@@ -358,6 +358,8 @@ impl App {
             &data.model_descriptor_set,
             "src/shaders/vert.spv",
             "src/shaders/frag.spv",
+            vk::PrimitiveTopology::TRIANGLE_LIST,
+            vk::PolygonMode::FILL,
         );
         data.grid_pipeline = RRPipeline::new(
             &rrdevice,
@@ -366,6 +368,8 @@ impl App {
             &data.grid_descriptor_set,
             "src/shaders/gridVert.spv",
             "src/shaders/gridFrag.spv",
+            vk::PrimitiveTopology::LINE_LIST,
+            vk::PolygonMode::LINE,
         );
         println!("created pipeline");
 
@@ -373,11 +377,11 @@ impl App {
         println!("loaded model");
 
         let tex_coord = Vec2::new(0.0, 0.0);
-        let mut color = Vec4::new(0.0, 0.0, 1.0, 1.0);
+        let mut color = Vec4::new(1.0, 0.0, 0.0, 1.0);
         let _ = Self::create_grid_data(&mut data, 0, color, tex_coord)?;
         color = Vec4::new(0.0, 1.0, 0.0, 1.0);
         let _ = Self::create_grid_data(&mut data, 1, color, tex_coord)?;
-        color = Vec4::new(1.0, 0.0, 0.0, 1.0);
+        color = Vec4::new(0.0, 0.0, 1.0, 1.0);
         let _ = Self::create_grid_data(&mut data, 2, color, tex_coord)?;
         println!("created grid data ");
         // let _ = Self::create_texture_image(&instance, &device, &mut data)?;
@@ -458,6 +462,8 @@ impl App {
             eprintln!("failed to create grid descriptor set: {:?}", e);
         }
         println!("created grid descriptor set");
+        let offset_vertex = (data.grid_vertices.len()) as u64;
+        let offset_index = (data.grid_indices.len()) as u64;
         data.rrcommand_buffer = RRCommandBuffer::new(&data.rrcommand_pool);
         if let Err(e) = create_command_buffers(
             &rrdevice,
@@ -472,6 +478,8 @@ impl App {
             &data.model_vertex_buffer,
             &data.model_index_buffer,
             &mut data.rrcommand_buffer,
+            offset_vertex,
+            offset_index,
         ) {
             eprintln!("failed to create command buffers: {:?}", e);
         }
@@ -528,7 +536,7 @@ impl App {
 
         let image_index = match result {
             Ok((image_index, _)) => image_index as usize,
-            //TODO: Err(vk::ErrorCode::OUT_OF_DATE_KHR) => return self.recreate_swapchain(window),
+            // TODO: Err(vk::ErrorCode::OUT_OF_DATE_KHR) => return self.recreate_swapchain(window),
             Err(e) => return Err(anyhow!(e)),
         };
 
@@ -875,31 +883,31 @@ impl App {
         for i in 0..100 {
             let mut pos1 = Vec3::new(0.0, 0.0, 0.0);
             if index == 0 {
-                // fix x coordinate
+                // y = 0
+                pos1.x = 100.0;
+                pos1.z = i as f32 * 0.1;
+            } else if index == 1 {
+                // x = 0
+                pos1.z = i as f32 * 0.1;
+                pos1.y = 100.0;
+            } else if index == 2 {
+                // y = 0
                 pos1.x = i as f32 * 0.1;
                 pos1.z = 100.0;
-            } else if index == 1 {
-                //fix x coodinate
-                pos1.x = i as f32 * 0.1;
-                pos1.y = 100.0f32;
-            } else if index == 2 {
-                // fix z coordinate
-                pos1.z = i as f32 * 0.1;
-                pos1.x = 100.0;
             }
             let mut pos2 = Vec3::new(0.0, 0.0, 0.0);
             if index == 0 {
-                // fix x coordinate
-                pos2.x = pos1.x;
-                pos2.z = -100.0;
+                // y = 0
+                pos2.x = -100.0;
+                pos2.z = pos1.z;
             } else if index == 1 {
                 // fix x coordinate
-                pos2.x = pos1.x;
+                pos2.z = pos1.z;
                 pos2.y = -100.0;
             } else if index == 2 {
                 // fix z coordinate
-                pos2.z = pos1.z;
-                pos2.x = -100.0;
+                pos2.x = pos1.x;
+                pos2.z = -100.0;
             }
             let vertex1 = Vertex::new(pos1, color, tex_coord);
             let vertex2 = Vertex::new(pos2, color, tex_coord);

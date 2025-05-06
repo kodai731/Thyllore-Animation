@@ -95,7 +95,7 @@ impl RRIndexBuffer {
             panic!("Failed to map staging buffer");
         };
 
-        memcpy(data, map_memory.cast(), length);
+        memcpy(data, map_memory.cast(), size as usize);
         rrdevice.device.unmap_memory(staging_buffer_memory);
 
         let Ok((index_buffer, index_buffer_memory)) = create_buffer(
@@ -163,7 +163,7 @@ impl RRVertexBuffer {
             panic!("failed to map buffer")
         };
 
-        memcpy(data, map_memory.cast(), length);
+        memcpy(data, map_memory.cast(), size as usize);
         rrdevice.device.unmap_memory(staging_buffer_memory);
         println!("mapped staging buffer");
 

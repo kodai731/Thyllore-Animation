@@ -110,6 +110,8 @@ pub unsafe fn create_command_buffers(
     model_vertex_buffer: &RRVertexBuffer,
     model_index_buffer: &RRIndexBuffer,
     rrcommand_buffer: &mut RRCommandBuffer,
+    offset_vertex: u64,
+    offset_index: u64,
 ) -> Result<()> {
     let info = vk::CommandBufferAllocateInfo::builder()
         .command_pool(rrcommand_buffer.rrcommand_pool.command_pool)

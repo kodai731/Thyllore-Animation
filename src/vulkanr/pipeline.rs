@@ -7,6 +7,7 @@ use crate::vulkanr::render::RRRender;
 use std::fs::File;
 use std::io::Read;
 use vulkanalia::bytecode::Bytecode;
+use vulkanalia::vk::PrimitiveTopology;
 
 #[derive(Clone, Debug, Default)]
 pub struct RRPipeline {
@@ -22,6 +23,8 @@ impl RRPipeline {
         rrdescriptor_set: &RRDescriptorSet,
         vertex_shader_path: &str,
         fragment_shader_path: &str,
+        topology: PrimitiveTopology,
+        polygon_mode: vk::PolygonMode,
     ) -> Self {
         let mut rrpipeline = RRPipeline::default();
         let _ = create_pipeline(
@@ -32,6 +35,8 @@ impl RRPipeline {
             &mut rrpipeline,
             vertex_shader_path,
             fragment_shader_path,
+            topology,
+            polygon_mode,
         );
         println!("rrpipeline: {:?}", rrpipeline);
         rrpipeline
@@ -45,6 +50,8 @@ unsafe fn create_pipeline(
     rrpipeline: &mut RRPipeline,
     vertex_shader_path: &str,
     fragment_shader_path: &str,
+    topology: vk::PrimitiveTopology,
+    polygon_mode: vk::PolygonMode,
 ) -> Result<()> {
     println!("start create pipeline");
     let mut vert_file = File::open(vertex_shader_path)?;
@@ -76,7 +83,7 @@ unsafe fn create_pipeline(
         .vertex_attribute_descriptions(&attribute_descriptions);
 
     let input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::builder()
-        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .topology(topology)
         .primitive_restart_enable(false);
 
     let viewport = vk::Viewport::builder()
@@ -100,7 +107,7 @@ unsafe fn create_pipeline(
     let rasterization_state = vk::PipelineRasterizationStateCreateInfo::builder()
         .depth_clamp_enable(false)
         .rasterizer_discard_enable(false)
-        .polygon_mode(vk::PolygonMode::FILL)
+        .polygon_mode(polygon_mode)
         .line_width(1.0)
         .cull_mode(vk::CullModeFlags::NONE)
         .front_face(vk::FrontFace::COUNTER_CLOCKWISE)

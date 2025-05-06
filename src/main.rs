@@ -373,16 +373,24 @@ impl App {
         );
         println!("created pipeline");
 
-        let _ = Self::load_model(&instance, &rrdevice, &mut data)?;
+        if let Err(e) = Self::load_model(&instance, &rrdevice, &mut data) {
+            eprintln!("{:?}", e)
+        }
         println!("loaded model");
 
         let tex_coord = Vec2::new(0.0, 0.0);
         let mut color = Vec4::new(1.0, 0.0, 0.0, 1.0);
-        let _ = Self::create_grid_data(&mut data, 0, color, tex_coord)?;
+        if let Err(e) = Self::create_grid_data(&mut data, 0, color, tex_coord) {
+            eprintln!("{:?}", e)
+        }
         color = Vec4::new(0.0, 1.0, 0.0, 1.0);
-        let _ = Self::create_grid_data(&mut data, 1, color, tex_coord)?;
+        if let Err(e) = Self::create_grid_data(&mut data, 1, color, tex_coord) {
+            eprintln!("{:?}", e)
+        }
         color = Vec4::new(0.0, 0.0, 1.0, 1.0);
-        let _ = Self::create_grid_data(&mut data, 2, color, tex_coord)?;
+        if let Err(e) = Self::create_grid_data(&mut data, 2, color, tex_coord) {
+            eprintln!("{:?}", e)
+        }
         println!("created grid data ");
         // let _ = Self::create_texture_image(&instance, &device, &mut data)?;
         // data.texture_image = RRImage::new(&instance, &rrdevice, &data.rrcommand_pool.borrow_mut());
@@ -926,47 +934,6 @@ impl App {
         Ok(())
     }
 
-    // unsafe fn create_descriptor_set_layout_grid(device: &Device, data: &mut AppData) -> Result<()> {
-    //     // The descriptor layout specifies the types of resources that are going to be accessed by the pipeline,
-    //     // just like a render pass specifies the types of attachments that will be accessed
-    //     let ubo_binding = vk::DescriptorSetLayoutBinding::builder()
-    //         .binding(0)
-    //         .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-    //         .descriptor_count(1)
-    //         .stage_flags(vk::ShaderStageFlags::VERTEX);
-    //
-    //     let bindings = &[ubo_binding];
-    //     let info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(bindings);
-    //     data.grid_descriptor_set_layout = device.create_descriptor_set_layout(&info, None)?;
-    //
-    //     Ok(())
-    // }
-    //
-    // unsafe fn create_uniform_buffers_grid(
-    //     instance: &Instance,
-    //     device: &Device,
-    //     data: &mut AppData,
-    // ) -> Result<()> {
-    //     data.grid_uniform_buffers.clear();
-    //     data.grid_uniform_buffer_memories.clear();
-    //
-    //     for _ in 0..data.swapchain_images.len() {
-    //         let (uniform_buffer, uniform_buffer_memory) = Self::create_buffer(
-    //             instance,
-    //             device,
-    //             data,
-    //             size_of::<UniformBufferObject>() as u64,
-    //             vk::BufferUsageFlags::UNIFORM_BUFFER,
-    //             vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-    //         )?;
-    //         data.grid_uniform_buffers.push(uniform_buffer);
-    //         data.grid_uniform_buffer_memories
-    //             .push(uniform_buffer_memory);
-    //     }
-    //
-    //     Ok(())
-    // }
-
     unsafe fn update_uniform_buffer(
         &mut self,
         image_index: usize,
@@ -1124,35 +1091,6 @@ impl App {
         Ok(())
     }
 
-    // unsafe fn create_descriptor_sets_grid(device: &Device, data: &mut AppData) -> Result<()> {
-    //     let layouts = vec![data.grid_descriptor_set_layout; data.swapchain_images.len()]; //  create one descriptor set for each swapchain image, all with the same layout.
-    //     let info = vk::DescriptorSetAllocateInfo::builder()
-    //         .descriptor_pool(data.descriptor_pool)
-    //         .set_layouts(&layouts);
-    //     data.grid_descriptor_sets = device.allocate_descriptor_sets(&info)?;
-    //
-    //     for i in 0..data.swapchain_images.len() {
-    //         let info = vk::DescriptorBufferInfo::builder()
-    //             .buffer(data.grid_uniform_buffers[i])
-    //             .offset(0)
-    //             .range(size_of::<UniformBufferObject>() as u64);
-    //         // The configuration of descriptors is updated using the update_descriptor_sets function,
-    //         // which takes an array of vk::WriteDescriptorSet structs as parameter.
-    //         let buffer_info = &[info];
-    //
-    //         let ubo_write = vk::WriteDescriptorSet::builder()
-    //             .dst_set(data.grid_descriptor_sets[i])
-    //             .dst_binding(0)
-    //             .dst_array_element(0) // Remember that descriptors can be arrays, so we also need to specify the first index in the array that we want to update
-    //             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-    //             .buffer_info(buffer_info);
-    //
-    //         device.update_descriptor_sets(&[ubo_write], &[] as &[vk::CopyDescriptorSet]);
-    //     }
-    //
-    //     Ok(())
-    // }
-
     unsafe fn load_model(
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -1218,7 +1156,6 @@ impl App {
         )?;
 
         for i in 0..gltf_data.positions.len() {
-            data.indices.push(i as u32);
             let vertex = Vertex::new(
                 Vec3::new_array(gltf_data.positions[i]) * 0.01f32,
                 Vec4::new(0.0, 1.0, 0.0, 1.0),
@@ -1226,6 +1163,8 @@ impl App {
             );
             data.vertices.push(vertex);
         }
+
+        data.indices = gltf_data.indices.clone();
 
         Ok(())
     }

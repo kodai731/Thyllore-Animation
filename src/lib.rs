@@ -4,3 +4,12 @@
 #![allow(improper_ctypes)]
 
 // include!(concat!(env!("OUT_DIR"), "\\bindings.rs"));
+
+pub mod gltf {
+    pub mod gltf;
+}
+
+pub mod math {
+    pub mod math;
+}
+pub use math::*;

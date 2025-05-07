@@ -50,6 +50,9 @@ pub unsafe fn load_gltf(path: &str) -> Result<GltfData> {
             process_node(&gltf, &buffers, &images, &node, &mut gltf_data)?;
         }
     }
+    for animation in gltf.animations() {
+        process_animation(&gltf, &buffers, animation, &mut gltf_data)?;
+    }
     Ok(gltf_data)
 }
 
@@ -61,12 +64,15 @@ unsafe fn process_node(
     gltf_data: &mut GltfData,
 ) -> Result<()> {
     println!("Node {} {}", node.index().to_string(), node.name().unwrap());
+    // meshes
     if let Some(mesh) = node.mesh() {
         println!("mesh found");
         let primitives = mesh.primitives();
         let mut normals = Vec::new();
         let mut joint_indices = Vec::new();
         let mut joint_weights = Vec::new();
+
+        // primitive
         primitives.for_each(|primitive| {
             println!("primitive found");
             let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
@@ -174,7 +180,7 @@ unsafe fn process_node(
         process_node(gltf, buffers, images, &child, gltf_data)?;
     }
 
-    // check
+    // validate
     println!("indices count {}", gltf_data.indices.len());
     println!("joint indices count {}", gltf_data.joint_indices.len());
     println!("joint weights count {}", gltf_data.joint_weights.len());
@@ -182,5 +188,55 @@ unsafe fn process_node(
     println!("morph normal count {}", gltf_data.morph_normals.len());
     println!("morph tangent count {}", gltf_data.morph_tangents.len());
 
+    Ok(())
+}
+
+unsafe fn process_animation(
+    gltf: &Document,
+    buffers: &Vec<Data>,
+    animation: gltf::Animation,
+    gltf_data: &mut GltfData,
+) -> Result<()> {
+    for channel in animation.channels() {
+        let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
+        if let Some(inputs) = reader.read_inputs() {
+            println!("KeyFrame Count: {:?}", inputs.len());
+            for input in inputs {
+                println!("KeyFrame Time: {:?}", input);
+            }
+        }
+
+        if let Some(outputs) = reader.read_outputs() {
+            use gltf::animation::util::ReadOutputs;
+            match outputs {
+                ReadOutputs::Translations(translations) => {
+                    println!("Translations");
+                    for translation in translations {
+                        println!("Translation: {:?}", translation);
+                    }
+                }
+                ReadOutputs::Rotations(rotations) => {
+                    println!("Rotations");
+                    // if let rotations = outputs {
+                    //     for rotation in rotations {
+                    //         println!("Rotation: {:?}", rotation);
+                    //     }
+                    // }
+                }
+                ReadOutputs::Scales(scales) => {
+                    println!("Scales");
+                    for scale in scales {
+                        println!("Scale: {:?}", scale);
+                    }
+                }
+                ReadOutputs::MorphTargetWeights(weights) => {
+                    println!("Morph Target Weights");
+                    // for weight in weights.into() {
+                    //     println!("Weight: {:?}", weight);
+                    // }
+                }
+            }
+        }
+    }
     Ok(())
 }

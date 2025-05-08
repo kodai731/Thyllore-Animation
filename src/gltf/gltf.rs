@@ -1,9 +1,12 @@
 use anyhow::{anyhow, Result};
+use chrono::Local;
 use core::result::Result::Ok;
 use glium::buffer::Content;
 use gltf::animation::util::morph_target_weights;
 use gltf::buffer::Data;
 use gltf::{image, Document, Gltf, Node};
+use std::fs::OpenOptions;
+use std::io::Write;
 
 pub struct GltfData {
     pub positions: Vec<[f32; 3]>,
@@ -197,12 +200,24 @@ unsafe fn process_animation(
     animation: gltf::Animation,
     gltf_data: &mut GltfData,
 ) -> Result<()> {
+    let mut log = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .append(true)
+        .open("log/log.txt")?;
+
     for channel in animation.channels() {
         let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
         if let Some(inputs) = reader.read_inputs() {
             println!("KeyFrame Count: {:?}", inputs.len());
             for input in inputs {
-                println!("KeyFrame Time: {:?}", input);
+                let time = Local::now();
+                writeln!(
+                    log,
+                    "[{}] KeyFrame Time: {:?}",
+                    time.format("%Y-%m-%d %H:%M:%S"),
+                    input
+                )?;
             }
         }
 
@@ -231,9 +246,17 @@ unsafe fn process_animation(
                 }
                 ReadOutputs::MorphTargetWeights(weights) => {
                     println!("Morph Target Weights");
-                    // for weight in weights.into() {
-                    //     println!("Weight: {:?}", weight);
-                    // }
+
+                    for (i, weight) in weights.into_f32().enumerate() {
+                        let time = Local::now();
+                        writeln!(
+                            log,
+                            "[{}]Weight {}: {:?}",
+                            time.format("%Y-%m-%d %H:%M:%S"),
+                            i,
+                            weight
+                        )?;
+                    }
                 }
             }
         }

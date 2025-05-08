@@ -18,3 +18,16 @@ src/shaders/*.spv
 
 # resource files
 src/resources
+
+# builds
+build.rs
+
+# cpp
+src/cpp/
+
+# editor
+.idea/
+.vscode/
+
+# log
+log/

@@ -1,3 +1,5 @@
+use crate::log;
+use crate::logger::logger::LOGGER;
 use anyhow::{anyhow, Result};
 use chrono::Local;
 use core::result::Result::Ok;
@@ -200,24 +202,16 @@ unsafe fn process_animation(
     animation: gltf::Animation,
     gltf_data: &mut GltfData,
 ) -> Result<()> {
-    let mut log = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .append(true)
-        .open("log/log.txt")?;
-
     for channel in animation.channels() {
         let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
         if let Some(inputs) = reader.read_inputs() {
             println!("KeyFrame Count: {:?}", inputs.len());
             for input in inputs {
-                let time = Local::now();
-                writeln!(
-                    log,
-                    "[{}] KeyFrame Time: {:?}",
-                    time.format("%Y-%m-%d %H:%M:%S"),
-                    input
-                )?;
+                LOGGER
+                    .lock()
+                    .expect("failed to lock logget")
+                    .log(format_args!("KeyFrame input {:?}", input))
+                    .expect("failed to write log");
             }
         }
 
@@ -248,14 +242,11 @@ unsafe fn process_animation(
                     println!("Morph Target Weights");
 
                     for (i, weight) in weights.into_f32().enumerate() {
-                        let time = Local::now();
-                        writeln!(
-                            log,
-                            "[{}]Weight {}: {:?}",
-                            time.format("%Y-%m-%d %H:%M:%S"),
-                            i,
-                            weight
-                        )?;
+                        LOGGER
+                            .lock()
+                            .expect("failed to lock logget")
+                            .log(format_args!("Weight {} {:?}", i, weight))
+                            .expect("failed to write log");
                     }
                 }
             }

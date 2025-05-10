@@ -44,9 +44,12 @@ mod gltf {
 }
 use gltf::gltf::*;
 
+pub mod logger {
+    pub mod logger;
+}
+
 use anyhow::{anyhow, Result};
 use core::result::Result::Ok;
-use log::*;
 const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
 use std::collections::HashSet;
 use std::ffi::CStr;

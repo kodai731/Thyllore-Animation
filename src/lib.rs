@@ -5,6 +5,8 @@
 
 // include!(concat!(env!("OUT_DIR"), "\\bindings.rs"));
 
+extern crate core;
+
 pub mod gltf {
     pub mod gltf;
 }
@@ -13,3 +15,7 @@ pub mod math {
     pub mod math;
 }
 pub use math::*;
+
+pub mod logger {
+    pub mod logger;
+}

@@ -1,13 +1,10 @@
 use crate::log;
 use anyhow::{anyhow, Result};
-use chrono::Local;
 use core::result::Result::Ok;
 use glium::buffer::Content;
 use gltf::animation::util::morph_target_weights;
 use gltf::buffer::Data;
 use gltf::{image, Document, Gltf, Node};
-use std::fs::OpenOptions;
-use std::io::Write;
 
 pub struct GltfData {
     pub positions: Vec<[f32; 3]>,
@@ -15,11 +12,15 @@ pub struct GltfData {
     pub tex_coords: Vec<[f32; 2]>,
     pub joint_indices: Vec<[u16; 4]>,
     pub joint_weights: Vec<[f32; 4]>,
-    pub morph_positions: Vec<[f32; 3]>,
-    pub morph_normals: Vec<[f32; 3]>,
-    pub morph_tangents: Vec<[f32; 3]>,
+    pub morph_targets: Vec<MorphTarget>,
     pub image_indices: Vec<[u16; 4]>,
     pub image_data: Vec<ImageData>,
+}
+
+pub struct MorphTarget {
+    pub positions: Vec<[f32; 3]>,
+    pub normals: Vec<[f32; 3]>,
+    pub tangents: Vec<[f32; 3]>,
 }
 
 impl GltfData {
@@ -30,11 +31,19 @@ impl GltfData {
             tex_coords: Vec::new(),
             joint_indices: Vec::new(),
             joint_weights: Vec::new(),
-            morph_positions: Vec::new(),
-            morph_normals: Vec::new(),
-            morph_tangents: Vec::new(),
+            morph_targets: Vec::new(),
             image_indices: Vec::new(),
             image_data: Vec::new(),
+        }
+    }
+}
+
+impl MorphTarget {
+    fn new() -> Self {
+        Self {
+            positions: Vec::new(),
+            normals: Vec::new(),
+            tangents: Vec::new(),
         }
     }
 }
@@ -156,26 +165,32 @@ unsafe fn process_node(
 
             // morph targets
             if let morph_targets = reader.read_morph_targets() {
+                log!("morph targets count {:?}", morph_targets.len());
                 for target in morph_targets {
+                    let mut morph_target = MorphTarget::new();
                     let (positions, normals, tangents) = target;
                     // positions
                     if let Some(position_iter) = positions {
+                        println!("morph positions count {:?}", position_iter.len());
                         for position in position_iter {
-                            gltf_data.morph_positions.push(position);
+                            morph_target.positions.push(position);
                         }
                     }
                     // normals
                     if let Some(normal_iter) = normals {
+                        println!("morph normals count {:?}", normal_iter.len());
                         for normal in normal_iter {
-                            gltf_data.morph_normals.push(normal);
+                            morph_target.normals.push(normal);
                         }
                     }
                     // tangents
                     if let Some(tangent_iter) = tangents {
+                        println!("morph tangents count {:?}", tangent_iter.len());
                         for tangent in tangent_iter {
-                            gltf_data.morph_tangents.push(tangent);
+                            morph_target.tangents.push(tangent);
                         }
                     }
+                    gltf_data.morph_targets.push(morph_target);
                 }
             }
         });
@@ -188,9 +203,9 @@ unsafe fn process_node(
     println!("indices count {}", gltf_data.indices.len());
     println!("joint indices count {}", gltf_data.joint_indices.len());
     println!("joint weights count {}", gltf_data.joint_weights.len());
-    println!("morph position count {}", gltf_data.morph_positions.len());
-    println!("morph normal count {}", gltf_data.morph_normals.len());
-    println!("morph tangent count {}", gltf_data.morph_tangents.len());
+    println!("positions count {}", gltf_data.positions.len());
+    println!("tex coords count {}", gltf_data.tex_coords.len());
+    println!("morph targets count {}", gltf_data.morph_targets.len());
 
     Ok(())
 }
@@ -204,7 +219,7 @@ unsafe fn process_animation(
     for channel in animation.channels() {
         let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
         if let Some(inputs) = reader.read_inputs() {
-            println!("KeyFrame Count: {:?}", inputs.len());
+            log!("KeyFrame Count: {:?}", inputs.len());
             for input in inputs {
                 log!("KeyFrame input {:?}", input)
             }
@@ -235,7 +250,6 @@ unsafe fn process_animation(
                 }
                 ReadOutputs::MorphTargetWeights(weights) => {
                     println!("Morph Target Weights");
-
                     for (i, weight) in weights.into_f32().enumerate() {
                         log!("Weight {} {:?}", i, weight)
                     }

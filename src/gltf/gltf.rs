@@ -1,5 +1,4 @@
 use crate::log;
-use crate::logger::logger::LOGGER;
 use anyhow::{anyhow, Result};
 use chrono::Local;
 use core::result::Result::Ok;
@@ -207,11 +206,7 @@ unsafe fn process_animation(
         if let Some(inputs) = reader.read_inputs() {
             println!("KeyFrame Count: {:?}", inputs.len());
             for input in inputs {
-                LOGGER
-                    .lock()
-                    .expect("failed to lock logget")
-                    .log(format_args!("KeyFrame input {:?}", input))
-                    .expect("failed to write log");
+                log!("KeyFrame input {:?}", input)
             }
         }
 
@@ -242,11 +237,7 @@ unsafe fn process_animation(
                     println!("Morph Target Weights");
 
                     for (i, weight) in weights.into_f32().enumerate() {
-                        LOGGER
-                            .lock()
-                            .expect("failed to lock logget")
-                            .log(format_args!("Weight {} {:?}", i, weight))
-                            .expect("failed to write log");
+                        log!("Weight {} {:?}", i, weight)
                     }
                 }
             }

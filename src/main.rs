@@ -326,6 +326,7 @@ struct AppData {
     is_left_clicked: bool,
     clicked_mouse_pos: [f32; 2],
     is_wheel_clicked: bool,
+    gltf_data: GltfData,
 }
 
 impl App {
@@ -1169,6 +1170,8 @@ impl App {
 
         data.indices = gltf_data.indices.clone();
 
+        data.gltf_data = gltf_data;
+
         Ok(())
     }
 
@@ -1190,5 +1193,10 @@ impl App {
         camera_direction = Vector3::cross(horizon, camera_up);
         self.data.camera_up = array3_from_vec(camera_up);
         self.data.camera_direction = array3_from_vec(camera_direction);
+    }
+
+    unsafe fn morphing(&mut self, time: f32, vertices: Vec<Vertex>, gltf: &GltfData) {
+        let index = gltf.morph_target_index(time);
+        //let morph_animation = self.data.morph_animations[index];
     }
 }

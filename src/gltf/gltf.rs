@@ -2,10 +2,10 @@ use crate::log;
 use anyhow::{anyhow, Result};
 use core::result::Result::Ok;
 use glium::buffer::Content;
-use gltf::animation::util::morph_target_weights;
 use gltf::buffer::Data;
 use gltf::{image, Document, Gltf, Node};
 
+#[derive(Clone, Debug, Default)]
 pub struct GltfData {
     pub positions: Vec<[f32; 3]>,
     pub indices: Vec<u32>,
@@ -18,12 +18,14 @@ pub struct GltfData {
     pub image_data: Vec<ImageData>,
 }
 
+#[derive(Clone, Debug, Default)]
 pub struct MorphTarget {
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
     pub tangents: Vec<[f32; 3]>,
 }
 
+#[derive(Clone, Debug, Default)]
 pub struct MorphAnimation {
     pub key_frame: f32,
     pub weights: Vec<f32>,
@@ -42,6 +44,27 @@ impl GltfData {
             image_indices: Vec::new(),
             image_data: Vec::new(),
         }
+    }
+
+    pub fn morph_target_index(&self, time: f32) -> usize {
+        let end = self
+            .morph_animations
+            .last()
+            .expect("morph_animations is empty");
+        let start = self
+            .morph_animations
+            .first()
+            .expect("morph_animations is empty");
+        let mod_time = time % (end.key_frame - start.key_frame);
+        let mut index = 0;
+        for i in 0..self.morph_animations.len() {
+            let morph_animation = &self.morph_animations[i];
+            if mod_time >= morph_animation.key_frame {
+                index = i;
+                break;
+            }
+        }
+        index
     }
 }
 
@@ -64,6 +87,7 @@ impl MorphAnimation {
     }
 }
 
+#[derive(Clone, Debug, Default)]
 pub struct ImageData {
     pub data: Vec<u8>,
     pub size: u64,
@@ -120,6 +144,7 @@ unsafe fn process_node(
             }
 
             if let Some(iter) = reader.read_positions() {
+                println!("positions count {:?}", iter.len());
                 for position in iter {
                     let mut position_converted = position;
                     position_converted[1] = 1.0 - position_converted[1];
@@ -312,5 +337,3 @@ unsafe fn process_animation(
     }
     Ok(())
 }
-
-// unsafe fn morph_target_index(time: f32) -> i32 {}

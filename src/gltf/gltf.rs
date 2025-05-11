@@ -13,6 +13,7 @@ pub struct GltfData {
     pub joint_indices: Vec<[u16; 4]>,
     pub joint_weights: Vec<[f32; 4]>,
     pub morph_targets: Vec<MorphTarget>,
+    pub morph_animations: Vec<MorphAnimation>,
     pub image_indices: Vec<[u16; 4]>,
     pub image_data: Vec<ImageData>,
 }
@@ -21,6 +22,11 @@ pub struct MorphTarget {
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
     pub tangents: Vec<[f32; 3]>,
+}
+
+pub struct MorphAnimation {
+    pub key_frame: f32,
+    pub weights: Vec<f32>,
 }
 
 impl GltfData {
@@ -32,6 +38,7 @@ impl GltfData {
             joint_indices: Vec::new(),
             joint_weights: Vec::new(),
             morph_targets: Vec::new(),
+            morph_animations: Vec::new(),
             image_indices: Vec::new(),
             image_data: Vec::new(),
         }
@@ -44,6 +51,15 @@ impl MorphTarget {
             positions: Vec::new(),
             normals: Vec::new(),
             tangents: Vec::new(),
+        }
+    }
+}
+
+impl MorphAnimation {
+    fn new() -> Self {
+        Self {
+            key_frame: 0.0,
+            weights: Vec::new(),
         }
     }
 }
@@ -218,10 +234,13 @@ unsafe fn process_animation(
 ) -> Result<()> {
     for channel in animation.channels() {
         let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
+        let mut key_frames = Vec::new();
+        let mut weights = Vec::new();
         if let Some(inputs) = reader.read_inputs() {
             log!("KeyFrame Count: {:?}", inputs.len());
             for input in inputs {
-                log!("KeyFrame input {:?}", input)
+                log!("KeyFrame input {:?}", input);
+                key_frames.push(input);
             }
         }
 
@@ -248,14 +267,50 @@ unsafe fn process_animation(
                         println!("Scale: {:?}", scale);
                     }
                 }
-                ReadOutputs::MorphTargetWeights(weights) => {
+                ReadOutputs::MorphTargetWeights(morph_target_weights) => {
                     println!("Morph Target Weights");
-                    for (i, weight) in weights.into_f32().enumerate() {
-                        log!("Weight {} {:?}", i, weight)
+                    let mut weight = Vec::new();
+                    let morph_target_length = gltf_data.morph_targets.len();
+                    for (i, morph_target_weight) in morph_target_weights.into_f32().enumerate() {
+                        log!("Morph Target Weight: {} {:?}", i, morph_target_weight);
+                        weight.push(morph_target_weight);
+                        if weight.len() >= morph_target_length {
+                            weights.push(weight);
+                            weight = Vec::new();
+                        }
                     }
                 }
+            }
+        }
+
+        if key_frames.len() != weights.len() {
+            eprintln!("KeyFrame Count != Weight Count");
+        }
+
+        if key_frames.len() != 0 && weights.len() != 0 && key_frames.len() == weights.len() {
+            for i in 0..key_frames.len() {
+                let mut morph_animation = MorphAnimation::new();
+                morph_animation.key_frame = key_frames[i];
+                morph_animation.weights = weights[i].clone();
+                gltf_data.morph_animations.push(morph_animation);
+            }
+        }
+
+        // validate
+        for i in 0..gltf_data.morph_animations.len() {
+            for j in 0..gltf_data.morph_animations[i].weights.len() {
+                let morph_animation = &gltf_data.morph_animations[i];
+                log!(
+                    "Morph Target {} KeyFrame {:?} Weight {} {:?}",
+                    i,
+                    morph_animation.key_frame,
+                    j,
+                    morph_animation.weights[j]
+                );
             }
         }
     }
     Ok(())
 }
+
+// unsafe fn morph_target_index(time: f32) -> i32 {}

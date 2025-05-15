@@ -57,9 +57,11 @@ impl GltfData {
             .expect("morph_animations is empty");
         let mod_time = time % (end.key_frame - start.key_frame);
         let mut index = 0;
-        for i in 0..self.morph_animations.len() {
+        // TODO: fix animation index
+        let end_index = self.morph_targets.len();
+        for i in 0..end_index {
             let morph_animation = &self.morph_animations[i];
-            if mod_time >= morph_animation.key_frame {
+            if mod_time <= morph_animation.key_frame {
                 index = i;
                 break;
             }
@@ -334,6 +336,15 @@ unsafe fn process_animation(
                 );
             }
         }
+        log!("position count {:?}", gltf_data.positions.len());
+        log!(
+            "target0 position count {:?}",
+            gltf_data.morph_targets[0].positions.len()
+        );
+        log!(
+            "morph animation0 weights count {:?}",
+            gltf_data.morph_animations[0].weights.len()
+        );
     }
     Ok(())
 }

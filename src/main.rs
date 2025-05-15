@@ -946,6 +946,10 @@ impl App {
         gui_data: &mut GUIData,
     ) -> Result<()> {
         //let mut model = Mat4::from_axis_angle(vec3(0.0, 0.0, 1.0), Deg(0.0));
+        // update vertex buffer
+        self.morphing(self.start.elapsed().as_secs_f32());
+
+        // update uniform buffer
         let model = Mat4::identity();
 
         let mut camera_pos = vec3_from_array(self.data.camera_pos);
@@ -1195,8 +1199,36 @@ impl App {
         self.data.camera_direction = array3_from_vec(camera_direction);
     }
 
-    unsafe fn morphing(&mut self, time: f32, vertices: Vec<Vertex>, gltf: &GltfData) {
-        let index = gltf.morph_target_index(time);
-        //let morph_animation = self.data.morph_animations[index];
+    // TODO: efficiency
+    unsafe fn morphing(&mut self, time: f32) {
+        let gltf_data = &self.data.gltf_data;
+        // reset
+        for i in 0..self.data.vertices.len() {
+            self.data.vertices[i].pos = Vec3::new_array(gltf_data.positions[i]) * 0.01f32;
+        }
+
+        let target_index = gltf_data.morph_target_index(time);
+        println!("target_index: {}", target_index);
+        let morph_target = &gltf_data.morph_targets[target_index];
+        let morph_animation = &gltf_data.morph_animations[target_index];
+        for i in 0..morph_animation.weights.len() {
+            for j in 0..morph_target.positions.len() {
+                let delta_position = Vec3::new_array(morph_target.positions[j])
+                    * morph_animation.weights[i]
+                    * 0.01f32;
+                self.data.vertices[j].pos += delta_position;
+            }
+        }
+
+        if let Err(e) = self.data.model_vertex_buffer.update(
+            &self.instance,
+            &self.rrdevice,
+            &self.data.rrcommand_pool,
+            (size_of::<Vertex>() * self.data.vertices.len()) as vk::DeviceSize,
+            self.data.vertices.as_ptr() as *const c_void,
+            self.data.vertices.len(),
+        ) {
+            eprintln!("failed to update vertex buffer: {}", e);
+        }
     }
 }

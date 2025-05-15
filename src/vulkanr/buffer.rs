@@ -197,6 +197,43 @@ impl RRVertexBuffer {
 
         rrvertex_buffer
     }
+
+    pub unsafe fn update(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        rr_command_pool: &RRCommandPool,
+        size: u64,
+        data: *const c_void,
+        length: usize,
+    ) -> Result<()> {
+        let Ok((staging_buffer, staging_buffer_memory)) = create_buffer(
+            instance,
+            rrdevice,
+            size,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+        ) else {
+            panic!("failed to create buffer");
+        };
+        let Ok(map_memory) =
+            rrdevice
+                .device
+                .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())
+        else {
+            panic!("failed to map buffer")
+        };
+
+        memcpy(data, map_memory.cast(), size as usize);
+        rrdevice.device.unmap_memory(staging_buffer_memory);
+
+        copy_buffer(rrdevice, rr_command_pool, staging_buffer, self.buffer, size)?;
+
+        rrdevice.device.destroy_buffer(staging_buffer, None);
+        rrdevice.device.free_memory(staging_buffer_memory, None);
+
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Default)]

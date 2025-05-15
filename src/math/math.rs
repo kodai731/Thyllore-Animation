@@ -2,7 +2,7 @@ pub use cgmath::Rad;
 pub use cgmath::{point3, Deg, InnerSpace, MetricSpace, Vector2};
 pub use cgmath::{prelude::*, Vector3};
 pub use cgmath::{vec2, vec3, vec4};
-use std::ops::{Deref, DerefMut, Mul, Neg};
+use std::ops::{Add, AddAssign, Deref, DerefMut, Mul, Neg};
 #[derive(Copy, Clone, Debug)]
 pub struct Vec2(cgmath::Vector2<f32>);
 impl Default for Vec2 {
@@ -76,6 +76,19 @@ impl Neg for Vec3 {
     type Output = Self;
     fn neg(self) -> Self::Output {
         Self(-self.0)
+    }
+}
+
+impl Add for Vec3 {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl AddAssign for Vec3 {
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0;
     }
 }
 

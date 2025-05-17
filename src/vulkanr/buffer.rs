@@ -198,6 +198,7 @@ impl RRVertexBuffer {
         rrvertex_buffer
     }
 
+    // TODO: efficiency
     pub unsafe fn update(
         &mut self,
         instance: &Instance,

@@ -58,7 +58,7 @@ impl GltfData {
         let mod_time = time % (end.key_frame - start.key_frame);
         let mut index = 0;
         // TODO: fix animation index
-        let end_index = self.morph_targets.len();
+        let end_index = self.morph_animations.len();
         for i in 0..end_index {
             let morph_animation = &self.morph_animations[i];
             if mod_time <= morph_animation.key_frame {
@@ -328,7 +328,7 @@ unsafe fn process_animation(
             for j in 0..gltf_data.morph_animations[i].weights.len() {
                 let morph_animation = &gltf_data.morph_animations[i];
                 log!(
-                    "Morph Target {} KeyFrame {:?} Weight {} {:?}",
+                    "Morph Animation {} KeyFrame {:?} Weight {} {:?}",
                     i,
                     morph_animation.key_frame,
                     j,

@@ -1207,11 +1207,11 @@ impl App {
             self.data.vertices[i].pos = Vec3::new_array(gltf_data.positions[i]) * 0.01f32;
         }
 
-        let target_index = gltf_data.morph_target_index(time);
-        println!("target_index: {}", target_index);
-        let morph_target = &gltf_data.morph_targets[target_index];
-        let morph_animation = &gltf_data.morph_animations[target_index];
+        let animation_index = gltf_data.morph_target_index(time);
+        println!("animation_index: {}", animation_index);
+        let morph_animation = &gltf_data.morph_animations[animation_index];
         for i in 0..morph_animation.weights.len() {
+            let morph_target = &gltf_data.morph_targets[i];
             for j in 0..morph_target.positions.len() {
                 let delta_position = Vec3::new_array(morph_target.positions[j])
                     * morph_animation.weights[i]

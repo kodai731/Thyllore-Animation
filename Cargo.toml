@@ -25,6 +25,8 @@ imgui = { path = "./src/imgui", features = ["tables-api"] }
 imgui-glium-renderer = { path = "./src/imgui-glium-renderer" }
 imgui-winit-support = { path = "./src/imgui-winit-support" }
 glium = "*"
+chrono = "*"
+once_cell = "*"
 
 [dependencies.gltf]
 version = "1.4"

@@ -77,6 +77,7 @@ use std::borrow::BorrowMut;
 use std::path::Path;
 use std::rc::Rc;
 use vulkanalia::vk::CommandPool;
+use serde::Serialize;
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
@@ -256,7 +257,7 @@ impl support::System {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 struct GUIData {
     is_left_clicked: bool,
     is_wheel_clicked: bool,
@@ -1208,7 +1209,6 @@ impl App {
         }
 
         let animation_index = gltf_data.morph_target_index(time);
-        println!("animation_index: {}", animation_index);
         let morph_animation = &gltf_data.morph_animations[animation_index];
         for i in 0..morph_animation.weights.len() {
             let morph_target = &gltf_data.morph_targets[i];

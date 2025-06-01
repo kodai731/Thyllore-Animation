@@ -73,11 +73,11 @@ use cgmath::num_traits::AsPrimitive;
 use cgmath::Vector4;
 use glium::buffer::Content;
 use imgui::{Condition, MouseButton};
+use serde::Serialize;
 use std::borrow::BorrowMut;
 use std::path::Path;
 use std::rc::Rc;
 use vulkanalia::vk::CommandPool;
-use serde::Serialize;
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
@@ -194,7 +194,7 @@ impl support::System {
                         window_target.exit();
                     }
 
-                    unsafe { app.render(&app_window, mouse_pos, mouse_wheel, gui_data) }.unwrap();
+                    unsafe { app.render(&app_window, gui_data) }.unwrap();
 
                     ui.window("debug window")
                         .size([600.0, 220.0], Condition::FirstUseEver)
@@ -262,6 +262,8 @@ struct GUIData {
     is_left_clicked: bool,
     is_wheel_clicked: bool,
     monitor_value: f32,
+    mouse_pos: [f32; 2],
+    mouse_wheel: f32,
 }
 
 impl Default for GUIData {
@@ -270,6 +272,8 @@ impl Default for GUIData {
             is_left_clicked: false,
             is_wheel_clicked: false,
             monitor_value: 0.0,
+            mouse_pos: [0.0, 0.0],
+            mouse_wheel: 0.0,
         }
     }
 }
@@ -524,13 +528,7 @@ impl App {
         })
     }
 
-    unsafe fn render(
-        &mut self,
-        window: &Window,
-        mouse_pos: [f32; 2],
-        mouse_wheel: f32,
-        gui_data: &mut GUIData,
-    ) -> Result<()> {
+    unsafe fn render(&mut self, window: &Window, gui_data: &mut GUIData) -> Result<()> {
         // Acquire an image from the swapchain
         // Execute the command buffer with that image as attachment in the framebuffer
         // Return the image to the swapchain for presentation
@@ -564,7 +562,12 @@ impl App {
 
         self.data.images_in_flight[image_index as usize] = self.data.in_flight_fences[self.frame];
 
-        self.update_uniform_buffer(image_index, mouse_pos, mouse_wheel, gui_data)?;
+        self.update_uniform_buffer(
+            image_index,
+            gui_data.mouse_pos,
+            gui_data.mouse_wheel,
+            gui_data,
+        )?;
 
         let wait_semaphores = &[self.data.image_available_semaphores[self.frame]];
         let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];

@@ -69,15 +69,18 @@ use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 use std::time::Instant;
 
+use imgui_winit_support::winit;
+use imgui_winit_support::winit::event::ElementState;
+
 use cgmath::num_traits::AsPrimitive;
 use cgmath::Vector4;
 use glium::buffer::Content;
 use imgui::{Condition, MouseButton};
+use serde::Serialize;
 use std::borrow::BorrowMut;
 use std::path::Path;
 use std::rc::Rc;
 use vulkanalia::vk::CommandPool;
-use serde::Serialize;
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
@@ -153,104 +156,130 @@ impl support::System {
         let mut last_frame = Instant::now();
 
         event_loop
-            .run(move |event, window_target| match event {
-                Event::NewEvents(_) => {
-                    let now = Instant::now();
-                    imgui.io_mut().update_delta_time(now - last_frame);
-                    last_frame = now;
-                }
-                Event::AboutToWait => {
-                    platform
-                        .prepare_frame(imgui.io_mut(), &window)
-                        .expect("Failed to prepare frame");
-                    window.request_redraw();
-                    platform
-                        .prepare_frame(imgui.io_mut(), &app_window)
-                        .expect("Failed to prepare frame");
-                    app_window.request_redraw();
-                }
-                Event::WindowEvent {
-                    event: WindowEvent::RedrawRequested,
-                    ..
-                } => {
-                    let ui = imgui.frame();
-                    let mouse_pos = ui.io().mouse_pos;
-                    let mouse_wheel = ui.io().mouse_wheel;
-                    // initialize gui_data
-                    gui_data.is_left_clicked = false;
-                    gui_data.is_wheel_clicked = false;
-                    gui_data.monitor_value = 0.0;
+            .run(move |event, window_target| {
+                // imgui take handles
+                platform.handle_event(imgui.io_mut(), &app_window, &event);
 
-                    if ui.is_mouse_down(MouseButton::Left) {
-                        gui_data.is_left_clicked = true;
-                    }
-                    if ui.is_mouse_down(MouseButton::Middle) {
-                        gui_data.is_wheel_clicked = true;
+                match event {
+                    Event::NewEvents(_) => {
+                        let now = Instant::now();
+                        imgui.io_mut().update_delta_time(now - last_frame);
+                        last_frame = now;
                     }
 
-                    let mut run = true;
-                    run_ui(&mut run, ui);
-                    if !run {
-                        window_target.exit();
+                    Event::AboutToWait => {
+                        platform
+                            .prepare_frame(imgui.io_mut(), &window)
+                            .expect("Failed to prepare frame");
+                        window.request_redraw();
+                        platform
+                            .prepare_frame(imgui.io_mut(), &app_window)
+                            .expect("Failed to prepare frame");
+                        app_window.request_redraw();
                     }
 
-                    unsafe { app.render(&app_window, mouse_pos, mouse_wheel, gui_data) }.unwrap();
+                    Event::WindowEvent { event, .. } => match event {
+                        WindowEvent::CursorMoved { position, .. } => {
+                            gui_data.mouse_pos = [position.x as f32, position.y as f32];
+                        }
 
-                    ui.window("debug window")
-                        .size([600.0, 220.0], Condition::FirstUseEver)
-                        .build(|| {
-                            ui.button("button");
-                            if ui.button("reset camera") {
-                                unsafe {
-                                    app.reset_camera();
-                                }
+                        WindowEvent::MouseInput { state, button, .. } => {
+                            if state == ElementState::Pressed
+                                && button == winit::event::MouseButton::Left
+                            {
+                                gui_data.is_left_clicked = true;
                             }
-                            if ui.button("reset camera up") {
-                                unsafe {
-                                    app.reset_camera_up();
-                                }
-                            }
-                            ui.separator();
-                            // let mouse_pos = ui.io().mouse_pos;
-                            ui.text(format!(
-                                "Mouse Position: ({:.1},{:.1})",
-                                mouse_pos[0], mouse_pos[1]
-                            ));
-                            ui.text(format!(
-                                "is left clicked: ({:.1})",
-                                gui_data.is_left_clicked
-                            ));
-                            ui.text(format!(
-                                "is wheel clicked: ({:.1})",
-                                gui_data.is_wheel_clicked
-                            ));
-                            ui.text(format!("monitor value: ({:.1})", gui_data.monitor_value));
-                        });
+                        }
 
-                    let mut target = display.draw();
-                    target.clear_color_srgb(0.0, 0.0, 0.5, 1.0);
-                    platform.prepare_render(ui, &app_window);
-                    let draw_data = imgui.render();
-                    renderer
-                        .render(&mut target, draw_data)
-                        .expect("Rendering failed");
-                    target.finish().expect("Failed to swap buffers");
-                }
-                Event::WindowEvent {
-                    event: WindowEvent::Resized(new_size),
-                    ..
-                } => {
-                    if new_size.width > 0 && new_size.height > 0 {
-                        display.resize((new_size.width, new_size.height));
-                    }
-                    platform.handle_event(imgui.io_mut(), &window, &event);
-                }
-                Event::WindowEvent {
-                    event: WindowEvent::CloseRequested,
-                    ..
-                } => window_target.exit(),
-                event => {
-                    platform.handle_event(imgui.io_mut(), &window, &event);
+                        WindowEvent::MouseWheel { delta, .. } => match delta {
+                            winit::event::MouseScrollDelta::LineDelta(x, y) => {
+                                gui_data.mouse_wheel = y;
+                            }
+                            winit::event::MouseScrollDelta::PixelDelta(pos) => {
+                                gui_data.mouse_wheel = pos.y as f32;
+                            }
+                        },
+
+                        WindowEvent::Resized(new_size) => {
+                            if new_size.width > 0 && new_size.height > 0 {
+                                display.resize((new_size.width, new_size.height));
+                            }
+                        }
+
+                        WindowEvent::CloseRequested => window_target.exit(),
+
+                        WindowEvent::RedrawRequested => {
+                            let ui = imgui.frame();
+                            // initialize gui_data
+                            gui_data.is_left_clicked = false;
+                            gui_data.is_wheel_clicked = false;
+                            gui_data.monitor_value = 0.0;
+
+                            if ui.is_mouse_down(MouseButton::Left) {
+                                gui_data.is_left_clicked = true;
+                            }
+                            if ui.is_mouse_down(MouseButton::Middle) {
+                                gui_data.is_wheel_clicked = true;
+                            }
+
+                            let mut run = true;
+                            run_ui(&mut run, ui);
+                            if !run {
+                                window_target.exit();
+                            }
+
+                            unsafe { app.render(&app_window, gui_data) }.unwrap();
+
+                            ui.window("debug window")
+                                .size([600.0, 220.0], Condition::FirstUseEver)
+                                .build(|| {
+                                    ui.button("button");
+                                    if ui.button("reset camera") {
+                                        unsafe {
+                                            app.reset_camera();
+                                        }
+                                    }
+                                    if ui.button("reset camera up") {
+                                        unsafe {
+                                            app.reset_camera_up();
+                                        }
+                                    }
+                                    ui.separator();
+                                    // let mouse_pos = ui.io().mouse_pos;
+                                    ui.text(format!(
+                                        "Mouse Position: ({:.1},{:.1})",
+                                        gui_data.mouse_pos[0], gui_data.mouse_pos[1]
+                                    ));
+                                    ui.text(format!(
+                                        "is left clicked: ({:.1})",
+                                        gui_data.is_left_clicked
+                                    ));
+                                    ui.text(format!(
+                                        "is wheel clicked: ({:.1})",
+                                        gui_data.is_wheel_clicked
+                                    ));
+                                    ui.text(format!(
+                                        "monitor value: ({:.1})",
+                                        gui_data.monitor_value
+                                    ));
+                                });
+
+                            let mut target = display.draw();
+                            target.clear_color_srgb(0.0, 0.0, 0.5, 1.0);
+                            platform.prepare_render(ui, &app_window);
+                            let draw_data = imgui.render();
+                            renderer
+                                .render(&mut target, draw_data)
+                                .expect("Rendering failed");
+                            target.finish().expect("Failed to swap buffers");
+
+                            // TODO: summarize the data
+                            // clear value
+                            gui_data.mouse_wheel = 0.0;
+                        }
+                        _ => {}
+                    },
+                    _ => {}
                 }
             })
             .expect("EventLoop error");
@@ -262,6 +291,8 @@ struct GUIData {
     is_left_clicked: bool,
     is_wheel_clicked: bool,
     monitor_value: f32,
+    mouse_pos: [f32; 2],
+    mouse_wheel: f32,
 }
 
 impl Default for GUIData {
@@ -270,6 +301,8 @@ impl Default for GUIData {
             is_left_clicked: false,
             is_wheel_clicked: false,
             monitor_value: 0.0,
+            mouse_pos: [0.0, 0.0],
+            mouse_wheel: 0.0,
         }
     }
 }
@@ -524,13 +557,7 @@ impl App {
         })
     }
 
-    unsafe fn render(
-        &mut self,
-        window: &Window,
-        mouse_pos: [f32; 2],
-        mouse_wheel: f32,
-        gui_data: &mut GUIData,
-    ) -> Result<()> {
+    unsafe fn render(&mut self, window: &Window, gui_data: &mut GUIData) -> Result<()> {
         // Acquire an image from the swapchain
         // Execute the command buffer with that image as attachment in the framebuffer
         // Return the image to the swapchain for presentation
@@ -564,7 +591,12 @@ impl App {
 
         self.data.images_in_flight[image_index as usize] = self.data.in_flight_fences[self.frame];
 
-        self.update_uniform_buffer(image_index, mouse_pos, mouse_wheel, gui_data)?;
+        self.update_uniform_buffer(
+            image_index,
+            gui_data.mouse_pos,
+            gui_data.mouse_wheel,
+            gui_data,
+        )?;
 
         let wait_semaphores = &[self.data.image_available_semaphores[self.frame]];
         let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];

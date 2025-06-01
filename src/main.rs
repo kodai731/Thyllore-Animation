@@ -69,6 +69,9 @@ use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 use std::time::Instant;
 
+use imgui_winit_support::winit;
+use imgui_winit_support::winit::event::ElementState;
+
 use cgmath::num_traits::AsPrimitive;
 use cgmath::Vector4;
 use glium::buffer::Content;
@@ -155,8 +158,8 @@ impl support::System {
         event_loop
             .run(move |event, window_target| {
                 // imgui take handles
-                platform.handle_event(imgui.io_mut(), &window, &event);
-                
+                platform.handle_event(imgui.io_mut(), &app_window, &event);
+
                 match event {
                     Event::NewEvents(_) => {
                         let now = Instant::now();
@@ -180,6 +183,23 @@ impl support::System {
                             gui_data.mouse_pos = [position.x as f32, position.y as f32];
                         }
 
+                        WindowEvent::MouseInput { state, button, .. } => {
+                            if state == ElementState::Pressed
+                                && button == winit::event::MouseButton::Left
+                            {
+                                gui_data.is_left_clicked = true;
+                            }
+                        }
+
+                        WindowEvent::MouseWheel { delta, .. } => match delta {
+                            winit::event::MouseScrollDelta::LineDelta(x, y) => {
+                                gui_data.mouse_wheel = y;
+                            }
+                            winit::event::MouseScrollDelta::PixelDelta(pos) => {
+                                gui_data.mouse_wheel = pos.y as f32;
+                            }
+                        },
+
                         WindowEvent::Resized(new_size) => {
                             if new_size.width > 0 && new_size.height > 0 {
                                 display.resize((new_size.width, new_size.height));
@@ -190,8 +210,6 @@ impl support::System {
 
                         WindowEvent::RedrawRequested => {
                             let ui = imgui.frame();
-                            let mouse_pos = ui.io().mouse_pos;
-                            let mouse_wheel = ui.io().mouse_wheel;
                             // initialize gui_data
                             gui_data.is_left_clicked = false;
                             gui_data.is_wheel_clicked = false;
@@ -230,7 +248,7 @@ impl support::System {
                                     // let mouse_pos = ui.io().mouse_pos;
                                     ui.text(format!(
                                         "Mouse Position: ({:.1},{:.1})",
-                                        mouse_pos[0], mouse_pos[1]
+                                        gui_data.mouse_pos[0], gui_data.mouse_pos[1]
                                     ));
                                     ui.text(format!(
                                         "is left clicked: ({:.1})",
@@ -254,6 +272,10 @@ impl support::System {
                                 .render(&mut target, draw_data)
                                 .expect("Rendering failed");
                             target.finish().expect("Failed to swap buffers");
+
+                            // TODO: summarize the data
+                            // clear value
+                            gui_data.mouse_wheel = 0.0;
                         }
                         _ => {}
                     },

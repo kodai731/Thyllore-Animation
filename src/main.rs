@@ -1049,7 +1049,7 @@ impl App {
             let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
             gui_data.monitor_value = distance;
             if 0.001 < distance {
-                let translate_x_v = base_x * diff.x * 0.01;
+                let translate_x_v = base_x * -diff.x * 0.01;
                 let translate_y_v = base_y * -diff.y * 0.01;
                 camera_pos += translate_x_v + translate_y_v;
 

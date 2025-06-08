@@ -157,9 +157,6 @@ impl support::System {
 
         event_loop
             .run(move |event, window_target| {
-                // imgui take handles
-                platform.handle_event(imgui.io_mut(), &app_window, &event);
-
                 match event {
                     Event::NewEvents(_) => {
                         let now = Instant::now();
@@ -178,107 +175,119 @@ impl support::System {
                         app_window.request_redraw();
                     }
 
-                    Event::WindowEvent { event, .. } => match event {
-                        WindowEvent::CursorMoved { position, .. } => {
-                            gui_data.mouse_pos = [position.x as f32, position.y as f32];
+                    Event::WindowEvent {
+                        event: ref window_event,
+                        window_id,
+                        ..
+                    } => {
+                        if window_id == window.id() {
+                            platform.handle_event(imgui.io_mut(), &window, &event);
+                        } else if window_id == app_window.id() {
+                            platform.handle_event(imgui.io_mut(), &app_window, &event);
                         }
 
-                        WindowEvent::MouseInput { state, button, .. } => {
-                            if state == ElementState::Pressed
-                                && button == winit::event::MouseButton::Left
-                            {
-                                gui_data.is_left_clicked = true;
-                            }
-                        }
-
-                        WindowEvent::MouseWheel { delta, .. } => match delta {
-                            winit::event::MouseScrollDelta::LineDelta(x, y) => {
-                                gui_data.mouse_wheel = y;
-                            }
-                            winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                                gui_data.mouse_wheel = pos.y as f32;
-                            }
-                        },
-
-                        WindowEvent::Resized(new_size) => {
-                            if new_size.width > 0 && new_size.height > 0 {
-                                display.resize((new_size.width, new_size.height));
-                            }
-                        }
-
-                        WindowEvent::CloseRequested => window_target.exit(),
-
-                        WindowEvent::RedrawRequested => {
-                            let ui = imgui.frame();
-                            // initialize gui_data
-                            gui_data.is_left_clicked = false;
-                            gui_data.is_wheel_clicked = false;
-                            gui_data.monitor_value = 0.0;
-
-                            if ui.is_mouse_down(MouseButton::Left) {
-                                gui_data.is_left_clicked = true;
-                            }
-                            if ui.is_mouse_down(MouseButton::Middle) {
-                                gui_data.is_wheel_clicked = true;
+                        match window_event {
+                            WindowEvent::CursorMoved { position, .. } => {
+                                gui_data.mouse_pos = [position.x as f32, position.y as f32];
                             }
 
-                            let mut run = true;
-                            run_ui(&mut run, ui);
-                            if !run {
-                                window_target.exit();
+                            WindowEvent::MouseInput { state, button, .. } => {
+                                if *state == ElementState::Pressed
+                                    && *button == winit::event::MouseButton::Left
+                                {
+                                    gui_data.is_left_clicked = true;
+                                }
                             }
 
-                            unsafe { app.render(&app_window, gui_data) }.unwrap();
+                            WindowEvent::MouseWheel { delta, .. } => match delta {
+                                winit::event::MouseScrollDelta::LineDelta(x, y) => {
+                                    gui_data.mouse_wheel = *y;
+                                }
+                                winit::event::MouseScrollDelta::PixelDelta(pos) => {
+                                    gui_data.mouse_wheel = pos.y as f32;
+                                }
+                            },
 
-                            ui.window("debug window")
-                                .size([600.0, 220.0], Condition::FirstUseEver)
-                                .build(|| {
-                                    ui.button("button");
-                                    if ui.button("reset camera") {
-                                        unsafe {
-                                            app.reset_camera();
+                            WindowEvent::Resized(new_size) => {
+                                if new_size.width > 0 && new_size.height > 0 {
+                                    display.resize((new_size.width, new_size.height));
+                                }
+                            }
+
+                            WindowEvent::CloseRequested => window_target.exit(),
+
+                            WindowEvent::RedrawRequested => {
+                                let ui = imgui.frame();
+                                // initialize gui_data
+                                gui_data.is_left_clicked = false;
+                                gui_data.is_wheel_clicked = false;
+                                gui_data.monitor_value = 0.0;
+
+                                if ui.is_mouse_down(MouseButton::Left) {
+                                    gui_data.is_left_clicked = true;
+                                }
+                                if ui.is_mouse_down(MouseButton::Middle) {
+                                    gui_data.is_wheel_clicked = true;
+                                }
+
+                                let mut run = true;
+                                run_ui(&mut run, ui);
+                                if !run {
+                                    window_target.exit();
+                                }
+
+                                unsafe { app.render(&app_window, gui_data) }.unwrap();
+
+                                ui.window("debug window")
+                                    .size([600.0, 220.0], Condition::FirstUseEver)
+                                    .build(|| {
+                                        ui.button("button");
+                                        if ui.button("reset camera") {
+                                            unsafe {
+                                                app.reset_camera();
+                                            }
                                         }
-                                    }
-                                    if ui.button("reset camera up") {
-                                        unsafe {
-                                            app.reset_camera_up();
+                                        if ui.button("reset camera up") {
+                                            unsafe {
+                                                app.reset_camera_up();
+                                            }
                                         }
-                                    }
-                                    ui.separator();
-                                    // let mouse_pos = ui.io().mouse_pos;
-                                    ui.text(format!(
-                                        "Mouse Position: ({:.1},{:.1})",
-                                        gui_data.mouse_pos[0], gui_data.mouse_pos[1]
-                                    ));
-                                    ui.text(format!(
-                                        "is left clicked: ({:.1})",
-                                        gui_data.is_left_clicked
-                                    ));
-                                    ui.text(format!(
-                                        "is wheel clicked: ({:.1})",
-                                        gui_data.is_wheel_clicked
-                                    ));
-                                    ui.text(format!(
-                                        "monitor value: ({:.1})",
-                                        gui_data.monitor_value
-                                    ));
-                                });
+                                        ui.separator();
+                                        // let mouse_pos = ui.io().mouse_pos;
+                                        ui.text(format!(
+                                            "Mouse Position: ({:.1},{:.1})",
+                                            gui_data.mouse_pos[0], gui_data.mouse_pos[1]
+                                        ));
+                                        ui.text(format!(
+                                            "is left clicked: ({:.1})",
+                                            gui_data.is_left_clicked
+                                        ));
+                                        ui.text(format!(
+                                            "is wheel clicked: ({:.1})",
+                                            gui_data.is_wheel_clicked
+                                        ));
+                                        ui.text(format!(
+                                            "monitor value: ({:.1})",
+                                            gui_data.monitor_value
+                                        ));
+                                    });
 
-                            let mut target = display.draw();
-                            target.clear_color_srgb(0.0, 0.0, 0.5, 1.0);
-                            platform.prepare_render(ui, &app_window);
-                            let draw_data = imgui.render();
-                            renderer
-                                .render(&mut target, draw_data)
-                                .expect("Rendering failed");
-                            target.finish().expect("Failed to swap buffers");
+                                let mut target = display.draw();
+                                target.clear_color_srgb(0.0, 0.0, 0.5, 1.0);
+                                platform.prepare_render(ui, &app_window);
+                                let draw_data = imgui.render();
+                                renderer
+                                    .render(&mut target, draw_data)
+                                    .expect("Rendering failed");
+                                target.finish().expect("Failed to swap buffers");
 
-                            // TODO: summarize the data
-                            // clear value
-                            gui_data.mouse_wheel = 0.0;
+                                // TODO: summarize the data
+                                // clear value
+                                gui_data.mouse_wheel = 0.0;
+                            }
+                            _ => {}
                         }
-                        _ => {}
-                    },
+                    }
                     _ => {}
                 }
             })
@@ -1050,7 +1059,7 @@ impl App {
             gui_data.monitor_value = distance;
             if 0.001 < distance {
                 let translate_x_v = base_x * -diff.x * 0.01;
-                let translate_y_v = base_y * -diff.y * 0.01;
+                let translate_y_v = base_y * diff.y * 0.01;
                 camera_pos += translate_x_v + translate_y_v;
 
                 if !gui_data.is_wheel_clicked {

@@ -95,41 +95,6 @@ fn main() -> Result<()> {
     let destroying = false;
     let minimized = false;
 
-    // event_loop.run(move |event, _, control_flow| {
-    //     *control_flow = ControlFlow::Poll;
-    //     match event {
-    //         Event::MainEventsCleared if !destroying && !minimized => {
-    //             unsafe { app.render(&window) }.unwrap()
-    //         }
-    //         Event::WindowEvent {
-    //             event: WindowEvent::Resized(size),
-    //             ..
-    //         } => {
-    //             if size.width == 0 || size.height == 0 {
-    //                 minimized = true;
-    //             } else {
-    //                 minimized = false;
-    //                 app.resized = true;
-    //             }
-    //         }
-    //         Event::WindowEvent {
-    //             event: WindowEvent::CloseRequested,
-    //             ..
-    //         } => {
-    //             destroying = true;
-    //             *control_flow = ControlFlow::Exit;
-    //             unsafe {
-    //                 app.device.device_wait_idle().unwrap();
-    //             }
-    //             unsafe {
-    //                 app.destroy();
-    //             }
-    //         }
-    //         _ => {}
-    //     }
-
-    // });
-
     system.main_loop(move |_, ui| {}, &mut app, &mut gui_data);
 
     Ok(())
@@ -216,6 +181,14 @@ impl support::System {
 
                             WindowEvent::CloseRequested => window_target.exit(),
 
+                            WindowEvent::DroppedFile(path_buf) => {
+                                if window_id == window.id() {
+                                    if let Some(path) = path_buf.to_str() {
+                                        gui_data.file_path = path.to_string();
+                                    }
+                                }
+                            }
+
                             WindowEvent::RedrawRequested => {
                                 let ui = imgui.frame();
                                 // initialize gui_data
@@ -270,6 +243,9 @@ impl support::System {
                                             "monitor value: ({:.1})",
                                             gui_data.monitor_value
                                         ));
+                                        ui.input_text("file path", &mut gui_data.file_path)
+                                            .read_only(true)
+                                            .build();
                                     });
 
                                 let mut target = display.draw();
@@ -302,6 +278,7 @@ struct GUIData {
     monitor_value: f32,
     mouse_pos: [f32; 2],
     mouse_wheel: f32,
+    file_path: String,
 }
 
 impl Default for GUIData {
@@ -312,6 +289,7 @@ impl Default for GUIData {
             monitor_value: 0.0,
             mouse_pos: [0.0, 0.0],
             mouse_wheel: 0.0,
+            file_path: String::default(),
         }
     }
 }

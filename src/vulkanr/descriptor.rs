@@ -30,6 +30,10 @@ impl RRDescriptorSet {
         }
         Ok(())
     }
+
+    pub unsafe fn delete_data(&mut self, rrdevice: &RRDevice) {
+        self.rrdata.delete(rrdevice);
+    }
 }
 unsafe fn create_descriptor_set_layout(
     rrdevice: &RRDevice,

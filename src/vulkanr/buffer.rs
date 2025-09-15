@@ -35,6 +35,12 @@ impl RRUniformBuffer {
         rruniform_buffer.uniform_buffer_object = uniform_buffer_object;
         rruniform_buffer
     }
+    
+    pub unsafe fn delete(&self, rrdevice: &RRDevice) {
+        rrdevice.device.destroy_buffer(self.buffer, None);
+        rrdevice.device.free_memory(self.buffer_memory, None);
+        //self.uniform_buffer_object.
+    }
 }
 
 // unsafe fn create_uniform_buffers(
@@ -126,6 +132,12 @@ impl RRIndexBuffer {
 
         rrindex_buffer
     }
+
+    pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
+        rrdevice.device.destroy_buffer(self.buffer, None);
+        rrdevice.device.free_memory(self.buffer_memory, None);
+        self.indices = 0;
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -198,6 +210,12 @@ impl RRVertexBuffer {
         rrvertex_buffer
     }
 
+    pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
+        rrdevice.device.destroy_buffer(self.buffer, None);
+        rrdevice.device.free_memory(self.buffer_memory, None);
+        self.vertices = 0;
+    }
+
     // TODO: efficiency
     pub unsafe fn update(
         &mut self,
@@ -261,6 +279,12 @@ impl RRBuffer {
         rrbuffer.buffer = buffer;
         rrbuffer.buffer_memory = buffer_memory;
         rrbuffer
+    }
+
+    pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
+        rrdevice.device.destroy_buffer(self.buffer, None);
+        rrdevice.device.free_memory(self.buffer_memory, None);
+        self.indices = 0;
     }
 }
 

@@ -1,10 +1,10 @@
+use super::super::math::math::{Mat4, Vec2, Vec3, Vec4};
 use super::buffer::*;
 use super::device::*;
 use super::swapchain::*;
 use super::vulkan::*;
 use std::cmp::PartialEq;
 use std::hash::{Hash, Hasher};
-use super::super::math::math::{Mat4, Vec2, Vec3, Vec4};
 
 #[repr(C)] // for compatibility of C struct
 #[derive(Copy, Clone, Debug, Default)]
@@ -34,6 +34,15 @@ impl RRData {
             rrdata.rruniform_buffers.push(rruniform_buffer);
         }
         rrdata
+    }
+
+    pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
+        for uniform_buffer in &self.rruniform_buffers {
+            uniform_buffer.delete(rrdevice);
+        }
+        self.rruniform_buffers.clear();
+        rrdevice.device.destroy_image_view(self.image_view, None);
+        rrdevice.device.destroy_sampler(self.sampler, None);
     }
 }
 

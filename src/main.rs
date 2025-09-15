@@ -95,41 +95,6 @@ fn main() -> Result<()> {
     let destroying = false;
     let minimized = false;
 
-    // event_loop.run(move |event, _, control_flow| {
-    //     *control_flow = ControlFlow::Poll;
-    //     match event {
-    //         Event::MainEventsCleared if !destroying && !minimized => {
-    //             unsafe { app.render(&window) }.unwrap()
-    //         }
-    //         Event::WindowEvent {
-    //             event: WindowEvent::Resized(size),
-    //             ..
-    //         } => {
-    //             if size.width == 0 || size.height == 0 {
-    //                 minimized = true;
-    //             } else {
-    //                 minimized = false;
-    //                 app.resized = true;
-    //             }
-    //         }
-    //         Event::WindowEvent {
-    //             event: WindowEvent::CloseRequested,
-    //             ..
-    //         } => {
-    //             destroying = true;
-    //             *control_flow = ControlFlow::Exit;
-    //             unsafe {
-    //                 app.device.device_wait_idle().unwrap();
-    //             }
-    //             unsafe {
-    //                 app.destroy();
-    //             }
-    //         }
-    //         _ => {}
-    //     }
-
-    // });
-
     system.main_loop(move |_, ui| {}, &mut app, &mut gui_data);
 
     Ok(())
@@ -157,9 +122,6 @@ impl support::System {
 
         event_loop
             .run(move |event, window_target| {
-                // imgui take handles
-                platform.handle_event(imgui.io_mut(), &app_window, &event);
-
                 match event {
                     Event::NewEvents(_) => {
                         let now = Instant::now();
@@ -178,107 +140,130 @@ impl support::System {
                         app_window.request_redraw();
                     }
 
-                    Event::WindowEvent { event, .. } => match event {
-                        WindowEvent::CursorMoved { position, .. } => {
-                            gui_data.mouse_pos = [position.x as f32, position.y as f32];
+                    Event::WindowEvent {
+                        event: ref window_event,
+                        window_id,
+                        ..
+                    } => {
+                        if window_id == window.id() {
+                            platform.handle_event(imgui.io_mut(), &window, &event);
+                        } else if window_id == app_window.id() {
+                            platform.handle_event(imgui.io_mut(), &app_window, &event);
                         }
 
-                        WindowEvent::MouseInput { state, button, .. } => {
-                            if state == ElementState::Pressed
-                                && button == winit::event::MouseButton::Left
-                            {
-                                gui_data.is_left_clicked = true;
-                            }
-                        }
-
-                        WindowEvent::MouseWheel { delta, .. } => match delta {
-                            winit::event::MouseScrollDelta::LineDelta(x, y) => {
-                                gui_data.mouse_wheel = y;
-                            }
-                            winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                                gui_data.mouse_wheel = pos.y as f32;
-                            }
-                        },
-
-                        WindowEvent::Resized(new_size) => {
-                            if new_size.width > 0 && new_size.height > 0 {
-                                display.resize((new_size.width, new_size.height));
-                            }
-                        }
-
-                        WindowEvent::CloseRequested => window_target.exit(),
-
-                        WindowEvent::RedrawRequested => {
-                            let ui = imgui.frame();
-                            // initialize gui_data
-                            gui_data.is_left_clicked = false;
-                            gui_data.is_wheel_clicked = false;
-                            gui_data.monitor_value = 0.0;
-
-                            if ui.is_mouse_down(MouseButton::Left) {
-                                gui_data.is_left_clicked = true;
-                            }
-                            if ui.is_mouse_down(MouseButton::Middle) {
-                                gui_data.is_wheel_clicked = true;
+                        match window_event {
+                            WindowEvent::CursorMoved { position, .. } => {
+                                gui_data.mouse_pos = [position.x as f32, position.y as f32];
                             }
 
-                            let mut run = true;
-                            run_ui(&mut run, ui);
-                            if !run {
-                                window_target.exit();
+                            WindowEvent::MouseInput { state, button, .. } => {
+                                if *state == ElementState::Pressed
+                                    && *button == winit::event::MouseButton::Left
+                                {
+                                    gui_data.is_left_clicked = true;
+                                }
                             }
 
-                            unsafe { app.render(&app_window, gui_data) }.unwrap();
+                            WindowEvent::MouseWheel { delta, .. } => match delta {
+                                winit::event::MouseScrollDelta::LineDelta(x, y) => {
+                                    gui_data.mouse_wheel = *y;
+                                }
+                                winit::event::MouseScrollDelta::PixelDelta(pos) => {
+                                    gui_data.mouse_wheel = pos.y as f32;
+                                }
+                            },
 
-                            ui.window("debug window")
-                                .size([600.0, 220.0], Condition::FirstUseEver)
-                                .build(|| {
-                                    ui.button("button");
-                                    if ui.button("reset camera") {
-                                        unsafe {
-                                            app.reset_camera();
-                                        }
+                            WindowEvent::Resized(new_size) => {
+                                if new_size.width > 0 && new_size.height > 0 {
+                                    display.resize((new_size.width, new_size.height));
+                                }
+                            }
+
+                            WindowEvent::CloseRequested => window_target.exit(),
+
+                            WindowEvent::DroppedFile(path_buf) => {
+                                if window_id == window.id() {
+                                    if let Some(path) = path_buf.to_str() {
+                                        gui_data.file_path = path.to_string();
                                     }
-                                    if ui.button("reset camera up") {
-                                        unsafe {
-                                            app.reset_camera_up();
+                                }
+                            }
+
+                            WindowEvent::RedrawRequested => {
+                                let ui = imgui.frame();
+                                // initialize gui_data
+                                gui_data.is_left_clicked = false;
+                                gui_data.is_wheel_clicked = false;
+                                gui_data.monitor_value = 0.0;
+
+                                if ui.is_mouse_down(MouseButton::Left) {
+                                    gui_data.is_left_clicked = true;
+                                }
+                                if ui.is_mouse_down(MouseButton::Middle) {
+                                    gui_data.is_wheel_clicked = true;
+                                }
+
+                                let mut run = true;
+                                run_ui(&mut run, ui);
+                                if !run {
+                                    window_target.exit();
+                                }
+
+                                unsafe { app.render(&app_window, gui_data) }.unwrap();
+
+                                ui.window("debug window")
+                                    .size([600.0, 220.0], Condition::FirstUseEver)
+                                    .build(|| {
+                                        ui.button("button");
+                                        if ui.button("reset camera") {
+                                            unsafe {
+                                                app.reset_camera();
+                                            }
                                         }
-                                    }
-                                    ui.separator();
-                                    // let mouse_pos = ui.io().mouse_pos;
-                                    ui.text(format!(
-                                        "Mouse Position: ({:.1},{:.1})",
-                                        gui_data.mouse_pos[0], gui_data.mouse_pos[1]
-                                    ));
-                                    ui.text(format!(
-                                        "is left clicked: ({:.1})",
-                                        gui_data.is_left_clicked
-                                    ));
-                                    ui.text(format!(
-                                        "is wheel clicked: ({:.1})",
-                                        gui_data.is_wheel_clicked
-                                    ));
-                                    ui.text(format!(
-                                        "monitor value: ({:.1})",
-                                        gui_data.monitor_value
-                                    ));
-                                });
+                                        if ui.button("reset camera up") {
+                                            unsafe {
+                                                app.reset_camera_up();
+                                            }
+                                        }
+                                        ui.separator();
+                                        // let mouse_pos = ui.io().mouse_pos;
+                                        ui.text(format!(
+                                            "Mouse Position: ({:.1},{:.1})",
+                                            gui_data.mouse_pos[0], gui_data.mouse_pos[1]
+                                        ));
+                                        ui.text(format!(
+                                            "is left clicked: ({:.1})",
+                                            gui_data.is_left_clicked
+                                        ));
+                                        ui.text(format!(
+                                            "is wheel clicked: ({:.1})",
+                                            gui_data.is_wheel_clicked
+                                        ));
+                                        ui.text(format!(
+                                            "monitor value: ({:.1})",
+                                            gui_data.monitor_value
+                                        ));
+                                        ui.input_text("file path", &mut gui_data.file_path)
+                                            .read_only(true)
+                                            .build();
+                                    });
 
-                            let mut target = display.draw();
-                            target.clear_color_srgb(0.0, 0.0, 0.5, 1.0);
-                            platform.prepare_render(ui, &app_window);
-                            let draw_data = imgui.render();
-                            renderer
-                                .render(&mut target, draw_data)
-                                .expect("Rendering failed");
-                            target.finish().expect("Failed to swap buffers");
+                                let mut target = display.draw();
+                                target.clear_color_srgb(0.0, 0.0, 0.5, 1.0);
+                                platform.prepare_render(ui, &app_window);
+                                let draw_data = imgui.render();
+                                renderer
+                                    .render(&mut target, draw_data)
+                                    .expect("Rendering failed");
+                                target.finish().expect("Failed to swap buffers");
 
-                            // TODO: summarize the data
-                            // clear value
-                            gui_data.mouse_wheel = 0.0;
+                                // TODO: summarize the data
+                                // clear value
+                                gui_data.mouse_wheel = 0.0;
+                            }
+                            _ => {}
                         }
-                        _ => {}
-                    },
+                    }
                     _ => {}
                 }
             })
@@ -293,6 +278,7 @@ struct GUIData {
     monitor_value: f32,
     mouse_pos: [f32; 2],
     mouse_wheel: f32,
+    file_path: String,
 }
 
 impl Default for GUIData {
@@ -303,6 +289,7 @@ impl Default for GUIData {
             monitor_value: 0.0,
             mouse_pos: [0.0, 0.0],
             mouse_wheel: 0.0,
+            file_path: String::default(),
         }
     }
 }
@@ -411,10 +398,10 @@ impl App {
         );
         println!("created pipeline");
 
-        if let Err(e) = Self::load_model(&instance, &rrdevice, &mut data) {
+        if let Err(e) = Self::reload_model_data_buffer(&instance, &rrdevice, &mut data) {
             eprintln!("{:?}", e)
         }
-        println!("loaded model");
+        println!("reloaded model");
 
         let tex_coord = Vec2::new(0.0, 0.0);
         let mut color = Vec4::new(1.0, 0.0, 0.0, 1.0);
@@ -432,14 +419,6 @@ impl App {
         println!("created grid data ");
         // let _ = Self::create_texture_image(&instance, &device, &mut data)?;
         // data.texture_image = RRImage::new(&instance, &rrdevice, &data.rrcommand_pool.borrow_mut());
-        data.model_vertex_buffer = RRVertexBuffer::new(
-            &instance,
-            &rrdevice,
-            &data.rrcommand_pool,
-            (size_of::<Vertex>() * data.vertices.len()) as vk::DeviceSize,
-            data.vertices.as_ptr() as *const c_void,
-            data.vertices.len(),
-        );
         data.grid_vertex_buffer = RRVertexBuffer::new(
             &instance,
             &rrdevice,
@@ -448,15 +427,7 @@ impl App {
             data.grid_vertices.as_ptr() as *const c_void,
             data.grid_vertices.len(),
         );
-        println!("created vertex buffers model and grid");
-        data.model_index_buffer = RRIndexBuffer::new(
-            &instance,
-            &rrdevice,
-            &data.rrcommand_pool,
-            (size_of::<u32>() * data.indices.len()) as u64,
-            data.indices.as_ptr() as *const c_void,
-            data.indices.len(),
-        );
+        println!("created grid vertex buffers");
         data.grid_index_buffer = RRIndexBuffer::new(
             &instance,
             &rrdevice,
@@ -465,23 +436,12 @@ impl App {
             data.grid_indices.as_ptr() as *const c_void,
             data.grid_indices.len(),
         );
-        println!("created index buffers model and grid");
+        println!("created grid index buffer");
 
-        data.model_descriptor_set.rrdata =
-            RRData::create_uniform_buffers(&instance, &rrdevice, &data.rrswapchain);
         data.grid_descriptor_set.rrdata =
             RRData::create_uniform_buffers(&instance, &rrdevice, &data.rrswapchain);
-        println!("created uniform buffers");
+        println!("created grid uniform buffers");
 
-        data.model_descriptor_set.rrdata.image_view = create_image_view(
-            &rrdevice,
-            data.texture_image,
-            vk::Format::R8G8B8A8_SRGB,
-            vk::ImageAspectFlags::COLOR,
-            data.mip_levels,
-        )?;
-        data.model_descriptor_set.rrdata.sampler =
-            create_texture_sampler(&rrdevice, data.mip_levels)?;
         data.grid_descriptor_set.rrdata.image_view = create_image_view(
             &rrdevice,
             data.texture_image,
@@ -1050,7 +1010,7 @@ impl App {
             gui_data.monitor_value = distance;
             if 0.001 < distance {
                 let translate_x_v = base_x * -diff.x * 0.01;
-                let translate_y_v = base_y * -diff.y * 0.01;
+                let translate_y_v = base_y * diff.y * 0.01;
                 camera_pos += translate_x_v + translate_y_v;
 
                 if !gui_data.is_wheel_clicked {
@@ -1262,5 +1222,61 @@ impl App {
         ) {
             eprintln!("failed to update vertex buffer: {}", e);
         }
+    }
+
+    unsafe fn reload_model_data_buffer(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        data: &mut AppData,
+    ) -> Result<()> {
+        if let Err(e) = Self::load_model(&instance, &rrdevice, data) {
+            eprintln!("{:?}", e)
+        }
+        println!("loaded model");
+
+        if data.model_vertex_buffer.buffer != vk::Buffer::null()
+            && data.model_index_buffer.buffer != vk::Buffer::null()
+        {
+            data.model_vertex_buffer.delete(&rrdevice);
+            data.model_index_buffer.delete(&rrdevice);
+        }
+
+        if data.model_descriptor_set.rrdata.rruniform_buffers.len() > 0 {
+            data.model_descriptor_set.rrdata.delete(&rrdevice);
+        }
+
+        data.model_vertex_buffer = RRVertexBuffer::new(
+            &instance,
+            &rrdevice,
+            &data.rrcommand_pool,
+            (size_of::<Vertex>() * data.vertices.len()) as vk::DeviceSize,
+            data.vertices.as_ptr() as *const c_void,
+            data.vertices.len(),
+        );
+
+        data.model_index_buffer = RRIndexBuffer::new(
+            &instance,
+            &rrdevice,
+            &data.rrcommand_pool,
+            (size_of::<u32>() * data.indices.len()) as u64,
+            data.indices.as_ptr() as *const c_void,
+            data.indices.len(),
+        );
+
+        data.model_descriptor_set.rrdata =
+            RRData::create_uniform_buffers(&instance, &rrdevice, &data.rrswapchain);
+
+        data.model_descriptor_set.rrdata.image_view = create_image_view(
+            &rrdevice,
+            data.texture_image,
+            vk::Format::R8G8B8A8_SRGB,
+            vk::ImageAspectFlags::COLOR,
+            data.mip_levels,
+        )?;
+
+        data.model_descriptor_set.rrdata.sampler =
+            create_texture_sampler(&rrdevice, data.mip_levels)?;
+
+        Ok(())
     }
 }

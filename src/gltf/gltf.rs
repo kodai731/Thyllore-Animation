@@ -337,14 +337,17 @@ unsafe fn process_animation(
             }
         }
         log!("position count {:?}", gltf_data.positions.len());
-        log!(
-            "target0 position count {:?}",
-            gltf_data.morph_targets[0].positions.len()
-        );
-        log!(
-            "morph animation0 weights count {:?}",
-            gltf_data.morph_animations[0].weights.len()
-        );
+        if gltf_data.morph_targets.len() > 0 {
+            // morphing
+            log!(
+                "target0 position count {:?}",
+                gltf_data.morph_targets[0].positions.len()
+            );
+            log!(
+                "morph animation0 weights count {:?}",
+                gltf_data.morph_animations[0].weights.len()
+            );
+        }
     }
     Ok(())
 }

@@ -1141,7 +1141,7 @@ impl App {
         // }
 
         // gltf model
-        let grass_path = "src/resources/yard_grass.glb";
+        let grass_path = "src/resources/phoenix-bird/glb/phoenixBird.glb";
         let gltf_data = load_gltf(grass_path)?;
         (
             data.texture_image,
@@ -1158,7 +1158,7 @@ impl App {
 
         for i in 0..gltf_data.positions.len() {
             let vertex = Vertex::new(
-                Vec3::new_array(gltf_data.positions[i]) * 0.01f32,
+                Vec3::new_array(gltf_data.positions[i]),
                 Vec4::new(0.0, 1.0, 0.0, 1.0),
                 Vec2::new_array(gltf_data.tex_coords[i]),
             );
@@ -1195,9 +1195,12 @@ impl App {
     // TODO: efficiency
     unsafe fn morphing(&mut self, time: f32) {
         let gltf_data = &self.data.gltf_data;
+        if gltf_data.morph_targets.len() <= 0 {
+            return;
+        };
         // reset
         for i in 0..self.data.vertices.len() {
-            self.data.vertices[i].pos = Vec3::new_array(gltf_data.positions[i]) * 0.01f32;
+            self.data.vertices[i].pos = Vec3::new_array(gltf_data.positions[i]);
         }
 
         let animation_index = gltf_data.morph_target_index(time);

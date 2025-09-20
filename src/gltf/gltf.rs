@@ -6,44 +6,17 @@ use gltf::buffer::Data;
 use gltf::{image, Document, Gltf, Node};
 
 #[derive(Clone, Debug, Default)]
-pub struct GltfData {
-    pub positions: Vec<[f32; 3]>,
-    pub indices: Vec<u32>,
-    pub tex_coords: Vec<[f32; 2]>,
-    pub joint_indices: Vec<[u16; 4]>,
-    pub joint_weights: Vec<[f32; 4]>,
-    pub morph_targets: Vec<MorphTarget>,
+pub struct GltfModel {
+    pub gltf_data: Vec<GltfData>,
     pub morph_animations: Vec<MorphAnimation>,
-    pub image_indices: Vec<[u16; 4]>,
-    pub image_data: Vec<ImageData>,
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct MorphTarget {
-    pub positions: Vec<[f32; 3]>,
-    pub normals: Vec<[f32; 3]>,
-    pub tangents: Vec<[f32; 3]>,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct MorphAnimation {
-    pub key_frame: f32,
-    pub weights: Vec<f32>,
-}
-
-impl GltfData {
-    fn new() -> Self {
-        Self {
-            positions: Vec::new(),
-            indices: Vec::new(),
-            tex_coords: Vec::new(),
-            joint_indices: Vec::new(),
-            joint_weights: Vec::new(),
-            morph_targets: Vec::new(),
-            morph_animations: Vec::new(),
-            image_indices: Vec::new(),
-            image_data: Vec::new(),
-        }
+impl GltfModel {
+    pub unsafe fn load_model(path: &str) -> Self {
+        let mut gltf_model = GltfModel::default();
+        gltf_model.morph_animations = Vec::new();
+        load_gltf(&mut gltf_model, path);
+        gltf_model
     }
 
     pub fn morph_target_index(&self, time: f32) -> usize {
@@ -67,6 +40,46 @@ impl GltfData {
             }
         }
         index
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct GltfData {
+    pub positions: Vec<[f32; 3]>,
+    pub indices: Vec<u32>,
+    pub tex_coords: Vec<[f32; 2]>,
+    pub joint_indices: Vec<[u16; 4]>,
+    pub joint_weights: Vec<[f32; 4]>,
+    pub image_indices: Vec<[u16; 4]>,
+    pub image_data: Vec<ImageData>,
+    pub morph_targets: Vec<MorphTarget>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct MorphTarget {
+    pub positions: Vec<[f32; 3]>,
+    pub normals: Vec<[f32; 3]>,
+    pub tangents: Vec<[f32; 3]>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct MorphAnimation {
+    pub key_frame: f32,
+    pub weights: Vec<f32>,
+}
+
+impl GltfData {
+    fn new() -> Self {
+        Self {
+            positions: Vec::new(),
+            indices: Vec::new(),
+            tex_coords: Vec::new(),
+            joint_indices: Vec::new(),
+            joint_weights: Vec::new(),
+            image_indices: Vec::new(),
+            image_data: Vec::new(),
+            morph_targets: Vec::new(),
+        }
     }
 }
 
@@ -97,18 +110,16 @@ pub struct ImageData {
     pub height: u32,
 }
 
-pub unsafe fn load_gltf(path: &str) -> Result<GltfData> {
-    let (gltf, buffers, images) = gltf::import(format!("{}", path)).expect("Failed to load grass");
-    let mut gltf_data = GltfData::new();
+unsafe fn load_gltf(gltf_model: &mut GltfModel, path: &str) {
+    let (gltf, buffers, images) = gltf::import(format!("{}", path)).expect("Failed to load model");
     for scene in gltf.scenes() {
         for node in scene.nodes() {
-            process_node(&gltf, &buffers, &images, &node, &mut gltf_data)?;
+            process_node(&gltf, &buffers, &images, &node, gltf_model).unwrap();
         }
     }
     for animation in gltf.animations() {
-        process_animation(&gltf, &buffers, animation, &mut gltf_data)?;
+        process_animation(&gltf, &buffers, animation, gltf_model).unwrap();
     }
-    Ok(gltf_data)
 }
 
 unsafe fn process_node(
@@ -116,7 +127,7 @@ unsafe fn process_node(
     buffers: &Vec<Data>,
     images: &Vec<gltf::image::Data>,
     node: &Node,
-    gltf_data: &mut GltfData,
+    gltf_model: &mut GltfModel,
 ) -> Result<()> {
     println!("Node {} {}", node.index().to_string(), node.name().unwrap());
     // meshes
@@ -130,6 +141,7 @@ unsafe fn process_node(
         // primitive
         primitives.for_each(|primitive| {
             println!("primitive found");
+            let mut gltf_data = GltfData::new();
             let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
             println!("Topology: {:?}", primitive.mode());
@@ -236,19 +248,20 @@ unsafe fn process_node(
                     gltf_data.morph_targets.push(morph_target);
                 }
             }
+
+            // validate
+            println!("indices count {}", gltf_data.indices.len());
+            println!("joint indices count {}", gltf_data.joint_indices.len());
+            println!("joint weights count {}", gltf_data.joint_weights.len());
+            println!("positions count {}", gltf_data.positions.len());
+            println!("tex coords count {}", gltf_data.tex_coords.len());
+            println!("morph targets count {}", gltf_data.morph_targets.len());
+            gltf_model.gltf_data.push(gltf_data);
         });
     }
     for child in node.children() {
-        process_node(gltf, buffers, images, &child, gltf_data)?;
+        process_node(gltf, buffers, images, &child, gltf_model)?;
     }
-
-    // validate
-    println!("indices count {}", gltf_data.indices.len());
-    println!("joint indices count {}", gltf_data.joint_indices.len());
-    println!("joint weights count {}", gltf_data.joint_weights.len());
-    println!("positions count {}", gltf_data.positions.len());
-    println!("tex coords count {}", gltf_data.tex_coords.len());
-    println!("morph targets count {}", gltf_data.morph_targets.len());
 
     Ok(())
 }
@@ -257,9 +270,10 @@ unsafe fn process_animation(
     gltf: &Document,
     buffers: &Vec<Data>,
     animation: gltf::Animation,
-    gltf_data: &mut GltfData,
+    gltf_model: &mut GltfModel,
 ) -> Result<()> {
     for channel in animation.channels() {
+        let gltf_data = &gltf_model.gltf_data[0];
         let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
         let mut key_frames = Vec::new();
         let mut weights = Vec::new();
@@ -297,6 +311,7 @@ unsafe fn process_animation(
                 ReadOutputs::MorphTargetWeights(morph_target_weights) => {
                     println!("Morph Target Weights");
                     let mut weight = Vec::new();
+                    // TODO: multi data
                     let morph_target_length = gltf_data.morph_targets.len();
                     for (i, morph_target_weight) in morph_target_weights.into_f32().enumerate() {
                         log!("Morph Target Weight: {} {:?}", i, morph_target_weight);
@@ -319,14 +334,14 @@ unsafe fn process_animation(
                 let mut morph_animation = MorphAnimation::new();
                 morph_animation.key_frame = key_frames[i];
                 morph_animation.weights = weights[i].clone();
-                gltf_data.morph_animations.push(morph_animation);
+                gltf_model.morph_animations.push(morph_animation);
             }
         }
 
         // validate
-        for i in 0..gltf_data.morph_animations.len() {
-            for j in 0..gltf_data.morph_animations[i].weights.len() {
-                let morph_animation = &gltf_data.morph_animations[i];
+        for i in 0..gltf_model.morph_animations.len() {
+            for j in 0..gltf_model.morph_animations[i].weights.len() {
+                let morph_animation = &gltf_model.morph_animations[i];
                 log!(
                     "Morph Animation {} KeyFrame {:?} Weight {} {:?}",
                     i,
@@ -345,7 +360,7 @@ unsafe fn process_animation(
             );
             log!(
                 "morph animation0 weights count {:?}",
-                gltf_data.morph_animations[0].weights.len()
+                gltf_model.morph_animations[0].weights.len()
             );
         }
     }

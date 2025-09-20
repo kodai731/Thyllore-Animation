@@ -8,7 +8,7 @@ pub struct RRDescriptorSet {
     pub descriptor_set_layout: vk::DescriptorSetLayout,
     pub descriptor_pool: vk::DescriptorPool,
     pub descriptor_sets: Vec<vk::DescriptorSet>,
-    pub rrdata: RRData,
+    pub rrdata: Vec<RRData>,
 }
 
 impl RRDescriptorSet {
@@ -32,7 +32,9 @@ impl RRDescriptorSet {
     }
 
     pub unsafe fn delete_data(&mut self, rrdevice: &RRDevice) {
-        self.rrdata.delete(rrdevice);
+        for i in 0..self.rrdata.len() {
+            self.rrdata[i].delete(rrdevice);
+        }
     }
 }
 unsafe fn create_descriptor_set_layout(
@@ -105,36 +107,39 @@ unsafe fn create_descriptor_sets(
     rrdescriptor_set.descriptor_sets = rrdevice.device.allocate_descriptor_sets(&info)?;
 
     for i in 0..rrswapchain.swapchain_images.len() {
-        let info = vk::DescriptorBufferInfo::builder()
-            .buffer(rrdescriptor_set.rrdata.rruniform_buffers[i].buffer)
-            .offset(0)
-            .range(size_of::<UniformBufferObject>() as u64);
-        // The configuration of descriptors is updated using the update_descriptor_sets function,
-        // which takes an array of vk::WriteDescriptorSet structs as parameter.
-        let buffer_info = &[info];
+        for j in 0..rrdescriptor_set.rrdata.len() {
+            let info = vk::DescriptorBufferInfo::builder()
+                .buffer(rrdescriptor_set.rrdata[j].rruniform_buffers[i].buffer)
+                .offset(0)
+                .range(size_of::<UniformBufferObject>() as u64);
+            // The configuration of descriptors is updated using the update_descriptor_sets function,
+            // which takes an array of vk::WriteDescriptorSet structs as parameter.
+            let buffer_info = &[info];
 
-        let info = vk::DescriptorImageInfo::builder()
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .image_view(rrdescriptor_set.rrdata.image_view)
-            .sampler(rrdescriptor_set.rrdata.sampler);
-        let image_info = &[info];
+            let info = vk::DescriptorImageInfo::builder()
+                .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                .image_view(rrdescriptor_set.rrdata[j].image_view)
+                .sampler(rrdescriptor_set.rrdata[j].sampler);
+            let image_info = &[info];
 
-        let ubo_write = vk::WriteDescriptorSet::builder()
-            .dst_set(rrdescriptor_set.descriptor_sets[i])
-            .dst_binding(0)
-            .dst_array_element(0) // Remember that descriptors can be arrays, so we also need to specify the first index in the array that we want to update
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .buffer_info(buffer_info);
-        let sampler_write = vk::WriteDescriptorSet::builder()
-            .dst_set(rrdescriptor_set.descriptor_sets[i])
-            .dst_binding(1)
-            .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .image_info(image_info);
+            let ubo_write = vk::WriteDescriptorSet::builder()
+                .dst_set(rrdescriptor_set.descriptor_sets[i])
+                .dst_binding(0)
+                .dst_array_element(0) // Remember that descriptors can be arrays, so we also need to specify the first index in the array that we want to update
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .buffer_info(buffer_info);
+            let sampler_write = vk::WriteDescriptorSet::builder()
+                .dst_set(rrdescriptor_set.descriptor_sets[i])
+                .dst_binding(1)
+                .dst_array_element(0)
+                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                .image_info(image_info);
 
-        rrdevice
-            .device
-            .update_descriptor_sets(&[ubo_write, sampler_write], &[] as &[vk::CopyDescriptorSet]);
+            rrdevice.device.update_descriptor_sets(
+                &[ubo_write, sampler_write],
+                &[] as &[vk::CopyDescriptorSet],
+            );
+        }
     }
 
     Ok(())

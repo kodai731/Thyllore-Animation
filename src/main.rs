@@ -468,27 +468,58 @@ impl App {
             eprintln!("failed to create grid descriptor set: {:?}", e);
         }
         println!("created grid descriptor set");
-        let offset_vertex = (data.grid_vertices.len()) as u64;
-        let offset_index = (data.grid_indices.len()) as u64;
+        let offset_vertex = (data.grid_vertices.len()) as u32;
+        let offset_index = (data.grid_indices.len()) as u32;
         data.rrcommand_buffer = RRCommandBuffer::new(&data.rrcommand_pool);
-        if let Err(e) = create_command_buffers(
+
+        if let Err(e) = RRCommandBuffer::allocate_command_buffers(
             &rrdevice,
             &data.rrrender,
-            &data.rrswapchain,
-            &data.grid_pipeline,
-            &data.grid_descriptor_set,
-            &data.grid_vertex_buffer,
-            &data.grid_index_buffer,
-            &data.model_pipeline,
-            &data.model_descriptor_set,
-            &data.model_vertex_buffer,
-            &data.model_index_buffer,
             &mut data.rrcommand_buffer,
-            offset_vertex,
-            offset_index,
         ) {
-            eprintln!("failed to create command buffers: {:?}", e);
+            eprintln!("failed to allocate command buffers: {:?}", e);
         }
+
+        for i in 0..data.rrrender.framebuffers.len() {
+            // grid, model
+
+            if let Err(e) = RRCommandBuffer::bind_command(
+                &rrdevice,
+                &data.rrrender,
+                &data.rrswapchain,
+                &data.grid_pipeline,
+                &data.grid_descriptor_set,
+                &data.grid_vertex_buffer,
+                &data.grid_index_buffer,
+                &mut data.rrcommand_buffer,
+                0,
+                0,
+                i * 2,
+                i,
+                0
+            ) {
+                eprintln!("failed to create command buffers: {:?}", e);
+            }
+
+            if let Err(e) = RRCommandBuffer::bind_command(
+                &rrdevice,
+                &data.rrrender,
+                &data.rrswapchain,
+                &data.model_pipeline,
+                &data.model_descriptor_set,
+                &data.model_vertex_buffer,
+                &data.model_index_buffer,
+                &mut data.rrcommand_buffer,
+                0,
+                0,
+                i * 2 + 1,
+                i,
+                0
+            ) {
+                eprintln!("failed to create command buffers: {:?}", e);
+            }
+        }
+
         println!("created command buffer");
 
         let _ = Self::create_sync_objects(&rrdevice.device, &mut data)?;
@@ -560,7 +591,10 @@ impl App {
 
         let wait_semaphores = &[self.data.image_available_semaphores[self.frame]];
         let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let command_buffers = &[self.data.rrcommand_buffer.command_buffers[image_index]];
+        let command_buffers = &[
+            self.data.rrcommand_buffer.command_buffers[2 * image_index],
+            self.data.rrcommand_buffer.command_buffers[2 * image_index + 1],
+        ];
         let signal_semaphores = &[self.data.render_finish_semaphores[self.frame]];
         let submit_info = vk::SubmitInfo::builder()
             .wait_semaphores(wait_semaphores)

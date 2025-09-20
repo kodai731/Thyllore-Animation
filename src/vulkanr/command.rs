@@ -78,56 +78,46 @@ impl RRCommandBuffer {
         rrcommand_buffer.rrcommand_pool = Rc::clone(rrcommand_pool);
         rrcommand_buffer
     }
-}
 
-unsafe fn create_command_pool(
-    instance: &Instance,
-    surface: &vk::SurfaceKHR,
-    rrdevice: &RRDevice,
-    rrcommand_buffer: &mut RRCommandPool,
-) -> Result<()> {
-    let indices = QueueFamilyIndices::get(instance, surface, &rrdevice.physical_device)?;
-    let info = vk::CommandPoolCreateInfo::builder()
-        .flags(vk::CommandPoolCreateFlags::empty())
-        .queue_family_index(indices.graphics); // Each command pool can only allocate command buffers that are submitted on a single type of queue.
+    // grid, grid, model, model
+    pub unsafe fn allocate_command_buffers(
+        rrdevice: &RRDevice,
+        rrrender: &RRRender,
+        rrcommand_buffer: &mut RRCommandBuffer,
+    ) -> Result<()> {
+        let info = vk::CommandBufferAllocateInfo::builder()
+            .command_pool(rrcommand_buffer.rrcommand_pool.command_pool)
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count((rrrender.framebuffers.len() * 2) as u32);
+        rrcommand_buffer.command_buffers = rrdevice.device.allocate_command_buffers(&info)?;
+        Ok(())
+    }
 
-    rrcommand_buffer.command_pool = rrdevice.device.create_command_pool(&info, None)?;
-
-    Ok(())
-}
-
-// TODO: パイプラインのデータをクラスにまとめる
-pub unsafe fn create_command_buffers(
-    rrdevice: &RRDevice,
-    rrrender: &RRRender,
-    rrswapchain: &RRSwapchain,
-    grid_pipeline: &RRPipeline,
-    grid_descriptor_set: &RRDescriptorSet,
-    grid_vertex_buffer: &RRVertexBuffer,
-    grid_index_buffer: &RRIndexBuffer,
-    model_pipeline: &RRPipeline,
-    model_descriptor_set: &RRDescriptorSet,
-    model_vertex_buffer: &RRVertexBuffer,
-    model_index_buffer: &RRIndexBuffer,
-    rrcommand_buffer: &mut RRCommandBuffer,
-    offset_vertex: u64,
-    offset_index: u64,
-) -> Result<()> {
-    let info = vk::CommandBufferAllocateInfo::builder()
-        .command_pool(rrcommand_buffer.rrcommand_pool.command_pool)
-        .level(vk::CommandBufferLevel::PRIMARY)
-        .command_buffer_count(rrrender.framebuffers.len() as u32);
-    rrcommand_buffer.command_buffers = rrdevice.device.allocate_command_buffers(&info)?;
-
-    for (i, command_buffer) in rrcommand_buffer.command_buffers.iter().enumerate() {
+    // TODO: summarize data in pipeline
+    pub unsafe fn bind_command(
+        rrdevice: &RRDevice,
+        rrrender: &RRRender,
+        rrswapchain: &RRSwapchain,
+        pipeline: &RRPipeline,
+        descriptor_set: &RRDescriptorSet,
+        vertex_buffer: &RRVertexBuffer,
+        index_buffer: &RRIndexBuffer,
+        rrcommand_buffer: &mut RRCommandBuffer,
+        offset_vertex: u32,
+        offset_index: u32,
+        command_buffer_index: usize,
+        frame_index: usize,
+        binding_index: u32,
+    ) -> Result<()> {
         let inheritance = vk::CommandBufferInheritanceInfo::builder(); //  only relevant for secondary command buffers.
         let begin_info = vk::CommandBufferBeginInfo::builder()
             .flags(vk::CommandBufferUsageFlags::empty())
             .inheritance_info(&inheritance);
+        let command_buffer = rrcommand_buffer.command_buffers[command_buffer_index];
 
         rrdevice
             .device
-            .begin_command_buffer(*command_buffer, &begin_info)?;
+            .begin_command_buffer(command_buffer, &begin_info)?;
 
         let render_area = vk::Rect2D::builder()
             .offset(vk::Offset2D::default())
@@ -147,76 +137,66 @@ pub unsafe fn create_command_buffers(
         let clear_values = &[color_clear_value, depth_clear_value];
         let info = vk::RenderPassBeginInfo::builder()
             .render_pass(rrrender.render_pass)
-            .framebuffer(rrrender.framebuffers[i])
+            .framebuffer(rrrender.framebuffers[frame_index])
             .render_area(render_area)
             .clear_values(clear_values);
         rrdevice
             .device
-            .cmd_begin_render_pass(*command_buffer, &info, vk::SubpassContents::INLINE);
+            .cmd_begin_render_pass(command_buffer, &info, vk::SubpassContents::INLINE);
 
-        // grid
         rrdevice.device.cmd_bind_pipeline(
-            *command_buffer,
+            command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            grid_pipeline.pipeline,
+            pipeline.pipeline,
         );
         rrdevice.device.cmd_bind_vertex_buffers(
-            *command_buffer,
-            0,
-            &[grid_vertex_buffer.buffer],
+            command_buffer,
+            binding_index,
+            &[vertex_buffer.buffer],
             &[0],
         );
         rrdevice.device.cmd_bind_index_buffer(
-            *command_buffer,
-            grid_index_buffer.buffer,
+            command_buffer,
+            index_buffer.buffer,
             0,
             vk::IndexType::UINT32,
         );
         rrdevice.device.cmd_bind_descriptor_sets(
-            *command_buffer,
+            command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            grid_pipeline.pipeline_layout,
+            pipeline.pipeline_layout,
             0,
-            &[grid_descriptor_set.descriptor_sets[i]],
+            &[descriptor_set.descriptor_sets[frame_index]],
             &[],
         );
-        rrdevice
-            .device
-            .cmd_draw_indexed(*command_buffer, grid_index_buffer.indices, 1, 0, 0, 0);
+        rrdevice.device.cmd_draw_indexed(
+            command_buffer,
+            index_buffer.indices,
+            1,
+            offset_index,
+            offset_vertex as i32,
+            binding_index,
+        );
 
-        // model
-        rrdevice.device.cmd_bind_pipeline(
-            *command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
-            model_pipeline.pipeline,
-        );
-        rrdevice.device.cmd_bind_vertex_buffers(
-            *command_buffer,
-            0,
-            &[model_vertex_buffer.buffer],
-            &[0],
-        );
-        rrdevice.device.cmd_bind_index_buffer(
-            *command_buffer,
-            model_index_buffer.buffer,
-            0,
-            vk::IndexType::UINT32,
-        );
-        rrdevice.device.cmd_bind_descriptor_sets(
-            *command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
-            model_pipeline.pipeline_layout,
-            0,
-            &[model_descriptor_set.descriptor_sets[i]],
-            &[],
-        );
-        rrdevice
-            .device
-            .cmd_draw_indexed(*command_buffer, model_index_buffer.indices, 1, 0, 0, 0);
+        rrdevice.device.cmd_end_render_pass(command_buffer);
+        rrdevice.device.end_command_buffer(command_buffer)?;
 
-        rrdevice.device.cmd_end_render_pass(*command_buffer);
-        rrdevice.device.end_command_buffer(*command_buffer)?;
+        Ok(())
     }
+}
+
+unsafe fn create_command_pool(
+    instance: &Instance,
+    surface: &vk::SurfaceKHR,
+    rrdevice: &RRDevice,
+    rrcommand_buffer: &mut RRCommandPool,
+) -> Result<()> {
+    let indices = QueueFamilyIndices::get(instance, surface, &rrdevice.physical_device)?;
+    let info = vk::CommandPoolCreateInfo::builder()
+        .flags(vk::CommandPoolCreateFlags::empty())
+        .queue_family_index(indices.graphics); // Each command pool can only allocate command buffers that are submitted on a single type of queue.
+
+    rrcommand_buffer.command_pool = rrdevice.device.create_command_pool(&info, None)?;
 
     Ok(())
 }

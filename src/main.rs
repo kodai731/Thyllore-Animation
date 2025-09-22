@@ -468,27 +468,50 @@ impl App {
             eprintln!("failed to create grid descriptor set: {:?}", e);
         }
         println!("created grid descriptor set");
-        let offset_vertex = (data.grid_vertices.len()) as u64;
-        let offset_index = (data.grid_indices.len()) as u64;
+        let offset_vertex = (data.grid_vertices.len()) as u32;
+        let offset_index = (data.grid_indices.len()) as u32;
         data.rrcommand_buffer = RRCommandBuffer::new(&data.rrcommand_pool);
-        if let Err(e) = create_command_buffers(
+
+        if let Err(e) = RRCommandBuffer::allocate_command_buffers(
             &rrdevice,
             &data.rrrender,
-            &data.rrswapchain,
+            &mut data.rrcommand_buffer,
+        ) {
+            eprintln!("failed to allocate command buffers: {:?}", e);
+        }
+        let mut rrbind_info = Vec::new();
+        rrbind_info.push(RRBindInfo::new(
             &data.grid_pipeline,
             &data.grid_descriptor_set,
             &data.grid_vertex_buffer,
             &data.grid_index_buffer,
+            0,
+            0,
+        ));
+        rrbind_info.push(RRBindInfo::new(
             &data.model_pipeline,
             &data.model_descriptor_set,
             &data.model_vertex_buffer,
             &data.model_index_buffer,
-            &mut data.rrcommand_buffer,
-            offset_vertex,
-            offset_index,
-        ) {
-            eprintln!("failed to create command buffers: {:?}", e);
+            0,
+            0,
+        ));
+
+        for i in 0..data.rrrender.framebuffers.len() {
+            for j in 0..rrbind_info.len() {
+                if let Err(e) = RRCommandBuffer::bind_command(
+                    &rrdevice,
+                    &data.rrrender,
+                    &data.rrswapchain,
+                    &rrbind_info,
+                    &mut data.rrcommand_buffer,
+                    i,
+                ) {
+                    eprintln!("failed to create command buffers: {:?}", e);
+                }
+            }
         }
+
         println!("created command buffer");
 
         let _ = Self::create_sync_objects(&rrdevice.device, &mut data)?;

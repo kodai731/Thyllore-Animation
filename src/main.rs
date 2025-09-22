@@ -316,8 +316,6 @@ struct AppData {
     rrcommand_buffer: RRCommandBuffer,
     model_pipeline: RRPipeline,
     model_descriptor_set: RRDescriptorSet,
-    model_vertex_buffer: RRVertexBuffer,
-    model_index_buffer: RRIndexBuffer,
     grid_pipeline: RRPipeline,
     grid_descriptor_set: RRDescriptorSet,
     grid_vertex_buffer: RRVertexBuffer,
@@ -327,13 +325,6 @@ struct AppData {
     render_finish_semaphores: Vec<vk::Semaphore>,
     in_flight_fences: Vec<vk::Fence>, // CPU-GPU sync. Fences are mainly designed to synchronize your application itself with rendering operation
     images_in_flight: Vec<vk::Fence>,
-    //rrdata_model: RRData,
-    //rrdata_grid: RRData,
-    texture_image: vk::Image,
-    texture_image_memory: vk::DeviceMemory,
-    vertices: Vec<Vertex>,
-    indices: Vec<u32>,
-    mip_levels: u32,
     msaa_samples: vk::SampleCountFlags,
     color_image: vk::Image, // We only need one render target since only one drawing operation is active at a time
     color_image_memory: vk::DeviceMemory,
@@ -347,7 +338,7 @@ struct AppData {
     is_left_clicked: bool,
     clicked_mouse_pos: [f32; 2],
     is_wheel_clicked: bool,
-    gltf_data: GltfData,
+    gltf_model: GltfModel,
 }
 
 impl App {
@@ -438,19 +429,21 @@ impl App {
         );
         println!("created grid index buffer");
 
-        data.grid_descriptor_set.rrdata =
-            RRData::create_uniform_buffers(&instance, &rrdevice, &data.rrswapchain);
+        data.grid_descriptor_set
+            .rrdata
+            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain));
         println!("created grid uniform buffers");
 
-        data.grid_descriptor_set.rrdata.image_view = create_image_view(
-            &rrdevice,
-            data.texture_image,
-            vk::Format::R8G8B8A8_SRGB,
-            vk::ImageAspectFlags::COLOR,
-            data.mip_levels,
-        )?;
-        data.grid_descriptor_set.rrdata.sampler =
-            create_texture_sampler(&rrdevice, data.mip_levels)?;
+        // let grid_rrdata = &mut data.grid_descriptor_set.rrdata[0];
+        // grid_rrdata.image_view = create_image_view(
+        //     &rrdevice,
+        //     data.texture_images[0],
+        //     vk::Format::R8G8B8A8_SRGB,
+        //     vk::ImageAspectFlags::COLOR,
+        //     data.mip_levels[0],
+        // )?;
+        // data.grid_descriptor_set.rrdata.sampler =
+        //     create_texture_sampler(&rrdevice, data.mip_levels[0])?;
 
         if let Err(e) = RRDescriptorSet::create_descriptor_set(
             &rrdevice,
@@ -488,14 +481,17 @@ impl App {
             0,
             0,
         ));
-        rrbind_info.push(RRBindInfo::new(
-            &data.model_pipeline,
-            &data.model_descriptor_set,
-            &data.model_vertex_buffer,
-            &data.model_index_buffer,
-            0,
-            0,
-        ));
+
+        for i in 0..data.model_descriptor_set.rrdata.len() {
+            rrbind_info.push(RRBindInfo::new(
+                &data.model_pipeline,
+                &data.model_descriptor_set,
+                &data.model_descriptor_set.rrdata[i].vertex_buffer,
+                &data.model_descriptor_set.rrdata[i].index_buffer,
+                0,
+                0,
+            ));
+        }
 
         for i in 0..data.rrrender.framebuffers.len() {
             for j in 0..rrbind_info.len() {
@@ -1080,37 +1076,41 @@ impl App {
                 10.0,
             );
 
-        let ubo = UniformBufferObject { model, view, proj };
-        let ubo_memory =
-            self.data.model_descriptor_set.rrdata.rruniform_buffers[image_index].buffer_memory;
-        let memory = self.rrdevice.device.map_memory(
-            ubo_memory,
-            0,
-            size_of::<UniformBufferObject>() as u64,
-            vk::MemoryMapFlags::empty(),
-        )?;
-        memcpy(&ubo, memory.cast(), 1);
-        self.rrdevice.device.unmap_memory(ubo_memory);
+        for i in 0..self.data.model_descriptor_set.rrdata.len() {
+            let rrdata = &mut self.data.model_descriptor_set.rrdata[i];
+            let ubo = UniformBufferObject { model, view, proj };
+            let ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;
+            let memory = self.rrdevice.device.map_memory(
+                ubo_memory,
+                0,
+                size_of::<UniformBufferObject>() as u64,
+                vk::MemoryMapFlags::empty(),
+            )?;
+            memcpy(&ubo, memory.cast(), 1);
+            self.rrdevice.device.unmap_memory(ubo_memory);
+        }
 
         // update for grid
         let model_grid = Mat4::identity();
-        let grid_ubo_memory =
-            self.data.grid_descriptor_set.rrdata.rruniform_buffers[image_index].buffer_memory;
-        let ubo_grid = UniformBufferObject {
-            model: model_grid,
-            view: view,
-            proj: proj,
-        };
-        let memory_grid = self.rrdevice.device.map_memory(
-            grid_ubo_memory,
-            0,
-            size_of::<UniformBufferObject>() as u64,
-            vk::MemoryMapFlags::empty(),
-        )?;
-        memcpy(&ubo_grid, memory_grid.cast(), 1);
-        self.rrdevice.device.unmap_memory(
-            self.data.grid_descriptor_set.rrdata.rruniform_buffers[image_index].buffer_memory,
-        );
+        for i in 0..self.data.grid_descriptor_set.rrdata.len() {
+            let rrdata = &mut self.data.grid_descriptor_set.rrdata[i];
+            let grid_ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;
+            let ubo_grid = UniformBufferObject {
+                model: model_grid,
+                view: view,
+                proj: proj,
+            };
+            let memory_grid = self.rrdevice.device.map_memory(
+                grid_ubo_memory,
+                0,
+                size_of::<UniformBufferObject>() as u64,
+                vk::MemoryMapFlags::empty(),
+            )?;
+            memcpy(&ubo_grid, memory_grid.cast(), 1);
+            self.rrdevice
+                .device
+                .unmap_memory(rrdata.rruniform_buffers[image_index].buffer_memory);
+        }
 
         Ok(())
     }
@@ -1120,77 +1120,36 @@ impl App {
         rrdevice: &RRDevice,
         data: &mut AppData,
     ) -> Result<()> {
-        let mut reader = BufReader::new(File::open("src/resources/VikingRoom/viking_room.obj")?);
-
-        // let (models, _) = tobj::load_obj_buf(
-        //     &mut reader,
-        //     &tobj::LoadOptions {
-        //         triangulate: true,
-        //         ..Default::default()
-        //     },
-        //     |_| Ok(Default::default()),
-        // )?;
-
-        // let mut unique_vertices = HashMap::new();
-
-        // for model in models {
-        //     for index in &model.mesh.indices {
-        //         let pos_offset = (3 * index) as usize;
-        //         let tex_coord_offset = (2 * index) as usize;
-
-        //         let vertex = Vertex {
-        //             pos: vec3(
-        //                 model.mesh.positions[pos_offset],
-        //                 model.mesh.positions[pos_offset + 1],
-        //                 model.mesh.positions[pos_offset + 2],
-        //             ),
-        //             color: vec3(1.0, 1.0, 1.0),
-        //             tex_coord: vec2(
-        //                 model.mesh.texcoords[tex_coord_offset],
-        //                 // The OBJ format assumes a coordinate system where a vertical coordinate of 0 means the bottom of the image,
-        //                 // however we've uploaded our image into Vulkan in a top to bottom orientation where 0 means the top of the image.
-        //                 1.0 - model.mesh.texcoords[tex_coord_offset + 1],
-        //             ),
-        //         };
-        //         if let Some(index) = unique_vertices.get(&vertex) {
-        //             data.indices.push(*index as u32);
-        //         } else {
-        //             let index = data.vertices.len();
-        //             unique_vertices.insert(vertex, index);
-        //             data.vertices.push(vertex);
-        //             data.indices.push(data.indices.len() as u32);
-        //         }
-        //     }
-        // }
-
         // gltf model
-        let grass_path = "src/resources/phoenix-bird/glb/phoenixBird.glb";
-        let gltf_data = load_gltf(grass_path)?;
-        (
-            data.texture_image,
-            data.texture_image_memory,
-            data.mip_levels,
-        ) = create_texture_image_pixel(
-            instance,
-            rrdevice,
-            data.rrcommand_pool.borrow_mut(),
-            &gltf_data.image_data[0].data,
-            gltf_data.image_data[0].width,
-            gltf_data.image_data[0].height,
-        )?;
+        let model_path = "src/resources/phoenix-bird/glb/phoenixBird.glb";
+        data.gltf_model = GltfModel::load_model(model_path);
 
-        for i in 0..gltf_data.positions.len() {
-            let vertex = Vertex::new(
-                Vec3::new_array(gltf_data.positions[i]),
-                Vec4::new(0.0, 1.0, 0.0, 1.0),
-                Vec2::new_array(gltf_data.tex_coords[i]),
-            );
-            data.vertices.push(vertex);
+        for i in 0..data.gltf_model.gltf_data.len() {
+            let gltf_data = &data.gltf_model.gltf_data[i];
+            let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain);
+            (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
+                instance,
+                rrdevice,
+                data.rrcommand_pool.borrow_mut(),
+                &gltf_data.image_data[0].data,
+                gltf_data.image_data[0].width,
+                gltf_data.image_data[0].height,
+            )?;
+
+            rrdata.vertex_data = VertexData::default();
+            for i in 0..gltf_data.positions.len() {
+                let vertex = Vertex::new(
+                    Vec3::new_array(gltf_data.positions[i]),
+                    Vec4::new(0.0, 1.0, 0.0, 1.0),
+                    Vec2::new_array(gltf_data.tex_coords[i]),
+                );
+                rrdata.vertex_data.vertices.push(vertex);
+            }
+
+            rrdata.vertex_data.indices = gltf_data.indices.clone();
+
+            &data.model_descriptor_set.rrdata.push(rrdata);
         }
-
-        data.indices = gltf_data.indices.clone();
-
-        data.gltf_data = gltf_data;
 
         Ok(())
     }
@@ -1217,36 +1176,46 @@ impl App {
 
     // TODO: efficiency
     unsafe fn morphing(&mut self, time: f32) {
-        let gltf_data = &self.data.gltf_data;
-        if gltf_data.morph_targets.len() <= 0 {
+        if self.data.gltf_model.morph_animations.len() <= 0 {
             return;
-        };
-        // reset
-        for i in 0..self.data.vertices.len() {
-            self.data.vertices[i].pos = Vec3::new_array(gltf_data.positions[i]);
         }
 
-        let animation_index = gltf_data.morph_target_index(time);
-        let morph_animation = &gltf_data.morph_animations[animation_index];
-        for i in 0..morph_animation.weights.len() {
-            let morph_target = &gltf_data.morph_targets[i];
-            for j in 0..morph_target.positions.len() {
-                let delta_position = Vec3::new_array(morph_target.positions[j])
-                    * morph_animation.weights[i]
-                    * 0.01f32;
-                self.data.vertices[j].pos += delta_position;
+        for i in 0..self.data.gltf_model.gltf_data.len() {
+            let animation_index = self.data.gltf_model.morph_target_index(time);
+
+            let gltf_model = &mut self.data.gltf_model;
+            let gltf_data = &mut gltf_model.gltf_data[i];
+            if gltf_data.morph_targets.len() <= 0 {
+                return;
+            };
+            // reset
+            let rrdata = &mut self.data.model_descriptor_set.rrdata[i];
+            let vertices = &mut rrdata.vertex_data.vertices;
+            for i in 0..vertices.len() {
+                vertices[i].pos = Vec3::new_array(gltf_data.positions[i]);
             }
-        }
 
-        if let Err(e) = self.data.model_vertex_buffer.update(
-            &self.instance,
-            &self.rrdevice,
-            &self.data.rrcommand_pool,
-            (size_of::<Vertex>() * self.data.vertices.len()) as vk::DeviceSize,
-            self.data.vertices.as_ptr() as *const c_void,
-            self.data.vertices.len(),
-        ) {
-            eprintln!("failed to update vertex buffer: {}", e);
+            let morph_animation = &gltf_model.morph_animations[animation_index];
+            for i in 0..morph_animation.weights.len() {
+                let morph_target = &gltf_data.morph_targets[i];
+                for j in 0..morph_target.positions.len() {
+                    let delta_position = Vec3::new_array(morph_target.positions[j])
+                        * morph_animation.weights[i]
+                        * 0.01f32;
+                    vertices[j].pos += delta_position;
+                }
+            }
+
+            if let Err(e) = rrdata.vertex_buffer.update(
+                &self.instance,
+                &self.rrdevice,
+                &self.data.rrcommand_pool,
+                (size_of::<Vertex>() * vertices.len()) as vk::DeviceSize,
+                vertices.as_ptr() as *const c_void,
+                vertices.len(),
+            ) {
+                eprintln!("failed to update vertex buffer: {}", e);
+            }
         }
     }
 
@@ -1256,52 +1225,45 @@ impl App {
         data: &mut AppData,
     ) -> Result<()> {
         if let Err(e) = Self::load_model(&instance, &rrdevice, data) {
-            eprintln!("{:?}", e)
+            eprintln!("{:?}", e);
+            log!("{:?}", e)
         }
-        println!("loaded model");
+        println!("reloaded model");
 
-        if data.model_vertex_buffer.buffer != vk::Buffer::null()
-            && data.model_index_buffer.buffer != vk::Buffer::null()
-        {
-            data.model_vertex_buffer.delete(&rrdevice);
-            data.model_index_buffer.delete(&rrdevice);
+        for i in 0..data.model_descriptor_set.rrdata.len() {
+            let rrdata = &mut data.model_descriptor_set.rrdata[i];
+            rrdata.delete(rrdevice);
+
+            rrdata.vertex_buffer = RRVertexBuffer::new(
+                &instance,
+                &rrdevice,
+                &data.rrcommand_pool,
+                (size_of::<Vertex>() * rrdata.vertex_data.vertices.len()) as vk::DeviceSize,
+                rrdata.vertex_data.vertices.as_ptr() as *const c_void,
+                rrdata.vertex_data.vertices.len(),
+            );
+
+            rrdata.index_buffer = RRIndexBuffer::new(
+                &instance,
+                &rrdevice,
+                &data.rrcommand_pool,
+                (size_of::<u32>() * rrdata.vertex_data.indices.len()) as u64,
+                rrdata.vertex_data.indices.as_ptr() as *const c_void,
+                rrdata.vertex_data.indices.len(),
+            );
+
+            RRData::create_uniform_buffers(rrdata, &instance, &rrdevice, &data.rrswapchain);
+
+            rrdata.image_view = create_image_view(
+                &rrdevice,
+                rrdata.image,
+                vk::Format::R8G8B8A8_SRGB,
+                vk::ImageAspectFlags::COLOR,
+                rrdata.mip_level,
+            )?;
+
+            rrdata.sampler = create_texture_sampler(&rrdevice, rrdata.mip_level)?;
         }
-
-        if data.model_descriptor_set.rrdata.rruniform_buffers.len() > 0 {
-            data.model_descriptor_set.rrdata.delete(&rrdevice);
-        }
-
-        data.model_vertex_buffer = RRVertexBuffer::new(
-            &instance,
-            &rrdevice,
-            &data.rrcommand_pool,
-            (size_of::<Vertex>() * data.vertices.len()) as vk::DeviceSize,
-            data.vertices.as_ptr() as *const c_void,
-            data.vertices.len(),
-        );
-
-        data.model_index_buffer = RRIndexBuffer::new(
-            &instance,
-            &rrdevice,
-            &data.rrcommand_pool,
-            (size_of::<u32>() * data.indices.len()) as u64,
-            data.indices.as_ptr() as *const c_void,
-            data.indices.len(),
-        );
-
-        data.model_descriptor_set.rrdata =
-            RRData::create_uniform_buffers(&instance, &rrdevice, &data.rrswapchain);
-
-        data.model_descriptor_set.rrdata.image_view = create_image_view(
-            &rrdevice,
-            data.texture_image,
-            vk::Format::R8G8B8A8_SRGB,
-            vk::ImageAspectFlags::COLOR,
-            data.mip_levels,
-        )?;
-
-        data.model_descriptor_set.rrdata.sampler =
-            create_texture_sampler(&rrdevice, data.mip_levels)?;
 
         Ok(())
     }

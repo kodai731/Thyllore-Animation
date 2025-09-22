@@ -15,25 +15,43 @@ pub struct Vertex {
 }
 
 #[derive(Clone, Debug, Default)]
+pub struct VertexData {
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<u32>,
+}
+
+// TODO: implement iterator
+#[derive(Clone, Debug, Default)]
 pub struct RRData {
     pub rruniform_buffers: Vec<RRUniformBuffer>,
+    pub image: vk::Image,
+    pub image_memory: vk::DeviceMemory,
+    pub mip_level: u32,
     pub image_view: vk::ImageView,
     pub sampler: vk::Sampler,
+    pub vertex_data: VertexData,
+    pub vertex_buffer: RRVertexBuffer,
+    pub index_buffer: RRIndexBuffer,
 }
 
 impl RRData {
+    pub unsafe fn new(instance: &Instance, rrdevice: &RRDevice, rrswapchain: &RRSwapchain) -> Self {
+        let mut rrdata = RRData::default();
+        Self::create_uniform_buffers(&mut rrdata, instance, rrdevice, rrswapchain);
+        rrdata
+    }
+
     pub unsafe fn create_uniform_buffers(
+        rrdata: &mut RRData,
         instance: &Instance,
         rrdevice: &RRDevice,
         rrswapchain: &RRSwapchain,
-    ) -> Self {
-        let mut rrdata = RRData::default();
+    ) {
         for _ in 0..rrswapchain.swapchain_images.len() {
             let ubo = UniformBufferObject::default();
             let rruniform_buffer = RRUniformBuffer::new(instance, rrdevice, ubo);
             rrdata.rruniform_buffers.push(rruniform_buffer);
         }
-        rrdata
     }
 
     pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
@@ -43,6 +61,12 @@ impl RRData {
         self.rruniform_buffers.clear();
         rrdevice.device.destroy_image_view(self.image_view, None);
         rrdevice.device.destroy_sampler(self.sampler, None);
+        rrdevice
+            .device
+            .destroy_buffer(self.vertex_buffer.buffer, None);
+        rrdevice
+            .device
+            .destroy_buffer(self.index_buffer.buffer, None);
     }
 }
 

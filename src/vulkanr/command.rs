@@ -110,20 +110,20 @@ impl RRCommandBuffer {
             .device
             .begin_command_buffer(command_buffer, &begin_info)?;
 
-        let render_area = vk::Rect2D::builder()
-            .offset(vk::Offset2D::default())
-            .extent(rrswapchain.swapchain_extent);
-        let color_clear_value = vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [0.0, 0.0, 0.0, 1.0],
-            },
-        };
-        let depth_clear_value = vk::ClearValue {
-            depth_stencil: vk::ClearDepthStencilValue {
-                depth: 1.0, // The range of depths in the depth buffer is 0.0 to 1.0 in Vulkan, where 1.0 lies at the far view plane and 0.0 at the near view plane
-                stencil: 0,
-            },
-        };
+            let render_area = vk::Rect2D::builder()
+                .offset(vk::Offset2D::default())
+                .extent(rrswapchain.swapchain_extent);
+            let color_clear_value = vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0.0, 0.0, 0.0, 1.0],
+                },
+            };
+            let depth_clear_value = vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: 1.0, // The range of depths in the depth buffer is 0.0 to 1.0 in Vulkan, where 1.0 lies at the far view plane and 0.0 at the near view plane
+                    stencil: 0,
+                },
+            };
 
         let clear_values = &[color_clear_value, depth_clear_value];
         let info = vk::RenderPassBeginInfo::builder()
@@ -187,7 +187,7 @@ unsafe fn create_command_pool(
 ) -> Result<()> {
     let indices = QueueFamilyIndices::get(instance, surface, &rrdevice.physical_device)?;
     let info = vk::CommandPoolCreateInfo::builder()
-        .flags(vk::CommandPoolCreateFlags::empty())
+        .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
         .queue_family_index(indices.graphics); // Each command pool can only allocate command buffers that are submitted on a single type of queue.
 
     rrcommand_buffer.command_pool = rrdevice.device.create_command_pool(&info, None)?;

@@ -5,9 +5,7 @@ use crate::vulkanr::descriptor::RRDescriptorSet;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::swapchain::RRSwapchain;
-use glutin::surface::Surface;
 use std::rc::Rc;
-use vulkanalia::vk::Pipeline;
 
 pub unsafe fn begin_single_time_commands(
     rrdevice: &RRDevice,
@@ -79,8 +77,8 @@ impl RRCommandBuffer {
         rrcommand_buffer
     }
 
+    // grid, grid, model, model
     pub unsafe fn allocate_command_buffers(
-        instance: &Instance,
         rrdevice: &RRDevice,
         rrrender: &RRRender,
         rrcommand_buffer: &mut RRCommandBuffer,
@@ -88,37 +86,29 @@ impl RRCommandBuffer {
         let info = vk::CommandBufferAllocateInfo::builder()
             .command_pool(rrcommand_buffer.rrcommand_pool.command_pool)
             .level(vk::CommandBufferLevel::PRIMARY)
-            .command_buffer_count(rrrender.framebuffers.len() as u32);
+            .command_buffer_count((rrrender.framebuffers.len() * 2) as u32);
         rrcommand_buffer.command_buffers = rrdevice.device.allocate_command_buffers(&info)?;
         Ok(())
     }
 
-    // TODO: sumarize data in pipeline
+    // TODO: summarize data in pipeline
     pub unsafe fn bind_command(
         rrdevice: &RRDevice,
         rrrender: &RRRender,
         rrswapchain: &RRSwapchain,
-        grid_pipeline: &RRPipeline,
-        grid_descriptor_set: &RRDescriptorSet,
-        grid_vertex_buffer: &RRVertexBuffer,
-        grid_index_buffer: &RRIndexBuffer,
-        model_pipeline: &RRPipeline,
-        model_descriptor_set: &RRDescriptorSet,
-        model_vertex_buffer: &RRVertexBuffer,
-        model_index_buffer: &RRIndexBuffer,
+        rrbind_info: &Vec<RRBindInfo>,
         rrcommand_buffer: &mut RRCommandBuffer,
-        offset_vertex: u64,
-        offset_index: u64,
+        frame_index: usize,
     ) -> Result<()> {
-        for (i, command_buffer) in rrcommand_buffer.command_buffers.iter().enumerate() {
-            let inheritance = vk::CommandBufferInheritanceInfo::builder(); //  only relevant for secondary command buffers.
-            let begin_info = vk::CommandBufferBeginInfo::builder()
-                .flags(vk::CommandBufferUsageFlags::empty())
-                .inheritance_info(&inheritance);
+        let inheritance = vk::CommandBufferInheritanceInfo::builder(); //  only relevant for secondary command buffers.
+        let begin_info = vk::CommandBufferBeginInfo::builder()
+            .flags(vk::CommandBufferUsageFlags::empty())
+            .inheritance_info(&inheritance);
+        let command_buffer = rrcommand_buffer.command_buffers[frame_index];
 
-            rrdevice
-                .device
-                .begin_command_buffer(*command_buffer, &begin_info)?;
+        rrdevice
+            .device
+            .begin_command_buffer(command_buffer, &begin_info)?;
 
             let render_area = vk::Rect2D::builder()
                 .offset(vk::Offset2D::default())
@@ -135,91 +125,55 @@ impl RRCommandBuffer {
                 },
             };
 
-            let clear_values = &[color_clear_value, depth_clear_value];
-            let info = vk::RenderPassBeginInfo::builder()
-                .render_pass(rrrender.render_pass)
-                .framebuffer(rrrender.framebuffers[i])
-                .render_area(render_area)
-                .clear_values(clear_values);
-            rrdevice.device.cmd_begin_render_pass(
-                *command_buffer,
-                &info,
-                vk::SubpassContents::INLINE,
-            );
+        let clear_values = &[color_clear_value, depth_clear_value];
+        let info = vk::RenderPassBeginInfo::builder()
+            .render_pass(rrrender.render_pass)
+            .framebuffer(rrrender.framebuffers[frame_index])
+            .render_area(render_area)
+            .clear_values(clear_values);
+        rrdevice
+            .device
+            .cmd_begin_render_pass(command_buffer, &info, vk::SubpassContents::INLINE);
 
-            // grid
+        for i in 0..rrbind_info.len() {
+            let rrbind_info = &rrbind_info[i];
             rrdevice.device.cmd_bind_pipeline(
-                *command_buffer,
+                command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                grid_pipeline.pipeline,
+                rrbind_info.rrpipeline.pipeline,
             );
             rrdevice.device.cmd_bind_vertex_buffers(
-                *command_buffer,
+                command_buffer,
                 0,
-                &[grid_vertex_buffer.buffer],
+                &[rrbind_info.rrvertex_buffer.buffer],
                 &[0],
             );
             rrdevice.device.cmd_bind_index_buffer(
-                *command_buffer,
-                grid_index_buffer.buffer,
+                command_buffer,
+                rrbind_info.rrindex_buffer.buffer,
                 0,
                 vk::IndexType::UINT32,
             );
             rrdevice.device.cmd_bind_descriptor_sets(
-                *command_buffer,
+                command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                grid_pipeline.pipeline_layout,
+                rrbind_info.rrpipeline.pipeline_layout,
                 0,
-                &[grid_descriptor_set.descriptor_sets[i]],
+                &[rrbind_info.rrdescriptor_set.descriptor_sets[frame_index]],
                 &[],
             );
             rrdevice.device.cmd_draw_indexed(
-                *command_buffer,
-                grid_index_buffer.indices,
+                command_buffer,
+                rrbind_info.rrindex_buffer.indices,
                 1,
-                0,
-                0,
-                0,
-            );
-
-            // model
-            rrdevice.device.cmd_bind_pipeline(
-                *command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                model_pipeline.pipeline,
-            );
-            rrdevice.device.cmd_bind_vertex_buffers(
-                *command_buffer,
-                0,
-                &[model_vertex_buffer.buffer],
-                &[0],
-            );
-            rrdevice.device.cmd_bind_index_buffer(
-                *command_buffer,
-                model_index_buffer.buffer,
-                0,
-                vk::IndexType::UINT32,
-            );
-            rrdevice.device.cmd_bind_descriptor_sets(
-                *command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                model_pipeline.pipeline_layout,
-                0,
-                &[model_descriptor_set.descriptor_sets[i]],
-                &[],
-            );
-            rrdevice.device.cmd_draw_indexed(
-                *command_buffer,
-                model_index_buffer.indices,
-                1,
-                0,
-                0,
+                rrbind_info.offset_index,
+                rrbind_info.offset_index as i32,
                 0,
             );
-
-            rrdevice.device.cmd_end_render_pass(*command_buffer);
-            rrdevice.device.end_command_buffer(*command_buffer)?;
         }
+
+        rrdevice.device.cmd_end_render_pass(command_buffer);
+        rrdevice.device.end_command_buffer(command_buffer)?;
 
         Ok(())
     }
@@ -239,4 +193,34 @@ unsafe fn create_command_pool(
     rrcommand_buffer.command_pool = rrdevice.device.create_command_pool(&info, None)?;
 
     Ok(())
+}
+
+#[derive(Clone, Debug)]
+pub struct RRBindInfo<'a> {
+    pub rrpipeline: &'a RRPipeline,
+    pub rrdescriptor_set: &'a RRDescriptorSet,
+    pub rrvertex_buffer: &'a RRVertexBuffer,
+    pub rrindex_buffer: &'a RRIndexBuffer,
+    pub offset_vertex: u32,
+    pub offset_index: u32,
+}
+
+impl<'a> RRBindInfo<'a> {
+    pub unsafe fn new(
+        rrpipeline: &'a RRPipeline,
+        rrdescriptor_set: &'a RRDescriptorSet,
+        rrvertex_buffer: &'a RRVertexBuffer,
+        rrindex_buffer: &'a RRIndexBuffer,
+        offset_vertex: u32,
+        offset_index: u32,
+    ) -> Self {
+        Self {
+            rrpipeline,
+            rrdescriptor_set,
+            rrvertex_buffer,
+            rrindex_buffer,
+            offset_vertex,
+            offset_index,
+        }
+    }
 }

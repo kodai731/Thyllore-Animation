@@ -481,14 +481,17 @@ impl App {
             0,
             0,
         ));
-        rrbind_info.push(RRBindInfo::new(
-            &data.model_pipeline,
-            &data.model_descriptor_set,
-            &data.model_descriptor_set.,
-            &data.model_index_buffer,
-            0,
-            0,
-        ));
+
+        for i in 0..data.model_descriptor_set.rrdata.len() {
+            rrbind_info.push(RRBindInfo::new(
+                &data.model_pipeline,
+                &data.model_descriptor_set,
+                &data.model_descriptor_set.rrdata[i].vertex_buffer,
+                &data.model_descriptor_set.rrdata[i].index_buffer,
+                0,
+                0,
+            ));
+        }
 
         for i in 0..data.rrrender.framebuffers.len() {
             for j in 0..rrbind_info.len() {
@@ -1066,12 +1069,12 @@ impl App {
         );
         let proj = correction
             * cgmath::perspective(
-            Deg(45.0),
-            self.data.rrswapchain.swapchain_extent.width as f32
-                / self.data.rrswapchain.swapchain_extent.height as f32,
-            0.1,
-            10.0,
-        );
+                Deg(45.0),
+                self.data.rrswapchain.swapchain_extent.width as f32
+                    / self.data.rrswapchain.swapchain_extent.height as f32,
+                0.1,
+                10.0,
+            );
 
         for i in 0..self.data.model_descriptor_set.rrdata.len() {
             let rrdata = &mut self.data.model_descriptor_set.rrdata[i];
@@ -1123,7 +1126,7 @@ impl App {
 
         for i in 0..data.gltf_model.gltf_data.len() {
             let gltf_data = &data.gltf_model.gltf_data[i];
-            let rrdata = &mut data.model_descriptor_set.rrdata[i];
+            let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain);
             (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
                 instance,
                 rrdevice,
@@ -1144,6 +1147,8 @@ impl App {
             }
 
             rrdata.vertex_data.indices = gltf_data.indices.clone();
+
+            &data.model_descriptor_set.rrdata.push(rrdata);
         }
 
         Ok(())
@@ -1171,6 +1176,10 @@ impl App {
 
     // TODO: efficiency
     unsafe fn morphing(&mut self, time: f32) {
+        if self.data.gltf_model.morph_animations.len() <= 0 {
+            return;
+        }
+
         for i in 0..self.data.gltf_model.gltf_data.len() {
             let animation_index = self.data.gltf_model.morph_target_index(time);
 

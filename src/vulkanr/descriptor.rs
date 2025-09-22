@@ -108,19 +108,14 @@ unsafe fn create_descriptor_sets(
 
     for i in 0..rrswapchain.swapchain_images.len() {
         for j in 0..rrdescriptor_set.rrdata.len() {
+            let rrdata = &rrdescriptor_set.rrdata[j];
             let info = vk::DescriptorBufferInfo::builder()
-                .buffer(rrdescriptor_set.rrdata[j].rruniform_buffers[i].buffer)
+                .buffer(rrdata.rruniform_buffers[i].buffer)
                 .offset(0)
                 .range(size_of::<UniformBufferObject>() as u64);
             // The configuration of descriptors is updated using the update_descriptor_sets function,
             // which takes an array of vk::WriteDescriptorSet structs as parameter.
             let buffer_info = &[info];
-
-            let info = vk::DescriptorImageInfo::builder()
-                .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                .image_view(rrdescriptor_set.rrdata[j].image_view)
-                .sampler(rrdescriptor_set.rrdata[j].sampler);
-            let image_info = &[info];
 
             let ubo_write = vk::WriteDescriptorSet::builder()
                 .dst_set(rrdescriptor_set.descriptor_sets[i])
@@ -128,17 +123,30 @@ unsafe fn create_descriptor_sets(
                 .dst_array_element(0) // Remember that descriptors can be arrays, so we also need to specify the first index in the array that we want to update
                 .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                 .buffer_info(buffer_info);
-            let sampler_write = vk::WriteDescriptorSet::builder()
-                .dst_set(rrdescriptor_set.descriptor_sets[i])
-                .dst_binding(1)
-                .dst_array_element(0)
-                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .image_info(image_info);
 
-            rrdevice.device.update_descriptor_sets(
-                &[ubo_write, sampler_write],
-                &[] as &[vk::CopyDescriptorSet],
-            );
+            if rrdata.image_view != vk::ImageView::null() && rrdata.sampler != vk::Sampler::null() {
+                let info = vk::DescriptorImageInfo::builder()
+                    .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                    .image_view(rrdata.image_view)
+                    .sampler(rrdata.sampler);
+                let image_info = &[info];
+
+                let sampler_write = vk::WriteDescriptorSet::builder()
+                    .dst_set(rrdescriptor_set.descriptor_sets[i])
+                    .dst_binding(1)
+                    .dst_array_element(0)
+                    .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                    .image_info(image_info);
+
+                rrdevice.device.update_descriptor_sets(
+                    &[ubo_write, sampler_write],
+                    &[] as &[vk::CopyDescriptorSet],
+                );
+            } else {
+                rrdevice
+                    .device
+                    .update_descriptor_sets(&[ubo_write], &[] as &[vk::CopyDescriptorSet]);
+            }
         }
     }
 

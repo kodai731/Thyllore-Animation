@@ -187,7 +187,7 @@ unsafe fn create_command_pool(
 ) -> Result<()> {
     let indices = QueueFamilyIndices::get(instance, surface, &rrdevice.physical_device)?;
     let info = vk::CommandPoolCreateInfo::builder()
-        .flags(vk::CommandPoolCreateFlags::empty())
+        .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
         .queue_family_index(indices.graphics); // Each command pool can only allocate command buffers that are submitted on a single type of queue.
 
     rrcommand_buffer.command_pool = rrdevice.device.create_command_pool(&info, None)?;

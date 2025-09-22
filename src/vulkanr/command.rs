@@ -5,9 +5,7 @@ use crate::vulkanr::descriptor::RRDescriptorSet;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::swapchain::RRSwapchain;
-use glutin::surface::Surface;
 use std::rc::Rc;
-use vulkanalia::vk::Pipeline;
 
 pub unsafe fn begin_single_time_commands(
     rrdevice: &RRDevice,
@@ -98,22 +96,15 @@ impl RRCommandBuffer {
         rrdevice: &RRDevice,
         rrrender: &RRRender,
         rrswapchain: &RRSwapchain,
-        pipeline: &RRPipeline,
-        descriptor_set: &RRDescriptorSet,
-        vertex_buffer: &RRVertexBuffer,
-        index_buffer: &RRIndexBuffer,
+        rrbind_info: &Vec<RRBindInfo>,
         rrcommand_buffer: &mut RRCommandBuffer,
-        offset_vertex: u32,
-        offset_index: u32,
-        command_buffer_index: usize,
         frame_index: usize,
-        binding_index: u32,
     ) -> Result<()> {
         let inheritance = vk::CommandBufferInheritanceInfo::builder(); //  only relevant for secondary command buffers.
         let begin_info = vk::CommandBufferBeginInfo::builder()
             .flags(vk::CommandBufferUsageFlags::empty())
             .inheritance_info(&inheritance);
-        let command_buffer = rrcommand_buffer.command_buffers[command_buffer_index];
+        let command_buffer = rrcommand_buffer.command_buffers[frame_index];
 
         rrdevice
             .device
@@ -144,39 +135,42 @@ impl RRCommandBuffer {
             .device
             .cmd_begin_render_pass(command_buffer, &info, vk::SubpassContents::INLINE);
 
-        rrdevice.device.cmd_bind_pipeline(
-            command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
-            pipeline.pipeline,
-        );
-        rrdevice.device.cmd_bind_vertex_buffers(
-            command_buffer,
-            binding_index,
-            &[vertex_buffer.buffer],
-            &[0],
-        );
-        rrdevice.device.cmd_bind_index_buffer(
-            command_buffer,
-            index_buffer.buffer,
-            0,
-            vk::IndexType::UINT32,
-        );
-        rrdevice.device.cmd_bind_descriptor_sets(
-            command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
-            pipeline.pipeline_layout,
-            0,
-            &[descriptor_set.descriptor_sets[frame_index]],
-            &[],
-        );
-        rrdevice.device.cmd_draw_indexed(
-            command_buffer,
-            index_buffer.indices,
-            1,
-            offset_index,
-            offset_vertex as i32,
-            binding_index,
-        );
+        for i in 0..rrbind_info.len() {
+            let rrbind_info = &rrbind_info[i];
+            rrdevice.device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                rrbind_info.rrpipeline.pipeline,
+            );
+            rrdevice.device.cmd_bind_vertex_buffers(
+                command_buffer,
+                0,
+                &[rrbind_info.rrvertex_buffer.buffer],
+                &[0],
+            );
+            rrdevice.device.cmd_bind_index_buffer(
+                command_buffer,
+                rrbind_info.rrindex_buffer.buffer,
+                0,
+                vk::IndexType::UINT32,
+            );
+            rrdevice.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                rrbind_info.rrpipeline.pipeline_layout,
+                0,
+                &[rrbind_info.rrdescriptor_set.descriptor_sets[frame_index]],
+                &[],
+            );
+            rrdevice.device.cmd_draw_indexed(
+                command_buffer,
+                rrbind_info.rrindex_buffer.indices,
+                1,
+                rrbind_info.offset_index,
+                rrbind_info.offset_index as i32,
+                0,
+            );
+        }
 
         rrdevice.device.cmd_end_render_pass(command_buffer);
         rrdevice.device.end_command_buffer(command_buffer)?;
@@ -199,4 +193,34 @@ unsafe fn create_command_pool(
     rrcommand_buffer.command_pool = rrdevice.device.create_command_pool(&info, None)?;
 
     Ok(())
+}
+
+#[derive(Clone, Debug)]
+pub struct RRBindInfo<'a> {
+    pub rrpipeline: &'a RRPipeline,
+    pub rrdescriptor_set: &'a RRDescriptorSet,
+    pub rrvertex_buffer: &'a RRVertexBuffer,
+    pub rrindex_buffer: &'a RRIndexBuffer,
+    pub offset_vertex: u32,
+    pub offset_index: u32,
+}
+
+impl<'a> RRBindInfo<'a> {
+    pub unsafe fn new(
+        rrpipeline: &'a RRPipeline,
+        rrdescriptor_set: &'a RRDescriptorSet,
+        rrvertex_buffer: &'a RRVertexBuffer,
+        rrindex_buffer: &'a RRIndexBuffer,
+        offset_vertex: u32,
+        offset_index: u32,
+    ) -> Self {
+        Self {
+            rrpipeline,
+            rrdescriptor_set,
+            rrvertex_buffer,
+            rrindex_buffer,
+            offset_vertex,
+            offset_index,
+        }
+    }
 }

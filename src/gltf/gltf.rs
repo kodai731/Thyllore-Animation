@@ -111,6 +111,7 @@ pub struct ImageData {
 }
 
 unsafe fn load_gltf(gltf_model: &mut GltfModel, path: &str) {
+    log!("Loading glTF file");
     let (gltf, buffers, images) = gltf::import(format!("{}", path)).expect("Failed to load model");
     for scene in gltf.scenes() {
         for node in scene.nodes() {
@@ -129,10 +130,10 @@ unsafe fn process_node(
     node: &Node,
     gltf_model: &mut GltfModel,
 ) -> Result<()> {
-    println!("Node {} {}", node.index().to_string(), node.name().unwrap());
+    log!("Node {} {}", node.index().to_string(), node.name().unwrap());
     // meshes
     if let Some(mesh) = node.mesh() {
-        println!("mesh found");
+        log!("mesh found");
         let primitives = mesh.primitives();
         let mut normals = Vec::new();
         let mut joint_indices = Vec::new();
@@ -140,11 +141,11 @@ unsafe fn process_node(
 
         // primitive
         primitives.for_each(|primitive| {
-            println!("primitive found");
+            log!("primitive found");
             let mut gltf_data = GltfData::new();
             let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
-            println!("Topology: {:?}", primitive.mode());
+            log!("Topology: {:?}", primitive.mode());
 
             let index_offset = gltf_data.indices.len();
             if let Some(gltf::mesh::util::ReadIndices::U16(gltf::accessor::Iter::Standard(iter))) =
@@ -158,7 +159,7 @@ unsafe fn process_node(
             }
 
             if let Some(iter) = reader.read_positions() {
-                println!("positions count {:?}", iter.len());
+                log!("positions count {:?}", iter.len());
                 for position in iter {
                     let mut position_converted = position;
                     position_converted[1] = 1.0 - position_converted[1];
@@ -188,7 +189,8 @@ unsafe fn process_node(
                 .base_color_texture()
             {
                 let texture = material.texture();
-                let image = &images[texture.source().index()];
+                let image_index = texture.source().index();
+                let image = &images[image_index];
 
                 let size = (size_of::<u8>() * image.pixels.len()) as u64;
                 let (width, height) = (image.width, image.height);
@@ -203,16 +205,16 @@ unsafe fn process_node(
 
             // joint
             if let Some(iter) = reader.read_joints(0) {
-                for joint in iter.into_u16() {
-                    print!("Joint: {:?}", joint);
+                for (joint_id, joint) in iter.into_u16().enumerate() {
+                    log!("Joint {}: {:?}", joint_id, joint);
                     joint_indices.push(joint);
                     gltf_data.joint_indices.push(joint);
                 }
             }
 
             if let Some(iter) = reader.read_weights(0) {
-                for weight in iter.into_f32() {
-                    println!("weight: {:?}", weight);
+                for (weight_id, weight) in iter.into_f32().enumerate() {
+                    log!("weight {}: {:?}", weight_id, weight);
                     joint_weights.push(weight);
                     gltf_data.joint_weights.push(weight);
                 }
@@ -226,21 +228,21 @@ unsafe fn process_node(
                     let (positions, normals, tangents) = target;
                     // positions
                     if let Some(position_iter) = positions {
-                        println!("morph positions count {:?}", position_iter.len());
+                        log!("morph positions count {:?}", position_iter.len());
                         for position in position_iter {
                             morph_target.positions.push(position);
                         }
                     }
                     // normals
                     if let Some(normal_iter) = normals {
-                        println!("morph normals count {:?}", normal_iter.len());
+                        log!("morph normals count {:?}", normal_iter.len());
                         for normal in normal_iter {
                             morph_target.normals.push(normal);
                         }
                     }
                     // tangents
                     if let Some(tangent_iter) = tangents {
-                        println!("morph tangents count {:?}", tangent_iter.len());
+                        log!("morph tangents count {:?}", tangent_iter.len());
                         for tangent in tangent_iter {
                             morph_target.tangents.push(tangent);
                         }
@@ -289,13 +291,12 @@ unsafe fn process_animation(
             use gltf::animation::util::ReadOutputs;
             match outputs {
                 ReadOutputs::Translations(translations) => {
-                    println!("Translations");
                     for translation in translations {
-                        println!("Translation: {:?}", translation);
+                        log!("Translation: {:?}", translation);
                     }
                 }
                 ReadOutputs::Rotations(rotations) => {
-                    println!("Rotations");
+                    log!("Rotations");
                     // if let rotations = outputs {
                     //     for rotation in rotations {
                     //         println!("Rotation: {:?}", rotation);
@@ -303,13 +304,11 @@ unsafe fn process_animation(
                     // }
                 }
                 ReadOutputs::Scales(scales) => {
-                    println!("Scales");
                     for scale in scales {
-                        println!("Scale: {:?}", scale);
+                        log!("Scale: {:?}", scale);
                     }
                 }
                 ReadOutputs::MorphTargetWeights(morph_target_weights) => {
-                    println!("Morph Target Weights");
                     let mut weight = Vec::new();
                     // TODO: multi data
                     let morph_target_length = gltf_data.morph_targets.len();
@@ -326,7 +325,7 @@ unsafe fn process_animation(
         }
 
         if key_frames.len() != weights.len() {
-            eprintln!("KeyFrame Count != Weight Count");
+            log!("KeyFrame Count != Weight Count");
         }
 
         if key_frames.len() != 0 && weights.len() != 0 && key_frames.len() == weights.len() {

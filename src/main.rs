@@ -333,7 +333,7 @@ struct AppData {
     camera_pos: [f32; 3],
     initial_camera_pos: [f32; 3],
     camera_up: [f32; 3],
-    grid_vertices: Vec<Vertex>,
+    grid_vertices: Vec<vulkanr::data::Vertex>,
     grid_indices: Vec<u32>,
     is_left_clicked: bool,
     clicked_mouse_pos: [f32; 2],
@@ -414,7 +414,7 @@ impl App {
             &instance,
             &rrdevice,
             &data.rrcommand_pool,
-            (size_of::<Vertex>() * data.grid_vertices.len()) as vk::DeviceSize,
+            (size_of::<vulkanr::data::Vertex>() * data.grid_vertices.len()) as vk::DeviceSize,
             data.grid_vertices.as_ptr() as *const c_void,
             data.grid_vertices.len(),
         );
@@ -933,10 +933,10 @@ impl App {
                 pos2.x = pos1.x;
                 pos2.z = -100.0;
             }
-            let vertex1 = Vertex::new(pos1, color, tex_coord);
-            let vertex2 = Vertex::new(pos2, color, tex_coord);
-            let vertex3 = Vertex::new(-pos1, color, tex_coord);
-            let vertex4 = Vertex::new(-pos2, color, tex_coord);
+            let vertex1 = vulkanr::data::Vertex::new(pos1, color, tex_coord);
+            let vertex2 = vulkanr::data::Vertex::new(pos2, color, tex_coord);
+            let vertex3 = vulkanr::data::Vertex::new(-pos1, color, tex_coord);
+            let vertex4 = vulkanr::data::Vertex::new(-pos2, color, tex_coord);
             data.grid_vertices.push(vertex1);
             data.grid_indices.push(data.grid_indices.len() as u32);
             data.grid_vertices.push(vertex2);
@@ -1137,11 +1137,12 @@ impl App {
             )?;
 
             rrdata.vertex_data = VertexData::default();
-            for i in 0..gltf_data.positions.len() {
-                let vertex = Vertex::new(
-                    Vec3::new_array(gltf_data.positions[i]),
+            for i in 0..gltf_data.vertices.len() {
+                let gltf_vertex = &gltf_data.vertices[i];
+                let vertex = vulkanr::data::Vertex::new(
+                    Vec3::new_array(gltf_vertex.position),
                     Vec4::new(0.0, 1.0, 0.0, 1.0),
-                    Vec2::new_array(gltf_data.tex_coords[i]),
+                    Vec2::new_array(gltf_vertex.tex_coord),
                 );
                 rrdata.vertex_data.vertices.push(vertex);
             }
@@ -1192,7 +1193,7 @@ impl App {
             let rrdata = &mut self.data.model_descriptor_set.rrdata[i];
             let vertices = &mut rrdata.vertex_data.vertices;
             for i in 0..vertices.len() {
-                vertices[i].pos = Vec3::new_array(gltf_data.positions[i]);
+                vertices[i].pos = Vec3::new_array(gltf_data.vertices[i].position);
             }
 
             let morph_animation = &gltf_model.morph_animations[animation_index];
@@ -1210,7 +1211,7 @@ impl App {
                 &self.instance,
                 &self.rrdevice,
                 &self.data.rrcommand_pool,
-                (size_of::<Vertex>() * vertices.len()) as vk::DeviceSize,
+                (size_of::<vulkanr::data::Vertex>() * vertices.len()) as vk::DeviceSize,
                 vertices.as_ptr() as *const c_void,
                 vertices.len(),
             ) {
@@ -1238,7 +1239,8 @@ impl App {
                 &instance,
                 &rrdevice,
                 &data.rrcommand_pool,
-                (size_of::<Vertex>() * rrdata.vertex_data.vertices.len()) as vk::DeviceSize,
+                (size_of::<vulkanr::data::Vertex>() * rrdata.vertex_data.vertices.len())
+                    as vk::DeviceSize,
                 rrdata.vertex_data.vertices.as_ptr() as *const c_void,
                 rrdata.vertex_data.vertices.len(),
             );

@@ -45,14 +45,29 @@ impl GltfModel {
 
 #[derive(Clone, Debug, Default)]
 pub struct GltfData {
-    pub positions: Vec<[f32; 3]>,
+    pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
-    pub tex_coords: Vec<[f32; 2]>,
-    pub joint_indices: Vec<[u16; 4]>,
-    pub joint_weights: Vec<[f32; 4]>,
     pub image_indices: Vec<[u16; 4]>,
     pub image_data: Vec<ImageData>,
+    pub joints: Vec<Joint>,
     pub morph_targets: Vec<MorphTarget>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Vertex {
+    pub index: usize,
+    pub position: [f32; 3],
+    pub normal: [f32; 3],
+    pub tangent: [f32; 3],
+    pub tex_coord: [f32; 2],
+    pub joint_indices: [u16; 4],
+    pub joint_weights: [f32; 4],
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Joint {
+    pub index: usize,
+    pub vertex_indices: Vec<u32>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -71,13 +86,11 @@ pub struct MorphAnimation {
 impl GltfData {
     fn new() -> Self {
         Self {
-            positions: Vec::new(),
+            vertices: Vec::new(),
             indices: Vec::new(),
-            tex_coords: Vec::new(),
-            joint_indices: Vec::new(),
-            joint_weights: Vec::new(),
             image_indices: Vec::new(),
             image_data: Vec::new(),
+            joints: Vec::new(),
             morph_targets: Vec::new(),
         }
     }
@@ -136,8 +149,7 @@ unsafe fn process_node(
         log!("mesh found");
         let primitives = mesh.primitives();
         let mut normals = Vec::new();
-        let mut joint_indices = Vec::new();
-        let mut joint_weights = Vec::new();
+        let mut joint_count = 0;
 
         // primitive
         primitives.for_each(|primitive| {
@@ -160,10 +172,13 @@ unsafe fn process_node(
 
             if let Some(iter) = reader.read_positions() {
                 log!("positions count {:?}", iter.len());
-                for position in iter {
+                for (i, position) in iter.enumerate() {
+                    let mut vertex = Vertex::default();
+                    vertex.index = i;
                     let mut position_converted = position;
                     position_converted[1] = 1.0 - position_converted[1];
-                    gltf_data.positions.push(position_converted);
+                    vertex.position = position_converted;
+                    gltf_data.vertices.push(vertex);
                 }
             }
 
@@ -171,8 +186,8 @@ unsafe fn process_node(
                 iter,
             ))) = reader.read_tex_coords(0)
             {
-                for texture_coord in iter {
-                    gltf_data.tex_coords.push(texture_coord);
+                for (i, texture_coord) in iter.enumerate() {
+                    gltf_data.vertices[i].tex_coord = texture_coord;
                 }
             }
 
@@ -205,18 +220,16 @@ unsafe fn process_node(
 
             // joint
             if let Some(iter) = reader.read_joints(0) {
-                for (joint_id, joint) in iter.into_u16().enumerate() {
-                    log!("Joint {}: {:?}", joint_id, joint);
-                    joint_indices.push(joint);
-                    gltf_data.joint_indices.push(joint);
+                for (i, joint) in iter.into_u16().enumerate() {
+                    log!("Joint {}: {:?}", i, joint);
+                    gltf_data.vertices[i].joint_indices = joint;
                 }
             }
 
             if let Some(iter) = reader.read_weights(0) {
-                for (weight_id, weight) in iter.into_f32().enumerate() {
-                    log!("weight {}: {:?}", weight_id, weight);
-                    joint_weights.push(weight);
-                    gltf_data.joint_weights.push(weight);
+                for (i, weight) in iter.into_f32().enumerate() {
+                    log!("weight {}: {:?}", i, weight);
+                    gltf_data.vertices[i].joint_weights = weight;
                 }
             }
 
@@ -252,12 +265,9 @@ unsafe fn process_node(
             }
 
             // validate
-            println!("indices count {}", gltf_data.indices.len());
-            println!("joint indices count {}", gltf_data.joint_indices.len());
-            println!("joint weights count {}", gltf_data.joint_weights.len());
-            println!("positions count {}", gltf_data.positions.len());
-            println!("tex coords count {}", gltf_data.tex_coords.len());
-            println!("morph targets count {}", gltf_data.morph_targets.len());
+            log!("vertex count {}", gltf_data.vertices.len());
+            log!("indices count {}", gltf_data.indices.len());
+            log!("morph targets count {}", gltf_data.morph_targets.len());
             gltf_model.gltf_data.push(gltf_data);
         });
     }
@@ -275,7 +285,8 @@ unsafe fn process_animation(
     gltf_model: &mut GltfModel,
 ) -> Result<()> {
     for channel in animation.channels() {
-        let gltf_data = &gltf_model.gltf_data[0];
+        let gltf_data_index = channel.animation().index();
+        let gltf_data = &gltf_model.gltf_data[gltf_data_index];
         let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
         let mut key_frames = Vec::new();
         let mut weights = Vec::new();
@@ -291,21 +302,18 @@ unsafe fn process_animation(
             use gltf::animation::util::ReadOutputs;
             match outputs {
                 ReadOutputs::Translations(translations) => {
-                    for translation in translations {
-                        log!("Translation: {:?}", translation);
+                    for (i, translation) in translations.enumerate() {
+                        log!("Translation {}: {:?}", i, translation);
                     }
                 }
                 ReadOutputs::Rotations(rotations) => {
-                    log!("Rotations");
-                    // if let rotations = outputs {
-                    //     for rotation in rotations {
-                    //         println!("Rotation: {:?}", rotation);
-                    //     }
-                    // }
+                    for (i, rotation) in rotations.into_f32().enumerate() {
+                        log!("Rotation {}: {:?}", i, rotation);
+                    }
                 }
                 ReadOutputs::Scales(scales) => {
-                    for scale in scales {
-                        log!("Scale: {:?}", scale);
+                    for (i, scale) in scales.enumerate() {
+                        log!("Scale {}: {:?}", i, scale);
                     }
                 }
                 ReadOutputs::MorphTargetWeights(morph_target_weights) => {
@@ -350,7 +358,7 @@ unsafe fn process_animation(
                 );
             }
         }
-        log!("position count {:?}", gltf_data.positions.len());
+        log!("vertex count {:?}", gltf_data.vertices.len());
         if gltf_data.morph_targets.len() > 0 {
             // morphing
             log!(

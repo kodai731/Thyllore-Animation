@@ -4,6 +4,7 @@ use core::result::Result::Ok;
 use glium::buffer::Content;
 use gltf::buffer::Data;
 use gltf::{image, Document, Gltf, Node};
+use std::ptr::null;
 
 #[derive(Clone, Debug, Default)]
 pub struct GltfModel {
@@ -66,8 +67,8 @@ pub struct Vertex {
 
 #[derive(Clone, Debug, Default)]
 pub struct Joint {
-    pub index: usize,
-    pub vertex_indices: Vec<u32>,
+    pub index: u16,
+    pub vertex_indices: Vec<u16>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -93,6 +94,15 @@ impl GltfData {
             joints: Vec::new(),
             morph_targets: Vec::new(),
         }
+    }
+
+    pub fn get_joint_array_id_from_joint_index(self: &Self, joint_index: u16) -> usize {
+        for i in 0..self.joints.len() {
+            if self.joints[i].index == joint_index {
+                return i;
+            }
+        }
+        0
     }
 }
 
@@ -149,7 +159,7 @@ unsafe fn process_node(
         log!("mesh found");
         let primitives = mesh.primitives();
         let mut normals = Vec::new();
-        let mut joint_count = 0;
+        let mut joint_count = 0u16;
 
         // primitive
         primitives.for_each(|primitive| {
@@ -223,6 +233,10 @@ unsafe fn process_node(
                 for (i, joint) in iter.into_u16().enumerate() {
                     log!("Joint {}: {:?}", i, joint);
                     gltf_data.vertices[i].joint_indices = joint;
+                    let max_joint_id = *joint.iter().max().unwrap();
+                    if max_joint_id > joint_count {
+                        joint_count = max_joint_id;
+                    }
                 }
             }
 
@@ -268,6 +282,8 @@ unsafe fn process_node(
             log!("vertex count {}", gltf_data.vertices.len());
             log!("indices count {}", gltf_data.indices.len());
             log!("morph targets count {}", gltf_data.morph_targets.len());
+
+            input_joint_info(&mut gltf_data, joint_count);
             gltf_model.gltf_data.push(gltf_data);
         });
     }
@@ -276,6 +292,57 @@ unsafe fn process_node(
     }
 
     Ok(())
+}
+
+unsafe fn input_joint_info(gltf_data: &mut GltfData, joint_count: u16) {
+    if gltf_data.vertices.len() <= 0 {
+        return;
+    }
+    if gltf_data.vertices[0].joint_indices.len() <= 0 {
+        return;
+    }
+
+    for i in 1..=joint_count {
+        let mut joint = Joint::default();
+        joint.index = i;
+        for j in 0..gltf_data.vertices.len() {
+            let joint_indices = &gltf_data.vertices[j].joint_indices;
+            if joint_indices.contains(&i) {
+                joint.vertex_indices.push(j as u16);
+            }
+        }
+        gltf_data.joints.push(joint);
+    }
+
+    // validate
+    for i in 0..gltf_data.vertices.len() {
+        let joint_indices = &gltf_data.vertices[i].joint_indices;
+        for j in 0..joint_indices.len() {
+            let joint_index = &joint_indices[j];
+            if joint_indices[j] == 0 {
+                continue;
+            }
+            let joint_array_index = gltf_data.get_joint_array_id_from_joint_index(*joint_index);
+            if !gltf_data.joints[joint_array_index]
+                .vertex_indices
+                .contains(&(i as u16))
+            {
+                log!(
+                    "invalid joint id, vertex id {}, joint id {}",
+                    i,
+                    joint_index
+                )
+            }
+        }
+    }
+
+    for i in 0..gltf_data.joints.len() {
+        log!(
+            "joint: {} {:?}",
+            gltf_data.joints[i].index,
+            gltf_data.joints[i].vertex_indices
+        );
+    }
 }
 
 unsafe fn process_animation(

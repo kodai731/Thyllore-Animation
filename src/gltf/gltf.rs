@@ -10,6 +10,7 @@ use std::ptr::null;
 pub struct GltfModel {
     pub gltf_data: Vec<GltfData>,
     pub morph_animations: Vec<MorphAnimation>,
+    pub joint_animations: Vec<JointAnimation>,
 }
 
 impl GltfModel {
@@ -82,6 +83,20 @@ pub struct MorphTarget {
 pub struct MorphAnimation {
     pub key_frame: f32,
     pub weights: Vec<f32>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct JointAnimation {
+    pub key_frame: f32,
+    pub joint_animation_nodes: Vec<JointAnimationNode>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct JointAnimationNode {
+    pub joint_id: u16,
+    pub translation: [f32; 4],
+    pub rotation: [f32; 4],
+    pub scale: [f32; 4],
 }
 
 impl GltfData {
@@ -357,10 +372,14 @@ unsafe fn process_animation(
         let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
         let mut key_frames = Vec::new();
         let mut weights = Vec::new();
+        let mut joint_animation = JointAnimation::default();
+        let mut joint_translations = Vec::new();
+        let mut joint_rotations = Vec::new();
+        let mut joint_scales = Vec::new();
         if let Some(inputs) = reader.read_inputs() {
             log!("KeyFrame Count: {:?}", inputs.len());
-            for input in inputs {
-                log!("KeyFrame input {:?}", input);
+            for (i, input) in inputs.enumerate() {
+                log!("KeyFrame input {}: {:?}", i, input);
                 key_frames.push(input);
             }
         }
@@ -371,16 +390,22 @@ unsafe fn process_animation(
                 ReadOutputs::Translations(translations) => {
                     for (i, translation) in translations.enumerate() {
                         log!("Translation {}: {:?}", i, translation);
+                        let joint_translation =
+                            [translation[0], translation[1], translation[2], 0.0];
+                        joint_translations.push(joint_translation);
                     }
                 }
                 ReadOutputs::Rotations(rotations) => {
                     for (i, rotation) in rotations.into_f32().enumerate() {
                         log!("Rotation {}: {:?}", i, rotation);
+                        joint_rotations.push(rotation);
                     }
                 }
                 ReadOutputs::Scales(scales) => {
                     for (i, scale) in scales.enumerate() {
                         log!("Scale {}: {:?}", i, scale);
+                        let joint_scale = [scale[0], scale[1], scale[2], 1.0];
+                        joint_scales.push(joint_scale);
                     }
                 }
                 ReadOutputs::MorphTargetWeights(morph_target_weights) => {
@@ -437,6 +462,11 @@ unsafe fn process_animation(
                 gltf_model.morph_animations[0].weights.len()
             );
         }
+        log!("joints count {:?}", gltf_data.joints.len());
+        log!("key frame count {:?}", key_frames.len());
+        log!("joint translation count {:?}", joint_translations.len());
+        log!("joint rotation count {:?}", joint_rotations.len());
+        log!("joint scale count {:?}", joint_scales.len());
     }
     Ok(())
 }

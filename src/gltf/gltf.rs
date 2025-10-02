@@ -4,6 +4,7 @@ use core::result::Result::Ok;
 use glium::buffer::Content;
 use gltf::buffer::Data;
 use gltf::{image, Document, Gltf, Node};
+use std::collections::HashMap;
 use std::ptr::null;
 
 #[derive(Clone, Debug, Default)]
@@ -11,6 +12,7 @@ pub struct GltfModel {
     pub gltf_data: Vec<GltfData>,
     pub morph_animations: Vec<MorphAnimation>,
     pub joint_animations: Vec<JointAnimation>,
+    pub node_joint_map: NodeJointMap,
 }
 
 impl GltfModel {
@@ -99,6 +101,31 @@ pub struct JointAnimationNode {
     pub scale: [f32; 4],
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct NodeJointMap {
+    pub node_to_index: HashMap<u16, u16>,
+}
+
+impl NodeJointMap {
+    pub fn make_from_skin(&mut self, skin: &gltf::Skin) {
+        self.node_to_index.clear();
+        self.node_to_index = HashMap::new();
+        for (joint_index, joint_node) in skin.joints().enumerate() {
+            self.node_to_index
+                .insert(joint_node.index() as u16, joint_index as u16);
+            log!(
+                "Node Joint Map, node: {}, joint: {}",
+                joint_node.index(),
+                joint_index
+            );
+        }
+    }
+
+    pub fn get_joint_index(&self, node_index: u16) -> Option<u16> {
+        self.node_to_index.get(&node_index).cloned()
+    }
+}
+
 impl GltfData {
     fn new() -> Self {
         Self {
@@ -151,6 +178,9 @@ pub struct ImageData {
 unsafe fn load_gltf(gltf_model: &mut GltfModel, path: &str) {
     log!("Loading glTF file");
     let (gltf, buffers, images) = gltf::import(format!("{}", path)).expect("Failed to load model");
+    gltf.skins().enumerate().for_each(|(i, skin)| {
+        gltf_model.node_joint_map.make_from_skin(&skin);
+    });
     for scene in gltf.scenes() {
         for node in scene.nodes() {
             process_node(&gltf, &buffers, &images, &node, gltf_model).unwrap();
@@ -369,6 +399,13 @@ unsafe fn process_animation(
     for channel in animation.channels() {
         let gltf_data_index = channel.animation().index();
         let gltf_data = &gltf_model.gltf_data[gltf_data_index];
+        let target = channel.target();
+        let node = target.node();
+        log!("target animation index {}", target.animation().index());
+        log!("node index {}", node.index());
+        if node.index() >= gltf_data.joints.len() {
+            log!("node index greater than gltf_data.joints.len() ");
+        }
         let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
         let mut key_frames = Vec::new();
         let mut weights = Vec::new();

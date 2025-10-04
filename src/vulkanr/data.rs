@@ -1,8 +1,8 @@
-use super::super::math::math::{Mat4, Vec2, Vec3, Vec4};
 use super::buffer::*;
 use super::device::*;
 use super::swapchain::*;
 use super::vulkan::*;
+use crate::math::math::*;
 use std::cmp::PartialEq;
 use std::hash::{Hash, Hasher};
 
@@ -80,9 +80,7 @@ pub struct UniformBufferObject {
 
 impl Default for UniformBufferObject {
     fn default() -> Self {
-        let identity = Mat4::new(
-            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0,
-        );
+        let identity = Mat4::IDENTITY;
         Self {
             model: identity,
             view: identity,
@@ -107,6 +105,7 @@ impl Hash for Vertex {
         self.color[0].to_bits().hash(state);
         self.color[1].to_bits().hash(state);
         self.color[2].to_bits().hash(state);
+        self.color[3].to_bits().hash(state);
         self.tex_coord[0].to_bits().hash(state);
         self.tex_coord[1].to_bits().hash(state);
     }
@@ -124,7 +123,7 @@ impl Vertex {
         //  at which rate to load data from memory throughout the vertices
         vk::VertexInputBindingDescription::builder()
             .binding(0)
-            .stride(size_of::<Vertex>() as u32)
+            .stride(40)
             .input_rate(vk::VertexInputRate::VERTEX)
             .build()
     }
@@ -143,14 +142,14 @@ impl Vertex {
             .binding(0)
             .location(1)
             .format(vk::Format::R32G32B32A32_SFLOAT)
-            .offset(size_of::<Vec3>() as u32)
+            .offset(16)
             .build();
 
         let tex_coord = vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(2)
             .format(vk::Format::R32G32_SFLOAT)
-            .offset((size_of::<Vec3>() + size_of::<Vec4>()) as u32)
+            .offset(28)
             .build();
 
         [pos, color, tex_coord]

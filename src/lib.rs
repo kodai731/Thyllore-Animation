@@ -14,6 +14,5 @@ pub mod gltf {
 pub mod math {
     pub mod math;
 }
-pub use math::*;
 
 pub mod logger;

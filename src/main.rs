@@ -72,8 +72,6 @@ use std::time::Instant;
 use imgui_winit_support::winit;
 use imgui_winit_support::winit::event::ElementState;
 
-use cgmath::num_traits::AsPrimitive;
-use cgmath::Vector4;
 use glium::buffer::Content;
 use imgui::{Condition, MouseButton};
 use serde::Serialize;
@@ -414,7 +412,7 @@ impl App {
             &instance,
             &rrdevice,
             &data.rrcommand_pool,
-            (size_of::<vulkanr::data::Vertex>() * data.grid_vertices.len()) as vk::DeviceSize,
+            (36 * data.grid_vertices.len()) as vk::DeviceSize,
             data.grid_vertices.as_ptr() as *const c_void,
             data.grid_vertices.len(),
         );
@@ -517,9 +515,9 @@ impl App {
         let start = Instant::now();
         data.initial_camera_pos = [0.0, -1.0, -2.0];
         data.camera_pos = data.initial_camera_pos;
-        let camera_pos = vec3(data.camera_pos[0], data.camera_pos[1], data.camera_pos[2]);
+        let camera_pos = Vec3::new(data.camera_pos[0], data.camera_pos[1], data.camera_pos[2]);
         let camera_direction = camera_pos.normalize();
-        let camera_up = Vector3::cross(camera_direction, vec3(1.0, 0.0, 0.0));
+        let camera_up = Vec3::cross(camera_direction, Vec3::new(1.0, 0.0, 0.0));
         data.camera_direction = [camera_direction.x, camera_direction.y, camera_direction.z];
         data.camera_up = [camera_up.x, camera_up.y, camera_up.z];
         data.is_left_clicked = false;
@@ -962,19 +960,19 @@ impl App {
         self.morphing(self.start.elapsed().as_secs_f32());
 
         // update uniform buffer
-        let model = Mat4::identity();
+        let model = Mat4::IDENTITY;
 
         let mut camera_pos = vec3_from_array(self.data.camera_pos);
         let mut camera_direction = vec3_from_array(self.data.camera_direction);
         let mut camera_up = vec3_from_array(self.data.camera_up);
 
-        let mouse_pos = Vector2::new(mouse_pos[0], mouse_pos[1]);
+        let mouse_pos = Vec2::new(mouse_pos[0], mouse_pos[1]);
 
         let last_view = view(camera_pos, camera_direction, camera_up);
-        let base_x_4 = last_view * vec4(1.0, 0.0, 0.0, 0.0);
-        let base_y_4 = last_view * vec4(0.0, -1.0, 0.0, 0.0);
-        let base_x = vec3(base_x_4.x, base_x_4.y, base_x_4.z);
-        let base_y = vec3(base_y_4.x, base_y_4.y, base_y_4.z);
+        let base_x_4 = last_view * Vec4::new(1.0, 0.0, 0.0, 0.0);
+        let base_y_4 = last_view * Vec4::new(0.0, -1.0, 0.0, 0.0);
+        let base_x = Vec3::new(base_x_4.x, base_x_4.y, base_x_4.z);
+        let base_y = Vec3::new(base_y_4.x, base_y_4.y, base_y_4.z);
 
         if gui_data.is_left_clicked || self.data.is_left_clicked {
             // first clicked
@@ -985,23 +983,23 @@ impl App {
             let clicked_mouse_pos = vec2_from_array(self.data.clicked_mouse_pos);
 
             let diff = mouse_pos - clicked_mouse_pos;
-            let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
+            let distance = Vec2::distance(mouse_pos, clicked_mouse_pos);
             gui_data.monitor_value = distance;
             if 0.001 < distance {
-                let mut rotate_x = Mat3::identity();
-                let mut rotate_y = Mat3::identity();
-                let theta_x = -diff.x * 0.005;
-                let theta_y = -diff.y * 0.005;
+                let mut rotate_x = Mat3::IDENTITY;
+                let mut rotate_y = Mat3::IDENTITY;
+                let theta_x = -diff.x * 0.05;
+                let theta_y = -diff.y * 0.05;
                 let _ = rodrigues(
                     &mut rotate_x,
-                    Rad(theta_x).cos(),
-                    Rad(theta_x).sin(),
+                    rad(theta_x).cos(),
+                    rad(theta_x).sin(),
                     &base_y,
                 );
                 let _ = rodrigues(
                     &mut rotate_y,
-                    Rad(theta_y).cos(),
-                    Rad(theta_y).sin(),
+                    rad(theta_y).cos(),
+                    rad(theta_y).sin(),
                     &base_x,
                 );
                 let rotate = rotate_y * rotate_x;
@@ -1025,7 +1023,7 @@ impl App {
             }
             let clicked_mouse_pos = vec2_from_array(self.data.clicked_mouse_pos);
             let diff = mouse_pos - clicked_mouse_pos;
-            let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
+            let distance = Vec2::distance(mouse_pos, clicked_mouse_pos);
             gui_data.monitor_value = distance;
             if 0.001 < distance {
                 let translate_x_v = base_x * -diff.x * 0.01;
@@ -1048,7 +1046,7 @@ impl App {
 
         let view = view(camera_pos, camera_direction, camera_up);
 
-        let correction = Mat4::new(
+        let correction = mat4_all_elements(
             // column-major order
             1.0,
             0.0,
@@ -1068,8 +1066,8 @@ impl App {
             1.0,
         );
         let proj = correction
-            * cgmath::perspective(
-                Deg(45.0),
+            * Mat4::perspective_rh_gl(
+                rad(45.0),
                 self.data.rrswapchain.swapchain_extent.width as f32
                     / self.data.rrswapchain.swapchain_extent.height as f32,
                 0.1,
@@ -1083,7 +1081,7 @@ impl App {
             let memory = self.rrdevice.device.map_memory(
                 ubo_memory,
                 0,
-                size_of::<UniformBufferObject>() as u64,
+                16 * 4 * 3,
                 vk::MemoryMapFlags::empty(),
             )?;
             memcpy(&ubo, memory.cast(), 1);
@@ -1091,7 +1089,7 @@ impl App {
         }
 
         // update for grid
-        let model_grid = Mat4::identity();
+        let model_grid = Mat4::IDENTITY;
         for i in 0..self.data.grid_descriptor_set.rrdata.len() {
             let rrdata = &mut self.data.grid_descriptor_set.rrdata[i];
             let grid_ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;
@@ -1103,7 +1101,7 @@ impl App {
             let memory_grid = self.rrdevice.device.map_memory(
                 grid_ubo_memory,
                 0,
-                size_of::<UniformBufferObject>() as u64,
+                16 * 4 * 3,
                 vk::MemoryMapFlags::empty(),
             )?;
             memcpy(&ubo_grid, memory_grid.cast(), 1);
@@ -1140,9 +1138,9 @@ impl App {
             for i in 0..gltf_data.vertices.len() {
                 let gltf_vertex = &gltf_data.vertices[i];
                 let vertex = vulkanr::data::Vertex::new(
-                    Vec3::new_array(gltf_vertex.position),
+                    vec3_from_array(gltf_vertex.position),
                     Vec4::new(0.0, 1.0, 0.0, 1.0),
-                    Vec2::new_array(gltf_vertex.tex_coord),
+                    vec2_from_array(gltf_vertex.tex_coord),
                 );
                 rrdata.vertex_data.vertices.push(vertex);
             }
@@ -1159,7 +1157,7 @@ impl App {
         self.data.camera_pos = self.data.initial_camera_pos;
         let camera_pos = vec3_from_array(self.data.camera_pos);
         let camera_direction = camera_pos.normalize();
-        let camera_up = Vector3::cross(camera_direction, vec3(1.0, 0.0, 0.0));
+        let camera_up = Vec3::cross(camera_direction, Vec3::new(1.0, 0.0, 0.0));
         self.data.camera_direction = array3_from_vec(camera_direction);
         self.data.camera_up = array3_from_vec(camera_up);
     }
@@ -1168,9 +1166,9 @@ impl App {
         let camera_pos = vec3_from_array(self.data.camera_pos);
         let mut camera_direction = vec3_from_array(self.data.camera_direction);
         let mut camera_up = vec3_from_array(self.data.camera_up);
-        let horizon = Vector3::cross(camera_up, camera_direction);
-        camera_up = vec3(0.0, -1.0, 0.0);
-        camera_direction = Vector3::cross(horizon, camera_up);
+        let horizon = Vec3::cross(camera_up, camera_direction);
+        camera_up = Vec3::new(0.0, -1.0, 0.0);
+        camera_direction = Vec3::cross(horizon, camera_up);
         self.data.camera_up = array3_from_vec(camera_up);
         self.data.camera_direction = array3_from_vec(camera_direction);
     }
@@ -1193,14 +1191,14 @@ impl App {
             let rrdata = &mut self.data.model_descriptor_set.rrdata[i];
             let vertices = &mut rrdata.vertex_data.vertices;
             for i in 0..vertices.len() {
-                vertices[i].pos = Vec3::new_array(gltf_data.vertices[i].position);
+                vertices[i].pos = vec3_from_array(gltf_data.vertices[i].position);
             }
 
             let morph_animation = &gltf_model.morph_animations[animation_index];
             for i in 0..morph_animation.weights.len() {
                 let morph_target = &gltf_data.morph_targets[i];
                 for j in 0..morph_target.positions.len() {
-                    let delta_position = Vec3::new_array(morph_target.positions[j])
+                    let delta_position = vec3_from_array(morph_target.positions[j])
                         * morph_animation.weights[i]
                         * 0.01f32;
                     vertices[j].pos += delta_position;
@@ -1211,7 +1209,7 @@ impl App {
                 &self.instance,
                 &self.rrdevice,
                 &self.data.rrcommand_pool,
-                (size_of::<vulkanr::data::Vertex>() * vertices.len()) as vk::DeviceSize,
+                (36 * vertices.len()) as vk::DeviceSize,
                 vertices.as_ptr() as *const c_void,
                 vertices.len(),
             ) {
@@ -1239,7 +1237,7 @@ impl App {
                 &instance,
                 &rrdevice,
                 &data.rrcommand_pool,
-                (size_of::<vulkanr::data::Vertex>() * rrdata.vertex_data.vertices.len())
+                (36 * rrdata.vertex_data.vertices.len())
                     as vk::DeviceSize,
                 rrdata.vertex_data.vertices.as_ptr() as *const c_void,
                 rrdata.vertex_data.vertices.len(),

@@ -23,7 +23,7 @@ impl RRUniformBuffer {
         let Ok((uniform_buffer, uniform_buffer_memory)) = create_buffer(
             instance,
             rrdevice,
-            size_of::<UniformBufferObject>() as u64,
+            4 * 16 * 3,
             vk::BufferUsageFlags::UNIFORM_BUFFER,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         ) else {
@@ -35,7 +35,7 @@ impl RRUniformBuffer {
         rruniform_buffer.uniform_buffer_object = uniform_buffer_object;
         rruniform_buffer
     }
-    
+
     pub unsafe fn delete(&self, rrdevice: &RRDevice) {
         rrdevice.device.destroy_buffer(self.buffer, None);
         rrdevice.device.free_memory(self.buffer_memory, None);

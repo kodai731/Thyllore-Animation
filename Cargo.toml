@@ -9,10 +9,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-bindgen = "0.69.1"
 anyhow = "1"
-log = "0.4"
-cgmath = "0.18"
 png = "0.17"
 pretty_env_logger = "0.4"
 thiserror = "1"
@@ -30,11 +27,9 @@ once_cell = "*"
 serde = {version = "*", features = ["derive"]}
 serde_json = "*"
 bincode = "*"
+glam = "*"
+log = "*"
 
 [dependencies.gltf]
 version = "1.4"
 features = ["extras", "names"]
-
-[build-dependencies]
-bindgen = "0.69.1"
-cxx-build = "1.0"

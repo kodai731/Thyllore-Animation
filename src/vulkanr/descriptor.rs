@@ -112,7 +112,7 @@ unsafe fn create_descriptor_sets(
             let info = vk::DescriptorBufferInfo::builder()
                 .buffer(rrdata.rruniform_buffers[i].buffer)
                 .offset(0)
-                .range(size_of::<UniformBufferObject>() as u64);
+                .range(16 * 4 * 3);
             // The configuration of descriptors is updated using the update_descriptor_sets function,
             // which takes an array of vk::WriteDescriptorSet structs as parameter.
             let buffer_info = &[info];

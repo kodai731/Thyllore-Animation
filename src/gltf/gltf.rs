@@ -89,16 +89,11 @@ pub struct MorphAnimation {
 
 #[derive(Clone, Debug, Default)]
 pub struct JointAnimation {
-    pub key_frame: f32,
-    pub joint_animation_nodes: Vec<JointAnimationNode>,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct JointAnimationNode {
-    pub joint_id: u16,
-    pub translation: [f32; 4],
-    pub rotation: [f32; 4],
-    pub scale: [f32; 4],
+    pub joint_array_id: usize,
+    pub key_frames: Vec<f32>,
+    pub translations: Vec<[f32; 4]>,
+    pub rotations: Vec<[f32; 4]>,
+    pub scales: Vec<[f32; 4]>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -122,7 +117,13 @@ impl NodeJointMap {
     }
 
     pub fn get_joint_index(&self, node_index: u16) -> Option<u16> {
-        self.node_to_index.get(&node_index).cloned()
+        match self.node_to_index.get(&node_index) {
+            Some(&joint_index) => Some(joint_index),
+            None => {
+                log!("Error: node {} is not in map", node_index);
+                None
+            }
+        }
     }
 }
 
@@ -188,6 +189,11 @@ unsafe fn load_gltf(gltf_model: &mut GltfModel, path: &str) {
     }
     for animation in gltf.animations() {
         process_animation(&gltf, &buffers, animation, gltf_model).unwrap();
+    }
+    // validation
+    for (i, joint_animation) in gltf_model.joint_animations.iter().enumerate() {
+        log!("Index {}, Joint Array Id {}, KeyFrameLength {}, TranslationLength {}, RotationLength {}, ScaleLength {}", 
+                i, joint_animation.joint_array_id, joint_animation.key_frames.len(), joint_animation.translations.len(), joint_animation.rotations.len(), joint_animation.scales.len());
     }
 }
 
@@ -409,7 +415,6 @@ unsafe fn process_animation(
         let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
         let mut key_frames = Vec::new();
         let mut weights = Vec::new();
-        let mut joint_animation = JointAnimation::default();
         let mut joint_translations = Vec::new();
         let mut joint_rotations = Vec::new();
         let mut joint_scales = Vec::new();
@@ -472,6 +477,33 @@ unsafe fn process_animation(
                 morph_animation.weights = weights[i].clone();
                 gltf_model.morph_animations.push(morph_animation);
             }
+        }
+
+        if key_frames.len() > 0
+            && (joint_translations.len() > 0
+                || joint_rotations.len() > 0
+                || joint_rotations.len() > 0)
+        {
+            let mut joint_animation = JointAnimation::default();
+            let joint_id = gltf_model
+                .node_joint_map
+                .get_joint_index(node.index() as u16)
+                .unwrap();
+            joint_animation.joint_array_id =
+                gltf_data.get_joint_array_id_from_joint_index(joint_id);
+            for i in 0..key_frames.len() {
+                joint_animation.key_frames.push(key_frames[i]);
+                if joint_translations.len() > 0 {
+                    joint_animation.translations.push(joint_translations[i]);
+                }
+                if joint_rotations.len() > 0 {
+                    joint_animation.rotations.push(joint_rotations[i]);
+                }
+                if joint_scales.len() > 0 {
+                    joint_animation.scales.push(joint_scales[i]);
+                }
+            }
+            gltf_model.joint_animations.push(joint_animation);
         }
 
         // validate

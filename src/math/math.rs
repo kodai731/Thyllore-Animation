@@ -1,3 +1,4 @@
+pub use cgmath::Quaternion;
 pub use cgmath::Rad;
 pub use cgmath::{point3, Deg, InnerSpace, MetricSpace, Vector2};
 pub use cgmath::{prelude::*, Vector3};

@@ -1,5 +1,5 @@
 [package]
-name = "AqooleEngineR"
+name = "RustRendering"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,7 +9,6 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-bindgen = "0.69.1"
 anyhow = "1"
 log = "0.4"
 cgmath = "0.18"
@@ -27,14 +26,10 @@ imgui-winit-support = { path = "./src/imgui-winit-support" }
 glium = "*"
 chrono = "*"
 once_cell = "*"
-serde = {version = "*", features = ["derive"]}
+serde = { version = "*", features = ["derive"] }
 serde_json = "*"
 bincode = "*"
 
 [dependencies.gltf]
 version = "1.4"
 features = ["extras", "names"]
-
-[build-dependencies]
-bindgen = "0.69.1"
-cxx-build = "1.0"

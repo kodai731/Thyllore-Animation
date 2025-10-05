@@ -1,8 +1,8 @@
-use super::super::math::math::{Mat4, Vec2, Vec3, Vec4};
 use super::buffer::*;
 use super::device::*;
 use super::swapchain::*;
 use super::vulkan::*;
+use crate::math::math::*;
 use std::cmp::PartialEq;
 use std::hash::{Hash, Hasher};
 
@@ -80,9 +80,7 @@ pub struct UniformBufferObject {
 
 impl Default for UniformBufferObject {
     fn default() -> Self {
-        let identity = Mat4::new(
-            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0,
-        );
+        let identity = Mat4::identity();
         Self {
             model: identity,
             view: identity,

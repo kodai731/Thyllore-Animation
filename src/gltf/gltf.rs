@@ -1,5 +1,7 @@
 use crate::log;
+use crate::math::math::{vec3_from_array, Mat4};
 use anyhow::{anyhow, Result};
+use cgmath::Quaternion;
 use core::result::Result::Ok;
 use glium::buffer::Content;
 use gltf::buffer::Data;
@@ -91,9 +93,9 @@ pub struct MorphAnimation {
 pub struct JointAnimation {
     pub joint_array_id: usize,
     pub key_frames: Vec<f32>,
-    pub translations: Vec<[f32; 4]>,
-    pub rotations: Vec<[f32; 4]>,
-    pub scales: Vec<[f32; 4]>,
+    pub translations: Vec<Mat4>,
+    pub rotations: Vec<Mat4>,
+    pub scales: Vec<Mat4>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -432,22 +434,29 @@ unsafe fn process_animation(
                 ReadOutputs::Translations(translations) => {
                     for (i, translation) in translations.enumerate() {
                         log!("Translation {}: {:?}", i, translation);
-                        let joint_translation =
-                            [translation[0], translation[1], translation[2], 0.0];
-                        joint_translations.push(joint_translation);
+                        let joint_translation = vec3_from_array(translation);
+                        let joint_translation_mat = Mat4::from_translation(joint_translation);
+                        joint_translations.push(joint_translation_mat);
                     }
                 }
                 ReadOutputs::Rotations(rotations) => {
                     for (i, rotation) in rotations.into_f32().enumerate() {
                         log!("Rotation {}: {:?}", i, rotation);
-                        joint_rotations.push(rotation);
+                        let joint_rotaion_mat = Mat4::from(Quaternion::new(
+                            rotation[0],
+                            rotation[1],
+                            rotation[2],
+                            rotation[3],
+                        ));
+                        joint_rotations.push(joint_rotaion_mat);
                     }
                 }
                 ReadOutputs::Scales(scales) => {
                     for (i, scale) in scales.enumerate() {
                         log!("Scale {}: {:?}", i, scale);
-                        let joint_scale = [scale[0], scale[1], scale[2], 1.0];
-                        joint_scales.push(joint_scale);
+                        let joint_scale_mat =
+                            Mat4::from_nonuniform_scale(scale[0], scale[1], scale[2]);
+                        joint_scales.push(joint_scale_mat);
                     }
                 }
                 ReadOutputs::MorphTargetWeights(morph_target_weights) => {

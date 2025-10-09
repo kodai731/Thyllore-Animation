@@ -14,7 +14,7 @@ pub struct GltfModel {
     pub gltf_data: Vec<GltfData>,
     pub morph_animations: Vec<MorphAnimation>,
     pub joints: Vec<Joint>, // order by node id
-    pub joint_animations: Vec<JointAnimation>,
+    pub joint_animations: Vec<Vec<JointAnimation>>,
     pub node_joint_map: NodeJointMap,
 }
 
@@ -118,7 +118,6 @@ pub struct MorphAnimation {
 
 #[derive(Clone, Debug, Default)]
 pub struct JointAnimation {
-    pub joint_array_id: usize,
     pub key_frames: Vec<f32>,
     pub translations: Vec<Mat4>,
     pub rotations: Vec<Mat4>,
@@ -224,13 +223,23 @@ unsafe fn load_gltf(gltf_model: &mut GltfModel, path: &str) {
         }
     }
     log_node_hierarchy(gltf_model);
+    initialize_joint_animation(gltf_model);
     for animation in gltf.animations() {
         process_animation(&gltf, &buffers, animation, gltf_model).unwrap();
     }
     // validation
-    for (i, joint_animation) in gltf_model.joint_animations.iter().enumerate() {
-        log!("Index {}, Joint Array Id {}, KeyFrameLength {}, TranslationLength {}, RotationLength {}, ScaleLength {}", 
-                i, joint_animation.joint_array_id, joint_animation.key_frames.len(), joint_animation.translations.len(), joint_animation.rotations.len(), joint_animation.scales.len());
+    for (i, joint_animation_joint) in gltf_model.joint_animations.iter().enumerate() {
+        for (j, joint_animation_animation) in joint_animation_joint.iter().enumerate() {
+            log!(
+                "Joint Id {}, Animation Index {}, KeyFrameLength {}, TranslationLength {}, RotationLength {}, ScaleLength {}",
+                i,
+                j,
+                joint_animation_animation.key_frames.len(),
+                joint_animation_animation.translations.len(),
+                joint_animation_animation.rotations.len(),
+                joint_animation_animation.scales.len()
+            );
+        }
     }
 }
 
@@ -446,6 +455,12 @@ unsafe fn log_node_hierarchy(gltf_model: &GltfModel) {
     }
 }
 
+unsafe fn initialize_joint_animation(gltf_model: &mut GltfModel) {
+    for _ in 0..gltf_model.joints.len() {
+        gltf_model.joint_animations.push(Vec::default())
+    }
+}
+
 unsafe fn process_animation(
     gltf: &Document,
     buffers: &Vec<Data>,
@@ -459,9 +474,6 @@ unsafe fn process_animation(
         let node = target.node();
         log!("target animation index {}", target.animation().index());
         log!("node index {}", node.index());
-        if node.index() >= gltf_data.joints.len() {
-            log!("node index greater than gltf_data.joints.len() ");
-        }
         let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
         let mut key_frames = Vec::new();
         let mut weights = Vec::new();
@@ -558,7 +570,7 @@ unsafe fn process_animation(
                     joint_animation.scales.push(joint_scales[i]);
                 }
             }
-            gltf_model.joint_animations.push(joint_animation);
+            gltf_model.joint_animations[joint_id as usize].push(joint_animation);
         }
 
         // validate
@@ -586,7 +598,6 @@ unsafe fn process_animation(
                 gltf_model.morph_animations[0].weights.len()
             );
         }
-        log!("joints count {:?}", gltf_data.joints.len());
         log!("key frame count {:?}", key_frames.len());
         log!("joint translation count {:?}", joint_translations.len());
         log!("joint rotation count {:?}", joint_rotations.len());

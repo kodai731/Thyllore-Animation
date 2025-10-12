@@ -160,6 +160,27 @@ pub fn array2_from_vec(v: Vector2<f32>) -> [f32; 2] {
     [v.x, v.y]
 }
 
+pub fn vec4_from_array(a: [f32; 4]) -> cgmath::Vector4<f32> {
+    cgmath::Vector4::new(a[0], a[1], a[2], a[3])
+}
+
+pub fn array4_from_vec(v: cgmath::Vector4<f32>) -> [f32; 4] {
+    [v.x, v.y, v.z, v.w]
+}
+
+pub fn array_from_mat4(m: Mat4) -> [[f32; 4]; 4] {
+    [
+        array4_from_vec(m.x),
+        array4_from_vec(m.y),
+        array4_from_vec(m.z),
+        array4_from_vec(m.w),
+    ]
+}
+
+pub fn mat4_from_array(a: [[f32; 4]; 4]) -> Mat4 {
+    Mat4::from_cols(a[0].into(), a[1].into(), a[2].into(), a[3].into())
+}
+
 pub unsafe fn rodrigues(
     rotate: &mut cgmath::Matrix3<f32>,
     c: f32,

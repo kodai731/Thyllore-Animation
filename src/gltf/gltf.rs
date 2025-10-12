@@ -1,5 +1,5 @@
 use crate::log;
-use crate::math::math::{vec3_from_array, Mat4};
+use crate::math::math::*;
 use anyhow::{anyhow, Result};
 use cgmath::Quaternion;
 use core::result::Result::Ok;
@@ -13,7 +13,7 @@ use std::ptr::null;
 pub struct GltfModel {
     pub gltf_data: Vec<GltfData>,
     pub morph_animations: Vec<MorphAnimation>,
-    pub joints: Vec<Joint>, // order by node id
+    pub joints: Vec<Joint>, // order by joint id
     pub joint_animations: Vec<Vec<JointAnimation>>,
     pub node_joint_map: NodeJointMap,
 }
@@ -56,14 +56,11 @@ impl GltfModel {
         }
 
         let mut temp_joints: Vec<_> = skin.joints().collect();
-        temp_joints.sort_by_key(|node| node.index());
-        for (node_index, node) in temp_joints.iter().enumerate() {
+        for (joint_index, node) in temp_joints.iter().enumerate() {
             let mut joint = Joint::default();
-            joint.index = self
-                .node_joint_map
-                .get_joint_index(node_index as u16)
-                .unwrap();
+            joint.index = joint_index as u16;
             joint.name = node.name().unwrap().to_string();
+            let node_index = self.node_joint_map.get_node_index(joint.index).unwrap();
             log!(
                 "Joint Pushed: Node Index: {}, Node Name: {}, Joint Index: {}",
                 node_index,
@@ -71,6 +68,38 @@ impl GltfModel {
                 joint.index
             );
             self.joints.push(joint);
+        }
+    }
+
+    pub fn apply_animation(self: &mut Self, time: f32, target_joint_id: usize, transform: Mat4) {
+        // joints[0] = Root
+        let joint = &self.joints[target_joint_id];
+        let joint_animations = &self.joint_animations[joint.index as usize];
+        let mut joint_translation = Mat4::identity();
+        for (i, joint_animation) in joint_animations.iter().enumerate() {
+            let key_frame_id = joint_animation.identify_key_frame_index(time);
+            if joint_animation.scales.len() > key_frame_id {
+                joint_translation = joint_animation.scales[key_frame_id] * joint_translation;
+            }
+            if joint_animation.rotations.len() > key_frame_id {
+                joint_translation = joint_animation.rotations[key_frame_id] * joint_translation;
+            }
+            if joint_animation.translations.len() > key_frame_id {
+                joint_translation = joint_animation.translations[key_frame_id] * joint_translation;
+            }
+        }
+
+        let joint_transform = joint_translation * transform;
+        for (i, vertex_id) in joint.vertex_indices.iter().enumerate() {
+            for (j, gltf_data) in self.gltf_data.iter_mut().enumerate() {
+                let vertex = &mut gltf_data.vertices[*vertex_id as usize];
+                vertex.transform = array_from_mat4(joint_transform);
+            }
+        }
+
+        let child_indices = joint.child_joint_indices.clone();
+        for (i, child_index) in child_indices.iter().enumerate() {
+            self.apply_animation(time, *child_index as usize, joint_transform)
         }
     }
 }
@@ -88,6 +117,7 @@ pub struct GltfData {
 pub struct Vertex {
     pub index: usize,
     pub position: [f32; 3],
+    pub transform: [[f32; 4]; 4],
     pub normal: [f32; 3],
     pub tangent: [f32; 3],
     pub tex_coord: [f32; 2],
@@ -122,6 +152,17 @@ pub struct JointAnimation {
     pub translations: Vec<Mat4>,
     pub rotations: Vec<Mat4>,
     pub scales: Vec<Mat4>,
+}
+
+impl JointAnimation {
+    pub fn identify_key_frame_index(&self, time: f32) -> usize {
+        for (i, key_frame) in self.key_frames.iter().enumerate() {
+            if time < *key_frame {
+                return i;
+            }
+        }
+        return self.key_frames.len() - 1;
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -383,7 +424,11 @@ unsafe fn process_node(
 
     // TODO: more hard comparison
     if node.index() < gltf_model.joints.len() {
-        let joint = &mut gltf_model.joints[node.index()];
+        let joint_index = gltf_model
+            .node_joint_map
+            .get_joint_index(node.index() as u16)
+            .unwrap();
+        let joint = &mut gltf_model.joints[joint_index as usize];
 
         for child in node.children() {
             joint.child_joint_indices.push(
@@ -445,10 +490,14 @@ unsafe fn input_joint_vertex(gltf_model: &mut GltfModel, gltf_data: &mut GltfDat
 
 unsafe fn log_node_hierarchy(gltf_model: &GltfModel) {
     for (i, joint) in gltf_model.joints.iter().enumerate() {
+        let node_index = gltf_model
+            .node_joint_map
+            .get_node_index(joint.index)
+            .unwrap();
         log!(
             "joint name: {}, node Id: {}, joint Id: {}, child joint indices: {:?}",
             joint.name,
-            i,
+            node_index,
             joint.index,
             joint.child_joint_indices
         );

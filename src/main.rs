@@ -570,6 +570,12 @@ impl App {
 
         self.data.images_in_flight[image_index as usize] = self.data.in_flight_fences[self.frame];
 
+        let identity = Mat4::identity();
+        self.data
+            .gltf_model
+            .apply_animation(self.start.elapsed().as_secs_f32(), 0, identity);
+        Self::update_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
+
         self.update_uniform_buffer(
             image_index,
             gui_data.mouse_pos,
@@ -1152,6 +1158,41 @@ impl App {
             &data.model_descriptor_set.rrdata.push(rrdata);
         }
 
+        Ok(())
+    }
+
+    unsafe fn update_vertex_buffer(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        data: &mut AppData,
+    ) -> Result<()> {
+        for (i, rrdata) in data.model_descriptor_set.rrdata.iter_mut().enumerate() {
+            let vertex_data = &mut rrdata.vertex_data;
+            let gltf_data = &mut data.gltf_model.gltf_data[i];
+            for (j, vertex) in gltf_data.vertices.iter().enumerate() {
+                let transform = mat4_from_array(vertex.transform);
+                let pos = vec4_from_array([
+                    vertex.position[0],
+                    vertex.position[1],
+                    vertex.position[2],
+                    0.0,
+                ]);
+                vertex_data.vertices[j].pos.x = pos.x;
+                vertex_data.vertices[j].pos.y = pos.y;
+                vertex_data.vertices[j].pos.z = pos.z;
+            }
+            if let Err(e) = rrdata.vertex_buffer.update(
+                instance,
+                rrdevice,
+                &data.rrcommand_pool,
+                (size_of::<vulkanr::data::Vertex>() * rrdata.vertex_data.vertices.len())
+                    as vk::DeviceSize,
+                rrdata.vertex_data.vertices.as_ptr() as *const c_void,
+                rrdata.vertex_data.vertices.len(),
+            ) {
+                eprintln!("Failed to update vertex buffer: {}", e);
+            }
+        }
         Ok(())
     }
 

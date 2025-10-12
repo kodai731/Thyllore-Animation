@@ -90,11 +90,10 @@ impl GltfModel {
         }
 
         let joint_transform = joint_translation * transform;
-        for (i, vertex_id) in joint.vertex_indices.iter().enumerate() {
-            for (j, gltf_data) in self.gltf_data.iter_mut().enumerate() {
-                let vertex = &mut gltf_data.vertices[*vertex_id as usize];
-                vertex.transform = array_from_mat4(joint_transform);
-            }
+        for (i, joint_vertex_id) in joint.vertex_indices.iter().enumerate() {
+            let vertex = &mut self.gltf_data[joint_vertex_id.gltf_data_index].vertices
+                [joint_vertex_id.vertex_index];
+            vertex.transform = array_from_mat4(joint_transform);
         }
 
         let child_indices = joint.child_joint_indices.clone();
@@ -129,8 +128,14 @@ pub struct Vertex {
 pub struct Joint {
     pub index: u16,
     pub name: String,
-    pub vertex_indices: Vec<u16>,
+    pub vertex_indices: Vec<JointVertexIndex>,
     pub child_joint_indices: Vec<u16>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct JointVertexIndex {
+    pub gltf_data_index: usize,
+    pub vertex_index: usize,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -416,7 +421,7 @@ unsafe fn process_node(
             log!("indices count {}", gltf_data.indices.len());
             log!("morph targets count {}", gltf_data.morph_targets.len());
 
-            input_joint_vertex(gltf_model, &mut gltf_data, node);
+            input_joint_vertex(gltf_model, &mut gltf_data, gltf_model.gltf_data.len(), node);
 
             gltf_model.gltf_data.push(gltf_data);
         });
@@ -447,7 +452,12 @@ unsafe fn process_node(
     Ok(())
 }
 
-unsafe fn input_joint_vertex(gltf_model: &mut GltfModel, gltf_data: &mut GltfData, node: &Node) {
+unsafe fn input_joint_vertex(
+    gltf_model: &mut GltfModel,
+    gltf_data: &mut GltfData,
+    gltf_data_index: usize,
+    node: &Node,
+) {
     if gltf_data.vertices.len() <= 0 {
         return;
     }
@@ -459,7 +469,10 @@ unsafe fn input_joint_vertex(gltf_model: &mut GltfModel, gltf_data: &mut GltfDat
         for j in 0..gltf_data.vertices.len() {
             let joint_indices = &gltf_data.vertices[j].joint_indices;
             if joint_indices.contains(&joint.index) {
-                joint.vertex_indices.push(j as u16);
+                let mut joint_vertex_index = JointVertexIndex::default();
+                joint_vertex_index.gltf_data_index = gltf_data_index;
+                joint_vertex_index.vertex_index = j;
+                joint.vertex_indices.push(joint_vertex_index);
             }
         }
     }
@@ -469,20 +482,23 @@ unsafe fn input_joint_vertex(gltf_model: &mut GltfModel, gltf_data: &mut GltfDat
         let joint_indices = &gltf_data.vertices[i].joint_indices;
         for j in 0..joint_indices.len() {
             let joint_index = &joint_indices[j];
-            if joint_indices[j] == 0 {
+            if joint_indices[j] == 0 && j >= 1 {
                 continue;
             }
-            let node_id = gltf_model
-                .node_joint_map
-                .get_node_index(joint_indices[j])
-                .unwrap();
-            let target_joint = &gltf_model.joints[node_id as usize];
-            if !target_joint.vertex_indices.contains(&(i as u16)) {
+            let target_joint = &gltf_model.joints[*joint_index as usize];
+            let mut is_found = false;
+            for (k, joint_vertex_index) in target_joint.vertex_indices.iter().enumerate() {
+                if joint_vertex_index.vertex_index == j {
+                    is_found = true;
+                    break;
+                }
+            }
+            if !is_found {
                 log!(
-                    "invalid joint id, vertex id {}, joint id {}",
-                    i,
-                    joint_index
-                )
+                    "invalid Joint Vertex Index: Gltf Index {}, Vertex Id {}",
+                    gltf_data_index,
+                    j
+                );
             }
         }
     }

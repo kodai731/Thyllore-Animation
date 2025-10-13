@@ -571,6 +571,8 @@ impl App {
         self.data.images_in_flight[image_index as usize] = self.data.in_flight_fences[self.frame];
 
         let identity = Mat4::identity();
+        // TODO: do in gltf_model
+        self.data.gltf_model.reset_vertices_animation_position();
         self.data
             .gltf_model
             .apply_animation(self.start.elapsed().as_secs_f32(), 0, identity);
@@ -1170,16 +1172,9 @@ impl App {
             let vertex_data = &mut rrdata.vertex_data;
             let gltf_data = &mut data.gltf_model.gltf_data[i];
             for (j, vertex) in gltf_data.vertices.iter().enumerate() {
-                let transform = mat4_from_array(vertex.transform);
-                let pos = vec4_from_array([
-                    vertex.position[0],
-                    vertex.position[1],
-                    vertex.position[2],
-                    0.0,
-                ]);
-                vertex_data.vertices[j].pos.x = pos.x;
-                vertex_data.vertices[j].pos.y = pos.y;
-                vertex_data.vertices[j].pos.z = pos.z;
+                vertex_data.vertices[j].pos.x = vertex.animation_position[0];
+                vertex_data.vertices[j].pos.y = vertex.animation_position[1];
+                vertex_data.vertices[j].pos.z = vertex.animation_position[2];
             }
             if let Err(e) = rrdata.vertex_buffer.update(
                 instance,

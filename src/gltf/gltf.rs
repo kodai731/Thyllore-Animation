@@ -3,7 +3,6 @@ use crate::math::math::*;
 use anyhow::{anyhow, Result};
 use cgmath::Quaternion;
 use core::result::Result::Ok;
-use glium::buffer::Content;
 use gltf::buffer::Data;
 use gltf::{image, Document, Gltf, Node};
 use std::collections::HashMap;
@@ -49,7 +48,7 @@ impl GltfModel {
         index
     }
 
-    pub fn set_joints(self: &mut Self, skin: &gltf::Skin) {
+    pub fn set_joints(self: &mut Self, skin: &gltf::Skin, buffers: &Vec<Data>) {
         self.joints.clear();
         if self.node_joint_map.node_to_joint.len() <= 0 {
             self.node_joint_map.make_from_skin(skin);
@@ -68,6 +67,17 @@ impl GltfModel {
                 joint.index
             );
             self.joints.push(joint);
+        }
+
+        if let Some(_) = skin.inverse_bind_matrices() {
+            let reader = skin.reader(|buffer| Some(&buffers[buffer.index()]));
+            if let Some(iter) = reader.read_inverse_bind_matrices() {
+                log!("Inverse bind matrices: {:?}", iter.len());
+                for (i, mat) in iter.enumerate() {
+                    self.joints[i].inverse_bind_matrix = mat;
+                    log!("Inverse bind matrix {}: {:?}", i, mat);
+                }
+            }
         }
     }
 
@@ -93,13 +103,33 @@ impl GltfModel {
         for (i, joint_vertex_id) in joint.vertex_indices.iter().enumerate() {
             let vertex = &mut self.gltf_data[joint_vertex_id.gltf_data_index].vertices
                 [joint_vertex_id.vertex_index];
-            vertex.transform = array_from_mat4(joint_transform);
+            let weight = vertex.get_weight_from_joint_id(joint.index);
+            let inverse_bind_matrix = mat4_from_array(joint.inverse_bind_matrix);
+            let mut pos = vec4_from_array([
+                vertex.position[0],
+                vertex.position[1],
+                vertex.position[2],
+                0f32,
+            ]);
+            pos = pos * 0.0001f32;
+            pos = weight * (joint_transform * inverse_bind_matrix * pos);
+            vertex.animation_position[0] += pos.x;
+            vertex.animation_position[1] += pos.y;
+            vertex.animation_position[2] += pos.z;
         }
 
         let child_indices = joint.child_joint_indices.clone();
         for (i, child_index) in child_indices.iter().enumerate() {
             self.apply_animation(time, *child_index as usize, joint_transform)
         }
+    }
+
+    pub fn reset_vertices_animation_position(self: &mut Self) {
+        self.gltf_data.iter_mut().for_each(|gltf_data| {
+            gltf_data.vertices.iter_mut().for_each(|vertex| {
+                vertex.animation_position = [0f32, 0f32, 0f32];
+            })
+        })
     }
 }
 
@@ -116,12 +146,28 @@ pub struct GltfData {
 pub struct Vertex {
     pub index: usize,
     pub position: [f32; 3],
-    pub transform: [[f32; 4]; 4],
+    pub animation_position: [f32; 3],
     pub normal: [f32; 3],
     pub tangent: [f32; 3],
     pub tex_coord: [f32; 2],
     pub joint_indices: [u16; 4],
     pub joint_weights: [f32; 4],
+}
+
+impl Vertex {
+    pub fn identify_index_from_joint_id(&self, joint_id: u16) -> usize {
+        for (i, vertex_joint_id) in self.joint_indices.iter().enumerate() {
+            if *vertex_joint_id == joint_id {
+                return i;
+            }
+        }
+        0
+    }
+
+    pub fn get_weight_from_joint_id(&self, joint_id: u16) -> f32 {
+        let index = self.identify_index_from_joint_id(joint_id);
+        self.joint_weights[index]
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -130,6 +176,7 @@ pub struct Joint {
     pub name: String,
     pub vertex_indices: Vec<JointVertexIndex>,
     pub child_joint_indices: Vec<u16>,
+    pub inverse_bind_matrix: [[f32; 4]; 4],
 }
 
 #[derive(Clone, Debug, Default)]
@@ -161,6 +208,8 @@ pub struct JointAnimation {
 
 impl JointAnimation {
     pub fn identify_key_frame_index(&self, time: f32) -> usize {
+        let period = self.key_frames.last().unwrap();
+        let time = time.rem_euclid(*period);
         for (i, key_frame) in self.key_frames.iter().enumerate() {
             if time < *key_frame {
                 return i;
@@ -261,7 +310,7 @@ unsafe fn load_gltf(gltf_model: &mut GltfModel, path: &str) {
     let (gltf, buffers, images) = gltf::import(format!("{}", path)).expect("Failed to load model");
     gltf.skins().enumerate().for_each(|(i, skin)| {
         gltf_model.node_joint_map.make_from_skin(&skin);
-        gltf_model.set_joints(&skin);
+        gltf_model.set_joints(&skin, &buffers);
     });
     for scene in gltf.scenes() {
         for node in scene.nodes() {

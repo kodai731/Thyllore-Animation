@@ -3,6 +3,7 @@ pub use cgmath::Rad;
 pub use cgmath::{point3, Deg, InnerSpace, MetricSpace, Vector2};
 pub use cgmath::{prelude::*, Vector3};
 pub use cgmath::{vec2, vec3, vec4};
+use std::f32::EPSILON;
 use std::ops::{Add, AddAssign, Deref, DerefMut, Mul, Neg};
 #[derive(Copy, Clone, Debug)]
 pub struct Vec2(cgmath::Vector2<f32>);
@@ -242,4 +243,10 @@ pub unsafe fn view(
         1.0,
     );
     return orientation * translate;
+}
+
+pub fn approx_equal_array3(a: &[f32; 3], b: &[f32; 3]) -> bool {
+    (a[0] - b[0]).abs() < 1e-5
+        && (a[1] - b[1]).abs() < 1e-5
+        && (a[2] - b[2]).abs() < 1e-5
 }

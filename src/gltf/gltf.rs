@@ -85,34 +85,35 @@ impl GltfModel {
         // joints[0] = Root
         let joint = &self.joints[target_joint_id];
         let joint_animations = &self.joint_animations[joint.index as usize];
-        let mut joint_translation = Mat4::identity();
+        let mut joint_transform = Mat4::identity();
         for (i, joint_animation) in joint_animations.iter().enumerate() {
             let key_frame_id = joint_animation.identify_key_frame_index(time);
             if joint_animation.scales.len() > key_frame_id {
-                joint_translation = joint_animation.scales[key_frame_id] * joint_translation;
+                joint_transform = joint_animation.scales[key_frame_id] * joint_transform;
             }
             if joint_animation.rotations.len() > key_frame_id {
-                joint_translation = joint_animation.rotations[key_frame_id] * joint_translation;
+                joint_transform = joint_animation.rotations[key_frame_id] * joint_transform;
             }
             if joint_animation.translations.len() > key_frame_id {
-                joint_translation = joint_animation.translations[key_frame_id] * joint_translation;
+                joint_transform = joint_animation.translations[key_frame_id] * joint_transform;
             }
         }
 
-        let joint_transform = joint_translation * transform;
+        let joint_inverse_bind_pose = mat4_from_array(joint.inverse_bind_matrix);
+        joint_transform = joint_transform * transform;
         for (i, joint_vertex_id) in joint.vertex_indices.iter().enumerate() {
             let vertex = &mut self.gltf_data[joint_vertex_id.gltf_data_index].vertices
                 [joint_vertex_id.vertex_index];
             let weight = vertex.get_weight_from_joint_id(joint.index);
-            let inverse_bind_matrix = mat4_from_array(joint.inverse_bind_matrix);
             let mut pos = vec4_from_array([
                 vertex.position[0],
                 vertex.position[1],
                 vertex.position[2],
-                0f32,
+                1f32,
             ]);
-            pos = pos * 0.0001f32;
-            pos = weight * (joint_transform * inverse_bind_matrix * pos);
+            // pos = pos * 0.0001f32;
+            // pos = weight * (transform * joint_inverse_bind_pose * pos);
+            pos = weight * pos;
             vertex.animation_position[0] += pos.x;
             vertex.animation_position[1] += pos.y;
             vertex.animation_position[2] += pos.z;
@@ -121,6 +122,22 @@ impl GltfModel {
         let child_indices = joint.child_joint_indices.clone();
         for (i, child_index) in child_indices.iter().enumerate() {
             self.apply_animation(time, *child_index as usize, joint_transform)
+        }
+    }
+
+    // debug
+    pub fn validate_vertex_position(self: &Self) {
+        for (i, gltf_data) in self.gltf_data.iter().enumerate() {
+            for vertex in &gltf_data.vertices {
+                if !approx_equal_array3(&vertex.position, &vertex.animation_position) {
+                    log!(
+                        "invalid vertex animation position: joint id {:?}, gltf data index {}, vertex id {}",
+                        vertex.joint_indices,
+                        i,
+                        vertex.index
+                    );
+                }
+            }
         }
     }
 
@@ -161,7 +178,12 @@ impl Vertex {
                 return i;
             }
         }
-        0
+        log!(
+            "invalid: this vertex {} is not included in joint {}",
+            self.index,
+            joint_id
+        );
+        3
     }
 
     pub fn get_weight_from_joint_id(&self, joint_id: u16) -> f32 {
@@ -183,6 +205,12 @@ pub struct Joint {
 pub struct JointVertexIndex {
     pub gltf_data_index: usize,
     pub vertex_index: usize,
+}
+
+impl PartialEq for JointVertexIndex {
+    fn eq(&self, other: &Self) -> bool {
+        self.gltf_data_index == other.gltf_data_index && self.vertex_index == other.vertex_index
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -470,7 +498,7 @@ unsafe fn process_node(
             log!("indices count {}", gltf_data.indices.len());
             log!("morph targets count {}", gltf_data.morph_targets.len());
 
-            input_joint_vertex(gltf_model, &mut gltf_data, gltf_model.gltf_data.len(), node);
+            input_joint_vertex(gltf_model, &mut gltf_data, gltf_model.gltf_data.len());
 
             gltf_model.gltf_data.push(gltf_data);
         });
@@ -505,7 +533,6 @@ unsafe fn input_joint_vertex(
     gltf_model: &mut GltfModel,
     gltf_data: &mut GltfData,
     gltf_data_index: usize,
-    node: &Node,
 ) {
     if gltf_data.vertices.len() <= 0 {
         return;
@@ -514,41 +541,47 @@ unsafe fn input_joint_vertex(
         return;
     }
 
-    for (i, joint) in gltf_model.joints.iter_mut().enumerate() {
-        for j in 0..gltf_data.vertices.len() {
-            let joint_indices = &gltf_data.vertices[j].joint_indices;
-            if joint_indices.contains(&joint.index) {
-                let mut joint_vertex_index = JointVertexIndex::default();
-                joint_vertex_index.gltf_data_index = gltf_data_index;
-                joint_vertex_index.vertex_index = j;
-                joint.vertex_indices.push(joint_vertex_index);
+    gltf_data.vertices.iter().for_each(|vertex| {
+        vertex.joint_indices.iter().for_each(|joint_index| {
+            let mut joint_vertex_index = JointVertexIndex::default();
+            joint_vertex_index.gltf_data_index = gltf_data_index;
+            joint_vertex_index.vertex_index = vertex.index;
+            if !gltf_model.joints[*joint_index as usize]
+                .vertex_indices
+                .contains(&joint_vertex_index)
+            {
+                gltf_model.joints[*joint_index as usize]
+                    .vertex_indices
+                    .push(joint_vertex_index);
             }
-        }
-    }
+        })
+    });
 
     // validate
-    for i in 0..gltf_data.vertices.len() {
-        let joint_indices = &gltf_data.vertices[i].joint_indices;
-        for j in 0..joint_indices.len() {
-            let joint_index = &joint_indices[j];
-            if joint_indices[j] == 0 && j >= 1 {
-                continue;
-            }
+    for vertex in &gltf_data.vertices {
+        let joint_indices = vertex.joint_indices;
+        let mut is_vertex_found = false;
+        for (i, joint_index) in joint_indices.iter().enumerate() {
             let target_joint = &gltf_model.joints[*joint_index as usize];
-            let mut is_found = false;
-            for (k, joint_vertex_index) in target_joint.vertex_indices.iter().enumerate() {
-                if joint_vertex_index.vertex_index == j {
-                    is_found = true;
+            let mut is_joint_found = false;
+            for joint_vertex_index in &target_joint.vertex_indices {
+                if joint_vertex_index.vertex_index == vertex.index {
+                    is_joint_found = true;
+                    is_vertex_found = true;
                     break;
                 }
             }
-            if !is_found {
+            if !is_joint_found {
                 log!(
-                    "invalid Joint Vertex Index: Gltf Index {}, Vertex Id {}",
+                    "invalid: joint index not found: Gltf Index {}, Joint Index Id {}, Joint Index {}",
                     gltf_data_index,
-                    j
+                    i,
+                    joint_index
                 );
             }
+        }
+        if !is_vertex_found {
+            log!("invalid: vertex {} is not included in Joint", vertex.index);
         }
     }
 }
@@ -588,6 +621,7 @@ unsafe fn process_animation(
         let node = target.node();
         log!("target animation index {}", target.animation().index());
         log!("node index {}", node.index());
+        log!("node name {}", node.name().unwrap());
         let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
         let mut key_frames = Vec::new();
         let mut weights = Vec::new();
@@ -616,12 +650,10 @@ unsafe fn process_animation(
                 ReadOutputs::Rotations(rotations) => {
                     for (i, rotation) in rotations.into_f32().enumerate() {
                         log!("Rotation {}: {:?}", i, rotation);
-                        let joint_rotaion_mat = Mat4::from(Quaternion::new(
-                            rotation[0],
-                            rotation[1],
-                            rotation[2],
-                            rotation[3],
-                        ));
+                        let joint_rotaion_mat = Mat4::from(
+                            Quaternion::new(rotation[3], rotation[0], rotation[1], rotation[2])
+                                .normalize(),
+                        );
                         joint_rotations.push(joint_rotaion_mat);
                     }
                 }

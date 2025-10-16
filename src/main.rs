@@ -1132,8 +1132,7 @@ impl App {
         let model_path = "src/resources/phoenix-bird/glb/phoenixBird.glb";
         data.gltf_model = GltfModel::load_model(model_path);
 
-        for i in 0..data.gltf_model.gltf_data.len() {
-            let gltf_data = &data.gltf_model.gltf_data[i];
+        for gltf_data in &data.gltf_model.gltf_data {
             let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain);
             (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
                 instance,
@@ -1145,14 +1144,19 @@ impl App {
             )?;
 
             rrdata.vertex_data = VertexData::default();
-            for i in 0..gltf_data.vertices.len() {
-                let gltf_vertex = &gltf_data.vertices[i];
+            for gltf_vertex in &gltf_data.vertices {
+                rrdata
+                    .vertex_data
+                    .vertices
+                    .push(vulkanr::data::Vertex::default());
+            }
+            for gltf_vertex in &gltf_data.vertices {
                 let vertex = vulkanr::data::Vertex::new(
                     Vec3::new_array(gltf_vertex.position),
                     Vec4::new(0.0, 1.0, 0.0, 1.0),
                     Vec2::new_array(gltf_vertex.tex_coord),
                 );
-                rrdata.vertex_data.vertices.push(vertex);
+                rrdata.vertex_data.vertices[gltf_vertex.index] = vertex;
             }
 
             rrdata.vertex_data.indices = gltf_data.indices.clone();
@@ -1172,9 +1176,9 @@ impl App {
             let vertex_data = &mut rrdata.vertex_data;
             let gltf_data = &mut data.gltf_model.gltf_data[i];
             for (j, vertex) in gltf_data.vertices.iter().enumerate() {
-                vertex_data.vertices[j].pos.x = vertex.animation_position[0];
-                vertex_data.vertices[j].pos.y = vertex.animation_position[1];
-                vertex_data.vertices[j].pos.z = vertex.animation_position[2];
+                vertex_data.vertices[vertex.index].pos.x = vertex.animation_position[0];
+                vertex_data.vertices[vertex.index].pos.y = vertex.animation_position[1];
+                vertex_data.vertices[vertex.index].pos.z = vertex.animation_position[2];
             }
             if let Err(e) = rrdata.vertex_buffer.update(
                 instance,

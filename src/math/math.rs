@@ -1,10 +1,13 @@
+use cgmath::num_traits::real::Real;
 pub use cgmath::Quaternion;
 pub use cgmath::Rad;
+use cgmath::Vector4;
 pub use cgmath::{point3, Deg, InnerSpace, MetricSpace, Vector2};
 pub use cgmath::{prelude::*, Vector3};
 pub use cgmath::{vec2, vec3, vec4};
 use std::f32::EPSILON;
 use std::ops::{Add, AddAssign, Deref, DerefMut, Mul, Neg};
+
 #[derive(Copy, Clone, Debug)]
 pub struct Vec2(cgmath::Vector2<f32>);
 impl Default for Vec2 {
@@ -179,7 +182,7 @@ pub fn array_from_mat4(m: Mat4) -> [[f32; 4]; 4] {
 }
 
 pub fn mat4_from_array(a: [[f32; 4]; 4]) -> Mat4 {
-    Mat4::from_cols(a[0].into(), a[1].into(), a[2].into(), a[3].into())
+    Mat4::from_cols(a[0].into(), a[1].into(), a[2].into(), a[3].into()).transpose()
 }
 
 pub unsafe fn rodrigues(
@@ -246,7 +249,26 @@ pub unsafe fn view(
 }
 
 pub fn approx_equal_array3(a: &[f32; 3], b: &[f32; 3]) -> bool {
+    (a[0] - b[0]).abs() < 1e-5 && (a[1] - b[1]).abs() < 1e-5 && (a[2] - b[2]).abs() < 1e-5
+}
+
+pub fn approx_equal_array4(a: &[f32; 4], b: &[f32; 4]) -> bool {
     (a[0] - b[0]).abs() < 1e-5
-        && (a[1] - b[1]).abs() < 1e-5
-        && (a[2] - b[2]).abs() < 1e-5
+        && (a[1] - b[1]).abs() < 1e-3
+        && (a[2] - b[2]).abs() < 1e-3
+        && (a[3] - b[3]).abs() < 1e-3
+}
+
+pub fn approx_equal_vec4(a: &Vector4<f32>, b: &Vector4<f32>) -> bool {
+    (a.x - b.x).abs() < 1e-3
+        && (a.y - b.y).abs() < 1e-3
+        && (a.z - b.z).abs() < 1e-3
+        && (a.w - b.w).abs() < 1e-3
+}
+
+pub fn approx_equal_mat4(a: &Mat4, b: &Mat4) -> bool {
+    approx_equal_vec4(&a.x, &b.x)
+        && approx_equal_vec4(&a.y, &b.y)
+        && approx_equal_vec4(&a.z, &b.z)
+        && approx_equal_vec4(&a.w, &b.w)
 }

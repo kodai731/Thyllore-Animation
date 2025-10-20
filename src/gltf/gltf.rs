@@ -59,7 +59,8 @@ impl GltfModel {
             let mut joint = Joint::default();
             joint.index = joint_index as u16;
             joint.name = node.name().unwrap().to_string();
-            joint.transform = node.transform().matrix();
+            let joint_transform = mat4_from_array(node.transform().matrix());
+            joint.transform = array_from_mat4(joint_transform);
             let node_index = self.node_joint_map.get_node_index(joint.index).unwrap();
             log!(
                 "Joint Pushed: Node Index: {}, Node Name: {}, Joint Index: {}",
@@ -72,12 +73,13 @@ impl GltfModel {
 
         if let Some(_) = skin.inverse_bind_matrices() {
             let reader = skin.reader(|buffer| Some(&buffers[buffer.index()]));
+            // convert milli meter to meter
             if let Some(iter) = reader.read_inverse_bind_matrices() {
                 log!("Inverse bind poses: {:?}", iter.len());
                 for (i, mat) in iter.enumerate() {
                     let mut inverse_bind_pose = mat4_from_array(mat);
                     // convert milli meter to meter
-                    inverse_bind_pose *= 0.001f32;
+                    inverse_bind_pose = inverse_bind_pose * Mat4::from_scale(0.001f32);
                     self.joints[i].inverse_bind_pose = array_from_mat4(inverse_bind_pose);
                     log!("Inverse bind pose {}: {:?}", i, mat);
                 }
@@ -351,7 +353,7 @@ unsafe fn load_gltf(gltf_model: &mut GltfModel, path: &str) {
         }
     }
     log_node_hierarchy(gltf_model);
-    validate_inverse_bind_pose(gltf_model, 0, Matrix4::identity());
+    validate_inverse_bind_pose(gltf_model, 0, fix_coord());
 
     initialize_joint_animation(gltf_model);
     for animation in gltf.animations() {
@@ -614,7 +616,7 @@ unsafe fn validate_inverse_bind_pose(gltf_model: &GltfModel, joint_index: u16, t
     let joint = &gltf_model.joints[joint_index as usize];
     let inverse_bind_pose = mat4_from_array(joint.inverse_bind_pose);
     let joint_transform = mat4_from_array(joint.transform);
-    let transform = joint_transform * transform;
+    let transform = transform * joint_transform;
     let multiplied = transform * inverse_bind_pose;
     if !approx_equal_mat4(&multiplied, &Mat4::identity()) {
         log!(

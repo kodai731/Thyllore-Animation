@@ -1,7 +1,7 @@
 use cgmath::num_traits::real::Real;
+use cgmath::Matrix4;
 pub use cgmath::Quaternion;
 pub use cgmath::Rad;
-use cgmath::Vector4;
 pub use cgmath::{point3, Deg, InnerSpace, MetricSpace, Vector2};
 pub use cgmath::{prelude::*, Vector3};
 pub use cgmath::{vec2, vec3, vec4};
@@ -112,6 +112,9 @@ impl PartialEq for Vec3 {
         self.0.eq(&other.0)
     }
 }
+
+pub type Vector4 = cgmath::Vector4<f32>;
+
 #[derive(Copy, Clone, Debug)]
 pub struct Vec4(cgmath::Vector4<f32>);
 impl Default for Vec4 {
@@ -182,7 +185,16 @@ pub fn array_from_mat4(m: Mat4) -> [[f32; 4]; 4] {
 }
 
 pub fn mat4_from_array(a: [[f32; 4]; 4]) -> Mat4 {
-    Mat4::from_cols(a[0].into(), a[1].into(), a[2].into(), a[3].into()).transpose()
+    Mat4::from_cols(a[0].into(), a[1].into(), a[2].into(), a[3].into())
+}
+
+pub fn fix_coord() -> Mat4 {
+    Matrix4::from_cols(
+        Vector4::new(1.0, 0.0, 0.0, 0.0),  // X ← X
+        Vector4::new(0.0, 0.0, 1.0, 0.0),  // Y ← Z
+        Vector4::new(0.0, -1.0, 0.0, 0.0), // Z ← -Y
+        Vector4::new(0.0, 0.0, 0.0, 1.0),
+    )
 }
 
 pub unsafe fn rodrigues(
@@ -259,7 +271,7 @@ pub fn approx_equal_array4(a: &[f32; 4], b: &[f32; 4]) -> bool {
         && (a[3] - b[3]).abs() < 1e-3
 }
 
-pub fn approx_equal_vec4(a: &Vector4<f32>, b: &Vector4<f32>) -> bool {
+pub fn approx_equal_vec4(a: &Vector4, b: &Vector4) -> bool {
     (a.x - b.x).abs() < 1e-3
         && (a.y - b.y).abs() < 1e-3
         && (a.z - b.z).abs() < 1e-3

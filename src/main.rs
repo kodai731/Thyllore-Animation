@@ -73,7 +73,7 @@ use imgui_winit_support::winit;
 use imgui_winit_support::winit::event::ElementState;
 
 use cgmath::num_traits::AsPrimitive;
-use cgmath::Vector4;
+use cgmath::{Matrix4, Vector4};
 use glium::buffer::Content;
 use imgui::{Condition, MouseButton};
 use serde::Serialize;
@@ -570,12 +570,13 @@ impl App {
 
         self.data.images_in_flight[image_index as usize] = self.data.in_flight_fences[self.frame];
 
-        let identity = Mat4::identity();
         // TODO: do in gltf_model
         self.data.gltf_model.reset_vertices_animation_position();
-        self.data
-            .gltf_model
-            .apply_animation(self.start.elapsed().as_secs_f32(), 0, identity);
+        // self.data.gltf_model.apply_animation(
+        //     self.start.elapsed().as_secs_f32(),
+        //     0,
+        //     fix_coord(),
+        // );
         Self::update_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
 
         self.update_uniform_buffer(
@@ -1129,7 +1130,7 @@ impl App {
         data: &mut AppData,
     ) -> Result<()> {
         // gltf model
-        let model_path = "src/resources/phoenix-bird/glb/phoenixBird.glb";
+        let model_path = "src/resources/stickman/stickman.glb";
         data.gltf_model = GltfModel::load_model(model_path);
 
         for gltf_data in &data.gltf_model.gltf_data {
@@ -1175,7 +1176,7 @@ impl App {
         for (i, rrdata) in data.model_descriptor_set.rrdata.iter_mut().enumerate() {
             let vertex_data = &mut rrdata.vertex_data;
             let gltf_data = &mut data.gltf_model.gltf_data[i];
-            for (j, vertex) in gltf_data.vertices.iter().enumerate() {
+            for vertex in &gltf_data.vertices {
                 vertex_data.vertices[vertex.index].pos.x = vertex.animation_position[0];
                 vertex_data.vertices[vertex.index].pos.y = vertex.animation_position[1];
                 vertex_data.vertices[vertex.index].pos.z = vertex.animation_position[2];

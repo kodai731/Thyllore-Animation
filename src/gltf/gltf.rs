@@ -358,6 +358,7 @@ unsafe fn load_gltf(gltf_model: &mut GltfModel, path: &str) {
             process_node(&gltf, &buffers, &images, &node, gltf_model).unwrap();
         }
     }
+    input_joint_vertex(gltf_model);
     log_node_hierarchy(gltf_model);
     validate_inverse_bind_pose(gltf_model, 0, fix_coord());
     load_white_texture_if_none(gltf_model);
@@ -399,12 +400,40 @@ unsafe fn process_node(
         // primitive
         primitives.for_each(|primitive| {
             log!("primitive found");
-            let mut gltf_data = GltfData::new();
             let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
             log!("Topology: {:?}", primitive.mode());
 
-            let index_offset = gltf_data.indices.len();
+            // texture
+            if let Some(material) = primitive
+                .material()
+                .pbr_metallic_roughness()
+                .base_color_texture()
+            {
+                let texture = material.texture();
+                let image_index = texture.source().index();
+                let image = &images[image_index];
+
+                let size = (size_of::<u8>() * image.pixels.len()) as u64;
+                let (width, height) = (image.width, image.height);
+                let image_data = ImageData {
+                    data: image.pixels.clone(),
+                    size: size,
+                    width: width,
+                    height: height,
+                };
+                let mut gltf_data = GltfData::default();
+                gltf_data.image_data.push(image_data);
+                gltf_model.gltf_data.push(gltf_data);
+            }
+
+            if gltf_model.gltf_data.len() < 1 {
+                gltf_model.gltf_data.push(GltfData::default());
+            }
+
+            let gltf_data = gltf_model.gltf_data.last_mut().unwrap();
+
+            let index_offset = gltf_data.vertices.len();
             if let Some(iter) = reader.read_indices() {
                 for index in iter.into_u32() {
                     gltf_data
@@ -415,9 +444,9 @@ unsafe fn process_node(
 
             if let Some(iter) = reader.read_positions() {
                 log!("positions count {:?}", iter.len());
-                for (i, position) in iter.enumerate() {
+                for position in iter {
                     let mut vertex = Vertex::default();
-                    vertex.index = i;
+                    vertex.index = gltf_data.vertices.len();
                     let mut position_converted = position;
                     position_converted[1] = 1.0 - position_converted[1];
                     vertex.position = position_converted;
@@ -438,27 +467,6 @@ unsafe fn process_node(
                 for normal in iter {
                     normals.push(normal);
                 }
-            }
-
-            // texture
-            if let Some(material) = primitive
-                .material()
-                .pbr_metallic_roughness()
-                .base_color_texture()
-            {
-                let texture = material.texture();
-                let image_index = texture.source().index();
-                let image = &images[image_index];
-
-                let size = (size_of::<u8>() * image.pixels.len()) as u64;
-                let (width, height) = (image.width, image.height);
-                let image_data = ImageData {
-                    data: image.pixels.clone(),
-                    size: size,
-                    width: width,
-                    height: height,
-                };
-                gltf_data.image_data.push(image_data);
             }
 
             // joint
@@ -511,10 +519,6 @@ unsafe fn process_node(
             log!("vertex count {}", gltf_data.vertices.len());
             log!("indices count {}", gltf_data.indices.len());
             log!("morph targets count {}", gltf_data.morph_targets.len());
-
-            input_joint_vertex(gltf_model, &mut gltf_data, gltf_model.gltf_data.len());
-
-            gltf_model.gltf_data.push(gltf_data);
         });
     }
 
@@ -576,59 +580,57 @@ fn load_white_texture() -> Result<ImageData> {
     })
 }
 
-unsafe fn input_joint_vertex(
-    gltf_model: &mut GltfModel,
-    gltf_data: &mut GltfData,
-    gltf_data_index: usize,
-) {
-    if gltf_data.vertices.len() <= 0 {
-        return;
-    }
-    if gltf_data.vertices[0].joint_indices.len() <= 0 {
-        return;
-    }
+unsafe fn input_joint_vertex(gltf_model: &mut GltfModel) {
+    for (i, gltf_data) in &mut gltf_model.gltf_data.iter().enumerate() {
+        if gltf_data.vertices.len() <= 0 {
+            return;
+        }
+        if gltf_data.vertices[0].joint_indices.len() <= 0 {
+            return;
+        }
 
-    gltf_data.vertices.iter().for_each(|vertex| {
-        vertex.joint_indices.iter().for_each(|joint_index| {
-            let mut joint_vertex_index = JointVertexIndex::default();
-            joint_vertex_index.gltf_data_index = gltf_data_index;
-            joint_vertex_index.vertex_index = vertex.index;
-            if !gltf_model.joints[*joint_index as usize]
-                .vertex_indices
-                .contains(&joint_vertex_index)
-            {
-                gltf_model.joints[*joint_index as usize]
+        gltf_data.vertices.iter().for_each(|vertex| {
+            vertex.joint_indices.iter().for_each(|joint_index| {
+                let mut joint_vertex_index = JointVertexIndex::default();
+                joint_vertex_index.gltf_data_index = i;
+                joint_vertex_index.vertex_index = vertex.index;
+                if !gltf_model.joints[*joint_index as usize]
                     .vertex_indices
-                    .push(joint_vertex_index);
-            }
-        })
-    });
+                    .contains(&joint_vertex_index)
+                {
+                    gltf_model.joints[*joint_index as usize]
+                        .vertex_indices
+                        .push(joint_vertex_index);
+                }
+            })
+        });
 
-    // validate
-    for vertex in &gltf_data.vertices {
-        let joint_indices = vertex.joint_indices;
-        let mut is_vertex_found = false;
-        for (i, joint_index) in joint_indices.iter().enumerate() {
-            let target_joint = &gltf_model.joints[*joint_index as usize];
-            let mut is_joint_found = false;
-            for joint_vertex_index in &target_joint.vertex_indices {
-                if joint_vertex_index.vertex_index == vertex.index {
-                    is_joint_found = true;
-                    is_vertex_found = true;
-                    break;
+        // validate
+        for vertex in &gltf_data.vertices {
+            let joint_indices = vertex.joint_indices;
+            let mut is_vertex_found = false;
+            for (j, joint_index) in joint_indices.iter().enumerate() {
+                let target_joint = &gltf_model.joints[*joint_index as usize];
+                let mut is_joint_found = false;
+                for joint_vertex_index in &target_joint.vertex_indices {
+                    if joint_vertex_index.vertex_index == vertex.index {
+                        is_joint_found = true;
+                        is_vertex_found = true;
+                        break;
+                    }
+                }
+                if !is_joint_found {
+                    log!(
+                        "invalid: joint index not found: Gltf Index {}, Joint Index Id {}, Joint Index {}",
+                        i,
+                        j,
+                        joint_index
+                    );
                 }
             }
-            if !is_joint_found {
-                log!(
-                    "invalid: joint index not found: Gltf Index {}, Joint Index Id {}, Joint Index {}",
-                    gltf_data_index,
-                    i,
-                    joint_index
-                );
+            if !is_vertex_found {
+                log!("invalid: vertex {} is not included in Joint", vertex.index);
             }
-        }
-        if !is_vertex_found {
-            log!("invalid: vertex {} is not included in Joint", vertex.index);
         }
     }
 }
@@ -654,6 +656,7 @@ unsafe fn validate_inverse_bind_pose(gltf_model: &GltfModel, joint_index: u16, t
     let joint = &gltf_model.joints[joint_index as usize];
     let inverse_bind_pose = mat4_from_array(joint.inverse_bind_pose);
     let joint_transform = mat4_from_array(joint.transform);
+    log!("joint transform {}: {:?}", joint_index, joint_transform);
     let transform = transform * joint_transform;
     let multiplied = transform * inverse_bind_pose;
     if !approx_equal_mat4(&multiplied, &Mat4::identity()) {

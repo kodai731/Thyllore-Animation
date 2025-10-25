@@ -156,24 +156,28 @@ impl GltfModel {
         //     })
         // });
 
-        self.apply_node_transform();
+        self.apply_node_transform(0, Matrix4::identity());
     }
 
-    fn apply_node_transform(self: &mut Self) {
-        for rrnode in self.rrnodes.iter_mut() {
-            let joint_transform = mat4_from_array(rrnode.transform);
-            for vertex_id in rrnode.vertex_indices.iter_mut() {
-                let vertex =
-                    &mut self.gltf_data[vertex_id.gltf_data_index].vertices[vertex_id.vertex_index];
-                let mut position = vec4_from_array([
-                    vertex.position[0],
-                    vertex.position[1],
-                    vertex.position[2],
-                    1f32,
-                ]);
-                position = joint_transform * position;
-                vertex.animation_position = [position.x, position.y, position.z];
-            }
+    fn apply_node_transform(self: &mut Self, node_id: u16, transform: Mat4) {
+        let rrnode = &mut self.rrnodes[node_id as usize];
+        let node_transform = transform * mat4_from_array(rrnode.transform);
+        for vertex_id in rrnode.vertex_indices.iter_mut() {
+            let vertex =
+                &mut self.gltf_data[vertex_id.gltf_data_index].vertices[vertex_id.vertex_index];
+            let mut position = vec4_from_array([
+                vertex.position[0],
+                vertex.position[1],
+                vertex.position[2],
+                1f32,
+            ]);
+            position = node_transform * position * 0.001f32;
+            vertex.animation_position = [position.x, position.y, position.z];
+        }
+
+        let children = rrnode.children.clone();
+        for child in children {
+            self.apply_node_transform(child, node_transform);
         }
     }
 }
@@ -237,6 +241,7 @@ pub struct RRNode {
     pub name: String,
     pub vertex_indices: Vec<JointVertexIndex>,
     pub transform: [[f32; 4]; 4],
+    pub children: Vec<u16>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -427,6 +432,9 @@ unsafe fn process_node(
     rrnode.index = node.index() as u16;
     rrnode.transform = node.transform().matrix();
     rrnode.name = (*node.name().unwrap().to_string()).parse()?;
+    for child in node.children() {
+        rrnode.children.push(child.index() as u16);
+    }
 
     // meshes
     if let Some(mesh) = node.mesh() {
@@ -629,6 +637,7 @@ fn load_white_texture() -> Result<ImageData> {
 }
 
 unsafe fn input_joint_vertex(gltf_model: &mut GltfModel) {
+    let mut vertex_count = 0;
     for (i, gltf_data) in &mut gltf_model.gltf_data.iter().enumerate() {
         if gltf_data.vertices.len() <= 0 {
             return;
@@ -637,6 +646,7 @@ unsafe fn input_joint_vertex(gltf_model: &mut GltfModel) {
             return;
         }
 
+        vertex_count += gltf_data.vertices.len();
         gltf_data.vertices.iter().for_each(|vertex| {
             vertex.joint_indices.iter().for_each(|joint_index| {
                 let mut joint_vertex_index = JointVertexIndex::default();
@@ -681,6 +691,23 @@ unsafe fn input_joint_vertex(gltf_model: &mut GltfModel) {
             }
         }
     }
+
+    // rrnode
+    let mut node_vertex_count = 0;
+    for rrnode in &gltf_model.rrnodes {
+        log!(
+            "node {} {} vertices count: {}",
+            rrnode.index,
+            rrnode.name,
+            rrnode.vertex_indices.len()
+        );
+        node_vertex_count += rrnode.vertex_indices.len();
+    }
+    log!(
+        "total node vertices {} vertices {}",
+        node_vertex_count,
+        vertex_count,
+    )
 }
 
 unsafe fn log_node_hierarchy(gltf_model: &GltfModel) {

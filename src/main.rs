@@ -575,7 +575,7 @@ impl App {
         // self.data.gltf_model.apply_animation(
         //     self.start.elapsed().as_secs_f32(),
         //     0,
-        //     fix_coord(),
+        //     Matrix4::identity(),
         // );
         Self::update_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
 

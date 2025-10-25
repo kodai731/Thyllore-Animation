@@ -16,6 +16,7 @@ pub struct GltfModel {
     pub joints: Vec<Joint>, // order by joint id
     pub joint_animations: Vec<Vec<JointAnimation>>,
     pub node_joint_map: NodeJointMap,
+    pub rrnodes: Vec<RRNode>,
 }
 
 impl GltfModel {
@@ -109,8 +110,7 @@ impl GltfModel {
         }
 
         let joint_inverse_bind_pose = mat4_from_array(joint.inverse_bind_pose);
-        let joint_transform =
-            (transform * joint_translate * joint_rotation * joint_scale).transpose();
+        let joint_transform = transform * joint_translate * joint_rotation * joint_scale;
         for joint_vertex_id in &joint.vertex_indices {
             let vertex = &mut self.gltf_data[joint_vertex_id.gltf_data_index].vertices
                 [joint_vertex_id.vertex_index];
@@ -121,7 +121,7 @@ impl GltfModel {
                 vertex.position[2],
                 1f32,
             ]);
-            pos = weight * joint_transform * joint_inverse_bind_pose.transpose() * pos;
+            pos = weight * joint_transform * joint_inverse_bind_pose * pos;
             vertex.animation_position[0] += pos.x;
             vertex.animation_position[1] += pos.y;
             vertex.animation_position[2] += pos.z;
@@ -150,11 +150,31 @@ impl GltfModel {
     }
 
     pub fn reset_vertices_animation_position(self: &mut Self) {
-        self.gltf_data.iter_mut().for_each(|gltf_data| {
-            gltf_data.vertices.iter_mut().for_each(|vertex| {
-                vertex.animation_position = vertex.position;
-            })
-        })
+        // self.gltf_data.iter_mut().for_each(|gltf_data| {
+        //     gltf_data.vertices.iter_mut().for_each(|vertex| {
+        //         vertex.animation_position = vertex.position;
+        //     })
+        // });
+
+        self.apply_node_transform();
+    }
+
+    fn apply_node_transform(self: &mut Self) {
+        for rrnode in self.rrnodes.iter_mut() {
+            let joint_transform = mat4_from_array(rrnode.transform);
+            for vertex_id in rrnode.vertex_indices.iter_mut() {
+                let vertex =
+                    &mut self.gltf_data[vertex_id.gltf_data_index].vertices[vertex_id.vertex_index];
+                let mut position = vec4_from_array([
+                    vertex.position[0],
+                    vertex.position[1],
+                    vertex.position[2],
+                    1f32,
+                ]);
+                position = joint_transform * position;
+                vertex.animation_position = [position.x, position.y, position.z];
+            }
+        }
     }
 }
 
@@ -177,6 +197,7 @@ pub struct Vertex {
     pub tex_coord: [f32; 2],
     pub joint_indices: [u16; 4],
     pub joint_weights: [f32; 4],
+    pub node_id: u16,
 }
 
 impl Vertex {
@@ -207,6 +228,14 @@ pub struct Joint {
     pub vertex_indices: Vec<JointVertexIndex>,
     pub child_joint_indices: Vec<u16>,
     pub inverse_bind_pose: [[f32; 4]; 4],
+    pub transform: [[f32; 4]; 4],
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct RRNode {
+    pub index: u16,
+    pub name: String,
+    pub vertex_indices: Vec<JointVertexIndex>,
     pub transform: [[f32; 4]; 4],
 }
 
@@ -349,15 +378,18 @@ pub struct ImageData {
 unsafe fn load_gltf(gltf_model: &mut GltfModel, path: &str) {
     log!("Loading glTF file");
     let (gltf, buffers, images) = gltf::import(format!("{}", path)).expect("Failed to load model");
+
     gltf.skins().enumerate().for_each(|(i, skin)| {
         gltf_model.node_joint_map.make_from_skin(&skin);
         gltf_model.set_joints(&skin, &buffers);
     });
+
     for scene in gltf.scenes() {
         for node in scene.nodes() {
             process_node(&gltf, &buffers, &images, &node, gltf_model).unwrap();
         }
     }
+
     input_joint_vertex(gltf_model);
     log_node_hierarchy(gltf_model);
     validate_inverse_bind_pose(gltf_model, 0, fix_coord());
@@ -390,7 +422,12 @@ unsafe fn process_node(
     node: &Node,
     gltf_model: &mut GltfModel,
 ) -> Result<()> {
-    log!("Node {} {}", node.index().to_string(), node.name().unwrap());
+    log!("Node {} {}", node.index(), node.name().unwrap());
+    let mut rrnode = RRNode::default();
+    rrnode.index = node.index() as u16;
+    rrnode.transform = node.transform().matrix();
+    rrnode.name = (*node.name().unwrap().to_string()).parse()?;
+
     // meshes
     if let Some(mesh) = node.mesh() {
         log!("mesh found");
@@ -431,10 +468,12 @@ unsafe fn process_node(
                 gltf_model.gltf_data.push(GltfData::default());
             }
 
+            let gltf_data_index = gltf_model.gltf_data.len() - 1;
             let gltf_data = gltf_model.gltf_data.last_mut().unwrap();
 
             let index_offset = gltf_data.vertices.len();
             if let Some(iter) = reader.read_indices() {
+                log!("index count: {:?}", iter.clone().into_u32().len());
                 for index in iter.into_u32() {
                     gltf_data
                         .indices
@@ -450,6 +489,13 @@ unsafe fn process_node(
                     let mut position_converted = position;
                     position_converted[1] = 1.0 - position_converted[1];
                     vertex.position = position_converted;
+                    vertex.node_id = node.index() as u16;
+
+                    let mut vertex_id = JointVertexIndex::default();
+                    vertex_id.gltf_data_index = gltf_data_index;
+                    vertex_id.vertex_index = vertex.index;
+                    rrnode.vertex_indices.push(vertex_id);
+
                     gltf_data.vertices.push(vertex);
                 }
             }
@@ -521,6 +567,8 @@ unsafe fn process_node(
             log!("morph targets count {}", gltf_data.morph_targets.len());
         });
     }
+
+    gltf_model.rrnodes.push(rrnode);
 
     if gltf_model
         .node_joint_map

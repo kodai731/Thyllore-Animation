@@ -156,7 +156,7 @@ impl GltfModel {
         //     })
         // });
 
-        self.apply_node_transform(0, Matrix4::identity());
+        self.apply_node_transform(0, fix_coord() * Matrix4::from_scale(0.01));
     }
 
     fn apply_node_transform(self: &mut Self, node_id: u16, transform: Mat4) {
@@ -171,7 +171,7 @@ impl GltfModel {
                 vertex.position[2],
                 1f32,
             ]);
-            position = node_transform * position * 0.001f32;
+            position = node_transform * position;
             vertex.animation_position = [position.x, position.y, position.z];
         }
 
@@ -430,7 +430,24 @@ unsafe fn process_node(
     log!("Node {} {}", node.index(), node.name().unwrap());
     let mut rrnode = RRNode::default();
     rrnode.index = node.index() as u16;
-    rrnode.transform = node.transform().matrix();
+    log!(
+        "node matrix {} {:?}",
+        node.index(),
+        node.transform().matrix()
+    );
+    let (node_translation, mut node_rotation, node_scale) =
+        decompose(&mat4_from_array(node.transform().matrix()));
+    // node_rotation = swap(&node_rotation);
+    rrnode.transform = array_from_mat4(
+        Matrix4::from_translation(node_translation)
+            * Matrix4::from(node_rotation)
+            * Matrix4::from_nonuniform_scale(node_scale[0], node_scale[1], node_scale[2]),
+    );
+    log!(
+        "recompose node matrix {} {:?}",
+        node.index(),
+        rrnode.transform
+    );
     rrnode.name = (*node.name().unwrap().to_string()).parse()?;
     for child in node.children() {
         rrnode.children.push(child.index() as u16);

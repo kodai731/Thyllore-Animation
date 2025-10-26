@@ -1,10 +1,10 @@
 use cgmath::num_traits::real::Real;
-use cgmath::Matrix4;
 pub use cgmath::Quaternion;
 pub use cgmath::Rad;
 pub use cgmath::{point3, Deg, InnerSpace, MetricSpace, Vector2};
 pub use cgmath::{prelude::*, Vector3};
 pub use cgmath::{vec2, vec3, vec4};
+use cgmath::{Matrix3, Matrix4};
 use std::f32::EPSILON;
 use std::ops::{Add, AddAssign, Deref, DerefMut, Mul, Neg};
 
@@ -195,6 +195,29 @@ pub fn fix_coord() -> Mat4 {
         Vector4::new(0.0, -1.0, 0.0, 0.0), // Z ← -Y
         Vector4::new(0.0, 0.0, 0.0, 1.0),
     )
+}
+
+pub fn decompose(m: &Matrix4<f32>) -> (Vector3<f32>, Quaternion<f32>, Vector3<f32>) {
+    let translation = Vector3::new(m.w.x, m.w.y, m.w.z);
+
+    let scale_x = Vector3::new(m.x.x, m.x.y, m.x.z).magnitude();
+    let scale_y = Vector3::new(m.y.x, m.y.y, m.y.z).magnitude();
+    let scale_z = Vector3::new(m.z.x, m.z.y, m.z.z).magnitude();
+    let scale = Vector3::new(scale_x, scale_y, scale_z);
+
+    let rot_x = Vector3::new(m.x.x, m.x.y, m.x.z) / scale_x;
+    let rot_y = Vector3::new(m.y.x, m.y.y, m.y.z) / scale_y;
+    let rot_z = Vector3::new(m.z.x, m.z.y, m.z.z) / scale_z;
+
+    let rot_matrix = Matrix3::from_cols(rot_x, rot_y, rot_z);
+
+    let rotation = Quaternion::from(rot_matrix);
+
+    (translation, rotation, scale)
+}
+
+pub fn swap(q: &Quaternion<f32>) -> Quaternion<f32> {
+    Quaternion::new(q.s, q.v[0], q.v[1], q.v[2])
 }
 
 pub unsafe fn rodrigues(

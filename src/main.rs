@@ -515,7 +515,7 @@ impl App {
         let frame = 0 as usize;
         let resized = false;
         let start = Instant::now();
-        data.initial_camera_pos = [0.0, -1.0, -2.0];
+        data.initial_camera_pos = [0.0, -100.0, -10.0];
         data.camera_pos = data.initial_camera_pos;
         let camera_pos = vec3(data.camera_pos[0], data.camera_pos[1], data.camera_pos[2]);
         let camera_direction = camera_pos.normalize();
@@ -571,12 +571,14 @@ impl App {
         self.data.images_in_flight[image_index as usize] = self.data.in_flight_fences[self.frame];
 
         // TODO: do in gltf_model
-        self.data.gltf_model.reset_vertices_animation_position();
-        // self.data.gltf_model.apply_animation(
-        //     self.start.elapsed().as_secs_f32(),
-        //     0,
-        //     Matrix4::identity(),
-        // );
+        self.data
+            .gltf_model
+            .reset_vertices_animation_position(self.start.elapsed().as_secs_f32());
+        self.data.gltf_model.apply_animation(
+            self.start.elapsed().as_secs_f32(),
+            0,
+            Matrix4::identity(),
+        );
         Self::update_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
 
         self.update_uniform_buffer(
@@ -1037,8 +1039,8 @@ impl App {
             let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
             gui_data.monitor_value = distance;
             if 0.001 < distance {
-                let translate_x_v = base_x * -diff.x * 0.01;
-                let translate_y_v = base_y * diff.y * 0.01;
+                let translate_x_v = base_x * -diff.x;
+                let translate_y_v = base_y * diff.y;
                 camera_pos += translate_x_v + translate_y_v;
 
                 if !gui_data.is_wheel_clicked {
@@ -1050,7 +1052,7 @@ impl App {
         }
 
         if mouse_wheel != 0.0 {
-            let diff_view = camera_direction * mouse_wheel * -0.03;
+            let diff_view = camera_direction * mouse_wheel * -5.0;
             camera_pos += diff_view;
             self.data.camera_pos = array3_from_vec(camera_pos);
         }
@@ -1082,7 +1084,7 @@ impl App {
                 self.data.rrswapchain.swapchain_extent.width as f32
                     / self.data.rrswapchain.swapchain_extent.height as f32,
                 0.1,
-                10.0,
+                1000.0,
             );
 
         for i in 0..self.data.model_descriptor_set.rrdata.len() {

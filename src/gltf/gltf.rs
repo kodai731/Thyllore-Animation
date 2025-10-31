@@ -149,19 +149,56 @@ impl GltfModel {
         }
     }
 
-    pub fn reset_vertices_animation_position(self: &mut Self) {
+    pub fn reset_vertices_animation_position(self: &mut Self, time: f32) {
         // self.gltf_data.iter_mut().for_each(|gltf_data| {
         //     gltf_data.vertices.iter_mut().for_each(|vertex| {
         //         vertex.animation_position = vertex.position;
         //     })
         // });
 
-        self.apply_node_transform(0, fix_coord() * Matrix4::from_scale(0.01));
+        let mut node_tree = Vec::default();
+        node_tree.push(0 as u16);
+        self.apply_node_transform(0, Matrix4::identity(), time, &mut node_tree);
     }
 
-    fn apply_node_transform(self: &mut Self, node_id: u16, transform: Mat4) {
+    fn apply_node_transform(
+        self: &mut Self,
+        node_id: u16,
+        transform: Mat4,
+        time: f32,
+        node_tree: &mut Vec<u16>,
+    ) {
+        if self.has_vertices(node_id) {
+            let mut node_names = Vec::default();
+            for node in node_tree.clone() {
+                node_names.push(&self.rrnodes[node as usize].name);
+            }
+            log!("node tree {:?}, {:?}", node_tree, node_names);
+        }
         let rrnode = &mut self.rrnodes[node_id as usize];
-        let node_transform = transform * mat4_from_array(rrnode.transform);
+        let mut rrnode_transform = mat4_from_array(rrnode.transform);
+        if rrnode.name.contains("Bone") {
+            // rrnode_transform = Matrix4::identity();
+        }
+        if rrnode.name.contains("Joint") {
+            // rrnode_transform = Matrix4::identity();
+        }
+        let node_transform = transform * rrnode_transform;
+        if rrnode.vertex_indices.len() <= 0 && time < 1.0 {
+            log!(
+                "node transform {} {} {:?}",
+                rrnode.index,
+                rrnode.name,
+                node_transform
+            );
+        } else if rrnode.vertex_indices.len() > 0 && time < 1.0 {
+            log!(
+                "node transform {} {} {:?}",
+                rrnode.index,
+                rrnode.name,
+                node_transform
+            );
+        }
         for vertex_id in rrnode.vertex_indices.iter_mut() {
             let vertex =
                 &mut self.gltf_data[vertex_id.gltf_data_index].vertices[vertex_id.vertex_index];
@@ -171,14 +208,20 @@ impl GltfModel {
                 vertex.position[2],
                 1f32,
             ]);
-            position = node_transform * position;
+            position = fix_coord() * node_transform * position;
             vertex.animation_position = [position.x, position.y, position.z];
         }
 
         let children = rrnode.children.clone();
         for child in children {
-            self.apply_node_transform(child, node_transform);
+            node_tree.push(child);
+            self.apply_node_transform(child, node_transform, time, node_tree);
+            node_tree.pop();
         }
+    }
+
+    fn has_vertices(self: &Self, node_index: u16) -> bool {
+        self.rrnodes[node_index as usize].vertex_indices.len() > 0
     }
 }
 
@@ -619,6 +662,21 @@ unsafe fn process_node(
             }
         }
     }
+
+    let children = node.children().clone();
+    let mut children_ids = Vec::default();
+    let mut children_names = Vec::new();
+    for child in children {
+        children_ids.push(child.index());
+        children_names.push(child.name().unwrap().to_string());
+    }
+    log!(
+        "node {} {} children: {:?} {:?}",
+        node.index(),
+        node.name().unwrap(),
+        children_ids,
+        children_names
+    );
 
     for child in node.children() {
         process_node(gltf, buffers, images, &child, gltf_model)?;

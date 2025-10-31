@@ -192,7 +192,7 @@ pub fn fix_coord() -> Mat4 {
     Matrix4::from_cols(
         Vector4::new(1.0, 0.0, 0.0, 0.0),  // X ← X
         Vector4::new(0.0, 0.0, 1.0, 0.0),  // Y ← Z
-        Vector4::new(0.0, -1.0, 0.0, 0.0), // Z ← -Y
+        Vector4::new(0.0, 1.0, 0.0, 0.0), // Z ← -Y
         Vector4::new(0.0, 0.0, 0.0, 1.0),
     )
 }

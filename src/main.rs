@@ -1171,7 +1171,7 @@ impl App {
             &data.model_descriptor_set.rrdata.push(rrdata);
         }
 
-        let model_path_fbx = "src/resources/stickman/stickman.fbx";
+        let model_path_fbx = "src/resources/stickman/stickman_bin.fbx";
         fbx::fbx::load_fbx(model_path_fbx)?;
 
         Ok(())

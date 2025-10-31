@@ -1,21 +1,22 @@
 use crate::log;
-use crate::math::math::{vec3_from_array, Mat4};
+use crate::math::math::*;
 use anyhow::{anyhow, Result};
-use cgmath::Quaternion;
+use cgmath::{Matrix4, Quaternion};
 use core::result::Result::Ok;
-use glium::buffer::Content;
 use gltf::buffer::Data;
 use gltf::{image, Document, Gltf, Node};
 use std::collections::HashMap;
+use std::fs::File;
 use std::ptr::null;
 
 #[derive(Clone, Debug, Default)]
 pub struct GltfModel {
     pub gltf_data: Vec<GltfData>,
     pub morph_animations: Vec<MorphAnimation>,
-    pub joints: Vec<Joint>, // order by node id
+    pub joints: Vec<Joint>, // order by joint id
     pub joint_animations: Vec<Vec<JointAnimation>>,
     pub node_joint_map: NodeJointMap,
+    pub rrnodes: Vec<RRNode>,
 }
 
 impl GltfModel {
@@ -49,21 +50,20 @@ impl GltfModel {
         index
     }
 
-    pub fn set_joints(self: &mut Self, skin: &gltf::Skin) {
+    pub fn set_joints(self: &mut Self, skin: &gltf::Skin, buffers: &Vec<Data>) {
         self.joints.clear();
         if self.node_joint_map.node_to_joint.len() <= 0 {
             self.node_joint_map.make_from_skin(skin);
         }
 
         let mut temp_joints: Vec<_> = skin.joints().collect();
-        temp_joints.sort_by_key(|node| node.index());
-        for (node_index, node) in temp_joints.iter().enumerate() {
+        for (joint_index, node) in temp_joints.iter().enumerate() {
             let mut joint = Joint::default();
-            joint.index = self
-                .node_joint_map
-                .get_joint_index(node_index as u16)
-                .unwrap();
+            joint.index = joint_index as u16;
             joint.name = node.name().unwrap().to_string();
+            let joint_transform = mat4_from_array(node.transform().matrix());
+            joint.transform = array_from_mat4(joint_transform);
+            let node_index = self.node_joint_map.get_node_index(joint.index).unwrap();
             log!(
                 "Joint Pushed: Node Index: {}, Node Name: {}, Joint Index: {}",
                 node_index,
@@ -72,6 +72,156 @@ impl GltfModel {
             );
             self.joints.push(joint);
         }
+
+        if let Some(_) = skin.inverse_bind_matrices() {
+            let reader = skin.reader(|buffer| Some(&buffers[buffer.index()]));
+            // convert milli meter to meter
+            if let Some(iter) = reader.read_inverse_bind_matrices() {
+                log!("Inverse bind poses: {:?}", iter.len());
+                for (i, mat) in iter.enumerate() {
+                    let mut inverse_bind_pose = mat4_from_array(mat);
+                    // convert milli meter to meter
+                    inverse_bind_pose = inverse_bind_pose * Matrix4::from_scale(0.001f32);
+                    self.joints[i].inverse_bind_pose = array_from_mat4(inverse_bind_pose);
+                    log!("Inverse bind pose {}: {:?}", i, inverse_bind_pose);
+                }
+            }
+        }
+    }
+
+    pub fn apply_animation(self: &mut Self, time: f32, target_joint_id: usize, transform: Mat4) {
+        // joints[0] = Root
+        let joint = &self.joints[target_joint_id];
+        let joint_animations = &self.joint_animations[target_joint_id];
+        let mut joint_translate = Mat4::identity();
+        let mut joint_rotation = Mat4::identity();
+        let mut joint_scale = Mat4::identity();
+        for joint_animation in joint_animations {
+            let key_frame_id = joint_animation.identify_key_frame_index(time);
+            if joint_animation.scales.len() > key_frame_id {
+                joint_scale = joint_animation.scales[key_frame_id] * joint_scale;
+            }
+            if joint_animation.rotations.len() > key_frame_id {
+                joint_rotation = joint_animation.rotations[key_frame_id] * joint_rotation;
+            }
+            if joint_animation.translations.len() > key_frame_id {
+                joint_translate = joint_animation.translations[key_frame_id] * joint_translate;
+            }
+        }
+
+        let joint_inverse_bind_pose = mat4_from_array(joint.inverse_bind_pose);
+        let joint_transform = transform * joint_translate * joint_rotation * joint_scale;
+        for joint_vertex_id in &joint.vertex_indices {
+            let vertex = &mut self.gltf_data[joint_vertex_id.gltf_data_index].vertices
+                [joint_vertex_id.vertex_index];
+            let weight = vertex.get_weight_from_joint_id(joint.index);
+            let mut pos = vec4_from_array([
+                vertex.position[0],
+                vertex.position[1],
+                vertex.position[2],
+                1f32,
+            ]);
+            pos = weight * joint_transform * joint_inverse_bind_pose * pos;
+            vertex.animation_position[0] += pos.x;
+            vertex.animation_position[1] += pos.y;
+            vertex.animation_position[2] += pos.z;
+        }
+
+        let child_indices = joint.child_joint_indices.clone();
+        for child_index in child_indices {
+            self.apply_animation(time, child_index as usize, joint_transform)
+        }
+    }
+
+    // debug
+    pub fn validate_vertex_position(self: &Self) {
+        for (i, gltf_data) in self.gltf_data.iter().enumerate() {
+            for vertex in &gltf_data.vertices {
+                if !approx_equal_array3(&vertex.position, &vertex.animation_position) {
+                    log!(
+                        "invalid vertex animation position: joint id {:?}, gltf data index {}, vertex id {}",
+                        vertex.joint_indices,
+                        i,
+                        vertex.index
+                    );
+                }
+            }
+        }
+    }
+
+    pub fn reset_vertices_animation_position(self: &mut Self, time: f32) {
+        // self.gltf_data.iter_mut().for_each(|gltf_data| {
+        //     gltf_data.vertices.iter_mut().for_each(|vertex| {
+        //         vertex.animation_position = vertex.position;
+        //     })
+        // });
+
+        let mut node_tree = Vec::default();
+        node_tree.push(0 as u16);
+        self.apply_node_transform(0, Matrix4::identity(), time, &mut node_tree);
+    }
+
+    fn apply_node_transform(
+        self: &mut Self,
+        node_id: u16,
+        transform: Mat4,
+        time: f32,
+        node_tree: &mut Vec<u16>,
+    ) {
+        if self.has_vertices(node_id) {
+            let mut node_names = Vec::default();
+            for node in node_tree.clone() {
+                node_names.push(&self.rrnodes[node as usize].name);
+            }
+            log!("node tree {:?}, {:?}", node_tree, node_names);
+        }
+        let rrnode = &mut self.rrnodes[node_id as usize];
+        let mut rrnode_transform = mat4_from_array(rrnode.transform);
+        if rrnode.name.contains("Bone") {
+            // rrnode_transform = Matrix4::identity();
+        }
+        if rrnode.name.contains("Joint") {
+            // rrnode_transform = Matrix4::identity();
+        }
+        let node_transform = transform * rrnode_transform;
+        if rrnode.vertex_indices.len() <= 0 && time < 1.0 {
+            log!(
+                "node transform {} {} {:?}",
+                rrnode.index,
+                rrnode.name,
+                node_transform
+            );
+        } else if rrnode.vertex_indices.len() > 0 && time < 1.0 {
+            log!(
+                "node transform {} {} {:?}",
+                rrnode.index,
+                rrnode.name,
+                node_transform
+            );
+        }
+        for vertex_id in rrnode.vertex_indices.iter_mut() {
+            let vertex =
+                &mut self.gltf_data[vertex_id.gltf_data_index].vertices[vertex_id.vertex_index];
+            let mut position = vec4_from_array([
+                vertex.position[0],
+                vertex.position[1],
+                vertex.position[2],
+                1f32,
+            ]);
+            position = fix_coord() * node_transform * position;
+            vertex.animation_position = [position.x, position.y, position.z];
+        }
+
+        let children = rrnode.children.clone();
+        for child in children {
+            node_tree.push(child);
+            self.apply_node_transform(child, node_transform, time, node_tree);
+            node_tree.pop();
+        }
+    }
+
+    fn has_vertices(self: &Self, node_index: u16) -> bool {
+        self.rrnodes[node_index as usize].vertex_indices.len() > 0
     }
 }
 
@@ -88,19 +238,65 @@ pub struct GltfData {
 pub struct Vertex {
     pub index: usize,
     pub position: [f32; 3],
+    pub animation_position: [f32; 3],
     pub normal: [f32; 3],
     pub tangent: [f32; 3],
     pub tex_coord: [f32; 2],
     pub joint_indices: [u16; 4],
     pub joint_weights: [f32; 4],
+    pub node_id: u16,
+}
+
+impl Vertex {
+    pub fn identify_index_from_joint_id(&self, joint_id: u16) -> usize {
+        for (i, vertex_joint_id) in self.joint_indices.iter().enumerate() {
+            if *vertex_joint_id == joint_id {
+                return i;
+            }
+        }
+        log!(
+            "invalid: this vertex {} is not included in joint {}",
+            self.index,
+            joint_id
+        );
+        3
+    }
+
+    pub fn get_weight_from_joint_id(&self, joint_id: u16) -> f32 {
+        let index = self.identify_index_from_joint_id(joint_id);
+        self.joint_weights[index]
+    }
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct Joint {
     pub index: u16,
     pub name: String,
-    pub vertex_indices: Vec<u16>,
+    pub vertex_indices: Vec<JointVertexIndex>,
     pub child_joint_indices: Vec<u16>,
+    pub inverse_bind_pose: [[f32; 4]; 4],
+    pub transform: [[f32; 4]; 4],
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct RRNode {
+    pub index: u16,
+    pub name: String,
+    pub vertex_indices: Vec<JointVertexIndex>,
+    pub transform: [[f32; 4]; 4],
+    pub children: Vec<u16>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct JointVertexIndex {
+    pub gltf_data_index: usize,
+    pub vertex_index: usize,
+}
+
+impl PartialEq for JointVertexIndex {
+    fn eq(&self, other: &Self) -> bool {
+        self.gltf_data_index == other.gltf_data_index && self.vertex_index == other.vertex_index
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -122,6 +318,19 @@ pub struct JointAnimation {
     pub translations: Vec<Mat4>,
     pub rotations: Vec<Mat4>,
     pub scales: Vec<Mat4>,
+}
+
+impl JointAnimation {
+    pub fn identify_key_frame_index(&self, time: f32) -> usize {
+        let period = self.key_frames.last().unwrap();
+        let time = time.rem_euclid(*period);
+        for (i, key_frame) in self.key_frames.iter().enumerate() {
+            if time < *key_frame {
+                return i;
+            }
+        }
+        return self.key_frames.len() - 1;
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -169,6 +378,10 @@ impl NodeJointMap {
             }
         }
     }
+
+    pub fn contain_node_index(&self, node_index: u16) -> bool {
+        self.node_to_joint.contains_key(&node_index)
+    }
 }
 
 impl GltfData {
@@ -213,16 +426,23 @@ pub struct ImageData {
 unsafe fn load_gltf(gltf_model: &mut GltfModel, path: &str) {
     log!("Loading glTF file");
     let (gltf, buffers, images) = gltf::import(format!("{}", path)).expect("Failed to load model");
+
     gltf.skins().enumerate().for_each(|(i, skin)| {
         gltf_model.node_joint_map.make_from_skin(&skin);
-        gltf_model.set_joints(&skin);
+        gltf_model.set_joints(&skin, &buffers);
     });
+
     for scene in gltf.scenes() {
         for node in scene.nodes() {
             process_node(&gltf, &buffers, &images, &node, gltf_model).unwrap();
         }
     }
+
+    input_joint_vertex(gltf_model);
     log_node_hierarchy(gltf_model);
+    validate_inverse_bind_pose(gltf_model, 0, fix_coord());
+    load_white_texture_if_none(gltf_model);
+
     initialize_joint_animation(gltf_model);
     for animation in gltf.animations() {
         process_animation(&gltf, &buffers, animation, gltf_model).unwrap();
@@ -250,7 +470,32 @@ unsafe fn process_node(
     node: &Node,
     gltf_model: &mut GltfModel,
 ) -> Result<()> {
-    log!("Node {} {}", node.index().to_string(), node.name().unwrap());
+    log!("Node {} {}", node.index(), node.name().unwrap());
+    let mut rrnode = RRNode::default();
+    rrnode.index = node.index() as u16;
+    log!(
+        "node matrix {} {:?}",
+        node.index(),
+        node.transform().matrix()
+    );
+    let (node_translation, mut node_rotation, node_scale) =
+        decompose(&mat4_from_array(node.transform().matrix()));
+    // node_rotation = swap(&node_rotation);
+    rrnode.transform = array_from_mat4(
+        Matrix4::from_translation(node_translation)
+            * Matrix4::from(node_rotation)
+            * Matrix4::from_nonuniform_scale(node_scale[0], node_scale[1], node_scale[2]),
+    );
+    log!(
+        "recompose node matrix {} {:?}",
+        node.index(),
+        rrnode.transform
+    );
+    rrnode.name = (*node.name().unwrap().to_string()).parse()?;
+    for child in node.children() {
+        rrnode.children.push(child.index() as u16);
+    }
+
     // meshes
     if let Some(mesh) = node.mesh() {
         log!("mesh found");
@@ -260,48 +505,9 @@ unsafe fn process_node(
         // primitive
         primitives.for_each(|primitive| {
             log!("primitive found");
-            let mut gltf_data = GltfData::new();
             let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
             log!("Topology: {:?}", primitive.mode());
-
-            let index_offset = gltf_data.indices.len();
-            if let Some(gltf::mesh::util::ReadIndices::U16(gltf::accessor::Iter::Standard(iter))) =
-                reader.read_indices()
-            {
-                for index in iter {
-                    gltf_data
-                        .indices
-                        .push((index_offset + index as usize) as u32);
-                }
-            }
-
-            if let Some(iter) = reader.read_positions() {
-                log!("positions count {:?}", iter.len());
-                for (i, position) in iter.enumerate() {
-                    let mut vertex = Vertex::default();
-                    vertex.index = i;
-                    let mut position_converted = position;
-                    position_converted[1] = 1.0 - position_converted[1];
-                    vertex.position = position_converted;
-                    gltf_data.vertices.push(vertex);
-                }
-            }
-
-            if let Some(gltf::mesh::util::ReadTexCoords::F32(gltf::accessor::Iter::Standard(
-                iter,
-            ))) = reader.read_tex_coords(0)
-            {
-                for (i, texture_coord) in iter.enumerate() {
-                    gltf_data.vertices[i].tex_coord = texture_coord;
-                }
-            }
-
-            if let Some(iter) = reader.read_normals() {
-                for normal in iter {
-                    normals.push(normal);
-                }
-            }
 
             // texture
             if let Some(material) = primitive
@@ -321,7 +527,60 @@ unsafe fn process_node(
                     width: width,
                     height: height,
                 };
+                let mut gltf_data = GltfData::default();
                 gltf_data.image_data.push(image_data);
+                gltf_model.gltf_data.push(gltf_data);
+            }
+
+            if gltf_model.gltf_data.len() < 1 {
+                gltf_model.gltf_data.push(GltfData::default());
+            }
+
+            let gltf_data_index = gltf_model.gltf_data.len() - 1;
+            let gltf_data = gltf_model.gltf_data.last_mut().unwrap();
+
+            let index_offset = gltf_data.vertices.len();
+            if let Some(iter) = reader.read_indices() {
+                log!("index count: {:?}", iter.clone().into_u32().len());
+                for index in iter.into_u32() {
+                    gltf_data
+                        .indices
+                        .push((index_offset + index as usize) as u32);
+                }
+            }
+
+            if let Some(iter) = reader.read_positions() {
+                log!("positions count {:?}", iter.len());
+                for position in iter {
+                    let mut vertex = Vertex::default();
+                    vertex.index = gltf_data.vertices.len();
+                    let mut position_converted = position;
+                    position_converted[1] = 1.0 - position_converted[1];
+                    vertex.position = position_converted;
+                    vertex.node_id = node.index() as u16;
+
+                    let mut vertex_id = JointVertexIndex::default();
+                    vertex_id.gltf_data_index = gltf_data_index;
+                    vertex_id.vertex_index = vertex.index;
+                    rrnode.vertex_indices.push(vertex_id);
+
+                    gltf_data.vertices.push(vertex);
+                }
+            }
+
+            if let Some(gltf::mesh::util::ReadTexCoords::F32(gltf::accessor::Iter::Standard(
+                iter,
+            ))) = reader.read_tex_coords(0)
+            {
+                for (i, texture_coord) in iter.enumerate() {
+                    gltf_data.vertices[i].tex_coord = texture_coord;
+                }
+            }
+
+            if let Some(iter) = reader.read_normals() {
+                for normal in iter {
+                    normals.push(normal);
+                }
             }
 
             // joint
@@ -374,26 +633,50 @@ unsafe fn process_node(
             log!("vertex count {}", gltf_data.vertices.len());
             log!("indices count {}", gltf_data.indices.len());
             log!("morph targets count {}", gltf_data.morph_targets.len());
-
-            input_joint_vertex(gltf_model, &mut gltf_data, node);
-
-            gltf_model.gltf_data.push(gltf_data);
         });
     }
 
-    // TODO: more hard comparison
-    if node.index() < gltf_model.joints.len() {
-        let joint = &mut gltf_model.joints[node.index()];
+    gltf_model.rrnodes.push(rrnode);
+
+    if gltf_model
+        .node_joint_map
+        .contain_node_index(node.index() as u16)
+    {
+        let joint_index = gltf_model
+            .node_joint_map
+            .get_joint_index(node.index() as u16)
+            .unwrap();
+        let joint = &mut gltf_model.joints[joint_index as usize];
 
         for child in node.children() {
-            joint.child_joint_indices.push(
-                gltf_model
-                    .node_joint_map
-                    .get_joint_index(child.index() as u16)
-                    .unwrap(),
-            );
+            if gltf_model
+                .node_joint_map
+                .contain_node_index(child.index() as u16)
+            {
+                joint.child_joint_indices.push(
+                    gltf_model
+                        .node_joint_map
+                        .get_joint_index(child.index() as u16)
+                        .unwrap(),
+                );
+            }
         }
     }
+
+    let children = node.children().clone();
+    let mut children_ids = Vec::default();
+    let mut children_names = Vec::new();
+    for child in children {
+        children_ids.push(child.index());
+        children_names.push(child.name().unwrap().to_string());
+    }
+    log!(
+        "node {} {} children: {:?} {:?}",
+        node.index(),
+        node.name().unwrap(),
+        children_ids,
+        children_names
+    );
 
     for child in node.children() {
         process_node(gltf, buffers, images, &child, gltf_model)?;
@@ -402,56 +685,139 @@ unsafe fn process_node(
     Ok(())
 }
 
-unsafe fn input_joint_vertex(gltf_model: &mut GltfModel, gltf_data: &mut GltfData, node: &Node) {
-    if gltf_data.vertices.len() <= 0 {
-        return;
-    }
-    if gltf_data.vertices[0].joint_indices.len() <= 0 {
-        return;
-    }
-
-    for (i, joint) in gltf_model.joints.iter_mut().enumerate() {
-        for j in 0..gltf_data.vertices.len() {
-            let joint_indices = &gltf_data.vertices[j].joint_indices;
-            if joint_indices.contains(&joint.index) {
-                joint.vertex_indices.push(j as u16);
-            }
-        }
-    }
-
-    // validate
-    for i in 0..gltf_data.vertices.len() {
-        let joint_indices = &gltf_data.vertices[i].joint_indices;
-        for j in 0..joint_indices.len() {
-            let joint_index = &joint_indices[j];
-            if joint_indices[j] == 0 {
-                continue;
-            }
-            let node_id = gltf_model
-                .node_joint_map
-                .get_node_index(joint_indices[j])
-                .unwrap();
-            let target_joint = &gltf_model.joints[node_id as usize];
-            if !target_joint.vertex_indices.contains(&(i as u16)) {
-                log!(
-                    "invalid joint id, vertex id {}, joint id {}",
-                    i,
-                    joint_index
-                )
-            }
+fn load_white_texture_if_none(gltf_model: &mut GltfModel) {
+    for gltf_data in &mut gltf_model.gltf_data {
+        if gltf_data.image_data.len() == 0 {
+            let image_data = load_white_texture().unwrap();
+            gltf_data.image_data.push(image_data);
         }
     }
 }
 
+// TODO: use vulkanr::image
+fn load_white_texture() -> Result<ImageData> {
+    let image = File::open("src/resources/white.png")?;
+    let decoder = png::Decoder::new(image);
+    let mut reader = decoder.read_info()?;
+    let mut pixels = vec![0; reader.output_buffer_size()];
+    reader.next_frame(&mut pixels)?;
+    let size = reader.info().raw_bytes() as u64;
+    let (width, height) = reader.info().size();
+    Ok(ImageData {
+        data: pixels,
+        size,
+        width,
+        height,
+    })
+}
+
+unsafe fn input_joint_vertex(gltf_model: &mut GltfModel) {
+    let mut vertex_count = 0;
+    for (i, gltf_data) in &mut gltf_model.gltf_data.iter().enumerate() {
+        if gltf_data.vertices.len() <= 0 {
+            return;
+        }
+        if gltf_data.vertices[0].joint_indices.len() <= 0 {
+            return;
+        }
+
+        vertex_count += gltf_data.vertices.len();
+        gltf_data.vertices.iter().for_each(|vertex| {
+            vertex.joint_indices.iter().for_each(|joint_index| {
+                let mut joint_vertex_index = JointVertexIndex::default();
+                joint_vertex_index.gltf_data_index = i;
+                joint_vertex_index.vertex_index = vertex.index;
+                if !gltf_model.joints[*joint_index as usize]
+                    .vertex_indices
+                    .contains(&joint_vertex_index)
+                {
+                    gltf_model.joints[*joint_index as usize]
+                        .vertex_indices
+                        .push(joint_vertex_index);
+                }
+            })
+        });
+
+        // validate
+        for vertex in &gltf_data.vertices {
+            let joint_indices = vertex.joint_indices;
+            let mut is_vertex_found = false;
+            for (j, joint_index) in joint_indices.iter().enumerate() {
+                let target_joint = &gltf_model.joints[*joint_index as usize];
+                let mut is_joint_found = false;
+                for joint_vertex_index in &target_joint.vertex_indices {
+                    if joint_vertex_index.vertex_index == vertex.index {
+                        is_joint_found = true;
+                        is_vertex_found = true;
+                        break;
+                    }
+                }
+                if !is_joint_found {
+                    log!(
+                        "invalid: joint index not found: Gltf Index {}, Joint Index Id {}, Joint Index {}",
+                        i,
+                        j,
+                        joint_index
+                    );
+                }
+            }
+            if !is_vertex_found {
+                log!("invalid: vertex {} is not included in Joint", vertex.index);
+            }
+        }
+    }
+
+    // rrnode
+    let mut node_vertex_count = 0;
+    for rrnode in &gltf_model.rrnodes {
+        log!(
+            "node {} {} vertices count: {}",
+            rrnode.index,
+            rrnode.name,
+            rrnode.vertex_indices.len()
+        );
+        node_vertex_count += rrnode.vertex_indices.len();
+    }
+    log!(
+        "total node vertices {} vertices {}",
+        node_vertex_count,
+        vertex_count,
+    )
+}
+
 unsafe fn log_node_hierarchy(gltf_model: &GltfModel) {
     for (i, joint) in gltf_model.joints.iter().enumerate() {
+        let node_index = gltf_model
+            .node_joint_map
+            .get_node_index(joint.index)
+            .unwrap();
         log!(
             "joint name: {}, node Id: {}, joint Id: {}, child joint indices: {:?}",
             joint.name,
-            i,
+            node_index,
             joint.index,
             joint.child_joint_indices
         );
+    }
+}
+
+// debug test
+unsafe fn validate_inverse_bind_pose(gltf_model: &GltfModel, joint_index: u16, transform: Mat4) {
+    let joint = &gltf_model.joints[joint_index as usize];
+    let inverse_bind_pose = mat4_from_array(joint.inverse_bind_pose);
+    let joint_transform = mat4_from_array(joint.transform);
+    log!("joint transform {}: {:?}", joint_index, joint_transform);
+    let transform = transform * joint_transform;
+    let multiplied = transform * inverse_bind_pose;
+    if !approx_equal_mat4(&multiplied, &Mat4::identity()) {
+        log!(
+            "invalid: inverse transform is not invertible, joint id {}, multi product {:?}",
+            joint_index,
+            multiplied,
+        );
+    }
+    for child in &joint.child_joint_indices {
+        validate_inverse_bind_pose(gltf_model, *child, transform);
     }
 }
 
@@ -474,6 +840,7 @@ unsafe fn process_animation(
         let node = target.node();
         log!("target animation index {}", target.animation().index());
         log!("node index {}", node.index());
+        log!("node name {}", node.name().unwrap());
         let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
         let mut key_frames = Vec::new();
         let mut weights = Vec::new();
@@ -494,20 +861,20 @@ unsafe fn process_animation(
                 ReadOutputs::Translations(translations) => {
                     for (i, translation) in translations.enumerate() {
                         log!("Translation {}: {:?}", i, translation);
-                        let joint_translation = vec3_from_array(translation);
+                        // convert milli meter to meter
+                        let joint_translation = vec3_from_array(translation) * 0.00001f32;
                         let joint_translation_mat = Mat4::from_translation(joint_translation);
                         joint_translations.push(joint_translation_mat);
+                        log!("Translation Matrix {}: {:?}", i, joint_translation_mat);
                     }
                 }
                 ReadOutputs::Rotations(rotations) => {
                     for (i, rotation) in rotations.into_f32().enumerate() {
                         log!("Rotation {}: {:?}", i, rotation);
-                        let joint_rotaion_mat = Mat4::from(Quaternion::new(
-                            rotation[0],
-                            rotation[1],
-                            rotation[2],
-                            rotation[3],
-                        ));
+                        let joint_rotaion_mat = Mat4::from(
+                            Quaternion::new(rotation[0], rotation[1], rotation[2], rotation[3])
+                                .normalize(),
+                        );
                         joint_rotations.push(joint_rotaion_mat);
                     }
                 }
@@ -516,6 +883,7 @@ unsafe fn process_animation(
                         log!("Scale {}: {:?}", i, scale);
                         let joint_scale_mat =
                             Mat4::from_nonuniform_scale(scale[0], scale[1], scale[2]);
+                        log!("Scale Matrix {} : {:?}", i, joint_scale_mat);
                         joint_scales.push(joint_scale_mat);
                     }
                 }

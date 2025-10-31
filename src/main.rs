@@ -73,7 +73,7 @@ use imgui_winit_support::winit;
 use imgui_winit_support::winit::event::ElementState;
 
 use cgmath::num_traits::AsPrimitive;
-use cgmath::Vector4;
+use cgmath::{Matrix4, Vector4};
 use glium::buffer::Content;
 use imgui::{Condition, MouseButton};
 use serde::Serialize;
@@ -515,7 +515,7 @@ impl App {
         let frame = 0 as usize;
         let resized = false;
         let start = Instant::now();
-        data.initial_camera_pos = [0.0, -1.0, -2.0];
+        data.initial_camera_pos = [0.0, -100.0, -10.0];
         data.camera_pos = data.initial_camera_pos;
         let camera_pos = vec3(data.camera_pos[0], data.camera_pos[1], data.camera_pos[2]);
         let camera_direction = camera_pos.normalize();
@@ -569,6 +569,17 @@ impl App {
         }
 
         self.data.images_in_flight[image_index as usize] = self.data.in_flight_fences[self.frame];
+
+        // TODO: do in gltf_model
+        self.data
+            .gltf_model
+            .reset_vertices_animation_position(self.start.elapsed().as_secs_f32());
+        self.data.gltf_model.apply_animation(
+            self.start.elapsed().as_secs_f32(),
+            0,
+            Matrix4::identity(),
+        );
+        Self::update_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
 
         self.update_uniform_buffer(
             image_index,
@@ -1028,8 +1039,8 @@ impl App {
             let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
             gui_data.monitor_value = distance;
             if 0.001 < distance {
-                let translate_x_v = base_x * -diff.x * 0.01;
-                let translate_y_v = base_y * diff.y * 0.01;
+                let translate_x_v = base_x * -diff.x;
+                let translate_y_v = base_y * diff.y;
                 camera_pos += translate_x_v + translate_y_v;
 
                 if !gui_data.is_wheel_clicked {
@@ -1041,7 +1052,7 @@ impl App {
         }
 
         if mouse_wheel != 0.0 {
-            let diff_view = camera_direction * mouse_wheel * -0.03;
+            let diff_view = camera_direction * mouse_wheel * -5.0;
             camera_pos += diff_view;
             self.data.camera_pos = array3_from_vec(camera_pos);
         }
@@ -1073,7 +1084,7 @@ impl App {
                 self.data.rrswapchain.swapchain_extent.width as f32
                     / self.data.rrswapchain.swapchain_extent.height as f32,
                 0.1,
-                10.0,
+                1000.0,
             );
 
         for i in 0..self.data.model_descriptor_set.rrdata.len() {
@@ -1121,11 +1132,10 @@ impl App {
         data: &mut AppData,
     ) -> Result<()> {
         // gltf model
-        let model_path = "src/resources/phoenix-bird/glb/phoenixBird.glb";
+        let model_path = "src/resources/stickman/stickman.glb";
         data.gltf_model = GltfModel::load_model(model_path);
 
-        for i in 0..data.gltf_model.gltf_data.len() {
-            let gltf_data = &data.gltf_model.gltf_data[i];
+        for gltf_data in &data.gltf_model.gltf_data {
             let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain);
             (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
                 instance,
@@ -1137,14 +1147,19 @@ impl App {
             )?;
 
             rrdata.vertex_data = VertexData::default();
-            for i in 0..gltf_data.vertices.len() {
-                let gltf_vertex = &gltf_data.vertices[i];
+            for gltf_vertex in &gltf_data.vertices {
+                rrdata
+                    .vertex_data
+                    .vertices
+                    .push(vulkanr::data::Vertex::default());
+            }
+            for gltf_vertex in &gltf_data.vertices {
                 let vertex = vulkanr::data::Vertex::new(
                     Vec3::new_array(gltf_vertex.position),
                     Vec4::new(0.0, 1.0, 0.0, 1.0),
                     Vec2::new_array(gltf_vertex.tex_coord),
                 );
-                rrdata.vertex_data.vertices.push(vertex);
+                rrdata.vertex_data.vertices[gltf_vertex.index] = vertex;
             }
 
             rrdata.vertex_data.indices = gltf_data.indices.clone();
@@ -1152,6 +1167,34 @@ impl App {
             &data.model_descriptor_set.rrdata.push(rrdata);
         }
 
+        Ok(())
+    }
+
+    unsafe fn update_vertex_buffer(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        data: &mut AppData,
+    ) -> Result<()> {
+        for (i, rrdata) in data.model_descriptor_set.rrdata.iter_mut().enumerate() {
+            let vertex_data = &mut rrdata.vertex_data;
+            let gltf_data = &mut data.gltf_model.gltf_data[i];
+            for vertex in &gltf_data.vertices {
+                vertex_data.vertices[vertex.index].pos.x = vertex.animation_position[0];
+                vertex_data.vertices[vertex.index].pos.y = vertex.animation_position[1];
+                vertex_data.vertices[vertex.index].pos.z = vertex.animation_position[2];
+            }
+            if let Err(e) = rrdata.vertex_buffer.update(
+                instance,
+                rrdevice,
+                &data.rrcommand_pool,
+                (size_of::<vulkanr::data::Vertex>() * rrdata.vertex_data.vertices.len())
+                    as vk::DeviceSize,
+                rrdata.vertex_data.vertices.as_ptr() as *const c_void,
+                rrdata.vertex_data.vertices.len(),
+            ) {
+                eprintln!("Failed to update vertex buffer: {}", e);
+            }
+        }
         Ok(())
     }
 

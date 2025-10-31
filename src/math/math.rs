@@ -1,9 +1,13 @@
+use cgmath::num_traits::real::Real;
 pub use cgmath::Quaternion;
 pub use cgmath::Rad;
 pub use cgmath::{point3, Deg, InnerSpace, MetricSpace, Vector2};
 pub use cgmath::{prelude::*, Vector3};
 pub use cgmath::{vec2, vec3, vec4};
+use cgmath::{Matrix3, Matrix4};
+use std::f32::EPSILON;
 use std::ops::{Add, AddAssign, Deref, DerefMut, Mul, Neg};
+
 #[derive(Copy, Clone, Debug)]
 pub struct Vec2(cgmath::Vector2<f32>);
 impl Default for Vec2 {
@@ -108,6 +112,9 @@ impl PartialEq for Vec3 {
         self.0.eq(&other.0)
     }
 }
+
+pub type Vector4 = cgmath::Vector4<f32>;
+
 #[derive(Copy, Clone, Debug)]
 pub struct Vec4(cgmath::Vector4<f32>);
 impl Default for Vec4 {
@@ -158,6 +165,59 @@ pub fn vec2_from_array(a: [f32; 2]) -> Vector2<f32> {
 
 pub fn array2_from_vec(v: Vector2<f32>) -> [f32; 2] {
     [v.x, v.y]
+}
+
+pub fn vec4_from_array(a: [f32; 4]) -> cgmath::Vector4<f32> {
+    cgmath::Vector4::new(a[0], a[1], a[2], a[3])
+}
+
+pub fn array4_from_vec(v: cgmath::Vector4<f32>) -> [f32; 4] {
+    [v.x, v.y, v.z, v.w]
+}
+
+pub fn array_from_mat4(m: Mat4) -> [[f32; 4]; 4] {
+    [
+        array4_from_vec(m.x),
+        array4_from_vec(m.y),
+        array4_from_vec(m.z),
+        array4_from_vec(m.w),
+    ]
+}
+
+pub fn mat4_from_array(a: [[f32; 4]; 4]) -> Mat4 {
+    Mat4::from_cols(a[0].into(), a[1].into(), a[2].into(), a[3].into())
+}
+
+pub fn fix_coord() -> Mat4 {
+    Matrix4::from_cols(
+        Vector4::new(1.0, 0.0, 0.0, 0.0),  // X ← X
+        Vector4::new(0.0, 0.0, 1.0, 0.0),  // Y ← Z
+        Vector4::new(0.0, 1.0, 0.0, 0.0), // Z ← -Y
+        Vector4::new(0.0, 0.0, 0.0, 1.0),
+    )
+}
+
+pub fn decompose(m: &Matrix4<f32>) -> (Vector3<f32>, Quaternion<f32>, Vector3<f32>) {
+    let translation = Vector3::new(m.w.x, m.w.y, m.w.z);
+
+    let scale_x = Vector3::new(m.x.x, m.x.y, m.x.z).magnitude();
+    let scale_y = Vector3::new(m.y.x, m.y.y, m.y.z).magnitude();
+    let scale_z = Vector3::new(m.z.x, m.z.y, m.z.z).magnitude();
+    let scale = Vector3::new(scale_x, scale_y, scale_z);
+
+    let rot_x = Vector3::new(m.x.x, m.x.y, m.x.z) / scale_x;
+    let rot_y = Vector3::new(m.y.x, m.y.y, m.y.z) / scale_y;
+    let rot_z = Vector3::new(m.z.x, m.z.y, m.z.z) / scale_z;
+
+    let rot_matrix = Matrix3::from_cols(rot_x, rot_y, rot_z);
+
+    let rotation = Quaternion::from(rot_matrix);
+
+    (translation, rotation, scale)
+}
+
+pub fn swap(q: &Quaternion<f32>) -> Quaternion<f32> {
+    Quaternion::new(q.s, q.v[0], q.v[1], q.v[2])
 }
 
 pub unsafe fn rodrigues(
@@ -221,4 +281,29 @@ pub unsafe fn view(
         1.0,
     );
     return orientation * translate;
+}
+
+pub fn approx_equal_array3(a: &[f32; 3], b: &[f32; 3]) -> bool {
+    (a[0] - b[0]).abs() < 1e-5 && (a[1] - b[1]).abs() < 1e-5 && (a[2] - b[2]).abs() < 1e-5
+}
+
+pub fn approx_equal_array4(a: &[f32; 4], b: &[f32; 4]) -> bool {
+    (a[0] - b[0]).abs() < 1e-5
+        && (a[1] - b[1]).abs() < 1e-3
+        && (a[2] - b[2]).abs() < 1e-3
+        && (a[3] - b[3]).abs() < 1e-3
+}
+
+pub fn approx_equal_vec4(a: &Vector4, b: &Vector4) -> bool {
+    (a.x - b.x).abs() < 1e-3
+        && (a.y - b.y).abs() < 1e-3
+        && (a.z - b.z).abs() < 1e-3
+        && (a.w - b.w).abs() < 1e-3
+}
+
+pub fn approx_equal_mat4(a: &Mat4, b: &Mat4) -> bool {
+    approx_equal_vec4(&a.x, &b.x)
+        && approx_equal_vec4(&a.y, &b.y)
+        && approx_equal_vec4(&a.z, &b.z)
+        && approx_equal_vec4(&a.w, &b.w)
 }

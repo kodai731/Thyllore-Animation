@@ -48,6 +48,10 @@ pub mod logger {
     pub mod logger;
 }
 
+pub mod fbx {
+    pub mod fbx;
+}
+
 use anyhow::{anyhow, Result};
 use core::result::Result::Ok;
 const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
@@ -1166,6 +1170,9 @@ impl App {
 
             &data.model_descriptor_set.rrdata.push(rrdata);
         }
+
+        let model_path_fbx = "src/resources/stickman/stickman.fbx";
+        fbx::fbx::load_fbx(model_path_fbx)?;
 
         Ok(())
     }

@@ -85,6 +85,7 @@ use std::borrow::BorrowMut;
 use std::path::Path;
 use std::rc::Rc;
 use vulkanalia::vk::CommandPool;
+use crate::fbx::fbx::FbxModel;
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
@@ -343,6 +344,7 @@ struct AppData {
     clicked_mouse_pos: [f32; 2],
     is_wheel_clicked: bool,
     gltf_model: GltfModel,
+    fbx_model: FbxModel,
 }
 
 impl App {

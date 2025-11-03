@@ -28,20 +28,33 @@ pub unsafe fn load_fbx(path: &str) -> anyhow::Result<()> {
     let file = std::fs::File::open(path)?;
     let reader = std::io::BufReader::new(file);
     let mut fbx_model = FbxModel::default();
+    // TODO: multi FbxData per material
+    fbx_model.fbx_data.push(FbxData::new());
     match AnyDocument::from_reader(reader).expect("failed to load FBX document") {
         AnyDocument::V7400(fbx_ver, doc) => {
             for object in doc.objects() {
                 if let TypedObjectHandle::Model(TypedModelHandle::Mesh(mesh)) = object.get_typed() {
                     log!("Loading mesh {:?}", mesh);
-                    let mut fbx_data = FbxData::new(object.node());
-                    fbx_data.name = mesh.name().expect("mesh name not found").to_string();
-                    log!("mesh node name {}", fbx_data.name);
+                    let mesh_name = mesh.name().expect("mesh name not found").to_string();
+                    log!("mesh node name {}", mesh_name);
                     let mesh_handle = mesh.geometry().context("failed to get geometry handle")?;
                     let polygon_vertices = mesh_handle
                         .polygon_vertices()
                         .context("failed to get polygon vertices")?;
                     let triangle_indices = polygon_vertices.triangulate_each(triangulate)?;
                     log!("polygon vertices {:?}", triangle_indices);
+
+                    let mut indices: Vec<u32> = triangle_indices
+                        .triangle_vertex_indices()
+                        .map(|t| t.to_usize() as u32)
+                        .collect();
+                    let offset = fbx_model.fbx_data[0].positions.len() as u32;
+                    for index in indices.iter_mut() {
+                        *index += offset;
+                    }
+                    log!("indices: count={}, {:?}", indices.len(), indices);
+                    fbx_model.fbx_data[0].indices.extend(indices);
+
                     let get_position =
                         |pos: Option<ControlPointIndex>| -> Result<_, anyhow::Error> {
                             let cpi =
@@ -51,23 +64,13 @@ pub unsafe fn load_fbx(path: &str) -> anyhow::Result<()> {
                             })?;
                             Ok(Vector3::new(point.x as f32, point.y as f32, point.z as f32))
                         };
-                    fbx_data.positions = triangle_indices
+                    let positions = triangle_indices
                         .iter_control_point_indices()
                         .map(get_position)
                         .collect::<Result<Vec<_>, _>>()
                         .context("failed to get position")?;
-                    log!("positions: {} {:?}", fbx_data.name, fbx_data.positions);
-
-                    fbx_data.indices = triangle_indices
-                        .triangle_vertex_indices()
-                        .map(|t| t.to_usize() as u32)
-                        .collect();
-                    log!(
-                        "indices: count={}, {:?}",
-                        fbx_data.indices.len(),
-                        fbx_data.indices
-                    );
-                    fbx_model.fbx_data.push(fbx_data);
+                    log!("positions: {} {:?}", mesh_name, positions);
+                    fbx_model.fbx_data[0].positions.extend(positions);
                 }
             }
         }
@@ -249,23 +252,19 @@ fn smallest_direction(v: &Vector3<f32>) -> Vector3<f32> {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct FbxModel<'a> {
-    fbx_data: Vec<FbxData<'a>>,
+pub struct FbxModel {
+    fbx_data: Vec<FbxData>,
 }
 
 #[derive(Clone, Debug)]
-struct FbxData<'a> {
-    pub name: String,
-    pub mesh_node_handle: NodeHandle<'a>,
+struct FbxData {
     pub positions: Vec<Vector3<f32>>,
     pub indices: Vec<u32>,
 }
 
-impl<'a> FbxData<'a> {
-    pub fn new(node_handle: NodeHandle<'a>) -> Self {
+impl FbxData {
+    pub fn new() -> Self {
         Self {
-            name: String::new(),
-            mesh_node_handle: node_handle,
             positions: Vec::new(),
             indices: Vec::new(),
         }

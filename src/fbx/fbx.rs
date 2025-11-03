@@ -9,18 +9,25 @@ use cgmath::{Matrix4, Quaternion};
 use fbxcel::tree::v7400::NodeHandle;
 use fbxcel_dom::any::AnyDocument;
 use fbxcel_dom::v7400::data::{
-    mesh::{layer::TypedLayerElementHandle, PolygonVertexIndex, PolygonVertices},
+    mesh::{
+        layer::TypedLayerElementHandle, ControlPointIndex, PolygonVertexIndex, PolygonVertices,
+    },
     texture::WrapMode,
 };
 use fbxcel_dom::v7400::object::property::loaders::StrictF64Loader;
-use fbxcel_dom::v7400::object::{
-    model::{ModelHandle, TypedModelHandle},
-    ObjectHandle, TypedObjectHandle,
+use fbxcel_dom::v7400::{
+    object::{
+        self,
+        model::{ModelHandle, TypedModelHandle},
+        ObjectHandle, ObjectId, TypedObjectHandle,
+    },
+    Document,
 };
 
 pub unsafe fn load_fbx(path: &str) -> anyhow::Result<()> {
     let file = std::fs::File::open(path)?;
     let reader = std::io::BufReader::new(file);
+    let mut fbx_model = FbxModel::default();
     match AnyDocument::from_reader(reader).expect("failed to load FBX document") {
         AnyDocument::V7400(fbx_ver, doc) => {
             for object in doc.objects() {
@@ -35,6 +42,32 @@ pub unsafe fn load_fbx(path: &str) -> anyhow::Result<()> {
                         .context("failed to get polygon vertices")?;
                     let triangle_indices = polygon_vertices.triangulate_each(triangulate)?;
                     log!("polygon vertices {:?}", triangle_indices);
+                    let get_position =
+                        |pos: Option<ControlPointIndex>| -> Result<_, anyhow::Error> {
+                            let cpi =
+                                pos.ok_or_else(|| anyhow!("failed to get position handle"))?;
+                            let point = polygon_vertices.control_point(cpi).ok_or_else(|| {
+                                anyhow!("failed to get point handle cpi: {:?}", cpi)
+                            })?;
+                            Ok(Vector3::new(point.x as f32, point.y as f32, point.z as f32))
+                        };
+                    fbx_data.positions = triangle_indices
+                        .iter_control_point_indices()
+                        .map(get_position)
+                        .collect::<Result<Vec<_>, _>>()
+                        .context("failed to get position")?;
+                    log!("positions: {} {:?}", fbx_data.name, fbx_data.positions);
+
+                    fbx_data.indices = triangle_indices
+                        .triangle_vertex_indices()
+                        .map(|t| t.to_usize() as u32)
+                        .collect();
+                    log!(
+                        "indices: count={}, {:?}",
+                        fbx_data.indices.len(),
+                        fbx_data.indices
+                    );
+                    fbx_model.fbx_data.push(fbx_data);
                 }
             }
         }
@@ -224,6 +257,8 @@ pub struct FbxModel<'a> {
 struct FbxData<'a> {
     pub name: String,
     pub mesh_node_handle: NodeHandle<'a>,
+    pub positions: Vec<Vector3<f32>>,
+    pub indices: Vec<u32>,
 }
 
 impl<'a> FbxData<'a> {
@@ -231,6 +266,8 @@ impl<'a> FbxData<'a> {
         Self {
             name: String::new(),
             mesh_node_handle: node_handle,
+            positions: Vec::new(),
+            indices: Vec::new(),
         }
     }
 }

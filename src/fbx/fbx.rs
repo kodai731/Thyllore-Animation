@@ -24,7 +24,7 @@ use fbxcel_dom::v7400::{
     Document,
 };
 
-pub unsafe fn load_fbx(path: &str) -> anyhow::Result<()> {
+pub unsafe fn load_fbx(path: &str) -> anyhow::Result<(FbxModel)> {
     let file = std::fs::File::open(path)?;
     let reader = std::io::BufReader::new(file);
     let mut fbx_model = FbxModel::default();
@@ -76,7 +76,7 @@ pub unsafe fn load_fbx(path: &str) -> anyhow::Result<()> {
         }
         _ => log!("unsupported FBX version"),
     }
-    Ok(())
+    Ok(fbx_model)
 }
 pub fn triangulate(
     pvs: &PolygonVertices<'_>,
@@ -253,11 +253,11 @@ fn smallest_direction(v: &Vector3<f32>) -> Vector3<f32> {
 
 #[derive(Clone, Debug, Default)]
 pub struct FbxModel {
-    fbx_data: Vec<FbxData>,
+    pub fbx_data: Vec<FbxData>,
 }
 
 #[derive(Clone, Debug)]
-struct FbxData {
+pub struct FbxData {
     pub positions: Vec<Vector3<f32>>,
     pub indices: Vec<u32>,
 }

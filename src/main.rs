@@ -76,6 +76,8 @@ use std::time::Instant;
 use imgui_winit_support::winit;
 use imgui_winit_support::winit::event::ElementState;
 
+use crate::fbx::fbx::FbxModel;
+use crate::vulkanr::data;
 use cgmath::num_traits::AsPrimitive;
 use cgmath::{Matrix4, Vector4};
 use glium::buffer::Content;
@@ -85,7 +87,6 @@ use std::borrow::BorrowMut;
 use std::path::Path;
 use std::rc::Rc;
 use vulkanalia::vk::CommandPool;
-use crate::fbx::fbx::FbxModel;
 
 fn main() -> Result<()> {
     pretty_env_logger::init();
@@ -577,15 +578,15 @@ impl App {
         self.data.images_in_flight[image_index as usize] = self.data.in_flight_fences[self.frame];
 
         // TODO: do in gltf_model
-        self.data
-            .gltf_model
-            .reset_vertices_animation_position(self.start.elapsed().as_secs_f32());
-        self.data.gltf_model.apply_animation(
-            self.start.elapsed().as_secs_f32(),
-            0,
-            Matrix4::identity(),
-        );
-        Self::update_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
+        // self.data
+        //     .gltf_model
+        //     .reset_vertices_animation_position(self.start.elapsed().as_secs_f32());
+        // self.data.gltf_model.apply_animation(
+        //     self.start.elapsed().as_secs_f32(),
+        //     0,
+        //     Matrix4::identity(),
+        // );
+        // Self::update_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
 
         self.update_uniform_buffer(
             image_index,
@@ -1173,8 +1174,33 @@ impl App {
             &data.model_descriptor_set.rrdata.push(rrdata);
         }
 
+        // fbx model
+        // write as fbx vertices and indices
         let model_path_fbx = "src/resources/stickman/stickman_bin.fbx";
-        fbx::fbx::load_fbx(model_path_fbx)?;
+        data.fbx_model = fbx::fbx::load_fbx(model_path_fbx)?;
+        data.model_descriptor_set.rrdata[0]
+            .vertex_data
+            .vertices
+            .clear();
+        data.model_descriptor_set.rrdata[0]
+            .vertex_data
+            .indices
+            .clear();
+        for position in &data.fbx_model.fbx_data[0].positions {
+            let vertex = vulkanr::data::Vertex::new(
+                Vec3::new(position.x, position.y, position.z),
+                Vec4::new(0.0, 1.0, 0.0, 1.0),
+                Vec2::new_array([0.0, 1.0]),
+            );
+            data.model_descriptor_set.rrdata[0]
+                .vertex_data
+                .vertices
+                .push(vertex);
+        }
+        data.model_descriptor_set.rrdata[0]
+            .vertex_data
+            .indices
+            .extend(&data.fbx_model.fbx_data[0].indices);
 
         Ok(())
     }

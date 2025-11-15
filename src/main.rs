@@ -29,6 +29,9 @@ use vulkanr::swapchain::*;
 use vulkanr::vulkan::*;
 use vulkanr::window::*;
 
+// Disambiguate Device type - use vulkanalia's Device explicitly where needed
+use vulkanalia::Device as VkDevice;
+
 // imgui
 //use imgui::*;
 
@@ -799,7 +802,7 @@ impl App {
         vk::FALSE
     }
 
-    unsafe fn create_sync_objects(device: &Device, data: &mut AppData) -> Result<()> {
+    unsafe fn create_sync_objects(device: &VkDevice, data: &mut AppData) -> Result<()> {
         let semaphore_info = vk::SemaphoreCreateInfo::builder();
         let fence_info = vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
 

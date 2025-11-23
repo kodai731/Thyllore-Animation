@@ -352,10 +352,20 @@ pub struct FbxModel {
     pub fbx_data: Vec<FbxData>,
 }
 
+/// Cluster情報（バインドポーズ）を保持する構造体
+#[derive(Clone, Debug)]
+pub struct ClusterInfo {
+    pub bone_name: String,
+    pub transform: Matrix4<f32>,           // メッシュの初期変換
+    pub transform_link: Matrix4<f32>,      // ボーンの初期変換（バインドポーズ）
+    pub inverse_bind_pose: Matrix4<f32>,   // 計算済み逆バインドポーズ
+}
+
 #[derive(Clone, Debug)]
 pub struct FbxData {
     pub positions: Vec<Vector3<f32>>,
     pub indices: Vec<u32>,
+    pub clusters: Vec<ClusterInfo>,        // スキニング情報
 }
 
 impl FbxData {
@@ -363,6 +373,7 @@ impl FbxData {
         Self {
             positions: Vec::new(),
             indices: Vec::new(),
+            clusters: Vec::new(),
         }
     }
 }

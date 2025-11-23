@@ -14,7 +14,7 @@ use fbxcel_dom::v7400::data::{
     },
     texture::WrapMode,
 };
-use fbxcel_dom::v7400::object::property::loaders::StrictF64Loader;
+use fbxcel_dom::v7400::object::property::loaders::{StrictF64Loader, F64Arr3Loader};
 use fbxcel_dom::v7400::{
     object::{
         self,
@@ -26,48 +26,28 @@ use fbxcel_dom::v7400::{
 
 /// Get local transform matrix from FBX model node
 fn get_local_transform(model: &ModelHandle) -> Matrix4<f32> {
-    let mut translation = [0.0, 0.0, 0.0];
-    let mut rotation = [0.0, 0.0, 0.0];
-    let mut scaling = [1.0, 1.0, 1.0];
-
-    let loader = StrictF64Loader;
-
-    // TODO: Figure out the correct fbxcel-dom API to extract property values
-    // For now, we'll use a workaround to test if transform application fixes the issue
-
-    // Check if this mesh has a specific name pattern and apply known transforms
-    // This is a temporary solution to validate the approach
     let mesh_name = model.name().unwrap_or("");
 
-    // You can manually set transforms for specific meshes here for testing
-    // For example, if Blender shows a parent transform of (0, -1.023, 0.0089):
-    // Uncomment and adjust these values based on what you see in Blender:
-    if mesh_name.contains("BezierCircle") {
-        translation = [0.0, -0.81, 0.0];
-        rotation = [-90.0, 0.0, 0.0];
-        scaling = [1.0, 1.0, 1.0];
-    }
+    // Get transform properties from FBX file
+    let model_obj: &ObjectHandle = &**model;
+    let props = model_obj.properties_by_native_typename("FbxNode");
 
-    if mesh_name.contains("NurbsPath.001") {
-        translation = [0.0, -1.023, 0.008889];
-        rotation = [-90.0, 1.1644, 90.0];
-        scaling = [1.0, 1.0, 1.0];
-    }
+    // Helper function to extract Vec3 from property
+    let get_vec3 = |name: &str, default: [f32; 3]| -> [f32; 3] {
+        if let Some(prop) = props.get_property(name) {
+            if let Ok(values) = prop.load_value(F64Arr3Loader) {
+                return [values[0] as f32, values[1] as f32, values[2] as f32];
+            }
+        }
+        default
+    };
 
-    if mesh_name.contains("NurbsPath.002") {
-        translation = [0.0, -1.0229, 0.009046];
-        rotation = [90.0, 1.5574, 90.0];
-        scaling = [1.0, 1.0, 1.0];
-    }
-
-    if mesh_name.eq("NurbsPath") {
-        translation = [0.0, 0.0, 0.0];
-        rotation = [-90.0, 90.0, 0.0];
-        scaling = [1.0, 1.0, 1.0];
-    }
+    let translation = get_vec3("Lcl Translation", [0.0, 0.0, 0.0]);
+    let rotation = get_vec3("Lcl Rotation", [0.0, 0.0, 0.0]);
+    let scaling = get_vec3("Lcl Scaling", [1.0, 1.0, 1.0]);
 
     log!(
-        "Mesh: {}, Using transform - Translation: {:?}, Rotation: {:?}, Scaling: {:?}",
+        "Mesh: {}, Local transform - Translation: {:?}, Rotation (deg): {:?}, Scaling: {:?}",
         mesh_name,
         translation,
         rotation,
@@ -76,38 +56,100 @@ fn get_local_transform(model: &ModelHandle) -> Matrix4<f32> {
 
     // Build transform matrix: T * R * S
     let translation_matrix = Matrix4::from_translation(vec3(
-        translation[0] as f32,
-        translation[1] as f32,
-        translation[2] as f32,
+        translation[0],
+        translation[1],
+        translation[2],
     ));
 
-    // Rotation in degrees, convert to radians
-    // FBX uses Euler XYZ order by default, so apply rotations in X * Y * Z order
-    let rotation_x = Matrix4::from_angle_x(Deg(rotation[0] as f32));
-    let rotation_y = Matrix4::from_angle_y(Deg(rotation[1] as f32));
-    let rotation_z = Matrix4::from_angle_z(Deg(rotation[2] as f32));
-    let rotation_matrix = rotation_x * rotation_y * rotation_z;  // Changed order to X * Y * Z
+    // FBX rotation is in degrees, convert to radians
+    // FBX uses XYZ Euler rotation order by default (applied as Z*Y*X in matrix multiplication)
+    let rotation_x = Matrix4::from_angle_x(Rad((rotation[0] as f32).to_radians()));
+    let rotation_y = Matrix4::from_angle_y(Rad((rotation[1] as f32).to_radians()));
+    let rotation_z = Matrix4::from_angle_z(Rad((rotation[2] as f32).to_radians()));
+    // Apply in reverse order for XYZ Euler: Z * Y * X
+    let rotation_matrix = rotation_z * rotation_y * rotation_x;
 
     let scale_matrix = Matrix4::from_nonuniform_scale(
-        scaling[0] as f32,
-        scaling[1] as f32,
-        scaling[2] as f32,
+        scaling[0],
+        scaling[1],
+        scaling[2],
     );
-
-    // Coordinate system conversion: FBX (Y-up) to Vulkan
-    // You may need to adjust this based on your Vulkan coordinate setup
-    // Uncomment the line below if you need Y-up to Z-up conversion:
-    // let coord_convert = Matrix4::from_angle_x(Deg(-90.0));
-    // coord_convert * translation_matrix * rotation_matrix * scale_matrix
 
     translation_matrix * rotation_matrix * scale_matrix
 }
 
 /// Get world transform matrix by traversing parent hierarchy
-fn get_world_transform(model: &ModelHandle, _doc: &Document) -> Matrix4<f32> {
-    // For now, just return local transform
-    // TODO: Traverse parent hierarchy if needed
-    get_local_transform(model)
+fn get_world_transform(model: &ModelHandle, doc: &Document) -> Matrix4<f32> {
+    let mesh_name = model.name().unwrap_or("");
+
+    // Get local transform first
+    let local_transform = get_local_transform(model);
+
+    // Try to find parent model in the hierarchy
+    let model_obj: &ObjectHandle = &**model;
+
+    // Check if this mesh is a child of another mesh/model
+    // In FBX, destination_objects() returns objects that this object connects TO (parents)
+    for conn in model_obj.destination_objects() {
+        if let Some(parent_obj) = conn.object_handle() {
+            // Check if parent is a Model node
+            if let TypedObjectHandle::Model(parent_model_typed) = parent_obj.get_typed() {
+                let parent_name = parent_obj.name().unwrap_or("");
+
+                // For mesh parents, use their transform
+                match parent_model_typed {
+                    TypedModelHandle::Mesh(parent_mesh) => {
+                        log!("  Mesh {} has parent mesh: {}", mesh_name, parent_name);
+
+                        // Recursively get parent's world transform
+                        let parent_world = get_world_transform(&parent_mesh, doc);
+
+                        // Combine: parent_world * local_transform
+                        let world_transform = parent_world * local_transform;
+                        return world_transform;
+                    }
+                    TypedModelHandle::Null(_) | TypedModelHandle::LimbNode(_) => {
+                        log!("  Mesh {} has parent node: {}", mesh_name, parent_name);
+
+                        // Get parent transform
+                        let parent_world = get_world_transform_for_object(&parent_obj, doc);
+
+                        // Combine: parent_world * local_transform
+                        let world_transform = parent_world * local_transform;
+                        return world_transform;
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    // No parent found, local transform is world transform
+    log!("  No parent for {}, using local as world", mesh_name);
+    local_transform
+}
+
+/// Helper function to get world transform for any ObjectHandle
+fn get_world_transform_for_object(obj: &ObjectHandle, doc: &Document) -> Matrix4<f32> {
+    if let TypedObjectHandle::Model(model_typed) = obj.get_typed() {
+        match model_typed {
+            TypedModelHandle::Mesh(mesh_model) => {
+                get_world_transform(&mesh_model, doc)
+            }
+            TypedModelHandle::Null(null_model) => {
+                get_world_transform(&null_model, doc)
+            }
+            TypedModelHandle::LimbNode(limb_model) => {
+                get_world_transform(&limb_model, doc)
+            }
+            _ => {
+                // For other model types, use identity transform
+                Matrix4::from_scale(1.0)
+            }
+        }
+    } else {
+        Matrix4::from_scale(1.0)
+    }
 }
 
 pub unsafe fn load_fbx(path: &str) -> anyhow::Result<(FbxModel)> {
@@ -118,6 +160,22 @@ pub unsafe fn load_fbx(path: &str) -> anyhow::Result<(FbxModel)> {
     fbx_model.fbx_data.push(FbxData::new());
     match AnyDocument::from_reader(reader).expect("failed to load FBX document") {
         AnyDocument::V7400(fbx_ver, doc) => {
+            // First, log all objects to understand the hierarchy
+            log!("=== FBX Object Hierarchy ===");
+            for object in doc.objects() {
+                let obj_name = object.name().unwrap_or("unnamed");
+                log!("Object: name='{}', class='{}', subclass='{}'",
+                    obj_name, object.class(), object.subclass());
+
+                // Log parent connections (source = parent)
+                for conn in object.source_objects() {
+                    if let Some(src) = conn.object_handle() {
+                        log!("  <- Parent: {}", src.name().unwrap_or("unnamed"));
+                    }
+                }
+            }
+            log!("=== Loading Meshes ===");
+
             for object in doc.objects() {
                 if let TypedObjectHandle::Model(TypedModelHandle::Mesh(mesh)) = object.get_typed() {
                     log!("Loading mesh {:?}", mesh);

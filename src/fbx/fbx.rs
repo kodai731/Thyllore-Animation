@@ -205,6 +205,24 @@ pub unsafe fn load_fbx(path: &str) -> anyhow::Result<(FbxModel)> {
                     log!("indices: count={}, {:?}", indices.len(), indices);
                     fbx_model.fbx_data[0].indices.extend(indices);
 
+                    // ローカル座標の頂点位置を取得
+                    let get_local_position =
+                        |pos: Option<ControlPointIndex>| -> Result<_, anyhow::Error> {
+                            let cpi =
+                                pos.ok_or_else(|| anyhow!("failed to get position handle"))?;
+                            let point = polygon_vertices.control_point(cpi).ok_or_else(|| {
+                                anyhow!("failed to get point handle cpi: {:?}", cpi)
+                            })?;
+                            Ok(Vector3::new(point.x as f32, point.y as f32, point.z as f32))
+                        };
+
+                    let local_positions = triangle_indices
+                        .iter_control_point_indices()
+                        .map(get_local_position)
+                        .collect::<Result<Vec<_>, _>>()
+                        .context("failed to get local position")?;
+
+                    // ワールド座標の頂点位置を取得（表示用）
                     let get_position =
                         |pos: Option<ControlPointIndex>| -> Result<_, anyhow::Error> {
                             let cpi =
@@ -224,7 +242,9 @@ pub unsafe fn load_fbx(path: &str) -> anyhow::Result<(FbxModel)> {
                         .map(get_position)
                         .collect::<Result<Vec<_>, _>>()
                         .context("failed to get position")?;
+
                     log!("positions (transformed): {} {:?}", mesh_name, positions);
+                    fbx_model.fbx_data[0].local_positions.extend(local_positions);
                     fbx_model.fbx_data[0].positions.extend(positions);
 
                     // Skin Deformerを探してクラスター情報を取得
@@ -454,6 +474,37 @@ pub struct FbxModel {
     pub animations: Vec<FbxAnimation>,
 }
 
+impl FbxModel {
+    /// 指定したアニメーションで頂点を更新
+    ///
+    /// # Arguments
+    /// * `animation_index` - アニメーションのインデックス
+    /// * `time` - アニメーション時間（秒）
+    ///
+    /// # Example
+    /// ```ignore
+    /// // アニメーションを0.5秒の位置で更新
+    /// fbx_model.update_animation(0, 0.5);
+    /// ```
+    pub fn update_animation(&mut self, animation_index: usize, time: f32) {
+        if let Some(animation) = self.animations.get(animation_index) {
+            for fbx_data in &mut self.fbx_data {
+                fbx_data.update_animation(animation, time);
+            }
+        }
+    }
+
+    /// アニメーションの長さ（秒）を取得
+    pub fn get_animation_duration(&self, animation_index: usize) -> Option<f32> {
+        self.animations.get(animation_index).map(|anim| anim.duration)
+    }
+
+    /// アニメーション数を取得
+    pub fn animation_count(&self) -> usize {
+        self.animations.len()
+    }
+}
+
 /// FBXアニメーション全体
 #[derive(Clone, Debug)]
 pub struct FbxAnimation {
@@ -476,6 +527,150 @@ pub struct BoneAnimation {
 pub struct KeyFrame<T> {
     pub time: f32,  // 秒
     pub value: T,
+}
+
+/// 指定時間でのボーン変換行列を計算
+fn evaluate_bone_transform_at_time(
+    bone_anim: &BoneAnimation,
+    time: f32,
+) -> Matrix4<f32> {
+    // Translation を補間
+    let translation = if !bone_anim.translation_keys.is_empty() {
+        interpolate_vec3_at_time(&bone_anim.translation_keys, time)
+    } else {
+        [0.0, 0.0, 0.0]
+    };
+
+    // Rotation を補間（度数法）
+    let rotation = if !bone_anim.rotation_keys.is_empty() {
+        interpolate_vec3_at_time(&bone_anim.rotation_keys, time)
+    } else {
+        [0.0, 0.0, 0.0]
+    };
+
+    // Scale を補間
+    let scale = if !bone_anim.scale_keys.is_empty() {
+        interpolate_vec3_at_time(&bone_anim.scale_keys, time)
+    } else {
+        [1.0, 1.0, 1.0]
+    };
+
+    // T * R * S の順で行列を構築
+    let translation_matrix = Matrix4::from_translation(vec3(translation[0], translation[1], translation[2]));
+
+    // FBX rotation is in degrees, convert to radians
+    let rotation_x = Matrix4::from_angle_x(Rad((rotation[0] as f32).to_radians()));
+    let rotation_y = Matrix4::from_angle_y(Rad((rotation[1] as f32).to_radians()));
+    let rotation_z = Matrix4::from_angle_z(Rad((rotation[2] as f32).to_radians()));
+    let rotation_matrix = rotation_z * rotation_y * rotation_x;
+
+    let scale_matrix = Matrix4::from_nonuniform_scale(scale[0], scale[1], scale[2]);
+
+    translation_matrix * rotation_matrix * scale_matrix
+}
+
+/// Vec3キーフレームを補間
+fn interpolate_vec3_at_time(keyframes: &[KeyFrame<[f32; 3]>], time: f32) -> [f32; 3] {
+    if keyframes.is_empty() {
+        return [0.0, 0.0, 0.0];
+    }
+
+    if keyframes.len() == 1 {
+        return keyframes[0].value;
+    }
+
+    // 時間がキーフレームの範囲外の場合
+    if time <= keyframes[0].time {
+        return keyframes[0].value;
+    }
+    if time >= keyframes[keyframes.len() - 1].time {
+        return keyframes[keyframes.len() - 1].value;
+    }
+
+    // 線形補間
+    for i in 0..keyframes.len() - 1 {
+        if time >= keyframes[i].time && time <= keyframes[i + 1].time {
+            let t = (time - keyframes[i].time) / (keyframes[i + 1].time - keyframes[i].time);
+            return [
+                keyframes[i].value[0] + t * (keyframes[i + 1].value[0] - keyframes[i].value[0]),
+                keyframes[i].value[1] + t * (keyframes[i + 1].value[1] - keyframes[i].value[1]),
+                keyframes[i].value[2] + t * (keyframes[i + 1].value[2] - keyframes[i].value[2]),
+            ];
+        }
+    }
+
+    keyframes[0].value
+}
+
+/// スキニングされた頂点位置を計算
+pub fn apply_skinning(
+    original_positions: &[Vector3<f32>],
+    clusters: &[ClusterInfo],
+    animation: &FbxAnimation,
+    time: f32,
+) -> Vec<Vector3<f32>> {
+    let num_vertices = original_positions.len();
+    let mut skinned_positions = original_positions.to_vec();
+
+    // 各ボーンのスキニング行列を計算
+    let mut bone_matrices: HashMap<String, Matrix4<f32>> = HashMap::new();
+
+    for cluster in clusters {
+        let bone_name = &cluster.bone_name;
+
+        // アニメーションからボーン変換を取得
+        let bone_transform = if let Some(bone_anim) = animation.bone_animations.get(bone_name) {
+            evaluate_bone_transform_at_time(bone_anim, time)
+        } else {
+            // アニメーションがない場合は単位行列
+            Matrix4::identity()
+        };
+
+        // スキニング行列 = BoneTransform * InverseBindPose
+        let skinning_matrix = bone_transform * cluster.inverse_bind_pose;
+        bone_matrices.insert(bone_name.clone(), skinning_matrix);
+    }
+
+    // 各頂点にスキニングを適用
+    let mut vertex_transforms: Vec<Vec<(usize, f32)>> = vec![Vec::new(); num_vertices];
+
+    // クラスターから頂点への影響を収集
+    for (cluster_idx, cluster) in clusters.iter().enumerate() {
+        for (i, &vertex_idx) in cluster.vertex_indices.iter().enumerate() {
+            if vertex_idx < num_vertices && i < cluster.vertex_weights.len() {
+                let weight = cluster.vertex_weights[i];
+                vertex_transforms[vertex_idx].push((cluster_idx, weight));
+            }
+        }
+    }
+
+    // 各頂点を変換
+    for (vertex_idx, transforms) in vertex_transforms.iter().enumerate() {
+        if transforms.is_empty() {
+            continue; // スキニングの影響を受けない頂点
+        }
+
+        let original_pos = original_positions[vertex_idx];
+        let mut weighted_pos = Vector3::new(0.0, 0.0, 0.0);
+        let mut total_weight = 0.0;
+
+        for &(cluster_idx, weight) in transforms {
+            let cluster = &clusters[cluster_idx];
+            if let Some(bone_matrix) = bone_matrices.get(&cluster.bone_name) {
+                // 頂点を変換
+                let transformed = bone_matrix.transform_point(Point3::from_vec(original_pos));
+                weighted_pos += transformed.to_vec() * weight;
+                total_weight += weight;
+            }
+        }
+
+        // ウェイトを正規化
+        if total_weight > 0.0 {
+            skinned_positions[vertex_idx] = weighted_pos / total_weight;
+        }
+    }
+
+    skinned_positions
 }
 
 /// AnimCurveからキーフレームデータを抽出
@@ -859,17 +1054,29 @@ pub struct ClusterInfo {
 
 #[derive(Clone, Debug)]
 pub struct FbxData {
-    pub positions: Vec<Vector3<f32>>,
+    pub positions: Vec<Vector3<f32>>,        // ワールド座標の頂点位置（表示用）
+    pub local_positions: Vec<Vector3<f32>>,  // ローカル座標の頂点位置（スキニング用）
     pub indices: Vec<u32>,
-    pub clusters: Vec<ClusterInfo>,        // スキニング情報
+    pub clusters: Vec<ClusterInfo>,          // スキニング情報
 }
 
 impl FbxData {
     pub fn new() -> Self {
         Self {
             positions: Vec::new(),
+            local_positions: Vec::new(),
             indices: Vec::new(),
             clusters: Vec::new(),
         }
+    }
+
+    /// アニメーション時間に基づいて頂点位置を更新
+    pub fn update_animation(&mut self, animation: &FbxAnimation, time: f32) {
+        if self.clusters.is_empty() || self.local_positions.is_empty() {
+            return; // スキニング情報がない場合はスキップ
+        }
+
+        // スキニングを適用
+        self.positions = apply_skinning(&self.local_positions, &self.clusters, animation, time);
     }
 }

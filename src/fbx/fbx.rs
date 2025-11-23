@@ -14,15 +14,16 @@ use fbxcel_dom::v7400::data::{
     },
     texture::WrapMode,
 };
-use fbxcel_dom::v7400::object::property::loaders::{StrictF64Loader, F64Arr3Loader};
+use fbxcel_dom::v7400::object::property::loaders::{StrictF64Loader, F64Arr3Loader, F64Arr16Loader};
 use fbxcel_dom::v7400::{
     object::{
-        self,
         model::{ModelHandle, TypedModelHandle},
-        ObjectHandle, ObjectId, TypedObjectHandle,
+        ObjectHandle, TypedObjectHandle,
+        deformer::{ClusterHandle, TypedDeformerHandle},
     },
     Document,
 };
+use std::collections::HashMap;
 
 /// Get local transform matrix from FBX model node
 fn get_local_transform(model: &ModelHandle) -> Matrix4<f32> {
@@ -225,6 +226,29 @@ pub unsafe fn load_fbx(path: &str) -> anyhow::Result<(FbxModel)> {
                         .context("failed to get position")?;
                     log!("positions (transformed): {} {:?}", mesh_name, positions);
                     fbx_model.fbx_data[0].positions.extend(positions);
+
+                    // Skin Deformerを探してクラスター情報を取得
+                    let mesh_obj: &ObjectHandle = &*mesh;
+                    for conn in mesh_obj.source_objects() {
+                        if let Some(deformer_obj) = conn.object_handle() {
+                            if let TypedObjectHandle::Deformer(TypedDeformerHandle::Skin(skin)) = deformer_obj.get_typed() {
+                                log!("Found Skin Deformer for mesh: {}", mesh_name);
+
+                                // 各クラスターを処理
+                                for cluster in skin.clusters() {
+                                    match extract_cluster_data(&cluster) {
+                                        Ok(cluster_info) => {
+                                            log!("Successfully extracted cluster data for bone: {}", cluster_info.bone_name);
+                                            fbx_model.fbx_data[0].clusters.push(cluster_info);
+                                        }
+                                        Err(e) => {
+                                            log!("Warning: Failed to extract cluster data: {}", e);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -408,6 +432,143 @@ fn smallest_direction(v: &Vector3<f32>) -> Vector3<f32> {
 #[derive(Clone, Debug, Default)]
 pub struct FbxModel {
     pub fbx_data: Vec<FbxData>,
+    pub animations: Vec<FbxAnimation>,
+}
+
+/// FBXアニメーション全体
+#[derive(Clone, Debug)]
+pub struct FbxAnimation {
+    pub name: String,
+    pub duration: f32,  // アニメーションの長さ（秒）
+    pub bone_animations: std::collections::HashMap<String, BoneAnimation>,
+}
+
+/// ボーンごとのアニメーション
+#[derive(Clone, Debug)]
+pub struct BoneAnimation {
+    pub bone_name: String,
+    pub translation_keys: Vec<KeyFrame<[f32; 3]>>,
+    pub rotation_keys: Vec<KeyFrame<[f32; 3]>>,
+    pub scale_keys: Vec<KeyFrame<[f32; 3]>>,
+}
+
+/// キーフレーム
+#[derive(Clone, Debug)]
+pub struct KeyFrame<T> {
+    pub time: f32,  // 秒
+    pub value: T,
+}
+
+/// Clusterから頂点インデックスとウェイトを抽出
+fn extract_cluster_data(cluster: &ClusterHandle) -> Result<ClusterInfo> {
+    // ClusterHandleからObjectHandleへの参照を取得
+    let cluster_obj: &ObjectHandle = &**cluster;
+
+    // ボーン名を取得（クラスターが接続されているモデルノード）
+    let bone_name = cluster_obj
+        .source_objects()
+        .filter(|obj| obj.label().is_none())
+        .filter_map(|obj| obj.object_handle())
+        .filter_map(|obj| match obj.get_typed() {
+            TypedObjectHandle::Model(_) => Some(obj.name().unwrap_or("Unknown")),
+            _ => None,
+        })
+        .next()
+        .unwrap_or("Unknown")
+        .to_string();
+
+    log!("Processing cluster for bone: {}", bone_name);
+
+    // 低レベルノードにアクセス
+    let node = cluster_obj.node();
+
+    // 頂点インデックスとウェイトを格納する配列
+    let mut vertex_indices = Vec::new();
+    let mut vertex_weights = Vec::new();
+
+    // 子ノードを走査して"Indexes"と"Weights"を探す
+    for child in node.children() {
+        let name = child.name();
+        match name {
+            "Indexes" => {
+                // インデックス配列を取得
+                if let Some(attr) = child.attributes().get(0) {
+                    if let Ok(arr) = attr.get_arr_i32_or_type() {
+                        vertex_indices = arr.iter().map(|&i| i as usize).collect();
+                        log!("Found {} vertex indices", vertex_indices.len());
+                    }
+                }
+            }
+            "Weights" => {
+                // ウェイト配列を取得
+                if let Some(attr) = child.attributes().get(0) {
+                    if let Ok(arr) = attr.get_arr_f64_or_type() {
+                        vertex_weights = arr.iter().map(|&w| w as f32).collect();
+                        log!("Found {} vertex weights", vertex_weights.len());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // TransformとTransformLinkマトリクスを取得
+    let props = cluster_obj.properties_by_native_typename("Cluster");
+
+    let transform = if let Some(prop) = props.get_property("Transform") {
+        if let Ok(values) = prop.load_value(F64Arr16Loader) {
+            // FBX stores matrices in row-major, cgmath uses column-major
+            Matrix4::new(
+                values[0] as f32, values[4] as f32, values[8] as f32, values[12] as f32,
+                values[1] as f32, values[5] as f32, values[9] as f32, values[13] as f32,
+                values[2] as f32, values[6] as f32, values[10] as f32, values[14] as f32,
+                values[3] as f32, values[7] as f32, values[11] as f32, values[15] as f32,
+            )
+        } else {
+            Matrix4::identity()
+        }
+    } else {
+        Matrix4::identity()
+    };
+
+    let transform_link = if let Some(prop) = props.get_property("TransformLink") {
+        if let Ok(values) = prop.load_value(F64Arr16Loader) {
+            Matrix4::new(
+                values[0] as f32, values[4] as f32, values[8] as f32, values[12] as f32,
+                values[1] as f32, values[5] as f32, values[9] as f32, values[13] as f32,
+                values[2] as f32, values[6] as f32, values[10] as f32, values[14] as f32,
+                values[3] as f32, values[7] as f32, values[11] as f32, values[15] as f32,
+            )
+        } else {
+            Matrix4::identity()
+        }
+    } else {
+        Matrix4::identity()
+    };
+
+    // 逆バインドポーズ行列を計算: inverse(TransformLink) * Transform
+    let inverse_bind_pose = if let Some(inv_tl) = transform_link.invert() {
+        inv_tl * transform
+    } else {
+        log!("Warning: Could not invert TransformLink matrix for bone {}", bone_name);
+        Matrix4::identity()
+    };
+
+    log!(
+        "Cluster {} - Transform: {:?}, TransformLink: {:?}",
+        bone_name,
+        transform,
+        transform_link
+    );
+
+    Ok(ClusterInfo {
+        bone_name,
+        transform,
+        transform_link,
+        inverse_bind_pose,
+        vertex_indices,
+        vertex_weights,
+    })
 }
 
 /// Cluster情報（バインドポーズ）を保持する構造体
@@ -417,6 +578,8 @@ pub struct ClusterInfo {
     pub transform: Matrix4<f32>,           // メッシュの初期変換
     pub transform_link: Matrix4<f32>,      // ボーンの初期変換（バインドポーズ）
     pub inverse_bind_pose: Matrix4<f32>,   // 計算済み逆バインドポーズ
+    pub vertex_indices: Vec<usize>,        // 影響を受ける頂点のインデックス
+    pub vertex_weights: Vec<f32>,          // 各頂点のウェイト値
 }
 
 #[derive(Clone, Debug)]

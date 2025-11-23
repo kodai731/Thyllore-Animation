@@ -251,6 +251,25 @@ pub unsafe fn load_fbx(path: &str) -> anyhow::Result<(FbxModel)> {
                     }
                 }
             }
+
+            // AnimStackを探してアニメーションを抽出
+            log!("=== Loading Animations ===");
+            for object in doc.objects() {
+                if object.class() == "AnimationStack" {
+                    log!("Found AnimStack: {:?}", object.name());
+                    match extract_anim_stack(&object, &doc) {
+                        Ok(animation) => {
+                            log!("Successfully extracted animation: {}", animation.name);
+                            fbx_model.animations.push(animation);
+                        }
+                        Err(e) => {
+                            log!("Warning: Failed to extract AnimStack: {}", e);
+                        }
+                    }
+                }
+            }
+
+            log!("Loaded {} animations", fbx_model.animations.len());
         }
         _ => log!("unsupported FBX version"),
     }
@@ -457,6 +476,262 @@ pub struct BoneAnimation {
 pub struct KeyFrame<T> {
     pub time: f32,  // 秒
     pub value: T,
+}
+
+/// AnimCurveからキーフレームデータを抽出
+fn extract_animation_curve(curve_obj: &ObjectHandle) -> Result<Vec<KeyFrame<f32>>> {
+    let node = curve_obj.node();
+
+    let mut key_times: Vec<f64> = Vec::new();
+    let mut key_values: Vec<f32> = Vec::new();
+
+    // 子ノードから"KeyTime"と"KeyValueFloat"を探す
+    for child in node.children() {
+        let name = child.name();
+        match name {
+            "KeyTime" => {
+                if let Some(attr) = child.attributes().get(0) {
+                    if let Ok(arr) = attr.get_arr_i64_or_type() {
+                        // FBX時間は内部的に整数で保存され、46186158000で1秒
+                        const FBX_TIME_UNIT: f64 = 46186158000.0;
+                        key_times = arr.iter().map(|&t| t as f64 / FBX_TIME_UNIT).collect();
+                        log!("Found {} key times", key_times.len());
+                    }
+                }
+            }
+            "KeyValueFloat" => {
+                if let Some(attr) = child.attributes().get(0) {
+                    if let Ok(arr) = attr.get_arr_f32_or_type() {
+                        key_values = arr.to_vec();
+                        log!("Found {} key values", key_values.len());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // キーフレームを構築
+    let mut keyframes = Vec::new();
+    let count = key_times.len().min(key_values.len());
+    for i in 0..count {
+        keyframes.push(KeyFrame {
+            time: key_times[i] as f32,
+            value: key_values[i],
+        });
+    }
+
+    Ok(keyframes)
+}
+
+/// AnimCurveNodeからアニメーションカーブを抽出（X, Y, Z成分）
+fn extract_anim_curve_node(curve_node_obj: &ObjectHandle, doc: &Document) -> Result<(Vec<KeyFrame<f32>>, Vec<KeyFrame<f32>>, Vec<KeyFrame<f32>>)> {
+    let mut curves_x = Vec::new();
+    let mut curves_y = Vec::new();
+    let mut curves_z = Vec::new();
+
+    // AnimCurveNodeに接続されているAnimCurveを探す
+    for conn in curve_node_obj.source_objects() {
+        if let Some(curve_obj) = conn.object_handle() {
+            if curve_obj.class() == "AnimationCurve" {
+                // 接続ラベル（"d|X", "d|Y", "d|Z"など）でどの軸か判別
+                let label = conn.label().unwrap_or("");
+
+                match extract_animation_curve(&curve_obj) {
+                    Ok(keyframes) => {
+                        if label.contains("X") {
+                            curves_x = keyframes;
+                        } else if label.contains("Y") {
+                            curves_y = keyframes;
+                        } else if label.contains("Z") {
+                            curves_z = keyframes;
+                        }
+                    }
+                    Err(e) => {
+                        log!("Warning: Failed to extract curve for label {}: {}", label, e);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok((curves_x, curves_y, curves_z))
+}
+
+/// AnimLayerからボーンごとのアニメーションを抽出
+fn extract_anim_layer(layer_obj: &ObjectHandle, doc: &Document) -> Result<HashMap<String, BoneAnimation>> {
+    let mut bone_animations = HashMap::new();
+
+    log!("Processing AnimLayer: {}", layer_obj.name().unwrap_or("Unnamed"));
+
+    // AnimLayerに接続されているAnimCurveNodeを探す
+    for conn in layer_obj.source_objects() {
+        if let Some(curve_node_obj) = conn.object_handle() {
+            if curve_node_obj.class() == "AnimationCurveNode" {
+                // AnimCurveNodeが影響するモデル（ボーン）を探す
+                for target_conn in curve_node_obj.destination_objects() {
+                    if let Some(target_obj) = target_conn.object_handle() {
+                        if target_obj.class() == "Model" {
+                            let bone_name = target_obj.name().unwrap_or("Unknown").to_string();
+                            let curve_node_name = curve_node_obj.name().unwrap_or("");
+
+                            log!("Found AnimCurveNode '{}' for bone '{}'", curve_node_name, bone_name);
+
+                            // カーブノードのタイプを判別（T=Translation, R=Rotation, S=Scaling）
+                            let (curves_x, curves_y, curves_z) = extract_anim_curve_node(&curve_node_obj, doc)?;
+
+                            // ボーンアニメーションを取得または作成
+                            let bone_anim = bone_animations.entry(bone_name.clone()).or_insert_with(|| {
+                                BoneAnimation {
+                                    bone_name: bone_name.clone(),
+                                    translation_keys: Vec::new(),
+                                    rotation_keys: Vec::new(),
+                                    scale_keys: Vec::new(),
+                                }
+                            });
+
+                            // プロパティ名で判別
+                            if curve_node_name.contains("T") || curve_node_name.contains("Lcl Translation") {
+                                // Translationカーブを統合
+                                bone_anim.translation_keys = merge_xyz_curves(curves_x, curves_y, curves_z);
+                            } else if curve_node_name.contains("R") || curve_node_name.contains("Lcl Rotation") {
+                                // Rotationカーブを統合
+                                bone_anim.rotation_keys = merge_xyz_curves(curves_x, curves_y, curves_z);
+                            } else if curve_node_name.contains("S") || curve_node_name.contains("Lcl Scaling") {
+                                // Scalingカーブを統合
+                                bone_anim.scale_keys = merge_xyz_curves(curves_x, curves_y, curves_z);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(bone_animations)
+}
+
+/// X, Y, Zの個別カーブを[f32; 3]のカーブに統合
+fn merge_xyz_curves(
+    curves_x: Vec<KeyFrame<f32>>,
+    curves_y: Vec<KeyFrame<f32>>,
+    curves_z: Vec<KeyFrame<f32>>,
+) -> Vec<KeyFrame<[f32; 3]>> {
+    // すべての時間を収集してソート
+    let mut all_times: Vec<f32> = Vec::new();
+    for kf in &curves_x {
+        if !all_times.contains(&kf.time) {
+            all_times.push(kf.time);
+        }
+    }
+    for kf in &curves_y {
+        if !all_times.contains(&kf.time) {
+            all_times.push(kf.time);
+        }
+    }
+    for kf in &curves_z {
+        if !all_times.contains(&kf.time) {
+            all_times.push(kf.time);
+        }
+    }
+    all_times.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    // 各時間でのX, Y, Z値を補間して統合
+    let mut merged = Vec::new();
+    for &time in &all_times {
+        let x = interpolate_at_time(&curves_x, time);
+        let y = interpolate_at_time(&curves_y, time);
+        let z = interpolate_at_time(&curves_z, time);
+
+        merged.push(KeyFrame {
+            time,
+            value: [x, y, z],
+        });
+    }
+
+    merged
+}
+
+/// 指定時間での値を線形補間で取得
+fn interpolate_at_time(keyframes: &[KeyFrame<f32>], time: f32) -> f32 {
+    if keyframes.is_empty() {
+        return 0.0;
+    }
+
+    if keyframes.len() == 1 {
+        return keyframes[0].value;
+    }
+
+    // 時間がキーフレームの範囲外の場合
+    if time <= keyframes[0].time {
+        return keyframes[0].value;
+    }
+    if time >= keyframes[keyframes.len() - 1].time {
+        return keyframes[keyframes.len() - 1].value;
+    }
+
+    // 線形補間
+    for i in 0..keyframes.len() - 1 {
+        if time >= keyframes[i].time && time <= keyframes[i + 1].time {
+            let t = (time - keyframes[i].time) / (keyframes[i + 1].time - keyframes[i].time);
+            return keyframes[i].value + t * (keyframes[i + 1].value - keyframes[i].value);
+        }
+    }
+
+    keyframes[0].value
+}
+
+/// AnimStackからアニメーションデータを抽出
+fn extract_anim_stack(stack_obj: &ObjectHandle, doc: &Document) -> Result<FbxAnimation> {
+    let name = stack_obj.name().unwrap_or("DefaultAnimation").to_string();
+    log!("Processing AnimStack: {}", name);
+
+    let mut all_bone_animations = HashMap::new();
+    let mut duration = 0.0f32;
+
+    // AnimStackに接続されているAnimLayerを探す
+    for conn in stack_obj.source_objects() {
+        if let Some(layer_obj) = conn.object_handle() {
+            if layer_obj.class() == "AnimationLayer" {
+                match extract_anim_layer(&layer_obj, doc) {
+                    Ok(bone_anims) => {
+                        // レイヤーのアニメーションをマージ
+                        for (bone_name, bone_anim) in bone_anims {
+                            // 最大時間を更新
+                            for kf in &bone_anim.translation_keys {
+                                if kf.time > duration {
+                                    duration = kf.time;
+                                }
+                            }
+                            for kf in &bone_anim.rotation_keys {
+                                if kf.time > duration {
+                                    duration = kf.time;
+                                }
+                            }
+                            for kf in &bone_anim.scale_keys {
+                                if kf.time > duration {
+                                    duration = kf.time;
+                                }
+                            }
+
+                            all_bone_animations.insert(bone_name, bone_anim);
+                        }
+                    }
+                    Err(e) => {
+                        log!("Warning: Failed to extract AnimLayer: {}", e);
+                    }
+                }
+            }
+        }
+    }
+
+    log!("AnimStack '{}' duration: {} seconds, {} bones", name, duration, all_bone_animations.len());
+
+    Ok(FbxAnimation {
+        name,
+        duration,
+        bone_animations: all_bone_animations,
+    })
 }
 
 /// Clusterから頂点インデックスとウェイトを抽出

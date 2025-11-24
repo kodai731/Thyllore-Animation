@@ -1204,7 +1204,7 @@ impl App {
 
         // fbx model
         // write as fbx vertices and indices
-        let model_path_fbx = "src/resources/stickman/stickman_bin.fbx";
+        let model_path_fbx = "src/resources/phoenix-bird/source/fly.fbx";
         data.fbx_model = fbx::fbx::load_fbx(model_path_fbx)?;
         data.model_descriptor_set.rrdata[0]
             .vertex_data

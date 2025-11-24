@@ -232,6 +232,62 @@ pub unsafe fn load_fbx(path: &str) -> anyhow::Result<(FbxModel)> {
                     }
                 }
             }
+            
+            // Populate BoneNodes
+            log!("=== Populating Bone Nodes ===");
+            for object in doc.objects() {
+                if let TypedObjectHandle::Model(model) = object.get_typed() {
+                    let name = model.name().unwrap_or("").to_string();
+                    if name.is_empty() { continue; }
+
+                    // Find parent
+                    let mut parent = None;
+                    for conn in object.destination_objects() {
+                        if let Some(parent_obj) = conn.object_handle() {
+                            if parent_obj.class() == "Model" {
+                                parent = parent_obj.name().map(|s| s.to_string());
+                                break; // Assume single parent
+                            }
+                        }
+                    }
+
+                    // Get transform properties
+                    let props = object.properties_by_native_typename("FbxNode");
+                    let get_vec3 = |name: &str, default: [f32; 3]| -> [f32; 3] {
+                        if let Some(prop) = props.get_property(name) {
+                            if let Ok(values) = prop.load_value(F64Arr3Loader) {
+                                return [values[0] as f32, values[1] as f32, values[2] as f32];
+                            }
+                        }
+                        default
+                    };
+
+                    let translation = get_vec3("Lcl Translation", [0.0, 0.0, 0.0]);
+                    let rotation = get_vec3("Lcl Rotation", [0.0, 0.0, 0.0]);
+                    let scaling = get_vec3("Lcl Scaling", [1.0, 1.0, 1.0]);
+
+                    // Build local transform matrix
+                    let translation_matrix = Matrix4::from_translation(vec3(translation[0], translation[1], translation[2]));
+                    let rotation_x = Matrix4::from_angle_x(Rad((rotation[0] as f32).to_radians()));
+                    let rotation_y = Matrix4::from_angle_y(Rad((rotation[1] as f32).to_radians()));
+                    let rotation_z = Matrix4::from_angle_z(Rad((rotation[2] as f32).to_radians()));
+                    let rotation_matrix = rotation_z * rotation_y * rotation_x;
+                    let scale_matrix = Matrix4::from_nonuniform_scale(scaling[0], scaling[1], scaling[2]);
+                    
+                    let local_transform = translation_matrix * rotation_matrix * scale_matrix;
+
+                    let node = BoneNode {
+                        name: name.clone(),
+                        parent,
+                        local_transform,
+                        default_translation: translation,
+                        default_rotation: rotation,
+                        default_scaling: scaling,
+                    };
+                    
+                    fbx_model.nodes.insert(name, node);
+                }
+            }
             log!("=== Loading Meshes ===");
 
             for object in doc.objects() {
@@ -550,10 +606,21 @@ fn smallest_direction(v: &Vector3<f32>) -> Vector3<f32> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct BoneNode {
+    pub name: String,
+    pub parent: Option<String>,
+    pub local_transform: Matrix4<f32>, // Static local transform (T * R * S)
+    pub default_translation: [f32; 3],
+    pub default_rotation: [f32; 3],
+    pub default_scaling: [f32; 3],
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct FbxModel {
     pub fbx_data: Vec<FbxData>,
     pub animations: Vec<FbxAnimation>,
+    pub nodes: HashMap<String, BoneNode>,
 }
 
 impl FbxModel {
@@ -571,7 +638,7 @@ impl FbxModel {
     pub fn update_animation(&mut self, animation_index: usize, time: f32) {
         if let Some(animation) = self.animations.get(animation_index) {
             for fbx_data in &mut self.fbx_data {
-                fbx_data.update_animation(animation, time);
+                fbx_data.update_animation(animation, &self.nodes, time);
             }
         }
     }
@@ -595,23 +662,59 @@ pub struct FbxAnimation {
     pub bone_animations: std::collections::HashMap<String, BoneAnimation>,
 }
 
-/// ボーン階層情報（親子関係を追跡）
-#[derive(Clone, Debug)]
-pub struct BoneHierarchy {
-    pub parent: Option<String>,  // 親ボーン名
-}
-
-/// アニメーション時のボーン階層変換を計算
-fn compute_bone_hierarchy_transforms(animation: &FbxAnimation, time: f32) -> HashMap<String, Matrix4<f32>> {
-    let mut bone_transforms = HashMap::new();
-
-    // まず、各ボーンのローカル変換を計算
-    for (bone_name, bone_anim) in &animation.bone_animations {
-        let local_transform = evaluate_bone_transform_at_time(bone_anim, time);
-        bone_transforms.insert(bone_name.clone(), local_transform);
+/// Calculate global transforms for all bones
+fn compute_global_bone_transforms(
+    animation: &FbxAnimation,
+    nodes: &HashMap<String, BoneNode>,
+    time: f32
+) -> HashMap<String, Matrix4<f32>> {
+    let mut global_transforms = HashMap::new();
+    
+    for name in nodes.keys() {
+        resolve_global_transform(name, animation, nodes, time, &mut global_transforms);
     }
 
-    bone_transforms
+    global_transforms
+}
+
+fn resolve_global_transform(
+    bone_name: &str,
+    animation: &FbxAnimation,
+    nodes: &HashMap<String, BoneNode>,
+    time: f32,
+    cache: &mut HashMap<String, Matrix4<f32>>
+) -> Matrix4<f32> {
+    if let Some(transform) = cache.get(bone_name) {
+        return *transform;
+    }
+
+    let transform = if let Some(node) = nodes.get(bone_name) {
+        // Calculate local transform
+        let local_transform = if let Some(bone_anim) = animation.bone_animations.get(bone_name) {
+            evaluate_bone_transform_at_time(
+                bone_anim, 
+                time, 
+                node.default_translation, 
+                node.default_rotation, 
+                node.default_scaling
+            )
+        } else {
+            node.local_transform
+        };
+
+        // Multiply with parent global transform
+        if let Some(parent_name) = &node.parent {
+            let parent_global = resolve_global_transform(parent_name, animation, nodes, time, cache);
+            parent_global * local_transform
+        } else {
+            local_transform
+        }
+    } else {
+        Matrix4::identity()
+    };
+
+    cache.insert(bone_name.to_string(), transform);
+    transform
 }
 
 /// ボーンごとのアニメーション
@@ -634,26 +737,29 @@ pub struct KeyFrame<T> {
 fn evaluate_bone_transform_at_time(
     bone_anim: &BoneAnimation,
     time: f32,
+    default_translation: [f32; 3],
+    default_rotation: [f32; 3],
+    default_scaling: [f32; 3],
 ) -> Matrix4<f32> {
     // Translation を補間
     let translation = if !bone_anim.translation_keys.is_empty() {
         interpolate_vec3_at_time(&bone_anim.translation_keys, time)
     } else {
-        [0.0, 0.0, 0.0]
+        default_translation
     };
 
     // Rotation を補間（度数法）
     let rotation = if !bone_anim.rotation_keys.is_empty() {
         interpolate_vec3_at_time(&bone_anim.rotation_keys, time)
     } else {
-        [0.0, 0.0, 0.0]
+        default_rotation
     };
 
     // Scale を補間
     let scale = if !bone_anim.scale_keys.is_empty() {
         interpolate_vec3_at_time(&bone_anim.scale_keys, time)
     } else {
-        [1.0, 1.0, 1.0]
+        default_scaling
     };
 
     // T * R * S の順で行列を構築
@@ -708,6 +814,7 @@ pub fn apply_skinning(
     original_positions: &[Vector3<f32>],
     clusters: &[ClusterInfo],
     animation: &FbxAnimation,
+    nodes: &HashMap<String, BoneNode>,
     time: f32,
 ) -> Vec<Vector3<f32>> {
     let num_vertices = original_positions.len();
@@ -715,17 +822,15 @@ pub fn apply_skinning(
 
     // 各ボーンのスキニング行列を計算
     let mut bone_matrices: HashMap<String, Matrix4<f32>> = HashMap::new();
+    
+    // 全ボーンのグローバル変換を計算
+    let global_transforms = compute_global_bone_transforms(animation, nodes, time);
 
     for cluster in clusters {
         let bone_name = &cluster.bone_name;
 
-        // アニメーションからボーン変換を取得
-        let bone_transform = if let Some(bone_anim) = animation.bone_animations.get(bone_name) {
-            evaluate_bone_transform_at_time(bone_anim, time)
-        } else {
-            // アニメーションがない場合は単位行列
-            Matrix4::identity()
-        };
+        // グローバル変換を取得
+        let bone_transform = global_transforms.get(bone_name).copied().unwrap_or(Matrix4::identity());
 
         // スキニング行列 = BoneTransform * InverseBindPose
         let skinning_matrix = bone_transform * cluster.inverse_bind_pose;
@@ -1199,23 +1304,23 @@ impl FbxData {
     }
 
     /// アニメーション時間に基づいて頂点位置を更新
-    pub fn update_animation(&mut self, animation: &FbxAnimation, time: f32) {
+    pub fn update_animation(&mut self, animation: &FbxAnimation, nodes: &HashMap<String, BoneNode>, time: f32) {
         // スキニング情報がある場合はスキニングアニメーション
         if !self.clusters.is_empty() && !self.local_positions.is_empty() {
-            self.positions = apply_skinning(&self.local_positions, &self.clusters, animation, time);
+            self.positions = apply_skinning(&self.local_positions, &self.clusters, animation, nodes, time);
             return;
         }
 
         // スキニング情報がない場合は階層アニメーション
         if !self.mesh_parts.is_empty() {
-            self.apply_hierarchy_animation(animation, time);
+            self.apply_hierarchy_animation(animation, nodes, time);
         }
     }
 
     /// 階層アニメーションを適用（親ボーンの変換を各メッシュパーツに適用）
-    fn apply_hierarchy_animation(&mut self, animation: &FbxAnimation, time: f32) {
+    fn apply_hierarchy_animation(&mut self, animation: &FbxAnimation, nodes: &HashMap<String, BoneNode>, time: f32) {
         // 全ボーンの階層変換を計算
-        let bone_transforms = compute_bone_hierarchy_transforms(animation, time);
+        let bone_transforms = compute_global_bone_transforms(animation, nodes, time);
 
         for mesh_part in &self.mesh_parts {
             // 親ボーンの変換を取得

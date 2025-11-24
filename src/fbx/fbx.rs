@@ -79,6 +79,63 @@ fn get_local_transform(model: &ModelHandle) -> Matrix4<f32> {
     translation_matrix * rotation_matrix * scale_matrix
 }
 
+/// メッシュの親ボーンを探す
+fn find_parent_bone(mesh: &ModelHandle, _doc: &Document) -> Option<String> {
+    let mesh_obj: &ObjectHandle = &**mesh;
+
+    // 親オブジェクトを探す
+    for conn in mesh_obj.destination_objects() {
+        if let Some(parent_obj) = conn.object_handle() {
+            // 親がModelの場合
+            if parent_obj.class() == "Model" {
+                let subclass = parent_obj.node().attributes()
+                    .get(2)
+                    .and_then(|attr| attr.get_string_or_type().ok())
+                    .unwrap_or("");
+
+                // LimbNodeまたはNullはボーン
+                if subclass == "LimbNode" || subclass == "Null" {
+                    if let Some(bone_name) = parent_obj.name() {
+                        return Some(bone_name.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// 親ボーンに対するメッシュの相対変換を計算
+fn calculate_mesh_local_transform(
+    mesh: &ModelHandle,
+    parent_bone_name: &str,
+    doc: &Document,
+) -> Matrix4<f32> {
+    // メッシュのワールド変換を取得
+    let mesh_world = get_world_transform(mesh, doc);
+
+    // 親ボーンを探す
+    for object in doc.objects() {
+        if let Some(name) = object.name() {
+            if name == parent_bone_name && object.class() == "Model" {
+                if let TypedObjectHandle::Model(model) = object.get_typed() {
+                    // 親ボーンのワールド変換を取得
+                    let bone_world = get_world_transform(&model, doc);
+
+                    // 相対変換 = inverse(親ボーンワールド) × メッシュワールド
+                    if let Some(bone_world_inv) = bone_world.invert() {
+                        return bone_world_inv * mesh_world;
+                    }
+                }
+            }
+        }
+    }
+
+    // 親ボーンが見つからない場合は単位行列
+    mesh_world
+}
+
 /// Get world transform matrix by traversing parent hierarchy
 fn get_world_transform(model: &ModelHandle, doc: &Document) -> Matrix4<f32> {
     let mesh_name = model.name().unwrap_or("");
@@ -244,8 +301,33 @@ pub unsafe fn load_fbx(path: &str) -> anyhow::Result<(FbxModel)> {
                         .context("failed to get position")?;
 
                     log!("positions (transformed): {} {:?}", mesh_name, positions);
-                    fbx_model.fbx_data[0].local_positions.extend(local_positions);
+
+                    // 頂点オフセットを計算
+                    let vertex_offset = fbx_model.fbx_data[0].positions.len();
+                    let vertex_count = local_positions.len();
+
+                    fbx_model.fbx_data[0].local_positions.extend(local_positions.clone());
                     fbx_model.fbx_data[0].positions.extend(positions);
+
+                    // 親ボーンを探してMeshPartを作成（階層アニメーション用）
+                    let parent_bone = find_parent_bone(&mesh, &doc);
+                    let local_transform = if let Some(ref bone_name) = parent_bone {
+                        log!("Mesh '{}' is parented to bone '{}'", mesh_name, bone_name);
+                        calculate_mesh_local_transform(&mesh, bone_name, &doc)
+                    } else {
+                        log!("Mesh '{}' has no parent bone, using world transform", mesh_name);
+                        world_transform
+                    };
+
+                    let mesh_part = MeshPart {
+                        mesh_name: mesh_name.clone(),
+                        local_positions,
+                        parent_bone,
+                        local_transform,
+                        vertex_offset,
+                        vertex_count,
+                    };
+                    fbx_model.fbx_data[0].mesh_parts.push(mesh_part);
 
                     // Skin Deformerを探してクラスター情報を取得
                     let mesh_obj: &ObjectHandle = &*mesh;
@@ -511,6 +593,25 @@ pub struct FbxAnimation {
     pub name: String,
     pub duration: f32,  // アニメーションの長さ（秒）
     pub bone_animations: std::collections::HashMap<String, BoneAnimation>,
+}
+
+/// ボーン階層情報（親子関係を追跡）
+#[derive(Clone, Debug)]
+pub struct BoneHierarchy {
+    pub parent: Option<String>,  // 親ボーン名
+}
+
+/// アニメーション時のボーン階層変換を計算
+fn compute_bone_hierarchy_transforms(animation: &FbxAnimation, time: f32) -> HashMap<String, Matrix4<f32>> {
+    let mut bone_transforms = HashMap::new();
+
+    // まず、各ボーンのローカル変換を計算
+    for (bone_name, bone_anim) in &animation.bone_animations {
+        let local_transform = evaluate_bone_transform_at_time(bone_anim, time);
+        bone_transforms.insert(bone_name.clone(), local_transform);
+    }
+
+    bone_transforms
 }
 
 /// ボーンごとのアニメーション
@@ -1066,12 +1167,24 @@ pub struct ClusterInfo {
     pub vertex_weights: Vec<f32>,          // 各頂点のウェイト値
 }
 
+/// 個別のメッシュパーツ（階層アニメーション用）
+#[derive(Clone, Debug)]
+pub struct MeshPart {
+    pub mesh_name: String,                    // メッシュ名
+    pub local_positions: Vec<Vector3<f32>>,  // メッシュローカル空間の頂点（変換前）
+    pub parent_bone: Option<String>,          // 親ボーンの名前
+    pub local_transform: Matrix4<f32>,        // 親ボーンに対する相対変換
+    pub vertex_offset: usize,                 // 結合頂点配列内の開始インデックス
+    pub vertex_count: usize,                  // 頂点数
+}
+
 #[derive(Clone, Debug)]
 pub struct FbxData {
     pub positions: Vec<Vector3<f32>>,        // ワールド座標の頂点位置（表示用）
     pub local_positions: Vec<Vector3<f32>>,  // ローカル座標の頂点位置（スキニング用）
     pub indices: Vec<u32>,
     pub clusters: Vec<ClusterInfo>,          // スキニング情報
+    pub mesh_parts: Vec<MeshPart>,           // 個別メッシュパーツ（階層アニメーション用）
 }
 
 impl FbxData {
@@ -1081,16 +1194,45 @@ impl FbxData {
             local_positions: Vec::new(),
             indices: Vec::new(),
             clusters: Vec::new(),
+            mesh_parts: Vec::new(),
         }
     }
 
     /// アニメーション時間に基づいて頂点位置を更新
     pub fn update_animation(&mut self, animation: &FbxAnimation, time: f32) {
-        if self.clusters.is_empty() || self.local_positions.is_empty() {
-            return; // スキニング情報がない場合はスキップ
+        // スキニング情報がある場合はスキニングアニメーション
+        if !self.clusters.is_empty() && !self.local_positions.is_empty() {
+            self.positions = apply_skinning(&self.local_positions, &self.clusters, animation, time);
+            return;
         }
 
-        // スキニングを適用
-        self.positions = apply_skinning(&self.local_positions, &self.clusters, animation, time);
+        // スキニング情報がない場合は階層アニメーション
+        if !self.mesh_parts.is_empty() {
+            self.apply_hierarchy_animation(animation, time);
+        }
+    }
+
+    /// 階層アニメーションを適用（親ボーンの変換を各メッシュパーツに適用）
+    fn apply_hierarchy_animation(&mut self, animation: &FbxAnimation, time: f32) {
+        // 全ボーンの階層変換を計算
+        let bone_transforms = compute_bone_hierarchy_transforms(animation, time);
+
+        for mesh_part in &self.mesh_parts {
+            // 親ボーンの変換を取得
+            let parent_transform = if let Some(bone_name) = &mesh_part.parent_bone {
+                bone_transforms.get(bone_name).copied().unwrap_or(Matrix4::identity())
+            } else {
+                Matrix4::identity()
+            };
+
+            // 最終変換 = 親ボーンの変換 × メッシュの相対変換
+            let final_transform = parent_transform * mesh_part.local_transform;
+
+            // 各頂点を変換
+            for (i, local_pos) in mesh_part.local_positions.iter().enumerate() {
+                let world_pos = final_transform.transform_point(Point3::from_vec(*local_pos));
+                self.positions[mesh_part.vertex_offset + i] = Vector3::new(world_pos.x, world_pos.y, world_pos.z);
+            }
+        }
     }
 }

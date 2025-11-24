@@ -593,6 +593,10 @@ impl App {
                 // ループ再生
                 self.data.animation_time = elapsed % duration;
 
+                if self.frame % 60 == 0 {
+                    log!("Updating FBX animation: time={:.2}/{:.2}s", self.data.animation_time, duration);
+                }
+
                 // アニメーションを適用
                 self.data.fbx_model.update_animation(self.data.current_animation_index, self.data.animation_time);
 
@@ -1111,12 +1115,12 @@ impl App {
         );
         let proj = correction
             * cgmath::perspective(
-                Deg(45.0),
-                self.data.rrswapchain.swapchain_extent.width as f32
-                    / self.data.rrswapchain.swapchain_extent.height as f32,
-                0.1,
-                1000.0,
-            );
+            Deg(45.0),
+            self.data.rrswapchain.swapchain_extent.width as f32
+                / self.data.rrswapchain.swapchain_extent.height as f32,
+            0.1,
+            1000.0,
+        );
 
         for i in 0..self.data.model_descriptor_set.rrdata.len() {
             let rrdata = &mut self.data.model_descriptor_set.rrdata[i];

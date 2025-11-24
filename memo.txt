@@ -2,7 +2,7 @@ vulkan tutorial rust
 https://kylemayes.github.io/vulkanalia/introduction.html
 
 how to run
-$env:RUST_LOG="debug"; cargo run --bin AqooleEngineR
+$env:RUST_LOG="debug"; cargo run --bin RustRendering
 
 shader layout
 https://www.khronos.org/opengl/wiki/Layout_Qualifier_(GLSL)
@@ -23,3 +23,34 @@ https://stackoverflow.com/questions/75846989/how-to-load-gltf-files-with-gltf-rs
 https://github.com/Fahien/rustspot/blob/48d8be86c144b6c4d771034fd7a77efb2aa78e0f/src/rustspot/model.rs#L65
 C++
 https://github.com/kodai731/Aqoole-Engine-Android-Vulkan-Rendering-Engine-/blob/develop/AqooleEngine/src/main/cpp/AESrc/AEDrawObjects.cpp#L2437
+
+joint and morph animation
+https://github.com/kodai731/Aqoole-Engine-Android-Vulkan-Rendering-Engine-/blob/develop/AqooleEngine/src/main/cpp/AESrc/AEDrawObjects.cpp
+
+gltf skinning qiita
+https://qiita.com/syoyo/items/797637db368eb0704986
+
+fbx get_properties
+https://github.com/Kleptine/fbxcel-dom/blob/f0877faf570c2b8904fb755c8d7c469415fd32d6/src/v7400/object/model.rs#L83
+https://github.com/nicopap/bevy_mod_fbx/blob/22666481afa537803a35b769e4289204fd5046c1/src/fbx_transform.rs#L105
+https://github.com/lo48576/fbxcel-dom/blob/af75fda0a6fa32342fd41d4985f196c12dd3703e/src/v7400/object/texture.rs#L37
+https://github.com/dtolnay-contrib/fbxcel-dom/blob/6a4c9f19d89660187f7d00720a8c27a5f32a3e6d/src/v7400/object/material.rs#L47
+https://github.com/x0f5c3/rg3d/blob/b6b4212e251a2e99acaa66327f1a8af6d4fceeea/src/resource/fbx/scene/mod.rs#L322
+https://github.com/FyroxEngine/Fyrox/blob/e7e9e70638b27c55095b3cb14ac7d33dd46a451e/fyrox-impl/src/resource/fbx/scene/mod.rs#L417
+https://github.com/AmbientRun/Ambient/blob/ef44a742ef8e1467a6b7485e61f9e28095fc8764/crates/model_import/src/fbx/mesh.rs#L13
+
+direct_properties
+https://github.com/Pontoco/fbx-sanitizer/blob/da62b692a0dbea943797f1be8f8f8b6ed8b13706/fbx-sanitizer/src/checks/no_scale_compensation.rs#L21
+https://github.com/dtolnay-contrib/fbxcel-dom/blob/6a4c9f19d89660187f7d00720a8c27a5f32a3e6d/src/v7400/object.rs#L276
+
+bevy engine
+https://github.com/bevyengine/bevy/tree/main/crates
+
+FBX ParSer in C++
+https://github.com/facebookincubator/FBX2glTF
+https://github.com/nem0/OpenFBX
+https://github.com/ufbx/ufbx
+https://github.com/assimp/assimp
+https://github.com/0xafbf/blender-datasmith-export
+https://github.com/EpicGames/UnrealEngine
+https://github.com/godotengine/godot

@@ -29,6 +29,9 @@ use vulkanr::swapchain::*;
 use vulkanr::vulkan::*;
 use vulkanr::window::*;
 
+// Disambiguate Device type - use vulkanalia's Device explicitly where needed
+use vulkanalia::Device as VkDevice;
+
 // imgui
 //use imgui::*;
 
@@ -46,6 +49,10 @@ use gltf::gltf::*;
 
 pub mod logger {
     pub mod logger;
+}
+
+pub mod fbx {
+    pub mod fbx;
 }
 
 use anyhow::{anyhow, Result};
@@ -72,6 +79,8 @@ use std::time::Instant;
 use imgui_winit_support::winit;
 use imgui_winit_support::winit::event::ElementState;
 
+use crate::fbx::fbx::FbxModel;
+use crate::vulkanr::data;
 use cgmath::num_traits::AsPrimitive;
 use cgmath::{Matrix4, Vector4};
 use glium::buffer::Content;
@@ -339,6 +348,10 @@ struct AppData {
     clicked_mouse_pos: [f32; 2],
     is_wheel_clicked: bool,
     gltf_model: GltfModel,
+    fbx_model: FbxModel,
+    animation_time: f32,           // 現在のアニメーション時間（秒）
+    animation_playing: bool,       // アニメーション再生中フラグ
+    current_animation_index: usize, // 現在再生中のアニメーションインデックス
 }
 
 impl App {
@@ -570,16 +583,38 @@ impl App {
 
         self.data.images_in_flight[image_index as usize] = self.data.in_flight_fences[self.frame];
 
+        // FBXアニメーション更新
+        if self.data.animation_playing && self.data.fbx_model.animation_count() > 0 {
+            // 経過時間を取得
+            let elapsed = self.start.elapsed().as_secs_f32();
+
+            // アニメーション時間を更新
+            if let Some(duration) = self.data.fbx_model.get_animation_duration(self.data.current_animation_index) {
+                // ループ再生
+                self.data.animation_time = elapsed % duration;
+
+                if self.frame % 60 == 0 {
+                    log!("Updating FBX animation: time={:.2}/{:.2}s", self.data.animation_time, duration);
+                }
+
+                // アニメーションを適用
+                self.data.fbx_model.update_animation(self.data.current_animation_index, self.data.animation_time);
+
+                // 頂点バッファを更新
+                Self::update_fbx_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
+            }
+        }
+
         // TODO: do in gltf_model
-        self.data
-            .gltf_model
-            .reset_vertices_animation_position(self.start.elapsed().as_secs_f32());
-        self.data.gltf_model.apply_animation(
-            self.start.elapsed().as_secs_f32(),
-            0,
-            Matrix4::identity(),
-        );
-        Self::update_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
+        // self.data
+        //     .gltf_model
+        //     .reset_vertices_animation_position(self.start.elapsed().as_secs_f32());
+        // self.data.gltf_model.apply_animation(
+        //     self.start.elapsed().as_secs_f32(),
+        //     0,
+        //     Matrix4::identity(),
+        // );
+        // Self::update_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
 
         self.update_uniform_buffer(
             image_index,
@@ -792,7 +827,7 @@ impl App {
         vk::FALSE
     }
 
-    unsafe fn create_sync_objects(device: &Device, data: &mut AppData) -> Result<()> {
+    unsafe fn create_sync_objects(device: &VkDevice, data: &mut AppData) -> Result<()> {
         let semaphore_info = vk::SemaphoreCreateInfo::builder();
         let fence_info = vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
 
@@ -1080,12 +1115,12 @@ impl App {
         );
         let proj = correction
             * cgmath::perspective(
-                Deg(45.0),
-                self.data.rrswapchain.swapchain_extent.width as f32
-                    / self.data.rrswapchain.swapchain_extent.height as f32,
-                0.1,
-                1000.0,
-            );
+            Deg(45.0),
+            self.data.rrswapchain.swapchain_extent.width as f32
+                / self.data.rrswapchain.swapchain_extent.height as f32,
+            0.1,
+            1000.0,
+        );
 
         for i in 0..self.data.model_descriptor_set.rrdata.len() {
             let rrdata = &mut self.data.model_descriptor_set.rrdata[i];
@@ -1167,6 +1202,45 @@ impl App {
             &data.model_descriptor_set.rrdata.push(rrdata);
         }
 
+        // fbx model
+        // write as fbx vertices and indices
+        let model_path_fbx = "src/resources/stickman/stickman_bin.fbx";
+        data.fbx_model = fbx::fbx::load_fbx(model_path_fbx)?;
+        data.model_descriptor_set.rrdata[0]
+            .vertex_data
+            .vertices
+            .clear();
+        data.model_descriptor_set.rrdata[0]
+            .vertex_data
+            .indices
+            .clear();
+        for position in &data.fbx_model.fbx_data[0].positions {
+            let vertex = vulkanr::data::Vertex::new(
+                Vec3::new(position.x, position.y, position.z),
+                Vec4::new(0.0, 1.0, 0.0, 1.0),
+                Vec2::new_array([0.0, 1.0]),
+            );
+            data.model_descriptor_set.rrdata[0]
+                .vertex_data
+                .vertices
+                .push(vertex);
+        }
+        data.model_descriptor_set.rrdata[0]
+            .vertex_data
+            .indices
+            .extend(&data.fbx_model.fbx_data[0].indices);
+
+        // アニメーションがあれば自動再生を開始
+        if data.fbx_model.animation_count() > 0 {
+            data.animation_playing = true;
+            data.current_animation_index = 0;
+            data.animation_time = 0.0;
+            log::info!("FBX animation loaded: {} animations", data.fbx_model.animation_count());
+            if let Some(duration) = data.fbx_model.get_animation_duration(0) {
+                log::info!("Animation 0 duration: {} seconds", duration);
+            }
+        }
+
         Ok(())
     }
 
@@ -1195,6 +1269,45 @@ impl App {
                 eprintln!("Failed to update vertex buffer: {}", e);
             }
         }
+        Ok(())
+    }
+
+    unsafe fn update_fbx_vertex_buffer(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        data: &mut AppData,
+    ) -> Result<()> {
+        if data.fbx_model.fbx_data.is_empty() {
+            return Ok(());
+        }
+
+        // FBXモデルは最初のrrdataに格納されている想定
+        if let Some(rrdata) = data.model_descriptor_set.rrdata.get_mut(0) {
+            let vertex_data = &mut rrdata.vertex_data;
+            let fbx_positions = &data.fbx_model.fbx_data[0].positions;
+
+            // 頂点位置を更新
+            for (i, pos) in fbx_positions.iter().enumerate() {
+                if i < vertex_data.vertices.len() {
+                    vertex_data.vertices[i].pos.x = pos.x;
+                    vertex_data.vertices[i].pos.y = pos.y;
+                    vertex_data.vertices[i].pos.z = pos.z;
+                }
+            }
+
+            // 頂点バッファを更新
+            if let Err(e) = rrdata.vertex_buffer.update(
+                instance,
+                rrdevice,
+                &data.rrcommand_pool,
+                (size_of::<vulkanr::data::Vertex>() * vertex_data.vertices.len()) as vk::DeviceSize,
+                vertex_data.vertices.as_ptr() as *const c_void,
+                vertex_data.vertices.len(),
+            ) {
+                eprintln!("Failed to update FBX vertex buffer: {}", e);
+            }
+        }
+
         Ok(())
     }
 

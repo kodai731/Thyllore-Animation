@@ -15,4 +15,8 @@ pub mod math {
     pub mod math;
 }
 
+pub mod fbx {
+    pub mod fbx;
+}
+
 pub mod logger;

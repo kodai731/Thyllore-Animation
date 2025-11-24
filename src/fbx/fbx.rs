@@ -275,7 +275,7 @@ pub unsafe fn load_fbx(path: &str) -> anyhow::Result<(FbxModel)> {
             // AnimStackを探してアニメーションを抽出
             log!("=== Loading Animations ===");
             for object in doc.objects() {
-                if object.class() == "AnimationStack" {
+                if object.class() == "AnimStack" {
                     log!("Found AnimStack: {:?}", object.name());
                     match extract_anim_stack(&object, &doc) {
                         Ok(animation) => {
@@ -690,7 +690,6 @@ fn extract_animation_curve(curve_obj: &ObjectHandle) -> Result<Vec<KeyFrame<f32>
                         // FBX時間は内部的に整数で保存され、46186158000で1秒
                         const FBX_TIME_UNIT: f64 = 46186158000.0;
                         key_times = arr.iter().map(|&t| t as f64 / FBX_TIME_UNIT).collect();
-                        log!("Found {} key times", key_times.len());
                     }
                 }
             }
@@ -698,7 +697,6 @@ fn extract_animation_curve(curve_obj: &ObjectHandle) -> Result<Vec<KeyFrame<f32>
                 if let Some(attr) = child.attributes().get(0) {
                     if let Ok(arr) = attr.get_arr_f32_or_type() {
                         key_values = arr.to_vec();
-                        log!("Found {} key values", key_values.len());
                     }
                 }
             }
@@ -716,6 +714,10 @@ fn extract_animation_curve(curve_obj: &ObjectHandle) -> Result<Vec<KeyFrame<f32>
         });
     }
 
+    if keyframes.is_empty() {
+        log!("      Warning: No keyframes extracted from AnimCurve");
+    }
+
     Ok(keyframes)
 }
 
@@ -725,15 +727,18 @@ fn extract_anim_curve_node(curve_node_obj: &ObjectHandle, doc: &Document) -> Res
     let mut curves_y = Vec::new();
     let mut curves_z = Vec::new();
 
+    let mut curve_count = 0;
     // AnimCurveNodeに接続されているAnimCurveを探す
     for conn in curve_node_obj.source_objects() {
         if let Some(curve_obj) = conn.object_handle() {
-            if curve_obj.class() == "AnimationCurve" {
+            if curve_obj.class() == "AnimCurve" {
+                curve_count += 1;
                 // 接続ラベル（"d|X", "d|Y", "d|Z"など）でどの軸か判別
                 let label = conn.label().unwrap_or("");
 
                 match extract_animation_curve(&curve_obj) {
                     Ok(keyframes) => {
+                        log!("    Extracted {} keyframes for label '{}'", keyframes.len(), label);
                         if label.contains("X") {
                             curves_x = keyframes;
                         } else if label.contains("Y") {
@@ -750,6 +755,8 @@ fn extract_anim_curve_node(curve_node_obj: &ObjectHandle, doc: &Document) -> Res
         }
     }
 
+    log!("    Found {} AnimCurves (X:{}, Y:{}, Z:{} keyframes)", curve_count, curves_x.len(), curves_y.len(), curves_z.len());
+
     Ok((curves_x, curves_y, curves_z))
 }
 
@@ -760,9 +767,12 @@ fn extract_anim_layer(layer_obj: &ObjectHandle, doc: &Document) -> Result<HashMa
     log!("Processing AnimLayer: {}", layer_obj.name().unwrap_or("Unnamed"));
 
     // AnimLayerに接続されているAnimCurveNodeを探す
+    let mut curve_node_count = 0;
     for conn in layer_obj.source_objects() {
         if let Some(curve_node_obj) = conn.object_handle() {
-            if curve_node_obj.class() == "AnimationCurveNode" {
+            log!("  Checking connection: class='{}', name='{}'", curve_node_obj.class(), curve_node_obj.name().unwrap_or(""));
+            if curve_node_obj.class() == "AnimCurveNode" {
+                curve_node_count += 1;
                 // AnimCurveNodeが影響するモデル（ボーン）を探す
                 for target_conn in curve_node_obj.destination_objects() {
                     if let Some(target_obj) = target_conn.object_handle() {
@@ -803,6 +813,7 @@ fn extract_anim_layer(layer_obj: &ObjectHandle, doc: &Document) -> Result<HashMa
         }
     }
 
+    log!("  Found {} AnimCurveNodes, extracted {} bone animations", curve_node_count, bone_animations.len());
     Ok(bone_animations)
 }
 
@@ -885,9 +896,12 @@ fn extract_anim_stack(stack_obj: &ObjectHandle, doc: &Document) -> Result<FbxAni
     let mut duration = 0.0f32;
 
     // AnimStackに接続されているAnimLayerを探す
+    let mut layer_count = 0;
     for conn in stack_obj.source_objects() {
         if let Some(layer_obj) = conn.object_handle() {
-            if layer_obj.class() == "AnimationLayer" {
+            log!("  Checking source object: class='{}', name='{}'", layer_obj.class(), layer_obj.name().unwrap_or(""));
+            if layer_obj.class() == "AnimLayer" {
+                layer_count += 1;
                 match extract_anim_layer(&layer_obj, doc) {
                     Ok(bone_anims) => {
                         // レイヤーのアニメーションをマージ
@@ -920,7 +934,7 @@ fn extract_anim_stack(stack_obj: &ObjectHandle, doc: &Document) -> Result<FbxAni
         }
     }
 
-    log!("AnimStack '{}' duration: {} seconds, {} bones", name, duration, all_bone_animations.len());
+    log!("AnimStack '{}': found {} layers, duration: {} seconds, {} bones", name, layer_count, duration, all_bone_animations.len());
 
     Ok(FbxAnimation {
         name,

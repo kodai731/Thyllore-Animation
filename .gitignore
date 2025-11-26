@@ -28,3 +28,6 @@ src/cpp/
 
 # log
 log/
+
+# lib
+thirdparty/

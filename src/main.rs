@@ -1205,7 +1205,8 @@ impl App {
         // fbx model
         // write as fbx vertices and indices
         let model_path_fbx = "src/resources/phoenix-bird/source/fly.fbx";
-        data.fbx_model = fbx::fbx::load_fbx(model_path_fbx)?;
+        // Use russimp-based loader for better compatibility
+        data.fbx_model = fbx::fbx::load_fbx_with_russimp(model_path_fbx)?;
         data.model_descriptor_set.rrdata[0]
             .vertex_data
             .vertices
@@ -1214,7 +1215,11 @@ impl App {
             .vertex_data
             .indices
             .clear();
-        for position in &data.fbx_model.fbx_data[0].positions {
+
+        // 全てのFbxDataから頂点とインデックスを収集
+        let mut vertex_offset = 0u32;
+        for fbx_data in &data.fbx_model.fbx_data {
+            for position in &fbx_data.positions {
             let vertex = vulkanr::data::Vertex::new(
                 Vec3::new(position.x, position.y, position.z),
                 Vec4::new(0.0, 1.0, 0.0, 1.0),
@@ -1225,10 +1230,17 @@ impl App {
                 .vertices
                 .push(vertex);
         }
-        data.model_descriptor_set.rrdata[0]
-            .vertex_data
-            .indices
-            .extend(&data.fbx_model.fbx_data[0].indices);
+            // インデックスをオフセット付きで追加
+            let adjusted_indices: Vec<u32> = fbx_data.indices.iter()
+                .map(|&idx| idx + vertex_offset)
+                .collect();
+            data.model_descriptor_set.rrdata[0]
+                .vertex_data
+                .indices
+                .extend(adjusted_indices);
+
+            vertex_offset += fbx_data.positions.len() as u32;
+        }
 
         // アニメーションがあれば自動再生を開始
         if data.fbx_model.animation_count() > 0 {
@@ -1284,14 +1296,17 @@ impl App {
         // FBXモデルは最初のrrdataに格納されている想定
         if let Some(rrdata) = data.model_descriptor_set.rrdata.get_mut(0) {
             let vertex_data = &mut rrdata.vertex_data;
-            let fbx_positions = &data.fbx_model.fbx_data[0].positions;
 
-            // 頂点位置を更新
-            for (i, pos) in fbx_positions.iter().enumerate() {
-                if i < vertex_data.vertices.len() {
-                    vertex_data.vertices[i].pos.x = pos.x;
-                    vertex_data.vertices[i].pos.y = pos.y;
-                    vertex_data.vertices[i].pos.z = pos.z;
+            // 全てのFbxDataから頂点位置を収集して更新
+            let mut vertex_index = 0;
+            for fbx_data in &data.fbx_model.fbx_data {
+                for pos in &fbx_data.positions {
+                    if vertex_index < vertex_data.vertices.len() {
+                        vertex_data.vertices[vertex_index].pos.x = pos.x;
+                        vertex_data.vertices[vertex_index].pos.y = pos.y;
+                        vertex_data.vertices[vertex_index].pos.z = pos.z;
+                        vertex_index += 1;
+                    }
                 }
             }
 

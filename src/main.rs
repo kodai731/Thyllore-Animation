@@ -591,11 +591,12 @@ impl App {
             // アニメーション時間を更新
             if let Some(duration) = self.data.fbx_model.get_animation_duration(self.data.current_animation_index) {
                 // ループ再生
+                let prev_time = self.data.animation_time;
                 self.data.animation_time = elapsed % duration;
 
-                if self.frame % 60 == 0 {
-                    log!("Updating FBX animation: time={:.2}/{:.2}s", self.data.animation_time, duration);
-                }
+                // Log every frame for debugging
+                log!("Updating FBX animation: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
+                     self.data.animation_time, duration, elapsed, prev_time);
 
                 // アニメーションを適用
                 self.data.fbx_model.update_animation(self.data.current_animation_index, self.data.animation_time);

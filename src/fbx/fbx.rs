@@ -1368,6 +1368,53 @@ fn merge_duplicate_rotation_keys(keyframes: &[KeyFrame<Quaternion<f32>>]) -> Vec
         i = j;
     }
 
+    // 無効なキーフレームをフィルタリング
+    // - 負の時間
+    // - ゼロに近いクォータニオン（単位クォータニオン[0,0,0,1]や[1,0,0,0]以外で長さが非常に小さいもの）
+    merged.retain(|key| {
+        // 負の時間を除外
+        if key.time < 0.0 {
+            return false;
+        }
+
+        let quat = &key.value;
+        let len = (quat.s * quat.s + quat.v.x * quat.v.x + quat.v.y * quat.v.y + quat.v.z * quat.v.z).sqrt();
+
+        // クォータニオンの長さがゼロに近い場合、単位クォータニオンかチェック
+        if len < 0.1 {
+            // 単位クォータニオンかチェック（[1,0,0,0]または[0,0,0,1]）
+            let is_identity =
+                ((quat.s - 1.0).abs() < 0.01 && quat.v.x.abs() < 0.01 && quat.v.y.abs() < 0.01 && quat.v.z.abs() < 0.01) ||
+                ((quat.s).abs() < 0.01 && quat.v.x.abs() < 0.01 && quat.v.y.abs() < 0.01 && (quat.v.z - 1.0).abs() < 0.01);
+
+            // 単位クォータニオンで時間が0の場合のみ除外（初期姿勢として無効なデータ）
+            if is_identity && key.time.abs() < 0.01 {
+                return false;
+            }
+        }
+
+        true
+    });
+
+    // ループをスムーズにするため、最初のキーフレームをt=0.0にコピー
+    if !merged.is_empty() && merged[0].time > 0.01 {
+        let first_keyframe = merged[0].value;
+        merged.insert(0, KeyFrame {
+            time: 0.0,
+            value: first_keyframe,
+        });
+    }
+
+    // ループをスムーズにするため、最後のキーフレームも最初のキーフレームと同じ値にする
+    // アニメーションの最後でループの最初に戻る際のジャンプを防ぐ
+    if merged.len() >= 2 {
+        let first_value = merged[0].value;
+        let last_index = merged.len() - 1;
+
+        // 最後のキーフレームの値を最初のキーフレームの値で置き換える
+        merged[last_index].value = first_value;
+    }
+
     merged
 }
 

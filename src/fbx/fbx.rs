@@ -457,6 +457,31 @@ pub unsafe fn load_fbx(path: &str) -> anyhow::Result<(FbxModel)> {
                             }
                         }
                     }
+
+                    // マテリアルとテクスチャ情報を取得
+                    log!("=== Loading Material and Texture for mesh '{}' ===", mesh_name);
+                    for conn in mesh_obj.source_objects() {
+                        if let Some(material_obj) = conn.object_handle() {
+                            if material_obj.class() == "Material" {
+                                let material_name = material_obj.name().unwrap_or("Unknown").to_string();
+                                log!("  Found Material: {}", material_name);
+                                fbx_model.fbx_data[fbx_data_index].material_name = Some(material_name.clone());
+
+                                // マテリアルからテクスチャを検索
+                                for texture_conn in material_obj.source_objects() {
+                                    if let Some(texture_obj) = texture_conn.object_handle() {
+                                        if texture_obj.class() == "Texture" {
+                                            let texture_name = texture_obj.name().unwrap_or("Unknown").to_string();
+                                            log!("    Found Texture: {}", texture_name);
+
+                                            // テクスチャ名を保存（後でテクスチャファイルとマッチングする）
+                                            fbx_model.fbx_data[fbx_data_index].diffuse_texture = Some(texture_name);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1642,8 +1667,11 @@ pub struct FbxData {
     pub positions: Vec<Vector3<f32>>,        // ワールド座標の頂点位置（表示用）
     pub local_positions: Vec<Vector3<f32>>,  // ローカル座標の頂点位置（スキニング用）
     pub indices: Vec<u32>,
+    pub tex_coords: Vec<[f32; 2]>,           // UV座標
     pub clusters: Vec<ClusterInfo>,          // スキニング情報
     pub mesh_parts: Vec<MeshPart>,           // 個別メッシュパーツ（階層アニメーション用）
+    pub material_name: Option<String>,       // マテリアル名
+    pub diffuse_texture: Option<String>,     // Diffuseテクスチャパス
 }
 
 impl FbxData {
@@ -1652,8 +1680,11 @@ impl FbxData {
             positions: Vec::new(),
             local_positions: Vec::new(),
             indices: Vec::new(),
+            tex_coords: Vec::new(),
             clusters: Vec::new(),
             mesh_parts: Vec::new(),
+            material_name: None,
+            diffuse_texture: None,
         }
     }
 
@@ -1725,10 +1756,110 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
 
         let mut fbx_data = FbxData::new();
 
+        // Extract material and texture information
+        let material_index = mesh.material_index as usize;
+        log!("  Mesh {} uses material index: {}", mesh_idx, material_index);
+
+        if material_index < scene.materials.len() {
+            let material = &scene.materials[material_index];
+
+            // Debug: Log all material properties
+            log!("  Material has {} properties:", material.properties.len());
+            for (i, prop) in material.properties.iter().enumerate() {
+                match &prop.data {
+                    russimp::material::PropertyTypeInfo::String(s) => {
+                        log!("    Property {}: key='{}', semantic={:?}, data=String('{}')", i, prop.key, prop.semantic, s);
+                    }
+                    russimp::material::PropertyTypeInfo::FloatArray(arr) => {
+                        log!("    Property {}: key='{}', semantic={:?}, data=FloatArray(len={})", i, prop.key, prop.semantic, arr.len());
+                    }
+                    russimp::material::PropertyTypeInfo::IntegerArray(arr) => {
+                        log!("    Property {}: key='{}', semantic={:?}, data=IntegerArray(len={})", i, prop.key, prop.semantic, arr.len());
+                    }
+                    russimp::material::PropertyTypeInfo::Buffer(buf) => {
+                        log!("    Property {}: key='{}', semantic={:?}, data=Buffer(len={})", i, prop.key, prop.semantic, buf.len());
+                    }
+                }
+            }
+
+            // Debug: Log all texture types
+            log!("  Material has {} textures:", material.textures.len());
+            for (tex_type, texture) in &material.textures {
+                let texture_ref = texture.borrow();
+                log!("    Texture type: {:?}, filename: '{}'", tex_type, texture_ref.filename);
+            }
+
+            // Get material name from properties
+            for prop in &material.properties {
+                if prop.key.contains("?mat.name") || prop.key == "$mat.name" {
+                    if let russimp::material::PropertyTypeInfo::String(name_str) = &prop.data {
+                        fbx_data.material_name = Some(name_str.clone());
+                        log!("  Material name: {}", name_str);
+                        break;
+                    }
+                }
+            }
+
+            // Get diffuse texture (try multiple texture types)
+            let texture_types = [
+                russimp::material::TextureType::Diffuse,
+                russimp::material::TextureType::BaseColor,
+                russimp::material::TextureType::Ambient,
+            ];
+
+            for tex_type in &texture_types {
+                if let Some(texture) = material.textures.get(tex_type) {
+                    let texture_ref = texture.borrow();
+                    let texture_filename = texture_ref.filename.clone();
+                    fbx_data.diffuse_texture = Some(texture_filename.clone());
+                    log!("  Found texture ({:?}): {}", tex_type, texture_filename);
+                    break;
+                }
+            }
+
+            if fbx_data.diffuse_texture.is_none() {
+                log!("  No diffuse/basecolor/ambient texture found in FBX");
+
+                // Fallback: Try to infer texture filename from material name
+                // Pattern: MatI_Ride_FengHuang_01a -> Tex_Ride_FengHuang_01a_D_A.tga.png
+                if let Some(mat_name) = &fbx_data.material_name {
+                    if mat_name.starts_with("MatI_") {
+                        let texture_base = mat_name.replace("MatI_", "Tex_");
+                        let texture_filename = format!("{}_D_A.tga.png", texture_base);
+
+                        // Construct relative path from executable location
+                        let texture_path = format!("src/resources/phoenix-bird/textures/{}", texture_filename);
+
+                        fbx_data.diffuse_texture = Some(texture_path.clone());
+                        log!("  Inferred texture from material name: {}", texture_path);
+                    }
+                }
+            }
+        } else {
+            log!("  Warning: material_index {} out of bounds (scene has {} materials)",
+                 material_index, scene.materials.len());
+        }
+
         // Extract vertices
         for vertex in &mesh.vertices {
             fbx_data.positions.push(Vector3::new(vertex.x, vertex.y, vertex.z));
             fbx_data.local_positions.push(Vector3::new(vertex.x, vertex.y, vertex.z));
+        }
+
+        // Extract UV coordinates (texture_coords[0] is the first UV channel)
+        if !mesh.texture_coords.is_empty() && mesh.texture_coords[0].is_some() {
+            if let Some(ref uvs) = mesh.texture_coords[0] {
+                log!("Mesh {} has {} UV coordinates", mesh_idx, uvs.len());
+                for uv in uvs {
+                    fbx_data.tex_coords.push([uv.x, uv.y]);
+                }
+            }
+        } else {
+            log!("Mesh {} has no UV coordinates, using default [0.5, 0.5]", mesh_idx);
+            // Fallback: use default UV coordinates
+            for _ in 0..mesh.vertices.len() {
+                fbx_data.tex_coords.push([0.5, 0.5]);
+            }
         }
 
         // Extract indices (triangulated)

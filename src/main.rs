@@ -508,6 +508,7 @@ impl App {
             &data.grid_index_buffer,
             0,
             0,
+            0,  // data_index for grid (always 0)
         ));
 
         for i in 0..data.model_descriptor_set.rrdata.len() {
@@ -518,6 +519,7 @@ impl App {
                 &data.model_descriptor_set.rrdata[i].index_buffer,
                 0,
                 0,
+                i,  // data_index corresponds to rrdata index
             ));
         }
 

@@ -99,16 +99,24 @@ unsafe fn create_descriptor_sets(
     Allocate a descriptor set from a descriptor pool
     Bind the descriptor set during rendering
      */
-    let layouts = vec![rrdescriptor_set.descriptor_set_layout; rrswapchain.swapchain_images.len()]; //  create one descriptor set for each swapchain image, all with the same layout.
+    // Create descriptor sets for each rrdata and each swapchain image
+    // Total descriptor sets = rrdata.len() * swapchain_images.len()
+    let num_sets = rrswapchain.swapchain_images.len() * rrdescriptor_set.rrdata.len().max(1);
+    let layouts = vec![rrdescriptor_set.descriptor_set_layout; num_sets];
     println!("{}, {}", "layouts length", layouts.len());
     let info = vk::DescriptorSetAllocateInfo::builder()
         .descriptor_pool(rrdescriptor_set.descriptor_pool)
         .set_layouts(&layouts);
     rrdescriptor_set.descriptor_sets = rrdevice.device.allocate_descriptor_sets(&info)?;
 
-    for i in 0..rrswapchain.swapchain_images.len() {
-        for j in 0..rrdescriptor_set.rrdata.len() {
-            let rrdata = &rrdescriptor_set.rrdata[j];
+    // Update descriptor sets for each rrdata
+    for j in 0..rrdescriptor_set.rrdata.len() {
+        let rrdata = &rrdescriptor_set.rrdata[j];
+
+        for i in 0..rrswapchain.swapchain_images.len() {
+            // Calculate descriptor set index: j * swapchain_images.len() + i
+            let descriptor_set_index = j * rrswapchain.swapchain_images.len() + i;
+
             let info = vk::DescriptorBufferInfo::builder()
                 .buffer(rrdata.rruniform_buffers[i].buffer)
                 .offset(0)
@@ -118,7 +126,7 @@ unsafe fn create_descriptor_sets(
             let buffer_info = &[info];
 
             let ubo_write = vk::WriteDescriptorSet::builder()
-                .dst_set(rrdescriptor_set.descriptor_sets[i])
+                .dst_set(rrdescriptor_set.descriptor_sets[descriptor_set_index])
                 .dst_binding(0)
                 .dst_array_element(0) // Remember that descriptors can be arrays, so we also need to specify the first index in the array that we want to update
                 .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
@@ -132,7 +140,7 @@ unsafe fn create_descriptor_sets(
                 let image_info = &[info];
 
                 let sampler_write = vk::WriteDescriptorSet::builder()
-                    .dst_set(rrdescriptor_set.descriptor_sets[i])
+                    .dst_set(rrdescriptor_set.descriptor_sets[descriptor_set_index])
                     .dst_binding(1)
                     .dst_array_element(0)
                     .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)

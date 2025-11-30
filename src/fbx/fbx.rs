@@ -1410,7 +1410,7 @@ fn merge_duplicate_rotation_keys(keyframes: &[KeyFrame<Quaternion<f32>>]) -> Vec
             // 単位クォータニオンかチェック（[1,0,0,0]または[0,0,0,1]）
             let is_identity =
                 ((quat.s - 1.0).abs() < 0.01 && quat.v.x.abs() < 0.01 && quat.v.y.abs() < 0.01 && quat.v.z.abs() < 0.01) ||
-                ((quat.s).abs() < 0.01 && quat.v.x.abs() < 0.01 && quat.v.y.abs() < 0.01 && (quat.v.z - 1.0).abs() < 0.01);
+                    ((quat.s).abs() < 0.01 && quat.v.x.abs() < 0.01 && quat.v.y.abs() < 0.01 && (quat.v.z - 1.0).abs() < 0.01);
 
             // 単位クォータニオンで時間が0の場合のみ除外（初期姿勢として無効なデータ）
             if is_identity && key.time.abs() < 0.01 {
@@ -1831,7 +1831,7 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                         let texture_path = format!("src/resources/phoenix-bird/textures/{}", texture_filename);
 
                         fbx_data.diffuse_texture = Some(texture_path.clone());
-                        log!("  Inferred texture from material name: {}", texture_path);
+                        log!("  Inferred texture from material name: {} -> {}", mat_name, texture_path);
                     }
                 }
             }
@@ -1850,8 +1850,15 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
         if !mesh.texture_coords.is_empty() && mesh.texture_coords[0].is_some() {
             if let Some(ref uvs) = mesh.texture_coords[0] {
                 log!("Mesh {} has {} UV coordinates", mesh_idx, uvs.len());
+
+                // Log first 5 UV coordinates for debugging
+                for (i, uv) in uvs.iter().enumerate().take(5) {
+                    log!("  UV[{}]: ({:.4}, {:.4})", i, uv.x, uv.y);
+                }
+
                 for uv in uvs {
-                    fbx_data.tex_coords.push([uv.x, uv.y]);
+                    // Flip V coordinate (1.0 - v) for Vulkan
+                    fbx_data.tex_coords.push([uv.x, 1.0 - uv.y]);
                 }
             }
         } else {
@@ -2047,7 +2054,7 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                                     quat.w / quat_length,
                                     quat.x / quat_length,
                                     quat.y / quat_length,
-                                    quat.z / quat_length
+                                    quat.z / quat_length,
                                 )
                             } else {
                                 // Already normalized - cgmath Quaternion is (w, x, y, z)
@@ -2131,7 +2138,7 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                                     quat.w / quat_length,
                                     quat.x / quat_length,
                                     quat.y / quat_length,
-                                    quat.z / quat_length
+                                    quat.z / quat_length,
                                 )
                             } else {
                                 // Already normalized - cgmath Quaternion is (w, x, y, z)
@@ -2276,7 +2283,7 @@ fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel) {
     fn traverse_node(
         node: &russimp::node::Node,
         nodes: &mut HashMap<String, BoneNode>,
-        parent: Option<String>
+        parent: Option<String>,
     ) {
         let node_name = node.name.clone();
 

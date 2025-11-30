@@ -154,12 +154,16 @@ impl RRCommandBuffer {
                 0,
                 vk::IndexType::UINT32,
             );
+            // Calculate descriptor set index: data_index * swapchain_images.len() + frame_index
+            let swapchain_images_len = rrbind_info.rrdescriptor_set.descriptor_sets.len() /
+                rrbind_info.rrdescriptor_set.rrdata.len().max(1);
+            let descriptor_set_index = rrbind_info.data_index * swapchain_images_len + frame_index;
             rrdevice.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
                 rrbind_info.rrpipeline.pipeline_layout,
                 0,
-                &[rrbind_info.rrdescriptor_set.descriptor_sets[frame_index]],
+                &[rrbind_info.rrdescriptor_set.descriptor_sets[descriptor_set_index]],
                 &[],
             );
             rrdevice.device.cmd_draw_indexed(
@@ -203,6 +207,7 @@ pub struct RRBindInfo<'a> {
     pub rrindex_buffer: &'a RRIndexBuffer,
     pub offset_vertex: u32,
     pub offset_index: u32,
+    pub data_index: usize,  // Index of RRData within descriptor set (for multiple meshes)
 }
 
 impl<'a> RRBindInfo<'a> {
@@ -213,6 +218,7 @@ impl<'a> RRBindInfo<'a> {
         rrindex_buffer: &'a RRIndexBuffer,
         offset_vertex: u32,
         offset_index: u32,
+        data_index: usize,
     ) -> Self {
         Self {
             rrpipeline,
@@ -221,6 +227,7 @@ impl<'a> RRBindInfo<'a> {
             rrindex_buffer,
             offset_vertex,
             offset_index,
+            data_index,
         }
     }
 }

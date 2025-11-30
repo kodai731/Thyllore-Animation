@@ -354,6 +354,21 @@ struct AppData {
     current_animation_index: usize, // 現在再生中のアニメーションインデックス
 }
 
+// Helper function to load PNG images
+fn load_png_image(path: &str) -> Result<(Vec<u8>, u32, u32)> {
+    use std::fs::File;
+    use png;
+
+    let image_file = File::open(path)?;
+    let decoder = png::Decoder::new(image_file);
+    let mut reader = decoder.read_info()?;
+    let mut pixels = vec![0; reader.info().raw_bytes()];
+    reader.next_frame(&mut pixels)?;
+    let (width, height) = reader.info().size();
+
+    Ok((pixels, width, height))
+}
+
 impl App {
     unsafe fn create(window: &Window) -> Result<Self> {
         let loader = LibloadingLoader::new(LIBRARY)?;
@@ -493,6 +508,7 @@ impl App {
             &data.grid_index_buffer,
             0,
             0,
+            0,  // data_index for grid (always 0)
         ));
 
         for i in 0..data.model_descriptor_set.rrdata.len() {
@@ -503,6 +519,7 @@ impl App {
                 &data.model_descriptor_set.rrdata[i].index_buffer,
                 0,
                 0,
+                i,  // data_index corresponds to rrdata index
             ));
         }
 
@@ -591,11 +608,12 @@ impl App {
             // アニメーション時間を更新
             if let Some(duration) = self.data.fbx_model.get_animation_duration(self.data.current_animation_index) {
                 // ループ再生
+                let prev_time = self.data.animation_time;
                 self.data.animation_time = elapsed % duration;
 
-                if self.frame % 60 == 0 {
-                    log!("Updating FBX animation: time={:.2}/{:.2}s", self.data.animation_time, duration);
-                }
+                // Log every frame for debugging
+                log!("Updating FBX animation: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
+                     self.data.animation_time, duration, elapsed, prev_time);
 
                 // アニメーションを適用
                 self.data.fbx_model.update_animation(self.data.current_animation_index, self.data.animation_time);
@@ -1203,41 +1221,111 @@ impl App {
         }
 
         // fbx model
-        // write as fbx vertices and indices
-        let model_path_fbx = "src/resources/stickman/stickman_bin.fbx";
-        data.fbx_model = fbx::fbx::load_fbx(model_path_fbx)?;
-        data.model_descriptor_set.rrdata[0]
-            .vertex_data
-            .vertices
-            .clear();
-        data.model_descriptor_set.rrdata[0]
-            .vertex_data
-            .indices
-            .clear();
-        for position in &data.fbx_model.fbx_data[0].positions {
-            let vertex = vulkanr::data::Vertex::new(
-                Vec3::new(position.x, position.y, position.z),
-                Vec4::new(0.0, 1.0, 0.0, 1.0),
-                Vec2::new_array([0.0, 1.0]),
-            );
-            data.model_descriptor_set.rrdata[0]
-                .vertex_data
-                .vertices
-                .push(vertex);
+        // Clear existing gltf rrdata (we're replacing with FBX)
+        data.model_descriptor_set.rrdata.clear();
+
+        let model_path_fbx = "src/resources/phoenix-bird/source/fly.fbx";
+        // Use russimp-based loader for better compatibility
+        data.fbx_model = fbx::fbx::load_fbx_with_russimp(model_path_fbx)?;
+
+        // Create separate rrdata for each FBX mesh
+        for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
+            log!("Creating RRData for FBX mesh {}: {} vertices, texture: {:?}",
+                mesh_idx, fbx_data.positions.len(), fbx_data.diffuse_texture);
+
+            let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain);
+
+            // Load texture for this mesh
+            if let Some(texture_path) = &fbx_data.diffuse_texture {
+                log!("Loading texture: {}", texture_path);
+                match load_png_image(texture_path) {
+                    Ok((image_data, width, height)) => {
+                        match create_texture_image_pixel(
+                            instance,
+                            rrdevice,
+                            data.rrcommand_pool.borrow_mut(),
+                            &image_data,
+                            width,
+                            height,
+                        ) {
+                            Ok((image, image_memory, mip_level)) => {
+                                rrdata.image = image;
+                                rrdata.image_memory = image_memory;
+                                rrdata.mip_level = mip_level;
+                                log!("Texture loaded successfully for mesh {}", mesh_idx);
+                            }
+                            Err(e) => {
+                                log!("Failed to create texture image for mesh {}: {}", mesh_idx, e);
+                                // Fall back to white texture
+                                (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
+                                    instance,
+                                    rrdevice,
+                                    data.rrcommand_pool.borrow_mut(),
+                                    &vec![255u8, 255, 255, 255],
+                                    1,
+                                    1,
+                                )?;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log!("Failed to load texture file {}: {}", texture_path, e);
+                        // Fall back to white texture
+                        (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
+                            instance,
+                            rrdevice,
+                            data.rrcommand_pool.borrow_mut(),
+                            &vec![255u8, 255, 255, 255],
+                            1,
+                            1,
+                        )?;
+                    }
+                }
+            } else {
+                log!("No texture specified for mesh {}, using white", mesh_idx);
+                // Use white texture as fallback
+                (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
+                    instance,
+                    rrdevice,
+                    data.rrcommand_pool.borrow_mut(),
+                    &vec![255u8, 255, 255, 255],
+                    1,
+                    1,
+                )?;
+            }
+
+            // Create vertex data
+            rrdata.vertex_data = VertexData::default();
+            for (i, position) in fbx_data.positions.iter().enumerate() {
+                // Get UV coordinates (or use default if index out of bounds)
+                let uv = if i < fbx_data.tex_coords.len() {
+                    fbx_data.tex_coords[i]
+                } else {
+                    [0.5, 0.5]
+                };
+
+                let vertex = vulkanr::data::Vertex::new(
+                    Vec3::new(position.x, position.y, position.z),
+                    Vec4::new(1.0, 1.0, 1.0, 1.0),  // White color for proper texturing
+                    Vec2::new_array(uv),             // Use actual UV coordinates
+                );
+                rrdata.vertex_data.vertices.push(vertex);
+            }
+
+            // Set indices
+            rrdata.vertex_data.indices = fbx_data.indices.clone();
+
+            data.model_descriptor_set.rrdata.push(rrdata);
         }
-        data.model_descriptor_set.rrdata[0]
-            .vertex_data
-            .indices
-            .extend(&data.fbx_model.fbx_data[0].indices);
 
         // アニメーションがあれば自動再生を開始
         if data.fbx_model.animation_count() > 0 {
             data.animation_playing = true;
             data.current_animation_index = 0;
             data.animation_time = 0.0;
-            log::info!("FBX animation loaded: {} animations", data.fbx_model.animation_count());
+            log!("FBX animation loaded: {} animations", data.fbx_model.animation_count());
             if let Some(duration) = data.fbx_model.get_animation_duration(0) {
-                log::info!("Animation 0 duration: {} seconds", duration);
+                log!("Animation 0 duration: {} seconds", duration);
             }
         }
 
@@ -1281,30 +1369,31 @@ impl App {
             return Ok(());
         }
 
-        // FBXモデルは最初のrrdataに格納されている想定
-        if let Some(rrdata) = data.model_descriptor_set.rrdata.get_mut(0) {
-            let vertex_data = &mut rrdata.vertex_data;
-            let fbx_positions = &data.fbx_model.fbx_data[0].positions;
+        // Update each FBX mesh's vertex buffer
+        for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
+            if let Some(rrdata) = data.model_descriptor_set.rrdata.get_mut(mesh_idx) {
+                let vertex_data = &mut rrdata.vertex_data;
 
-            // 頂点位置を更新
-            for (i, pos) in fbx_positions.iter().enumerate() {
-                if i < vertex_data.vertices.len() {
-                    vertex_data.vertices[i].pos.x = pos.x;
-                    vertex_data.vertices[i].pos.y = pos.y;
-                    vertex_data.vertices[i].pos.z = pos.z;
+                // Update vertex positions from fbx_data
+                for (vertex_idx, pos) in fbx_data.positions.iter().enumerate() {
+                    if vertex_idx < vertex_data.vertices.len() {
+                        vertex_data.vertices[vertex_idx].pos.x = pos.x;
+                        vertex_data.vertices[vertex_idx].pos.y = pos.y;
+                        vertex_data.vertices[vertex_idx].pos.z = pos.z;
+                    }
                 }
-            }
 
-            // 頂点バッファを更新
-            if let Err(e) = rrdata.vertex_buffer.update(
-                instance,
-                rrdevice,
-                &data.rrcommand_pool,
-                (size_of::<vulkanr::data::Vertex>() * vertex_data.vertices.len()) as vk::DeviceSize,
-                vertex_data.vertices.as_ptr() as *const c_void,
-                vertex_data.vertices.len(),
-            ) {
-                eprintln!("Failed to update FBX vertex buffer: {}", e);
+                // Update vertex buffer for this mesh
+                if let Err(e) = rrdata.vertex_buffer.update(
+                    instance,
+                    rrdevice,
+                    &data.rrcommand_pool,
+                    (size_of::<vulkanr::data::Vertex>() * vertex_data.vertices.len()) as vk::DeviceSize,
+                    vertex_data.vertices.as_ptr() as *const c_void,
+                    vertex_data.vertices.len(),
+                ) {
+                    eprintln!("Failed to update FBX vertex buffer for mesh {}: {}", mesh_idx, e);
+                }
             }
         }
 

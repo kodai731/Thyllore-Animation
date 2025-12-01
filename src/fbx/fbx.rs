@@ -1841,9 +1841,14 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
         }
 
         // Extract vertices
-        for vertex in &mesh.vertices {
+        for (i, vertex) in mesh.vertices.iter().enumerate() {
             fbx_data.positions.push(Vector3::new(vertex.x, vertex.y, vertex.z));
             fbx_data.local_positions.push(Vector3::new(vertex.x, vertex.y, vertex.z));
+
+            // Debug: Log first 3 vertices to check if positions are correct
+            if i < 3 {
+                log!("  Vertex[{}]: ({:.3}, {:.3}, {:.3})", i, vertex.x, vertex.y, vertex.z);
+            }
         }
 
         // Extract UV coordinates (texture_coords[0] is the first UV channel)
@@ -2269,8 +2274,38 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
         }
     }
 
-    // Build bone hierarchy
-    build_bone_hierarchy_from_scene(&scene, &mut fbx_model);
+    // Build bone hierarchy and get mesh-to-node mapping
+    let mesh_to_node = build_bone_hierarchy_from_scene(&scene, &mut fbx_model);
+
+    // Apply initial node transform to meshes (for hierarchy animation models without clusters)
+    log!("Applying initial node transforms to meshes...");
+    for (mesh_idx, fbx_data) in fbx_model.fbx_data.iter_mut().enumerate() {
+        // Only apply transform if mesh has no clusters (hierarchy animation)
+        if fbx_data.clusters.is_empty() {
+            if let Some(node_name) = mesh_to_node.get(&mesh_idx) {
+                log!("  Mesh {} belongs to node: {}", mesh_idx, node_name);
+
+                // Calculate global transform for this node
+                let global_transform = compute_global_node_transform(&fbx_model.nodes, node_name);
+
+                // Transform all vertices
+                for i in 0..fbx_data.positions.len() {
+                    let local_pos = Point3::new(
+                        fbx_data.local_positions[i].x,
+                        fbx_data.local_positions[i].y,
+                        fbx_data.local_positions[i].z,
+                    );
+                    let world_pos = global_transform.transform_point(local_pos);
+                    fbx_data.positions[i] = Vector3::new(world_pos.x, world_pos.y, world_pos.z);
+                }
+
+                log!("    Applied transform from node: {} (first vertex: {:?})",
+                     node_name, fbx_data.positions.get(0));
+            } else {
+                log!("  Mesh {} has no associated node (using identity transform)", mesh_idx);
+            }
+        }
+    }
 
     log!("=== FBX loading complete: {} meshes, {} animations ===",
          fbx_model.fbx_data.len(), fbx_model.animations.len());
@@ -2278,8 +2313,8 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
     Ok(fbx_model)
 }
 
-/// Build bone hierarchy from russimp scene
-fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel) {
+/// Build bone hierarchy from russimp scene and return mesh-to-node mapping
+fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel) -> HashMap<usize, String> {
     fn traverse_node(
         node: &russimp::node::Node,
         nodes: &mut HashMap<String, BoneNode>,
@@ -2328,6 +2363,38 @@ fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel) {
         }
     }
 
+    // Build mesh-to-node mapping (which node each mesh belongs to)
+    fn build_mesh_node_mapping(
+        node: &russimp::node::Node,
+        mesh_to_node: &mut HashMap<usize, String>,
+        parent_transform: Matrix4<f32>,
+    ) {
+        let node_name = node.name.clone();
+
+        // Convert russimp matrix to cgmath Matrix4
+        let transform = node.transformation;
+        let local_transform = Matrix4::new(
+            transform.a1, transform.b1, transform.c1, transform.d1,
+            transform.a2, transform.b2, transform.c2, transform.d2,
+            transform.a3, transform.b3, transform.c3, transform.d3,
+            transform.a4, transform.b4, transform.c4, transform.d4,
+        );
+
+        // Calculate global transform for this node
+        let global_transform = parent_transform * local_transform;
+
+        // Map all meshes in this node to this node name
+        for &mesh_idx in &node.meshes {
+            mesh_to_node.insert(mesh_idx as usize, node_name.clone());
+            log!("  Mesh {} belongs to node: {}", mesh_idx, node_name);
+        }
+
+        // Recursively process children
+        for child in node.children.borrow().iter() {
+            build_mesh_node_mapping(child, mesh_to_node, global_transform);
+        }
+    }
+
     if let Some(root) = &scene.root {
         traverse_node(root, &mut fbx_model.nodes, None);
         log!("Built bone hierarchy with {} nodes", fbx_model.nodes.len());
@@ -2355,7 +2422,35 @@ fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel) {
         if let Some(b_spine) = fbx_model.nodes.get("B_Spine") {
             log!("DEBUG: Bone B_Spine - parent: {:?}", b_spine.parent);
         }
+
+        // Build mesh-to-node mapping
+        let mut mesh_to_node = HashMap::new();
+        log!("Building mesh-to-node mapping...");
+        build_mesh_node_mapping(root, &mut mesh_to_node, Matrix4::identity());
+        log!("Built mesh-to-node mapping with {} meshes", mesh_to_node.len());
+
+        mesh_to_node
+    } else {
+        HashMap::new()
     }
+}
+
+/// Compute global transform for a node by traversing up the hierarchy
+fn compute_global_node_transform(nodes: &HashMap<String, BoneNode>, node_name: &str) -> Matrix4<f32> {
+    let mut transform = Matrix4::identity();
+    let mut current_name = Some(node_name.to_string());
+
+    // Traverse up the hierarchy and accumulate transforms
+    while let Some(name) = current_name {
+        if let Some(node) = nodes.get(&name) {
+            transform = node.local_transform * transform;
+            current_name = node.parent.clone();
+        } else {
+            break;
+        }
+    }
+
+    transform
 }
 
 /// Convert quaternion to Euler angles (XYZ order, in radians, then converted to degrees)

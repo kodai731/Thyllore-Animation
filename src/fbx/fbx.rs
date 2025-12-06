@@ -84,101 +84,101 @@ fn get_local_transform(model: &ModelHandle) -> Matrix4<f32> {
         log!("  DEBUG: Testing rotation patterns for {}:", mesh_name);
         log!("    FBX Rotation: {:?}", rotation);
 
-            // Test coordinate system conversion
-            // FBX might have Z-up to Y-up conversion baked in
-            // Try converting rotation from Z-up to Y-up (or vice versa)
+        // Test coordinate system conversion
+        // FBX might have Z-up to Y-up conversion baked in
+        // Try converting rotation from Z-up to Y-up (or vice versa)
 
-            // Pattern 1: Direct use of FBX rotation
-            let rx1 = Matrix4::from_angle_x(Rad((rotation[0] as f32).to_radians()));
-            let ry1 = Matrix4::from_angle_y(Rad((rotation[1] as f32).to_radians()));
-            let rz1 = Matrix4::from_angle_z(Rad((rotation[2] as f32).to_radians()));
-            let s = Matrix4::from_nonuniform_scale(scaling[0], scaling[1], scaling[2]);
-            let mat1 = rx1 * ry1 * rz1 * s;
-            log!("    Pattern 1 (X*Y*Z): [{:?}, {:?}, {:?}]", mat1.x, mat1.y, mat1.z);
+        // Pattern 1: Direct use of FBX rotation
+        let rx1 = Matrix4::from_angle_x(Rad((rotation[0] as f32).to_radians()));
+        let ry1 = Matrix4::from_angle_y(Rad((rotation[1] as f32).to_radians()));
+        let rz1 = Matrix4::from_angle_z(Rad((rotation[2] as f32).to_radians()));
+        let s = Matrix4::from_nonuniform_scale(scaling[0], scaling[1], scaling[2]);
+        let mat1 = rx1 * ry1 * rz1 * s;
+        log!("    Pattern 1 (X*Y*Z): [{:?}, {:?}, {:?}]", mat1.x, mat1.y, mat1.z);
 
-            // Pattern 2: Negate Y rotation (convert between coordinate systems)
-            let rx2 = Matrix4::from_angle_x(Rad((rotation[0] as f32).to_radians()));
-            let ry2 = Matrix4::from_angle_y(Rad((-rotation[1] as f32).to_radians()));
-            let rz2 = Matrix4::from_angle_z(Rad((rotation[2] as f32).to_radians()));
-            let mat2 = rx2 * ry2 * rz2 * s;
-            log!("    Pattern 2 (X*-Y*Z): [{:?}, {:?}, {:?}]", mat2.x, mat2.y, mat2.z);
+        // Pattern 2: Negate Y rotation (convert between coordinate systems)
+        let rx2 = Matrix4::from_angle_x(Rad((rotation[0] as f32).to_radians()));
+        let ry2 = Matrix4::from_angle_y(Rad((-rotation[1] as f32).to_radians()));
+        let rz2 = Matrix4::from_angle_z(Rad((rotation[2] as f32).to_radians()));
+        let mat2 = rx2 * ry2 * rz2 * s;
+        log!("    Pattern 2 (X*-Y*Z): [{:?}, {:?}, {:?}]", mat2.x, mat2.y, mat2.z);
 
-            // Pattern 3: Negate Z rotation
-            let rx3 = Matrix4::from_angle_x(Rad((rotation[0] as f32).to_radians()));
-            let ry3 = Matrix4::from_angle_y(Rad((rotation[1] as f32).to_radians()));
-            let rz3 = Matrix4::from_angle_z(Rad((-rotation[2] as f32).to_radians()));
-            let mat3 = rx3 * ry3 * rz3 * s;
-            log!("    Pattern 3 (X*Y*-Z): [{:?}, {:?}, {:?}]", mat3.x, mat3.y, mat3.z);
+        // Pattern 3: Negate Z rotation
+        let rx3 = Matrix4::from_angle_x(Rad((rotation[0] as f32).to_radians()));
+        let ry3 = Matrix4::from_angle_y(Rad((rotation[1] as f32).to_radians()));
+        let rz3 = Matrix4::from_angle_z(Rad((-rotation[2] as f32).to_radians()));
+        let mat3 = rx3 * ry3 * rz3 * s;
+        log!("    Pattern 3 (X*Y*-Z): [{:?}, {:?}, {:?}]", mat3.x, mat3.y, mat3.z);
 
-            // Pattern 4: Swap Y and Z components
-            let converted_rot = [rotation[0], rotation[2], rotation[1]]; // Swap Y and Z
-            let rx4 = Matrix4::from_angle_x(Rad((converted_rot[0] as f32).to_radians()));
-            let ry4 = Matrix4::from_angle_y(Rad((converted_rot[1] as f32).to_radians()));
-            let rz4 = Matrix4::from_angle_z(Rad((converted_rot[2] as f32).to_radians()));
-            let mat4 = rx4 * ry4 * rz4 * s;
-            log!("    Pattern 4 (Swap Y<->Z): [{:?}, {:?}, {:?}]", mat4.x, mat4.y, mat4.z);
+        // Pattern 4: Swap Y and Z components
+        let converted_rot = [rotation[0], rotation[2], rotation[1]]; // Swap Y and Z
+        let rx4 = Matrix4::from_angle_x(Rad((converted_rot[0] as f32).to_radians()));
+        let ry4 = Matrix4::from_angle_y(Rad((converted_rot[1] as f32).to_radians()));
+        let rz4 = Matrix4::from_angle_z(Rad((converted_rot[2] as f32).to_radians()));
+        let mat4 = rx4 * ry4 * rz4 * s;
+        log!("    Pattern 4 (Swap Y<->Z): [{:?}, {:?}, {:?}]", mat4.x, mat4.y, mat4.z);
 
-            // Pattern 5: Apply Z-up to Y-up coordinate conversion AFTER rotation
-            // Conversion matrix: swap Y and Z, negate new Z
-            let mat1_copy = mat1.clone();
-            let zup_to_yup = Matrix4::new(
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, 1.0, 0.0,
-                0.0, -1.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 1.0,
-            );
-            let mat5 = zup_to_yup * mat1_copy;
-            log!("    Pattern 5 (Z-up->Y-up * X*Y*Z): [{:?}, {:?}, {:?}]", mat5.x, mat5.y, mat5.z);
+        // Pattern 5: Apply Z-up to Y-up coordinate conversion AFTER rotation
+        // Conversion matrix: swap Y and Z, negate new Z
+        let mat1_copy = mat1.clone();
+        let zup_to_yup = Matrix4::new(
+            1.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+            0.0, -1.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 1.0,
+        );
+        let mat5 = zup_to_yup * mat1_copy;
+        log!("    Pattern 5 (Z-up->Y-up * X*Y*Z): [{:?}, {:?}, {:?}]", mat5.x, mat5.y, mat5.z);
 
-            // Pattern 6: Apply Z-up to Y-up coordinate conversion BEFORE rotation
-            let mat6 = mat1_copy * zup_to_yup;
-            log!("    Pattern 6 (X*Y*Z * Z-up->Y-up): [{:?}, {:?}, {:?}]", mat6.x, mat6.y, mat6.z);
+        // Pattern 6: Apply Z-up to Y-up coordinate conversion BEFORE rotation
+        let mat6 = mat1_copy * zup_to_yup;
+        log!("    Pattern 6 (X*Y*Z * Z-up->Y-up): [{:?}, {:?}, {:?}]", mat6.x, mat6.y, mat6.z);
 
-            // Pattern 7: Z-up to Y-up with X negation
-            let zup_to_yup_negx = Matrix4::new(
-                -1.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, 1.0, 0.0,
-                0.0, -1.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 1.0,
-            );
-            let mat7 = zup_to_yup_negx * mat1_copy;
-            log!("    Pattern 7 (Z-up->Y-up with -X): [{:?}, {:?}, {:?}]", mat7.x, mat7.y, mat7.z);
+        // Pattern 7: Z-up to Y-up with X negation
+        let zup_to_yup_negx = Matrix4::new(
+            -1.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+            0.0, -1.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 1.0,
+        );
+        let mat7 = zup_to_yup_negx * mat1_copy;
+        log!("    Pattern 7 (Z-up->Y-up with -X): [{:?}, {:?}, {:?}]", mat7.x, mat7.y, mat7.z);
 
-            // Pattern 8: Different Z-up to Y-up conversion
-            let zup_to_yup_alt = Matrix4::new(
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, -1.0, 0.0,
-                0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 1.0,
-            );
-            let mat8 = zup_to_yup_alt * mat1_copy;
-            log!("    Pattern 8 (Alt Z-up->Y-up): [{:?}, {:?}, {:?}]", mat8.x, mat8.y, mat8.z);
+        // Pattern 8: Different Z-up to Y-up conversion
+        let zup_to_yup_alt = Matrix4::new(
+            1.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, -1.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 1.0,
+        );
+        let mat8 = zup_to_yup_alt * mat1_copy;
+        log!("    Pattern 8 (Alt Z-up->Y-up): [{:?}, {:?}, {:?}]", mat8.x, mat8.y, mat8.z);
 
-            // Pattern 9: Correct Z*Y*X rotation order (what we now use)
-            let mat9 = rz1 * ry1 * rx1 * s;
-            log!("    Pattern 9 (Z*Y*X): [{:?}, {:?}, {:?}]", mat9.x, mat9.y, mat9.z);
+        // Pattern 9: Correct Z*Y*X rotation order (what we now use)
+        let mat9 = rz1 * ry1 * rx1 * s;
+        log!("    Pattern 9 (Z*Y*X): [{:?}, {:?}, {:?}]", mat9.x, mat9.y, mat9.z);
 
-            // Pattern 10: Z*Y*X with Z-up to Y-up conversion
-            let mat10_conv = zup_to_yup * mat9;
-            log!("    Pattern 10 (Z-up->Y-up * Z*Y*X): [{:?}, {:?}, {:?}]", mat10_conv.x, mat10_conv.y, mat10_conv.z);
+        // Pattern 10: Z*Y*X with Z-up to Y-up conversion
+        let mat10_conv = zup_to_yup * mat9;
+        log!("    Pattern 10 (Z-up->Y-up * Z*Y*X): [{:?}, {:?}, {:?}]", mat10_conv.x, mat10_conv.y, mat10_conv.z);
 
-            // Pattern 11-16: More systematic testing
-            // Blender col0=[0, 0, -37.549], col1=[-37.549, 0, 0], col2=[0, 37.549, 0]
-            // Pattern 9 col0=[~0, ~0, 37.549], col1=[-37.549, ~0, ~0], col2=[0, -37.549, ~0]
-            // Need to negate Z component of col0 and Y component of col2
+        // Pattern 11-16: More systematic testing
+        // Blender col0=[0, 0, -37.549], col1=[-37.549, 0, 0], col2=[0, 37.549, 0]
+        // Pattern 9 col0=[~0, ~0, 37.549], col1=[-37.549, ~0, ~0], col2=[0, -37.549, ~0]
+        // Need to negate Z component of col0 and Y component of col2
 
-            let test_matrices = [
-                ("Rot 180° around Y", Matrix4::new(-1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
-                ("Rot 90° around X", Matrix4::new(1.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
-                ("Rot -90° around X", Matrix4::new(1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
-                ("Rot 90° around Z", Matrix4::new(0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
-                ("Rot -90° around Z", Matrix4::new(0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
-                ("Negate X and Z", Matrix4::new(-1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
-            ];
-            for (idx, (name, test_mat)) in test_matrices.iter().enumerate() {
-                let result = *test_mat * mat9;
-                log!("    Pattern {} ({}): [{:?}, {:?}, {:?}]", 11 + idx, name, result.x, result.y, result.z);
-            }
+        let test_matrices = [
+            ("Rot 180° around Y", Matrix4::new(-1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
+            ("Rot 90° around X", Matrix4::new(1.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
+            ("Rot -90° around X", Matrix4::new(1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
+            ("Rot 90° around Z", Matrix4::new(0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
+            ("Rot -90° around Z", Matrix4::new(0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
+            ("Negate X and Z", Matrix4::new(-1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
+        ];
+        for (idx, (name, test_mat)) in test_matrices.iter().enumerate() {
+            let result = *test_mat * mat9;
+            log!("    Pattern {} ({}): [{:?}, {:?}, {:?}]", 11 + idx, name, result.x, result.y, result.z);
+        }
 
         log!("    Note: Compare with expected values from your 3D editor");
     }

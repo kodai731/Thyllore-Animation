@@ -70,19 +70,19 @@ fn get_local_transform(model: &ModelHandle) -> Matrix4<f32> {
         rotation_order
     );
 
-    if mesh_name.starts_with("NurbsPath") {
-        log!("  {} additional properties:", mesh_name);
-        log!("    PreRotation: {:?}", pre_rotation);
-        log!("    PostRotation: {:?}", post_rotation);
-        log!("    GeometricTranslation: {:?}", geometric_translation);
-        log!("    GeometricRotation: {:?}", geometric_rotation);
-        log!("    GeometricScaling: {:?}", geometric_scaling);
+    // Log additional properties for all meshes (useful for debugging)
+    log!("  {} additional properties:", mesh_name);
+    log!("    PreRotation: {:?}", pre_rotation);
+    log!("    PostRotation: {:?}", post_rotation);
+    log!("    GeometricTranslation: {:?}", geometric_translation);
+    log!("    GeometricRotation: {:?}", geometric_rotation);
+    log!("    GeometricScaling: {:?}", geometric_scaling);
 
-        // DEBUG: Test all rotation orders to find which matches Blender
-        if mesh_name == "NurbsPath" {
-            log!("  DEBUG: Testing rotations for NurbsPath:");
-            log!("    FBX Rotation: {:?}", rotation);
-            log!("    Blender World Rotation: (-90, 90, 0)");
+    // Optional: Test rotation patterns for debugging coordinate system issues
+    // This can be enabled/disabled via environment variable or removed entirely
+    if std::env::var("FBX_DEBUG_ROTATION").is_ok() {
+        log!("  DEBUG: Testing rotation patterns for {}:", mesh_name);
+        log!("    FBX Rotation: {:?}", rotation);
 
             // Test coordinate system conversion
             // FBX might have Z-up to Y-up conversion baked in
@@ -180,9 +180,7 @@ fn get_local_transform(model: &ModelHandle) -> Matrix4<f32> {
                 log!("    Pattern {} ({}): [{:?}, {:?}, {:?}]", 11 + idx, name, result.x, result.y, result.z);
             }
 
-            log!("    Blender expected (columns): col0=[0, 0, -37.549], col1=[-37.549, 0, 0], col2=[0, 37.549, 0]");
-            log!("    Current implementation will use Pattern 9 (Z*Y*X)");
-        }
+        log!("    Note: Compare with expected values from your 3D editor");
     }
 
     // Build transform matrix: T * R * S

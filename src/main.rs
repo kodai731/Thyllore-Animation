@@ -673,30 +673,62 @@ impl App {
         self.data.images_in_flight[image_index as usize] = self.data.in_flight_fences[self.frame];
 
         // FBXアニメーション更新
-        if self.data.animation_playing && self.data.fbx_model.animation_count() > 0 {
-            // 経過時間を取得
-            let elapsed = self.start.elapsed().as_secs_f32();
+        if self.data.fbx_model.animation_count() > 0 {
+            if !self.data.animation_playing {
+                // アニメーションが一時停止中の場合のみ、最初のフレームでログを出力
+                static mut LOGGED_PAUSED: bool = false;
+                unsafe {
+                    if !LOGGED_PAUSED {
+                        log!("FBX animation is paused (animation_playing=false)");
+                        LOGGED_PAUSED = true;
+                    }
+                }
+            } else {
+                // 経過時間を取得
+                let elapsed = self.start.elapsed().as_secs_f32();
 
-            // アニメーション時間を更新
-            if let Some(duration) = self.data.fbx_model.get_animation_duration(self.data.current_animation_index) {
-                // Static pose (duration == 0) or animated
-                if duration > 0.0 {
-                    // ループ再生（アニメーション）
-                    let prev_time = self.data.animation_time;
-                    self.data.animation_time = elapsed % duration;
+                // アニメーション時間を更新
+                if let Some(duration) = self.data.fbx_model.get_animation_duration(self.data.current_animation_index) {
+                    // Static pose (duration == 0) or animated
+                    if duration > 0.0 {
+                        // ループ再生（アニメーション）
+                        let prev_time = self.data.animation_time;
+                        self.data.animation_time = elapsed % duration;
 
-                    // Log every frame for debugging
-                    log!("Updating FBX animation: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
-                         self.data.animation_time, duration, elapsed, prev_time);
+                        // Log every 10 frames for debugging (avoid log spam)
+                        static mut FRAME_COUNT: u32 = 0;
+                        unsafe {
+                            FRAME_COUNT += 1;
+                            if FRAME_COUNT % 10 == 0 {
+                                log!("Updating FBX animation: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
+                                     self.data.animation_time, duration, elapsed, prev_time);
+                            }
+                        }
 
-                    // アニメーションを適用
-                    self.data.fbx_model.update_animation(self.data.current_animation_index, self.data.animation_time);
+                        // アニメーションを適用
+                        self.data.fbx_model.update_animation(self.data.current_animation_index, self.data.animation_time);
 
-                    // 頂点バッファを更新
-                    Self::update_fbx_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
+                        // 頂点バッファを更新
+                        Self::update_fbx_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
+                    } else {
+                        // Static pose (duration == 0): keep time at 0, no need to update every frame
+                        // Initial pose was already applied in load_model_from_path
+                        static mut LOGGED_STATIC: bool = false;
+                        unsafe {
+                            if !LOGGED_STATIC {
+                                log!("FBX animation has duration=0 (static pose)");
+                                LOGGED_STATIC = true;
+                            }
+                        }
+                    }
                 } else {
-                    // Static pose (duration == 0): keep time at 0, no need to update every frame
-                    // Initial pose was already applied in load_model_from_path
+                    static mut LOGGED_NO_DURATION: bool = false;
+                    unsafe {
+                        if !LOGGED_NO_DURATION {
+                            log!("FBX animation has no duration (get_animation_duration returned None)");
+                            LOGGED_NO_DURATION = true;
+                        }
+                    }
                 }
             }
         }
@@ -1637,7 +1669,17 @@ impl App {
         // Load the model based on file type
         if is_fbx {
             log!("Loading FBX model...");
-            data.fbx_model = fbx::fbx::load_fbx_with_russimp(model_path)?;
+            // Use fbxcel for stickman_bin.fbx (russimp doesn't read its animation correctly)
+            // Use russimp for other FBX files (better compatibility)
+            if model_path.contains("stickman_bin.fbx") {
+                log!("Using fbxcel loader for stickman_bin.fbx");
+                unsafe {
+                    data.fbx_model = fbx::fbx::load_fbx(model_path)?;
+                }
+            } else {
+                log!("Using russimp loader");
+                data.fbx_model = fbx::fbx::load_fbx_with_russimp(model_path)?;
+            }
 
             // Create separate rrdata for each FBX mesh
             for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {

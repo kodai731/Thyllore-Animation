@@ -1647,24 +1647,11 @@ impl App {
             return Err(anyhow!("Unsupported file format. Only FBX and glTF/GLB are supported."));
         }
 
-        // Clean up existing model data
+        // Clean up existing model data (this will free descriptor sets and reuse the pool)
         log!("Cleaning up existing model data...");
         data.model_descriptor_set.delete_data(rrdevice);
         data.model_descriptor_set.rrdata.clear();
-
-        // Recreate descriptor set with larger pool size
-        log!("Recreating descriptor pool and layout for new model...");
-        if data.model_descriptor_set.descriptor_pool != vk::DescriptorPool::null() {
-            rrdevice.device.destroy_descriptor_pool(data.model_descriptor_set.descriptor_pool, None);
-        }
-        if data.model_descriptor_set.descriptor_set_layout != vk::DescriptorSetLayout::null() {
-            rrdevice.device.destroy_descriptor_set_layout(data.model_descriptor_set.descriptor_set_layout, None);
-        }
-        data.model_descriptor_set.descriptor_sets.clear();
-
-        // Create new descriptor set with updated pool size (supports up to 30 meshes)
-        data.model_descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
-        log!("Created new descriptor set");
+        log!("Cleared existing data, descriptor pool will be reused");
 
         // Load the model based on file type
         if is_fbx {

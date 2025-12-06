@@ -1707,8 +1707,11 @@ fn merge_duplicate_rotation_keys(keyframes: &[KeyFrame<Quaternion<f32>>]) -> Vec
     }
 
     // まず時間でソート（FBXのキーフレームは時系列順ではない場合がある）
+    // NaN値がある場合はEqualとして扱う
     let mut sorted_keyframes = keyframes.to_vec();
-    sorted_keyframes.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
+    sorted_keyframes.sort_by(|a, b| {
+        a.time.partial_cmp(&b.time).unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     let mut merged = Vec::new();
     let time_threshold = 0.001; // 1ms以内は同じ時間とみなす

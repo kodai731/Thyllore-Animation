@@ -32,6 +32,16 @@ impl RRDescriptorSet {
     }
 
     pub unsafe fn delete_data(&mut self, rrdevice: &RRDevice) {
+        // Free allocated descriptor sets before deleting data
+        if !self.descriptor_sets.is_empty() {
+            rrdevice.device.free_descriptor_sets(
+                self.descriptor_pool,
+                &self.descriptor_sets,
+            ).ok(); // Ignore errors if pool was already reset
+            self.descriptor_sets.clear();
+        }
+
+        // Delete rrdata resources
         for i in 0..self.rrdata.len() {
             self.rrdata[i].delete(rrdevice);
         }
@@ -84,7 +94,8 @@ unsafe fn create_descriptor_pool(
     let pool_sizes = &[ubo_size, sampler_size];
     let info = vk::DescriptorPoolCreateInfo::builder()
         .pool_sizes(pool_sizes)
-        .max_sets(descriptor_count);
+        .max_sets(descriptor_count)
+        .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET); // Allow individual descriptor set freeing
     rrdescriptor_set.descriptor_pool = rrdevice.device.create_descriptor_pool(&info, None)?;
 
     Ok(())

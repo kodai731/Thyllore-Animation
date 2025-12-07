@@ -434,7 +434,7 @@ unsafe fn load_gltf(gltf_model: &mut GltfModel, path: &str) {
 
     for scene in gltf.scenes() {
         for node in scene.nodes() {
-            process_node(&gltf, &buffers, &images, &node, gltf_model).unwrap();
+            process_node(&gltf, &buffers, &images, &node, gltf_model, &Matrix4::identity()).unwrap();
         }
     }
 
@@ -469,6 +469,7 @@ unsafe fn process_node(
     images: &Vec<gltf::image::Data>,
     node: &Node,
     gltf_model: &mut GltfModel,
+    parent_transform: &Matrix4<f32>,
 ) -> Result<()> {
     log!("Node {} {}", node.index(), node.name().unwrap());
     let mut rrnode = RRNode::default();
@@ -496,6 +497,10 @@ unsafe fn process_node(
         rrnode.children.push(child.index() as u16);
     }
 
+    // Calculate cumulative transform (parent * local)
+    let local_transform = mat4_from_array(rrnode.transform);
+    let cumulative_transform = parent_transform * local_transform;
+
     // meshes
     if let Some(mesh) = node.mesh() {
         log!("mesh found");
@@ -508,6 +513,15 @@ unsafe fn process_node(
             let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
             log!("Topology: {:?}", primitive.mode());
+
+            // Check if this primitive has joints (skinned mesh)
+            // Skinned meshes should not have node transforms applied to vertices
+            // since they will be transformed by joint matrices in the shader
+            let has_joints = reader.read_joints(0).is_some();
+            log!("Primitive has joints: {}", has_joints);
+
+            // Create a new GltfData for each primitive
+            let mut gltf_data = GltfData::default();
 
             // texture
             if let Some(material) = primitive
@@ -527,14 +541,11 @@ unsafe fn process_node(
                     width: width,
                     height: height,
                 };
-                let mut gltf_data = GltfData::default();
                 gltf_data.image_data.push(image_data);
-                gltf_model.gltf_data.push(gltf_data);
             }
 
-            if gltf_model.gltf_data.len() < 1 {
-                gltf_model.gltf_data.push(GltfData::default());
-            }
+            // Add the new GltfData to the model
+            gltf_model.gltf_data.push(gltf_data);
 
             let gltf_data_index = gltf_model.gltf_data.len() - 1;
             let gltf_data = gltf_model.gltf_data.last_mut().unwrap();
@@ -554,7 +565,18 @@ unsafe fn process_node(
                 for position in iter {
                     let mut vertex = Vertex::default();
                     vertex.index = gltf_data.vertices.len();
-                    let mut position_converted = position;
+
+                    // Apply cumulative transform to vertices of non-skinned meshes
+                    // Skinned meshes will be transformed by joint matrices in shader
+                    let transformed_position = if !has_joints {
+                        // Transform position from local space to world space
+                        let pos_vec4 = cumulative_transform * Vector4::new(position[0], position[1], position[2], 1.0);
+                        [pos_vec4.x, pos_vec4.y, pos_vec4.z]
+                    } else {
+                        position
+                    };
+
+                    let mut position_converted = transformed_position;
                     position_converted[1] = 1.0 - position_converted[1];
                     vertex.position = position_converted;
                     vertex.node_id = node.index() as u16;
@@ -679,7 +701,7 @@ unsafe fn process_node(
     );
 
     for child in node.children() {
-        process_node(gltf, buffers, images, &child, gltf_model)?;
+        process_node(gltf, buffers, images, &child, gltf_model, &cumulative_transform)?;
     }
 
     Ok(())

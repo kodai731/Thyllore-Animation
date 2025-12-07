@@ -1656,6 +1656,11 @@ impl App {
         // Load the model based on file type
         if is_fbx {
             log!("Loading FBX model...");
+
+            // Clear glTF model data when loading FBX
+            data.gltf_model = GltfModel::default();
+            log!("Cleared glTF model data");
+
             // Use fbxcel for stickman_bin.fbx (russimp doesn't read its animation correctly)
             // Use russimp for other FBX files (better compatibility)
             if model_path.contains("stickman_bin.fbx") {
@@ -1768,6 +1773,14 @@ impl App {
 
         } else if is_gltf {
             log!("Loading glTF model...");
+
+            // Clear FBX model data and animation state when loading glTF
+            data.fbx_model = fbx::fbx::FbxModel::default();
+            data.animation_playing = false;
+            data.current_animation_index = 0;
+            data.animation_time = 0.0;
+            log!("Cleared FBX model data and animation state");
+
             data.gltf_model = GltfModel::load_model(model_path);
 
             for (i, gltf_data) in data.gltf_model.gltf_data.iter().enumerate() {

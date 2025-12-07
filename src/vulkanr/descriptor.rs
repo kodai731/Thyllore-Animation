@@ -32,6 +32,16 @@ impl RRDescriptorSet {
     }
 
     pub unsafe fn delete_data(&mut self, rrdevice: &RRDevice) {
+        // Free allocated descriptor sets before deleting data
+        if !self.descriptor_sets.is_empty() {
+            rrdevice.device.free_descriptor_sets(
+                self.descriptor_pool,
+                &self.descriptor_sets,
+            ).ok(); // Ignore errors if pool was already reset
+            self.descriptor_sets.clear();
+        }
+
+        // Delete rrdata resources
         for i in 0..self.rrdata.len() {
             self.rrdata[i].delete(rrdevice);
         }
@@ -68,19 +78,24 @@ unsafe fn create_descriptor_pool(
     rrswapchain: &RRSwapchain,
     rrdescriptor_set: &mut RRDescriptorSet,
 ) -> Result<()> {
+    // Support up to 30 meshes (30 meshes * swapchain_images)
+    // This allows models with many sub-meshes to be loaded dynamically
+    let max_meshes = 30;
+    let descriptor_count = (rrswapchain.swapchain_images.len() * max_meshes) as u32;
+
     let ubo_size = vk::DescriptorPoolSize::builder()
         .type_(vk::DescriptorType::UNIFORM_BUFFER)
-        .descriptor_count((rrswapchain.swapchain_images.len() * 4) as u32); // This pool size structure is referenced by the main vk::DescriptorPoolCreateInfo
-                                                                            //along with the maximum number of descriptor sets that may be allocated:
+        .descriptor_count(descriptor_count);
 
     let sampler_size = vk::DescriptorPoolSize::builder()
         .type_(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        .descriptor_count((rrswapchain.swapchain_images.len() * 4) as u32);
+        .descriptor_count(descriptor_count);
 
     let pool_sizes = &[ubo_size, sampler_size];
     let info = vk::DescriptorPoolCreateInfo::builder()
         .pool_sizes(pool_sizes)
-        .max_sets((rrswapchain.swapchain_images.len() * 4) as u32);
+        .max_sets(descriptor_count)
+        .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET); // Allow individual descriptor set freeing
     rrdescriptor_set.descriptor_pool = rrdevice.device.create_descriptor_pool(&info, None)?;
 
     Ok(())

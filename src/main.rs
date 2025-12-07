@@ -223,19 +223,61 @@ impl support::System {
                                 ui.window("debug window")
                                     .size([600.0, 220.0], Condition::FirstUseEver)
                                     .build(|| {
-                                        ui.button("button");
+                                        // Model Loading Section
+                                        ui.text("Model Loading:");
+                                        if ui.button("Open FBX Model") {
+                                            if let Some(path) = rfd::FileDialog::new()
+                                                .add_filter("FBX Files", &["fbx"])
+                                                .pick_file()
+                                            {
+                                                gui_data.selected_model_path = path.to_string_lossy().to_string();
+                                                gui_data.file_changed = true;
+                                                log!("Selected FBX file: {}", gui_data.selected_model_path);
+                                            }
+                                        }
+                                        ui.same_line();
+                                        if ui.button("Open glTF Model") {
+                                            if let Some(path) = rfd::FileDialog::new()
+                                                .add_filter("glTF Files", &["gltf", "glb"])
+                                                .pick_file()
+                                            {
+                                                gui_data.selected_model_path = path.to_string_lossy().to_string();
+                                                gui_data.file_changed = true;
+                                                log!("Selected glTF file: {}", gui_data.selected_model_path);
+                                            }
+                                        }
+
+                                        // Current model display
+                                        ui.text(format!("Current Model: {}",
+                                            if app.data.current_model_path.is_empty() {
+                                                "None"
+                                            } else {
+                                                &app.data.current_model_path
+                                            }
+                                        ));
+
+                                        // Load status display
+                                        ui.text(format!("Status: {}", gui_data.load_status));
+
+                                        ui.separator();
+
+                                        // Camera Controls
+                                        ui.text("Camera Controls:");
                                         if ui.button("reset camera") {
                                             unsafe {
                                                 app.reset_camera();
                                             }
                                         }
+                                        ui.same_line();
                                         if ui.button("reset camera up") {
                                             unsafe {
                                                 app.reset_camera_up();
                                             }
                                         }
                                         ui.separator();
-                                        // let mouse_pos = ui.io().mouse_pos;
+
+                                        // Debug Information
+                                        ui.text("Debug Info:");
                                         ui.text(format!(
                                             "Mouse Position: ({:.1},{:.1})",
                                             gui_data.mouse_pos[0], gui_data.mouse_pos[1]
@@ -247,10 +289,6 @@ impl support::System {
                                         ui.text(format!(
                                             "is wheel clicked: ({:.1})",
                                             gui_data.is_wheel_clicked
-                                        ));
-                                        ui.text(format!(
-                                            "monitor value: ({:.1})",
-                                            gui_data.monitor_value
                                         ));
                                         ui.input_text("file path", &mut gui_data.file_path)
                                             .read_only(true)
@@ -288,6 +326,10 @@ struct GUIData {
     mouse_pos: [f32; 2],
     mouse_wheel: f32,
     file_path: String,
+    // New fields for file loading
+    file_changed: bool,           // Flag indicating a new file was selected
+    selected_model_path: String,  // Path of the selected model file
+    load_status: String,          // Status message for loading (success/error)
 }
 
 impl Default for GUIData {
@@ -299,6 +341,9 @@ impl Default for GUIData {
             mouse_pos: [0.0, 0.0],
             mouse_wheel: 0.0,
             file_path: String::default(),
+            file_changed: false,
+            selected_model_path: String::default(),
+            load_status: String::from("No model loaded"),
         }
     }
 }
@@ -352,6 +397,7 @@ struct AppData {
     animation_time: f32,           // 現在のアニメーション時間（秒）
     animation_playing: bool,       // アニメーション再生中フラグ
     current_animation_index: usize, // 現在再生中のアニメーションインデックス
+    current_model_path: String,    // 現在読み込まれているモデルファイルのパス
 }
 
 // Helper function to load PNG images
@@ -567,6 +613,32 @@ impl App {
     }
 
     unsafe fn render(&mut self, window: &Window, gui_data: &mut GUIData) -> Result<()> {
+        // Check if a new model file was selected
+        if gui_data.file_changed {
+            log!("Loading new model from: {}", gui_data.selected_model_path);
+
+            // Wait for device to finish all operations before reloading
+            self.rrdevice.device.device_wait_idle()?;
+
+            match Self::load_model_from_path(
+                &self.instance,
+                &self.rrdevice,
+                &mut self.data,
+                &gui_data.selected_model_path,
+            ) {
+                Ok(_) => {
+                    gui_data.load_status = format!("Loaded: {}", gui_data.selected_model_path);
+                    log!("Successfully loaded model: {}", gui_data.selected_model_path);
+                }
+                Err(e) => {
+                    gui_data.load_status = format!("Error: {}", e);
+                    log!("Failed to load model: {:?}", e);
+                }
+            }
+
+            gui_data.file_changed = false;
+        }
+
         // Acquire an image from the swapchain
         // Execute the command buffer with that image as attachment in the framebuffer
         // Return the image to the swapchain for presentation
@@ -601,25 +673,63 @@ impl App {
         self.data.images_in_flight[image_index as usize] = self.data.in_flight_fences[self.frame];
 
         // FBXアニメーション更新
-        if self.data.animation_playing && self.data.fbx_model.animation_count() > 0 {
-            // 経過時間を取得
-            let elapsed = self.start.elapsed().as_secs_f32();
+        if self.data.fbx_model.animation_count() > 0 {
+            if !self.data.animation_playing {
+                // アニメーションが一時停止中の場合のみ、最初のフレームでログを出力
+                static mut LOGGED_PAUSED: bool = false;
+                unsafe {
+                    if !LOGGED_PAUSED {
+                        log!("FBX animation is paused (animation_playing=false)");
+                        LOGGED_PAUSED = true;
+                    }
+                }
+            } else {
+                // 経過時間を取得
+                let elapsed = self.start.elapsed().as_secs_f32();
 
-            // アニメーション時間を更新
-            if let Some(duration) = self.data.fbx_model.get_animation_duration(self.data.current_animation_index) {
-                // ループ再生
-                let prev_time = self.data.animation_time;
-                self.data.animation_time = elapsed % duration;
+                // アニメーション時間を更新
+                if let Some(duration) = self.data.fbx_model.get_animation_duration(self.data.current_animation_index) {
+                    // Static pose (duration == 0) or animated
+                    if duration > 0.0 {
+                        // ループ再生（アニメーション）
+                        let prev_time = self.data.animation_time;
+                        self.data.animation_time = elapsed % duration;
 
-                // Log every frame for debugging
-                log!("Updating FBX animation: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
-                     self.data.animation_time, duration, elapsed, prev_time);
+                        // Log every 10 frames for debugging (avoid log spam)
+                        static mut FRAME_COUNT: u32 = 0;
+                        unsafe {
+                            FRAME_COUNT += 1;
+                            if FRAME_COUNT % 10 == 0 {
+                                log!("Updating FBX animation: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
+                                     self.data.animation_time, duration, elapsed, prev_time);
+                            }
+                        }
 
-                // アニメーションを適用
-                self.data.fbx_model.update_animation(self.data.current_animation_index, self.data.animation_time);
+                        // アニメーションを適用
+                        self.data.fbx_model.update_animation(self.data.current_animation_index, self.data.animation_time);
 
-                // 頂点バッファを更新
-                Self::update_fbx_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
+                        // 頂点バッファを更新
+                        Self::update_fbx_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
+                    } else {
+                        // Static pose (duration == 0): keep time at 0, no need to update every frame
+                        // Initial pose was already applied in load_model_from_path
+                        static mut LOGGED_STATIC: bool = false;
+                        unsafe {
+                            if !LOGGED_STATIC {
+                                log!("FBX animation has duration=0 (static pose)");
+                                LOGGED_STATIC = true;
+                            }
+                        }
+                    }
+                } else {
+                    static mut LOGGED_NO_DURATION: bool = false;
+                    unsafe {
+                        if !LOGGED_NO_DURATION {
+                            log!("FBX animation has no duration (get_animation_duration returned None)");
+                            LOGGED_NO_DURATION = true;
+                        }
+                    }
+                }
             }
         }
 
@@ -1329,6 +1439,10 @@ impl App {
             }
         }
 
+        // Set current model path
+        let model_path_fbx = "src/resources/phoenix-bird/source/fly.fbx";
+        data.current_model_path = model_path_fbx.to_string();
+
         Ok(())
     }
 
@@ -1512,6 +1626,361 @@ impl App {
             rrdata.sampler = create_texture_sampler(&rrdevice, rrdata.mip_level)?;
         }
 
+        Ok(())
+    }
+
+    /// Load a model from the specified file path
+    unsafe fn load_model_from_path(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        data: &mut AppData,
+        model_path: &str,
+    ) -> Result<()> {
+        log!("=== Loading model from path: {} ===", model_path);
+
+        // Determine file type by extension
+        let path_lower = model_path.to_lowercase();
+        let is_fbx = path_lower.ends_with(".fbx");
+        let is_gltf = path_lower.ends_with(".gltf") || path_lower.ends_with(".glb");
+
+        if !is_fbx && !is_gltf {
+            return Err(anyhow!("Unsupported file format. Only FBX and glTF/GLB are supported."));
+        }
+
+        // Clean up existing model data (this will free descriptor sets and reuse the pool)
+        log!("Cleaning up existing model data...");
+        data.model_descriptor_set.delete_data(rrdevice);
+        data.model_descriptor_set.rrdata.clear();
+        log!("Cleared existing data, descriptor pool will be reused");
+
+        // Load the model based on file type
+        if is_fbx {
+            log!("Loading FBX model...");
+
+            // Clear glTF model data when loading FBX
+            data.gltf_model = GltfModel::default();
+            log!("Cleared glTF model data");
+
+            // Use fbxcel for stickman_bin.fbx (russimp doesn't read its animation correctly)
+            // Use russimp for other FBX files (better compatibility)
+            if model_path.contains("stickman_bin.fbx") {
+                log!("Using fbxcel loader for stickman_bin.fbx");
+                unsafe {
+                    data.fbx_model = fbx::fbx::load_fbx(model_path)?;
+                }
+            } else {
+                log!("Using russimp loader");
+                data.fbx_model = fbx::fbx::load_fbx_with_russimp(model_path)?;
+            }
+
+            // Create separate rrdata for each FBX mesh
+            for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
+                log!("Creating RRData for FBX mesh {}: {} vertices, texture: {:?}",
+                    mesh_idx, fbx_data.positions.len(), fbx_data.diffuse_texture);
+
+                let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain);
+
+                // Load texture for this mesh
+                if let Some(texture_path) = &fbx_data.diffuse_texture {
+                    log!("Loading texture: {}", texture_path);
+                    match load_png_image(texture_path) {
+                        Ok((image_data, width, height)) => {
+                            match create_texture_image_pixel(
+                                instance,
+                                rrdevice,
+                                data.rrcommand_pool.borrow_mut(),
+                                &image_data,
+                                width,
+                                height,
+                            ) {
+                                Ok((image, image_memory, mip_level)) => {
+                                    rrdata.image = image;
+                                    rrdata.image_memory = image_memory;
+                                    rrdata.mip_level = mip_level;
+                                    log!("Texture loaded successfully for mesh {}", mesh_idx);
+                                }
+                                Err(e) => {
+                                    log!("Failed to create texture image for mesh {}: {}", mesh_idx, e);
+                                    // Fall back to white texture
+                                    (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
+                                        instance,
+                                        rrdevice,
+                                        data.rrcommand_pool.borrow_mut(),
+                                        &vec![255u8, 255, 255, 255],
+                                        1,
+                                        1,
+                                    )?;
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            log!("Failed to load texture file {}: {}", texture_path, e);
+                            // Fall back to white texture
+                            (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
+                                instance,
+                                rrdevice,
+                                data.rrcommand_pool.borrow_mut(),
+                                &vec![255u8, 255, 255, 255],
+                                1,
+                                1,
+                            )?;
+                        }
+                    }
+                } else {
+                    log!("No texture specified for mesh {}, using white", mesh_idx);
+                    // Use white texture as fallback
+                    (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
+                        instance,
+                        rrdevice,
+                        data.rrcommand_pool.borrow_mut(),
+                        &vec![255u8, 255, 255, 255],
+                        1,
+                        1,
+                    )?;
+                }
+
+                // Create vertex data
+                rrdata.vertex_data = VertexData::default();
+                for (i, position) in fbx_data.positions.iter().enumerate() {
+                    // Get UV coordinates (or use default if index out of bounds)
+                    let uv = if i < fbx_data.tex_coords.len() {
+                        fbx_data.tex_coords[i]
+                    } else {
+                        [0.5, 0.5]
+                    };
+
+                    let vertex = vulkanr::data::Vertex::new(
+                        Vec3::new(position.x, position.y, position.z),
+                        Vec4::new(1.0, 1.0, 1.0, 1.0),  // White color for proper texturing
+                        Vec2::new_array(uv),             // Use actual UV coordinates
+                    );
+                    rrdata.vertex_data.vertices.push(vertex);
+                }
+
+                // Set indices
+                rrdata.vertex_data.indices = fbx_data.indices.clone();
+
+                data.model_descriptor_set.rrdata.push(rrdata);
+            }
+
+            // Initialize animation if available
+            if data.fbx_model.animation_count() > 0 {
+                data.animation_playing = true;
+                data.current_animation_index = 0;
+                data.animation_time = 0.0;
+                log!("FBX animation loaded: {} animations", data.fbx_model.animation_count());
+            }
+
+        } else if is_gltf {
+            log!("Loading glTF model...");
+
+            // Clear FBX model data and animation state when loading glTF
+            data.fbx_model = fbx::fbx::FbxModel::default();
+            data.animation_playing = false;
+            data.current_animation_index = 0;
+            data.animation_time = 0.0;
+            log!("Cleared FBX model data and animation state");
+
+            data.gltf_model = GltfModel::load_model(model_path);
+
+            for (i, gltf_data) in data.gltf_model.gltf_data.iter().enumerate() {
+                log!("Creating RRData for glTF mesh {}: {} vertices", i, gltf_data.vertices.len());
+
+                let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain);
+
+                // Load texture from image_data
+                if !gltf_data.image_data.is_empty() {
+                    log!("Loading texture from glTF image data for mesh {}", i);
+                    match create_texture_image_pixel(
+                        instance,
+                        rrdevice,
+                        data.rrcommand_pool.borrow_mut(),
+                        &gltf_data.image_data[0].data,
+                        gltf_data.image_data[0].width,
+                        gltf_data.image_data[0].height,
+                    ) {
+                        Ok((image, image_memory, mip_level)) => {
+                            rrdata.image = image;
+                            rrdata.image_memory = image_memory;
+                            rrdata.mip_level = mip_level;
+                            log!("Texture loaded successfully for mesh {}", i);
+                        }
+                        Err(e) => {
+                            log!("Failed to create texture image for mesh {}: {}", i, e);
+                            // Fallback to white texture
+                            (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
+                                instance,
+                                rrdevice,
+                                data.rrcommand_pool.borrow_mut(),
+                                &vec![255u8, 255, 255, 255],
+                                1,
+                                1,
+                            )?;
+                        }
+                    }
+                } else {
+                    log!("No texture data for mesh {}, using white", i);
+                    // Use white texture as fallback
+                    (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
+                        instance,
+                        rrdevice,
+                        data.rrcommand_pool.borrow_mut(),
+                        &vec![255u8, 255, 255, 255],
+                        1,
+                        1,
+                    )?;
+                }
+
+                // Create vertex data
+                rrdata.vertex_data = VertexData::default();
+                for gltf_vertex in &gltf_data.vertices {
+                    rrdata
+                        .vertex_data
+                        .vertices
+                        .push(vulkanr::data::Vertex::default());
+                }
+
+                for gltf_vertex in &gltf_data.vertices {
+                    let vertex = vulkanr::data::Vertex::new(
+                        Vec3::new_array(gltf_vertex.position),
+                        Vec4::new(0.0, 1.0, 0.0, 1.0),
+                        Vec2::new_array(gltf_vertex.tex_coord),
+                    );
+                    rrdata.vertex_data.vertices[gltf_vertex.index] = vertex;
+                }
+
+                rrdata.vertex_data.indices = gltf_data.indices.clone();
+
+                data.model_descriptor_set.rrdata.push(rrdata);
+            }
+        }
+
+        // Recreate buffers and descriptor sets
+        log!("Recreating buffers and descriptor sets...");
+        for i in 0..data.model_descriptor_set.rrdata.len() {
+            let rrdata = &mut data.model_descriptor_set.rrdata[i];
+
+            rrdata.vertex_buffer = RRVertexBuffer::new(
+                &instance,
+                &rrdevice,
+                &data.rrcommand_pool,
+                (size_of::<vulkanr::data::Vertex>() * rrdata.vertex_data.vertices.len())
+                    as vk::DeviceSize,
+                rrdata.vertex_data.vertices.as_ptr() as *const c_void,
+                rrdata.vertex_data.vertices.len(),
+            );
+
+            rrdata.index_buffer = RRIndexBuffer::new(
+                &instance,
+                &rrdevice,
+                &data.rrcommand_pool,
+                (size_of::<u32>() * rrdata.vertex_data.indices.len()) as u64,
+                rrdata.vertex_data.indices.as_ptr() as *const c_void,
+                rrdata.vertex_data.indices.len(),
+            );
+
+            RRData::create_uniform_buffers(rrdata, &instance, &rrdevice, &data.rrswapchain);
+
+            rrdata.image_view = create_image_view(
+                &rrdevice,
+                rrdata.image,
+                vk::Format::R8G8B8A8_SRGB,
+                vk::ImageAspectFlags::COLOR,
+                rrdata.mip_level,
+            )?;
+
+            rrdata.sampler = create_texture_sampler(&rrdevice, rrdata.mip_level)?;
+        }
+
+        // Apply initial pose for FBX models with skeletal animation
+        if is_fbx && data.fbx_model.animation_count() > 0 {
+            log!("Applying initial pose (time=0) for FBX skeletal animation...");
+            data.fbx_model.update_animation(0, 0.0);
+
+            // Update vertex buffers with initial pose
+            for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
+                if let Some(rrdata) = data.model_descriptor_set.rrdata.get_mut(mesh_idx) {
+                    let vertex_data = &mut rrdata.vertex_data;
+
+                    // Update vertex positions from fbx_data (after animation applied)
+                    for (vertex_idx, pos) in fbx_data.positions.iter().enumerate() {
+                        if vertex_idx < vertex_data.vertices.len() {
+                            vertex_data.vertices[vertex_idx].pos.x = pos.x;
+                            vertex_data.vertices[vertex_idx].pos.y = pos.y;
+                            vertex_data.vertices[vertex_idx].pos.z = pos.z;
+                        }
+                    }
+
+                    // Update vertex buffer with initial pose
+                    if let Err(e) = rrdata.vertex_buffer.update(
+                        &instance,
+                        &rrdevice,
+                        &data.rrcommand_pool,
+                        (size_of::<vulkanr::data::Vertex>() * vertex_data.vertices.len()) as vk::DeviceSize,
+                        vertex_data.vertices.as_ptr() as *const c_void,
+                        vertex_data.vertices.len(),
+                    ) {
+                        log!("Failed to update vertex buffer for mesh {} with initial pose: {}", mesh_idx, e);
+                    }
+                }
+            }
+            log!("Initial pose applied successfully");
+        }
+
+        // Recreate descriptor sets
+        log!("Creating descriptor sets...");
+        if let Err(e) = RRDescriptorSet::create_descriptor_set(
+            &rrdevice,
+            &data.rrswapchain,
+            &mut data.model_descriptor_set,
+        ) {
+            log!("Failed to create model descriptor set: {:?}", e);
+            return Err(anyhow!("Failed to create descriptor sets: {:?}", e));
+        }
+
+        // Recreate command buffers
+        log!("Recreating command buffers...");
+        let mut rrbind_info = Vec::new();
+        rrbind_info.push(RRBindInfo::new(
+            &data.grid_pipeline,
+            &data.grid_descriptor_set,
+            &data.grid_vertex_buffer,
+            &data.grid_index_buffer,
+            0,
+            0,
+            0,
+        ));
+
+        for i in 0..data.model_descriptor_set.rrdata.len() {
+            rrbind_info.push(RRBindInfo::new(
+                &data.model_pipeline,
+                &data.model_descriptor_set,
+                &data.model_descriptor_set.rrdata[i].vertex_buffer,
+                &data.model_descriptor_set.rrdata[i].index_buffer,
+                0,
+                0,
+                i,
+            ));
+        }
+
+        for i in 0..data.rrrender.framebuffers.len() {
+            if let Err(e) = RRCommandBuffer::bind_command(
+                &rrdevice,
+                &data.rrrender,
+                &data.rrswapchain,
+                &rrbind_info,
+                &mut data.rrcommand_buffer,
+                i,
+            ) {
+                log!("Failed to bind command for framebuffer {}: {:?}", i, e);
+                return Err(anyhow!("Failed to bind command: {:?}", e));
+            }
+        }
+
+        // Update current model path
+        data.current_model_path = model_path.to_string();
+
+        log!("=== Model loaded successfully ===");
         Ok(())
     }
 }

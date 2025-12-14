@@ -1,27 +1,17 @@
-use glium::glutin::surface::WindowSurface;
-use glium::Surface;
-use imgui::{Context, FontConfig, FontGlyphRanges, FontSource, Ui};
-use imgui_glium_renderer::Renderer;
-use imgui_winit_support::winit::dpi::LogicalSize;
-use imgui_winit_support::winit::event::{Event, WindowEvent};
-use imgui_winit_support::winit::event_loop::EventLoop;
-use imgui_winit_support::winit::window::{Window, WindowBuilder};
+use imgui::{Context, FontConfig, FontGlyphRanges, FontSource};
+use winit::dpi::LogicalSize;
+use winit::event_loop::EventLoop;
+use winit::window::{Window, WindowBuilder};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use std::path::Path;
-use std::time::Instant;
 
 mod clipboard;
 
 pub struct System {
     pub event_loop: EventLoop<()>,
     pub window: Window,
-    pub display: glium::Display<WindowSurface>,
     pub imgui: Context,
     pub platform: WinitPlatform,
-    pub renderer: Renderer,
-    pub font_size: f32,
-    pub app_window: Window,
-    pub app_display: glium::Display<WindowSurface>,
 }
 
 pub fn init(title: &str) -> System {
@@ -34,19 +24,13 @@ pub fn init(title: &str) -> System {
     let builder = WindowBuilder::new()
         .with_title(title)
         .with_inner_size(LogicalSize::new(1524, 1524));
-    let (window, display) = glium::backend::glutin::SimpleWindowBuilder::new()
-        .set_window_builder(builder)
-        .build(&event_loop);
-
-    let builder3 = WindowBuilder::new()
-        .with_title("App Window")
-        .with_inner_size(LogicalSize::new(1524, 1524));
-    let (app_window, app_display) = glium::backend::glutin::SimpleWindowBuilder::new()
-        .set_window_builder(builder3)
-        .build(&event_loop);
+    let window = builder.build(&event_loop).expect("Failed to create window");
 
     let mut imgui = Context::create();
     imgui.set_ini_filename(None);
+
+    // Enable docking
+    imgui.io_mut().config_flags |= imgui::ConfigFlags::DOCKING_ENABLE;
 
     if let Some(backend) = clipboard::init() {
         imgui.set_clipboard_backend(backend);
@@ -65,8 +49,7 @@ pub fn init(title: &str) -> System {
         } else {
             HiDpiMode::Default
         };
-        
-        platform.attach_window(imgui.io_mut(), &app_window, dpi_mode);
+
         platform.attach_window(imgui.io_mut(), &window, dpi_mode);
     }
 
@@ -82,11 +65,6 @@ pub fn init(title: &str) -> System {
             data: include_bytes!("../resources/Roboto-Regular.ttf"),
             size_pixels: font_size,
             config: Some(FontConfig {
-                // As imgui-glium-renderer isn't gamma-correct with
-                // it's font rendering, we apply an arbitrary
-                // multiplier to make the font a bit "heavier". With
-                // default imgui-glow-renderer this is unnecessary.
-                rasterizer_multiply: 1.5,
                 // Oversampling font helps improve text rendering at
                 // expense of larger font atlas texture.
                 oversample_h: 4,
@@ -109,17 +87,14 @@ pub fn init(title: &str) -> System {
         },
     ]);
 
-    let renderer = Renderer::init(&mut imgui, &display).expect("Failed to initialize renderer");
+    // Build the font atlas to generate texture data
+    // This is required before any ImGui rendering can occur
+    let _font_texture = imgui.fonts().build_rgba32_texture();
 
     System {
         event_loop,
         window,
-        display,
         imgui,
         platform,
-        renderer,
-        font_size,
-        app_window,
-        app_display,
     }
 }

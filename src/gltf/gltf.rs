@@ -1,7 +1,7 @@
 use crate::log;
 use crate::math::math::*;
 use anyhow::{anyhow, Result};
-use cgmath::{Matrix4, Quaternion};
+use cgmath::{Matrix4, Quaternion, Vector3, Vector4};
 use core::result::Result::Ok;
 use gltf::buffer::Data;
 use gltf::{image, Document, Gltf, Node};
@@ -15,8 +15,10 @@ pub struct GltfModel {
     pub morph_animations: Vec<MorphAnimation>,
     pub joints: Vec<Joint>, // order by joint id
     pub joint_animations: Vec<Vec<JointAnimation>>,
+    pub node_animations: Vec<NodeAnimation>, // Node transform animations
     pub node_joint_map: NodeJointMap,
     pub rrnodes: Vec<RRNode>,
+    pub has_skinned_meshes: bool, // True if any mesh has JOINTS/WEIGHTS data
 }
 
 impl GltfModel {
@@ -48,6 +50,96 @@ impl GltfModel {
             }
         }
         index
+    }
+
+    /// Update node animations and apply transformations to vertices
+    pub unsafe fn update_node_animations(&mut self, time: f32) {
+        if self.node_animations.is_empty() {
+            return;
+        }
+
+        // Build a map of node index to animated transform
+        let mut node_transforms: HashMap<usize, Matrix4<f32>> = HashMap::new();
+
+        for node_anim in &self.node_animations {
+            let transform = node_anim.get_transform_at_time(time);
+            node_transforms.insert(node_anim.node_index, transform);
+        }
+
+        // Pre-calculate cumulative transforms for all nodes to avoid borrow issues
+        let mut node_cumulative_transforms: HashMap<usize, Matrix4<f32>> = HashMap::new();
+        for rrnode in &self.rrnodes {
+            let node_index = rrnode.index as usize;
+            // Calculate full cumulative transform including parent hierarchy
+            let cumulative_transform = self.calculate_cumulative_transform(node_index, &node_transforms);
+            node_cumulative_transforms.insert(node_index, cumulative_transform);
+        }
+
+        // Apply transforms to each gltf_data
+        for gltf_data in self.gltf_data.iter_mut() {
+            if gltf_data.vertices.is_empty() {
+                continue;
+            }
+
+            // Find which node this mesh belongs to
+            let node_id = gltf_data.vertices[0].node_id as usize;
+
+            // Get cumulative transform for this node
+            let cumulative_transform = node_cumulative_transforms
+                .get(&node_id)
+                .cloned()
+                .unwrap_or(Matrix4::identity());
+
+            // Apply transform to all vertices in this gltf_data
+            for vertex in &mut gltf_data.vertices {
+                // Get original local space position from animation_position
+                let local_pos = vertex.animation_position;
+
+                // Apply cumulative transform
+                let pos_vec4 = cumulative_transform * Vector4::new(local_pos[0], local_pos[1], local_pos[2], 1.0);
+
+                // Apply Y-flip for rendering
+                vertex.position = [pos_vec4.x, 1.0 - pos_vec4.y, pos_vec4.z];
+            }
+        }
+    }
+
+    /// Calculate cumulative transform for a node by traversing up the hierarchy
+    fn calculate_cumulative_transform(
+        &self,
+        node_index: usize,
+        node_transforms: &HashMap<usize, Matrix4<f32>>,
+    ) -> Matrix4<f32> {
+        // Find the node in rrnodes
+        let rrnode = self.rrnodes.iter().find(|n| n.index as usize == node_index);
+
+        if let Some(rrnode) = rrnode {
+            // Get the base transform for this node
+            let base_transform = if let Some(anim_transform) = node_transforms.get(&node_index) {
+                // Use animated transform if available
+                *anim_transform
+            } else {
+                // Use static transform from rrnode
+                mat4_from_array(rrnode.transform)
+            };
+
+            // Find parent node by searching for a node that has this node as a child
+            let parent_index = self.rrnodes.iter()
+                .find(|parent| parent.children.contains(&(node_index as u16)))
+                .map(|parent| parent.index as usize);
+
+            if let Some(parent_idx) = parent_index {
+                // Recursively calculate parent's cumulative transform
+                let parent_transform = self.calculate_cumulative_transform(parent_idx, node_transforms);
+                // Return parent_transform * local_transform
+                parent_transform * base_transform
+            } else {
+                // This is a root node, return its own transform
+                base_transform
+            }
+        } else {
+            Matrix4::identity()
+        }
     }
 
     pub fn set_joints(self: &mut Self, skin: &gltf::Skin, buffers: &Vec<Data>) {
@@ -96,8 +188,32 @@ impl GltfModel {
         let mut joint_translate = Mat4::identity();
         let mut joint_rotation = Mat4::identity();
         let mut joint_scale = Mat4::identity();
-        for joint_animation in joint_animations {
+
+        // Debug: Log for joints with animation data
+        static mut LOG_COUNTER: u32 = 0;
+        unsafe {
+            LOG_COUNTER += 1;
+            if LOG_COUNTER % 60 == 0 && joint_animations.len() > 0 {
+                log!("apply_animation: time={:.4}, target_joint_id={}, animations_count={}",
+                     time, target_joint_id, joint_animations.len());
+            }
+        }
+
+        for (anim_idx, joint_animation) in joint_animations.iter().enumerate() {
             let key_frame_id = joint_animation.identify_key_frame_index(time);
+
+            unsafe {
+                if LOG_COUNTER % 60 == 0 && joint_animations.len() > 0 {
+                    log!("  anim_idx={}, key_frame_id={}, keyframes_len={}, has_trans={}, has_rot={}, has_scale={}",
+                         anim_idx,
+                         key_frame_id,
+                         joint_animation.key_frames.len(),
+                         joint_animation.translations.len() > 0,
+                         joint_animation.rotations.len() > 0,
+                         joint_animation.scales.len() > 0);
+                }
+            }
+
             if joint_animation.scales.len() > key_frame_id {
                 joint_scale = joint_animation.scales[key_frame_id] * joint_scale;
             }
@@ -111,6 +227,14 @@ impl GltfModel {
 
         let joint_inverse_bind_pose = mat4_from_array(joint.inverse_bind_pose);
         let joint_transform = transform * joint_translate * joint_rotation * joint_scale;
+
+        // Debug: Log vertex count for this joint
+        unsafe {
+            if LOG_COUNTER % 60 == 0 && joint_animations.len() > 0 {
+                log!("  joint_id={}, vertex_count={}", target_joint_id, joint.vertex_indices.len());
+            }
+        }
+
         for joint_vertex_id in &joint.vertex_indices {
             let vertex = &mut self.gltf_data[joint_vertex_id.gltf_data_index].vertices
                 [joint_vertex_id.vertex_index];
@@ -121,7 +245,8 @@ impl GltfModel {
                 vertex.position[2],
                 1f32,
             ]);
-            pos = weight * joint_transform * joint_inverse_bind_pose * pos;
+            pos = fix_coord() * joint_transform * joint_inverse_bind_pose * pos;
+            pos = weight * pos;
             vertex.animation_position[0] += pos.x;
             vertex.animation_position[1] += pos.y;
             vertex.animation_position[2] += pos.z;
@@ -150,12 +275,23 @@ impl GltfModel {
     }
 
     pub fn reset_vertices_animation_position(self: &mut Self, time: f32) {
-        // self.gltf_data.iter_mut().for_each(|gltf_data| {
-        //     gltf_data.vertices.iter_mut().for_each(|vertex| {
-        //         vertex.animation_position = vertex.position;
-        //     })
-        // });
+        // For skeletal animation (meshes with JOINTS/WEIGHTS), reset to original local positions
+        // For node animation (meshes without JOINTS/WEIGHTS), apply node transforms
+        // Reset skinned meshes to original positions for skeletal animation
+        self.gltf_data.iter_mut().for_each(|gltf_data| {
+            if gltf_data.has_joints {
+                // Skinned mesh: reset to original positions for skeletal animation
+                gltf_data.vertices.iter_mut().for_each(|vertex| {
+                    vertex.animation_position = vertex.position;
+                })
+            }
+        });
 
+        // Apply node transforms to non-skinned meshes
+        // This is called even if has_skinned_meshes is true, because the model may have both types
+        if time < 0.1 {
+            log!("=== Starting animation transform from node 0 with identity matrix ===");
+        }
         let mut node_tree = Vec::default();
         node_tree.push(0 as u16);
         self.apply_node_transform(0, Matrix4::identity(), time, &mut node_tree);
@@ -176,7 +312,17 @@ impl GltfModel {
             log!("node tree {:?}, {:?}", node_tree, node_names);
         }
         let rrnode = &mut self.rrnodes[node_id as usize];
+
+        // Check if this node has animation
         let mut rrnode_transform = mat4_from_array(rrnode.transform);
+        for node_anim in &self.node_animations {
+            if node_anim.node_index == node_id as usize {
+                rrnode_transform = node_anim.get_transform_at_time(time);
+                log!("Using animated transform for node {} at time {}", node_id, time);
+                break;
+            }
+        }
+
         if rrnode.name.contains("Bone") {
             // rrnode_transform = Matrix4::identity();
         }
@@ -184,6 +330,36 @@ impl GltfModel {
             // rrnode_transform = Matrix4::identity();
         }
         let node_transform = transform * rrnode_transform;
+
+        // Debug: log transform calculation for key nodes in the hierarchy
+        if (rrnode.index <= 10 || rrnode.index == 14 || rrnode.index == 15 || rrnode.index == 16 || rrnode.name.contains("NurbsPath.009_Material")) && time < 0.1 {
+            // Calculate scale as column vector magnitudes (correct method for rotated matrices)
+            let parent_scale_x = (transform.x.x * transform.x.x + transform.x.y * transform.x.y + transform.x.z * transform.x.z).sqrt();
+            let parent_scale_y = (transform.y.x * transform.y.x + transform.y.y * transform.y.y + transform.y.z * transform.y.z).sqrt();
+            let parent_scale_z = (transform.z.x * transform.z.x + transform.z.y * transform.z.y + transform.z.z * transform.z.z).sqrt();
+
+            let local_scale_x = (rrnode_transform.x.x * rrnode_transform.x.x + rrnode_transform.x.y * rrnode_transform.x.y + rrnode_transform.x.z * rrnode_transform.x.z).sqrt();
+            let local_scale_y = (rrnode_transform.y.x * rrnode_transform.y.x + rrnode_transform.y.y * rrnode_transform.y.y + rrnode_transform.y.z * rrnode_transform.y.z).sqrt();
+            let local_scale_z = (rrnode_transform.z.x * rrnode_transform.z.x + rrnode_transform.z.y * rrnode_transform.z.y + rrnode_transform.z.z * rrnode_transform.z.z).sqrt();
+
+            let result_scale_x = (node_transform.x.x * node_transform.x.x + node_transform.x.y * node_transform.x.y + node_transform.x.z * node_transform.x.z).sqrt();
+            let result_scale_y = (node_transform.y.x * node_transform.y.x + node_transform.y.y * node_transform.y.y + node_transform.y.z * node_transform.y.z).sqrt();
+            let result_scale_z = (node_transform.z.x * node_transform.z.x + node_transform.z.y * node_transform.z.y + node_transform.z.z * node_transform.z.z).sqrt();
+
+            log!("ANIM CUMULATIVE: node={} ({}), parent_transform.translation={:?}, parent_scale={:?}",
+                rrnode.index, rrnode.name,
+                [transform.w.x, transform.w.y, transform.w.z],
+                [parent_scale_x, parent_scale_y, parent_scale_z]);
+            log!("ANIM CUMULATIVE: node={} ({}), local_transform.translation={:?}, local_scale={:?}",
+                rrnode.index, rrnode.name,
+                [rrnode_transform.w.x, rrnode_transform.w.y, rrnode_transform.w.z],
+                [local_scale_x, local_scale_y, local_scale_z]);
+            log!("ANIM CUMULATIVE: node={} ({}), result.translation={:?}, result_scale={:?}",
+                rrnode.index, rrnode.name,
+                [node_transform.w.x, node_transform.w.y, node_transform.w.z],
+                [result_scale_x, result_scale_y, result_scale_z]);
+        }
+
         if rrnode.vertex_indices.len() <= 0 && time < 1.0 {
             log!(
                 "node transform {} {} {:?}",
@@ -200,16 +376,38 @@ impl GltfModel {
             );
         }
         for vertex_id in rrnode.vertex_indices.iter_mut() {
+            let gltf_data_has_joints = self.gltf_data[vertex_id.gltf_data_index].has_joints;
+
+            // Debug: log first vertex of NurbsPath.009 BEFORE skipping
+            if rrnode.name.contains("NurbsPath.009") && vertex_id.vertex_index == 0 && time < 0.1 {
+                log!("DEBUG BEFORE: node={}, has_joints={}, gltf_data_index={}",
+                    rrnode.name, gltf_data_has_joints, vertex_id.gltf_data_index);
+            }
+
+            // Skip skinned mesh vertices (they use skeletal animation, not node animation)
+            if gltf_data_has_joints {
+                continue;
+            }
+
             let vertex =
                 &mut self.gltf_data[vertex_id.gltf_data_index].vertices[vertex_id.vertex_index];
+            // Use original local space position (never changes)
             let mut position = vec4_from_array([
-                vertex.position[0],
-                vertex.position[1],
-                vertex.position[2],
+                vertex.original_local_position[0],
+                vertex.original_local_position[1],
+                vertex.original_local_position[2],
                 1f32,
             ]);
-            position = fix_coord() * node_transform * position;
-            vertex.animation_position = [position.x, position.y, position.z];
+            // Apply node transform (same as load time - no fix_coord)
+            position = node_transform * position;
+            // Apply Y-flip for rendering (same as load time)
+            vertex.animation_position = [position.x, 1.0 - position.y, position.z];
+
+            // Debug: log first vertex of NurbsPath.009 AFTER transform
+            if rrnode.name.contains("NurbsPath.009") && vertex_id.vertex_index == 0 && time < 0.1 {
+                log!("DEBUG AFTER: original_local={:?}, after_node_transform={:?}, animation_position={:?}, load_position={:?}",
+                    vertex.original_local_position, [position.x, position.y, position.z], vertex.animation_position, vertex.position);
+            }
         }
 
         let children = rrnode.children.clone();
@@ -232,6 +430,7 @@ pub struct GltfData {
     pub image_indices: Vec<[u16; 4]>,
     pub image_data: Vec<ImageData>,
     pub morph_targets: Vec<MorphTarget>,
+    pub has_joints: bool, // True if this mesh has JOINTS/WEIGHTS data (skinned mesh)
 }
 
 #[derive(Clone, Debug, Default)]
@@ -239,6 +438,7 @@ pub struct Vertex {
     pub index: usize,
     pub position: [f32; 3],
     pub animation_position: [f32; 3],
+    pub original_local_position: [f32; 3], // Original local space position for node animation
     pub normal: [f32; 3],
     pub tangent: [f32; 3],
     pub tex_coord: [f32; 2],
@@ -333,6 +533,116 @@ impl JointAnimation {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct NodeAnimation {
+    pub node_index: usize,
+    pub translation_keyframes: Vec<f32>,
+    pub translations: Vec<Vector3<f32>>,
+    pub rotation_keyframes: Vec<f32>,
+    pub rotations: Vec<cgmath::Quaternion<f32>>,
+    pub scale_keyframes: Vec<f32>,
+    pub scales: Vec<Vector3<f32>>,
+    // Default transform from the node (used when property is not animated)
+    pub default_translation: Vector3<f32>,
+    pub default_rotation: cgmath::Quaternion<f32>,
+    pub default_scale: Vector3<f32>,
+}
+
+impl Default for NodeAnimation {
+    fn default() -> Self {
+        NodeAnimation {
+            node_index: 0,
+            translation_keyframes: Vec::new(),
+            translations: Vec::new(),
+            rotation_keyframes: Vec::new(),
+            rotations: Vec::new(),
+            scale_keyframes: Vec::new(),
+            scales: Vec::new(),
+            default_translation: Vector3::new(0.0, 0.0, 0.0),
+            default_rotation: cgmath::Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            default_scale: Vector3::new(1.0, 1.0, 1.0),
+        }
+    }
+}
+
+impl NodeAnimation {
+    pub fn has_animation(&self) -> bool {
+        !self.translation_keyframes.is_empty()
+            || !self.rotation_keyframes.is_empty()
+            || !self.scale_keyframes.is_empty()
+    }
+
+    pub fn get_transform_at_time(&self, time: f32) -> Matrix4<f32> {
+        let translation = self.interpolate_translation(time);
+        let rotation = self.interpolate_rotation(time);
+        let scale = self.interpolate_scale(time);
+
+        Matrix4::from_translation(translation)
+            * Matrix4::from(rotation)
+            * Matrix4::from_nonuniform_scale(scale.x, scale.y, scale.z)
+    }
+
+    fn interpolate_translation(&self, time: f32) -> Vector3<f32> {
+        if self.translations.is_empty() {
+            return self.default_translation;  // Use node's default translation
+        }
+        if self.translations.len() == 1 {
+            return self.translations[0];
+        }
+
+        let (idx0, idx1, t) = self.find_keyframe_indices(&self.translation_keyframes, time);
+        let v0 = self.translations[idx0];
+        let v1 = self.translations[idx1];
+        v0 + (v1 - v0) * t
+    }
+
+    fn interpolate_rotation(&self, time: f32) -> cgmath::Quaternion<f32> {
+        if self.rotations.is_empty() {
+            return self.default_rotation;  // Use node's default rotation
+        }
+        if self.rotations.len() == 1 {
+            return self.rotations[0];
+        }
+
+        let (idx0, idx1, t) = self.find_keyframe_indices(&self.rotation_keyframes, time);
+        let q0 = self.rotations[idx0];
+        let q1 = self.rotations[idx1];
+        q0.nlerp(q1, t)
+    }
+
+    fn interpolate_scale(&self, time: f32) -> Vector3<f32> {
+        if self.scales.is_empty() {
+            return self.default_scale;  // Use node's default scale
+        }
+        if self.scales.len() == 1 {
+            return self.scales[0];
+        }
+
+        let (idx0, idx1, t) = self.find_keyframe_indices(&self.scale_keyframes, time);
+        let v0 = self.scales[idx0];
+        let v1 = self.scales[idx1];
+        v0 + (v1 - v0) * t
+    }
+
+    fn find_keyframe_indices(&self, keyframes: &Vec<f32>, time: f32) -> (usize, usize, f32) {
+        if keyframes.is_empty() {
+            return (0, 0, 0.0);
+        }
+
+        let period = keyframes.last().unwrap();
+        let time = time.rem_euclid(*period);
+
+        for i in 0..keyframes.len() - 1 {
+            if time >= keyframes[i] && time < keyframes[i + 1] {
+                let t = (time - keyframes[i]) / (keyframes[i + 1] - keyframes[i]);
+                return (i, i + 1, t);
+            }
+        }
+
+        (keyframes.len() - 1, keyframes.len() - 1, 0.0)
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct NodeJointMap {
     pub node_to_joint: HashMap<u16, u16>,
@@ -392,6 +702,7 @@ impl GltfData {
             image_indices: Vec::new(),
             image_data: Vec::new(),
             morph_targets: Vec::new(),
+            has_joints: false,
         }
     }
 }
@@ -427,14 +738,48 @@ unsafe fn load_gltf(gltf_model: &mut GltfModel, path: &str) {
     log!("Loading glTF file");
     let (gltf, buffers, images) = gltf::import(format!("{}", path)).expect("Failed to load model");
 
+    log!("=== glTF File Structure ===");
+    log!("Total skins: {}", gltf.skins().count());
+    log!("Total nodes: {}", gltf.nodes().count());
+    log!("Total meshes: {}", gltf.meshes().count());
+    log!("Total animations: {}", gltf.animations().count());
+
+    // Log skin information
     gltf.skins().enumerate().for_each(|(i, skin)| {
+        log!("Skin {}: name={:?}, {} joints", i, skin.name(), skin.joints().count());
+        log!("  Skeleton root: {:?}", skin.skeleton().map(|n| (n.index(), n.name())));
         gltf_model.node_joint_map.make_from_skin(&skin);
         gltf_model.set_joints(&skin, &buffers);
     });
 
+    // Log which nodes reference which skin
+    log!("=== Node-Skin Mappings ===");
+    for node in gltf.nodes() {
+        if let Some(skin) = node.skin() {
+            log!("Node {} ({:?}) uses Skin {}", node.index(), node.name(), skin.index());
+        }
+    }
+
+    // Log animation information
+    log!("=== Animation Information ===");
+    for (anim_idx, animation) in gltf.animations().enumerate() {
+        log!("Animation {}: name={:?}, {} channels", anim_idx, animation.name(), animation.channels().count());
+        for (chan_idx, channel) in animation.channels().enumerate() {
+            let target = channel.target();
+            let node = target.node();
+            log!("  Channel {}: targets Node {} ({:?}), property={:?}",
+                 chan_idx, node.index(), node.name(), target.property());
+        }
+    }
+
     for scene in gltf.scenes() {
-        for node in scene.nodes() {
-            process_node(&gltf, &buffers, &images, &node, gltf_model).unwrap();
+        log!("=== Processing Scene {} ===", scene.index());
+        let root_nodes: Vec<_> = scene.nodes().collect();
+        log!("Scene root nodes: {:?}", root_nodes.iter().map(|n| (n.index(), n.name())).collect::<Vec<_>>());
+
+        for node in root_nodes {
+            log!("Processing root node {} ({:?})", node.index(), node.name());
+            process_node(&gltf, &buffers, &images, &node, gltf_model, &Matrix4::identity(), None).unwrap();
         }
     }
 
@@ -461,6 +806,19 @@ unsafe fn load_gltf(gltf_model: &mut GltfModel, path: &str) {
             );
         }
     }
+
+    // Log animation summary
+    log!("=== Animation Summary ===");
+    log!("Has skinned meshes: {}", gltf_model.has_skinned_meshes);
+    log!("Total node animations: {}", gltf_model.node_animations.len());
+    for (i, node_anim) in gltf_model.node_animations.iter().enumerate() {
+        log!("  Node animation {}: targets node {}, {} translation keyframes, {} rotation keyframes, {} scale keyframes",
+             i, node_anim.node_index,
+             node_anim.translation_keyframes.len(),
+             node_anim.rotation_keyframes.len(),
+             node_anim.scale_keyframes.len());
+    }
+    log!("Total joint animations: {}", gltf_model.joint_animations.len());
 }
 
 unsafe fn process_node(
@@ -469,8 +827,18 @@ unsafe fn process_node(
     images: &Vec<gltf::image::Data>,
     node: &Node,
     gltf_model: &mut GltfModel,
+    parent_transform: &Matrix4<f32>,
+    parent_node_index: Option<usize>,
 ) -> Result<()> {
-    log!("Node {} {}", node.index(), node.name().unwrap());
+    log!("Node {} {} (parent: {:?})", node.index(), node.name().unwrap(), parent_node_index);
+
+    // Check if this node has a skin
+    if let Some(skin) = node.skin() {
+        log!("Node {} has skin: {} joints", node.index(), skin.joints().count());
+    } else {
+        log!("Node {} has NO skin", node.index());
+    }
+
     let mut rrnode = RRNode::default();
     rrnode.index = node.index() as u16;
     log!(
@@ -480,6 +848,17 @@ unsafe fn process_node(
     );
     let (node_translation, mut node_rotation, node_scale) =
         decompose(&mat4_from_array(node.transform().matrix()));
+
+    // Debug: log Node 14's local transform and parent transform
+    if node.index() == 14 {
+        log!("Node 14 LOCAL (load time): translation={:?}, rotation={:?}, scale={:?}",
+            [node_translation.x, node_translation.y, node_translation.z],
+            node_rotation,
+            [node_scale.x, node_scale.y, node_scale.z]);
+        log!("Node 14 PARENT (load time): parent_transform={:?}",
+            [parent_transform.w.x, parent_transform.w.y, parent_transform.w.z]);
+    }
+
     // node_rotation = swap(&node_rotation);
     rrnode.transform = array_from_mat4(
         Matrix4::from_translation(node_translation)
@@ -496,6 +875,21 @@ unsafe fn process_node(
         rrnode.children.push(child.index() as u16);
     }
 
+    // Calculate cumulative transform (parent * local) for initial pose
+    let local_transform = mat4_from_array(rrnode.transform);
+    let cumulative_transform = parent_transform * local_transform;
+
+    // Debug: log cumulative transform for key nodes
+    if node.index() <= 10 || node.index() == 14 || node.index() == 15 || node.index() == 16 || node.index() == 17 {
+        let cum_scale_x = (cumulative_transform.x.x * cumulative_transform.x.x + cumulative_transform.x.y * cumulative_transform.x.y + cumulative_transform.x.z * cumulative_transform.x.z).sqrt();
+        let cum_scale_y = (cumulative_transform.y.x * cumulative_transform.y.x + cumulative_transform.y.y * cumulative_transform.y.y + cumulative_transform.y.z * cumulative_transform.y.z).sqrt();
+        let cum_scale_z = (cumulative_transform.z.x * cumulative_transform.z.x + cumulative_transform.z.y * cumulative_transform.z.y + cumulative_transform.z.z * cumulative_transform.z.z).sqrt();
+        log!("LOAD CUMULATIVE: node={} ({:?}), cumulative.translation={:?}, cumulative.scale={:?}",
+            node.index(), node.name(),
+            [cumulative_transform.w.x, cumulative_transform.w.y, cumulative_transform.w.z],
+            [cum_scale_x, cum_scale_y, cum_scale_z]);
+    }
+
     // meshes
     if let Some(mesh) = node.mesh() {
         log!("mesh found");
@@ -508,6 +902,28 @@ unsafe fn process_node(
             let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
             log!("Topology: {:?}", primitive.mode());
+
+            // Log all attributes this primitive has
+            log!("Primitive attributes:");
+            for (semantic, _accessor) in primitive.attributes() {
+                log!("  - {:?}", semantic);
+            }
+
+            // Check if this primitive has joints (skinned mesh)
+            // Skinned meshes are transformed by joint matrices in the shader
+            // Static meshes get the cumulative transform applied to vertices for initial pose
+            let has_joints = reader.read_joints(0).is_some();
+            log!("Primitive has joints: {}", has_joints);
+
+            // Set flag if any mesh has skinned data
+            if has_joints {
+                gltf_model.has_skinned_meshes = true;
+            }
+
+            // Create a new GltfData for each primitive
+            let mut gltf_data = GltfData::default();
+            gltf_data.has_joints = has_joints;
+            log!("Setting gltf_data.has_joints={} for mesh at node {}", has_joints, node.index());
 
             // texture
             if let Some(material) = primitive
@@ -527,14 +943,11 @@ unsafe fn process_node(
                     width: width,
                     height: height,
                 };
-                let mut gltf_data = GltfData::default();
                 gltf_data.image_data.push(image_data);
-                gltf_model.gltf_data.push(gltf_data);
             }
 
-            if gltf_model.gltf_data.len() < 1 {
-                gltf_model.gltf_data.push(GltfData::default());
-            }
+            // Add the new GltfData to the model
+            gltf_model.gltf_data.push(gltf_data);
 
             let gltf_data_index = gltf_model.gltf_data.len() - 1;
             let gltf_data = gltf_model.gltf_data.last_mut().unwrap();
@@ -554,10 +967,33 @@ unsafe fn process_node(
                 for position in iter {
                     let mut vertex = Vertex::default();
                     vertex.index = gltf_data.vertices.len();
-                    let mut position_converted = position;
+
+                    // Store original local space position permanently for node animation
+                    vertex.original_local_position = position;
+
+                    // Apply cumulative transform to static meshes for initial pose display
+                    // Skinned meshes keep vertices in local space (transformed by joints in shader)
+                    let transformed_position = if !has_joints {
+                        // Transform vertex from local space to world space using cumulative transform
+                        let pos_vec4 = cumulative_transform * Vector4::new(position[0], position[1], position[2], 1.0);
+                        [pos_vec4.x, pos_vec4.y, pos_vec4.z]
+                    } else {
+                        position
+                    };
+
+                    let mut position_converted = transformed_position;
                     position_converted[1] = 1.0 - position_converted[1];
                     vertex.position = position_converted;
+                    // Initialize animation_position with transformed position for non-animated meshes
+                    vertex.animation_position = position_converted;
                     vertex.node_id = node.index() as u16;
+
+                    // Debug: log first vertex of NurbsPath.009_Material at load time
+                    if node.name() == Some("NurbsPath.009_Material.001_0") && gltf_data.vertices.len() == 0 {
+                        log!("LOAD TIME: node={}, node_index={}, original_local={:?}, cumulative_transform={:?}",
+                            node.name().unwrap(), node.index(), position, cumulative_transform);
+                        log!("LOAD TIME: transformed={:?}, position_converted={:?}", transformed_position, position_converted);
+                    }
 
                     let mut vertex_id = JointVertexIndex::default();
                     vertex_id.gltf_data_index = gltf_data_index;
@@ -569,8 +1005,8 @@ unsafe fn process_node(
             }
 
             if let Some(gltf::mesh::util::ReadTexCoords::F32(gltf::accessor::Iter::Standard(
-                iter,
-            ))) = reader.read_tex_coords(0)
+                                                                 iter,
+                                                             ))) = reader.read_tex_coords(0)
             {
                 for (i, texture_coord) in iter.enumerate() {
                     gltf_data.vertices[i].tex_coord = texture_coord;
@@ -585,17 +1021,29 @@ unsafe fn process_node(
 
             // joint
             if let Some(iter) = reader.read_joints(0) {
-                for (i, joint) in iter.into_u16().enumerate() {
-                    log!("Vertex {}, Joint: {:?}", i, joint);
+                let joints_vec: Vec<_> = iter.into_u16().collect();
+                log!("Mesh {}: Found {} joint assignments", gltf_data_index, joints_vec.len());
+                for (i, joint) in joints_vec.into_iter().enumerate() {
+                    if i < 5 {  // Log only first 5 vertices
+                        log!("  Vertex {}, Joint indices: {:?}", i, joint);
+                    }
                     gltf_data.vertices[i].joint_indices = joint;
                 }
+            } else {
+                log!("Mesh {}: NO joint data found (reader.read_joints returned None)", gltf_data_index);
             }
 
             if let Some(iter) = reader.read_weights(0) {
-                for (i, weight) in iter.into_f32().enumerate() {
-                    log!("Vertex {}, Weight: {:?}", i, weight);
+                let weights_vec: Vec<_> = iter.into_f32().collect();
+                log!("Mesh {}: Found {} weight assignments", gltf_data_index, weights_vec.len());
+                for (i, weight) in weights_vec.into_iter().enumerate() {
+                    if i < 5 {  // Log only first 5 vertices
+                        log!("  Vertex {}, Weights: {:?}", i, weight);
+                    }
                     gltf_data.vertices[i].joint_weights = weight;
                 }
+            } else {
+                log!("Mesh {}: NO weight data found (reader.read_weights returned None)", gltf_data_index);
             }
 
             // morph targets
@@ -679,7 +1127,7 @@ unsafe fn process_node(
     );
 
     for child in node.children() {
-        process_node(gltf, buffers, images, &child, gltf_model)?;
+        process_node(gltf, buffers, images, &child, gltf_model, &cumulative_transform, Some(node.index()))?;
     }
 
     Ok(())
@@ -712,15 +1160,19 @@ fn load_white_texture() -> Result<ImageData> {
 }
 
 unsafe fn input_joint_vertex(gltf_model: &mut GltfModel) {
+    log!("input_joint_vertex: processing {} meshes", gltf_model.gltf_data.len());
     let mut vertex_count = 0;
     for (i, gltf_data) in &mut gltf_model.gltf_data.iter().enumerate() {
         if gltf_data.vertices.len() <= 0 {
-            return;
+            log!("  mesh {}: no vertices, skipping", i);
+            continue; // Changed from return to continue
         }
         if gltf_data.vertices[0].joint_indices.len() <= 0 {
-            return;
+            log!("  mesh {}: no joint indices, skipping", i);
+            continue; // Changed from return to continue
         }
 
+        log!("  mesh {}: {} vertices with joints", i, gltf_data.vertices.len());
         vertex_count += gltf_data.vertices.len();
         gltf_data.vertices.iter().for_each(|vertex| {
             vertex.joint_indices.iter().for_each(|joint_index| {
@@ -782,7 +1234,13 @@ unsafe fn input_joint_vertex(gltf_model: &mut GltfModel) {
         "total node vertices {} vertices {}",
         node_vertex_count,
         vertex_count,
-    )
+    );
+
+    // Log joint vertex counts
+    log!("Joint vertex assignments:");
+    for (i, joint) in gltf_model.joints.iter().enumerate() {
+        log!("  joint {}: {} ({} vertices)", i, joint.name, joint.vertex_indices.len());
+    }
 }
 
 unsafe fn log_node_hierarchy(gltf_model: &GltfModel) {
@@ -845,7 +1303,9 @@ unsafe fn process_animation(
         let mut key_frames = Vec::new();
         let mut weights = Vec::new();
         let mut joint_translations = Vec::new();
+        let mut node_translations = Vec::new(); // Store unscaled translations for node animations
         let mut joint_rotations = Vec::new();
+        let mut joint_rotation_quats = Vec::new(); // Store quaternions for node animations
         let mut joint_scales = Vec::new();
         if let Some(inputs) = reader.read_inputs() {
             log!("KeyFrame Count: {:?}", inputs.len());
@@ -861,7 +1321,11 @@ unsafe fn process_animation(
                 ReadOutputs::Translations(translations) => {
                     for (i, translation) in translations.enumerate() {
                         log!("Translation {}: {:?}", i, translation);
-                        // convert milli meter to meter
+                        // Store unscaled translation for node animations
+                        let node_translation = vec3_from_array(translation);
+                        node_translations.push(node_translation);
+
+                        // convert milli meter to meter for joint animations
                         let joint_translation = vec3_from_array(translation) * 0.00001f32;
                         let joint_translation_mat = Mat4::from_translation(joint_translation);
                         joint_translations.push(joint_translation_mat);
@@ -871,10 +1335,13 @@ unsafe fn process_animation(
                 ReadOutputs::Rotations(rotations) => {
                     for (i, rotation) in rotations.into_f32().enumerate() {
                         log!("Rotation {}: {:?}", i, rotation);
-                        let joint_rotaion_mat = Mat4::from(
-                            Quaternion::new(rotation[0], rotation[1], rotation[2], rotation[3])
-                                .normalize(),
-                        );
+                        // glTF quaternions are [x, y, z, w], cgmath Quaternion::new expects (w, x, y, z)
+                        let quat = Quaternion::new(rotation[3], rotation[0], rotation[1], rotation[2])
+                            .normalize();
+                        joint_rotation_quats.push(quat);
+
+                        // Also store as matrix for joint animations
+                        let joint_rotaion_mat = Mat4::from(quat);
                         joint_rotations.push(joint_rotaion_mat);
                     }
                 }
@@ -918,27 +1385,81 @@ unsafe fn process_animation(
 
         if key_frames.len() > 0
             && (joint_translations.len() > 0
-                || joint_rotations.len() > 0
-                || joint_rotations.len() > 0)
+            || joint_rotations.len() > 0
+            || joint_scales.len() > 0)
         {
-            let mut joint_animation = JointAnimation::default();
-            let joint_id = gltf_model
+            // Check if this node is a joint AND we have skinned meshes
+            // If no skinned meshes, treat all animations as node animations
+            let is_joint_node = gltf_model
                 .node_joint_map
                 .get_joint_index(node.index() as u16)
-                .unwrap();
-            for i in 0..key_frames.len() {
-                joint_animation.key_frames.push(key_frames[i]);
-                if joint_translations.len() > 0 {
-                    joint_animation.translations.push(joint_translations[i]);
+                .is_some();
+
+            if is_joint_node && gltf_model.has_skinned_meshes {
+                // This is a joint animation for skinned mesh
+                let joint_id = gltf_model
+                    .node_joint_map
+                    .get_joint_index(node.index() as u16)
+                    .unwrap();
+                let mut joint_animation = JointAnimation::default();
+                for i in 0..key_frames.len() {
+                    joint_animation.key_frames.push(key_frames[i]);
+                    if joint_translations.len() > 0 {
+                        joint_animation.translations.push(joint_translations[i]);
+                    }
+                    if joint_rotations.len() > 0 {
+                        joint_animation.rotations.push(joint_rotations[i]);
+                    }
+                    if joint_scales.len() > 0 {
+                        joint_animation.scales.push(joint_scales[i]);
+                    }
                 }
-                if joint_rotations.len() > 0 {
-                    joint_animation.rotations.push(joint_rotations[i]);
+                gltf_model.joint_animations[joint_id as usize].push(joint_animation);
+            } else {
+                // This is a node animation (non-joint)
+                let mut node_animation = NodeAnimation::default();
+                node_animation.node_index = node.index();
+
+                // Store translation keyframes and values
+                if node_translations.len() > 0 {
+                    for i in 0..key_frames.len() {
+                        node_animation.translation_keyframes.push(key_frames[i]);
+                        // Use unscaled translation for node animations
+                        node_animation.translations.push(node_translations[i]);
+                    }
                 }
+
+                // Store rotation keyframes and values
+                if joint_rotation_quats.len() > 0 {
+                    for i in 0..key_frames.len() {
+                        node_animation.rotation_keyframes.push(key_frames[i]);
+                        // Use the quaternion directly from glTF data
+                        node_animation.rotations.push(joint_rotation_quats[i]);
+                    }
+                }
+
+                // Store scale keyframes and values
                 if joint_scales.len() > 0 {
-                    joint_animation.scales.push(joint_scales[i]);
+                    for i in 0..key_frames.len() {
+                        node_animation.scale_keyframes.push(key_frames[i]);
+                        // Extract scale from matrix
+                        let mat = joint_scales[i];
+                        let scale = Vector3::new(mat[0][0], mat[1][1], mat[2][2]);
+                        node_animation.scales.push(scale);
+                    }
                 }
+
+                // Set default transform from node (for properties not animated)
+                let (default_trans, default_rot, default_scale) =
+                    decompose(&mat4_from_array(node.transform().matrix()));
+                node_animation.default_translation = default_trans;
+                node_animation.default_rotation = default_rot;
+                node_animation.default_scale = default_scale;
+
+                log!("Node Animation created for node {}: {} keyframes", node.index(), key_frames.len());
+                log!("  Default translation: {:?}", default_trans);
+                gltf_model.node_animations.push(node_animation);
             }
-            gltf_model.joint_animations[joint_id as usize].push(joint_animation);
         }
 
         // validate

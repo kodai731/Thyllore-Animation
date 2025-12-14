@@ -91,8 +91,55 @@ use std::path::Path;
 use std::rc::Rc;
 use vulkanalia::vk::CommandPool;
 
+/// Clean up old screenshot files from the log directory
+fn cleanup_old_screenshots() -> Result<()> {
+    use std::fs;
+    use std::path::PathBuf;
+
+    let log_dir = PathBuf::from("log");
+
+    // Check if log directory exists
+    if !log_dir.exists() {
+        return Ok(());
+    }
+
+    // Read directory entries
+    let entries = fs::read_dir(&log_dir)?;
+
+    let mut deleted_count = 0;
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+
+        // Only process files (not directories)
+        if path.is_file() {
+            // Check if filename starts with "screenshot_"
+            if let Some(filename) = path.file_name() {
+                if let Some(filename_str) = filename.to_str() {
+                    if filename_str.starts_with("screenshot_") {
+                        // Delete the file
+                        fs::remove_file(&path)?;
+                        deleted_count += 1;
+                        log!("Deleted old screenshot: {:?}", filename_str);
+                    }
+                }
+            }
+        }
+    }
+
+    if deleted_count > 0 {
+        log!("Cleaned up {} old screenshot(s)", deleted_count);
+    }
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
     pretty_env_logger::init();
+
+    // Clean up old screenshots from previous runs
+    cleanup_old_screenshots()?;
+
     // imgui
     let system = support::init(file!());
     let mut value = 0;
@@ -276,6 +323,13 @@ impl support::System {
                                         }
                                         ui.separator();
 
+                                        // Screenshot
+                                        ui.text("Screenshot:");
+                                        if ui.button("Take Screenshot") {
+                                            gui_data.take_screenshot = true;
+                                        }
+                                        ui.separator();
+
                                         // Debug Information
                                         ui.text("Debug Info:");
                                         ui.text(format!(
@@ -330,6 +384,7 @@ struct GUIData {
     file_changed: bool,           // Flag indicating a new file was selected
     selected_model_path: String,  // Path of the selected model file
     load_status: String,          // Status message for loading (success/error)
+    take_screenshot: bool,        // Flag to trigger screenshot capture
 }
 
 impl Default for GUIData {
@@ -344,6 +399,7 @@ impl Default for GUIData {
             file_changed: false,
             selected_model_path: String::default(),
             load_status: String::from("No model loaded"),
+            take_screenshot: false,
         }
     }
 }
@@ -733,16 +789,44 @@ impl App {
             }
         }
 
-        // TODO: do in gltf_model
-        // self.data
-        //     .gltf_model
-        //     .reset_vertices_animation_position(self.start.elapsed().as_secs_f32());
-        // self.data.gltf_model.apply_animation(
-        //     self.start.elapsed().as_secs_f32(),
-        //     0,
-        //     Matrix4::identity(),
-        // );
-        // Self::update_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
+        // Apply animation for glTF models (skeletal or node animation)
+        if !self.data.gltf_model.gltf_data.is_empty() {
+            let time = self.start.elapsed().as_secs_f32();
+
+            // Log every 60 frames (approximately 1 second at 60fps)
+            static mut FRAME_COUNT: u32 = 0;
+            unsafe {
+                FRAME_COUNT += 1;
+                if FRAME_COUNT % 60 == 0 {
+                    if self.data.gltf_model.has_skinned_meshes {
+                        log!("Updating glTF skeletal animation: time={:.4}s, joint_animations={}, gltf_data={}",
+                             time, self.data.gltf_model.joint_animations.len(), self.data.gltf_model.gltf_data.len());
+                    } else {
+                        log!("Updating glTF node animation: time={:.4}s, node_animations={}, gltf_data={}",
+                             time, self.data.gltf_model.node_animations.len(), self.data.gltf_model.gltf_data.len());
+                    }
+                }
+            }
+
+            if self.data.gltf_model.has_skinned_meshes {
+                // Skeletal animation: use joint transforms with weights
+                self.data
+                    .gltf_model
+                    .reset_vertices_animation_position(time);
+                self.data.gltf_model.apply_animation(
+                    time,
+                    0,
+                    Matrix4::identity(),
+                );
+            } else {
+                // Node animation: transform nodes and propagate to children
+                self.data
+                    .gltf_model
+                    .reset_vertices_animation_position(time);
+            }
+
+            Self::update_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
+        }
 
         self.update_uniform_buffer(
             image_index,
@@ -790,9 +874,222 @@ impl App {
             return Err(anyhow!(e));
         }
 
+        // Handle screenshot request
+        if gui_data.take_screenshot {
+            log!("Taking screenshot...");
+            self.save_screenshot(image_index)?;
+            gui_data.take_screenshot = false;
+            log!("Screenshot saved!");
+        }
+
         self.frame = (self.frame + 1) % MAX_FRAMES_IN_FLIGHT;
 
         Ok(())
+    }
+
+    unsafe fn save_screenshot(&self, image_index: usize) -> Result<()> {
+        use std::fs::File;
+        use std::io::BufWriter;
+        use std::time::SystemTime;
+
+        let device = &self.rrdevice.device;
+        let swapchain_image = self.data.rrswapchain.swapchain_images[image_index];
+        let extent = self.data.rrswapchain.swapchain_extent;
+        let width = extent.width;
+        let height = extent.height;
+
+        // Create a buffer to copy the image to
+        let image_size = (width * height * 4) as vk::DeviceSize; // RGBA format
+        let buffer_info = vk::BufferCreateInfo::builder()
+            .size(image_size)
+            .usage(vk::BufferUsageFlags::TRANSFER_DST)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+
+        let buffer = device.create_buffer(&buffer_info, None)?;
+
+        // Allocate memory for the buffer
+        let mem_requirements = device.get_buffer_memory_requirements(buffer);
+        let memory_type_index = self.get_memory_type_index(
+            mem_requirements.memory_type_bits,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+        )?;
+
+        let alloc_info = vk::MemoryAllocateInfo::builder()
+            .allocation_size(mem_requirements.size)
+            .memory_type_index(memory_type_index);
+
+        let buffer_memory = device.allocate_memory(&alloc_info, None)?;
+        device.bind_buffer_memory(buffer, buffer_memory, 0)?;
+
+        // Create a command buffer for the copy operation
+        let command_pool = &self.data.rrcommand_pool.command_pool;
+        let alloc_info = vk::CommandBufferAllocateInfo::builder()
+            .command_pool(*command_pool)
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(1);
+
+        let command_buffers = device.allocate_command_buffers(&alloc_info)?;
+        let command_buffer = command_buffers[0];
+
+        // Begin command buffer
+        let begin_info = vk::CommandBufferBeginInfo::builder()
+            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+        device.begin_command_buffer(command_buffer, &begin_info)?;
+
+        // Transition image layout to TRANSFER_SRC_OPTIMAL
+        let barrier = vk::ImageMemoryBarrier::builder()
+            .old_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+            .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .image(swapchain_image)
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .src_access_mask(vk::AccessFlags::MEMORY_READ)
+            .dst_access_mask(vk::AccessFlags::TRANSFER_READ);
+
+        device.cmd_pipeline_barrier(
+            command_buffer,
+            vk::PipelineStageFlags::TRANSFER,
+            vk::PipelineStageFlags::TRANSFER,
+            vk::DependencyFlags::empty(),
+            &[] as &[vk::MemoryBarrier],
+            &[] as &[vk::BufferMemoryBarrier],
+            &[barrier.build()],
+        );
+
+        // Copy image to buffer
+        let region = vk::BufferImageCopy::builder()
+            .buffer_offset(0)
+            .buffer_row_length(0)
+            .buffer_image_height(0)
+            .image_subresource(vk::ImageSubresourceLayers {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                mip_level: 0,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .image_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
+            .image_extent(vk::Extent3D {
+                width,
+                height,
+                depth: 1,
+            });
+
+        device.cmd_copy_image_to_buffer(
+            command_buffer,
+            swapchain_image,
+            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+            buffer,
+            &[region.build()],
+        );
+
+        // Transition image layout back to PRESENT_SRC_KHR
+        let barrier = vk::ImageMemoryBarrier::builder()
+            .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+            .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .image(swapchain_image)
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .src_access_mask(vk::AccessFlags::TRANSFER_READ)
+            .dst_access_mask(vk::AccessFlags::MEMORY_READ);
+
+        device.cmd_pipeline_barrier(
+            command_buffer,
+            vk::PipelineStageFlags::TRANSFER,
+            vk::PipelineStageFlags::TRANSFER,
+            vk::DependencyFlags::empty(),
+            &[] as &[vk::MemoryBarrier],
+            &[] as &[vk::BufferMemoryBarrier],
+            &[barrier.build()],
+        );
+
+        // End and submit command buffer
+        device.end_command_buffer(command_buffer)?;
+
+        let command_buffers_slice = [command_buffer];
+        let submit_info = vk::SubmitInfo::builder()
+            .command_buffers(&command_buffers_slice);
+        device.queue_submit(self.rrdevice.graphics_queue, &[submit_info.build()], vk::Fence::null())?;
+        device.queue_wait_idle(self.rrdevice.graphics_queue)?;
+
+        // Map memory and read data
+        let data = device.map_memory(buffer_memory, 0, image_size, vk::MemoryMapFlags::empty())?;
+        let slice = std::slice::from_raw_parts(data as *const u8, image_size as usize);
+
+        // Convert BGRA to RGBA
+        let mut rgba_data = vec![0u8; (width * height * 4) as usize];
+        for y in 0..height {
+            for x in 0..width {
+                let i = ((y * width + x) * 4) as usize;
+                rgba_data[i] = slice[i + 2];     // R = B
+                rgba_data[i + 1] = slice[i + 1]; // G = G
+                rgba_data[i + 2] = slice[i];     // B = R
+                rgba_data[i + 3] = slice[i + 3]; // A = A
+            }
+        }
+
+        device.unmap_memory(buffer_memory);
+
+        // Generate filename with timestamp
+        let timestamp = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)?
+            .as_secs();
+        let filename = format!("log/screenshot_{}.png", timestamp);
+
+        // Ensure log directory exists
+        std::fs::create_dir_all("log")?;
+
+        // Save as PNG
+        let file = File::create(&filename)?;
+        let writer = BufWriter::new(file);
+        let mut encoder = png::Encoder::new(writer, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header()?;
+        writer.write_image_data(&rgba_data)?;
+
+        log!("Screenshot saved to: {}", filename);
+
+        // Cleanup
+        device.free_command_buffers(*command_pool, &[command_buffer]);
+        device.free_memory(buffer_memory, None);
+        device.destroy_buffer(buffer, None);
+
+        Ok(())
+    }
+
+    unsafe fn get_memory_type_index(
+        &self,
+        type_filter: u32,
+        properties: vk::MemoryPropertyFlags,
+    ) -> Result<u32> {
+        let mem_properties = self.instance.get_physical_device_memory_properties(self.rrdevice.physical_device);
+
+        for i in 0..mem_properties.memory_type_count {
+            let has_type = (type_filter & (1 << i)) != 0;
+            let has_properties = mem_properties.memory_types[i as usize]
+                .property_flags
+                .contains(properties);
+
+            if has_type && has_properties {
+                return Ok(i);
+            }
+        }
+
+        Err(anyhow!("Failed to find suitable memory type"))
     }
 
     unsafe fn destroy(&mut self) {
@@ -1135,6 +1432,8 @@ impl App {
         // update vertex buffer
         self.morphing(self.start.elapsed().as_secs_f32());
 
+        // Note: Animation updates are now handled in draw() method before rendering
+
         // update uniform buffer
         let model = Mat4::identity();
 
@@ -1294,54 +1593,28 @@ impl App {
         rrdevice: &RRDevice,
         data: &mut AppData,
     ) -> Result<()> {
-        // gltf model
-        let model_path = "src/resources/stickman/stickman.glb";
-        data.gltf_model = GltfModel::load_model(model_path);
-
-        for gltf_data in &data.gltf_model.gltf_data {
-            let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain);
-            (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
-                instance,
-                rrdevice,
-                data.rrcommand_pool.borrow_mut(),
-                &gltf_data.image_data[0].data,
-                gltf_data.image_data[0].width,
-                gltf_data.image_data[0].height,
-            )?;
-
-            rrdata.vertex_data = VertexData::default();
-            for gltf_vertex in &gltf_data.vertices {
-                rrdata
-                    .vertex_data
-                    .vertices
-                    .push(vulkanr::data::Vertex::default());
-            }
-            for gltf_vertex in &gltf_data.vertices {
-                let vertex = vulkanr::data::Vertex::new(
-                    Vec3::new_array(gltf_vertex.position),
-                    Vec4::new(0.0, 1.0, 0.0, 1.0),
-                    Vec2::new_array(gltf_vertex.tex_coord),
-                );
-                rrdata.vertex_data.vertices[gltf_vertex.index] = vertex;
-            }
-
-            rrdata.vertex_data.indices = gltf_data.indices.clone();
-
-            &data.model_descriptor_set.rrdata.push(rrdata);
-        }
-
         // fbx model
-        // Clear existing gltf rrdata (we're replacing with FBX)
-        data.model_descriptor_set.rrdata.clear();
 
         let model_path_fbx = "src/resources/phoenix-bird/source/fly.fbx";
         // Use russimp-based loader for better compatibility
         data.fbx_model = fbx::fbx::load_fbx_with_russimp(model_path_fbx)?;
 
+        // Apply initial pose before creating vertex buffers
+        if data.fbx_model.animation_count() > 0 {
+            log!("Applying initial pose (time=0) for FBX skeletal animation...");
+            data.fbx_model.update_animation(0, 0.0);
+        }
+
         // Create separate rrdata for each FBX mesh
         for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
             log!("Creating RRData for FBX mesh {}: {} vertices, texture: {:?}",
                 mesh_idx, fbx_data.positions.len(), fbx_data.diffuse_texture);
+
+            // Debug: log first vertex position to verify skinning was applied
+            if !fbx_data.positions.is_empty() {
+                let first_pos = &fbx_data.positions[0];
+                log!("DEBUG: Mesh {} first vertex position: ({}, {}, {})", mesh_idx, first_pos.x, first_pos.y, first_pos.z);
+            }
 
             let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain);
 
@@ -1443,6 +1716,9 @@ impl App {
         let model_path_fbx = "src/resources/phoenix-bird/source/fly.fbx";
         data.current_model_path = model_path_fbx.to_string();
 
+        // Note: descriptor sets and command buffers are created by the initialization code
+        // (after this function returns) in the main initialization sequence
+        log!("=== FBX model loaded successfully ===");
         Ok(())
     }
 
@@ -1451,9 +1727,22 @@ impl App {
         rrdevice: &RRDevice,
         data: &mut AppData,
     ) -> Result<()> {
-        for (i, rrdata) in data.model_descriptor_set.rrdata.iter_mut().enumerate() {
+        // Only update if glTF model is loaded (check if gltf_data matches rrdata count)
+        if data.gltf_model.gltf_data.is_empty() {
+            return Ok(());
+        }
+
+        // Only update glTF meshes (up to gltf_data.len())
+        let gltf_mesh_count = data.gltf_model.gltf_data.len();
+        for i in 0..gltf_mesh_count {
+            if i >= data.model_descriptor_set.rrdata.len() {
+                break;
+            }
+
+            let rrdata = &mut data.model_descriptor_set.rrdata[i];
             let vertex_data = &mut rrdata.vertex_data;
-            let gltf_data = &mut data.gltf_model.gltf_data[i];
+            let gltf_data = &data.gltf_model.gltf_data[i];
+
             for vertex in &gltf_data.vertices {
                 vertex_data.vertices[vertex.index].pos.x = vertex.animation_position[0];
                 vertex_data.vertices[vertex.index].pos.y = vertex.animation_position[1];
@@ -1892,6 +2181,48 @@ impl App {
             rrdata.sampler = create_texture_sampler(&rrdevice, rrdata.mip_level)?;
         }
 
+        // Apply initial pose for glTF models with animation
+        if is_gltf && (!data.gltf_model.joint_animations.is_empty() || !data.gltf_model.node_animations.is_empty()) {
+            if data.gltf_model.has_skinned_meshes {
+                log!("Applying initial pose (time=0) for glTF skeletal animation...");
+                data.gltf_model.reset_vertices_animation_position(0.0);
+                data.gltf_model.apply_animation(0.0, 0, Matrix4::identity());
+            } else {
+                log!("Applying initial pose (time=0) for glTF node animation...");
+                data.gltf_model.reset_vertices_animation_position(0.0);
+            }
+
+            // Update vertex buffers with initial pose
+            for i in 0..data.gltf_model.gltf_data.len() {
+                if i >= data.model_descriptor_set.rrdata.len() {
+                    break;
+                }
+
+                let rrdata = &mut data.model_descriptor_set.rrdata[i];
+                let vertex_data = &mut rrdata.vertex_data;
+                let gltf_data = &data.gltf_model.gltf_data[i];
+
+                for vertex in &gltf_data.vertices {
+                    vertex_data.vertices[vertex.index].pos.x = vertex.animation_position[0];
+                    vertex_data.vertices[vertex.index].pos.y = vertex.animation_position[1];
+                    vertex_data.vertices[vertex.index].pos.z = vertex.animation_position[2];
+                }
+
+                // Update vertex buffer with initial pose
+                if let Err(e) = rrdata.vertex_buffer.update(
+                    &instance,
+                    &rrdevice,
+                    &data.rrcommand_pool,
+                    (size_of::<vulkanr::data::Vertex>() * vertex_data.vertices.len()) as vk::DeviceSize,
+                    vertex_data.vertices.as_ptr() as *const c_void,
+                    vertex_data.vertices.len(),
+                ) {
+                    log!("Failed to update vertex buffer for glTF mesh {} with initial pose: {}", i, e);
+                }
+            }
+            log!("Initial pose applied successfully for glTF");
+        }
+
         // Apply initial pose for FBX models with skeletal animation
         if is_fbx && data.fbx_model.animation_count() > 0 {
             log!("Applying initial pose (time=0) for FBX skeletal animation...");
@@ -1924,7 +2255,7 @@ impl App {
                     }
                 }
             }
-            log!("Initial pose applied successfully");
+            log!("Initial pose applied successfully for FBX");
         }
 
         // Recreate descriptor sets

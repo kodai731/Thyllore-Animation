@@ -2579,10 +2579,24 @@ impl App {
             .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
             .depth_bias_enable(false);
 
-        // Multisample state
+        // Multisample state - must match render pass MSAA settings
+        // Use 8x MSAA to match the render pass (default for this application)
+        let msaa_samples = if !data.msaa_samples.is_empty() {
+            data.msaa_samples
+        } else {
+            vk::SampleCountFlags::_8
+        };
         let multisample_state = vk::PipelineMultisampleStateCreateInfo::builder()
             .sample_shading_enable(false)
-            .rasterization_samples(vk::SampleCountFlags::_1);
+            .rasterization_samples(msaa_samples);
+
+        // Depth/stencil state - ImGui doesn't use depth testing but we need to specify it
+        let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
+            .depth_test_enable(false)
+            .depth_write_enable(false)
+            .depth_compare_op(vk::CompareOp::ALWAYS)
+            .depth_bounds_test_enable(false)
+            .stencil_test_enable(false);
 
         // Color blend state
         let color_blend_attachment = vk::PipelineColorBlendAttachmentState::builder()
@@ -2613,6 +2627,7 @@ impl App {
             .viewport_state(&viewport_state)
             .rasterization_state(&rasterization_state)
             .multisample_state(&multisample_state)
+            .depth_stencil_state(&depth_stencil_state)
             .color_blend_state(&color_blend_state)
             .dynamic_state(&dynamic_state)
             .layout(pipeline_layout)

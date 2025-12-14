@@ -1593,54 +1593,28 @@ impl App {
         rrdevice: &RRDevice,
         data: &mut AppData,
     ) -> Result<()> {
-        // gltf model
-        let model_path = "src/resources/stickman/stickman.glb";
-        data.gltf_model = GltfModel::load_model(model_path);
-
-        for gltf_data in &data.gltf_model.gltf_data {
-            let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain);
-            (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
-                instance,
-                rrdevice,
-                data.rrcommand_pool.borrow_mut(),
-                &gltf_data.image_data[0].data,
-                gltf_data.image_data[0].width,
-                gltf_data.image_data[0].height,
-            )?;
-
-            rrdata.vertex_data = VertexData::default();
-            for gltf_vertex in &gltf_data.vertices {
-                rrdata
-                    .vertex_data
-                    .vertices
-                    .push(vulkanr::data::Vertex::default());
-            }
-            for gltf_vertex in &gltf_data.vertices {
-                let vertex = vulkanr::data::Vertex::new(
-                    Vec3::new_array(gltf_vertex.position),
-                    Vec4::new(0.0, 1.0, 0.0, 1.0),
-                    Vec2::new_array(gltf_vertex.tex_coord),
-                );
-                rrdata.vertex_data.vertices[gltf_vertex.index] = vertex;
-            }
-
-            rrdata.vertex_data.indices = gltf_data.indices.clone();
-
-            &data.model_descriptor_set.rrdata.push(rrdata);
-        }
-
         // fbx model
-        // Clear existing gltf rrdata (we're replacing with FBX)
-        data.model_descriptor_set.rrdata.clear();
 
         let model_path_fbx = "src/resources/phoenix-bird/source/fly.fbx";
         // Use russimp-based loader for better compatibility
         data.fbx_model = fbx::fbx::load_fbx_with_russimp(model_path_fbx)?;
 
+        // Apply initial pose before creating vertex buffers
+        if data.fbx_model.animation_count() > 0 {
+            log!("Applying initial pose (time=0) for FBX skeletal animation...");
+            data.fbx_model.update_animation(0, 0.0);
+        }
+
         // Create separate rrdata for each FBX mesh
         for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
             log!("Creating RRData for FBX mesh {}: {} vertices, texture: {:?}",
                 mesh_idx, fbx_data.positions.len(), fbx_data.diffuse_texture);
+
+            // Debug: log first vertex position to verify skinning was applied
+            if !fbx_data.positions.is_empty() {
+                let first_pos = &fbx_data.positions[0];
+                log!("DEBUG: Mesh {} first vertex position: ({}, {}, {})", mesh_idx, first_pos.x, first_pos.y, first_pos.z);
+            }
 
             let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain);
 
@@ -1742,6 +1716,9 @@ impl App {
         let model_path_fbx = "src/resources/phoenix-bird/source/fly.fbx";
         data.current_model_path = model_path_fbx.to_string();
 
+        // Note: descriptor sets and command buffers are created by the initialization code
+        // (after this function returns) in the main initialization sequence
+        log!("=== FBX model loaded successfully ===");
         Ok(())
     }
 

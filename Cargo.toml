@@ -19,12 +19,10 @@ thiserror = "1"
 tobj = { version = "3", features = ["log"] }
 vulkanalia = { version = "=0.26.0", features = ["libloading", "provisional", "window"] }
 copypasta = "0.8"
-glutin = "0.31.1"
-glutin-winit = "0.4.2"
-imgui = { path = "./src/imgui", features = ["tables-api"] }
-imgui-glium-renderer = { path = "./src/imgui-glium-renderer" }
+imgui = { path = "./src/imgui", features = ["tables-api", "docking"] }
 imgui-winit-support = { path = "./src/imgui-winit-support" }
-glium = "*"
+winit = "0.29"
+raw-window-handle = "0.6"
 chrono = "*"
 once_cell = "*"
 serde = { version = "*", features = ["derive"] }

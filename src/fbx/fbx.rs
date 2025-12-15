@@ -1736,7 +1736,14 @@ fn merge_duplicate_rotation_keys(keyframes: &[KeyFrame<Quaternion<f32>>]) -> Vec
                 let len_b = (b.s * b.s + b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z).sqrt();
                 let diff_a = (len_a - 1.0).abs();
                 let diff_b = (len_b - 1.0).abs();
-                diff_a.partial_cmp(&diff_b).unwrap()
+
+                // NaN安全な比較：NaNの場合は無限大として扱う
+                match (diff_a.is_nan(), diff_b.is_nan()) {
+                    (true, true) => std::cmp::Ordering::Equal,
+                    (true, false) => std::cmp::Ordering::Greater,
+                    (false, true) => std::cmp::Ordering::Less,
+                    (false, false) => diff_a.partial_cmp(&diff_b).unwrap_or(std::cmp::Ordering::Equal),
+                }
             })
             .unwrap();
 

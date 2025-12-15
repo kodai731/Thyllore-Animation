@@ -2497,156 +2497,25 @@ impl App {
 
         rrdevice.device.update_descriptor_sets(&descriptor_writes, &[] as &[vk::CopyDescriptorSet]);
 
-        // Create pipeline layout with push constants
-        let push_constant_range = vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::VERTEX)
-            .offset(0)
-            .size(std::mem::size_of::<[f32; 4]>() as u32); // scale and translate
-
-        let set_layouts = [descriptor_set_layout];
-        let push_constant_ranges = [push_constant_range];
-        let pipeline_layout_info = vk::PipelineLayoutCreateInfo::builder()
-            .set_layouts(&set_layouts)
-            .push_constant_ranges(&push_constant_ranges);
-
-        let pipeline_layout = rrdevice.device.create_pipeline_layout(&pipeline_layout_info, None)?;
-
-        // Load shaders
-        let vert_shader_module = Self::create_shader_module(&rrdevice.device, "src/shaders/imguiVert.spv")?;
-        let frag_shader_module = Self::create_shader_module(&rrdevice.device, "src/shaders/imguiFrag.spv")?;
-
-        let entry_name = std::ffi::CString::new("main").unwrap();
-
-        let shader_stages = [
-            vk::PipelineShaderStageCreateInfo::builder()
-                .stage(vk::ShaderStageFlags::VERTEX)
-                .module(vert_shader_module)
-                .name(entry_name.as_c_str().to_bytes_with_nul()),
-            vk::PipelineShaderStageCreateInfo::builder()
-                .stage(vk::ShaderStageFlags::FRAGMENT)
-                .module(frag_shader_module)
-                .name(entry_name.as_c_str().to_bytes_with_nul()),
-        ];
-
-        // Vertex input state
-        let vertex_binding_descriptions = [vk::VertexInputBindingDescription::builder()
-            .binding(0)
-            .stride(std::mem::size_of::<imgui::DrawVert>() as u32)
-            .input_rate(vk::VertexInputRate::VERTEX)];
-
-        let vertex_attribute_descriptions = [
-            // Position
-            vk::VertexInputAttributeDescription::builder()
-                .binding(0)
-                .location(0)
-                .format(vk::Format::R32G32_SFLOAT)
-                .offset(0),
-            // UV
-            vk::VertexInputAttributeDescription::builder()
-                .binding(0)
-                .location(1)
-                .format(vk::Format::R32G32_SFLOAT)
-                .offset(8),
-            // Color
-            vk::VertexInputAttributeDescription::builder()
-                .binding(0)
-                .location(2)
-                .format(vk::Format::R8G8B8A8_UNORM)
-                .offset(16),
-        ];
-
-        let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
-            .vertex_binding_descriptions(&vertex_binding_descriptions)
-            .vertex_attribute_descriptions(&vertex_attribute_descriptions);
-
-        // Input assembly state
-        let input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::builder()
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .primitive_restart_enable(false);
-
-        // Viewport state (dynamic)
-        let viewport_state = vk::PipelineViewportStateCreateInfo::builder()
-            .viewport_count(1)
-            .scissor_count(1);
-
-        // Rasterization state
-        let rasterization_state = vk::PipelineRasterizationStateCreateInfo::builder()
-            .depth_clamp_enable(false)
-            .rasterizer_discard_enable(false)
-            .polygon_mode(vk::PolygonMode::FILL)
-            .line_width(1.0)
-            .cull_mode(vk::CullModeFlags::NONE)
-            .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
-            .depth_bias_enable(false);
-
-        // Multisample state - must match render pass MSAA settings
-        // Use 8x MSAA to match the render pass (default for this application)
+        // Create ImGui pipeline using RRPipeline
         let msaa_samples = if !data.msaa_samples.is_empty() {
             data.msaa_samples
         } else {
             vk::SampleCountFlags::_8
         };
-        let multisample_state = vk::PipelineMultisampleStateCreateInfo::builder()
-            .sample_shading_enable(false)
-            .rasterization_samples(msaa_samples);
 
-        // Depth/stencil state - ImGui doesn't use depth testing but we need to specify it
-        let depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo::builder()
-            .depth_test_enable(false)
-            .depth_write_enable(false)
-            .depth_compare_op(vk::CompareOp::ALWAYS)
-            .depth_bounds_test_enable(false)
-            .stencil_test_enable(false);
-
-        // Color blend state
-        let color_blend_attachment = vk::PipelineColorBlendAttachmentState::builder()
-            .color_write_mask(vk::ColorComponentFlags::all())
-            .blend_enable(true)
-            .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
-            .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-            .color_blend_op(vk::BlendOp::ADD)
-            .src_alpha_blend_factor(vk::BlendFactor::ONE)
-            .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-            .alpha_blend_op(vk::BlendOp::ADD);
-
-        let color_blend_attachments = [color_blend_attachment];
-        let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
-            .logic_op_enable(false)
-            .logic_op(vk::LogicOp::COPY)
-            .attachments(&color_blend_attachments);
-
-        // Dynamic state
-        let dynamic_states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
-        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder().dynamic_states(&dynamic_states);
-
-        // Create graphics pipeline
-        let pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
-            .stages(&shader_stages)
-            .vertex_input_state(&vertex_input_state)
-            .input_assembly_state(&input_assembly_state)
-            .viewport_state(&viewport_state)
-            .rasterization_state(&rasterization_state)
-            .multisample_state(&multisample_state)
-            .depth_stencil_state(&depth_stencil_state)
-            .color_blend_state(&color_blend_state)
-            .dynamic_state(&dynamic_state)
-            .layout(pipeline_layout)
-            .render_pass(data.rrrender.render_pass)
-            .subpass(0);
-
-        let pipelines = rrdevice
-            .device
-            .create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None)
-            .map_err(|e| anyhow!("Failed to create ImGui pipeline: {:?}", e))?;
-        let pipeline = pipelines.0[0];
-
-        // Cleanup shader modules
-        rrdevice.device.destroy_shader_module(vert_shader_module, None);
-        rrdevice.device.destroy_shader_module(frag_shader_module, None);
+        let imgui_pipeline = RRPipeline::new_imgui(
+            rrdevice,
+            &data.rrrender,
+            descriptor_set_layout,
+            "src/shaders/imguiVert.spv",
+            "src/shaders/imguiFrag.spv",
+            msaa_samples,
+        )?;
 
         // Store in AppData
-        data.imgui_pipeline = Some(pipeline);
-        data.imgui_pipeline_layout = Some(pipeline_layout);
+        data.imgui_pipeline = Some(imgui_pipeline.pipeline);
+        data.imgui_pipeline_layout = Some(imgui_pipeline.pipeline_layout);
         data.imgui_descriptor_set = Some(descriptor_set);
         data.imgui_descriptor_set_layout = Some(descriptor_set_layout);
         data.imgui_descriptor_pool = Some(descriptor_pool);
@@ -2656,7 +2525,7 @@ impl App {
         data.imgui_sampler = Some(sampler);
 
         log!("ImGui rendering resources initialized successfully");
-        log!("  Pipeline: {:?}", pipeline);
+        log!("  Pipeline: {:?}", imgui_pipeline.pipeline);
         log!("  Descriptor Set: {:?}", descriptor_set);
 
         Ok(())
@@ -3052,18 +2921,6 @@ impl App {
         }
 
         Ok(())
-    }
-
-    /// Helper function to create shader module from SPIR-V file
-    unsafe fn create_shader_module(device: &vulkanalia::Device, path: &str) -> Result<vk::ShaderModule> {
-        let bytecode = std::fs::read(path)?;
-        let bytecode = vulkanalia::bytecode::Bytecode::new(&bytecode).unwrap();
-
-        let info = vk::ShaderModuleCreateInfo::builder()
-            .code_size(bytecode.code_size())
-            .code(bytecode.code());
-
-        Ok(device.create_shader_module(&info, None)?)
     }
 
     /// Helper function to transition image layout and copy buffer to image

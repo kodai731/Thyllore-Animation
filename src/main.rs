@@ -2190,9 +2190,11 @@ impl App {
                 log!("Applying initial pose (time=0) for glTF skeletal animation...");
                 data.gltf_model.reset_vertices_animation_position(0.0);
                 data.gltf_model.apply_animation(0.0, 0, Matrix4::identity());
+                log!("Initial pose applied successfully for glTF");
             } else {
                 log!("Applying initial pose (time=0) for glTF node animation...");
                 data.gltf_model.reset_vertices_animation_position(0.0);
+                log!("Initial pose applied successfully for glTF");
             }
 
             // Update vertex buffers with initial pose

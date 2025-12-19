@@ -167,15 +167,26 @@ impl GltfModel {
 
         if let Some(_) = skin.inverse_bind_matrices() {
             let reader = skin.reader(|buffer| Some(&buffers[buffer.index()]));
-            // convert milli meter to meter
             if let Some(iter) = reader.read_inverse_bind_matrices() {
                 log!("Inverse bind poses: {:?}", iter.len());
                 for (i, mat) in iter.enumerate() {
-                    let mut inverse_bind_pose = mat4_from_array(mat);
-                    // convert milli meter to meter
-                    inverse_bind_pose = inverse_bind_pose * Matrix4::from_scale(0.001f32);
+                    let inverse_bind_pose_raw = mat4_from_array(mat);
+
+                    // IMPORTANT: Do NOT scale inverse_bind_pose
+                    // glTF files store inverse_bind_pose in the same coordinate system as vertices
+                    // Both are already in meters, so no scaling is needed
+                    let inverse_bind_pose = inverse_bind_pose_raw;
+
                     self.joints[i].inverse_bind_pose = array_from_mat4(inverse_bind_pose);
-                    log!("Inverse bind pose {}: {:?}", i, inverse_bind_pose);
+                    if i < 2 {
+                        log!("Inverse bind pose {} (RAW from glTF file):", i);
+                        log!("  rotation: [{:.6}, {:.6}, {:.6}], [{:.6}, {:.6}, {:.6}], [{:.6}, {:.6}, {:.6}]",
+                             inverse_bind_pose.x.x, inverse_bind_pose.x.y, inverse_bind_pose.x.z,
+                             inverse_bind_pose.y.x, inverse_bind_pose.y.y, inverse_bind_pose.y.z,
+                             inverse_bind_pose.z.x, inverse_bind_pose.z.y, inverse_bind_pose.z.z);
+                        log!("  translation: [{:.6}, {:.6}, {:.6}]",
+                             inverse_bind_pose.w.x, inverse_bind_pose.w.y, inverse_bind_pose.w.z);
+                    }
                 }
             }
         }
@@ -228,10 +239,19 @@ impl GltfModel {
         let joint_inverse_bind_pose = mat4_from_array(joint.inverse_bind_pose);
         let joint_transform = transform * joint_translate * joint_rotation * joint_scale;
 
-        // Debug: Log vertex count for this joint
+        // Debug: Log joint transforms and inverse bind pose for first few joints
+        static mut LOGGED_JOINTS: [bool; 5] = [false; 5];
         unsafe {
-            if LOG_COUNTER % 60 == 0 && joint_animations.len() > 0 {
-                log!("  joint_id={}, vertex_count={}", target_joint_id, joint.vertex_indices.len());
+            if LOG_COUNTER >= 60 && LOG_COUNTER <= 200 && target_joint_id < 5 && !LOGGED_JOINTS[target_joint_id] {
+                LOGGED_JOINTS[target_joint_id] = true;
+                log!("  joint_id={}, vertex_count={}, has_anim={}", target_joint_id, joint.vertex_indices.len(), joint_animations.len() > 0);
+                log!("    joint_translate: {:?}", joint_translate);
+                log!("    joint_inverse_bind_pose (first 2 rows): [{}, {}, {}, {}], [{}, {}, {}, {}]",
+                     joint_inverse_bind_pose.x.x, joint_inverse_bind_pose.x.y, joint_inverse_bind_pose.x.z, joint_inverse_bind_pose.x.w,
+                     joint_inverse_bind_pose.y.x, joint_inverse_bind_pose.y.y, joint_inverse_bind_pose.y.z, joint_inverse_bind_pose.y.w);
+                log!("    joint_transform (first 2 rows): [{}, {}, {}, {}], [{}, {}, {}, {}]",
+                     joint_transform.x.x, joint_transform.x.y, joint_transform.x.z, joint_transform.x.w,
+                     joint_transform.y.x, joint_transform.y.y, joint_transform.y.z, joint_transform.y.w);
             }
         }
 
@@ -239,13 +259,21 @@ impl GltfModel {
             let vertex = &mut self.gltf_data[joint_vertex_id.gltf_data_index].vertices
                 [joint_vertex_id.vertex_index];
             let weight = vertex.get_weight_from_joint_id(joint.index);
+
+            // Skip if weight is zero
+            if weight < 0.0001 {
+                continue;
+            }
+
             let mut pos = vec4_from_array([
                 vertex.position[0],
                 vertex.position[1],
                 vertex.position[2],
                 1f32,
             ]);
-            pos = fix_coord() * joint_transform * joint_inverse_bind_pose * pos;
+
+            // Apply skinning: joint_transform * inverse_bind_pose transforms from bind pose to current pose
+            pos = joint_transform * joint_inverse_bind_pose * pos;
             pos = weight * pos;
             vertex.animation_position[0] += pos.x;
             vertex.animation_position[1] += pos.y;
@@ -275,14 +303,14 @@ impl GltfModel {
     }
 
     pub fn reset_vertices_animation_position(self: &mut Self, time: f32) {
-        // For skeletal animation (meshes with JOINTS/WEIGHTS), reset to original local positions
+        // For skeletal animation (meshes with JOINTS/WEIGHTS), reset to zero for weighted blending
         // For node animation (meshes without JOINTS/WEIGHTS), apply node transforms
-        // Reset skinned meshes to original positions for skeletal animation
+        // Reset skinned meshes animation positions to zero for weighted sum of joint transformations
         self.gltf_data.iter_mut().for_each(|gltf_data| {
             if gltf_data.has_joints {
-                // Skinned mesh: reset to original positions for skeletal animation
+                // Skinned mesh: reset to zero because we'll accumulate weighted joint transformations
                 gltf_data.vertices.iter_mut().for_each(|vertex| {
-                    vertex.animation_position = vertex.position;
+                    vertex.animation_position = [0.0, 0.0, 0.0];
                 })
             }
         });
@@ -295,6 +323,26 @@ impl GltfModel {
         let mut node_tree = Vec::default();
         node_tree.push(0 as u16);
         self.apply_node_transform(0, Matrix4::identity(), time, &mut node_tree);
+    }
+
+    /// Apply coordinate system fix to all animated vertices (after all transformations are complete)
+    pub fn apply_coord_fix_to_animated_vertices(&mut self) {
+        let fix_transform = fix_coord();
+        for gltf_data in &mut self.gltf_data {
+            // Apply to all vertices, both skinned and non-skinned
+            for vertex in &mut gltf_data.vertices {
+                let pos = vec4_from_array([
+                    vertex.animation_position[0],
+                    vertex.animation_position[1],
+                    vertex.animation_position[2],
+                    1.0,
+                ]);
+                let fixed_pos = fix_transform * pos;
+                vertex.animation_position[0] = fixed_pos.x;
+                vertex.animation_position[1] = fixed_pos.y;
+                vertex.animation_position[2] = fixed_pos.z;
+            }
+        }
     }
 
     fn apply_node_transform(
@@ -978,21 +1026,31 @@ unsafe fn process_node(
                         let pos_vec4 = cumulative_transform * Vector4::new(position[0], position[1], position[2], 1.0);
                         [pos_vec4.x, pos_vec4.y, pos_vec4.z]
                     } else {
+                        // Keep skinned mesh vertices at original scale (mm units)
+                        // inverse_bind_pose is now scaled by 0.001, so vertices should stay in mm
                         position
                     };
 
-                    let mut position_converted = transformed_position;
-                    position_converted[1] = 1.0 - position_converted[1];
-                    vertex.position = position_converted;
+                    // Log first 5 vertices for debugging
+                    if gltf_data.vertices.len() < 5 {
+                        log!("VERTEX LOAD: node={:?}, idx={}, has_joints={}, original_pos=[{:.3}, {:.3}, {:.3}], transformed_pos=[{:.3}, {:.3}, {:.3}]",
+                            node.name(), gltf_data.vertices.len(), has_joints,
+                            position[0], position[1], position[2],
+                            transformed_position[0], transformed_position[1], transformed_position[2]);
+                    }
+
+                    // Store position as-is without Y-flip
+                    // Coordinate system conversion (Y-up to Z-up) will be handled by fix_coord()
+                    vertex.position = transformed_position;
                     // Initialize animation_position with transformed position for non-animated meshes
-                    vertex.animation_position = position_converted;
+                    vertex.animation_position = transformed_position;
                     vertex.node_id = node.index() as u16;
 
                     // Debug: log first vertex of NurbsPath.009_Material at load time
                     if node.name() == Some("NurbsPath.009_Material.001_0") && gltf_data.vertices.len() == 0 {
                         log!("LOAD TIME: node={}, node_index={}, original_local={:?}, cumulative_transform={:?}",
                             node.name().unwrap(), node.index(), position, cumulative_transform);
-                        log!("LOAD TIME: transformed={:?}, position_converted={:?}", transformed_position, position_converted);
+                        log!("LOAD TIME: transformed={:?}, has_joints={}", transformed_position, has_joints);
                     }
 
                     let mut vertex_id = JointVertexIndex::default();
@@ -1175,7 +1233,13 @@ unsafe fn input_joint_vertex(gltf_model: &mut GltfModel) {
         log!("  mesh {}: {} vertices with joints", i, gltf_data.vertices.len());
         vertex_count += gltf_data.vertices.len();
         gltf_data.vertices.iter().for_each(|vertex| {
-            vertex.joint_indices.iter().for_each(|joint_index| {
+            // Only register vertex to joints with non-zero weights
+            for (joint_idx, joint_index) in vertex.joint_indices.iter().enumerate() {
+                let weight = vertex.joint_weights[joint_idx];
+                // Skip joints with zero or negligible weight
+                if weight < 0.0001 {
+                    continue;
+                }
                 let mut joint_vertex_index = JointVertexIndex::default();
                 joint_vertex_index.gltf_data_index = i;
                 joint_vertex_index.vertex_index = vertex.index;
@@ -1187,7 +1251,7 @@ unsafe fn input_joint_vertex(gltf_model: &mut GltfModel) {
                         .vertex_indices
                         .push(joint_vertex_index);
                 }
-            })
+            }
         });
 
         // validate
@@ -1321,12 +1385,14 @@ unsafe fn process_animation(
                 ReadOutputs::Translations(translations) => {
                     for (i, translation) in translations.enumerate() {
                         log!("Translation {}: {:?}", i, translation);
-                        // Store unscaled translation for node animations
+                        // Store translation for node animations
                         let node_translation = vec3_from_array(translation);
                         node_translations.push(node_translation);
 
-                        // convert milli meter to meter for joint animations
-                        let joint_translation = vec3_from_array(translation) * 0.00001f32;
+                        // IMPORTANT: Do NOT scale joint animation translations
+                        // glTF files store animation data in the same coordinate system as vertices
+                        // Both are already in meters, so no scaling is needed
+                        let joint_translation = vec3_from_array(translation);
                         let joint_translation_mat = Mat4::from_translation(joint_translation);
                         joint_translations.push(joint_translation_mat);
                         log!("Translation Matrix {}: {:?}", i, joint_translation_mat);

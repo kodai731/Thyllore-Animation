@@ -1732,16 +1732,60 @@ impl App {
                 .unmap_memory(rrdata.rruniform_buffers[image_index].buffer_memory);
         }
 
-        // Gizmoの頂点をカメラの回転に応じて更新
-        // ビュー行列からカメラの回転行列を抽出
-        let camera_rotation = cgmath::Matrix3::new(
-            view.x.x, view.x.y, view.x.z,
-            view.y.x, view.y.y, view.y.z,
-            view.z.x, view.z.y, view.z.z,
+        // Gizmoの頂点をカメラの向きに応じて更新
+        // カメラのright/up/direction（forward）ベクトルから直接Gizmo軸を計算
+        let camera_right = camera_direction.cross(camera_up).normalize();
+
+        // カメラの向き（forward）は camera_direction
+        // X軸（赤）= カメラのright
+        // Y軸（緑）= カメラのup
+        // Z軸（青）= カメラのdirection（forward）
+        let gizmo_rotation = cgmath::Matrix3::from_cols(
+            camera_right,      // X軸方向
+            camera_up,         // Y軸方向
+            camera_direction,  // Z軸方向
         );
 
         // Gizmoの頂点を更新
-        self.data.gizmo_data.update_rotation(&camera_rotation);
+        self.data.gizmo_data.update_rotation(&gizmo_rotation);
+
+        // Gizmo方向確認用ログ（60フレームごと）
+        static mut GIZMO_LOG_COUNTER: u32 = 0;
+        unsafe {
+            GIZMO_LOG_COUNTER += 1;
+            if GIZMO_LOG_COUNTER % 60 == 0 {
+                log!("=== Gizmo Direction Debug (frame {}) ===", GIZMO_LOG_COUNTER);
+                log!("Camera state:");
+                log!("  position: ({:.3}, {:.3}, {:.3})", camera_pos.x, camera_pos.y, camera_pos.z);
+                log!("  direction: ({:.3}, {:.3}, {:.3})", camera_direction.x, camera_direction.y, camera_direction.z);
+                log!("  up: ({:.3}, {:.3}, {:.3})", camera_up.x, camera_up.y, camera_up.z);
+
+                log!("  right: ({:.3}, {:.3}, {:.3})", camera_right.x, camera_right.y, camera_right.z);
+
+                log!("Gizmo rotation matrix (from camera vectors):");
+                log!("  X-axis (red):   [{:.3}, {:.3}, {:.3}] = camera right", gizmo_rotation.x.x, gizmo_rotation.x.y, gizmo_rotation.x.z);
+                log!("  Y-axis (green): [{:.3}, {:.3}, {:.3}] = camera up", gizmo_rotation.y.x, gizmo_rotation.y.y, gizmo_rotation.y.z);
+                log!("  Z-axis (blue):  [{:.3}, {:.3}, {:.3}] = camera direction", gizmo_rotation.z.x, gizmo_rotation.z.y, gizmo_rotation.z.z);
+
+                log!("Gizmo vertices (after rotation):");
+                log!("  Origin: ({:.3}, {:.3}, {:.3})",
+                     self.data.gizmo_data.vertices[0].pos[0],
+                     self.data.gizmo_data.vertices[0].pos[1],
+                     self.data.gizmo_data.vertices[0].pos[2]);
+                log!("  X-axis (red): ({:.3}, {:.3}, {:.3})",
+                     self.data.gizmo_data.vertices[1].pos[0],
+                     self.data.gizmo_data.vertices[1].pos[1],
+                     self.data.gizmo_data.vertices[1].pos[2]);
+                log!("  Y-axis (green): ({:.3}, {:.3}, {:.3})",
+                     self.data.gizmo_data.vertices[2].pos[0],
+                     self.data.gizmo_data.vertices[2].pos[1],
+                     self.data.gizmo_data.vertices[2].pos[2]);
+                log!("  Z-axis (blue): ({:.3}, {:.3}, {:.3})",
+                     self.data.gizmo_data.vertices[3].pos[0],
+                     self.data.gizmo_data.vertices[3].pos[1],
+                     self.data.gizmo_data.vertices[3].pos[2]);
+            }
+        }
 
         // 頂点バッファを更新（デバイスローカルメモリなので、staging bufferを使う必要があります）
         // 今回は簡単のため、毎フレーム再作成します

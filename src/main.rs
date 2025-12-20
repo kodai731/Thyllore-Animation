@@ -55,6 +55,11 @@ pub mod fbx {
     pub mod fbx;
 }
 
+pub mod gizmo {
+    pub mod gizmo;
+}
+use gizmo::gizmo::*;
+
 use anyhow::{anyhow, Result};
 use core::result::Result::Ok;
 const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
@@ -411,6 +416,9 @@ struct AppData {
     grid_descriptor_set: RRDescriptorSet,
     grid_vertex_buffer: RRVertexBuffer,
     grid_index_buffer: RRIndexBuffer,
+    gizmo_pipeline: RRPipeline,
+    gizmo_descriptor_set: RRDescriptorSet,
+    gizmo_data: GizmoData,
     command_pool: vk::CommandPool,
     image_available_semaphores: Vec<vk::Semaphore>, // semaphores are used to synchronize operations within or across command queues.
     render_finish_semaphores: Vec<vk::Semaphore>,
@@ -514,6 +522,42 @@ impl App {
             vk::PrimitiveTopology::LINE_LIST,
             vk::PolygonMode::LINE,
         );
+
+        // Gizmo用のディスクリプタセットとパイプラインを作成
+        data.gizmo_descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
+
+        // Gizmo用のuniform bufferを作成（テクスチャは不要、グリッドと同じ方法）
+        data.gizmo_descriptor_set
+            .rrdata
+            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain));
+
+        if let Err(e) = RRDescriptorSet::create_descriptor_set(
+            &rrdevice,
+            &data.rrswapchain,
+            &mut data.gizmo_descriptor_set,
+        ) {
+            eprintln!("failed to create gizmo descriptor set: {:?}", e);
+        }
+        println!("created gizmo descriptor set");
+
+        data.gizmo_pipeline = PipelineBuilder::new("src/shaders/gizmoVert.spv", "src/shaders/gizmoFrag.spv")
+            .vertex_input(VertexInputConfig::Custom {
+                bindings: vec![GizmoVertex::binding_description()],
+                attributes: GizmoVertex::attribute_descriptions().to_vec(),
+            })
+            .topology(vk::PrimitiveTopology::LINE_LIST)
+            .polygon_mode(vk::PolygonMode::LINE)
+            .no_depth_test()  // Gizmoは常に手前に表示
+            .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
+            .descriptor_layouts(vec![data.gizmo_descriptor_set.descriptor_set_layout])
+            .build(&rrdevice, &data.rrrender, Some(data.rrswapchain.swapchain_extent))
+            .expect("Failed to create gizmo pipeline");
+
+        // Gizmoデータを初期化
+        data.gizmo_data = GizmoData::new();
+        data.gizmo_data.create_buffers(&instance, &rrdevice, &data.rrcommand_pool)
+            .expect("Failed to create gizmo buffers");
+
         println!("created pipeline");
 
         if let Err(e) = Self::reload_model_data_buffer(&instance, &rrdevice, &mut data) {
@@ -1666,6 +1710,85 @@ impl App {
                 .device
                 .unmap_memory(rrdata.rruniform_buffers[image_index].buffer_memory);
         }
+
+        // Gizmo用のuniform bufferを更新
+        for i in 0..self.data.gizmo_descriptor_set.rrdata.len() {
+            let rrdata = &mut self.data.gizmo_descriptor_set.rrdata[i];
+            let gizmo_ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;
+            let ubo_gizmo = UniformBufferObject {
+                model: Mat4::identity(),
+                view: view,
+                proj: proj,
+            };
+            let memory_gizmo = self.rrdevice.device.map_memory(
+                gizmo_ubo_memory,
+                0,
+                size_of::<UniformBufferObject>() as u64,
+                vk::MemoryMapFlags::empty(),
+            )?;
+            memcpy(&ubo_gizmo, memory_gizmo.cast(), 1);
+            self.rrdevice
+                .device
+                .unmap_memory(rrdata.rruniform_buffers[image_index].buffer_memory);
+        }
+
+        // Gizmoの頂点をカメラの回転に応じて更新
+        // ビュー行列からカメラの回転行列を抽出
+        let camera_rotation = cgmath::Matrix3::new(
+            view.x.x, view.x.y, view.x.z,
+            view.y.x, view.y.y, view.y.z,
+            view.z.x, view.z.y, view.z.z,
+        );
+
+        // Gizmoの頂点を更新
+        self.data.gizmo_data.update_rotation(&camera_rotation);
+
+        // 頂点バッファを更新（デバイスローカルメモリなので、staging bufferを使う必要があります）
+        // 今回は簡単のため、毎フレーム再作成します
+        if let Some(vertex_buffer) = self.data.gizmo_data.vertex_buffer {
+            self.rrdevice.device.destroy_buffer(vertex_buffer, None);
+        }
+        if let Some(vertex_buffer_memory) = self.data.gizmo_data.vertex_buffer_memory {
+            self.rrdevice.device.free_memory(vertex_buffer_memory, None);
+        }
+
+        // 頂点バッファを再作成
+        let vertex_buffer_size = (size_of::<GizmoVertex>() * self.data.gizmo_data.vertices.len()) as u64;
+        let (staging_buffer, staging_buffer_memory) = create_buffer(
+            &self.instance,
+            &self.rrdevice,
+            vertex_buffer_size,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+        )?;
+
+        let data_ptr = self.rrdevice
+            .device
+            .map_memory(staging_buffer_memory, 0, vertex_buffer_size, vk::MemoryMapFlags::empty())?;
+        std::ptr::copy_nonoverlapping(self.data.gizmo_data.vertices.as_ptr(), data_ptr.cast(), self.data.gizmo_data.vertices.len());
+        self.rrdevice.device.unmap_memory(staging_buffer_memory);
+
+        let (vertex_buffer, vertex_buffer_memory) = create_buffer(
+            &self.instance,
+            &self.rrdevice,
+            vertex_buffer_size,
+            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        )?;
+
+        copy_buffer(
+            &self.rrdevice,
+            &self.data.rrcommand_pool,
+            staging_buffer,
+            vertex_buffer,
+            vertex_buffer_size,
+        )?;
+
+        self.rrdevice.device.destroy_buffer(staging_buffer, None);
+        self.rrdevice.device.free_memory(staging_buffer_memory, None);
+
+        self.data.gizmo_data.vertex_buffer = Some(vertex_buffer);
+        self.data.gizmo_data.vertex_buffer_memory = Some(vertex_buffer_memory);
 
         Ok(())
     }
@@ -2855,6 +2978,10 @@ impl App {
                 bind_info.rrpipeline.pipeline,
             );
 
+            // すべてのパイプラインで線幅を設定（RRPipeline::new()はすべてLINE_WIDTHをdynamic stateに含む）
+            // パイプラインバインド直後に設定（Vulkanのベストプラクティス）
+            self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
+
             self.rrdevice.device.cmd_bind_vertex_buffers(
                 command_buffer,
                 0,
@@ -2888,6 +3015,62 @@ impl App {
                 1,
                 bind_info.offset_index,
                 bind_info.offset_index as i32,
+                0,
+            );
+        }
+
+        // Gizmoの描画（常に最後に描画して、他のオブジェクトの上に表示）
+        if let (Some(vertex_buffer), Some(index_buffer)) =
+            (self.data.gizmo_data.vertex_buffer, self.data.gizmo_data.index_buffer) {
+
+            // Gizmoパイプラインをバインド
+            self.rrdevice.device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.data.gizmo_pipeline.pipeline,
+            );
+
+            // 線幅を設定（wideLinesが無効なので1.0のみ使用可能）- パイプラインバインド直後に設定
+            self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
+
+            // 頂点バッファをバインド
+            self.rrdevice.device.cmd_bind_vertex_buffers(
+                command_buffer,
+                0,
+                &[vertex_buffer],
+                &[0],
+            );
+
+            // インデックスバッファをバインド
+            self.rrdevice.device.cmd_bind_index_buffer(
+                command_buffer,
+                index_buffer,
+                0,
+                vk::IndexType::UINT32,
+            );
+
+            // ディスクリプタセットをバインド
+            // Gizmoは常にdata_index=0（1つのRRDataのみ）
+            let swapchain_images_len = self.data.gizmo_descriptor_set.descriptor_sets.len() /
+                self.data.gizmo_descriptor_set.rrdata.len().max(1);
+            let descriptor_set_index = 0 * swapchain_images_len + image_index;
+
+            self.rrdevice.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.data.gizmo_pipeline.pipeline_layout,
+                0,
+                &[self.data.gizmo_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[],
+            );
+
+            // Gizmoを描画
+            self.rrdevice.device.cmd_draw_indexed(
+                command_buffer,
+                self.data.gizmo_data.indices.len() as u32,
+                1,
+                0,
+                0,
                 0,
             );
         }

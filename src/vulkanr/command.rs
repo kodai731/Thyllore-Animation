@@ -142,6 +142,10 @@ impl RRCommandBuffer {
                 vk::PipelineBindPoint::GRAPHICS,
                 rrbind_info.rrpipeline.pipeline,
             );
+
+            // Set line width after pipeline bind (required for VK_DYNAMIC_STATE_LINE_WIDTH)
+            rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
+
             rrdevice.device.cmd_bind_vertex_buffers(
                 command_buffer,
                 0,

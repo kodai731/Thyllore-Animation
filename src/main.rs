@@ -644,11 +644,14 @@ impl App {
         let frame = 0 as usize;
         let resized = false;
         let start = Instant::now();
-        data.initial_camera_pos = [0.0, -100.0, -10.0];
+        // Vulkan Y-down coordinate system: View from diagonal position
+        data.initial_camera_pos = [5.0, -3.0, -5.0];
         data.camera_pos = data.initial_camera_pos;
         let camera_pos = vec3(data.camera_pos[0], data.camera_pos[1], data.camera_pos[2]);
-        let camera_direction = camera_pos.normalize();
-        let camera_up = Vector3::cross(camera_direction, vec3(1.0, 0.0, 0.0));
+        // Look at origin (0, 0, 0)
+        let camera_direction = (vec3(0.0, 0.0, 0.0) - camera_pos).normalize();
+        // Y-down (Vulkan coordinate system)
+        let camera_up = vec3(0.0, -1.0, 0.0);
         data.camera_direction = [camera_direction.x, camera_direction.y, camera_direction.z];
         data.camera_up = [camera_up.x, camera_up.y, camera_up.z];
         data.is_left_clicked = false;
@@ -1446,11 +1449,21 @@ impl App {
 
         let mouse_pos = Vector2::new(mouse_pos[0], mouse_pos[1]);
 
+        // Unity-style camera rotation (Y-down coordinate system):
+        // - Horizontal rotation: Always around world Y-down axis (0, -1, 0) - prevents gimbal lock
+        // - Vertical rotation: Around camera's local right axis
+        let world_y_down = vec3(0.0, -1.0, 0.0);  // Y-down world axis (fixed)
+        let camera_right = camera_direction.cross(camera_up).normalize();
+
+        // For pan operation, use view-based axes
         let last_view = view(camera_pos, camera_direction, camera_up);
         let base_x_4 = last_view * vec4(1.0, 0.0, 0.0, 0.0);
         let base_y_4 = last_view * vec4(0.0, -1.0, 0.0, 0.0);
         let base_x = vec3(base_x_4.x, base_x_4.y, base_x_4.z);
         let base_y = vec3(base_y_4.x, base_y_4.y, base_y_4.z);
+
+        // Camera rotation logging counter
+        static mut ROTATION_LOG_COUNTER: u32 = 0;
 
         if gui_data.is_left_clicked || self.data.is_left_clicked {
             // first clicked
@@ -1468,22 +1481,75 @@ impl App {
                 let mut rotate_x = Mat3::identity();
                 let mut rotate_y = Mat3::identity();
                 let theta_x = -diff.x * 0.005;
-                let theta_y = -diff.y * 0.005;
+                let theta_y = diff.y * 0.005;  // Inverted for intuitive up/down rotation
+
+                // Horizontal rotation: Around world Y-down axis (Unity-style, gimbal-lock free)
                 let _ = rodrigues(
                     &mut rotate_x,
                     Rad(theta_x).cos(),
                     Rad(theta_x).sin(),
-                    &base_y,
+                    &world_y_down,
                 );
+                // Vertical rotation: Around camera's local right axis
                 let _ = rodrigues(
                     &mut rotate_y,
                     Rad(theta_y).cos(),
                     Rad(theta_y).sin(),
-                    &base_x,
+                    &camera_right,
                 );
+
+                // Log rotation info every 30 frames
+                unsafe {
+                    ROTATION_LOG_COUNTER += 1;
+                    if ROTATION_LOG_COUNTER % 30 == 0 {
+                        log!("=== Camera Rotation Debug (frame {}) ===", ROTATION_LOG_COUNTER);
+                        log!("  Mouse diff: ({:.3}, {:.3}), theta: ({:.3}, {:.3})",
+                             diff.x, diff.y, theta_x, theta_y);
+                        log!("  Before rotation:");
+                        log!("    direction: ({:.3}, {:.3}, {:.3})",
+                             camera_direction.x, camera_direction.y, camera_direction.z);
+                        log!("    up: ({:.3}, {:.3}, {:.3})",
+                             camera_up.x, camera_up.y, camera_up.z);
+                        log!("    right: ({:.3}, {:.3}, {:.3})",
+                             camera_right.x, camera_right.y, camera_right.z);
+                        log!("  Rotation axes:");
+                        log!("    horizontal (world Y-down): ({:.3}, {:.3}, {:.3})",
+                             world_y_down.x, world_y_down.y, world_y_down.z);
+                        log!("    vertical (camera right): ({:.3}, {:.3}, {:.3})",
+                             camera_right.x, camera_right.y, camera_right.z);
+                    }
+                }
+
                 let rotate = rotate_y * rotate_x;
                 camera_up = rotate * camera_up;
                 camera_direction = rotate * camera_direction;
+
+                // Re-orthogonalize camera vectors to prevent drift and maintain stability
+                camera_direction = camera_direction.normalize();
+                let camera_right_new = camera_direction.cross(camera_up).normalize();
+                camera_up = camera_right_new.cross(camera_direction).normalize();
+
+                // Log after rotation
+                unsafe {
+                    if ROTATION_LOG_COUNTER % 30 == 0 {
+                        log!("  After rotation & re-orthogonalization:");
+                        log!("    direction: ({:.3}, {:.3}, {:.3})",
+                             camera_direction.x, camera_direction.y, camera_direction.z);
+                        log!("    up: ({:.3}, {:.3}, {:.3})",
+                             camera_up.x, camera_up.y, camera_up.z);
+                        log!("    right: ({:.3}, {:.3}, {:.3})",
+                             camera_right_new.x, camera_right_new.y, camera_right_new.z);
+
+                        // Check orthogonality
+                        let dot_dir_up = camera_direction.dot(camera_up);
+                        let dot_dir_right = camera_direction.dot(camera_right_new);
+                        let dot_up_right = camera_up.dot(camera_right_new);
+                        log!("  Orthogonality check (should be ~0):");
+                        log!("    direction·up: {:.6}", dot_dir_up);
+                        log!("    direction·right: {:.6}", dot_dir_right);
+                        log!("    up·right: {:.6}", dot_up_right);
+                    }
+                }
 
                 // Update camera state every frame (not just on release)
                 self.data.camera_direction = array3_from_vec(camera_direction);
@@ -1822,8 +1888,10 @@ impl App {
     unsafe fn reset_camera(&mut self) {
         self.data.camera_pos = self.data.initial_camera_pos;
         let camera_pos = vec3_from_array(self.data.camera_pos);
-        let camera_direction = camera_pos.normalize();
-        let camera_up = Vector3::cross(camera_direction, vec3(1.0, 0.0, 0.0));
+        // Look at origin (0, 0, 0)
+        let camera_direction = (vec3(0.0, 0.0, 0.0) - camera_pos).normalize();
+        // Y-down (Vulkan coordinate system)
+        let camera_up = vec3(0.0, -1.0, 0.0);
         self.data.camera_direction = array3_from_vec(camera_direction);
         self.data.camera_up = array3_from_vec(camera_up);
     }
@@ -1833,6 +1901,7 @@ impl App {
         let mut camera_direction = vec3_from_array(self.data.camera_direction);
         let mut camera_up = vec3_from_array(self.data.camera_up);
         let horizon = Vector3::cross(camera_up, camera_direction);
+        // Reset to Y-down (Vulkan coordinate system)
         camera_up = vec3(0.0, -1.0, 0.0);
         camera_direction = Vector3::cross(horizon, camera_up);
         self.data.camera_up = array3_from_vec(camera_up);

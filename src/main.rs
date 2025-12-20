@@ -1460,6 +1460,7 @@ impl App {
             }
             let clicked_mouse_pos = vec2_from_array(self.data.clicked_mouse_pos);
 
+            // FIX: Use delta from previous frame (Unity-style) instead of cumulative diff
             let diff = mouse_pos - clicked_mouse_pos;
             let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
             gui_data.monitor_value = distance;
@@ -1484,12 +1485,17 @@ impl App {
                 camera_up = rotate * camera_up;
                 camera_direction = rotate * camera_direction;
 
-                if !gui_data.is_left_clicked {
-                    // left button released
-                    self.data.camera_direction = array3_from_vec(camera_direction);
-                    self.data.camera_up = array3_from_vec(camera_up);
-                    self.data.is_left_clicked = false;
-                }
+                // Update camera state every frame (not just on release)
+                self.data.camera_direction = array3_from_vec(camera_direction);
+                self.data.camera_up = array3_from_vec(camera_up);
+
+                // Update previous mouse position every frame for delta calculation
+                self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
+            }
+
+            if !gui_data.is_left_clicked {
+                // left button released
+                self.data.is_left_clicked = false;
             }
         }
 
@@ -1500,6 +1506,8 @@ impl App {
                 self.data.is_wheel_clicked = true;
             }
             let clicked_mouse_pos = vec2_from_array(self.data.clicked_mouse_pos);
+
+            // FIX: Use delta from previous frame (Unity-style) instead of cumulative diff
             let diff = mouse_pos - clicked_mouse_pos;
             let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
             gui_data.monitor_value = distance;
@@ -1508,11 +1516,16 @@ impl App {
                 let translate_y_v = base_y * diff.y;
                 camera_pos += translate_x_v + translate_y_v;
 
-                if !gui_data.is_wheel_clicked {
-                    // left button released
-                    self.data.camera_pos = array3_from_vec(camera_pos);
-                    self.data.is_wheel_clicked = false;
-                }
+                // Update camera position every frame (not just on release)
+                self.data.camera_pos = array3_from_vec(camera_pos);
+
+                // Update previous mouse position every frame for delta calculation
+                self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
+            }
+
+            if !gui_data.is_wheel_clicked {
+                // left button released
+                self.data.is_wheel_clicked = false;
             }
         }
 

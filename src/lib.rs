@@ -7,6 +7,20 @@
 
 extern crate core;
 
+pub mod vulkanr {
+    pub mod buffer;
+    pub mod command;
+    pub mod data;
+    pub mod descriptor;
+    pub mod device;
+    pub mod image;
+    pub mod pipeline;
+    pub mod render;
+    pub mod swapchain;
+    pub mod vulkan;
+    pub mod window;
+}
+
 pub mod gltf {
     pub mod gltf;
 }
@@ -17,6 +31,10 @@ pub mod math {
 
 pub mod fbx {
     pub mod fbx;
+}
+
+pub mod gizmo {
+    pub mod gizmo;
 }
 
 pub mod logger;

@@ -4,7 +4,6 @@ use super::render::*;
 use super::vulkan::*;
 use super::window::*;
 use crate::vulkanr::command::RRCommandPool;
-use crate::AppData;
 
 #[derive(Clone, Debug)]
 pub struct SwapchainSupport {

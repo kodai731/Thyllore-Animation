@@ -4,30 +4,25 @@
     clippy::too_many_arguments,
     clippy::unnecessary_wraps
 )]
-mod vulkanr {
-    pub mod buffer;
-    pub mod command;
-    pub mod data;
-    pub mod descriptor;
-    pub mod device;
-    pub mod image;
-    pub mod pipeline;
-    pub mod render;
-    pub mod swapchain;
-    pub mod vulkan;
-    pub mod window;
-}
-use vulkanr::buffer::*;
-use vulkanr::command::*;
-use vulkanr::data::*;
-use vulkanr::descriptor::*;
-use vulkanr::device::*;
-use vulkanr::image::*;
-use vulkanr::pipeline::*;
-use vulkanr::render::*;
-use vulkanr::swapchain::*;
-use vulkanr::vulkan::*;
-use vulkanr::window::*;
+
+// lib.rsからモジュールをインポート
+use rust_rendering::vulkanr::buffer::*;
+use rust_rendering::vulkanr::command::*;
+use rust_rendering::vulkanr::data::{self, *};
+use rust_rendering::vulkanr::descriptor::*;
+use rust_rendering::vulkanr::device::*;
+use rust_rendering::vulkanr::image::*;
+use rust_rendering::vulkanr::pipeline::{
+    PipelineBuilder, RRPipeline, VertexInputConfig, DepthTestConfig, BlendConfig, PushConstantConfig,
+};
+use rust_rendering::vulkanr::render::*;
+use rust_rendering::vulkanr::swapchain::*;
+use rust_rendering::vulkanr::vulkan::*;
+use rust_rendering::vulkanr::window::*;
+
+use rust_rendering::gltf::gltf::*;
+use rust_rendering::math::math::*;
+use rust_rendering::gizmo::gizmo::*;
 
 // Disambiguate Device type - use vulkanalia's Device explicitly where needed
 use vulkanalia::Device as VkDevice;
@@ -35,30 +30,14 @@ use vulkanalia::Device as VkDevice;
 // imgui
 //use imgui::*;
 
+// マクロをインポート
+#[macro_use]
+extern crate rust_rendering;
+
 mod support;
 
-mod math {
-    pub mod math;
-}
-use math::math::*;
-
-mod gltf {
-    pub mod gltf;
-}
-use gltf::gltf::*;
-
-pub mod logger {
-    pub mod logger;
-}
-
-pub mod fbx {
-    pub mod fbx;
-}
-
-pub mod gizmo {
-    pub mod gizmo;
-}
-use gizmo::gizmo::*;
+use rust_rendering::logger::logger::*;
+use rust_rendering::fbx::fbx::{FbxModel, load_fbx, load_fbx_with_russimp};
 
 use anyhow::{anyhow, Result};
 use core::result::Result::Ok;
@@ -84,8 +63,6 @@ use std::time::Instant;
 use winit;
 use winit::event::ElementState;
 
-use crate::fbx::fbx::FbxModel;
-use crate::vulkanr::data;
 use cgmath::num_traits::AsPrimitive;
 use cgmath::{Matrix4, Vector4};
 use imgui::{Condition, MouseButton};
@@ -432,7 +409,7 @@ struct AppData {
     camera_pos: [f32; 3],
     initial_camera_pos: [f32; 3],
     camera_up: [f32; 3],
-    grid_vertices: Vec<vulkanr::data::Vertex>,
+    grid_vertices: Vec<data::Vertex>,
     grid_indices: Vec<u32>,
     is_left_clicked: bool,
     clicked_mouse_pos: [f32; 2],
@@ -585,7 +562,7 @@ impl App {
             &instance,
             &rrdevice,
             &data.rrcommand_pool,
-            (size_of::<vulkanr::data::Vertex>() * data.grid_vertices.len()) as vk::DeviceSize,
+            (size_of::<data::Vertex>() * data.grid_vertices.len()) as vk::DeviceSize,
             data.grid_vertices.as_ptr() as *const c_void,
             data.grid_vertices.len(),
         );
@@ -1228,7 +1205,7 @@ impl App {
 
         // for Mac ablability
         let flags = if cfg!(target_os = "macos") && entry.version()? >= PORTABILITY_MACOS_VERSION {
-            info!("Enabling extensions for macOS portability.");
+            log::info!("Enabling extensions for macOS portability.");
             extensions.push(
                 vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_EXTENSION
                     .name
@@ -1289,6 +1266,8 @@ impl App {
         let data = unsafe { *data };
         let message = unsafe { CStr::from_ptr(data.message) }.to_string_lossy();
 
+        // Vulkan validation layerのメッセージは標準logクレートでコンソールに出力
+        use log::{error, warn, debug, trace};
         if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::ERROR {
             error!("({:?}) {}", type_, message);
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING {
@@ -1454,10 +1433,10 @@ impl App {
                 pos2.x = pos1.x;
                 pos2.z = -100.0;
             }
-            let vertex1 = vulkanr::data::Vertex::new(pos1, color, tex_coord);
-            let vertex2 = vulkanr::data::Vertex::new(pos2, color, tex_coord);
-            let vertex3 = vulkanr::data::Vertex::new(-pos1, color, tex_coord);
-            let vertex4 = vulkanr::data::Vertex::new(-pos2, color, tex_coord);
+            let vertex1 = data::Vertex::new(pos1, color, tex_coord);
+            let vertex2 = data::Vertex::new(pos2, color, tex_coord);
+            let vertex3 = data::Vertex::new(-pos1, color, tex_coord);
+            let vertex4 = data::Vertex::new(-pos2, color, tex_coord);
             data.grid_vertices.push(vertex1);
             data.grid_indices.push(data.grid_indices.len() as u32);
             data.grid_vertices.push(vertex2);
@@ -1846,7 +1825,7 @@ impl App {
 
         let model_path_fbx = "src/resources/phoenix-bird/source/fly.fbx";
         // Use russimp-based loader for better compatibility
-        data.fbx_model = fbx::fbx::load_fbx_with_russimp(model_path_fbx)?;
+        data.fbx_model = load_fbx_with_russimp(model_path_fbx)?;
 
         // Apply initial pose before creating vertex buffers
         if data.fbx_model.animation_count() > 0 {
@@ -1936,7 +1915,7 @@ impl App {
                     [0.5, 0.5]
                 };
 
-                let vertex = vulkanr::data::Vertex::new(
+                let vertex = data::Vertex::new(
                     Vec3::new(position.x, position.y, position.z),
                     Vec4::new(1.0, 1.0, 1.0, 1.0),  // White color for proper texturing
                     Vec2::new_array(uv),             // Use actual UV coordinates
@@ -2001,7 +1980,7 @@ impl App {
                 instance,
                 rrdevice,
                 &data.rrcommand_pool,
-                (size_of::<vulkanr::data::Vertex>() * rrdata.vertex_data.vertices.len())
+                (size_of::<data::Vertex>() * rrdata.vertex_data.vertices.len())
                     as vk::DeviceSize,
                 rrdata.vertex_data.vertices.as_ptr() as *const c_void,
                 rrdata.vertex_data.vertices.len(),
@@ -2040,7 +2019,7 @@ impl App {
                     instance,
                     rrdevice,
                     &data.rrcommand_pool,
-                    (size_of::<vulkanr::data::Vertex>() * vertex_data.vertices.len()) as vk::DeviceSize,
+                    (size_of::<data::Vertex>() * vertex_data.vertices.len()) as vk::DeviceSize,
                     vertex_data.vertices.as_ptr() as *const c_void,
                     vertex_data.vertices.len(),
                 ) {
@@ -2111,7 +2090,7 @@ impl App {
                 &self.instance,
                 &self.rrdevice,
                 &self.data.rrcommand_pool,
-                (size_of::<vulkanr::data::Vertex>() * vertices.len()) as vk::DeviceSize,
+                (size_of::<data::Vertex>() * vertices.len()) as vk::DeviceSize,
                 vertices.as_ptr() as *const c_void,
                 vertices.len(),
             ) {
@@ -2139,7 +2118,7 @@ impl App {
                 &instance,
                 &rrdevice,
                 &data.rrcommand_pool,
-                (size_of::<vulkanr::data::Vertex>() * rrdata.vertex_data.vertices.len())
+                (size_of::<data::Vertex>() * rrdata.vertex_data.vertices.len())
                     as vk::DeviceSize,
                 rrdata.vertex_data.vertices.as_ptr() as *const c_void,
                 rrdata.vertex_data.vertices.len(),
@@ -2207,11 +2186,11 @@ impl App {
             if model_path.contains("stickman_bin.fbx") {
                 log!("Using fbxcel loader for stickman_bin.fbx");
                 unsafe {
-                    data.fbx_model = fbx::fbx::load_fbx(model_path)?;
+                    data.fbx_model = load_fbx(model_path)?;
                 }
             } else {
                 log!("Using russimp loader");
-                data.fbx_model = fbx::fbx::load_fbx_with_russimp(model_path)?;
+                data.fbx_model = load_fbx_with_russimp(model_path)?;
             }
 
             // Create separate rrdata for each FBX mesh
@@ -2290,7 +2269,7 @@ impl App {
                         [0.5, 0.5]
                     };
 
-                    let vertex = vulkanr::data::Vertex::new(
+                    let vertex = data::Vertex::new(
                         Vec3::new(position.x, position.y, position.z),
                         Vec4::new(1.0, 1.0, 1.0, 1.0),  // White color for proper texturing
                         Vec2::new_array(uv),             // Use actual UV coordinates
@@ -2316,7 +2295,7 @@ impl App {
             log!("Loading glTF model...");
 
             // Clear FBX model data and animation state when loading glTF
-            data.fbx_model = fbx::fbx::FbxModel::default();
+            data.fbx_model = FbxModel::default();
             data.animation_playing = false;
             data.current_animation_index = 0;
             data.animation_time = 0.0;
@@ -2378,11 +2357,11 @@ impl App {
                     rrdata
                         .vertex_data
                         .vertices
-                        .push(vulkanr::data::Vertex::default());
+                        .push(data::Vertex::default());
                 }
 
                 for gltf_vertex in &gltf_data.vertices {
-                    let vertex = vulkanr::data::Vertex::new(
+                    let vertex = data::Vertex::new(
                         Vec3::new_array(gltf_vertex.position),
                         Vec4::new(0.0, 1.0, 0.0, 1.0),
                         Vec2::new_array(gltf_vertex.tex_coord),
@@ -2405,7 +2384,7 @@ impl App {
                 &instance,
                 &rrdevice,
                 &data.rrcommand_pool,
-                (size_of::<vulkanr::data::Vertex>() * rrdata.vertex_data.vertices.len())
+                (size_of::<data::Vertex>() * rrdata.vertex_data.vertices.len())
                     as vk::DeviceSize,
                 rrdata.vertex_data.vertices.as_ptr() as *const c_void,
                 rrdata.vertex_data.vertices.len(),
@@ -2467,7 +2446,7 @@ impl App {
                     &instance,
                     &rrdevice,
                     &data.rrcommand_pool,
-                    (size_of::<vulkanr::data::Vertex>() * vertex_data.vertices.len()) as vk::DeviceSize,
+                    (size_of::<data::Vertex>() * vertex_data.vertices.len()) as vk::DeviceSize,
                     vertex_data.vertices.as_ptr() as *const c_void,
                     vertex_data.vertices.len(),
                 ) {
@@ -2501,7 +2480,7 @@ impl App {
                         &instance,
                         &rrdevice,
                         &data.rrcommand_pool,
-                        (size_of::<vulkanr::data::Vertex>() * vertex_data.vertices.len()) as vk::DeviceSize,
+                        (size_of::<data::Vertex>() * vertex_data.vertices.len()) as vk::DeviceSize,
                         vertex_data.vertices.as_ptr() as *const c_void,
                         vertex_data.vertices.len(),
                     ) {

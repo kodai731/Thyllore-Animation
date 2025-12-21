@@ -192,12 +192,12 @@ unsafe fn pick_physical_device(
         if let Err(error) =
             check_physical_device(instance, surface, &physical_device, device_extensions)
         {
-            warn!(
+            log::warn!(
                 "Skipping Physical Device (`{}`): {}",
                 properties.device_name, error
             );
         } else {
-            info!("Selected Physical Device (`{}`).", properties.device_name);
+            log::info!("Selected Physical Device (`{}`).", properties.device_name);
             let sample_count = get_max_msaa_samples(instance, physical_device);
             return Ok((physical_device, sample_count));
         }

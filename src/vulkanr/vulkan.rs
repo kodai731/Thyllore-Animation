@@ -1,6 +1,6 @@
 pub use anyhow::{anyhow, Result};
 pub use core::result::Result::Ok;
-pub use log::*;
+// pub use log::*;  // カスタムlog!マクロと競合するため、標準のlogクレートは使わない
 pub use vulkanalia::loader::{LibloadingLoader, LIBRARY};
 pub use vulkanalia::prelude::v1_2::*;
 pub use vulkanalia::vk::ExtDebugUtilsExtension;

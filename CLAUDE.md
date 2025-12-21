@@ -171,3 +171,8 @@ The `memo.txt` file contains useful reference links for:
 ## 重要
 - 回答は日本語で行ってください
 - commitやpushなど、gitの操作は行わないでください
+
+## log
+- ログは log! マクロで記録します
+- log/log_N.txt に出力されます
+- 標準コンソールには出力せず、上記のファイルに記録するようにしてください

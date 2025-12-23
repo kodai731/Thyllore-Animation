@@ -91,6 +91,8 @@ pub struct PipelineBuilder {
     dynamic_states: Vec<vk::DynamicState>,
     descriptor_layouts: Vec<vk::DescriptorSetLayout>,
     msaa_samples: vk::SampleCountFlags,
+    custom_render_pass: Option<vk::RenderPass>,
+    mrt_attachment_count: u32, // Number of color attachments for MRT
 }
 
 impl PipelineBuilder {
@@ -109,7 +111,21 @@ impl PipelineBuilder {
             dynamic_states: vec![vk::DynamicState::VIEWPORT, vk::DynamicState::LINE_WIDTH],
             descriptor_layouts: vec![],
             msaa_samples: vk::SampleCountFlags::empty(),
+            custom_render_pass: None,
+            mrt_attachment_count: 1,
         }
+    }
+
+    /// Set custom render pass (for G-Buffer, etc.)
+    pub fn custom_render_pass(mut self, render_pass: vk::RenderPass) -> Self {
+        self.custom_render_pass = Some(render_pass);
+        self
+    }
+
+    /// Set number of color attachments for MRT
+    pub fn mrt_attachments(mut self, count: u32) -> Self {
+        self.mrt_attachment_count = count;
+        self
     }
 
     /// Set vertex input configuration
@@ -322,7 +338,10 @@ impl PipelineBuilder {
             .alpha_blend_op(self.blend.alpha_op)
             .build();
 
-        let color_blend_attachments = [color_blend_attachment];
+        // For MRT support, create multiple attachments
+        let color_blend_attachments: Vec<_> = (0..self.mrt_attachment_count)
+            .map(|_| color_blend_attachment)
+            .collect();
         let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
             .logic_op_enable(false)
             .logic_op(vk::LogicOp::COPY)
@@ -348,6 +367,7 @@ impl PipelineBuilder {
         rrpipeline.pipeline_layout = rrdevice.device.create_pipeline_layout(&pipeline_layout_info, None)?;
 
         // Create graphics pipeline
+        let render_pass = self.custom_render_pass.unwrap_or(rrrender.render_pass);
         let pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
             .stages(&shader_stages)
             .vertex_input_state(&vertex_input_state)
@@ -359,7 +379,7 @@ impl PipelineBuilder {
             .color_blend_state(&color_blend_state)
             .dynamic_state(&dynamic_state)
             .layout(rrpipeline.pipeline_layout)
-            .render_pass(rrrender.render_pass)
+            .render_pass(render_pass)
             .subpass(0);
 
         let pipelines = rrdevice
@@ -421,6 +441,58 @@ impl RRPipeline {
             .descriptor_layouts(vec![descriptor_set_layout])
             .msaa_samples(msaa_samples)
             .build(rrdevice, rrrender, None)
+    }
+
+    /// Create compute pipeline for ray query or other compute shaders
+    pub unsafe fn new_compute(
+        rrdevice: &RRDevice,
+        compute_shader_path: &str,
+        descriptor_set_layouts: &[vk::DescriptorSetLayout],
+    ) -> Result<Self> {
+        let device = &rrdevice.device;
+
+        // Load compute shader
+        let comp_shader_module = load_shader_module(rrdevice, compute_shader_path)?;
+
+        // Create shader stage
+        let comp_stage = vk::PipelineShaderStageCreateInfo::builder()
+            .stage(vk::ShaderStageFlags::COMPUTE)
+            .module(comp_shader_module)
+            .name(b"main\0")
+            .build();
+
+        // Create pipeline layout
+        let layout_info = vk::PipelineLayoutCreateInfo::builder()
+            .set_layouts(descriptor_set_layouts);
+        let pipeline_layout = device.create_pipeline_layout(&layout_info, None)?;
+
+        // Create compute pipeline
+        let compute_pipeline_info = vk::ComputePipelineCreateInfo::builder()
+            .stage(comp_stage)
+            .layout(pipeline_layout)
+            .build();
+
+        let pipeline = device
+            .create_compute_pipelines(vk::PipelineCache::null(), &[compute_pipeline_info], None)?
+            .0[0];
+
+        // Clean up shader module
+        device.destroy_shader_module(comp_shader_module, None);
+
+        Ok(Self {
+            pipeline_layout,
+            pipeline,
+        })
+    }
+
+    pub unsafe fn destroy(&self, device: &vulkanalia::Device) {
+        if self.pipeline != vk::Pipeline::null() {
+            device.destroy_pipeline(self.pipeline, None);
+        }
+
+        if self.pipeline_layout != vk::PipelineLayout::null() {
+            device.destroy_pipeline_layout(self.pipeline_layout, None);
+        }
     }
 }
 

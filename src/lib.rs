@@ -8,6 +8,7 @@
 extern crate core;
 
 pub mod vulkanr {
+    pub mod acceleration_structure;
     pub mod buffer;
     pub mod command;
     pub mod data;

@@ -24,6 +24,7 @@ use rust_rendering::vulkanr::acceleration_structure::*;
 use rust_rendering::gltf::gltf::*;
 use rust_rendering::math::math::*;
 use rust_rendering::gizmo::gizmo::*;
+use rust_rendering::debug::debug::*;
 
 // Disambiguate Device type - use vulkanalia's Device explicitly where needed
 use vulkanalia::Device as VkDevice;
@@ -234,15 +235,22 @@ impl support::System {
                                 gui_data.is_wheel_clicked = false;
                                 gui_data.monitor_value = 0.0;
 
-                                if ui.is_mouse_down(MouseButton::Left) {
-                                    gui_data.is_left_clicked = true;
-                                }
-                                if ui.is_mouse_down(MouseButton::Middle) {
-                                    gui_data.is_wheel_clicked = true;
+                                // Check if ImGui wants to capture mouse input
+                                let io = ui.io();
+                                gui_data.imgui_wants_mouse = io.want_capture_mouse;
+
+                                // Only process mouse input for rendering window if ImGui doesn't want it
+                                if !gui_data.imgui_wants_mouse {
+                                    if ui.is_mouse_down(MouseButton::Left) {
+                                        gui_data.is_left_clicked = true;
+                                    }
+                                    if ui.is_mouse_down(MouseButton::Middle) {
+                                        gui_data.is_wheel_clicked = true;
+                                    }
                                 }
 
                                 ui.window("debug window")
-                                    .size([600.0, 220.0], Condition::FirstUseEver)
+                                    .size([600.0, 450.0], Condition::FirstUseEver)
                                     .build(|| {
                                         // Model Loading Section
                                         ui.text("Model Loading:");
@@ -304,6 +312,47 @@ impl support::System {
                                         }
                                         ui.separator();
 
+                                        // Ray Tracing Controls
+                                        ui.text("Ray Tracing Controls:");
+
+                                        let mut light_pos = [
+                                            app.data.rt_debug_state.light_position.x,
+                                            app.data.rt_debug_state.light_position.y,
+                                            app.data.rt_debug_state.light_position.z,
+                                        ];
+                                        if ui.slider_config("Light X", -10.0, 10.0)
+                                            .build(&mut light_pos[0])
+                                        {
+                                            app.data.rt_debug_state.light_position.x = light_pos[0];
+                                        }
+                                        if ui.slider_config("Light Y", -10.0, 10.0)
+                                            .build(&mut light_pos[1])
+                                        {
+                                            app.data.rt_debug_state.light_position.y = light_pos[1];
+                                        }
+                                        if ui.slider_config("Light Z", -10.0, 10.0)
+                                            .build(&mut light_pos[2])
+                                        {
+                                            app.data.rt_debug_state.light_position.z = light_pos[2];
+                                        }
+
+                                        ui.text("Debug View Mode:");
+                                        let mut current_mode = app.data.rt_debug_state.debug_view_mode.as_int();
+                                        if ui.radio_button("Final (Lit + Shadow)", &mut current_mode, 0) {
+                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::Final;
+                                        }
+                                        if ui.radio_button("Position (World Space)", &mut current_mode, 1) {
+                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::Position;
+                                        }
+                                        if ui.radio_button("Normal (World Space)", &mut current_mode, 2) {
+                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::Normal;
+                                        }
+                                        if ui.radio_button("Shadow Mask", &mut current_mode, 3) {
+                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::ShadowMask;
+                                        }
+
+                                        ui.separator();
+
                                         // Debug Information
                                         ui.text("Debug Info:");
                                         ui.text(format!(
@@ -355,6 +404,7 @@ struct GUIData {
     selected_model_path: String,  // Path of the selected model file
     load_status: String,          // Status message for loading (success/error)
     take_screenshot: bool,        // Flag to trigger screenshot capture
+    imgui_wants_mouse: bool,      // Flag indicating ImGui wants to capture mouse input
 }
 
 impl Default for GUIData {
@@ -370,6 +420,7 @@ impl Default for GUIData {
             selected_model_path: String::default(),
             load_status: String::from("No model loaded"),
             take_screenshot: false,
+            imgui_wants_mouse: false,
         }
     }
 }
@@ -456,6 +507,8 @@ struct AppData {
     gbuffer_pipeline: Option<RRPipeline>,
     gbuffer_descriptor_set: Option<RRDescriptorSet>,
     gbuffer_sampler: Option<vk::Sampler>, // Sampler for G-Buffer images
+
+    rt_debug_state: RayTracingDebugState,
 }
 
 // Helper function to load PNG images
@@ -1513,7 +1566,8 @@ impl App {
         // Camera rotation logging counter
         static mut ROTATION_LOG_COUNTER: u32 = 0;
 
-        if gui_data.is_left_clicked || self.data.is_left_clicked {
+        // Only process camera rotation if ImGui doesn't want the mouse
+        if !gui_data.imgui_wants_mouse && (gui_data.is_left_clicked || self.data.is_left_clicked) {
             // first clicked
             if !self.data.is_left_clicked {
                 self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
@@ -1611,9 +1665,13 @@ impl App {
                 // left button released
                 self.data.is_left_clicked = false;
             }
+        } else if gui_data.imgui_wants_mouse {
+            // If ImGui wants the mouse, reset camera operation state
+            self.data.is_left_clicked = false;
         }
 
-        if gui_data.is_wheel_clicked || self.data.is_wheel_clicked {
+        // Only process camera pan if ImGui doesn't want the mouse
+        if !gui_data.imgui_wants_mouse && (gui_data.is_wheel_clicked || self.data.is_wheel_clicked) {
             // first clicked
             if !self.data.is_wheel_clicked {
                 self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
@@ -1641,9 +1699,13 @@ impl App {
                 // left button released
                 self.data.is_wheel_clicked = false;
             }
+        } else if gui_data.imgui_wants_mouse {
+            // If ImGui wants the mouse, reset camera operation state
+            self.data.is_wheel_clicked = false;
         }
 
-        if mouse_wheel != 0.0 {
+        // Only process mouse wheel zoom if ImGui doesn't want the mouse
+        if !gui_data.imgui_wants_mouse && mouse_wheel != 0.0 {
             let diff_view = camera_direction * mouse_wheel * -5.0;
             camera_pos += diff_view;
             self.data.camera_pos = array3_from_vec(camera_pos);
@@ -1697,11 +1759,14 @@ impl App {
         if let (Some(scene_buffer), Some(scene_memory)) =
             (self.data.scene_uniform_buffer, self.data.scene_uniform_buffer_memory)
         {
+            let light_pos = &self.data.rt_debug_state.light_position;
             let scene_data = SceneUniformData {
-                light_position: Vec4::new(5.0, 5.0, 5.0, 1.0),
+                light_position: Vec4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
                 light_color: Vec4::new(1.0, 1.0, 1.0, 1.0),
                 view,
                 proj,
+                debug_mode: self.data.rt_debug_state.debug_view_mode.as_int(),
+                _padding: [0; 3],
             };
 
             let data_ptr = self.rrdevice.device.map_memory(

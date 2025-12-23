@@ -98,6 +98,8 @@ pub struct SceneUniformData {
     pub light_color: Vec4,     // Light color and intensity
     pub view: Mat4,            // View matrix
     pub proj: Mat4,            // Projection matrix
+    pub debug_mode: i32,       // Debug view mode (0=Final, 1=Position, 2=Normal, 3=Shadow)
+    pub _padding: [i32; 3],    // Padding for alignment
 }
 
 impl Default for SceneUniformData {
@@ -108,6 +110,8 @@ impl Default for SceneUniformData {
             light_color: Vec4::new(1.0, 1.0, 1.0, 1.0),
             view: identity,
             proj: identity,
+            debug_mode: 0,
+            _padding: [0; 3],
         }
     }
 }

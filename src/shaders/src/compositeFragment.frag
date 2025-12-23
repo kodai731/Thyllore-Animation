@@ -9,12 +9,14 @@ layout(binding = 0) uniform sampler2D positionSampler;
 layout(binding = 1) uniform sampler2D normalSampler;
 layout(binding = 2) uniform sampler2D shadowMaskSampler;
 
-// Scene data (light information)
+// Scene data (light information and debug mode)
 layout(binding = 3) uniform SceneData {
     vec4 lightPosition;    // Light position (w component unused)
     vec4 lightColor;       // Light color and intensity
     mat4 view;             // View matrix (for debugging)
     mat4 proj;             // Projection matrix (for debugging)
+    int debugMode;         // Debug view mode (0=Final, 1=Position, 2=Normal, 3=Shadow)
+    int _padding[3];       // Padding for alignment
 } sceneData;
 
 void main() {
@@ -24,12 +26,35 @@ void main() {
     float shadowMask = texture(shadowMaskSampler, fragTexCoord).r;
 
     // Check if this is a valid fragment (normal length check)
-    if (length(worldNormal) < 0.01) {
+    bool isBackground = length(worldNormal) < 0.01;
+
+    if (isBackground) {
         // Background pixel - simple sky color
         outColor = vec4(0.5, 0.7, 1.0, 1.0);
         return;
     }
 
+    // Debug view modes
+    if (sceneData.debugMode == 1) {
+        // Position view (world space) - visualize as color
+        // Map world position to visible range
+        vec3 posColor = worldPosition * 0.1 + 0.5;
+        outColor = vec4(posColor, 1.0);
+        return;
+    }
+    else if (sceneData.debugMode == 2) {
+        // Normal view (world space) - map [-1,1] to [0,1]
+        vec3 normalColor = normalize(worldNormal) * 0.5 + 0.5;
+        outColor = vec4(normalColor, 1.0);
+        return;
+    }
+    else if (sceneData.debugMode == 3) {
+        // Shadow mask view - show shadow as grayscale
+        outColor = vec4(vec3(shadowMask), 1.0);
+        return;
+    }
+
+    // Final rendering mode (debugMode == 0)
     // Normalize normal
     worldNormal = normalize(worldNormal);
 

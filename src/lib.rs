@@ -38,4 +38,8 @@ pub mod gizmo {
     pub mod gizmo;
 }
 
+pub mod debug {
+    pub mod debug;
+}
+
 pub mod logger;

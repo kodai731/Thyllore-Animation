@@ -1344,16 +1344,20 @@ impl App {
         let data = unsafe { *data };
         let message = unsafe { CStr::from_ptr(data.message) }.to_string_lossy();
 
-        // Vulkan validation layerのメッセージは標準logクレートでコンソールに出力
+        // コンソール（色付き）とログファイルの両方に出力
         use log::{error, warn, debug, trace};
         if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::ERROR {
             error!("({:?}) {}", type_, message);
+            log!("ERROR ({:?}) {}", type_, message);
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING {
             warn!("({:?}) {}", type_, message);
+            log!("WARN ({:?}) {}", type_, message);
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::INFO {
             debug!("({:?}) {}", type_, message);
+            log!("INFO ({:?}) {}", type_, message);
         } else {
             trace!("({:?}) {}", type_, message);
+            log!("DEBUG ({:?}) {}", type_, message);
         }
 
         vk::FALSE
@@ -2306,34 +2310,55 @@ impl App {
         rrdevice: &RRDevice,
         data: &mut AppData,
     ) -> Result<()> {
-        log::info!("Creating Ray Tracing pipelines...");
+        log!("Creating Ray Tracing pipelines...");
 
-        // 1. Create G-Buffer pipeline
-        if let Some(ref mut gbuffer_desc) = data.gbuffer_descriptor_set {
-            // Copy model data for G-Buffer rendering
-            for rrdata in &data.model_descriptor_set.rrdata {
-                gbuffer_desc.rrdata.push(rrdata.clone());
-            }
+        // 0. Create G-Buffer (framebuffer attachments)
+        let gbuffer = RRGBuffer::new(
+            instance,
+            rrdevice,
+            data.rrswapchain.swapchain_extent.width,
+            data.rrswapchain.swapchain_extent.height,
+        )?;
+        data.gbuffer = Some(gbuffer);
+        log!("Created G-Buffer resources (position, normal, shadow mask images)");
 
-            // Create descriptor sets
-            RRDescriptorSet::create_descriptor_set(rrdevice, &data.rrswapchain, gbuffer_desc)?;
-
-            // Create G-Buffer pipeline with MRT
-            let gbuffer_pipeline = PipelineBuilder::new(
-                "src/shaders/gbufferVert.spv",
-                "src/shaders/gbufferFrag.spv",
-            )
-            .vertex_input(VertexInputConfig::Standard)
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .polygon_mode(vk::PolygonMode::FILL)
-            .custom_render_pass(data.rrrender.gbuffer_render_pass)
-            .mrt_attachments(2) // position and normal
-            .descriptor_layouts(vec![gbuffer_desc.descriptor_set_layout])
-            .build(rrdevice, &data.rrrender, Some(data.rrswapchain.swapchain_extent))?;
-
-            data.gbuffer_pipeline = Some(gbuffer_pipeline);
-            log::info!("Created G-Buffer pipeline");
+        // Create G-Buffer framebuffer
+        if let Some(ref gbuffer) = data.gbuffer {
+            create_gbuffer_framebuffer(instance, rrdevice, &mut data.rrrender, gbuffer)?;
+            log!("Created G-Buffer framebuffer");
         }
+
+        // 1. Create G-Buffer descriptor set and pipeline
+        let mut gbuffer_desc = RRDescriptorSet::new(
+            rrdevice,
+            &data.rrswapchain,
+        );
+
+        // Copy model data for G-Buffer rendering
+        for rrdata in &data.model_descriptor_set.rrdata {
+            gbuffer_desc.rrdata.push(rrdata.clone());
+        }
+
+        // Create descriptor sets
+        RRDescriptorSet::create_descriptor_set(rrdevice, &data.rrswapchain, &mut gbuffer_desc)?;
+
+        // Create G-Buffer pipeline with MRT
+        let gbuffer_pipeline = PipelineBuilder::new(
+            "src/shaders/gbufferVert.spv",
+            "src/shaders/gbufferFrag.spv",
+        )
+        .vertex_input(VertexInputConfig::Standard)
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .custom_render_pass(data.rrrender.gbuffer_render_pass)
+        .mrt_attachments(2) // position and normal
+        .msaa_samples(vk::SampleCountFlags::_1) // G-Buffer uses 1 sample (no MSAA)
+        .descriptor_layouts(vec![gbuffer_desc.descriptor_set_layout])
+        .build(rrdevice, &data.rrrender, Some(data.rrswapchain.swapchain_extent))?;
+
+        data.gbuffer_descriptor_set = Some(gbuffer_desc);
+        data.gbuffer_pipeline = Some(gbuffer_pipeline);
+        log!("Created G-Buffer descriptor set and pipeline");
 
         // 2. Create scene uniform buffer
         let (scene_buffer, scene_memory) = create_buffer(
@@ -3256,6 +3281,27 @@ impl App {
             && self.data.ray_query_pipeline.is_some()
             && self.data.composite_pipeline.is_some();
 
+        // Debug: Log rendering path (only once)
+        static mut RAY_TRACING_LOG_ONCE: bool = false;
+        unsafe {
+            if !RAY_TRACING_LOG_ONCE {
+                if use_ray_tracing {
+                    log!("=== Using Ray Tracing Rendering Path ===");
+                    log!("  G-Buffer: {:?}", self.data.gbuffer.is_some());
+                    log!("  Ray Query Pipeline: {:?}", self.data.ray_query_pipeline.is_some());
+                    log!("  Composite Pipeline: {:?}", self.data.composite_pipeline.is_some());
+                    log!("  Light Position: {:?}", self.data.rt_debug_state.light_position);
+                    log!("  Debug Mode: {:?}", self.data.rt_debug_state.debug_view_mode);
+                } else {
+                    log!("=== Using Traditional Forward Rendering Path ===");
+                    log!("  G-Buffer: {:?}", self.data.gbuffer.is_some());
+                    log!("  Ray Query Pipeline: {:?}", self.data.ray_query_pipeline.is_some());
+                    log!("  Composite Pipeline: {:?}", self.data.composite_pipeline.is_some());
+                }
+                RAY_TRACING_LOG_ONCE = true;
+            }
+        }
+
         if use_ray_tracing {
             // === Ray Tracing Path (3-pass rendering) ===
 
@@ -3628,6 +3674,25 @@ impl App {
             gbuffer_pipeline.pipeline,
         );
 
+        // Set viewport and scissor (required for dynamic state)
+        let viewport = vk::Viewport::builder()
+            .x(0.0)
+            .y(0.0)
+            .width(gbuffer.width as f32)
+            .height(gbuffer.height as f32)
+            .min_depth(0.0)
+            .max_depth(1.0);
+
+        let scissor = vk::Rect2D::builder()
+            .offset(vk::Offset2D { x: 0, y: 0 })
+            .extent(vk::Extent2D {
+                width: gbuffer.width,
+                height: gbuffer.height,
+            });
+
+        self.rrdevice.device.cmd_set_viewport(command_buffer, 0, &[viewport]);
+        self.rrdevice.device.cmd_set_scissor(command_buffer, 0, &[scissor]);
+
         // Render all model meshes to G-Buffer
         for i in 0..gbuffer_descriptor_set.rrdata.len() {
             let rrdata = &gbuffer_descriptor_set.rrdata[i];
@@ -3695,7 +3760,7 @@ impl App {
             vk::ImageMemoryBarrier::builder()
                 .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
                 .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                .old_layout(vk::ImageLayout::GENERAL)
                 .new_layout(vk::ImageLayout::GENERAL)
                 .image(gbuffer.position_image)
                 .subresource_range(vk::ImageSubresourceRange {
@@ -3709,9 +3774,23 @@ impl App {
             vk::ImageMemoryBarrier::builder()
                 .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
                 .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                .old_layout(vk::ImageLayout::GENERAL)
                 .new_layout(vk::ImageLayout::GENERAL)
                 .image(gbuffer.normal_image)
+                .subresource_range(vk::ImageSubresourceRange {
+                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                    base_mip_level: 0,
+                    level_count: 1,
+                    base_array_layer: 0,
+                    layer_count: 1,
+                })
+                .build(),
+            vk::ImageMemoryBarrier::builder()
+                .src_access_mask(vk::AccessFlags::empty())
+                .dst_access_mask(vk::AccessFlags::SHADER_WRITE)
+                .old_layout(vk::ImageLayout::UNDEFINED)
+                .new_layout(vk::ImageLayout::GENERAL)
+                .image(gbuffer.shadow_mask_image)
                 .subresource_range(vk::ImageSubresourceRange {
                     aspect_mask: vk::ImageAspectFlags::COLOR,
                     base_mip_level: 0,

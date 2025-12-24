@@ -50,6 +50,9 @@ impl RRRender {
         if let Err(e) = create_framebuffers(rrdevice, rrswapchain, &mut rrrender) {
             eprintln!("Create framebuffers failed {:?}", e);
         }
+        if let Err(e) = create_gbuffer_render_pass(instance, rrdevice, &mut rrrender) {
+            eprintln!("Create G-Buffer render pass failed {:?}", e);
+        }
         println!("created render pass {:?}", rrrender);
         rrrender
     }
@@ -338,7 +341,7 @@ impl RRGBuffer {
             vk::SampleCountFlags::_1,
             vk::Format::R32G32B32A32_SFLOAT,
             vk::ImageTiling::OPTIMAL,
-            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::STORAGE,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 
@@ -360,7 +363,7 @@ impl RRGBuffer {
             vk::SampleCountFlags::_1,
             vk::Format::R32G32B32A32_SFLOAT,
             vk::ImageTiling::OPTIMAL,
-            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::STORAGE,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 

@@ -117,9 +117,13 @@ impl RRAccelerationStructure {
             as_memory_requirements,
         )?;
 
+        let mut memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
+            .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+
         let as_memory_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(as_memory_requirements.size)
-            .memory_type_index(as_memory_type_index);
+            .memory_type_index(as_memory_type_index)
+            .push_next(&mut memory_allocate_flags_info);
 
         let as_buffer_memory = device.allocate_memory(&as_memory_info, None)?;
         device.bind_buffer_memory(as_buffer, as_buffer_memory, 0)?;
@@ -147,9 +151,13 @@ impl RRAccelerationStructure {
             scratch_memory_requirements,
         )?;
 
+        let mut scratch_memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
+            .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+
         let scratch_memory_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(scratch_memory_requirements.size)
-            .memory_type_index(scratch_memory_type_index);
+            .memory_type_index(scratch_memory_type_index)
+            .push_next(&mut scratch_memory_allocate_flags_info);
 
         let scratch_buffer_memory = device.allocate_memory(&scratch_memory_info, None)?;
         device.bind_buffer_memory(scratch_buffer, scratch_buffer_memory, 0)?;
@@ -269,9 +277,13 @@ impl RRAccelerationStructure {
             instances_memory_requirements,
         )?;
 
+        let mut instances_memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
+            .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+
         let instances_memory_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(instances_memory_requirements.size)
-            .memory_type_index(instances_memory_type_index);
+            .memory_type_index(instances_memory_type_index)
+            .push_next(&mut instances_memory_allocate_flags_info);
 
         let instances_buffer_memory = device.allocate_memory(&instances_memory_info, None)?;
         device.bind_buffer_memory(instances_buffer, instances_buffer_memory, 0)?;
@@ -342,9 +354,13 @@ impl RRAccelerationStructure {
             as_memory_requirements,
         )?;
 
+        let mut memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
+            .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+
         let as_memory_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(as_memory_requirements.size)
-            .memory_type_index(as_memory_type_index);
+            .memory_type_index(as_memory_type_index)
+            .push_next(&mut memory_allocate_flags_info);
 
         let as_buffer_memory = device.allocate_memory(&as_memory_info, None)?;
         device.bind_buffer_memory(as_buffer, as_buffer_memory, 0)?;
@@ -372,9 +388,13 @@ impl RRAccelerationStructure {
             scratch_memory_requirements,
         )?;
 
+        let mut scratch_memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
+            .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+
         let scratch_memory_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(scratch_memory_requirements.size)
-            .memory_type_index(scratch_memory_type_index);
+            .memory_type_index(scratch_memory_type_index)
+            .push_next(&mut scratch_memory_allocate_flags_info);
 
         let scratch_buffer_memory = device.allocate_memory(&scratch_memory_info, None)?;
         device.bind_buffer_memory(scratch_buffer, scratch_buffer_memory, 0)?;

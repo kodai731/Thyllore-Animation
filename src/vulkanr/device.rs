@@ -126,9 +126,6 @@ unsafe fn create_logical_device(
         .sample_rate_shading(true)
         .fill_mode_non_solid(true);
 
-    let mut buffer_device_address_features = vk::PhysicalDeviceBufferDeviceAddressFeatures::builder()
-        .buffer_device_address(true);
-
     let mut acceleration_structure_features = vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
         .acceleration_structure(true);
 
@@ -144,7 +141,6 @@ unsafe fn create_logical_device(
         .enabled_extension_names(&extensions)
         .enabled_features(&features)
         .push_next(&mut vulkan_12_features)
-        .push_next(&mut buffer_device_address_features)
         .push_next(&mut acceleration_structure_features)
         .push_next(&mut ray_query_features);
 

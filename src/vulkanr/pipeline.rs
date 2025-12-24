@@ -108,7 +108,7 @@ impl PipelineBuilder {
             depth_test: DepthTestConfig::default(),
             blend: BlendConfig::default(),
             push_constants: None,
-            dynamic_states: vec![vk::DynamicState::VIEWPORT, vk::DynamicState::LINE_WIDTH],
+            dynamic_states: vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR, vk::DynamicState::LINE_WIDTH],
             descriptor_layouts: vec![],
             msaa_samples: vk::SampleCountFlags::empty(),
             custom_render_pass: None,

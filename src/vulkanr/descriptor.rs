@@ -362,7 +362,7 @@ impl RRRayQueryDescriptorSet {
             .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
             .push_next(&mut tlas_info.clone())
             .build();
-        // Note: descriptor_count is set to 1 by default
+        tlas_write.descriptor_count = 1;
 
         // Binding 4: Scene uniform buffer
         let scene_buffer_info = vk::DescriptorBufferInfo::builder()
@@ -510,7 +510,7 @@ impl RRCompositeDescriptorSet {
         let position_image_info = vk::DescriptorImageInfo::builder()
             .image_view(position_image_view)
             .sampler(position_sampler)
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_layout(vk::ImageLayout::GENERAL)
             .build();
 
         let position_write = vk::WriteDescriptorSet::builder()
@@ -525,7 +525,7 @@ impl RRCompositeDescriptorSet {
         let normal_image_info = vk::DescriptorImageInfo::builder()
             .image_view(normal_image_view)
             .sampler(normal_sampler)
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_layout(vk::ImageLayout::GENERAL)
             .build();
 
         let normal_write = vk::WriteDescriptorSet::builder()

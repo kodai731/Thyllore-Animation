@@ -8,6 +8,7 @@
 extern crate core;
 
 pub mod vulkanr {
+    pub mod acceleration_structure;
     pub mod buffer;
     pub mod command;
     pub mod data;
@@ -35,6 +36,10 @@ pub mod fbx {
 
 pub mod gizmo {
     pub mod gizmo;
+}
+
+pub mod debug {
+    pub mod debug;
 }
 
 pub mod logger;

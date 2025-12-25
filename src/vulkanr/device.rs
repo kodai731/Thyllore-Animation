@@ -1,5 +1,6 @@
 use super::swapchain::*;
 use super::vulkan::*;
+use crate::log;
 use std::collections::HashSet;
 use std::ops::Deref;
 use std::ptr::null;
@@ -125,11 +126,23 @@ unsafe fn create_logical_device(
         .sample_rate_shading(true)
         .fill_mode_non_solid(true);
 
+    let mut acceleration_structure_features = vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
+        .acceleration_structure(true);
+
+    let mut ray_query_features = vk::PhysicalDeviceRayQueryFeaturesKHR::builder()
+        .ray_query(true);
+
+    let mut vulkan_12_features = vk::PhysicalDeviceVulkan12Features::builder()
+        .buffer_device_address(true);
+
     let info = vk::DeviceCreateInfo::builder()
         .queue_create_infos(&queue_infos)
         .enabled_layer_names(&layers)
         .enabled_extension_names(&extensions)
-        .enabled_features(&features);
+        .enabled_features(&features)
+        .push_next(&mut vulkan_12_features)
+        .push_next(&mut acceleration_structure_features)
+        .push_next(&mut ray_query_features);
 
     let vulkan_device = instance.create_device(*physical_device, &info, None)?;
     let device = Device::new(vulkan_device);
@@ -213,30 +226,56 @@ unsafe fn check_physical_device(
     device_extensions: &[vk::ExtensionName],
 ) -> Result<()> {
     let properties = instance.get_physical_device_properties(*physical_device);
+    log!("Checking device: {}", properties.device_name);
+    log!("Device type: {:?}", properties.device_type);
+
     if properties.device_type != vk::PhysicalDeviceType::DISCRETE_GPU {
+        log!("Device rejected: Only discrete GPUs are supported");
         return Err(anyhow!(SuitabilityError(
             "Only discrete GPUs are supported"
         )));
     }
+    log!("Device type check passed");
 
     let features = instance.get_physical_device_features(*physical_device);
     if features.sampler_anisotropy != vk::TRUE {
+        log!("Device rejected: No sampler anisotropy");
         return Err(anyhow!(SuitabilityError("No sampler anisotropy")));
     }
+    log!("Sampler anisotropy check passed");
+
     if features.geometry_shader != vk::TRUE {
+        log!("Device rejected: Missing geometry shader support");
         return Err(anyhow!(SuitabilityError(
             "Missing geometry shader supported"
         )));
     }
+    log!("Geometry shader check passed");
 
-    QueueFamilyIndices::get(instance, surface, physical_device)?;
-    check_physical_device_extensions(instance, physical_device, device_extensions)?;
+    match QueueFamilyIndices::get(instance, surface, physical_device) {
+        Ok(_) => log!("Queue family check passed"),
+        Err(e) => {
+            log!("Device rejected: Queue family check failed - {}", e);
+            return Err(e);
+        }
+    }
+
+    match check_physical_device_extensions(instance, physical_device, device_extensions) {
+        Ok(_) => log!("Device extensions check passed"),
+        Err(e) => {
+            log!("Device rejected: Extensions check failed - {}", e);
+            return Err(e);
+        }
+    }
 
     let support = SwapchainSupport::get(instance, surface, physical_device)?;
     if support.formats.is_empty() || support.present_modes.is_empty() {
+        log!("Device rejected: Insufficient swapchain support");
         return Err(anyhow!(SuitabilityError("Insufficient swapchain support")));
     }
+    log!("Swapchain support check passed");
 
+    log!("All device checks passed!");
     Ok(())
 }
 
@@ -250,9 +289,25 @@ unsafe fn check_physical_device_extensions(
         .iter()
         .map(|e| e.extension_name)
         .collect::<HashSet<_>>();
-    if device_extensions.iter().all(|e| extensions.contains(e)) {
+
+    log!("Required extensions: {}", device_extensions.len());
+    for ext in device_extensions {
+        let supported = extensions.contains(ext);
+        log!("  {} - {}", ext, if supported { "SUPPORTED" } else { "NOT SUPPORTED" });
+    }
+
+    let missing_extensions: Vec<_> = device_extensions
+        .iter()
+        .filter(|e| !extensions.contains(e))
+        .collect();
+
+    if missing_extensions.is_empty() {
         Ok(())
     } else {
+        log!("Missing {} extensions:", missing_extensions.len());
+        for ext in &missing_extensions {
+            log!("  - {}", ext);
+        }
         Err(anyhow!(SuitabilityError("Device Extensions Not Supported")))
     }
 }

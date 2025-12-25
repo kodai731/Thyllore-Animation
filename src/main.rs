@@ -19,10 +19,12 @@ use rust_rendering::vulkanr::render::*;
 use rust_rendering::vulkanr::swapchain::*;
 use rust_rendering::vulkanr::vulkan::*;
 use rust_rendering::vulkanr::window::*;
+use rust_rendering::vulkanr::acceleration_structure::*;
 
 use rust_rendering::gltf::gltf::*;
 use rust_rendering::math::math::*;
 use rust_rendering::gizmo::gizmo::*;
+use rust_rendering::debug::debug::*;
 
 // Disambiguate Device type - use vulkanalia's Device explicitly where needed
 use vulkanalia::Device as VkDevice;
@@ -48,7 +50,13 @@ use std::os::raw::c_void;
 const VALIDATION_ENABLED: bool = cfg!(debug_assertions);
 const VALIDATION_LAYER: vk::ExtensionName =
     vk::ExtensionName::from_bytes(b"VK_LAYER_KHRONOS_validation");
-const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[vk::KHR_SWAPCHAIN_EXTENSION.name];
+const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
+    vk::KHR_SWAPCHAIN_EXTENSION.name,
+    vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION.name,
+    vk::KHR_ACCELERATION_STRUCTURE_EXTENSION.name,
+    vk::KHR_RAY_QUERY_EXTENSION.name,
+    vk::KHR_DEFERRED_HOST_OPERATIONS_EXTENSION.name,
+];
 use thiserror::Error;
 use vulkanalia::bytecode::Bytecode;
 const MAX_FRAMES_IN_FLIGHT: usize = 2; // how many frames should be processed concurrently GPU-GPU synchronization
@@ -227,15 +235,22 @@ impl support::System {
                                 gui_data.is_wheel_clicked = false;
                                 gui_data.monitor_value = 0.0;
 
-                                if ui.is_mouse_down(MouseButton::Left) {
-                                    gui_data.is_left_clicked = true;
-                                }
-                                if ui.is_mouse_down(MouseButton::Middle) {
-                                    gui_data.is_wheel_clicked = true;
+                                // Check if ImGui wants to capture mouse input
+                                let io = ui.io();
+                                gui_data.imgui_wants_mouse = io.want_capture_mouse;
+
+                                // Only process mouse input for rendering window if ImGui doesn't want it
+                                if !gui_data.imgui_wants_mouse {
+                                    if ui.is_mouse_down(MouseButton::Left) {
+                                        gui_data.is_left_clicked = true;
+                                    }
+                                    if ui.is_mouse_down(MouseButton::Middle) {
+                                        gui_data.is_wheel_clicked = true;
+                                    }
                                 }
 
                                 ui.window("debug window")
-                                    .size([600.0, 220.0], Condition::FirstUseEver)
+                                    .size([600.0, 450.0], Condition::FirstUseEver)
                                     .build(|| {
                                         // Model Loading Section
                                         ui.text("Model Loading:");
@@ -297,6 +312,54 @@ impl support::System {
                                         }
                                         ui.separator();
 
+                                        // Ray Tracing Controls
+                                        ui.text("Ray Tracing Controls:");
+
+                                        let mut light_pos = [
+                                            app.data.rt_debug_state.light_position.x,
+                                            app.data.rt_debug_state.light_position.y,
+                                            app.data.rt_debug_state.light_position.z,
+                                        ];
+                                        if ui.slider_config("Light X", -50.0, 50.0)
+                                            .build(&mut light_pos[0])
+                                        {
+                                            app.data.rt_debug_state.light_position.x = light_pos[0];
+                                        }
+                                        if ui.slider_config("Light Y", -50.0, 50.0)
+                                            .build(&mut light_pos[1])
+                                        {
+                                            app.data.rt_debug_state.light_position.y = light_pos[1];
+                                        }
+                                        if ui.slider_config("Light Z", -50.0, 50.0)
+                                            .build(&mut light_pos[2])
+                                        {
+                                            app.data.rt_debug_state.light_position.z = light_pos[2];
+                                        }
+
+                                        let mut shadow_strength = app.data.rt_debug_state.shadow_strength;
+                                        if ui.slider_config("Shadow Strength", 0.0, 1.0)
+                                            .build(&mut shadow_strength)
+                                        {
+                                            app.data.rt_debug_state.shadow_strength = shadow_strength;
+                                        }
+
+                                        ui.text("Debug View Mode:");
+                                        let mut current_mode = app.data.rt_debug_state.debug_view_mode.as_int();
+                                        if ui.radio_button("Final (Lit + Shadow)", &mut current_mode, 0) {
+                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::Final;
+                                        }
+                                        if ui.radio_button("Position (World Space)", &mut current_mode, 1) {
+                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::Position;
+                                        }
+                                        if ui.radio_button("Normal (World Space)", &mut current_mode, 2) {
+                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::Normal;
+                                        }
+                                        if ui.radio_button("Shadow Mask", &mut current_mode, 3) {
+                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::ShadowMask;
+                                        }
+
+                                        ui.separator();
+
                                         // Debug Information
                                         ui.text("Debug Info:");
                                         ui.text(format!(
@@ -348,6 +411,7 @@ struct GUIData {
     selected_model_path: String,  // Path of the selected model file
     load_status: String,          // Status message for loading (success/error)
     take_screenshot: bool,        // Flag to trigger screenshot capture
+    imgui_wants_mouse: bool,      // Flag indicating ImGui wants to capture mouse input
 }
 
 impl Default for GUIData {
@@ -363,6 +427,7 @@ impl Default for GUIData {
             selected_model_path: String::default(),
             load_status: String::from("No model loaded"),
             take_screenshot: false,
+            imgui_wants_mouse: false,
         }
     }
 }
@@ -436,6 +501,21 @@ struct AppData {
     imgui_index_buffer: Option<vk::Buffer>,
     imgui_index_buffer_memory: Option<vk::DeviceMemory>,
     imgui_index_buffer_size: vk::DeviceSize,
+
+    // Ray Tracing / Deferred Rendering components
+    gbuffer: Option<RRGBuffer>,
+    acceleration_structure: Option<RRAccelerationStructure>,
+    ray_query_pipeline: Option<RRPipeline>,
+    ray_query_descriptor: Option<RRRayQueryDescriptorSet>,
+    scene_uniform_buffer: Option<vk::Buffer>,
+    scene_uniform_buffer_memory: Option<vk::DeviceMemory>,
+    composite_pipeline: Option<RRPipeline>,
+    composite_descriptor: Option<RRCompositeDescriptorSet>,
+    gbuffer_pipeline: Option<RRPipeline>,
+    gbuffer_descriptor_set: Option<RRDescriptorSet>,
+    gbuffer_sampler: Option<vk::Sampler>, // Sampler for G-Buffer images
+
+    rt_debug_state: RayTracingDebugState,
 }
 
 // Helper function to load PNG images
@@ -662,6 +742,14 @@ impl App {
 
         let _ = Self::create_sync_objects(&rrdevice.device, &mut data)?;
         println!("created sync objects");
+
+        // Initialize Ray Tracing (G-Buffer, etc.)
+        // Note: Acceleration structures will be built after model is loaded
+        if let Err(e) = Self::init_ray_tracing(&instance, &rrdevice, &mut data) {
+            eprintln!("Failed to initialize ray tracing: {:?}", e);
+        }
+        println!("initialized ray tracing resources");
+
         let frame = 0 as usize;
         let resized = false;
         let start = Instant::now();
@@ -1120,66 +1208,63 @@ impl App {
     }
 
     unsafe fn destroy(&mut self) {
-        // buffer
-        // self.rrdevice
-        //     .device
-        //     .destroy_buffer(self.data.vertex_buffer, None);
-        // self.rrdevice
-        //     .device
-        //     .free_memory(self.data.vertex_buffer_memory, None);
-        // self.rrdevice
-        //     .device
-        //     .destroy_buffer(self.data.index_buffer, None);
-        // self.rrdevice
-        //     .device
-        //     .free_memory(self.data.index_buffer_memory, None);
-        // // texture image
-        // self.rrdevice
-        //     .device
-        //     .destroy_image(self.data.texture_image, None);
-        // self.rrdevice
-        //     .device
-        //     .free_memory(self.data.texture_image_memory, None);
-        // self.rrdevice
-        //     .device
-        //     .destroy_image_view(self.data.texture_image_view, None);
-        // self.rrdevice
-        //     .device
-        //     .destroy_sampler(self.data.texture_sampler, None);
-        // // semaphore
-        // self.data
-        //     .image_available_semaphores
-        //     .iter()
-        //     .for_each(|s| self.rrdevice.device.destroy_semaphore(*s, None));
-        // self.data
-        //     .render_finish_semaphores
-        //     .iter()
-        //     .for_each(|s| self.rrdevice.device.destroy_semaphore(*s, None));
-        // // fence
-        // self.data
-        //     .in_flight_fences
-        //     .iter()
-        //     .for_each(|f| self.rrdevice.device.destroy_fence(*f, None));
-        // // relate to swapchain
-        // self.destroy_swapchain();
-        // // descriptor set layouts
-        // self.rrdevice
-        //     .device
-        //     .destroy_descriptor_set_layout(self.data.descriptor_set_layout, None);
-        // // command pool
-        // self.rrdevice
-        //     .device
-        //     .destroy_command_pool(self.data.command_pool, None);
-        // // device
-        // self.rrdevice.device.destroy_device(None);
-        // // surface
-        // self.instance.destroy_surface_khr(self.data.surface, None);
-        //
-        // if VALIDATION_ENABLED {
-        //     self.instance
-        //         .destroy_debug_utils_messenger_ext(self.data.messenger, None);
-        // }
-        // self.instance.destroy_instance(None)
+        log!("Destroying application resources...");
+
+        if let Some(sampler) = self.data.gbuffer_sampler {
+            self.rrdevice.device.destroy_sampler(sampler, None);
+            log!("Destroyed G-Buffer sampler");
+        }
+
+        if let Some(mut gbuffer_descriptor) = self.data.gbuffer_descriptor_set.take() {
+            gbuffer_descriptor.destroy(&self.rrdevice.device);
+            log!("Destroyed G-Buffer descriptor set");
+        }
+
+        if let Some(gbuffer_pipeline) = self.data.gbuffer_pipeline.take() {
+            gbuffer_pipeline.destroy(&self.rrdevice.device);
+            log!("Destroyed G-Buffer pipeline");
+        }
+
+        if let Some(mut composite_descriptor) = self.data.composite_descriptor.take() {
+            composite_descriptor.destroy(&self.rrdevice.device);
+            log!("Destroyed composite descriptor set");
+        }
+
+        if let Some(composite_pipeline) = self.data.composite_pipeline.take() {
+            composite_pipeline.destroy(&self.rrdevice.device);
+            log!("Destroyed composite pipeline");
+        }
+
+        if let (Some(buffer), Some(memory)) = (
+            self.data.scene_uniform_buffer,
+            self.data.scene_uniform_buffer_memory,
+        ) {
+            self.rrdevice.device.destroy_buffer(buffer, None);
+            self.rrdevice.device.free_memory(memory, None);
+            log!("Destroyed scene uniform buffer");
+        }
+
+        if let Some(mut ray_query_descriptor) = self.data.ray_query_descriptor.take() {
+            ray_query_descriptor.destroy(&self.rrdevice.device);
+            log!("Destroyed ray query descriptor set");
+        }
+
+        if let Some(ray_query_pipeline) = self.data.ray_query_pipeline.take() {
+            ray_query_pipeline.destroy(&self.rrdevice.device);
+            log!("Destroyed ray query pipeline");
+        }
+
+        if let Some(mut acceleration_structure) = self.data.acceleration_structure.take() {
+            acceleration_structure.destroy(&self.rrdevice.device);
+            log!("Destroyed acceleration structure");
+        }
+
+        if let Some(mut gbuffer) = self.data.gbuffer.take() {
+            gbuffer.destroy(&self.rrdevice.device);
+            log!("Destroyed G-Buffer");
+        }
+
+        log!("All application resources destroyed");
     }
 
     unsafe fn create_instance(
@@ -1192,7 +1277,7 @@ impl App {
             .application_version(vk::make_version(1, 0, 0))
             .engine_name(b"No Engine\0")
             .engine_version(vk::make_version(1, 0, 0))
-            .api_version(vk::make_version(1, 0, 0));
+            .api_version(vk::make_version(1, 2, 0));
 
         let mut extensions = vk_window::get_required_instance_extensions(window)
             .iter()
@@ -1266,16 +1351,20 @@ impl App {
         let data = unsafe { *data };
         let message = unsafe { CStr::from_ptr(data.message) }.to_string_lossy();
 
-        // Vulkan validation layerのメッセージは標準logクレートでコンソールに出力
+        // コンソール（色付き）とログファイルの両方に出力
         use log::{error, warn, debug, trace};
         if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::ERROR {
             error!("({:?}) {}", type_, message);
+            log!("ERROR ({:?}) {}", type_, message);
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING {
             warn!("({:?}) {}", type_, message);
+            log!("WARN ({:?}) {}", type_, message);
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::INFO {
             debug!("({:?}) {}", type_, message);
+            log!("INFO ({:?}) {}", type_, message);
         } else {
             trace!("({:?}) {}", type_, message);
+            log!("DEBUG ({:?}) {}", type_, message);
         }
 
         vk::FALSE
@@ -1488,7 +1577,8 @@ impl App {
         // Camera rotation logging counter
         static mut ROTATION_LOG_COUNTER: u32 = 0;
 
-        if gui_data.is_left_clicked || self.data.is_left_clicked {
+        // Only process camera rotation if ImGui doesn't want the mouse
+        if !gui_data.imgui_wants_mouse && (gui_data.is_left_clicked || self.data.is_left_clicked) {
             // first clicked
             if !self.data.is_left_clicked {
                 self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
@@ -1586,9 +1676,13 @@ impl App {
                 // left button released
                 self.data.is_left_clicked = false;
             }
+        } else if gui_data.imgui_wants_mouse {
+            // If ImGui wants the mouse, reset camera operation state
+            self.data.is_left_clicked = false;
         }
 
-        if gui_data.is_wheel_clicked || self.data.is_wheel_clicked {
+        // Only process camera pan if ImGui doesn't want the mouse
+        if !gui_data.imgui_wants_mouse && (gui_data.is_wheel_clicked || self.data.is_wheel_clicked) {
             // first clicked
             if !self.data.is_wheel_clicked {
                 self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
@@ -1616,9 +1710,13 @@ impl App {
                 // left button released
                 self.data.is_wheel_clicked = false;
             }
+        } else if gui_data.imgui_wants_mouse {
+            // If ImGui wants the mouse, reset camera operation state
+            self.data.is_wheel_clicked = false;
         }
 
-        if mouse_wheel != 0.0 {
+        // Only process mouse wheel zoom if ImGui doesn't want the mouse
+        if !gui_data.imgui_wants_mouse && mouse_wheel != 0.0 {
             let diff_view = camera_direction * mouse_wheel * -5.0;
             camera_pos += diff_view;
             self.data.camera_pos = array3_from_vec(camera_pos);
@@ -1666,6 +1764,37 @@ impl App {
             )?;
             memcpy(&ubo, memory.cast(), 1);
             self.rrdevice.device.unmap_memory(ubo_memory);
+        }
+
+        // Update Scene Uniform Buffer for Ray Tracing
+        if let (Some(scene_buffer), Some(scene_memory)) =
+            (self.data.scene_uniform_buffer, self.data.scene_uniform_buffer_memory)
+        {
+            let light_pos = &self.data.rt_debug_state.light_position;
+            let scene_data = SceneUniformData {
+                light_position: Vec4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
+                light_color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+                view,
+                proj,
+                debug_mode: self.data.rt_debug_state.debug_view_mode.as_int(),
+                shadow_strength: self.data.rt_debug_state.shadow_strength,
+                _padding: [0; 2],
+            };
+
+            let data_ptr = self.rrdevice.device.map_memory(
+                scene_memory,
+                0,
+                std::mem::size_of::<SceneUniformData>() as u64,
+                vk::MemoryMapFlags::empty(),
+            )?;
+
+            std::ptr::copy_nonoverlapping(
+                &scene_data as *const SceneUniformData,
+                data_ptr as *mut SceneUniformData,
+                1,
+            );
+
+            self.rrdevice.device.unmap_memory(scene_memory);
         }
 
         // update for grid
@@ -2099,6 +2228,236 @@ impl App {
         }
     }
 
+    /// Initialize Ray Tracing resources (G-Buffer, Acceleration Structure, Pipelines)
+    unsafe fn init_ray_tracing(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        data: &mut AppData,
+    ) -> Result<()> {
+        log::info!("Initializing Ray Tracing resources...");
+
+        // 1. Create G-Buffer
+        let gbuffer = RRGBuffer::new(
+            instance,
+            rrdevice,
+            data.rrswapchain.swapchain_extent.width,
+            data.rrswapchain.swapchain_extent.height,
+        )?;
+
+        // Transition G-Buffer images to proper layouts
+        gbuffer.transition_layouts(rrdevice, data.rrcommand_pool.command_pool)?;
+
+        data.gbuffer = Some(gbuffer);
+        log::info!("Created G-Buffer");
+
+        // 2. Create G-Buffer render pass and framebuffer
+        create_gbuffer_render_pass(instance, rrdevice, &mut data.rrrender)?;
+
+        if let Some(ref gbuffer) = data.gbuffer {
+            create_gbuffer_framebuffer(instance, rrdevice, &mut data.rrrender, gbuffer)?;
+        }
+        log::info!("Created G-Buffer render pass and framebuffer");
+
+        // 3. Create G-Buffer pipeline and descriptor set
+        data.gbuffer_descriptor_set = Some(RRDescriptorSet::new(rrdevice, &data.rrswapchain));
+
+        // Note: G-Buffer pipeline will be created after model is loaded
+        // because it needs to match the vertex format
+
+        log::info!("Ray Tracing initialization complete");
+        Ok(())
+    }
+
+    /// Build acceleration structures from loaded model
+    unsafe fn build_acceleration_structures(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        data: &mut AppData,
+    ) -> Result<()> {
+        log::info!("Building acceleration structures...");
+
+        let mut acceleration_structure = RRAccelerationStructure::new();
+
+        // Build BLAS for each mesh in the model
+        for rrdata in &data.model_descriptor_set.rrdata {
+            let blas = RRAccelerationStructure::create_blas(
+                instance,
+                rrdevice,
+                &data.rrcommand_pool,
+                &rrdata.vertex_buffer.buffer,
+                rrdata.vertex_data.vertices.len() as u32,
+                std::mem::size_of::<data::Vertex>() as u32,
+                &rrdata.index_buffer.buffer,
+                rrdata.vertex_data.indices.len() as u32,
+            )?;
+
+            acceleration_structure.blas_list.push(blas);
+            log::info!("Created BLAS for mesh");
+        }
+
+        // Build TLAS from all BLAS
+        if !acceleration_structure.blas_list.is_empty() {
+            let tlas = RRAccelerationStructure::create_tlas(
+                instance,
+                rrdevice,
+                &data.rrcommand_pool,
+                &acceleration_structure.blas_list,
+            )?;
+            acceleration_structure.tlas = tlas;
+            log::info!("Created TLAS with {} instances", acceleration_structure.blas_list.len());
+        }
+
+        data.acceleration_structure = Some(acceleration_structure);
+        log::info!("Acceleration structures built successfully");
+        Ok(())
+    }
+
+    /// Create Ray Tracing pipelines after AS is built
+    unsafe fn create_ray_tracing_pipelines(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        data: &mut AppData,
+    ) -> Result<()> {
+        log!("Creating Ray Tracing pipelines...");
+
+        // 0. Create G-Buffer (framebuffer attachments)
+        let gbuffer = RRGBuffer::new(
+            instance,
+            rrdevice,
+            data.rrswapchain.swapchain_extent.width,
+            data.rrswapchain.swapchain_extent.height,
+        )?;
+        data.gbuffer = Some(gbuffer);
+        log!("Created G-Buffer resources (position, normal, shadow mask images)");
+
+        // Create G-Buffer framebuffer
+        if let Some(ref gbuffer) = data.gbuffer {
+            create_gbuffer_framebuffer(instance, rrdevice, &mut data.rrrender, gbuffer)?;
+            log!("Created G-Buffer framebuffer");
+        }
+
+        // 1. Create G-Buffer descriptor set and pipeline
+        let mut gbuffer_desc = RRDescriptorSet::new(
+            rrdevice,
+            &data.rrswapchain,
+        );
+
+        // Copy model data for G-Buffer rendering
+        for rrdata in &data.model_descriptor_set.rrdata {
+            gbuffer_desc.rrdata.push(rrdata.clone());
+        }
+
+        // Create descriptor sets
+        RRDescriptorSet::create_descriptor_set(rrdevice, &data.rrswapchain, &mut gbuffer_desc)?;
+
+        // Create G-Buffer pipeline with MRT
+        let gbuffer_pipeline = PipelineBuilder::new(
+            "src/shaders/gbufferVert.spv",
+            "src/shaders/gbufferFrag.spv",
+        )
+        .vertex_input(VertexInputConfig::Standard)
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .custom_render_pass(data.rrrender.gbuffer_render_pass)
+        .mrt_attachments(3) // position, normal, and albedo
+        .msaa_samples(vk::SampleCountFlags::_1) // G-Buffer uses 1 sample (no MSAA)
+        .descriptor_layouts(vec![gbuffer_desc.descriptor_set_layout])
+        .build(rrdevice, &data.rrrender, Some(data.rrswapchain.swapchain_extent))?;
+
+        data.gbuffer_descriptor_set = Some(gbuffer_desc);
+        data.gbuffer_pipeline = Some(gbuffer_pipeline);
+        log!("Created G-Buffer descriptor set and pipeline");
+
+        // 2. Create scene uniform buffer
+        let (scene_buffer, scene_memory) = create_buffer(
+            instance,
+            rrdevice,
+            std::mem::size_of::<SceneUniformData>() as u64,
+            vk::BufferUsageFlags::UNIFORM_BUFFER,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+        )?;
+        data.scene_uniform_buffer = Some(scene_buffer);
+        data.scene_uniform_buffer_memory = Some(scene_memory);
+
+        // 3. Create Ray Query descriptor set and pipeline
+        let mut ray_query_descriptor = RRRayQueryDescriptorSet {
+            descriptor_set_layout: RRRayQueryDescriptorSet::create_layout(rrdevice)?,
+            descriptor_pool: RRRayQueryDescriptorSet::create_pool(rrdevice)?,
+            descriptor_set: vk::DescriptorSet::null(),
+        };
+
+        // Allocate and update descriptor set with G-Buffer images, TLAS, and scene uniform buffer
+        if let (Some(ref gbuffer), Some(ref accel_struct)) = (&data.gbuffer, &data.acceleration_structure) {
+            if let Some(tlas) = accel_struct.tlas.acceleration_structure {
+                ray_query_descriptor.allocate_and_update(
+                    rrdevice,
+                    gbuffer.position_image_view,
+                    gbuffer.normal_image_view,
+                    gbuffer.shadow_mask_image_view,
+                    tlas,
+                    scene_buffer,
+                )?;
+            }
+        }
+
+        let ray_query_pipeline = RRPipeline::new_compute(
+            rrdevice,
+            "src/shaders/rayQueryShadow.spv",
+            &[ray_query_descriptor.descriptor_set_layout],
+        )?;
+        data.ray_query_pipeline = Some(ray_query_pipeline);
+        data.ray_query_descriptor = Some(ray_query_descriptor);
+        log::info!("Created Ray Query descriptor set and pipeline");
+
+        // 4. Create G-Buffer sampler
+        let gbuffer_sampler = create_texture_sampler(rrdevice, 1)?;
+        data.gbuffer_sampler = Some(gbuffer_sampler);
+
+        // 5. Create composite descriptor set and pipeline
+        let mut composite_descriptor = RRCompositeDescriptorSet {
+            descriptor_set_layout: RRCompositeDescriptorSet::create_layout(rrdevice)?,
+            descriptor_pool: RRCompositeDescriptorSet::create_pool(rrdevice)?,
+            descriptor_set: vk::DescriptorSet::null(),
+        };
+
+        // Allocate and update descriptor set with G-Buffer images and scene uniform buffer
+        if let Some(ref gbuffer) = data.gbuffer {
+            composite_descriptor.allocate_and_update(
+                rrdevice,
+                gbuffer.position_image_view,
+                gbuffer_sampler,
+                gbuffer.normal_image_view,
+                gbuffer_sampler,
+                gbuffer.shadow_mask_image_view,
+                gbuffer_sampler,
+                gbuffer.albedo_image_view,
+                gbuffer_sampler,
+                scene_buffer,
+            )?;
+        }
+
+        let composite_pipeline = PipelineBuilder::new(
+            "src/shaders/compositeVert.spv",
+            "src/shaders/compositeFrag.spv",
+        )
+        .vertex_input(VertexInputConfig::Custom {
+            bindings: vec![],
+            attributes: vec![],
+        })
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .no_depth_test()
+        .descriptor_layouts(vec![composite_descriptor.descriptor_set_layout])
+        .build(rrdevice, &data.rrrender, Some(data.rrswapchain.swapchain_extent))?;
+
+        data.composite_pipeline = Some(composite_pipeline);
+        data.composite_descriptor = Some(composite_descriptor);
+        log::info!("Created composite descriptor set and pipeline");
+
+        log::info!("Ray Tracing pipelines created successfully");
+        Ok(())
+    }
+
     unsafe fn reload_model_data_buffer(
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -2144,6 +2503,18 @@ impl App {
             )?;
 
             rrdata.sampler = create_texture_sampler(&rrdevice, rrdata.mip_level)?;
+        }
+
+        // Build acceleration structures after model is loaded
+        if let Err(e) = Self::build_acceleration_structures(instance, rrdevice, data) {
+            eprintln!("Failed to build acceleration structures: {:?}", e);
+            log!("Failed to build acceleration structures: {:?}", e);
+        }
+
+        // Create Ray Tracing pipelines after AS is built
+        if let Err(e) = Self::create_ray_tracing_pipelines(instance, rrdevice, data) {
+            eprintln!("Failed to create ray tracing pipelines: {:?}", e);
+            log!("Failed to create ray tracing pipelines: {:?}", e);
         }
 
         Ok(())
@@ -2915,44 +3286,85 @@ impl App {
             .flags(vk::CommandBufferUsageFlags::empty());
         self.rrdevice.device.begin_command_buffer(command_buffer, &begin_info)?;
 
-        // Begin render pass
-        let render_area = vk::Rect2D::builder()
-            .offset(vk::Offset2D::default())
-            .extent(self.data.rrswapchain.swapchain_extent);
+        // Check if Ray Tracing is enabled
+        let use_ray_tracing = self.data.gbuffer.is_some()
+            && self.data.ray_query_pipeline.is_some()
+            && self.data.composite_pipeline.is_some();
 
-        let color_clear_value = vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [0.0, 0.0, 0.0, 1.0],
-            },
-        };
-        let depth_clear_value = vk::ClearValue {
-            depth_stencil: vk::ClearDepthStencilValue {
-                depth: 1.0,
-                stencil: 0,
-            },
-        };
-        let clear_values = [color_clear_value, depth_clear_value];
+        // Debug: Log rendering path (only once)
+        static mut RAY_TRACING_LOG_ONCE: bool = false;
+        unsafe {
+            if !RAY_TRACING_LOG_ONCE {
+                if use_ray_tracing {
+                    log!("=== Using Ray Tracing Rendering Path ===");
+                    log!("  G-Buffer: {:?}", self.data.gbuffer.is_some());
+                    log!("  Ray Query Pipeline: {:?}", self.data.ray_query_pipeline.is_some());
+                    log!("  Composite Pipeline: {:?}", self.data.composite_pipeline.is_some());
+                    log!("  Light Position: {:?}", self.data.rt_debug_state.light_position);
+                    log!("  Debug Mode: {:?}", self.data.rt_debug_state.debug_view_mode);
+                } else {
+                    log!("=== Using Traditional Forward Rendering Path ===");
+                    log!("  G-Buffer: {:?}", self.data.gbuffer.is_some());
+                    log!("  Ray Query Pipeline: {:?}", self.data.ray_query_pipeline.is_some());
+                    log!("  Composite Pipeline: {:?}", self.data.composite_pipeline.is_some());
+                }
+                RAY_TRACING_LOG_ONCE = true;
+            }
+        }
 
-        let render_pass_info = vk::RenderPassBeginInfo::builder()
-            .render_pass(self.data.rrrender.render_pass)
-            .framebuffer(self.data.rrrender.framebuffers[image_index])
-            .render_area(render_area)
-            .clear_values(&clear_values);
+        if use_ray_tracing {
+            // === Ray Tracing Path (3-pass rendering) ===
 
-        self.rrdevice.device.cmd_begin_render_pass(
-            command_buffer,
-            &render_pass_info,
-            vk::SubpassContents::INLINE,
-        );
+            // Pass 1: Render to G-Buffer
+            self.record_gbuffer_pass(command_buffer, image_index)?;
 
-        // Draw 3D models (existing rendering logic)
-        self.record_3d_rendering(command_buffer, image_index)?;
+            // Pass 2: Ray Query compute shader (shadow calculation)
+            self.record_ray_query_pass(command_buffer)?;
 
-        // Draw ImGui
-        self.record_imgui_rendering(command_buffer, draw_data)?;
+            // Pass 3: Composite pass (final image) + ImGui
+            self.record_composite_pass(command_buffer, image_index, draw_data)?;
+        } else {
+            // === Traditional Forward Rendering Path ===
 
-        // End render pass
-        self.rrdevice.device.cmd_end_render_pass(command_buffer);
+            // Begin render pass
+            let render_area = vk::Rect2D::builder()
+                .offset(vk::Offset2D::default())
+                .extent(self.data.rrswapchain.swapchain_extent);
+
+            let color_clear_value = vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0.0, 0.0, 0.0, 1.0],
+                },
+            };
+            let depth_clear_value = vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: 1.0,
+                    stencil: 0,
+                },
+            };
+            let clear_values = [color_clear_value, depth_clear_value];
+
+            let render_pass_info = vk::RenderPassBeginInfo::builder()
+                .render_pass(self.data.rrrender.render_pass)
+                .framebuffer(self.data.rrrender.framebuffers[image_index])
+                .render_area(render_area)
+                .clear_values(&clear_values);
+
+            self.rrdevice.device.cmd_begin_render_pass(
+                command_buffer,
+                &render_pass_info,
+                vk::SubpassContents::INLINE,
+            );
+
+            // Draw 3D models (existing rendering logic)
+            self.record_3d_rendering(command_buffer, image_index)?;
+
+            // Draw ImGui
+            self.record_imgui_rendering(command_buffer, draw_data)?;
+
+            // End render pass
+            self.rrdevice.device.cmd_end_render_pass(command_buffer);
+        }
 
         // End command buffer
         self.rrdevice.device.end_command_buffer(command_buffer)?;
@@ -3209,6 +3621,420 @@ impl App {
             vertex_offset += draw_list.vtx_buffer().len() as u32;
             index_offset += draw_list.idx_buffer().len() as u32;
         }
+
+        Ok(())
+    }
+
+    /// Pass 1: Render models to G-Buffer (position and normal)
+    unsafe fn record_gbuffer_pass(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+    ) -> Result<()> {
+        let gbuffer = self.data.gbuffer.as_ref()
+            .ok_or_else(|| anyhow!("G-Buffer not initialized"))?;
+        let gbuffer_pipeline = self.data.gbuffer_pipeline.as_ref()
+            .ok_or_else(|| anyhow!("G-Buffer pipeline not initialized"))?;
+        let gbuffer_descriptor_set = self.data.gbuffer_descriptor_set.as_ref()
+            .ok_or_else(|| anyhow!("G-Buffer descriptor set not initialized"))?;
+
+        // Begin G-Buffer render pass
+        let render_area = vk::Rect2D::builder()
+            .offset(vk::Offset2D::default())
+            .extent(vk::Extent2D {
+                width: gbuffer.width,
+                height: gbuffer.height,
+            });
+
+        // Clear values for position, normal, albedo, and depth
+        let position_clear = vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 0.0],
+            },
+        };
+        let normal_clear = vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 0.0],
+            },
+        };
+        let albedo_clear = vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 0.0],
+            },
+        };
+        let depth_clear = vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 1.0,
+                stencil: 0,
+            },
+        };
+        let clear_values = [position_clear, normal_clear, albedo_clear, depth_clear];
+
+        let render_pass_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(self.data.rrrender.gbuffer_render_pass)
+            .framebuffer(self.data.rrrender.gbuffer_framebuffer)
+            .render_area(render_area)
+            .clear_values(&clear_values);
+
+        self.rrdevice.device.cmd_begin_render_pass(
+            command_buffer,
+            &render_pass_info,
+            vk::SubpassContents::INLINE,
+        );
+
+        // Bind G-Buffer pipeline
+        self.rrdevice.device.cmd_bind_pipeline(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            gbuffer_pipeline.pipeline,
+        );
+
+        // Set viewport and scissor (required for dynamic state)
+        let viewport = vk::Viewport::builder()
+            .x(0.0)
+            .y(0.0)
+            .width(gbuffer.width as f32)
+            .height(gbuffer.height as f32)
+            .min_depth(0.0)
+            .max_depth(1.0);
+
+        let scissor = vk::Rect2D::builder()
+            .offset(vk::Offset2D { x: 0, y: 0 })
+            .extent(vk::Extent2D {
+                width: gbuffer.width,
+                height: gbuffer.height,
+            });
+
+        self.rrdevice.device.cmd_set_viewport(command_buffer, 0, &[viewport]);
+        self.rrdevice.device.cmd_set_scissor(command_buffer, 0, &[scissor]);
+
+        // Render all model meshes to G-Buffer
+        for i in 0..gbuffer_descriptor_set.rrdata.len() {
+            let rrdata = &gbuffer_descriptor_set.rrdata[i];
+
+            // Bind vertex and index buffers
+            self.rrdevice.device.cmd_bind_vertex_buffers(
+                command_buffer,
+                0,
+                &[rrdata.vertex_buffer.buffer],
+                &[0],
+            );
+
+            self.rrdevice.device.cmd_bind_index_buffer(
+                command_buffer,
+                rrdata.index_buffer.buffer,
+                0,
+                vk::IndexType::UINT32,
+            );
+
+            // Bind descriptor set
+            let swapchain_images_len = gbuffer_descriptor_set.descriptor_sets.len() /
+                gbuffer_descriptor_set.rrdata.len().max(1);
+            let descriptor_set_index = i * swapchain_images_len + image_index;
+
+            self.rrdevice.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                gbuffer_pipeline.pipeline_layout,
+                0,
+                &[gbuffer_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[],
+            );
+
+            // Draw
+            self.rrdevice.device.cmd_draw_indexed(
+                command_buffer,
+                rrdata.index_buffer.indices,
+                1,
+                0,
+                0,
+                0,
+            );
+        }
+
+        // End G-Buffer render pass
+        self.rrdevice.device.cmd_end_render_pass(command_buffer);
+
+        Ok(())
+    }
+
+    /// Pass 2: Execute Ray Query compute shader to calculate shadows
+    unsafe fn record_ray_query_pass(
+        &self,
+        command_buffer: vk::CommandBuffer,
+    ) -> Result<()> {
+        let gbuffer = self.data.gbuffer.as_ref()
+            .ok_or_else(|| anyhow!("G-Buffer not initialized"))?;
+        let ray_query_pipeline = self.data.ray_query_pipeline.as_ref()
+            .ok_or_else(|| anyhow!("Ray Query pipeline not initialized"))?;
+        let ray_query_descriptor = self.data.ray_query_descriptor.as_ref()
+            .ok_or_else(|| anyhow!("Ray Query descriptor set not initialized"))?;
+
+        // Memory barrier: G-Buffer writes -> compute shader reads
+        let image_barriers = [
+            vk::ImageMemoryBarrier::builder()
+                .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+                .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                .old_layout(vk::ImageLayout::GENERAL)
+                .new_layout(vk::ImageLayout::GENERAL)
+                .image(gbuffer.position_image)
+                .subresource_range(vk::ImageSubresourceRange {
+                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                    base_mip_level: 0,
+                    level_count: 1,
+                    base_array_layer: 0,
+                    layer_count: 1,
+                })
+                .build(),
+            vk::ImageMemoryBarrier::builder()
+                .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+                .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                .old_layout(vk::ImageLayout::GENERAL)
+                .new_layout(vk::ImageLayout::GENERAL)
+                .image(gbuffer.normal_image)
+                .subresource_range(vk::ImageSubresourceRange {
+                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                    base_mip_level: 0,
+                    level_count: 1,
+                    base_array_layer: 0,
+                    layer_count: 1,
+                })
+                .build(),
+            vk::ImageMemoryBarrier::builder()
+                .src_access_mask(vk::AccessFlags::empty())
+                .dst_access_mask(vk::AccessFlags::SHADER_WRITE)
+                .old_layout(vk::ImageLayout::UNDEFINED)
+                .new_layout(vk::ImageLayout::GENERAL)
+                .image(gbuffer.shadow_mask_image)
+                .subresource_range(vk::ImageSubresourceRange {
+                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                    base_mip_level: 0,
+                    level_count: 1,
+                    base_array_layer: 0,
+                    layer_count: 1,
+                })
+                .build(),
+        ];
+
+        self.rrdevice.device.cmd_pipeline_barrier(
+            command_buffer,
+            vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+            vk::PipelineStageFlags::COMPUTE_SHADER,
+            vk::DependencyFlags::empty(),
+            &[] as &[vk::MemoryBarrier],
+            &[] as &[vk::BufferMemoryBarrier],
+            &image_barriers,
+        );
+
+        // Bind compute pipeline
+        self.rrdevice.device.cmd_bind_pipeline(
+            command_buffer,
+            vk::PipelineBindPoint::COMPUTE,
+            ray_query_pipeline.pipeline,
+        );
+
+        // Bind descriptor set
+        self.rrdevice.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::COMPUTE,
+            ray_query_pipeline.pipeline_layout,
+            0,
+            &[ray_query_descriptor.descriptor_set],
+            &[],
+        );
+
+        // Dispatch compute shader (one thread per pixel)
+        let group_count_x = (gbuffer.width + 15) / 16;  // 16x16 local workgroup size
+        let group_count_y = (gbuffer.height + 15) / 16;
+        self.rrdevice.device.cmd_dispatch(command_buffer, group_count_x, group_count_y, 1);
+
+        // Memory barrier: compute shader writes -> fragment shader reads
+        let shadow_barrier = vk::ImageMemoryBarrier::builder()
+            .src_access_mask(vk::AccessFlags::SHADER_WRITE)
+            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+            .old_layout(vk::ImageLayout::GENERAL)
+            .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image(gbuffer.shadow_mask_image)
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .build();
+
+        self.rrdevice.device.cmd_pipeline_barrier(
+            command_buffer,
+            vk::PipelineStageFlags::COMPUTE_SHADER,
+            vk::PipelineStageFlags::FRAGMENT_SHADER,
+            vk::DependencyFlags::empty(),
+            &[] as &[vk::MemoryBarrier],
+            &[] as &[vk::BufferMemoryBarrier],
+            &[shadow_barrier],
+        );
+
+        Ok(())
+    }
+
+    /// Pass 3: Composite final image and render ImGui
+    unsafe fn record_composite_pass(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+        draw_data: &imgui::DrawData,
+    ) -> Result<()> {
+        let composite_pipeline = self.data.composite_pipeline.as_ref()
+            .ok_or_else(|| anyhow!("Composite pipeline not initialized"))?;
+        let composite_descriptor = self.data.composite_descriptor.as_ref()
+            .ok_or_else(|| anyhow!("Composite descriptor set not initialized"))?;
+
+        // Begin main render pass
+        let render_area = vk::Rect2D::builder()
+            .offset(vk::Offset2D::default())
+            .extent(self.data.rrswapchain.swapchain_extent);
+
+        let color_clear_value = vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
+        };
+        let depth_clear_value = vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 1.0,
+                stencil: 0,
+            },
+        };
+        let clear_values = [color_clear_value, depth_clear_value];
+
+        let render_pass_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(self.data.rrrender.render_pass)
+            .framebuffer(self.data.rrrender.framebuffers[image_index])
+            .render_area(render_area)
+            .clear_values(&clear_values);
+
+        self.rrdevice.device.cmd_begin_render_pass(
+            command_buffer,
+            &render_pass_info,
+            vk::SubpassContents::INLINE,
+        );
+
+        // Draw fullscreen quad with composite shader
+        self.rrdevice.device.cmd_bind_pipeline(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            composite_pipeline.pipeline,
+        );
+
+        self.rrdevice.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            composite_pipeline.pipeline_layout,
+            0,
+            &[composite_descriptor.descriptor_set],
+            &[],
+        );
+
+        // Draw fullscreen triangle (no vertex buffer needed)
+        self.rrdevice.device.cmd_draw(command_buffer, 3, 1, 0, 0);
+
+        // Draw grid
+        self.rrdevice.device.cmd_bind_pipeline(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            self.data.grid_pipeline.pipeline,
+        );
+
+        self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
+
+        self.rrdevice.device.cmd_bind_vertex_buffers(
+            command_buffer,
+            0,
+            &[self.data.grid_vertex_buffer.buffer],
+            &[0],
+        );
+
+        self.rrdevice.device.cmd_bind_index_buffer(
+            command_buffer,
+            self.data.grid_index_buffer.buffer,
+            0,
+            vk::IndexType::UINT32,
+        );
+
+        let swapchain_images_len = self.data.grid_descriptor_set.descriptor_sets.len() /
+            self.data.grid_descriptor_set.rrdata.len().max(1);
+        let descriptor_set_index = image_index;
+
+        self.rrdevice.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            self.data.grid_pipeline.pipeline_layout,
+            0,
+            &[self.data.grid_descriptor_set.descriptor_sets[descriptor_set_index]],
+            &[],
+        );
+
+        self.rrdevice.device.cmd_draw_indexed(
+            command_buffer,
+            self.data.grid_index_buffer.indices,
+            1,
+            0,
+            0,
+            0,
+        );
+
+        // Draw Gizmo
+        if let (Some(vertex_buffer), Some(index_buffer)) =
+            (self.data.gizmo_data.vertex_buffer, self.data.gizmo_data.index_buffer) {
+
+            self.rrdevice.device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.data.gizmo_pipeline.pipeline,
+            );
+
+            self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
+
+            self.rrdevice.device.cmd_bind_vertex_buffers(
+                command_buffer,
+                0,
+                &[vertex_buffer],
+                &[0],
+            );
+
+            self.rrdevice.device.cmd_bind_index_buffer(
+                command_buffer,
+                index_buffer,
+                0,
+                vk::IndexType::UINT32,
+            );
+
+            let descriptor_set_index = image_index;
+
+            self.rrdevice.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.data.gizmo_pipeline.pipeline_layout,
+                0,
+                &[self.data.gizmo_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[],
+            );
+
+            self.rrdevice.device.cmd_draw_indexed(
+                command_buffer,
+                self.data.gizmo_data.indices.len() as u32,
+                1,
+                0,
+                0,
+                0,
+            );
+        }
+
+        // Draw ImGui on top
+        self.record_imgui_rendering(command_buffer, draw_data)?;
+
+        // End render pass
+        self.rrdevice.device.cmd_end_render_pass(command_buffer);
 
         Ok(())
     }

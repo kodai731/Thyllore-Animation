@@ -12,6 +12,7 @@ pub struct Vertex {
     pub pos: Vec3,
     pub color: Vec4,
     pub tex_coord: Vec2,
+    pub normal: Vec3,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -89,9 +90,37 @@ impl Default for UniformBufferObject {
     }
 }
 
+/// Scene data for ray query and composite shaders
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct SceneUniformData {
+    pub light_position: Vec4,
+    pub light_color: Vec4,
+    pub view: Mat4,
+    pub proj: Mat4,
+    pub debug_mode: i32,
+    pub shadow_strength: f32,
+    pub _padding: [i32; 2],
+}
+
+impl Default for SceneUniformData {
+    fn default() -> Self {
+        let identity = Mat4::identity();
+        Self {
+            light_position: Vec4::new(5.0, 5.0, 5.0, 1.0),
+            light_color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+            view: identity,
+            proj: identity,
+            debug_mode: 0,
+            shadow_strength: 1.0,
+            _padding: [0; 2],
+        }
+    }
+}
+
 impl PartialEq for Vertex {
     fn eq(&self, other: &Self) -> bool {
-        self.pos == other.pos && self.color == other.color && self.tex_coord == other.tex_coord
+        self.pos == other.pos && self.color == other.color && self.tex_coord == other.tex_coord && self.normal == other.normal
     }
 }
 
@@ -107,14 +136,27 @@ impl Hash for Vertex {
         self.color[2].to_bits().hash(state);
         self.tex_coord[0].to_bits().hash(state);
         self.tex_coord[1].to_bits().hash(state);
+        self.normal[0].to_bits().hash(state);
+        self.normal[1].to_bits().hash(state);
+        self.normal[2].to_bits().hash(state);
     }
 }
 impl Vertex {
-    pub const fn new(pos: Vec3, color: Vec4, tex_coord: Vec2) -> Self {
+    pub fn new(pos: Vec3, color: Vec4, tex_coord: Vec2) -> Self {
         Self {
             pos,
             color,
             tex_coord,
+            normal: Vec3::new(0.0, 0.0, 1.0), // Default normal pointing up
+        }
+    }
+
+    pub fn new_with_normal(pos: Vec3, color: Vec4, tex_coord: Vec2, normal: Vec3) -> Self {
+        Self {
+            pos,
+            color,
+            tex_coord,
+            normal,
         }
     }
 
@@ -127,9 +169,8 @@ impl Vertex {
             .build()
     }
 
-    pub fn attribute_descriptions() -> [vk::VertexInputAttributeDescription; 3] {
+    pub fn attribute_descriptions() -> [vk::VertexInputAttributeDescription; 4] {
         // how to extract a vertex attribute from a chunk of vertex data originating from a binding description
-        // two attributes, position and color
         let pos = vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(0) // directive of the input in the vertex shader
@@ -151,6 +192,13 @@ impl Vertex {
             .offset((size_of::<Vec3>() + size_of::<Vec4>()) as u32)
             .build();
 
-        [pos, color, tex_coord]
+        let normal = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(3)
+            .format(vk::Format::R32G32B32_SFLOAT)
+            .offset((size_of::<Vec3>() + size_of::<Vec4>() + size_of::<Vec2>()) as u32)
+            .build();
+
+        [pos, color, tex_coord, normal]
     }
 }

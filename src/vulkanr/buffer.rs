@@ -108,8 +108,11 @@ impl RRIndexBuffer {
             instance,
             rrdevice,
             size,
-            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL, //  we're not able to use map_memory, instead can be copied
+            vk::BufferUsageFlags::TRANSFER_DST
+                | vk::BufferUsageFlags::INDEX_BUFFER
+                | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+                | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
         ) else {
             panic!("failed to create buffer")
         };
@@ -183,8 +186,11 @@ impl RRVertexBuffer {
             instance,
             rrdevice,
             size,
-            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL, //  we're not able to use map_memory, instead can be copied
+            vk::BufferUsageFlags::TRANSFER_DST
+                | vk::BufferUsageFlags::VERTEX_BUFFER
+                | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+                | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
         ) else {
             panic!("failed to create buffer");
         };
@@ -302,7 +308,11 @@ pub unsafe fn create_buffer(
 
     let buffer = rrdevice.device.create_buffer(&buffer_info, None)?;
     let requirements = rrdevice.device.get_buffer_memory_requirements(buffer);
-    let memory_info = vk::MemoryAllocateInfo::builder()
+
+    let mut memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
+        .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+
+    let mut memory_info = vk::MemoryAllocateInfo::builder()
         .allocation_size(requirements.size)
         .memory_type_index(get_memory_type_index(
             instance,
@@ -310,6 +320,11 @@ pub unsafe fn create_buffer(
             properties,
             requirements,
         )?);
+
+    if usage.contains(vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS) {
+        memory_info = memory_info.push_next(&mut memory_allocate_flags_info);
+    }
+
     let buffer_memory = rrdevice.device.allocate_memory(&memory_info, None)?;
     rrdevice
         .device

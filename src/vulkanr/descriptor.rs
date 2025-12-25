@@ -442,9 +442,17 @@ impl RRCompositeDescriptorSet {
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)
             .build();
 
-        // Binding 3: Scene uniform buffer (light position, color, etc.)
-        let scene_ubo_binding = vk::DescriptorSetLayoutBinding::builder()
+        // Binding 3: Albedo sampler (sampled image)
+        let albedo_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(3)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build();
+
+        // Binding 4: Scene uniform buffer (light position, color, etc.)
+        let scene_ubo_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(4)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(1)
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)
@@ -454,6 +462,7 @@ impl RRCompositeDescriptorSet {
             position_binding,
             normal_binding,
             shadow_mask_binding,
+            albedo_binding,
             scene_ubo_binding,
         ];
 
@@ -468,7 +477,7 @@ impl RRCompositeDescriptorSet {
     pub unsafe fn create_pool(rrdevice: &RRDevice) -> Result<vk::DescriptorPool> {
         let sampler_size = vk::DescriptorPoolSize::builder()
             .type_(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(3); // position, normal, shadow mask
+            .descriptor_count(4); // position, normal, shadow mask, albedo
 
         let ubo_size = vk::DescriptorPoolSize::builder()
             .type_(vk::DescriptorType::UNIFORM_BUFFER)
@@ -495,6 +504,8 @@ impl RRCompositeDescriptorSet {
         normal_sampler: vk::Sampler,
         shadow_mask_image_view: vk::ImageView,
         shadow_mask_sampler: vk::Sampler,
+        albedo_image_view: vk::ImageView,
+        albedo_sampler: vk::Sampler,
         scene_uniform_buffer: vk::Buffer,
     ) -> Result<()> {
         // Allocate descriptor set
@@ -551,7 +562,22 @@ impl RRCompositeDescriptorSet {
             .image_info(std::slice::from_ref(&shadow_mask_info))
             .build();
 
-        // Binding 3: Scene uniform buffer
+        // Binding 3: Albedo image sampler
+        let albedo_image_info = vk::DescriptorImageInfo::builder()
+            .image_view(albedo_image_view)
+            .sampler(albedo_sampler)
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .build();
+
+        let albedo_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(3)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(std::slice::from_ref(&albedo_image_info))
+            .build();
+
+        // Binding 4: Scene uniform buffer
         let scene_buffer_info = vk::DescriptorBufferInfo::builder()
             .buffer(scene_uniform_buffer)
             .offset(0)
@@ -560,7 +586,7 @@ impl RRCompositeDescriptorSet {
 
         let scene_ubo_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)
-            .dst_binding(3)
+            .dst_binding(4)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
             .buffer_info(std::slice::from_ref(&scene_buffer_info))
@@ -571,6 +597,7 @@ impl RRCompositeDescriptorSet {
             position_write,
             normal_write,
             shadow_mask_write,
+            albedo_write,
             scene_ubo_write,
         ];
 

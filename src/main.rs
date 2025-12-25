@@ -336,6 +336,14 @@ impl support::System {
                                             app.data.rt_debug_state.light_position.z = light_pos[2];
                                         }
 
+                                        let mut shadow_strength = app.data.rt_debug_state.shadow_strength;
+                                        if ui.slider_config("Shadow Strength", 0.0, 1.0)
+                                            .build(&mut shadow_strength)
+                                        {
+                                            app.data.rt_debug_state.shadow_strength = shadow_strength;
+                                            log!("Shadow strength changed to: {}", shadow_strength);
+                                        }
+
                                         ui.text("Debug View Mode:");
                                         let mut current_mode = app.data.rt_debug_state.debug_view_mode.as_int();
                                         if ui.radio_button("Final (Lit + Shadow)", &mut current_mode, 0) {
@@ -1770,8 +1778,19 @@ impl App {
                 view,
                 proj,
                 debug_mode: self.data.rt_debug_state.debug_view_mode.as_int(),
-                _padding: [0; 3],
+                shadow_strength: self.data.rt_debug_state.shadow_strength,
+                _padding: [0; 2],
             };
+
+            // Log shadow strength for debugging (only on frame 0 or when it changes)
+            static mut LAST_SHADOW_STRENGTH: f32 = -1.0;
+            unsafe {
+                if LAST_SHADOW_STRENGTH != scene_data.shadow_strength {
+                    log!("Updating scene uniform: shadow_strength = {}, debug_mode = {}",
+                         scene_data.shadow_strength, scene_data.debug_mode);
+                    LAST_SHADOW_STRENGTH = scene_data.shadow_strength;
+                }
+            }
 
             let data_ptr = self.rrdevice.device.map_memory(
                 scene_memory,
@@ -2351,7 +2370,7 @@ impl App {
         .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
         .polygon_mode(vk::PolygonMode::FILL)
         .custom_render_pass(data.rrrender.gbuffer_render_pass)
-        .mrt_attachments(2) // position and normal
+        .mrt_attachments(3) // position, normal, and albedo
         .msaa_samples(vk::SampleCountFlags::_1) // G-Buffer uses 1 sample (no MSAA)
         .descriptor_layouts(vec![gbuffer_desc.descriptor_set_layout])
         .build(rrdevice, &data.rrrender, Some(data.rrswapchain.swapchain_extent))?;
@@ -2421,6 +2440,8 @@ impl App {
                 gbuffer.normal_image_view,
                 gbuffer_sampler,
                 gbuffer.shadow_mask_image_view,
+                gbuffer_sampler,
+                gbuffer.albedo_image_view,
                 gbuffer_sampler,
                 scene_buffer,
             )?;
@@ -3636,7 +3657,7 @@ impl App {
                 height: gbuffer.height,
             });
 
-        // Clear values for position, normal, and depth
+        // Clear values for position, normal, albedo, and depth
         let position_clear = vk::ClearValue {
             color: vk::ClearColorValue {
                 float32: [0.0, 0.0, 0.0, 0.0],
@@ -3647,13 +3668,18 @@ impl App {
                 float32: [0.0, 0.0, 0.0, 0.0],
             },
         };
+        let albedo_clear = vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 0.0],
+            },
+        };
         let depth_clear = vk::ClearValue {
             depth_stencil: vk::ClearDepthStencilValue {
                 depth: 1.0,
                 stencil: 0,
             },
         };
-        let clear_values = [position_clear, normal_clear, depth_clear];
+        let clear_values = [position_clear, normal_clear, albedo_clear, depth_clear];
 
         let render_pass_info = vk::RenderPassBeginInfo::builder()
             .render_pass(self.data.rrrender.gbuffer_render_pass)

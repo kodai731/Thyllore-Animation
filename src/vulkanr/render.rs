@@ -314,6 +314,11 @@ pub struct RRGBuffer {
     pub normal_image_memory: vk::DeviceMemory,
     pub normal_image_view: vk::ImageView,
 
+    // Albedo / Base Color (RGB = color, A = alpha)
+    pub albedo_image: vk::Image,
+    pub albedo_image_memory: vk::DeviceMemory,
+    pub albedo_image_view: vk::ImageView,
+
     // Shadow mask (R = shadow factor, 0.0 = shadowed, 1.0 = lit)
     pub shadow_mask_image: vk::Image,
     pub shadow_mask_image_memory: vk::DeviceMemory,
@@ -375,6 +380,28 @@ impl RRGBuffer {
             1,
         )?;
 
+        // Create albedo buffer (RGBA8_UNORM for base color/texture)
+        let (albedo_image, albedo_image_memory) = create_image(
+            instance,
+            rrdevice,
+            width,
+            height,
+            1,
+            vk::SampleCountFlags::_1,
+            vk::Format::R8G8B8A8_UNORM,
+            vk::ImageTiling::OPTIMAL,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        )?;
+
+        let albedo_image_view = create_image_view(
+            rrdevice,
+            albedo_image,
+            vk::Format::R8G8B8A8_UNORM,
+            vk::ImageAspectFlags::COLOR,
+            1,
+        )?;
+
         // Create shadow mask buffer (R32F for shadow factor)
         let (shadow_mask_image, shadow_mask_image_memory) = create_image(
             instance,
@@ -398,7 +425,7 @@ impl RRGBuffer {
         )?;
 
         log::info!(
-            "Created G-Buffer: {}x{} (position, normal, shadow mask)",
+            "Created G-Buffer: {}x{} (position, normal, albedo, shadow mask)",
             width,
             height
         );
@@ -410,6 +437,9 @@ impl RRGBuffer {
             normal_image,
             normal_image_memory,
             normal_image_view,
+            albedo_image,
+            albedo_image_memory,
+            albedo_image_view,
             shadow_mask_image,
             shadow_mask_image_memory,
             shadow_mask_image_view,
@@ -427,6 +457,10 @@ impl RRGBuffer {
         device.destroy_image_view(self.normal_image_view, None);
         device.destroy_image(self.normal_image, None);
         device.free_memory(self.normal_image_memory, None);
+
+        device.destroy_image_view(self.albedo_image_view, None);
+        device.destroy_image(self.albedo_image, None);
+        device.free_memory(self.albedo_image_memory, None);
 
         device.destroy_image_view(self.shadow_mask_image_view, None);
         device.destroy_image(self.shadow_mask_image, None);
@@ -459,6 +493,17 @@ impl RRGBuffer {
             command_pool,
             self.normal_image,
             vk::Format::R32G32B32A32_SFLOAT,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            1,
+        )?;
+
+        transition_image_layout(
+            rrdevice,
+            rrdevice.graphics_queue,
+            command_pool,
+            self.albedo_image,
+            vk::Format::R8G8B8A8_UNORM,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             1,
@@ -510,7 +555,19 @@ pub unsafe fn create_gbuffer_render_pass(
         .final_layout(vk::ImageLayout::GENERAL) // For compute shader read
         .build();
 
-    // Attachment 2: Depth
+    // Attachment 2: Albedo (RGBA8_UNORM)
+    let albedo_attachment = vk::AttachmentDescription::builder()
+        .format(vk::Format::R8G8B8A8_UNORM)
+        .samples(vk::SampleCountFlags::_1)
+        .load_op(vk::AttachmentLoadOp::CLEAR)
+        .store_op(vk::AttachmentStoreOp::STORE)
+        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .initial_layout(vk::ImageLayout::UNDEFINED)
+        .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL) // For fragment shader read
+        .build();
+
+    // Attachment 3: Depth
     let depth_attachment = vk::AttachmentDescription::builder()
         .format(get_depth_format(instance, rrdevice)?)
         .samples(vk::SampleCountFlags::_1)
@@ -533,11 +590,16 @@ pub unsafe fn create_gbuffer_render_pass(
         .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
         .build();
 
-    let color_attachments = [position_attachment_ref, normal_attachment_ref];
+    let albedo_attachment_ref = vk::AttachmentReference::builder()
+        .attachment(2)
+        .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+        .build();
+
+    let color_attachments = [position_attachment_ref, normal_attachment_ref, albedo_attachment_ref];
 
     // Depth attachment reference
     let depth_attachment_ref = vk::AttachmentReference::builder()
-        .attachment(2)
+        .attachment(3)
         .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
     // Subpass
@@ -555,7 +617,7 @@ pub unsafe fn create_gbuffer_render_pass(
         .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS)
         .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE);
 
-    let attachments = [position_attachment, normal_attachment, depth_attachment];
+    let attachments = [position_attachment, normal_attachment, albedo_attachment, depth_attachment];
     let subpasses = [subpass];
     let dependencies = [dependency];
 
@@ -603,10 +665,11 @@ pub unsafe fn create_gbuffer_framebuffer(
     rrrender.gbuffer_depth_image_memory = depth_image_memory;
     rrrender.gbuffer_depth_image_view = depth_image_view;
 
-    // Create framebuffer with position, normal, and depth attachments
+    // Create framebuffer with position, normal, albedo, and depth attachments
     let attachments = [
         gbuffer.position_image_view,
         gbuffer.normal_image_view,
+        gbuffer.albedo_image_view,
         depth_image_view,
     ];
 

@@ -7,11 +7,12 @@ layout(location = 2) in vec2 fragTexCoord;
 // Multiple render targets (MRT) for G-Buffer
 layout(location = 0) out vec4 outPosition;  // World position
 layout(location = 1) out vec4 outNormal;    // World normal
+layout(location = 2) out vec4 outAlbedo;    // Albedo/Base color
 
 layout(binding = 1) uniform sampler2D texSampler;
 
 void main() {
-    // Sample albedo texture for alpha testing
+    // Sample albedo texture
     vec4 albedo = texture(texSampler, fragTexCoord);
     if (albedo.a < 0.5) discard;
 
@@ -20,4 +21,7 @@ void main() {
 
     // Output normalized world normal
     outNormal = vec4(normalize(fragWorldNormal), 1.0);
+
+    // Output albedo/base color
+    outAlbedo = albedo;
 }

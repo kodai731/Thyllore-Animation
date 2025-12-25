@@ -8,15 +8,16 @@ layout(location = 0) out vec4 outColor;
 layout(binding = 0) uniform sampler2D positionSampler;
 layout(binding = 1) uniform sampler2D normalSampler;
 layout(binding = 2) uniform sampler2D shadowMaskSampler;
+layout(binding = 3) uniform sampler2D albedoSampler;
 
-// Scene data (light information and debug mode)
-layout(binding = 3) uniform SceneData {
-    vec4 lightPosition;    // Light position (w component unused)
-    vec4 lightColor;       // Light color and intensity
-    mat4 view;             // View matrix (for debugging)
-    mat4 proj;             // Projection matrix (for debugging)
-    int debugMode;         // Debug view mode (0=Final, 1=Position, 2=Normal, 3=Shadow)
-    int _padding[3];       // Padding for alignment
+layout(binding = 4) uniform SceneData {
+    vec4 lightPosition;
+    vec4 lightColor;
+    mat4 view;
+    mat4 proj;
+    int debugMode;
+    float shadowStrength;
+    int _padding[2];
 } sceneData;
 
 void main() {
@@ -24,6 +25,7 @@ void main() {
     vec3 worldPosition = texture(positionSampler, fragTexCoord).xyz;
     vec3 worldNormal = texture(normalSampler, fragTexCoord).xyz;
     float shadowMask = texture(shadowMaskSampler, fragTexCoord).r;
+    vec4 albedo = texture(albedoSampler, fragTexCoord);
 
     // Check if this is a valid fragment (normal length check)
     bool isBackground = length(worldNormal) < 0.01;
@@ -54,22 +56,18 @@ void main() {
         return;
     }
 
-    // Final rendering mode (debugMode == 0)
-    // Normalize normal
     worldNormal = normalize(worldNormal);
 
-    // Calculate lighting direction
     vec3 lightDir = normalize(sceneData.lightPosition.xyz - worldPosition);
 
-    // Simple diffuse lighting
     float diffuse = max(dot(worldNormal, lightDir), 0.0);
 
-    // Ambient lighting
     float ambient = 0.2;
 
-    // Combine lighting with shadow
-    vec3 baseColor = vec3(0.8, 0.8, 0.8); // Simple gray material
-    vec3 lighting = (ambient + diffuse * shadowMask) * sceneData.lightColor.rgb;
+    float shadowFactor = mix(1.0, shadowMask, sceneData.shadowStrength);
+
+    vec3 baseColor = albedo.rgb;
+    vec3 lighting = (ambient + diffuse * shadowFactor) * sceneData.lightColor.rgb;
     vec3 finalColor = baseColor * lighting;
 
     outColor = vec4(finalColor, 1.0);

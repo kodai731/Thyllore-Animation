@@ -320,17 +320,17 @@ impl support::System {
                                             app.data.rt_debug_state.light_position.y,
                                             app.data.rt_debug_state.light_position.z,
                                         ];
-                                        if ui.slider_config("Light X", -10.0, 10.0)
+                                        if ui.slider_config("Light X", -50.0, 50.0)
                                             .build(&mut light_pos[0])
                                         {
                                             app.data.rt_debug_state.light_position.x = light_pos[0];
                                         }
-                                        if ui.slider_config("Light Y", -10.0, 10.0)
+                                        if ui.slider_config("Light Y", -50.0, 50.0)
                                             .build(&mut light_pos[1])
                                         {
                                             app.data.rt_debug_state.light_position.y = light_pos[1];
                                         }
-                                        if ui.slider_config("Light Z", -10.0, 10.0)
+                                        if ui.slider_config("Light Z", -50.0, 50.0)
                                             .build(&mut light_pos[2])
                                         {
                                             app.data.rt_debug_state.light_position.z = light_pos[2];
@@ -341,7 +341,6 @@ impl support::System {
                                             .build(&mut shadow_strength)
                                         {
                                             app.data.rt_debug_state.shadow_strength = shadow_strength;
-                                            log!("Shadow strength changed to: {}", shadow_strength);
                                         }
 
                                         ui.text("Debug View Mode:");
@@ -1781,16 +1780,6 @@ impl App {
                 shadow_strength: self.data.rt_debug_state.shadow_strength,
                 _padding: [0; 2],
             };
-
-            // Log shadow strength for debugging (only on frame 0 or when it changes)
-            static mut LAST_SHADOW_STRENGTH: f32 = -1.0;
-            unsafe {
-                if LAST_SHADOW_STRENGTH != scene_data.shadow_strength {
-                    log!("Updating scene uniform: shadow_strength = {}, debug_mode = {}",
-                         scene_data.shadow_strength, scene_data.debug_mode);
-                    LAST_SHADOW_STRENGTH = scene_data.shadow_strength;
-                }
-            }
 
             let data_ptr = self.rrdevice.device.map_memory(
                 scene_memory,
@@ -3948,6 +3937,98 @@ impl App {
 
         // Draw fullscreen triangle (no vertex buffer needed)
         self.rrdevice.device.cmd_draw(command_buffer, 3, 1, 0, 0);
+
+        // Draw grid
+        self.rrdevice.device.cmd_bind_pipeline(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            self.data.grid_pipeline.pipeline,
+        );
+
+        self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
+
+        self.rrdevice.device.cmd_bind_vertex_buffers(
+            command_buffer,
+            0,
+            &[self.data.grid_vertex_buffer.buffer],
+            &[0],
+        );
+
+        self.rrdevice.device.cmd_bind_index_buffer(
+            command_buffer,
+            self.data.grid_index_buffer.buffer,
+            0,
+            vk::IndexType::UINT32,
+        );
+
+        let swapchain_images_len = self.data.grid_descriptor_set.descriptor_sets.len() /
+            self.data.grid_descriptor_set.rrdata.len().max(1);
+        let descriptor_set_index = image_index;
+
+        self.rrdevice.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            self.data.grid_pipeline.pipeline_layout,
+            0,
+            &[self.data.grid_descriptor_set.descriptor_sets[descriptor_set_index]],
+            &[],
+        );
+
+        self.rrdevice.device.cmd_draw_indexed(
+            command_buffer,
+            self.data.grid_index_buffer.indices,
+            1,
+            0,
+            0,
+            0,
+        );
+
+        // Draw Gizmo
+        if let (Some(vertex_buffer), Some(index_buffer)) =
+            (self.data.gizmo_data.vertex_buffer, self.data.gizmo_data.index_buffer) {
+
+            self.rrdevice.device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.data.gizmo_pipeline.pipeline,
+            );
+
+            self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
+
+            self.rrdevice.device.cmd_bind_vertex_buffers(
+                command_buffer,
+                0,
+                &[vertex_buffer],
+                &[0],
+            );
+
+            self.rrdevice.device.cmd_bind_index_buffer(
+                command_buffer,
+                index_buffer,
+                0,
+                vk::IndexType::UINT32,
+            );
+
+            let descriptor_set_index = image_index;
+
+            self.rrdevice.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.data.gizmo_pipeline.pipeline_layout,
+                0,
+                &[self.data.gizmo_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[],
+            );
+
+            self.rrdevice.device.cmd_draw_indexed(
+                command_buffer,
+                self.data.gizmo_data.indices.len() as u32,
+                1,
+                0,
+                0,
+                0,
+            );
+        }
 
         // Draw ImGui on top
         self.record_imgui_rendering(command_buffer, draw_data)?;

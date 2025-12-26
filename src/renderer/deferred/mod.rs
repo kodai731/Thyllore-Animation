@@ -309,7 +309,7 @@ pub unsafe fn record_composite_pass(
         &[],
     );
 
-    use rust_rendering::debug::debug::DebugViewMode;
+    use rust_rendering::debugview::DebugViewMode;
     let debug_view_mode_value = match app.data.rt_debug_state.debug_view_mode {
         DebugViewMode::Final => 0,
         DebugViewMode::Position => 1,

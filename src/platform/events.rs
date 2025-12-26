@@ -1,10 +1,10 @@
-use super::system::System;
+use super::platform::System;
 use std::time::Instant;
 use winit::event::{Event, WindowEvent, ElementState};
 use imgui::{Condition, MouseButton};
 
 use crate::{App, GUIData};
-use rust_rendering::debug::debug::DebugViewMode;
+use rust_rendering::debugview::DebugViewMode;
 
 impl System {
     pub fn main_loop(

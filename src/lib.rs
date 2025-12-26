@@ -22,24 +22,12 @@ pub mod vulkanr {
     pub mod window;
 }
 
-pub mod gltf {
-    pub mod gltf;
-}
+pub mod loader;
 
 pub mod math {
     pub mod math;
 }
 
-pub mod fbx {
-    pub mod fbx;
-}
-
-pub mod gizmo {
-    pub mod gizmo;
-}
-
-pub mod debug {
-    pub mod debug;
-}
+pub mod debugview;
 
 pub mod logger;

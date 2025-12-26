@@ -11,10 +11,11 @@ extern crate rust_rendering;
 
 mod app;
 mod renderer;
-mod system;
+mod scene;
+mod platform;
 
 use app::{App, GUIData};
-use app::instance::cleanup_old_screenshots;
+use app::init::instance::cleanup_old_screenshots;
 
 use anyhow::Result;
 
@@ -24,7 +25,7 @@ fn main() -> Result<()> {
     cleanup_old_screenshots()?;
 
     // imgui
-    let mut system = system::init(file!());
+    let mut system = platform::init(file!());
     let mut gui_data = GUIData::default();
 
     // App

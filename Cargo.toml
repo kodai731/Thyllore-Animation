@@ -19,8 +19,8 @@ thiserror = "1"
 tobj = { version = "3", features = ["log"] }
 vulkanalia = { version = "=0.26.0", features = ["libloading", "provisional", "window"] }
 copypasta = "0.8"
-imgui = { path = "./src/imgui", features = ["tables-api", "docking"] }
-imgui-winit-support = { path = "./src/imgui-winit-support" }
+imgui = { path = "./vendor/imgui", features = ["tables-api", "docking"] }
+imgui-winit-support = { path = "./vendor/imgui-winit-support" }
 winit = "0.29"
 raw-window-handle = "0.6"
 chrono = "*"

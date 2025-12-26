@@ -25,7 +25,7 @@ impl App {
             .device
             .begin_command_buffer(command_buffer, &begin_info)?;
 
-        use rust_rendering::debug::debug::DebugViewMode;
+        use rust_rendering::debugview::DebugViewMode;
         let use_ray_tracing = self.data.acceleration_structure.is_some()
             && self.data.gbuffer.is_some()
             && self.data.gbuffer_pipeline.is_some()

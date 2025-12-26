@@ -550,16 +550,3 @@ pub unsafe fn create_texture_image_pixel(
 
     Ok((texture_image, texture_image_memory, mip_levels))
 }
-
-pub fn load_png_image(path: &str) -> Result<(Vec<u8>, u32, u32)> {
-    use png;
-
-    let image_file = File::open(path)?;
-    let decoder = png::Decoder::new(image_file);
-    let mut reader = decoder.read_info()?;
-    let mut pixels = vec![0; reader.info().raw_bytes()];
-    reader.next_frame(&mut pixels)?;
-    let (width, height) = reader.info().size();
-
-    Ok((pixels, width, height))
-}

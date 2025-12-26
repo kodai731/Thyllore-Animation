@@ -11,10 +11,9 @@ use rust_rendering::vulkanr::pipeline::*;
 use rust_rendering::vulkanr::render::*;
 use rust_rendering::vulkanr::swapchain::*;
 use rust_rendering::vulkanr::acceleration_structure::*;
-use rust_rendering::gltf::gltf::*;
-use rust_rendering::fbx::fbx::*;
-use rust_rendering::gizmo::gizmo::*;
-use rust_rendering::debug::debug::*;
+use rust_rendering::loader::gltf::gltf::*;
+use rust_rendering::loader::fbx::fbx::*;
+use rust_rendering::debugview::*;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct GUIData {

@@ -1,5 +1,5 @@
-use super::{App, AppData};
-use super::data::GUIData;
+use crate::app::{App, AppData};
+use crate::app::data::GUIData;
 
 use rust_rendering::vulkanr::buffer::*;
 use rust_rendering::vulkanr::command::*;
@@ -17,11 +17,10 @@ use rust_rendering::vulkanr::vulkan::*;
 use rust_rendering::vulkanr::window::*;
 use rust_rendering::vulkanr::acceleration_structure::*;
 
-use rust_rendering::gltf::gltf::*;
+use rust_rendering::loader::gltf::gltf::*;
 use rust_rendering::math::math::*;
-use rust_rendering::gizmo::gizmo::*;
-use rust_rendering::debug::debug::*;
-use rust_rendering::fbx::fbx::{FbxModel, load_fbx, load_fbx_with_russimp};
+use rust_rendering::debugview::*;
+use rust_rendering::loader::fbx::fbx::{FbxModel, load_fbx, load_fbx_with_russimp};
 use rust_rendering::logger::logger::*;
 
 use vulkanalia::Device as VkDevice;

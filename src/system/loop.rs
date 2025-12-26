@@ -3,7 +3,8 @@ use std::time::Instant;
 use winit::event::{Event, WindowEvent, ElementState};
 use imgui::{Condition, MouseButton};
 
-use crate::{App, GUIData, DebugViewMode};
+use crate::{App, GUIData};
+use rust_rendering::debug::debug::DebugViewMode;
 
 impl System {
     pub fn main_loop(

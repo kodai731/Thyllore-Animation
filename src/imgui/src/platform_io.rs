@@ -145,7 +145,7 @@ pub trait PlatformViewportBackend: 'static {
     fn set_window_title(&mut self, viewport: &mut Viewport, title: &str);
     /// Called by imgui to set the opacity of an entire [`Viewport`].
     ///
-    /// If your backend does not support opactiy, it is safe to just do nothing in this function.
+    /// If your backend does not system opactiy, it is safe to just do nothing in this function.
     fn set_window_alpha(&mut self, viewport: &mut Viewport, alpha: f32);
     fn update_window(&mut self, viewport: &mut Viewport);
     fn render_window(&mut self, viewport: &mut Viewport);
@@ -352,7 +352,7 @@ impl PlatformViewportContext {
     }
 }
 
-/// Trait that holds optional functions for a rendering backend to support multiple viewports.
+/// Trait that holds optional functions for a rendering backend to system multiple viewports.
 ///
 /// It is completely fine to not use this Backend at all, as all functions are optional.
 pub trait RendererViewportBackend: 'static {

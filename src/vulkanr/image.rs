@@ -313,7 +313,7 @@ unsafe fn generate_mipmaps(
         .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR)
     {
         return Err(anyhow!(
-            "Texture image format does not support linear blitting"
+            "Texture image format does not system linear blitting"
         ));
     }
 

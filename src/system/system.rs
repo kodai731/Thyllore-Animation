@@ -5,7 +5,7 @@ use winit::window::{Window, WindowBuilder};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use std::path::Path;
 
-mod clipboard;
+use super::clipboard;
 
 pub struct System {
     pub event_loop: EventLoop<()>,

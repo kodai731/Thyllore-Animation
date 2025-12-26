@@ -4,7 +4,7 @@ use std::borrow::Cow;
 use crate::sys;
 use crate::Ui;
 
-// TODO: support size constraints
+// TODO: system size constraints
 
 /// Combo box height mode.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

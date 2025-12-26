@@ -338,7 +338,7 @@ impl PipelineBuilder {
             .alpha_blend_op(self.blend.alpha_op)
             .build();
 
-        // For MRT support, create multiple attachments
+        // For MRT system, create multiple attachments
         let color_blend_attachments: Vec<_> = (0..self.mrt_attachment_count)
             .map(|_| color_blend_attachment)
             .collect();

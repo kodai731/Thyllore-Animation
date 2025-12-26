@@ -512,7 +512,7 @@ impl<'ui, 'a, Label: AsRef<str>> Window<'ui, 'a, Label> {
             unsafe { sys::igSetNextWindowSize(self.size.into(), self.size_cond as i32) };
         }
         if let Some((size_min, size_max)) = self.size_constraints {
-            // TODO: callback support
+            // TODO: callback system
             unsafe {
                 sys::igSetNextWindowSizeConstraints(
                     size_min.into(),

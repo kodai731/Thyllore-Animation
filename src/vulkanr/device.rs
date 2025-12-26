@@ -157,7 +157,7 @@ pub struct QueueFamilyIndices {
     pub graphics: u32,
     pub present: u32,
 }
-// TODO: support for trasfer bit, see https://kylemayes.github.io/vulkanalia/vertex/staging_buffer.html
+// TODO: system for trasfer bit, see https://kylemayes.github.io/vulkanalia/vertex/staging_buffer.html
 
 impl QueueFamilyIndices {
     pub unsafe fn get(
@@ -245,7 +245,7 @@ unsafe fn check_physical_device(
     log!("Sampler anisotropy check passed");
 
     if features.geometry_shader != vk::TRUE {
-        log!("Device rejected: Missing geometry shader support");
+        log!("Device rejected: Missing geometry shader system");
         return Err(anyhow!(SuitabilityError(
             "Missing geometry shader supported"
         )));
@@ -270,10 +270,10 @@ unsafe fn check_physical_device(
 
     let support = SwapchainSupport::get(instance, surface, physical_device)?;
     if support.formats.is_empty() || support.present_modes.is_empty() {
-        log!("Device rejected: Insufficient swapchain support");
-        return Err(anyhow!(SuitabilityError("Insufficient swapchain support")));
+        log!("Device rejected: Insufficient swapchain system");
+        return Err(anyhow!(SuitabilityError("Insufficient swapchain system")));
     }
-    log!("Swapchain support check passed");
+    log!("Swapchain system check passed");
 
     log!("All device checks passed!");
     Ok(())

@@ -292,7 +292,7 @@ impl<'ui, T: AsRef<str>> DragDropSource<'ui, T> {
     }
 }
 
-/// A helper struct for RAII drap-drop support.
+/// A helper struct for RAII drap-drop system.
 pub struct DragDropSourceToolTip<'ui>(PhantomData<&'ui Ui>);
 
 impl DragDropSourceToolTip<'_> {

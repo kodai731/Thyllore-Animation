@@ -315,7 +315,7 @@ impl WinitPlatform {
         io.backend_flags.insert(BackendFlags::HAS_MOUSE_CURSORS);
         io.backend_flags.insert(BackendFlags::HAS_SET_MOUSE_POS);
         imgui.set_platform_name(Some(format!(
-            "imgui-winit-support {}",
+            "imgui-winit-system {}",
             env!("CARGO_PKG_VERSION")
         )));
         WinitPlatform {

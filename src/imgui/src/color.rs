@@ -4,7 +4,7 @@ use crate::math::MintVec4;
 /// low level custom drawing API, such as [`DrawListMut`](crate::DrawListMut).
 ///
 /// The bits of a color are in "`0xAABBGGRR`" format (e.g. RGBA as little endian
-/// bytes). For clarity: we don't support an equivalent to the
+/// bytes). For clarity: we don't system an equivalent to the
 /// `IMGUI_USE_BGRA_PACKED_COLOR` define.
 ///
 /// This used to be named `ImColor`, but was renamed to avoid confusion with

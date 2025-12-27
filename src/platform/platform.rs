@@ -62,7 +62,7 @@ pub fn init(title: &str) -> System {
 
     imgui.fonts().add_font(&[
         FontSource::TtfData {
-            data: include_bytes!("../resources/Roboto-Regular.ttf"),
+            data: include_bytes!("../../assets/fonts/Roboto-Regular.ttf"),
             size_pixels: font_size,
             config: Some(FontConfig {
                 // Oversampling font helps improve text rendering at
@@ -73,7 +73,7 @@ pub fn init(title: &str) -> System {
             }),
         },
         FontSource::TtfData {
-            data: include_bytes!("../resources/mplus-1p-regular.ttf"),
+            data: include_bytes!("../../assets/fonts/mplus-1p-regular.ttf"),
             size_pixels: font_size,
             config: Some(FontConfig {
                 // Oversampling font helps improve text rendering at

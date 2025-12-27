@@ -14,7 +14,7 @@ Cargo.lock
 *.pdb
 
 # resource files
-src/resources
+assets
 
 # builds
 build.rs
@@ -30,4 +30,4 @@ src/cpp/
 log/
 
 # lib
-thirdparty/
+vendor/

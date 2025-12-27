@@ -1202,7 +1202,7 @@ fn load_white_texture_if_none(gltf_model: &mut GltfModel) {
 
 // TODO: use vulkanr::image
 fn load_white_texture() -> Result<ImageData> {
-    let image = File::open("src/resources/white.png")?;
+    let image = File::open("assets/textures/white.png")?;
     let decoder = png::Decoder::new(image);
     let mut reader = decoder.read_info()?;
     let mut pixels = vec![0; reader.output_buffer_size()];

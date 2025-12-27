@@ -131,8 +131,8 @@ impl App {
             &data.rrswapchain,
             &data.rrrender,
             &data.model_descriptor_set,
-            "src/shaders/vert.spv",
-            "src/shaders/frag.spv",
+            "assets/shaders/vert.spv",
+            "assets/shaders/frag.spv",
             vk::PrimitiveTopology::TRIANGLE_LIST,
             vk::PolygonMode::FILL,
         );
@@ -141,8 +141,8 @@ impl App {
             &data.rrswapchain,
             &data.rrrender,
             &data.grid_descriptor_set,
-            "src/shaders/gridVert.spv",
-            "src/shaders/gridFrag.spv",
+            "assets/shaders/gridVert.spv",
+            "assets/shaders/gridFrag.spv",
             vk::PrimitiveTopology::LINE_LIST,
             vk::PolygonMode::LINE,
         );
@@ -164,7 +164,7 @@ impl App {
         }
         println!("created gizmo descriptor set");
 
-        data.gizmo_pipeline = PipelineBuilder::new("src/shaders/gizmoVert.spv", "src/shaders/gizmoFrag.spv")
+        data.gizmo_pipeline = PipelineBuilder::new("assets/shaders/gizmoVert.spv", "assets/shaders/gizmoFrag.spv")
             .vertex_input(VertexInputConfig::Custom {
                 bindings: vec![GizmoVertex::binding_description()],
                 attributes: GizmoVertex::attribute_descriptions().to_vec(),
@@ -658,8 +658,8 @@ impl App {
             rrdevice,
             &data.rrrender,
             descriptor_set_layout,
-            "src/shaders/imguiVert.spv",
-            "src/shaders/imguiFrag.spv",
+            "assets/shaders/imguiVert.spv",
+            "assets/shaders/imguiFrag.spv",
             msaa_samples,
         )?;
 

@@ -2305,7 +2305,7 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                         let texture_filename = format!("{}_D_A.tga.png", texture_base);
 
                         // Construct relative path from executable location
-                        let texture_path = format!("src/resources/phoenix-bird/textures/{}", texture_filename);
+                        let texture_path = format!("assets/models/phoenix-bird/textures/{}", texture_filename);
 
                         fbx_data.diffuse_texture = Some(texture_path.clone());
                         log!("  Inferred texture from material name: {} -> {}", mat_name, texture_path);

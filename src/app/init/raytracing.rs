@@ -122,8 +122,8 @@ impl App {
         RRDescriptorSet::create_descriptor_set(rrdevice, &data.rrswapchain, &mut gbuffer_desc)?;
 
         let gbuffer_pipeline = PipelineBuilder::new(
-            "src/shaders/gbufferVert.spv",
-            "src/shaders/gbufferFrag.spv",
+            "assets/shaders/gbufferVert.spv",
+            "assets/shaders/gbufferFrag.spv",
         )
         .vertex_input(VertexInputConfig::Standard)
         .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
@@ -169,7 +169,7 @@ impl App {
 
         let ray_query_pipeline = RRPipeline::new_compute(
             rrdevice,
-            "src/shaders/rayQueryShadow.spv",
+            "assets/shaders/rayQueryShadow.spv",
             &[ray_query_descriptor.descriptor_set_layout],
         )?;
         data.ray_query_pipeline = Some(ray_query_pipeline);
@@ -201,8 +201,8 @@ impl App {
         }
 
         let composite_pipeline = PipelineBuilder::new(
-            "src/shaders/compositeVert.spv",
-            "src/shaders/compositeFrag.spv",
+            "assets/shaders/compositeVert.spv",
+            "assets/shaders/compositeFrag.spv",
         )
         .vertex_input(VertexInputConfig::Custom {
             bindings: vec![],

@@ -59,7 +59,7 @@ pub unsafe fn create_texture_image(
      and add a flush_setup_commands to execute the commands that have been recorded so far.
      It's best to do this after the texture mapping works to check if the texture resources are still set up correctly.
     */
-    let image = File::open("src/resources/VikingRoom/viking_room.png")?;
+    let image = File::open("assets/models/VikingRoom/viking_room.png")?;
     let decoder = png::Decoder::new(image);
     let mut reader = decoder.read_info()?;
     let mut pixels = vec![0; reader.info().raw_bytes()];

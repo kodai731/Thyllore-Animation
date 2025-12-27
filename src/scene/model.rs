@@ -32,7 +32,7 @@ impl App {
         rrdevice: &RRDevice,
         data: &mut AppData,
     ) -> Result<()> {
-        let model_path_fbx = "src/resources/phoenix-bird/source/fly.fbx";
+        let model_path_fbx = "assets/models/phoenix-bird/source/fly.fbx";
         data.fbx_model = load_fbx_with_russimp(model_path_fbx)?;
 
         if data.fbx_model.animation_count() > 0 {
@@ -136,7 +136,7 @@ impl App {
             }
         }
 
-        let model_path_fbx = "src/resources/phoenix-bird/source/fly.fbx";
+        let model_path_fbx = "assets/models/phoenix-bird/source/fly.fbx";
         data.current_model_path = model_path_fbx.to_string();
 
         log!("=== FBX model loaded successfully ===");

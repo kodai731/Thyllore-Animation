@@ -44,8 +44,6 @@ impl App {
         }
         log::info!("Created G-Buffer render pass and framebuffer");
 
-        data.gbuffer_descriptor_set = Some(RRDescriptorSet::new(rrdevice, &data.rrswapchain));
-
         log::info!("Ray Tracing initialization complete");
         Ok(())
     }

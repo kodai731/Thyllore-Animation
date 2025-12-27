@@ -22,24 +22,22 @@ cargo build
 ### Running the Application
 ```bash
 # With debug logging (recommended for development)
-$env:RUST_LOG="debug"; cargo run --bin RustRendering
+$env:RUST_LOG="debug"; cargo run --bin rust-rendering
 
 # Without logging
-cargo run --bin RustRendering
+cargo run --bin rust-rendering
 ```
 
 ### Compiling Shaders
-Shaders must be compiled to SPIR-V before running. On Windows:
-```bash
-cd src/shaders
-./compile.bat
-```
+Shaders are automatically compiled during `cargo build`. The build system compiles all shader files from `shaders/` directory to `assets/shaders/` using glslc from VulkanSDK.
 
-The compile script uses glslc from VulkanSDK to compile:
-- `vertex.vert` → `vert.spv`
-- `fragment.frag` → `frag.spv`
-- `gridVertex.vert` → `gridVert.spv`
-- `gridFragment.frag` → `gridFrag.spv`
+Shader source files are located in `shaders/`:
+- `vertex.vert` → `assets/shaders/vert.spv`
+- `fragment.frag` → `assets/shaders/frag.spv`
+- `gbufferVertex.vert` → `assets/shaders/gbufferVert.spv`
+- `gbufferFragment.frag` → `assets/shaders/gbufferFrag.spv`
+- `rayQueryShadow.comp` → `assets/shaders/rayQueryShadow.spv`
+- etc.
 
 ## Architecture
 
@@ -135,7 +133,7 @@ To load a new model, modify `App::load_model()`:
 
 ### Shader Modifications
 
-After editing shaders in `src/shaders/src/`, the build system automatically compiles them to `assets/shaders/` directory during `cargo build`. The application loads compiled shaders from `assets/shaders/` directory.
+After editing shaders in `shaders/`, the build system automatically compiles them to `assets/shaders/` directory during `cargo build`. The application loads compiled shaders from `assets/shaders/` directory.
 
 ### Camera Debugging
 

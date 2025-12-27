@@ -1,8 +1,8 @@
 use super::device::*;
-use super::image::*;
-use super::render::*;
-use super::vulkan::*;
-use super::window::*;
+use super::instance::*;
+use crate::vulkanr::resource::*;
+use crate::vulkanr::render::*;
+use crate::vulkanr::vulkan::*;
 use crate::vulkanr::command::RRCommandPool;
 
 #[derive(Clone, Debug)]

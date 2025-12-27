@@ -1,9 +1,9 @@
 use super::device::*;
 use super::vulkan::*;
 use crate::vulkanr::buffer::{RRBuffer, RRIndexBuffer, RRVertexBuffer};
-use crate::vulkanr::descriptor::RRDescriptorSet;
+use crate::vulkanr::descriptor::model::RRDescriptorSet;
 use crate::vulkanr::pipeline::RRPipeline;
-use crate::vulkanr::render::RRRender;
+use crate::vulkanr::render::pass::RRRender;
 use crate::vulkanr::swapchain::RRSwapchain;
 use std::rc::Rc;
 

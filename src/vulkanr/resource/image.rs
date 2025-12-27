@@ -1,7 +1,7 @@
-use super::buffer::*;
-use super::command::*;
-use super::device::*;
-use super::vulkan::*;
+use crate::vulkanr::resource::buffer::*;
+use crate::vulkanr::command::*;
+use crate::vulkanr::core::device::*;
+use crate::vulkanr::vulkan::*;
 use std::fs::File;
 use std::ptr::copy_nonoverlapping as memcpy;
 use std::rc::Rc;

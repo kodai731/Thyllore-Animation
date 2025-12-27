@@ -1,5 +1,5 @@
-use super::device::*;
-use super::vulkan::*;
+use crate::vulkanr::core::device::*;
+use crate::vulkanr::vulkan::*;
 use crate::vulkanr::command::*;
 use crate::vulkanr::data::UniformBufferObject;
 use std::ffi::c_void;

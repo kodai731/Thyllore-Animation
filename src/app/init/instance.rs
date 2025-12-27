@@ -14,8 +14,8 @@ use rust_rendering::vulkanr::pipeline::{
 use rust_rendering::vulkanr::render::*;
 use rust_rendering::vulkanr::swapchain::*;
 use rust_rendering::vulkanr::vulkan::*;
-use rust_rendering::vulkanr::window::*;
-use rust_rendering::vulkanr::acceleration_structure::*;
+use rust_rendering::vulkanr::core::instance::*;
+use rust_rendering::vulkanr::raytracing::acceleration::*;
 
 use rust_rendering::loader::gltf::gltf::*;
 use rust_rendering::math::math::*;

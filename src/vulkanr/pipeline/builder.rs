@@ -1,9 +1,9 @@
-use super::data::*;
-use super::descriptor::*;
-use super::device::*;
-use super::swapchain::*;
-use super::vulkan::*;
-use crate::vulkanr::render::RRRender;
+use crate::vulkanr::data::*;
+use crate::vulkanr::descriptor::*;
+use crate::vulkanr::core::device::*;
+use crate::vulkanr::core::swapchain::*;
+use crate::vulkanr::vulkan::*;
+use crate::vulkanr::render::pass::RRRender;
 use std::fs::File;
 use std::io::Read;
 use vulkanalia::bytecode::Bytecode;

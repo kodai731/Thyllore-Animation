@@ -8,18 +8,26 @@
 extern crate core;
 
 pub mod vulkanr {
-    pub mod acceleration_structure;
-    pub mod buffer;
+    pub mod core;
+    pub mod resource;
+    pub mod pipeline;
+    pub mod descriptor;
+    pub mod render;
+    pub mod raytracing;
     pub mod command;
     pub mod data;
-    pub mod descriptor;
-    pub mod device;
-    pub mod image;
-    pub mod pipeline;
-    pub mod render;
-    pub mod swapchain;
     pub mod vulkan;
-    pub mod window;
+
+    // Re-export commonly used items
+    pub use core::*;
+    pub use resource::*;
+    pub use pipeline::*;
+    pub use descriptor::*;
+    pub use render::*;
+    pub use raytracing::*;
+    pub use command::*;
+    pub use data::*;
+    pub use vulkan::*;
 }
 
 pub mod loader;

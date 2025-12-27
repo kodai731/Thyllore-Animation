@@ -10,7 +10,7 @@ use rust_rendering::vulkanr::image::*;
 use rust_rendering::vulkanr::pipeline::*;
 use rust_rendering::vulkanr::render::*;
 use rust_rendering::vulkanr::swapchain::*;
-use rust_rendering::vulkanr::acceleration_structure::*;
+use rust_rendering::vulkanr::raytracing::acceleration::*;
 use rust_rendering::loader::gltf::gltf::*;
 use rust_rendering::loader::fbx::fbx::*;
 use rust_rendering::debugview::*;

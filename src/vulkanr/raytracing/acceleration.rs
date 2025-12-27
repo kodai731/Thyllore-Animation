@@ -1,7 +1,7 @@
-use super::buffer::*;
-use super::command::*;
-use super::device::*;
-use super::vulkan::*;
+use crate::vulkanr::resource::buffer::*;
+use crate::vulkanr::command::*;
+use crate::vulkanr::core::device::*;
+use crate::vulkanr::vulkan::*;
 use anyhow::Result;
 use vulkanalia::vk::KhrAccelerationStructureExtension;
 
@@ -187,7 +187,7 @@ impl RRAccelerationStructure {
         let build_range_infos = [build_range_info];
 
         // コマンドバッファでビルド実行
-        let command_buffer = super::command::begin_single_time_commands(
+        let command_buffer = crate::vulkanr::command::begin_single_time_commands(
             rrdevice,
             rrcommand_pool.command_pool,
         )?;
@@ -198,7 +198,7 @@ impl RRAccelerationStructure {
             &[&build_range_infos[0]],
         );
 
-        super::command::end_single_time_commands(
+        crate::vulkanr::command::end_single_time_commands(
             rrdevice,
             rrdevice.graphics_queue,
             rrcommand_pool.command_pool,
@@ -424,7 +424,7 @@ impl RRAccelerationStructure {
         let build_range_infos = [build_range_info];
 
         // コマンドバッファでビルド実行
-        let command_buffer = super::command::begin_single_time_commands(
+        let command_buffer = crate::vulkanr::command::begin_single_time_commands(
             rrdevice,
             rrcommand_pool.command_pool,
         )?;
@@ -435,7 +435,7 @@ impl RRAccelerationStructure {
             &[&build_range_infos[0]],
         );
 
-        super::command::end_single_time_commands(
+        crate::vulkanr::command::end_single_time_commands(
             rrdevice,
             rrdevice.graphics_queue,
             rrcommand_pool.command_pool,

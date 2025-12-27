@@ -22,24 +22,22 @@ cargo build
 ### Running the Application
 ```bash
 # With debug logging (recommended for development)
-$env:RUST_LOG="debug"; cargo run --bin RustRendering
+$env:RUST_LOG="debug"; cargo run --bin rust-rendering
 
 # Without logging
-cargo run --bin RustRendering
+cargo run --bin rust-rendering
 ```
 
 ### Compiling Shaders
-Shaders must be compiled to SPIR-V before running. On Windows:
-```bash
-cd src/shaders
-./compile.bat
-```
+Shaders are automatically compiled during `cargo build`. The build system compiles all shader files from `shaders/` directory to `assets/shaders/` using glslc from VulkanSDK.
 
-The compile script uses glslc from VulkanSDK to compile:
-- `vertex.vert` → `vert.spv`
-- `fragment.frag` → `frag.spv`
-- `gridVertex.vert` → `gridVert.spv`
-- `gridFragment.frag` → `gridFrag.spv`
+Shader source files are located in `shaders/`:
+- `vertex.vert` → `assets/shaders/vert.spv`
+- `fragment.frag` → `assets/shaders/frag.spv`
+- `gbufferVertex.vert` → `assets/shaders/gbufferVert.spv`
+- `gbufferFragment.frag` → `assets/shaders/gbufferFrag.spv`
+- `rayQueryShadow.comp` → `assets/shaders/rayQueryShadow.spv`
+- etc.
 
 ## Architecture
 
@@ -108,11 +106,11 @@ The `App` struct in `main.rs` contains:
 
 ### Model Loading
 
-**glTF models** are loaded from `src/resources/` (e.g., `stickman/stickman.glb`)
+**glTF models** are loaded from `assets/models/` (e.g., `stickman/stickman.glb`)
 - Each mesh becomes an `RRData` with vertex/index buffers and textures
 - Morph animations are stored in `GltfModel.morph_animations`
 
-**FBX models** are loaded from `src/resources/` (e.g., `stickman/stickman_bin.fbx`)
+**FBX models** are loaded from `assets/models/` (e.g., `stickman/stickman_bin.fbx`)
 - Currently replaces the first `RRData` vertex/index buffers
 - Uses triangulation for quad faces
 
@@ -135,7 +133,7 @@ To load a new model, modify `App::load_model()`:
 
 ### Shader Modifications
 
-After editing shaders in `src/shaders/src/`, run `compile.bat` to regenerate `.spv` files. The application loads compiled shaders from `src/shaders/` directory.
+After editing shaders in `shaders/`, the build system automatically compiles them to `assets/shaders/` directory during `cargo build`. The application loads compiled shaders from `assets/shaders/` directory.
 
 ### Camera Debugging
 
@@ -151,7 +149,7 @@ Use `reset camera` to return to initial position, `reset camera up` to align cam
 
 - **Vulkan validation errors**: Check `RUST_LOG=debug` output for details
 - **Shader compilation errors**: Ensure VulkanSDK is installed and `glslc` is in PATH
-- **Missing textures**: Verify texture paths in model files match `src/resources/` structure
+- **Missing textures**: Verify texture paths in model files match `assets/models/` or `assets/textures/` structure
 - **FBX loading errors**: Check that FBX file is binary format (not ASCII)
 
 ### Module Organization

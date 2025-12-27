@@ -4,7 +4,6 @@ use crate::vulkanr::render::*;
 use crate::vulkanr::vulkan::*;
 use crate::vulkanr::command::RRCommandPool;
 use winit::window::Window;
-use vulkanalia::Instance;
 
 #[derive(Clone, Debug)]
 pub struct SwapchainSupport {

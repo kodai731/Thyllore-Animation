@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
-use rust_rendering::vulkanr::render::RRGBuffer;
+use super::gbuffer::RRGBuffer;
 use rust_rendering::vulkanr::pipeline::RRPipeline;
 use rust_rendering::vulkanr::descriptor::RRRayQueryDescriptorSet;
 use rust_rendering::vulkanr::core::Device;

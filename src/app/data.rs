@@ -2,6 +2,7 @@ use serde::Serialize;
 use std::rc::Rc;
 use vulkanalia::prelude::v1_0::*;
 
+use crate::renderer::deferred::RRGBuffer;
 use rust_rendering::vulkanr::buffer::*;
 use rust_rendering::vulkanr::command::*;
 use rust_rendering::vulkanr::data;

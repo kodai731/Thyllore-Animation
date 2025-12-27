@@ -57,7 +57,7 @@ impl App {
         }
 
         if let Some(mut gbuffer) = self.data.gbuffer.take() {
-            gbuffer.destroy(&self.rrdevice.device);
+            gbuffer.destroy(&*self.rrdevice.device);
             log!("Destroyed G-Buffer");
         }
 

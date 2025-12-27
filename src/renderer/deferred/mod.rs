@@ -6,7 +6,7 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
-pub use gbuffer::GBufferPass;
+pub use gbuffer::{GBufferPass, RRGBuffer, create_gbuffer_framebuffer};
 pub use rayquery::RayQueryPass;
 pub use composite::CompositePass;
 

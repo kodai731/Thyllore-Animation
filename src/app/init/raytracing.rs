@@ -1,4 +1,5 @@
 use crate::app::{App, AppData};
+use crate::renderer::deferred::{RRGBuffer, create_gbuffer_framebuffer};
 use rust_rendering::vulkanr::buffer::*;
 use rust_rendering::vulkanr::command::*;
 use rust_rendering::vulkanr::data as vulkan_data;

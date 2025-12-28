@@ -204,6 +204,16 @@ impl App {
 
         let view = view(camera_pos, camera_direction, camera_up);
 
+        let camera_distance = camera_pos.magnitude();
+        let base_scale = 10.0;
+        let grid_scale = (camera_distance / base_scale).max(1.0);
+        self.data.grid_scale = grid_scale;
+
+        let near_plane = (camera_distance * 0.001).max(0.1).min(10.0);
+        let far_plane = (grid_scale * 1000.0).max(1000.0).min(100000.0);
+        self.data.near_plane = near_plane;
+        self.data.far_plane = far_plane;
+
         let correction = Mat4::new(
             // column-major order
             1.0,
@@ -228,8 +238,8 @@ impl App {
             Deg(45.0),
             self.data.rrswapchain.swapchain_extent.width as f32
                 / self.data.rrswapchain.swapchain_extent.height as f32,
-            0.1,
-            1000.0,
+            near_plane,
+            far_plane,
         );
 
         for i in 0..self.data.model_descriptor_set.rrdata.len() {
@@ -278,7 +288,7 @@ impl App {
         }
 
         // update for grid
-        let model_grid = Mat4::identity();
+        let model_grid = Mat4::from_scale(self.data.grid_scale);
         for i in 0..self.data.grid_descriptor_set.rrdata.len() {
             let rrdata = &mut self.data.grid_descriptor_set.rrdata[i];
             let grid_ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;

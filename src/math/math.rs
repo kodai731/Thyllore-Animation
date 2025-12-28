@@ -307,6 +307,85 @@ pub fn approx_equal_mat4(a: &Mat4, b: &Mat4) -> bool {
         && approx_equal_vec4(&a.z, &b.z)
         && approx_equal_vec4(&a.w, &b.w)
 }
+
+pub fn screen_to_world_ray(
+    screen_pos: Vector2<f32>,
+    screen_size: Vector2<f32>,
+    view_matrix: Mat4,
+    proj_matrix: Mat4,
+) -> (Vector3<f32>, Vector3<f32>) {
+    let ndc_x = (2.0 * screen_pos.x) / screen_size.x - 1.0;
+    let ndc_y = 1.0 - (2.0 * screen_pos.y) / screen_size.y;
+
+    let clip_near = cgmath::vec4(ndc_x, ndc_y, -1.0, 1.0);
+    let clip_far = cgmath::vec4(ndc_x, ndc_y, 1.0, 1.0);
+
+    let view_proj_inverse = (proj_matrix * view_matrix).invert().unwrap();
+
+    let world_near_4 = view_proj_inverse * clip_near;
+    let world_far_4 = view_proj_inverse * clip_far;
+
+    let world_near = vec3(
+        world_near_4.x / world_near_4.w,
+        world_near_4.y / world_near_4.w,
+        world_near_4.z / world_near_4.w,
+    );
+    let world_far = vec3(
+        world_far_4.x / world_far_4.w,
+        world_far_4.y / world_far_4.w,
+        world_far_4.z / world_far_4.w,
+    );
+
+    let ray_origin = world_near;
+    let ray_direction = (world_far - world_near).normalize();
+
+    (ray_origin, ray_direction)
+}
+
+pub fn ray_to_point_distance(
+    ray_origin: Vector3<f32>,
+    ray_direction: Vector3<f32>,
+    point: Vector3<f32>,
+) -> f32 {
+    let to_point = point - ray_origin;
+    let projection = to_point.dot(ray_direction);
+    let closest_point = ray_origin + ray_direction * projection;
+    (point - closest_point).magnitude()
+}
+
+pub fn ray_to_line_segment_distance(
+    ray_origin: Vector3<f32>,
+    ray_direction: Vector3<f32>,
+    line_start: Vector3<f32>,
+    line_end: Vector3<f32>,
+) -> f32 {
+    let line_dir = (line_end - line_start).normalize();
+    let w0 = ray_origin - line_start;
+
+    let a = ray_direction.dot(ray_direction);
+    let b = ray_direction.dot(line_dir);
+    let c = line_dir.dot(line_dir);
+    let d = ray_direction.dot(w0);
+    let e = line_dir.dot(w0);
+
+    let denom = a * c - b * b;
+
+    let (s, t) = if denom.abs() < EPSILON {
+        (0.0, e / c)
+    } else {
+        let s = (b * e - c * d) / denom;
+        let t = (a * e - b * d) / denom;
+        (s, t)
+    };
+
+    let t_clamped = t.max(0.0).min((line_end - line_start).magnitude());
+
+    let point_on_ray = ray_origin + ray_direction * s;
+    let point_on_line = line_start + line_dir * t_clamped;
+
+    (point_on_ray - point_on_line).magnitude()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

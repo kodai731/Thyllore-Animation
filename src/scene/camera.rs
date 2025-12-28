@@ -22,4 +22,17 @@ impl App {
         self.data.camera_up = array3_from_vec(camera_up);
         self.data.camera_direction = array3_from_vec(camera_direction);
     }
+
+    pub unsafe fn move_camera_to_light(&mut self) {
+        let light_pos = self.data.rt_debug_state.light_position;
+        let offset_distance = 2.0;
+        let offset = vec3(offset_distance, offset_distance, offset_distance);
+        let camera_pos = light_pos + offset;
+        let camera_direction = (light_pos - camera_pos).normalize();
+        let camera_up = vec3(0.0, -1.0, 0.0);
+
+        self.data.camera_pos = array3_from_vec(camera_pos);
+        self.data.camera_direction = array3_from_vec(camera_direction);
+        self.data.camera_up = array3_from_vec(camera_up);
+    }
 }

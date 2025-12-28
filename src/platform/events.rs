@@ -150,6 +150,11 @@ impl System {
                                                 app.reset_camera_up();
                                             }
                                         }
+                                        if ui.button("move to light gizmo") {
+                                            unsafe {
+                                                app.move_camera_to_light();
+                                            }
+                                        }
                                         ui.separator();
 
                                         ui.text("Screenshot:");

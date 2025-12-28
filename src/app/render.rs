@@ -566,6 +566,54 @@ impl App {
             );
         }
 
+        if let (Some(vertex_buffer), Some(index_buffer)) =
+            (self.data.light_gizmo_data.vertex_buffer, self.data.light_gizmo_data.index_buffer) {
+
+            self.rrdevice.device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.data.gizmo_pipeline.pipeline,
+            );
+
+            self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
+
+            self.rrdevice.device.cmd_bind_vertex_buffers(
+                command_buffer,
+                0,
+                &[vertex_buffer],
+                &[0],
+            );
+
+            self.rrdevice.device.cmd_bind_index_buffer(
+                command_buffer,
+                index_buffer,
+                0,
+                vk::IndexType::UINT32,
+            );
+
+            let swapchain_images_len = self.data.gizmo_descriptor_set.descriptor_sets.len() /
+                self.data.gizmo_descriptor_set.rrdata.len().max(1);
+            let descriptor_set_index = 1 * swapchain_images_len + image_index;
+
+            self.rrdevice.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.data.gizmo_pipeline.pipeline_layout,
+                0,
+                &[self.data.gizmo_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[],
+            );
+
+            self.rrdevice.device.cmd_draw_indexed(
+                command_buffer,
+                self.data.light_gizmo_data.indices.len() as u32,
+                1,
+                0,
+                0,
+                0,
+            );
+        }
+
         Ok(())
     }
 

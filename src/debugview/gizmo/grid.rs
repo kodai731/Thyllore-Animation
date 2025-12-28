@@ -2,7 +2,7 @@ use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
 use crate::vulkanr::device::*;
 use crate::vulkanr::vulkan::*;
-use cgmath::{vec3, Matrix3, Vector3};
+use cgmath::{vec3, Matrix3};
 use std::mem::size_of;
 
 /// Gizmo用の頂点構造（位置 + 色）
@@ -24,14 +24,12 @@ impl GizmoVertex {
 
     pub fn attribute_descriptions() -> [vk::VertexInputAttributeDescription; 2] {
         [
-            // 位置
             vk::VertexInputAttributeDescription {
                 binding: 0,
                 location: 0,
                 format: vk::Format::R32G32B32_SFLOAT,
                 offset: 0,
             },
-            // 色
             vk::VertexInputAttributeDescription {
                 binding: 0,
                 location: 1,
@@ -42,9 +40,8 @@ impl GizmoVertex {
     }
 }
 
-/// Gizmoの描画データ
 #[derive(Clone, Debug, Default)]
-pub struct GizmoData {
+pub struct GridGizmoData {
     pub vertices: Vec<GizmoVertex>,
     pub indices: Vec<u32>,
     pub vertex_buffer: Option<vk::Buffer>,
@@ -53,33 +50,21 @@ pub struct GizmoData {
     pub index_buffer_memory: Option<vk::DeviceMemory>,
 }
 
-impl GizmoData {
-    /// 新しいGizmoデータを作成（3軸の線分）
+impl GridGizmoData {
     pub fn new() -> Self {
-        // Gizmoの軸の長さ
         let axis_length = 0.15;
 
-        // Y-down座標系での3軸
-        // X軸: 赤 (右方向)
-        // Y軸: 緑 (下方向、Y-down)
-        // Z軸: 青 (前方向)
-
         let vertices = vec![
-            // 原点
             GizmoVertex { pos: [0.0, 0.0, 0.0], color: [1.0, 1.0, 1.0] },
-            // X軸（赤）
             GizmoVertex { pos: [axis_length, 0.0, 0.0], color: [1.0, 0.0, 0.0] },
-            // Y軸（緑）- Y-down
             GizmoVertex { pos: [0.0, axis_length, 0.0], color: [0.0, 1.0, 0.0] },
-            // Z軸（青）
             GizmoVertex { pos: [0.0, 0.0, axis_length], color: [0.0, 0.0, 1.0] },
         ];
 
-        // 各軸を線分として描画
         let indices = vec![
-            0, 1, // X軸
-            0, 2, // Y軸
-            0, 3, // Z軸
+            0, 1,
+            0, 2,
+            0, 3,
         ];
 
         Self {
@@ -92,29 +77,24 @@ impl GizmoData {
         }
     }
 
-    /// カメラの回転行列でGizmoの頂点を更新
     pub fn update_rotation(&mut self, rotation_matrix: &Matrix3<f32>) {
         let axis_length = 0.15;
 
-        // 各軸の方向ベクトル
         let x_axis = rotation_matrix * vec3(axis_length, 0.0, 0.0);
         let y_axis = rotation_matrix * vec3(0.0, axis_length, 0.0);
         let z_axis = rotation_matrix * vec3(0.0, 0.0, axis_length);
 
-        // 頂点を更新（原点は変更なし）
         self.vertices[1].pos = [x_axis.x, x_axis.y, x_axis.z];
         self.vertices[2].pos = [y_axis.x, y_axis.y, y_axis.z];
         self.vertices[3].pos = [z_axis.x, z_axis.y, z_axis.z];
     }
 
-    /// Vulkanバッファーを作成
     pub unsafe fn create_buffers(
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
         rrcommand_pool: &RRCommandPool,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // 頂点バッファー作成
         let vertex_buffer_size = (size_of::<GizmoVertex>() * self.vertices.len()) as u64;
         let (staging_buffer, staging_buffer_memory) = create_buffer(
             instance,
@@ -152,7 +132,6 @@ impl GizmoData {
         self.vertex_buffer = Some(vertex_buffer);
         self.vertex_buffer_memory = Some(vertex_buffer_memory);
 
-        // インデックスバッファー作成
         let index_buffer_size = (size_of::<u32>() * self.indices.len()) as u64;
         let (staging_buffer, staging_buffer_memory) = create_buffer(
             instance,
@@ -193,7 +172,6 @@ impl GizmoData {
         Ok(())
     }
 
-    /// バッファーを更新（頂点データが変更された場合）
     pub unsafe fn update_vertex_buffer(
         &self,
         rrdevice: &RRDevice,
@@ -209,7 +187,6 @@ impl GizmoData {
         Ok(())
     }
 
-    /// バッファーを削除
     pub unsafe fn destroy_buffers(&mut self, rrdevice: &RRDevice) {
         if let Some(vertex_buffer) = self.vertex_buffer {
             rrdevice.device.destroy_buffer(vertex_buffer, None);

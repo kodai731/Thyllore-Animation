@@ -443,6 +443,29 @@ impl RRPipeline {
             .build(rrdevice, rrrender, None)
     }
 
+    /// Create Billboard rendering pipeline with custom vertex input
+    pub unsafe fn new_billboard(
+        rrdevice: &RRDevice,
+        rrrender: &RRRender,
+        rrswapchain: &RRSwapchain,
+        descriptor_set_layout: vk::DescriptorSetLayout,
+        vertex_shader_path: &str,
+        fragment_shader_path: &str,
+        binding_description: vk::VertexInputBindingDescription,
+        attribute_descriptions: Vec<vk::VertexInputAttributeDescription>,
+    ) -> Result<Self> {
+        PipelineBuilder::new(vertex_shader_path, fragment_shader_path)
+            .vertex_input(VertexInputConfig::Custom {
+                bindings: vec![binding_description],
+                attributes: attribute_descriptions,
+            })
+            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+            .polygon_mode(vk::PolygonMode::FILL)
+            .no_depth_test()
+            .descriptor_layouts(vec![descriptor_set_layout])
+            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+    }
+
     /// Create compute pipeline for ray query or other compute shaders
     pub unsafe fn new_compute(
         rrdevice: &RRDevice,

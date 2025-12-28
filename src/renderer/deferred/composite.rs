@@ -6,7 +6,7 @@ use rust_rendering::vulkanr::pipeline::RRPipeline;
 use rust_rendering::vulkanr::descriptor::{RRCompositeDescriptorSet, RRDescriptorSet};
 use rust_rendering::vulkanr::buffer::{RRVertexBuffer, RRIndexBuffer};
 use rust_rendering::vulkanr::core::Device;
-use rust_rendering::debugview::{DebugViewMode, gizmo::GizmoData};
+use rust_rendering::debugview::{DebugViewMode, gizmo::{GridGizmoData, LightGizmoData}};
 
 pub struct CompositePass<'a> {
     composite_pipeline: &'a RRPipeline,
@@ -17,7 +17,10 @@ pub struct CompositePass<'a> {
     grid_index_buffer: &'a RRIndexBuffer,
     gizmo_pipeline: &'a RRPipeline,
     gizmo_descriptor_set: &'a RRDescriptorSet,
-    gizmo_data: &'a GizmoData,
+    gizmo_data: &'a GridGizmoData,
+    light_gizmo_data: &'a LightGizmoData,
+    billboard_pipeline: &'a RRPipeline,
+    billboard_descriptor_set: &'a RRDescriptorSet,
     device: &'a Device,
     swapchain_extent: vk::Extent2D,
     debug_view_mode: DebugViewMode,
@@ -40,6 +43,9 @@ impl<'a> CompositePass<'a> {
             gizmo_pipeline: &app.data.gizmo_pipeline,
             gizmo_descriptor_set: &app.data.gizmo_descriptor_set,
             gizmo_data: &app.data.gizmo_data,
+            light_gizmo_data: &app.data.light_gizmo_data,
+            billboard_pipeline: &app.data.billboard_pipeline,
+            billboard_descriptor_set: &app.data.billboard_descriptor_set,
             device: &app.rrdevice.device,
             swapchain_extent: app.data.rrswapchain.swapchain_extent,
             debug_view_mode: app.data.rt_debug_state.debug_view_mode,
@@ -57,6 +63,7 @@ impl<'a> CompositePass<'a> {
         self.draw_composite(command_buffer)?;
         self.draw_grid(command_buffer, image_index)?;
         self.draw_gizmo(command_buffer, image_index)?;
+        self.draw_billboard(command_buffer, image_index)?;
 
         Ok(())
     }
@@ -226,7 +233,9 @@ impl<'a> CompositePass<'a> {
                 vk::IndexType::UINT32,
             );
 
-            let descriptor_set_index = image_index;
+            let swapchain_images_len = self.gizmo_descriptor_set.descriptor_sets.len() /
+                self.gizmo_descriptor_set.rrdata.len().max(1);
+            let descriptor_set_index = 0 * swapchain_images_len + image_index;
 
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
@@ -240,6 +249,108 @@ impl<'a> CompositePass<'a> {
             self.device.cmd_draw_indexed(
                 command_buffer,
                 self.gizmo_data.indices.len() as u32,
+                1,
+                0,
+                0,
+                0,
+            );
+        }
+
+        Ok(())
+    }
+
+    unsafe fn draw_light_gizmo(&self, command_buffer: vk::CommandBuffer, image_index: usize) -> Result<()> {
+        if let (Some(vertex_buffer), Some(index_buffer)) =
+            (self.light_gizmo_data.vertex_buffer, self.light_gizmo_data.index_buffer) {
+
+            self.device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.gizmo_pipeline.pipeline,
+            );
+
+            self.device.cmd_set_line_width(command_buffer, 1.0);
+
+            self.device.cmd_bind_vertex_buffers(
+                command_buffer,
+                0,
+                &[vertex_buffer],
+                &[0],
+            );
+
+            self.device.cmd_bind_index_buffer(
+                command_buffer,
+                index_buffer,
+                0,
+                vk::IndexType::UINT32,
+            );
+
+            let swapchain_images_len = self.gizmo_descriptor_set.descriptor_sets.len() /
+                self.gizmo_descriptor_set.rrdata.len().max(1);
+            let descriptor_set_index = 1 * swapchain_images_len + image_index;
+
+            self.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.gizmo_pipeline.pipeline_layout,
+                0,
+                &[self.gizmo_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[],
+            );
+
+            self.device.cmd_draw_indexed(
+                command_buffer,
+                self.light_gizmo_data.indices.len() as u32,
+                1,
+                0,
+                0,
+                0,
+            );
+        }
+
+        Ok(())
+    }
+
+    unsafe fn draw_billboard(&self, command_buffer: vk::CommandBuffer, image_index: usize) -> Result<()> {
+        if let (Some(vertex_buffer), Some(index_buffer)) =
+            (self.light_gizmo_data.billboard_vertex_buffer, self.light_gizmo_data.billboard_index_buffer) {
+
+            self.device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.billboard_pipeline.pipeline,
+            );
+
+            self.device.cmd_bind_vertex_buffers(
+                command_buffer,
+                0,
+                &[vertex_buffer],
+                &[0],
+            );
+
+            self.device.cmd_bind_index_buffer(
+                command_buffer,
+                index_buffer,
+                0,
+                vk::IndexType::UINT32,
+            );
+
+            let swapchain_images_len = self.billboard_descriptor_set.descriptor_sets.len() /
+                self.billboard_descriptor_set.rrdata.len().max(1);
+            let descriptor_set_index = image_index;
+
+            self.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.billboard_pipeline.pipeline_layout,
+                0,
+                &[self.billboard_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[],
+            );
+
+            self.device.cmd_draw_indexed(
+                command_buffer,
+                self.light_gizmo_data.billboard_indices.len() as u32,
                 1,
                 0,
                 0,

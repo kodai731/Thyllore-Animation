@@ -1560,3 +1560,128 @@ unsafe fn process_animation(
     }
     Ok(())
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vertex_default() {
+        let vertex = Vertex::default();
+        assert_eq!(vertex.position, [0.0, 0.0, 0.0]);
+        assert_eq!(vertex.normal, [0.0, 0.0, 0.0]);
+        assert_eq!(vertex.tex_coord, [0.0, 0.0]);
+        assert_eq!(vertex.joint_indices, [0, 0, 0, 0]);
+        assert_eq!(vertex.joint_weights, [0.0, 0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn test_gltf_data_default() {
+        let data = GltfData::default();
+        assert_eq!(data.vertices.len(), 0);
+        assert_eq!(data.indices.len(), 0);
+        assert_eq!(data.morph_targets.len(), 0);
+        assert_eq!(data.has_joints, false);
+    }
+
+    #[test]
+    fn test_gltf_model_default() {
+        let model = GltfModel::default();
+        assert_eq!(model.gltf_data.len(), 0);
+        assert_eq!(model.morph_animations.len(), 0);
+        assert_eq!(model.joints.len(), 0);
+        assert_eq!(model.has_skinned_meshes, false);
+    }
+
+    #[test]
+    fn test_image_data_default() {
+        let image = ImageData::default();
+        assert_eq!(image.data.len(), 0);
+        assert_eq!(image.size, 0);
+        assert_eq!(image.width, 0);
+        assert_eq!(image.height, 0);
+    }
+
+    #[test]
+    fn test_vertex_position_modification() {
+        let mut vertex = Vertex::default();
+        vertex.position = [1.0, 2.0, 3.0];
+        assert_eq!(vertex.position, [1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn test_vertex_normal_modification() {
+        let mut vertex = Vertex::default();
+        vertex.normal = [0.0, 1.0, 0.0];
+        assert_eq!(vertex.normal, [0.0, 1.0, 0.0]);
+    }
+
+    #[test]
+    fn test_vertex_tex_coord_modification() {
+        let mut vertex = Vertex::default();
+        vertex.tex_coord = [0.5, 0.5];
+        assert_eq!(vertex.tex_coord, [0.5, 0.5]);
+    }
+
+    #[test]
+    fn test_vertex_joint_data() {
+        let mut vertex = Vertex::default();
+        vertex.joint_indices = [0, 1, 2, 3];
+        vertex.joint_weights = [0.4, 0.3, 0.2, 0.1];
+        
+        assert_eq!(vertex.joint_indices, [0, 1, 2, 3]);
+        assert_eq!(vertex.joint_weights, [0.4, 0.3, 0.2, 0.1]);
+    }
+
+    #[test]
+    fn test_joint_weights_sum() {
+        let mut vertex = Vertex::default();
+        vertex.joint_weights = [0.25, 0.25, 0.25, 0.25];
+        
+        let sum: f32 = vertex.joint_weights.iter().sum();
+        assert!((sum - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_morph_target_default() {
+        let morph = MorphTarget::default();
+        assert_eq!(morph.positions.len(), 0);
+        assert_eq!(morph.normals.len(), 0);
+        assert_eq!(morph.tangents.len(), 0);
+    }
+
+    #[test]
+    fn test_joint_default() {
+        let joint = Joint::default();
+        assert_eq!(joint.index, 0);
+        assert_eq!(joint.name, "");
+        assert_eq!(joint.vertex_indices.len(), 0);
+        assert_eq!(joint.child_joint_indices.len(), 0);
+    }
+
+    #[test]
+    fn test_gltf_data_push_vertex() {
+        let mut data = GltfData::default();
+        let vertex = Vertex {
+            position: [1.0, 2.0, 3.0],
+            ..Default::default()
+        };
+        data.vertices.push(vertex);
+        
+        assert_eq!(data.vertices.len(), 1);
+        assert_eq!(data.vertices[0].position, [1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn test_gltf_data_push_index() {
+        let mut data = GltfData::default();
+        data.indices.push(0);
+        data.indices.push(1);
+        data.indices.push(2);
+        
+        assert_eq!(data.indices.len(), 3);
+        assert_eq!(data.indices, vec![0, 1, 2]);
+    }
+}
+

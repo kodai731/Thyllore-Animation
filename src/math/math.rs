@@ -307,3 +307,309 @@ pub fn approx_equal_mat4(a: &Mat4, b: &Mat4) -> bool {
         && approx_equal_vec4(&a.z, &b.z)
         && approx_equal_vec4(&a.w, &b.w)
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vec2_new() {
+        let v = Vec2::new(1.0, 2.0);
+        assert_eq!(v.x, 1.0);
+        assert_eq!(v.y, 2.0);
+    }
+
+    #[test]
+    fn test_vec2_default() {
+        let v = Vec2::default();
+        assert_eq!(v.x, 0.0);
+        assert_eq!(v.y, 0.0);
+    }
+
+    #[test]
+    fn test_vec2_distance() {
+        let v1 = Vec2::new(0.0, 0.0);
+        let v2 = Vec2::new(3.0, 4.0);
+        let distance = v1.distance(v2);
+        assert!((distance - 5.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_vec2_new_array() {
+        let v = Vec2::new_array([3.5, 4.5]);
+        assert_eq!(v.x, 3.5);
+        assert_eq!(v.y, 4.5);
+    }
+
+    #[test]
+    fn test_vec2_neg() {
+        let v = Vec2::new(1.0, -2.0);
+        let negated = -v;
+        assert_eq!(negated.x, -1.0);
+        assert_eq!(negated.y, 2.0);
+    }
+
+    #[test]
+    fn test_vec3_new() {
+        let v = Vec3::new(1.0, 2.0, 3.0);
+        assert_eq!(v.x, 1.0);
+        assert_eq!(v.y, 2.0);
+        assert_eq!(v.z, 3.0);
+    }
+
+    #[test]
+    fn test_vec3_default() {
+        let v = Vec3::default();
+        assert_eq!(v.x, 0.0);
+        assert_eq!(v.y, 0.0);
+        assert_eq!(v.z, 0.0);
+    }
+
+    #[test]
+    fn test_vec3_new_array() {
+        let v = Vec3::new_array([1.5, 2.5, 3.5]);
+        assert_eq!(v.x, 1.5);
+        assert_eq!(v.y, 2.5);
+        assert_eq!(v.z, 3.5);
+    }
+
+    #[test]
+    fn test_vec3_add() {
+        let v1 = Vec3::new(1.0, 2.0, 3.0);
+        let v2 = Vec3::new(4.0, 5.0, 6.0);
+        let result = v1 + v2;
+        assert_eq!(result.x, 5.0);
+        assert_eq!(result.y, 7.0);
+        assert_eq!(result.z, 9.0);
+    }
+
+    #[test]
+    fn test_vec3_mul_scalar() {
+        let v = Vec3::new(1.0, 2.0, 3.0);
+        let result = v * 2.0;
+        assert_eq!(result.x, 2.0);
+        assert_eq!(result.y, 4.0);
+        assert_eq!(result.z, 6.0);
+    }
+
+    #[test]
+    fn test_vec3_neg() {
+        let v = Vec3::new(1.0, -2.0, 3.0);
+        let negated = -v;
+        assert_eq!(negated.x, -1.0);
+        assert_eq!(negated.y, 2.0);
+        assert_eq!(negated.z, -3.0);
+    }
+
+    #[test]
+    fn test_vec3_add_assign() {
+        let mut v1 = Vec3::new(1.0, 2.0, 3.0);
+        let v2 = Vec3::new(4.0, 5.0, 6.0);
+        v1 += v2;
+        assert_eq!(v1.x, 5.0);
+        assert_eq!(v1.y, 7.0);
+        assert_eq!(v1.z, 9.0);
+    }
+
+    #[test]
+    fn test_vec4_new() {
+        let v = Vec4::new(1.0, 2.0, 3.0, 4.0);
+        assert_eq!(v.x, 1.0);
+        assert_eq!(v.y, 2.0);
+        assert_eq!(v.z, 3.0);
+        assert_eq!(v.w, 4.0);
+    }
+
+    #[test]
+    fn test_vec4_default() {
+        let v = Vec4::default();
+        assert_eq!(v.x, 0.0);
+        assert_eq!(v.y, 0.0);
+        assert_eq!(v.z, 0.0);
+        assert_eq!(v.w, 0.0);
+    }
+
+    #[test]
+    fn test_vec4_neg() {
+        let v = Vec4::new(1.0, -2.0, 3.0, -4.0);
+        let negated = -v;
+        assert_eq!(negated.x, -1.0);
+        assert_eq!(negated.y, 2.0);
+        assert_eq!(negated.z, -3.0);
+        assert_eq!(negated.w, 4.0);
+    }
+
+    #[test]
+    fn test_vec3_from_array() {
+        let v = vec3_from_array([1.0, 2.0, 3.0]);
+        assert_eq!(v.x, 1.0);
+        assert_eq!(v.y, 2.0);
+        assert_eq!(v.z, 3.0);
+    }
+
+    #[test]
+    fn test_array3_from_vec() {
+        let v = vec3(1.5, 2.5, 3.5);
+        let arr = array3_from_vec(v);
+        assert_eq!(arr, [1.5, 2.5, 3.5]);
+    }
+
+    #[test]
+    fn test_vec2_from_array() {
+        let v = vec2_from_array([1.0, 2.0]);
+        assert_eq!(v.x, 1.0);
+        assert_eq!(v.y, 2.0);
+    }
+
+    #[test]
+    fn test_array2_from_vec() {
+        let v = vec2(1.5, 2.5);
+        let arr = array2_from_vec(v);
+        assert_eq!(arr, [1.5, 2.5]);
+    }
+
+    #[test]
+    fn test_vec4_from_array() {
+        let v = vec4_from_array([1.0, 2.0, 3.0, 4.0]);
+        assert_eq!(v.x, 1.0);
+        assert_eq!(v.y, 2.0);
+        assert_eq!(v.z, 3.0);
+        assert_eq!(v.w, 4.0);
+    }
+
+    #[test]
+    fn test_array4_from_vec() {
+        let v = cgmath::Vector4::new(1.5, 2.5, 3.5, 4.5);
+        let arr = array4_from_vec(v);
+        assert_eq!(arr, [1.5, 2.5, 3.5, 4.5]);
+    }
+
+    #[test]
+    fn test_mat4_array_conversion() {
+        let original = Mat4::from_cols(
+            cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0),
+            cgmath::Vector4::new(0.0, 1.0, 0.0, 0.0),
+            cgmath::Vector4::new(0.0, 0.0, 1.0, 0.0),
+            cgmath::Vector4::new(0.0, 0.0, 0.0, 1.0),
+        );
+
+        let arr = array_from_mat4(original);
+        let converted = mat4_from_array(arr);
+
+        assert!(approx_equal_mat4(&original, &converted));
+    }
+
+    #[test]
+    fn test_approx_equal_array3() {
+        let a = [1.0, 2.0, 3.0];
+        let b = [1.000001, 2.000001, 3.000001];
+        assert!(approx_equal_array3(&a, &b));
+
+        let c = [1.0, 2.0, 3.0];
+        let d = [1.1, 2.0, 3.0];
+        assert!(!approx_equal_array3(&c, &d));
+    }
+
+    #[test]
+    fn test_approx_equal_array4() {
+        let a = [1.0, 2.0, 3.0, 4.0];
+        let b = [1.000001, 2.0001, 3.0001, 4.0001];
+        assert!(approx_equal_array4(&a, &b));
+    }
+
+    #[test]
+    fn test_approx_equal_vec4() {
+        let a = cgmath::Vector4::new(1.0, 2.0, 3.0, 4.0);
+        let b = cgmath::Vector4::new(1.0001, 2.0001, 3.0001, 4.0001);
+        assert!(approx_equal_vec4(&a, &b));
+    }
+
+    #[test]
+    fn test_fix_coord() {
+        let m = fix_coord();
+        assert_eq!(m.x.x, 1.0);
+        assert_eq!(m.y.z, 1.0);
+        assert_eq!(m.z.y, 1.0);
+        assert_eq!(m.w.w, 1.0);
+    }
+
+    #[test]
+    fn test_swap_quaternion() {
+        let q = Quaternion::new(1.0, 2.0, 3.0, 4.0);
+        let swapped = swap(&q);
+        assert_eq!(swapped.s, 1.0);
+        assert_eq!(swapped.v.x, 2.0);
+        assert_eq!(swapped.v.y, 3.0);
+        assert_eq!(swapped.v.z, 4.0);
+    }
+
+    #[test]
+    fn test_decompose_identity() {
+        let identity = Matrix4::from_scale(1.0);
+        let (translation, rotation, scale) = decompose(&identity);
+
+        assert!((translation.x).abs() < 1e-5);
+        assert!((translation.y).abs() < 1e-5);
+        assert!((translation.z).abs() < 1e-5);
+
+        assert!((scale.x - 1.0).abs() < 1e-5);
+        assert!((scale.y - 1.0).abs() < 1e-5);
+        assert!((scale.z - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_rodrigues_rotation() {
+        unsafe {
+            let mut rotate = Matrix3::from_value(0.0);
+            let angle = std::f32::consts::PI / 2.0;
+            let c = angle.cos();
+            let s = angle.sin();
+            let n = Vector3::new(0.0, 0.0, 1.0);
+
+            let result = rodrigues(&mut rotate, c, s, &n);
+            assert!(result.is_ok());
+        }
+    }
+
+    #[test]
+    fn test_view_matrix() {
+        unsafe {
+            let camera_pos = Vector3::new(0.0, 0.0, -5.0);
+            let direction = Vector3::new(0.0, 0.0, 1.0);
+            let up = Vector3::new(0.0, 1.0, 0.0);
+
+            let view_matrix = view(camera_pos, direction, up);
+
+            assert_eq!(view_matrix.w.w, 1.0);
+        }
+    }
+
+    #[test]
+    fn test_vec3_equality() {
+        let v1 = Vec3::new(1.0, 2.0, 3.0);
+        let v2 = Vec3::new(1.0, 2.0, 3.0);
+        let v3 = Vec3::new(1.0, 2.0, 3.1);
+
+        assert_eq!(v1, v2);
+        assert_ne!(v1, v3);
+    }
+
+    #[test]
+    fn test_vec2_equality() {
+        let v1 = Vec2::new(1.0, 2.0);
+        let v2 = Vec2::new(1.0, 2.0);
+        let v3 = Vec2::new(1.0, 2.1);
+
+        assert_eq!(v1, v2);
+        assert_ne!(v1, v3);
+    }
+
+    #[test]
+    fn test_vec4_equality() {
+        let v1 = Vec4::new(1.0, 2.0, 3.0, 4.0);
+        let v2 = Vec4::new(1.0, 2.0, 3.0, 4.0);
+        let v3 = Vec4::new(1.0, 2.0, 3.0, 4.1);
+
+        assert_eq!(v1, v2);
+        assert_ne!(v1, v3);
+    }
+}

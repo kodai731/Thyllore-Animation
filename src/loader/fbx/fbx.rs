@@ -3041,3 +3041,133 @@ fn quat_to_euler(x: f32, y: f32, z: f32, w: f32) -> [f32; 3] {
         yaw.to_degrees(),
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fbx_model_default() {
+        let model = FbxModel::default();
+        assert_eq!(model.fbx_data.len(), 0);
+        assert_eq!(model.animations.len(), 0);
+        assert_eq!(model.nodes.len(), 0);
+    }
+
+    #[test]
+    fn test_fbx_data_new() {
+        let data = FbxData::new();
+        assert_eq!(data.positions.len(), 0);
+        assert_eq!(data.local_positions.len(), 0);
+        assert_eq!(data.indices.len(), 0);
+        assert_eq!(data.tex_coords.len(), 0);
+        assert_eq!(data.clusters.len(), 0);
+        assert_eq!(data.mesh_parts.len(), 0);
+        assert_eq!(data.parent_node, None);
+        assert_eq!(data.material_name, None);
+        assert_eq!(data.diffuse_texture, None);
+    }
+
+    #[test]
+    fn test_fbx_data_add_position() {
+        let mut data = FbxData::new();
+        data.positions.push(Vector3::new(1.0, 2.0, 3.0));
+        
+        assert_eq!(data.positions.len(), 1);
+        assert_eq!(data.positions[0].x, 1.0);
+        assert_eq!(data.positions[0].y, 2.0);
+        assert_eq!(data.positions[0].z, 3.0);
+    }
+
+    #[test]
+    fn test_fbx_data_add_index() {
+        let mut data = FbxData::new();
+        data.indices.push(0);
+        data.indices.push(1);
+        data.indices.push(2);
+        
+        assert_eq!(data.indices.len(), 3);
+        assert_eq!(data.indices, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn test_fbx_data_add_tex_coord() {
+        let mut data = FbxData::new();
+        data.tex_coords.push([0.5, 0.5]);
+        
+        assert_eq!(data.tex_coords.len(), 1);
+        assert_eq!(data.tex_coords[0], [0.5, 0.5]);
+    }
+
+    #[test]
+    fn test_fbx_data_set_parent_node() {
+        let mut data = FbxData::new();
+        data.parent_node = Some("ParentBone".to_string());
+        
+        assert_eq!(data.parent_node, Some("ParentBone".to_string()));
+    }
+
+    #[test]
+    fn test_fbx_data_set_material_name() {
+        let mut data = FbxData::new();
+        data.material_name = Some("Material01".to_string());
+        
+        assert_eq!(data.material_name, Some("Material01".to_string()));
+    }
+
+    #[test]
+    fn test_fbx_data_set_diffuse_texture() {
+        let mut data = FbxData::new();
+        data.diffuse_texture = Some("texture.png".to_string());
+        
+        assert_eq!(data.diffuse_texture, Some("texture.png".to_string()));
+    }
+
+    #[test]
+    fn test_fbx_animation_name() {
+        let mut animation = FbxAnimation {
+            name: "Walk".to_string(),
+            duration: 1.0,
+            bone_animations: HashMap::new(),
+        };
+        
+        assert_eq!(animation.name, "Walk");
+        assert_eq!(animation.duration, 1.0);
+        assert_eq!(animation.bone_animations.len(), 0);
+    }
+
+    #[test]
+    fn test_keyframe_creation() {
+        let keyframe = KeyFrame {
+            time: 0.5,
+            value: [1.0, 2.0, 3.0],
+        };
+        
+        assert_eq!(keyframe.time, 0.5);
+        assert_eq!(keyframe.value, [1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn test_bone_animation_structure() {
+        let bone_anim = BoneAnimation {
+            bone_name: "Bone01".to_string(),
+            translation_keys: Vec::new(),
+            rotation_keys: Vec::new(),
+            scale_keys: Vec::new(),
+        };
+        
+        assert_eq!(bone_anim.bone_name, "Bone01");
+        assert_eq!(bone_anim.translation_keys.len(), 0);
+        assert_eq!(bone_anim.rotation_keys.len(), 0);
+        assert_eq!(bone_anim.scale_keys.len(), 0);
+    }
+
+    #[test]
+    fn test_fbx_model_add_data() {
+        let mut model = FbxModel::default();
+        let data = FbxData::new();
+        model.fbx_data.push(data);
+        
+        assert_eq!(model.fbx_data.len(), 1);
+    }
+}

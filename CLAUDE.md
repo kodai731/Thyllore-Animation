@@ -15,9 +15,28 @@ The project is currently on the `feature/fbx-model` branch, working on implement
 ## Build and Run Commands
 
 ### Building the Project
+
+**通常のビルド**:
 ```bash
 cargo build
 ```
+
+**ビルド＋テスト実行（推奨）**:
+```powershell
+# ビルドとテストを順次実行し、結果を log/log_test.txt に保存
+.\build-with-tests.ps1
+
+# リリースビルド
+.\build-with-tests.ps1 -Release
+
+# テストをスキップ
+.\build-with-tests.ps1 -SkipTests
+```
+
+このスクリプトは:
+1. プロジェクトをビルド
+2. ビルド成功後、全テストを実行
+3. テスト結果を `log/log_test.txt` に保存
 
 ### Running the Application
 ```bash
@@ -27,6 +46,8 @@ $env:RUST_LOG="debug"; cargo run --bin rust-rendering
 # Without logging
 cargo run --bin rust-rendering
 ```
+
+**Note**: `cargo run` 実行時は自動テストはスキップされ、アプリケーションが正常に起動します。
 
 ### Compiling Shaders
 Shaders are automatically compiled during `cargo build`. The build system compiles all shader files from `shaders/` directory to `assets/shaders/` using glslc from VulkanSDK.
@@ -38,6 +59,23 @@ Shader source files are located in `shaders/`:
 - `gbufferFragment.frag` → `assets/shaders/gbufferFrag.spv`
 - `rayQueryShadow.comp` → `assets/shaders/rayQueryShadow.spv`
 - etc.
+
+### Running Tests
+```bash
+# Run all tests
+cargo test
+
+# Run specific test file
+cargo test --test integration_tests
+cargo test --test model_loading_tests
+cargo test --test shader_tests
+
+# Run tests with output
+cargo test -- --nocapture
+
+# Run ignored tests
+cargo test -- --ignored
+```
 
 ## Architecture
 
@@ -157,6 +195,44 @@ Use `reset camera` to return to initial position, `reset camera up` to align cam
 - Embed imgui crates locally in `src/imgui*/` for custom modifications
 - Vulkan abstraction (`RR*` structs) provides a higher-level API over raw Vulkan
 - Model loaders are isolated in `gltf/` and `fbx/` modules
+
+## Testing
+
+The project includes integration tests in the `tests/` directory:
+
+### Test Files
+
+**`integration_tests.rs`** - Project structure and configuration tests
+- Verifies required directories exist
+- Checks Cargo files and configuration
+- Validates font and vendor directory structure
+
+**`model_loading_tests.rs`** - Model loader tests
+- Tests glTF and FBX model file existence
+- Verifies model files are not empty
+- Checks texture file availability
+- Validates model directory structure
+
+**`shader_tests.rs`** - Shader compilation tests
+- Verifies shader source files exist
+- Checks compiled shader files (`.spv`)
+- Validates SPIR-V header format
+- Ensures shader count matches between source and compiled files
+
+### Running Tests
+
+All tests can be run with `cargo test`. Tests verify:
+- File and directory structure integrity
+- Asset availability (models, textures, fonts)
+- Shader compilation success
+- Project configuration correctness
+
+**テスト数**:
+- ユニットテスト: 58個 (math: 35, gltf: 11, fbx: 12)
+- インテグレーションテスト: 31個 (プロジェクト構造: 12, モデル: 9, シェーダー: 10)
+
+**ビルド+テスト実行**:
+`build-with-tests.ps1` を使用すると、ビルドとテストを順次実行し、結果を `log/log_test.txt` に保存します
 
 ## Reference Documentation
 

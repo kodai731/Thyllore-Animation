@@ -462,6 +462,7 @@ impl RRPipeline {
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
             .polygon_mode(vk::PolygonMode::FILL)
             .no_depth_test()
+            .blend(BlendConfig::default())
             .descriptor_layouts(vec![descriptor_set_layout])
             .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
     }

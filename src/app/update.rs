@@ -492,9 +492,7 @@ impl App {
             let billboard_ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;
 
             let light_pos = self.data.rt_debug_state.light_position;
-            let distance = (light_pos - camera_pos).magnitude();
-            let scale_factor = distance * 0.1;
-            let model = Mat4::from_translation(light_pos) * Mat4::from_scale(scale_factor);
+            let model = Mat4::from_translation(light_pos);
 
             let ubo_billboard = UniformBufferObject {
                 model,

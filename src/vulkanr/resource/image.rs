@@ -199,6 +199,9 @@ pub unsafe fn create_texture_image_from_file(
     let (width, height) = info.size();
     let color_type = info.color_type;
 
+    println!("Loading texture: {:?}, size: {}x{}, color_type: {:?}",
+             file_path, width, height, color_type);
+
     let mut pixels = vec![0; reader.info().raw_bytes()];
     reader.next_frame(&mut pixels)?;
 

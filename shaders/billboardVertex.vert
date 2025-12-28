@@ -12,13 +12,12 @@ layout(location = 1) in vec2 inTexCoord;
 layout(location = 0) out vec2 fragTexCoord;
 
 void main() {
-    vec3 billboardCenter = (ubo.model * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+    vec4 billboardCenter = ubo.proj * ubo.view * ubo.model * vec4(0.0, 0.0, 0.0, 1.0);
 
-    vec3 cameraRight = vec3(ubo.view[0][0], ubo.view[1][0], ubo.view[2][0]);
-    vec3 cameraUp = vec3(ubo.view[0][1], ubo.view[1][1], ubo.view[2][1]);
+    vec2 screenOffset = inPosition.xy * 0.1;
 
-    vec3 worldPos = billboardCenter + cameraRight * inPosition.x + cameraUp * inPosition.y;
+    gl_Position = billboardCenter;
+    gl_Position.xy += screenOffset * billboardCenter.w;
 
-    gl_Position = ubo.proj * ubo.view * vec4(worldPos, 1.0);
     fragTexCoord = inTexCoord;
 }

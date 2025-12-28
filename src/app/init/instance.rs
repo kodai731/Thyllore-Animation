@@ -194,15 +194,14 @@ impl App {
         if let Err(e) = Self::create_grid_data(&mut data, 0, color, tex_coord) {
             eprintln!("{:?}", e)
         }
-        color = Vec4::new(0.0, 1.0, 0.0, 1.0);
-        if let Err(e) = Self::create_grid_data(&mut data, 1, color, tex_coord) {
-            eprintln!("{:?}", e)
-        }
         color = Vec4::new(0.0, 0.0, 1.0, 1.0);
         if let Err(e) = Self::create_grid_data(&mut data, 2, color, tex_coord) {
             eprintln!("{:?}", e)
         }
         println!("created grid data ");
+        data.grid_scale = 1.0;
+        data.near_plane = 0.1;
+        data.far_plane = 1000.0;
         // let _ = Self::create_texture_image(&instance, &device, &mut data)?;
         // data.texture_image = RRImage::new(&instance, &rrdevice, &data.rrcommand_pool.borrow_mut());
         data.grid_vertex_buffer = RRVertexBuffer::new(

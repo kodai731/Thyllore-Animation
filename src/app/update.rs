@@ -131,10 +131,10 @@ impl App {
                     self.data.light_gizmo_data.selected_axis = selected_axis;
 
                     let light_pos = self.data.rt_debug_state.light_position;
-                    self.data.light_drag_depth = (light_pos - camera_pos).magnitude();
                     self.data.light_initial_position = [light_pos.x, light_pos.y, light_pos.z];
 
-                    log!("Light gizmo selected - axis: {:?}, depth: {:.2}", selected_axis, self.data.light_drag_depth);
+                    let drag_depth = (light_pos - camera_pos).magnitude();
+                    log!("Light gizmo selected - axis: {:?}, depth: {:.2}", selected_axis, drag_depth);
 
                     self.data.light_just_selected = true;
                 }
@@ -142,118 +142,7 @@ impl App {
             let clicked_mouse_pos = vec2_from_array(self.data.clicked_mouse_pos);
 
             if self.data.light_gizmo_selected && gui_data.is_left_clicked && !self.data.light_just_selected {
-                static mut DRAG_LOG_COUNTER: u32 = 0;
-
-                match self.data.light_drag_axis {
-                    LightGizmoAxis::Center => {
-                        let view = view(camera_pos, camera_direction, camera_up);
-                        let swapchain_extent = self.data.rrswapchain.swapchain_extent;
-                        let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
-                        let proj = cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
-                        let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
-
-                        let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
-
-                        let light_pos = self.data.rt_debug_state.light_position;
-                        let plane_point = light_pos;
-                        let plane_normal = -camera_direction;
-
-                        unsafe {
-                            DRAG_LOG_COUNTER += 1;
-                            if DRAG_LOG_COUNTER == 1 {
-                                log!("First drag - light_pos: ({:.2}, {:.2}, {:.2}), camera_pos: ({:.2}, {:.2}, {:.2}), drag_depth: {:.2}",
-                                     light_pos.x, light_pos.y, light_pos.z,
-                                     camera_pos.x, camera_pos.y, camera_pos.z,
-                                     self.data.light_drag_depth);
-                                log!("  ray_origin: ({:.2}, {:.2}, {:.2}), ray_direction: ({:.2}, {:.2}, {:.2})",
-                                     ray_origin.x, ray_origin.y, ray_origin.z,
-                                     ray_direction.x, ray_direction.y, ray_direction.z);
-                            }
-                        }
-
-                        let denom = plane_normal.dot(ray_direction);
-
-                        if denom.abs() < std::f32::EPSILON {
-                            log!("  -> FAILED: denom too small ({:.9})", denom);
-                        } else {
-                            let t = (plane_point - ray_origin).dot(plane_normal) / denom;
-
-                            if t < 0.0 {
-                                unsafe {
-                                    if DRAG_LOG_COUNTER == 1 {
-                                        log!("  -> FAILED: t is negative ({:.2})", t);
-                                    }
-                                }
-                            } else {
-                                let intersection = ray_origin + ray_direction * t;
-
-                                let old_pos = self.data.rt_debug_state.light_position;
-                                self.data.rt_debug_state.light_position = intersection;
-
-                                unsafe {
-                                    if DRAG_LOG_COUNTER == 1 || DRAG_LOG_COUNTER % 30 == 0 {
-                                        log!("Light position updated - old: ({:.2}, {:.2}, {:.2}), new: ({:.2}, {:.2}, {:.2}), delta: ({:.2}, {:.2}, {:.2})",
-                                             old_pos.x, old_pos.y, old_pos.z,
-                                             intersection.x, intersection.y, intersection.z,
-                                             intersection.x - old_pos.x, intersection.y - old_pos.y, intersection.z - old_pos.z);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    LightGizmoAxis::X => {
-                        let initial_pos = vec3_from_array(self.data.light_initial_position);
-                        let drag_depth = self.data.light_drag_depth;
-
-                        let view = view(camera_pos, camera_direction, camera_up);
-                        let (camera_right, _camera_up_axis, _camera_forward) = get_camera_axes_from_view(view);
-
-                        let swapchain_extent = self.data.rrswapchain.swapchain_extent;
-                        let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
-
-                        let mouse_delta = mouse_pos - clicked_mouse_pos;
-                        let depth_scale = drag_depth / screen_size.x;
-                        let movement = camera_right * mouse_delta.x * depth_scale;
-
-                        let new_position = initial_pos + movement;
-                        self.data.rt_debug_state.light_position = new_position;
-                    }
-                    LightGizmoAxis::Y => {
-                        let initial_pos = vec3_from_array(self.data.light_initial_position);
-                        let drag_depth = self.data.light_drag_depth;
-
-                        let view = view(camera_pos, camera_direction, camera_up);
-                        let (_camera_right, camera_up_axis, _camera_forward) = get_camera_axes_from_view(view);
-
-                        let swapchain_extent = self.data.rrswapchain.swapchain_extent;
-                        let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
-
-                        let mouse_delta = mouse_pos - clicked_mouse_pos;
-                        let depth_scale = drag_depth / screen_size.y;
-                        let movement = camera_up_axis * -mouse_delta.y * depth_scale;
-
-                        let new_position = initial_pos + movement;
-                        self.data.rt_debug_state.light_position = new_position;
-                    }
-                    LightGizmoAxis::Z => {
-                        let initial_pos = vec3_from_array(self.data.light_initial_position);
-                        let drag_depth = self.data.light_drag_depth;
-
-                        let view = view(camera_pos, camera_direction, camera_up);
-                        let (_camera_right, _camera_up_axis, camera_forward) = get_camera_axes_from_view(view);
-
-                        let swapchain_extent = self.data.rrswapchain.swapchain_extent;
-                        let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
-
-                        let mouse_delta = mouse_pos - clicked_mouse_pos;
-                        let depth_scale = drag_depth / screen_size.y;
-                        let movement = camera_forward * -mouse_delta.y * depth_scale;
-
-                        let new_position = initial_pos + movement;
-                        self.data.rt_debug_state.light_position = new_position;
-                    }
-                    LightGizmoAxis::None => {}
-                }
+                self.update_light_gizmo_position(mouse_pos, camera_pos, camera_direction);
             } else if !self.data.light_gizmo_selected {
                 // FIX: Use delta from previous frame (Unity-style) instead of cumulative diff
                 let diff = mouse_pos - clicked_mouse_pos;
@@ -342,6 +231,9 @@ impl App {
             }
 
             if !gui_data.is_left_clicked {
+                if self.data.is_left_clicked {
+                    log!("Mouse released - resetting light gizmo state");
+                }
                 self.data.is_left_clicked = false;
                 self.data.light_gizmo_selected = false;
                 self.data.light_drag_axis = LightGizmoAxis::None;
@@ -390,7 +282,9 @@ impl App {
 
         // Only process mouse wheel zoom if ImGui doesn't want the mouse
         if !gui_data.imgui_wants_mouse && mouse_wheel != 0.0 {
-            let diff_view = camera_direction * mouse_wheel * -5.0;
+            let distance_to_origin = camera_pos.magnitude();
+            let zoom_speed = (distance_to_origin * 0.1).max(1.0).min(50.0);
+            let diff_view = camera_direction * mouse_wheel * zoom_speed * -1.0;
             camera_pos += diff_view;
             self.data.camera_pos = array3_from_vec(camera_pos);
         }
@@ -911,5 +805,44 @@ impl App {
         }
 
         Ok(())
+    }
+
+    fn update_light_gizmo_position(
+        &mut self,
+        mouse_pos: Vector2<f32>,
+        camera_pos: Vector3<f32>,
+        camera_direction: Vector3<f32>,
+    ) {
+        unsafe {
+            let view = view(
+                camera_pos,
+                camera_direction,
+                vec3_from_array(self.data.camera_up),
+            );
+            let swapchain_extent = self.data.rrswapchain.swapchain_extent;
+            let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
+            let proj = cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
+            let screen_size = Vector2::new(
+                swapchain_extent.width as f32,
+                swapchain_extent.height as f32,
+            );
+
+            let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
+
+            let light_pos = self.data.rt_debug_state.light_position;
+            let plane_point = light_pos;
+            let plane_normal = -camera_direction;
+
+            let denom = plane_normal.dot(ray_direction);
+
+            if denom.abs() > std::f32::EPSILON {
+                let t = (plane_point - ray_origin).dot(plane_normal) / denom;
+
+                if t >= 0.0 {
+                    let intersection = ray_origin + ray_direction * t;
+                    self.data.rt_debug_state.light_position = intersection;
+                }
+            }
+        }
     }
 }

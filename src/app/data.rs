@@ -69,7 +69,6 @@ pub struct AppData {
     pub light_gizmo_data: LightGizmoData,
     pub light_gizmo_selected: bool,
     pub light_drag_axis: LightGizmoAxis,
-    pub light_drag_depth: f32,
     pub light_just_selected: bool,
     pub light_initial_position: [f32; 3],
     pub billboard_pipeline: RRPipeline,

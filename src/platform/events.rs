@@ -6,6 +6,20 @@ use imgui::{Condition, MouseButton};
 use crate::{App, GUIData};
 use rust_rendering::debugview::DebugViewMode;
 
+fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
+    gui_data.is_left_clicked = false;
+    gui_data.is_wheel_clicked = false;
+
+    if !gui_data.imgui_wants_mouse {
+        if ui.is_mouse_down(MouseButton::Left) {
+            gui_data.is_left_clicked = true;
+        }
+        if ui.is_mouse_down(MouseButton::Middle) {
+            gui_data.is_wheel_clicked = true;
+        }
+    }
+}
+
 impl System {
     pub fn main_loop(
         self,
@@ -48,14 +62,6 @@ impl System {
                                 gui_data.mouse_pos = [position.x as f32, position.y as f32];
                             }
 
-                            WindowEvent::MouseInput { state, button, .. } => {
-                                if *state == ElementState::Pressed
-                                    && *button == winit::event::MouseButton::Left
-                                {
-                                    gui_data.is_left_clicked = true;
-                                }
-                            }
-
                             WindowEvent::MouseWheel { delta, .. } => match delta {
                                 winit::event::MouseScrollDelta::LineDelta(x, y) => {
                                     gui_data.mouse_wheel = *y;
@@ -84,21 +90,12 @@ impl System {
 
                                 ui.dockspace_over_main_viewport();
 
-                                gui_data.is_left_clicked = false;
-                                gui_data.is_wheel_clicked = false;
                                 gui_data.monitor_value = 0.0;
 
                                 let io = ui.io();
                                 gui_data.imgui_wants_mouse = io.want_capture_mouse;
 
-                                if !gui_data.imgui_wants_mouse {
-                                    if ui.is_mouse_down(MouseButton::Left) {
-                                        gui_data.is_left_clicked = true;
-                                    }
-                                    if ui.is_mouse_down(MouseButton::Middle) {
-                                        gui_data.is_wheel_clicked = true;
-                                    }
-                                }
+                                update_mouse_input(gui_data, ui);
 
                                 ui.window("debug window")
                                     .size([600.0, 450.0], Condition::FirstUseEver)

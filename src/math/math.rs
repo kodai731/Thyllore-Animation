@@ -315,7 +315,7 @@ pub fn screen_to_world_ray(
     proj_matrix: Mat4,
 ) -> (Vector3<f32>, Vector3<f32>) {
     let ndc_x = (2.0 * screen_pos.x) / screen_size.x - 1.0;
-    let ndc_y = 1.0 - (2.0 * screen_pos.y) / screen_size.y;
+    let ndc_y = (2.0 * screen_pos.y) / screen_size.y - 1.0;
 
     let clip_near = cgmath::vec4(ndc_x, ndc_y, -1.0, 1.0);
     let clip_far = cgmath::vec4(ndc_x, ndc_y, 1.0, 1.0);
@@ -384,6 +384,58 @@ pub fn ray_to_line_segment_distance(
     let point_on_line = line_start + line_dir * t_clamped;
 
     (point_on_ray - point_on_line).magnitude()
+}
+
+pub fn world_to_screen(
+    world_pos: Vector3<f32>,
+    screen_size: Vector2<f32>,
+    view_matrix: Mat4,
+    proj_matrix: Mat4,
+) -> Option<Vector2<f32>> {
+    let clip_pos = proj_matrix * view_matrix * cgmath::vec4(world_pos.x, world_pos.y, world_pos.z, 1.0);
+
+    if clip_pos.w <= 0.0 {
+        return None;
+    }
+
+    let ndc_x = clip_pos.x / clip_pos.w;
+    let ndc_y = clip_pos.y / clip_pos.w;
+
+    let screen_x = (ndc_x + 1.0) * 0.5 * screen_size.x;
+    let screen_y = (1.0 - ndc_y) * 0.5 * screen_size.y;
+
+    Some(Vector2::new(screen_x, screen_y))
+}
+
+pub fn ray_plane_intersection(
+    ray_origin: Vector3<f32>,
+    ray_direction: Vector3<f32>,
+    plane_point: Vector3<f32>,
+    plane_normal: Vector3<f32>,
+) -> Option<Vector3<f32>> {
+    let denom = plane_normal.dot(ray_direction);
+
+    if denom.abs() < EPSILON {
+        return None;
+    }
+
+    let t = (plane_point - ray_origin).dot(plane_normal) / denom;
+
+    if t < 0.0 {
+        return None;
+    }
+
+    Some(ray_origin + ray_direction * t)
+}
+
+pub fn get_camera_axes_from_view(view_matrix: Mat4) -> (Vector3<f32>, Vector3<f32>, Vector3<f32>) {
+    let view_inverse = view_matrix.invert().unwrap();
+
+    let camera_right = vec3(view_inverse.x.x, view_inverse.y.x, view_inverse.z.x);
+    let camera_up = vec3(view_inverse.x.y, view_inverse.y.y, view_inverse.z.y);
+    let camera_forward = -vec3(view_inverse.x.z, view_inverse.y.z, view_inverse.z.z);
+
+    (camera_right, camera_up, camera_forward)
 }
 
 #[cfg(test)]

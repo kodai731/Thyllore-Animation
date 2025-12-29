@@ -41,13 +41,9 @@ impl App {
 
         let mouse_pos = Vector2::new(mouse_pos[0], mouse_pos[1]);
 
-        // Unity-style camera rotation (Y-down coordinate system):
-        // - Horizontal rotation: Always around world Y-down axis (0, -1, 0) - prevents gimbal lock
-        // - Vertical rotation: Around camera's local right axis
-        let world_y_down = vec3(0.0, -1.0, 0.0);  // Y-down world axis (fixed)
+        let world_y_down = vec3(0.0, -1.0, 0.0);
         let camera_right = camera_direction.cross(camera_up).normalize();
 
-        // For pan operation, use view-based axes
         let last_view = view(camera_pos, camera_direction, camera_up);
         let base_x_4 = last_view * vec4(1.0, 0.0, 0.0, 0.0);
         let base_y_4 = last_view * vec4(0.0, -1.0, 0.0, 0.0);
@@ -59,6 +55,8 @@ impl App {
 
         // Only process camera rotation if ImGui doesn't want the mouse
         if !gui_data.imgui_wants_mouse && (gui_data.is_left_clicked || self.data.is_left_clicked) {
+            self.data.light_just_selected = false;
+
             // first clicked
             if !self.data.is_left_clicked {
                 self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
@@ -75,6 +73,15 @@ impl App {
                 let light_pos = self.data.rt_debug_state.light_position;
                 let distance = (light_pos - camera_pos).magnitude();
                 let scale_factor = distance * 0.03;
+
+                let billboard_screen_pos = world_to_screen(light_pos, screen_size, view, proj);
+                let billboard_clicked = if let Some(billboard_pos) = billboard_screen_pos {
+                    let screen_distance = (billboard_pos - mouse_pos).magnitude();
+                    let click_radius = 150.0;
+                    screen_distance < click_radius
+                } else {
+                    false
+                };
 
                 let center_distance = ray_to_point_distance(ray_origin, ray_direction, light_pos);
 
@@ -94,114 +101,158 @@ impl App {
                 let mut min_distance = center_distance;
                 let mut selected_axis = LightGizmoAxis::None;
 
-                if center_distance < threshold {
+                if billboard_clicked {
                     selected_axis = LightGizmoAxis::Center;
-                }
+                    min_distance = 0.0;
+                } else {
+                    if center_distance < threshold {
+                        selected_axis = LightGizmoAxis::Center;
+                    }
 
-                if x_distance < threshold && x_distance < min_distance {
-                    min_distance = x_distance;
-                    selected_axis = LightGizmoAxis::X;
-                }
+                    if x_distance < threshold && x_distance < min_distance {
+                        min_distance = x_distance;
+                        selected_axis = LightGizmoAxis::X;
+                    }
 
-                if y_distance < threshold && y_distance < min_distance {
-                    min_distance = y_distance;
-                    selected_axis = LightGizmoAxis::Y;
-                }
+                    if y_distance < threshold && y_distance < min_distance {
+                        min_distance = y_distance;
+                        selected_axis = LightGizmoAxis::Y;
+                    }
 
-                if z_distance < threshold && z_distance < min_distance {
-                    min_distance = z_distance;
-                    selected_axis = LightGizmoAxis::Z;
+                    if z_distance < threshold && z_distance < min_distance {
+                        min_distance = z_distance;
+                        selected_axis = LightGizmoAxis::Z;
+                    }
                 }
 
                 if selected_axis != LightGizmoAxis::None {
                     self.data.light_gizmo_selected = true;
                     self.data.light_drag_axis = selected_axis;
                     self.data.light_gizmo_data.selected_axis = selected_axis;
+
+                    let light_pos = self.data.rt_debug_state.light_position;
+                    self.data.light_drag_depth = (light_pos - camera_pos).magnitude();
+                    self.data.light_initial_position = [light_pos.x, light_pos.y, light_pos.z];
+
+                    log!("Light gizmo selected - axis: {:?}, depth: {:.2}", selected_axis, self.data.light_drag_depth);
+
+                    self.data.light_just_selected = true;
                 }
             }
             let clicked_mouse_pos = vec2_from_array(self.data.clicked_mouse_pos);
 
-            if self.data.light_gizmo_selected {
-                let diff = mouse_pos - clicked_mouse_pos;
-                let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
+            if self.data.light_gizmo_selected && gui_data.is_left_clicked && !self.data.light_just_selected {
+                static mut DRAG_LOG_COUNTER: u32 = 0;
 
-                if 0.001 < distance {
-                    match self.data.light_drag_axis {
-                        LightGizmoAxis::Center => {
-                            let drag_speed = 0.01;
-                            let translate_x_v = base_x * -diff.x * drag_speed;
-                            let translate_y_v = base_y * diff.y * drag_speed;
-                            let translate = translate_x_v + translate_y_v;
+                match self.data.light_drag_axis {
+                    LightGizmoAxis::Center => {
+                        let view = view(camera_pos, camera_direction, camera_up);
+                        let swapchain_extent = self.data.rrswapchain.swapchain_extent;
+                        let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
+                        let proj = cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
+                        let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
 
-                            self.data.rt_debug_state.light_position += translate;
+                        let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
+
+                        let light_pos = self.data.rt_debug_state.light_position;
+                        let plane_point = light_pos;
+                        let plane_normal = -camera_direction;
+
+                        unsafe {
+                            DRAG_LOG_COUNTER += 1;
+                            if DRAG_LOG_COUNTER == 1 {
+                                log!("First drag - light_pos: ({:.2}, {:.2}, {:.2}), camera_pos: ({:.2}, {:.2}, {:.2}), drag_depth: {:.2}",
+                                     light_pos.x, light_pos.y, light_pos.z,
+                                     camera_pos.x, camera_pos.y, camera_pos.z,
+                                     self.data.light_drag_depth);
+                                log!("  ray_origin: ({:.2}, {:.2}, {:.2}), ray_direction: ({:.2}, {:.2}, {:.2})",
+                                     ray_origin.x, ray_origin.y, ray_origin.z,
+                                     ray_direction.x, ray_direction.y, ray_direction.z);
+                            }
                         }
-                        LightGizmoAxis::X => {
-                            let light_pos = self.data.rt_debug_state.light_position;
-                            let axis_direction = vec3(1.0, 0.0, 0.0);
 
-                            let view = view(camera_pos, camera_direction, camera_up);
-                            let swapchain_extent = self.data.rrswapchain.swapchain_extent;
-                            let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
-                            let proj = cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
-                            let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
+                        let denom = plane_normal.dot(ray_direction);
 
-                            let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
+                        if denom.abs() < std::f32::EPSILON {
+                            log!("  -> FAILED: denom too small ({:.9})", denom);
+                        } else {
+                            let t = (plane_point - ray_origin).dot(plane_normal) / denom;
 
-                            let to_origin = light_pos - ray_origin;
-                            let projection_on_ray = to_origin.dot(ray_direction);
-                            let point_on_ray = ray_origin + ray_direction * projection_on_ray;
+                            if t < 0.0 {
+                                unsafe {
+                                    if DRAG_LOG_COUNTER == 1 {
+                                        log!("  -> FAILED: t is negative ({:.2})", t);
+                                    }
+                                }
+                            } else {
+                                let intersection = ray_origin + ray_direction * t;
 
-                            let projection_on_axis = (point_on_ray - light_pos).dot(axis_direction);
-                            let new_position = light_pos + axis_direction * projection_on_axis;
+                                let old_pos = self.data.rt_debug_state.light_position;
+                                self.data.rt_debug_state.light_position = intersection;
 
-                            self.data.rt_debug_state.light_position = new_position;
+                                unsafe {
+                                    if DRAG_LOG_COUNTER == 1 || DRAG_LOG_COUNTER % 30 == 0 {
+                                        log!("Light position updated - old: ({:.2}, {:.2}, {:.2}), new: ({:.2}, {:.2}, {:.2}), delta: ({:.2}, {:.2}, {:.2})",
+                                             old_pos.x, old_pos.y, old_pos.z,
+                                             intersection.x, intersection.y, intersection.z,
+                                             intersection.x - old_pos.x, intersection.y - old_pos.y, intersection.z - old_pos.z);
+                                    }
+                                }
+                            }
                         }
-                        LightGizmoAxis::Y => {
-                            let light_pos = self.data.rt_debug_state.light_position;
-                            let axis_direction = vec3(0.0, 1.0, 0.0);
-
-                            let view = view(camera_pos, camera_direction, camera_up);
-                            let swapchain_extent = self.data.rrswapchain.swapchain_extent;
-                            let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
-                            let proj = cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
-                            let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
-
-                            let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
-
-                            let to_origin = light_pos - ray_origin;
-                            let projection_on_ray = to_origin.dot(ray_direction);
-                            let point_on_ray = ray_origin + ray_direction * projection_on_ray;
-
-                            let projection_on_axis = (point_on_ray - light_pos).dot(axis_direction);
-                            let new_position = light_pos + axis_direction * projection_on_axis;
-
-                            self.data.rt_debug_state.light_position = new_position;
-                        }
-                        LightGizmoAxis::Z => {
-                            let light_pos = self.data.rt_debug_state.light_position;
-                            let axis_direction = vec3(0.0, 0.0, 1.0);
-
-                            let view = view(camera_pos, camera_direction, camera_up);
-                            let swapchain_extent = self.data.rrswapchain.swapchain_extent;
-                            let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
-                            let proj = cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
-                            let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
-
-                            let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
-
-                            let to_origin = light_pos - ray_origin;
-                            let projection_on_ray = to_origin.dot(ray_direction);
-                            let point_on_ray = ray_origin + ray_direction * projection_on_ray;
-
-                            let projection_on_axis = (point_on_ray - light_pos).dot(axis_direction);
-                            let new_position = light_pos + axis_direction * projection_on_axis;
-
-                            self.data.rt_debug_state.light_position = new_position;
-                        }
-                        LightGizmoAxis::None => {}
                     }
+                    LightGizmoAxis::X => {
+                        let initial_pos = vec3_from_array(self.data.light_initial_position);
+                        let drag_depth = self.data.light_drag_depth;
 
-                    self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
+                        let view = view(camera_pos, camera_direction, camera_up);
+                        let (camera_right, _camera_up_axis, _camera_forward) = get_camera_axes_from_view(view);
+
+                        let swapchain_extent = self.data.rrswapchain.swapchain_extent;
+                        let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
+
+                        let mouse_delta = mouse_pos - clicked_mouse_pos;
+                        let depth_scale = drag_depth / screen_size.x;
+                        let movement = camera_right * mouse_delta.x * depth_scale;
+
+                        let new_position = initial_pos + movement;
+                        self.data.rt_debug_state.light_position = new_position;
+                    }
+                    LightGizmoAxis::Y => {
+                        let initial_pos = vec3_from_array(self.data.light_initial_position);
+                        let drag_depth = self.data.light_drag_depth;
+
+                        let view = view(camera_pos, camera_direction, camera_up);
+                        let (_camera_right, camera_up_axis, _camera_forward) = get_camera_axes_from_view(view);
+
+                        let swapchain_extent = self.data.rrswapchain.swapchain_extent;
+                        let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
+
+                        let mouse_delta = mouse_pos - clicked_mouse_pos;
+                        let depth_scale = drag_depth / screen_size.y;
+                        let movement = camera_up_axis * -mouse_delta.y * depth_scale;
+
+                        let new_position = initial_pos + movement;
+                        self.data.rt_debug_state.light_position = new_position;
+                    }
+                    LightGizmoAxis::Z => {
+                        let initial_pos = vec3_from_array(self.data.light_initial_position);
+                        let drag_depth = self.data.light_drag_depth;
+
+                        let view = view(camera_pos, camera_direction, camera_up);
+                        let (_camera_right, _camera_up_axis, camera_forward) = get_camera_axes_from_view(view);
+
+                        let swapchain_extent = self.data.rrswapchain.swapchain_extent;
+                        let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
+
+                        let mouse_delta = mouse_pos - clicked_mouse_pos;
+                        let depth_scale = drag_depth / screen_size.y;
+                        let movement = camera_forward * -mouse_delta.y * depth_scale;
+
+                        let new_position = initial_pos + movement;
+                        self.data.rt_debug_state.light_position = new_position;
+                    }
+                    LightGizmoAxis::None => {}
                 }
             } else if !self.data.light_gizmo_selected {
                 // FIX: Use delta from previous frame (Unity-style) instead of cumulative diff
@@ -255,7 +306,6 @@ impl App {
                     camera_up = rotate * camera_up;
                     camera_direction = rotate * camera_direction;
 
-                    // Re-orthogonalize camera vectors to prevent drift and maintain stability
                     camera_direction = camera_direction.normalize();
                     let camera_right_new = camera_direction.cross(camera_up).normalize();
                     camera_up = camera_right_new.cross(camera_direction).normalize();
@@ -296,6 +346,8 @@ impl App {
                 self.data.light_gizmo_selected = false;
                 self.data.light_drag_axis = LightGizmoAxis::None;
                 self.data.light_gizmo_data.selected_axis = LightGizmoAxis::None;
+                self.data.light_just_selected = false;
+                self.data.light_initial_position = [0.0, 0.0, 0.0];
             }
         } else if gui_data.imgui_wants_mouse {
             // If ImGui wants the mouse, reset camera operation state
@@ -487,11 +539,21 @@ impl App {
             .expect("Failed to update light gizmo vertex buffer");
 
         // ビルボード用のuniform bufferを更新
+        static mut BILLBOARD_UPDATE_COUNTER: u32 = 0;
         for i in 0..self.data.billboard_descriptor_set.rrdata.len() {
             let rrdata = &mut self.data.billboard_descriptor_set.rrdata[i];
             let billboard_ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;
 
             let light_pos = self.data.rt_debug_state.light_position;
+
+            unsafe {
+                BILLBOARD_UPDATE_COUNTER += 1;
+                if BILLBOARD_UPDATE_COUNTER % 60 == 0 {
+                    log!("Billboard uniform update - light_pos: ({:.2}, {:.2}, {:.2})",
+                         light_pos.x, light_pos.y, light_pos.z);
+                }
+            }
+
             let model = Mat4::from_translation(light_pos);
 
             let ubo_billboard = UniformBufferObject {
@@ -512,18 +574,12 @@ impl App {
                 .unmap_memory(rrdata.rruniform_buffers[image_index].buffer_memory);
         }
 
-        // Gizmoの頂点をカメラの向きに応じて更新
-        // カメラのright/up/direction（forward）ベクトルから直接Gizmo軸を計算
-        let camera_right = camera_direction.cross(camera_up).normalize();
+        let (camera_right, camera_up_gizmo, camera_forward) = get_camera_axes_from_view(view);
 
-        // カメラの向き（forward）は camera_direction
-        // X軸（赤）= カメラのright
-        // Y軸（緑）= カメラのup
-        // Z軸（青）= カメラのdirection（forward）
         let gizmo_rotation = cgmath::Matrix3::from_cols(
-            camera_right,      // X軸方向
-            camera_up,         // Y軸方向
-            camera_direction,  // Z軸方向
+            camera_right,
+            camera_up_gizmo,
+            camera_forward,
         );
 
         // Gizmoの頂点を更新

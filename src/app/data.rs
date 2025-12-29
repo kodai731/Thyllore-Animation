@@ -29,6 +29,9 @@ pub struct GUIData {
     pub load_status: String,
     pub take_screenshot: bool,
     pub imgui_wants_mouse: bool,
+    pub show_click_debug: bool,
+    pub billboard_click_rect: Option<[f32; 4]>,
+    pub debug_shadow_info: bool,
 }
 
 impl Default for GUIData {
@@ -45,6 +48,9 @@ impl Default for GUIData {
             load_status: String::from("No model loaded"),
             take_screenshot: false,
             imgui_wants_mouse: false,
+            show_click_debug: false,
+            billboard_click_rect: None,
+            debug_shadow_info: false,
         }
     }
 }
@@ -65,7 +71,14 @@ pub struct AppData {
     pub grid_index_buffer: RRIndexBuffer,
     pub gizmo_pipeline: RRPipeline,
     pub gizmo_descriptor_set: RRDescriptorSet,
-    pub gizmo_data: GizmoData,
+    pub gizmo_data: GridGizmoData,
+    pub light_gizmo_data: LightGizmoData,
+    pub light_gizmo_selected: bool,
+    pub light_drag_axis: LightGizmoAxis,
+    pub light_just_selected: bool,
+    pub light_initial_position: [f32; 3],
+    pub billboard_pipeline: RRPipeline,
+    pub billboard_descriptor_set: RRDescriptorSet,
     pub command_pool: vk::CommandPool,
     pub image_available_semaphores: Vec<vk::Semaphore>,
     pub render_finish_semaphores: Vec<vk::Semaphore>,

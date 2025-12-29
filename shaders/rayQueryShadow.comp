@@ -51,7 +51,7 @@ void main() {
     lightDir = normalize(lightDir);
 
     // Offset ray origin slightly along normal to avoid self-intersection
-    const float normalOffset = 0.001;
+    const float normalOffset = 0.5;
     vec3 rayOrigin = worldPosition + worldNormal * normalOffset;
 
     // Setup ray query
@@ -62,7 +62,7 @@ void main() {
         gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT,
         0xFF,  // Cull mask
         rayOrigin,
-        0.0,   // Tmin
+        0.01,   // Tmin
         lightDir,
         lightDistance  // Tmax (only check up to light distance)
     );

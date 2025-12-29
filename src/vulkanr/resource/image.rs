@@ -47,6 +47,53 @@ impl RRImage {
         println!("created image");
         rrimage
     }
+
+    pub unsafe fn new_from_file(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        rrcommand_pool: &RRCommandPool,
+        file_path: &std::path::Path,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut rrimage = RRImage::default();
+        let (image, image_memory, mip_levels) =
+            create_texture_image_from_file(instance, rrdevice, rrcommand_pool, file_path)?;
+
+        let image_view = create_image_view(
+            rrdevice,
+            image,
+            vk::Format::R8G8B8A8_SRGB,
+            vk::ImageAspectFlags::COLOR,
+            mip_levels,
+        )?;
+
+        rrimage.image = image;
+        rrimage.image_memory = image_memory;
+        rrimage.image_view = image_view;
+
+        let sampler = create_texture_sampler(&rrdevice, mip_levels)?;
+        rrimage.sampler = sampler;
+
+        Ok(rrimage)
+    }
+
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        if self.sampler != vk::Sampler::null() {
+            rrdevice.device.destroy_sampler(self.sampler, None);
+            self.sampler = vk::Sampler::null();
+        }
+        if self.image_view != vk::ImageView::null() {
+            rrdevice.device.destroy_image_view(self.image_view, None);
+            self.image_view = vk::ImageView::null();
+        }
+        if self.image != vk::Image::null() {
+            rrdevice.device.destroy_image(self.image, None);
+            self.image = vk::Image::null();
+        }
+        if self.image_memory != vk::DeviceMemory::null() {
+            rrdevice.device.free_memory(self.image_memory, None);
+            self.image_memory = vk::DeviceMemory::null();
+        }
+    }
 }
 
 pub unsafe fn create_texture_image(
@@ -85,6 +132,134 @@ pub unsafe fn create_texture_image(
             .device
             .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())?;
     memcpy(pixels.as_ptr(), memory.cast(), pixels.len());
+    rrdevice.device.unmap_memory(staging_buffer_memory);
+
+    let (texture_image, texture_image_memory) = create_image(
+        instance,
+        rrdevice,
+        width,
+        height,
+        mip_levels,
+        vk::SampleCountFlags::_1,
+        vk::Format::R8G8B8A8_SRGB,
+        vk::ImageTiling::OPTIMAL,
+        vk::ImageUsageFlags::SAMPLED
+            | vk::ImageUsageFlags::TRANSFER_DST
+            | vk::ImageUsageFlags::TRANSFER_SRC,
+        vk::MemoryPropertyFlags::DEVICE_LOCAL,
+    )?;
+
+    transition_image_layout(
+        rrdevice,
+        rrdevice.graphics_queue,
+        rrcommand_pool.command_pool,
+        texture_image,
+        vk::Format::R8G8B8A8_SRGB,
+        vk::ImageLayout::UNDEFINED,
+        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+        mip_levels,
+    )?;
+    copy_buffer_to_image(
+        rrdevice,
+        rrcommand_pool,
+        staging_buffer,
+        texture_image,
+        width,
+        height,
+    )?;
+
+    generate_mipmaps(
+        instance,
+        rrdevice,
+        rrcommand_pool,
+        texture_image,
+        vk::Format::R8G8B8A8_SRGB,
+        width,
+        height,
+        mip_levels,
+    )?;
+
+    rrdevice.device.destroy_buffer(staging_buffer, None);
+    rrdevice.device.free_memory(staging_buffer_memory, None);
+
+    Ok((texture_image, texture_image_memory, mip_levels))
+}
+
+pub unsafe fn create_texture_image_from_file(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+    rrcommand_pool: &RRCommandPool,
+    file_path: &std::path::Path,
+) -> Result<(vk::Image, vk::DeviceMemory, u32)> {
+    let image = File::open(file_path)?;
+    let decoder = png::Decoder::new(image);
+    let mut reader = decoder.read_info()?;
+
+    let info = reader.info();
+    let (width, height) = info.size();
+    let color_type = info.color_type;
+
+    println!("Loading texture: {:?}, size: {}x{}, color_type: {:?}",
+             file_path, width, height, color_type);
+
+    let mut pixels = vec![0; reader.info().raw_bytes()];
+    reader.next_frame(&mut pixels)?;
+
+    let rgba_pixels = match color_type {
+        png::ColorType::Rgba => pixels,
+        png::ColorType::Rgb => {
+            let mut rgba = Vec::with_capacity(width as usize * height as usize * 4);
+            for chunk in pixels.chunks(3) {
+                rgba.push(chunk[0]);
+                rgba.push(chunk[1]);
+                rgba.push(chunk[2]);
+                rgba.push(255);
+            }
+            rgba
+        }
+        png::ColorType::Grayscale => {
+            let mut rgba = Vec::with_capacity(width as usize * height as usize * 4);
+            for &gray in pixels.iter() {
+                rgba.push(gray);
+                rgba.push(gray);
+                rgba.push(gray);
+                rgba.push(255);
+            }
+            rgba
+        }
+        png::ColorType::GrayscaleAlpha => {
+            let mut rgba = Vec::with_capacity(width as usize * height as usize * 4);
+            for chunk in pixels.chunks(2) {
+                let gray = chunk[0];
+                let alpha = chunk[1];
+                rgba.push(gray);
+                rgba.push(gray);
+                rgba.push(gray);
+                rgba.push(alpha);
+            }
+            rgba
+        }
+        _ => {
+            return Err(anyhow!("Unsupported color type: {:?}", color_type).into());
+        }
+    };
+
+    let size = (rgba_pixels.len()) as u64;
+    let mip_levels = (width.max(height) as f32).log2().floor() as u32 + 1;
+
+    let (staging_buffer, staging_buffer_memory) = create_buffer(
+        instance,
+        rrdevice,
+        size,
+        vk::BufferUsageFlags::TRANSFER_SRC,
+        vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
+    )?;
+
+    let memory =
+        rrdevice
+            .device
+            .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())?;
+    memcpy(rgba_pixels.as_ptr(), memory.cast(), rgba_pixels.len());
     rrdevice.device.unmap_memory(staging_buffer_memory);
 
     let (texture_image, texture_image_memory) = create_image(

@@ -41,120 +41,200 @@ impl App {
 
         let mouse_pos = Vector2::new(mouse_pos[0], mouse_pos[1]);
 
-        // Unity-style camera rotation (Y-down coordinate system):
-        // - Horizontal rotation: Always around world Y-down axis (0, -1, 0) - prevents gimbal lock
-        // - Vertical rotation: Around camera's local right axis
-        let world_y_down = vec3(0.0, -1.0, 0.0);  // Y-down world axis (fixed)
+        let world_y_down = vec3(0.0, -1.0, 0.0);
         let camera_right = camera_direction.cross(camera_up).normalize();
 
-        // For pan operation, use view-based axes
         let last_view = view(camera_pos, camera_direction, camera_up);
-        let base_x_4 = last_view * vec4(1.0, 0.0, 0.0, 0.0);
-        let base_y_4 = last_view * vec4(0.0, -1.0, 0.0, 0.0);
-        let base_x = vec3(base_x_4.x, base_x_4.y, base_x_4.z);
-        let base_y = vec3(base_y_4.x, base_y_4.y, base_y_4.z);
+        let base_x = camera_right;
+        let base_y = camera_up;
 
         // Camera rotation logging counter
         static mut ROTATION_LOG_COUNTER: u32 = 0;
 
         // Only process camera rotation if ImGui doesn't want the mouse
         if !gui_data.imgui_wants_mouse && (gui_data.is_left_clicked || self.data.is_left_clicked) {
+            self.data.light_just_selected = false;
+
             // first clicked
             if !self.data.is_left_clicked {
                 self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
                 self.data.is_left_clicked = true;
+
+                let view = view(camera_pos, camera_direction, camera_up);
+                let swapchain_extent = self.data.rrswapchain.swapchain_extent;
+                let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
+                let proj = cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
+                let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
+
+                let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
+
+                let light_pos = self.data.rt_debug_state.light_position;
+                let distance = (light_pos - camera_pos).magnitude();
+                let scale_factor = distance * 0.03;
+
+                let billboard_clicked = if let Some(rect) = gui_data.billboard_click_rect {
+                    is_point_in_rect(mouse_pos, rect)
+                } else {
+                    false
+                };
+
+                let center_distance = ray_to_point_distance(ray_origin, ray_direction, light_pos);
+
+                let x_axis_start = light_pos;
+                let x_axis_end = light_pos + vec3(1.0 * scale_factor, 0.0, 0.0);
+                let y_axis_start = light_pos;
+                let y_axis_end = light_pos + vec3(0.0, 1.0 * scale_factor, 0.0);
+                let z_axis_start = light_pos;
+                let z_axis_end = light_pos + vec3(0.0, 0.0, 1.0 * scale_factor);
+
+                let x_distance = ray_to_line_segment_distance(ray_origin, ray_direction, x_axis_start, x_axis_end);
+                let y_distance = ray_to_line_segment_distance(ray_origin, ray_direction, y_axis_start, y_axis_end);
+                let z_distance = ray_to_line_segment_distance(ray_origin, ray_direction, z_axis_start, z_axis_end);
+
+                let threshold = 0.05 * scale_factor;
+
+                let mut min_distance = center_distance;
+                let mut selected_axis = LightGizmoAxis::None;
+
+                if billboard_clicked {
+                    selected_axis = LightGizmoAxis::Center;
+                    min_distance = 0.0;
+                } else {
+                    if center_distance < threshold {
+                        selected_axis = LightGizmoAxis::Center;
+                    }
+
+                    if x_distance < threshold && x_distance < min_distance {
+                        min_distance = x_distance;
+                        selected_axis = LightGizmoAxis::X;
+                    }
+
+                    if y_distance < threshold && y_distance < min_distance {
+                        min_distance = y_distance;
+                        selected_axis = LightGizmoAxis::Y;
+                    }
+
+                    if z_distance < threshold && z_distance < min_distance {
+                        min_distance = z_distance;
+                        selected_axis = LightGizmoAxis::Z;
+                    }
+                }
+
+                if selected_axis != LightGizmoAxis::None {
+                    self.data.light_gizmo_selected = true;
+                    self.data.light_drag_axis = selected_axis;
+                    self.data.light_gizmo_data.selected_axis = selected_axis;
+
+                    let light_pos = self.data.rt_debug_state.light_position;
+                    self.data.light_initial_position = [light_pos.x, light_pos.y, light_pos.z];
+
+                    let drag_depth = (light_pos - camera_pos).magnitude();
+                    log!("Light gizmo selected - axis: {:?}, depth: {:.2}", selected_axis, drag_depth);
+
+                    self.data.light_just_selected = true;
+                }
             }
             let clicked_mouse_pos = vec2_from_array(self.data.clicked_mouse_pos);
 
-            // FIX: Use delta from previous frame (Unity-style) instead of cumulative diff
-            let diff = mouse_pos - clicked_mouse_pos;
-            let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
-            gui_data.monitor_value = distance;
-            if 0.001 < distance {
-                let mut rotate_x = Mat3::identity();
-                let mut rotate_y = Mat3::identity();
-                let theta_x = -diff.x * 0.005;
-                let theta_y = diff.y * 0.005;  // Inverted for intuitive up/down rotation
+            if self.data.light_gizmo_selected && gui_data.is_left_clicked && !self.data.light_just_selected {
+                self.update_light_gizmo_position(mouse_pos, camera_pos, camera_direction);
+            } else if !self.data.light_gizmo_selected {
+                // FIX: Use delta from previous frame (Unity-style) instead of cumulative diff
+                let diff = mouse_pos - clicked_mouse_pos;
+                let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
+                gui_data.monitor_value = distance;
+                if 0.001 < distance {
+                    let mut rotate_x = Mat3::identity();
+                    let mut rotate_y = Mat3::identity();
+                    let theta_x = -diff.x * 0.005;
+                    let theta_y = diff.y * 0.005;  // Inverted for intuitive up/down rotation
 
-                // Horizontal rotation: Around world Y-down axis (Unity-style, gimbal-lock free)
-                let _ = rodrigues(
-                    &mut rotate_x,
-                    Rad(theta_x).cos(),
-                    Rad(theta_x).sin(),
-                    &world_y_down,
-                );
-                // Vertical rotation: Around camera's local right axis
-                let _ = rodrigues(
-                    &mut rotate_y,
-                    Rad(theta_y).cos(),
-                    Rad(theta_y).sin(),
-                    &camera_right,
-                );
+                    // Horizontal rotation: Around world Y-down axis (Unity-style, gimbal-lock free)
+                    let _ = rodrigues(
+                        &mut rotate_x,
+                        Rad(theta_x).cos(),
+                        Rad(theta_x).sin(),
+                        &world_y_down,
+                    );
+                    // Vertical rotation: Around camera's local right axis
+                    let _ = rodrigues(
+                        &mut rotate_y,
+                        Rad(theta_y).cos(),
+                        Rad(theta_y).sin(),
+                        &camera_right,
+                    );
 
-                // Log rotation info every 30 frames
-                unsafe {
-                    ROTATION_LOG_COUNTER += 1;
-                    if ROTATION_LOG_COUNTER % 30 == 0 {
-                        log!("=== Camera Rotation Debug (frame {}) ===", ROTATION_LOG_COUNTER);
-                        log!("  Mouse diff: ({:.3}, {:.3}), theta: ({:.3}, {:.3})",
-                             diff.x, diff.y, theta_x, theta_y);
-                        log!("  Before rotation:");
-                        log!("    direction: ({:.3}, {:.3}, {:.3})",
-                             camera_direction.x, camera_direction.y, camera_direction.z);
-                        log!("    up: ({:.3}, {:.3}, {:.3})",
-                             camera_up.x, camera_up.y, camera_up.z);
-                        log!("    right: ({:.3}, {:.3}, {:.3})",
-                             camera_right.x, camera_right.y, camera_right.z);
-                        log!("  Rotation axes:");
-                        log!("    horizontal (world Y-down): ({:.3}, {:.3}, {:.3})",
-                             world_y_down.x, world_y_down.y, world_y_down.z);
-                        log!("    vertical (camera right): ({:.3}, {:.3}, {:.3})",
-                             camera_right.x, camera_right.y, camera_right.z);
+                    // Log rotation info every 30 frames
+                    unsafe {
+                        ROTATION_LOG_COUNTER += 1;
+                        if ROTATION_LOG_COUNTER % 30 == 0 {
+                            log!("=== Camera Rotation Debug (frame {}) ===", ROTATION_LOG_COUNTER);
+                            log!("  Mouse diff: ({:.3}, {:.3}), theta: ({:.3}, {:.3})",
+                                 diff.x, diff.y, theta_x, theta_y);
+                            log!("  Before rotation:");
+                            log!("    direction: ({:.3}, {:.3}, {:.3})",
+                                 camera_direction.x, camera_direction.y, camera_direction.z);
+                            log!("    up: ({:.3}, {:.3}, {:.3})",
+                                 camera_up.x, camera_up.y, camera_up.z);
+                            log!("    right: ({:.3}, {:.3}, {:.3})",
+                                 camera_right.x, camera_right.y, camera_right.z);
+                            log!("  Rotation axes:");
+                            log!("    horizontal (world Y-down): ({:.3}, {:.3}, {:.3})",
+                                 world_y_down.x, world_y_down.y, world_y_down.z);
+                            log!("    vertical (camera right): ({:.3}, {:.3}, {:.3})",
+                                 camera_right.x, camera_right.y, camera_right.z);
+                        }
                     }
-                }
 
-                let rotate = rotate_y * rotate_x;
-                camera_up = rotate * camera_up;
-                camera_direction = rotate * camera_direction;
+                    let rotate = rotate_y * rotate_x;
+                    camera_up = rotate * camera_up;
+                    camera_direction = rotate * camera_direction;
 
-                // Re-orthogonalize camera vectors to prevent drift and maintain stability
-                camera_direction = camera_direction.normalize();
-                let camera_right_new = camera_direction.cross(camera_up).normalize();
-                camera_up = camera_right_new.cross(camera_direction).normalize();
+                    camera_direction = camera_direction.normalize();
+                    let camera_right_new = camera_direction.cross(camera_up).normalize();
+                    camera_up = camera_right_new.cross(camera_direction).normalize();
 
-                // Log after rotation
-                unsafe {
-                    if ROTATION_LOG_COUNTER % 30 == 0 {
-                        log!("  After rotation & re-orthogonalization:");
-                        log!("    direction: ({:.3}, {:.3}, {:.3})",
-                             camera_direction.x, camera_direction.y, camera_direction.z);
-                        log!("    up: ({:.3}, {:.3}, {:.3})",
-                             camera_up.x, camera_up.y, camera_up.z);
-                        log!("    right: ({:.3}, {:.3}, {:.3})",
-                             camera_right_new.x, camera_right_new.y, camera_right_new.z);
+                    // Log after rotation
+                    unsafe {
+                        if ROTATION_LOG_COUNTER % 30 == 0 {
+                            log!("  After rotation & re-orthogonalization:");
+                            log!("    direction: ({:.3}, {:.3}, {:.3})",
+                                 camera_direction.x, camera_direction.y, camera_direction.z);
+                            log!("    up: ({:.3}, {:.3}, {:.3})",
+                                 camera_up.x, camera_up.y, camera_up.z);
+                            log!("    right: ({:.3}, {:.3}, {:.3})",
+                                 camera_right_new.x, camera_right_new.y, camera_right_new.z);
 
-                        // Check orthogonality
-                        let dot_dir_up = camera_direction.dot(camera_up);
-                        let dot_dir_right = camera_direction.dot(camera_right_new);
-                        let dot_up_right = camera_up.dot(camera_right_new);
-                        log!("  Orthogonality check (should be ~0):");
-                        log!("    direction·up: {:.6}", dot_dir_up);
-                        log!("    direction·right: {:.6}", dot_dir_right);
-                        log!("    up·right: {:.6}", dot_up_right);
+                            // Check orthogonality
+                            let dot_dir_up = camera_direction.dot(camera_up);
+                            let dot_dir_right = camera_direction.dot(camera_right_new);
+                            let dot_up_right = camera_up.dot(camera_right_new);
+                            log!("  Orthogonality check (should be ~0):");
+                            log!("    direction·up: {:.6}", dot_dir_up);
+                            log!("    direction·right: {:.6}", dot_dir_right);
+                            log!("    up·right: {:.6}", dot_up_right);
+                        }
                     }
+
+                    // Update camera state every frame (not just on release)
+                    self.data.camera_direction = array3_from_vec(camera_direction);
+                    self.data.camera_up = array3_from_vec(camera_up);
+
+                    // Update previous mouse position every frame for delta calculation
+                    self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
                 }
-
-                // Update camera state every frame (not just on release)
-                self.data.camera_direction = array3_from_vec(camera_direction);
-                self.data.camera_up = array3_from_vec(camera_up);
-
-                // Update previous mouse position every frame for delta calculation
-                self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
             }
 
             if !gui_data.is_left_clicked {
-                // left button released
+                if self.data.is_left_clicked {
+                    log!("Mouse released - resetting light gizmo state");
+                }
                 self.data.is_left_clicked = false;
+                self.data.light_gizmo_selected = false;
+                self.data.light_drag_axis = LightGizmoAxis::None;
+                self.data.light_gizmo_data.selected_axis = LightGizmoAxis::None;
+                self.data.light_just_selected = false;
+                self.data.light_initial_position = [0.0, 0.0, 0.0];
             }
         } else if gui_data.imgui_wants_mouse {
             // If ImGui wants the mouse, reset camera operation state
@@ -175,7 +255,7 @@ impl App {
             let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
             gui_data.monitor_value = distance;
             if 0.001 < distance {
-                let translate_x_v = base_x * -diff.x;
+                let translate_x_v = base_x * diff.x;
                 let translate_y_v = base_y * diff.y;
                 camera_pos += translate_x_v + translate_y_v;
 
@@ -197,7 +277,9 @@ impl App {
 
         // Only process mouse wheel zoom if ImGui doesn't want the mouse
         if !gui_data.imgui_wants_mouse && mouse_wheel != 0.0 {
-            let diff_view = camera_direction * mouse_wheel * -5.0;
+            let distance_to_origin = camera_pos.magnitude();
+            let zoom_speed = (distance_to_origin * 0.1).max(1.0).min(50.0);
+            let diff_view = camera_direction * mouse_wheel * zoom_speed * -1.0;
             camera_pos += diff_view;
             self.data.camera_pos = array3_from_vec(camera_pos);
         }
@@ -241,6 +323,43 @@ impl App {
             near_plane,
             far_plane,
         );
+
+        let swapchain_extent = self.data.rrswapchain.swapchain_extent;
+        let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
+        let light_pos = self.data.rt_debug_state.light_position;
+        let billboard_world_size = 0.5;
+        let billboard_ndc_scale = 0.1;
+
+        gui_data.billboard_click_rect = calculate_billboard_click_rect(
+            light_pos,
+            screen_size,
+            view,
+            proj,
+            billboard_world_size,
+            billboard_ndc_scale,
+        );
+
+        if gui_data.debug_shadow_info {
+            log!("=== Shadow Debug Info ===");
+            log!("Light position: ({:.2}, {:.2}, {:.2})", light_pos.x, light_pos.y, light_pos.z);
+            log!("Camera position: ({:.2}, {:.2}, {:.2})", camera_pos.x, camera_pos.y, camera_pos.z);
+            log!("Camera direction: ({:.3}, {:.3}, {:.3})", camera_direction.x, camera_direction.y, camera_direction.z);
+            log!("Shadow strength: {:.2}", self.data.rt_debug_state.shadow_strength);
+            log!("Debug view mode: {:?}", self.data.rt_debug_state.debug_view_mode);
+            log!("Screen size: {:.0} x {:.0}", screen_size.x, screen_size.y);
+            log!("Near plane: {:.2}, Far plane: {:.2}", self.data.near_plane, self.data.far_plane);
+
+            let light_distance = (light_pos - camera_pos).magnitude();
+            log!("Distance camera to light: {:.2}", light_distance);
+
+            if let Some(screen_pos) = world_to_screen(light_pos, screen_size, view, proj) {
+                log!("Light screen position: ({:.1}, {:.1})", screen_pos.x, screen_pos.y);
+            }
+
+            log!("Suggestion: Switch to 'Shadow Mask' debug view to see shadow coverage");
+            log!("======================");
+            gui_data.debug_shadow_info = false;
+        }
 
         for i in 0..self.data.model_descriptor_set.rrdata.len() {
             let rrdata = &mut self.data.model_descriptor_set.rrdata[i];
@@ -313,10 +432,20 @@ impl App {
         for i in 0..self.data.gizmo_descriptor_set.rrdata.len() {
             let rrdata = &mut self.data.gizmo_descriptor_set.rrdata[i];
             let gizmo_ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;
+
+            let model = if i == 0 {
+                Mat4::identity()
+            } else {
+                let light_pos = self.data.rt_debug_state.light_position;
+                let distance = (light_pos - camera_pos).magnitude();
+                let scale_factor = distance * 0.03;
+                Mat4::from_translation(light_pos) * Mat4::from_scale(scale_factor)
+            };
+
             let ubo_gizmo = UniformBufferObject {
-                model: Mat4::identity(),
-                view: view,
-                proj: proj,
+                model,
+                view,
+                proj,
             };
             let memory_gizmo = self.rrdevice.device.map_memory(
                 gizmo_ubo_memory,
@@ -330,18 +459,53 @@ impl App {
                 .unmap_memory(rrdata.rruniform_buffers[image_index].buffer_memory);
         }
 
-        // Gizmoの頂点をカメラの向きに応じて更新
-        // カメラのright/up/direction（forward）ベクトルから直接Gizmo軸を計算
-        let camera_right = camera_direction.cross(camera_up).normalize();
+        self.data.light_gizmo_data.update_position(self.data.rt_debug_state.light_position);
+        self.data.light_gizmo_data.update_selection_color();
+        self.data.light_gizmo_data.update_vertex_buffer(&self.rrdevice)
+            .expect("Failed to update light gizmo vertex buffer");
 
-        // カメラの向き（forward）は camera_direction
-        // X軸（赤）= カメラのright
-        // Y軸（緑）= カメラのup
-        // Z軸（青）= カメラのdirection（forward）
+        // ビルボード用のuniform bufferを更新
+        static mut BILLBOARD_UPDATE_COUNTER: u32 = 0;
+        for i in 0..self.data.billboard_descriptor_set.rrdata.len() {
+            let rrdata = &mut self.data.billboard_descriptor_set.rrdata[i];
+            let billboard_ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;
+
+            let light_pos = self.data.rt_debug_state.light_position;
+
+            unsafe {
+                BILLBOARD_UPDATE_COUNTER += 1;
+                if BILLBOARD_UPDATE_COUNTER % 60 == 0 {
+                    log!("Billboard uniform update - light_pos: ({:.2}, {:.2}, {:.2})",
+                         light_pos.x, light_pos.y, light_pos.z);
+                }
+            }
+
+            let model = Mat4::from_translation(light_pos);
+
+            let ubo_billboard = UniformBufferObject {
+                model,
+                view,
+                proj,
+            };
+
+            let memory_billboard = self.rrdevice.device.map_memory(
+                billboard_ubo_memory,
+                0,
+                size_of::<UniformBufferObject>() as u64,
+                vk::MemoryMapFlags::empty(),
+            )?;
+            memcpy(&ubo_billboard, memory_billboard.cast(), 1);
+            self.rrdevice
+                .device
+                .unmap_memory(rrdata.rruniform_buffers[image_index].buffer_memory);
+        }
+
+        let (camera_right, camera_up_gizmo, camera_forward) = get_camera_axes_from_view(view);
+
         let gizmo_rotation = cgmath::Matrix3::from_cols(
-            camera_right,      // X軸方向
-            camera_up,         // Y軸方向
-            camera_direction,  // Z軸方向
+            camera_right,
+            camera_up_gizmo,
+            camera_forward,
         );
 
         // Gizmoの頂点を更新
@@ -673,5 +837,44 @@ impl App {
         }
 
         Ok(())
+    }
+
+    fn update_light_gizmo_position(
+        &mut self,
+        mouse_pos: Vector2<f32>,
+        camera_pos: Vector3<f32>,
+        camera_direction: Vector3<f32>,
+    ) {
+        unsafe {
+            let view = view(
+                camera_pos,
+                camera_direction,
+                vec3_from_array(self.data.camera_up),
+            );
+            let swapchain_extent = self.data.rrswapchain.swapchain_extent;
+            let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
+            let proj = cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
+            let screen_size = Vector2::new(
+                swapchain_extent.width as f32,
+                swapchain_extent.height as f32,
+            );
+
+            let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
+
+            let light_pos = self.data.rt_debug_state.light_position;
+            let plane_point = light_pos;
+            let plane_normal = -camera_direction;
+
+            let denom = plane_normal.dot(ray_direction);
+
+            if denom.abs() > std::f32::EPSILON {
+                let t = (plane_point - ray_origin).dot(plane_normal) / denom;
+
+                if t >= 0.0 {
+                    let intersection = ray_origin + ray_direction * t;
+                    self.data.rt_debug_state.light_position = intersection;
+                }
+            }
+        }
     }
 }

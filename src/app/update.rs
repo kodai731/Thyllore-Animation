@@ -45,10 +45,8 @@ impl App {
         let camera_right = camera_direction.cross(camera_up).normalize();
 
         let last_view = view(camera_pos, camera_direction, camera_up);
-        let base_x_4 = last_view * vec4(1.0, 0.0, 0.0, 0.0);
-        let base_y_4 = last_view * vec4(0.0, -1.0, 0.0, 0.0);
-        let base_x = vec3(base_x_4.x, base_x_4.y, base_x_4.z);
-        let base_y = vec3(base_y_4.x, base_y_4.y, base_y_4.z);
+        let base_x = camera_right;
+        let base_y = camera_up;
 
         // Camera rotation logging counter
         static mut ROTATION_LOG_COUNTER: u32 = 0;
@@ -257,7 +255,7 @@ impl App {
             let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
             gui_data.monitor_value = distance;
             if 0.001 < distance {
-                let translate_x_v = base_x * -diff.x;
+                let translate_x_v = base_x * diff.x;
                 let translate_y_v = base_y * diff.y;
                 camera_pos += translate_x_v + translate_y_v;
 
@@ -341,25 +339,26 @@ impl App {
             billboard_ndc_scale,
         );
 
-        static mut DEBUG_LOG_COUNTER: u32 = 0;
-        unsafe {
-            DEBUG_LOG_COUNTER += 1;
-            if DEBUG_LOG_COUNTER == 60 {
-                if let Some(rect) = gui_data.billboard_click_rect {
-                    log!("=== Billboard Debug ===");
-                    log!("Light position: ({:.2}, {:.2}, {:.2})", light_pos.x, light_pos.y, light_pos.z);
-                    log!("Screen size: {:.1} x {:.1}", screen_size.x, screen_size.y);
-                    if let Some(screen_pos) = world_to_screen(light_pos, screen_size, view, proj) {
-                        log!("Billboard screen pos: ({:.1}, {:.1})", screen_pos.x, screen_pos.y);
-                    }
-                    log!("Billboard rect: [{:.1}, {:.1}] to [{:.1}, {:.1}]", rect[0], rect[1], rect[2], rect[3]);
-                    let center_x = (rect[0] + rect[2]) / 2.0;
-                    let center_y = (rect[1] + rect[3]) / 2.0;
-                    let width = rect[2] - rect[0];
-                    let height = rect[3] - rect[1];
-                    log!("Rect center: ({:.1}, {:.1}), size: {:.1} x {:.1}", center_x, center_y, width, height);
-                }
+        if gui_data.debug_shadow_info {
+            log!("=== Shadow Debug Info ===");
+            log!("Light position: ({:.2}, {:.2}, {:.2})", light_pos.x, light_pos.y, light_pos.z);
+            log!("Camera position: ({:.2}, {:.2}, {:.2})", camera_pos.x, camera_pos.y, camera_pos.z);
+            log!("Camera direction: ({:.3}, {:.3}, {:.3})", camera_direction.x, camera_direction.y, camera_direction.z);
+            log!("Shadow strength: {:.2}", self.data.rt_debug_state.shadow_strength);
+            log!("Debug view mode: {:?}", self.data.rt_debug_state.debug_view_mode);
+            log!("Screen size: {:.0} x {:.0}", screen_size.x, screen_size.y);
+            log!("Near plane: {:.2}, Far plane: {:.2}", self.data.near_plane, self.data.far_plane);
+
+            let light_distance = (light_pos - camera_pos).magnitude();
+            log!("Distance camera to light: {:.2}", light_distance);
+
+            if let Some(screen_pos) = world_to_screen(light_pos, screen_size, view, proj) {
+                log!("Light screen position: ({:.1}, {:.1})", screen_pos.x, screen_pos.y);
             }
+
+            log!("Suggestion: Switch to 'Shadow Mask' debug view to see shadow coverage");
+            log!("======================");
+            gui_data.debug_shadow_info = false;
         }
 
         for i in 0..self.data.model_descriptor_set.rrdata.len() {

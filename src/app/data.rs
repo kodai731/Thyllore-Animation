@@ -31,6 +31,7 @@ pub struct GUIData {
     pub imgui_wants_mouse: bool,
     pub show_click_debug: bool,
     pub billboard_click_rect: Option<[f32; 4]>,
+    pub debug_shadow_info: bool,
 }
 
 impl Default for GUIData {
@@ -49,6 +50,7 @@ impl Default for GUIData {
             imgui_wants_mouse: false,
             show_click_debug: false,
             billboard_click_rect: None,
+            debug_shadow_info: false,
         }
     }
 }

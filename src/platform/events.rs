@@ -209,6 +209,9 @@ impl System {
 
                                         ui.text("Debug Info:");
                                         ui.checkbox("Show Click Debug", &mut gui_data.show_click_debug);
+                                        if ui.button("Debug Shadow Info") {
+                                            gui_data.debug_shadow_info = true;
+                                        }
                                         ui.text(format!(
                                             "Mouse Position: ({:.1},{:.1})",
                                             gui_data.mouse_pos[0], gui_data.mouse_pos[1]

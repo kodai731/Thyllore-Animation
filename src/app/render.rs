@@ -120,6 +120,9 @@ impl App {
 
                         // 頂点バッファを更新
                         Self::update_fbx_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
+
+                        // Acceleration Structureを再構築（アニメーション後の頂点座標で）
+                        Self::build_acceleration_structures(&self.instance, &self.rrdevice, &mut self.data)?;
                     } else {
                         // Static pose (duration == 0): keep time at 0, no need to update every frame
                         // Initial pose was already applied in load_model_from_path

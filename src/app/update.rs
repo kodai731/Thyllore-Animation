@@ -74,11 +74,8 @@ impl App {
                 let distance = (light_pos - camera_pos).magnitude();
                 let scale_factor = distance * 0.03;
 
-                let billboard_screen_pos = world_to_screen(light_pos, screen_size, view, proj);
-                let billboard_clicked = if let Some(billboard_pos) = billboard_screen_pos {
-                    let screen_distance = (billboard_pos - mouse_pos).magnitude();
-                    let click_radius = 150.0;
-                    screen_distance < click_radius
+                let billboard_clicked = if let Some(rect) = gui_data.billboard_click_rect {
+                    is_point_in_rect(mouse_pos, rect)
                 } else {
                     false
                 };
@@ -328,6 +325,42 @@ impl App {
             near_plane,
             far_plane,
         );
+
+        let swapchain_extent = self.data.rrswapchain.swapchain_extent;
+        let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
+        let light_pos = self.data.rt_debug_state.light_position;
+        let billboard_world_size = 0.5;
+        let billboard_ndc_scale = 0.1;
+
+        gui_data.billboard_click_rect = calculate_billboard_click_rect(
+            light_pos,
+            screen_size,
+            view,
+            proj,
+            billboard_world_size,
+            billboard_ndc_scale,
+        );
+
+        static mut DEBUG_LOG_COUNTER: u32 = 0;
+        unsafe {
+            DEBUG_LOG_COUNTER += 1;
+            if DEBUG_LOG_COUNTER == 60 {
+                if let Some(rect) = gui_data.billboard_click_rect {
+                    log!("=== Billboard Debug ===");
+                    log!("Light position: ({:.2}, {:.2}, {:.2})", light_pos.x, light_pos.y, light_pos.z);
+                    log!("Screen size: {:.1} x {:.1}", screen_size.x, screen_size.y);
+                    if let Some(screen_pos) = world_to_screen(light_pos, screen_size, view, proj) {
+                        log!("Billboard screen pos: ({:.1}, {:.1})", screen_pos.x, screen_pos.y);
+                    }
+                    log!("Billboard rect: [{:.1}, {:.1}] to [{:.1}, {:.1}]", rect[0], rect[1], rect[2], rect[3]);
+                    let center_x = (rect[0] + rect[2]) / 2.0;
+                    let center_y = (rect[1] + rect[3]) / 2.0;
+                    let width = rect[2] - rect[0];
+                    let height = rect[3] - rect[1];
+                    log!("Rect center: ({:.1}, {:.1}), size: {:.1} x {:.1}", center_x, center_y, width, height);
+                }
+            }
+        }
 
         for i in 0..self.data.model_descriptor_set.rrdata.len() {
             let rrdata = &mut self.data.model_descriptor_set.rrdata[i];

@@ -29,6 +29,8 @@ pub struct GUIData {
     pub load_status: String,
     pub take_screenshot: bool,
     pub imgui_wants_mouse: bool,
+    pub show_click_debug: bool,
+    pub billboard_click_rect: Option<[f32; 4]>,
 }
 
 impl Default for GUIData {
@@ -45,6 +47,8 @@ impl Default for GUIData {
             load_status: String::from("No model loaded"),
             take_screenshot: false,
             imgui_wants_mouse: false,
+            show_click_debug: false,
+            billboard_click_rect: None,
         }
     }
 }

@@ -208,6 +208,7 @@ impl System {
                                         ui.separator();
 
                                         ui.text("Debug Info:");
+                                        ui.checkbox("Show Click Debug", &mut gui_data.show_click_debug);
                                         ui.text(format!(
                                             "Mouse Position: ({:.1},{:.1})",
                                             gui_data.mouse_pos[0], gui_data.mouse_pos[1]
@@ -224,6 +225,37 @@ impl System {
                                             .read_only(true)
                                             .build();
                                     });
+
+                                if gui_data.show_click_debug {
+                                    static mut IMGUI_SIZE_LOGGED: bool = false;
+                                    unsafe {
+                                        if !IMGUI_SIZE_LOGGED {
+                                            let display_size = ui.io().display_size;
+                                            log!("ImGui display size: {:.1} x {:.1}", display_size[0], display_size[1]);
+                                            IMGUI_SIZE_LOGGED = true;
+                                        }
+                                    }
+
+                                    if let Some(rect) = gui_data.billboard_click_rect {
+                                        let draw_list = ui.get_foreground_draw_list();
+                                        draw_list
+                                            .add_rect(
+                                                [rect[0], rect[1]],
+                                                [rect[2], rect[3]],
+                                                [1.0, 0.0, 0.0, 0.8],
+                                            )
+                                            .filled(true)
+                                            .build();
+                                        draw_list
+                                            .add_rect(
+                                                [rect[0], rect[1]],
+                                                [rect[2], rect[3]],
+                                                [1.0, 1.0, 0.0, 1.0],
+                                            )
+                                            .thickness(2.0)
+                                            .build();
+                                    }
+                                }
 
                                 platform.prepare_render(ui, &window);
                                 let draw_data = imgui.render();

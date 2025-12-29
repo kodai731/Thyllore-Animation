@@ -411,10 +411,19 @@ impl App {
         for i in 0..self.data.grid_descriptor_set.rrdata.len() {
             let rrdata = &mut self.data.grid_descriptor_set.rrdata[i];
             let grid_ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;
+
+            // i==0: Grid用（スケール変換）
+            // i==1: Light Ray用（単位行列）
+            let model = if i == 0 {
+                model_grid
+            } else {
+                Mat4::identity()
+            };
+
             let ubo_grid = UniformBufferObject {
-                model: model_grid,
-                view: view,
-                proj: proj,
+                model,
+                view,
+                proj,
             };
             let memory_grid = self.rrdevice.device.map_memory(
                 grid_ubo_memory,

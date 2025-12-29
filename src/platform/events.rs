@@ -209,6 +209,7 @@ impl System {
 
                                         ui.text("Debug Info:");
                                         ui.checkbox("Show Click Debug", &mut gui_data.show_click_debug);
+                                        ui.checkbox("Show Light Ray to Model", &mut gui_data.show_light_ray_to_model);
                                         if ui.button("Debug Shadow Info") {
                                             gui_data.debug_shadow_info = true;
                                         }

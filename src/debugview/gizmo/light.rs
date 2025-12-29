@@ -4,7 +4,12 @@ use crate::vulkanr::command::*;
 use crate::vulkanr::device::*;
 use crate::vulkanr::vulkan::*;
 use crate::vulkanr::image::*;
-use cgmath::Vector3;
+use crate::vulkanr::pipeline::RRPipeline;
+use crate::vulkanr::descriptor::RRDescriptorSet;
+use crate::vulkanr::core::Device;
+use crate::vulkanr::data::Vertex;
+use crate::math::math::{Vec2, Vec3, Vec4};
+use cgmath::{Vector3, InnerSpace};
 use std::mem::size_of;
 
 #[repr(C)]
@@ -67,6 +72,12 @@ pub struct LightGizmoData {
     pub billboard_index_buffer: Option<vk::Buffer>,
     pub billboard_index_buffer_memory: Option<vk::DeviceMemory>,
     pub billboard_texture: Option<RRImage>,
+    pub ray_to_model_vertices: Vec<Vertex>,
+    pub ray_to_model_indices: Vec<u32>,
+    pub ray_to_model_vertex_buffer: Option<vk::Buffer>,
+    pub ray_to_model_vertex_buffer_memory: Option<vk::DeviceMemory>,
+    pub ray_to_model_index_buffer: Option<vk::Buffer>,
+    pub ray_to_model_index_buffer_memory: Option<vk::DeviceMemory>,
 }
 
 impl Default for LightGizmoData {
@@ -122,6 +133,12 @@ impl LightGizmoData {
             billboard_index_buffer: None,
             billboard_index_buffer_memory: None,
             billboard_texture: None,
+            ray_to_model_vertices: Vec::new(),
+            ray_to_model_indices: Vec::new(),
+            ray_to_model_vertex_buffer: None,
+            ray_to_model_vertex_buffer_memory: None,
+            ray_to_model_index_buffer: None,
+            ray_to_model_index_buffer_memory: None,
         }
     }
 
@@ -287,6 +304,177 @@ impl LightGizmoData {
         Ok(())
     }
 
+    pub fn update_ray_to_model(&mut self, model_positions: &[Vector3<f32>]) {
+        if model_positions.is_empty() {
+            self.ray_to_model_vertices.clear();
+            self.ray_to_model_indices.clear();
+            return;
+        }
+
+        let mut closest_point = model_positions[0];
+        let mut min_distance = (closest_point - self.position).magnitude();
+
+        for pos in model_positions.iter() {
+            let distance = (*pos - self.position).magnitude();
+            if distance < min_distance {
+                min_distance = distance;
+                closest_point = *pos;
+            }
+        }
+
+        let bright_yellow = Vec4::new(1.0, 1.0, 0.0, 1.0);
+        let tex_coord = Vec2::new(0.0, 0.0);
+
+        let light_pos = Vec3::new(self.position.x, self.position.y, self.position.z);
+        let closest = Vec3::new(closest_point.x, closest_point.y, closest_point.z);
+
+        self.ray_to_model_vertices = vec![
+            Vertex::new(light_pos, bright_yellow, tex_coord),
+            Vertex::new(closest, bright_yellow, tex_coord),
+        ];
+        self.ray_to_model_indices = vec![0, 1];
+
+        use crate::log;
+        log!("Ray vertices: Light({:.2}, {:.2}, {:.2}) -> Closest({:.2}, {:.2}, {:.2}), distance={:.2}",
+            self.position.x, self.position.y, self.position.z,
+            closest_point.x, closest_point.y, closest_point.z,
+            min_distance);
+    }
+
+    pub unsafe fn update_or_create_ray_buffers(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+    ) -> anyhow::Result<()> {
+        if self.ray_to_model_vertices.is_empty() {
+            return Ok(());
+        }
+
+        let vertex_buffer_size = (size_of::<Vertex>() * self.ray_to_model_vertices.len()) as u64;
+
+        if self.ray_to_model_vertex_buffer.is_none() {
+            let (vertex_buffer, vertex_buffer_memory) = create_buffer(
+                instance,
+                rrdevice,
+                vertex_buffer_size,
+                vk::BufferUsageFlags::VERTEX_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            )?;
+            self.ray_to_model_vertex_buffer = Some(vertex_buffer);
+            self.ray_to_model_vertex_buffer_memory = Some(vertex_buffer_memory);
+        }
+
+        if let (Some(vertex_buffer_memory), Some(_vertex_buffer)) =
+            (self.ray_to_model_vertex_buffer_memory, self.ray_to_model_vertex_buffer) {
+            let data = rrdevice.device.map_memory(
+                vertex_buffer_memory,
+                0,
+                vertex_buffer_size,
+                vk::MemoryMapFlags::empty()
+            )?;
+            std::ptr::copy_nonoverlapping(
+                self.ray_to_model_vertices.as_ptr(),
+                data.cast(),
+                self.ray_to_model_vertices.len()
+            );
+            rrdevice.device.unmap_memory(vertex_buffer_memory);
+        }
+
+        let index_buffer_size = (size_of::<u32>() * self.ray_to_model_indices.len()) as u64;
+
+        if self.ray_to_model_index_buffer.is_none() {
+            let (index_buffer, index_buffer_memory) = create_buffer(
+                instance,
+                rrdevice,
+                index_buffer_size,
+                vk::BufferUsageFlags::INDEX_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            )?;
+            self.ray_to_model_index_buffer = Some(index_buffer);
+            self.ray_to_model_index_buffer_memory = Some(index_buffer_memory);
+        }
+
+        if let (Some(index_buffer_memory), Some(_index_buffer)) =
+            (self.ray_to_model_index_buffer_memory, self.ray_to_model_index_buffer) {
+            let data = rrdevice.device.map_memory(
+                index_buffer_memory,
+                0,
+                index_buffer_size,
+                vk::MemoryMapFlags::empty()
+            )?;
+            std::ptr::copy_nonoverlapping(
+                self.ray_to_model_indices.as_ptr(),
+                data.cast(),
+                self.ray_to_model_indices.len()
+            );
+            rrdevice.device.unmap_memory(index_buffer_memory);
+        }
+
+        Ok(())
+    }
+
+    pub unsafe fn draw_ray_to_model(
+        &self,
+        device: &Device,
+        command_buffer: vk::CommandBuffer,
+        grid_pipeline: &RRPipeline,
+        grid_descriptor_set: &RRDescriptorSet,
+        image_index: usize,
+    ) {
+        if let (Some(vertex_buffer), Some(index_buffer)) =
+            (self.ray_to_model_vertex_buffer, self.ray_to_model_index_buffer) {
+
+            use crate::log;
+            log!("Light Ray Rendering: drawing {} indices", self.ray_to_model_indices.len());
+
+            device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                grid_pipeline.pipeline,
+            );
+
+            device.cmd_set_line_width(command_buffer, 1.0);
+
+            device.cmd_bind_vertex_buffers(
+                command_buffer,
+                0,
+                &[vertex_buffer],
+                &[0],
+            );
+
+            device.cmd_bind_index_buffer(
+                command_buffer,
+                index_buffer,
+                0,
+                vk::IndexType::UINT32,
+            );
+
+            let swapchain_images_len = grid_descriptor_set.descriptor_sets.len() /
+                grid_descriptor_set.rrdata.len().max(1);
+            let descriptor_set_index = 1 * swapchain_images_len + image_index;
+            log!("Light Ray Debug: swapchain_images_len={}, descriptor_set_index={}, total_descriptors={}",
+                swapchain_images_len, descriptor_set_index, grid_descriptor_set.descriptor_sets.len());
+
+            device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                grid_pipeline.pipeline_layout,
+                0,
+                &[grid_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[],
+            );
+
+            device.cmd_draw_indexed(
+                command_buffer,
+                self.ray_to_model_indices.len() as u32,
+                1,
+                0,
+                0,
+                0,
+            );
+        }
+    }
+
     pub unsafe fn destroy_buffers(&mut self, rrdevice: &RRDevice) {
         if let Some(vertex_buffer) = self.vertex_buffer {
             rrdevice.device.destroy_buffer(vertex_buffer, None);
@@ -327,5 +515,23 @@ impl LightGizmoData {
         self.billboard_index_buffer = None;
         self.billboard_index_buffer_memory = None;
         self.billboard_texture = None;
+
+        if let Some(ray_vertex_buffer) = self.ray_to_model_vertex_buffer {
+            rrdevice.device.destroy_buffer(ray_vertex_buffer, None);
+        }
+        if let Some(ray_vertex_buffer_memory) = self.ray_to_model_vertex_buffer_memory {
+            rrdevice.device.free_memory(ray_vertex_buffer_memory, None);
+        }
+        if let Some(ray_index_buffer) = self.ray_to_model_index_buffer {
+            rrdevice.device.destroy_buffer(ray_index_buffer, None);
+        }
+        if let Some(ray_index_buffer_memory) = self.ray_to_model_index_buffer_memory {
+            rrdevice.device.free_memory(ray_index_buffer_memory, None);
+        }
+
+        self.ray_to_model_vertex_buffer = None;
+        self.ray_to_model_vertex_buffer_memory = None;
+        self.ray_to_model_index_buffer = None;
+        self.ray_to_model_index_buffer_memory = None;
     }
 }

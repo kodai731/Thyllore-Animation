@@ -272,6 +272,12 @@ impl App {
             .push(RRData::new(&instance, &rrdevice, &data.rrswapchain));
         println!("created grid uniform buffers");
 
+        // Light Ray用のuniform buffer（model = 単位行列）
+        data.grid_descriptor_set
+            .rrdata
+            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain));
+        println!("created light ray uniform buffers");
+
         // let grid_rrdata = &mut data.grid_descriptor_set.rrdata[0];
         // grid_rrdata.image_view = create_image_view(
         //     &rrdevice,

@@ -33,6 +33,7 @@ pub struct GUIData {
     pub billboard_click_rect: Option<[f32; 4]>,
     pub debug_shadow_info: bool,
     pub show_light_ray_to_model: bool,
+    pub is_ctrl_pressed: bool,
 }
 
 impl Default for GUIData {
@@ -53,6 +54,7 @@ impl Default for GUIData {
             billboard_click_rect: None,
             debug_shadow_info: false,
             show_light_ray_to_model: false,
+            is_ctrl_pressed: false,
         }
     }
 }

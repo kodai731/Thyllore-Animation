@@ -18,6 +18,9 @@ fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
             gui_data.is_wheel_clicked = true;
         }
     }
+
+    let io = ui.io();
+    gui_data.is_ctrl_pressed = io.key_ctrl;
 }
 
 impl System {

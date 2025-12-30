@@ -16,7 +16,7 @@ use rust_rendering::vulkanr::vulkan::*;
 use rust_rendering::loader::gltf::gltf::*;
 use rust_rendering::loader::fbx::fbx::{FbxModel, load_fbx, load_fbx_with_russimp};
 use rust_rendering::loader::texture::load_png_image;
-use rust_rendering::math::math::*;
+use rust_rendering::math::*;
 use rust_rendering::logger::logger::*;
 
 use anyhow::{anyhow, Result};
@@ -559,6 +559,20 @@ impl App {
         for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
             if let Some(rrdata) = data.model_descriptor_set.rrdata.get_mut(mesh_idx) {
                 let vertex_data = &mut rrdata.vertex_data;
+
+                if mesh_idx == 0 {
+                    static mut VERTEX_BUFFER_LOG_COUNTER: u32 = 0;
+                    unsafe {
+                        VERTEX_BUFFER_LOG_COUNTER += 1;
+                        if VERTEX_BUFFER_LOG_COUNTER % 60 == 0 {
+                            log!("GPU Vertex Buffer (first 5 vertices being sent to GPU):");
+                            for i in 0..5.min(fbx_data.positions.len()) {
+                                log!("  GPU[{}]: ({:.2}, {:.2}, {:.2})",
+                                     i, fbx_data.positions[i].x, fbx_data.positions[i].y, fbx_data.positions[i].z);
+                            }
+                        }
+                    }
+                }
 
                 for (vertex_idx, pos) in fbx_data.positions.iter().enumerate() {
                     if vertex_idx < vertex_data.vertices.len() {

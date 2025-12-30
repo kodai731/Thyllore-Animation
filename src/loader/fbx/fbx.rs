@@ -3,7 +3,7 @@ reference from bevy_mod_fbx, FizzWizZleDazzle
 https://github.com/FizzWizZleDazzle/bevy_mod_fbx/blob/main/src/loader.rs#L217
  */
 use crate::log;
-use crate::math::math::*;
+use crate::math::*;
 use anyhow::{anyhow, Context, Result};
 use cgmath::{Matrix4, Quaternion, Deg, Rad, EuclideanSpace, Point3};
 use fbxcel::tree::v7400::NodeHandle;
@@ -410,20 +410,11 @@ fn get_world_transform(model: &ModelHandle, doc: &Document) -> Matrix4<f32> {
         }
     }
 
-    // No parent found, local transform is world transform
     log!("  No parent for {}, using local as world", mesh_name);
 
-    // Apply Z-up to Y-up coordinate system conversion to all root meshes (no parent)
-    // This is needed because FBX files may have coordinate transformations baked in
-    // Pattern 12: Rotate 90° around X axis (swaps Y and Z, negates new Y)
-    let zup_to_yup = Matrix4::new(
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, -1.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 1.0,
-    );
-    log!("  Applying Z-up to Y-up conversion (Rot +90° X) to root mesh {}", mesh_name);
-    zup_to_yup * local_transform
+    use crate::math::coordinate_system::fbx_to_world;
+    log!("  Applying FBX Z-up to World Y-up conversion to root mesh {}", mesh_name);
+    fbx_to_world() * local_transform
 }
 
 /// Helper function to get world transform for any ObjectHandle
@@ -627,15 +618,8 @@ pub unsafe fn load_fbx(path: &str) -> anyhow::Result<(FbxModel)> {
                         || parent.as_ref().map_or(false, |p| p == "RootNode");
 
                     let local_transform = if needs_coord_conversion {
-                        // Coordinate conversion matrix: Y-up → Z-up (90-degree X-axis rotation)
-                        // [1, 0, 0, 0; 0, 0, -1, 0; 0, 1, 0, 0; 0, 0, 0, 1]
-                        let coord_conversion = Matrix4::new(
-                            1.0, 0.0, 0.0, 0.0,
-                            0.0, 0.0, -1.0, 0.0,
-                            0.0, 1.0, 0.0, 0.0,
-                            0.0, 0.0, 0.0, 1.0,
-                        );
-                        coord_conversion * local_transform_fbx
+                        use crate::math::coordinate_system::fbx_to_world;
+                        fbx_to_world() * local_transform_fbx
                     } else {
                         local_transform_fbx
                     };
@@ -1139,17 +1123,9 @@ fn resolve_global_transform(
             || node.parent.as_ref().map_or(false, |p| p == "RootNode");
 
         let local_transform = if needs_coord_conversion && animation.bone_animations.contains_key(bone_name) {
-            // Only apply conversion if this bone has animation (animated local_transform_fbx needs conversion)
-            // Coordinate conversion matrix: Y-up → Z-up (90-degree X-axis rotation)
-            let coord_conversion = Matrix4::new(
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, -1.0, 0.0,
-                0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 1.0,
-            );
-            coord_conversion * local_transform_fbx
+            use crate::math::coordinate_system::fbx_to_world;
+            fbx_to_world() * local_transform_fbx
         } else {
-            // Child bones or static bones: use local_transform as-is
             local_transform_fbx
         };
 

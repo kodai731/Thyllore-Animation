@@ -1,5 +1,5 @@
 use crate::log;
-use crate::math::math::*;
+use crate::math::*;
 use anyhow::{anyhow, Result};
 use cgmath::{Matrix4, Quaternion, Vector3, Vector4};
 use core::result::Result::Ok;

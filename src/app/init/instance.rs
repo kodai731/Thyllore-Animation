@@ -17,7 +17,7 @@ use rust_rendering::vulkanr::vulkan::*;
 use rust_rendering::vulkanr::raytracing::acceleration::*;
 
 use rust_rendering::loader::gltf::gltf::*;
-use rust_rendering::math::math::*;
+use rust_rendering::math::*;
 use rust_rendering::debugview::*;
 use rust_rendering::loader::fbx::fbx::{FbxModel, load_fbx, load_fbx_with_russimp};
 use rust_rendering::logger::logger::*;
@@ -369,14 +369,12 @@ impl App {
         let frame = 0 as usize;
         let resized = false;
         let start = Instant::now();
-        // Vulkan Y-down coordinate system: View from diagonal position
-        data.initial_camera_pos = [5.0, -3.0, -5.0];
+
+        data.initial_camera_pos = [5.0, 3.0, -5.0];
         data.camera_pos = data.initial_camera_pos;
         let camera_pos = vec3(data.camera_pos[0], data.camera_pos[1], data.camera_pos[2]);
-        // Look at origin (0, 0, 0)
         let camera_direction = (vec3(0.0, 0.0, 0.0) - camera_pos).normalize();
-        // Y-down (Vulkan coordinate system)
-        let camera_up = vec3(0.0, -1.0, 0.0);
+        let camera_up = vec3(0.0, 1.0, 0.0);
         data.camera_direction = [camera_direction.x, camera_direction.y, camera_direction.z];
         data.camera_up = [camera_up.x, camera_up.y, camera_up.z];
         data.is_left_clicked = false;

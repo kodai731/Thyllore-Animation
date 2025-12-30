@@ -8,9 +8,10 @@ use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::descriptor::RRDescriptorSet;
 use crate::vulkanr::core::Device;
 use crate::vulkanr::data::Vertex;
-use crate::math::math::{Vec2, Vec3, Vec4};
+use crate::math::{Vec2, Vec3, Vec4};
 use cgmath::{Vector3, InnerSpace};
 use std::mem::size_of;
+use crate::log;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -144,6 +145,38 @@ impl LightGizmoData {
 
     pub fn update_position(&mut self, position: Vector3<f32>) {
         self.position = position;
+    }
+
+    pub fn update_position_with_constraint(
+        &mut self,
+        new_position: Vector3<f32>,
+        initial_position: Vector3<f32>,
+        is_ctrl_pressed: bool,
+    ) {
+        if is_ctrl_pressed {
+            let delta = new_position - initial_position;
+
+            let abs_x = delta.x.abs();
+            let abs_y = delta.y.abs();
+            let abs_z = delta.z.abs();
+
+            let constrained_pos = if abs_x >= abs_y && abs_x >= abs_z {
+                Vector3::new(initial_position.x + delta.x, initial_position.y, initial_position.z)
+            } else if abs_y >= abs_x && abs_y >= abs_z {
+                Vector3::new(initial_position.x, initial_position.y + delta.y, initial_position.z)
+            } else {
+                Vector3::new(initial_position.x, initial_position.y, initial_position.z + delta.z)
+            };
+
+            log!("Ctrl pressed - axis constrained: initial({:.2}, {:.2}, {:.2}) -> delta({:.2}, {:.2}, {:.2}) -> constrained({:.2}, {:.2}, {:.2})",
+                 initial_position.x, initial_position.y, initial_position.z,
+                 delta.x, delta.y, delta.z,
+                 constrained_pos.x, constrained_pos.y, constrained_pos.z);
+
+            self.position = constrained_pos;
+        } else {
+            self.position = new_position;
+        }
     }
 
     pub fn update_selection_color(&mut self) {
@@ -311,10 +344,35 @@ impl LightGizmoData {
             return;
         }
 
+        let mut min_x = f32::MAX;
+        let mut max_x = f32::MIN;
+        let mut min_y = f32::MAX;
+        let mut max_y = f32::MIN;
+        let mut min_z = f32::MAX;
+        let mut max_z = f32::MIN;
+
         let mut closest_point = model_positions[0];
         let mut min_distance = (closest_point - self.position).magnitude();
 
+        static mut POSITION_CHECK_COUNTER: u32 = 0;
+        unsafe {
+            POSITION_CHECK_COUNTER += 1;
+            if POSITION_CHECK_COUNTER % 60 == 0 {
+                log!("First 5 model positions:");
+                for (i, pos) in model_positions.iter().take(5).enumerate() {
+                    log!("  [{}]: ({:.2}, {:.2}, {:.2})", i, pos.x, pos.y, pos.z);
+                }
+            }
+        }
+
         for pos in model_positions.iter() {
+            min_x = min_x.min(pos.x);
+            max_x = max_x.max(pos.x);
+            min_y = min_y.min(pos.y);
+            max_y = max_y.max(pos.y);
+            min_z = min_z.min(pos.z);
+            max_z = max_z.max(pos.z);
+
             let distance = (*pos - self.position).magnitude();
             if distance < min_distance {
                 min_distance = distance;
@@ -328,13 +386,25 @@ impl LightGizmoData {
         let light_pos = Vec3::new(self.position.x, self.position.y, self.position.z);
         let closest = Vec3::new(closest_point.x, closest_point.y, closest_point.z);
 
-        self.ray_to_model_vertices = vec![
-            Vertex::new(light_pos, bright_yellow, tex_coord),
-            Vertex::new(closest, bright_yellow, tex_coord),
-        ];
+        let vertex_0 = Vertex::new(light_pos, bright_yellow, tex_coord);
+        let vertex_1 = Vertex::new(closest, bright_yellow, tex_coord);
+
+        static mut VERTEX_LOG_COUNTER: u32 = 0;
+        unsafe {
+            VERTEX_LOG_COUNTER += 1;
+            if VERTEX_LOG_COUNTER % 60 == 0 {
+                log!("Ray Vertex[0] pos: ({:.2}, {:.2}, {:.2})", vertex_0.pos.x, vertex_0.pos.y, vertex_0.pos.z);
+                log!("Ray Vertex[1] pos: ({:.2}, {:.2}, {:.2})", vertex_1.pos.x, vertex_1.pos.y, vertex_1.pos.z);
+            }
+        }
+
+        self.ray_to_model_vertices = vec![vertex_0, vertex_1];
         self.ray_to_model_indices = vec![0, 1];
 
         use crate::log;
+        log!("Model bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
+             min_x, max_x, min_y, max_y, min_z, max_z);
+        log!("Light position: ({:.2}, {:.2}, {:.2})", self.position.x, self.position.y, self.position.z);
         log!("Ray vertices: Light({:.2}, {:.2}, {:.2}) -> Closest({:.2}, {:.2}, {:.2}), distance={:.2}",
             self.position.x, self.position.y, self.position.z,
             closest_point.x, closest_point.y, closest_point.z,

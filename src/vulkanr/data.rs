@@ -2,7 +2,7 @@ use super::buffer::*;
 use super::device::*;
 use super::swapchain::*;
 use super::vulkan::*;
-use crate::math::math::*;
+use crate::math::*;
 use std::cmp::PartialEq;
 use std::hash::{Hash, Hasher};
 

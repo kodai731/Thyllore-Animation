@@ -124,22 +124,6 @@ impl App {
                         // Acceleration Structureを再構築（アニメーション後の頂点座標で）
                         Self::build_acceleration_structures(&self.instance, &self.rrdevice, &mut self.data)?;
 
-                        if gui_data.show_light_ray_to_model {
-                            let all_positions: Vec<_> = self.data.fbx_model.fbx_data
-                                .iter()
-                                .flat_map(|data| data.positions.iter())
-                                .cloned()
-                                .collect();
-                            log!("Light Ray Debug (animated): all_positions count = {}", all_positions.len());
-                            self.data.light_gizmo_data.update_ray_to_model(&all_positions);
-                            log!("Light Ray Debug (animated): ray vertices = {}, indices = {}",
-                                self.data.light_gizmo_data.ray_to_model_vertices.len(),
-                                self.data.light_gizmo_data.ray_to_model_indices.len());
-                            self.data.light_gizmo_data.update_or_create_ray_buffers(&self.instance, &self.rrdevice)?;
-                            log!("Light Ray Debug (animated): buffers created - vertex_buffer={:?}, index_buffer={:?}",
-                                self.data.light_gizmo_data.ray_to_model_vertex_buffer.is_some(),
-                                self.data.light_gizmo_data.ray_to_model_index_buffer.is_some());
-                        }
                     } else {
                         // Static pose (duration == 0): keep time at 0, no need to update every frame
                         // Initial pose was already applied in load_model_from_path
@@ -151,22 +135,6 @@ impl App {
                             }
                         }
 
-                        if gui_data.show_light_ray_to_model {
-                            let all_positions: Vec<_> = self.data.fbx_model.fbx_data
-                                .iter()
-                                .flat_map(|data| data.positions.iter())
-                                .cloned()
-                                .collect();
-                            log!("Light Ray Debug (static): all_positions count = {}", all_positions.len());
-                            self.data.light_gizmo_data.update_ray_to_model(&all_positions);
-                            log!("Light Ray Debug (static): ray vertices = {}, indices = {}",
-                                self.data.light_gizmo_data.ray_to_model_vertices.len(),
-                                self.data.light_gizmo_data.ray_to_model_indices.len());
-                            self.data.light_gizmo_data.update_or_create_ray_buffers(&self.instance, &self.rrdevice)?;
-                            log!("Light Ray Debug (static): buffers created - vertex_buffer={:?}, index_buffer={:?}",
-                                self.data.light_gizmo_data.ray_to_model_vertex_buffer.is_some(),
-                                self.data.light_gizmo_data.ray_to_model_index_buffer.is_some());
-                        }
                     }
                 } else {
                     static mut LOGGED_NO_DURATION: bool = false;
@@ -225,6 +193,37 @@ impl App {
             gui_data.mouse_wheel,
             gui_data,
         )?;
+
+        if gui_data.show_light_ray_to_model {
+            let all_positions: Vec<_> = if !self.data.fbx_model.fbx_data.is_empty() {
+                self.data.fbx_model.fbx_data
+                    .iter()
+                    .flat_map(|data| data.positions.iter())
+                    .cloned()
+                    .collect()
+            } else {
+                self.data.gltf_model.gltf_data
+                    .iter()
+                    .flat_map(|data| data.vertices.iter().map(|v| {
+                        cgmath::Vector3::new(
+                            v.animation_position[0],
+                            v.animation_position[1],
+                            v.animation_position[2],
+                        )
+                    }))
+                    .collect()
+            };
+
+            log!("Light Ray Debug: all_positions count = {}", all_positions.len());
+            self.data.light_gizmo_data.update_ray_to_model(&all_positions);
+            log!("Light Ray Debug: ray vertices = {}, indices = {}",
+                self.data.light_gizmo_data.ray_to_model_vertices.len(),
+                self.data.light_gizmo_data.ray_to_model_indices.len());
+            self.data.light_gizmo_data.update_or_create_ray_buffers(&self.instance, &self.rrdevice)?;
+            log!("Light Ray Debug: buffers created - vertex_buffer={:?}, index_buffer={:?}",
+                self.data.light_gizmo_data.ray_to_model_vertex_buffer.is_some(),
+                self.data.light_gizmo_data.ray_to_model_index_buffer.is_some());
+        }
 
         // Update ImGui buffers
         Self::update_imgui_buffers(&self.instance, &self.rrdevice, &mut self.data, draw_data)?;

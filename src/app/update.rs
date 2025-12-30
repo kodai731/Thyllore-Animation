@@ -7,11 +7,11 @@ use rust_rendering::vulkanr::descriptor::*;
 use rust_rendering::vulkanr::device::*;
 use rust_rendering::vulkanr::image::*;
 use rust_rendering::vulkanr::vulkan::*;
-use rust_rendering::math::math::*;
+use rust_rendering::math::*;
 use rust_rendering::logger::logger::*;
 use rust_rendering::debugview::*;
 
-use cgmath::{Vector2, Vector3, Deg, Rad, Matrix4, Matrix3, InnerSpace};
+use cgmath::{Vector2, Vector3, Deg, Matrix4, InnerSpace};
 use anyhow::Result;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
@@ -41,8 +41,7 @@ impl App {
 
         let mouse_pos = Vector2::new(mouse_pos[0], mouse_pos[1]);
 
-        let world_y_down = vec3(0.0, -1.0, 0.0);
-        let camera_right = camera_direction.cross(camera_up).normalize();
+        let camera_right = camera_up.cross(camera_direction).normalize();
 
         let last_view = view(camera_pos, camera_direction, camera_up);
         let base_x = camera_right;
@@ -60,10 +59,11 @@ impl App {
                 self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
                 self.data.is_left_clicked = true;
 
+                use rust_rendering::math::coordinate_system::vulkan_projection_correction;
                 let view = view(camera_pos, camera_direction, camera_up);
                 let swapchain_extent = self.data.rrswapchain.swapchain_extent;
                 let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
-                let proj = cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
+                let proj = vulkan_projection_correction() * cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
                 let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
 
                 let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
@@ -137,90 +137,39 @@ impl App {
             let clicked_mouse_pos = vec2_from_array(self.data.clicked_mouse_pos);
 
             if self.data.light_gizmo_selected && gui_data.is_left_clicked && !self.data.light_just_selected {
-                self.update_light_gizmo_position(mouse_pos, camera_pos, camera_direction);
+                self.update_light_gizmo_position(mouse_pos, camera_pos, camera_direction, gui_data);
             } else if !self.data.light_gizmo_selected {
-                // FIX: Use delta from previous frame (Unity-style) instead of cumulative diff
                 let diff = mouse_pos - clicked_mouse_pos;
                 let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
                 gui_data.monitor_value = distance;
                 if 0.001 < distance {
-                    let mut rotate_x = Mat3::identity();
-                    let mut rotate_y = Mat3::identity();
-                    let theta_x = -diff.x * 0.005;
-                    let theta_y = diff.y * 0.005;  // Inverted for intuitive up/down rotation
-
-                    // Horizontal rotation: Around world Y-down axis (Unity-style, gimbal-lock free)
-                    let _ = rodrigues(
-                        &mut rotate_x,
-                        Rad(theta_x).cos(),
-                        Rad(theta_x).sin(),
-                        &world_y_down,
-                    );
-                    // Vertical rotation: Around camera's local right axis
-                    let _ = rodrigues(
-                        &mut rotate_y,
-                        Rad(theta_y).cos(),
-                        Rad(theta_y).sin(),
-                        &camera_right,
-                    );
-
-                    // Log rotation info every 30 frames
                     unsafe {
                         ROTATION_LOG_COUNTER += 1;
                         if ROTATION_LOG_COUNTER % 30 == 0 {
                             log!("=== Camera Rotation Debug (frame {}) ===", ROTATION_LOG_COUNTER);
-                            log!("  Mouse diff: ({:.3}, {:.3}), theta: ({:.3}, {:.3})",
-                                 diff.x, diff.y, theta_x, theta_y);
+                            log!("  Mouse diff: ({:.3}, {:.3})", diff.x, diff.y);
                             log!("  Before rotation:");
                             log!("    direction: ({:.3}, {:.3}, {:.3})",
                                  camera_direction.x, camera_direction.y, camera_direction.z);
                             log!("    up: ({:.3}, {:.3}, {:.3})",
                                  camera_up.x, camera_up.y, camera_up.z);
-                            log!("    right: ({:.3}, {:.3}, {:.3})",
-                                 camera_right.x, camera_right.y, camera_right.z);
-                            log!("  Rotation axes:");
-                            log!("    horizontal (world Y-down): ({:.3}, {:.3}, {:.3})",
-                                 world_y_down.x, world_y_down.y, world_y_down.z);
-                            log!("    vertical (camera right): ({:.3}, {:.3}, {:.3})",
-                                 camera_right.x, camera_right.y, camera_right.z);
                         }
                     }
 
-                    let rotate = rotate_y * rotate_x;
-                    camera_up = rotate * camera_up;
-                    camera_direction = rotate * camera_direction;
+                    let (new_direction, new_up) = self.rotate_camera(diff);
+                    camera_direction = new_direction;
+                    camera_up = new_up;
 
-                    camera_direction = camera_direction.normalize();
-                    let camera_right_new = camera_direction.cross(camera_up).normalize();
-                    camera_up = camera_right_new.cross(camera_direction).normalize();
-
-                    // Log after rotation
                     unsafe {
                         if ROTATION_LOG_COUNTER % 30 == 0 {
-                            log!("  After rotation & re-orthogonalization:");
+                            log!("  After rotation:");
                             log!("    direction: ({:.3}, {:.3}, {:.3})",
                                  camera_direction.x, camera_direction.y, camera_direction.z);
                             log!("    up: ({:.3}, {:.3}, {:.3})",
                                  camera_up.x, camera_up.y, camera_up.z);
-                            log!("    right: ({:.3}, {:.3}, {:.3})",
-                                 camera_right_new.x, camera_right_new.y, camera_right_new.z);
-
-                            // Check orthogonality
-                            let dot_dir_up = camera_direction.dot(camera_up);
-                            let dot_dir_right = camera_direction.dot(camera_right_new);
-                            let dot_up_right = camera_up.dot(camera_right_new);
-                            log!("  Orthogonality check (should be ~0):");
-                            log!("    direction·up: {:.6}", dot_dir_up);
-                            log!("    direction·right: {:.6}", dot_dir_right);
-                            log!("    up·right: {:.6}", dot_up_right);
                         }
                     }
 
-                    // Update camera state every frame (not just on release)
-                    self.data.camera_direction = array3_from_vec(camera_direction);
-                    self.data.camera_up = array3_from_vec(camera_up);
-
-                    // Update previous mouse position every frame for delta calculation
                     self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
                 }
             }
@@ -243,45 +192,26 @@ impl App {
 
         // Only process camera pan if ImGui doesn't want the mouse
         if !gui_data.imgui_wants_mouse && (gui_data.is_wheel_clicked || self.data.is_wheel_clicked) {
-            // first clicked
             if !self.data.is_wheel_clicked {
                 self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
                 self.data.is_wheel_clicked = true;
             }
             let clicked_mouse_pos = vec2_from_array(self.data.clicked_mouse_pos);
 
-            // FIX: Use delta from previous frame (Unity-style) instead of cumulative diff
             let diff = mouse_pos - clicked_mouse_pos;
             let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
             gui_data.monitor_value = distance;
             if 0.001 < distance {
-                let translate_x_v = base_x * diff.x;
-                let translate_y_v = base_y * diff.y;
-                camera_pos += translate_x_v + translate_y_v;
-
-                // Update camera position every frame (not just on release)
-                self.data.camera_pos = array3_from_vec(camera_pos);
-
-                // Update previous mouse position every frame for delta calculation
+                self.pan_camera(diff, base_x, base_y);
+                camera_pos = vec3_from_array(self.data.camera_pos);
                 self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
             }
 
             if !gui_data.is_wheel_clicked {
-                // left button released
                 self.data.is_wheel_clicked = false;
             }
         } else if gui_data.imgui_wants_mouse {
-            // If ImGui wants the mouse, reset camera operation state
             self.data.is_wheel_clicked = false;
-        }
-
-        // Only process mouse wheel zoom if ImGui doesn't want the mouse
-        if !gui_data.imgui_wants_mouse && mouse_wheel != 0.0 {
-            let distance_to_origin = camera_pos.magnitude();
-            let zoom_speed = (distance_to_origin * 0.1).max(1.0).min(50.0);
-            let diff_view = camera_direction * mouse_wheel * zoom_speed * -1.0;
-            camera_pos += diff_view;
-            self.data.camera_pos = array3_from_vec(camera_pos);
         }
 
         let view = view(camera_pos, camera_direction, camera_up);
@@ -296,26 +226,8 @@ impl App {
         self.data.near_plane = near_plane;
         self.data.far_plane = far_plane;
 
-        let correction = Mat4::new(
-            // column-major order
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0, // cgmath was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted.
-            0.0,
-            0.0,
-            1.0 / 2.0,
-            0.0, // depth [-1.0, 1.0] (OpenGL) -> [0.0, 1.0] (Vulkan)
-            0.0,
-            0.0,
-            1.0 / 2.0,
-            1.0,
-        );
-        let proj = correction
+        use rust_rendering::math::coordinate_system::vulkan_projection_correction;
+        let proj = vulkan_projection_correction()
             * cgmath::perspective(
             Deg(45.0),
             self.data.rrswapchain.swapchain_extent.width as f32
@@ -323,6 +235,11 @@ impl App {
             near_plane,
             far_plane,
         );
+
+        if !gui_data.imgui_wants_mouse && mouse_wheel != 0.0 {
+            self.zoom_camera(mouse_wheel);
+            camera_pos = vec3_from_array(self.data.camera_pos);
+        }
 
         let swapchain_extent = self.data.rrswapchain.swapchain_extent;
         let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
@@ -425,6 +342,16 @@ impl App {
                 view,
                 proj,
             };
+
+            static mut GRID_UBO_LOG_COUNTER: u32 = 0;
+            unsafe {
+                GRID_UBO_LOG_COUNTER += 1;
+                if GRID_UBO_LOG_COUNTER % 60 == 0 && i == 1 {
+                    log!("Grid descriptor_set[{}] UBO update: view={{...}}, proj={{...}}", i);
+                    log!("  Same view/proj as model and billboard: YES");
+                }
+            }
+
             let memory_grid = self.rrdevice.device.map_memory(
                 grid_ubo_memory,
                 0,
@@ -468,7 +395,19 @@ impl App {
                 .unmap_memory(rrdata.rruniform_buffers[image_index].buffer_memory);
         }
 
-        self.data.light_gizmo_data.update_position(self.data.rt_debug_state.light_position);
+        static mut POSITION_SYNC_COUNTER: u32 = 0;
+        unsafe {
+            POSITION_SYNC_COUNTER += 1;
+            if POSITION_SYNC_COUNTER % 60 == 0 {
+                log!("Position sync - light_gizmo_data.position: ({:.2}, {:.2}, {:.2})",
+                     self.data.light_gizmo_data.position.x,
+                     self.data.light_gizmo_data.position.y,
+                     self.data.light_gizmo_data.position.z);
+            }
+        }
+
+        self.data.rt_debug_state.light_position = self.data.light_gizmo_data.position;
+
         self.data.light_gizmo_data.update_selection_color();
         self.data.light_gizmo_data.update_vertex_buffer(&self.rrdevice)
             .expect("Failed to update light gizmo vertex buffer");
@@ -479,7 +418,7 @@ impl App {
             let rrdata = &mut self.data.billboard_descriptor_set.rrdata[i];
             let billboard_ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;
 
-            let light_pos = self.data.rt_debug_state.light_position;
+            let light_pos = self.data.light_gizmo_data.position;
 
             unsafe {
                 BILLBOARD_UPDATE_COUNTER += 1;
@@ -853,6 +792,7 @@ impl App {
         mouse_pos: Vector2<f32>,
         camera_pos: Vector3<f32>,
         camera_direction: Vector3<f32>,
+        gui_data: &GUIData,
     ) {
         unsafe {
             let view = view(
@@ -860,15 +800,20 @@ impl App {
                 camera_direction,
                 vec3_from_array(self.data.camera_up),
             );
+            use rust_rendering::math::coordinate_system::vulkan_projection_correction;
             let swapchain_extent = self.data.rrswapchain.swapchain_extent;
             let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
-            let proj = cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
+            let proj = vulkan_projection_correction() * cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
             let screen_size = Vector2::new(
                 swapchain_extent.width as f32,
                 swapchain_extent.height as f32,
             );
 
             let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
+
+            log!("update_light_gizmo_position - camera_pos: ({:.2}, {:.2}, {:.2})", camera_pos.x, camera_pos.y, camera_pos.z);
+            log!("update_light_gizmo_position - ray_origin: ({:.2}, {:.2}, {:.2})", ray_origin.x, ray_origin.y, ray_origin.z);
+            log!("update_light_gizmo_position - ray_direction: ({:.2}, {:.2}, {:.2})", ray_direction.x, ray_direction.y, ray_direction.z);
 
             let light_pos = self.data.rt_debug_state.light_position;
             let plane_point = light_pos;
@@ -879,9 +824,21 @@ impl App {
             if denom.abs() > std::f32::EPSILON {
                 let t = (plane_point - ray_origin).dot(plane_normal) / denom;
 
+                log!("update_light_gizmo_position - t: {:.2}, intersection will be: ({:.2}, {:.2}, {:.2})",
+                     t,
+                     (ray_origin + ray_direction * t).x,
+                     (ray_origin + ray_direction * t).y,
+                     (ray_origin + ray_direction * t).z);
+
                 if t >= 0.0 {
                     let intersection = ray_origin + ray_direction * t;
-                    self.data.rt_debug_state.light_position = intersection;
+                    let initial_pos = vec3_from_array(self.data.light_initial_position);
+
+                    self.data.light_gizmo_data.update_position_with_constraint(
+                        intersection,
+                        initial_pos,
+                        gui_data.is_ctrl_pressed,
+                    );
                 }
             }
         }

@@ -22,6 +22,11 @@ layout(binding = 4) uniform SceneData {
     mat4 proj;             // Projection matrix (for debugging)
 } sceneData;
 
+// Push constants for per-frame parameters
+layout(push_constant) uniform PushConstants {
+    float normalOffset;    // Offset along normal to avoid self-intersection
+} pushConstants;
+
 void main() {
     ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
     ivec2 imageSize = imageSize(positionImage);
@@ -51,8 +56,7 @@ void main() {
     lightDir = normalize(lightDir);
 
     // Offset ray origin slightly along normal to avoid self-intersection
-    const float normalOffset = 0.5;
-    vec3 rayOrigin = worldPosition + worldNormal * normalOffset;
+    vec3 rayOrigin = worldPosition + worldNormal * pushConstants.normalOffset;
 
     // Setup ray query
     rayQueryEXT rayQuery;

@@ -55,6 +55,26 @@ impl RRData {
         }
     }
 
+    pub unsafe fn update_ubo(
+        &mut self,
+        rrdevice: &RRDevice,
+        image_index: usize,
+        ubo: &UniformBufferObject,
+    ) -> Result<(), anyhow::Error> {
+        use std::ptr::copy_nonoverlapping as memcpy;
+
+        let ubo_memory = self.rruniform_buffers[image_index].buffer_memory;
+        let memory = rrdevice.device.map_memory(
+            ubo_memory,
+            0,
+            std::mem::size_of::<UniformBufferObject>() as u64,
+            vk::MemoryMapFlags::empty(),
+        )?;
+        memcpy(ubo, memory.cast(), 1);
+        rrdevice.device.unmap_memory(ubo_memory);
+        Ok(())
+    }
+
     pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
         for uniform_buffer in &self.rruniform_buffers {
             uniform_buffer.delete(rrdevice);
@@ -100,7 +120,8 @@ pub struct SceneUniformData {
     pub proj: Mat4,
     pub debug_mode: i32,
     pub shadow_strength: f32,
-    pub _padding: [i32; 2],
+    pub enable_distance_attenuation: i32,
+    pub _padding: i32,
 }
 
 impl Default for SceneUniformData {
@@ -113,7 +134,8 @@ impl Default for SceneUniformData {
             proj: identity,
             debug_mode: 0,
             shadow_strength: 1.0,
-            _padding: [0; 2],
+            enable_distance_attenuation: 0,
+            _padding: 0,
         }
     }
 }

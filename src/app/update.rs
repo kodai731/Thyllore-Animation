@@ -10,6 +10,7 @@ use rust_rendering::vulkanr::vulkan::*;
 use rust_rendering::math::*;
 use rust_rendering::logger::logger::*;
 use rust_rendering::debugview::*;
+use rust_rendering::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 
 use cgmath::{Vector2, Vector3, Deg, Matrix4, InnerSpace};
 use anyhow::Result;
@@ -26,13 +27,132 @@ impl App {
         mouse_wheel: f32,
         gui_data: &mut GUIData,
     ) -> Result<()> {
-        //let mut model = Mat4::from_axis_angle(vec3(0.0, 0.0, 1.0), Deg(0.0));
-        // update vertex buffer
+        use crate::app::data::LightMoveTarget;
+
+        if gui_data.move_light_to != LightMoveTarget::None {
+            log!("========================================");
+            log!("LIGHT MOVE BUTTON PRESSED: {:?}", gui_data.move_light_to);
+            log!("========================================");
+
+            let all_positions: Vec<Vector3<f32>> = if !self.data.fbx_model.fbx_data.is_empty() {
+                self.data.fbx_model.fbx_data
+                    .iter()
+                    .flat_map(|data| data.positions.iter())
+                    .cloned()
+                    .collect()
+            } else {
+                self.data.gltf_model.gltf_data
+                    .iter()
+                    .flat_map(|data| data.vertices.iter().map(|v| {
+                        Vector3::new(
+                            v.animation_position[0],
+                            v.animation_position[1],
+                            v.animation_position[2],
+                        )
+                    }))
+                    .collect()
+            };
+
+            if !all_positions.is_empty() {
+                let mut min_x = f32::MAX;
+                let mut max_x = f32::MIN;
+                let mut min_y = f32::MAX;
+                let mut max_y = f32::MIN;
+                let mut min_z = f32::MAX;
+                let mut max_z = f32::MIN;
+
+                for pos in all_positions.iter() {
+                    min_x = min_x.min(pos.x);
+                    max_x = max_x.max(pos.x);
+                    min_y = min_y.min(pos.y);
+                    max_y = max_y.max(pos.y);
+                    min_z = min_z.min(pos.z);
+                    max_z = max_z.max(pos.z);
+                }
+
+                let size_x = (max_x - min_x).abs();
+                let size_y = (max_y - min_y).abs();
+                let size_z = (max_z - min_z).abs();
+                let model_size = (size_x + size_y + size_z) / 3.0;
+
+                let offset = 2.0;
+                let new_light_pos = match gui_data.move_light_to {
+                    LightMoveTarget::XMin => Vector3::new(min_x - offset, (min_y + max_y) / 2.0, (min_z + max_z) / 2.0),
+                    LightMoveTarget::XMax => Vector3::new(max_x + offset, (min_y + max_y) / 2.0, (min_z + max_z) / 2.0),
+                    LightMoveTarget::YMin => Vector3::new((min_x + max_x) / 2.0, min_y - offset, (min_z + max_z) / 2.0),
+                    LightMoveTarget::YMax => Vector3::new((min_x + max_x) / 2.0, max_y + offset, (min_z + max_z) / 2.0),
+                    LightMoveTarget::ZMin => Vector3::new((min_x + max_x) / 2.0, (min_y + max_y) / 2.0, min_z - offset),
+                    LightMoveTarget::ZMax => Vector3::new((min_x + max_x) / 2.0, (min_y + max_y) / 2.0, max_z + offset),
+                    LightMoveTarget::None => self.data.rt_debug_state.light_position,
+                };
+
+                self.data.rt_debug_state.shadow_normal_offset = (model_size * 0.005).max(0.5);
+
+                log!("=== LIGHT POSITION DEBUG ===");
+                log!("Model size: {:.2}, Shadow normal offset: {:.2}", model_size, self.data.rt_debug_state.shadow_normal_offset);
+                log!("Model bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
+                    min_x, max_x, min_y, max_y, min_z, max_z);
+                log!("Model center: ({:.2}, {:.2}, {:.2})",
+                    (min_x + max_x) / 2.0, (min_y + max_y) / 2.0, (min_z + max_z) / 2.0);
+                log!("Calculated light position: ({:.2}, {:.2}, {:.2})",
+                    new_light_pos.x, new_light_pos.y, new_light_pos.z);
+                log!("CAMERA position: ({:.2}, {:.2}, {:.2})",
+                    self.data.camera_pos[0], self.data.camera_pos[1], self.data.camera_pos[2]);
+
+                let closest_vertex = all_positions.iter()
+                    .min_by(|a, b| {
+                        let dist_a = (new_light_pos - **a).magnitude();
+                        let dist_b = (new_light_pos - **b).magnitude();
+                        dist_a.partial_cmp(&dist_b).unwrap()
+                    });
+                let farthest_vertex = all_positions.iter()
+                    .max_by(|a, b| {
+                        let dist_a = (new_light_pos - **a).magnitude();
+                        let dist_b = (new_light_pos - **b).magnitude();
+                        dist_a.partial_cmp(&dist_b).unwrap()
+                    });
+
+                if let Some(closest) = closest_vertex {
+                    let dist = (new_light_pos - *closest).magnitude();
+                    log!("Closest vertex to light: ({:.2}, {:.2}, {:.2}), distance: {:.2}",
+                        closest.x, closest.y, closest.z, dist);
+                }
+                if let Some(farthest) = farthest_vertex {
+                    let dist = (new_light_pos - *farthest).magnitude();
+                    log!("Farthest vertex from light: ({:.2}, {:.2}, {:.2}), distance: {:.2}",
+                        farthest.x, farthest.y, farthest.z, dist);
+                }
+
+                match gui_data.move_light_to {
+                    LightMoveTarget::XMax => {
+                        log!("XMax: Light should be to the RIGHT of all vertices");
+                        log!("  Light X: {:.2}, Model X range: [{:.2}, {:.2}]", new_light_pos.x, min_x, max_x);
+                        if new_light_pos.x <= max_x {
+                            log!("  WARNING: Light X ({:.2}) is NOT greater than max X ({:.2})!", new_light_pos.x, max_x);
+                        } else {
+                            log!("  OK: Light X ({:.2}) > max X ({:.2})", new_light_pos.x, max_x);
+                        }
+                    }
+                    _ => {}
+                }
+
+                self.data.rt_debug_state.light_position = new_light_pos;
+
+                log!("Light position SET in rt_debug_state: ({:.2}, {:.2}, {:.2})",
+                    self.data.rt_debug_state.light_position.x,
+                    self.data.rt_debug_state.light_position.y,
+                    self.data.rt_debug_state.light_position.z);
+                log!("(light_gizmo_data will be synced later in this frame)");
+                log!("========================================");
+            } else {
+                log!("WARNING: No model positions found!");
+            }
+
+            gui_data.move_light_to = LightMoveTarget::None;
+        }
+
         self.morphing(self.start.elapsed().as_secs_f32());
 
-        // Note: Animation updates are now handled in draw() method before rendering
-
-        // update uniform buffer
         let model = Mat4::identity();
 
         let mut camera_pos = vec3_from_array(self.data.camera_pos);
@@ -262,6 +382,7 @@ impl App {
             log!("Camera position: ({:.2}, {:.2}, {:.2})", camera_pos.x, camera_pos.y, camera_pos.z);
             log!("Camera direction: ({:.3}, {:.3}, {:.3})", camera_direction.x, camera_direction.y, camera_direction.z);
             log!("Shadow strength: {:.2}", self.data.rt_debug_state.shadow_strength);
+            log!("Shadow normal offset: {:.2}", self.data.rt_debug_state.shadow_normal_offset);
             log!("Debug view mode: {:?}", self.data.rt_debug_state.debug_view_mode);
             log!("Screen size: {:.0} x {:.0}", screen_size.x, screen_size.y);
             log!("Near plane: {:.2}, Far plane: {:.2}", self.data.near_plane, self.data.far_plane);
@@ -273,23 +394,55 @@ impl App {
                 log!("Light screen position: ({:.1}, {:.1})", screen_pos.x, screen_pos.y);
             }
 
-            log!("Suggestion: Switch to 'Shadow Mask' debug view to see shadow coverage");
+            let all_positions: Vec<Vector3<f32>> = if !self.data.fbx_model.fbx_data.is_empty() {
+                self.data.fbx_model.fbx_data.iter().flat_map(|data| data.positions.iter()).cloned().collect()
+            } else {
+                self.data.gltf_model.gltf_data.iter().flat_map(|data| data.vertices.iter().map(|v| {
+                    Vector3::new(v.animation_position[0], v.animation_position[1], v.animation_position[2])
+                })).collect()
+            };
+
+            if !all_positions.is_empty() {
+                let (min_x, max_x) = all_positions.iter().fold((f32::MAX, f32::MIN), |(min, max), p| (min.min(p.x), max.max(p.x)));
+                let (min_y, max_y) = all_positions.iter().fold((f32::MAX, f32::MIN), |(min, max), p| (min.min(p.y), max.max(p.y)));
+                let (min_z, max_z) = all_positions.iter().fold((f32::MAX, f32::MIN), |(min, max), p| (min.min(p.z), max.max(p.z)));
+
+                log!("Model bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]", min_x, max_x, min_y, max_y, min_z, max_z);
+                log!("Light X: {} model (min={:.2}, max={:.2}, light={:.2})",
+                    if light_pos.x < min_x { "LEFT of" } else if light_pos.x > max_x { "RIGHT of" } else { "INSIDE" },
+                    min_x, max_x, light_pos.x);
+                log!("Light Y: {} model (min={:.2}, max={:.2}, light={:.2})",
+                    if light_pos.y < min_y { "BELOW" } else if light_pos.y > max_y { "ABOVE" } else { "INSIDE" },
+                    min_y, max_y, light_pos.y);
+                log!("Light Z: {} model (min={:.2}, max={:.2}, light={:.2})",
+                    if light_pos.z < min_z { "BEHIND" } else if light_pos.z > max_z { "IN FRONT of" } else { "INSIDE" },
+                    min_z, max_z, light_pos.z);
+            }
+
+            log!("Suggestion: Switch debug view modes to verify:");
+            log!("  - 'Shadow Mask' to see shadow coverage");
+            log!("  - 'Position' to verify G-Buffer world positions");
+            log!("  - 'Normal' to verify G-Buffer normals");
             log!("======================");
             gui_data.debug_shadow_info = false;
         }
 
+        let ubo = UniformBufferObject { model, view, proj };
+
         for i in 0..self.data.model_descriptor_set.rrdata.len() {
             let rrdata = &mut self.data.model_descriptor_set.rrdata[i];
-            let ubo = UniformBufferObject { model, view, proj };
-            let ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;
-            let memory = self.rrdevice.device.map_memory(
-                ubo_memory,
-                0,
-                size_of::<UniformBufferObject>() as u64,
-                vk::MemoryMapFlags::empty(),
-            )?;
-            memcpy(&ubo, memory.cast(), 1);
-            self.rrdevice.device.unmap_memory(ubo_memory);
+            if let Err(e) = rrdata.update_ubo(&self.rrdevice, image_index, &ubo) {
+                eprintln!("Failed to update model UBO: {}", e);
+            }
+        }
+
+        if let Some(ref mut gbuffer_desc) = self.data.gbuffer_descriptor_set {
+            for i in 0..gbuffer_desc.rrdata.len() {
+                let rrdata = &mut gbuffer_desc.rrdata[i];
+                if let Err(e) = rrdata.update_ubo(&self.rrdevice, image_index, &ubo) {
+                    eprintln!("Failed to update G-Buffer UBO: {}", e);
+                }
+            }
         }
 
         // Update Scene Uniform Buffer for Ray Tracing
@@ -297,6 +450,16 @@ impl App {
             (self.data.scene_uniform_buffer, self.data.scene_uniform_buffer_memory)
         {
             let light_pos = &self.data.rt_debug_state.light_position;
+
+            static mut SCENE_UNIFORM_LOG_COUNTER: u32 = 0;
+            unsafe {
+                SCENE_UNIFORM_LOG_COUNTER += 1;
+                if SCENE_UNIFORM_LOG_COUNTER % 60 == 0 {
+                    log!("SceneUniformData UPDATE - light_position sent to shader: ({:.2}, {:.2}, {:.2})",
+                        light_pos.x, light_pos.y, light_pos.z);
+                }
+            }
+
             let scene_data = SceneUniformData {
                 light_position: Vec4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
                 light_color: Vec4::new(1.0, 1.0, 1.0, 1.0),
@@ -304,7 +467,8 @@ impl App {
                 proj,
                 debug_mode: self.data.rt_debug_state.debug_view_mode.as_int(),
                 shadow_strength: self.data.rt_debug_state.shadow_strength,
-                _padding: [0; 2],
+                enable_distance_attenuation: if self.data.rt_debug_state.enable_distance_attenuation { 1 } else { 0 },
+                _padding: 0,
             };
 
             let data_ptr = self.rrdevice.device.map_memory(
@@ -395,18 +559,7 @@ impl App {
                 .unmap_memory(rrdata.rruniform_buffers[image_index].buffer_memory);
         }
 
-        static mut POSITION_SYNC_COUNTER: u32 = 0;
-        unsafe {
-            POSITION_SYNC_COUNTER += 1;
-            if POSITION_SYNC_COUNTER % 60 == 0 {
-                log!("Position sync - light_gizmo_data.position: ({:.2}, {:.2}, {:.2})",
-                     self.data.light_gizmo_data.position.x,
-                     self.data.light_gizmo_data.position.y,
-                     self.data.light_gizmo_data.position.z);
-            }
-        }
-
-        self.data.rt_debug_state.light_position = self.data.light_gizmo_data.position;
+        self.data.light_gizmo_data.sync_from_debug_state(self.data.rt_debug_state.light_position);
 
         self.data.light_gizmo_data.update_selection_color();
         self.data.light_gizmo_data.update_vertex_buffer(&self.rrdevice)
@@ -559,7 +712,7 @@ impl App {
             if gltf_data.morph_targets.len() <= 0 {
                 return;
             };
-            // reset
+
             let rrdata = &mut self.data.model_descriptor_set.rrdata[i];
             let vertices = &mut rrdata.vertex_data.vertices;
             for i in 0..vertices.len() {
@@ -586,6 +739,38 @@ impl App {
                 vertices.len(),
             ) {
                 eprintln!("failed to update vertex buffer: {}", e);
+            }
+
+            if let Some(ref mut accel_struct) = self.data.acceleration_structure {
+                if i < accel_struct.blas_list.len() {
+                    let blas = &accel_struct.blas_list[i];
+                    if let Err(e) = RRAccelerationStructure::update_blas(
+                        &self.instance,
+                        &self.rrdevice,
+                        &self.data.rrcommand_pool,
+                        blas,
+                        &rrdata.vertex_buffer.buffer,
+                        rrdata.vertex_data.vertices.len() as u32,
+                        std::mem::size_of::<vulkan_data::Vertex>() as u32,
+                        &rrdata.index_buffer.buffer,
+                        rrdata.vertex_data.indices.len() as u32,
+                    ) {
+                        eprintln!("failed to update BLAS: {}", e);
+                    }
+                }
+            }
+        }
+
+        if let Some(ref mut accel_struct) = self.data.acceleration_structure {
+            let tlas = &accel_struct.tlas;
+            if let Err(e) = RRAccelerationStructure::update_tlas(
+                &self.instance,
+                &self.rrdevice,
+                &self.data.rrcommand_pool,
+                tlas,
+                &accel_struct.blas_list,
+            ) {
+                eprintln!("failed to update TLAS: {}", e);
             }
         }
     }
@@ -839,6 +1024,8 @@ impl App {
                         initial_pos,
                         gui_data.is_ctrl_pressed,
                     );
+
+                    self.data.rt_debug_state.light_position = self.data.light_gizmo_data.position;
                 }
             }
         }

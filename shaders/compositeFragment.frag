@@ -17,7 +17,8 @@ layout(binding = 4) uniform SceneData {
     mat4 proj;
     int debugMode;
     float shadowStrength;
-    int _padding[2];
+    int enableDistanceAttenuation;
+    int _padding;
 } sceneData;
 
 void main() {
@@ -58,16 +59,27 @@ void main() {
 
     worldNormal = normalize(worldNormal);
 
-    vec3 lightDir = normalize(sceneData.lightPosition.xyz - worldPosition);
+    vec3 lightVector = sceneData.lightPosition.xyz - worldPosition;
+    float lightDistance = length(lightVector);
+    vec3 lightDir = lightVector / lightDistance;
 
     float diffuse = max(dot(worldNormal, lightDir), 0.0);
 
-    float ambient = 0.2;
+    float attenuation = 1.0;
+    if (sceneData.enableDistanceAttenuation != 0) {
+        attenuation = 1.0 / (1.0 + 0.01 * lightDistance + 0.001 * lightDistance * lightDistance);
+    }
+
+    float ambient = 0.3;
 
     float shadowFactor = mix(1.0, shadowMask, sceneData.shadowStrength);
 
     vec3 baseColor = albedo.rgb;
-    vec3 lighting = (ambient + diffuse * shadowFactor) * sceneData.lightColor.rgb;
+
+    vec3 ambientLight = ambient * vec3(1.0);
+    vec3 diffuseLight = diffuse * attenuation * sceneData.lightColor.rgb;
+
+    vec3 lighting = ambientLight + diffuseLight * shadowFactor;
     vec3 finalColor = baseColor * lighting;
 
     outColor = vec4(finalColor, 1.0);

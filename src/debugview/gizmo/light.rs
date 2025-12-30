@@ -147,6 +147,19 @@ impl LightGizmoData {
         self.position = position;
     }
 
+    pub fn sync_from_debug_state(&mut self, debug_state_position: Vector3<f32>) {
+        if self.position.x != debug_state_position.x ||
+           self.position.y != debug_state_position.y ||
+           self.position.z != debug_state_position.z {
+            log!("LightGizmoData: syncing from rt_debug_state");
+            log!("  Before: ({:.2}, {:.2}, {:.2})",
+                self.position.x, self.position.y, self.position.z);
+            log!("  After:  ({:.2}, {:.2}, {:.2})",
+                debug_state_position.x, debug_state_position.y, debug_state_position.z);
+            self.position = debug_state_position;
+        }
+    }
+
     pub fn update_position_with_constraint(
         &mut self,
         new_position: Vector3<f32>,

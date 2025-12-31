@@ -199,7 +199,33 @@ impl RRRayQueryDescriptorSet {
         Ok(())
     }
 
-    /// Destroy descriptor set resources
+    pub unsafe fn update_tlas(
+        &mut self,
+        rrdevice: &RRDevice,
+        tlas: vk::AccelerationStructureKHR,
+    ) -> Result<()> {
+        if self.descriptor_set == vk::DescriptorSet::null() {
+            return Ok(());
+        }
+
+        let tlas_info = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
+            .acceleration_structures(std::slice::from_ref(&tlas))
+            .build();
+
+        let mut tlas_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(3)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
+            .push_next(&mut tlas_info.clone())
+            .build();
+        tlas_write.descriptor_count = 1;
+
+        rrdevice.device.update_descriptor_sets(&[tlas_write], &[] as &[vk::CopyDescriptorSet]);
+
+        Ok(())
+    }
+
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         if self.descriptor_pool != vk::DescriptorPool::null() {
             device.destroy_descriptor_pool(self.descriptor_pool, None);

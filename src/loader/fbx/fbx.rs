@@ -1043,6 +1043,13 @@ impl FbxModel {
     pub fn animation_count(&self) -> usize {
         self.animations.len()
     }
+
+    /// すべてのデータをクリア
+    pub fn clear(&mut self) {
+        self.fbx_data.clear();
+        self.animations.clear();
+        self.nodes.clear();
+    }
 }
 
 /// FBXアニメーション全体

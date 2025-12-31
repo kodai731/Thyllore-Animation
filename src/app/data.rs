@@ -46,6 +46,7 @@ pub struct GUIData {
     pub show_light_ray_to_model: bool,
     pub is_ctrl_pressed: bool,
     pub move_light_to: LightMoveTarget,
+    pub load_cube: bool,
 }
 
 impl Default for GUIData {
@@ -68,6 +69,7 @@ impl Default for GUIData {
             show_light_ray_to_model: false,
             is_ctrl_pressed: false,
             move_light_to: LightMoveTarget::None,
+            load_cube: false,
         }
     }
 }

@@ -226,6 +226,12 @@ impl System {
                                         }
 
                                         ui.separator();
+                                        ui.text("Test Models:");
+                                        if ui.button("Load Cube Model") {
+                                            gui_data.load_cube = true;
+                                        }
+
+                                        ui.separator();
                                         ui.text("Move Light to Model Bounds:");
                                         if ui.button("X Min") {
                                             gui_data.move_light_to = crate::app::data::LightMoveTarget::XMin;

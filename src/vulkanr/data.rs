@@ -75,19 +75,55 @@ impl RRData {
         Ok(())
     }
 
-    pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
+    pub unsafe fn delete_buffers(&mut self, rrdevice: &RRDevice) {
         for uniform_buffer in &self.rruniform_buffers {
             uniform_buffer.delete(rrdevice);
         }
         self.rruniform_buffers.clear();
-        rrdevice.device.destroy_image_view(self.image_view, None);
-        rrdevice.device.destroy_sampler(self.sampler, None);
-        rrdevice
-            .device
-            .destroy_buffer(self.vertex_buffer.buffer, None);
-        rrdevice
-            .device
-            .destroy_buffer(self.index_buffer.buffer, None);
+
+        if self.image_view != vk::ImageView::null() {
+            rrdevice.device.destroy_image_view(self.image_view, None);
+            self.image_view = vk::ImageView::null();
+        }
+
+        if self.sampler != vk::Sampler::null() {
+            rrdevice.device.destroy_sampler(self.sampler, None);
+            self.sampler = vk::Sampler::null();
+        }
+
+        if self.vertex_buffer.buffer != vk::Buffer::null() {
+            rrdevice.device.destroy_buffer(self.vertex_buffer.buffer, None);
+            self.vertex_buffer.buffer = vk::Buffer::null();
+        }
+
+        if self.vertex_buffer.buffer_memory != vk::DeviceMemory::null() {
+            rrdevice.device.free_memory(self.vertex_buffer.buffer_memory, None);
+            self.vertex_buffer.buffer_memory = vk::DeviceMemory::null();
+        }
+
+        if self.index_buffer.buffer != vk::Buffer::null() {
+            rrdevice.device.destroy_buffer(self.index_buffer.buffer, None);
+            self.index_buffer.buffer = vk::Buffer::null();
+        }
+
+        if self.index_buffer.buffer_memory != vk::DeviceMemory::null() {
+            rrdevice.device.free_memory(self.index_buffer.buffer_memory, None);
+            self.index_buffer.buffer_memory = vk::DeviceMemory::null();
+        }
+    }
+
+    pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
+        self.delete_buffers(rrdevice);
+
+        if self.image != vk::Image::null() {
+            rrdevice.device.destroy_image(self.image, None);
+            self.image = vk::Image::null();
+        }
+
+        if self.image_memory != vk::DeviceMemory::null() {
+            rrdevice.device.free_memory(self.image_memory, None);
+            self.image_memory = vk::DeviceMemory::null();
+        }
     }
 }
 

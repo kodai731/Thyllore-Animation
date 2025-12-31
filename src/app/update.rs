@@ -381,6 +381,25 @@ impl App {
             gui_data.debug_shadow_info = false;
         }
 
+        if gui_data.load_cube {
+            log!("Loading cube model...");
+            match crate::scene::common::replace_model_with_cube(
+                &self.instance,
+                &self.rrdevice,
+                &mut self.data,
+                100.0,
+                [0.0, 0.0, 100.0],
+            ) {
+                Ok(_) => {
+                    log!("Cube model loaded successfully");
+                }
+                Err(e) => {
+                    log!("Failed to load cube model: {}", e);
+                }
+            }
+            gui_data.load_cube = false;
+        }
+
         let ubo = UniformBufferObject { model, view, proj };
 
         for i in 0..self.data.model_descriptor_set.rrdata.len() {
@@ -748,7 +767,7 @@ impl App {
 
         for i in 0..data.model_descriptor_set.rrdata.len() {
             let rrdata = &mut data.model_descriptor_set.rrdata[i];
-            rrdata.delete(rrdevice);
+            rrdata.delete_buffers(rrdevice);
 
             rrdata.vertex_buffer = RRVertexBuffer::new(
                 &instance,

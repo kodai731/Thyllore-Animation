@@ -14,18 +14,16 @@ layout(location = 3) in vec3 inNormal;
 layout(location = 0) out vec3 fragWorldPos;
 layout(location = 1) out vec3 fragWorldNormal;
 layout(location = 2) out vec2 fragTexCoord;
+layout(location = 3) out vec4 fragColor;
 
 void main() {
-    // Transform position to world space
     vec4 worldPos = ubo.model * vec4(inPosition, 1.0);
     fragWorldPos = worldPos.xyz;
 
-    // Transform normal to world space (use inverse transpose for non-uniform scaling)
-    // For now, assuming uniform scaling, so just use model matrix
     fragWorldNormal = mat3(ubo.model) * inNormal;
 
     fragTexCoord = inTexCoord;
+    fragColor = inColor;
 
-    // Final position in clip space
     gl_Position = ubo.proj * ubo.view * worldPos;
 }

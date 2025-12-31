@@ -825,4 +825,38 @@ impl RRAccelerationStructure {
         }
         self.blas_list.clear();
     }
+
+    pub unsafe fn update_all(
+        &self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        rrcommand_pool: &RRCommandPool,
+        vertex_buffers: &[(&vk::Buffer, u32, u32, &vk::Buffer, u32)],
+    ) -> Result<()> {
+        for (i, (vertex_buffer, vertex_count, vertex_stride, index_buffer, index_count)) in vertex_buffers.iter().enumerate() {
+            if i < self.blas_list.len() {
+                Self::update_blas(
+                    instance,
+                    rrdevice,
+                    rrcommand_pool,
+                    &self.blas_list[i],
+                    vertex_buffer,
+                    *vertex_count,
+                    *vertex_stride,
+                    index_buffer,
+                    *index_count,
+                )?;
+            }
+        }
+
+        Self::update_tlas(
+            instance,
+            rrdevice,
+            rrcommand_pool,
+            &self.tlas,
+            &self.blas_list,
+        )?;
+
+        Ok(())
+    }
 }

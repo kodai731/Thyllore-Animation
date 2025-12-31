@@ -370,10 +370,10 @@ impl App {
         let resized = false;
         let start = Instant::now();
 
-        data.initial_camera_pos = [5.0, 3.0, -5.0];
+        data.initial_camera_pos = [1100.0, -100.0, 200.0];
         data.camera_pos = data.initial_camera_pos;
         let camera_pos = vec3(data.camera_pos[0], data.camera_pos[1], data.camera_pos[2]);
-        let camera_direction = (vec3(0.0, 0.0, 0.0) - camera_pos).normalize();
+        let camera_direction = (camera_pos - vec3(0.0, 0.0, 0.0)).normalize();
         let camera_up = vec3(0.0, 1.0, 0.0);
         data.camera_direction = [camera_direction.x, camera_direction.y, camera_direction.z];
         data.camera_up = [camera_up.x, camera_up.y, camera_up.z];

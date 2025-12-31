@@ -121,8 +121,8 @@ impl App {
                         // 頂点バッファを更新
                         Self::update_fbx_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
 
-                        // Acceleration Structureを再構築（アニメーション後の頂点座標で）
-                        Self::build_acceleration_structures(&self.instance, &self.rrdevice, &mut self.data)?;
+                        // Acceleration Structureを更新（アニメーション後の頂点座標で）
+                        Self::update_acceleration_structures(&self.instance, &self.rrdevice, &mut self.data)?;
 
                     } else {
                         // Static pose (duration == 0): keep time at 0, no need to update every frame
@@ -185,6 +185,8 @@ impl App {
             }
 
             Self::update_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
+
+            Self::update_acceleration_structures(&self.instance, &self.rrdevice, &mut self.data)?;
         }
 
         self.update_uniform_buffer(
@@ -202,27 +204,16 @@ impl App {
                     .cloned()
                     .collect()
             } else {
-                self.data.gltf_model.gltf_data
+                self.data.model_descriptor_set.rrdata
                     .iter()
-                    .flat_map(|data| data.vertices.iter().map(|v| {
-                        cgmath::Vector3::new(
-                            v.animation_position[0],
-                            v.animation_position[1],
-                            v.animation_position[2],
-                        )
+                    .flat_map(|rrdata| rrdata.vertex_data.vertices.iter().map(|v| {
+                        cgmath::Vector3::new(v.pos.x, v.pos.y, v.pos.z)
                     }))
                     .collect()
             };
 
-            log!("Light Ray Debug: all_positions count = {}", all_positions.len());
             self.data.light_gizmo_data.update_ray_to_model(&all_positions);
-            log!("Light Ray Debug: ray vertices = {}, indices = {}",
-                self.data.light_gizmo_data.ray_to_model_vertices.len(),
-                self.data.light_gizmo_data.ray_to_model_indices.len());
             self.data.light_gizmo_data.update_or_create_ray_buffers(&self.instance, &self.rrdevice)?;
-            log!("Light Ray Debug: buffers created - vertex_buffer={:?}, index_buffer={:?}",
-                self.data.light_gizmo_data.ray_to_model_vertex_buffer.is_some(),
-                self.data.light_gizmo_data.ray_to_model_index_buffer.is_some());
         }
 
         // Update ImGui buffers

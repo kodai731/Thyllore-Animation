@@ -6,6 +6,8 @@ pub enum DebugViewMode {
     Position = 1,
     Normal = 2,
     ShadowMask = 3,
+    NdotL = 4,
+    LightDirection = 5,
 }
 
 impl Default for DebugViewMode {
@@ -25,6 +27,8 @@ impl DebugViewMode {
             1 => DebugViewMode::Position,
             2 => DebugViewMode::Normal,
             3 => DebugViewMode::ShadowMask,
+            4 => DebugViewMode::NdotL,
+            5 => DebugViewMode::LightDirection,
             _ => DebugViewMode::Final,
         }
     }
@@ -35,6 +39,8 @@ impl DebugViewMode {
             DebugViewMode::Position => "Position (World Space)",
             DebugViewMode::Normal => "Normal (World Space)",
             DebugViewMode::ShadowMask => "Shadow Mask",
+            DebugViewMode::NdotL => "N dot L (Green=Lit, Red=Back)",
+            DebugViewMode::LightDirection => "Light Direction",
         }
     }
 }

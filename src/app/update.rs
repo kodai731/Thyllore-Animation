@@ -377,53 +377,7 @@ impl App {
         );
 
         if gui_data.debug_shadow_info {
-            log!("=== Shadow Debug Info ===");
-            log!("Light position: ({:.2}, {:.2}, {:.2})", light_pos.x, light_pos.y, light_pos.z);
-            log!("Camera position: ({:.2}, {:.2}, {:.2})", camera_pos.x, camera_pos.y, camera_pos.z);
-            log!("Camera direction: ({:.3}, {:.3}, {:.3})", camera_direction.x, camera_direction.y, camera_direction.z);
-            log!("Shadow strength: {:.2}", self.data.rt_debug_state.shadow_strength);
-            log!("Shadow normal offset: {:.2}", self.data.rt_debug_state.shadow_normal_offset);
-            log!("Debug view mode: {:?}", self.data.rt_debug_state.debug_view_mode);
-            log!("Screen size: {:.0} x {:.0}", screen_size.x, screen_size.y);
-            log!("Near plane: {:.2}, Far plane: {:.2}", self.data.near_plane, self.data.far_plane);
-
-            let light_distance = (light_pos - camera_pos).magnitude();
-            log!("Distance camera to light: {:.2}", light_distance);
-
-            if let Some(screen_pos) = world_to_screen(light_pos, screen_size, view, proj) {
-                log!("Light screen position: ({:.1}, {:.1})", screen_pos.x, screen_pos.y);
-            }
-
-            let all_positions: Vec<Vector3<f32>> = if !self.data.fbx_model.fbx_data.is_empty() {
-                self.data.fbx_model.fbx_data.iter().flat_map(|data| data.positions.iter()).cloned().collect()
-            } else {
-                self.data.gltf_model.gltf_data.iter().flat_map(|data| data.vertices.iter().map(|v| {
-                    Vector3::new(v.animation_position[0], v.animation_position[1], v.animation_position[2])
-                })).collect()
-            };
-
-            if !all_positions.is_empty() {
-                let (min_x, max_x) = all_positions.iter().fold((f32::MAX, f32::MIN), |(min, max), p| (min.min(p.x), max.max(p.x)));
-                let (min_y, max_y) = all_positions.iter().fold((f32::MAX, f32::MIN), |(min, max), p| (min.min(p.y), max.max(p.y)));
-                let (min_z, max_z) = all_positions.iter().fold((f32::MAX, f32::MIN), |(min, max), p| (min.min(p.z), max.max(p.z)));
-
-                log!("Model bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]", min_x, max_x, min_y, max_y, min_z, max_z);
-                log!("Light X: {} model (min={:.2}, max={:.2}, light={:.2})",
-                    if light_pos.x < min_x { "LEFT of" } else if light_pos.x > max_x { "RIGHT of" } else { "INSIDE" },
-                    min_x, max_x, light_pos.x);
-                log!("Light Y: {} model (min={:.2}, max={:.2}, light={:.2})",
-                    if light_pos.y < min_y { "BELOW" } else if light_pos.y > max_y { "ABOVE" } else { "INSIDE" },
-                    min_y, max_y, light_pos.y);
-                log!("Light Z: {} model (min={:.2}, max={:.2}, light={:.2})",
-                    if light_pos.z < min_z { "BEHIND" } else if light_pos.z > max_z { "IN FRONT of" } else { "INSIDE" },
-                    min_z, max_z, light_pos.z);
-            }
-
-            log!("Suggestion: Switch debug view modes to verify:");
-            log!("  - 'Shadow Mask' to see shadow coverage");
-            log!("  - 'Position' to verify G-Buffer world positions");
-            log!("  - 'Normal' to verify G-Buffer normals");
-            log!("======================");
+            self.log_shadow_debug_info();
             gui_data.debug_shadow_info = false;
         }
 
@@ -452,11 +406,18 @@ impl App {
             let light_pos = &self.data.rt_debug_state.light_position;
 
             static mut SCENE_UNIFORM_LOG_COUNTER: u32 = 0;
+            static mut PREV_LIGHT_POS: [f32; 3] = [0.0, 0.0, 0.0];
             unsafe {
                 SCENE_UNIFORM_LOG_COUNTER += 1;
-                if SCENE_UNIFORM_LOG_COUNTER % 60 == 0 {
-                    log!("SceneUniformData UPDATE - light_position sent to shader: ({:.2}, {:.2}, {:.2})",
+                let current = [light_pos.x, light_pos.y, light_pos.z];
+                let changed = (current[0] - PREV_LIGHT_POS[0]).abs() > 0.1
+                    || (current[1] - PREV_LIGHT_POS[1]).abs() > 0.1
+                    || (current[2] - PREV_LIGHT_POS[2]).abs() > 0.1;
+
+                if changed || SCENE_UNIFORM_LOG_COUNTER % 60 == 0 {
+                    log!("SceneUniformData UPDATE - light_position: ({:.2}, {:.2}, {:.2})",
                         light_pos.x, light_pos.y, light_pos.z);
+                    PREV_LIGHT_POS = current;
                 }
             }
 
@@ -1029,5 +990,86 @@ impl App {
                 }
             }
         }
+    }
+
+    pub(crate) fn log_shadow_debug_info(&self) {
+        let light_pos = self.data.rt_debug_state.light_position;
+        let camera_pos = vec3_from_array(self.data.camera_pos);
+
+        log!("=== Shadow Debug Info ===");
+        log!("Light position (rt_debug_state): ({:.2}, {:.2}, {:.2})", light_pos.x, light_pos.y, light_pos.z);
+        log!("Light gizmo position: ({:.2}, {:.2}, {:.2})",
+            self.data.light_gizmo_data.position.x,
+            self.data.light_gizmo_data.position.y,
+            self.data.light_gizmo_data.position.z);
+        log!("Camera position: ({:.2}, {:.2}, {:.2})", camera_pos.x, camera_pos.y, camera_pos.z);
+
+        log!("Shadow settings:");
+        log!("  strength: {:.2}", self.data.rt_debug_state.shadow_strength);
+        log!("  normal_offset: {:.2}", self.data.rt_debug_state.shadow_normal_offset);
+        log!("  debug_view_mode: {:?}", self.data.rt_debug_state.debug_view_mode);
+        log!("  distance_attenuation: {}", self.data.rt_debug_state.enable_distance_attenuation);
+
+        if let Some(ref accel_struct) = self.data.acceleration_structure {
+            log!("Acceleration Structure:");
+            log!("  BLAS count: {}", accel_struct.blas_list.len());
+            for (i, blas) in accel_struct.blas_list.iter().enumerate() {
+                log!("    BLAS[{}]: AS={:?}, device_addr={:#x}",
+                    i, blas.acceleration_structure.is_some(), blas.device_address);
+            }
+            log!("  TLAS: AS={:?}", accel_struct.tlas.acceleration_structure.is_some());
+        } else {
+            log!("WARNING: No acceleration structure!");
+        }
+
+        log!("Vertex buffers (GPU):");
+        for (i, rrdata) in self.data.model_descriptor_set.rrdata.iter().enumerate() {
+            log!("  Mesh[{}]: {} vertices, {} indices",
+                i, rrdata.vertex_data.vertices.len(), rrdata.vertex_data.indices.len());
+            if !rrdata.vertex_data.vertices.is_empty() {
+                let v = &rrdata.vertex_data.vertices[0];
+                log!("    vertex[0].pos: ({:.2}, {:.2}, {:.2})", v.pos.x, v.pos.y, v.pos.z);
+                log!("    vertex[0].normal: ({:.3}, {:.3}, {:.3})", v.normal.x, v.normal.y, v.normal.z);
+            }
+        }
+
+        if !self.data.fbx_model.fbx_data.is_empty() {
+            log!("FBX model data:");
+            for (i, fbx_data) in self.data.fbx_model.fbx_data.iter().enumerate() {
+                log!("  Mesh[{}]: {} positions, {} normals",
+                    i, fbx_data.positions.len(), fbx_data.normals.len());
+                if !fbx_data.positions.is_empty() {
+                    let (min_x, max_x) = fbx_data.positions.iter().fold((f32::MAX, f32::MIN), |(min, max), p| (min.min(p.x), max.max(p.x)));
+                    let (min_y, max_y) = fbx_data.positions.iter().fold((f32::MAX, f32::MIN), |(min, max), p| (min.min(p.y), max.max(p.y)));
+                    let (min_z, max_z) = fbx_data.positions.iter().fold((f32::MAX, f32::MIN), |(min, max), p| (min.min(p.z), max.max(p.z)));
+                    log!("    bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]", min_x, max_x, min_y, max_y, min_z, max_z);
+
+                    let center = Vector3::new((min_x + max_x) / 2.0, (min_y + max_y) / 2.0, (min_z + max_z) / 2.0);
+                    let light_to_center = center - light_pos;
+                    let dist = light_to_center.magnitude();
+                    if dist > 0.001 {
+                        log!("    light->center: dir=({:.3}, {:.3}, {:.3}), dist={:.2}",
+                            light_to_center.x / dist, light_to_center.y / dist, light_to_center.z / dist, dist);
+                    }
+
+                    log!("    Light relative to model:");
+                    log!("      X: {} (light={:.2}, range=[{:.2}, {:.2}])",
+                        if light_pos.x < min_x { "LEFT" } else if light_pos.x > max_x { "RIGHT" } else { "INSIDE" },
+                        light_pos.x, min_x, max_x);
+                    log!("      Y: {} (light={:.2}, range=[{:.2}, {:.2}])",
+                        if light_pos.y < min_y { "BELOW" } else if light_pos.y > max_y { "ABOVE" } else { "INSIDE" },
+                        light_pos.y, min_y, max_y);
+                    log!("      Z: {} (light={:.2}, range=[{:.2}, {:.2}])",
+                        if light_pos.z < min_z { "BEHIND" } else if light_pos.z > max_z { "FRONT" } else { "INSIDE" },
+                        light_pos.z, min_z, max_z);
+                }
+                if !fbx_data.normals.is_empty() {
+                    log!("    normal[0]: ({:.3}, {:.3}, {:.3})",
+                        fbx_data.normals[0].x, fbx_data.normals[0].y, fbx_data.normals[0].z);
+                }
+            }
+        }
+
+        log!("=========================");
     }
 }

@@ -365,20 +365,10 @@ impl LightGizmoData {
         let mut max_z = f32::MIN;
 
         let mut closest_point = model_positions[0];
+        let mut closest_index: usize = 0;
         let mut min_distance = (closest_point - self.position).magnitude();
 
-        static mut POSITION_CHECK_COUNTER: u32 = 0;
-        unsafe {
-            POSITION_CHECK_COUNTER += 1;
-            if POSITION_CHECK_COUNTER % 60 == 0 {
-                log!("First 5 model positions:");
-                for (i, pos) in model_positions.iter().take(5).enumerate() {
-                    log!("  [{}]: ({:.2}, {:.2}, {:.2})", i, pos.x, pos.y, pos.z);
-                }
-            }
-        }
-
-        for pos in model_positions.iter() {
+        for (i, pos) in model_positions.iter().enumerate() {
             min_x = min_x.min(pos.x);
             max_x = max_x.max(pos.x);
             min_y = min_y.min(pos.y);
@@ -390,6 +380,7 @@ impl LightGizmoData {
             if distance < min_distance {
                 min_distance = distance;
                 closest_point = *pos;
+                closest_index = i;
             }
         }
 
@@ -402,26 +393,27 @@ impl LightGizmoData {
         let vertex_0 = Vertex::new(light_pos, bright_yellow, tex_coord);
         let vertex_1 = Vertex::new(closest, bright_yellow, tex_coord);
 
-        static mut VERTEX_LOG_COUNTER: u32 = 0;
-        unsafe {
-            VERTEX_LOG_COUNTER += 1;
-            if VERTEX_LOG_COUNTER % 60 == 0 {
-                log!("Ray Vertex[0] pos: ({:.2}, {:.2}, {:.2})", vertex_0.pos.x, vertex_0.pos.y, vertex_0.pos.z);
-                log!("Ray Vertex[1] pos: ({:.2}, {:.2}, {:.2})", vertex_1.pos.x, vertex_1.pos.y, vertex_1.pos.z);
-            }
-        }
-
         self.ray_to_model_vertices = vec![vertex_0, vertex_1];
         self.ray_to_model_indices = vec![0, 1];
 
-        use crate::log;
-        log!("Model bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
-             min_x, max_x, min_y, max_y, min_z, max_z);
-        log!("Light position: ({:.2}, {:.2}, {:.2})", self.position.x, self.position.y, self.position.z);
-        log!("Ray vertices: Light({:.2}, {:.2}, {:.2}) -> Closest({:.2}, {:.2}, {:.2}), distance={:.2}",
-            self.position.x, self.position.y, self.position.z,
-            closest_point.x, closest_point.y, closest_point.z,
-            min_distance);
+        static mut VERTEX_LOG_COUNTER: u32 = 0;
+        unsafe {
+            VERTEX_LOG_COUNTER += 1;
+            if VERTEX_LOG_COUNTER % 120 == 1 {
+                log!("=== Ray to Model Debug ===");
+                log!("Model vertex count: {}", model_positions.len());
+                log!("Model bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
+                     min_x, max_x, min_y, max_y, min_z, max_z);
+                log!("Light position: ({:.2}, {:.2}, {:.2})", self.position.x, self.position.y, self.position.z);
+                log!("Closest vertex index: {}", closest_index);
+                log!("Closest vertex position: ({:.2}, {:.2}, {:.2})", closest_point.x, closest_point.y, closest_point.z);
+                log!("Distance to closest: {:.2}", min_distance);
+                log!("Ray line: [0]=Light({:.2}, {:.2}, {:.2}) -> [1]=Model({:.2}, {:.2}, {:.2})",
+                    vertex_0.pos.x, vertex_0.pos.y, vertex_0.pos.z,
+                    vertex_1.pos.x, vertex_1.pos.y, vertex_1.pos.z);
+                log!("==========================");
+            }
+        }
     }
 
     pub unsafe fn update_or_create_ray_buffers(

@@ -56,6 +56,24 @@ void main() {
         outColor = vec4(vec3(shadowMask), 1.0);
         return;
     }
+    else if (sceneData.debugMode == 4) {
+        // N dot L view - visualize light direction relative to surface
+        vec3 n = normalize(worldNormal);
+        vec3 lightVector = sceneData.lightPosition.xyz - worldPosition;
+        vec3 l = normalize(lightVector);
+        float ndotl = dot(n, l);
+        // Red = facing away from light, Green = facing toward light
+        vec3 ndotlColor = ndotl > 0.0 ? vec3(0.0, ndotl, 0.0) : vec3(-ndotl, 0.0, 0.0);
+        outColor = vec4(ndotlColor, 1.0);
+        return;
+    }
+    else if (sceneData.debugMode == 5) {
+        // Light direction view - show raw light direction as color
+        vec3 lightVector = sceneData.lightPosition.xyz - worldPosition;
+        vec3 l = normalize(lightVector);
+        outColor = vec4(l * 0.5 + 0.5, 1.0);
+        return;
+    }
 
     worldNormal = normalize(worldNormal);
 

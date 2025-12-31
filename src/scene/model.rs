@@ -114,10 +114,18 @@ impl App {
                     [0.5, 0.5]
                 };
 
-                let vertex = vulkan_data::Vertex::new(
+                let normal = if i < fbx_data.normals.len() {
+                    let n = &fbx_data.normals[i];
+                    Vec3::new(n.x, n.y, n.z)
+                } else {
+                    Vec3::new(0.0, 1.0, 0.0)
+                };
+
+                let vertex = vulkan_data::Vertex::new_with_normal(
                     Vec3::new(position.x, position.y, position.z),
                     Vec4::new(1.0, 1.0, 1.0, 1.0),
                     Vec2::new_array(uv),
+                    normal,
                 );
                 rrdata.vertex_data.vertices.push(vertex);
             }
@@ -249,10 +257,18 @@ impl App {
                         [0.5, 0.5]
                     };
 
-                    let vertex = vulkan_data::Vertex::new(
+                    let normal = if i < fbx_data.normals.len() {
+                        let n = &fbx_data.normals[i];
+                        Vec3::new(n.x, n.y, n.z)
+                    } else {
+                        Vec3::new(0.0, 1.0, 0.0)
+                    };
+
+                    let vertex = vulkan_data::Vertex::new_with_normal(
                         Vec3::new(position.x, position.y, position.z),
                         Vec4::new(1.0, 1.0, 1.0, 1.0),
                         Vec2::new_array(uv),
+                        normal,
                     );
                     rrdata.vertex_data.vertices.push(vertex);
                 }
@@ -532,6 +548,34 @@ impl App {
                 vertex_data.vertices[vertex.index].pos.y = vertex.animation_position[1];
                 vertex_data.vertices[vertex.index].pos.z = vertex.animation_position[2];
             }
+
+            static mut UPDATE_LOG_COUNTER: u32 = 0;
+            unsafe {
+                UPDATE_LOG_COUNTER += 1;
+                if UPDATE_LOG_COUNTER <= 5 {
+                    log!("=== update_vertex_buffer Debug (mesh {}) ===", i);
+                    log!("gltf_data.vertices count: {}", gltf_data.vertices.len());
+                    log!("vertex_data.vertices count: {}", vertex_data.vertices.len());
+                    if !vertex_data.vertices.is_empty() {
+                        let v0 = &vertex_data.vertices[0];
+                        log!("vertex_data[0].pos: ({:.2}, {:.2}, {:.2})", v0.pos.x, v0.pos.y, v0.pos.z);
+                        if vertex_data.vertices.len() > 100 {
+                            let v100 = &vertex_data.vertices[100];
+                            log!("vertex_data[100].pos: ({:.2}, {:.2}, {:.2})", v100.pos.x, v100.pos.y, v100.pos.z);
+                        }
+                    }
+                    if !gltf_data.vertices.is_empty() {
+                        let v = &gltf_data.vertices[0];
+                        log!("gltf_data[0].index: {}", v.index);
+                        log!("gltf_data[0].animation_position: ({:.2}, {:.2}, {:.2})",
+                            v.animation_position[0], v.animation_position[1], v.animation_position[2]);
+                        log!("gltf_data[0].position (original): ({:.2}, {:.2}, {:.2})",
+                            v.position[0], v.position[1], v.position[2]);
+                    }
+                    log!("==================================");
+                }
+            }
+
             if let Err(e) = rrdata.vertex_buffer.update(
                 instance,
                 rrdevice,
@@ -579,6 +623,13 @@ impl App {
                         vertex_data.vertices[vertex_idx].pos.x = pos.x;
                         vertex_data.vertices[vertex_idx].pos.y = pos.y;
                         vertex_data.vertices[vertex_idx].pos.z = pos.z;
+
+                        if vertex_idx < fbx_data.normals.len() {
+                            let normal = &fbx_data.normals[vertex_idx];
+                            vertex_data.vertices[vertex_idx].normal.x = normal.x;
+                            vertex_data.vertices[vertex_idx].normal.y = normal.y;
+                            vertex_data.vertices[vertex_idx].normal.z = normal.z;
+                        }
                     }
                 }
 
@@ -593,6 +644,35 @@ impl App {
                     eprintln!("Failed to update FBX vertex buffer for mesh {}: {}", mesh_idx, e);
                 }
             }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) unsafe fn update_acceleration_structures(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        data: &mut AppData,
+    ) -> Result<()> {
+        if let Some(ref accel_struct) = data.acceleration_structure {
+            let vertex_buffers: Vec<_> = data.model_descriptor_set.rrdata.iter()
+                .map(|rrdata| {
+                    (
+                        &rrdata.vertex_buffer.buffer,
+                        rrdata.vertex_data.vertices.len() as u32,
+                        std::mem::size_of::<vulkan_data::Vertex>() as u32,
+                        &rrdata.index_buffer.buffer,
+                        rrdata.vertex_data.indices.len() as u32,
+                    )
+                })
+                .collect();
+
+            accel_struct.update_all(
+                instance,
+                rrdevice,
+                &data.rrcommand_pool,
+                &vertex_buffers,
+            )?;
         }
 
         Ok(())

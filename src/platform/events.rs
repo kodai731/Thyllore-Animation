@@ -209,6 +209,12 @@ impl System {
                                         if ui.radio_button("Shadow Mask", &mut current_mode, 3) {
                                             app.data.rt_debug_state.debug_view_mode = DebugViewMode::ShadowMask;
                                         }
+                                        if ui.radio_button("N dot L (Green=Lit, Red=Back)", &mut current_mode, 4) {
+                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::NdotL;
+                                        }
+                                        if ui.radio_button("Light Direction", &mut current_mode, 5) {
+                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::LightDirection;
+                                        }
 
                                         ui.separator();
 

@@ -147,6 +147,8 @@ impl<'a> CompositePass<'a> {
             DebugViewMode::Position => 1,
             DebugViewMode::Normal => 2,
             DebugViewMode::ShadowMask => 3,
+            DebugViewMode::NdotL => 4,
+            DebugViewMode::LightDirection => 5,
         };
 
         let push_constants = [debug_view_mode_value];

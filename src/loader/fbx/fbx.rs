@@ -3,9 +3,9 @@ reference from bevy_mod_fbx, FizzWizZleDazzle
 https://github.com/FizzWizZleDazzle/bevy_mod_fbx/blob/main/src/loader.rs#L217
  */
 use crate::log;
-use crate::math::math::*;
+use crate::math::*;
 use anyhow::{anyhow, Context, Result};
-use cgmath::{Matrix4, Quaternion, Deg, Rad, EuclideanSpace, Point3};
+use cgmath::{Matrix3, Matrix4, Quaternion, Deg, Rad, EuclideanSpace, Point3};
 use fbxcel::tree::v7400::NodeHandle;
 use fbxcel_dom::any::AnyDocument;
 use fbxcel_dom::v7400::data::{
@@ -410,20 +410,11 @@ fn get_world_transform(model: &ModelHandle, doc: &Document) -> Matrix4<f32> {
         }
     }
 
-    // No parent found, local transform is world transform
     log!("  No parent for {}, using local as world", mesh_name);
 
-    // Apply Z-up to Y-up coordinate system conversion to all root meshes (no parent)
-    // This is needed because FBX files may have coordinate transformations baked in
-    // Pattern 12: Rotate 90° around X axis (swaps Y and Z, negates new Y)
-    let zup_to_yup = Matrix4::new(
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, -1.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 1.0,
-    );
-    log!("  Applying Z-up to Y-up conversion (Rot +90° X) to root mesh {}", mesh_name);
-    zup_to_yup * local_transform
+    use crate::math::coordinate_system::fbx_to_world;
+    log!("  Applying FBX Z-up to World Y-up conversion to root mesh {}", mesh_name);
+    fbx_to_world() * local_transform
 }
 
 /// Helper function to get world transform for any ObjectHandle
@@ -627,15 +618,8 @@ pub unsafe fn load_fbx(path: &str) -> anyhow::Result<(FbxModel)> {
                         || parent.as_ref().map_or(false, |p| p == "RootNode");
 
                     let local_transform = if needs_coord_conversion {
-                        // Coordinate conversion matrix: Y-up → Z-up (90-degree X-axis rotation)
-                        // [1, 0, 0, 0; 0, 0, -1, 0; 0, 1, 0, 0; 0, 0, 0, 1]
-                        let coord_conversion = Matrix4::new(
-                            1.0, 0.0, 0.0, 0.0,
-                            0.0, 0.0, -1.0, 0.0,
-                            0.0, 1.0, 0.0, 0.0,
-                            0.0, 0.0, 0.0, 1.0,
-                        );
-                        coord_conversion * local_transform_fbx
+                        use crate::math::coordinate_system::fbx_to_world;
+                        fbx_to_world() * local_transform_fbx
                     } else {
                         local_transform_fbx
                     };
@@ -1139,17 +1123,9 @@ fn resolve_global_transform(
             || node.parent.as_ref().map_or(false, |p| p == "RootNode");
 
         let local_transform = if needs_coord_conversion && animation.bone_animations.contains_key(bone_name) {
-            // Only apply conversion if this bone has animation (animated local_transform_fbx needs conversion)
-            // Coordinate conversion matrix: Y-up → Z-up (90-degree X-axis rotation)
-            let coord_conversion = Matrix4::new(
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, -1.0, 0.0,
-                0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 1.0,
-            );
-            coord_conversion * local_transform_fbx
+            use crate::math::coordinate_system::fbx_to_world;
+            fbx_to_world() * local_transform_fbx
         } else {
-            // Child bones or static bones: use local_transform as-is
             local_transform_fbx
         };
 
@@ -2028,6 +2004,8 @@ pub struct MeshPart {
 pub struct FbxData {
     pub positions: Vec<Vector3<f32>>,        // ワールド座標の頂点位置（表示用）
     pub local_positions: Vec<Vector3<f32>>,  // ローカル座標の頂点位置（スキニング用）
+    pub normals: Vec<Vector3<f32>>,          // 頂点法線（変換後）
+    pub local_normals: Vec<Vector3<f32>>,    // ローカル座標の頂点法線（スキニング用）
     pub indices: Vec<u32>,
     pub tex_coords: Vec<[f32; 2]>,           // UV座標
     pub clusters: Vec<ClusterInfo>,          // スキニング情報
@@ -2042,6 +2020,8 @@ impl FbxData {
         Self {
             positions: Vec::new(),
             local_positions: Vec::new(),
+            normals: Vec::new(),
+            local_normals: Vec::new(),
             indices: Vec::new(),
             tex_coords: Vec::new(),
             clusters: Vec::new(),
@@ -2160,7 +2140,12 @@ impl FbxData {
 
         let animated_transform = final_transform;
 
-        // 全頂点を変換
+        let rotation_matrix = Matrix3::new(
+            animated_transform[0][0], animated_transform[0][1], animated_transform[0][2],
+            animated_transform[1][0], animated_transform[1][1], animated_transform[1][2],
+            animated_transform[2][0], animated_transform[2][1], animated_transform[2][2],
+        );
+
         for i in 0..self.local_positions.len() {
             let local_pos = Point3::new(
                 self.local_positions[i].x,
@@ -2169,12 +2154,28 @@ impl FbxData {
             );
             let world_pos = animated_transform.transform_point(local_pos);
             self.positions[i] = Vector3::new(world_pos.x, world_pos.y, world_pos.z);
+
+            if i < self.local_normals.len() {
+                let local_normal = self.local_normals[i];
+                let world_normal = rotation_matrix * local_normal;
+                let normalized = if world_normal.magnitude() > 0.0001 {
+                    world_normal.normalize()
+                } else {
+                    Vector3::new(0.0, 1.0, 0.0)
+                };
+                if i < self.normals.len() {
+                    self.normals[i] = normalized;
+                }
+            }
         }
 
-        // デバッグ: 最初の頂点をログ出力
         if time < 0.1 && !self.local_positions.is_empty() {
             log!("    First vertex: local={:?} -> world={:?}",
                  self.local_positions.get(0), self.positions.get(0));
+            if !self.local_normals.is_empty() {
+                log!("    First normal: local={:?} -> world={:?}",
+                     self.local_normals.get(0), self.normals.get(0));
+            }
         }
     }
 
@@ -2322,9 +2323,28 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
             fbx_data.positions.push(Vector3::new(vertex.x, vertex.y, vertex.z));
             fbx_data.local_positions.push(Vector3::new(vertex.x, vertex.y, vertex.z));
 
-            // Debug: Log first 3 vertices to check if positions are correct
             if i < 3 {
                 log!("  Vertex[{}]: ({:.3}, {:.3}, {:.3})", i, vertex.x, vertex.y, vertex.z);
+            }
+        }
+
+        // Extract normals
+        if !mesh.normals.is_empty() {
+            log!("Mesh {} has {} normals", mesh_idx, mesh.normals.len());
+            for (i, normal) in mesh.normals.iter().enumerate() {
+                let n = Vector3::new(normal.x, normal.y, normal.z);
+                fbx_data.normals.push(n);
+                fbx_data.local_normals.push(n);
+                if i < 3 {
+                    log!("  Normal[{}]: ({:.3}, {:.3}, {:.3})", i, normal.x, normal.y, normal.z);
+                }
+            }
+        } else {
+            log!("Mesh {} has no normals, generating default (0, 1, 0)", mesh_idx);
+            for _ in 0..mesh.vertices.len() {
+                let n = Vector3::new(0.0, 1.0, 0.0);
+                fbx_data.normals.push(n);
+                fbx_data.local_normals.push(n);
             }
         }
 

@@ -167,10 +167,17 @@ impl App {
             }
         }
 
-        let ray_query_pipeline = RRPipeline::new_compute(
+        let push_constant_range = vk::PushConstantRange::builder()
+            .stage_flags(vk::ShaderStageFlags::COMPUTE)
+            .offset(0)
+            .size(std::mem::size_of::<f32>() as u32)
+            .build();
+
+        let ray_query_pipeline = RRPipeline::new_compute_with_push_constants(
             rrdevice,
             "assets/shaders/rayQueryShadow.spv",
             &[ray_query_descriptor.descriptor_set_layout],
+            &[push_constant_range],
         )?;
         data.ray_query_pipeline = Some(ray_query_pipeline);
         data.ray_query_descriptor = Some(ray_query_descriptor);

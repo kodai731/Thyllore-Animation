@@ -18,6 +18,9 @@ fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
             gui_data.is_wheel_clicked = true;
         }
     }
+
+    let io = ui.io();
+    gui_data.is_ctrl_pressed = io.key_ctrl;
 }
 
 impl System {
@@ -190,6 +193,8 @@ impl System {
                                             app.data.rt_debug_state.shadow_strength = shadow_strength;
                                         }
 
+                                        ui.checkbox("Distance Attenuation", &mut app.data.rt_debug_state.enable_distance_attenuation);
+
                                         ui.text("Debug View Mode:");
                                         let mut current_mode = app.data.rt_debug_state.debug_view_mode.as_int();
                                         if ui.radio_button("Final (Lit + Shadow)", &mut current_mode, 0) {
@@ -204,13 +209,44 @@ impl System {
                                         if ui.radio_button("Shadow Mask", &mut current_mode, 3) {
                                             app.data.rt_debug_state.debug_view_mode = DebugViewMode::ShadowMask;
                                         }
+                                        if ui.radio_button("N dot L (Green=Lit, Red=Back)", &mut current_mode, 4) {
+                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::NdotL;
+                                        }
+                                        if ui.radio_button("Light Direction", &mut current_mode, 5) {
+                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::LightDirection;
+                                        }
 
                                         ui.separator();
 
                                         ui.text("Debug Info:");
                                         ui.checkbox("Show Click Debug", &mut gui_data.show_click_debug);
+                                        ui.checkbox("Show Light Ray to Model", &mut gui_data.show_light_ray_to_model);
                                         if ui.button("Debug Shadow Info") {
                                             gui_data.debug_shadow_info = true;
+                                        }
+
+                                        ui.separator();
+                                        ui.text("Move Light to Model Bounds:");
+                                        if ui.button("X Min") {
+                                            gui_data.move_light_to = crate::app::data::LightMoveTarget::XMin;
+                                        }
+                                        ui.same_line();
+                                        if ui.button("X Max") {
+                                            gui_data.move_light_to = crate::app::data::LightMoveTarget::XMax;
+                                        }
+                                        if ui.button("Y Min") {
+                                            gui_data.move_light_to = crate::app::data::LightMoveTarget::YMin;
+                                        }
+                                        ui.same_line();
+                                        if ui.button("Y Max") {
+                                            gui_data.move_light_to = crate::app::data::LightMoveTarget::YMax;
+                                        }
+                                        if ui.button("Z Min") {
+                                            gui_data.move_light_to = crate::app::data::LightMoveTarget::ZMin;
+                                        }
+                                        ui.same_line();
+                                        if ui.button("Z Max") {
+                                            gui_data.move_light_to = crate::app::data::LightMoveTarget::ZMax;
                                         }
                                         ui.text(format!(
                                             "Mouse Position: ({:.1},{:.1})",

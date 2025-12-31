@@ -274,6 +274,7 @@ pub struct GBufferPass<'a> {
     gbuffer: &'a RRGBuffer,
     pipeline: &'a RRPipeline,
     descriptor_set: &'a RRDescriptorSet,
+    model_descriptor_set: &'a RRDescriptorSet,
     device: &'a Device,
 }
 
@@ -290,6 +291,7 @@ impl<'a> GBufferPass<'a> {
             gbuffer,
             pipeline,
             descriptor_set,
+            model_descriptor_set: &app.data.model_descriptor_set,
             device: &app.rrdevice.device,
         })
     }
@@ -387,19 +389,19 @@ impl<'a> GBufferPass<'a> {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        for i in 0..self.descriptor_set.rrdata.len() {
-            let rrdata = &self.descriptor_set.rrdata[i];
+        for i in 0..self.model_descriptor_set.rrdata.len() {
+            let model_rrdata = &self.model_descriptor_set.rrdata[i];
 
             self.device.cmd_bind_vertex_buffers(
                 command_buffer,
                 0,
-                &[rrdata.vertex_buffer.buffer],
+                &[model_rrdata.vertex_buffer.buffer],
                 &[0],
             );
 
             self.device.cmd_bind_index_buffer(
                 command_buffer,
-                rrdata.index_buffer.buffer,
+                model_rrdata.index_buffer.buffer,
                 0,
                 vk::IndexType::UINT32,
             );
@@ -419,7 +421,7 @@ impl<'a> GBufferPass<'a> {
 
             self.device.cmd_draw_indexed(
                 command_buffer,
-                rrdata.index_buffer.indices,
+                model_rrdata.index_buffer.indices,
                 1,
                 0,
                 0,

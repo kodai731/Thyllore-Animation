@@ -121,8 +121,9 @@ impl App {
                         // 頂点バッファを更新
                         Self::update_fbx_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
 
-                        // Acceleration Structureを再構築（アニメーション後の頂点座標で）
-                        Self::build_acceleration_structures(&self.instance, &self.rrdevice, &mut self.data)?;
+                        // Acceleration Structureを更新（アニメーション後の頂点座標で）
+                        Self::update_acceleration_structures(&self.instance, &self.rrdevice, &mut self.data)?;
+
                     } else {
                         // Static pose (duration == 0): keep time at 0, no need to update every frame
                         // Initial pose was already applied in load_model_from_path
@@ -133,6 +134,7 @@ impl App {
                                 LOGGED_STATIC = true;
                             }
                         }
+
                     }
                 } else {
                     static mut LOGGED_NO_DURATION: bool = false;
@@ -183,6 +185,8 @@ impl App {
             }
 
             Self::update_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
+
+            Self::update_acceleration_structures(&self.instance, &self.rrdevice, &mut self.data)?;
         }
 
         self.update_uniform_buffer(
@@ -191,6 +195,26 @@ impl App {
             gui_data.mouse_wheel,
             gui_data,
         )?;
+
+        if gui_data.show_light_ray_to_model {
+            let all_positions: Vec<_> = if !self.data.fbx_model.fbx_data.is_empty() {
+                self.data.fbx_model.fbx_data
+                    .iter()
+                    .flat_map(|data| data.positions.iter())
+                    .cloned()
+                    .collect()
+            } else {
+                self.data.model_descriptor_set.rrdata
+                    .iter()
+                    .flat_map(|rrdata| rrdata.vertex_data.vertices.iter().map(|v| {
+                        cgmath::Vector3::new(v.pos.x, v.pos.y, v.pos.z)
+                    }))
+                    .collect()
+            };
+
+            self.data.light_gizmo_data.update_ray_to_model(&all_positions);
+            self.data.light_gizmo_data.update_or_create_ray_buffers(&self.instance, &self.rrdevice)?;
+        }
 
         // Update ImGui buffers
         Self::update_imgui_buffers(&self.instance, &self.rrdevice, &mut self.data, draw_data)?;

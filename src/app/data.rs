@@ -16,6 +16,17 @@ use rust_rendering::loader::gltf::gltf::*;
 use rust_rendering::loader::fbx::fbx::*;
 use rust_rendering::debugview::*;
 
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub enum LightMoveTarget {
+    None,
+    XMin,
+    XMax,
+    YMin,
+    YMax,
+    ZMin,
+    ZMax,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct GUIData {
     pub is_left_clicked: bool,
@@ -32,6 +43,9 @@ pub struct GUIData {
     pub show_click_debug: bool,
     pub billboard_click_rect: Option<[f32; 4]>,
     pub debug_shadow_info: bool,
+    pub show_light_ray_to_model: bool,
+    pub is_ctrl_pressed: bool,
+    pub move_light_to: LightMoveTarget,
 }
 
 impl Default for GUIData {
@@ -51,6 +65,9 @@ impl Default for GUIData {
             show_click_debug: false,
             billboard_click_rect: None,
             debug_shadow_info: false,
+            show_light_ray_to_model: false,
+            is_ctrl_pressed: false,
+            move_light_to: LightMoveTarget::None,
         }
     }
 }

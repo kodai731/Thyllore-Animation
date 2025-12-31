@@ -29,7 +29,8 @@ pub unsafe fn record_ray_query_pass(
     command_buffer: vk::CommandBuffer,
 ) -> Result<()> {
     let pass = RayQueryPass::new(app)?;
-    pass.record(command_buffer)
+    let normal_offset = app.data.rt_debug_state.shadow_normal_offset;
+    pass.record(command_buffer, normal_offset)
 }
 
 pub unsafe fn record_composite_pass(

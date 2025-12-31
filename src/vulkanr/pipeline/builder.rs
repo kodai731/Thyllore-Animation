@@ -410,12 +410,22 @@ impl RRPipeline {
         topology: PrimitiveTopology,
         polygon_mode: vk::PolygonMode,
     ) -> Self {
-        PipelineBuilder::new(vertex_shader_path, fragment_shader_path)
+        let mut builder = PipelineBuilder::new(vertex_shader_path, fragment_shader_path)
             .vertex_input(VertexInputConfig::Standard)
             .topology(topology)
             .polygon_mode(polygon_mode)
-            .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])  // Remove VIEWPORT - use static viewport
-            .descriptor_layouts(vec![rrdescriptor_set.descriptor_set_layout])
+            .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
+            .descriptor_layouts(vec![rrdescriptor_set.descriptor_set_layout]);
+
+        if topology == vk::PrimitiveTopology::LINE_LIST {
+            builder = builder.depth_test(DepthTestConfig {
+                test_enable: true,
+                write_enable: false,
+                compare_op: vk::CompareOp::LESS,
+            });
+        }
+
+        builder
             .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
             .expect("Failed to create pipeline")
     }
@@ -473,6 +483,16 @@ impl RRPipeline {
         compute_shader_path: &str,
         descriptor_set_layouts: &[vk::DescriptorSetLayout],
     ) -> Result<Self> {
+        Self::new_compute_with_push_constants(rrdevice, compute_shader_path, descriptor_set_layouts, &[])
+    }
+
+    /// Create compute pipeline with push constants
+    pub unsafe fn new_compute_with_push_constants(
+        rrdevice: &RRDevice,
+        compute_shader_path: &str,
+        descriptor_set_layouts: &[vk::DescriptorSetLayout],
+        push_constant_ranges: &[vk::PushConstantRange],
+    ) -> Result<Self> {
         let device = &rrdevice.device;
 
         // Load compute shader
@@ -486,9 +506,12 @@ impl RRPipeline {
             .build();
 
         // Create pipeline layout
-        let layout_info = vk::PipelineLayoutCreateInfo::builder()
+        let mut layout_info = vk::PipelineLayoutCreateInfo::builder()
             .set_layouts(descriptor_set_layouts);
-        let pipeline_layout = device.create_pipeline_layout(&layout_info, None)?;
+        if !push_constant_ranges.is_empty() {
+            layout_info = layout_info.push_constant_ranges(push_constant_ranges);
+        }
+        let pipeline_layout = device.create_pipeline_layout(&layout_info.build(), None)?;
 
         // Create compute pipeline
         let compute_pipeline_info = vk::ComputePipelineCreateInfo::builder()

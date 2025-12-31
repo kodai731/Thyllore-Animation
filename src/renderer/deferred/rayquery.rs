@@ -31,9 +31,9 @@ impl<'a> RayQueryPass<'a> {
         })
     }
 
-    pub unsafe fn record(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
+    pub unsafe fn record(&self, command_buffer: vk::CommandBuffer, normal_offset: f32) -> Result<()> {
         self.insert_pre_compute_barriers(command_buffer);
-        self.dispatch_compute(command_buffer);
+        self.dispatch_compute(command_buffer, normal_offset);
         self.insert_post_compute_barriers(command_buffer);
 
         Ok(())
@@ -96,7 +96,7 @@ impl<'a> RayQueryPass<'a> {
         );
     }
 
-    unsafe fn dispatch_compute(&self, command_buffer: vk::CommandBuffer) {
+    unsafe fn dispatch_compute(&self, command_buffer: vk::CommandBuffer, normal_offset: f32) {
         self.device.cmd_bind_pipeline(
             command_buffer,
             vk::PipelineBindPoint::COMPUTE,
@@ -110,6 +110,18 @@ impl<'a> RayQueryPass<'a> {
             0,
             &[self.descriptor_set.descriptor_set],
             &[],
+        );
+
+        let push_constant_data = [normal_offset];
+        self.device.cmd_push_constants(
+            command_buffer,
+            self.pipeline.pipeline_layout,
+            vk::ShaderStageFlags::COMPUTE,
+            0,
+            std::slice::from_raw_parts(
+                push_constant_data.as_ptr() as *const u8,
+                std::mem::size_of::<f32>(),
+            ),
         );
 
         let group_count_x = (self.gbuffer.width + 15) / 16;

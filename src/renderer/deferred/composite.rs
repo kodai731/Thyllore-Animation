@@ -63,6 +63,13 @@ impl<'a> CompositePass<'a> {
         self.draw_composite(command_buffer)?;
         self.draw_grid(command_buffer, image_index)?;
         self.draw_gizmo(command_buffer, image_index)?;
+        self.light_gizmo_data.draw_ray_to_model(
+            self.device,
+            command_buffer,
+            self.grid_pipeline,
+            self.grid_descriptor_set,
+            image_index,
+        );
         self.draw_billboard(command_buffer, image_index)?;
 
         Ok(())
@@ -140,6 +147,8 @@ impl<'a> CompositePass<'a> {
             DebugViewMode::Position => 1,
             DebugViewMode::Normal => 2,
             DebugViewMode::ShadowMask => 3,
+            DebugViewMode::NdotL => 4,
+            DebugViewMode::LightDirection => 5,
         };
 
         let push_constants = [debug_view_mode_value];

@@ -7,11 +7,12 @@ use rust_rendering::vulkanr::descriptor::*;
 use rust_rendering::vulkanr::device::*;
 use rust_rendering::vulkanr::image::*;
 use rust_rendering::vulkanr::vulkan::*;
-use rust_rendering::math::math::*;
+use rust_rendering::math::*;
 use rust_rendering::logger::logger::*;
 use rust_rendering::debugview::*;
+use rust_rendering::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 
-use cgmath::{Vector2, Vector3, Deg, Rad, Matrix4, Matrix3, InnerSpace};
+use cgmath::{Vector2, Vector3, Deg, Matrix4, InnerSpace};
 use anyhow::Result;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
@@ -26,13 +27,132 @@ impl App {
         mouse_wheel: f32,
         gui_data: &mut GUIData,
     ) -> Result<()> {
-        //let mut model = Mat4::from_axis_angle(vec3(0.0, 0.0, 1.0), Deg(0.0));
-        // update vertex buffer
+        use crate::app::data::LightMoveTarget;
+
+        if gui_data.move_light_to != LightMoveTarget::None {
+            log!("========================================");
+            log!("LIGHT MOVE BUTTON PRESSED: {:?}", gui_data.move_light_to);
+            log!("========================================");
+
+            let all_positions: Vec<Vector3<f32>> = if !self.data.fbx_model.fbx_data.is_empty() {
+                self.data.fbx_model.fbx_data
+                    .iter()
+                    .flat_map(|data| data.positions.iter())
+                    .cloned()
+                    .collect()
+            } else {
+                self.data.gltf_model.gltf_data
+                    .iter()
+                    .flat_map(|data| data.vertices.iter().map(|v| {
+                        Vector3::new(
+                            v.animation_position[0],
+                            v.animation_position[1],
+                            v.animation_position[2],
+                        )
+                    }))
+                    .collect()
+            };
+
+            if !all_positions.is_empty() {
+                let mut min_x = f32::MAX;
+                let mut max_x = f32::MIN;
+                let mut min_y = f32::MAX;
+                let mut max_y = f32::MIN;
+                let mut min_z = f32::MAX;
+                let mut max_z = f32::MIN;
+
+                for pos in all_positions.iter() {
+                    min_x = min_x.min(pos.x);
+                    max_x = max_x.max(pos.x);
+                    min_y = min_y.min(pos.y);
+                    max_y = max_y.max(pos.y);
+                    min_z = min_z.min(pos.z);
+                    max_z = max_z.max(pos.z);
+                }
+
+                let size_x = (max_x - min_x).abs();
+                let size_y = (max_y - min_y).abs();
+                let size_z = (max_z - min_z).abs();
+                let model_size = (size_x + size_y + size_z) / 3.0;
+
+                let offset = 2.0;
+                let new_light_pos = match gui_data.move_light_to {
+                    LightMoveTarget::XMin => Vector3::new(min_x - offset, (min_y + max_y) / 2.0, (min_z + max_z) / 2.0),
+                    LightMoveTarget::XMax => Vector3::new(max_x + offset, (min_y + max_y) / 2.0, (min_z + max_z) / 2.0),
+                    LightMoveTarget::YMin => Vector3::new((min_x + max_x) / 2.0, min_y - offset, (min_z + max_z) / 2.0),
+                    LightMoveTarget::YMax => Vector3::new((min_x + max_x) / 2.0, max_y + offset, (min_z + max_z) / 2.0),
+                    LightMoveTarget::ZMin => Vector3::new((min_x + max_x) / 2.0, (min_y + max_y) / 2.0, min_z - offset),
+                    LightMoveTarget::ZMax => Vector3::new((min_x + max_x) / 2.0, (min_y + max_y) / 2.0, max_z + offset),
+                    LightMoveTarget::None => self.data.rt_debug_state.light_position,
+                };
+
+                self.data.rt_debug_state.shadow_normal_offset = (model_size * 0.005).max(0.5);
+
+                log!("=== LIGHT POSITION DEBUG ===");
+                log!("Model size: {:.2}, Shadow normal offset: {:.2}", model_size, self.data.rt_debug_state.shadow_normal_offset);
+                log!("Model bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
+                    min_x, max_x, min_y, max_y, min_z, max_z);
+                log!("Model center: ({:.2}, {:.2}, {:.2})",
+                    (min_x + max_x) / 2.0, (min_y + max_y) / 2.0, (min_z + max_z) / 2.0);
+                log!("Calculated light position: ({:.2}, {:.2}, {:.2})",
+                    new_light_pos.x, new_light_pos.y, new_light_pos.z);
+                log!("CAMERA position: ({:.2}, {:.2}, {:.2})",
+                    self.data.camera_pos[0], self.data.camera_pos[1], self.data.camera_pos[2]);
+
+                let closest_vertex = all_positions.iter()
+                    .min_by(|a, b| {
+                        let dist_a = (new_light_pos - **a).magnitude();
+                        let dist_b = (new_light_pos - **b).magnitude();
+                        dist_a.partial_cmp(&dist_b).unwrap()
+                    });
+                let farthest_vertex = all_positions.iter()
+                    .max_by(|a, b| {
+                        let dist_a = (new_light_pos - **a).magnitude();
+                        let dist_b = (new_light_pos - **b).magnitude();
+                        dist_a.partial_cmp(&dist_b).unwrap()
+                    });
+
+                if let Some(closest) = closest_vertex {
+                    let dist = (new_light_pos - *closest).magnitude();
+                    log!("Closest vertex to light: ({:.2}, {:.2}, {:.2}), distance: {:.2}",
+                        closest.x, closest.y, closest.z, dist);
+                }
+                if let Some(farthest) = farthest_vertex {
+                    let dist = (new_light_pos - *farthest).magnitude();
+                    log!("Farthest vertex from light: ({:.2}, {:.2}, {:.2}), distance: {:.2}",
+                        farthest.x, farthest.y, farthest.z, dist);
+                }
+
+                match gui_data.move_light_to {
+                    LightMoveTarget::XMax => {
+                        log!("XMax: Light should be to the RIGHT of all vertices");
+                        log!("  Light X: {:.2}, Model X range: [{:.2}, {:.2}]", new_light_pos.x, min_x, max_x);
+                        if new_light_pos.x <= max_x {
+                            log!("  WARNING: Light X ({:.2}) is NOT greater than max X ({:.2})!", new_light_pos.x, max_x);
+                        } else {
+                            log!("  OK: Light X ({:.2}) > max X ({:.2})", new_light_pos.x, max_x);
+                        }
+                    }
+                    _ => {}
+                }
+
+                self.data.rt_debug_state.light_position = new_light_pos;
+
+                log!("Light position SET in rt_debug_state: ({:.2}, {:.2}, {:.2})",
+                    self.data.rt_debug_state.light_position.x,
+                    self.data.rt_debug_state.light_position.y,
+                    self.data.rt_debug_state.light_position.z);
+                log!("(light_gizmo_data will be synced later in this frame)");
+                log!("========================================");
+            } else {
+                log!("WARNING: No model positions found!");
+            }
+
+            gui_data.move_light_to = LightMoveTarget::None;
+        }
+
         self.morphing(self.start.elapsed().as_secs_f32());
 
-        // Note: Animation updates are now handled in draw() method before rendering
-
-        // update uniform buffer
         let model = Mat4::identity();
 
         let mut camera_pos = vec3_from_array(self.data.camera_pos);
@@ -41,8 +161,7 @@ impl App {
 
         let mouse_pos = Vector2::new(mouse_pos[0], mouse_pos[1]);
 
-        let world_y_down = vec3(0.0, -1.0, 0.0);
-        let camera_right = camera_direction.cross(camera_up).normalize();
+        let camera_right = camera_up.cross(camera_direction).normalize();
 
         let last_view = view(camera_pos, camera_direction, camera_up);
         let base_x = camera_right;
@@ -60,10 +179,11 @@ impl App {
                 self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
                 self.data.is_left_clicked = true;
 
+                use rust_rendering::math::coordinate_system::vulkan_projection_correction;
                 let view = view(camera_pos, camera_direction, camera_up);
                 let swapchain_extent = self.data.rrswapchain.swapchain_extent;
                 let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
-                let proj = cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
+                let proj = vulkan_projection_correction() * cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
                 let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
 
                 let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
@@ -137,90 +257,39 @@ impl App {
             let clicked_mouse_pos = vec2_from_array(self.data.clicked_mouse_pos);
 
             if self.data.light_gizmo_selected && gui_data.is_left_clicked && !self.data.light_just_selected {
-                self.update_light_gizmo_position(mouse_pos, camera_pos, camera_direction);
+                self.update_light_gizmo_position(mouse_pos, camera_pos, camera_direction, gui_data);
             } else if !self.data.light_gizmo_selected {
-                // FIX: Use delta from previous frame (Unity-style) instead of cumulative diff
                 let diff = mouse_pos - clicked_mouse_pos;
                 let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
                 gui_data.monitor_value = distance;
                 if 0.001 < distance {
-                    let mut rotate_x = Mat3::identity();
-                    let mut rotate_y = Mat3::identity();
-                    let theta_x = -diff.x * 0.005;
-                    let theta_y = diff.y * 0.005;  // Inverted for intuitive up/down rotation
-
-                    // Horizontal rotation: Around world Y-down axis (Unity-style, gimbal-lock free)
-                    let _ = rodrigues(
-                        &mut rotate_x,
-                        Rad(theta_x).cos(),
-                        Rad(theta_x).sin(),
-                        &world_y_down,
-                    );
-                    // Vertical rotation: Around camera's local right axis
-                    let _ = rodrigues(
-                        &mut rotate_y,
-                        Rad(theta_y).cos(),
-                        Rad(theta_y).sin(),
-                        &camera_right,
-                    );
-
-                    // Log rotation info every 30 frames
                     unsafe {
                         ROTATION_LOG_COUNTER += 1;
                         if ROTATION_LOG_COUNTER % 30 == 0 {
                             log!("=== Camera Rotation Debug (frame {}) ===", ROTATION_LOG_COUNTER);
-                            log!("  Mouse diff: ({:.3}, {:.3}), theta: ({:.3}, {:.3})",
-                                 diff.x, diff.y, theta_x, theta_y);
+                            log!("  Mouse diff: ({:.3}, {:.3})", diff.x, diff.y);
                             log!("  Before rotation:");
                             log!("    direction: ({:.3}, {:.3}, {:.3})",
                                  camera_direction.x, camera_direction.y, camera_direction.z);
                             log!("    up: ({:.3}, {:.3}, {:.3})",
                                  camera_up.x, camera_up.y, camera_up.z);
-                            log!("    right: ({:.3}, {:.3}, {:.3})",
-                                 camera_right.x, camera_right.y, camera_right.z);
-                            log!("  Rotation axes:");
-                            log!("    horizontal (world Y-down): ({:.3}, {:.3}, {:.3})",
-                                 world_y_down.x, world_y_down.y, world_y_down.z);
-                            log!("    vertical (camera right): ({:.3}, {:.3}, {:.3})",
-                                 camera_right.x, camera_right.y, camera_right.z);
                         }
                     }
 
-                    let rotate = rotate_y * rotate_x;
-                    camera_up = rotate * camera_up;
-                    camera_direction = rotate * camera_direction;
+                    let (new_direction, new_up) = self.rotate_camera(diff);
+                    camera_direction = new_direction;
+                    camera_up = new_up;
 
-                    camera_direction = camera_direction.normalize();
-                    let camera_right_new = camera_direction.cross(camera_up).normalize();
-                    camera_up = camera_right_new.cross(camera_direction).normalize();
-
-                    // Log after rotation
                     unsafe {
                         if ROTATION_LOG_COUNTER % 30 == 0 {
-                            log!("  After rotation & re-orthogonalization:");
+                            log!("  After rotation:");
                             log!("    direction: ({:.3}, {:.3}, {:.3})",
                                  camera_direction.x, camera_direction.y, camera_direction.z);
                             log!("    up: ({:.3}, {:.3}, {:.3})",
                                  camera_up.x, camera_up.y, camera_up.z);
-                            log!("    right: ({:.3}, {:.3}, {:.3})",
-                                 camera_right_new.x, camera_right_new.y, camera_right_new.z);
-
-                            // Check orthogonality
-                            let dot_dir_up = camera_direction.dot(camera_up);
-                            let dot_dir_right = camera_direction.dot(camera_right_new);
-                            let dot_up_right = camera_up.dot(camera_right_new);
-                            log!("  Orthogonality check (should be ~0):");
-                            log!("    direction·up: {:.6}", dot_dir_up);
-                            log!("    direction·right: {:.6}", dot_dir_right);
-                            log!("    up·right: {:.6}", dot_up_right);
                         }
                     }
 
-                    // Update camera state every frame (not just on release)
-                    self.data.camera_direction = array3_from_vec(camera_direction);
-                    self.data.camera_up = array3_from_vec(camera_up);
-
-                    // Update previous mouse position every frame for delta calculation
                     self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
                 }
             }
@@ -243,45 +312,26 @@ impl App {
 
         // Only process camera pan if ImGui doesn't want the mouse
         if !gui_data.imgui_wants_mouse && (gui_data.is_wheel_clicked || self.data.is_wheel_clicked) {
-            // first clicked
             if !self.data.is_wheel_clicked {
                 self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
                 self.data.is_wheel_clicked = true;
             }
             let clicked_mouse_pos = vec2_from_array(self.data.clicked_mouse_pos);
 
-            // FIX: Use delta from previous frame (Unity-style) instead of cumulative diff
             let diff = mouse_pos - clicked_mouse_pos;
             let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
             gui_data.monitor_value = distance;
             if 0.001 < distance {
-                let translate_x_v = base_x * diff.x;
-                let translate_y_v = base_y * diff.y;
-                camera_pos += translate_x_v + translate_y_v;
-
-                // Update camera position every frame (not just on release)
-                self.data.camera_pos = array3_from_vec(camera_pos);
-
-                // Update previous mouse position every frame for delta calculation
+                self.pan_camera(diff, base_x, base_y);
+                camera_pos = vec3_from_array(self.data.camera_pos);
                 self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
             }
 
             if !gui_data.is_wheel_clicked {
-                // left button released
                 self.data.is_wheel_clicked = false;
             }
         } else if gui_data.imgui_wants_mouse {
-            // If ImGui wants the mouse, reset camera operation state
             self.data.is_wheel_clicked = false;
-        }
-
-        // Only process mouse wheel zoom if ImGui doesn't want the mouse
-        if !gui_data.imgui_wants_mouse && mouse_wheel != 0.0 {
-            let distance_to_origin = camera_pos.magnitude();
-            let zoom_speed = (distance_to_origin * 0.1).max(1.0).min(50.0);
-            let diff_view = camera_direction * mouse_wheel * zoom_speed * -1.0;
-            camera_pos += diff_view;
-            self.data.camera_pos = array3_from_vec(camera_pos);
         }
 
         let view = view(camera_pos, camera_direction, camera_up);
@@ -296,26 +346,8 @@ impl App {
         self.data.near_plane = near_plane;
         self.data.far_plane = far_plane;
 
-        let correction = Mat4::new(
-            // column-major order
-            1.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0, // cgmath was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted.
-            0.0,
-            0.0,
-            1.0 / 2.0,
-            0.0, // depth [-1.0, 1.0] (OpenGL) -> [0.0, 1.0] (Vulkan)
-            0.0,
-            0.0,
-            1.0 / 2.0,
-            1.0,
-        );
-        let proj = correction
+        use rust_rendering::math::coordinate_system::vulkan_projection_correction;
+        let proj = vulkan_projection_correction()
             * cgmath::perspective(
             Deg(45.0),
             self.data.rrswapchain.swapchain_extent.width as f32
@@ -323,6 +355,11 @@ impl App {
             near_plane,
             far_plane,
         );
+
+        if !gui_data.imgui_wants_mouse && mouse_wheel != 0.0 {
+            self.zoom_camera(mouse_wheel);
+            camera_pos = vec3_from_array(self.data.camera_pos);
+        }
 
         let swapchain_extent = self.data.rrswapchain.swapchain_extent;
         let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
@@ -340,39 +377,26 @@ impl App {
         );
 
         if gui_data.debug_shadow_info {
-            log!("=== Shadow Debug Info ===");
-            log!("Light position: ({:.2}, {:.2}, {:.2})", light_pos.x, light_pos.y, light_pos.z);
-            log!("Camera position: ({:.2}, {:.2}, {:.2})", camera_pos.x, camera_pos.y, camera_pos.z);
-            log!("Camera direction: ({:.3}, {:.3}, {:.3})", camera_direction.x, camera_direction.y, camera_direction.z);
-            log!("Shadow strength: {:.2}", self.data.rt_debug_state.shadow_strength);
-            log!("Debug view mode: {:?}", self.data.rt_debug_state.debug_view_mode);
-            log!("Screen size: {:.0} x {:.0}", screen_size.x, screen_size.y);
-            log!("Near plane: {:.2}, Far plane: {:.2}", self.data.near_plane, self.data.far_plane);
-
-            let light_distance = (light_pos - camera_pos).magnitude();
-            log!("Distance camera to light: {:.2}", light_distance);
-
-            if let Some(screen_pos) = world_to_screen(light_pos, screen_size, view, proj) {
-                log!("Light screen position: ({:.1}, {:.1})", screen_pos.x, screen_pos.y);
-            }
-
-            log!("Suggestion: Switch to 'Shadow Mask' debug view to see shadow coverage");
-            log!("======================");
+            self.log_shadow_debug_info();
             gui_data.debug_shadow_info = false;
         }
 
+        let ubo = UniformBufferObject { model, view, proj };
+
         for i in 0..self.data.model_descriptor_set.rrdata.len() {
             let rrdata = &mut self.data.model_descriptor_set.rrdata[i];
-            let ubo = UniformBufferObject { model, view, proj };
-            let ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;
-            let memory = self.rrdevice.device.map_memory(
-                ubo_memory,
-                0,
-                size_of::<UniformBufferObject>() as u64,
-                vk::MemoryMapFlags::empty(),
-            )?;
-            memcpy(&ubo, memory.cast(), 1);
-            self.rrdevice.device.unmap_memory(ubo_memory);
+            if let Err(e) = rrdata.update_ubo(&self.rrdevice, image_index, &ubo) {
+                eprintln!("Failed to update model UBO: {}", e);
+            }
+        }
+
+        if let Some(ref mut gbuffer_desc) = self.data.gbuffer_descriptor_set {
+            for i in 0..gbuffer_desc.rrdata.len() {
+                let rrdata = &mut gbuffer_desc.rrdata[i];
+                if let Err(e) = rrdata.update_ubo(&self.rrdevice, image_index, &ubo) {
+                    eprintln!("Failed to update G-Buffer UBO: {}", e);
+                }
+            }
         }
 
         // Update Scene Uniform Buffer for Ray Tracing
@@ -380,6 +404,23 @@ impl App {
             (self.data.scene_uniform_buffer, self.data.scene_uniform_buffer_memory)
         {
             let light_pos = &self.data.rt_debug_state.light_position;
+
+            static mut SCENE_UNIFORM_LOG_COUNTER: u32 = 0;
+            static mut PREV_LIGHT_POS: [f32; 3] = [0.0, 0.0, 0.0];
+            unsafe {
+                SCENE_UNIFORM_LOG_COUNTER += 1;
+                let current = [light_pos.x, light_pos.y, light_pos.z];
+                let changed = (current[0] - PREV_LIGHT_POS[0]).abs() > 0.1
+                    || (current[1] - PREV_LIGHT_POS[1]).abs() > 0.1
+                    || (current[2] - PREV_LIGHT_POS[2]).abs() > 0.1;
+
+                if changed || SCENE_UNIFORM_LOG_COUNTER % 60 == 0 {
+                    log!("SceneUniformData UPDATE - light_position: ({:.2}, {:.2}, {:.2})",
+                        light_pos.x, light_pos.y, light_pos.z);
+                    PREV_LIGHT_POS = current;
+                }
+            }
+
             let scene_data = SceneUniformData {
                 light_position: Vec4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
                 light_color: Vec4::new(1.0, 1.0, 1.0, 1.0),
@@ -387,7 +428,8 @@ impl App {
                 proj,
                 debug_mode: self.data.rt_debug_state.debug_view_mode.as_int(),
                 shadow_strength: self.data.rt_debug_state.shadow_strength,
-                _padding: [0; 2],
+                enable_distance_attenuation: if self.data.rt_debug_state.enable_distance_attenuation { 1 } else { 0 },
+                _padding: 0,
             };
 
             let data_ptr = self.rrdevice.device.map_memory(
@@ -411,11 +453,30 @@ impl App {
         for i in 0..self.data.grid_descriptor_set.rrdata.len() {
             let rrdata = &mut self.data.grid_descriptor_set.rrdata[i];
             let grid_ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;
-            let ubo_grid = UniformBufferObject {
-                model: model_grid,
-                view: view,
-                proj: proj,
+
+            // i==0: Grid用（スケール変換）
+            // i==1: Light Ray用（単位行列）
+            let model = if i == 0 {
+                model_grid
+            } else {
+                Mat4::identity()
             };
+
+            let ubo_grid = UniformBufferObject {
+                model,
+                view,
+                proj,
+            };
+
+            static mut GRID_UBO_LOG_COUNTER: u32 = 0;
+            unsafe {
+                GRID_UBO_LOG_COUNTER += 1;
+                if GRID_UBO_LOG_COUNTER % 60 == 0 && i == 1 {
+                    log!("Grid descriptor_set[{}] UBO update: view={{...}}, proj={{...}}", i);
+                    log!("  Same view/proj as model and billboard: YES");
+                }
+            }
+
             let memory_grid = self.rrdevice.device.map_memory(
                 grid_ubo_memory,
                 0,
@@ -459,7 +520,8 @@ impl App {
                 .unmap_memory(rrdata.rruniform_buffers[image_index].buffer_memory);
         }
 
-        self.data.light_gizmo_data.update_position(self.data.rt_debug_state.light_position);
+        self.data.light_gizmo_data.sync_from_debug_state(self.data.rt_debug_state.light_position);
+
         self.data.light_gizmo_data.update_selection_color();
         self.data.light_gizmo_data.update_vertex_buffer(&self.rrdevice)
             .expect("Failed to update light gizmo vertex buffer");
@@ -470,7 +532,7 @@ impl App {
             let rrdata = &mut self.data.billboard_descriptor_set.rrdata[i];
             let billboard_ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;
 
-            let light_pos = self.data.rt_debug_state.light_position;
+            let light_pos = self.data.light_gizmo_data.position;
 
             unsafe {
                 BILLBOARD_UPDATE_COUNTER += 1;
@@ -611,7 +673,7 @@ impl App {
             if gltf_data.morph_targets.len() <= 0 {
                 return;
             };
-            // reset
+
             let rrdata = &mut self.data.model_descriptor_set.rrdata[i];
             let vertices = &mut rrdata.vertex_data.vertices;
             for i in 0..vertices.len() {
@@ -638,6 +700,38 @@ impl App {
                 vertices.len(),
             ) {
                 eprintln!("failed to update vertex buffer: {}", e);
+            }
+
+            if let Some(ref mut accel_struct) = self.data.acceleration_structure {
+                if i < accel_struct.blas_list.len() {
+                    let blas = &accel_struct.blas_list[i];
+                    if let Err(e) = RRAccelerationStructure::update_blas(
+                        &self.instance,
+                        &self.rrdevice,
+                        &self.data.rrcommand_pool,
+                        blas,
+                        &rrdata.vertex_buffer.buffer,
+                        rrdata.vertex_data.vertices.len() as u32,
+                        std::mem::size_of::<vulkan_data::Vertex>() as u32,
+                        &rrdata.index_buffer.buffer,
+                        rrdata.vertex_data.indices.len() as u32,
+                    ) {
+                        eprintln!("failed to update BLAS: {}", e);
+                    }
+                }
+            }
+        }
+
+        if let Some(ref mut accel_struct) = self.data.acceleration_structure {
+            let tlas = &accel_struct.tlas;
+            if let Err(e) = RRAccelerationStructure::update_tlas(
+                &self.instance,
+                &self.rrdevice,
+                &self.data.rrcommand_pool,
+                tlas,
+                &accel_struct.blas_list,
+            ) {
+                eprintln!("failed to update TLAS: {}", e);
             }
         }
     }
@@ -844,6 +938,7 @@ impl App {
         mouse_pos: Vector2<f32>,
         camera_pos: Vector3<f32>,
         camera_direction: Vector3<f32>,
+        gui_data: &GUIData,
     ) {
         unsafe {
             let view = view(
@@ -851,15 +946,20 @@ impl App {
                 camera_direction,
                 vec3_from_array(self.data.camera_up),
             );
+            use rust_rendering::math::coordinate_system::vulkan_projection_correction;
             let swapchain_extent = self.data.rrswapchain.swapchain_extent;
             let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
-            let proj = cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
+            let proj = vulkan_projection_correction() * cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
             let screen_size = Vector2::new(
                 swapchain_extent.width as f32,
                 swapchain_extent.height as f32,
             );
 
             let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
+
+            log!("update_light_gizmo_position - camera_pos: ({:.2}, {:.2}, {:.2})", camera_pos.x, camera_pos.y, camera_pos.z);
+            log!("update_light_gizmo_position - ray_origin: ({:.2}, {:.2}, {:.2})", ray_origin.x, ray_origin.y, ray_origin.z);
+            log!("update_light_gizmo_position - ray_direction: ({:.2}, {:.2}, {:.2})", ray_direction.x, ray_direction.y, ray_direction.z);
 
             let light_pos = self.data.rt_debug_state.light_position;
             let plane_point = light_pos;
@@ -870,11 +970,106 @@ impl App {
             if denom.abs() > std::f32::EPSILON {
                 let t = (plane_point - ray_origin).dot(plane_normal) / denom;
 
+                log!("update_light_gizmo_position - t: {:.2}, intersection will be: ({:.2}, {:.2}, {:.2})",
+                     t,
+                     (ray_origin + ray_direction * t).x,
+                     (ray_origin + ray_direction * t).y,
+                     (ray_origin + ray_direction * t).z);
+
                 if t >= 0.0 {
                     let intersection = ray_origin + ray_direction * t;
-                    self.data.rt_debug_state.light_position = intersection;
+                    let initial_pos = vec3_from_array(self.data.light_initial_position);
+
+                    self.data.light_gizmo_data.update_position_with_constraint(
+                        intersection,
+                        initial_pos,
+                        gui_data.is_ctrl_pressed,
+                    );
+
+                    self.data.rt_debug_state.light_position = self.data.light_gizmo_data.position;
                 }
             }
         }
+    }
+
+    pub(crate) fn log_shadow_debug_info(&self) {
+        let light_pos = self.data.rt_debug_state.light_position;
+        let camera_pos = vec3_from_array(self.data.camera_pos);
+
+        log!("=== Shadow Debug Info ===");
+        log!("Light position (rt_debug_state): ({:.2}, {:.2}, {:.2})", light_pos.x, light_pos.y, light_pos.z);
+        log!("Light gizmo position: ({:.2}, {:.2}, {:.2})",
+            self.data.light_gizmo_data.position.x,
+            self.data.light_gizmo_data.position.y,
+            self.data.light_gizmo_data.position.z);
+        log!("Camera position: ({:.2}, {:.2}, {:.2})", camera_pos.x, camera_pos.y, camera_pos.z);
+
+        log!("Shadow settings:");
+        log!("  strength: {:.2}", self.data.rt_debug_state.shadow_strength);
+        log!("  normal_offset: {:.2}", self.data.rt_debug_state.shadow_normal_offset);
+        log!("  debug_view_mode: {:?}", self.data.rt_debug_state.debug_view_mode);
+        log!("  distance_attenuation: {}", self.data.rt_debug_state.enable_distance_attenuation);
+
+        if let Some(ref accel_struct) = self.data.acceleration_structure {
+            log!("Acceleration Structure:");
+            log!("  BLAS count: {}", accel_struct.blas_list.len());
+            for (i, blas) in accel_struct.blas_list.iter().enumerate() {
+                log!("    BLAS[{}]: AS={:?}, device_addr={:#x}",
+                    i, blas.acceleration_structure.is_some(), blas.device_address);
+            }
+            log!("  TLAS: AS={:?}", accel_struct.tlas.acceleration_structure.is_some());
+        } else {
+            log!("WARNING: No acceleration structure!");
+        }
+
+        log!("Vertex buffers (GPU):");
+        for (i, rrdata) in self.data.model_descriptor_set.rrdata.iter().enumerate() {
+            log!("  Mesh[{}]: {} vertices, {} indices",
+                i, rrdata.vertex_data.vertices.len(), rrdata.vertex_data.indices.len());
+            if !rrdata.vertex_data.vertices.is_empty() {
+                let v = &rrdata.vertex_data.vertices[0];
+                log!("    vertex[0].pos: ({:.2}, {:.2}, {:.2})", v.pos.x, v.pos.y, v.pos.z);
+                log!("    vertex[0].normal: ({:.3}, {:.3}, {:.3})", v.normal.x, v.normal.y, v.normal.z);
+            }
+        }
+
+        if !self.data.fbx_model.fbx_data.is_empty() {
+            log!("FBX model data:");
+            for (i, fbx_data) in self.data.fbx_model.fbx_data.iter().enumerate() {
+                log!("  Mesh[{}]: {} positions, {} normals",
+                    i, fbx_data.positions.len(), fbx_data.normals.len());
+                if !fbx_data.positions.is_empty() {
+                    let (min_x, max_x) = fbx_data.positions.iter().fold((f32::MAX, f32::MIN), |(min, max), p| (min.min(p.x), max.max(p.x)));
+                    let (min_y, max_y) = fbx_data.positions.iter().fold((f32::MAX, f32::MIN), |(min, max), p| (min.min(p.y), max.max(p.y)));
+                    let (min_z, max_z) = fbx_data.positions.iter().fold((f32::MAX, f32::MIN), |(min, max), p| (min.min(p.z), max.max(p.z)));
+                    log!("    bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]", min_x, max_x, min_y, max_y, min_z, max_z);
+
+                    let center = Vector3::new((min_x + max_x) / 2.0, (min_y + max_y) / 2.0, (min_z + max_z) / 2.0);
+                    let light_to_center = center - light_pos;
+                    let dist = light_to_center.magnitude();
+                    if dist > 0.001 {
+                        log!("    light->center: dir=({:.3}, {:.3}, {:.3}), dist={:.2}",
+                            light_to_center.x / dist, light_to_center.y / dist, light_to_center.z / dist, dist);
+                    }
+
+                    log!("    Light relative to model:");
+                    log!("      X: {} (light={:.2}, range=[{:.2}, {:.2}])",
+                        if light_pos.x < min_x { "LEFT" } else if light_pos.x > max_x { "RIGHT" } else { "INSIDE" },
+                        light_pos.x, min_x, max_x);
+                    log!("      Y: {} (light={:.2}, range=[{:.2}, {:.2}])",
+                        if light_pos.y < min_y { "BELOW" } else if light_pos.y > max_y { "ABOVE" } else { "INSIDE" },
+                        light_pos.y, min_y, max_y);
+                    log!("      Z: {} (light={:.2}, range=[{:.2}, {:.2}])",
+                        if light_pos.z < min_z { "BEHIND" } else if light_pos.z > max_z { "FRONT" } else { "INSIDE" },
+                        light_pos.z, min_z, max_z);
+                }
+                if !fbx_data.normals.is_empty() {
+                    log!("    normal[0]: ({:.3}, {:.3}, {:.3})",
+                        fbx_data.normals[0].x, fbx_data.normals[0].y, fbx_data.normals[0].z);
+                }
+            }
+        }
+
+        log!("=========================");
     }
 }

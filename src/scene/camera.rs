@@ -84,8 +84,9 @@ impl App {
 
         let mut camera_pos = vec3_from_array(self.data.camera_pos);
 
-        let translate_x_v = -base_x * mouse_diff.x;
-        let translate_y_v = -base_y * mouse_diff.y;
+        let pan_speed = self.data.grid_scale * 0.01;
+        let translate_x_v = -base_x * mouse_diff.x * pan_speed;
+        let translate_y_v = -base_y * mouse_diff.y * pan_speed;
 
         PAN_LOG_COUNTER += 1;
         if PAN_LOG_COUNTER % 30 == 0 {

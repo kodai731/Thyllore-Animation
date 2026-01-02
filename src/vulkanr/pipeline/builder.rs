@@ -453,7 +453,7 @@ impl RRPipeline {
             .build(rrdevice, rrrender, None)
     }
 
-    /// Create Billboard rendering pipeline with custom vertex input
+    /// Create Billboard rendering pipeline with depth test
     pub unsafe fn new_billboard(
         rrdevice: &RRDevice,
         rrrender: &RRRender,
@@ -471,7 +471,6 @@ impl RRPipeline {
             })
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
             .polygon_mode(vk::PolygonMode::FILL)
-            .no_depth_test()
             .blend(BlendConfig::default())
             .descriptor_layouts(vec![descriptor_set_layout])
             .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))

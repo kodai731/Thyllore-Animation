@@ -1,4 +1,5 @@
 use crate::app::{App, AppData, GUIData};
+use crate::scene::billboard::BillboardTransform;
 use rust_rendering::vulkanr::buffer::*;
 use rust_rendering::vulkanr::command::*;
 use rust_rendering::vulkanr::data as vulkan_data;
@@ -40,7 +41,7 @@ impl App {
                     .flat_map(|data| data.positions.iter())
                     .cloned()
                     .collect()
-            } else {
+            } else if !self.data.gltf_model.gltf_data.is_empty() {
                 self.data.gltf_model.gltf_data
                     .iter()
                     .flat_map(|data| data.vertices.iter().map(|v| {
@@ -49,6 +50,13 @@ impl App {
                             v.animation_position[1],
                             v.animation_position[2],
                         )
+                    }))
+                    .collect()
+            } else {
+                self.data.model_descriptor_set.rrdata
+                    .iter()
+                    .flat_map(|rrdata| rrdata.vertex_data.vertices.iter().map(|v| {
+                        Vector3::new(v.pos.x, v.pos.y, v.pos.z)
                     }))
                     .collect()
             };
@@ -76,14 +84,15 @@ impl App {
                 let model_size = (size_x + size_y + size_z) / 3.0;
 
                 let offset = 2.0;
+                let current_pos = self.data.rt_debug_state.light_position;
                 let new_light_pos = match gui_data.move_light_to {
-                    LightMoveTarget::XMin => Vector3::new(min_x - offset, (min_y + max_y) / 2.0, (min_z + max_z) / 2.0),
-                    LightMoveTarget::XMax => Vector3::new(max_x + offset, (min_y + max_y) / 2.0, (min_z + max_z) / 2.0),
-                    LightMoveTarget::YMin => Vector3::new((min_x + max_x) / 2.0, min_y - offset, (min_z + max_z) / 2.0),
-                    LightMoveTarget::YMax => Vector3::new((min_x + max_x) / 2.0, max_y + offset, (min_z + max_z) / 2.0),
-                    LightMoveTarget::ZMin => Vector3::new((min_x + max_x) / 2.0, (min_y + max_y) / 2.0, min_z - offset),
-                    LightMoveTarget::ZMax => Vector3::new((min_x + max_x) / 2.0, (min_y + max_y) / 2.0, max_z + offset),
-                    LightMoveTarget::None => self.data.rt_debug_state.light_position,
+                    LightMoveTarget::XMin => Vector3::new(min_x - offset, current_pos.y, current_pos.z),
+                    LightMoveTarget::XMax => Vector3::new(max_x + offset, current_pos.y, current_pos.z),
+                    LightMoveTarget::YMin => Vector3::new(current_pos.x, min_y - offset, current_pos.z),
+                    LightMoveTarget::YMax => Vector3::new(current_pos.x, max_y + offset, current_pos.z),
+                    LightMoveTarget::ZMin => Vector3::new(current_pos.x, current_pos.y, min_z - offset),
+                    LightMoveTarget::ZMax => Vector3::new(current_pos.x, current_pos.y, max_z + offset),
+                    LightMoveTarget::None => current_pos,
                 };
 
                 self.data.rt_debug_state.shadow_normal_offset = (model_size * 0.005).max(0.5);
@@ -381,14 +390,41 @@ impl App {
             gui_data.debug_shadow_info = false;
         }
 
-        if gui_data.load_cube {
-            log!("Loading cube model...");
+        if gui_data.debug_billboard_depth {
+            use rust_rendering::debugview::{BillboardDebugInfo, GBufferDebugInfo, log_billboard_debug_info};
+            let info = BillboardDebugInfo {
+                light_position: self.data.rt_debug_state.light_position,
+                camera_position: vec3_from_array(self.data.camera_pos),
+                camera_direction: vec3_from_array(self.data.camera_direction),
+                camera_up: vec3_from_array(self.data.camera_up),
+                near_plane: self.data.near_plane,
+                far_plane: self.data.far_plane,
+            };
+            let gbuffer_debug_info = self.data.gbuffer.as_ref().map(|gb| GBufferDebugInfo {
+                position_image_view: gb.position_image_view,
+                extent_width: gb.width,
+                extent_height: gb.height,
+            });
+            log_billboard_debug_info(
+                &info,
+                &self.data.rrswapchain,
+                &self.data.billboard_descriptor_set,
+                gbuffer_debug_info.as_ref(),
+                self.data.gbuffer_sampler,
+            );
+            gui_data.debug_billboard_depth = false;
+        }
+
+        let should_load_cube = gui_data.load_cube || self.data.rt_debug_state.cube_size_changed;
+        if should_load_cube {
+            let cube_size = self.data.rt_debug_state.cube_size;
+            log!("Loading cube model with size {}...", cube_size);
             match crate::scene::common::replace_model_with_cube(
                 &self.instance,
                 &self.rrdevice,
                 &mut self.data,
-                100.0,
-                [0.0, 0.0, 100.0],
+                cube_size,
+                [0.0, 0.0, cube_size],
             ) {
                 Ok(_) => {
                     log!("Cube model loaded successfully");
@@ -398,6 +434,7 @@ impl App {
                 }
             }
             gui_data.load_cube = false;
+            self.data.rt_debug_state.cube_size_changed = false;
         }
 
         let ubo = UniformBufferObject { model, view, proj };
@@ -545,43 +582,50 @@ impl App {
         self.data.light_gizmo_data.update_vertex_buffer(&self.rrdevice)
             .expect("Failed to update light gizmo vertex buffer");
 
+        let (camera_right, camera_up_gizmo, camera_forward) = get_camera_axes_from_view(view);
+
         // ビルボード用のuniform bufferを更新
-        static mut BILLBOARD_UPDATE_COUNTER: u32 = 0;
-        for i in 0..self.data.billboard_descriptor_set.rrdata.len() {
-            let rrdata = &mut self.data.billboard_descriptor_set.rrdata[i];
-            let billboard_ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;
+        let light_pos = self.data.light_gizmo_data.position;
 
-            let light_pos = self.data.light_gizmo_data.position;
-
-            unsafe {
-                BILLBOARD_UPDATE_COUNTER += 1;
-                if BILLBOARD_UPDATE_COUNTER % 60 == 0 {
-                    log!("Billboard uniform update - light_pos: ({:.2}, {:.2}, {:.2})",
-                         light_pos.x, light_pos.y, light_pos.z);
-                }
-            }
-
-            let model = Mat4::from_translation(light_pos);
-
-            let ubo_billboard = UniformBufferObject {
-                model,
-                view,
-                proj,
-            };
-
-            let memory_billboard = self.rrdevice.device.map_memory(
-                billboard_ubo_memory,
-                0,
-                size_of::<UniformBufferObject>() as u64,
-                vk::MemoryMapFlags::empty(),
-            )?;
-            memcpy(&ubo_billboard, memory_billboard.cast(), 1);
-            self.rrdevice
-                .device
-                .unmap_memory(rrdata.rruniform_buffers[image_index].buffer_memory);
+        if self.data.billboard_transform.is_none() {
+            self.data.billboard_transform = Some(BillboardTransform::new(light_pos));
         }
 
-        let (camera_right, camera_up_gizmo, camera_forward) = get_camera_axes_from_view(view);
+        if let Some(ref mut billboard_transform) = self.data.billboard_transform {
+            billboard_transform.set_position(light_pos);
+            billboard_transform.update_look_at(camera_pos, camera_up);
+
+            static mut BILLBOARD_UPDATE_COUNTER: u32 = 0;
+            for i in 0..self.data.billboard_descriptor_set.rrdata.len() {
+                let rrdata = &mut self.data.billboard_descriptor_set.rrdata[i];
+                let billboard_ubo_memory = rrdata.rruniform_buffers[image_index].buffer_memory;
+
+                unsafe {
+                    BILLBOARD_UPDATE_COUNTER += 1;
+                    if BILLBOARD_UPDATE_COUNTER % 60 == 0 {
+                        log!("Billboard uniform update - light_pos: ({:.2}, {:.2}, {:.2})",
+                             light_pos.x, light_pos.y, light_pos.z);
+                    }
+                }
+
+                let ubo_billboard = UniformBufferObject {
+                    model: billboard_transform.model_matrix,
+                    view,
+                    proj,
+                };
+
+                let memory_billboard = self.rrdevice.device.map_memory(
+                    billboard_ubo_memory,
+                    0,
+                    size_of::<UniformBufferObject>() as u64,
+                    vk::MemoryMapFlags::empty(),
+                )?;
+                memcpy(&ubo_billboard, memory_billboard.cast(), 1);
+                self.rrdevice
+                    .device
+                    .unmap_memory(rrdata.rruniform_buffers[image_index].buffer_memory);
+            }
+        }
 
         let gizmo_rotation = cgmath::Matrix3::from_cols(
             camera_right,

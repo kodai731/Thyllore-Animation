@@ -205,6 +205,14 @@ impl App {
                 gbuffer_sampler,
                 scene_buffer,
             )?;
+
+            data.billboard_descriptor_set.update_position_sampler(
+                rrdevice,
+                &data.rrswapchain,
+                gbuffer.position_image_view,
+                gbuffer_sampler,
+            )?;
+            log!("Updated billboard descriptor set with G-Buffer position sampler");
         }
 
         let composite_pipeline = PipelineBuilder::new(

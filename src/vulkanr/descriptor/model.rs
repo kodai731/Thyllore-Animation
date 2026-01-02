@@ -32,16 +32,14 @@ impl RRDescriptorSet {
     }
 
     pub unsafe fn delete_data(&mut self, rrdevice: &RRDevice) {
-        // Free allocated descriptor sets before deleting data
         if !self.descriptor_sets.is_empty() {
             rrdevice.device.free_descriptor_sets(
                 self.descriptor_pool,
                 &self.descriptor_sets,
-            ).ok(); // Ignore errors if pool was already reset
+            ).ok();
             self.descriptor_sets.clear();
         }
 
-        // Delete rrdata resources
         for i in 0..self.rrdata.len() {
             self.rrdata[i].delete(rrdevice);
         }
@@ -67,12 +65,11 @@ impl RRDescriptorSet {
         }
     }
 }
+
 unsafe fn create_descriptor_set_layout(
     rrdevice: &RRDevice,
     rrdescriptor_set: &mut RRDescriptorSet,
 ) -> Result<()> {
-    // The descriptor layout specifies the types of resources that are going to be accessed by the pipeline,
-    // just like a render pass specifies the types of attachments that will be accessed
     let ubo_binding = vk::DescriptorSetLayoutBinding::builder()
         .binding(0)
         .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
@@ -98,8 +95,6 @@ unsafe fn create_descriptor_pool(
     rrswapchain: &RRSwapchain,
     rrdescriptor_set: &mut RRDescriptorSet,
 ) -> Result<()> {
-    // Support up to 30 meshes (30 meshes * swapchain_images)
-    // This allows models with many sub-meshes to be loaded dynamically
     let max_meshes = 30;
     let descriptor_count = (rrswapchain.swapchain_images.len() * max_meshes) as u32;
 
@@ -115,7 +110,7 @@ unsafe fn create_descriptor_pool(
     let info = vk::DescriptorPoolCreateInfo::builder()
         .pool_sizes(pool_sizes)
         .max_sets(descriptor_count)
-        .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET); // Allow individual descriptor set freeing
+        .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET);
     rrdescriptor_set.descriptor_pool = rrdevice.device.create_descriptor_pool(&info, None)?;
 
     Ok(())
@@ -126,16 +121,14 @@ unsafe fn create_descriptor_sets(
     rrswapchain: &RRSwapchain,
     rrdescriptor_set: &mut RRDescriptorSet,
 ) -> Result<()> {
-    /*
-    A descriptor is a way for shaders to freely access resources like buffers and images
-    Usage of descriptors consists of three parts:
+    if !rrdescriptor_set.descriptor_sets.is_empty() {
+        rrdevice.device.free_descriptor_sets(
+            rrdescriptor_set.descriptor_pool,
+            &rrdescriptor_set.descriptor_sets,
+        ).ok();
+        rrdescriptor_set.descriptor_sets.clear();
+    }
 
-    Specify a descriptor layout during pipeline creation
-    Allocate a descriptor set from a descriptor pool
-    Bind the descriptor set during rendering
-     */
-    // Create descriptor sets for each rrdata and each swapchain image
-    // Total descriptor sets = rrdata.len() * swapchain_images.len()
     let num_sets = rrswapchain.swapchain_images.len() * rrdescriptor_set.rrdata.len().max(1);
     let layouts = vec![rrdescriptor_set.descriptor_set_layout; num_sets];
     println!("{}, {}", "layouts length", layouts.len());
@@ -144,26 +137,23 @@ unsafe fn create_descriptor_sets(
         .set_layouts(&layouts);
     rrdescriptor_set.descriptor_sets = rrdevice.device.allocate_descriptor_sets(&info)?;
 
-    // Update descriptor sets for each rrdata
     for j in 0..rrdescriptor_set.rrdata.len() {
         let rrdata = &rrdescriptor_set.rrdata[j];
 
         for i in 0..rrswapchain.swapchain_images.len() {
-            // Calculate descriptor set index: j * swapchain_images.len() + i
             let descriptor_set_index = j * rrswapchain.swapchain_images.len() + i;
 
             let info = vk::DescriptorBufferInfo::builder()
                 .buffer(rrdata.rruniform_buffers[i].buffer)
                 .offset(0)
                 .range(size_of::<UniformBufferObject>() as u64);
-            // The configuration of descriptors is updated using the update_descriptor_sets function,
-            // which takes an array of vk::WriteDescriptorSet structs as parameter.
+
             let buffer_info = &[info];
 
             let ubo_write = vk::WriteDescriptorSet::builder()
                 .dst_set(rrdescriptor_set.descriptor_sets[descriptor_set_index])
                 .dst_binding(0)
-                .dst_array_element(0) // Remember that descriptors can be arrays, so we also need to specify the first index in the array that we want to update
+                .dst_array_element(0)
                 .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                 .buffer_info(buffer_info);
 

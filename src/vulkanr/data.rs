@@ -22,7 +22,7 @@ pub struct VertexData {
 }
 
 // TODO: implement iterator
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct RRData {
     pub rruniform_buffers: Vec<RRUniformBuffer>,
     pub image: vk::Image,
@@ -33,6 +33,24 @@ pub struct RRData {
     pub vertex_data: VertexData,
     pub vertex_buffer: RRVertexBuffer,
     pub index_buffer: RRIndexBuffer,
+    pub render_to_gbuffer: bool,
+}
+
+impl Default for RRData {
+    fn default() -> Self {
+        Self {
+            rruniform_buffers: Vec::new(),
+            image: vk::Image::null(),
+            image_memory: vk::DeviceMemory::null(),
+            mip_level: 0,
+            image_view: vk::ImageView::null(),
+            sampler: vk::Sampler::null(),
+            vertex_data: VertexData::default(),
+            vertex_buffer: RRVertexBuffer::default(),
+            index_buffer: RRIndexBuffer::default(),
+            render_to_gbuffer: true,
+        }
+    }
 }
 
 impl RRData {

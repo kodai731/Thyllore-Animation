@@ -291,6 +291,12 @@ pub unsafe fn replace_model_with_cube(
         }
     }
 
+    if let Some(ref billboard_texture) = data.light_gizmo_data.billboard_texture {
+        data.billboard_descriptor_set
+            .update_descriptor_sets(rrdevice, &data.rrswapchain, billboard_texture)?;
+        log!("Re-updated billboard_descriptor_set after cube reload");
+    }
+
     log!("Model replaced with cube. Size: {}, Position: ({}, {}, {})", size, position[0], position[1], position[2]);
     Ok(())
 }

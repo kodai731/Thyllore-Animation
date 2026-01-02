@@ -392,6 +392,10 @@ impl<'a> GBufferPass<'a> {
         for i in 0..self.model_descriptor_set.rrdata.len() {
             let model_rrdata = &self.model_descriptor_set.rrdata[i];
 
+            if !model_rrdata.render_to_gbuffer {
+                continue;
+            }
+
             self.device.cmd_bind_vertex_buffers(
                 command_buffer,
                 0,

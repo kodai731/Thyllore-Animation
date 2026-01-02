@@ -199,19 +199,20 @@ impl App {
             .expect("Failed to create billboard buffers");
 
         // ビルボード用のディスクリプタセットとパイプラインを作成
-        data.billboard_descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
+        data.billboard_descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &data.rrswapchain)
+            .expect("Failed to create billboard descriptor set");
         data.billboard_descriptor_set
             .rrdata
             .push(RRData::new(&instance, &rrdevice, &data.rrswapchain));
 
-        if let Err(e) = create_billboard_descriptor_set(
-            &instance,
-            &rrdevice,
-            &data.rrswapchain,
-            &mut data.billboard_descriptor_set,
-            &data.light_gizmo_data,
-        ) {
-            eprintln!("failed to create billboard descriptor set: {:?}", e);
+        data.billboard_descriptor_set
+            .allocate_descriptor_sets(&rrdevice, &data.rrswapchain)
+            .expect("Failed to allocate billboard descriptor sets");
+
+        if let Some(ref billboard_texture) = data.light_gizmo_data.billboard_texture {
+            data.billboard_descriptor_set
+                .update_descriptor_sets(&rrdevice, &data.rrswapchain, billboard_texture)
+                .expect("Failed to update billboard descriptor sets");
         }
 
         data.billboard_pipeline = RRPipeline::new_billboard(
@@ -729,53 +730,3 @@ impl App {
     }
 }
 
-unsafe fn create_billboard_descriptor_set(
-    _instance: &Instance,
-    rrdevice: &RRDevice,
-    rrswapchain: &RRSwapchain,
-    billboard_descriptor_set: &mut RRDescriptorSet,
-    light_gizmo_data: &rust_rendering::debugview::gizmo::LightGizmoData,
-) -> Result<(), Box<dyn std::error::Error>> {
-    use rust_rendering::vulkanr::descriptor::*;
-    use rust_rendering::logger::logger::*;
-
-    RRDescriptorSet::create_descriptor_set(rrdevice, rrswapchain, billboard_descriptor_set)?;
-
-    log!("billboard_texture is_some: {}", light_gizmo_data.billboard_texture.is_some());
-
-    if let Some(ref billboard_texture) = light_gizmo_data.billboard_texture {
-        let swapchain_images_len = rrswapchain.swapchain_images.len();
-        log!("Updating billboard descriptor sets: rrdata.len={}, swapchain_images_len={}",
-             billboard_descriptor_set.rrdata.len(), swapchain_images_len);
-
-        for i in 0..billboard_descriptor_set.rrdata.len() {
-            for j in 0..swapchain_images_len {
-                let descriptor_set_index = i * swapchain_images_len + j;
-                log!("Updating descriptor set index {} (i={}, j={})", descriptor_set_index, i, j);
-
-                let descriptor_image_info = vk::DescriptorImageInfo::builder()
-                    .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                    .image_view(billboard_texture.image_view)
-                    .sampler(billboard_texture.sampler);
-
-                let descriptor_image_infos = &[descriptor_image_info];
-
-                let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
-                    .dst_set(billboard_descriptor_set.descriptor_sets[descriptor_set_index])
-                    .dst_binding(1)
-                    .dst_array_element(0)
-                    .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                    .image_info(descriptor_image_infos);
-
-                rrdevice.device.update_descriptor_sets(
-                    &[sampler_descriptor_write.build()],
-                    &[] as &[vk::CopyDescriptorSet],
-                );
-            }
-        }
-    } else {
-        log!("WARNING: billboard_texture is None!");
-    }
-
-    Ok(())
-}

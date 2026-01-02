@@ -215,6 +215,9 @@ impl System {
                                         if ui.radio_button("Light Direction", &mut current_mode, 5) {
                                             app.data.rt_debug_state.debug_view_mode = DebugViewMode::LightDirection;
                                         }
+                                        if ui.radio_button("View Depth (Green=GBuffer depth)", &mut current_mode, 6) {
+                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::ViewDepth;
+                                        }
 
                                         ui.separator();
 
@@ -224,9 +227,17 @@ impl System {
                                         if ui.button("Debug Shadow Info") {
                                             gui_data.debug_shadow_info = true;
                                         }
+                                        ui.same_line();
+                                        if ui.button("Debug Billboard Depth") {
+                                            gui_data.debug_billboard_depth = true;
+                                        }
 
                                         ui.separator();
                                         ui.text("Test Models:");
+                                        let mut cube_size = app.data.rt_debug_state.cube_size;
+                                        if ui.slider("Cube Size", 1.0, 500.0, &mut cube_size) {
+                                            app.data.rt_debug_state.set_cube_size(cube_size);
+                                        }
                                         if ui.button("Load Cube Model") {
                                             gui_data.load_cube = true;
                                         }

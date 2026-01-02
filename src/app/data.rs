@@ -3,6 +3,7 @@ use std::rc::Rc;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::renderer::deferred::RRGBuffer;
+use crate::scene::billboard::BillboardTransform;
 use rust_rendering::vulkanr::buffer::*;
 use rust_rendering::vulkanr::command::*;
 use rust_rendering::vulkanr::data;
@@ -43,6 +44,7 @@ pub struct GUIData {
     pub show_click_debug: bool,
     pub billboard_click_rect: Option<[f32; 4]>,
     pub debug_shadow_info: bool,
+    pub debug_billboard_depth: bool,
     pub show_light_ray_to_model: bool,
     pub is_ctrl_pressed: bool,
     pub move_light_to: LightMoveTarget,
@@ -66,6 +68,7 @@ impl Default for GUIData {
             show_click_debug: false,
             billboard_click_rect: None,
             debug_shadow_info: false,
+            debug_billboard_depth: false,
             show_light_ray_to_model: false,
             is_ctrl_pressed: false,
             move_light_to: LightMoveTarget::None,
@@ -97,7 +100,8 @@ pub struct AppData {
     pub light_just_selected: bool,
     pub light_initial_position: [f32; 3],
     pub billboard_pipeline: RRPipeline,
-    pub billboard_descriptor_set: RRDescriptorSet,
+    pub billboard_descriptor_set: RRBillboardDescriptorSet,
+    pub billboard_transform: Option<BillboardTransform>,
     pub command_pool: vk::CommandPool,
     pub image_available_semaphores: Vec<vk::Semaphore>,
     pub render_finish_semaphores: Vec<vk::Semaphore>,

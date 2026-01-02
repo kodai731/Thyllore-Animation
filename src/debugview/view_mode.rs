@@ -8,6 +8,7 @@ pub enum DebugViewMode {
     ShadowMask = 3,
     NdotL = 4,
     LightDirection = 5,
+    ViewDepth = 6,
 }
 
 impl Default for DebugViewMode {
@@ -29,6 +30,7 @@ impl DebugViewMode {
             3 => DebugViewMode::ShadowMask,
             4 => DebugViewMode::NdotL,
             5 => DebugViewMode::LightDirection,
+            6 => DebugViewMode::ViewDepth,
             _ => DebugViewMode::Final,
         }
     }
@@ -41,6 +43,7 @@ impl DebugViewMode {
             DebugViewMode::ShadowMask => "Shadow Mask",
             DebugViewMode::NdotL => "N dot L (Green=Lit, Red=Back)",
             DebugViewMode::LightDirection => "Light Direction",
+            DebugViewMode::ViewDepth => "View Depth (R=billboard, G=gbuffer)",
         }
     }
 }
@@ -52,6 +55,8 @@ pub struct RayTracingDebugState {
     pub shadow_strength: f32,
     pub shadow_normal_offset: f32,
     pub enable_distance_attenuation: bool,
+    pub cube_size: f32,
+    pub cube_size_changed: bool,
 }
 
 impl Default for RayTracingDebugState {
@@ -62,6 +67,15 @@ impl Default for RayTracingDebugState {
             shadow_strength: 1.0,
             shadow_normal_offset: 0.5,
             enable_distance_attenuation: false,
+            cube_size: 100.0,
+            cube_size_changed: false,
         }
+    }
+}
+
+impl RayTracingDebugState {
+    pub fn set_cube_size(&mut self, size: f32) {
+        self.cube_size = size;
+        self.cube_size_changed = true;
     }
 }

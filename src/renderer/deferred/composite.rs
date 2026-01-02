@@ -3,7 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
 use rust_rendering::vulkanr::pipeline::RRPipeline;
-use rust_rendering::vulkanr::descriptor::{RRCompositeDescriptorSet, RRDescriptorSet};
+use rust_rendering::vulkanr::descriptor::{RRCompositeDescriptorSet, RRDescriptorSet, RRBillboardDescriptorSet};
 use rust_rendering::vulkanr::buffer::{RRVertexBuffer, RRIndexBuffer};
 use rust_rendering::vulkanr::core::Device;
 use rust_rendering::debugview::{DebugViewMode, gizmo::{GridGizmoData, LightGizmoData}};
@@ -20,7 +20,7 @@ pub struct CompositePass<'a> {
     gizmo_data: &'a GridGizmoData,
     light_gizmo_data: &'a LightGizmoData,
     billboard_pipeline: &'a RRPipeline,
-    billboard_descriptor_set: &'a RRDescriptorSet,
+    billboard_descriptor_set: &'a RRBillboardDescriptorSet,
     device: &'a Device,
     swapchain_extent: vk::Extent2D,
     debug_view_mode: DebugViewMode,
@@ -149,6 +149,7 @@ impl<'a> CompositePass<'a> {
             DebugViewMode::ShadowMask => 3,
             DebugViewMode::NdotL => 4,
             DebugViewMode::LightDirection => 5,
+            DebugViewMode::ViewDepth => 6,
         };
 
         let push_constants = [debug_view_mode_value];
@@ -344,8 +345,6 @@ impl<'a> CompositePass<'a> {
                 vk::IndexType::UINT32,
             );
 
-            let swapchain_images_len = self.billboard_descriptor_set.descriptor_sets.len() /
-                self.billboard_descriptor_set.rrdata.len().max(1);
             let descriptor_set_index = image_index;
 
             self.device.cmd_bind_descriptor_sets(

@@ -19,6 +19,7 @@ use rust_rendering::vulkanr::raytracing::acceleration::*;
 use rust_rendering::loader::gltf::gltf::*;
 use rust_rendering::math::*;
 use rust_rendering::debugview::*;
+use rust_rendering::scene::Camera;
 use rust_rendering::loader::fbx::fbx::{FbxModel, load_fbx, load_fbx_with_russimp};
 use rust_rendering::logger::logger::*;
 
@@ -153,12 +154,12 @@ impl App {
         // Grid Gizmo用のuniform bufferを作成
         data.gizmo_descriptor_set
             .rrdata
-            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain));
+            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "gizmo_grid"));
 
         // Light Gizmo用のuniform bufferを作成
         data.gizmo_descriptor_set
             .rrdata
-            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain));
+            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "gizmo_light"));
 
         if let Err(e) = RRDescriptorSet::create_descriptor_set(
             &rrdevice,
@@ -203,7 +204,7 @@ impl App {
             .expect("Failed to create billboard descriptor set");
         data.billboard_descriptor_set
             .rrdata
-            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain));
+            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "billboard"));
 
         data.billboard_descriptor_set
             .allocate_descriptor_sets(&rrdevice, &data.rrswapchain)
@@ -239,6 +240,10 @@ impl App {
         if let Err(e) = Self::create_grid_data(&mut data, 0, color, tex_coord) {
             eprintln!("{:?}", e)
         }
+        color = Vec4::new(0.0, 1.0, 0.0, 1.0);
+        if let Err(e) = Self::create_grid_data(&mut data, 1, color, tex_coord) {
+            eprintln!("{:?}", e)
+        }
         color = Vec4::new(0.0, 0.0, 1.0, 1.0);
         if let Err(e) = Self::create_grid_data(&mut data, 2, color, tex_coord) {
             eprintln!("{:?}", e)
@@ -270,13 +275,13 @@ impl App {
 
         data.grid_descriptor_set
             .rrdata
-            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain));
+            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "grid"));
         println!("created grid uniform buffers");
 
         // Light Ray用のuniform buffer（model = 単位行列）
         data.grid_descriptor_set
             .rrdata
-            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain));
+            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "light_ray"));
         println!("created light ray uniform buffers");
 
         // let grid_rrdata = &mut data.grid_descriptor_set.rrdata[0];
@@ -371,13 +376,9 @@ impl App {
         let resized = false;
         let start = Instant::now();
 
-        data.initial_camera_pos = [1100.0, -100.0, 200.0];
-        data.camera_pos = data.initial_camera_pos;
-        let camera_pos = vec3(data.camera_pos[0], data.camera_pos[1], data.camera_pos[2]);
-        let camera_direction = (camera_pos - vec3(0.0, 0.0, 0.0)).normalize();
-        let camera_up = vec3(0.0, 1.0, 0.0);
-        data.camera_direction = [camera_direction.x, camera_direction.y, camera_direction.z];
-        data.camera_up = [camera_up.x, camera_up.y, camera_up.z];
+        let initial_pos = cgmath::Vector3::new(1100.0, -100.0, 200.0);
+        let target = cgmath::Vector3::new(0.0, 0.0, 0.0);
+        data.camera = Camera::new(initial_pos, target);
         data.is_left_clicked = false;
 
         println!("initialized finished");

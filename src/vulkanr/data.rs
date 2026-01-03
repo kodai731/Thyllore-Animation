@@ -54,9 +54,9 @@ impl Default for RRData {
 }
 
 impl RRData {
-    pub unsafe fn new(instance: &Instance, rrdevice: &RRDevice, rrswapchain: &RRSwapchain) -> Self {
+    pub unsafe fn new(instance: &Instance, rrdevice: &RRDevice, rrswapchain: &RRSwapchain, name: &str) -> Self {
         let mut rrdata = RRData::default();
-        Self::create_uniform_buffers(&mut rrdata, instance, rrdevice, rrswapchain);
+        Self::create_uniform_buffers(&mut rrdata, instance, rrdevice, rrswapchain, name);
         rrdata
     }
 
@@ -65,32 +65,14 @@ impl RRData {
         instance: &Instance,
         rrdevice: &RRDevice,
         rrswapchain: &RRSwapchain,
+        name: &str,
     ) {
-        for _ in 0..rrswapchain.swapchain_images.len() {
+        for i in 0..rrswapchain.swapchain_images.len() {
             let ubo = UniformBufferObject::default();
-            let rruniform_buffer = RRUniformBuffer::new(instance, rrdevice, ubo);
+            let buffer_name = format!("{}[{}]", name, i);
+            let rruniform_buffer = RRUniformBuffer::new(instance, rrdevice, ubo, &buffer_name);
             rrdata.rruniform_buffers.push(rruniform_buffer);
         }
-    }
-
-    pub unsafe fn update_ubo(
-        &mut self,
-        rrdevice: &RRDevice,
-        image_index: usize,
-        ubo: &UniformBufferObject,
-    ) -> Result<(), anyhow::Error> {
-        use std::ptr::copy_nonoverlapping as memcpy;
-
-        let ubo_memory = self.rruniform_buffers[image_index].buffer_memory;
-        let memory = rrdevice.device.map_memory(
-            ubo_memory,
-            0,
-            std::mem::size_of::<UniformBufferObject>() as u64,
-            vk::MemoryMapFlags::empty(),
-        )?;
-        memcpy(ubo, memory.cast(), 1);
-        rrdevice.device.unmap_memory(ubo_memory);
-        Ok(())
     }
 
     pub unsafe fn delete_buffers(&mut self, rrdevice: &RRDevice) {

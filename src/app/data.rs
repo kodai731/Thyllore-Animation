@@ -3,7 +3,8 @@ use std::rc::Rc;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::renderer::deferred::RRGBuffer;
-use crate::scene::billboard::BillboardTransform;
+use rust_rendering::scene::billboard::BillboardTransform;
+use rust_rendering::scene::Camera;
 use rust_rendering::vulkanr::buffer::*;
 use rust_rendering::vulkanr::command::*;
 use rust_rendering::vulkanr::data;
@@ -111,10 +112,7 @@ pub struct AppData {
     pub color_image: vk::Image,
     pub color_image_memory: vk::DeviceMemory,
     pub color_image_view: vk::ImageView,
-    pub camera_direction: [f32; 3],
-    pub camera_pos: [f32; 3],
-    pub initial_camera_pos: [f32; 3],
-    pub camera_up: [f32; 3],
+    pub camera: Camera,
     pub grid_vertices: Vec<data::Vertex>,
     pub grid_indices: Vec<u32>,
     pub grid_scale: f32,
@@ -156,4 +154,5 @@ pub struct AppData {
     pub gbuffer_descriptor_set: Option<RRDescriptorSet>,
     pub gbuffer_sampler: Option<vk::Sampler>,
     pub rt_debug_state: RayTracingDebugState,
+    pub debug_view_data: DebugViewData,
 }

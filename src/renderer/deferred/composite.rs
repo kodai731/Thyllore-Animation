@@ -70,6 +70,13 @@ impl<'a> CompositePass<'a> {
             self.grid_descriptor_set,
             image_index,
         );
+        self.light_gizmo_data.draw_vertical_lines(
+            self.device,
+            command_buffer,
+            self.grid_pipeline,
+            self.grid_descriptor_set,
+            image_index,
+        );
         self.draw_billboard(command_buffer, image_index)?;
 
         Ok(())

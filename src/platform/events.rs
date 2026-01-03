@@ -140,20 +140,16 @@ impl System {
 
                                         ui.text("Camera Controls:");
                                         if ui.button("reset camera") {
-                                            unsafe {
-                                                app.reset_camera();
-                                            }
+                                            app.data.camera.reset();
                                         }
                                         ui.same_line();
                                         if ui.button("reset camera up") {
-                                            unsafe {
-                                                app.reset_camera_up();
-                                            }
+                                            app.data.camera.reset_up();
                                         }
                                         if ui.button("move to light gizmo") {
-                                            unsafe {
-                                                app.move_camera_to_light();
-                                            }
+                                            let light_pos = app.data.rt_debug_state.light_position;
+                                            let offset = cgmath::Vector3::new(2.0, 2.0, 2.0);
+                                            app.data.camera.move_to_look_at(light_pos, offset);
                                         }
                                         ui.separator();
 

@@ -49,7 +49,8 @@ impl App {
                 log!("DEBUG: Mesh {} first vertex position: ({}, {}, {})", mesh_idx, first_pos.x, first_pos.y, first_pos.z);
             }
 
-            let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain);
+            let rrdata_name = format!("fbx_mesh_{}", mesh_idx);
+            let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain, &rrdata_name);
 
             if let Some(texture_path) = &fbx_data.diffuse_texture {
                 log!("Loading texture: {}", texture_path);
@@ -192,7 +193,8 @@ impl App {
                 log!("Creating RRData for FBX mesh {}: {} vertices, texture: {:?}",
                     mesh_idx, fbx_data.positions.len(), fbx_data.diffuse_texture);
 
-                let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain);
+                let rrdata_name = format!("gltf_mesh_{}", mesh_idx);
+                let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain, &rrdata_name);
 
                 if let Some(texture_path) = &fbx_data.diffuse_texture {
                     log!("Loading texture: {}", texture_path);
@@ -298,7 +300,8 @@ impl App {
             for (i, gltf_data) in data.gltf_model.gltf_data.iter().enumerate() {
                 log!("Creating RRData for glTF mesh {}: {} vertices", i, gltf_data.vertices.len());
 
-                let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain);
+                let rrdata_name = format!("gltf_mesh2_{}", i);
+                let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain, &rrdata_name);
 
                 if !gltf_data.image_data.is_empty() {
                     log!("Loading texture from glTF image data for mesh {}", i);
@@ -385,7 +388,8 @@ impl App {
                 rrdata.vertex_data.indices.len(),
             );
 
-            RRData::create_uniform_buffers(rrdata, &instance, &rrdevice, &data.rrswapchain);
+            let buffer_name = format!("recreate_mesh_{}", i);
+            RRData::create_uniform_buffers(rrdata, &instance, &rrdevice, &data.rrswapchain, &buffer_name);
 
             rrdata.image_view = create_image_view(
                 &rrdevice,

@@ -11,7 +11,6 @@ extern crate rust_rendering;
 
 mod app;
 mod renderer;
-mod scene;
 mod platform;
 
 use app::{App, GUIData};

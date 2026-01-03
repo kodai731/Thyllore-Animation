@@ -1,6 +1,8 @@
 pub mod data;
 pub mod init;
+pub mod model_loader;
 pub mod render;
+pub mod scene_model;
 pub mod update;
 pub mod cleanup;
 pub mod util;

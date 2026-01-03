@@ -123,7 +123,6 @@ impl App {
 
                         // Acceleration Structureを更新（アニメーション後の頂点座標で）
                         Self::update_acceleration_structures(&self.instance, &self.rrdevice, &mut self.data)?;
-
                     } else {
                         // Static pose (duration == 0): keep time at 0, no need to update every frame
                         // Initial pose was already applied in load_model_from_path
@@ -134,7 +133,6 @@ impl App {
                                 LOGGED_STATIC = true;
                             }
                         }
-
                     }
                 } else {
                     static mut LOGGED_NO_DURATION: bool = false;
@@ -196,25 +194,53 @@ impl App {
             gui_data,
         )?;
 
-        if gui_data.show_light_ray_to_model {
-            let all_positions: Vec<_> = if !self.data.fbx_model.fbx_data.is_empty() {
-                self.data.fbx_model.fbx_data
-                    .iter()
-                    .flat_map(|data| data.positions.iter())
-                    .cloned()
-                    .collect()
-            } else {
-                self.data.model_descriptor_set.rrdata
-                    .iter()
-                    .flat_map(|rrdata| rrdata.vertex_data.vertices.iter().map(|v| {
-                        cgmath::Vector3::new(v.pos.x, v.pos.y, v.pos.z)
-                    }))
-                    .collect()
-            };
+        let model_tops: Vec<cgmath::Vector3<f32>> = self.data.rt_debug_state.get_cube_top()
+            .into_iter()
+            .collect();
 
-            self.data.light_gizmo_data.update_ray_to_model(&all_positions);
-            self.data.light_gizmo_data.update_or_create_ray_buffers(&self.instance, &self.rrdevice)?;
+        static mut CUBE_DEBUG_COUNTER: u32 = 0;
+        CUBE_DEBUG_COUNTER += 1;
+        if CUBE_DEBUG_COUNTER % 60 == 1 {
+            log!("=== Cube Position Debug (frame {}) ===", CUBE_DEBUG_COUNTER);
+            log!("model_tops from get_cube_top(): {:?}", model_tops);
+
+            if !self.data.model_descriptor_set.rrdata.is_empty() {
+                for (mesh_idx, rrdata) in self.data.model_descriptor_set.rrdata.iter().enumerate() {
+                    if !rrdata.vertex_data.vertices.is_empty() {
+                        let mut min_x = f32::MAX;
+                        let mut max_x = f32::MIN;
+                        let mut min_y = f32::MAX;
+                        let mut max_y = f32::MIN;
+                        let mut min_z = f32::MAX;
+                        let mut max_z = f32::MIN;
+
+                        for v in &rrdata.vertex_data.vertices {
+                            min_x = min_x.min(v.pos.x);
+                            max_x = max_x.max(v.pos.x);
+                            min_y = min_y.min(v.pos.y);
+                            max_y = max_y.max(v.pos.y);
+                            min_z = min_z.min(v.pos.z);
+                            max_z = max_z.max(v.pos.z);
+                        }
+
+                        let center_x = (min_x + max_x) / 2.0;
+                        let center_z = (min_z + max_z) / 2.0;
+
+                        log!("Mesh[{}] vertex_data bounds:", mesh_idx);
+                        log!("  X: [{:.2}, {:.2}], Y: [{:.2}, {:.2}], Z: [{:.2}, {:.2}]",
+                            min_x, max_x, min_y, max_y, min_z, max_z);
+                        log!("  Top center: ({:.2}, {:.2}, {:.2})", center_x, max_y, center_z);
+                        log!("  vertex count: {}", rrdata.vertex_data.vertices.len());
+                    }
+                }
+            } else {
+                log!("model_descriptor_set.rrdata is empty!");
+            }
+            log!("=====================================");
         }
+
+        self.data.light_gizmo_data.update_vertical_lines(&model_tops);
+        self.data.light_gizmo_data.update_or_create_vertical_line_buffers(&self.instance, &self.rrdevice)?;
 
         // Update ImGui buffers
         Self::update_imgui_buffers(&self.instance, &self.rrdevice, &mut self.data, draw_data)?;
@@ -595,7 +621,6 @@ impl App {
 
         if let (Some(vertex_buffer), Some(index_buffer)) =
             (self.data.light_gizmo_data.vertex_buffer, self.data.light_gizmo_data.index_buffer) {
-
             self.rrdevice.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,

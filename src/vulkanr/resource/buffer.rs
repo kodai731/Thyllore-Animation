@@ -1,3 +1,4 @@
+use crate::log;
 use crate::vulkanr::core::device::*;
 use crate::vulkanr::vulkan::*;
 use crate::vulkanr::command::*;
@@ -18,6 +19,7 @@ impl RRUniformBuffer {
         instance: &Instance,
         rrdevice: &RRDevice,
         uniform_buffer_object: UniformBufferObject,
+        name: &str,
     ) -> Self {
         let mut rruniform_buffer = Self::default();
         let Ok((uniform_buffer, uniform_buffer_memory)) = create_buffer(
@@ -30,16 +32,47 @@ impl RRUniformBuffer {
             panic!("Unable to create uniform buffer");
         };
 
+        log!("RRUniformBuffer::new [{}] buffer={:?}, memory={:?}",
+            name, uniform_buffer, uniform_buffer_memory);
+
         rruniform_buffer.buffer = uniform_buffer;
         rruniform_buffer.buffer_memory = uniform_buffer_memory;
         rruniform_buffer.uniform_buffer_object = uniform_buffer_object;
         rruniform_buffer
     }
-    
+
+    pub unsafe fn update(
+        &mut self,
+        rrdevice: &RRDevice,
+        ubo: &UniformBufferObject,
+        name: &str,
+    ) -> anyhow::Result<()> {
+        let memory = rrdevice.device.map_memory(
+            self.buffer_memory,
+            0,
+            size_of::<UniformBufferObject>() as u64,
+            vk::MemoryMapFlags::empty(),
+        )?;
+        memcpy(ubo, memory.cast(), 1);
+        rrdevice.device.unmap_memory(self.buffer_memory);
+
+        self.uniform_buffer_object = ubo.clone();
+
+        static mut LOG_COUNTER: u32 = 0;
+        LOG_COUNTER += 1;
+        if LOG_COUNTER % 300 == 1 {
+            log!("RRUniformBuffer::update [{}] buffer={:?} model_translation=({:.2},{:.2},{:.2})",
+                name,
+                self.buffer,
+                ubo.model.w.x, ubo.model.w.y, ubo.model.w.z);
+        }
+
+        Ok(())
+    }
+
     pub unsafe fn delete(&self, rrdevice: &RRDevice) {
         rrdevice.device.destroy_buffer(self.buffer, None);
         rrdevice.device.free_memory(self.buffer_memory, None);
-        //self.uniform_buffer_object.
     }
 }
 

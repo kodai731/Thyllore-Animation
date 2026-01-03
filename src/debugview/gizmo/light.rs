@@ -79,6 +79,12 @@ pub struct LightGizmoData {
     pub ray_to_model_vertex_buffer_memory: Option<vk::DeviceMemory>,
     pub ray_to_model_index_buffer: Option<vk::Buffer>,
     pub ray_to_model_index_buffer_memory: Option<vk::DeviceMemory>,
+    pub vertical_line_vertices: Vec<Vertex>,
+    pub vertical_line_indices: Vec<u32>,
+    pub vertical_line_vertex_buffer: Option<vk::Buffer>,
+    pub vertical_line_vertex_buffer_memory: Option<vk::DeviceMemory>,
+    pub vertical_line_index_buffer: Option<vk::Buffer>,
+    pub vertical_line_index_buffer_memory: Option<vk::DeviceMemory>,
 }
 
 impl Default for LightGizmoData {
@@ -140,6 +146,12 @@ impl LightGizmoData {
             ray_to_model_vertex_buffer_memory: None,
             ray_to_model_index_buffer: None,
             ray_to_model_index_buffer_memory: None,
+            vertical_line_vertices: Vec::new(),
+            vertical_line_indices: Vec::new(),
+            vertical_line_vertex_buffer: None,
+            vertical_line_vertex_buffer_memory: None,
+            vertical_line_index_buffer: None,
+            vertical_line_index_buffer_memory: None,
         }
     }
 
@@ -608,5 +620,218 @@ impl LightGizmoData {
         self.ray_to_model_vertex_buffer_memory = None;
         self.ray_to_model_index_buffer = None;
         self.ray_to_model_index_buffer_memory = None;
+
+        if let Some(buffer) = self.vertical_line_vertex_buffer {
+            rrdevice.device.destroy_buffer(buffer, None);
+        }
+        if let Some(memory) = self.vertical_line_vertex_buffer_memory {
+            rrdevice.device.free_memory(memory, None);
+        }
+        if let Some(buffer) = self.vertical_line_index_buffer {
+            rrdevice.device.destroy_buffer(buffer, None);
+        }
+        if let Some(memory) = self.vertical_line_index_buffer_memory {
+            rrdevice.device.free_memory(memory, None);
+        }
+
+        self.vertical_line_vertex_buffer = None;
+        self.vertical_line_vertex_buffer_memory = None;
+        self.vertical_line_index_buffer = None;
+        self.vertical_line_index_buffer_memory = None;
+    }
+
+    pub fn update_vertical_lines(&mut self, model_positions: &[Vector3<f32>]) {
+        let orange = Vec4::new(1.0, 0.5, 0.0, 1.0);
+        let tex_coord = Vec2::new(0.0, 0.0);
+
+        self.vertical_line_vertices.clear();
+        self.vertical_line_indices.clear();
+
+        let light_pos = Vec3::new(self.position.x, self.position.y, self.position.z);
+        let light_ground = Vec3::new(self.position.x, 0.0, self.position.z);
+
+        self.vertical_line_vertices.push(Vertex::new(light_pos, orange, tex_coord));
+        self.vertical_line_vertices.push(Vertex::new(light_ground, orange, tex_coord));
+        self.vertical_line_indices.push(0);
+        self.vertical_line_indices.push(1);
+
+        for (i, pos) in model_positions.iter().enumerate() {
+            let top = Vec3::new(pos.x, pos.y, pos.z);
+            let bottom = Vec3::new(pos.x, 0.0, pos.z);
+
+            let base_index = (2 + i * 2) as u32;
+            self.vertical_line_vertices.push(Vertex::new(top, orange, tex_coord));
+            self.vertical_line_vertices.push(Vertex::new(bottom, orange, tex_coord));
+            self.vertical_line_indices.push(base_index);
+            self.vertical_line_indices.push(base_index + 1);
+        }
+
+        static mut LOG_COUNTER: u32 = 0;
+        unsafe {
+            LOG_COUNTER += 1;
+            if LOG_COUNTER % 60 == 1 {
+                log!("Vertical lines: light=({:.1},{:.1},{:.1}), models={}, vertices={}, indices={}",
+                    light_pos.x, light_pos.y, light_pos.z,
+                    model_positions.len(),
+                    self.vertical_line_vertices.len(),
+                    self.vertical_line_indices.len());
+                for (i, pos) in model_positions.iter().enumerate() {
+                    log!("  Model[{}] top: ({:.1},{:.1},{:.1})", i, pos.x, pos.y, pos.z);
+                }
+            }
+        }
+    }
+
+    pub unsafe fn update_or_create_vertical_line_buffers(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+    ) -> anyhow::Result<()> {
+        if self.vertical_line_vertices.is_empty() {
+            return Ok(());
+        }
+
+        let vertex_buffer_size = (size_of::<Vertex>() * self.vertical_line_vertices.len()) as u64;
+
+        if self.vertical_line_vertex_buffer.is_none() {
+            let (vertex_buffer, vertex_buffer_memory) = create_buffer(
+                instance,
+                rrdevice,
+                vertex_buffer_size.max(1024),
+                vk::BufferUsageFlags::VERTEX_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            )?;
+            self.vertical_line_vertex_buffer = Some(vertex_buffer);
+            self.vertical_line_vertex_buffer_memory = Some(vertex_buffer_memory);
+        }
+
+        if let Some(vertex_buffer_memory) = self.vertical_line_vertex_buffer_memory {
+            let data = rrdevice.device.map_memory(
+                vertex_buffer_memory,
+                0,
+                vertex_buffer_size,
+                vk::MemoryMapFlags::empty()
+            )?;
+            std::ptr::copy_nonoverlapping(
+                self.vertical_line_vertices.as_ptr(),
+                data.cast(),
+                self.vertical_line_vertices.len()
+            );
+            rrdevice.device.unmap_memory(vertex_buffer_memory);
+        }
+
+        let index_buffer_size = (size_of::<u32>() * self.vertical_line_indices.len()) as u64;
+
+        if self.vertical_line_index_buffer.is_none() {
+            let (index_buffer, index_buffer_memory) = create_buffer(
+                instance,
+                rrdevice,
+                index_buffer_size.max(256),
+                vk::BufferUsageFlags::INDEX_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            )?;
+            self.vertical_line_index_buffer = Some(index_buffer);
+            self.vertical_line_index_buffer_memory = Some(index_buffer_memory);
+        }
+
+        if let Some(index_buffer_memory) = self.vertical_line_index_buffer_memory {
+            let data = rrdevice.device.map_memory(
+                index_buffer_memory,
+                0,
+                index_buffer_size,
+                vk::MemoryMapFlags::empty()
+            )?;
+            std::ptr::copy_nonoverlapping(
+                self.vertical_line_indices.as_ptr(),
+                data.cast(),
+                self.vertical_line_indices.len()
+            );
+            rrdevice.device.unmap_memory(index_buffer_memory);
+        }
+
+        Ok(())
+    }
+
+    pub unsafe fn draw_vertical_lines(
+        &self,
+        device: &Device,
+        command_buffer: vk::CommandBuffer,
+        grid_pipeline: &RRPipeline,
+        grid_descriptor_set: &RRDescriptorSet,
+        image_index: usize,
+    ) {
+        static mut DRAW_LOG_COUNTER: u32 = 0;
+        DRAW_LOG_COUNTER += 1;
+
+        if self.vertical_line_indices.is_empty() {
+            if DRAW_LOG_COUNTER % 60 == 1 {
+                log!("draw_vertical_lines: indices empty, skipping");
+            }
+            return;
+        }
+
+        if self.vertical_line_vertex_buffer.is_none() || self.vertical_line_index_buffer.is_none() {
+            if DRAW_LOG_COUNTER % 60 == 1 {
+                log!("draw_vertical_lines: buffers not created, vb={:?}, ib={:?}",
+                    self.vertical_line_vertex_buffer.is_some(),
+                    self.vertical_line_index_buffer.is_some());
+            }
+            return;
+        }
+
+        if let (Some(vertex_buffer), Some(index_buffer)) =
+            (self.vertical_line_vertex_buffer, self.vertical_line_index_buffer) {
+            let swapchain_images_len = grid_descriptor_set.descriptor_sets.len() /
+                grid_descriptor_set.rrdata.len().max(1);
+            let descriptor_set_index = 1 * swapchain_images_len + image_index;
+
+            if DRAW_LOG_COUNTER % 60 == 1 {
+                log!("draw_vertical_lines: indices={}, rrdata_len={}, desc_sets_len={}, using desc_index={}",
+                    self.vertical_line_indices.len(),
+                    grid_descriptor_set.rrdata.len(),
+                    grid_descriptor_set.descriptor_sets.len(),
+                    descriptor_set_index);
+            }
+
+            device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                grid_pipeline.pipeline,
+            );
+
+            device.cmd_set_line_width(command_buffer, 1.0);
+
+            device.cmd_bind_vertex_buffers(
+                command_buffer,
+                0,
+                &[vertex_buffer],
+                &[0],
+            );
+
+            device.cmd_bind_index_buffer(
+                command_buffer,
+                index_buffer,
+                0,
+                vk::IndexType::UINT32,
+            );
+
+            device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                grid_pipeline.pipeline_layout,
+                0,
+                &[grid_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[],
+            );
+
+            device.cmd_draw_indexed(
+                command_buffer,
+                self.vertical_line_indices.len() as u32,
+                1,
+                0,
+                0,
+                0,
+            );
+        }
     }
 }

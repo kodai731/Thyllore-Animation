@@ -712,16 +712,15 @@ impl App {
             msaa_samples,
         )?;
 
-        // Store in AppData
-        data.imgui_pipeline = Some(imgui_pipeline.pipeline);
-        data.imgui_pipeline_layout = Some(imgui_pipeline.pipeline_layout);
-        data.imgui_descriptor_set = Some(descriptor_set);
-        data.imgui_descriptor_set_layout = Some(descriptor_set_layout);
-        data.imgui_descriptor_pool = Some(descriptor_pool);
-        data.imgui_font_image = Some(image);
-        data.imgui_font_image_memory = Some(image_memory);
-        data.imgui_font_image_view = Some(image_view);
-        data.imgui_sampler = Some(sampler);
+        data.imgui.pipeline = Some(imgui_pipeline.pipeline);
+        data.imgui.pipeline_layout = Some(imgui_pipeline.pipeline_layout);
+        data.imgui.descriptor_set = Some(descriptor_set);
+        data.imgui.descriptor_set_layout = Some(descriptor_set_layout);
+        data.imgui.descriptor_pool = Some(descriptor_pool);
+        data.imgui.font_image = Some(image);
+        data.imgui.font_image_memory = Some(image_memory);
+        data.imgui.font_image_view = Some(image_view);
+        data.imgui.sampler = Some(sampler);
 
         log!("ImGui rendering resources initialized successfully");
         log!("  Pipeline: {:?}", imgui_pipeline.pipeline);

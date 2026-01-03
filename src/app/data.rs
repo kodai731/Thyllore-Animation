@@ -2,6 +2,7 @@ use serde::Serialize;
 use std::rc::Rc;
 use vulkanalia::prelude::v1_0::*;
 
+use crate::platform::ImguiData;
 use crate::renderer::deferred::RRGBuffer;
 use rust_rendering::scene::billboard::BillboardTransform;
 use rust_rendering::scene::Camera;
@@ -127,21 +128,7 @@ pub struct AppData {
     pub animation_playing: bool,
     pub current_animation_index: usize,
     pub current_model_path: String,
-    pub imgui_pipeline: Option<vk::Pipeline>,
-    pub imgui_pipeline_layout: Option<vk::PipelineLayout>,
-    pub imgui_descriptor_set: Option<vk::DescriptorSet>,
-    pub imgui_descriptor_set_layout: Option<vk::DescriptorSetLayout>,
-    pub imgui_descriptor_pool: Option<vk::DescriptorPool>,
-    pub imgui_font_image: Option<vk::Image>,
-    pub imgui_font_image_memory: Option<vk::DeviceMemory>,
-    pub imgui_font_image_view: Option<vk::ImageView>,
-    pub imgui_sampler: Option<vk::Sampler>,
-    pub imgui_vertex_buffer: Option<vk::Buffer>,
-    pub imgui_vertex_buffer_memory: Option<vk::DeviceMemory>,
-    pub imgui_vertex_buffer_size: vk::DeviceSize,
-    pub imgui_index_buffer: Option<vk::Buffer>,
-    pub imgui_index_buffer_memory: Option<vk::DeviceMemory>,
-    pub imgui_index_buffer_size: vk::DeviceSize,
+    pub imgui: ImguiData,
     pub gbuffer: Option<RRGBuffer>,
     pub acceleration_structure: Option<RRAccelerationStructure>,
     pub ray_query_pipeline: Option<RRPipeline>,

@@ -679,11 +679,11 @@ impl App {
             return Ok(());
         }
 
-        let pipeline = self.data.imgui_pipeline.ok_or_else(|| anyhow!("ImGui pipeline not initialized"))?;
-        let pipeline_layout = self.data.imgui_pipeline_layout.ok_or_else(|| anyhow!("ImGui pipeline layout not initialized"))?;
-        let descriptor_set = self.data.imgui_descriptor_set.ok_or_else(|| anyhow!("ImGui descriptor set not initialized"))?;
-        let vertex_buffer = self.data.imgui_vertex_buffer.ok_or_else(|| anyhow!("ImGui vertex buffer not initialized"))?;
-        let index_buffer = self.data.imgui_index_buffer.ok_or_else(|| anyhow!("ImGui index buffer not initialized"))?;
+        let pipeline = self.data.imgui.pipeline.ok_or_else(|| anyhow!("ImGui pipeline not initialized"))?;
+        let pipeline_layout = self.data.imgui.pipeline_layout.ok_or_else(|| anyhow!("ImGui pipeline layout not initialized"))?;
+        let descriptor_set = self.data.imgui.descriptor_set.ok_or_else(|| anyhow!("ImGui descriptor set not initialized"))?;
+        let vertex_buffer = self.data.imgui.vertex_buffer.ok_or_else(|| anyhow!("ImGui vertex buffer not initialized"))?;
+        let index_buffer = self.data.imgui.index_buffer.ok_or_else(|| anyhow!("ImGui index buffer not initialized"))?;
 
         // Bind pipeline
         self.rrdevice.device.cmd_bind_pipeline(

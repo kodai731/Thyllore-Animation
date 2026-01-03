@@ -824,16 +824,14 @@ impl App {
         let idx_buffer_size = (draw_data.total_idx_count as usize * std::mem::size_of::<imgui::DrawIdx>()) as vk::DeviceSize;
 
         // Create or resize vertex buffer if needed
-        if data.imgui_vertex_buffer.is_none() || vtx_buffer_size > data.imgui_vertex_buffer_size {
-            // Destroy old buffer if exists
-            if let Some(buffer) = data.imgui_vertex_buffer {
+        if data.imgui.vertex_buffer.is_none() || vtx_buffer_size > data.imgui.vertex_buffer_size {
+            if let Some(buffer) = data.imgui.vertex_buffer {
                 rrdevice.device.destroy_buffer(buffer, None);
             }
-            if let Some(memory) = data.imgui_vertex_buffer_memory {
+            if let Some(memory) = data.imgui.vertex_buffer_memory {
                 rrdevice.device.free_memory(memory, None);
             }
 
-            // Create new vertex buffer
             let buffer_info = vk::BufferCreateInfo::builder()
                 .size(vtx_buffer_size)
                 .usage(vk::BufferUsageFlags::VERTEX_BUFFER)
@@ -854,22 +852,20 @@ impl App {
             let vertex_buffer_memory = rrdevice.device.allocate_memory(&mem_alloc_info, None)?;
             rrdevice.device.bind_buffer_memory(vertex_buffer, vertex_buffer_memory, 0)?;
 
-            data.imgui_vertex_buffer = Some(vertex_buffer);
-            data.imgui_vertex_buffer_memory = Some(vertex_buffer_memory);
-            data.imgui_vertex_buffer_size = vtx_buffer_size;
+            data.imgui.vertex_buffer = Some(vertex_buffer);
+            data.imgui.vertex_buffer_memory = Some(vertex_buffer_memory);
+            data.imgui.vertex_buffer_size = vtx_buffer_size;
         }
 
         // Create or resize index buffer if needed
-        if data.imgui_index_buffer.is_none() || idx_buffer_size > data.imgui_index_buffer_size {
-            // Destroy old buffer if exists
-            if let Some(buffer) = data.imgui_index_buffer {
+        if data.imgui.index_buffer.is_none() || idx_buffer_size > data.imgui.index_buffer_size {
+            if let Some(buffer) = data.imgui.index_buffer {
                 rrdevice.device.destroy_buffer(buffer, None);
             }
-            if let Some(memory) = data.imgui_index_buffer_memory {
+            if let Some(memory) = data.imgui.index_buffer_memory {
                 rrdevice.device.free_memory(memory, None);
             }
 
-            // Create new index buffer
             let buffer_info = vk::BufferCreateInfo::builder()
                 .size(idx_buffer_size)
                 .usage(vk::BufferUsageFlags::INDEX_BUFFER)
@@ -890,13 +886,13 @@ impl App {
             let index_buffer_memory = rrdevice.device.allocate_memory(&mem_alloc_info, None)?;
             rrdevice.device.bind_buffer_memory(index_buffer, index_buffer_memory, 0)?;
 
-            data.imgui_index_buffer = Some(index_buffer);
-            data.imgui_index_buffer_memory = Some(index_buffer_memory);
-            data.imgui_index_buffer_size = idx_buffer_size;
+            data.imgui.index_buffer = Some(index_buffer);
+            data.imgui.index_buffer_memory = Some(index_buffer_memory);
+            data.imgui.index_buffer_size = idx_buffer_size;
         }
 
         // Upload vertex data
-        if let Some(vertex_buffer_memory) = data.imgui_vertex_buffer_memory {
+        if let Some(vertex_buffer_memory) = data.imgui.vertex_buffer_memory {
             let ptr = rrdevice.device.map_memory(
                 vertex_buffer_memory,
                 0,
@@ -920,7 +916,7 @@ impl App {
         }
 
         // Upload index data
-        if let Some(index_buffer_memory) = data.imgui_index_buffer_memory {
+        if let Some(index_buffer_memory) = data.imgui.index_buffer_memory {
             let ptr = rrdevice.device.map_memory(
                 index_buffer_memory,
                 0,

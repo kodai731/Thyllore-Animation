@@ -180,7 +180,7 @@ impl App {
 
         // Only process camera rotation if ImGui doesn't want the mouse
         if !gui_data.imgui_wants_mouse && (gui_data.is_left_clicked || self.data.is_left_clicked) {
-            self.data.light_just_selected = false;
+            self.data.light_gizmo_data.just_selected = false;
 
             // first clicked
             if !self.data.is_left_clicked {
@@ -249,24 +249,24 @@ impl App {
                 }
 
                 if selected_axis != LightGizmoAxis::None {
-                    self.data.light_gizmo_selected = true;
-                    self.data.light_drag_axis = selected_axis;
+                    self.data.light_gizmo_data.is_selected = true;
+                    self.data.light_gizmo_data.drag_axis = selected_axis;
                     self.data.light_gizmo_data.selected_axis = selected_axis;
 
                     let light_pos = self.data.rt_debug_state.light_position;
-                    self.data.light_initial_position = [light_pos.x, light_pos.y, light_pos.z];
+                    self.data.light_gizmo_data.initial_position = [light_pos.x, light_pos.y, light_pos.z];
 
                     let drag_depth = (light_pos - camera_pos).magnitude();
                     log!("Light gizmo selected - axis: {:?}, depth: {:.2}", selected_axis, drag_depth);
 
-                    self.data.light_just_selected = true;
+                    self.data.light_gizmo_data.just_selected = true;
                 }
             }
             let clicked_mouse_pos = vec2_from_array(self.data.clicked_mouse_pos);
 
-            if self.data.light_gizmo_selected && gui_data.is_left_clicked && !self.data.light_just_selected {
+            if self.data.light_gizmo_data.is_selected && gui_data.is_left_clicked && !self.data.light_gizmo_data.just_selected {
                 self.update_light_gizmo_position(mouse_pos, camera_pos, camera_direction, gui_data);
-            } else if !self.data.light_gizmo_selected {
+            } else if !self.data.light_gizmo_data.is_selected {
                 let diff = mouse_pos - clicked_mouse_pos;
                 let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
                 gui_data.monitor_value = distance;
@@ -307,11 +307,11 @@ impl App {
                     log!("Mouse released - resetting light gizmo state");
                 }
                 self.data.is_left_clicked = false;
-                self.data.light_gizmo_selected = false;
-                self.data.light_drag_axis = LightGizmoAxis::None;
+                self.data.light_gizmo_data.is_selected = false;
+                self.data.light_gizmo_data.drag_axis = LightGizmoAxis::None;
                 self.data.light_gizmo_data.selected_axis = LightGizmoAxis::None;
-                self.data.light_just_selected = false;
-                self.data.light_initial_position = [0.0, 0.0, 0.0];
+                self.data.light_gizmo_data.just_selected = false;
+                self.data.light_gizmo_data.initial_position = [0.0, 0.0, 0.0];
             }
         } else if gui_data.imgui_wants_mouse {
             // If ImGui wants the mouse, reset camera operation state
@@ -330,7 +330,7 @@ impl App {
             let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
             gui_data.monitor_value = distance;
             if 0.001 < distance {
-                let pan_speed = self.data.grid_scale * 0.01;
+                let pan_speed = self.data.grid.scale * 0.01;
                 self.data.camera.pan_with_base(diff, base_x, base_y, pan_speed);
                 camera_pos = self.data.camera.position();
                 self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
@@ -347,13 +347,12 @@ impl App {
 
         let camera_distance = camera_pos.magnitude();
         let base_scale = 10.0;
-        let grid_scale = (camera_distance / base_scale).max(1.0);
-        self.data.grid_scale = grid_scale;
+        self.data.grid.scale = (camera_distance / base_scale).max(1.0);
 
         let near_plane = (camera_distance * 0.001).max(0.1).min(10.0);
-        let far_plane = (grid_scale * 1000.0).max(1000.0).min(100000.0);
-        self.data.near_plane = near_plane;
-        self.data.far_plane = far_plane;
+        let far_plane = (self.data.grid.scale * 1000.0).max(1000.0).min(100000.0);
+        self.data.camera.set_near_plane(near_plane);
+        self.data.camera.set_far_plane(far_plane);
 
         use rust_rendering::math::coordinate_system::vulkan_projection_correction;
         let proj = vulkan_projection_correction()
@@ -361,12 +360,12 @@ impl App {
             Deg(45.0),
             self.data.rrswapchain.swapchain_extent.width as f32
                 / self.data.rrswapchain.swapchain_extent.height as f32,
-            near_plane,
-            far_plane,
+            self.data.camera.near_plane(),
+            self.data.camera.far_plane(),
         );
 
         if !gui_data.imgui_wants_mouse && mouse_wheel != 0.0 {
-            let zoom_speed = self.data.grid_scale * 0.5;
+            let zoom_speed = self.data.grid.scale * 0.5;
             self.data.camera.zoom(mouse_wheel, zoom_speed);
             camera_pos = self.data.camera.position();
         }
@@ -398,10 +397,10 @@ impl App {
                 camera_position: self.data.camera.position(),
                 camera_direction: self.data.camera.direction(),
                 camera_up: self.data.camera.up(),
-                near_plane: self.data.near_plane,
-                far_plane: self.data.far_plane,
+                near_plane: self.data.camera.near_plane(),
+                far_plane: self.data.camera.far_plane(),
             };
-            let gbuffer_debug_info = self.data.gbuffer.as_ref().map(|gb| GBufferDebugInfo {
+            let gbuffer_debug_info = self.data.raytracing.gbuffer.as_ref().map(|gb| GBufferDebugInfo {
                 position_image_view: gb.position_image_view,
                 extent_width: gb.width,
                 extent_height: gb.height,
@@ -409,9 +408,9 @@ impl App {
             log_billboard_debug_info(
                 &info,
                 &self.data.rrswapchain,
-                &self.data.billboard_descriptor_set,
+                &self.data.billboard.descriptor_set,
                 gbuffer_debug_info.as_ref(),
-                self.data.gbuffer_sampler,
+                self.data.raytracing.gbuffer_sampler,
             );
             gui_data.debug_billboard_depth = false;
         }
@@ -450,7 +449,7 @@ impl App {
             }
         }
 
-        if let Some(ref mut gbuffer_desc) = self.data.gbuffer_descriptor_set {
+        if let Some(ref mut gbuffer_desc) = self.data.raytracing.gbuffer_descriptor_set {
             for i in 0..gbuffer_desc.rrdata.len() {
                 let rrdata = &mut gbuffer_desc.rrdata[i];
                 let name = format!("gbuffer[{}]", i);
@@ -460,9 +459,8 @@ impl App {
             }
         }
 
-        // Update Scene Uniform Buffer for Ray Tracing
         if let (Some(scene_buffer), Some(scene_memory)) =
-            (self.data.scene_uniform_buffer, self.data.scene_uniform_buffer_memory)
+            (self.data.raytracing.scene_uniform_buffer, self.data.raytracing.scene_uniform_buffer_memory)
         {
             let light_pos = &self.data.rt_debug_state.light_position;
 
@@ -509,10 +507,9 @@ impl App {
             self.rrdevice.device.unmap_memory(scene_memory);
         }
 
-        // update for grid
-        let model_grid = Mat4::from_scale(self.data.grid_scale);
-        for i in 0..self.data.grid_descriptor_set.rrdata.len() {
-            let rrdata = &mut self.data.grid_descriptor_set.rrdata[i];
+        let model_grid = Mat4::from_scale(self.data.grid.scale);
+        for i in 0..self.data.grid.descriptor_set.rrdata.len() {
+            let rrdata = &mut self.data.grid.descriptor_set.rrdata[i];
 
             let model = if i == 0 {
                 model_grid
@@ -526,8 +523,8 @@ impl App {
         }
 
         // Gizmo用のuniform bufferを更新
-        for i in 0..self.data.gizmo_descriptor_set.rrdata.len() {
-            let rrdata = &mut self.data.gizmo_descriptor_set.rrdata[i];
+        for i in 0..self.data.gizmo_data.descriptor_set.rrdata.len() {
+            let rrdata = &mut self.data.gizmo_data.descriptor_set.rrdata[i];
 
             let model = if i == 0 {
                 Mat4::identity()
@@ -554,16 +551,16 @@ impl App {
         // ビルボード用のuniform bufferを更新
         let light_pos = self.data.light_gizmo_data.position;
 
-        if self.data.billboard_transform.is_none() {
-            self.data.billboard_transform = Some(BillboardTransform::new(light_pos));
+        if self.data.billboard.transform.is_none() {
+            self.data.billboard.transform = Some(BillboardTransform::new(light_pos));
         }
 
-        if let Some(ref mut billboard_transform) = self.data.billboard_transform {
+        if let Some(ref mut billboard_transform) = self.data.billboard.transform {
             billboard_transform.set_position(light_pos);
             billboard_transform.update_look_at(camera_pos, camera_up);
 
-            for i in 0..self.data.billboard_descriptor_set.rrdata.len() {
-                let rrdata = &mut self.data.billboard_descriptor_set.rrdata[i];
+            for i in 0..self.data.billboard.descriptor_set.rrdata.len() {
+                let rrdata = &mut self.data.billboard.descriptor_set.rrdata[i];
 
                 let ubo_billboard = UniformBufferObject {
                     model: billboard_transform.model_matrix,
@@ -714,7 +711,7 @@ impl App {
                 eprintln!("failed to update vertex buffer: {}", e);
             }
 
-            if let Some(ref mut accel_struct) = self.data.acceleration_structure {
+            if let Some(ref mut accel_struct) = self.data.raytracing.acceleration_structure {
                 if i < accel_struct.blas_list.len() {
                     let blas = &accel_struct.blas_list[i];
                     if let Err(e) = RRAccelerationStructure::update_blas(
@@ -734,7 +731,7 @@ impl App {
             }
         }
 
-        if let Some(ref mut accel_struct) = self.data.acceleration_structure {
+        if let Some(ref mut accel_struct) = self.data.raytracing.acceleration_structure {
             let tlas = &accel_struct.tlas;
             if let Err(e) = RRAccelerationStructure::update_tlas(
                 &self.instance,
@@ -987,7 +984,7 @@ impl App {
 
                 if t >= 0.0 {
                     let intersection = ray_origin + ray_direction * t;
-                    let initial_pos = vec3_from_array(self.data.light_initial_position);
+                    let initial_pos = vec3_from_array(self.data.light_gizmo_data.initial_position);
 
                     self.data.light_gizmo_data.update_position_with_constraint(
                         intersection,
@@ -1019,7 +1016,7 @@ impl App {
         log!("  debug_view_mode: {:?}", self.data.rt_debug_state.debug_view_mode);
         log!("  distance_attenuation: {}", self.data.rt_debug_state.enable_distance_attenuation);
 
-        if let Some(ref accel_struct) = self.data.acceleration_structure {
+        if let Some(ref accel_struct) = self.data.raytracing.acceleration_structure {
             log!("Acceleration Structure:");
             log!("  BLAS count: {}", accel_struct.blas_list.len());
             for (i, blas) in accel_struct.blas_list.iter().enumerate() {

@@ -126,7 +126,7 @@ impl App {
             &data.rrcommand_pool.borrow_mut(),
         );
         data.model_descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
-        data.grid_descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
+        data.grid.descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
         data.model_pipeline = RRPipeline::new(
             &rrdevice,
             &data.rrswapchain,
@@ -137,90 +137,83 @@ impl App {
             vk::PrimitiveTopology::TRIANGLE_LIST,
             vk::PolygonMode::FILL,
         );
-        data.grid_pipeline = RRPipeline::new(
+        data.grid.pipeline = RRPipeline::new(
             &rrdevice,
             &data.rrswapchain,
             &data.rrrender,
-            &data.grid_descriptor_set,
+            &data.grid.descriptor_set,
             "assets/shaders/gridVert.spv",
             "assets/shaders/gridFrag.spv",
             vk::PrimitiveTopology::LINE_LIST,
             vk::PolygonMode::LINE,
         );
 
-        // Gizmo用のディスクリプタセットとパイプラインを作成
-        data.gizmo_descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
+        data.gizmo_data = GridGizmoData::new();
+        data.gizmo_data.descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
 
-        // Grid Gizmo用のuniform bufferを作成
-        data.gizmo_descriptor_set
+        data.gizmo_data.descriptor_set
             .rrdata
             .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "gizmo_grid"));
 
-        // Light Gizmo用のuniform bufferを作成
-        data.gizmo_descriptor_set
+        data.gizmo_data.descriptor_set
             .rrdata
             .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "gizmo_light"));
 
         if let Err(e) = RRDescriptorSet::create_descriptor_set(
             &rrdevice,
             &data.rrswapchain,
-            &mut data.gizmo_descriptor_set,
+            &mut data.gizmo_data.descriptor_set,
         ) {
             eprintln!("failed to create gizmo descriptor set: {:?}", e);
         }
         println!("created gizmo descriptor set");
 
-        data.gizmo_pipeline = PipelineBuilder::new("assets/shaders/gizmoVert.spv", "assets/shaders/gizmoFrag.spv")
+        data.gizmo_data.pipeline = PipelineBuilder::new("assets/shaders/gizmoVert.spv", "assets/shaders/gizmoFrag.spv")
             .vertex_input(VertexInputConfig::Custom {
                 bindings: vec![GizmoVertex::binding_description()],
                 attributes: GizmoVertex::attribute_descriptions().to_vec(),
             })
             .topology(vk::PrimitiveTopology::LINE_LIST)
             .polygon_mode(vk::PolygonMode::LINE)
-            .no_depth_test()  // Gizmoは常に手前に表示
+            .no_depth_test()
             .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
-            .descriptor_layouts(vec![data.gizmo_descriptor_set.descriptor_set_layout])
+            .descriptor_layouts(vec![data.gizmo_data.descriptor_set.descriptor_set_layout])
             .build(&rrdevice, &data.rrrender, Some(data.rrswapchain.swapchain_extent))
             .expect("Failed to create gizmo pipeline");
 
-        // Gizmoデータを初期化
-        data.gizmo_data = GridGizmoData::new();
+        data.light_gizmo_data.pipeline = data.gizmo_data.pipeline.clone();
+        data.light_gizmo_data.descriptor_set = data.gizmo_data.descriptor_set.clone();
         data.gizmo_data.create_buffers(&instance, &rrdevice, &data.rrcommand_pool)
             .expect("Failed to create gizmo buffers");
 
-        // ライトGizmoデータを初期化
         data.light_gizmo_data = LightGizmoData::new(data.rt_debug_state.light_position);
         data.light_gizmo_data.create_buffers(&instance, &rrdevice, &data.rrcommand_pool)
             .expect("Failed to create light gizmo buffers");
-        data.light_gizmo_selected = false;
-        data.light_drag_axis = LightGizmoAxis::None;
 
-        // ビルボード用のテクスチャを先にロード
         data.light_gizmo_data.create_billboard_buffers(&instance, &rrdevice, &data.rrcommand_pool)
             .expect("Failed to create billboard buffers");
 
-        // ビルボード用のディスクリプタセットとパイプラインを作成
-        data.billboard_descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &data.rrswapchain)
+        data.billboard.descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &data.rrswapchain)
             .expect("Failed to create billboard descriptor set");
-        data.billboard_descriptor_set
+        data.billboard.descriptor_set
             .rrdata
             .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "billboard"));
 
-        data.billboard_descriptor_set
+        data.billboard.descriptor_set
             .allocate_descriptor_sets(&rrdevice, &data.rrswapchain)
             .expect("Failed to allocate billboard descriptor sets");
 
         if let Some(ref billboard_texture) = data.light_gizmo_data.billboard_texture {
-            data.billboard_descriptor_set
+            data.billboard.descriptor_set
                 .update_descriptor_sets(&rrdevice, &data.rrswapchain, billboard_texture)
                 .expect("Failed to update billboard descriptor sets");
         }
 
-        data.billboard_pipeline = RRPipeline::new_billboard(
+        data.billboard.pipeline = RRPipeline::new_billboard(
             &rrdevice,
             &data.rrrender,
             &data.rrswapchain,
-            data.billboard_descriptor_set.descriptor_set_layout,
+            data.billboard.descriptor_set.descriptor_set_layout,
             "assets/shaders/billboardVert.spv",
             "assets/shaders/billboardFrag.spv",
             rust_rendering::debugview::gizmo::BillboardVertex::binding_description(),
@@ -229,6 +222,20 @@ impl App {
         .expect("Failed to create billboard pipeline");
 
         println!("created pipeline");
+
+        log!("Starting ray tracing initialization...");
+        log!("swapchain extent: {}x{}", data.rrswapchain.swapchain_extent.width, data.rrswapchain.swapchain_extent.height);
+
+        match Self::init_ray_tracing(&instance, &rrdevice, &mut data) {
+            Ok(_) => {
+                log!("init_ray_tracing succeeded");
+                log!("gbuffer is_some: {}", data.raytracing.gbuffer.is_some());
+            }
+            Err(e) => {
+                log!("Failed to initialize ray tracing: {:?}", e);
+            }
+        }
+        log!("initialized ray tracing resources");
 
         if let Err(e) = Self::reload_model_data_buffer(&instance, &rrdevice, &mut data) {
             eprintln!("{:?}", e)
@@ -249,37 +256,32 @@ impl App {
             eprintln!("{:?}", e)
         }
         println!("created grid data ");
-        data.grid_scale = 1.0;
-        data.near_plane = 0.1;
-        data.far_plane = 1000.0;
-        // let _ = Self::create_texture_image(&instance, &device, &mut data)?;
-        // data.texture_image = RRImage::new(&instance, &rrdevice, &data.rrcommand_pool.borrow_mut());
-        data.grid_vertex_buffer = RRVertexBuffer::new(
+        data.grid.scale = 1.0;
+        data.grid.vertex_buffer = RRVertexBuffer::new(
             &instance,
             &rrdevice,
             &data.rrcommand_pool,
-            (size_of::<vulkan_data::Vertex>() * data.grid_vertices.len()) as vk::DeviceSize,
-            data.grid_vertices.as_ptr() as *const c_void,
-            data.grid_vertices.len(),
+            (size_of::<vulkan_data::Vertex>() * data.grid.vertices.len()) as vk::DeviceSize,
+            data.grid.vertices.as_ptr() as *const c_void,
+            data.grid.vertices.len(),
         );
         println!("created grid vertex buffers");
-        data.grid_index_buffer = RRIndexBuffer::new(
+        data.grid.index_buffer = RRIndexBuffer::new(
             &instance,
             &rrdevice,
             &data.rrcommand_pool,
-            (size_of::<u32>() * data.grid_indices.len()) as u64,
-            data.grid_indices.as_ptr() as *const c_void,
-            data.grid_indices.len(),
+            (size_of::<u32>() * data.grid.indices.len()) as u64,
+            data.grid.indices.as_ptr() as *const c_void,
+            data.grid.indices.len(),
         );
         println!("created grid index buffer");
 
-        data.grid_descriptor_set
+        data.grid.descriptor_set
             .rrdata
             .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "grid"));
         println!("created grid uniform buffers");
 
-        // Light Ray用のuniform buffer（model = 単位行列）
-        data.grid_descriptor_set
+        data.grid.descriptor_set
             .rrdata
             .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "light_ray"));
         println!("created light ray uniform buffers");
@@ -306,13 +308,13 @@ impl App {
         if let Err(e) = RRDescriptorSet::create_descriptor_set(
             &rrdevice,
             &data.rrswapchain,
-            &mut data.grid_descriptor_set,
+            &mut data.grid.descriptor_set,
         ) {
             eprintln!("failed to create grid descriptor set: {:?}", e);
         }
         println!("created grid descriptor set");
-        let offset_vertex = (data.grid_vertices.len()) as u32;
-        let offset_index = (data.grid_indices.len()) as u32;
+        let offset_vertex = (data.grid.vertices.len()) as u32;
+        let offset_index = (data.grid.indices.len()) as u32;
         data.rrcommand_buffer = RRCommandBuffer::new(&data.rrcommand_pool);
 
         if let Err(e) = RRCommandBuffer::allocate_command_buffers(
@@ -324,13 +326,13 @@ impl App {
         }
         let mut rrbind_info = Vec::new();
         rrbind_info.push(RRBindInfo::new(
-            &data.grid_pipeline,
-            &data.grid_descriptor_set,
-            &data.grid_vertex_buffer,
-            &data.grid_index_buffer,
+            &data.grid.pipeline,
+            &data.grid.descriptor_set,
+            &data.grid.vertex_buffer,
+            &data.grid.index_buffer,
             0,
             0,
-            0,  // data_index for grid (always 0)
+            0,
         ));
 
         for i in 0..data.model_descriptor_set.rrdata.len() {
@@ -364,13 +366,6 @@ impl App {
 
         let _ = Self::create_sync_objects(&rrdevice.device, &mut data)?;
         println!("created sync objects");
-
-        // Initialize Ray Tracing (G-Buffer, etc.)
-        // Note: Acceleration structures will be built after model is loaded
-        if let Err(e) = Self::init_ray_tracing(&instance, &rrdevice, &mut data) {
-            eprintln!("Failed to initialize ray tracing: {:?}", e);
-        }
-        println!("initialized ray tracing resources");
 
         let frame = 0 as usize;
         let resized = false;

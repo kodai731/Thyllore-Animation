@@ -1,5 +1,15 @@
 use cgmath::{Matrix4, Vector3, Vector4, InnerSpace};
 
+use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
+use crate::vulkanr::pipeline::RRPipeline;
+
+#[derive(Clone, Debug, Default)]
+pub struct BillboardData {
+    pub pipeline: RRPipeline,
+    pub descriptor_set: RRBillboardDescriptorSet,
+    pub transform: Option<BillboardTransform>,
+}
+
 #[derive(Clone, Debug)]
 pub struct BillboardTransform {
     pub position: Vector3<f32>,

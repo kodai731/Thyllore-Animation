@@ -18,13 +18,13 @@ pub unsafe fn cleanup_model_resources(
 
     rrdevice.device.device_wait_idle().ok();
 
-    if let Some(ref mut accel) = data.acceleration_structure {
+    if let Some(ref mut accel) = data.raytracing.acceleration_structure {
         accel.destroy(&rrdevice.device);
         log!("Destroyed acceleration structure");
     }
-    data.acceleration_structure = None;
+    data.raytracing.acceleration_structure = None;
 
-    if let Some(ref mut gbuffer_desc) = data.gbuffer_descriptor_set {
+    if let Some(ref mut gbuffer_desc) = data.raytracing.gbuffer_descriptor_set {
         gbuffer_desc.rrdata.clear();
         log!("Cleared gbuffer_descriptor_set.rrdata (shared handles, no delete)");
     }
@@ -77,7 +77,7 @@ pub unsafe fn rebuild_acceleration_structures(
         log!("Created TLAS with {} instances", acceleration_structure.blas_list.len());
     }
 
-    data.acceleration_structure = Some(acceleration_structure);
+    data.raytracing.acceleration_structure = Some(acceleration_structure);
     log!("Acceleration structures rebuilt successfully");
     Ok(())
 }
@@ -101,7 +101,7 @@ pub unsafe fn replace_model_with_cube(
     RRDescriptorSet::create_descriptor_set(rrdevice, &data.rrswapchain, &mut data.model_descriptor_set)?;
     log!("Updated model_descriptor_set with new cube data");
 
-    if let Some(ref mut gbuffer_desc) = data.gbuffer_descriptor_set {
+    if let Some(ref mut gbuffer_desc) = data.raytracing.gbuffer_descriptor_set {
         for rrdata in &data.model_descriptor_set.rrdata {
             gbuffer_desc.rrdata.push(rrdata.clone());
         }
@@ -111,9 +111,9 @@ pub unsafe fn replace_model_with_cube(
 
     rebuild_acceleration_structures(instance, rrdevice, data)?;
 
-    if let Some(ref accel_struct) = data.acceleration_structure {
+    if let Some(ref accel_struct) = data.raytracing.acceleration_structure {
         if let Some(tlas) = accel_struct.tlas.acceleration_structure {
-            if let Some(ref mut ray_query_desc) = data.ray_query_descriptor {
+            if let Some(ref mut ray_query_desc) = data.raytracing.ray_query_descriptor {
                 ray_query_desc.update_tlas(rrdevice, tlas)?;
                 log!("Updated ray_query_descriptor with new TLAS");
             }
@@ -121,9 +121,9 @@ pub unsafe fn replace_model_with_cube(
     }
 
     if let Some(ref billboard_texture) = data.light_gizmo_data.billboard_texture {
-        data.billboard_descriptor_set
+        data.billboard.descriptor_set
             .update_descriptor_sets(rrdevice, &data.rrswapchain, billboard_texture)?;
-        log!("Re-updated billboard_descriptor_set after cube reload");
+        log!("Re-updated billboard.descriptor_set after cube reload");
     }
 
     data.debug_view_data.cube_model = Some(cube);

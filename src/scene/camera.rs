@@ -7,6 +7,8 @@ pub struct Camera {
     direction: Vector3<f32>,
     up: Vector3<f32>,
     initial_position: Vector3<f32>,
+    near_plane: f32,
+    far_plane: f32,
 }
 
 impl Default for Camera {
@@ -18,6 +20,8 @@ impl Default for Camera {
             direction,
             up: Vector3::new(0.0, 1.0, 0.0),
             initial_position: initial_pos,
+            near_plane: 0.1,
+            far_plane: 1000.0,
         }
     }
 }
@@ -30,6 +34,8 @@ impl Camera {
             direction,
             up: Vector3::new(0.0, 1.0, 0.0),
             initial_position: position,
+            near_plane: 0.1,
+            far_plane: 1000.0,
         }
     }
 
@@ -47,6 +53,22 @@ impl Camera {
 
     pub fn initial_position(&self) -> Vector3<f32> {
         self.initial_position
+    }
+
+    pub fn near_plane(&self) -> f32 {
+        self.near_plane
+    }
+
+    pub fn far_plane(&self) -> f32 {
+        self.far_plane
+    }
+
+    pub fn set_near_plane(&mut self, near_plane: f32) {
+        self.near_plane = near_plane;
+    }
+
+    pub fn set_far_plane(&mut self, far_plane: f32) {
+        self.far_plane = far_plane;
     }
 
     pub fn position_array(&self) -> [f32; 3] {

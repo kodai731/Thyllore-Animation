@@ -482,6 +482,38 @@ impl App {
 
         Ok(())
     }
+
+    pub unsafe fn begin_main_render_pass(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
+        let render_area = vk::Rect2D::builder()
+            .offset(vk::Offset2D::default())
+            .extent(self.data.rrswapchain.swapchain_extent);
+
+        let color_clear_value = vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
+        };
+        let depth_clear_value = vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 1.0,
+                stencil: 0,
+            },
+        };
+        let clear_values = [color_clear_value, depth_clear_value];
+
+        let render_pass_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(self.data.rrrender.render_pass)
+            .framebuffer(self.data.rrrender.framebuffers[image_index])
+            .render_area(render_area)
+            .clear_values(&clear_values);
+
+        self.rrdevice.device.cmd_begin_render_pass(
+            command_buffer,
+            &render_pass_info,
+            vk::SubpassContents::INLINE,
+        );
+    }
+
     pub unsafe fn record_3d_rendering(
         &self,
         command_buffer: vk::CommandBuffer,
@@ -490,12 +522,11 @@ impl App {
         // This is the existing rendering logic from bind_command
         let mut rrbind_info = Vec::new();
 
-        // Grid pipeline bindings
         rrbind_info.push(RRBindInfo::new(
-            &self.data.grid_pipeline,
-            &self.data.grid_descriptor_set,
-            &self.data.grid_vertex_buffer,
-            &self.data.grid_index_buffer,
+            &self.data.grid.pipeline,
+            &self.data.grid.descriptor_set,
+            &self.data.grid.vertex_buffer,
+            &self.data.grid.index_buffer,
             0,
             0,
             0,
@@ -567,17 +598,14 @@ impl App {
         if let (Some(vertex_buffer), Some(index_buffer)) =
             (self.data.gizmo_data.vertex_buffer, self.data.gizmo_data.index_buffer) {
 
-            // Gizmoパイプラインをバインド
             self.rrdevice.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.data.gizmo_pipeline.pipeline,
+                self.data.gizmo_data.pipeline.pipeline,
             );
 
-            // 線幅を設定（wideLinesが無効なので1.0のみ使用可能）- パイプラインバインド直後に設定
             self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
 
-            // 頂点バッファをバインド
             self.rrdevice.device.cmd_bind_vertex_buffers(
                 command_buffer,
                 0,
@@ -585,7 +613,6 @@ impl App {
                 &[0],
             );
 
-            // インデックスバッファをバインド
             self.rrdevice.device.cmd_bind_index_buffer(
                 command_buffer,
                 index_buffer,
@@ -593,22 +620,19 @@ impl App {
                 vk::IndexType::UINT32,
             );
 
-            // ディスクリプタセットをバインド
-            // Gizmoは常にdata_index=0（1つのRRDataのみ）
-            let swapchain_images_len = self.data.gizmo_descriptor_set.descriptor_sets.len() /
-                self.data.gizmo_descriptor_set.rrdata.len().max(1);
+            let swapchain_images_len = self.data.gizmo_data.descriptor_set.descriptor_sets.len() /
+                self.data.gizmo_data.descriptor_set.rrdata.len().max(1);
             let descriptor_set_index = 0 * swapchain_images_len + image_index;
 
             self.rrdevice.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.data.gizmo_pipeline.pipeline_layout,
+                self.data.gizmo_data.pipeline.pipeline_layout,
                 0,
-                &[self.data.gizmo_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[self.data.gizmo_data.descriptor_set.descriptor_sets[descriptor_set_index]],
                 &[],
             );
 
-            // Gizmoを描画
             self.rrdevice.device.cmd_draw_indexed(
                 command_buffer,
                 self.data.gizmo_data.indices.len() as u32,
@@ -624,7 +648,7 @@ impl App {
             self.rrdevice.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.data.gizmo_pipeline.pipeline,
+                self.data.light_gizmo_data.pipeline.pipeline,
             );
 
             self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
@@ -643,16 +667,16 @@ impl App {
                 vk::IndexType::UINT32,
             );
 
-            let swapchain_images_len = self.data.gizmo_descriptor_set.descriptor_sets.len() /
-                self.data.gizmo_descriptor_set.rrdata.len().max(1);
+            let swapchain_images_len = self.data.light_gizmo_data.descriptor_set.descriptor_sets.len() /
+                self.data.light_gizmo_data.descriptor_set.rrdata.len().max(1);
             let descriptor_set_index = 1 * swapchain_images_len + image_index;
 
             self.rrdevice.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.data.gizmo_pipeline.pipeline_layout,
+                self.data.light_gizmo_data.pipeline.pipeline_layout,
                 0,
-                &[self.data.gizmo_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[self.data.light_gizmo_data.descriptor_set.descriptor_sets[descriptor_set_index]],
                 &[],
             );
 

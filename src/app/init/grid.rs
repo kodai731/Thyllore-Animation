@@ -43,14 +43,14 @@ impl App {
             let vertex2 = vulkan_data::Vertex::new(pos2, color, tex_coord);
             let vertex3 = vulkan_data::Vertex::new(-pos1, color, tex_coord);
             let vertex4 = vulkan_data::Vertex::new(-pos2, color, tex_coord);
-            data.grid_vertices.push(vertex1);
-            data.grid_indices.push(data.grid_indices.len() as u32);
-            data.grid_vertices.push(vertex2);
-            data.grid_indices.push(data.grid_indices.len() as u32);
-            data.grid_vertices.push(vertex3);
-            data.grid_indices.push(data.grid_indices.len() as u32);
-            data.grid_vertices.push(vertex4);
-            data.grid_indices.push(data.grid_indices.len() as u32);
+            data.grid.vertices.push(vertex1);
+            data.grid.indices.push(data.grid.indices.len() as u32);
+            data.grid.vertices.push(vertex2);
+            data.grid.indices.push(data.grid.indices.len() as u32);
+            data.grid.vertices.push(vertex3);
+            data.grid.indices.push(data.grid.indices.len() as u32);
+            data.grid.vertices.push(vertex4);
+            data.grid.indices.push(data.grid.indices.len() as u32);
         }
 
         Ok(())

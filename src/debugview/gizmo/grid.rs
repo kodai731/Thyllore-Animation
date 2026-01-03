@@ -1,6 +1,8 @@
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
+use crate::vulkanr::descriptor::RRDescriptorSet;
 use crate::vulkanr::device::*;
+use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::vulkan::*;
 use cgmath::{vec3, Matrix3};
 use std::mem::size_of;
@@ -42,6 +44,8 @@ impl GizmoVertex {
 
 #[derive(Clone, Debug, Default)]
 pub struct GridGizmoData {
+    pub pipeline: RRPipeline,
+    pub descriptor_set: RRDescriptorSet,
     pub vertices: Vec<GizmoVertex>,
     pub indices: Vec<u32>,
     pub vertex_buffer: Option<vk::Buffer>,
@@ -68,6 +72,8 @@ impl GridGizmoData {
         ];
 
         Self {
+            pipeline: RRPipeline::default(),
+            descriptor_set: RRDescriptorSet::default(),
             vertices,
             indices,
             vertex_buffer: None,

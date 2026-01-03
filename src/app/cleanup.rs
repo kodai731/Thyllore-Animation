@@ -7,56 +7,56 @@ impl App {
     unsafe fn destroy(&mut self) {
         log!("Destroying application resources...");
 
-        if let Some(sampler) = self.data.gbuffer_sampler {
+        if let Some(sampler) = self.data.raytracing.gbuffer_sampler {
             self.rrdevice.device.destroy_sampler(sampler, None);
             log!("Destroyed G-Buffer sampler");
         }
 
-        if let Some(mut gbuffer_descriptor) = self.data.gbuffer_descriptor_set.take() {
+        if let Some(mut gbuffer_descriptor) = self.data.raytracing.gbuffer_descriptor_set.take() {
             gbuffer_descriptor.destroy(&self.rrdevice.device);
             log!("Destroyed G-Buffer descriptor set");
         }
 
-        if let Some(gbuffer_pipeline) = self.data.gbuffer_pipeline.take() {
+        if let Some(gbuffer_pipeline) = self.data.raytracing.gbuffer_pipeline.take() {
             gbuffer_pipeline.destroy(&self.rrdevice.device);
             log!("Destroyed G-Buffer pipeline");
         }
 
-        if let Some(mut composite_descriptor) = self.data.composite_descriptor.take() {
+        if let Some(mut composite_descriptor) = self.data.raytracing.composite_descriptor.take() {
             composite_descriptor.destroy(&self.rrdevice.device);
             log!("Destroyed composite descriptor set");
         }
 
-        if let Some(composite_pipeline) = self.data.composite_pipeline.take() {
+        if let Some(composite_pipeline) = self.data.raytracing.composite_pipeline.take() {
             composite_pipeline.destroy(&self.rrdevice.device);
             log!("Destroyed composite pipeline");
         }
 
         if let (Some(buffer), Some(memory)) = (
-            self.data.scene_uniform_buffer,
-            self.data.scene_uniform_buffer_memory,
+            self.data.raytracing.scene_uniform_buffer,
+            self.data.raytracing.scene_uniform_buffer_memory,
         ) {
             self.rrdevice.device.destroy_buffer(buffer, None);
             self.rrdevice.device.free_memory(memory, None);
             log!("Destroyed scene uniform buffer");
         }
 
-        if let Some(mut ray_query_descriptor) = self.data.ray_query_descriptor.take() {
+        if let Some(mut ray_query_descriptor) = self.data.raytracing.ray_query_descriptor.take() {
             ray_query_descriptor.destroy(&self.rrdevice.device);
             log!("Destroyed ray query descriptor set");
         }
 
-        if let Some(ray_query_pipeline) = self.data.ray_query_pipeline.take() {
+        if let Some(ray_query_pipeline) = self.data.raytracing.ray_query_pipeline.take() {
             ray_query_pipeline.destroy(&self.rrdevice.device);
             log!("Destroyed ray query pipeline");
         }
 
-        if let Some(mut acceleration_structure) = self.data.acceleration_structure.take() {
+        if let Some(mut acceleration_structure) = self.data.raytracing.acceleration_structure.take() {
             acceleration_structure.destroy(&self.rrdevice.device);
             log!("Destroyed acceleration structure");
         }
 
-        if let Some(mut gbuffer) = self.data.gbuffer.take() {
+        if let Some(mut gbuffer) = self.data.raytracing.gbuffer.take() {
             gbuffer.destroy(&*self.rrdevice.device);
             log!("Destroyed G-Buffer");
         }

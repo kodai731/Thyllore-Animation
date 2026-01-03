@@ -58,6 +58,8 @@ pub enum LightGizmoAxis {
 
 #[derive(Clone, Debug)]
 pub struct LightGizmoData {
+    pub pipeline: RRPipeline,
+    pub descriptor_set: RRDescriptorSet,
     pub position: Vector3<f32>,
     pub vertices: Vec<GizmoVertex>,
     pub indices: Vec<u32>,
@@ -66,6 +68,10 @@ pub struct LightGizmoData {
     pub index_buffer: Option<vk::Buffer>,
     pub index_buffer_memory: Option<vk::DeviceMemory>,
     pub selected_axis: LightGizmoAxis,
+    pub is_selected: bool,
+    pub drag_axis: LightGizmoAxis,
+    pub just_selected: bool,
+    pub initial_position: [f32; 3],
     pub billboard_vertices: Vec<BillboardVertex>,
     pub billboard_indices: Vec<u32>,
     pub billboard_vertex_buffer: Option<vk::Buffer>,
@@ -125,6 +131,8 @@ impl LightGizmoData {
         ];
 
         Self {
+            pipeline: RRPipeline::default(),
+            descriptor_set: RRDescriptorSet::default(),
             position,
             vertices,
             indices,
@@ -133,6 +141,10 @@ impl LightGizmoData {
             index_buffer: None,
             index_buffer_memory: None,
             selected_axis: LightGizmoAxis::None,
+            is_selected: false,
+            drag_axis: LightGizmoAxis::None,
+            just_selected: false,
+            initial_position: [0.0, 0.0, 0.0],
             billboard_vertices,
             billboard_indices,
             billboard_vertex_buffer: None,

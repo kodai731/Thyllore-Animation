@@ -15,8 +15,6 @@ pub struct CompositePass<'a> {
     grid_descriptor_set: &'a RRDescriptorSet,
     grid_vertex_buffer: &'a RRVertexBuffer,
     grid_index_buffer: &'a RRIndexBuffer,
-    gizmo_pipeline: &'a RRPipeline,
-    gizmo_descriptor_set: &'a RRDescriptorSet,
     gizmo_data: &'a GridGizmoData,
     light_gizmo_data: &'a LightGizmoData,
     billboard_pipeline: &'a RRPipeline,
@@ -28,24 +26,22 @@ pub struct CompositePass<'a> {
 
 impl<'a> CompositePass<'a> {
     pub fn new(app: &'a App) -> Result<Self> {
-        let composite_pipeline = app.data.composite_pipeline.as_ref()
+        let composite_pipeline = app.data.raytracing.composite_pipeline.as_ref()
             .ok_or_else(|| anyhow!("Composite pipeline not initialized"))?;
-        let composite_descriptor = app.data.composite_descriptor.as_ref()
+        let composite_descriptor = app.data.raytracing.composite_descriptor.as_ref()
             .ok_or_else(|| anyhow!("Composite descriptor set not initialized"))?;
 
         Ok(Self {
             composite_pipeline,
             composite_descriptor,
-            grid_pipeline: &app.data.grid_pipeline,
-            grid_descriptor_set: &app.data.grid_descriptor_set,
-            grid_vertex_buffer: &app.data.grid_vertex_buffer,
-            grid_index_buffer: &app.data.grid_index_buffer,
-            gizmo_pipeline: &app.data.gizmo_pipeline,
-            gizmo_descriptor_set: &app.data.gizmo_descriptor_set,
+            grid_pipeline: &app.data.grid.pipeline,
+            grid_descriptor_set: &app.data.grid.descriptor_set,
+            grid_vertex_buffer: &app.data.grid.vertex_buffer,
+            grid_index_buffer: &app.data.grid.index_buffer,
             gizmo_data: &app.data.gizmo_data,
             light_gizmo_data: &app.data.light_gizmo_data,
-            billboard_pipeline: &app.data.billboard_pipeline,
-            billboard_descriptor_set: &app.data.billboard_descriptor_set,
+            billboard_pipeline: &app.data.billboard.pipeline,
+            billboard_descriptor_set: &app.data.billboard.descriptor_set,
             device: &app.rrdevice.device,
             swapchain_extent: app.data.rrswapchain.swapchain_extent,
             debug_view_mode: app.data.rt_debug_state.debug_view_mode,
@@ -231,7 +227,7 @@ impl<'a> CompositePass<'a> {
             self.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.gizmo_pipeline.pipeline,
+                self.gizmo_data.pipeline.pipeline,
             );
 
             self.device.cmd_set_line_width(command_buffer, 1.0);
@@ -250,16 +246,16 @@ impl<'a> CompositePass<'a> {
                 vk::IndexType::UINT32,
             );
 
-            let swapchain_images_len = self.gizmo_descriptor_set.descriptor_sets.len() /
-                self.gizmo_descriptor_set.rrdata.len().max(1);
+            let swapchain_images_len = self.gizmo_data.descriptor_set.descriptor_sets.len() /
+                self.gizmo_data.descriptor_set.rrdata.len().max(1);
             let descriptor_set_index = 0 * swapchain_images_len + image_index;
 
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.gizmo_pipeline.pipeline_layout,
+                self.gizmo_data.pipeline.pipeline_layout,
                 0,
-                &[self.gizmo_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[self.gizmo_data.descriptor_set.descriptor_sets[descriptor_set_index]],
                 &[],
             );
 
@@ -283,7 +279,7 @@ impl<'a> CompositePass<'a> {
             self.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.gizmo_pipeline.pipeline,
+                self.light_gizmo_data.pipeline.pipeline,
             );
 
             self.device.cmd_set_line_width(command_buffer, 1.0);
@@ -302,16 +298,16 @@ impl<'a> CompositePass<'a> {
                 vk::IndexType::UINT32,
             );
 
-            let swapchain_images_len = self.gizmo_descriptor_set.descriptor_sets.len() /
-                self.gizmo_descriptor_set.rrdata.len().max(1);
+            let swapchain_images_len = self.light_gizmo_data.descriptor_set.descriptor_sets.len() /
+                self.light_gizmo_data.descriptor_set.rrdata.len().max(1);
             let descriptor_set_index = 1 * swapchain_images_len + image_index;
 
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.gizmo_pipeline.pipeline_layout,
+                self.light_gizmo_data.pipeline.pipeline_layout,
                 0,
-                &[self.gizmo_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[self.light_gizmo_data.descriptor_set.descriptor_sets[descriptor_set_index]],
                 &[],
             );
 

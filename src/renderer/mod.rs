@@ -25,23 +25,13 @@ impl App {
             .device
             .begin_command_buffer(command_buffer, &begin_info)?;
 
-        use rust_rendering::debugview::DebugViewMode;
-        let use_ray_tracing = self.data.acceleration_structure.is_some()
-            && self.data.gbuffer.is_some()
-            && self.data.gbuffer_pipeline.is_some()
-            && self.data.ray_query_pipeline.is_some()
-            && self.data.composite_pipeline.is_some();
+        let use_ray_tracing = self.data.raytracing.is_available();
 
         static mut RAY_TRACING_LOG_ONCE: bool = false;
         unsafe {
             if !RAY_TRACING_LOG_ONCE {
                 if use_ray_tracing {
                     log!("=== Using Ray Tracing Rendering Path ===");
-                    log!("  G-Buffer: {:?}", self.data.gbuffer.is_some());
-                    log!("  Acceleration Structure: {:?}", self.data.acceleration_structure.is_some());
-                    log!("  G-Buffer Pipeline: {:?}", self.data.gbuffer_pipeline.is_some());
-                    log!("  Ray Query Pipeline: {:?}", self.data.ray_query_pipeline.is_some());
-                    log!("  Composite Pipeline: {:?}", self.data.composite_pipeline.is_some());
                 }
                 RAY_TRACING_LOG_ONCE = true;
             }
@@ -52,8 +42,9 @@ impl App {
             deferred::record_ray_query_pass(self, command_buffer)?;
             deferred::record_composite_pass(self, command_buffer, image_index, draw_data)?;
         } else {
-            self.record_3d_rendering(command_buffer, image_index)?;
+            self.begin_main_render_pass(command_buffer, image_index);
             self.record_imgui_rendering(command_buffer, draw_data)?;
+            self.rrdevice.device.cmd_end_render_pass(command_buffer);
         }
 
         self.rrdevice.device.end_command_buffer(command_buffer)?;

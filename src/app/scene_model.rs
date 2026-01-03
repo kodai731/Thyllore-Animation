@@ -487,10 +487,10 @@ impl App {
         log!("Recreating command buffers...");
         let mut rrbind_info = Vec::new();
         rrbind_info.push(RRBindInfo::new(
-            &data.grid_pipeline,
-            &data.grid_descriptor_set,
-            &data.grid_vertex_buffer,
-            &data.grid_index_buffer,
+            &data.grid.pipeline,
+            &data.grid.descriptor_set,
+            &data.grid.vertex_buffer,
+            &data.grid.index_buffer,
             0,
             0,
             0,
@@ -658,7 +658,7 @@ impl App {
         rrdevice: &RRDevice,
         data: &mut AppData,
     ) -> Result<()> {
-        if let Some(ref accel_struct) = data.acceleration_structure {
+        if let Some(ref accel_struct) = data.raytracing.acceleration_structure {
             let vertex_buffers: Vec<_> = data.model_descriptor_set.rrdata.iter()
                 .map(|rrdata| {
                     (

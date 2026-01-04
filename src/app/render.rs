@@ -1,16 +1,16 @@
 use crate::app::{App, AppData, GUIData};
-use rust_rendering::vulkanr::buffer::*;
-use rust_rendering::vulkanr::command::*;
-use rust_rendering::vulkanr::data as vulkan_data;
-use rust_rendering::vulkanr::data::*;
-use rust_rendering::vulkanr::descriptor::*;
-use rust_rendering::vulkanr::device::*;
-use rust_rendering::vulkanr::image::*;
-use rust_rendering::vulkanr::pipeline::*;
-use rust_rendering::vulkanr::render::*;
-use rust_rendering::vulkanr::vulkan::*;
-use rust_rendering::debugview::*;
-use rust_rendering::logger::logger::*;
+use crate::vulkanr::buffer::*;
+use crate::vulkanr::command::*;
+use crate::vulkanr::data as vulkan_data;
+use crate::vulkanr::data::*;
+use crate::vulkanr::descriptor::*;
+use crate::vulkanr::device::*;
+use crate::vulkanr::image::*;
+use crate::vulkanr::pipeline::*;
+use crate::vulkanr::render::*;
+use crate::vulkanr::vulkan::*;
+use crate::debugview::*;
+use crate::logger::logger::*;
 
 use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use cgmath::{Matrix4, SquareMatrix};
@@ -25,7 +25,7 @@ impl App {
     pub unsafe fn render(&mut self, window: &Window, gui_data: &mut GUIData, draw_data: &imgui::DrawData) -> Result<()> {
         // Check if a new model file was selected
         if gui_data.file_changed {
-            log!("Loading new model from: {}", gui_data.selected_model_path);
+            crate::log!("Loading new model from: {}", gui_data.selected_model_path);
 
             // Wait for device to finish all operations before reloading
             self.rrdevice.device.device_wait_idle()?;
@@ -38,11 +38,11 @@ impl App {
             ) {
                 Ok(_) => {
                     gui_data.load_status = format!("Loaded: {}", gui_data.selected_model_path);
-                    log!("Successfully loaded model: {}", gui_data.selected_model_path);
+                    crate::log!("Successfully loaded model: {}", gui_data.selected_model_path);
                 }
                 Err(e) => {
                     gui_data.load_status = format!("Error: {}", e);
-                    log!("Failed to load model: {:?}", e);
+                    crate::log!("Failed to load model: {:?}", e);
                 }
             }
 
@@ -89,7 +89,7 @@ impl App {
                 static mut LOGGED_PAUSED: bool = false;
                 unsafe {
                     if !LOGGED_PAUSED {
-                        log!("FBX animation is paused (animation_playing=false)");
+                        crate::log!("FBX animation is paused (animation_playing=false)");
                         LOGGED_PAUSED = true;
                     }
                 }
@@ -110,7 +110,7 @@ impl App {
                         unsafe {
                             FRAME_COUNT += 1;
                             if FRAME_COUNT % 10 == 0 {
-                                log!("Updating FBX animation: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
+                                crate::log!("Updating FBX animation: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
                                      self.data.animation_time, duration, elapsed, prev_time);
                             }
                         }
@@ -129,7 +129,7 @@ impl App {
                         static mut LOGGED_STATIC: bool = false;
                         unsafe {
                             if !LOGGED_STATIC {
-                                log!("FBX animation has duration=0 (static pose)");
+                                crate::log!("FBX animation has duration=0 (static pose)");
                                 LOGGED_STATIC = true;
                             }
                         }
@@ -138,7 +138,7 @@ impl App {
                     static mut LOGGED_NO_DURATION: bool = false;
                     unsafe {
                         if !LOGGED_NO_DURATION {
-                            log!("FBX animation has no duration (get_animation_duration returned None)");
+                            crate::log!("FBX animation has no duration (get_animation_duration returned None)");
                             LOGGED_NO_DURATION = true;
                         }
                     }
@@ -156,10 +156,10 @@ impl App {
                 FRAME_COUNT += 1;
                 if FRAME_COUNT % 60 == 0 {
                     if self.data.gltf_model.has_skinned_meshes {
-                        log!("Updating glTF skeletal animation: time={:.4}s, joint_animations={}, gltf_data={}",
+                        crate::log!("Updating glTF skeletal animation: time={:.4}s, joint_animations={}, gltf_data={}",
                              time, self.data.gltf_model.joint_animations.len(), self.data.gltf_model.gltf_data.len());
                     } else {
-                        log!("Updating glTF node animation: time={:.4}s, node_animations={}, gltf_data={}",
+                        crate::log!("Updating glTF node animation: time={:.4}s, node_animations={}, gltf_data={}",
                              time, self.data.gltf_model.node_animations.len(), self.data.gltf_model.gltf_data.len());
                     }
                 }
@@ -201,8 +201,8 @@ impl App {
         static mut CUBE_DEBUG_COUNTER: u32 = 0;
         CUBE_DEBUG_COUNTER += 1;
         if CUBE_DEBUG_COUNTER % 60 == 1 {
-            log!("=== Cube Position Debug (frame {}) ===", CUBE_DEBUG_COUNTER);
-            log!("model_tops from get_cube_top(): {:?}", model_tops);
+            crate::log!("=== Cube Position Debug (frame {}) ===", CUBE_DEBUG_COUNTER);
+            crate::log!("model_tops from get_cube_top(): {:?}", model_tops);
 
             if !self.data.model_descriptor_set.rrdata.is_empty() {
                 for (mesh_idx, rrdata) in self.data.model_descriptor_set.rrdata.iter().enumerate() {
@@ -226,17 +226,17 @@ impl App {
                         let center_x = (min_x + max_x) / 2.0;
                         let center_z = (min_z + max_z) / 2.0;
 
-                        log!("Mesh[{}] vertex_data bounds:", mesh_idx);
-                        log!("  X: [{:.2}, {:.2}], Y: [{:.2}, {:.2}], Z: [{:.2}, {:.2}]",
+                        crate::log!("Mesh[{}] vertex_data bounds:", mesh_idx);
+                        crate::log!("  X: [{:.2}, {:.2}], Y: [{:.2}, {:.2}], Z: [{:.2}, {:.2}]",
                             min_x, max_x, min_y, max_y, min_z, max_z);
-                        log!("  Top center: ({:.2}, {:.2}, {:.2})", center_x, max_y, center_z);
-                        log!("  vertex count: {}", rrdata.vertex_data.vertices.len());
+                        crate::log!("  Top center: ({:.2}, {:.2}, {:.2})", center_x, max_y, center_z);
+                        crate::log!("  vertex count: {}", rrdata.vertex_data.vertices.len());
                     }
                 }
             } else {
-                log!("model_descriptor_set.rrdata is empty!");
+                crate::log!("model_descriptor_set.rrdata is empty!");
             }
-            log!("=====================================");
+            crate::log!("=====================================");
         }
 
         self.data.light_gizmo_data.update_vertical_lines(&model_tops);
@@ -289,10 +289,10 @@ impl App {
 
         // Handle screenshot request
         if gui_data.take_screenshot {
-            log!("Taking screenshot...");
+            crate::log!("Taking screenshot...");
             self.save_screenshot(image_index)?;
             gui_data.take_screenshot = false;
-            log!("Screenshot saved!");
+            crate::log!("Screenshot saved!");
         }
 
         self.frame = (self.frame + 1) % MAX_FRAMES_IN_FLIGHT;
@@ -473,7 +473,7 @@ impl App {
         let mut writer = encoder.write_header()?;
         writer.write_image_data(&rgba_data)?;
 
-        log!("Screenshot saved to: {}", filename);
+        crate::log!("Screenshot saved to: {}", filename);
 
         // Cleanup
         device.free_command_buffers(*command_pool, &[command_buffer]);

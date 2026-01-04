@@ -1,35 +1,35 @@
 use crate::app::App;
-use rust_rendering::vulkanr::device::*;
+use crate::vulkanr::device::*;
 
 use vulkanalia::prelude::v1_0::*;
 
 impl App {
     unsafe fn destroy(&mut self) {
-        log!("Destroying application resources...");
+        crate::log!("Destroying application resources...");
 
         if let Some(sampler) = self.data.raytracing.gbuffer_sampler {
             self.rrdevice.device.destroy_sampler(sampler, None);
-            log!("Destroyed G-Buffer sampler");
+            crate::log!("Destroyed G-Buffer sampler");
         }
 
         if let Some(mut gbuffer_descriptor) = self.data.raytracing.gbuffer_descriptor_set.take() {
             gbuffer_descriptor.destroy(&self.rrdevice.device);
-            log!("Destroyed G-Buffer descriptor set");
+            crate::log!("Destroyed G-Buffer descriptor set");
         }
 
         if let Some(gbuffer_pipeline) = self.data.raytracing.gbuffer_pipeline.take() {
             gbuffer_pipeline.destroy(&self.rrdevice.device);
-            log!("Destroyed G-Buffer pipeline");
+            crate::log!("Destroyed G-Buffer pipeline");
         }
 
         if let Some(mut composite_descriptor) = self.data.raytracing.composite_descriptor.take() {
             composite_descriptor.destroy(&self.rrdevice.device);
-            log!("Destroyed composite descriptor set");
+            crate::log!("Destroyed composite descriptor set");
         }
 
         if let Some(composite_pipeline) = self.data.raytracing.composite_pipeline.take() {
             composite_pipeline.destroy(&self.rrdevice.device);
-            log!("Destroyed composite pipeline");
+            crate::log!("Destroyed composite pipeline");
         }
 
         if let (Some(buffer), Some(memory)) = (
@@ -38,30 +38,30 @@ impl App {
         ) {
             self.rrdevice.device.destroy_buffer(buffer, None);
             self.rrdevice.device.free_memory(memory, None);
-            log!("Destroyed scene uniform buffer");
+            crate::log!("Destroyed scene uniform buffer");
         }
 
         if let Some(mut ray_query_descriptor) = self.data.raytracing.ray_query_descriptor.take() {
             ray_query_descriptor.destroy(&self.rrdevice.device);
-            log!("Destroyed ray query descriptor set");
+            crate::log!("Destroyed ray query descriptor set");
         }
 
         if let Some(ray_query_pipeline) = self.data.raytracing.ray_query_pipeline.take() {
             ray_query_pipeline.destroy(&self.rrdevice.device);
-            log!("Destroyed ray query pipeline");
+            crate::log!("Destroyed ray query pipeline");
         }
 
         if let Some(mut acceleration_structure) = self.data.raytracing.acceleration_structure.take() {
             acceleration_structure.destroy(&self.rrdevice.device);
-            log!("Destroyed acceleration structure");
+            crate::log!("Destroyed acceleration structure");
         }
 
         if let Some(mut gbuffer) = self.data.raytracing.gbuffer.take() {
             gbuffer.destroy(&*self.rrdevice.device);
-            log!("Destroyed G-Buffer");
+            crate::log!("Destroyed G-Buffer");
         }
 
-        log!("All application resources destroyed");
+        crate::log!("All application resources destroyed");
     }
 
     //unsafe fn recreate_swapchain(&mut self, window: &Window) -> Result<()> {

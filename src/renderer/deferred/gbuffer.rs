@@ -2,12 +2,12 @@ use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
-use rust_rendering::vulkanr::pipeline::RRPipeline;
-use rust_rendering::vulkanr::descriptor::RRDescriptorSet;
-use rust_rendering::vulkanr::core::{Device, RRDevice};
-use rust_rendering::vulkanr::resource::{RRGBuffer, create_image, create_image_view};
-use rust_rendering::vulkanr::render::RRRender;
-use rust_rendering::vulkanr::render::pass::get_depth_format;
+use crate::vulkanr::pipeline::RRPipeline;
+use crate::vulkanr::descriptor::RRDescriptorSet;
+use crate::vulkanr::core::{Device, RRDevice};
+use crate::vulkanr::resource::{RRGBuffer, create_image, create_image_view};
+use crate::vulkanr::render::RRRender;
+use crate::vulkanr::render::pass::get_depth_format;
 
 pub unsafe fn create_gbuffer_framebuffer(
     instance: &Instance,

@@ -2,10 +2,10 @@ use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
-use rust_rendering::vulkanr::resource::RRGBuffer;
-use rust_rendering::vulkanr::pipeline::RRPipeline;
-use rust_rendering::vulkanr::descriptor::RRRayQueryDescriptorSet;
-use rust_rendering::vulkanr::core::Device;
+use crate::vulkanr::resource::RRGBuffer;
+use crate::vulkanr::pipeline::RRPipeline;
+use crate::vulkanr::descriptor::RRRayQueryDescriptorSet;
+use crate::vulkanr::core::Device;
 
 pub struct RayQueryPass<'a> {
     gbuffer: &'a RRGBuffer,

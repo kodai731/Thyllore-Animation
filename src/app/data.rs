@@ -3,19 +3,19 @@ use std::rc::Rc;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::platform::ImguiData;
-use rust_rendering::scene::billboard::BillboardData;
-use rust_rendering::scene::grid::GridData;
-use rust_rendering::scene::raytracing::RayTracingData;
-use rust_rendering::scene::Camera;
-use rust_rendering::vulkanr::buffer::*;
-use rust_rendering::vulkanr::command::*;
-use rust_rendering::vulkanr::descriptor::*;
-use rust_rendering::vulkanr::pipeline::*;
-use rust_rendering::vulkanr::render::*;
-use rust_rendering::vulkanr::swapchain::*;
-use rust_rendering::loader::gltf::gltf::*;
-use rust_rendering::loader::fbx::fbx::*;
-use rust_rendering::debugview::*;
+use crate::scene::billboard::BillboardData;
+use crate::scene::grid::GridData;
+use crate::scene::raytracing::RayTracingData;
+use crate::scene::Camera;
+use crate::vulkanr::buffer::*;
+use crate::vulkanr::command::*;
+use crate::vulkanr::descriptor::*;
+use crate::vulkanr::pipeline::*;
+use crate::vulkanr::render::*;
+use crate::vulkanr::swapchain::*;
+use crate::loader::gltf::gltf::*;
+use crate::loader::fbx::fbx::*;
+use crate::debugview::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub enum LightMoveTarget {

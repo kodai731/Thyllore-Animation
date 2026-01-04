@@ -1,23 +1,23 @@
 use crate::app::{App, AppData};
-use rust_rendering::vulkanr::buffer::*;
-use rust_rendering::vulkanr::command::*;
-use rust_rendering::vulkanr::data as vulkan_data;
-use rust_rendering::vulkanr::data::*;
-use rust_rendering::vulkanr::descriptor::*;
-use rust_rendering::vulkanr::device::*;
-use rust_rendering::vulkanr::image::*;
-use rust_rendering::vulkanr::pipeline::{
+use crate::vulkanr::buffer::*;
+use crate::vulkanr::command::*;
+use crate::vulkanr::data as vulkan_data;
+use crate::vulkanr::data::*;
+use crate::vulkanr::descriptor::*;
+use crate::vulkanr::device::*;
+use crate::vulkanr::image::*;
+use crate::vulkanr::pipeline::{
     PipelineBuilder, RRPipeline, VertexInputConfig, DepthTestConfig, BlendConfig, PushConstantConfig,
 };
-use rust_rendering::vulkanr::render::*;
-use rust_rendering::vulkanr::swapchain::*;
-use rust_rendering::vulkanr::vulkan::*;
+use crate::vulkanr::render::*;
+use crate::vulkanr::swapchain::*;
+use crate::vulkanr::vulkan::*;
 
-use rust_rendering::loader::gltf::gltf::*;
-use rust_rendering::loader::fbx::fbx::{FbxModel, load_fbx, load_fbx_with_russimp};
-use rust_rendering::loader::texture::load_png_image;
-use rust_rendering::math::*;
-use rust_rendering::logger::logger::*;
+use crate::loader::gltf::gltf::*;
+use crate::loader::fbx::fbx::{FbxModel, load_fbx, load_fbx_with_russimp};
+use crate::loader::texture::load_png_image;
+use crate::math::*;
+use crate::logger::logger::*;
 
 use anyhow::{anyhow, Result};
 use std::mem::size_of;
@@ -36,24 +36,24 @@ impl App {
         data.fbx_model = load_fbx_with_russimp(model_path_fbx)?;
 
         if data.fbx_model.animation_count() > 0 {
-            log!("Applying initial pose (time=0) for FBX skeletal animation...");
+            crate::log!("Applying initial pose (time=0) for FBX skeletal animation...");
             data.fbx_model.update_animation(0, 0.0);
         }
 
         for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
-            log!("Creating RRData for FBX mesh {}: {} vertices, texture: {:?}",
+            crate::log!("Creating RRData for FBX mesh {}: {} vertices, texture: {:?}",
                 mesh_idx, fbx_data.positions.len(), fbx_data.diffuse_texture);
 
             if !fbx_data.positions.is_empty() {
                 let first_pos = &fbx_data.positions[0];
-                log!("DEBUG: Mesh {} first vertex position: ({}, {}, {})", mesh_idx, first_pos.x, first_pos.y, first_pos.z);
+                crate::log!("DEBUG: Mesh {} first vertex position: ({}, {}, {})", mesh_idx, first_pos.x, first_pos.y, first_pos.z);
             }
 
             let rrdata_name = format!("fbx_mesh_{}", mesh_idx);
             let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain, &rrdata_name);
 
             if let Some(texture_path) = &fbx_data.diffuse_texture {
-                log!("Loading texture: {}", texture_path);
+                crate::log!("Loading texture: {}", texture_path);
                 match load_png_image(texture_path) {
                     Ok((image_data, width, height)) => {
                         match create_texture_image_pixel(
@@ -68,10 +68,10 @@ impl App {
                                 rrdata.image = image;
                                 rrdata.image_memory = image_memory;
                                 rrdata.mip_level = mip_level;
-                                log!("Texture loaded successfully for mesh {}", mesh_idx);
+                                crate::log!("Texture loaded successfully for mesh {}", mesh_idx);
                             }
                             Err(e) => {
-                                log!("Failed to create texture image for mesh {}: {}", mesh_idx, e);
+                                crate::log!("Failed to create texture image for mesh {}: {}", mesh_idx, e);
                                 (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
                                     instance,
                                     rrdevice,
@@ -84,7 +84,7 @@ impl App {
                         }
                     }
                     Err(e) => {
-                        log!("Failed to load texture file {}: {}", texture_path, e);
+                        crate::log!("Failed to load texture file {}: {}", texture_path, e);
                         (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
                             instance,
                             rrdevice,
@@ -96,7 +96,7 @@ impl App {
                     }
                 }
             } else {
-                log!("No texture specified for mesh {}, using white", mesh_idx);
+                crate::log!("No texture specified for mesh {}, using white", mesh_idx);
                 (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
                     instance,
                     rrdevice,
@@ -139,16 +139,16 @@ impl App {
             data.animation_playing = true;
             data.current_animation_index = 0;
             data.animation_time = 0.0;
-            log!("FBX animation loaded: {} animations", data.fbx_model.animation_count());
+            crate::log!("FBX animation loaded: {} animations", data.fbx_model.animation_count());
             if let Some(duration) = data.fbx_model.get_animation_duration(0) {
-                log!("Animation 0 duration: {} seconds", duration);
+                crate::log!("Animation 0 duration: {} seconds", duration);
             }
         }
 
         let model_path_fbx = "assets/models/phoenix-bird/source/fly.fbx";
         data.current_model_path = model_path_fbx.to_string();
 
-        log!("=== FBX model loaded successfully ===");
+        crate::log!("=== FBX model loaded successfully ===");
         Ok(())
     }
 
@@ -158,7 +158,7 @@ impl App {
         data: &mut AppData,
         model_path: &str,
     ) -> Result<()> {
-        log!("=== Loading model from path: {} ===", model_path);
+        crate::log!("=== Loading model from path: {} ===", model_path);
 
         let path_lower = model_path.to_lowercase();
         let is_fbx = path_lower.ends_with(".fbx");
@@ -168,36 +168,36 @@ impl App {
             return Err(anyhow!("Unsupported file format. Only FBX and glTF/GLB are supported."));
         }
 
-        log!("Cleaning up existing model data...");
+        crate::log!("Cleaning up existing model data...");
         data.model_descriptor_set.delete_data(rrdevice);
         data.model_descriptor_set.rrdata.clear();
-        log!("Cleared existing data, descriptor pool will be reused");
+        crate::log!("Cleared existing data, descriptor pool will be reused");
 
         if is_fbx {
-            log!("Loading FBX model...");
+            crate::log!("Loading FBX model...");
 
             data.gltf_model = GltfModel::default();
-            log!("Cleared glTF model data");
+            crate::log!("Cleared glTF model data");
 
             if model_path.contains("stickman_bin.fbx") {
-                log!("Using fbxcel loader for stickman_bin.fbx");
+                crate::log!("Using fbxcel loader for stickman_bin.fbx");
                 unsafe {
                     data.fbx_model = load_fbx(model_path)?;
                 }
             } else {
-                log!("Using russimp loader");
+                crate::log!("Using russimp loader");
                 data.fbx_model = load_fbx_with_russimp(model_path)?;
             }
 
             for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
-                log!("Creating RRData for FBX mesh {}: {} vertices, texture: {:?}",
+                crate::log!("Creating RRData for FBX mesh {}: {} vertices, texture: {:?}",
                     mesh_idx, fbx_data.positions.len(), fbx_data.diffuse_texture);
 
                 let rrdata_name = format!("gltf_mesh_{}", mesh_idx);
                 let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain, &rrdata_name);
 
                 if let Some(texture_path) = &fbx_data.diffuse_texture {
-                    log!("Loading texture: {}", texture_path);
+                    crate::log!("Loading texture: {}", texture_path);
                     match load_png_image(texture_path) {
                         Ok((image_data, width, height)) => {
                             match create_texture_image_pixel(
@@ -212,10 +212,10 @@ impl App {
                                     rrdata.image = image;
                                     rrdata.image_memory = image_memory;
                                     rrdata.mip_level = mip_level;
-                                    log!("Texture loaded successfully for mesh {}", mesh_idx);
+                                    crate::log!("Texture loaded successfully for mesh {}", mesh_idx);
                                 }
                                 Err(e) => {
-                                    log!("Failed to create texture image for mesh {}: {}", mesh_idx, e);
+                                    crate::log!("Failed to create texture image for mesh {}: {}", mesh_idx, e);
                                     (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
                                         instance,
                                         rrdevice,
@@ -228,7 +228,7 @@ impl App {
                             }
                         }
                         Err(e) => {
-                            log!("Failed to load texture file {}: {}", texture_path, e);
+                            crate::log!("Failed to load texture file {}: {}", texture_path, e);
                             (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
                                 instance,
                                 rrdevice,
@@ -240,7 +240,7 @@ impl App {
                         }
                     }
                 } else {
-                    log!("No texture specified for mesh {}, using white", mesh_idx);
+                    crate::log!("No texture specified for mesh {}, using white", mesh_idx);
                     (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
                         instance,
                         rrdevice,
@@ -283,28 +283,28 @@ impl App {
                 data.animation_playing = true;
                 data.current_animation_index = 0;
                 data.animation_time = 0.0;
-                log!("FBX animation loaded: {} animations", data.fbx_model.animation_count());
+                crate::log!("FBX animation loaded: {} animations", data.fbx_model.animation_count());
             }
 
         } else if is_gltf {
-            log!("Loading glTF model...");
+            crate::log!("Loading glTF model...");
 
             data.fbx_model = FbxModel::default();
             data.animation_playing = false;
             data.current_animation_index = 0;
             data.animation_time = 0.0;
-            log!("Cleared FBX model data and animation state");
+            crate::log!("Cleared FBX model data and animation state");
 
             data.gltf_model = GltfModel::load_model(model_path);
 
             for (i, gltf_data) in data.gltf_model.gltf_data.iter().enumerate() {
-                log!("Creating RRData for glTF mesh {}: {} vertices", i, gltf_data.vertices.len());
+                crate::log!("Creating RRData for glTF mesh {}: {} vertices", i, gltf_data.vertices.len());
 
                 let rrdata_name = format!("gltf_mesh2_{}", i);
                 let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain, &rrdata_name);
 
                 if !gltf_data.image_data.is_empty() {
-                    log!("Loading texture from glTF image data for mesh {}", i);
+                    crate::log!("Loading texture from glTF image data for mesh {}", i);
                     match create_texture_image_pixel(
                         instance,
                         rrdevice,
@@ -317,10 +317,10 @@ impl App {
                             rrdata.image = image;
                             rrdata.image_memory = image_memory;
                             rrdata.mip_level = mip_level;
-                            log!("Texture loaded successfully for mesh {}", i);
+                            crate::log!("Texture loaded successfully for mesh {}", i);
                         }
                         Err(e) => {
-                            log!("Failed to create texture image for mesh {}: {}", i, e);
+                            crate::log!("Failed to create texture image for mesh {}: {}", i, e);
                             (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
                                 instance,
                                 rrdevice,
@@ -332,7 +332,7 @@ impl App {
                         }
                     }
                 } else {
-                    log!("No texture data for mesh {}, using white", i);
+                    crate::log!("No texture data for mesh {}, using white", i);
                     (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
                         instance,
                         rrdevice,
@@ -365,7 +365,7 @@ impl App {
             }
         }
 
-        log!("Recreating buffers and descriptor sets...");
+        crate::log!("Recreating buffers and descriptor sets...");
         for i in 0..data.model_descriptor_set.rrdata.len() {
             let rrdata = &mut data.model_descriptor_set.rrdata[i];
 
@@ -404,14 +404,14 @@ impl App {
 
         if is_gltf && (!data.gltf_model.joint_animations.is_empty() || !data.gltf_model.node_animations.is_empty()) {
             if data.gltf_model.has_skinned_meshes {
-                log!("Applying initial pose (time=0) for glTF skeletal animation...");
+                crate::log!("Applying initial pose (time=0) for glTF skeletal animation...");
                 data.gltf_model.reset_vertices_animation_position(0.0);
                 data.gltf_model.apply_animation(0.0, 0, Matrix4::identity());
-                log!("Initial pose applied successfully for glTF");
+                crate::log!("Initial pose applied successfully for glTF");
             } else {
-                log!("Applying initial pose (time=0) for glTF node animation...");
+                crate::log!("Applying initial pose (time=0) for glTF node animation...");
                 data.gltf_model.reset_vertices_animation_position(0.0);
-                log!("Initial pose applied successfully for glTF");
+                crate::log!("Initial pose applied successfully for glTF");
             }
 
             for i in 0..data.gltf_model.gltf_data.len() {
@@ -437,14 +437,14 @@ impl App {
                     vertex_data.vertices.as_ptr() as *const c_void,
                     vertex_data.vertices.len(),
                 ) {
-                    log!("Failed to update vertex buffer for glTF mesh {} with initial pose: {}", i, e);
+                    crate::log!("Failed to update vertex buffer for glTF mesh {} with initial pose: {}", i, e);
                 }
             }
-            log!("Initial pose applied successfully for glTF");
+            crate::log!("Initial pose applied successfully for glTF");
         }
 
         if is_fbx && data.fbx_model.animation_count() > 0 {
-            log!("Applying initial pose (time=0) for FBX skeletal animation...");
+            crate::log!("Applying initial pose (time=0) for FBX skeletal animation...");
             data.fbx_model.update_animation(0, 0.0);
 
             for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
@@ -467,24 +467,24 @@ impl App {
                         vertex_data.vertices.as_ptr() as *const c_void,
                         vertex_data.vertices.len(),
                     ) {
-                        log!("Failed to update vertex buffer for mesh {} with initial pose: {}", mesh_idx, e);
+                        crate::log!("Failed to update vertex buffer for mesh {} with initial pose: {}", mesh_idx, e);
                     }
                 }
             }
-            log!("Initial pose applied successfully for FBX");
+            crate::log!("Initial pose applied successfully for FBX");
         }
 
-        log!("Creating descriptor sets...");
+        crate::log!("Creating descriptor sets...");
         if let Err(e) = RRDescriptorSet::create_descriptor_set(
             &rrdevice,
             &data.rrswapchain,
             &mut data.model_descriptor_set,
         ) {
-            log!("Failed to create model descriptor set: {:?}", e);
+            crate::log!("Failed to create model descriptor set: {:?}", e);
             return Err(anyhow!("Failed to create descriptor sets: {:?}", e));
         }
 
-        log!("Recreating command buffers...");
+        crate::log!("Recreating command buffers...");
         let mut rrbind_info = Vec::new();
         rrbind_info.push(RRBindInfo::new(
             &data.grid.pipeline,
@@ -517,14 +517,14 @@ impl App {
                 &mut data.rrcommand_buffer,
                 i,
             ) {
-                log!("Failed to bind command for framebuffer {}: {:?}", i, e);
+                crate::log!("Failed to bind command for framebuffer {}: {:?}", i, e);
                 return Err(anyhow!("Failed to bind command: {:?}", e));
             }
         }
 
         data.current_model_path = model_path.to_string();
 
-        log!("=== Model loaded successfully ===");
+        crate::log!("=== Model loaded successfully ===");
         Ok(())
     }
 
@@ -557,26 +557,26 @@ impl App {
             unsafe {
                 UPDATE_LOG_COUNTER += 1;
                 if UPDATE_LOG_COUNTER <= 5 {
-                    log!("=== update_vertex_buffer Debug (mesh {}) ===", i);
-                    log!("gltf_data.vertices count: {}", gltf_data.vertices.len());
-                    log!("vertex_data.vertices count: {}", vertex_data.vertices.len());
+                    crate::log!("=== update_vertex_buffer Debug (mesh {}) ===", i);
+                    crate::log!("gltf_data.vertices count: {}", gltf_data.vertices.len());
+                    crate::log!("vertex_data.vertices count: {}", vertex_data.vertices.len());
                     if !vertex_data.vertices.is_empty() {
                         let v0 = &vertex_data.vertices[0];
-                        log!("vertex_data[0].pos: ({:.2}, {:.2}, {:.2})", v0.pos.x, v0.pos.y, v0.pos.z);
+                        crate::log!("vertex_data[0].pos: ({:.2}, {:.2}, {:.2})", v0.pos.x, v0.pos.y, v0.pos.z);
                         if vertex_data.vertices.len() > 100 {
                             let v100 = &vertex_data.vertices[100];
-                            log!("vertex_data[100].pos: ({:.2}, {:.2}, {:.2})", v100.pos.x, v100.pos.y, v100.pos.z);
+                            crate::log!("vertex_data[100].pos: ({:.2}, {:.2}, {:.2})", v100.pos.x, v100.pos.y, v100.pos.z);
                         }
                     }
                     if !gltf_data.vertices.is_empty() {
                         let v = &gltf_data.vertices[0];
-                        log!("gltf_data[0].index: {}", v.index);
-                        log!("gltf_data[0].animation_position: ({:.2}, {:.2}, {:.2})",
+                        crate::log!("gltf_data[0].index: {}", v.index);
+                        crate::log!("gltf_data[0].animation_position: ({:.2}, {:.2}, {:.2})",
                             v.animation_position[0], v.animation_position[1], v.animation_position[2]);
-                        log!("gltf_data[0].position (original): ({:.2}, {:.2}, {:.2})",
+                        crate::log!("gltf_data[0].position (original): ({:.2}, {:.2}, {:.2})",
                             v.position[0], v.position[1], v.position[2]);
                     }
-                    log!("==================================");
+                    crate::log!("==================================");
                 }
             }
 
@@ -613,9 +613,9 @@ impl App {
                     unsafe {
                         VERTEX_BUFFER_LOG_COUNTER += 1;
                         if VERTEX_BUFFER_LOG_COUNTER % 60 == 0 {
-                            log!("GPU Vertex Buffer (first 5 vertices being sent to GPU):");
+                            crate::log!("GPU Vertex Buffer (first 5 vertices being sent to GPU):");
                             for i in 0..5.min(fbx_data.positions.len()) {
-                                log!("  GPU[{}]: ({:.2}, {:.2}, {:.2})",
+                                crate::log!("  GPU[{}]: ({:.2}, {:.2}, {:.2})",
                                      i, fbx_data.positions[i].x, fbx_data.positions[i].y, fbx_data.positions[i].z);
                             }
                         }

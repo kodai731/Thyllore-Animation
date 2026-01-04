@@ -10,7 +10,7 @@ pub mod util;
 pub use data::{AppData, GUIData};
 pub use init::*;
 
-use rust_rendering::vulkanr::device::*;
+use crate::vulkanr::device::*;
 
 use std::time::Instant;
 use vulkanalia::prelude::v1_0::*;

@@ -31,7 +31,7 @@ impl App {
         unsafe {
             if !RAY_TRACING_LOG_ONCE {
                 if use_ray_tracing {
-                    log!("=== Using Ray Tracing Rendering Path ===");
+                    crate::log!("=== Using Ray Tracing Rendering Path ===");
                 }
                 RAY_TRACING_LOG_ONCE = true;
             }

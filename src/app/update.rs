@@ -1,17 +1,17 @@
 use crate::app::{App, AppData, GUIData};
-use rust_rendering::scene::billboard::BillboardTransform;
-use rust_rendering::vulkanr::buffer::*;
-use rust_rendering::vulkanr::command::*;
-use rust_rendering::vulkanr::data as vulkan_data;
-use rust_rendering::vulkanr::data::*;
-use rust_rendering::vulkanr::descriptor::*;
-use rust_rendering::vulkanr::device::*;
-use rust_rendering::vulkanr::image::*;
-use rust_rendering::vulkanr::vulkan::*;
-use rust_rendering::math::*;
-use rust_rendering::logger::logger::*;
-use rust_rendering::debugview::*;
-use rust_rendering::vulkanr::raytracing::acceleration::RRAccelerationStructure;
+use crate::scene::billboard::BillboardTransform;
+use crate::vulkanr::buffer::*;
+use crate::vulkanr::command::*;
+use crate::vulkanr::data as vulkan_data;
+use crate::vulkanr::data::*;
+use crate::vulkanr::descriptor::*;
+use crate::vulkanr::device::*;
+use crate::vulkanr::image::*;
+use crate::vulkanr::vulkan::*;
+use crate::math::*;
+use crate::logger::logger::*;
+use crate::debugview::*;
+use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 
 use cgmath::{Vector2, Vector3, Deg, Matrix4, InnerSpace};
 use anyhow::Result;
@@ -30,9 +30,9 @@ impl App {
         use crate::app::data::LightMoveTarget;
 
         if gui_data.move_light_to != LightMoveTarget::None {
-            log!("========================================");
-            log!("LIGHT MOVE BUTTON PRESSED: {:?}", gui_data.move_light_to);
-            log!("========================================");
+            crate::log!("========================================");
+            crate::log!("LIGHT MOVE BUTTON PRESSED: {:?}", gui_data.move_light_to);
+            crate::log!("========================================");
 
             let all_positions: Vec<Vector3<f32>> = if !self.data.fbx_model.fbx_data.is_empty() {
                 self.data.fbx_model.fbx_data
@@ -96,15 +96,15 @@ impl App {
 
                 self.data.rt_debug_state.shadow_normal_offset = (model_size * 0.005).max(0.5);
 
-                log!("=== LIGHT POSITION DEBUG ===");
-                log!("Model size: {:.2}, Shadow normal offset: {:.2}", model_size, self.data.rt_debug_state.shadow_normal_offset);
-                log!("Model bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
+                crate::log!("=== LIGHT POSITION DEBUG ===");
+                crate::log!("Model size: {:.2}, Shadow normal offset: {:.2}", model_size, self.data.rt_debug_state.shadow_normal_offset);
+                crate::log!("Model bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
                     min_x, max_x, min_y, max_y, min_z, max_z);
-                log!("Model center: ({:.2}, {:.2}, {:.2})",
+                crate::log!("Model center: ({:.2}, {:.2}, {:.2})",
                     (min_x + max_x) / 2.0, (min_y + max_y) / 2.0, (min_z + max_z) / 2.0);
-                log!("Calculated light position: ({:.2}, {:.2}, {:.2})",
+                crate::log!("Calculated light position: ({:.2}, {:.2}, {:.2})",
                     new_light_pos.x, new_light_pos.y, new_light_pos.z);
-                log!("CAMERA position: ({:.2}, {:.2}, {:.2})",
+                crate::log!("CAMERA position: ({:.2}, {:.2}, {:.2})",
                     self.data.camera.position().x, self.data.camera.position().y, self.data.camera.position().z);
 
                 let closest_vertex = all_positions.iter()
@@ -122,23 +122,23 @@ impl App {
 
                 if let Some(closest) = closest_vertex {
                     let dist = (new_light_pos - *closest).magnitude();
-                    log!("Closest vertex to light: ({:.2}, {:.2}, {:.2}), distance: {:.2}",
+                    crate::log!("Closest vertex to light: ({:.2}, {:.2}, {:.2}), distance: {:.2}",
                         closest.x, closest.y, closest.z, dist);
                 }
                 if let Some(farthest) = farthest_vertex {
                     let dist = (new_light_pos - *farthest).magnitude();
-                    log!("Farthest vertex from light: ({:.2}, {:.2}, {:.2}), distance: {:.2}",
+                    crate::log!("Farthest vertex from light: ({:.2}, {:.2}, {:.2}), distance: {:.2}",
                         farthest.x, farthest.y, farthest.z, dist);
                 }
 
                 match gui_data.move_light_to {
                     LightMoveTarget::XMax => {
-                        log!("XMax: Light should be to the RIGHT of all vertices");
-                        log!("  Light X: {:.2}, Model X range: [{:.2}, {:.2}]", new_light_pos.x, min_x, max_x);
+                        crate::log!("XMax: Light should be to the RIGHT of all vertices");
+                        crate::log!("  Light X: {:.2}, Model X range: [{:.2}, {:.2}]", new_light_pos.x, min_x, max_x);
                         if new_light_pos.x <= max_x {
-                            log!("  WARNING: Light X ({:.2}) is NOT greater than max X ({:.2})!", new_light_pos.x, max_x);
+                            crate::log!("  WARNING: Light X ({:.2}) is NOT greater than max X ({:.2})!", new_light_pos.x, max_x);
                         } else {
-                            log!("  OK: Light X ({:.2}) > max X ({:.2})", new_light_pos.x, max_x);
+                            crate::log!("  OK: Light X ({:.2}) > max X ({:.2})", new_light_pos.x, max_x);
                         }
                     }
                     _ => {}
@@ -146,14 +146,14 @@ impl App {
 
                 self.data.rt_debug_state.light_position = new_light_pos;
 
-                log!("Light position SET in rt_debug_state: ({:.2}, {:.2}, {:.2})",
+                crate::log!("Light position SET in rt_debug_state: ({:.2}, {:.2}, {:.2})",
                     self.data.rt_debug_state.light_position.x,
                     self.data.rt_debug_state.light_position.y,
                     self.data.rt_debug_state.light_position.z);
-                log!("(light_gizmo_data will be synced later in this frame)");
-                log!("========================================");
+                crate::log!("(light_gizmo_data will be synced later in this frame)");
+                crate::log!("========================================");
             } else {
-                log!("WARNING: No model positions found!");
+                crate::log!("WARNING: No model positions found!");
             }
 
             gui_data.move_light_to = LightMoveTarget::None;
@@ -185,7 +185,7 @@ impl App {
             if is_first_click {
                 gui_data.clicked_mouse_pos = Some([mouse_pos[0], mouse_pos[1]]);
 
-                use rust_rendering::math::coordinate_system::vulkan_projection_correction;
+                use crate::math::coordinate_system::vulkan_projection_correction;
                 let view = view(camera_pos, camera_direction, camera_up);
                 let swapchain_extent = self.data.rrswapchain.swapchain_extent;
                 let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
@@ -255,7 +255,7 @@ impl App {
                     self.data.light_gizmo_data.initial_position = [light_pos.x, light_pos.y, light_pos.z];
 
                     let drag_depth = (light_pos - camera_pos).magnitude();
-                    log!("Light gizmo selected - axis: {:?}, depth: {:.2}", selected_axis, drag_depth);
+                    crate::log!("Light gizmo selected - axis: {:?}, depth: {:.2}", selected_axis, drag_depth);
 
                     self.data.light_gizmo_data.just_selected = true;
                 }
@@ -274,12 +274,12 @@ impl App {
                     unsafe {
                         ROTATION_LOG_COUNTER += 1;
                         if ROTATION_LOG_COUNTER % 30 == 0 {
-                            log!("=== Camera Rotation Debug (frame {}) ===", ROTATION_LOG_COUNTER);
-                            log!("  Mouse diff: ({:.3}, {:.3})", diff.x, diff.y);
-                            log!("  Before rotation:");
-                            log!("    direction: ({:.3}, {:.3}, {:.3})",
+                            crate::log!("=== Camera Rotation Debug (frame {}) ===", ROTATION_LOG_COUNTER);
+                            crate::log!("  Mouse diff: ({:.3}, {:.3})", diff.x, diff.y);
+                            crate::log!("  Before rotation:");
+                            crate::log!("    direction: ({:.3}, {:.3}, {:.3})",
                                  camera_direction.x, camera_direction.y, camera_direction.z);
-                            log!("    up: ({:.3}, {:.3}, {:.3})",
+                            crate::log!("    up: ({:.3}, {:.3}, {:.3})",
                                  camera_up.x, camera_up.y, camera_up.z);
                         }
                     }
@@ -290,10 +290,10 @@ impl App {
 
                     unsafe {
                         if ROTATION_LOG_COUNTER % 30 == 0 {
-                            log!("  After rotation:");
-                            log!("    direction: ({:.3}, {:.3}, {:.3})",
+                            crate::log!("  After rotation:");
+                            crate::log!("    direction: ({:.3}, {:.3}, {:.3})",
                                  camera_direction.x, camera_direction.y, camera_direction.z);
-                            log!("    up: ({:.3}, {:.3}, {:.3})",
+                            crate::log!("    up: ({:.3}, {:.3}, {:.3})",
                                  camera_up.x, camera_up.y, camera_up.z);
                         }
                     }
@@ -303,7 +303,7 @@ impl App {
             }
         } else if !gui_data.is_wheel_clicked {
             if gui_data.clicked_mouse_pos.is_some() {
-                log!("Mouse released - resetting light gizmo state");
+                crate::log!("Mouse released - resetting light gizmo state");
                 self.data.light_gizmo_data.is_selected = false;
                 self.data.light_gizmo_data.drag_axis = LightGizmoAxis::None;
                 self.data.light_gizmo_data.selected_axis = LightGizmoAxis::None;
@@ -345,7 +345,7 @@ impl App {
         self.data.camera.set_near_plane(near_plane);
         self.data.camera.set_far_plane(far_plane);
 
-        use rust_rendering::math::coordinate_system::vulkan_projection_correction;
+        use crate::math::coordinate_system::vulkan_projection_correction;
         let proj = vulkan_projection_correction()
             * cgmath::perspective(
             Deg(45.0),
@@ -382,7 +382,7 @@ impl App {
         }
 
         if gui_data.debug_billboard_depth {
-            use rust_rendering::debugview::{BillboardDebugInfo, GBufferDebugInfo, log_billboard_debug_info};
+            use crate::debugview::{BillboardDebugInfo, GBufferDebugInfo, log_billboard_debug_info};
             let info = BillboardDebugInfo {
                 light_position: self.data.rt_debug_state.light_position,
                 camera_position: self.data.camera.position(),
@@ -409,8 +409,8 @@ impl App {
         let should_load_cube = gui_data.load_cube || self.data.rt_debug_state.cube_size_changed;
         if should_load_cube {
             let cube_size = self.data.rt_debug_state.cube_size;
-            let cube_position = [0.0, 0.0, cube_size];
-            log!("Loading cube model with size {}...", cube_size);
+            let cube_position = [0.0, 0.0, 0.0];
+            crate::log!("Loading cube model with size {}...", cube_size);
             match crate::app::model_loader::replace_model_with_cube(
                 &self.instance,
                 &self.rrdevice,
@@ -420,10 +420,10 @@ impl App {
             ) {
                 Ok(_) => {
                     self.data.rt_debug_state.set_actual_cube_top(cube_size, cube_position);
-                    log!("Cube model loaded successfully");
+                    crate::log!("Cube model loaded successfully");
                 }
                 Err(e) => {
-                    log!("Failed to load cube model: {}", e);
+                    crate::log!("Failed to load cube model: {}", e);
                 }
             }
             gui_data.load_cube = false;
@@ -465,7 +465,7 @@ impl App {
                     || (current[2] - PREV_LIGHT_POS[2]).abs() > 0.1;
 
                 if changed || SCENE_UNIFORM_LOG_COUNTER % 60 == 0 {
-                    log!("SceneUniformData UPDATE - light_position: ({:.2}, {:.2}, {:.2})",
+                    crate::log!("SceneUniformData UPDATE - light_position: ({:.2}, {:.2}, {:.2})",
                         light_pos.x, light_pos.y, light_pos.z);
                     PREV_LIGHT_POS = current;
                 }
@@ -578,33 +578,33 @@ impl App {
         unsafe {
             GIZMO_LOG_COUNTER += 1;
             if GIZMO_LOG_COUNTER % 60 == 0 {
-                log!("=== Gizmo Direction Debug (frame {}) ===", GIZMO_LOG_COUNTER);
-                log!("Camera state:");
-                log!("  position: ({:.3}, {:.3}, {:.3})", camera_pos.x, camera_pos.y, camera_pos.z);
-                log!("  direction: ({:.3}, {:.3}, {:.3})", camera_direction.x, camera_direction.y, camera_direction.z);
-                log!("  up: ({:.3}, {:.3}, {:.3})", camera_up.x, camera_up.y, camera_up.z);
+                crate::log!("=== Gizmo Direction Debug (frame {}) ===", GIZMO_LOG_COUNTER);
+                crate::log!("Camera state:");
+                crate::log!("  position: ({:.3}, {:.3}, {:.3})", camera_pos.x, camera_pos.y, camera_pos.z);
+                crate::log!("  direction: ({:.3}, {:.3}, {:.3})", camera_direction.x, camera_direction.y, camera_direction.z);
+                crate::log!("  up: ({:.3}, {:.3}, {:.3})", camera_up.x, camera_up.y, camera_up.z);
 
-                log!("  right: ({:.3}, {:.3}, {:.3})", camera_right.x, camera_right.y, camera_right.z);
+                crate::log!("  right: ({:.3}, {:.3}, {:.3})", camera_right.x, camera_right.y, camera_right.z);
 
-                log!("Gizmo rotation matrix (from camera vectors):");
-                log!("  X-axis (red):   [{:.3}, {:.3}, {:.3}] = camera right", gizmo_rotation.x.x, gizmo_rotation.x.y, gizmo_rotation.x.z);
-                log!("  Y-axis (green): [{:.3}, {:.3}, {:.3}] = camera up", gizmo_rotation.y.x, gizmo_rotation.y.y, gizmo_rotation.y.z);
-                log!("  Z-axis (blue):  [{:.3}, {:.3}, {:.3}] = camera direction", gizmo_rotation.z.x, gizmo_rotation.z.y, gizmo_rotation.z.z);
+                crate::log!("Gizmo rotation matrix (from camera vectors):");
+                crate::log!("  X-axis (red):   [{:.3}, {:.3}, {:.3}] = camera right", gizmo_rotation.x.x, gizmo_rotation.x.y, gizmo_rotation.x.z);
+                crate::log!("  Y-axis (green): [{:.3}, {:.3}, {:.3}] = camera up", gizmo_rotation.y.x, gizmo_rotation.y.y, gizmo_rotation.y.z);
+                crate::log!("  Z-axis (blue):  [{:.3}, {:.3}, {:.3}] = camera direction", gizmo_rotation.z.x, gizmo_rotation.z.y, gizmo_rotation.z.z);
 
-                log!("Gizmo vertices (after rotation):");
-                log!("  Origin: ({:.3}, {:.3}, {:.3})",
+                crate::log!("Gizmo vertices (after rotation):");
+                crate::log!("  Origin: ({:.3}, {:.3}, {:.3})",
                      self.data.gizmo_data.vertices[0].pos[0],
                      self.data.gizmo_data.vertices[0].pos[1],
                      self.data.gizmo_data.vertices[0].pos[2]);
-                log!("  X-axis (red): ({:.3}, {:.3}, {:.3})",
+                crate::log!("  X-axis (red): ({:.3}, {:.3}, {:.3})",
                      self.data.gizmo_data.vertices[1].pos[0],
                      self.data.gizmo_data.vertices[1].pos[1],
                      self.data.gizmo_data.vertices[1].pos[2]);
-                log!("  Y-axis (green): ({:.3}, {:.3}, {:.3})",
+                crate::log!("  Y-axis (green): ({:.3}, {:.3}, {:.3})",
                      self.data.gizmo_data.vertices[2].pos[0],
                      self.data.gizmo_data.vertices[2].pos[1],
                      self.data.gizmo_data.vertices[2].pos[2]);
-                log!("  Z-axis (blue): ({:.3}, {:.3}, {:.3})",
+                crate::log!("  Z-axis (blue): ({:.3}, {:.3}, {:.3})",
                      self.data.gizmo_data.vertices[3].pos[0],
                      self.data.gizmo_data.vertices[3].pos[1],
                      self.data.gizmo_data.vertices[3].pos[2]);
@@ -742,7 +742,7 @@ impl App {
     ) -> Result<()> {
         if let Err(e) = Self::load_model(&instance, &rrdevice, data) {
             eprintln!("{:?}", e);
-            log!("{:?}", e)
+            crate::log!("{:?}", e)
         }
         println!("reloaded model");
 
@@ -786,13 +786,13 @@ impl App {
         // Build acceleration structures after model is loaded
         if let Err(e) = Self::build_acceleration_structures(instance, rrdevice, data) {
             eprintln!("Failed to build acceleration structures: {:?}", e);
-            log!("Failed to build acceleration structures: {:?}", e);
+            crate::log!("Failed to build acceleration structures: {:?}", e);
         }
 
         // Create Ray Tracing pipelines after AS is built
         if let Err(e) = Self::create_ray_tracing_pipelines(instance, rrdevice, data) {
             eprintln!("Failed to create ray tracing pipelines: {:?}", e);
-            log!("Failed to create ray tracing pipelines: {:?}", e);
+            crate::log!("Failed to create ray tracing pipelines: {:?}", e);
         }
 
         Ok(())
@@ -943,7 +943,7 @@ impl App {
                 camera_direction,
                 self.data.camera.up(),
             );
-            use rust_rendering::math::coordinate_system::vulkan_projection_correction;
+            use crate::math::coordinate_system::vulkan_projection_correction;
             let swapchain_extent = self.data.rrswapchain.swapchain_extent;
             let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
             let proj = vulkan_projection_correction() * cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
@@ -954,9 +954,9 @@ impl App {
 
             let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
 
-            log!("update_light_gizmo_position - camera_pos: ({:.2}, {:.2}, {:.2})", camera_pos.x, camera_pos.y, camera_pos.z);
-            log!("update_light_gizmo_position - ray_origin: ({:.2}, {:.2}, {:.2})", ray_origin.x, ray_origin.y, ray_origin.z);
-            log!("update_light_gizmo_position - ray_direction: ({:.2}, {:.2}, {:.2})", ray_direction.x, ray_direction.y, ray_direction.z);
+            crate::log!("update_light_gizmo_position - camera_pos: ({:.2}, {:.2}, {:.2})", camera_pos.x, camera_pos.y, camera_pos.z);
+            crate::log!("update_light_gizmo_position - ray_origin: ({:.2}, {:.2}, {:.2})", ray_origin.x, ray_origin.y, ray_origin.z);
+            crate::log!("update_light_gizmo_position - ray_direction: ({:.2}, {:.2}, {:.2})", ray_direction.x, ray_direction.y, ray_direction.z);
 
             let light_pos = self.data.rt_debug_state.light_position;
             let plane_point = light_pos;
@@ -967,7 +967,7 @@ impl App {
             if denom.abs() > std::f32::EPSILON {
                 let t = (plane_point - ray_origin).dot(plane_normal) / denom;
 
-                log!("update_light_gizmo_position - t: {:.2}, intersection will be: ({:.2}, {:.2}, {:.2})",
+                crate::log!("update_light_gizmo_position - t: {:.2}, intersection will be: ({:.2}, {:.2}, {:.2})",
                      t,
                      (ray_origin + ray_direction * t).x,
                      (ray_origin + ray_direction * t).y,
@@ -993,80 +993,80 @@ impl App {
         let light_pos = self.data.rt_debug_state.light_position;
         let camera_pos = self.data.camera.position();
 
-        log!("=== Shadow Debug Info ===");
-        log!("Light position (rt_debug_state): ({:.2}, {:.2}, {:.2})", light_pos.x, light_pos.y, light_pos.z);
-        log!("Light gizmo position: ({:.2}, {:.2}, {:.2})",
+        crate::log!("=== Shadow Debug Info ===");
+        crate::log!("Light position (rt_debug_state): ({:.2}, {:.2}, {:.2})", light_pos.x, light_pos.y, light_pos.z);
+        crate::log!("Light gizmo position: ({:.2}, {:.2}, {:.2})",
             self.data.light_gizmo_data.position.x,
             self.data.light_gizmo_data.position.y,
             self.data.light_gizmo_data.position.z);
-        log!("Camera position: ({:.2}, {:.2}, {:.2})", camera_pos.x, camera_pos.y, camera_pos.z);
+        crate::log!("Camera position: ({:.2}, {:.2}, {:.2})", camera_pos.x, camera_pos.y, camera_pos.z);
 
-        log!("Shadow settings:");
-        log!("  strength: {:.2}", self.data.rt_debug_state.shadow_strength);
-        log!("  normal_offset: {:.2}", self.data.rt_debug_state.shadow_normal_offset);
-        log!("  debug_view_mode: {:?}", self.data.rt_debug_state.debug_view_mode);
-        log!("  distance_attenuation: {}", self.data.rt_debug_state.enable_distance_attenuation);
+        crate::log!("Shadow settings:");
+        crate::log!("  strength: {:.2}", self.data.rt_debug_state.shadow_strength);
+        crate::log!("  normal_offset: {:.2}", self.data.rt_debug_state.shadow_normal_offset);
+        crate::log!("  debug_view_mode: {:?}", self.data.rt_debug_state.debug_view_mode);
+        crate::log!("  distance_attenuation: {}", self.data.rt_debug_state.enable_distance_attenuation);
 
         if let Some(ref accel_struct) = self.data.raytracing.acceleration_structure {
-            log!("Acceleration Structure:");
-            log!("  BLAS count: {}", accel_struct.blas_list.len());
+            crate::log!("Acceleration Structure:");
+            crate::log!("  BLAS count: {}", accel_struct.blas_list.len());
             for (i, blas) in accel_struct.blas_list.iter().enumerate() {
-                log!("    BLAS[{}]: AS={:?}, device_addr={:#x}",
+                crate::log!("    BLAS[{}]: AS={:?}, device_addr={:#x}",
                     i, blas.acceleration_structure.is_some(), blas.device_address);
             }
-            log!("  TLAS: AS={:?}", accel_struct.tlas.acceleration_structure.is_some());
+            crate::log!("  TLAS: AS={:?}", accel_struct.tlas.acceleration_structure.is_some());
         } else {
-            log!("WARNING: No acceleration structure!");
+            crate::log!("WARNING: No acceleration structure!");
         }
 
-        log!("Vertex buffers (GPU):");
+        crate::log!("Vertex buffers (GPU):");
         for (i, rrdata) in self.data.model_descriptor_set.rrdata.iter().enumerate() {
-            log!("  Mesh[{}]: {} vertices, {} indices",
+            crate::log!("  Mesh[{}]: {} vertices, {} indices",
                 i, rrdata.vertex_data.vertices.len(), rrdata.vertex_data.indices.len());
             if !rrdata.vertex_data.vertices.is_empty() {
                 let v = &rrdata.vertex_data.vertices[0];
-                log!("    vertex[0].pos: ({:.2}, {:.2}, {:.2})", v.pos.x, v.pos.y, v.pos.z);
-                log!("    vertex[0].normal: ({:.3}, {:.3}, {:.3})", v.normal.x, v.normal.y, v.normal.z);
+                crate::log!("    vertex[0].pos: ({:.2}, {:.2}, {:.2})", v.pos.x, v.pos.y, v.pos.z);
+                crate::log!("    vertex[0].normal: ({:.3}, {:.3}, {:.3})", v.normal.x, v.normal.y, v.normal.z);
             }
         }
 
         if !self.data.fbx_model.fbx_data.is_empty() {
-            log!("FBX model data:");
+            crate::log!("FBX model data:");
             for (i, fbx_data) in self.data.fbx_model.fbx_data.iter().enumerate() {
-                log!("  Mesh[{}]: {} positions, {} normals",
+                crate::log!("  Mesh[{}]: {} positions, {} normals",
                     i, fbx_data.positions.len(), fbx_data.normals.len());
                 if !fbx_data.positions.is_empty() {
                     let (min_x, max_x) = fbx_data.positions.iter().fold((f32::MAX, f32::MIN), |(min, max), p| (min.min(p.x), max.max(p.x)));
                     let (min_y, max_y) = fbx_data.positions.iter().fold((f32::MAX, f32::MIN), |(min, max), p| (min.min(p.y), max.max(p.y)));
                     let (min_z, max_z) = fbx_data.positions.iter().fold((f32::MAX, f32::MIN), |(min, max), p| (min.min(p.z), max.max(p.z)));
-                    log!("    bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]", min_x, max_x, min_y, max_y, min_z, max_z);
+                    crate::log!("    bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]", min_x, max_x, min_y, max_y, min_z, max_z);
 
                     let center = Vector3::new((min_x + max_x) / 2.0, (min_y + max_y) / 2.0, (min_z + max_z) / 2.0);
                     let light_to_center = center - light_pos;
                     let dist = light_to_center.magnitude();
                     if dist > 0.001 {
-                        log!("    light->center: dir=({:.3}, {:.3}, {:.3}), dist={:.2}",
+                        crate::log!("    light->center: dir=({:.3}, {:.3}, {:.3}), dist={:.2}",
                             light_to_center.x / dist, light_to_center.y / dist, light_to_center.z / dist, dist);
                     }
 
-                    log!("    Light relative to model:");
-                    log!("      X: {} (light={:.2}, range=[{:.2}, {:.2}])",
+                    crate::log!("    Light relative to model:");
+                    crate::log!("      X: {} (light={:.2}, range=[{:.2}, {:.2}])",
                         if light_pos.x < min_x { "LEFT" } else if light_pos.x > max_x { "RIGHT" } else { "INSIDE" },
                         light_pos.x, min_x, max_x);
-                    log!("      Y: {} (light={:.2}, range=[{:.2}, {:.2}])",
+                    crate::log!("      Y: {} (light={:.2}, range=[{:.2}, {:.2}])",
                         if light_pos.y < min_y { "BELOW" } else if light_pos.y > max_y { "ABOVE" } else { "INSIDE" },
                         light_pos.y, min_y, max_y);
-                    log!("      Z: {} (light={:.2}, range=[{:.2}, {:.2}])",
+                    crate::log!("      Z: {} (light={:.2}, range=[{:.2}, {:.2}])",
                         if light_pos.z < min_z { "BEHIND" } else if light_pos.z > max_z { "FRONT" } else { "INSIDE" },
                         light_pos.z, min_z, max_z);
                 }
                 if !fbx_data.normals.is_empty() {
-                    log!("    normal[0]: ({:.3}, {:.3}, {:.3})",
+                    crate::log!("    normal[0]: ({:.3}, {:.3}, {:.3})",
                         fbx_data.normals[0].x, fbx_data.normals[0].y, fbx_data.normals[0].z);
                 }
             }
         }
 
-        log!("=========================");
+        crate::log!("=========================");
     }
 }

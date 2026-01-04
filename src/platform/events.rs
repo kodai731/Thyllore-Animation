@@ -3,8 +3,8 @@ use std::time::Instant;
 use winit::event::{Event, WindowEvent, ElementState};
 use imgui::{Condition, MouseButton};
 
-use crate::{App, GUIData};
-use rust_rendering::debugview::DebugViewMode;
+use crate::app::{App, GUIData};
+use crate::debugview::DebugViewMode;
 
 fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
     gui_data.is_left_clicked = false;
@@ -111,7 +111,7 @@ impl System {
                                             {
                                                 gui_data.selected_model_path = path.to_string_lossy().to_string();
                                                 gui_data.file_changed = true;
-                                                log!("Selected FBX file: {}", gui_data.selected_model_path);
+                                                crate::log!("Selected FBX file: {}", gui_data.selected_model_path);
                                             }
                                         }
                                         ui.same_line();
@@ -122,7 +122,7 @@ impl System {
                                             {
                                                 gui_data.selected_model_path = path.to_string_lossy().to_string();
                                                 gui_data.file_changed = true;
-                                                log!("Selected glTF file: {}", gui_data.selected_model_path);
+                                                crate::log!("Selected glTF file: {}", gui_data.selected_model_path);
                                             }
                                         }
 
@@ -283,7 +283,7 @@ impl System {
                                     unsafe {
                                         if !IMGUI_SIZE_LOGGED {
                                             let display_size = ui.io().display_size;
-                                            log!("ImGui display size: {:.1} x {:.1}", display_size[0], display_size[1]);
+                                            crate::log!("ImGui display size: {:.1} x {:.1}", display_size[0], display_size[1]);
                                             IMGUI_SIZE_LOGGED = true;
                                         }
                                     }

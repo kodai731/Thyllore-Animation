@@ -1,7 +1,7 @@
 use crate::app::{App, AppData};
 use crate::renderer::deferred::create_gbuffer_framebuffer;
-use rust_rendering::vulkanr::core::RRDevice;
-use rust_rendering::vulkanr::render::create_gbuffer_render_pass;
+use crate::vulkanr::core::RRDevice;
+use crate::vulkanr::render::create_gbuffer_render_pass;
 
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;

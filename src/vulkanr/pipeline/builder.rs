@@ -409,11 +409,13 @@ impl RRPipeline {
         fragment_shader_path: &str,
         topology: PrimitiveTopology,
         polygon_mode: vk::PolygonMode,
+        cull_mode: vk::CullModeFlags,
     ) -> Self {
         let mut builder = PipelineBuilder::new(vertex_shader_path, fragment_shader_path)
             .vertex_input(VertexInputConfig::Standard)
             .topology(topology)
             .polygon_mode(polygon_mode)
+            .cull_mode(cull_mode)
             .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
             .descriptor_layouts(vec![rrdescriptor_set.descriptor_set_layout]);
 

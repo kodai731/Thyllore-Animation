@@ -1,7 +1,7 @@
 use crate::app::{App, AppData};
-use rust_rendering::vulkanr::data as vulkan_data;
-use rust_rendering::vulkanr::data::*;
-use rust_rendering::math::*;
+use crate::vulkanr::data as vulkan_data;
+use crate::vulkanr::data::*;
+use crate::math::*;
 
 use anyhow::Result;
 

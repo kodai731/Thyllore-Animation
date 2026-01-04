@@ -1,27 +1,27 @@
 use crate::app::{App, AppData};
 use crate::app::data::GUIData;
 
-use rust_rendering::vulkanr::buffer::*;
-use rust_rendering::vulkanr::command::*;
-use rust_rendering::vulkanr::data as vulkan_data;
-use rust_rendering::vulkanr::data::*;
-use rust_rendering::vulkanr::descriptor::*;
-use rust_rendering::vulkanr::device::*;
-use rust_rendering::vulkanr::image::*;
-use rust_rendering::vulkanr::pipeline::{
+use crate::vulkanr::buffer::*;
+use crate::vulkanr::command::*;
+use crate::vulkanr::data as vulkan_data;
+use crate::vulkanr::data::*;
+use crate::vulkanr::descriptor::*;
+use crate::vulkanr::device::*;
+use crate::vulkanr::image::*;
+use crate::vulkanr::pipeline::{
     PipelineBuilder, RRPipeline, VertexInputConfig, DepthTestConfig, BlendConfig, PushConstantConfig,
 };
-use rust_rendering::vulkanr::render::*;
-use rust_rendering::vulkanr::swapchain::*;
-use rust_rendering::vulkanr::vulkan::*;
-use rust_rendering::vulkanr::raytracing::acceleration::*;
+use crate::vulkanr::render::*;
+use crate::vulkanr::swapchain::*;
+use crate::vulkanr::vulkan::*;
+use crate::vulkanr::raytracing::acceleration::*;
 
-use rust_rendering::loader::gltf::gltf::*;
-use rust_rendering::math::*;
-use rust_rendering::debugview::*;
-use rust_rendering::scene::Camera;
-use rust_rendering::loader::fbx::fbx::{FbxModel, load_fbx, load_fbx_with_russimp};
-use rust_rendering::logger::logger::*;
+use crate::loader::gltf::gltf::*;
+use crate::math::*;
+use crate::debugview::*;
+use crate::scene::Camera;
+use crate::loader::fbx::fbx::{FbxModel, load_fbx, load_fbx_with_russimp};
+use crate::logger::logger::*;
 
 use vulkanalia::Device as VkDevice;
 
@@ -86,7 +86,7 @@ pub fn cleanup_old_screenshots() -> Result<()> {
                     if filename_str.starts_with("screenshot_") {
                         fs::remove_file(&path)?;
                         deleted_count += 1;
-                        log!("Deleted old screenshot: {:?}", filename_str);
+                        crate::log!("Deleted old screenshot: {:?}", filename_str);
                     }
                 }
             }
@@ -94,7 +94,7 @@ pub fn cleanup_old_screenshots() -> Result<()> {
     }
 
     if deleted_count > 0 {
-        log!("Cleaned up {} old screenshot(s)", deleted_count);
+        crate::log!("Cleaned up {} old screenshot(s)", deleted_count);
     }
 
     Ok(())
@@ -136,6 +136,7 @@ impl App {
             "assets/shaders/frag.spv",
             vk::PrimitiveTopology::TRIANGLE_LIST,
             vk::PolygonMode::FILL,
+            vk::CullModeFlags::BACK,
         );
         data.grid.pipeline = RRPipeline::new(
             &rrdevice,
@@ -146,6 +147,7 @@ impl App {
             "assets/shaders/gridFrag.spv",
             vk::PrimitiveTopology::LINE_LIST,
             vk::PolygonMode::LINE,
+            vk::CullModeFlags::NONE,
         );
 
         data.gizmo_data = GridGizmoData::new();
@@ -216,26 +218,26 @@ impl App {
             data.billboard.descriptor_set.descriptor_set_layout,
             "assets/shaders/billboardVert.spv",
             "assets/shaders/billboardFrag.spv",
-            rust_rendering::debugview::gizmo::BillboardVertex::binding_description(),
-            rust_rendering::debugview::gizmo::BillboardVertex::attribute_descriptions().to_vec(),
+            crate::debugview::gizmo::BillboardVertex::binding_description(),
+            crate::debugview::gizmo::BillboardVertex::attribute_descriptions().to_vec(),
         )
         .expect("Failed to create billboard pipeline");
 
         println!("created pipeline");
 
-        log!("Starting ray tracing initialization...");
-        log!("swapchain extent: {}x{}", data.rrswapchain.swapchain_extent.width, data.rrswapchain.swapchain_extent.height);
+        crate::log!("Starting ray tracing initialization...");
+        crate::log!("swapchain extent: {}x{}", data.rrswapchain.swapchain_extent.width, data.rrswapchain.swapchain_extent.height);
 
         match Self::init_ray_tracing(&instance, &rrdevice, &mut data) {
             Ok(_) => {
-                log!("init_ray_tracing succeeded");
-                log!("gbuffer is_some: {}", data.raytracing.gbuffer.is_some());
+                crate::log!("init_ray_tracing succeeded");
+                crate::log!("gbuffer is_some: {}", data.raytracing.gbuffer.is_some());
             }
             Err(e) => {
-                log!("Failed to initialize ray tracing: {:?}", e);
+                crate::log!("Failed to initialize ray tracing: {:?}", e);
             }
         }
-        log!("initialized ray tracing resources");
+        crate::log!("initialized ray tracing resources");
 
         if let Err(e) = Self::reload_model_data_buffer(&instance, &rrdevice, &mut data) {
             eprintln!("{:?}", e)
@@ -371,7 +373,7 @@ impl App {
         let resized = false;
         let start = Instant::now();
 
-        let initial_pos = cgmath::Vector3::new(1100.0, -100.0, 200.0);
+        let initial_pos = cgmath::Vector3::new(5.0, 5.0, 5.0);
         let target = cgmath::Vector3::new(0.0, 0.0, 0.0);
         data.camera = Camera::new(initial_pos, target);
 
@@ -475,16 +477,16 @@ impl App {
         use log::{error, warn, debug, trace};
         if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::ERROR {
             error!("({:?}) {}", type_, message);
-            log!("ERROR ({:?}) {}", type_, message);
+            crate::log!("ERROR ({:?}) {}", type_, message);
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING {
             warn!("({:?}) {}", type_, message);
-            log!("WARN ({:?}) {}", type_, message);
+            crate::log!("WARN ({:?}) {}", type_, message);
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::INFO {
             debug!("({:?}) {}", type_, message);
-            log!("INFO ({:?}) {}", type_, message);
+            crate::log!("INFO ({:?}) {}", type_, message);
         } else {
             trace!("({:?}) {}", type_, message);
-            log!("DEBUG ({:?}) {}", type_, message);
+            crate::log!("DEBUG ({:?}) {}", type_, message);
         }
 
         vk::FALSE
@@ -518,7 +520,7 @@ impl App {
         data: &mut AppData,
         imgui: &mut imgui::Context,
     ) -> Result<()> {
-        log!("Initializing ImGui Vulkan rendering resources");
+        crate::log!("Initializing ImGui Vulkan rendering resources");
 
         // Get font texture data from ImGui
         let font_atlas = imgui.fonts();
@@ -527,7 +529,7 @@ impl App {
         let height = font_texture.height;
         let font_data: &[u8] = &font_texture.data;
 
-        log!("Font texture size: {}x{}", width, height);
+        crate::log!("Font texture size: {}x{}", width, height);
 
         // Create font image
         let extent = vk::Extent3D {
@@ -716,9 +718,9 @@ impl App {
         data.imgui.font_image_view = Some(image_view);
         data.imgui.sampler = Some(sampler);
 
-        log!("ImGui rendering resources initialized successfully");
-        log!("  Pipeline: {:?}", imgui_pipeline.pipeline);
-        log!("  Descriptor Set: {:?}", descriptor_set);
+        crate::log!("ImGui rendering resources initialized successfully");
+        crate::log!("  Pipeline: {:?}", imgui_pipeline.pipeline);
+        crate::log!("  Descriptor Set: {:?}", descriptor_set);
 
         Ok(())
     }

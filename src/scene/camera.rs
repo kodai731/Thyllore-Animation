@@ -115,6 +115,9 @@ impl Camera {
         self.position = self.initial_position;
         self.direction = (Vector3::new(0.0, 0.0, 0.0) - self.position).normalize();
         self.up = Vector3::new(0.0, 1.0, 0.0);
+        crate::log!("Camera::reset() - position: ({:.2}, {:.2}, {:.2}), direction: ({:.2}, {:.2}, {:.2})",
+            self.position.x, self.position.y, self.position.z,
+            self.direction.x, self.direction.y, self.direction.z);
     }
 
     pub fn reset_up(&mut self) {

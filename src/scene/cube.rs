@@ -32,39 +32,39 @@ impl CubeModel {
         let faces = [
             ([0.0, 0.0, 1.0], [
                 [-half, -half,  half],
-                [ half, -half,  half],
-                [ half,  half,  half],
                 [-half,  half,  half],
+                [ half,  half,  half],
+                [ half, -half,  half],
             ]),
             ([0.0, 0.0, -1.0], [
                 [ half, -half, -half],
-                [-half, -half, -half],
-                [-half,  half, -half],
                 [ half,  half, -half],
+                [-half,  half, -half],
+                [-half, -half, -half],
             ]),
             ([1.0, 0.0, 0.0], [
                 [ half, -half,  half],
-                [ half, -half, -half],
-                [ half,  half, -half],
                 [ half,  half,  half],
+                [ half,  half, -half],
+                [ half, -half, -half],
             ]),
             ([-1.0, 0.0, 0.0], [
                 [-half, -half, -half],
-                [-half, -half,  half],
-                [-half,  half,  half],
                 [-half,  half, -half],
+                [-half,  half,  half],
+                [-half, -half,  half],
             ]),
             ([0.0, 1.0, 0.0], [
                 [-half,  half,  half],
-                [ half,  half,  half],
-                [ half,  half, -half],
                 [-half,  half, -half],
+                [ half,  half, -half],
+                [ half,  half,  half],
             ]),
             ([0.0, -1.0, 0.0], [
                 [-half, -half, -half],
-                [ half, -half, -half],
-                [ half, -half,  half],
                 [-half, -half,  half],
+                [ half, -half,  half],
+                [ half, -half, -half],
             ]),
         ];
 

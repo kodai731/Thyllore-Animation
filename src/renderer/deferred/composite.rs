@@ -2,11 +2,11 @@ use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
-use rust_rendering::vulkanr::pipeline::RRPipeline;
-use rust_rendering::vulkanr::descriptor::{RRCompositeDescriptorSet, RRDescriptorSet, RRBillboardDescriptorSet};
-use rust_rendering::vulkanr::buffer::{RRVertexBuffer, RRIndexBuffer};
-use rust_rendering::vulkanr::core::Device;
-use rust_rendering::debugview::{DebugViewMode, gizmo::{GridGizmoData, LightGizmoData}};
+use crate::vulkanr::pipeline::RRPipeline;
+use crate::vulkanr::descriptor::{RRCompositeDescriptorSet, RRDescriptorSet, RRBillboardDescriptorSet};
+use crate::vulkanr::buffer::{RRVertexBuffer, RRIndexBuffer};
+use crate::vulkanr::core::Device;
+use crate::debugview::{DebugViewMode, gizmo::{GridGizmoData, LightGizmoData}};
 
 pub struct CompositePass<'a> {
     composite_pipeline: &'a RRPipeline,

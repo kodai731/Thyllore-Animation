@@ -5,16 +5,12 @@
     clippy::unnecessary_wraps
 )]
 
-// マクロをインポート
 #[macro_use]
 extern crate rust_rendering;
 
-mod app;
-mod renderer;
-mod platform;
-
-use app::{App, GUIData};
-use app::init::instance::cleanup_old_screenshots;
+use rust_rendering::app::{App, GUIData};
+use rust_rendering::app::init::instance::cleanup_old_screenshots;
+use rust_rendering::platform;
 
 use anyhow::Result;
 

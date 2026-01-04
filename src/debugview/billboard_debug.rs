@@ -26,7 +26,7 @@ pub fn log_billboard_debug_info(
     gbuffer_info: Option<&GBufferDebugInfo>,
     gbuffer_sampler: Option<vk::Sampler>,
 ) {
-    use crate::math::{view, coordinate_system::vulkan_projection_correction};
+    use crate::math::{view, coordinate_system::perspective};
 
     log!("=== Billboard Depth Debug Info ===");
 
@@ -77,8 +77,7 @@ pub fn log_billboard_debug_info(
     log!("  view_depth (=-view_pos.z): {:.4}", billboard_view_depth);
 
     let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
-    let proj = vulkan_projection_correction()
-        * cgmath::perspective(Deg(45.0), aspect, info.near_plane, info.far_plane);
+    let proj = perspective(Deg(45.0), aspect, info.near_plane, info.far_plane);
 
     let light_clip_pos = proj * light_view_pos;
     let light_ndc = if light_clip_pos.w.abs() > 0.0001 {

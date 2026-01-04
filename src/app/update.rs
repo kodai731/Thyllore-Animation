@@ -185,11 +185,11 @@ impl App {
             if is_first_click {
                 gui_data.clicked_mouse_pos = Some([mouse_pos[0], mouse_pos[1]]);
 
-                use crate::math::coordinate_system::vulkan_projection_correction;
+                use crate::math::coordinate_system::perspective;
                 let view = view(camera_pos, camera_direction, camera_up);
                 let swapchain_extent = self.data.rrswapchain.swapchain_extent;
                 let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
-                let proj = vulkan_projection_correction() * cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
+                let proj = perspective(Deg(45.0), aspect, 0.1, 10000.0);
                 let screen_size = Vector2::new(swapchain_extent.width as f32, swapchain_extent.height as f32);
 
                 let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
@@ -345,9 +345,8 @@ impl App {
         self.data.camera.set_near_plane(near_plane);
         self.data.camera.set_far_plane(far_plane);
 
-        use crate::math::coordinate_system::vulkan_projection_correction;
-        let proj = vulkan_projection_correction()
-            * cgmath::perspective(
+        use crate::math::coordinate_system::perspective;
+        let proj = perspective(
             Deg(45.0),
             self.data.rrswapchain.swapchain_extent.width as f32
                 / self.data.rrswapchain.swapchain_extent.height as f32,
@@ -943,10 +942,10 @@ impl App {
                 camera_direction,
                 self.data.camera.up(),
             );
-            use crate::math::coordinate_system::vulkan_projection_correction;
+            use crate::math::coordinate_system::perspective;
             let swapchain_extent = self.data.rrswapchain.swapchain_extent;
             let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
-            let proj = vulkan_projection_correction() * cgmath::perspective(Deg(45.0), aspect, 0.1, 10000.0);
+            let proj = perspective(Deg(45.0), aspect, 0.1, 10000.0);
             let screen_size = Vector2::new(
                 swapchain_extent.width as f32,
                 swapchain_extent.height as f32,

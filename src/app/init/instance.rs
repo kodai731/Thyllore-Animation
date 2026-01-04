@@ -374,7 +374,6 @@ impl App {
         let initial_pos = cgmath::Vector3::new(1100.0, -100.0, 200.0);
         let target = cgmath::Vector3::new(0.0, 0.0, 0.0);
         data.camera = Camera::new(initial_pos, target);
-        data.is_left_clicked = false;
 
         println!("initialized finished");
         Ok(Self {

@@ -49,6 +49,7 @@ pub struct GUIData {
     pub is_ctrl_pressed: bool,
     pub move_light_to: LightMoveTarget,
     pub load_cube: bool,
+    pub clicked_mouse_pos: Option<[f32; 2]>,
 }
 
 impl Default for GUIData {
@@ -73,6 +74,7 @@ impl Default for GUIData {
             is_ctrl_pressed: false,
             move_light_to: LightMoveTarget::None,
             load_cube: false,
+            clicked_mouse_pos: None,
         }
     }
 }
@@ -98,9 +100,6 @@ pub struct AppData {
     pub images_in_flight: Vec<vk::Fence>,
     pub msaa_samples: vk::SampleCountFlags,
     pub camera: Camera,
-    pub is_left_clicked: bool,
-    pub clicked_mouse_pos: [f32; 2],
-    pub is_wheel_clicked: bool,
     pub gltf_model: GltfModel,
     pub fbx_model: FbxModel,
     pub animation_time: f32,

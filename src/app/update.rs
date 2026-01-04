@@ -178,14 +178,12 @@ impl App {
         // Camera rotation logging counter
         static mut ROTATION_LOG_COUNTER: u32 = 0;
 
-        // Only process camera rotation if ImGui doesn't want the mouse
-        if !gui_data.imgui_wants_mouse && (gui_data.is_left_clicked || self.data.is_left_clicked) {
+        if !gui_data.imgui_wants_mouse && gui_data.is_left_clicked {
             self.data.light_gizmo_data.just_selected = false;
 
-            // first clicked
-            if !self.data.is_left_clicked {
-                self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
-                self.data.is_left_clicked = true;
+            let is_first_click = gui_data.clicked_mouse_pos.is_none();
+            if is_first_click {
+                gui_data.clicked_mouse_pos = Some([mouse_pos[0], mouse_pos[1]]);
 
                 use rust_rendering::math::coordinate_system::vulkan_projection_correction;
                 let view = view(camera_pos, camera_direction, camera_up);
@@ -262,7 +260,9 @@ impl App {
                     self.data.light_gizmo_data.just_selected = true;
                 }
             }
-            let clicked_mouse_pos = vec2_from_array(self.data.clicked_mouse_pos);
+            let clicked_mouse_pos = gui_data.clicked_mouse_pos
+                .map(vec2_from_array)
+                .unwrap_or(mouse_pos);
 
             if self.data.light_gizmo_data.is_selected && gui_data.is_left_clicked && !self.data.light_gizmo_data.just_selected {
                 self.update_light_gizmo_position(mouse_pos, camera_pos, camera_direction, gui_data);
@@ -298,33 +298,28 @@ impl App {
                         }
                     }
 
-                    self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
+                    gui_data.clicked_mouse_pos = Some([mouse_pos[0], mouse_pos[1]]);
                 }
             }
-
-            if !gui_data.is_left_clicked {
-                if self.data.is_left_clicked {
-                    log!("Mouse released - resetting light gizmo state");
-                }
-                self.data.is_left_clicked = false;
+        } else if !gui_data.is_wheel_clicked {
+            if gui_data.clicked_mouse_pos.is_some() {
+                log!("Mouse released - resetting light gizmo state");
                 self.data.light_gizmo_data.is_selected = false;
                 self.data.light_gizmo_data.drag_axis = LightGizmoAxis::None;
                 self.data.light_gizmo_data.selected_axis = LightGizmoAxis::None;
                 self.data.light_gizmo_data.just_selected = false;
                 self.data.light_gizmo_data.initial_position = [0.0, 0.0, 0.0];
             }
-        } else if gui_data.imgui_wants_mouse {
-            // If ImGui wants the mouse, reset camera operation state
-            self.data.is_left_clicked = false;
+            gui_data.clicked_mouse_pos = None;
         }
 
-        // Only process camera pan if ImGui doesn't want the mouse
-        if !gui_data.imgui_wants_mouse && (gui_data.is_wheel_clicked || self.data.is_wheel_clicked) {
-            if !self.data.is_wheel_clicked {
-                self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
-                self.data.is_wheel_clicked = true;
+        if !gui_data.imgui_wants_mouse && gui_data.is_wheel_clicked {
+            if gui_data.clicked_mouse_pos.is_none() {
+                gui_data.clicked_mouse_pos = Some([mouse_pos[0], mouse_pos[1]]);
             }
-            let clicked_mouse_pos = vec2_from_array(self.data.clicked_mouse_pos);
+            let clicked_mouse_pos = gui_data.clicked_mouse_pos
+                .map(vec2_from_array)
+                .unwrap_or(mouse_pos);
 
             let diff = mouse_pos - clicked_mouse_pos;
             let distance = Vector2::distance(mouse_pos, clicked_mouse_pos);
@@ -333,14 +328,10 @@ impl App {
                 let pan_speed = self.data.grid.scale * 0.01;
                 self.data.camera.pan_with_base(diff, base_x, base_y, pan_speed);
                 camera_pos = self.data.camera.position();
-                self.data.clicked_mouse_pos = [mouse_pos[0], mouse_pos[1]];
+                gui_data.clicked_mouse_pos = Some([mouse_pos[0], mouse_pos[1]]);
             }
-
-            if !gui_data.is_wheel_clicked {
-                self.data.is_wheel_clicked = false;
-            }
-        } else if gui_data.imgui_wants_mouse {
-            self.data.is_wheel_clicked = false;
+        } else if !gui_data.is_left_clicked {
+            gui_data.clicked_mouse_pos = None;
         }
 
         let view = view(camera_pos, camera_direction, camera_up);

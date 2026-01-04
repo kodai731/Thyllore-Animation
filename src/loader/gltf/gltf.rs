@@ -265,12 +265,12 @@ impl GltfModel {
                 continue;
             }
 
-            let mut pos = vec4_from_array([
+            let mut pos = [
                 vertex.position[0],
                 vertex.position[1],
                 vertex.position[2],
                 1f32,
-            ]);
+            ].to_vec4();
 
             // Apply skinning: joint_transform * inverse_bind_pose transforms from bind pose to current pose
             pos = joint_transform * joint_inverse_bind_pose * pos;
@@ -331,12 +331,12 @@ impl GltfModel {
         for gltf_data in &mut self.gltf_data {
             // Apply to all vertices, both skinned and non-skinned
             for vertex in &mut gltf_data.vertices {
-                let pos = vec4_from_array([
+                let pos = [
                     vertex.animation_position[0],
                     vertex.animation_position[1],
                     vertex.animation_position[2],
                     1.0,
-                ]);
+                ].to_vec4();
                 let fixed_pos = fix_transform * pos;
                 vertex.animation_position[0] = fixed_pos.x;
                 vertex.animation_position[1] = fixed_pos.y;
@@ -440,12 +440,12 @@ impl GltfModel {
             let vertex =
                 &mut self.gltf_data[vertex_id.gltf_data_index].vertices[vertex_id.vertex_index];
             // Use original local space position (never changes)
-            let mut position = vec4_from_array([
+            let mut position = [
                 vertex.original_local_position[0],
                 vertex.original_local_position[1],
                 vertex.original_local_position[2],
                 1f32,
-            ]);
+            ].to_vec4();
             // Apply node transform (same as load time - no fix_coord)
             position = node_transform * position;
             // Apply Y-flip for rendering (same as load time)
@@ -1386,14 +1386,14 @@ unsafe fn process_animation(
                     for (i, translation) in translations.enumerate() {
                         log!("Translation {}: {:?}", i, translation);
                         // Store translation for node animations
-                        let node_translation = vec3_from_array(translation);
+                        let node_translation = translation.to_vec3().into();
                         node_translations.push(node_translation);
 
                         // IMPORTANT: Do NOT scale joint animation translations
                         // glTF files store animation data in the same coordinate system as vertices
                         // Both are already in meters, so no scaling is needed
-                        let joint_translation = vec3_from_array(translation);
-                        let joint_translation_mat = Mat4::from_translation(joint_translation);
+                        let joint_translation = translation.to_vec3();
+                        let joint_translation_mat = Mat4::from_translation(joint_translation.into());
                         joint_translations.push(joint_translation_mat);
                         log!("Translation Matrix {}: {:?}", i, joint_translation_mat);
                     }

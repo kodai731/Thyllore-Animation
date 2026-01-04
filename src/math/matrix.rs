@@ -1,16 +1,11 @@
-use crate::math::vector::{approx_equal_vec4, array4_from_vec};
+use crate::math::vector::{approx_equal_vec4, ToArray4};
 use cgmath::{InnerSpace, Matrix3, Matrix4, Quaternion, Vector3};
 
 pub type Mat3 = cgmath::Matrix3<f32>;
 pub type Mat4 = cgmath::Matrix4<f32>;
 
 pub fn array_from_mat4(m: Mat4) -> [[f32; 4]; 4] {
-    [
-        array4_from_vec(m.x),
-        array4_from_vec(m.y),
-        array4_from_vec(m.z),
-        array4_from_vec(m.w),
-    ]
+    [m.x.to_array(), m.y.to_array(), m.z.to_array(), m.w.to_array()]
 }
 
 pub fn mat4_from_array(a: [[f32; 4]; 4]) -> Mat4 {

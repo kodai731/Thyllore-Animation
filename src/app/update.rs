@@ -260,8 +260,8 @@ impl App {
                     self.data.light_gizmo_data.just_selected = true;
                 }
             }
-            let clicked_mouse_pos = gui_data.clicked_mouse_pos
-                .map(vec2_from_array)
+            let clicked_mouse_pos: Vector2<f32> = gui_data.clicked_mouse_pos
+                .map(|p| p.to_vec2().into())
                 .unwrap_or(mouse_pos);
 
             if self.data.light_gizmo_data.is_selected && gui_data.is_left_clicked && !self.data.light_gizmo_data.just_selected {
@@ -317,8 +317,8 @@ impl App {
             if gui_data.clicked_mouse_pos.is_none() {
                 gui_data.clicked_mouse_pos = Some([mouse_pos[0], mouse_pos[1]]);
             }
-            let clicked_mouse_pos = gui_data.clicked_mouse_pos
-                .map(vec2_from_array)
+            let clicked_mouse_pos: Vector2<f32> = gui_data.clicked_mouse_pos
+                .map(|p| p.to_vec2().into())
                 .unwrap_or(mouse_pos);
 
             let diff = mouse_pos - clicked_mouse_pos;
@@ -676,14 +676,14 @@ impl App {
             let rrdata = &mut self.data.model_descriptor_set.rrdata[i];
             let vertices = &mut rrdata.vertex_data.vertices;
             for i in 0..vertices.len() {
-                vertices[i].pos = Vec3::new_array(gltf_data.vertices[i].position);
+                vertices[i].pos = gltf_data.vertices[i].position.to_vec3();
             }
 
             let morph_animation = &gltf_model.morph_animations[animation_index];
             for i in 0..morph_animation.weights.len() {
                 let morph_target = &gltf_data.morph_targets[i];
                 for j in 0..morph_target.positions.len() {
-                    let delta_position = Vec3::new_array(morph_target.positions[j])
+                    let delta_position = morph_target.positions[j].to_vec3()
                         * morph_animation.weights[i]
                         * 0.01f32;
                     vertices[j].pos += delta_position;
@@ -974,11 +974,11 @@ impl App {
 
                 if t >= 0.0 {
                     let intersection = ray_origin + ray_direction * t;
-                    let initial_pos = vec3_from_array(self.data.light_gizmo_data.initial_position);
+                    let initial_pos = self.data.light_gizmo_data.initial_position.to_vec3();
 
                     self.data.light_gizmo_data.update_position_with_constraint(
                         intersection,
-                        initial_pos,
+                        initial_pos.into(),
                         gui_data.is_ctrl_pressed,
                     );
 

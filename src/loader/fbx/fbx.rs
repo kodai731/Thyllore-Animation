@@ -966,7 +966,7 @@ pub fn triangulate(
 
 fn get_vec(pvs: &PolygonVertices<'_>, pvi: PolygonVertexIndex) -> anyhow::Result<Vector3<f32>> {
     pvs.control_point(pvi)
-        .map(|p| vec3_from_array([p.x as f32, p.y as f32, p.z as f32]))
+        .map(|p| [p.x as f32, p.y as f32, p.z as f32].to_vec3().into())
         .ok_or_else(|| anyhow!("Index out of range: {pvi:?}"))
 }
 

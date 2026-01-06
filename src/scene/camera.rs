@@ -1,4 +1,5 @@
 use cgmath::{Vector2, Vector3, Matrix3, InnerSpace};
+use crate::app::GUIData;
 use crate::math::*;
 
 #[derive(Clone, Debug)]
@@ -36,6 +37,24 @@ impl Camera {
             initial_position: position,
             near_plane: 0.1,
             far_plane: 1000.0,
+        }
+    }
+
+    pub fn update(&mut self, gui_data: &GUIData, grid_scale: f32) {
+        let diff = Vector2::new(gui_data.mouse_diff[0], gui_data.mouse_diff[1]);
+
+        if gui_data.is_left_clicked && diff.magnitude() > 0.001 {
+            self.rotate(diff);
+        } else if gui_data.is_wheel_clicked && diff.magnitude() > 0.001 {
+            let base_x = self.right();
+            let base_y = self.up;
+            let pan_speed = grid_scale * 0.01;
+            self.pan_with_base(diff, base_x, base_y, pan_speed);
+        }
+
+        if gui_data.mouse_wheel != 0.0 {
+            let zoom_speed = grid_scale * 0.5;
+            self.zoom(gui_data.mouse_wheel, zoom_speed);
         }
     }
 
@@ -171,13 +190,13 @@ impl Camera {
     }
 
     pub fn pan_with_base(&mut self, mouse_diff: Vector2<f32>, base_x: Vector3<f32>, base_y: Vector3<f32>, speed: f32) {
-        let translate_x = -base_x * mouse_diff.x * speed;
-        let translate_y = -base_y * mouse_diff.y * speed;
+        let translate_x = base_x * mouse_diff.x * speed;
+        let translate_y = base_y * mouse_diff.y * speed;
         self.position += translate_x + translate_y;
     }
 
     pub fn zoom(&mut self, mouse_wheel: f32, speed: f32) {
-        let movement = self.direction * -mouse_wheel * speed;
+        let movement = self.direction * mouse_wheel * speed;
         self.position += movement;
     }
 

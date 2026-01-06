@@ -1,5 +1,6 @@
 use super::device::*;
 use super::vulkan::*;
+use crate::scene::render_resource::RenderResources;
 use crate::vulkanr::buffer::{RRBuffer, RRIndexBuffer, RRVertexBuffer};
 use crate::vulkanr::descriptor::model::RRDescriptorSet;
 use crate::vulkanr::pipeline::RRPipeline;
@@ -136,46 +137,83 @@ impl RRCommandBuffer {
             .cmd_begin_render_pass(command_buffer, &info, vk::SubpassContents::INLINE);
 
         for i in 0..rrbind_info.len() {
-            let rrbind_info = &rrbind_info[i];
+            let bind_info = &rrbind_info[i];
             rrdevice.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                rrbind_info.rrpipeline.pipeline,
+                bind_info.rrpipeline.pipeline,
             );
 
-            // Set line width after pipeline bind (required for VK_DYNAMIC_STATE_LINE_WIDTH)
             rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
 
             rrdevice.device.cmd_bind_vertex_buffers(
                 command_buffer,
                 0,
-                &[rrbind_info.rrvertex_buffer.buffer],
+                &[bind_info.rrvertex_buffer.buffer],
                 &[0],
             );
             rrdevice.device.cmd_bind_index_buffer(
                 command_buffer,
-                rrbind_info.rrindex_buffer.buffer,
+                bind_info.rrindex_buffer.buffer,
                 0,
                 vk::IndexType::UINT32,
             );
-            // Calculate descriptor set index: data_index * swapchain_images.len() + frame_index
-            let swapchain_images_len = rrbind_info.rrdescriptor_set.descriptor_sets.len() /
-                rrbind_info.rrdescriptor_set.rrdata.len().max(1);
-            let descriptor_set_index = rrbind_info.data_index * swapchain_images_len + frame_index;
-            rrdevice.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                rrbind_info.rrpipeline.pipeline_layout,
-                0,
-                &[rrbind_info.rrdescriptor_set.descriptor_sets[descriptor_set_index]],
-                &[],
-            );
+
+            if let Some(render_resources) = bind_info.render_resources {
+                let frame_set = render_resources.frame_set.sets[frame_index];
+                let object_set_idx = render_resources.objects.get_set_index(frame_index, bind_info.object_index);
+                let object_set = render_resources.objects.sets[object_set_idx];
+
+                rrdevice.device.cmd_bind_descriptor_sets(
+                    command_buffer,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    bind_info.rrpipeline.pipeline_layout,
+                    0,
+                    &[frame_set],
+                    &[],
+                );
+
+                if let Some(material_id) = bind_info.material_id {
+                    if let Some(material) = render_resources.materials.get(material_id) {
+                        rrdevice.device.cmd_bind_descriptor_sets(
+                            command_buffer,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            bind_info.rrpipeline.pipeline_layout,
+                            1,
+                            &[material.descriptor_set],
+                            &[],
+                        );
+                    }
+                }
+
+                rrdevice.device.cmd_bind_descriptor_sets(
+                    command_buffer,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    bind_info.rrpipeline.pipeline_layout,
+                    2,
+                    &[object_set],
+                    &[],
+                );
+            } else {
+                let swapchain_images_len = bind_info.rrdescriptor_set.descriptor_sets.len() /
+                    bind_info.rrdescriptor_set.rrdata.len().max(1);
+                let descriptor_set_index = bind_info.data_index * swapchain_images_len + frame_index;
+                rrdevice.device.cmd_bind_descriptor_sets(
+                    command_buffer,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    bind_info.rrpipeline.pipeline_layout,
+                    0,
+                    &[bind_info.rrdescriptor_set.descriptor_sets[descriptor_set_index]],
+                    &[],
+                );
+            }
+
             rrdevice.device.cmd_draw_indexed(
                 command_buffer,
-                rrbind_info.rrindex_buffer.indices,
+                bind_info.rrindex_buffer.indices,
                 1,
-                rrbind_info.offset_index,
-                rrbind_info.offset_index as i32,
+                bind_info.offset_index,
+                bind_info.offset_index as i32,
                 0,
             );
         }
@@ -203,6 +241,8 @@ unsafe fn create_command_pool(
     Ok(())
 }
 
+use crate::scene::render_resource::MaterialId;
+
 #[derive(Clone, Debug)]
 pub struct RRBindInfo<'a> {
     pub rrpipeline: &'a RRPipeline,
@@ -211,7 +251,10 @@ pub struct RRBindInfo<'a> {
     pub rrindex_buffer: &'a RRIndexBuffer,
     pub offset_vertex: u32,
     pub offset_index: u32,
-    pub data_index: usize,  // Index of RRData within descriptor set (for multiple meshes)
+    pub data_index: usize,
+    pub render_resources: Option<&'a RenderResources>,
+    pub object_index: usize,
+    pub material_id: Option<MaterialId>,
 }
 
 impl<'a> RRBindInfo<'a> {
@@ -232,6 +275,32 @@ impl<'a> RRBindInfo<'a> {
             offset_vertex,
             offset_index,
             data_index,
+            render_resources: None,
+            object_index: 0,
+            material_id: None,
+        }
+    }
+
+    pub unsafe fn with_render_resources(
+        rrpipeline: &'a RRPipeline,
+        rrdescriptor_set: &'a RRDescriptorSet,
+        rrvertex_buffer: &'a RRVertexBuffer,
+        rrindex_buffer: &'a RRIndexBuffer,
+        render_resources: &'a RenderResources,
+        object_index: usize,
+        material_id: MaterialId,
+    ) -> Self {
+        Self {
+            rrpipeline,
+            rrdescriptor_set,
+            rrvertex_buffer,
+            rrindex_buffer,
+            offset_vertex: 0,
+            offset_index: 0,
+            data_index: 0,
+            render_resources: Some(render_resources),
+            object_index,
+            material_id: Some(material_id),
         }
     }
 }

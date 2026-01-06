@@ -39,6 +39,7 @@ impl App {
                 pos2.x = pos1.x;
                 pos2.z = -grid_extent;
             }
+
             let vertex1 = vulkan_data::Vertex::new(pos1, color, tex_coord);
             let vertex2 = vulkan_data::Vertex::new(pos2, color, tex_coord);
             let vertex3 = vulkan_data::Vertex::new(-pos1, color, tex_coord);

@@ -6,8 +6,10 @@ pub mod scene_model;
 pub mod update;
 pub mod cleanup;
 pub mod util;
+pub mod gui_data;
 
-pub use data::{AppData, GUIData};
+pub use data::AppData;
+pub use gui_data::GUIData;
 pub use init::*;
 
 use crate::vulkanr::device::*;

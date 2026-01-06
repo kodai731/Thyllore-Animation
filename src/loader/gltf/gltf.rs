@@ -98,8 +98,7 @@ impl GltfModel {
                 // Apply cumulative transform
                 let pos_vec4 = cumulative_transform * Vector4::new(local_pos[0], local_pos[1], local_pos[2], 1.0);
 
-                // Apply Y-flip for rendering
-                vertex.position = [pos_vec4.x, 1.0 - pos_vec4.y, pos_vec4.z];
+                vertex.position = [pos_vec4.x, pos_vec4.y, pos_vec4.z];
             }
         }
     }
@@ -448,8 +447,8 @@ impl GltfModel {
             ].to_vec4();
             // Apply node transform (same as load time - no fix_coord)
             position = node_transform * position;
-            // Apply Y-flip for rendering (same as load time)
-            vertex.animation_position = [position.x, 1.0 - position.y, position.z];
+
+            vertex.animation_position = [position.x, position.y, position.z];
 
             // Debug: log first vertex of NurbsPath.009 AFTER transform
             if rrnode.name.contains("NurbsPath.009") && vertex_id.vertex_index == 0 && time < 0.1 {

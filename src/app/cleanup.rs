@@ -61,6 +61,9 @@ impl App {
             crate::log!("Destroyed G-Buffer");
         }
 
+        self.data.render_resources.destroy(&self.rrdevice.device);
+        crate::log!("Destroyed render resources");
+
         crate::log!("All application resources destroyed");
     }
 

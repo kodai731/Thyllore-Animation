@@ -25,7 +25,9 @@ void main() {
     float gizmoScale = 1.0;  // CPU側で既にスケール済み（0.15）
 
     // 最終的な位置を計算（透視投影なしで直接NDC座標に配置）
-    vec4 position = vec4(inPosition * gizmoScale, 1.0);
+    // Vulkan NDCはY-downなので、Y軸を反転
+    vec3 flippedPos = vec3(inPosition.x, -inPosition.y, inPosition.z);
+    vec4 position = vec4(flippedPos * gizmoScale, 1.0);
     position.xy += gizmoOffset;
     position.z = 0.0; // 深度は固定（常に手前に表示）
 

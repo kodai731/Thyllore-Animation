@@ -1,5 +1,4 @@
-use crate::app::{App, AppData};
-use crate::app::data::GUIData;
+use crate::app::{App, AppData, GUIData};
 
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
@@ -19,6 +18,7 @@ use crate::vulkanr::raytracing::acceleration::*;
 use crate::loader::gltf::gltf::*;
 use crate::math::*;
 use crate::debugview::*;
+use crate::scene::render_resource::RenderResources;
 use crate::scene::Camera;
 use crate::loader::fbx::fbx::{FbxModel, load_fbx, load_fbx_with_russimp};
 use crate::logger::logger::*;
@@ -127,11 +127,24 @@ impl App {
         );
         data.model_descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
         data.grid.descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
-        data.model_pipeline = RRPipeline::new(
+
+        let swapchain_image_count = data.rrswapchain.swapchain_images.len();
+        let max_materials = 32;
+        let max_objects = 64;
+        data.render_resources = RenderResources::new(
+            &instance,
+            &rrdevice,
+            swapchain_image_count,
+            max_materials,
+            max_objects,
+        ).expect("Failed to create render resources");
+
+        let render_layouts = data.render_resources.get_layouts();
+        data.model_pipeline = RRPipeline::new_with_render_resources(
             &rrdevice,
             &data.rrswapchain,
             &data.rrrender,
-            &data.model_descriptor_set,
+            &render_layouts,
             "assets/shaders/vert.spv",
             "assets/shaders/frag.spv",
             vk::PrimitiveTopology::TRIANGLE_LIST,
@@ -338,15 +351,17 @@ impl App {
         ));
 
         for i in 0..data.model_descriptor_set.rrdata.len() {
-            rrbind_info.push(RRBindInfo::new(
-                &data.model_pipeline,
-                &data.model_descriptor_set,
-                &data.model_descriptor_set.rrdata[i].vertex_buffer,
-                &data.model_descriptor_set.rrdata[i].index_buffer,
-                0,
-                0,
-                i,  // data_index corresponds to rrdata index
-            ));
+            if let Some(material_id) = data.render_resources.get_material_id(i) {
+                rrbind_info.push(RRBindInfo::with_render_resources(
+                    &data.model_pipeline,
+                    &data.model_descriptor_set,
+                    &data.model_descriptor_set.rrdata[i].vertex_buffer,
+                    &data.model_descriptor_set.rrdata[i].index_buffer,
+                    &data.render_resources,
+                    i,
+                    material_id,
+                ));
+            }
         }
 
         for i in 0..data.rrrender.framebuffers.len() {

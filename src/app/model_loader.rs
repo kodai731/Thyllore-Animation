@@ -1,19 +1,16 @@
 use crate::app::AppData;
+use crate::logger::logger::*;
+use crate::scene::CubeModel;
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::data::*;
 use crate::vulkanr::descriptor::RRDescriptorSet;
 use crate::vulkanr::device::*;
 use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::vulkan::*;
-use crate::logger::logger::*;
-use crate::scene::CubeModel;
 
 use anyhow::Result;
 
-pub unsafe fn cleanup_model_resources(
-    rrdevice: &RRDevice,
-    data: &mut AppData,
-) {
+pub unsafe fn cleanup_model_resources(rrdevice: &RRDevice, data: &mut AppData) {
     crate::log!("Cleaning up model resources...");
 
     rrdevice.device.device_wait_idle().ok();
@@ -74,7 +71,10 @@ pub unsafe fn rebuild_acceleration_structures(
             &acceleration_structure.blas_list,
         )?;
         acceleration_structure.tlas = tlas;
-        crate::log!("Created TLAS with {} instances", acceleration_structure.blas_list.len());
+        crate::log!(
+            "Created TLAS with {} instances",
+            acceleration_structure.blas_list.len()
+        );
     }
 
     data.raytracing.acceleration_structure = Some(acceleration_structure);
@@ -98,7 +98,11 @@ pub unsafe fn replace_model_with_cube(
         data.model_descriptor_set.rrdata.push(rrdata.clone());
     }
 
-    RRDescriptorSet::create_descriptor_set(rrdevice, &data.rrswapchain, &mut data.model_descriptor_set)?;
+    RRDescriptorSet::create_descriptor_set(
+        rrdevice,
+        &data.rrswapchain,
+        &mut data.model_descriptor_set,
+    )?;
     crate::log!("Updated model_descriptor_set with new cube data");
 
     if let Some(ref mut gbuffer_desc) = data.raytracing.gbuffer_descriptor_set {
@@ -121,13 +125,22 @@ pub unsafe fn replace_model_with_cube(
     }
 
     if let Some(ref billboard_texture) = data.light_gizmo_data.billboard_texture {
-        data.billboard.descriptor_set
-            .update_descriptor_sets(rrdevice, &data.rrswapchain, billboard_texture)?;
+        data.billboard.descriptor_set.update_descriptor_sets(
+            rrdevice,
+            &data.rrswapchain,
+            billboard_texture,
+        )?;
         crate::log!("Re-updated billboard.descriptor_set after cube reload");
     }
 
     data.debug_view_data.cube_model = Some(cube);
 
-    crate::log!("Model replaced with cube. Size: {}, Position: ({}, {}, {})", size, position[0], position[1], position[2]);
+    crate::log!(
+        "Model replaced with cube. Size: {}, Position: ({}, {}, {})",
+        size,
+        position[0],
+        position[1],
+        position[2]
+    );
     Ok(())
 }

@@ -1,4 +1,5 @@
 use crate::app::{App, AppData};
+use crate::scene::render_resource::MaterialUBO;
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
 use crate::vulkanr::data as vulkan_data;
@@ -149,6 +150,7 @@ impl App {
             }
 
             rrdata.vertex_data.indices = fbx_data.indices.clone();
+
             data.model_descriptor_set.rrdata.push(rrdata);
         }
 

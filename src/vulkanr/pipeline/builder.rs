@@ -432,6 +432,72 @@ impl RRPipeline {
             .expect("Failed to create pipeline")
     }
 
+    /// Create a pipeline with RenderResources layouts (Set 0, 1, 2)
+    pub unsafe fn new_with_render_resources(
+        rrdevice: &RRDevice,
+        rrswapchain: &RRSwapchain,
+        rrrender: &RRRender,
+        layouts: &[vk::DescriptorSetLayout; 3],
+        vertex_shader_path: &str,
+        fragment_shader_path: &str,
+        topology: PrimitiveTopology,
+        polygon_mode: vk::PolygonMode,
+        cull_mode: vk::CullModeFlags,
+    ) -> Self {
+        let mut builder = PipelineBuilder::new(vertex_shader_path, fragment_shader_path)
+            .vertex_input(VertexInputConfig::Standard)
+            .topology(topology)
+            .polygon_mode(polygon_mode)
+            .cull_mode(cull_mode)
+            .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
+            .descriptor_layouts(layouts.to_vec());
+
+        if topology == vk::PrimitiveTopology::LINE_LIST {
+            builder = builder.depth_test(DepthTestConfig {
+                test_enable: true,
+                write_enable: false,
+                compare_op: vk::CompareOp::LESS,
+            });
+        }
+
+        builder
+            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+            .expect("Failed to create pipeline")
+    }
+
+    /// Create a pipeline with RenderResources layouts (Set 0, Set 2 only - no material)
+    pub unsafe fn new_with_frame_object_layouts(
+        rrdevice: &RRDevice,
+        rrswapchain: &RRSwapchain,
+        rrrender: &RRRender,
+        layouts: &[vk::DescriptorSetLayout; 2],
+        vertex_shader_path: &str,
+        fragment_shader_path: &str,
+        topology: PrimitiveTopology,
+        polygon_mode: vk::PolygonMode,
+        cull_mode: vk::CullModeFlags,
+    ) -> Self {
+        let mut builder = PipelineBuilder::new(vertex_shader_path, fragment_shader_path)
+            .vertex_input(VertexInputConfig::Standard)
+            .topology(topology)
+            .polygon_mode(polygon_mode)
+            .cull_mode(cull_mode)
+            .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
+            .descriptor_layouts(layouts.to_vec());
+
+        if topology == vk::PrimitiveTopology::LINE_LIST {
+            builder = builder.depth_test(DepthTestConfig {
+                test_enable: true,
+                write_enable: false,
+                compare_op: vk::CompareOp::LESS,
+            });
+        }
+
+        builder
+            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+            .expect("Failed to create pipeline")
+    }
+
     /// Create ImGui rendering pipeline (backward compatibility)
     pub unsafe fn new_imgui(
         rrdevice: &RRDevice,

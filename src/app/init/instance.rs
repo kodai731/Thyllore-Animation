@@ -1,4 +1,4 @@
-use crate::app::{App, AppData, GUIData};
+use crate::app::{App, AppData};
 
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
@@ -7,21 +7,15 @@ use crate::vulkanr::data::*;
 use crate::vulkanr::descriptor::*;
 use crate::vulkanr::device::*;
 use crate::vulkanr::image::*;
-use crate::vulkanr::pipeline::{
-    PipelineBuilder, RRPipeline, VertexInputConfig, DepthTestConfig, BlendConfig, PushConstantConfig,
-};
+use crate::vulkanr::pipeline::{PipelineBuilder, RRPipeline, VertexInputConfig};
 use crate::vulkanr::render::*;
 use crate::vulkanr::swapchain::*;
 use crate::vulkanr::vulkan::*;
-use crate::vulkanr::raytracing::acceleration::*;
 
-use crate::loader::gltf::gltf::*;
 use crate::math::*;
 use crate::debugview::*;
 use crate::scene::render_resource::RenderResources;
 use crate::scene::Camera;
-use crate::loader::fbx::fbx::{FbxModel, load_fbx, load_fbx_with_russimp};
-use crate::logger::logger::*;
 
 use vulkanalia::Device as VkDevice;
 
@@ -29,10 +23,6 @@ use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::ffi::CStr;
 use std::os::raw::c_void;
-use std::collections::HashMap;
-use std::fs::File;
-use std::hash::{Hash, Hasher};
-use std::io::BufReader;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 use std::time::Instant;
@@ -40,13 +30,8 @@ use std::borrow::BorrowMut;
 use std::rc::Rc;
 
 use winit::window::Window;
-use cgmath::num_traits::AsPrimitive;
-use cgmath::{Matrix4, Vector4};
 use vulkanalia::prelude::v1_0::*;
-use vulkanalia::bytecode::Bytecode;
-use vulkanalia::vk::KhrSwapchainExtension;
 use vulkanalia::loader::{LibloadingLoader, LIBRARY};
-use vulkanalia::vk::KhrSurfaceExtension;
 
 // Constants
 pub const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
@@ -350,13 +335,13 @@ impl App {
             0,
         ));
 
-        for i in 0..data.model_descriptor_set.rrdata.len() {
+        for i in 0..data.render_resources.meshes.len() {
             if let Some(material_id) = data.render_resources.get_material_id(i) {
                 rrbind_info.push(RRBindInfo::with_render_resources(
                     &data.model_pipeline,
                     &data.model_descriptor_set,
-                    &data.model_descriptor_set.rrdata[i].vertex_buffer,
-                    &data.model_descriptor_set.rrdata[i].index_buffer,
+                    &data.render_resources.meshes[i].vertex_buffer,
+                    &data.render_resources.meshes[i].index_buffer,
                     &data.render_resources,
                     i,
                     material_id,

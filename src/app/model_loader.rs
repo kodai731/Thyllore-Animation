@@ -1,5 +1,4 @@
 use crate::app::AppData;
-use crate::logger::logger::*;
 use crate::scene::CubeModel;
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::data::*;
@@ -26,10 +25,8 @@ pub unsafe fn cleanup_model_resources(rrdevice: &RRDevice, data: &mut AppData) {
         crate::log!("Cleared gbuffer_descriptor_set.rrdata (shared handles, no delete)");
     }
 
-    for rrdata in &mut data.model_descriptor_set.rrdata {
-        rrdata.delete(rrdevice);
-    }
-    data.model_descriptor_set.rrdata.clear();
+    data.render_resources.clear_meshes(rrdevice);
+    data.render_resources.mesh_material_ids.clear();
 
     data.fbx_model.clear();
     data.animation_playing = false;
@@ -47,16 +44,16 @@ pub unsafe fn rebuild_acceleration_structures(
 
     let mut acceleration_structure = RRAccelerationStructure::new();
 
-    for rrdata in &data.model_descriptor_set.rrdata {
+    for mesh in &data.render_resources.meshes {
         let blas = RRAccelerationStructure::create_blas(
             instance,
             rrdevice,
             &data.rrcommand_pool,
-            &rrdata.vertex_buffer.buffer,
-            rrdata.vertex_data.vertices.len() as u32,
+            &mesh.vertex_buffer.buffer,
+            mesh.vertex_data.vertices.len() as u32,
             std::mem::size_of::<vulkan_data::Vertex>() as u32,
-            &rrdata.index_buffer.buffer,
-            rrdata.vertex_data.indices.len() as u32,
+            &mesh.index_buffer.buffer,
+            mesh.vertex_data.indices.len() as u32,
         )?;
 
         acceleration_structure.blas_list.push(blas);

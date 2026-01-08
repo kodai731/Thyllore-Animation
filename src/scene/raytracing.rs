@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::rc::Rc;
 use vulkanalia::prelude::v1_0::*;
 
+use crate::scene::render_resource::{Mesh, RenderResources};
 use crate::vulkanr::buffer::create_buffer;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
@@ -87,22 +88,22 @@ impl RayTracingData {
         instance: &Instance,
         rrdevice: &RRDevice,
         rrcommand_pool: &Rc<RRCommandPool>,
-        model_descriptor_set: &RRDescriptorSet,
+        meshes: &[Mesh],
     ) -> Result<()> {
         log::info!("Building acceleration structures...");
 
         let mut acceleration_structure = RRAccelerationStructure::new();
 
-        for rrdata in &model_descriptor_set.rrdata {
+        for mesh in meshes {
             let blas = RRAccelerationStructure::create_blas(
                 instance,
                 rrdevice,
                 rrcommand_pool,
-                &rrdata.vertex_buffer.buffer,
-                rrdata.vertex_data.vertices.len() as u32,
+                &mesh.vertex_buffer.buffer,
+                mesh.vertex_data.vertices.len() as u32,
                 std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                &rrdata.index_buffer.buffer,
-                rrdata.vertex_data.indices.len() as u32,
+                &mesh.index_buffer.buffer,
+                mesh.vertex_data.indices.len() as u32,
             )?;
 
             acceleration_structure.blas_list.push(blas);

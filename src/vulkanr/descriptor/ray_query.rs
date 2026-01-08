@@ -1,6 +1,4 @@
-use crate::vulkanr::data::*;
 use crate::vulkanr::core::device::*;
-use crate::vulkanr::core::swapchain::*;
 use crate::vulkanr::vulkan::*;
 
 #[derive(Clone, Debug, Default)]

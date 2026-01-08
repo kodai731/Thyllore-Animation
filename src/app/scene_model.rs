@@ -1,5 +1,5 @@
 use crate::app::{App, AppData};
-use crate::scene::render_resource::MaterialUBO;
+use crate::scene::render_resource::{MaterialUBO, Mesh};
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
 use crate::vulkanr::data as vulkan_data;
@@ -44,25 +44,13 @@ impl App {
 
         for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
             crate::log!(
-                "Creating RRData for FBX mesh {}: {} vertices, texture: {:?}",
+                "Creating Mesh for FBX mesh {}: {} vertices, texture: {:?}",
                 mesh_idx,
                 fbx_data.positions.len(),
                 fbx_data.diffuse_texture
             );
 
-            if !fbx_data.positions.is_empty() {
-                let first_pos = &fbx_data.positions[0];
-                crate::log!(
-                    "DEBUG: Mesh {} first vertex position: ({}, {}, {})",
-                    mesh_idx,
-                    first_pos.x,
-                    first_pos.y,
-                    first_pos.z
-                );
-            }
-
-            let rrdata_name = format!("fbx_mesh_{}", mesh_idx);
-            let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain, &rrdata_name);
+            let mut mesh = Mesh::default();
 
             if let Some(texture_path) = &fbx_data.diffuse_texture {
                 crate::log!("Loading texture: {}", texture_path);
@@ -77,9 +65,9 @@ impl App {
                             height,
                         ) {
                             Ok((image, image_memory, mip_level)) => {
-                                rrdata.image = image;
-                                rrdata.image_memory = image_memory;
-                                rrdata.mip_level = mip_level;
+                                mesh.image = image;
+                                mesh.image_memory = image_memory;
+                                mesh.mip_level = mip_level;
                                 crate::log!("Texture loaded successfully for mesh {}", mesh_idx);
                             }
                             Err(e) => {
@@ -88,7 +76,7 @@ impl App {
                                     mesh_idx,
                                     e
                                 );
-                                (rrdata.image, rrdata.image_memory, rrdata.mip_level) =
+                                (mesh.image, mesh.image_memory, mesh.mip_level) =
                                     create_texture_image_pixel(
                                         instance,
                                         rrdevice,
@@ -102,7 +90,7 @@ impl App {
                     }
                     Err(e) => {
                         crate::log!("Failed to load texture file {}: {}", texture_path, e);
-                        (rrdata.image, rrdata.image_memory, rrdata.mip_level) =
+                        (mesh.image, mesh.image_memory, mesh.mip_level) =
                             create_texture_image_pixel(
                                 instance,
                                 rrdevice,
@@ -115,7 +103,7 @@ impl App {
                 }
             } else {
                 crate::log!("No texture specified for mesh {}, using white", mesh_idx);
-                (rrdata.image, rrdata.image_memory, rrdata.mip_level) = create_texture_image_pixel(
+                (mesh.image, mesh.image_memory, mesh.mip_level) = create_texture_image_pixel(
                     instance,
                     rrdevice,
                     data.rrcommand_pool.borrow_mut(),
@@ -125,7 +113,7 @@ impl App {
                 )?;
             }
 
-            rrdata.vertex_data = VertexData::default();
+            mesh.vertex_data = VertexData::default();
             for (i, position) in fbx_data.positions.iter().enumerate() {
                 let uv = if i < fbx_data.tex_coords.len() {
                     fbx_data.tex_coords[i]
@@ -146,11 +134,18 @@ impl App {
                     uv.to_vec2(),
                     normal,
                 );
-                rrdata.vertex_data.vertices.push(vertex);
+                mesh.vertex_data.vertices.push(vertex);
             }
 
-            rrdata.vertex_data.indices = fbx_data.indices.clone();
+            mesh.vertex_data.indices = fbx_data.indices.clone();
+            data.render_resources.meshes.push(mesh);
 
+            let rrdata_name = format!("fbx_mesh_{}", mesh_idx);
+            let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain, &rrdata_name);
+            rrdata.vertex_data = data.render_resources.meshes.last().unwrap().vertex_data.clone();
+            rrdata.image = data.render_resources.meshes.last().unwrap().image;
+            rrdata.image_memory = data.render_resources.meshes.last().unwrap().image_memory;
+            rrdata.mip_level = data.render_resources.meshes.last().unwrap().mip_level;
             data.model_descriptor_set.rrdata.push(rrdata);
         }
 
@@ -167,7 +162,6 @@ impl App {
             }
         }
 
-        let model_path_fbx = "assets/models/phoenix-bird/source/fly.fbx";
         data.current_model_path = model_path_fbx.to_string();
 
         crate::log!("=== FBX model loaded successfully ===");
@@ -193,9 +187,9 @@ impl App {
         }
 
         crate::log!("Cleaning up existing model data...");
-        data.model_descriptor_set.delete_data(rrdevice);
-        data.model_descriptor_set.rrdata.clear();
-        crate::log!("Cleared existing data, descriptor pool will be reused");
+        data.render_resources.clear_meshes(rrdevice);
+        data.render_resources.mesh_material_ids.clear();
+        crate::log!("Cleared existing data");
 
         if is_fbx {
             crate::log!("Loading FBX model...");
@@ -215,14 +209,13 @@ impl App {
 
             for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
                 crate::log!(
-                    "Creating RRData for FBX mesh {}: {} vertices, texture: {:?}",
+                    "Creating Mesh for FBX mesh {}: {} vertices, texture: {:?}",
                     mesh_idx,
                     fbx_data.positions.len(),
                     fbx_data.diffuse_texture
                 );
 
-                let rrdata_name = format!("gltf_mesh_{}", mesh_idx);
-                let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain, &rrdata_name);
+                let mut mesh = Mesh::default();
 
                 if let Some(texture_path) = &fbx_data.diffuse_texture {
                     crate::log!("Loading texture: {}", texture_path);
@@ -237,9 +230,9 @@ impl App {
                                 height,
                             ) {
                                 Ok((image, image_memory, mip_level)) => {
-                                    rrdata.image = image;
-                                    rrdata.image_memory = image_memory;
-                                    rrdata.mip_level = mip_level;
+                                    mesh.image = image;
+                                    mesh.image_memory = image_memory;
+                                    mesh.mip_level = mip_level;
                                     crate::log!(
                                         "Texture loaded successfully for mesh {}",
                                         mesh_idx
@@ -251,7 +244,7 @@ impl App {
                                         mesh_idx,
                                         e
                                     );
-                                    (rrdata.image, rrdata.image_memory, rrdata.mip_level) =
+                                    (mesh.image, mesh.image_memory, mesh.mip_level) =
                                         create_texture_image_pixel(
                                             instance,
                                             rrdevice,
@@ -265,7 +258,7 @@ impl App {
                         }
                         Err(e) => {
                             crate::log!("Failed to load texture file {}: {}", texture_path, e);
-                            (rrdata.image, rrdata.image_memory, rrdata.mip_level) =
+                            (mesh.image, mesh.image_memory, mesh.mip_level) =
                                 create_texture_image_pixel(
                                     instance,
                                     rrdevice,
@@ -278,7 +271,7 @@ impl App {
                     }
                 } else {
                     crate::log!("No texture specified for mesh {}, using white", mesh_idx);
-                    (rrdata.image, rrdata.image_memory, rrdata.mip_level) =
+                    (mesh.image, mesh.image_memory, mesh.mip_level) =
                         create_texture_image_pixel(
                             instance,
                             rrdevice,
@@ -289,7 +282,7 @@ impl App {
                         )?;
                 }
 
-                rrdata.vertex_data = VertexData::default();
+                mesh.vertex_data = VertexData::default();
                 for (i, position) in fbx_data.positions.iter().enumerate() {
                     let uv = if i < fbx_data.tex_coords.len() {
                         fbx_data.tex_coords[i]
@@ -310,11 +303,11 @@ impl App {
                         uv.to_vec2(),
                         normal,
                     );
-                    rrdata.vertex_data.vertices.push(vertex);
+                    mesh.vertex_data.vertices.push(vertex);
                 }
 
-                rrdata.vertex_data.indices = fbx_data.indices.clone();
-                data.model_descriptor_set.rrdata.push(rrdata);
+                mesh.vertex_data.indices = fbx_data.indices.clone();
+                data.render_resources.meshes.push(mesh);
             }
 
             if data.fbx_model.animation_count() > 0 {
@@ -339,13 +332,12 @@ impl App {
 
             for (i, gltf_data) in data.gltf_model.gltf_data.iter().enumerate() {
                 crate::log!(
-                    "Creating RRData for glTF mesh {}: {} vertices",
+                    "Creating Mesh for glTF mesh {}: {} vertices",
                     i,
                     gltf_data.vertices.len()
                 );
 
-                let rrdata_name = format!("gltf_mesh2_{}", i);
-                let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain, &rrdata_name);
+                let mut mesh = Mesh::default();
 
                 if !gltf_data.image_data.is_empty() {
                     crate::log!("Loading texture from glTF image data for mesh {}", i);
@@ -358,14 +350,14 @@ impl App {
                         gltf_data.image_data[0].height,
                     ) {
                         Ok((image, image_memory, mip_level)) => {
-                            rrdata.image = image;
-                            rrdata.image_memory = image_memory;
-                            rrdata.mip_level = mip_level;
+                            mesh.image = image;
+                            mesh.image_memory = image_memory;
+                            mesh.mip_level = mip_level;
                             crate::log!("Texture loaded successfully for mesh {}", i);
                         }
                         Err(e) => {
                             crate::log!("Failed to create texture image for mesh {}: {}", i, e);
-                            (rrdata.image, rrdata.image_memory, rrdata.mip_level) =
+                            (mesh.image, mesh.image_memory, mesh.mip_level) =
                                 create_texture_image_pixel(
                                     instance,
                                     rrdevice,
@@ -378,7 +370,7 @@ impl App {
                     }
                 } else {
                     crate::log!("No texture data for mesh {}, using white", i);
-                    (rrdata.image, rrdata.image_memory, rrdata.mip_level) =
+                    (mesh.image, mesh.image_memory, mesh.mip_level) =
                         create_texture_image_pixel(
                             instance,
                             rrdevice,
@@ -389,12 +381,9 @@ impl App {
                         )?;
                 }
 
-                rrdata.vertex_data = VertexData::default();
+                mesh.vertex_data = VertexData::default();
                 for gltf_vertex in &gltf_data.vertices {
-                    rrdata
-                        .vertex_data
-                        .vertices
-                        .push(vulkan_data::Vertex::default());
+                    mesh.vertex_data.vertices.push(vulkan_data::Vertex::default());
                 }
 
                 for gltf_vertex in &gltf_data.vertices {
@@ -403,55 +392,58 @@ impl App {
                         Vec4::new(0.0, 1.0, 0.0, 1.0),
                         gltf_vertex.tex_coord.to_vec2(),
                     );
-                    rrdata.vertex_data.vertices[gltf_vertex.index] = vertex;
+                    mesh.vertex_data.vertices[gltf_vertex.index] = vertex;
                 }
 
-                rrdata.vertex_data.indices = gltf_data.indices.clone();
-                data.model_descriptor_set.rrdata.push(rrdata);
+                mesh.vertex_data.indices = gltf_data.indices.clone();
+                data.render_resources.meshes.push(mesh);
             }
         }
 
-        crate::log!("Recreating buffers and descriptor sets...");
-        for i in 0..data.model_descriptor_set.rrdata.len() {
-            let rrdata = &mut data.model_descriptor_set.rrdata[i];
+        crate::log!("Recreating buffers...");
+        for i in 0..data.render_resources.meshes.len() {
+            let mesh = &mut data.render_resources.meshes[i];
 
-            rrdata.vertex_buffer = RRVertexBuffer::new(
+            mesh.vertex_buffer = RRVertexBuffer::new(
                 &instance,
                 &rrdevice,
                 &data.rrcommand_pool,
-                (size_of::<vulkan_data::Vertex>() * rrdata.vertex_data.vertices.len())
+                (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len())
                     as vk::DeviceSize,
-                rrdata.vertex_data.vertices.as_ptr() as *const c_void,
-                rrdata.vertex_data.vertices.len(),
+                mesh.vertex_data.vertices.as_ptr() as *const c_void,
+                mesh.vertex_data.vertices.len(),
             );
 
-            rrdata.index_buffer = RRIndexBuffer::new(
+            mesh.index_buffer = RRIndexBuffer::new(
                 &instance,
                 &rrdevice,
                 &data.rrcommand_pool,
-                (size_of::<u32>() * rrdata.vertex_data.indices.len()) as u64,
-                rrdata.vertex_data.indices.as_ptr() as *const c_void,
-                rrdata.vertex_data.indices.len(),
+                (size_of::<u32>() * mesh.vertex_data.indices.len()) as u64,
+                mesh.vertex_data.indices.as_ptr() as *const c_void,
+                mesh.vertex_data.indices.len(),
             );
 
-            let buffer_name = format!("recreate_mesh_{}", i);
-            RRData::create_uniform_buffers(
-                rrdata,
-                &instance,
+            mesh.image_view = create_image_view(
                 &rrdevice,
-                &data.rrswapchain,
-                &buffer_name,
-            );
-
-            rrdata.image_view = create_image_view(
-                &rrdevice,
-                rrdata.image,
+                mesh.image,
                 vk::Format::R8G8B8A8_SRGB,
                 vk::ImageAspectFlags::COLOR,
-                rrdata.mip_level,
+                mesh.mip_level,
             )?;
 
-            rrdata.sampler = create_texture_sampler(&rrdevice, rrdata.mip_level)?;
+            mesh.sampler = create_texture_sampler(&rrdevice, mesh.mip_level)?;
+
+            let material_name = format!("material_{}", i);
+            let material_properties = MaterialUBO::default();
+            let material_id = data.render_resources.materials.create_material_with_texture(
+                instance,
+                rrdevice,
+                &material_name,
+                mesh.image_view,
+                mesh.sampler,
+                material_properties,
+            )?;
+            data.render_resources.mesh_material_ids.push(material_id);
         }
 
         if is_gltf
@@ -470,12 +462,12 @@ impl App {
             }
 
             for i in 0..data.gltf_model.gltf_data.len() {
-                if i >= data.model_descriptor_set.rrdata.len() {
+                if i >= data.render_resources.meshes.len() {
                     break;
                 }
 
-                let rrdata = &mut data.model_descriptor_set.rrdata[i];
-                let vertex_data = &mut rrdata.vertex_data;
+                let mesh = &mut data.render_resources.meshes[i];
+                let vertex_data = &mut mesh.vertex_data;
                 let gltf_data = &data.gltf_model.gltf_data[i];
 
                 for vertex in &gltf_data.vertices {
@@ -484,7 +476,7 @@ impl App {
                     vertex_data.vertices[vertex.index].pos.z = vertex.animation_position[2];
                 }
 
-                if let Err(e) = rrdata.vertex_buffer.update(
+                if let Err(e) = mesh.vertex_buffer.update(
                     &instance,
                     &rrdevice,
                     &data.rrcommand_pool,
@@ -508,8 +500,8 @@ impl App {
             data.fbx_model.update_animation(0, 0.0);
 
             for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
-                if let Some(rrdata) = data.model_descriptor_set.rrdata.get_mut(mesh_idx) {
-                    let vertex_data = &mut rrdata.vertex_data;
+                if let Some(mesh) = data.render_resources.meshes.get_mut(mesh_idx) {
+                    let vertex_data = &mut mesh.vertex_data;
 
                     for (vertex_idx, pos) in fbx_data.positions.iter().enumerate() {
                         if vertex_idx < vertex_data.vertices.len() {
@@ -519,7 +511,7 @@ impl App {
                         }
                     }
 
-                    if let Err(e) = rrdata.vertex_buffer.update(
+                    if let Err(e) = mesh.vertex_buffer.update(
                         &instance,
                         &rrdevice,
                         &data.rrcommand_pool,
@@ -561,12 +553,12 @@ impl App {
             0,
         ));
 
-        for i in 0..data.model_descriptor_set.rrdata.len() {
+        for i in 0..data.render_resources.meshes.len() {
             rrbind_info.push(RRBindInfo::new(
                 &data.model_pipeline,
                 &data.model_descriptor_set,
-                &data.model_descriptor_set.rrdata[i].vertex_buffer,
-                &data.model_descriptor_set.rrdata[i].index_buffer,
+                &data.render_resources.meshes[i].vertex_buffer,
+                &data.render_resources.meshes[i].index_buffer,
                 0,
                 0,
                 i,
@@ -604,12 +596,12 @@ impl App {
 
         let gltf_mesh_count = data.gltf_model.gltf_data.len();
         for i in 0..gltf_mesh_count {
-            if i >= data.model_descriptor_set.rrdata.len() {
+            if i >= data.render_resources.meshes.len() {
                 break;
             }
 
-            let rrdata = &mut data.model_descriptor_set.rrdata[i];
-            let vertex_data = &mut rrdata.vertex_data;
+            let mesh = &mut data.render_resources.meshes[i];
+            let vertex_data = &mut mesh.vertex_data;
             let gltf_data = &data.gltf_model.gltf_data[i];
 
             for vertex in &gltf_data.vertices {
@@ -663,14 +655,14 @@ impl App {
                 }
             }
 
-            if let Err(e) = rrdata.vertex_buffer.update(
+            if let Err(e) = mesh.vertex_buffer.update(
                 instance,
                 rrdevice,
                 &data.rrcommand_pool,
-                (size_of::<vulkan_data::Vertex>() * rrdata.vertex_data.vertices.len())
+                (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len())
                     as vk::DeviceSize,
-                rrdata.vertex_data.vertices.as_ptr() as *const c_void,
-                rrdata.vertex_data.vertices.len(),
+                mesh.vertex_data.vertices.as_ptr() as *const c_void,
+                mesh.vertex_data.vertices.len(),
             ) {
                 eprintln!("Failed to update vertex buffer: {}", e);
             }
@@ -688,8 +680,8 @@ impl App {
         }
 
         for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
-            if let Some(rrdata) = data.model_descriptor_set.rrdata.get_mut(mesh_idx) {
-                let vertex_data = &mut rrdata.vertex_data;
+            if let Some(mesh) = data.render_resources.meshes.get_mut(mesh_idx) {
+                let vertex_data = &mut mesh.vertex_data;
 
                 if mesh_idx == 0 {
                     static mut VERTEX_BUFFER_LOG_COUNTER: u32 = 0;
@@ -725,7 +717,7 @@ impl App {
                     }
                 }
 
-                if let Err(e) = rrdata.vertex_buffer.update(
+                if let Err(e) = mesh.vertex_buffer.update(
                     instance,
                     rrdevice,
                     &data.rrcommand_pool,
@@ -752,21 +744,24 @@ impl App {
     ) -> Result<()> {
         if let Some(ref accel_struct) = data.raytracing.acceleration_structure {
             let vertex_buffers: Vec<_> = data
-                .model_descriptor_set
-                .rrdata
+                .render_resources
+                .meshes
                 .iter()
-                .map(|rrdata| {
+                .filter(|mesh| mesh.vertex_buffer.buffer != vk::Buffer::null())
+                .map(|mesh| {
                     (
-                        &rrdata.vertex_buffer.buffer,
-                        rrdata.vertex_data.vertices.len() as u32,
+                        &mesh.vertex_buffer.buffer,
+                        mesh.vertex_data.vertices.len() as u32,
                         std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                        &rrdata.index_buffer.buffer,
-                        rrdata.vertex_data.indices.len() as u32,
+                        &mesh.index_buffer.buffer,
+                        mesh.vertex_data.indices.len() as u32,
                     )
                 })
                 .collect();
 
-            accel_struct.update_all(instance, rrdevice, &data.rrcommand_pool, &vertex_buffers)?;
+            if !vertex_buffers.is_empty() {
+                accel_struct.update_all(instance, rrdevice, &data.rrcommand_pool, &vertex_buffers)?;
+            }
         }
 
         Ok(())

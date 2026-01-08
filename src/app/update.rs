@@ -1,6 +1,5 @@
 use crate::app::{App, AppData, GUIData};
 use crate::debugview::*;
-use crate::logger::logger::*;
 use crate::math::*;
 use crate::scene::billboard::BillboardTransform;
 use crate::scene::render_resource::{FrameUBO, MaterialUBO, ObjectUBO};
@@ -234,20 +233,10 @@ impl App {
             eprintln!("Failed to update FrameUBO: {}", e);
         }
 
-        for i in 0..self.data.model_descriptor_set.rrdata.len() {
+        for i in 0..self.data.render_resources.meshes.len() {
             let object_ubo = ObjectUBO { model };
             if let Err(e) = self.data.render_resources.objects.update(&self.rrdevice, image_index, i, &object_ubo) {
                 eprintln!("Failed to update ObjectUBO: {}", e);
-            }
-        }
-
-        for i in 0..self.data.model_descriptor_set.rrdata.len() {
-            let rrdata = &mut self.data.model_descriptor_set.rrdata[i];
-            let name = format!("model[{}]", i);
-            if let Err(e) =
-                rrdata.rruniform_buffers[image_index].update(&self.rrdevice, &ubo, &name)
-            {
-                eprintln!("Failed to update model UBO: {}", e);
             }
         }
 
@@ -554,8 +543,8 @@ impl App {
                 return;
             };
 
-            let rrdata = &mut self.data.model_descriptor_set.rrdata[i];
-            let vertices = &mut rrdata.vertex_data.vertices;
+            let mesh = &mut self.data.render_resources.meshes[i];
+            let vertices = &mut mesh.vertex_data.vertices;
             for i in 0..vertices.len() {
                 vertices[i].pos = gltf_data.vertices[i].position.to_vec3();
             }
@@ -570,7 +559,7 @@ impl App {
                 }
             }
 
-            if let Err(e) = rrdata.vertex_buffer.update(
+            if let Err(e) = mesh.vertex_buffer.update(
                 &self.instance,
                 &self.rrdevice,
                 &self.data.rrcommand_pool,
@@ -589,11 +578,11 @@ impl App {
                         &self.rrdevice,
                         &self.data.rrcommand_pool,
                         blas,
-                        &rrdata.vertex_buffer.buffer,
-                        rrdata.vertex_data.vertices.len() as u32,
+                        &mesh.vertex_buffer.buffer,
+                        mesh.vertex_data.vertices.len() as u32,
                         std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                        &rrdata.index_buffer.buffer,
-                        rrdata.vertex_data.indices.len() as u32,
+                        &mesh.index_buffer.buffer,
+                        mesh.vertex_data.indices.len() as u32,
                     ) {
                         eprintln!("failed to update BLAS: {}", e);
                     }
@@ -619,53 +608,53 @@ impl App {
         rrdevice: &RRDevice,
         data: &mut AppData,
     ) -> Result<()> {
+        data.render_resources.clear_meshes(rrdevice);
+        data.render_resources.mesh_material_ids.clear();
+
         if let Err(e) = Self::load_model(&instance, &rrdevice, data) {
             eprintln!("{:?}", e);
             crate::log!("{:?}", e)
         }
-        println!("reloaded model");
+        crate::log!("reloaded model");
 
-        for i in 0..data.model_descriptor_set.rrdata.len() {
-            let rrdata = &mut data.model_descriptor_set.rrdata[i];
-            rrdata.delete_buffers(rrdevice);
+        for i in 0..data.render_resources.meshes.len() {
+            let mesh = &mut data.render_resources.meshes[i];
 
-            rrdata.vertex_buffer = RRVertexBuffer::new(
+            mesh.vertex_buffer = RRVertexBuffer::new(
                 &instance,
                 &rrdevice,
                 &data.rrcommand_pool,
-                (size_of::<vulkan_data::Vertex>() * rrdata.vertex_data.vertices.len())
+                (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len())
                     as vk::DeviceSize,
-                rrdata.vertex_data.vertices.as_ptr() as *const c_void,
-                rrdata.vertex_data.vertices.len(),
+                mesh.vertex_data.vertices.as_ptr() as *const c_void,
+                mesh.vertex_data.vertices.len(),
             );
 
-            rrdata.index_buffer = RRIndexBuffer::new(
+            mesh.index_buffer = RRIndexBuffer::new(
                 &instance,
                 &rrdevice,
                 &data.rrcommand_pool,
-                (size_of::<u32>() * rrdata.vertex_data.indices.len()) as u64,
-                rrdata.vertex_data.indices.as_ptr() as *const c_void,
-                rrdata.vertex_data.indices.len(),
+                (size_of::<u32>() * mesh.vertex_data.indices.len()) as u64,
+                mesh.vertex_data.indices.as_ptr() as *const c_void,
+                mesh.vertex_data.indices.len(),
             );
 
-            let buffer_name = format!("reload_mesh_{}", i);
-            RRData::create_uniform_buffers(
-                rrdata,
-                &instance,
+            mesh.image_view = create_image_view(
                 &rrdevice,
-                &data.rrswapchain,
-                &buffer_name,
-            );
-
-            rrdata.image_view = create_image_view(
-                &rrdevice,
-                rrdata.image,
+                mesh.image,
                 vk::Format::R8G8B8A8_SRGB,
                 vk::ImageAspectFlags::COLOR,
-                rrdata.mip_level,
+                mesh.mip_level,
             )?;
 
-            rrdata.sampler = create_texture_sampler(&rrdevice, rrdata.mip_level)?;
+            mesh.sampler = create_texture_sampler(&rrdevice, mesh.mip_level)?;
+
+            if i < data.model_descriptor_set.rrdata.len() {
+                data.model_descriptor_set.rrdata[i].image_view = mesh.image_view;
+                data.model_descriptor_set.rrdata[i].sampler = mesh.sampler;
+                data.model_descriptor_set.rrdata[i].vertex_buffer = mesh.vertex_buffer.clone();
+                data.model_descriptor_set.rrdata[i].index_buffer = mesh.index_buffer.clone();
+            }
 
             let material_name = format!("material_{}", i);
             let material_properties = MaterialUBO {
@@ -678,21 +667,19 @@ impl App {
                 instance,
                 rrdevice,
                 &material_name,
-                rrdata.image_view,
-                rrdata.sampler,
+                mesh.image_view,
+                mesh.sampler,
                 material_properties,
             )?;
             data.render_resources.mesh_material_ids.push(material_id);
             crate::log!("Created material {} for mesh {}", material_id, i);
         }
 
-        // Build acceleration structures after model is loaded
         if let Err(e) = Self::build_acceleration_structures(instance, rrdevice, data) {
             eprintln!("Failed to build acceleration structures: {:?}", e);
             crate::log!("Failed to build acceleration structures: {:?}", e);
         }
 
-        // Create Ray Tracing pipelines after AS is built
         if let Err(e) = Self::create_ray_tracing_pipelines(instance, rrdevice, data) {
             eprintln!("Failed to create ray tracing pipelines: {:?}", e);
             crate::log!("Failed to create ray tracing pipelines: {:?}", e);
@@ -976,15 +963,15 @@ impl App {
         }
 
         crate::log!("Vertex buffers (GPU):");
-        for (i, rrdata) in self.data.model_descriptor_set.rrdata.iter().enumerate() {
+        for (i, mesh) in self.data.render_resources.meshes.iter().enumerate() {
             crate::log!(
                 "  Mesh[{}]: {} vertices, {} indices",
                 i,
-                rrdata.vertex_data.vertices.len(),
-                rrdata.vertex_data.indices.len()
+                mesh.vertex_data.vertices.len(),
+                mesh.vertex_data.indices.len()
             );
-            if !rrdata.vertex_data.vertices.is_empty() {
-                let v = &rrdata.vertex_data.vertices[0];
+            if !mesh.vertex_data.vertices.is_empty() {
+                let v = &mesh.vertex_data.vertices[0];
                 crate::log!(
                     "    vertex[0].pos: ({:.2}, {:.2}, {:.2})",
                     v.pos.x,

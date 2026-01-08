@@ -1,24 +1,10 @@
-use crate::app::{App, AppData, GUIData};
-use crate::debugview::*;
-use crate::logger::logger::*;
-use crate::vulkanr::buffer::*;
+use crate::app::{App, GUIData};
 use crate::vulkanr::command::*;
-use crate::vulkanr::data as vulkan_data;
-use crate::vulkanr::data::*;
-use crate::vulkanr::descriptor::*;
-use crate::vulkanr::device::*;
-use crate::vulkanr::image::*;
-use crate::vulkanr::pipeline::*;
-use crate::vulkanr::render::*;
 use crate::vulkanr::vulkan::*;
 
 use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use anyhow::{anyhow, Result};
 use cgmath::{Matrix4, SquareMatrix};
-use std::mem::size_of;
-use std::os::raw::c_void;
-use std::ptr::copy_nonoverlapping as memcpy;
-use vulkanalia::prelude::v1_0::*;
 use winit::window::Window;
 
 impl App {
@@ -224,9 +210,9 @@ impl App {
             crate::log!("=== Cube Position Debug (frame {}) ===", CUBE_DEBUG_COUNTER);
             crate::log!("model_tops from get_cube_top(): {:?}", model_tops);
 
-            if !self.data.model_descriptor_set.rrdata.is_empty() {
-                for (mesh_idx, rrdata) in self.data.model_descriptor_set.rrdata.iter().enumerate() {
-                    if !rrdata.vertex_data.vertices.is_empty() {
+            if !self.data.render_resources.meshes.is_empty() {
+                for (mesh_idx, mesh) in self.data.render_resources.meshes.iter().enumerate() {
+                    if !mesh.vertex_data.vertices.is_empty() {
                         let mut min_x = f32::MAX;
                         let mut max_x = f32::MIN;
                         let mut min_y = f32::MAX;
@@ -234,7 +220,7 @@ impl App {
                         let mut min_z = f32::MAX;
                         let mut max_z = f32::MIN;
 
-                        for v in &rrdata.vertex_data.vertices {
+                        for v in &mesh.vertex_data.vertices {
                             min_x = min_x.min(v.pos.x);
                             max_x = max_x.max(v.pos.x);
                             min_y = min_y.min(v.pos.y);
@@ -262,11 +248,11 @@ impl App {
                             max_y,
                             center_z
                         );
-                        crate::log!("  vertex count: {}", rrdata.vertex_data.vertices.len());
+                        crate::log!("  vertex count: {}", mesh.vertex_data.vertices.len());
                     }
                 }
             } else {
-                crate::log!("model_descriptor_set.rrdata is empty!");
+                crate::log!("render_resources.meshes is empty!");
             }
             crate::log!("=====================================");
         }
@@ -576,12 +562,12 @@ impl App {
         ));
 
         // Model pipeline bindings
-        for i in 0..self.data.model_descriptor_set.rrdata.len() {
+        for i in 0..self.data.render_resources.meshes.len() {
             rrbind_info.push(RRBindInfo::new(
                 &self.data.model_pipeline,
                 &self.data.model_descriptor_set,
-                &self.data.model_descriptor_set.rrdata[i].vertex_buffer,
-                &self.data.model_descriptor_set.rrdata[i].index_buffer,
+                &self.data.render_resources.meshes[i].vertex_buffer,
+                &self.data.render_resources.meshes[i].index_buffer,
                 0,
                 0,
                 i,

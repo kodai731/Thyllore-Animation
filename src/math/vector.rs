@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, MetricSpace, Vector2, Vector3};
+use cgmath::{MetricSpace, Vector2, Vector3};
 use std::ops::{Add, AddAssign, Deref, DerefMut, Mul, Neg};
 
 pub trait ToArray2 {

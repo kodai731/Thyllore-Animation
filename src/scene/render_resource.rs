@@ -1,4 +1,6 @@
+use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::vulkanr::core::device::RRDevice;
+use crate::vulkanr::data::{Vertex, VertexData};
 use crate::vulkanr::resource::buffer::create_buffer;
 use crate::vulkanr::resource::image::RRImage;
 use crate::vulkanr::vulkan::*;
@@ -59,6 +61,72 @@ impl Default for MaterialUBO {
             metallic: 0.0,
             roughness: 0.5,
             _padding: [0.0; 2],
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Mesh {
+    pub vertex_buffer: RRVertexBuffer,
+    pub index_buffer: RRIndexBuffer,
+    pub vertex_data: VertexData,
+    pub image: vk::Image,
+    pub image_memory: vk::DeviceMemory,
+    pub mip_level: u32,
+    pub image_view: vk::ImageView,
+    pub sampler: vk::Sampler,
+    pub render_to_gbuffer: bool,
+}
+
+impl Default for Mesh {
+    fn default() -> Self {
+        Self {
+            vertex_buffer: RRVertexBuffer::default(),
+            index_buffer: RRIndexBuffer::default(),
+            vertex_data: VertexData::default(),
+            image: vk::Image::null(),
+            image_memory: vk::DeviceMemory::null(),
+            mip_level: 0,
+            image_view: vk::ImageView::null(),
+            sampler: vk::Sampler::null(),
+            render_to_gbuffer: true,
+        }
+    }
+}
+
+impl Mesh {
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        if self.image_view != vk::ImageView::null() {
+            rrdevice.device.destroy_image_view(self.image_view, None);
+            self.image_view = vk::ImageView::null();
+        }
+        if self.sampler != vk::Sampler::null() {
+            rrdevice.device.destroy_sampler(self.sampler, None);
+            self.sampler = vk::Sampler::null();
+        }
+        if self.vertex_buffer.buffer != vk::Buffer::null() {
+            rrdevice.device.destroy_buffer(self.vertex_buffer.buffer, None);
+            self.vertex_buffer.buffer = vk::Buffer::null();
+        }
+        if self.vertex_buffer.buffer_memory != vk::DeviceMemory::null() {
+            rrdevice.device.free_memory(self.vertex_buffer.buffer_memory, None);
+            self.vertex_buffer.buffer_memory = vk::DeviceMemory::null();
+        }
+        if self.index_buffer.buffer != vk::Buffer::null() {
+            rrdevice.device.destroy_buffer(self.index_buffer.buffer, None);
+            self.index_buffer.buffer = vk::Buffer::null();
+        }
+        if self.index_buffer.buffer_memory != vk::DeviceMemory::null() {
+            rrdevice.device.free_memory(self.index_buffer.buffer_memory, None);
+            self.index_buffer.buffer_memory = vk::DeviceMemory::null();
+        }
+        if self.image != vk::Image::null() {
+            rrdevice.device.destroy_image(self.image, None);
+            self.image = vk::Image::null();
+        }
+        if self.image_memory != vk::DeviceMemory::null() {
+            rrdevice.device.free_memory(self.image_memory, None);
+            self.image_memory = vk::DeviceMemory::null();
         }
     }
 }
@@ -552,6 +620,7 @@ pub struct RenderResources {
     pub frame_set: FrameDescriptorSet,
     pub materials: MaterialManager,
     pub objects: ObjectDescriptorSet,
+    pub meshes: Vec<Mesh>,
     pub mesh_material_ids: Vec<MaterialId>,
 }
 
@@ -571,12 +640,17 @@ impl RenderResources {
             frame_set,
             materials,
             objects,
+            meshes: Vec::new(),
             mesh_material_ids: Vec::new(),
         })
     }
 
     pub fn get_material_id(&self, mesh_index: usize) -> Option<MaterialId> {
         self.mesh_material_ids.get(mesh_index).copied()
+    }
+
+    pub fn mesh_count(&self) -> usize {
+        self.meshes.len()
     }
 
     pub fn get_layouts(&self) -> [vk::DescriptorSetLayout; 3] {
@@ -594,9 +668,23 @@ impl RenderResources {
         ]
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.frame_set.destroy(device);
-        self.materials.destroy(device);
-        self.objects.destroy(device);
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        for mesh in &mut self.meshes {
+            mesh.destroy(rrdevice);
+        }
+        self.meshes.clear();
+        self.mesh_material_ids.clear();
+
+        self.frame_set.destroy(&rrdevice.device);
+        self.materials.destroy(&rrdevice.device);
+        self.objects.destroy(&rrdevice.device);
+    }
+
+    pub unsafe fn clear_meshes(&mut self, rrdevice: &RRDevice) {
+        for mesh in &mut self.meshes {
+            mesh.destroy(rrdevice);
+        }
+        self.meshes.clear();
+        self.mesh_material_ids.clear();
     }
 }

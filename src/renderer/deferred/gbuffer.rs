@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
+use crate::scene::render_resource::Mesh;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::descriptor::RRDescriptorSet;
 use crate::vulkanr::core::{Device, RRDevice};
@@ -64,7 +65,7 @@ pub struct GBufferPass<'a> {
     gbuffer: &'a RRGBuffer,
     pipeline: &'a RRPipeline,
     descriptor_set: &'a RRDescriptorSet,
-    model_descriptor_set: &'a RRDescriptorSet,
+    meshes: &'a [Mesh],
     device: &'a Device,
 }
 
@@ -81,7 +82,7 @@ impl<'a> GBufferPass<'a> {
             gbuffer,
             pipeline,
             descriptor_set,
-            model_descriptor_set: &app.data.model_descriptor_set,
+            meshes: &app.data.render_resources.meshes,
             device: &app.rrdevice.device,
         })
     }
@@ -179,30 +180,39 @@ impl<'a> GBufferPass<'a> {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        for i in 0..self.model_descriptor_set.rrdata.len() {
-            let model_rrdata = &self.model_descriptor_set.rrdata[i];
+        let rrdata_len = self.descriptor_set.rrdata.len();
+        if rrdata_len == 0 || self.descriptor_set.descriptor_sets.is_empty() {
+            return Ok(());
+        }
 
-            if !model_rrdata.render_to_gbuffer {
+        let mesh_count = self.meshes.len().min(rrdata_len);
+        let swapchain_images_len = self.descriptor_set.descriptor_sets.len() / rrdata_len;
+
+        for i in 0..mesh_count {
+            let mesh = &self.meshes[i];
+
+            if !mesh.render_to_gbuffer {
                 continue;
             }
 
             self.device.cmd_bind_vertex_buffers(
                 command_buffer,
                 0,
-                &[model_rrdata.vertex_buffer.buffer],
+                &[mesh.vertex_buffer.buffer],
                 &[0],
             );
 
             self.device.cmd_bind_index_buffer(
                 command_buffer,
-                model_rrdata.index_buffer.buffer,
+                mesh.index_buffer.buffer,
                 0,
                 vk::IndexType::UINT32,
             );
 
-            let swapchain_images_len = self.descriptor_set.descriptor_sets.len() /
-                self.descriptor_set.rrdata.len().max(1);
             let descriptor_set_index = i * swapchain_images_len + image_index;
+            if descriptor_set_index >= self.descriptor_set.descriptor_sets.len() {
+                continue;
+            }
 
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
@@ -215,7 +225,7 @@ impl<'a> GBufferPass<'a> {
 
             self.device.cmd_draw_indexed(
                 command_buffer,
-                model_rrdata.index_buffer.indices,
+                mesh.index_buffer.indices,
                 1,
                 0,
                 0,

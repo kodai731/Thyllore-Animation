@@ -5,15 +5,9 @@ https://github.com/FizzWizZleDazzle/bevy_mod_fbx/blob/main/src/loader.rs#L217
 use crate::log;
 use crate::math::*;
 use anyhow::{anyhow, Context, Result};
-use cgmath::{Matrix3, Matrix4, Quaternion, Deg, Rad, EuclideanSpace, Point3};
-use fbxcel::tree::v7400::NodeHandle;
+use cgmath::{Matrix3, Matrix4, Quaternion, Rad, EuclideanSpace, Point3};
 use fbxcel_dom::any::AnyDocument;
-use fbxcel_dom::v7400::data::{
-    mesh::{
-        layer::TypedLayerElementHandle, ControlPointIndex, PolygonVertexIndex, PolygonVertices,
-    },
-    texture::WrapMode,
-};
+use fbxcel_dom::v7400::data::mesh::{ControlPointIndex, PolygonVertexIndex, PolygonVertices};
 use fbxcel_dom::v7400::object::property::loaders::{StrictF64Loader, F64Arr3Loader, F64Arr16Loader};
 use fbxcel_dom::v7400::{
     object::{

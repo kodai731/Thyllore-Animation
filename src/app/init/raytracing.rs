@@ -41,7 +41,7 @@ impl App {
             instance,
             rrdevice,
             &data.rrcommand_pool,
-            &data.model_descriptor_set,
+            &data.render_resources.meshes,
         )
     }
 

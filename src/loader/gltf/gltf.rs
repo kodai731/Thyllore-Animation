@@ -1,13 +1,12 @@
 use crate::log;
 use crate::math::*;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use cgmath::{Matrix4, Quaternion, Vector3, Vector4};
 use core::result::Result::Ok;
 use gltf::buffer::Data;
-use gltf::{image, Document, Gltf, Node};
+use gltf::{Document, Node};
 use std::collections::HashMap;
 use std::fs::File;
-use std::ptr::null;
 
 #[derive(Clone, Debug, Default)]
 pub struct GltfModel {

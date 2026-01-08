@@ -3,7 +3,6 @@ use crate::vulkanr::vulkan::*;
 use crate::log;
 use std::collections::HashSet;
 use std::ops::Deref;
-use std::ptr::null;
 use thiserror::Error;
 use vulkanalia::Device as VulkanDevice;
 

@@ -3,18 +3,20 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
 use crate::vulkanr::pipeline::RRPipeline;
-use crate::vulkanr::descriptor::{RRCompositeDescriptorSet, RRDescriptorSet, RRBillboardDescriptorSet};
+use crate::vulkanr::descriptor::{RRCompositeDescriptorSet, RRBillboardDescriptorSet};
 use crate::vulkanr::buffer::{RRVertexBuffer, RRIndexBuffer};
 use crate::vulkanr::core::Device;
 use crate::debugview::{DebugViewMode, gizmo::{GridGizmoData, LightGizmoData}};
+use crate::scene::render_resource::RenderResources;
 
 pub struct CompositePass<'a> {
     composite_pipeline: &'a RRPipeline,
     composite_descriptor: &'a RRCompositeDescriptorSet,
     grid_pipeline: &'a RRPipeline,
-    grid_descriptor_set: &'a RRDescriptorSet,
     grid_vertex_buffer: &'a RRVertexBuffer,
     grid_index_buffer: &'a RRIndexBuffer,
+    grid_object_index: usize,
+    render_resources: &'a RenderResources,
     gizmo_data: &'a GridGizmoData,
     light_gizmo_data: &'a LightGizmoData,
     billboard_pipeline: &'a RRPipeline,
@@ -35,9 +37,10 @@ impl<'a> CompositePass<'a> {
             composite_pipeline,
             composite_descriptor,
             grid_pipeline: &app.data.grid.pipeline,
-            grid_descriptor_set: &app.data.grid.descriptor_set,
             grid_vertex_buffer: &app.data.grid.vertex_buffer,
             grid_index_buffer: &app.data.grid.index_buffer,
+            grid_object_index: app.data.grid.object_index,
+            render_resources: &app.data.render_resources,
             gizmo_data: &app.data.gizmo_data,
             light_gizmo_data: &app.data.light_gizmo_data,
             billboard_pipeline: &app.data.billboard.pipeline,
@@ -59,18 +62,20 @@ impl<'a> CompositePass<'a> {
         self.draw_composite(command_buffer)?;
         self.draw_grid(command_buffer, image_index)?;
         self.draw_gizmo(command_buffer, image_index)?;
-        self.light_gizmo_data.draw_ray_to_model(
+        self.light_gizmo_data.draw_ray_to_model_with_resources(
             self.device,
             command_buffer,
             self.grid_pipeline,
-            self.grid_descriptor_set,
+            self.render_resources,
+            self.grid_object_index,
             image_index,
         );
-        self.light_gizmo_data.draw_vertical_lines(
+        self.light_gizmo_data.draw_vertical_lines_with_resources(
             self.device,
             command_buffer,
             self.grid_pipeline,
-            self.grid_descriptor_set,
+            self.render_resources,
+            self.grid_object_index,
             image_index,
         );
         self.draw_billboard(command_buffer, image_index)?;
@@ -197,14 +202,24 @@ impl<'a> CompositePass<'a> {
             vk::IndexType::UINT32,
         );
 
-        let descriptor_set_index = image_index;
-
+        let frame_set = self.render_resources.frame_set.sets[image_index];
         self.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
             self.grid_pipeline.pipeline_layout,
             0,
-            &[self.grid_descriptor_set.descriptor_sets[descriptor_set_index]],
+            &[frame_set],
+            &[],
+        );
+
+        let object_set_idx = self.render_resources.objects.get_set_index(image_index, self.grid_object_index);
+        let object_set = self.render_resources.objects.sets[object_set_idx];
+        self.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            self.grid_pipeline.pipeline_layout,
+            2,
+            &[object_set],
             &[],
         );
 
@@ -246,16 +261,24 @@ impl<'a> CompositePass<'a> {
                 vk::IndexType::UINT32,
             );
 
-            let swapchain_images_len = self.gizmo_data.descriptor_set.descriptor_sets.len() /
-                self.gizmo_data.descriptor_set.rrdata.len().max(1);
-            let descriptor_set_index = 0 * swapchain_images_len + image_index;
-
+            let frame_set = self.render_resources.frame_set.sets[image_index];
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
                 self.gizmo_data.pipeline.pipeline_layout,
                 0,
-                &[self.gizmo_data.descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[frame_set],
+                &[],
+            );
+
+            let object_set_idx = self.render_resources.objects.get_set_index(image_index, self.gizmo_data.object_index);
+            let object_set = self.render_resources.objects.sets[object_set_idx];
+            self.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.gizmo_data.pipeline.pipeline_layout,
+                2,
+                &[object_set],
                 &[],
             );
 
@@ -298,16 +321,24 @@ impl<'a> CompositePass<'a> {
                 vk::IndexType::UINT32,
             );
 
-            let swapchain_images_len = self.light_gizmo_data.descriptor_set.descriptor_sets.len() /
-                self.light_gizmo_data.descriptor_set.rrdata.len().max(1);
-            let descriptor_set_index = 1 * swapchain_images_len + image_index;
-
+            let frame_set = self.render_resources.frame_set.sets[image_index];
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
                 self.light_gizmo_data.pipeline.pipeline_layout,
                 0,
-                &[self.light_gizmo_data.descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[frame_set],
+                &[],
+            );
+
+            let object_set_idx = self.render_resources.objects.get_set_index(image_index, self.light_gizmo_data.object_index);
+            let object_set = self.render_resources.objects.sets[object_set_idx];
+            self.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.light_gizmo_data.pipeline.pipeline_layout,
+                2,
+                &[object_set],
                 &[],
             );
 

@@ -8,7 +8,7 @@ use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::data::{self as vulkan_data, SceneUniformData};
 use crate::vulkanr::descriptor::{
-    RRDescriptorSet, RRRayQueryDescriptorSet, RRCompositeDescriptorSet, RRBillboardDescriptorSet
+    RRRayQueryDescriptorSet, RRCompositeDescriptorSet, RRBillboardDescriptorSet
 };
 use crate::vulkanr::image::create_texture_sampler;
 use crate::vulkanr::pipeline::{PipelineBuilder, RRPipeline, VertexInputConfig, PushConstantConfig};
@@ -21,7 +21,6 @@ use crate::vulkanr::swapchain::RRSwapchain;
 pub struct RayTracingData {
     pub gbuffer: Option<RRGBuffer>,
     pub gbuffer_pipeline: Option<RRPipeline>,
-    pub gbuffer_descriptor_set: Option<RRDescriptorSet>,
     pub gbuffer_sampler: Option<vk::Sampler>,
 
     pub acceleration_structure: Option<RRAccelerationStructure>,
@@ -132,18 +131,18 @@ impl RayTracingData {
         rrdevice: &RRDevice,
         rrswapchain: &RRSwapchain,
         rrrender: &RRRender,
-        model_descriptor_set: &RRDescriptorSet,
+        render_resources: &RenderResources,
         billboard_descriptor_set: &mut RRBillboardDescriptorSet,
     ) -> Result<()> {
         crate::log!("create_pipelines: starting...");
         crate::log!("create_pipelines: gbuffer is_some: {}", self.gbuffer.is_some());
         crate::log!("create_pipelines: acceleration_structure is_some: {}", self.acceleration_structure.is_some());
 
-        let mut gbuffer_desc = RRDescriptorSet::new(rrdevice, rrswapchain);
-        for rrdata in &model_descriptor_set.rrdata {
-            gbuffer_desc.rrdata.push(rrdata.clone());
-        }
-        RRDescriptorSet::create_descriptor_set(rrdevice, rrswapchain, &mut gbuffer_desc)?;
+        let render_layouts = [
+            render_resources.frame_set.layout,
+            render_resources.materials.layout,
+            render_resources.objects.layout,
+        ];
 
         let gbuffer_pipeline = PipelineBuilder::new(
             "assets/shaders/gbufferVert.spv",
@@ -155,10 +154,9 @@ impl RayTracingData {
         .custom_render_pass(rrrender.gbuffer_render_pass)
         .mrt_attachments(3)
         .msaa_samples(vk::SampleCountFlags::_1)
-        .descriptor_layouts(vec![gbuffer_desc.descriptor_set_layout])
+        .descriptor_layouts(render_layouts.to_vec())
         .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))?;
 
-        self.gbuffer_descriptor_set = Some(gbuffer_desc);
         self.gbuffer_pipeline = Some(gbuffer_pipeline);
         log::info!("Created G-Buffer descriptor set and pipeline");
 

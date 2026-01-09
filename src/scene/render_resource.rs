@@ -76,6 +76,7 @@ pub struct Mesh {
     pub image_view: vk::ImageView,
     pub sampler: vk::Sampler,
     pub render_to_gbuffer: bool,
+    pub object_index: usize,
 }
 
 impl Default for Mesh {
@@ -90,6 +91,7 @@ impl Default for Mesh {
             image_view: vk::ImageView::null(),
             sampler: vk::Sampler::null(),
             render_to_gbuffer: true,
+            object_index: 0,
         }
     }
 }
@@ -470,6 +472,7 @@ pub struct ObjectDescriptorSet {
     pub buffers: Vec<vk::Buffer>,
     pub buffer_memories: Vec<vk::DeviceMemory>,
     pub max_objects: usize,
+    next_slot: usize,
 }
 
 impl ObjectDescriptorSet {
@@ -506,6 +509,7 @@ impl ObjectDescriptorSet {
             buffers,
             buffer_memories,
             max_objects,
+            next_slot: 0,
         };
         object_set.write_descriptor_sets(rrdevice, swapchain_image_count);
 
@@ -574,6 +578,16 @@ impl ObjectDescriptorSet {
 
     pub fn get_set_index(&self, image_index: usize, object_index: usize) -> usize {
         image_index * self.max_objects + object_index
+    }
+
+    pub fn allocate_slot(&mut self) -> usize {
+        let slot = self.next_slot;
+        self.next_slot += 1;
+        slot
+    }
+
+    pub fn get_next_slot(&self) -> usize {
+        self.next_slot
     }
 
     pub unsafe fn update(

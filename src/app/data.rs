@@ -9,11 +9,9 @@ use crate::platform::ImguiData;
 use crate::scene::billboard::BillboardData;
 use crate::scene::grid::GridData;
 use crate::scene::raytracing::RayTracingData;
-use crate::scene::render_resource::{MaterialId, RenderResources};
+use crate::scene::render_resource::RenderResources;
 use crate::scene::Camera;
-use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
-use crate::vulkanr::descriptor::*;
 use crate::vulkanr::pipeline::*;
 use crate::vulkanr::render::*;
 use crate::vulkanr::swapchain::*;
@@ -38,7 +36,6 @@ pub struct AppData {
     pub rrcommand_pool: Rc<RRCommandPool>,
     pub rrcommand_buffer: RRCommandBuffer,
     pub model_pipeline: RRPipeline,
-    pub model_descriptor_set: RRDescriptorSet,
     pub render_resources: RenderResources,
     pub grid: GridData,
     pub gizmo_data: GridGizmoData,

@@ -62,7 +62,7 @@ pub enum LightGizmoAxis {
 #[derive(Clone, Debug)]
 pub struct LightGizmoData {
     pub pipeline: RRPipeline,
-    pub descriptor_set: RRDescriptorSet,
+    pub object_index: usize,
     pub position: Vector3<f32>,
     pub vertices: Vec<GizmoVertex>,
     pub indices: Vec<u32>,
@@ -152,7 +152,7 @@ impl LightGizmoData {
 
         Self {
             pipeline: RRPipeline::default(),
-            descriptor_set: RRDescriptorSet::default(),
+            object_index: 0,
             position,
             vertices,
             indices,
@@ -1027,6 +1027,128 @@ impl LightGizmoData {
                 grid_pipeline.pipeline_layout,
                 0,
                 &[grid_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[],
+            );
+
+            device.cmd_draw_indexed(
+                command_buffer,
+                self.vertical_line_indices.len() as u32,
+                1,
+                0,
+                0,
+                0,
+            );
+        }
+    }
+
+    pub unsafe fn draw_ray_to_model_with_resources(
+        &self,
+        device: &Device,
+        command_buffer: vk::CommandBuffer,
+        grid_pipeline: &RRPipeline,
+        render_resources: &crate::scene::render_resource::RenderResources,
+        object_index: usize,
+        image_index: usize,
+    ) {
+        if let (Some(vertex_buffer), Some(index_buffer)) = (
+            self.ray_to_model_vertex_buffer,
+            self.ray_to_model_index_buffer,
+        ) {
+            device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                grid_pipeline.pipeline,
+            );
+
+            device.cmd_set_line_width(command_buffer, 1.0);
+
+            device.cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
+
+            device.cmd_bind_index_buffer(command_buffer, index_buffer, 0, vk::IndexType::UINT32);
+
+            let frame_set = render_resources.frame_set.sets[image_index];
+            device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                grid_pipeline.pipeline_layout,
+                0,
+                &[frame_set],
+                &[],
+            );
+
+            let object_set_idx = render_resources.objects.get_set_index(image_index, object_index);
+            let object_set = render_resources.objects.sets[object_set_idx];
+            device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                grid_pipeline.pipeline_layout,
+                2,
+                &[object_set],
+                &[],
+            );
+
+            device.cmd_draw_indexed(
+                command_buffer,
+                self.ray_to_model_indices.len() as u32,
+                1,
+                0,
+                0,
+                0,
+            );
+        }
+    }
+
+    pub unsafe fn draw_vertical_lines_with_resources(
+        &self,
+        device: &Device,
+        command_buffer: vk::CommandBuffer,
+        grid_pipeline: &RRPipeline,
+        render_resources: &crate::scene::render_resource::RenderResources,
+        object_index: usize,
+        image_index: usize,
+    ) {
+        if self.vertical_line_indices.is_empty() {
+            return;
+        }
+
+        if self.vertical_line_vertex_buffer.is_none() || self.vertical_line_index_buffer.is_none() {
+            return;
+        }
+
+        if let (Some(vertex_buffer), Some(index_buffer)) = (
+            self.vertical_line_vertex_buffer,
+            self.vertical_line_index_buffer,
+        ) {
+            device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                grid_pipeline.pipeline,
+            );
+
+            device.cmd_set_line_width(command_buffer, 1.0);
+
+            device.cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
+
+            device.cmd_bind_index_buffer(command_buffer, index_buffer, 0, vk::IndexType::UINT32);
+
+            let frame_set = render_resources.frame_set.sets[image_index];
+            device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                grid_pipeline.pipeline_layout,
+                0,
+                &[frame_set],
+                &[],
+            );
+
+            let object_set_idx = render_resources.objects.get_set_index(image_index, object_index);
+            let object_set = render_resources.objects.sets[object_set_idx];
+            device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                grid_pipeline.pipeline_layout,
+                2,
+                &[object_set],
                 &[],
             );
 

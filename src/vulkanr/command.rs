@@ -303,4 +303,26 @@ impl<'a> RRBindInfo<'a> {
             material_id: Some(material_id),
         }
     }
+
+    pub unsafe fn with_render_resources_no_material(
+        rrpipeline: &'a RRPipeline,
+        rrdescriptor_set: &'a RRDescriptorSet,
+        rrvertex_buffer: &'a RRVertexBuffer,
+        rrindex_buffer: &'a RRIndexBuffer,
+        render_resources: &'a RenderResources,
+        object_index: usize,
+    ) -> Self {
+        Self {
+            rrpipeline,
+            rrdescriptor_set,
+            rrvertex_buffer,
+            rrindex_buffer,
+            offset_vertex: 0,
+            offset_index: 0,
+            data_index: 0,
+            render_resources: Some(render_resources),
+            object_index,
+            material_id: None,
+        }
+    }
 }

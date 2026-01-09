@@ -12,11 +12,6 @@ impl App {
             crate::log!("Destroyed G-Buffer sampler");
         }
 
-        if let Some(mut gbuffer_descriptor) = self.data.raytracing.gbuffer_descriptor_set.take() {
-            gbuffer_descriptor.destroy(&self.rrdevice.device);
-            crate::log!("Destroyed G-Buffer descriptor set");
-        }
-
         if let Some(gbuffer_pipeline) = self.data.raytracing.gbuffer_pipeline.take() {
             gbuffer_pipeline.destroy(&self.rrdevice.device);
             crate::log!("Destroyed G-Buffer pipeline");

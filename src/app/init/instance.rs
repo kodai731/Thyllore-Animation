@@ -110,9 +110,6 @@ impl App {
             &data.rrswapchain,
             &data.rrcommand_pool.borrow_mut(),
         );
-        data.model_descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
-        data.grid.descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
-
         let swapchain_image_count = data.rrswapchain.swapchain_images.len();
         let max_materials = 32;
         let max_objects = 64;
@@ -136,11 +133,11 @@ impl App {
             vk::PolygonMode::FILL,
             vk::CullModeFlags::BACK,
         );
-        data.grid.pipeline = RRPipeline::new(
+        data.grid.pipeline = RRPipeline::new_with_render_resources(
             &rrdevice,
             &data.rrswapchain,
             &data.rrrender,
-            &data.grid.descriptor_set,
+            &render_layouts,
             "assets/shaders/gridVert.spv",
             "assets/shaders/gridFrag.spv",
             vk::PrimitiveTopology::LINE_LIST,
@@ -149,24 +146,9 @@ impl App {
         );
 
         data.gizmo_data = GridGizmoData::new();
-        data.gizmo_data.descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
-
-        data.gizmo_data.descriptor_set
-            .rrdata
-            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "gizmo_grid"));
-
-        data.gizmo_data.descriptor_set
-            .rrdata
-            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "gizmo_light"));
-
-        if let Err(e) = RRDescriptorSet::create_descriptor_set(
-            &rrdevice,
-            &data.rrswapchain,
-            &mut data.gizmo_data.descriptor_set,
-        ) {
-            eprintln!("failed to create gizmo descriptor set: {:?}", e);
-        }
-        println!("created gizmo descriptor set");
+        data.gizmo_data.object_index = data.render_resources.objects.allocate_slot();
+        crate::log!("Allocated object_index {} for Gizmo", data.gizmo_data.object_index);
+        println!("allocated gizmo object_index");
 
         data.gizmo_data.pipeline = PipelineBuilder::new("assets/shaders/gizmoVert.spv", "assets/shaders/gizmoFrag.spv")
             .vertex_input(VertexInputConfig::Custom {
@@ -177,16 +159,17 @@ impl App {
             .polygon_mode(vk::PolygonMode::LINE)
             .no_depth_test()
             .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
-            .descriptor_layouts(vec![data.gizmo_data.descriptor_set.descriptor_set_layout])
+            .descriptor_layouts(render_layouts.to_vec())
             .build(&rrdevice, &data.rrrender, Some(data.rrswapchain.swapchain_extent))
             .expect("Failed to create gizmo pipeline");
 
-        data.light_gizmo_data.pipeline = data.gizmo_data.pipeline.clone();
-        data.light_gizmo_data.descriptor_set = data.gizmo_data.descriptor_set.clone();
         data.gizmo_data.create_buffers(&instance, &rrdevice, &data.rrcommand_pool)
             .expect("Failed to create gizmo buffers");
 
         data.light_gizmo_data = LightGizmoData::new(data.rt_debug_state.light_position);
+        data.light_gizmo_data.pipeline = data.gizmo_data.pipeline.clone();
+        data.light_gizmo_data.object_index = data.render_resources.objects.allocate_slot();
+        crate::log!("Allocated object_index {} for LightGizmo", data.light_gizmo_data.object_index);
         data.light_gizmo_data.create_buffers(&instance, &rrdevice, &data.rrcommand_pool)
             .expect("Failed to create light gizmo buffers");
 
@@ -276,47 +259,11 @@ impl App {
         );
         println!("created grid index buffer");
 
-        data.grid.descriptor_set
-            .rrdata
-            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "grid"));
-        println!("created grid uniform buffers");
+        data.grid.object_index = data.render_resources.objects.allocate_slot();
+        crate::log!("Allocated object_index {} for Grid", data.grid.object_index);
+        println!("allocated grid object_index");
 
-        data.grid.descriptor_set
-            .rrdata
-            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "light_ray"));
-        println!("created light ray uniform buffers");
-
-        // let grid_rrdata = &mut data.grid_descriptor_set.rrdata[0];
-        // grid_rrdata.image_view = create_image_view(
-        //     &rrdevice,
-        //     data.texture_images[0],
-        //     vk::Format::R8G8B8A8_SRGB,
-        //     vk::ImageAspectFlags::COLOR,
-        //     data.mip_levels[0],
-        // )?;
-        // data.grid_descriptor_set.rrdata.sampler =
-        //     create_texture_sampler(&rrdevice, data.mip_levels[0])?;
-
-        if let Err(e) = RRDescriptorSet::create_descriptor_set(
-            &rrdevice,
-            &data.rrswapchain,
-            &mut data.model_descriptor_set,
-        ) {
-            eprintln!("failed to create model descriptor set: {:?}", e);
-        };
-        println!("created model descriptor set");
-        if let Err(e) = RRDescriptorSet::create_descriptor_set(
-            &rrdevice,
-            &data.rrswapchain,
-            &mut data.grid.descriptor_set,
-        ) {
-            eprintln!("failed to create grid descriptor set: {:?}", e);
-        }
-        println!("created grid descriptor set");
-        let offset_vertex = (data.grid.vertices.len()) as u32;
-        let offset_index = (data.grid.indices.len()) as u32;
         data.rrcommand_buffer = RRCommandBuffer::new(&data.rrcommand_pool);
-
         if let Err(e) = RRCommandBuffer::allocate_command_buffers(
             &rrdevice,
             &data.rrrender,
@@ -324,47 +271,7 @@ impl App {
         ) {
             eprintln!("failed to allocate command buffers: {:?}", e);
         }
-        let mut rrbind_info = Vec::new();
-        rrbind_info.push(RRBindInfo::new(
-            &data.grid.pipeline,
-            &data.grid.descriptor_set,
-            &data.grid.vertex_buffer,
-            &data.grid.index_buffer,
-            0,
-            0,
-            0,
-        ));
-
-        for i in 0..data.render_resources.meshes.len() {
-            if let Some(material_id) = data.render_resources.get_material_id(i) {
-                rrbind_info.push(RRBindInfo::with_render_resources(
-                    &data.model_pipeline,
-                    &data.model_descriptor_set,
-                    &data.render_resources.meshes[i].vertex_buffer,
-                    &data.render_resources.meshes[i].index_buffer,
-                    &data.render_resources,
-                    i,
-                    material_id,
-                ));
-            }
-        }
-
-        for i in 0..data.rrrender.framebuffers.len() {
-            for j in 0..rrbind_info.len() {
-                if let Err(e) = RRCommandBuffer::bind_command(
-                    &rrdevice,
-                    &data.rrrender,
-                    &data.rrswapchain,
-                    &rrbind_info,
-                    &mut data.rrcommand_buffer,
-                    i,
-                ) {
-                    eprintln!("failed to create command buffers: {:?}", e);
-                }
-            }
-        }
-
-        println!("created command buffer");
+        println!("created command buffers");
 
         let _ = Self::create_sync_objects(&rrdevice.device, &mut data)?;
         println!("created sync objects");

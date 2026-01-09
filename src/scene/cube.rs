@@ -20,6 +20,7 @@ pub struct CubeModel {
     pub indices: Vec<u32>,
     pub rrdata: Option<RRData>,
     pub descriptor_set: Option<RRDescriptorSet>,
+    pub object_index: usize,
 }
 
 impl CubeModel {
@@ -110,6 +111,7 @@ impl CubeModel {
             indices,
             rrdata: None,
             descriptor_set: None,
+            object_index: 0,
         }
     }
 

@@ -543,87 +543,132 @@ impl App {
         );
     }
 
-    pub unsafe fn record_3d_rendering(
-        &self,
-        command_buffer: vk::CommandBuffer,
-        image_index: usize,
-    ) -> Result<()> {
-        // This is the existing rendering logic from bind_command
-        let mut rrbind_info = Vec::new();
+    unsafe fn render_grid(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
+        self.rrdevice.device.cmd_bind_pipeline(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            self.data.grid.pipeline.pipeline,
+        );
 
-        rrbind_info.push(RRBindInfo::new(
-            &self.data.grid.pipeline,
-            &self.data.grid.descriptor_set,
-            &self.data.grid.vertex_buffer,
-            &self.data.grid.index_buffer,
-            0,
-            0,
-            0,
-        ));
+        self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
 
-        // Model pipeline bindings
+        self.rrdevice.device.cmd_bind_vertex_buffers(
+            command_buffer,
+            0,
+            &[self.data.grid.vertex_buffer.buffer],
+            &[0],
+        );
+
+        self.rrdevice.device.cmd_bind_index_buffer(
+            command_buffer,
+            self.data.grid.index_buffer.buffer,
+            0,
+            vk::IndexType::UINT32,
+        );
+
+        let frame_set = self.data.render_resources.frame_set.sets[image_index];
+        self.rrdevice.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            self.data.grid.pipeline.pipeline_layout,
+            0,
+            &[frame_set],
+            &[],
+        );
+
+        let object_set_idx = self.data.render_resources.objects.get_set_index(image_index, self.data.grid.object_index);
+        let object_set = self.data.render_resources.objects.sets[object_set_idx];
+        self.rrdevice.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            self.data.grid.pipeline.pipeline_layout,
+            2,
+            &[object_set],
+            &[],
+        );
+
+        self.rrdevice.device.cmd_draw_indexed(
+            command_buffer,
+            self.data.grid.index_buffer.indices,
+            1,
+            0,
+            0,
+            0,
+        );
+    }
+
+    unsafe fn render_models(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
         for i in 0..self.data.render_resources.meshes.len() {
-            rrbind_info.push(RRBindInfo::new(
-                &self.data.model_pipeline,
-                &self.data.model_descriptor_set,
-                &self.data.render_resources.meshes[i].vertex_buffer,
-                &self.data.render_resources.meshes[i].index_buffer,
-                0,
-                0,
-                i,
-            ));
-        }
+            let mesh = &self.data.render_resources.meshes[i];
 
-        // Execute all bind commands
-        for bind_info in &rrbind_info {
             self.rrdevice.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                bind_info.rrpipeline.pipeline,
+                self.data.model_pipeline.pipeline,
             );
 
-            // すべてのパイプラインで線幅を設定（RRPipeline::new()はすべてLINE_WIDTHをdynamic stateに含む）
-            // パイプラインバインド直後に設定（Vulkanのベストプラクティス）
             self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
 
             self.rrdevice.device.cmd_bind_vertex_buffers(
                 command_buffer,
                 0,
-                &[bind_info.rrvertex_buffer.buffer],
+                &[mesh.vertex_buffer.buffer],
                 &[0],
             );
 
             self.rrdevice.device.cmd_bind_index_buffer(
                 command_buffer,
-                bind_info.rrindex_buffer.buffer,
+                mesh.index_buffer.buffer,
                 0,
                 vk::IndexType::UINT32,
             );
 
-            let swapchain_images_len = bind_info.rrdescriptor_set.descriptor_sets.len()
-                / bind_info.rrdescriptor_set.rrdata.len().max(1);
-            let descriptor_set_index = bind_info.data_index * swapchain_images_len + image_index;
-
+            let frame_set = self.data.render_resources.frame_set.sets[image_index];
             self.rrdevice.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                bind_info.rrpipeline.pipeline_layout,
+                self.data.model_pipeline.pipeline_layout,
                 0,
-                &[bind_info.rrdescriptor_set.descriptor_sets[descriptor_set_index]],
+                &[frame_set],
+                &[],
+            );
+
+            if let Some(material_id) = self.data.render_resources.get_material_id(i) {
+                if let Some(material) = self.data.render_resources.materials.get(material_id) {
+                    self.rrdevice.device.cmd_bind_descriptor_sets(
+                        command_buffer,
+                        vk::PipelineBindPoint::GRAPHICS,
+                        self.data.model_pipeline.pipeline_layout,
+                        1,
+                        &[material.descriptor_set],
+                        &[],
+                    );
+                }
+            }
+
+            let object_set_idx = self.data.render_resources.objects.get_set_index(image_index, mesh.object_index);
+            let object_set = self.data.render_resources.objects.sets[object_set_idx];
+            self.rrdevice.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.data.model_pipeline.pipeline_layout,
+                2,
+                &[object_set],
                 &[],
             );
 
             self.rrdevice.device.cmd_draw_indexed(
                 command_buffer,
-                bind_info.rrindex_buffer.indices,
+                mesh.index_buffer.indices,
                 1,
-                bind_info.offset_index,
-                bind_info.offset_index as i32,
+                0,
+                0,
                 0,
             );
         }
+    }
 
-        // Gizmoの描画（常に最後に描画して、他のオブジェクトの上に表示）
+    unsafe fn render_gizmo(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
         if let (Some(vertex_buffer), Some(index_buffer)) = (
             self.data.gizmo_data.vertex_buffer,
             self.data.gizmo_data.index_buffer,
@@ -636,9 +681,7 @@ impl App {
 
             self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
 
-            self.rrdevice
-                .device
-                .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
+            self.rrdevice.device.cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
             self.rrdevice.device.cmd_bind_index_buffer(
                 command_buffer,
@@ -647,16 +690,26 @@ impl App {
                 vk::IndexType::UINT32,
             );
 
-            let swapchain_images_len = self.data.gizmo_data.descriptor_set.descriptor_sets.len()
-                / self.data.gizmo_data.descriptor_set.rrdata.len().max(1);
-            let descriptor_set_index = 0 * swapchain_images_len + image_index;
-
+            let frame_set = self.data.render_resources.frame_set.sets[image_index];
             self.rrdevice.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
                 self.data.gizmo_data.pipeline.pipeline_layout,
                 0,
-                &[self.data.gizmo_data.descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[frame_set],
+                &[],
+            );
+
+            let object_set_idx = self.data.render_resources.objects.get_set_index(
+                image_index, self.data.gizmo_data.object_index
+            );
+            let object_set = self.data.render_resources.objects.sets[object_set_idx];
+            self.rrdevice.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.data.gizmo_data.pipeline.pipeline_layout,
+                2,
+                &[object_set],
                 &[],
             );
 
@@ -669,7 +722,9 @@ impl App {
                 0,
             );
         }
+    }
 
+    unsafe fn render_light_gizmo(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
         if let (Some(vertex_buffer), Some(index_buffer)) = (
             self.data.light_gizmo_data.vertex_buffer,
             self.data.light_gizmo_data.index_buffer,
@@ -682,9 +737,7 @@ impl App {
 
             self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
 
-            self.rrdevice
-                .device
-                .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
+            self.rrdevice.device.cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
             self.rrdevice.device.cmd_bind_index_buffer(
                 command_buffer,
@@ -693,27 +746,26 @@ impl App {
                 vk::IndexType::UINT32,
             );
 
-            let swapchain_images_len = self
-                .data
-                .light_gizmo_data
-                .descriptor_set
-                .descriptor_sets
-                .len()
-                / self
-                    .data
-                    .light_gizmo_data
-                    .descriptor_set
-                    .rrdata
-                    .len()
-                    .max(1);
-            let descriptor_set_index = 1 * swapchain_images_len + image_index;
-
+            let frame_set = self.data.render_resources.frame_set.sets[image_index];
             self.rrdevice.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
                 self.data.light_gizmo_data.pipeline.pipeline_layout,
                 0,
-                &[self.data.light_gizmo_data.descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[frame_set],
+                &[],
+            );
+
+            let object_set_idx = self.data.render_resources.objects.get_set_index(
+                image_index, self.data.light_gizmo_data.object_index
+            );
+            let object_set = self.data.render_resources.objects.sets[object_set_idx];
+            self.rrdevice.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.data.light_gizmo_data.pipeline.pipeline_layout,
+                2,
+                &[object_set],
                 &[],
             );
 
@@ -726,6 +778,18 @@ impl App {
                 0,
             );
         }
+    }
+
+    pub unsafe fn record_3d_rendering(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+    ) -> Result<()> {
+        self.render_grid(command_buffer, image_index);
+        self.render_models(command_buffer, image_index);
+
+        self.render_gizmo(command_buffer, image_index);
+        self.render_light_gizmo(command_buffer, image_index);
 
         Ok(())
     }

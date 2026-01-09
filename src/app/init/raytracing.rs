@@ -55,7 +55,7 @@ impl App {
             rrdevice,
             &data.rrswapchain,
             &data.rrrender,
-            &data.model_descriptor_set,
+            &data.render_resources,
             &mut data.billboard.descriptor_set,
         )
     }

@@ -1,8 +1,6 @@
 use crate::app::AppData;
 use crate::scene::CubeModel;
 use crate::vulkanr::data as vulkan_data;
-use crate::vulkanr::data::*;
-use crate::vulkanr::descriptor::RRDescriptorSet;
 use crate::vulkanr::device::*;
 use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::vulkan::*;
@@ -19,11 +17,6 @@ pub unsafe fn cleanup_model_resources(rrdevice: &RRDevice, data: &mut AppData) {
         crate::log!("Destroyed acceleration structure");
     }
     data.raytracing.acceleration_structure = None;
-
-    if let Some(ref mut gbuffer_desc) = data.raytracing.gbuffer_descriptor_set {
-        gbuffer_desc.rrdata.clear();
-        crate::log!("Cleared gbuffer_descriptor_set.rrdata (shared handles, no delete)");
-    }
 
     data.render_resources.clear_meshes(rrdevice);
     data.render_resources.mesh_material_ids.clear();
@@ -90,25 +83,6 @@ pub unsafe fn replace_model_with_cube(
 
     let mut cube = CubeModel::new_at_position(size, position);
     cube.initialize_gpu_resources(instance, rrdevice, &data.rrswapchain, &data.rrcommand_pool)?;
-
-    if let Some(ref rrdata) = cube.rrdata {
-        data.model_descriptor_set.rrdata.push(rrdata.clone());
-    }
-
-    RRDescriptorSet::create_descriptor_set(
-        rrdevice,
-        &data.rrswapchain,
-        &mut data.model_descriptor_set,
-    )?;
-    crate::log!("Updated model_descriptor_set with new cube data");
-
-    if let Some(ref mut gbuffer_desc) = data.raytracing.gbuffer_descriptor_set {
-        for rrdata in &data.model_descriptor_set.rrdata {
-            gbuffer_desc.rrdata.push(rrdata.clone());
-        }
-        RRDescriptorSet::create_descriptor_set(rrdevice, &data.rrswapchain, gbuffer_desc)?;
-        crate::log!("Updated gbuffer_descriptor_set with new model data");
-    }
 
     rebuild_acceleration_structures(instance, rrdevice, data)?;
 

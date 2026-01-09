@@ -2,9 +2,8 @@ use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
-use crate::scene::render_resource::Mesh;
+use crate::scene::render_resource::{Mesh, RenderResources};
 use crate::vulkanr::pipeline::RRPipeline;
-use crate::vulkanr::descriptor::RRDescriptorSet;
 use crate::vulkanr::core::{Device, RRDevice};
 use crate::vulkanr::resource::{RRGBuffer, create_image, create_image_view};
 use crate::vulkanr::render::RRRender;
@@ -64,7 +63,7 @@ pub unsafe fn create_gbuffer_framebuffer(
 pub struct GBufferPass<'a> {
     gbuffer: &'a RRGBuffer,
     pipeline: &'a RRPipeline,
-    descriptor_set: &'a RRDescriptorSet,
+    render_resources: &'a RenderResources,
     meshes: &'a [Mesh],
     device: &'a Device,
 }
@@ -75,13 +74,11 @@ impl<'a> GBufferPass<'a> {
             .ok_or_else(|| anyhow!("G-Buffer not initialized"))?;
         let pipeline = app.data.raytracing.gbuffer_pipeline.as_ref()
             .ok_or_else(|| anyhow!("G-Buffer pipeline not initialized"))?;
-        let descriptor_set = app.data.raytracing.gbuffer_descriptor_set.as_ref()
-            .ok_or_else(|| anyhow!("G-Buffer descriptor set not initialized"))?;
 
         Ok(Self {
             gbuffer,
             pipeline,
-            descriptor_set,
+            render_resources: &app.data.render_resources,
             meshes: &app.data.render_resources.meshes,
             device: &app.rrdevice.device,
         })
@@ -180,15 +177,11 @@ impl<'a> GBufferPass<'a> {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        let rrdata_len = self.descriptor_set.rrdata.len();
-        if rrdata_len == 0 || self.descriptor_set.descriptor_sets.is_empty() {
+        if self.meshes.is_empty() {
             return Ok(());
         }
 
-        let mesh_count = self.meshes.len().min(rrdata_len);
-        let swapchain_images_len = self.descriptor_set.descriptor_sets.len() / rrdata_len;
-
-        for i in 0..mesh_count {
+        for i in 0..self.meshes.len() {
             let mesh = &self.meshes[i];
 
             if !mesh.render_to_gbuffer {
@@ -209,17 +202,37 @@ impl<'a> GBufferPass<'a> {
                 vk::IndexType::UINT32,
             );
 
-            let descriptor_set_index = i * swapchain_images_len + image_index;
-            if descriptor_set_index >= self.descriptor_set.descriptor_sets.len() {
-                continue;
-            }
-
+            let frame_set = self.render_resources.frame_set.sets[image_index];
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
                 self.pipeline.pipeline_layout,
                 0,
-                &[self.descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[frame_set],
+                &[],
+            );
+
+            if let Some(material_id) = self.render_resources.get_material_id(i) {
+                if let Some(material) = self.render_resources.materials.get(material_id) {
+                    self.device.cmd_bind_descriptor_sets(
+                        command_buffer,
+                        vk::PipelineBindPoint::GRAPHICS,
+                        self.pipeline.pipeline_layout,
+                        1,
+                        &[material.descriptor_set],
+                        &[],
+                    );
+                }
+            }
+
+            let object_set_idx = self.render_resources.objects.get_set_index(image_index, mesh.object_index);
+            let object_set = self.render_resources.objects.sets[object_set_idx];
+            self.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline.pipeline_layout,
+                2,
+                &[object_set],
                 &[],
             );
 

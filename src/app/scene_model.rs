@@ -1,24 +1,15 @@
 use crate::app::{App, AppData};
 use crate::scene::render_resource::{MaterialUBO, Mesh};
 use crate::vulkanr::buffer::*;
-use crate::vulkanr::command::*;
 use crate::vulkanr::data as vulkan_data;
-use crate::vulkanr::data::*;
-use crate::vulkanr::descriptor::*;
+use crate::vulkanr::data::{Vertex, VertexData};
 use crate::vulkanr::device::*;
 use crate::vulkanr::image::*;
-use crate::vulkanr::pipeline::{
-    BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline,
-    VertexInputConfig,
-};
-use crate::vulkanr::render::*;
-use crate::vulkanr::swapchain::*;
 use crate::vulkanr::vulkan::*;
 
 use crate::loader::fbx::fbx::{load_fbx, load_fbx_with_russimp, FbxModel};
 use crate::loader::gltf::gltf::*;
 use crate::loader::texture::load_png_image;
-use crate::logger::logger::*;
 use crate::math::*;
 
 use anyhow::{anyhow, Result};
@@ -139,14 +130,6 @@ impl App {
 
             mesh.vertex_data.indices = fbx_data.indices.clone();
             data.render_resources.meshes.push(mesh);
-
-            let rrdata_name = format!("fbx_mesh_{}", mesh_idx);
-            let mut rrdata = RRData::new(&instance, &rrdevice, &data.rrswapchain, &rrdata_name);
-            rrdata.vertex_data = data.render_resources.meshes.last().unwrap().vertex_data.clone();
-            rrdata.image = data.render_resources.meshes.last().unwrap().image;
-            rrdata.image_memory = data.render_resources.meshes.last().unwrap().image_memory;
-            rrdata.mip_level = data.render_resources.meshes.last().unwrap().mip_level;
-            data.model_descriptor_set.rrdata.push(rrdata);
         }
 
         if data.fbx_model.animation_count() > 0 {
@@ -433,6 +416,9 @@ impl App {
 
             mesh.sampler = create_texture_sampler(&rrdevice, mesh.mip_level)?;
 
+            mesh.object_index = data.render_resources.objects.allocate_slot();
+            crate::log!("Allocated object_index {} for mesh {}", mesh.object_index, i);
+
             let material_name = format!("material_{}", i);
             let material_properties = MaterialUBO::default();
             let material_id = data.render_resources.materials.create_material_with_texture(
@@ -529,54 +515,6 @@ impl App {
                 }
             }
             crate::log!("Initial pose applied successfully for FBX");
-        }
-
-        crate::log!("Creating descriptor sets...");
-        if let Err(e) = RRDescriptorSet::create_descriptor_set(
-            &rrdevice,
-            &data.rrswapchain,
-            &mut data.model_descriptor_set,
-        ) {
-            crate::log!("Failed to create model descriptor set: {:?}", e);
-            return Err(anyhow!("Failed to create descriptor sets: {:?}", e));
-        }
-
-        crate::log!("Recreating command buffers...");
-        let mut rrbind_info = Vec::new();
-        rrbind_info.push(RRBindInfo::new(
-            &data.grid.pipeline,
-            &data.grid.descriptor_set,
-            &data.grid.vertex_buffer,
-            &data.grid.index_buffer,
-            0,
-            0,
-            0,
-        ));
-
-        for i in 0..data.render_resources.meshes.len() {
-            rrbind_info.push(RRBindInfo::new(
-                &data.model_pipeline,
-                &data.model_descriptor_set,
-                &data.render_resources.meshes[i].vertex_buffer,
-                &data.render_resources.meshes[i].index_buffer,
-                0,
-                0,
-                i,
-            ));
-        }
-
-        for i in 0..data.rrrender.framebuffers.len() {
-            if let Err(e) = RRCommandBuffer::bind_command(
-                &rrdevice,
-                &data.rrrender,
-                &data.rrswapchain,
-                &rrbind_info,
-                &mut data.rrcommand_buffer,
-                i,
-            ) {
-                crate::log!("Failed to bind command for framebuffer {}: {:?}", i, e);
-                return Err(anyhow!("Failed to bind command: {:?}", e));
-            }
         }
 
         data.current_model_path = model_path.to_string();

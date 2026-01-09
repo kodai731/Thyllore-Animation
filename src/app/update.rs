@@ -55,11 +55,11 @@ impl App {
                     .collect()
             } else {
                 self.data
-                    .model_descriptor_set
-                    .rrdata
+                    .render_resources
+                    .meshes
                     .iter()
-                    .flat_map(|rrdata| {
-                        rrdata
+                    .flat_map(|mesh| {
+                        mesh
                             .vertex_data
                             .vertices
                             .iter()
@@ -233,22 +233,10 @@ impl App {
             eprintln!("Failed to update FrameUBO: {}", e);
         }
 
-        for i in 0..self.data.render_resources.meshes.len() {
+        for mesh in &self.data.render_resources.meshes {
             let object_ubo = ObjectUBO { model };
-            if let Err(e) = self.data.render_resources.objects.update(&self.rrdevice, image_index, i, &object_ubo) {
-                eprintln!("Failed to update ObjectUBO: {}", e);
-            }
-        }
-
-        if let Some(ref mut gbuffer_desc) = self.data.raytracing.gbuffer_descriptor_set {
-            for i in 0..gbuffer_desc.rrdata.len() {
-                let rrdata = &mut gbuffer_desc.rrdata[i];
-                let name = format!("gbuffer[{}]", i);
-                if let Err(e) =
-                    rrdata.rruniform_buffers[image_index].update(&self.rrdevice, &ubo, &name)
-                {
-                    eprintln!("Failed to update G-Buffer UBO: {}", e);
-                }
+            if let Err(e) = self.data.render_resources.objects.update(&self.rrdevice, image_index, mesh.object_index, &object_ubo) {
+                eprintln!("Failed to update ObjectUBO for mesh object_index {}: {}", mesh.object_index, e);
             }
         }
 
@@ -311,32 +299,38 @@ impl App {
         }
 
         let model_grid = Mat4::from_scale(self.data.grid.scale);
-        for i in 0..self.data.grid.descriptor_set.rrdata.len() {
-            let rrdata = &mut self.data.grid.descriptor_set.rrdata[i];
-
-            let model = if i == 0 { model_grid } else { Mat4::identity() };
-
-            let ubo_grid = UniformBufferObject { model, view, proj };
-            let name = format!("grid[{}]", i);
-            rrdata.rruniform_buffers[image_index].update(&self.rrdevice, &ubo_grid, &name)?;
+        let grid_object_ubo = ObjectUBO { model: model_grid };
+        if let Err(e) = self.data.render_resources.objects.update(
+            &self.rrdevice,
+            image_index,
+            self.data.grid.object_index,
+            &grid_object_ubo,
+        ) {
+            eprintln!("Failed to update Grid ObjectUBO: {}", e);
         }
 
-        // Gizmo用のuniform bufferを更新
-        for i in 0..self.data.gizmo_data.descriptor_set.rrdata.len() {
-            let rrdata = &mut self.data.gizmo_data.descriptor_set.rrdata[i];
+        let gizmo_object_ubo = ObjectUBO { model: Mat4::identity() };
+        if let Err(e) = self.data.render_resources.objects.update(
+            &self.rrdevice,
+            image_index,
+            self.data.gizmo_data.object_index,
+            &gizmo_object_ubo,
+        ) {
+            eprintln!("Failed to update Gizmo ObjectUBO: {}", e);
+        }
 
-            let model = if i == 0 {
-                Mat4::identity()
-            } else {
-                let light_pos = self.data.rt_debug_state.light_position;
-                let distance = (light_pos - camera_pos).magnitude();
-                let scale_factor = distance * 0.03;
-                Mat4::from_translation(light_pos) * Mat4::from_scale(scale_factor)
-            };
-
-            let ubo_gizmo = UniformBufferObject { model, view, proj };
-            let name = format!("gizmo[{}]", i);
-            rrdata.rruniform_buffers[image_index].update(&self.rrdevice, &ubo_gizmo, &name)?;
+        let light_pos = self.data.rt_debug_state.light_position;
+        let distance = (light_pos - camera_pos).magnitude();
+        let scale_factor = distance * 0.03;
+        let light_gizmo_model = Mat4::from_translation(light_pos) * Mat4::from_scale(scale_factor);
+        let light_gizmo_object_ubo = ObjectUBO { model: light_gizmo_model };
+        if let Err(e) = self.data.render_resources.objects.update(
+            &self.rrdevice,
+            image_index,
+            self.data.light_gizmo_data.object_index,
+            &light_gizmo_object_ubo,
+        ) {
+            eprintln!("Failed to update LightGizmo ObjectUBO: {}", e);
         }
 
         self.data
@@ -649,12 +643,8 @@ impl App {
 
             mesh.sampler = create_texture_sampler(&rrdevice, mesh.mip_level)?;
 
-            if i < data.model_descriptor_set.rrdata.len() {
-                data.model_descriptor_set.rrdata[i].image_view = mesh.image_view;
-                data.model_descriptor_set.rrdata[i].sampler = mesh.sampler;
-                data.model_descriptor_set.rrdata[i].vertex_buffer = mesh.vertex_buffer.clone();
-                data.model_descriptor_set.rrdata[i].index_buffer = mesh.index_buffer.clone();
-            }
+            mesh.object_index = data.render_resources.objects.allocate_slot();
+            crate::log!("Allocated object_index {} for mesh {}", mesh.object_index, i);
 
             let material_name = format!("material_{}", i);
             let material_properties = MaterialUBO {

@@ -1,8 +1,6 @@
 use super::device::*;
 use crate::vulkanr::resource::*;
-use crate::vulkanr::render::*;
 use crate::vulkanr::vulkan::*;
-use crate::vulkanr::command::RRCommandPool;
 use winit::window::Window;
 
 #[derive(Clone, Debug)]

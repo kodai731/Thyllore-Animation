@@ -2,10 +2,10 @@ use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
-use super::gbuffer::RRGBuffer;
-use rust_rendering::vulkanr::pipeline::RRPipeline;
-use rust_rendering::vulkanr::descriptor::RRRayQueryDescriptorSet;
-use rust_rendering::vulkanr::core::Device;
+use crate::vulkanr::resource::RRGBuffer;
+use crate::vulkanr::pipeline::RRPipeline;
+use crate::vulkanr::descriptor::RRRayQueryDescriptorSet;
+use crate::vulkanr::core::Device;
 
 pub struct RayQueryPass<'a> {
     gbuffer: &'a RRGBuffer,
@@ -16,11 +16,11 @@ pub struct RayQueryPass<'a> {
 
 impl<'a> RayQueryPass<'a> {
     pub fn new(app: &'a App) -> Result<Self> {
-        let gbuffer = app.data.gbuffer.as_ref()
+        let gbuffer = app.data.raytracing.gbuffer.as_ref()
             .ok_or_else(|| anyhow!("G-Buffer not initialized"))?;
-        let pipeline = app.data.ray_query_pipeline.as_ref()
+        let pipeline = app.data.raytracing.ray_query_pipeline.as_ref()
             .ok_or_else(|| anyhow!("Ray Query pipeline not initialized"))?;
-        let descriptor_set = app.data.ray_query_descriptor.as_ref()
+        let descriptor_set = app.data.raytracing.ray_query_descriptor.as_ref()
             .ok_or_else(|| anyhow!("Ray Query descriptor set not initialized"))?;
 
         Ok(Self {

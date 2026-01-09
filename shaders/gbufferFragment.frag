@@ -3,25 +3,20 @@
 layout(location = 0) in vec3 fragWorldPos;
 layout(location = 1) in vec3 fragWorldNormal;
 layout(location = 2) in vec2 fragTexCoord;
+layout(location = 3) in vec4 fragColor;
 
-// Multiple render targets (MRT) for G-Buffer
-layout(location = 0) out vec4 outPosition;  // World position
-layout(location = 1) out vec4 outNormal;    // World normal
-layout(location = 2) out vec4 outAlbedo;    // Albedo/Base color
+layout(location = 0) out vec4 outPosition;
+layout(location = 1) out vec4 outNormal;
+layout(location = 2) out vec4 outAlbedo;
 
-layout(binding = 1) uniform sampler2D texSampler;
+layout(set = 1, binding = 0) uniform sampler2D texSampler;
 
 void main() {
-    // Sample albedo texture
-    vec4 albedo = texture(texSampler, fragTexCoord);
+    vec4 texColor = texture(texSampler, fragTexCoord);
+    vec4 albedo = texColor * fragColor;
     if (albedo.a < 0.5) discard;
 
-    // Output world position
     outPosition = vec4(fragWorldPos, 1.0);
-
-    // Output normalized world normal
     outNormal = vec4(normalize(fragWorldNormal), 1.0);
-
-    // Output albedo/base color
     outAlbedo = albedo;
 }

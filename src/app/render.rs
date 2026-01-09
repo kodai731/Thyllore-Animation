@@ -1,31 +1,22 @@
-use crate::app::{App, AppData, GUIData};
-use rust_rendering::vulkanr::buffer::*;
-use rust_rendering::vulkanr::command::*;
-use rust_rendering::vulkanr::data as vulkan_data;
-use rust_rendering::vulkanr::data::*;
-use rust_rendering::vulkanr::descriptor::*;
-use rust_rendering::vulkanr::device::*;
-use rust_rendering::vulkanr::image::*;
-use rust_rendering::vulkanr::pipeline::*;
-use rust_rendering::vulkanr::render::*;
-use rust_rendering::vulkanr::vulkan::*;
-use rust_rendering::debugview::*;
-use rust_rendering::logger::logger::*;
+use crate::app::{App, GUIData};
+use crate::vulkanr::command::*;
+use crate::vulkanr::vulkan::*;
 
 use crate::app::init::MAX_FRAMES_IN_FLIGHT;
-use cgmath::{Matrix4, SquareMatrix};
 use anyhow::{anyhow, Result};
-use std::mem::size_of;
-use std::ptr::copy_nonoverlapping as memcpy;
-use std::os::raw::c_void;
+use cgmath::{Matrix4, SquareMatrix};
 use winit::window::Window;
-use vulkanalia::prelude::v1_0::*;
 
 impl App {
-    pub unsafe fn render(&mut self, window: &Window, gui_data: &mut GUIData, draw_data: &imgui::DrawData) -> Result<()> {
+    pub unsafe fn render(
+        &mut self,
+        window: &Window,
+        gui_data: &mut GUIData,
+        draw_data: &imgui::DrawData,
+    ) -> Result<()> {
         // Check if a new model file was selected
         if gui_data.file_changed {
-            log!("Loading new model from: {}", gui_data.selected_model_path);
+            crate::log!("Loading new model from: {}", gui_data.selected_model_path);
 
             // Wait for device to finish all operations before reloading
             self.rrdevice.device.device_wait_idle()?;
@@ -38,11 +29,14 @@ impl App {
             ) {
                 Ok(_) => {
                     gui_data.load_status = format!("Loaded: {}", gui_data.selected_model_path);
-                    log!("Successfully loaded model: {}", gui_data.selected_model_path);
+                    crate::log!(
+                        "Successfully loaded model: {}",
+                        gui_data.selected_model_path
+                    );
                 }
                 Err(e) => {
                     gui_data.load_status = format!("Error: {}", e);
-                    log!("Failed to load model: {:?}", e);
+                    crate::log!("Failed to load model: {:?}", e);
                 }
             }
 
@@ -89,7 +83,7 @@ impl App {
                 static mut LOGGED_PAUSED: bool = false;
                 unsafe {
                     if !LOGGED_PAUSED {
-                        log!("FBX animation is paused (animation_playing=false)");
+                        crate::log!("FBX animation is paused (animation_playing=false)");
                         LOGGED_PAUSED = true;
                     }
                 }
@@ -98,7 +92,11 @@ impl App {
                 let elapsed = self.start.elapsed().as_secs_f32();
 
                 // アニメーション時間を更新
-                if let Some(duration) = self.data.fbx_model.get_animation_duration(self.data.current_animation_index) {
+                if let Some(duration) = self
+                    .data
+                    .fbx_model
+                    .get_animation_duration(self.data.current_animation_index)
+                {
                     // Static pose (duration == 0) or animated
                     if duration > 0.0 {
                         // ループ再生（アニメーション）
@@ -110,37 +108,46 @@ impl App {
                         unsafe {
                             FRAME_COUNT += 1;
                             if FRAME_COUNT % 10 == 0 {
-                                log!("Updating FBX animation: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
+                                crate::log!("Updating FBX animation: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
                                      self.data.animation_time, duration, elapsed, prev_time);
                             }
                         }
 
                         // アニメーションを適用
-                        self.data.fbx_model.update_animation(self.data.current_animation_index, self.data.animation_time);
+                        self.data.fbx_model.update_animation(
+                            self.data.current_animation_index,
+                            self.data.animation_time,
+                        );
 
                         // 頂点バッファを更新
-                        Self::update_fbx_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
+                        Self::update_fbx_vertex_buffer(
+                            &self.instance,
+                            &self.rrdevice,
+                            &mut self.data,
+                        )?;
 
                         // Acceleration Structureを更新（アニメーション後の頂点座標で）
-                        Self::update_acceleration_structures(&self.instance, &self.rrdevice, &mut self.data)?;
-
+                        Self::update_acceleration_structures(
+                            &self.instance,
+                            &self.rrdevice,
+                            &mut self.data,
+                        )?;
                     } else {
                         // Static pose (duration == 0): keep time at 0, no need to update every frame
                         // Initial pose was already applied in load_model_from_path
                         static mut LOGGED_STATIC: bool = false;
                         unsafe {
                             if !LOGGED_STATIC {
-                                log!("FBX animation has duration=0 (static pose)");
+                                crate::log!("FBX animation has duration=0 (static pose)");
                                 LOGGED_STATIC = true;
                             }
                         }
-
                     }
                 } else {
                     static mut LOGGED_NO_DURATION: bool = false;
                     unsafe {
                         if !LOGGED_NO_DURATION {
-                            log!("FBX animation has no duration (get_animation_duration returned None)");
+                            crate::log!("FBX animation has no duration (get_animation_duration returned None)");
                             LOGGED_NO_DURATION = true;
                         }
                     }
@@ -158,10 +165,10 @@ impl App {
                 FRAME_COUNT += 1;
                 if FRAME_COUNT % 60 == 0 {
                     if self.data.gltf_model.has_skinned_meshes {
-                        log!("Updating glTF skeletal animation: time={:.4}s, joint_animations={}, gltf_data={}",
+                        crate::log!("Updating glTF skeletal animation: time={:.4}s, joint_animations={}, gltf_data={}",
                              time, self.data.gltf_model.joint_animations.len(), self.data.gltf_model.gltf_data.len());
                     } else {
-                        log!("Updating glTF node animation: time={:.4}s, node_animations={}, gltf_data={}",
+                        crate::log!("Updating glTF node animation: time={:.4}s, node_animations={}, gltf_data={}",
                              time, self.data.gltf_model.node_animations.len(), self.data.gltf_model.gltf_data.len());
                     }
                 }
@@ -169,19 +176,13 @@ impl App {
 
             if self.data.gltf_model.has_skinned_meshes {
                 // Skeletal animation: use joint transforms with weights
+                self.data.gltf_model.reset_vertices_animation_position(time);
                 self.data
                     .gltf_model
-                    .reset_vertices_animation_position(time);
-                self.data.gltf_model.apply_animation(
-                    time,
-                    0,
-                    Matrix4::identity(),
-                );
+                    .apply_animation(time, 0, Matrix4::identity());
             } else {
                 // Node animation: transform nodes and propagate to children
-                self.data
-                    .gltf_model
-                    .reset_vertices_animation_position(time);
+                self.data.gltf_model.reset_vertices_animation_position(time);
             }
 
             Self::update_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
@@ -196,25 +197,72 @@ impl App {
             gui_data,
         )?;
 
-        if gui_data.show_light_ray_to_model {
-            let all_positions: Vec<_> = if !self.data.fbx_model.fbx_data.is_empty() {
-                self.data.fbx_model.fbx_data
-                    .iter()
-                    .flat_map(|data| data.positions.iter())
-                    .cloned()
-                    .collect()
-            } else {
-                self.data.model_descriptor_set.rrdata
-                    .iter()
-                    .flat_map(|rrdata| rrdata.vertex_data.vertices.iter().map(|v| {
-                        cgmath::Vector3::new(v.pos.x, v.pos.y, v.pos.z)
-                    }))
-                    .collect()
-            };
+        let model_tops: Vec<cgmath::Vector3<f32>> = self
+            .data
+            .rt_debug_state
+            .get_cube_top()
+            .into_iter()
+            .collect();
 
-            self.data.light_gizmo_data.update_ray_to_model(&all_positions);
-            self.data.light_gizmo_data.update_or_create_ray_buffers(&self.instance, &self.rrdevice)?;
+        static mut CUBE_DEBUG_COUNTER: u32 = 0;
+        CUBE_DEBUG_COUNTER += 1;
+        if CUBE_DEBUG_COUNTER % 60 == 1 {
+            crate::log!("=== Cube Position Debug (frame {}) ===", CUBE_DEBUG_COUNTER);
+            crate::log!("model_tops from get_cube_top(): {:?}", model_tops);
+
+            if !self.data.render_resources.meshes.is_empty() {
+                for (mesh_idx, mesh) in self.data.render_resources.meshes.iter().enumerate() {
+                    if !mesh.vertex_data.vertices.is_empty() {
+                        let mut min_x = f32::MAX;
+                        let mut max_x = f32::MIN;
+                        let mut min_y = f32::MAX;
+                        let mut max_y = f32::MIN;
+                        let mut min_z = f32::MAX;
+                        let mut max_z = f32::MIN;
+
+                        for v in &mesh.vertex_data.vertices {
+                            min_x = min_x.min(v.pos.x);
+                            max_x = max_x.max(v.pos.x);
+                            min_y = min_y.min(v.pos.y);
+                            max_y = max_y.max(v.pos.y);
+                            min_z = min_z.min(v.pos.z);
+                            max_z = max_z.max(v.pos.z);
+                        }
+
+                        let center_x = (min_x + max_x) / 2.0;
+                        let center_z = (min_z + max_z) / 2.0;
+
+                        crate::log!("Mesh[{}] vertex_data bounds:", mesh_idx);
+                        crate::log!(
+                            "  X: [{:.2}, {:.2}], Y: [{:.2}, {:.2}], Z: [{:.2}, {:.2}]",
+                            min_x,
+                            max_x,
+                            min_y,
+                            max_y,
+                            min_z,
+                            max_z
+                        );
+                        crate::log!(
+                            "  Top center: ({:.2}, {:.2}, {:.2})",
+                            center_x,
+                            max_y,
+                            center_z
+                        );
+                        crate::log!("  vertex count: {}", mesh.vertex_data.vertices.len());
+                    }
+                }
+            } else {
+                crate::log!("render_resources.meshes is empty!");
+            }
+            crate::log!("=====================================");
         }
+
+        self.data
+            .light_gizmo_data
+            .update_vertical_lines(&model_tops);
+        self.data
+            .light_gizmo_data
+            .update_or_create_vertical_line_buffers(&self.instance, &self.rrdevice)?;
 
         // Update ImGui buffers
         Self::update_imgui_buffers(&self.instance, &self.rrdevice, &mut self.data, draw_data)?;
@@ -263,10 +311,10 @@ impl App {
 
         // Handle screenshot request
         if gui_data.take_screenshot {
-            log!("Taking screenshot...");
+            crate::log!("Taking screenshot...");
             self.save_screenshot(image_index)?;
             gui_data.take_screenshot = false;
-            log!("Screenshot saved!");
+            crate::log!("Screenshot saved!");
         }
 
         self.frame = (self.frame + 1) % MAX_FRAMES_IN_FLIGHT;
@@ -406,9 +454,12 @@ impl App {
         device.end_command_buffer(command_buffer)?;
 
         let command_buffers_slice = [command_buffer];
-        let submit_info = vk::SubmitInfo::builder()
-            .command_buffers(&command_buffers_slice);
-        device.queue_submit(self.rrdevice.graphics_queue, &[submit_info.build()], vk::Fence::null())?;
+        let submit_info = vk::SubmitInfo::builder().command_buffers(&command_buffers_slice);
+        device.queue_submit(
+            self.rrdevice.graphics_queue,
+            &[submit_info.build()],
+            vk::Fence::null(),
+        )?;
         device.queue_wait_idle(self.rrdevice.graphics_queue)?;
 
         // Map memory and read data
@@ -420,9 +471,9 @@ impl App {
         for y in 0..height {
             for x in 0..width {
                 let i = ((y * width + x) * 4) as usize;
-                rgba_data[i] = slice[i + 2];     // R = B
+                rgba_data[i] = slice[i + 2]; // R = B
                 rgba_data[i + 1] = slice[i + 1]; // G = G
-                rgba_data[i + 2] = slice[i];     // B = R
+                rgba_data[i + 2] = slice[i]; // B = R
                 rgba_data[i + 3] = slice[i + 3]; // A = A
             }
         }
@@ -447,7 +498,7 @@ impl App {
         let mut writer = encoder.write_header()?;
         writer.write_image_data(&rgba_data)?;
 
-        log!("Screenshot saved to: {}", filename);
+        crate::log!("Screenshot saved to: {}", filename);
 
         // Cleanup
         device.free_command_buffers(*command_pool, &[command_buffer]);
@@ -456,110 +507,182 @@ impl App {
 
         Ok(())
     }
-    pub unsafe fn record_3d_rendering(
+
+    pub unsafe fn begin_main_render_pass(
         &self,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
-    ) -> Result<()> {
-        // This is the existing rendering logic from bind_command
-        let mut rrbind_info = Vec::new();
+    ) {
+        let render_area = vk::Rect2D::builder()
+            .offset(vk::Offset2D::default())
+            .extent(self.data.rrswapchain.swapchain_extent);
 
-        // Grid pipeline bindings
-        rrbind_info.push(RRBindInfo::new(
-            &self.data.grid_pipeline,
-            &self.data.grid_descriptor_set,
-            &self.data.grid_vertex_buffer,
-            &self.data.grid_index_buffer,
+        let color_clear_value = vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
+        };
+        let depth_clear_value = vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 1.0,
+                stencil: 0,
+            },
+        };
+        let clear_values = [color_clear_value, depth_clear_value];
+
+        let render_pass_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(self.data.rrrender.render_pass)
+            .framebuffer(self.data.rrrender.framebuffers[image_index])
+            .render_area(render_area)
+            .clear_values(&clear_values);
+
+        self.rrdevice.device.cmd_begin_render_pass(
+            command_buffer,
+            &render_pass_info,
+            vk::SubpassContents::INLINE,
+        );
+    }
+
+    unsafe fn render_grid(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
+        self.rrdevice.device.cmd_bind_pipeline(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            self.data.grid.pipeline.pipeline,
+        );
+
+        self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
+
+        self.rrdevice.device.cmd_bind_vertex_buffers(
+            command_buffer,
+            0,
+            &[self.data.grid.vertex_buffer.buffer],
+            &[0],
+        );
+
+        self.rrdevice.device.cmd_bind_index_buffer(
+            command_buffer,
+            self.data.grid.index_buffer.buffer,
+            0,
+            vk::IndexType::UINT32,
+        );
+
+        let frame_set = self.data.render_resources.frame_set.sets[image_index];
+        self.rrdevice.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            self.data.grid.pipeline.pipeline_layout,
+            0,
+            &[frame_set],
+            &[],
+        );
+
+        let object_set_idx = self.data.render_resources.objects.get_set_index(image_index, self.data.grid.object_index);
+        let object_set = self.data.render_resources.objects.sets[object_set_idx];
+        self.rrdevice.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            self.data.grid.pipeline.pipeline_layout,
+            2,
+            &[object_set],
+            &[],
+        );
+
+        self.rrdevice.device.cmd_draw_indexed(
+            command_buffer,
+            self.data.grid.index_buffer.indices,
+            1,
             0,
             0,
             0,
-        ));
+        );
+    }
 
-        // Model pipeline bindings
-        for i in 0..self.data.model_descriptor_set.rrdata.len() {
-            rrbind_info.push(RRBindInfo::new(
-                &self.data.model_pipeline,
-                &self.data.model_descriptor_set,
-                &self.data.model_descriptor_set.rrdata[i].vertex_buffer,
-                &self.data.model_descriptor_set.rrdata[i].index_buffer,
-                0,
-                0,
-                i,
-            ));
-        }
+    unsafe fn render_models(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
+        for i in 0..self.data.render_resources.meshes.len() {
+            let mesh = &self.data.render_resources.meshes[i];
 
-        // Execute all bind commands
-        for bind_info in &rrbind_info {
             self.rrdevice.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                bind_info.rrpipeline.pipeline,
+                self.data.model_pipeline.pipeline,
             );
 
-            // すべてのパイプラインで線幅を設定（RRPipeline::new()はすべてLINE_WIDTHをdynamic stateに含む）
-            // パイプラインバインド直後に設定（Vulkanのベストプラクティス）
             self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
 
             self.rrdevice.device.cmd_bind_vertex_buffers(
                 command_buffer,
                 0,
-                &[bind_info.rrvertex_buffer.buffer],
+                &[mesh.vertex_buffer.buffer],
                 &[0],
             );
 
             self.rrdevice.device.cmd_bind_index_buffer(
                 command_buffer,
-                bind_info.rrindex_buffer.buffer,
+                mesh.index_buffer.buffer,
                 0,
                 vk::IndexType::UINT32,
             );
 
-            let swapchain_images_len = bind_info.rrdescriptor_set.descriptor_sets.len() /
-                bind_info.rrdescriptor_set.rrdata.len().max(1);
-            let descriptor_set_index = bind_info.data_index * swapchain_images_len + image_index;
-
+            let frame_set = self.data.render_resources.frame_set.sets[image_index];
             self.rrdevice.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                bind_info.rrpipeline.pipeline_layout,
+                self.data.model_pipeline.pipeline_layout,
                 0,
-                &[bind_info.rrdescriptor_set.descriptor_sets[descriptor_set_index]],
+                &[frame_set],
+                &[],
+            );
+
+            if let Some(material_id) = self.data.render_resources.get_material_id(i) {
+                if let Some(material) = self.data.render_resources.materials.get(material_id) {
+                    self.rrdevice.device.cmd_bind_descriptor_sets(
+                        command_buffer,
+                        vk::PipelineBindPoint::GRAPHICS,
+                        self.data.model_pipeline.pipeline_layout,
+                        1,
+                        &[material.descriptor_set],
+                        &[],
+                    );
+                }
+            }
+
+            let object_set_idx = self.data.render_resources.objects.get_set_index(image_index, mesh.object_index);
+            let object_set = self.data.render_resources.objects.sets[object_set_idx];
+            self.rrdevice.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.data.model_pipeline.pipeline_layout,
+                2,
+                &[object_set],
                 &[],
             );
 
             self.rrdevice.device.cmd_draw_indexed(
                 command_buffer,
-                bind_info.rrindex_buffer.indices,
+                mesh.index_buffer.indices,
                 1,
-                bind_info.offset_index,
-                bind_info.offset_index as i32,
+                0,
+                0,
                 0,
             );
         }
+    }
 
-        // Gizmoの描画（常に最後に描画して、他のオブジェクトの上に表示）
-        if let (Some(vertex_buffer), Some(index_buffer)) =
-            (self.data.gizmo_data.vertex_buffer, self.data.gizmo_data.index_buffer) {
-
-            // Gizmoパイプラインをバインド
+    unsafe fn render_gizmo(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
+        if let (Some(vertex_buffer), Some(index_buffer)) = (
+            self.data.gizmo_data.vertex_buffer,
+            self.data.gizmo_data.index_buffer,
+        ) {
             self.rrdevice.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.data.gizmo_pipeline.pipeline,
+                self.data.gizmo_data.pipeline.pipeline,
             );
 
-            // 線幅を設定（wideLinesが無効なので1.0のみ使用可能）- パイプラインバインド直後に設定
             self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
 
-            // 頂点バッファをバインド
-            self.rrdevice.device.cmd_bind_vertex_buffers(
-                command_buffer,
-                0,
-                &[vertex_buffer],
-                &[0],
-            );
+            self.rrdevice.device.cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
-            // インデックスバッファをバインド
             self.rrdevice.device.cmd_bind_index_buffer(
                 command_buffer,
                 index_buffer,
@@ -567,22 +690,29 @@ impl App {
                 vk::IndexType::UINT32,
             );
 
-            // ディスクリプタセットをバインド
-            // Gizmoは常にdata_index=0（1つのRRDataのみ）
-            let swapchain_images_len = self.data.gizmo_descriptor_set.descriptor_sets.len() /
-                self.data.gizmo_descriptor_set.rrdata.len().max(1);
-            let descriptor_set_index = 0 * swapchain_images_len + image_index;
-
+            let frame_set = self.data.render_resources.frame_set.sets[image_index];
             self.rrdevice.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.data.gizmo_pipeline.pipeline_layout,
+                self.data.gizmo_data.pipeline.pipeline_layout,
                 0,
-                &[self.data.gizmo_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[frame_set],
                 &[],
             );
 
-            // Gizmoを描画
+            let object_set_idx = self.data.render_resources.objects.get_set_index(
+                image_index, self.data.gizmo_data.object_index
+            );
+            let object_set = self.data.render_resources.objects.sets[object_set_idx];
+            self.rrdevice.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.data.gizmo_data.pipeline.pipeline_layout,
+                2,
+                &[object_set],
+                &[],
+            );
+
             self.rrdevice.device.cmd_draw_indexed(
                 command_buffer,
                 self.data.gizmo_data.indices.len() as u32,
@@ -592,24 +722,22 @@ impl App {
                 0,
             );
         }
+    }
 
-        if let (Some(vertex_buffer), Some(index_buffer)) =
-            (self.data.light_gizmo_data.vertex_buffer, self.data.light_gizmo_data.index_buffer) {
-
+    unsafe fn render_light_gizmo(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
+        if let (Some(vertex_buffer), Some(index_buffer)) = (
+            self.data.light_gizmo_data.vertex_buffer,
+            self.data.light_gizmo_data.index_buffer,
+        ) {
             self.rrdevice.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.data.gizmo_pipeline.pipeline,
+                self.data.light_gizmo_data.pipeline.pipeline,
             );
 
             self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
 
-            self.rrdevice.device.cmd_bind_vertex_buffers(
-                command_buffer,
-                0,
-                &[vertex_buffer],
-                &[0],
-            );
+            self.rrdevice.device.cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
             self.rrdevice.device.cmd_bind_index_buffer(
                 command_buffer,
@@ -618,16 +746,26 @@ impl App {
                 vk::IndexType::UINT32,
             );
 
-            let swapchain_images_len = self.data.gizmo_descriptor_set.descriptor_sets.len() /
-                self.data.gizmo_descriptor_set.rrdata.len().max(1);
-            let descriptor_set_index = 1 * swapchain_images_len + image_index;
-
+            let frame_set = self.data.render_resources.frame_set.sets[image_index];
             self.rrdevice.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.data.gizmo_pipeline.pipeline_layout,
+                self.data.light_gizmo_data.pipeline.pipeline_layout,
                 0,
-                &[self.data.gizmo_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[frame_set],
+                &[],
+            );
+
+            let object_set_idx = self.data.render_resources.objects.get_set_index(
+                image_index, self.data.light_gizmo_data.object_index
+            );
+            let object_set = self.data.render_resources.objects.sets[object_set_idx];
+            self.rrdevice.device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.data.light_gizmo_data.pipeline.pipeline_layout,
+                2,
+                &[object_set],
                 &[],
             );
 
@@ -640,6 +778,18 @@ impl App {
                 0,
             );
         }
+    }
+
+    pub unsafe fn record_3d_rendering(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+    ) -> Result<()> {
+        self.render_grid(command_buffer, image_index);
+        self.render_models(command_buffer, image_index);
+
+        self.render_gizmo(command_buffer, image_index);
+        self.render_light_gizmo(command_buffer, image_index);
 
         Ok(())
     }
@@ -654,11 +804,31 @@ impl App {
             return Ok(());
         }
 
-        let pipeline = self.data.imgui_pipeline.ok_or_else(|| anyhow!("ImGui pipeline not initialized"))?;
-        let pipeline_layout = self.data.imgui_pipeline_layout.ok_or_else(|| anyhow!("ImGui pipeline layout not initialized"))?;
-        let descriptor_set = self.data.imgui_descriptor_set.ok_or_else(|| anyhow!("ImGui descriptor set not initialized"))?;
-        let vertex_buffer = self.data.imgui_vertex_buffer.ok_or_else(|| anyhow!("ImGui vertex buffer not initialized"))?;
-        let index_buffer = self.data.imgui_index_buffer.ok_or_else(|| anyhow!("ImGui index buffer not initialized"))?;
+        let pipeline = self
+            .data
+            .imgui
+            .pipeline
+            .ok_or_else(|| anyhow!("ImGui pipeline not initialized"))?;
+        let pipeline_layout = self
+            .data
+            .imgui
+            .pipeline_layout
+            .ok_or_else(|| anyhow!("ImGui pipeline layout not initialized"))?;
+        let descriptor_set = self
+            .data
+            .imgui
+            .descriptor_set
+            .ok_or_else(|| anyhow!("ImGui descriptor set not initialized"))?;
+        let vertex_buffer = self
+            .data
+            .imgui
+            .vertex_buffer
+            .ok_or_else(|| anyhow!("ImGui vertex buffer not initialized"))?;
+        let index_buffer = self
+            .data
+            .imgui
+            .index_buffer
+            .ok_or_else(|| anyhow!("ImGui index buffer not initialized"))?;
 
         // Bind pipeline
         self.rrdevice.device.cmd_bind_pipeline(
@@ -678,8 +848,15 @@ impl App {
         );
 
         // Bind vertex and index buffers
-        self.rrdevice.device.cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
-        self.rrdevice.device.cmd_bind_index_buffer(command_buffer, index_buffer, 0, vk::IndexType::UINT16);
+        self.rrdevice
+            .device
+            .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
+        self.rrdevice.device.cmd_bind_index_buffer(
+            command_buffer,
+            index_buffer,
+            0,
+            vk::IndexType::UINT16,
+        );
 
         // Setup viewport and scissor
         let fb_width = draw_data.display_size[0] * draw_data.framebuffer_scale[0];
@@ -692,7 +869,9 @@ impl App {
             .height(fb_height)
             .min_depth(0.0)
             .max_depth(1.0);
-        self.rrdevice.device.cmd_set_viewport(command_buffer, 0, &[viewport]);
+        self.rrdevice
+            .device
+            .cmd_set_viewport(command_buffer, 0, &[viewport]);
 
         // Setup scale and translation for ImGui coordinates -> NDC
         let scale = [
@@ -727,14 +906,24 @@ impl App {
                         let clip_rect = cmd_params.clip_rect;
                         let scissor = vk::Rect2D::builder()
                             .offset(vk::Offset2D {
-                                x: ((clip_rect[0] - draw_data.display_pos[0]) * draw_data.framebuffer_scale[0]).max(0.0) as i32,
-                                y: ((clip_rect[1] - draw_data.display_pos[1]) * draw_data.framebuffer_scale[1]).max(0.0) as i32,
+                                x: ((clip_rect[0] - draw_data.display_pos[0])
+                                    * draw_data.framebuffer_scale[0])
+                                    .max(0.0) as i32,
+                                y: ((clip_rect[1] - draw_data.display_pos[1])
+                                    * draw_data.framebuffer_scale[1])
+                                    .max(0.0) as i32,
                             })
                             .extent(vk::Extent2D {
-                                width: ((clip_rect[2] - clip_rect[0]) * draw_data.framebuffer_scale[0]) as u32,
-                                height: ((clip_rect[3] - clip_rect[1]) * draw_data.framebuffer_scale[1]) as u32,
+                                width: ((clip_rect[2] - clip_rect[0])
+                                    * draw_data.framebuffer_scale[0])
+                                    as u32,
+                                height: ((clip_rect[3] - clip_rect[1])
+                                    * draw_data.framebuffer_scale[1])
+                                    as u32,
                             });
-                        self.rrdevice.device.cmd_set_scissor(command_buffer, 0, &[scissor]);
+                        self.rrdevice
+                            .device
+                            .cmd_set_scissor(command_buffer, 0, &[scissor]);
 
                         self.rrdevice.device.cmd_draw_indexed(
                             command_buffer,

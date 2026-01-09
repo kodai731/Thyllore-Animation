@@ -74,6 +74,25 @@ void main() {
         outColor = vec4(l * 0.5 + 0.5, 1.0);
         return;
     }
+    else if (sceneData.debugMode == 6) {
+        // View depth mode - visualize GBuffer depth in view space
+        vec4 worldPos4 = texture(positionSampler, fragTexCoord);
+        bool hasGeometry = worldPos4.w > 0.5;
+
+        if (!hasGeometry) {
+            outColor = vec4(0.0, 0.0, 0.2, 1.0);
+            return;
+        }
+
+        vec4 viewPos = sceneData.view * vec4(worldPos4.xyz, 1.0);
+        float viewDepth = -viewPos.z;
+
+        float normalizedDepth = viewDepth * 0.005;
+        normalizedDepth = clamp(normalizedDepth, 0.0, 1.0);
+
+        outColor = vec4(0.0, normalizedDepth, 0.0, 1.0);
+        return;
+    }
 
     worldNormal = normalize(worldNormal);
 

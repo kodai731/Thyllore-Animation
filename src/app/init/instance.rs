@@ -1,26 +1,21 @@
 use crate::app::{App, AppData};
-use crate::app::data::GUIData;
 
-use rust_rendering::vulkanr::buffer::*;
-use rust_rendering::vulkanr::command::*;
-use rust_rendering::vulkanr::data as vulkan_data;
-use rust_rendering::vulkanr::data::*;
-use rust_rendering::vulkanr::descriptor::*;
-use rust_rendering::vulkanr::device::*;
-use rust_rendering::vulkanr::image::*;
-use rust_rendering::vulkanr::pipeline::{
-    PipelineBuilder, RRPipeline, VertexInputConfig, DepthTestConfig, BlendConfig, PushConstantConfig,
-};
-use rust_rendering::vulkanr::render::*;
-use rust_rendering::vulkanr::swapchain::*;
-use rust_rendering::vulkanr::vulkan::*;
-use rust_rendering::vulkanr::raytracing::acceleration::*;
+use crate::vulkanr::buffer::*;
+use crate::vulkanr::command::*;
+use crate::vulkanr::data as vulkan_data;
+use crate::vulkanr::data::*;
+use crate::vulkanr::descriptor::*;
+use crate::vulkanr::device::*;
+use crate::vulkanr::image::*;
+use crate::vulkanr::pipeline::{PipelineBuilder, RRPipeline, VertexInputConfig};
+use crate::vulkanr::render::*;
+use crate::vulkanr::swapchain::*;
+use crate::vulkanr::vulkan::*;
 
-use rust_rendering::loader::gltf::gltf::*;
-use rust_rendering::math::*;
-use rust_rendering::debugview::*;
-use rust_rendering::loader::fbx::fbx::{FbxModel, load_fbx, load_fbx_with_russimp};
-use rust_rendering::logger::logger::*;
+use crate::math::*;
+use crate::debugview::*;
+use crate::scene::render_resource::RenderResources;
+use crate::scene::Camera;
 
 use vulkanalia::Device as VkDevice;
 
@@ -28,10 +23,6 @@ use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::ffi::CStr;
 use std::os::raw::c_void;
-use std::collections::HashMap;
-use std::fs::File;
-use std::hash::{Hash, Hasher};
-use std::io::BufReader;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 use std::time::Instant;
@@ -39,13 +30,8 @@ use std::borrow::BorrowMut;
 use std::rc::Rc;
 
 use winit::window::Window;
-use cgmath::num_traits::AsPrimitive;
-use cgmath::{Matrix4, Vector4};
 use vulkanalia::prelude::v1_0::*;
-use vulkanalia::bytecode::Bytecode;
-use vulkanalia::vk::KhrSwapchainExtension;
 use vulkanalia::loader::{LibloadingLoader, LIBRARY};
-use vulkanalia::vk::KhrSurfaceExtension;
 
 // Constants
 pub const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
@@ -85,7 +71,7 @@ pub fn cleanup_old_screenshots() -> Result<()> {
                     if filename_str.starts_with("screenshot_") {
                         fs::remove_file(&path)?;
                         deleted_count += 1;
-                        log!("Deleted old screenshot: {:?}", filename_str);
+                        crate::log!("Deleted old screenshot: {:?}", filename_str);
                     }
                 }
             }
@@ -93,7 +79,7 @@ pub fn cleanup_old_screenshots() -> Result<()> {
     }
 
     if deleted_count > 0 {
-        log!("Cleaned up {} old screenshot(s)", deleted_count);
+        crate::log!("Cleaned up {} old screenshot(s)", deleted_count);
     }
 
     Ok(())
@@ -124,109 +110,115 @@ impl App {
             &data.rrswapchain,
             &data.rrcommand_pool.borrow_mut(),
         );
-        data.model_descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
-        data.grid_descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
-        data.model_pipeline = RRPipeline::new(
+        let swapchain_image_count = data.rrswapchain.swapchain_images.len();
+        let max_materials = 32;
+        let max_objects = 64;
+        data.render_resources = RenderResources::new(
+            &instance,
+            &rrdevice,
+            swapchain_image_count,
+            max_materials,
+            max_objects,
+        ).expect("Failed to create render resources");
+
+        let render_layouts = data.render_resources.get_layouts();
+        data.model_pipeline = RRPipeline::new_with_render_resources(
             &rrdevice,
             &data.rrswapchain,
             &data.rrrender,
-            &data.model_descriptor_set,
+            &render_layouts,
             "assets/shaders/vert.spv",
             "assets/shaders/frag.spv",
             vk::PrimitiveTopology::TRIANGLE_LIST,
             vk::PolygonMode::FILL,
+            vk::CullModeFlags::BACK,
         );
-        data.grid_pipeline = RRPipeline::new(
+        data.grid.pipeline = RRPipeline::new_with_render_resources(
             &rrdevice,
             &data.rrswapchain,
             &data.rrrender,
-            &data.grid_descriptor_set,
+            &render_layouts,
             "assets/shaders/gridVert.spv",
             "assets/shaders/gridFrag.spv",
             vk::PrimitiveTopology::LINE_LIST,
             vk::PolygonMode::LINE,
+            vk::CullModeFlags::NONE,
         );
 
-        // Gizmo用のディスクリプタセットとパイプラインを作成
-        data.gizmo_descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
+        data.gizmo_data = GridGizmoData::new();
+        data.gizmo_data.object_index = data.render_resources.objects.allocate_slot();
+        crate::log!("Allocated object_index {} for Gizmo", data.gizmo_data.object_index);
+        println!("allocated gizmo object_index");
 
-        // Grid Gizmo用のuniform bufferを作成
-        data.gizmo_descriptor_set
-            .rrdata
-            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain));
-
-        // Light Gizmo用のuniform bufferを作成
-        data.gizmo_descriptor_set
-            .rrdata
-            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain));
-
-        if let Err(e) = RRDescriptorSet::create_descriptor_set(
-            &rrdevice,
-            &data.rrswapchain,
-            &mut data.gizmo_descriptor_set,
-        ) {
-            eprintln!("failed to create gizmo descriptor set: {:?}", e);
-        }
-        println!("created gizmo descriptor set");
-
-        data.gizmo_pipeline = PipelineBuilder::new("assets/shaders/gizmoVert.spv", "assets/shaders/gizmoFrag.spv")
+        data.gizmo_data.pipeline = PipelineBuilder::new("assets/shaders/gizmoVert.spv", "assets/shaders/gizmoFrag.spv")
             .vertex_input(VertexInputConfig::Custom {
                 bindings: vec![GizmoVertex::binding_description()],
                 attributes: GizmoVertex::attribute_descriptions().to_vec(),
             })
             .topology(vk::PrimitiveTopology::LINE_LIST)
             .polygon_mode(vk::PolygonMode::LINE)
-            .no_depth_test()  // Gizmoは常に手前に表示
+            .no_depth_test()
             .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
-            .descriptor_layouts(vec![data.gizmo_descriptor_set.descriptor_set_layout])
+            .descriptor_layouts(render_layouts.to_vec())
             .build(&rrdevice, &data.rrrender, Some(data.rrswapchain.swapchain_extent))
             .expect("Failed to create gizmo pipeline");
 
-        // Gizmoデータを初期化
-        data.gizmo_data = GridGizmoData::new();
         data.gizmo_data.create_buffers(&instance, &rrdevice, &data.rrcommand_pool)
             .expect("Failed to create gizmo buffers");
 
-        // ライトGizmoデータを初期化
         data.light_gizmo_data = LightGizmoData::new(data.rt_debug_state.light_position);
+        data.light_gizmo_data.pipeline = data.gizmo_data.pipeline.clone();
+        data.light_gizmo_data.object_index = data.render_resources.objects.allocate_slot();
+        crate::log!("Allocated object_index {} for LightGizmo", data.light_gizmo_data.object_index);
         data.light_gizmo_data.create_buffers(&instance, &rrdevice, &data.rrcommand_pool)
             .expect("Failed to create light gizmo buffers");
-        data.light_gizmo_selected = false;
-        data.light_drag_axis = LightGizmoAxis::None;
 
-        // ビルボード用のテクスチャを先にロード
         data.light_gizmo_data.create_billboard_buffers(&instance, &rrdevice, &data.rrcommand_pool)
             .expect("Failed to create billboard buffers");
 
-        // ビルボード用のディスクリプタセットとパイプラインを作成
-        data.billboard_descriptor_set = RRDescriptorSet::new(&rrdevice, &data.rrswapchain);
-        data.billboard_descriptor_set
+        data.billboard.descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &data.rrswapchain)
+            .expect("Failed to create billboard descriptor set");
+        data.billboard.descriptor_set
             .rrdata
-            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain));
+            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "billboard"));
 
-        if let Err(e) = create_billboard_descriptor_set(
-            &instance,
-            &rrdevice,
-            &data.rrswapchain,
-            &mut data.billboard_descriptor_set,
-            &data.light_gizmo_data,
-        ) {
-            eprintln!("failed to create billboard descriptor set: {:?}", e);
+        data.billboard.descriptor_set
+            .allocate_descriptor_sets(&rrdevice, &data.rrswapchain)
+            .expect("Failed to allocate billboard descriptor sets");
+
+        if let Some(ref billboard_texture) = data.light_gizmo_data.billboard_texture {
+            data.billboard.descriptor_set
+                .update_descriptor_sets(&rrdevice, &data.rrswapchain, billboard_texture)
+                .expect("Failed to update billboard descriptor sets");
         }
 
-        data.billboard_pipeline = RRPipeline::new_billboard(
+        data.billboard.pipeline = RRPipeline::new_billboard(
             &rrdevice,
             &data.rrrender,
             &data.rrswapchain,
-            data.billboard_descriptor_set.descriptor_set_layout,
+            data.billboard.descriptor_set.descriptor_set_layout,
             "assets/shaders/billboardVert.spv",
             "assets/shaders/billboardFrag.spv",
-            rust_rendering::debugview::gizmo::BillboardVertex::binding_description(),
-            rust_rendering::debugview::gizmo::BillboardVertex::attribute_descriptions().to_vec(),
+            crate::debugview::gizmo::BillboardVertex::binding_description(),
+            crate::debugview::gizmo::BillboardVertex::attribute_descriptions().to_vec(),
         )
         .expect("Failed to create billboard pipeline");
 
         println!("created pipeline");
+
+        crate::log!("Starting ray tracing initialization...");
+        crate::log!("swapchain extent: {}x{}", data.rrswapchain.swapchain_extent.width, data.rrswapchain.swapchain_extent.height);
+
+        match Self::init_ray_tracing(&instance, &rrdevice, &mut data) {
+            Ok(_) => {
+                crate::log!("init_ray_tracing succeeded");
+                crate::log!("gbuffer is_some: {}", data.raytracing.gbuffer.is_some());
+            }
+            Err(e) => {
+                crate::log!("Failed to initialize ray tracing: {:?}", e);
+            }
+        }
+        crate::log!("initialized ray tracing resources");
 
         if let Err(e) = Self::reload_model_data_buffer(&instance, &rrdevice, &mut data) {
             eprintln!("{:?}", e)
@@ -238,77 +230,40 @@ impl App {
         if let Err(e) = Self::create_grid_data(&mut data, 0, color, tex_coord) {
             eprintln!("{:?}", e)
         }
+        color = Vec4::new(0.0, 1.0, 0.0, 1.0);
+        if let Err(e) = Self::create_grid_data(&mut data, 1, color, tex_coord) {
+            eprintln!("{:?}", e)
+        }
         color = Vec4::new(0.0, 0.0, 1.0, 1.0);
         if let Err(e) = Self::create_grid_data(&mut data, 2, color, tex_coord) {
             eprintln!("{:?}", e)
         }
         println!("created grid data ");
-        data.grid_scale = 1.0;
-        data.near_plane = 0.1;
-        data.far_plane = 1000.0;
-        // let _ = Self::create_texture_image(&instance, &device, &mut data)?;
-        // data.texture_image = RRImage::new(&instance, &rrdevice, &data.rrcommand_pool.borrow_mut());
-        data.grid_vertex_buffer = RRVertexBuffer::new(
+        data.grid.scale = 1.0;
+        data.grid.vertex_buffer = RRVertexBuffer::new(
             &instance,
             &rrdevice,
             &data.rrcommand_pool,
-            (size_of::<vulkan_data::Vertex>() * data.grid_vertices.len()) as vk::DeviceSize,
-            data.grid_vertices.as_ptr() as *const c_void,
-            data.grid_vertices.len(),
+            (size_of::<vulkan_data::Vertex>() * data.grid.vertices.len()) as vk::DeviceSize,
+            data.grid.vertices.as_ptr() as *const c_void,
+            data.grid.vertices.len(),
         );
         println!("created grid vertex buffers");
-        data.grid_index_buffer = RRIndexBuffer::new(
+        data.grid.index_buffer = RRIndexBuffer::new(
             &instance,
             &rrdevice,
             &data.rrcommand_pool,
-            (size_of::<u32>() * data.grid_indices.len()) as u64,
-            data.grid_indices.as_ptr() as *const c_void,
-            data.grid_indices.len(),
+            (size_of::<u32>() * data.grid.indices.len()) as u64,
+            data.grid.indices.as_ptr() as *const c_void,
+            data.grid.indices.len(),
         );
         println!("created grid index buffer");
 
-        data.grid_descriptor_set
-            .rrdata
-            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain));
-        println!("created grid uniform buffers");
+        data.grid.object_index = data.render_resources.objects.allocate_slot();
+        crate::log!("Allocated object_index {} for Grid", data.grid.object_index);
+        println!("allocated grid object_index");
 
-        // Light Ray用のuniform buffer（model = 単位行列）
-        data.grid_descriptor_set
-            .rrdata
-            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain));
-        println!("created light ray uniform buffers");
-
-        // let grid_rrdata = &mut data.grid_descriptor_set.rrdata[0];
-        // grid_rrdata.image_view = create_image_view(
-        //     &rrdevice,
-        //     data.texture_images[0],
-        //     vk::Format::R8G8B8A8_SRGB,
-        //     vk::ImageAspectFlags::COLOR,
-        //     data.mip_levels[0],
-        // )?;
-        // data.grid_descriptor_set.rrdata.sampler =
-        //     create_texture_sampler(&rrdevice, data.mip_levels[0])?;
-
-        if let Err(e) = RRDescriptorSet::create_descriptor_set(
-            &rrdevice,
-            &data.rrswapchain,
-            &mut data.model_descriptor_set,
-        ) {
-            eprintln!("failed to create model descriptor set: {:?}", e);
-        };
-        println!("created model descriptor set");
-        if let Err(e) = RRDescriptorSet::create_descriptor_set(
-            &rrdevice,
-            &data.rrswapchain,
-            &mut data.grid_descriptor_set,
-        ) {
-            eprintln!("failed to create grid descriptor set: {:?}", e);
-        }
-        println!("created grid descriptor set");
-        let offset_vertex = (data.grid_vertices.len()) as u32;
-        let offset_index = (data.grid_indices.len()) as u32;
         data.rrcommand_buffer = RRCommandBuffer::new(&data.rrcommand_pool);
-
         if let Err(e) = RRCommandBuffer::allocate_command_buffers(
             &rrdevice,
             &data.rrrender,
@@ -316,68 +271,18 @@ impl App {
         ) {
             eprintln!("failed to allocate command buffers: {:?}", e);
         }
-        let mut rrbind_info = Vec::new();
-        rrbind_info.push(RRBindInfo::new(
-            &data.grid_pipeline,
-            &data.grid_descriptor_set,
-            &data.grid_vertex_buffer,
-            &data.grid_index_buffer,
-            0,
-            0,
-            0,  // data_index for grid (always 0)
-        ));
-
-        for i in 0..data.model_descriptor_set.rrdata.len() {
-            rrbind_info.push(RRBindInfo::new(
-                &data.model_pipeline,
-                &data.model_descriptor_set,
-                &data.model_descriptor_set.rrdata[i].vertex_buffer,
-                &data.model_descriptor_set.rrdata[i].index_buffer,
-                0,
-                0,
-                i,  // data_index corresponds to rrdata index
-            ));
-        }
-
-        for i in 0..data.rrrender.framebuffers.len() {
-            for j in 0..rrbind_info.len() {
-                if let Err(e) = RRCommandBuffer::bind_command(
-                    &rrdevice,
-                    &data.rrrender,
-                    &data.rrswapchain,
-                    &rrbind_info,
-                    &mut data.rrcommand_buffer,
-                    i,
-                ) {
-                    eprintln!("failed to create command buffers: {:?}", e);
-                }
-            }
-        }
-
-        println!("created command buffer");
+        println!("created command buffers");
 
         let _ = Self::create_sync_objects(&rrdevice.device, &mut data)?;
         println!("created sync objects");
-
-        // Initialize Ray Tracing (G-Buffer, etc.)
-        // Note: Acceleration structures will be built after model is loaded
-        if let Err(e) = Self::init_ray_tracing(&instance, &rrdevice, &mut data) {
-            eprintln!("Failed to initialize ray tracing: {:?}", e);
-        }
-        println!("initialized ray tracing resources");
 
         let frame = 0 as usize;
         let resized = false;
         let start = Instant::now();
 
-        data.initial_camera_pos = [1100.0, -100.0, 200.0];
-        data.camera_pos = data.initial_camera_pos;
-        let camera_pos = vec3(data.camera_pos[0], data.camera_pos[1], data.camera_pos[2]);
-        let camera_direction = (camera_pos - vec3(0.0, 0.0, 0.0)).normalize();
-        let camera_up = vec3(0.0, 1.0, 0.0);
-        data.camera_direction = [camera_direction.x, camera_direction.y, camera_direction.z];
-        data.camera_up = [camera_up.x, camera_up.y, camera_up.z];
-        data.is_left_clicked = false;
+        let initial_pos = cgmath::Vector3::new(5.0, 5.0, 5.0);
+        let target = cgmath::Vector3::new(0.0, 0.0, 0.0);
+        data.camera = Camera::new(initial_pos, target);
 
         println!("initialized finished");
         Ok(Self {
@@ -479,16 +384,16 @@ impl App {
         use log::{error, warn, debug, trace};
         if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::ERROR {
             error!("({:?}) {}", type_, message);
-            log!("ERROR ({:?}) {}", type_, message);
+            crate::log!("ERROR ({:?}) {}", type_, message);
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING {
             warn!("({:?}) {}", type_, message);
-            log!("WARN ({:?}) {}", type_, message);
+            crate::log!("WARN ({:?}) {}", type_, message);
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::INFO {
             debug!("({:?}) {}", type_, message);
-            log!("INFO ({:?}) {}", type_, message);
+            crate::log!("INFO ({:?}) {}", type_, message);
         } else {
             trace!("({:?}) {}", type_, message);
-            log!("DEBUG ({:?}) {}", type_, message);
+            crate::log!("DEBUG ({:?}) {}", type_, message);
         }
 
         vk::FALSE
@@ -522,7 +427,7 @@ impl App {
         data: &mut AppData,
         imgui: &mut imgui::Context,
     ) -> Result<()> {
-        log!("Initializing ImGui Vulkan rendering resources");
+        crate::log!("Initializing ImGui Vulkan rendering resources");
 
         // Get font texture data from ImGui
         let font_atlas = imgui.fonts();
@@ -531,7 +436,7 @@ impl App {
         let height = font_texture.height;
         let font_data: &[u8] = &font_texture.data;
 
-        log!("Font texture size: {}x{}", width, height);
+        crate::log!("Font texture size: {}x{}", width, height);
 
         // Create font image
         let extent = vk::Extent3D {
@@ -710,72 +615,21 @@ impl App {
             msaa_samples,
         )?;
 
-        // Store in AppData
-        data.imgui_pipeline = Some(imgui_pipeline.pipeline);
-        data.imgui_pipeline_layout = Some(imgui_pipeline.pipeline_layout);
-        data.imgui_descriptor_set = Some(descriptor_set);
-        data.imgui_descriptor_set_layout = Some(descriptor_set_layout);
-        data.imgui_descriptor_pool = Some(descriptor_pool);
-        data.imgui_font_image = Some(image);
-        data.imgui_font_image_memory = Some(image_memory);
-        data.imgui_font_image_view = Some(image_view);
-        data.imgui_sampler = Some(sampler);
+        data.imgui.pipeline = Some(imgui_pipeline.pipeline);
+        data.imgui.pipeline_layout = Some(imgui_pipeline.pipeline_layout);
+        data.imgui.descriptor_set = Some(descriptor_set);
+        data.imgui.descriptor_set_layout = Some(descriptor_set_layout);
+        data.imgui.descriptor_pool = Some(descriptor_pool);
+        data.imgui.font_image = Some(image);
+        data.imgui.font_image_memory = Some(image_memory);
+        data.imgui.font_image_view = Some(image_view);
+        data.imgui.sampler = Some(sampler);
 
-        log!("ImGui rendering resources initialized successfully");
-        log!("  Pipeline: {:?}", imgui_pipeline.pipeline);
-        log!("  Descriptor Set: {:?}", descriptor_set);
+        crate::log!("ImGui rendering resources initialized successfully");
+        crate::log!("  Pipeline: {:?}", imgui_pipeline.pipeline);
+        crate::log!("  Descriptor Set: {:?}", descriptor_set);
 
         Ok(())
     }
 }
 
-unsafe fn create_billboard_descriptor_set(
-    _instance: &Instance,
-    rrdevice: &RRDevice,
-    rrswapchain: &RRSwapchain,
-    billboard_descriptor_set: &mut RRDescriptorSet,
-    light_gizmo_data: &rust_rendering::debugview::gizmo::LightGizmoData,
-) -> Result<(), Box<dyn std::error::Error>> {
-    use rust_rendering::vulkanr::descriptor::*;
-    use rust_rendering::logger::logger::*;
-
-    RRDescriptorSet::create_descriptor_set(rrdevice, rrswapchain, billboard_descriptor_set)?;
-
-    log!("billboard_texture is_some: {}", light_gizmo_data.billboard_texture.is_some());
-
-    if let Some(ref billboard_texture) = light_gizmo_data.billboard_texture {
-        let swapchain_images_len = rrswapchain.swapchain_images.len();
-        log!("Updating billboard descriptor sets: rrdata.len={}, swapchain_images_len={}",
-             billboard_descriptor_set.rrdata.len(), swapchain_images_len);
-
-        for i in 0..billboard_descriptor_set.rrdata.len() {
-            for j in 0..swapchain_images_len {
-                let descriptor_set_index = i * swapchain_images_len + j;
-                log!("Updating descriptor set index {} (i={}, j={})", descriptor_set_index, i, j);
-
-                let descriptor_image_info = vk::DescriptorImageInfo::builder()
-                    .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                    .image_view(billboard_texture.image_view)
-                    .sampler(billboard_texture.sampler);
-
-                let descriptor_image_infos = &[descriptor_image_info];
-
-                let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
-                    .dst_set(billboard_descriptor_set.descriptor_sets[descriptor_set_index])
-                    .dst_binding(1)
-                    .dst_array_element(0)
-                    .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                    .image_info(descriptor_image_infos);
-
-                rrdevice.device.update_descriptor_sets(
-                    &[sampler_descriptor_write.build()],
-                    &[] as &[vk::CopyDescriptorSet],
-                );
-            }
-        }
-    } else {
-        log!("WARNING: billboard_texture is None!");
-    }
-
-    Ok(())
-}

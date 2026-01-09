@@ -1,13 +1,12 @@
 use crate::log;
 use crate::math::*;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use cgmath::{Matrix4, Quaternion, Vector3, Vector4};
 use core::result::Result::Ok;
 use gltf::buffer::Data;
-use gltf::{image, Document, Gltf, Node};
+use gltf::{Document, Node};
 use std::collections::HashMap;
 use std::fs::File;
-use std::ptr::null;
 
 #[derive(Clone, Debug, Default)]
 pub struct GltfModel {
@@ -98,8 +97,7 @@ impl GltfModel {
                 // Apply cumulative transform
                 let pos_vec4 = cumulative_transform * Vector4::new(local_pos[0], local_pos[1], local_pos[2], 1.0);
 
-                // Apply Y-flip for rendering
-                vertex.position = [pos_vec4.x, 1.0 - pos_vec4.y, pos_vec4.z];
+                vertex.position = [pos_vec4.x, pos_vec4.y, pos_vec4.z];
             }
         }
     }
@@ -265,12 +263,12 @@ impl GltfModel {
                 continue;
             }
 
-            let mut pos = vec4_from_array([
+            let mut pos = [
                 vertex.position[0],
                 vertex.position[1],
                 vertex.position[2],
                 1f32,
-            ]);
+            ].to_vec4();
 
             // Apply skinning: joint_transform * inverse_bind_pose transforms from bind pose to current pose
             pos = joint_transform * joint_inverse_bind_pose * pos;
@@ -331,12 +329,12 @@ impl GltfModel {
         for gltf_data in &mut self.gltf_data {
             // Apply to all vertices, both skinned and non-skinned
             for vertex in &mut gltf_data.vertices {
-                let pos = vec4_from_array([
+                let pos = [
                     vertex.animation_position[0],
                     vertex.animation_position[1],
                     vertex.animation_position[2],
                     1.0,
-                ]);
+                ].to_vec4();
                 let fixed_pos = fix_transform * pos;
                 vertex.animation_position[0] = fixed_pos.x;
                 vertex.animation_position[1] = fixed_pos.y;
@@ -440,16 +438,16 @@ impl GltfModel {
             let vertex =
                 &mut self.gltf_data[vertex_id.gltf_data_index].vertices[vertex_id.vertex_index];
             // Use original local space position (never changes)
-            let mut position = vec4_from_array([
+            let mut position = [
                 vertex.original_local_position[0],
                 vertex.original_local_position[1],
                 vertex.original_local_position[2],
                 1f32,
-            ]);
+            ].to_vec4();
             // Apply node transform (same as load time - no fix_coord)
             position = node_transform * position;
-            // Apply Y-flip for rendering (same as load time)
-            vertex.animation_position = [position.x, 1.0 - position.y, position.z];
+
+            vertex.animation_position = [position.x, position.y, position.z];
 
             // Debug: log first vertex of NurbsPath.009 AFTER transform
             if rrnode.name.contains("NurbsPath.009") && vertex_id.vertex_index == 0 && time < 0.1 {
@@ -1386,14 +1384,14 @@ unsafe fn process_animation(
                     for (i, translation) in translations.enumerate() {
                         log!("Translation {}: {:?}", i, translation);
                         // Store translation for node animations
-                        let node_translation = vec3_from_array(translation);
+                        let node_translation = translation.to_vec3().into();
                         node_translations.push(node_translation);
 
                         // IMPORTANT: Do NOT scale joint animation translations
                         // glTF files store animation data in the same coordinate system as vertices
                         // Both are already in meters, so no scaling is needed
-                        let joint_translation = vec3_from_array(translation);
-                        let joint_translation_mat = Mat4::from_translation(joint_translation);
+                        let joint_translation = translation.to_vec3();
+                        let joint_translation_mat = Mat4::from_translation(joint_translation.into());
                         joint_translations.push(joint_translation_mat);
                         log!("Translation Matrix {}: {:?}", i, joint_translation_mat);
                     }

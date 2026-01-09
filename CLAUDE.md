@@ -250,3 +250,7 @@ The `memo.txt` file contains useful reference links for:
 - ログは log! マクロで記録します
 - log/log_N.txt に出力されます
 - 標準コンソールには出力せず、上記のファイルに記録するようにしてください
+
+## app/update.rs
+- update の処理がかかれてあります
+- 各機能の処理はここに記述せず、関連する別ファイルに更新処理を書いて、それをupdateで呼ぶ形にしてください

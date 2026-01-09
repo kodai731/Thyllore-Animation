@@ -3,8 +3,8 @@ use std::time::Instant;
 use winit::event::{Event, WindowEvent, ElementState};
 use imgui::{Condition, MouseButton};
 
-use crate::{App, GUIData};
-use rust_rendering::debugview::DebugViewMode;
+use crate::app::{App, GUIData};
+use crate::debugview::DebugViewMode;
 
 fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
     gui_data.is_left_clicked = false;
@@ -111,7 +111,7 @@ impl System {
                                             {
                                                 gui_data.selected_model_path = path.to_string_lossy().to_string();
                                                 gui_data.file_changed = true;
-                                                log!("Selected FBX file: {}", gui_data.selected_model_path);
+                                                crate::log!("Selected FBX file: {}", gui_data.selected_model_path);
                                             }
                                         }
                                         ui.same_line();
@@ -122,7 +122,7 @@ impl System {
                                             {
                                                 gui_data.selected_model_path = path.to_string_lossy().to_string();
                                                 gui_data.file_changed = true;
-                                                log!("Selected glTF file: {}", gui_data.selected_model_path);
+                                                crate::log!("Selected glTF file: {}", gui_data.selected_model_path);
                                             }
                                         }
 
@@ -140,20 +140,16 @@ impl System {
 
                                         ui.text("Camera Controls:");
                                         if ui.button("reset camera") {
-                                            unsafe {
-                                                app.reset_camera();
-                                            }
+                                            app.data.camera.reset();
                                         }
                                         ui.same_line();
                                         if ui.button("reset camera up") {
-                                            unsafe {
-                                                app.reset_camera_up();
-                                            }
+                                            app.data.camera.reset_up();
                                         }
                                         if ui.button("move to light gizmo") {
-                                            unsafe {
-                                                app.move_camera_to_light();
-                                            }
+                                            let light_pos = app.data.rt_debug_state.light_position;
+                                            let offset = cgmath::Vector3::new(2.0, 2.0, 2.0);
+                                            app.data.camera.move_to_look_at(light_pos, offset);
                                         }
                                         ui.separator();
 
@@ -215,6 +211,9 @@ impl System {
                                         if ui.radio_button("Light Direction", &mut current_mode, 5) {
                                             app.data.rt_debug_state.debug_view_mode = DebugViewMode::LightDirection;
                                         }
+                                        if ui.radio_button("View Depth (Green=GBuffer depth)", &mut current_mode, 6) {
+                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::ViewDepth;
+                                        }
 
                                         ui.separator();
 
@@ -223,6 +222,20 @@ impl System {
                                         ui.checkbox("Show Light Ray to Model", &mut gui_data.show_light_ray_to_model);
                                         if ui.button("Debug Shadow Info") {
                                             gui_data.debug_shadow_info = true;
+                                        }
+                                        ui.same_line();
+                                        if ui.button("Debug Billboard Depth") {
+                                            gui_data.debug_billboard_depth = true;
+                                        }
+
+                                        ui.separator();
+                                        ui.text("Test Models:");
+                                        let mut cube_size = app.data.rt_debug_state.cube_size;
+                                        if ui.slider("Cube Size", 1.0, 500.0, &mut cube_size) {
+                                            app.data.rt_debug_state.set_cube_size(cube_size);
+                                        }
+                                        if ui.button("Load Cube Model") {
+                                            gui_data.load_cube = true;
                                         }
 
                                         ui.separator();
@@ -270,7 +283,7 @@ impl System {
                                     unsafe {
                                         if !IMGUI_SIZE_LOGGED {
                                             let display_size = ui.io().display_size;
-                                            log!("ImGui display size: {:.1} x {:.1}", display_size[0], display_size[1]);
+                                            crate::log!("ImGui display size: {:.1} x {:.1}", display_size[0], display_size[1]);
                                             IMGUI_SIZE_LOGGED = true;
                                         }
                                     }

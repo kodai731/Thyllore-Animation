@@ -22,7 +22,7 @@ pub struct VertexData {
 }
 
 // TODO: implement iterator
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct RRData {
     pub rruniform_buffers: Vec<RRUniformBuffer>,
     pub image: vk::Image,
@@ -33,12 +33,30 @@ pub struct RRData {
     pub vertex_data: VertexData,
     pub vertex_buffer: RRVertexBuffer,
     pub index_buffer: RRIndexBuffer,
+    pub render_to_gbuffer: bool,
+}
+
+impl Default for RRData {
+    fn default() -> Self {
+        Self {
+            rruniform_buffers: Vec::new(),
+            image: vk::Image::null(),
+            image_memory: vk::DeviceMemory::null(),
+            mip_level: 0,
+            image_view: vk::ImageView::null(),
+            sampler: vk::Sampler::null(),
+            vertex_data: VertexData::default(),
+            vertex_buffer: RRVertexBuffer::default(),
+            index_buffer: RRIndexBuffer::default(),
+            render_to_gbuffer: true,
+        }
+    }
 }
 
 impl RRData {
-    pub unsafe fn new(instance: &Instance, rrdevice: &RRDevice, rrswapchain: &RRSwapchain) -> Self {
+    pub unsafe fn new(instance: &Instance, rrdevice: &RRDevice, rrswapchain: &RRSwapchain, name: &str) -> Self {
         let mut rrdata = RRData::default();
-        Self::create_uniform_buffers(&mut rrdata, instance, rrdevice, rrswapchain);
+        Self::create_uniform_buffers(&mut rrdata, instance, rrdevice, rrswapchain, name);
         rrdata
     }
 
@@ -47,47 +65,65 @@ impl RRData {
         instance: &Instance,
         rrdevice: &RRDevice,
         rrswapchain: &RRSwapchain,
+        name: &str,
     ) {
-        for _ in 0..rrswapchain.swapchain_images.len() {
+        for i in 0..rrswapchain.swapchain_images.len() {
             let ubo = UniformBufferObject::default();
-            let rruniform_buffer = RRUniformBuffer::new(instance, rrdevice, ubo);
+            let buffer_name = format!("{}[{}]", name, i);
+            let rruniform_buffer = RRUniformBuffer::new(instance, rrdevice, ubo, &buffer_name);
             rrdata.rruniform_buffers.push(rruniform_buffer);
         }
     }
 
-    pub unsafe fn update_ubo(
-        &mut self,
-        rrdevice: &RRDevice,
-        image_index: usize,
-        ubo: &UniformBufferObject,
-    ) -> Result<(), anyhow::Error> {
-        use std::ptr::copy_nonoverlapping as memcpy;
-
-        let ubo_memory = self.rruniform_buffers[image_index].buffer_memory;
-        let memory = rrdevice.device.map_memory(
-            ubo_memory,
-            0,
-            std::mem::size_of::<UniformBufferObject>() as u64,
-            vk::MemoryMapFlags::empty(),
-        )?;
-        memcpy(ubo, memory.cast(), 1);
-        rrdevice.device.unmap_memory(ubo_memory);
-        Ok(())
-    }
-
-    pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
+    pub unsafe fn delete_buffers(&mut self, rrdevice: &RRDevice) {
         for uniform_buffer in &self.rruniform_buffers {
             uniform_buffer.delete(rrdevice);
         }
         self.rruniform_buffers.clear();
-        rrdevice.device.destroy_image_view(self.image_view, None);
-        rrdevice.device.destroy_sampler(self.sampler, None);
-        rrdevice
-            .device
-            .destroy_buffer(self.vertex_buffer.buffer, None);
-        rrdevice
-            .device
-            .destroy_buffer(self.index_buffer.buffer, None);
+
+        if self.image_view != vk::ImageView::null() {
+            rrdevice.device.destroy_image_view(self.image_view, None);
+            self.image_view = vk::ImageView::null();
+        }
+
+        if self.sampler != vk::Sampler::null() {
+            rrdevice.device.destroy_sampler(self.sampler, None);
+            self.sampler = vk::Sampler::null();
+        }
+
+        if self.vertex_buffer.buffer != vk::Buffer::null() {
+            rrdevice.device.destroy_buffer(self.vertex_buffer.buffer, None);
+            self.vertex_buffer.buffer = vk::Buffer::null();
+        }
+
+        if self.vertex_buffer.buffer_memory != vk::DeviceMemory::null() {
+            rrdevice.device.free_memory(self.vertex_buffer.buffer_memory, None);
+            self.vertex_buffer.buffer_memory = vk::DeviceMemory::null();
+        }
+
+        if self.index_buffer.buffer != vk::Buffer::null() {
+            rrdevice.device.destroy_buffer(self.index_buffer.buffer, None);
+            self.index_buffer.buffer = vk::Buffer::null();
+        }
+
+        if self.index_buffer.buffer_memory != vk::DeviceMemory::null() {
+            rrdevice.device.free_memory(self.index_buffer.buffer_memory, None);
+            self.index_buffer.buffer_memory = vk::DeviceMemory::null();
+        }
+    }
+
+    pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
+        self.delete_buffers(rrdevice);
+
+        if self.image != vk::Image::null() {
+            rrdevice.device.destroy_image(self.image, None);
+            self.image = vk::Image::null();
+        }
+
+        if self.image_memory != vk::DeviceMemory::null() {
+            rrdevice.device.free_memory(self.image_memory, None);
+            self.image_memory = vk::DeviceMemory::null();
+        }
     }
 }
 

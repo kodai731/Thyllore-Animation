@@ -1,6 +1,6 @@
 use crate::app::App;
-use rust_rendering::vulkanr::command::*;
-use rust_rendering::vulkanr::vulkan::*;
+use crate::vulkanr::command::*;
+use crate::vulkanr::vulkan::*;
 
 use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;

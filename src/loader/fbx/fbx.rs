@@ -5,15 +5,9 @@ https://github.com/FizzWizZleDazzle/bevy_mod_fbx/blob/main/src/loader.rs#L217
 use crate::log;
 use crate::math::*;
 use anyhow::{anyhow, Context, Result};
-use cgmath::{Matrix3, Matrix4, Quaternion, Deg, Rad, EuclideanSpace, Point3};
-use fbxcel::tree::v7400::NodeHandle;
+use cgmath::{Matrix3, Matrix4, Quaternion, Rad, EuclideanSpace, Point3};
 use fbxcel_dom::any::AnyDocument;
-use fbxcel_dom::v7400::data::{
-    mesh::{
-        layer::TypedLayerElementHandle, ControlPointIndex, PolygonVertexIndex, PolygonVertices,
-    },
-    texture::WrapMode,
-};
+use fbxcel_dom::v7400::data::mesh::{ControlPointIndex, PolygonVertexIndex, PolygonVertices};
 use fbxcel_dom::v7400::object::property::loaders::{StrictF64Loader, F64Arr3Loader, F64Arr16Loader};
 use fbxcel_dom::v7400::{
     object::{
@@ -966,7 +960,7 @@ pub fn triangulate(
 
 fn get_vec(pvs: &PolygonVertices<'_>, pvi: PolygonVertexIndex) -> anyhow::Result<Vector3<f32>> {
     pvs.control_point(pvi)
-        .map(|p| vec3_from_array([p.x as f32, p.y as f32, p.z as f32]))
+        .map(|p| [p.x as f32, p.y as f32, p.z as f32].to_vec3().into())
         .ok_or_else(|| anyhow!("Index out of range: {pvi:?}"))
 }
 
@@ -1042,6 +1036,13 @@ impl FbxModel {
     /// アニメーション数を取得
     pub fn animation_count(&self) -> usize {
         self.animations.len()
+    }
+
+    /// すべてのデータをクリア
+    pub fn clear(&mut self) {
+        self.fbx_data.clear();
+        self.animations.clear();
+        self.nodes.clear();
     }
 }
 
@@ -2208,6 +2209,34 @@ impl FbxData {
 // Russimp-based FBX loader (more flexible, handles various FBX formats)
 // ============================================================================
 
+fn extract_unit_scale_factor(metadata: &russimp::metadata::MetaData) -> Option<f32> {
+    let index = metadata.keys.iter().position(|k| k == "UnitScaleFactor")?;
+    let entry = metadata.values.get(index)?;
+    let meta_type = entry.0.as_ref().ok()?;
+
+    match meta_type {
+        russimp::metadata::MetadataType::Float(v) => Some(*v),
+        russimp::metadata::MetadataType::Double(v) => Some(*v as f32),
+        russimp::metadata::MetadataType::Int(v) => Some(*v as f32),
+        _ => None,
+    }
+}
+
+fn get_unit_scale_to_meters(scene: &Scene) -> f32 {
+    let unit_scale_factor = scene.metadata
+        .as_ref()
+        .and_then(extract_unit_scale_factor)
+        .unwrap_or(1.0);
+
+    // FBX base unit is centimeters
+    // UnitScaleFactor = 1.0 means 1 file unit = 1 cm → 0.01 m
+    // UnitScaleFactor = 100.0 means 1 file unit = 1 m
+    let scale_to_meters = unit_scale_factor * 0.01;
+
+    log!("UnitScaleFactor: {}, scale to meters: {}", unit_scale_factor, scale_to_meters);
+    scale_to_meters
+}
+
 /// Load FBX file using russimp (Assimp bindings)
 /// This is more flexible than fbxcel and can handle FBX files that fbxcel cannot parse
 pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
@@ -2223,9 +2252,10 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
         ],
     ).context(format!("Failed to load FBX with russimp: {}", path))?;
 
+    let unit_scale = get_unit_scale_to_meters(&scene);
     let mut fbx_model = FbxModel::default();
 
-    log!("Loaded scene with {} meshes", scene.meshes.len());
+    log!("Loaded scene with {} meshes, applying unit scale: {}", scene.meshes.len(), unit_scale);
 
     // Process each mesh
     for (mesh_idx, mesh) in scene.meshes.iter().enumerate() {
@@ -2318,13 +2348,19 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                  material_index, scene.materials.len());
         }
 
-        // Extract vertices
+        // Extract vertices with unit scale applied
         for (i, vertex) in mesh.vertices.iter().enumerate() {
-            fbx_data.positions.push(Vector3::new(vertex.x, vertex.y, vertex.z));
-            fbx_data.local_positions.push(Vector3::new(vertex.x, vertex.y, vertex.z));
+            let scaled_pos = Vector3::new(
+                vertex.x * unit_scale,
+                vertex.y * unit_scale,
+                vertex.z * unit_scale,
+            );
+            fbx_data.positions.push(scaled_pos);
+            fbx_data.local_positions.push(scaled_pos);
 
             if i < 3 {
-                log!("  Vertex[{}]: ({:.3}, {:.3}, {:.3})", i, vertex.x, vertex.y, vertex.z);
+                log!("  Vertex[{}]: ({:.3}, {:.3}, {:.3}) scaled from ({:.3}, {:.3}, {:.3})",
+                     i, scaled_pos.x, scaled_pos.y, scaled_pos.z, vertex.x, vertex.y, vertex.z);
             }
         }
 
@@ -2390,12 +2426,17 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                 // Note: Do NOT transpose! Skeletal animation needs the raw offset matrix
                 // because it compensates for the row-major/column-major difference internally
                 let offset = &bone.offset_matrix;
-                let inverse_bind_pose = Matrix4::new(
+                let mut inverse_bind_pose = Matrix4::new(
                     offset.a1, offset.b1, offset.c1, offset.d1,
                     offset.a2, offset.b2, offset.c2, offset.d2,
                     offset.a3, offset.b3, offset.c3, offset.d3,
                     offset.a4, offset.b4, offset.c4, offset.d4,
                 );
+
+                // Apply unit scale to translation component of the matrix
+                inverse_bind_pose[3][0] *= unit_scale;
+                inverse_bind_pose[3][1] *= unit_scale;
+                inverse_bind_pose[3][2] *= unit_scale;
 
                 // Calculate transform_link (bind pose = inverse of offset matrix)
                 let transform_link = inverse_bind_pose.invert().unwrap_or(Matrix4::identity());
@@ -2514,10 +2555,14 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                             let time = (pos_key.time / animation.ticks_per_second) as f32;
                             bone_anim.translation_keys.push(KeyFrame {
                                 time,
-                                value: [pos_key.value.x, pos_key.value.y, pos_key.value.z],
+                                value: [
+                                    pos_key.value.x * unit_scale,
+                                    pos_key.value.y * unit_scale,
+                                    pos_key.value.z * unit_scale,
+                                ],
                             });
                         }
-                        log!("    Added {} translation keys to {}", bone_anim.translation_keys.len() - before_count, bone_name);
+                        log!("    Added {} translation keys to {} (scaled by {})", bone_anim.translation_keys.len() - before_count, bone_name, unit_scale);
                     }
                     Some("Rotation") => {
                         // Only process rotation keys for Rotation channel
@@ -2607,7 +2652,11 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                             let time = (pos_key.time / animation.ticks_per_second) as f32;
                             bone_anim.translation_keys.push(KeyFrame {
                                 time,
-                                value: [pos_key.value.x, pos_key.value.y, pos_key.value.z],
+                                value: [
+                                    pos_key.value.x * unit_scale,
+                                    pos_key.value.y * unit_scale,
+                                    pos_key.value.z * unit_scale,
+                                ],
                             });
                         }
 
@@ -2791,7 +2840,7 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
     }
 
     // Build bone hierarchy and get mesh-to-node mapping
-    let mesh_to_node = build_bone_hierarchy_from_scene(&scene, &mut fbx_model);
+    let mesh_to_node = build_bone_hierarchy_from_scene(&scene, &mut fbx_model, unit_scale);
 
     // Check which nodes have animations
     let animated_nodes: std::collections::HashSet<String> = if !fbx_model.animations.is_empty() {
@@ -2864,11 +2913,12 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
 }
 
 /// Build bone hierarchy from russimp scene and return mesh-to-node mapping
-fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel) -> HashMap<usize, String> {
+fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel, unit_scale: f32) -> HashMap<usize, String> {
     fn traverse_node(
         node: &russimp::node::Node,
         nodes: &mut HashMap<String, BoneNode>,
         parent: Option<String>,
+        unit_scale: f32,
     ) {
         let raw_node_name = node.name.clone();
 
@@ -2881,7 +2931,7 @@ fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel) -> H
         if node_name.contains("$AssimpFbx$") {
             // Process children with the current parent (skip this node)
             for child in node.children.borrow().iter() {
-                traverse_node(child, nodes, parent.clone());
+                traverse_node(child, nodes, parent.clone(), unit_scale);
             }
             return;
         }
@@ -2891,12 +2941,17 @@ fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel) -> H
         // cgmath Matrix4::new() expects column-major: each 4 arguments form a column
         // To transpose: column 0 of cgmath = [a1, b1, c1, d1] (first element of each row)
         let transform = node.transformation;
-        let local_transform = Matrix4::new(
+        let mut local_transform = Matrix4::new(
             transform.a1, transform.b1, transform.c1, transform.d1,  // Column 0 (a1=row0col0, b1=row1col0, c1=row2col0, d1=row3col0)
             transform.a2, transform.b2, transform.c2, transform.d2,  // Column 1 (a2=row0col1, b2=row1col1, c2=row2col1, d2=row3col1)
             transform.a3, transform.b3, transform.c3, transform.d3,  // Column 2
             transform.a4, transform.b4, transform.c4, transform.d4,  // Column 3
         );
+
+        // Apply unit scale to translation component of the matrix
+        local_transform[3][0] *= unit_scale;
+        local_transform[3][1] *= unit_scale;
+        local_transform[3][2] *= unit_scale;
 
         // Use identity default values - local_transform already contains the full transform
         // These defaults are only used when there are no animation keys for a specific component
@@ -2917,7 +2972,7 @@ fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel) -> H
 
         // Recursively process children
         for child in node.children.borrow().iter() {
-            traverse_node(child, nodes, Some(node_name.clone()));
+            traverse_node(child, nodes, Some(node_name.clone()), unit_scale);
         }
     }
 
@@ -2960,7 +3015,7 @@ fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel) -> H
     }
 
     if let Some(root) = &scene.root {
-        traverse_node(root, &mut fbx_model.nodes, None);
+        traverse_node(root, &mut fbx_model.nodes, None, unit_scale);
         log!("Built bone hierarchy with {} nodes", fbx_model.nodes.len());
 
         // Debug: Log all nodes in the hierarchy

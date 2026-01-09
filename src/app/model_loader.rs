@@ -1,11 +1,18 @@
 use crate::app::AppData;
+use crate::scene::render_resource::{MaterialUBO, Mesh};
 use crate::scene::CubeModel;
+use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::vulkanr::data as vulkan_data;
+use crate::vulkanr::data::VertexData;
 use crate::vulkanr::device::*;
+use crate::vulkanr::image::{create_image_view, create_texture_image_pixel, create_texture_sampler};
 use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::vulkan::*;
 
 use anyhow::Result;
+use std::borrow::BorrowMut;
+use std::mem::size_of;
+use std::os::raw::c_void;
 
 pub unsafe fn cleanup_model_resources(rrdevice: &RRDevice, data: &mut AppData) {
     crate::log!("Cleaning up model resources...");
@@ -20,6 +27,8 @@ pub unsafe fn cleanup_model_resources(rrdevice: &RRDevice, data: &mut AppData) {
 
     data.render_resources.clear_meshes(rrdevice);
     data.render_resources.mesh_material_ids.clear();
+    data.render_resources.materials.clear_materials(&rrdevice.device);
+    crate::log!("Cleared materials");
 
     data.fbx_model.clear();
     data.animation_playing = false;
@@ -81,8 +90,68 @@ pub unsafe fn replace_model_with_cube(
 ) -> Result<()> {
     cleanup_model_resources(rrdevice, data);
 
-    let mut cube = CubeModel::new_at_position(size, position);
-    cube.initialize_gpu_resources(instance, rrdevice, &data.rrswapchain, &data.rrcommand_pool)?;
+    let cube = CubeModel::new_at_position(size, position);
+
+    let mut mesh = Mesh::default();
+
+    (mesh.image, mesh.image_memory, mesh.mip_level) = create_texture_image_pixel(
+        instance,
+        rrdevice,
+        data.rrcommand_pool.borrow_mut(),
+        &vec![255u8, 255, 255, 255],
+        1,
+        1,
+    )?;
+
+    mesh.image_view = create_image_view(
+        rrdevice,
+        mesh.image,
+        vk::Format::R8G8B8A8_SRGB,
+        vk::ImageAspectFlags::COLOR,
+        mesh.mip_level,
+    )?;
+
+    mesh.sampler = create_texture_sampler(rrdevice, mesh.mip_level)?;
+
+    mesh.vertex_data = VertexData {
+        vertices: cube.vertices.clone(),
+        indices: cube.indices.clone(),
+    };
+
+    mesh.vertex_buffer = RRVertexBuffer::new(
+        instance,
+        rrdevice,
+        &data.rrcommand_pool,
+        (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len()) as vk::DeviceSize,
+        mesh.vertex_data.vertices.as_ptr() as *const c_void,
+        mesh.vertex_data.vertices.len(),
+    );
+
+    mesh.index_buffer = RRIndexBuffer::new(
+        instance,
+        rrdevice,
+        &data.rrcommand_pool,
+        (size_of::<u32>() * mesh.vertex_data.indices.len()) as u64,
+        mesh.vertex_data.indices.as_ptr() as *const c_void,
+        mesh.vertex_data.indices.len(),
+    );
+
+    mesh.object_index = data.render_resources.objects.allocate_slot();
+    crate::log!("Allocated object_index {} for cube mesh", mesh.object_index);
+
+    let material_id = data.render_resources.materials.create_material_with_texture(
+        instance,
+        rrdevice,
+        "cube_material",
+        mesh.image_view,
+        mesh.sampler,
+        MaterialUBO::default(),
+    )?;
+    data.render_resources.mesh_material_ids.push(material_id);
+    crate::log!("Created material {} for cube", material_id);
+
+    data.render_resources.meshes.push(mesh);
+    crate::log!("Added cube mesh to render_resources.meshes");
 
     rebuild_acceleration_structures(instance, rrdevice, data)?;
 

@@ -2,12 +2,7 @@ use crate::app::data::LightMoveTarget;
 use crate::app::GUIData;
 use crate::log;
 use crate::scene::CubeModel;
-use crate::vulkanr::command::RRCommandPool;
-use crate::vulkanr::core::swapchain::RRSwapchain;
-use crate::vulkanr::device::RRDevice;
 use cgmath::{InnerSpace, Vector3};
-use std::rc::Rc;
-use vulkanalia::prelude::v1_0::Instance;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DebugViewMode {
@@ -239,35 +234,6 @@ impl RayTracingDebugState {
     }
     pub fn should_load_cube(&self, gui_data: &GUIData) -> bool {
         gui_data.load_cube || self.cube_size_changed
-    }
-
-    pub unsafe fn load_cube(
-        &mut self,
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        rrswapchain: &RRSwapchain,
-        rrcommand_pool: &Rc<RRCommandPool>,
-    ) {
-        let cube_position = [0.0, 0.0, 0.0];
-        crate::log!("Loading cube model with size {}...", self.cube_size);
-
-        if let Some(ref mut old_cube) = self.cube_model {
-            old_cube.cleanup(rrdevice);
-        }
-
-        let mut cube = CubeModel::new_at_position(self.cube_size, cube_position);
-        match cube.initialize_gpu_resources(instance, rrdevice, rrswapchain, rrcommand_pool) {
-            Ok(_) => {
-                self.set_actual_cube_top(self.cube_size, cube_position);
-                self.cube_model = Some(cube);
-                crate::log!("Cube model loaded successfully");
-            }
-            Err(e) => {
-                crate::log!("Failed to load cube model: {}", e);
-            }
-        }
-
-        self.cube_size_changed = false;
     }
 
     pub fn finish_cube_load(&mut self) {

@@ -447,6 +447,20 @@ impl MaterialManager {
         self.materials.get(&id)
     }
 
+    pub unsafe fn clear_materials(&mut self, device: &vulkanalia::Device) {
+        for material in self.materials.values() {
+            device.destroy_buffer(material.uniform_buffer, None);
+            device.free_memory(material.uniform_buffer_memory, None);
+        }
+
+        if self.pool != vk::DescriptorPool::null() {
+            device.reset_descriptor_pool(self.pool, vk::DescriptorPoolResetFlags::empty()).ok();
+        }
+
+        self.materials.clear();
+        self.next_id = 0;
+    }
+
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         for material in self.materials.values() {
             device.destroy_buffer(material.uniform_buffer, None);

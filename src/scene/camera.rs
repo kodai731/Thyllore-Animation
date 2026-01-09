@@ -52,7 +52,7 @@ impl Camera {
             self.pan_with_base(diff, base_x, base_y, pan_speed);
         }
 
-        if gui_data.mouse_wheel != 0.0 {
+        if gui_data.mouse_wheel != 0.0 && !gui_data.imgui_wants_mouse {
             let zoom_speed = grid_scale * 0.5;
             self.zoom(gui_data.mouse_wheel, zoom_speed);
         }

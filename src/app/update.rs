@@ -1,3 +1,4 @@
+use crate::app::model_loader::replace_model_with_cube;
 use crate::app::{App, AppData, GUIData};
 use crate::debugview::*;
 use crate::math::*;
@@ -210,12 +211,20 @@ impl App {
         }
 
         if self.data.rt_debug_state.should_load_cube(gui_data) {
-            self.data.rt_debug_state.load_cube(
+            let cube_size = self.data.rt_debug_state.cube_size;
+            let cube_position = [0.0, 0.0, 0.0];
+            if let Err(e) = replace_model_with_cube(
                 &self.instance,
                 &self.rrdevice,
-                &self.data.rrswapchain,
-                &self.data.rrcommand_pool,
-            );
+                &mut self.data,
+                cube_size,
+                cube_position,
+            ) {
+                crate::log!("Failed to replace model with cube: {:?}", e);
+            } else {
+                self.data.rt_debug_state.set_actual_cube_top(cube_size, cube_position);
+            }
+            self.data.rt_debug_state.finish_cube_load();
             gui_data.load_cube = false;
         }
 

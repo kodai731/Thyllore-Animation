@@ -1,0 +1,567 @@
+use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3, Vector4};
+use std::collections::HashMap;
+
+pub type BoneId = u32;
+pub type SkeletonId = u32;
+pub type AnimationClipId = u32;
+
+#[derive(Clone, Debug)]
+pub struct Bone {
+    pub id: BoneId,
+    pub name: String,
+    pub parent_id: Option<BoneId>,
+    pub children: Vec<BoneId>,
+    pub local_transform: Matrix4<f32>,
+    pub inverse_bind_pose: Matrix4<f32>,
+}
+
+impl Default for Bone {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            name: String::new(),
+            parent_id: None,
+            children: Vec::new(),
+            local_transform: Matrix4::identity(),
+            inverse_bind_pose: Matrix4::identity(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Skeleton {
+    pub id: SkeletonId,
+    pub name: String,
+    pub bones: Vec<Bone>,
+    pub bone_name_to_id: HashMap<String, BoneId>,
+    pub root_bone_ids: Vec<BoneId>,
+}
+
+impl Skeleton {
+    pub fn new(name: &str) -> Self {
+        Self {
+            id: 0,
+            name: name.to_string(),
+            bones: Vec::new(),
+            bone_name_to_id: HashMap::new(),
+            root_bone_ids: Vec::new(),
+        }
+    }
+
+    pub fn add_bone(&mut self, name: &str, parent_id: Option<BoneId>) -> BoneId {
+        let id = self.bones.len() as BoneId;
+        let bone = Bone {
+            id,
+            name: name.to_string(),
+            parent_id,
+            children: Vec::new(),
+            local_transform: Matrix4::identity(),
+            inverse_bind_pose: Matrix4::identity(),
+        };
+
+        self.bone_name_to_id.insert(name.to_string(), id);
+        self.bones.push(bone);
+
+        if let Some(parent) = parent_id {
+            if let Some(parent_bone) = self.bones.get_mut(parent as usize) {
+                parent_bone.children.push(id);
+            }
+        } else {
+            self.root_bone_ids.push(id);
+        }
+
+        id
+    }
+
+    pub fn get_bone(&self, id: BoneId) -> Option<&Bone> {
+        self.bones.get(id as usize)
+    }
+
+    pub fn get_bone_mut(&mut self, id: BoneId) -> Option<&mut Bone> {
+        self.bones.get_mut(id as usize)
+    }
+
+    pub fn get_bone_by_name(&self, name: &str) -> Option<&Bone> {
+        self.bone_name_to_id
+            .get(name)
+            .and_then(|&id| self.get_bone(id))
+    }
+
+    pub fn bone_count(&self) -> usize {
+        self.bones.len()
+    }
+
+    pub fn compute_global_transforms(&self) -> Vec<Matrix4<f32>> {
+        let mut global_transforms = vec![Matrix4::identity(); self.bones.len()];
+
+        fn compute_recursive(
+            skeleton: &Skeleton,
+            bone_id: BoneId,
+            parent_transform: Matrix4<f32>,
+            global_transforms: &mut Vec<Matrix4<f32>>,
+        ) {
+            if let Some(bone) = skeleton.get_bone(bone_id) {
+                let global = parent_transform * bone.local_transform;
+                global_transforms[bone_id as usize] = global;
+
+                for &child_id in &bone.children {
+                    compute_recursive(skeleton, child_id, global, global_transforms);
+                }
+            }
+        }
+
+        for &root_id in &self.root_bone_ids {
+            compute_recursive(self, root_id, Matrix4::identity(), &mut global_transforms);
+        }
+
+        global_transforms
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Interpolation {
+    Step,
+    Linear,
+    CubicSpline,
+}
+
+impl Default for Interpolation {
+    fn default() -> Self {
+        Self::Linear
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Keyframe<T> {
+    pub time: f32,
+    pub value: T,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct TransformChannel {
+    pub translation: Vec<Keyframe<Vector3<f32>>>,
+    pub rotation: Vec<Keyframe<Quaternion<f32>>>,
+    pub scale: Vec<Keyframe<Vector3<f32>>>,
+    pub interpolation: Interpolation,
+}
+
+impl TransformChannel {
+    pub fn sample_translation(&self, time: f32) -> Option<Vector3<f32>> {
+        Self::sample_vec3(&self.translation, time, &self.interpolation)
+    }
+
+    pub fn sample_rotation(&self, time: f32) -> Option<Quaternion<f32>> {
+        Self::sample_quat(&self.rotation, time, &self.interpolation)
+    }
+
+    pub fn sample_scale(&self, time: f32) -> Option<Vector3<f32>> {
+        Self::sample_vec3(&self.scale, time, &self.interpolation)
+    }
+
+    fn sample_vec3(
+        keyframes: &[Keyframe<Vector3<f32>>],
+        time: f32,
+        interpolation: &Interpolation,
+    ) -> Option<Vector3<f32>> {
+        if keyframes.is_empty() {
+            return None;
+        }
+        if keyframes.len() == 1 {
+            return Some(keyframes[0].value);
+        }
+
+        if time <= keyframes[0].time {
+            return Some(keyframes[0].value);
+        }
+        if time >= keyframes.last().unwrap().time {
+            return Some(keyframes.last().unwrap().value);
+        }
+
+        for i in 0..keyframes.len() - 1 {
+            let k0 = &keyframes[i];
+            let k1 = &keyframes[i + 1];
+
+            if time >= k0.time && time < k1.time {
+                let t = (time - k0.time) / (k1.time - k0.time);
+                return match interpolation {
+                    Interpolation::Step => Some(k0.value),
+                    Interpolation::Linear | Interpolation::CubicSpline => {
+                        Some(k0.value + (k1.value - k0.value) * t)
+                    }
+                };
+            }
+        }
+
+        Some(keyframes.last().unwrap().value)
+    }
+
+    fn sample_quat(
+        keyframes: &[Keyframe<Quaternion<f32>>],
+        time: f32,
+        interpolation: &Interpolation,
+    ) -> Option<Quaternion<f32>> {
+        if keyframes.is_empty() {
+            return None;
+        }
+        if keyframes.len() == 1 {
+            return Some(keyframes[0].value);
+        }
+
+        if time <= keyframes[0].time {
+            return Some(keyframes[0].value);
+        }
+        if time >= keyframes.last().unwrap().time {
+            return Some(keyframes.last().unwrap().value);
+        }
+
+        for i in 0..keyframes.len() - 1 {
+            let k0 = &keyframes[i];
+            let k1 = &keyframes[i + 1];
+
+            if time >= k0.time && time < k1.time {
+                let t = (time - k0.time) / (k1.time - k0.time);
+                return match interpolation {
+                    Interpolation::Step => Some(k0.value),
+                    Interpolation::Linear | Interpolation::CubicSpline => {
+                        Some(slerp(k0.value, k1.value, t))
+                    }
+                };
+            }
+        }
+
+        Some(keyframes.last().unwrap().value)
+    }
+}
+
+fn slerp(a: Quaternion<f32>, b: Quaternion<f32>, t: f32) -> Quaternion<f32> {
+    let dot = a.s * b.s + a.v.x * b.v.x + a.v.y * b.v.y + a.v.z * b.v.z;
+
+    let (b, dot) = if dot < 0.0 {
+        (Quaternion::new(-b.s, -b.v.x, -b.v.y, -b.v.z), -dot)
+    } else {
+        (b, dot)
+    };
+
+    if dot > 0.9995 {
+        let result = Quaternion::new(
+            a.s + t * (b.s - a.s),
+            a.v.x + t * (b.v.x - a.v.x),
+            a.v.y + t * (b.v.y - a.v.y),
+            a.v.z + t * (b.v.z - a.v.z),
+        );
+        return normalize_quat(result);
+    }
+
+    let theta_0 = dot.acos();
+    let theta = theta_0 * t;
+    let sin_theta = theta.sin();
+    let sin_theta_0 = theta_0.sin();
+
+    let s0 = (theta_0 - theta).cos() - dot * sin_theta / sin_theta_0;
+    let s1 = sin_theta / sin_theta_0;
+
+    Quaternion::new(
+        s0 * a.s + s1 * b.s,
+        s0 * a.v.x + s1 * b.v.x,
+        s0 * a.v.y + s1 * b.v.y,
+        s0 * a.v.z + s1 * b.v.z,
+    )
+}
+
+fn normalize_quat(q: Quaternion<f32>) -> Quaternion<f32> {
+    let len = (q.s * q.s + q.v.x * q.v.x + q.v.y * q.v.y + q.v.z * q.v.z).sqrt();
+    if len > 0.0 {
+        Quaternion::new(q.s / len, q.v.x / len, q.v.y / len, q.v.z / len)
+    } else {
+        Quaternion::new(1.0, 0.0, 0.0, 0.0)
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct AnimationClip {
+    pub id: AnimationClipId,
+    pub name: String,
+    pub duration: f32,
+    pub channels: HashMap<BoneId, TransformChannel>,
+}
+
+impl AnimationClip {
+    pub fn new(name: &str) -> Self {
+        Self {
+            id: 0,
+            name: name.to_string(),
+            duration: 0.0,
+            channels: HashMap::new(),
+        }
+    }
+
+    pub fn add_channel(&mut self, bone_id: BoneId, channel: TransformChannel) {
+        self.channels.insert(bone_id, channel);
+    }
+
+    pub fn sample(&self, time: f32, skeleton: &mut Skeleton) {
+        for (&bone_id, channel) in &self.channels {
+            if let Some(bone) = skeleton.get_bone_mut(bone_id) {
+                let translation = channel
+                    .sample_translation(time)
+                    .unwrap_or(Vector3::new(0.0, 0.0, 0.0));
+                let rotation = channel
+                    .sample_rotation(time)
+                    .unwrap_or(Quaternion::new(1.0, 0.0, 0.0, 0.0));
+                let scale = channel
+                    .sample_scale(time)
+                    .unwrap_or(Vector3::new(1.0, 1.0, 1.0));
+
+                bone.local_transform = compose_transform(translation, rotation, scale);
+            }
+        }
+    }
+}
+
+fn compose_transform(
+    translation: Vector3<f32>,
+    rotation: Quaternion<f32>,
+    scale: Vector3<f32>,
+) -> Matrix4<f32> {
+    let t = Matrix4::from_translation(translation);
+    let r = Matrix4::from(rotation);
+    let s = Matrix4::from_nonuniform_scale(scale.x, scale.y, scale.z);
+    t * r * s
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct AnimationPlayer {
+    pub current_clip_id: Option<AnimationClipId>,
+    pub time: f32,
+    pub speed: f32,
+    pub playing: bool,
+    pub looping: bool,
+}
+
+impl AnimationPlayer {
+    pub fn new() -> Self {
+        Self {
+            current_clip_id: None,
+            time: 0.0,
+            speed: 1.0,
+            playing: false,
+            looping: true,
+        }
+    }
+
+    pub fn play(&mut self, clip_id: AnimationClipId) {
+        self.current_clip_id = Some(clip_id);
+        self.time = 0.0;
+        self.playing = true;
+    }
+
+    pub fn pause(&mut self) {
+        self.playing = false;
+    }
+
+    pub fn resume(&mut self) {
+        self.playing = true;
+    }
+
+    pub fn stop(&mut self) {
+        self.playing = false;
+        self.time = 0.0;
+    }
+
+    pub fn update(&mut self, delta_time: f32, clip_duration: f32) {
+        if !self.playing || clip_duration <= 0.0 {
+            return;
+        }
+
+        self.time += delta_time * self.speed;
+
+        if self.looping {
+            self.time = self.time % clip_duration;
+        } else if self.time >= clip_duration {
+            self.time = clip_duration;
+            self.playing = false;
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SkinData {
+    pub skeleton_id: SkeletonId,
+    pub bone_indices: Vec<Vector4<u32>>,
+    pub bone_weights: Vec<Vector4<f32>>,
+    pub base_positions: Vec<Vector3<f32>>,
+    pub base_normals: Vec<Vector3<f32>>,
+}
+
+impl Default for SkinData {
+    fn default() -> Self {
+        Self {
+            skeleton_id: 0,
+            bone_indices: Vec::new(),
+            bone_weights: Vec::new(),
+            base_positions: Vec::new(),
+            base_normals: Vec::new(),
+        }
+    }
+}
+
+impl SkinData {
+    pub fn apply_skinning(
+        &self,
+        skeleton: &Skeleton,
+        out_positions: &mut [Vector3<f32>],
+        out_normals: &mut [Vector3<f32>],
+    ) {
+        let global_transforms = skeleton.compute_global_transforms();
+        let mut skin_matrices = Vec::with_capacity(skeleton.bone_count());
+
+        for bone in &skeleton.bones {
+            let global = global_transforms[bone.id as usize];
+            skin_matrices.push(global * bone.inverse_bind_pose);
+        }
+
+        for i in 0..self.base_positions.len() {
+            let indices = &self.bone_indices[i];
+            let weights = &self.bone_weights[i];
+
+            let mut skinned_pos = Vector3::new(0.0, 0.0, 0.0);
+            let mut skinned_normal = Vector3::new(0.0, 0.0, 0.0);
+
+            for j in 0..4 {
+                let bone_idx = match j {
+                    0 => indices.x,
+                    1 => indices.y,
+                    2 => indices.z,
+                    3 => indices.w,
+                    _ => 0,
+                } as usize;
+
+                let weight = match j {
+                    0 => weights.x,
+                    1 => weights.y,
+                    2 => weights.z,
+                    3 => weights.w,
+                    _ => 0.0,
+                };
+
+                if weight > 0.0 && bone_idx < skin_matrices.len() {
+                    let m = &skin_matrices[bone_idx];
+
+                    let pos = self.base_positions[i];
+                    let transformed = m * Vector4::new(pos.x, pos.y, pos.z, 1.0);
+                    skinned_pos +=
+                        Vector3::new(transformed.x, transformed.y, transformed.z) * weight;
+
+                    if i < self.base_normals.len() {
+                        let normal = self.base_normals[i];
+                        let transformed_n = m * Vector4::new(normal.x, normal.y, normal.z, 0.0);
+                        skinned_normal +=
+                            Vector3::new(transformed_n.x, transformed_n.y, transformed_n.z)
+                                * weight;
+                    }
+                }
+            }
+
+            if i < out_positions.len() {
+                out_positions[i] = skinned_pos;
+            }
+            if i < out_normals.len() {
+                let len = (skinned_normal.x * skinned_normal.x
+                    + skinned_normal.y * skinned_normal.y
+                    + skinned_normal.z * skinned_normal.z)
+                    .sqrt();
+                if len > 0.0 {
+                    out_normals[i] = skinned_normal / len;
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct AnimationSystem {
+    pub skeletons: Vec<Skeleton>,
+    pub clips: Vec<AnimationClip>,
+    pub player: AnimationPlayer,
+    next_skeleton_id: SkeletonId,
+    next_clip_id: AnimationClipId,
+}
+
+impl AnimationSystem {
+    pub fn new() -> Self {
+        Self {
+            skeletons: Vec::new(),
+            clips: Vec::new(),
+            player: AnimationPlayer::new(),
+            next_skeleton_id: 0,
+            next_clip_id: 0,
+        }
+    }
+
+    pub fn add_skeleton(&mut self, mut skeleton: Skeleton) -> SkeletonId {
+        let id = self.next_skeleton_id;
+        self.next_skeleton_id += 1;
+        skeleton.id = id;
+        self.skeletons.push(skeleton);
+        id
+    }
+
+    pub fn add_clip(&mut self, mut clip: AnimationClip) -> AnimationClipId {
+        let id = self.next_clip_id;
+        self.next_clip_id += 1;
+        clip.id = id;
+        self.clips.push(clip);
+        id
+    }
+
+    pub fn get_skeleton(&self, id: SkeletonId) -> Option<&Skeleton> {
+        self.skeletons.iter().find(|s| s.id == id)
+    }
+
+    pub fn get_skeleton_mut(&mut self, id: SkeletonId) -> Option<&mut Skeleton> {
+        self.skeletons.iter_mut().find(|s| s.id == id)
+    }
+
+    pub fn get_clip(&self, id: AnimationClipId) -> Option<&AnimationClip> {
+        self.clips.iter().find(|c| c.id == id)
+    }
+
+    pub fn play(&mut self, clip_id: AnimationClipId) {
+        self.player.play(clip_id);
+    }
+
+    pub fn update(&mut self, delta_time: f32) {
+        if let Some(clip_id) = self.player.current_clip_id {
+            if let Some(clip) = self.get_clip(clip_id) {
+                let duration = clip.duration;
+                self.player.update(delta_time, duration);
+            }
+        }
+    }
+
+    pub fn apply_to_skeleton(&mut self, skeleton_id: SkeletonId) {
+        let clip_id = match self.player.current_clip_id {
+            Some(id) => id,
+            None => return,
+        };
+
+        let time = self.player.time;
+
+        let clip = match self.clips.iter().find(|c| c.id == clip_id) {
+            Some(c) => c.clone(),
+            None => return,
+        };
+
+        if let Some(skeleton) = self.get_skeleton_mut(skeleton_id) {
+            clip.sample(time, skeleton);
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.skeletons.clear();
+        self.clips.clear();
+        self.player = AnimationPlayer::new();
+        self.next_skeleton_id = 0;
+        self.next_clip_id = 0;
+    }
+}

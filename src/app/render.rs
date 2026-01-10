@@ -76,82 +76,56 @@ impl App {
 
         self.data.images_in_flight[image_index as usize] = self.data.in_flight_fences[self.frame];
 
-        // FBXアニメーション更新
-        if self.data.fbx_model.animation_count() > 0 {
+        if !self.data.render_resources.animation.clips.is_empty() {
             if !self.data.animation_playing {
-                // アニメーションが一時停止中の場合のみ、最初のフレームでログを出力
                 static mut LOGGED_PAUSED: bool = false;
                 unsafe {
                     if !LOGGED_PAUSED {
-                        crate::log!("FBX animation is paused (animation_playing=false)");
+                        crate::log!("Animation is paused (animation_playing=false)");
                         LOGGED_PAUSED = true;
                     }
                 }
             } else {
-                // 経過時間を取得
                 let elapsed = self.start.elapsed().as_secs_f32();
+                let animation = &mut self.data.render_resources.animation;
 
-                // アニメーション時間を更新
-                if let Some(duration) = self
-                    .data
-                    .fbx_model
-                    .get_animation_duration(self.data.current_animation_index)
-                {
-                    // Static pose (duration == 0) or animated
-                    if duration > 0.0 {
-                        // ループ再生（アニメーション）
-                        let prev_time = self.data.animation_time;
-                        self.data.animation_time = elapsed % duration;
+                if let Some(clip_id) = animation.player.current_clip_id {
+                    if let Some(clip) = animation.clips.iter().find(|c| c.id == clip_id) {
+                        let duration = clip.duration;
+                        if duration > 0.0 {
+                            let prev_time = animation.player.time;
+                            animation.player.time = elapsed % duration;
 
-                        // Log every 10 frames for debugging (avoid log spam)
-                        static mut FRAME_COUNT: u32 = 0;
-                        unsafe {
-                            FRAME_COUNT += 1;
-                            if FRAME_COUNT % 10 == 0 {
-                                crate::log!("Updating FBX animation: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
-                                     self.data.animation_time, duration, elapsed, prev_time);
+                            static mut FRAME_COUNT: u32 = 0;
+                            unsafe {
+                                FRAME_COUNT += 1;
+                                if FRAME_COUNT % 60 == 0 {
+                                    crate::log!("Animation update: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
+                                         animation.player.time, duration, elapsed, prev_time);
+                                }
                             }
-                        }
-
-                        // アニメーションを適用
-                        self.data.fbx_model.update_animation(
-                            self.data.current_animation_index,
-                            self.data.animation_time,
-                        );
-
-                        // 頂点バッファを更新
-                        Self::update_fbx_vertex_buffer(
-                            &self.instance,
-                            &self.rrdevice,
-                            &mut self.data,
-                        )?;
-
-                        // Acceleration Structureを更新（アニメーション後の頂点座標で）
-                        Self::update_acceleration_structures(
-                            &self.instance,
-                            &self.rrdevice,
-                            &mut self.data,
-                        )?;
-                    } else {
-                        // Static pose (duration == 0): keep time at 0, no need to update every frame
-                        // Initial pose was already applied in load_model_from_path
-                        static mut LOGGED_STATIC: bool = false;
-                        unsafe {
-                            if !LOGGED_STATIC {
-                                crate::log!("FBX animation has duration=0 (static pose)");
-                                LOGGED_STATIC = true;
-                            }
-                        }
-                    }
-                } else {
-                    static mut LOGGED_NO_DURATION: bool = false;
-                    unsafe {
-                        if !LOGGED_NO_DURATION {
-                            crate::log!("FBX animation has no duration (get_animation_duration returned None)");
-                            LOGGED_NO_DURATION = true;
                         }
                     }
                 }
+
+                let skeleton_id = self.data.render_resources.meshes.first()
+                    .and_then(|m| m.skeleton_id);
+
+                if let Some(skel_id) = skeleton_id {
+                    self.data.render_resources.animation.apply_to_skeleton(skel_id);
+                }
+
+                Self::update_skinned_vertex_buffers(
+                    &self.instance,
+                    &self.rrdevice,
+                    &mut self.data,
+                )?;
+
+                Self::update_acceleration_structures(
+                    &self.instance,
+                    &self.rrdevice,
+                    &mut self.data,
+                )?;
             }
         }
 

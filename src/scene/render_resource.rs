@@ -1,3 +1,4 @@
+use crate::scene::animation::{AnimationSystem, SkeletonId, SkinData};
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::vulkanr::core::device::RRDevice;
 use crate::vulkanr::data::{Vertex, VertexData};
@@ -77,6 +78,8 @@ pub struct Mesh {
     pub sampler: vk::Sampler,
     pub render_to_gbuffer: bool,
     pub object_index: usize,
+    pub skin_data: Option<SkinData>,
+    pub skeleton_id: Option<SkeletonId>,
 }
 
 impl Default for Mesh {
@@ -92,6 +95,8 @@ impl Default for Mesh {
             sampler: vk::Sampler::null(),
             render_to_gbuffer: true,
             object_index: 0,
+            skin_data: None,
+            skeleton_id: None,
         }
     }
 }
@@ -650,6 +655,7 @@ pub struct RenderResources {
     pub objects: ObjectDescriptorSet,
     pub meshes: Vec<Mesh>,
     pub mesh_material_ids: Vec<MaterialId>,
+    pub animation: AnimationSystem,
 }
 
 impl RenderResources {
@@ -670,6 +676,7 @@ impl RenderResources {
             objects,
             meshes: Vec::new(),
             mesh_material_ids: Vec::new(),
+            animation: AnimationSystem::new(),
         })
     }
 

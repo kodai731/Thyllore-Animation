@@ -28,9 +28,9 @@ pub unsafe fn cleanup_model_resources(rrdevice: &RRDevice, data: &mut AppData) {
     data.render_resources.clear_meshes(rrdevice);
     data.render_resources.mesh_material_ids.clear();
     data.render_resources.materials.clear_materials(&rrdevice.device);
-    crate::log!("Cleared materials");
+    data.render_resources.animation.clear();
+    crate::log!("Cleared materials and animation");
 
-    data.fbx_model.clear();
     data.animation_playing = false;
     data.animation_time = 0.0;
 

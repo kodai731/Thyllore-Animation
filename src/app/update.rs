@@ -31,13 +31,18 @@ impl App {
         use crate::app::data::LightMoveTarget;
 
         if gui_data.move_light_to != LightMoveTarget::None {
-            let all_positions: Vec<Vector3<f32>> = if !self.data.fbx_model.fbx_data.is_empty() {
+            let all_positions: Vec<Vector3<f32>> = if !self.data.render_resources.meshes.is_empty() {
                 self.data
-                    .fbx_model
-                    .fbx_data
+                    .render_resources
+                    .meshes
                     .iter()
-                    .flat_map(|data| data.positions.iter())
-                    .cloned()
+                    .flat_map(|mesh| {
+                        mesh
+                            .vertex_data
+                            .vertices
+                            .iter()
+                            .map(|v| Vector3::new(v.pos.x, v.pos.y, v.pos.z))
+                    })
                     .collect()
             } else if !self.data.gltf_model.gltf_data.is_empty() {
                 self.data
@@ -55,18 +60,7 @@ impl App {
                     })
                     .collect()
             } else {
-                self.data
-                    .render_resources
-                    .meshes
-                    .iter()
-                    .flat_map(|mesh| {
-                        mesh
-                            .vertex_data
-                            .vertices
-                            .iter()
-                            .map(|v| Vector3::new(v.pos.x, v.pos.y, v.pos.z))
-                    })
-                    .collect()
+                Vec::new()
             };
 
             self.data.rt_debug_state.update_light_position(
@@ -983,113 +977,6 @@ impl App {
                     v.normal.y,
                     v.normal.z
                 );
-            }
-        }
-
-        if !self.data.fbx_model.fbx_data.is_empty() {
-            crate::log!("FBX model data:");
-            for (i, fbx_data) in self.data.fbx_model.fbx_data.iter().enumerate() {
-                crate::log!(
-                    "  Mesh[{}]: {} positions, {} normals",
-                    i,
-                    fbx_data.positions.len(),
-                    fbx_data.normals.len()
-                );
-                if !fbx_data.positions.is_empty() {
-                    let (min_x, max_x) = fbx_data
-                        .positions
-                        .iter()
-                        .fold((f32::MAX, f32::MIN), |(min, max), p| {
-                            (min.min(p.x), max.max(p.x))
-                        });
-                    let (min_y, max_y) = fbx_data
-                        .positions
-                        .iter()
-                        .fold((f32::MAX, f32::MIN), |(min, max), p| {
-                            (min.min(p.y), max.max(p.y))
-                        });
-                    let (min_z, max_z) = fbx_data
-                        .positions
-                        .iter()
-                        .fold((f32::MAX, f32::MIN), |(min, max), p| {
-                            (min.min(p.z), max.max(p.z))
-                        });
-                    crate::log!(
-                        "    bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
-                        min_x,
-                        max_x,
-                        min_y,
-                        max_y,
-                        min_z,
-                        max_z
-                    );
-
-                    let center = Vector3::new(
-                        (min_x + max_x) / 2.0,
-                        (min_y + max_y) / 2.0,
-                        (min_z + max_z) / 2.0,
-                    );
-                    let light_to_center = center - light_pos;
-                    let dist = light_to_center.magnitude();
-                    if dist > 0.001 {
-                        crate::log!(
-                            "    light->center: dir=({:.3}, {:.3}, {:.3}), dist={:.2}",
-                            light_to_center.x / dist,
-                            light_to_center.y / dist,
-                            light_to_center.z / dist,
-                            dist
-                        );
-                    }
-
-                    crate::log!("    Light relative to model:");
-                    crate::log!(
-                        "      X: {} (light={:.2}, range=[{:.2}, {:.2}])",
-                        if light_pos.x < min_x {
-                            "LEFT"
-                        } else if light_pos.x > max_x {
-                            "RIGHT"
-                        } else {
-                            "INSIDE"
-                        },
-                        light_pos.x,
-                        min_x,
-                        max_x
-                    );
-                    crate::log!(
-                        "      Y: {} (light={:.2}, range=[{:.2}, {:.2}])",
-                        if light_pos.y < min_y {
-                            "BELOW"
-                        } else if light_pos.y > max_y {
-                            "ABOVE"
-                        } else {
-                            "INSIDE"
-                        },
-                        light_pos.y,
-                        min_y,
-                        max_y
-                    );
-                    crate::log!(
-                        "      Z: {} (light={:.2}, range=[{:.2}, {:.2}])",
-                        if light_pos.z < min_z {
-                            "BEHIND"
-                        } else if light_pos.z > max_z {
-                            "FRONT"
-                        } else {
-                            "INSIDE"
-                        },
-                        light_pos.z,
-                        min_z,
-                        max_z
-                    );
-                }
-                if !fbx_data.normals.is_empty() {
-                    crate::log!(
-                        "    normal[0]: ({:.3}, {:.3}, {:.3})",
-                        fbx_data.normals[0].x,
-                        fbx_data.normals[0].y,
-                        fbx_data.normals[0].z
-                    );
-                }
             }
         }
 

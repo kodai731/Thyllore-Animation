@@ -1,4 +1,8 @@
 use crate::app::{App, AppData};
+use crate::loader::fbx::load_fbx_to_render_resources;
+use crate::loader::gltf::gltf::*;
+use crate::loader::texture::load_png_image;
+use crate::math::*;
 use crate::scene::render_resource::{MaterialUBO, Mesh};
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::data as vulkan_data;
@@ -6,11 +10,6 @@ use crate::vulkanr::data::{Vertex, VertexData};
 use crate::vulkanr::device::*;
 use crate::vulkanr::image::*;
 use crate::vulkanr::vulkan::*;
-
-use crate::loader::fbx::fbx::{load_fbx, load_fbx_with_russimp, FbxModel};
-use crate::loader::gltf::gltf::*;
-use crate::loader::texture::load_png_image;
-use crate::math::*;
 
 use anyhow::{anyhow, Result};
 use cgmath::Matrix4;
@@ -26,24 +25,28 @@ impl App {
         data: &mut AppData,
     ) -> Result<()> {
         let model_path_fbx = "assets/models/phoenix-bird/source/fly.fbx";
-        data.fbx_model = load_fbx_with_russimp(model_path_fbx)?;
 
-        if data.fbx_model.animation_count() > 0 {
-            crate::log!("Applying initial pose (time=0) for FBX skeletal animation...");
-            data.fbx_model.update_animation(0, 0.0);
-        }
+        let fbx_result = load_fbx_to_render_resources(model_path_fbx)?;
+        crate::log!(
+            "Loaded FBX: {} meshes, {} skeletons, {} clips",
+            fbx_result.meshes.len(),
+            fbx_result.animation_system.skeletons.len(),
+            fbx_result.animation_system.clips.len()
+        );
 
-        for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
+        data.render_resources.animation = fbx_result.animation_system;
+
+        for (mesh_idx, fbx_mesh) in fbx_result.meshes.iter().enumerate() {
             crate::log!(
-                "Creating Mesh for FBX mesh {}: {} vertices, texture: {:?}",
+                "Creating Mesh {}: {} vertices, texture: {:?}",
                 mesh_idx,
-                fbx_data.positions.len(),
-                fbx_data.diffuse_texture
+                fbx_mesh.vertex_data.vertices.len(),
+                fbx_mesh.texture_path
             );
 
             let mut mesh = Mesh::default();
 
-            if let Some(texture_path) = &fbx_data.diffuse_texture {
+            if let Some(texture_path) = &fbx_mesh.texture_path {
                 crate::log!("Loading texture: {}", texture_path);
                 match load_png_image(texture_path) {
                     Ok((image_data, width, height)) => {
@@ -62,11 +65,7 @@ impl App {
                                 crate::log!("Texture loaded successfully for mesh {}", mesh_idx);
                             }
                             Err(e) => {
-                                crate::log!(
-                                    "Failed to create texture image for mesh {}: {}",
-                                    mesh_idx,
-                                    e
-                                );
+                                crate::log!("Failed to create texture image: {}", e);
                                 (mesh.image, mesh.image_memory, mesh.mip_level) =
                                     create_texture_image_pixel(
                                         instance,
@@ -80,7 +79,7 @@ impl App {
                         }
                     }
                     Err(e) => {
-                        crate::log!("Failed to load texture file {}: {}", texture_path, e);
+                        crate::log!("Failed to load texture file: {}", e);
                         (mesh.image, mesh.image_memory, mesh.mip_level) =
                             create_texture_image_pixel(
                                 instance,
@@ -93,7 +92,6 @@ impl App {
                     }
                 }
             } else {
-                crate::log!("No texture specified for mesh {}, using white", mesh_idx);
                 (mesh.image, mesh.image_memory, mesh.mip_level) = create_texture_image_pixel(
                     instance,
                     rrdevice,
@@ -104,44 +102,25 @@ impl App {
                 )?;
             }
 
-            mesh.vertex_data = VertexData::default();
-            for (i, position) in fbx_data.positions.iter().enumerate() {
-                let uv = if i < fbx_data.tex_coords.len() {
-                    fbx_data.tex_coords[i]
-                } else {
-                    [0.5, 0.5]
-                };
+            mesh.vertex_data = fbx_mesh.vertex_data.clone();
+            mesh.skin_data = fbx_mesh.skin_data.clone();
+            mesh.skeleton_id = fbx_mesh.skeleton_id;
 
-                let normal = if i < fbx_data.normals.len() {
-                    let n = &fbx_data.normals[i];
-                    Vec3::new(n.x, n.y, n.z)
-                } else {
-                    Vec3::new(0.0, 1.0, 0.0)
-                };
-
-                let vertex = vulkan_data::Vertex::new_with_normal(
-                    Vec3::new(position.x, position.y, position.z),
-                    Vec4::new(1.0, 1.0, 1.0, 1.0),
-                    uv.to_vec2(),
-                    normal,
-                );
-                mesh.vertex_data.vertices.push(vertex);
-            }
-
-            mesh.vertex_data.indices = fbx_data.indices.clone();
             data.render_resources.meshes.push(mesh);
         }
 
-        if data.fbx_model.animation_count() > 0 {
+        if !data.render_resources.animation.clips.is_empty() {
             data.animation_playing = true;
             data.current_animation_index = 0;
             data.animation_time = 0.0;
-            crate::log!(
-                "FBX animation loaded: {} animations",
-                data.fbx_model.animation_count()
-            );
-            if let Some(duration) = data.fbx_model.get_animation_duration(0) {
-                crate::log!("Animation 0 duration: {} seconds", duration);
+
+            data.render_resources.animation.play(0);
+
+            let clip_count = data.render_resources.animation.clips.len();
+            crate::log!("Animation loaded: {} clips", clip_count);
+
+            if let Some(clip) = data.render_resources.animation.clips.first() {
+                crate::log!("Animation 0 duration: {} seconds", clip.duration);
             }
         }
 
@@ -178,29 +157,30 @@ impl App {
             crate::log!("Loading FBX model...");
 
             data.gltf_model = GltfModel::default();
-            crate::log!("Cleared glTF model data");
+            data.render_resources.animation.clear();
+            crate::log!("Cleared glTF model and animation data");
 
-            if model_path.contains("stickman_bin.fbx") {
-                crate::log!("Using fbxcel loader for stickman_bin.fbx");
-                unsafe {
-                    data.fbx_model = load_fbx(model_path)?;
-                }
-            } else {
-                crate::log!("Using russimp loader");
-                data.fbx_model = load_fbx_with_russimp(model_path)?;
-            }
+            let fbx_result = load_fbx_to_render_resources(model_path)?;
+            crate::log!(
+                "Loaded FBX: {} meshes, {} skeletons, {} clips",
+                fbx_result.meshes.len(),
+                fbx_result.animation_system.skeletons.len(),
+                fbx_result.animation_system.clips.len()
+            );
 
-            for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
+            data.render_resources.animation = fbx_result.animation_system;
+
+            for (mesh_idx, fbx_mesh) in fbx_result.meshes.iter().enumerate() {
                 crate::log!(
                     "Creating Mesh for FBX mesh {}: {} vertices, texture: {:?}",
                     mesh_idx,
-                    fbx_data.positions.len(),
-                    fbx_data.diffuse_texture
+                    fbx_mesh.vertex_data.vertices.len(),
+                    fbx_mesh.texture_path
                 );
 
                 let mut mesh = Mesh::default();
 
-                if let Some(texture_path) = &fbx_data.diffuse_texture {
+                if let Some(texture_path) = &fbx_mesh.texture_path {
                     crate::log!("Loading texture: {}", texture_path);
                     match load_png_image(texture_path) {
                         Ok((image_data, width, height)) => {
@@ -265,51 +245,30 @@ impl App {
                         )?;
                 }
 
-                mesh.vertex_data = VertexData::default();
-                for (i, position) in fbx_data.positions.iter().enumerate() {
-                    let uv = if i < fbx_data.tex_coords.len() {
-                        fbx_data.tex_coords[i]
-                    } else {
-                        [0.5, 0.5]
-                    };
+                mesh.vertex_data = fbx_mesh.vertex_data.clone();
+                mesh.skin_data = fbx_mesh.skin_data.clone();
+                mesh.skeleton_id = fbx_mesh.skeleton_id;
 
-                    let normal = if i < fbx_data.normals.len() {
-                        let n = &fbx_data.normals[i];
-                        Vec3::new(n.x, n.y, n.z)
-                    } else {
-                        Vec3::new(0.0, 1.0, 0.0)
-                    };
-
-                    let vertex = vulkan_data::Vertex::new_with_normal(
-                        Vec3::new(position.x, position.y, position.z),
-                        Vec4::new(1.0, 1.0, 1.0, 1.0),
-                        uv.to_vec2(),
-                        normal,
-                    );
-                    mesh.vertex_data.vertices.push(vertex);
-                }
-
-                mesh.vertex_data.indices = fbx_data.indices.clone();
                 data.render_resources.meshes.push(mesh);
             }
 
-            if data.fbx_model.animation_count() > 0 {
+            if !data.render_resources.animation.clips.is_empty() {
                 data.animation_playing = true;
                 data.current_animation_index = 0;
                 data.animation_time = 0.0;
                 crate::log!(
-                    "FBX animation loaded: {} animations",
-                    data.fbx_model.animation_count()
+                    "FBX animation loaded: {} clips",
+                    data.render_resources.animation.clips.len()
                 );
             }
         } else if is_gltf {
             crate::log!("Loading glTF model...");
 
-            data.fbx_model = FbxModel::default();
+            data.render_resources.animation.clear();
             data.animation_playing = false;
             data.current_animation_index = 0;
             data.animation_time = 0.0;
-            crate::log!("Cleared FBX model data and animation state");
+            crate::log!("Cleared animation state");
 
             data.gltf_model = GltfModel::load_model(model_path);
 
@@ -481,36 +440,64 @@ impl App {
             crate::log!("Initial pose applied successfully for glTF");
         }
 
-        if is_fbx && data.fbx_model.animation_count() > 0 {
+        if is_fbx && !data.render_resources.animation.clips.is_empty() {
             crate::log!("Applying initial pose (time=0) for FBX skeletal animation...");
-            data.fbx_model.update_animation(0, 0.0);
 
-            for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
-                if let Some(mesh) = data.render_resources.meshes.get_mut(mesh_idx) {
-                    let vertex_data = &mut mesh.vertex_data;
+            data.render_resources.animation.play(0);
+            data.render_resources.animation.player.time = 0.0;
 
-                    for (vertex_idx, pos) in fbx_data.positions.iter().enumerate() {
-                        if vertex_idx < vertex_data.vertices.len() {
-                            vertex_data.vertices[vertex_idx].pos.x = pos.x;
-                            vertex_data.vertices[vertex_idx].pos.y = pos.y;
-                            vertex_data.vertices[vertex_idx].pos.z = pos.z;
+            let skeleton_id = data.render_resources.meshes.first()
+                .and_then(|m| m.skeleton_id);
+
+            if let Some(skel_id) = skeleton_id {
+                data.render_resources.animation.apply_to_skeleton(skel_id);
+
+                for mesh_idx in 0..data.render_resources.meshes.len() {
+                    let (skin_data, skel_id) = {
+                        let mesh = &data.render_resources.meshes[mesh_idx];
+                        (mesh.skin_data.clone(), mesh.skeleton_id)
+                    };
+
+                    if let (Some(skin_data), Some(skel_id)) = (skin_data, skel_id) {
+                        if let Some(skeleton) = data.render_resources.animation.get_skeleton(skel_id) {
+                            let vertex_count = skin_data.base_positions.len();
+                            let mut skinned_positions = vec![cgmath::Vector3::new(0.0, 0.0, 0.0); vertex_count];
+                            let mut skinned_normals = vec![cgmath::Vector3::new(0.0, 1.0, 0.0); vertex_count];
+
+                            skin_data.apply_skinning(skeleton, &mut skinned_positions, &mut skinned_normals);
+
+                            let mesh = &mut data.render_resources.meshes[mesh_idx];
+                            for (i, pos) in skinned_positions.iter().enumerate() {
+                                if i < mesh.vertex_data.vertices.len() {
+                                    mesh.vertex_data.vertices[i].pos.x = pos.x;
+                                    mesh.vertex_data.vertices[i].pos.y = pos.y;
+                                    mesh.vertex_data.vertices[i].pos.z = pos.z;
+                                }
+                            }
+                            for (i, normal) in skinned_normals.iter().enumerate() {
+                                if i < mesh.vertex_data.vertices.len() {
+                                    mesh.vertex_data.vertices[i].normal.x = normal.x;
+                                    mesh.vertex_data.vertices[i].normal.y = normal.y;
+                                    mesh.vertex_data.vertices[i].normal.z = normal.z;
+                                }
+                            }
+
+                            if let Err(e) = mesh.vertex_buffer.update(
+                                &instance,
+                                &rrdevice,
+                                &data.rrcommand_pool,
+                                (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len())
+                                    as vk::DeviceSize,
+                                mesh.vertex_data.vertices.as_ptr() as *const c_void,
+                                mesh.vertex_data.vertices.len(),
+                            ) {
+                                crate::log!(
+                                    "Failed to update vertex buffer for mesh {} with initial pose: {}",
+                                    mesh_idx,
+                                    e
+                                );
+                            }
                         }
-                    }
-
-                    if let Err(e) = mesh.vertex_buffer.update(
-                        &instance,
-                        &rrdevice,
-                        &data.rrcommand_pool,
-                        (size_of::<vulkan_data::Vertex>() * vertex_data.vertices.len())
-                            as vk::DeviceSize,
-                        vertex_data.vertices.as_ptr() as *const c_void,
-                        vertex_data.vertices.len(),
-                    ) {
-                        crate::log!(
-                            "Failed to update vertex buffer for mesh {} with initial pose: {}",
-                            mesh_idx,
-                            e
-                        );
                     }
                 }
             }
@@ -608,67 +595,60 @@ impl App {
         Ok(())
     }
 
-    pub(crate) unsafe fn update_fbx_vertex_buffer(
+    pub(crate) unsafe fn update_skinned_vertex_buffers(
         instance: &Instance,
         rrdevice: &RRDevice,
         data: &mut AppData,
     ) -> Result<()> {
-        if data.fbx_model.fbx_data.is_empty() {
-            return Ok(());
-        }
+        for mesh_idx in 0..data.render_resources.meshes.len() {
+            let (skin_data, skeleton_id) = {
+                let mesh = &data.render_resources.meshes[mesh_idx];
+                (mesh.skin_data.clone(), mesh.skeleton_id)
+            };
 
-        for (mesh_idx, fbx_data) in data.fbx_model.fbx_data.iter().enumerate() {
-            if let Some(mesh) = data.render_resources.meshes.get_mut(mesh_idx) {
-                let vertex_data = &mut mesh.vertex_data;
+            let Some(skin_data) = skin_data else {
+                continue;
+            };
 
-                if mesh_idx == 0 {
-                    static mut VERTEX_BUFFER_LOG_COUNTER: u32 = 0;
-                    unsafe {
-                        VERTEX_BUFFER_LOG_COUNTER += 1;
-                        if VERTEX_BUFFER_LOG_COUNTER % 60 == 0 {
-                            crate::log!("GPU Vertex Buffer (first 5 vertices being sent to GPU):");
-                            for i in 0..5.min(fbx_data.positions.len()) {
-                                crate::log!(
-                                    "  GPU[{}]: ({:.2}, {:.2}, {:.2})",
-                                    i,
-                                    fbx_data.positions[i].x,
-                                    fbx_data.positions[i].y,
-                                    fbx_data.positions[i].z
-                                );
-                            }
-                        }
-                    }
+            let Some(skeleton_id) = skeleton_id else {
+                continue;
+            };
+
+            let Some(skeleton) = data.render_resources.animation.get_skeleton(skeleton_id) else {
+                continue;
+            };
+
+            let vertex_count = skin_data.base_positions.len();
+            let mut skinned_positions = vec![cgmath::Vector3::new(0.0, 0.0, 0.0); vertex_count];
+            let mut skinned_normals = vec![cgmath::Vector3::new(0.0, 1.0, 0.0); vertex_count];
+
+            skin_data.apply_skinning(skeleton, &mut skinned_positions, &mut skinned_normals);
+
+            let mesh = &mut data.render_resources.meshes[mesh_idx];
+            for (i, pos) in skinned_positions.iter().enumerate() {
+                if i < mesh.vertex_data.vertices.len() {
+                    mesh.vertex_data.vertices[i].pos.x = pos.x;
+                    mesh.vertex_data.vertices[i].pos.y = pos.y;
+                    mesh.vertex_data.vertices[i].pos.z = pos.z;
                 }
-
-                for (vertex_idx, pos) in fbx_data.positions.iter().enumerate() {
-                    if vertex_idx < vertex_data.vertices.len() {
-                        vertex_data.vertices[vertex_idx].pos.x = pos.x;
-                        vertex_data.vertices[vertex_idx].pos.y = pos.y;
-                        vertex_data.vertices[vertex_idx].pos.z = pos.z;
-
-                        if vertex_idx < fbx_data.normals.len() {
-                            let normal = &fbx_data.normals[vertex_idx];
-                            vertex_data.vertices[vertex_idx].normal.x = normal.x;
-                            vertex_data.vertices[vertex_idx].normal.y = normal.y;
-                            vertex_data.vertices[vertex_idx].normal.z = normal.z;
-                        }
-                    }
+            }
+            for (i, normal) in skinned_normals.iter().enumerate() {
+                if i < mesh.vertex_data.vertices.len() {
+                    mesh.vertex_data.vertices[i].normal.x = normal.x;
+                    mesh.vertex_data.vertices[i].normal.y = normal.y;
+                    mesh.vertex_data.vertices[i].normal.z = normal.z;
                 }
+            }
 
-                if let Err(e) = mesh.vertex_buffer.update(
-                    instance,
-                    rrdevice,
-                    &data.rrcommand_pool,
-                    (size_of::<vulkan_data::Vertex>() * vertex_data.vertices.len())
-                        as vk::DeviceSize,
-                    vertex_data.vertices.as_ptr() as *const c_void,
-                    vertex_data.vertices.len(),
-                ) {
-                    eprintln!(
-                        "Failed to update FBX vertex buffer for mesh {}: {}",
-                        mesh_idx, e
-                    );
-                }
+            if let Err(e) = mesh.vertex_buffer.update(
+                instance,
+                rrdevice,
+                &data.rrcommand_pool,
+                (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len()) as vk::DeviceSize,
+                mesh.vertex_data.vertices.as_ptr() as *const c_void,
+                mesh.vertex_data.vertices.len(),
+            ) {
+                crate::log!("Failed to update skinned vertex buffer for mesh {}: {}", mesh_idx, e);
             }
         }
 

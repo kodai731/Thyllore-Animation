@@ -1,6 +1,7 @@
 use crate::app::{App, AppData};
 use crate::loader::fbx::load_fbx_to_render_resources;
 use crate::loader::gltf::gltf::*;
+use crate::loader::gltf::convert_gltf_to_render_resources;
 use crate::loader::texture::load_png_image;
 use crate::math::*;
 use crate::scene::render_resource::{MaterialUBO, Mesh};
@@ -272,15 +273,26 @@ impl App {
 
             data.gltf_model = GltfModel::load_model(model_path);
 
-            for (i, gltf_data) in data.gltf_model.gltf_data.iter().enumerate() {
+            let gltf_result = convert_gltf_to_render_resources(&data.gltf_model);
+            crate::log!(
+                "Converted glTF: {} meshes, {} skeletons, {} clips",
+                gltf_result.meshes.len(),
+                gltf_result.animation_system.skeletons.len(),
+                gltf_result.animation_system.clips.len()
+            );
+
+            data.render_resources.animation = gltf_result.animation_system;
+
+            for (i, gltf_mesh) in gltf_result.meshes.iter().enumerate() {
                 crate::log!(
                     "Creating Mesh for glTF mesh {}: {} vertices",
                     i,
-                    gltf_data.vertices.len()
+                    gltf_mesh.vertex_data.vertices.len()
                 );
 
                 let mut mesh = Mesh::default();
 
+                let gltf_data = &data.gltf_model.gltf_data[i];
                 if !gltf_data.image_data.is_empty() {
                     crate::log!("Loading texture from glTF image data for mesh {}", i);
                     match create_texture_image_pixel(
@@ -323,22 +335,21 @@ impl App {
                         )?;
                 }
 
-                mesh.vertex_data = VertexData::default();
-                for gltf_vertex in &gltf_data.vertices {
-                    mesh.vertex_data.vertices.push(vulkan_data::Vertex::default());
-                }
+                mesh.vertex_data = gltf_mesh.vertex_data.clone();
+                mesh.skin_data = gltf_mesh.skin_data.clone();
+                mesh.skeleton_id = gltf_mesh.skeleton_id;
 
-                for gltf_vertex in &gltf_data.vertices {
-                    let vertex = vulkan_data::Vertex::new(
-                        gltf_vertex.position.to_vec3(),
-                        Vec4::new(0.0, 1.0, 0.0, 1.0),
-                        gltf_vertex.tex_coord.to_vec2(),
-                    );
-                    mesh.vertex_data.vertices[gltf_vertex.index] = vertex;
-                }
-
-                mesh.vertex_data.indices = gltf_data.indices.clone();
                 data.render_resources.meshes.push(mesh);
+            }
+
+            if !data.render_resources.animation.clips.is_empty() {
+                data.animation_playing = true;
+                data.current_animation_index = 0;
+                data.animation_time = 0.0;
+                crate::log!(
+                    "glTF animation loaded: {} clips",
+                    data.render_resources.animation.clips.len()
+                );
             }
         }
 
@@ -391,57 +402,8 @@ impl App {
             data.render_resources.mesh_material_ids.push(material_id);
         }
 
-        if is_gltf
-            && (!data.gltf_model.joint_animations.is_empty()
-                || !data.gltf_model.node_animations.is_empty())
-        {
-            if data.gltf_model.has_skinned_meshes {
-                crate::log!("Applying initial pose (time=0) for glTF skeletal animation...");
-                data.gltf_model.reset_vertices_animation_position(0.0);
-                data.gltf_model.apply_animation(0.0, 0, Matrix4::identity());
-                crate::log!("Initial pose applied successfully for glTF");
-            } else {
-                crate::log!("Applying initial pose (time=0) for glTF node animation...");
-                data.gltf_model.reset_vertices_animation_position(0.0);
-                crate::log!("Initial pose applied successfully for glTF");
-            }
-
-            for i in 0..data.gltf_model.gltf_data.len() {
-                if i >= data.render_resources.meshes.len() {
-                    break;
-                }
-
-                let mesh = &mut data.render_resources.meshes[i];
-                let vertex_data = &mut mesh.vertex_data;
-                let gltf_data = &data.gltf_model.gltf_data[i];
-
-                for vertex in &gltf_data.vertices {
-                    vertex_data.vertices[vertex.index].pos.x = vertex.animation_position[0];
-                    vertex_data.vertices[vertex.index].pos.y = vertex.animation_position[1];
-                    vertex_data.vertices[vertex.index].pos.z = vertex.animation_position[2];
-                }
-
-                if let Err(e) = mesh.vertex_buffer.update(
-                    &instance,
-                    &rrdevice,
-                    &data.rrcommand_pool,
-                    (size_of::<vulkan_data::Vertex>() * vertex_data.vertices.len())
-                        as vk::DeviceSize,
-                    vertex_data.vertices.as_ptr() as *const c_void,
-                    vertex_data.vertices.len(),
-                ) {
-                    crate::log!(
-                        "Failed to update vertex buffer for glTF mesh {} with initial pose: {}",
-                        i,
-                        e
-                    );
-                }
-            }
-            crate::log!("Initial pose applied successfully for glTF");
-        }
-
-        if is_fbx && !data.render_resources.animation.clips.is_empty() {
-            crate::log!("Applying initial pose (time=0) for FBX skeletal animation...");
+        if !data.render_resources.animation.clips.is_empty() {
+            crate::log!("Applying initial pose (time=0) for skeletal animation...");
 
             data.render_resources.animation.play(0);
             data.render_resources.animation.player.time = 0.0;
@@ -501,7 +463,7 @@ impl App {
                     }
                 }
             }
-            crate::log!("Initial pose applied successfully for FBX");
+            crate::log!("Initial pose applied successfully");
         }
 
         data.current_model_path = model_path.to_string();

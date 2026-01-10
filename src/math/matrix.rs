@@ -12,6 +12,15 @@ pub fn mat4_from_array(a: [[f32; 4]; 4]) -> Mat4 {
     Mat4::from_cols(a[0].into(), a[1].into(), a[2].into(), a[3].into())
 }
 
+pub fn mat4_from_array_transpose(a: [[f32; 4]; 4]) -> Mat4 {
+    Mat4::new(
+        a[0][0], a[1][0], a[2][0], a[3][0],
+        a[0][1], a[1][1], a[2][1], a[3][1],
+        a[0][2], a[1][2], a[2][2], a[3][2],
+        a[0][3], a[1][3], a[2][3], a[3][3],
+    )
+}
+
 pub fn decompose(m: &Matrix4<f32>) -> (Vector3<f32>, Quaternion<f32>, Vector3<f32>) {
     let translation = Vector3::new(m.w.x, m.w.y, m.w.z);
 

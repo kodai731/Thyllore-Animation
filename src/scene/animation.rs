@@ -28,13 +28,27 @@ impl Default for Bone {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Skeleton {
     pub id: SkeletonId,
     pub name: String,
     pub bones: Vec<Bone>,
     pub bone_name_to_id: HashMap<String, BoneId>,
     pub root_bone_ids: Vec<BoneId>,
+    pub root_transform: Matrix4<f32>,
+}
+
+impl Default for Skeleton {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            name: String::new(),
+            bones: Vec::new(),
+            bone_name_to_id: HashMap::new(),
+            root_bone_ids: Vec::new(),
+            root_transform: Matrix4::identity(),
+        }
+    }
 }
 
 impl Skeleton {
@@ -45,6 +59,7 @@ impl Skeleton {
             bones: Vec::new(),
             bone_name_to_id: HashMap::new(),
             root_bone_ids: Vec::new(),
+            root_transform: Matrix4::identity(),
         }
     }
 
@@ -111,7 +126,7 @@ impl Skeleton {
         }
 
         for &root_id in &self.root_bone_ids {
-            compute_recursive(self, root_id, Matrix4::identity(), &mut global_transforms);
+            compute_recursive(self, root_id, self.root_transform, &mut global_transforms);
         }
 
         global_transforms
@@ -184,7 +199,7 @@ impl TransformChannel {
             if time >= k0.time && time < k1.time {
                 let t = (time - k0.time) / (k1.time - k0.time);
                 return match interpolation {
-                    Interpolation::Step => Some(k0.value),
+                    Interpolation::Step => Some(k1.value),
                     Interpolation::Linear | Interpolation::CubicSpline => {
                         Some(k0.value + (k1.value - k0.value) * t)
                     }
@@ -221,7 +236,7 @@ impl TransformChannel {
             if time >= k0.time && time < k1.time {
                 let t = (time - k0.time) / (k1.time - k0.time);
                 return match interpolation {
-                    Interpolation::Step => Some(k0.value),
+                    Interpolation::Step => Some(k1.value),
                     Interpolation::Linear | Interpolation::CubicSpline => {
                         Some(slerp(k0.value, k1.value, t))
                     }
@@ -412,12 +427,48 @@ impl SkinData {
         out_positions: &mut [Vector3<f32>],
         out_normals: &mut [Vector3<f32>],
     ) {
+        let is_gltf = skeleton.name.contains("gltf");
+        static mut GLTF_LOG_DONE: bool = false;
+        let should_log = unsafe {
+            if is_gltf && !GLTF_LOG_DONE {
+                GLTF_LOG_DONE = true;
+                true
+            } else {
+                false
+            }
+        };
+
         let global_transforms = skeleton.compute_global_transforms();
         let mut skin_matrices = Vec::with_capacity(skeleton.bone_count());
 
         for bone in &skeleton.bones {
             let global = global_transforms[bone.id as usize];
-            skin_matrices.push(global * bone.inverse_bind_pose);
+            let skin_matrix = global * bone.inverse_bind_pose;
+
+            if should_log && bone.id < 3 {
+                crate::log!("=== Skinning Debug bone {} ({}) ===", bone.id, bone.name);
+                crate::log!("  local_transform diag: [{:.4}, {:.4}, {:.4}]",
+                    bone.local_transform[0][0], bone.local_transform[1][1], bone.local_transform[2][2]);
+                crate::log!("  local_transform trans: [{:.4}, {:.4}, {:.4}]",
+                    bone.local_transform[3][0], bone.local_transform[3][1], bone.local_transform[3][2]);
+                crate::log!("  global_transform diag: [{:.4}, {:.4}, {:.4}]",
+                    global[0][0], global[1][1], global[2][2]);
+                crate::log!("  global_transform trans: [{:.4}, {:.4}, {:.4}]",
+                    global[3][0], global[3][1], global[3][2]);
+                crate::log!("  inverse_bind_pose trans: [{:.4}, {:.4}, {:.4}]",
+                    bone.inverse_bind_pose[3][0], bone.inverse_bind_pose[3][1], bone.inverse_bind_pose[3][2]);
+                crate::log!("  skin_matrix diag: [{:.4}, {:.4}, {:.4}]",
+                    skin_matrix[0][0], skin_matrix[1][1], skin_matrix[2][2]);
+                crate::log!("  skin_matrix trans: [{:.4}, {:.4}, {:.4}]",
+                    skin_matrix[3][0], skin_matrix[3][1], skin_matrix[3][2]);
+            }
+
+            skin_matrices.push(skin_matrix);
+        }
+
+        if should_log && !self.base_positions.is_empty() {
+            let pos = self.base_positions[0];
+            crate::log!("=== base_positions[0]: [{:.4}, {:.4}, {:.4}] ===", pos.x, pos.y, pos.z);
         }
 
         for i in 0..self.base_positions.len() {
@@ -474,6 +525,23 @@ impl SkinData {
                     out_normals[i] = skinned_normal / len;
                 }
             }
+
+            if should_log && i < 3 {
+                let base = self.base_positions[i];
+                crate::log!("=== Skinning vertex {} ===", i);
+                crate::log!("  base_pos: [{:.4}, {:.4}, {:.4}]", base.x, base.y, base.z);
+                crate::log!("  bone_indices: [{}, {}, {}, {}]", indices.x, indices.y, indices.z, indices.w);
+                crate::log!("  bone_weights: [{:.4}, {:.4}, {:.4}, {:.4}]", weights.x, weights.y, weights.z, weights.w);
+                crate::log!("  skinned_pos: [{:.4}, {:.4}, {:.4}]", skinned_pos.x, skinned_pos.y, skinned_pos.z);
+            }
+        }
+
+        if should_log {
+            let mut max_coord = 0.0f32;
+            for pos in out_positions.iter() {
+                max_coord = max_coord.max(pos.x.abs()).max(pos.y.abs()).max(pos.z.abs());
+            }
+            crate::log!("=== Skinning result: max_coord={:.4}, vertex_count={} ===", max_coord, out_positions.len());
         }
     }
 }

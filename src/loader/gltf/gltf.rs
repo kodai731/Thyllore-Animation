@@ -18,6 +18,7 @@ pub struct GltfModel {
     pub node_joint_map: NodeJointMap,
     pub rrnodes: Vec<RRNode>,
     pub has_skinned_meshes: bool, // True if any mesh has JOINTS/WEIGHTS data
+    pub skeleton_root_transform: Option<[[f32; 4]; 4]>,
 }
 
 impl GltfModel {
@@ -780,6 +781,88 @@ pub struct ImageData {
     pub height: u32,
 }
 
+fn build_node_parent_map(gltf: &Document) -> HashMap<usize, usize> {
+    let mut parent_map = HashMap::new();
+    for node in gltf.nodes() {
+        for child in node.children() {
+            parent_map.insert(child.index(), node.index());
+        }
+    }
+    parent_map
+}
+
+fn compute_node_global_transform(gltf: &Document, node_index: usize, parent_map: &HashMap<usize, usize>) -> Matrix4<f32> {
+    let mut transform_chain = Vec::new();
+    let mut current_index = Some(node_index);
+
+    while let Some(idx) = current_index {
+        if let Some(node) = gltf.nodes().nth(idx) {
+            transform_chain.push(mat4_from_array(node.transform().matrix()));
+        }
+        current_index = parent_map.get(&idx).copied();
+    }
+
+    let mut global = Matrix4::identity();
+    for transform in transform_chain.iter().rev() {
+        global = global * transform;
+    }
+    global
+}
+
+fn determine_skeleton_root_transform(
+    gltf: &Document,
+    skin: &gltf::Skin,
+    parent_map: &HashMap<usize, usize>,
+) -> Option<[[f32; 4]; 4]> {
+    if let Some(skeleton_node) = skin.skeleton() {
+        let global_transform = compute_node_global_transform(gltf, skeleton_node.index(), parent_map);
+        log!("=== Skeleton Root Transform (from skin.skeleton) ===");
+        log!("  skeleton node: {} ({:?})", skeleton_node.index(), skeleton_node.name());
+        log!("  global_transform diag: [{:.6}, {:.6}, {:.6}]",
+            global_transform[0][0], global_transform[1][1], global_transform[2][2]);
+        log!("  global_transform trans: [{:.6}, {:.6}, {:.6}]",
+            global_transform[3][0], global_transform[3][1], global_transform[3][2]);
+        return Some(array_from_mat4(global_transform));
+    }
+
+    let joint_indices: std::collections::HashSet<usize> = skin.joints().map(|j| j.index()).collect();
+    let mut root_joint_node: Option<gltf::Node> = None;
+
+    for joint in skin.joints() {
+        let has_parent_joint = parent_map
+            .get(&joint.index())
+            .map(|parent_idx| joint_indices.contains(parent_idx))
+            .unwrap_or(false);
+
+        if !has_parent_joint {
+            root_joint_node = Some(joint);
+            break;
+        }
+    }
+
+    if let Some(root_joint) = root_joint_node {
+        if let Some(&parent_index) = parent_map.get(&root_joint.index()) {
+            let parent_global = compute_node_global_transform(gltf, parent_index, parent_map);
+            let parent_name = gltf.nodes().nth(parent_index).and_then(|n| n.name());
+            log!("=== Skeleton Root Transform (from root joint's parent) ===");
+            log!("  root joint: {} ({:?})", root_joint.index(), root_joint.name());
+            log!("  parent node: {} ({:?})", parent_index, parent_name);
+            log!("  parent_global diag: [{:.6}, {:.6}, {:.6}]",
+                parent_global[0][0], parent_global[1][1], parent_global[2][2]);
+            log!("  parent_global trans: [{:.6}, {:.6}, {:.6}]",
+                parent_global[3][0], parent_global[3][1], parent_global[3][2]);
+            return Some(array_from_mat4(parent_global));
+        } else {
+            log!("=== Skeleton Root Transform (root joint at scene root) ===");
+            log!("  root joint: {} ({:?}) has no parent, using identity", root_joint.index(), root_joint.name());
+            return None;
+        }
+    }
+
+    log!("=== Skeleton Root Transform: None (no joints found) ===");
+    None
+}
+
 unsafe fn load_gltf(gltf_model: &mut GltfModel, path: &str) {
     log!("Loading glTF file");
     let (gltf, buffers, images) = gltf::import(format!("{}", path)).expect("Failed to load model");
@@ -790,12 +873,16 @@ unsafe fn load_gltf(gltf_model: &mut GltfModel, path: &str) {
     log!("Total meshes: {}", gltf.meshes().count());
     log!("Total animations: {}", gltf.animations().count());
 
-    // Log skin information
+    let node_parent_map = build_node_parent_map(&gltf);
+
     gltf.skins().enumerate().for_each(|(i, skin)| {
         log!("Skin {}: name={:?}, {} joints", i, skin.name(), skin.joints().count());
         log!("  Skeleton root: {:?}", skin.skeleton().map(|n| (n.index(), n.name())));
         gltf_model.node_joint_map.make_from_skin(&skin);
         gltf_model.set_joints(&skin, &buffers);
+
+        let root_transform = determine_skeleton_root_transform(&gltf, &skin, &node_parent_map);
+        gltf_model.skeleton_root_transform = root_transform;
     });
 
     // Log which nodes reference which skin
@@ -878,7 +965,6 @@ unsafe fn process_node(
 ) -> Result<()> {
     log!("Node {} {} (parent: {:?})", node.index(), node.name().unwrap(), parent_node_index);
 
-    // Check if this node has a skin
     if let Some(skin) = node.skin() {
         log!("Node {} has skin: {} joints", node.index(), skin.joints().count());
     } else {

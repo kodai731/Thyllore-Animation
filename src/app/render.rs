@@ -129,40 +129,6 @@ impl App {
             }
         }
 
-        // Apply animation for glTF models (skeletal or node animation)
-        if !self.data.gltf_model.gltf_data.is_empty() {
-            let time = self.start.elapsed().as_secs_f32();
-
-            // Log every 60 frames (approximately 1 second at 60fps)
-            static mut FRAME_COUNT: u32 = 0;
-            unsafe {
-                FRAME_COUNT += 1;
-                if FRAME_COUNT % 60 == 0 {
-                    if self.data.gltf_model.has_skinned_meshes {
-                        crate::log!("Updating glTF skeletal animation: time={:.4}s, joint_animations={}, gltf_data={}",
-                             time, self.data.gltf_model.joint_animations.len(), self.data.gltf_model.gltf_data.len());
-                    } else {
-                        crate::log!("Updating glTF node animation: time={:.4}s, node_animations={}, gltf_data={}",
-                             time, self.data.gltf_model.node_animations.len(), self.data.gltf_model.gltf_data.len());
-                    }
-                }
-            }
-
-            if self.data.gltf_model.has_skinned_meshes {
-                // Skeletal animation: use joint transforms with weights
-                self.data.gltf_model.reset_vertices_animation_position(time);
-                self.data
-                    .gltf_model
-                    .apply_animation(time, 0, Matrix4::identity());
-            } else {
-                // Node animation: transform nodes and propagate to children
-                self.data.gltf_model.reset_vertices_animation_position(time);
-            }
-
-            Self::update_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
-
-            Self::update_acceleration_structures(&self.instance, &self.rrdevice, &mut self.data)?;
-        }
 
         self.update_uniform_buffer(
             image_index,

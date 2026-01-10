@@ -62,6 +62,8 @@ fn convert_fbx_model_to_render_resources(fbx_model: FbxModel) -> Result<FbxLoadR
         meshes.push(mesh_data);
     }
 
+    log_fbx_scale_info(&meshes);
+
     if animation_system.clips.len() > 0 {
         animation_system.play(0);
     }
@@ -70,6 +72,42 @@ fn convert_fbx_model_to_render_resources(fbx_model: FbxModel) -> Result<FbxLoadR
         meshes,
         animation_system,
     })
+}
+
+fn log_fbx_scale_info(meshes: &[FbxMeshData]) {
+    let mut min_x = f32::MAX;
+    let mut min_y = f32::MAX;
+    let mut min_z = f32::MAX;
+    let mut max_x = f32::MIN;
+    let mut max_y = f32::MIN;
+    let mut max_z = f32::MIN;
+    let mut total_vertices = 0;
+
+    for mesh in meshes {
+        for v in &mesh.vertex_data.vertices {
+            min_x = min_x.min(v.pos.x);
+            min_y = min_y.min(v.pos.y);
+            min_z = min_z.min(v.pos.z);
+            max_x = max_x.max(v.pos.x);
+            max_y = max_y.max(v.pos.y);
+            max_z = max_z.max(v.pos.z);
+            total_vertices += 1;
+        }
+    }
+
+    if total_vertices > 0 {
+        let size_x = max_x - min_x;
+        let size_y = max_y - min_y;
+        let size_z = max_z - min_z;
+        let max_dimension = size_x.max(size_y).max(size_z);
+
+        crate::log!("=== FBX Scale Info (after unit conversion to meters) ===");
+        crate::log!("  Total vertices: {}", total_vertices);
+        crate::log!("  Bounding box min: ({:.4}, {:.4}, {:.4})", min_x, min_y, min_z);
+        crate::log!("  Bounding box max: ({:.4}, {:.4}, {:.4})", max_x, max_y, max_z);
+        crate::log!("  Size: ({:.4}, {:.4}, {:.4})", size_x, size_y, size_z);
+        crate::log!("  Max dimension: {:.4} meters", max_dimension);
+    }
 }
 
 fn convert_nodes_to_skeleton(nodes: &HashMap<String, super::fbx::BoneNode>) -> Skeleton {

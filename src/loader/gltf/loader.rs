@@ -31,7 +31,12 @@ pub fn convert_gltf_to_render_resources(gltf_model: &GltfModel) -> GltfLoadResul
 
     if !gltf_model.joint_animations.is_empty() {
         let clip = convert_joint_animations_to_clip(&gltf_model.joint_animations, &gltf_model.joints);
-        animation_system.add_clip(clip);
+        crate::log!("Joint animation clip: duration={}, channels={}", clip.duration, clip.channels.len());
+        if clip.duration > 0.0 && !clip.channels.is_empty() {
+            animation_system.add_clip(clip);
+        } else {
+            crate::log!("Skipping joint animation clip (no valid data)");
+        }
     }
 
     if !gltf_model.node_animations.is_empty() && skeleton_id.is_some() {
@@ -41,19 +46,35 @@ pub fn convert_gltf_to_render_resources(gltf_model: &GltfModel) -> GltfLoadResul
             &animation_system,
             skeleton_id.unwrap(),
         );
-        if !clip.channels.is_empty() {
+        crate::log!("Node animation clip: duration={}, channels={}", clip.duration, clip.channels.len());
+        if clip.duration > 0.0 && !clip.channels.is_empty() {
             animation_system.add_clip(clip);
+        } else {
+            crate::log!("Skipping node animation clip (no valid data)");
         }
     }
 
     let mut meshes = Vec::new();
+    let scale = if gltf_model.has_armature { 0.01 } else { 1.0 };
+    crate::log!("glTF scale: {} (has_armature={}, has_skinned_meshes={})",
+        scale, gltf_model.has_armature, gltf_model.has_skinned_meshes);
+
     for gltf_data in &gltf_model.gltf_data {
-        let mesh_data = convert_gltf_data_to_mesh(
+        let mut mesh_data = convert_gltf_data_to_mesh(
             gltf_data,
             skeleton_id,
             &gltf_model.joints,
             &animation_system,
         );
+
+        if scale != 1.0 {
+            for v in &mut mesh_data.vertex_data.vertices {
+                v.pos.x *= scale;
+                v.pos.y *= scale;
+                v.pos.z *= scale;
+            }
+        }
+
         meshes.push(mesh_data);
     }
 

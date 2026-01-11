@@ -26,6 +26,7 @@ pub struct GUIData {
     pub move_light_to: LightMoveTarget,
     pub load_cube: bool,
     pub clicked_mouse_pos: Option<[f32; 2]>,
+    pub dump_debug_info: bool,
 }
 
 impl Default for GUIData {
@@ -52,6 +53,7 @@ impl Default for GUIData {
             move_light_to: LightMoveTarget::None,
             load_cube: false,
             clicked_mouse_pos: None,
+            dump_debug_info: false,
         }
     }
 }

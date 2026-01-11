@@ -220,10 +220,12 @@ impl App {
         }
         crate::log!("initialized ray tracing resources");
 
-        if let Err(e) = Self::reload_model_data_buffer(&instance, &rrdevice, &mut data) {
-            eprintln!("{:?}", e)
+        let default_model_path = "assets/models/stickman/stickman.glb";
+        if let Err(e) = Self::load_model_from_path(&instance, &rrdevice, &mut data, default_model_path) {
+            eprintln!("Failed to load model: {:?}", e);
+            crate::log!("Failed to load model: {:?}", e);
         }
-        println!("reloaded model");
+        crate::log!("loaded initial model: {}", default_model_path);
 
         let tex_coord = Vec2::new(0.0, 0.0);
         let mut color = Vec4::new(1.0, 0.0, 0.0, 1.0);

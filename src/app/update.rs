@@ -71,7 +71,11 @@ impl App {
             gui_data.move_light_to = LightMoveTarget::None;
         }
 
-        self.morphing(self.start.elapsed().as_secs_f32());
+        let time = self.start.elapsed().as_secs_f32();
+
+        if !self.data.gltf_model.morph_animations.is_empty() {
+            self.morphing(time);
+        }
 
         let model = Mat4::identity();
 
@@ -599,86 +603,6 @@ impl App {
                 eprintln!("failed to update TLAS: {}", e);
             }
         }
-    }
-    pub(crate) unsafe fn reload_model_data_buffer(
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        data: &mut AppData,
-    ) -> Result<()> {
-        data.render_resources.clear_meshes(rrdevice);
-        data.render_resources.mesh_material_ids.clear();
-
-        if let Err(e) = Self::load_model(&instance, &rrdevice, data) {
-            eprintln!("{:?}", e);
-            crate::log!("{:?}", e)
-        }
-        crate::log!("reloaded model");
-
-        for i in 0..data.render_resources.meshes.len() {
-            let mesh = &mut data.render_resources.meshes[i];
-
-            mesh.vertex_buffer = RRVertexBuffer::new(
-                &instance,
-                &rrdevice,
-                &data.rrcommand_pool,
-                (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len())
-                    as vk::DeviceSize,
-                mesh.vertex_data.vertices.as_ptr() as *const c_void,
-                mesh.vertex_data.vertices.len(),
-            );
-
-            mesh.index_buffer = RRIndexBuffer::new(
-                &instance,
-                &rrdevice,
-                &data.rrcommand_pool,
-                (size_of::<u32>() * mesh.vertex_data.indices.len()) as u64,
-                mesh.vertex_data.indices.as_ptr() as *const c_void,
-                mesh.vertex_data.indices.len(),
-            );
-
-            mesh.image_view = create_image_view(
-                &rrdevice,
-                mesh.image,
-                vk::Format::R8G8B8A8_SRGB,
-                vk::ImageAspectFlags::COLOR,
-                mesh.mip_level,
-            )?;
-
-            mesh.sampler = create_texture_sampler(&rrdevice, mesh.mip_level)?;
-
-            mesh.object_index = data.render_resources.objects.allocate_slot();
-            crate::log!("Allocated object_index {} for mesh {}", mesh.object_index, i);
-
-            let material_name = format!("material_{}", i);
-            let material_properties = MaterialUBO {
-                base_color: cgmath::Vector4::new(1.0, 1.0, 1.0, 1.0),
-                metallic: 0.0,
-                roughness: 0.5,
-                _padding: [0.0, 0.0],
-            };
-            let material_id = data.render_resources.materials.create_material_with_texture(
-                instance,
-                rrdevice,
-                &material_name,
-                mesh.image_view,
-                mesh.sampler,
-                material_properties,
-            )?;
-            data.render_resources.mesh_material_ids.push(material_id);
-            crate::log!("Created material {} for mesh {}", material_id, i);
-        }
-
-        if let Err(e) = Self::build_acceleration_structures(instance, rrdevice, data) {
-            eprintln!("Failed to build acceleration structures: {:?}", e);
-            crate::log!("Failed to build acceleration structures: {:?}", e);
-        }
-
-        if let Err(e) = Self::create_ray_tracing_pipelines(instance, rrdevice, data) {
-            eprintln!("Failed to create ray tracing pipelines: {:?}", e);
-            crate::log!("Failed to create ray tracing pipelines: {:?}", e);
-        }
-
-        Ok(())
     }
     pub unsafe fn update_imgui_buffers(
         instance: &Instance,

@@ -151,6 +151,17 @@ impl System {
                                             let offset = cgmath::Vector3::new(2.0, 2.0, 2.0);
                                             app.data.camera.move_to_look_at(light_pos, offset);
                                         }
+                                        if ui.button("move to model") {
+                                            if let Some((min, max, center)) = app.data.render_resources.calculate_model_bounds() {
+                                                let size = max - min;
+                                                let max_dim = size.x.max(size.y).max(size.z);
+                                                let distance = max_dim * 2.0;
+                                                let offset = cgmath::Vector3::new(0.0, 0.0, distance);
+                                                app.data.camera.move_to_look_at(center, offset);
+                                                crate::log!("Moved camera to model: center=({:.2}, {:.2}, {:.2}), size=({:.2}, {:.2}, {:.2}), distance={:.2}",
+                                                    center.x, center.y, center.z, size.x, size.y, size.z, distance);
+                                            }
+                                        }
                                         ui.separator();
 
                                         ui.text("Screenshot:");
@@ -226,6 +237,9 @@ impl System {
                                         ui.same_line();
                                         if ui.button("Debug Billboard Depth") {
                                             gui_data.debug_billboard_depth = true;
+                                        }
+                                        if ui.button("Dump Debug Information") {
+                                            gui_data.dump_debug_info = true;
                                         }
 
                                         ui.separator();

@@ -1,3 +1,4 @@
+use crate::app::model_loader::rebuild_acceleration_structures;
 use crate::app::{App, AppData};
 use crate::loader::fbx::load_fbx_to_render_resources;
 use crate::loader::gltf::gltf::*;
@@ -20,117 +21,6 @@ use std::os::raw::c_void;
 use vulkanalia::prelude::v1_0::*;
 
 impl App {
-    pub(crate) unsafe fn load_model(
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        data: &mut AppData,
-    ) -> Result<()> {
-        let model_path_fbx = "assets/models/phoenix-bird/source/fly.fbx";
-
-        let fbx_result = load_fbx_to_render_resources(model_path_fbx)?;
-        crate::log!(
-            "Loaded FBX: {} meshes, {} skeletons, {} clips",
-            fbx_result.meshes.len(),
-            fbx_result.animation_system.skeletons.len(),
-            fbx_result.animation_system.clips.len()
-        );
-
-        data.render_resources.animation = fbx_result.animation_system;
-
-        for (mesh_idx, fbx_mesh) in fbx_result.meshes.iter().enumerate() {
-            crate::log!(
-                "Creating Mesh {}: {} vertices, texture: {:?}",
-                mesh_idx,
-                fbx_mesh.vertex_data.vertices.len(),
-                fbx_mesh.texture_path
-            );
-
-            let mut mesh = Mesh::default();
-
-            if let Some(texture_path) = &fbx_mesh.texture_path {
-                crate::log!("Loading texture: {}", texture_path);
-                match load_png_image(texture_path) {
-                    Ok((image_data, width, height)) => {
-                        match create_texture_image_pixel(
-                            instance,
-                            rrdevice,
-                            data.rrcommand_pool.borrow_mut(),
-                            &image_data,
-                            width,
-                            height,
-                        ) {
-                            Ok((image, image_memory, mip_level)) => {
-                                mesh.image = image;
-                                mesh.image_memory = image_memory;
-                                mesh.mip_level = mip_level;
-                                crate::log!("Texture loaded successfully for mesh {}", mesh_idx);
-                            }
-                            Err(e) => {
-                                crate::log!("Failed to create texture image: {}", e);
-                                (mesh.image, mesh.image_memory, mesh.mip_level) =
-                                    create_texture_image_pixel(
-                                        instance,
-                                        rrdevice,
-                                        data.rrcommand_pool.borrow_mut(),
-                                        &vec![255u8, 255, 255, 255],
-                                        1,
-                                        1,
-                                    )?;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        crate::log!("Failed to load texture file: {}", e);
-                        (mesh.image, mesh.image_memory, mesh.mip_level) =
-                            create_texture_image_pixel(
-                                instance,
-                                rrdevice,
-                                data.rrcommand_pool.borrow_mut(),
-                                &vec![255u8, 255, 255, 255],
-                                1,
-                                1,
-                            )?;
-                    }
-                }
-            } else {
-                (mesh.image, mesh.image_memory, mesh.mip_level) = create_texture_image_pixel(
-                    instance,
-                    rrdevice,
-                    data.rrcommand_pool.borrow_mut(),
-                    &vec![255u8, 255, 255, 255],
-                    1,
-                    1,
-                )?;
-            }
-
-            mesh.vertex_data = fbx_mesh.vertex_data.clone();
-            mesh.skin_data = fbx_mesh.skin_data.clone();
-            mesh.skeleton_id = fbx_mesh.skeleton_id;
-
-            data.render_resources.meshes.push(mesh);
-        }
-
-        if !data.render_resources.animation.clips.is_empty() {
-            data.animation_playing = true;
-            data.current_animation_index = 0;
-            data.animation_time = 0.0;
-
-            data.render_resources.animation.play(0);
-
-            let clip_count = data.render_resources.animation.clips.len();
-            crate::log!("Animation loaded: {} clips", clip_count);
-
-            if let Some(clip) = data.render_resources.animation.clips.first() {
-                crate::log!("Animation 0 duration: {} seconds", clip.duration);
-            }
-        }
-
-        data.current_model_path = model_path_fbx.to_string();
-
-        crate::log!("=== FBX model loaded successfully ===");
-        Ok(())
-    }
-
     pub(crate) unsafe fn load_model_from_path(
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -151,8 +41,10 @@ impl App {
 
         crate::log!("Cleaning up existing model data...");
         data.render_resources.clear_meshes(rrdevice);
+        data.render_resources.materials.clear_materials(&rrdevice.device);
         data.render_resources.mesh_material_ids.clear();
-        crate::log!("Cleared existing data");
+        data.render_resources.objects.reset_to(2);
+        crate::log!("Cleared existing data (meshes and materials), reset object slots to 2");
 
         if is_fbx {
             crate::log!("Loading FBX model...");
@@ -294,7 +186,10 @@ impl App {
 
                 let gltf_data = &data.gltf_model.gltf_data[i];
                 if !gltf_data.image_data.is_empty() {
-                    crate::log!("Loading texture from glTF image data for mesh {}", i);
+                    let img = &gltf_data.image_data[0];
+                    let expected_rgba_size = img.width as usize * img.height as usize * 4;
+                    crate::log!("Loading texture for mesh {}: {}x{}, data_len={}, expected_rgba={}, is_rgba={}",
+                        i, img.width, img.height, img.data.len(), expected_rgba_size, img.data.len() == expected_rgba_size);
                     match create_texture_image_pixel(
                         instance,
                         rrdevice,
@@ -400,6 +295,14 @@ impl App {
                 material_properties,
             )?;
             data.render_resources.mesh_material_ids.push(material_id);
+            crate::log!("Created material {} for mesh {}", material_id, i);
+        }
+
+        let is_gltf_node_animation = !data.gltf_model.gltf_data.is_empty()
+            && !data.gltf_model.has_skinned_meshes;
+
+        if is_gltf_node_animation {
+            crate::log!("glTF node animation detected - using initial mesh positions (no node transform)");
         }
 
         if !data.render_resources.animation.clips.is_empty() {
@@ -467,6 +370,21 @@ impl App {
         }
 
         data.current_model_path = model_path.to_string();
+
+        rebuild_acceleration_structures(instance, rrdevice, data)?;
+
+        if let Some(ref accel_struct) = data.raytracing.acceleration_structure {
+            if let Some(tlas) = accel_struct.tlas.acceleration_structure {
+                if let Some(ref mut ray_query_desc) = data.raytracing.ray_query_descriptor {
+                    ray_query_desc.update_tlas(rrdevice, tlas)?;
+                    crate::log!("Updated ray_query_descriptor with new TLAS");
+                }
+            }
+        }
+
+        if let Err(e) = Self::create_ray_tracing_pipelines(instance, rrdevice, data) {
+            crate::log!("Failed to create ray tracing pipelines: {:?}", e);
+        }
 
         crate::log!("=== Model loaded successfully ===");
         Ok(())
@@ -540,6 +458,18 @@ impl App {
                     }
                     crate::log!("==================================");
                 }
+            }
+
+            static mut UPDATE_BUFFER_LOG_COUNTER: u32 = 0;
+            static mut PREV_GLTF_MESH_COUNT: usize = 0;
+            if gltf_mesh_count != PREV_GLTF_MESH_COUNT {
+                UPDATE_BUFFER_LOG_COUNTER = 0;
+                PREV_GLTF_MESH_COUNT = gltf_mesh_count;
+            }
+            UPDATE_BUFFER_LOG_COUNTER += 1;
+            if UPDATE_BUFFER_LOG_COUNTER <= 3 {
+                crate::log!("update_vertex_buffer: mesh[{}] buffer={:?}, size={}",
+                    i, mesh.vertex_buffer.buffer, mesh.vertex_data.vertices.len());
             }
 
             if let Err(e) = mesh.vertex_buffer.update(
@@ -645,5 +575,70 @@ impl App {
         }
 
         Ok(())
+    }
+
+    pub fn dump_debug_info(&self) {
+        crate::log!("========== DUMP DEBUG INFORMATION ==========");
+
+        crate::log!("--- GltfModel Info ---");
+        crate::log!("  gltf_data count: {}", self.data.gltf_model.gltf_data.len());
+        crate::log!("  has_skinned_meshes: {}", self.data.gltf_model.has_skinned_meshes);
+        crate::log!("  node_animations count: {}", self.data.gltf_model.node_animations.len());
+        crate::log!("  morph_animations count: {}", self.data.gltf_model.morph_animations.len());
+        crate::log!("  joints count: {}", self.data.gltf_model.joints.len());
+        crate::log!("  rrnodes count: {}", self.data.gltf_model.rrnodes.len());
+
+        for (i, gltf_data) in self.data.gltf_model.gltf_data.iter().enumerate() {
+            crate::log!("  gltf_data[{}]: vertices={}, indices={}, has_joints={}",
+                i, gltf_data.vertices.len(), gltf_data.indices.len(), gltf_data.has_joints);
+            if !gltf_data.vertices.is_empty() {
+                let v = &gltf_data.vertices[0];
+                crate::log!("    vertex[0]: position={:?}, animation_position={:?}, original_local={:?}",
+                    v.position, v.animation_position, v.original_local_position);
+            }
+        }
+
+        crate::log!("--- RenderResources Info ---");
+        crate::log!("  meshes count: {}", self.data.render_resources.meshes.len());
+        crate::log!("  materials count: {}", self.data.render_resources.materials.materials.len());
+        crate::log!("  mesh_material_ids: {:?}", self.data.render_resources.mesh_material_ids);
+
+        for (i, mesh) in self.data.render_resources.meshes.iter().enumerate() {
+            crate::log!("  mesh[{}]: render_to_gbuffer={}, vertex_buffer={:?}, indices={}",
+                i, mesh.render_to_gbuffer, mesh.vertex_buffer.buffer, mesh.index_buffer.indices);
+            crate::log!("    vertex_data.vertices count: {}", mesh.vertex_data.vertices.len());
+            crate::log!("    object_index: {}", mesh.object_index);
+
+            if !mesh.vertex_data.vertices.is_empty() {
+                let v = &mesh.vertex_data.vertices[0];
+                crate::log!("    vertex_data[0].pos: ({:.4}, {:.4}, {:.4})", v.pos.x, v.pos.y, v.pos.z);
+
+                let mut min_x = f32::MAX;
+                let mut max_x = f32::MIN;
+                let mut min_y = f32::MAX;
+                let mut max_y = f32::MIN;
+                let mut min_z = f32::MAX;
+                let mut max_z = f32::MIN;
+                for v in &mesh.vertex_data.vertices {
+                    min_x = min_x.min(v.pos.x);
+                    max_x = max_x.max(v.pos.x);
+                    min_y = min_y.min(v.pos.y);
+                    max_y = max_y.max(v.pos.y);
+                    min_z = min_z.min(v.pos.z);
+                    max_z = max_z.max(v.pos.z);
+                }
+                crate::log!("    bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
+                    min_x, max_x, min_y, max_y, min_z, max_z);
+            }
+        }
+
+        crate::log!("--- Camera Info ---");
+        crate::log!("  position: {:?}", self.data.camera.position());
+
+        crate::log!("--- Animation Info ---");
+        crate::log!("  animation_playing: {}", self.data.animation_playing);
+        crate::log!("  clips count: {}", self.data.render_resources.animation.clips.len());
+
+        crate::log!("========== END DEBUG INFORMATION ==========");
     }
 }

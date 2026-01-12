@@ -163,21 +163,34 @@ pub struct TransformChannel {
 
 impl TransformChannel {
     pub fn sample_translation(&self, time: f32) -> Option<Vector3<f32>> {
-        Self::sample_vec3(&self.translation, time, &self.interpolation)
+        Self::sample_vec3(&self.translation, time, &self.interpolation, None)
+    }
+
+    pub fn sample_translation_looped(&self, time: f32, duration: f32) -> Option<Vector3<f32>> {
+        Self::sample_vec3(&self.translation, time, &self.interpolation, Some(duration))
     }
 
     pub fn sample_rotation(&self, time: f32) -> Option<Quaternion<f32>> {
-        Self::sample_quat(&self.rotation, time, &self.interpolation)
+        Self::sample_quat(&self.rotation, time, &self.interpolation, None)
+    }
+
+    pub fn sample_rotation_looped(&self, time: f32, duration: f32) -> Option<Quaternion<f32>> {
+        Self::sample_quat(&self.rotation, time, &self.interpolation, Some(duration))
     }
 
     pub fn sample_scale(&self, time: f32) -> Option<Vector3<f32>> {
-        Self::sample_vec3(&self.scale, time, &self.interpolation)
+        Self::sample_vec3(&self.scale, time, &self.interpolation, None)
+    }
+
+    pub fn sample_scale_looped(&self, time: f32, duration: f32) -> Option<Vector3<f32>> {
+        Self::sample_vec3(&self.scale, time, &self.interpolation, Some(duration))
     }
 
     fn sample_vec3(
         keyframes: &[Keyframe<Vector3<f32>>],
         time: f32,
         interpolation: &Interpolation,
+        duration: Option<f32>,
     ) -> Option<Vector3<f32>> {
         if keyframes.is_empty() {
             return None;
@@ -189,8 +202,20 @@ impl TransformChannel {
         if time <= keyframes[0].time {
             return Some(keyframes[0].value);
         }
-        if time >= keyframes.last().unwrap().time {
-            return Some(keyframes.last().unwrap().value);
+
+        let last_kf = keyframes.last().unwrap();
+        if time >= last_kf.time {
+            if let Some(dur) = duration {
+                if dur > last_kf.time && time < dur {
+                    let first_kf = &keyframes[0];
+                    let wrap_duration = dur - last_kf.time + first_kf.time;
+                    if wrap_duration > 0.0001 {
+                        let t = (time - last_kf.time) / wrap_duration;
+                        return Some(last_kf.value + (first_kf.value - last_kf.value) * t);
+                    }
+                }
+            }
+            return Some(last_kf.value);
         }
 
         for i in 0..keyframes.len() - 1 {
@@ -208,13 +233,14 @@ impl TransformChannel {
             }
         }
 
-        Some(keyframes.last().unwrap().value)
+        Some(last_kf.value)
     }
 
     fn sample_quat(
         keyframes: &[Keyframe<Quaternion<f32>>],
         time: f32,
         interpolation: &Interpolation,
+        duration: Option<f32>,
     ) -> Option<Quaternion<f32>> {
         if keyframes.is_empty() {
             return None;
@@ -226,8 +252,20 @@ impl TransformChannel {
         if time <= keyframes[0].time {
             return Some(keyframes[0].value);
         }
-        if time >= keyframes.last().unwrap().time {
-            return Some(keyframes.last().unwrap().value);
+
+        let last_kf = keyframes.last().unwrap();
+        if time >= last_kf.time {
+            if let Some(dur) = duration {
+                if dur > last_kf.time && time < dur {
+                    let first_kf = &keyframes[0];
+                    let wrap_duration = dur - last_kf.time + first_kf.time;
+                    if wrap_duration > 0.0001 {
+                        let t = (time - last_kf.time) / wrap_duration;
+                        return Some(slerp(last_kf.value, first_kf.value, t));
+                    }
+                }
+            }
+            return Some(last_kf.value);
         }
 
         for i in 0..keyframes.len() - 1 {
@@ -245,7 +283,7 @@ impl TransformChannel {
             }
         }
 
-        Some(keyframes.last().unwrap().value)
+        Some(last_kf.value)
     }
 }
 
@@ -316,19 +354,27 @@ impl AnimationClip {
     }
 
     pub fn sample(&self, time: f32, skeleton: &mut Skeleton) {
+        self.sample_with_loop(time, skeleton, false)
+    }
+
+    pub fn sample_with_loop(&self, time: f32, skeleton: &mut Skeleton, looping: bool) {
         for (&bone_id, channel) in &self.channels {
             if let Some(bone) = skeleton.get_bone_mut(bone_id) {
                 let (rest_t, rest_r, rest_s) = decompose_transform(&bone.local_transform);
 
-                let translation = channel
-                    .sample_translation(time)
-                    .unwrap_or(rest_t);
-                let rotation = channel
-                    .sample_rotation(time)
-                    .unwrap_or(rest_r);
-                let scale = channel
-                    .sample_scale(time)
-                    .unwrap_or(rest_s);
+                let (translation, rotation, scale) = if looping && self.duration > 0.0 {
+                    (
+                        channel.sample_translation_looped(time, self.duration).unwrap_or(rest_t),
+                        channel.sample_rotation_looped(time, self.duration).unwrap_or(rest_r),
+                        channel.sample_scale_looped(time, self.duration).unwrap_or(rest_s),
+                    )
+                } else {
+                    (
+                        channel.sample_translation(time).unwrap_or(rest_t),
+                        channel.sample_rotation(time).unwrap_or(rest_r),
+                        channel.sample_scale(time).unwrap_or(rest_s),
+                    )
+                };
 
                 bone.local_transform = compose_transform(translation, rotation, scale);
             }
@@ -642,8 +688,9 @@ impl AnimationSystem {
             None => return,
         };
 
+        let looping = self.player.looping;
         if let Some(skeleton) = self.get_skeleton_mut(skeleton_id) {
-            clip.sample(time, skeleton);
+            clip.sample_with_loop(time, skeleton, looping);
         }
     }
 

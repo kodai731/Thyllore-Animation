@@ -58,6 +58,20 @@ impl App {
             );
 
             data.render_resources.animation = fbx_result.animation_system;
+            data.render_resources.has_skinned_meshes = fbx_result.has_skinned_meshes;
+            data.render_resources.node_animation_scale = 1.0;
+
+            data.render_resources.nodes = fbx_result
+                .nodes
+                .iter()
+                .map(|n| crate::scene::render_resource::NodeData {
+                    index: n.index,
+                    name: n.name.clone(),
+                    parent_index: n.parent_index,
+                    local_transform: n.local_transform,
+                    global_transform: cgmath::Matrix4::identity(),
+                })
+                .collect();
 
             for (mesh_idx, fbx_mesh) in fbx_result.meshes.iter().enumerate() {
                 crate::log!(
@@ -137,6 +151,8 @@ impl App {
                 mesh.vertex_data = fbx_mesh.vertex_data.clone();
                 mesh.skin_data = fbx_mesh.skin_data.clone();
                 mesh.skeleton_id = fbx_mesh.skeleton_id;
+                mesh.node_index = fbx_mesh.node_index;
+                mesh.base_vertices = fbx_mesh.local_vertices.clone();
 
                 data.render_resources.meshes.push(mesh);
             }

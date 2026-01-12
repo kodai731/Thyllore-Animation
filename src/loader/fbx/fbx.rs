@@ -1760,23 +1760,12 @@ fn merge_duplicate_rotation_keys(keyframes: &[KeyFrame<Quaternion<f32>>]) -> Vec
         true
     });
 
-    // ループをスムーズにするため、最初のキーフレームをt=0.0にコピー
     if !merged.is_empty() && merged[0].time > 0.01 {
         let first_keyframe = merged[0].value;
         merged.insert(0, KeyFrame {
             time: 0.0,
             value: first_keyframe,
         });
-    }
-
-    // ループをスムーズにするため、最後のキーフレームも最初のキーフレームと同じ値にする
-    // アニメーションの最後でループの最初に戻る際のジャンプを防ぐ
-    if merged.len() >= 2 {
-        let first_value = merged[0].value;
-        let last_index = merged.len() - 1;
-
-        // 最後のキーフレームの値を最初のキーフレームの値で置き換える
-        merged[last_index].value = first_value;
     }
 
     merged
@@ -2569,7 +2558,7 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                         let before_count = bone_anim.rotation_keys.len();
 
                         // Debug: For specific bones, log first 10 rotation keys from the channel
-                        if (bone_name == "b_Root" || bone_name == "b_Head" || bone_name == "B_Spine") && channel.rotation_keys.len() > 5 {
+                        if (bone_name == "b_Root" || bone_name == "b_Head" || bone_name == "B_Spine" || bone_name == "B_Tail_0") && channel.rotation_keys.len() > 5 {
                             log!("    {} Rotation channel has {} rotation keys (showing first 10):", bone_name, channel.rotation_keys.len());
                             for (i, rot_key) in channel.rotation_keys.iter().take(10).enumerate() {
                                 let time = (rot_key.time / animation.ticks_per_second) as f32;
@@ -2584,21 +2573,17 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                             let time = (rot_key.time / animation.ticks_per_second) as f32;
                             let quat = &rot_key.value;
 
-                            // Calculate quaternion length
-                            let quat_length = (quat.x * quat.x + quat.y * quat.y + quat.z * quat.z + quat.w * quat.w).sqrt();
-
-                            // Skip quaternions that are too small (essentially zero rotation)
-                            if quat_length < 0.01 {
-                                if bone_name == "b_Root" && time < 0.5 {
-                                    log!("    Skipping near-zero quaternion at t={:.4}: quat=[{:.3}, {:.3}, {:.3}, {:.3}] length={:.3}",
-                                         time, quat.x, quat.y, quat.z, quat.w, quat_length);
-                                }
+                            if quat.x.abs() > 1.0 || quat.y.abs() > 1.0 || quat.z.abs() > 1.0 || quat.w.abs() > 1.0 {
                                 continue;
                             }
 
-                            // Normalize quaternion if it's not normalized
+                            let quat_length = (quat.x * quat.x + quat.y * quat.y + quat.z * quat.z + quat.w * quat.w).sqrt();
+
+                            if quat_length < 0.9 || quat_length > 1.1 {
+                                continue;
+                            }
+
                             let normalized_quat = if (quat_length - 1.0).abs() > 0.01 {
-                                // Normalize
                                 Quaternion::new(
                                     quat.w / quat_length,
                                     quat.x / quat_length,
@@ -2606,11 +2591,9 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                                     quat.z / quat_length,
                                 )
                             } else {
-                                // Already normalized - cgmath Quaternion is (w, x, y, z)
                                 Quaternion::new(quat.w, quat.x, quat.y, quat.z)
                             };
 
-                            // クォータニオンのまま保存（オイラー角変換なし）
                             bone_anim.rotation_keys.push(KeyFrame {
                                 time,
                                 value: normalized_quat,
@@ -2661,7 +2644,7 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                         }
 
                         // Debug: For specific bones, log first 10 rotation keys from the channel
-                        if (bone_name == "b_Head" || bone_name == "B_Spine") && channel.rotation_keys.len() > 5 {
+                        if (bone_name == "b_Head" || bone_name == "B_Spine" || bone_name == "B_Tail_0") && channel.rotation_keys.len() > 5 {
                             log!("    {} Normal channel has {} rotation keys (showing first 10):", bone_name, channel.rotation_keys.len());
                             for (i, rot_key) in channel.rotation_keys.iter().take(10).enumerate() {
                                 let time = (rot_key.time / animation.ticks_per_second) as f32;
@@ -2676,17 +2659,17 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                             let time = (rot_key.time / animation.ticks_per_second) as f32;
                             let quat = &rot_key.value;
 
-                            // Calculate quaternion length
-                            let quat_length = (quat.x * quat.x + quat.y * quat.y + quat.z * quat.z + quat.w * quat.w).sqrt();
-
-                            // Skip quaternions that are too small (essentially zero rotation)
-                            if quat_length < 0.01 {
+                            if quat.x.abs() > 1.0 || quat.y.abs() > 1.0 || quat.z.abs() > 1.0 || quat.w.abs() > 1.0 {
                                 continue;
                             }
 
-                            // Normalize quaternion if it's not normalized
+                            let quat_length = (quat.x * quat.x + quat.y * quat.y + quat.z * quat.z + quat.w * quat.w).sqrt();
+
+                            if quat_length < 0.9 || quat_length > 1.1 {
+                                continue;
+                            }
+
                             let normalized_quat = if (quat_length - 1.0).abs() > 0.01 {
-                                // Normalize
                                 Quaternion::new(
                                     quat.w / quat_length,
                                     quat.x / quat_length,
@@ -2694,11 +2677,9 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                                     quat.z / quat_length,
                                 )
                             } else {
-                                // Already normalized - cgmath Quaternion is (w, x, y, z)
                                 Quaternion::new(quat.w, quat.x, quat.y, quat.z)
                             };
 
-                            // クォータニオンのまま保存（オイラー角変換なし）
                             bone_anim.rotation_keys.push(KeyFrame {
                                 time,
                                 value: normalized_quat,
@@ -2768,9 +2749,8 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                             }
                         }
 
-                        // For b_Root, log all rotation keyframes to investigate the 90-degree rotation issue
-                        if *bone_name == "b_Root" && bone_anim.rotation_keys.len() > 5 {
-                            log!("  b_Root rotation keyframes (showing first 10):");
+                        if (*bone_name == "b_Root" || *bone_name == "B_Tail_0") && bone_anim.rotation_keys.len() > 5 {
+                            log!("  {} rotation keyframes (showing first 10):", bone_name);
                             for (i, key) in bone_anim.rotation_keys.iter().take(10).enumerate() {
                                 let quat = &key.value;
                                 log!("    [{:2}] t={:.4} quat=[{:.3}, {:.3}, {:.3}, {:.3}]",

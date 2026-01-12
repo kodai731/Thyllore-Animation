@@ -10,16 +10,41 @@ use std::collections::HashMap;
 
 use super::fbx::{load_fbx_with_russimp, FbxModel};
 
+#[derive(Clone, Debug)]
+pub struct FbxNodeInfo {
+    pub index: usize,
+    pub name: String,
+    pub parent_index: Option<usize>,
+    pub local_transform: Matrix4<f32>,
+}
+
+impl Default for FbxNodeInfo {
+    fn default() -> Self {
+        Self {
+            index: 0,
+            name: String::new(),
+            parent_index: None,
+            local_transform: Matrix4::identity(),
+        }
+    }
+}
+
 pub struct FbxMeshData {
     pub vertex_data: VertexData,
     pub skin_data: Option<SkinData>,
     pub skeleton_id: Option<u32>,
     pub texture_path: Option<String>,
+    pub node_index: Option<usize>,
+    pub local_vertices: Vec<Vertex>,
+    pub base_positions: Vec<[f32; 3]>,
 }
 
 pub struct FbxLoadResult {
     pub meshes: Vec<FbxMeshData>,
+    pub nodes: Vec<FbxNodeInfo>,
     pub animation_system: AnimationSystem,
+    pub has_skinned_meshes: bool,
+    pub has_armature: bool,
 }
 
 pub fn load_fbx_to_render_resources(path: &str) -> Result<FbxLoadResult> {
@@ -30,7 +55,9 @@ pub fn load_fbx_to_render_resources(path: &str) -> Result<FbxLoadResult> {
 fn convert_fbx_model_to_render_resources(fbx_model: FbxModel) -> Result<FbxLoadResult> {
     let mut animation_system = AnimationSystem::new();
 
-    let skeleton_id = if !fbx_model.nodes.is_empty() {
+    let has_armature = !fbx_model.nodes.is_empty();
+
+    let skeleton_id = if has_armature {
         let skeleton = convert_nodes_to_skeleton(&fbx_model.nodes);
         Some(animation_system.add_skeleton(skeleton))
     } else {
@@ -56,22 +83,74 @@ fn convert_fbx_model_to_render_resources(fbx_model: FbxModel) -> Result<FbxLoadR
         animation_system.add_clip(clip);
     }
 
+    let nodes = convert_bone_nodes_to_node_info(&fbx_model.nodes);
+
     let mut meshes = Vec::new();
+    let mut has_skinned_meshes = false;
+
     for fbx_data in &fbx_model.fbx_data {
-        let mesh_data = convert_fbx_data_to_mesh(fbx_data, skeleton_id, &animation_system);
+        let mesh_data = convert_fbx_data_to_mesh(fbx_data, skeleton_id, &animation_system, &nodes);
+        if mesh_data.skin_data.is_some() {
+            has_skinned_meshes = true;
+        }
         meshes.push(mesh_data);
     }
 
     log_fbx_scale_info(&meshes);
 
-    if animation_system.clips.len() > 0 {
+    if !animation_system.clips.is_empty() {
         animation_system.play(0);
     }
 
     Ok(FbxLoadResult {
         meshes,
+        nodes,
         animation_system,
+        has_skinned_meshes,
+        has_armature,
     })
+}
+
+fn convert_bone_nodes_to_node_info(
+    bone_nodes: &HashMap<String, super::fbx::BoneNode>,
+) -> Vec<FbxNodeInfo> {
+    let mut nodes = Vec::new();
+    let mut name_to_index: HashMap<String, usize> = HashMap::new();
+
+    let mut sorted_names: Vec<&String> = bone_nodes.keys().collect();
+    sorted_names.sort();
+
+    for (index, name) in sorted_names.iter().enumerate() {
+        name_to_index.insert((*name).clone(), index);
+    }
+
+    for (index, name) in sorted_names.iter().enumerate() {
+        if let Some(bone_node) = bone_nodes.get(*name) {
+            let parent_index = bone_node
+                .parent
+                .as_ref()
+                .and_then(|parent_name| name_to_index.get(parent_name).copied());
+
+            let needs_coord_conversion = parent_index.is_none()
+                || *name == "RootNode"
+                || bone_node.parent.as_ref().map_or(false, |p| p == "RootNode");
+
+            let local_transform = if needs_coord_conversion {
+                fbx_to_world() * bone_node.local_transform
+            } else {
+                bone_node.local_transform
+            };
+
+            nodes.push(FbxNodeInfo {
+                index,
+                name: (*name).clone(),
+                parent_index,
+                local_transform,
+            });
+        }
+    }
+
+    nodes
 }
 
 fn log_fbx_scale_info(meshes: &[FbxMeshData]) {
@@ -240,11 +319,14 @@ fn convert_fbx_data_to_mesh(
     fbx_data: &super::fbx::FbxData,
     skeleton_id: Option<u32>,
     animation_system: &AnimationSystem,
+    nodes: &[FbxNodeInfo],
 ) -> FbxMeshData {
     let mut vertices = Vec::with_capacity(fbx_data.positions.len());
+    let mut local_vertices = Vec::with_capacity(fbx_data.positions.len());
 
     for i in 0..fbx_data.positions.len() {
         let pos = &fbx_data.positions[i];
+        let local_pos = fbx_data.local_positions.get(i).unwrap_or(pos);
         let normal = fbx_data.normals.get(i).cloned().unwrap_or(Vector3::new(0.0, 1.0, 0.0));
         let tex_coord = fbx_data.tex_coords.get(i).cloned().unwrap_or([0.5, 0.5]);
 
@@ -254,7 +336,20 @@ fn convert_fbx_data_to_mesh(
             tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
             normal: Vec3::new(normal.x, normal.y, normal.z),
         });
+
+        local_vertices.push(Vertex {
+            pos: Vec3::new(local_pos.x, local_pos.y, local_pos.z),
+            color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+            tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
+            normal: Vec3::new(normal.x, normal.y, normal.z),
+        });
     }
+
+    let base_positions: Vec<[f32; 3]> = fbx_data
+        .positions
+        .iter()
+        .map(|p| [p.x, p.y, p.z])
+        .collect();
 
     let vertex_data = VertexData {
         vertices,
@@ -268,11 +363,19 @@ fn convert_fbx_data_to_mesh(
         None
     };
 
+    let node_index = fbx_data
+        .parent_node
+        .as_ref()
+        .and_then(|parent_name| nodes.iter().find(|n| &n.name == parent_name).map(|n| n.index));
+
     FbxMeshData {
         vertex_data,
         skin_data,
         skeleton_id,
         texture_path: fbx_data.diffuse_texture.clone(),
+        node_index,
+        local_vertices,
+        base_positions,
     }
 }
 

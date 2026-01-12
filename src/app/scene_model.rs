@@ -1,20 +1,17 @@
 use crate::app::model_loader::rebuild_acceleration_structures;
 use crate::app::{App, AppData};
 use crate::loader::fbx::load_fbx_to_render_resources;
-use crate::loader::gltf::gltf::*;
-use crate::loader::gltf::convert_gltf_to_render_resources;
+use crate::loader::gltf::load_gltf_file;
 use crate::loader::texture::load_png_image;
 use crate::math::*;
 use crate::scene::render_resource::{MaterialUBO, Mesh};
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::data as vulkan_data;
-use crate::vulkanr::data::{Vertex, VertexData};
 use crate::vulkanr::device::*;
 use crate::vulkanr::image::*;
 use crate::vulkanr::vulkan::*;
 
 use anyhow::{anyhow, Result};
-use cgmath::Matrix4;
 use std::borrow::BorrowMut;
 use std::mem::size_of;
 use std::os::raw::c_void;
@@ -49,9 +46,8 @@ impl App {
         if is_fbx {
             crate::log!("Loading FBX model...");
 
-            data.gltf_model = GltfModel::default();
             data.render_resources.animation.clear();
-            crate::log!("Cleared glTF model and animation data");
+            crate::log!("Cleared animation data");
 
             let fbx_result = load_fbx_to_render_resources(model_path)?;
             crate::log!(
@@ -163,9 +159,7 @@ impl App {
             data.animation_time = 0.0;
             crate::log!("Cleared animation state");
 
-            data.gltf_model = GltfModel::load_model(model_path);
-
-            let gltf_result = convert_gltf_to_render_resources(&data.gltf_model);
+            let gltf_result = load_gltf_file(model_path);
             crate::log!(
                 "Converted glTF: {} meshes, {} skeletons, {} clips",
                 gltf_result.meshes.len(),
@@ -174,6 +168,8 @@ impl App {
             );
 
             data.render_resources.animation = gltf_result.animation_system;
+            data.render_resources.has_skinned_meshes = gltf_result.has_skinned_meshes;
+            data.render_resources.morph_animation = gltf_result.morph_animation;
 
             for (i, gltf_mesh) in gltf_result.meshes.iter().enumerate() {
                 crate::log!(
@@ -184,9 +180,8 @@ impl App {
 
                 let mut mesh = Mesh::default();
 
-                let gltf_data = &data.gltf_model.gltf_data[i];
-                if !gltf_data.image_data.is_empty() {
-                    let img = &gltf_data.image_data[0];
+                if !gltf_mesh.image_data.is_empty() {
+                    let img = &gltf_mesh.image_data[0];
                     let expected_rgba_size = img.width as usize * img.height as usize * 4;
                     crate::log!("Loading texture for mesh {}: {}x{}, data_len={}, expected_rgba={}, is_rgba={}",
                         i, img.width, img.height, img.data.len(), expected_rgba_size, img.data.len() == expected_rgba_size);
@@ -194,9 +189,9 @@ impl App {
                         instance,
                         rrdevice,
                         data.rrcommand_pool.borrow_mut(),
-                        &gltf_data.image_data[0].data,
-                        gltf_data.image_data[0].width,
-                        gltf_data.image_data[0].height,
+                        &gltf_mesh.image_data[0].data,
+                        gltf_mesh.image_data[0].width,
+                        gltf_mesh.image_data[0].height,
                     ) {
                         Ok((image, image_memory, mip_level)) => {
                             mesh.image = image;
@@ -298,8 +293,11 @@ impl App {
             crate::log!("Created material {} for mesh {}", material_id, i);
         }
 
-        let is_gltf_node_animation = !data.gltf_model.gltf_data.is_empty()
-            && !data.gltf_model.has_skinned_meshes;
+        let is_gltf = data.current_model_path.ends_with(".glb")
+            || data.current_model_path.ends_with(".gltf");
+        let is_gltf_node_animation = is_gltf
+            && !data.render_resources.meshes.is_empty()
+            && !data.render_resources.has_skinned_meshes;
 
         if is_gltf_node_animation {
             crate::log!("glTF node animation detected - using initial mesh positions (no node transform)");
@@ -390,100 +388,12 @@ impl App {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub(crate) unsafe fn update_vertex_buffer(
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        data: &mut AppData,
+        _instance: &Instance,
+        _rrdevice: &RRDevice,
+        _data: &mut AppData,
     ) -> Result<()> {
-        if data.gltf_model.gltf_data.is_empty() {
-            return Ok(());
-        }
-
-        let gltf_mesh_count = data.gltf_model.gltf_data.len();
-        for i in 0..gltf_mesh_count {
-            if i >= data.render_resources.meshes.len() {
-                break;
-            }
-
-            let mesh = &mut data.render_resources.meshes[i];
-            let vertex_data = &mut mesh.vertex_data;
-            let gltf_data = &data.gltf_model.gltf_data[i];
-
-            for vertex in &gltf_data.vertices {
-                vertex_data.vertices[vertex.index].pos.x = vertex.animation_position[0];
-                vertex_data.vertices[vertex.index].pos.y = vertex.animation_position[1];
-                vertex_data.vertices[vertex.index].pos.z = vertex.animation_position[2];
-            }
-
-            static mut UPDATE_LOG_COUNTER: u32 = 0;
-            unsafe {
-                UPDATE_LOG_COUNTER += 1;
-                if UPDATE_LOG_COUNTER <= 5 {
-                    crate::log!("=== update_vertex_buffer Debug (mesh {}) ===", i);
-                    crate::log!("gltf_data.vertices count: {}", gltf_data.vertices.len());
-                    crate::log!("vertex_data.vertices count: {}", vertex_data.vertices.len());
-                    if !vertex_data.vertices.is_empty() {
-                        let v0 = &vertex_data.vertices[0];
-                        crate::log!(
-                            "vertex_data[0].pos: ({:.2}, {:.2}, {:.2})",
-                            v0.pos.x,
-                            v0.pos.y,
-                            v0.pos.z
-                        );
-                        if vertex_data.vertices.len() > 100 {
-                            let v100 = &vertex_data.vertices[100];
-                            crate::log!(
-                                "vertex_data[100].pos: ({:.2}, {:.2}, {:.2})",
-                                v100.pos.x,
-                                v100.pos.y,
-                                v100.pos.z
-                            );
-                        }
-                    }
-                    if !gltf_data.vertices.is_empty() {
-                        let v = &gltf_data.vertices[0];
-                        crate::log!("gltf_data[0].index: {}", v.index);
-                        crate::log!(
-                            "gltf_data[0].animation_position: ({:.2}, {:.2}, {:.2})",
-                            v.animation_position[0],
-                            v.animation_position[1],
-                            v.animation_position[2]
-                        );
-                        crate::log!(
-                            "gltf_data[0].position (original): ({:.2}, {:.2}, {:.2})",
-                            v.position[0],
-                            v.position[1],
-                            v.position[2]
-                        );
-                    }
-                    crate::log!("==================================");
-                }
-            }
-
-            static mut UPDATE_BUFFER_LOG_COUNTER: u32 = 0;
-            static mut PREV_GLTF_MESH_COUNT: usize = 0;
-            if gltf_mesh_count != PREV_GLTF_MESH_COUNT {
-                UPDATE_BUFFER_LOG_COUNTER = 0;
-                PREV_GLTF_MESH_COUNT = gltf_mesh_count;
-            }
-            UPDATE_BUFFER_LOG_COUNTER += 1;
-            if UPDATE_BUFFER_LOG_COUNTER <= 3 {
-                crate::log!("update_vertex_buffer: mesh[{}] buffer={:?}, size={}",
-                    i, mesh.vertex_buffer.buffer, mesh.vertex_data.vertices.len());
-            }
-
-            if let Err(e) = mesh.vertex_buffer.update(
-                instance,
-                rrdevice,
-                &data.rrcommand_pool,
-                (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len())
-                    as vk::DeviceSize,
-                mesh.vertex_data.vertices.as_ptr() as *const c_void,
-                mesh.vertex_data.vertices.len(),
-            ) {
-                eprintln!("Failed to update vertex buffer: {}", e);
-            }
-        }
         Ok(())
     }
 
@@ -580,23 +490,13 @@ impl App {
     pub fn dump_debug_info(&self) {
         crate::log!("========== DUMP DEBUG INFORMATION ==========");
 
-        crate::log!("--- GltfModel Info ---");
-        crate::log!("  gltf_data count: {}", self.data.gltf_model.gltf_data.len());
-        crate::log!("  has_skinned_meshes: {}", self.data.gltf_model.has_skinned_meshes);
-        crate::log!("  node_animations count: {}", self.data.gltf_model.node_animations.len());
-        crate::log!("  morph_animations count: {}", self.data.gltf_model.morph_animations.len());
-        crate::log!("  joints count: {}", self.data.gltf_model.joints.len());
-        crate::log!("  rrnodes count: {}", self.data.gltf_model.rrnodes.len());
-
-        for (i, gltf_data) in self.data.gltf_model.gltf_data.iter().enumerate() {
-            crate::log!("  gltf_data[{}]: vertices={}, indices={}, has_joints={}",
-                i, gltf_data.vertices.len(), gltf_data.indices.len(), gltf_data.has_joints);
-            if !gltf_data.vertices.is_empty() {
-                let v = &gltf_data.vertices[0];
-                crate::log!("    vertex[0]: position={:?}, animation_position={:?}, original_local={:?}",
-                    v.position, v.animation_position, v.original_local_position);
-            }
-        }
+        crate::log!("--- Model Info ---");
+        crate::log!("  current_model_path: {}", self.data.current_model_path);
+        crate::log!("  meshes count: {}", self.data.render_resources.meshes.len());
+        crate::log!("  has_skinned_meshes: {}", self.data.render_resources.has_skinned_meshes);
+        crate::log!("  animation clips count: {}", self.data.render_resources.animation.clips.len());
+        crate::log!("  morph_animations count: {}", self.data.render_resources.morph_animation.animations.len());
+        crate::log!("  skeletons count: {}", self.data.render_resources.animation.skeletons.len());
 
         crate::log!("--- RenderResources Info ---");
         crate::log!("  meshes count: {}", self.data.render_resources.meshes.len());

@@ -177,12 +177,31 @@ impl<'a> GBufferPass<'a> {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
+        static mut DRAW_LOG_COUNTER: u32 = 0;
+        static mut PREV_MESH_COUNT: usize = 0;
+        let mesh_count = self.meshes.len();
+        if mesh_count != PREV_MESH_COUNT {
+            DRAW_LOG_COUNTER = 0;
+            PREV_MESH_COUNT = mesh_count;
+        }
+        DRAW_LOG_COUNTER += 1;
+        let should_log = DRAW_LOG_COUNTER <= 3;
+
+        if should_log {
+            crate::log!("=== draw_meshes (GBuffer): {} meshes ===", mesh_count);
+        }
+
         if self.meshes.is_empty() {
             return Ok(());
         }
 
         for i in 0..self.meshes.len() {
             let mesh = &self.meshes[i];
+
+            if should_log {
+                crate::log!("  GBuffer Mesh[{}]: render_to_gbuffer={}, vertex_buffer={:?}, indices={}",
+                    i, mesh.render_to_gbuffer, mesh.vertex_buffer.buffer, mesh.index_buffer.indices);
+            }
 
             if !mesh.render_to_gbuffer {
                 continue;

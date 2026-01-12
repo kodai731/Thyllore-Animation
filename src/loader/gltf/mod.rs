@@ -1,4 +1,4 @@
-pub mod gltf;
-pub mod loader;
+pub(crate) mod gltf;
+mod loader;
 
-pub use loader::{convert_gltf_to_render_resources, GltfLoadResult, GltfMeshData};
+pub use loader::{load_gltf_file, GltfLoadResult, GltfMeshData};

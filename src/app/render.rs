@@ -43,6 +43,11 @@ impl App {
             gui_data.file_changed = false;
         }
 
+        if gui_data.dump_debug_info {
+            self.dump_debug_info();
+            gui_data.dump_debug_info = false;
+        }
+
         // Acquire an image from the swapchain
         // Execute the command buffer with that image as attachment in the framebuffer
         // Return the image to the swapchain for presentation
@@ -115,11 +120,18 @@ impl App {
                     self.data.render_resources.animation.apply_to_skeleton(skel_id);
                 }
 
-                Self::update_skinned_vertex_buffers(
-                    &self.instance,
-                    &self.rrdevice,
-                    &mut self.data,
-                )?;
+                let is_gltf = self.data.current_model_path.ends_with(".glb")
+                    || self.data.current_model_path.ends_with(".gltf");
+                let is_gltf_node_animation = is_gltf
+                    && !self.data.render_resources.has_skinned_meshes;
+
+                if !is_gltf_node_animation {
+                    Self::update_skinned_vertex_buffers(
+                        &self.instance,
+                        &self.rrdevice,
+                        &mut self.data,
+                    )?;
+                }
 
                 Self::update_acceleration_structures(
                     &self.instance,
@@ -538,8 +550,31 @@ impl App {
     }
 
     unsafe fn render_models(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
-        for i in 0..self.data.render_resources.meshes.len() {
+        static mut RENDER_LOG_COUNTER: u32 = 0;
+        static mut PREV_MESH_COUNT: usize = 0;
+
+        let mesh_count = self.data.render_resources.meshes.len();
+        let mesh_count_changed = mesh_count != PREV_MESH_COUNT;
+        if mesh_count_changed {
+            RENDER_LOG_COUNTER = 0;
+            PREV_MESH_COUNT = mesh_count;
+        }
+
+        RENDER_LOG_COUNTER += 1;
+        let should_log = RENDER_LOG_COUNTER <= 3;
+
+        if should_log {
+            crate::log!("=== render_models: {} meshes ===", mesh_count);
+        }
+
+        for i in 0..mesh_count {
             let mesh = &self.data.render_resources.meshes[i];
+
+            if should_log {
+                crate::log!("  Mesh[{}]: vertex_buffer={:?}, indices={}, vertices={}",
+                    i, mesh.vertex_buffer.buffer,
+                    mesh.index_buffer.indices, mesh.vertex_data.vertices.len());
+            }
 
             self.rrdevice.device.cmd_bind_pipeline(
                 command_buffer,

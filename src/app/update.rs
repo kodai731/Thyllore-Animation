@@ -44,21 +44,6 @@ impl App {
                             .map(|v| Vector3::new(v.pos.x, v.pos.y, v.pos.z))
                     })
                     .collect()
-            } else if !self.data.gltf_model.gltf_data.is_empty() {
-                self.data
-                    .gltf_model
-                    .gltf_data
-                    .iter()
-                    .flat_map(|data| {
-                        data.vertices.iter().map(|v| {
-                            Vector3::new(
-                                v.animation_position[0],
-                                v.animation_position[1],
-                                v.animation_position[2],
-                            )
-                        })
-                    })
-                    .collect()
             } else {
                 Vec::new()
             };
@@ -73,7 +58,7 @@ impl App {
 
         let time = self.start.elapsed().as_secs_f32();
 
-        if !self.data.gltf_model.morph_animations.is_empty() {
+        if !self.data.render_resources.morph_animation.is_empty() {
             self.morphing(time);
         }
 
@@ -531,32 +516,46 @@ impl App {
         Ok(())
     }
     unsafe fn morphing(&mut self, time: f32) {
-        if self.data.gltf_model.morph_animations.len() <= 0 {
+        let morph_system = &self.data.render_resources.morph_animation;
+        if morph_system.is_empty() {
             return;
         }
 
-        for i in 0..self.data.gltf_model.gltf_data.len() {
-            let animation_index = self.data.gltf_model.morph_target_index(time);
+        let animation_index = morph_system.get_animation_index(time);
+        let mesh_count = morph_system.targets.len().min(self.data.render_resources.meshes.len());
 
-            let gltf_model = &mut self.data.gltf_model;
-            let gltf_data = &mut gltf_model.gltf_data[i];
-            if gltf_data.morph_targets.len() <= 0 {
-                return;
-            };
-
-            let mesh = &mut self.data.render_resources.meshes[i];
-            let vertices = &mut mesh.vertex_data.vertices;
-            for i in 0..vertices.len() {
-                vertices[i].pos = gltf_data.vertices[i].position.to_vec3();
+        for mesh_idx in 0..mesh_count {
+            let morph_targets = &morph_system.targets[mesh_idx];
+            if morph_targets.is_empty() {
+                continue;
             }
 
-            let morph_animation = &gltf_model.morph_animations[animation_index];
-            for i in 0..morph_animation.weights.len() {
-                let morph_target = &gltf_data.morph_targets[i];
-                for j in 0..morph_target.positions.len() {
-                    let delta_position =
-                        morph_target.positions[j].to_vec3() * morph_animation.weights[i] * 0.01f32;
-                    vertices[j].pos += delta_position;
+            let base_vertices = &morph_system.base_vertices[mesh_idx];
+            let mesh = &mut self.data.render_resources.meshes[mesh_idx];
+            let vertices = &mut mesh.vertex_data.vertices;
+
+            for (i, v) in vertices.iter_mut().enumerate() {
+                if i < base_vertices.len() {
+                    let base = base_vertices[i];
+                    v.pos.x = base[0];
+                    v.pos.y = base[1];
+                    v.pos.z = base[2];
+                }
+            }
+
+            let morph_animation = &morph_system.animations[animation_index];
+            for (weight_idx, &weight) in morph_animation.weights.iter().enumerate() {
+                if weight_idx >= morph_targets.len() {
+                    break;
+                }
+                let morph_target = &morph_targets[weight_idx];
+                let scale_factor = 0.01f32;
+                for (j, delta_pos) in morph_target.positions.iter().enumerate() {
+                    if j < vertices.len() {
+                        vertices[j].pos.x += delta_pos[0] * weight * scale_factor;
+                        vertices[j].pos.y += delta_pos[1] * weight * scale_factor;
+                        vertices[j].pos.z += delta_pos[2] * weight * scale_factor;
+                    }
                 }
             }
 
@@ -572,8 +571,8 @@ impl App {
             }
 
             if let Some(ref mut accel_struct) = self.data.raytracing.acceleration_structure {
-                if i < accel_struct.blas_list.len() {
-                    let blas = &accel_struct.blas_list[i];
+                if mesh_idx < accel_struct.blas_list.len() {
+                    let blas = &accel_struct.blas_list[mesh_idx];
                     if let Err(e) = RRAccelerationStructure::update_blas(
                         &self.instance,
                         &self.rrdevice,

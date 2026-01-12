@@ -96,11 +96,12 @@ impl Skeleton {
         self.bones.get_mut(id as usize)
     }
 
-    pub fn get_bone_by_name(&self, name: &str) -> Option<&Bone> {
-        self.bone_name_to_id
-            .get(name)
-            .and_then(|&id| self.get_bone(id))
-    }
+    // TODO: FBX/glTFで未使用 - 必要時に有効化
+    // pub fn get_bone_by_name(&self, name: &str) -> Option<&Bone> {
+    //     self.bone_name_to_id
+    //         .get(name)
+    //         .and_then(|&id| self.get_bone(id))
+    // }
 
     pub fn bone_count(&self) -> usize {
         self.bones.len()
@@ -370,18 +371,19 @@ impl AnimationPlayer {
         self.playing = true;
     }
 
-    pub fn pause(&mut self) {
-        self.playing = false;
-    }
+    // TODO: FBX/glTFで未使用 - 必要時に有効化
+    // pub fn pause(&mut self) {
+    //     self.playing = false;
+    // }
 
-    pub fn resume(&mut self) {
-        self.playing = true;
-    }
+    // pub fn resume(&mut self) {
+    //     self.playing = true;
+    // }
 
-    pub fn stop(&mut self) {
-        self.playing = false;
-        self.time = 0.0;
-    }
+    // pub fn stop(&mut self) {
+    //     self.playing = false;
+    //     self.time = 0.0;
+    // }
 
     pub fn update(&mut self, delta_time: f32, clip_duration: f32) {
         if !self.playing || clip_duration <= 0.0 {
@@ -631,5 +633,67 @@ impl AnimationSystem {
         self.player = AnimationPlayer::new();
         self.next_skeleton_id = 0;
         self.next_clip_id = 0;
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct MorphTarget {
+    pub positions: Vec<[f32; 3]>,
+    pub normals: Vec<[f32; 3]>,
+    pub tangents: Vec<[f32; 3]>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct MorphAnimation {
+    pub key_frame: f32,
+    pub weights: Vec<f32>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct MorphAnimationSystem {
+    pub animations: Vec<MorphAnimation>,
+    pub targets: Vec<Vec<MorphTarget>>,
+    pub base_vertices: Vec<Vec<[f32; 3]>>,
+}
+
+impl MorphAnimationSystem {
+    pub fn new() -> Self {
+        Self {
+            animations: Vec::new(),
+            targets: Vec::new(),
+            base_vertices: Vec::new(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.animations.is_empty()
+    }
+
+    pub fn get_animation_index(&self, time: f32) -> usize {
+        if self.animations.is_empty() {
+            return 0;
+        }
+
+        let start_key_frame = self.animations.first()
+            .expect("morph_animations is empty")
+            .key_frame;
+        let end_key_frame = self.animations.last()
+            .expect("morph_animations is empty")
+            .key_frame;
+        let period = end_key_frame - start_key_frame;
+        let mod_time = time.rem_euclid(period);
+
+        for i in 0..self.animations.len() {
+            if mod_time <= self.animations[i].key_frame {
+                return i;
+            }
+        }
+        self.animations.len() - 1
+    }
+
+    pub fn clear(&mut self) {
+        self.animations.clear();
+        self.targets.clear();
+        self.base_vertices.clear();
     }
 }

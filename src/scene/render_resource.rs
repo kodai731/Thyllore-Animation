@@ -1,4 +1,4 @@
-use crate::scene::animation::{AnimationSystem, SkeletonId, SkinData};
+use crate::scene::animation::{AnimationSystem, MorphAnimationSystem, SkeletonId, SkinData};
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::vulkanr::core::device::RRDevice;
 use crate::vulkanr::data::{Vertex, VertexData};
@@ -660,6 +660,8 @@ pub struct RenderResources {
     pub meshes: Vec<Mesh>,
     pub mesh_material_ids: Vec<MaterialId>,
     pub animation: AnimationSystem,
+    pub morph_animation: MorphAnimationSystem,
+    pub has_skinned_meshes: bool,
 }
 
 impl RenderResources {
@@ -681,6 +683,8 @@ impl RenderResources {
             meshes: Vec::new(),
             mesh_material_ids: Vec::new(),
             animation: AnimationSystem::new(),
+            morph_animation: MorphAnimationSystem::new(),
+            has_skinned_meshes: false,
         })
     }
 

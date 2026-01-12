@@ -1,5 +1,6 @@
 use crate::scene::animation::{
-    AnimationClip, AnimationSystem, Interpolation, Keyframe, Skeleton, SkinData, TransformChannel,
+    AnimationClip, AnimationSystem, Interpolation, Keyframe, MorphAnimation, MorphAnimationSystem,
+    MorphTarget, Skeleton, SkinData, TransformChannel,
 };
 use crate::vulkanr::data::{Vertex, VertexData};
 use crate::math::{Vec2, Vec3, Vec4};
@@ -7,19 +8,35 @@ use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3, Vector4};
 
 use super::gltf::{GltfModel, GltfData, Joint};
 
+#[derive(Clone, Debug, Default)]
+pub struct ImageData {
+    pub data: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+}
+
 pub struct GltfMeshData {
     pub vertex_data: VertexData,
     pub skin_data: Option<SkinData>,
     pub skeleton_id: Option<u32>,
     pub texture_path: Option<String>,
+    pub image_data: Vec<ImageData>,
 }
 
 pub struct GltfLoadResult {
     pub meshes: Vec<GltfMeshData>,
     pub animation_system: AnimationSystem,
+    pub morph_animation: MorphAnimationSystem,
+    pub has_skinned_meshes: bool,
+    pub has_armature: bool,
 }
 
-pub fn convert_gltf_to_render_resources(gltf_model: &GltfModel) -> GltfLoadResult {
+pub unsafe fn load_gltf_file(path: &str) -> GltfLoadResult {
+    let gltf_model = GltfModel::load_model(path);
+    convert_gltf_model_to_result(&gltf_model)
+}
+
+fn convert_gltf_model_to_result(gltf_model: &GltfModel) -> GltfLoadResult {
     let mut animation_system = AnimationSystem::new();
 
     let skeleton_id = if !gltf_model.joints.is_empty() {
@@ -84,9 +101,14 @@ pub fn convert_gltf_to_render_resources(gltf_model: &GltfModel) -> GltfLoadResul
         animation_system.play(0);
     }
 
+    let morph_animation = convert_morph_animation(gltf_model, scale);
+
     GltfLoadResult {
         meshes,
         animation_system,
+        morph_animation,
+        has_skinned_meshes: gltf_model.has_skinned_meshes,
+        has_armature: gltf_model.has_armature,
     }
 }
 
@@ -130,6 +152,43 @@ fn log_gltf_scale_info(meshes: &[GltfMeshData]) {
             crate::log!("  WARNING: Model appears very small. Check unit scale.");
         }
     }
+}
+
+fn convert_morph_animation(gltf_model: &GltfModel, scale: f32) -> MorphAnimationSystem {
+    let mut morph_system = MorphAnimationSystem::new();
+
+    for anim in &gltf_model.morph_animations {
+        morph_system.animations.push(MorphAnimation {
+            key_frame: anim.key_frame,
+            weights: anim.weights.clone(),
+        });
+    }
+
+    for gltf_data in &gltf_model.gltf_data {
+        let mut mesh_targets = Vec::new();
+        for old_target in &gltf_data.morph_targets {
+            let target = MorphTarget {
+                positions: old_target.positions.clone(),
+                normals: old_target.normals.clone(),
+                tangents: old_target.tangents.clone(),
+            };
+            mesh_targets.push(target);
+        }
+        morph_system.targets.push(mesh_targets);
+
+        let base_verts: Vec<[f32; 3]> = gltf_data.vertices.iter().map(|v| {
+            [v.position[0] * scale, v.position[1] * scale, v.position[2] * scale]
+        }).collect();
+        morph_system.base_vertices.push(base_verts);
+    }
+
+    if !morph_system.animations.is_empty() {
+        crate::log!("Morph animation loaded: {} keyframes, {} meshes",
+            morph_system.animations.len(),
+            morph_system.targets.len());
+    }
+
+    morph_system
 }
 
 fn convert_joints_to_skeleton(joints: &[Joint], skeleton_root_transform: &Option<[[f32; 4]; 4]>) -> Skeleton {
@@ -366,11 +425,20 @@ fn convert_gltf_data_to_mesh(
         None
     };
 
+    let image_data: Vec<ImageData> = gltf_data.image_data.iter().map(|img| {
+        ImageData {
+            data: img.data.clone(),
+            width: img.width,
+            height: img.height,
+        }
+    }).collect();
+
     GltfMeshData {
         vertex_data,
         skin_data,
         skeleton_id,
         texture_path: None,
+        image_data,
     }
 }
 
@@ -400,9 +468,9 @@ fn convert_gltf_to_skin_data(
             v.joint_weights[3],
         ));
         base_positions.push(Vector3::new(
-            v.animation_position[0],
-            v.animation_position[1],
-            v.animation_position[2],
+            v.position[0],
+            v.position[1],
+            v.position[2],
         ));
         base_normals.push(Vector3::new(
             v.normal[0],

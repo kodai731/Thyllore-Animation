@@ -170,6 +170,23 @@ impl App {
             data.render_resources.animation = gltf_result.animation_system;
             data.render_resources.has_skinned_meshes = gltf_result.has_skinned_meshes;
             data.render_resources.morph_animation = gltf_result.morph_animation;
+            data.render_resources.node_animation_scale = if gltf_result.has_armature { 0.01 } else { 1.0 };
+
+            data.render_resources.nodes = gltf_result
+                .nodes
+                .iter()
+                .map(|n| crate::scene::render_resource::NodeData {
+                    index: n.index,
+                    name: n.name.clone(),
+                    parent_index: n.parent_index,
+                    local_transform: n.local_transform,
+                    global_transform: cgmath::Matrix4::identity(),
+                })
+                .collect();
+            crate::log!(
+                "Loaded {} nodes into render_resources",
+                data.render_resources.nodes.len()
+            );
 
             for (i, gltf_mesh) in gltf_result.meshes.iter().enumerate() {
                 crate::log!(
@@ -228,6 +245,25 @@ impl App {
                 mesh.vertex_data = gltf_mesh.vertex_data.clone();
                 mesh.skin_data = gltf_mesh.skin_data.clone();
                 mesh.skeleton_id = gltf_mesh.skeleton_id;
+                mesh.node_index = gltf_mesh.node_index;
+                mesh.base_vertices = gltf_mesh.local_vertices.clone();
+
+                if i == 2 && !gltf_mesh.local_vertices.is_empty() {
+                    crate::log!(
+                        "  gltf_mesh[2].local_vertices[0]=({:.3},{:.3},{:.3})",
+                        gltf_mesh.local_vertices[0].pos.x,
+                        gltf_mesh.local_vertices[0].pos.y,
+                        gltf_mesh.local_vertices[0].pos.z
+                    );
+                }
+
+                crate::log!(
+                    "Mesh[{}]: node_index={:?}, base_vertices={}, skin_data={}",
+                    i,
+                    mesh.node_index,
+                    mesh.base_vertices.len(),
+                    mesh.skin_data.is_some()
+                );
 
                 data.render_resources.meshes.push(mesh);
             }

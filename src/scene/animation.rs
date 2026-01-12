@@ -318,15 +318,17 @@ impl AnimationClip {
     pub fn sample(&self, time: f32, skeleton: &mut Skeleton) {
         for (&bone_id, channel) in &self.channels {
             if let Some(bone) = skeleton.get_bone_mut(bone_id) {
+                let (rest_t, rest_r, rest_s) = decompose_transform(&bone.local_transform);
+
                 let translation = channel
                     .sample_translation(time)
-                    .unwrap_or(Vector3::new(0.0, 0.0, 0.0));
+                    .unwrap_or(rest_t);
                 let rotation = channel
                     .sample_rotation(time)
-                    .unwrap_or(Quaternion::new(1.0, 0.0, 0.0, 0.0));
+                    .unwrap_or(rest_r);
                 let scale = channel
                     .sample_scale(time)
-                    .unwrap_or(Vector3::new(1.0, 1.0, 1.0));
+                    .unwrap_or(rest_s);
 
                 bone.local_transform = compose_transform(translation, rotation, scale);
             }
@@ -343,6 +345,24 @@ fn compose_transform(
     let r = Matrix4::from(rotation);
     let s = Matrix4::from_nonuniform_scale(scale.x, scale.y, scale.z);
     t * r * s
+}
+
+fn decompose_transform(m: &Matrix4<f32>) -> (Vector3<f32>, Quaternion<f32>, Vector3<f32>) {
+    let translation = Vector3::new(m[3][0], m[3][1], m[3][2]);
+
+    let sx = (m[0][0] * m[0][0] + m[0][1] * m[0][1] + m[0][2] * m[0][2]).sqrt();
+    let sy = (m[1][0] * m[1][0] + m[1][1] * m[1][1] + m[1][2] * m[1][2]).sqrt();
+    let sz = (m[2][0] * m[2][0] + m[2][1] * m[2][1] + m[2][2] * m[2][2]).sqrt();
+    let scale = Vector3::new(sx, sy, sz);
+
+    let rot_matrix = cgmath::Matrix3::new(
+        m[0][0] / sx.max(0.0001), m[0][1] / sx.max(0.0001), m[0][2] / sx.max(0.0001),
+        m[1][0] / sy.max(0.0001), m[1][1] / sy.max(0.0001), m[1][2] / sy.max(0.0001),
+        m[2][0] / sz.max(0.0001), m[2][1] / sz.max(0.0001), m[2][2] / sz.max(0.0001),
+    );
+    let rotation = Quaternion::from(rot_matrix);
+
+    (translation, rotation, scale)
 }
 
 #[derive(Clone, Debug, Default)]

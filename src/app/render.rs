@@ -125,7 +125,16 @@ impl App {
                 let is_gltf_node_animation = is_gltf
                     && !self.data.render_resources.has_skinned_meshes;
 
-                if !is_gltf_node_animation {
+                if is_gltf_node_animation {
+                    if let Err(e) = self.data.render_resources.update_node_animation(
+                        &self.instance,
+                        &self.rrdevice,
+                        &self.data.rrcommand_pool,
+                        &mut self.data.raytracing.acceleration_structure,
+                    ) {
+                        crate::log!("Failed to update node animation: {}", e);
+                    }
+                } else {
                     Self::update_skinned_vertex_buffers(
                         &self.instance,
                         &self.rrdevice,

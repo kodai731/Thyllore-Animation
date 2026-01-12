@@ -25,10 +25,32 @@ pub struct GltfMeshData {
     pub base_positions: Vec<[f32; 3]>,
     pub skeleton_id: Option<u32>,
     pub image_data: Vec<ImageData>,
+    pub node_index: Option<usize>,
+    pub local_vertices: Vec<Vertex>,
+}
+
+#[derive(Clone, Debug)]
+pub struct NodeInfo {
+    pub index: usize,
+    pub name: String,
+    pub parent_index: Option<usize>,
+    pub local_transform: Matrix4<f32>,
+}
+
+impl Default for NodeInfo {
+    fn default() -> Self {
+        Self {
+            index: 0,
+            name: String::new(),
+            parent_index: None,
+            local_transform: Matrix4::identity(),
+        }
+    }
 }
 
 pub struct GltfLoadResult {
     pub meshes: Vec<GltfMeshData>,
+    pub nodes: Vec<NodeInfo>,
     pub animation_system: AnimationSystem,
     pub morph_animation: MorphAnimationSystem,
     pub has_skinned_meshes: bool,
@@ -133,6 +155,8 @@ struct MeshBuildData {
     morph_targets: Vec<MorphTarget>,
     image_data: Vec<ImageData>,
     has_joints: bool,
+    node_index: usize,
+    local_vertices: Vec<Vertex>,
 }
 
 struct GltfParseContext {
@@ -143,6 +167,7 @@ struct GltfParseContext {
     node_animations: Vec<NodeAnimation>,
     node_joint_map: NodeJointMap,
     rrnodes: Vec<RRNode>,
+    node_infos: Vec<NodeInfo>,
     has_skinned_meshes: bool,
     has_armature: bool,
     skeleton_root_transform: Option<[[f32; 4]; 4]>,
@@ -158,6 +183,7 @@ impl Default for GltfParseContext {
             node_animations: Vec::new(),
             node_joint_map: NodeJointMap::default(),
             rrnodes: Vec::new(),
+            node_infos: Vec::new(),
             has_skinned_meshes: false,
             has_armature: false,
             skeleton_root_transform: None,
@@ -373,6 +399,8 @@ unsafe fn process_node(
                 morph_targets: Vec::new(),
                 image_data: Vec::new(),
                 has_joints: false,
+                node_index: node.index(),
+                local_vertices: Vec::new(),
             };
 
             let mut raw_positions: Vec<[f32; 3]> = Vec::new();
@@ -399,16 +427,44 @@ unsafe fn process_node(
                 joint_indices = iter.into_u16().collect();
             }
 
-            let positions: Vec<[f32; 3]> = if mesh_data.has_joints {
-                raw_positions
-            } else {
-                raw_positions
-                    .iter()
-                    .map(|p| {
-                        let pos = cumulative_transform * [p[0], p[1], p[2], 1.0].to_vec4();
-                        [pos.x, pos.y, pos.z]
-                    })
-                    .collect()
+            let positions: Vec<[f32; 3]> = {
+                let node_name = node.name().unwrap_or("");
+                if node_name.contains("NurbsPath.009") {
+                    crate::log!(
+                        "=== Load-time transform for {} (has_joints={}) ===",
+                        node_name, mesh_data.has_joints
+                    );
+                    let ct = &cumulative_transform;
+                    let scale = (
+                        (ct[0][0]*ct[0][0] + ct[0][1]*ct[0][1] + ct[0][2]*ct[0][2]).sqrt(),
+                        (ct[1][0]*ct[1][0] + ct[1][1]*ct[1][1] + ct[1][2]*ct[1][2]).sqrt(),
+                        (ct[2][0]*ct[2][0] + ct[2][1]*ct[2][1] + ct[2][2]*ct[2][2]).sqrt(),
+                    );
+                    crate::log!(
+                        "  cumulative_transform: scale=[{:.1},{:.1},{:.1}] trans=[{:.2},{:.2},{:.2}]",
+                        scale.0, scale.1, scale.2,
+                        ct[3][0], ct[3][1], ct[3][2]
+                    );
+                    if !raw_positions.is_empty() {
+                        let raw = raw_positions[0];
+                        let pos = cumulative_transform * [raw[0], raw[1], raw[2], 1.0].to_vec4();
+                        crate::log!(
+                            "  raw[0]=({:.3},{:.3},{:.3}) -> transformed=({:.2},{:.2},{:.2})",
+                            raw[0], raw[1], raw[2], pos.x, pos.y, pos.z
+                        );
+                    }
+                }
+                if mesh_data.has_joints {
+                    raw_positions.clone()
+                } else {
+                    raw_positions
+                        .iter()
+                        .map(|p| {
+                            let pos = cumulative_transform * [p[0], p[1], p[2], 1.0].to_vec4();
+                            [pos.x, pos.y, pos.z]
+                        })
+                        .collect()
+                }
             };
 
             if let Some(iter) = reader.read_weights(0) {
@@ -417,6 +473,7 @@ unsafe fn process_node(
 
             for i in 0..positions.len() {
                 let pos = positions[i];
+                let raw_pos = raw_positions[i];
                 let normal = normals.get(i).copied().unwrap_or([0.0, 0.0, 1.0]);
                 let tex_coord = tex_coords.get(i).copied().unwrap_or([0.0, 0.0]);
 
@@ -426,6 +483,15 @@ unsafe fn process_node(
                     tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
                     normal: Vec3::new(normal[0], normal[1], normal[2]),
                 });
+
+                if !mesh_data.has_joints {
+                    mesh_data.local_vertices.push(Vertex {
+                        pos: Vec3::new(raw_pos[0], raw_pos[1], raw_pos[2]),
+                        color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+                        tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
+                        normal: Vec3::new(normal[0], normal[1], normal[2]),
+                    });
+                }
 
                 mesh_data.base_positions.push(pos);
                 mesh_data
@@ -482,6 +548,15 @@ unsafe fn process_node(
                 }
             }
 
+            if node.name().unwrap_or("").contains("NurbsPath.009") {
+                if !mesh_data.local_vertices.is_empty() {
+                    let lv = &mesh_data.local_vertices[0];
+                    crate::log!(
+                        "  After processing: local_vertices[0]=({:.3},{:.3},{:.3}), count={}",
+                        lv.pos.x, lv.pos.y, lv.pos.z, mesh_data.local_vertices.len()
+                    );
+                }
+            }
             ctx.meshes.push(mesh_data);
         }
     }
@@ -491,6 +566,13 @@ unsafe fn process_node(
         name: node.name().unwrap_or("").to_string(),
         transform: array_from_mat4(node_transform),
         children: node.children().map(|c| c.index() as u16).collect(),
+    });
+
+    ctx.node_infos.push(NodeInfo {
+        index: node.index(),
+        name: node.name().unwrap_or("").to_string(),
+        parent_index: parent_node_index,
+        local_transform: node_transform,
     });
 
     if ctx.node_joint_map.contain_node_index(node.index() as u16) {
@@ -761,6 +843,10 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
             clip.channels.len()
         );
         if clip.duration > 0.0 && !clip.channels.is_empty() {
+            if let Some(skeleton) = animation_system.get_skeleton_mut(skeleton_id.unwrap()) {
+                clip.sample(0.0, skeleton);
+                log!("Initialized skeleton bones with animation t=0 values");
+            }
             animation_system.add_clip(clip);
         }
     }
@@ -824,6 +910,8 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
             .collect();
         morph_system.base_vertices.push(base_verts);
 
+        let local_vertices: Vec<Vertex> = mesh.local_vertices.clone();
+
         meshes.push(GltfMeshData {
             vertex_data,
             skin_data,
@@ -831,6 +919,8 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
             base_positions: mesh.base_positions,
             skeleton_id,
             image_data: mesh.image_data,
+            node_index: Some(mesh.node_index),
+            local_vertices,
         });
     }
 
@@ -850,6 +940,7 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
 
     GltfLoadResult {
         meshes,
+        nodes: ctx.node_infos,
         animation_system,
         morph_animation: morph_system,
         has_skinned_meshes: ctx.has_skinned_meshes,

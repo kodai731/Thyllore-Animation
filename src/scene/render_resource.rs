@@ -1,12 +1,15 @@
 use crate::scene::animation::{AnimationSystem, MorphAnimationSystem, SkeletonId, SkinData};
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
+use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::device::RRDevice;
 use crate::vulkanr::data::{Vertex, VertexData};
+use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::resource::buffer::create_buffer;
 use crate::vulkanr::resource::image::RRImage;
 use crate::vulkanr::vulkan::*;
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 use std::collections::HashMap;
+use std::ffi::c_void;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 
@@ -112,19 +115,27 @@ impl Mesh {
             self.sampler = vk::Sampler::null();
         }
         if self.vertex_buffer.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.vertex_buffer.buffer, None);
+            rrdevice
+                .device
+                .destroy_buffer(self.vertex_buffer.buffer, None);
             self.vertex_buffer.buffer = vk::Buffer::null();
         }
         if self.vertex_buffer.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.vertex_buffer.buffer_memory, None);
+            rrdevice
+                .device
+                .free_memory(self.vertex_buffer.buffer_memory, None);
             self.vertex_buffer.buffer_memory = vk::DeviceMemory::null();
         }
         if self.index_buffer.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.index_buffer.buffer, None);
+            rrdevice
+                .device
+                .destroy_buffer(self.index_buffer.buffer, None);
             self.index_buffer.buffer = vk::Buffer::null();
         }
         if self.index_buffer.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.index_buffer.buffer_memory, None);
+            rrdevice
+                .device
+                .free_memory(self.index_buffer.buffer_memory, None);
             self.index_buffer.buffer_memory = vk::DeviceMemory::null();
         }
         if self.image != vk::Image::null() {
@@ -197,10 +208,7 @@ impl FrameDescriptorSet {
         Ok(rrdevice.device.create_descriptor_set_layout(&info, None)?)
     }
 
-    unsafe fn create_pool(
-        rrdevice: &RRDevice,
-        count: usize,
-    ) -> anyhow::Result<vk::DescriptorPool> {
+    unsafe fn create_pool(rrdevice: &RRDevice, count: usize) -> anyhow::Result<vk::DescriptorPool> {
         let pool_size = vk::DescriptorPoolSize::builder()
             .type_(vk::DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(count as u32);
@@ -243,11 +251,18 @@ impl FrameDescriptorSet {
                 .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                 .buffer_info(buffer_infos);
 
-            rrdevice.device.update_descriptor_sets(&[write], &[] as &[vk::CopyDescriptorSet]);
+            rrdevice
+                .device
+                .update_descriptor_sets(&[write], &[] as &[vk::CopyDescriptorSet]);
         }
     }
 
-    pub unsafe fn update(&self, rrdevice: &RRDevice, image_index: usize, ubo: &FrameUBO) -> anyhow::Result<()> {
+    pub unsafe fn update(
+        &self,
+        rrdevice: &RRDevice,
+        image_index: usize,
+        ubo: &FrameUBO,
+    ) -> anyhow::Result<()> {
         let memory = rrdevice.device.map_memory(
             self.buffer_memories[image_index],
             0,
@@ -255,7 +270,9 @@ impl FrameDescriptorSet {
             vk::MemoryMapFlags::empty(),
         )?;
         memcpy(ubo, memory.cast(), 1);
-        rrdevice.device.unmap_memory(self.buffer_memories[image_index]);
+        rrdevice
+            .device
+            .unmap_memory(self.buffer_memories[image_index]);
         Ok(())
     }
 
@@ -332,7 +349,10 @@ impl MaterialManager {
         Ok(rrdevice.device.create_descriptor_set_layout(&info, None)?)
     }
 
-    unsafe fn create_pool(rrdevice: &RRDevice, max_materials: u32) -> anyhow::Result<vk::DescriptorPool> {
+    unsafe fn create_pool(
+        rrdevice: &RRDevice,
+        max_materials: u32,
+    ) -> anyhow::Result<vk::DescriptorPool> {
         let sampler_size = vk::DescriptorPoolSize::builder()
             .type_(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .descriptor_count(max_materials);
@@ -429,7 +449,9 @@ impl MaterialManager {
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
             .buffer_info(buffer_infos);
 
-        rrdevice.device.update_descriptor_sets(&[sampler_write, ubo_write], &[] as &[vk::CopyDescriptorSet]);
+        rrdevice
+            .device
+            .update_descriptor_sets(&[sampler_write, ubo_write], &[] as &[vk::CopyDescriptorSet]);
 
         let id = self.next_id;
         self.next_id += 1;
@@ -459,7 +481,9 @@ impl MaterialManager {
         }
 
         if self.pool != vk::DescriptorPool::null() {
-            device.reset_descriptor_pool(self.pool, vk::DescriptorPoolResetFlags::empty()).ok();
+            device
+                .reset_descriptor_pool(self.pool, vk::DescriptorPoolResetFlags::empty())
+                .ok();
         }
 
         self.materials.clear();
@@ -591,7 +615,9 @@ impl ObjectDescriptorSet {
                 .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                 .buffer_info(buffer_infos);
 
-            rrdevice.device.update_descriptor_sets(&[write], &[] as &[vk::CopyDescriptorSet]);
+            rrdevice
+                .device
+                .update_descriptor_sets(&[write], &[] as &[vk::CopyDescriptorSet]);
         }
     }
 
@@ -674,7 +700,8 @@ impl RenderResources {
     ) -> anyhow::Result<Self> {
         let frame_set = FrameDescriptorSet::new(instance, rrdevice, swapchain_image_count)?;
         let materials = MaterialManager::new(rrdevice, max_materials)?;
-        let objects = ObjectDescriptorSet::new(instance, rrdevice, swapchain_image_count, max_objects)?;
+        let objects =
+            ObjectDescriptorSet::new(instance, rrdevice, swapchain_image_count, max_objects)?;
 
         Ok(Self {
             frame_set,
@@ -705,10 +732,7 @@ impl RenderResources {
     }
 
     pub fn get_layouts_without_material(&self) -> [vk::DescriptorSetLayout; 2] {
-        [
-            self.frame_set.layout,
-            self.objects.layout,
-        ]
+        [self.frame_set.layout, self.objects.layout]
     }
 
     pub fn calculate_model_bounds(&self) -> Option<(Vector3<f32>, Vector3<f32>, Vector3<f32>)> {
@@ -766,5 +790,112 @@ impl RenderResources {
         }
         self.meshes.clear();
         self.mesh_material_ids.clear();
+    }
+
+    pub fn apply_morph_animation(&mut self, time: f32) -> Vec<usize> {
+        if self.morph_animation.is_empty() {
+            return Vec::new();
+        }
+
+        let animation_index = self.morph_animation.get_animation_index(time);
+        let mesh_count = self.morph_animation.targets.len().min(self.meshes.len());
+        let mut updated_mesh_indices = Vec::new();
+
+        for mesh_idx in 0..mesh_count {
+            let morph_targets = &self.morph_animation.targets[mesh_idx];
+            if morph_targets.is_empty() {
+                continue;
+            }
+
+            let base_vertices = &self.morph_animation.base_vertices[mesh_idx];
+            let vertices = &mut self.meshes[mesh_idx].vertex_data.vertices;
+
+            for (i, v) in vertices.iter_mut().enumerate() {
+                if i < base_vertices.len() {
+                    let base = base_vertices[i];
+                    v.pos.x = base[0];
+                    v.pos.y = base[1];
+                    v.pos.z = base[2];
+                }
+            }
+
+            let morph_animation = &self.morph_animation.animations[animation_index];
+            let scale_factor = self.morph_animation.scale_factor;
+            for (weight_idx, &weight) in morph_animation.weights.iter().enumerate() {
+                if weight_idx >= morph_targets.len() {
+                    break;
+                }
+                let morph_target = &morph_targets[weight_idx];
+                for (j, delta_pos) in morph_target.positions.iter().enumerate() {
+                    if j < vertices.len() {
+                        vertices[j].pos.x += delta_pos[0] * weight * scale_factor;
+                        vertices[j].pos.y += delta_pos[1] * weight * scale_factor;
+                        vertices[j].pos.z += delta_pos[2] * weight * scale_factor;
+                    }
+                }
+            }
+
+            updated_mesh_indices.push(mesh_idx);
+        }
+
+        updated_mesh_indices
+    }
+
+    pub unsafe fn update_morph_animation(
+        &mut self,
+        time: f32,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        command_pool: &RRCommandPool,
+        acceleration_structure: &mut Option<RRAccelerationStructure>,
+    ) -> anyhow::Result<()> {
+        let updated_indices = self.apply_morph_animation(time);
+        if updated_indices.is_empty() {
+            return Ok(());
+        }
+
+        for mesh_idx in &updated_indices {
+            let mesh = &mut self.meshes[*mesh_idx];
+            let vertices = &mesh.vertex_data.vertices;
+
+            mesh.vertex_buffer.update(
+                instance,
+                rrdevice,
+                command_pool,
+                (std::mem::size_of::<Vertex>() * vertices.len()) as vk::DeviceSize,
+                vertices.as_ptr() as *const c_void,
+                vertices.len(),
+            )?;
+
+            if let Some(ref mut accel_struct) = acceleration_structure {
+                if *mesh_idx < accel_struct.blas_list.len() {
+                    let blas = &accel_struct.blas_list[*mesh_idx];
+                    RRAccelerationStructure::update_blas(
+                        instance,
+                        rrdevice,
+                        command_pool,
+                        blas,
+                        &mesh.vertex_buffer.buffer,
+                        mesh.vertex_data.vertices.len() as u32,
+                        std::mem::size_of::<Vertex>() as u32,
+                        &mesh.index_buffer.buffer,
+                        mesh.vertex_data.indices.len() as u32,
+                    )?;
+                }
+            }
+        }
+
+        if let Some(ref mut accel_struct) = acceleration_structure {
+            let tlas = &accel_struct.tlas;
+            RRAccelerationStructure::update_tlas(
+                instance,
+                rrdevice,
+                command_pool,
+                tlas,
+                &accel_struct.blas_list,
+            )?;
+        }
+
+        Ok(())
     }
 }

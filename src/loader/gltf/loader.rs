@@ -775,6 +775,7 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
 
     let mut meshes = Vec::new();
     let mut morph_system = MorphAnimationSystem::new();
+    morph_system.scale_factor = scale;
 
     for anim in &ctx.morph_animations {
         morph_system.animations.push(MorphAnimation {

@@ -649,20 +649,28 @@ pub struct MorphAnimation {
     pub weights: Vec<f32>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct MorphAnimationSystem {
     pub animations: Vec<MorphAnimation>,
     pub targets: Vec<Vec<MorphTarget>>,
     pub base_vertices: Vec<Vec<[f32; 3]>>,
+    pub scale_factor: f32,
 }
 
-impl MorphAnimationSystem {
-    pub fn new() -> Self {
+impl Default for MorphAnimationSystem {
+    fn default() -> Self {
         Self {
             animations: Vec::new(),
             targets: Vec::new(),
             base_vertices: Vec::new(),
+            scale_factor: 1.0,
         }
+    }
+}
+
+impl MorphAnimationSystem {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn is_empty(&self) -> bool {

@@ -3,21 +3,15 @@ use crate::app::{App, AppData, GUIData};
 use crate::debugview::*;
 use crate::math::*;
 use crate::scene::billboard::BillboardTransform;
-use crate::scene::render_resource::{FrameUBO, MaterialUBO, ObjectUBO};
+use crate::scene::render_resource::{FrameUBO, ObjectUBO};
 use crate::vulkanr::buffer::*;
-use crate::vulkanr::command::*;
-use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::data::*;
-use crate::vulkanr::descriptor::*;
 use crate::vulkanr::device::*;
-use crate::vulkanr::image::*;
-use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::vulkan::*;
 
 use anyhow::Result;
 use cgmath::{Deg, InnerSpace, Matrix4, Vector2, Vector3};
 use std::mem::size_of;
-use std::os::raw::c_void;
 use vulkanalia::prelude::v1_0::*;
 
 impl App {
@@ -31,14 +25,14 @@ impl App {
         use crate::app::data::LightMoveTarget;
 
         if gui_data.move_light_to != LightMoveTarget::None {
-            let all_positions: Vec<Vector3<f32>> = if !self.data.render_resources.meshes.is_empty() {
+            let all_positions: Vec<Vector3<f32>> = if !self.data.render_resources.meshes.is_empty()
+            {
                 self.data
                     .render_resources
                     .meshes
                     .iter()
                     .flat_map(|mesh| {
-                        mesh
-                            .vertex_data
+                        mesh.vertex_data
                             .vertices
                             .iter()
                             .map(|v| Vector3::new(v.pos.x, v.pos.y, v.pos.z))
@@ -59,7 +53,15 @@ impl App {
         let time = self.start.elapsed().as_secs_f32();
 
         if !self.data.render_resources.morph_animation.is_empty() {
-            self.morphing(time);
+            if let Err(e) = self.data.render_resources.update_morph_animation(
+                time,
+                &self.instance,
+                &self.rrdevice,
+                &self.data.rrcommand_pool,
+                &mut self.data.raytracing.acceleration_structure,
+            ) {
+                eprintln!("failed to update morph animation: {}", e);
+            }
         }
 
         let model = Mat4::identity();
@@ -205,7 +207,9 @@ impl App {
             ) {
                 crate::log!("Failed to replace model with cube: {:?}", e);
             } else {
-                self.data.rt_debug_state.set_actual_cube_top(cube_size, cube_position);
+                self.data
+                    .rt_debug_state
+                    .set_actual_cube_top(cube_size, cube_position);
             }
             self.data.rt_debug_state.finish_cube_load();
             gui_data.load_cube = false;
@@ -221,14 +225,27 @@ impl App {
             light_pos: cgmath::Vector4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
             light_color: cgmath::Vector4::new(1.0, 1.0, 1.0, 1.0),
         };
-        if let Err(e) = self.data.render_resources.frame_set.update(&self.rrdevice, image_index, &frame_ubo) {
+        if let Err(e) =
+            self.data
+                .render_resources
+                .frame_set
+                .update(&self.rrdevice, image_index, &frame_ubo)
+        {
             eprintln!("Failed to update FrameUBO: {}", e);
         }
 
         for mesh in &self.data.render_resources.meshes {
             let object_ubo = ObjectUBO { model };
-            if let Err(e) = self.data.render_resources.objects.update(&self.rrdevice, image_index, mesh.object_index, &object_ubo) {
-                eprintln!("Failed to update ObjectUBO for mesh object_index {}: {}", mesh.object_index, e);
+            if let Err(e) = self.data.render_resources.objects.update(
+                &self.rrdevice,
+                image_index,
+                mesh.object_index,
+                &object_ubo,
+            ) {
+                eprintln!(
+                    "Failed to update ObjectUBO for mesh object_index {}: {}",
+                    mesh.object_index, e
+                );
             }
         }
 
@@ -301,7 +318,9 @@ impl App {
             eprintln!("Failed to update Grid ObjectUBO: {}", e);
         }
 
-        let gizmo_object_ubo = ObjectUBO { model: Mat4::identity() };
+        let gizmo_object_ubo = ObjectUBO {
+            model: Mat4::identity(),
+        };
         if let Err(e) = self.data.render_resources.objects.update(
             &self.rrdevice,
             image_index,
@@ -315,7 +334,9 @@ impl App {
         let distance = (light_pos - camera_pos).magnitude();
         let scale_factor = distance * 0.03;
         let light_gizmo_model = Mat4::from_translation(light_pos) * Mat4::from_scale(scale_factor);
-        let light_gizmo_object_ubo = ObjectUBO { model: light_gizmo_model };
+        let light_gizmo_object_ubo = ObjectUBO {
+            model: light_gizmo_model,
+        };
         if let Err(e) = self.data.render_resources.objects.update(
             &self.rrdevice,
             image_index,
@@ -515,94 +536,7 @@ impl App {
 
         Ok(())
     }
-    unsafe fn morphing(&mut self, time: f32) {
-        let morph_system = &self.data.render_resources.morph_animation;
-        if morph_system.is_empty() {
-            return;
-        }
 
-        let animation_index = morph_system.get_animation_index(time);
-        let mesh_count = morph_system.targets.len().min(self.data.render_resources.meshes.len());
-
-        for mesh_idx in 0..mesh_count {
-            let morph_targets = &morph_system.targets[mesh_idx];
-            if morph_targets.is_empty() {
-                continue;
-            }
-
-            let base_vertices = &morph_system.base_vertices[mesh_idx];
-            let mesh = &mut self.data.render_resources.meshes[mesh_idx];
-            let vertices = &mut mesh.vertex_data.vertices;
-
-            for (i, v) in vertices.iter_mut().enumerate() {
-                if i < base_vertices.len() {
-                    let base = base_vertices[i];
-                    v.pos.x = base[0];
-                    v.pos.y = base[1];
-                    v.pos.z = base[2];
-                }
-            }
-
-            let morph_animation = &morph_system.animations[animation_index];
-            for (weight_idx, &weight) in morph_animation.weights.iter().enumerate() {
-                if weight_idx >= morph_targets.len() {
-                    break;
-                }
-                let morph_target = &morph_targets[weight_idx];
-                let scale_factor = 0.01f32;
-                for (j, delta_pos) in morph_target.positions.iter().enumerate() {
-                    if j < vertices.len() {
-                        vertices[j].pos.x += delta_pos[0] * weight * scale_factor;
-                        vertices[j].pos.y += delta_pos[1] * weight * scale_factor;
-                        vertices[j].pos.z += delta_pos[2] * weight * scale_factor;
-                    }
-                }
-            }
-
-            if let Err(e) = mesh.vertex_buffer.update(
-                &self.instance,
-                &self.rrdevice,
-                &self.data.rrcommand_pool,
-                (size_of::<vulkan_data::Vertex>() * vertices.len()) as vk::DeviceSize,
-                vertices.as_ptr() as *const c_void,
-                vertices.len(),
-            ) {
-                eprintln!("failed to update vertex buffer: {}", e);
-            }
-
-            if let Some(ref mut accel_struct) = self.data.raytracing.acceleration_structure {
-                if mesh_idx < accel_struct.blas_list.len() {
-                    let blas = &accel_struct.blas_list[mesh_idx];
-                    if let Err(e) = RRAccelerationStructure::update_blas(
-                        &self.instance,
-                        &self.rrdevice,
-                        &self.data.rrcommand_pool,
-                        blas,
-                        &mesh.vertex_buffer.buffer,
-                        mesh.vertex_data.vertices.len() as u32,
-                        std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                        &mesh.index_buffer.buffer,
-                        mesh.vertex_data.indices.len() as u32,
-                    ) {
-                        eprintln!("failed to update BLAS: {}", e);
-                    }
-                }
-            }
-        }
-
-        if let Some(ref mut accel_struct) = self.data.raytracing.acceleration_structure {
-            let tlas = &accel_struct.tlas;
-            if let Err(e) = RRAccelerationStructure::update_tlas(
-                &self.instance,
-                &self.rrdevice,
-                &self.data.rrcommand_pool,
-                tlas,
-                &accel_struct.blas_list,
-            ) {
-                eprintln!("failed to update TLAS: {}", e);
-            }
-        }
-    }
     pub unsafe fn update_imgui_buffers(
         instance: &Instance,
         rrdevice: &RRDevice,

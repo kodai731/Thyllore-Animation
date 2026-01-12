@@ -52,16 +52,14 @@ impl App {
 
         let time = self.start.elapsed().as_secs_f32();
 
-        if !self.data.render_resources.morph_animation.is_empty() {
-            if let Err(e) = self.data.render_resources.update_morph_animation(
-                time,
-                &self.instance,
-                &self.rrdevice,
-                &self.data.rrcommand_pool,
-                &mut self.data.raytracing.acceleration_structure,
-            ) {
-                eprintln!("failed to update morph animation: {}", e);
-            }
+        if let Err(e) = self.data.render_resources.update_animations(
+            time,
+            &self.instance,
+            &self.rrdevice,
+            &self.data.rrcommand_pool,
+            &mut self.data.raytracing.acceleration_structure,
+        ) {
+            eprintln!("failed to update animations: {}", e);
         }
 
         let model = Mat4::identity();
@@ -234,19 +232,12 @@ impl App {
             eprintln!("Failed to update FrameUBO: {}", e);
         }
 
-        for mesh in &self.data.render_resources.meshes {
-            let object_ubo = ObjectUBO { model };
-            if let Err(e) = self.data.render_resources.objects.update(
-                &self.rrdevice,
-                image_index,
-                mesh.object_index,
-                &object_ubo,
-            ) {
-                eprintln!(
-                    "Failed to update ObjectUBO for mesh object_index {}: {}",
-                    mesh.object_index, e
-                );
-            }
+        if let Err(e) =
+            self.data
+                .render_resources
+                .update_objects(&self.rrdevice, image_index, model)
+        {
+            eprintln!("Failed to update ObjectUBO: {}", e);
         }
 
         if let (Some(scene_buffer), Some(scene_memory)) = (

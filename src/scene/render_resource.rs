@@ -744,6 +744,41 @@ impl RenderResources {
         })
     }
 
+    pub unsafe fn update_animations(
+        &mut self,
+        time: f32,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        command_pool: &RRCommandPool,
+        acceleration_structure: &mut Option<RRAccelerationStructure>,
+    ) -> anyhow::Result<()> {
+        if !self.morph_animation.is_empty() {
+            self.update_morph_animation(
+                time,
+                instance,
+                rrdevice,
+                command_pool,
+                acceleration_structure,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    pub unsafe fn update_objects(
+        &self,
+        rrdevice: &RRDevice,
+        image_index: usize,
+        model: Matrix4<f32>,
+    ) -> anyhow::Result<()> {
+        for mesh in &self.meshes {
+            let object_ubo = ObjectUBO { model };
+            self.objects
+                .update(rrdevice, image_index, mesh.object_index, &object_ubo)?;
+        }
+        Ok(())
+    }
+
     pub fn get_material_id(&self, mesh_index: usize) -> Option<MaterialId> {
         self.mesh_material_ids.get(mesh_index).copied()
     }
@@ -944,14 +979,32 @@ impl RenderResources {
                             let orig = node.local_transform;
                             let anim = bone.local_transform;
                             let orig_scale = (
-                                (orig[0][0]*orig[0][0] + orig[0][1]*orig[0][1] + orig[0][2]*orig[0][2]).sqrt(),
-                                (orig[1][0]*orig[1][0] + orig[1][1]*orig[1][1] + orig[1][2]*orig[1][2]).sqrt(),
-                                (orig[2][0]*orig[2][0] + orig[2][1]*orig[2][1] + orig[2][2]*orig[2][2]).sqrt(),
+                                (orig[0][0] * orig[0][0]
+                                    + orig[0][1] * orig[0][1]
+                                    + orig[0][2] * orig[0][2])
+                                    .sqrt(),
+                                (orig[1][0] * orig[1][0]
+                                    + orig[1][1] * orig[1][1]
+                                    + orig[1][2] * orig[1][2])
+                                    .sqrt(),
+                                (orig[2][0] * orig[2][0]
+                                    + orig[2][1] * orig[2][1]
+                                    + orig[2][2] * orig[2][2])
+                                    .sqrt(),
                             );
                             let anim_scale = (
-                                (anim[0][0]*anim[0][0] + anim[0][1]*anim[0][1] + anim[0][2]*anim[0][2]).sqrt(),
-                                (anim[1][0]*anim[1][0] + anim[1][1]*anim[1][1] + anim[1][2]*anim[1][2]).sqrt(),
-                                (anim[2][0]*anim[2][0] + anim[2][1]*anim[2][1] + anim[2][2]*anim[2][2]).sqrt(),
+                                (anim[0][0] * anim[0][0]
+                                    + anim[0][1] * anim[0][1]
+                                    + anim[0][2] * anim[0][2])
+                                    .sqrt(),
+                                (anim[1][0] * anim[1][0]
+                                    + anim[1][1] * anim[1][1]
+                                    + anim[1][2] * anim[1][2])
+                                    .sqrt(),
+                                (anim[2][0] * anim[2][0]
+                                    + anim[2][1] * anim[2][1]
+                                    + anim[2][2] * anim[2][2])
+                                    .sqrt(),
                             );
                             crate::log!(
                                 "  bone '{}' node[{}]: orig_t=[{:.2},{:.2},{:.2}] anim_t=[{:.2},{:.2},{:.2}]",
@@ -961,8 +1014,12 @@ impl RenderResources {
                             );
                             crate::log!(
                                 "    orig_s=[{:.2},{:.2},{:.2}] anim_s=[{:.2},{:.2},{:.2}]",
-                                orig_scale.0, orig_scale.1, orig_scale.2,
-                                anim_scale.0, anim_scale.1, anim_scale.2
+                                orig_scale.0,
+                                orig_scale.1,
+                                orig_scale.2,
+                                anim_scale.0,
+                                anim_scale.1,
+                                anim_scale.2
                             );
                         }
                     }
@@ -981,20 +1038,26 @@ impl RenderResources {
                 );
                 crate::log!("=== Node Hierarchy (with transforms) ===");
                 for node in &self.nodes {
-                    let parent_name = node.parent_index
+                    let parent_name = node
+                        .parent_index
                         .and_then(|pi| self.nodes.iter().find(|pn| pn.index == pi))
                         .map(|pn| pn.name.as_str())
                         .unwrap_or("(root)");
                     let lt = node.local_transform;
                     let scale = (
-                        (lt[0][0]*lt[0][0] + lt[0][1]*lt[0][1] + lt[0][2]*lt[0][2]).sqrt(),
-                        (lt[1][0]*lt[1][0] + lt[1][1]*lt[1][1] + lt[1][2]*lt[1][2]).sqrt(),
-                        (lt[2][0]*lt[2][0] + lt[2][1]*lt[2][1] + lt[2][2]*lt[2][2]).sqrt(),
+                        (lt[0][0] * lt[0][0] + lt[0][1] * lt[0][1] + lt[0][2] * lt[0][2]).sqrt(),
+                        (lt[1][0] * lt[1][0] + lt[1][1] * lt[1][1] + lt[1][2] * lt[1][2]).sqrt(),
+                        (lt[2][0] * lt[2][0] + lt[2][1] * lt[2][1] + lt[2][2] * lt[2][2]).sqrt(),
                     );
                     if scale.0 > 1.01 || scale.1 > 1.01 || scale.2 > 1.01 {
                         crate::log!(
                             "  node[{}] '{}' SCALE=[{:.1},{:.1},{:.1}] parent='{}'",
-                            node.index, node.name, scale.0, scale.1, scale.2, parent_name
+                            node.index,
+                            node.name,
+                            scale.0,
+                            scale.1,
+                            scale.2,
+                            parent_name
                         );
                     }
                 }
@@ -1070,23 +1133,36 @@ impl RenderResources {
             let node_found = self.nodes.iter().find(|n| n.index == node_idx);
             if LOG_COUNT < 1 {
                 if let Some(n) = &node_found {
-                    let parent_name = n.parent_index
+                    let parent_name = n
+                        .parent_index
                         .and_then(|pi| self.nodes.iter().find(|pn| pn.index == pi))
                         .map(|pn| pn.name.as_str())
                         .unwrap_or("(none)");
                     crate::log!(
                         "update_node_anim: mesh[{}] node='{}' idx={}, parent='{}' (idx={:?})",
-                        mesh_idx, n.name, node_idx, parent_name, n.parent_index
+                        mesh_idx,
+                        n.name,
+                        node_idx,
+                        parent_name,
+                        n.parent_index
                     );
                     crate::log!(
                         "  local: diag=[{:.2},{:.2},{:.2}] trans=[{:.2},{:.2},{:.2}]",
-                        n.local_transform[0][0], n.local_transform[1][1], n.local_transform[2][2],
-                        n.local_transform[3][0], n.local_transform[3][1], n.local_transform[3][2]
+                        n.local_transform[0][0],
+                        n.local_transform[1][1],
+                        n.local_transform[2][2],
+                        n.local_transform[3][0],
+                        n.local_transform[3][1],
+                        n.local_transform[3][2]
                     );
                     crate::log!(
                         "  global: diag=[{:.2},{:.2},{:.2}] trans=[{:.2},{:.2},{:.2}]",
-                        n.global_transform[0][0], n.global_transform[1][1], n.global_transform[2][2],
-                        n.global_transform[3][0], n.global_transform[3][1], n.global_transform[3][2]
+                        n.global_transform[0][0],
+                        n.global_transform[1][1],
+                        n.global_transform[2][2],
+                        n.global_transform[3][0],
+                        n.global_transform[3][1],
+                        n.global_transform[3][2]
                     );
                 }
             }
@@ -1103,9 +1179,18 @@ impl RenderResources {
                 while let Some(idx) = current_idx {
                     if let Some(n) = self.nodes.iter().find(|nn| nn.index == idx) {
                         let s = (
-                            (n.global_transform[0][0].powi(2) + n.global_transform[0][1].powi(2) + n.global_transform[0][2].powi(2)).sqrt(),
-                            (n.global_transform[1][0].powi(2) + n.global_transform[1][1].powi(2) + n.global_transform[1][2].powi(2)).sqrt(),
-                            (n.global_transform[2][0].powi(2) + n.global_transform[2][1].powi(2) + n.global_transform[2][2].powi(2)).sqrt(),
+                            (n.global_transform[0][0].powi(2)
+                                + n.global_transform[0][1].powi(2)
+                                + n.global_transform[0][2].powi(2))
+                            .sqrt(),
+                            (n.global_transform[1][0].powi(2)
+                                + n.global_transform[1][1].powi(2)
+                                + n.global_transform[1][2].powi(2))
+                            .sqrt(),
+                            (n.global_transform[2][0].powi(2)
+                                + n.global_transform[2][1].powi(2)
+                                + n.global_transform[2][2].powi(2))
+                            .sqrt(),
                         );
                         crate::log!(
                             "  {} (idx={}) global_scale=[{:.1},{:.1},{:.1}] trans=[{:.1},{:.1},{:.1}]",
@@ -1124,8 +1209,12 @@ impl RenderResources {
                 let orig = &mesh.vertex_data.vertices[0];
                 crate::log!(
                     "  base_v[0]=({:.2},{:.2},{:.2}), orig_v[0]=({:.2},{:.2},{:.2})",
-                    base.pos.x, base.pos.y, base.pos.z,
-                    orig.pos.x, orig.pos.y, orig.pos.z
+                    base.pos.x,
+                    base.pos.y,
+                    base.pos.z,
+                    orig.pos.x,
+                    orig.pos.y,
+                    orig.pos.z
                 );
             }
 
@@ -1143,7 +1232,9 @@ impl RenderResources {
                 let v = &mesh.vertex_data.vertices[0];
                 crate::log!(
                     "  after transform: v[0]=({:.2},{:.2},{:.2})",
-                    v.pos.x, v.pos.y, v.pos.z
+                    v.pos.x,
+                    v.pos.y,
+                    v.pos.z
                 );
             }
 
@@ -1195,7 +1286,10 @@ impl RenderResources {
         }
 
         if LOG_COUNT < 1 {
-            crate::log!("update_node_anim: updated {} meshes", updated_mesh_indices.len());
+            crate::log!(
+                "update_node_anim: updated {} meshes",
+                updated_mesh_indices.len()
+            );
             LOG_COUNT += 1;
         }
 

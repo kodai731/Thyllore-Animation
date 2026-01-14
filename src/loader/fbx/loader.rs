@@ -1,14 +1,14 @@
-use crate::math::coordinate_system::fbx_to_world;
+use crate::math::{Vec2, Vec3, Vec4};
 use crate::scene::animation::{
     AnimationClip, AnimationSystem, Keyframe, Skeleton, SkinData, TransformChannel,
 };
 use crate::vulkanr::data::{Vertex, VertexData};
-use crate::math::{Vec2, Vec3, Vec4};
 use anyhow::Result;
 use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3, Vector4};
 use std::collections::HashMap;
 
-use super::fbx::{load_fbx_with_russimp, FbxModel};
+use super::fbx::{load_animations_with_fbxcel, load_fbx_with_russimp, FbxModel};
+use crate::log;
 
 #[derive(Clone, Debug)]
 pub struct FbxNodeInfo {
@@ -48,17 +48,64 @@ pub struct FbxLoadResult {
 }
 
 pub fn load_fbx_to_render_resources(path: &str) -> Result<FbxLoadResult> {
-    let fbx_model = load_fbx_with_russimp(path)?;
+    let mut fbx_model = load_fbx_with_russimp(path)?;
+    let unit_scale = fbx_model.unit_scale;
+
+    if let Ok(mut fbxcel_animations) = load_animations_with_fbxcel(path) {
+        if !fbxcel_animations.is_empty() {
+            let russimp_keyframe_count: usize = fbx_model
+                .animations
+                .iter()
+                .flat_map(|anim| anim.bone_animations.values())
+                .map(|ba| ba.translation_keys.len() + ba.rotation_keys.len() + ba.scale_keys.len())
+                .sum();
+
+            let fbxcel_keyframe_count: usize = fbxcel_animations
+                .iter()
+                .flat_map(|anim| anim.bone_animations.values())
+                .map(|ba| ba.translation_keys.len() + ba.rotation_keys.len() + ba.scale_keys.len())
+                .sum();
+
+            log!(
+                "Animation keyframe comparison: russimp={}, fbxcel={}",
+                russimp_keyframe_count,
+                fbxcel_keyframe_count
+            );
+
+            if fbxcel_keyframe_count > russimp_keyframe_count {
+                log!(
+                    "Using fbxcel-dom animations (more keyframes), applying unit_scale={}",
+                    unit_scale
+                );
+
+                for anim in &mut fbxcel_animations {
+                    for bone_anim in anim.bone_animations.values_mut() {
+                        for key in &mut bone_anim.translation_keys {
+                            key.value[0] *= unit_scale;
+                            key.value[1] *= unit_scale;
+                            key.value[2] *= unit_scale;
+                        }
+                    }
+                }
+
+                fbx_model.animations = fbxcel_animations;
+            } else {
+                log!("Using russimp animations");
+            }
+        }
+    }
+
     convert_fbx_model_to_render_resources(fbx_model)
 }
 
 fn convert_fbx_model_to_render_resources(fbx_model: FbxModel) -> Result<FbxLoadResult> {
     let mut animation_system = AnimationSystem::new();
-
     let has_armature = !fbx_model.nodes.is_empty();
 
+    let has_skinned_meshes = fbx_model.fbx_data.iter().any(|d| !d.clusters.is_empty());
+
     let skeleton_id = if has_armature {
-        let skeleton = convert_nodes_to_skeleton(&fbx_model.nodes);
+        let skeleton = convert_nodes_to_skeleton(&fbx_model.nodes, has_skinned_meshes);
         Some(animation_system.add_skeleton(skeleton))
     } else {
         None
@@ -83,16 +130,11 @@ fn convert_fbx_model_to_render_resources(fbx_model: FbxModel) -> Result<FbxLoadR
         animation_system.add_clip(clip);
     }
 
-    let nodes = convert_bone_nodes_to_node_info(&fbx_model.nodes);
+    let nodes = convert_bone_nodes_to_node_info(&fbx_model.nodes, has_skinned_meshes);
 
     let mut meshes = Vec::new();
-    let mut has_skinned_meshes = false;
-
     for fbx_data in &fbx_model.fbx_data {
         let mesh_data = convert_fbx_data_to_mesh(fbx_data, skeleton_id, &animation_system, &nodes);
-        if mesh_data.skin_data.is_some() {
-            has_skinned_meshes = true;
-        }
         meshes.push(mesh_data);
     }
 
@@ -113,7 +155,10 @@ fn convert_fbx_model_to_render_resources(fbx_model: FbxModel) -> Result<FbxLoadR
 
 fn convert_bone_nodes_to_node_info(
     bone_nodes: &HashMap<String, super::fbx::BoneNode>,
+    needs_coord_conversion: bool,
 ) -> Vec<FbxNodeInfo> {
+    use crate::math::coordinate_system::fbx_to_world;
+
     let mut nodes = Vec::new();
     let mut name_to_index: HashMap<String, usize> = HashMap::new();
 
@@ -131,11 +176,11 @@ fn convert_bone_nodes_to_node_info(
                 .as_ref()
                 .and_then(|parent_name| name_to_index.get(parent_name).copied());
 
-            let needs_coord_conversion = parent_index.is_none()
+            let is_root_or_root_child = parent_index.is_none()
                 || *name == "RootNode"
                 || bone_node.parent.as_ref().map_or(false, |p| p == "RootNode");
 
-            let local_transform = if needs_coord_conversion {
+            let local_transform = if needs_coord_conversion && is_root_or_root_child {
                 fbx_to_world() * bone_node.local_transform
             } else {
                 bone_node.local_transform
@@ -182,14 +227,27 @@ fn log_fbx_scale_info(meshes: &[FbxMeshData]) {
 
         crate::log!("=== FBX Scale Info (after unit conversion to meters) ===");
         crate::log!("  Total vertices: {}", total_vertices);
-        crate::log!("  Bounding box min: ({:.4}, {:.4}, {:.4})", min_x, min_y, min_z);
-        crate::log!("  Bounding box max: ({:.4}, {:.4}, {:.4})", max_x, max_y, max_z);
+        crate::log!(
+            "  Bounding box min: ({:.4}, {:.4}, {:.4})",
+            min_x,
+            min_y,
+            min_z
+        );
+        crate::log!(
+            "  Bounding box max: ({:.4}, {:.4}, {:.4})",
+            max_x,
+            max_y,
+            max_z
+        );
         crate::log!("  Size: ({:.4}, {:.4}, {:.4})", size_x, size_y, size_z);
         crate::log!("  Max dimension: {:.4} meters", max_dimension);
     }
 }
 
-fn convert_nodes_to_skeleton(nodes: &HashMap<String, super::fbx::BoneNode>) -> Skeleton {
+fn convert_nodes_to_skeleton(
+    nodes: &HashMap<String, super::fbx::BoneNode>,
+    needs_coord_conversion: bool,
+) -> Skeleton {
     let mut skeleton = Skeleton::new("fbx_skeleton");
 
     let mut name_to_id: HashMap<String, u32> = HashMap::new();
@@ -199,7 +257,13 @@ fn convert_nodes_to_skeleton(nodes: &HashMap<String, super::fbx::BoneNode>) -> S
     for name in &sorted_names {
         if let Some(node) = nodes.get(*name) {
             if node.parent.is_none() {
-                add_bone_recursive(&mut skeleton, *name, nodes, &mut name_to_id);
+                add_bone_recursive(
+                    &mut skeleton,
+                    *name,
+                    nodes,
+                    &mut name_to_id,
+                    needs_coord_conversion,
+                );
             }
         }
     }
@@ -207,7 +271,13 @@ fn convert_nodes_to_skeleton(nodes: &HashMap<String, super::fbx::BoneNode>) -> S
     for name in &sorted_names {
         if !name_to_id.contains_key(*name) {
             if let Some(_node) = nodes.get(*name) {
-                add_bone_recursive(&mut skeleton, *name, nodes, &mut name_to_id);
+                add_bone_recursive(
+                    &mut skeleton,
+                    *name,
+                    nodes,
+                    &mut name_to_id,
+                    needs_coord_conversion,
+                );
             }
         }
     }
@@ -220,7 +290,10 @@ fn add_bone_recursive(
     name: &str,
     nodes: &HashMap<String, super::fbx::BoneNode>,
     name_to_id: &mut HashMap<String, u32>,
+    needs_coord_conversion: bool,
 ) -> u32 {
+    use crate::math::coordinate_system::fbx_to_world;
+
     if let Some(&id) = name_to_id.get(name) {
         return id;
     }
@@ -234,7 +307,13 @@ fn add_bone_recursive(
         if let Some(&pid) = name_to_id.get(parent_name) {
             Some(pid)
         } else {
-            let pid = add_bone_recursive(skeleton, parent_name, nodes, name_to_id);
+            let pid = add_bone_recursive(
+                skeleton,
+                parent_name,
+                nodes,
+                name_to_id,
+                needs_coord_conversion,
+            );
             Some(pid)
         }
     } else {
@@ -245,11 +324,11 @@ fn add_bone_recursive(
     name_to_id.insert(name.to_string(), bone_id);
 
     if let Some(bone) = skeleton.get_bone_mut(bone_id) {
-        let needs_coord_conversion = parent_id.is_none()
+        let is_root_or_root_child = parent_id.is_none()
             || name == "RootNode"
             || node.parent.as_ref().map_or(false, |p| p == "RootNode");
 
-        if needs_coord_conversion {
+        if needs_coord_conversion && is_root_or_root_child {
             bone.local_transform = fbx_to_world() * node.local_transform;
         } else {
             bone.local_transform = node.local_transform;
@@ -259,7 +338,13 @@ fn add_bone_recursive(
     for (child_name, child_node) in nodes {
         if let Some(ref parent) = child_node.parent {
             if parent == name && !name_to_id.contains_key(child_name) {
-                add_bone_recursive(skeleton, child_name, nodes, name_to_id);
+                add_bone_recursive(
+                    skeleton,
+                    child_name,
+                    nodes,
+                    name_to_id,
+                    needs_coord_conversion,
+                );
             }
         }
     }
@@ -327,7 +412,11 @@ fn convert_fbx_data_to_mesh(
     for i in 0..fbx_data.positions.len() {
         let pos = &fbx_data.positions[i];
         let local_pos = fbx_data.local_positions.get(i).unwrap_or(pos);
-        let normal = fbx_data.normals.get(i).cloned().unwrap_or(Vector3::new(0.0, 1.0, 0.0));
+        let normal = fbx_data
+            .normals
+            .get(i)
+            .cloned()
+            .unwrap_or(Vector3::new(0.0, 1.0, 0.0));
         let tex_coord = fbx_data.tex_coords.get(i).cloned().unwrap_or([0.5, 0.5]);
 
         vertices.push(Vertex {
@@ -345,11 +434,8 @@ fn convert_fbx_data_to_mesh(
         });
     }
 
-    let base_positions: Vec<[f32; 3]> = fbx_data
-        .positions
-        .iter()
-        .map(|p| [p.x, p.y, p.z])
-        .collect();
+    let base_positions: Vec<[f32; 3]> =
+        fbx_data.positions.iter().map(|p| [p.x, p.y, p.z]).collect();
 
     let vertex_data = VertexData {
         vertices,
@@ -358,15 +444,21 @@ fn convert_fbx_data_to_mesh(
 
     let skin_data = if !fbx_data.clusters.is_empty() && skeleton_id.is_some() {
         let skeleton = animation_system.get_skeleton(skeleton_id.unwrap());
-        Some(convert_clusters_to_skin_data(fbx_data, skeleton_id.unwrap(), skeleton))
+        Some(convert_clusters_to_skin_data(
+            fbx_data,
+            skeleton_id.unwrap(),
+            skeleton,
+        ))
     } else {
         None
     };
 
-    let node_index = fbx_data
-        .parent_node
-        .as_ref()
-        .and_then(|parent_name| nodes.iter().find(|n| &n.name == parent_name).map(|n| n.index));
+    let node_index = fbx_data.parent_node.as_ref().and_then(|parent_name| {
+        nodes
+            .iter()
+            .find(|n| &n.name == parent_name)
+            .map(|n| n.index)
+    });
 
     FbxMeshData {
         vertex_data,
@@ -393,7 +485,10 @@ fn convert_clusters_to_skin_data(
 
     for cluster in fbx_data.clusters.iter() {
         let bone_idx = if let Some(skel) = skeleton {
-            skel.bone_name_to_id.get(&cluster.bone_name).copied().unwrap_or(0)
+            skel.bone_name_to_id
+                .get(&cluster.bone_name)
+                .copied()
+                .unwrap_or(0)
         } else {
             0
         };

@@ -38,7 +38,9 @@ impl App {
 
         crate::log!("Cleaning up existing model data...");
         data.render_resources.clear_meshes(rrdevice);
-        data.render_resources.materials.clear_materials(&rrdevice.device);
+        data.render_resources
+            .materials
+            .clear_materials(&rrdevice.device);
         data.render_resources.mesh_material_ids.clear();
         data.render_resources.objects.reset_to(2);
         crate::log!("Cleared existing data (meshes and materials), reset object slots to 2");
@@ -137,15 +139,14 @@ impl App {
                     }
                 } else {
                     crate::log!("No texture specified for mesh {}, using white", mesh_idx);
-                    (mesh.image, mesh.image_memory, mesh.mip_level) =
-                        create_texture_image_pixel(
-                            instance,
-                            rrdevice,
-                            data.rrcommand_pool.borrow_mut(),
-                            &vec![255u8, 255, 255, 255],
-                            1,
-                            1,
-                        )?;
+                    (mesh.image, mesh.image_memory, mesh.mip_level) = create_texture_image_pixel(
+                        instance,
+                        rrdevice,
+                        data.rrcommand_pool.borrow_mut(),
+                        &vec![255u8, 255, 255, 255],
+                        1,
+                        1,
+                    )?;
                 }
 
                 mesh.vertex_data = fbx_mesh.vertex_data.clone();
@@ -153,6 +154,24 @@ impl App {
                 mesh.skeleton_id = fbx_mesh.skeleton_id;
                 mesh.node_index = fbx_mesh.node_index;
                 mesh.base_vertices = fbx_mesh.local_vertices.clone();
+
+                crate::log!(
+                    "FBX Mesh[{}]: node_index={:?}, base_vertices={}, skin_data={}",
+                    mesh_idx,
+                    mesh.node_index,
+                    mesh.base_vertices.len(),
+                    mesh.skin_data.is_some()
+                );
+
+                if !mesh.base_vertices.is_empty() {
+                    let first = &mesh.base_vertices[0];
+                    crate::log!(
+                        "  base_vertices[0] = ({:.4}, {:.4}, {:.4})",
+                        first.pos.x,
+                        first.pos.y,
+                        first.pos.z
+                    );
+                }
 
                 data.render_resources.meshes.push(mesh);
             }
@@ -186,7 +205,8 @@ impl App {
             data.render_resources.animation = gltf_result.animation_system;
             data.render_resources.has_skinned_meshes = gltf_result.has_skinned_meshes;
             data.render_resources.morph_animation = gltf_result.morph_animation;
-            data.render_resources.node_animation_scale = if gltf_result.has_armature { 0.01 } else { 1.0 };
+            data.render_resources.node_animation_scale =
+                if gltf_result.has_armature { 0.01 } else { 1.0 };
 
             data.render_resources.nodes = gltf_result
                 .nodes
@@ -247,15 +267,14 @@ impl App {
                     }
                 } else {
                     crate::log!("No texture data for mesh {}, using white", i);
-                    (mesh.image, mesh.image_memory, mesh.mip_level) =
-                        create_texture_image_pixel(
-                            instance,
-                            rrdevice,
-                            data.rrcommand_pool.borrow_mut(),
-                            &vec![255u8, 255, 255, 255],
-                            1,
-                            1,
-                        )?;
+                    (mesh.image, mesh.image_memory, mesh.mip_level) = create_texture_image_pixel(
+                        instance,
+                        rrdevice,
+                        data.rrcommand_pool.borrow_mut(),
+                        &vec![255u8, 255, 255, 255],
+                        1,
+                        1,
+                    )?;
                 }
 
                 mesh.vertex_data = gltf_mesh.vertex_data.clone();
@@ -329,30 +348,40 @@ impl App {
             mesh.sampler = create_texture_sampler(&rrdevice, mesh.mip_level)?;
 
             mesh.object_index = data.render_resources.objects.allocate_slot();
-            crate::log!("Allocated object_index {} for mesh {}", mesh.object_index, i);
+            crate::log!(
+                "Allocated object_index {} for mesh {}",
+                mesh.object_index,
+                i
+            );
 
             let material_name = format!("material_{}", i);
             let material_properties = MaterialUBO::default();
-            let material_id = data.render_resources.materials.create_material_with_texture(
-                instance,
-                rrdevice,
-                &material_name,
-                mesh.image_view,
-                mesh.sampler,
-                material_properties,
-            )?;
+            let material_id = data
+                .render_resources
+                .materials
+                .create_material_with_texture(
+                    instance,
+                    rrdevice,
+                    &material_name,
+                    mesh.image_view,
+                    mesh.sampler,
+                    material_properties,
+                )?;
             data.render_resources.mesh_material_ids.push(material_id);
             crate::log!("Created material {} for mesh {}", material_id, i);
         }
 
-        let is_gltf = data.current_model_path.ends_with(".glb")
-            || data.current_model_path.ends_with(".gltf");
-        let is_gltf_node_animation = is_gltf
+        let is_gltf =
+            data.current_model_path.ends_with(".glb") || data.current_model_path.ends_with(".gltf");
+        let is_fbx = data.current_model_path.ends_with(".fbx");
+        let has_node_animation = (is_gltf || is_fbx)
             && !data.render_resources.meshes.is_empty()
             && !data.render_resources.has_skinned_meshes;
 
-        if is_gltf_node_animation {
-            crate::log!("glTF node animation detected - using initial mesh positions (no node transform)");
+        if has_node_animation {
+            crate::log!(
+                "Node animation detected - using initial mesh positions (no node transform)"
+            );
         }
 
         if !data.render_resources.animation.clips.is_empty() {
@@ -361,7 +390,10 @@ impl App {
             data.render_resources.animation.play(0);
             data.render_resources.animation.player.time = 0.0;
 
-            let skeleton_id = data.render_resources.meshes.first()
+            let skeleton_id = data
+                .render_resources
+                .meshes
+                .first()
                 .and_then(|m| m.skeleton_id);
 
             if let Some(skel_id) = skeleton_id {
@@ -374,12 +406,20 @@ impl App {
                     };
 
                     if let (Some(skin_data), Some(skel_id)) = (skin_data, skel_id) {
-                        if let Some(skeleton) = data.render_resources.animation.get_skeleton(skel_id) {
+                        if let Some(skeleton) =
+                            data.render_resources.animation.get_skeleton(skel_id)
+                        {
                             let vertex_count = skin_data.base_positions.len();
-                            let mut skinned_positions = vec![cgmath::Vector3::new(0.0, 0.0, 0.0); vertex_count];
-                            let mut skinned_normals = vec![cgmath::Vector3::new(0.0, 1.0, 0.0); vertex_count];
+                            let mut skinned_positions =
+                                vec![cgmath::Vector3::new(0.0, 0.0, 0.0); vertex_count];
+                            let mut skinned_normals =
+                                vec![cgmath::Vector3::new(0.0, 1.0, 0.0); vertex_count];
 
-                            skin_data.apply_skinning(skeleton, &mut skinned_positions, &mut skinned_normals);
+                            skin_data.apply_skinning(
+                                skeleton,
+                                &mut skinned_positions,
+                                &mut skinned_normals,
+                            );
 
                             let mesh = &mut data.render_resources.meshes[mesh_idx];
                             for (i, pos) in skinned_positions.iter().enumerate() {
@@ -416,6 +456,20 @@ impl App {
                     }
                 }
             }
+
+            if has_node_animation {
+                unsafe {
+                    if let Err(e) = data.render_resources.update_node_animation(
+                        &instance,
+                        &rrdevice,
+                        &data.rrcommand_pool,
+                        &mut None,
+                    ) {
+                        crate::log!("Failed to apply initial node animation: {}", e);
+                    }
+                }
+            }
+
             crate::log!("Initial pose applied successfully");
         }
 
@@ -498,11 +552,16 @@ impl App {
                 instance,
                 rrdevice,
                 &data.rrcommand_pool,
-                (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len()) as vk::DeviceSize,
+                (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len())
+                    as vk::DeviceSize,
                 mesh.vertex_data.vertices.as_ptr() as *const c_void,
                 mesh.vertex_data.vertices.len(),
             ) {
-                crate::log!("Failed to update skinned vertex buffer for mesh {}: {}", mesh_idx, e);
+                crate::log!(
+                    "Failed to update skinned vertex buffer for mesh {}: {}",
+                    mesh_idx,
+                    e
+                );
             }
         }
 
@@ -532,7 +591,12 @@ impl App {
                 .collect();
 
             if !vertex_buffers.is_empty() {
-                accel_struct.update_all(instance, rrdevice, &data.rrcommand_pool, &vertex_buffers)?;
+                accel_struct.update_all(
+                    instance,
+                    rrdevice,
+                    &data.rrcommand_pool,
+                    &vertex_buffers,
+                )?;
             }
         }
 
@@ -544,26 +608,63 @@ impl App {
 
         crate::log!("--- Model Info ---");
         crate::log!("  current_model_path: {}", self.data.current_model_path);
-        crate::log!("  meshes count: {}", self.data.render_resources.meshes.len());
-        crate::log!("  has_skinned_meshes: {}", self.data.render_resources.has_skinned_meshes);
-        crate::log!("  animation clips count: {}", self.data.render_resources.animation.clips.len());
-        crate::log!("  morph_animations count: {}", self.data.render_resources.morph_animation.animations.len());
-        crate::log!("  skeletons count: {}", self.data.render_resources.animation.skeletons.len());
+        crate::log!(
+            "  meshes count: {}",
+            self.data.render_resources.meshes.len()
+        );
+        crate::log!(
+            "  has_skinned_meshes: {}",
+            self.data.render_resources.has_skinned_meshes
+        );
+        crate::log!(
+            "  animation clips count: {}",
+            self.data.render_resources.animation.clips.len()
+        );
+        crate::log!(
+            "  morph_animations count: {}",
+            self.data.render_resources.morph_animation.animations.len()
+        );
+        crate::log!(
+            "  skeletons count: {}",
+            self.data.render_resources.animation.skeletons.len()
+        );
 
         crate::log!("--- RenderResources Info ---");
-        crate::log!("  meshes count: {}", self.data.render_resources.meshes.len());
-        crate::log!("  materials count: {}", self.data.render_resources.materials.materials.len());
-        crate::log!("  mesh_material_ids: {:?}", self.data.render_resources.mesh_material_ids);
+        crate::log!(
+            "  meshes count: {}",
+            self.data.render_resources.meshes.len()
+        );
+        crate::log!(
+            "  materials count: {}",
+            self.data.render_resources.materials.materials.len()
+        );
+        crate::log!(
+            "  mesh_material_ids: {:?}",
+            self.data.render_resources.mesh_material_ids
+        );
 
         for (i, mesh) in self.data.render_resources.meshes.iter().enumerate() {
-            crate::log!("  mesh[{}]: render_to_gbuffer={}, vertex_buffer={:?}, indices={}",
-                i, mesh.render_to_gbuffer, mesh.vertex_buffer.buffer, mesh.index_buffer.indices);
-            crate::log!("    vertex_data.vertices count: {}", mesh.vertex_data.vertices.len());
+            crate::log!(
+                "  mesh[{}]: render_to_gbuffer={}, vertex_buffer={:?}, indices={}",
+                i,
+                mesh.render_to_gbuffer,
+                mesh.vertex_buffer.buffer,
+                mesh.index_buffer.indices
+            );
+            crate::log!(
+                "    vertex_data.vertices count: {}",
+                mesh.vertex_data.vertices.len()
+            );
             crate::log!("    object_index: {}", mesh.object_index);
 
             if !mesh.vertex_data.vertices.is_empty() {
                 let v = &mesh.vertex_data.vertices[0];
-                crate::log!("    vertex_data[0].pos: ({:.4}, {:.4}, {:.4})", v.pos.x, v.pos.y, v.pos.z);
+                crate::log!(
+                    "    vertex_data[0].pos: ({:.4}, {:.4}, {:.4})",
+                    v.pos.x,
+                    v.pos.y,
+                    v.pos.z
+                );
 
                 let mut min_x = f32::MAX;
                 let mut max_x = f32::MIN;
@@ -579,8 +680,15 @@ impl App {
                     min_z = min_z.min(v.pos.z);
                     max_z = max_z.max(v.pos.z);
                 }
-                crate::log!("    bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
-                    min_x, max_x, min_y, max_y, min_z, max_z);
+                crate::log!(
+                    "    bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
+                    min_x,
+                    max_x,
+                    min_y,
+                    max_y,
+                    min_z,
+                    max_z
+                );
             }
         }
 
@@ -589,7 +697,10 @@ impl App {
 
         crate::log!("--- Animation Info ---");
         crate::log!("  animation_playing: {}", self.data.animation_playing);
-        crate::log!("  clips count: {}", self.data.render_resources.animation.clips.len());
+        crate::log!(
+            "  clips count: {}",
+            self.data.render_resources.animation.clips.len()
+        );
 
         crate::log!("========== END DEBUG INFORMATION ==========");
     }

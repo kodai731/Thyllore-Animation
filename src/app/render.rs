@@ -122,10 +122,12 @@ impl App {
 
                 let is_gltf = self.data.current_model_path.ends_with(".glb")
                     || self.data.current_model_path.ends_with(".gltf");
-                let is_gltf_node_animation = is_gltf
+                let is_fbx = self.data.current_model_path.ends_with(".fbx");
+
+                let has_node_animation = (is_gltf || is_fbx)
                     && !self.data.render_resources.has_skinned_meshes;
 
-                if is_gltf_node_animation {
+                if has_node_animation {
                     if let Err(e) = self.data.render_resources.update_node_animation(
                         &self.instance,
                         &self.rrdevice,

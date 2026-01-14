@@ -4,7 +4,7 @@ use winit::event::{Event, WindowEvent, ElementState};
 use imgui::{Condition, MouseButton};
 
 use crate::app::{App, GUIData};
-use crate::debugview::DebugViewMode;
+use crate::debugview::{DebugViewMode, FBX_DEBUG};
 
 fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
     gui_data.is_left_clicked = false;
@@ -240,6 +240,25 @@ impl System {
                                         }
                                         if ui.button("Dump Debug Information") {
                                             gui_data.dump_debug_info = true;
+                                        }
+
+                                        ui.separator();
+                                        ui.text("FBX Debug Logs:");
+                                        let mut fbx_anim = FBX_DEBUG.animation_enabled();
+                                        let mut fbx_hier = FBX_DEBUG.hierarchy_enabled();
+                                        let mut fbx_skin = FBX_DEBUG.skinning_enabled();
+                                        let mut fbx_trans = FBX_DEBUG.transform_enabled();
+                                        if ui.checkbox("Animation", &mut fbx_anim) {
+                                            FBX_DEBUG.set_animation(fbx_anim);
+                                        }
+                                        if ui.checkbox("Hierarchy", &mut fbx_hier) {
+                                            FBX_DEBUG.set_hierarchy(fbx_hier);
+                                        }
+                                        if ui.checkbox("Skinning", &mut fbx_skin) {
+                                            FBX_DEBUG.set_skinning(fbx_skin);
+                                        }
+                                        if ui.checkbox("Transform", &mut fbx_trans) {
+                                            FBX_DEBUG.set_transform(fbx_trans);
                                         }
 
                                         ui.separator();

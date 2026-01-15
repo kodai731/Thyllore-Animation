@@ -13,9 +13,7 @@ use crate::vulkanr::vulkan::*;
 
 use anyhow::{anyhow, Result};
 use std::borrow::BorrowMut;
-use std::mem::size_of;
-use std::os::raw::c_void;
-use vulkanalia::prelude::v1_0::*;
+use std::ffi::c_void;
 
 impl App {
     pub(crate) unsafe fn load_model_from_path(
@@ -500,106 +498,6 @@ impl App {
         _rrdevice: &RRDevice,
         _data: &mut AppData,
     ) -> Result<()> {
-        Ok(())
-    }
-
-    pub(crate) unsafe fn update_skinned_vertex_buffers(
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        data: &mut AppData,
-    ) -> Result<()> {
-        for mesh_idx in 0..data.render_resources.meshes.len() {
-            let (skin_data, skeleton_id) = {
-                let mesh = &data.render_resources.meshes[mesh_idx];
-                (mesh.skin_data.clone(), mesh.skeleton_id)
-            };
-
-            let Some(skin_data) = skin_data else {
-                continue;
-            };
-
-            let Some(skeleton_id) = skeleton_id else {
-                continue;
-            };
-
-            let Some(skeleton) = data.render_resources.animation.get_skeleton(skeleton_id) else {
-                continue;
-            };
-
-            let vertex_count = skin_data.base_positions.len();
-            let mut skinned_positions = vec![cgmath::Vector3::new(0.0, 0.0, 0.0); vertex_count];
-            let mut skinned_normals = vec![cgmath::Vector3::new(0.0, 1.0, 0.0); vertex_count];
-
-            skin_data.apply_skinning(skeleton, &mut skinned_positions, &mut skinned_normals);
-
-            let mesh = &mut data.render_resources.meshes[mesh_idx];
-            for (i, pos) in skinned_positions.iter().enumerate() {
-                if i < mesh.vertex_data.vertices.len() {
-                    mesh.vertex_data.vertices[i].pos.x = pos.x;
-                    mesh.vertex_data.vertices[i].pos.y = pos.y;
-                    mesh.vertex_data.vertices[i].pos.z = pos.z;
-                }
-            }
-            for (i, normal) in skinned_normals.iter().enumerate() {
-                if i < mesh.vertex_data.vertices.len() {
-                    mesh.vertex_data.vertices[i].normal.x = normal.x;
-                    mesh.vertex_data.vertices[i].normal.y = normal.y;
-                    mesh.vertex_data.vertices[i].normal.z = normal.z;
-                }
-            }
-
-            if let Err(e) = mesh.vertex_buffer.update(
-                instance,
-                rrdevice,
-                &data.rrcommand_pool,
-                (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len())
-                    as vk::DeviceSize,
-                mesh.vertex_data.vertices.as_ptr() as *const c_void,
-                mesh.vertex_data.vertices.len(),
-            ) {
-                crate::log!(
-                    "Failed to update skinned vertex buffer for mesh {}: {}",
-                    mesh_idx,
-                    e
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    pub(crate) unsafe fn update_acceleration_structures(
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        data: &mut AppData,
-    ) -> Result<()> {
-        if let Some(ref accel_struct) = data.raytracing.acceleration_structure {
-            let vertex_buffers: Vec<_> = data
-                .render_resources
-                .meshes
-                .iter()
-                .filter(|mesh| mesh.vertex_buffer.buffer != vk::Buffer::null())
-                .map(|mesh| {
-                    (
-                        &mesh.vertex_buffer.buffer,
-                        mesh.vertex_data.vertices.len() as u32,
-                        std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                        &mesh.index_buffer.buffer,
-                        mesh.vertex_data.indices.len() as u32,
-                    )
-                })
-                .collect();
-
-            if !vertex_buffers.is_empty() {
-                accel_struct.update_all(
-                    instance,
-                    rrdevice,
-                    &data.rrcommand_pool,
-                    &vertex_buffers,
-                )?;
-            }
-        }
-
         Ok(())
     }
 

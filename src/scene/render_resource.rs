@@ -747,6 +747,8 @@ impl RenderResources {
     pub unsafe fn update_animations(
         &mut self,
         time: f32,
+        animation_playing: bool,
+        model_path: &str,
         instance: &Instance,
         rrdevice: &RRDevice,
         command_pool: &RRCommandPool,
@@ -760,6 +762,154 @@ impl RenderResources {
                 command_pool,
                 acceleration_structure,
             )?;
+        }
+
+        if self.animation.clips.is_empty() {
+            return Ok(());
+        }
+
+        if !animation_playing {
+            static mut LOGGED_PAUSED: bool = false;
+            if !LOGGED_PAUSED {
+                crate::log!("Animation is paused (animation_playing=false)");
+                LOGGED_PAUSED = true;
+            }
+            return Ok(());
+        }
+
+        if let Some(clip_id) = self.animation.player.current_clip_id {
+            if let Some(clip) = self.animation.clips.iter().find(|c| c.id == clip_id) {
+                let duration = clip.duration;
+                if duration > 0.0 {
+                    let prev_time = self.animation.player.time;
+                    self.animation.player.time = time % duration;
+
+                    static mut FRAME_COUNT: u32 = 0;
+                    FRAME_COUNT += 1;
+                    if FRAME_COUNT % 60 == 0 {
+                        crate::log!(
+                            "Animation update: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
+                            self.animation.player.time,
+                            duration,
+                            time,
+                            prev_time
+                        );
+                    }
+                }
+            }
+        }
+
+        let skeleton_id = self.meshes.first().and_then(|m| m.skeleton_id);
+        if let Some(skel_id) = skeleton_id {
+            self.animation.apply_to_skeleton(skel_id);
+        }
+
+        let is_gltf = model_path.ends_with(".glb") || model_path.ends_with(".gltf");
+        let is_fbx = model_path.ends_with(".fbx");
+        let has_node_animation = (is_gltf || is_fbx) && !self.has_skinned_meshes;
+
+        if has_node_animation {
+            self.update_node_animation(instance, rrdevice, command_pool, acceleration_structure)?;
+        } else {
+            self.update_skinned_vertex_buffers(instance, rrdevice, command_pool)?;
+        }
+
+        self.update_acceleration_structure(instance, rrdevice, command_pool, acceleration_structure)?;
+
+        Ok(())
+    }
+
+    unsafe fn update_skinned_vertex_buffers(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        command_pool: &RRCommandPool,
+    ) -> anyhow::Result<()> {
+        for mesh_idx in 0..self.meshes.len() {
+            let (skin_data, skeleton_id) = {
+                let mesh = &self.meshes[mesh_idx];
+                (mesh.skin_data.clone(), mesh.skeleton_id)
+            };
+
+            let Some(skin_data) = skin_data else {
+                continue;
+            };
+            let Some(skeleton_id) = skeleton_id else {
+                continue;
+            };
+            let Some(skeleton) = self.animation.get_skeleton(skeleton_id) else {
+                continue;
+            };
+
+            let vertex_count = skin_data.base_positions.len();
+            let mut skinned_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
+            let mut skinned_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
+
+            skin_data.apply_skinning(skeleton, &mut skinned_positions, &mut skinned_normals);
+
+            let mesh = &mut self.meshes[mesh_idx];
+            for (i, pos) in skinned_positions.iter().enumerate() {
+                if i < mesh.vertex_data.vertices.len() {
+                    mesh.vertex_data.vertices[i].pos.x = pos.x;
+                    mesh.vertex_data.vertices[i].pos.y = pos.y;
+                    mesh.vertex_data.vertices[i].pos.z = pos.z;
+                }
+            }
+            for (i, normal) in skinned_normals.iter().enumerate() {
+                if i < mesh.vertex_data.vertices.len() {
+                    mesh.vertex_data.vertices[i].normal.x = normal.x;
+                    mesh.vertex_data.vertices[i].normal.y = normal.y;
+                    mesh.vertex_data.vertices[i].normal.z = normal.z;
+                }
+            }
+
+            if let Err(e) = mesh.vertex_buffer.update(
+                instance,
+                rrdevice,
+                command_pool,
+                (size_of::<Vertex>() * mesh.vertex_data.vertices.len()) as vk::DeviceSize,
+                mesh.vertex_data.vertices.as_ptr() as *const c_void,
+                mesh.vertex_data.vertices.len(),
+            ) {
+                crate::log!(
+                    "Failed to update skinned vertex buffer for mesh {}: {}",
+                    mesh_idx,
+                    e
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    unsafe fn update_acceleration_structure(
+        &self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        command_pool: &RRCommandPool,
+        acceleration_structure: &Option<RRAccelerationStructure>,
+    ) -> anyhow::Result<()> {
+        let Some(ref accel_struct) = acceleration_structure else {
+            return Ok(());
+        };
+
+        let vertex_buffers: Vec<_> = self
+            .meshes
+            .iter()
+            .filter(|mesh| mesh.vertex_buffer.buffer != vk::Buffer::null())
+            .map(|mesh| {
+                (
+                    &mesh.vertex_buffer.buffer,
+                    mesh.vertex_data.vertices.len() as u32,
+                    size_of::<Vertex>() as u32,
+                    &mesh.index_buffer.buffer,
+                    mesh.vertex_data.indices.len() as u32,
+                )
+            })
+            .collect();
+
+        if !vertex_buffers.is_empty() {
+            accel_struct.update_all(instance, rrdevice, command_pool, &vertex_buffers)?;
         }
 
         Ok(())

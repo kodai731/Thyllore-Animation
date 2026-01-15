@@ -54,6 +54,8 @@ impl App {
 
         if let Err(e) = self.data.render_resources.update_animations(
             time,
+            self.data.animation_playing,
+            &self.data.current_model_path,
             &self.instance,
             &self.rrdevice,
             &self.data.rrcommand_pool,
@@ -212,8 +214,6 @@ impl App {
             self.data.rt_debug_state.finish_cube_load();
             gui_data.load_cube = false;
         }
-
-        let ubo = UniformBufferObject { model, view, proj };
 
         let light_pos = self.data.rt_debug_state.light_position;
         let frame_ubo = FrameUBO {

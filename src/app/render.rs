@@ -80,78 +80,7 @@ impl App {
         }
 
         self.data.images_in_flight[image_index as usize] = self.data.in_flight_fences[self.frame];
-
-        if !self.data.render_resources.animation.clips.is_empty() {
-            if !self.data.animation_playing {
-                static mut LOGGED_PAUSED: bool = false;
-                unsafe {
-                    if !LOGGED_PAUSED {
-                        crate::log!("Animation is paused (animation_playing=false)");
-                        LOGGED_PAUSED = true;
-                    }
-                }
-            } else {
-                let elapsed = self.start.elapsed().as_secs_f32();
-                let animation = &mut self.data.render_resources.animation;
-
-                if let Some(clip_id) = animation.player.current_clip_id {
-                    if let Some(clip) = animation.clips.iter().find(|c| c.id == clip_id) {
-                        let duration = clip.duration;
-                        if duration > 0.0 {
-                            let prev_time = animation.player.time;
-                            animation.player.time = elapsed % duration;
-
-                            static mut FRAME_COUNT: u32 = 0;
-                            unsafe {
-                                FRAME_COUNT += 1;
-                                if FRAME_COUNT % 60 == 0 {
-                                    crate::log!("Animation update: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
-                                         animation.player.time, duration, elapsed, prev_time);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                let skeleton_id = self.data.render_resources.meshes.first()
-                    .and_then(|m| m.skeleton_id);
-
-                if let Some(skel_id) = skeleton_id {
-                    self.data.render_resources.animation.apply_to_skeleton(skel_id);
-                }
-
-                let is_gltf = self.data.current_model_path.ends_with(".glb")
-                    || self.data.current_model_path.ends_with(".gltf");
-                let is_fbx = self.data.current_model_path.ends_with(".fbx");
-
-                let has_node_animation = (is_gltf || is_fbx)
-                    && !self.data.render_resources.has_skinned_meshes;
-
-                if has_node_animation {
-                    if let Err(e) = self.data.render_resources.update_node_animation(
-                        &self.instance,
-                        &self.rrdevice,
-                        &self.data.rrcommand_pool,
-                        &mut self.data.raytracing.acceleration_structure,
-                    ) {
-                        crate::log!("Failed to update node animation: {}", e);
-                    }
-                } else {
-                    Self::update_skinned_vertex_buffers(
-                        &self.instance,
-                        &self.rrdevice,
-                        &mut self.data,
-                    )?;
-                }
-
-                Self::update_acceleration_structures(
-                    &self.instance,
-                    &self.rrdevice,
-                    &mut self.data,
-                )?;
-            }
-        }
-
+        
 
         self.update_uniform_buffer(
             image_index,

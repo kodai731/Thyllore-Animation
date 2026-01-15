@@ -3,21 +3,15 @@ use crate::app::{App, AppData, GUIData};
 use crate::debugview::*;
 use crate::math::*;
 use crate::scene::billboard::BillboardTransform;
-use crate::scene::render_resource::{FrameUBO, MaterialUBO, ObjectUBO};
+use crate::scene::render_resource::{FrameUBO, ObjectUBO};
 use crate::vulkanr::buffer::*;
-use crate::vulkanr::command::*;
-use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::data::*;
-use crate::vulkanr::descriptor::*;
 use crate::vulkanr::device::*;
-use crate::vulkanr::image::*;
-use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::vulkan::*;
 
 use anyhow::Result;
 use cgmath::{Deg, InnerSpace, Matrix4, Vector2, Vector3};
 use std::mem::size_of;
-use std::os::raw::c_void;
 use vulkanalia::prelude::v1_0::*;
 
 impl App {
@@ -31,42 +25,21 @@ impl App {
         use crate::app::data::LightMoveTarget;
 
         if gui_data.move_light_to != LightMoveTarget::None {
-            let all_positions: Vec<Vector3<f32>> = if !self.data.fbx_model.fbx_data.is_empty() {
-                self.data
-                    .fbx_model
-                    .fbx_data
-                    .iter()
-                    .flat_map(|data| data.positions.iter())
-                    .cloned()
-                    .collect()
-            } else if !self.data.gltf_model.gltf_data.is_empty() {
-                self.data
-                    .gltf_model
-                    .gltf_data
-                    .iter()
-                    .flat_map(|data| {
-                        data.vertices.iter().map(|v| {
-                            Vector3::new(
-                                v.animation_position[0],
-                                v.animation_position[1],
-                                v.animation_position[2],
-                            )
-                        })
-                    })
-                    .collect()
-            } else {
+            let all_positions: Vec<Vector3<f32>> = if !self.data.render_resources.meshes.is_empty()
+            {
                 self.data
                     .render_resources
                     .meshes
                     .iter()
                     .flat_map(|mesh| {
-                        mesh
-                            .vertex_data
+                        mesh.vertex_data
                             .vertices
                             .iter()
                             .map(|v| Vector3::new(v.pos.x, v.pos.y, v.pos.z))
                     })
                     .collect()
+            } else {
+                Vec::new()
             };
 
             self.data.rt_debug_state.update_light_position(
@@ -77,7 +50,19 @@ impl App {
             gui_data.move_light_to = LightMoveTarget::None;
         }
 
-        self.morphing(self.start.elapsed().as_secs_f32());
+        let time = self.start.elapsed().as_secs_f32();
+
+        if let Err(e) = self.data.render_resources.update_animations(
+            time,
+            self.data.animation_playing,
+            &self.data.current_model_path,
+            &self.instance,
+            &self.rrdevice,
+            &self.data.rrcommand_pool,
+            &mut self.data.raytracing.acceleration_structure,
+        ) {
+            eprintln!("failed to update animations: {}", e);
+        }
 
         let model = Mat4::identity();
 
@@ -222,13 +207,13 @@ impl App {
             ) {
                 crate::log!("Failed to replace model with cube: {:?}", e);
             } else {
-                self.data.rt_debug_state.set_actual_cube_top(cube_size, cube_position);
+                self.data
+                    .rt_debug_state
+                    .set_actual_cube_top(cube_size, cube_position);
             }
             self.data.rt_debug_state.finish_cube_load();
             gui_data.load_cube = false;
         }
-
-        let ubo = UniformBufferObject { model, view, proj };
 
         let light_pos = self.data.rt_debug_state.light_position;
         let frame_ubo = FrameUBO {
@@ -238,15 +223,21 @@ impl App {
             light_pos: cgmath::Vector4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
             light_color: cgmath::Vector4::new(1.0, 1.0, 1.0, 1.0),
         };
-        if let Err(e) = self.data.render_resources.frame_set.update(&self.rrdevice, image_index, &frame_ubo) {
+        if let Err(e) =
+            self.data
+                .render_resources
+                .frame_set
+                .update(&self.rrdevice, image_index, &frame_ubo)
+        {
             eprintln!("Failed to update FrameUBO: {}", e);
         }
 
-        for mesh in &self.data.render_resources.meshes {
-            let object_ubo = ObjectUBO { model };
-            if let Err(e) = self.data.render_resources.objects.update(&self.rrdevice, image_index, mesh.object_index, &object_ubo) {
-                eprintln!("Failed to update ObjectUBO for mesh object_index {}: {}", mesh.object_index, e);
-            }
+        if let Err(e) =
+            self.data
+                .render_resources
+                .update_objects(&self.rrdevice, image_index, model)
+        {
+            eprintln!("Failed to update ObjectUBO: {}", e);
         }
 
         if let (Some(scene_buffer), Some(scene_memory)) = (
@@ -318,7 +309,9 @@ impl App {
             eprintln!("Failed to update Grid ObjectUBO: {}", e);
         }
 
-        let gizmo_object_ubo = ObjectUBO { model: Mat4::identity() };
+        let gizmo_object_ubo = ObjectUBO {
+            model: Mat4::identity(),
+        };
         if let Err(e) = self.data.render_resources.objects.update(
             &self.rrdevice,
             image_index,
@@ -332,7 +325,9 @@ impl App {
         let distance = (light_pos - camera_pos).magnitude();
         let scale_factor = distance * 0.03;
         let light_gizmo_model = Mat4::from_translation(light_pos) * Mat4::from_scale(scale_factor);
-        let light_gizmo_object_ubo = ObjectUBO { model: light_gizmo_model };
+        let light_gizmo_object_ubo = ObjectUBO {
+            model: light_gizmo_model,
+        };
         if let Err(e) = self.data.render_resources.objects.update(
             &self.rrdevice,
             image_index,
@@ -532,160 +527,7 @@ impl App {
 
         Ok(())
     }
-    unsafe fn morphing(&mut self, time: f32) {
-        if self.data.gltf_model.morph_animations.len() <= 0 {
-            return;
-        }
 
-        for i in 0..self.data.gltf_model.gltf_data.len() {
-            let animation_index = self.data.gltf_model.morph_target_index(time);
-
-            let gltf_model = &mut self.data.gltf_model;
-            let gltf_data = &mut gltf_model.gltf_data[i];
-            if gltf_data.morph_targets.len() <= 0 {
-                return;
-            };
-
-            let mesh = &mut self.data.render_resources.meshes[i];
-            let vertices = &mut mesh.vertex_data.vertices;
-            for i in 0..vertices.len() {
-                vertices[i].pos = gltf_data.vertices[i].position.to_vec3();
-            }
-
-            let morph_animation = &gltf_model.morph_animations[animation_index];
-            for i in 0..morph_animation.weights.len() {
-                let morph_target = &gltf_data.morph_targets[i];
-                for j in 0..morph_target.positions.len() {
-                    let delta_position =
-                        morph_target.positions[j].to_vec3() * morph_animation.weights[i] * 0.01f32;
-                    vertices[j].pos += delta_position;
-                }
-            }
-
-            if let Err(e) = mesh.vertex_buffer.update(
-                &self.instance,
-                &self.rrdevice,
-                &self.data.rrcommand_pool,
-                (size_of::<vulkan_data::Vertex>() * vertices.len()) as vk::DeviceSize,
-                vertices.as_ptr() as *const c_void,
-                vertices.len(),
-            ) {
-                eprintln!("failed to update vertex buffer: {}", e);
-            }
-
-            if let Some(ref mut accel_struct) = self.data.raytracing.acceleration_structure {
-                if i < accel_struct.blas_list.len() {
-                    let blas = &accel_struct.blas_list[i];
-                    if let Err(e) = RRAccelerationStructure::update_blas(
-                        &self.instance,
-                        &self.rrdevice,
-                        &self.data.rrcommand_pool,
-                        blas,
-                        &mesh.vertex_buffer.buffer,
-                        mesh.vertex_data.vertices.len() as u32,
-                        std::mem::size_of::<vulkan_data::Vertex>() as u32,
-                        &mesh.index_buffer.buffer,
-                        mesh.vertex_data.indices.len() as u32,
-                    ) {
-                        eprintln!("failed to update BLAS: {}", e);
-                    }
-                }
-            }
-        }
-
-        if let Some(ref mut accel_struct) = self.data.raytracing.acceleration_structure {
-            let tlas = &accel_struct.tlas;
-            if let Err(e) = RRAccelerationStructure::update_tlas(
-                &self.instance,
-                &self.rrdevice,
-                &self.data.rrcommand_pool,
-                tlas,
-                &accel_struct.blas_list,
-            ) {
-                eprintln!("failed to update TLAS: {}", e);
-            }
-        }
-    }
-    pub(crate) unsafe fn reload_model_data_buffer(
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        data: &mut AppData,
-    ) -> Result<()> {
-        data.render_resources.clear_meshes(rrdevice);
-        data.render_resources.mesh_material_ids.clear();
-
-        if let Err(e) = Self::load_model(&instance, &rrdevice, data) {
-            eprintln!("{:?}", e);
-            crate::log!("{:?}", e)
-        }
-        crate::log!("reloaded model");
-
-        for i in 0..data.render_resources.meshes.len() {
-            let mesh = &mut data.render_resources.meshes[i];
-
-            mesh.vertex_buffer = RRVertexBuffer::new(
-                &instance,
-                &rrdevice,
-                &data.rrcommand_pool,
-                (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len())
-                    as vk::DeviceSize,
-                mesh.vertex_data.vertices.as_ptr() as *const c_void,
-                mesh.vertex_data.vertices.len(),
-            );
-
-            mesh.index_buffer = RRIndexBuffer::new(
-                &instance,
-                &rrdevice,
-                &data.rrcommand_pool,
-                (size_of::<u32>() * mesh.vertex_data.indices.len()) as u64,
-                mesh.vertex_data.indices.as_ptr() as *const c_void,
-                mesh.vertex_data.indices.len(),
-            );
-
-            mesh.image_view = create_image_view(
-                &rrdevice,
-                mesh.image,
-                vk::Format::R8G8B8A8_SRGB,
-                vk::ImageAspectFlags::COLOR,
-                mesh.mip_level,
-            )?;
-
-            mesh.sampler = create_texture_sampler(&rrdevice, mesh.mip_level)?;
-
-            mesh.object_index = data.render_resources.objects.allocate_slot();
-            crate::log!("Allocated object_index {} for mesh {}", mesh.object_index, i);
-
-            let material_name = format!("material_{}", i);
-            let material_properties = MaterialUBO {
-                base_color: cgmath::Vector4::new(1.0, 1.0, 1.0, 1.0),
-                metallic: 0.0,
-                roughness: 0.5,
-                _padding: [0.0, 0.0],
-            };
-            let material_id = data.render_resources.materials.create_material_with_texture(
-                instance,
-                rrdevice,
-                &material_name,
-                mesh.image_view,
-                mesh.sampler,
-                material_properties,
-            )?;
-            data.render_resources.mesh_material_ids.push(material_id);
-            crate::log!("Created material {} for mesh {}", material_id, i);
-        }
-
-        if let Err(e) = Self::build_acceleration_structures(instance, rrdevice, data) {
-            eprintln!("Failed to build acceleration structures: {:?}", e);
-            crate::log!("Failed to build acceleration structures: {:?}", e);
-        }
-
-        if let Err(e) = Self::create_ray_tracing_pipelines(instance, rrdevice, data) {
-            eprintln!("Failed to create ray tracing pipelines: {:?}", e);
-            crate::log!("Failed to create ray tracing pipelines: {:?}", e);
-        }
-
-        Ok(())
-    }
     pub unsafe fn update_imgui_buffers(
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -983,113 +825,6 @@ impl App {
                     v.normal.y,
                     v.normal.z
                 );
-            }
-        }
-
-        if !self.data.fbx_model.fbx_data.is_empty() {
-            crate::log!("FBX model data:");
-            for (i, fbx_data) in self.data.fbx_model.fbx_data.iter().enumerate() {
-                crate::log!(
-                    "  Mesh[{}]: {} positions, {} normals",
-                    i,
-                    fbx_data.positions.len(),
-                    fbx_data.normals.len()
-                );
-                if !fbx_data.positions.is_empty() {
-                    let (min_x, max_x) = fbx_data
-                        .positions
-                        .iter()
-                        .fold((f32::MAX, f32::MIN), |(min, max), p| {
-                            (min.min(p.x), max.max(p.x))
-                        });
-                    let (min_y, max_y) = fbx_data
-                        .positions
-                        .iter()
-                        .fold((f32::MAX, f32::MIN), |(min, max), p| {
-                            (min.min(p.y), max.max(p.y))
-                        });
-                    let (min_z, max_z) = fbx_data
-                        .positions
-                        .iter()
-                        .fold((f32::MAX, f32::MIN), |(min, max), p| {
-                            (min.min(p.z), max.max(p.z))
-                        });
-                    crate::log!(
-                        "    bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
-                        min_x,
-                        max_x,
-                        min_y,
-                        max_y,
-                        min_z,
-                        max_z
-                    );
-
-                    let center = Vector3::new(
-                        (min_x + max_x) / 2.0,
-                        (min_y + max_y) / 2.0,
-                        (min_z + max_z) / 2.0,
-                    );
-                    let light_to_center = center - light_pos;
-                    let dist = light_to_center.magnitude();
-                    if dist > 0.001 {
-                        crate::log!(
-                            "    light->center: dir=({:.3}, {:.3}, {:.3}), dist={:.2}",
-                            light_to_center.x / dist,
-                            light_to_center.y / dist,
-                            light_to_center.z / dist,
-                            dist
-                        );
-                    }
-
-                    crate::log!("    Light relative to model:");
-                    crate::log!(
-                        "      X: {} (light={:.2}, range=[{:.2}, {:.2}])",
-                        if light_pos.x < min_x {
-                            "LEFT"
-                        } else if light_pos.x > max_x {
-                            "RIGHT"
-                        } else {
-                            "INSIDE"
-                        },
-                        light_pos.x,
-                        min_x,
-                        max_x
-                    );
-                    crate::log!(
-                        "      Y: {} (light={:.2}, range=[{:.2}, {:.2}])",
-                        if light_pos.y < min_y {
-                            "BELOW"
-                        } else if light_pos.y > max_y {
-                            "ABOVE"
-                        } else {
-                            "INSIDE"
-                        },
-                        light_pos.y,
-                        min_y,
-                        max_y
-                    );
-                    crate::log!(
-                        "      Z: {} (light={:.2}, range=[{:.2}, {:.2}])",
-                        if light_pos.z < min_z {
-                            "BEHIND"
-                        } else if light_pos.z > max_z {
-                            "FRONT"
-                        } else {
-                            "INSIDE"
-                        },
-                        light_pos.z,
-                        min_z,
-                        max_z
-                    );
-                }
-                if !fbx_data.normals.is_empty() {
-                    crate::log!(
-                        "    normal[0]: ({:.3}, {:.3}, {:.3})",
-                        fbx_data.normals[0].x,
-                        fbx_data.normals[0].y,
-                        fbx_data.normals[0].z
-                    );
-                }
             }
         }
 

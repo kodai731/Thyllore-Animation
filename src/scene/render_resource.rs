@@ -1,11 +1,15 @@
+use crate::scene::animation::{AnimationSystem, MorphAnimationSystem, SkeletonId, SkinData};
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
+use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::device::RRDevice;
 use crate::vulkanr::data::{Vertex, VertexData};
+use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::resource::buffer::create_buffer;
 use crate::vulkanr::resource::image::RRImage;
 use crate::vulkanr::vulkan::*;
-use cgmath::{Matrix4, SquareMatrix, Vector4};
+use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 use std::collections::HashMap;
+use std::ffi::c_void;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
 
@@ -66,6 +70,27 @@ impl Default for MaterialUBO {
 }
 
 #[derive(Clone, Debug)]
+pub struct NodeData {
+    pub index: usize,
+    pub name: String,
+    pub parent_index: Option<usize>,
+    pub local_transform: Matrix4<f32>,
+    pub global_transform: Matrix4<f32>,
+}
+
+impl Default for NodeData {
+    fn default() -> Self {
+        Self {
+            index: 0,
+            name: String::new(),
+            parent_index: None,
+            local_transform: Matrix4::identity(),
+            global_transform: Matrix4::identity(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Mesh {
     pub vertex_buffer: RRVertexBuffer,
     pub index_buffer: RRIndexBuffer,
@@ -77,6 +102,10 @@ pub struct Mesh {
     pub sampler: vk::Sampler,
     pub render_to_gbuffer: bool,
     pub object_index: usize,
+    pub skin_data: Option<SkinData>,
+    pub skeleton_id: Option<SkeletonId>,
+    pub node_index: Option<usize>,
+    pub base_vertices: Vec<Vertex>,
 }
 
 impl Default for Mesh {
@@ -92,6 +121,10 @@ impl Default for Mesh {
             sampler: vk::Sampler::null(),
             render_to_gbuffer: true,
             object_index: 0,
+            skin_data: None,
+            skeleton_id: None,
+            node_index: None,
+            base_vertices: Vec::new(),
         }
     }
 }
@@ -107,19 +140,27 @@ impl Mesh {
             self.sampler = vk::Sampler::null();
         }
         if self.vertex_buffer.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.vertex_buffer.buffer, None);
+            rrdevice
+                .device
+                .destroy_buffer(self.vertex_buffer.buffer, None);
             self.vertex_buffer.buffer = vk::Buffer::null();
         }
         if self.vertex_buffer.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.vertex_buffer.buffer_memory, None);
+            rrdevice
+                .device
+                .free_memory(self.vertex_buffer.buffer_memory, None);
             self.vertex_buffer.buffer_memory = vk::DeviceMemory::null();
         }
         if self.index_buffer.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.index_buffer.buffer, None);
+            rrdevice
+                .device
+                .destroy_buffer(self.index_buffer.buffer, None);
             self.index_buffer.buffer = vk::Buffer::null();
         }
         if self.index_buffer.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.index_buffer.buffer_memory, None);
+            rrdevice
+                .device
+                .free_memory(self.index_buffer.buffer_memory, None);
             self.index_buffer.buffer_memory = vk::DeviceMemory::null();
         }
         if self.image != vk::Image::null() {
@@ -192,10 +233,7 @@ impl FrameDescriptorSet {
         Ok(rrdevice.device.create_descriptor_set_layout(&info, None)?)
     }
 
-    unsafe fn create_pool(
-        rrdevice: &RRDevice,
-        count: usize,
-    ) -> anyhow::Result<vk::DescriptorPool> {
+    unsafe fn create_pool(rrdevice: &RRDevice, count: usize) -> anyhow::Result<vk::DescriptorPool> {
         let pool_size = vk::DescriptorPoolSize::builder()
             .type_(vk::DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(count as u32);
@@ -238,11 +276,18 @@ impl FrameDescriptorSet {
                 .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                 .buffer_info(buffer_infos);
 
-            rrdevice.device.update_descriptor_sets(&[write], &[] as &[vk::CopyDescriptorSet]);
+            rrdevice
+                .device
+                .update_descriptor_sets(&[write], &[] as &[vk::CopyDescriptorSet]);
         }
     }
 
-    pub unsafe fn update(&self, rrdevice: &RRDevice, image_index: usize, ubo: &FrameUBO) -> anyhow::Result<()> {
+    pub unsafe fn update(
+        &self,
+        rrdevice: &RRDevice,
+        image_index: usize,
+        ubo: &FrameUBO,
+    ) -> anyhow::Result<()> {
         let memory = rrdevice.device.map_memory(
             self.buffer_memories[image_index],
             0,
@@ -250,7 +295,9 @@ impl FrameDescriptorSet {
             vk::MemoryMapFlags::empty(),
         )?;
         memcpy(ubo, memory.cast(), 1);
-        rrdevice.device.unmap_memory(self.buffer_memories[image_index]);
+        rrdevice
+            .device
+            .unmap_memory(self.buffer_memories[image_index]);
         Ok(())
     }
 
@@ -327,7 +374,10 @@ impl MaterialManager {
         Ok(rrdevice.device.create_descriptor_set_layout(&info, None)?)
     }
 
-    unsafe fn create_pool(rrdevice: &RRDevice, max_materials: u32) -> anyhow::Result<vk::DescriptorPool> {
+    unsafe fn create_pool(
+        rrdevice: &RRDevice,
+        max_materials: u32,
+    ) -> anyhow::Result<vk::DescriptorPool> {
         let sampler_size = vk::DescriptorPoolSize::builder()
             .type_(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .descriptor_count(max_materials);
@@ -424,7 +474,9 @@ impl MaterialManager {
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
             .buffer_info(buffer_infos);
 
-        rrdevice.device.update_descriptor_sets(&[sampler_write, ubo_write], &[] as &[vk::CopyDescriptorSet]);
+        rrdevice
+            .device
+            .update_descriptor_sets(&[sampler_write, ubo_write], &[] as &[vk::CopyDescriptorSet]);
 
         let id = self.next_id;
         self.next_id += 1;
@@ -454,7 +506,9 @@ impl MaterialManager {
         }
 
         if self.pool != vk::DescriptorPool::null() {
-            device.reset_descriptor_pool(self.pool, vk::DescriptorPoolResetFlags::empty()).ok();
+            device
+                .reset_descriptor_pool(self.pool, vk::DescriptorPoolResetFlags::empty())
+                .ok();
         }
 
         self.materials.clear();
@@ -586,7 +640,9 @@ impl ObjectDescriptorSet {
                 .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                 .buffer_info(buffer_infos);
 
-            rrdevice.device.update_descriptor_sets(&[write], &[] as &[vk::CopyDescriptorSet]);
+            rrdevice
+                .device
+                .update_descriptor_sets(&[write], &[] as &[vk::CopyDescriptorSet]);
         }
     }
 
@@ -602,6 +658,10 @@ impl ObjectDescriptorSet {
 
     pub fn get_next_slot(&self) -> usize {
         self.next_slot
+    }
+
+    pub fn reset_to(&mut self, slot: usize) {
+        self.next_slot = slot;
     }
 
     pub unsafe fn update(
@@ -650,6 +710,11 @@ pub struct RenderResources {
     pub objects: ObjectDescriptorSet,
     pub meshes: Vec<Mesh>,
     pub mesh_material_ids: Vec<MaterialId>,
+    pub nodes: Vec<NodeData>,
+    pub animation: AnimationSystem,
+    pub morph_animation: MorphAnimationSystem,
+    pub has_skinned_meshes: bool,
+    pub node_animation_scale: f32,
 }
 
 impl RenderResources {
@@ -662,7 +727,8 @@ impl RenderResources {
     ) -> anyhow::Result<Self> {
         let frame_set = FrameDescriptorSet::new(instance, rrdevice, swapchain_image_count)?;
         let materials = MaterialManager::new(rrdevice, max_materials)?;
-        let objects = ObjectDescriptorSet::new(instance, rrdevice, swapchain_image_count, max_objects)?;
+        let objects =
+            ObjectDescriptorSet::new(instance, rrdevice, swapchain_image_count, max_objects)?;
 
         Ok(Self {
             frame_set,
@@ -670,7 +736,197 @@ impl RenderResources {
             objects,
             meshes: Vec::new(),
             mesh_material_ids: Vec::new(),
+            nodes: Vec::new(),
+            animation: AnimationSystem::new(),
+            morph_animation: MorphAnimationSystem::new(),
+            has_skinned_meshes: false,
+            node_animation_scale: 1.0,
         })
+    }
+
+    pub unsafe fn update_animations(
+        &mut self,
+        time: f32,
+        animation_playing: bool,
+        model_path: &str,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        command_pool: &RRCommandPool,
+        acceleration_structure: &mut Option<RRAccelerationStructure>,
+    ) -> anyhow::Result<()> {
+        if !self.morph_animation.is_empty() {
+            self.update_morph_animation(
+                time,
+                instance,
+                rrdevice,
+                command_pool,
+                acceleration_structure,
+            )?;
+        }
+
+        if self.animation.clips.is_empty() {
+            return Ok(());
+        }
+
+        if !animation_playing {
+            static mut LOGGED_PAUSED: bool = false;
+            if !LOGGED_PAUSED {
+                crate::log!("Animation is paused (animation_playing=false)");
+                LOGGED_PAUSED = true;
+            }
+            return Ok(());
+        }
+
+        if let Some(clip_id) = self.animation.player.current_clip_id {
+            if let Some(clip) = self.animation.clips.iter().find(|c| c.id == clip_id) {
+                let duration = clip.duration;
+                if duration > 0.0 {
+                    let prev_time = self.animation.player.time;
+                    self.animation.player.time = time % duration;
+
+                    static mut FRAME_COUNT: u32 = 0;
+                    FRAME_COUNT += 1;
+                    if FRAME_COUNT % 60 == 0 {
+                        crate::log!(
+                            "Animation update: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
+                            self.animation.player.time,
+                            duration,
+                            time,
+                            prev_time
+                        );
+                    }
+                }
+            }
+        }
+
+        let skeleton_id = self.meshes.first().and_then(|m| m.skeleton_id);
+        if let Some(skel_id) = skeleton_id {
+            self.animation.apply_to_skeleton(skel_id);
+        }
+
+        let is_gltf = model_path.ends_with(".glb") || model_path.ends_with(".gltf");
+        let is_fbx = model_path.ends_with(".fbx");
+        let has_node_animation = (is_gltf || is_fbx) && !self.has_skinned_meshes;
+
+        if has_node_animation {
+            self.update_node_animation(instance, rrdevice, command_pool, acceleration_structure)?;
+        } else {
+            self.update_skinned_vertex_buffers(instance, rrdevice, command_pool)?;
+        }
+
+        self.update_acceleration_structure(instance, rrdevice, command_pool, acceleration_structure)?;
+
+        Ok(())
+    }
+
+    unsafe fn update_skinned_vertex_buffers(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        command_pool: &RRCommandPool,
+    ) -> anyhow::Result<()> {
+        for mesh_idx in 0..self.meshes.len() {
+            let (skin_data, skeleton_id) = {
+                let mesh = &self.meshes[mesh_idx];
+                (mesh.skin_data.clone(), mesh.skeleton_id)
+            };
+
+            let Some(skin_data) = skin_data else {
+                continue;
+            };
+            let Some(skeleton_id) = skeleton_id else {
+                continue;
+            };
+            let Some(skeleton) = self.animation.get_skeleton(skeleton_id) else {
+                continue;
+            };
+
+            let vertex_count = skin_data.base_positions.len();
+            let mut skinned_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
+            let mut skinned_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
+
+            skin_data.apply_skinning(skeleton, &mut skinned_positions, &mut skinned_normals);
+
+            let mesh = &mut self.meshes[mesh_idx];
+            for (i, pos) in skinned_positions.iter().enumerate() {
+                if i < mesh.vertex_data.vertices.len() {
+                    mesh.vertex_data.vertices[i].pos.x = pos.x;
+                    mesh.vertex_data.vertices[i].pos.y = pos.y;
+                    mesh.vertex_data.vertices[i].pos.z = pos.z;
+                }
+            }
+            for (i, normal) in skinned_normals.iter().enumerate() {
+                if i < mesh.vertex_data.vertices.len() {
+                    mesh.vertex_data.vertices[i].normal.x = normal.x;
+                    mesh.vertex_data.vertices[i].normal.y = normal.y;
+                    mesh.vertex_data.vertices[i].normal.z = normal.z;
+                }
+            }
+
+            if let Err(e) = mesh.vertex_buffer.update(
+                instance,
+                rrdevice,
+                command_pool,
+                (size_of::<Vertex>() * mesh.vertex_data.vertices.len()) as vk::DeviceSize,
+                mesh.vertex_data.vertices.as_ptr() as *const c_void,
+                mesh.vertex_data.vertices.len(),
+            ) {
+                crate::log!(
+                    "Failed to update skinned vertex buffer for mesh {}: {}",
+                    mesh_idx,
+                    e
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    unsafe fn update_acceleration_structure(
+        &self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        command_pool: &RRCommandPool,
+        acceleration_structure: &Option<RRAccelerationStructure>,
+    ) -> anyhow::Result<()> {
+        let Some(ref accel_struct) = acceleration_structure else {
+            return Ok(());
+        };
+
+        let vertex_buffers: Vec<_> = self
+            .meshes
+            .iter()
+            .filter(|mesh| mesh.vertex_buffer.buffer != vk::Buffer::null())
+            .map(|mesh| {
+                (
+                    &mesh.vertex_buffer.buffer,
+                    mesh.vertex_data.vertices.len() as u32,
+                    size_of::<Vertex>() as u32,
+                    &mesh.index_buffer.buffer,
+                    mesh.vertex_data.indices.len() as u32,
+                )
+            })
+            .collect();
+
+        if !vertex_buffers.is_empty() {
+            accel_struct.update_all(instance, rrdevice, command_pool, &vertex_buffers)?;
+        }
+
+        Ok(())
+    }
+
+    pub unsafe fn update_objects(
+        &self,
+        rrdevice: &RRDevice,
+        image_index: usize,
+        model: Matrix4<f32>,
+    ) -> anyhow::Result<()> {
+        for mesh in &self.meshes {
+            let object_ubo = ObjectUBO { model };
+            self.objects
+                .update(rrdevice, image_index, mesh.object_index, &object_ubo)?;
+        }
+        Ok(())
     }
 
     pub fn get_material_id(&self, mesh_index: usize) -> Option<MaterialId> {
@@ -690,10 +946,44 @@ impl RenderResources {
     }
 
     pub fn get_layouts_without_material(&self) -> [vk::DescriptorSetLayout; 2] {
-        [
-            self.frame_set.layout,
-            self.objects.layout,
-        ]
+        [self.frame_set.layout, self.objects.layout]
+    }
+
+    pub fn calculate_model_bounds(&self) -> Option<(Vector3<f32>, Vector3<f32>, Vector3<f32>)> {
+        if self.meshes.is_empty() {
+            return None;
+        }
+
+        let mut min = Vector3::new(f32::MAX, f32::MAX, f32::MAX);
+        let mut max = Vector3::new(f32::MIN, f32::MIN, f32::MIN);
+        let mut has_vertices = false;
+
+        for mesh in &self.meshes {
+            for vertex in &mesh.vertex_data.vertices {
+                has_vertices = true;
+                min.x = min.x.min(vertex.pos.x);
+                min.y = min.y.min(vertex.pos.y);
+                min.z = min.z.min(vertex.pos.z);
+                max.x = max.x.max(vertex.pos.x);
+                max.y = max.y.max(vertex.pos.y);
+                max.z = max.z.max(vertex.pos.z);
+            }
+        }
+
+        if !has_vertices {
+            return None;
+        }
+
+        let center = Vector3::new(
+            (min.x + max.x) * 0.5,
+            (min.y + max.y) * 0.5,
+            (min.z + max.z) * 0.5,
+        );
+
+        crate::log!("Model bounds: min=({:.2}, {:.2}, {:.2}), max=({:.2}, {:.2}, {:.2}), center=({:.2}, {:.2}, {:.2})",
+            min.x, min.y, min.z, max.x, max.y, max.z, center.x, center.y, center.z);
+
+        Some((min, max, center))
     }
 
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
@@ -714,5 +1004,445 @@ impl RenderResources {
         }
         self.meshes.clear();
         self.mesh_material_ids.clear();
+    }
+
+    pub fn apply_morph_animation(&mut self, time: f32) -> Vec<usize> {
+        if self.morph_animation.is_empty() {
+            return Vec::new();
+        }
+
+        let animation_index = self.morph_animation.get_animation_index(time);
+        let mesh_count = self.morph_animation.targets.len().min(self.meshes.len());
+        let mut updated_mesh_indices = Vec::new();
+
+        for mesh_idx in 0..mesh_count {
+            let morph_targets = &self.morph_animation.targets[mesh_idx];
+            if morph_targets.is_empty() {
+                continue;
+            }
+
+            let base_vertices = &self.morph_animation.base_vertices[mesh_idx];
+            let vertices = &mut self.meshes[mesh_idx].vertex_data.vertices;
+
+            for (i, v) in vertices.iter_mut().enumerate() {
+                if i < base_vertices.len() {
+                    let base = base_vertices[i];
+                    v.pos.x = base[0];
+                    v.pos.y = base[1];
+                    v.pos.z = base[2];
+                }
+            }
+
+            let morph_animation = &self.morph_animation.animations[animation_index];
+            let scale_factor = self.morph_animation.scale_factor;
+            for (weight_idx, &weight) in morph_animation.weights.iter().enumerate() {
+                if weight_idx >= morph_targets.len() {
+                    break;
+                }
+                let morph_target = &morph_targets[weight_idx];
+                for (j, delta_pos) in morph_target.positions.iter().enumerate() {
+                    if j < vertices.len() {
+                        vertices[j].pos.x += delta_pos[0] * weight * scale_factor;
+                        vertices[j].pos.y += delta_pos[1] * weight * scale_factor;
+                        vertices[j].pos.z += delta_pos[2] * weight * scale_factor;
+                    }
+                }
+            }
+
+            updated_mesh_indices.push(mesh_idx);
+        }
+
+        updated_mesh_indices
+    }
+
+    pub unsafe fn update_morph_animation(
+        &mut self,
+        time: f32,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        command_pool: &RRCommandPool,
+        acceleration_structure: &mut Option<RRAccelerationStructure>,
+    ) -> anyhow::Result<()> {
+        let updated_indices = self.apply_morph_animation(time);
+        if updated_indices.is_empty() {
+            return Ok(());
+        }
+
+        for mesh_idx in &updated_indices {
+            let mesh = &mut self.meshes[*mesh_idx];
+            let vertices = &mesh.vertex_data.vertices;
+
+            mesh.vertex_buffer.update(
+                instance,
+                rrdevice,
+                command_pool,
+                (std::mem::size_of::<Vertex>() * vertices.len()) as vk::DeviceSize,
+                vertices.as_ptr() as *const c_void,
+                vertices.len(),
+            )?;
+
+            if let Some(ref mut accel_struct) = acceleration_structure {
+                if *mesh_idx < accel_struct.blas_list.len() {
+                    let blas = &accel_struct.blas_list[*mesh_idx];
+                    RRAccelerationStructure::update_blas(
+                        instance,
+                        rrdevice,
+                        command_pool,
+                        blas,
+                        &mesh.vertex_buffer.buffer,
+                        mesh.vertex_data.vertices.len() as u32,
+                        std::mem::size_of::<Vertex>() as u32,
+                        &mesh.index_buffer.buffer,
+                        mesh.vertex_data.indices.len() as u32,
+                    )?;
+                }
+            }
+        }
+
+        if let Some(ref mut accel_struct) = acceleration_structure {
+            let tlas = &accel_struct.tlas;
+            RRAccelerationStructure::update_tlas(
+                instance,
+                rrdevice,
+                command_pool,
+                tlas,
+                &accel_struct.blas_list,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn compute_node_global_transforms(&mut self) {
+        static mut TRANSFORM_LOG: u32 = 0;
+
+        if self.nodes.is_empty() {
+            return;
+        }
+
+        let mut matched_count = 0;
+        for skeleton in &self.animation.skeletons {
+            for bone in &skeleton.bones {
+                if let Some(node) = self.nodes.iter_mut().find(|n| n.name == bone.name) {
+                    unsafe {
+                        if TRANSFORM_LOG < 1 {
+                            let orig = node.local_transform;
+                            let anim = bone.local_transform;
+                            let orig_scale = (
+                                (orig[0][0] * orig[0][0]
+                                    + orig[0][1] * orig[0][1]
+                                    + orig[0][2] * orig[0][2])
+                                    .sqrt(),
+                                (orig[1][0] * orig[1][0]
+                                    + orig[1][1] * orig[1][1]
+                                    + orig[1][2] * orig[1][2])
+                                    .sqrt(),
+                                (orig[2][0] * orig[2][0]
+                                    + orig[2][1] * orig[2][1]
+                                    + orig[2][2] * orig[2][2])
+                                    .sqrt(),
+                            );
+                            let anim_scale = (
+                                (anim[0][0] * anim[0][0]
+                                    + anim[0][1] * anim[0][1]
+                                    + anim[0][2] * anim[0][2])
+                                    .sqrt(),
+                                (anim[1][0] * anim[1][0]
+                                    + anim[1][1] * anim[1][1]
+                                    + anim[1][2] * anim[1][2])
+                                    .sqrt(),
+                                (anim[2][0] * anim[2][0]
+                                    + anim[2][1] * anim[2][1]
+                                    + anim[2][2] * anim[2][2])
+                                    .sqrt(),
+                            );
+                            crate::log!(
+                                "  bone '{}' node[{}]: orig_t=[{:.2},{:.2},{:.2}] anim_t=[{:.2},{:.2},{:.2}]",
+                                bone.name, node.index,
+                                orig[3][0], orig[3][1], orig[3][2],
+                                anim[3][0], anim[3][1], anim[3][2]
+                            );
+                            crate::log!(
+                                "    orig_s=[{:.2},{:.2},{:.2}] anim_s=[{:.2},{:.2},{:.2}]",
+                                orig_scale.0,
+                                orig_scale.1,
+                                orig_scale.2,
+                                anim_scale.0,
+                                anim_scale.1,
+                                anim_scale.2
+                            );
+                        }
+                    }
+                    node.local_transform = bone.local_transform;
+                    matched_count += 1;
+                }
+            }
+        }
+
+        unsafe {
+            if TRANSFORM_LOG < 1 {
+                crate::log!(
+                    "compute_node_global_transforms: {} bones matched to {} nodes",
+                    matched_count,
+                    self.nodes.len()
+                );
+                crate::log!("=== Node Hierarchy (with transforms) ===");
+                for node in &self.nodes {
+                    let parent_name = node
+                        .parent_index
+                        .and_then(|pi| self.nodes.iter().find(|pn| pn.index == pi))
+                        .map(|pn| pn.name.as_str())
+                        .unwrap_or("(root)");
+                    let lt = node.local_transform;
+                    let scale = (
+                        (lt[0][0] * lt[0][0] + lt[0][1] * lt[0][1] + lt[0][2] * lt[0][2]).sqrt(),
+                        (lt[1][0] * lt[1][0] + lt[1][1] * lt[1][1] + lt[1][2] * lt[1][2]).sqrt(),
+                        (lt[2][0] * lt[2][0] + lt[2][1] * lt[2][1] + lt[2][2] * lt[2][2]).sqrt(),
+                    );
+                    if scale.0 > 1.01 || scale.1 > 1.01 || scale.2 > 1.01 {
+                        crate::log!(
+                            "  node[{}] '{}' SCALE=[{:.1},{:.1},{:.1}] parent='{}'",
+                            node.index,
+                            node.name,
+                            scale.0,
+                            scale.1,
+                            scale.2,
+                            parent_name
+                        );
+                    }
+                }
+                TRANSFORM_LOG += 1;
+            }
+        }
+
+        let node_count = self.nodes.len();
+
+        fn compute_global(
+            nodes: &[NodeData],
+            node_idx: usize,
+            computed: &mut [bool],
+            global_transforms: &mut [Matrix4<f32>],
+        ) -> Matrix4<f32> {
+            if computed[node_idx] {
+                return global_transforms[node_idx];
+            }
+
+            let local = nodes[node_idx].local_transform;
+            let global = if let Some(parent_idx) = nodes[node_idx].parent_index {
+                if let Some(parent_array_idx) = nodes.iter().position(|n| n.index == parent_idx) {
+                    let parent_global =
+                        compute_global(nodes, parent_array_idx, computed, global_transforms);
+                    parent_global * local
+                } else {
+                    local
+                }
+            } else {
+                local
+            };
+
+            global_transforms[node_idx] = global;
+            computed[node_idx] = true;
+            global
+        }
+
+        let mut computed = vec![false; node_count];
+        let mut global_transforms = vec![Matrix4::identity(); node_count];
+
+        for i in 0..node_count {
+            compute_global(&self.nodes, i, &mut computed, &mut global_transforms);
+        }
+
+        for (i, node) in self.nodes.iter_mut().enumerate() {
+            node.global_transform = global_transforms[i];
+        }
+    }
+
+    pub unsafe fn update_node_animation(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        command_pool: &RRCommandPool,
+        acceleration_structure: &mut Option<RRAccelerationStructure>,
+    ) -> anyhow::Result<Vec<usize>> {
+        static mut LOG_COUNT: u32 = 0;
+
+        self.compute_node_global_transforms();
+
+        let mut updated_mesh_indices = Vec::new();
+        let scale = self.node_animation_scale;
+
+        for (mesh_idx, mesh) in self.meshes.iter_mut().enumerate() {
+            if mesh.skin_data.is_some() || mesh.base_vertices.is_empty() {
+                continue;
+            }
+
+            let Some(node_idx) = mesh.node_index else {
+                continue;
+            };
+
+            let node_found = self.nodes.iter().find(|n| n.index == node_idx);
+            if LOG_COUNT < 1 {
+                if let Some(n) = &node_found {
+                    let parent_name = n
+                        .parent_index
+                        .and_then(|pi| self.nodes.iter().find(|pn| pn.index == pi))
+                        .map(|pn| pn.name.as_str())
+                        .unwrap_or("(none)");
+                    crate::log!(
+                        "update_node_anim: mesh[{}] node='{}' idx={}, parent='{}' (idx={:?})",
+                        mesh_idx,
+                        n.name,
+                        node_idx,
+                        parent_name,
+                        n.parent_index
+                    );
+                    crate::log!(
+                        "  local: diag=[{:.2},{:.2},{:.2}] trans=[{:.2},{:.2},{:.2}]",
+                        n.local_transform[0][0],
+                        n.local_transform[1][1],
+                        n.local_transform[2][2],
+                        n.local_transform[3][0],
+                        n.local_transform[3][1],
+                        n.local_transform[3][2]
+                    );
+                    crate::log!(
+                        "  global: diag=[{:.2},{:.2},{:.2}] trans=[{:.2},{:.2},{:.2}]",
+                        n.global_transform[0][0],
+                        n.global_transform[1][1],
+                        n.global_transform[2][2],
+                        n.global_transform[3][0],
+                        n.global_transform[3][1],
+                        n.global_transform[3][2]
+                    );
+                }
+            }
+
+            let Some(node) = node_found else {
+                continue;
+            };
+
+            let transform = node.global_transform;
+
+            if LOG_COUNT < 1 && mesh_idx == 2 {
+                crate::log!("=== mesh[2] global_transform chain ===");
+                let mut current_idx = Some(node_idx);
+                while let Some(idx) = current_idx {
+                    if let Some(n) = self.nodes.iter().find(|nn| nn.index == idx) {
+                        let s = (
+                            (n.global_transform[0][0].powi(2)
+                                + n.global_transform[0][1].powi(2)
+                                + n.global_transform[0][2].powi(2))
+                            .sqrt(),
+                            (n.global_transform[1][0].powi(2)
+                                + n.global_transform[1][1].powi(2)
+                                + n.global_transform[1][2].powi(2))
+                            .sqrt(),
+                            (n.global_transform[2][0].powi(2)
+                                + n.global_transform[2][1].powi(2)
+                                + n.global_transform[2][2].powi(2))
+                            .sqrt(),
+                        );
+                        crate::log!(
+                            "  {} (idx={}) global_scale=[{:.1},{:.1},{:.1}] trans=[{:.1},{:.1},{:.1}]",
+                            n.name, n.index, s.0, s.1, s.2,
+                            n.global_transform[3][0], n.global_transform[3][1], n.global_transform[3][2]
+                        );
+                        current_idx = n.parent_index;
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            if LOG_COUNT < 1 && !mesh.base_vertices.is_empty() {
+                let base = &mesh.base_vertices[0];
+                let orig = &mesh.vertex_data.vertices[0];
+                crate::log!(
+                    "  base_v[0]=({:.2},{:.2},{:.2}), orig_v[0]=({:.2},{:.2},{:.2})",
+                    base.pos.x,
+                    base.pos.y,
+                    base.pos.z,
+                    orig.pos.x,
+                    orig.pos.y,
+                    orig.pos.z
+                );
+            }
+
+            for (i, v) in mesh.vertex_data.vertices.iter_mut().enumerate() {
+                if i < mesh.base_vertices.len() {
+                    let base = &mesh.base_vertices[i];
+                    let pos = transform * Vector4::new(base.pos.x, base.pos.y, base.pos.z, 1.0);
+                    v.pos.x = pos.x * scale;
+                    v.pos.y = pos.y * scale;
+                    v.pos.z = pos.z * scale;
+                }
+            }
+
+            if LOG_COUNT < 1 && !mesh.vertex_data.vertices.is_empty() {
+                let v = &mesh.vertex_data.vertices[0];
+                crate::log!(
+                    "  after transform: v[0]=({:.2},{:.2},{:.2})",
+                    v.pos.x,
+                    v.pos.y,
+                    v.pos.z
+                );
+            }
+
+            updated_mesh_indices.push(mesh_idx);
+        }
+
+        for mesh_idx in &updated_mesh_indices {
+            let mesh = &mut self.meshes[*mesh_idx];
+            let vertices = &mesh.vertex_data.vertices;
+
+            mesh.vertex_buffer.update(
+                instance,
+                rrdevice,
+                command_pool,
+                (std::mem::size_of::<Vertex>() * vertices.len()) as vk::DeviceSize,
+                vertices.as_ptr() as *const c_void,
+                vertices.len(),
+            )?;
+
+            if let Some(ref mut accel_struct) = acceleration_structure {
+                if *mesh_idx < accel_struct.blas_list.len() {
+                    let blas = &accel_struct.blas_list[*mesh_idx];
+                    RRAccelerationStructure::update_blas(
+                        instance,
+                        rrdevice,
+                        command_pool,
+                        blas,
+                        &mesh.vertex_buffer.buffer,
+                        mesh.vertex_data.vertices.len() as u32,
+                        std::mem::size_of::<Vertex>() as u32,
+                        &mesh.index_buffer.buffer,
+                        mesh.vertex_data.indices.len() as u32,
+                    )?;
+                }
+            }
+        }
+
+        if !updated_mesh_indices.is_empty() {
+            if let Some(ref mut accel_struct) = acceleration_structure {
+                let tlas = &accel_struct.tlas;
+                RRAccelerationStructure::update_tlas(
+                    instance,
+                    rrdevice,
+                    command_pool,
+                    tlas,
+                    &accel_struct.blas_list,
+                )?;
+            }
+        }
+
+        if LOG_COUNT < 1 {
+            crate::log!(
+                "update_node_anim: updated {} meshes",
+                updated_mesh_indices.len()
+            );
+            LOG_COUNT += 1;
+        }
+
+        Ok(updated_mesh_indices)
     }
 }

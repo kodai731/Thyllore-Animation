@@ -43,6 +43,11 @@ impl App {
             gui_data.file_changed = false;
         }
 
+        if gui_data.dump_debug_info {
+            self.dump_debug_info();
+            gui_data.dump_debug_info = false;
+        }
+
         // Acquire an image from the swapchain
         // Execute the command buffer with that image as attachment in the framebuffer
         // Return the image to the swapchain for presentation
@@ -75,120 +80,7 @@ impl App {
         }
 
         self.data.images_in_flight[image_index as usize] = self.data.in_flight_fences[self.frame];
-
-        // FBXアニメーション更新
-        if self.data.fbx_model.animation_count() > 0 {
-            if !self.data.animation_playing {
-                // アニメーションが一時停止中の場合のみ、最初のフレームでログを出力
-                static mut LOGGED_PAUSED: bool = false;
-                unsafe {
-                    if !LOGGED_PAUSED {
-                        crate::log!("FBX animation is paused (animation_playing=false)");
-                        LOGGED_PAUSED = true;
-                    }
-                }
-            } else {
-                // 経過時間を取得
-                let elapsed = self.start.elapsed().as_secs_f32();
-
-                // アニメーション時間を更新
-                if let Some(duration) = self
-                    .data
-                    .fbx_model
-                    .get_animation_duration(self.data.current_animation_index)
-                {
-                    // Static pose (duration == 0) or animated
-                    if duration > 0.0 {
-                        // ループ再生（アニメーション）
-                        let prev_time = self.data.animation_time;
-                        self.data.animation_time = elapsed % duration;
-
-                        // Log every 10 frames for debugging (avoid log spam)
-                        static mut FRAME_COUNT: u32 = 0;
-                        unsafe {
-                            FRAME_COUNT += 1;
-                            if FRAME_COUNT % 10 == 0 {
-                                crate::log!("Updating FBX animation: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
-                                     self.data.animation_time, duration, elapsed, prev_time);
-                            }
-                        }
-
-                        // アニメーションを適用
-                        self.data.fbx_model.update_animation(
-                            self.data.current_animation_index,
-                            self.data.animation_time,
-                        );
-
-                        // 頂点バッファを更新
-                        Self::update_fbx_vertex_buffer(
-                            &self.instance,
-                            &self.rrdevice,
-                            &mut self.data,
-                        )?;
-
-                        // Acceleration Structureを更新（アニメーション後の頂点座標で）
-                        Self::update_acceleration_structures(
-                            &self.instance,
-                            &self.rrdevice,
-                            &mut self.data,
-                        )?;
-                    } else {
-                        // Static pose (duration == 0): keep time at 0, no need to update every frame
-                        // Initial pose was already applied in load_model_from_path
-                        static mut LOGGED_STATIC: bool = false;
-                        unsafe {
-                            if !LOGGED_STATIC {
-                                crate::log!("FBX animation has duration=0 (static pose)");
-                                LOGGED_STATIC = true;
-                            }
-                        }
-                    }
-                } else {
-                    static mut LOGGED_NO_DURATION: bool = false;
-                    unsafe {
-                        if !LOGGED_NO_DURATION {
-                            crate::log!("FBX animation has no duration (get_animation_duration returned None)");
-                            LOGGED_NO_DURATION = true;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Apply animation for glTF models (skeletal or node animation)
-        if !self.data.gltf_model.gltf_data.is_empty() {
-            let time = self.start.elapsed().as_secs_f32();
-
-            // Log every 60 frames (approximately 1 second at 60fps)
-            static mut FRAME_COUNT: u32 = 0;
-            unsafe {
-                FRAME_COUNT += 1;
-                if FRAME_COUNT % 60 == 0 {
-                    if self.data.gltf_model.has_skinned_meshes {
-                        crate::log!("Updating glTF skeletal animation: time={:.4}s, joint_animations={}, gltf_data={}",
-                             time, self.data.gltf_model.joint_animations.len(), self.data.gltf_model.gltf_data.len());
-                    } else {
-                        crate::log!("Updating glTF node animation: time={:.4}s, node_animations={}, gltf_data={}",
-                             time, self.data.gltf_model.node_animations.len(), self.data.gltf_model.gltf_data.len());
-                    }
-                }
-            }
-
-            if self.data.gltf_model.has_skinned_meshes {
-                // Skeletal animation: use joint transforms with weights
-                self.data.gltf_model.reset_vertices_animation_position(time);
-                self.data
-                    .gltf_model
-                    .apply_animation(time, 0, Matrix4::identity());
-            } else {
-                // Node animation: transform nodes and propagate to children
-                self.data.gltf_model.reset_vertices_animation_position(time);
-            }
-
-            Self::update_vertex_buffer(&self.instance, &self.rrdevice, &mut self.data)?;
-
-            Self::update_acceleration_structures(&self.instance, &self.rrdevice, &mut self.data)?;
-        }
+        
 
         self.update_uniform_buffer(
             image_index,
@@ -598,8 +490,31 @@ impl App {
     }
 
     unsafe fn render_models(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
-        for i in 0..self.data.render_resources.meshes.len() {
+        static mut RENDER_LOG_COUNTER: u32 = 0;
+        static mut PREV_MESH_COUNT: usize = 0;
+
+        let mesh_count = self.data.render_resources.meshes.len();
+        let mesh_count_changed = mesh_count != PREV_MESH_COUNT;
+        if mesh_count_changed {
+            RENDER_LOG_COUNTER = 0;
+            PREV_MESH_COUNT = mesh_count;
+        }
+
+        RENDER_LOG_COUNTER += 1;
+        let should_log = RENDER_LOG_COUNTER <= 3;
+
+        if should_log {
+            crate::log!("=== render_models: {} meshes ===", mesh_count);
+        }
+
+        for i in 0..mesh_count {
             let mesh = &self.data.render_resources.meshes[i];
+
+            if should_log {
+                crate::log!("  Mesh[{}]: vertex_buffer={:?}, indices={}, vertices={}",
+                    i, mesh.vertex_buffer.buffer,
+                    mesh.index_buffer.indices, mesh.vertex_data.vertices.len());
+            }
 
             self.rrdevice.device.cmd_bind_pipeline(
                 command_buffer,

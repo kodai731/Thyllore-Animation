@@ -2,820 +2,60 @@
 reference from bevy_mod_fbx, FizzWizZleDazzle
 https://github.com/FizzWizZleDazzle/bevy_mod_fbx/blob/main/src/loader.rs#L217
  */
+use crate::debugview::FBX_DEBUG;
 use crate::log;
 use crate::math::*;
 use anyhow::{anyhow, Context, Result};
-use cgmath::{Matrix3, Matrix4, Quaternion, Rad, EuclideanSpace, Point3};
+use cgmath::Vector3;
+use cgmath::{EuclideanSpace, Matrix3, Matrix4, Point3, Quaternion, Rad};
 use fbxcel_dom::any::AnyDocument;
 use fbxcel_dom::v7400::data::mesh::{ControlPointIndex, PolygonVertexIndex, PolygonVertices};
-use fbxcel_dom::v7400::object::property::loaders::{StrictF64Loader, F64Arr3Loader, F64Arr16Loader};
+use fbxcel_dom::v7400::object::property::loaders::{
+    F64Arr16Loader, F64Arr3Loader, StrictF64Loader,
+};
 use fbxcel_dom::v7400::{
     object::{
+        deformer::{ClusterHandle, TypedDeformerHandle},
         model::{ModelHandle, TypedModelHandle},
         ObjectHandle, TypedObjectHandle,
-        deformer::{ClusterHandle, TypedDeformerHandle},
     },
     Document,
 };
-use std::collections::HashMap;
 use russimp::scene::{PostProcess, Scene};
-use cgmath::Vector3;
+use std::collections::HashMap;
 
-/// Get local transform matrix from FBX model node
-fn get_local_transform(model: &ModelHandle) -> Matrix4<f32> {
-    let mesh_name = model.name().unwrap_or("");
-
-    // Get transform properties from FBX file
-    let model_obj: &ObjectHandle = &**model;
-    let props = model_obj.properties_by_native_typename("FbxNode");
-
-    // Helper function to extract Vec3 from property
-    let get_vec3 = |name: &str, default: [f32; 3]| -> [f32; 3] {
-        if let Some(prop) = props.get_property(name) {
-            if let Ok(values) = prop.load_value(F64Arr3Loader) {
-                return [values[0] as f32, values[1] as f32, values[2] as f32];
-            }
-        }
-        default
-    };
-
-    let translation = get_vec3("Lcl Translation", [0.0, 0.0, 0.0]);
-    let rotation = get_vec3("Lcl Rotation", [0.0, 0.0, 0.0]);
-    let scaling = get_vec3("Lcl Scaling", [1.0, 1.0, 1.0]);
-    let pre_rotation = get_vec3("PreRotation", [0.0, 0.0, 0.0]);
-    let post_rotation = get_vec3("PostRotation", [0.0, 0.0, 0.0]);
-    let geometric_translation = get_vec3("GeometricTranslation", [0.0, 0.0, 0.0]);
-    let geometric_rotation = get_vec3("GeometricRotation", [0.0, 0.0, 0.0]);
-    let geometric_scaling = get_vec3("GeometricScaling", [1.0, 1.0, 1.0]);
-
-    // Read RotationOrder (0: XYZ, 1: XZY, 2: YZX, 3: YXZ, 4: ZXY, 5: ZYX)
-    let rotation_order = if let Some(prop) = props.get_property("RotationOrder") {
-        prop.load_value(StrictF64Loader).ok().map(|v| v as i32).unwrap_or(0)
-    } else {
-        0 // Default to XYZ
-    };
-
-    log!(
-        "Mesh: {}, Local transform - Translation: {:?}, Rotation (deg): {:?}, Scaling: {:?}, RotationOrder: {}",
-        mesh_name,
-        translation,
-        rotation,
-        scaling,
-        rotation_order
-    );
-
-    // Log additional properties for all meshes (useful for debugging)
-    log!("  {} additional properties:", mesh_name);
-    log!("    PreRotation: {:?}", pre_rotation);
-    log!("    PostRotation: {:?}", post_rotation);
-    log!("    GeometricTranslation: {:?}", geometric_translation);
-    log!("    GeometricRotation: {:?}", geometric_rotation);
-    log!("    GeometricScaling: {:?}", geometric_scaling);
-
-    // Optional: Test rotation patterns for debugging coordinate system issues
-    // This can be enabled/disabled via environment variable or removed entirely
-    if std::env::var("FBX_DEBUG_ROTATION").is_ok() {
-        log!("  DEBUG: Testing rotation patterns for {}:", mesh_name);
-        log!("    FBX Rotation: {:?}", rotation);
-
-        // Test coordinate system conversion
-        // FBX might have Z-up to Y-up conversion baked in
-        // Try converting rotation from Z-up to Y-up (or vice versa)
-
-        // Pattern 1: Direct use of FBX rotation
-        let rx1 = Matrix4::from_angle_x(Rad((rotation[0] as f32).to_radians()));
-        let ry1 = Matrix4::from_angle_y(Rad((rotation[1] as f32).to_radians()));
-        let rz1 = Matrix4::from_angle_z(Rad((rotation[2] as f32).to_radians()));
-        let s = Matrix4::from_nonuniform_scale(scaling[0], scaling[1], scaling[2]);
-        let mat1 = rx1 * ry1 * rz1 * s;
-        log!("    Pattern 1 (X*Y*Z): [{:?}, {:?}, {:?}]", mat1.x, mat1.y, mat1.z);
-
-        // Pattern 2: Negate Y rotation (convert between coordinate systems)
-        let rx2 = Matrix4::from_angle_x(Rad((rotation[0] as f32).to_radians()));
-        let ry2 = Matrix4::from_angle_y(Rad((-rotation[1] as f32).to_radians()));
-        let rz2 = Matrix4::from_angle_z(Rad((rotation[2] as f32).to_radians()));
-        let mat2 = rx2 * ry2 * rz2 * s;
-        log!("    Pattern 2 (X*-Y*Z): [{:?}, {:?}, {:?}]", mat2.x, mat2.y, mat2.z);
-
-        // Pattern 3: Negate Z rotation
-        let rx3 = Matrix4::from_angle_x(Rad((rotation[0] as f32).to_radians()));
-        let ry3 = Matrix4::from_angle_y(Rad((rotation[1] as f32).to_radians()));
-        let rz3 = Matrix4::from_angle_z(Rad((-rotation[2] as f32).to_radians()));
-        let mat3 = rx3 * ry3 * rz3 * s;
-        log!("    Pattern 3 (X*Y*-Z): [{:?}, {:?}, {:?}]", mat3.x, mat3.y, mat3.z);
-
-        // Pattern 4: Swap Y and Z components
-        let converted_rot = [rotation[0], rotation[2], rotation[1]]; // Swap Y and Z
-        let rx4 = Matrix4::from_angle_x(Rad((converted_rot[0] as f32).to_radians()));
-        let ry4 = Matrix4::from_angle_y(Rad((converted_rot[1] as f32).to_radians()));
-        let rz4 = Matrix4::from_angle_z(Rad((converted_rot[2] as f32).to_radians()));
-        let mat4 = rx4 * ry4 * rz4 * s;
-        log!("    Pattern 4 (Swap Y<->Z): [{:?}, {:?}, {:?}]", mat4.x, mat4.y, mat4.z);
-
-        // Pattern 5: Apply Z-up to Y-up coordinate conversion AFTER rotation
-        // Conversion matrix: swap Y and Z, negate new Z
-        let mat1_copy = mat1.clone();
-        let zup_to_yup = Matrix4::new(
-            1.0, 0.0, 0.0, 0.0,
-            0.0, 0.0, 1.0, 0.0,
-            0.0, -1.0, 0.0, 0.0,
-            0.0, 0.0, 0.0, 1.0,
+fn debug_transform(name: &str, label: &str, transform: &Matrix4<f32>) {
+    if FBX_DEBUG.transform_enabled() {
+        log!(
+            "DEBUG[Transform] {} - {}: [{:.3},{:.3},{:.3},{:.3}]",
+            name,
+            label,
+            transform[3][0],
+            transform[3][1],
+            transform[3][2],
+            transform[3][3]
         );
-        let mat5 = zup_to_yup * mat1_copy;
-        log!("    Pattern 5 (Z-up->Y-up * X*Y*Z): [{:?}, {:?}, {:?}]", mat5.x, mat5.y, mat5.z);
-
-        // Pattern 6: Apply Z-up to Y-up coordinate conversion BEFORE rotation
-        let mat6 = mat1_copy * zup_to_yup;
-        log!("    Pattern 6 (X*Y*Z * Z-up->Y-up): [{:?}, {:?}, {:?}]", mat6.x, mat6.y, mat6.z);
-
-        // Pattern 7: Z-up to Y-up with X negation
-        let zup_to_yup_negx = Matrix4::new(
-            -1.0, 0.0, 0.0, 0.0,
-            0.0, 0.0, 1.0, 0.0,
-            0.0, -1.0, 0.0, 0.0,
-            0.0, 0.0, 0.0, 1.0,
-        );
-        let mat7 = zup_to_yup_negx * mat1_copy;
-        log!("    Pattern 7 (Z-up->Y-up with -X): [{:?}, {:?}, {:?}]", mat7.x, mat7.y, mat7.z);
-
-        // Pattern 8: Different Z-up to Y-up conversion
-        let zup_to_yup_alt = Matrix4::new(
-            1.0, 0.0, 0.0, 0.0,
-            0.0, 0.0, -1.0, 0.0,
-            0.0, 1.0, 0.0, 0.0,
-            0.0, 0.0, 0.0, 1.0,
-        );
-        let mat8 = zup_to_yup_alt * mat1_copy;
-        log!("    Pattern 8 (Alt Z-up->Y-up): [{:?}, {:?}, {:?}]", mat8.x, mat8.y, mat8.z);
-
-        // Pattern 9: Correct Z*Y*X rotation order (what we now use)
-        let mat9 = rz1 * ry1 * rx1 * s;
-        log!("    Pattern 9 (Z*Y*X): [{:?}, {:?}, {:?}]", mat9.x, mat9.y, mat9.z);
-
-        // Pattern 10: Z*Y*X with Z-up to Y-up conversion
-        let mat10_conv = zup_to_yup * mat9;
-        log!("    Pattern 10 (Z-up->Y-up * Z*Y*X): [{:?}, {:?}, {:?}]", mat10_conv.x, mat10_conv.y, mat10_conv.z);
-
-        // Pattern 11-16: More systematic testing
-        // Blender col0=[0, 0, -37.549], col1=[-37.549, 0, 0], col2=[0, 37.549, 0]
-        // Pattern 9 col0=[~0, ~0, 37.549], col1=[-37.549, ~0, ~0], col2=[0, -37.549, ~0]
-        // Need to negate Z component of col0 and Y component of col2
-
-        let test_matrices = [
-            ("Rot 180° around Y", Matrix4::new(-1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
-            ("Rot 90° around X", Matrix4::new(1.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
-            ("Rot -90° around X", Matrix4::new(1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
-            ("Rot 90° around Z", Matrix4::new(0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
-            ("Rot -90° around Z", Matrix4::new(0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
-            ("Negate X and Z", Matrix4::new(-1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0)),
-        ];
-        for (idx, (name, test_mat)) in test_matrices.iter().enumerate() {
-            let result = *test_mat * mat9;
-            log!("    Pattern {} ({}): [{:?}, {:?}, {:?}]", 11 + idx, name, result.x, result.y, result.z);
-        }
-
-        log!("    Note: Compare with expected values from your 3D editor");
-    }
-
-    // Build transform matrix: T * R * S
-    let translation_matrix = Matrix4::from_translation(vec3(
-        translation[0],
-        translation[1],
-        translation[2],
-    ));
-
-    // FBX rotation is in degrees, convert to radians
-    let rotation_x = Matrix4::from_angle_x(Rad((rotation[0] as f32).to_radians()));
-    let rotation_y = Matrix4::from_angle_y(Rad((rotation[1] as f32).to_radians()));
-    let rotation_z = Matrix4::from_angle_z(Rad((rotation[2] as f32).to_radians()));
-
-    // Apply rotation in the order specified by RotationOrder
-    // FBX RotationOrder specifies Euler angle application order
-    // Matrix multiplication is in REVERSE order of angle application
-    // 0: XYZ (angles) -> Z*Y*X (matrices), 1: XZY -> Y*Z*X, 2: YZX -> X*Z*Y, etc.
-    let rotation_matrix = match rotation_order {
-        0 => rotation_z * rotation_y * rotation_x, // XYZ angles -> Z*Y*X matrices
-        1 => rotation_y * rotation_z * rotation_x, // XZY angles -> Y*Z*X matrices
-        2 => rotation_x * rotation_z * rotation_y, // YZX angles -> X*Z*Y matrices
-        3 => rotation_z * rotation_x * rotation_y, // YXZ angles -> Z*X*Y matrices
-        4 => rotation_y * rotation_x * rotation_z, // ZXY angles -> Y*X*Z matrices
-        5 => rotation_x * rotation_y * rotation_z, // ZYX angles -> X*Y*Z matrices
-        _ => rotation_z * rotation_y * rotation_x, // Default to XYZ
-    };
-
-    // Apply PreRotation and PostRotation
-    // FBX transform: T * Rpre * R * Rpost * S
-    let pre_rot_x = Matrix4::from_angle_x(Rad((pre_rotation[0] as f32).to_radians()));
-    let pre_rot_y = Matrix4::from_angle_y(Rad((pre_rotation[1] as f32).to_radians()));
-    let pre_rot_z = Matrix4::from_angle_z(Rad((pre_rotation[2] as f32).to_radians()));
-    let pre_rotation_matrix = pre_rot_z * pre_rot_y * pre_rot_x;
-
-    let post_rot_x = Matrix4::from_angle_x(Rad((post_rotation[0] as f32).to_radians()));
-    let post_rot_y = Matrix4::from_angle_y(Rad((post_rotation[1] as f32).to_radians()));
-    let post_rot_z = Matrix4::from_angle_z(Rad((post_rotation[2] as f32).to_radians()));
-    let post_rotation_matrix = post_rot_z * post_rot_y * post_rot_x;
-
-    let scale_matrix = Matrix4::from_nonuniform_scale(
-        scaling[0],
-        scaling[1],
-        scaling[2],
-    );
-
-    translation_matrix * pre_rotation_matrix * rotation_matrix * post_rotation_matrix * scale_matrix
-}
-
-/// メッシュの親ボーンを探す
-fn find_parent_bone(mesh: &ModelHandle, _doc: &Document) -> Option<String> {
-    let mesh_obj: &ObjectHandle = &**mesh;
-
-    // 親オブジェクトを探す
-    for conn in mesh_obj.destination_objects() {
-        if let Some(parent_obj) = conn.object_handle() {
-            // 親がModelの場合
-            if parent_obj.class() == "Model" {
-                let subclass = parent_obj.node().attributes()
-                    .get(2)
-                    .and_then(|attr| attr.get_string_or_type().ok())
-                    .unwrap_or("");
-
-                // LimbNodeまたはNullはボーン
-                if subclass == "LimbNode" || subclass == "Null" {
-                    if let Some(bone_name) = parent_obj.name() {
-                        return Some(bone_name.to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    None
-}
-
-/// 親ボーンに対するメッシュの相対変換を計算
-fn calculate_mesh_local_transform(
-    mesh: &ModelHandle,
-    parent_bone_name: &str,
-    doc: &Document,
-) -> Matrix4<f32> {
-    // メッシュのワールド変換を取得
-    let mesh_world = get_world_transform(mesh, doc);
-
-    // 親ボーンを探す
-    for object in doc.objects() {
-        if let Some(name) = object.name() {
-            if name == parent_bone_name && object.class() == "Model" {
-                if let TypedObjectHandle::Model(model) = object.get_typed() {
-                    // 親ボーンのワールド変換を取得
-                    let bone_world = get_world_transform(&model, doc);
-
-                    // 相対変換 = inverse(親ボーンワールド) × メッシュワールド
-                    if let Some(bone_world_inv) = bone_world.invert() {
-                        return bone_world_inv * mesh_world;
-                    }
-                }
-            }
-        }
-    }
-
-    // 親ボーンが見つからない場合は単位行列
-    mesh_world
-}
-
-/// Find a transform-bearing parent by skipping AnimCurve/AnimCurveNode objects
-/// Returns the first parent that is a Model node (Mesh, Null, LimbNode, etc.)
-fn find_transform_bearing_parent<'a>(obj: &ObjectHandle<'a>, doc: &'a Document) -> Option<ObjectHandle<'a>> {
-    for conn in obj.destination_objects() {
-        if let Some(parent_obj) = conn.object_handle() {
-            let parent_class = parent_obj.class();
-
-            // Skip materials and Geometry (Geometry doesn't have transforms)
-            if parent_class == "Material" || parent_class == "Geometry" {
-                continue;
-            }
-
-            // If parent is AnimCurve/AnimCurveNode, recursively search its parents
-            if parent_class == "AnimCurve" || parent_class == "AnimCurveNode" {
-                if let Some(transform_parent) = find_transform_bearing_parent(&parent_obj, doc) {
-                    return Some(transform_parent);
-                }
-                continue;
-            }
-
-            // Check if this is a Model node (which can have transforms)
-            if let TypedObjectHandle::Model(_) = parent_obj.get_typed() {
-                return Some(parent_obj);
-            }
-
-            // For other object types, try to check if they have transform properties
-            // by checking if they have FbxNode properties
-            let props = parent_obj.properties_by_native_typename("FbxNode");
-            if props.get_property("Lcl Translation").is_some()
-                || props.get_property("Lcl Rotation").is_some()
-                || props.get_property("Lcl Scaling").is_some() {
-                // This object has transform properties
-                return Some(parent_obj);
-            }
-
-            // If this object doesn't have transforms, recursively search its parents
-            if let Some(transform_parent) = find_transform_bearing_parent(&parent_obj, doc) {
-                return Some(transform_parent);
-            }
-        }
-    }
-
-    None
-}
-
-/// Get world transform matrix by traversing parent hierarchy
-fn get_world_transform(model: &ModelHandle, doc: &Document) -> Matrix4<f32> {
-    let mesh_name = model.name().unwrap_or("");
-
-    // Get local transform first
-    let local_transform = get_local_transform(model);
-
-    // Try to find parent model in the hierarchy
-    let model_obj: &ObjectHandle = &**model;
-
-    // Check if this mesh is a child of another mesh/model
-    // In FBX, destination_objects() returns objects that this object connects TO (parents)
-    for conn in model_obj.destination_objects() {
-        if let Some(parent_obj) = conn.object_handle() {
-            let parent_name = parent_obj.name().unwrap_or("<no name>");
-            let parent_class = parent_obj.class();
-
-            // Skip materials and Geometry (Geometry doesn't have transforms)
-            if parent_class == "Material" || parent_class == "Geometry" {
-                continue;
-            }
-
-            // For AnimCurve/AnimCurveNode, skip to their parent
-            if parent_class == "AnimCurve" || parent_class == "AnimCurveNode" {
-                log!("  Mesh {} has AnimCurve/AnimCurveNode parent, searching for transform parent...", mesh_name);
-                // Recursively search for a transform-bearing parent
-                if let Some(transform_parent) = find_transform_bearing_parent(&parent_obj, doc) {
-                    log!("    Found transform parent through AnimCurve chain");
-                    let parent_world = get_world_transform_for_object(&transform_parent, doc);
-                    let world_transform = parent_world * local_transform;
-                    return world_transform;
-                } else {
-                    // No transform parent found through this AnimCurve, continue to next connection
-                    continue;
-                }
-            }
-
-            // Check if parent is a Model node
-            if let TypedObjectHandle::Model(parent_model_typed) = parent_obj.get_typed() {
-                // For mesh parents, use their transform
-                match parent_model_typed {
-                    TypedModelHandle::Mesh(parent_mesh) => {
-                        log!("  Mesh {} has parent mesh: {}", mesh_name, parent_name);
-
-                        // Recursively get parent's world transform
-                        let parent_world = get_world_transform(&parent_mesh, doc);
-
-                        // Combine: parent_world * local_transform
-                        let world_transform = parent_world * local_transform;
-                        return world_transform;
-                    }
-                    TypedModelHandle::Null(_) | TypedModelHandle::LimbNode(_) => {
-                        log!("  Mesh {} has parent node: {}", mesh_name, parent_name);
-
-                        // Get parent transform
-                        let parent_world = get_world_transform_for_object(&parent_obj, doc);
-
-                        // Combine: parent_world * local_transform
-                        let world_transform = parent_world * local_transform;
-                        return world_transform;
-                    }
-                    _ => {}
-                }
-            } else {
-                // Parent is not a Model type, but might still have transform properties
-                log!("  Mesh {} has non-model parent: {} (class: {})", mesh_name, parent_name, parent_class);
-
-                // Try to get transform from any object type
-                let parent_world = get_object_transform(&parent_obj, doc);
-                if parent_world != Matrix4::identity() {
-                    log!("    Applied non-model parent transform");
-                    let world_transform = parent_world * local_transform;
-                    return world_transform;
-                }
-            }
-        }
-    }
-
-    log!("  No parent for {}, using local as world", mesh_name);
-
-    use crate::math::coordinate_system::fbx_to_world;
-    log!("  Applying FBX Z-up to World Y-up conversion to root mesh {}", mesh_name);
-    fbx_to_world() * local_transform
-}
-
-/// Helper function to get world transform for any ObjectHandle
-fn get_world_transform_for_object(obj: &ObjectHandle, doc: &Document) -> Matrix4<f32> {
-    if let TypedObjectHandle::Model(model_typed) = obj.get_typed() {
-        match model_typed {
-            TypedModelHandle::Mesh(mesh_model) => {
-                get_world_transform(&mesh_model, doc)
-            }
-            TypedModelHandle::Null(null_model) => {
-                get_world_transform(&null_model, doc)
-            }
-            TypedModelHandle::LimbNode(limb_model) => {
-                get_world_transform(&limb_model, doc)
-            }
-            _ => {
-                // For other model types, use identity transform
-                Matrix4::from_scale(1.0)
-            }
-        }
-    } else {
-        Matrix4::from_scale(1.0)
     }
 }
 
-/// Get transform from any object type by reading properties directly
-fn get_object_transform(obj: &ObjectHandle, doc: &Document) -> Matrix4<f32> {
-    // Try to read transform properties from any object type
-    let props = obj.properties_by_native_typename("FbxNode");
-
-    // Helper function to extract Vec3 from property
-    let get_vec3 = |name: &str, default: [f32; 3]| -> [f32; 3] {
-        if let Some(prop) = props.get_property(name) {
-            if let Ok(values) = prop.load_value(F64Arr3Loader) {
-                return [values[0] as f32, values[1] as f32, values[2] as f32];
-            }
-        }
-        default
-    };
-
-    let translation = get_vec3("Lcl Translation", [0.0, 0.0, 0.0]);
-    let rotation = get_vec3("Lcl Rotation", [0.0, 0.0, 0.0]);
-    let scaling = get_vec3("Lcl Scaling", [1.0, 1.0, 1.0]);
-
-    // Read RotationOrder (0: XYZ, 1: XZY, 2: YZX, 3: YXZ, 4: ZXY, 5: ZYX)
-    let rotation_order = if let Some(prop) = props.get_property("RotationOrder") {
-        prop.load_value(StrictF64Loader).ok().map(|v| v as i32).unwrap_or(0)
-    } else {
-        0 // Default to XYZ
-    };
-
-    // Build local transform
-    let translation_matrix = Matrix4::from_translation(vec3(
-        translation[0],
-        translation[1],
-        translation[2],
-    ));
-
-    let rotation_x = Matrix4::from_angle_x(Rad((rotation[0] as f32).to_radians()));
-    let rotation_y = Matrix4::from_angle_y(Rad((rotation[1] as f32).to_radians()));
-    let rotation_z = Matrix4::from_angle_z(Rad((rotation[2] as f32).to_radians()));
-
-    // Apply rotation in the order specified by RotationOrder
-    // Note: Trying reversed order to match Blender's output
-    let rotation_matrix = match rotation_order {
-        0 => rotation_x * rotation_y * rotation_z, // XYZ (reversed from Z*Y*X)
-        1 => rotation_x * rotation_z * rotation_y, // XZY
-        2 => rotation_y * rotation_z * rotation_x, // YZX
-        3 => rotation_y * rotation_x * rotation_z, // YXZ
-        4 => rotation_z * rotation_x * rotation_y, // ZXY
-        5 => rotation_z * rotation_y * rotation_x, // ZYX
-        _ => rotation_x * rotation_y * rotation_z, // Default to XYZ (reversed)
-    };
-
-    let scale_matrix = Matrix4::from_nonuniform_scale(
-        scaling[0],
-        scaling[1],
-        scaling[2],
-    );
-
-    let local_transform = translation_matrix * rotation_matrix * scale_matrix;
-
-    // Check for parent and recursively get parent transform
-    for conn in obj.destination_objects() {
-        if let Some(parent_obj) = conn.object_handle() {
-            let parent_class = parent_obj.class();
-
-            // Skip materials and Geometry (Geometry doesn't have transforms)
-            if parent_class == "Material" || parent_class == "Geometry" {
-                continue;
-            }
-
-            // For AnimCurve/AnimCurveNode, skip to their parent
-            if parent_class == "AnimCurve" || parent_class == "AnimCurveNode" {
-                // Recursively search for a transform-bearing parent
-                if let Some(transform_parent) = find_transform_bearing_parent(&parent_obj, doc) {
-                    let parent_world = get_object_transform(&transform_parent, doc);
-                    return parent_world * local_transform;
-                } else {
-                    // No transform parent found through this AnimCurve, continue to next connection
-                    continue;
-                }
-            }
-
-            // Get parent transform recursively
-            let parent_world = get_object_transform(&parent_obj, doc);
-            return parent_world * local_transform;
-        }
+fn debug_animation(msg: &str) {
+    if FBX_DEBUG.animation_enabled() {
+        log!("DEBUG[Animation] {}", msg);
     }
-
-    // No parent, return local transform
-    local_transform
 }
 
-pub unsafe fn load_fbx(path: &str) -> anyhow::Result<(FbxModel)> {
-    let file = std::fs::File::open(path)?;
-    let reader = std::io::BufReader::new(file);
-    let mut fbx_model = FbxModel::default();
-
-    log!("=== Loading FBX file: {} ===", path);
-
-    // 各メッシュごとにFbxDataを作成するため、ここでは初期化しない
-    let doc = AnyDocument::from_reader(reader)
-        .context(format!("Failed to parse FBX file: {}. This may be due to NodeLengthMismatch or other parsing errors.", path))?;
-
-    match doc {
-        AnyDocument::V7400(fbx_ver, doc) => {
-            // TODO: Read GlobalSettings to detect coordinate system conversion
-            // Currently, we assume the FBX file has coordinate system transformations baked in
-
-            // First, log all objects to understand the hierarchy
-            log!("=== FBX Object Hierarchy ===");
-            for object in doc.objects() {
-                let obj_name = object.name().unwrap_or("unnamed");
-                log!("Object: name='{}', class='{}', subclass='{}'",
-                    obj_name, object.class(), object.subclass());
-
-                // Log parent connections (source = parent)
-                for conn in object.source_objects() {
-                    if let Some(src) = conn.object_handle() {
-                        log!("  <- Parent: name='{}', class='{}'",
-                            src.name().unwrap_or(""), src.class());
-                    }
-                }
-            }
-
-            // Populate BoneNodes
-            log!("=== Populating Bone Nodes ===");
-            for object in doc.objects() {
-                if let TypedObjectHandle::Model(model) = object.get_typed() {
-                    let name = model.name().unwrap_or("").to_string();
-                    if name.is_empty() { continue; }
-
-                    // Find parent
-                    let mut parent = None;
-                    for conn in object.destination_objects() {
-                        if let Some(parent_obj) = conn.object_handle() {
-                            if parent_obj.class() == "Model" {
-                                parent = parent_obj.name().map(|s| s.to_string());
-                                break; // Assume single parent
-                            }
-                        }
-                    }
-
-                    // Get transform properties
-                    let props = object.properties_by_native_typename("FbxNode");
-                    let get_vec3 = |name: &str, default: [f32; 3]| -> [f32; 3] {
-                        if let Some(prop) = props.get_property(name) {
-                            if let Ok(values) = prop.load_value(F64Arr3Loader) {
-                                return [values[0] as f32, values[1] as f32, values[2] as f32];
-                            }
-                        }
-                        default
-                    };
-
-                    let translation = get_vec3("Lcl Translation", [0.0, 0.0, 0.0]);
-                    let rotation = get_vec3("Lcl Rotation", [0.0, 0.0, 0.0]);
-                    let scaling = get_vec3("Lcl Scaling", [1.0, 1.0, 1.0]);
-
-                    // Debug: Log translation for specific bones
-                    if name == "b_Head" || name == "b_Neck_2" || name == "b_Root" {
-                        log!("DEBUG: Bone '{}' - Lcl Translation (FBX Y-up): [{:.3}, {:.3}, {:.3}]", name, translation[0], translation[1], translation[2]);
-                        log!("DEBUG: Bone '{}' - Lcl Rotation: [{:.3}, {:.3}, {:.3}]", name, rotation[0], rotation[1], rotation[2]);
-                    }
-
-                    // Build local transform matrix
-                    let translation_matrix = Matrix4::from_translation(vec3(translation[0], translation[1], translation[2]));
-                    let rotation_x = Matrix4::from_angle_x(Rad((rotation[0] as f32).to_radians()));
-                    let rotation_y = Matrix4::from_angle_y(Rad((rotation[1] as f32).to_radians()));
-                    let rotation_z = Matrix4::from_angle_z(Rad((rotation[2] as f32).to_radians()));
-                    let rotation_matrix = rotation_z * rotation_y * rotation_x;
-                    let scale_matrix = Matrix4::from_nonuniform_scale(scaling[0], scaling[1], scaling[2]);
-
-                    let local_transform_fbx = translation_matrix * rotation_matrix * scale_matrix;
-
-                    // Apply coordinate system conversion (Y-up → Z-up) for RootNode and its direct children (armature roots)
-                    // This is necessary because inverse_bind_pose contains coordinate conversion,
-                    // so bone_transform must also contain it for skinning to work correctly
-                    let needs_coord_conversion = parent.is_none()
-                        || name == "RootNode"
-                        || parent.as_ref().map_or(false, |p| p == "RootNode");
-
-                    let local_transform = if needs_coord_conversion {
-                        use crate::math::coordinate_system::fbx_to_world;
-                        fbx_to_world() * local_transform_fbx
-                    } else {
-                        local_transform_fbx
-                    };
-
-                    if name == "b_Head" || name == "b_Neck_2" || name == "b_Root" {
-                        log!("DEBUG: Bone '{}' - Local transform position: [{:.3}, {:.3}, {:.3}]",
-                             name, local_transform[3][0], local_transform[3][1], local_transform[3][2]);
-                    }
-
-                    // オイラー角からクォータニオンに変換（度数法→ラジアン）
-                    let quat_x = Quaternion::from_angle_x(Rad(rotation[0].to_radians()));
-                    let quat_y = Quaternion::from_angle_y(Rad(rotation[1].to_radians()));
-                    let quat_z = Quaternion::from_angle_z(Rad(rotation[2].to_radians()));
-                    let rotation_quat = quat_z * quat_y * quat_x;
-
-                    let node = BoneNode {
-                        name: name.clone(),
-                        parent,
-                        local_transform,
-                        default_translation: translation,
-                        default_rotation: rotation_quat,
-                        default_scaling: scaling,
-                    };
-
-                    fbx_model.nodes.insert(name, node);
-                }
-            }
-            log!("=== Loading Meshes ===");
-
-            for object in doc.objects() {
-                if let TypedObjectHandle::Model(TypedModelHandle::Mesh(mesh)) = object.get_typed() {
-                    log!("Loading mesh {:?}", mesh);
-                    let mesh_name = mesh.name().expect("mesh name not found").to_string();
-                    log!("mesh node name {}", mesh_name);
-
-                    // 各メッシュごとに新しいFbxDataを作成
-                    let fbx_data_index = fbx_model.fbx_data.len();
-                    fbx_model.fbx_data.push(FbxData::new());
-                    log!("Created FbxData[{}] for mesh '{}'", fbx_data_index, mesh_name);
-
-                    // Get world transform matrix for this mesh
-                    let world_transform = get_world_transform(&mesh, &doc);
-                    log!("World transform for {}: {:?}", mesh_name, world_transform);
-
-                    let mesh_handle = mesh.geometry().context("failed to get geometry handle")?;
-                    let polygon_vertices = mesh_handle
-                        .polygon_vertices()
-                        .context("failed to get polygon vertices")?;
-                    let triangle_indices = polygon_vertices.triangulate_each(triangulate)?;
-                    log!("polygon vertices {:?}", triangle_indices);
-
-                    let mut indices: Vec<u32> = triangle_indices
-                        .triangle_vertex_indices()
-                        .map(|t| t.to_usize() as u32)
-                        .collect();
-                    let offset = fbx_model.fbx_data[fbx_data_index].positions.len() as u32;
-                    for index in indices.iter_mut() {
-                        *index += offset;
-                    }
-                    log!("indices: count={}, {:?}", indices.len(), indices);
-                    fbx_model.fbx_data[fbx_data_index].indices.extend(indices);
-
-                    // ローカル座標の頂点位置を取得
-                    let get_local_position =
-                        |pos: Option<ControlPointIndex>| -> Result<_, anyhow::Error> {
-                            let cpi =
-                                pos.ok_or_else(|| anyhow!("failed to get position handle"))?;
-                            let point = polygon_vertices.control_point(cpi).ok_or_else(|| {
-                                anyhow!("failed to get point handle cpi: {:?}", cpi)
-                            })?;
-                            Ok(Vector3::new(point.x as f32, point.y as f32, point.z as f32))
-                        };
-
-                    let local_positions = triangle_indices
-                        .iter_control_point_indices()
-                        .map(get_local_position)
-                        .collect::<Result<Vec<_>, _>>()
-                        .context("failed to get local position")?;
-
-                    // ワールド座標の頂点位置を取得（表示用）
-                    let get_position =
-                        |pos: Option<ControlPointIndex>| -> Result<_, anyhow::Error> {
-                            let cpi =
-                                pos.ok_or_else(|| anyhow!("failed to get position handle"))?;
-                            let point = polygon_vertices.control_point(cpi).ok_or_else(|| {
-                                anyhow!("failed to get point handle cpi: {:?}", cpi)
-                            })?;
-
-                            // Apply world transform to vertex position
-                            let local_pos = Vector3::new(point.x as f32, point.y as f32, point.z as f32);
-                            let world_pos = world_transform.transform_point(Point3::from_vec(local_pos));
-
-                            Ok(Vector3::new(world_pos.x, world_pos.y, world_pos.z))
-                        };
-                    let positions = triangle_indices
-                        .iter_control_point_indices()
-                        .map(get_position)
-                        .collect::<Result<Vec<_>, _>>()
-                        .context("failed to get position")?;
-
-                    log!("positions (transformed): {} {:?}", mesh_name, positions);
-
-                    // 頂点オフセットを計算
-                    let vertex_offset = fbx_model.fbx_data[fbx_data_index].positions.len();
-                    let vertex_count = local_positions.len();
-
-                    fbx_model.fbx_data[fbx_data_index].local_positions.extend(local_positions.clone());
-                    fbx_model.fbx_data[fbx_data_index].positions.extend(positions);
-
-                    // 親ボーンを探してMeshPartを作成（階層アニメーション用）
-                    let parent_bone = find_parent_bone(&mesh, &doc);
-                    let local_transform = if let Some(ref bone_name) = parent_bone {
-                        log!("Mesh '{}' is parented to bone '{}'", mesh_name, bone_name);
-                        calculate_mesh_local_transform(&mesh, bone_name, &doc)
-                    } else {
-                        log!("Mesh '{}' has no parent bone, using world transform", mesh_name);
-                        world_transform
-                    };
-
-                    let mesh_part = MeshPart {
-                        mesh_name: mesh_name.clone(),
-                        local_positions,
-                        parent_bone,
-                        local_transform,
-                        vertex_offset,
-                        vertex_count,
-                    };
-                    fbx_model.fbx_data[fbx_data_index].mesh_parts.push(mesh_part);
-
-                    // Skin Deformerを探してクラスター情報を取得
-                    let mesh_obj: &ObjectHandle = &*mesh;
-                    for conn in mesh_obj.source_objects() {
-                        if let Some(deformer_obj) = conn.object_handle() {
-                            if let TypedObjectHandle::Deformer(TypedDeformerHandle::Skin(skin)) = deformer_obj.get_typed() {
-                                log!("Found Skin Deformer for mesh: {}", mesh_name);
-
-                                // 各クラスターを処理
-                                for cluster in skin.clusters() {
-                                    match extract_cluster_data(&cluster) {
-                                        Ok(cluster_info) => {
-                                            log!("Successfully extracted cluster data for bone: {}", cluster_info.bone_name);
-                                            fbx_model.fbx_data[fbx_data_index].clusters.push(cluster_info);
-                                        }
-                                        Err(e) => {
-                                            log!("Warning: Failed to extract cluster data: {}", e);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // マテリアルとテクスチャ情報を取得
-                    log!("=== Loading Material and Texture for mesh '{}' ===", mesh_name);
-                    for conn in mesh_obj.source_objects() {
-                        if let Some(material_obj) = conn.object_handle() {
-                            if material_obj.class() == "Material" {
-                                let material_name = material_obj.name().unwrap_or("Unknown").to_string();
-                                log!("  Found Material: {}", material_name);
-                                fbx_model.fbx_data[fbx_data_index].material_name = Some(material_name.clone());
-
-                                // マテリアルからテクスチャを検索
-                                for texture_conn in material_obj.source_objects() {
-                                    if let Some(texture_obj) = texture_conn.object_handle() {
-                                        if texture_obj.class() == "Texture" {
-                                            let texture_name = texture_obj.name().unwrap_or("Unknown").to_string();
-                                            log!("    Found Texture: {}", texture_name);
-
-                                            // テクスチャ名を保存（後でテクスチャファイルとマッチングする）
-                                            fbx_model.fbx_data[fbx_data_index].diffuse_texture = Some(texture_name);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // AnimStackを探してアニメーションを抽出
-            log!("=== Loading Animations ===");
-            for object in doc.objects() {
-                if object.class() == "AnimStack" {
-                    log!("Found AnimStack: {:?}", object.name());
-                    match extract_anim_stack(&object, &doc) {
-                        Ok(animation) => {
-                            log!("Successfully extracted animation: {}", animation.name);
-                            fbx_model.animations.push(animation);
-                        }
-                        Err(e) => {
-                            log!("Warning: Failed to extract AnimStack: {}", e);
-                        }
-                    }
-                }
-            }
-
-            log!("Loaded {} animations", fbx_model.animations.len());
-        }
-        _ => log!("unsupported FBX version"),
+fn debug_hierarchy(msg: &str) {
+    if FBX_DEBUG.hierarchy_enabled() {
+        log!("DEBUG[Hierarchy] {}", msg);
     }
-    Ok(fbx_model)
 }
+
+fn debug_skinning(msg: &str) {
+    if FBX_DEBUG.skinning_enabled() {
+        log!("DEBUG[Skinning] {}", msg);
+    }
+}
+
 pub fn triangulate(
     pvs: &PolygonVertices<'_>,
     poly_pvis: &[PolygonVertexIndex],
@@ -965,7 +205,7 @@ fn get_vec(pvs: &PolygonVertices<'_>, pvi: PolygonVertexIndex) -> anyhow::Result
 }
 
 fn bounding_box<'a>(
-    points: impl IntoIterator<Item=&'a Vector3<f32>>,
+    points: impl IntoIterator<Item = &'a Vector3<f32>>,
 ) -> Option<(Vector3<f32>, Vector3<f32>)> {
     points.into_iter().fold(None, |minmax, point| {
         minmax.map_or_else(
@@ -995,7 +235,7 @@ pub struct BoneNode {
     pub parent: Option<String>,
     pub local_transform: Matrix4<f32>, // Static local transform (T * R * S)
     pub default_translation: [f32; 3],
-    pub default_rotation: Quaternion<f32>,  // クォータニオンで保存
+    pub default_rotation: Quaternion<f32>, // クォータニオンで保存
     pub default_scaling: [f32; 3],
 }
 
@@ -1004,6 +244,7 @@ pub struct FbxModel {
     pub fbx_data: Vec<FbxData>,
     pub animations: Vec<FbxAnimation>,
     pub nodes: HashMap<String, BoneNode>,
+    pub unit_scale: f32,
 }
 
 impl FbxModel {
@@ -1020,7 +261,10 @@ impl FbxModel {
     /// ```
     pub fn update_animation(&mut self, animation_index: usize, time: f32) {
         if let Some(animation) = self.animations.get(animation_index) {
-            log!("[FRAME t={:.4}] ========== Animation update ==========", time);
+            log!(
+                "[FRAME t={:.4}] ========== Animation update ==========",
+                time
+            );
             for (mesh_idx, fbx_data) in self.fbx_data.iter_mut().enumerate() {
                 log!("[FRAME t={:.4}] Processing mesh {}", time, mesh_idx);
                 fbx_data.update_animation(animation, &self.nodes, time);
@@ -1030,7 +274,9 @@ impl FbxModel {
 
     /// アニメーションの長さ（秒）を取得
     pub fn get_animation_duration(&self, animation_index: usize) -> Option<f32> {
-        self.animations.get(animation_index).map(|anim| anim.duration)
+        self.animations
+            .get(animation_index)
+            .map(|anim| anim.duration)
     }
 
     /// アニメーション数を取得
@@ -1050,7 +296,7 @@ impl FbxModel {
 #[derive(Clone, Debug)]
 pub struct FbxAnimation {
     pub name: String,
-    pub duration: f32,  // アニメーションの長さ（秒）
+    pub duration: f32, // アニメーションの長さ（秒）
     pub bone_animations: std::collections::HashMap<String, BoneAnimation>,
 }
 
@@ -1068,15 +314,23 @@ fn compute_global_bone_transforms(
 
     // Debug: Log bone transforms every frame
     if let Some(transform) = global_transforms.get("b_Root") {
-        log!("[FRAME t={:.4}] b_Root global transform: [{:.3}, {:.3}, {:.3}] rotation",
-             time,
-             transform[3][0], transform[3][1], transform[3][2]);
+        log!(
+            "[FRAME t={:.4}] b_Root global transform: [{:.3}, {:.3}, {:.3}] rotation",
+            time,
+            transform[3][0],
+            transform[3][1],
+            transform[3][2]
+        );
     }
 
     if let Some(transform) = global_transforms.get("b_Head") {
-        log!("[FRAME t={:.4}] b_Head global transform: [{:.3}, {:.3}, {:.3}]",
-             time,
-             transform[3][0], transform[3][1], transform[3][2]);
+        log!(
+            "[FRAME t={:.4}] b_Head global transform: [{:.3}, {:.3}, {:.3}]",
+            time,
+            transform[3][0],
+            transform[3][1],
+            transform[3][2]
+        );
     }
 
     global_transforms
@@ -1099,7 +353,8 @@ fn resolve_global_transform(
 
     let transform = if let Some(node) = nodes.get(bone_name) {
         // Calculate local transform
-        let local_transform_fbx = if let Some(bone_anim) = animation.bone_animations.get(bone_name) {
+        let local_transform_fbx = if let Some(bone_anim) = animation.bone_animations.get(bone_name)
+        {
             evaluate_bone_transform_at_time(
                 bone_anim,
                 time,
@@ -1111,7 +366,11 @@ fn resolve_global_transform(
             // For nodes without animation, use the bind pose (local_transform)
             // Note: node.local_transform already has coord conversion applied for root bones
             if time < 0.1 && (bone_name == "RootNode" || bone_name == "b_Root") {
-                log!("DEBUG: {} using static local_transform (no animation): {:?}", bone_name, node.local_transform);
+                debug_transform(
+                    bone_name,
+                    "static local_transform (no animation)",
+                    &node.local_transform,
+                );
             }
             node.local_transform
         };
@@ -1123,27 +382,22 @@ fn resolve_global_transform(
             || bone_name == "RootNode"
             || node.parent.as_ref().map_or(false, |p| p == "RootNode");
 
-        let local_transform = if needs_coord_conversion && animation.bone_animations.contains_key(bone_name) {
-            use crate::math::coordinate_system::fbx_to_world;
-            fbx_to_world() * local_transform_fbx
-        } else {
-            local_transform_fbx
-        };
+        let local_transform =
+            if needs_coord_conversion && animation.bone_animations.contains_key(bone_name) {
+                use crate::math::coordinate_system::fbx_to_world;
+                fbx_to_world() * local_transform_fbx
+            } else {
+                local_transform_fbx
+            };
 
         // Multiply with parent global transform
         if let Some(parent_name) = &node.parent {
-            let parent_global = resolve_global_transform(parent_name, animation, nodes, time, cache);
+            let parent_global =
+                resolve_global_transform(parent_name, animation, nodes, time, cache);
 
-            // Debug: Log parent multiplication
-            if time < 0.1 && bone_name == "b_Root" {
-                log!("DEBUG: b_Root - parent_global: {:?}", parent_global);
-                log!("DEBUG: b_Root - local_transform: {:?}", local_transform);
-            }
-
-            if time < 0.1 && bone_name == "b_Head" {
-                log!("DEBUG: b_Head - parent: {}", parent_name);
-                log!("DEBUG: b_Head - parent_global: {:?}", parent_global);
-                log!("DEBUG: b_Head - local_transform: {:?}", local_transform);
+            if time < 0.1 {
+                debug_transform(bone_name, "parent_global", &parent_global);
+                debug_transform(bone_name, "local_transform", &local_transform);
             }
 
             parent_global * local_transform
@@ -1163,14 +417,14 @@ fn resolve_global_transform(
 pub struct BoneAnimation {
     pub bone_name: String,
     pub translation_keys: Vec<KeyFrame<[f32; 3]>>,
-    pub rotation_keys: Vec<KeyFrame<Quaternion<f32>>>,  // クォータニオンで保存
+    pub rotation_keys: Vec<KeyFrame<Quaternion<f32>>>, // クォータニオンで保存
     pub scale_keys: Vec<KeyFrame<[f32; 3]>>,
 }
 
 /// キーフレーム
 #[derive(Clone, Debug)]
 pub struct KeyFrame<T> {
-    pub time: f32,  // 秒
+    pub time: f32, // 秒
     pub value: T,
 }
 
@@ -1182,21 +436,24 @@ fn evaluate_bone_transform_at_time(
     default_rotation: Quaternion<f32>,
     default_scaling: [f32; 3],
 ) -> Matrix4<f32> {
-    // Debug logging (only for time < 0.05 to avoid spam)
-    let should_log = time < 0.05 && (bone_anim.bone_name.contains("Bone.003") || bone_anim.bone_name.contains("Bone.007"));
+    let should_log = FBX_DEBUG.animation_enabled()
+        && time < 0.05
+        && (bone_anim.bone_name.contains("Bone.003") || bone_anim.bone_name.contains("Bone.007"));
 
     if should_log {
-        log!("DEBUG [evaluate_bone_transform_at_time] bone={}, time={:.4}", bone_anim.bone_name, time);
-        log!("  translation_keys: {} keys", bone_anim.translation_keys.len());
-        log!("  rotation_keys: {} keys", bone_anim.rotation_keys.len());
-        log!("  scale_keys: {} keys", bone_anim.scale_keys.len());
+        debug_animation(&format!(
+            "[evaluate_bone_transform_at_time] bone={}, time={:.4}, t_keys={}, r_keys={}, s_keys={}",
+            bone_anim.bone_name,
+            time,
+            bone_anim.translation_keys.len(),
+            bone_anim.rotation_keys.len(),
+            bone_anim.scale_keys.len()
+        ));
         if !bone_anim.translation_keys.is_empty() {
-            log!("  First translation key: time={:.4}, value={:?}",
-                 bone_anim.translation_keys[0].time, bone_anim.translation_keys[0].value);
-            if bone_anim.translation_keys.len() > 1 {
-                log!("  Second translation key: time={:.4}, value={:?}",
-                     bone_anim.translation_keys[1].time, bone_anim.translation_keys[1].value);
-            }
+            debug_animation(&format!(
+                "  First translation: time={:.4}, value={:?}",
+                bone_anim.translation_keys[0].time, bone_anim.translation_keys[0].value
+            ));
         }
     }
 
@@ -1225,7 +482,8 @@ fn evaluate_bone_transform_at_time(
     };
 
     // T * R * S の順で行列を構築
-    let translation_matrix = Matrix4::from_translation(vec3(translation[0], translation[1], translation[2]));
+    let translation_matrix =
+        Matrix4::from_translation(vec3(translation[0], translation[1], translation[2]));
 
     // クォータニオンから回転行列を作成
     let rotation_matrix = Matrix4::from(rotation_quat);
@@ -1237,9 +495,12 @@ fn evaluate_bone_transform_at_time(
 
 /// クォータニオン補間（SLERP: Spherical Linear Interpolation）
 /// 滑らかな回転補間を提供
-fn interpolate_quaternion_at_time(keyframes: &[KeyFrame<Quaternion<f32>>], time: f32) -> Quaternion<f32> {
+fn interpolate_quaternion_at_time(
+    keyframes: &[KeyFrame<Quaternion<f32>>],
+    time: f32,
+) -> Quaternion<f32> {
     if keyframes.is_empty() {
-        return Quaternion::new(1.0, 0.0, 0.0, 0.0);  // 単位クォータニオン
+        return Quaternion::new(1.0, 0.0, 0.0, 0.0); // 単位クォータニオン
     }
 
     if keyframes.len() == 1 {
@@ -1332,7 +593,10 @@ pub fn apply_skinning(
         } else {
             missing_bones += 1;
             if missing_bones <= 3 && time < 0.1 {
-                log!("DEBUG: Bone '{}' not found in global_transforms, using identity", bone_name);
+                debug_skinning(&format!(
+                    "Bone '{}' not found in global_transforms, using identity",
+                    bone_name
+                ));
             }
             Matrix4::identity()
         };
@@ -1342,21 +606,19 @@ pub fn apply_skinning(
         bone_matrices.insert(bone_name.clone(), skinning_matrix);
 
         // Debug: Log first bone's matrices
-        if bone_name == "b_Root" && time < 0.1 {
-            log!("DEBUG: b_Root bone_transform: {:?}", bone_transform);
-            log!("DEBUG: b_Root inverse_bind_pose: {:?}", cluster.inverse_bind_pose);
-            log!("DEBUG: b_Root skinning_matrix: {:?}", skinning_matrix);
-        }
-
-        if bone_name == "b_Head" && time < 0.1 {
-            log!("DEBUG: b_Head bone_transform: {:?}", bone_transform);
-            log!("DEBUG: b_Head inverse_bind_pose: {:?}", cluster.inverse_bind_pose);
-            log!("DEBUG: b_Head skinning_matrix: {:?}", skinning_matrix);
+        if time < 0.1 {
+            debug_transform(&bone_name, "bone_transform", &bone_transform);
+            debug_transform(&bone_name, "inverse_bind_pose", &cluster.inverse_bind_pose);
+            debug_transform(&bone_name, "skinning_matrix", &skinning_matrix);
         }
     }
 
     if missing_bones > 0 && time < 0.1 {
-        log!("DEBUG: Total missing bones in global_transforms: {}/{}", missing_bones, clusters.len());
+        debug_skinning(&format!(
+            "Total missing bones in global_transforms: {}/{}",
+            missing_bones,
+            clusters.len()
+        ));
     }
 
     // 各頂点にスキニングを適用
@@ -1372,12 +634,13 @@ pub fn apply_skinning(
         }
     }
 
-    // Debug: Check how many vertices have weights
     if time < 0.1 {
         let vertices_with_weights = vertex_transforms.iter().filter(|v| !v.is_empty()).count();
-        log!("DEBUG: Vertices with weights: {}/{}", vertices_with_weights, num_vertices);
+        debug_skinning(&format!(
+            "Vertices with weights: {}/{}",
+            vertices_with_weights, num_vertices
+        ));
 
-        // Debug: Check if all bone matrices are available
         let mut bones_with_matrices = 0;
         let mut bones_without_matrices = 0;
         for cluster in clusters {
@@ -1386,19 +649,32 @@ pub fn apply_skinning(
             } else {
                 bones_without_matrices += 1;
                 if bones_without_matrices <= 3 {
-                    log!("DEBUG: Cluster bone '{}' has no matrix!", cluster.bone_name);
+                    debug_skinning(&format!(
+                        "Cluster bone '{}' has no matrix!",
+                        cluster.bone_name
+                    ));
                 }
             }
         }
-        log!("DEBUG: Bones with matrices: {}/{}", bones_with_matrices, clusters.len());
+        debug_skinning(&format!(
+            "Bones with matrices: {}/{}",
+            bones_with_matrices,
+            clusters.len()
+        ));
 
-        // Debug: Show first few vertices' weight info
         for i in 0..3.min(num_vertices) {
             if !vertex_transforms[i].is_empty() {
-                log!("DEBUG: Vertex {} has {} bone influences", i, vertex_transforms[i].len());
-                for &(cluster_idx, weight) in &vertex_transforms[i] {
-                    log!("  Bone: {}, Weight: {}", clusters[cluster_idx].bone_name, weight);
-                }
+                let influences: Vec<String> = vertex_transforms[i]
+                    .iter()
+                    .map(|&(cluster_idx, weight)| {
+                        format!("{}:{:.3}", clusters[cluster_idx].bone_name, weight)
+                    })
+                    .collect();
+                debug_skinning(&format!(
+                    "Vertex {} influences: [{}]",
+                    i,
+                    influences.join(", ")
+                ));
             }
         }
     }
@@ -1423,7 +699,12 @@ pub fn apply_skinning(
 
                 // Debug: Log vertex 0 transformation details (every frame)
                 if vertex_idx == 0 {
-                    log!("[FRAME t={:.4}] Vertex 0 - Bone: {}, Weight: {}", time, cluster.bone_name, weight);
+                    log!(
+                        "[FRAME t={:.4}] Vertex 0 - Bone: {}, Weight: {}",
+                        time,
+                        cluster.bone_name,
+                        weight
+                    );
                     log!("  Original pos: {:?}", original_pos);
                     log!("  Transformed pos: {:?}", transformed);
                 }
@@ -1436,7 +717,11 @@ pub fn apply_skinning(
 
             // Debug: Log final position for vertex 0 (every frame)
             if vertex_idx == 0 {
-                log!("[FRAME t={:.4}] Vertex 0 final skinned position: {:?}", time, skinned_positions[vertex_idx]);
+                log!(
+                    "[FRAME t={:.4}] Vertex 0 final skinned position: {:?}",
+                    time,
+                    skinned_positions[vertex_idx]
+                );
             }
         }
     }
@@ -1493,7 +778,10 @@ fn extract_animation_curve(curve_obj: &ObjectHandle) -> Result<Vec<KeyFrame<f32>
 }
 
 /// AnimCurveNodeからアニメーションカーブを抽出（X, Y, Z成分）
-fn extract_anim_curve_node(curve_node_obj: &ObjectHandle, doc: &Document) -> Result<(Vec<KeyFrame<f32>>, Vec<KeyFrame<f32>>, Vec<KeyFrame<f32>>)> {
+fn extract_anim_curve_node(
+    curve_node_obj: &ObjectHandle,
+    doc: &Document,
+) -> Result<(Vec<KeyFrame<f32>>, Vec<KeyFrame<f32>>, Vec<KeyFrame<f32>>)> {
     let mut curves_x = Vec::new();
     let mut curves_y = Vec::new();
     let mut curves_z = Vec::new();
@@ -1509,7 +797,11 @@ fn extract_anim_curve_node(curve_node_obj: &ObjectHandle, doc: &Document) -> Res
 
                 match extract_animation_curve(&curve_obj) {
                     Ok(keyframes) => {
-                        log!("    Extracted {} keyframes for label '{}'", keyframes.len(), label);
+                        log!(
+                            "    Extracted {} keyframes for label '{}'",
+                            keyframes.len(),
+                            label
+                        );
                         if label.contains("X") {
                             curves_x = keyframes;
                         } else if label.contains("Y") {
@@ -1519,29 +811,49 @@ fn extract_anim_curve_node(curve_node_obj: &ObjectHandle, doc: &Document) -> Res
                         }
                     }
                     Err(e) => {
-                        log!("Warning: Failed to extract curve for label {}: {}", label, e);
+                        log!(
+                            "Warning: Failed to extract curve for label {}: {}",
+                            label,
+                            e
+                        );
                     }
                 }
             }
         }
     }
 
-    log!("    Found {} AnimCurves (X:{}, Y:{}, Z:{} keyframes)", curve_count, curves_x.len(), curves_y.len(), curves_z.len());
+    log!(
+        "    Found {} AnimCurves (X:{}, Y:{}, Z:{} keyframes)",
+        curve_count,
+        curves_x.len(),
+        curves_y.len(),
+        curves_z.len()
+    );
 
     Ok((curves_x, curves_y, curves_z))
 }
 
 /// AnimLayerからボーンごとのアニメーションを抽出
-fn extract_anim_layer(layer_obj: &ObjectHandle, doc: &Document) -> Result<HashMap<String, BoneAnimation>> {
+fn extract_anim_layer(
+    layer_obj: &ObjectHandle,
+    doc: &Document,
+) -> Result<HashMap<String, BoneAnimation>> {
     let mut bone_animations = HashMap::new();
 
-    log!("Processing AnimLayer: {}", layer_obj.name().unwrap_or("Unnamed"));
+    log!(
+        "Processing AnimLayer: {}",
+        layer_obj.name().unwrap_or("Unnamed")
+    );
 
     // AnimLayerに接続されているAnimCurveNodeを探す
     let mut curve_node_count = 0;
     for conn in layer_obj.source_objects() {
         if let Some(curve_node_obj) = conn.object_handle() {
-            log!("  Checking connection: class='{}', name='{}'", curve_node_obj.class(), curve_node_obj.name().unwrap_or(""));
+            log!(
+                "  Checking connection: class='{}', name='{}'",
+                curve_node_obj.class(),
+                curve_node_obj.name().unwrap_or("")
+            );
             if curve_node_obj.class() == "AnimCurveNode" {
                 curve_node_count += 1;
                 // AnimCurveNodeが影響するモデル（ボーン）を探す
@@ -1551,31 +863,45 @@ fn extract_anim_layer(layer_obj: &ObjectHandle, doc: &Document) -> Result<HashMa
                             let bone_name = target_obj.name().unwrap_or("Unknown").to_string();
                             let curve_node_name = curve_node_obj.name().unwrap_or("");
 
-                            log!("Found AnimCurveNode '{}' for bone '{}'", curve_node_name, bone_name);
+                            log!(
+                                "Found AnimCurveNode '{}' for bone '{}'",
+                                curve_node_name,
+                                bone_name
+                            );
 
                             // カーブノードのタイプを判別（T=Translation, R=Rotation, S=Scaling）
-                            let (curves_x, curves_y, curves_z) = extract_anim_curve_node(&curve_node_obj, doc)?;
+                            let (curves_x, curves_y, curves_z) =
+                                extract_anim_curve_node(&curve_node_obj, doc)?;
 
                             // ボーンアニメーションを取得または作成
-                            let bone_anim = bone_animations.entry(bone_name.clone()).or_insert_with(|| {
-                                BoneAnimation {
+                            let bone_anim = bone_animations
+                                .entry(bone_name.clone())
+                                .or_insert_with(|| BoneAnimation {
                                     bone_name: bone_name.clone(),
                                     translation_keys: Vec::new(),
                                     rotation_keys: Vec::new(),
                                     scale_keys: Vec::new(),
-                                }
-                            });
+                                });
 
                             // プロパティ名で判別
-                            if curve_node_name.contains("T") || curve_node_name.contains("Lcl Translation") {
+                            if curve_node_name.contains("T")
+                                || curve_node_name.contains("Lcl Translation")
+                            {
                                 // Translationカーブを統合
-                                bone_anim.translation_keys = merge_xyz_curves(curves_x, curves_y, curves_z);
-                            } else if curve_node_name.contains("R") || curve_node_name.contains("Lcl Rotation") {
+                                bone_anim.translation_keys =
+                                    merge_xyz_curves(curves_x, curves_y, curves_z);
+                            } else if curve_node_name.contains("R")
+                                || curve_node_name.contains("Lcl Rotation")
+                            {
                                 // Rotationカーブを統合（オイラー角→クォータニオン）
-                                bone_anim.rotation_keys = merge_xyz_curves_to_quaternion(curves_x, curves_y, curves_z);
-                            } else if curve_node_name.contains("S") || curve_node_name.contains("Lcl Scaling") {
+                                bone_anim.rotation_keys =
+                                    merge_xyz_curves_to_quaternion(curves_x, curves_y, curves_z);
+                            } else if curve_node_name.contains("S")
+                                || curve_node_name.contains("Lcl Scaling")
+                            {
                                 // Scalingカーブを統合
-                                bone_anim.scale_keys = merge_xyz_curves(curves_x, curves_y, curves_z);
+                                bone_anim.scale_keys =
+                                    merge_xyz_curves(curves_x, curves_y, curves_z);
                             }
                         }
                     }
@@ -1584,7 +910,11 @@ fn extract_anim_layer(layer_obj: &ObjectHandle, doc: &Document) -> Result<HashMa
         }
     }
 
-    log!("  Found {} AnimCurveNodes, extracted {} bone animations", curve_node_count, bone_animations.len());
+    log!(
+        "  Found {} AnimCurveNodes, extracted {} bone animations",
+        curve_node_count,
+        bone_animations.len()
+    );
     Ok(bone_animations)
 }
 
@@ -1678,7 +1008,9 @@ fn merge_xyz_curves_to_quaternion(
 
 /// 同じ時間のrotation keyframeをマージ
 /// FBXではクォータニオンの成分が別々のキーとして保存されることがある
-fn merge_duplicate_rotation_keys(keyframes: &[KeyFrame<Quaternion<f32>>]) -> Vec<KeyFrame<Quaternion<f32>>> {
+fn merge_duplicate_rotation_keys(
+    keyframes: &[KeyFrame<Quaternion<f32>>],
+) -> Vec<KeyFrame<Quaternion<f32>>> {
     if keyframes.is_empty() {
         return Vec::new();
     }
@@ -1687,7 +1019,9 @@ fn merge_duplicate_rotation_keys(keyframes: &[KeyFrame<Quaternion<f32>>]) -> Vec
     // NaN値がある場合はEqualとして扱う
     let mut sorted_keyframes = keyframes.to_vec();
     sorted_keyframes.sort_by(|a, b| {
-        a.time.partial_cmp(&b.time).unwrap_or(std::cmp::Ordering::Equal)
+        a.time
+            .partial_cmp(&b.time)
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
 
     let mut merged = Vec::new();
@@ -1701,13 +1035,16 @@ fn merge_duplicate_rotation_keys(keyframes: &[KeyFrame<Quaternion<f32>>]) -> Vec
         let mut group = vec![sorted_keyframes[i].value];
         let mut j = i + 1;
 
-        while j < sorted_keyframes.len() && (sorted_keyframes[j].time - current_time).abs() < time_threshold {
+        while j < sorted_keyframes.len()
+            && (sorted_keyframes[j].time - current_time).abs() < time_threshold
+        {
             group.push(sorted_keyframes[j].value);
             j += 1;
         }
 
         // グループから最も妥当なクォータニオンを選択（最も正規化に近いもの）
-        let best_quat = group.iter()
+        let best_quat = group
+            .iter()
             .min_by(|a, b| {
                 let len_a = (a.s * a.s + a.v.x * a.v.x + a.v.y * a.v.y + a.v.z * a.v.z).sqrt();
                 let len_b = (b.s * b.s + b.v.x * b.v.x + b.v.y * b.v.y + b.v.z * b.v.z).sqrt();
@@ -1719,7 +1056,9 @@ fn merge_duplicate_rotation_keys(keyframes: &[KeyFrame<Quaternion<f32>>]) -> Vec
                     (true, true) => std::cmp::Ordering::Equal,
                     (true, false) => std::cmp::Ordering::Greater,
                     (false, true) => std::cmp::Ordering::Less,
-                    (false, false) => diff_a.partial_cmp(&diff_b).unwrap_or(std::cmp::Ordering::Equal),
+                    (false, false) => diff_a
+                        .partial_cmp(&diff_b)
+                        .unwrap_or(std::cmp::Ordering::Equal),
                 }
             })
             .unwrap();
@@ -1742,14 +1081,21 @@ fn merge_duplicate_rotation_keys(keyframes: &[KeyFrame<Quaternion<f32>>]) -> Vec
         }
 
         let quat = &key.value;
-        let len = (quat.s * quat.s + quat.v.x * quat.v.x + quat.v.y * quat.v.y + quat.v.z * quat.v.z).sqrt();
+        let len =
+            (quat.s * quat.s + quat.v.x * quat.v.x + quat.v.y * quat.v.y + quat.v.z * quat.v.z)
+                .sqrt();
 
         // クォータニオンの長さがゼロに近い場合、単位クォータニオンかチェック
         if len < 0.1 {
             // 単位クォータニオンかチェック（[1,0,0,0]または[0,0,0,1]）
-            let is_identity =
-                ((quat.s - 1.0).abs() < 0.01 && quat.v.x.abs() < 0.01 && quat.v.y.abs() < 0.01 && quat.v.z.abs() < 0.01) ||
-                    ((quat.s).abs() < 0.01 && quat.v.x.abs() < 0.01 && quat.v.y.abs() < 0.01 && (quat.v.z - 1.0).abs() < 0.01);
+            let is_identity = ((quat.s - 1.0).abs() < 0.01
+                && quat.v.x.abs() < 0.01
+                && quat.v.y.abs() < 0.01
+                && quat.v.z.abs() < 0.01)
+                || ((quat.s).abs() < 0.01
+                    && quat.v.x.abs() < 0.01
+                    && quat.v.y.abs() < 0.01
+                    && (quat.v.z - 1.0).abs() < 0.01);
 
             // 単位クォータニオンで時間が0の場合のみ除外（初期姿勢として無効なデータ）
             if is_identity && key.time.abs() < 0.01 {
@@ -1760,23 +1106,15 @@ fn merge_duplicate_rotation_keys(keyframes: &[KeyFrame<Quaternion<f32>>]) -> Vec
         true
     });
 
-    // ループをスムーズにするため、最初のキーフレームをt=0.0にコピー
     if !merged.is_empty() && merged[0].time > 0.01 {
         let first_keyframe = merged[0].value;
-        merged.insert(0, KeyFrame {
-            time: 0.0,
-            value: first_keyframe,
-        });
-    }
-
-    // ループをスムーズにするため、最後のキーフレームも最初のキーフレームと同じ値にする
-    // アニメーションの最後でループの最初に戻る際のジャンプを防ぐ
-    if merged.len() >= 2 {
-        let first_value = merged[0].value;
-        let last_index = merged.len() - 1;
-
-        // 最後のキーフレームの値を最初のキーフレームの値で置き換える
-        merged[last_index].value = first_value;
+        merged.insert(
+            0,
+            KeyFrame {
+                time: 0.0,
+                value: first_keyframe,
+            },
+        );
     }
 
     merged
@@ -1823,7 +1161,11 @@ fn extract_anim_stack(stack_obj: &ObjectHandle, doc: &Document) -> Result<FbxAni
     let mut layer_count = 0;
     for conn in stack_obj.source_objects() {
         if let Some(layer_obj) = conn.object_handle() {
-            log!("  Checking source object: class='{}', name='{}'", layer_obj.class(), layer_obj.name().unwrap_or(""));
+            log!(
+                "  Checking source object: class='{}', name='{}'",
+                layer_obj.class(),
+                layer_obj.name().unwrap_or("")
+            );
             if layer_obj.class() == "AnimLayer" {
                 layer_count += 1;
                 match extract_anim_layer(&layer_obj, doc) {
@@ -1858,7 +1200,13 @@ fn extract_anim_stack(stack_obj: &ObjectHandle, doc: &Document) -> Result<FbxAni
         }
     }
 
-    log!("AnimStack '{}': found {} layers, duration: {} seconds, {} bones", name, layer_count, duration, all_bone_animations.len());
+    log!(
+        "AnimStack '{}': found {} layers, duration: {} seconds, {} bones",
+        name,
+        layer_count,
+        duration,
+        all_bone_animations.len()
+    );
 
     Ok(FbxAnimation {
         name,
@@ -1927,10 +1275,22 @@ fn extract_cluster_data(cluster: &ClusterHandle) -> Result<ClusterInfo> {
         if let Ok(values) = prop.load_value(F64Arr16Loader) {
             // FBX stores matrices in row-major, cgmath uses column-major
             Matrix4::new(
-                values[0] as f32, values[4] as f32, values[8] as f32, values[12] as f32,
-                values[1] as f32, values[5] as f32, values[9] as f32, values[13] as f32,
-                values[2] as f32, values[6] as f32, values[10] as f32, values[14] as f32,
-                values[3] as f32, values[7] as f32, values[11] as f32, values[15] as f32,
+                values[0] as f32,
+                values[4] as f32,
+                values[8] as f32,
+                values[12] as f32,
+                values[1] as f32,
+                values[5] as f32,
+                values[9] as f32,
+                values[13] as f32,
+                values[2] as f32,
+                values[6] as f32,
+                values[10] as f32,
+                values[14] as f32,
+                values[3] as f32,
+                values[7] as f32,
+                values[11] as f32,
+                values[15] as f32,
             )
         } else {
             Matrix4::identity()
@@ -1942,10 +1302,22 @@ fn extract_cluster_data(cluster: &ClusterHandle) -> Result<ClusterInfo> {
     let transform_link = if let Some(prop) = props.get_property("TransformLink") {
         if let Ok(values) = prop.load_value(F64Arr16Loader) {
             Matrix4::new(
-                values[0] as f32, values[4] as f32, values[8] as f32, values[12] as f32,
-                values[1] as f32, values[5] as f32, values[9] as f32, values[13] as f32,
-                values[2] as f32, values[6] as f32, values[10] as f32, values[14] as f32,
-                values[3] as f32, values[7] as f32, values[11] as f32, values[15] as f32,
+                values[0] as f32,
+                values[4] as f32,
+                values[8] as f32,
+                values[12] as f32,
+                values[1] as f32,
+                values[5] as f32,
+                values[9] as f32,
+                values[13] as f32,
+                values[2] as f32,
+                values[6] as f32,
+                values[10] as f32,
+                values[14] as f32,
+                values[3] as f32,
+                values[7] as f32,
+                values[11] as f32,
+                values[15] as f32,
             )
         } else {
             Matrix4::identity()
@@ -1958,7 +1330,10 @@ fn extract_cluster_data(cluster: &ClusterHandle) -> Result<ClusterInfo> {
     let inverse_bind_pose = if let Some(inv_tl) = transform_link.invert() {
         inv_tl * transform
     } else {
-        log!("Warning: Could not invert TransformLink matrix for bone {}", bone_name);
+        log!(
+            "Warning: Could not invert TransformLink matrix for bone {}",
+            bone_name
+        );
         Matrix4::identity()
     };
 
@@ -1983,37 +1358,37 @@ fn extract_cluster_data(cluster: &ClusterHandle) -> Result<ClusterInfo> {
 #[derive(Clone, Debug)]
 pub struct ClusterInfo {
     pub bone_name: String,
-    pub transform: Matrix4<f32>,           // メッシュの初期変換
-    pub transform_link: Matrix4<f32>,      // ボーンの初期変換（バインドポーズ）
-    pub inverse_bind_pose: Matrix4<f32>,   // 計算済み逆バインドポーズ
-    pub vertex_indices: Vec<usize>,        // 影響を受ける頂点のインデックス
-    pub vertex_weights: Vec<f32>,          // 各頂点のウェイト値
+    pub transform: Matrix4<f32>,         // メッシュの初期変換
+    pub transform_link: Matrix4<f32>,    // ボーンの初期変換（バインドポーズ）
+    pub inverse_bind_pose: Matrix4<f32>, // 計算済み逆バインドポーズ
+    pub vertex_indices: Vec<usize>,      // 影響を受ける頂点のインデックス
+    pub vertex_weights: Vec<f32>,        // 各頂点のウェイト値
 }
 
 /// 個別のメッシュパーツ（階層アニメーション用）
 #[derive(Clone, Debug)]
 pub struct MeshPart {
-    pub mesh_name: String,                    // メッシュ名
-    pub local_positions: Vec<Vector3<f32>>,  // メッシュローカル空間の頂点（変換前）
-    pub parent_bone: Option<String>,          // 親ボーンの名前
-    pub local_transform: Matrix4<f32>,        // 親ボーンに対する相対変換
-    pub vertex_offset: usize,                 // 結合頂点配列内の開始インデックス
-    pub vertex_count: usize,                  // 頂点数
+    pub mesh_name: String,                  // メッシュ名
+    pub local_positions: Vec<Vector3<f32>>, // メッシュローカル空間の頂点（変換前）
+    pub parent_bone: Option<String>,        // 親ボーンの名前
+    pub local_transform: Matrix4<f32>,      // 親ボーンに対する相対変換
+    pub vertex_offset: usize,               // 結合頂点配列内の開始インデックス
+    pub vertex_count: usize,                // 頂点数
 }
 
 #[derive(Clone, Debug)]
 pub struct FbxData {
-    pub positions: Vec<Vector3<f32>>,        // ワールド座標の頂点位置（表示用）
-    pub local_positions: Vec<Vector3<f32>>,  // ローカル座標の頂点位置（スキニング用）
-    pub normals: Vec<Vector3<f32>>,          // 頂点法線（変換後）
-    pub local_normals: Vec<Vector3<f32>>,    // ローカル座標の頂点法線（スキニング用）
+    pub positions: Vec<Vector3<f32>>, // ワールド座標の頂点位置（表示用）
+    pub local_positions: Vec<Vector3<f32>>, // ローカル座標の頂点位置（スキニング用）
+    pub normals: Vec<Vector3<f32>>,   // 頂点法線（変換後）
+    pub local_normals: Vec<Vector3<f32>>, // ローカル座標の頂点法線（スキニング用）
     pub indices: Vec<u32>,
-    pub tex_coords: Vec<[f32; 2]>,           // UV座標
-    pub clusters: Vec<ClusterInfo>,          // スキニング情報
-    pub mesh_parts: Vec<MeshPart>,           // 個別メッシュパーツ（階層アニメーション用）
-    pub parent_node: Option<String>,         // 親ノード名（階層アニメーション用）
-    pub material_name: Option<String>,       // マテリアル名
-    pub diffuse_texture: Option<String>,     // Diffuseテクスチャパス
+    pub tex_coords: Vec<[f32; 2]>,       // UV座標
+    pub clusters: Vec<ClusterInfo>,      // スキニング情報
+    pub mesh_parts: Vec<MeshPart>,       // 個別メッシュパーツ（階層アニメーション用）
+    pub parent_node: Option<String>,     // 親ノード名（階層アニメーション用）
+    pub material_name: Option<String>,   // マテリアル名
+    pub diffuse_texture: Option<String>, // Diffuseテクスチャパス
 }
 
 impl FbxData {
@@ -2034,10 +1409,21 @@ impl FbxData {
     }
 
     /// アニメーション時間に基づいて頂点位置を更新
-    pub fn update_animation(&mut self, animation: &FbxAnimation, nodes: &HashMap<String, BoneNode>, time: f32) {
+    pub fn update_animation(
+        &mut self,
+        animation: &FbxAnimation,
+        nodes: &HashMap<String, BoneNode>,
+        time: f32,
+    ) {
         // スキニング情報がある場合はスキニングアニメーション
         if !self.clusters.is_empty() && !self.local_positions.is_empty() {
-            self.positions = apply_skinning(&self.local_positions, &self.clusters, animation, nodes, time);
+            self.positions = apply_skinning(
+                &self.local_positions,
+                &self.clusters,
+                animation,
+                nodes,
+                time,
+            );
             return;
         }
 
@@ -2054,7 +1440,13 @@ impl FbxData {
     }
 
     /// 単一ノードの階層アニメーションを適用（メッシュ全体を親ノードの変換で変換）
-    fn apply_single_node_animation(&mut self, animation: &FbxAnimation, nodes: &HashMap<String, BoneNode>, time: f32, parent_node: &str) {
+    fn apply_single_node_animation(
+        &mut self,
+        animation: &FbxAnimation,
+        nodes: &HashMap<String, BoneNode>,
+        time: f32,
+        parent_node: &str,
+    ) {
         // 全ボーンの階層変換を計算
         let bone_transforms = compute_global_bone_transforms(animation, nodes, time);
 
@@ -2073,7 +1465,10 @@ impl FbxData {
             // Check for circular reference
             if visited_nodes.contains(&node_name) {
                 if time < 0.1 {
-                    log!("    Circular reference detected at node: {}, stopping search", node_name);
+                    log!(
+                        "    Circular reference detected at node: {}, stopping search",
+                        node_name
+                    );
                 }
                 break;
             }
@@ -2097,7 +1492,10 @@ impl FbxData {
                 current_node = node.parent.clone();
             } else {
                 if time < 0.1 {
-                    log!("    Node {} not found in nodes map, stopping search", node_name);
+                    log!(
+                        "    Node {} not found in nodes map, stopping search",
+                        node_name
+                    );
                 }
                 break;
             }
@@ -2108,7 +1506,10 @@ impl FbxData {
 
         if let Some(ancestor_name) = animated_ancestor {
             // animated ancestorのグローバル変換を取得
-            final_transform = bone_transforms.get(&ancestor_name).copied().unwrap_or(Matrix4::identity());
+            final_transform = bone_transforms
+                .get(&ancestor_name)
+                .copied()
+                .unwrap_or(Matrix4::identity());
 
             // メッシュノードからanimated ancestorまでの中間ノードのlocal_transformを累積
             // path_to_animated[0]がメッシュノード、最後がanimated ancestor
@@ -2124,7 +1525,10 @@ impl FbxData {
             }
         } else {
             // アニメーションされた祖先が見つからない場合、親ノードの変換をそのまま使用
-            final_transform = bone_transforms.get(parent_node).copied().unwrap_or(Matrix4::identity());
+            final_transform = bone_transforms
+                .get(parent_node)
+                .copied()
+                .unwrap_or(Matrix4::identity());
             if time < 0.1 {
                 log!("    No animated ancestor found, using parent node transform");
             }
@@ -2133,18 +1537,48 @@ impl FbxData {
         // デバッグ: 最初のフレームで変換行列をログ出力
         if time < 0.1 {
             log!("    Final transform (row-major display):");
-            log!("      [{:.4}, {:.4}, {:.4}, {:.4}]", final_transform[0][0], final_transform[1][0], final_transform[2][0], final_transform[3][0]);
-            log!("      [{:.4}, {:.4}, {:.4}, {:.4}]", final_transform[0][1], final_transform[1][1], final_transform[2][1], final_transform[3][1]);
-            log!("      [{:.4}, {:.4}, {:.4}, {:.4}]", final_transform[0][2], final_transform[1][2], final_transform[2][2], final_transform[3][2]);
-            log!("      [{:.4}, {:.4}, {:.4}, {:.4}]", final_transform[0][3], final_transform[1][3], final_transform[2][3], final_transform[3][3]);
+            log!(
+                "      [{:.4}, {:.4}, {:.4}, {:.4}]",
+                final_transform[0][0],
+                final_transform[1][0],
+                final_transform[2][0],
+                final_transform[3][0]
+            );
+            log!(
+                "      [{:.4}, {:.4}, {:.4}, {:.4}]",
+                final_transform[0][1],
+                final_transform[1][1],
+                final_transform[2][1],
+                final_transform[3][1]
+            );
+            log!(
+                "      [{:.4}, {:.4}, {:.4}, {:.4}]",
+                final_transform[0][2],
+                final_transform[1][2],
+                final_transform[2][2],
+                final_transform[3][2]
+            );
+            log!(
+                "      [{:.4}, {:.4}, {:.4}, {:.4}]",
+                final_transform[0][3],
+                final_transform[1][3],
+                final_transform[2][3],
+                final_transform[3][3]
+            );
         }
 
         let animated_transform = final_transform;
 
         let rotation_matrix = Matrix3::new(
-            animated_transform[0][0], animated_transform[0][1], animated_transform[0][2],
-            animated_transform[1][0], animated_transform[1][1], animated_transform[1][2],
-            animated_transform[2][0], animated_transform[2][1], animated_transform[2][2],
+            animated_transform[0][0],
+            animated_transform[0][1],
+            animated_transform[0][2],
+            animated_transform[1][0],
+            animated_transform[1][1],
+            animated_transform[1][2],
+            animated_transform[2][0],
+            animated_transform[2][1],
+            animated_transform[2][2],
         );
 
         for i in 0..self.local_positions.len() {
@@ -2171,24 +1605,38 @@ impl FbxData {
         }
 
         if time < 0.1 && !self.local_positions.is_empty() {
-            log!("    First vertex: local={:?} -> world={:?}",
-                 self.local_positions.get(0), self.positions.get(0));
+            log!(
+                "    First vertex: local={:?} -> world={:?}",
+                self.local_positions.get(0),
+                self.positions.get(0)
+            );
             if !self.local_normals.is_empty() {
-                log!("    First normal: local={:?} -> world={:?}",
-                     self.local_normals.get(0), self.normals.get(0));
+                log!(
+                    "    First normal: local={:?} -> world={:?}",
+                    self.local_normals.get(0),
+                    self.normals.get(0)
+                );
             }
         }
     }
 
     /// 階層アニメーションを適用（親ボーンの変換を各メッシュパーツに適用）
-    fn apply_hierarchy_animation(&mut self, animation: &FbxAnimation, nodes: &HashMap<String, BoneNode>, time: f32) {
+    fn apply_hierarchy_animation(
+        &mut self,
+        animation: &FbxAnimation,
+        nodes: &HashMap<String, BoneNode>,
+        time: f32,
+    ) {
         // 全ボーンの階層変換を計算
         let bone_transforms = compute_global_bone_transforms(animation, nodes, time);
 
         for mesh_part in &self.mesh_parts {
             // 親ボーンの変換を取得
             let parent_transform = if let Some(bone_name) = &mesh_part.parent_bone {
-                bone_transforms.get(bone_name).copied().unwrap_or(Matrix4::identity())
+                bone_transforms
+                    .get(bone_name)
+                    .copied()
+                    .unwrap_or(Matrix4::identity())
             } else {
                 Matrix4::identity()
             };
@@ -2199,7 +1647,8 @@ impl FbxData {
             // 各頂点を変換
             for (i, local_pos) in mesh_part.local_positions.iter().enumerate() {
                 let world_pos = final_transform.transform_point(Point3::from_vec(*local_pos));
-                self.positions[mesh_part.vertex_offset + i] = Vector3::new(world_pos.x, world_pos.y, world_pos.z);
+                self.positions[mesh_part.vertex_offset + i] =
+                    Vector3::new(world_pos.x, world_pos.y, world_pos.z);
             }
         }
     }
@@ -2223,7 +1672,8 @@ fn extract_unit_scale_factor(metadata: &russimp::metadata::MetaData) -> Option<f
 }
 
 fn get_unit_scale_to_meters(scene: &Scene) -> f32 {
-    let unit_scale_factor = scene.metadata
+    let unit_scale_factor = scene
+        .metadata
         .as_ref()
         .and_then(extract_unit_scale_factor)
         .unwrap_or(1.0);
@@ -2233,7 +1683,11 @@ fn get_unit_scale_to_meters(scene: &Scene) -> f32 {
     // UnitScaleFactor = 100.0 means 1 file unit = 1 m
     let scale_to_meters = unit_scale_factor * 0.01;
 
-    log!("UnitScaleFactor: {}, scale to meters: {}", unit_scale_factor, scale_to_meters);
+    log!(
+        "UnitScaleFactor: {}, scale to meters: {}",
+        unit_scale_factor,
+        scale_to_meters
+    );
     scale_to_meters
 }
 
@@ -2250,23 +1704,37 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
             // Don't join identical vertices - this can break animation
             // PostProcess::JoinIdenticalVertices,
         ],
-    ).context(format!("Failed to load FBX with russimp: {}", path))?;
+    )
+    .context(format!("Failed to load FBX with russimp: {}", path))?;
 
     let unit_scale = get_unit_scale_to_meters(&scene);
     let mut fbx_model = FbxModel::default();
+    fbx_model.unit_scale = unit_scale;
 
-    log!("Loaded scene with {} meshes, applying unit scale: {}", scene.meshes.len(), unit_scale);
+    log!(
+        "Loaded scene with {} meshes, applying unit scale: {}",
+        scene.meshes.len(),
+        unit_scale
+    );
 
     // Process each mesh
     for (mesh_idx, mesh) in scene.meshes.iter().enumerate() {
-        log!("Processing mesh {}: {} vertices, {} faces",
-             mesh_idx, mesh.vertices.len(), mesh.faces.len());
+        log!(
+            "Processing mesh {}: {} vertices, {} faces",
+            mesh_idx,
+            mesh.vertices.len(),
+            mesh.faces.len()
+        );
 
         let mut fbx_data = FbxData::new();
 
         // Extract material and texture information
         let material_index = mesh.material_index as usize;
-        log!("  Mesh {} uses material index: {}", mesh_idx, material_index);
+        log!(
+            "  Mesh {} uses material index: {}",
+            mesh_idx,
+            material_index
+        );
 
         if material_index < scene.materials.len() {
             let material = &scene.materials[material_index];
@@ -2276,16 +1744,40 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
             for (i, prop) in material.properties.iter().enumerate() {
                 match &prop.data {
                     russimp::material::PropertyTypeInfo::String(s) => {
-                        log!("    Property {}: key='{}', semantic={:?}, data=String('{}')", i, prop.key, prop.semantic, s);
+                        log!(
+                            "    Property {}: key='{}', semantic={:?}, data=String('{}')",
+                            i,
+                            prop.key,
+                            prop.semantic,
+                            s
+                        );
                     }
                     russimp::material::PropertyTypeInfo::FloatArray(arr) => {
-                        log!("    Property {}: key='{}', semantic={:?}, data=FloatArray(len={})", i, prop.key, prop.semantic, arr.len());
+                        log!(
+                            "    Property {}: key='{}', semantic={:?}, data=FloatArray(len={})",
+                            i,
+                            prop.key,
+                            prop.semantic,
+                            arr.len()
+                        );
                     }
                     russimp::material::PropertyTypeInfo::IntegerArray(arr) => {
-                        log!("    Property {}: key='{}', semantic={:?}, data=IntegerArray(len={})", i, prop.key, prop.semantic, arr.len());
+                        log!(
+                            "    Property {}: key='{}', semantic={:?}, data=IntegerArray(len={})",
+                            i,
+                            prop.key,
+                            prop.semantic,
+                            arr.len()
+                        );
                     }
                     russimp::material::PropertyTypeInfo::Buffer(buf) => {
-                        log!("    Property {}: key='{}', semantic={:?}, data=Buffer(len={})", i, prop.key, prop.semantic, buf.len());
+                        log!(
+                            "    Property {}: key='{}', semantic={:?}, data=Buffer(len={})",
+                            i,
+                            prop.key,
+                            prop.semantic,
+                            buf.len()
+                        );
                     }
                 }
             }
@@ -2294,7 +1786,11 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
             log!("  Material has {} textures:", material.textures.len());
             for (tex_type, texture) in &material.textures {
                 let texture_ref = texture.borrow();
-                log!("    Texture type: {:?}, filename: '{}'", tex_type, texture_ref.filename);
+                log!(
+                    "    Texture type: {:?}, filename: '{}'",
+                    tex_type,
+                    texture_ref.filename
+                );
             }
 
             // Get material name from properties
@@ -2336,16 +1832,24 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                         let texture_filename = format!("{}_D_A.tga.png", texture_base);
 
                         // Construct relative path from executable location
-                        let texture_path = format!("assets/models/phoenix-bird/textures/{}", texture_filename);
+                        let texture_path =
+                            format!("assets/models/phoenix-bird/textures/{}", texture_filename);
 
                         fbx_data.diffuse_texture = Some(texture_path.clone());
-                        log!("  Inferred texture from material name: {} -> {}", mat_name, texture_path);
+                        log!(
+                            "  Inferred texture from material name: {} -> {}",
+                            mat_name,
+                            texture_path
+                        );
                     }
                 }
             }
         } else {
-            log!("  Warning: material_index {} out of bounds (scene has {} materials)",
-                 material_index, scene.materials.len());
+            log!(
+                "  Warning: material_index {} out of bounds (scene has {} materials)",
+                material_index,
+                scene.materials.len()
+            );
         }
 
         // Extract vertices with unit scale applied
@@ -2359,8 +1863,16 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
             fbx_data.local_positions.push(scaled_pos);
 
             if i < 3 {
-                log!("  Vertex[{}]: ({:.3}, {:.3}, {:.3}) scaled from ({:.3}, {:.3}, {:.3})",
-                     i, scaled_pos.x, scaled_pos.y, scaled_pos.z, vertex.x, vertex.y, vertex.z);
+                log!(
+                    "  Vertex[{}]: ({:.3}, {:.3}, {:.3}) scaled from ({:.3}, {:.3}, {:.3})",
+                    i,
+                    scaled_pos.x,
+                    scaled_pos.y,
+                    scaled_pos.z,
+                    vertex.x,
+                    vertex.y,
+                    vertex.z
+                );
             }
         }
 
@@ -2372,11 +1884,20 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                 fbx_data.normals.push(n);
                 fbx_data.local_normals.push(n);
                 if i < 3 {
-                    log!("  Normal[{}]: ({:.3}, {:.3}, {:.3})", i, normal.x, normal.y, normal.z);
+                    log!(
+                        "  Normal[{}]: ({:.3}, {:.3}, {:.3})",
+                        i,
+                        normal.x,
+                        normal.y,
+                        normal.z
+                    );
                 }
             }
         } else {
-            log!("Mesh {} has no normals, generating default (0, 1, 0)", mesh_idx);
+            log!(
+                "Mesh {} has no normals, generating default (0, 1, 0)",
+                mesh_idx
+            );
             for _ in 0..mesh.vertices.len() {
                 let n = Vector3::new(0.0, 1.0, 0.0);
                 fbx_data.normals.push(n);
@@ -2400,7 +1921,10 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                 }
             }
         } else {
-            log!("Mesh {} has no UV coordinates, using default [0.5, 0.5]", mesh_idx);
+            log!(
+                "Mesh {} has no UV coordinates, using default [0.5, 0.5]",
+                mesh_idx
+            );
             // Fallback: use default UV coordinates
             for _ in 0..mesh.vertices.len() {
                 fbx_data.tex_coords.push([0.5, 0.5]);
@@ -2427,10 +1951,9 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                 // because it compensates for the row-major/column-major difference internally
                 let offset = &bone.offset_matrix;
                 let mut inverse_bind_pose = Matrix4::new(
-                    offset.a1, offset.b1, offset.c1, offset.d1,
-                    offset.a2, offset.b2, offset.c2, offset.d2,
-                    offset.a3, offset.b3, offset.c3, offset.d3,
-                    offset.a4, offset.b4, offset.c4, offset.d4,
+                    offset.a1, offset.b1, offset.c1, offset.d1, offset.a2, offset.b2, offset.c2,
+                    offset.d2, offset.a3, offset.b3, offset.c3, offset.d3, offset.a4, offset.b4,
+                    offset.c4, offset.d4,
                 );
 
                 // Apply unit scale to translation component of the matrix
@@ -2453,8 +1976,8 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                 if !vertex_indices.is_empty() {
                     fbx_data.clusters.push(ClusterInfo {
                         bone_name,
-                        transform: Matrix4::identity(),  // Mesh transform (identity for simplicity)
-                        transform_link,                   // Bone bind pose
+                        transform: Matrix4::identity(), // Mesh transform (identity for simplicity)
+                        transform_link,                 // Bone bind pose
                         inverse_bind_pose,
                         vertex_indices,
                         vertex_weights,
@@ -2462,11 +1985,18 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                 }
             }
 
-            log!("Extracted {} clusters for mesh {}", fbx_data.clusters.len(), mesh_idx);
+            log!(
+                "Extracted {} clusters for mesh {}",
+                fbx_data.clusters.len(),
+                mesh_idx
+            );
         }
 
-        log!("Extracted {} positions, {} indices",
-             fbx_data.positions.len(), fbx_data.indices.len());
+        log!(
+            "Extracted {} positions, {} indices",
+            fbx_data.positions.len(),
+            fbx_data.indices.len()
+        );
 
         fbx_model.fbx_data.push(fbx_data);
     }
@@ -2476,8 +2006,12 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
         log!("Found {} animations", scene.animations.len());
 
         for (anim_idx, animation) in scene.animations.iter().enumerate() {
-            log!("Animation {}: duration={}, ticks_per_second={}",
-                 anim_idx, animation.duration, animation.ticks_per_second);
+            log!(
+                "Animation {}: duration={}, ticks_per_second={}",
+                anim_idx,
+                animation.duration,
+                animation.ticks_per_second
+            );
 
             let anim_name = if animation.name.is_empty() {
                 format!("Animation_{}", anim_idx)
@@ -2505,11 +2039,13 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
             // Process node animations
             for channel in &animation.channels {
                 let channel_name = channel.name.clone();
-                log!("  Channel: {} ({} position keys, {} rotation keys, {} scaling keys)",
-                     channel_name,
-                     channel.position_keys.len(),
-                     channel.rotation_keys.len(),
-                     channel.scaling_keys.len());
+                log!(
+                    "  Channel: {} ({} position keys, {} rotation keys, {} scaling keys)",
+                    channel_name,
+                    channel.position_keys.len(),
+                    channel.rotation_keys.len(),
+                    channel.scaling_keys.len()
+                );
 
                 // Handle Assimp FBX split channels (e.g., "b_Root_$AssimpFbx$_Translation")
                 let (bone_name, channel_type) = if channel_name.contains("$AssimpFbx$") {
@@ -2526,14 +2062,15 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                 };
 
                 // Get or create bone animation
-                let bone_anim = fbx_animation.bone_animations.entry(bone_name.clone()).or_insert_with(|| {
-                    BoneAnimation {
+                let bone_anim = fbx_animation
+                    .bone_animations
+                    .entry(bone_name.clone())
+                    .or_insert_with(|| BoneAnimation {
                         bone_name: bone_name.clone(),
                         translation_keys: Vec::new(),
                         rotation_keys: Vec::new(),
                         scale_keys: Vec::new(),
-                    }
-                });
+                    });
 
                 // For $AssimpFbx$ channels, only process the specific transformation type
                 match channel_type {
@@ -2542,12 +2079,22 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                         let before_count = bone_anim.translation_keys.len();
 
                         // Debug: For specific bones, log first 10 position keys from the channel
-                        if (bone_name == "b_Head" || bone_name == "B_Spine" || bone_name == "b_Neck_2") && channel.position_keys.len() > 5 {
+                        if (bone_name == "b_Head"
+                            || bone_name == "B_Spine"
+                            || bone_name == "b_Neck_2")
+                            && channel.position_keys.len() > 5
+                        {
                             log!("    {} Translation channel has {} position keys (showing first 10):", bone_name, channel.position_keys.len());
                             for (i, pos_key) in channel.position_keys.iter().take(10).enumerate() {
                                 let time = (pos_key.time / animation.ticks_per_second) as f32;
-                                log!("      [{:2}] t={:.4} pos=[{:.3}, {:.3}, {:.3}]",
-                                     i, time, pos_key.value.x, pos_key.value.y, pos_key.value.z);
+                                log!(
+                                    "      [{:2}] t={:.4} pos=[{:.3}, {:.3}, {:.3}]",
+                                    i,
+                                    time,
+                                    pos_key.value.x,
+                                    pos_key.value.y,
+                                    pos_key.value.z
+                                );
                             }
                         }
 
@@ -2562,15 +2109,29 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                                 ],
                             });
                         }
-                        log!("    Added {} translation keys to {} (scaled by {})", bone_anim.translation_keys.len() - before_count, bone_name, unit_scale);
+                        log!(
+                            "    Added {} translation keys to {} (scaled by {})",
+                            bone_anim.translation_keys.len() - before_count,
+                            bone_name,
+                            unit_scale
+                        );
                     }
                     Some("Rotation") => {
                         // Only process rotation keys for Rotation channel
                         let before_count = bone_anim.rotation_keys.len();
 
                         // Debug: For specific bones, log first 10 rotation keys from the channel
-                        if (bone_name == "b_Root" || bone_name == "b_Head" || bone_name == "B_Spine") && channel.rotation_keys.len() > 5 {
-                            log!("    {} Rotation channel has {} rotation keys (showing first 10):", bone_name, channel.rotation_keys.len());
+                        if (bone_name == "b_Root"
+                            || bone_name == "b_Head"
+                            || bone_name == "B_Spine"
+                            || bone_name == "B_Tail_0")
+                            && channel.rotation_keys.len() > 5
+                        {
+                            log!(
+                                "    {} Rotation channel has {} rotation keys (showing first 10):",
+                                bone_name,
+                                channel.rotation_keys.len()
+                            );
                             for (i, rot_key) in channel.rotation_keys.iter().take(10).enumerate() {
                                 let time = (rot_key.time / animation.ticks_per_second) as f32;
                                 let quat = &rot_key.value;
@@ -2584,21 +2145,25 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                             let time = (rot_key.time / animation.ticks_per_second) as f32;
                             let quat = &rot_key.value;
 
-                            // Calculate quaternion length
-                            let quat_length = (quat.x * quat.x + quat.y * quat.y + quat.z * quat.z + quat.w * quat.w).sqrt();
-
-                            // Skip quaternions that are too small (essentially zero rotation)
-                            if quat_length < 0.01 {
-                                if bone_name == "b_Root" && time < 0.5 {
-                                    log!("    Skipping near-zero quaternion at t={:.4}: quat=[{:.3}, {:.3}, {:.3}, {:.3}] length={:.3}",
-                                         time, quat.x, quat.y, quat.z, quat.w, quat_length);
-                                }
+                            if quat.x.abs() > 1.0
+                                || quat.y.abs() > 1.0
+                                || quat.z.abs() > 1.0
+                                || quat.w.abs() > 1.0
+                            {
                                 continue;
                             }
 
-                            // Normalize quaternion if it's not normalized
+                            let quat_length = (quat.x * quat.x
+                                + quat.y * quat.y
+                                + quat.z * quat.z
+                                + quat.w * quat.w)
+                                .sqrt();
+
+                            if quat_length < 0.9 || quat_length > 1.1 {
+                                continue;
+                            }
+
                             let normalized_quat = if (quat_length - 1.0).abs() > 0.01 {
-                                // Normalize
                                 Quaternion::new(
                                     quat.w / quat_length,
                                     quat.x / quat_length,
@@ -2606,17 +2171,19 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                                     quat.z / quat_length,
                                 )
                             } else {
-                                // Already normalized - cgmath Quaternion is (w, x, y, z)
                                 Quaternion::new(quat.w, quat.x, quat.y, quat.z)
                             };
 
-                            // クォータニオンのまま保存（オイラー角変換なし）
                             bone_anim.rotation_keys.push(KeyFrame {
                                 time,
                                 value: normalized_quat,
                             });
                         }
-                        log!("    Added {} rotation keys to {}", bone_anim.rotation_keys.len() - before_count, bone_name);
+                        log!(
+                            "    Added {} rotation keys to {}",
+                            bone_anim.rotation_keys.len() - before_count,
+                            bone_name
+                        );
                     }
                     Some("Scaling") => {
                         // Only process scaling keys for Scaling channel
@@ -2628,23 +2195,44 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                                 value: [scale_key.value.x, scale_key.value.y, scale_key.value.z],
                             });
                         }
-                        log!("    Added {} scale keys to {}", bone_anim.scale_keys.len() - before_count, bone_name);
+                        log!(
+                            "    Added {} scale keys to {}",
+                            bone_anim.scale_keys.len() - before_count,
+                            bone_name
+                        );
                     }
                     None => {
                         // Normal channel with all transformation types
                         // Skip this channel if the bone has $AssimpFbx$ split channels
                         if bones_with_assimp_channels.contains(&bone_name) {
-                            log!("  Skipping channel '{}' because it has $AssimpFbx$ split channels", channel_name);
+                            log!(
+                                "  Skipping channel '{}' because it has $AssimpFbx$ split channels",
+                                channel_name
+                            );
                             continue;
                         }
 
                         // Debug: For specific bones, log first 10 position keys from the channel
-                        if (bone_name == "b_Head" || bone_name == "B_Spine" || bone_name == "b_Neck_2") && channel.position_keys.len() > 5 {
-                            log!("    {} Normal channel has {} position keys (showing first 10):", bone_name, channel.position_keys.len());
+                        if (bone_name == "b_Head"
+                            || bone_name == "B_Spine"
+                            || bone_name == "b_Neck_2")
+                            && channel.position_keys.len() > 5
+                        {
+                            log!(
+                                "    {} Normal channel has {} position keys (showing first 10):",
+                                bone_name,
+                                channel.position_keys.len()
+                            );
                             for (i, pos_key) in channel.position_keys.iter().take(10).enumerate() {
                                 let time = (pos_key.time / animation.ticks_per_second) as f32;
-                                log!("      [{:2}] t={:.4} pos=[{:.3}, {:.3}, {:.3}]",
-                                     i, time, pos_key.value.x, pos_key.value.y, pos_key.value.z);
+                                log!(
+                                    "      [{:2}] t={:.4} pos=[{:.3}, {:.3}, {:.3}]",
+                                    i,
+                                    time,
+                                    pos_key.value.x,
+                                    pos_key.value.y,
+                                    pos_key.value.z
+                                );
                             }
                         }
 
@@ -2661,8 +2249,16 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                         }
 
                         // Debug: For specific bones, log first 10 rotation keys from the channel
-                        if (bone_name == "b_Head" || bone_name == "B_Spine") && channel.rotation_keys.len() > 5 {
-                            log!("    {} Normal channel has {} rotation keys (showing first 10):", bone_name, channel.rotation_keys.len());
+                        if (bone_name == "b_Head"
+                            || bone_name == "B_Spine"
+                            || bone_name == "B_Tail_0")
+                            && channel.rotation_keys.len() > 5
+                        {
+                            log!(
+                                "    {} Normal channel has {} rotation keys (showing first 10):",
+                                bone_name,
+                                channel.rotation_keys.len()
+                            );
                             for (i, rot_key) in channel.rotation_keys.iter().take(10).enumerate() {
                                 let time = (rot_key.time / animation.ticks_per_second) as f32;
                                 let quat = &rot_key.value;
@@ -2676,17 +2272,25 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                             let time = (rot_key.time / animation.ticks_per_second) as f32;
                             let quat = &rot_key.value;
 
-                            // Calculate quaternion length
-                            let quat_length = (quat.x * quat.x + quat.y * quat.y + quat.z * quat.z + quat.w * quat.w).sqrt();
-
-                            // Skip quaternions that are too small (essentially zero rotation)
-                            if quat_length < 0.01 {
+                            if quat.x.abs() > 1.0
+                                || quat.y.abs() > 1.0
+                                || quat.z.abs() > 1.0
+                                || quat.w.abs() > 1.0
+                            {
                                 continue;
                             }
 
-                            // Normalize quaternion if it's not normalized
+                            let quat_length = (quat.x * quat.x
+                                + quat.y * quat.y
+                                + quat.z * quat.z
+                                + quat.w * quat.w)
+                                .sqrt();
+
+                            if quat_length < 0.9 || quat_length > 1.1 {
+                                continue;
+                            }
+
                             let normalized_quat = if (quat_length - 1.0).abs() > 0.01 {
-                                // Normalize
                                 Quaternion::new(
                                     quat.w / quat_length,
                                     quat.x / quat_length,
@@ -2694,11 +2298,9 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                                     quat.z / quat_length,
                                 )
                             } else {
-                                // Already normalized - cgmath Quaternion is (w, x, y, z)
                                 Quaternion::new(quat.w, quat.x, quat.y, quat.z)
                             };
 
-                            // クォータニオンのまま保存（オイラー角変換なし）
                             bone_anim.rotation_keys.push(KeyFrame {
                                 time,
                                 value: normalized_quat,
@@ -2714,7 +2316,11 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                         }
                     }
                     Some(other) => {
-                        log!("Warning: Unknown $AssimpFbx$ channel type '{}' in {}", other, channel_name);
+                        log!(
+                            "Warning: Unknown $AssimpFbx$ channel type '{}' in {}",
+                            other,
+                            channel_name
+                        );
                     }
                 }
             }
@@ -2723,60 +2329,34 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
             for bone_anim in fbx_animation.bone_animations.values_mut() {
                 if bone_anim.rotation_keys.len() > 1 {
                     let original_count = bone_anim.rotation_keys.len();
-                    bone_anim.rotation_keys = merge_duplicate_rotation_keys(&bone_anim.rotation_keys);
-                    if bone_anim.rotation_keys.len() != original_count && (bone_anim.bone_name == "b_Head" || bone_anim.bone_name == "b_Root") {
-                        log!("  Merged {} rotation keys for {} (was {}, now {})",
-                             original_count - bone_anim.rotation_keys.len(),
-                             bone_anim.bone_name,
-                             original_count,
-                             bone_anim.rotation_keys.len());
+                    bone_anim.rotation_keys =
+                        merge_duplicate_rotation_keys(&bone_anim.rotation_keys);
+                    if bone_anim.rotation_keys.len() != original_count
+                        && (bone_anim.bone_name == "b_Head" || bone_anim.bone_name == "b_Root")
+                    {
+                        log!(
+                            "  Merged {} rotation keys for {} (was {}, now {})",
+                            original_count - bone_anim.rotation_keys.len(),
+                            bone_anim.bone_name,
+                            original_count,
+                            bone_anim.rotation_keys.len()
+                        );
                     }
                 }
             }
 
-            // Debug: Log bone animation info for key bones
-            for bone_name in &["b_Root", "b_Head", "B_Tail_0", "B_Tail_1", "B_Spine", "b_Neck_0"] {
-                if let Some(bone_anim) = fbx_animation.bone_animations.get(*bone_name) {
-                    log!("DEBUG: {} animation - {} translation keys, {} rotation keys, {} scale keys",
-                         bone_name,
-                         bone_anim.translation_keys.len(),
-                         bone_anim.rotation_keys.len(),
-                         bone_anim.scale_keys.len());
-
-                    // Log first and last keyframe values
-                    if !bone_anim.translation_keys.is_empty() {
-                        let first = &bone_anim.translation_keys[0];
-                        let last = &bone_anim.translation_keys[bone_anim.translation_keys.len() - 1];
-                        log!("  Translation: first t={:.4} v=[{:.3}, {:.3}, {:.3}], last t={:.4} v=[{:.3}, {:.3}, {:.3}]",
-                             first.time, first.value[0], first.value[1], first.value[2],
-                             last.time, last.value[0], last.value[1], last.value[2]);
-                    }
-                    if !bone_anim.rotation_keys.is_empty() {
-                        let first = &bone_anim.rotation_keys[0];
-                        let last = &bone_anim.rotation_keys[bone_anim.rotation_keys.len() - 1];
-                        log!("  Rotation: first t={:.4} quat=[{:.3}, {:.3}, {:.3}, {:.3}], last t={:.4} quat=[{:.3}, {:.3}, {:.3}, {:.3}]",
-                             first.time, first.value.s, first.value.v.x, first.value.v.y, first.value.v.z,
-                             last.time, last.value.s, last.value.v.x, last.value.v.y, last.value.v.z);
-
-                        // Log first 10 rotation keys after merge for b_Head
-                        if *bone_name == "b_Head" {
-                            log!("  b_Head rotation keys after merge (showing first 10):");
-                            for (i, key) in bone_anim.rotation_keys.iter().take(10).enumerate() {
-                                let quat = &key.value;
-                                log!("    [{:2}] t={:.4} quat=[{:.3}, {:.3}, {:.3}, {:.3}]",
-                                     i, key.time, quat.s, quat.v.x, quat.v.y, quat.v.z);
-                            }
-                        }
-
-                        // For b_Root, log all rotation keyframes to investigate the 90-degree rotation issue
-                        if *bone_name == "b_Root" && bone_anim.rotation_keys.len() > 5 {
-                            log!("  b_Root rotation keyframes (showing first 10):");
-                            for (i, key) in bone_anim.rotation_keys.iter().take(10).enumerate() {
-                                let quat = &key.value;
-                                log!("    [{:2}] t={:.4} quat=[{:.3}, {:.3}, {:.3}, {:.3}]",
-                                     i, key.time, quat.s, quat.v.x, quat.v.y, quat.v.z);
-                            }
-                        }
+            if FBX_DEBUG.animation_enabled() {
+                for bone_name in &[
+                    "b_Root", "b_Head", "B_Tail_0", "B_Tail_1", "B_Spine", "b_Neck_0",
+                ] {
+                    if let Some(bone_anim) = fbx_animation.bone_animations.get(*bone_name) {
+                        log!(
+                            "DEBUG[Animation] {} - {} translation, {} rotation, {} scale keys",
+                            bone_name,
+                            bone_anim.translation_keys.len(),
+                            bone_anim.rotation_keys.len(),
+                            bone_anim.scale_keys.len()
+                        );
                     }
                 }
             }
@@ -2820,15 +2400,23 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                 // This ensures ALL bones have ALL keyframe types throughout the entire duration
                 // But only if bone_min_time > 0 (not a static pose)
                 if has_keys && bone_min_time > 0.0 && bone_min_time < actual_duration {
-                    log!("Adjusting duration based on bone '{}': {:.4} -> {:.4}", bone_name, fbx_animation.duration, bone_min_time);
+                    log!(
+                        "Adjusting duration based on bone '{}': {:.4} -> {:.4}",
+                        bone_name,
+                        fbx_animation.duration,
+                        bone_min_time
+                    );
                     actual_duration = bone_min_time;
                 }
             }
 
             // Only adjust duration if there are actually animated keyframes
             if has_animated_keys && actual_duration != fbx_animation.duration {
-                log!("Animation duration adjusted from {:.4}s to {:.4}s to prevent loop jumps",
-                     fbx_animation.duration, actual_duration);
+                log!(
+                    "Animation duration adjusted from {:.4}s to {:.4}s to prevent loop jumps",
+                    fbx_animation.duration,
+                    actual_duration
+                );
                 fbx_animation.duration = actual_duration;
             } else if !has_animated_keys {
                 log!("Animation appears to be a static pose (all keyframes at time=0), keeping original duration={:.4}s",
@@ -2844,7 +2432,11 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
 
     // Check which nodes have animations
     let animated_nodes: std::collections::HashSet<String> = if !fbx_model.animations.is_empty() {
-        fbx_model.animations[0].bone_animations.keys().cloned().collect()
+        fbx_model.animations[0]
+            .bone_animations
+            .keys()
+            .cloned()
+            .collect()
     } else {
         std::collections::HashSet::new()
     };
@@ -2855,39 +2447,24 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
         log!("  - {}", node_name);
     }
 
-    // Apply initial node transform to meshes OR set parent node for animation
-    log!("Setting up meshes for hierarchy animation...");
+    // Set parent_node for all meshes with node associations (hierarchy animation)
+    let has_any_animation = !animated_nodes.is_empty();
+    log!(
+        "Setting up meshes for hierarchy animation... (has_any_animation={})",
+        has_any_animation
+    );
+
     for (mesh_idx, fbx_data) in fbx_model.fbx_data.iter_mut().enumerate() {
-        // Only process meshes without clusters (hierarchy animation)
         if fbx_data.clusters.is_empty() {
             if let Some(node_name) = mesh_to_node.get(&mesh_idx) {
                 log!("  Mesh {} belongs to node: {}", mesh_idx, node_name);
 
-                // Check if this node or any ancestor has animation
-                let mut has_animated_ancestor = false;
-                let mut current = Some(node_name.clone());
-                log!("    Checking node hierarchy for animations:");
-                while let Some(ref node) = current {
-                    log!("      Checking node: {}", node);
-                    if animated_nodes.contains(node) {
-                        has_animated_ancestor = true;
-                        log!("        -> Found! This node has animation");
-                        break;
-                    }
-                    current = fbx_model.nodes.get(node).and_then(|n| n.parent.clone());
-                }
-                if !has_animated_ancestor {
-                    log!("      -> No animated ancestor found");
-                }
-
-                if has_animated_ancestor {
-                    // This mesh will be animated, set parent_node for animation updates
+                if has_any_animation {
                     fbx_data.parent_node = Some(node_name.clone());
-                    log!("    Mesh {} will be animated (has animated ancestor)", mesh_idx);
+                    log!("    Set parent_node for node animation");
                 } else {
-                    // This mesh is static, apply transform once at load time
-                    let global_transform = compute_global_node_transform_for_hierarchy(&fbx_model.nodes, node_name);
-
+                    let global_transform =
+                        compute_global_node_transform_for_hierarchy(&fbx_model.nodes, node_name);
                     for i in 0..fbx_data.positions.len() {
                         let local_pos = Point3::new(
                             fbx_data.local_positions[i].x,
@@ -2897,8 +2474,7 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
                         let world_pos = global_transform.transform_point(local_pos);
                         fbx_data.positions[i] = Vector3::new(world_pos.x, world_pos.y, world_pos.z);
                     }
-                    log!("    Mesh {} is static, applied transform at load time (first vertex: {:?})",
-                         mesh_idx, fbx_data.positions.get(0));
+                    log!("    No animations - applied static transform");
                 }
             } else {
                 log!("  Mesh {} has no associated node", mesh_idx);
@@ -2906,14 +2482,21 @@ pub fn load_fbx_with_russimp(path: &str) -> Result<FbxModel> {
         }
     }
 
-    log!("=== FBX loading complete: {} meshes, {} animations ===",
-         fbx_model.fbx_data.len(), fbx_model.animations.len());
+    log!(
+        "=== FBX loading complete: {} meshes, {} animations ===",
+        fbx_model.fbx_data.len(),
+        fbx_model.animations.len()
+    );
 
     Ok(fbx_model)
 }
 
 /// Build bone hierarchy from russimp scene and return mesh-to-node mapping
-fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel, unit_scale: f32) -> HashMap<usize, String> {
+fn build_bone_hierarchy_from_scene(
+    scene: &Scene,
+    fbx_model: &mut FbxModel,
+    unit_scale: f32,
+) -> HashMap<usize, String> {
     fn traverse_node(
         node: &russimp::node::Node,
         nodes: &mut HashMap<String, BoneNode>,
@@ -2942,10 +2525,22 @@ fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel, unit
         // To transpose: column 0 of cgmath = [a1, b1, c1, d1] (first element of each row)
         let transform = node.transformation;
         let mut local_transform = Matrix4::new(
-            transform.a1, transform.b1, transform.c1, transform.d1,  // Column 0 (a1=row0col0, b1=row1col0, c1=row2col0, d1=row3col0)
-            transform.a2, transform.b2, transform.c2, transform.d2,  // Column 1 (a2=row0col1, b2=row1col1, c2=row2col1, d2=row3col1)
-            transform.a3, transform.b3, transform.c3, transform.d3,  // Column 2
-            transform.a4, transform.b4, transform.c4, transform.d4,  // Column 3
+            transform.a1,
+            transform.b1,
+            transform.c1,
+            transform.d1, // Column 0 (a1=row0col0, b1=row1col0, c1=row2col0, d1=row3col0)
+            transform.a2,
+            transform.b2,
+            transform.c2,
+            transform.d2, // Column 1 (a2=row0col1, b2=row1col1, c2=row2col1, d2=row3col1)
+            transform.a3,
+            transform.b3,
+            transform.c3,
+            transform.d3, // Column 2
+            transform.a4,
+            transform.b4,
+            transform.c4,
+            transform.d4, // Column 3
         );
 
         // Apply unit scale to translation component of the matrix
@@ -2956,7 +2551,7 @@ fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel, unit
         // Use identity default values - local_transform already contains the full transform
         // These defaults are only used when there are no animation keys for a specific component
         let default_translation = [0.0, 0.0, 0.0];
-        let default_rotation = Quaternion::new(1.0, 0.0, 0.0, 0.0);  // 単位クォータニオン
+        let default_rotation = Quaternion::new(1.0, 0.0, 0.0, 0.0); // 単位クォータニオン
         let default_scaling = [1.0, 1.0, 1.0];
 
         let bone_node = BoneNode {
@@ -2993,10 +2588,22 @@ fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel, unit
         // To transpose: column 0 of cgmath = [a1, b1, c1, d1] (first element of each row)
         let transform = node.transformation;
         let local_transform = Matrix4::new(
-            transform.a1, transform.b1, transform.c1, transform.d1,  // Column 0 (a1=row0col0, b1=row1col0, c1=row2col0, d1=row3col0)
-            transform.a2, transform.b2, transform.c2, transform.d2,  // Column 1 (a2=row0col1, b2=row1col1, c2=row2col1, d2=row3col1)
-            transform.a3, transform.b3, transform.c3, transform.d3,  // Column 2
-            transform.a4, transform.b4, transform.c4, transform.d4,  // Column 3
+            transform.a1,
+            transform.b1,
+            transform.c1,
+            transform.d1, // Column 0 (a1=row0col0, b1=row1col0, c1=row2col0, d1=row3col0)
+            transform.a2,
+            transform.b2,
+            transform.c2,
+            transform.d2, // Column 1 (a2=row0col1, b2=row1col1, c2=row2col1, d2=row3col1)
+            transform.a3,
+            transform.b3,
+            transform.c3,
+            transform.d3, // Column 2
+            transform.a4,
+            transform.b4,
+            transform.c4,
+            transform.d4, // Column 3
         );
 
         // Calculate global transform for this node
@@ -3023,37 +2630,63 @@ fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel, unit
         for (name, node) in &fbx_model.nodes {
             log!("Node: {} (parent: {:?})", name, node.parent);
             log!("  local_transform (row-major display):");
-            log!("    [{:.6}, {:.6}, {:.6}, {:.6}]", node.local_transform[0][0], node.local_transform[1][0], node.local_transform[2][0], node.local_transform[3][0]);
-            log!("    [{:.6}, {:.6}, {:.6}, {:.6}]", node.local_transform[0][1], node.local_transform[1][1], node.local_transform[2][1], node.local_transform[3][1]);
-            log!("    [{:.6}, {:.6}, {:.6}, {:.6}]", node.local_transform[0][2], node.local_transform[1][2], node.local_transform[2][2], node.local_transform[3][2]);
-            log!("    [{:.6}, {:.6}, {:.6}, {:.6}]", node.local_transform[0][3], node.local_transform[1][3], node.local_transform[2][3], node.local_transform[3][3]);
+            log!(
+                "    [{:.6}, {:.6}, {:.6}, {:.6}]",
+                node.local_transform[0][0],
+                node.local_transform[1][0],
+                node.local_transform[2][0],
+                node.local_transform[3][0]
+            );
+            log!(
+                "    [{:.6}, {:.6}, {:.6}, {:.6}]",
+                node.local_transform[0][1],
+                node.local_transform[1][1],
+                node.local_transform[2][1],
+                node.local_transform[3][1]
+            );
+            log!(
+                "    [{:.6}, {:.6}, {:.6}, {:.6}]",
+                node.local_transform[0][2],
+                node.local_transform[1][2],
+                node.local_transform[2][2],
+                node.local_transform[3][2]
+            );
+            log!(
+                "    [{:.6}, {:.6}, {:.6}, {:.6}]",
+                node.local_transform[0][3],
+                node.local_transform[1][3],
+                node.local_transform[2][3],
+                node.local_transform[3][3]
+            );
         }
         log!("=== End of Nodes ===");
 
-        // Debug: Log $AssimpFbx$ nodes
-        for (name, node) in &fbx_model.nodes {
-            if name.contains("$AssimpFbx$") && name.contains("b_Root") {
-                log!("DEBUG: {} - parent: {:?}", name, node.parent);
-                log!("DEBUG: {} - local_transform: {:?}", name, node.local_transform);
+        if FBX_DEBUG.hierarchy_enabled() {
+            for (name, node) in &fbx_model.nodes {
+                if name.contains("$AssimpFbx$") && name.contains("b_Root") {
+                    debug_hierarchy(&format!("{} - parent: {:?}", name, node.parent));
+                }
             }
-        }
 
-        if let Some(b_root) = fbx_model.nodes.get("b_Root") {
-            log!("DEBUG: Bone b_Root - parent: {:?}", b_root.parent);
-            log!("DEBUG: Bone b_Root - local_transform: {:?}", b_root.local_transform);
-        }
-        if let Some(b_head) = fbx_model.nodes.get("b_Head") {
-            log!("DEBUG: Bone b_Head - parent: {:?}", b_head.parent);
-        }
-        if let Some(b_spine) = fbx_model.nodes.get("B_Spine") {
-            log!("DEBUG: Bone B_Spine - parent: {:?}", b_spine.parent);
+            if let Some(b_root) = fbx_model.nodes.get("b_Root") {
+                debug_hierarchy(&format!("Bone b_Root - parent: {:?}", b_root.parent));
+            }
+            if let Some(b_head) = fbx_model.nodes.get("b_Head") {
+                debug_hierarchy(&format!("Bone b_Head - parent: {:?}", b_head.parent));
+            }
+            if let Some(b_spine) = fbx_model.nodes.get("B_Spine") {
+                debug_hierarchy(&format!("Bone B_Spine - parent: {:?}", b_spine.parent));
+            }
         }
 
         // Build mesh-to-node mapping
         let mut mesh_to_node = HashMap::new();
         log!("Building mesh-to-node mapping...");
         build_mesh_node_mapping(root, &mut mesh_to_node, Matrix4::identity());
-        log!("Built mesh-to-node mapping with {} meshes", mesh_to_node.len());
+        log!(
+            "Built mesh-to-node mapping with {} meshes",
+            mesh_to_node.len()
+        );
 
         mesh_to_node
     } else {
@@ -3062,7 +2695,10 @@ fn build_bone_hierarchy_from_scene(scene: &Scene, fbx_model: &mut FbxModel, unit
 }
 
 /// Compute global transform for a node by traversing up the hierarchy
-fn compute_global_node_transform(nodes: &HashMap<String, BoneNode>, node_name: &str) -> Matrix4<f32> {
+fn compute_global_node_transform(
+    nodes: &HashMap<String, BoneNode>,
+    node_name: &str,
+) -> Matrix4<f32> {
     let mut transform = Matrix4::identity();
     let mut current_name = Some(node_name.to_string());
 
@@ -3085,7 +2721,10 @@ fn compute_global_node_transform(nodes: &HashMap<String, BoneNode>, node_name: &
 /// This function applies the necessary transpose to correct the transformation for hierarchy animations.
 /// Note: This is only needed for hierarchy animation. Skeletal animation doesn't need this because
 /// inverse_bind_pose compensates for the transpose issue.
-fn compute_global_node_transform_for_hierarchy(nodes: &HashMap<String, BoneNode>, node_name: &str) -> Matrix4<f32> {
+fn compute_global_node_transform_for_hierarchy(
+    nodes: &HashMap<String, BoneNode>,
+    node_name: &str,
+) -> Matrix4<f32> {
     let transform = compute_global_node_transform(nodes, node_name);
     // Transpose to fix row-major to column-major conversion
     transform.transpose()
@@ -3110,11 +2749,57 @@ fn quat_to_euler(x: f32, y: f32, z: f32, w: f32) -> [f32; 3] {
     let yaw = siny_cosp.atan2(cosy_cosp);
 
     // Convert radians to degrees (FBX uses degrees)
-    [
-        roll.to_degrees(),
-        pitch.to_degrees(),
-        yaw.to_degrees(),
-    ]
+    [roll.to_degrees(), pitch.to_degrees(), yaw.to_degrees()]
+}
+
+pub fn load_animations_with_fbxcel(path: &str) -> Result<Vec<FbxAnimation>> {
+    let file = std::fs::File::open(path)?;
+    let reader = std::io::BufReader::new(file);
+
+    log!("=== Loading FBX animations with fbxcel-dom: {} ===", path);
+
+    let doc =
+        AnyDocument::from_reader(reader).context(format!("Failed to parse FBX file: {}", path))?;
+
+    let mut animations = Vec::new();
+
+    match doc {
+        AnyDocument::V7400(_fbx_ver, doc) => {
+            for object in doc.objects() {
+                if object.class() == "AnimStack" {
+                    log!("Found AnimStack: {:?}", object.name());
+                    match extract_anim_stack(&object, &doc) {
+                        Ok(animation) => {
+                            log!(
+                                "Successfully extracted animation: {} ({} bone animations)",
+                                animation.name,
+                                animation.bone_animations.len()
+                            );
+                            for (bone_name, bone_anim) in &animation.bone_animations {
+                                log!(
+                                    "  Bone '{}': {} translation, {} rotation, {} scale keys",
+                                    bone_name,
+                                    bone_anim.translation_keys.len(),
+                                    bone_anim.rotation_keys.len(),
+                                    bone_anim.scale_keys.len()
+                                );
+                            }
+                            animations.push(animation);
+                        }
+                        Err(e) => {
+                            log!("Warning: Failed to extract AnimStack: {}", e);
+                        }
+                    }
+                }
+            }
+        }
+        _ => {
+            log!("Unsupported FBX version");
+        }
+    }
+
+    log!("Loaded {} animations from fbxcel-dom", animations.len());
+    Ok(animations)
 }
 
 #[cfg(test)]
@@ -3147,7 +2832,7 @@ mod tests {
     fn test_fbx_data_add_position() {
         let mut data = FbxData::new();
         data.positions.push(Vector3::new(1.0, 2.0, 3.0));
-        
+
         assert_eq!(data.positions.len(), 1);
         assert_eq!(data.positions[0].x, 1.0);
         assert_eq!(data.positions[0].y, 2.0);
@@ -3160,7 +2845,7 @@ mod tests {
         data.indices.push(0);
         data.indices.push(1);
         data.indices.push(2);
-        
+
         assert_eq!(data.indices.len(), 3);
         assert_eq!(data.indices, vec![0, 1, 2]);
     }
@@ -3169,7 +2854,7 @@ mod tests {
     fn test_fbx_data_add_tex_coord() {
         let mut data = FbxData::new();
         data.tex_coords.push([0.5, 0.5]);
-        
+
         assert_eq!(data.tex_coords.len(), 1);
         assert_eq!(data.tex_coords[0], [0.5, 0.5]);
     }
@@ -3178,7 +2863,7 @@ mod tests {
     fn test_fbx_data_set_parent_node() {
         let mut data = FbxData::new();
         data.parent_node = Some("ParentBone".to_string());
-        
+
         assert_eq!(data.parent_node, Some("ParentBone".to_string()));
     }
 
@@ -3186,7 +2871,7 @@ mod tests {
     fn test_fbx_data_set_material_name() {
         let mut data = FbxData::new();
         data.material_name = Some("Material01".to_string());
-        
+
         assert_eq!(data.material_name, Some("Material01".to_string()));
     }
 
@@ -3194,7 +2879,7 @@ mod tests {
     fn test_fbx_data_set_diffuse_texture() {
         let mut data = FbxData::new();
         data.diffuse_texture = Some("texture.png".to_string());
-        
+
         assert_eq!(data.diffuse_texture, Some("texture.png".to_string()));
     }
 
@@ -3205,7 +2890,7 @@ mod tests {
             duration: 1.0,
             bone_animations: HashMap::new(),
         };
-        
+
         assert_eq!(animation.name, "Walk");
         assert_eq!(animation.duration, 1.0);
         assert_eq!(animation.bone_animations.len(), 0);
@@ -3217,7 +2902,7 @@ mod tests {
             time: 0.5,
             value: [1.0, 2.0, 3.0],
         };
-        
+
         assert_eq!(keyframe.time, 0.5);
         assert_eq!(keyframe.value, [1.0, 2.0, 3.0]);
     }
@@ -3230,7 +2915,7 @@ mod tests {
             rotation_keys: Vec::new(),
             scale_keys: Vec::new(),
         };
-        
+
         assert_eq!(bone_anim.bone_name, "Bone01");
         assert_eq!(bone_anim.translation_keys.len(), 0);
         assert_eq!(bone_anim.rotation_keys.len(), 0);
@@ -3242,7 +2927,7 @@ mod tests {
         let mut model = FbxModel::default();
         let data = FbxData::new();
         model.fbx_data.push(data);
-        
+
         assert_eq!(model.fbx_data.len(), 1);
     }
 }

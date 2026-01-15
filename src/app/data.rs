@@ -3,8 +3,6 @@ use std::rc::Rc;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::debugview::*;
-use crate::loader::fbx::fbx::*;
-use crate::loader::gltf::gltf::*;
 use crate::platform::ImguiData;
 use crate::scene::billboard::BillboardData;
 use crate::scene::grid::GridData;
@@ -48,8 +46,6 @@ pub struct AppData {
     pub images_in_flight: Vec<vk::Fence>,
     pub msaa_samples: vk::SampleCountFlags,
     pub camera: Camera,
-    pub gltf_model: GltfModel,
-    pub fbx_model: FbxModel,
     pub animation_time: f32,
     pub animation_playing: bool,
     pub current_animation_index: usize,

@@ -3,7 +3,9 @@ use crate::app::{App, AppData, GUIData};
 use crate::debugview::*;
 use crate::math::*;
 use crate::scene::billboard::BillboardTransform;
-use crate::scene::render_resource::{FrameUBO, ObjectUBO};
+use crate::scene::components::{CameraState, Renderable, RenderContext};
+use crate::scene::render_resource::FrameUBO;
+use crate::scene::systems::update_object_ubos;
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::data::*;
 use crate::vulkanr::device::*;
@@ -298,43 +300,28 @@ impl App {
             self.rrdevice.device.unmap_memory(scene_memory);
         }
 
-        let model_grid = Mat4::from_scale(self.data.grid.scale);
-        let grid_object_ubo = ObjectUBO { model: model_grid };
-        if let Err(e) = self.data.render_resources.objects.update(
-            &self.rrdevice,
-            image_index,
-            self.data.grid.object_index,
-            &grid_object_ubo,
-        ) {
-            eprintln!("Failed to update Grid ObjectUBO: {}", e);
-        }
-
-        let gizmo_object_ubo = ObjectUBO {
-            model: Mat4::identity(),
+        let camera_state = CameraState {
+            position: camera_pos,
+            direction: camera_direction,
         };
-        if let Err(e) = self.data.render_resources.objects.update(
-            &self.rrdevice,
+        let render_ctx = RenderContext {
+            camera: &camera_state,
             image_index,
-            self.data.gizmo_data.object_index,
-            &gizmo_object_ubo,
-        ) {
-            eprintln!("Failed to update Gizmo ObjectUBO: {}", e);
-        }
-
-        let light_pos = self.data.rt_debug_state.light_position;
-        let distance = (light_pos - camera_pos).magnitude();
-        let scale_factor = distance * 0.03;
-        let light_gizmo_model = Mat4::from_translation(light_pos) * Mat4::from_scale(scale_factor);
-        let light_gizmo_object_ubo = ObjectUBO {
-            model: light_gizmo_model,
         };
-        if let Err(e) = self.data.render_resources.objects.update(
+
+        let renderables: Vec<&dyn Renderable> = vec![
+            &self.data.grid,
+            &self.data.gizmo_data,
+            &self.data.light_gizmo_data,
+        ];
+
+        if let Err(e) = update_object_ubos(
+            &renderables,
+            &render_ctx,
+            &self.data.render_resources.objects,
             &self.rrdevice,
-            image_index,
-            self.data.light_gizmo_data.object_index,
-            &light_gizmo_object_ubo,
         ) {
-            eprintln!("Failed to update LightGizmo ObjectUBO: {}", e);
+            eprintln!("Failed to update object UBOs: {}", e);
         }
 
         self.data

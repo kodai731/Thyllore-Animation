@@ -4,6 +4,7 @@ use crate::math::{
     is_point_in_rect, ray_to_line_segment_distance, ray_to_point_distance, screen_to_world_ray,
     view, Vec2, Vec3, Vec4,
 };
+use crate::scene::components::{Renderable, RenderContext, Updatable, UpdateContext};
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
 use crate::vulkanr::core::Device;
@@ -13,7 +14,7 @@ use crate::vulkanr::device::*;
 use crate::vulkanr::image::*;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::vulkan::*;
-use cgmath::{vec3, Deg, InnerSpace, Vector2, Vector3};
+use cgmath::{vec3, Deg, InnerSpace, Matrix4, Vector2, Vector3};
 use std::mem::size_of;
 
 #[repr(C)]
@@ -1161,5 +1162,37 @@ impl LightGizmoData {
                 0,
             );
         }
+    }
+}
+
+impl Updatable for LightGizmoData {
+    fn update(&mut self, _ctx: &UpdateContext) {}
+}
+
+impl Renderable for LightGizmoData {
+    fn object_index(&self) -> usize {
+        self.object_index
+    }
+
+    fn model_matrix(&self, ctx: &RenderContext) -> Matrix4<f32> {
+        let distance = (self.position - ctx.camera.position).magnitude();
+        let scale_factor = distance * 0.03;
+        Matrix4::from_translation(self.position) * Matrix4::from_scale(scale_factor)
+    }
+
+    fn pipeline(&self) -> &RRPipeline {
+        &self.pipeline
+    }
+
+    fn vertex_buffer(&self) -> vk::Buffer {
+        self.vertex_buffer.unwrap_or(vk::Buffer::null())
+    }
+
+    fn index_buffer(&self) -> vk::Buffer {
+        self.index_buffer.unwrap_or(vk::Buffer::null())
+    }
+
+    fn index_count(&self) -> u32 {
+        self.indices.len() as u32
     }
 }

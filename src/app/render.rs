@@ -1,4 +1,6 @@
 use crate::app::{App, GUIData};
+use crate::scene::components::Renderable;
+use crate::scene::systems::render_objects;
 use crate::vulkanr::command::*;
 use crate::vulkanr::vulkan::*;
 
@@ -435,60 +437,6 @@ impl App {
         );
     }
 
-    unsafe fn render_grid(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
-        self.rrdevice.device.cmd_bind_pipeline(
-            command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
-            self.data.grid.pipeline.pipeline,
-        );
-
-        self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
-
-        self.rrdevice.device.cmd_bind_vertex_buffers(
-            command_buffer,
-            0,
-            &[self.data.grid.vertex_buffer.buffer],
-            &[0],
-        );
-
-        self.rrdevice.device.cmd_bind_index_buffer(
-            command_buffer,
-            self.data.grid.index_buffer.buffer,
-            0,
-            vk::IndexType::UINT32,
-        );
-
-        let frame_set = self.data.render_resources.frame_set.sets[image_index];
-        self.rrdevice.device.cmd_bind_descriptor_sets(
-            command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
-            self.data.grid.pipeline.pipeline_layout,
-            0,
-            &[frame_set],
-            &[],
-        );
-
-        let object_set_idx = self.data.render_resources.objects.get_set_index(image_index, self.data.grid.object_index);
-        let object_set = self.data.render_resources.objects.sets[object_set_idx];
-        self.rrdevice.device.cmd_bind_descriptor_sets(
-            command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
-            self.data.grid.pipeline.pipeline_layout,
-            2,
-            &[object_set],
-            &[],
-        );
-
-        self.rrdevice.device.cmd_draw_indexed(
-            command_buffer,
-            self.data.grid.index_buffer.indices,
-            1,
-            0,
-            0,
-            0,
-        );
-    }
-
     unsafe fn render_models(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
         static mut RENDER_LOG_COUNTER: u32 = 0;
         static mut PREV_MESH_COUNT: usize = 0;
@@ -583,128 +531,29 @@ impl App {
         }
     }
 
-    unsafe fn render_gizmo(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
-        if let (Some(vertex_buffer), Some(index_buffer)) = (
-            self.data.gizmo_data.vertex_buffer,
-            self.data.gizmo_data.index_buffer,
-        ) {
-            self.rrdevice.device.cmd_bind_pipeline(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.data.gizmo_data.pipeline.pipeline,
-            );
-
-            self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
-
-            self.rrdevice.device.cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
-
-            self.rrdevice.device.cmd_bind_index_buffer(
-                command_buffer,
-                index_buffer,
-                0,
-                vk::IndexType::UINT32,
-            );
-
-            let frame_set = self.data.render_resources.frame_set.sets[image_index];
-            self.rrdevice.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.data.gizmo_data.pipeline.pipeline_layout,
-                0,
-                &[frame_set],
-                &[],
-            );
-
-            let object_set_idx = self.data.render_resources.objects.get_set_index(
-                image_index, self.data.gizmo_data.object_index
-            );
-            let object_set = self.data.render_resources.objects.sets[object_set_idx];
-            self.rrdevice.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.data.gizmo_data.pipeline.pipeline_layout,
-                2,
-                &[object_set],
-                &[],
-            );
-
-            self.rrdevice.device.cmd_draw_indexed(
-                command_buffer,
-                self.data.gizmo_data.indices.len() as u32,
-                1,
-                0,
-                0,
-                0,
-            );
-        }
-    }
-
-    unsafe fn render_light_gizmo(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
-        if let (Some(vertex_buffer), Some(index_buffer)) = (
-            self.data.light_gizmo_data.vertex_buffer,
-            self.data.light_gizmo_data.index_buffer,
-        ) {
-            self.rrdevice.device.cmd_bind_pipeline(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.data.light_gizmo_data.pipeline.pipeline,
-            );
-
-            self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
-
-            self.rrdevice.device.cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
-
-            self.rrdevice.device.cmd_bind_index_buffer(
-                command_buffer,
-                index_buffer,
-                0,
-                vk::IndexType::UINT32,
-            );
-
-            let frame_set = self.data.render_resources.frame_set.sets[image_index];
-            self.rrdevice.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.data.light_gizmo_data.pipeline.pipeline_layout,
-                0,
-                &[frame_set],
-                &[],
-            );
-
-            let object_set_idx = self.data.render_resources.objects.get_set_index(
-                image_index, self.data.light_gizmo_data.object_index
-            );
-            let object_set = self.data.render_resources.objects.sets[object_set_idx];
-            self.rrdevice.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.data.light_gizmo_data.pipeline.pipeline_layout,
-                2,
-                &[object_set],
-                &[],
-            );
-
-            self.rrdevice.device.cmd_draw_indexed(
-                command_buffer,
-                self.data.light_gizmo_data.indices.len() as u32,
-                1,
-                0,
-                0,
-                0,
-            );
-        }
-    }
-
     pub unsafe fn record_3d_rendering(
         &self,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        self.render_grid(command_buffer, image_index);
-        self.render_models(command_buffer, image_index);
+        let renderables: Vec<&dyn Renderable> = vec![
+            &self.data.grid,
+            &self.data.gizmo_data,
+            &self.data.light_gizmo_data,
+        ];
 
-        self.render_gizmo(command_buffer, image_index);
-        self.render_light_gizmo(command_buffer, image_index);
+        let frame_set = self.data.render_resources.frame_set.sets[image_index];
+
+        render_objects(
+            &renderables,
+            command_buffer,
+            image_index,
+            frame_set,
+            &self.data.render_resources.objects,
+            &self.rrdevice,
+        );
+
+        self.render_models(command_buffer, image_index);
 
         Ok(())
     }

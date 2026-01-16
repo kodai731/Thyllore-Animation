@@ -1,9 +1,10 @@
+use crate::scene::components::{Renderable, RenderContext, Updatable, UpdateContext};
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
 use crate::vulkanr::device::*;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::vulkan::*;
-use cgmath::{vec3, Matrix3};
+use cgmath::{vec3, Matrix3, Matrix4, SquareMatrix};
 use std::mem::size_of;
 
 /// Gizmo用の頂点構造（位置 + 色）
@@ -210,5 +211,35 @@ impl GridGizmoData {
         self.vertex_buffer_memory = None;
         self.index_buffer = None;
         self.index_buffer_memory = None;
+    }
+}
+
+impl Updatable for GridGizmoData {
+    fn update(&mut self, _ctx: &UpdateContext) {}
+}
+
+impl Renderable for GridGizmoData {
+    fn object_index(&self) -> usize {
+        self.object_index
+    }
+
+    fn model_matrix(&self, _ctx: &RenderContext) -> Matrix4<f32> {
+        Matrix4::identity()
+    }
+
+    fn pipeline(&self) -> &RRPipeline {
+        &self.pipeline
+    }
+
+    fn vertex_buffer(&self) -> vk::Buffer {
+        self.vertex_buffer.unwrap_or(vk::Buffer::null())
+    }
+
+    fn index_buffer(&self) -> vk::Buffer {
+        self.index_buffer.unwrap_or(vk::Buffer::null())
+    }
+
+    fn index_count(&self) -> u32 {
+        self.indices.len() as u32
     }
 }

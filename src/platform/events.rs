@@ -345,7 +345,11 @@ impl System {
                                 platform.prepare_render(ui, &window);
                                 let draw_data = imgui.render();
 
-                                unsafe { app.render(&window, gui_data, draw_data) }.unwrap();
+                                unsafe {
+                                    let image_index = app.begin_frame(gui_data).unwrap();
+                                    app.update(image_index, gui_data).unwrap();
+                                    app.render(image_index, gui_data, draw_data).unwrap();
+                                }
 
                                 gui_data.mouse_wheel = 0.0;
                             }

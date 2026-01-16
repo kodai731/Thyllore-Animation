@@ -1,4 +1,5 @@
-use crate::app::{App, AppData};
+use crate::app::App;
+use crate::scene::grid::GridData;
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::data::*;
 use crate::math::*;
@@ -7,7 +8,7 @@ use anyhow::Result;
 
 impl App {
     pub(crate) unsafe fn create_grid_data(
-        data: &mut AppData,
+        grid: &mut GridData,
         index: i32,
         color: Vec4,
         tex_coord: Vec2,
@@ -44,14 +45,14 @@ impl App {
             let vertex2 = vulkan_data::Vertex::new(pos2, color, tex_coord);
             let vertex3 = vulkan_data::Vertex::new(-pos1, color, tex_coord);
             let vertex4 = vulkan_data::Vertex::new(-pos2, color, tex_coord);
-            data.grid.vertices.push(vertex1);
-            data.grid.indices.push(data.grid.indices.len() as u32);
-            data.grid.vertices.push(vertex2);
-            data.grid.indices.push(data.grid.indices.len() as u32);
-            data.grid.vertices.push(vertex3);
-            data.grid.indices.push(data.grid.indices.len() as u32);
-            data.grid.vertices.push(vertex4);
-            data.grid.indices.push(data.grid.indices.len() as u32);
+            grid.vertices.push(vertex1);
+            grid.indices.push(grid.indices.len() as u32);
+            grid.vertices.push(vertex2);
+            grid.indices.push(grid.indices.len() as u32);
+            grid.vertices.push(vertex3);
+            grid.indices.push(grid.indices.len() as u32);
+            grid.vertices.push(vertex4);
+            grid.indices.push(grid.indices.len() as u32);
         }
 
         Ok(())

@@ -6,6 +6,7 @@ pub mod cube;
 pub mod grid;
 pub mod raytracing;
 pub mod render_resource;
+pub mod scene;
 pub mod systems;
 
 pub use animation::*;
@@ -16,4 +17,5 @@ pub use cube::CubeModel;
 pub use grid::GridData;
 pub use raytracing::RayTracingData;
 pub use render_resource::*;
+pub use scene::*;
 pub use systems::*;

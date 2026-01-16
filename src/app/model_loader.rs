@@ -85,6 +85,7 @@ pub unsafe fn replace_model_with_cube(
     instance: &Instance,
     rrdevice: &RRDevice,
     data: &mut AppData,
+    scene: &crate::scene::Scene,
     size: f32,
     position: [f32; 3],
 ) -> Result<()> {
@@ -164,7 +165,7 @@ pub unsafe fn replace_model_with_cube(
         }
     }
 
-    if let Some(ref billboard_texture) = data.light_gizmo_data.billboard_texture {
+    if let Some(ref billboard_texture) = scene.light_gizmo().billboard_texture {
         data.billboard.descriptor_set.update_descriptor_sets(
             rrdevice,
             &data.rrswapchain,

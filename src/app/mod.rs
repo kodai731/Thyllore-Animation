@@ -12,17 +12,18 @@ pub use data::AppData;
 pub use gui_data::GUIData;
 pub use init::*;
 
+use crate::scene::Scene;
 use crate::vulkanr::device::*;
 
 use std::time::Instant;
 use vulkanalia::prelude::v1_0::*;
 
-#[derive(Clone, Debug)]
 pub struct App {
     pub entry: Entry,
     pub instance: Instance,
     pub rrdevice: RRDevice,
     pub data: AppData,
+    pub scene: Scene,
     pub frame: usize,
     pub resized: bool,
     pub start: Instant,

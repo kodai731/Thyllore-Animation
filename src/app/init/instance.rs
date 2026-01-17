@@ -2,7 +2,10 @@ use crate::app::{App, AppData};
 
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
-use crate::vulkanr::context::{AnimationPlayback, CommandState, FrameSync, PipelineState, RenderTargets, SurfaceState, SwapchainState};
+use crate::vulkanr::context::{
+    AnimationPlayback, CommandState, FrameSync, PipelineState, RenderTargets, SurfaceState,
+    SwapchainState,
+};
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::data::*;
 use crate::vulkanr::descriptor::*;
@@ -13,28 +16,28 @@ use crate::vulkanr::render::*;
 use crate::vulkanr::swapchain::*;
 use crate::vulkanr::vulkan::*;
 
-use crate::math::*;
 use crate::debugview::*;
+use crate::math::*;
 use crate::scene::billboard::{BillboardData, BillboardVertex};
-use crate::scene::grid::GridData;
 use crate::scene::graphics_resource::GraphicsResources;
+use crate::scene::grid::GridData;
 use crate::scene::{Camera, Scene};
 
 use vulkanalia::Device as VkDevice;
 
 use anyhow::{anyhow, Result};
+use std::borrow::BorrowMut;
 use std::collections::HashSet;
 use std::ffi::CStr;
-use std::os::raw::c_void;
 use std::mem::size_of;
+use std::os::raw::c_void;
 use std::ptr::copy_nonoverlapping as memcpy;
-use std::time::Instant;
-use std::borrow::BorrowMut;
 use std::rc::Rc;
+use std::time::Instant;
 
-use winit::window::Window;
-use vulkanalia::prelude::v1_0::*;
 use vulkanalia::loader::{LibloadingLoader, LIBRARY};
+use vulkanalia::prelude::v1_0::*;
+use winit::window::Window;
 
 // Constants
 pub const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
@@ -88,32 +91,40 @@ pub fn cleanup_old_screenshots() -> Result<()> {
     Ok(())
 }
 
-// Initialization methods for App
+struct VulkanResources {
+    messenger: vk::DebugUtilsMessengerEXT,
+    surface: vk::SurfaceKHR,
+    rrswapchain: RRSwapchain,
+    rrrender: RRRender,
+    rrcommand_pool: Rc<RRCommandPool>,
+    rrcommand_buffer: RRCommandBuffer,
+    model_pipeline: RRPipeline,
+    image_available_semaphores: Vec<vk::Semaphore>,
+    render_finish_semaphores: Vec<vk::Semaphore>,
+    in_flight_fences: Vec<vk::Fence>,
+}
+
 impl App {
     pub unsafe fn create(window: &Window) -> Result<Self> {
         let loader = LibloadingLoader::new(LIBRARY)?;
         let entry = Entry::new(loader).map_err(|b| anyhow!("{}", b))?;
         let mut data = AppData::default();
-        let instance = Self::create_instance(window, &entry, &mut data)?;
-        data.surface = vk_window::create_surface(&instance, &window, &window)?;
+
+        let (instance, messenger) = Self::create_instance_with_messenger(window, &entry)?;
+        let surface = vk_window::create_surface(&instance, &window, &window)?;
         let rrdevice = RRDevice::new(
             &entry,
             &instance,
-            &data.surface,
+            &surface,
             VALIDATION_ENABLED,
             VALIDATION_LAYER,
             DEVICE_EXTENSIONS,
             PORTABILITY_MACOS_VERSION,
         )?;
-        data.rrswapchain = RRSwapchain::new(window, &instance, &data.surface, &rrdevice);
-        data.rrcommand_pool = Rc::new(RRCommandPool::new(&instance, &data.surface, &rrdevice));
-        data.rrrender = RRRender::new(
-            &instance,
-            &rrdevice,
-            &data.rrswapchain,
-            &data.rrcommand_pool.borrow_mut(),
-        );
-        let swapchain_image_count = data.rrswapchain.swapchain_images.len();
+        let rrswapchain = RRSwapchain::new(window, &instance, &surface, &rrdevice);
+        let rrcommand_pool = Rc::new(RRCommandPool::new(&instance, &surface, &rrdevice));
+        let rrrender = RRRender::new(&instance, &rrdevice, &rrswapchain, rrcommand_pool.as_ref());
+        let swapchain_image_count = rrswapchain.swapchain_images.len();
         let max_materials = 32;
         let max_objects = 64;
         data.graphics_resources = GraphicsResources::new(
@@ -122,13 +133,14 @@ impl App {
             swapchain_image_count,
             max_materials,
             max_objects,
-        ).expect("Failed to create render resources");
+        )
+        .expect("Failed to create render resources");
 
         let render_layouts = data.graphics_resources.get_layouts();
-        data.model_pipeline = RRPipeline::new_with_graphics_resources(
+        let model_pipeline = RRPipeline::new_with_graphics_resources(
             &rrdevice,
-            &data.rrswapchain,
-            &data.rrrender,
+            &rrswapchain,
+            &rrrender,
             &render_layouts,
             "assets/shaders/vert.spv",
             "assets/shaders/frag.spv",
@@ -138,8 +150,8 @@ impl App {
         );
         let grid_pipeline = RRPipeline::new_with_graphics_resources(
             &rrdevice,
-            &data.rrswapchain,
-            &data.rrrender,
+            &rrswapchain,
+            &rrrender,
             &render_layouts,
             "assets/shaders/gridVert.spv",
             "assets/shaders/gridFrag.spv",
@@ -150,59 +162,79 @@ impl App {
 
         let mut gizmo_data = GridGizmoData::new();
         gizmo_data.object_index = data.graphics_resources.objects.allocate_slot();
-        crate::log!("Allocated object_index {} for Gizmo", gizmo_data.object_index);
+        crate::log!(
+            "Allocated object_index {} for Gizmo",
+            gizmo_data.object_index
+        );
         println!("allocated gizmo object_index");
 
-        gizmo_data.pipeline = PipelineBuilder::new("assets/shaders/gizmoVert.spv", "assets/shaders/gizmoFrag.spv")
-            .vertex_input(VertexInputConfig::Custom {
-                bindings: vec![GizmoVertex::binding_description()],
-                attributes: GizmoVertex::attribute_descriptions().to_vec(),
-            })
-            .topology(vk::PrimitiveTopology::LINE_LIST)
-            .polygon_mode(vk::PolygonMode::LINE)
-            .no_depth_test()
-            .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
-            .descriptor_layouts(render_layouts.to_vec())
-            .build(&rrdevice, &data.rrrender, Some(data.rrswapchain.swapchain_extent))
-            .expect("Failed to create gizmo pipeline");
+        gizmo_data.pipeline = PipelineBuilder::new(
+            "assets/shaders/gizmoVert.spv",
+            "assets/shaders/gizmoFrag.spv",
+        )
+        .vertex_input(VertexInputConfig::Custom {
+            bindings: vec![GizmoVertex::binding_description()],
+            attributes: GizmoVertex::attribute_descriptions().to_vec(),
+        })
+        .topology(vk::PrimitiveTopology::LINE_LIST)
+        .polygon_mode(vk::PolygonMode::LINE)
+        .no_depth_test()
+        .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
+        .descriptor_layouts(render_layouts.to_vec())
+        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+        .expect("Failed to create gizmo pipeline");
 
-        gizmo_data.create_buffers(&instance, &rrdevice, &data.rrcommand_pool)
+        gizmo_data
+            .create_buffers(&instance, &rrdevice, rrcommand_pool.as_ref())
             .expect("Failed to create gizmo buffers");
 
         let mut light_gizmo_data = LightGizmoData::new(data.rt_debug_state.light_position);
         light_gizmo_data.pipeline = gizmo_data.pipeline.clone();
         light_gizmo_data.object_index = data.graphics_resources.objects.allocate_slot();
-        crate::log!("Allocated object_index {} for LightGizmo", light_gizmo_data.object_index);
-        light_gizmo_data.create_buffers(&instance, &rrdevice, &data.rrcommand_pool)
+        crate::log!(
+            "Allocated object_index {} for LightGizmo",
+            light_gizmo_data.object_index
+        );
+        light_gizmo_data
+            .create_buffers(&instance, &rrdevice, rrcommand_pool.as_ref())
             .expect("Failed to create light gizmo buffers");
 
         let mut billboard_data = BillboardData::new();
         billboard_data.object_index = data.graphics_resources.objects.allocate_slot();
-        crate::log!("Allocated object_index {} for Billboard", billboard_data.object_index);
+        crate::log!(
+            "Allocated object_index {} for Billboard",
+            billboard_data.object_index
+        );
 
-        billboard_data.create_buffers(&instance, &rrdevice, &data.rrcommand_pool)
+        billboard_data
+            .create_buffers(&instance, &rrdevice, rrcommand_pool.as_ref())
             .expect("Failed to create billboard buffers");
 
-        billboard_data.descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &data.rrswapchain)
+        billboard_data.descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &rrswapchain)
             .expect("Failed to create billboard descriptor set");
-        billboard_data.descriptor_set
-            .rrdata
-            .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "billboard"));
+        billboard_data.descriptor_set.rrdata.push(RRData::new(
+            &instance,
+            &rrdevice,
+            &rrswapchain,
+            "billboard",
+        ));
 
-        billboard_data.descriptor_set
-            .allocate_descriptor_sets(&rrdevice, &data.rrswapchain)
+        billboard_data
+            .descriptor_set
+            .allocate_descriptor_sets(&rrdevice, &rrswapchain)
             .expect("Failed to allocate billboard descriptor sets");
 
         if let Some(ref billboard_texture) = billboard_data.texture {
-            billboard_data.descriptor_set
-                .update_descriptor_sets(&rrdevice, &data.rrswapchain, billboard_texture)
+            billboard_data
+                .descriptor_set
+                .update_descriptor_sets(&rrdevice, &rrswapchain, billboard_texture)
                 .expect("Failed to update billboard descriptor sets");
         }
 
         billboard_data.pipeline = RRPipeline::new_billboard(
             &rrdevice,
-            &data.rrrender,
-            &data.rrswapchain,
+            &rrrender,
+            &rrswapchain,
             billboard_data.descriptor_set.descriptor_set_layout,
             "assets/shaders/billboardVert.spv",
             "assets/shaders/billboardFrag.spv",
@@ -219,9 +251,21 @@ impl App {
         scene.add(billboard_data);
 
         crate::log!("Starting ray tracing initialization...");
-        crate::log!("swapchain extent: {}x{}", data.rrswapchain.swapchain_extent.width, data.rrswapchain.swapchain_extent.height);
+        crate::log!(
+            "swapchain extent: {}x{}",
+            rrswapchain.swapchain_extent.width,
+            rrswapchain.swapchain_extent.height
+        );
 
-        match Self::init_ray_tracing(&instance, &rrdevice, &mut data) {
+        let mut rrrender_mut = rrrender.clone();
+        match Self::init_ray_tracing_with_resources(
+            &instance,
+            &rrdevice,
+            &mut data,
+            &rrswapchain,
+            rrcommand_pool.as_ref(),
+            &mut rrrender_mut,
+        ) {
             Ok(_) => {
                 crate::log!("init_ray_tracing succeeded");
                 crate::log!("gbuffer is_some: {}", data.raytracing.gbuffer.is_some());
@@ -230,10 +274,20 @@ impl App {
                 crate::log!("Failed to initialize ray tracing: {:?}", e);
             }
         }
+        let rrrender = rrrender_mut;
         crate::log!("initialized ray tracing resources");
 
         let default_model_path = "assets/models/stickman/stickman.glb";
-        if let Err(e) = Self::load_model_from_path(&instance, &rrdevice, &mut data, &scene, default_model_path) {
+        if let Err(e) = Self::load_model_from_path_with_resources(
+            &instance,
+            &rrdevice,
+            &mut data,
+            &scene,
+            &rrcommand_pool,
+            &rrswapchain,
+            &rrrender,
+            default_model_path,
+        ) {
             eprintln!("Failed to load model: {:?}", e);
             crate::log!("Failed to load model: {:?}", e);
         }
@@ -260,7 +314,7 @@ impl App {
         grid.vertex_buffer = RRVertexBuffer::new(
             &instance,
             &rrdevice,
-            &data.rrcommand_pool,
+            rrcommand_pool.as_ref(),
             (size_of::<vulkan_data::Vertex>() * grid.vertices.len()) as vk::DeviceSize,
             grid.vertices.as_ptr() as *const c_void,
             grid.vertices.len(),
@@ -269,7 +323,7 @@ impl App {
         grid.index_buffer = RRIndexBuffer::new(
             &instance,
             &rrdevice,
-            &data.rrcommand_pool,
+            rrcommand_pool.as_ref(),
             (size_of::<u32>() * grid.indices.len()) as u64,
             grid.indices.as_ptr() as *const c_void,
             grid.indices.len(),
@@ -280,20 +334,32 @@ impl App {
         crate::log!("Allocated object_index {} for Grid", grid.object_index);
         println!("allocated grid object_index");
 
-        data.rrcommand_buffer = RRCommandBuffer::new(&data.rrcommand_pool);
-        if let Err(e) = RRCommandBuffer::allocate_command_buffers(
-            &rrdevice,
-            &data.rrrender,
-            &mut data.rrcommand_buffer,
-        ) {
+        let mut rrcommand_buffer = RRCommandBuffer::new(&rrcommand_pool);
+        if let Err(e) =
+            RRCommandBuffer::allocate_command_buffers(&rrdevice, &rrrender, &mut rrcommand_buffer)
+        {
             eprintln!("failed to allocate command buffers: {:?}", e);
         }
         println!("created command buffers");
 
-        let _ = Self::create_sync_objects(&rrdevice.device, &mut data)?;
+        let (image_available_semaphores, render_finish_semaphores, in_flight_fences) =
+            Self::create_sync_objects_new(&rrdevice.device)?;
         println!("created sync objects");
 
-        Self::register_resources(&mut data);
+        let vulkan_resources = VulkanResources {
+            messenger,
+            surface,
+            rrswapchain,
+            rrrender,
+            rrcommand_pool,
+            rrcommand_buffer,
+            model_pipeline,
+            image_available_semaphores,
+            render_finish_semaphores,
+            in_flight_fences,
+        };
+
+        Self::register_resources_new(&mut data, &vulkan_resources, default_model_path);
         println!("registered ECS resources");
 
         let frame = 0 as usize;
@@ -319,11 +385,38 @@ impl App {
         })
     }
 
-    unsafe fn create_instance(
+    extern "system" fn debug_callback(
+        severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+        type_: vk::DebugUtilsMessageTypeFlagsEXT,
+        data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+        _: *mut c_void,
+    ) -> vk::Bool32 {
+        let data = unsafe { *data };
+        let message = unsafe { CStr::from_ptr(data.message) }.to_string_lossy();
+
+        // コンソール（色付き）とログファイルの両方に出力
+        use log::{debug, error, trace, warn};
+        if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::ERROR {
+            error!("({:?}) {}", type_, message);
+            crate::log!("ERROR ({:?}) {}", type_, message);
+        } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING {
+            warn!("({:?}) {}", type_, message);
+            crate::log!("WARN ({:?}) {}", type_, message);
+        } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::INFO {
+            debug!("({:?}) {}", type_, message);
+            crate::log!("INFO ({:?}) {}", type_, message);
+        } else {
+            trace!("({:?}) {}", type_, message);
+            crate::log!("DEBUG ({:?}) {}", type_, message);
+        }
+
+        vk::FALSE
+    }
+
+    unsafe fn create_instance_with_messenger(
         window: &Window,
         entry: &Entry,
-        data: &mut AppData,
-    ) -> Result<Instance> {
+    ) -> Result<(Instance, vk::DebugUtilsMessengerEXT)> {
         let application_info = vk::ApplicationInfo::builder()
             .application_name(b"Vulkan Tutorial\0")
             .application_version(vk::make_version(1, 0, 0))
@@ -340,7 +433,6 @@ impl App {
             extensions.push(vk::EXT_DEBUG_UTILS_EXTENSION.name.as_ptr());
         }
 
-        // for Mac ablability
         let flags = if cfg!(target_os = "macos") && entry.version()? >= PORTABILITY_MACOS_VERSION {
             log::info!("Enabling extensions for macOS portability.");
             extensions.push(
@@ -387,96 +479,64 @@ impl App {
 
         let instance = entry.create_instance(&info, None)?;
 
-        if VALIDATION_ENABLED {
-            data.messenger = instance.create_debug_utils_messenger_ext(&debug_info, None)?;
-        }
-
-        Ok(instance)
-    }
-
-    extern "system" fn debug_callback(
-        severity: vk::DebugUtilsMessageSeverityFlagsEXT,
-        type_: vk::DebugUtilsMessageTypeFlagsEXT,
-        data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-        _: *mut c_void,
-    ) -> vk::Bool32 {
-        let data = unsafe { *data };
-        let message = unsafe { CStr::from_ptr(data.message) }.to_string_lossy();
-
-        // コンソール（色付き）とログファイルの両方に出力
-        use log::{error, warn, debug, trace};
-        if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::ERROR {
-            error!("({:?}) {}", type_, message);
-            crate::log!("ERROR ({:?}) {}", type_, message);
-        } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING {
-            warn!("({:?}) {}", type_, message);
-            crate::log!("WARN ({:?}) {}", type_, message);
-        } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::INFO {
-            debug!("({:?}) {}", type_, message);
-            crate::log!("INFO ({:?}) {}", type_, message);
+        let messenger = if VALIDATION_ENABLED {
+            instance.create_debug_utils_messenger_ext(&debug_info, None)?
         } else {
-            trace!("({:?}) {}", type_, message);
-            crate::log!("DEBUG ({:?}) {}", type_, message);
-        }
+            vk::DebugUtilsMessengerEXT::null()
+        };
 
-        vk::FALSE
+        Ok((instance, messenger))
     }
 
-    unsafe fn create_sync_objects(device: &VkDevice, data: &mut AppData) -> Result<()> {
+    unsafe fn create_sync_objects_new(
+        device: &VkDevice,
+    ) -> Result<(Vec<vk::Semaphore>, Vec<vk::Semaphore>, Vec<vk::Fence>)> {
         let semaphore_info = vk::SemaphoreCreateInfo::builder();
         let fence_info = vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::SIGNALED);
 
+        let mut image_available = Vec::new();
+        let mut render_finished = Vec::new();
+        let mut in_flight = Vec::new();
+
         for _ in 0..MAX_FRAMES_IN_FLIGHT {
-            data.image_available_semaphores
-                .push(device.create_semaphore(&semaphore_info, None)?);
-            data.render_finish_semaphores
-                .push(device.create_semaphore(&semaphore_info, None)?);
-            data.in_flight_fences
-                .push(device.create_fence(&fence_info, None)?);
+            image_available.push(device.create_semaphore(&semaphore_info, None)?);
+            render_finished.push(device.create_semaphore(&semaphore_info, None)?);
+            in_flight.push(device.create_fence(&fence_info, None)?);
         }
 
-        data.images_in_flight = data
-            .rrswapchain
-            .swapchain_images
-            .iter()
-            .map(|_| vk::Fence::null())
-            .collect();
-
-        Ok(())
+        Ok((image_available, render_finished, in_flight))
     }
 
-    fn register_resources(data: &mut AppData) {
+    fn register_resources_new(data: &mut AppData, resources: &VulkanResources, model_path: &str) {
         let frame_sync = FrameSync::new(
-            data.image_available_semaphores.clone(),
-            data.render_finish_semaphores.clone(),
-            data.in_flight_fences.clone(),
+            resources.image_available_semaphores.clone(),
+            resources.render_finish_semaphores.clone(),
+            resources.in_flight_fences.clone(),
         );
         data.ecs_world.insert_resource(frame_sync);
 
         let swapchain_state = SwapchainState::new(
-            data.rrswapchain.clone(),
-            data.rrswapchain.swapchain_images.len(),
+            resources.rrswapchain.clone(),
+            resources.rrswapchain.swapchain_images.len(),
         );
         data.ecs_world.insert_resource(swapchain_state);
 
-        let render_targets = RenderTargets::new(data.rrrender.clone());
+        let render_targets = RenderTargets::new(resources.rrrender.clone());
         data.ecs_world.insert_resource(render_targets);
 
         let command_state = CommandState::new(
-            data.rrcommand_pool.clone(),
-            data.rrcommand_buffer.clone(),
+            resources.rrcommand_pool.clone(),
+            resources.rrcommand_buffer.clone(),
         );
         data.ecs_world.insert_resource(command_state);
 
-        let pipeline_state = PipelineState::new(data.model_pipeline.clone());
+        let pipeline_state = PipelineState::new(resources.model_pipeline.clone());
         data.ecs_world.insert_resource(pipeline_state);
 
-        let surface_state = SurfaceState::new(data.surface, data.messenger);
+        let surface_state = SurfaceState::new(resources.surface, resources.messenger);
         data.ecs_world.insert_resource(surface_state);
 
-        let animation_playback = AnimationPlayback::with_model_path(
-            data.current_model_path.clone(),
-        );
+        let animation_playback = AnimationPlayback::with_model_path(model_path.to_string());
         data.ecs_world.insert_resource(animation_playback);
     }
 
@@ -485,6 +545,8 @@ impl App {
         rrdevice: &RRDevice,
         data: &mut AppData,
         imgui: &mut imgui::Context,
+        rrcommand_pool: &RRCommandPool,
+        rrrender: &RRRender,
     ) -> Result<()> {
         crate::log!("Initializing ImGui Vulkan rendering resources");
 
@@ -543,7 +605,9 @@ impl App {
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
         let staging_buffer = rrdevice.device.create_buffer(&buffer_info, None)?;
-        let buffer_requirements = rrdevice.device.get_buffer_memory_requirements(staging_buffer);
+        let buffer_requirements = rrdevice
+            .device
+            .get_buffer_memory_requirements(staging_buffer);
 
         let memory_type_index = get_memory_type_index(
             instance,
@@ -557,7 +621,9 @@ impl App {
             .memory_type_index(memory_type_index);
 
         let staging_buffer_memory = rrdevice.device.allocate_memory(&allocate_info, None)?;
-        rrdevice.device.bind_buffer_memory(staging_buffer, staging_buffer_memory, 0)?;
+        rrdevice
+            .device
+            .bind_buffer_memory(staging_buffer, staging_buffer_memory, 0)?;
 
         // Copy font data to staging buffer
         let memory_ptr = rrdevice.device.map_memory(
@@ -572,7 +638,7 @@ impl App {
         // Transition image layout and copy from staging buffer
         Self::transition_image_layout_and_copy(
             &rrdevice.device,
-            &data.rrcommand_pool,
+            rrcommand_pool,
             &rrdevice.graphics_queue,
             image,
             staging_buffer,
@@ -632,7 +698,9 @@ impl App {
 
         let layout_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings);
 
-        let descriptor_set_layout = rrdevice.device.create_descriptor_set_layout(&layout_info, None)?;
+        let descriptor_set_layout = rrdevice
+            .device
+            .create_descriptor_set_layout(&layout_info, None)?;
 
         // Allocate descriptor set
         let layouts = [descriptor_set_layout];
@@ -656,7 +724,9 @@ impl App {
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .image_info(&image_info)];
 
-        rrdevice.device.update_descriptor_sets(&descriptor_writes, &[] as &[vk::CopyDescriptorSet]);
+        rrdevice
+            .device
+            .update_descriptor_sets(&descriptor_writes, &[] as &[vk::CopyDescriptorSet]);
 
         // Create ImGui pipeline using RRPipeline
         let msaa_samples = if !data.msaa_samples.is_empty() {
@@ -667,7 +737,7 @@ impl App {
 
         let imgui_pipeline = RRPipeline::new_imgui(
             rrdevice,
-            &data.rrrender,
+            rrrender,
             descriptor_set_layout,
             "assets/shaders/imguiVert.spv",
             "assets/shaders/imguiFrag.spv",
@@ -691,4 +761,3 @@ impl App {
         Ok(())
     }
 }
-

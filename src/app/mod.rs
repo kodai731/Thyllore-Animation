@@ -14,8 +14,16 @@ pub use init::*;
 
 use crate::scene::graphics_resource::GraphicsResources;
 use crate::scene::world::Resource;
+use crate::scene::raytracing::RayTracingData;
+use crate::scene::Camera;
 use crate::scene::Scene;
-use crate::vulkanr::context::{AnimationPlayback, FrameSync, SwapchainState, RenderTargets, CommandState, PipelineState, SurfaceState};
+use crate::debugview::{RayTracingDebugState, DebugViewData};
+use crate::platform::ImguiData;
+use crate::vulkanr::context::{
+    AnimationPlayback, CameraState, CommandState, DebugState, FrameSync, GpuAssets,
+    ImGuiState, PipelineState, RayTracingState, RenderConfig, RenderTargets,
+    SurfaceState, SwapchainState,
+};
 use crate::vulkanr::device::*;
 
 use std::time::Instant;
@@ -87,5 +95,45 @@ impl App {
 
     pub fn animation_playback_mut(&mut self) -> &mut AnimationPlayback {
         self.resource_mut::<AnimationPlayback>()
+    }
+
+    pub fn camera(&self) -> &Camera {
+        &self.data.camera
+    }
+
+    pub fn camera_mut(&mut self) -> &mut Camera {
+        &mut self.data.camera
+    }
+
+    pub fn raytracing(&self) -> &RayTracingData {
+        &self.data.raytracing
+    }
+
+    pub fn raytracing_mut(&mut self) -> &mut RayTracingData {
+        &mut self.data.raytracing
+    }
+
+    pub fn rt_debug_state(&self) -> &RayTracingDebugState {
+        &self.data.rt_debug_state
+    }
+
+    pub fn rt_debug_state_mut(&mut self) -> &mut RayTracingDebugState {
+        &mut self.data.rt_debug_state
+    }
+
+    pub fn debug_view_data(&self) -> &DebugViewData {
+        &self.data.debug_view_data
+    }
+
+    pub fn debug_view_data_mut(&mut self) -> &mut DebugViewData {
+        &mut self.data.debug_view_data
+    }
+
+    pub fn imgui_data(&self) -> &ImguiData {
+        &self.data.imgui
+    }
+
+    pub fn imgui_data_mut(&mut self) -> &mut ImguiData {
+        &mut self.data.imgui
     }
 }

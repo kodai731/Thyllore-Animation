@@ -27,22 +27,22 @@ impl App {
         use crate::app::data::LightMoveTarget;
 
         if gui_data.move_light_to != LightMoveTarget::None {
-            let all_positions: Vec<Vector3<f32>> = if !self.data.graphics_resources.meshes.is_empty()
-            {
-                self.data
-                    .graphics_resources
-                    .meshes
-                    .iter()
-                    .flat_map(|mesh| {
-                        mesh.vertex_data
-                            .vertices
-                            .iter()
-                            .map(|v| Vector3::new(v.pos.x, v.pos.y, v.pos.z))
-                    })
-                    .collect()
-            } else {
-                Vec::new()
-            };
+            let all_positions: Vec<Vector3<f32>> =
+                if !self.data.graphics_resources.meshes.is_empty() {
+                    self.data
+                        .graphics_resources
+                        .meshes
+                        .iter()
+                        .flat_map(|mesh| {
+                            mesh.vertex_data
+                                .vertices
+                                .iter()
+                                .map(|v| Vector3::new(v.pos.x, v.pos.y, v.pos.z))
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
 
             self.data.rt_debug_state.update_light_position(
                 &all_positions,
@@ -54,13 +54,16 @@ impl App {
 
         let time = self.start.elapsed().as_secs_f32();
 
+        let animation_playing = self.animation_playback().playing;
+        let current_model_path = self.animation_playback().model_path.clone();
+        let command_pool = self.command_state().pool.clone();
         if let Err(e) = self.data.graphics_resources.update_animations(
             time,
-            self.data.animation_playing,
-            &self.data.current_model_path,
+            animation_playing,
+            &current_model_path,
             &self.instance,
             &self.rrdevice,
-            &self.data.rrcommand_pool,
+            command_pool.as_ref(),
             &mut self.data.raytracing.acceleration_structure,
         ) {
             eprintln!("failed to update animations: {}", e);
@@ -89,7 +92,7 @@ impl App {
             if is_first_click {
                 gui_data.clicked_mouse_pos = Some([mouse_pos[0], mouse_pos[1]]);
 
-                let swapchain_extent = self.data.rrswapchain.swapchain_extent;
+                let swapchain_extent = self.swapchain_state().swapchain.swapchain_extent;
                 self.scene.light_gizmo_mut().try_select(
                     mouse_pos,
                     camera_pos,
@@ -136,15 +139,13 @@ impl App {
         self.data.camera.set_far_plane(far_plane);
 
         use crate::math::coordinate_system::perspective;
+        let swapchain_extent = self.swapchain_state().swapchain.swapchain_extent;
         let proj = perspective(
             Deg(45.0),
-            self.data.rrswapchain.swapchain_extent.width as f32
-                / self.data.rrswapchain.swapchain_extent.height as f32,
+            swapchain_extent.width as f32 / swapchain_extent.height as f32,
             self.data.camera.near_plane(),
             self.data.camera.far_plane(),
         );
-
-        let swapchain_extent = self.data.rrswapchain.swapchain_extent;
         let screen_size = Vector2::new(
             swapchain_extent.width as f32,
             swapchain_extent.height as f32,
@@ -191,7 +192,7 @@ impl App {
                     });
             log_billboard_debug_info(
                 &info,
-                &self.data.rrswapchain,
+                &self.swapchain_state().swapchain,
                 &self.scene.billboard().descriptor_set,
                 gbuffer_debug_info.as_ref(),
                 self.data.raytracing.gbuffer_sampler,
@@ -202,11 +203,15 @@ impl App {
         if self.data.rt_debug_state.should_load_cube(gui_data) {
             let cube_size = self.data.rt_debug_state.cube_size;
             let cube_position = [0.0, 0.0, 0.0];
+            let command_pool = self.command_state().pool.clone();
+            let swapchain = self.swapchain_state().swapchain.clone();
             if let Err(e) = replace_model_with_cube(
                 &self.instance,
                 &self.rrdevice,
                 &mut self.data,
                 &self.scene,
+                &command_pool,
+                &swapchain,
                 cube_size,
                 cube_position,
             ) {
@@ -505,7 +510,7 @@ impl App {
 
         copy_buffer(
             &self.rrdevice,
-            &self.data.rrcommand_pool,
+            self.command_state().pool.as_ref(),
             staging_buffer,
             vertex_buffer,
             vertex_buffer_size,
@@ -756,7 +761,7 @@ impl App {
         unsafe {
             let view = view(camera_pos, camera_direction, self.data.camera.up());
             use crate::math::coordinate_system::perspective;
-            let swapchain_extent = self.data.rrswapchain.swapchain_extent;
+            let swapchain_extent = self.swapchain_state().swapchain.swapchain_extent;
             let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
             let proj = perspective(Deg(45.0), aspect, 0.1, 10000.0);
             let screen_size = Vector2::new(

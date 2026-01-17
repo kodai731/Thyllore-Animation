@@ -1,6 +1,7 @@
 use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use crate::app::{App, GUIData};
 use crate::vulkanr::command::*;
+use crate::vulkanr::context::{FrameSync, SwapchainState};
 use crate::vulkanr::vulkan::*;
 
 use anyhow::{anyhow, Result};
@@ -12,14 +13,22 @@ impl App {
             crate::log!("Loading new model from: {}", gui_data.selected_model_path);
             self.rrdevice.device.device_wait_idle()?;
 
-            match Self::load_model_from_path(
+            let command_pool = self.command_state().pool.clone();
+            let swapchain = self.swapchain_state().swapchain.clone();
+            let rrrender = self.render_targets().render.clone();
+            match Self::load_model_from_path_with_resources(
                 &self.instance,
                 &self.rrdevice,
                 &mut self.data,
                 &self.scene,
+                &command_pool,
+                &swapchain,
+                &rrrender,
                 &gui_data.selected_model_path,
             ) {
                 Ok(_) => {
+                    self.animation_playback_mut().model_path = gui_data.selected_model_path.clone();
+                    self.animation_playback_mut().time = 0.0;
                     gui_data.load_status = format!("Loaded: {}", gui_data.selected_model_path);
                     crate::log!(
                         "Successfully loaded model: {}",
@@ -40,16 +49,17 @@ impl App {
             gui_data.dump_debug_info = false;
         }
 
-        self.rrdevice.device.wait_for_fences(
-            &[self.data.in_flight_fences[self.frame]],
-            true,
-            u64::MAX,
-        )?;
+        let current_fence = self.frame_sync().current_fence();
+        self.rrdevice
+            .device
+            .wait_for_fences(&[current_fence], true, u64::MAX)?;
 
+        let swapchain = self.swapchain_state().swapchain.swapchain;
+        let image_available = self.frame_sync().current_image_available();
         let result = self.rrdevice.device.acquire_next_image_khr(
-            self.data.rrswapchain.swapchain,
+            swapchain,
             u64::MAX,
-            self.data.image_available_semaphores[self.frame],
+            image_available,
             vk::Fence::null(),
         );
 
@@ -58,15 +68,15 @@ impl App {
             Err(e) => return Err(anyhow!(e)),
         };
 
-        if !self.data.images_in_flight[image_index].is_null() {
-            self.rrdevice.device.wait_for_fences(
-                &[self.data.images_in_flight[image_index]],
-                true,
-                u64::MAX,
-            )?;
+        let image_in_flight = self.resource::<SwapchainState>().images_in_flight[image_index];
+        if !image_in_flight.is_null() {
+            self.rrdevice
+                .device
+                .wait_for_fences(&[image_in_flight], true, u64::MAX)?;
         }
 
-        self.data.images_in_flight[image_index] = self.data.in_flight_fences[self.frame];
+        let current_fence = self.frame_sync().current_fence();
+        self.resource_mut::<SwapchainState>().images_in_flight[image_index] = current_fence;
 
         Ok(image_index)
     }
@@ -81,26 +91,29 @@ impl App {
 
         self.record_command_buffer(image_index, gui_data, draw_data)?;
 
-        let wait_semaphores = &[self.data.image_available_semaphores[self.frame]];
+        let image_available = self.frame_sync().current_image_available();
+        let render_finished = self.frame_sync().current_render_finished();
+        let current_fence = self.frame_sync().current_fence();
+
+        let wait_semaphores = &[image_available];
         let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let command_buffers = &[self.data.rrcommand_buffer.command_buffers[image_index]];
-        let signal_semaphores = &[self.data.render_finish_semaphores[self.frame]];
+        let command_buffers = &[self.command_state().buffers.command_buffers[image_index]];
+        let signal_semaphores = &[render_finished];
         let submit_info = vk::SubmitInfo::builder()
             .wait_semaphores(wait_semaphores)
             .wait_dst_stage_mask(wait_stages)
             .command_buffers(command_buffers)
             .signal_semaphores(signal_semaphores);
 
-        self.rrdevice
-            .device
-            .reset_fences(&[self.data.in_flight_fences[self.frame]])?;
+        self.rrdevice.device.reset_fences(&[current_fence])?;
         self.rrdevice.device.queue_submit(
             self.rrdevice.graphics_queue,
             &[submit_info],
-            self.data.in_flight_fences[self.frame],
+            current_fence,
         )?;
 
-        let swapchains = &[self.data.rrswapchain.swapchain];
+        let swapchain = self.swapchain_state().swapchain.swapchain;
+        let swapchains = &[swapchain];
         let image_indices = &[image_index as u32];
         let present_info = vk::PresentInfoKHR::builder()
             .wait_semaphores(signal_semaphores)
@@ -126,7 +139,8 @@ impl App {
             crate::log!("Screenshot saved!");
         }
 
-        self.frame = (self.frame + 1) % MAX_FRAMES_IN_FLIGHT;
+        self.frame_sync_mut().advance(MAX_FRAMES_IN_FLIGHT);
+        self.frame = self.frame_sync().current_frame;
 
         Ok(())
     }
@@ -136,8 +150,9 @@ impl App {
         use std::time::SystemTime;
 
         let device = &self.rrdevice.device;
-        let swapchain_image = self.data.rrswapchain.swapchain_images[image_index];
-        let extent = self.data.rrswapchain.swapchain_extent;
+        let swapchain = &self.swapchain_state().swapchain;
+        let swapchain_image = swapchain.swapchain_images[image_index];
+        let extent = swapchain.swapchain_extent;
         let width = extent.width;
         let height = extent.height;
 
@@ -165,9 +180,9 @@ impl App {
         device.bind_buffer_memory(buffer, buffer_memory, 0)?;
 
         // Create a command buffer for the copy operation
-        let command_pool = &self.data.rrcommand_pool.command_pool;
+        let command_pool = self.command_state().pool.command_pool;
         let alloc_info = vk::CommandBufferAllocateInfo::builder()
-            .command_pool(*command_pool)
+            .command_pool(command_pool)
             .level(vk::CommandBufferLevel::PRIMARY)
             .command_buffer_count(1);
 
@@ -310,7 +325,7 @@ impl App {
         crate::log!("Screenshot saved to: {}", filename);
 
         // Cleanup
-        device.free_command_buffers(*command_pool, &[command_buffer]);
+        device.free_command_buffers(command_pool, &[command_buffer]);
         device.free_memory(buffer_memory, None);
         device.destroy_buffer(buffer, None);
 
@@ -324,7 +339,7 @@ impl App {
     ) {
         let render_area = vk::Rect2D::builder()
             .offset(vk::Offset2D::default())
-            .extent(self.data.rrswapchain.swapchain_extent);
+            .extent(self.swapchain_state().swapchain.swapchain_extent);
 
         let color_clear_value = vk::ClearValue {
             color: vk::ClearColorValue {
@@ -339,9 +354,10 @@ impl App {
         };
         let clear_values = [color_clear_value, depth_clear_value];
 
+        let render_targets = self.render_targets();
         let render_pass_info = vk::RenderPassBeginInfo::builder()
-            .render_pass(self.data.rrrender.render_pass)
-            .framebuffer(self.data.rrrender.framebuffers[image_index])
+            .render_pass(render_targets.render.render_pass)
+            .framebuffer(render_targets.render.framebuffers[image_index])
             .render_area(render_area)
             .clear_values(&clear_values);
 
@@ -383,10 +399,11 @@ impl App {
                 );
             }
 
+            let pipeline = &self.pipeline_state().model_pipeline;
             self.rrdevice.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.data.model_pipeline.pipeline,
+                pipeline.pipeline,
             );
 
             self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
@@ -409,7 +426,7 @@ impl App {
             self.rrdevice.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.data.model_pipeline.pipeline_layout,
+                pipeline.pipeline_layout,
                 0,
                 &[frame_set],
                 &[],
@@ -420,7 +437,7 @@ impl App {
                     self.rrdevice.device.cmd_bind_descriptor_sets(
                         command_buffer,
                         vk::PipelineBindPoint::GRAPHICS,
-                        self.data.model_pipeline.pipeline_layout,
+                        pipeline.pipeline_layout,
                         1,
                         &[material.descriptor_set],
                         &[],
@@ -437,7 +454,7 @@ impl App {
             self.rrdevice.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.data.model_pipeline.pipeline_layout,
+                pipeline.pipeline_layout,
                 2,
                 &[object_set],
                 &[],

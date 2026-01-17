@@ -8,21 +8,28 @@ use crate::scene::graphics_resource::{MaterialUBO, Mesh};
 use crate::scene::world::{AnimationState, Transform};
 use crate::scene::Scene;
 use crate::vulkanr::buffer::*;
+use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::device::*;
 use crate::vulkanr::image::*;
 use crate::vulkanr::vulkan::*;
+use std::rc::Rc;
 
 use anyhow::{anyhow, Result};
-use std::borrow::BorrowMut;
 use std::ffi::c_void;
 
+use crate::vulkanr::render::RRRender;
+use crate::vulkanr::swapchain::RRSwapchain;
+
 impl App {
-    pub(crate) unsafe fn load_model_from_path(
+    pub(crate) unsafe fn load_model_from_path_with_resources(
         instance: &Instance,
         rrdevice: &RRDevice,
         data: &mut AppData,
         scene: &Scene,
+        rrcommand_pool: &Rc<RRCommandPool>,
+        rrswapchain: &RRSwapchain,
+        rrrender: &RRRender,
         model_path: &str,
     ) -> Result<()> {
         crate::log!("=== Loading model from path: {} ===", model_path);
@@ -93,7 +100,7 @@ impl App {
                             match create_texture_image_pixel(
                                 instance,
                                 rrdevice,
-                                data.rrcommand_pool.borrow_mut(),
+                                rrcommand_pool,
                                 &image_data,
                                 width,
                                 height,
@@ -117,7 +124,7 @@ impl App {
                                         create_texture_image_pixel(
                                             instance,
                                             rrdevice,
-                                            data.rrcommand_pool.borrow_mut(),
+                                            rrcommand_pool,
                                             &vec![255u8, 255, 255, 255],
                                             1,
                                             1,
@@ -131,7 +138,7 @@ impl App {
                                 create_texture_image_pixel(
                                     instance,
                                     rrdevice,
-                                    data.rrcommand_pool.borrow_mut(),
+                                    rrcommand_pool,
                                     &vec![255u8, 255, 255, 255],
                                     1,
                                     1,
@@ -143,7 +150,7 @@ impl App {
                     (mesh.image, mesh.image_memory, mesh.mip_level) = create_texture_image_pixel(
                         instance,
                         rrdevice,
-                        data.rrcommand_pool.borrow_mut(),
+                        rrcommand_pool,
                         &vec![255u8, 255, 255, 255],
                         1,
                         1,
@@ -178,9 +185,6 @@ impl App {
             }
 
             if !data.graphics_resources.animation.clips.is_empty() {
-                data.animation_playing = true;
-                data.current_animation_index = 0;
-                data.animation_time = 0.0;
                 crate::log!(
                     "FBX animation loaded: {} clips",
                     data.graphics_resources.animation.clips.len()
@@ -190,9 +194,6 @@ impl App {
             crate::log!("Loading glTF model...");
 
             data.graphics_resources.animation.clear();
-            data.animation_playing = false;
-            data.current_animation_index = 0;
-            data.animation_time = 0.0;
             crate::log!("Cleared animation state");
 
             let gltf_result = load_gltf_file(model_path);
@@ -242,7 +243,7 @@ impl App {
                     match create_texture_image_pixel(
                         instance,
                         rrdevice,
-                        data.rrcommand_pool.borrow_mut(),
+                        rrcommand_pool,
                         &gltf_mesh.image_data[0].data,
                         gltf_mesh.image_data[0].width,
                         gltf_mesh.image_data[0].height,
@@ -259,7 +260,7 @@ impl App {
                                 create_texture_image_pixel(
                                     instance,
                                     rrdevice,
-                                    data.rrcommand_pool.borrow_mut(),
+                                    rrcommand_pool,
                                     &vec![255u8, 255, 255, 255],
                                     1,
                                     1,
@@ -271,7 +272,7 @@ impl App {
                     (mesh.image, mesh.image_memory, mesh.mip_level) = create_texture_image_pixel(
                         instance,
                         rrdevice,
-                        data.rrcommand_pool.borrow_mut(),
+                        rrcommand_pool,
                         &vec![255u8, 255, 255, 255],
                         1,
                         1,
@@ -305,9 +306,6 @@ impl App {
             }
 
             if !data.graphics_resources.animation.clips.is_empty() {
-                data.animation_playing = true;
-                data.current_animation_index = 0;
-                data.animation_time = 0.0;
                 crate::log!(
                     "glTF animation loaded: {} clips",
                     data.graphics_resources.animation.clips.len()
@@ -322,7 +320,7 @@ impl App {
             mesh.vertex_buffer = RRVertexBuffer::new(
                 &instance,
                 &rrdevice,
-                &data.rrcommand_pool,
+                rrcommand_pool,
                 (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len())
                     as vk::DeviceSize,
                 mesh.vertex_data.vertices.as_ptr() as *const c_void,
@@ -332,7 +330,7 @@ impl App {
             mesh.index_buffer = RRIndexBuffer::new(
                 &instance,
                 &rrdevice,
-                &data.rrcommand_pool,
+                rrcommand_pool,
                 (size_of::<u32>() * mesh.vertex_data.indices.len()) as u64,
                 mesh.vertex_data.indices.as_ptr() as *const c_void,
                 mesh.vertex_data.indices.len(),
@@ -372,9 +370,8 @@ impl App {
             crate::log!("Created material {} for mesh {}", material_id, i);
         }
 
-        let is_gltf =
-            data.current_model_path.ends_with(".glb") || data.current_model_path.ends_with(".gltf");
-        let is_fbx = data.current_model_path.ends_with(".fbx");
+        let is_gltf = model_path.ends_with(".glb") || model_path.ends_with(".gltf");
+        let is_fbx = model_path.ends_with(".fbx");
         let has_node_animation = (is_gltf || is_fbx)
             && !data.graphics_resources.meshes.is_empty()
             && !data.graphics_resources.has_skinned_meshes;
@@ -441,7 +438,7 @@ impl App {
                             if let Err(e) = mesh.vertex_buffer.update(
                                 &instance,
                                 &rrdevice,
-                                &data.rrcommand_pool,
+                                rrcommand_pool,
                                 (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len())
                                     as vk::DeviceSize,
                                 mesh.vertex_data.vertices.as_ptr() as *const c_void,
@@ -463,7 +460,7 @@ impl App {
                     if let Err(e) = data.graphics_resources.update_node_animation(
                         &instance,
                         &rrdevice,
-                        &data.rrcommand_pool,
+                        rrcommand_pool,
                         &mut None,
                     ) {
                         crate::log!("Failed to apply initial node animation: {}", e);
@@ -474,9 +471,7 @@ impl App {
             crate::log!("Initial pose applied successfully");
         }
 
-        data.current_model_path = model_path.to_string();
-
-        rebuild_acceleration_structures(instance, rrdevice, data)?;
+        rebuild_acceleration_structures(instance, rrdevice, data, rrcommand_pool)?;
 
         if let Some(ref accel_struct) = data.raytracing.acceleration_structure {
             if let Some(tlas) = accel_struct.tlas.acceleration_structure {
@@ -487,25 +482,30 @@ impl App {
             }
         }
 
-        if let Err(e) = Self::create_ray_tracing_pipelines(instance, rrdevice, data, scene) {
+        if let Err(e) = Self::create_ray_tracing_pipelines_with_resources(
+            instance,
+            rrdevice,
+            data,
+            scene,
+            rrswapchain,
+            rrrender,
+        ) {
             crate::log!("Failed to create ray tracing pipelines: {:?}", e);
         }
 
-        Self::create_ecs_entities_from_meshes(data);
+        Self::create_ecs_entities_from_meshes(data, model_path);
 
         crate::log!("=== Model loaded successfully ===");
         Ok(())
     }
 
-    fn create_ecs_entities_from_meshes(data: &mut AppData) {
-        use crate::scene::assets::{
-            AnimationClipAsset, MeshAsset, NodeAsset, SkeletonAsset,
-        };
+    fn create_ecs_entities_from_meshes(data: &mut AppData, model_path: &str) {
+        use crate::scene::assets::{AnimationClipAsset, MeshAsset, NodeAsset, SkeletonAsset};
 
         data.ecs_world.clear();
         data.ecs_assets.clear();
 
-        let model_name = std::path::Path::new(&data.current_model_path)
+        let model_name = std::path::Path::new(model_path)
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("model")
@@ -549,7 +549,12 @@ impl App {
         crate::log!("Added {} nodes to ecs_assets", data.ecs_assets.nodes.len());
 
         let has_animation = !data.graphics_resources.animation.clips.is_empty();
-        let first_clip_id = data.graphics_resources.animation.clips.first().map(|c| c.id);
+        let first_clip_id = data
+            .graphics_resources
+            .animation
+            .clips
+            .first()
+            .map(|c| c.id);
 
         for (mesh_idx, mesh) in data.graphics_resources.meshes.iter().enumerate() {
             let entity_name = format!("{}_{}", model_name, mesh_idx);
@@ -559,7 +564,11 @@ impl App {
                 name: entity_name.clone(),
                 graphics_mesh_index: mesh_idx,
                 object_index: mesh.object_index,
-                material_id: data.graphics_resources.mesh_material_ids.get(mesh_idx).copied(),
+                material_id: data
+                    .graphics_resources
+                    .mesh_material_ids
+                    .get(mesh_idx)
+                    .copied(),
                 skeleton_id: mesh.skeleton_id,
                 node_index: mesh.node_index,
                 render_to_gbuffer: mesh.render_to_gbuffer,
@@ -612,7 +621,10 @@ impl App {
         crate::log!("========== DUMP DEBUG INFORMATION ==========");
 
         crate::log!("--- Model Info ---");
-        crate::log!("  current_model_path: {}", self.data.current_model_path);
+        crate::log!(
+            "  current_model_path: {}",
+            self.animation_playback().model_path
+        );
         crate::log!(
             "  meshes count: {}",
             self.data.graphics_resources.meshes.len()
@@ -627,7 +639,11 @@ impl App {
         );
         crate::log!(
             "  morph_animations count: {}",
-            self.data.graphics_resources.morph_animation.animations.len()
+            self.data
+                .graphics_resources
+                .morph_animation
+                .animations
+                .len()
         );
         crate::log!(
             "  skeletons count: {}",
@@ -701,7 +717,7 @@ impl App {
         crate::log!("  position: {:?}", self.data.camera.position());
 
         crate::log!("--- Animation Info ---");
-        crate::log!("  animation_playing: {}", self.data.animation_playing);
+        crate::log!("  animation_playing: {}", self.animation_playback().playing);
         crate::log!(
             "  clips count: {}",
             self.data.graphics_resources.animation.clips.len()

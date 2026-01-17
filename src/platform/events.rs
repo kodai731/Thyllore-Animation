@@ -1,7 +1,7 @@
 use super::platform::System;
-use std::time::Instant;
-use winit::event::{Event, WindowEvent, ElementState};
 use imgui::{Condition, MouseButton};
+use std::time::Instant;
+use winit::event::{ElementState, Event, WindowEvent};
 
 use crate::app::{App, GUIData};
 use crate::debugview::{DebugViewMode, FBX_DEBUG};
@@ -24,11 +24,7 @@ fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
 }
 
 impl System {
-    pub fn main_loop(
-        self,
-        app: &mut App,
-        gui_data: &mut GUIData,
-    ) {
+    pub fn main_loop(self, app: &mut App, gui_data: &mut GUIData) {
         let System {
             event_loop,
             window,
@@ -127,10 +123,10 @@ impl System {
                                         }
 
                                         ui.text(format!("Current Model: {}",
-                                            if app.data.current_model_path.is_empty() {
+                                            if app.animation_playback().model_path.is_empty() {
                                                 "None"
                                             } else {
-                                                &app.data.current_model_path
+                                                &app.animation_playback().model_path
                                             }
                                         ));
 

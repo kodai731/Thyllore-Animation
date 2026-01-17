@@ -165,3 +165,111 @@ impl Default for AnimationPlayback {
         Self::new()
     }
 }
+
+use crate::debugview::{DebugViewData, RayTracingDebugState};
+use crate::platform::ImguiData;
+use crate::scene::raytracing::RayTracingData;
+use crate::scene::Camera;
+
+pub struct CameraState {
+    pub camera: Camera,
+}
+
+impl CameraState {
+    pub fn new(camera: Camera) -> Self {
+        Self { camera }
+    }
+
+    pub fn position(&self) -> cgmath::Vector3<f32> {
+        self.camera.position()
+    }
+
+    pub fn direction(&self) -> cgmath::Vector3<f32> {
+        self.camera.direction()
+    }
+
+    pub fn up(&self) -> cgmath::Vector3<f32> {
+        self.camera.up()
+    }
+}
+
+pub struct RayTracingState {
+    pub data: RayTracingData,
+}
+
+impl RayTracingState {
+    pub fn new(data: RayTracingData) -> Self {
+        Self { data }
+    }
+
+    pub fn is_available(&self) -> bool {
+        self.data.is_available()
+    }
+}
+
+impl Default for RayTracingState {
+    fn default() -> Self {
+        Self {
+            data: RayTracingData::default(),
+        }
+    }
+}
+
+pub struct DebugState {
+    pub rt_debug: RayTracingDebugState,
+    pub view_data: DebugViewData,
+}
+
+impl DebugState {
+    pub fn new(rt_debug: RayTracingDebugState, view_data: DebugViewData) -> Self {
+        Self {
+            rt_debug,
+            view_data,
+        }
+    }
+}
+
+impl Default for DebugState {
+    fn default() -> Self {
+        Self {
+            rt_debug: RayTracingDebugState::default(),
+            view_data: DebugViewData::default(),
+        }
+    }
+}
+
+pub struct ImGuiState {
+    pub data: ImguiData,
+}
+
+impl ImGuiState {
+    pub fn new(data: ImguiData) -> Self {
+        Self { data }
+    }
+}
+
+impl Default for ImGuiState {
+    fn default() -> Self {
+        Self {
+            data: ImguiData::default(),
+        }
+    }
+}
+
+pub struct RenderConfig {
+    pub msaa_samples: vk::SampleCountFlags,
+}
+
+impl RenderConfig {
+    pub fn new(msaa_samples: vk::SampleCountFlags) -> Self {
+        Self { msaa_samples }
+    }
+}
+
+impl Default for RenderConfig {
+    fn default() -> Self {
+        Self {
+            msaa_samples: vk::SampleCountFlags::_1,
+        }
+    }
+}

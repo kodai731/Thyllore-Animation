@@ -31,3 +31,16 @@ pub trait Renderable {
     fn index_buffer(&self) -> vk::Buffer;
     fn index_count(&self) -> u32;
 }
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ObjectIndex(pub usize);
+
+impl ObjectIndex {
+    pub fn new(index: usize) -> Self {
+        Self(index)
+    }
+
+    pub fn get(&self) -> usize {
+        self.0
+    }
+}

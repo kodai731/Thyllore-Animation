@@ -95,10 +95,6 @@ impl App {
                     gui_data.billboard_click_rect,
                 );
             }
-            let clicked_mouse_pos: Vector2<f32> = gui_data
-                .clicked_mouse_pos
-                .map(|p| p.to_vec2().into())
-                .unwrap_or(mouse_pos);
 
             if self.scene.light_gizmo_mut().is_selected
                 && gui_data.is_left_clicked
@@ -125,8 +121,6 @@ impl App {
         let view = view(camera_pos, camera_direction, camera_up);
 
         let camera_distance = camera_pos.magnitude();
-        let base_scale = 10.0;
-        //self.scene.grid_mut().scale = (camera_distance / base_scale).max(1.0);
         self.scene.grid_mut().scale = 1.0;
 
         let near_plane = (camera_distance * 0.001).max(0.1).min(10.0);

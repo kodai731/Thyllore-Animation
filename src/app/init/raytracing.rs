@@ -42,7 +42,7 @@ impl App {
             instance,
             rrdevice,
             &data.rrcommand_pool,
-            &data.render_resources.meshes,
+            &data.graphics_resources.meshes,
         )
     }
 
@@ -58,7 +58,7 @@ impl App {
             rrdevice,
             &data.rrswapchain,
             &data.rrrender,
-            &data.render_resources,
+            &data.graphics_resources,
             &mut billboard.descriptor_set,
         )
     }

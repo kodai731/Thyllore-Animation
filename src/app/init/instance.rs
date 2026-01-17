@@ -16,7 +16,7 @@ use crate::math::*;
 use crate::debugview::*;
 use crate::scene::billboard::{BillboardData, BillboardVertex};
 use crate::scene::grid::GridData;
-use crate::scene::render_resource::RenderResources;
+use crate::scene::graphics_resource::GraphicsResources;
 use crate::scene::{Camera, Scene};
 
 use vulkanalia::Device as VkDevice;
@@ -115,7 +115,7 @@ impl App {
         let swapchain_image_count = data.rrswapchain.swapchain_images.len();
         let max_materials = 32;
         let max_objects = 64;
-        data.render_resources = RenderResources::new(
+        data.graphics_resources = GraphicsResources::new(
             &instance,
             &rrdevice,
             swapchain_image_count,
@@ -123,8 +123,8 @@ impl App {
             max_objects,
         ).expect("Failed to create render resources");
 
-        let render_layouts = data.render_resources.get_layouts();
-        data.model_pipeline = RRPipeline::new_with_render_resources(
+        let render_layouts = data.graphics_resources.get_layouts();
+        data.model_pipeline = RRPipeline::new_with_graphics_resources(
             &rrdevice,
             &data.rrswapchain,
             &data.rrrender,
@@ -135,7 +135,7 @@ impl App {
             vk::PolygonMode::FILL,
             vk::CullModeFlags::BACK,
         );
-        let grid_pipeline = RRPipeline::new_with_render_resources(
+        let grid_pipeline = RRPipeline::new_with_graphics_resources(
             &rrdevice,
             &data.rrswapchain,
             &data.rrrender,
@@ -148,7 +148,7 @@ impl App {
         );
 
         let mut gizmo_data = GridGizmoData::new();
-        gizmo_data.object_index = data.render_resources.objects.allocate_slot();
+        gizmo_data.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!("Allocated object_index {} for Gizmo", gizmo_data.object_index);
         println!("allocated gizmo object_index");
 
@@ -170,13 +170,13 @@ impl App {
 
         let mut light_gizmo_data = LightGizmoData::new(data.rt_debug_state.light_position);
         light_gizmo_data.pipeline = gizmo_data.pipeline.clone();
-        light_gizmo_data.object_index = data.render_resources.objects.allocate_slot();
+        light_gizmo_data.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!("Allocated object_index {} for LightGizmo", light_gizmo_data.object_index);
         light_gizmo_data.create_buffers(&instance, &rrdevice, &data.rrcommand_pool)
             .expect("Failed to create light gizmo buffers");
 
         let mut billboard_data = BillboardData::new();
-        billboard_data.object_index = data.render_resources.objects.allocate_slot();
+        billboard_data.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!("Allocated object_index {} for Billboard", billboard_data.object_index);
 
         billboard_data.create_buffers(&instance, &rrdevice, &data.rrcommand_pool)
@@ -275,7 +275,7 @@ impl App {
         );
         println!("created grid index buffer");
 
-        grid.object_index = data.render_resources.objects.allocate_slot();
+        grid.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!("Allocated object_index {} for Grid", grid.object_index);
         println!("allocated grid object_index");
 

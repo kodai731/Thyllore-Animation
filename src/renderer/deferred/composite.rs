@@ -3,7 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
 use crate::debugview::DebugViewMode;
-use crate::scene::render_resource::RenderResources;
+use crate::scene::graphics_resource::GraphicsResources;
 use crate::scene::Scene;
 use crate::vulkanr::core::Device;
 use crate::vulkanr::descriptor::RRCompositeDescriptorSet;
@@ -13,7 +13,7 @@ pub struct CompositePass<'a> {
     composite_pipeline: &'a RRPipeline,
     composite_descriptor: &'a RRCompositeDescriptorSet,
     scene: &'a Scene,
-    render_resources: &'a RenderResources,
+    graphics_resources: &'a GraphicsResources,
     device: &'a Device,
     swapchain_extent: vk::Extent2D,
     debug_view_mode: DebugViewMode,
@@ -38,7 +38,7 @@ impl<'a> CompositePass<'a> {
             composite_pipeline,
             composite_descriptor,
             scene: &app.scene,
-            render_resources: &app.data.render_resources,
+            graphics_resources: &app.data.graphics_resources,
             device: &app.rrdevice.device,
             swapchain_extent: app.data.rrswapchain.swapchain_extent,
             debug_view_mode: app.data.rt_debug_state.debug_view_mode,
@@ -64,7 +64,7 @@ impl<'a> CompositePass<'a> {
             self.device,
             command_buffer,
             &grid.pipeline,
-            self.render_resources,
+            self.graphics_resources,
             grid.object_index,
             image_index,
         );
@@ -72,7 +72,7 @@ impl<'a> CompositePass<'a> {
             self.device,
             command_buffer,
             &grid.pipeline,
-            self.render_resources,
+            self.graphics_resources,
             grid.object_index,
             image_index,
         );
@@ -202,7 +202,7 @@ impl<'a> CompositePass<'a> {
             vk::IndexType::UINT32,
         );
 
-        let frame_set = self.render_resources.frame_set.sets[image_index];
+        let frame_set = self.graphics_resources.frame_set.sets[image_index];
         self.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
@@ -213,10 +213,10 @@ impl<'a> CompositePass<'a> {
         );
 
         let object_set_idx = self
-            .render_resources
+            .graphics_resources
             .objects
             .get_set_index(image_index, grid.object_index);
-        let object_set = self.render_resources.objects.sets[object_set_idx];
+        let object_set = self.graphics_resources.objects.sets[object_set_idx];
         self.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
@@ -259,7 +259,7 @@ impl<'a> CompositePass<'a> {
                 vk::IndexType::UINT32,
             );
 
-            let frame_set = self.render_resources.frame_set.sets[image_index];
+            let frame_set = self.graphics_resources.frame_set.sets[image_index];
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
@@ -270,10 +270,10 @@ impl<'a> CompositePass<'a> {
             );
 
             let object_set_idx = self
-                .render_resources
+                .graphics_resources
                 .objects
                 .get_set_index(image_index, gizmo.object_index);
-            let object_set = self.render_resources.objects.sets[object_set_idx];
+            let object_set = self.graphics_resources.objects.sets[object_set_idx];
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,

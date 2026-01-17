@@ -9,7 +9,7 @@ use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::scene::billboard::BillboardData;
 use crate::scene::components::{RenderContext, Renderable, Updatable, UpdateContext};
 use crate::scene::grid::GridData;
-use crate::scene::render_resource::ObjectDescriptorSet;
+use crate::scene::graphics_resource::ObjectDescriptorSet;
 use crate::vulkanr::device::RRDevice;
 
 pub trait SceneObject: Updatable + Renderable + Any {
@@ -70,7 +70,7 @@ impl Scene {
         objects: &ObjectDescriptorSet,
         rrdevice: &RRDevice,
     ) -> Result<()> {
-        use crate::scene::render_resource::ObjectUBO;
+        use crate::scene::graphics_resource::ObjectUBO;
 
         for obj_cell in &self.objects {
             let obj = obj_cell.borrow();

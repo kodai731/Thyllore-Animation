@@ -4,7 +4,7 @@ use crate::debugview::*;
 use crate::math::*;
 use crate::scene::billboard::BillboardTransform;
 use crate::scene::components::{CameraState, RenderContext};
-use crate::scene::render_resource::FrameUBO;
+use crate::scene::graphics_resource::FrameUBO;
 use crate::scene::systems::{animation_time_system, transform_propagation_system};
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::data::*;
@@ -27,10 +27,10 @@ impl App {
         use crate::app::data::LightMoveTarget;
 
         if gui_data.move_light_to != LightMoveTarget::None {
-            let all_positions: Vec<Vector3<f32>> = if !self.data.render_resources.meshes.is_empty()
+            let all_positions: Vec<Vector3<f32>> = if !self.data.graphics_resources.meshes.is_empty()
             {
                 self.data
-                    .render_resources
+                    .graphics_resources
                     .meshes
                     .iter()
                     .flat_map(|mesh| {
@@ -54,7 +54,7 @@ impl App {
 
         let time = self.start.elapsed().as_secs_f32();
 
-        if let Err(e) = self.data.render_resources.update_animations(
+        if let Err(e) = self.data.graphics_resources.update_animations(
             time,
             self.data.animation_playing,
             &self.data.current_model_path,
@@ -230,7 +230,7 @@ impl App {
         };
         if let Err(e) =
             self.data
-                .render_resources
+                .graphics_resources
                 .frame_set
                 .update(&self.rrdevice, image_index, &frame_ubo)
         {
@@ -239,7 +239,7 @@ impl App {
 
         if let Err(e) =
             self.data
-                .render_resources
+                .graphics_resources
                 .update_objects(&self.rrdevice, image_index, model)
         {
             eprintln!("Failed to update ObjectUBO: {}", e);
@@ -314,7 +314,7 @@ impl App {
 
         if let Err(e) = self.scene.update_object_ubos(
             &render_ctx,
-            &self.data.render_resources.objects,
+            &self.data.graphics_resources.objects,
             &self.rrdevice,
         ) {
             eprintln!("Failed to update object UBOs: {}", e);
@@ -546,8 +546,8 @@ impl App {
             crate::log!("=== Cube Position Debug (frame {}) ===", CUBE_DEBUG_COUNTER);
             crate::log!("model_tops from get_cube_top(): {:?}", model_tops);
 
-            if !self.data.render_resources.meshes.is_empty() {
-                for (mesh_idx, mesh) in self.data.render_resources.meshes.iter().enumerate() {
+            if !self.data.graphics_resources.meshes.is_empty() {
+                for (mesh_idx, mesh) in self.data.graphics_resources.meshes.iter().enumerate() {
                     if !mesh.vertex_data.vertices.is_empty() {
                         let mut min_x = f32::MAX;
                         let mut max_x = f32::MIN;
@@ -588,7 +588,7 @@ impl App {
                     }
                 }
             } else {
-                crate::log!("render_resources.meshes is empty!");
+                crate::log!("graphics_resources.meshes is empty!");
             }
             crate::log!("=====================================");
         }
@@ -881,7 +881,7 @@ impl App {
         }
 
         crate::log!("Vertex buffers (GPU):");
-        for (i, mesh) in self.data.render_resources.meshes.iter().enumerate() {
+        for (i, mesh) in self.data.graphics_resources.meshes.iter().enumerate() {
             crate::log!(
                 "  Mesh[{}]: {} vertices, {} indices",
                 i,

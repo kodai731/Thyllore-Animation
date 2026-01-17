@@ -704,7 +704,7 @@ impl ObjectDescriptorSet {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct RenderResources {
+pub struct GraphicsResources {
     pub frame_set: FrameDescriptorSet,
     pub materials: MaterialManager,
     pub objects: ObjectDescriptorSet,
@@ -717,7 +717,7 @@ pub struct RenderResources {
     pub node_animation_scale: f32,
 }
 
-impl RenderResources {
+impl GraphicsResources {
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,

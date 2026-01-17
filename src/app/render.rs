@@ -356,7 +356,7 @@ impl App {
         static mut RENDER_LOG_COUNTER: u32 = 0;
         static mut PREV_MESH_COUNT: usize = 0;
 
-        let mesh_count = self.data.render_resources.meshes.len();
+        let mesh_count = self.data.graphics_resources.meshes.len();
         let mesh_count_changed = mesh_count != PREV_MESH_COUNT;
         if mesh_count_changed {
             RENDER_LOG_COUNTER = 0;
@@ -371,7 +371,7 @@ impl App {
         }
 
         for i in 0..mesh_count {
-            let mesh = &self.data.render_resources.meshes[i];
+            let mesh = &self.data.graphics_resources.meshes[i];
 
             if should_log {
                 crate::log!(
@@ -405,7 +405,7 @@ impl App {
                 vk::IndexType::UINT32,
             );
 
-            let frame_set = self.data.render_resources.frame_set.sets[image_index];
+            let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
             self.rrdevice.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
@@ -415,8 +415,8 @@ impl App {
                 &[],
             );
 
-            if let Some(material_id) = self.data.render_resources.get_material_id(i) {
-                if let Some(material) = self.data.render_resources.materials.get(material_id) {
+            if let Some(material_id) = self.data.graphics_resources.get_material_id(i) {
+                if let Some(material) = self.data.graphics_resources.materials.get(material_id) {
                     self.rrdevice.device.cmd_bind_descriptor_sets(
                         command_buffer,
                         vk::PipelineBindPoint::GRAPHICS,
@@ -430,10 +430,10 @@ impl App {
 
             let object_set_idx = self
                 .data
-                .render_resources
+                .graphics_resources
                 .objects
                 .get_set_index(image_index, mesh.object_index);
-            let object_set = self.data.render_resources.objects.sets[object_set_idx];
+            let object_set = self.data.graphics_resources.objects.sets[object_set_idx];
             self.rrdevice.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
@@ -459,13 +459,13 @@ impl App {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        let frame_set = self.data.render_resources.frame_set.sets[image_index];
+        let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
 
         self.scene.render_all(
             command_buffer,
             image_index,
             frame_set,
-            &self.data.render_resources.objects,
+            &self.data.graphics_resources.objects,
             &self.rrdevice,
         );
 

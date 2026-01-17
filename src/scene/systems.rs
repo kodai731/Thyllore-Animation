@@ -3,7 +3,7 @@ use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
 use crate::scene::assets::AssetStorage;
 use crate::scene::components::{CameraState, Renderable, RenderContext, Updatable, UpdateContext};
-use crate::scene::render_resource::{ObjectDescriptorSet, ObjectUBO};
+use crate::scene::graphics_resource::{ObjectDescriptorSet, ObjectUBO};
 use crate::scene::world::{Entity, GlobalTransform, World};
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::vulkan::*;

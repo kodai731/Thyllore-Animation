@@ -1,10 +1,10 @@
 use crate::app::model_loader::rebuild_acceleration_structures;
 use crate::app::{App, AppData};
-use crate::loader::fbx::load_fbx_to_render_resources;
+use crate::loader::fbx::load_fbx_to_graphics_resources;
 use crate::loader::gltf::load_gltf_file;
 use crate::loader::texture::load_png_image;
 use crate::math::*;
-use crate::scene::render_resource::{MaterialUBO, Mesh};
+use crate::scene::graphics_resource::{MaterialUBO, Mesh};
 use crate::scene::world::{AnimationState, Transform};
 use crate::scene::Scene;
 use crate::vulkanr::buffer::*;
@@ -38,21 +38,21 @@ impl App {
         }
 
         crate::log!("Cleaning up existing model data...");
-        data.render_resources.clear_meshes(rrdevice);
-        data.render_resources
+        data.graphics_resources.clear_meshes(rrdevice);
+        data.graphics_resources
             .materials
             .clear_materials(&rrdevice.device);
-        data.render_resources.mesh_material_ids.clear();
-        data.render_resources.objects.reset_to(3);
+        data.graphics_resources.mesh_material_ids.clear();
+        data.graphics_resources.objects.reset_to(3);
         crate::log!("Cleared existing data (meshes and materials), reset object slots to 3");
 
         if is_fbx {
             crate::log!("Loading FBX model...");
 
-            data.render_resources.animation.clear();
+            data.graphics_resources.animation.clear();
             crate::log!("Cleared animation data");
 
-            let fbx_result = load_fbx_to_render_resources(model_path)?;
+            let fbx_result = load_fbx_to_graphics_resources(model_path)?;
             crate::log!(
                 "Loaded FBX: {} meshes, {} skeletons, {} clips",
                 fbx_result.meshes.len(),
@@ -60,14 +60,14 @@ impl App {
                 fbx_result.animation_system.clips.len()
             );
 
-            data.render_resources.animation = fbx_result.animation_system;
-            data.render_resources.has_skinned_meshes = fbx_result.has_skinned_meshes;
-            data.render_resources.node_animation_scale = 1.0;
+            data.graphics_resources.animation = fbx_result.animation_system;
+            data.graphics_resources.has_skinned_meshes = fbx_result.has_skinned_meshes;
+            data.graphics_resources.node_animation_scale = 1.0;
 
-            data.render_resources.nodes = fbx_result
+            data.graphics_resources.nodes = fbx_result
                 .nodes
                 .iter()
-                .map(|n| crate::scene::render_resource::NodeData {
+                .map(|n| crate::scene::graphics_resource::NodeData {
                     index: n.index,
                     name: n.name.clone(),
                     parent_index: n.parent_index,
@@ -174,22 +174,22 @@ impl App {
                     );
                 }
 
-                data.render_resources.meshes.push(mesh);
+                data.graphics_resources.meshes.push(mesh);
             }
 
-            if !data.render_resources.animation.clips.is_empty() {
+            if !data.graphics_resources.animation.clips.is_empty() {
                 data.animation_playing = true;
                 data.current_animation_index = 0;
                 data.animation_time = 0.0;
                 crate::log!(
                     "FBX animation loaded: {} clips",
-                    data.render_resources.animation.clips.len()
+                    data.graphics_resources.animation.clips.len()
                 );
             }
         } else if is_gltf {
             crate::log!("Loading glTF model...");
 
-            data.render_resources.animation.clear();
+            data.graphics_resources.animation.clear();
             data.animation_playing = false;
             data.current_animation_index = 0;
             data.animation_time = 0.0;
@@ -203,16 +203,16 @@ impl App {
                 gltf_result.animation_system.clips.len()
             );
 
-            data.render_resources.animation = gltf_result.animation_system;
-            data.render_resources.has_skinned_meshes = gltf_result.has_skinned_meshes;
-            data.render_resources.morph_animation = gltf_result.morph_animation;
-            data.render_resources.node_animation_scale =
+            data.graphics_resources.animation = gltf_result.animation_system;
+            data.graphics_resources.has_skinned_meshes = gltf_result.has_skinned_meshes;
+            data.graphics_resources.morph_animation = gltf_result.morph_animation;
+            data.graphics_resources.node_animation_scale =
                 if gltf_result.has_armature { 0.01 } else { 1.0 };
 
-            data.render_resources.nodes = gltf_result
+            data.graphics_resources.nodes = gltf_result
                 .nodes
                 .iter()
-                .map(|n| crate::scene::render_resource::NodeData {
+                .map(|n| crate::scene::graphics_resource::NodeData {
                     index: n.index,
                     name: n.name.clone(),
                     parent_index: n.parent_index,
@@ -221,8 +221,8 @@ impl App {
                 })
                 .collect();
             crate::log!(
-                "Loaded {} nodes into render_resources",
-                data.render_resources.nodes.len()
+                "Loaded {} nodes into graphics_resources",
+                data.graphics_resources.nodes.len()
             );
 
             for (i, gltf_mesh) in gltf_result.meshes.iter().enumerate() {
@@ -301,23 +301,23 @@ impl App {
                     mesh.skin_data.is_some()
                 );
 
-                data.render_resources.meshes.push(mesh);
+                data.graphics_resources.meshes.push(mesh);
             }
 
-            if !data.render_resources.animation.clips.is_empty() {
+            if !data.graphics_resources.animation.clips.is_empty() {
                 data.animation_playing = true;
                 data.current_animation_index = 0;
                 data.animation_time = 0.0;
                 crate::log!(
                     "glTF animation loaded: {} clips",
-                    data.render_resources.animation.clips.len()
+                    data.graphics_resources.animation.clips.len()
                 );
             }
         }
 
         crate::log!("Recreating buffers...");
-        for i in 0..data.render_resources.meshes.len() {
-            let mesh = &mut data.render_resources.meshes[i];
+        for i in 0..data.graphics_resources.meshes.len() {
+            let mesh = &mut data.graphics_resources.meshes[i];
 
             mesh.vertex_buffer = RRVertexBuffer::new(
                 &instance,
@@ -348,7 +348,7 @@ impl App {
 
             mesh.sampler = create_texture_sampler(&rrdevice, mesh.mip_level)?;
 
-            mesh.object_index = data.render_resources.objects.allocate_slot();
+            mesh.object_index = data.graphics_resources.objects.allocate_slot();
             crate::log!(
                 "Allocated object_index {} for mesh {}",
                 mesh.object_index,
@@ -358,7 +358,7 @@ impl App {
             let material_name = format!("material_{}", i);
             let material_properties = MaterialUBO::default();
             let material_id = data
-                .render_resources
+                .graphics_resources
                 .materials
                 .create_material_with_texture(
                     instance,
@@ -368,7 +368,7 @@ impl App {
                     mesh.sampler,
                     material_properties,
                 )?;
-            data.render_resources.mesh_material_ids.push(material_id);
+            data.graphics_resources.mesh_material_ids.push(material_id);
             crate::log!("Created material {} for mesh {}", material_id, i);
         }
 
@@ -376,8 +376,8 @@ impl App {
             data.current_model_path.ends_with(".glb") || data.current_model_path.ends_with(".gltf");
         let is_fbx = data.current_model_path.ends_with(".fbx");
         let has_node_animation = (is_gltf || is_fbx)
-            && !data.render_resources.meshes.is_empty()
-            && !data.render_resources.has_skinned_meshes;
+            && !data.graphics_resources.meshes.is_empty()
+            && !data.graphics_resources.has_skinned_meshes;
 
         if has_node_animation {
             crate::log!(
@@ -385,30 +385,30 @@ impl App {
             );
         }
 
-        if !data.render_resources.animation.clips.is_empty() {
+        if !data.graphics_resources.animation.clips.is_empty() {
             crate::log!("Applying initial pose (time=0) for skeletal animation...");
 
-            data.render_resources.animation.play(0);
-            data.render_resources.animation.player.time = 0.0;
+            data.graphics_resources.animation.play(0);
+            data.graphics_resources.animation.player.time = 0.0;
 
             let skeleton_id = data
-                .render_resources
+                .graphics_resources
                 .meshes
                 .first()
                 .and_then(|m| m.skeleton_id);
 
             if let Some(skel_id) = skeleton_id {
-                data.render_resources.animation.apply_to_skeleton(skel_id);
+                data.graphics_resources.animation.apply_to_skeleton(skel_id);
 
-                for mesh_idx in 0..data.render_resources.meshes.len() {
+                for mesh_idx in 0..data.graphics_resources.meshes.len() {
                     let (skin_data, skel_id) = {
-                        let mesh = &data.render_resources.meshes[mesh_idx];
+                        let mesh = &data.graphics_resources.meshes[mesh_idx];
                         (mesh.skin_data.clone(), mesh.skeleton_id)
                     };
 
                     if let (Some(skin_data), Some(skel_id)) = (skin_data, skel_id) {
                         if let Some(skeleton) =
-                            data.render_resources.animation.get_skeleton(skel_id)
+                            data.graphics_resources.animation.get_skeleton(skel_id)
                         {
                             let vertex_count = skin_data.base_positions.len();
                             let mut skinned_positions =
@@ -422,7 +422,7 @@ impl App {
                                 &mut skinned_normals,
                             );
 
-                            let mesh = &mut data.render_resources.meshes[mesh_idx];
+                            let mesh = &mut data.graphics_resources.meshes[mesh_idx];
                             for (i, pos) in skinned_positions.iter().enumerate() {
                                 if i < mesh.vertex_data.vertices.len() {
                                     mesh.vertex_data.vertices[i].pos.x = pos.x;
@@ -460,7 +460,7 @@ impl App {
 
             if has_node_animation {
                 unsafe {
-                    if let Err(e) = data.render_resources.update_node_animation(
+                    if let Err(e) = data.graphics_resources.update_node_animation(
                         &instance,
                         &rrdevice,
                         &data.rrcommand_pool,
@@ -498,7 +498,12 @@ impl App {
     }
 
     fn create_ecs_entities_from_meshes(data: &mut AppData) {
+        use crate::scene::assets::{
+            AnimationClipAsset, MeshAsset, NodeAsset, SkeletonAsset,
+        };
+
         data.ecs_world.clear();
+        data.ecs_assets.clear();
 
         let model_name = std::path::Path::new(&data.current_model_path)
             .file_stem()
@@ -506,18 +511,67 @@ impl App {
             .unwrap_or("model")
             .to_string();
 
-        let has_animation = !data.render_resources.animation.clips.is_empty();
-        let first_clip_id = data.render_resources.animation.clips.first().map(|c| c.id);
+        for skeleton in &data.graphics_resources.animation.skeletons {
+            let skeleton_asset = SkeletonAsset {
+                id: 0,
+                skeleton_id: skeleton.id,
+                skeleton: skeleton.clone(),
+            };
+            data.ecs_assets.add_skeleton(skeleton_asset);
+        }
+        crate::log!(
+            "Added {} skeletons to ecs_assets",
+            data.ecs_assets.skeletons.len()
+        );
 
-        for (mesh_idx, mesh) in data.render_resources.meshes.iter().enumerate() {
+        for clip in &data.graphics_resources.animation.clips {
+            let clip_asset = AnimationClipAsset {
+                id: 0,
+                clip_id: clip.id,
+                clip: clip.clone(),
+            };
+            data.ecs_assets.add_animation_clip(clip_asset);
+        }
+        crate::log!(
+            "Added {} animation clips to ecs_assets",
+            data.ecs_assets.animation_clips.len()
+        );
+
+        for node in &data.graphics_resources.nodes {
+            let node_asset = NodeAsset {
+                id: node.index as u64,
+                name: node.name.clone(),
+                parent_id: node.parent_index.map(|i| i as u64),
+                local_transform: node.local_transform,
+            };
+            data.ecs_assets.add_node(node_asset);
+        }
+        crate::log!("Added {} nodes to ecs_assets", data.ecs_assets.nodes.len());
+
+        let has_animation = !data.graphics_resources.animation.clips.is_empty();
+        let first_clip_id = data.graphics_resources.animation.clips.first().map(|c| c.id);
+
+        for (mesh_idx, mesh) in data.graphics_resources.meshes.iter().enumerate() {
             let entity_name = format!("{}_{}", model_name, mesh_idx);
+
+            let mesh_asset = MeshAsset {
+                id: 0,
+                name: entity_name.clone(),
+                graphics_mesh_index: mesh_idx,
+                object_index: mesh.object_index,
+                material_id: data.graphics_resources.mesh_material_ids.get(mesh_idx).copied(),
+                skeleton_id: mesh.skeleton_id,
+                node_index: mesh.node_index,
+                render_to_gbuffer: mesh.render_to_gbuffer,
+            };
+            let asset_id = data.ecs_assets.add_mesh(mesh_asset);
 
             let mut builder = data.ecs_world.entity();
             builder = builder
                 .with_name(&entity_name)
                 .with_transform(Transform::default())
                 .with_visible(true)
-                .with_mesh(mesh_idx as u64, mesh.object_index);
+                .with_mesh(asset_id, mesh.object_index);
 
             if has_animation {
                 let mut anim_state = AnimationState::new();
@@ -527,16 +581,21 @@ impl App {
 
             let entity = builder.build();
             crate::log!(
-                "Created ECS entity {} for mesh {}: id={}",
+                "Created ECS entity {} (asset_id={}) for mesh {}: entity_id={}",
                 entity_name,
+                asset_id,
                 mesh_idx,
                 entity
             );
         }
 
         crate::log!(
-            "Created {} ECS entities for model",
-            data.ecs_world.entity_count()
+            "Created {} ECS entities, {} mesh assets, {} skeletons, {} clips, {} nodes",
+            data.ecs_world.entity_count(),
+            data.ecs_assets.meshes.len(),
+            data.ecs_assets.skeletons.len(),
+            data.ecs_assets.animation_clips.len(),
+            data.ecs_assets.nodes.len()
         );
     }
 
@@ -556,40 +615,40 @@ impl App {
         crate::log!("  current_model_path: {}", self.data.current_model_path);
         crate::log!(
             "  meshes count: {}",
-            self.data.render_resources.meshes.len()
+            self.data.graphics_resources.meshes.len()
         );
         crate::log!(
             "  has_skinned_meshes: {}",
-            self.data.render_resources.has_skinned_meshes
+            self.data.graphics_resources.has_skinned_meshes
         );
         crate::log!(
             "  animation clips count: {}",
-            self.data.render_resources.animation.clips.len()
+            self.data.graphics_resources.animation.clips.len()
         );
         crate::log!(
             "  morph_animations count: {}",
-            self.data.render_resources.morph_animation.animations.len()
+            self.data.graphics_resources.morph_animation.animations.len()
         );
         crate::log!(
             "  skeletons count: {}",
-            self.data.render_resources.animation.skeletons.len()
+            self.data.graphics_resources.animation.skeletons.len()
         );
 
-        crate::log!("--- RenderResources Info ---");
+        crate::log!("--- GraphicsResources Info ---");
         crate::log!(
             "  meshes count: {}",
-            self.data.render_resources.meshes.len()
+            self.data.graphics_resources.meshes.len()
         );
         crate::log!(
             "  materials count: {}",
-            self.data.render_resources.materials.materials.len()
+            self.data.graphics_resources.materials.materials.len()
         );
         crate::log!(
             "  mesh_material_ids: {:?}",
-            self.data.render_resources.mesh_material_ids
+            self.data.graphics_resources.mesh_material_ids
         );
 
-        for (i, mesh) in self.data.render_resources.meshes.iter().enumerate() {
+        for (i, mesh) in self.data.graphics_resources.meshes.iter().enumerate() {
             crate::log!(
                 "  mesh[{}]: render_to_gbuffer={}, vertex_buffer={:?}, indices={}",
                 i,
@@ -645,7 +704,7 @@ impl App {
         crate::log!("  animation_playing: {}", self.data.animation_playing);
         crate::log!(
             "  clips count: {}",
-            self.data.render_resources.animation.clips.len()
+            self.data.graphics_resources.animation.clips.len()
         );
 
         crate::log!("========== END DEBUG INFORMATION ==========");

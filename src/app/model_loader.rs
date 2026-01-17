@@ -1,5 +1,5 @@
 use crate::app::AppData;
-use crate::scene::render_resource::{MaterialUBO, Mesh};
+use crate::scene::graphics_resource::{MaterialUBO, Mesh};
 use crate::scene::CubeModel;
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::vulkanr::data as vulkan_data;
@@ -25,10 +25,10 @@ pub unsafe fn cleanup_model_resources(rrdevice: &RRDevice, data: &mut AppData) {
     }
     data.raytracing.acceleration_structure = None;
 
-    data.render_resources.clear_meshes(rrdevice);
-    data.render_resources.mesh_material_ids.clear();
-    data.render_resources.materials.clear_materials(&rrdevice.device);
-    data.render_resources.animation.clear();
+    data.graphics_resources.clear_meshes(rrdevice);
+    data.graphics_resources.mesh_material_ids.clear();
+    data.graphics_resources.materials.clear_materials(&rrdevice.device);
+    data.graphics_resources.animation.clear();
     crate::log!("Cleared materials and animation");
 
     data.animation_playing = false;
@@ -46,7 +46,7 @@ pub unsafe fn rebuild_acceleration_structures(
 
     let mut acceleration_structure = RRAccelerationStructure::new();
 
-    for mesh in &data.render_resources.meshes {
+    for mesh in &data.graphics_resources.meshes {
         let blas = RRAccelerationStructure::create_blas(
             instance,
             rrdevice,
@@ -137,10 +137,10 @@ pub unsafe fn replace_model_with_cube(
         mesh.vertex_data.indices.len(),
     );
 
-    mesh.object_index = data.render_resources.objects.allocate_slot();
+    mesh.object_index = data.graphics_resources.objects.allocate_slot();
     crate::log!("Allocated object_index {} for cube mesh", mesh.object_index);
 
-    let material_id = data.render_resources.materials.create_material_with_texture(
+    let material_id = data.graphics_resources.materials.create_material_with_texture(
         instance,
         rrdevice,
         "cube_material",
@@ -148,11 +148,11 @@ pub unsafe fn replace_model_with_cube(
         mesh.sampler,
         MaterialUBO::default(),
     )?;
-    data.render_resources.mesh_material_ids.push(material_id);
+    data.graphics_resources.mesh_material_ids.push(material_id);
     crate::log!("Created material {} for cube", material_id);
 
-    data.render_resources.meshes.push(mesh);
-    crate::log!("Added cube mesh to render_resources.meshes");
+    data.graphics_resources.meshes.push(mesh);
+    crate::log!("Added cube mesh to graphics_resources.meshes");
 
     rebuild_acceleration_structures(instance, rrdevice, data)?;
 

@@ -432,8 +432,8 @@ impl RRPipeline {
             .expect("Failed to create pipeline")
     }
 
-    /// Create a pipeline with RenderResources layouts (Set 0, 1, 2)
-    pub unsafe fn new_with_render_resources(
+    /// Create a pipeline with GraphicsResources layouts (Set 0, 1, 2)
+    pub unsafe fn new_with_graphics_resources(
         rrdevice: &RRDevice,
         rrswapchain: &RRSwapchain,
         rrrender: &RRRender,
@@ -465,7 +465,7 @@ impl RRPipeline {
             .expect("Failed to create pipeline")
     }
 
-    /// Create a pipeline with RenderResources layouts (Set 0, Set 2 only - no material)
+    /// Create a pipeline with GraphicsResources layouts (Set 0, Set 2 only - no material)
     pub unsafe fn new_with_frame_object_layouts(
         rrdevice: &RRDevice,
         rrswapchain: &RRSwapchain,

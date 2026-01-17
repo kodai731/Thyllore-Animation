@@ -747,7 +747,7 @@ impl LightGizmoData {
         device: &Device,
         command_buffer: vk::CommandBuffer,
         grid_pipeline: &RRPipeline,
-        render_resources: &crate::scene::render_resource::RenderResources,
+        graphics_resources: &crate::scene::graphics_resource::GraphicsResources,
         object_index: usize,
         image_index: usize,
     ) {
@@ -767,7 +767,7 @@ impl LightGizmoData {
 
             device.cmd_bind_index_buffer(command_buffer, index_buffer, 0, vk::IndexType::UINT32);
 
-            let frame_set = render_resources.frame_set.sets[image_index];
+            let frame_set = graphics_resources.frame_set.sets[image_index];
             device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
@@ -777,8 +777,8 @@ impl LightGizmoData {
                 &[],
             );
 
-            let object_set_idx = render_resources.objects.get_set_index(image_index, object_index);
-            let object_set = render_resources.objects.sets[object_set_idx];
+            let object_set_idx = graphics_resources.objects.get_set_index(image_index, object_index);
+            let object_set = graphics_resources.objects.sets[object_set_idx];
             device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
@@ -804,7 +804,7 @@ impl LightGizmoData {
         device: &Device,
         command_buffer: vk::CommandBuffer,
         grid_pipeline: &RRPipeline,
-        render_resources: &crate::scene::render_resource::RenderResources,
+        graphics_resources: &crate::scene::graphics_resource::GraphicsResources,
         object_index: usize,
         image_index: usize,
     ) {
@@ -832,7 +832,7 @@ impl LightGizmoData {
 
             device.cmd_bind_index_buffer(command_buffer, index_buffer, 0, vk::IndexType::UINT32);
 
-            let frame_set = render_resources.frame_set.sets[image_index];
+            let frame_set = graphics_resources.frame_set.sets[image_index];
             device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
@@ -842,8 +842,8 @@ impl LightGizmoData {
                 &[],
             );
 
-            let object_set_idx = render_resources.objects.get_set_index(image_index, object_index);
-            let object_set = render_resources.objects.sets[object_set_idx];
+            let object_set_idx = graphics_resources.objects.get_set_index(image_index, object_index);
+            let object_set = graphics_resources.objects.sets[object_set_idx];
             device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,

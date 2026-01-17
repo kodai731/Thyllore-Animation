@@ -47,7 +47,7 @@ pub struct FbxLoadResult {
     pub has_armature: bool,
 }
 
-pub fn load_fbx_to_render_resources(path: &str) -> Result<FbxLoadResult> {
+pub fn load_fbx_to_graphics_resources(path: &str) -> Result<FbxLoadResult> {
     let mut fbx_model = load_fbx_with_russimp(path)?;
     let unit_scale = fbx_model.unit_scale;
 
@@ -95,10 +95,10 @@ pub fn load_fbx_to_render_resources(path: &str) -> Result<FbxLoadResult> {
         }
     }
 
-    convert_fbx_model_to_render_resources(fbx_model)
+    convert_fbx_model_to_graphics_resources(fbx_model)
 }
 
-fn convert_fbx_model_to_render_resources(fbx_model: FbxModel) -> Result<FbxLoadResult> {
+fn convert_fbx_model_to_graphics_resources(fbx_model: FbxModel) -> Result<FbxLoadResult> {
     let mut animation_system = AnimationSystem::new();
     let has_armature = !fbx_model.nodes.is_empty();
 

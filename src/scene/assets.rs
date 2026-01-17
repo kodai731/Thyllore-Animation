@@ -1,12 +1,9 @@
 use std::collections::HashMap;
 
 use cgmath::{Matrix4, SquareMatrix};
-use vulkanalia::vk;
 
 use crate::scene::animation::{AnimationClip, AnimationClipId, Skeleton, SkeletonId};
-use crate::scene::render_resource::{MaterialId, MaterialUBO};
-use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
-use crate::vulkanr::data::VertexData;
+use crate::scene::graphics_resource::{MaterialId, MaterialUBO};
 
 pub type AssetId = u64;
 
@@ -14,14 +11,12 @@ pub type AssetId = u64;
 pub struct MeshAsset {
     pub id: AssetId,
     pub name: String,
-    pub vertex_buffer: RRVertexBuffer,
-    pub index_buffer: RRIndexBuffer,
-    pub vertex_data: VertexData,
-    pub image: vk::Image,
-    pub image_memory: vk::DeviceMemory,
-    pub mip_level: u32,
-    pub image_view: vk::ImageView,
-    pub sampler: vk::Sampler,
+    pub graphics_mesh_index: usize,
+    pub object_index: usize,
+    pub material_id: Option<MaterialId>,
+    pub skeleton_id: Option<SkeletonId>,
+    pub node_index: Option<usize>,
+    pub render_to_gbuffer: bool,
 }
 
 #[derive(Clone, Debug)]

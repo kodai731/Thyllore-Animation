@@ -152,7 +152,7 @@ impl System {
                                             app.data.camera.move_to_look_at(light_pos, offset);
                                         }
                                         if ui.button("move to model") {
-                                            if let Some((min, max, center)) = app.data.render_resources.calculate_model_bounds() {
+                                            if let Some((min, max, center)) = app.data.graphics_resources.calculate_model_bounds() {
                                                 let size = max - min;
                                                 let max_dim = size.x.max(size.y).max(size.z);
                                                 let distance = max_dim * 2.0;

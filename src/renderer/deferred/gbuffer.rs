@@ -2,7 +2,8 @@ use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
-use crate::scene::render_resource::{Mesh, RenderResources};
+use crate::scene::assets::AssetStorage;
+use crate::scene::graphics_resource::{Mesh, GraphicsResources};
 use crate::scene::world::World;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::core::{Device, RRDevice};
@@ -64,10 +65,11 @@ pub unsafe fn create_gbuffer_framebuffer(
 pub struct GBufferPass<'a> {
     gbuffer: &'a RRGBuffer,
     pipeline: &'a RRPipeline,
-    render_resources: &'a RenderResources,
+    graphics_resources: &'a GraphicsResources,
     meshes: &'a [Mesh],
     device: &'a Device,
     ecs_world: &'a World,
+    ecs_assets: &'a AssetStorage,
 }
 
 impl<'a> GBufferPass<'a> {
@@ -80,10 +82,11 @@ impl<'a> GBufferPass<'a> {
         Ok(Self {
             gbuffer,
             pipeline,
-            render_resources: &app.data.render_resources,
-            meshes: &app.data.render_resources.meshes,
+            graphics_resources: &app.data.graphics_resources,
+            meshes: &app.data.graphics_resources.meshes,
             device: &app.rrdevice.device,
             ecs_world: &app.data.ecs_world,
+            ecs_assets: &app.data.ecs_assets,
         })
     }
 
@@ -226,7 +229,11 @@ impl<'a> GBufferPass<'a> {
                 continue;
             };
 
-            let mesh_index = mesh_ref.mesh_asset_id as usize;
+            let Some(mesh_asset) = self.ecs_assets.get_mesh(mesh_ref.mesh_asset_id) else {
+                continue;
+            };
+
+            let mesh_index = mesh_asset.graphics_mesh_index;
             if mesh_index >= self.meshes.len() {
                 continue;
             }
@@ -235,14 +242,15 @@ impl<'a> GBufferPass<'a> {
 
             if should_log {
                 crate::log!(
-                    "  ECS Entity {}: mesh_index={}, render_to_gbuffer={}",
+                    "  ECS Entity {}: asset_id={}, mesh_index={}, render_to_gbuffer={}",
                     entity,
+                    mesh_ref.mesh_asset_id,
                     mesh_index,
-                    mesh.render_to_gbuffer
+                    mesh_asset.render_to_gbuffer
                 );
             }
 
-            if !mesh.render_to_gbuffer {
+            if !mesh_asset.render_to_gbuffer {
                 continue;
             }
 
@@ -306,7 +314,7 @@ impl<'a> GBufferPass<'a> {
             vk::IndexType::UINT32,
         );
 
-        let frame_set = self.render_resources.frame_set.sets[image_index];
+        let frame_set = self.graphics_resources.frame_set.sets[image_index];
         self.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
@@ -316,8 +324,8 @@ impl<'a> GBufferPass<'a> {
             &[],
         );
 
-        if let Some(material_id) = self.render_resources.get_material_id(mesh_index) {
-            if let Some(material) = self.render_resources.materials.get(material_id) {
+        if let Some(material_id) = self.graphics_resources.get_material_id(mesh_index) {
+            if let Some(material) = self.graphics_resources.materials.get(material_id) {
                 self.device.cmd_bind_descriptor_sets(
                     command_buffer,
                     vk::PipelineBindPoint::GRAPHICS,
@@ -330,10 +338,10 @@ impl<'a> GBufferPass<'a> {
         }
 
         let object_set_idx = self
-            .render_resources
+            .graphics_resources
             .objects
             .get_set_index(image_index, mesh.object_index);
-        let object_set = self.render_resources.objects.sets[object_set_idx];
+        let object_set = self.graphics_resources.objects.sets[object_set_idx];
         self.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,

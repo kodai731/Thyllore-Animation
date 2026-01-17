@@ -1,9 +1,82 @@
+use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
 use cgmath::{Matrix4, SquareMatrix, Vector3};
 
 use crate::scene::animation::AnimationClipId;
 use crate::scene::assets::AssetId;
+
+pub trait Resource: Any {
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+impl<T: Any> Resource for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+pub struct Resources {
+    data: HashMap<TypeId, Box<dyn Any>>,
+}
+
+impl std::fmt::Debug for Resources {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Resources")
+            .field("count", &self.data.len())
+            .finish()
+    }
+}
+
+impl Default for Resources {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Resources {
+    pub fn new() -> Self {
+        Self {
+            data: HashMap::new(),
+        }
+    }
+
+    pub fn insert<R: Resource>(&mut self, resource: R) {
+        let type_id = TypeId::of::<R>();
+        self.data.insert(type_id, Box::new(resource));
+    }
+
+    pub fn get<R: Resource>(&self) -> Option<&R> {
+        let type_id = TypeId::of::<R>();
+        self.data
+            .get(&type_id)
+            .and_then(|boxed| boxed.downcast_ref::<R>())
+    }
+
+    pub fn get_mut<R: Resource>(&mut self) -> Option<&mut R> {
+        let type_id = TypeId::of::<R>();
+        self.data
+            .get_mut(&type_id)
+            .and_then(|boxed| boxed.downcast_mut::<R>())
+    }
+
+    pub fn remove<R: Resource>(&mut self) -> Option<R> {
+        let type_id = TypeId::of::<R>();
+        self.data
+            .remove(&type_id)
+            .and_then(|boxed| boxed.downcast::<R>().ok())
+            .map(|boxed| *boxed)
+    }
+
+    pub fn contains<R: Resource>(&self) -> bool {
+        let type_id = TypeId::of::<R>();
+        self.data.contains_key(&type_id)
+    }
+}
 
 pub type Entity = u64;
 
@@ -125,9 +198,10 @@ pub struct SkinRef {
     pub inverse_bind_matrices: Vec<Matrix4<f32>>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Default)]
 pub struct World {
     next_entity: Entity,
+    resources: Resources,
 
     pub names: HashMap<Entity, Name>,
     pub transforms: HashMap<Entity, Transform>,
@@ -145,10 +219,20 @@ pub struct World {
     pub skin_refs: HashMap<Entity, SkinRef>,
 }
 
+impl std::fmt::Debug for World {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("World")
+            .field("entity_count", &self.transforms.len())
+            .field("resources", &self.resources)
+            .finish()
+    }
+}
+
 impl World {
     pub fn new() -> Self {
         Self {
             next_entity: 1,
+            resources: Resources::new(),
             names: HashMap::new(),
             transforms: HashMap::new(),
             global_transforms: HashMap::new(),
@@ -164,6 +248,40 @@ impl World {
             node_refs: HashMap::new(),
             skin_refs: HashMap::new(),
         }
+    }
+
+    pub fn insert_resource<R: Resource>(&mut self, resource: R) {
+        self.resources.insert(resource);
+    }
+
+    pub fn resource<R: Resource>(&self) -> &R {
+        self.resources.get::<R>().expect(&format!(
+            "Resource {} not found",
+            std::any::type_name::<R>()
+        ))
+    }
+
+    pub fn resource_mut<R: Resource>(&mut self) -> &mut R {
+        self.resources.get_mut::<R>().expect(&format!(
+            "Resource {} not found",
+            std::any::type_name::<R>()
+        ))
+    }
+
+    pub fn get_resource<R: Resource>(&self) -> Option<&R> {
+        self.resources.get::<R>()
+    }
+
+    pub fn get_resource_mut<R: Resource>(&mut self) -> Option<&mut R> {
+        self.resources.get_mut::<R>()
+    }
+
+    pub fn remove_resource<R: Resource>(&mut self) -> Option<R> {
+        self.resources.remove::<R>()
+    }
+
+    pub fn contains_resource<R: Resource>(&self) -> bool {
+        self.resources.contains::<R>()
     }
 
     pub fn spawn(&mut self) -> Entity {

@@ -25,7 +25,7 @@ pub enum LightMoveTarget {
     ZMax,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct AppData {
     pub messenger: vk::DebugUtilsMessengerEXT,
     pub surface: vk::SurfaceKHR,

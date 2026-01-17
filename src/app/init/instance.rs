@@ -2,6 +2,7 @@ use crate::app::{App, AppData};
 
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
+use crate::vulkanr::context::{AnimationPlayback, CommandState, FrameSync, PipelineState, RenderTargets, SurfaceState, SwapchainState};
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::data::*;
 use crate::vulkanr::descriptor::*;
@@ -292,6 +293,9 @@ impl App {
         let _ = Self::create_sync_objects(&rrdevice.device, &mut data)?;
         println!("created sync objects");
 
+        Self::register_resources(&mut data);
+        println!("registered ECS resources");
+
         let frame = 0 as usize;
         let resized = false;
         let start = Instant::now();
@@ -440,6 +444,42 @@ impl App {
 
         Ok(())
     }
+
+    fn register_resources(data: &mut AppData) {
+        let frame_sync = FrameSync::new(
+            data.image_available_semaphores.clone(),
+            data.render_finish_semaphores.clone(),
+            data.in_flight_fences.clone(),
+        );
+        data.ecs_world.insert_resource(frame_sync);
+
+        let swapchain_state = SwapchainState::new(
+            data.rrswapchain.clone(),
+            data.rrswapchain.swapchain_images.len(),
+        );
+        data.ecs_world.insert_resource(swapchain_state);
+
+        let render_targets = RenderTargets::new(data.rrrender.clone());
+        data.ecs_world.insert_resource(render_targets);
+
+        let command_state = CommandState::new(
+            data.rrcommand_pool.clone(),
+            data.rrcommand_buffer.clone(),
+        );
+        data.ecs_world.insert_resource(command_state);
+
+        let pipeline_state = PipelineState::new(data.model_pipeline.clone());
+        data.ecs_world.insert_resource(pipeline_state);
+
+        let surface_state = SurfaceState::new(data.surface, data.messenger);
+        data.ecs_world.insert_resource(surface_state);
+
+        let animation_playback = AnimationPlayback::with_model_path(
+            data.current_model_path.clone(),
+        );
+        data.ecs_world.insert_resource(animation_playback);
+    }
+
     pub unsafe fn init_imgui_rendering(
         instance: &Instance,
         rrdevice: &RRDevice,

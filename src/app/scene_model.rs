@@ -5,6 +5,7 @@ use crate::loader::gltf::load_gltf_file;
 use crate::loader::texture::load_png_image;
 use crate::math::*;
 use crate::scene::render_resource::{MaterialUBO, Mesh};
+use crate::scene::Scene;
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::device::*;
@@ -20,6 +21,7 @@ impl App {
         instance: &Instance,
         rrdevice: &RRDevice,
         data: &mut AppData,
+        scene: &Scene,
         model_path: &str,
     ) -> Result<()> {
         crate::log!("=== Loading model from path: {} ===", model_path);
@@ -40,8 +42,8 @@ impl App {
             .materials
             .clear_materials(&rrdevice.device);
         data.render_resources.mesh_material_ids.clear();
-        data.render_resources.objects.reset_to(2);
-        crate::log!("Cleared existing data (meshes and materials), reset object slots to 2");
+        data.render_resources.objects.reset_to(3);
+        crate::log!("Cleared existing data (meshes and materials), reset object slots to 3");
 
         if is_fbx {
             crate::log!("Loading FBX model...");
@@ -484,7 +486,7 @@ impl App {
             }
         }
 
-        if let Err(e) = Self::create_ray_tracing_pipelines(instance, rrdevice, data) {
+        if let Err(e) = Self::create_ray_tracing_pipelines(instance, rrdevice, data, scene) {
             crate::log!("Failed to create ray tracing pipelines: {:?}", e);
         }
 

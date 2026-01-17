@@ -6,6 +6,7 @@ use anyhow::Result;
 use vulkanalia::vk;
 
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
+use crate::scene::billboard::BillboardData;
 use crate::scene::components::{RenderContext, Renderable, Updatable, UpdateContext};
 use crate::scene::grid::GridData;
 use crate::scene::render_resource::ObjectDescriptorSet;
@@ -202,6 +203,24 @@ impl Scene {
             .expect("LightGizmoData not found in scene");
         RefMut::map(cell.borrow_mut(), |obj| {
             obj.as_any_mut().downcast_mut::<LightGizmoData>().unwrap()
+        })
+    }
+
+    pub fn billboard(&self) -> Ref<BillboardData> {
+        let cell = self
+            .get_cell::<BillboardData>()
+            .expect("BillboardData not found in scene");
+        Ref::map(cell.borrow(), |obj| {
+            obj.as_any().downcast_ref::<BillboardData>().unwrap()
+        })
+    }
+
+    pub fn billboard_mut(&self) -> RefMut<BillboardData> {
+        let cell = self
+            .get_cell::<BillboardData>()
+            .expect("BillboardData not found in scene");
+        RefMut::map(cell.borrow_mut(), |obj| {
+            obj.as_any_mut().downcast_mut::<BillboardData>().unwrap()
         })
     }
 }

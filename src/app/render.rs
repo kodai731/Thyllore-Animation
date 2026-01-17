@@ -16,6 +16,7 @@ impl App {
                 &self.instance,
                 &self.rrdevice,
                 &mut self.data,
+                &self.scene,
                 &gui_data.selected_model_path,
             ) {
                 Ok(_) => {
@@ -373,9 +374,13 @@ impl App {
             let mesh = &self.data.render_resources.meshes[i];
 
             if should_log {
-                crate::log!("  Mesh[{}]: vertex_buffer={:?}, indices={}, vertices={}",
-                    i, mesh.vertex_buffer.buffer,
-                    mesh.index_buffer.indices, mesh.vertex_data.vertices.len());
+                crate::log!(
+                    "  Mesh[{}]: vertex_buffer={:?}, indices={}, vertices={}",
+                    i,
+                    mesh.vertex_buffer.buffer,
+                    mesh.index_buffer.indices,
+                    mesh.vertex_data.vertices.len()
+                );
             }
 
             self.rrdevice.device.cmd_bind_pipeline(
@@ -423,7 +428,11 @@ impl App {
                 }
             }
 
-            let object_set_idx = self.data.render_resources.objects.get_set_index(image_index, mesh.object_index);
+            let object_set_idx = self
+                .data
+                .render_resources
+                .objects
+                .get_set_index(image_index, mesh.object_index);
             let object_set = self.data.render_resources.objects.sets[object_set_idx];
             self.rrdevice.device.cmd_bind_descriptor_sets(
                 command_buffer,

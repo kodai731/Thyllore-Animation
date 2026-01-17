@@ -14,6 +14,7 @@ use crate::vulkanr::vulkan::*;
 
 use crate::math::*;
 use crate::debugview::*;
+use crate::scene::billboard::{BillboardData, BillboardVertex};
 use crate::scene::grid::GridData;
 use crate::scene::render_resource::RenderResources;
 use crate::scene::{Camera, Scene};
@@ -174,38 +175,47 @@ impl App {
         light_gizmo_data.create_buffers(&instance, &rrdevice, &data.rrcommand_pool)
             .expect("Failed to create light gizmo buffers");
 
-        light_gizmo_data.create_billboard_buffers(&instance, &rrdevice, &data.rrcommand_pool)
+        let mut billboard_data = BillboardData::new();
+        billboard_data.object_index = data.render_resources.objects.allocate_slot();
+        crate::log!("Allocated object_index {} for Billboard", billboard_data.object_index);
+
+        billboard_data.create_buffers(&instance, &rrdevice, &data.rrcommand_pool)
             .expect("Failed to create billboard buffers");
 
-        data.billboard.descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &data.rrswapchain)
+        billboard_data.descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &data.rrswapchain)
             .expect("Failed to create billboard descriptor set");
-        data.billboard.descriptor_set
+        billboard_data.descriptor_set
             .rrdata
             .push(RRData::new(&instance, &rrdevice, &data.rrswapchain, "billboard"));
 
-        data.billboard.descriptor_set
+        billboard_data.descriptor_set
             .allocate_descriptor_sets(&rrdevice, &data.rrswapchain)
             .expect("Failed to allocate billboard descriptor sets");
 
-        if let Some(ref billboard_texture) = light_gizmo_data.billboard_texture {
-            data.billboard.descriptor_set
+        if let Some(ref billboard_texture) = billboard_data.texture {
+            billboard_data.descriptor_set
                 .update_descriptor_sets(&rrdevice, &data.rrswapchain, billboard_texture)
                 .expect("Failed to update billboard descriptor sets");
         }
 
-        data.billboard.pipeline = RRPipeline::new_billboard(
+        billboard_data.pipeline = RRPipeline::new_billboard(
             &rrdevice,
             &data.rrrender,
             &data.rrswapchain,
-            data.billboard.descriptor_set.descriptor_set_layout,
+            billboard_data.descriptor_set.descriptor_set_layout,
             "assets/shaders/billboardVert.spv",
             "assets/shaders/billboardFrag.spv",
-            crate::debugview::gizmo::BillboardVertex::binding_description(),
-            crate::debugview::gizmo::BillboardVertex::attribute_descriptions().to_vec(),
+            BillboardVertex::binding_description(),
+            BillboardVertex::attribute_descriptions().to_vec(),
         )
         .expect("Failed to create billboard pipeline");
 
         println!("created pipeline");
+
+        let mut scene = Scene::new();
+        scene.add(gizmo_data);
+        scene.add(light_gizmo_data);
+        scene.add(billboard_data);
 
         crate::log!("Starting ray tracing initialization...");
         crate::log!("swapchain extent: {}x{}", data.rrswapchain.swapchain_extent.width, data.rrswapchain.swapchain_extent.height);
@@ -222,7 +232,7 @@ impl App {
         crate::log!("initialized ray tracing resources");
 
         let default_model_path = "assets/models/stickman/stickman.glb";
-        if let Err(e) = Self::load_model_from_path(&instance, &rrdevice, &mut data, default_model_path) {
+        if let Err(e) = Self::load_model_from_path(&instance, &rrdevice, &mut data, &scene, default_model_path) {
             eprintln!("Failed to load model: {:?}", e);
             crate::log!("Failed to load model: {:?}", e);
         }
@@ -290,10 +300,7 @@ impl App {
         let target = cgmath::Vector3::new(0.0, 0.0, 0.0);
         data.camera = Camera::new(initial_pos, target);
 
-        let mut scene = Scene::new();
         scene.add(grid);
-        scene.add(gizmo_data);
-        scene.add(light_gizmo_data);
 
         println!("initialized finished");
         Ok(Self {

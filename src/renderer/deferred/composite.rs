@@ -6,7 +6,7 @@ use crate::debugview::DebugViewMode;
 use crate::scene::render_resource::RenderResources;
 use crate::scene::Scene;
 use crate::vulkanr::core::Device;
-use crate::vulkanr::descriptor::{RRBillboardDescriptorSet, RRCompositeDescriptorSet};
+use crate::vulkanr::descriptor::RRCompositeDescriptorSet;
 use crate::vulkanr::pipeline::RRPipeline;
 
 pub struct CompositePass<'a> {
@@ -14,8 +14,6 @@ pub struct CompositePass<'a> {
     composite_descriptor: &'a RRCompositeDescriptorSet,
     scene: &'a Scene,
     render_resources: &'a RenderResources,
-    billboard_pipeline: &'a RRPipeline,
-    billboard_descriptor_set: &'a RRBillboardDescriptorSet,
     device: &'a Device,
     swapchain_extent: vk::Extent2D,
     debug_view_mode: DebugViewMode,
@@ -41,8 +39,6 @@ impl<'a> CompositePass<'a> {
             composite_descriptor,
             scene: &app.scene,
             render_resources: &app.data.render_resources,
-            billboard_pipeline: &app.data.billboard.pipeline,
-            billboard_descriptor_set: &app.data.billboard.descriptor_set,
             device: &app.rrdevice.device,
             swapchain_extent: app.data.rrswapchain.swapchain_extent,
             debug_view_mode: app.data.rt_debug_state.debug_view_mode,
@@ -364,16 +360,15 @@ impl<'a> CompositePass<'a> {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        let light_gizmo = self.scene.light_gizmo();
+        let billboard = self.scene.billboard();
 
-        if let (Some(vertex_buffer), Some(index_buffer)) = (
-            light_gizmo.billboard_vertex_buffer,
-            light_gizmo.billboard_index_buffer,
-        ) {
+        if let (Some(vertex_buffer), Some(index_buffer)) =
+            (billboard.vertex_buffer, billboard.index_buffer)
+        {
             self.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.billboard_pipeline.pipeline,
+                billboard.pipeline.pipeline,
             );
 
             self.device
@@ -391,15 +386,15 @@ impl<'a> CompositePass<'a> {
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.billboard_pipeline.pipeline_layout,
+                billboard.pipeline.pipeline_layout,
                 0,
-                &[self.billboard_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[billboard.descriptor_set.descriptor_sets[descriptor_set_index]],
                 &[],
             );
 
             self.device.cmd_draw_indexed(
                 command_buffer,
-                light_gizmo.billboard_indices.len() as u32,
+                billboard.indices.len() as u32,
                 1,
                 0,
                 0,

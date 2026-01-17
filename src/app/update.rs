@@ -11,7 +11,7 @@ use crate::vulkanr::device::*;
 use crate::vulkanr::vulkan::*;
 
 use anyhow::Result;
-use cgmath::{Deg, InnerSpace, Matrix4, Vector2, Vector3};
+use cgmath::{Deg, InnerSpace, Matrix4, SquareMatrix, Vector2, Vector3};
 use std::mem::size_of;
 use vulkanalia::prelude::v1_0::*;
 
@@ -114,7 +114,9 @@ impl App {
         }
 
         if !self.scene.light_gizmo_mut().is_selected {
-            self.data.camera.update(gui_data, self.scene.grid_mut().scale);
+            self.data
+                .camera
+                .update(gui_data, self.scene.grid_mut().scale);
         }
 
         let camera_pos = self.data.camera.position();
@@ -128,7 +130,9 @@ impl App {
         self.scene.grid_mut().scale = 1.0;
 
         let near_plane = (camera_distance * 0.001).max(0.1).min(10.0);
-        let far_plane = (self.scene.grid_mut().scale * 1000.0).max(1000.0).min(100000.0);
+        let far_plane = (self.scene.grid_mut().scale * 1000.0)
+            .max(1000.0)
+            .min(100000.0);
         self.data.camera.set_near_plane(near_plane);
         self.data.camera.set_far_plane(far_plane);
 
@@ -189,7 +193,7 @@ impl App {
             log_billboard_debug_info(
                 &info,
                 &self.data.rrswapchain,
-                &self.data.billboard.descriptor_set,
+                &self.scene.billboard().descriptor_set,
                 gbuffer_debug_info.as_ref(),
                 self.data.raytracing.gbuffer_sampler,
             );
@@ -329,22 +333,30 @@ impl App {
 
         let (camera_right, camera_up_gizmo, camera_forward) = get_camera_axes_from_view(view);
 
-        // ビルボード用のuniform bufferを更新
-        let light_pos = self.scene.light_gizmo_mut().position;
+        let light_pos = self.scene.light_gizmo().position;
 
-        if self.data.billboard.transform.is_none() {
-            self.data.billboard.transform = Some(BillboardTransform::new(light_pos));
-        }
+        {
+            let mut billboard = self.scene.billboard_mut();
+            if billboard.transform.is_none() {
+                billboard.transform = Some(BillboardTransform::new(light_pos));
+            }
 
-        if let Some(ref mut billboard_transform) = self.data.billboard.transform {
-            billboard_transform.set_position(light_pos);
-            billboard_transform.update_look_at(camera_pos, camera_up);
+            if let Some(ref mut billboard_transform) = billboard.transform {
+                billboard_transform.set_position(light_pos);
+                billboard_transform.update_look_at(camera_pos, camera_up);
+            }
 
-            for i in 0..self.data.billboard.descriptor_set.rrdata.len() {
-                let rrdata = &mut self.data.billboard.descriptor_set.rrdata[i];
+            let model_matrix = billboard
+                .transform
+                .as_ref()
+                .map(|t| t.model_matrix)
+                .unwrap_or(Matrix4::identity());
+
+            for i in 0..billboard.descriptor_set.rrdata.len() {
+                let rrdata = &mut billboard.descriptor_set.rrdata[i];
 
                 let ubo_billboard = UniformBufferObject {
-                    model: billboard_transform.model_matrix,
+                    model: model_matrix,
                     view,
                     proj,
                 };
@@ -514,11 +526,7 @@ impl App {
         Ok(())
     }
 
-    pub unsafe fn update(
-        &mut self,
-        image_index: usize,
-        gui_data: &mut GUIData,
-    ) -> Result<()> {
+    pub unsafe fn update(&mut self, image_index: usize, gui_data: &mut GUIData) -> Result<()> {
         self.update_uniform_buffer(
             image_index,
             gui_data.mouse_pos,
@@ -798,11 +806,13 @@ impl App {
                     let intersection = ray_origin + ray_direction * t;
                     let initial_pos = self.scene.light_gizmo_mut().initial_position.to_vec3();
 
-                    self.scene.light_gizmo_mut().update_position_with_constraint(
-                        intersection,
-                        initial_pos.into(),
-                        gui_data.is_ctrl_pressed,
-                    );
+                    self.scene
+                        .light_gizmo_mut()
+                        .update_position_with_constraint(
+                            intersection,
+                            initial_pos.into(),
+                            gui_data.is_ctrl_pressed,
+                        );
 
                     self.data.rt_debug_state.light_position = self.scene.light_gizmo_mut().position;
                 }

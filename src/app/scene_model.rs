@@ -5,6 +5,7 @@ use crate::loader::gltf::load_gltf_file;
 use crate::loader::texture::load_png_image;
 use crate::math::*;
 use crate::scene::render_resource::{MaterialUBO, Mesh};
+use crate::scene::world::{AnimationState, Transform};
 use crate::scene::Scene;
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::data as vulkan_data;
@@ -490,8 +491,53 @@ impl App {
             crate::log!("Failed to create ray tracing pipelines: {:?}", e);
         }
 
+        Self::create_ecs_entities_from_meshes(data);
+
         crate::log!("=== Model loaded successfully ===");
         Ok(())
+    }
+
+    fn create_ecs_entities_from_meshes(data: &mut AppData) {
+        data.ecs_world.clear();
+
+        let model_name = std::path::Path::new(&data.current_model_path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("model")
+            .to_string();
+
+        let has_animation = !data.render_resources.animation.clips.is_empty();
+        let first_clip_id = data.render_resources.animation.clips.first().map(|c| c.id);
+
+        for (mesh_idx, mesh) in data.render_resources.meshes.iter().enumerate() {
+            let entity_name = format!("{}_{}", model_name, mesh_idx);
+
+            let mut builder = data.ecs_world.entity();
+            builder = builder
+                .with_name(&entity_name)
+                .with_transform(Transform::default())
+                .with_visible(true)
+                .with_mesh(mesh_idx as u64, mesh.object_index);
+
+            if has_animation {
+                let mut anim_state = AnimationState::new();
+                anim_state.current_clip_id = first_clip_id;
+                builder = builder.with_animation_state(anim_state);
+            }
+
+            let entity = builder.build();
+            crate::log!(
+                "Created ECS entity {} for mesh {}: id={}",
+                entity_name,
+                mesh_idx,
+                entity
+            );
+        }
+
+        crate::log!(
+            "Created {} ECS entities for model",
+            data.ecs_world.entity_count()
+        );
     }
 
     #[allow(dead_code)]

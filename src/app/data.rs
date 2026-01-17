@@ -4,8 +4,10 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::debugview::*;
 use crate::platform::ImguiData;
+use crate::scene::assets::AssetStorage;
 use crate::scene::raytracing::RayTracingData;
 use crate::scene::render_resource::RenderResources;
+use crate::scene::world::World;
 use crate::scene::Camera;
 use crate::vulkanr::command::*;
 use crate::vulkanr::pipeline::*;
@@ -48,4 +50,6 @@ pub struct AppData {
     pub raytracing: RayTracingData,
     pub rt_debug_state: RayTracingDebugState,
     pub debug_view_data: DebugViewData,
+    pub ecs_world: World,
+    pub ecs_assets: AssetStorage,
 }

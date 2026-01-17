@@ -125,7 +125,7 @@ pub struct SkinRef {
     pub inverse_bind_matrices: Vec<Matrix4<f32>>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct World {
     next_entity: Entity,
 

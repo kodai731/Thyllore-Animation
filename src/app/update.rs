@@ -5,6 +5,7 @@ use crate::math::*;
 use crate::scene::billboard::BillboardTransform;
 use crate::scene::components::{CameraState, RenderContext};
 use crate::scene::render_resource::FrameUBO;
+use crate::scene::systems::{animation_time_system, transform_propagation_system};
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::data::*;
 use crate::vulkanr::device::*;
@@ -64,6 +65,10 @@ impl App {
         ) {
             eprintln!("failed to update animations: {}", e);
         }
+
+        let delta_time = 1.0 / 60.0;
+        animation_time_system(&mut self.data.ecs_world, delta_time, &self.data.ecs_assets);
+        transform_propagation_system(&mut self.data.ecs_world);
 
         let model = Mat4::identity();
 

@@ -65,7 +65,7 @@ impl Default for NodeAsset {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct AssetStorage {
     pub meshes: HashMap<AssetId, MeshAsset>,
     pub materials: HashMap<AssetId, MaterialAsset>,

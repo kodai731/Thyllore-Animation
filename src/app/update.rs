@@ -54,19 +54,19 @@ impl App {
 
         let time = self.start.elapsed().as_secs_f32();
 
-        let animation_playing = self.animation_playback().playing;
-        let current_model_path = self.animation_playback().model_path.clone();
         let command_pool = self.command_state().pool.clone();
-        if let Err(e) = self.data.graphics_resources.update_animations(
-            time,
-            animation_playing,
-            &current_model_path,
-            &self.instance,
-            &self.rrdevice,
-            command_pool.as_ref(),
-            &mut self.data.raytracing.acceleration_structure,
-        ) {
-            eprintln!("failed to update animations: {}", e);
+        {
+            let playback = self.data.ecs_world.resource_mut::<crate::vulkanr::context::AnimationPlayback>();
+            if let Err(e) = self.data.graphics_resources.update_animations(
+                time,
+                playback,
+                &self.instance,
+                &self.rrdevice,
+                command_pool.as_ref(),
+                &mut self.data.raytracing.acceleration_structure,
+            ) {
+                eprintln!("failed to update animations: {}", e);
+            }
         }
 
         let delta_time = 1.0 / 60.0;

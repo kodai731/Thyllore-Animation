@@ -1,6 +1,7 @@
 use std::rc::Rc;
 use vulkanalia::prelude::v1_0::*;
 
+use crate::scene::animation::AnimationClipId;
 use crate::scene::graphics_resource::GraphicsResources;
 use crate::vulkanr::command::{RRCommandBuffer, RRCommandPool};
 use crate::vulkanr::core::RRDevice;
@@ -138,6 +139,9 @@ pub struct AnimationPlayback {
     pub playing: bool,
     pub current_index: usize,
     pub model_path: String,
+    pub current_clip_id: Option<AnimationClipId>,
+    pub speed: f32,
+    pub looping: bool,
 }
 
 impl AnimationPlayback {
@@ -147,6 +151,9 @@ impl AnimationPlayback {
             playing: true,
             current_index: 0,
             model_path: String::new(),
+            current_clip_id: None,
+            speed: 1.0,
+            looping: true,
         }
     }
 
@@ -156,11 +163,53 @@ impl AnimationPlayback {
             playing: true,
             current_index: 0,
             model_path,
+            current_clip_id: None,
+            speed: 1.0,
+            looping: true,
         }
+    }
+
+    pub fn play(&mut self, clip_id: AnimationClipId) {
+        self.current_clip_id = Some(clip_id);
+        self.playing = true;
+        self.time = 0.0;
+    }
+
+    pub fn stop(&mut self) {
+        self.playing = false;
+        self.current_clip_id = None;
+    }
+
+    pub fn pause(&mut self) {
+        self.playing = false;
+    }
+
+    pub fn resume(&mut self) {
+        self.playing = true;
     }
 }
 
 impl Default for AnimationPlayback {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub struct ModelInfo {
+    pub has_skinned_meshes: bool,
+    pub node_animation_scale: f32,
+}
+
+impl ModelInfo {
+    pub fn new() -> Self {
+        Self {
+            has_skinned_meshes: false,
+            node_animation_scale: 1.0,
+        }
+    }
+}
+
+impl Default for ModelInfo {
     fn default() -> Self {
         Self::new()
     }

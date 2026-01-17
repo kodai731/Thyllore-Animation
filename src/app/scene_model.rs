@@ -4,7 +4,7 @@ use crate::loader::fbx::load_fbx_to_graphics_resources;
 use crate::loader::gltf::load_gltf_file;
 use crate::loader::texture::load_png_image;
 use crate::math::*;
-use crate::scene::graphics_resource::{MaterialUBO, Mesh};
+use crate::scene::graphics_resource::{MaterialUBO, MeshBuffer};
 use crate::scene::world::{AnimationState, Transform};
 use crate::scene::Scene;
 use crate::vulkanr::buffer::*;
@@ -71,6 +71,16 @@ impl App {
             data.graphics_resources.has_skinned_meshes = fbx_result.has_skinned_meshes;
             data.graphics_resources.node_animation_scale = 1.0;
 
+            if let Some(model_info) = data.ecs_world.get_resource_mut::<crate::vulkanr::context::ModelInfo>() {
+                model_info.has_skinned_meshes = fbx_result.has_skinned_meshes;
+                model_info.node_animation_scale = 1.0;
+            } else {
+                let mut model_info = crate::vulkanr::context::ModelInfo::new();
+                model_info.has_skinned_meshes = fbx_result.has_skinned_meshes;
+                model_info.node_animation_scale = 1.0;
+                data.ecs_world.insert_resource(model_info);
+            }
+
             data.graphics_resources.nodes = fbx_result
                 .nodes
                 .iter()
@@ -91,7 +101,7 @@ impl App {
                     fbx_mesh.texture_path
                 );
 
-                let mut mesh = Mesh::default();
+                let mut mesh = MeshBuffer::default();
 
                 if let Some(texture_path) = &fbx_mesh.texture_path {
                     crate::log!("Loading texture: {}", texture_path);
@@ -207,8 +217,18 @@ impl App {
             data.graphics_resources.animation = gltf_result.animation_system;
             data.graphics_resources.has_skinned_meshes = gltf_result.has_skinned_meshes;
             data.graphics_resources.morph_animation = gltf_result.morph_animation;
-            data.graphics_resources.node_animation_scale =
-                if gltf_result.has_armature { 0.01 } else { 1.0 };
+            let node_animation_scale = if gltf_result.has_armature { 0.01 } else { 1.0 };
+            data.graphics_resources.node_animation_scale = node_animation_scale;
+
+            if let Some(model_info) = data.ecs_world.get_resource_mut::<crate::vulkanr::context::ModelInfo>() {
+                model_info.has_skinned_meshes = gltf_result.has_skinned_meshes;
+                model_info.node_animation_scale = node_animation_scale;
+            } else {
+                let mut model_info = crate::vulkanr::context::ModelInfo::new();
+                model_info.has_skinned_meshes = gltf_result.has_skinned_meshes;
+                model_info.node_animation_scale = node_animation_scale;
+                data.ecs_world.insert_resource(model_info);
+            }
 
             data.graphics_resources.nodes = gltf_result
                 .nodes
@@ -233,7 +253,7 @@ impl App {
                     gltf_mesh.vertex_data.vertices.len()
                 );
 
-                let mut mesh = Mesh::default();
+                let mut mesh = MeshBuffer::default();
 
                 if !gltf_mesh.image_data.is_empty() {
                     let img = &gltf_mesh.image_data[0];
@@ -385,8 +405,19 @@ impl App {
         if !data.graphics_resources.animation.clips.is_empty() {
             crate::log!("Applying initial pose (time=0) for skeletal animation...");
 
-            data.graphics_resources.animation.play(0);
-            data.graphics_resources.animation.player.time = 0.0;
+            let first_clip_id = data.graphics_resources.animation.clips.first().map(|c| c.id);
+            if let Some(clip_id) = first_clip_id {
+                data.graphics_resources.animation.play(clip_id);
+                if let Some(playback) = data.ecs_world.get_resource_mut::<crate::vulkanr::context::AnimationPlayback>() {
+                    playback.current_clip_id = Some(clip_id);
+                    playback.time = 0.0;
+                } else {
+                    let mut playback = crate::vulkanr::context::AnimationPlayback::new();
+                    playback.current_clip_id = Some(clip_id);
+                    playback.time = 0.0;
+                    data.ecs_world.insert_resource(playback);
+                }
+            }
 
             let skeleton_id = data
                 .graphics_resources

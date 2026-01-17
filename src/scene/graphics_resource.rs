@@ -91,7 +91,7 @@ impl Default for NodeData {
 }
 
 #[derive(Clone, Debug)]
-pub struct Mesh {
+pub struct MeshBuffer {
     pub vertex_buffer: RRVertexBuffer,
     pub index_buffer: RRIndexBuffer,
     pub vertex_data: VertexData,
@@ -108,7 +108,7 @@ pub struct Mesh {
     pub base_vertices: Vec<Vertex>,
 }
 
-impl Default for Mesh {
+impl Default for MeshBuffer {
     fn default() -> Self {
         Self {
             vertex_buffer: RRVertexBuffer::default(),
@@ -129,7 +129,7 @@ impl Default for Mesh {
     }
 }
 
-impl Mesh {
+impl MeshBuffer {
     pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.image_view != vk::ImageView::null() {
             rrdevice.device.destroy_image_view(self.image_view, None);
@@ -708,7 +708,7 @@ pub struct GraphicsResources {
     pub frame_set: FrameDescriptorSet,
     pub materials: MaterialManager,
     pub objects: ObjectDescriptorSet,
-    pub meshes: Vec<Mesh>,
+    pub meshes: Vec<MeshBuffer>,
     pub mesh_material_ids: Vec<MaterialId>,
     pub nodes: Vec<NodeData>,
     pub animation: AnimationSystem,
@@ -747,8 +747,7 @@ impl GraphicsResources {
     pub unsafe fn update_animations(
         &mut self,
         time: f32,
-        animation_playing: bool,
-        model_path: &str,
+        playback: &mut crate::vulkanr::context::AnimationPlayback,
         instance: &Instance,
         rrdevice: &RRDevice,
         command_pool: &RRCommandPool,
@@ -768,7 +767,7 @@ impl GraphicsResources {
             return Ok(());
         }
 
-        if !animation_playing {
+        if !playback.playing {
             static mut LOGGED_PAUSED: bool = false;
             if !LOGGED_PAUSED {
                 crate::log!("Animation is paused (animation_playing=false)");
@@ -777,19 +776,19 @@ impl GraphicsResources {
             return Ok(());
         }
 
-        if let Some(clip_id) = self.animation.player.current_clip_id {
+        if let Some(clip_id) = playback.current_clip_id {
             if let Some(clip) = self.animation.clips.iter().find(|c| c.id == clip_id) {
                 let duration = clip.duration;
                 if duration > 0.0 {
-                    let prev_time = self.animation.player.time;
-                    self.animation.player.time = time % duration;
+                    let prev_time = playback.time;
+                    playback.time = time % duration;
 
                     static mut FRAME_COUNT: u32 = 0;
                     FRAME_COUNT += 1;
                     if FRAME_COUNT % 60 == 0 {
                         crate::log!(
                             "Animation update: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
-                            self.animation.player.time,
+                            playback.time,
                             duration,
                             time,
                             prev_time
@@ -801,9 +800,11 @@ impl GraphicsResources {
 
         let skeleton_id = self.meshes.first().and_then(|m| m.skeleton_id);
         if let Some(skel_id) = skeleton_id {
-            self.animation.apply_to_skeleton(skel_id);
+            self.animation
+                .apply_to_skeleton_with_playback(skel_id, playback);
         }
 
+        let model_path = &playback.model_path;
         let is_gltf = model_path.ends_with(".glb") || model_path.ends_with(".gltf");
         let is_fbx = model_path.ends_with(".fbx");
         let has_node_animation = (is_gltf || is_fbx) && !self.has_skinned_meshes;
@@ -814,7 +815,12 @@ impl GraphicsResources {
             self.update_skinned_vertex_buffers(instance, rrdevice, command_pool)?;
         }
 
-        self.update_acceleration_structure(instance, rrdevice, command_pool, acceleration_structure)?;
+        self.update_acceleration_structure(
+            instance,
+            rrdevice,
+            command_pool,
+            acceleration_structure,
+        )?;
 
         Ok(())
     }

@@ -1,5 +1,4 @@
 use serde::Serialize;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::debugview::*;
 use crate::platform::ImguiData;
@@ -23,7 +22,6 @@ pub enum LightMoveTarget {
 #[derive(Debug, Default)]
 pub struct AppData {
     pub graphics_resources: GraphicsResources,
-    pub msaa_samples: vk::SampleCountFlags,
     pub camera: Camera,
     pub imgui: ImguiData,
     pub raytracing: RayTracingData,

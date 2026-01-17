@@ -21,7 +21,7 @@ use crate::debugview::{RayTracingDebugState, DebugViewData};
 use crate::platform::ImguiData;
 use crate::vulkanr::context::{
     AnimationPlayback, CameraState, CommandState, DebugState, FrameSync, GpuAssets,
-    ImGuiState, PipelineState, RayTracingState, RenderConfig, RenderTargets,
+    ImGuiState, ModelInfo, PipelineState, RayTracingState, RenderConfig, RenderTargets,
     SurfaceState, SwapchainState,
 };
 use crate::vulkanr::device::*;
@@ -135,5 +135,21 @@ impl App {
 
     pub fn imgui_data_mut(&mut self) -> &mut ImguiData {
         &mut self.data.imgui
+    }
+
+    pub fn render_config(&self) -> &RenderConfig {
+        self.resource::<RenderConfig>()
+    }
+
+    pub fn render_config_mut(&mut self) -> &mut RenderConfig {
+        self.resource_mut::<RenderConfig>()
+    }
+
+    pub fn model_info(&self) -> &ModelInfo {
+        self.resource::<ModelInfo>()
+    }
+
+    pub fn model_info_mut(&mut self) -> &mut ModelInfo {
+        self.resource_mut::<ModelInfo>()
     }
 }

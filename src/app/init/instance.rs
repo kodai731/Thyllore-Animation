@@ -3,8 +3,8 @@ use crate::app::{App, AppData};
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
 use crate::vulkanr::context::{
-    AnimationPlayback, CommandState, FrameSync, PipelineState, RenderTargets, SurfaceState,
-    SwapchainState,
+    AnimationPlayback, CommandState, FrameSync, ModelInfo, PipelineState, RenderConfig,
+    RenderTargets, SurfaceState, SwapchainState,
 };
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::data::*;
@@ -359,7 +359,7 @@ impl App {
             in_flight_fences,
         };
 
-        Self::register_resources_new(&mut data, &vulkan_resources, default_model_path);
+        Self::register_resources_new(&mut data, &vulkan_resources, default_model_path, rrdevice.msaa_samples);
         println!("registered ECS resources");
 
         let frame = 0 as usize;
@@ -507,7 +507,12 @@ impl App {
         Ok((image_available, render_finished, in_flight))
     }
 
-    fn register_resources_new(data: &mut AppData, resources: &VulkanResources, model_path: &str) {
+    fn register_resources_new(
+        data: &mut AppData,
+        resources: &VulkanResources,
+        model_path: &str,
+        msaa_samples: vk::SampleCountFlags,
+    ) {
         let frame_sync = FrameSync::new(
             resources.image_available_semaphores.clone(),
             resources.render_finish_semaphores.clone(),
@@ -536,8 +541,24 @@ impl App {
         let surface_state = SurfaceState::new(resources.surface, resources.messenger);
         data.ecs_world.insert_resource(surface_state);
 
-        let animation_playback = AnimationPlayback::with_model_path(model_path.to_string());
-        data.ecs_world.insert_resource(animation_playback);
+        if let Some(playback) = data.ecs_world.get_resource_mut::<AnimationPlayback>() {
+            if playback.model_path.is_empty() {
+                playback.model_path = model_path.to_string();
+            }
+        } else {
+            let animation_playback = AnimationPlayback::with_model_path(model_path.to_string());
+            data.ecs_world.insert_resource(animation_playback);
+        }
+
+        if data.ecs_world.get_resource::<RenderConfig>().is_none() {
+            let render_config = RenderConfig::new(msaa_samples);
+            data.ecs_world.insert_resource(render_config);
+        }
+
+        if data.ecs_world.get_resource::<ModelInfo>().is_none() {
+            let model_info = ModelInfo::new();
+            data.ecs_world.insert_resource(model_info);
+        }
     }
 
     pub unsafe fn init_imgui_rendering(
@@ -729,10 +750,13 @@ impl App {
             .update_descriptor_sets(&descriptor_writes, &[] as &[vk::CopyDescriptorSet]);
 
         // Create ImGui pipeline using RRPipeline
-        let msaa_samples = if !data.msaa_samples.is_empty() {
-            data.msaa_samples
-        } else {
-            vk::SampleCountFlags::_8
+        let msaa_samples = {
+            let render_config = data.ecs_world.resource::<RenderConfig>();
+            if !render_config.msaa_samples.is_empty() {
+                render_config.msaa_samples
+            } else {
+                vk::SampleCountFlags::_8
+            }
         };
 
         let imgui_pipeline = RRPipeline::new_imgui(

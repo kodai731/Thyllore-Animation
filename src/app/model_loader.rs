@@ -1,5 +1,5 @@
 use crate::app::AppData;
-use crate::scene::graphics_resource::{MaterialUBO, Mesh};
+use crate::scene::graphics_resource::{MaterialUBO, MeshBuffer};
 use crate::scene::CubeModel;
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::vulkanr::command::RRCommandPool;
@@ -95,7 +95,7 @@ pub unsafe fn replace_model_with_cube(
 
     let cube = CubeModel::new_at_position(size, position);
 
-    let mut mesh = Mesh::default();
+    let mut mesh = MeshBuffer::default();
 
     (mesh.image, mesh.image_memory, mesh.mip_level) = create_texture_image_pixel(
         instance,

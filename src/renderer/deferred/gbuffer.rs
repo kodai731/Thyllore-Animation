@@ -3,7 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
 use crate::scene::assets::AssetStorage;
-use crate::scene::graphics_resource::{Mesh, GraphicsResources};
+use crate::scene::graphics_resource::{MeshBuffer, GraphicsResources};
 use crate::scene::world::World;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::core::{Device, RRDevice};
@@ -66,7 +66,7 @@ pub struct GBufferPass<'a> {
     gbuffer: &'a RRGBuffer,
     pipeline: &'a RRPipeline,
     graphics_resources: &'a GraphicsResources,
-    meshes: &'a [Mesh],
+    meshes: &'a [MeshBuffer],
     device: &'a Device,
     ecs_world: &'a World,
     ecs_assets: &'a AssetStorage,
@@ -297,7 +297,7 @@ impl<'a> GBufferPass<'a> {
         &self,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
-        mesh: &Mesh,
+        mesh: &MeshBuffer,
         mesh_index: usize,
     ) -> Result<()> {
         self.device.cmd_bind_vertex_buffers(

@@ -4,8 +4,6 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::debugview::*;
 use crate::platform::ImguiData;
-use crate::scene::billboard::BillboardData;
-use crate::scene::grid::GridData;
 use crate::scene::raytracing::RayTracingData;
 use crate::scene::render_resource::RenderResources;
 use crate::scene::Camera;
@@ -35,10 +33,6 @@ pub struct AppData {
     pub rrcommand_buffer: RRCommandBuffer,
     pub model_pipeline: RRPipeline,
     pub render_resources: RenderResources,
-    pub grid: GridData,
-    pub gizmo_data: GridGizmoData,
-    pub light_gizmo_data: LightGizmoData,
-    pub billboard: BillboardData,
     pub command_pool: vk::CommandPool,
     pub image_available_semaphores: Vec<vk::Semaphore>,
     pub render_finish_semaphores: Vec<vk::Semaphore>,

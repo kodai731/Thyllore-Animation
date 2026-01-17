@@ -3,19 +3,20 @@ use crate::app::{App, AppData, GUIData};
 use crate::debugview::*;
 use crate::math::*;
 use crate::scene::billboard::BillboardTransform;
-use crate::scene::render_resource::{FrameUBO, ObjectUBO};
+use crate::scene::components::{CameraState, RenderContext};
+use crate::scene::render_resource::FrameUBO;
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::data::*;
 use crate::vulkanr::device::*;
 use crate::vulkanr::vulkan::*;
 
 use anyhow::Result;
-use cgmath::{Deg, InnerSpace, Matrix4, Vector2, Vector3};
+use cgmath::{Deg, InnerSpace, Matrix4, SquareMatrix, Vector2, Vector3};
 use std::mem::size_of;
 use vulkanalia::prelude::v1_0::*;
 
 impl App {
-    pub(crate) unsafe fn update_uniform_buffer(
+    unsafe fn update_uniform_buffer(
         &mut self,
         image_index: usize,
         mouse_pos: [f32; 2],
@@ -77,14 +78,14 @@ impl App {
         let camera_up = self.data.camera.up();
 
         if !gui_data.imgui_wants_mouse && gui_data.is_left_clicked {
-            self.data.light_gizmo_data.just_selected = false;
+            self.scene.light_gizmo_mut().just_selected = false;
 
             let is_first_click = gui_data.clicked_mouse_pos.is_none();
             if is_first_click {
                 gui_data.clicked_mouse_pos = Some([mouse_pos[0], mouse_pos[1]]);
 
                 let swapchain_extent = self.data.rrswapchain.swapchain_extent;
-                self.data.light_gizmo_data.try_select(
+                self.scene.light_gizmo_mut().try_select(
                     mouse_pos,
                     camera_pos,
                     camera_direction,
@@ -99,21 +100,23 @@ impl App {
                 .map(|p| p.to_vec2().into())
                 .unwrap_or(mouse_pos);
 
-            if self.data.light_gizmo_data.is_selected
+            if self.scene.light_gizmo_mut().is_selected
                 && gui_data.is_left_clicked
-                && !self.data.light_gizmo_data.just_selected
+                && !self.scene.light_gizmo_mut().just_selected
             {
                 self.update_light_gizmo_position(mouse_pos, camera_pos, camera_direction, gui_data);
             }
         } else if !gui_data.is_wheel_clicked {
             if gui_data.clicked_mouse_pos.is_some() {
                 crate::log!("Mouse released - resetting light gizmo state");
-                self.data.light_gizmo_data.set_default();
+                self.scene.light_gizmo_mut().set_default();
             }
         }
 
-        if !self.data.light_gizmo_data.is_selected {
-            self.data.camera.update(gui_data, self.data.grid.scale);
+        if !self.scene.light_gizmo_mut().is_selected {
+            self.data
+                .camera
+                .update(gui_data, self.scene.grid_mut().scale);
         }
 
         let camera_pos = self.data.camera.position();
@@ -123,11 +126,13 @@ impl App {
 
         let camera_distance = camera_pos.magnitude();
         let base_scale = 10.0;
-        //self.data.grid.scale = (camera_distance / base_scale).max(1.0);
-        self.data.grid.scale = 1.0;
+        //self.scene.grid_mut().scale = (camera_distance / base_scale).max(1.0);
+        self.scene.grid_mut().scale = 1.0;
 
         let near_plane = (camera_distance * 0.001).max(0.1).min(10.0);
-        let far_plane = (self.data.grid.scale * 1000.0).max(1000.0).min(100000.0);
+        let far_plane = (self.scene.grid_mut().scale * 1000.0)
+            .max(1000.0)
+            .min(100000.0);
         self.data.camera.set_near_plane(near_plane);
         self.data.camera.set_far_plane(far_plane);
 
@@ -188,7 +193,7 @@ impl App {
             log_billboard_debug_info(
                 &info,
                 &self.data.rrswapchain,
-                &self.data.billboard.descriptor_set,
+                &self.scene.billboard().descriptor_set,
                 gbuffer_debug_info.as_ref(),
                 self.data.raytracing.gbuffer_sampler,
             );
@@ -202,6 +207,7 @@ impl App {
                 &self.instance,
                 &self.rrdevice,
                 &mut self.data,
+                &self.scene,
                 cube_size,
                 cube_position,
             ) {
@@ -298,73 +304,59 @@ impl App {
             self.rrdevice.device.unmap_memory(scene_memory);
         }
 
-        let model_grid = Mat4::from_scale(self.data.grid.scale);
-        let grid_object_ubo = ObjectUBO { model: model_grid };
-        if let Err(e) = self.data.render_resources.objects.update(
-            &self.rrdevice,
-            image_index,
-            self.data.grid.object_index,
-            &grid_object_ubo,
-        ) {
-            eprintln!("Failed to update Grid ObjectUBO: {}", e);
-        }
-
-        let gizmo_object_ubo = ObjectUBO {
-            model: Mat4::identity(),
+        let camera_state = CameraState {
+            position: camera_pos,
+            direction: camera_direction,
         };
-        if let Err(e) = self.data.render_resources.objects.update(
-            &self.rrdevice,
+        let render_ctx = RenderContext {
+            camera: &camera_state,
             image_index,
-            self.data.gizmo_data.object_index,
-            &gizmo_object_ubo,
-        ) {
-            eprintln!("Failed to update Gizmo ObjectUBO: {}", e);
-        }
-
-        let light_pos = self.data.rt_debug_state.light_position;
-        let distance = (light_pos - camera_pos).magnitude();
-        let scale_factor = distance * 0.03;
-        let light_gizmo_model = Mat4::from_translation(light_pos) * Mat4::from_scale(scale_factor);
-        let light_gizmo_object_ubo = ObjectUBO {
-            model: light_gizmo_model,
         };
-        if let Err(e) = self.data.render_resources.objects.update(
+
+        if let Err(e) = self.scene.update_object_ubos(
+            &render_ctx,
+            &self.data.render_resources.objects,
             &self.rrdevice,
-            image_index,
-            self.data.light_gizmo_data.object_index,
-            &light_gizmo_object_ubo,
         ) {
-            eprintln!("Failed to update LightGizmo ObjectUBO: {}", e);
+            eprintln!("Failed to update object UBOs: {}", e);
         }
 
-        self.data
-            .light_gizmo_data
+        self.scene
+            .light_gizmo_mut()
             .sync_from_debug_state(self.data.rt_debug_state.light_position);
 
-        self.data.light_gizmo_data.update_selection_color();
-        self.data
-            .light_gizmo_data
+        self.scene.light_gizmo_mut().update_selection_color();
+        self.scene
+            .light_gizmo_mut()
             .update_vertex_buffer(&self.rrdevice)
             .expect("Failed to update light gizmo vertex buffer");
 
         let (camera_right, camera_up_gizmo, camera_forward) = get_camera_axes_from_view(view);
 
-        // ビルボード用のuniform bufferを更新
-        let light_pos = self.data.light_gizmo_data.position;
+        let light_pos = self.scene.light_gizmo().position;
 
-        if self.data.billboard.transform.is_none() {
-            self.data.billboard.transform = Some(BillboardTransform::new(light_pos));
-        }
+        {
+            let mut billboard = self.scene.billboard_mut();
+            if billboard.transform.is_none() {
+                billboard.transform = Some(BillboardTransform::new(light_pos));
+            }
 
-        if let Some(ref mut billboard_transform) = self.data.billboard.transform {
-            billboard_transform.set_position(light_pos);
-            billboard_transform.update_look_at(camera_pos, camera_up);
+            if let Some(ref mut billboard_transform) = billboard.transform {
+                billboard_transform.set_position(light_pos);
+                billboard_transform.update_look_at(camera_pos, camera_up);
+            }
 
-            for i in 0..self.data.billboard.descriptor_set.rrdata.len() {
-                let rrdata = &mut self.data.billboard.descriptor_set.rrdata[i];
+            let model_matrix = billboard
+                .transform
+                .as_ref()
+                .map(|t| t.model_matrix)
+                .unwrap_or(Matrix4::identity());
+
+            for i in 0..billboard.descriptor_set.rrdata.len() {
+                let rrdata = &mut billboard.descriptor_set.rrdata[i];
 
                 let ubo_billboard = UniformBufferObject {
-                    model: billboard_transform.model_matrix,
+                    model: model_matrix,
                     view,
                     proj,
                 };
@@ -382,7 +374,7 @@ impl App {
             cgmath::Matrix3::from_cols(camera_right, camera_up_gizmo, camera_forward);
 
         // Gizmoの頂点を更新
-        self.data.gizmo_data.update_rotation(&gizmo_rotation);
+        self.scene.gizmo_mut().update_rotation(&gizmo_rotation);
 
         // Gizmo方向確認用ログ（60フレームごと）
         static mut GIZMO_LOG_COUNTER: u32 = 0;
@@ -441,45 +433,52 @@ impl App {
                 );
 
                 crate::log!("Gizmo vertices (after rotation):");
+                let gizmo = self.scene.gizmo();
                 crate::log!(
                     "  Origin: ({:.3}, {:.3}, {:.3})",
-                    self.data.gizmo_data.vertices[0].pos[0],
-                    self.data.gizmo_data.vertices[0].pos[1],
-                    self.data.gizmo_data.vertices[0].pos[2]
+                    gizmo.vertices[0].pos[0],
+                    gizmo.vertices[0].pos[1],
+                    gizmo.vertices[0].pos[2]
                 );
                 crate::log!(
                     "  X-axis (red): ({:.3}, {:.3}, {:.3})",
-                    self.data.gizmo_data.vertices[1].pos[0],
-                    self.data.gizmo_data.vertices[1].pos[1],
-                    self.data.gizmo_data.vertices[1].pos[2]
+                    gizmo.vertices[1].pos[0],
+                    gizmo.vertices[1].pos[1],
+                    gizmo.vertices[1].pos[2]
                 );
                 crate::log!(
                     "  Y-axis (green): ({:.3}, {:.3}, {:.3})",
-                    self.data.gizmo_data.vertices[2].pos[0],
-                    self.data.gizmo_data.vertices[2].pos[1],
-                    self.data.gizmo_data.vertices[2].pos[2]
+                    gizmo.vertices[2].pos[0],
+                    gizmo.vertices[2].pos[1],
+                    gizmo.vertices[2].pos[2]
                 );
                 crate::log!(
                     "  Z-axis (blue): ({:.3}, {:.3}, {:.3})",
-                    self.data.gizmo_data.vertices[3].pos[0],
-                    self.data.gizmo_data.vertices[3].pos[1],
-                    self.data.gizmo_data.vertices[3].pos[2]
+                    gizmo.vertices[3].pos[0],
+                    gizmo.vertices[3].pos[1],
+                    gizmo.vertices[3].pos[2]
                 );
             }
         }
 
-        // 頂点バッファを更新（デバイスローカルメモリなので、staging bufferを使う必要があります）
-        // 今回は簡単のため、毎フレーム再作成します
-        if let Some(vertex_buffer) = self.data.gizmo_data.vertex_buffer {
-            self.rrdevice.device.destroy_buffer(vertex_buffer, None);
+        let (old_vertex_buffer, old_vertex_buffer_memory, vertices_len, vertices_ptr) = {
+            let gizmo = self.scene.gizmo();
+            (
+                gizmo.vertex_buffer,
+                gizmo.vertex_buffer_memory,
+                gizmo.vertices.len(),
+                gizmo.vertices.as_ptr(),
+            )
+        };
+
+        if let Some(vb) = old_vertex_buffer {
+            self.rrdevice.device.destroy_buffer(vb, None);
         }
-        if let Some(vertex_buffer_memory) = self.data.gizmo_data.vertex_buffer_memory {
-            self.rrdevice.device.free_memory(vertex_buffer_memory, None);
+        if let Some(vbm) = old_vertex_buffer_memory {
+            self.rrdevice.device.free_memory(vbm, None);
         }
 
-        // 頂点バッファを再作成
-        let vertex_buffer_size =
-            (size_of::<GizmoVertex>() * self.data.gizmo_data.vertices.len()) as u64;
+        let vertex_buffer_size = (size_of::<GizmoVertex>() * vertices_len) as u64;
         let (staging_buffer, staging_buffer_memory) = create_buffer(
             &self.instance,
             &self.rrdevice,
@@ -494,11 +493,7 @@ impl App {
             vertex_buffer_size,
             vk::MemoryMapFlags::empty(),
         )?;
-        std::ptr::copy_nonoverlapping(
-            self.data.gizmo_data.vertices.as_ptr(),
-            data_ptr.cast(),
-            self.data.gizmo_data.vertices.len(),
-        );
+        std::ptr::copy_nonoverlapping(vertices_ptr, data_ptr.cast(), vertices_len);
         self.rrdevice.device.unmap_memory(staging_buffer_memory);
 
         let (vertex_buffer, vertex_buffer_memory) = create_buffer(
@@ -522,8 +517,89 @@ impl App {
             .device
             .free_memory(staging_buffer_memory, None);
 
-        self.data.gizmo_data.vertex_buffer = Some(vertex_buffer);
-        self.data.gizmo_data.vertex_buffer_memory = Some(vertex_buffer_memory);
+        {
+            let mut gizmo = self.scene.gizmo_mut();
+            gizmo.vertex_buffer = Some(vertex_buffer);
+            gizmo.vertex_buffer_memory = Some(vertex_buffer_memory);
+        }
+
+        Ok(())
+    }
+
+    pub unsafe fn update(&mut self, image_index: usize, gui_data: &mut GUIData) -> Result<()> {
+        self.update_uniform_buffer(
+            image_index,
+            gui_data.mouse_pos,
+            gui_data.mouse_wheel,
+            gui_data,
+        )?;
+
+        let model_tops: Vec<cgmath::Vector3<f32>> = self
+            .data
+            .rt_debug_state
+            .get_cube_top()
+            .into_iter()
+            .collect();
+
+        static mut CUBE_DEBUG_COUNTER: u32 = 0;
+        CUBE_DEBUG_COUNTER += 1;
+        if CUBE_DEBUG_COUNTER % 60 == 1 {
+            crate::log!("=== Cube Position Debug (frame {}) ===", CUBE_DEBUG_COUNTER);
+            crate::log!("model_tops from get_cube_top(): {:?}", model_tops);
+
+            if !self.data.render_resources.meshes.is_empty() {
+                for (mesh_idx, mesh) in self.data.render_resources.meshes.iter().enumerate() {
+                    if !mesh.vertex_data.vertices.is_empty() {
+                        let mut min_x = f32::MAX;
+                        let mut max_x = f32::MIN;
+                        let mut min_y = f32::MAX;
+                        let mut max_y = f32::MIN;
+                        let mut min_z = f32::MAX;
+                        let mut max_z = f32::MIN;
+
+                        for v in &mesh.vertex_data.vertices {
+                            min_x = min_x.min(v.pos.x);
+                            max_x = max_x.max(v.pos.x);
+                            min_y = min_y.min(v.pos.y);
+                            max_y = max_y.max(v.pos.y);
+                            min_z = min_z.min(v.pos.z);
+                            max_z = max_z.max(v.pos.z);
+                        }
+
+                        let center_x = (min_x + max_x) / 2.0;
+                        let center_z = (min_z + max_z) / 2.0;
+
+                        crate::log!("Mesh[{}] vertex_data bounds:", mesh_idx);
+                        crate::log!(
+                            "  X: [{:.2}, {:.2}], Y: [{:.2}, {:.2}], Z: [{:.2}, {:.2}]",
+                            min_x,
+                            max_x,
+                            min_y,
+                            max_y,
+                            min_z,
+                            max_z
+                        );
+                        crate::log!(
+                            "  Top center: ({:.2}, {:.2}, {:.2})",
+                            center_x,
+                            max_y,
+                            center_z
+                        );
+                        crate::log!("  vertex count: {}", mesh.vertex_data.vertices.len());
+                    }
+                }
+            } else {
+                crate::log!("render_resources.meshes is empty!");
+            }
+            crate::log!("=====================================");
+        }
+
+        self.scene
+            .light_gizmo_mut()
+            .update_vertical_lines(&model_tops);
+        self.scene
+            .light_gizmo_mut()
+            .update_or_create_vertical_line_buffers(&self.instance, &self.rrdevice)?;
 
         Ok(())
     }
@@ -728,15 +804,17 @@ impl App {
 
                 if t >= 0.0 {
                     let intersection = ray_origin + ray_direction * t;
-                    let initial_pos = self.data.light_gizmo_data.initial_position.to_vec3();
+                    let initial_pos = self.scene.light_gizmo_mut().initial_position.to_vec3();
 
-                    self.data.light_gizmo_data.update_position_with_constraint(
-                        intersection,
-                        initial_pos.into(),
-                        gui_data.is_ctrl_pressed,
-                    );
+                    self.scene
+                        .light_gizmo_mut()
+                        .update_position_with_constraint(
+                            intersection,
+                            initial_pos.into(),
+                            gui_data.is_ctrl_pressed,
+                        );
 
-                    self.data.rt_debug_state.light_position = self.data.light_gizmo_data.position;
+                    self.data.rt_debug_state.light_position = self.scene.light_gizmo_mut().position;
                 }
             }
         }
@@ -755,9 +833,9 @@ impl App {
         );
         crate::log!(
             "Light gizmo position: ({:.2}, {:.2}, {:.2})",
-            self.data.light_gizmo_data.position.x,
-            self.data.light_gizmo_data.position.y,
-            self.data.light_gizmo_data.position.z
+            self.scene.light_gizmo().position.x,
+            self.scene.light_gizmo().position.y,
+            self.scene.light_gizmo().position.z
         );
         crate::log!(
             "Camera position: ({:.2}, {:.2}, {:.2})",

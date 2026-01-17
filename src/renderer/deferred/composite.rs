@@ -2,25 +2,18 @@ use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
-use crate::vulkanr::pipeline::RRPipeline;
-use crate::vulkanr::descriptor::{RRCompositeDescriptorSet, RRBillboardDescriptorSet};
-use crate::vulkanr::buffer::{RRVertexBuffer, RRIndexBuffer};
-use crate::vulkanr::core::Device;
-use crate::debugview::{DebugViewMode, gizmo::{GridGizmoData, LightGizmoData}};
+use crate::debugview::DebugViewMode;
 use crate::scene::render_resource::RenderResources;
+use crate::scene::Scene;
+use crate::vulkanr::core::Device;
+use crate::vulkanr::descriptor::RRCompositeDescriptorSet;
+use crate::vulkanr::pipeline::RRPipeline;
 
 pub struct CompositePass<'a> {
     composite_pipeline: &'a RRPipeline,
     composite_descriptor: &'a RRCompositeDescriptorSet,
-    grid_pipeline: &'a RRPipeline,
-    grid_vertex_buffer: &'a RRVertexBuffer,
-    grid_index_buffer: &'a RRIndexBuffer,
-    grid_object_index: usize,
+    scene: &'a Scene,
     render_resources: &'a RenderResources,
-    gizmo_data: &'a GridGizmoData,
-    light_gizmo_data: &'a LightGizmoData,
-    billboard_pipeline: &'a RRPipeline,
-    billboard_descriptor_set: &'a RRBillboardDescriptorSet,
     device: &'a Device,
     swapchain_extent: vk::Extent2D,
     debug_view_mode: DebugViewMode,
@@ -28,23 +21,24 @@ pub struct CompositePass<'a> {
 
 impl<'a> CompositePass<'a> {
     pub fn new(app: &'a App) -> Result<Self> {
-        let composite_pipeline = app.data.raytracing.composite_pipeline.as_ref()
+        let composite_pipeline = app
+            .data
+            .raytracing
+            .composite_pipeline
+            .as_ref()
             .ok_or_else(|| anyhow!("Composite pipeline not initialized"))?;
-        let composite_descriptor = app.data.raytracing.composite_descriptor.as_ref()
+        let composite_descriptor = app
+            .data
+            .raytracing
+            .composite_descriptor
+            .as_ref()
             .ok_or_else(|| anyhow!("Composite descriptor set not initialized"))?;
 
         Ok(Self {
             composite_pipeline,
             composite_descriptor,
-            grid_pipeline: &app.data.grid.pipeline,
-            grid_vertex_buffer: &app.data.grid.vertex_buffer,
-            grid_index_buffer: &app.data.grid.index_buffer,
-            grid_object_index: app.data.grid.object_index,
+            scene: &app.scene,
             render_resources: &app.data.render_resources,
-            gizmo_data: &app.data.gizmo_data,
-            light_gizmo_data: &app.data.light_gizmo_data,
-            billboard_pipeline: &app.data.billboard.pipeline,
-            billboard_descriptor_set: &app.data.billboard.descriptor_set,
             device: &app.rrdevice.device,
             swapchain_extent: app.data.rrswapchain.swapchain_extent,
             debug_view_mode: app.data.rt_debug_state.debug_view_mode,
@@ -62,20 +56,24 @@ impl<'a> CompositePass<'a> {
         self.draw_composite(command_buffer)?;
         self.draw_grid(command_buffer, image_index)?;
         self.draw_gizmo(command_buffer, image_index)?;
-        self.light_gizmo_data.draw_ray_to_model_with_resources(
+
+        let grid = self.scene.grid();
+        let light_gizmo = self.scene.light_gizmo();
+
+        light_gizmo.draw_ray_to_model_with_resources(
             self.device,
             command_buffer,
-            self.grid_pipeline,
+            &grid.pipeline,
             self.render_resources,
-            self.grid_object_index,
+            grid.object_index,
             image_index,
         );
-        self.light_gizmo_data.draw_vertical_lines_with_resources(
+        light_gizmo.draw_vertical_lines_with_resources(
             self.device,
             command_buffer,
-            self.grid_pipeline,
+            &grid.pipeline,
             self.render_resources,
-            self.grid_object_index,
+            grid.object_index,
             image_index,
         );
         self.draw_billboard(command_buffer, image_index)?;
@@ -179,25 +177,27 @@ impl<'a> CompositePass<'a> {
         Ok(())
     }
 
-    unsafe fn draw_grid(&self, command_buffer: vk::CommandBuffer, image_index: usize) -> Result<()> {
+    unsafe fn draw_grid(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+    ) -> Result<()> {
+        let grid = self.scene.grid();
+
         self.device.cmd_bind_pipeline(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            self.grid_pipeline.pipeline,
+            grid.pipeline.pipeline,
         );
 
         self.device.cmd_set_line_width(command_buffer, 1.0);
 
-        self.device.cmd_bind_vertex_buffers(
-            command_buffer,
-            0,
-            &[self.grid_vertex_buffer.buffer],
-            &[0],
-        );
+        self.device
+            .cmd_bind_vertex_buffers(command_buffer, 0, &[grid.vertex_buffer.buffer], &[0]);
 
         self.device.cmd_bind_index_buffer(
             command_buffer,
-            self.grid_index_buffer.buffer,
+            grid.index_buffer.buffer,
             0,
             vk::IndexType::UINT32,
         );
@@ -206,53 +206,51 @@ impl<'a> CompositePass<'a> {
         self.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            self.grid_pipeline.pipeline_layout,
+            grid.pipeline.pipeline_layout,
             0,
             &[frame_set],
             &[],
         );
 
-        let object_set_idx = self.render_resources.objects.get_set_index(image_index, self.grid_object_index);
+        let object_set_idx = self
+            .render_resources
+            .objects
+            .get_set_index(image_index, grid.object_index);
         let object_set = self.render_resources.objects.sets[object_set_idx];
         self.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            self.grid_pipeline.pipeline_layout,
+            grid.pipeline.pipeline_layout,
             2,
             &[object_set],
             &[],
         );
 
-        self.device.cmd_draw_indexed(
-            command_buffer,
-            self.grid_index_buffer.indices,
-            1,
-            0,
-            0,
-            0,
-        );
+        self.device
+            .cmd_draw_indexed(command_buffer, grid.index_buffer.indices, 1, 0, 0, 0);
 
         Ok(())
     }
 
-    unsafe fn draw_gizmo(&self, command_buffer: vk::CommandBuffer, image_index: usize) -> Result<()> {
-        if let (Some(vertex_buffer), Some(index_buffer)) =
-            (self.gizmo_data.vertex_buffer, self.gizmo_data.index_buffer) {
+    unsafe fn draw_gizmo(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+    ) -> Result<()> {
+        let gizmo = self.scene.gizmo();
 
+        if let (Some(vertex_buffer), Some(index_buffer)) = (gizmo.vertex_buffer, gizmo.index_buffer)
+        {
             self.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.gizmo_data.pipeline.pipeline,
+                gizmo.pipeline.pipeline,
             );
 
             self.device.cmd_set_line_width(command_buffer, 1.0);
 
-            self.device.cmd_bind_vertex_buffers(
-                command_buffer,
-                0,
-                &[vertex_buffer],
-                &[0],
-            );
+            self.device
+                .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
             self.device.cmd_bind_index_buffer(
                 command_buffer,
@@ -265,54 +263,53 @@ impl<'a> CompositePass<'a> {
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.gizmo_data.pipeline.pipeline_layout,
+                gizmo.pipeline.pipeline_layout,
                 0,
                 &[frame_set],
                 &[],
             );
 
-            let object_set_idx = self.render_resources.objects.get_set_index(image_index, self.gizmo_data.object_index);
+            let object_set_idx = self
+                .render_resources
+                .objects
+                .get_set_index(image_index, gizmo.object_index);
             let object_set = self.render_resources.objects.sets[object_set_idx];
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.gizmo_data.pipeline.pipeline_layout,
+                gizmo.pipeline.pipeline_layout,
                 2,
                 &[object_set],
                 &[],
             );
 
-            self.device.cmd_draw_indexed(
-                command_buffer,
-                self.gizmo_data.indices.len() as u32,
-                1,
-                0,
-                0,
-                0,
-            );
+            self.device
+                .cmd_draw_indexed(command_buffer, gizmo.indices.len() as u32, 1, 0, 0, 0);
         }
 
         Ok(())
     }
 
-    unsafe fn draw_light_gizmo(&self, command_buffer: vk::CommandBuffer, image_index: usize) -> Result<()> {
-        if let (Some(vertex_buffer), Some(index_buffer)) =
-            (self.light_gizmo_data.vertex_buffer, self.light_gizmo_data.index_buffer) {
+    unsafe fn draw_light_gizmo(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+    ) -> Result<()> {
+        let light_gizmo = self.scene.light_gizmo();
 
+        if let (Some(vertex_buffer), Some(index_buffer)) =
+            (light_gizmo.vertex_buffer, light_gizmo.index_buffer)
+        {
             self.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.light_gizmo_data.pipeline.pipeline,
+                light_gizmo.pipeline.pipeline,
             );
 
             self.device.cmd_set_line_width(command_buffer, 1.0);
 
-            self.device.cmd_bind_vertex_buffers(
-                command_buffer,
-                0,
-                &[vertex_buffer],
-                &[0],
-            );
+            self.device
+                .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
             self.device.cmd_bind_index_buffer(
                 command_buffer,
@@ -325,18 +322,21 @@ impl<'a> CompositePass<'a> {
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.light_gizmo_data.pipeline.pipeline_layout,
+                light_gizmo.pipeline.pipeline_layout,
                 0,
                 &[frame_set],
                 &[],
             );
 
-            let object_set_idx = self.render_resources.objects.get_set_index(image_index, self.light_gizmo_data.object_index);
+            let object_set_idx = self
+                .render_resources
+                .objects
+                .get_set_index(image_index, light_gizmo.object_index);
             let object_set = self.render_resources.objects.sets[object_set_idx];
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.light_gizmo_data.pipeline.pipeline_layout,
+                light_gizmo.pipeline.pipeline_layout,
                 2,
                 &[object_set],
                 &[],
@@ -344,7 +344,7 @@ impl<'a> CompositePass<'a> {
 
             self.device.cmd_draw_indexed(
                 command_buffer,
-                self.light_gizmo_data.indices.len() as u32,
+                light_gizmo.indices.len() as u32,
                 1,
                 0,
                 0,
@@ -355,22 +355,24 @@ impl<'a> CompositePass<'a> {
         Ok(())
     }
 
-    unsafe fn draw_billboard(&self, command_buffer: vk::CommandBuffer, image_index: usize) -> Result<()> {
-        if let (Some(vertex_buffer), Some(index_buffer)) =
-            (self.light_gizmo_data.billboard_vertex_buffer, self.light_gizmo_data.billboard_index_buffer) {
+    unsafe fn draw_billboard(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+    ) -> Result<()> {
+        let billboard = self.scene.billboard();
 
+        if let (Some(vertex_buffer), Some(index_buffer)) =
+            (billboard.vertex_buffer, billboard.index_buffer)
+        {
             self.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.billboard_pipeline.pipeline,
+                billboard.pipeline.pipeline,
             );
 
-            self.device.cmd_bind_vertex_buffers(
-                command_buffer,
-                0,
-                &[vertex_buffer],
-                &[0],
-            );
+            self.device
+                .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
             self.device.cmd_bind_index_buffer(
                 command_buffer,
@@ -384,15 +386,15 @@ impl<'a> CompositePass<'a> {
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.billboard_pipeline.pipeline_layout,
+                billboard.pipeline.pipeline_layout,
                 0,
-                &[self.billboard_descriptor_set.descriptor_sets[descriptor_set_index]],
+                &[billboard.descriptor_set.descriptor_sets[descriptor_set_index]],
                 &[],
             );
 
             self.device.cmd_draw_indexed(
                 command_buffer,
-                self.light_gizmo_data.billboard_indices.len() as u32,
+                billboard.indices.len() as u32,
                 1,
                 0,
                 0,

@@ -1,30 +1,22 @@
+use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use crate::app::{App, GUIData};
 use crate::vulkanr::command::*;
 use crate::vulkanr::vulkan::*;
 
-use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use anyhow::{anyhow, Result};
 use cgmath::{Matrix4, SquareMatrix};
-use winit::window::Window;
 
 impl App {
-    pub unsafe fn render(
-        &mut self,
-        window: &Window,
-        gui_data: &mut GUIData,
-        draw_data: &imgui::DrawData,
-    ) -> Result<()> {
-        // Check if a new model file was selected
+    pub unsafe fn begin_frame(&mut self, gui_data: &mut GUIData) -> Result<usize> {
         if gui_data.file_changed {
             crate::log!("Loading new model from: {}", gui_data.selected_model_path);
-
-            // Wait for device to finish all operations before reloading
             self.rrdevice.device.device_wait_idle()?;
 
             match Self::load_model_from_path(
                 &self.instance,
                 &self.rrdevice,
                 &mut self.data,
+                &self.scene,
                 &gui_data.selected_model_path,
             ) {
                 Ok(_) => {
@@ -48,14 +40,11 @@ impl App {
             gui_data.dump_debug_info = false;
         }
 
-        // Acquire an image from the swapchain
-        // Execute the command buffer with that image as attachment in the framebuffer
-        // Return the image to the swapchain for presentation
         self.rrdevice.device.wait_for_fences(
             &[self.data.in_flight_fences[self.frame]],
             true,
             u64::MAX,
-        )?; // wait until all fences signaled
+        )?;
 
         let result = self.rrdevice.device.acquire_next_image_khr(
             self.data.rrswapchain.swapchain,
@@ -66,100 +55,30 @@ impl App {
 
         let image_index = match result {
             Ok((image_index, _)) => image_index as usize,
-            // TODO: Err(vk::ErrorCode::OUT_OF_DATE_KHR) => return self.recreate_swapchain(window),
             Err(e) => return Err(anyhow!(e)),
         };
 
-        // sync CPU(swapchain image)
-        if !self.data.images_in_flight[image_index as usize].is_null() {
+        if !self.data.images_in_flight[image_index].is_null() {
             self.rrdevice.device.wait_for_fences(
-                &[self.data.images_in_flight[image_index as usize]],
+                &[self.data.images_in_flight[image_index]],
                 true,
                 u64::MAX,
             )?;
         }
 
-        self.data.images_in_flight[image_index as usize] = self.data.in_flight_fences[self.frame];
-        
+        self.data.images_in_flight[image_index] = self.data.in_flight_fences[self.frame];
 
-        self.update_uniform_buffer(
-            image_index,
-            gui_data.mouse_pos,
-            gui_data.mouse_wheel,
-            gui_data,
-        )?;
+        Ok(image_index)
+    }
 
-        let model_tops: Vec<cgmath::Vector3<f32>> = self
-            .data
-            .rt_debug_state
-            .get_cube_top()
-            .into_iter()
-            .collect();
-
-        static mut CUBE_DEBUG_COUNTER: u32 = 0;
-        CUBE_DEBUG_COUNTER += 1;
-        if CUBE_DEBUG_COUNTER % 60 == 1 {
-            crate::log!("=== Cube Position Debug (frame {}) ===", CUBE_DEBUG_COUNTER);
-            crate::log!("model_tops from get_cube_top(): {:?}", model_tops);
-
-            if !self.data.render_resources.meshes.is_empty() {
-                for (mesh_idx, mesh) in self.data.render_resources.meshes.iter().enumerate() {
-                    if !mesh.vertex_data.vertices.is_empty() {
-                        let mut min_x = f32::MAX;
-                        let mut max_x = f32::MIN;
-                        let mut min_y = f32::MAX;
-                        let mut max_y = f32::MIN;
-                        let mut min_z = f32::MAX;
-                        let mut max_z = f32::MIN;
-
-                        for v in &mesh.vertex_data.vertices {
-                            min_x = min_x.min(v.pos.x);
-                            max_x = max_x.max(v.pos.x);
-                            min_y = min_y.min(v.pos.y);
-                            max_y = max_y.max(v.pos.y);
-                            min_z = min_z.min(v.pos.z);
-                            max_z = max_z.max(v.pos.z);
-                        }
-
-                        let center_x = (min_x + max_x) / 2.0;
-                        let center_z = (min_z + max_z) / 2.0;
-
-                        crate::log!("Mesh[{}] vertex_data bounds:", mesh_idx);
-                        crate::log!(
-                            "  X: [{:.2}, {:.2}], Y: [{:.2}, {:.2}], Z: [{:.2}, {:.2}]",
-                            min_x,
-                            max_x,
-                            min_y,
-                            max_y,
-                            min_z,
-                            max_z
-                        );
-                        crate::log!(
-                            "  Top center: ({:.2}, {:.2}, {:.2})",
-                            center_x,
-                            max_y,
-                            center_z
-                        );
-                        crate::log!("  vertex count: {}", mesh.vertex_data.vertices.len());
-                    }
-                }
-            } else {
-                crate::log!("render_resources.meshes is empty!");
-            }
-            crate::log!("=====================================");
-        }
-
-        self.data
-            .light_gizmo_data
-            .update_vertical_lines(&model_tops);
-        self.data
-            .light_gizmo_data
-            .update_or_create_vertical_line_buffers(&self.instance, &self.rrdevice)?;
-
-        // Update ImGui buffers
+    pub unsafe fn render(
+        &mut self,
+        image_index: usize,
+        gui_data: &mut GUIData,
+        draw_data: &imgui::DrawData,
+    ) -> Result<()> {
         Self::update_imgui_buffers(&self.instance, &self.rrdevice, &mut self.data, draw_data)?;
 
-        // Record command buffer with 3D rendering and ImGui
         self.record_command_buffer(image_index, gui_data, draw_data)?;
 
         let wait_semaphores = &[self.data.image_available_semaphores[self.frame]];
@@ -168,7 +87,7 @@ impl App {
         let signal_semaphores = &[self.data.render_finish_semaphores[self.frame]];
         let submit_info = vk::SubmitInfo::builder()
             .wait_semaphores(wait_semaphores)
-            .wait_dst_stage_mask(wait_stages) // Each entry in the wait_stages array corresponds to the semaphore with the same index in wait_semaphores.
+            .wait_dst_stage_mask(wait_stages)
             .command_buffers(command_buffers)
             .signal_semaphores(signal_semaphores);
 
@@ -196,12 +115,10 @@ impl App {
 
         if changed || self.resized {
             self.resized = false;
-            // TODO: self.recreate_swapchain(window)?;
         } else if let Err(e) = present_result {
             return Err(anyhow!(e));
         }
 
-        // Handle screenshot request
         if gui_data.take_screenshot {
             crate::log!("Taking screenshot...");
             self.save_screenshot(image_index)?;
@@ -435,60 +352,6 @@ impl App {
         );
     }
 
-    unsafe fn render_grid(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
-        self.rrdevice.device.cmd_bind_pipeline(
-            command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
-            self.data.grid.pipeline.pipeline,
-        );
-
-        self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
-
-        self.rrdevice.device.cmd_bind_vertex_buffers(
-            command_buffer,
-            0,
-            &[self.data.grid.vertex_buffer.buffer],
-            &[0],
-        );
-
-        self.rrdevice.device.cmd_bind_index_buffer(
-            command_buffer,
-            self.data.grid.index_buffer.buffer,
-            0,
-            vk::IndexType::UINT32,
-        );
-
-        let frame_set = self.data.render_resources.frame_set.sets[image_index];
-        self.rrdevice.device.cmd_bind_descriptor_sets(
-            command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
-            self.data.grid.pipeline.pipeline_layout,
-            0,
-            &[frame_set],
-            &[],
-        );
-
-        let object_set_idx = self.data.render_resources.objects.get_set_index(image_index, self.data.grid.object_index);
-        let object_set = self.data.render_resources.objects.sets[object_set_idx];
-        self.rrdevice.device.cmd_bind_descriptor_sets(
-            command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
-            self.data.grid.pipeline.pipeline_layout,
-            2,
-            &[object_set],
-            &[],
-        );
-
-        self.rrdevice.device.cmd_draw_indexed(
-            command_buffer,
-            self.data.grid.index_buffer.indices,
-            1,
-            0,
-            0,
-            0,
-        );
-    }
-
     unsafe fn render_models(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
         static mut RENDER_LOG_COUNTER: u32 = 0;
         static mut PREV_MESH_COUNT: usize = 0;
@@ -511,9 +374,13 @@ impl App {
             let mesh = &self.data.render_resources.meshes[i];
 
             if should_log {
-                crate::log!("  Mesh[{}]: vertex_buffer={:?}, indices={}, vertices={}",
-                    i, mesh.vertex_buffer.buffer,
-                    mesh.index_buffer.indices, mesh.vertex_data.vertices.len());
+                crate::log!(
+                    "  Mesh[{}]: vertex_buffer={:?}, indices={}, vertices={}",
+                    i,
+                    mesh.vertex_buffer.buffer,
+                    mesh.index_buffer.indices,
+                    mesh.vertex_data.vertices.len()
+                );
             }
 
             self.rrdevice.device.cmd_bind_pipeline(
@@ -561,7 +428,11 @@ impl App {
                 }
             }
 
-            let object_set_idx = self.data.render_resources.objects.get_set_index(image_index, mesh.object_index);
+            let object_set_idx = self
+                .data
+                .render_resources
+                .objects
+                .get_set_index(image_index, mesh.object_index);
             let object_set = self.data.render_resources.objects.sets[object_set_idx];
             self.rrdevice.device.cmd_bind_descriptor_sets(
                 command_buffer,
@@ -583,128 +454,22 @@ impl App {
         }
     }
 
-    unsafe fn render_gizmo(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
-        if let (Some(vertex_buffer), Some(index_buffer)) = (
-            self.data.gizmo_data.vertex_buffer,
-            self.data.gizmo_data.index_buffer,
-        ) {
-            self.rrdevice.device.cmd_bind_pipeline(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.data.gizmo_data.pipeline.pipeline,
-            );
-
-            self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
-
-            self.rrdevice.device.cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
-
-            self.rrdevice.device.cmd_bind_index_buffer(
-                command_buffer,
-                index_buffer,
-                0,
-                vk::IndexType::UINT32,
-            );
-
-            let frame_set = self.data.render_resources.frame_set.sets[image_index];
-            self.rrdevice.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.data.gizmo_data.pipeline.pipeline_layout,
-                0,
-                &[frame_set],
-                &[],
-            );
-
-            let object_set_idx = self.data.render_resources.objects.get_set_index(
-                image_index, self.data.gizmo_data.object_index
-            );
-            let object_set = self.data.render_resources.objects.sets[object_set_idx];
-            self.rrdevice.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.data.gizmo_data.pipeline.pipeline_layout,
-                2,
-                &[object_set],
-                &[],
-            );
-
-            self.rrdevice.device.cmd_draw_indexed(
-                command_buffer,
-                self.data.gizmo_data.indices.len() as u32,
-                1,
-                0,
-                0,
-                0,
-            );
-        }
-    }
-
-    unsafe fn render_light_gizmo(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
-        if let (Some(vertex_buffer), Some(index_buffer)) = (
-            self.data.light_gizmo_data.vertex_buffer,
-            self.data.light_gizmo_data.index_buffer,
-        ) {
-            self.rrdevice.device.cmd_bind_pipeline(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.data.light_gizmo_data.pipeline.pipeline,
-            );
-
-            self.rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
-
-            self.rrdevice.device.cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
-
-            self.rrdevice.device.cmd_bind_index_buffer(
-                command_buffer,
-                index_buffer,
-                0,
-                vk::IndexType::UINT32,
-            );
-
-            let frame_set = self.data.render_resources.frame_set.sets[image_index];
-            self.rrdevice.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.data.light_gizmo_data.pipeline.pipeline_layout,
-                0,
-                &[frame_set],
-                &[],
-            );
-
-            let object_set_idx = self.data.render_resources.objects.get_set_index(
-                image_index, self.data.light_gizmo_data.object_index
-            );
-            let object_set = self.data.render_resources.objects.sets[object_set_idx];
-            self.rrdevice.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.data.light_gizmo_data.pipeline.pipeline_layout,
-                2,
-                &[object_set],
-                &[],
-            );
-
-            self.rrdevice.device.cmd_draw_indexed(
-                command_buffer,
-                self.data.light_gizmo_data.indices.len() as u32,
-                1,
-                0,
-                0,
-                0,
-            );
-        }
-    }
-
     pub unsafe fn record_3d_rendering(
         &self,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        self.render_grid(command_buffer, image_index);
-        self.render_models(command_buffer, image_index);
+        let frame_set = self.data.render_resources.frame_set.sets[image_index];
 
-        self.render_gizmo(command_buffer, image_index);
-        self.render_light_gizmo(command_buffer, image_index);
+        self.scene.render_all(
+            command_buffer,
+            image_index,
+            frame_set,
+            &self.data.render_resources.objects,
+            &self.rrdevice,
+        );
+
+        self.render_models(command_buffer, image_index);
 
         Ok(())
     }

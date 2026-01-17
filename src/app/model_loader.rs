@@ -85,6 +85,7 @@ pub unsafe fn replace_model_with_cube(
     instance: &Instance,
     rrdevice: &RRDevice,
     data: &mut AppData,
+    scene: &crate::scene::Scene,
     size: f32,
     position: [f32; 3],
 ) -> Result<()> {
@@ -164,13 +165,16 @@ pub unsafe fn replace_model_with_cube(
         }
     }
 
-    if let Some(ref billboard_texture) = data.light_gizmo_data.billboard_texture {
-        data.billboard.descriptor_set.update_descriptor_sets(
-            rrdevice,
-            &data.rrswapchain,
-            billboard_texture,
-        )?;
-        crate::log!("Re-updated billboard.descriptor_set after cube reload");
+    {
+        let texture_clone = scene.billboard().texture.clone();
+        if let Some(ref billboard_texture) = texture_clone {
+            scene.billboard_mut().descriptor_set.update_descriptor_sets(
+                rrdevice,
+                &data.rrswapchain,
+                billboard_texture,
+            )?;
+            crate::log!("Re-updated billboard.descriptor_set after cube reload");
+        }
     }
 
     data.debug_view_data.cube_model = Some(cube);

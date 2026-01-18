@@ -54,21 +54,6 @@ impl AnimationPlayback {
     pub fn resume(&mut self) {
         self.playing = true;
     }
-
-    pub fn update(&mut self, delta_time: f32, clip_duration: f32) {
-        if !self.playing || clip_duration <= 0.0 {
-            return;
-        }
-
-        self.time += delta_time * self.speed;
-
-        if self.looping {
-            self.time = self.time % clip_duration;
-        } else if self.time >= clip_duration {
-            self.time = clip_duration;
-            self.playing = false;
-        }
-    }
 }
 
 impl Default for AnimationPlayback {

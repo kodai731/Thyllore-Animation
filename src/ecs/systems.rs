@@ -3,6 +3,7 @@ use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
 use crate::asset::AssetStorage;
 use crate::ecs::components::{CameraState, RenderContext, Renderable, Updatable, UpdateContext};
+use crate::ecs::resource::AnimationPlayback;
 use crate::ecs::world::{Entity, GlobalTransform, World};
 use crate::scene::graphics_resource::{ObjectDescriptorSet, ObjectUBO};
 use crate::vulkanr::device::RRDevice;
@@ -11,6 +12,25 @@ use crate::vulkanr::vulkan::*;
 pub fn update_all(updatables: &mut [&mut dyn Updatable], ctx: &UpdateContext) {
     for obj in updatables {
         obj.update(ctx);
+    }
+}
+
+pub fn animation_playback_system(
+    playback: &mut AnimationPlayback,
+    delta_time: f32,
+    clip_duration: f32,
+) {
+    if !playback.playing || clip_duration <= 0.0 {
+        return;
+    }
+
+    playback.time += delta_time * playback.speed;
+
+    if playback.looping {
+        playback.time = playback.time % clip_duration;
+    } else if playback.time >= clip_duration {
+        playback.time = clip_duration;
+        playback.playing = false;
     }
 }
 

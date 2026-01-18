@@ -5,7 +5,10 @@ use crate::ecs::systems::{
     billboard_create_buffers, create_billboard, create_camera, create_grid_gizmo,
     create_light_gizmo, gizmo_create_buffers,
 };
-use crate::ecs::{AnimationPlayback, ModelInfo};
+use crate::ecs::{
+    AnimationPlayback, AnimationRegistry, GpuDescriptors, MaterialRegistry, MeshAssets, ModelInfo,
+    ModelState, NodeAssets,
+};
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
 use crate::vulkanr::context::{
@@ -144,6 +147,18 @@ impl App {
             max_objects,
         )
         .expect("Failed to create render resources");
+
+        let gpu_descriptors = GpuDescriptors::new(
+            data.graphics_resources.frame_set.clone(),
+            data.graphics_resources.objects.clone(),
+        );
+        let material_registry = MaterialRegistry::new(data.graphics_resources.materials.clone());
+        data.ecs_world.insert_resource(gpu_descriptors);
+        data.ecs_world.insert_resource(material_registry);
+        data.ecs_world.insert_resource(AnimationRegistry::new());
+        data.ecs_world.insert_resource(ModelState::default());
+        data.ecs_world.insert_resource(MeshAssets::new());
+        data.ecs_world.insert_resource(NodeAssets::new());
 
         let render_layouts = data.graphics_resources.get_layouts();
         let model_pipeline = RRPipeline::new_with_graphics_resources(

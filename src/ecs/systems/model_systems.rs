@@ -10,7 +10,9 @@ use crate::animation::AnimationClipId;
 use crate::asset::{AnimationClipAsset, AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
 use crate::debugview::DebugViewData;
 use crate::ecs::playback_play;
-use crate::ecs::resource::{AnimationPlayback, ModelInfo};
+use crate::ecs::resource::{
+    AnimationPlayback, AnimationRegistry, MeshAssets, ModelInfo, ModelState, NodeAssets,
+};
 use crate::ecs::world::{AnimationState, Transform, World};
 use crate::loader::texture::load_png_image;
 use crate::loader::{ModelLoadResult, TextureSource};
@@ -140,7 +142,7 @@ unsafe fn apply_model_to_scene(
     cleanup_resources(device, graphics, raytracing, world, assets)?;
 
     setup_animation_system(graphics, world, load_result);
-    setup_nodes(graphics, load_result);
+    setup_nodes(graphics, world, load_result);
 
     for (i, loaded_mesh) in load_result.meshes.iter().enumerate() {
         let mesh_buffer =
@@ -183,6 +185,21 @@ unsafe fn cleanup_resources(
     graphics.animation.clear();
     graphics.objects.reset_to(3);
 
+    if world.contains_resource::<AnimationRegistry>() {
+        let mut anim_registry = world.resource_mut::<AnimationRegistry>();
+        anim_registry.clear();
+    }
+
+    if world.contains_resource::<MeshAssets>() {
+        let mut mesh_assets = world.resource_mut::<MeshAssets>();
+        mesh_assets.meshes.clear();
+    }
+
+    if world.contains_resource::<NodeAssets>() {
+        let mut node_assets = world.resource_mut::<NodeAssets>();
+        node_assets.nodes.clear();
+    }
+
     world.clear();
     assets.clear();
 
@@ -200,8 +217,19 @@ fn setup_animation_system(
     graphics.morph_animation = load_result.morph_animation.clone();
     graphics.node_animation_scale = load_result.node_animation_scale;
 
-    let has_model_info = world.contains_resource::<ModelInfo>();
-    if has_model_info {
+    if world.contains_resource::<AnimationRegistry>() {
+        let mut anim_registry = world.resource_mut::<AnimationRegistry>();
+        anim_registry.animation = load_result.animation_system.clone();
+        anim_registry.morph_animation = load_result.morph_animation.clone();
+    }
+
+    if world.contains_resource::<ModelState>() {
+        let mut model_state = world.resource_mut::<ModelState>();
+        model_state.has_skinned_meshes = load_result.has_skinned_meshes;
+        model_state.node_animation_scale = load_result.node_animation_scale;
+    }
+
+    if world.contains_resource::<ModelInfo>() {
         let mut model_info = world.resource_mut::<ModelInfo>();
         model_info.has_skinned_meshes = load_result.has_skinned_meshes;
         model_info.node_animation_scale = load_result.node_animation_scale;
@@ -213,8 +241,8 @@ fn setup_animation_system(
     }
 }
 
-fn setup_nodes(graphics: &mut GraphicsResources, load_result: &ModelLoadResult) {
-    graphics.nodes = load_result
+fn setup_nodes(graphics: &mut GraphicsResources, world: &mut World, load_result: &ModelLoadResult) {
+    let nodes: Vec<NodeData> = load_result
         .nodes
         .iter()
         .map(|n| NodeData {
@@ -225,6 +253,13 @@ fn setup_nodes(graphics: &mut GraphicsResources, load_result: &ModelLoadResult) 
             global_transform: cgmath::Matrix4::identity(),
         })
         .collect();
+
+    graphics.nodes = nodes.clone();
+
+    if world.contains_resource::<NodeAssets>() {
+        let mut node_assets = world.resource_mut::<NodeAssets>();
+        node_assets.nodes = nodes;
+    }
 
     crate::log!(
         "Loaded {} nodes into graphics_resources",

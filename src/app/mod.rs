@@ -12,7 +12,10 @@ pub use data::AppData;
 pub use gui_data::GUIData;
 pub use init::*;
 
-use crate::ecs::{AnimationPlayback, ModelInfo, ResMut, ResRef, Resource};
+use crate::ecs::{
+    AnimationPlayback, AnimationRegistry, GpuDescriptors, MaterialRegistry, MeshAssets, ModelInfo,
+    ModelState, NodeAssets, ResMut, ResRef, Resource,
+};
 use crate::scene::graphics_resource::GraphicsResources;
 use crate::scene::raytracing::RayTracingData;
 use crate::scene::Camera;
@@ -150,5 +153,53 @@ impl App {
 
     pub fn model_info_mut(&self) -> ResMut<ModelInfo> {
         self.resource_mut::<ModelInfo>()
+    }
+
+    pub fn gpu_descriptors(&self) -> ResRef<GpuDescriptors> {
+        self.resource::<GpuDescriptors>()
+    }
+
+    pub fn gpu_descriptors_mut(&self) -> ResMut<GpuDescriptors> {
+        self.resource_mut::<GpuDescriptors>()
+    }
+
+    pub fn material_registry(&self) -> ResRef<MaterialRegistry> {
+        self.resource::<MaterialRegistry>()
+    }
+
+    pub fn material_registry_mut(&self) -> ResMut<MaterialRegistry> {
+        self.resource_mut::<MaterialRegistry>()
+    }
+
+    pub fn animation_registry(&self) -> ResRef<AnimationRegistry> {
+        self.resource::<AnimationRegistry>()
+    }
+
+    pub fn animation_registry_mut(&self) -> ResMut<AnimationRegistry> {
+        self.resource_mut::<AnimationRegistry>()
+    }
+
+    pub fn model_state(&self) -> ResRef<ModelState> {
+        self.resource::<ModelState>()
+    }
+
+    pub fn model_state_mut(&self) -> ResMut<ModelState> {
+        self.resource_mut::<ModelState>()
+    }
+
+    pub fn mesh_assets(&self) -> ResRef<MeshAssets> {
+        self.resource::<MeshAssets>()
+    }
+
+    pub fn mesh_assets_mut(&self) -> ResMut<MeshAssets> {
+        self.resource_mut::<MeshAssets>()
+    }
+
+    pub fn node_assets(&self) -> ResRef<NodeAssets> {
+        self.resource::<NodeAssets>()
+    }
+
+    pub fn node_assets_mut(&self) -> ResMut<NodeAssets> {
+        self.resource_mut::<NodeAssets>()
     }
 }

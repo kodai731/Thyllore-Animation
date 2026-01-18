@@ -15,26 +15,26 @@ pub unsafe fn run_transform_phase(ctx: &mut FrameContext) -> Result<()> {
     let proj_data = calculate_projection(&*ctx.camera(), ctx.swapchain_extent);
 
     let light_position = ctx.rt_debug().light_position;
-    gizmo_sync_position(&mut ctx.scene.light_gizmo_mut().position, light_position);
+    gizmo_sync_position(&mut ctx.light_gizmo_mut().position, light_position);
 
     {
-        let mut light_gizmo = ctx.scene.light_gizmo_mut();
+        let mut light_gizmo = ctx.light_gizmo_mut();
         let selectable = light_gizmo.selectable.clone();
         gizmo_update_selection_color(&mut light_gizmo.mesh, &selectable);
     }
-    gizmo_update_vertex_buffer(&ctx.scene.light_gizmo().mesh, ctx.device)
+    gizmo_update_vertex_buffer(&ctx.light_gizmo().mesh, ctx.device)
         .expect("Failed to update light gizmo vertex buffer");
 
     let camera_pos = ctx.camera().position;
     let camera_up = ctx.camera().up;
     update_billboard_transform(
-        &mut ctx.scene.billboard_mut(),
+        &mut ctx.billboard_mut(),
         light_position,
         camera_pos,
         camera_up,
     );
 
-    update_grid_gizmo_rotation_from_view(&mut ctx.scene.gizmo_mut(), proj_data.view);
+    update_grid_gizmo_rotation_from_view(&mut ctx.gizmo_mut(), proj_data.view);
 
     let screen_size = Vector2::new(
         ctx.swapchain_extent.0 as f32,
@@ -56,9 +56,9 @@ pub unsafe fn run_transform_phase(ctx: &mut FrameContext) -> Result<()> {
 
 fn update_camera_planes(ctx: &mut FrameContext) {
     let camera_distance = ctx.camera().position.magnitude();
-    ctx.scene.grid_mut().scale = 1.0;
+    ctx.grid_mut().scale = 1.0;
 
-    let grid_scale = ctx.scene.grid().scale;
+    let grid_scale = ctx.grid().scale;
     let mut camera = ctx.camera_mut();
     camera.near_plane = (camera_distance * 0.001).max(0.1).min(10.0);
     camera.far_plane = (grid_scale * 1000.0).max(1000.0).min(100000.0);

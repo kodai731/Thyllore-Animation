@@ -1,9 +1,9 @@
 use cgmath::{Matrix4, Vector3};
 use vulkanalia::prelude::v1_0::*;
 
+use crate::ecs::resource::PipelineId;
 use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
 use crate::vulkanr::image::RRImage;
-use crate::vulkanr::pipeline::RRPipeline;
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -40,7 +40,7 @@ impl BillboardVertex {
 
 #[derive(Clone, Debug, Default)]
 pub struct BillboardData {
-    pub pipeline: RRPipeline,
+    pub pipeline_id: Option<PipelineId>,
     pub descriptor_set: RRBillboardDescriptorSet,
     pub transform: Option<BillboardTransform>,
     pub object_index: usize,

@@ -6,7 +6,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::debugview::gizmo::grid::GridGizmoData;
 use crate::debugview::gizmo::light::LightGizmoData;
-use crate::ecs::components::{
+use crate::ecs::component::{
     GizmoAxis, GizmoDraggable, GizmoMesh, GizmoPosition, GizmoRayToModel, GizmoSelectable,
     GizmoVertex, GizmoVerticalLines,
 };
@@ -15,6 +15,7 @@ use crate::math::{
     ray_to_point_distance, screen_to_world_ray, view, Vec2, Vec3, Vec4,
 };
 use crate::vulkanr::buffer::{copy_buffer, create_buffer};
+use crate::scene::graphics_resource::GraphicsResources;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::Device;
 use crate::vulkanr::data::Vertex;
@@ -49,7 +50,7 @@ pub fn create_light_gizmo(position: Vector3<f32>) -> LightGizmoData {
 
     LightGizmoData {
         mesh: GizmoMesh {
-            pipeline: RRPipeline::default(),
+            pipeline_id: None,
             object_index: 0,
             vertices,
             indices,
@@ -92,7 +93,7 @@ pub fn create_grid_gizmo() -> GridGizmoData {
 
     GridGizmoData {
         mesh: GizmoMesh {
-            pipeline: RRPipeline::default(),
+            pipeline_id: None,
             object_index: 0,
             vertices,
             indices,
@@ -774,12 +775,12 @@ pub unsafe fn gizmo_destroy_vertical_line_buffers(
     lines.index_buffer_memory = None;
 }
 
-pub unsafe fn gizmo_draw_ray(
+pub unsafe fn gizmo_draw_ray_with_pipeline(
     ray: &GizmoRayToModel,
     device: &Device,
     command_buffer: vk::CommandBuffer,
     pipeline: &RRPipeline,
-    graphics_resources: &crate::scene::graphics_resource::GraphicsResources,
+    graphics_resources: &GraphicsResources,
     object_index: usize,
     image_index: usize,
 ) {
@@ -824,12 +825,12 @@ pub unsafe fn gizmo_draw_ray(
     device.cmd_draw_indexed(command_buffer, ray.indices.len() as u32, 1, 0, 0, 0);
 }
 
-pub unsafe fn gizmo_draw_vertical_lines(
+pub unsafe fn gizmo_draw_vertical_lines_with_pipeline(
     lines: &GizmoVerticalLines,
     device: &Device,
     command_buffer: vk::CommandBuffer,
     pipeline: &RRPipeline,
-    graphics_resources: &crate::scene::graphics_resource::GraphicsResources,
+    graphics_resources: &GraphicsResources,
     object_index: usize,
     image_index: usize,
 ) {

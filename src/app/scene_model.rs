@@ -4,7 +4,6 @@ use anyhow::Result;
 
 use crate::app::{App, AppData};
 use crate::ecs::{load_cube_model_system, load_model_from_file_system};
-use crate::scene::Scene;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::swapchain::RRSwapchain;
@@ -15,7 +14,6 @@ impl App {
         instance: &Instance,
         rrdevice: &RRDevice,
         data: &mut AppData,
-        scene: &Scene,
         rrcommand_pool: &Rc<RRCommandPool>,
         rrswapchain: &RRSwapchain,
         model_path: &str,
@@ -28,7 +26,6 @@ impl App {
             rrswapchain,
             &mut data.graphics_resources,
             &mut data.raytracing,
-            scene,
             &mut data.ecs_world,
             &mut data.ecs_assets,
         )
@@ -170,7 +167,6 @@ impl App {
             &mut self.data.graphics_resources,
             &mut self.data.raytracing,
             &mut self.data.debug_view_data,
-            &self.scene,
             &mut self.data.ecs_world,
             &mut self.data.ecs_assets,
         )?;

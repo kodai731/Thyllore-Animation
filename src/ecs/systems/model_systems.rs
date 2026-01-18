@@ -16,11 +16,12 @@ use crate::ecs::resource::{
 use crate::ecs::world::{AnimationState, Transform, World};
 use crate::loader::texture::load_png_image;
 use crate::loader::{ModelLoadResult, TextureSource};
+use crate::scene::billboard::BillboardData;
 use crate::scene::graphics_resource::{
     GraphicsResources, MaterialId, MaterialUBO, MeshBuffer, NodeData,
 };
 use crate::scene::raytracing::RayTracingData;
-use crate::scene::{CubeModel, Scene};
+use crate::scene::CubeModel;
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::data as vulkan_data;
@@ -40,7 +41,6 @@ pub unsafe fn load_model_from_file_system(
     swapchain: &RRSwapchain,
     graphics: &mut GraphicsResources,
     raytracing: &mut RayTracingData,
-    scene: &Scene,
     world: &mut World,
     assets: &mut AssetStorage,
 ) -> Result<()> {
@@ -48,7 +48,7 @@ pub unsafe fn load_model_from_file_system(
 
     let load_result = load_model_data(path)?;
 
-    apply_model_to_scene(
+    apply_model_to_resources(
         &load_result,
         path,
         instance,
@@ -57,7 +57,6 @@ pub unsafe fn load_model_from_file_system(
         swapchain,
         graphics,
         raytracing,
-        scene,
         world,
         assets,
     )?;
@@ -76,7 +75,6 @@ pub unsafe fn load_cube_model_system(
     graphics: &mut GraphicsResources,
     raytracing: &mut RayTracingData,
     debug_view: &mut DebugViewData,
-    scene: &Scene,
     world: &mut World,
     assets: &mut AssetStorage,
 ) -> Result<()> {
@@ -90,7 +88,7 @@ pub unsafe fn load_cube_model_system(
 
     let load_result = crate::loader::cube::create_cube(size, position);
 
-    apply_model_to_scene(
+    apply_model_to_resources(
         &load_result,
         "cube",
         instance,
@@ -99,7 +97,6 @@ pub unsafe fn load_cube_model_system(
         swapchain,
         graphics,
         raytracing,
-        scene,
         world,
         assets,
     )?;
@@ -126,7 +123,7 @@ unsafe fn load_model_data(path: &str) -> Result<ModelLoadResult> {
     }
 }
 
-unsafe fn apply_model_to_scene(
+unsafe fn apply_model_to_resources(
     load_result: &ModelLoadResult,
     model_name: &str,
     instance: &Instance,
@@ -135,7 +132,6 @@ unsafe fn apply_model_to_scene(
     swapchain: &RRSwapchain,
     graphics: &mut GraphicsResources,
     raytracing: &mut RayTracingData,
-    scene: &Scene,
     world: &mut World,
     assets: &mut AssetStorage,
 ) -> Result<()> {
@@ -156,7 +152,11 @@ unsafe fn apply_model_to_scene(
     apply_initial_pose(instance, device, command_pool, graphics, world, load_result)?;
     rebuild_acceleration_structures(instance, device, command_pool, graphics, raytracing)?;
     update_ray_query_descriptor(device, raytracing)?;
-    update_billboard_descriptor(device, swapchain, scene)?;
+
+    {
+        let mut billboard = world.resource_mut::<BillboardData>();
+        update_billboard_descriptor(device, swapchain, &mut *billboard)?;
+    }
 
     create_ecs_entities(model_name, graphics, world, assets);
 
@@ -549,12 +549,11 @@ unsafe fn update_ray_query_descriptor(
 unsafe fn update_billboard_descriptor(
     device: &RRDevice,
     swapchain: &RRSwapchain,
-    scene: &Scene,
+    billboard: &mut BillboardData,
 ) -> Result<()> {
-    let texture_clone = scene.billboard().texture.clone();
+    let texture_clone = billboard.texture.clone();
     if let Some(ref billboard_texture) = texture_clone {
-        scene
-            .billboard_mut()
+        billboard
             .descriptor_set
             .update_descriptor_sets(device, swapchain, billboard_texture)?;
         crate::log!("Re-updated billboard.descriptor_set after model reload");

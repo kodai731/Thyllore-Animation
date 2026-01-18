@@ -1,16 +1,10 @@
 use std::mem::size_of;
 
-use cgmath::{Matrix4, SquareMatrix, Vector3};
+use cgmath::Vector3;
 use vulkanalia::prelude::v1_0::*;
 
+use crate::ecs::resource::PipelineId;
 use crate::vulkanr::data::Vertex;
-use crate::vulkanr::pipeline::RRPipeline;
-
-#[derive(Clone, Copy, Debug)]
-pub struct CameraState {
-    pub position: Vector3<f32>,
-    pub direction: Vector3<f32>,
-}
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -58,7 +52,7 @@ pub enum GizmoAxis {
 
 #[derive(Clone, Debug, Default)]
 pub struct GizmoMesh {
-    pub pipeline: RRPipeline,
+    pub pipeline_id: Option<PipelineId>,
     pub object_index: usize,
     pub vertices: Vec<GizmoVertex>,
     pub indices: Vec<u32>,
@@ -122,64 +116,4 @@ pub struct GizmoVerticalLines {
     pub vertex_buffer_memory: Option<vk::DeviceMemory>,
     pub index_buffer: Option<vk::Buffer>,
     pub index_buffer_memory: Option<vk::DeviceMemory>,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct ObjectIndex(pub usize);
-
-impl ObjectIndex {
-    pub fn new(index: usize) -> Self {
-        Self(index)
-    }
-
-    pub fn get(&self) -> usize {
-        self.0
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct RenderData {
-    pub object_index: usize,
-    pub pipeline: RRPipeline,
-    pub vertex_buffer: vk::Buffer,
-    pub index_buffer: vk::Buffer,
-    pub index_count: u32,
-    pub model_matrix: Matrix4<f32>,
-}
-
-impl Default for RenderData {
-    fn default() -> Self {
-        Self {
-            object_index: 0,
-            pipeline: RRPipeline::default(),
-            vertex_buffer: vk::Buffer::null(),
-            index_buffer: vk::Buffer::null(),
-            index_count: 0,
-            model_matrix: Matrix4::identity(),
-        }
-    }
-}
-
-impl RenderData {
-    pub fn new(
-        object_index: usize,
-        pipeline: RRPipeline,
-        vertex_buffer: vk::Buffer,
-        index_buffer: vk::Buffer,
-        index_count: u32,
-    ) -> Self {
-        Self {
-            object_index,
-            pipeline,
-            vertex_buffer,
-            index_buffer,
-            index_count,
-            model_matrix: Matrix4::identity(),
-        }
-    }
-
-    pub fn with_model_matrix(mut self, model_matrix: Matrix4<f32>) -> Self {
-        self.model_matrix = model_matrix;
-        self
-    }
 }

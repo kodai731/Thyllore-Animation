@@ -1,10 +1,10 @@
+use crate::ecs::resource::PipelineId;
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::vulkanr::data::Vertex;
-use crate::vulkanr::pipeline::RRPipeline;
 
 #[derive(Clone, Debug, Default)]
 pub struct GridData {
-    pub pipeline: RRPipeline,
+    pub pipeline_id: Option<PipelineId>,
     pub vertex_buffer: RRVertexBuffer,
     pub index_buffer: RRIndexBuffer,
     pub vertices: Vec<Vertex>,

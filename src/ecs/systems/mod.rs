@@ -7,7 +7,7 @@ mod frame_systems;
 mod gizmo_systems;
 mod model_systems;
 pub mod phases;
-mod render_data_systems;
+pub mod render_data_systems;
 mod render_systems;
 mod ui_event_systems;
 

@@ -1,6 +1,6 @@
 use crate::app::{App, AppData};
 use crate::renderer::deferred::create_gbuffer_framebuffer;
-use crate::scene::Scene;
+use crate::scene::billboard::BillboardData;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::render::{create_gbuffer_render_pass, RRRender};
@@ -53,11 +53,10 @@ impl App {
         instance: &Instance,
         rrdevice: &RRDevice,
         data: &mut AppData,
-        scene: &Scene,
         rrswapchain: &RRSwapchain,
         rrrender: &RRRender,
     ) -> Result<()> {
-        let mut billboard = scene.billboard_mut();
+        let mut billboard = data.ecs_world.resource_mut::<BillboardData>();
         data.raytracing.create_pipelines(
             instance,
             rrdevice,

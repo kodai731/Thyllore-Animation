@@ -1,7 +1,8 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::components::RenderData;
+use crate::ecs::component::RenderData;
+use crate::ecs::resource::PipelineManager;
 use crate::scene::graphics_resource::{ObjectDescriptorSet, ObjectUBO};
 use crate::vulkanr::device::RRDevice;
 
@@ -27,16 +28,26 @@ pub unsafe fn render_scene_objects_system(
     frame_set: vk::DescriptorSet,
     objects: &ObjectDescriptorSet,
     rrdevice: &RRDevice,
+    pipeline_manager: &PipelineManager,
 ) {
     for data in render_data {
         if data.vertex_buffer == vk::Buffer::null() || data.index_buffer == vk::Buffer::null() {
             continue;
         }
 
+        let pipeline_id = match data.pipeline_id {
+            Some(id) => id,
+            None => continue,
+        };
+        let pipeline = match pipeline_manager.get(pipeline_id) {
+            Some(p) => p,
+            None => continue,
+        };
+
         rrdevice.device.cmd_bind_pipeline(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            data.pipeline.pipeline,
+            pipeline.pipeline,
         );
 
         rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
@@ -55,7 +66,7 @@ pub unsafe fn render_scene_objects_system(
         rrdevice.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            data.pipeline.pipeline_layout,
+            pipeline.pipeline_layout,
             0,
             &[frame_set],
             &[],
@@ -66,7 +77,7 @@ pub unsafe fn render_scene_objects_system(
         rrdevice.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            data.pipeline.pipeline_layout,
+            pipeline.pipeline_layout,
             2,
             &[object_set],
             &[],
@@ -85,16 +96,26 @@ pub unsafe fn render_system(
     frame_set: vk::DescriptorSet,
     objects: &ObjectDescriptorSet,
     rrdevice: &RRDevice,
+    pipeline_manager: &PipelineManager,
 ) {
     for data in render_data {
         if data.vertex_buffer == vk::Buffer::null() || data.index_buffer == vk::Buffer::null() {
             continue;
         }
 
+        let pipeline_id = match data.pipeline_id {
+            Some(id) => id,
+            None => continue,
+        };
+        let pipeline = match pipeline_manager.get(pipeline_id) {
+            Some(p) => p,
+            None => continue,
+        };
+
         rrdevice.device.cmd_bind_pipeline(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            data.pipeline.pipeline,
+            pipeline.pipeline,
         );
 
         rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
@@ -113,7 +134,7 @@ pub unsafe fn render_system(
         rrdevice.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            data.pipeline.pipeline_layout,
+            pipeline.pipeline_layout,
             0,
             &[frame_set],
             &[],
@@ -124,7 +145,7 @@ pub unsafe fn render_system(
         rrdevice.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            data.pipeline.pipeline_layout,
+            pipeline.pipeline_layout,
             2,
             &[object_set],
             &[],

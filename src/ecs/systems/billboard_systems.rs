@@ -4,7 +4,7 @@ use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, Vector3, Vector4};
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::components::CameraState;
+use crate::ecs::component::CameraState;
 use crate::ecs::world::World;
 use crate::scene::billboard::{BillboardData, BillboardTransform, BillboardVertex};
 use crate::vulkanr::buffer::create_buffer;
@@ -12,7 +12,6 @@ use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::image::RRImage;
-use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::vulkan::Instance;
 
 pub fn create_billboard() -> BillboardData {
@@ -39,7 +38,7 @@ pub fn create_billboard() -> BillboardData {
     let indices = vec![0, 1, 2, 0, 2, 3];
 
     BillboardData {
-        pipeline: RRPipeline::default(),
+        pipeline_id: None,
         descriptor_set: RRBillboardDescriptorSet::default(),
         transform: None,
         object_index: 0,

@@ -18,8 +18,8 @@ pub unsafe fn run_input_phase(ctx: &mut FrameContext) -> Result<()> {
 
     process_gizmo_interaction(ctx)?;
 
-    if !ctx.scene.light_gizmo().selectable.is_selected {
-        let grid_scale = ctx.scene.grid().scale;
+    if !ctx.light_gizmo().selectable.is_selected {
+        let grid_scale = ctx.grid().scale;
         let is_left_clicked = ctx.gui_data.is_left_clicked;
         let is_wheel_clicked = ctx.gui_data.is_wheel_clicked;
         let mouse_wheel = ctx.gui_data.mouse_wheel;
@@ -73,7 +73,7 @@ unsafe fn process_gizmo_interaction(ctx: &mut FrameContext) -> Result<()> {
     let mouse_pos = cgmath::Vector2::new(ctx.gui_data.mouse_pos[0], ctx.gui_data.mouse_pos[1]);
 
     if !ctx.gui_data.imgui_wants_mouse && ctx.gui_data.is_left_clicked {
-        ctx.scene.light_gizmo_mut().draggable.just_selected = false;
+        ctx.light_gizmo_mut().draggable.just_selected = false;
 
         let is_first_click = ctx.gui_data.clicked_mouse_pos.is_none();
         if is_first_click {
@@ -83,7 +83,7 @@ unsafe fn process_gizmo_interaction(ctx: &mut FrameContext) -> Result<()> {
             let camera_dir = ctx.camera().direction;
             let camera_up = ctx.camera().up;
             {
-                let mut gizmo_ref = ctx.scene.light_gizmo_mut();
+                let mut gizmo_ref = ctx.light_gizmo_mut();
                 let light_gizmo = &mut *gizmo_ref;
                 let position = light_gizmo.position.clone();
                 gizmo_try_select(
@@ -101,7 +101,7 @@ unsafe fn process_gizmo_interaction(ctx: &mut FrameContext) -> Result<()> {
         }
 
         let (is_selected, just_selected) = {
-            let gizmo = ctx.scene.light_gizmo();
+            let gizmo = ctx.light_gizmo();
             (gizmo.selectable.is_selected, gizmo.draggable.just_selected)
         };
 
@@ -119,7 +119,7 @@ unsafe fn process_gizmo_interaction(ctx: &mut FrameContext) -> Result<()> {
 
 fn gizmo_handle_mouse_release(ctx: &mut FrameContext) {
     crate::log!("Mouse released - resetting light gizmo state");
-    let mut gizmo = ctx.scene.light_gizmo_mut();
+    let mut gizmo = ctx.light_gizmo_mut();
     gizmo.selectable.is_selected = false;
     gizmo.selectable.selected_axis = GizmoAxis::None;
     gizmo.draggable.drag_axis = GizmoAxis::None;
@@ -161,7 +161,7 @@ unsafe fn update_light_gizmo_position(
             let intersection = ray_origin + ray_direction * t;
 
             {
-                let mut gizmo = ctx.scene.light_gizmo_mut();
+                let mut gizmo = ctx.light_gizmo_mut();
                 let draggable = gizmo.draggable.clone();
                 gizmo_update_position_with_constraint(
                     &mut gizmo.position,
@@ -171,7 +171,7 @@ unsafe fn update_light_gizmo_position(
                 );
             }
 
-            ctx.rt_debug_mut().light_position = ctx.scene.light_gizmo().position.position;
+            ctx.rt_debug_mut().light_position = ctx.light_gizmo().position.position;
         }
     }
 

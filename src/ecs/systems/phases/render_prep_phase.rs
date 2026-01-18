@@ -4,8 +4,11 @@ use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::components::GizmoVertex;
+use crate::ecs::component::GizmoVertex;
 use crate::ecs::context::FrameContext;
+use crate::ecs::systems::render_data_systems::{
+    gizmo_mesh_render_data, gizmo_selectable_render_data, grid_render_data,
+};
 use crate::ecs::{gizmo_update_rotation, update_frame_ubo, update_object_ubo_system, ProjectionData};
 use crate::math::get_camera_axes_from_view;
 use crate::vulkanr::buffer::{copy_buffer, create_buffer};
@@ -42,7 +45,11 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
 
     update_scene_uniform(ctx, view, proj)?;
 
-    let render_data_vec = ctx.scene.collect_render_data(camera_position);
+    let render_data_vec = vec![
+        grid_render_data(&ctx.grid()),
+        gizmo_mesh_render_data(&ctx.gizmo()),
+        gizmo_selectable_render_data(&ctx.light_gizmo(), camera_position),
+    ];
     let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
     if let Err(e) = update_object_ubo_system(
@@ -115,7 +122,7 @@ unsafe fn update_billboard_ubo(
     view: Matrix4<f32>,
     proj: Matrix4<f32>,
 ) -> Result<()> {
-    let mut billboard = ctx.scene.billboard_mut();
+    let mut billboard = ctx.billboard_mut();
 
     let model_matrix = billboard
         .transform
@@ -145,10 +152,10 @@ unsafe fn update_grid_gizmo_buffers(ctx: &mut FrameContext, view: Matrix4<f32>) 
     let gizmo_rotation =
         cgmath::Matrix3::from_cols(camera_right, camera_up_gizmo, camera_forward);
 
-    gizmo_update_rotation(&mut ctx.scene.gizmo_mut().mesh, &gizmo_rotation);
+    gizmo_update_rotation(&mut ctx.gizmo_mut().mesh, &gizmo_rotation);
 
     let (old_vertex_buffer, old_vertex_buffer_memory, vertices_len, vertices_ptr) = {
-        let gizmo = ctx.scene.gizmo();
+        let gizmo = ctx.gizmo();
         (
             gizmo.mesh.vertex_buffer,
             gizmo.mesh.vertex_buffer_memory,
@@ -202,7 +209,7 @@ unsafe fn update_grid_gizmo_buffers(ctx: &mut FrameContext, view: Matrix4<f32>) 
     ctx.device.device.free_memory(staging_buffer_memory, None);
 
     {
-        let mut gizmo = ctx.scene.gizmo_mut();
+        let mut gizmo = ctx.gizmo_mut();
         gizmo.mesh.vertex_buffer = Some(vertex_buffer);
         gizmo.mesh.vertex_buffer_memory = Some(vertex_buffer_memory);
     }

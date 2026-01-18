@@ -4,11 +4,13 @@ use cgmath::Vector3;
 
 use crate::app::GUIData;
 use crate::asset::AssetStorage;
+use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::debugview::RayTracingDebugState;
+use crate::scene::billboard::BillboardData;
 use crate::scene::camera::Camera;
 use crate::scene::graphics_resource::GraphicsResources;
+use crate::scene::grid::GridData;
 use crate::scene::raytracing::RayTracingData;
-use crate::scene::Scene;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::vulkan::Instance;
@@ -27,8 +29,6 @@ pub struct FrameContext<'a> {
 
     pub graphics: &'a mut GraphicsResources,
     pub raytracing: &'a mut RayTracingData,
-
-    pub scene: &'a Scene,
 
     pub world: &'a mut World,
     pub assets: &'a AssetStorage,
@@ -67,5 +67,37 @@ impl<'a> FrameContext<'a> {
 
     pub fn light_position(&self) -> Vector3<f32> {
         self.rt_debug().light_position
+    }
+
+    pub fn grid(&self) -> ResRef<GridData> {
+        self.world.resource::<GridData>()
+    }
+
+    pub fn grid_mut(&self) -> ResMut<GridData> {
+        self.world.resource_mut::<GridData>()
+    }
+
+    pub fn gizmo(&self) -> ResRef<GridGizmoData> {
+        self.world.resource::<GridGizmoData>()
+    }
+
+    pub fn gizmo_mut(&self) -> ResMut<GridGizmoData> {
+        self.world.resource_mut::<GridGizmoData>()
+    }
+
+    pub fn light_gizmo(&self) -> ResRef<LightGizmoData> {
+        self.world.resource::<LightGizmoData>()
+    }
+
+    pub fn light_gizmo_mut(&self) -> ResMut<LightGizmoData> {
+        self.world.resource_mut::<LightGizmoData>()
+    }
+
+    pub fn billboard(&self) -> ResRef<BillboardData> {
+        self.world.resource::<BillboardData>()
+    }
+
+    pub fn billboard_mut(&self) -> ResMut<BillboardData> {
+        self.world.resource_mut::<BillboardData>()
     }
 }

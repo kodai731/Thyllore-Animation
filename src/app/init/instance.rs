@@ -1,13 +1,13 @@
 use crate::app::{App, AppData};
 
-use crate::ecs::components::GizmoVertex;
+use crate::ecs::component::GizmoVertex;
 use crate::ecs::systems::{
     billboard_create_buffers, create_billboard, create_camera, create_grid_gizmo,
     create_light_gizmo, gizmo_create_buffers,
 };
 use crate::ecs::{
     AnimationPlayback, AnimationRegistry, GpuDescriptors, MaterialRegistry, MeshAssets, ModelInfo,
-    ModelState, NodeAssets,
+    ModelState, NodeAssets, PipelineManager,
 };
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
@@ -25,12 +25,13 @@ use crate::vulkanr::render::*;
 use crate::vulkanr::swapchain::*;
 use crate::vulkanr::vulkan::*;
 
+use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::debugview::*;
 use crate::math::*;
 use crate::scene::billboard::{BillboardData, BillboardVertex};
 use crate::scene::graphics_resource::GraphicsResources;
 use crate::scene::grid::GridData;
-use crate::scene::{Camera, Scene};
+use crate::scene::Camera;
 
 use vulkanalia::Device as VkDevice;
 
@@ -161,6 +162,8 @@ impl App {
         data.ecs_world.insert_resource(NodeAssets::new());
 
         let render_layouts = data.graphics_resources.get_layouts();
+        let mut pipeline_manager = PipelineManager::new();
+
         let model_pipeline = RRPipeline::new_with_graphics_resources(
             &rrdevice,
             &rrswapchain,
@@ -172,6 +175,9 @@ impl App {
             vk::PolygonMode::FILL,
             vk::CullModeFlags::BACK,
         );
+        let model_pipeline_id = pipeline_manager.register(model_pipeline.clone());
+        crate::log!("Registered model pipeline with id {}", model_pipeline_id);
+
         let grid_pipeline = RRPipeline::new_with_graphics_resources(
             &rrdevice,
             &rrswapchain,
@@ -183,16 +189,10 @@ impl App {
             vk::PolygonMode::LINE,
             vk::CullModeFlags::NONE,
         );
+        let grid_pipeline_id = pipeline_manager.register(grid_pipeline);
+        crate::log!("Registered grid pipeline with id {}", grid_pipeline_id);
 
-        let mut gizmo_data = create_grid_gizmo();
-        gizmo_data.mesh.object_index = data.graphics_resources.objects.allocate_slot();
-        crate::log!(
-            "Allocated object_index {} for Gizmo",
-            gizmo_data.mesh.object_index
-        );
-        println!("allocated gizmo object_index");
-
-        gizmo_data.mesh.pipeline = PipelineBuilder::new(
+        let gizmo_pipeline = PipelineBuilder::new(
             "assets/shaders/gizmoVert.spv",
             "assets/shaders/gizmoFrag.spv",
         )
@@ -207,6 +207,17 @@ impl App {
         .descriptor_layouts(render_layouts.to_vec())
         .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
         .expect("Failed to create gizmo pipeline");
+        let gizmo_pipeline_id = pipeline_manager.register(gizmo_pipeline);
+        crate::log!("Registered gizmo pipeline with id {}", gizmo_pipeline_id);
+
+        let mut gizmo_data = create_grid_gizmo();
+        gizmo_data.mesh.object_index = data.graphics_resources.objects.allocate_slot();
+        gizmo_data.mesh.pipeline_id = Some(gizmo_pipeline_id);
+        crate::log!(
+            "Allocated object_index {} for Gizmo",
+            gizmo_data.mesh.object_index
+        );
+        println!("allocated gizmo object_index");
 
         gizmo_create_buffers(
             &mut gizmo_data.mesh,
@@ -222,7 +233,7 @@ impl App {
             .resource::<RayTracingDebugState>()
             .light_position;
         let mut light_gizmo_data = create_light_gizmo(light_position);
-        light_gizmo_data.mesh.pipeline = gizmo_data.mesh.pipeline.clone();
+        light_gizmo_data.mesh.pipeline_id = Some(gizmo_pipeline_id);
         light_gizmo_data.mesh.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!(
             "Allocated object_index {} for LightGizmo",
@@ -273,7 +284,7 @@ impl App {
                 .expect("Failed to update billboard descriptor sets");
         }
 
-        billboard_data.pipeline = RRPipeline::new_billboard(
+        let billboard_pipeline = RRPipeline::new_billboard(
             &rrdevice,
             &rrrender,
             &rrswapchain,
@@ -284,13 +295,16 @@ impl App {
             BillboardVertex::attribute_descriptions().to_vec(),
         )
         .expect("Failed to create billboard pipeline");
+        let billboard_pipeline_id = pipeline_manager.register(billboard_pipeline);
+        billboard_data.pipeline_id = Some(billboard_pipeline_id);
+        crate::log!("Registered billboard pipeline with id {}", billboard_pipeline_id);
 
         println!("created pipeline");
 
-        let scene = Scene::new();
-        *scene.gizmo.borrow_mut() = gizmo_data;
-        *scene.light_gizmo.borrow_mut() = light_gizmo_data;
-        *scene.billboard.borrow_mut() = billboard_data;
+        data.ecs_world.insert_resource(pipeline_manager);
+        data.ecs_world.insert_resource(gizmo_data);
+        data.ecs_world.insert_resource(light_gizmo_data);
+        data.ecs_world.insert_resource(billboard_data);
 
         crate::log!("Starting ray tracing initialization...");
         crate::log!(
@@ -324,7 +338,6 @@ impl App {
             &instance,
             &rrdevice,
             &mut data,
-            &scene,
             &rrcommand_pool,
             &rrswapchain,
             default_model_path,
@@ -338,7 +351,6 @@ impl App {
             &instance,
             &rrdevice,
             &mut data,
-            &scene,
             &rrswapchain,
             &rrrender,
         ) {
@@ -348,7 +360,7 @@ impl App {
         }
 
         let mut grid = GridData::default();
-        grid.pipeline = grid_pipeline;
+        grid.pipeline_id = Some(grid_pipeline_id);
 
         let tex_coord = Vec2::new(0.0, 0.0);
         let mut color = Vec4::new(1.0, 0.0, 0.0, 1.0);
@@ -425,7 +437,7 @@ impl App {
         let resized = false;
         let start = Instant::now();
 
-        *scene.grid.borrow_mut() = grid;
+        data.ecs_world.insert_resource(grid);
 
         println!("initialized finished");
         Ok(Self {
@@ -433,7 +445,6 @@ impl App {
             instance,
             rrdevice,
             data,
-            scene,
             frame,
             resized,
             start,

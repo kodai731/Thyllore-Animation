@@ -44,7 +44,6 @@ impl App {
                 swapchain_extent,
                 graphics: &mut self.data.graphics_resources,
                 raytracing: &mut self.data.raytracing,
-                scene: &self.scene,
                 world: &mut self.data.ecs_world,
                 assets: &self.data.ecs_assets,
                 gui_data,
@@ -102,7 +101,7 @@ impl App {
         log_billboard_debug_info(
             &info,
             swapchain,
-            &self.scene.billboard().descriptor_set,
+            &self.billboard().descriptor_set,
             gbuffer_debug_info.as_ref(),
             self.data.raytracing.gbuffer_sampler,
         );
@@ -116,13 +115,13 @@ impl App {
             .collect();
 
         {
-            let mut gizmo = self.scene.light_gizmo_mut();
+            let mut gizmo = self.light_gizmo_mut();
             let position = gizmo.position.clone();
             gizmo_update_vertical_lines(&mut gizmo.vertical_lines, &position, &model_tops);
         }
 
         gizmo_update_or_create_vertical_line_buffers(
-            &mut self.scene.light_gizmo_mut().vertical_lines,
+            &mut self.light_gizmo_mut().vertical_lines,
             &self.instance,
             &self.rrdevice,
         )?;
@@ -281,9 +280,9 @@ impl App {
         );
         crate::log!(
             "Light gizmo position: ({:.2}, {:.2}, {:.2})",
-            self.scene.light_gizmo().position.position.x,
-            self.scene.light_gizmo().position.position.y,
-            self.scene.light_gizmo().position.position.z
+            self.light_gizmo().position.position.x,
+            self.light_gizmo().position.position.y,
+            self.light_gizmo().position.position.z
         );
         crate::log!(
             "Camera position: ({:.2}, {:.2}, {:.2})",

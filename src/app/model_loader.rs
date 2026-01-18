@@ -1,4 +1,5 @@
 use crate::app::AppData;
+use crate::scene::billboard::BillboardData;
 use crate::scene::graphics_resource::{MaterialUBO, MeshBuffer};
 use crate::scene::CubeModel;
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
@@ -85,7 +86,7 @@ pub unsafe fn replace_model_with_cube(
     instance: &Instance,
     rrdevice: &RRDevice,
     data: &mut AppData,
-    scene: &crate::scene::Scene,
+    billboard: &mut BillboardData,
     rrcommand_pool: &Rc<RRCommandPool>,
     rrswapchain: &RRSwapchain,
     size: f32,
@@ -168,13 +169,11 @@ pub unsafe fn replace_model_with_cube(
     }
 
     {
-        let texture_clone = scene.billboard().texture.clone();
+        let texture_clone = billboard.texture.clone();
         if let Some(ref billboard_texture) = texture_clone {
-            scene.billboard_mut().descriptor_set.update_descriptor_sets(
-                rrdevice,
-                rrswapchain,
-                billboard_texture,
-            )?;
+            billboard
+                .descriptor_set
+                .update_descriptor_sets(rrdevice, rrswapchain, billboard_texture)?;
             crate::log!("Re-updated billboard.descriptor_set after cube reload");
         }
     }

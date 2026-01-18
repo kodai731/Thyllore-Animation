@@ -1,6 +1,10 @@
 use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use crate::app::{App, GUIData};
 use crate::ecs::render_scene_objects_system;
+use crate::ecs::resource::PipelineManager;
+use crate::ecs::systems::render_data_systems::{
+    gizmo_mesh_render_data, gizmo_selectable_render_data, grid_render_data,
+};
 use crate::vulkanr::command::*;
 use crate::vulkanr::context::{FrameSync, SwapchainState};
 use crate::vulkanr::vulkan::*;
@@ -20,7 +24,6 @@ impl App {
                 &self.instance,
                 &self.rrdevice,
                 &mut self.data,
-                &self.scene,
                 &command_pool,
                 &swapchain,
                 &gui_data.selected_model_path,
@@ -494,9 +497,14 @@ impl App {
         let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
         let camera_pos = self.camera().position;
 
-        let render_data_vec = self.scene.collect_render_data(camera_pos);
+        let render_data_vec = vec![
+            grid_render_data(&self.grid()),
+            gizmo_mesh_render_data(&self.grid_gizmo()),
+            gizmo_selectable_render_data(&self.light_gizmo(), camera_pos),
+        ];
         let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
+        let pipeline_manager = self.resource::<PipelineManager>();
         render_scene_objects_system(
             &render_data_refs,
             command_buffer,
@@ -504,6 +512,7 @@ impl App {
             frame_set,
             &self.data.graphics_resources.objects,
             &self.rrdevice,
+            &*pipeline_manager,
         );
 
         self.render_billboard(command_buffer, image_index);
@@ -514,7 +523,8 @@ impl App {
     }
 
     unsafe fn render_billboard(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
-        let billboard = self.scene.billboard();
+        let billboard = self.billboard();
+        let pipeline_manager = self.resource::<PipelineManager>();
 
         let (vertex_buffer, index_buffer) = match (billboard.vertex_buffer, billboard.index_buffer)
         {
@@ -522,10 +532,19 @@ impl App {
             _ => return,
         };
 
+        let pipeline_id = match billboard.pipeline_id {
+            Some(id) => id,
+            None => return,
+        };
+        let pipeline = match pipeline_manager.get(pipeline_id) {
+            Some(p) => p,
+            None => return,
+        };
+
         self.rrdevice.device.cmd_bind_pipeline(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            billboard.pipeline.pipeline,
+            pipeline.pipeline,
         );
 
         self.rrdevice
@@ -542,7 +561,7 @@ impl App {
         self.rrdevice.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            billboard.pipeline.pipeline_layout,
+            pipeline.pipeline_layout,
             0,
             &[billboard.descriptor_set.descriptor_sets[image_index]],
             &[],

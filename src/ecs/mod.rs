@@ -1,11 +1,11 @@
-pub mod components;
+pub mod component;
 pub mod context;
 pub mod events;
 pub mod resource;
 pub mod systems;
 pub mod world;
 
-pub use components::*;
+pub use component::*;
 pub use context::*;
 pub use events::*;
 pub use resource::*;

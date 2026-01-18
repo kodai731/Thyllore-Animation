@@ -12,16 +12,18 @@ pub use data::AppData;
 pub use gui_data::GUIData;
 pub use init::*;
 
+use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
+use crate::debugview::{DebugViewData, RayTracingDebugState};
 use crate::ecs::{
     AnimationPlayback, AnimationRegistry, GpuDescriptors, MaterialRegistry, MeshAssets, ModelInfo,
     ModelState, NodeAssets, ResMut, ResRef, Resource,
 };
+use crate::platform::ImguiData;
+use crate::scene::billboard::BillboardData;
 use crate::scene::graphics_resource::GraphicsResources;
+use crate::scene::grid::GridData;
 use crate::scene::raytracing::RayTracingData;
 use crate::scene::Camera;
-use crate::scene::Scene;
-use crate::debugview::{RayTracingDebugState, DebugViewData};
-use crate::platform::ImguiData;
 use crate::vulkanr::context::{
     CameraState, CommandState, DebugState, FrameSync, GpuAssets, ImGuiState, PipelineState,
     RayTracingState, RenderConfig, RenderTargets, SurfaceState, SwapchainState,
@@ -36,7 +38,6 @@ pub struct App {
     pub instance: Instance,
     pub rrdevice: RRDevice,
     pub data: AppData,
-    pub scene: Scene,
     pub frame: usize,
     pub resized: bool,
     pub start: Instant,
@@ -201,5 +202,37 @@ impl App {
 
     pub fn node_assets_mut(&self) -> ResMut<NodeAssets> {
         self.resource_mut::<NodeAssets>()
+    }
+
+    pub fn grid(&self) -> ResRef<GridData> {
+        self.resource::<GridData>()
+    }
+
+    pub fn grid_mut(&self) -> ResMut<GridData> {
+        self.resource_mut::<GridData>()
+    }
+
+    pub fn grid_gizmo(&self) -> ResRef<GridGizmoData> {
+        self.resource::<GridGizmoData>()
+    }
+
+    pub fn grid_gizmo_mut(&self) -> ResMut<GridGizmoData> {
+        self.resource_mut::<GridGizmoData>()
+    }
+
+    pub fn light_gizmo(&self) -> ResRef<LightGizmoData> {
+        self.resource::<LightGizmoData>()
+    }
+
+    pub fn light_gizmo_mut(&self) -> ResMut<LightGizmoData> {
+        self.resource_mut::<LightGizmoData>()
+    }
+
+    pub fn billboard(&self) -> ResRef<BillboardData> {
+        self.resource::<BillboardData>()
+    }
+
+    pub fn billboard_mut(&self) -> ResMut<BillboardData> {
+        self.resource_mut::<BillboardData>()
     }
 }

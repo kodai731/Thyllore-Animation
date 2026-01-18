@@ -9,7 +9,7 @@ use crate::scene::grid::GridData;
 pub fn grid_render_data(grid: &GridData) -> RenderData {
     RenderData {
         object_index: grid.object_index,
-        pipeline: grid.pipeline.clone(),
+        pipeline_id: grid.pipeline_id,
         vertex_buffer: grid.vertex_buffer.buffer,
         index_buffer: grid.index_buffer.buffer,
         index_count: grid.index_buffer.indices,
@@ -20,7 +20,7 @@ pub fn grid_render_data(grid: &GridData) -> RenderData {
 pub fn gizmo_mesh_render_data(gizmo: &GridGizmoData) -> RenderData {
     RenderData {
         object_index: gizmo.mesh.object_index,
-        pipeline: gizmo.mesh.pipeline.clone(),
+        pipeline_id: gizmo.mesh.pipeline_id,
         vertex_buffer: gizmo.mesh.vertex_buffer.unwrap_or(vk::Buffer::null()),
         index_buffer: gizmo.mesh.index_buffer.unwrap_or(vk::Buffer::null()),
         index_count: gizmo.mesh.indices.len() as u32,
@@ -39,7 +39,7 @@ pub fn gizmo_selectable_render_data(
 
     RenderData {
         object_index: gizmo.mesh.object_index,
-        pipeline: gizmo.mesh.pipeline.clone(),
+        pipeline_id: gizmo.mesh.pipeline_id,
         vertex_buffer: gizmo.mesh.vertex_buffer.unwrap_or(vk::Buffer::null()),
         index_buffer: gizmo.mesh.index_buffer.unwrap_or(vk::Buffer::null()),
         index_count: gizmo.mesh.indices.len() as u32,
@@ -56,7 +56,7 @@ pub fn billboard_render_data(billboard: &BillboardData) -> RenderData {
 
     RenderData {
         object_index: billboard.object_index,
-        pipeline: billboard.pipeline.clone(),
+        pipeline_id: billboard.pipeline_id,
         vertex_buffer: billboard.vertex_buffer.unwrap_or(vk::Buffer::null()),
         index_buffer: billboard.index_buffer.unwrap_or(vk::Buffer::null()),
         index_count: billboard.indices.len() as u32,

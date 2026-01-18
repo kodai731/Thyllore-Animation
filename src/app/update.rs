@@ -2,10 +2,12 @@ use crate::app::model_loader::replace_model_with_cube;
 use crate::app::{App, AppData, GUIData};
 use crate::debugview::*;
 use crate::ecs::{
-    animation_time_system, camera_input_system, light_gizmo_set_default,
-    light_gizmo_sync_from_debug_state, light_gizmo_try_select,
-    light_gizmo_update_position_with_constraint, light_gizmo_update_selection_color,
-    transform_propagation_system, update_object_ubo_system, CameraState,
+    animation_time_system, billboard_transform_set_position, billboard_transform_update_look_at,
+    camera_input_system, gizmo_reset_selection, gizmo_sync_position, gizmo_try_select,
+    gizmo_update_or_create_vertical_line_buffers, gizmo_update_position_with_constraint,
+    gizmo_update_rotation, gizmo_update_selection_color, gizmo_update_vertex_buffer,
+    gizmo_update_vertical_lines, transform_propagation_system, update_object_ubo_system,
+    CameraState, GizmoVertex,
 };
 use crate::math::*;
 use crate::scene::billboard::BillboardTransform;
@@ -90,39 +92,51 @@ impl App {
         let camera_up = self.data.camera.up;
 
         if !gui_data.imgui_wants_mouse && gui_data.is_left_clicked {
-            self.scene.light_gizmo_mut().just_selected = false;
+            self.scene.light_gizmo_mut().draggable.just_selected = false;
 
             let is_first_click = gui_data.clicked_mouse_pos.is_none();
             if is_first_click {
                 gui_data.clicked_mouse_pos = Some([mouse_pos[0], mouse_pos[1]]);
 
                 let swapchain_extent = self.swapchain_state().swapchain.swapchain_extent;
-                light_gizmo_try_select(
-                    &mut self.scene.light_gizmo_mut(),
-                    mouse_pos,
-                    camera_pos,
-                    camera_direction,
-                    camera_up,
-                    (swapchain_extent.width, swapchain_extent.height),
-                    self.data.rt_debug_state.light_position,
-                    gui_data.billboard_click_rect,
-                );
+                {
+                    let mut gizmo_ref = self.scene.light_gizmo_mut();
+                    let light_gizmo = &mut *gizmo_ref;
+                    let position = light_gizmo.position.clone();
+                    gizmo_try_select(
+                        &position,
+                        &mut light_gizmo.selectable,
+                        &mut light_gizmo.draggable,
+                        mouse_pos,
+                        camera_pos,
+                        camera_direction,
+                        camera_up,
+                        (swapchain_extent.width, swapchain_extent.height),
+                        gui_data.billboard_click_rect,
+                    );
+                }
             }
 
-            if self.scene.light_gizmo_mut().is_selected
-                && gui_data.is_left_clicked
-                && !self.scene.light_gizmo_mut().just_selected
-            {
+            let (is_selected, just_selected) = {
+                let gizmo = self.scene.light_gizmo();
+                (gizmo.selectable.is_selected, gizmo.draggable.just_selected)
+            };
+            if is_selected && gui_data.is_left_clicked && !just_selected {
                 self.update_light_gizmo_position(mouse_pos, camera_pos, camera_direction, gui_data);
             }
         } else if !gui_data.is_wheel_clicked {
             if gui_data.clicked_mouse_pos.is_some() {
                 crate::log!("Mouse released - resetting light gizmo state");
-                light_gizmo_set_default(&mut self.scene.light_gizmo_mut());
+                let mut gizmo = self.scene.light_gizmo_mut();
+                gizmo.selectable.is_selected = false;
+                gizmo.selectable.selected_axis = crate::ecs::GizmoAxis::None;
+                gizmo.draggable.drag_axis = crate::ecs::GizmoAxis::None;
+                gizmo.draggable.just_selected = false;
+                gizmo.draggable.initial_position = Vector3::new(0.0, 0.0, 0.0);
             }
         }
 
-        if !self.scene.light_gizmo_mut().is_selected {
+        if !self.scene.light_gizmo().selectable.is_selected {
             let grid_scale = self.scene.grid_mut().scale;
             camera_input_system(&mut self.data.camera, gui_data, grid_scale);
         }
@@ -322,20 +336,22 @@ impl App {
             eprintln!("Failed to update object UBOs: {}", e);
         }
 
-        light_gizmo_sync_from_debug_state(
-            &mut self.scene.light_gizmo_mut(),
+        gizmo_sync_position(
+            &mut self.scene.light_gizmo_mut().position,
             self.data.rt_debug_state.light_position,
         );
 
-        light_gizmo_update_selection_color(&mut self.scene.light_gizmo_mut());
-        self.scene
-            .light_gizmo_mut()
-            .update_vertex_buffer(&self.rrdevice)
+        {
+            let mut light_gizmo = self.scene.light_gizmo_mut();
+            let selectable = light_gizmo.selectable.clone();
+            gizmo_update_selection_color(&mut light_gizmo.mesh, &selectable);
+        }
+        gizmo_update_vertex_buffer(&self.scene.light_gizmo().mesh, &self.rrdevice)
             .expect("Failed to update light gizmo vertex buffer");
 
         let (camera_right, camera_up_gizmo, camera_forward) = get_camera_axes_from_view(view);
 
-        let light_pos = self.scene.light_gizmo().position;
+        let light_pos = self.scene.light_gizmo().position.position;
 
         {
             let mut billboard = self.scene.billboard_mut();
@@ -344,8 +360,8 @@ impl App {
             }
 
             if let Some(ref mut billboard_transform) = billboard.transform {
-                billboard_transform.set_position(light_pos);
-                billboard_transform.update_look_at(camera_pos, camera_up);
+                billboard_transform_set_position(billboard_transform, light_pos);
+                billboard_transform_update_look_at(billboard_transform, camera_pos, camera_up);
             }
 
             let model_matrix = billboard
@@ -375,8 +391,7 @@ impl App {
         let gizmo_rotation =
             cgmath::Matrix3::from_cols(camera_right, camera_up_gizmo, camera_forward);
 
-        // Gizmoの頂点を更新
-        self.scene.gizmo_mut().update_rotation(&gizmo_rotation);
+        gizmo_update_rotation(&mut self.scene.gizmo_mut().mesh, &gizmo_rotation);
 
         // Gizmo方向確認用ログ（60フレームごと）
         static mut GIZMO_LOG_COUNTER: u32 = 0;
@@ -438,27 +453,27 @@ impl App {
                 let gizmo = self.scene.gizmo();
                 crate::log!(
                     "  Origin: ({:.3}, {:.3}, {:.3})",
-                    gizmo.vertices[0].pos[0],
-                    gizmo.vertices[0].pos[1],
-                    gizmo.vertices[0].pos[2]
+                    gizmo.mesh.vertices[0].pos[0],
+                    gizmo.mesh.vertices[0].pos[1],
+                    gizmo.mesh.vertices[0].pos[2]
                 );
                 crate::log!(
                     "  X-axis (red): ({:.3}, {:.3}, {:.3})",
-                    gizmo.vertices[1].pos[0],
-                    gizmo.vertices[1].pos[1],
-                    gizmo.vertices[1].pos[2]
+                    gizmo.mesh.vertices[1].pos[0],
+                    gizmo.mesh.vertices[1].pos[1],
+                    gizmo.mesh.vertices[1].pos[2]
                 );
                 crate::log!(
                     "  Y-axis (green): ({:.3}, {:.3}, {:.3})",
-                    gizmo.vertices[2].pos[0],
-                    gizmo.vertices[2].pos[1],
-                    gizmo.vertices[2].pos[2]
+                    gizmo.mesh.vertices[2].pos[0],
+                    gizmo.mesh.vertices[2].pos[1],
+                    gizmo.mesh.vertices[2].pos[2]
                 );
                 crate::log!(
                     "  Z-axis (blue): ({:.3}, {:.3}, {:.3})",
-                    gizmo.vertices[3].pos[0],
-                    gizmo.vertices[3].pos[1],
-                    gizmo.vertices[3].pos[2]
+                    gizmo.mesh.vertices[3].pos[0],
+                    gizmo.mesh.vertices[3].pos[1],
+                    gizmo.mesh.vertices[3].pos[2]
                 );
             }
         }
@@ -466,10 +481,10 @@ impl App {
         let (old_vertex_buffer, old_vertex_buffer_memory, vertices_len, vertices_ptr) = {
             let gizmo = self.scene.gizmo();
             (
-                gizmo.vertex_buffer,
-                gizmo.vertex_buffer_memory,
-                gizmo.vertices.len(),
-                gizmo.vertices.as_ptr(),
+                gizmo.mesh.vertex_buffer,
+                gizmo.mesh.vertex_buffer_memory,
+                gizmo.mesh.vertices.len(),
+                gizmo.mesh.vertices.as_ptr(),
             )
         };
 
@@ -521,8 +536,8 @@ impl App {
 
         {
             let mut gizmo = self.scene.gizmo_mut();
-            gizmo.vertex_buffer = Some(vertex_buffer);
-            gizmo.vertex_buffer_memory = Some(vertex_buffer_memory);
+            gizmo.mesh.vertex_buffer = Some(vertex_buffer);
+            gizmo.mesh.vertex_buffer_memory = Some(vertex_buffer_memory);
         }
 
         Ok(())
@@ -596,12 +611,16 @@ impl App {
             crate::log!("=====================================");
         }
 
-        self.scene
-            .light_gizmo_mut()
-            .update_vertical_lines(&model_tops);
-        self.scene
-            .light_gizmo_mut()
-            .update_or_create_vertical_line_buffers(&self.instance, &self.rrdevice)?;
+        {
+            let mut gizmo = self.scene.light_gizmo_mut();
+            let position = gizmo.position.clone();
+            gizmo_update_vertical_lines(&mut gizmo.vertical_lines, &position, &model_tops);
+        }
+        gizmo_update_or_create_vertical_line_buffers(
+            &mut self.scene.light_gizmo_mut().vertical_lines,
+            &self.instance,
+            &self.rrdevice,
+        )?;
 
         Ok(())
     }
@@ -806,16 +825,20 @@ impl App {
 
                 if t >= 0.0 {
                     let intersection = ray_origin + ray_direction * t;
-                    let initial_pos = self.scene.light_gizmo_mut().initial_position.to_vec3();
 
-                    light_gizmo_update_position_with_constraint(
-                        &mut self.scene.light_gizmo_mut(),
-                        intersection,
-                        initial_pos.into(),
-                        gui_data.is_ctrl_pressed,
-                    );
+                    {
+                        let mut gizmo = self.scene.light_gizmo_mut();
+                        let draggable = gizmo.draggable.clone();
+                        gizmo_update_position_with_constraint(
+                            &mut gizmo.position,
+                            intersection,
+                            &draggable,
+                            gui_data.is_ctrl_pressed,
+                        );
+                    }
 
-                    self.data.rt_debug_state.light_position = self.scene.light_gizmo_mut().position;
+                    self.data.rt_debug_state.light_position =
+                        self.scene.light_gizmo().position.position;
                 }
             }
         }
@@ -834,9 +857,9 @@ impl App {
         );
         crate::log!(
             "Light gizmo position: ({:.2}, {:.2}, {:.2})",
-            self.scene.light_gizmo().position.x,
-            self.scene.light_gizmo().position.y,
-            self.scene.light_gizmo().position.z
+            self.scene.light_gizmo().position.position.x,
+            self.scene.light_gizmo().position.position.y,
+            self.scene.light_gizmo().position.position.z
         );
         crate::log!(
             "Camera position: ({:.2}, {:.2}, {:.2})",

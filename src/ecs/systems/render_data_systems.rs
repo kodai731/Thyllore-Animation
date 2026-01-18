@@ -17,32 +17,32 @@ pub fn grid_render_data(grid: &GridData) -> RenderData {
     }
 }
 
-pub fn grid_gizmo_render_data(gizmo: &GridGizmoData) -> RenderData {
+pub fn gizmo_mesh_render_data(gizmo: &GridGizmoData) -> RenderData {
     RenderData {
-        object_index: gizmo.object_index,
-        pipeline: gizmo.pipeline.clone(),
-        vertex_buffer: gizmo.vertex_buffer.unwrap_or(vk::Buffer::null()),
-        index_buffer: gizmo.index_buffer.unwrap_or(vk::Buffer::null()),
-        index_count: gizmo.indices.len() as u32,
+        object_index: gizmo.mesh.object_index,
+        pipeline: gizmo.mesh.pipeline.clone(),
+        vertex_buffer: gizmo.mesh.vertex_buffer.unwrap_or(vk::Buffer::null()),
+        index_buffer: gizmo.mesh.index_buffer.unwrap_or(vk::Buffer::null()),
+        index_count: gizmo.mesh.indices.len() as u32,
         model_matrix: Matrix4::identity(),
     }
 }
 
-pub fn light_gizmo_render_data(
+pub fn gizmo_selectable_render_data(
     gizmo: &LightGizmoData,
     camera_position: Vector3<f32>,
 ) -> RenderData {
-    let distance = (gizmo.position - camera_position).magnitude();
+    let gizmo_pos = gizmo.position.position;
+    let distance = (gizmo_pos - camera_position).magnitude();
     let scale_factor = distance * 0.03;
-    let model_matrix =
-        Matrix4::from_translation(gizmo.position) * Matrix4::from_scale(scale_factor);
+    let model_matrix = Matrix4::from_translation(gizmo_pos) * Matrix4::from_scale(scale_factor);
 
     RenderData {
-        object_index: gizmo.object_index,
-        pipeline: gizmo.pipeline.clone(),
-        vertex_buffer: gizmo.vertex_buffer.unwrap_or(vk::Buffer::null()),
-        index_buffer: gizmo.index_buffer.unwrap_or(vk::Buffer::null()),
-        index_count: gizmo.indices.len() as u32,
+        object_index: gizmo.mesh.object_index,
+        pipeline: gizmo.mesh.pipeline.clone(),
+        vertex_buffer: gizmo.mesh.vertex_buffer.unwrap_or(vk::Buffer::null()),
+        index_buffer: gizmo.mesh.index_buffer.unwrap_or(vk::Buffer::null()),
+        index_count: gizmo.mesh.indices.len() as u32,
         model_matrix,
     }
 }
@@ -73,8 +73,8 @@ pub fn collect_scene_render_data(
 ) -> Vec<RenderData> {
     vec![
         grid_render_data(grid),
-        grid_gizmo_render_data(gizmo),
-        light_gizmo_render_data(light_gizmo, camera_position),
+        gizmo_mesh_render_data(gizmo),
+        gizmo_selectable_render_data(light_gizmo, camera_position),
         billboard_render_data(billboard),
     ]
 }

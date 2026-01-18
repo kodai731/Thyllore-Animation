@@ -3,6 +3,9 @@ use std::cell::{Ref, RefCell, RefMut};
 use cgmath::Vector3;
 
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
+use crate::ecs::systems::{
+    billboard_render_data, gizmo_mesh_render_data, gizmo_selectable_render_data, grid_render_data,
+};
 use crate::ecs::RenderData;
 use crate::scene::billboard::BillboardData;
 use crate::scene::grid::GridData;
@@ -32,10 +35,10 @@ impl Scene {
 
     pub fn collect_render_data(&self, camera_position: Vector3<f32>) -> Vec<RenderData> {
         vec![
-            self.grid.borrow().render_data(),
-            self.gizmo.borrow().render_data(),
-            self.light_gizmo.borrow().render_data(camera_position),
-            self.billboard.borrow().render_data(),
+            grid_render_data(&self.grid.borrow()),
+            gizmo_mesh_render_data(&self.gizmo.borrow()),
+            gizmo_selectable_render_data(&self.light_gizmo.borrow(), camera_position),
+            billboard_render_data(&self.billboard.borrow()),
         ]
     }
 
@@ -63,11 +66,11 @@ impl Scene {
         self.light_gizmo.borrow_mut()
     }
 
-    pub fn billboard(&self) -> Ref<BillboardData> {
+    pub fn billboard(&self) -> Ref<'_, BillboardData> {
         self.billboard.borrow()
     }
 
-    pub fn billboard_mut(&self) -> RefMut<BillboardData> {
+    pub fn billboard_mut(&self) -> RefMut<'_, BillboardData> {
         self.billboard.borrow_mut()
     }
 }

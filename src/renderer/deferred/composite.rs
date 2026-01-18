@@ -3,6 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
 use crate::debugview::DebugViewMode;
+use crate::ecs::systems::{gizmo_draw_ray, gizmo_draw_vertical_lines};
 use crate::scene::graphics_resource::GraphicsResources;
 use crate::scene::Scene;
 use crate::vulkanr::core::Device;
@@ -60,7 +61,8 @@ impl<'a> CompositePass<'a> {
         let grid = self.scene.grid();
         let light_gizmo = self.scene.light_gizmo();
 
-        light_gizmo.draw_ray_to_model_with_resources(
+        gizmo_draw_ray(
+            &light_gizmo.ray_to_model,
             self.device,
             command_buffer,
             &grid.pipeline,
@@ -68,7 +70,8 @@ impl<'a> CompositePass<'a> {
             grid.object_index,
             image_index,
         );
-        light_gizmo.draw_vertical_lines_with_resources(
+        gizmo_draw_vertical_lines(
+            &light_gizmo.vertical_lines,
             self.device,
             command_buffer,
             &grid.pipeline,
@@ -239,12 +242,13 @@ impl<'a> CompositePass<'a> {
     ) -> Result<()> {
         let gizmo = self.scene.gizmo();
 
-        if let (Some(vertex_buffer), Some(index_buffer)) = (gizmo.vertex_buffer, gizmo.index_buffer)
+        if let (Some(vertex_buffer), Some(index_buffer)) =
+            (gizmo.mesh.vertex_buffer, gizmo.mesh.index_buffer)
         {
             self.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                gizmo.pipeline.pipeline,
+                gizmo.mesh.pipeline.pipeline,
             );
 
             self.device.cmd_set_line_width(command_buffer, 1.0);
@@ -263,7 +267,7 @@ impl<'a> CompositePass<'a> {
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                gizmo.pipeline.pipeline_layout,
+                gizmo.mesh.pipeline.pipeline_layout,
                 0,
                 &[frame_set],
                 &[],
@@ -272,19 +276,19 @@ impl<'a> CompositePass<'a> {
             let object_set_idx = self
                 .graphics_resources
                 .objects
-                .get_set_index(image_index, gizmo.object_index);
+                .get_set_index(image_index, gizmo.mesh.object_index);
             let object_set = self.graphics_resources.objects.sets[object_set_idx];
             self.device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
-                gizmo.pipeline.pipeline_layout,
+                gizmo.mesh.pipeline.pipeline_layout,
                 2,
                 &[object_set],
                 &[],
             );
 
             self.device
-                .cmd_draw_indexed(command_buffer, gizmo.indices.len() as u32, 1, 0, 0, 0);
+                .cmd_draw_indexed(command_buffer, gizmo.mesh.indices.len() as u32, 1, 0, 0, 0);
         }
 
         Ok(())

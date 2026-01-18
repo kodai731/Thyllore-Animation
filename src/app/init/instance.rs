@@ -1,5 +1,7 @@
 use crate::app::{App, AppData};
 
+use crate::ecs::components::GizmoVertex;
+use crate::ecs::systems::{billboard_create_buffers, gizmo_create_buffers};
 use crate::ecs::{AnimationPlayback, ModelInfo};
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
@@ -162,14 +164,14 @@ impl App {
         );
 
         let mut gizmo_data = GridGizmoData::new();
-        gizmo_data.object_index = data.graphics_resources.objects.allocate_slot();
+        gizmo_data.mesh.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!(
             "Allocated object_index {} for Gizmo",
-            gizmo_data.object_index
+            gizmo_data.mesh.object_index
         );
         println!("allocated gizmo object_index");
 
-        gizmo_data.pipeline = PipelineBuilder::new(
+        gizmo_data.mesh.pipeline = PipelineBuilder::new(
             "assets/shaders/gizmoVert.spv",
             "assets/shaders/gizmoFrag.spv",
         )
@@ -185,20 +187,30 @@ impl App {
         .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
         .expect("Failed to create gizmo pipeline");
 
-        gizmo_data
-            .create_buffers(&instance, &rrdevice, rrcommand_pool.as_ref())
-            .expect("Failed to create gizmo buffers");
+        gizmo_create_buffers(
+            &mut gizmo_data.mesh,
+            &instance,
+            &rrdevice,
+            rrcommand_pool.as_ref(),
+            true,
+        )
+        .expect("Failed to create gizmo buffers");
 
         let mut light_gizmo_data = LightGizmoData::new(data.rt_debug_state.light_position);
-        light_gizmo_data.pipeline = gizmo_data.pipeline.clone();
-        light_gizmo_data.object_index = data.graphics_resources.objects.allocate_slot();
+        light_gizmo_data.mesh.pipeline = gizmo_data.mesh.pipeline.clone();
+        light_gizmo_data.mesh.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!(
             "Allocated object_index {} for LightGizmo",
-            light_gizmo_data.object_index
+            light_gizmo_data.mesh.object_index
         );
-        light_gizmo_data
-            .create_buffers(&instance, &rrdevice, rrcommand_pool.as_ref())
-            .expect("Failed to create light gizmo buffers");
+        gizmo_create_buffers(
+            &mut light_gizmo_data.mesh,
+            &instance,
+            &rrdevice,
+            rrcommand_pool.as_ref(),
+            false,
+        )
+        .expect("Failed to create light gizmo buffers");
 
         let mut billboard_data = BillboardData::new();
         billboard_data.object_index = data.graphics_resources.objects.allocate_slot();
@@ -207,8 +219,7 @@ impl App {
             billboard_data.object_index
         );
 
-        billboard_data
-            .create_buffers(&instance, &rrdevice, rrcommand_pool.as_ref())
+        billboard_create_buffers(&mut billboard_data, &instance, &rrdevice, rrcommand_pool.as_ref())
             .expect("Failed to create billboard buffers");
 
         billboard_data.descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &rrswapchain)

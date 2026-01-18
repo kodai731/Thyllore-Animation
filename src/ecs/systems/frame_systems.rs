@@ -1,10 +1,11 @@
 use anyhow::Result;
 use cgmath::{Deg, Matrix3, Matrix4, SquareMatrix, Vector2, Vector3, Vector4};
 
+use super::{billboard_transform_update_look_at, gizmo_update_rotation};
 use crate::app::data::LightMoveTarget;
 use crate::debugview::view_mode::RayTracingDebugState;
 use crate::math::coordinate_system::perspective;
-use crate::scene::billboard::BillboardData;
+use crate::scene::billboard::{BillboardData, BillboardTransform};
 use crate::scene::camera::Camera;
 use crate::scene::graphics_resource::{FrameUBO, GraphicsResources, ObjectUBO};
 use crate::vulkanr::device::RRDevice;
@@ -84,11 +85,11 @@ pub fn update_billboard_transform(
 
     if let Some(ref mut transform) = billboard.transform {
         transform.position = light_position;
-        transform.update_look_at(camera_position, camera_up);
+        billboard_transform_update_look_at(transform, camera_position, camera_up);
     }
 }
 
-pub fn update_grid_gizmo_rotation(
+pub fn update_grid_gizmo_rotation_from_view(
     gizmo: &mut crate::debugview::gizmo::GridGizmoData,
     view: Matrix4<f32>,
 ) {
@@ -100,7 +101,7 @@ pub fn update_grid_gizmo_rotation(
         Vector3::new(camera_right.z, camera_up.z, camera_forward.z),
     );
 
-    gizmo.update_rotation(&rotation_matrix);
+    gizmo_update_rotation(&mut gizmo.mesh, &rotation_matrix);
 }
 
 fn get_camera_axes_from_view(view: Matrix4<f32>) -> (Vector3<f32>, Vector3<f32>, Vector3<f32>) {

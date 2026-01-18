@@ -323,6 +323,36 @@ impl World {
         &self.component_registry
     }
 
+    pub fn storage<T: crate::ecs::storage::Component>(
+        &self,
+    ) -> Option<&crate::ecs::storage::TypedStorage<T>> {
+        self.components.storage::<T>()
+    }
+
+    pub fn storage_mut<T: crate::ecs::storage::Component>(
+        &mut self,
+    ) -> Option<&mut crate::ecs::storage::TypedStorage<T>> {
+        self.components.storage_mut::<T>()
+    }
+
+    pub fn iter_components<T: crate::ecs::storage::Component>(
+        &self,
+    ) -> impl Iterator<Item = (Entity, &T)> {
+        self.components
+            .storage::<T>()
+            .into_iter()
+            .flat_map(|s| s.iter())
+    }
+
+    pub fn iter_components_mut<T: crate::ecs::storage::Component>(
+        &mut self,
+    ) -> impl Iterator<Item = (Entity, &mut T)> {
+        self.components
+            .storage_mut::<T>()
+            .into_iter()
+            .flat_map(|s| s.iter_mut())
+    }
+
     pub fn insert_resource<R: Resource>(&mut self, resource: R) {
         self.resources.insert(resource);
     }

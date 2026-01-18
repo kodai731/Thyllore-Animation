@@ -3,7 +3,8 @@ use std::collections::HashMap;
 
 use crate::ecs::world::Entity;
 
-use super::component_storage::{Component, ComponentStorage, TypedStorage};
+use super::component_storage::{Component, ComponentStorage};
+use super::typed_storage::TypedStorage;
 
 pub struct Components {
     storages: HashMap<TypeId, Box<dyn ComponentStorage>>,
@@ -38,6 +39,16 @@ impl Components {
         }
     }
 
+    pub fn register_with_capacity<T: Component>(&mut self, capacity: usize) {
+        let type_id = TypeId::of::<T>();
+        if !self.storages.contains_key(&type_id) {
+            self.storages.insert(
+                type_id,
+                Box::new(TypedStorage::<T>::with_capacity(capacity)),
+            );
+        }
+    }
+
     pub fn is_registered<T: Component>(&self) -> bool {
         self.storages.contains_key(&TypeId::of::<T>())
     }
@@ -52,8 +63,7 @@ impl Components {
             typed.insert(entity, component);
         } else {
             panic!(
-                "Component type {} not registered. Call register::<{}>() first.",
-                std::any::type_name::<T>(),
+                "Component type {} not registered",
                 std::any::type_name::<T>()
             );
         }
@@ -62,22 +72,20 @@ impl Components {
     pub fn get<T: Component>(&self, entity: Entity) -> Option<&T> {
         let type_id = TypeId::of::<T>();
         self.storages.get(&type_id).and_then(|storage| {
-            let typed = storage
+            storage
                 .as_any()
                 .downcast_ref::<TypedStorage<T>>()
-                .expect("Type mismatch in component storage");
-            typed.get(entity)
+                .and_then(|typed| typed.get(entity))
         })
     }
 
     pub fn get_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut T> {
         let type_id = TypeId::of::<T>();
         self.storages.get_mut(&type_id).and_then(|storage| {
-            let typed = storage
+            storage
                 .as_any_mut()
                 .downcast_mut::<TypedStorage<T>>()
-                .expect("Type mismatch in component storage");
-            typed.get_mut(entity)
+                .and_then(|typed| typed.get_mut(entity))
         })
     }
 
@@ -110,6 +118,20 @@ impl Components {
             .unwrap_or_default()
     }
 
+    pub fn storage<T: Component>(&self) -> Option<&TypedStorage<T>> {
+        let type_id = TypeId::of::<T>();
+        self.storages
+            .get(&type_id)
+            .and_then(|storage| storage.as_any().downcast_ref::<TypedStorage<T>>())
+    }
+
+    pub fn storage_mut<T: Component>(&mut self) -> Option<&mut TypedStorage<T>> {
+        let type_id = TypeId::of::<T>();
+        self.storages
+            .get_mut(&type_id)
+            .and_then(|storage| storage.as_any_mut().downcast_mut::<TypedStorage<T>>())
+    }
+
     pub fn clear(&mut self) {
         for storage in self.storages.values_mut() {
             storage.clear();
@@ -118,5 +140,9 @@ impl Components {
 
     pub fn storage_count(&self) -> usize {
         self.storages.len()
+    }
+
+    pub fn total_component_count(&self) -> usize {
+        self.storages.values().map(|s| s.len()).sum()
     }
 }

@@ -497,4 +497,18 @@ impl World {
     pub fn entity(&mut self) -> EntityBuilder {
         EntityBuilder::new(self)
     }
+
+    pub fn query<Q: crate::ecs::query::QueryData>(&self) -> crate::ecs::query::Query<Q> {
+        crate::ecs::query::Query::new(self)
+    }
+
+    pub fn query_filtered<Q: crate::ecs::query::QueryData, F: crate::ecs::query::QueryFilter>(
+        &self,
+    ) -> crate::ecs::query::QueryFiltered<Q, F> {
+        crate::ecs::query::QueryFiltered::new(self)
+    }
+
+    pub fn query_builder(&self) -> crate::ecs::query::QueryBuilder<crate::ecs::query::HNil> {
+        crate::ecs::query::QueryBuilder::new(self)
+    }
 }

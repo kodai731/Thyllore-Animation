@@ -11,7 +11,7 @@ use crate::asset::{AnimationClipAsset, AssetStorage, MeshAsset, NodeAsset, Skele
 use crate::debugview::DebugViewData;
 use crate::ecs::playback_play;
 use crate::ecs::resource::{
-    AnimationPlayback, AnimationRegistry, MeshAssets, ModelInfo, ModelState, NodeAssets,
+    AnimationPlayback, AnimationRegistry, MeshAssets, ModelState, NodeAssets,
 };
 use crate::ecs::world::{AnimationState, Transform, World};
 use crate::loader::texture::load_png_image;
@@ -227,17 +227,6 @@ fn setup_animation_system(
         let mut model_state = world.resource_mut::<ModelState>();
         model_state.has_skinned_meshes = load_result.has_skinned_meshes;
         model_state.node_animation_scale = load_result.node_animation_scale;
-    }
-
-    if world.contains_resource::<ModelInfo>() {
-        let mut model_info = world.resource_mut::<ModelInfo>();
-        model_info.has_skinned_meshes = load_result.has_skinned_meshes;
-        model_info.node_animation_scale = load_result.node_animation_scale;
-    } else {
-        let mut model_info = ModelInfo::new();
-        model_info.has_skinned_meshes = load_result.has_skinned_meshes;
-        model_info.node_animation_scale = load_result.node_animation_scale;
-        world.insert_resource(model_info);
     }
 }
 

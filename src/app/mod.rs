@@ -15,8 +15,8 @@ pub use init::*;
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::debugview::{DebugViewData, RayTracingDebugState};
 use crate::ecs::{
-    AnimationPlayback, AnimationRegistry, GpuDescriptors, MaterialRegistry, MeshAssets, ModelInfo,
-    ModelState, NodeAssets, ResMut, ResRef, Resource,
+    AnimationPlayback, AnimationRegistry, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState,
+    NodeAssets, ResMut, ResRef, Resource,
 };
 use crate::platform::ImguiData;
 use crate::scene::billboard::BillboardData;
@@ -146,14 +146,6 @@ impl App {
 
     pub fn render_config_mut(&self) -> ResMut<RenderConfig> {
         self.resource_mut::<RenderConfig>()
-    }
-
-    pub fn model_info(&self) -> ResRef<ModelInfo> {
-        self.resource::<ModelInfo>()
-    }
-
-    pub fn model_info_mut(&self) -> ResMut<ModelInfo> {
-        self.resource_mut::<ModelInfo>()
     }
 
     pub fn gpu_descriptors(&self) -> ResRef<GpuDescriptors> {

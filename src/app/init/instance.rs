@@ -6,8 +6,8 @@ use crate::ecs::systems::{
     create_light_gizmo, gizmo_create_buffers,
 };
 use crate::ecs::{
-    AnimationPlayback, AnimationRegistry, GpuDescriptors, MaterialRegistry, MeshAssets, ModelInfo,
-    ModelState, NodeAssets, PipelineManager,
+    AnimationPlayback, AnimationRegistry, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState,
+    NodeAssets, PipelineManager,
 };
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
@@ -297,7 +297,10 @@ impl App {
         .expect("Failed to create billboard pipeline");
         let billboard_pipeline_id = pipeline_manager.register(billboard_pipeline);
         billboard_data.pipeline_id = Some(billboard_pipeline_id);
-        crate::log!("Registered billboard pipeline with id {}", billboard_pipeline_id);
+        crate::log!(
+            "Registered billboard pipeline with id {}",
+            billboard_pipeline_id
+        );
 
         println!("created pipeline");
 
@@ -621,11 +624,6 @@ impl App {
         if !data.ecs_world.contains_resource::<RenderConfig>() {
             let render_config = RenderConfig::new(msaa_samples);
             data.ecs_world.insert_resource(render_config);
-        }
-
-        if !data.ecs_world.contains_resource::<ModelInfo>() {
-            let model_info = ModelInfo::new();
-            data.ecs_world.insert_resource(model_info);
         }
 
         if !data

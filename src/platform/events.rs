@@ -343,6 +343,13 @@ impl System {
                                 let draw_data = imgui.render();
 
                                 unsafe {
+                                    if app.data.rt_debug_state.should_load_cube(gui_data) {
+                                        if let Err(e) = app.load_cube_model() {
+                                            crate::log!("Failed to load cube model: {:?}", e);
+                                        }
+                                        gui_data.load_cube = false;
+                                    }
+
                                     let image_index = app.begin_frame(gui_data).unwrap();
                                     app.update(image_index, gui_data).unwrap();
                                     app.render(image_index, gui_data, draw_data).unwrap();

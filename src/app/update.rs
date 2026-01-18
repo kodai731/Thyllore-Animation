@@ -1,8 +1,8 @@
 use crate::app::{App, AppData, GUIData};
 use crate::debugview::*;
 use crate::ecs::{
-    gizmo_update_or_create_vertical_line_buffers, gizmo_update_vertical_lines,
-    load_cube_model_system, run_frame, FrameContext,
+    gizmo_update_or_create_vertical_line_buffers, gizmo_update_vertical_lines, run_frame,
+    FrameContext,
 };
 use crate::vulkanr::device::*;
 use crate::vulkanr::vulkan::*;
@@ -56,7 +56,6 @@ impl App {
         }
 
         self.process_debug_commands(gui_data)?;
-        self.process_cube_load(gui_data)?;
         self.update_vertical_lines()?;
 
         Ok(())
@@ -112,54 +111,6 @@ impl App {
             gbuffer_debug_info.as_ref(),
             self.data.raytracing.gbuffer_sampler,
         );
-    }
-
-    unsafe fn process_cube_load(&mut self, gui_data: &mut GUIData) -> Result<()> {
-        if !self.data.rt_debug_state.should_load_cube(gui_data) {
-            return Ok(());
-        }
-
-        let cube_size = self.data.rt_debug_state.cube_size;
-        let cube_position = [0.0, 0.0, 0.0];
-
-        let command_pool = self
-            .data
-            .ecs_world
-            .resource::<crate::vulkanr::context::CommandState>()
-            .pool
-            .clone();
-        let swapchain = self
-            .data
-            .ecs_world
-            .resource::<crate::vulkanr::context::SwapchainState>()
-            .swapchain
-            .clone();
-
-        if let Err(e) = load_cube_model_system(
-            cube_size,
-            cube_position,
-            &self.instance,
-            &self.rrdevice,
-            &command_pool,
-            &swapchain,
-            &mut self.data.graphics_resources,
-            &mut self.data.raytracing,
-            &mut self.data.debug_view_data,
-            &self.scene,
-            &mut self.data.ecs_world,
-            &mut self.data.ecs_assets,
-        ) {
-            crate::log!("Failed to load cube model: {:?}", e);
-        } else {
-            self.data
-                .rt_debug_state
-                .set_actual_cube_top(cube_size, cube_position);
-        }
-
-        self.data.rt_debug_state.finish_cube_load();
-        gui_data.load_cube = false;
-
-        Ok(())
     }
 
     unsafe fn update_vertical_lines(&mut self) -> Result<()> {

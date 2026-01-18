@@ -1,11 +1,11 @@
 use anyhow::Result;
 use cgmath::{Deg, Matrix3, Matrix4, SquareMatrix, Vector2, Vector3, Vector4};
 
-use super::{billboard_transform_update_look_at, gizmo_update_rotation};
+use super::{billboard_transform_update_look_at, create_billboard_transform, gizmo_update_rotation};
 use crate::app::data::LightMoveTarget;
 use crate::debugview::view_mode::RayTracingDebugState;
 use crate::math::coordinate_system::perspective;
-use crate::scene::billboard::{BillboardData, BillboardTransform};
+use crate::scene::billboard::BillboardData;
 use crate::scene::camera::Camera;
 use crate::scene::graphics_resource::{FrameUBO, GraphicsResources, ObjectUBO};
 use crate::vulkanr::device::RRDevice;
@@ -77,10 +77,8 @@ pub fn update_billboard_transform(
     camera_position: Vector3<f32>,
     camera_up: Vector3<f32>,
 ) {
-    use crate::scene::billboard::BillboardTransform;
-
     if billboard.transform.is_none() {
-        billboard.transform = Some(BillboardTransform::new(light_position));
+        billboard.transform = Some(create_billboard_transform(light_position));
     }
 
     if let Some(ref mut transform) = billboard.transform {

@@ -9,9 +9,56 @@ use crate::ecs::world::World;
 use crate::scene::billboard::{BillboardData, BillboardTransform, BillboardVertex};
 use crate::vulkanr::buffer::create_buffer;
 use crate::vulkanr::command::RRCommandPool;
+use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::image::RRImage;
+use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::vulkan::Instance;
+
+pub fn create_billboard() -> BillboardData {
+    let billboard_size = 0.5;
+    let vertices = vec![
+        BillboardVertex {
+            pos: [-billboard_size, -billboard_size, 0.0],
+            tex_coord: [0.0, 1.0],
+        },
+        BillboardVertex {
+            pos: [billboard_size, -billboard_size, 0.0],
+            tex_coord: [1.0, 1.0],
+        },
+        BillboardVertex {
+            pos: [billboard_size, billboard_size, 0.0],
+            tex_coord: [1.0, 0.0],
+        },
+        BillboardVertex {
+            pos: [-billboard_size, billboard_size, 0.0],
+            tex_coord: [0.0, 0.0],
+        },
+    ];
+
+    let indices = vec![0, 1, 2, 0, 2, 3];
+
+    BillboardData {
+        pipeline: RRPipeline::default(),
+        descriptor_set: RRBillboardDescriptorSet::default(),
+        transform: None,
+        object_index: 0,
+        vertices,
+        indices,
+        vertex_buffer: None,
+        vertex_buffer_memory: None,
+        index_buffer: None,
+        index_buffer_memory: None,
+        texture: None,
+    }
+}
+
+pub fn create_billboard_transform(position: Vector3<f32>) -> BillboardTransform {
+    BillboardTransform {
+        position,
+        model_matrix: Matrix4::from_translation(position),
+    }
+}
 
 pub fn billboard_system(world: &mut World, camera: &CameraState) {
     let billboards = world.query_billboards();

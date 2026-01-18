@@ -25,28 +25,3 @@ impl Default for Camera {
     }
 }
 
-impl Camera {
-    pub fn new(position: Vector3<f32>, target: Vector3<f32>) -> Self {
-        let direction = (target - position).normalize();
-        Self {
-            position,
-            direction,
-            up: Vector3::new(0.0, 1.0, 0.0),
-            initial_position: position,
-            near_plane: 0.1,
-            far_plane: 1000.0,
-        }
-    }
-
-    pub fn position_array(&self) -> [f32; 3] {
-        [self.position.x, self.position.y, self.position.z]
-    }
-
-    pub fn direction_array(&self) -> [f32; 3] {
-        [self.direction.x, self.direction.y, self.direction.z]
-    }
-
-    pub fn up_array(&self) -> [f32; 3] {
-        [self.up.x, self.up.y, self.up.z]
-    }
-}

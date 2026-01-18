@@ -1,7 +1,10 @@
 use crate::app::{App, AppData};
 
 use crate::ecs::components::GizmoVertex;
-use crate::ecs::systems::{billboard_create_buffers, gizmo_create_buffers};
+use crate::ecs::systems::{
+    billboard_create_buffers, create_billboard, create_camera, create_grid_gizmo,
+    create_light_gizmo, gizmo_create_buffers,
+};
 use crate::ecs::{AnimationPlayback, ModelInfo};
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
@@ -163,7 +166,7 @@ impl App {
             vk::CullModeFlags::NONE,
         );
 
-        let mut gizmo_data = GridGizmoData::new();
+        let mut gizmo_data = create_grid_gizmo();
         gizmo_data.mesh.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!(
             "Allocated object_index {} for Gizmo",
@@ -196,7 +199,7 @@ impl App {
         )
         .expect("Failed to create gizmo buffers");
 
-        let mut light_gizmo_data = LightGizmoData::new(data.rt_debug_state.light_position);
+        let mut light_gizmo_data = create_light_gizmo(data.rt_debug_state.light_position);
         light_gizmo_data.mesh.pipeline = gizmo_data.mesh.pipeline.clone();
         light_gizmo_data.mesh.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!(
@@ -212,15 +215,20 @@ impl App {
         )
         .expect("Failed to create light gizmo buffers");
 
-        let mut billboard_data = BillboardData::new();
+        let mut billboard_data = create_billboard();
         billboard_data.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!(
             "Allocated object_index {} for Billboard",
             billboard_data.object_index
         );
 
-        billboard_create_buffers(&mut billboard_data, &instance, &rrdevice, rrcommand_pool.as_ref())
-            .expect("Failed to create billboard buffers");
+        billboard_create_buffers(
+            &mut billboard_data,
+            &instance,
+            &rrdevice,
+            rrcommand_pool.as_ref(),
+        )
+        .expect("Failed to create billboard buffers");
 
         billboard_data.descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &rrswapchain)
             .expect("Failed to create billboard descriptor set");
@@ -385,7 +393,7 @@ impl App {
 
         let initial_pos = cgmath::Vector3::new(5.0, 5.0, 5.0);
         let target = cgmath::Vector3::new(0.0, 0.0, 0.0);
-        data.camera = Camera::new(initial_pos, target);
+        data.camera = create_camera(initial_pos, target);
 
         *scene.grid.borrow_mut() = grid;
 

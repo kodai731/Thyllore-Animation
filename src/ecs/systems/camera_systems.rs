@@ -4,6 +4,18 @@ use crate::app::GUIData;
 use crate::math::{coordinate_system::world_y_axis, rodrigues};
 use crate::scene::camera::Camera;
 
+pub fn create_camera(position: Vector3<f32>, target: Vector3<f32>) -> Camera {
+    let direction = (target - position).normalize();
+    Camera {
+        position,
+        direction,
+        up: Vector3::new(0.0, 1.0, 0.0),
+        initial_position: position,
+        near_plane: 0.1,
+        far_plane: 1000.0,
+    }
+}
+
 pub fn camera_input_system(camera: &mut Camera, gui_data: &GUIData, grid_scale: f32) {
     let diff = Vector2::new(gui_data.mouse_diff[0], gui_data.mouse_diff[1]);
 

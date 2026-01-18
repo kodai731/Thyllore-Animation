@@ -4,7 +4,8 @@ use cgmath::Vector3;
 
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::ecs::systems::{
-    billboard_render_data, gizmo_mesh_render_data, gizmo_selectable_render_data, grid_render_data,
+    billboard_render_data, create_billboard, create_grid_gizmo, gizmo_mesh_render_data,
+    gizmo_selectable_render_data, grid_render_data,
 };
 use crate::ecs::RenderData;
 use crate::scene::billboard::BillboardData;
@@ -27,9 +28,9 @@ impl Scene {
     pub fn new() -> Self {
         Self {
             grid: RefCell::new(GridData::default()),
-            gizmo: RefCell::new(GridGizmoData::new()),
+            gizmo: RefCell::new(create_grid_gizmo()),
             light_gizmo: RefCell::new(LightGizmoData::default()),
-            billboard: RefCell::new(BillboardData::new()),
+            billboard: RefCell::new(create_billboard()),
         }
     }
 

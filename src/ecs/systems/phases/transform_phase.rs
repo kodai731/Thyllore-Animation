@@ -1,0 +1,66 @@
+use anyhow::Result;
+use cgmath::{Deg, InnerSpace, Vector2};
+
+use crate::math::calculate_billboard_click_rect;
+use crate::ecs::context::FrameContext;
+use crate::ecs::{
+    calculate_projection, gizmo_sync_position, gizmo_update_selection_color,
+    gizmo_update_vertex_buffer, update_billboard_transform, update_grid_gizmo_rotation_from_view,
+    ProjectionData,
+};
+
+pub unsafe fn run_transform_phase(ctx: &mut FrameContext) -> Result<()> {
+    let proj_data = calculate_projection(ctx.camera, ctx.swapchain_extent);
+
+    update_camera_planes(ctx);
+
+    gizmo_sync_position(
+        &mut ctx.scene.light_gizmo_mut().position,
+        ctx.rt_debug.light_position,
+    );
+
+    {
+        let mut light_gizmo = ctx.scene.light_gizmo_mut();
+        let selectable = light_gizmo.selectable.clone();
+        gizmo_update_selection_color(&mut light_gizmo.mesh, &selectable);
+    }
+    gizmo_update_vertex_buffer(&ctx.scene.light_gizmo().mesh, ctx.device)
+        .expect("Failed to update light gizmo vertex buffer");
+
+    let light_pos = ctx.rt_debug.light_position;
+    update_billboard_transform(
+        &mut ctx.scene.billboard_mut(),
+        light_pos,
+        ctx.camera.position,
+        ctx.camera.up,
+    );
+
+    update_grid_gizmo_rotation_from_view(&mut ctx.scene.gizmo_mut(), proj_data.view);
+
+    let screen_size = Vector2::new(
+        ctx.swapchain_extent.0 as f32,
+        ctx.swapchain_extent.1 as f32,
+    );
+    ctx.gui_data.billboard_click_rect = calculate_billboard_click_rect(
+        light_pos,
+        screen_size,
+        proj_data.view,
+        proj_data.proj,
+        0.5,
+        0.1,
+    );
+
+    ctx.world.insert_resource(proj_data);
+
+    Ok(())
+}
+
+fn update_camera_planes(ctx: &mut FrameContext) {
+    let camera_distance = ctx.camera.position.magnitude();
+    ctx.scene.grid_mut().scale = 1.0;
+
+    ctx.camera.near_plane = (camera_distance * 0.001).max(0.1).min(10.0);
+    ctx.camera.far_plane = (ctx.scene.grid().scale * 1000.0)
+        .max(1000.0)
+        .min(100000.0);
+}

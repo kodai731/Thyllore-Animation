@@ -4,6 +4,8 @@ use anyhow::Result;
 use cgmath::{vec3, Deg, InnerSpace, Matrix3, Vector2, Vector3};
 use vulkanalia::prelude::v1_0::*;
 
+use crate::debugview::gizmo::grid::GridGizmoData;
+use crate::debugview::gizmo::light::LightGizmoData;
 use crate::ecs::components::{
     GizmoAxis, GizmoDraggable, GizmoMesh, GizmoPosition, GizmoRayToModel, GizmoSelectable,
     GizmoVertex, GizmoVerticalLines,
@@ -19,6 +21,88 @@ use crate::vulkanr::data::Vertex;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::vulkan::Instance;
+
+pub fn create_light_gizmo(position: Vector3<f32>) -> LightGizmoData {
+    let axis_length = 1.0;
+    let yellow = [1.0, 1.0, 0.0];
+
+    let vertices = vec![
+        GizmoVertex {
+            pos: [0.0, 0.0, 0.0],
+            color: yellow,
+        },
+        GizmoVertex {
+            pos: [axis_length, 0.0, 0.0],
+            color: [1.0, 0.0, 0.0],
+        },
+        GizmoVertex {
+            pos: [0.0, axis_length, 0.0],
+            color: [0.0, 1.0, 0.0],
+        },
+        GizmoVertex {
+            pos: [0.0, 0.0, axis_length],
+            color: [0.0, 0.0, 1.0],
+        },
+    ];
+
+    let indices = vec![0, 1, 0, 2, 0, 3];
+
+    LightGizmoData {
+        mesh: GizmoMesh {
+            pipeline: RRPipeline::default(),
+            object_index: 0,
+            vertices,
+            indices,
+            vertex_buffer: None,
+            vertex_buffer_memory: None,
+            index_buffer: None,
+            index_buffer_memory: None,
+        },
+        position: GizmoPosition { position },
+        selectable: GizmoSelectable::default(),
+        draggable: GizmoDraggable::default(),
+        ray_to_model: GizmoRayToModel::default(),
+        vertical_lines: GizmoVerticalLines::default(),
+    }
+}
+
+pub fn create_grid_gizmo() -> GridGizmoData {
+    let axis_length = 0.15;
+
+    let vertices = vec![
+        GizmoVertex {
+            pos: [0.0, 0.0, 0.0],
+            color: [1.0, 1.0, 1.0],
+        },
+        GizmoVertex {
+            pos: [axis_length, 0.0, 0.0],
+            color: [1.0, 0.0, 0.0],
+        },
+        GizmoVertex {
+            pos: [0.0, axis_length, 0.0],
+            color: [0.0, 1.0, 0.0],
+        },
+        GizmoVertex {
+            pos: [0.0, 0.0, axis_length],
+            color: [0.0, 0.0, 1.0],
+        },
+    ];
+
+    let indices = vec![0, 1, 0, 2, 0, 3];
+
+    GridGizmoData {
+        mesh: GizmoMesh {
+            pipeline: RRPipeline::default(),
+            object_index: 0,
+            vertices,
+            indices,
+            vertex_buffer: None,
+            vertex_buffer_memory: None,
+            index_buffer: None,
+            index_buffer_memory: None,
+        },
+    }
+}
 
 pub fn gizmo_try_select(
     position: &GizmoPosition,

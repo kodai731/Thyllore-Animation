@@ -1,4 +1,4 @@
-use crate::scene::animation::{AnimationSystem, MorphAnimationSystem, SkeletonId, SkinData};
+use crate::animation::{AnimationSystem, MorphAnimationSystem, SkeletonId, SkinData};
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::device::RRDevice;

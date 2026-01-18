@@ -1,5 +1,5 @@
 use crate::math::{Vec2, Vec3, Vec4};
-use crate::scene::animation::{
+use crate::animation::{
     AnimationClip, AnimationSystem, Keyframe, Skeleton, SkinData, TransformChannel,
 };
 use crate::vulkanr::data::{Vertex, VertexData};

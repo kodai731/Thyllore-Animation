@@ -85,7 +85,7 @@ pub fn skeleton_animation_system(world: &mut World, assets: &mut AssetStorage) {
 
     struct AnimationData {
         skeleton_asset_id: crate::asset::AssetId,
-        clip: crate::scene::animation::AnimationClip,
+        clip: crate::animation::AnimationClip,
         time: f32,
     }
 

@@ -1,8 +1,8 @@
 use crate::app::{App, AppData};
 
+use crate::ecs::{AnimationPlayback, ModelInfo};
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
-use crate::ecs::{AnimationPlayback, ModelInfo};
 use crate::vulkanr::context::{
     CommandState, FrameSync, PipelineState, RenderConfig, RenderTargets, SurfaceState,
     SwapchainState,
@@ -344,7 +344,7 @@ impl App {
         println!("created command buffers");
 
         let (image_available_semaphores, render_finish_semaphores, in_flight_fences) =
-            Self::create_sync_objects_new(&rrdevice.device)?;
+            Self::create_sync_objects(&rrdevice.device)?;
         println!("created sync objects");
 
         let vulkan_resources = VulkanResources {
@@ -360,7 +360,12 @@ impl App {
             in_flight_fences,
         };
 
-        Self::register_resources_new(&mut data, &vulkan_resources, default_model_path, rrdevice.msaa_samples);
+        Self::register_resources(
+            &mut data,
+            &vulkan_resources,
+            default_model_path,
+            rrdevice.msaa_samples,
+        );
         println!("registered ECS resources");
 
         let frame = 0 as usize;
@@ -489,7 +494,7 @@ impl App {
         Ok((instance, messenger))
     }
 
-    unsafe fn create_sync_objects_new(
+    unsafe fn create_sync_objects(
         device: &VkDevice,
     ) -> Result<(Vec<vk::Semaphore>, Vec<vk::Semaphore>, Vec<vk::Fence>)> {
         let semaphore_info = vk::SemaphoreCreateInfo::builder();
@@ -508,7 +513,7 @@ impl App {
         Ok((image_available, render_finished, in_flight))
     }
 
-    fn register_resources_new(
+    fn register_resources(
         data: &mut AppData,
         resources: &VulkanResources,
         model_path: &str,

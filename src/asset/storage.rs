@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use cgmath::{Matrix4, SquareMatrix};
 
-use crate::scene::animation::{AnimationClip, AnimationClipId, Skeleton, SkeletonId};
+use crate::animation::{AnimationClip, AnimationClipId, Skeleton, SkeletonId};
 use crate::scene::graphics_resource::{MaterialId, MaterialUBO};
 
 pub type AssetId = u64;

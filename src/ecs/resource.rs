@@ -1,4 +1,4 @@
-use crate::scene::animation::AnimationClipId;
+use crate::animation::AnimationClipId;
 
 #[derive(Clone, Debug)]
 pub struct AnimationPlayback {

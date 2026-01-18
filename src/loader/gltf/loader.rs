@@ -1,6 +1,6 @@
 use crate::log;
 use crate::math::*;
-use crate::scene::animation::{
+use crate::animation::{
     AnimationClip, AnimationSystem, Interpolation, Keyframe, MorphAnimation, MorphAnimationSystem,
     MorphTarget, Skeleton, SkinData, TransformChannel,
 };

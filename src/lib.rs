@@ -5,6 +5,7 @@
 
 extern crate core;
 
+pub mod animation;
 pub mod asset;
 pub mod ecs;
 pub mod vulkanr;

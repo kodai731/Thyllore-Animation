@@ -305,7 +305,6 @@ impl App {
             &scene,
             &rrcommand_pool,
             &rrswapchain,
-            &rrrender,
             default_model_path,
         ) {
             eprintln!("Failed to load model: {:?}", e);

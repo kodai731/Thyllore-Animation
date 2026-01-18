@@ -1,6 +1,6 @@
 use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use crate::app::{App, GUIData};
-use crate::ecs::render_system;
+use crate::ecs::render_scene_objects_system;
 use crate::vulkanr::command::*;
 use crate::vulkanr::context::{FrameSync, SwapchainState};
 use crate::vulkanr::vulkan::*;
@@ -16,7 +16,6 @@ impl App {
 
             let command_pool = self.command_state().pool.clone();
             let swapchain = self.swapchain_state().swapchain.clone();
-            let rrrender = self.render_targets().render.clone();
             match Self::load_model_from_path_with_resources(
                 &self.instance,
                 &self.rrdevice,
@@ -24,7 +23,6 @@ impl App {
                 &self.scene,
                 &command_pool,
                 &swapchain,
-                &rrrender,
                 &gui_data.selected_model_path,
             ) {
                 Ok(_) => {
@@ -477,13 +475,33 @@ impl App {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
+        let extent = self.swapchain_state().swapchain.swapchain_extent;
+
+        let viewport = vk::Viewport::builder()
+            .x(0.0)
+            .y(0.0)
+            .width(extent.width as f32)
+            .height(extent.height as f32)
+            .min_depth(0.0)
+            .max_depth(1.0);
+        self.rrdevice
+            .device
+            .cmd_set_viewport(command_buffer, 0, &[viewport]);
+
+        let scissor = vk::Rect2D::builder()
+            .offset(vk::Offset2D { x: 0, y: 0 })
+            .extent(extent);
+        self.rrdevice
+            .device
+            .cmd_set_scissor(command_buffer, 0, &[scissor]);
+
         let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
         let camera_pos = self.data.camera.position;
 
         let render_data_vec = self.scene.collect_render_data(camera_pos);
         let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
-        render_system(
+        render_scene_objects_system(
             &render_data_refs,
             command_buffer,
             image_index,
@@ -492,9 +510,56 @@ impl App {
             &self.rrdevice,
         );
 
+        self.render_billboard(command_buffer, image_index);
+
         self.render_models(command_buffer, image_index);
 
         Ok(())
+    }
+
+    unsafe fn render_billboard(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
+        let billboard = self.scene.billboard();
+
+        let (vertex_buffer, index_buffer) = match (billboard.vertex_buffer, billboard.index_buffer)
+        {
+            (Some(vb), Some(ib)) => (vb, ib),
+            _ => return,
+        };
+
+        self.rrdevice.device.cmd_bind_pipeline(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            billboard.pipeline.pipeline,
+        );
+
+        self.rrdevice
+            .device
+            .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
+
+        self.rrdevice.device.cmd_bind_index_buffer(
+            command_buffer,
+            index_buffer,
+            0,
+            vk::IndexType::UINT32,
+        );
+
+        self.rrdevice.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            billboard.pipeline.pipeline_layout,
+            0,
+            &[billboard.descriptor_set.descriptor_sets[image_index]],
+            &[],
+        );
+
+        self.rrdevice.device.cmd_draw_indexed(
+            command_buffer,
+            billboard.indices.len() as u32,
+            1,
+            0,
+            0,
+            0,
+        );
     }
 
     /// Record ImGui rendering commands

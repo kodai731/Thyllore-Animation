@@ -43,6 +43,7 @@ impl App {
             deferred::record_composite_pass(self, command_buffer, image_index, draw_data)?;
         } else {
             self.begin_main_render_pass(command_buffer, image_index);
+            self.record_3d_rendering(command_buffer, image_index)?;
             self.record_imgui_rendering(command_buffer, draw_data)?;
             self.rrdevice.device.cmd_end_render_pass(command_buffer);
         }

@@ -1,9 +1,8 @@
-use crate::app::model_loader::replace_model_with_cube;
 use crate::app::{App, AppData, GUIData};
 use crate::debugview::*;
 use crate::ecs::{
-    gizmo_update_or_create_vertical_line_buffers, gizmo_update_vertical_lines, run_frame,
-    FrameContext,
+    gizmo_update_or_create_vertical_line_buffers, gizmo_update_vertical_lines,
+    load_cube_model_system, run_frame, FrameContext,
 };
 use crate::vulkanr::device::*;
 use crate::vulkanr::vulkan::*;
@@ -136,17 +135,21 @@ impl App {
             .swapchain
             .clone();
 
-        if let Err(e) = replace_model_with_cube(
-            &self.instance,
-            &self.rrdevice,
-            &mut self.data,
-            &self.scene,
-            &command_pool,
-            &swapchain,
+        if let Err(e) = load_cube_model_system(
             cube_size,
             cube_position,
+            &self.instance,
+            &self.rrdevice,
+            &command_pool,
+            &swapchain,
+            &mut self.data.graphics_resources,
+            &mut self.data.raytracing,
+            &mut self.data.debug_view_data,
+            &self.scene,
+            &mut self.data.ecs_world,
+            &mut self.data.ecs_assets,
         ) {
-            crate::log!("Failed to replace model with cube: {:?}", e);
+            crate::log!("Failed to load cube model: {:?}", e);
         } else {
             self.data
                 .rt_debug_state

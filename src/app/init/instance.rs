@@ -312,6 +312,19 @@ impl App {
         }
         crate::log!("loaded initial model: {}", default_model_path);
 
+        if let Err(e) = Self::create_ray_tracing_pipelines_with_resources(
+            &instance,
+            &rrdevice,
+            &mut data,
+            &scene,
+            &rrswapchain,
+            &rrrender,
+        ) {
+            crate::log!("Failed to create ray tracing pipelines: {:?}", e);
+        } else {
+            crate::log!("Ray tracing pipelines created successfully");
+        }
+
         let mut grid = GridData::default();
         grid.pipeline = grid_pipeline;
 

@@ -134,7 +134,8 @@ impl App {
         }
 
         self.frame_sync_mut().advance(MAX_FRAMES_IN_FLIGHT);
-        self.frame = self.frame_sync().current_frame;
+        let current_frame = self.frame_sync().current_frame;
+        self.frame = current_frame;
 
         Ok(())
     }
@@ -491,7 +492,7 @@ impl App {
             .cmd_set_scissor(command_buffer, 0, &[scissor]);
 
         let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
-        let camera_pos = self.data.camera.position;
+        let camera_pos = self.camera().position;
 
         let render_data_vec = self.scene.collect_render_data(camera_pos);
         let render_data_refs: Vec<_> = render_data_vec.iter().collect();

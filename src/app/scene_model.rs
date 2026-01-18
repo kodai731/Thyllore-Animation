@@ -131,7 +131,7 @@ impl App {
         }
 
         crate::log!("--- Camera Info ---");
-        crate::log!("  position: {:?}", self.data.camera.position);
+        crate::log!("  position: {:?}", self.camera().position);
 
         crate::log!("--- Animation Info ---");
         crate::log!("  animation_playing: {}", self.animation_playback().playing);
@@ -144,7 +144,7 @@ impl App {
     }
 
     pub unsafe fn load_cube_model(&mut self) -> Result<()> {
-        let cube_size = self.data.rt_debug_state.cube_size;
+        let cube_size = self.rt_debug_state().cube_size;
         let cube_position = [0.0, 0.0, 0.0];
 
         let command_pool = self
@@ -175,10 +175,9 @@ impl App {
             &mut self.data.ecs_assets,
         )?;
 
-        self.data
-            .rt_debug_state
+        self.rt_debug_state_mut()
             .set_actual_cube_top(cube_size, cube_position);
-        self.data.rt_debug_state.finish_cube_load();
+        self.rt_debug_state_mut().finish_cube_load();
 
         Ok(())
     }

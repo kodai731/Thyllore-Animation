@@ -1,27 +1,17 @@
 use std::any::{Any, TypeId};
+use std::cell::{Ref, RefCell, RefMut};
 use std::collections::HashMap;
 
 use cgmath::{Matrix4, SquareMatrix, Vector3};
 
-use crate::asset::AssetId;
 use crate::animation::AnimationClipId;
+use crate::asset::AssetId;
 
-pub trait Resource: Any {
-    fn as_any(&self) -> &dyn Any;
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-}
-
-impl<T: Any> Resource for T {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-}
+pub trait Resource: Any + 'static {}
+impl<T: Any + 'static> Resource for T {}
 
 pub struct Resources {
-    data: HashMap<TypeId, Box<dyn Any>>,
+    data: HashMap<TypeId, RefCell<Box<dyn Any>>>,
 }
 
 impl std::fmt::Debug for Resources {
@@ -38,6 +28,29 @@ impl Default for Resources {
     }
 }
 
+pub struct ResRef<'a, T: 'static>(Ref<'a, Box<dyn Any>>, std::marker::PhantomData<T>);
+pub struct ResMut<'a, T: 'static>(RefMut<'a, Box<dyn Any>>, std::marker::PhantomData<T>);
+
+impl<'a, T: 'static> std::ops::Deref for ResRef<'a, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        self.0.downcast_ref::<T>().unwrap()
+    }
+}
+
+impl<'a, T: 'static> std::ops::Deref for ResMut<'a, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        self.0.downcast_ref::<T>().unwrap()
+    }
+}
+
+impl<'a, T: 'static> std::ops::DerefMut for ResMut<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.0.downcast_mut::<T>().unwrap()
+    }
+}
+
 impl Resources {
     pub fn new() -> Self {
         Self {
@@ -47,28 +60,28 @@ impl Resources {
 
     pub fn insert<R: Resource>(&mut self, resource: R) {
         let type_id = TypeId::of::<R>();
-        self.data.insert(type_id, Box::new(resource));
+        self.data.insert(type_id, RefCell::new(Box::new(resource)));
     }
 
-    pub fn get<R: Resource>(&self) -> Option<&R> {
+    pub fn get<R: Resource>(&self) -> Option<ResRef<R>> {
         let type_id = TypeId::of::<R>();
         self.data
             .get(&type_id)
-            .and_then(|boxed| boxed.downcast_ref::<R>())
+            .map(|cell| ResRef(cell.borrow(), std::marker::PhantomData))
     }
 
-    pub fn get_mut<R: Resource>(&mut self) -> Option<&mut R> {
+    pub fn get_mut<R: Resource>(&self) -> Option<ResMut<R>> {
         let type_id = TypeId::of::<R>();
         self.data
-            .get_mut(&type_id)
-            .and_then(|boxed| boxed.downcast_mut::<R>())
+            .get(&type_id)
+            .map(|cell| ResMut(cell.borrow_mut(), std::marker::PhantomData))
     }
 
     pub fn remove<R: Resource>(&mut self) -> Option<R> {
         let type_id = TypeId::of::<R>();
         self.data
             .remove(&type_id)
-            .and_then(|boxed| boxed.downcast::<R>().ok())
+            .and_then(|cell| cell.into_inner().downcast::<R>().ok())
             .map(|boxed| *boxed)
     }
 
@@ -254,25 +267,25 @@ impl World {
         self.resources.insert(resource);
     }
 
-    pub fn resource<R: Resource>(&self) -> &R {
+    pub fn resource<R: Resource>(&self) -> ResRef<R> {
         self.resources.get::<R>().expect(&format!(
             "Resource {} not found",
             std::any::type_name::<R>()
         ))
     }
 
-    pub fn resource_mut<R: Resource>(&mut self) -> &mut R {
+    pub fn resource_mut<R: Resource>(&self) -> ResMut<R> {
         self.resources.get_mut::<R>().expect(&format!(
             "Resource {} not found",
             std::any::type_name::<R>()
         ))
     }
 
-    pub fn get_resource<R: Resource>(&self) -> Option<&R> {
+    pub fn get_resource<R: Resource>(&self) -> Option<ResRef<R>> {
         self.resources.get::<R>()
     }
 
-    pub fn get_resource_mut<R: Resource>(&mut self) -> Option<&mut R> {
+    pub fn get_resource_mut<R: Resource>(&self) -> Option<ResMut<R>> {
         self.resources.get_mut::<R>()
     }
 

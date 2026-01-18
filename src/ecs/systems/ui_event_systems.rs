@@ -24,9 +24,29 @@ pub fn process_ui_events_system(
     rt_debug_state: &mut RayTracingDebugState,
     graphics_resources: &GraphicsResources,
 ) -> Vec<DeferredAction> {
+    let events: Vec<_> = ui_events.drain().collect();
+    process_ui_events_with_events(events, camera, rt_debug_state, graphics_resources)
+}
+
+pub fn process_ui_events_with_events(
+    events: Vec<UIEvent>,
+    camera: &mut Camera,
+    rt_debug_state: &mut RayTracingDebugState,
+    graphics_resources: &GraphicsResources,
+) -> Vec<DeferredAction> {
+    let model_bounds = graphics_resources.calculate_model_bounds();
+    process_ui_events_with_events_simple(events, camera, rt_debug_state, model_bounds)
+}
+
+pub fn process_ui_events_with_events_simple(
+    events: Vec<UIEvent>,
+    camera: &mut Camera,
+    rt_debug_state: &mut RayTracingDebugState,
+    model_bounds: Option<(Vector3<f32>, Vector3<f32>, Vector3<f32>)>,
+) -> Vec<DeferredAction> {
     let mut deferred = Vec::new();
 
-    for event in ui_events.drain() {
+    for event in events {
         match event {
             UIEvent::ResetCamera => {
                 camera_reset(camera);
@@ -37,7 +57,7 @@ pub fn process_ui_events_system(
             }
 
             UIEvent::MoveCameraToModel => {
-                if let Some((min, max, center)) = graphics_resources.calculate_model_bounds() {
+                if let Some((min, max, center)) = model_bounds {
                     let size = max - min;
                     let max_dim = size.x.max(size.y).max(size.z);
                     let distance = max_dim * 2.0;
@@ -66,7 +86,7 @@ pub fn process_ui_events_system(
             UIEvent::MoveLightToBounds(target) => {
                 use crate::app::data::LightMoveTarget;
 
-                if let Some((min, max, _)) = graphics_resources.calculate_model_bounds() {
+                if let Some((min, max, _)) = model_bounds {
                     let offset = 2.0;
                     let current = rt_debug_state.light_position;
                     let new_pos = match target {

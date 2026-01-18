@@ -42,10 +42,8 @@ impl App {
                 delta_time,
                 image_index,
                 swapchain_extent,
-                camera: &mut self.data.camera,
                 graphics: &mut self.data.graphics_resources,
                 raytracing: &mut self.data.raytracing,
-                rt_debug: &mut self.data.rt_debug_state,
                 scene: &self.scene,
                 world: &mut self.data.ecs_world,
                 assets: &self.data.ecs_assets,
@@ -73,13 +71,15 @@ impl App {
     fn log_billboard_debug_info(&self) {
         use crate::debugview::{log_billboard_debug_info, BillboardDebugInfo, GBufferDebugInfo};
 
+        let camera = self.camera();
+        let rt_debug = self.rt_debug_state();
         let info = BillboardDebugInfo {
-            light_position: self.data.rt_debug_state.light_position,
-            camera_position: self.data.camera.position,
-            camera_direction: self.data.camera.direction,
-            camera_up: self.data.camera.up,
-            near_plane: self.data.camera.near_plane,
-            far_plane: self.data.camera.far_plane,
+            light_position: rt_debug.light_position,
+            camera_position: camera.position,
+            camera_direction: camera.direction,
+            camera_up: camera.up,
+            near_plane: camera.near_plane,
+            far_plane: camera.far_plane,
         };
 
         let gbuffer_debug_info = self
@@ -110,8 +110,7 @@ impl App {
 
     unsafe fn update_vertical_lines(&mut self) -> Result<()> {
         let model_tops: Vec<cgmath::Vector3<f32>> = self
-            .data
-            .rt_debug_state
+            .rt_debug_state()
             .get_cube_top()
             .into_iter()
             .collect();
@@ -270,15 +269,15 @@ impl App {
     }
 
     pub(crate) fn log_shadow_debug_info(&self) {
-        let light_pos = self.data.rt_debug_state.light_position;
-        let camera_pos = self.data.camera.position;
+        let rt_debug = self.rt_debug_state();
+        let camera = self.camera();
 
         crate::log!("=== Shadow Debug Info ===");
         crate::log!(
             "Light position (rt_debug_state): ({:.2}, {:.2}, {:.2})",
-            light_pos.x,
-            light_pos.y,
-            light_pos.z
+            rt_debug.light_position.x,
+            rt_debug.light_position.y,
+            rt_debug.light_position.z
         );
         crate::log!(
             "Light gizmo position: ({:.2}, {:.2}, {:.2})",
@@ -288,27 +287,18 @@ impl App {
         );
         crate::log!(
             "Camera position: ({:.2}, {:.2}, {:.2})",
-            camera_pos.x,
-            camera_pos.y,
-            camera_pos.z
+            camera.position.x,
+            camera.position.y,
+            camera.position.z
         );
 
         crate::log!("Shadow settings:");
-        crate::log!(
-            "  strength: {:.2}",
-            self.data.rt_debug_state.shadow_strength
-        );
-        crate::log!(
-            "  normal_offset: {:.2}",
-            self.data.rt_debug_state.shadow_normal_offset
-        );
-        crate::log!(
-            "  debug_view_mode: {:?}",
-            self.data.rt_debug_state.debug_view_mode
-        );
+        crate::log!("  strength: {:.2}", rt_debug.shadow_strength);
+        crate::log!("  normal_offset: {:.2}", rt_debug.shadow_normal_offset);
+        crate::log!("  debug_view_mode: {:?}", rt_debug.debug_view_mode);
         crate::log!(
             "  distance_attenuation: {}",
-            self.data.rt_debug_state.enable_distance_attenuation
+            rt_debug.enable_distance_attenuation
         );
 
         if let Some(ref accel_struct) = self.data.raytracing.acceleration_structure {

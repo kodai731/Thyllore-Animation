@@ -20,7 +20,19 @@ pub unsafe fn run_input_phase(ctx: &mut FrameContext) -> Result<()> {
 
     if !ctx.scene.light_gizmo().selectable.is_selected {
         let grid_scale = ctx.scene.grid().scale;
-        camera_input_system(ctx.camera, ctx.gui_data, grid_scale);
+        let is_left_clicked = ctx.gui_data.is_left_clicked;
+        let is_wheel_clicked = ctx.gui_data.is_wheel_clicked;
+        let mouse_wheel = ctx.gui_data.mouse_wheel;
+        let mouse_diff = ctx.gui_data.mouse_diff;
+        let mut camera = ctx.camera_mut();
+        crate::ecs::camera_input_system_inner(
+            &mut *camera,
+            is_left_clicked,
+            is_wheel_clicked,
+            mouse_wheel,
+            mouse_diff,
+            grid_scale,
+        );
     }
 
     Ok(())
@@ -32,12 +44,11 @@ fn process_light_auto_target(ctx: &mut FrameContext) {
     }
 
     let all_positions = collect_mesh_positions(ctx.graphics);
-    update_light_auto_target(
-        ctx.rt_debug,
-        &all_positions,
-        ctx.camera.position,
-        ctx.gui_data.move_light_to,
-    );
+    let camera_position = ctx.camera().position;
+    let move_light_to = ctx.gui_data.move_light_to;
+    let mut rt_debug = ctx.rt_debug_mut();
+    update_light_auto_target(&mut *rt_debug, &all_positions, camera_position, move_light_to);
+    drop(rt_debug);
     ctx.gui_data.move_light_to = LightMoveTarget::None;
 }
 
@@ -68,6 +79,9 @@ unsafe fn process_gizmo_interaction(ctx: &mut FrameContext) -> Result<()> {
         if is_first_click {
             ctx.gui_data.clicked_mouse_pos = Some([mouse_pos.x, mouse_pos.y]);
 
+            let camera_pos = ctx.camera().position;
+            let camera_dir = ctx.camera().direction;
+            let camera_up = ctx.camera().up;
             {
                 let mut gizmo_ref = ctx.scene.light_gizmo_mut();
                 let light_gizmo = &mut *gizmo_ref;
@@ -77,9 +91,9 @@ unsafe fn process_gizmo_interaction(ctx: &mut FrameContext) -> Result<()> {
                     &mut light_gizmo.selectable,
                     &mut light_gizmo.draggable,
                     mouse_pos,
-                    ctx.camera.position,
-                    ctx.camera.direction,
-                    ctx.camera.up,
+                    camera_pos,
+                    camera_dir,
+                    camera_up,
                     ctx.swapchain_extent,
                     ctx.gui_data.billboard_click_rect,
                 );
@@ -120,7 +134,11 @@ unsafe fn update_light_gizmo_position(
     use cgmath::{Deg, InnerSpace};
     use crate::math::coordinate_system::perspective;
 
-    let view = crate::math::view(ctx.camera.position, ctx.camera.direction, ctx.camera.up);
+    let camera_pos = ctx.camera().position;
+    let camera_dir = ctx.camera().direction;
+    let camera_up = ctx.camera().up;
+
+    let view = crate::math::view(camera_pos, camera_dir, camera_up);
     let aspect = ctx.swapchain_extent.0 as f32 / ctx.swapchain_extent.1 as f32;
     let proj = perspective(Deg(45.0), aspect, 0.1, 10000.0);
     let screen_size = cgmath::Vector2::new(
@@ -130,9 +148,9 @@ unsafe fn update_light_gizmo_position(
 
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
 
-    let light_pos = ctx.rt_debug.light_position;
+    let light_pos = ctx.rt_debug().light_position;
     let plane_point = light_pos;
-    let plane_normal = -ctx.camera.direction;
+    let plane_normal = -camera_dir;
 
     let denom = plane_normal.dot(ray_direction);
 
@@ -153,7 +171,7 @@ unsafe fn update_light_gizmo_position(
                 );
             }
 
-            ctx.rt_debug.light_position = ctx.scene.light_gizmo().position.position;
+            ctx.rt_debug_mut().light_position = ctx.scene.light_gizmo().position.position;
         }
     }
 

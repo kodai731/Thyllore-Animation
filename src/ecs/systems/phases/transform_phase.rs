@@ -10,14 +10,12 @@ use crate::ecs::{
 };
 
 pub unsafe fn run_transform_phase(ctx: &mut FrameContext) -> Result<()> {
-    let proj_data = calculate_projection(ctx.camera, ctx.swapchain_extent);
-
     update_camera_planes(ctx);
 
-    gizmo_sync_position(
-        &mut ctx.scene.light_gizmo_mut().position,
-        ctx.rt_debug.light_position,
-    );
+    let proj_data = calculate_projection(&*ctx.camera(), ctx.swapchain_extent);
+
+    let light_position = ctx.rt_debug().light_position;
+    gizmo_sync_position(&mut ctx.scene.light_gizmo_mut().position, light_position);
 
     {
         let mut light_gizmo = ctx.scene.light_gizmo_mut();
@@ -27,12 +25,13 @@ pub unsafe fn run_transform_phase(ctx: &mut FrameContext) -> Result<()> {
     gizmo_update_vertex_buffer(&ctx.scene.light_gizmo().mesh, ctx.device)
         .expect("Failed to update light gizmo vertex buffer");
 
-    let light_pos = ctx.rt_debug.light_position;
+    let camera_pos = ctx.camera().position;
+    let camera_up = ctx.camera().up;
     update_billboard_transform(
         &mut ctx.scene.billboard_mut(),
-        light_pos,
-        ctx.camera.position,
-        ctx.camera.up,
+        light_position,
+        camera_pos,
+        camera_up,
     );
 
     update_grid_gizmo_rotation_from_view(&mut ctx.scene.gizmo_mut(), proj_data.view);
@@ -42,7 +41,7 @@ pub unsafe fn run_transform_phase(ctx: &mut FrameContext) -> Result<()> {
         ctx.swapchain_extent.1 as f32,
     );
     ctx.gui_data.billboard_click_rect = calculate_billboard_click_rect(
-        light_pos,
+        light_position,
         screen_size,
         proj_data.view,
         proj_data.proj,
@@ -56,11 +55,11 @@ pub unsafe fn run_transform_phase(ctx: &mut FrameContext) -> Result<()> {
 }
 
 fn update_camera_planes(ctx: &mut FrameContext) {
-    let camera_distance = ctx.camera.position.magnitude();
+    let camera_distance = ctx.camera().position.magnitude();
     ctx.scene.grid_mut().scale = 1.0;
 
-    ctx.camera.near_plane = (camera_distance * 0.001).max(0.1).min(10.0);
-    ctx.camera.far_plane = (ctx.scene.grid().scale * 1000.0)
-        .max(1000.0)
-        .min(100000.0);
+    let grid_scale = ctx.scene.grid().scale;
+    let mut camera = ctx.camera_mut();
+    camera.near_plane = (camera_distance * 0.001).max(0.1).min(10.0);
+    camera.far_plane = (grid_scale * 1000.0).max(1000.0).min(100000.0);
 }

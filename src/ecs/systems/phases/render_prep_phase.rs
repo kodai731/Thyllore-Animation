@@ -12,19 +12,26 @@ use crate::vulkanr::buffer::{copy_buffer, create_buffer};
 use crate::vulkanr::data::{SceneUniformData, UniformBufferObject};
 
 pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
-    let proj_data = ctx.world.resource::<ProjectionData>();
-    let view = proj_data.view;
-    let proj = proj_data.proj;
+    let (view, proj) = {
+        let proj_data = ctx.world.resource::<ProjectionData>();
+        (proj_data.view, proj_data.proj)
+    };
 
-    update_frame_ubo(
-        ctx.graphics,
-        proj_data,
-        ctx.camera.position,
-        ctx.rt_debug.light_position,
-        Vector3::new(1.0, 1.0, 1.0),
-        ctx.image_index,
-        ctx.device,
-    )?;
+    let camera_position = ctx.camera().position;
+    let light_position = ctx.rt_debug().light_position;
+
+    {
+        let proj_data = ctx.world.resource::<ProjectionData>();
+        update_frame_ubo(
+            ctx.graphics,
+            &*proj_data,
+            camera_position,
+            light_position,
+            Vector3::new(1.0, 1.0, 1.0),
+            ctx.image_index,
+            ctx.device,
+        )?;
+    }
 
     if let Err(e) = ctx
         .graphics
@@ -35,7 +42,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
 
     update_scene_uniform(ctx, view, proj)?;
 
-    let render_data_vec = ctx.scene.collect_render_data(ctx.camera.position);
+    let render_data_vec = ctx.scene.collect_render_data(camera_position);
     let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
     if let Err(e) = update_object_ubo_system(
@@ -67,16 +74,17 @@ unsafe fn update_scene_uniform(
         _ => return Ok(()),
     };
 
-    let light_pos = &ctx.rt_debug.light_position;
+    let rt_debug = ctx.rt_debug();
+    let light_pos = &rt_debug.light_position;
 
     let scene_data = SceneUniformData {
         light_position: crate::math::Vec4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
         light_color: crate::math::Vec4::new(1.0, 1.0, 1.0, 1.0),
         view,
         proj,
-        debug_mode: ctx.rt_debug.debug_view_mode.as_int(),
-        shadow_strength: ctx.rt_debug.shadow_strength,
-        enable_distance_attenuation: if ctx.rt_debug.enable_distance_attenuation {
+        debug_mode: rt_debug.debug_view_mode.as_int(),
+        shadow_strength: rt_debug.shadow_strength,
+        enable_distance_attenuation: if rt_debug.enable_distance_attenuation {
             1
         } else {
             0

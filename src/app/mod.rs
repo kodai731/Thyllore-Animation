@@ -12,7 +12,7 @@ pub use data::AppData;
 pub use gui_data::GUIData;
 pub use init::*;
 
-use crate::ecs::{AnimationPlayback, ModelInfo, Resource};
+use crate::ecs::{AnimationPlayback, ModelInfo, ResMut, ResRef, Resource};
 use crate::scene::graphics_resource::GraphicsResources;
 use crate::scene::raytracing::RayTracingData;
 use crate::scene::Camera;
@@ -40,43 +40,43 @@ pub struct App {
 }
 
 impl App {
-    pub fn resource<R: Resource>(&self) -> &R {
+    pub fn resource<R: Resource>(&self) -> ResRef<R> {
         self.data.ecs_world.resource::<R>()
     }
 
-    pub fn resource_mut<R: Resource>(&mut self) -> &mut R {
+    pub fn resource_mut<R: Resource>(&self) -> ResMut<R> {
         self.data.ecs_world.resource_mut::<R>()
     }
 
-    pub fn get_resource<R: Resource>(&self) -> Option<&R> {
+    pub fn get_resource<R: Resource>(&self) -> Option<ResRef<R>> {
         self.data.ecs_world.get_resource::<R>()
     }
 
-    pub fn frame_sync(&self) -> &FrameSync {
+    pub fn frame_sync(&self) -> ResRef<FrameSync> {
         self.resource::<FrameSync>()
     }
 
-    pub fn frame_sync_mut(&mut self) -> &mut FrameSync {
+    pub fn frame_sync_mut(&self) -> ResMut<FrameSync> {
         self.resource_mut::<FrameSync>()
     }
 
-    pub fn swapchain_state(&self) -> &SwapchainState {
+    pub fn swapchain_state(&self) -> ResRef<SwapchainState> {
         self.resource::<SwapchainState>()
     }
 
-    pub fn render_targets(&self) -> &RenderTargets {
+    pub fn render_targets(&self) -> ResRef<RenderTargets> {
         self.resource::<RenderTargets>()
     }
 
-    pub fn command_state(&self) -> &CommandState {
+    pub fn command_state(&self) -> ResRef<CommandState> {
         self.resource::<CommandState>()
     }
 
-    pub fn pipeline_state(&self) -> &PipelineState {
+    pub fn pipeline_state(&self) -> ResRef<PipelineState> {
         self.resource::<PipelineState>()
     }
 
-    pub fn surface_state(&self) -> &SurfaceState {
+    pub fn surface_state(&self) -> ResRef<SurfaceState> {
         self.resource::<SurfaceState>()
     }
 
@@ -88,20 +88,20 @@ impl App {
         &mut self.data.graphics_resources
     }
 
-    pub fn animation_playback(&self) -> &AnimationPlayback {
+    pub fn animation_playback(&self) -> ResRef<AnimationPlayback> {
         self.resource::<AnimationPlayback>()
     }
 
-    pub fn animation_playback_mut(&mut self) -> &mut AnimationPlayback {
+    pub fn animation_playback_mut(&self) -> ResMut<AnimationPlayback> {
         self.resource_mut::<AnimationPlayback>()
     }
 
-    pub fn camera(&self) -> &Camera {
-        &self.data.camera
+    pub fn camera(&self) -> ResRef<Camera> {
+        self.resource::<Camera>()
     }
 
-    pub fn camera_mut(&mut self) -> &mut Camera {
-        &mut self.data.camera
+    pub fn camera_mut(&self) -> ResMut<Camera> {
+        self.resource_mut::<Camera>()
     }
 
     pub fn raytracing(&self) -> &RayTracingData {
@@ -112,12 +112,12 @@ impl App {
         &mut self.data.raytracing
     }
 
-    pub fn rt_debug_state(&self) -> &RayTracingDebugState {
-        &self.data.rt_debug_state
+    pub fn rt_debug_state(&self) -> ResRef<RayTracingDebugState> {
+        self.resource::<RayTracingDebugState>()
     }
 
-    pub fn rt_debug_state_mut(&mut self) -> &mut RayTracingDebugState {
-        &mut self.data.rt_debug_state
+    pub fn rt_debug_state_mut(&self) -> ResMut<RayTracingDebugState> {
+        self.resource_mut::<RayTracingDebugState>()
     }
 
     pub fn debug_view_data(&self) -> &DebugViewData {
@@ -136,19 +136,19 @@ impl App {
         &mut self.data.imgui
     }
 
-    pub fn render_config(&self) -> &RenderConfig {
+    pub fn render_config(&self) -> ResRef<RenderConfig> {
         self.resource::<RenderConfig>()
     }
 
-    pub fn render_config_mut(&mut self) -> &mut RenderConfig {
+    pub fn render_config_mut(&self) -> ResMut<RenderConfig> {
         self.resource_mut::<RenderConfig>()
     }
 
-    pub fn model_info(&self) -> &ModelInfo {
+    pub fn model_info(&self) -> ResRef<ModelInfo> {
         self.resource::<ModelInfo>()
     }
 
-    pub fn model_info_mut(&mut self) -> &mut ModelInfo {
+    pub fn model_info_mut(&self) -> ResMut<ModelInfo> {
         self.resource_mut::<ModelInfo>()
     }
 }

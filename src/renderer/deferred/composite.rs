@@ -42,7 +42,7 @@ impl<'a> CompositePass<'a> {
             graphics_resources: &app.data.graphics_resources,
             device: &app.rrdevice.device,
             swapchain_extent: app.swapchain_state().swapchain.swapchain_extent,
-            debug_view_mode: app.data.rt_debug_state.debug_view_mode,
+            debug_view_mode: app.rt_debug_state().debug_view_mode,
         })
     }
 

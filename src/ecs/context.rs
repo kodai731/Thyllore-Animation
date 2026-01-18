@@ -13,7 +13,7 @@ use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::vulkan::Instance;
 
-use super::world::World;
+use super::world::{ResMut, ResRef, World};
 
 pub struct FrameContext<'a> {
     pub instance: &'a Instance,
@@ -25,10 +25,8 @@ pub struct FrameContext<'a> {
     pub image_index: usize,
     pub swapchain_extent: (u32, u32),
 
-    pub camera: &'a mut Camera,
     pub graphics: &'a mut GraphicsResources,
     pub raytracing: &'a mut RayTracingData,
-    pub rt_debug: &'a mut RayTracingDebugState,
 
     pub scene: &'a Scene,
 
@@ -39,19 +37,35 @@ pub struct FrameContext<'a> {
 }
 
 impl<'a> FrameContext<'a> {
+    pub fn camera(&self) -> ResRef<Camera> {
+        self.world.resource::<Camera>()
+    }
+
+    pub fn camera_mut(&self) -> ResMut<Camera> {
+        self.world.resource_mut::<Camera>()
+    }
+
+    pub fn rt_debug(&self) -> ResRef<RayTracingDebugState> {
+        self.world.resource::<RayTracingDebugState>()
+    }
+
+    pub fn rt_debug_mut(&self) -> ResMut<RayTracingDebugState> {
+        self.world.resource_mut::<RayTracingDebugState>()
+    }
+
     pub fn camera_position(&self) -> Vector3<f32> {
-        self.camera.position
+        self.camera().position
     }
 
     pub fn camera_direction(&self) -> Vector3<f32> {
-        self.camera.direction
+        self.camera().direction
     }
 
     pub fn camera_up(&self) -> Vector3<f32> {
-        self.camera.up
+        self.camera().up
     }
 
     pub fn light_position(&self) -> Vector3<f32> {
-        self.rt_debug.light_position
+        self.rt_debug().light_position
     }
 }

@@ -32,7 +32,6 @@ use crate::scene::{Camera, Scene};
 use vulkanalia::Device as VkDevice;
 
 use anyhow::{anyhow, Result};
-use std::borrow::BorrowMut;
 use std::collections::HashSet;
 use std::ffi::CStr;
 use std::mem::size_of;
@@ -115,6 +114,10 @@ impl App {
         let loader = LibloadingLoader::new(LIBRARY)?;
         let entry = Entry::new(loader).map_err(|b| anyhow!("{}", b))?;
         let mut data = AppData::default();
+
+        data.ecs_world.insert_resource(Camera::default());
+        data.ecs_world
+            .insert_resource(RayTracingDebugState::default());
 
         let (instance, messenger) = Self::create_instance_with_messenger(window, &entry)?;
         let surface = vk_window::create_surface(&instance, &window, &window)?;
@@ -199,7 +202,11 @@ impl App {
         )
         .expect("Failed to create gizmo buffers");
 
-        let mut light_gizmo_data = create_light_gizmo(data.rt_debug_state.light_position);
+        let light_position = data
+            .ecs_world
+            .resource::<RayTracingDebugState>()
+            .light_position;
+        let mut light_gizmo_data = create_light_gizmo(light_position);
         light_gizmo_data.mesh.pipeline = gizmo_data.mesh.pipeline.clone();
         light_gizmo_data.mesh.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!(
@@ -403,10 +410,6 @@ impl App {
         let resized = false;
         let start = Instant::now();
 
-        let initial_pos = cgmath::Vector3::new(5.0, 5.0, 5.0);
-        let target = cgmath::Vector3::new(0.0, 0.0, 0.0);
-        data.camera = create_camera(initial_pos, target);
-
         *scene.grid.borrow_mut() = grid;
 
         println!("initialized finished");
@@ -578,7 +581,9 @@ impl App {
         let surface_state = SurfaceState::new(resources.surface, resources.messenger);
         data.ecs_world.insert_resource(surface_state);
 
-        if let Some(playback) = data.ecs_world.get_resource_mut::<AnimationPlayback>() {
+        let has_playback = data.ecs_world.contains_resource::<AnimationPlayback>();
+        if has_playback {
+            let mut playback = data.ecs_world.resource_mut::<AnimationPlayback>();
             if playback.model_path.is_empty() {
                 playback.model_path = model_path.to_string();
             }
@@ -587,17 +592,20 @@ impl App {
             data.ecs_world.insert_resource(animation_playback);
         }
 
-        if data.ecs_world.get_resource::<RenderConfig>().is_none() {
+        if !data.ecs_world.contains_resource::<RenderConfig>() {
             let render_config = RenderConfig::new(msaa_samples);
             data.ecs_world.insert_resource(render_config);
         }
 
-        if data.ecs_world.get_resource::<ModelInfo>().is_none() {
+        if !data.ecs_world.contains_resource::<ModelInfo>() {
             let model_info = ModelInfo::new();
             data.ecs_world.insert_resource(model_info);
         }
 
-        if data.ecs_world.get_resource::<crate::ecs::UIEventQueue>().is_none() {
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::UIEventQueue>()
+        {
             let ui_event_queue = crate::ecs::UIEventQueue::new();
             data.ecs_world.insert_resource(ui_event_queue);
         }

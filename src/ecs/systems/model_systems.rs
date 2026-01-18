@@ -200,7 +200,9 @@ fn setup_animation_system(
     graphics.morph_animation = load_result.morph_animation.clone();
     graphics.node_animation_scale = load_result.node_animation_scale;
 
-    if let Some(model_info) = world.get_resource_mut::<ModelInfo>() {
+    let has_model_info = world.contains_resource::<ModelInfo>();
+    if has_model_info {
+        let mut model_info = world.resource_mut::<ModelInfo>();
         model_info.has_skinned_meshes = load_result.has_skinned_meshes;
         model_info.node_animation_scale = load_result.node_animation_scale;
     } else {
@@ -358,8 +360,10 @@ unsafe fn apply_initial_pose(
 
     let first_clip_id = graphics.animation.clips.first().map(|c| c.id);
     if let Some(clip_id) = first_clip_id {
-        if let Some(playback) = world.get_resource_mut::<AnimationPlayback>() {
-            playback_play(playback, clip_id);
+        let has_playback = world.contains_resource::<AnimationPlayback>();
+        if has_playback {
+            let mut playback = world.resource_mut::<AnimationPlayback>();
+            playback_play(&mut playback, clip_id);
         } else {
             let mut playback = AnimationPlayback::new();
             playback_play(&mut playback, clip_id);
@@ -371,7 +375,7 @@ unsafe fn apply_initial_pose(
 
     if let Some(skel_id) = skeleton_id {
         let playback = world.resource::<AnimationPlayback>();
-        graphics.animation.apply_to_skeleton(skel_id, playback);
+        graphics.animation.apply_to_skeleton(skel_id, &*playback);
 
         for mesh_idx in 0..graphics.meshes.len() {
             apply_skinning_to_mesh(instance, device, command_pool, graphics, mesh_idx)?;

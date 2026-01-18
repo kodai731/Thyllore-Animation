@@ -17,20 +17,38 @@ pub fn create_camera(position: Vector3<f32>, target: Vector3<f32>) -> Camera {
 }
 
 pub fn camera_input_system(camera: &mut Camera, gui_data: &GUIData, grid_scale: f32) {
-    let diff = Vector2::new(gui_data.mouse_diff[0], gui_data.mouse_diff[1]);
+    camera_input_system_inner(
+        camera,
+        gui_data.is_left_clicked,
+        gui_data.is_wheel_clicked,
+        gui_data.mouse_wheel,
+        gui_data.mouse_diff,
+        grid_scale,
+    );
+}
 
-    if gui_data.is_left_clicked && diff.magnitude() > 0.001 {
+pub fn camera_input_system_inner(
+    camera: &mut Camera,
+    is_left_clicked: bool,
+    is_wheel_clicked: bool,
+    mouse_wheel: f32,
+    mouse_diff: [f32; 2],
+    grid_scale: f32,
+) {
+    let diff = Vector2::new(mouse_diff[0], mouse_diff[1]);
+
+    if is_left_clicked && diff.magnitude() > 0.001 {
         camera_rotate(camera, diff);
-    } else if gui_data.is_wheel_clicked && diff.magnitude() > 0.001 {
+    } else if is_wheel_clicked && diff.magnitude() > 0.001 {
         let base_x = camera_right(camera);
         let base_y = camera.up;
         let pan_speed = grid_scale * 0.01;
         camera_pan_with_base(camera, diff, base_x, base_y, pan_speed);
     }
 
-    if gui_data.mouse_wheel != 0.0 && !gui_data.imgui_wants_mouse {
+    if mouse_wheel != 0.0 {
         let zoom_speed = grid_scale * 0.5;
-        camera_zoom(camera, gui_data.mouse_wheel, zoom_speed);
+        camera_zoom(camera, mouse_wheel, zoom_speed);
     }
 }
 

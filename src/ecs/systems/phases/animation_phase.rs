@@ -6,11 +6,11 @@ use crate::ecs::AnimationPlayback;
 
 pub unsafe fn run_animation_phase(ctx: &mut FrameContext) -> Result<()> {
     {
-        let playback = ctx.world.resource_mut::<AnimationPlayback>();
+        let mut playback = ctx.world.resource_mut::<AnimationPlayback>();
         if let Err(e) = playback_update_animations(
             ctx.graphics,
             ctx.time,
-            playback,
+            &mut *playback,
             ctx.instance,
             ctx.device,
             ctx.command_pool.as_ref(),

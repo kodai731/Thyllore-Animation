@@ -6,7 +6,9 @@ use winit::event::{Event, WindowEvent};
 use super::platform::System;
 use super::ui::{build_click_debug_overlay, build_debug_window, DebugWindowState};
 use crate::app::{App, GUIData};
-use crate::ecs::{process_ui_events_system, DeferredAction, UIEventQueue};
+use crate::debugview::RayTracingDebugState;
+use crate::ecs::{process_ui_events_with_events_simple, DeferredAction, UIEventQueue};
+use crate::scene::camera::Camera;
 
 fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
     gui_data.is_left_clicked = false;
@@ -98,29 +100,32 @@ impl System {
                             let model_path = app.animation_playback().model_path.clone();
                             let load_status = gui_data.load_status.clone();
 
-                            let mut debug_state = DebugWindowState {
-                                model_path,
-                                load_status,
-                                light_position: app.data.rt_debug_state.light_position,
-                                shadow_strength: app.data.rt_debug_state.shadow_strength,
-                                enable_distance_attenuation: app
-                                    .data
-                                    .rt_debug_state
-                                    .enable_distance_attenuation,
-                                debug_view_mode: app.data.rt_debug_state.debug_view_mode,
-                                cube_size: app.data.rt_debug_state.cube_size,
+                            let mut debug_state = {
+                                let rt_debug = app.rt_debug_state();
+                                DebugWindowState {
+                                    model_path,
+                                    load_status,
+                                    light_position: rt_debug.light_position,
+                                    shadow_strength: rt_debug.shadow_strength,
+                                    enable_distance_attenuation: rt_debug.enable_distance_attenuation,
+                                    debug_view_mode: rt_debug.debug_view_mode,
+                                    cube_size: rt_debug.cube_size,
+                                }
                             };
 
                             {
-                                let ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                build_debug_window(ui, ui_events, &mut debug_state, gui_data);
+                                let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+                                build_debug_window(ui, &mut *ui_events, &mut debug_state, gui_data);
                             }
 
-                            app.data.rt_debug_state.shadow_strength = debug_state.shadow_strength;
-                            app.data.rt_debug_state.enable_distance_attenuation =
-                                debug_state.enable_distance_attenuation;
-                            app.data.rt_debug_state.debug_view_mode = debug_state.debug_view_mode;
-                            app.data.rt_debug_state.set_cube_size(debug_state.cube_size);
+                            {
+                                let mut rt_debug_mut = app.rt_debug_state_mut();
+                                rt_debug_mut.shadow_strength = debug_state.shadow_strength;
+                                rt_debug_mut.enable_distance_attenuation =
+                                    debug_state.enable_distance_attenuation;
+                                rt_debug_mut.debug_view_mode = debug_state.debug_view_mode;
+                                rt_debug_mut.set_cube_size(debug_state.cube_size);
+                            }
 
                             build_click_debug_overlay(ui, gui_data);
 
@@ -129,17 +134,30 @@ impl System {
 
                             unsafe {
                                 let deferred_actions = {
-                                    let ui_events =
-                                        app.data.ecs_world.get_resource_mut::<UIEventQueue>();
-                                    if let Some(ui_events) = ui_events {
-                                        process_ui_events_system(
-                                            ui_events,
-                                            &mut app.data.camera,
-                                            &mut app.data.rt_debug_state,
-                                            &app.data.graphics_resources,
-                                        )
-                                    } else {
+                                    let events: Vec<_> = {
+                                        if let Some(mut ui_events) =
+                                            app.data.ecs_world.get_resource_mut::<UIEventQueue>()
+                                        {
+                                            ui_events.drain().collect()
+                                        } else {
+                                            Vec::new()
+                                        }
+                                    };
+
+                                    if events.is_empty() {
                                         Vec::new()
+                                    } else {
+                                        let model_bounds =
+                                            app.data.graphics_resources.calculate_model_bounds();
+                                        let world = &app.data.ecs_world;
+                                        let mut camera = world.resource_mut::<Camera>();
+                                        let mut rt_debug = world.resource_mut::<RayTracingDebugState>();
+                                        crate::ecs::process_ui_events_with_events_simple(
+                                            events,
+                                            &mut camera,
+                                            &mut rt_debug,
+                                            model_bounds,
+                                        )
                                     }
                                 };
 

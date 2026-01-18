@@ -17,7 +17,7 @@ impl QueryData for HNil {
     }
 
     fn entities(world: &World) -> Vec<Entity> {
-        world.transforms.keys().copied().collect()
+        world.component_entities::<crate::ecs::world::Transform>()
     }
 
     fn is_required() -> bool {

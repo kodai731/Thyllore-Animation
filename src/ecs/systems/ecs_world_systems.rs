@@ -2,7 +2,9 @@ use cgmath::{Matrix4, SquareMatrix};
 
 use crate::asset::AssetStorage;
 use crate::ecs::resource::AnimationPlayback;
-use crate::ecs::world::{Entity, World};
+use crate::ecs::world::{
+    AnimationState, Children, Entity, GlobalTransform, SkeletonRef, Transform, World,
+};
 
 pub fn animation_playback_system(
     playback: &mut AnimationPlayback,
@@ -28,20 +30,18 @@ pub fn transform_propagation_system(world: &mut World) {
 
     fn propagate(world: &mut World, entity: Entity, parent_global: Matrix4<f32>) {
         let local_matrix = world
-            .transforms
-            .get(&entity)
+            .get_component::<Transform>(entity)
             .map(|t| t.to_matrix())
             .unwrap_or_else(Matrix4::identity);
 
         let global_matrix = parent_global * local_matrix;
 
-        if let Some(gt) = world.global_transforms.get_mut(&entity) {
+        if let Some(gt) = world.get_component_mut::<GlobalTransform>(entity) {
             gt.0 = global_matrix;
         }
 
         let child_entities: Vec<Entity> = world
-            .children
-            .get(&entity)
+            .get_component::<Children>(entity)
             .map(|c| c.0.clone())
             .unwrap_or_default();
 
@@ -59,7 +59,7 @@ pub fn animation_time_system(world: &mut World, delta_time: f32, assets: &AssetS
     let animated_entities = world.query_animated();
 
     for entity in animated_entities {
-        let Some(state) = world.animation_states.get_mut(&entity) else {
+        let Some(state) = world.get_component_mut::<AnimationState>(entity) else {
             continue;
         };
 
@@ -101,10 +101,10 @@ pub fn skeleton_animation_system(world: &mut World, assets: &mut AssetStorage) {
     let mut animations_to_apply = Vec::new();
 
     for entity in animated_entities {
-        let Some(state) = world.animation_states.get(&entity) else {
+        let Some(state) = world.get_component::<AnimationState>(entity) else {
             continue;
         };
-        let Some(skeleton_ref) = world.skeleton_refs.get(&entity) else {
+        let Some(skeleton_ref) = world.get_component::<SkeletonRef>(entity) else {
             continue;
         };
 

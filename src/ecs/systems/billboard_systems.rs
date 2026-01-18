@@ -5,7 +5,7 @@ use cgmath::{InnerSpace, Matrix4, Vector3, Vector4};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::component::CameraState;
-use crate::ecs::world::World;
+use crate::ecs::world::{BillboardBehavior, Transform, World};
 use crate::scene::billboard::{BillboardData, BillboardTransform, BillboardVertex};
 use crate::vulkanr::buffer::create_buffer;
 use crate::vulkanr::command::RRCommandPool;
@@ -63,7 +63,7 @@ pub fn billboard_system(world: &mut World, camera: &CameraState) {
     let billboards = world.query_billboards();
 
     for entity in billboards {
-        let Some(behavior) = world.billboard_behaviors.get(&entity) else {
+        let Some(behavior) = world.get_component::<BillboardBehavior>(entity) else {
             continue;
         };
 
@@ -71,7 +71,7 @@ pub fn billboard_system(world: &mut World, camera: &CameraState) {
             continue;
         }
 
-        let Some(transform) = world.transforms.get_mut(&entity) else {
+        let Some(transform) = world.get_component_mut::<Transform>(entity) else {
             continue;
         };
 

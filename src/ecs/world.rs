@@ -211,56 +211,116 @@ pub struct SkinRef {
     pub inverse_bind_matrices: Vec<Matrix4<f32>>,
 }
 
-#[derive(Default)]
 pub struct World {
     next_entity: Entity,
     resources: Resources,
-
-    pub names: HashMap<Entity, Name>,
-    pub transforms: HashMap<Entity, Transform>,
-    pub global_transforms: HashMap<Entity, GlobalTransform>,
-    pub visibles: HashMap<Entity, Visible>,
-    pub parents: HashMap<Entity, Parent>,
-    pub children: HashMap<Entity, Children>,
-    pub mesh_refs: HashMap<Entity, MeshRef>,
-    pub material_refs: HashMap<Entity, MaterialRef>,
-    pub skeleton_refs: HashMap<Entity, SkeletonRef>,
-    pub animation_states: HashMap<Entity, AnimationState>,
-    pub line_renderings: HashMap<Entity, LineRendering>,
-    pub billboard_behaviors: HashMap<Entity, BillboardBehavior>,
-    pub node_refs: HashMap<Entity, NodeRef>,
-    pub skin_refs: HashMap<Entity, SkinRef>,
+    components: crate::ecs::storage::Components,
+    component_registry: crate::ecs::registry::ComponentRegistry,
 }
 
 impl std::fmt::Debug for World {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("World")
-            .field("entity_count", &self.transforms.len())
+            .field("entity_count", &self.entity_count())
             .field("resources", &self.resources)
+            .field("components", &self.components)
             .finish()
+    }
+}
+
+impl Default for World {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl World {
     pub fn new() -> Self {
-        Self {
+        let mut world = Self {
             next_entity: 1,
             resources: Resources::new(),
-            names: HashMap::new(),
-            transforms: HashMap::new(),
-            global_transforms: HashMap::new(),
-            visibles: HashMap::new(),
-            parents: HashMap::new(),
-            children: HashMap::new(),
-            mesh_refs: HashMap::new(),
-            material_refs: HashMap::new(),
-            skeleton_refs: HashMap::new(),
-            animation_states: HashMap::new(),
-            line_renderings: HashMap::new(),
-            billboard_behaviors: HashMap::new(),
-            node_refs: HashMap::new(),
-            skin_refs: HashMap::new(),
-        }
+            components: crate::ecs::storage::Components::new(),
+            component_registry: crate::ecs::registry::ComponentRegistry::new(),
+        };
+
+        world.register_component::<Name>();
+        world.register_component::<Transform>();
+        world.register_component::<GlobalTransform>();
+        world.register_component::<Visible>();
+        world.register_component::<Parent>();
+        world.register_component::<Children>();
+        world.register_component::<MeshRef>();
+        world.register_component::<MaterialRef>();
+        world.register_component::<SkeletonRef>();
+        world.register_component::<AnimationState>();
+        world.register_component::<LineRendering>();
+        world.register_component::<BillboardBehavior>();
+        world.register_component::<NodeRef>();
+        world.register_component::<SkinRef>();
+
+        world
+    }
+
+    pub fn register_component<T: crate::ecs::storage::Component>(&mut self) {
+        self.component_registry.register::<T>();
+        self.components.register::<T>();
+    }
+
+    pub fn get_component<T: crate::ecs::storage::Component>(&self, entity: Entity) -> Option<&T> {
+        self.components.get::<T>(entity)
+    }
+
+    pub fn get_component_mut<T: crate::ecs::storage::Component>(
+        &mut self,
+        entity: Entity,
+    ) -> Option<&mut T> {
+        self.components.get_mut::<T>(entity)
+    }
+
+    pub fn get_component_ref<T: crate::ecs::storage::Component>(
+        &self,
+        entity: Entity,
+    ) -> Option<&T> {
+        self.components.get::<T>(entity)
+    }
+
+    pub fn get_component_ref_mut<T: crate::ecs::storage::Component>(
+        &mut self,
+        entity: Entity,
+    ) -> Option<&mut T> {
+        self.components.get_mut::<T>(entity)
+    }
+
+    pub fn insert_component<T: crate::ecs::storage::Component>(
+        &mut self,
+        entity: Entity,
+        component: T,
+    ) {
+        self.components.insert(entity, component);
+    }
+
+    pub fn has_component<T: crate::ecs::storage::Component>(&self, entity: Entity) -> bool {
+        self.components.contains::<T>(entity)
+    }
+
+    pub fn remove_component<T: crate::ecs::storage::Component>(&mut self, entity: Entity) {
+        self.components.remove::<T>(entity);
+    }
+
+    pub fn component_entities<T: crate::ecs::storage::Component>(&self) -> Vec<Entity> {
+        self.components.entities::<T>()
+    }
+
+    pub fn components(&self) -> &crate::ecs::storage::Components {
+        &self.components
+    }
+
+    pub fn components_mut(&mut self) -> &mut crate::ecs::storage::Components {
+        &mut self.components
+    }
+
+    pub fn component_registry(&self) -> &crate::ecs::registry::ComponentRegistry {
+        &self.component_registry
     }
 
     pub fn insert_resource<R: Resource>(&mut self, resource: R) {
@@ -304,77 +364,61 @@ impl World {
     }
 
     pub fn despawn(&mut self, entity: Entity) {
-        self.names.remove(&entity);
-        self.transforms.remove(&entity);
-        self.global_transforms.remove(&entity);
-        self.visibles.remove(&entity);
-        self.parents.remove(&entity);
-        self.children.remove(&entity);
-        self.mesh_refs.remove(&entity);
-        self.material_refs.remove(&entity);
-        self.skeleton_refs.remove(&entity);
-        self.animation_states.remove(&entity);
-        self.line_renderings.remove(&entity);
-        self.billboard_behaviors.remove(&entity);
-        self.node_refs.remove(&entity);
-        self.skin_refs.remove(&entity);
+        self.components.remove_entity(entity);
     }
 
     pub fn query_renderable(&self) -> Vec<Entity> {
-        self.mesh_refs
-            .keys()
-            .filter(|e| self.visibles.get(e).map(|v| v.0).unwrap_or(true))
-            .copied()
+        self.component_entities::<MeshRef>()
+            .into_iter()
+            .filter(|e| {
+                self.get_component::<Visible>(*e)
+                    .map(|v| v.0)
+                    .unwrap_or(true)
+            })
             .collect()
     }
 
     pub fn query_animated(&self) -> Vec<Entity> {
-        self.animation_states.keys().copied().collect()
+        self.component_entities::<AnimationState>()
     }
 
     pub fn query_skinned(&self) -> Vec<Entity> {
-        self.skin_refs.keys().copied().collect()
+        self.component_entities::<SkinRef>()
     }
 
     pub fn query_line_rendering(&self) -> Vec<Entity> {
-        self.line_renderings.keys().copied().collect()
+        self.component_entities::<LineRendering>()
     }
 
     pub fn query_billboards(&self) -> Vec<Entity> {
-        self.billboard_behaviors.keys().copied().collect()
+        self.component_entities::<BillboardBehavior>()
     }
 
     pub fn query_with_parent(&self) -> Vec<Entity> {
-        self.parents.keys().copied().collect()
+        self.component_entities::<Parent>()
     }
 
     pub fn get_root_entities(&self) -> Vec<Entity> {
-        self.transforms
-            .keys()
-            .filter(|e| !self.parents.contains_key(e))
-            .copied()
+        self.component_entities::<Transform>()
+            .into_iter()
+            .filter(|e| !self.has_component::<Parent>(*e))
             .collect()
     }
 
     pub fn entity_count(&self) -> usize {
-        self.transforms.len()
+        self.component_entities::<Transform>().len()
     }
 
     pub fn clear(&mut self) {
-        self.names.clear();
-        self.transforms.clear();
-        self.global_transforms.clear();
-        self.visibles.clear();
-        self.parents.clear();
-        self.children.clear();
-        self.mesh_refs.clear();
-        self.material_refs.clear();
-        self.skeleton_refs.clear();
-        self.animation_states.clear();
-        self.line_renderings.clear();
-        self.billboard_behaviors.clear();
-        self.node_refs.clear();
-        self.skin_refs.clear();
+        self.components.clear();
+    }
+
+    pub fn add_child(&mut self, parent: Entity, child: Entity) {
+        if let Some(children) = self.get_component_mut::<Children>(parent) {
+            children.0.push(child);
+        } else {
+            self.insert_component(parent, Children(vec![child]));
+        }
     }
 }
 
@@ -390,38 +434,31 @@ impl<'a> EntityBuilder<'a> {
     }
 
     pub fn with_name(self, name: &str) -> Self {
-        self.world.names.insert(self.entity, Name(name.to_string()));
+        self.world
+            .insert_component(self.entity, Name(name.to_string()));
         self
     }
 
     pub fn with_transform(self, transform: Transform) -> Self {
-        self.world.transforms.insert(self.entity, transform);
+        self.world.insert_component(self.entity, transform);
         self.world
-            .global_transforms
-            .insert(self.entity, GlobalTransform::new());
+            .insert_component(self.entity, GlobalTransform::new());
         self
     }
 
     pub fn with_visible(self, visible: bool) -> Self {
-        self.world.visibles.insert(self.entity, Visible(visible));
+        self.world.insert_component(self.entity, Visible(visible));
         self
     }
 
     pub fn with_parent(self, parent: Entity) -> Self {
-        self.world.parents.insert(self.entity, Parent(parent));
-
-        let children = self
-            .world
-            .children
-            .entry(parent)
-            .or_insert_with(|| Children(Vec::new()));
-        children.0.push(self.entity);
-
+        self.world.insert_component(self.entity, Parent(parent));
+        self.world.add_child(parent, self.entity);
         self
     }
 
     pub fn with_mesh(self, mesh_asset_id: AssetId, object_index: usize) -> Self {
-        self.world.mesh_refs.insert(
+        self.world.insert_component(
             self.entity,
             MeshRef {
                 mesh_asset_id,
@@ -433,41 +470,36 @@ impl<'a> EntityBuilder<'a> {
 
     pub fn with_material(self, material_asset_id: AssetId) -> Self {
         self.world
-            .material_refs
-            .insert(self.entity, MaterialRef(material_asset_id));
+            .insert_component(self.entity, MaterialRef(material_asset_id));
         self
     }
 
     pub fn with_skeleton(self, skeleton_asset_id: AssetId) -> Self {
         self.world
-            .skeleton_refs
-            .insert(self.entity, SkeletonRef(skeleton_asset_id));
+            .insert_component(self.entity, SkeletonRef(skeleton_asset_id));
         self
     }
 
     pub fn with_animation_state(self, state: AnimationState) -> Self {
-        self.world.animation_states.insert(self.entity, state);
+        self.world.insert_component(self.entity, state);
         self
     }
 
     pub fn with_line_rendering(self, line_width: f32) -> Self {
         self.world
-            .line_renderings
-            .insert(self.entity, LineRendering::new(line_width));
+            .insert_component(self.entity, LineRendering::new(line_width));
         self
     }
 
     pub fn with_billboard(self, always_face_camera: bool) -> Self {
         self.world
-            .billboard_behaviors
-            .insert(self.entity, BillboardBehavior::new(always_face_camera));
+            .insert_component(self.entity, BillboardBehavior::new(always_face_camera));
         self
     }
 
     pub fn with_node(self, node_asset_id: AssetId) -> Self {
         self.world
-            .node_refs
-            .insert(self.entity, NodeRef(node_asset_id));
+            .insert_component(self.entity, NodeRef(node_asset_id));
         self
     }
 
@@ -477,7 +509,7 @@ impl<'a> EntityBuilder<'a> {
         joint_indices: Vec<u32>,
         inverse_bind_matrices: Vec<Matrix4<f32>>,
     ) -> Self {
-        self.world.skin_refs.insert(
+        self.world.insert_component(
             self.entity,
             SkinRef {
                 skeleton_asset_id,

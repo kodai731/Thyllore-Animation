@@ -3,6 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
 use crate::asset::AssetStorage;
+use crate::ecs::world::MeshRef;
 use crate::ecs::World;
 use crate::scene::graphics_resource::{MeshBuffer, GraphicsResources};
 use crate::vulkanr::pipeline::RRPipeline;
@@ -225,7 +226,7 @@ impl<'a> GBufferPass<'a> {
         }
 
         for &entity in entities {
-            let Some(mesh_ref) = self.ecs_world.mesh_refs.get(&entity) else {
+            let Some(mesh_ref) = self.ecs_world.get_component::<MeshRef>(entity) else {
                 continue;
             };
 

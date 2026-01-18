@@ -1,5 +1,6 @@
 use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use crate::app::{App, GUIData};
+use crate::ecs::render_system;
 use crate::vulkanr::command::*;
 use crate::vulkanr::context::{FrameSync, SwapchainState};
 use crate::vulkanr::vulkan::*;
@@ -477,8 +478,13 @@ impl App {
         image_index: usize,
     ) -> Result<()> {
         let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
+        let camera_pos = self.data.camera.position();
 
-        self.scene.render_all(
+        let render_data_vec = self.scene.collect_render_data(camera_pos);
+        let render_data_refs: Vec<_> = render_data_vec.iter().collect();
+
+        render_system(
+            &render_data_refs,
             command_buffer,
             image_index,
             frame_set,

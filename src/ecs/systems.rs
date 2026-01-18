@@ -2,18 +2,12 @@ use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
 use crate::asset::AssetStorage;
-use crate::ecs::components::{CameraState, RenderContext, Renderable, Updatable, UpdateContext};
+use crate::ecs::components::{CameraState, RenderData};
 use crate::ecs::resource::AnimationPlayback;
 use crate::ecs::world::{Entity, GlobalTransform, World};
 use crate::scene::graphics_resource::{ObjectDescriptorSet, ObjectUBO};
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::vulkan::*;
-
-pub fn update_all(updatables: &mut [&mut dyn Updatable], ctx: &UpdateContext) {
-    for obj in updatables {
-        obj.update(ctx);
-    }
-}
 
 pub fn animation_playback_system(
     playback: &mut AnimationPlayback,
@@ -178,52 +172,49 @@ pub fn billboard_system(world: &mut World, camera: &CameraState) {
     }
 }
 
-pub unsafe fn update_object_ubos(
-    renderables: &[&dyn Renderable],
-    ctx: &RenderContext,
+pub unsafe fn update_object_ubo_system(
+    render_data: &[&RenderData],
+    image_index: usize,
     objects: &ObjectDescriptorSet,
     rrdevice: &RRDevice,
 ) -> Result<()> {
-    for obj in renderables {
+    for data in render_data {
         let ubo = ObjectUBO {
-            model: obj.model_matrix(ctx),
+            model: data.model_matrix,
         };
-        objects.update(rrdevice, ctx.image_index, obj.object_index(), &ubo)?;
+        objects.update(rrdevice, image_index, data.object_index, &ubo)?;
     }
     Ok(())
 }
 
-pub unsafe fn render_objects(
-    renderables: &[&dyn Renderable],
+pub unsafe fn render_system(
+    render_data: &[&RenderData],
     command_buffer: vk::CommandBuffer,
     image_index: usize,
     frame_set: vk::DescriptorSet,
     objects: &ObjectDescriptorSet,
     rrdevice: &RRDevice,
 ) {
-    for obj in renderables {
-        let vertex_buffer = obj.vertex_buffer();
-        let index_buffer = obj.index_buffer();
-
-        if vertex_buffer == vk::Buffer::null() || index_buffer == vk::Buffer::null() {
+    for data in render_data {
+        if data.vertex_buffer == vk::Buffer::null() || data.index_buffer == vk::Buffer::null() {
             continue;
         }
 
         rrdevice.device.cmd_bind_pipeline(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            obj.pipeline().pipeline,
+            data.pipeline.pipeline,
         );
 
         rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
 
         rrdevice
             .device
-            .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
+            .cmd_bind_vertex_buffers(command_buffer, 0, &[data.vertex_buffer], &[0]);
 
         rrdevice.device.cmd_bind_index_buffer(
             command_buffer,
-            index_buffer,
+            data.index_buffer,
             0,
             vk::IndexType::UINT32,
         );
@@ -231,18 +222,18 @@ pub unsafe fn render_objects(
         rrdevice.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            obj.pipeline().pipeline_layout,
+            data.pipeline.pipeline_layout,
             0,
             &[frame_set],
             &[],
         );
 
-        let object_set_idx = objects.get_set_index(image_index, obj.object_index());
+        let object_set_idx = objects.get_set_index(image_index, data.object_index);
         let object_set = objects.sets[object_set_idx];
         rrdevice.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            obj.pipeline().pipeline_layout,
+            data.pipeline.pipeline_layout,
             2,
             &[object_set],
             &[],
@@ -250,6 +241,6 @@ pub unsafe fn render_objects(
 
         rrdevice
             .device
-            .cmd_draw_indexed(command_buffer, obj.index_count(), 1, 0, 0, 0);
+            .cmd_draw_indexed(command_buffer, data.index_count, 1, 0, 0, 0);
     }
 }

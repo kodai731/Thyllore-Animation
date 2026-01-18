@@ -1,4 +1,4 @@
-use crate::ecs::{Renderable, RenderContext, Updatable, UpdateContext};
+use crate::ecs::RenderData;
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
 use crate::vulkanr::device::*;
@@ -6,6 +6,7 @@ use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::vulkan::*;
 use cgmath::{vec3, Matrix3, Matrix4, SquareMatrix};
 use std::mem::size_of;
+use vulkanalia::prelude::v1_0::*;
 
 /// Gizmo用の頂点構造（位置 + 色）
 #[repr(C)]
@@ -212,34 +213,15 @@ impl GridGizmoData {
         self.index_buffer = None;
         self.index_buffer_memory = None;
     }
-}
 
-impl Updatable for GridGizmoData {
-    fn update(&mut self, _ctx: &UpdateContext) {}
-}
-
-impl Renderable for GridGizmoData {
-    fn object_index(&self) -> usize {
-        self.object_index
-    }
-
-    fn model_matrix(&self, _ctx: &RenderContext) -> Matrix4<f32> {
-        Matrix4::identity()
-    }
-
-    fn pipeline(&self) -> &RRPipeline {
-        &self.pipeline
-    }
-
-    fn vertex_buffer(&self) -> vk::Buffer {
-        self.vertex_buffer.unwrap_or(vk::Buffer::null())
-    }
-
-    fn index_buffer(&self) -> vk::Buffer {
-        self.index_buffer.unwrap_or(vk::Buffer::null())
-    }
-
-    fn index_count(&self) -> u32 {
-        self.indices.len() as u32
+    pub fn render_data(&self) -> RenderData {
+        RenderData {
+            object_index: self.object_index,
+            pipeline: self.pipeline.clone(),
+            vertex_buffer: self.vertex_buffer.unwrap_or(vk::Buffer::null()),
+            index_buffer: self.index_buffer.unwrap_or(vk::Buffer::null()),
+            index_count: self.indices.len() as u32,
+            model_matrix: Matrix4::identity(),
+        }
     }
 }

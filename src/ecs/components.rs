@@ -1,5 +1,5 @@
-use cgmath::{Matrix4, Vector3};
-use vulkanalia::vk;
+use cgmath::{Matrix4, SquareMatrix, Vector3};
+use vulkanalia::prelude::v1_0::*;
 
 use crate::vulkanr::pipeline::RRPipeline;
 
@@ -7,29 +7,6 @@ use crate::vulkanr::pipeline::RRPipeline;
 pub struct CameraState {
     pub position: Vector3<f32>,
     pub direction: Vector3<f32>,
-}
-
-pub struct UpdateContext {
-    pub time: f32,
-    pub delta_time: f32,
-}
-
-pub struct RenderContext<'a> {
-    pub camera: &'a CameraState,
-    pub image_index: usize,
-}
-
-pub trait Updatable {
-    fn update(&mut self, ctx: &UpdateContext);
-}
-
-pub trait Renderable {
-    fn object_index(&self) -> usize;
-    fn model_matrix(&self, ctx: &RenderContext) -> Matrix4<f32>;
-    fn pipeline(&self) -> &RRPipeline;
-    fn vertex_buffer(&self) -> vk::Buffer;
-    fn index_buffer(&self) -> vk::Buffer;
-    fn index_count(&self) -> u32;
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -42,5 +19,52 @@ impl ObjectIndex {
 
     pub fn get(&self) -> usize {
         self.0
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct RenderData {
+    pub object_index: usize,
+    pub pipeline: RRPipeline,
+    pub vertex_buffer: vk::Buffer,
+    pub index_buffer: vk::Buffer,
+    pub index_count: u32,
+    pub model_matrix: Matrix4<f32>,
+}
+
+impl Default for RenderData {
+    fn default() -> Self {
+        Self {
+            object_index: 0,
+            pipeline: RRPipeline::default(),
+            vertex_buffer: vk::Buffer::null(),
+            index_buffer: vk::Buffer::null(),
+            index_count: 0,
+            model_matrix: Matrix4::identity(),
+        }
+    }
+}
+
+impl RenderData {
+    pub fn new(
+        object_index: usize,
+        pipeline: RRPipeline,
+        vertex_buffer: vk::Buffer,
+        index_buffer: vk::Buffer,
+        index_count: u32,
+    ) -> Self {
+        Self {
+            object_index,
+            pipeline,
+            vertex_buffer,
+            index_buffer,
+            index_count,
+            model_matrix: Matrix4::identity(),
+        }
+    }
+
+    pub fn with_model_matrix(mut self, model_matrix: Matrix4<f32>) -> Self {
+        self.model_matrix = model_matrix;
+        self
     }
 }

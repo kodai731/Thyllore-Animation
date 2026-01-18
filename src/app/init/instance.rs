@@ -246,10 +246,10 @@ impl App {
 
         println!("created pipeline");
 
-        let mut scene = Scene::new();
-        scene.add(gizmo_data);
-        scene.add(light_gizmo_data);
-        scene.add(billboard_data);
+        let scene = Scene::new();
+        *scene.gizmo.borrow_mut() = gizmo_data;
+        *scene.light_gizmo.borrow_mut() = light_gizmo_data;
+        *scene.billboard.borrow_mut() = billboard_data;
 
         crate::log!("Starting ray tracing initialization...");
         crate::log!(
@@ -376,7 +376,7 @@ impl App {
         let target = cgmath::Vector3::new(0.0, 0.0, 0.0);
         data.camera = Camera::new(initial_pos, target);
 
-        scene.add(grid);
+        *scene.grid.borrow_mut() = grid;
 
         println!("initialized finished");
         Ok(Self {

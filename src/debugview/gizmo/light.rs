@@ -4,7 +4,7 @@ use crate::math::{
     is_point_in_rect, ray_to_line_segment_distance, ray_to_point_distance, screen_to_world_ray,
     view, Vec2, Vec3, Vec4,
 };
-use crate::ecs::{Renderable, RenderContext, Updatable, UpdateContext};
+use crate::ecs::RenderData;
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
 use crate::vulkanr::core::Device;
@@ -14,6 +14,7 @@ use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::vulkan::*;
 use cgmath::{vec3, Deg, InnerSpace, Matrix4, Vector2, Vector3};
 use std::mem::size_of;
+use vulkanalia::prelude::v1_0::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub enum LightGizmoAxis {
@@ -863,36 +864,19 @@ impl LightGizmoData {
             );
         }
     }
-}
 
-impl Updatable for LightGizmoData {
-    fn update(&mut self, _ctx: &UpdateContext) {}
-}
-
-impl Renderable for LightGizmoData {
-    fn object_index(&self) -> usize {
-        self.object_index
-    }
-
-    fn model_matrix(&self, ctx: &RenderContext) -> Matrix4<f32> {
-        let distance = (self.position - ctx.camera.position).magnitude();
+    pub fn render_data(&self, camera_position: Vector3<f32>) -> RenderData {
+        let distance = (self.position - camera_position).magnitude();
         let scale_factor = distance * 0.03;
-        Matrix4::from_translation(self.position) * Matrix4::from_scale(scale_factor)
-    }
+        let model_matrix = Matrix4::from_translation(self.position) * Matrix4::from_scale(scale_factor);
 
-    fn pipeline(&self) -> &RRPipeline {
-        &self.pipeline
-    }
-
-    fn vertex_buffer(&self) -> vk::Buffer {
-        self.vertex_buffer.unwrap_or(vk::Buffer::null())
-    }
-
-    fn index_buffer(&self) -> vk::Buffer {
-        self.index_buffer.unwrap_or(vk::Buffer::null())
-    }
-
-    fn index_count(&self) -> u32 {
-        self.indices.len() as u32
+        RenderData {
+            object_index: self.object_index,
+            pipeline: self.pipeline.clone(),
+            vertex_buffer: self.vertex_buffer.unwrap_or(vk::Buffer::null()),
+            index_buffer: self.index_buffer.unwrap_or(vk::Buffer::null()),
+            index_count: self.indices.len() as u32,
+            model_matrix,
+        }
     }
 }

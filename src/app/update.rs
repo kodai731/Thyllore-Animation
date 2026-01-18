@@ -1,7 +1,7 @@
 use crate::app::model_loader::replace_model_with_cube;
 use crate::app::{App, AppData, GUIData};
 use crate::debugview::*;
-use crate::ecs::{animation_time_system, transform_propagation_system, CameraState, RenderContext};
+use crate::ecs::{animation_time_system, transform_propagation_system, update_object_ubo_system, CameraState};
 use crate::math::*;
 use crate::scene::billboard::BillboardTransform;
 use crate::scene::graphics_resource::FrameUBO;
@@ -307,17 +307,12 @@ impl App {
             self.rrdevice.device.unmap_memory(scene_memory);
         }
 
-        let camera_state = CameraState {
-            position: camera_pos,
-            direction: camera_direction,
-        };
-        let render_ctx = RenderContext {
-            camera: &camera_state,
-            image_index,
-        };
+        let render_data_vec = self.scene.collect_render_data(camera_pos);
+        let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
-        if let Err(e) = self.scene.update_object_ubos(
-            &render_ctx,
+        if let Err(e) = update_object_ubo_system(
+            &render_data_refs,
+            image_index,
             &self.data.graphics_resources.objects,
             &self.rrdevice,
         ) {

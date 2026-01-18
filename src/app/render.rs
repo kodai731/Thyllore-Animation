@@ -43,11 +43,6 @@ impl App {
             gui_data.file_changed = false;
         }
 
-        if gui_data.dump_debug_info {
-            self.dump_debug_info();
-            gui_data.dump_debug_info = false;
-        }
-
         let current_fence = self.frame_sync().current_fence();
         self.rrdevice
             .device

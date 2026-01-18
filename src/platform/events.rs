@@ -1,11 +1,12 @@
-use super::platform::System;
-use imgui::{Condition, MouseButton};
 use std::time::Instant;
-use winit::event::{ElementState, Event, WindowEvent};
 
+use imgui::MouseButton;
+use winit::event::{Event, WindowEvent};
+
+use super::platform::System;
+use super::ui::{build_click_debug_overlay, build_debug_window, DebugWindowState};
 use crate::app::{App, GUIData};
-use crate::debugview::{DebugViewMode, FBX_DEBUG};
-use crate::ecs::{camera_move_to_look_at, camera_reset, camera_reset_up};
+use crate::ecs::{process_ui_events_system, DeferredAction, UIEventQueue};
 
 fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
     gui_data.is_left_clicked = false;
@@ -35,333 +36,150 @@ impl System {
         let mut last_frame = Instant::now();
 
         event_loop
-            .run(move |event, window_target| {
-                match event {
-                    Event::NewEvents(_) => {
-                        let now = Instant::now();
-                        imgui.io_mut().update_delta_time(now - last_frame);
-                        last_frame = now;
-                    }
+            .run(move |event, window_target| match event {
+                Event::NewEvents(_) => {
+                    let now = Instant::now();
+                    imgui.io_mut().update_delta_time(now - last_frame);
+                    last_frame = now;
+                }
 
-                    Event::AboutToWait => {
-                        platform
-                            .prepare_frame(imgui.io_mut(), &window)
-                            .expect("Failed to prepare frame");
-                        window.request_redraw();
-                    }
+                Event::AboutToWait => {
+                    platform
+                        .prepare_frame(imgui.io_mut(), &window)
+                        .expect("Failed to prepare frame");
+                    window.request_redraw();
+                }
 
-                    Event::WindowEvent {
-                        event: ref window_event,
-                        window_id,
-                        ..
-                    } => {
-                        platform.handle_event(imgui.io_mut(), &window, &event);
+                Event::WindowEvent {
+                    event: ref window_event,
+                    ..
+                } => {
+                    platform.handle_event(imgui.io_mut(), &window, &event);
 
-                        match window_event {
-                            WindowEvent::CursorMoved { position, .. } => {
-                                gui_data.mouse_pos = [position.x as f32, position.y as f32];
+                    match window_event {
+                        WindowEvent::CursorMoved { position, .. } => {
+                            gui_data.mouse_pos = [position.x as f32, position.y as f32];
+                        }
+
+                        WindowEvent::MouseWheel { delta, .. } => match delta {
+                            winit::event::MouseScrollDelta::LineDelta(_, y) => {
+                                gui_data.mouse_wheel = *y;
+                            }
+                            winit::event::MouseScrollDelta::PixelDelta(pos) => {
+                                gui_data.mouse_wheel = pos.y as f32;
+                            }
+                        },
+
+                        WindowEvent::Resized(new_size) => {
+                            if new_size.width > 0 && new_size.height > 0 {
+                                app.resized = true;
+                            }
+                        }
+
+                        WindowEvent::CloseRequested => window_target.exit(),
+
+                        WindowEvent::DroppedFile(path_buf) => {
+                            if let Some(path) = path_buf.to_str() {
+                                gui_data.file_path = path.to_string();
+                            }
+                        }
+
+                        WindowEvent::RedrawRequested => {
+                            let ui = imgui.frame();
+                            ui.dockspace_over_main_viewport();
+
+                            gui_data.monitor_value = 0.0;
+
+                            let io = ui.io();
+                            gui_data.imgui_wants_mouse = io.want_capture_mouse;
+
+                            update_mouse_input(gui_data, ui);
+
+                            let model_path = app.animation_playback().model_path.clone();
+                            let load_status = gui_data.load_status.clone();
+
+                            let mut debug_state = DebugWindowState {
+                                model_path,
+                                load_status,
+                                light_position: app.data.rt_debug_state.light_position,
+                                shadow_strength: app.data.rt_debug_state.shadow_strength,
+                                enable_distance_attenuation: app
+                                    .data
+                                    .rt_debug_state
+                                    .enable_distance_attenuation,
+                                debug_view_mode: app.data.rt_debug_state.debug_view_mode,
+                                cube_size: app.data.rt_debug_state.cube_size,
+                            };
+
+                            {
+                                let ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+                                build_debug_window(ui, ui_events, &mut debug_state, gui_data);
                             }
 
-                            WindowEvent::MouseWheel { delta, .. } => match delta {
-                                winit::event::MouseScrollDelta::LineDelta(x, y) => {
-                                    gui_data.mouse_wheel = *y;
-                                }
-                                winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                                    gui_data.mouse_wheel = pos.y as f32;
-                                }
-                            },
+                            app.data.rt_debug_state.shadow_strength = debug_state.shadow_strength;
+                            app.data.rt_debug_state.enable_distance_attenuation =
+                                debug_state.enable_distance_attenuation;
+                            app.data.rt_debug_state.debug_view_mode = debug_state.debug_view_mode;
+                            app.data.rt_debug_state.set_cube_size(debug_state.cube_size);
 
-                            WindowEvent::Resized(new_size) => {
-                                if new_size.width > 0 && new_size.height > 0 {
-                                    app.resized = true;
-                                }
-                            }
+                            build_click_debug_overlay(ui, gui_data);
 
-                            WindowEvent::CloseRequested => window_target.exit(),
+                            platform.prepare_render(ui, &window);
+                            let draw_data = imgui.render();
 
-                            WindowEvent::DroppedFile(path_buf) => {
-                                if let Some(path) = path_buf.to_str() {
-                                    gui_data.file_path = path.to_string();
-                                }
-                            }
+                            unsafe {
+                                let deferred_actions = {
+                                    let ui_events =
+                                        app.data.ecs_world.get_resource_mut::<UIEventQueue>();
+                                    if let Some(ui_events) = ui_events {
+                                        process_ui_events_system(
+                                            ui_events,
+                                            &mut app.data.camera,
+                                            &mut app.data.rt_debug_state,
+                                            &app.data.graphics_resources,
+                                        )
+                                    } else {
+                                        Vec::new()
+                                    }
+                                };
 
-                            WindowEvent::RedrawRequested => {
-                                let ui = imgui.frame();
-
-                                ui.dockspace_over_main_viewport();
-
-                                gui_data.monitor_value = 0.0;
-
-                                let io = ui.io();
-                                gui_data.imgui_wants_mouse = io.want_capture_mouse;
-
-                                update_mouse_input(gui_data, ui);
-
-                                ui.window("debug window")
-                                    .size([600.0, 450.0], Condition::FirstUseEver)
-                                    .build(|| {
-                                        ui.text("Model Loading:");
-                                        if ui.button("Open FBX Model") {
-                                            if let Some(path) = rfd::FileDialog::new()
-                                                .add_filter("FBX Files", &["fbx"])
-                                                .pick_file()
-                                            {
-                                                gui_data.selected_model_path = path.to_string_lossy().to_string();
-                                                gui_data.file_changed = true;
-                                                crate::log!("Selected FBX file: {}", gui_data.selected_model_path);
+                                for action in deferred_actions {
+                                    match action {
+                                        DeferredAction::LoadModel { path } => {
+                                            gui_data.selected_model_path = path;
+                                            gui_data.file_changed = true;
+                                        }
+                                        DeferredAction::LoadCube => {
+                                            if let Err(e) = app.load_cube_model() {
+                                                crate::log!("Failed to load cube model: {:?}", e);
                                             }
                                         }
-                                        ui.same_line();
-                                        if ui.button("Open glTF Model") {
-                                            if let Some(path) = rfd::FileDialog::new()
-                                                .add_filter("glTF Files", &["gltf", "glb"])
-                                                .pick_file()
-                                            {
-                                                gui_data.selected_model_path = path.to_string_lossy().to_string();
-                                                gui_data.file_changed = true;
-                                                crate::log!("Selected glTF file: {}", gui_data.selected_model_path);
-                                            }
-                                        }
-
-                                        ui.text(format!("Current Model: {}",
-                                            if app.animation_playback().model_path.is_empty() {
-                                                "None"
-                                            } else {
-                                                &app.animation_playback().model_path
-                                            }
-                                        ));
-
-                                        ui.text(format!("Status: {}", gui_data.load_status));
-
-                                        ui.separator();
-
-                                        ui.text("Camera Controls:");
-                                        if ui.button("reset camera") {
-                                            camera_reset(&mut app.data.camera);
-                                        }
-                                        ui.same_line();
-                                        if ui.button("reset camera up") {
-                                            camera_reset_up(&mut app.data.camera);
-                                        }
-                                        if ui.button("move to light gizmo") {
-                                            let light_pos = app.data.rt_debug_state.light_position;
-                                            let offset = cgmath::Vector3::new(2.0, 2.0, 2.0);
-                                            camera_move_to_look_at(&mut app.data.camera, light_pos, offset);
-                                        }
-                                        if ui.button("move to model") {
-                                            if let Some((min, max, center)) = app.data.graphics_resources.calculate_model_bounds() {
-                                                let size = max - min;
-                                                let max_dim = size.x.max(size.y).max(size.z);
-                                                let distance = max_dim * 2.0;
-                                                let offset = cgmath::Vector3::new(0.0, 0.0, distance);
-                                                camera_move_to_look_at(&mut app.data.camera, center, offset);
-                                                crate::log!("Moved camera to model: center=({:.2}, {:.2}, {:.2}), size=({:.2}, {:.2}, {:.2}), distance={:.2}",
-                                                    center.x, center.y, center.z, size.x, size.y, size.z, distance);
-                                            }
-                                        }
-                                        ui.separator();
-
-                                        ui.text("Screenshot:");
-                                        if ui.button("Take Screenshot") {
+                                        DeferredAction::TakeScreenshot => {
                                             gui_data.take_screenshot = true;
                                         }
-                                        ui.separator();
-
-                                        ui.text("Ray Tracing Controls:");
-
-                                        let mut light_pos = [
-                                            app.data.rt_debug_state.light_position.x,
-                                            app.data.rt_debug_state.light_position.y,
-                                            app.data.rt_debug_state.light_position.z,
-                                        ];
-                                        if ui.slider_config("Light X", -50.0, 50.0)
-                                            .build(&mut light_pos[0])
-                                        {
-                                            app.data.rt_debug_state.light_position.x = light_pos[0];
+                                        DeferredAction::DebugShadowInfo => {
+                                            app.log_shadow_debug_info();
                                         }
-                                        if ui.slider_config("Light Y", -50.0, 50.0)
-                                            .build(&mut light_pos[1])
-                                        {
-                                            app.data.rt_debug_state.light_position.y = light_pos[1];
-                                        }
-                                        if ui.slider_config("Light Z", -50.0, 50.0)
-                                            .build(&mut light_pos[2])
-                                        {
-                                            app.data.rt_debug_state.light_position.z = light_pos[2];
-                                        }
-
-                                        let mut shadow_strength = app.data.rt_debug_state.shadow_strength;
-                                        if ui.slider_config("Shadow Strength", 0.0, 1.0)
-                                            .build(&mut shadow_strength)
-                                        {
-                                            app.data.rt_debug_state.shadow_strength = shadow_strength;
-                                        }
-
-                                        ui.checkbox("Distance Attenuation", &mut app.data.rt_debug_state.enable_distance_attenuation);
-
-                                        ui.text("Debug View Mode:");
-                                        let mut current_mode = app.data.rt_debug_state.debug_view_mode.as_int();
-                                        if ui.radio_button("Final (Lit + Shadow)", &mut current_mode, 0) {
-                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::Final;
-                                        }
-                                        if ui.radio_button("Position (World Space)", &mut current_mode, 1) {
-                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::Position;
-                                        }
-                                        if ui.radio_button("Normal (World Space)", &mut current_mode, 2) {
-                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::Normal;
-                                        }
-                                        if ui.radio_button("Shadow Mask", &mut current_mode, 3) {
-                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::ShadowMask;
-                                        }
-                                        if ui.radio_button("N dot L (Green=Lit, Red=Back)", &mut current_mode, 4) {
-                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::NdotL;
-                                        }
-                                        if ui.radio_button("Light Direction", &mut current_mode, 5) {
-                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::LightDirection;
-                                        }
-                                        if ui.radio_button("View Depth (Green=GBuffer depth)", &mut current_mode, 6) {
-                                            app.data.rt_debug_state.debug_view_mode = DebugViewMode::ViewDepth;
-                                        }
-
-                                        ui.separator();
-
-                                        ui.text("Debug Info:");
-                                        ui.checkbox("Show Click Debug", &mut gui_data.show_click_debug);
-                                        ui.checkbox("Show Light Ray to Model", &mut gui_data.show_light_ray_to_model);
-                                        if ui.button("Debug Shadow Info") {
-                                            gui_data.debug_shadow_info = true;
-                                        }
-                                        ui.same_line();
-                                        if ui.button("Debug Billboard Depth") {
+                                        DeferredAction::DebugBillboardDepth => {
                                             gui_data.debug_billboard_depth = true;
                                         }
-                                        if ui.button("Dump Debug Information") {
-                                            gui_data.dump_debug_info = true;
+                                        DeferredAction::DumpDebugInfo => {
+                                            app.dump_debug_info();
                                         }
-
-                                        ui.separator();
-                                        ui.text("FBX Debug Logs:");
-                                        let mut fbx_anim = FBX_DEBUG.animation_enabled();
-                                        let mut fbx_hier = FBX_DEBUG.hierarchy_enabled();
-                                        let mut fbx_skin = FBX_DEBUG.skinning_enabled();
-                                        let mut fbx_trans = FBX_DEBUG.transform_enabled();
-                                        if ui.checkbox("Animation", &mut fbx_anim) {
-                                            FBX_DEBUG.set_animation(fbx_anim);
-                                        }
-                                        if ui.checkbox("Hierarchy", &mut fbx_hier) {
-                                            FBX_DEBUG.set_hierarchy(fbx_hier);
-                                        }
-                                        if ui.checkbox("Skinning", &mut fbx_skin) {
-                                            FBX_DEBUG.set_skinning(fbx_skin);
-                                        }
-                                        if ui.checkbox("Transform", &mut fbx_trans) {
-                                            FBX_DEBUG.set_transform(fbx_trans);
-                                        }
-
-                                        ui.separator();
-                                        ui.text("Test Models:");
-                                        let mut cube_size = app.data.rt_debug_state.cube_size;
-                                        if ui.slider("Cube Size", 1.0, 500.0, &mut cube_size) {
-                                            app.data.rt_debug_state.set_cube_size(cube_size);
-                                        }
-                                        if ui.button("Load Cube Model") {
-                                            gui_data.load_cube = true;
-                                        }
-
-                                        ui.separator();
-                                        ui.text("Move Light to Model Bounds:");
-                                        if ui.button("X Min") {
-                                            gui_data.move_light_to = crate::app::data::LightMoveTarget::XMin;
-                                        }
-                                        ui.same_line();
-                                        if ui.button("X Max") {
-                                            gui_data.move_light_to = crate::app::data::LightMoveTarget::XMax;
-                                        }
-                                        if ui.button("Y Min") {
-                                            gui_data.move_light_to = crate::app::data::LightMoveTarget::YMin;
-                                        }
-                                        ui.same_line();
-                                        if ui.button("Y Max") {
-                                            gui_data.move_light_to = crate::app::data::LightMoveTarget::YMax;
-                                        }
-                                        if ui.button("Z Min") {
-                                            gui_data.move_light_to = crate::app::data::LightMoveTarget::ZMin;
-                                        }
-                                        ui.same_line();
-                                        if ui.button("Z Max") {
-                                            gui_data.move_light_to = crate::app::data::LightMoveTarget::ZMax;
-                                        }
-                                        ui.text(format!(
-                                            "Mouse Position: ({:.1},{:.1})",
-                                            gui_data.mouse_pos[0], gui_data.mouse_pos[1]
-                                        ));
-                                        ui.text(format!(
-                                            "is left clicked: ({:.1})",
-                                            gui_data.is_left_clicked
-                                        ));
-                                        ui.text(format!(
-                                            "is wheel clicked: ({:.1})",
-                                            gui_data.is_wheel_clicked
-                                        ));
-                                        ui.input_text("file path", &mut gui_data.file_path)
-                                            .read_only(true)
-                                            .build();
-                                    });
-
-                                if gui_data.show_click_debug {
-                                    static mut IMGUI_SIZE_LOGGED: bool = false;
-                                    unsafe {
-                                        if !IMGUI_SIZE_LOGGED {
-                                            let display_size = ui.io().display_size;
-                                            crate::log!("ImGui display size: {:.1} x {:.1}", display_size[0], display_size[1]);
-                                            IMGUI_SIZE_LOGGED = true;
-                                        }
-                                    }
-
-                                    if let Some(rect) = gui_data.billboard_click_rect {
-                                        let draw_list = ui.get_foreground_draw_list();
-                                        draw_list
-                                            .add_rect(
-                                                [rect[0], rect[1]],
-                                                [rect[2], rect[3]],
-                                                [1.0, 0.0, 0.0, 0.8],
-                                            )
-                                            .filled(true)
-                                            .build();
-                                        draw_list
-                                            .add_rect(
-                                                [rect[0], rect[1]],
-                                                [rect[2], rect[3]],
-                                                [1.0, 1.0, 0.0, 1.0],
-                                            )
-                                            .thickness(2.0)
-                                            .build();
                                     }
                                 }
 
-                                platform.prepare_render(ui, &window);
-                                let draw_data = imgui.render();
-
-                                unsafe {
-                                    if app.data.rt_debug_state.should_load_cube(gui_data) {
-                                        if let Err(e) = app.load_cube_model() {
-                                            crate::log!("Failed to load cube model: {:?}", e);
-                                        }
-                                        gui_data.load_cube = false;
-                                    }
-
-                                    let image_index = app.begin_frame(gui_data).unwrap();
-                                    app.update(image_index, gui_data).unwrap();
-                                    app.render(image_index, gui_data, draw_data).unwrap();
-                                }
-
-                                gui_data.mouse_wheel = 0.0;
+                                let image_index = app.begin_frame(gui_data).unwrap();
+                                app.update(image_index, gui_data).unwrap();
+                                app.render(image_index, gui_data, draw_data).unwrap();
                             }
-                            _ => {}
+
+                            gui_data.mouse_wheel = 0.0;
                         }
+                        _ => {}
                     }
-                    _ => {}
                 }
+                _ => {}
             })
             .expect("EventLoop error");
     }

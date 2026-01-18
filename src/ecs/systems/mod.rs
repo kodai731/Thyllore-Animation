@@ -9,6 +9,7 @@ mod model_systems;
 pub mod phases;
 mod render_data_systems;
 mod render_systems;
+mod ui_event_systems;
 
 pub use animation_playback_systems::*;
 pub use billboard_systems::*;
@@ -20,3 +21,4 @@ pub use gizmo_systems::*;
 pub use model_systems::*;
 pub use render_data_systems::*;
 pub use render_systems::*;
+pub use ui_event_systems::*;

@@ -62,11 +62,6 @@ impl App {
     }
 
     unsafe fn process_debug_commands(&self, gui_data: &mut GUIData) -> Result<()> {
-        if gui_data.debug_shadow_info {
-            self.log_shadow_debug_info();
-            gui_data.debug_shadow_info = false;
-        }
-
         if gui_data.debug_billboard_depth {
             self.log_billboard_debug_info();
             gui_data.debug_billboard_depth = false;

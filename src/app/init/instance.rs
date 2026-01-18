@@ -596,6 +596,11 @@ impl App {
             let model_info = ModelInfo::new();
             data.ecs_world.insert_resource(model_info);
         }
+
+        if data.ecs_world.get_resource::<crate::ecs::UIEventQueue>().is_none() {
+            let ui_event_queue = crate::ecs::UIEventQueue::new();
+            data.ecs_world.insert_resource(ui_event_queue);
+        }
     }
 
     pub unsafe fn init_imgui_rendering(

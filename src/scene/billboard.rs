@@ -4,7 +4,7 @@ use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, Vector3, Vector4};
 use vulkanalia::prelude::v1_0::*;
 
-use crate::scene::components::{RenderContext, Renderable, Updatable, UpdateContext};
+use crate::ecs::{RenderContext, Renderable, Updatable, UpdateContext};
 use crate::vulkanr::buffer::create_buffer;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::descriptor::RRBillboardDescriptorSet;

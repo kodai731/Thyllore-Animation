@@ -1,4 +1,4 @@
-use crate::scene::components::{Renderable, RenderContext, Updatable, UpdateContext};
+use crate::ecs::{Renderable, RenderContext, Updatable, UpdateContext};
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
 use crate::vulkanr::device::*;

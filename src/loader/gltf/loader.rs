@@ -926,10 +926,6 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
 
     log_gltf_scale_info(&meshes);
 
-    if !animation_system.clips.is_empty() {
-        animation_system.play(0);
-    }
-
     if !morph_system.animations.is_empty() {
         log!(
             "Morph animation loaded: {} keyframes, {} meshes",

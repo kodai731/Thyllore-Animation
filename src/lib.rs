@@ -5,6 +5,8 @@
 
 extern crate core;
 
+pub mod asset;
+pub mod ecs;
 pub mod vulkanr;
 pub mod loader;
 pub mod debugview;

@@ -7,7 +7,7 @@ use vulkanalia::vk;
 
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::scene::billboard::BillboardData;
-use crate::scene::components::{RenderContext, Renderable, Updatable, UpdateContext};
+use crate::ecs::{RenderContext, Renderable, Updatable, UpdateContext};
 use crate::scene::grid::GridData;
 use crate::scene::graphics_resource::ObjectDescriptorSet;
 use crate::vulkanr::device::RRDevice;

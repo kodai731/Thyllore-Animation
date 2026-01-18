@@ -1,11 +1,11 @@
 use crate::app::model_loader::rebuild_acceleration_structures;
 use crate::app::{App, AppData};
+use crate::ecs::{AnimationState, Transform};
 use crate::loader::fbx::load_fbx_to_graphics_resources;
 use crate::loader::gltf::load_gltf_file;
 use crate::loader::texture::load_png_image;
 use crate::math::*;
 use crate::scene::graphics_resource::{MaterialUBO, MeshBuffer};
-use crate::scene::world::{AnimationState, Transform};
 use crate::scene::Scene;
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::RRCommandPool;
@@ -71,11 +71,11 @@ impl App {
             data.graphics_resources.has_skinned_meshes = fbx_result.has_skinned_meshes;
             data.graphics_resources.node_animation_scale = 1.0;
 
-            if let Some(model_info) = data.ecs_world.get_resource_mut::<crate::vulkanr::context::ModelInfo>() {
+            if let Some(model_info) = data.ecs_world.get_resource_mut::<crate::ecs::ModelInfo>() {
                 model_info.has_skinned_meshes = fbx_result.has_skinned_meshes;
                 model_info.node_animation_scale = 1.0;
             } else {
-                let mut model_info = crate::vulkanr::context::ModelInfo::new();
+                let mut model_info = crate::ecs::ModelInfo::new();
                 model_info.has_skinned_meshes = fbx_result.has_skinned_meshes;
                 model_info.node_animation_scale = 1.0;
                 data.ecs_world.insert_resource(model_info);
@@ -220,11 +220,11 @@ impl App {
             let node_animation_scale = if gltf_result.has_armature { 0.01 } else { 1.0 };
             data.graphics_resources.node_animation_scale = node_animation_scale;
 
-            if let Some(model_info) = data.ecs_world.get_resource_mut::<crate::vulkanr::context::ModelInfo>() {
+            if let Some(model_info) = data.ecs_world.get_resource_mut::<crate::ecs::ModelInfo>() {
                 model_info.has_skinned_meshes = gltf_result.has_skinned_meshes;
                 model_info.node_animation_scale = node_animation_scale;
             } else {
-                let mut model_info = crate::vulkanr::context::ModelInfo::new();
+                let mut model_info = crate::ecs::ModelInfo::new();
                 model_info.has_skinned_meshes = gltf_result.has_skinned_meshes;
                 model_info.node_animation_scale = node_animation_scale;
                 data.ecs_world.insert_resource(model_info);
@@ -407,14 +407,11 @@ impl App {
 
             let first_clip_id = data.graphics_resources.animation.clips.first().map(|c| c.id);
             if let Some(clip_id) = first_clip_id {
-                data.graphics_resources.animation.play(clip_id);
-                if let Some(playback) = data.ecs_world.get_resource_mut::<crate::vulkanr::context::AnimationPlayback>() {
-                    playback.current_clip_id = Some(clip_id);
-                    playback.time = 0.0;
+                if let Some(playback) = data.ecs_world.get_resource_mut::<crate::ecs::AnimationPlayback>() {
+                    playback.play(clip_id);
                 } else {
-                    let mut playback = crate::vulkanr::context::AnimationPlayback::new();
-                    playback.current_clip_id = Some(clip_id);
-                    playback.time = 0.0;
+                    let mut playback = crate::ecs::AnimationPlayback::new();
+                    playback.play(clip_id);
                     data.ecs_world.insert_resource(playback);
                 }
             }
@@ -426,7 +423,10 @@ impl App {
                 .and_then(|m| m.skeleton_id);
 
             if let Some(skel_id) = skeleton_id {
-                data.graphics_resources.animation.apply_to_skeleton(skel_id);
+                let playback = data.ecs_world.resource::<crate::ecs::AnimationPlayback>();
+                data.graphics_resources
+                    .animation
+                    .apply_to_skeleton(skel_id, playback);
 
                 for mesh_idx in 0..data.graphics_resources.meshes.len() {
                     let (skin_data, skel_id) = {
@@ -531,7 +531,7 @@ impl App {
     }
 
     fn create_ecs_entities_from_meshes(data: &mut AppData, model_path: &str) {
-        use crate::scene::assets::{AnimationClipAsset, MeshAsset, NodeAsset, SkeletonAsset};
+        use crate::asset::{AnimationClipAsset, MeshAsset, NodeAsset, SkeletonAsset};
 
         data.ecs_world.clear();
         data.ecs_assets.clear();

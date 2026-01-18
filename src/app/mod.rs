@@ -12,17 +12,16 @@ pub use data::AppData;
 pub use gui_data::GUIData;
 pub use init::*;
 
+use crate::ecs::{AnimationPlayback, ModelInfo, Resource};
 use crate::scene::graphics_resource::GraphicsResources;
-use crate::scene::world::Resource;
 use crate::scene::raytracing::RayTracingData;
 use crate::scene::Camera;
 use crate::scene::Scene;
 use crate::debugview::{RayTracingDebugState, DebugViewData};
 use crate::platform::ImguiData;
 use crate::vulkanr::context::{
-    AnimationPlayback, CameraState, CommandState, DebugState, FrameSync, GpuAssets,
-    ImGuiState, ModelInfo, PipelineState, RayTracingState, RenderConfig, RenderTargets,
-    SurfaceState, SwapchainState,
+    CameraState, CommandState, DebugState, FrameSync, GpuAssets, ImGuiState, PipelineState,
+    RayTracingState, RenderConfig, RenderTargets, SurfaceState, SwapchainState,
 };
 use crate::vulkanr::device::*;
 

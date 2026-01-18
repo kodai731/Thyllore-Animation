@@ -140,10 +140,6 @@ fn convert_fbx_model_to_graphics_resources(fbx_model: FbxModel) -> Result<FbxLoa
 
     log_fbx_scale_info(&meshes);
 
-    if !animation_system.clips.is_empty() {
-        animation_system.play(0);
-    }
-
     Ok(FbxLoadResult {
         meshes,
         nodes,

@@ -2,9 +2,10 @@ use crate::app::{App, AppData};
 
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
+use crate::ecs::{AnimationPlayback, ModelInfo};
 use crate::vulkanr::context::{
-    AnimationPlayback, CommandState, FrameSync, ModelInfo, PipelineState, RenderConfig,
-    RenderTargets, SurfaceState, SwapchainState,
+    CommandState, FrameSync, PipelineState, RenderConfig, RenderTargets, SurfaceState,
+    SwapchainState,
 };
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::data::*;

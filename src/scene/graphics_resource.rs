@@ -747,7 +747,7 @@ impl GraphicsResources {
     pub unsafe fn update_animations(
         &mut self,
         time: f32,
-        playback: &mut crate::vulkanr::context::AnimationPlayback,
+        playback: &mut crate::ecs::AnimationPlayback,
         instance: &Instance,
         rrdevice: &RRDevice,
         command_pool: &RRCommandPool,
@@ -800,8 +800,7 @@ impl GraphicsResources {
 
         let skeleton_id = self.meshes.first().and_then(|m| m.skeleton_id);
         if let Some(skel_id) = skeleton_id {
-            self.animation
-                .apply_to_skeleton_with_playback(skel_id, playback);
+            self.animation.apply_to_skeleton(skel_id, playback);
         }
 
         let model_path = &playback.model_path;

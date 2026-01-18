@@ -3,8 +3,8 @@ use std::collections::HashMap;
 
 use cgmath::{Matrix4, SquareMatrix, Vector3};
 
+use crate::asset::AssetId;
 use crate::scene::animation::AnimationClipId;
-use crate::scene::assets::AssetId;
 
 pub trait Resource: Any {
     fn as_any(&self) -> &dyn Any;

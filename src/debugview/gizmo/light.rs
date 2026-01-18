@@ -4,7 +4,7 @@ use crate::math::{
     is_point_in_rect, ray_to_line_segment_distance, ray_to_point_distance, screen_to_world_ray,
     view, Vec2, Vec3, Vec4,
 };
-use crate::scene::components::{Renderable, RenderContext, Updatable, UpdateContext};
+use crate::ecs::{Renderable, RenderContext, Updatable, UpdateContext};
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
 use crate::vulkanr::core::Device;

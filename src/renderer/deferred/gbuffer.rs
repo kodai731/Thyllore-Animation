@@ -2,9 +2,9 @@ use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
-use crate::scene::assets::AssetStorage;
+use crate::asset::AssetStorage;
+use crate::ecs::World;
 use crate::scene::graphics_resource::{MeshBuffer, GraphicsResources};
-use crate::scene::world::World;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::core::{Device, RRDevice};
 use crate::vulkanr::resource::{RRGBuffer, create_image, create_image_view};
@@ -217,7 +217,7 @@ impl<'a> GBufferPass<'a> {
         &self,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
-        entities: &[crate::scene::world::Entity],
+        entities: &[crate::ecs::Entity],
         should_log: bool,
     ) -> Result<()> {
         if should_log {

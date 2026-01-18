@@ -1,11 +1,10 @@
 use crate::app::model_loader::replace_model_with_cube;
 use crate::app::{App, AppData, GUIData};
 use crate::debugview::*;
+use crate::ecs::{animation_time_system, transform_propagation_system, CameraState, RenderContext};
 use crate::math::*;
 use crate::scene::billboard::BillboardTransform;
-use crate::scene::components::{CameraState, RenderContext};
 use crate::scene::graphics_resource::FrameUBO;
-use crate::scene::systems::{animation_time_system, transform_propagation_system};
 use crate::vulkanr::buffer::*;
 use crate::vulkanr::data::*;
 use crate::vulkanr::device::*;
@@ -56,7 +55,7 @@ impl App {
 
         let command_pool = self.command_state().pool.clone();
         {
-            let playback = self.data.ecs_world.resource_mut::<crate::vulkanr::context::AnimationPlayback>();
+            let playback = self.data.ecs_world.resource_mut::<crate::ecs::AnimationPlayback>();
             if let Err(e) = self.data.graphics_resources.update_animations(
                 time,
                 playback,

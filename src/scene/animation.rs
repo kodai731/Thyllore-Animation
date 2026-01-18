@@ -423,62 +423,6 @@ fn decompose_transform(m: &Matrix4<f32>) -> (Vector3<f32>, Quaternion<f32>, Vect
     (translation, rotation, scale)
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct AnimationPlayer {
-    pub current_clip_id: Option<AnimationClipId>,
-    pub time: f32,
-    pub speed: f32,
-    pub playing: bool,
-    pub looping: bool,
-}
-
-impl AnimationPlayer {
-    pub fn new() -> Self {
-        Self {
-            current_clip_id: None,
-            time: 0.0,
-            speed: 1.0,
-            playing: false,
-            looping: true,
-        }
-    }
-
-    pub fn play(&mut self, clip_id: AnimationClipId) {
-        self.current_clip_id = Some(clip_id);
-        self.time = 0.0;
-        self.playing = true;
-    }
-
-    // TODO: FBX/glTFで未使用 - 必要時に有効化
-    // pub fn pause(&mut self) {
-    //     self.playing = false;
-    // }
-
-    // pub fn resume(&mut self) {
-    //     self.playing = true;
-    // }
-
-    // pub fn stop(&mut self) {
-    //     self.playing = false;
-    //     self.time = 0.0;
-    // }
-
-    pub fn update(&mut self, delta_time: f32, clip_duration: f32) {
-        if !self.playing || clip_duration <= 0.0 {
-            return;
-        }
-
-        self.time += delta_time * self.speed;
-
-        if self.looping {
-            self.time = self.time % clip_duration;
-        } else if self.time >= clip_duration {
-            self.time = clip_duration;
-            self.playing = false;
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct SkinData {
     pub skeleton_id: SkeletonId,
@@ -684,7 +628,6 @@ impl SkinData {
 pub struct AnimationSystem {
     pub skeletons: Vec<Skeleton>,
     pub clips: Vec<AnimationClip>,
-    pub player: AnimationPlayer,
     next_skeleton_id: SkeletonId,
     next_clip_id: AnimationClipId,
 }
@@ -694,7 +637,6 @@ impl AnimationSystem {
         Self {
             skeletons: Vec::new(),
             clips: Vec::new(),
-            player: AnimationPlayer::new(),
             next_skeleton_id: 0,
             next_clip_id: 0,
         }
@@ -728,59 +670,10 @@ impl AnimationSystem {
         self.clips.iter().find(|c| c.id == id)
     }
 
-    pub fn play(&mut self, clip_id: AnimationClipId) {
-        self.player.play(clip_id);
-    }
-
-    pub fn update(&mut self, delta_time: f32) {
-        if let Some(clip_id) = self.player.current_clip_id {
-            if let Some(clip) = self.get_clip(clip_id) {
-                let duration = clip.duration;
-                self.player.update(delta_time, duration);
-            }
-        }
-    }
-
-    pub fn apply_to_skeleton(&mut self, skeleton_id: SkeletonId) {
-        let clip_id = match self.player.current_clip_id {
-            Some(id) => id,
-            None => return,
-        };
-
-        let time = self.player.time;
-
-        let clip = match self.clips.iter().find(|c| c.id == clip_id) {
-            Some(c) => c.clone(),
-            None => return,
-        };
-
-        let looping = self.player.looping;
-        if let Some(skeleton) = self.get_skeleton_mut(skeleton_id) {
-            clip.sample_with_loop(time, skeleton, looping);
-        }
-    }
-
-    pub fn apply_to_skeleton_with_time(&mut self, skeleton_id: SkeletonId, time: f32) {
-        let clip_id = match self.player.current_clip_id {
-            Some(id) => id,
-            None => return,
-        };
-
-        let clip = match self.clips.iter().find(|c| c.id == clip_id) {
-            Some(c) => c.clone(),
-            None => return,
-        };
-
-        let looping = self.player.looping;
-        if let Some(skeleton) = self.get_skeleton_mut(skeleton_id) {
-            clip.sample_with_loop(time, skeleton, looping);
-        }
-    }
-
-    pub fn apply_to_skeleton_with_playback(
+    pub fn apply_to_skeleton(
         &mut self,
         skeleton_id: SkeletonId,
-        playback: &crate::vulkanr::context::AnimationPlayback,
+        playback: &crate::ecs::AnimationPlayback,
     ) {
         let clip_id = match playback.current_clip_id {
             Some(id) => id,
@@ -800,7 +693,6 @@ impl AnimationSystem {
     pub fn clear(&mut self) {
         self.skeletons.clear();
         self.clips.clear();
-        self.player = AnimationPlayer::new();
         self.next_skeleton_id = 0;
         self.next_clip_id = 0;
     }

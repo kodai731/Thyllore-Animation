@@ -1,10 +1,10 @@
 use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
-use crate::scene::assets::AssetStorage;
-use crate::scene::components::{CameraState, Renderable, RenderContext, Updatable, UpdateContext};
+use crate::asset::AssetStorage;
+use crate::ecs::components::{CameraState, RenderContext, Renderable, Updatable, UpdateContext};
+use crate::ecs::world::{Entity, GlobalTransform, World};
 use crate::scene::graphics_resource::{ObjectDescriptorSet, ObjectUBO};
-use crate::scene::world::{Entity, GlobalTransform, World};
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::vulkan::*;
 
@@ -84,7 +84,7 @@ pub fn skeleton_animation_system(world: &mut World, assets: &mut AssetStorage) {
     let animated_entities = world.query_animated();
 
     struct AnimationData {
-        skeleton_asset_id: crate::scene::assets::AssetId,
+        skeleton_asset_id: crate::asset::AssetId,
         clip: crate::scene::animation::AnimationClip,
         time: f32,
     }
@@ -152,11 +152,8 @@ pub fn billboard_system(world: &mut World, camera: &CameraState) {
             let right = up.cross(forward).normalize();
             let adjusted_up = forward.cross(right);
 
-            transform.rotation = cgmath::Quaternion::from(cgmath::Matrix3::from_cols(
-                right,
-                adjusted_up,
-                forward,
-            ));
+            transform.rotation =
+                cgmath::Quaternion::from(cgmath::Matrix3::from_cols(right, adjusted_up, forward));
         }
     }
 }
@@ -231,13 +228,8 @@ pub unsafe fn render_objects(
             &[],
         );
 
-        rrdevice.device.cmd_draw_indexed(
-            command_buffer,
-            obj.index_count(),
-            1,
-            0,
-            0,
-            0,
-        );
+        rrdevice
+            .device
+            .cmd_draw_indexed(command_buffer, obj.index_count(), 1, 0, 0, 0);
     }
 }

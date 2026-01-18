@@ -1,7 +1,7 @@
 use cgmath::Matrix4;
 use vulkanalia::vk;
 
-use crate::scene::components::{Renderable, RenderContext, Updatable, UpdateContext};
+use crate::ecs::{Renderable, RenderContext, Updatable, UpdateContext};
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::vulkanr::data::Vertex;
 use crate::vulkanr::pipeline::RRPipeline;

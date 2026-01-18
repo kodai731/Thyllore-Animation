@@ -35,49 +35,9 @@ impl AnimationPlayback {
             looping: true,
         }
     }
-
-    pub fn play(&mut self, clip_id: AnimationClipId) {
-        self.current_clip_id = Some(clip_id);
-        self.playing = true;
-        self.time = 0.0;
-    }
-
-    pub fn stop(&mut self) {
-        self.playing = false;
-        self.current_clip_id = None;
-    }
-
-    pub fn pause(&mut self) {
-        self.playing = false;
-    }
-
-    pub fn resume(&mut self) {
-        self.playing = true;
-    }
 }
 
 impl Default for AnimationPlayback {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct ModelInfo {
-    pub has_skinned_meshes: bool,
-    pub node_animation_scale: f32,
-}
-
-impl ModelInfo {
-    pub fn new() -> Self {
-        Self {
-            has_skinned_meshes: false,
-            node_animation_scale: 1.0,
-        }
-    }
-}
-
-impl Default for ModelInfo {
     fn default() -> Self {
         Self::new()
     }

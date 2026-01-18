@@ -148,15 +148,15 @@ impl CameraState {
     }
 
     pub fn position(&self) -> cgmath::Vector3<f32> {
-        self.camera.position()
+        self.camera.position
     }
 
     pub fn direction(&self) -> cgmath::Vector3<f32> {
-        self.camera.direction()
+        self.camera.direction
     }
 
     pub fn up(&self) -> cgmath::Vector3<f32> {
-        self.camera.up()
+        self.camera.up
     }
 }
 

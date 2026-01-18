@@ -5,6 +5,7 @@ use winit::event::{ElementState, Event, WindowEvent};
 
 use crate::app::{App, GUIData};
 use crate::debugview::{DebugViewMode, FBX_DEBUG};
+use crate::ecs::{camera_move_to_look_at, camera_reset, camera_reset_up};
 
 fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
     gui_data.is_left_clicked = false;
@@ -136,16 +137,16 @@ impl System {
 
                                         ui.text("Camera Controls:");
                                         if ui.button("reset camera") {
-                                            app.data.camera.reset();
+                                            camera_reset(&mut app.data.camera);
                                         }
                                         ui.same_line();
                                         if ui.button("reset camera up") {
-                                            app.data.camera.reset_up();
+                                            camera_reset_up(&mut app.data.camera);
                                         }
                                         if ui.button("move to light gizmo") {
                                             let light_pos = app.data.rt_debug_state.light_position;
                                             let offset = cgmath::Vector3::new(2.0, 2.0, 2.0);
-                                            app.data.camera.move_to_look_at(light_pos, offset);
+                                            camera_move_to_look_at(&mut app.data.camera, light_pos, offset);
                                         }
                                         if ui.button("move to model") {
                                             if let Some((min, max, center)) = app.data.graphics_resources.calculate_model_bounds() {
@@ -153,7 +154,7 @@ impl System {
                                                 let max_dim = size.x.max(size.y).max(size.z);
                                                 let distance = max_dim * 2.0;
                                                 let offset = cgmath::Vector3::new(0.0, 0.0, distance);
-                                                app.data.camera.move_to_look_at(center, offset);
+                                                camera_move_to_look_at(&mut app.data.camera, center, offset);
                                                 crate::log!("Moved camera to model: center=({:.2}, {:.2}, {:.2}), size=({:.2}, {:.2}, {:.2}), distance={:.2}",
                                                     center.x, center.y, center.z, size.x, size.y, size.z, distance);
                                             }

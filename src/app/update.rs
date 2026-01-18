@@ -1,7 +1,12 @@
 use crate::app::model_loader::replace_model_with_cube;
 use crate::app::{App, AppData, GUIData};
 use crate::debugview::*;
-use crate::ecs::{animation_time_system, transform_propagation_system, update_object_ubo_system, CameraState};
+use crate::ecs::{
+    animation_time_system, camera_input_system, light_gizmo_set_default,
+    light_gizmo_sync_from_debug_state, light_gizmo_try_select,
+    light_gizmo_update_position_with_constraint, light_gizmo_update_selection_color,
+    transform_propagation_system, update_object_ubo_system, CameraState,
+};
 use crate::math::*;
 use crate::scene::billboard::BillboardTransform;
 use crate::scene::graphics_resource::FrameUBO;
@@ -45,7 +50,7 @@ impl App {
 
             self.data.rt_debug_state.update_light_position(
                 &all_positions,
-                self.data.camera.position(),
+                self.data.camera.position,
                 gui_data.move_light_to,
             );
             gui_data.move_light_to = LightMoveTarget::None;
@@ -80,9 +85,9 @@ impl App {
 
         let mouse_pos = Vector2::new(mouse_pos[0], mouse_pos[1]);
 
-        let camera_pos = self.data.camera.position();
-        let camera_direction = self.data.camera.direction();
-        let camera_up = self.data.camera.up();
+        let camera_pos = self.data.camera.position;
+        let camera_direction = self.data.camera.direction;
+        let camera_up = self.data.camera.up;
 
         if !gui_data.imgui_wants_mouse && gui_data.is_left_clicked {
             self.scene.light_gizmo_mut().just_selected = false;
@@ -92,7 +97,8 @@ impl App {
                 gui_data.clicked_mouse_pos = Some([mouse_pos[0], mouse_pos[1]]);
 
                 let swapchain_extent = self.swapchain_state().swapchain.swapchain_extent;
-                self.scene.light_gizmo_mut().try_select(
+                light_gizmo_try_select(
+                    &mut self.scene.light_gizmo_mut(),
                     mouse_pos,
                     camera_pos,
                     camera_direction,
@@ -112,38 +118,35 @@ impl App {
         } else if !gui_data.is_wheel_clicked {
             if gui_data.clicked_mouse_pos.is_some() {
                 crate::log!("Mouse released - resetting light gizmo state");
-                self.scene.light_gizmo_mut().set_default();
+                light_gizmo_set_default(&mut self.scene.light_gizmo_mut());
             }
         }
 
         if !self.scene.light_gizmo_mut().is_selected {
-            self.data
-                .camera
-                .update(gui_data, self.scene.grid_mut().scale);
+            let grid_scale = self.scene.grid_mut().scale;
+            camera_input_system(&mut self.data.camera, gui_data, grid_scale);
         }
 
-        let camera_pos = self.data.camera.position();
-        let camera_direction = self.data.camera.direction();
-        let camera_up = self.data.camera.up();
+        let camera_pos = self.data.camera.position;
+        let camera_direction = self.data.camera.direction;
+        let camera_up = self.data.camera.up;
         let view = view(camera_pos, camera_direction, camera_up);
 
         let camera_distance = camera_pos.magnitude();
         self.scene.grid_mut().scale = 1.0;
 
-        let near_plane = (camera_distance * 0.001).max(0.1).min(10.0);
-        let far_plane = (self.scene.grid_mut().scale * 1000.0)
+        self.data.camera.near_plane = (camera_distance * 0.001).max(0.1).min(10.0);
+        self.data.camera.far_plane = (self.scene.grid_mut().scale * 1000.0)
             .max(1000.0)
             .min(100000.0);
-        self.data.camera.set_near_plane(near_plane);
-        self.data.camera.set_far_plane(far_plane);
 
         use crate::math::coordinate_system::perspective;
         let swapchain_extent = self.swapchain_state().swapchain.swapchain_extent;
         let proj = perspective(
             Deg(45.0),
             swapchain_extent.width as f32 / swapchain_extent.height as f32,
-            self.data.camera.near_plane(),
-            self.data.camera.far_plane(),
+            self.data.camera.near_plane,
+            self.data.camera.far_plane,
         );
         let screen_size = Vector2::new(
             swapchain_extent.width as f32,
@@ -173,11 +176,11 @@ impl App {
             };
             let info = BillboardDebugInfo {
                 light_position: self.data.rt_debug_state.light_position,
-                camera_position: self.data.camera.position(),
-                camera_direction: self.data.camera.direction(),
-                camera_up: self.data.camera.up(),
-                near_plane: self.data.camera.near_plane(),
-                far_plane: self.data.camera.far_plane(),
+                camera_position: self.data.camera.position,
+                camera_direction: self.data.camera.direction,
+                camera_up: self.data.camera.up,
+                near_plane: self.data.camera.near_plane,
+                far_plane: self.data.camera.far_plane,
             };
             let gbuffer_debug_info =
                 self.data
@@ -319,11 +322,12 @@ impl App {
             eprintln!("Failed to update object UBOs: {}", e);
         }
 
-        self.scene
-            .light_gizmo_mut()
-            .sync_from_debug_state(self.data.rt_debug_state.light_position);
+        light_gizmo_sync_from_debug_state(
+            &mut self.scene.light_gizmo_mut(),
+            self.data.rt_debug_state.light_position,
+        );
 
-        self.scene.light_gizmo_mut().update_selection_color();
+        light_gizmo_update_selection_color(&mut self.scene.light_gizmo_mut());
         self.scene
             .light_gizmo_mut()
             .update_vertex_buffer(&self.rrdevice)
@@ -753,7 +757,7 @@ impl App {
         gui_data: &GUIData,
     ) {
         unsafe {
-            let view = view(camera_pos, camera_direction, self.data.camera.up());
+            let view = view(camera_pos, camera_direction, self.data.camera.up);
             use crate::math::coordinate_system::perspective;
             let swapchain_extent = self.swapchain_state().swapchain.swapchain_extent;
             let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
@@ -804,13 +808,12 @@ impl App {
                     let intersection = ray_origin + ray_direction * t;
                     let initial_pos = self.scene.light_gizmo_mut().initial_position.to_vec3();
 
-                    self.scene
-                        .light_gizmo_mut()
-                        .update_position_with_constraint(
-                            intersection,
-                            initial_pos.into(),
-                            gui_data.is_ctrl_pressed,
-                        );
+                    light_gizmo_update_position_with_constraint(
+                        &mut self.scene.light_gizmo_mut(),
+                        intersection,
+                        initial_pos.into(),
+                        gui_data.is_ctrl_pressed,
+                    );
 
                     self.data.rt_debug_state.light_position = self.scene.light_gizmo_mut().position;
                 }
@@ -820,7 +823,7 @@ impl App {
 
     pub(crate) fn log_shadow_debug_info(&self) {
         let light_pos = self.data.rt_debug_state.light_position;
-        let camera_pos = self.data.camera.position();
+        let camera_pos = self.data.camera.position;
 
         crate::log!("=== Shadow Debug Info ===");
         crate::log!(

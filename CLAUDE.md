@@ -425,3 +425,7 @@ The `memo.txt` file contains useful reference links for:
 - Contains the update processing
 - Do NOT write feature-specific processing here
 - Instead, write update processing in related files and call them from update
+
+## mod.rs
+- Don't write definition or implementation in mod.rs file
+- Only module publish responsibility on mod.rs

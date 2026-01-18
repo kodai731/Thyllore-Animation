@@ -1,13 +1,8 @@
-use anyhow::Result;
-use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
+use cgmath::{Matrix4, SquareMatrix};
 
 use crate::asset::AssetStorage;
-use crate::ecs::components::{CameraState, RenderData};
 use crate::ecs::resource::AnimationPlayback;
-use crate::ecs::world::{Entity, GlobalTransform, World};
-use crate::scene::graphics_resource::{ObjectDescriptorSet, ObjectUBO};
-use crate::vulkanr::device::RRDevice;
-use crate::vulkanr::vulkan::*;
+use crate::ecs::world::{Entity, World};
 
 pub fn animation_playback_system(
     playback: &mut AnimationPlayback,
@@ -138,109 +133,5 @@ pub fn skeleton_animation_system(world: &mut World, assets: &mut AssetStorage) {
                 .clip
                 .sample(anim_data.time, &mut skeleton_asset.skeleton);
         }
-    }
-}
-
-pub fn billboard_system(world: &mut World, camera: &CameraState) {
-    let billboards = world.query_billboards();
-
-    for entity in billboards {
-        let Some(behavior) = world.billboard_behaviors.get(&entity) else {
-            continue;
-        };
-
-        if !behavior.always_face_camera {
-            continue;
-        }
-
-        let Some(transform) = world.transforms.get_mut(&entity) else {
-            continue;
-        };
-
-        let position = transform.translation;
-        let to_camera = camera.position - position;
-
-        if to_camera.magnitude() > 0.001 {
-            let forward = to_camera.normalize();
-            let up = Vector3::new(0.0, 1.0, 0.0);
-            let right = up.cross(forward).normalize();
-            let adjusted_up = forward.cross(right);
-
-            transform.rotation =
-                cgmath::Quaternion::from(cgmath::Matrix3::from_cols(right, adjusted_up, forward));
-        }
-    }
-}
-
-pub unsafe fn update_object_ubo_system(
-    render_data: &[&RenderData],
-    image_index: usize,
-    objects: &ObjectDescriptorSet,
-    rrdevice: &RRDevice,
-) -> Result<()> {
-    for data in render_data {
-        let ubo = ObjectUBO {
-            model: data.model_matrix,
-        };
-        objects.update(rrdevice, image_index, data.object_index, &ubo)?;
-    }
-    Ok(())
-}
-
-pub unsafe fn render_system(
-    render_data: &[&RenderData],
-    command_buffer: vk::CommandBuffer,
-    image_index: usize,
-    frame_set: vk::DescriptorSet,
-    objects: &ObjectDescriptorSet,
-    rrdevice: &RRDevice,
-) {
-    for data in render_data {
-        if data.vertex_buffer == vk::Buffer::null() || data.index_buffer == vk::Buffer::null() {
-            continue;
-        }
-
-        rrdevice.device.cmd_bind_pipeline(
-            command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
-            data.pipeline.pipeline,
-        );
-
-        rrdevice.device.cmd_set_line_width(command_buffer, 1.0);
-
-        rrdevice
-            .device
-            .cmd_bind_vertex_buffers(command_buffer, 0, &[data.vertex_buffer], &[0]);
-
-        rrdevice.device.cmd_bind_index_buffer(
-            command_buffer,
-            data.index_buffer,
-            0,
-            vk::IndexType::UINT32,
-        );
-
-        rrdevice.device.cmd_bind_descriptor_sets(
-            command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
-            data.pipeline.pipeline_layout,
-            0,
-            &[frame_set],
-            &[],
-        );
-
-        let object_set_idx = objects.get_set_index(image_index, data.object_index);
-        let object_set = objects.sets[object_set_idx];
-        rrdevice.device.cmd_bind_descriptor_sets(
-            command_buffer,
-            vk::PipelineBindPoint::GRAPHICS,
-            data.pipeline.pipeline_layout,
-            2,
-            &[object_set],
-            &[],
-        );
-
-        rrdevice
-            .device
-            .cmd_draw_indexed(command_buffer, data.index_count, 1, 0, 0, 0);
     }
 }

@@ -1,6 +1,6 @@
 use crate::app::model_loader::rebuild_acceleration_structures;
 use crate::app::{App, AppData};
-use crate::ecs::{AnimationState, Transform};
+use crate::ecs::{playback_play, AnimationState, Transform};
 use crate::loader::fbx::load_fbx_to_graphics_resources;
 use crate::loader::gltf::load_gltf_file;
 use crate::loader::texture::load_png_image;
@@ -408,10 +408,10 @@ impl App {
             let first_clip_id = data.graphics_resources.animation.clips.first().map(|c| c.id);
             if let Some(clip_id) = first_clip_id {
                 if let Some(playback) = data.ecs_world.get_resource_mut::<crate::ecs::AnimationPlayback>() {
-                    playback.play(clip_id);
+                    playback_play(playback, clip_id);
                 } else {
                     let mut playback = crate::ecs::AnimationPlayback::new();
-                    playback.play(clip_id);
+                    playback_play(&mut playback, clip_id);
                     data.ecs_world.insert_resource(playback);
                 }
             }
@@ -745,7 +745,7 @@ impl App {
         }
 
         crate::log!("--- Camera Info ---");
-        crate::log!("  position: {:?}", self.data.camera.position());
+        crate::log!("  position: {:?}", self.data.camera.position);
 
         crate::log!("--- Animation Info ---");
         crate::log!("  animation_playing: {}", self.animation_playback().playing);

@@ -6,6 +6,7 @@ use crate::app::GUIData;
 use crate::asset::AssetStorage;
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::debugview::RayTracingDebugState;
+use crate::ecs::render_context::RenderContext;
 use crate::scene::billboard::BillboardData;
 use crate::scene::camera::Camera;
 use crate::scene::graphics_resource::GraphicsResources;
@@ -14,6 +15,7 @@ use crate::scene::raytracing::RayTracingData;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::vulkan::Instance;
+use crate::vulkanr::VulkanBackend;
 
 use super::world::{ResMut, ResRef, World};
 
@@ -37,6 +39,16 @@ pub struct FrameContext<'a> {
 }
 
 impl<'a> FrameContext<'a> {
+    pub fn create_backend(&mut self) -> VulkanBackend<'_> {
+        VulkanBackend::new(
+            self.instance,
+            self.device,
+            self.command_pool.clone(),
+            self.graphics,
+            &mut self.raytracing.acceleration_structure,
+        )
+    }
+
     pub fn camera(&self) -> ResRef<Camera> {
         self.world.resource::<Camera>()
     }
@@ -99,5 +111,33 @@ impl<'a> FrameContext<'a> {
 
     pub fn billboard_mut(&self) -> ResMut<BillboardData> {
         self.world.resource_mut::<BillboardData>()
+    }
+}
+
+pub struct EcsContext<'a> {
+    pub time: f32,
+    pub delta_time: f32,
+    pub image_index: usize,
+    pub swapchain_extent: (u32, u32),
+    pub world: &'a mut World,
+    pub assets: &'a AssetStorage,
+    pub gui_data: &'a mut GUIData,
+}
+
+impl<'a> EcsContext<'a> {
+    pub fn camera(&self) -> ResRef<Camera> {
+        self.world.resource::<Camera>()
+    }
+
+    pub fn camera_mut(&self) -> ResMut<Camera> {
+        self.world.resource_mut::<Camera>()
+    }
+
+    pub fn rt_debug(&self) -> ResRef<RayTracingDebugState> {
+        self.world.resource::<RayTracingDebugState>()
+    }
+
+    pub fn rt_debug_mut(&self) -> ResMut<RayTracingDebugState> {
+        self.world.resource_mut::<RayTracingDebugState>()
     }
 }

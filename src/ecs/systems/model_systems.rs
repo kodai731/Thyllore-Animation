@@ -17,9 +17,8 @@ use crate::ecs::world::{AnimationState, Transform, World};
 use crate::loader::texture::load_png_image;
 use crate::loader::{ModelLoadResult, TextureSource};
 use crate::scene::billboard::BillboardData;
-use crate::scene::graphics_resource::{
-    GraphicsResources, MaterialId, MaterialUBO, MeshBuffer, NodeData,
-};
+use crate::render::MaterialUBO;
+use crate::scene::graphics_resource::{GraphicsResources, MaterialId, MeshBuffer, NodeData};
 use crate::scene::raytracing::RayTracingData;
 use crate::scene::CubeModel;
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
@@ -137,8 +136,8 @@ unsafe fn apply_model_to_resources(
 ) -> Result<()> {
     cleanup_resources(device, graphics, raytracing, world, assets)?;
 
-    setup_animation_system(graphics, world, load_result);
-    setup_nodes(graphics, world, load_result);
+    setup_animation_system(world, load_result);
+    setup_nodes(world, load_result);
 
     for (i, loaded_mesh) in load_result.meshes.iter().enumerate() {
         let mesh_buffer =
@@ -182,7 +181,6 @@ unsafe fn cleanup_resources(
     graphics.clear_meshes(device);
     graphics.mesh_material_ids.clear();
     graphics.materials.clear_materials(&device.device);
-    graphics.animation.clear();
     graphics.objects.reset_to(3);
 
     if world.contains_resource::<AnimationRegistry>() {
@@ -207,16 +205,7 @@ unsafe fn cleanup_resources(
     Ok(())
 }
 
-fn setup_animation_system(
-    graphics: &mut GraphicsResources,
-    world: &mut World,
-    load_result: &ModelLoadResult,
-) {
-    graphics.animation = load_result.animation_system.clone();
-    graphics.has_skinned_meshes = load_result.has_skinned_meshes;
-    graphics.morph_animation = load_result.morph_animation.clone();
-    graphics.node_animation_scale = load_result.node_animation_scale;
-
+fn setup_animation_system(world: &mut World, load_result: &ModelLoadResult) {
     if world.contains_resource::<AnimationRegistry>() {
         let mut anim_registry = world.resource_mut::<AnimationRegistry>();
         anim_registry.animation = load_result.animation_system.clone();
@@ -230,7 +219,7 @@ fn setup_animation_system(
     }
 }
 
-fn setup_nodes(graphics: &mut GraphicsResources, world: &mut World, load_result: &ModelLoadResult) {
+fn setup_nodes(world: &mut World, load_result: &ModelLoadResult) {
     let nodes: Vec<NodeData> = load_result
         .nodes
         .iter()
@@ -243,17 +232,14 @@ fn setup_nodes(graphics: &mut GraphicsResources, world: &mut World, load_result:
         })
         .collect();
 
-    graphics.nodes = nodes.clone();
+    let node_count = nodes.len();
 
     if world.contains_resource::<NodeAssets>() {
         let mut node_assets = world.resource_mut::<NodeAssets>();
         node_assets.nodes = nodes;
     }
 
-    crate::log!(
-        "Loaded {} nodes into graphics_resources",
-        graphics.nodes.len()
-    );
+    crate::log!("Loaded {} nodes into NodeAssets", node_count);
 }
 
 unsafe fn create_mesh_buffer(
@@ -376,13 +362,13 @@ unsafe fn apply_initial_pose(
     world: &mut World,
     load_result: &ModelLoadResult,
 ) -> Result<()> {
-    if graphics.animation.clips.is_empty() {
+    if load_result.animation_system.clips.is_empty() {
         return Ok(());
     }
 
     crate::log!("Applying initial pose (time=0) for animation...");
 
-    let first_clip_id = graphics.animation.clips.first().map(|c| c.id);
+    let first_clip_id = load_result.animation_system.clips.first().map(|c| c.id);
     if let Some(clip_id) = first_clip_id {
         let has_playback = world.contains_resource::<AnimationPlayback>();
         if has_playback {
@@ -399,17 +385,42 @@ unsafe fn apply_initial_pose(
 
     if let Some(skel_id) = skeleton_id {
         let playback = world.resource::<AnimationPlayback>();
-        graphics.animation.apply_to_skeleton(skel_id, &*playback);
+        let mut anim_registry = world.resource_mut::<AnimationRegistry>();
+        anim_registry.animation.apply_to_skeleton(skel_id, &*playback);
+        drop(anim_registry);
+        drop(playback);
 
+        let anim_registry = world.resource::<AnimationRegistry>();
         for mesh_idx in 0..graphics.meshes.len() {
-            apply_skinning_to_mesh(instance, device, command_pool, graphics, mesh_idx)?;
+            apply_skinning_to_mesh(
+                instance,
+                device,
+                command_pool,
+                graphics,
+                &anim_registry.animation,
+                mesh_idx,
+            )?;
         }
     }
 
-    let has_node_animation = !graphics.has_skinned_meshes && !graphics.meshes.is_empty();
+    let has_node_animation = !load_result.has_skinned_meshes && !graphics.meshes.is_empty();
     if has_node_animation {
-        if let Err(e) = graphics.update_node_animation(instance, device, command_pool, &mut None) {
-            crate::log!("Failed to apply initial node animation: {}", e);
+        let anim_registry = world.resource::<AnimationRegistry>();
+        let model_state = world.resource::<ModelState>();
+        let mut node_assets = world.resource_mut::<NodeAssets>();
+        let animation = anim_registry.animation.clone();
+        let node_animation_scale = model_state.node_animation_scale;
+        drop(anim_registry);
+        drop(model_state);
+
+        let updated_meshes =
+            graphics.prepare_node_animation(&mut node_assets.nodes, &animation, node_animation_scale);
+
+        for mesh_idx in updated_meshes {
+            if let Err(e) = upload_mesh_vertices(instance, device, command_pool, graphics, mesh_idx)
+            {
+                crate::log!("Failed to upload initial node animation mesh {}: {}", mesh_idx, e);
+            }
         }
     }
 
@@ -422,6 +433,7 @@ unsafe fn apply_skinning_to_mesh(
     device: &RRDevice,
     command_pool: &Rc<RRCommandPool>,
     graphics: &mut GraphicsResources,
+    animation: &crate::animation::AnimationSystem,
     mesh_idx: usize,
 ) -> Result<()> {
     let (skin_data, skel_id) = {
@@ -430,7 +442,7 @@ unsafe fn apply_skinning_to_mesh(
     };
 
     if let (Some(skin_data), Some(skel_id)) = (skin_data, skel_id) {
-        if let Some(skeleton) = graphics.animation.get_skeleton(skel_id) {
+        if let Some(skeleton) = animation.get_skeleton(skel_id) {
             let vertex_count = skin_data.base_positions.len();
             let mut skinned_positions = vec![cgmath::Vector3::new(0.0, 0.0, 0.0); vertex_count];
             let mut skinned_normals = vec![cgmath::Vector3::new(0.0, 1.0, 0.0); vertex_count];
@@ -470,6 +482,34 @@ unsafe fn apply_skinning_to_mesh(
             }
         }
     }
+
+    Ok(())
+}
+
+unsafe fn upload_mesh_vertices(
+    instance: &Instance,
+    device: &RRDevice,
+    command_pool: &Rc<RRCommandPool>,
+    graphics: &mut GraphicsResources,
+    mesh_idx: usize,
+) -> Result<()> {
+    if mesh_idx >= graphics.meshes.len() {
+        return Ok(());
+    }
+
+    let mesh = &mut graphics.meshes[mesh_idx];
+    let vertices = &mesh.vertex_data.vertices;
+    let vertex_count = vertices.len();
+    let vertex_stride = size_of::<vulkan_data::Vertex>();
+
+    mesh.vertex_buffer.update(
+        instance,
+        device,
+        command_pool,
+        (vertex_stride * vertex_count) as vk::DeviceSize,
+        vertices.as_ptr() as *const c_void,
+        vertex_count,
+    )?;
 
     Ok(())
 }
@@ -562,7 +602,16 @@ fn create_ecs_entities(
         .unwrap_or("model")
         .to_string();
 
-    for skeleton in &graphics.animation.skeletons {
+    let (skeletons, clips, has_animation, first_clip_id) = {
+        let anim_registry = world.resource::<AnimationRegistry>();
+        let skeletons = anim_registry.animation.skeletons.clone();
+        let clips = anim_registry.animation.clips.clone();
+        let has_animation = !clips.is_empty();
+        let first_clip_id = clips.first().map(|c| c.id);
+        (skeletons, clips, has_animation, first_clip_id)
+    };
+
+    for skeleton in &skeletons {
         let skeleton_asset = SkeletonAsset {
             id: 0,
             skeleton_id: skeleton.id,
@@ -571,7 +620,7 @@ fn create_ecs_entities(
         assets.add_skeleton(skeleton_asset);
     }
 
-    for clip in &graphics.animation.clips {
+    for clip in &clips {
         let clip_asset = AnimationClipAsset {
             id: 0,
             clip_id: clip.id,
@@ -580,18 +629,18 @@ fn create_ecs_entities(
         assets.add_animation_clip(clip_asset);
     }
 
-    for node in &graphics.nodes {
-        let node_asset = NodeAsset {
-            id: node.index as u64,
-            name: node.name.clone(),
-            parent_id: node.parent_index.map(|i| i as u64),
-            local_transform: node.local_transform,
-        };
-        assets.add_node(node_asset);
+    {
+        let node_assets = world.resource::<NodeAssets>();
+        for node in &node_assets.nodes {
+            let node_asset = NodeAsset {
+                id: node.index as u64,
+                name: node.name.clone(),
+                parent_id: node.parent_index.map(|i| i as u64),
+                local_transform: node.local_transform,
+            };
+            assets.add_node(node_asset);
+        }
     }
-
-    let has_animation = !graphics.animation.clips.is_empty();
-    let first_clip_id = graphics.animation.clips.first().map(|c| c.id);
 
     for (mesh_idx, mesh) in graphics.meshes.iter().enumerate() {
         let entity_name = format!("{}_{}", name, mesh_idx);

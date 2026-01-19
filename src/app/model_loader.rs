@@ -1,13 +1,16 @@
 use crate::app::AppData;
+use crate::render::MaterialUBO;
 use crate::scene::billboard::BillboardData;
-use crate::scene::graphics_resource::{MaterialUBO, MeshBuffer};
+use crate::scene::graphics_resource::MeshBuffer;
 use crate::scene::CubeModel;
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::data::VertexData;
 use crate::vulkanr::device::*;
-use crate::vulkanr::image::{create_image_view, create_texture_image_pixel, create_texture_sampler};
+use crate::vulkanr::image::{
+    create_image_view, create_texture_image_pixel, create_texture_sampler,
+};
 use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::swapchain::RRSwapchain;
 use crate::vulkanr::vulkan::*;
@@ -30,9 +33,10 @@ pub unsafe fn cleanup_model_resources(rrdevice: &RRDevice, data: &mut AppData) {
 
     data.graphics_resources.clear_meshes(rrdevice);
     data.graphics_resources.mesh_material_ids.clear();
-    data.graphics_resources.materials.clear_materials(&rrdevice.device);
-    data.graphics_resources.animation.clear();
-    crate::log!("Cleared materials and animation");
+    data.graphics_resources
+        .materials
+        .clear_materials(&rrdevice.device);
+    crate::log!("Cleared materials");
 
     crate::log!("Model resources cleaned up");
 }
@@ -143,14 +147,17 @@ pub unsafe fn replace_model_with_cube(
     mesh.object_index = data.graphics_resources.objects.allocate_slot();
     crate::log!("Allocated object_index {} for cube mesh", mesh.object_index);
 
-    let material_id = data.graphics_resources.materials.create_material_with_texture(
-        instance,
-        rrdevice,
-        "cube_material",
-        mesh.image_view,
-        mesh.sampler,
-        MaterialUBO::default(),
-    )?;
+    let material_id = data
+        .graphics_resources
+        .materials
+        .create_material_with_texture(
+            instance,
+            rrdevice,
+            "cube_material",
+            mesh.image_view,
+            mesh.sampler,
+            MaterialUBO::default(),
+        )?;
     data.graphics_resources.mesh_material_ids.push(material_id);
     crate::log!("Created material {} for cube", material_id);
 
@@ -171,9 +178,11 @@ pub unsafe fn replace_model_with_cube(
     {
         let texture_clone = billboard.texture.clone();
         if let Some(ref billboard_texture) = texture_clone {
-            billboard
-                .descriptor_set
-                .update_descriptor_sets(rrdevice, rrswapchain, billboard_texture)?;
+            billboard.descriptor_set.update_descriptor_sets(
+                rrdevice,
+                rrswapchain,
+                billboard_texture,
+            )?;
             crate::log!("Re-updated billboard.descriptor_set after cube reload");
         }
     }

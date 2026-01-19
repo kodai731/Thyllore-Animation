@@ -34,6 +34,9 @@ impl App {
     pub fn dump_debug_info(&self) {
         crate::log!("========== DUMP DEBUG INFORMATION ==========");
 
+        let anim_registry = self.animation_registry();
+        let model_state = self.model_state();
+
         crate::log!("--- Model Info ---");
         crate::log!(
             "  current_model_path: {}",
@@ -43,25 +46,18 @@ impl App {
             "  meshes count: {}",
             self.data.graphics_resources.meshes.len()
         );
-        crate::log!(
-            "  has_skinned_meshes: {}",
-            self.data.graphics_resources.has_skinned_meshes
-        );
+        crate::log!("  has_skinned_meshes: {}", model_state.has_skinned_meshes);
         crate::log!(
             "  animation clips count: {}",
-            self.data.graphics_resources.animation.clips.len()
+            anim_registry.animation.clips.len()
         );
         crate::log!(
             "  morph_animations count: {}",
-            self.data
-                .graphics_resources
-                .morph_animation
-                .animations
-                .len()
+            anim_registry.morph_animation.animations.len()
         );
         crate::log!(
             "  skeletons count: {}",
-            self.data.graphics_resources.animation.skeletons.len()
+            anim_registry.animation.skeletons.len()
         );
 
         crate::log!("--- GraphicsResources Info ---");
@@ -132,10 +128,7 @@ impl App {
 
         crate::log!("--- Animation Info ---");
         crate::log!("  animation_playing: {}", self.animation_playback().playing);
-        crate::log!(
-            "  clips count: {}",
-            self.data.graphics_resources.animation.clips.len()
-        );
+        crate::log!("  clips count: {}", anim_registry.animation.clips.len());
 
         crate::log!("========== END DEBUG INFORMATION ==========");
     }

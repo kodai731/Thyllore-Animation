@@ -17,3 +17,4 @@ pub mod scene;
 pub mod app;
 pub mod renderer;
 pub mod platform;
+pub mod render;

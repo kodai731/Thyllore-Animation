@@ -14,7 +14,8 @@
       "WebFetch(domain:forums.autodesk.com)",
       "Bash(cargo check:*)",
       "Bash(cat:*)",
-      "Bash(cargo build:*)"
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)"
     ],
     "deny": [],
     "ask": []

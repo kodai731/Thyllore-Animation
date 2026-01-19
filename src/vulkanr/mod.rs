@@ -8,6 +8,7 @@ pub mod command;
 pub mod context;
 pub mod data;
 pub mod vulkan;
+pub mod backend;
 
 pub use core::*;
 pub use resource::*;
@@ -19,3 +20,4 @@ pub use command::*;
 pub use context::*;
 pub use data::*;
 pub use vulkan::*;
+pub use backend::VulkanBackend;

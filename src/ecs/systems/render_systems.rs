@@ -3,7 +3,8 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::component::RenderData;
 use crate::ecs::resource::PipelineManager;
-use crate::scene::graphics_resource::{ObjectDescriptorSet, ObjectUBO};
+use crate::render::ObjectUBO;
+use crate::scene::graphics_resource::ObjectDescriptorSet;
 use crate::vulkanr::device::RRDevice;
 
 pub unsafe fn update_object_ubo_system(

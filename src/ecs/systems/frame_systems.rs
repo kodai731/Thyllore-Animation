@@ -1,13 +1,16 @@
 use anyhow::Result;
 use cgmath::{Deg, Matrix3, Matrix4, SquareMatrix, Vector2, Vector3, Vector4};
 
-use super::{billboard_transform_update_look_at, create_billboard_transform, gizmo_update_rotation};
+use super::{
+    billboard_transform_update_look_at, create_billboard_transform, gizmo_update_rotation,
+};
 use crate::app::data::LightMoveTarget;
 use crate::debugview::view_mode::RayTracingDebugState;
 use crate::math::coordinate_system::perspective;
+use crate::render::{FrameUBO, ObjectUBO};
 use crate::scene::billboard::BillboardData;
 use crate::scene::camera::Camera;
-use crate::scene::graphics_resource::{FrameUBO, GraphicsResources, ObjectUBO};
+use crate::scene::graphics_resource::GraphicsResources;
 use crate::vulkanr::device::RRDevice;
 
 pub struct ProjectionData {

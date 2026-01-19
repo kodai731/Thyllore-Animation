@@ -44,6 +44,7 @@ impl App {
                 swapchain_extent,
                 graphics: &mut self.data.graphics_resources,
                 raytracing: &mut self.data.raytracing,
+                buffer_registry: &mut self.data.buffer_registry,
                 world: &mut self.data.ecs_world,
                 assets: &self.data.ecs_assets,
                 gui_data,
@@ -120,8 +121,13 @@ impl App {
             gizmo_update_vertical_lines(&mut gizmo.vertical_lines, &position, &model_tops);
         }
 
+        let ecs_world = &mut self.data.ecs_world;
+        let buffer_registry = &mut self.data.buffer_registry;
+
+        let mut gizmo = ecs_world.resource_mut::<crate::debugview::gizmo::LightGizmoData>();
         gizmo_update_or_create_vertical_line_buffers(
-            &mut self.light_gizmo_mut().vertical_lines,
+            &mut gizmo.vertical_lines,
+            buffer_registry,
             &self.instance,
             &self.rrdevice,
         )?;

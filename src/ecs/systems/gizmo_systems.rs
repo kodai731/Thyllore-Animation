@@ -1,5 +1,3 @@
-use std::mem::size_of;
-
 use anyhow::Result;
 use cgmath::{vec3, Deg, InnerSpace, Matrix3, Vector2, Vector3};
 use vulkanalia::prelude::v1_0::*;
@@ -14,13 +12,14 @@ use crate::math::{
     coordinate_system::perspective, is_point_in_rect, ray_to_line_segment_distance,
     ray_to_point_distance, screen_to_world_ray, view, Vec2, Vec3, Vec4,
 };
-use crate::vulkanr::buffer::{copy_buffer, create_buffer};
+use crate::render::{IndexBufferHandle, VertexBufferHandle};
 use crate::scene::graphics_resource::GraphicsResources;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::Device;
 use crate::vulkanr::data::Vertex;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::pipeline::RRPipeline;
+use crate::vulkanr::resource::GpuBufferRegistry;
 use crate::vulkanr::vulkan::Instance;
 
 pub fn create_light_gizmo(position: Vector3<f32>) -> LightGizmoData {
@@ -54,10 +53,8 @@ pub fn create_light_gizmo(position: Vector3<f32>) -> LightGizmoData {
             object_index: 0,
             vertices,
             indices,
-            vertex_buffer: None,
-            vertex_buffer_memory: None,
-            index_buffer: None,
-            index_buffer_memory: None,
+            vertex_buffer_handle: VertexBufferHandle::INVALID,
+            index_buffer_handle: IndexBufferHandle::INVALID,
         },
         position: GizmoPosition { position },
         selectable: GizmoSelectable::default(),
@@ -97,10 +94,8 @@ pub fn create_grid_gizmo() -> GridGizmoData {
             object_index: 0,
             vertices,
             indices,
-            vertex_buffer: None,
-            vertex_buffer_memory: None,
-            index_buffer: None,
-            index_buffer_memory: None,
+            vertex_buffer_handle: VertexBufferHandle::INVALID,
+            index_buffer_handle: IndexBufferHandle::INVALID,
         },
     }
 }
@@ -302,150 +297,44 @@ pub fn gizmo_update_rotation(mesh: &mut GizmoMesh, rotation_matrix: &Matrix3<f32
 
 pub unsafe fn gizmo_create_buffers(
     mesh: &mut GizmoMesh,
+    registry: &mut GpuBufferRegistry,
     instance: &Instance,
     rrdevice: &RRDevice,
     rrcommand_pool: &RRCommandPool,
     use_staging: bool,
 ) -> Result<()> {
-    let vertex_buffer_size = (size_of::<GizmoVertex>() * mesh.vertices.len()) as u64;
-
-    if use_staging {
-        let (staging_buffer, staging_buffer_memory) = create_buffer(
-            instance,
-            rrdevice,
-            vertex_buffer_size,
-            vk::BufferUsageFlags::TRANSFER_SRC,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )?;
-
-        let data = rrdevice.device.map_memory(
-            staging_buffer_memory,
-            0,
-            vertex_buffer_size,
-            vk::MemoryMapFlags::empty(),
-        )?;
-        std::ptr::copy_nonoverlapping(mesh.vertices.as_ptr(), data.cast(), mesh.vertices.len());
-        rrdevice.device.unmap_memory(staging_buffer_memory);
-
-        let (vertex_buffer, vertex_buffer_memory) = create_buffer(
-            instance,
-            rrdevice,
-            vertex_buffer_size,
-            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
-        )?;
-
-        copy_buffer(
-            rrdevice,
-            rrcommand_pool,
-            staging_buffer,
-            vertex_buffer,
-            vertex_buffer_size,
-        )?;
-
-        rrdevice.device.destroy_buffer(staging_buffer, None);
-        rrdevice.device.free_memory(staging_buffer_memory, None);
-
-        mesh.vertex_buffer = Some(vertex_buffer);
-        mesh.vertex_buffer_memory = Some(vertex_buffer_memory);
+    let vertex_handle = if use_staging {
+        registry.create_vertex_buffer(instance, rrdevice, rrcommand_pool, &mesh.vertices, true)?
     } else {
-        let (vertex_buffer, vertex_buffer_memory) = create_buffer(
-            instance,
-            rrdevice,
-            vertex_buffer_size,
-            vk::BufferUsageFlags::VERTEX_BUFFER,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )?;
+        registry.create_host_visible_vertex_buffer(instance, rrdevice, &mesh.vertices, 0)?
+    };
+    mesh.vertex_buffer_handle = vertex_handle;
 
-        let data = rrdevice.device.map_memory(
-            vertex_buffer_memory,
-            0,
-            vertex_buffer_size,
-            vk::MemoryMapFlags::empty(),
-        )?;
-        std::ptr::copy_nonoverlapping(mesh.vertices.as_ptr(), data.cast(), mesh.vertices.len());
-        rrdevice.device.unmap_memory(vertex_buffer_memory);
-
-        mesh.vertex_buffer = Some(vertex_buffer);
-        mesh.vertex_buffer_memory = Some(vertex_buffer_memory);
-    }
-
-    let index_buffer_size = (size_of::<u32>() * mesh.indices.len()) as u64;
-    let (staging_buffer, staging_buffer_memory) = create_buffer(
-        instance,
-        rrdevice,
-        index_buffer_size,
-        vk::BufferUsageFlags::TRANSFER_SRC,
-        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-    )?;
-
-    let data = rrdevice.device.map_memory(
-        staging_buffer_memory,
-        0,
-        index_buffer_size,
-        vk::MemoryMapFlags::empty(),
-    )?;
-    std::ptr::copy_nonoverlapping(mesh.indices.as_ptr(), data.cast(), mesh.indices.len());
-    rrdevice.device.unmap_memory(staging_buffer_memory);
-
-    let (index_buffer, index_buffer_memory) = create_buffer(
-        instance,
-        rrdevice,
-        index_buffer_size,
-        vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER,
-        vk::MemoryPropertyFlags::DEVICE_LOCAL,
-    )?;
-
-    copy_buffer(
-        rrdevice,
-        rrcommand_pool,
-        staging_buffer,
-        index_buffer,
-        index_buffer_size,
-    )?;
-
-    rrdevice.device.destroy_buffer(staging_buffer, None);
-    rrdevice.device.free_memory(staging_buffer_memory, None);
-
-    mesh.index_buffer = Some(index_buffer);
-    mesh.index_buffer_memory = Some(index_buffer_memory);
+    let index_handle =
+        registry.create_index_buffer(instance, rrdevice, rrcommand_pool, &mesh.indices)?;
+    mesh.index_buffer_handle = index_handle;
 
     Ok(())
 }
 
-pub unsafe fn gizmo_update_vertex_buffer(mesh: &GizmoMesh, rrdevice: &RRDevice) -> Result<()> {
-    if let Some(vertex_buffer_memory) = mesh.vertex_buffer_memory {
-        let vertex_buffer_size = (size_of::<GizmoVertex>() * mesh.vertices.len()) as u64;
-        let data = rrdevice.device.map_memory(
-            vertex_buffer_memory,
-            0,
-            vertex_buffer_size,
-            vk::MemoryMapFlags::empty(),
-        )?;
-        std::ptr::copy_nonoverlapping(mesh.vertices.as_ptr(), data.cast(), mesh.vertices.len());
-        rrdevice.device.unmap_memory(vertex_buffer_memory);
-    }
+pub unsafe fn gizmo_update_vertex_buffer(
+    mesh: &GizmoMesh,
+    registry: &GpuBufferRegistry,
+    rrdevice: &RRDevice,
+) -> Result<()> {
+    registry.update_vertex_buffer(rrdevice, mesh.vertex_buffer_handle, &mesh.vertices)?;
     Ok(())
 }
 
-pub unsafe fn gizmo_destroy_buffers(mesh: &mut GizmoMesh, rrdevice: &RRDevice) {
-    if let Some(vertex_buffer) = mesh.vertex_buffer {
-        rrdevice.device.destroy_buffer(vertex_buffer, None);
-    }
-    if let Some(vertex_buffer_memory) = mesh.vertex_buffer_memory {
-        rrdevice.device.free_memory(vertex_buffer_memory, None);
-    }
-    if let Some(index_buffer) = mesh.index_buffer {
-        rrdevice.device.destroy_buffer(index_buffer, None);
-    }
-    if let Some(index_buffer_memory) = mesh.index_buffer_memory {
-        rrdevice.device.free_memory(index_buffer_memory, None);
-    }
-
-    mesh.vertex_buffer = None;
-    mesh.vertex_buffer_memory = None;
-    mesh.index_buffer = None;
-    mesh.index_buffer_memory = None;
+pub unsafe fn gizmo_destroy_buffers(
+    mesh: &mut GizmoMesh,
+    registry: &mut GpuBufferRegistry,
+    rrdevice: &RRDevice,
+) {
+    registry.destroy_vertex_buffer(rrdevice, mesh.vertex_buffer_handle);
+    registry.destroy_index_buffer(rrdevice, mesh.index_buffer_handle);
+    mesh.vertex_buffer_handle = VertexBufferHandle::INVALID;
+    mesh.index_buffer_handle = IndexBufferHandle::INVALID;
 }
 
 pub fn gizmo_update_ray_to_model(
@@ -545,6 +434,7 @@ pub fn gizmo_update_ray_to_model(
 
 pub unsafe fn gizmo_update_or_create_ray_buffers(
     ray: &mut GizmoRayToModel,
+    registry: &mut GpuBufferRegistry,
     instance: &Instance,
     rrdevice: &RRDevice,
 ) -> Result<()> {
@@ -552,81 +442,34 @@ pub unsafe fn gizmo_update_or_create_ray_buffers(
         return Ok(());
     }
 
-    let vertex_buffer_size = (size_of::<Vertex>() * ray.vertices.len()) as u64;
-
-    if ray.vertex_buffer.is_none() {
-        let (vertex_buffer, vertex_buffer_memory) = create_buffer(
-            instance,
-            rrdevice,
-            vertex_buffer_size,
-            vk::BufferUsageFlags::VERTEX_BUFFER,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )?;
-        ray.vertex_buffer = Some(vertex_buffer);
-        ray.vertex_buffer_memory = Some(vertex_buffer_memory);
+    if !ray.vertex_buffer_handle.is_valid() {
+        let vertex_handle =
+            registry.create_host_visible_vertex_buffer(instance, rrdevice, &ray.vertices, 0)?;
+        ray.vertex_buffer_handle = vertex_handle;
+    } else {
+        registry.update_vertex_buffer(rrdevice, ray.vertex_buffer_handle, &ray.vertices)?;
     }
 
-    if let (Some(vertex_buffer_memory), Some(_vertex_buffer)) =
-        (ray.vertex_buffer_memory, ray.vertex_buffer)
-    {
-        let data = rrdevice.device.map_memory(
-            vertex_buffer_memory,
-            0,
-            vertex_buffer_size,
-            vk::MemoryMapFlags::empty(),
-        )?;
-        std::ptr::copy_nonoverlapping(ray.vertices.as_ptr(), data.cast(), ray.vertices.len());
-        rrdevice.device.unmap_memory(vertex_buffer_memory);
-    }
-
-    let index_buffer_size = (size_of::<u32>() * ray.indices.len()) as u64;
-
-    if ray.index_buffer.is_none() {
-        let (index_buffer, index_buffer_memory) = create_buffer(
-            instance,
-            rrdevice,
-            index_buffer_size,
-            vk::BufferUsageFlags::INDEX_BUFFER,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )?;
-        ray.index_buffer = Some(index_buffer);
-        ray.index_buffer_memory = Some(index_buffer_memory);
-    }
-
-    if let (Some(index_buffer_memory), Some(_index_buffer)) =
-        (ray.index_buffer_memory, ray.index_buffer)
-    {
-        let data = rrdevice.device.map_memory(
-            index_buffer_memory,
-            0,
-            index_buffer_size,
-            vk::MemoryMapFlags::empty(),
-        )?;
-        std::ptr::copy_nonoverlapping(ray.indices.as_ptr(), data.cast(), ray.indices.len());
-        rrdevice.device.unmap_memory(index_buffer_memory);
+    if !ray.index_buffer_handle.is_valid() {
+        let index_handle =
+            registry.create_host_visible_index_buffer(instance, rrdevice, &ray.indices)?;
+        ray.index_buffer_handle = index_handle;
+    } else {
+        registry.update_index_buffer(rrdevice, ray.index_buffer_handle, &ray.indices)?;
     }
 
     Ok(())
 }
 
-pub unsafe fn gizmo_destroy_ray_buffers(ray: &mut GizmoRayToModel, rrdevice: &RRDevice) {
-    if let Some(vertex_buffer) = ray.vertex_buffer {
-        rrdevice.device.destroy_buffer(vertex_buffer, None);
-    }
-    if let Some(vertex_buffer_memory) = ray.vertex_buffer_memory {
-        rrdevice.device.free_memory(vertex_buffer_memory, None);
-    }
-    if let Some(index_buffer) = ray.index_buffer {
-        rrdevice.device.destroy_buffer(index_buffer, None);
-    }
-    if let Some(index_buffer_memory) = ray.index_buffer_memory {
-        rrdevice.device.free_memory(index_buffer_memory, None);
-    }
-
-    ray.vertex_buffer = None;
-    ray.vertex_buffer_memory = None;
-    ray.index_buffer = None;
-    ray.index_buffer_memory = None;
+pub unsafe fn gizmo_destroy_ray_buffers(
+    ray: &mut GizmoRayToModel,
+    registry: &mut GpuBufferRegistry,
+    rrdevice: &RRDevice,
+) {
+    registry.destroy_vertex_buffer(rrdevice, ray.vertex_buffer_handle);
+    registry.destroy_index_buffer(rrdevice, ray.index_buffer_handle);
+    ray.vertex_buffer_handle = VertexBufferHandle::INVALID;
+    ray.index_buffer_handle = IndexBufferHandle::INVALID;
 }
 
 pub fn gizmo_update_vertical_lines(
@@ -692,6 +535,7 @@ pub fn gizmo_update_vertical_lines(
 
 pub unsafe fn gizmo_update_or_create_vertical_line_buffers(
     lines: &mut GizmoVerticalLines,
+    registry: &mut GpuBufferRegistry,
     instance: &Instance,
     rrdevice: &RRDevice,
 ) -> Result<()> {
@@ -699,54 +543,20 @@ pub unsafe fn gizmo_update_or_create_vertical_line_buffers(
         return Ok(());
     }
 
-    let vertex_buffer_size = (size_of::<Vertex>() * lines.vertices.len()) as u64;
-
-    if lines.vertex_buffer.is_none() {
-        let (vertex_buffer, vertex_buffer_memory) = create_buffer(
-            instance,
-            rrdevice,
-            vertex_buffer_size.max(1024),
-            vk::BufferUsageFlags::VERTEX_BUFFER,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )?;
-        lines.vertex_buffer = Some(vertex_buffer);
-        lines.vertex_buffer_memory = Some(vertex_buffer_memory);
+    if !lines.vertex_buffer_handle.is_valid() {
+        let vertex_handle =
+            registry.create_host_visible_vertex_buffer(instance, rrdevice, &lines.vertices, 1024)?;
+        lines.vertex_buffer_handle = vertex_handle;
+    } else {
+        registry.update_vertex_buffer(rrdevice, lines.vertex_buffer_handle, &lines.vertices)?;
     }
 
-    if let Some(vertex_buffer_memory) = lines.vertex_buffer_memory {
-        let data = rrdevice.device.map_memory(
-            vertex_buffer_memory,
-            0,
-            vertex_buffer_size,
-            vk::MemoryMapFlags::empty(),
-        )?;
-        std::ptr::copy_nonoverlapping(lines.vertices.as_ptr(), data.cast(), lines.vertices.len());
-        rrdevice.device.unmap_memory(vertex_buffer_memory);
-    }
-
-    let index_buffer_size = (size_of::<u32>() * lines.indices.len()) as u64;
-
-    if lines.index_buffer.is_none() {
-        let (index_buffer, index_buffer_memory) = create_buffer(
-            instance,
-            rrdevice,
-            index_buffer_size.max(256),
-            vk::BufferUsageFlags::INDEX_BUFFER,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )?;
-        lines.index_buffer = Some(index_buffer);
-        lines.index_buffer_memory = Some(index_buffer_memory);
-    }
-
-    if let Some(index_buffer_memory) = lines.index_buffer_memory {
-        let data = rrdevice.device.map_memory(
-            index_buffer_memory,
-            0,
-            index_buffer_size,
-            vk::MemoryMapFlags::empty(),
-        )?;
-        std::ptr::copy_nonoverlapping(lines.indices.as_ptr(), data.cast(), lines.indices.len());
-        rrdevice.device.unmap_memory(index_buffer_memory);
+    if !lines.index_buffer_handle.is_valid() {
+        let index_handle =
+            registry.create_host_visible_index_buffer(instance, rrdevice, &lines.indices)?;
+        lines.index_buffer_handle = index_handle;
+    } else {
+        registry.update_index_buffer(rrdevice, lines.index_buffer_handle, &lines.indices)?;
     }
 
     Ok(())
@@ -754,29 +564,18 @@ pub unsafe fn gizmo_update_or_create_vertical_line_buffers(
 
 pub unsafe fn gizmo_destroy_vertical_line_buffers(
     lines: &mut GizmoVerticalLines,
+    registry: &mut GpuBufferRegistry,
     rrdevice: &RRDevice,
 ) {
-    if let Some(buffer) = lines.vertex_buffer {
-        rrdevice.device.destroy_buffer(buffer, None);
-    }
-    if let Some(memory) = lines.vertex_buffer_memory {
-        rrdevice.device.free_memory(memory, None);
-    }
-    if let Some(buffer) = lines.index_buffer {
-        rrdevice.device.destroy_buffer(buffer, None);
-    }
-    if let Some(memory) = lines.index_buffer_memory {
-        rrdevice.device.free_memory(memory, None);
-    }
-
-    lines.vertex_buffer = None;
-    lines.vertex_buffer_memory = None;
-    lines.index_buffer = None;
-    lines.index_buffer_memory = None;
+    registry.destroy_vertex_buffer(rrdevice, lines.vertex_buffer_handle);
+    registry.destroy_index_buffer(rrdevice, lines.index_buffer_handle);
+    lines.vertex_buffer_handle = VertexBufferHandle::INVALID;
+    lines.index_buffer_handle = IndexBufferHandle::INVALID;
 }
 
 pub unsafe fn gizmo_draw_ray_with_pipeline(
     ray: &GizmoRayToModel,
+    registry: &GpuBufferRegistry,
     device: &Device,
     command_buffer: vk::CommandBuffer,
     pipeline: &RRPipeline,
@@ -784,9 +583,13 @@ pub unsafe fn gizmo_draw_ray_with_pipeline(
     object_index: usize,
     image_index: usize,
 ) {
-    let (vertex_buffer, index_buffer) = match (ray.vertex_buffer, ray.index_buffer) {
-        (Some(vb), Some(ib)) => (vb, ib),
-        _ => return,
+    let vertex_buffer = match registry.get_vertex_buffer(ray.vertex_buffer_handle) {
+        Some(vb) => vb,
+        None => return,
+    };
+    let index_buffer = match registry.get_index_buffer(ray.index_buffer_handle) {
+        Some(ib) => ib,
+        None => return,
     };
 
     device.cmd_bind_pipeline(
@@ -827,6 +630,7 @@ pub unsafe fn gizmo_draw_ray_with_pipeline(
 
 pub unsafe fn gizmo_draw_vertical_lines_with_pipeline(
     lines: &GizmoVerticalLines,
+    registry: &GpuBufferRegistry,
     device: &Device,
     command_buffer: vk::CommandBuffer,
     pipeline: &RRPipeline,
@@ -838,9 +642,13 @@ pub unsafe fn gizmo_draw_vertical_lines_with_pipeline(
         return;
     }
 
-    let (vertex_buffer, index_buffer) = match (lines.vertex_buffer, lines.index_buffer) {
-        (Some(vb), Some(ib)) => (vb, ib),
-        _ => return,
+    let vertex_buffer = match registry.get_vertex_buffer(lines.vertex_buffer_handle) {
+        Some(vb) => vb,
+        None => return,
+    };
+    let index_buffer = match registry.get_index_buffer(lines.index_buffer_handle) {
+        Some(ib) => ib,
+        None => return,
     };
 
     device.cmd_bind_pipeline(

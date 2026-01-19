@@ -15,7 +15,8 @@
       "Bash(cargo check:*)",
       "Bash(cat:*)",
       "Bash(cargo build:*)",
-      "Bash(cargo test:*)"
+      "Bash(cargo test:*)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []

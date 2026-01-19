@@ -9,12 +9,14 @@ use crate::scene::graphics_resource::GraphicsResources;
 use crate::vulkanr::core::Device;
 use crate::vulkanr::descriptor::RRCompositeDescriptorSet;
 use crate::vulkanr::pipeline::RRPipeline;
+use crate::vulkanr::resource::GpuBufferRegistry;
 
 pub struct CompositePass<'a> {
     app: &'a App,
     composite_pipeline: &'a RRPipeline,
     composite_descriptor: &'a RRCompositeDescriptorSet,
     graphics_resources: &'a GraphicsResources,
+    buffer_registry: &'a GpuBufferRegistry,
     device: &'a Device,
     swapchain_extent: vk::Extent2D,
     debug_view_mode: DebugViewMode,
@@ -40,6 +42,7 @@ impl<'a> CompositePass<'a> {
             composite_pipeline,
             composite_descriptor,
             graphics_resources: &app.data.graphics_resources,
+            buffer_registry: &app.data.buffer_registry,
             device: &app.rrdevice.device,
             swapchain_extent: app.swapchain_state().swapchain.swapchain_extent,
             debug_view_mode: app.rt_debug_state().debug_view_mode,
@@ -70,6 +73,7 @@ impl<'a> CompositePass<'a> {
             if let Some(pipeline) = pipeline_manager.get(pipeline_id) {
                 gizmo_draw_ray_with_pipeline(
                     &light_gizmo.ray_to_model,
+                    self.buffer_registry,
                     self.device,
                     command_buffer,
                     pipeline,
@@ -79,6 +83,7 @@ impl<'a> CompositePass<'a> {
                 );
                 gizmo_draw_vertical_lines_with_pipeline(
                     &light_gizmo.vertical_lines,
+                    self.buffer_registry,
                     self.device,
                     command_buffer,
                     pipeline,
@@ -263,10 +268,19 @@ impl<'a> CompositePass<'a> {
         let gizmo = self.app.grid_gizmo();
         let pipeline_manager = self.pipeline_manager();
 
-        let (vertex_buffer, index_buffer) = match (gizmo.mesh.vertex_buffer, gizmo.mesh.index_buffer)
+        let vertex_buffer = match self
+            .buffer_registry
+            .get_vertex_buffer(gizmo.mesh.vertex_buffer_handle)
         {
-            (Some(v), Some(i)) => (v, i),
-            _ => return Ok(()),
+            Some(b) => b,
+            None => return Ok(()),
+        };
+        let index_buffer = match self
+            .buffer_registry
+            .get_index_buffer(gizmo.mesh.index_buffer_handle)
+        {
+            Some(b) => b,
+            None => return Ok(()),
         };
 
         let pipeline_id = match gizmo.mesh.pipeline_id {

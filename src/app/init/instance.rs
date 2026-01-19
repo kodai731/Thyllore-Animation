@@ -221,6 +221,7 @@ impl App {
 
         gizmo_create_buffers(
             &mut gizmo_data.mesh,
+            &mut data.buffer_registry,
             &instance,
             &rrdevice,
             rrcommand_pool.as_ref(),
@@ -241,6 +242,7 @@ impl App {
         );
         gizmo_create_buffers(
             &mut light_gizmo_data.mesh,
+            &mut data.buffer_registry,
             &instance,
             &rrdevice,
             rrcommand_pool.as_ref(),

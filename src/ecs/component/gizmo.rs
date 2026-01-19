@@ -4,6 +4,7 @@ use cgmath::Vector3;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::PipelineId;
+use crate::render::{IndexBufferHandle, VertexBufferHandle};
 use crate::vulkanr::data::Vertex;
 
 #[repr(C)]
@@ -56,10 +57,8 @@ pub struct GizmoMesh {
     pub object_index: usize,
     pub vertices: Vec<GizmoVertex>,
     pub indices: Vec<u32>,
-    pub vertex_buffer: Option<vk::Buffer>,
-    pub vertex_buffer_memory: Option<vk::DeviceMemory>,
-    pub index_buffer: Option<vk::Buffer>,
-    pub index_buffer_memory: Option<vk::DeviceMemory>,
+    pub vertex_buffer_handle: VertexBufferHandle,
+    pub index_buffer_handle: IndexBufferHandle,
 }
 
 #[derive(Clone, Debug)]
@@ -102,18 +101,14 @@ impl Default for GizmoDraggable {
 pub struct GizmoRayToModel {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
-    pub vertex_buffer: Option<vk::Buffer>,
-    pub vertex_buffer_memory: Option<vk::DeviceMemory>,
-    pub index_buffer: Option<vk::Buffer>,
-    pub index_buffer_memory: Option<vk::DeviceMemory>,
+    pub vertex_buffer_handle: VertexBufferHandle,
+    pub index_buffer_handle: IndexBufferHandle,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct GizmoVerticalLines {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
-    pub vertex_buffer: Option<vk::Buffer>,
-    pub vertex_buffer_memory: Option<vk::DeviceMemory>,
-    pub index_buffer: Option<vk::Buffer>,
-    pub index_buffer_memory: Option<vk::DeviceMemory>,
+    pub vertex_buffer_handle: VertexBufferHandle,
+    pub index_buffer_handle: IndexBufferHandle,
 }

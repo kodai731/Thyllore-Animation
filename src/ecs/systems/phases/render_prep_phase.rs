@@ -1,17 +1,16 @@
-use std::mem::size_of;
-
 use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::component::GizmoVertex;
 use crate::ecs::context::FrameContext;
 use crate::ecs::systems::render_data_systems::{
     gizmo_mesh_render_data, gizmo_selectable_render_data, grid_render_data,
 };
-use crate::ecs::{gizmo_update_rotation, update_frame_ubo, update_object_ubo_system, ProjectionData};
+use crate::ecs::{
+    gizmo_update_rotation, gizmo_update_vertex_buffer, update_frame_ubo, update_object_ubo_system,
+    ProjectionData,
+};
 use crate::math::get_camera_axes_from_view;
-use crate::vulkanr::buffer::{copy_buffer, create_buffer};
 use crate::vulkanr::data::{SceneUniformData, UniformBufferObject};
 
 pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
@@ -47,8 +46,8 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
 
     let render_data_vec = vec![
         grid_render_data(&ctx.grid()),
-        gizmo_mesh_render_data(&ctx.gizmo()),
-        gizmo_selectable_render_data(&ctx.light_gizmo(), camera_position),
+        gizmo_mesh_render_data(&ctx.gizmo(), ctx.buffer_registry),
+        gizmo_selectable_render_data(&ctx.light_gizmo(), ctx.buffer_registry, camera_position),
     ];
     let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
@@ -154,65 +153,7 @@ unsafe fn update_grid_gizmo_buffers(ctx: &mut FrameContext, view: Matrix4<f32>) 
 
     gizmo_update_rotation(&mut ctx.gizmo_mut().mesh, &gizmo_rotation);
 
-    let (old_vertex_buffer, old_vertex_buffer_memory, vertices_len, vertices_ptr) = {
-        let gizmo = ctx.gizmo();
-        (
-            gizmo.mesh.vertex_buffer,
-            gizmo.mesh.vertex_buffer_memory,
-            gizmo.mesh.vertices.len(),
-            gizmo.mesh.vertices.as_ptr(),
-        )
-    };
-
-    if let Some(vb) = old_vertex_buffer {
-        ctx.device.device.destroy_buffer(vb, None);
-    }
-    if let Some(vbm) = old_vertex_buffer_memory {
-        ctx.device.device.free_memory(vbm, None);
-    }
-
-    let vertex_buffer_size = (size_of::<GizmoVertex>() * vertices_len) as u64;
-    let (staging_buffer, staging_buffer_memory) = create_buffer(
-        ctx.instance,
-        ctx.device,
-        vertex_buffer_size,
-        vk::BufferUsageFlags::TRANSFER_SRC,
-        vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-    )?;
-
-    let data_ptr = ctx.device.device.map_memory(
-        staging_buffer_memory,
-        0,
-        vertex_buffer_size,
-        vk::MemoryMapFlags::empty(),
-    )?;
-    std::ptr::copy_nonoverlapping(vertices_ptr, data_ptr.cast(), vertices_len);
-    ctx.device.device.unmap_memory(staging_buffer_memory);
-
-    let (vertex_buffer, vertex_buffer_memory) = create_buffer(
-        ctx.instance,
-        ctx.device,
-        vertex_buffer_size,
-        vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER,
-        vk::MemoryPropertyFlags::DEVICE_LOCAL,
-    )?;
-
-    copy_buffer(
-        ctx.device,
-        ctx.command_pool.as_ref(),
-        staging_buffer,
-        vertex_buffer,
-        vertex_buffer_size,
-    )?;
-
-    ctx.device.device.destroy_buffer(staging_buffer, None);
-    ctx.device.device.free_memory(staging_buffer_memory, None);
-
-    {
-        let mut gizmo = ctx.gizmo_mut();
-        gizmo.mesh.vertex_buffer = Some(vertex_buffer);
-        gizmo.mesh.vertex_buffer_memory = Some(vertex_buffer_memory);
-    }
+    gizmo_update_vertex_buffer(&ctx.gizmo().mesh, ctx.buffer_registry, ctx.device)?;
 
     Ok(())
 }

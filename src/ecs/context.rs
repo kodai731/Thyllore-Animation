@@ -14,6 +14,7 @@ use crate::scene::grid::GridData;
 use crate::scene::raytracing::RayTracingData;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
+use crate::vulkanr::resource::GpuBufferRegistry;
 use crate::vulkanr::vulkan::Instance;
 use crate::vulkanr::VulkanBackend;
 
@@ -31,6 +32,7 @@ pub struct FrameContext<'a> {
 
     pub graphics: &'a mut GraphicsResources,
     pub raytracing: &'a mut RayTracingData,
+    pub buffer_registry: &'a mut GpuBufferRegistry,
 
     pub world: &'a mut World,
     pub assets: &'a AssetStorage,

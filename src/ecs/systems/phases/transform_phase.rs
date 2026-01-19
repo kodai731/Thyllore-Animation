@@ -22,7 +22,7 @@ pub unsafe fn run_transform_phase(ctx: &mut FrameContext) -> Result<()> {
         let selectable = light_gizmo.selectable.clone();
         gizmo_update_selection_color(&mut light_gizmo.mesh, &selectable);
     }
-    gizmo_update_vertex_buffer(&ctx.light_gizmo().mesh, ctx.device)
+    gizmo_update_vertex_buffer(&ctx.light_gizmo().mesh, ctx.buffer_registry, ctx.device)
         .expect("Failed to update light gizmo vertex buffer");
 
     let camera_pos = ctx.camera().position;

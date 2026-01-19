@@ -6,6 +6,7 @@ use crate::ecs::World;
 use crate::platform::ImguiData;
 use crate::scene::graphics_resource::GraphicsResources;
 use crate::scene::raytracing::RayTracingData;
+use crate::vulkanr::resource::GpuBufferRegistry;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub enum LightMoveTarget {
@@ -26,4 +27,5 @@ pub struct AppData {
     pub debug_view_data: DebugViewData,
     pub ecs_world: World,
     pub ecs_assets: AssetStorage,
+    pub buffer_registry: GpuBufferRegistry,
 }

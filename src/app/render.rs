@@ -499,8 +499,8 @@ impl App {
 
         let render_data_vec = vec![
             grid_render_data(&self.grid()),
-            gizmo_mesh_render_data(&self.grid_gizmo()),
-            gizmo_selectable_render_data(&self.light_gizmo(), camera_pos),
+            gizmo_mesh_render_data(&self.grid_gizmo(), &self.data.buffer_registry),
+            gizmo_selectable_render_data(&self.light_gizmo(), &self.data.buffer_registry, camera_pos),
         ];
         let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 

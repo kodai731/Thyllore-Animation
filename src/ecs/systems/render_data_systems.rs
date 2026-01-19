@@ -5,6 +5,7 @@ use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::ecs::RenderData;
 use crate::scene::billboard::BillboardData;
 use crate::scene::grid::GridData;
+use crate::vulkanr::resource::GpuBufferRegistry;
 
 pub fn grid_render_data(grid: &GridData) -> RenderData {
     RenderData {
@@ -17,12 +18,16 @@ pub fn grid_render_data(grid: &GridData) -> RenderData {
     }
 }
 
-pub fn gizmo_mesh_render_data(gizmo: &GridGizmoData) -> RenderData {
+pub fn gizmo_mesh_render_data(gizmo: &GridGizmoData, registry: &GpuBufferRegistry) -> RenderData {
     RenderData {
         object_index: gizmo.mesh.object_index,
         pipeline_id: gizmo.mesh.pipeline_id,
-        vertex_buffer: gizmo.mesh.vertex_buffer.unwrap_or(vk::Buffer::null()),
-        index_buffer: gizmo.mesh.index_buffer.unwrap_or(vk::Buffer::null()),
+        vertex_buffer: registry
+            .get_vertex_buffer(gizmo.mesh.vertex_buffer_handle)
+            .unwrap_or(vk::Buffer::null()),
+        index_buffer: registry
+            .get_index_buffer(gizmo.mesh.index_buffer_handle)
+            .unwrap_or(vk::Buffer::null()),
         index_count: gizmo.mesh.indices.len() as u32,
         model_matrix: Matrix4::identity(),
     }
@@ -30,6 +35,7 @@ pub fn gizmo_mesh_render_data(gizmo: &GridGizmoData) -> RenderData {
 
 pub fn gizmo_selectable_render_data(
     gizmo: &LightGizmoData,
+    registry: &GpuBufferRegistry,
     camera_position: Vector3<f32>,
 ) -> RenderData {
     let gizmo_pos = gizmo.position.position;
@@ -40,8 +46,12 @@ pub fn gizmo_selectable_render_data(
     RenderData {
         object_index: gizmo.mesh.object_index,
         pipeline_id: gizmo.mesh.pipeline_id,
-        vertex_buffer: gizmo.mesh.vertex_buffer.unwrap_or(vk::Buffer::null()),
-        index_buffer: gizmo.mesh.index_buffer.unwrap_or(vk::Buffer::null()),
+        vertex_buffer: registry
+            .get_vertex_buffer(gizmo.mesh.vertex_buffer_handle)
+            .unwrap_or(vk::Buffer::null()),
+        index_buffer: registry
+            .get_index_buffer(gizmo.mesh.index_buffer_handle)
+            .unwrap_or(vk::Buffer::null()),
         index_count: gizmo.mesh.indices.len() as u32,
         model_matrix,
     }
@@ -69,12 +79,13 @@ pub fn collect_scene_render_data(
     gizmo: &GridGizmoData,
     light_gizmo: &LightGizmoData,
     billboard: &BillboardData,
+    registry: &GpuBufferRegistry,
     camera_position: Vector3<f32>,
 ) -> Vec<RenderData> {
     vec![
         grid_render_data(grid),
-        gizmo_mesh_render_data(gizmo),
-        gizmo_selectable_render_data(light_gizmo, camera_position),
+        gizmo_mesh_render_data(gizmo, registry),
+        gizmo_selectable_render_data(light_gizmo, registry, camera_position),
         billboard_render_data(billboard),
     ]
 }

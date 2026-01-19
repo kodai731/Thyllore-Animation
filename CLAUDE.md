@@ -2,7 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**IMPORTANT**: This file must be written in English for Claude's optimal understanding. Always respond to the user in Japanese, but keep this documentation in English.
+**IMPORTANT**: This file must be written in English for Claude's optimal understanding.
+Always respond to the user in user's Claude setting language, but keep this documentation in English.
 
 ## Project Overview
 
@@ -93,29 +94,16 @@ This project uses an Entity-Component-System (ECS) architecture inspired by [Bev
 src/ecs/
 ├── component/           # Component definitions (data attached to entities)
 │   ├── mod.rs
-│   ├── core.rs          # Name, Transform, Visible
-│   ├── mesh.rs          # GpuMesh, GizmoVertices, MeshRef
-│   ├── render.rs        # PipelineRef, ObjectIndex
-│   ├── interaction.rs   # Selectable, Draggable
-│   └── marker.rs        # Tag components: Grid, LightGizmo, LightBillboard
+│   ├── ...
 ├── bundle/              # Common component combinations
 │   ├── mod.rs
-│   ├── grid.rs          # GridBundle
-│   ├── gizmo.rs         # LightGizmoBundle
-│   └── billboard.rs     # BillboardBundle
+│   ├── ...
 ├── resource/            # Global dynamic state (changes per frame)
 │   ├── mod.rs
-│   ├── animation_playback.rs
-│   ├── graphics.rs
-│   ├── model_info.rs
-│   └── pipeline_manager.rs
+│   ├── ...
 ├── systems/             # System functions (behavior/logic)
 │   ├── mod.rs
-│   ├── camera_systems.rs
-│   ├── animation_systems.rs
-│   ├── light_gizmo_systems.rs
-│   ├── model_systems.rs
-│   └── render_data_systems.rs
+│   ├── ...
 ├── world.rs             # World container for entities and resources
 ├── query.rs             # Query functions for entity filtering
 └── mod.rs
@@ -558,7 +546,8 @@ The `memo.txt` file contains useful reference links for:
 ## Important Rules
 
 - Always respond in Japanese
-- Do NOT perform git operations (commit, push, etc.)
+- Do NOT perform git write operations (commit, push, etc.)
+    - read operation (diff log) is allowed
 
 ## Logging
 

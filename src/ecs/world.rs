@@ -6,6 +6,7 @@ use cgmath::{Matrix4, SquareMatrix, Vector3};
 
 use crate::animation::AnimationClipId;
 use crate::asset::AssetId;
+use crate::ecs::component::{Animated, MeshHandle, Model, Skinned};
 
 pub trait Resource: Any + 'static {}
 impl<T: Any + 'static> Resource for T {}
@@ -257,6 +258,10 @@ impl World {
         world.register_component::<BillboardBehavior>();
         world.register_component::<NodeRef>();
         world.register_component::<SkinRef>();
+        world.register_component::<Animated>();
+        world.register_component::<Skinned>();
+        world.register_component::<Model>();
+        world.register_component::<MeshHandle>();
 
         world
     }
@@ -398,41 +403,62 @@ impl World {
     }
 
     pub fn query_renderable(&self) -> Vec<Entity> {
-        self.component_entities::<MeshRef>()
-            .into_iter()
-            .filter(|e| {
+        self.iter_components::<MeshRef>()
+            .filter(|(e, _)| {
                 self.get_component::<Visible>(*e)
                     .map(|v| v.0)
                     .unwrap_or(true)
             })
+            .map(|(e, _)| e)
             .collect()
     }
 
     pub fn query_animated(&self) -> Vec<Entity> {
-        self.component_entities::<AnimationState>()
+        self.iter_components::<AnimationState>()
+            .map(|(e, _)| e)
+            .collect()
     }
 
     pub fn query_skinned(&self) -> Vec<Entity> {
-        self.component_entities::<SkinRef>()
+        self.iter_components::<SkinRef>().map(|(e, _)| e).collect()
     }
 
     pub fn query_line_rendering(&self) -> Vec<Entity> {
-        self.component_entities::<LineRendering>()
+        self.iter_components::<LineRendering>()
+            .map(|(e, _)| e)
+            .collect()
     }
 
     pub fn query_billboards(&self) -> Vec<Entity> {
-        self.component_entities::<BillboardBehavior>()
+        self.iter_components::<BillboardBehavior>()
+            .map(|(e, _)| e)
+            .collect()
     }
 
     pub fn query_with_parent(&self) -> Vec<Entity> {
-        self.component_entities::<Parent>()
+        self.iter_components::<Parent>().map(|(e, _)| e).collect()
     }
 
     pub fn get_root_entities(&self) -> Vec<Entity> {
-        self.component_entities::<Transform>()
-            .into_iter()
-            .filter(|e| !self.has_component::<Parent>(*e))
+        self.iter_components::<Transform>()
+            .filter(|(e, _)| !self.has_component::<Parent>(*e))
+            .map(|(e, _)| e)
             .collect()
+    }
+
+    pub fn iter_models(&self) -> impl Iterator<Item = (Entity, &MeshHandle)> {
+        self.iter_components::<MeshHandle>()
+            .filter(|(e, _)| self.has_component::<Model>(*e))
+    }
+
+    pub fn iter_animated_entities(&self) -> impl Iterator<Item = (Entity, &AnimationState)> {
+        self.iter_components::<AnimationState>()
+            .filter(|(e, _)| self.has_component::<Animated>(*e))
+    }
+
+    pub fn iter_skinned_entities(&self) -> impl Iterator<Item = (Entity, &SkinRef)> {
+        self.iter_components::<SkinRef>()
+            .filter(|(e, _)| self.has_component::<Skinned>(*e))
     }
 
     pub fn entity_count(&self) -> usize {

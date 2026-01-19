@@ -10,7 +10,7 @@ mod tuple_impl;
 
 pub use builder::QueryBuilder;
 pub use fetch::{Fetch, FetchOptional, FilterWith};
-pub use filter::{With, Without};
+pub use filter::{Or, With, Without};
 pub use hlist::{HCons, HList, HListGet, HNil, Here, There};
 pub use iterator::{QueryFilteredIter, QueryIter};
 pub use query::{Query, QueryFiltered};

@@ -20,6 +20,14 @@ impl<T: ComponentRef> QueryFilter for Without<T> {
     }
 }
 
+pub struct Or<A, B>(PhantomData<(A, B)>);
+
+impl<A: QueryFilter, B: QueryFilter> QueryFilter for Or<A, B> {
+    fn matches(world: &World, entity: Entity) -> bool {
+        A::matches(world, entity) || B::matches(world, entity)
+    }
+}
+
 impl QueryFilter for () {
     fn matches(_world: &World, _entity: Entity) -> bool {
         true
@@ -35,5 +43,14 @@ impl<A: QueryFilter, B: QueryFilter> QueryFilter for (A, B) {
 impl<A: QueryFilter, B: QueryFilter, C: QueryFilter> QueryFilter for (A, B, C) {
     fn matches(world: &World, entity: Entity) -> bool {
         A::matches(world, entity) && B::matches(world, entity) && C::matches(world, entity)
+    }
+}
+
+impl<A: QueryFilter, B: QueryFilter, C: QueryFilter, D: QueryFilter> QueryFilter for (A, B, C, D) {
+    fn matches(world: &World, entity: Entity) -> bool {
+        A::matches(world, entity)
+            && B::matches(world, entity)
+            && C::matches(world, entity)
+            && D::matches(world, entity)
     }
 }

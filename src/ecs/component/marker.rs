@@ -9,3 +9,12 @@ pub struct LightGizmoMarker;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct LightBillboardMarker;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Animated;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Skinned;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Model;

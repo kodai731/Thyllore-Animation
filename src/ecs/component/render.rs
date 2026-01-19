@@ -2,6 +2,7 @@ use cgmath::{Matrix4, SquareMatrix};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::PipelineId;
+use crate::render::MeshId;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ObjectIndex(pub usize);
@@ -14,6 +15,22 @@ impl ObjectIndex {
     pub fn get(&self) -> usize {
         self.0
     }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MeshHandle {
+    pub mesh_id: MeshId,
+}
+
+impl MeshHandle {
+    pub fn new(mesh_id: MeshId) -> Self {
+        Self { mesh_id }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SkeletonHandle {
+    pub skeleton_id: usize,
 }
 
 #[derive(Clone, Debug)]

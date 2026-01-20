@@ -1,4 +1,5 @@
 mod gbuffer;
+mod gizmo;
 mod rayquery;
 mod composite;
 

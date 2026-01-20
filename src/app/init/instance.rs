@@ -1,6 +1,5 @@
 use crate::app::{App, AppData};
 
-use crate::ecs::component::GizmoVertex;
 use crate::ecs::systems::{
     billboard_create_buffers, create_billboard, create_grid_gizmo, create_light_gizmo,
     gizmo_create_buffers,
@@ -24,7 +23,6 @@ use crate::vulkanr::vulkan::*;
 
 use crate::debugview::*;
 use crate::math::*;
-use crate::scene::billboard::BillboardVertex;
 use crate::scene::graphics_resource::GraphicsResources;
 use crate::scene::grid::GridData;
 use crate::scene::Camera;
@@ -190,10 +188,7 @@ impl App {
             "assets/shaders/gizmoVert.spv",
             "assets/shaders/gizmoFrag.spv",
         )
-        .vertex_input(VertexInputConfig::Custom {
-            bindings: vec![GizmoVertex::binding_description()],
-            attributes: GizmoVertex::attribute_descriptions().to_vec(),
-        })
+        .vertex_input(VertexInputConfig::Gizmo)
         .topology(vk::PrimitiveTopology::LINE_LIST)
         .polygon_mode(vk::PolygonMode::LINE)
         .no_depth_test()
@@ -288,8 +283,6 @@ impl App {
             billboard_data.descriptor_set.descriptor_set_layout,
             "assets/shaders/billboardVert.spv",
             "assets/shaders/billboardFrag.spv",
-            BillboardVertex::binding_description(),
-            BillboardVertex::attribute_descriptions().to_vec(),
         )
         .expect("Failed to create billboard pipeline");
         let billboard_pipeline_id = pipeline_manager.register(billboard_pipeline);

@@ -1,7 +1,4 @@
-use std::mem::size_of;
-
 use cgmath::Vector3;
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::PipelineId;
 use crate::render::{IndexBufferHandle, VertexBufferHandle};
@@ -12,33 +9,6 @@ use crate::vulkanr::data::Vertex;
 pub struct GizmoVertex {
     pub pos: [f32; 3],
     pub color: [f32; 3],
-}
-
-impl GizmoVertex {
-    pub fn binding_description() -> vk::VertexInputBindingDescription {
-        vk::VertexInputBindingDescription {
-            binding: 0,
-            stride: size_of::<GizmoVertex>() as u32,
-            input_rate: vk::VertexInputRate::VERTEX,
-        }
-    }
-
-    pub fn attribute_descriptions() -> [vk::VertexInputAttributeDescription; 2] {
-        [
-            vk::VertexInputAttributeDescription {
-                binding: 0,
-                location: 0,
-                format: vk::Format::R32G32B32_SFLOAT,
-                offset: 0,
-            },
-            vk::VertexInputAttributeDescription {
-                binding: 0,
-                location: 1,
-                format: vk::Format::R32G32B32_SFLOAT,
-                offset: size_of::<[f32; 3]>() as u32,
-            },
-        ]
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Default)]

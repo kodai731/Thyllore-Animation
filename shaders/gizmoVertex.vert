@@ -21,7 +21,10 @@ void main() {
     vec2 gizmoOffset = vec2(0.75, -0.75);
     float gizmoScale = 1.0;
 
-    vec3 flippedPos = vec3(inPosition.x, -inPosition.y, inPosition.z);
+    mat3 viewRotation = mat3(frame.view);
+    vec3 rotatedPos = viewRotation * inPosition;
+
+    vec3 flippedPos = vec3(rotatedPos.x, -rotatedPos.y, rotatedPos.z);
     vec4 position = vec4(flippedPos * gizmoScale, 1.0);
     position.xy += gizmoOffset;
     position.z = 0.0;

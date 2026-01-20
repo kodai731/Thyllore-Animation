@@ -1,5 +1,4 @@
 use cgmath::{Matrix4, Vector3};
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::PipelineId;
 use crate::render::{IndexBufferHandle, VertexBufferHandle};
@@ -11,32 +10,6 @@ use crate::vulkanr::image::RRImage;
 pub struct BillboardVertex {
     pub pos: [f32; 3],
     pub tex_coord: [f32; 2],
-}
-
-impl BillboardVertex {
-    pub fn binding_description() -> vk::VertexInputBindingDescription {
-        vk::VertexInputBindingDescription::builder()
-            .binding(0)
-            .stride(std::mem::size_of::<BillboardVertex>() as u32)
-            .input_rate(vk::VertexInputRate::VERTEX)
-            .build()
-    }
-
-    pub fn attribute_descriptions() -> [vk::VertexInputAttributeDescription; 2] {
-        let pos = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(0)
-            .format(vk::Format::R32G32B32_SFLOAT)
-            .offset(0)
-            .build();
-        let tex_coord = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(1)
-            .format(vk::Format::R32G32_SFLOAT)
-            .offset(std::mem::size_of::<[f32; 3]>() as u32)
-            .build();
-        [pos, tex_coord]
-    }
 }
 
 #[derive(Clone, Debug, Default)]

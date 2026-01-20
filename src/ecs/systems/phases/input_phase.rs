@@ -2,16 +2,15 @@ use anyhow::Result;
 use cgmath::Vector3;
 
 use crate::app::data::LightMoveTarget;
-use crate::ecs::context::FrameContext;
+use crate::ecs::context::EcsContext;
+use crate::ecs::GizmoAxis;
 use crate::ecs::{
     camera_input_system, gizmo_try_select, gizmo_update_position_with_constraint,
     update_light_auto_target,
 };
-use crate::ecs::GizmoAxis;
 use crate::math::screen_to_world_ray;
-use crate::scene::graphics_resource::GraphicsResources;
 
-pub unsafe fn run_input_phase(ctx: &mut FrameContext) -> Result<()> {
+pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
     process_light_auto_target(ctx);
 
     ctx.gui_data.update();
@@ -38,38 +37,25 @@ pub unsafe fn run_input_phase(ctx: &mut FrameContext) -> Result<()> {
     Ok(())
 }
 
-fn process_light_auto_target(ctx: &mut FrameContext) {
+fn process_light_auto_target(ctx: &mut EcsContext) {
     if ctx.gui_data.move_light_to == LightMoveTarget::None {
         return;
     }
 
-    let all_positions = collect_mesh_positions(ctx.graphics);
     let camera_position = ctx.camera().position;
     let move_light_to = ctx.gui_data.move_light_to;
     let mut rt_debug = ctx.rt_debug_mut();
-    update_light_auto_target(&mut *rt_debug, &all_positions, camera_position, move_light_to);
+    update_light_auto_target(
+        &mut *rt_debug,
+        &ctx.mesh_positions,
+        camera_position,
+        move_light_to,
+    );
     drop(rt_debug);
     ctx.gui_data.move_light_to = LightMoveTarget::None;
 }
 
-fn collect_mesh_positions(graphics: &GraphicsResources) -> Vec<Vector3<f32>> {
-    if graphics.meshes.is_empty() {
-        return Vec::new();
-    }
-
-    graphics
-        .meshes
-        .iter()
-        .flat_map(|mesh| {
-            mesh.vertex_data
-                .vertices
-                .iter()
-                .map(|v| Vector3::new(v.pos.x, v.pos.y, v.pos.z))
-        })
-        .collect()
-}
-
-unsafe fn process_gizmo_interaction(ctx: &mut FrameContext) -> Result<()> {
+fn process_gizmo_interaction(ctx: &mut EcsContext) -> Result<()> {
     let mouse_pos = cgmath::Vector2::new(ctx.gui_data.mouse_pos[0], ctx.gui_data.mouse_pos[1]);
 
     if !ctx.gui_data.imgui_wants_mouse && ctx.gui_data.is_left_clicked {
@@ -117,7 +103,7 @@ unsafe fn process_gizmo_interaction(ctx: &mut FrameContext) -> Result<()> {
     Ok(())
 }
 
-fn gizmo_handle_mouse_release(ctx: &mut FrameContext) {
+fn gizmo_handle_mouse_release(ctx: &mut EcsContext) {
     crate::log!("Mouse released - resetting light gizmo state");
     let mut gizmo = ctx.light_gizmo_mut();
     gizmo.selectable.is_selected = false;
@@ -127,24 +113,22 @@ fn gizmo_handle_mouse_release(ctx: &mut FrameContext) {
     gizmo.draggable.initial_position = Vector3::new(0.0, 0.0, 0.0);
 }
 
-unsafe fn update_light_gizmo_position(
-    ctx: &mut FrameContext,
+fn update_light_gizmo_position(
+    ctx: &mut EcsContext,
     mouse_pos: cgmath::Vector2<f32>,
 ) -> Result<()> {
-    use cgmath::{Deg, InnerSpace};
     use crate::math::coordinate_system::perspective;
+    use cgmath::{Deg, InnerSpace};
 
     let camera_pos = ctx.camera().position;
     let camera_dir = ctx.camera().direction;
     let camera_up = ctx.camera().up;
 
-    let view = crate::math::view(camera_pos, camera_dir, camera_up);
+    let view = unsafe { crate::math::view(camera_pos, camera_dir, camera_up) };
     let aspect = ctx.swapchain_extent.0 as f32 / ctx.swapchain_extent.1 as f32;
     let proj = perspective(Deg(45.0), aspect, 0.1, 10000.0);
-    let screen_size = cgmath::Vector2::new(
-        ctx.swapchain_extent.0 as f32,
-        ctx.swapchain_extent.1 as f32,
-    );
+    let screen_size =
+        cgmath::Vector2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
 
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
 

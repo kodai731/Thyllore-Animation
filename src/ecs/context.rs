@@ -124,6 +124,7 @@ pub struct EcsContext<'a> {
     pub world: &'a mut World,
     pub assets: &'a AssetStorage,
     pub gui_data: &'a mut GUIData,
+    pub mesh_positions: Vec<Vector3<f32>>,
 }
 
 impl<'a> EcsContext<'a> {
@@ -141,5 +142,53 @@ impl<'a> EcsContext<'a> {
 
     pub fn rt_debug_mut(&self) -> ResMut<RayTracingDebugState> {
         self.world.resource_mut::<RayTracingDebugState>()
+    }
+
+    pub fn camera_position(&self) -> Vector3<f32> {
+        self.camera().position
+    }
+
+    pub fn camera_direction(&self) -> Vector3<f32> {
+        self.camera().direction
+    }
+
+    pub fn camera_up(&self) -> Vector3<f32> {
+        self.camera().up
+    }
+
+    pub fn light_position(&self) -> Vector3<f32> {
+        self.rt_debug().light_position
+    }
+
+    pub fn grid(&self) -> ResRef<GridData> {
+        self.world.resource::<GridData>()
+    }
+
+    pub fn grid_mut(&self) -> ResMut<GridData> {
+        self.world.resource_mut::<GridData>()
+    }
+
+    pub fn gizmo(&self) -> ResRef<GridGizmoData> {
+        self.world.resource::<GridGizmoData>()
+    }
+
+    pub fn gizmo_mut(&self) -> ResMut<GridGizmoData> {
+        self.world.resource_mut::<GridGizmoData>()
+    }
+
+    pub fn light_gizmo(&self) -> ResRef<LightGizmoData> {
+        self.world.resource::<LightGizmoData>()
+    }
+
+    pub fn light_gizmo_mut(&self) -> ResMut<LightGizmoData> {
+        self.world.resource_mut::<LightGizmoData>()
+    }
+
+    pub fn billboard(&self) -> ResRef<BillboardData> {
+        self.world.resource::<BillboardData>()
+    }
+
+    pub fn billboard_mut(&self) -> ResMut<BillboardData> {
+        self.world.resource_mut::<BillboardData>()
     }
 }

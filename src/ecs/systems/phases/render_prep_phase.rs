@@ -1,16 +1,14 @@
 use anyhow::Result;
-use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
+use cgmath::{Matrix4, SquareMatrix, Vector3};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::context::FrameContext;
 use crate::ecs::systems::render_data_systems::{
     gizmo_mesh_render_data, gizmo_selectable_render_data, grid_render_data,
 };
-use crate::ecs::{
-    gizmo_update_rotation, gizmo_update_vertex_buffer, update_frame_ubo, update_object_ubo_system,
-    ProjectionData,
-};
+use crate::ecs::{gizmo_update_rotation, gizmo_update_vertex_buffer, update_frame_ubo, ProjectionData};
 use crate::math::get_camera_axes_from_view;
+use crate::renderer::scene_renderer::update_object_ubo;
 use crate::vulkanr::data::{SceneUniformData, UniformBufferObject};
 
 pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
@@ -51,7 +49,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     ];
     let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
-    if let Err(e) = update_object_ubo_system(
+    if let Err(e) = update_object_ubo(
         &render_data_refs,
         ctx.image_index,
         &ctx.graphics.objects,

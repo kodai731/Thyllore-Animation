@@ -3,7 +3,6 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::scene::graphics_resource::GraphicsResources;
 use crate::vulkanr::command::{RRCommandBuffer, RRCommandPool};
-use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::RRGBuffer;

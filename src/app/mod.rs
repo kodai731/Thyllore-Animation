@@ -25,8 +25,8 @@ use crate::scene::grid::GridData;
 use crate::scene::raytracing::RayTracingData;
 use crate::scene::Camera;
 use crate::vulkanr::context::{
-    CameraState, CommandState, DebugState, FrameSync, GpuAssets, ImGuiState, PipelineState,
-    RayTracingState, RenderConfig, RenderTargets, SurfaceState, SwapchainState,
+    CommandState, FrameSync, PipelineState, RenderConfig, RenderTargets, SurfaceState,
+    SwapchainState,
 };
 use crate::vulkanr::device::*;
 

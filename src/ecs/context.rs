@@ -6,7 +6,6 @@ use crate::app::GUIData;
 use crate::asset::AssetStorage;
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::debugview::RayTracingDebugState;
-use crate::ecs::render_context::RenderContext;
 use crate::scene::billboard::BillboardData;
 use crate::scene::camera::Camera;
 use crate::scene::graphics_resource::GraphicsResources;

@@ -1,16 +1,14 @@
 use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use crate::app::{App, GUIData};
-use crate::ecs::render_scene_objects_system;
 use crate::ecs::resource::PipelineManager;
 use crate::ecs::systems::render_data_systems::{
     gizmo_mesh_render_data, gizmo_selectable_render_data, grid_render_data,
 };
-use crate::vulkanr::command::*;
-use crate::vulkanr::context::{FrameSync, SwapchainState};
+use crate::renderer::scene_renderer::render_scene_objects;
+use crate::vulkanr::context::SwapchainState;
 use crate::vulkanr::vulkan::*;
 
 use anyhow::{anyhow, Result};
-use cgmath::{Matrix4, SquareMatrix};
 
 impl App {
     pub unsafe fn begin_frame(&mut self, gui_data: &mut GUIData) -> Result<usize> {
@@ -505,7 +503,7 @@ impl App {
         let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
         let pipeline_manager = self.resource::<PipelineManager>();
-        render_scene_objects_system(
+        render_scene_objects(
             &render_data_refs,
             command_buffer,
             image_index,

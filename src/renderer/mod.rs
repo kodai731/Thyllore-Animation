@@ -1,4 +1,5 @@
 pub mod deferred;
+pub mod scene_renderer;
 
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;

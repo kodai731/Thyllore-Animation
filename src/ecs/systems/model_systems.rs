@@ -6,7 +6,6 @@ use anyhow::{anyhow, Result};
 use cgmath::SquareMatrix;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::animation::AnimationClipId;
 use crate::asset::{AnimationClipAsset, AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
 use crate::debugview::DebugViewData;
 use crate::ecs::playback_play;

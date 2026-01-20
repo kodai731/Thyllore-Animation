@@ -2,33 +2,29 @@ use crate::app::{App, AppData};
 
 use crate::ecs::component::GizmoVertex;
 use crate::ecs::systems::{
-    billboard_create_buffers, create_billboard, create_camera, create_grid_gizmo,
-    create_light_gizmo, gizmo_create_buffers,
+    billboard_create_buffers, create_billboard, create_grid_gizmo, create_light_gizmo,
+    gizmo_create_buffers,
 };
 use crate::ecs::{
     AnimationPlayback, AnimationRegistry, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState,
     NodeAssets, PipelineManager,
 };
-use crate::vulkanr::buffer::*;
 use crate::vulkanr::command::*;
 use crate::vulkanr::context::{
     CommandState, FrameSync, PipelineState, RenderConfig, RenderTargets, SurfaceState,
     SwapchainState,
 };
-use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::data::*;
 use crate::vulkanr::descriptor::*;
 use crate::vulkanr::device::*;
-use crate::vulkanr::image::*;
 use crate::vulkanr::pipeline::{PipelineBuilder, RRPipeline, VertexInputConfig};
 use crate::vulkanr::render::*;
 use crate::vulkanr::swapchain::*;
 use crate::vulkanr::vulkan::*;
 
-use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::debugview::*;
 use crate::math::*;
-use crate::scene::billboard::{BillboardData, BillboardVertex};
+use crate::scene::billboard::BillboardVertex;
 use crate::scene::graphics_resource::GraphicsResources;
 use crate::scene::grid::GridData;
 use crate::scene::Camera;
@@ -38,14 +34,12 @@ use vulkanalia::Device as VkDevice;
 use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::ffi::CStr;
-use std::mem::size_of;
 use std::os::raw::c_void;
 use std::ptr::copy_nonoverlapping as memcpy;
 use std::rc::Rc;
 use std::time::Instant;
 
 use vulkanalia::loader::{LibloadingLoader, LIBRARY};
-use vulkanalia::prelude::v1_0::*;
 use winit::window::Window;
 
 // Constants

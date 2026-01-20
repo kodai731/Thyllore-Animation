@@ -1,5 +1,4 @@
 use crate::app::App;
-use crate::vulkanr::device::*;
 
 use vulkanalia::prelude::v1_0::*;
 

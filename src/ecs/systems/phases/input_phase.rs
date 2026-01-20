@@ -4,10 +4,7 @@ use cgmath::Vector3;
 use crate::app::data::LightMoveTarget;
 use crate::ecs::context::EcsContext;
 use crate::ecs::GizmoAxis;
-use crate::ecs::{
-    camera_input_system, gizmo_try_select, gizmo_update_position_with_constraint,
-    update_light_auto_target,
-};
+use crate::ecs::{gizmo_try_select, gizmo_update_position_with_constraint, update_light_auto_target};
 use crate::math::screen_to_world_ray;
 
 pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::{Deg, Matrix3, Matrix4, SquareMatrix, Vector2, Vector3, Vector4};
+use cgmath::{Deg, Matrix3, Matrix4, Vector2, Vector3, Vector4};
 
 use super::{
     billboard_transform_update_look_at, create_billboard_transform, gizmo_update_rotation,

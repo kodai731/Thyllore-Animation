@@ -1,14 +1,12 @@
 use crate::app::{App, AppData, GUIData};
-use crate::debugview::*;
 use crate::ecs::{
     gizmo_update_or_create_vertical_line_buffers, gizmo_update_vertical_lines, run_frame,
     FrameContext,
 };
-use crate::vulkanr::device::*;
+use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::vulkan::*;
 
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
 impl App {
     pub unsafe fn update(&mut self, image_index: usize, gui_data: &mut GUIData) -> Result<()> {

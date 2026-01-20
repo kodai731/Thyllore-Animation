@@ -1,8 +1,7 @@
 use cgmath::{Matrix4, SquareMatrix};
-use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::PipelineId;
-use crate::render::MeshId;
+use crate::render::{IndexBufferHandle, MeshId, VertexBufferHandle};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ObjectIndex(pub usize);
@@ -37,8 +36,8 @@ pub struct SkeletonHandle {
 pub struct RenderData {
     pub object_index: usize,
     pub pipeline_id: Option<PipelineId>,
-    pub vertex_buffer: vk::Buffer,
-    pub index_buffer: vk::Buffer,
+    pub vertex_buffer_handle: VertexBufferHandle,
+    pub index_buffer_handle: IndexBufferHandle,
     pub index_count: u32,
     pub model_matrix: Matrix4<f32>,
 }
@@ -48,8 +47,8 @@ impl Default for RenderData {
         Self {
             object_index: 0,
             pipeline_id: None,
-            vertex_buffer: vk::Buffer::null(),
-            index_buffer: vk::Buffer::null(),
+            vertex_buffer_handle: Default::default(),
+            index_buffer_handle: Default::default(),
             index_count: 0,
             model_matrix: Matrix4::identity(),
         }
@@ -60,15 +59,15 @@ impl RenderData {
     pub fn new(
         object_index: usize,
         pipeline_id: Option<PipelineId>,
-        vertex_buffer: vk::Buffer,
-        index_buffer: vk::Buffer,
+        vertex_buffer_handle: VertexBufferHandle,
+        index_buffer_handle: IndexBufferHandle,
         index_count: u32,
     ) -> Self {
         Self {
             object_index,
             pipeline_id,
-            vertex_buffer,
-            index_buffer,
+            vertex_buffer_handle,
+            index_buffer_handle,
             index_count,
             model_matrix: Matrix4::identity(),
         }

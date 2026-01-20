@@ -46,8 +46,8 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
 
     let render_data_vec = vec![
         grid_render_data(&ctx.grid()),
-        gizmo_mesh_render_data(&ctx.gizmo(), ctx.buffer_registry),
-        gizmo_selectable_render_data(&ctx.light_gizmo(), ctx.buffer_registry, camera_position),
+        gizmo_mesh_render_data(&ctx.gizmo()),
+        gizmo_selectable_render_data(&ctx.light_gizmo(), camera_position),
     ];
     let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 

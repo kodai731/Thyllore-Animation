@@ -499,8 +499,8 @@ impl App {
 
         let render_data_vec = vec![
             grid_render_data(&self.grid()),
-            gizmo_mesh_render_data(&self.grid_gizmo(), &self.data.buffer_registry),
-            gizmo_selectable_render_data(&self.light_gizmo(), &self.data.buffer_registry, camera_pos),
+            gizmo_mesh_render_data(&self.grid_gizmo()),
+            gizmo_selectable_render_data(&self.light_gizmo(), camera_pos),
         ];
         let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
@@ -513,6 +513,7 @@ impl App {
             &self.data.graphics_resources.objects,
             &self.rrdevice,
             &*pipeline_manager,
+            &self.data.buffer_registry,
         );
 
         self.render_billboard(command_buffer, image_index);
@@ -526,10 +527,21 @@ impl App {
         let billboard = self.billboard();
         let pipeline_manager = self.resource::<PipelineManager>();
 
-        let (vertex_buffer, index_buffer) = match (billboard.vertex_buffer, billboard.index_buffer)
+        let vertex_buffer = match self
+            .data
+            .buffer_registry
+            .get_vertex_buffer(billboard.vertex_buffer_handle)
         {
-            (Some(vb), Some(ib)) => (vb, ib),
-            _ => return,
+            Some(b) => b,
+            None => return,
+        };
+        let index_buffer = match self
+            .data
+            .buffer_registry
+            .get_index_buffer(billboard.index_buffer_handle)
+        {
+            Some(b) => b,
+            None => return,
         };
 
         let pipeline_id = match billboard.pipeline_id {

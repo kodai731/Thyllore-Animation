@@ -203,6 +203,21 @@ impl<'a> CompositePass<'a> {
         let grid = self.app.grid();
         let pipeline_manager = self.pipeline_manager();
 
+        let vertex_buffer = match self
+            .buffer_registry
+            .get_vertex_buffer(grid.vertex_buffer_handle)
+        {
+            Some(b) => b,
+            None => return Ok(()),
+        };
+        let index_buffer = match self
+            .buffer_registry
+            .get_index_buffer(grid.index_buffer_handle)
+        {
+            Some(b) => b,
+            None => return Ok(()),
+        };
+
         let pipeline_id = match grid.pipeline_id {
             Some(id) => id,
             None => return Ok(()),
@@ -221,11 +236,11 @@ impl<'a> CompositePass<'a> {
         self.device.cmd_set_line_width(command_buffer, 1.0);
 
         self.device
-            .cmd_bind_vertex_buffers(command_buffer, 0, &[grid.vertex_buffer.buffer], &[0]);
+            .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
         self.device.cmd_bind_index_buffer(
             command_buffer,
-            grid.index_buffer.buffer,
+            index_buffer,
             0,
             vk::IndexType::UINT32,
         );
@@ -255,7 +270,7 @@ impl<'a> CompositePass<'a> {
         );
 
         self.device
-            .cmd_draw_indexed(command_buffer, grid.index_buffer.indices, 1, 0, 0, 0);
+            .cmd_draw_indexed(command_buffer, grid.indices.len() as u32, 1, 0, 0, 0);
 
         Ok(())
     }
@@ -348,9 +363,19 @@ impl<'a> CompositePass<'a> {
         let billboard = self.app.billboard();
         let pipeline_manager = self.pipeline_manager();
 
-        let (vertex_buffer, index_buffer) = match (billboard.vertex_buffer, billboard.index_buffer) {
-            (Some(v), Some(i)) => (v, i),
-            _ => return Ok(()),
+        let vertex_buffer = match self
+            .buffer_registry
+            .get_vertex_buffer(billboard.vertex_buffer_handle)
+        {
+            Some(b) => b,
+            None => return Ok(()),
+        };
+        let index_buffer = match self
+            .buffer_registry
+            .get_index_buffer(billboard.index_buffer_handle)
+        {
+            Some(b) => b,
+            None => return Ok(()),
         };
 
         let pipeline_id = match billboard.pipeline_id {

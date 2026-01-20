@@ -259,6 +259,7 @@ impl App {
 
         billboard_create_buffers(
             &mut billboard_data,
+            &mut data.buffer_registry,
             &instance,
             &rrdevice,
             rrcommand_pool.as_ref(),
@@ -382,23 +383,20 @@ impl App {
         }
         println!("created grid data ");
         grid.scale = 1.0;
-        grid.vertex_buffer = RRVertexBuffer::new(
+        grid.vertex_buffer_handle = data.buffer_registry.create_vertex_buffer(
             &instance,
             &rrdevice,
-            rrcommand_pool.as_ref(),
-            (size_of::<vulkan_data::Vertex>() * grid.vertices.len()) as vk::DeviceSize,
-            grid.vertices.as_ptr() as *const c_void,
-            grid.vertices.len(),
-        );
+            &rrcommand_pool,
+            &grid.vertices,
+            true,
+        )?;
         println!("created grid vertex buffers");
-        grid.index_buffer = RRIndexBuffer::new(
+        grid.index_buffer_handle = data.buffer_registry.create_index_buffer(
             &instance,
             &rrdevice,
-            rrcommand_pool.as_ref(),
-            (size_of::<u32>() * grid.indices.len()) as u64,
-            grid.indices.as_ptr() as *const c_void,
-            grid.indices.len(),
-        );
+            &rrcommand_pool,
+            &grid.indices,
+        )?;
         println!("created grid index buffer");
 
         grid.object_index = data.graphics_resources.objects.allocate_slot();

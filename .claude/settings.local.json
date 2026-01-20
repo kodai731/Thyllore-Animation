@@ -16,7 +16,10 @@
       "Bash(cat:*)",
       "Bash(cargo build:*)",
       "Bash(cargo test:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(findstr:*)",
+      "Bash(Select-String -Pattern \"error\\\\[\")",
+      "Bash(Select-Object -First 10)"
     ],
     "deny": [],
     "ask": []

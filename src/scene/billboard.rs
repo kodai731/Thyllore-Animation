@@ -2,6 +2,7 @@ use cgmath::{Matrix4, Vector3};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::PipelineId;
+use crate::render::{IndexBufferHandle, VertexBufferHandle};
 use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
 use crate::vulkanr::image::RRImage;
 
@@ -46,10 +47,8 @@ pub struct BillboardData {
     pub object_index: usize,
     pub vertices: Vec<BillboardVertex>,
     pub indices: Vec<u32>,
-    pub vertex_buffer: Option<vk::Buffer>,
-    pub vertex_buffer_memory: Option<vk::DeviceMemory>,
-    pub index_buffer: Option<vk::Buffer>,
-    pub index_buffer_memory: Option<vk::DeviceMemory>,
+    pub vertex_buffer_handle: VertexBufferHandle,
+    pub index_buffer_handle: IndexBufferHandle,
     pub texture: Option<RRImage>,
 }
 

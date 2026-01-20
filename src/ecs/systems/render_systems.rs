@@ -6,6 +6,7 @@ use crate::ecs::resource::PipelineManager;
 use crate::render::ObjectUBO;
 use crate::scene::graphics_resource::ObjectDescriptorSet;
 use crate::vulkanr::device::RRDevice;
+use crate::vulkanr::resource::GpuBufferRegistry;
 
 pub unsafe fn update_object_ubo_system(
     render_data: &[&RenderData],
@@ -30,11 +31,17 @@ pub unsafe fn render_scene_objects_system(
     objects: &ObjectDescriptorSet,
     rrdevice: &RRDevice,
     pipeline_manager: &PipelineManager,
+    buffer_registry: &GpuBufferRegistry,
 ) {
     for data in render_data {
-        if data.vertex_buffer == vk::Buffer::null() || data.index_buffer == vk::Buffer::null() {
-            continue;
-        }
+        let vertex_buffer = match buffer_registry.get_vertex_buffer(data.vertex_buffer_handle) {
+            Some(b) => b,
+            None => continue,
+        };
+        let index_buffer = match buffer_registry.get_index_buffer(data.index_buffer_handle) {
+            Some(b) => b,
+            None => continue,
+        };
 
         let pipeline_id = match data.pipeline_id {
             Some(id) => id,
@@ -55,11 +62,11 @@ pub unsafe fn render_scene_objects_system(
 
         rrdevice
             .device
-            .cmd_bind_vertex_buffers(command_buffer, 0, &[data.vertex_buffer], &[0]);
+            .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
         rrdevice.device.cmd_bind_index_buffer(
             command_buffer,
-            data.index_buffer,
+            index_buffer,
             0,
             vk::IndexType::UINT32,
         );
@@ -98,11 +105,17 @@ pub unsafe fn render_system(
     objects: &ObjectDescriptorSet,
     rrdevice: &RRDevice,
     pipeline_manager: &PipelineManager,
+    buffer_registry: &GpuBufferRegistry,
 ) {
     for data in render_data {
-        if data.vertex_buffer == vk::Buffer::null() || data.index_buffer == vk::Buffer::null() {
-            continue;
-        }
+        let vertex_buffer = match buffer_registry.get_vertex_buffer(data.vertex_buffer_handle) {
+            Some(b) => b,
+            None => continue,
+        };
+        let index_buffer = match buffer_registry.get_index_buffer(data.index_buffer_handle) {
+            Some(b) => b,
+            None => continue,
+        };
 
         let pipeline_id = match data.pipeline_id {
             Some(id) => id,
@@ -123,11 +136,11 @@ pub unsafe fn render_system(
 
         rrdevice
             .device
-            .cmd_bind_vertex_buffers(command_buffer, 0, &[data.vertex_buffer], &[0]);
+            .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
         rrdevice.device.cmd_bind_index_buffer(
             command_buffer,
-            data.index_buffer,
+            index_buffer,
             0,
             vk::IndexType::UINT32,
         );

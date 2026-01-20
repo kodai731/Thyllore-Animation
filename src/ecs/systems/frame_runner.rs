@@ -5,8 +5,8 @@ use crate::ecs::context::{EcsContext, FrameContext};
 use crate::scene::graphics_resource::GraphicsResources;
 
 use super::phases::{
-    run_animation_phase, run_input_phase, run_render_prep_phase, run_transform_phase_ecs,
-    run_transform_phase_gpu,
+    run_animation_phase_ecs, run_animation_phase_gpu, run_input_phase, run_render_prep_phase,
+    run_transform_phase_ecs, run_transform_phase_gpu,
 };
 
 pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
@@ -27,7 +27,9 @@ pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
         run_transform_phase_ecs(&mut ecs_ctx);
     }
 
-    run_animation_phase(ctx)?;
+    let animation_updates = run_animation_phase_ecs(ctx);
+    run_animation_phase_gpu(ctx, &animation_updates)?;
+
     run_transform_phase_gpu(ctx)?;
     run_render_prep_phase(ctx)?;
     Ok(())

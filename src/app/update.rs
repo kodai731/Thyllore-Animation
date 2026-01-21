@@ -5,6 +5,7 @@ use crate::ecs::{
 };
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::vulkan::*;
+use crate::vulkanr::VulkanBackend;
 
 use anyhow::Result;
 
@@ -119,16 +120,27 @@ impl App {
             gizmo_update_vertical_lines(&mut gizmo.vertical_lines, &position, &model_tops);
         }
 
-        let ecs_world = &mut self.data.ecs_world;
-        let buffer_registry = &mut self.data.buffer_registry;
+        let command_pool = self
+            .data
+            .ecs_world
+            .resource::<crate::vulkanr::context::CommandState>()
+            .pool
+            .clone();
 
-        let mut gizmo = ecs_world.resource_mut::<crate::debugview::gizmo::LightGizmoData>();
-        gizmo_update_or_create_vertical_line_buffers(
-            &mut gizmo.vertical_lines,
-            buffer_registry,
+        let mut backend = VulkanBackend::new(
             &self.instance,
             &self.rrdevice,
-        )?;
+            command_pool,
+            &mut self.data.graphics_resources,
+            &mut self.data.raytracing.acceleration_structure,
+            &mut self.data.buffer_registry,
+        );
+
+        let mut gizmo = self
+            .data
+            .ecs_world
+            .resource_mut::<crate::debugview::gizmo::LightGizmoData>();
+        gizmo_update_or_create_vertical_line_buffers(&mut gizmo.vertical_lines, &mut backend)?;
 
         Ok(())
     }

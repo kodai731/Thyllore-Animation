@@ -25,6 +25,7 @@ impl<'a> RenderContext<'a> {
             self.command_pool.clone(),
             self.graphics,
             &mut self.raytracing.acceleration_structure,
+            self.buffer_registry,
         )
     }
 }

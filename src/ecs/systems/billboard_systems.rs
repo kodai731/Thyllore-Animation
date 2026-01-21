@@ -3,13 +3,9 @@ use cgmath::{InnerSpace, Matrix4, Vector3, Vector4};
 
 use crate::ecs::component::CameraState;
 use crate::ecs::world::{BillboardBehavior, Transform, World};
+use crate::render::RenderBackend;
 use crate::scene::billboard::{BillboardData, BillboardTransform, BillboardVertex};
-use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
-use crate::vulkanr::device::RRDevice;
-use crate::vulkanr::image::RRImage;
-use crate::vulkanr::resource::GpuBufferRegistry;
-use crate::vulkanr::vulkan::Instance;
 
 pub fn create_billboard() -> BillboardData {
     let billboard_size = 0.5;
@@ -87,31 +83,9 @@ pub fn billboard_system(world: &mut World, camera: &CameraState) {
 
 pub unsafe fn billboard_create_buffers(
     billboard: &mut BillboardData,
-    registry: &mut GpuBufferRegistry,
-    instance: &Instance,
-    rrdevice: &RRDevice,
-    rrcommand_pool: &RRCommandPool,
+    backend: &mut dyn RenderBackend,
 ) -> Result<()> {
-    billboard.vertex_buffer_handle = registry.create_host_visible_vertex_buffer(
-        instance,
-        rrdevice,
-        &billboard.vertices,
-        256,
-    )?;
-
-    billboard.index_buffer_handle = registry.create_host_visible_index_buffer(
-        instance,
-        rrdevice,
-        &billboard.indices,
-    )?;
-
-    let texture_path = std::path::Path::new("assets/textures/lightIcon.png");
-    billboard.texture = Some(
-        RRImage::new_from_file(instance, rrdevice, rrcommand_pool, texture_path)
-            .map_err(|e| anyhow::anyhow!("Failed to load billboard texture: {}", e))?,
-    );
-
-    Ok(())
+    backend.create_billboard_buffers(billboard)
 }
 
 pub fn billboard_transform_update_look_at(

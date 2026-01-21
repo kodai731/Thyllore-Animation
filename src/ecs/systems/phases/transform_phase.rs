@@ -47,7 +47,9 @@ pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
 }
 
 pub unsafe fn run_transform_phase_gpu(ctx: &mut FrameContext) -> Result<()> {
-    gizmo_update_vertex_buffer(&ctx.light_gizmo().mesh, ctx.buffer_registry, ctx.device)
+    let mesh = ctx.light_gizmo().mesh.clone();
+    let backend = ctx.create_backend();
+    gizmo_update_vertex_buffer(&mesh, &backend)
         .expect("Failed to update light gizmo vertex buffer");
     Ok(())
 }

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::{Deg, Matrix3, Matrix4, Vector2, Vector3, Vector4};
+use cgmath::{Deg, Matrix3, Matrix4, Vector2, Vector3};
 
 use super::{
     billboard_transform_update_look_at, create_billboard_transform, gizmo_update_rotation,
@@ -7,11 +7,9 @@ use super::{
 use crate::app::data::LightMoveTarget;
 use crate::debugview::view_mode::RayTracingDebugState;
 use crate::math::coordinate_system::perspective;
-use crate::render::{FrameUBO, ObjectUBO};
+use crate::render::RenderBackend;
 use crate::scene::billboard::BillboardData;
 use crate::scene::camera::Camera;
-use crate::scene::graphics_resource::GraphicsResources;
-use crate::vulkanr::device::RRDevice;
 
 pub struct ProjectionData {
     pub view: Matrix4<f32>,
@@ -35,43 +33,23 @@ pub fn calculate_projection(camera: &Camera, swapchain_extent: (u32, u32)) -> Pr
 }
 
 pub unsafe fn update_frame_ubo(
-    graphics_resources: &mut GraphicsResources,
+    backend: &mut dyn RenderBackend,
     proj_data: &ProjectionData,
     camera_position: Vector3<f32>,
     light_position: Vector3<f32>,
     light_color: Vector3<f32>,
     image_index: usize,
-    rrdevice: &RRDevice,
 ) -> Result<()> {
-    let ubo = FrameUBO {
-        view: proj_data.view,
-        proj: proj_data.proj,
-        camera_pos: Vector4::new(camera_position.x, camera_position.y, camera_position.z, 1.0),
-        light_pos: Vector4::new(light_position.x, light_position.y, light_position.z, 1.0),
-        light_color: Vector4::new(light_color.x, light_color.y, light_color.z, 1.0),
-    };
-
-    graphics_resources
-        .frame_set
-        .update(rrdevice, image_index, &ubo)?;
-
-    Ok(())
+    backend.update_frame_ubo(proj_data, camera_position, light_position, light_color, image_index)
 }
 
 pub unsafe fn update_object_ubos(
-    graphics_resources: &GraphicsResources,
+    backend: &mut dyn RenderBackend,
     model_matrix: Matrix4<f32>,
     object_index: usize,
     image_index: usize,
-    rrdevice: &RRDevice,
 ) -> Result<()> {
-    let ubo = ObjectUBO {
-        model: model_matrix,
-    };
-    graphics_resources
-        .objects
-        .update(rrdevice, image_index, object_index, &ubo)?;
-    Ok(())
+    backend.update_object_ubo(model_matrix, object_index, image_index)
 }
 
 pub fn update_billboard_transform(

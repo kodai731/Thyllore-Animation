@@ -4,6 +4,7 @@ use crate::ecs::systems::{
     billboard_create_buffers, create_billboard, create_grid_gizmo, create_light_gizmo,
     gizmo_create_buffers,
 };
+use crate::vulkanr::VulkanBackend;
 use crate::ecs::{
     AnimationPlayback, AnimationRegistry, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState,
     NodeAssets, PipelineManager,
@@ -208,15 +209,18 @@ impl App {
         );
         println!("allocated gizmo object_index");
 
-        gizmo_create_buffers(
-            &mut gizmo_data.mesh,
-            &mut data.buffer_registry,
-            &instance,
-            &rrdevice,
-            rrcommand_pool.as_ref(),
-            true,
-        )
-        .expect("Failed to create gizmo buffers");
+        {
+            let mut backend = VulkanBackend::new(
+                &instance,
+                &rrdevice,
+                rrcommand_pool.clone(),
+                &mut data.graphics_resources,
+                &mut data.raytracing.acceleration_structure,
+                &mut data.buffer_registry,
+            );
+            gizmo_create_buffers(&mut gizmo_data.mesh, &mut backend, true)
+                .expect("Failed to create gizmo buffers");
+        }
 
         let light_position = data
             .ecs_world
@@ -229,15 +233,18 @@ impl App {
             "Allocated object_index {} for LightGizmo",
             light_gizmo_data.mesh.object_index
         );
-        gizmo_create_buffers(
-            &mut light_gizmo_data.mesh,
-            &mut data.buffer_registry,
-            &instance,
-            &rrdevice,
-            rrcommand_pool.as_ref(),
-            false,
-        )
-        .expect("Failed to create light gizmo buffers");
+        {
+            let mut backend = VulkanBackend::new(
+                &instance,
+                &rrdevice,
+                rrcommand_pool.clone(),
+                &mut data.graphics_resources,
+                &mut data.raytracing.acceleration_structure,
+                &mut data.buffer_registry,
+            );
+            gizmo_create_buffers(&mut light_gizmo_data.mesh, &mut backend, false)
+                .expect("Failed to create light gizmo buffers");
+        }
 
         let mut billboard_data = create_billboard();
         billboard_data.object_index = data.graphics_resources.objects.allocate_slot();
@@ -246,14 +253,18 @@ impl App {
             billboard_data.object_index
         );
 
-        billboard_create_buffers(
-            &mut billboard_data,
-            &mut data.buffer_registry,
-            &instance,
-            &rrdevice,
-            rrcommand_pool.as_ref(),
-        )
-        .expect("Failed to create billboard buffers");
+        {
+            let mut backend = VulkanBackend::new(
+                &instance,
+                &rrdevice,
+                rrcommand_pool.clone(),
+                &mut data.graphics_resources,
+                &mut data.raytracing.acceleration_structure,
+                &mut data.buffer_registry,
+            );
+            billboard_create_buffers(&mut billboard_data, &mut backend)
+                .expect("Failed to create billboard buffers");
+        }
 
         billboard_data.descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &rrswapchain)
             .expect("Failed to create billboard descriptor set");

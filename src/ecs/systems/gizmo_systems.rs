@@ -1,6 +1,5 @@
 use anyhow::Result;
 use cgmath::{vec3, Deg, InnerSpace, Matrix3, Vector2, Vector3};
-use vulkanalia::prelude::v1_0::*;
 
 use crate::debugview::gizmo::grid::GridGizmoData;
 use crate::debugview::gizmo::light::LightGizmoData;
@@ -12,12 +11,8 @@ use crate::math::{
     coordinate_system::perspective, is_point_in_rect, ray_to_line_segment_distance,
     ray_to_point_distance, screen_to_world_ray, view, Vec2, Vec3, Vec4,
 };
-use crate::render::{IndexBufferHandle, VertexBufferHandle};
-use crate::vulkanr::command::RRCommandPool;
+use crate::render::{IndexBufferHandle, RenderBackend, VertexBufferHandle};
 use crate::vulkanr::data::Vertex;
-use crate::vulkanr::device::RRDevice;
-use crate::vulkanr::resource::GpuBufferRegistry;
-use crate::vulkanr::vulkan::Instance;
 
 pub fn create_light_gizmo(position: Vector3<f32>) -> LightGizmoData {
     let axis_length = 1.0;
@@ -294,44 +289,21 @@ pub fn gizmo_update_rotation(mesh: &mut GizmoMesh, rotation_matrix: &Matrix3<f32
 
 pub unsafe fn gizmo_create_buffers(
     mesh: &mut GizmoMesh,
-    registry: &mut GpuBufferRegistry,
-    instance: &Instance,
-    rrdevice: &RRDevice,
-    rrcommand_pool: &RRCommandPool,
+    backend: &mut dyn RenderBackend,
     use_staging: bool,
 ) -> Result<()> {
-    let vertex_handle = if use_staging {
-        registry.create_vertex_buffer(instance, rrdevice, rrcommand_pool, &mesh.vertices, true)?
-    } else {
-        registry.create_host_visible_vertex_buffer(instance, rrdevice, &mesh.vertices, 0)?
-    };
-    mesh.vertex_buffer_handle = vertex_handle;
-
-    let index_handle =
-        registry.create_index_buffer(instance, rrdevice, rrcommand_pool, &mesh.indices)?;
-    mesh.index_buffer_handle = index_handle;
-
-    Ok(())
+    backend.create_gizmo_buffers(mesh, use_staging)
 }
 
 pub unsafe fn gizmo_update_vertex_buffer(
     mesh: &GizmoMesh,
-    registry: &GpuBufferRegistry,
-    rrdevice: &RRDevice,
+    backend: &dyn RenderBackend,
 ) -> Result<()> {
-    registry.update_vertex_buffer(rrdevice, mesh.vertex_buffer_handle, &mesh.vertices)?;
-    Ok(())
+    backend.update_gizmo_vertex_buffer(mesh)
 }
 
-pub unsafe fn gizmo_destroy_buffers(
-    mesh: &mut GizmoMesh,
-    registry: &mut GpuBufferRegistry,
-    rrdevice: &RRDevice,
-) {
-    registry.destroy_vertex_buffer(rrdevice, mesh.vertex_buffer_handle);
-    registry.destroy_index_buffer(rrdevice, mesh.index_buffer_handle);
-    mesh.vertex_buffer_handle = VertexBufferHandle::INVALID;
-    mesh.index_buffer_handle = IndexBufferHandle::INVALID;
+pub unsafe fn gizmo_destroy_buffers(mesh: &mut GizmoMesh, backend: &mut dyn RenderBackend) {
+    backend.destroy_gizmo_buffers(mesh);
 }
 
 pub fn gizmo_update_ray_to_model(
@@ -431,42 +403,16 @@ pub fn gizmo_update_ray_to_model(
 
 pub unsafe fn gizmo_update_or_create_ray_buffers(
     ray: &mut GizmoRayToModel,
-    registry: &mut GpuBufferRegistry,
-    instance: &Instance,
-    rrdevice: &RRDevice,
+    backend: &mut dyn RenderBackend,
 ) -> Result<()> {
-    if ray.vertices.is_empty() {
-        return Ok(());
-    }
-
-    if !ray.vertex_buffer_handle.is_valid() {
-        let vertex_handle =
-            registry.create_host_visible_vertex_buffer(instance, rrdevice, &ray.vertices, 0)?;
-        ray.vertex_buffer_handle = vertex_handle;
-    } else {
-        registry.update_vertex_buffer(rrdevice, ray.vertex_buffer_handle, &ray.vertices)?;
-    }
-
-    if !ray.index_buffer_handle.is_valid() {
-        let index_handle =
-            registry.create_host_visible_index_buffer(instance, rrdevice, &ray.indices)?;
-        ray.index_buffer_handle = index_handle;
-    } else {
-        registry.update_index_buffer(rrdevice, ray.index_buffer_handle, &ray.indices)?;
-    }
-
-    Ok(())
+    backend.update_or_create_ray_buffers(ray)
 }
 
 pub unsafe fn gizmo_destroy_ray_buffers(
     ray: &mut GizmoRayToModel,
-    registry: &mut GpuBufferRegistry,
-    rrdevice: &RRDevice,
+    backend: &mut dyn RenderBackend,
 ) {
-    registry.destroy_vertex_buffer(rrdevice, ray.vertex_buffer_handle);
-    registry.destroy_index_buffer(rrdevice, ray.index_buffer_handle);
-    ray.vertex_buffer_handle = VertexBufferHandle::INVALID;
-    ray.index_buffer_handle = IndexBufferHandle::INVALID;
+    backend.destroy_ray_buffers(ray);
 }
 
 pub fn gizmo_update_vertical_lines(
@@ -532,41 +478,15 @@ pub fn gizmo_update_vertical_lines(
 
 pub unsafe fn gizmo_update_or_create_vertical_line_buffers(
     lines: &mut GizmoVerticalLines,
-    registry: &mut GpuBufferRegistry,
-    instance: &Instance,
-    rrdevice: &RRDevice,
+    backend: &mut dyn RenderBackend,
 ) -> Result<()> {
-    if lines.vertices.is_empty() {
-        return Ok(());
-    }
-
-    if !lines.vertex_buffer_handle.is_valid() {
-        let vertex_handle =
-            registry.create_host_visible_vertex_buffer(instance, rrdevice, &lines.vertices, 1024)?;
-        lines.vertex_buffer_handle = vertex_handle;
-    } else {
-        registry.update_vertex_buffer(rrdevice, lines.vertex_buffer_handle, &lines.vertices)?;
-    }
-
-    if !lines.index_buffer_handle.is_valid() {
-        let index_handle =
-            registry.create_host_visible_index_buffer(instance, rrdevice, &lines.indices)?;
-        lines.index_buffer_handle = index_handle;
-    } else {
-        registry.update_index_buffer(rrdevice, lines.index_buffer_handle, &lines.indices)?;
-    }
-
-    Ok(())
+    backend.update_or_create_vertical_line_buffers(lines)
 }
 
 pub unsafe fn gizmo_destroy_vertical_line_buffers(
     lines: &mut GizmoVerticalLines,
-    registry: &mut GpuBufferRegistry,
-    rrdevice: &RRDevice,
+    backend: &mut dyn RenderBackend,
 ) {
-    registry.destroy_vertex_buffer(rrdevice, lines.vertex_buffer_handle);
-    registry.destroy_index_buffer(rrdevice, lines.index_buffer_handle);
-    lines.vertex_buffer_handle = VertexBufferHandle::INVALID;
-    lines.index_buffer_handle = IndexBufferHandle::INVALID;
+    backend.destroy_vertical_line_buffers(lines);
 }
 

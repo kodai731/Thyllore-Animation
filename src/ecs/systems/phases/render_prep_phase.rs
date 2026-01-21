@@ -6,30 +6,41 @@ use crate::ecs::context::FrameContext;
 use crate::ecs::systems::render_data_systems::{
     gizmo_mesh_render_data, gizmo_selectable_render_data, grid_render_data,
 };
-use crate::ecs::{gizmo_update_rotation, gizmo_update_vertex_buffer, update_frame_ubo, ProjectionData};
+use crate::ecs::{gizmo_update_rotation, gizmo_update_vertex_buffer, ProjectionData};
 use crate::math::get_camera_axes_from_view;
+use crate::render::RenderBackend;
 use crate::renderer::scene_renderer::update_object_ubo;
 use crate::vulkanr::data::{SceneUniformData, UniformBufferObject};
 
 pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
-    let (view, proj) = {
+    let (view, proj, screen_size, aspect) = {
         let proj_data = ctx.world.resource::<ProjectionData>();
-        (proj_data.view, proj_data.proj)
+        (
+            proj_data.view,
+            proj_data.proj,
+            proj_data.screen_size,
+            proj_data.aspect,
+        )
     };
 
     let camera_position = ctx.camera().position;
     let light_position = ctx.rt_debug().light_position;
 
     {
-        let proj_data = ctx.world.resource::<ProjectionData>();
-        update_frame_ubo(
-            ctx.graphics,
-            &*proj_data,
+        let proj_data = ProjectionData {
+            view,
+            proj,
+            screen_size,
+            aspect,
+        };
+        let image_index = ctx.image_index;
+        let mut backend = ctx.create_backend();
+        backend.update_frame_ubo(
+            &proj_data,
             camera_position,
             light_position,
             Vector3::new(1.0, 1.0, 1.0),
-            ctx.image_index,
-            ctx.device,
+            image_index,
         )?;
     }
 
@@ -151,7 +162,9 @@ unsafe fn update_grid_gizmo_buffers(ctx: &mut FrameContext, view: Matrix4<f32>) 
 
     gizmo_update_rotation(&mut ctx.gizmo_mut().mesh, &gizmo_rotation);
 
-    gizmo_update_vertex_buffer(&ctx.gizmo().mesh, ctx.buffer_registry, ctx.device)?;
+    let mesh = ctx.gizmo().mesh.clone();
+    let backend = ctx.create_backend();
+    gizmo_update_vertex_buffer(&mesh, &backend)?;
 
     Ok(())
 }

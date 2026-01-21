@@ -1,7 +1,8 @@
 use anyhow::Result;
 use cgmath::Vector3;
 
-use crate::ecs::context::{EcsContext, FrameContext};
+use crate::app::FrameContext;
+use crate::ecs::context::EcsContext;
 use crate::scene::graphics_resource::GraphicsResources;
 
 use super::phases::{

@@ -1,27 +1,56 @@
+use std::rc::Rc;
+
 use cgmath::Vector3;
 
-use crate::app::GUIData;
 use crate::asset::AssetStorage;
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::debugview::RayTracingDebugState;
+use crate::ecs::world::{ResMut, ResRef, World};
 use crate::scene::billboard::BillboardData;
 use crate::scene::camera::Camera;
+use crate::scene::graphics_resource::GraphicsResources;
 use crate::scene::grid::GridData;
+use crate::scene::raytracing::RayTracingData;
+use crate::vulkanr::command::RRCommandPool;
+use crate::vulkanr::device::RRDevice;
+use crate::vulkanr::resource::GpuBufferRegistry;
+use crate::vulkanr::vulkan::Instance;
+use crate::vulkanr::VulkanBackend;
 
-use super::world::{ResMut, ResRef, World};
+use super::GUIData;
 
-pub struct EcsContext<'a> {
+pub struct FrameContext<'a> {
+    pub instance: &'a Instance,
+    pub device: &'a RRDevice,
+    pub command_pool: Rc<RRCommandPool>,
+
     pub time: f32,
     pub delta_time: f32,
     pub image_index: usize,
     pub swapchain_extent: (u32, u32),
+
+    pub graphics: &'a mut GraphicsResources,
+    pub raytracing: &'a mut RayTracingData,
+    pub buffer_registry: &'a mut GpuBufferRegistry,
+
     pub world: &'a mut World,
     pub assets: &'a AssetStorage,
+
     pub gui_data: &'a mut GUIData,
-    pub mesh_positions: Vec<Vector3<f32>>,
 }
 
-impl<'a> EcsContext<'a> {
+impl<'a> FrameContext<'a> {
+    pub fn create_backend(&mut self) -> VulkanBackend<'_> {
+        VulkanBackend::new(
+            self.instance,
+            self.device,
+            self.command_pool.clone(),
+            self.graphics,
+            &mut self.raytracing.acceleration_structure,
+            self.buffer_registry,
+        )
+    }
+
     pub fn camera(&self) -> ResRef<Camera> {
         self.world.resource::<Camera>()
     }

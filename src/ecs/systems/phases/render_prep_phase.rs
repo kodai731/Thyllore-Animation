@@ -2,7 +2,7 @@ use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix, Vector3};
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::context::FrameContext;
+use crate::app::FrameContext;
 use crate::ecs::systems::render_data_systems::{
     gizmo_mesh_render_data, gizmo_selectable_render_data, grid_render_data,
 };

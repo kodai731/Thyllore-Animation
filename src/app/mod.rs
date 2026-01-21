@@ -1,4 +1,5 @@
 pub mod data;
+pub mod frame_context;
 pub mod init;
 pub mod model_loader;
 pub mod render;
@@ -7,6 +8,8 @@ pub mod update;
 pub mod cleanup;
 pub mod util;
 pub mod gui_data;
+
+pub use frame_context::FrameContext;
 
 pub use data::AppData;
 pub use gui_data::GUIData;

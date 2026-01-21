@@ -4,12 +4,11 @@ use vulkanalia::prelude::v1_0::*;
 use super::gizmo::{gizmo_draw_ray_with_pipeline, gizmo_draw_vertical_lines_with_pipeline};
 use crate::app::App;
 use crate::debugview::DebugViewMode;
-use crate::ecs::resource::PipelineManager;
 use crate::scene::graphics_resource::GraphicsResources;
 use crate::vulkanr::core::Device;
 use crate::vulkanr::descriptor::RRCompositeDescriptorSet;
 use crate::vulkanr::pipeline::RRPipeline;
-use crate::vulkanr::resource::GpuBufferRegistry;
+use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};
 
 pub struct CompositePass<'a> {
     app: &'a App,
@@ -49,8 +48,8 @@ impl<'a> CompositePass<'a> {
         })
     }
 
-    fn pipeline_manager(&self) -> crate::ecs::world::ResRef<PipelineManager> {
-        self.app.resource::<PipelineManager>()
+    fn pipeline_storage(&self) -> &PipelineStorage {
+        self.app.pipeline_storage()
     }
 
     pub unsafe fn record(
@@ -67,10 +66,10 @@ impl<'a> CompositePass<'a> {
 
         let grid = self.app.grid();
         let light_gizmo = self.app.light_gizmo();
-        let pipeline_manager = self.pipeline_manager();
+        let pipeline_storage = self.pipeline_storage();
 
         if let Some(pipeline_id) = grid.pipeline_id {
-            if let Some(pipeline) = pipeline_manager.get(pipeline_id) {
+            if let Some(pipeline) = pipeline_storage.get(pipeline_id) {
                 gizmo_draw_ray_with_pipeline(
                     &light_gizmo.ray_to_model,
                     self.buffer_registry,
@@ -201,7 +200,7 @@ impl<'a> CompositePass<'a> {
         image_index: usize,
     ) -> Result<()> {
         let grid = self.app.grid();
-        let pipeline_manager = self.pipeline_manager();
+        let pipeline_storage = self.pipeline_storage();
 
         let vertex_buffer = match self
             .buffer_registry
@@ -222,7 +221,7 @@ impl<'a> CompositePass<'a> {
             Some(id) => id,
             None => return Ok(()),
         };
-        let pipeline = match pipeline_manager.get(pipeline_id) {
+        let pipeline = match pipeline_storage.get(pipeline_id) {
             Some(p) => p,
             None => return Ok(()),
         };
@@ -281,7 +280,7 @@ impl<'a> CompositePass<'a> {
         image_index: usize,
     ) -> Result<()> {
         let gizmo = self.app.grid_gizmo();
-        let pipeline_manager = self.pipeline_manager();
+        let pipeline_storage = self.pipeline_storage();
 
         let vertex_buffer = match self
             .buffer_registry
@@ -302,7 +301,7 @@ impl<'a> CompositePass<'a> {
             Some(id) => id,
             None => return Ok(()),
         };
-        let pipeline = match pipeline_manager.get(pipeline_id) {
+        let pipeline = match pipeline_storage.get(pipeline_id) {
             Some(p) => p,
             None => return Ok(()),
         };
@@ -361,28 +360,28 @@ impl<'a> CompositePass<'a> {
         image_index: usize,
     ) -> Result<()> {
         let billboard = self.app.billboard();
-        let pipeline_manager = self.pipeline_manager();
+        let pipeline_storage = self.pipeline_storage();
 
         let vertex_buffer = match self
             .buffer_registry
-            .get_vertex_buffer(billboard.vertex_buffer_handle)
+            .get_vertex_buffer(billboard.info.vertex_buffer_handle)
         {
             Some(b) => b,
             None => return Ok(()),
         };
         let index_buffer = match self
             .buffer_registry
-            .get_index_buffer(billboard.index_buffer_handle)
+            .get_index_buffer(billboard.info.index_buffer_handle)
         {
             Some(b) => b,
             None => return Ok(()),
         };
 
-        let pipeline_id = match billboard.pipeline_id {
+        let pipeline_id = match billboard.render.pipeline_id {
             Some(id) => id,
             None => return Ok(()),
         };
-        let pipeline = match pipeline_manager.get(pipeline_id) {
+        let pipeline = match pipeline_storage.get(pipeline_id) {
             Some(p) => p,
             None => return Ok(()),
         };
@@ -410,13 +409,13 @@ impl<'a> CompositePass<'a> {
             vk::PipelineBindPoint::GRAPHICS,
             pipeline.pipeline_layout,
             0,
-            &[billboard.descriptor_set.descriptor_sets[descriptor_set_index]],
+            &[billboard.render.descriptor_set.descriptor_sets[descriptor_set_index]],
             &[],
         );
 
         self.device.cmd_draw_indexed(
             command_buffer,
-            billboard.indices.len() as u32,
+            billboard.info.indices.len() as u32,
             1,
             0,
             0,

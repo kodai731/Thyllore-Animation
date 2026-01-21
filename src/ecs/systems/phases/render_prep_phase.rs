@@ -133,13 +133,14 @@ unsafe fn update_billboard_ubo(
     let mut billboard = ctx.billboard_mut();
 
     let model_matrix = billboard
+        .info
         .transform
         .as_ref()
         .map(|t| t.model_matrix)
         .unwrap_or(Matrix4::identity());
 
-    for i in 0..billboard.descriptor_set.rrdata.len() {
-        let rrdata = &mut billboard.descriptor_set.rrdata[i];
+    for i in 0..billboard.render.descriptor_set.rrdata.len() {
+        let rrdata = &mut billboard.render.descriptor_set.rrdata[i];
 
         let ubo_billboard = UniformBufferObject {
             model: model_matrix,

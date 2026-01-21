@@ -48,17 +48,18 @@ pub fn gizmo_selectable_render_data(
 
 pub fn billboard_render_data(billboard: &BillboardData) -> RenderData {
     let model_matrix = billboard
+        .info
         .transform
         .as_ref()
         .map(|t| t.model_matrix)
         .unwrap_or_else(Matrix4::identity);
 
     RenderData {
-        object_index: billboard.object_index,
-        pipeline_id: billboard.pipeline_id,
-        vertex_buffer_handle: billboard.vertex_buffer_handle,
-        index_buffer_handle: billboard.index_buffer_handle,
-        index_count: billboard.indices.len() as u32,
+        object_index: billboard.render.object_index,
+        pipeline_id: billboard.render.pipeline_id,
+        vertex_buffer_handle: billboard.info.vertex_buffer_handle,
+        index_buffer_handle: billboard.info.index_buffer_handle,
+        index_count: billboard.info.indices.len() as u32,
         model_matrix,
     }
 }

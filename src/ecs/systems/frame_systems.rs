@@ -58,11 +58,11 @@ pub fn update_billboard_transform(
     camera_position: Vector3<f32>,
     camera_up: Vector3<f32>,
 ) {
-    if billboard.transform.is_none() {
-        billboard.transform = Some(create_billboard_transform(light_position));
+    if billboard.info.transform.is_none() {
+        billboard.info.transform = Some(create_billboard_transform(light_position));
     }
 
-    if let Some(ref mut transform) = billboard.transform {
+    if let Some(ref mut transform) = billboard.info.transform {
         transform.position = light_position;
         billboard_transform_update_look_at(transform, camera_position, camera_up);
     }

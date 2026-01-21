@@ -4,7 +4,9 @@ use cgmath::{InnerSpace, Matrix4, Vector3, Vector4};
 use crate::ecs::component::CameraState;
 use crate::ecs::world::{BillboardBehavior, Transform, World};
 use crate::render::RenderBackend;
-use crate::scene::billboard::{BillboardData, BillboardTransform, BillboardVertex};
+use crate::scene::billboard::{
+    BillboardData, BillboardInfo, BillboardRenderData, BillboardTransform, BillboardVertex,
+};
 use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
 
 pub fn create_billboard() -> BillboardData {
@@ -31,15 +33,19 @@ pub fn create_billboard() -> BillboardData {
     let indices = vec![0, 1, 2, 0, 2, 3];
 
     BillboardData {
-        pipeline_id: None,
-        descriptor_set: RRBillboardDescriptorSet::default(),
-        transform: None,
-        object_index: 0,
-        vertices,
-        indices,
-        vertex_buffer_handle: Default::default(),
-        index_buffer_handle: Default::default(),
-        texture: None,
+        info: BillboardInfo {
+            transform: None,
+            vertices,
+            indices,
+            vertex_buffer_handle: Default::default(),
+            index_buffer_handle: Default::default(),
+        },
+        render: BillboardRenderData {
+            pipeline_id: None,
+            object_index: 0,
+            descriptor_set: RRBillboardDescriptorSet::default(),
+            texture: None,
+        },
     }
 }
 

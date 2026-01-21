@@ -95,6 +95,10 @@ impl App {
         &mut self.data.graphics_resources
     }
 
+    pub fn pipeline_storage(&self) -> &crate::vulkanr::resource::PipelineStorage {
+        &self.data.pipeline_storage
+    }
+
     pub fn animation_playback(&self) -> ResRef<AnimationPlayback> {
         self.resource::<AnimationPlayback>()
     }

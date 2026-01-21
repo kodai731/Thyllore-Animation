@@ -19,7 +19,10 @@
       "Bash(grep:*)",
       "Bash(findstr:*)",
       "Bash(Select-String -Pattern \"error\\\\[\")",
-      "Bash(Select-Object -First 10)"
+      "Bash(Select-Object -First 10)",
+      "Bash(Select-String -Pattern \"error|src\\\\\")",
+      "Bash(Select-Object -First 60)",
+      "Bash(1)"
     ],
     "deny": [],
     "ask": []

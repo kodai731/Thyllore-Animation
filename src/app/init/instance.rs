@@ -168,7 +168,8 @@ impl App {
             vk::PolygonMode::FILL,
             vk::CullModeFlags::BACK,
         );
-        let model_pipeline_id = pipeline_manager.register(model_pipeline.clone());
+        let model_pipeline_id = data.pipeline_storage.register(model_pipeline.clone());
+        pipeline_manager.allocate_id();
         crate::log!("Registered model pipeline with id {}", model_pipeline_id);
 
         let grid_pipeline = RRPipeline::new_with_graphics_resources(
@@ -182,7 +183,8 @@ impl App {
             vk::PolygonMode::LINE,
             vk::CullModeFlags::NONE,
         );
-        let grid_pipeline_id = pipeline_manager.register(grid_pipeline);
+        let grid_pipeline_id = data.pipeline_storage.register(grid_pipeline);
+        pipeline_manager.allocate_id();
         crate::log!("Registered grid pipeline with id {}", grid_pipeline_id);
 
         let gizmo_pipeline = PipelineBuilder::new(
@@ -197,7 +199,8 @@ impl App {
         .descriptor_layouts(render_layouts.to_vec())
         .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
         .expect("Failed to create gizmo pipeline");
-        let gizmo_pipeline_id = pipeline_manager.register(gizmo_pipeline);
+        let gizmo_pipeline_id = data.pipeline_storage.register(gizmo_pipeline);
+        pipeline_manager.allocate_id();
         crate::log!("Registered gizmo pipeline with id {}", gizmo_pipeline_id);
 
         let mut gizmo_data = create_grid_gizmo();
@@ -247,10 +250,10 @@ impl App {
         }
 
         let mut billboard_data = create_billboard();
-        billboard_data.object_index = data.graphics_resources.objects.allocate_slot();
+        billboard_data.render.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!(
             "Allocated object_index {} for Billboard",
-            billboard_data.object_index
+            billboard_data.render.object_index
         );
 
         {
@@ -266,9 +269,9 @@ impl App {
                 .expect("Failed to create billboard buffers");
         }
 
-        billboard_data.descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &rrswapchain)
+        billboard_data.render.descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &rrswapchain)
             .expect("Failed to create billboard descriptor set");
-        billboard_data.descriptor_set.rrdata.push(RRData::new(
+        billboard_data.render.descriptor_set.rrdata.push(RRData::new(
             &instance,
             &rrdevice,
             &rrswapchain,
@@ -276,12 +279,14 @@ impl App {
         ));
 
         billboard_data
+            .render
             .descriptor_set
             .allocate_descriptor_sets(&rrdevice, &rrswapchain)
             .expect("Failed to allocate billboard descriptor sets");
 
-        if let Some(ref billboard_texture) = billboard_data.texture {
+        if let Some(ref billboard_texture) = billboard_data.render.texture {
             billboard_data
+                .render
                 .descriptor_set
                 .update_descriptor_sets(&rrdevice, &rrswapchain, billboard_texture)
                 .expect("Failed to update billboard descriptor sets");
@@ -291,13 +296,14 @@ impl App {
             &rrdevice,
             &rrrender,
             &rrswapchain,
-            billboard_data.descriptor_set.descriptor_set_layout,
+            billboard_data.render.descriptor_set.descriptor_set_layout,
             "assets/shaders/billboardVert.spv",
             "assets/shaders/billboardFrag.spv",
         )
         .expect("Failed to create billboard pipeline");
-        let billboard_pipeline_id = pipeline_manager.register(billboard_pipeline);
-        billboard_data.pipeline_id = Some(billboard_pipeline_id);
+        let billboard_pipeline_id = data.pipeline_storage.register(billboard_pipeline);
+        pipeline_manager.allocate_id();
+        billboard_data.render.pipeline_id = Some(billboard_pipeline_id);
         crate::log!(
             "Registered billboard pipeline with id {}",
             billboard_pipeline_id

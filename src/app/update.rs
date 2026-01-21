@@ -100,7 +100,7 @@ impl App {
         log_billboard_debug_info(
             &info,
             swapchain,
-            &self.billboard().descriptor_set,
+            &self.billboard().render.descriptor_set,
             gbuffer_debug_info.as_ref(),
             self.data.raytracing.gbuffer_sampler,
         );

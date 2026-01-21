@@ -2,11 +2,10 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::component::RenderData;
-use crate::ecs::resource::PipelineManager;
 use crate::render::ObjectUBO;
 use crate::scene::graphics_resource::ObjectDescriptorSet;
 use crate::vulkanr::device::RRDevice;
-use crate::vulkanr::resource::GpuBufferRegistry;
+use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};
 
 pub unsafe fn update_object_ubo(
     render_data: &[&RenderData],
@@ -30,7 +29,7 @@ pub unsafe fn render_scene_objects(
     frame_set: vk::DescriptorSet,
     objects: &ObjectDescriptorSet,
     rrdevice: &RRDevice,
-    pipeline_manager: &PipelineManager,
+    pipeline_storage: &PipelineStorage,
     buffer_registry: &GpuBufferRegistry,
 ) {
     for data in render_data {
@@ -47,7 +46,7 @@ pub unsafe fn render_scene_objects(
             Some(id) => id,
             None => continue,
         };
-        let pipeline = match pipeline_manager.get(pipeline_id) {
+        let pipeline = match pipeline_storage.get(pipeline_id) {
             Some(p) => p,
             None => continue,
         };

@@ -260,21 +260,21 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
     }
 
     unsafe fn create_billboard_buffers(&mut self, billboard: &mut BillboardData) -> Result<()> {
-        billboard.vertex_buffer_handle = self.buffer_registry.create_host_visible_vertex_buffer(
+        billboard.info.vertex_buffer_handle = self.buffer_registry.create_host_visible_vertex_buffer(
             self.instance,
             self.device,
-            &billboard.vertices,
+            &billboard.info.vertices,
             256,
         )?;
 
-        billboard.index_buffer_handle = self.buffer_registry.create_host_visible_index_buffer(
+        billboard.info.index_buffer_handle = self.buffer_registry.create_host_visible_index_buffer(
             self.instance,
             self.device,
-            &billboard.indices,
+            &billboard.info.indices,
         )?;
 
         let texture_path = std::path::Path::new("assets/textures/lightIcon.png");
-        billboard.texture = Some(
+        billboard.render.texture = Some(
             RRImage::new_from_file(
                 self.instance,
                 self.device,

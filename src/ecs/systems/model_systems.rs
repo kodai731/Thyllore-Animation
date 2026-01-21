@@ -579,12 +579,13 @@ unsafe fn update_billboard_descriptor(
     swapchain: &RRSwapchain,
     billboard: &mut BillboardData,
 ) -> Result<()> {
-    let texture_clone = billboard.texture.clone();
+    let texture_clone = billboard.render.texture.clone();
     if let Some(ref billboard_texture) = texture_clone {
         billboard
+            .render
             .descriptor_set
             .update_descriptor_sets(device, swapchain, billboard_texture)?;
-        crate::log!("Re-updated billboard.descriptor_set after model reload");
+        crate::log!("Re-updated billboard.render.descriptor_set after model reload");
     }
     Ok(())
 }

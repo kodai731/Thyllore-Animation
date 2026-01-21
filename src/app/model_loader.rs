@@ -176,14 +176,14 @@ pub unsafe fn replace_model_with_cube(
     }
 
     {
-        let texture_clone = billboard.texture.clone();
+        let texture_clone = billboard.render.texture.clone();
         if let Some(ref billboard_texture) = texture_clone {
-            billboard.descriptor_set.update_descriptor_sets(
+            billboard.render.descriptor_set.update_descriptor_sets(
                 rrdevice,
                 rrswapchain,
                 billboard_texture,
             )?;
-            crate::log!("Re-updated billboard.descriptor_set after cube reload");
+            crate::log!("Re-updated billboard.render.descriptor_set after cube reload");
         }
     }
 

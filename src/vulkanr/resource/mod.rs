@@ -4,6 +4,7 @@ pub mod dynamic_buffer;
 pub mod gbuffer;
 pub mod image;
 pub mod mesh_buffer;
+pub mod pipeline_storage;
 
 pub use buffer::*;
 pub use buffer_registry::GpuBufferRegistry;
@@ -11,3 +12,4 @@ pub use dynamic_buffer::*;
 pub use gbuffer::RRGBuffer;
 pub use image::*;
 pub use mesh_buffer::*;
+pub use pipeline_storage::PipelineStorage;

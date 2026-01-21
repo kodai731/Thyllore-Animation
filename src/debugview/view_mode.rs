@@ -1,5 +1,4 @@
 use crate::app::data::LightMoveTarget;
-use crate::app::GUIData;
 use crate::log;
 use crate::scene::CubeModel;
 use cgmath::{InnerSpace, Vector3};
@@ -232,8 +231,8 @@ impl RayTracingDebugState {
         crate::log!("(light_gizmo_data will be synced later in this frame)");
         crate::log!("========================================");
     }
-    pub fn should_load_cube(&self, gui_data: &GUIData) -> bool {
-        gui_data.load_cube || self.cube_size_changed
+    pub fn should_load_cube(&self) -> bool {
+        self.cube_size_changed
     }
 
     pub fn finish_cube_load(&mut self) {

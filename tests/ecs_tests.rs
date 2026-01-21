@@ -1,0 +1,668 @@
+use rust_rendering::ecs::registry::ComponentRegistry;
+use rust_rendering::ecs::storage::{Components, SparseSet};
+use rust_rendering::ecs::world::{Entity, Name, Resources, Transform, Visible, World};
+use rust_rendering::render::{BufferHandle, IndexBufferHandle, VertexBufferHandle};
+
+mod sparse_set_tests {
+    use super::*;
+
+    #[test]
+    fn test_sparse_set_new() {
+        let set: SparseSet<i32> = SparseSet::new();
+        assert_eq!(set.len(), 0);
+        assert!(set.is_empty());
+    }
+
+    #[test]
+    fn test_sparse_set_insert_and_get() {
+        let mut set = SparseSet::new();
+        let entity: Entity = 1;
+
+        set.insert(entity, 42);
+
+        assert_eq!(set.get(entity), Some(&42));
+        assert_eq!(set.len(), 1);
+    }
+
+    #[test]
+    fn test_sparse_set_insert_multiple() {
+        let mut set = SparseSet::new();
+
+        set.insert(1, "first");
+        set.insert(2, "second");
+        set.insert(3, "third");
+
+        assert_eq!(set.get(1), Some(&"first"));
+        assert_eq!(set.get(2), Some(&"second"));
+        assert_eq!(set.get(3), Some(&"third"));
+        assert_eq!(set.len(), 3);
+    }
+
+    #[test]
+    fn test_sparse_set_update_existing() {
+        let mut set = SparseSet::new();
+        let entity: Entity = 1;
+
+        set.insert(entity, 10);
+        set.insert(entity, 20);
+
+        assert_eq!(set.get(entity), Some(&20));
+        assert_eq!(set.len(), 1);
+    }
+
+    #[test]
+    fn test_sparse_set_remove() {
+        let mut set = SparseSet::new();
+
+        set.insert(1, 100);
+        set.insert(2, 200);
+
+        set.remove(1);
+
+        assert_eq!(set.get(1), None);
+        assert_eq!(set.get(2), Some(&200));
+        assert_eq!(set.len(), 1);
+    }
+
+    #[test]
+    fn test_sparse_set_contains() {
+        let mut set = SparseSet::new();
+
+        set.insert(5, "value");
+
+        assert!(set.contains(5));
+        assert!(!set.contains(6));
+    }
+
+    #[test]
+    fn test_sparse_set_get_nonexistent() {
+        let set: SparseSet<i32> = SparseSet::new();
+
+        assert_eq!(set.get(999), None);
+    }
+
+    #[test]
+    fn test_sparse_set_large_entity_id() {
+        let mut set = SparseSet::new();
+        let large_entity: Entity = 10000;
+
+        set.insert(large_entity, "large");
+
+        assert_eq!(set.get(large_entity), Some(&"large"));
+    }
+
+    #[test]
+    fn test_sparse_set_iteration() {
+        let mut set = SparseSet::new();
+
+        set.insert(1, 10);
+        set.insert(3, 30);
+        set.insert(5, 50);
+
+        let collected: Vec<_> = set.iter().collect();
+        assert_eq!(collected.len(), 3);
+
+        let values: Vec<_> = collected.iter().map(|(_, v)| **v).collect();
+        assert!(values.contains(&10));
+        assert!(values.contains(&30));
+        assert!(values.contains(&50));
+    }
+
+    #[test]
+    fn test_sparse_set_clear() {
+        let mut set = SparseSet::new();
+
+        set.insert(1, 1);
+        set.insert(2, 2);
+        set.clear();
+
+        assert!(set.is_empty());
+        assert_eq!(set.len(), 0);
+    }
+
+    #[test]
+    fn test_sparse_set_entities() {
+        let mut set = SparseSet::new();
+
+        set.insert(10, "a");
+        set.insert(20, "b");
+        set.insert(30, "c");
+
+        let entities = set.entities();
+        assert_eq!(entities.len(), 3);
+        assert!(entities.contains(&10));
+        assert!(entities.contains(&20));
+        assert!(entities.contains(&30));
+    }
+}
+
+mod resources_tests {
+    use super::*;
+
+    #[derive(Debug, PartialEq)]
+    struct TestResource {
+        value: i32,
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct AnotherResource {
+        name: String,
+    }
+
+    #[test]
+    fn test_resources_insert_and_get() {
+        let mut resources = Resources::new();
+
+        resources.insert(TestResource { value: 42 });
+
+        let res = resources.get::<TestResource>();
+        assert!(res.is_some());
+        assert_eq!(res.unwrap().value, 42);
+    }
+
+    #[test]
+    fn test_resources_get_mut() {
+        let mut resources = Resources::new();
+
+        resources.insert(TestResource { value: 0 });
+
+        {
+            let mut res = resources.get_mut::<TestResource>().unwrap();
+            res.value = 100;
+        }
+
+        let res = resources.get::<TestResource>().unwrap();
+        assert_eq!(res.value, 100);
+    }
+
+    #[test]
+    fn test_resources_multiple_types() {
+        let mut resources = Resources::new();
+
+        resources.insert(TestResource { value: 1 });
+        resources.insert(AnotherResource {
+            name: "test".to_string(),
+        });
+
+        assert_eq!(resources.get::<TestResource>().unwrap().value, 1);
+        assert_eq!(
+            resources.get::<AnotherResource>().unwrap().name,
+            "test".to_string()
+        );
+    }
+
+    #[test]
+    fn test_resources_contains() {
+        let mut resources = Resources::new();
+
+        assert!(!resources.contains::<TestResource>());
+
+        resources.insert(TestResource { value: 0 });
+
+        assert!(resources.contains::<TestResource>());
+    }
+
+    #[test]
+    fn test_resources_remove() {
+        let mut resources = Resources::new();
+
+        resources.insert(TestResource { value: 50 });
+        let removed = resources.remove::<TestResource>();
+
+        assert!(removed.is_some());
+        assert_eq!(removed.unwrap().value, 50);
+        assert!(!resources.contains::<TestResource>());
+    }
+
+    #[test]
+    fn test_resources_get_nonexistent() {
+        let resources = Resources::new();
+
+        assert!(resources.get::<TestResource>().is_none());
+    }
+
+    #[test]
+    fn test_resources_overwrite() {
+        let mut resources = Resources::new();
+
+        resources.insert(TestResource { value: 1 });
+        resources.insert(TestResource { value: 2 });
+
+        assert_eq!(resources.get::<TestResource>().unwrap().value, 2);
+    }
+}
+
+mod component_registry_tests {
+    use super::*;
+
+    #[derive(Clone, Debug)]
+    struct Position {
+        x: f32,
+        y: f32,
+    }
+
+    #[derive(Clone, Debug)]
+    struct Velocity {
+        dx: f32,
+        dy: f32,
+    }
+
+    #[test]
+    fn test_registry_register() {
+        let mut registry = ComponentRegistry::new();
+
+        let info = registry.register::<Position>();
+
+        assert!(info.size() >= 0);
+        assert!(registry.is_registered::<Position>());
+    }
+
+    #[test]
+    fn test_registry_multiple_types() {
+        let mut registry = ComponentRegistry::new();
+
+        registry.register::<Position>();
+        registry.register::<Velocity>();
+
+        assert!(registry.is_registered::<Position>());
+        assert!(registry.is_registered::<Velocity>());
+        assert_eq!(registry.component_count(), 2);
+    }
+
+    #[test]
+    fn test_registry_not_registered() {
+        let registry = ComponentRegistry::new();
+
+        assert!(!registry.is_registered::<Position>());
+    }
+
+    #[test]
+    fn test_registry_get_info() {
+        let mut registry = ComponentRegistry::new();
+
+        registry.register::<Position>();
+
+        let info = registry.get_info::<Position>();
+        assert!(info.is_some());
+    }
+
+    #[test]
+    fn test_registry_double_register() {
+        let mut registry = ComponentRegistry::new();
+
+        registry.register::<Position>();
+        registry.register::<Position>();
+
+        assert_eq!(registry.component_count(), 1);
+    }
+}
+
+mod world_tests {
+    use super::*;
+    use cgmath::Vector3;
+
+    #[test]
+    fn test_world_new() {
+        let world = World::new();
+
+        assert_eq!(world.entity_count(), 0);
+    }
+
+    #[test]
+    fn test_world_spawn() {
+        let mut world = World::new();
+
+        let e1 = world.spawn();
+        let e2 = world.spawn();
+
+        assert_ne!(e1, e2);
+    }
+
+    #[test]
+    fn test_world_insert_and_get_component() {
+        let mut world = World::new();
+        let entity = world.spawn();
+
+        world.insert_component(entity, Name("TestEntity".to_string()));
+
+        let name = world.get_component::<Name>(entity);
+        assert!(name.is_some());
+        assert_eq!(name.unwrap().0, "TestEntity");
+    }
+
+    #[test]
+    fn test_world_multiple_components() {
+        let mut world = World::new();
+        let entity = world.spawn();
+
+        world.insert_component(entity, Name("Entity1".to_string()));
+        world.insert_component(entity, Transform::default());
+        world.insert_component(entity, Visible(true));
+
+        assert!(world.has_component::<Name>(entity));
+        assert!(world.has_component::<Transform>(entity));
+        assert!(world.has_component::<Visible>(entity));
+    }
+
+    #[test]
+    fn test_world_get_component_mut() {
+        let mut world = World::new();
+        let entity = world.spawn();
+
+        world.insert_component(
+            entity,
+            Transform {
+                translation: Vector3::new(0.0, 0.0, 0.0),
+                ..Transform::default()
+            },
+        );
+
+        {
+            let transform = world.get_component_mut::<Transform>(entity).unwrap();
+            transform.translation = Vector3::new(10.0, 20.0, 30.0);
+        }
+
+        let transform = world.get_component::<Transform>(entity).unwrap();
+        assert_eq!(transform.translation.x, 10.0);
+        assert_eq!(transform.translation.y, 20.0);
+        assert_eq!(transform.translation.z, 30.0);
+    }
+
+    #[test]
+    fn test_world_remove_component() {
+        let mut world = World::new();
+        let entity = world.spawn();
+
+        world.insert_component(entity, Name("ToRemove".to_string()));
+        assert!(world.has_component::<Name>(entity));
+
+        world.remove_component::<Name>(entity);
+        assert!(!world.has_component::<Name>(entity));
+    }
+
+    #[test]
+    fn test_world_component_entities() {
+        let mut world = World::new();
+
+        let e1 = world.spawn();
+        let e2 = world.spawn();
+        let e3 = world.spawn();
+
+        world.insert_component(e1, Name("A".to_string()));
+        world.insert_component(e2, Name("B".to_string()));
+
+        let entities = world.component_entities::<Name>();
+        assert_eq!(entities.len(), 2);
+        assert!(entities.contains(&e1));
+        assert!(entities.contains(&e2));
+        assert!(!entities.contains(&e3));
+    }
+
+    #[test]
+    fn test_world_resources() {
+        #[derive(Debug)]
+        struct GameTime(f32);
+
+        let mut world = World::new();
+
+        world.insert_resource(GameTime(0.0));
+
+        assert!(world.contains_resource::<GameTime>());
+
+        {
+            let time = world.resource::<GameTime>();
+            assert_eq!(time.0, 0.0);
+        }
+
+        {
+            let mut time = world.resource_mut::<GameTime>();
+            time.0 = 1.5;
+        }
+
+        let time = world.resource::<GameTime>();
+        assert_eq!(time.0, 1.5);
+    }
+
+    #[test]
+    fn test_world_iter_components() {
+        let mut world = World::new();
+
+        let e1 = world.spawn();
+        let e2 = world.spawn();
+
+        world.insert_component(e1, Name("First".to_string()));
+        world.insert_component(e2, Name("Second".to_string()));
+
+        let names: Vec<_> = world.iter_components::<Name>().collect();
+        assert_eq!(names.len(), 2);
+    }
+
+    #[test]
+    fn test_world_entity_count() {
+        let mut world = World::new();
+
+        let e1 = world.spawn();
+        world.insert_component(e1, Transform::default());
+
+        let e2 = world.spawn();
+        world.insert_component(e2, Transform::default());
+
+        assert_eq!(world.entity_count(), 2);
+    }
+}
+
+mod buffer_handle_tests {
+    use super::*;
+
+    #[test]
+    fn test_buffer_handle_new() {
+        let handle = BufferHandle::new(5);
+
+        assert_eq!(handle.index(), 5);
+        assert!(handle.is_valid());
+    }
+
+    #[test]
+    fn test_buffer_handle_invalid() {
+        let handle = BufferHandle::INVALID;
+
+        assert!(!handle.is_valid());
+        assert_eq!(handle.0, u32::MAX);
+    }
+
+    #[test]
+    fn test_buffer_handle_default() {
+        let handle = BufferHandle::default();
+
+        assert_eq!(handle.0, 0);
+        assert!(handle.is_valid());
+    }
+
+    #[test]
+    fn test_buffer_handle_equality() {
+        let h1 = BufferHandle::new(10);
+        let h2 = BufferHandle::new(10);
+        let h3 = BufferHandle::new(20);
+
+        assert_eq!(h1, h2);
+        assert_ne!(h1, h3);
+    }
+
+    #[test]
+    fn test_vertex_buffer_handle() {
+        let handle = VertexBufferHandle::new(3);
+
+        assert_eq!(handle.index(), 3);
+        assert!(handle.is_valid());
+    }
+
+    #[test]
+    fn test_vertex_buffer_handle_invalid() {
+        let handle = VertexBufferHandle::INVALID;
+
+        assert!(!handle.is_valid());
+    }
+
+    #[test]
+    fn test_index_buffer_handle() {
+        let handle = IndexBufferHandle::new(7);
+
+        assert_eq!(handle.index(), 7);
+        assert!(handle.is_valid());
+    }
+
+    #[test]
+    fn test_index_buffer_handle_invalid() {
+        let handle = IndexBufferHandle::INVALID;
+
+        assert!(!handle.is_valid());
+    }
+
+    #[test]
+    fn test_handle_as_hash_key() {
+        use std::collections::HashMap;
+
+        let mut map = HashMap::new();
+        let handle = VertexBufferHandle::new(1);
+
+        map.insert(handle, "test_value");
+
+        assert_eq!(map.get(&handle), Some(&"test_value"));
+    }
+}
+
+mod components_tests {
+    use super::*;
+
+    #[derive(Clone, Debug, PartialEq)]
+    struct Health(pub i32);
+
+    #[derive(Clone, Debug, PartialEq)]
+    struct Damage(pub i32);
+
+    #[test]
+    fn test_components_register_and_insert() {
+        let mut components = Components::new();
+        components.register::<Health>();
+
+        let entity: Entity = 1;
+        components.insert(entity, Health(100));
+
+        assert!(components.contains::<Health>(entity));
+        assert_eq!(components.get::<Health>(entity), Some(&Health(100)));
+    }
+
+    #[test]
+    fn test_components_multiple_types() {
+        let mut components = Components::new();
+        components.register::<Health>();
+        components.register::<Damage>();
+
+        let entity: Entity = 1;
+        components.insert(entity, Health(100));
+        components.insert(entity, Damage(25));
+
+        assert_eq!(components.get::<Health>(entity), Some(&Health(100)));
+        assert_eq!(components.get::<Damage>(entity), Some(&Damage(25)));
+    }
+
+    #[test]
+    fn test_components_remove() {
+        let mut components = Components::new();
+        components.register::<Health>();
+
+        let entity: Entity = 1;
+        components.insert(entity, Health(50));
+        components.remove::<Health>(entity);
+
+        assert!(!components.contains::<Health>(entity));
+    }
+
+    #[test]
+    fn test_components_entities() {
+        let mut components = Components::new();
+        components.register::<Health>();
+
+        components.insert(1, Health(100));
+        components.insert(3, Health(200));
+        components.insert(5, Health(300));
+
+        let entities = components.entities::<Health>();
+        assert_eq!(entities.len(), 3);
+        assert!(entities.contains(&1));
+        assert!(entities.contains(&3));
+        assert!(entities.contains(&5));
+    }
+
+    #[test]
+    fn test_components_get_mut() {
+        let mut components = Components::new();
+        components.register::<Health>();
+
+        let entity: Entity = 1;
+        components.insert(entity, Health(100));
+
+        if let Some(health) = components.get_mut::<Health>(entity) {
+            health.0 -= 30;
+        }
+
+        assert_eq!(components.get::<Health>(entity), Some(&Health(70)));
+    }
+}
+
+mod transform_tests {
+    use super::*;
+    use cgmath::{assert_relative_eq, Quaternion, Vector3};
+
+    #[test]
+    fn test_transform_default() {
+        let transform = Transform::default();
+
+        assert_eq!(transform.translation, Vector3::new(0.0, 0.0, 0.0));
+        assert_eq!(transform.scale, Vector3::new(1.0, 1.0, 1.0));
+    }
+
+    #[test]
+    fn test_transform_to_matrix_identity() {
+        let transform = Transform::default();
+        let matrix = transform.to_matrix();
+
+        for i in 0..4 {
+            for j in 0..4 {
+                if i == j {
+                    assert_relative_eq!(matrix[i][j], 1.0, epsilon = 0.0001);
+                } else {
+                    assert_relative_eq!(matrix[i][j], 0.0, epsilon = 0.0001);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_transform_to_matrix_translation() {
+        let transform = Transform {
+            translation: Vector3::new(10.0, 20.0, 30.0),
+            rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            scale: Vector3::new(1.0, 1.0, 1.0),
+        };
+        let matrix = transform.to_matrix();
+
+        assert_relative_eq!(matrix[3][0], 10.0, epsilon = 0.0001);
+        assert_relative_eq!(matrix[3][1], 20.0, epsilon = 0.0001);
+        assert_relative_eq!(matrix[3][2], 30.0, epsilon = 0.0001);
+    }
+
+    #[test]
+    fn test_transform_to_matrix_scale() {
+        let transform = Transform {
+            translation: Vector3::new(0.0, 0.0, 0.0),
+            rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            scale: Vector3::new(2.0, 3.0, 4.0),
+        };
+        let matrix = transform.to_matrix();
+
+        assert_relative_eq!(matrix[0][0], 2.0, epsilon = 0.0001);
+        assert_relative_eq!(matrix[1][1], 3.0, epsilon = 0.0001);
+        assert_relative_eq!(matrix[2][2], 4.0, epsilon = 0.0001);
+    }
+}

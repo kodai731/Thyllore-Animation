@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::rc::Rc;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::scene::render_resource::{Mesh, RenderResources};
+use crate::scene::graphics_resource::{MeshBuffer, GraphicsResources};
 use crate::vulkanr::buffer::create_buffer;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
@@ -87,7 +87,7 @@ impl RayTracingData {
         instance: &Instance,
         rrdevice: &RRDevice,
         rrcommand_pool: &Rc<RRCommandPool>,
-        meshes: &[Mesh],
+        meshes: &[MeshBuffer],
     ) -> Result<()> {
         log::info!("Building acceleration structures...");
 
@@ -131,7 +131,7 @@ impl RayTracingData {
         rrdevice: &RRDevice,
         rrswapchain: &RRSwapchain,
         rrrender: &RRRender,
-        render_resources: &RenderResources,
+        graphics_resources: &GraphicsResources,
         billboard_descriptor_set: &mut RRBillboardDescriptorSet,
     ) -> Result<()> {
         crate::log!("create_pipelines: starting...");
@@ -139,9 +139,9 @@ impl RayTracingData {
         crate::log!("create_pipelines: acceleration_structure is_some: {}", self.acceleration_structure.is_some());
 
         let render_layouts = [
-            render_resources.frame_set.layout,
-            render_resources.materials.layout,
-            render_resources.objects.layout,
+            graphics_resources.frame_set.layout,
+            graphics_resources.materials.layout,
+            graphics_resources.objects.layout,
         ];
 
         let gbuffer_pipeline = PipelineBuilder::new(

@@ -1,21 +1,12 @@
-pub mod animation;
 pub mod billboard;
 pub mod camera;
-pub mod components;
 pub mod cube;
+pub mod graphics_resource;
 pub mod grid;
 pub mod raytracing;
-pub mod render_resource;
-pub mod scene;
-pub mod systems;
 
-pub use animation::*;
-pub use billboard::*;
 pub use camera::Camera;
-pub use components::*;
 pub use cube::CubeModel;
+pub use graphics_resource::*;
 pub use grid::GridData;
 pub use raytracing::RayTracingData;
-pub use render_resource::*;
-pub use scene::*;
-pub use systems::*;

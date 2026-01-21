@@ -1,18 +1,24 @@
 use crate::app::AppData;
-use crate::scene::render_resource::{MaterialUBO, Mesh};
+use crate::render::MaterialUBO;
+use crate::scene::billboard::BillboardData;
+use crate::scene::graphics_resource::MeshBuffer;
 use crate::scene::CubeModel;
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
+use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::data::VertexData;
 use crate::vulkanr::device::*;
-use crate::vulkanr::image::{create_image_view, create_texture_image_pixel, create_texture_sampler};
+use crate::vulkanr::image::{
+    create_image_view, create_texture_image_pixel, create_texture_sampler,
+};
 use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
+use crate::vulkanr::swapchain::RRSwapchain;
 use crate::vulkanr::vulkan::*;
 
 use anyhow::Result;
-use std::borrow::BorrowMut;
 use std::mem::size_of;
 use std::os::raw::c_void;
+use std::rc::Rc;
 
 pub unsafe fn cleanup_model_resources(rrdevice: &RRDevice, data: &mut AppData) {
     crate::log!("Cleaning up model resources...");
@@ -25,14 +31,12 @@ pub unsafe fn cleanup_model_resources(rrdevice: &RRDevice, data: &mut AppData) {
     }
     data.raytracing.acceleration_structure = None;
 
-    data.render_resources.clear_meshes(rrdevice);
-    data.render_resources.mesh_material_ids.clear();
-    data.render_resources.materials.clear_materials(&rrdevice.device);
-    data.render_resources.animation.clear();
-    crate::log!("Cleared materials and animation");
-
-    data.animation_playing = false;
-    data.animation_time = 0.0;
+    data.graphics_resources.clear_meshes(rrdevice);
+    data.graphics_resources.mesh_material_ids.clear();
+    data.graphics_resources
+        .materials
+        .clear_materials(&rrdevice.device);
+    crate::log!("Cleared materials");
 
     crate::log!("Model resources cleaned up");
 }
@@ -41,16 +45,17 @@ pub unsafe fn rebuild_acceleration_structures(
     instance: &Instance,
     rrdevice: &RRDevice,
     data: &mut AppData,
+    rrcommand_pool: &Rc<RRCommandPool>,
 ) -> Result<()> {
     crate::log!("Rebuilding acceleration structures...");
 
     let mut acceleration_structure = RRAccelerationStructure::new();
 
-    for mesh in &data.render_resources.meshes {
+    for mesh in &data.graphics_resources.meshes {
         let blas = RRAccelerationStructure::create_blas(
             instance,
             rrdevice,
-            &data.rrcommand_pool,
+            rrcommand_pool.as_ref(),
             &mesh.vertex_buffer.buffer,
             mesh.vertex_data.vertices.len() as u32,
             std::mem::size_of::<vulkan_data::Vertex>() as u32,
@@ -66,7 +71,7 @@ pub unsafe fn rebuild_acceleration_structures(
         let tlas = RRAccelerationStructure::create_tlas(
             instance,
             rrdevice,
-            &data.rrcommand_pool,
+            rrcommand_pool.as_ref(),
             &acceleration_structure.blas_list,
         )?;
         acceleration_structure.tlas = tlas;
@@ -85,7 +90,9 @@ pub unsafe fn replace_model_with_cube(
     instance: &Instance,
     rrdevice: &RRDevice,
     data: &mut AppData,
-    scene: &crate::scene::Scene,
+    billboard: &mut BillboardData,
+    rrcommand_pool: &Rc<RRCommandPool>,
+    rrswapchain: &RRSwapchain,
     size: f32,
     position: [f32; 3],
 ) -> Result<()> {
@@ -93,12 +100,12 @@ pub unsafe fn replace_model_with_cube(
 
     let cube = CubeModel::new_at_position(size, position);
 
-    let mut mesh = Mesh::default();
+    let mut mesh = MeshBuffer::default();
 
     (mesh.image, mesh.image_memory, mesh.mip_level) = create_texture_image_pixel(
         instance,
         rrdevice,
-        data.rrcommand_pool.borrow_mut(),
+        rrcommand_pool,
         &vec![255u8, 255, 255, 255],
         1,
         1,
@@ -122,7 +129,7 @@ pub unsafe fn replace_model_with_cube(
     mesh.vertex_buffer = RRVertexBuffer::new(
         instance,
         rrdevice,
-        &data.rrcommand_pool,
+        rrcommand_pool.as_ref(),
         (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len()) as vk::DeviceSize,
         mesh.vertex_data.vertices.as_ptr() as *const c_void,
         mesh.vertex_data.vertices.len(),
@@ -131,30 +138,33 @@ pub unsafe fn replace_model_with_cube(
     mesh.index_buffer = RRIndexBuffer::new(
         instance,
         rrdevice,
-        &data.rrcommand_pool,
+        rrcommand_pool.as_ref(),
         (size_of::<u32>() * mesh.vertex_data.indices.len()) as u64,
         mesh.vertex_data.indices.as_ptr() as *const c_void,
         mesh.vertex_data.indices.len(),
     );
 
-    mesh.object_index = data.render_resources.objects.allocate_slot();
+    mesh.object_index = data.graphics_resources.objects.allocate_slot();
     crate::log!("Allocated object_index {} for cube mesh", mesh.object_index);
 
-    let material_id = data.render_resources.materials.create_material_with_texture(
-        instance,
-        rrdevice,
-        "cube_material",
-        mesh.image_view,
-        mesh.sampler,
-        MaterialUBO::default(),
-    )?;
-    data.render_resources.mesh_material_ids.push(material_id);
+    let material_id = data
+        .graphics_resources
+        .materials
+        .create_material_with_texture(
+            instance,
+            rrdevice,
+            "cube_material",
+            mesh.image_view,
+            mesh.sampler,
+            MaterialUBO::default(),
+        )?;
+    data.graphics_resources.mesh_material_ids.push(material_id);
     crate::log!("Created material {} for cube", material_id);
 
-    data.render_resources.meshes.push(mesh);
-    crate::log!("Added cube mesh to render_resources.meshes");
+    data.graphics_resources.meshes.push(mesh);
+    crate::log!("Added cube mesh to graphics_resources.meshes");
 
-    rebuild_acceleration_structures(instance, rrdevice, data)?;
+    rebuild_acceleration_structures(instance, rrdevice, data, rrcommand_pool)?;
 
     if let Some(ref accel_struct) = data.raytracing.acceleration_structure {
         if let Some(tlas) = accel_struct.tlas.acceleration_structure {
@@ -166,11 +176,11 @@ pub unsafe fn replace_model_with_cube(
     }
 
     {
-        let texture_clone = scene.billboard().texture.clone();
+        let texture_clone = billboard.texture.clone();
         if let Some(ref billboard_texture) = texture_clone {
-            scene.billboard_mut().descriptor_set.update_descriptor_sets(
+            billboard.descriptor_set.update_descriptor_sets(
                 rrdevice,
-                &data.rrswapchain,
+                rrswapchain,
                 billboard_texture,
             )?;
             crate::log!("Re-updated billboard.descriptor_set after cube reload");

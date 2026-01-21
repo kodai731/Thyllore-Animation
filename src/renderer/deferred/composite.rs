@@ -1,19 +1,22 @@
 use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
+use super::gizmo::{gizmo_draw_ray_with_pipeline, gizmo_draw_vertical_lines_with_pipeline};
 use crate::app::App;
 use crate::debugview::DebugViewMode;
-use crate::scene::render_resource::RenderResources;
-use crate::scene::Scene;
+use crate::ecs::resource::PipelineManager;
+use crate::scene::graphics_resource::GraphicsResources;
 use crate::vulkanr::core::Device;
 use crate::vulkanr::descriptor::RRCompositeDescriptorSet;
 use crate::vulkanr::pipeline::RRPipeline;
+use crate::vulkanr::resource::GpuBufferRegistry;
 
 pub struct CompositePass<'a> {
+    app: &'a App,
     composite_pipeline: &'a RRPipeline,
     composite_descriptor: &'a RRCompositeDescriptorSet,
-    scene: &'a Scene,
-    render_resources: &'a RenderResources,
+    graphics_resources: &'a GraphicsResources,
+    buffer_registry: &'a GpuBufferRegistry,
     device: &'a Device,
     swapchain_extent: vk::Extent2D,
     debug_view_mode: DebugViewMode,
@@ -35,14 +38,19 @@ impl<'a> CompositePass<'a> {
             .ok_or_else(|| anyhow!("Composite descriptor set not initialized"))?;
 
         Ok(Self {
+            app,
             composite_pipeline,
             composite_descriptor,
-            scene: &app.scene,
-            render_resources: &app.data.render_resources,
+            graphics_resources: &app.data.graphics_resources,
+            buffer_registry: &app.data.buffer_registry,
             device: &app.rrdevice.device,
-            swapchain_extent: app.data.rrswapchain.swapchain_extent,
-            debug_view_mode: app.data.rt_debug_state.debug_view_mode,
+            swapchain_extent: app.swapchain_state().swapchain.swapchain_extent,
+            debug_view_mode: app.rt_debug_state().debug_view_mode,
         })
+    }
+
+    fn pipeline_manager(&self) -> crate::ecs::world::ResRef<PipelineManager> {
+        self.app.resource::<PipelineManager>()
     }
 
     pub unsafe fn record(
@@ -57,25 +65,35 @@ impl<'a> CompositePass<'a> {
         self.draw_grid(command_buffer, image_index)?;
         self.draw_gizmo(command_buffer, image_index)?;
 
-        let grid = self.scene.grid();
-        let light_gizmo = self.scene.light_gizmo();
+        let grid = self.app.grid();
+        let light_gizmo = self.app.light_gizmo();
+        let pipeline_manager = self.pipeline_manager();
 
-        light_gizmo.draw_ray_to_model_with_resources(
-            self.device,
-            command_buffer,
-            &grid.pipeline,
-            self.render_resources,
-            grid.object_index,
-            image_index,
-        );
-        light_gizmo.draw_vertical_lines_with_resources(
-            self.device,
-            command_buffer,
-            &grid.pipeline,
-            self.render_resources,
-            grid.object_index,
-            image_index,
-        );
+        if let Some(pipeline_id) = grid.pipeline_id {
+            if let Some(pipeline) = pipeline_manager.get(pipeline_id) {
+                gizmo_draw_ray_with_pipeline(
+                    &light_gizmo.ray_to_model,
+                    self.buffer_registry,
+                    self.device,
+                    command_buffer,
+                    pipeline,
+                    self.graphics_resources,
+                    grid.object_index,
+                    image_index,
+                );
+                gizmo_draw_vertical_lines_with_pipeline(
+                    &light_gizmo.vertical_lines,
+                    self.buffer_registry,
+                    self.device,
+                    command_buffer,
+                    pipeline,
+                    self.graphics_resources,
+                    grid.object_index,
+                    image_index,
+                );
+            }
+        }
+
         self.draw_billboard(command_buffer, image_index)?;
 
         Ok(())
@@ -182,52 +200,77 @@ impl<'a> CompositePass<'a> {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        let grid = self.scene.grid();
+        let grid = self.app.grid();
+        let pipeline_manager = self.pipeline_manager();
+
+        let vertex_buffer = match self
+            .buffer_registry
+            .get_vertex_buffer(grid.vertex_buffer_handle)
+        {
+            Some(b) => b,
+            None => return Ok(()),
+        };
+        let index_buffer = match self
+            .buffer_registry
+            .get_index_buffer(grid.index_buffer_handle)
+        {
+            Some(b) => b,
+            None => return Ok(()),
+        };
+
+        let pipeline_id = match grid.pipeline_id {
+            Some(id) => id,
+            None => return Ok(()),
+        };
+        let pipeline = match pipeline_manager.get(pipeline_id) {
+            Some(p) => p,
+            None => return Ok(()),
+        };
 
         self.device.cmd_bind_pipeline(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            grid.pipeline.pipeline,
+            pipeline.pipeline,
         );
 
         self.device.cmd_set_line_width(command_buffer, 1.0);
 
         self.device
-            .cmd_bind_vertex_buffers(command_buffer, 0, &[grid.vertex_buffer.buffer], &[0]);
+            .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
         self.device.cmd_bind_index_buffer(
             command_buffer,
-            grid.index_buffer.buffer,
+            index_buffer,
             0,
             vk::IndexType::UINT32,
         );
 
-        let frame_set = self.render_resources.frame_set.sets[image_index];
+        let frame_set = self.graphics_resources.frame_set.sets[image_index];
         self.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            grid.pipeline.pipeline_layout,
+            pipeline.pipeline_layout,
             0,
             &[frame_set],
             &[],
         );
 
         let object_set_idx = self
-            .render_resources
+            .graphics_resources
             .objects
             .get_set_index(image_index, grid.object_index);
-        let object_set = self.render_resources.objects.sets[object_set_idx];
+        let object_set = self.graphics_resources.objects.sets[object_set_idx];
         self.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            grid.pipeline.pipeline_layout,
+            pipeline.pipeline_layout,
             2,
             &[object_set],
             &[],
         );
 
         self.device
-            .cmd_draw_indexed(command_buffer, grid.index_buffer.indices, 1, 0, 0, 0);
+            .cmd_draw_indexed(command_buffer, grid.indices.len() as u32, 1, 0, 0, 0);
 
         Ok(())
     }
@@ -237,120 +280,77 @@ impl<'a> CompositePass<'a> {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        let gizmo = self.scene.gizmo();
+        let gizmo = self.app.grid_gizmo();
+        let pipeline_manager = self.pipeline_manager();
 
-        if let (Some(vertex_buffer), Some(index_buffer)) = (gizmo.vertex_buffer, gizmo.index_buffer)
+        let vertex_buffer = match self
+            .buffer_registry
+            .get_vertex_buffer(gizmo.mesh.vertex_buffer_handle)
         {
-            self.device.cmd_bind_pipeline(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                gizmo.pipeline.pipeline,
-            );
-
-            self.device.cmd_set_line_width(command_buffer, 1.0);
-
-            self.device
-                .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
-
-            self.device.cmd_bind_index_buffer(
-                command_buffer,
-                index_buffer,
-                0,
-                vk::IndexType::UINT32,
-            );
-
-            let frame_set = self.render_resources.frame_set.sets[image_index];
-            self.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                gizmo.pipeline.pipeline_layout,
-                0,
-                &[frame_set],
-                &[],
-            );
-
-            let object_set_idx = self
-                .render_resources
-                .objects
-                .get_set_index(image_index, gizmo.object_index);
-            let object_set = self.render_resources.objects.sets[object_set_idx];
-            self.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                gizmo.pipeline.pipeline_layout,
-                2,
-                &[object_set],
-                &[],
-            );
-
-            self.device
-                .cmd_draw_indexed(command_buffer, gizmo.indices.len() as u32, 1, 0, 0, 0);
-        }
-
-        Ok(())
-    }
-
-    unsafe fn draw_light_gizmo(
-        &self,
-        command_buffer: vk::CommandBuffer,
-        image_index: usize,
-    ) -> Result<()> {
-        let light_gizmo = self.scene.light_gizmo();
-
-        if let (Some(vertex_buffer), Some(index_buffer)) =
-            (light_gizmo.vertex_buffer, light_gizmo.index_buffer)
+            Some(b) => b,
+            None => return Ok(()),
+        };
+        let index_buffer = match self
+            .buffer_registry
+            .get_index_buffer(gizmo.mesh.index_buffer_handle)
         {
-            self.device.cmd_bind_pipeline(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                light_gizmo.pipeline.pipeline,
-            );
+            Some(b) => b,
+            None => return Ok(()),
+        };
 
-            self.device.cmd_set_line_width(command_buffer, 1.0);
+        let pipeline_id = match gizmo.mesh.pipeline_id {
+            Some(id) => id,
+            None => return Ok(()),
+        };
+        let pipeline = match pipeline_manager.get(pipeline_id) {
+            Some(p) => p,
+            None => return Ok(()),
+        };
 
-            self.device
-                .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
+        self.device.cmd_bind_pipeline(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline,
+        );
 
-            self.device.cmd_bind_index_buffer(
-                command_buffer,
-                index_buffer,
-                0,
-                vk::IndexType::UINT32,
-            );
+        self.device.cmd_set_line_width(command_buffer, 1.0);
 
-            let frame_set = self.render_resources.frame_set.sets[image_index];
-            self.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                light_gizmo.pipeline.pipeline_layout,
-                0,
-                &[frame_set],
-                &[],
-            );
+        self.device
+            .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
-            let object_set_idx = self
-                .render_resources
-                .objects
-                .get_set_index(image_index, light_gizmo.object_index);
-            let object_set = self.render_resources.objects.sets[object_set_idx];
-            self.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                light_gizmo.pipeline.pipeline_layout,
-                2,
-                &[object_set],
-                &[],
-            );
+        self.device.cmd_bind_index_buffer(
+            command_buffer,
+            index_buffer,
+            0,
+            vk::IndexType::UINT32,
+        );
 
-            self.device.cmd_draw_indexed(
-                command_buffer,
-                light_gizmo.indices.len() as u32,
-                1,
-                0,
-                0,
-                0,
-            );
-        }
+        let frame_set = self.graphics_resources.frame_set.sets[image_index];
+        self.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline_layout,
+            0,
+            &[frame_set],
+            &[],
+        );
+
+        let object_set_idx = self
+            .graphics_resources
+            .objects
+            .get_set_index(image_index, gizmo.mesh.object_index);
+        let object_set = self.graphics_resources.objects.sets[object_set_idx];
+        self.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline_layout,
+            2,
+            &[object_set],
+            &[],
+        );
+
+        self.device
+            .cmd_draw_indexed(command_buffer, gizmo.mesh.indices.len() as u32, 1, 0, 0, 0);
 
         Ok(())
     }
@@ -360,47 +360,68 @@ impl<'a> CompositePass<'a> {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        let billboard = self.scene.billboard();
+        let billboard = self.app.billboard();
+        let pipeline_manager = self.pipeline_manager();
 
-        if let (Some(vertex_buffer), Some(index_buffer)) =
-            (billboard.vertex_buffer, billboard.index_buffer)
+        let vertex_buffer = match self
+            .buffer_registry
+            .get_vertex_buffer(billboard.vertex_buffer_handle)
         {
-            self.device.cmd_bind_pipeline(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                billboard.pipeline.pipeline,
-            );
+            Some(b) => b,
+            None => return Ok(()),
+        };
+        let index_buffer = match self
+            .buffer_registry
+            .get_index_buffer(billboard.index_buffer_handle)
+        {
+            Some(b) => b,
+            None => return Ok(()),
+        };
 
-            self.device
-                .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
+        let pipeline_id = match billboard.pipeline_id {
+            Some(id) => id,
+            None => return Ok(()),
+        };
+        let pipeline = match pipeline_manager.get(pipeline_id) {
+            Some(p) => p,
+            None => return Ok(()),
+        };
 
-            self.device.cmd_bind_index_buffer(
-                command_buffer,
-                index_buffer,
-                0,
-                vk::IndexType::UINT32,
-            );
+        self.device.cmd_bind_pipeline(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline,
+        );
 
-            let descriptor_set_index = image_index;
+        self.device
+            .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
-            self.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                billboard.pipeline.pipeline_layout,
-                0,
-                &[billboard.descriptor_set.descriptor_sets[descriptor_set_index]],
-                &[],
-            );
+        self.device.cmd_bind_index_buffer(
+            command_buffer,
+            index_buffer,
+            0,
+            vk::IndexType::UINT32,
+        );
 
-            self.device.cmd_draw_indexed(
-                command_buffer,
-                billboard.indices.len() as u32,
-                1,
-                0,
-                0,
-                0,
-            );
-        }
+        let descriptor_set_index = image_index;
+
+        self.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline_layout,
+            0,
+            &[billboard.descriptor_set.descriptor_sets[descriptor_set_index]],
+            &[],
+        );
+
+        self.device.cmd_draw_indexed(
+            command_buffer,
+            billboard.indices.len() as u32,
+            1,
+            0,
+            0,
+            0,
+        );
 
         Ok(())
     }

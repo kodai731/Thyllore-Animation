@@ -364,9 +364,15 @@ impl AnimationClip {
 
                 let (translation, rotation, scale) = if looping && self.duration > 0.0 {
                     (
-                        channel.sample_translation_looped(time, self.duration).unwrap_or(rest_t),
-                        channel.sample_rotation_looped(time, self.duration).unwrap_or(rest_r),
-                        channel.sample_scale_looped(time, self.duration).unwrap_or(rest_s),
+                        channel
+                            .sample_translation_looped(time, self.duration)
+                            .unwrap_or(rest_t),
+                        channel
+                            .sample_rotation_looped(time, self.duration)
+                            .unwrap_or(rest_r),
+                        channel
+                            .sample_scale_looped(time, self.duration)
+                            .unwrap_or(rest_s),
                     )
                 } else {
                     (
@@ -402,69 +408,19 @@ fn decompose_transform(m: &Matrix4<f32>) -> (Vector3<f32>, Quaternion<f32>, Vect
     let scale = Vector3::new(sx, sy, sz);
 
     let rot_matrix = cgmath::Matrix3::new(
-        m[0][0] / sx.max(0.0001), m[0][1] / sx.max(0.0001), m[0][2] / sx.max(0.0001),
-        m[1][0] / sy.max(0.0001), m[1][1] / sy.max(0.0001), m[1][2] / sy.max(0.0001),
-        m[2][0] / sz.max(0.0001), m[2][1] / sz.max(0.0001), m[2][2] / sz.max(0.0001),
+        m[0][0] / sx.max(0.0001),
+        m[0][1] / sx.max(0.0001),
+        m[0][2] / sx.max(0.0001),
+        m[1][0] / sy.max(0.0001),
+        m[1][1] / sy.max(0.0001),
+        m[1][2] / sy.max(0.0001),
+        m[2][0] / sz.max(0.0001),
+        m[2][1] / sz.max(0.0001),
+        m[2][2] / sz.max(0.0001),
     );
     let rotation = Quaternion::from(rot_matrix);
 
     (translation, rotation, scale)
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct AnimationPlayer {
-    pub current_clip_id: Option<AnimationClipId>,
-    pub time: f32,
-    pub speed: f32,
-    pub playing: bool,
-    pub looping: bool,
-}
-
-impl AnimationPlayer {
-    pub fn new() -> Self {
-        Self {
-            current_clip_id: None,
-            time: 0.0,
-            speed: 1.0,
-            playing: false,
-            looping: true,
-        }
-    }
-
-    pub fn play(&mut self, clip_id: AnimationClipId) {
-        self.current_clip_id = Some(clip_id);
-        self.time = 0.0;
-        self.playing = true;
-    }
-
-    // TODO: FBX/glTFで未使用 - 必要時に有効化
-    // pub fn pause(&mut self) {
-    //     self.playing = false;
-    // }
-
-    // pub fn resume(&mut self) {
-    //     self.playing = true;
-    // }
-
-    // pub fn stop(&mut self) {
-    //     self.playing = false;
-    //     self.time = 0.0;
-    // }
-
-    pub fn update(&mut self, delta_time: f32, clip_duration: f32) {
-        if !self.playing || clip_duration <= 0.0 {
-            return;
-        }
-
-        self.time += delta_time * self.speed;
-
-        if self.looping {
-            self.time = self.time % clip_duration;
-        } else if self.time >= clip_duration {
-            self.time = clip_duration;
-            self.playing = false;
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -515,20 +471,48 @@ impl SkinData {
 
             if should_log && bone.id < 3 {
                 crate::log!("=== Skinning Debug bone {} ({}) ===", bone.id, bone.name);
-                crate::log!("  local_transform diag: [{:.4}, {:.4}, {:.4}]",
-                    bone.local_transform[0][0], bone.local_transform[1][1], bone.local_transform[2][2]);
-                crate::log!("  local_transform trans: [{:.4}, {:.4}, {:.4}]",
-                    bone.local_transform[3][0], bone.local_transform[3][1], bone.local_transform[3][2]);
-                crate::log!("  global_transform diag: [{:.4}, {:.4}, {:.4}]",
-                    global[0][0], global[1][1], global[2][2]);
-                crate::log!("  global_transform trans: [{:.4}, {:.4}, {:.4}]",
-                    global[3][0], global[3][1], global[3][2]);
-                crate::log!("  inverse_bind_pose trans: [{:.4}, {:.4}, {:.4}]",
-                    bone.inverse_bind_pose[3][0], bone.inverse_bind_pose[3][1], bone.inverse_bind_pose[3][2]);
-                crate::log!("  skin_matrix diag: [{:.4}, {:.4}, {:.4}]",
-                    skin_matrix[0][0], skin_matrix[1][1], skin_matrix[2][2]);
-                crate::log!("  skin_matrix trans: [{:.4}, {:.4}, {:.4}]",
-                    skin_matrix[3][0], skin_matrix[3][1], skin_matrix[3][2]);
+                crate::log!(
+                    "  local_transform diag: [{:.4}, {:.4}, {:.4}]",
+                    bone.local_transform[0][0],
+                    bone.local_transform[1][1],
+                    bone.local_transform[2][2]
+                );
+                crate::log!(
+                    "  local_transform trans: [{:.4}, {:.4}, {:.4}]",
+                    bone.local_transform[3][0],
+                    bone.local_transform[3][1],
+                    bone.local_transform[3][2]
+                );
+                crate::log!(
+                    "  global_transform diag: [{:.4}, {:.4}, {:.4}]",
+                    global[0][0],
+                    global[1][1],
+                    global[2][2]
+                );
+                crate::log!(
+                    "  global_transform trans: [{:.4}, {:.4}, {:.4}]",
+                    global[3][0],
+                    global[3][1],
+                    global[3][2]
+                );
+                crate::log!(
+                    "  inverse_bind_pose trans: [{:.4}, {:.4}, {:.4}]",
+                    bone.inverse_bind_pose[3][0],
+                    bone.inverse_bind_pose[3][1],
+                    bone.inverse_bind_pose[3][2]
+                );
+                crate::log!(
+                    "  skin_matrix diag: [{:.4}, {:.4}, {:.4}]",
+                    skin_matrix[0][0],
+                    skin_matrix[1][1],
+                    skin_matrix[2][2]
+                );
+                crate::log!(
+                    "  skin_matrix trans: [{:.4}, {:.4}, {:.4}]",
+                    skin_matrix[3][0],
+                    skin_matrix[3][1],
+                    skin_matrix[3][2]
+                );
             }
 
             skin_matrices.push(skin_matrix);
@@ -536,7 +520,12 @@ impl SkinData {
 
         if should_log && !self.base_positions.is_empty() {
             let pos = self.base_positions[0];
-            crate::log!("=== base_positions[0]: [{:.4}, {:.4}, {:.4}] ===", pos.x, pos.y, pos.z);
+            crate::log!(
+                "=== base_positions[0]: [{:.4}, {:.4}, {:.4}] ===",
+                pos.x,
+                pos.y,
+                pos.z
+            );
         }
 
         for i in 0..self.base_positions.len() {
@@ -598,9 +587,26 @@ impl SkinData {
                 let base = self.base_positions[i];
                 crate::log!("=== Skinning vertex {} ===", i);
                 crate::log!("  base_pos: [{:.4}, {:.4}, {:.4}]", base.x, base.y, base.z);
-                crate::log!("  bone_indices: [{}, {}, {}, {}]", indices.x, indices.y, indices.z, indices.w);
-                crate::log!("  bone_weights: [{:.4}, {:.4}, {:.4}, {:.4}]", weights.x, weights.y, weights.z, weights.w);
-                crate::log!("  skinned_pos: [{:.4}, {:.4}, {:.4}]", skinned_pos.x, skinned_pos.y, skinned_pos.z);
+                crate::log!(
+                    "  bone_indices: [{}, {}, {}, {}]",
+                    indices.x,
+                    indices.y,
+                    indices.z,
+                    indices.w
+                );
+                crate::log!(
+                    "  bone_weights: [{:.4}, {:.4}, {:.4}, {:.4}]",
+                    weights.x,
+                    weights.y,
+                    weights.z,
+                    weights.w
+                );
+                crate::log!(
+                    "  skinned_pos: [{:.4}, {:.4}, {:.4}]",
+                    skinned_pos.x,
+                    skinned_pos.y,
+                    skinned_pos.z
+                );
             }
         }
 
@@ -609,7 +615,11 @@ impl SkinData {
             for pos in out_positions.iter() {
                 max_coord = max_coord.max(pos.x.abs()).max(pos.y.abs()).max(pos.z.abs());
             }
-            crate::log!("=== Skinning result: max_coord={:.4}, vertex_count={} ===", max_coord, out_positions.len());
+            crate::log!(
+                "=== Skinning result: max_coord={:.4}, vertex_count={} ===",
+                max_coord,
+                out_positions.len()
+            );
         }
     }
 }
@@ -618,7 +628,6 @@ impl SkinData {
 pub struct AnimationSystem {
     pub skeletons: Vec<Skeleton>,
     pub clips: Vec<AnimationClip>,
-    pub player: AnimationPlayer,
     next_skeleton_id: SkeletonId,
     next_clip_id: AnimationClipId,
 }
@@ -628,7 +637,6 @@ impl AnimationSystem {
         Self {
             skeletons: Vec::new(),
             clips: Vec::new(),
-            player: AnimationPlayer::new(),
             next_skeleton_id: 0,
             next_clip_id: 0,
         }
@@ -662,42 +670,29 @@ impl AnimationSystem {
         self.clips.iter().find(|c| c.id == id)
     }
 
-    pub fn play(&mut self, clip_id: AnimationClipId) {
-        self.player.play(clip_id);
-    }
-
-    pub fn update(&mut self, delta_time: f32) {
-        if let Some(clip_id) = self.player.current_clip_id {
-            if let Some(clip) = self.get_clip(clip_id) {
-                let duration = clip.duration;
-                self.player.update(delta_time, duration);
-            }
-        }
-    }
-
-    pub fn apply_to_skeleton(&mut self, skeleton_id: SkeletonId) {
-        let clip_id = match self.player.current_clip_id {
+    pub fn apply_to_skeleton(
+        &mut self,
+        skeleton_id: SkeletonId,
+        playback: &crate::ecs::AnimationPlayback,
+    ) {
+        let clip_id = match playback.current_clip_id {
             Some(id) => id,
             None => return,
         };
-
-        let time = self.player.time;
 
         let clip = match self.clips.iter().find(|c| c.id == clip_id) {
             Some(c) => c.clone(),
             None => return,
         };
 
-        let looping = self.player.looping;
         if let Some(skeleton) = self.get_skeleton_mut(skeleton_id) {
-            clip.sample_with_loop(time, skeleton, looping);
+            clip.sample_with_loop(playback.time, skeleton, playback.looping);
         }
     }
 
     pub fn clear(&mut self) {
         self.skeletons.clear();
         self.clips.clear();
-        self.player = AnimationPlayer::new();
         self.next_skeleton_id = 0;
         self.next_clip_id = 0;
     }
@@ -749,10 +744,14 @@ impl MorphAnimationSystem {
             return 0;
         }
 
-        let start_key_frame = self.animations.first()
+        let start_key_frame = self
+            .animations
+            .first()
             .expect("morph_animations is empty")
             .key_frame;
-        let end_key_frame = self.animations.last()
+        let end_key_frame = self
+            .animations
+            .last()
             .expect("morph_animations is empty")
             .key_frame;
         let period = end_key_frame - start_key_frame;

@@ -1,5 +1,4 @@
 use crate::app::App;
-use crate::vulkanr::device::*;
 
 use vulkanalia::prelude::v1_0::*;
 
@@ -56,7 +55,7 @@ impl App {
             crate::log!("Destroyed G-Buffer");
         }
 
-        self.data.render_resources.destroy(&self.rrdevice);
+        self.data.graphics_resources.destroy(&self.rrdevice);
         crate::log!("Destroyed render resources");
 
         crate::log!("All application resources destroyed");

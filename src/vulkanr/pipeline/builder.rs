@@ -21,6 +21,10 @@ pub enum VertexInputConfig {
     Standard,
     /// Use ImGui DrawVert struct (position, uv, color)
     ImGui,
+    /// Use GizmoVertex struct (position, color)
+    Gizmo,
+    /// Use BillboardVertex struct (position, texcoord)
+    Billboard,
     /// Custom vertex input (bindings and attributes)
     Custom {
         bindings: Vec<vk::VertexInputBindingDescription>,
@@ -254,6 +258,50 @@ impl PipelineBuilder {
                 ];
                 (bindings, attributes)
             }
+            VertexInputConfig::Gizmo => {
+                let bindings = vec![vk::VertexInputBindingDescription::builder()
+                    .binding(0)
+                    .stride(std::mem::size_of::<[f32; 6]>() as u32)
+                    .input_rate(vk::VertexInputRate::VERTEX)
+                    .build()];
+                let attributes = vec![
+                    vk::VertexInputAttributeDescription::builder()
+                        .binding(0)
+                        .location(0)
+                        .format(vk::Format::R32G32B32_SFLOAT)
+                        .offset(0)
+                        .build(),
+                    vk::VertexInputAttributeDescription::builder()
+                        .binding(0)
+                        .location(1)
+                        .format(vk::Format::R32G32B32_SFLOAT)
+                        .offset(std::mem::size_of::<[f32; 3]>() as u32)
+                        .build(),
+                ];
+                (bindings, attributes)
+            }
+            VertexInputConfig::Billboard => {
+                let bindings = vec![vk::VertexInputBindingDescription::builder()
+                    .binding(0)
+                    .stride(std::mem::size_of::<[f32; 5]>() as u32)
+                    .input_rate(vk::VertexInputRate::VERTEX)
+                    .build()];
+                let attributes = vec![
+                    vk::VertexInputAttributeDescription::builder()
+                        .binding(0)
+                        .location(0)
+                        .format(vk::Format::R32G32B32_SFLOAT)
+                        .offset(0)
+                        .build(),
+                    vk::VertexInputAttributeDescription::builder()
+                        .binding(0)
+                        .location(1)
+                        .format(vk::Format::R32G32_SFLOAT)
+                        .offset(std::mem::size_of::<[f32; 3]>() as u32)
+                        .build(),
+                ];
+                (bindings, attributes)
+            }
             VertexInputConfig::Custom { bindings, attributes } => (bindings, attributes),
         };
 
@@ -432,8 +480,8 @@ impl RRPipeline {
             .expect("Failed to create pipeline")
     }
 
-    /// Create a pipeline with RenderResources layouts (Set 0, 1, 2)
-    pub unsafe fn new_with_render_resources(
+    /// Create a pipeline with GraphicsResources layouts (Set 0, 1, 2)
+    pub unsafe fn new_with_graphics_resources(
         rrdevice: &RRDevice,
         rrswapchain: &RRSwapchain,
         rrrender: &RRRender,
@@ -465,7 +513,7 @@ impl RRPipeline {
             .expect("Failed to create pipeline")
     }
 
-    /// Create a pipeline with RenderResources layouts (Set 0, Set 2 only - no material)
+    /// Create a pipeline with GraphicsResources layouts (Set 0, Set 2 only - no material)
     pub unsafe fn new_with_frame_object_layouts(
         rrdevice: &RRDevice,
         rrswapchain: &RRSwapchain,
@@ -529,14 +577,9 @@ impl RRPipeline {
         descriptor_set_layout: vk::DescriptorSetLayout,
         vertex_shader_path: &str,
         fragment_shader_path: &str,
-        binding_description: vk::VertexInputBindingDescription,
-        attribute_descriptions: Vec<vk::VertexInputAttributeDescription>,
     ) -> Result<Self> {
         PipelineBuilder::new(vertex_shader_path, fragment_shader_path)
-            .vertex_input(VertexInputConfig::Custom {
-                bindings: vec![binding_description],
-                attributes: attribute_descriptions,
-            })
+            .vertex_input(VertexInputConfig::Billboard)
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
             .polygon_mode(vk::PolygonMode::FILL)
             .blend(BlendConfig::default())

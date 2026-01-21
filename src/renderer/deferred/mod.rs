@@ -1,4 +1,5 @@
 mod gbuffer;
+mod gizmo;
 mod rayquery;
 mod composite;
 
@@ -16,10 +17,11 @@ pub unsafe fn record_gbuffer_pass(
     image_index: usize,
 ) -> Result<()> {
     let pass = GBufferPass::new(app)?;
+    let render_targets = app.render_targets();
     pass.record(
         command_buffer,
-        app.data.rrrender.gbuffer_render_pass,
-        app.data.rrrender.gbuffer_framebuffer,
+        render_targets.render.gbuffer_render_pass,
+        render_targets.render.gbuffer_framebuffer,
         image_index,
     )
 }
@@ -29,7 +31,7 @@ pub unsafe fn record_ray_query_pass(
     command_buffer: vk::CommandBuffer,
 ) -> Result<()> {
     let pass = RayQueryPass::new(app)?;
-    let normal_offset = app.data.rt_debug_state.shadow_normal_offset;
+    let normal_offset = app.rt_debug_state().shadow_normal_offset;
     pass.record(command_buffer, normal_offset)
 }
 
@@ -39,8 +41,9 @@ pub unsafe fn record_composite_pass(
     image_index: usize,
     draw_data: &imgui::DrawData,
 ) -> Result<()> {
-    let render_pass = app.data.rrrender.render_pass;
-    let framebuffer = app.data.rrrender.framebuffers[image_index];
+    let render_targets = app.render_targets();
+    let render_pass = render_targets.render.render_pass;
+    let framebuffer = render_targets.render.framebuffers[image_index];
 
     {
         let pass = CompositePass::new(app)?;

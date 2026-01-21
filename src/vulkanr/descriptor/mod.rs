@@ -2,8 +2,16 @@ pub mod model;
 pub mod ray_query;
 pub mod composite;
 pub mod billboard;
+pub mod layouts;
+pub mod frame;
+pub mod object;
+pub mod material;
 
 pub use model::*;
 pub use ray_query::*;
 pub use composite::*;
 pub use billboard::*;
+pub use layouts::*;
+pub use frame::*;
+pub use object::*;
+pub use material::*;

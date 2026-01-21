@@ -1,5 +1,4 @@
 use crate::app::data::LightMoveTarget;
-use crate::scene::Camera;
 use cgmath::{InnerSpace, Vector2};
 use serde::Serialize;
 
@@ -19,14 +18,11 @@ pub struct GUIData {
     pub imgui_wants_mouse: bool,
     pub show_click_debug: bool,
     pub billboard_click_rect: Option<[f32; 4]>,
-    pub debug_shadow_info: bool,
     pub debug_billboard_depth: bool,
     pub show_light_ray_to_model: bool,
     pub is_ctrl_pressed: bool,
     pub move_light_to: LightMoveTarget,
-    pub load_cube: bool,
     pub clicked_mouse_pos: Option<[f32; 2]>,
-    pub dump_debug_info: bool,
 }
 
 impl Default for GUIData {
@@ -46,14 +42,11 @@ impl Default for GUIData {
             imgui_wants_mouse: false,
             show_click_debug: false,
             billboard_click_rect: None,
-            debug_shadow_info: false,
             debug_billboard_depth: false,
             show_light_ray_to_model: false,
             is_ctrl_pressed: false,
             move_light_to: LightMoveTarget::None,
-            load_cube: false,
             clicked_mouse_pos: None,
-            dump_debug_info: false,
         }
     }
 }

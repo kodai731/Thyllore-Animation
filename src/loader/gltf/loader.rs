@@ -1,6 +1,6 @@
 use crate::log;
 use crate::math::*;
-use crate::scene::animation::{
+use crate::animation::{
     AnimationClip, AnimationSystem, Interpolation, Keyframe, MorphAnimation, MorphAnimationSystem,
     MorphTarget, Skeleton, SkinData, TransformChannel,
 };
@@ -925,10 +925,6 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
     }
 
     log_gltf_scale_info(&meshes);
-
-    if !animation_system.clips.is_empty() {
-        animation_system.play(0);
-    }
 
     if !morph_system.animations.is_empty() {
         log!(

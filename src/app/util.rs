@@ -1,9 +1,8 @@
 use crate::app::App;
-use crate::vulkanr::command::*;
+use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::vulkan::*;
 
 use anyhow::{anyhow, Result};
-use vulkanalia::prelude::v1_0::*;
 
 impl App {
     pub(crate) unsafe fn get_memory_type_index(

@@ -1,7 +1,6 @@
 use crate::app::App;
 use crate::scene::grid::GridData;
 use crate::vulkanr::data as vulkan_data;
-use crate::vulkanr::data::*;
 use crate::math::*;
 
 use anyhow::Result;

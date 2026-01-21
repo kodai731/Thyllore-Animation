@@ -1,6 +1,6 @@
 use super::device::*;
 use super::vulkan::*;
-use crate::scene::render_resource::RenderResources;
+use crate::scene::graphics_resource::GraphicsResources;
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::vulkanr::descriptor::model::RRDescriptorSet;
 use crate::vulkanr::pipeline::RRPipeline;
@@ -159,10 +159,10 @@ impl RRCommandBuffer {
                 vk::IndexType::UINT32,
             );
 
-            if let Some(render_resources) = bind_info.render_resources {
-                let frame_set = render_resources.frame_set.sets[frame_index];
-                let object_set_idx = render_resources.objects.get_set_index(frame_index, bind_info.object_index);
-                let object_set = render_resources.objects.sets[object_set_idx];
+            if let Some(graphics_resources) = bind_info.graphics_resources {
+                let frame_set = graphics_resources.frame_set.sets[frame_index];
+                let object_set_idx = graphics_resources.objects.get_set_index(frame_index, bind_info.object_index);
+                let object_set = graphics_resources.objects.sets[object_set_idx];
 
                 rrdevice.device.cmd_bind_descriptor_sets(
                     command_buffer,
@@ -174,7 +174,7 @@ impl RRCommandBuffer {
                 );
 
                 if let Some(material_id) = bind_info.material_id {
-                    if let Some(material) = render_resources.materials.get(material_id) {
+                    if let Some(material) = graphics_resources.materials.get(material_id) {
                         rrdevice.device.cmd_bind_descriptor_sets(
                             command_buffer,
                             vk::PipelineBindPoint::GRAPHICS,
@@ -241,7 +241,7 @@ unsafe fn create_command_pool(
     Ok(())
 }
 
-use crate::scene::render_resource::MaterialId;
+use crate::scene::graphics_resource::MaterialId;
 
 #[derive(Clone, Debug)]
 pub struct RRBindInfo<'a> {
@@ -252,7 +252,7 @@ pub struct RRBindInfo<'a> {
     pub offset_vertex: u32,
     pub offset_index: u32,
     pub data_index: usize,
-    pub render_resources: Option<&'a RenderResources>,
+    pub graphics_resources: Option<&'a GraphicsResources>,
     pub object_index: usize,
     pub material_id: Option<MaterialId>,
 }
@@ -275,18 +275,18 @@ impl<'a> RRBindInfo<'a> {
             offset_vertex,
             offset_index,
             data_index,
-            render_resources: None,
+            graphics_resources: None,
             object_index: 0,
             material_id: None,
         }
     }
 
-    pub unsafe fn with_render_resources(
+    pub unsafe fn with_graphics_resources(
         rrpipeline: &'a RRPipeline,
         rrdescriptor_set: &'a RRDescriptorSet,
         rrvertex_buffer: &'a RRVertexBuffer,
         rrindex_buffer: &'a RRIndexBuffer,
-        render_resources: &'a RenderResources,
+        graphics_resources: &'a GraphicsResources,
         object_index: usize,
         material_id: MaterialId,
     ) -> Self {
@@ -298,18 +298,18 @@ impl<'a> RRBindInfo<'a> {
             offset_vertex: 0,
             offset_index: 0,
             data_index: 0,
-            render_resources: Some(render_resources),
+            graphics_resources: Some(graphics_resources),
             object_index,
             material_id: Some(material_id),
         }
     }
 
-    pub unsafe fn with_render_resources_no_material(
+    pub unsafe fn with_graphics_resources_no_material(
         rrpipeline: &'a RRPipeline,
         rrdescriptor_set: &'a RRDescriptorSet,
         rrvertex_buffer: &'a RRVertexBuffer,
         rrindex_buffer: &'a RRIndexBuffer,
-        render_resources: &'a RenderResources,
+        graphics_resources: &'a GraphicsResources,
         object_index: usize,
     ) -> Self {
         Self {
@@ -320,7 +320,7 @@ impl<'a> RRBindInfo<'a> {
             offset_vertex: 0,
             offset_index: 0,
             data_index: 0,
-            render_resources: Some(render_resources),
+            graphics_resources: Some(graphics_resources),
             object_index,
             material_id: None,
         }

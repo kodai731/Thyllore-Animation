@@ -5,6 +5,9 @@
 
 extern crate core;
 
+pub mod animation;
+pub mod asset;
+pub mod ecs;
 pub mod vulkanr;
 pub mod loader;
 pub mod debugview;
@@ -14,3 +17,4 @@ pub mod scene;
 pub mod app;
 pub mod renderer;
 pub mod platform;
+pub mod render;

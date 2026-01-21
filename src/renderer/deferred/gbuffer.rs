@@ -2,7 +2,10 @@ use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
-use crate::scene::render_resource::{Mesh, RenderResources};
+use crate::asset::AssetStorage;
+use crate::ecs::world::MeshRef;
+use crate::ecs::World;
+use crate::scene::graphics_resource::{MeshBuffer, GraphicsResources};
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::core::{Device, RRDevice};
 use crate::vulkanr::resource::{RRGBuffer, create_image, create_image_view};
@@ -63,9 +66,11 @@ pub unsafe fn create_gbuffer_framebuffer(
 pub struct GBufferPass<'a> {
     gbuffer: &'a RRGBuffer,
     pipeline: &'a RRPipeline,
-    render_resources: &'a RenderResources,
-    meshes: &'a [Mesh],
+    graphics_resources: &'a GraphicsResources,
+    meshes: &'a [MeshBuffer],
     device: &'a Device,
+    ecs_world: &'a World,
+    ecs_assets: &'a AssetStorage,
 }
 
 impl<'a> GBufferPass<'a> {
@@ -78,9 +83,11 @@ impl<'a> GBufferPass<'a> {
         Ok(Self {
             gbuffer,
             pipeline,
-            render_resources: &app.data.render_resources,
-            meshes: &app.data.render_resources.meshes,
+            graphics_resources: &app.data.graphics_resources,
+            meshes: &app.data.graphics_resources.meshes,
             device: &app.rrdevice.device,
+            ecs_world: &app.data.ecs_world,
+            ecs_assets: &app.data.ecs_assets,
         })
     }
 
@@ -195,75 +202,164 @@ impl<'a> GBufferPass<'a> {
             return Ok(());
         }
 
+        let renderable_entities = self.ecs_world.query_renderable();
+        let use_ecs = !renderable_entities.is_empty();
+
+        if use_ecs {
+            self.draw_meshes_ecs(command_buffer, image_index, &renderable_entities, should_log)?;
+        } else {
+            self.draw_meshes_legacy(command_buffer, image_index, should_log)?;
+        }
+
+        Ok(())
+    }
+
+    unsafe fn draw_meshes_ecs(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+        entities: &[crate::ecs::Entity],
+        should_log: bool,
+    ) -> Result<()> {
+        if should_log {
+            crate::log!("  Using ECS rendering: {} entities", entities.len());
+        }
+
+        for &entity in entities {
+            let Some(mesh_ref) = self.ecs_world.get_component::<MeshRef>(entity) else {
+                continue;
+            };
+
+            let Some(mesh_asset) = self.ecs_assets.get_mesh(mesh_ref.mesh_asset_id) else {
+                continue;
+            };
+
+            let mesh_index = mesh_asset.graphics_mesh_index;
+            if mesh_index >= self.meshes.len() {
+                continue;
+            }
+
+            let mesh = &self.meshes[mesh_index];
+
+            if should_log {
+                crate::log!(
+                    "  ECS Entity {}: asset_id={}, mesh_index={}, render_to_gbuffer={}",
+                    entity,
+                    mesh_ref.mesh_asset_id,
+                    mesh_index,
+                    mesh_asset.render_to_gbuffer
+                );
+            }
+
+            if !mesh_asset.render_to_gbuffer {
+                continue;
+            }
+
+            self.draw_single_mesh(command_buffer, image_index, mesh, mesh_index)?;
+        }
+
+        Ok(())
+    }
+
+    unsafe fn draw_meshes_legacy(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+        should_log: bool,
+    ) -> Result<()> {
+        if should_log {
+            crate::log!("  Using legacy rendering: {} meshes", self.meshes.len());
+        }
+
         for i in 0..self.meshes.len() {
             let mesh = &self.meshes[i];
 
             if should_log {
-                crate::log!("  GBuffer Mesh[{}]: render_to_gbuffer={}, vertex_buffer={:?}, indices={}",
-                    i, mesh.render_to_gbuffer, mesh.vertex_buffer.buffer, mesh.index_buffer.indices);
+                crate::log!(
+                    "  GBuffer Mesh[{}]: render_to_gbuffer={}, vertex_buffer={:?}, indices={}",
+                    i,
+                    mesh.render_to_gbuffer,
+                    mesh.vertex_buffer.buffer,
+                    mesh.index_buffer.indices
+                );
             }
 
             if !mesh.render_to_gbuffer {
                 continue;
             }
 
-            self.device.cmd_bind_vertex_buffers(
-                command_buffer,
-                0,
-                &[mesh.vertex_buffer.buffer],
-                &[0],
-            );
-
-            self.device.cmd_bind_index_buffer(
-                command_buffer,
-                mesh.index_buffer.buffer,
-                0,
-                vk::IndexType::UINT32,
-            );
-
-            let frame_set = self.render_resources.frame_set.sets[image_index];
-            self.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pipeline.pipeline_layout,
-                0,
-                &[frame_set],
-                &[],
-            );
-
-            if let Some(material_id) = self.render_resources.get_material_id(i) {
-                if let Some(material) = self.render_resources.materials.get(material_id) {
-                    self.device.cmd_bind_descriptor_sets(
-                        command_buffer,
-                        vk::PipelineBindPoint::GRAPHICS,
-                        self.pipeline.pipeline_layout,
-                        1,
-                        &[material.descriptor_set],
-                        &[],
-                    );
-                }
-            }
-
-            let object_set_idx = self.render_resources.objects.get_set_index(image_index, mesh.object_index);
-            let object_set = self.render_resources.objects.sets[object_set_idx];
-            self.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pipeline.pipeline_layout,
-                2,
-                &[object_set],
-                &[],
-            );
-
-            self.device.cmd_draw_indexed(
-                command_buffer,
-                mesh.index_buffer.indices,
-                1,
-                0,
-                0,
-                0,
-            );
+            self.draw_single_mesh(command_buffer, image_index, mesh, i)?;
         }
+
+        Ok(())
+    }
+
+    unsafe fn draw_single_mesh(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+        mesh: &MeshBuffer,
+        mesh_index: usize,
+    ) -> Result<()> {
+        self.device.cmd_bind_vertex_buffers(
+            command_buffer,
+            0,
+            &[mesh.vertex_buffer.buffer],
+            &[0],
+        );
+
+        self.device.cmd_bind_index_buffer(
+            command_buffer,
+            mesh.index_buffer.buffer,
+            0,
+            vk::IndexType::UINT32,
+        );
+
+        let frame_set = self.graphics_resources.frame_set.sets[image_index];
+        self.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            self.pipeline.pipeline_layout,
+            0,
+            &[frame_set],
+            &[],
+        );
+
+        if let Some(material_id) = self.graphics_resources.get_material_id(mesh_index) {
+            if let Some(material) = self.graphics_resources.materials.get(material_id) {
+                self.device.cmd_bind_descriptor_sets(
+                    command_buffer,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.pipeline.pipeline_layout,
+                    1,
+                    &[material.descriptor_set],
+                    &[],
+                );
+            }
+        }
+
+        let object_set_idx = self
+            .graphics_resources
+            .objects
+            .get_set_index(image_index, mesh.object_index);
+        let object_set = self.graphics_resources.objects.sets[object_set_idx];
+        self.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            self.pipeline.pipeline_layout,
+            2,
+            &[object_set],
+            &[],
+        );
+
+        self.device.cmd_draw_indexed(
+            command_buffer,
+            mesh.index_buffer.indices,
+            1,
+            0,
+            0,
+            0,
+        );
 
         Ok(())
     }

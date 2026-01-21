@@ -38,6 +38,7 @@ pub struct RRDevice {
     pub graphics_queue: vk::Queue,
     pub present_queue: vk::Queue,
     pub msaa_samples: vk::SampleCountFlags,
+    pub min_uniform_buffer_offset_alignment: u64,
 }
 
 impl RRDevice {
@@ -48,6 +49,7 @@ impl RRDevice {
             graphics_queue: vk::Queue::default(),
             present_queue: vk::Queue::default(),
             msaa_samples: vk::SampleCountFlags::default(),
+            min_uniform_buffer_offset_alignment: 256,
         }
     }
     pub unsafe fn new(
@@ -71,6 +73,10 @@ impl RRDevice {
             portability_macro_version,
             &physical_device,
         )?;
+
+        let properties = instance.get_physical_device_properties(physical_device);
+        let min_ubo_alignment = properties.limits.min_uniform_buffer_offset_alignment;
+
         println!("created logical device");
         Ok(Self {
             device: device,
@@ -78,6 +84,7 @@ impl RRDevice {
             graphics_queue: graphics_queue,
             present_queue: present_queue,
             msaa_samples: sample_count,
+            min_uniform_buffer_offset_alignment: min_ubo_alignment,
         })
     }
 }

@@ -2,7 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**IMPORTANT**: This file must be written in English for Claude's optimal understanding. Always respond to the user in Japanese, but keep this documentation in English.
+**IMPORTANT**: This file must be written in English for Claude's optimal understanding.
+Always respond to the user in user's Claude setting language, but keep this documentation in English.
 
 ## Project Overview
 
@@ -76,6 +77,139 @@ cargo test -- --nocapture
 # Run ignored tests
 cargo test -- --ignored
 ```
+
+## ECS Architecture
+
+This project uses an Entity-Component-System (ECS) architecture inspired by [Bevy Engine](https://bevyengine.org/). The design follows these principles:
+
+### Design Philosophy
+
+1. **Data-Behavior Separation**: Data structures hold only data; all behavior is implemented as system functions
+2. **Composition over Inheritance**: Build complex objects by combining simple components
+3. **Single Responsibility**: Each component/system has one clear purpose
+
+### Directory Structure
+
+```
+src/ecs/
+├── component/           # Component definitions (data attached to entities)
+│   ├── mod.rs
+│   ├── ...
+├── bundle/              # Common component combinations
+│   ├── mod.rs
+│   ├── ...
+├── resource/            # Global dynamic state (changes per frame)
+│   ├── mod.rs
+│   ├── ...
+├── systems/             # System functions (behavior/logic)
+│   ├── mod.rs
+│   ├── ...
+├── world.rs             # World container for entities and resources
+├── query.rs             # Query functions for entity filtering
+└── mod.rs
+```
+
+### Core Concepts
+
+#### Components
+
+Data-only structs attached to entities. Located in `ecs/component/`.
+
+```rust
+// Core components
+pub struct Name(pub String);
+pub struct Transform { pub position: Vector3<f32>, pub rotation: Quaternion<f32>, pub scale: Vector3<f32> }
+pub struct Visible(pub bool);
+
+// Marker components (tag only, no data)
+pub struct Grid;           // Identifies grid entity
+pub struct LightGizmo;     // Identifies light gizmo entity
+pub struct LightBillboard; // Identifies billboard entity
+```
+
+#### Resources
+
+Global state that changes per frame. Located in `ecs/resource/`. **Only use for dynamic data.**
+
+```rust
+// Good: Dynamic state that changes during runtime
+pub struct Camera { pub position: Vector3<f32>, pub direction: Vector3<f32>, ... }
+pub struct AnimationPlayback { pub current_time: f32, pub is_playing: bool, ... }
+pub struct Time { pub delta: f32, pub elapsed: f32 }
+
+// Bad: Static configuration (should be component or const)
+// pub struct WindowSize { width: u32, height: u32 }  // <- Don't do this
+```
+
+#### Systems
+
+Pure functions that operate on components and resources. Located in `ecs/systems/`.
+
+```rust
+// System function naming convention: <domain>_<action>
+pub fn camera_rotate(camera: &mut Camera, delta: Vector2<f32>);
+pub fn camera_zoom(camera: &mut Camera, amount: f32);
+pub fn light_gizmo_try_select(world: &World, ray: Ray) -> Option<Entity>;
+pub fn animation_update(playback: &mut AnimationPlayback, registry: &mut AnimationRegistry, dt: f32);
+```
+
+#### Bundles
+
+Predefined component combinations for common entity types. Located in `ecs/bundle/`.
+
+```rust
+pub struct GridBundle {
+    pub name: Name,
+    pub transform: Transform,
+    pub visible: Visible,
+    pub grid: Grid,  // Marker
+    pub gpu_mesh: GpuMesh,
+    pub pipeline_ref: PipelineRef,
+}
+```
+
+### Query Pattern
+
+Use query functions instead of storing entity IDs:
+
+```rust
+// Query by marker component
+pub fn query_grid(world: &World) -> Option<Entity>;
+pub fn query_light_gizmo(world: &World) -> Option<Entity>;
+pub fn query_selectable_entities(world: &World) -> Vec<Entity>;
+
+// Usage
+if let Some(grid_entity) = query_grid(&world) {
+    let transform = world.get_component::<Transform>(grid_entity);
+}
+```
+
+### RefCell-Based Interior Mutability
+
+Resources use `RefCell` for interior mutability with wrapper types:
+
+```rust
+// Access patterns
+let camera = app.resource::<Camera>();           // ResRef<Camera> (immutable)
+let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
+
+// ResRef/ResMut auto-deref to inner type
+camera.position.x += 1.0;  // Direct field access through DerefMut
+```
+
+### Adding New Scene Objects
+
+1. Define components in `ecs/component/`
+2. Create a bundle in `ecs/bundle/`
+3. Add a marker component for queries
+4. Implement system functions in `ecs/systems/`
+5. Spawn entity with the bundle in initialization
+
+### Reference Projects
+
+- [Bevy Engine](https://github.com/bevyengine/bevy) - Primary reference for ECS patterns
+- [Hecs](https://github.com/Ralith/hecs) - Lightweight ECS library
+- [Legion](https://github.com/amethyst/legion) - Another Rust ECS implementation
 
 ## Architecture
 
@@ -412,7 +546,8 @@ The `memo.txt` file contains useful reference links for:
 ## Important Rules
 
 - Always respond in Japanese
-- Do NOT perform git operations (commit, push, etc.)
+- Do NOT perform git write operations (commit, push, etc.)
+    - read operation (diff log) is allowed
 
 ## Logging
 
@@ -425,3 +560,7 @@ The `memo.txt` file contains useful reference links for:
 - Contains the update processing
 - Do NOT write feature-specific processing here
 - Instead, write update processing in related files and call them from update
+
+## mod.rs
+- Don't write definition or implementation in mod.rs file
+- Only module publish responsibility on mod.rs

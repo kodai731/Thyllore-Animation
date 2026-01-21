@@ -1,4 +1,5 @@
 pub mod deferred;
+pub mod scene_renderer;
 
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
@@ -12,7 +13,7 @@ impl App {
         gui_data: &mut crate::app::GUIData,
         draw_data: &imgui::DrawData,
     ) -> Result<()> {
-        let command_buffer = self.data.rrcommand_buffer.command_buffers[image_index];
+        let command_buffer = self.command_state().buffers.command_buffers[image_index];
 
         self.rrdevice
             .device
@@ -43,6 +44,7 @@ impl App {
             deferred::record_composite_pass(self, command_buffer, image_index, draw_data)?;
         } else {
             self.begin_main_render_pass(command_buffer, image_index);
+            self.record_3d_rendering(command_buffer, image_index)?;
             self.record_imgui_rendering(command_buffer, draw_data)?;
             self.rrdevice.device.cmd_end_render_pass(command_buffer);
         }

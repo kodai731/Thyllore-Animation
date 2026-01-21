@@ -1,8 +1,8 @@
 use crate::log;
-use crate::vulkanr::core::device::*;
-use crate::vulkanr::vulkan::*;
 use crate::vulkanr::command::*;
+use crate::vulkanr::core::device::*;
 use crate::vulkanr::data::UniformBufferObject;
+use crate::vulkanr::vulkan::*;
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping as memcpy;
@@ -32,8 +32,12 @@ impl RRUniformBuffer {
             panic!("Unable to create uniform buffer");
         };
 
-        log!("RRUniformBuffer::new [{}] buffer={:?}, memory={:?}",
-            name, uniform_buffer, uniform_buffer_memory);
+        log!(
+            "RRUniformBuffer::new [{}] buffer={:?}, memory={:?}",
+            name,
+            uniform_buffer,
+            uniform_buffer_memory
+        );
 
         rruniform_buffer.buffer = uniform_buffer;
         rruniform_buffer.buffer_memory = uniform_buffer_memory;
@@ -61,10 +65,14 @@ impl RRUniformBuffer {
         static mut LOG_COUNTER: u32 = 0;
         LOG_COUNTER += 1;
         if LOG_COUNTER % 300 == 1 {
-            log!("RRUniformBuffer::update [{}] buffer={:?} model_translation=({:.2},{:.2},{:.2})",
+            log!(
+                "RRUniformBuffer::update [{}] buffer={:?} model_translation=({:.2},{:.2},{:.2})",
                 name,
                 self.buffer,
-                ubo.model.w.x, ubo.model.w.y, ubo.model.w.z);
+                ubo.model.w.x,
+                ubo.model.w.y,
+                ubo.model.w.z
+            );
         }
 
         Ok(())
@@ -342,8 +350,8 @@ pub unsafe fn create_buffer(
     let buffer = rrdevice.device.create_buffer(&buffer_info, None)?;
     let requirements = rrdevice.device.get_buffer_memory_requirements(buffer);
 
-    let mut memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
-        .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+    let mut memory_allocate_flags_info =
+        vk::MemoryAllocateFlagsInfo::builder().flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
 
     let mut memory_info = vk::MemoryAllocateInfo::builder()
         .allocation_size(requirements.size)

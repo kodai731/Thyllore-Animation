@@ -1,7 +1,7 @@
 use anyhow::Result;
 use cgmath::{Matrix4, Vector3};
 
-use crate::ecs::component::{GizmoMesh, GizmoRayToModel, GizmoVerticalLines};
+use crate::ecs::component::{GizmoMesh, LineMesh};
 use crate::ecs::systems::ProjectionData;
 use crate::app::billboard::BillboardData;
 
@@ -21,16 +21,9 @@ pub trait RenderBackend {
 
     unsafe fn destroy_gizmo_buffers(&mut self, mesh: &mut GizmoMesh);
 
-    unsafe fn update_or_create_ray_buffers(&mut self, ray: &mut GizmoRayToModel) -> Result<()>;
+    unsafe fn update_or_create_line_buffers(&mut self, mesh: &mut LineMesh) -> Result<()>;
 
-    unsafe fn destroy_ray_buffers(&mut self, ray: &mut GizmoRayToModel);
-
-    unsafe fn update_or_create_vertical_line_buffers(
-        &mut self,
-        lines: &mut GizmoVerticalLines,
-    ) -> Result<()>;
-
-    unsafe fn destroy_vertical_line_buffers(&mut self, lines: &mut GizmoVerticalLines);
+    unsafe fn destroy_line_buffers(&mut self, mesh: &mut LineMesh);
 
     unsafe fn create_billboard_buffers(&mut self, billboard: &mut BillboardData) -> Result<()>;
 

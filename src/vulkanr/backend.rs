@@ -6,7 +6,7 @@ use anyhow::Result;
 use cgmath::{Matrix4, Vector3, Vector4};
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::component::{GizmoMesh, GizmoRayToModel, GizmoVerticalLines};
+use crate::ecs::component::{GizmoMesh, LineMesh};
 use crate::ecs::systems::ProjectionData;
 use crate::render::{FrameUBO, IndexBufferHandle, MeshId, ObjectUBO, RenderBackend, VertexBufferHandle};
 use crate::app::billboard::BillboardData;
@@ -174,94 +174,49 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         mesh.index_buffer_handle = IndexBufferHandle::INVALID;
     }
 
-    unsafe fn update_or_create_ray_buffers(&mut self, ray: &mut GizmoRayToModel) -> Result<()> {
-        if ray.vertices.is_empty() {
+    unsafe fn update_or_create_line_buffers(&mut self, mesh: &mut LineMesh) -> Result<()> {
+        if mesh.vertices.is_empty() {
             return Ok(());
         }
 
-        if !ray.vertex_buffer_handle.is_valid() {
+        if !mesh.vertex_buffer_handle.is_valid() {
             let vertex_handle = self.buffer_registry.create_host_visible_vertex_buffer(
                 self.instance,
                 self.device,
-                &ray.vertices,
-                0,
-            )?;
-            ray.vertex_buffer_handle = vertex_handle;
-        } else {
-            self.buffer_registry
-                .update_vertex_buffer(self.device, ray.vertex_buffer_handle, &ray.vertices)?;
-        }
-
-        if !ray.index_buffer_handle.is_valid() {
-            let index_handle = self.buffer_registry.create_host_visible_index_buffer(
-                self.instance,
-                self.device,
-                &ray.indices,
-            )?;
-            ray.index_buffer_handle = index_handle;
-        } else {
-            self.buffer_registry
-                .update_index_buffer(self.device, ray.index_buffer_handle, &ray.indices)?;
-        }
-
-        Ok(())
-    }
-
-    unsafe fn destroy_ray_buffers(&mut self, ray: &mut GizmoRayToModel) {
-        self.buffer_registry
-            .destroy_vertex_buffer(self.device, ray.vertex_buffer_handle);
-        self.buffer_registry
-            .destroy_index_buffer(self.device, ray.index_buffer_handle);
-        ray.vertex_buffer_handle = VertexBufferHandle::INVALID;
-        ray.index_buffer_handle = IndexBufferHandle::INVALID;
-    }
-
-    unsafe fn update_or_create_vertical_line_buffers(
-        &mut self,
-        lines: &mut GizmoVerticalLines,
-    ) -> Result<()> {
-        if lines.vertices.is_empty() {
-            return Ok(());
-        }
-
-        if !lines.vertex_buffer_handle.is_valid() {
-            let vertex_handle = self.buffer_registry.create_host_visible_vertex_buffer(
-                self.instance,
-                self.device,
-                &lines.vertices,
+                &mesh.vertices,
                 1024,
             )?;
-            lines.vertex_buffer_handle = vertex_handle;
+            mesh.vertex_buffer_handle = vertex_handle;
         } else {
             self.buffer_registry.update_vertex_buffer(
                 self.device,
-                lines.vertex_buffer_handle,
-                &lines.vertices,
+                mesh.vertex_buffer_handle,
+                &mesh.vertices,
             )?;
         }
 
-        if !lines.index_buffer_handle.is_valid() {
+        if !mesh.index_buffer_handle.is_valid() {
             let index_handle = self.buffer_registry.create_host_visible_index_buffer(
                 self.instance,
                 self.device,
-                &lines.indices,
+                &mesh.indices,
             )?;
-            lines.index_buffer_handle = index_handle;
+            mesh.index_buffer_handle = index_handle;
         } else {
             self.buffer_registry
-                .update_index_buffer(self.device, lines.index_buffer_handle, &lines.indices)?;
+                .update_index_buffer(self.device, mesh.index_buffer_handle, &mesh.indices)?;
         }
 
         Ok(())
     }
 
-    unsafe fn destroy_vertical_line_buffers(&mut self, lines: &mut GizmoVerticalLines) {
+    unsafe fn destroy_line_buffers(&mut self, mesh: &mut LineMesh) {
         self.buffer_registry
-            .destroy_vertex_buffer(self.device, lines.vertex_buffer_handle);
+            .destroy_vertex_buffer(self.device, mesh.vertex_buffer_handle);
         self.buffer_registry
-            .destroy_index_buffer(self.device, lines.index_buffer_handle);
-        lines.vertex_buffer_handle = VertexBufferHandle::INVALID;
-        lines.index_buffer_handle = IndexBufferHandle::INVALID;
+            .destroy_index_buffer(self.device, mesh.index_buffer_handle);
+        mesh.vertex_buffer_handle = VertexBufferHandle::INVALID;
+        mesh.index_buffer_handle = IndexBufferHandle::INVALID;
     }
 
     unsafe fn create_billboard_buffers(&mut self, billboard: &mut BillboardData) -> Result<()> {

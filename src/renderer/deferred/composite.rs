@@ -1,10 +1,10 @@
 use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
-use super::gizmo::{gizmo_draw_ray_with_pipeline, gizmo_draw_vertical_lines_with_pipeline};
 use crate::app::App;
 use crate::debugview::DebugViewMode;
 use crate::app::graphics_resource::GraphicsResources;
+use crate::ecs::component::LineMesh;
 use crate::vulkanr::core::Device;
 use crate::vulkanr::descriptor::RRCompositeDescriptorSet;
 use crate::vulkanr::pipeline::RRPipeline;
@@ -70,24 +70,18 @@ impl<'a> CompositePass<'a> {
 
         if let Some(pipeline_id) = grid_mesh.pipeline_id {
             if let Some(pipeline) = pipeline_storage.get(pipeline_id) {
-                gizmo_draw_ray_with_pipeline(
+                self.draw_line_mesh(
                     &light_gizmo.ray_to_model,
-                    self.buffer_registry,
-                    self.device,
-                    command_buffer,
                     pipeline,
-                    self.graphics_resources,
                     grid_mesh.object_index,
+                    command_buffer,
                     image_index,
                 );
-                gizmo_draw_vertical_lines_with_pipeline(
+                self.draw_line_mesh(
                     &light_gizmo.vertical_lines,
-                    self.buffer_registry,
-                    self.device,
-                    command_buffer,
                     pipeline,
-                    self.graphics_resources,
                     grid_mesh.object_index,
+                    command_buffer,
                     image_index,
                 );
             }
@@ -352,6 +346,73 @@ impl<'a> CompositePass<'a> {
             .cmd_draw_indexed(command_buffer, gizmo.mesh.indices.len() as u32, 1, 0, 0, 0);
 
         Ok(())
+    }
+
+    unsafe fn draw_line_mesh(
+        &self,
+        mesh: &LineMesh,
+        pipeline: &RRPipeline,
+        object_index: usize,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+    ) {
+        if mesh.indices.is_empty() {
+            return;
+        }
+
+        let vertex_buffer = match self
+            .buffer_registry
+            .get_vertex_buffer(mesh.vertex_buffer_handle)
+        {
+            Some(vb) => vb,
+            None => return,
+        };
+        let index_buffer = match self
+            .buffer_registry
+            .get_index_buffer(mesh.index_buffer_handle)
+        {
+            Some(ib) => ib,
+            None => return,
+        };
+
+        self.device.cmd_bind_pipeline(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline,
+        );
+
+        self.device.cmd_set_line_width(command_buffer, 1.0);
+        self.device
+            .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
+        self.device
+            .cmd_bind_index_buffer(command_buffer, index_buffer, 0, vk::IndexType::UINT32);
+
+        let frame_set = self.graphics_resources.frame_set.sets[image_index];
+        self.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline_layout,
+            0,
+            &[frame_set],
+            &[],
+        );
+
+        let object_set_idx = self
+            .graphics_resources
+            .objects
+            .get_set_index(image_index, object_index);
+        let object_set = self.graphics_resources.objects.sets[object_set_idx];
+        self.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline_layout,
+            2,
+            &[object_set],
+            &[],
+        );
+
+        self.device
+            .cmd_draw_indexed(command_buffer, mesh.indices.len() as u32, 1, 0, 0, 0);
     }
 
     unsafe fn draw_billboard(

@@ -1,6 +1,5 @@
 use crate::ecs::component::{
-    GizmoDraggable, GizmoMesh, GizmoPosition, GizmoRayToModel, GizmoSelectable,
-    GizmoVerticalLines,
+    GizmoDraggable, GizmoMesh, GizmoPosition, GizmoSelectable, LineMesh,
 };
 
 pub use crate::ecs::component::GizmoAxis as LightGizmoAxis;
@@ -11,7 +10,7 @@ pub struct LightGizmoData {
     pub position: GizmoPosition,
     pub selectable: GizmoSelectable,
     pub draggable: GizmoDraggable,
-    pub ray_to_model: GizmoRayToModel,
-    pub vertical_lines: GizmoVerticalLines,
+    pub ray_to_model: LineMesh,
+    pub vertical_lines: LineMesh,
 }
 

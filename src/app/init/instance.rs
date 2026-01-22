@@ -1,8 +1,9 @@
 use crate::app::{App, AppData};
 
+use crate::ecs::component::{LineMesh, MeshScale};
 use crate::ecs::systems::{
-    billboard_create_buffers, create_billboard, create_grid_gizmo, create_light_gizmo,
-    gizmo_create_buffers,
+    billboard_create_buffers, create_billboard, create_default_grid_scale, create_grid_gizmo,
+    create_grid_mesh, create_light_gizmo, gizmo_create_buffers,
 };
 use crate::vulkanr::VulkanBackend;
 use crate::ecs::{
@@ -17,7 +18,7 @@ use crate::vulkanr::context::{
 use crate::vulkanr::data::*;
 use crate::vulkanr::descriptor::*;
 use crate::vulkanr::device::*;
-use crate::vulkanr::pipeline::{PipelineBuilder, RRPipeline, VertexInputConfig};
+use crate::vulkanr::pipeline::{DepthTestConfig, PipelineBuilder, RRPipeline, VertexInputConfig};
 use crate::vulkanr::render::*;
 use crate::vulkanr::swapchain::*;
 use crate::vulkanr::vulkan::*;
@@ -25,7 +26,6 @@ use crate::vulkanr::vulkan::*;
 use crate::debugview::*;
 use crate::math::*;
 use crate::app::graphics_resource::GraphicsResources;
-use crate::scene::grid::GridData;
 use crate::scene::Camera;
 
 use vulkanalia::Device as VkDevice;
@@ -172,17 +172,22 @@ impl App {
         pipeline_manager.allocate_id();
         crate::log!("Registered model pipeline with id {}", model_pipeline_id);
 
-        let grid_pipeline = RRPipeline::new_with_graphics_resources(
-            &rrdevice,
-            &rrswapchain,
-            &rrrender,
-            &render_layouts,
+        let grid_pipeline = PipelineBuilder::new(
             "assets/shaders/gridVert.spv",
             "assets/shaders/gridFrag.spv",
-            vk::PrimitiveTopology::LINE_LIST,
-            vk::PolygonMode::LINE,
-            vk::CullModeFlags::NONE,
-        );
+        )
+        .vertex_input(VertexInputConfig::Gizmo)
+        .topology(vk::PrimitiveTopology::LINE_LIST)
+        .polygon_mode(vk::PolygonMode::LINE)
+        .depth_test(DepthTestConfig {
+            test_enable: true,
+            write_enable: false,
+            compare_op: vk::CompareOp::LESS,
+        })
+        .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
+        .descriptor_layouts(render_layouts.to_vec())
+        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+        .expect("Failed to create grid pipeline");
         let grid_pipeline_id = data.pipeline_storage.register(grid_pipeline);
         pipeline_manager.allocate_id();
         crate::log!("Registered grid pipeline with id {}", grid_pipeline_id);
@@ -369,42 +374,30 @@ impl App {
             crate::log!("Ray tracing pipelines created successfully");
         }
 
-        let mut grid = GridData::default();
-        grid.pipeline_id = Some(grid_pipeline_id);
+        let mut grid_mesh = create_grid_mesh();
+        grid_mesh.pipeline_id = Some(grid_pipeline_id);
 
-        let tex_coord = Vec2::new(0.0, 0.0);
-        let mut color = Vec4::new(1.0, 0.0, 0.0, 1.0);
-        if let Err(e) = Self::create_grid_data(&mut grid, 0, color, tex_coord) {
-            eprintln!("{:?}", e)
-        }
-        color = Vec4::new(0.0, 1.0, 0.0, 1.0);
-        if let Err(e) = Self::create_grid_data(&mut grid, 1, color, tex_coord) {
-            eprintln!("{:?}", e)
-        }
-        color = Vec4::new(0.0, 0.0, 1.0, 1.0);
-        if let Err(e) = Self::create_grid_data(&mut grid, 2, color, tex_coord) {
-            eprintln!("{:?}", e)
-        }
-        println!("created grid data ");
-        grid.scale = 1.0;
-        grid.vertex_buffer_handle = data.buffer_registry.create_vertex_buffer(
+        let grid_scale = create_default_grid_scale();
+
+        grid_mesh.vertex_buffer_handle = data.buffer_registry.create_vertex_buffer(
             &instance,
             &rrdevice,
             &rrcommand_pool,
-            &grid.vertices,
+            &grid_mesh.vertices,
             true,
         )?;
         println!("created grid vertex buffers");
-        grid.index_buffer_handle = data.buffer_registry.create_index_buffer(
+
+        grid_mesh.index_buffer_handle = data.buffer_registry.create_index_buffer(
             &instance,
             &rrdevice,
             &rrcommand_pool,
-            &grid.indices,
+            &grid_mesh.indices,
         )?;
         println!("created grid index buffer");
 
-        grid.object_index = data.graphics_resources.objects.allocate_slot();
-        crate::log!("Allocated object_index {} for Grid", grid.object_index);
+        grid_mesh.object_index = data.graphics_resources.objects.allocate_slot();
+        crate::log!("Allocated object_index {} for Grid", grid_mesh.object_index);
         println!("allocated grid object_index");
 
         let mut rrcommand_buffer = RRCommandBuffer::new(&rrcommand_pool);
@@ -444,7 +437,8 @@ impl App {
         let resized = false;
         let start = Instant::now();
 
-        data.ecs_world.insert_resource(grid);
+        data.ecs_world.insert_resource(grid_mesh);
+        data.ecs_world.insert_resource(grid_scale);
 
         println!("initialized finished");
         Ok(Self {

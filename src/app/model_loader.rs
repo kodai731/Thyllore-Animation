@@ -8,7 +8,6 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::AppData;
 use crate::asset::{AnimationClipAsset, AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
-use crate::debugview::DebugViewData;
 use crate::ecs::playback_play;
 use crate::ecs::resource::{
     AnimationPlayback, AnimationRegistry, MeshAssets, ModelState, NodeAssets,
@@ -20,7 +19,6 @@ use crate::render::MaterialUBO;
 use crate::app::billboard::BillboardData;
 use crate::app::graphics_resource::{GraphicsResources, MaterialId, MeshBuffer, NodeData};
 use crate::app::raytracing::RayTracingData;
-use crate::scene::CubeModel;
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::data as vulkan_data;
@@ -62,48 +60,6 @@ pub unsafe fn load_model_from_file_system(
     )?;
 
     crate::log!("=== Model loaded successfully ===");
-    Ok(())
-}
-
-pub unsafe fn load_cube_model_system(
-    size: f32,
-    position: [f32; 3],
-    instance: &Instance,
-    device: &RRDevice,
-    command_pool: &Rc<RRCommandPool>,
-    swapchain: &RRSwapchain,
-    graphics: &mut GraphicsResources,
-    raytracing: &mut RayTracingData,
-    debug_view: &mut DebugViewData,
-    world: &mut World,
-    assets: &mut AssetStorage,
-) -> Result<()> {
-    crate::log!(
-        "=== Loading cube model: size={}, position=({}, {}, {}) ===",
-        size,
-        position[0],
-        position[1],
-        position[2]
-    );
-
-    let load_result = crate::loader::cube::create_cube(size, position);
-
-    apply_model_to_resources(
-        &load_result,
-        "cube",
-        instance,
-        device,
-        command_pool,
-        swapchain,
-        graphics,
-        raytracing,
-        world,
-        assets,
-    )?;
-
-    debug_view.cube_model = Some(CubeModel::new_at_position(size, position));
-
-    crate::log!("=== Cube model loaded successfully ===");
     Ok(())
 }
 
@@ -726,123 +682,4 @@ fn create_ecs_entities(
         assets.animation_clips.len(),
         assets.nodes.len()
     );
-}
-
-pub unsafe fn replace_model_with_cube(
-    instance: &Instance,
-    rrdevice: &RRDevice,
-    data: &mut AppData,
-    billboard: &mut BillboardData,
-    rrcommand_pool: &Rc<RRCommandPool>,
-    rrswapchain: &RRSwapchain,
-    size: f32,
-    position: [f32; 3],
-) -> Result<()> {
-    cleanup_model_resources(rrdevice, data);
-
-    let cube = CubeModel::new_at_position(size, position);
-
-    let mut mesh = MeshBuffer::default();
-
-    (mesh.image, mesh.image_memory, mesh.mip_level) = create_texture_image_pixel(
-        instance,
-        rrdevice,
-        rrcommand_pool,
-        &vec![255u8, 255, 255, 255],
-        1,
-        1,
-    )?;
-
-    mesh.image_view = create_image_view(
-        rrdevice,
-        mesh.image,
-        vk::Format::R8G8B8A8_SRGB,
-        vk::ImageAspectFlags::COLOR,
-        mesh.mip_level,
-    )?;
-
-    mesh.sampler = create_texture_sampler(rrdevice, mesh.mip_level)?;
-
-    mesh.vertex_data = VertexData {
-        vertices: cube.vertices.clone(),
-        indices: cube.indices.clone(),
-    };
-
-    mesh.vertex_buffer = RRVertexBuffer::new(
-        instance,
-        rrdevice,
-        rrcommand_pool.as_ref(),
-        (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len()) as vk::DeviceSize,
-        mesh.vertex_data.vertices.as_ptr() as *const c_void,
-        mesh.vertex_data.vertices.len(),
-    );
-
-    mesh.index_buffer = RRIndexBuffer::new(
-        instance,
-        rrdevice,
-        rrcommand_pool.as_ref(),
-        (size_of::<u32>() * mesh.vertex_data.indices.len()) as u64,
-        mesh.vertex_data.indices.as_ptr() as *const c_void,
-        mesh.vertex_data.indices.len(),
-    );
-
-    mesh.object_index = data.graphics_resources.objects.allocate_slot();
-    crate::log!("Allocated object_index {} for cube mesh", mesh.object_index);
-
-    let material_id = data
-        .graphics_resources
-        .materials
-        .create_material_with_texture(
-            instance,
-            rrdevice,
-            "cube_material",
-            mesh.image_view,
-            mesh.sampler,
-            MaterialUBO::default(),
-        )?;
-    data.graphics_resources.mesh_material_ids.push(material_id);
-    crate::log!("Created material {} for cube", material_id);
-
-    data.graphics_resources.meshes.push(mesh);
-    crate::log!("Added cube mesh to graphics_resources.meshes");
-
-    rebuild_acceleration_structures(
-        instance,
-        rrdevice,
-        rrcommand_pool,
-        &data.graphics_resources,
-        &mut data.raytracing,
-    )?;
-
-    if let Some(ref accel_struct) = data.raytracing.acceleration_structure {
-        if let Some(tlas) = accel_struct.tlas.acceleration_structure {
-            if let Some(ref mut ray_query_desc) = data.raytracing.ray_query_descriptor {
-                ray_query_desc.update_tlas(rrdevice, tlas)?;
-                crate::log!("Updated ray_query_descriptor with new TLAS");
-            }
-        }
-    }
-
-    {
-        let texture_clone = billboard.render.texture.clone();
-        if let Some(ref billboard_texture) = texture_clone {
-            billboard.render.descriptor_set.update_descriptor_sets(
-                rrdevice,
-                rrswapchain,
-                billboard_texture,
-            )?;
-            crate::log!("Re-updated billboard.render.descriptor_set after cube reload");
-        }
-    }
-
-    data.debug_view_data.cube_model = Some(cube);
-
-    crate::log!(
-        "Model replaced with cube. Size: {}, Position: ({}, {}, {})",
-        size,
-        position[0],
-        position[1],
-        position[2]
-    );
-    Ok(())
 }

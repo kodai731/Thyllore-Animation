@@ -107,11 +107,7 @@ impl App {
     }
 
     unsafe fn update_vertical_lines(&mut self) -> Result<()> {
-        let model_tops: Vec<cgmath::Vector3<f32>> = self
-            .rt_debug_state()
-            .get_cube_top()
-            .into_iter()
-            .collect();
+        let model_tops: Vec<cgmath::Vector3<f32>> = Vec::new();
 
         {
             let mut gizmo = self.light_gizmo_mut();

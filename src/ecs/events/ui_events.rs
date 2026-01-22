@@ -5,7 +5,6 @@ use crate::app::data::LightMoveTarget;
 #[derive(Clone, Debug)]
 pub enum UIEvent {
     LoadModel { path: String },
-    LoadCube,
 
     ResetCamera,
     ResetCameraUp,

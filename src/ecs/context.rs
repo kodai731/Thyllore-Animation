@@ -5,8 +5,8 @@ use crate::asset::AssetStorage;
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::debugview::RayTracingDebugState;
 use crate::app::billboard::BillboardData;
+use crate::ecs::component::{LineMesh, MeshScale};
 use crate::scene::camera::Camera;
-use crate::scene::grid::GridData;
 
 use super::world::{ResMut, ResRef, World};
 
@@ -54,12 +54,20 @@ impl<'a> EcsContext<'a> {
         self.rt_debug().light_position
     }
 
-    pub fn grid(&self) -> ResRef<GridData> {
-        self.world.resource::<GridData>()
+    pub fn grid_mesh(&self) -> ResRef<LineMesh> {
+        self.world.resource::<LineMesh>()
     }
 
-    pub fn grid_mut(&self) -> ResMut<GridData> {
-        self.world.resource_mut::<GridData>()
+    pub fn grid_mesh_mut(&self) -> ResMut<LineMesh> {
+        self.world.resource_mut::<LineMesh>()
+    }
+
+    pub fn grid_scale(&self) -> ResRef<MeshScale> {
+        self.world.resource::<MeshScale>()
+    }
+
+    pub fn grid_scale_mut(&self) -> ResMut<MeshScale> {
+        self.world.resource_mut::<MeshScale>()
     }
 
     pub fn gizmo(&self) -> ResRef<GridGizmoData> {

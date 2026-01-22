@@ -3,7 +3,7 @@ use cgmath::{Matrix4, SquareMatrix, Vector3};
 
 use crate::app::FrameContext;
 use crate::ecs::systems::render_data_systems::{
-    gizmo_mesh_render_data, gizmo_selectable_render_data, grid_render_data,
+    gizmo_mesh_render_data, gizmo_selectable_render_data, line_mesh_render_data,
 };
 use crate::ecs::{gizmo_update_rotation, gizmo_update_vertex_buffer, ProjectionData};
 use crate::math::get_camera_axes_from_view;
@@ -71,7 +71,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     }
 
     let render_data_vec = vec![
-        grid_render_data(&ctx.grid()),
+        line_mesh_render_data(&ctx.grid_mesh(), &ctx.grid_scale()),
         gizmo_mesh_render_data(&ctx.gizmo()),
         gizmo_selectable_render_data(&ctx.light_gizmo(), camera_position),
     ];

@@ -64,11 +64,11 @@ impl<'a> CompositePass<'a> {
         self.draw_grid(command_buffer, image_index)?;
         self.draw_gizmo(command_buffer, image_index)?;
 
-        let grid = self.app.grid();
+        let grid_mesh = self.app.grid_mesh();
         let light_gizmo = self.app.light_gizmo();
         let pipeline_storage = self.pipeline_storage();
 
-        if let Some(pipeline_id) = grid.pipeline_id {
+        if let Some(pipeline_id) = grid_mesh.pipeline_id {
             if let Some(pipeline) = pipeline_storage.get(pipeline_id) {
                 gizmo_draw_ray_with_pipeline(
                     &light_gizmo.ray_to_model,
@@ -77,7 +77,7 @@ impl<'a> CompositePass<'a> {
                     command_buffer,
                     pipeline,
                     self.graphics_resources,
-                    grid.object_index,
+                    grid_mesh.object_index,
                     image_index,
                 );
                 gizmo_draw_vertical_lines_with_pipeline(
@@ -87,7 +87,7 @@ impl<'a> CompositePass<'a> {
                     command_buffer,
                     pipeline,
                     self.graphics_resources,
-                    grid.object_index,
+                    grid_mesh.object_index,
                     image_index,
                 );
             }
@@ -199,25 +199,25 @@ impl<'a> CompositePass<'a> {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        let grid = self.app.grid();
+        let grid_mesh = self.app.grid_mesh();
         let pipeline_storage = self.pipeline_storage();
 
         let vertex_buffer = match self
             .buffer_registry
-            .get_vertex_buffer(grid.vertex_buffer_handle)
+            .get_vertex_buffer(grid_mesh.vertex_buffer_handle)
         {
             Some(b) => b,
             None => return Ok(()),
         };
         let index_buffer = match self
             .buffer_registry
-            .get_index_buffer(grid.index_buffer_handle)
+            .get_index_buffer(grid_mesh.index_buffer_handle)
         {
             Some(b) => b,
             None => return Ok(()),
         };
 
-        let pipeline_id = match grid.pipeline_id {
+        let pipeline_id = match grid_mesh.pipeline_id {
             Some(id) => id,
             None => return Ok(()),
         };
@@ -257,7 +257,7 @@ impl<'a> CompositePass<'a> {
         let object_set_idx = self
             .graphics_resources
             .objects
-            .get_set_index(image_index, grid.object_index);
+            .get_set_index(image_index, grid_mesh.object_index);
         let object_set = self.graphics_resources.objects.sets[object_set_idx];
         self.device.cmd_bind_descriptor_sets(
             command_buffer,
@@ -269,7 +269,7 @@ impl<'a> CompositePass<'a> {
         );
 
         self.device
-            .cmd_draw_indexed(command_buffer, grid.indices.len() as u32, 1, 0, 0, 0);
+            .cmd_draw_indexed(command_buffer, grid_mesh.indices.len() as u32, 1, 0, 0, 0);
 
         Ok(())
     }

@@ -11,7 +11,6 @@ use crate::app::graphics_resource::GraphicsResources;
 #[derive(Clone, Debug)]
 pub enum DeferredAction {
     LoadModel { path: String },
-    LoadCube,
     TakeScreenshot,
     DebugShadowInfo,
     DebugBillboardDepth,
@@ -124,10 +123,6 @@ pub fn process_ui_events_with_events_simple(
 
             UIEvent::LoadModel { path } => {
                 deferred.push(DeferredAction::LoadModel { path });
-            }
-
-            UIEvent::LoadCube => {
-                deferred.push(DeferredAction::LoadCube);
             }
 
             UIEvent::TakeScreenshot => {

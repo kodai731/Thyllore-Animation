@@ -1,7 +1,7 @@
 use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use crate::app::{App, GUIData};
 use crate::ecs::systems::render_data_systems::{
-    gizmo_mesh_render_data, gizmo_selectable_render_data, grid_render_data,
+    gizmo_mesh_render_data, gizmo_selectable_render_data, line_mesh_render_data,
 };
 use crate::renderer::scene_renderer::render_scene_objects;
 use crate::vulkanr::context::SwapchainState;
@@ -495,7 +495,7 @@ impl App {
         let camera_pos = self.camera().position;
 
         let render_data_vec = vec![
-            grid_render_data(&self.grid()),
+            line_mesh_render_data(&self.grid_mesh(), &self.grid_scale()),
             gizmo_mesh_render_data(&self.grid_gizmo()),
             gizmo_selectable_render_data(&self.light_gizmo(), camera_pos),
         ];

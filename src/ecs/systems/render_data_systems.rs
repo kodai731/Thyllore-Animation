@@ -1,18 +1,18 @@
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
+use crate::ecs::component::{LineMesh, MeshScale};
 use crate::ecs::RenderData;
 use crate::app::billboard::BillboardData;
-use crate::scene::grid::GridData;
 
-pub fn grid_render_data(grid: &GridData) -> RenderData {
+pub fn line_mesh_render_data(mesh: &LineMesh, scale: &MeshScale) -> RenderData {
     RenderData {
-        object_index: grid.object_index,
-        pipeline_id: grid.pipeline_id,
-        vertex_buffer_handle: grid.vertex_buffer_handle,
-        index_buffer_handle: grid.index_buffer_handle,
-        index_count: grid.indices.len() as u32,
-        model_matrix: Matrix4::from_scale(grid.scale),
+        object_index: mesh.object_index,
+        pipeline_id: mesh.pipeline_id,
+        vertex_buffer_handle: mesh.vertex_buffer_handle,
+        index_buffer_handle: mesh.index_buffer_handle,
+        index_count: mesh.indices.len() as u32,
+        model_matrix: Matrix4::from_scale(scale.value()),
     }
 }
 
@@ -65,14 +65,15 @@ pub fn billboard_render_data(billboard: &BillboardData) -> RenderData {
 }
 
 pub fn collect_scene_render_data(
-    grid: &GridData,
+    grid_mesh: &LineMesh,
+    grid_scale: &MeshScale,
     gizmo: &GridGizmoData,
     light_gizmo: &LightGizmoData,
     billboard: &BillboardData,
     camera_position: Vector3<f32>,
 ) -> Vec<RenderData> {
     vec![
-        grid_render_data(grid),
+        line_mesh_render_data(grid_mesh, grid_scale),
         gizmo_mesh_render_data(gizmo),
         gizmo_selectable_render_data(light_gizmo, camera_position),
         billboard_render_data(billboard),

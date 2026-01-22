@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::scene::graphics_resource::GraphicsResources;
+use crate::app::graphics_resource::GraphicsResources;
 use crate::vulkanr::command::{RRCommandBuffer, RRCommandPool};
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::render::RRRender;
@@ -134,7 +134,7 @@ impl GpuAssets {
 
 use crate::debugview::{DebugViewData, RayTracingDebugState};
 use crate::platform::ImguiData;
-use crate::scene::raytracing::RayTracingData;
+use crate::app::raytracing::RayTracingData;
 use crate::scene::Camera;
 
 pub struct CameraState {

@@ -3,7 +3,7 @@ use anyhow::Result;
 use crate::animation::{AnimationClipId, MorphAnimationSystem};
 use crate::ecs::resource::{AnimationPlayback, AnimationRegistry, ModelState};
 use crate::render::RenderBackend;
-use crate::scene::graphics_resource::{GraphicsResources, NodeData};
+use crate::app::graphics_resource::{GraphicsResources, NodeData};
 
 pub fn playback_play(playback: &mut AnimationPlayback, clip_id: AnimationClipId) {
     playback.current_clip_id = Some(clip_id);

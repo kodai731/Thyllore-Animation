@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use anyhow::Result;
 
+use crate::app::model_loader::{load_cube_model_system, load_model_from_file_system};
 use crate::app::{App, AppData};
-use crate::ecs::{load_cube_model_system, load_model_from_file_system};
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::swapchain::RRSwapchain;

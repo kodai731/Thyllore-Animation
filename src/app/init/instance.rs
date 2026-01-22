@@ -24,7 +24,7 @@ use crate::vulkanr::vulkan::*;
 
 use crate::debugview::*;
 use crate::math::*;
-use crate::scene::graphics_resource::GraphicsResources;
+use crate::app::graphics_resource::GraphicsResources;
 use crate::scene::grid::GridData;
 use crate::scene::Camera;
 
@@ -218,7 +218,7 @@ impl App {
                 &rrdevice,
                 rrcommand_pool.clone(),
                 &mut data.graphics_resources,
-                &mut data.raytracing.acceleration_structure,
+                &mut data.raytracing,
                 &mut data.buffer_registry,
             );
             gizmo_create_buffers(&mut gizmo_data.mesh, &mut backend, true)
@@ -242,7 +242,7 @@ impl App {
                 &rrdevice,
                 rrcommand_pool.clone(),
                 &mut data.graphics_resources,
-                &mut data.raytracing.acceleration_structure,
+                &mut data.raytracing,
                 &mut data.buffer_registry,
             );
             gizmo_create_buffers(&mut light_gizmo_data.mesh, &mut backend, false)
@@ -262,7 +262,7 @@ impl App {
                 &rrdevice,
                 rrcommand_pool.clone(),
                 &mut data.graphics_resources,
-                &mut data.raytracing.acceleration_structure,
+                &mut data.raytracing,
                 &mut data.buffer_registry,
             );
             billboard_create_buffers(&mut billboard_data, &mut backend)

@@ -3,7 +3,7 @@ use cgmath::{Matrix4, Vector3};
 
 use crate::ecs::component::{GizmoMesh, GizmoRayToModel, GizmoVerticalLines};
 use crate::ecs::systems::ProjectionData;
-use crate::scene::billboard::BillboardData;
+use crate::app::billboard::BillboardData;
 
 pub type MeshId = usize;
 
@@ -48,5 +48,16 @@ pub trait RenderBackend {
         model_matrix: Matrix4<f32>,
         object_index: usize,
         image_index: usize,
+    ) -> Result<()>;
+
+    unsafe fn update_scene_uniform(
+        &mut self,
+        view: Matrix4<f32>,
+        proj: Matrix4<f32>,
+        light_pos: Vector3<f32>,
+        light_color: Vector3<f32>,
+        debug_mode: i32,
+        shadow_strength: f32,
+        enable_distance_attenuation: bool,
     ) -> Result<()>;
 }

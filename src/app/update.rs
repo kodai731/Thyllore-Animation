@@ -131,7 +131,7 @@ impl App {
             &self.rrdevice,
             command_pool,
             &mut self.data.graphics_resources,
-            &mut self.data.raytracing.acceleration_structure,
+            &mut self.data.raytracing,
             &mut self.data.buffer_registry,
         );
 

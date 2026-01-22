@@ -79,7 +79,7 @@ cargo test -- --ignored
 ```
 
 ## ECS Architecture
-
+** IMPORTANT ** must follow architecture to add file or code, plan new function.
 This project uses an Entity-Component-System (ECS) architecture inspired by [Bevy Engine](https://bevyengine.org/). The design follows these principles:
 
 ### Design Philosophy

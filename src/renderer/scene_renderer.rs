@@ -3,7 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::component::RenderData;
 use crate::render::ObjectUBO;
-use crate::scene::graphics_resource::ObjectDescriptorSet;
+use crate::app::graphics_resource::ObjectDescriptorSet;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};
 

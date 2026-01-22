@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use crate::scene::graphics_resource::GraphicsResources;
-use crate::scene::raytracing::RayTracingData;
+use crate::app::graphics_resource::GraphicsResources;
+use crate::app::raytracing::RayTracingData;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::device::RRDevice;
 use crate::vulkanr::resource::GpuBufferRegistry;
@@ -24,7 +24,7 @@ impl<'a> RenderContext<'a> {
             self.device,
             self.command_pool.clone(),
             self.graphics,
-            &mut self.raytracing.acceleration_structure,
+            self.raytracing,
             self.buffer_registry,
         )
     }

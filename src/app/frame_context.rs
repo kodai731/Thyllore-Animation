@@ -6,11 +6,11 @@ use crate::asset::AssetStorage;
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::debugview::RayTracingDebugState;
 use crate::ecs::world::{ResMut, ResRef, World};
-use crate::scene::billboard::BillboardData;
+use crate::app::billboard::BillboardData;
 use crate::scene::camera::Camera;
-use crate::scene::graphics_resource::GraphicsResources;
+use crate::app::graphics_resource::GraphicsResources;
 use crate::scene::grid::GridData;
-use crate::scene::raytracing::RayTracingData;
+use crate::app::raytracing::RayTracingData;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::GpuBufferRegistry;
@@ -46,7 +46,7 @@ impl<'a> FrameContext<'a> {
             self.device,
             self.command_pool.clone(),
             self.graphics,
-            &mut self.raytracing.acceleration_structure,
+            self.raytracing,
             self.buffer_registry,
         )
     }

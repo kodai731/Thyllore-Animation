@@ -4,7 +4,7 @@ use cgmath::{Matrix4, SquareMatrix};
 
 use crate::animation::{AnimationClip, AnimationClipId, Skeleton, SkeletonId};
 use crate::render::MaterialUBO;
-use crate::scene::graphics_resource::MaterialId;
+use crate::app::graphics_resource::MaterialId;
 
 pub type AssetId = u64;
 

@@ -4,7 +4,7 @@ use vulkanalia::prelude::v1_0::*;
 use super::gizmo::{gizmo_draw_ray_with_pipeline, gizmo_draw_vertical_lines_with_pipeline};
 use crate::app::App;
 use crate::debugview::DebugViewMode;
-use crate::scene::graphics_resource::GraphicsResources;
+use crate::app::graphics_resource::GraphicsResources;
 use crate::vulkanr::core::Device;
 use crate::vulkanr::descriptor::RRCompositeDescriptorSet;
 use crate::vulkanr::pipeline::RRPipeline;

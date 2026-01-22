@@ -9,11 +9,12 @@ use vulkanalia::prelude::v1_0::*;
 use crate::ecs::component::{GizmoMesh, GizmoRayToModel, GizmoVerticalLines};
 use crate::ecs::systems::ProjectionData;
 use crate::render::{FrameUBO, IndexBufferHandle, MeshId, ObjectUBO, RenderBackend, VertexBufferHandle};
-use crate::scene::billboard::BillboardData;
-use crate::scene::graphics_resource::GraphicsResources;
+use crate::app::billboard::BillboardData;
+use crate::app::graphics_resource::GraphicsResources;
+use crate::app::raytracing::RayTracingData;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::device::RRDevice;
-use crate::vulkanr::data::Vertex;
+use crate::vulkanr::data::{SceneUniformData, Vertex};
 use crate::vulkanr::image::RRImage;
 use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::resource::GpuBufferRegistry;
@@ -24,7 +25,7 @@ pub struct VulkanBackend<'a> {
     pub device: &'a RRDevice,
     pub command_pool: Rc<RRCommandPool>,
     pub graphics: &'a mut GraphicsResources,
-    pub acceleration_structure: &'a mut Option<RRAccelerationStructure>,
+    pub raytracing: &'a mut RayTracingData,
     pub buffer_registry: &'a mut GpuBufferRegistry,
 }
 
@@ -34,7 +35,7 @@ impl<'a> VulkanBackend<'a> {
         device: &'a RRDevice,
         command_pool: Rc<RRCommandPool>,
         graphics: &'a mut GraphicsResources,
-        acceleration_structure: &'a mut Option<RRAccelerationStructure>,
+        raytracing: &'a mut RayTracingData,
         buffer_registry: &'a mut GpuBufferRegistry,
     ) -> Self {
         Self {
@@ -42,9 +43,13 @@ impl<'a> VulkanBackend<'a> {
             device,
             command_pool,
             graphics,
-            acceleration_structure,
+            raytracing,
             buffer_registry,
         }
+    }
+
+    fn acceleration_structure(&mut self) -> &mut Option<RRAccelerationStructure> {
+        &mut self.raytracing.acceleration_structure
     }
 }
 
@@ -72,7 +77,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
     }
 
     unsafe fn update_acceleration_structure(&mut self, mesh_ids: &[MeshId]) -> Result<()> {
-        let Some(ref mut accel_struct) = self.acceleration_structure else {
+        let Some(ref accel_struct) = self.raytracing.acceleration_structure else {
             return Ok(());
         };
 
@@ -104,7 +109,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
     }
 
     unsafe fn rebuild_tlas(&mut self) -> Result<()> {
-        let Some(ref mut accel_struct) = self.acceleration_structure else {
+        let Some(ref accel_struct) = self.raytracing.acceleration_structure else {
             return Ok(());
         };
 
@@ -320,6 +325,53 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         self.graphics
             .objects
             .update(self.device, image_index, object_index, &ubo)?;
+        Ok(())
+    }
+
+    unsafe fn update_scene_uniform(
+        &mut self,
+        view: Matrix4<f32>,
+        proj: Matrix4<f32>,
+        light_pos: Vector3<f32>,
+        light_color: Vector3<f32>,
+        debug_mode: i32,
+        shadow_strength: f32,
+        enable_distance_attenuation: bool,
+    ) -> Result<()> {
+        let (scene_buffer, scene_memory) = match (
+            self.raytracing.scene_uniform_buffer,
+            self.raytracing.scene_uniform_buffer_memory,
+        ) {
+            (Some(b), Some(m)) => (b, m),
+            _ => return Ok(()),
+        };
+
+        let scene_data = SceneUniformData {
+            light_position: crate::math::Vec4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
+            light_color: crate::math::Vec4::new(light_color.x, light_color.y, light_color.z, 1.0),
+            view,
+            proj,
+            debug_mode,
+            shadow_strength,
+            enable_distance_attenuation: if enable_distance_attenuation { 1 } else { 0 },
+            _padding: 0,
+        };
+
+        let data_ptr = self.device.device.map_memory(
+            scene_memory,
+            0,
+            std::mem::size_of::<SceneUniformData>() as u64,
+            vk::MemoryMapFlags::empty(),
+        )?;
+
+        std::ptr::copy_nonoverlapping(
+            &scene_data as *const SceneUniformData,
+            data_ptr as *mut SceneUniformData,
+            1,
+        );
+
+        self.device.device.unmap_memory(scene_memory);
+
         Ok(())
     }
 }

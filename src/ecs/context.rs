@@ -4,7 +4,7 @@ use crate::app::GUIData;
 use crate::asset::AssetStorage;
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::debugview::RayTracingDebugState;
-use crate::scene::billboard::BillboardData;
+use crate::app::billboard::BillboardData;
 use crate::scene::camera::Camera;
 use crate::scene::grid::GridData;
 

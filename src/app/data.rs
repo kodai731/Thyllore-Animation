@@ -4,8 +4,8 @@ use crate::asset::AssetStorage;
 use crate::debugview::*;
 use crate::ecs::World;
 use crate::platform::ImguiData;
-use crate::scene::graphics_resource::GraphicsResources;
-use crate::scene::raytracing::RayTracingData;
+use crate::app::graphics_resource::GraphicsResources;
+use crate::app::raytracing::RayTracingData;
 use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]

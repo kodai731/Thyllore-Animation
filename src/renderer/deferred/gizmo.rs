@@ -1,7 +1,7 @@
 use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::component::{GizmoRayToModel, GizmoVerticalLines};
-use crate::scene::graphics_resource::GraphicsResources;
+use crate::app::graphics_resource::GraphicsResources;
 use crate::vulkanr::core::Device;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::resource::GpuBufferRegistry;

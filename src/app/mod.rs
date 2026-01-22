@@ -1,8 +1,12 @@
+pub mod billboard;
 pub mod data;
 pub mod frame_context;
+pub mod graphics_resource;
 pub mod init;
 pub mod model_loader;
+pub mod raytracing;
 pub mod render;
+pub mod render_context;
 pub mod scene_model;
 pub mod update;
 pub mod cleanup;
@@ -10,6 +14,7 @@ pub mod util;
 pub mod gui_data;
 
 pub use frame_context::FrameContext;
+pub use render_context::RenderContext;
 
 pub use data::AppData;
 pub use gui_data::GUIData;
@@ -22,10 +27,10 @@ use crate::ecs::{
     NodeAssets, ResMut, ResRef, Resource,
 };
 use crate::platform::ImguiData;
-use crate::scene::billboard::BillboardData;
-use crate::scene::graphics_resource::GraphicsResources;
+use crate::app::billboard::BillboardData;
+use crate::app::graphics_resource::GraphicsResources;
 use crate::scene::grid::GridData;
-use crate::scene::raytracing::RayTracingData;
+use crate::app::raytracing::RayTracingData;
 use crate::scene::Camera;
 use crate::vulkanr::context::{
     CommandState, FrameSync, PipelineState, RenderConfig, RenderTargets, SurfaceState,

@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::rc::Rc;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::scene::graphics_resource::{MeshBuffer, GraphicsResources};
+use crate::app::graphics_resource::{MeshBuffer, GraphicsResources};
 use crate::vulkanr::buffer::create_buffer;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;

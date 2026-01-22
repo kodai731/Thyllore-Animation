@@ -8,7 +8,7 @@ use crate::app::data::LightMoveTarget;
 use crate::debugview::view_mode::RayTracingDebugState;
 use crate::math::coordinate_system::perspective;
 use crate::render::RenderBackend;
-use crate::scene::billboard::BillboardData;
+use crate::app::billboard::BillboardData;
 use crate::scene::camera::Camera;
 
 pub struct ProjectionData {

@@ -4,7 +4,7 @@ use cgmath::{InnerSpace, Matrix4, Vector3, Vector4};
 use crate::ecs::component::CameraState;
 use crate::ecs::world::{BillboardBehavior, Transform, World};
 use crate::render::RenderBackend;
-use crate::scene::billboard::{
+use crate::app::billboard::{
     BillboardData, BillboardInfo, BillboardRenderData, BillboardTransform, BillboardVertex,
 };
 use crate::vulkanr::descriptor::RRBillboardDescriptorSet;

@@ -5,7 +5,7 @@ use crate::app::App;
 use crate::asset::AssetStorage;
 use crate::ecs::world::MeshRef;
 use crate::ecs::World;
-use crate::scene::graphics_resource::{MeshBuffer, GraphicsResources};
+use crate::app::graphics_resource::{MeshBuffer, GraphicsResources};
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::core::{Device, RRDevice};
 use crate::vulkanr::resource::{RRGBuffer, create_image, create_image_view};

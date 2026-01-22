@@ -6,7 +6,7 @@ use crate::ecs::systems::camera_systems::{
     camera_move_to_look_at, camera_reset, camera_reset_up,
 };
 use crate::scene::camera::Camera;
-use crate::scene::graphics_resource::GraphicsResources;
+use crate::app::graphics_resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub enum DeferredAction {

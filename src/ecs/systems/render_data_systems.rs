@@ -2,7 +2,7 @@ use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::ecs::RenderData;
-use crate::scene::billboard::BillboardData;
+use crate::app::billboard::BillboardData;
 use crate::scene::grid::GridData;
 
 pub fn grid_render_data(grid: &GridData) -> RenderData {

@@ -9,7 +9,6 @@ use crate::ecs::{gizmo_update_rotation, gizmo_update_vertex_buffer, ProjectionDa
 use crate::math::get_camera_axes_from_view;
 use crate::render::RenderBackend;
 use crate::renderer::scene_renderer::update_object_ubo;
-use crate::vulkanr::data::UniformBufferObject;
 
 pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     let (view, proj, screen_size, aspect) = {
@@ -98,26 +97,17 @@ unsafe fn update_billboard_ubo(
     view: Matrix4<f32>,
     proj: Matrix4<f32>,
 ) -> Result<()> {
-    let mut billboard = ctx.billboard_mut();
+    let model_matrix = {
+        let billboard = ctx.billboard();
+        billboard
+            .transform
+            .as_ref()
+            .map(|t| t.model_matrix)
+            .unwrap_or(Matrix4::identity())
+    };
 
-    let model_matrix = billboard
-        .transform
-        .as_ref()
-        .map(|t| t.model_matrix)
-        .unwrap_or(Matrix4::identity());
-
-    for i in 0..billboard.render_state.descriptor_set.rrdata.len() {
-        let rrdata = &mut billboard.render_state.descriptor_set.rrdata[i];
-
-        let ubo_billboard = UniformBufferObject {
-            model: model_matrix,
-            view,
-            proj,
-        };
-
-        let name = format!("billboard[{}]", i);
-        rrdata.rruniform_buffers[ctx.image_index].update(ctx.device, &ubo_billboard, &name)?;
-    }
+    let image_index = ctx.image_index;
+    ctx.update_billboard_ubo_internal(model_matrix, view, proj, image_index)?;
 
     Ok(())
 }

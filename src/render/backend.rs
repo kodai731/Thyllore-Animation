@@ -53,4 +53,13 @@ pub trait RenderBackend {
         shadow_strength: f32,
         enable_distance_attenuation: bool,
     ) -> Result<()>;
+
+    unsafe fn update_billboard_ubo(
+        &mut self,
+        billboard: &mut BillboardData,
+        model: Matrix4<f32>,
+        view: Matrix4<f32>,
+        proj: Matrix4<f32>,
+        image_index: usize,
+    ) -> Result<()>;
 }

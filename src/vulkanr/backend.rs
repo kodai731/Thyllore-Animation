@@ -341,4 +341,26 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
 
         Ok(())
     }
+
+    unsafe fn update_billboard_ubo(
+        &mut self,
+        billboard: &mut BillboardData,
+        model: Matrix4<f32>,
+        view: Matrix4<f32>,
+        proj: Matrix4<f32>,
+        image_index: usize,
+    ) -> Result<()> {
+        use crate::vulkanr::data::UniformBufferObject;
+
+        for i in 0..billboard.render_state.descriptor_set.rrdata.len() {
+            let rrdata = &mut billboard.render_state.descriptor_set.rrdata[i];
+
+            let ubo = UniformBufferObject { model, view, proj };
+
+            let name = format!("billboard[{}]", i);
+            rrdata.rruniform_buffers[image_index].update(self.device, &ubo, &name)?;
+        }
+
+        Ok(())
+    }
 }

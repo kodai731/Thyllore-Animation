@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
-use cgmath::Vector3;
+use anyhow::Result;
+use cgmath::{Matrix4, Vector3};
 
 use crate::asset::AssetStorage;
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
@@ -9,6 +10,7 @@ use crate::ecs::world::{ResMut, ResRef, World};
 use crate::app::billboard::BillboardData;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::app::raytracing::RayTracingData;
+use crate::render::RenderBackend;
 use crate::scene::camera::Camera;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
@@ -112,5 +114,24 @@ impl<'a> FrameContext<'a> {
 
     pub fn billboard_mut(&self) -> ResMut<BillboardData> {
         self.world.resource_mut::<BillboardData>()
+    }
+
+    pub unsafe fn update_billboard_ubo_internal(
+        &mut self,
+        model: Matrix4<f32>,
+        view: Matrix4<f32>,
+        proj: Matrix4<f32>,
+        image_index: usize,
+    ) -> Result<()> {
+        let mut billboard = self.world.resource_mut::<BillboardData>();
+        let mut backend = VulkanBackend::new(
+            self.instance,
+            self.device,
+            self.command_pool.clone(),
+            self.graphics,
+            self.raytracing,
+            self.buffer_registry,
+        );
+        backend.update_billboard_ubo(&mut billboard, model, view, proj, image_index)
     }
 }

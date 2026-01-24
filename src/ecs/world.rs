@@ -6,7 +6,7 @@ use cgmath::{Matrix4, SquareMatrix, Vector3};
 
 use crate::animation::AnimationClipId;
 use crate::asset::AssetId;
-use crate::ecs::component::{Animated, MeshHandle, Model, Skinned};
+use crate::ecs::component::{Animated, EditorDisplay, MeshHandle, Model, Skinned};
 
 pub trait Resource: Any + 'static {}
 impl<T: Any + 'static> Resource for T {}
@@ -262,6 +262,7 @@ impl World {
         world.register_component::<Skinned>();
         world.register_component::<Model>();
         world.register_component::<MeshHandle>();
+        world.register_component::<EditorDisplay>();
 
         world
     }

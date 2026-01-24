@@ -8,7 +8,7 @@ use crate::ecs::systems::{
 };
 use crate::vulkanr::VulkanBackend;
 use crate::ecs::{
-    AnimationPlayback, AnimationRegistry, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState,
+    AnimationPlayback, AnimationRegistry, GpuDescriptors, HierarchyState, MaterialRegistry, MeshAssets, ModelState,
     NodeAssets, PipelineManager,
 };
 use crate::vulkanr::command::*;
@@ -636,6 +636,10 @@ impl App {
         {
             let ui_event_queue = crate::ecs::UIEventQueue::new();
             data.ecs_world.insert_resource(ui_event_queue);
+        }
+
+        if !data.ecs_world.contains_resource::<HierarchyState>() {
+            data.ecs_world.insert_resource(HierarchyState::new());
         }
     }
 

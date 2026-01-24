@@ -1,6 +1,7 @@
-use cgmath::Vector3;
+use cgmath::{Quaternion, Vector3};
 
 use crate::app::data::LightMoveTarget;
+use crate::ecs::world::Entity;
 
 #[derive(Clone, Debug)]
 pub enum UIEvent {
@@ -19,6 +20,20 @@ pub enum UIEvent {
     DebugShadowInfo,
     DebugBillboardDepth,
     DumpDebugInfo,
+
+    SelectEntity(Entity),
+    DeselectAll,
+    ToggleEntitySelection(Entity),
+    ExpandEntity(Entity),
+    CollapseEntity(Entity),
+    SetSearchFilter(String),
+
+    SetEntityVisible(Entity, bool),
+    SetEntityTranslation(Entity, Vector3<f32>),
+    SetEntityRotation(Entity, Quaternion<f32>),
+    SetEntityScale(Entity, Vector3<f32>),
+    RenameEntity(Entity, String),
+    FocusOnEntity(Entity),
 }
 
 #[derive(Default)]

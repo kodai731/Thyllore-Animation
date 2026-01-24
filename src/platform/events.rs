@@ -4,9 +4,16 @@ use imgui::MouseButton;
 use winit::event::{Event, WindowEvent};
 
 use super::platform::System;
-use super::ui::{build_click_debug_overlay, build_debug_window, DebugWindowState};
+use super::ui::{build_click_debug_overlay, build_debug_window, build_hierarchy_window, build_inspector_window, DebugWindowState};
 use crate::app::{App, GUIData};
 use crate::debugview::RayTracingDebugState;
+use crate::ecs::resource::HierarchyState;
+use crate::ecs::events::UIEvent;
+use crate::ecs::systems::{
+    camera_move_to_look_at, collapse_entity, expand_entity, rename_entity,
+    update_entity_scale, update_entity_translation, update_entity_visible,
+};
+use crate::ecs::world::Transform;
 use crate::ecs::{process_ui_events_with_events_simple, DeferredAction, UIEventQueue};
 use crate::scene::camera::Camera;
 
@@ -118,6 +125,18 @@ impl System {
                             }
 
                             {
+                                let hierarchy_state = app.data.ecs_world.resource::<HierarchyState>();
+                                let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+                                build_hierarchy_window(ui, &mut *ui_events, &app.data.ecs_world, &*hierarchy_state);
+                            }
+
+                            {
+                                let hierarchy_state = app.data.ecs_world.resource::<HierarchyState>();
+                                let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+                                build_inspector_window(ui, &mut *ui_events, &app.data.ecs_world, &*hierarchy_state);
+                            }
+
+                            {
                                 let mut rt_debug_mut = app.rt_debug_state_mut();
                                 rt_debug_mut.shadow_strength = debug_state.shadow_strength;
                                 rt_debug_mut.enable_distance_attenuation =
@@ -145,6 +164,8 @@ impl System {
                                     if events.is_empty() {
                                         Vec::new()
                                     } else {
+                                        process_hierarchy_events_inline(&events, app);
+
                                         let model_bounds =
                                             app.data.graphics_resources.calculate_model_bounds();
                                         let world = &app.data.ecs_world;
@@ -193,5 +214,79 @@ impl System {
                 _ => {}
             })
             .expect("EventLoop error");
+    }
+}
+
+fn process_hierarchy_events_inline(events: &[UIEvent], app: &mut App) {
+    use cgmath::Vector3;
+
+    for event in events {
+        match event {
+            UIEvent::SelectEntity(entity) => {
+                let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
+                hierarchy_state.select(*entity);
+            }
+
+            UIEvent::DeselectAll => {
+                let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
+                hierarchy_state.deselect_all();
+            }
+
+            UIEvent::ToggleEntitySelection(entity) => {
+                let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
+                hierarchy_state.toggle_selection(*entity);
+            }
+
+            UIEvent::ExpandEntity(entity) => {
+                expand_entity(&mut app.data.ecs_world, *entity);
+            }
+
+            UIEvent::CollapseEntity(entity) => {
+                collapse_entity(&mut app.data.ecs_world, *entity);
+            }
+
+            UIEvent::SetSearchFilter(filter) => {
+                let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
+                hierarchy_state.search_filter = filter.clone();
+            }
+
+            UIEvent::SetEntityVisible(entity, visible) => {
+                update_entity_visible(&mut app.data.ecs_world, *entity, *visible);
+            }
+
+            UIEvent::SetEntityTranslation(entity, translation) => {
+                update_entity_translation(&mut app.data.ecs_world, *entity, *translation);
+            }
+
+            UIEvent::SetEntityRotation(entity, rotation) => {
+                if let Some(transform) = app.data.ecs_world.get_component_mut::<Transform>(*entity) {
+                    transform.rotation = *rotation;
+                }
+            }
+
+            UIEvent::SetEntityScale(entity, scale) => {
+                update_entity_scale(&mut app.data.ecs_world, *entity, *scale);
+            }
+
+            UIEvent::RenameEntity(entity, new_name) => {
+                rename_entity(&mut app.data.ecs_world, *entity, new_name.clone());
+            }
+
+            UIEvent::FocusOnEntity(entity) => {
+                let target = app
+                    .data
+                    .ecs_world
+                    .get_component::<Transform>(*entity)
+                    .map(|t| t.translation);
+
+                if let Some(target) = target {
+                    let offset = Vector3::new(5.0, 3.0, 5.0);
+                    let mut camera = app.data.ecs_world.resource_mut::<Camera>();
+                    camera_move_to_look_at(&mut camera, target, offset);
+                }
+            }
+
+            _ => {}
+        }
     }
 }

@@ -1,6 +1,8 @@
 use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, Vector3, Vector4};
 
+use crate::ecs::component::mesh::presets::{POSITION, TEX_COORD_0};
+use crate::ecs::component::mesh::{MeshData, PrimitiveTopology};
 use crate::ecs::component::{CameraState, RenderInfo};
 use crate::ecs::world::{BillboardBehavior, Transform, World};
 use crate::render::RenderBackend;
@@ -8,6 +10,30 @@ use crate::app::billboard::{
     BillboardData, BillboardMesh, BillboardRenderState, BillboardTransform, BillboardVertex,
 };
 
+pub fn create_billboard_mesh_data(size: f32) -> MeshData {
+    let positions = vec![
+        [-size, -size, 0.0],
+        [size, -size, 0.0],
+        [size, size, 0.0],
+        [-size, size, 0.0],
+    ];
+
+    let tex_coords = vec![
+        [0.0, 1.0],
+        [1.0, 1.0],
+        [1.0, 0.0],
+        [0.0, 0.0],
+    ];
+
+    let indices = vec![0, 1, 2, 0, 2, 3];
+
+    MeshData::new(PrimitiveTopology::TriangleList)
+        .with_inserted_attribute(POSITION, positions)
+        .with_inserted_attribute(TEX_COORD_0, tex_coords)
+        .with_indices(indices)
+}
+
+#[deprecated(note = "Use create_billboard_mesh_data() instead")]
 pub fn create_billboard() -> BillboardData {
     let billboard_size = 0.5;
     let vertices = vec![

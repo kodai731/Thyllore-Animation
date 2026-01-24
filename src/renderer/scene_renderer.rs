@@ -2,11 +2,10 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::component::RenderData;
-use crate::ecs::resource::PipelineManager;
 use crate::render::ObjectUBO;
-use crate::scene::graphics_resource::ObjectDescriptorSet;
+use crate::app::graphics_resource::ObjectDescriptorSet;
 use crate::vulkanr::device::RRDevice;
-use crate::vulkanr::resource::GpuBufferRegistry;
+use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};
 
 pub unsafe fn update_object_ubo(
     render_data: &[&RenderData],
@@ -18,7 +17,7 @@ pub unsafe fn update_object_ubo(
         let ubo = ObjectUBO {
             model: data.model_matrix,
         };
-        objects.update(rrdevice, image_index, data.object_index, &ubo)?;
+        objects.update(rrdevice, image_index, data.render_info.object_index, &ubo)?;
     }
     Ok(())
 }
@@ -30,24 +29,26 @@ pub unsafe fn render_scene_objects(
     frame_set: vk::DescriptorSet,
     objects: &ObjectDescriptorSet,
     rrdevice: &RRDevice,
-    pipeline_manager: &PipelineManager,
+    pipeline_storage: &PipelineStorage,
     buffer_registry: &GpuBufferRegistry,
 ) {
     for data in render_data {
-        let vertex_buffer = match buffer_registry.get_vertex_buffer(data.vertex_buffer_handle) {
-            Some(b) => b,
-            None => continue,
-        };
-        let index_buffer = match buffer_registry.get_index_buffer(data.index_buffer_handle) {
-            Some(b) => b,
-            None => continue,
-        };
+        let vertex_buffer =
+            match buffer_registry.get_vertex_buffer(data.mesh_ref.vertex_buffer_handle) {
+                Some(b) => b,
+                None => continue,
+            };
+        let index_buffer =
+            match buffer_registry.get_index_buffer(data.mesh_ref.index_buffer_handle) {
+                Some(b) => b,
+                None => continue,
+            };
 
-        let pipeline_id = match data.pipeline_id {
+        let pipeline_id = match data.render_info.pipeline_id {
             Some(id) => id,
             None => continue,
         };
-        let pipeline = match pipeline_manager.get(pipeline_id) {
+        let pipeline = match pipeline_storage.get(pipeline_id) {
             Some(p) => p,
             None => continue,
         };
@@ -80,7 +81,7 @@ pub unsafe fn render_scene_objects(
             &[],
         );
 
-        let object_set_idx = objects.get_set_index(image_index, data.object_index);
+        let object_set_idx = objects.get_set_index(image_index, data.render_info.object_index);
         let object_set = objects.sets[object_set_idx];
         rrdevice.device.cmd_bind_descriptor_sets(
             command_buffer,
@@ -93,6 +94,6 @@ pub unsafe fn render_scene_objects(
 
         rrdevice
             .device
-            .cmd_draw_indexed(command_buffer, data.index_count, 1, 0, 0, 0);
+            .cmd_draw_indexed(command_buffer, data.mesh_ref.index_count, 1, 0, 0, 0);
     }
 }

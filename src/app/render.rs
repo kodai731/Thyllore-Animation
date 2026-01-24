@@ -1,8 +1,7 @@
 use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use crate::app::{App, GUIData};
-use crate::ecs::resource::PipelineManager;
 use crate::ecs::systems::render_data_systems::{
-    gizmo_mesh_render_data, gizmo_selectable_render_data, grid_render_data,
+    gizmo_mesh_render_data, gizmo_selectable_render_data, grid_mesh_render_data,
 };
 use crate::renderer::scene_renderer::render_scene_objects;
 use crate::vulkanr::context::SwapchainState;
@@ -496,13 +495,12 @@ impl App {
         let camera_pos = self.camera().position;
 
         let render_data_vec = vec![
-            grid_render_data(&self.grid()),
+            grid_mesh_render_data(&self.grid_mesh()),
             gizmo_mesh_render_data(&self.grid_gizmo()),
             gizmo_selectable_render_data(&self.light_gizmo(), camera_pos),
         ];
         let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
-        let pipeline_manager = self.resource::<PipelineManager>();
         render_scene_objects(
             &render_data_refs,
             command_buffer,
@@ -510,7 +508,7 @@ impl App {
             frame_set,
             &self.data.graphics_resources.objects,
             &self.rrdevice,
-            &*pipeline_manager,
+            self.pipeline_storage(),
             &self.data.buffer_registry,
         );
 
@@ -523,12 +521,12 @@ impl App {
 
     unsafe fn render_billboard(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
         let billboard = self.billboard();
-        let pipeline_manager = self.resource::<PipelineManager>();
+        let pipeline_storage = self.pipeline_storage();
 
         let vertex_buffer = match self
             .data
             .buffer_registry
-            .get_vertex_buffer(billboard.vertex_buffer_handle)
+            .get_vertex_buffer(billboard.mesh.vertex_buffer_handle)
         {
             Some(b) => b,
             None => return,
@@ -536,17 +534,17 @@ impl App {
         let index_buffer = match self
             .data
             .buffer_registry
-            .get_index_buffer(billboard.index_buffer_handle)
+            .get_index_buffer(billboard.mesh.index_buffer_handle)
         {
             Some(b) => b,
             None => return,
         };
 
-        let pipeline_id = match billboard.pipeline_id {
+        let pipeline_id = match billboard.render_info.pipeline_id {
             Some(id) => id,
             None => return,
         };
-        let pipeline = match pipeline_manager.get(pipeline_id) {
+        let pipeline = match pipeline_storage.get(pipeline_id) {
             Some(p) => p,
             None => return,
         };
@@ -573,13 +571,13 @@ impl App {
             vk::PipelineBindPoint::GRAPHICS,
             pipeline.pipeline_layout,
             0,
-            &[billboard.descriptor_set.descriptor_sets[image_index]],
+            &[billboard.render_state.descriptor_set.descriptor_sets[image_index]],
             &[],
         );
 
         self.rrdevice.device.cmd_draw_indexed(
             command_buffer,
-            billboard.indices.len() as u32,
+            billboard.mesh.indices.len() as u32,
             1,
             0,
             0,

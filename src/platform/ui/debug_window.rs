@@ -13,7 +13,6 @@ pub struct DebugWindowState {
     pub shadow_strength: f32,
     pub enable_distance_attenuation: bool,
     pub debug_view_mode: DebugViewMode,
-    pub cube_size: f32,
 }
 
 pub fn build_debug_window(
@@ -41,9 +40,6 @@ pub fn build_debug_window(
             ui.separator();
 
             build_fbx_debug_panel(ui);
-            ui.separator();
-
-            build_test_models_panel(ui, ui_events, state);
             ui.separator();
 
             build_light_bounds_panel(ui, ui_events);
@@ -245,21 +241,6 @@ fn build_fbx_debug_panel(ui: &imgui::Ui) {
     }
     if ui.checkbox("Transform", &mut fbx_trans) {
         FBX_DEBUG.set_transform(fbx_trans);
-    }
-}
-
-fn build_test_models_panel(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    state: &mut DebugWindowState,
-) {
-    ui.text("Test Models:");
-
-    if ui.slider("Cube Size", 1.0, 500.0, &mut state.cube_size) {
-    }
-
-    if ui.button("Load Cube Model") {
-        ui_events.send(UIEvent::LoadCube);
     }
 }
 

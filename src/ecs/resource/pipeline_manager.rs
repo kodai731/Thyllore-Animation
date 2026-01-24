@@ -1,5 +1,3 @@
-use crate::vulkanr::pipeline::RRPipeline;
-
 pub type PipelineId = usize;
 
 #[derive(Clone, Debug)]
@@ -15,45 +13,23 @@ impl PipelineRef {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct PipelineManager {
-    pipelines: Vec<RRPipeline>,
+    count: usize,
 }
 
 impl PipelineManager {
     pub fn new() -> Self {
-        Self {
-            pipelines: Vec::new(),
-        }
+        Self { count: 0 }
     }
 
-    pub fn register(&mut self, pipeline: RRPipeline) -> PipelineId {
-        let id = self.pipelines.len();
-        self.pipelines.push(pipeline);
+    pub fn allocate_id(&mut self) -> PipelineId {
+        let id = self.count;
+        self.count += 1;
         id
     }
 
-    pub fn get(&self, id: PipelineId) -> Option<&RRPipeline> {
-        self.pipelines.get(id)
-    }
-
-    pub fn get_mut(&mut self, id: PipelineId) -> Option<&mut RRPipeline> {
-        self.pipelines.get_mut(id)
-    }
-
     pub fn count(&self) -> usize {
-        self.pipelines.len()
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = (PipelineId, &RRPipeline)> {
-        self.pipelines.iter().enumerate()
-    }
-}
-
-impl std::fmt::Debug for PipelineManager {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PipelineManager")
-            .field("pipeline_count", &self.pipelines.len())
-            .finish()
+        self.count
     }
 }

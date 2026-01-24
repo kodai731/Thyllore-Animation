@@ -1,7 +1,8 @@
 use cgmath::{Matrix4, SquareMatrix};
 
-use crate::ecs::resource::PipelineId;
-use crate::render::{IndexBufferHandle, MeshId, VertexBufferHandle};
+use crate::render::MeshId;
+
+use super::{GpuMeshRef, RenderInfo};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ObjectIndex(pub usize);
@@ -32,43 +33,28 @@ pub struct SkeletonHandle {
     pub skeleton_id: usize,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct RenderData {
-    pub object_index: usize,
-    pub pipeline_id: Option<PipelineId>,
-    pub vertex_buffer_handle: VertexBufferHandle,
-    pub index_buffer_handle: IndexBufferHandle,
-    pub index_count: u32,
+    pub mesh_ref: GpuMeshRef,
+    pub render_info: RenderInfo,
     pub model_matrix: Matrix4<f32>,
 }
 
 impl Default for RenderData {
     fn default() -> Self {
         Self {
-            object_index: 0,
-            pipeline_id: None,
-            vertex_buffer_handle: Default::default(),
-            index_buffer_handle: Default::default(),
-            index_count: 0,
+            mesh_ref: GpuMeshRef::default(),
+            render_info: RenderInfo::default(),
             model_matrix: Matrix4::identity(),
         }
     }
 }
 
 impl RenderData {
-    pub fn new(
-        object_index: usize,
-        pipeline_id: Option<PipelineId>,
-        vertex_buffer_handle: VertexBufferHandle,
-        index_buffer_handle: IndexBufferHandle,
-        index_count: u32,
-    ) -> Self {
+    pub fn new(mesh_ref: GpuMeshRef, render_info: RenderInfo) -> Self {
         Self {
-            object_index,
-            pipeline_id,
-            vertex_buffer_handle,
-            index_buffer_handle,
-            index_count,
+            mesh_ref,
+            render_info,
             model_matrix: Matrix4::identity(),
         }
     }

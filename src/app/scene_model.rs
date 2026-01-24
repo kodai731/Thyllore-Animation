@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use anyhow::Result;
 
+use crate::app::model_loader::load_model_from_file_system;
 use crate::app::{App, AppData};
-use crate::ecs::{load_cube_model_system, load_model_from_file_system};
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::swapchain::RRSwapchain;
@@ -131,43 +131,5 @@ impl App {
         crate::log!("  clips count: {}", anim_registry.animation.clips.len());
 
         crate::log!("========== END DEBUG INFORMATION ==========");
-    }
-
-    pub unsafe fn load_cube_model(&mut self) -> Result<()> {
-        let cube_size = self.rt_debug_state().cube_size;
-        let cube_position = [0.0, 0.0, 0.0];
-
-        let command_pool = self
-            .data
-            .ecs_world
-            .resource::<crate::vulkanr::context::CommandState>()
-            .pool
-            .clone();
-        let swapchain = self
-            .data
-            .ecs_world
-            .resource::<crate::vulkanr::context::SwapchainState>()
-            .swapchain
-            .clone();
-
-        load_cube_model_system(
-            cube_size,
-            cube_position,
-            &self.instance,
-            &self.rrdevice,
-            &command_pool,
-            &swapchain,
-            &mut self.data.graphics_resources,
-            &mut self.data.raytracing,
-            &mut self.data.debug_view_data,
-            &mut self.data.ecs_world,
-            &mut self.data.ecs_assets,
-        )?;
-
-        self.rt_debug_state_mut()
-            .set_actual_cube_top(cube_size, cube_position);
-        self.rt_debug_state_mut().finish_cube_load();
-
-        Ok(())
     }
 }

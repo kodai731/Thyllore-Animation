@@ -1,6 +1,5 @@
 use crate::app::data::LightMoveTarget;
 use crate::log;
-use crate::scene::CubeModel;
 use cgmath::{InnerSpace, Vector3};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -58,10 +57,6 @@ pub struct RayTracingDebugState {
     pub shadow_strength: f32,
     pub shadow_normal_offset: f32,
     pub enable_distance_attenuation: bool,
-    pub cube_size: f32,
-    pub cube_size_changed: bool,
-    pub actual_cube_top: Option<Vector3<f32>>,
-    pub cube_model: Option<CubeModel>,
 }
 
 impl Default for RayTracingDebugState {
@@ -72,10 +67,6 @@ impl Default for RayTracingDebugState {
             shadow_strength: 1.0,
             shadow_normal_offset: 0.5,
             enable_distance_attenuation: false,
-            cube_size: 100.0,
-            cube_size_changed: false,
-            actual_cube_top: None,
-            cube_model: None,
         }
     }
 }
@@ -231,49 +222,7 @@ impl RayTracingDebugState {
         crate::log!("(light_gizmo_data will be synced later in this frame)");
         crate::log!("========================================");
     }
-    pub fn should_load_cube(&self) -> bool {
-        self.cube_size_changed
-    }
-
-    pub fn finish_cube_load(&mut self) {
-        self.cube_size_changed = false;
-    }
-    pub fn set_cube_size(&mut self, size: f32) {
-        self.cube_size = size;
-        self.cube_size_changed = true;
-    }
-
-    pub fn set_actual_cube_top(&mut self, size: f32, position: [f32; 3]) {
-        let top_y = position[1] + size / 2.0;
-        self.actual_cube_top = Some(Vector3::new(position[0], top_y, position[2]));
-    }
-
-    pub fn get_cube_top(&self) -> Option<Vector3<f32>> {
-        static mut LOG_COUNTER: u32 = 0;
-        unsafe {
-            LOG_COUNTER += 1;
-            if LOG_COUNTER % 60 == 1 {
-                if let Some(top) = self.actual_cube_top {
-                    log!(
-                        "get_cube_top: cube_size={:.2}, actual_top=({:.2},{:.2},{:.2})",
-                        self.cube_size,
-                        top.x,
-                        top.y,
-                        top.z
-                    );
-                } else {
-                    log!(
-                        "get_cube_top: cube_size={:.2}, actual_top=None",
-                        self.cube_size
-                    );
-                }
-            }
-        }
-        self.actual_cube_top
-    }
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct DebugViewData {
-    pub cube_model: Option<CubeModel>,
-}
+pub struct DebugViewData;

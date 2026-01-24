@@ -109,7 +109,6 @@ impl System {
                                     shadow_strength: rt_debug.shadow_strength,
                                     enable_distance_attenuation: rt_debug.enable_distance_attenuation,
                                     debug_view_mode: rt_debug.debug_view_mode,
-                                    cube_size: rt_debug.cube_size,
                                 }
                             };
 
@@ -124,7 +123,6 @@ impl System {
                                 rt_debug_mut.enable_distance_attenuation =
                                     debug_state.enable_distance_attenuation;
                                 rt_debug_mut.debug_view_mode = debug_state.debug_view_mode;
-                                rt_debug_mut.set_cube_size(debug_state.cube_size);
                             }
 
                             build_click_debug_overlay(ui, gui_data);
@@ -166,11 +164,6 @@ impl System {
                                         DeferredAction::LoadModel { path } => {
                                             gui_data.selected_model_path = path;
                                             gui_data.file_changed = true;
-                                        }
-                                        DeferredAction::LoadCube => {
-                                            if let Err(e) = app.load_cube_model() {
-                                                crate::log!("Failed to load cube model: {:?}", e);
-                                            }
                                         }
                                         DeferredAction::TakeScreenshot => {
                                             gui_data.take_screenshot = true;

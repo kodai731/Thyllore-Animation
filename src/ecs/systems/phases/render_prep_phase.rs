@@ -1,16 +1,14 @@
 use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix, Vector3};
-use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::context::FrameContext;
+use crate::app::FrameContext;
 use crate::ecs::systems::render_data_systems::{
-    gizmo_mesh_render_data, gizmo_selectable_render_data, grid_render_data,
+    gizmo_mesh_render_data, gizmo_selectable_render_data, grid_mesh_render_data,
 };
 use crate::ecs::{gizmo_update_rotation, gizmo_update_vertex_buffer, ProjectionData};
 use crate::math::get_camera_axes_from_view;
 use crate::render::RenderBackend;
 use crate::renderer::scene_renderer::update_object_ubo;
-use crate::vulkanr::data::{SceneUniformData, UniformBufferObject};
 
 pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     let (view, proj, screen_size, aspect) = {
@@ -51,10 +49,28 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         eprintln!("Failed to update ObjectUBO: {}", e);
     }
 
-    update_scene_uniform(ctx, view, proj)?;
+    {
+        let rt_debug = ctx.rt_debug();
+        let light_pos = rt_debug.light_position;
+        let debug_mode = rt_debug.debug_view_mode.as_int();
+        let shadow_strength = rt_debug.shadow_strength;
+        let enable_distance_attenuation = rt_debug.enable_distance_attenuation;
+        drop(rt_debug);
+
+        let mut backend = ctx.create_backend();
+        backend.update_scene_uniform(
+            view,
+            proj,
+            light_pos,
+            Vector3::new(1.0, 1.0, 1.0),
+            debug_mode,
+            shadow_strength,
+            enable_distance_attenuation,
+        )?;
+    }
 
     let render_data_vec = vec![
-        grid_render_data(&ctx.grid()),
+        grid_mesh_render_data(&ctx.grid_mesh()),
         gizmo_mesh_render_data(&ctx.gizmo()),
         gizmo_selectable_render_data(&ctx.light_gizmo(), camera_position),
     ];
@@ -76,80 +92,22 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     Ok(())
 }
 
-unsafe fn update_scene_uniform(
-    ctx: &mut FrameContext,
-    view: Matrix4<f32>,
-    proj: Matrix4<f32>,
-) -> Result<()> {
-    let (scene_buffer, scene_memory) = match (
-        ctx.raytracing.scene_uniform_buffer,
-        ctx.raytracing.scene_uniform_buffer_memory,
-    ) {
-        (Some(b), Some(m)) => (b, m),
-        _ => return Ok(()),
-    };
-
-    let rt_debug = ctx.rt_debug();
-    let light_pos = &rt_debug.light_position;
-
-    let scene_data = SceneUniformData {
-        light_position: crate::math::Vec4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
-        light_color: crate::math::Vec4::new(1.0, 1.0, 1.0, 1.0),
-        view,
-        proj,
-        debug_mode: rt_debug.debug_view_mode.as_int(),
-        shadow_strength: rt_debug.shadow_strength,
-        enable_distance_attenuation: if rt_debug.enable_distance_attenuation {
-            1
-        } else {
-            0
-        },
-        _padding: 0,
-    };
-
-    let data_ptr = ctx.device.device.map_memory(
-        scene_memory,
-        0,
-        std::mem::size_of::<SceneUniformData>() as u64,
-        vk::MemoryMapFlags::empty(),
-    )?;
-
-    std::ptr::copy_nonoverlapping(
-        &scene_data as *const SceneUniformData,
-        data_ptr as *mut SceneUniformData,
-        1,
-    );
-
-    ctx.device.device.unmap_memory(scene_memory);
-
-    Ok(())
-}
-
 unsafe fn update_billboard_ubo(
     ctx: &mut FrameContext,
     view: Matrix4<f32>,
     proj: Matrix4<f32>,
 ) -> Result<()> {
-    let mut billboard = ctx.billboard_mut();
+    let model_matrix = {
+        let billboard = ctx.billboard();
+        billboard
+            .transform
+            .as_ref()
+            .map(|t| t.model_matrix)
+            .unwrap_or(Matrix4::identity())
+    };
 
-    let model_matrix = billboard
-        .transform
-        .as_ref()
-        .map(|t| t.model_matrix)
-        .unwrap_or(Matrix4::identity());
-
-    for i in 0..billboard.descriptor_set.rrdata.len() {
-        let rrdata = &mut billboard.descriptor_set.rrdata[i];
-
-        let ubo_billboard = UniformBufferObject {
-            model: model_matrix,
-            view,
-            proj,
-        };
-
-        let name = format!("billboard[{}]", i);
-        rrdata.rruniform_buffers[ctx.image_index].update(ctx.device, &ubo_billboard, &name)?;
-    }
+    let image_index = ctx.image_index;
+    ctx.update_billboard_ubo_internal(model_matrix, view, proj, image_index)?;
 
     Ok(())
 }

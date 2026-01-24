@@ -1,9 +1,9 @@
 use anyhow::Result;
 use cgmath::{Matrix4, Vector3};
 
-use crate::ecs::component::{GizmoMesh, GizmoRayToModel, GizmoVerticalLines};
+use crate::ecs::component::LineMesh;
 use crate::ecs::systems::ProjectionData;
-use crate::scene::billboard::BillboardData;
+use crate::app::billboard::BillboardData;
 
 pub type MeshId = usize;
 
@@ -14,23 +14,16 @@ pub trait RenderBackend {
 
     unsafe fn rebuild_tlas(&mut self) -> Result<()>;
 
-    unsafe fn create_gizmo_buffers(&mut self, mesh: &mut GizmoMesh, use_staging: bool)
+    unsafe fn create_gizmo_buffers(&mut self, mesh: &mut LineMesh, use_staging: bool)
         -> Result<()>;
 
-    unsafe fn update_gizmo_vertex_buffer(&self, mesh: &GizmoMesh) -> Result<()>;
+    unsafe fn update_gizmo_vertex_buffer(&self, mesh: &LineMesh) -> Result<()>;
 
-    unsafe fn destroy_gizmo_buffers(&mut self, mesh: &mut GizmoMesh);
+    unsafe fn destroy_gizmo_buffers(&mut self, mesh: &mut LineMesh);
 
-    unsafe fn update_or_create_ray_buffers(&mut self, ray: &mut GizmoRayToModel) -> Result<()>;
+    unsafe fn update_or_create_line_buffers(&mut self, mesh: &mut LineMesh) -> Result<()>;
 
-    unsafe fn destroy_ray_buffers(&mut self, ray: &mut GizmoRayToModel);
-
-    unsafe fn update_or_create_vertical_line_buffers(
-        &mut self,
-        lines: &mut GizmoVerticalLines,
-    ) -> Result<()>;
-
-    unsafe fn destroy_vertical_line_buffers(&mut self, lines: &mut GizmoVerticalLines);
+    unsafe fn destroy_line_buffers(&mut self, mesh: &mut LineMesh);
 
     unsafe fn create_billboard_buffers(&mut self, billboard: &mut BillboardData) -> Result<()>;
 
@@ -47,6 +40,26 @@ pub trait RenderBackend {
         &mut self,
         model_matrix: Matrix4<f32>,
         object_index: usize,
+        image_index: usize,
+    ) -> Result<()>;
+
+    unsafe fn update_scene_uniform(
+        &mut self,
+        view: Matrix4<f32>,
+        proj: Matrix4<f32>,
+        light_pos: Vector3<f32>,
+        light_color: Vector3<f32>,
+        debug_mode: i32,
+        shadow_strength: f32,
+        enable_distance_attenuation: bool,
+    ) -> Result<()>;
+
+    unsafe fn update_billboard_ubo(
+        &mut self,
+        billboard: &mut BillboardData,
+        model: Matrix4<f32>,
+        view: Matrix4<f32>,
+        proj: Matrix4<f32>,
         image_index: usize,
     ) -> Result<()>;
 }

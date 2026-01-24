@@ -1,12 +1,8 @@
 use cgmath::Vector3;
 
-use crate::ecs::resource::PipelineId;
-use crate::render::{IndexBufferHandle, VertexBufferHandle};
-use crate::vulkanr::data::Vertex;
-
 #[repr(C)]
-#[derive(Clone, Debug, Copy)]
-pub struct GizmoVertex {
+#[derive(Clone, Debug, Copy, Default)]
+pub struct ColorVertex {
     pub pos: [f32; 3],
     pub color: [f32; 3],
 }
@@ -19,16 +15,6 @@ pub enum GizmoAxis {
     Y,
     Z,
     Center,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct GizmoMesh {
-    pub pipeline_id: Option<PipelineId>,
-    pub object_index: usize,
-    pub vertices: Vec<GizmoVertex>,
-    pub indices: Vec<u32>,
-    pub vertex_buffer_handle: VertexBufferHandle,
-    pub index_buffer_handle: IndexBufferHandle,
 }
 
 #[derive(Clone, Debug)]
@@ -67,18 +53,3 @@ impl Default for GizmoDraggable {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct GizmoRayToModel {
-    pub vertices: Vec<Vertex>,
-    pub indices: Vec<u32>,
-    pub vertex_buffer_handle: VertexBufferHandle,
-    pub index_buffer_handle: IndexBufferHandle,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct GizmoVerticalLines {
-    pub vertices: Vec<Vertex>,
-    pub indices: Vec<u32>,
-    pub vertex_buffer_handle: VertexBufferHandle,
-    pub index_buffer_handle: IndexBufferHandle,
-}

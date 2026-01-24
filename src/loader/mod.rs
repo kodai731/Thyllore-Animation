@@ -1,4 +1,3 @@
-pub mod cube;
 pub mod fbx;
 pub mod gltf;
 pub mod texture;

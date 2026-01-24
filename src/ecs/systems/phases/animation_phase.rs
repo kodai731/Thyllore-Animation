@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::ecs::context::FrameContext;
+use crate::app::FrameContext;
 use crate::ecs::resource::{AnimationPlayback, AnimationRegistry, ModelState, NodeAssets};
 use crate::ecs::{
     animation_time_system, playback_prepare_animations, playback_upload_animations,

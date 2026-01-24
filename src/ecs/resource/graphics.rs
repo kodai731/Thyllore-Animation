@@ -1,5 +1,5 @@
 use crate::animation::{AnimationSystem, MorphAnimationSystem};
-use crate::scene::graphics_resource::{
+use crate::app::graphics_resource::{
     FrameDescriptorSet, MaterialId, MaterialManager, MeshBuffer, NodeData, ObjectDescriptorSet,
 };
 use cgmath::Vector3;

@@ -6,14 +6,17 @@ use anyhow::Result;
 use cgmath::{Matrix4, Vector3, Vector4};
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::component::{GizmoMesh, GizmoRayToModel, GizmoVerticalLines};
+use crate::app::billboard::BillboardData;
+use crate::app::graphics_resource::GraphicsResources;
+use crate::app::raytracing::RayTracingData;
+use crate::ecs::component::LineMesh;
 use crate::ecs::systems::ProjectionData;
-use crate::render::{FrameUBO, IndexBufferHandle, MeshId, ObjectUBO, RenderBackend, VertexBufferHandle};
-use crate::scene::billboard::BillboardData;
-use crate::scene::graphics_resource::GraphicsResources;
+use crate::render::{
+    FrameUBO, IndexBufferHandle, MeshId, ObjectUBO, RenderBackend, VertexBufferHandle,
+};
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::device::RRDevice;
-use crate::vulkanr::data::Vertex;
+use crate::vulkanr::data::{SceneUniformData, Vertex};
 use crate::vulkanr::image::RRImage;
 use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::resource::GpuBufferRegistry;
@@ -24,7 +27,7 @@ pub struct VulkanBackend<'a> {
     pub device: &'a RRDevice,
     pub command_pool: Rc<RRCommandPool>,
     pub graphics: &'a mut GraphicsResources,
-    pub acceleration_structure: &'a mut Option<RRAccelerationStructure>,
+    pub raytracing: &'a mut RayTracingData,
     pub buffer_registry: &'a mut GpuBufferRegistry,
 }
 
@@ -34,7 +37,7 @@ impl<'a> VulkanBackend<'a> {
         device: &'a RRDevice,
         command_pool: Rc<RRCommandPool>,
         graphics: &'a mut GraphicsResources,
-        acceleration_structure: &'a mut Option<RRAccelerationStructure>,
+        raytracing: &'a mut RayTracingData,
         buffer_registry: &'a mut GpuBufferRegistry,
     ) -> Self {
         Self {
@@ -42,9 +45,13 @@ impl<'a> VulkanBackend<'a> {
             device,
             command_pool,
             graphics,
-            acceleration_structure,
+            raytracing,
             buffer_registry,
         }
+    }
+
+    fn acceleration_structure(&mut self) -> &mut Option<RRAccelerationStructure> {
+        &mut self.raytracing.acceleration_structure
     }
 }
 
@@ -72,7 +79,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
     }
 
     unsafe fn update_acceleration_structure(&mut self, mesh_ids: &[MeshId]) -> Result<()> {
-        let Some(ref mut accel_struct) = self.acceleration_structure else {
+        let Some(ref accel_struct) = self.raytracing.acceleration_structure else {
             return Ok(());
         };
 
@@ -104,7 +111,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
     }
 
     unsafe fn rebuild_tlas(&mut self) -> Result<()> {
-        let Some(ref mut accel_struct) = self.acceleration_structure else {
+        let Some(ref accel_struct) = self.raytracing.acceleration_structure else {
             return Ok(());
         };
 
@@ -122,7 +129,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
 
     unsafe fn create_gizmo_buffers(
         &mut self,
-        mesh: &mut GizmoMesh,
+        mesh: &mut LineMesh,
         use_staging: bool,
     ) -> Result<()> {
         let vertex_handle = if use_staging {
@@ -154,13 +161,16 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         Ok(())
     }
 
-    unsafe fn update_gizmo_vertex_buffer(&self, mesh: &GizmoMesh) -> Result<()> {
-        self.buffer_registry
-            .update_vertex_buffer(self.device, mesh.vertex_buffer_handle, &mesh.vertices)?;
+    unsafe fn update_gizmo_vertex_buffer(&self, mesh: &LineMesh) -> Result<()> {
+        self.buffer_registry.update_vertex_buffer(
+            self.device,
+            mesh.vertex_buffer_handle,
+            &mesh.vertices,
+        )?;
         Ok(())
     }
 
-    unsafe fn destroy_gizmo_buffers(&mut self, mesh: &mut GizmoMesh) {
+    unsafe fn destroy_gizmo_buffers(&mut self, mesh: &mut LineMesh) {
         self.buffer_registry
             .destroy_vertex_buffer(self.device, mesh.vertex_buffer_handle);
         self.buffer_registry
@@ -169,112 +179,72 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         mesh.index_buffer_handle = IndexBufferHandle::INVALID;
     }
 
-    unsafe fn update_or_create_ray_buffers(&mut self, ray: &mut GizmoRayToModel) -> Result<()> {
-        if ray.vertices.is_empty() {
+    unsafe fn update_or_create_line_buffers(&mut self, mesh: &mut LineMesh) -> Result<()> {
+        if mesh.vertices.is_empty() {
             return Ok(());
         }
 
-        if !ray.vertex_buffer_handle.is_valid() {
+        if !mesh.vertex_buffer_handle.is_valid() {
             let vertex_handle = self.buffer_registry.create_host_visible_vertex_buffer(
                 self.instance,
                 self.device,
-                &ray.vertices,
-                0,
-            )?;
-            ray.vertex_buffer_handle = vertex_handle;
-        } else {
-            self.buffer_registry
-                .update_vertex_buffer(self.device, ray.vertex_buffer_handle, &ray.vertices)?;
-        }
-
-        if !ray.index_buffer_handle.is_valid() {
-            let index_handle = self.buffer_registry.create_host_visible_index_buffer(
-                self.instance,
-                self.device,
-                &ray.indices,
-            )?;
-            ray.index_buffer_handle = index_handle;
-        } else {
-            self.buffer_registry
-                .update_index_buffer(self.device, ray.index_buffer_handle, &ray.indices)?;
-        }
-
-        Ok(())
-    }
-
-    unsafe fn destroy_ray_buffers(&mut self, ray: &mut GizmoRayToModel) {
-        self.buffer_registry
-            .destroy_vertex_buffer(self.device, ray.vertex_buffer_handle);
-        self.buffer_registry
-            .destroy_index_buffer(self.device, ray.index_buffer_handle);
-        ray.vertex_buffer_handle = VertexBufferHandle::INVALID;
-        ray.index_buffer_handle = IndexBufferHandle::INVALID;
-    }
-
-    unsafe fn update_or_create_vertical_line_buffers(
-        &mut self,
-        lines: &mut GizmoVerticalLines,
-    ) -> Result<()> {
-        if lines.vertices.is_empty() {
-            return Ok(());
-        }
-
-        if !lines.vertex_buffer_handle.is_valid() {
-            let vertex_handle = self.buffer_registry.create_host_visible_vertex_buffer(
-                self.instance,
-                self.device,
-                &lines.vertices,
+                &mesh.vertices,
                 1024,
             )?;
-            lines.vertex_buffer_handle = vertex_handle;
+            mesh.vertex_buffer_handle = vertex_handle;
         } else {
             self.buffer_registry.update_vertex_buffer(
                 self.device,
-                lines.vertex_buffer_handle,
-                &lines.vertices,
+                mesh.vertex_buffer_handle,
+                &mesh.vertices,
             )?;
         }
 
-        if !lines.index_buffer_handle.is_valid() {
+        if !mesh.index_buffer_handle.is_valid() {
             let index_handle = self.buffer_registry.create_host_visible_index_buffer(
                 self.instance,
                 self.device,
-                &lines.indices,
+                &mesh.indices,
             )?;
-            lines.index_buffer_handle = index_handle;
+            mesh.index_buffer_handle = index_handle;
         } else {
-            self.buffer_registry
-                .update_index_buffer(self.device, lines.index_buffer_handle, &lines.indices)?;
+            self.buffer_registry.update_index_buffer(
+                self.device,
+                mesh.index_buffer_handle,
+                &mesh.indices,
+            )?;
         }
 
         Ok(())
     }
 
-    unsafe fn destroy_vertical_line_buffers(&mut self, lines: &mut GizmoVerticalLines) {
+    unsafe fn destroy_line_buffers(&mut self, mesh: &mut LineMesh) {
         self.buffer_registry
-            .destroy_vertex_buffer(self.device, lines.vertex_buffer_handle);
+            .destroy_vertex_buffer(self.device, mesh.vertex_buffer_handle);
         self.buffer_registry
-            .destroy_index_buffer(self.device, lines.index_buffer_handle);
-        lines.vertex_buffer_handle = VertexBufferHandle::INVALID;
-        lines.index_buffer_handle = IndexBufferHandle::INVALID;
+            .destroy_index_buffer(self.device, mesh.index_buffer_handle);
+        mesh.vertex_buffer_handle = VertexBufferHandle::INVALID;
+        mesh.index_buffer_handle = IndexBufferHandle::INVALID;
     }
 
     unsafe fn create_billboard_buffers(&mut self, billboard: &mut BillboardData) -> Result<()> {
-        billboard.vertex_buffer_handle = self.buffer_registry.create_host_visible_vertex_buffer(
-            self.instance,
-            self.device,
-            &billboard.vertices,
-            256,
-        )?;
+        billboard.mesh.vertex_buffer_handle =
+            self.buffer_registry.create_host_visible_vertex_buffer(
+                self.instance,
+                self.device,
+                &billboard.mesh.vertices,
+                256,
+            )?;
 
-        billboard.index_buffer_handle = self.buffer_registry.create_host_visible_index_buffer(
-            self.instance,
-            self.device,
-            &billboard.indices,
-        )?;
+        billboard.mesh.index_buffer_handle =
+            self.buffer_registry.create_host_visible_index_buffer(
+                self.instance,
+                self.device,
+                &billboard.mesh.indices,
+            )?;
 
         let texture_path = std::path::Path::new("assets/textures/lightIcon.png");
-        billboard.texture = Some(
+        billboard.render_state.texture = Some(
             RRImage::new_from_file(
                 self.instance,
                 self.device,
@@ -316,10 +286,81 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         object_index: usize,
         image_index: usize,
     ) -> Result<()> {
-        let ubo = ObjectUBO { model: model_matrix };
+        let ubo = ObjectUBO {
+            model: model_matrix,
+        };
         self.graphics
             .objects
             .update(self.device, image_index, object_index, &ubo)?;
+        Ok(())
+    }
+
+    unsafe fn update_scene_uniform(
+        &mut self,
+        view: Matrix4<f32>,
+        proj: Matrix4<f32>,
+        light_pos: Vector3<f32>,
+        light_color: Vector3<f32>,
+        debug_mode: i32,
+        shadow_strength: f32,
+        enable_distance_attenuation: bool,
+    ) -> Result<()> {
+        let (scene_buffer, scene_memory) = match (
+            self.raytracing.scene_uniform_buffer,
+            self.raytracing.scene_uniform_buffer_memory,
+        ) {
+            (Some(b), Some(m)) => (b, m),
+            _ => return Ok(()),
+        };
+
+        let scene_data = SceneUniformData {
+            light_position: crate::math::Vec4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
+            light_color: crate::math::Vec4::new(light_color.x, light_color.y, light_color.z, 1.0),
+            view,
+            proj,
+            debug_mode,
+            shadow_strength,
+            enable_distance_attenuation: if enable_distance_attenuation { 1 } else { 0 },
+            _padding: 0,
+        };
+
+        let data_ptr = self.device.device.map_memory(
+            scene_memory,
+            0,
+            std::mem::size_of::<SceneUniformData>() as u64,
+            vk::MemoryMapFlags::empty(),
+        )?;
+
+        std::ptr::copy_nonoverlapping(
+            &scene_data as *const SceneUniformData,
+            data_ptr as *mut SceneUniformData,
+            1,
+        );
+
+        self.device.device.unmap_memory(scene_memory);
+
+        Ok(())
+    }
+
+    unsafe fn update_billboard_ubo(
+        &mut self,
+        billboard: &mut BillboardData,
+        model: Matrix4<f32>,
+        view: Matrix4<f32>,
+        proj: Matrix4<f32>,
+        image_index: usize,
+    ) -> Result<()> {
+        use crate::vulkanr::data::UniformBufferObject;
+
+        for i in 0..billboard.render_state.descriptor_set.rrdata.len() {
+            let rrdata = &mut billboard.render_state.descriptor_set.rrdata[i];
+
+            let ubo = UniformBufferObject { model, view, proj };
+
+            let name = format!("billboard[{}]", i);
+            rrdata.rruniform_buffers[image_index].update(self.device, &ubo, &name)?;
+        }
+
         Ok(())
     }
 }

@@ -1,7 +1,6 @@
-use crate::app::{App, AppData, GUIData};
+use crate::app::{App, AppData, FrameContext, GUIData};
 use crate::ecs::{
     gizmo_update_or_create_vertical_line_buffers, gizmo_update_vertical_lines, run_frame,
-    FrameContext,
 };
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::vulkan::*;
@@ -101,18 +100,14 @@ impl App {
         log_billboard_debug_info(
             &info,
             swapchain,
-            &self.billboard().descriptor_set,
+            &self.billboard().render_state.descriptor_set,
             gbuffer_debug_info.as_ref(),
             self.data.raytracing.gbuffer_sampler,
         );
     }
 
     unsafe fn update_vertical_lines(&mut self) -> Result<()> {
-        let model_tops: Vec<cgmath::Vector3<f32>> = self
-            .rt_debug_state()
-            .get_cube_top()
-            .into_iter()
-            .collect();
+        let model_tops: Vec<cgmath::Vector3<f32>> = Vec::new();
 
         {
             let mut gizmo = self.light_gizmo_mut();
@@ -132,7 +127,7 @@ impl App {
             &self.rrdevice,
             command_pool,
             &mut self.data.graphics_resources,
-            &mut self.data.raytracing.acceleration_structure,
+            &mut self.data.raytracing,
             &mut self.data.buffer_registry,
         );
 

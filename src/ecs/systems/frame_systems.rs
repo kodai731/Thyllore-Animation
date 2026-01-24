@@ -4,11 +4,11 @@ use cgmath::{Deg, Matrix3, Matrix4, Vector2, Vector3};
 use super::{
     billboard_transform_update_look_at, create_billboard_transform, gizmo_update_rotation,
 };
+use crate::app::billboard::BillboardData;
 use crate::app::data::LightMoveTarget;
 use crate::debugview::view_mode::RayTracingDebugState;
 use crate::math::coordinate_system::perspective;
 use crate::render::RenderBackend;
-use crate::scene::billboard::BillboardData;
 use crate::scene::camera::Camera;
 
 pub struct ProjectionData {
@@ -40,7 +40,13 @@ pub unsafe fn update_frame_ubo(
     light_color: Vector3<f32>,
     image_index: usize,
 ) -> Result<()> {
-    backend.update_frame_ubo(proj_data, camera_position, light_position, light_color, image_index)
+    backend.update_frame_ubo(
+        proj_data,
+        camera_position,
+        light_position,
+        light_color,
+        image_index,
+    )
 }
 
 pub unsafe fn update_object_ubos(

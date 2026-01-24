@@ -1,28 +1,35 @@
+pub mod billboard;
 pub mod data;
+pub mod frame_context;
+pub mod graphics_resource;
 pub mod init;
 pub mod model_loader;
+pub mod raytracing;
 pub mod render;
+pub mod render_context;
 pub mod scene_model;
 pub mod update;
 pub mod cleanup;
 pub mod util;
 pub mod gui_data;
 
+pub use frame_context::FrameContext;
+pub use render_context::RenderContext;
+
 pub use data::AppData;
 pub use gui_data::GUIData;
 pub use init::*;
 
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
-use crate::debugview::{DebugViewData, RayTracingDebugState};
+use crate::debugview::{DebugViewData, GridMeshData, RayTracingDebugState};
 use crate::ecs::{
     AnimationPlayback, AnimationRegistry, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState,
     NodeAssets, ResMut, ResRef, Resource,
 };
 use crate::platform::ImguiData;
-use crate::scene::billboard::BillboardData;
-use crate::scene::graphics_resource::GraphicsResources;
-use crate::scene::grid::GridData;
-use crate::scene::raytracing::RayTracingData;
+use crate::app::billboard::BillboardData;
+use crate::app::graphics_resource::GraphicsResources;
+use crate::app::raytracing::RayTracingData;
 use crate::scene::Camera;
 use crate::vulkanr::context::{
     CommandState, FrameSync, PipelineState, RenderConfig, RenderTargets, SurfaceState,
@@ -90,6 +97,10 @@ impl App {
 
     pub fn graphics_resources_mut(&mut self) -> &mut GraphicsResources {
         &mut self.data.graphics_resources
+    }
+
+    pub fn pipeline_storage(&self) -> &crate::vulkanr::resource::PipelineStorage {
+        &self.data.pipeline_storage
     }
 
     pub fn animation_playback(&self) -> ResRef<AnimationPlayback> {
@@ -196,12 +207,12 @@ impl App {
         self.resource_mut::<NodeAssets>()
     }
 
-    pub fn grid(&self) -> ResRef<GridData> {
-        self.resource::<GridData>()
+    pub fn grid_mesh(&self) -> ResRef<GridMeshData> {
+        self.resource::<GridMeshData>()
     }
 
-    pub fn grid_mut(&self) -> ResMut<GridData> {
-        self.resource_mut::<GridData>()
+    pub fn grid_mesh_mut(&self) -> ResMut<GridMeshData> {
+        self.resource_mut::<GridMeshData>()
     }
 
     pub fn grid_gizmo(&self) -> ResRef<GridGizmoData> {

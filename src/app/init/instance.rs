@@ -1,8 +1,10 @@
 use crate::app::{App, AppData};
 
+use crate::debugview::GridMeshData;
+use crate::ecs::component::{MeshScale, RenderInfo};
 use crate::ecs::systems::{
-    billboard_create_buffers, create_billboard, create_grid_gizmo, create_light_gizmo,
-    gizmo_create_buffers,
+    billboard_create_buffers, create_billboard, create_default_grid_scale, create_grid_gizmo,
+    create_grid_mesh, create_light_gizmo, gizmo_create_buffers,
 };
 use crate::vulkanr::VulkanBackend;
 use crate::ecs::{
@@ -17,15 +19,13 @@ use crate::vulkanr::context::{
 use crate::vulkanr::data::*;
 use crate::vulkanr::descriptor::*;
 use crate::vulkanr::device::*;
-use crate::vulkanr::pipeline::{PipelineBuilder, RRPipeline, VertexInputConfig};
+use crate::vulkanr::pipeline::{DepthTestConfig, PipelineBuilder, RRPipeline, VertexInputConfig};
 use crate::vulkanr::render::*;
 use crate::vulkanr::swapchain::*;
 use crate::vulkanr::vulkan::*;
 
 use crate::debugview::*;
-use crate::math::*;
-use crate::scene::graphics_resource::GraphicsResources;
-use crate::scene::grid::GridData;
+use crate::app::graphics_resource::GraphicsResources;
 use crate::scene::Camera;
 
 use vulkanalia::Device as VkDevice;
@@ -168,21 +168,28 @@ impl App {
             vk::PolygonMode::FILL,
             vk::CullModeFlags::BACK,
         );
-        let model_pipeline_id = pipeline_manager.register(model_pipeline.clone());
+        let model_pipeline_id = data.pipeline_storage.register(model_pipeline.clone());
+        pipeline_manager.allocate_id();
         crate::log!("Registered model pipeline with id {}", model_pipeline_id);
 
-        let grid_pipeline = RRPipeline::new_with_graphics_resources(
-            &rrdevice,
-            &rrswapchain,
-            &rrrender,
-            &render_layouts,
+        let grid_pipeline = PipelineBuilder::new(
             "assets/shaders/gridVert.spv",
             "assets/shaders/gridFrag.spv",
-            vk::PrimitiveTopology::LINE_LIST,
-            vk::PolygonMode::LINE,
-            vk::CullModeFlags::NONE,
-        );
-        let grid_pipeline_id = pipeline_manager.register(grid_pipeline);
+        )
+        .vertex_input(VertexInputConfig::Gizmo)
+        .topology(vk::PrimitiveTopology::LINE_LIST)
+        .polygon_mode(vk::PolygonMode::LINE)
+        .depth_test(DepthTestConfig {
+            test_enable: true,
+            write_enable: false,
+            compare_op: vk::CompareOp::LESS,
+        })
+        .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
+        .descriptor_layouts(render_layouts.to_vec())
+        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+        .expect("Failed to create grid pipeline");
+        let grid_pipeline_id = data.pipeline_storage.register(grid_pipeline);
+        pipeline_manager.allocate_id();
         crate::log!("Registered grid pipeline with id {}", grid_pipeline_id);
 
         let gizmo_pipeline = PipelineBuilder::new(
@@ -197,15 +204,16 @@ impl App {
         .descriptor_layouts(render_layouts.to_vec())
         .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
         .expect("Failed to create gizmo pipeline");
-        let gizmo_pipeline_id = pipeline_manager.register(gizmo_pipeline);
+        let gizmo_pipeline_id = data.pipeline_storage.register(gizmo_pipeline);
+        pipeline_manager.allocate_id();
         crate::log!("Registered gizmo pipeline with id {}", gizmo_pipeline_id);
 
         let mut gizmo_data = create_grid_gizmo();
-        gizmo_data.mesh.object_index = data.graphics_resources.objects.allocate_slot();
-        gizmo_data.mesh.pipeline_id = Some(gizmo_pipeline_id);
+        gizmo_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
+        gizmo_data.render_info.pipeline_id = Some(gizmo_pipeline_id);
         crate::log!(
             "Allocated object_index {} for Gizmo",
-            gizmo_data.mesh.object_index
+            gizmo_data.render_info.object_index
         );
         println!("allocated gizmo object_index");
 
@@ -215,7 +223,7 @@ impl App {
                 &rrdevice,
                 rrcommand_pool.clone(),
                 &mut data.graphics_resources,
-                &mut data.raytracing.acceleration_structure,
+                &mut data.raytracing,
                 &mut data.buffer_registry,
             );
             gizmo_create_buffers(&mut gizmo_data.mesh, &mut backend, true)
@@ -227,11 +235,11 @@ impl App {
             .resource::<RayTracingDebugState>()
             .light_position;
         let mut light_gizmo_data = create_light_gizmo(light_position);
-        light_gizmo_data.mesh.pipeline_id = Some(gizmo_pipeline_id);
-        light_gizmo_data.mesh.object_index = data.graphics_resources.objects.allocate_slot();
+        light_gizmo_data.render_info.pipeline_id = Some(gizmo_pipeline_id);
+        light_gizmo_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!(
             "Allocated object_index {} for LightGizmo",
-            light_gizmo_data.mesh.object_index
+            light_gizmo_data.render_info.object_index
         );
         {
             let mut backend = VulkanBackend::new(
@@ -239,7 +247,7 @@ impl App {
                 &rrdevice,
                 rrcommand_pool.clone(),
                 &mut data.graphics_resources,
-                &mut data.raytracing.acceleration_structure,
+                &mut data.raytracing,
                 &mut data.buffer_registry,
             );
             gizmo_create_buffers(&mut light_gizmo_data.mesh, &mut backend, false)
@@ -247,10 +255,10 @@ impl App {
         }
 
         let mut billboard_data = create_billboard();
-        billboard_data.object_index = data.graphics_resources.objects.allocate_slot();
+        billboard_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!(
             "Allocated object_index {} for Billboard",
-            billboard_data.object_index
+            billboard_data.render_info.object_index
         );
 
         {
@@ -259,16 +267,16 @@ impl App {
                 &rrdevice,
                 rrcommand_pool.clone(),
                 &mut data.graphics_resources,
-                &mut data.raytracing.acceleration_structure,
+                &mut data.raytracing,
                 &mut data.buffer_registry,
             );
             billboard_create_buffers(&mut billboard_data, &mut backend)
                 .expect("Failed to create billboard buffers");
         }
 
-        billboard_data.descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &rrswapchain)
+        billboard_data.render_state.descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &rrswapchain)
             .expect("Failed to create billboard descriptor set");
-        billboard_data.descriptor_set.rrdata.push(RRData::new(
+        billboard_data.render_state.descriptor_set.rrdata.push(RRData::new(
             &instance,
             &rrdevice,
             &rrswapchain,
@@ -276,12 +284,14 @@ impl App {
         ));
 
         billboard_data
+            .render_state
             .descriptor_set
             .allocate_descriptor_sets(&rrdevice, &rrswapchain)
             .expect("Failed to allocate billboard descriptor sets");
 
-        if let Some(ref billboard_texture) = billboard_data.texture {
+        if let Some(ref billboard_texture) = billboard_data.render_state.texture {
             billboard_data
+                .render_state
                 .descriptor_set
                 .update_descriptor_sets(&rrdevice, &rrswapchain, billboard_texture)
                 .expect("Failed to update billboard descriptor sets");
@@ -291,13 +301,14 @@ impl App {
             &rrdevice,
             &rrrender,
             &rrswapchain,
-            billboard_data.descriptor_set.descriptor_set_layout,
+            billboard_data.render_state.descriptor_set.descriptor_set_layout,
             "assets/shaders/billboardVert.spv",
             "assets/shaders/billboardFrag.spv",
         )
         .expect("Failed to create billboard pipeline");
-        let billboard_pipeline_id = pipeline_manager.register(billboard_pipeline);
-        billboard_data.pipeline_id = Some(billboard_pipeline_id);
+        let billboard_pipeline_id = data.pipeline_storage.register(billboard_pipeline);
+        pipeline_manager.allocate_id();
+        billboard_data.render_info.pipeline_id = Some(billboard_pipeline_id);
         crate::log!(
             "Registered billboard pipeline with id {}",
             billboard_pipeline_id
@@ -363,42 +374,36 @@ impl App {
             crate::log!("Ray tracing pipelines created successfully");
         }
 
-        let mut grid = GridData::default();
-        grid.pipeline_id = Some(grid_pipeline_id);
+        let mut grid_mesh = create_grid_mesh();
+        let grid_scale = create_default_grid_scale();
 
-        let tex_coord = Vec2::new(0.0, 0.0);
-        let mut color = Vec4::new(1.0, 0.0, 0.0, 1.0);
-        if let Err(e) = Self::create_grid_data(&mut grid, 0, color, tex_coord) {
-            eprintln!("{:?}", e)
-        }
-        color = Vec4::new(0.0, 1.0, 0.0, 1.0);
-        if let Err(e) = Self::create_grid_data(&mut grid, 1, color, tex_coord) {
-            eprintln!("{:?}", e)
-        }
-        color = Vec4::new(0.0, 0.0, 1.0, 1.0);
-        if let Err(e) = Self::create_grid_data(&mut grid, 2, color, tex_coord) {
-            eprintln!("{:?}", e)
-        }
-        println!("created grid data ");
-        grid.scale = 1.0;
-        grid.vertex_buffer_handle = data.buffer_registry.create_vertex_buffer(
+        grid_mesh.vertex_buffer_handle = data.buffer_registry.create_vertex_buffer(
             &instance,
             &rrdevice,
             &rrcommand_pool,
-            &grid.vertices,
+            &grid_mesh.vertices,
             true,
         )?;
         println!("created grid vertex buffers");
-        grid.index_buffer_handle = data.buffer_registry.create_index_buffer(
+
+        grid_mesh.index_buffer_handle = data.buffer_registry.create_index_buffer(
             &instance,
             &rrdevice,
             &rrcommand_pool,
-            &grid.indices,
+            &grid_mesh.indices,
         )?;
         println!("created grid index buffer");
 
-        grid.object_index = data.graphics_resources.objects.allocate_slot();
-        crate::log!("Allocated object_index {} for Grid", grid.object_index);
+        let grid_object_index = data.graphics_resources.objects.allocate_slot();
+        crate::log!("Allocated object_index {} for Grid", grid_object_index);
+
+        let grid_render_info = RenderInfo::new(Some(grid_pipeline_id), grid_object_index);
+
+        let grid_mesh_data = GridMeshData {
+            mesh: grid_mesh,
+            render_info: grid_render_info,
+            scale: grid_scale,
+        };
         println!("allocated grid object_index");
 
         let mut rrcommand_buffer = RRCommandBuffer::new(&rrcommand_pool);
@@ -438,7 +443,8 @@ impl App {
         let resized = false;
         let start = Instant::now();
 
-        data.ecs_world.insert_resource(grid);
+        data.ecs_world.insert_resource(grid_mesh_data);
+        data.ecs_world.insert_resource(grid_scale);
 
         println!("initialized finished");
         Ok(Self {

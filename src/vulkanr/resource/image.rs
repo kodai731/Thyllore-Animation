@@ -394,7 +394,7 @@ pub unsafe fn transition_image_layout(
                 vk::AccessFlags::empty(),
                 vk::AccessFlags::TRANSFER_WRITE,
                 vk::PipelineStageFlags::TOP_OF_PIPE,
-                vk::PipelineStageFlags::TRANSFER, // transfer writes must occur in the pipeline transfer stage
+                vk::PipelineStageFlags::TRANSFER,
             ),
             (vk::ImageLayout::TRANSFER_DST_OPTIMAL, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL) => (
                 vk::AccessFlags::TRANSFER_WRITE,
@@ -408,6 +408,24 @@ pub unsafe fn transition_image_layout(
                     | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
                 vk::PipelineStageFlags::TOP_OF_PIPE,
                 vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+            ),
+            (vk::ImageLayout::UNDEFINED, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL) => (
+                vk::AccessFlags::empty(),
+                vk::AccessFlags::SHADER_READ,
+                vk::PipelineStageFlags::TOP_OF_PIPE,
+                vk::PipelineStageFlags::FRAGMENT_SHADER,
+            ),
+            (vk::ImageLayout::UNDEFINED, vk::ImageLayout::GENERAL) => (
+                vk::AccessFlags::empty(),
+                vk::AccessFlags::SHADER_READ | vk::AccessFlags::SHADER_WRITE,
+                vk::PipelineStageFlags::TOP_OF_PIPE,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+            ),
+            (vk::ImageLayout::UNDEFINED, vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL) => (
+                vk::AccessFlags::empty(),
+                vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                vk::PipelineStageFlags::TOP_OF_PIPE,
+                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
             ),
             _ => return Err(anyhow!("Unsupported image layout transition")),
         };

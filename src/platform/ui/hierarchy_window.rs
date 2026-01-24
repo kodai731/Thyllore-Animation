@@ -11,8 +11,17 @@ pub fn build_hierarchy_window(
     world: &World,
     state: &HierarchyState,
 ) {
+    let display_size = ui.io().display_size;
+    let hierarchy_width = 250.0;
+    let debug_height = 250.0;
+    let main_height = display_size[1] - debug_height;
+
     ui.window("Hierarchy")
-        .size([250.0, 400.0], Condition::FirstUseEver)
+        .position([0.0, 0.0], Condition::Always)
+        .size([hierarchy_width, main_height], Condition::Always)
+        .resizable(false)
+        .movable(false)
+        .collapsible(false)
         .build(|| {
             build_search_bar(ui, ui_events, state);
             ui.separator();

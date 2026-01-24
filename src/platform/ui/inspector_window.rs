@@ -11,8 +11,18 @@ pub fn build_inspector_window(
     world: &World,
     state: &HierarchyState,
 ) {
+    let display_size = ui.io().display_size;
+    let inspector_width = 300.0;
+    let debug_height = 250.0;
+    let main_height = display_size[1] - debug_height;
+    let inspector_x = display_size[0] - inspector_width;
+
     ui.window("Inspector")
-        .size([300.0, 400.0], Condition::FirstUseEver)
+        .position([inspector_x, 0.0], Condition::Always)
+        .size([inspector_width, main_height], Condition::Always)
+        .resizable(false)
+        .movable(false)
+        .collapsible(false)
         .build(|| {
             if let Some(entity) = state.selected_entity {
                 let data = collect_inspector_data(world, entity);

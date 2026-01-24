@@ -154,6 +154,26 @@ impl App {
         data.ecs_world.insert_resource(MeshAssets::new());
         data.ecs_world.insert_resource(NodeAssets::new());
 
+        let viewport_width = rrswapchain.swapchain_extent.width;
+        let viewport_height = rrswapchain.swapchain_extent.height;
+        data.viewport = crate::app::viewport::ViewportState::new(
+            &instance,
+            &rrdevice,
+            rrcommand_pool.command_pool,
+            viewport_width,
+            viewport_height,
+            rrdevice.msaa_samples,
+            rrswapchain.swapchain_format,
+        )
+        .expect("Failed to create viewport state");
+        crate::log!(
+            "Created viewport state: {}x{} with MSAA {:?}, format {:?}",
+            viewport_width,
+            viewport_height,
+            rrdevice.msaa_samples,
+            rrswapchain.swapchain_format
+        );
+
         let render_layouts = data.graphics_resources.get_layouts();
         let mut pipeline_manager = PipelineManager::new();
 

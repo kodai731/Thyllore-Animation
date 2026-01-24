@@ -173,7 +173,7 @@ impl RRGBuffer {
             self.position_image,
             vk::Format::R32G32B32A32_SFLOAT,
             vk::ImageLayout::UNDEFINED,
-            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            vk::ImageLayout::GENERAL,
             1,
         )?;
 
@@ -184,7 +184,7 @@ impl RRGBuffer {
             self.normal_image,
             vk::Format::R32G32B32A32_SFLOAT,
             vk::ImageLayout::UNDEFINED,
-            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            vk::ImageLayout::GENERAL,
             1,
         )?;
 
@@ -195,7 +195,7 @@ impl RRGBuffer {
             self.albedo_image,
             vk::Format::R8G8B8A8_UNORM,
             vk::ImageLayout::UNDEFINED,
-            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             1,
         )?;
 

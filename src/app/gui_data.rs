@@ -23,6 +23,9 @@ pub struct GUIData {
     pub is_ctrl_pressed: bool,
     pub move_light_to: LightMoveTarget,
     pub clicked_mouse_pos: Option<[f32; 2]>,
+    pub viewport_resize_pending: Option<(u32, u32)>,
+    pub viewport_hovered: bool,
+    pub viewport_focused: bool,
 }
 
 impl Default for GUIData {
@@ -47,6 +50,9 @@ impl Default for GUIData {
             is_ctrl_pressed: false,
             move_light_to: LightMoveTarget::None,
             clicked_mouse_pos: None,
+            viewport_resize_pending: None,
+            viewport_hovered: false,
+            viewport_focused: false,
         }
     }
 }
@@ -55,7 +61,8 @@ impl GUIData {
     pub fn update(&mut self) {
         self.mouse_diff = [0.0, 0.0];
 
-        if self.imgui_wants_mouse {
+        let allow_input = !self.imgui_wants_mouse || self.viewport_hovered;
+        if !allow_input {
             self.clicked_mouse_pos = None;
             return;
         }

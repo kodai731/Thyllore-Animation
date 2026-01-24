@@ -4,6 +4,7 @@ pub mod dynamic_buffer;
 pub mod gbuffer;
 pub mod image;
 pub mod mesh_buffer;
+pub mod offscreen;
 pub mod pipeline_storage;
 
 pub use buffer::*;
@@ -12,4 +13,5 @@ pub use dynamic_buffer::*;
 pub use gbuffer::RRGBuffer;
 pub use image::*;
 pub use mesh_buffer::*;
+pub use offscreen::OffscreenFramebuffer;
 pub use pipeline_storage::PipelineStorage;

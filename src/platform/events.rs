@@ -4,7 +4,7 @@ use imgui::MouseButton;
 use winit::event::{Event, WindowEvent};
 
 use super::platform::System;
-use super::ui::{build_click_debug_overlay, build_debug_window, build_hierarchy_window, build_inspector_window, DebugWindowState};
+use super::ui::{build_click_debug_overlay, build_debug_window, build_hierarchy_window, build_inspector_window, build_viewport_window, DebugWindowState};
 use crate::app::{App, GUIData};
 use crate::debugview::RayTracingDebugState;
 use crate::ecs::resource::HierarchyState;
@@ -21,7 +21,8 @@ fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
     gui_data.is_left_clicked = false;
     gui_data.is_wheel_clicked = false;
 
-    if !gui_data.imgui_wants_mouse {
+    let allow_input = !gui_data.imgui_wants_mouse || gui_data.viewport_hovered;
+    if allow_input {
         if ui.is_mouse_down(MouseButton::Left) {
             gui_data.is_left_clicked = true;
         }
@@ -134,6 +135,25 @@ impl System {
                                 let hierarchy_state = app.data.ecs_world.resource::<HierarchyState>();
                                 let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
                                 build_inspector_window(ui, &mut *ui_events, &app.data.ecs_world, &*hierarchy_state);
+                            }
+
+                            {
+                                let texture_id = imgui::TextureId::new(app.data.viewport.texture_id());
+                                let current_size = [app.data.viewport.width as f32, app.data.viewport.height as f32];
+                                let viewport_info = build_viewport_window(ui, texture_id, current_size);
+
+                                app.data.viewport.focused = viewport_info.focused;
+                                app.data.viewport.hovered = viewport_info.hovered;
+                                gui_data.viewport_focused = viewport_info.focused;
+                                gui_data.viewport_hovered = viewport_info.hovered;
+
+                                let new_width = viewport_info.size[0] as u32;
+                                let new_height = viewport_info.size[1] as u32;
+                                if new_width > 0 && new_height > 0
+                                    && (new_width != app.data.viewport.width || new_height != app.data.viewport.height)
+                                {
+                                    gui_data.viewport_resize_pending = Some((new_width, new_height));
+                                }
                             }
 
                             {

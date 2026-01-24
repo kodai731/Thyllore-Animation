@@ -21,8 +21,16 @@ pub fn build_debug_window(
     state: &mut DebugWindowState,
     gui_data: &mut GUIData,
 ) {
+    let display_size = ui.io().display_size;
+    let debug_height = 250.0;
+    let debug_y = display_size[1] - debug_height;
+
     ui.window("debug window")
-        .size([600.0, 450.0], Condition::FirstUseEver)
+        .position([0.0, debug_y], Condition::Always)
+        .size([display_size[0], debug_height], Condition::Always)
+        .resizable(false)
+        .movable(false)
+        .collapsible(false)
         .build(|| {
             build_model_panel(ui, ui_events, state, gui_data);
             ui.separator();

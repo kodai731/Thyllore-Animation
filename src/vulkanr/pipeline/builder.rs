@@ -21,7 +21,7 @@ pub enum VertexInputConfig {
     Standard,
     /// Use ImGui DrawVert struct (position, uv, color)
     ImGui,
-    /// Use GizmoVertex struct (position, color)
+    /// Use ColorVertex struct (position, color)
     Gizmo,
     /// Use BillboardVertex struct (position, texcoord)
     Billboard,

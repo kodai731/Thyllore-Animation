@@ -1,6 +1,7 @@
 use crate::app::{App, AppData};
 
-use crate::ecs::component::{LineMesh, MeshScale};
+use crate::debugview::GridMeshData;
+use crate::ecs::component::RenderInfo;
 use crate::ecs::systems::{
     billboard_create_buffers, create_billboard, create_default_grid_scale, create_grid_gizmo,
     create_grid_mesh, create_light_gizmo, gizmo_create_buffers,
@@ -24,7 +25,6 @@ use crate::vulkanr::swapchain::*;
 use crate::vulkanr::vulkan::*;
 
 use crate::debugview::*;
-use crate::math::*;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::scene::Camera;
 
@@ -209,11 +209,11 @@ impl App {
         crate::log!("Registered gizmo pipeline with id {}", gizmo_pipeline_id);
 
         let mut gizmo_data = create_grid_gizmo();
-        gizmo_data.mesh.object_index = data.graphics_resources.objects.allocate_slot();
-        gizmo_data.mesh.pipeline_id = Some(gizmo_pipeline_id);
+        gizmo_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
+        gizmo_data.render_info.pipeline_id = Some(gizmo_pipeline_id);
         crate::log!(
             "Allocated object_index {} for Gizmo",
-            gizmo_data.mesh.object_index
+            gizmo_data.render_info.object_index
         );
         println!("allocated gizmo object_index");
 
@@ -235,11 +235,11 @@ impl App {
             .resource::<RayTracingDebugState>()
             .light_position;
         let mut light_gizmo_data = create_light_gizmo(light_position);
-        light_gizmo_data.mesh.pipeline_id = Some(gizmo_pipeline_id);
-        light_gizmo_data.mesh.object_index = data.graphics_resources.objects.allocate_slot();
+        light_gizmo_data.render_info.pipeline_id = Some(gizmo_pipeline_id);
+        light_gizmo_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!(
             "Allocated object_index {} for LightGizmo",
-            light_gizmo_data.mesh.object_index
+            light_gizmo_data.render_info.object_index
         );
         {
             let mut backend = VulkanBackend::new(
@@ -255,10 +255,10 @@ impl App {
         }
 
         let mut billboard_data = create_billboard();
-        billboard_data.render.object_index = data.graphics_resources.objects.allocate_slot();
+        billboard_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!(
             "Allocated object_index {} for Billboard",
-            billboard_data.render.object_index
+            billboard_data.render_info.object_index
         );
 
         {
@@ -274,9 +274,9 @@ impl App {
                 .expect("Failed to create billboard buffers");
         }
 
-        billboard_data.render.descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &rrswapchain)
+        billboard_data.render_state.descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &rrswapchain)
             .expect("Failed to create billboard descriptor set");
-        billboard_data.render.descriptor_set.rrdata.push(RRData::new(
+        billboard_data.render_state.descriptor_set.rrdata.push(RRData::new(
             &instance,
             &rrdevice,
             &rrswapchain,
@@ -284,14 +284,14 @@ impl App {
         ));
 
         billboard_data
-            .render
+            .render_state
             .descriptor_set
             .allocate_descriptor_sets(&rrdevice, &rrswapchain)
             .expect("Failed to allocate billboard descriptor sets");
 
-        if let Some(ref billboard_texture) = billboard_data.render.texture {
+        if let Some(ref billboard_texture) = billboard_data.render_state.texture {
             billboard_data
-                .render
+                .render_state
                 .descriptor_set
                 .update_descriptor_sets(&rrdevice, &rrswapchain, billboard_texture)
                 .expect("Failed to update billboard descriptor sets");
@@ -301,14 +301,14 @@ impl App {
             &rrdevice,
             &rrrender,
             &rrswapchain,
-            billboard_data.render.descriptor_set.descriptor_set_layout,
+            billboard_data.render_state.descriptor_set.descriptor_set_layout,
             "assets/shaders/billboardVert.spv",
             "assets/shaders/billboardFrag.spv",
         )
         .expect("Failed to create billboard pipeline");
         let billboard_pipeline_id = data.pipeline_storage.register(billboard_pipeline);
         pipeline_manager.allocate_id();
-        billboard_data.render.pipeline_id = Some(billboard_pipeline_id);
+        billboard_data.render_info.pipeline_id = Some(billboard_pipeline_id);
         crate::log!(
             "Registered billboard pipeline with id {}",
             billboard_pipeline_id
@@ -375,8 +375,6 @@ impl App {
         }
 
         let mut grid_mesh = create_grid_mesh();
-        grid_mesh.pipeline_id = Some(grid_pipeline_id);
-
         let grid_scale = create_default_grid_scale();
 
         grid_mesh.vertex_buffer_handle = data.buffer_registry.create_vertex_buffer(
@@ -396,8 +394,16 @@ impl App {
         )?;
         println!("created grid index buffer");
 
-        grid_mesh.object_index = data.graphics_resources.objects.allocate_slot();
-        crate::log!("Allocated object_index {} for Grid", grid_mesh.object_index);
+        let grid_object_index = data.graphics_resources.objects.allocate_slot();
+        crate::log!("Allocated object_index {} for Grid", grid_object_index);
+
+        let grid_render_info = RenderInfo::new(Some(grid_pipeline_id), grid_object_index);
+
+        let grid_mesh_data = GridMeshData {
+            mesh: grid_mesh,
+            render_info: grid_render_info,
+            scale: grid_scale,
+        };
         println!("allocated grid object_index");
 
         let mut rrcommand_buffer = RRCommandBuffer::new(&rrcommand_pool);
@@ -437,8 +443,7 @@ impl App {
         let resized = false;
         let start = Instant::now();
 
-        data.ecs_world.insert_resource(grid_mesh);
-        data.ecs_world.insert_resource(grid_scale);
+        data.ecs_world.insert_resource(grid_mesh_data);
 
         println!("initialized finished");
         Ok(Self {

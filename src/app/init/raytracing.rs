@@ -63,7 +63,7 @@ impl App {
             rrswapchain,
             rrrender,
             &data.graphics_resources,
-            &mut billboard.render.descriptor_set,
+            &mut billboard.render_state.descriptor_set,
         )
     }
 }

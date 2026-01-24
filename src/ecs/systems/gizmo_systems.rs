@@ -4,7 +4,7 @@ use cgmath::{vec3, Deg, InnerSpace, Matrix3, Vector2, Vector3};
 use crate::debugview::gizmo::grid::GridGizmoData;
 use crate::debugview::gizmo::light::LightGizmoData;
 use crate::ecs::component::{
-    GizmoAxis, GizmoDraggable, GizmoMesh, GizmoPosition, GizmoSelectable, GizmoVertex, LineMesh,
+    ColorVertex, GizmoAxis, GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, RenderInfo,
 };
 use crate::math::{
     coordinate_system::perspective, is_point_in_rect, ray_to_line_segment_distance,
@@ -17,19 +17,19 @@ pub fn create_light_gizmo(position: Vector3<f32>) -> LightGizmoData {
     let yellow = [1.0, 1.0, 0.0];
 
     let vertices = vec![
-        GizmoVertex {
+        ColorVertex {
             pos: [0.0, 0.0, 0.0],
             color: yellow,
         },
-        GizmoVertex {
+        ColorVertex {
             pos: [axis_length, 0.0, 0.0],
             color: [1.0, 0.0, 0.0],
         },
-        GizmoVertex {
+        ColorVertex {
             pos: [0.0, axis_length, 0.0],
             color: [0.0, 1.0, 0.0],
         },
-        GizmoVertex {
+        ColorVertex {
             pos: [0.0, 0.0, axis_length],
             color: [0.0, 0.0, 1.0],
         },
@@ -38,14 +38,13 @@ pub fn create_light_gizmo(position: Vector3<f32>) -> LightGizmoData {
     let indices = vec![0, 1, 0, 2, 0, 3];
 
     LightGizmoData {
-        mesh: GizmoMesh {
-            pipeline_id: None,
-            object_index: 0,
+        mesh: LineMesh {
             vertices,
             indices,
             vertex_buffer_handle: VertexBufferHandle::INVALID,
             index_buffer_handle: IndexBufferHandle::INVALID,
         },
+        render_info: RenderInfo::default(),
         position: GizmoPosition { position },
         selectable: GizmoSelectable::default(),
         draggable: GizmoDraggable::default(),
@@ -58,19 +57,19 @@ pub fn create_grid_gizmo() -> GridGizmoData {
     let axis_length = 0.15;
 
     let vertices = vec![
-        GizmoVertex {
+        ColorVertex {
             pos: [0.0, 0.0, 0.0],
             color: [1.0, 1.0, 1.0],
         },
-        GizmoVertex {
+        ColorVertex {
             pos: [axis_length, 0.0, 0.0],
             color: [1.0, 0.0, 0.0],
         },
-        GizmoVertex {
+        ColorVertex {
             pos: [0.0, axis_length, 0.0],
             color: [0.0, 1.0, 0.0],
         },
-        GizmoVertex {
+        ColorVertex {
             pos: [0.0, 0.0, axis_length],
             color: [0.0, 0.0, 1.0],
         },
@@ -79,14 +78,13 @@ pub fn create_grid_gizmo() -> GridGizmoData {
     let indices = vec![0, 1, 0, 2, 0, 3];
 
     GridGizmoData {
-        mesh: GizmoMesh {
-            pipeline_id: None,
-            object_index: 0,
+        mesh: LineMesh {
             vertices,
             indices,
             vertex_buffer_handle: VertexBufferHandle::INVALID,
             index_buffer_handle: IndexBufferHandle::INVALID,
         },
+        render_info: RenderInfo::default(),
     }
 }
 
@@ -247,7 +245,7 @@ pub fn gizmo_update_position_with_constraint(
     }
 }
 
-pub fn gizmo_update_selection_color(mesh: &mut GizmoMesh, selectable: &GizmoSelectable) {
+pub fn gizmo_update_selection_color(mesh: &mut LineMesh, selectable: &GizmoSelectable) {
     let yellow = [1.0, 1.0, 0.0];
     let highlight = [1.0, 1.0, 0.5];
 
@@ -273,7 +271,7 @@ pub fn gizmo_update_selection_color(mesh: &mut GizmoMesh, selectable: &GizmoSele
     }
 }
 
-pub fn gizmo_update_rotation(mesh: &mut GizmoMesh, rotation_matrix: &Matrix3<f32>) {
+pub fn gizmo_update_rotation(mesh: &mut LineMesh, rotation_matrix: &Matrix3<f32>) {
     let axis_length = 0.15;
 
     let x_axis = rotation_matrix * vec3(axis_length, 0.0, 0.0);
@@ -286,7 +284,7 @@ pub fn gizmo_update_rotation(mesh: &mut GizmoMesh, rotation_matrix: &Matrix3<f32
 }
 
 pub unsafe fn gizmo_create_buffers(
-    mesh: &mut GizmoMesh,
+    mesh: &mut LineMesh,
     backend: &mut dyn RenderBackend,
     use_staging: bool,
 ) -> Result<()> {
@@ -294,13 +292,13 @@ pub unsafe fn gizmo_create_buffers(
 }
 
 pub unsafe fn gizmo_update_vertex_buffer(
-    mesh: &GizmoMesh,
+    mesh: &LineMesh,
     backend: &dyn RenderBackend,
 ) -> Result<()> {
     backend.update_gizmo_vertex_buffer(mesh)
 }
 
-pub unsafe fn gizmo_destroy_buffers(mesh: &mut GizmoMesh, backend: &mut dyn RenderBackend) {
+pub unsafe fn gizmo_destroy_buffers(mesh: &mut LineMesh, backend: &mut dyn RenderBackend) {
     backend.destroy_gizmo_buffers(mesh);
 }
 
@@ -330,11 +328,11 @@ pub fn gizmo_update_ray_to_model(
 
     let bright_yellow = [1.0, 1.0, 0.0];
 
-    let vertex_0 = GizmoVertex {
+    let vertex_0 = ColorVertex {
         pos: [gizmo_pos.x, gizmo_pos.y, gizmo_pos.z],
         color: bright_yellow,
     };
-    let vertex_1 = GizmoVertex {
+    let vertex_1 = ColorVertex {
         pos: [closest_point.x, closest_point.y, closest_point.z],
         color: bright_yellow,
     };
@@ -366,11 +364,11 @@ pub fn gizmo_update_vertical_lines(
 
     let gizmo_pos = position.position;
 
-    lines.vertices.push(GizmoVertex {
+    lines.vertices.push(ColorVertex {
         pos: [gizmo_pos.x, gizmo_pos.y, gizmo_pos.z],
         color: orange,
     });
-    lines.vertices.push(GizmoVertex {
+    lines.vertices.push(ColorVertex {
         pos: [gizmo_pos.x, 0.0, gizmo_pos.z],
         color: orange,
     });
@@ -379,11 +377,11 @@ pub fn gizmo_update_vertical_lines(
 
     for (i, pos) in model_positions.iter().enumerate() {
         let base_index = (2 + i * 2) as u32;
-        lines.vertices.push(GizmoVertex {
+        lines.vertices.push(ColorVertex {
             pos: [pos.x, pos.y, pos.z],
             color: orange,
         });
-        lines.vertices.push(GizmoVertex {
+        lines.vertices.push(ColorVertex {
             pos: [pos.x, 0.0, pos.z],
             color: orange,
         });

@@ -1,13 +1,12 @@
 use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, Vector3, Vector4};
 
-use crate::ecs::component::CameraState;
+use crate::ecs::component::{CameraState, RenderInfo};
 use crate::ecs::world::{BillboardBehavior, Transform, World};
 use crate::render::RenderBackend;
 use crate::app::billboard::{
-    BillboardData, BillboardInfo, BillboardRenderData, BillboardTransform, BillboardVertex,
+    BillboardData, BillboardMesh, BillboardRenderState, BillboardTransform, BillboardVertex,
 };
-use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
 
 pub fn create_billboard() -> BillboardData {
     let billboard_size = 0.5;
@@ -33,19 +32,15 @@ pub fn create_billboard() -> BillboardData {
     let indices = vec![0, 1, 2, 0, 2, 3];
 
     BillboardData {
-        info: BillboardInfo {
-            transform: None,
+        mesh: BillboardMesh {
             vertices,
             indices,
             vertex_buffer_handle: Default::default(),
             index_buffer_handle: Default::default(),
         },
-        render: BillboardRenderData {
-            pipeline_id: None,
-            object_index: 0,
-            descriptor_set: RRBillboardDescriptorSet::default(),
-            texture: None,
-        },
+        transform: None,
+        render_info: RenderInfo::default(),
+        render_state: BillboardRenderState::default(),
     }
 }
 

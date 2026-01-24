@@ -21,7 +21,7 @@ pub use gui_data::GUIData;
 pub use init::*;
 
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
-use crate::debugview::{DebugViewData, RayTracingDebugState};
+use crate::debugview::{DebugViewData, GridMeshData, RayTracingDebugState};
 use crate::ecs::{
     AnimationPlayback, AnimationRegistry, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState,
     NodeAssets, ResMut, ResRef, Resource,
@@ -30,7 +30,6 @@ use crate::platform::ImguiData;
 use crate::app::billboard::BillboardData;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::app::raytracing::RayTracingData;
-use crate::ecs::component::{LineMesh, MeshScale};
 use crate::scene::Camera;
 use crate::vulkanr::context::{
     CommandState, FrameSync, PipelineState, RenderConfig, RenderTargets, SurfaceState,
@@ -208,20 +207,12 @@ impl App {
         self.resource_mut::<NodeAssets>()
     }
 
-    pub fn grid_mesh(&self) -> ResRef<LineMesh> {
-        self.resource::<LineMesh>()
+    pub fn grid_mesh(&self) -> ResRef<GridMeshData> {
+        self.resource::<GridMeshData>()
     }
 
-    pub fn grid_mesh_mut(&self) -> ResMut<LineMesh> {
-        self.resource_mut::<LineMesh>()
-    }
-
-    pub fn grid_scale(&self) -> ResRef<MeshScale> {
-        self.resource::<MeshScale>()
-    }
-
-    pub fn grid_scale_mut(&self) -> ResMut<MeshScale> {
-        self.resource_mut::<MeshScale>()
+    pub fn grid_mesh_mut(&self) -> ResMut<GridMeshData> {
+        self.resource_mut::<GridMeshData>()
     }
 
     pub fn grid_gizmo(&self) -> ResRef<GridGizmoData> {

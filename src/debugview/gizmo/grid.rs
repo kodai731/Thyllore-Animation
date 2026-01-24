@@ -1,8 +1,7 @@
-use crate::ecs::component::GizmoMesh;
-
-pub use crate::ecs::component::GizmoVertex as GridGizmoVertex;
+use crate::ecs::component::{LineMesh, RenderInfo};
 
 #[derive(Clone, Debug, Default)]
 pub struct GridGizmoData {
-    pub mesh: GizmoMesh,
+    pub mesh: LineMesh,
+    pub render_info: RenderInfo,
 }

@@ -1,4 +1,4 @@
-use crate::ecs::component::{GizmoVertex, LineMesh, MeshScale};
+use crate::ecs::component::{ColorVertex, LineMesh, MeshScale};
 
 pub fn create_grid_mesh() -> LineMesh {
     let mut mesh = LineMesh::default();
@@ -57,7 +57,7 @@ fn add_grid_axis(
 }
 
 fn add_line_vertices(mesh: &mut LineMesh, pos: [f32; 3], color: [f32; 3]) {
-    let vertex = GizmoVertex { pos, color };
+    let vertex = ColorVertex { pos, color };
     let index = mesh.vertices.len() as u32;
     mesh.vertices.push(vertex);
     mesh.indices.push(index);

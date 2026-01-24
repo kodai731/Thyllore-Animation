@@ -1,7 +1,7 @@
 use anyhow::Result;
 use cgmath::{Matrix4, Vector3};
 
-use crate::ecs::component::{GizmoMesh, LineMesh};
+use crate::ecs::component::LineMesh;
 use crate::ecs::systems::ProjectionData;
 use crate::app::billboard::BillboardData;
 
@@ -14,12 +14,12 @@ pub trait RenderBackend {
 
     unsafe fn rebuild_tlas(&mut self) -> Result<()>;
 
-    unsafe fn create_gizmo_buffers(&mut self, mesh: &mut GizmoMesh, use_staging: bool)
+    unsafe fn create_gizmo_buffers(&mut self, mesh: &mut LineMesh, use_staging: bool)
         -> Result<()>;
 
-    unsafe fn update_gizmo_vertex_buffer(&self, mesh: &GizmoMesh) -> Result<()>;
+    unsafe fn update_gizmo_vertex_buffer(&self, mesh: &LineMesh) -> Result<()>;
 
-    unsafe fn destroy_gizmo_buffers(&mut self, mesh: &mut GizmoMesh);
+    unsafe fn destroy_gizmo_buffers(&mut self, mesh: &mut LineMesh);
 
     unsafe fn update_or_create_line_buffers(&mut self, mesh: &mut LineMesh) -> Result<()>;
 

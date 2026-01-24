@@ -1,16 +1,17 @@
 use cgmath::{Matrix4, Vector3};
 
-use crate::ecs::resource::PipelineId;
-use crate::render::{IndexBufferHandle, VertexBufferHandle};
+use crate::ecs::component::{DynamicMesh, RenderInfo};
 use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
 use crate::vulkanr::image::RRImage;
 
 #[repr(C)]
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, Default)]
 pub struct BillboardVertex {
     pub pos: [f32; 3],
     pub tex_coord: [f32; 2],
 }
+
+pub type BillboardMesh = DynamicMesh<BillboardVertex>;
 
 #[derive(Clone, Debug)]
 pub struct BillboardTransform {
@@ -19,58 +20,33 @@ pub struct BillboardTransform {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct BillboardInfo {
-    pub transform: Option<BillboardTransform>,
-    pub vertices: Vec<BillboardVertex>,
-    pub indices: Vec<u32>,
-    pub vertex_buffer_handle: VertexBufferHandle,
-    pub index_buffer_handle: IndexBufferHandle,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct BillboardRenderData {
-    pub pipeline_id: Option<PipelineId>,
-    pub object_index: usize,
+pub struct BillboardRenderState {
     pub descriptor_set: RRBillboardDescriptorSet,
     pub texture: Option<RRImage>,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct BillboardData {
-    pub info: BillboardInfo,
-    pub render: BillboardRenderData,
+    pub mesh: BillboardMesh,
+    pub transform: Option<BillboardTransform>,
+    pub render_info: RenderInfo,
+    pub render_state: BillboardRenderState,
 }
 
 impl BillboardData {
     pub fn transform(&self) -> Option<&BillboardTransform> {
-        self.info.transform.as_ref()
+        self.transform.as_ref()
     }
 
     pub fn transform_mut(&mut self) -> &mut Option<BillboardTransform> {
-        &mut self.info.transform
+        &mut self.transform
     }
 
     pub fn vertices(&self) -> &[BillboardVertex] {
-        &self.info.vertices
+        &self.mesh.vertices
     }
 
     pub fn indices(&self) -> &[u32] {
-        &self.info.indices
-    }
-
-    pub fn vertex_buffer_handle(&self) -> VertexBufferHandle {
-        self.info.vertex_buffer_handle
-    }
-
-    pub fn index_buffer_handle(&self) -> IndexBufferHandle {
-        self.info.index_buffer_handle
-    }
-
-    pub fn pipeline_id(&self) -> Option<PipelineId> {
-        self.render.pipeline_id
-    }
-
-    pub fn object_index(&self) -> usize {
-        self.render.object_index
+        &self.mesh.indices
     }
 }

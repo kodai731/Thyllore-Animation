@@ -6,12 +6,14 @@ use anyhow::Result;
 use cgmath::{Matrix4, Vector3, Vector4};
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::component::{GizmoMesh, LineMesh};
-use crate::ecs::systems::ProjectionData;
-use crate::render::{FrameUBO, IndexBufferHandle, MeshId, ObjectUBO, RenderBackend, VertexBufferHandle};
 use crate::app::billboard::BillboardData;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::app::raytracing::RayTracingData;
+use crate::ecs::component::LineMesh;
+use crate::ecs::systems::ProjectionData;
+use crate::render::{
+    FrameUBO, IndexBufferHandle, MeshId, ObjectUBO, RenderBackend, VertexBufferHandle,
+};
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::device::RRDevice;
 use crate::vulkanr::data::{SceneUniformData, Vertex};
@@ -127,7 +129,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
 
     unsafe fn create_gizmo_buffers(
         &mut self,
-        mesh: &mut GizmoMesh,
+        mesh: &mut LineMesh,
         use_staging: bool,
     ) -> Result<()> {
         let vertex_handle = if use_staging {
@@ -159,13 +161,16 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         Ok(())
     }
 
-    unsafe fn update_gizmo_vertex_buffer(&self, mesh: &GizmoMesh) -> Result<()> {
-        self.buffer_registry
-            .update_vertex_buffer(self.device, mesh.vertex_buffer_handle, &mesh.vertices)?;
+    unsafe fn update_gizmo_vertex_buffer(&self, mesh: &LineMesh) -> Result<()> {
+        self.buffer_registry.update_vertex_buffer(
+            self.device,
+            mesh.vertex_buffer_handle,
+            &mesh.vertices,
+        )?;
         Ok(())
     }
 
-    unsafe fn destroy_gizmo_buffers(&mut self, mesh: &mut GizmoMesh) {
+    unsafe fn destroy_gizmo_buffers(&mut self, mesh: &mut LineMesh) {
         self.buffer_registry
             .destroy_vertex_buffer(self.device, mesh.vertex_buffer_handle);
         self.buffer_registry
@@ -203,8 +208,11 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             )?;
             mesh.index_buffer_handle = index_handle;
         } else {
-            self.buffer_registry
-                .update_index_buffer(self.device, mesh.index_buffer_handle, &mesh.indices)?;
+            self.buffer_registry.update_index_buffer(
+                self.device,
+                mesh.index_buffer_handle,
+                &mesh.indices,
+            )?;
         }
 
         Ok(())
@@ -220,21 +228,23 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
     }
 
     unsafe fn create_billboard_buffers(&mut self, billboard: &mut BillboardData) -> Result<()> {
-        billboard.info.vertex_buffer_handle = self.buffer_registry.create_host_visible_vertex_buffer(
-            self.instance,
-            self.device,
-            &billboard.info.vertices,
-            256,
-        )?;
+        billboard.mesh.vertex_buffer_handle =
+            self.buffer_registry.create_host_visible_vertex_buffer(
+                self.instance,
+                self.device,
+                &billboard.mesh.vertices,
+                256,
+            )?;
 
-        billboard.info.index_buffer_handle = self.buffer_registry.create_host_visible_index_buffer(
-            self.instance,
-            self.device,
-            &billboard.info.indices,
-        )?;
+        billboard.mesh.index_buffer_handle =
+            self.buffer_registry.create_host_visible_index_buffer(
+                self.instance,
+                self.device,
+                &billboard.mesh.indices,
+            )?;
 
         let texture_path = std::path::Path::new("assets/textures/lightIcon.png");
-        billboard.render.texture = Some(
+        billboard.render_state.texture = Some(
             RRImage::new_from_file(
                 self.instance,
                 self.device,
@@ -276,7 +286,9 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         object_index: usize,
         image_index: usize,
     ) -> Result<()> {
-        let ubo = ObjectUBO { model: model_matrix };
+        let ubo = ObjectUBO {
+            model: model_matrix,
+        };
         self.graphics
             .objects
             .update(self.device, image_index, object_index, &ubo)?;

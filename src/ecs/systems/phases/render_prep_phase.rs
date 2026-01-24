@@ -3,7 +3,7 @@ use cgmath::{Matrix4, SquareMatrix, Vector3};
 
 use crate::app::FrameContext;
 use crate::ecs::systems::render_data_systems::{
-    gizmo_mesh_render_data, gizmo_selectable_render_data, line_mesh_render_data,
+    gizmo_mesh_render_data, gizmo_selectable_render_data, grid_mesh_render_data,
 };
 use crate::ecs::{gizmo_update_rotation, gizmo_update_vertex_buffer, ProjectionData};
 use crate::math::get_camera_axes_from_view;
@@ -71,7 +71,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     }
 
     let render_data_vec = vec![
-        line_mesh_render_data(&ctx.grid_mesh(), &ctx.grid_scale()),
+        grid_mesh_render_data(&ctx.grid_mesh()),
         gizmo_mesh_render_data(&ctx.gizmo()),
         gizmo_selectable_render_data(&ctx.light_gizmo(), camera_position),
     ];
@@ -101,14 +101,13 @@ unsafe fn update_billboard_ubo(
     let mut billboard = ctx.billboard_mut();
 
     let model_matrix = billboard
-        .info
         .transform
         .as_ref()
         .map(|t| t.model_matrix)
         .unwrap_or(Matrix4::identity());
 
-    for i in 0..billboard.render.descriptor_set.rrdata.len() {
-        let rrdata = &mut billboard.render.descriptor_set.rrdata[i];
+    for i in 0..billboard.render_state.descriptor_set.rrdata.len() {
+        let rrdata = &mut billboard.render_state.descriptor_set.rrdata[i];
 
         let ubo_billboard = UniformBufferObject {
             model: model_matrix,

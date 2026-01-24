@@ -4,12 +4,11 @@ use cgmath::Vector3;
 
 use crate::asset::AssetStorage;
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
-use crate::debugview::RayTracingDebugState;
+use crate::debugview::{GridMeshData, RayTracingDebugState};
 use crate::ecs::world::{ResMut, ResRef, World};
 use crate::app::billboard::BillboardData;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::app::raytracing::RayTracingData;
-use crate::ecs::component::{LineMesh, MeshScale};
 use crate::scene::camera::Camera;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
@@ -83,20 +82,12 @@ impl<'a> FrameContext<'a> {
         self.rt_debug().light_position
     }
 
-    pub fn grid_mesh(&self) -> ResRef<LineMesh> {
-        self.world.resource::<LineMesh>()
+    pub fn grid_mesh(&self) -> ResRef<GridMeshData> {
+        self.world.resource::<GridMeshData>()
     }
 
-    pub fn grid_mesh_mut(&self) -> ResMut<LineMesh> {
-        self.world.resource_mut::<LineMesh>()
-    }
-
-    pub fn grid_scale(&self) -> ResRef<MeshScale> {
-        self.world.resource::<MeshScale>()
-    }
-
-    pub fn grid_scale_mut(&self) -> ResMut<MeshScale> {
-        self.world.resource_mut::<MeshScale>()
+    pub fn grid_mesh_mut(&self) -> ResMut<GridMeshData> {
+        self.world.resource_mut::<GridMeshData>()
     }
 
     pub fn gizmo(&self) -> ResRef<GridGizmoData> {

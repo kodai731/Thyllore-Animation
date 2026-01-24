@@ -1,7 +1,7 @@
 mod core;
 mod gizmo;
 mod marker;
-mod mesh;
+pub mod mesh;
 mod render;
 
 pub use core::*;

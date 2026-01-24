@@ -1,7 +1,7 @@
 use crate::app::{App, AppData};
 
 use crate::debugview::GridMeshData;
-use crate::ecs::component::RenderInfo;
+use crate::ecs::component::{MeshScale, RenderInfo};
 use crate::ecs::systems::{
     billboard_create_buffers, create_billboard, create_default_grid_scale, create_grid_gizmo,
     create_grid_mesh, create_light_gizmo, gizmo_create_buffers,
@@ -444,6 +444,7 @@ impl App {
         let start = Instant::now();
 
         data.ecs_world.insert_resource(grid_mesh_data);
+        data.ecs_world.insert_resource(grid_scale);
 
         println!("initialized finished");
         Ok(Self {

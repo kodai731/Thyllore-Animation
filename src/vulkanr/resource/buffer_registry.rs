@@ -4,6 +4,7 @@ use std::ptr::copy_nonoverlapping as memcpy;
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
+use crate::ecs::component::mesh::{create_interleaved_buffer, MeshData, VertexLayout};
 use crate::render::{IndexBufferHandle, VertexBufferHandle};
 use crate::vulkanr::buffer::{copy_buffer, create_buffer};
 use crate::vulkanr::command::RRCommandPool;
@@ -292,6 +293,102 @@ impl GpuBufferRegistry {
 
         self.free_vertex_slots.clear();
         self.free_index_slots.clear();
+    }
+
+    pub unsafe fn create_buffer_from_mesh_data(
+        &mut self,
+        instance: &Instance,
+        device: &RRDevice,
+        command_pool: &RRCommandPool,
+        mesh: &MeshData,
+        use_staging: bool,
+    ) -> Result<(VertexBufferHandle, Option<IndexBufferHandle>)> {
+        let layout = VertexLayout::from_mesh_data(mesh);
+        let vertex_data = create_interleaved_buffer(mesh, &layout);
+
+        let vertex_handle = if use_staging {
+            self.create_vertex_buffer_raw(
+                instance,
+                device,
+                command_pool,
+                &vertex_data,
+                true,
+            )?
+        } else {
+            self.create_vertex_buffer_raw(
+                instance,
+                device,
+                command_pool,
+                &vertex_data,
+                false,
+            )?
+        };
+
+        let index_handle = if let Some(indices) = mesh.indices() {
+            Some(self.create_index_buffer(instance, device, command_pool, indices)?)
+        } else {
+            None
+        };
+
+        Ok((vertex_handle, index_handle))
+    }
+
+    unsafe fn create_vertex_buffer_raw(
+        &mut self,
+        instance: &Instance,
+        device: &RRDevice,
+        command_pool: &RRCommandPool,
+        data: &[u8],
+        use_staging: bool,
+    ) -> Result<VertexBufferHandle> {
+        let buffer_size = data.len() as u64;
+
+        let gpu_buffer = if use_staging {
+            self.create_device_local_buffer(
+                instance,
+                device,
+                command_pool,
+                buffer_size,
+                vk::BufferUsageFlags::VERTEX_BUFFER,
+                data.as_ptr(),
+            )?
+        } else {
+            let (buffer, memory) = create_buffer(
+                instance,
+                device,
+                buffer_size.max(256),
+                vk::BufferUsageFlags::VERTEX_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            )?;
+
+            if !data.is_empty() {
+                let ptr = device.device.map_memory(
+                    memory,
+                    0,
+                    buffer_size,
+                    vk::MemoryMapFlags::empty(),
+                )?;
+                std::ptr::copy_nonoverlapping(data.as_ptr(), ptr.cast(), buffer_size as usize);
+                device.device.unmap_memory(memory);
+            }
+
+            GpuBuffer {
+                buffer,
+                memory,
+                size: buffer_size.max(256),
+                is_host_visible: true,
+            }
+        };
+
+        let handle = self.allocate_vertex_slot();
+        let index = handle.index();
+
+        if index >= self.vertex_buffers.len() {
+            self.vertex_buffers.resize_with(index + 1, || None);
+        }
+        self.vertex_buffers[index] = Some(gpu_buffer);
+
+        Ok(handle)
     }
 
     fn allocate_vertex_slot(&mut self) -> VertexBufferHandle {

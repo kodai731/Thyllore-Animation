@@ -31,3 +31,6 @@ log/
 
 # lib
 vendor/
+
+# claude
+.claude/settings.local.json

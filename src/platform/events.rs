@@ -4,17 +4,18 @@ use imgui::MouseButton;
 use winit::event::{Event, WindowEvent};
 
 use super::platform::System;
-use super::ui::{build_click_debug_overlay, build_debug_window, build_hierarchy_window, build_inspector_window, build_viewport_window, DebugWindowState};
+use super::ui::{build_click_debug_overlay, build_debug_window, build_hierarchy_window, build_inspector_window, build_timeline_window, build_viewport_window, DebugWindowState};
+use crate::animation::editable::EditableClipManager;
 use crate::app::{App, GUIData};
 use crate::debugview::RayTracingDebugState;
-use crate::ecs::resource::HierarchyState;
+use crate::ecs::resource::{HierarchyState, TimelineState};
 use crate::ecs::events::UIEvent;
 use crate::ecs::systems::{
     camera_move_to_look_at, collapse_entity, expand_entity, rename_entity,
-    update_entity_scale, update_entity_translation, update_entity_visible,
+    timeline_process_events, update_entity_scale, update_entity_translation, update_entity_visible,
 };
 use crate::ecs::world::Transform;
-use crate::ecs::{process_ui_events_with_events_simple, DeferredAction, UIEventQueue};
+use crate::ecs::{process_ui_events_with_events_simple, AnimationPlayback, DeferredAction, UIEventQueue};
 use crate::scene::camera::Camera;
 
 fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
@@ -157,6 +158,13 @@ impl System {
                             }
 
                             {
+                                let timeline_state = app.data.ecs_world.resource::<TimelineState>();
+                                let clip_manager = app.data.ecs_world.resource::<EditableClipManager>();
+                                let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+                                build_timeline_window(ui, &mut *ui_events, &*timeline_state, &*clip_manager);
+                            }
+
+                            {
                                 let mut rt_debug_mut = app.rt_debug_state_mut();
                                 rt_debug_mut.shadow_strength = debug_state.shadow_strength;
                                 rt_debug_mut.enable_distance_attenuation =
@@ -185,6 +193,7 @@ impl System {
                                         Vec::new()
                                     } else {
                                         process_hierarchy_events_inline(&events, app);
+                                        process_timeline_events_inline(&events, app);
 
                                         let model_bounds =
                                             app.data.graphics_resources.calculate_model_bounds();
@@ -309,4 +318,12 @@ fn process_hierarchy_events_inline(events: &[UIEvent], app: &mut App) {
             _ => {}
         }
     }
+}
+
+fn process_timeline_events_inline(events: &[UIEvent], app: &mut App) {
+    let mut timeline_state = app.data.ecs_world.resource_mut::<TimelineState>();
+    let mut playback = app.data.ecs_world.resource_mut::<AnimationPlayback>();
+    let clip_manager = app.data.ecs_world.resource::<EditableClipManager>();
+
+    timeline_process_events(events, &mut timeline_state, &mut playback, &*clip_manager);
 }

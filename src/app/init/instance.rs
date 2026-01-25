@@ -7,9 +7,10 @@ use crate::ecs::systems::{
     create_grid_mesh, create_light_gizmo, gizmo_create_buffers,
 };
 use crate::vulkanr::VulkanBackend;
+use crate::animation::editable::EditableClipManager;
 use crate::ecs::{
     AnimationPlayback, AnimationRegistry, GpuDescriptors, HierarchyState, MaterialRegistry, MeshAssets, ModelState,
-    NodeAssets, PipelineManager,
+    NodeAssets, PipelineManager, TimelineState,
 };
 use crate::vulkanr::command::*;
 use crate::vulkanr::context::{
@@ -660,6 +661,14 @@ impl App {
 
         if !data.ecs_world.contains_resource::<HierarchyState>() {
             data.ecs_world.insert_resource(HierarchyState::new());
+        }
+
+        if !data.ecs_world.contains_resource::<TimelineState>() {
+            data.ecs_world.insert_resource(TimelineState::new());
+        }
+
+        if !data.ecs_world.contains_resource::<EditableClipManager>() {
+            data.ecs_world.insert_resource(EditableClipManager::new());
         }
     }
 

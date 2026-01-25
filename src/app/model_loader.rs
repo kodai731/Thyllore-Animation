@@ -8,9 +8,10 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::AppData;
 use crate::asset::{AnimationClipAsset, AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
+use crate::animation::editable::EditableClipManager;
 use crate::ecs::playback_play;
 use crate::ecs::resource::{
-    AnimationPlayback, AnimationRegistry, MeshAssets, ModelState, NodeAssets,
+    AnimationPlayback, AnimationRegistry, MeshAssets, ModelState, NodeAssets, TimelineState,
 };
 use crate::ecs::component::EntityIcon;
 use crate::ecs::world::{AnimationState, Transform, World};
@@ -144,6 +145,19 @@ unsafe fn cleanup_resources(
     if world.contains_resource::<AnimationRegistry>() {
         let mut anim_registry = world.resource_mut::<AnimationRegistry>();
         anim_registry.clear();
+    }
+
+    if world.contains_resource::<EditableClipManager>() {
+        let mut clip_manager = world.resource_mut::<EditableClipManager>();
+        clip_manager.clear();
+    }
+
+    if world.contains_resource::<TimelineState>() {
+        let mut timeline_state = world.resource_mut::<TimelineState>();
+        timeline_state.current_clip_id = None;
+        timeline_state.current_time = 0.0;
+        timeline_state.selected_keyframes.clear();
+        timeline_state.expanded_tracks.clear();
     }
 
     if world.contains_resource::<MeshAssets>() {
@@ -622,6 +636,36 @@ fn create_ecs_entities(
             clip: clip.clone(),
         };
         assets.add_animation_clip(clip_asset);
+    }
+
+    let bone_names: std::collections::HashMap<u32, String> = skeletons
+        .iter()
+        .flat_map(|s| s.bones.iter().map(|b| (b.id, b.name.clone())))
+        .collect();
+
+    let mut first_editable_clip_id = None;
+    if world.contains_resource::<EditableClipManager>() {
+        let mut clip_manager = world.resource_mut::<EditableClipManager>();
+        for clip in &clips {
+            let editable_id = clip_manager.create_from_imported(clip, &bone_names);
+            if first_editable_clip_id.is_none() {
+                first_editable_clip_id = Some(editable_id);
+            }
+            crate::log!(
+                "Registered editable clip '{}' (editable_id={}, original_id={})",
+                clip.name,
+                editable_id,
+                clip.id
+            );
+        }
+    }
+
+    if let Some(editable_id) = first_editable_clip_id {
+        if world.contains_resource::<TimelineState>() {
+            let mut timeline_state = world.resource_mut::<TimelineState>();
+            timeline_state.current_clip_id = Some(editable_id);
+            crate::log!("Set timeline current_clip_id to {}", editable_id);
+        }
     }
 
     {

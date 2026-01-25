@@ -108,11 +108,11 @@ pub struct PipelineBuilder {
     descriptor_layouts: Vec<vk::DescriptorSetLayout>,
     msaa_samples: vk::SampleCountFlags,
     custom_render_pass: Option<vk::RenderPass>,
-    mrt_attachment_count: u32, // Number of color attachments for MRT
+    mrt_attachment_count: u32,
+    no_blend_attachments: Vec<u32>,
 }
 
 impl PipelineBuilder {
-    /// Create a new pipeline builder with required shaders
     pub fn new(vertex_shader: &str, fragment_shader: &str) -> Self {
         Self {
             vertex_shader_path: vertex_shader.to_string(),
@@ -129,7 +129,13 @@ impl PipelineBuilder {
             msaa_samples: vk::SampleCountFlags::empty(),
             custom_render_pass: None,
             mrt_attachment_count: 1,
+            no_blend_attachments: vec![],
         }
+    }
+
+    pub fn no_blend_attachment(mut self, attachment_index: u32) -> Self {
+        self.no_blend_attachments.push(attachment_index);
+        self
     }
 
     /// Set custom render pass (for G-Buffer, etc.)
@@ -409,21 +415,20 @@ impl PipelineBuilder {
             .max_depth_bounds(1.0)
             .stencil_test_enable(false);
 
-        // Color blend state
-        let color_blend_attachment = vk::PipelineColorBlendAttachmentState::builder()
-            .color_write_mask(vk::ColorComponentFlags::all())
-            .blend_enable(self.blend.enable)
-            .src_color_blend_factor(self.blend.src_color_factor)
-            .dst_color_blend_factor(self.blend.dst_color_factor)
-            .color_blend_op(self.blend.color_op)
-            .src_alpha_blend_factor(self.blend.src_alpha_factor)
-            .dst_alpha_blend_factor(self.blend.dst_alpha_factor)
-            .alpha_blend_op(self.blend.alpha_op)
-            .build();
-
-        // For MRT system, create multiple attachments
         let color_blend_attachments: Vec<_> = (0..self.mrt_attachment_count)
-            .map(|_| color_blend_attachment)
+            .map(|i| {
+                let blend_enable = self.blend.enable && !self.no_blend_attachments.contains(&i);
+                vk::PipelineColorBlendAttachmentState::builder()
+                    .color_write_mask(vk::ColorComponentFlags::all())
+                    .blend_enable(blend_enable)
+                    .src_color_blend_factor(self.blend.src_color_factor)
+                    .dst_color_blend_factor(self.blend.dst_color_factor)
+                    .color_blend_op(self.blend.color_op)
+                    .src_alpha_blend_factor(self.blend.src_alpha_factor)
+                    .dst_alpha_blend_factor(self.blend.dst_alpha_factor)
+                    .alpha_blend_op(self.blend.alpha_op)
+                    .build()
+            })
             .collect();
         let color_blend_state = vk::PipelineColorBlendStateCreateInfo::builder()
             .logic_op_enable(false)

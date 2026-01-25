@@ -79,7 +79,7 @@ cargo test -- --ignored
 ```
 
 ## ECS Architecture
-** IMPORTANT ** must follow architecture to add file or code, plan new function.
+** IMPORTANT ** MUST follow architecture rule to add file or code, plan new function.
 This project uses an Entity-Component-System (ECS) architecture inspired by [Bevy Engine](https://bevyengine.org/). The design follows these principles:
 
 ### Design Philosophy
@@ -569,6 +569,6 @@ The `memo.txt` file contains useful reference links for:
 Issue History Guidelines
 **IMPORTANT:** If you encounter an issue and resolve it, you must document the issue and its solution in detail at .claude/IssueHistory/
 File names must use CamelCase (e.g., ImageLayoutTransition.md).
-Each issue must be documented in a separate file.
+Each issue must be documented in a separate file, but to avoid huge number of files, try to add issue in a existing file and recap it.
 At the top of each file, include a brief summary of the issue and its resolution to read shortly.
 **IMPORTANT:** You must read all existing issue history files before adding a new one.

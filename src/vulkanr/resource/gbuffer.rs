@@ -18,6 +18,10 @@ pub struct RRGBuffer {
     pub albedo_image_memory: vk::DeviceMemory,
     pub albedo_image_view: vk::ImageView,
 
+    pub object_id_image: vk::Image,
+    pub object_id_image_memory: vk::DeviceMemory,
+    pub object_id_image_view: vk::ImageView,
+
     pub shadow_mask_image: vk::Image,
     pub shadow_mask_image_memory: vk::DeviceMemory,
     pub shadow_mask_image_view: vk::ImageView,
@@ -96,6 +100,27 @@ impl RRGBuffer {
             1,
         )?;
 
+        let (object_id_image, object_id_image_memory) = create_image(
+            instance,
+            rrdevice,
+            width,
+            height,
+            1,
+            vk::SampleCountFlags::_1,
+            vk::Format::R32_UINT,
+            vk::ImageTiling::OPTIMAL,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        )?;
+
+        let object_id_image_view = create_image_view(
+            rrdevice,
+            object_id_image,
+            vk::Format::R32_UINT,
+            vk::ImageAspectFlags::COLOR,
+            1,
+        )?;
+
         let (shadow_mask_image, shadow_mask_image_memory) = create_image(
             instance,
             rrdevice,
@@ -118,7 +143,7 @@ impl RRGBuffer {
         )?;
 
         log::info!(
-            "Created G-Buffer: {}x{} (position, normal, albedo, shadow mask)",
+            "Created G-Buffer: {}x{} (position, normal, albedo, object_id, shadow mask)",
             width,
             height
         );
@@ -133,6 +158,9 @@ impl RRGBuffer {
             albedo_image,
             albedo_image_memory,
             albedo_image_view,
+            object_id_image,
+            object_id_image_memory,
+            object_id_image_view,
             shadow_mask_image,
             shadow_mask_image_memory,
             shadow_mask_image_view,
@@ -153,6 +181,10 @@ impl RRGBuffer {
         device.destroy_image_view(self.albedo_image_view, None);
         device.destroy_image(self.albedo_image, None);
         device.free_memory(self.albedo_image_memory, None);
+
+        device.destroy_image_view(self.object_id_image_view, None);
+        device.destroy_image(self.object_id_image, None);
+        device.free_memory(self.object_id_image_memory, None);
 
         device.destroy_image_view(self.shadow_mask_image_view, None);
         device.destroy_image(self.shadow_mask_image, None);
@@ -194,6 +226,17 @@ impl RRGBuffer {
             command_pool,
             self.albedo_image,
             vk::Format::R8G8B8A8_UNORM,
+            vk::ImageLayout::UNDEFINED,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            1,
+        )?;
+
+        transition_image_layout(
+            rrdevice,
+            rrdevice.graphics_queue,
+            command_pool,
+            self.object_id_image,
+            vk::Format::R32_UINT,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             1,

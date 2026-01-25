@@ -48,6 +48,32 @@ impl<'a> CompositePass<'a> {
         })
     }
 
+    pub fn new_for_offscreen(app: &'a App, offscreen_extent: vk::Extent2D) -> Result<Self> {
+        let composite_pipeline = app
+            .data
+            .raytracing
+            .composite_pipeline
+            .as_ref()
+            .ok_or_else(|| anyhow!("Composite pipeline not initialized"))?;
+        let composite_descriptor = app
+            .data
+            .raytracing
+            .composite_descriptor
+            .as_ref()
+            .ok_or_else(|| anyhow!("Composite descriptor set not initialized"))?;
+
+        Ok(Self {
+            app,
+            composite_pipeline,
+            composite_descriptor,
+            graphics_resources: &app.data.graphics_resources,
+            buffer_registry: &app.data.buffer_registry,
+            device: &app.rrdevice.device,
+            swapchain_extent: offscreen_extent,
+            debug_view_mode: app.rt_debug_state().debug_view_mode,
+        })
+    }
+
     fn pipeline_storage(&self) -> &PipelineStorage {
         self.app.pipeline_storage()
     }
@@ -59,7 +85,7 @@ impl<'a> CompositePass<'a> {
         framebuffer: vk::Framebuffer,
         image_index: usize,
     ) -> Result<()> {
-        self.begin_render_pass(command_buffer, render_pass, framebuffer);
+        self.begin_render_pass(command_buffer, render_pass, framebuffer, 2);
         self.draw_composite(command_buffer)?;
         self.draw_grid(command_buffer, image_index)?;
         self.draw_gizmo(command_buffer, image_index)?;
@@ -92,11 +118,53 @@ impl<'a> CompositePass<'a> {
         Ok(())
     }
 
+    pub unsafe fn record_to_offscreen(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        framebuffer: vk::Framebuffer,
+        image_index: usize,
+    ) -> Result<()> {
+        self.begin_render_pass(command_buffer, render_pass, framebuffer, 3);
+        self.draw_composite(command_buffer)?;
+        self.draw_grid(command_buffer, image_index)?;
+        self.draw_gizmo(command_buffer, image_index)?;
+
+        let grid_mesh = self.app.grid_mesh();
+        let light_gizmo = self.app.light_gizmo();
+        let pipeline_storage = self.pipeline_storage();
+
+        if let Some(pipeline_id) = grid_mesh.render_info.pipeline_id {
+            if let Some(pipeline) = pipeline_storage.get(pipeline_id) {
+                self.draw_line_mesh(
+                    &light_gizmo.ray_to_model,
+                    pipeline,
+                    grid_mesh.render_info.object_index,
+                    command_buffer,
+                    image_index,
+                );
+                self.draw_line_mesh(
+                    &light_gizmo.vertical_lines,
+                    pipeline,
+                    grid_mesh.render_info.object_index,
+                    command_buffer,
+                    image_index,
+                );
+            }
+        }
+
+        self.draw_billboard(command_buffer, image_index)?;
+        self.device.cmd_end_render_pass(command_buffer);
+
+        Ok(())
+    }
+
     unsafe fn begin_render_pass(
         &self,
         command_buffer: vk::CommandBuffer,
         render_pass: vk::RenderPass,
         framebuffer: vk::Framebuffer,
+        attachment_count: usize,
     ) {
         let render_area = vk::Rect2D::builder()
             .offset(vk::Offset2D::default())
@@ -113,7 +181,12 @@ impl<'a> CompositePass<'a> {
                 stencil: 0,
             },
         };
-        let clear_values = [color_clear_value, depth_clear_value];
+
+        let clear_values: Vec<vk::ClearValue> = if attachment_count == 3 {
+            vec![color_clear_value, depth_clear_value, color_clear_value]
+        } else {
+            vec![color_clear_value, depth_clear_value]
+        };
 
         let render_pass_info = vk::RenderPassBeginInfo::builder()
             .render_pass(render_pass)
@@ -167,6 +240,9 @@ impl<'a> CompositePass<'a> {
             DebugViewMode::NdotL => 4,
             DebugViewMode::LightDirection => 5,
             DebugViewMode::ViewDepth => 6,
+            DebugViewMode::ObjectID => 7,
+            DebugViewMode::SelectionView => 8,
+            DebugViewMode::SelectionUBO => 9,
         };
 
         let push_constants = [debug_view_mode_value];

@@ -639,11 +639,9 @@ pub unsafe fn create_texture_sampler(
     rrdevice: &RRDevice,
     mip_levels: u32,
 ) -> Result<(vk::Sampler)> {
-    // Textures are usually accessed through samplers, which will apply filtering and transformations to compute the final color that is retrieved.
-    // anisotorpic filtering, addressing mode(clamp, repeat, ...)
     let info = vk::SamplerCreateInfo::builder()
-        .mag_filter(vk::Filter::LINEAR) // concerns the oversampling problem
-        .min_filter(vk::Filter::LINEAR) // concerns the undersampling problem
+        .mag_filter(vk::Filter::LINEAR)
+        .min_filter(vk::Filter::LINEAR)
         .address_mode_u(vk::SamplerAddressMode::REPEAT)
         .address_mode_v(vk::SamplerAddressMode::REPEAT)
         .address_mode_w(vk::SamplerAddressMode::REPEAT)
@@ -651,7 +649,7 @@ pub unsafe fn create_texture_sampler(
         .max_anisotropy(16.0)
         .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
         .unnormalized_coordinates(false)
-        .compare_enable(false) // If a comparison function is enabled, then texels will first be compared to a value, and the result of that comparison is used in filtering operations., mainly used like shadow maps
+        .compare_enable(false)
         .compare_op(vk::CompareOp::ALWAYS)
         .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
         .mip_lod_bias(0.0)
@@ -660,6 +658,28 @@ pub unsafe fn create_texture_sampler(
     let sampler = rrdevice.device.create_sampler(&info, None)?;
 
     Ok((sampler))
+}
+
+pub unsafe fn create_nearest_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
+    let info = vk::SamplerCreateInfo::builder()
+        .mag_filter(vk::Filter::NEAREST)
+        .min_filter(vk::Filter::NEAREST)
+        .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .anisotropy_enable(false)
+        .max_anisotropy(1.0)
+        .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+        .unnormalized_coordinates(false)
+        .compare_enable(false)
+        .compare_op(vk::CompareOp::ALWAYS)
+        .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
+        .mip_lod_bias(0.0)
+        .min_lod(0.0)
+        .max_lod(0.0);
+    let sampler = rrdevice.device.create_sampler(&info, None)?;
+
+    Ok(sampler)
 }
 
 pub unsafe fn create_texture_image_pixel(

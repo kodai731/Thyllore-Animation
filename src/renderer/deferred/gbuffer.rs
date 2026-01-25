@@ -47,6 +47,7 @@ pub unsafe fn create_gbuffer_framebuffer(
         gbuffer.position_image_view,
         gbuffer.normal_image_view,
         gbuffer.albedo_image_view,
+        gbuffer.object_id_image_view,
         depth_image_view,
     ];
 
@@ -127,7 +128,7 @@ impl<'a> GBufferPass<'a> {
         Ok(())
     }
 
-    fn create_clear_values(&self) -> [vk::ClearValue; 4] {
+    fn create_clear_values(&self) -> [vk::ClearValue; 5] {
         let position_clear = vk::ClearValue {
             color: vk::ClearColorValue {
                 float32: [0.0, 0.0, 0.0, 0.0],
@@ -143,6 +144,11 @@ impl<'a> GBufferPass<'a> {
                 float32: [0.0, 0.0, 0.0, 0.0],
             },
         };
+        let object_id_clear = vk::ClearValue {
+            color: vk::ClearColorValue {
+                uint32: [0, 0, 0, 0],
+            },
+        };
         let depth_clear = vk::ClearValue {
             depth_stencil: vk::ClearDepthStencilValue {
                 depth: 1.0,
@@ -150,7 +156,7 @@ impl<'a> GBufferPass<'a> {
             },
         };
 
-        [position_clear, normal_clear, albedo_clear, depth_clear]
+        [position_clear, normal_clear, albedo_clear, object_id_clear, depth_clear]
     }
 
     unsafe fn bind_pipeline_and_state(&self, command_buffer: vk::CommandBuffer) {
@@ -350,6 +356,16 @@ impl<'a> GBufferPass<'a> {
             2,
             &[object_set],
             &[],
+        );
+
+        let object_id: u32 = (mesh_index + 1) as u32;
+        let object_id_bytes = object_id.to_ne_bytes();
+        self.device.cmd_push_constants(
+            command_buffer,
+            self.pipeline.pipeline_layout,
+            vk::ShaderStageFlags::FRAGMENT,
+            0,
+            &object_id_bytes,
         );
 
         self.device.cmd_draw_indexed(

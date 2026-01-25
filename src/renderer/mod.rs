@@ -26,19 +26,33 @@ impl App {
             .device
             .begin_command_buffer(command_buffer, &begin_info)?;
 
-        if let Some(ref offscreen) = self.data.viewport.offscreen {
-            self.begin_offscreen_render_pass(command_buffer, offscreen);
-            self.record_3d_rendering_to_offscreen(command_buffer, image_index, offscreen)?;
+        let use_gbuffer = self.data.raytracing.is_available()
+            && self.data.viewport.offscreen.is_some();
+
+        if use_gbuffer {
+            deferred::record_gbuffer_pass(self, command_buffer, image_index)?;
+
+            deferred::record_ray_query_pass(self, command_buffer)?;
+
+            deferred::record_composite_to_offscreen(self, command_buffer, image_index)?;
+
+            self.begin_main_render_pass(command_buffer, image_index);
+            self.record_imgui_rendering(command_buffer, draw_data)?;
+            self.rrdevice.device.cmd_end_render_pass(command_buffer);
+        } else {
+            if let Some(ref offscreen) = self.data.viewport.offscreen {
+                self.begin_offscreen_render_pass(command_buffer, offscreen);
+                self.record_3d_rendering_to_offscreen(command_buffer, image_index, offscreen)?;
+                self.rrdevice.device.cmd_end_render_pass(command_buffer);
+            }
+
+            self.begin_main_render_pass(command_buffer, image_index);
+            self.record_imgui_rendering(command_buffer, draw_data)?;
             self.rrdevice.device.cmd_end_render_pass(command_buffer);
         }
-
-        self.begin_main_render_pass(command_buffer, image_index);
-        self.record_imgui_rendering(command_buffer, draw_data)?;
-        self.rrdevice.device.cmd_end_render_pass(command_buffer);
 
         self.rrdevice.device.end_command_buffer(command_buffer)?;
 
         Ok(())
     }
-
 }

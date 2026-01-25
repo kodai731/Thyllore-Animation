@@ -8,8 +8,13 @@ layout(location = 3) in vec4 fragColor;
 layout(location = 0) out vec4 outPosition;
 layout(location = 1) out vec4 outNormal;
 layout(location = 2) out vec4 outAlbedo;
+layout(location = 3) out uint outObjectID;
 
 layout(set = 1, binding = 0) uniform sampler2D texSampler;
+
+layout(push_constant) uniform PushConstants {
+    uint objectID;
+} pc;
 
 void main() {
     vec4 texColor = texture(texSampler, fragTexCoord);
@@ -19,4 +24,5 @@ void main() {
     outPosition = vec4(fragWorldPos, 1.0);
     outNormal = vec4(normalize(fragWorldNormal), 1.0);
     outAlbedo = albedo;
+    outObjectID = pc.objectID;
 }

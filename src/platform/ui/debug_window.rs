@@ -204,6 +204,15 @@ fn build_raytracing_panel(
     if ui.radio_button("View Depth (Green=GBuffer depth)", &mut current_mode, 6) {
         state.debug_view_mode = DebugViewMode::ViewDepth;
     }
+    if ui.radio_button("ObjectID (Color per ID)", &mut current_mode, 7) {
+        state.debug_view_mode = DebugViewMode::ObjectID;
+    }
+    if ui.radio_button("Selection View (Orange=Selected)", &mut current_mode, 8) {
+        state.debug_view_mode = DebugViewMode::SelectionView;
+    }
+    if ui.radio_button("SelectionUBO (R=count, G=id0)", &mut current_mode, 9) {
+        state.debug_view_mode = DebugViewMode::SelectionUBO;
+    }
 }
 
 fn build_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, gui_data: &mut GUIData) {

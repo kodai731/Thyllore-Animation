@@ -297,14 +297,6 @@ impl RRCompositeDescriptorSet {
         }
         ubo.selected_count = count as u32;
 
-        if count > 0 {
-            crate::log!(
-                "SelectionUBO: count={}, ids[0]={:?}",
-                ubo.selected_count,
-                ubo.selected_ids[0]
-            );
-        }
-
         let memory = rrdevice.device.map_memory(
             self.selection_buffer_memory,
             0,

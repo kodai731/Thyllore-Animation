@@ -40,30 +40,15 @@ fn collect_selected_mesh_ids(app: &App) -> Vec<u32> {
     let hierarchy_state = app.data.ecs_world.resource::<HierarchyState>();
     let mut selected_ids = Vec::new();
 
-    let selection_count = hierarchy_state.multi_selection.len();
-    if selection_count > 0 {
-        crate::log!("collect_selected_mesh_ids: {} entities selected", selection_count);
-    }
-
     for &entity in hierarchy_state.multi_selection.iter() {
-        let has_mesh_ref = app.data.ecs_world.get_component::<MeshRef>(entity).is_some();
-        crate::log!("  entity {:?}: has_mesh_ref={}", entity, has_mesh_ref);
-
         if let Some(mesh_ref) = app.data.ecs_world.get_component::<MeshRef>(entity) {
             if let Some(mesh_asset) = app.data.ecs_assets.get_mesh(mesh_ref.mesh_asset_id) {
                 let mesh_id = (mesh_asset.graphics_mesh_index + 1) as u32;
-                crate::log!("    -> mesh_id={}", mesh_id);
                 if !selected_ids.contains(&mesh_id) {
                     selected_ids.push(mesh_id);
                 }
-            } else {
-                crate::log!("    -> mesh_asset not found for mesh_asset_id={}", mesh_ref.mesh_asset_id);
             }
         }
-    }
-
-    if !selected_ids.is_empty() {
-        crate::log!("collect_selected_mesh_ids: result={:?}", selected_ids);
     }
 
     selected_ids

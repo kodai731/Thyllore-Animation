@@ -6,7 +6,7 @@ use cgmath::{Matrix4, SquareMatrix, Vector3};
 
 use crate::animation::AnimationClipId;
 use crate::asset::AssetId;
-use crate::ecs::component::{Animated, EditorDisplay, MeshHandle, Model, Skinned};
+use crate::ecs::component::{Animated, EditorDisplay, EntityIcon, MeshHandle, Model, Skinned};
 
 pub trait Resource: Any + 'static {}
 impl<T: Any + 'static> Resource for T {}
@@ -573,6 +573,14 @@ impl<'a> EntityBuilder<'a> {
                 joint_indices,
                 inverse_bind_matrices,
             },
+        );
+        self
+    }
+
+    pub fn with_editor_display(self, icon: EntityIcon, expanded: bool) -> Self {
+        self.world.insert_component(
+            self.entity,
+            EditorDisplay::new(icon).with_expanded(expanded),
         );
         self
     }

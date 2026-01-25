@@ -23,7 +23,8 @@
       "Bash(Select-String -Pattern \"error|src\\\\\")",
       "Bash(Select-Object -First 60)",
       "Bash(1)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []

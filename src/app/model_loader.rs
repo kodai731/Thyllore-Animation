@@ -12,6 +12,7 @@ use crate::ecs::playback_play;
 use crate::ecs::resource::{
     AnimationPlayback, AnimationRegistry, MeshAssets, ModelState, NodeAssets,
 };
+use crate::ecs::component::EntityIcon;
 use crate::ecs::world::{AnimationState, Transform, World};
 use crate::loader::texture::load_png_image;
 use crate::loader::{ModelLoadResult, TextureSource};
@@ -636,8 +637,22 @@ fn create_ecs_entities(
         }
     }
 
+    let parent_entity = world
+        .entity()
+        .with_name(&name)
+        .with_transform(Transform::default())
+        .with_visible(true)
+        .with_editor_display(EntityIcon::Model, true)
+        .build();
+
+    crate::log!(
+        "Created parent entity '{}': entity_id={}",
+        name,
+        parent_entity
+    );
+
     for (mesh_idx, mesh) in graphics.meshes.iter().enumerate() {
-        let entity_name = format!("{}_{}", name, mesh_idx);
+        let entity_name = format!("{}_{:02}", name, mesh_idx + 1);
 
         let mesh_asset = MeshAsset {
             id: 0,
@@ -656,6 +671,8 @@ fn create_ecs_entities(
             .with_name(&entity_name)
             .with_transform(Transform::default())
             .with_visible(true)
+            .with_parent(parent_entity)
+            .with_editor_display(EntityIcon::Mesh, false)
             .with_mesh(asset_id, mesh.object_index);
 
         if has_animation {
@@ -666,11 +683,12 @@ fn create_ecs_entities(
 
         let entity = builder.build();
         crate::log!(
-            "Created ECS entity {} (asset_id={}) for mesh {}: entity_id={}",
+            "Created ECS entity {} (asset_id={}) for mesh {}: entity_id={}, parent={}",
             entity_name,
             asset_id,
             mesh_idx,
-            entity
+            entity,
+            parent_entity
         );
     }
 

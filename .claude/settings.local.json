@@ -24,7 +24,8 @@
       "Bash(Select-Object -First 60)",
       "Bash(1)",
       "Bash(find:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "WebFetch(domain:docs.unity3d.com)"
     ],
     "deny": [],
     "ask": []

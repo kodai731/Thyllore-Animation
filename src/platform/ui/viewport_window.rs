@@ -19,7 +19,8 @@ pub fn build_viewport_window(
     let hierarchy_width = 250.0;
     let inspector_width = 300.0;
     let debug_height = 250.0;
-    let main_height = display_size[1] - debug_height;
+    let timeline_height = 300.0;
+    let main_height = display_size[1] - debug_height - timeline_height;
     let viewport_width = display_size[0] - hierarchy_width - inspector_width;
     let viewport_x = hierarchy_width;
 

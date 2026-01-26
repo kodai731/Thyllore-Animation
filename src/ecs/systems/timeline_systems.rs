@@ -28,7 +28,9 @@ pub fn timeline_process_events(
             }
 
             UIEvent::TimelineSetTime(time) => {
+                timeline_state.playing = false;
                 timeline_state.set_time(*time);
+                playback.playing = false;
                 playback.time = *time;
             }
 

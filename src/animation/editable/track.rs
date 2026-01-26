@@ -108,4 +108,16 @@ impl BoneTrack {
     pub fn has_scale_keyframes(&self) -> bool {
         !self.scale_x.is_empty() || !self.scale_y.is_empty() || !self.scale_z.is_empty()
     }
+
+    pub fn collect_all_keyframe_times(&self) -> Vec<f32> {
+        let mut times: Vec<f32> = self
+            .all_curves()
+            .iter()
+            .flat_map(|c| c.keyframes.iter().map(|kf| kf.time))
+            .collect();
+
+        times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        times.dedup_by(|a, b| (*a - *b).abs() < 0.001);
+        times
+    }
 }

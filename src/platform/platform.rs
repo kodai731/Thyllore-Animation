@@ -23,7 +23,7 @@ pub fn init(title: &str) -> System {
 
     let builder = WindowBuilder::new()
         .with_title(title)
-        .with_inner_size(LogicalSize::new(1524, 1524));
+        .with_inner_size(LogicalSize::new(1524, 1724));
     let window = builder.build(&event_loop).expect("Failed to create window");
 
     let mut imgui = Context::create();

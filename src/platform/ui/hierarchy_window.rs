@@ -14,7 +14,8 @@ pub fn build_hierarchy_window(
     let display_size = ui.io().display_size;
     let hierarchy_width = 250.0;
     let debug_height = 250.0;
-    let main_height = display_size[1] - debug_height;
+    let timeline_height = 300.0;
+    let main_height = display_size[1] - debug_height - timeline_height;
 
     ui.window("Hierarchy")
         .position([0.0, 0.0], Condition::Always)

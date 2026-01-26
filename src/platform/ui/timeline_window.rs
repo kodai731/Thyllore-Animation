@@ -5,12 +5,13 @@ use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::TimelineState;
 
+use super::CurveEditorState;
+
 const TRACK_LABEL_WIDTH: f32 = 150.0;
 const TRACK_HEIGHT: f32 = 24.0;
 const CURVE_HEIGHT: f32 = 60.0;
 const TIME_RULER_HEIGHT: f32 = 30.0;
 const MAX_VISIBLE_TRACKS: usize = 10;
-const CURVE_SAMPLES: usize = 40;
 const PIXELS_PER_SECOND: f32 = 80.0;
 const PLAYHEAD_HANDLE_SIZE: f32 = 10.0;
 
@@ -19,6 +20,7 @@ pub fn build_timeline_window(
     ui_events: &mut UIEventQueue,
     state: &TimelineState,
     clip_manager: &EditableClipManager,
+    curve_editor_state: &mut CurveEditorState,
 ) {
     let display_size = ui.io().display_size;
     let timeline_height = 300.0;
@@ -32,7 +34,7 @@ pub fn build_timeline_window(
         .movable(false)
         .collapsible(false)
         .build(|| {
-            build_transport_controls(ui, ui_events, state, clip_manager);
+            build_transport_controls(ui, ui_events, state, clip_manager, curve_editor_state);
             ui.separator();
             build_timeline_content(ui, ui_events, state, clip_manager);
         });
@@ -43,6 +45,7 @@ fn build_transport_controls(
     ui_events: &mut UIEventQueue,
     state: &TimelineState,
     clip_manager: &EditableClipManager,
+    curve_editor_state: &mut CurveEditorState,
 ) {
     if state.playing {
         if ui.button("||") {
@@ -85,6 +88,14 @@ fn build_transport_controls(
     }
     ui.same_line();
     ui.text(format!("Zoom: {:.1}x", state.zoom_level));
+
+    ui.same_line();
+    if ui.button("Curve Editor") {
+        curve_editor_state.is_open = true;
+        if let Some(first_bone_id) = current_clip.and_then(|c| c.tracks.keys().next().copied()) {
+            curve_editor_state.selected_bone_id = Some(first_bone_id);
+        }
+    }
 
     build_clip_selector(ui, ui_events, state, clip_manager);
 }
@@ -484,6 +495,7 @@ fn draw_curve_area(
             duration,
             pixels_per_second,
             CURVE_HEIGHT,
+            timeline_width,
         );
     }
 
@@ -498,18 +510,21 @@ fn draw_single_curve(
     duration: f32,
     pixels_per_second: f32,
     height: f32,
+    timeline_width: f32,
 ) {
     if curve.keyframes.is_empty() {
         return;
     }
 
+    let sample_count = calculate_sample_count(timeline_width);
+
     let (min_val, max_val) = calculate_value_range(curve);
     let value_range = (max_val - min_val).max(0.001);
 
-    let step = duration / CURVE_SAMPLES as f32;
+    let step = duration / sample_count as f32;
     let mut prev_point: Option<[f32; 2]> = None;
 
-    for i in 0..=CURVE_SAMPLES {
+    for i in 0..=sample_count {
         let time = (i as f32) * step;
         if let Some(value) = curve.sample(time) {
             let x = cursor_pos[0] + time * pixels_per_second;
@@ -553,6 +568,13 @@ fn calculate_value_range(curve: &PropertyCurve) -> (f32, f32) {
     }
 
     (min_val, max_val)
+}
+
+fn calculate_sample_count(width: f32) -> usize {
+    let base_samples = 30;
+    let samples_per_100px = 10;
+    let additional = ((width / 100.0) as usize) * samples_per_100px;
+    (base_samples + additional).min(150)
 }
 
 fn draw_track_playhead(

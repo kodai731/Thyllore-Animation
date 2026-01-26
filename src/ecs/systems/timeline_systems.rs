@@ -6,7 +6,7 @@ pub fn timeline_process_events(
     events: &[UIEvent],
     timeline_state: &mut TimelineState,
     playback: &mut AnimationPlayback,
-    clip_manager: &EditableClipManager,
+    clip_manager: &mut EditableClipManager,
 ) {
     for event in events {
         match event {
@@ -73,6 +73,22 @@ pub fn timeline_process_events(
             UIEvent::TimelineAddKeyframe { .. } => {}
 
             UIEvent::TimelineDeleteSelectedKeyframes => {}
+
+            UIEvent::TimelineMoveKeyframe {
+                bone_id,
+                property_type,
+                keyframe_id,
+                new_time,
+                new_value,
+            } => {
+                if let Some(clip_id) = timeline_state.current_clip_id {
+                    if let Some(clip) = clip_manager.get_mut(clip_id) {
+                        if let Some(track) = clip.tracks.get_mut(bone_id) {
+                            track.move_keyframe(*property_type, *keyframe_id, *new_time, *new_value);
+                        }
+                    }
+                }
+            }
 
             UIEvent::TimelineZoomIn => {
                 timeline_state.zoom_in();

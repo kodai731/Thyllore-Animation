@@ -59,6 +59,13 @@ pub enum UIEvent {
         value: f32,
     },
     TimelineDeleteSelectedKeyframes,
+    TimelineMoveKeyframe {
+        bone_id: BoneId,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+        new_time: f32,
+        new_value: f32,
+    },
     TimelineZoomIn,
     TimelineZoomOut,
 }

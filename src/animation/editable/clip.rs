@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cgmath::{Quaternion, Vector3};
+use cgmath::{Deg, Euler, Quaternion, Rad, Vector3};
 use serde::{Deserialize, Serialize};
 
 use crate::animation::{AnimationClip, BoneId, Keyframe, TransformChannel};
@@ -57,10 +57,10 @@ impl EditableAnimationClip {
             }
 
             for kf in &channel.rotation {
-                track.rotation_x.add_keyframe(kf.time, kf.value.v.x);
-                track.rotation_y.add_keyframe(kf.time, kf.value.v.y);
-                track.rotation_z.add_keyframe(kf.time, kf.value.v.z);
-                track.rotation_w.add_keyframe(kf.time, kf.value.s);
+                let euler = quaternion_to_euler_degrees(&kf.value);
+                track.rotation_x.add_keyframe(kf.time, euler.x);
+                track.rotation_y.add_keyframe(kf.time, euler.y);
+                track.rotation_z.add_keyframe(kf.time, euler.z);
             }
 
             for kf in &channel.scale {
@@ -101,16 +101,16 @@ impl EditableAnimationClip {
                 &track.rotation_x,
                 &track.rotation_y,
                 &track.rotation_z,
-                &track.rotation_w,
             ]);
             for time in rotation_times {
-                let x = track.rotation_x.sample(time).unwrap_or(0.0);
-                let y = track.rotation_y.sample(time).unwrap_or(0.0);
-                let z = track.rotation_z.sample(time).unwrap_or(0.0);
-                let w = track.rotation_w.sample(time).unwrap_or(1.0);
+                let ex = track.rotation_x.sample(time).unwrap_or(0.0);
+                let ey = track.rotation_y.sample(time).unwrap_or(0.0);
+                let ez = track.rotation_z.sample(time).unwrap_or(0.0);
+                let q = euler_degrees_to_quaternion(ex, ey, ez);
+
                 channel.rotation.push(Keyframe {
                     time,
-                    value: Quaternion::new(w, x, y, z),
+                    value: q,
                 });
             }
 
@@ -205,6 +205,42 @@ fn collect_unique_times(curves: &[&super::curve::PropertyCurve]) -> Vec<f32> {
     times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     times.dedup_by(|a, b| (*a - *b).abs() < 0.0001);
     times
+}
+
+fn quaternion_to_euler_degrees(q: &Quaternion<f32>) -> Vector3<f32> {
+    let sinr_cosp = 2.0 * (q.s * q.v.x + q.v.y * q.v.z);
+    let cosr_cosp = 1.0 - 2.0 * (q.v.x * q.v.x + q.v.y * q.v.y);
+    let roll = sinr_cosp.atan2(cosr_cosp);
+
+    let sinp = 2.0 * (q.s * q.v.y - q.v.z * q.v.x);
+    let pitch = if sinp.abs() >= 1.0 {
+        std::f32::consts::FRAC_PI_2.copysign(sinp)
+    } else {
+        sinp.asin()
+    };
+
+    let siny_cosp = 2.0 * (q.s * q.v.z + q.v.x * q.v.y);
+    let cosy_cosp = 1.0 - 2.0 * (q.v.y * q.v.y + q.v.z * q.v.z);
+    let yaw = siny_cosp.atan2(cosy_cosp);
+
+    Vector3::new(
+        roll.to_degrees(),
+        pitch.to_degrees(),
+        yaw.to_degrees(),
+    )
+}
+
+fn euler_degrees_to_quaternion(x_deg: f32, y_deg: f32, z_deg: f32) -> Quaternion<f32> {
+    let euler = Euler {
+        x: Deg(x_deg),
+        y: Deg(y_deg),
+        z: Deg(z_deg),
+    };
+    Quaternion::from(Euler {
+        x: Rad::from(euler.x),
+        y: Rad::from(euler.y),
+        z: Rad::from(euler.z),
+    })
 }
 
 impl Default for EditableAnimationClip {

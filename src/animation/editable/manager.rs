@@ -5,7 +5,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
-use crate::animation::{AnimationClip, BoneId};
+use crate::animation::{AnimationClip, AnimationClipId, BoneId};
 
 use super::clip::EditableAnimationClip;
 use super::keyframe::EditableClipId;
@@ -15,6 +15,7 @@ pub struct EditableClipManager {
     clips: HashMap<EditableClipId, EditableAnimationClip>,
     dirty_clips: HashSet<EditableClipId>,
     next_clip_id: EditableClipId,
+    editable_to_anim_id: HashMap<EditableClipId, AnimationClipId>,
 }
 
 impl EditableClipManager {
@@ -23,6 +24,7 @@ impl EditableClipManager {
             clips: HashMap::new(),
             dirty_clips: HashSet::new(),
             next_clip_id: 1,
+            editable_to_anim_id: HashMap::new(),
         }
     }
 
@@ -36,6 +38,7 @@ impl EditableClipManager {
 
         let editable = EditableAnimationClip::from_animation_clip(id, clip, bone_names);
         self.clips.insert(id, editable);
+        self.editable_to_anim_id.insert(id, clip.id);
         id
     }
 
@@ -95,6 +98,26 @@ impl EditableClipManager {
     pub fn clear(&mut self) {
         self.clips.clear();
         self.dirty_clips.clear();
+        self.editable_to_anim_id.clear();
+    }
+
+    pub fn sync_dirty_to_animation_clips(&mut self, anim_clips: &mut Vec<AnimationClip>) {
+        for editable_id in self.dirty_clips.drain() {
+            let (clip, anim_id) = match (
+                self.clips.get(&editable_id),
+                self.editable_to_anim_id.get(&editable_id),
+            ) {
+                (Some(c), Some(&id)) => (c, id),
+                _ => continue,
+            };
+
+            let mut playable = clip.to_animation_clip();
+            playable.id = anim_id;
+
+            if let Some(target) = anim_clips.iter_mut().find(|c| c.id == anim_id) {
+                *target = playable;
+            }
+        }
     }
 
     pub fn clip_names(&self) -> Vec<(EditableClipId, String)> {

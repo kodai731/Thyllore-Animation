@@ -643,8 +643,15 @@ fn create_ecs_entities(
         .flat_map(|s| s.bones.iter().map(|b| (b.id, b.name.clone())))
         .collect();
 
+    if !world.contains_resource::<EditableClipManager>() {
+        world.insert_resource(EditableClipManager::new());
+    }
+    if !world.contains_resource::<TimelineState>() {
+        world.insert_resource(TimelineState::new());
+    }
+
     let mut first_editable_clip_id = None;
-    if world.contains_resource::<EditableClipManager>() {
+    {
         let mut clip_manager = world.resource_mut::<EditableClipManager>();
         for clip in &clips {
             let editable_id = clip_manager.create_from_imported(clip, &bone_names);
@@ -661,11 +668,9 @@ fn create_ecs_entities(
     }
 
     if let Some(editable_id) = first_editable_clip_id {
-        if world.contains_resource::<TimelineState>() {
-            let mut timeline_state = world.resource_mut::<TimelineState>();
-            timeline_state.current_clip_id = Some(editable_id);
-            crate::log!("Set timeline current_clip_id to {}", editable_id);
-        }
+        let mut timeline_state = world.resource_mut::<TimelineState>();
+        timeline_state.current_clip_id = Some(editable_id);
+        crate::log!("Set timeline current_clip_id to {}", editable_id);
     }
 
     {

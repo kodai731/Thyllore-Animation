@@ -5,6 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **IMPORTANT**: This file must be written in English for Claude's optimal understanding.
 Always respond to the user in user's Claude setting language, but keep this documentation in English.
 
+## Code Format
+**IMPORTANT**: Must follow PROJECT_ROOT/rustfmt.toml on coding
+
 ## Project Overview
 
 This is a Rust-based Vulkan rendering engine with support for:

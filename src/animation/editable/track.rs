@@ -15,7 +15,6 @@ pub struct BoneTrack {
     pub rotation_x: PropertyCurve,
     pub rotation_y: PropertyCurve,
     pub rotation_z: PropertyCurve,
-    pub rotation_w: PropertyCurve,
     pub scale_x: PropertyCurve,
     pub scale_y: PropertyCurve,
     pub scale_z: PropertyCurve,
@@ -32,10 +31,9 @@ impl BoneTrack {
             rotation_x: PropertyCurve::new(base_curve_id + 3, PropertyType::RotationX),
             rotation_y: PropertyCurve::new(base_curve_id + 4, PropertyType::RotationY),
             rotation_z: PropertyCurve::new(base_curve_id + 5, PropertyType::RotationZ),
-            rotation_w: PropertyCurve::new(base_curve_id + 6, PropertyType::RotationW),
-            scale_x: PropertyCurve::new(base_curve_id + 7, PropertyType::ScaleX),
-            scale_y: PropertyCurve::new(base_curve_id + 8, PropertyType::ScaleY),
-            scale_z: PropertyCurve::new(base_curve_id + 9, PropertyType::ScaleZ),
+            scale_x: PropertyCurve::new(base_curve_id + 6, PropertyType::ScaleX),
+            scale_y: PropertyCurve::new(base_curve_id + 7, PropertyType::ScaleY),
+            scale_z: PropertyCurve::new(base_curve_id + 8, PropertyType::ScaleZ),
         }
     }
 
@@ -47,7 +45,6 @@ impl BoneTrack {
             PropertyType::RotationX => &self.rotation_x,
             PropertyType::RotationY => &self.rotation_y,
             PropertyType::RotationZ => &self.rotation_z,
-            PropertyType::RotationW => &self.rotation_w,
             PropertyType::ScaleX => &self.scale_x,
             PropertyType::ScaleY => &self.scale_y,
             PropertyType::ScaleZ => &self.scale_z,
@@ -62,14 +59,13 @@ impl BoneTrack {
             PropertyType::RotationX => &mut self.rotation_x,
             PropertyType::RotationY => &mut self.rotation_y,
             PropertyType::RotationZ => &mut self.rotation_z,
-            PropertyType::RotationW => &mut self.rotation_w,
             PropertyType::ScaleX => &mut self.scale_x,
             PropertyType::ScaleY => &mut self.scale_y,
             PropertyType::ScaleZ => &mut self.scale_z,
         }
     }
 
-    pub fn all_curves(&self) -> [&PropertyCurve; 10] {
+    pub fn all_curves(&self) -> [&PropertyCurve; 9] {
         [
             &self.translation_x,
             &self.translation_y,
@@ -77,7 +73,6 @@ impl BoneTrack {
             &self.rotation_x,
             &self.rotation_y,
             &self.rotation_z,
-            &self.rotation_w,
             &self.scale_x,
             &self.scale_y,
             &self.scale_z,
@@ -102,7 +97,6 @@ impl BoneTrack {
         !self.rotation_x.is_empty()
             || !self.rotation_y.is_empty()
             || !self.rotation_z.is_empty()
-            || !self.rotation_w.is_empty()
     }
 
     pub fn has_scale_keyframes(&self) -> bool {

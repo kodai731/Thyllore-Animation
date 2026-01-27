@@ -3,7 +3,7 @@ use cgmath::Vector3;
 
 use crate::app::FrameContext;
 use crate::ecs::context::EcsContext;
-use crate::ecs::resource::{AnimationPlayback, TimelineState};
+use crate::ecs::resource::{AnimationPlayback, AnimationRegistry, TimelineState};
 use crate::animation::editable::EditableClipManager;
 use crate::app::graphics_resource::GraphicsResources;
 
@@ -52,8 +52,18 @@ fn run_timeline_phase(ctx: &mut FrameContext) {
     let mut timeline_state = ctx.world.resource_mut::<TimelineState>();
     let mut playback = ctx.world.resource_mut::<AnimationPlayback>();
     let clip_manager = ctx.world.resource::<EditableClipManager>();
-
     timeline_update(&mut timeline_state, &mut playback, &*clip_manager, ctx.delta_time);
+    drop(clip_manager);
+    drop(playback);
+    drop(timeline_state);
+
+    sync_editable_clips_to_registry(ctx);
+}
+
+fn sync_editable_clips_to_registry(ctx: &mut FrameContext) {
+    let mut clip_manager = ctx.world.resource_mut::<EditableClipManager>();
+    let mut anim_registry = ctx.world.resource_mut::<AnimationRegistry>();
+    clip_manager.sync_dirty_to_animation_clips(&mut anim_registry.animation.clips);
 }
 
 fn collect_mesh_positions(graphics: &GraphicsResources) -> Vec<Vector3<f32>> {

@@ -130,7 +130,8 @@ unsafe fn create_logical_device(
     let features = vk::PhysicalDeviceFeatures::builder()
         .sampler_anisotropy(true)
         .sample_rate_shading(true)
-        .fill_mode_non_solid(true);
+        .fill_mode_non_solid(true)
+        .independent_blend(true);
 
     let mut acceleration_structure_features = vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
         .acceleration_structure(true);

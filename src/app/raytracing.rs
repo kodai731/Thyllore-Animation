@@ -10,7 +10,7 @@ use crate::vulkanr::data::{self as vulkan_data, SceneUniformData};
 use crate::vulkanr::descriptor::{
     RRRayQueryDescriptorSet, RRCompositeDescriptorSet, RRBillboardDescriptorSet
 };
-use crate::vulkanr::image::create_texture_sampler;
+use crate::vulkanr::image::{create_texture_sampler, create_nearest_sampler};
 use crate::vulkanr::pipeline::{PipelineBuilder, RRPipeline, VertexInputConfig, PushConstantConfig};
 use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::render::RRRender;
@@ -22,6 +22,7 @@ pub struct RayTracingData {
     pub gbuffer: Option<RRGBuffer>,
     pub gbuffer_pipeline: Option<RRPipeline>,
     pub gbuffer_sampler: Option<vk::Sampler>,
+    pub object_id_sampler: Option<vk::Sampler>,
 
     pub acceleration_structure: Option<RRAccelerationStructure>,
 
@@ -133,6 +134,8 @@ impl RayTracingData {
         rrrender: &RRRender,
         graphics_resources: &GraphicsResources,
         billboard_descriptor_set: &mut RRBillboardDescriptorSet,
+        offscreen_render_pass: Option<vk::RenderPass>,
+        offscreen_extent: Option<vk::Extent2D>,
     ) -> Result<()> {
         crate::log!("create_pipelines: starting...");
         crate::log!("create_pipelines: gbuffer is_some: {}", self.gbuffer.is_some());
@@ -144,6 +147,12 @@ impl RayTracingData {
             graphics_resources.objects.layout,
         ];
 
+        let push_constant_range = vk::PushConstantRange::builder()
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .offset(0)
+            .size(std::mem::size_of::<u32>() as u32)
+            .build();
+
         let gbuffer_pipeline = PipelineBuilder::new(
             "assets/shaders/gbufferVert.spv",
             "assets/shaders/gbufferFrag.spv",
@@ -152,9 +161,15 @@ impl RayTracingData {
         .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
         .polygon_mode(vk::PolygonMode::FILL)
         .custom_render_pass(rrrender.gbuffer_render_pass)
-        .mrt_attachments(3)
+        .mrt_attachments(4)
+        .no_blend_attachment(3)
         .msaa_samples(vk::SampleCountFlags::_1)
         .descriptor_layouts(render_layouts.to_vec())
+        .push_constants(PushConstantConfig {
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            offset: 0,
+            size: std::mem::size_of::<u32>() as u32,
+        })
         .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))?;
 
         self.gbuffer_pipeline = Some(gbuffer_pipeline);
@@ -208,14 +223,20 @@ impl RayTracingData {
         let gbuffer_sampler = create_texture_sampler(rrdevice, 1)?;
         self.gbuffer_sampler = Some(gbuffer_sampler);
 
+        let object_id_sampler = create_nearest_sampler(rrdevice)?;
+        self.object_id_sampler = Some(object_id_sampler);
+
         let mut composite_descriptor = RRCompositeDescriptorSet {
             descriptor_set_layout: RRCompositeDescriptorSet::create_layout(rrdevice)?,
             descriptor_pool: RRCompositeDescriptorSet::create_pool(rrdevice)?,
             descriptor_set: vk::DescriptorSet::null(),
+            selection_buffer: vk::Buffer::null(),
+            selection_buffer_memory: vk::DeviceMemory::null(),
         };
 
         if let Some(ref gbuffer) = self.gbuffer {
             composite_descriptor.allocate_and_update(
+                instance,
                 rrdevice,
                 gbuffer.position_image_view,
                 gbuffer_sampler,
@@ -226,6 +247,8 @@ impl RayTracingData {
                 gbuffer.albedo_image_view,
                 gbuffer_sampler,
                 scene_buffer,
+                gbuffer.object_id_image_view,
+                object_id_sampler,
             )?;
 
             billboard_descriptor_set.update_position_sampler(
@@ -237,7 +260,7 @@ impl RayTracingData {
             log::info!("Updated billboard descriptor set with G-Buffer position sampler");
         }
 
-        let composite_pipeline = PipelineBuilder::new(
+        let mut composite_builder = PipelineBuilder::new(
             "assets/shaders/compositeVert.spv",
             "assets/shaders/compositeFrag.spv",
         )
@@ -253,8 +276,15 @@ impl RayTracingData {
             stage_flags: vk::ShaderStageFlags::FRAGMENT,
             offset: 0,
             size: 4,
-        })
-        .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))?;
+        });
+
+        if let Some(render_pass) = offscreen_render_pass {
+            composite_builder = composite_builder.custom_render_pass(render_pass);
+            crate::log!("create_pipelines: using offscreen render pass for composite pipeline");
+        }
+
+        let extent = offscreen_extent.unwrap_or(rrswapchain.swapchain_extent);
+        let composite_pipeline = composite_builder.build(rrdevice, rrrender, Some(extent))?;
 
         self.composite_pipeline = Some(composite_pipeline);
         self.composite_descriptor = Some(composite_descriptor);

@@ -56,6 +56,13 @@ impl App {
         rrswapchain: &RRSwapchain,
         rrrender: &RRRender,
     ) -> Result<()> {
+        let (offscreen_render_pass, offscreen_extent) =
+            if let Some(ref offscreen) = data.viewport.offscreen {
+                (Some(offscreen.render_pass), Some(offscreen.extent()))
+            } else {
+                (None, None)
+            };
+
         let mut billboard = data.ecs_world.resource_mut::<BillboardData>();
         data.raytracing.create_pipelines(
             instance,
@@ -64,6 +71,8 @@ impl App {
             rrrender,
             &data.graphics_resources,
             &mut billboard.render_state.descriptor_set,
+            offscreen_render_pass,
+            offscreen_extent,
         )
     }
 }

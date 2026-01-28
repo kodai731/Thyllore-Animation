@@ -296,6 +296,8 @@ fn slerp(a: Quaternion<f32>, b: Quaternion<f32>, t: f32) -> Quaternion<f32> {
         (b, dot)
     };
 
+    let dot = dot.clamp(-1.0, 1.0);
+
     if dot > 0.9995 {
         let result = Quaternion::new(
             a.s + t * (b.s - a.s),
@@ -307,19 +309,18 @@ fn slerp(a: Quaternion<f32>, b: Quaternion<f32>, t: f32) -> Quaternion<f32> {
     }
 
     let theta_0 = dot.acos();
-    let theta = theta_0 * t;
-    let sin_theta = theta.sin();
     let sin_theta_0 = theta_0.sin();
 
-    let s0 = (theta_0 - theta).cos() - dot * sin_theta / sin_theta_0;
-    let s1 = sin_theta / sin_theta_0;
+    let s0 = ((1.0 - t) * theta_0).sin() / sin_theta_0;
+    let s1 = (t * theta_0).sin() / sin_theta_0;
 
-    Quaternion::new(
+    let result = Quaternion::new(
         s0 * a.s + s1 * b.s,
         s0 * a.v.x + s1 * b.v.x,
         s0 * a.v.y + s1 * b.v.y,
         s0 * a.v.z + s1 * b.v.z,
-    )
+    );
+    normalize_quat(result)
 }
 
 fn normalize_quat(q: Quaternion<f32>) -> Quaternion<f32> {

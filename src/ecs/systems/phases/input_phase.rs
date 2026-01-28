@@ -14,7 +14,8 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
 
     process_gizmo_interaction(ctx)?;
 
-    if !ctx.light_gizmo().selectable.is_selected {
+    let viewport_hovered = ctx.gui_data.viewport_hovered;
+    if !ctx.light_gizmo().selectable.is_selected && viewport_hovered {
         let grid_scale = ctx.grid_scale().value();
         let is_left_clicked = ctx.gui_data.is_left_clicked;
         let is_wheel_clicked = ctx.gui_data.is_wheel_clicked;

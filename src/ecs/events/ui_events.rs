@@ -1,6 +1,9 @@
-use cgmath::Vector3;
+use cgmath::{Quaternion, Vector3};
 
+use crate::animation::editable::{EditableClipId, KeyframeId, PropertyType};
+use crate::animation::BoneId;
 use crate::app::data::LightMoveTarget;
+use crate::ecs::world::Entity;
 
 #[derive(Clone, Debug)]
 pub enum UIEvent {
@@ -19,6 +22,52 @@ pub enum UIEvent {
     DebugShadowInfo,
     DebugBillboardDepth,
     DumpDebugInfo,
+
+    SelectEntity(Entity),
+    DeselectAll,
+    ToggleEntitySelection(Entity),
+    ExpandEntity(Entity),
+    CollapseEntity(Entity),
+    SetSearchFilter(String),
+
+    SetEntityVisible(Entity, bool),
+    SetEntityTranslation(Entity, Vector3<f32>),
+    SetEntityRotation(Entity, Quaternion<f32>),
+    SetEntityScale(Entity, Vector3<f32>),
+    RenameEntity(Entity, String),
+    FocusOnEntity(Entity),
+
+    TimelinePlay,
+    TimelinePause,
+    TimelineStop,
+    TimelineSetTime(f32),
+    TimelineSetSpeed(f32),
+    TimelineToggleLoop,
+    TimelineSelectClip(EditableClipId),
+    TimelineToggleTrack(BoneId),
+    TimelineExpandTrack(BoneId),
+    TimelineCollapseTrack(BoneId),
+    TimelineSelectKeyframe {
+        bone_id: BoneId,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+    },
+    TimelineAddKeyframe {
+        bone_id: BoneId,
+        property_type: PropertyType,
+        time: f32,
+        value: f32,
+    },
+    TimelineDeleteSelectedKeyframes,
+    TimelineMoveKeyframe {
+        bone_id: BoneId,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+        new_time: f32,
+        new_value: f32,
+    },
+    TimelineZoomIn,
+    TimelineZoomOut,
 }
 
 #[derive(Default)]

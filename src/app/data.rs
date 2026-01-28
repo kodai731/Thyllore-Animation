@@ -6,6 +6,7 @@ use crate::ecs::World;
 use crate::platform::ImguiData;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::app::raytracing::RayTracingData;
+use crate::app::viewport::ViewportState;
 use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -29,4 +30,5 @@ pub struct AppData {
     pub ecs_assets: AssetStorage,
     pub buffer_registry: GpuBufferRegistry,
     pub pipeline_storage: PipelineStorage,
+    pub viewport: ViewportState,
 }

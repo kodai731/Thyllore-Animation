@@ -12,6 +12,7 @@ pub mod update;
 pub mod cleanup;
 pub mod util;
 pub mod gui_data;
+pub mod viewport;
 
 pub use frame_context::FrameContext;
 pub use render_context::RenderContext;

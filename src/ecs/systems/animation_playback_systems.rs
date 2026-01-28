@@ -29,57 +29,19 @@ pub fn playback_prepare_animations(
     nodes: &mut [NodeData],
     anim_registry: &mut AnimationRegistry,
     model_state: &ModelState,
-    time: f32,
+    _time: f32,
     playback: &mut AnimationPlayback,
 ) -> Vec<usize> {
+    let current_time = playback.time;
+
     let morph_updated = if !anim_registry.morph_animation.is_empty() {
-        playback_apply_morph_animation(graphics, &anim_registry.morph_animation, time)
+        playback_apply_morph_animation(graphics, &anim_registry.morph_animation, current_time)
     } else {
         Vec::new()
     };
 
     if anim_registry.animation.clips.is_empty() {
         return morph_updated;
-    }
-
-    if !playback.playing {
-        static mut LOGGED_PAUSED: bool = false;
-        unsafe {
-            if !LOGGED_PAUSED {
-                crate::log!("Animation is paused (animation_playing=false)");
-                LOGGED_PAUSED = true;
-            }
-        }
-        return morph_updated;
-    }
-
-    if let Some(clip_id) = playback.current_clip_id {
-        if let Some(clip) = anim_registry
-            .animation
-            .clips
-            .iter()
-            .find(|c| c.id == clip_id)
-        {
-            let duration = clip.duration;
-            if duration > 0.0 {
-                let prev_time = playback.time;
-                playback.time = time % duration;
-
-                static mut FRAME_COUNT: u32 = 0;
-                unsafe {
-                    FRAME_COUNT += 1;
-                    if FRAME_COUNT % 60 == 0 {
-                        crate::log!(
-                            "Animation update: time={:.4}/{:.4}s (elapsed={:.4}, prev={:.4})",
-                            playback.time,
-                            duration,
-                            time,
-                            prev_time
-                        );
-                    }
-                }
-            }
-        }
     }
 
     let skeleton_id = graphics.meshes.first().and_then(|m| m.skeleton_id);

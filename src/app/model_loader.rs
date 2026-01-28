@@ -8,10 +8,12 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::AppData;
 use crate::asset::{AnimationClipAsset, AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
+use crate::animation::editable::EditableClipManager;
 use crate::ecs::playback_play;
 use crate::ecs::resource::{
-    AnimationPlayback, AnimationRegistry, MeshAssets, ModelState, NodeAssets,
+    AnimationPlayback, AnimationRegistry, MeshAssets, ModelState, NodeAssets, TimelineState,
 };
+use crate::ecs::component::EntityIcon;
 use crate::ecs::world::{AnimationState, Transform, World};
 use crate::loader::texture::load_png_image;
 use crate::loader::{ModelLoadResult, TextureSource};
@@ -143,6 +145,19 @@ unsafe fn cleanup_resources(
     if world.contains_resource::<AnimationRegistry>() {
         let mut anim_registry = world.resource_mut::<AnimationRegistry>();
         anim_registry.clear();
+    }
+
+    if world.contains_resource::<EditableClipManager>() {
+        let mut clip_manager = world.resource_mut::<EditableClipManager>();
+        clip_manager.clear();
+    }
+
+    if world.contains_resource::<TimelineState>() {
+        let mut timeline_state = world.resource_mut::<TimelineState>();
+        timeline_state.current_clip_id = None;
+        timeline_state.current_time = 0.0;
+        timeline_state.selected_keyframes.clear();
+        timeline_state.expanded_tracks.clear();
     }
 
     if world.contains_resource::<MeshAssets>() {
@@ -623,6 +638,41 @@ fn create_ecs_entities(
         assets.add_animation_clip(clip_asset);
     }
 
+    let bone_names: std::collections::HashMap<u32, String> = skeletons
+        .iter()
+        .flat_map(|s| s.bones.iter().map(|b| (b.id, b.name.clone())))
+        .collect();
+
+    if !world.contains_resource::<EditableClipManager>() {
+        world.insert_resource(EditableClipManager::new());
+    }
+    if !world.contains_resource::<TimelineState>() {
+        world.insert_resource(TimelineState::new());
+    }
+
+    let mut first_editable_clip_id = None;
+    {
+        let mut clip_manager = world.resource_mut::<EditableClipManager>();
+        for clip in &clips {
+            let editable_id = clip_manager.create_from_imported(clip, &bone_names);
+            if first_editable_clip_id.is_none() {
+                first_editable_clip_id = Some(editable_id);
+            }
+            crate::log!(
+                "Registered editable clip '{}' (editable_id={}, original_id={})",
+                clip.name,
+                editable_id,
+                clip.id
+            );
+        }
+    }
+
+    if let Some(editable_id) = first_editable_clip_id {
+        let mut timeline_state = world.resource_mut::<TimelineState>();
+        timeline_state.current_clip_id = Some(editable_id);
+        crate::log!("Set timeline current_clip_id to {}", editable_id);
+    }
+
     {
         let node_assets = world.resource::<NodeAssets>();
         for node in &node_assets.nodes {
@@ -636,8 +686,22 @@ fn create_ecs_entities(
         }
     }
 
+    let parent_entity = world
+        .entity()
+        .with_name(&name)
+        .with_transform(Transform::default())
+        .with_visible(true)
+        .with_editor_display(EntityIcon::Model, true)
+        .build();
+
+    crate::log!(
+        "Created parent entity '{}': entity_id={}",
+        name,
+        parent_entity
+    );
+
     for (mesh_idx, mesh) in graphics.meshes.iter().enumerate() {
-        let entity_name = format!("{}_{}", name, mesh_idx);
+        let entity_name = format!("{}_{:02}", name, mesh_idx + 1);
 
         let mesh_asset = MeshAsset {
             id: 0,
@@ -656,6 +720,8 @@ fn create_ecs_entities(
             .with_name(&entity_name)
             .with_transform(Transform::default())
             .with_visible(true)
+            .with_parent(parent_entity)
+            .with_editor_display(EntityIcon::Mesh, false)
             .with_mesh(asset_id, mesh.object_index);
 
         if has_animation {
@@ -666,11 +732,12 @@ fn create_ecs_entities(
 
         let entity = builder.build();
         crate::log!(
-            "Created ECS entity {} (asset_id={}) for mesh {}: entity_id={}",
+            "Created ECS entity {} (asset_id={}) for mesh {}: entity_id={}, parent={}",
             entity_name,
             asset_id,
             mesh_idx,
-            entity
+            entity,
+            parent_entity
         );
     }
 

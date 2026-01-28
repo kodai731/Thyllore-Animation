@@ -5,6 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **IMPORTANT**: This file must be written in English for Claude's optimal understanding.
 Always respond to the user in user's Claude setting language, but keep this documentation in English.
 
+## Code Format
+**IMPORTANT**: Must follow PROJECT_ROOT/rustfmt.toml on coding
+
 ## Project Overview
 
 This is a Rust-based Vulkan rendering engine with support for:
@@ -79,7 +82,7 @@ cargo test -- --ignored
 ```
 
 ## ECS Architecture
-** IMPORTANT ** must follow architecture to add file or code, plan new function.
+** IMPORTANT ** MUST follow architecture rule to add file or code, plan new function.
 This project uses an Entity-Component-System (ECS) architecture inspired by [Bevy Engine](https://bevyengine.org/). The design follows these principles:
 
 ### Design Philosophy
@@ -562,5 +565,13 @@ The `memo.txt` file contains useful reference links for:
 - Instead, write update processing in related files and call them from update
 
 ## mod.rs
-- Don't write definition or implementation in mod.rs file
+- **IMPORTANT:** Don't write definition or implementation in mod.rs file
 - Only module publish responsibility on mod.rs
+
+## issue history
+Issue History Guidelines
+**IMPORTANT:** If you encounter an issue and resolve it, you must document the issue and its solution in detail at .claude/IssueHistory/
+File names must use CamelCase (e.g., ImageLayoutTransition.md).
+Each issue must be documented in a separate file, but to avoid huge number of files, try to add issue in a existing file and recap it.
+At the top of each file, include a brief summary of the issue and its resolution to read shortly.
+**IMPORTANT:** You must read all existing issue history files before adding a new one.

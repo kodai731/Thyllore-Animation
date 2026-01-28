@@ -11,6 +11,9 @@ pub enum DebugViewMode {
     NdotL = 4,
     LightDirection = 5,
     ViewDepth = 6,
+    ObjectID = 7,
+    SelectionView = 8,
+    SelectionUBO = 9,
 }
 
 impl Default for DebugViewMode {
@@ -33,6 +36,9 @@ impl DebugViewMode {
             4 => DebugViewMode::NdotL,
             5 => DebugViewMode::LightDirection,
             6 => DebugViewMode::ViewDepth,
+            7 => DebugViewMode::ObjectID,
+            8 => DebugViewMode::SelectionView,
+            9 => DebugViewMode::SelectionUBO,
             _ => DebugViewMode::Final,
         }
     }
@@ -46,6 +52,9 @@ impl DebugViewMode {
             DebugViewMode::NdotL => "N dot L (Green=Lit, Red=Back)",
             DebugViewMode::LightDirection => "Light Direction",
             DebugViewMode::ViewDepth => "View Depth (R=billboard, G=gbuffer)",
+            DebugViewMode::ObjectID => "ObjectID (Color per ID)",
+            DebugViewMode::SelectionView => "Selection View (Orange=Selected)",
+            DebugViewMode::SelectionUBO => "SelectionUBO (R=count, G=id0)",
         }
     }
 }

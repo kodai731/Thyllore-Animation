@@ -11,6 +11,14 @@ use anyhow::{anyhow, Result};
 
 impl App {
     pub unsafe fn begin_frame(&mut self, gui_data: &mut GUIData) -> Result<usize> {
+        if let Some((width, height)) = gui_data.viewport_resize_pending.take() {
+            self.rrdevice.device.device_wait_idle()?;
+            let command_pool = self.command_state().pool.command_pool;
+            self.data
+                .viewport
+                .resize(&self.instance, &self.rrdevice, command_pool, width, height)?;
+        }
+
         if gui_data.file_changed {
             crate::log!("Loading new model from: {}", gui_data.selected_model_path);
             self.rrdevice.device.device_wait_idle()?;
@@ -323,6 +331,94 @@ impl App {
         device.free_command_buffers(command_pool, &[command_buffer]);
         device.free_memory(buffer_memory, None);
         device.destroy_buffer(buffer, None);
+
+        Ok(())
+    }
+
+    pub unsafe fn begin_offscreen_render_pass(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        offscreen: &crate::vulkanr::resource::OffscreenFramebuffer,
+    ) {
+        let render_area = vk::Rect2D::builder()
+            .offset(vk::Offset2D::default())
+            .extent(offscreen.extent());
+
+        let color_clear_value = vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.1, 0.1, 0.1, 1.0],
+            },
+        };
+        let depth_clear_value = vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 1.0,
+                stencil: 0,
+            },
+        };
+        let clear_values = [color_clear_value, depth_clear_value];
+
+        let render_pass_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(offscreen.render_pass)
+            .framebuffer(offscreen.framebuffer)
+            .render_area(render_area)
+            .clear_values(&clear_values);
+
+        self.rrdevice.device.cmd_begin_render_pass(
+            command_buffer,
+            &render_pass_info,
+            vk::SubpassContents::INLINE,
+        );
+    }
+
+    pub unsafe fn record_3d_rendering_to_offscreen(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+        offscreen: &crate::vulkanr::resource::OffscreenFramebuffer,
+    ) -> Result<()> {
+        let extent = offscreen.extent();
+
+        let viewport = vk::Viewport::builder()
+            .x(0.0)
+            .y(0.0)
+            .width(extent.width as f32)
+            .height(extent.height as f32)
+            .min_depth(0.0)
+            .max_depth(1.0);
+        self.rrdevice
+            .device
+            .cmd_set_viewport(command_buffer, 0, &[viewport]);
+
+        let scissor = vk::Rect2D::builder()
+            .offset(vk::Offset2D { x: 0, y: 0 })
+            .extent(extent);
+        self.rrdevice
+            .device
+            .cmd_set_scissor(command_buffer, 0, &[scissor]);
+
+        let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
+        let camera_pos = self.camera().position;
+
+        let render_data_vec = vec![
+            crate::ecs::systems::render_data_systems::grid_mesh_render_data(&self.grid_mesh()),
+            crate::ecs::systems::render_data_systems::gizmo_mesh_render_data(&self.grid_gizmo()),
+            crate::ecs::systems::render_data_systems::gizmo_selectable_render_data(&self.light_gizmo(), camera_pos),
+        ];
+        let render_data_refs: Vec<_> = render_data_vec.iter().collect();
+
+        crate::renderer::scene_renderer::render_scene_objects(
+            &render_data_refs,
+            command_buffer,
+            image_index,
+            frame_set,
+            &self.data.graphics_resources.objects,
+            &self.rrdevice,
+            self.pipeline_storage(),
+            &self.data.buffer_registry,
+        );
+
+        self.render_billboard(command_buffer, image_index);
+        self.render_models(command_buffer, image_index);
 
         Ok(())
     }
@@ -686,7 +782,11 @@ impl App {
             ),
         );
 
-        // Render draw lists
+        let font_texture_id = descriptor_set.as_raw() as usize;
+        let viewport_texture_id = self.data.viewport.texture_id();
+        let viewport_descriptor_set = self.data.viewport.descriptor_set;
+        let mut current_texture_id = font_texture_id;
+
         let mut vertex_offset: u32 = 0;
         let mut index_offset: u32 = 0;
 
@@ -694,6 +794,25 @@ impl App {
             for cmd in draw_list.commands() {
                 match cmd {
                     imgui::DrawCmd::Elements { count, cmd_params } => {
+                        let texture_id = cmd_params.texture_id.id();
+
+                        if texture_id != current_texture_id {
+                            current_texture_id = texture_id;
+                            let new_descriptor_set = if texture_id == viewport_texture_id {
+                                viewport_descriptor_set
+                            } else {
+                                descriptor_set
+                            };
+                            self.rrdevice.device.cmd_bind_descriptor_sets(
+                                command_buffer,
+                                vk::PipelineBindPoint::GRAPHICS,
+                                pipeline_layout,
+                                0,
+                                &[new_descriptor_set],
+                                &[],
+                            );
+                        }
+
                         let clip_rect = cmd_params.clip_rect;
                         let scissor = vk::Rect2D::builder()
                             .offset(vk::Offset2D {

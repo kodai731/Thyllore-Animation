@@ -21,8 +21,16 @@ pub fn build_debug_window(
     state: &mut DebugWindowState,
     gui_data: &mut GUIData,
 ) {
+    let display_size = ui.io().display_size;
+    let debug_height = 250.0;
+    let debug_y = display_size[1] - debug_height;
+
     ui.window("debug window")
-        .size([600.0, 450.0], Condition::FirstUseEver)
+        .position([0.0, debug_y], Condition::Always)
+        .size([display_size[0], debug_height], Condition::Always)
+        .resizable(false)
+        .movable(false)
+        .collapsible(false)
         .build(|| {
             build_model_panel(ui, ui_events, state, gui_data);
             ui.separator();
@@ -195,6 +203,15 @@ fn build_raytracing_panel(
     }
     if ui.radio_button("View Depth (Green=GBuffer depth)", &mut current_mode, 6) {
         state.debug_view_mode = DebugViewMode::ViewDepth;
+    }
+    if ui.radio_button("ObjectID (Color per ID)", &mut current_mode, 7) {
+        state.debug_view_mode = DebugViewMode::ObjectID;
+    }
+    if ui.radio_button("Selection View (Orange=Selected)", &mut current_mode, 8) {
+        state.debug_view_mode = DebugViewMode::SelectionView;
+    }
+    if ui.radio_button("SelectionUBO (R=count, G=id0)", &mut current_mode, 9) {
+        state.debug_view_mode = DebugViewMode::SelectionUBO;
     }
 }
 

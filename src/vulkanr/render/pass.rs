@@ -249,7 +249,6 @@ pub unsafe fn create_gbuffer_render_pass(
     rrdevice: &RRDevice,
     rrrender: &mut RRRender,
 ) -> Result<()> {
-    // Attachment 0: Position (RGBA32F)
     let position_attachment = vk::AttachmentDescription::builder()
         .format(vk::Format::R32G32B32A32_SFLOAT)
         .samples(vk::SampleCountFlags::_1)
@@ -258,10 +257,9 @@ pub unsafe fn create_gbuffer_render_pass(
         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
         .initial_layout(vk::ImageLayout::UNDEFINED)
-        .final_layout(vk::ImageLayout::GENERAL) // For compute shader read
+        .final_layout(vk::ImageLayout::GENERAL)
         .build();
 
-    // Attachment 1: Normal (RGBA32F)
     let normal_attachment = vk::AttachmentDescription::builder()
         .format(vk::Format::R32G32B32A32_SFLOAT)
         .samples(vk::SampleCountFlags::_1)
@@ -270,10 +268,9 @@ pub unsafe fn create_gbuffer_render_pass(
         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
         .initial_layout(vk::ImageLayout::UNDEFINED)
-        .final_layout(vk::ImageLayout::GENERAL) // For compute shader read
+        .final_layout(vk::ImageLayout::GENERAL)
         .build();
 
-    // Attachment 2: Albedo (RGBA8_UNORM)
     let albedo_attachment = vk::AttachmentDescription::builder()
         .format(vk::Format::R8G8B8A8_UNORM)
         .samples(vk::SampleCountFlags::_1)
@@ -282,22 +279,31 @@ pub unsafe fn create_gbuffer_render_pass(
         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
         .initial_layout(vk::ImageLayout::UNDEFINED)
-        .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL) // For fragment shader read
+        .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
         .build();
 
-    // Attachment 3: Depth
+    let object_id_attachment = vk::AttachmentDescription::builder()
+        .format(vk::Format::R32_UINT)
+        .samples(vk::SampleCountFlags::_1)
+        .load_op(vk::AttachmentLoadOp::CLEAR)
+        .store_op(vk::AttachmentStoreOp::STORE)
+        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .initial_layout(vk::ImageLayout::UNDEFINED)
+        .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+        .build();
+
     let depth_attachment = vk::AttachmentDescription::builder()
         .format(get_depth_format(instance, rrdevice)?)
         .samples(vk::SampleCountFlags::_1)
         .load_op(vk::AttachmentLoadOp::CLEAR)
-        .store_op(vk::AttachmentStoreOp::DONT_CARE) // Don't need to keep depth after G-Buffer pass
+        .store_op(vk::AttachmentStoreOp::DONT_CARE)
         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
         .initial_layout(vk::ImageLayout::UNDEFINED)
         .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
         .build();
 
-    // Color attachment references
     let position_attachment_ref = vk::AttachmentReference::builder()
         .attachment(0)
         .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
@@ -313,20 +319,27 @@ pub unsafe fn create_gbuffer_render_pass(
         .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
         .build();
 
-    let color_attachments = [position_attachment_ref, normal_attachment_ref, albedo_attachment_ref];
-
-    // Depth attachment reference
-    let depth_attachment_ref = vk::AttachmentReference::builder()
+    let object_id_attachment_ref = vk::AttachmentReference::builder()
         .attachment(3)
+        .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+        .build();
+
+    let color_attachments = [
+        position_attachment_ref,
+        normal_attachment_ref,
+        albedo_attachment_ref,
+        object_id_attachment_ref,
+    ];
+
+    let depth_attachment_ref = vk::AttachmentReference::builder()
+        .attachment(4)
         .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
-    // Subpass
     let subpass = vk::SubpassDescription::builder()
         .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
         .color_attachments(&color_attachments)
         .depth_stencil_attachment(&depth_attachment_ref);
 
-    // Subpass dependencies
     let dependency = vk::SubpassDependency::builder()
         .src_subpass(vk::SUBPASS_EXTERNAL)
         .dst_subpass(0)
@@ -335,7 +348,13 @@ pub unsafe fn create_gbuffer_render_pass(
         .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS)
         .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE);
 
-    let attachments = [position_attachment, normal_attachment, albedo_attachment, depth_attachment];
+    let attachments = [
+        position_attachment,
+        normal_attachment,
+        albedo_attachment,
+        object_id_attachment,
+        depth_attachment,
+    ];
     let subpasses = [subpass];
     let dependencies = [dependency];
 
@@ -346,6 +365,6 @@ pub unsafe fn create_gbuffer_render_pass(
 
     rrrender.gbuffer_render_pass = rrdevice.device.create_render_pass(&info, None)?;
 
-    log::info!("Created G-Buffer render pass");
+    log::info!("Created G-Buffer render pass with ObjectID attachment");
     Ok(())
 }

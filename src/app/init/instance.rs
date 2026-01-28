@@ -7,9 +7,10 @@ use crate::ecs::systems::{
     create_grid_mesh, create_light_gizmo, gizmo_create_buffers,
 };
 use crate::vulkanr::VulkanBackend;
+use crate::animation::editable::EditableClipManager;
 use crate::ecs::{
-    AnimationPlayback, AnimationRegistry, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState,
-    NodeAssets, PipelineManager,
+    AnimationPlayback, AnimationRegistry, GpuDescriptors, HierarchyState, MaterialRegistry, MeshAssets, ModelState,
+    NodeAssets, PipelineManager, TimelineState,
 };
 use crate::vulkanr::command::*;
 use crate::vulkanr::context::{
@@ -153,6 +154,26 @@ impl App {
         data.ecs_world.insert_resource(ModelState::default());
         data.ecs_world.insert_resource(MeshAssets::new());
         data.ecs_world.insert_resource(NodeAssets::new());
+
+        let viewport_width = rrswapchain.swapchain_extent.width;
+        let viewport_height = rrswapchain.swapchain_extent.height;
+        data.viewport = crate::app::viewport::ViewportState::new(
+            &instance,
+            &rrdevice,
+            rrcommand_pool.command_pool,
+            viewport_width,
+            viewport_height,
+            rrdevice.msaa_samples,
+            rrswapchain.swapchain_format,
+        )
+        .expect("Failed to create viewport state");
+        crate::log!(
+            "Created viewport state: {}x{} with MSAA {:?}, format {:?}",
+            viewport_width,
+            viewport_height,
+            rrdevice.msaa_samples,
+            rrswapchain.swapchain_format
+        );
 
         let render_layouts = data.graphics_resources.get_layouts();
         let mut pipeline_manager = PipelineManager::new();
@@ -636,6 +657,18 @@ impl App {
         {
             let ui_event_queue = crate::ecs::UIEventQueue::new();
             data.ecs_world.insert_resource(ui_event_queue);
+        }
+
+        if !data.ecs_world.contains_resource::<HierarchyState>() {
+            data.ecs_world.insert_resource(HierarchyState::new());
+        }
+
+        if !data.ecs_world.contains_resource::<TimelineState>() {
+            data.ecs_world.insert_resource(TimelineState::new());
+        }
+
+        if !data.ecs_world.contains_resource::<EditableClipManager>() {
+            data.ecs_world.insert_resource(EditableClipManager::new());
         }
     }
 

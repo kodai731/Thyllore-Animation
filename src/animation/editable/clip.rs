@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cgmath::{Deg, Euler, Quaternion, Rad, Vector3};
+use cgmath::{Quaternion, Vector3};
 use serde::{Deserialize, Serialize};
 
 use crate::animation::{AnimationClip, BoneId, Keyframe, TransformChannel};
@@ -208,39 +208,51 @@ fn collect_unique_times(curves: &[&super::curve::PropertyCurve]) -> Vec<f32> {
 }
 
 fn quaternion_to_euler_degrees(q: &Quaternion<f32>) -> Vector3<f32> {
-    let sinr_cosp = 2.0 * (q.s * q.v.x + q.v.y * q.v.z);
-    let cosr_cosp = 1.0 - 2.0 * (q.v.x * q.v.x + q.v.y * q.v.y);
-    let roll = sinr_cosp.atan2(cosr_cosp);
+    let w = q.s;
+    let x = q.v.x;
+    let y = q.v.y;
+    let z = q.v.z;
 
-    let sinp = 2.0 * (q.s * q.v.y - q.v.z * q.v.x);
-    let pitch = if sinp.abs() >= 1.0 {
-        std::f32::consts::FRAC_PI_2.copysign(sinp)
+    let sinp = 2.0 * (w * x + y * z);
+    let cosp = 1.0 - 2.0 * (x * x + y * y);
+    let pitch = sinp.atan2(cosp);
+
+    let siny = 2.0 * (w * y - z * x);
+    let yaw = if siny.abs() >= 1.0 {
+        std::f32::consts::FRAC_PI_2.copysign(siny)
     } else {
-        sinp.asin()
+        siny.asin()
     };
 
-    let siny_cosp = 2.0 * (q.s * q.v.z + q.v.x * q.v.y);
-    let cosy_cosp = 1.0 - 2.0 * (q.v.y * q.v.y + q.v.z * q.v.z);
-    let yaw = siny_cosp.atan2(cosy_cosp);
+    let sinr = 2.0 * (w * z + x * y);
+    let cosr = 1.0 - 2.0 * (y * y + z * z);
+    let roll = sinr.atan2(cosr);
 
     Vector3::new(
-        roll.to_degrees(),
         pitch.to_degrees(),
         yaw.to_degrees(),
+        roll.to_degrees(),
     )
 }
 
 fn euler_degrees_to_quaternion(x_deg: f32, y_deg: f32, z_deg: f32) -> Quaternion<f32> {
-    let euler = Euler {
-        x: Deg(x_deg),
-        y: Deg(y_deg),
-        z: Deg(z_deg),
-    };
-    Quaternion::from(Euler {
-        x: Rad::from(euler.x),
-        y: Rad::from(euler.y),
-        z: Rad::from(euler.z),
-    })
+    let x_rad = x_deg.to_radians();
+    let y_rad = y_deg.to_radians();
+    let z_rad = z_deg.to_radians();
+
+    let cx = (x_rad * 0.5).cos();
+    let sx = (x_rad * 0.5).sin();
+    let cy = (y_rad * 0.5).cos();
+    let sy = (y_rad * 0.5).sin();
+    let cz = (z_rad * 0.5).cos();
+    let sz = (z_rad * 0.5).sin();
+
+    Quaternion::new(
+        cx * cy * cz + sx * sy * sz,
+        sx * cy * cz - cx * sy * sz,
+        cx * sy * cz + sx * cy * sz,
+        cx * cy * sz - sx * sy * cz,
+    )
 }
 
 impl Default for EditableAnimationClip {

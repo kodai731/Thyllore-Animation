@@ -14,7 +14,8 @@ pub fn build_inspector_window(
     let display_size = ui.io().display_size;
     let inspector_width = 300.0;
     let debug_height = 250.0;
-    let main_height = display_size[1] - debug_height;
+    let timeline_height = 300.0;
+    let main_height = display_size[1] - debug_height - timeline_height;
     let inspector_x = display_size[0] - inspector_width;
 
     ui.window("Inspector")

@@ -152,7 +152,23 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::SetEntityRotation(_, _)
             | UIEvent::SetEntityScale(_, _)
             | UIEvent::RenameEntity(_, _)
-            | UIEvent::FocusOnEntity(_) => {}
+            | UIEvent::FocusOnEntity(_)
+            | UIEvent::TimelinePlay
+            | UIEvent::TimelinePause
+            | UIEvent::TimelineStop
+            | UIEvent::TimelineSetTime(_)
+            | UIEvent::TimelineSetSpeed(_)
+            | UIEvent::TimelineToggleLoop
+            | UIEvent::TimelineSelectClip(_)
+            | UIEvent::TimelineToggleTrack(_)
+            | UIEvent::TimelineExpandTrack(_)
+            | UIEvent::TimelineCollapseTrack(_)
+            | UIEvent::TimelineSelectKeyframe { .. }
+            | UIEvent::TimelineAddKeyframe { .. }
+            | UIEvent::TimelineDeleteSelectedKeyframes
+            | UIEvent::TimelineMoveKeyframe { .. }
+            | UIEvent::TimelineZoomIn
+            | UIEvent::TimelineZoomOut => {}
         }
     }
 

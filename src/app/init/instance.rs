@@ -10,7 +10,7 @@ use crate::vulkanr::VulkanBackend;
 use crate::animation::editable::EditableClipManager;
 use crate::ecs::{
     AnimationPlayback, AnimationRegistry, GpuDescriptors, HierarchyState, MaterialRegistry, MeshAssets, ModelState,
-    NodeAssets, PipelineManager, TimelineState,
+    NodeAssets, PipelineManager, SceneState, TimelineState,
 };
 use crate::vulkanr::command::*;
 use crate::vulkanr::context::{
@@ -369,19 +369,27 @@ impl App {
         let rrrender = rrrender_mut;
         crate::log!("initialized ray tracing resources");
 
-        let default_model_path = "assets/models/stickman/stickman.glb";
+        let (model_path, loaded_scene) = Self::determine_startup_model();
         if let Err(e) = Self::load_model_from_path_with_resources(
             &instance,
             &rrdevice,
             &mut data,
             &rrcommand_pool,
             &rrswapchain,
-            default_model_path,
+            &model_path,
         ) {
             eprintln!("Failed to load model: {:?}", e);
             crate::log!("Failed to load model: {:?}", e);
         }
-        crate::log!("loaded initial model: {}", default_model_path);
+        crate::log!("loaded initial model: {}", model_path);
+
+        let mut scene_state = SceneState::new();
+        if let Some((scene_path, scene, clips)) = loaded_scene {
+            let clips_with_ids = Self::register_loaded_clips(&mut data.ecs_world, clips);
+            crate::scene::apply_loaded_scene_to_world(&scene, &mut data.ecs_world, &clips_with_ids);
+            scene_state.set_from_loaded(scene_path, scene.scene.metadata.clone());
+        }
+        data.ecs_world.insert_resource(scene_state);
 
         if let Err(e) = Self::create_ray_tracing_pipelines_with_resources(
             &instance,
@@ -455,7 +463,7 @@ impl App {
         Self::register_resources(
             &mut data,
             &vulkan_resources,
-            default_model_path,
+            &model_path,
             rrdevice.msaa_samples,
         );
         println!("registered ECS resources");
@@ -669,6 +677,10 @@ impl App {
 
         if !data.ecs_world.contains_resource::<EditableClipManager>() {
             data.ecs_world.insert_resource(EditableClipManager::new());
+        }
+
+        if !data.ecs_world.contains_resource::<crate::platform::CurveEditorState>() {
+            data.ecs_world.insert_resource(crate::platform::CurveEditorState::default());
         }
     }
 
@@ -894,5 +906,49 @@ impl App {
         crate::log!("  Descriptor Set: {:?}", descriptor_set);
 
         Ok(())
+    }
+
+    fn determine_startup_model() -> (String, Option<(std::path::PathBuf, crate::scene::LoadedScene, Vec<crate::animation::editable::EditableAnimationClip>)>) {
+        use crate::scene::{find_default_scene, load_scene};
+
+        let default_model_path = "assets/models/stickman/stickman.glb".to_string();
+
+        if let Some(scene_path) = find_default_scene() {
+            match load_scene(&scene_path) {
+                Ok(loaded) => {
+                    let model_path = loaded.model_path.to_string_lossy().to_string();
+                    let clips = loaded.clips.clone();
+                    crate::log!("Loaded default scene from: {}", scene_path.display());
+                    return (model_path, Some((scene_path, loaded, clips)));
+                }
+                Err(e) => {
+                    crate::log!("Failed to load default scene: {:?}", e);
+                }
+            }
+        }
+
+        (default_model_path, None)
+    }
+
+    fn register_loaded_clips(
+        world: &mut crate::ecs::world::World,
+        clips: Vec<crate::animation::editable::EditableAnimationClip>,
+    ) -> Vec<(crate::animation::editable::EditableClipId, String)> {
+        use crate::animation::editable::EditableClipManager;
+
+        if !world.contains_resource::<EditableClipManager>() {
+            world.insert_resource(EditableClipManager::new());
+        }
+
+        let mut clip_manager = world.resource_mut::<EditableClipManager>();
+        let mut result = Vec::new();
+
+        for clip in clips {
+            let name = clip.name.clone();
+            let id = clip_manager.register_clip(clip);
+            result.push((id, name));
+        }
+
+        result
     }
 }

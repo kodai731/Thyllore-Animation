@@ -1,14 +1,15 @@
 use std::time::Instant;
 
 use imgui::MouseButton;
-use winit::event::{Event, WindowEvent};
+use winit::event::{ElementState, Event, WindowEvent};
+use winit::keyboard::{Key, NamedKey};
 
 use super::platform::System;
 use super::ui::{build_click_debug_overlay, build_curve_editor_window, build_debug_window, build_hierarchy_window, build_inspector_window, build_timeline_window, build_viewport_window, CurveEditorState, DebugWindowState};
 use crate::animation::editable::EditableClipManager;
 use crate::app::{App, GUIData};
 use crate::debugview::RayTracingDebugState;
-use crate::ecs::resource::{HierarchyState, TimelineState};
+use crate::ecs::resource::{HierarchyState, SceneState, TimelineState};
 use crate::ecs::events::UIEvent;
 use crate::ecs::systems::{
     camera_move_to_look_at, collapse_entity, expand_entity, rename_entity,
@@ -45,7 +46,6 @@ impl System {
             mut platform,
         } = self;
         let mut last_frame = Instant::now();
-        let mut curve_editor_state = CurveEditorState::default();
 
         event_loop
             .run(move |event, window_target| match event {
@@ -93,6 +93,17 @@ impl System {
                         WindowEvent::DroppedFile(path_buf) => {
                             if let Some(path) = path_buf.to_str() {
                                 gui_data.file_path = path.to_string();
+                            }
+                        }
+
+                        WindowEvent::KeyboardInput { event, .. } => {
+                            if event.state == ElementState::Pressed && gui_data.is_ctrl_pressed {
+                                if let Key::Character(ref c) = event.logical_key {
+                                    if c.eq_ignore_ascii_case("s") {
+                                        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+                                        ui_events.send(UIEvent::SaveScene);
+                                    }
+                                }
                             }
                         }
 
@@ -162,14 +173,16 @@ impl System {
                                 let timeline_state = app.data.ecs_world.resource::<TimelineState>();
                                 let clip_manager = app.data.ecs_world.resource::<EditableClipManager>();
                                 let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                build_timeline_window(ui, &mut *ui_events, &*timeline_state, &*clip_manager, &mut curve_editor_state);
+                                let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
+                                build_timeline_window(ui, &mut *ui_events, &*timeline_state, &*clip_manager, &mut *curve_editor);
                             }
 
                             {
                                 let timeline_state = app.data.ecs_world.resource::<TimelineState>();
                                 let clip_manager = app.data.ecs_world.resource::<EditableClipManager>();
                                 let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                build_curve_editor_window(ui, &mut *ui_events, &*timeline_state, &*clip_manager, &mut curve_editor_state);
+                                let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
+                                build_curve_editor_window(ui, &mut *ui_events, &*timeline_state, &*clip_manager, &mut *curve_editor);
                             }
 
                             {
@@ -202,6 +215,7 @@ impl System {
                                     } else {
                                         process_hierarchy_events_inline(&events, app);
                                         process_timeline_events_inline(&events, app);
+                                        process_scene_events_inline(&events, app);
 
                                         let model_bounds =
                                             app.data.graphics_resources.calculate_model_bounds();
@@ -334,4 +348,21 @@ fn process_timeline_events_inline(events: &[UIEvent], app: &mut App) {
     let mut clip_manager = app.data.ecs_world.resource_mut::<EditableClipManager>();
 
     timeline_process_events(events, &mut timeline_state, &mut playback, &mut *clip_manager);
+}
+
+fn process_scene_events_inline(events: &[UIEvent], app: &mut App) {
+    for event in events {
+        if let UIEvent::SaveScene = event {
+            let scene_path = std::path::PathBuf::from("assets/scenes/default.scene.ron");
+
+            match crate::scene::save_scene(&scene_path, &app.data.ecs_world) {
+                Ok(()) => {
+                    crate::log!("Scene saved to {:?}", scene_path);
+                }
+                Err(e) => {
+                    crate::log!("Failed to save scene: {:?}", e);
+                }
+            }
+        }
+    }
 }

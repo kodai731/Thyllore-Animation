@@ -68,6 +68,8 @@ pub enum UIEvent {
     },
     TimelineZoomIn,
     TimelineZoomOut,
+
+    SaveScene,
 }
 
 #[derive(Default)]

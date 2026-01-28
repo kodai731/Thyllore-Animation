@@ -36,6 +36,13 @@ impl App {
                 Ok(_) => {
                     self.animation_playback_mut().model_path = gui_data.selected_model_path.clone();
                     self.animation_playback_mut().time = 0.0;
+
+                    {
+                        let mut scene_state =
+                            self.data.ecs_world.resource_mut::<crate::ecs::SceneState>();
+                        scene_state.clear();
+                    }
+
                     gui_data.load_status = format!("Loaded: {}", gui_data.selected_model_path);
                     crate::log!(
                         "Successfully loaded model: {}",

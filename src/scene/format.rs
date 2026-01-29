@@ -1,0 +1,166 @@
+use serde::{Deserialize, Serialize};
+
+use crate::animation::editable::EditableAnimationClip;
+
+pub const SCENE_FORMAT_VERSION: u32 = 1;
+pub const ANIMATION_FORMAT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SceneFile {
+    pub version: u32,
+    pub metadata: SceneMetadata,
+    pub model: ModelReference,
+    pub animation_clips: Vec<AnimationClipRef>,
+    pub current_clip: Option<String>,
+    pub camera: CameraState,
+    pub timeline: TimelineConfig,
+    pub editor: EditorState,
+}
+
+impl SceneFile {
+    pub fn new(name: &str, model_path: &str) -> Self {
+        Self {
+            version: SCENE_FORMAT_VERSION,
+            metadata: SceneMetadata::new(name),
+            model: ModelReference::new(model_path),
+            animation_clips: Vec::new(),
+            current_clip: None,
+            camera: CameraState::default(),
+            timeline: TimelineConfig::default(),
+            editor: EditorState::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SceneMetadata {
+    pub name: String,
+    pub created_at: String,
+    pub modified_at: String,
+}
+
+impl SceneMetadata {
+    pub fn new(name: &str) -> Self {
+        let now = chrono::Utc::now().to_rfc3339();
+        Self {
+            name: name.to_string(),
+            created_at: now.clone(),
+            modified_at: now,
+        }
+    }
+
+    pub fn update_modified(&mut self) {
+        self.modified_at = chrono::Utc::now().to_rfc3339();
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelReference {
+    pub path: String,
+    pub transform: TransformData,
+}
+
+impl ModelReference {
+    pub fn new(path: &str) -> Self {
+        Self {
+            path: path.to_string(),
+            transform: TransformData::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransformData {
+    pub position: [f32; 3],
+    pub rotation: [f32; 4],
+    pub scale: [f32; 3],
+}
+
+impl Default for TransformData {
+    fn default() -> Self {
+        Self {
+            position: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            scale: [1.0, 1.0, 1.0],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnimationClipRef {
+    pub path: String,
+}
+
+impl AnimationClipRef {
+    pub fn new(path: &str) -> Self {
+        Self {
+            path: path.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnimationClipFile {
+    pub version: u32,
+    pub clip: EditableAnimationClip,
+}
+
+impl AnimationClipFile {
+    pub fn new(clip: EditableAnimationClip) -> Self {
+        Self {
+            version: ANIMATION_FORMAT_VERSION,
+            clip,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CameraState {
+    pub position: [f32; 3],
+    pub direction: [f32; 3],
+    pub up: [f32; 3],
+}
+
+impl Default for CameraState {
+    fn default() -> Self {
+        Self {
+            position: [5.0, 5.0, 5.0],
+            direction: [-0.577, -0.577, -0.577],
+            up: [0.0, 1.0, 0.0],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimelineConfig {
+    pub current_time: f32,
+    pub playing: bool,
+    pub looping: bool,
+    pub speed: f32,
+}
+
+impl Default for TimelineConfig {
+    fn default() -> Self {
+        Self {
+            current_time: 0.0,
+            playing: false,
+            looping: true,
+            speed: 1.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EditorState {
+    pub selected_bone_id: Option<u32>,
+    pub curve_editor_open: bool,
+}
+
+impl Default for EditorState {
+    fn default() -> Self {
+        Self {
+            selected_bone_id: None,
+            curve_editor_open: false,
+        }
+    }
+}

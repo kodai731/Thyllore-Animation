@@ -168,7 +168,8 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::TimelineDeleteSelectedKeyframes
             | UIEvent::TimelineMoveKeyframe { .. }
             | UIEvent::TimelineZoomIn
-            | UIEvent::TimelineZoomOut => {}
+            | UIEvent::TimelineZoomOut
+            | UIEvent::SaveScene => {}
         }
     }
 

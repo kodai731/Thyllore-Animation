@@ -51,6 +51,14 @@ impl EditableClipManager {
         id
     }
 
+    pub fn register_clip(&mut self, mut clip: EditableAnimationClip) -> EditableClipId {
+        let id = self.next_clip_id;
+        self.next_clip_id += 1;
+        clip.id = id;
+        self.clips.insert(id, clip);
+        id
+    }
+
     pub fn get(&self, id: EditableClipId) -> Option<&EditableAnimationClip> {
         self.clips.get(&id)
     }

@@ -8,13 +8,12 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::AppData;
 use crate::asset::{AnimationClipAsset, AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
-use crate::animation::editable::EditableClipManager;
 use crate::ecs::playback_play;
 use crate::ecs::resource::{
-    AnimationPlayback, AnimationRegistry, MeshAssets, ModelState, NodeAssets, TimelineState,
+    AnimationPlayback, ClipLibrary, MeshAssets, ModelState, NodeAssets, TimelineState,
 };
 use crate::ecs::component::EntityIcon;
-use crate::ecs::world::{AnimationState, Transform, World};
+use crate::ecs::world::{Animator, Transform, World};
 use crate::loader::texture::load_png_image;
 use crate::loader::{ModelLoadResult, TextureSource};
 use crate::render::MaterialUBO;
@@ -142,14 +141,9 @@ unsafe fn cleanup_resources(
     graphics.materials.clear_materials(&device.device);
     graphics.objects.reset_to(3);
 
-    if world.contains_resource::<AnimationRegistry>() {
-        let mut anim_registry = world.resource_mut::<AnimationRegistry>();
-        anim_registry.clear();
-    }
-
-    if world.contains_resource::<EditableClipManager>() {
-        let mut clip_manager = world.resource_mut::<EditableClipManager>();
-        clip_manager.clear();
+    if world.contains_resource::<ClipLibrary>() {
+        let mut clip_library = world.resource_mut::<ClipLibrary>();
+        clip_library.clear();
     }
 
     if world.contains_resource::<TimelineState>() {
@@ -199,16 +193,25 @@ pub unsafe fn cleanup_model_resources(rrdevice: &RRDevice, data: &mut AppData) {
 }
 
 fn setup_animation_system(world: &mut World, load_result: &ModelLoadResult) {
-    if world.contains_resource::<AnimationRegistry>() {
-        let mut anim_registry = world.resource_mut::<AnimationRegistry>();
-        anim_registry.animation = load_result.animation_system.clone();
-        anim_registry.morph_animation = load_result.morph_animation.clone();
+    if world.contains_resource::<ClipLibrary>() {
+        let mut clip_library = world.resource_mut::<ClipLibrary>();
+        clip_library.animation = load_result.animation_system.clone();
+        clip_library.morph_animation = load_result.morph_animation.clone();
     }
 
     if world.contains_resource::<ModelState>() {
         let mut model_state = world.resource_mut::<ModelState>();
         model_state.has_skinned_meshes = load_result.has_skinned_meshes;
         model_state.node_animation_scale = load_result.node_animation_scale;
+
+        let animation_type = if load_result.has_skinned_meshes {
+            crate::ecs::resource::AnimationType::Skeletal
+        } else if !load_result.animation_system.clips.is_empty() {
+            crate::ecs::resource::AnimationType::Node
+        } else {
+            crate::ecs::resource::AnimationType::None
+        };
+        model_state.animation_type = animation_type;
     }
 }
 
@@ -378,19 +381,21 @@ unsafe fn apply_initial_pose(
 
     if let Some(skel_id) = skeleton_id {
         let playback = world.resource::<AnimationPlayback>();
-        let mut anim_registry = world.resource_mut::<AnimationRegistry>();
-        anim_registry.animation.apply_to_skeleton(skel_id, &*playback);
-        drop(anim_registry);
+        let mut clip_library = world.resource_mut::<ClipLibrary>();
+        if let Some(clip_id) = playback.current_clip_id {
+            clip_library.animation.apply_to_skeleton(skel_id, clip_id, playback.time, playback.looping);
+        }
+        drop(clip_library);
         drop(playback);
 
-        let anim_registry = world.resource::<AnimationRegistry>();
+        let clip_library = world.resource::<ClipLibrary>();
         for mesh_idx in 0..graphics.meshes.len() {
             apply_skinning_to_mesh(
                 instance,
                 device,
                 command_pool,
                 graphics,
-                &anim_registry.animation,
+                &clip_library.animation,
                 mesh_idx,
             )?;
         }
@@ -398,12 +403,12 @@ unsafe fn apply_initial_pose(
 
     let has_node_animation = !load_result.has_skinned_meshes && !graphics.meshes.is_empty();
     if has_node_animation {
-        let anim_registry = world.resource::<AnimationRegistry>();
+        let clip_library = world.resource::<ClipLibrary>();
         let model_state = world.resource::<ModelState>();
         let mut node_assets = world.resource_mut::<NodeAssets>();
-        let animation = anim_registry.animation.clone();
+        let animation = clip_library.animation.clone();
         let node_animation_scale = model_state.node_animation_scale;
-        drop(anim_registry);
+        drop(clip_library);
         drop(model_state);
 
         let updated_meshes =
@@ -612,9 +617,9 @@ fn create_ecs_entities(
         .to_string();
 
     let (skeletons, clips, has_animation, first_clip_id) = {
-        let anim_registry = world.resource::<AnimationRegistry>();
-        let skeletons = anim_registry.animation.skeletons.clone();
-        let clips = anim_registry.animation.clips.clone();
+        let clip_library = world.resource::<ClipLibrary>();
+        let skeletons = clip_library.animation.skeletons.clone();
+        let clips = clip_library.animation.clips.clone();
         let has_animation = !clips.is_empty();
         let first_clip_id = clips.first().map(|c| c.id);
         (skeletons, clips, has_animation, first_clip_id)
@@ -643,8 +648,8 @@ fn create_ecs_entities(
         .flat_map(|s| s.bones.iter().map(|b| (b.id, b.name.clone())))
         .collect();
 
-    if !world.contains_resource::<EditableClipManager>() {
-        world.insert_resource(EditableClipManager::new());
+    if !world.contains_resource::<ClipLibrary>() {
+        world.insert_resource(ClipLibrary::new());
     }
     if !world.contains_resource::<TimelineState>() {
         world.insert_resource(TimelineState::new());
@@ -652,7 +657,7 @@ fn create_ecs_entities(
 
     let mut first_editable_clip_id = None;
     {
-        let mut clip_manager = world.resource_mut::<EditableClipManager>();
+        let mut clip_manager = world.resource_mut::<ClipLibrary>();
         for clip in &clips {
             let editable_id = clip_manager.create_from_imported(clip, &bone_names);
             if first_editable_clip_id.is_none() {
@@ -725,9 +730,9 @@ fn create_ecs_entities(
             .with_mesh(asset_id, mesh.object_index);
 
         if has_animation {
-            let mut anim_state = AnimationState::new();
-            anim_state.current_clip_id = first_clip_id;
-            builder = builder.with_animation_state(anim_state);
+            let mut animator = Animator::new();
+            animator.current_clip_id = first_clip_id;
+            builder = builder.with_animator(animator);
         }
 
         let entity = builder.build();

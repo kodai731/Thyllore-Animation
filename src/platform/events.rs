@@ -6,7 +6,7 @@ use winit::keyboard::{Key, NamedKey};
 
 use super::platform::System;
 use super::ui::{build_click_debug_overlay, build_curve_editor_window, build_debug_window, build_hierarchy_window, build_inspector_window, build_timeline_window, build_viewport_window, CurveEditorState, DebugWindowState};
-use crate::animation::editable::EditableClipManager;
+use crate::ecs::resource::ClipLibrary;
 use crate::app::{App, GUIData};
 use crate::debugview::RayTracingDebugState;
 use crate::ecs::resource::{HierarchyState, SceneState, TimelineState};
@@ -118,7 +118,7 @@ impl System {
 
                             update_mouse_input(gui_data, ui);
 
-                            let model_path = app.animation_playback().model_path.clone();
+                            let model_path = app.model_state().model_path.clone();
                             let load_status = gui_data.load_status.clone();
 
                             let mut debug_state = {
@@ -147,7 +147,14 @@ impl System {
                             {
                                 let hierarchy_state = app.data.ecs_world.resource::<HierarchyState>();
                                 let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                build_inspector_window(ui, &mut *ui_events, &app.data.ecs_world, &*hierarchy_state);
+                                build_inspector_window(
+                                    ui,
+                                    &mut *ui_events,
+                                    &app.data.ecs_world,
+                                    &*hierarchy_state,
+                                    &app.data.ecs_assets,
+                                    &app.data.graphics_resources,
+                                );
                             }
 
                             {
@@ -170,19 +177,19 @@ impl System {
                             }
 
                             {
-                                let timeline_state = app.data.ecs_world.resource::<TimelineState>();
-                                let clip_manager = app.data.ecs_world.resource::<EditableClipManager>();
+                                let mut timeline_state = app.data.ecs_world.resource_mut::<TimelineState>();
+                                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
                                 let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
                                 let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
-                                build_timeline_window(ui, &mut *ui_events, &*timeline_state, &*clip_manager, &mut *curve_editor);
+                                build_timeline_window(ui, &mut *ui_events, &mut *timeline_state, &*clip_library, &mut *curve_editor);
                             }
 
                             {
                                 let timeline_state = app.data.ecs_world.resource::<TimelineState>();
-                                let clip_manager = app.data.ecs_world.resource::<EditableClipManager>();
+                                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
                                 let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
                                 let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
-                                build_curve_editor_window(ui, &mut *ui_events, &*timeline_state, &*clip_manager, &mut *curve_editor);
+                                build_curve_editor_window(ui, &mut *ui_events, &*timeline_state, &*clip_library, &mut *curve_editor);
                             }
 
                             {
@@ -345,9 +352,9 @@ fn process_hierarchy_events_inline(events: &[UIEvent], app: &mut App) {
 fn process_timeline_events_inline(events: &[UIEvent], app: &mut App) {
     let mut timeline_state = app.data.ecs_world.resource_mut::<TimelineState>();
     let mut playback = app.data.ecs_world.resource_mut::<AnimationPlayback>();
-    let mut clip_manager = app.data.ecs_world.resource_mut::<EditableClipManager>();
+    let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
 
-    timeline_process_events(events, &mut timeline_state, &mut playback, &mut *clip_manager);
+    timeline_process_events(events, &mut timeline_state, &mut playback, &mut *clip_library);
 }
 
 fn process_scene_events_inline(events: &[UIEvent], app: &mut App) {

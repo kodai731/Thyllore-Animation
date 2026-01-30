@@ -674,20 +674,17 @@ impl AnimationSystem {
     pub fn apply_to_skeleton(
         &mut self,
         skeleton_id: SkeletonId,
-        playback: &crate::ecs::AnimationPlayback,
+        clip_id: AnimationClipId,
+        time: f32,
+        looping: bool,
     ) {
-        let clip_id = match playback.current_clip_id {
-            Some(id) => id,
-            None => return,
-        };
-
         let clip = match self.clips.iter().find(|c| c.id == clip_id) {
             Some(c) => c.clone(),
             None => return,
         };
 
         if let Some(skeleton) = self.get_skeleton_mut(skeleton_id) {
-            clip.sample_with_loop(playback.time, skeleton, playback.looping);
+            clip.sample_with_loop(time, skeleton, looping);
         }
     }
 

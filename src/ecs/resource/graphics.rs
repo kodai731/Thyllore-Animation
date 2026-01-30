@@ -1,4 +1,3 @@
-use crate::animation::{AnimationSystem, MorphAnimationSystem};
 use crate::app::graphics_resource::{
     FrameDescriptorSet, MaterialId, MaterialManager, MeshBuffer, NodeData, ObjectDescriptorSet,
 };
@@ -35,23 +34,16 @@ impl MaterialRegistry {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct AnimationRegistry {
-    pub animation: AnimationSystem,
-    pub morph_animation: MorphAnimationSystem,
+#[derive(Clone, Debug, PartialEq)]
+pub enum AnimationType {
+    None,
+    Skeletal,
+    Node,
 }
 
-impl AnimationRegistry {
-    pub fn new() -> Self {
-        Self {
-            animation: AnimationSystem::new(),
-            morph_animation: MorphAnimationSystem::new(),
-        }
-    }
-
-    pub fn clear(&mut self) {
-        self.animation.clear();
-        self.morph_animation = MorphAnimationSystem::new();
+impl Default for AnimationType {
+    fn default() -> Self {
+        Self::None
     }
 }
 
@@ -59,6 +51,8 @@ impl AnimationRegistry {
 pub struct ModelState {
     pub has_skinned_meshes: bool,
     pub node_animation_scale: f32,
+    pub model_path: String,
+    pub animation_type: AnimationType,
 }
 
 impl Default for ModelState {
@@ -66,6 +60,8 @@ impl Default for ModelState {
         Self {
             has_skinned_meshes: false,
             node_animation_scale: 1.0,
+            model_path: String::new(),
+            animation_type: AnimationType::None,
         }
     }
 }

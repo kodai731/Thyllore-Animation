@@ -1,6 +1,7 @@
 use imgui::Condition;
 
-use crate::animation::editable::{EditableAnimationClip, EditableClipManager, PropertyCurve};
+use crate::animation::editable::{EditableAnimationClip, PropertyCurve};
+use crate::ecs::resource::ClipLibrary;
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::TimelineState;
@@ -18,8 +19,8 @@ const PLAYHEAD_HANDLE_SIZE: f32 = 10.0;
 pub fn build_timeline_window(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
-    state: &TimelineState,
-    clip_manager: &EditableClipManager,
+    state: &mut TimelineState,
+    clip_library: &ClipLibrary,
     curve_editor_state: &mut CurveEditorState,
 ) {
     let display_size = ui.io().display_size;
@@ -34,9 +35,9 @@ pub fn build_timeline_window(
         .movable(false)
         .collapsible(false)
         .build(|| {
-            build_transport_controls(ui, ui_events, state, clip_manager, curve_editor_state);
+            build_transport_controls(ui, ui_events, state, clip_library, curve_editor_state);
             ui.separator();
-            build_timeline_content(ui, ui_events, state, clip_manager);
+            build_timeline_content(ui, ui_events, state, clip_library);
         });
 }
 
@@ -44,7 +45,7 @@ fn build_transport_controls(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     state: &TimelineState,
-    clip_manager: &EditableClipManager,
+    clip_library: &ClipLibrary,
     curve_editor_state: &mut CurveEditorState,
 ) {
     if state.playing {
@@ -69,7 +70,7 @@ fn build_transport_controls(
     ui.same_line();
     let current_clip = state
         .current_clip_id
-        .and_then(|id| clip_manager.get(id));
+        .and_then(|id| clip_library.get(id));
 
     let duration = current_clip.map(|c| c.duration).unwrap_or(0.0);
 
@@ -97,16 +98,16 @@ fn build_transport_controls(
         }
     }
 
-    build_clip_selector(ui, ui_events, state, clip_manager);
+    build_clip_selector(ui, ui_events, state, clip_library);
 }
 
 fn build_clip_selector(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     state: &TimelineState,
-    clip_manager: &EditableClipManager,
+    clip_library: &ClipLibrary,
 ) {
-    let clip_names = clip_manager.clip_names();
+    let clip_names = clip_library.clip_names();
 
     if clip_names.is_empty() {
         ui.text("No clips available");
@@ -115,7 +116,7 @@ fn build_clip_selector(
 
     let current_name = state
         .current_clip_id
-        .and_then(|id| clip_manager.get(id))
+        .and_then(|id| clip_library.get(id))
         .map(|c| c.name.as_str())
         .unwrap_or("Select Clip");
 
@@ -135,10 +136,10 @@ fn build_clip_selector(
 fn build_timeline_content(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
-    state: &TimelineState,
-    clip_manager: &EditableClipManager,
+    state: &mut TimelineState,
+    clip_library: &ClipLibrary,
 ) {
-    let current_clip = match state.current_clip_id.and_then(|id| clip_manager.get(id)) {
+    let current_clip = match state.current_clip_id.and_then(|id| clip_library.get(id)) {
         Some(clip) => clip,
         None => {
             ui.text("Select a clip to edit");
@@ -162,7 +163,7 @@ fn build_timeline_content(
 fn build_time_ruler_with_scrub(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
-    state: &TimelineState,
+    state: &mut TimelineState,
     clip: &EditableAnimationClip,
     timeline_width: f32,
 ) {
@@ -223,7 +224,7 @@ fn build_time_ruler_with_scrub(
     let ruler_rect_min = [ruler_start_x, cursor_pos[1]];
     let ruler_rect_max = [ruler_start_x + ruler_width, cursor_pos[1] + TIME_RULER_HEIGHT];
 
-    handle_scrub_interaction(ui, ui_events, ruler_rect_min, ruler_rect_max, clip.duration, pixels_per_second, ruler_start_x);
+    handle_scrub_interaction(ui, ui_events, state, ruler_rect_min, ruler_rect_max, clip.duration, pixels_per_second, ruler_start_x);
 
     ui.dummy([ruler_width + TRACK_LABEL_WIDTH, TIME_RULER_HEIGHT]);
 }
@@ -257,6 +258,7 @@ fn draw_playhead_handle(
 fn handle_scrub_interaction(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
+    state: &mut TimelineState,
     rect_min: [f32; 2],
     rect_max: [f32; 2],
     duration: f32,
@@ -264,18 +266,26 @@ fn handle_scrub_interaction(
     ruler_start_x: f32,
 ) {
     let mouse_pos = ui.io().mouse_pos;
+    let mouse_down = ui.io().mouse_down[0];
+
+    if !mouse_down {
+        state.scrubbing = false;
+        return;
+    }
+
     let is_mouse_in_ruler = mouse_pos[0] >= rect_min[0]
         && mouse_pos[0] <= rect_max[0]
         && mouse_pos[1] >= rect_min[1]
         && mouse_pos[1] <= rect_max[1];
 
-    let is_dragging = ui.io().mouse_down[0];
-
-    if is_mouse_in_ruler && is_dragging {
-        let relative_x = mouse_pos[0] - ruler_start_x;
-        let new_time = (relative_x / pixels_per_second).clamp(0.0, duration);
-        ui_events.send(UIEvent::TimelineSetTime(new_time));
+    if !state.scrubbing && !is_mouse_in_ruler {
+        return;
     }
+
+    state.scrubbing = true;
+    let relative_x = mouse_pos[0] - ruler_start_x;
+    let new_time = (relative_x / pixels_per_second).clamp(0.0, duration);
+    ui_events.send(UIEvent::TimelineSetTime(new_time));
 }
 
 fn calculate_tick_interval(zoom_level: f32) -> f32 {

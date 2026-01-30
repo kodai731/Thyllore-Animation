@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use crate::animation::editable::{EditableClipId, KeyframeId, PropertyType};
 use crate::animation::BoneId;
+use crate::ecs::world::Entity;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SelectedKeyframe {
@@ -34,6 +35,8 @@ pub struct TimelineState {
     pub show_translation: bool,
     pub show_rotation: bool,
     pub show_scale: bool,
+    pub target_entity: Option<Entity>,
+    pub scrubbing: bool,
 }
 
 impl TimelineState {
@@ -51,6 +54,8 @@ impl TimelineState {
             show_translation: true,
             show_rotation: true,
             show_scale: true,
+            target_entity: None,
+            scrubbing: false,
         }
     }
 

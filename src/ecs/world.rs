@@ -160,7 +160,7 @@ pub struct MaterialRef(pub AssetId);
 pub struct SkeletonRef(pub AssetId);
 
 #[derive(Clone, Debug, Default)]
-pub struct AnimationState {
+pub struct Animator {
     pub current_clip_id: Option<AnimationClipId>,
     pub time: f32,
     pub speed: f32,
@@ -168,7 +168,7 @@ pub struct AnimationState {
     pub looping: bool,
 }
 
-impl AnimationState {
+impl Animator {
     pub fn new() -> Self {
         Self {
             current_clip_id: None,
@@ -253,7 +253,7 @@ impl World {
         world.register_component::<MeshRef>();
         world.register_component::<MaterialRef>();
         world.register_component::<SkeletonRef>();
-        world.register_component::<AnimationState>();
+        world.register_component::<Animator>();
         world.register_component::<LineRendering>();
         world.register_component::<BillboardBehavior>();
         world.register_component::<NodeRef>();
@@ -415,7 +415,7 @@ impl World {
     }
 
     pub fn query_animated(&self) -> Vec<Entity> {
-        self.iter_components::<AnimationState>()
+        self.iter_components::<Animator>()
             .map(|(e, _)| e)
             .collect()
     }
@@ -452,8 +452,8 @@ impl World {
             .filter(|(e, _)| self.has_component::<Model>(*e))
     }
 
-    pub fn iter_animated_entities(&self) -> impl Iterator<Item = (Entity, &AnimationState)> {
-        self.iter_components::<AnimationState>()
+    pub fn iter_animated_entities(&self) -> impl Iterator<Item = (Entity, &Animator)> {
+        self.iter_components::<Animator>()
             .filter(|(e, _)| self.has_component::<Animated>(*e))
     }
 
@@ -537,8 +537,8 @@ impl<'a> EntityBuilder<'a> {
         self
     }
 
-    pub fn with_animation_state(self, state: AnimationState) -> Self {
-        self.world.insert_component(self.entity, state);
+    pub fn with_animator(self, animator: Animator) -> Self {
+        self.world.insert_component(self.entity, animator);
         self
     }
 

@@ -9,10 +9,11 @@ use super::format::{
 };
 use super::Camera;
 
-use crate::animation::editable::{EditableClipId, EditableClipManager};
+use crate::animation::editable::EditableClipId;
+use crate::ecs::resource::ClipLibrary;
 use crate::ecs::resource::{SceneState, TimelineState};
 use crate::ecs::world::World;
-use crate::ecs::AnimationPlayback;
+use crate::ecs::resource::ModelState;
 use crate::platform::CurveEditorState;
 
 pub fn save_scene(scene_path: &Path, world: &World) -> SceneResult<()> {
@@ -49,8 +50,8 @@ struct CollectedSceneState {
 impl CollectedSceneState {
     fn from_world(world: &World) -> Self {
         let model_path = world
-            .get_resource::<AnimationPlayback>()
-            .map(|p| p.model_path.clone())
+            .get_resource::<ModelState>()
+            .map(|s| s.model_path.clone())
             .unwrap_or_default();
 
         let camera = world
@@ -84,7 +85,7 @@ impl CollectedSceneState {
 
 fn collect_timeline_and_clip(world: &World) -> (TimelineConfig, Option<String>) {
     let timeline_state = world.get_resource::<TimelineState>();
-    let clip_manager = world.get_resource::<EditableClipManager>();
+    let clip_library = world.get_resource::<ClipLibrary>();
 
     let timeline = timeline_state
         .as_ref()
@@ -98,7 +99,7 @@ fn collect_timeline_and_clip(world: &World) -> (TimelineConfig, Option<String>) 
 
     let current_clip_id = timeline_state.as_ref().and_then(|t| t.current_clip_id);
     let current_clip_name =
-        current_clip_id.and_then(|id| clip_manager.and_then(|cm| cm.get(id).map(|c| c.name.clone())));
+        current_clip_id.and_then(|id| clip_library.and_then(|cm| cm.get(id).map(|c| c.name.clone())));
 
     (timeline, current_clip_name)
 }
@@ -110,15 +111,15 @@ fn collect_previous_metadata(world: &World) -> Option<SceneMetadata> {
 }
 
 fn save_animation_clips(world: &World, animations_dir: &Path) -> SceneResult<Vec<AnimationClipRef>> {
-    let clip_manager = match world.get_resource::<EditableClipManager>() {
+    let clip_library = match world.get_resource::<ClipLibrary>() {
         Some(cm) => cm,
         None => return Ok(Vec::new()),
     };
 
     let mut animation_clips = Vec::new();
 
-    for (clip_id, clip_name) in clip_manager.clip_names() {
-        if let Some(clip) = clip_manager.get(clip_id) {
+    for (clip_id, clip_name) in clip_library.clip_names() {
+        if let Some(clip) = clip_library.get(clip_id) {
             let clip_filename = sanitize_filename(&clip_name);
             let clip_path = animations_dir.join(format!("{}.anim.ron", clip_filename));
 

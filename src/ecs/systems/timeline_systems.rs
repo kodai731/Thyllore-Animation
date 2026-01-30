@@ -1,4 +1,5 @@
-use crate::animation::editable::{EditableClipId, EditableClipManager};
+use crate::animation::editable::EditableClipId;
+use crate::ecs::resource::ClipLibrary;
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{AnimationPlayback, TimelineState};
 
@@ -6,7 +7,7 @@ pub fn timeline_process_events(
     events: &[UIEvent],
     timeline_state: &mut TimelineState,
     playback: &mut AnimationPlayback,
-    clip_manager: &mut EditableClipManager,
+    clip_library: &mut ClipLibrary,
 ) {
     for event in events {
         match event {
@@ -45,7 +46,7 @@ pub fn timeline_process_events(
             }
 
             UIEvent::TimelineSelectClip(clip_id) => {
-                timeline_select_clip(timeline_state, playback, clip_manager, *clip_id);
+                timeline_select_clip(timeline_state, playback, clip_library, *clip_id);
             }
 
             UIEvent::TimelineToggleTrack(bone_id) => {
@@ -82,7 +83,7 @@ pub fn timeline_process_events(
                 new_value,
             } => {
                 if let Some(clip_id) = timeline_state.current_clip_id {
-                    if let Some(clip) = clip_manager.get_mut(clip_id) {
+                    if let Some(clip) = clip_library.get_mut(clip_id) {
                         if let Some(track) = clip.tracks.get_mut(bone_id) {
                             track.move_keyframe(*property_type, *keyframe_id, *new_time, *new_value);
                         }
@@ -106,10 +107,10 @@ pub fn timeline_process_events(
 fn timeline_select_clip(
     timeline_state: &mut TimelineState,
     playback: &mut AnimationPlayback,
-    clip_manager: &EditableClipManager,
+    clip_library: &ClipLibrary,
     clip_id: EditableClipId,
 ) {
-    if let Some(clip) = clip_manager.get(clip_id) {
+    if let Some(clip) = clip_library.get(clip_id) {
         timeline_state.current_clip_id = Some(clip_id);
         timeline_state.current_time = 0.0;
         timeline_state.selected_keyframes.clear();
@@ -128,7 +129,7 @@ fn timeline_select_clip(
         );
     }
 
-    if let Some(playable_clip) = clip_manager.to_playable_clip(clip_id) {
+    if let Some(playable_clip) = clip_library.to_playable_clip(clip_id) {
         playback.current_clip_id = Some(playable_clip.id);
         playback.time = 0.0;
     }
@@ -137,7 +138,7 @@ fn timeline_select_clip(
 pub fn timeline_update(
     timeline_state: &mut TimelineState,
     playback: &mut AnimationPlayback,
-    clip_manager: &EditableClipManager,
+    clip_library: &ClipLibrary,
     delta_time: f32,
 ) {
     if !timeline_state.playing {
@@ -146,7 +147,7 @@ pub fn timeline_update(
 
     let duration = timeline_state
         .current_clip_id
-        .and_then(|id| clip_manager.get(id))
+        .and_then(|id| clip_library.get(id))
         .map(|c| c.duration)
         .unwrap_or(0.0);
 

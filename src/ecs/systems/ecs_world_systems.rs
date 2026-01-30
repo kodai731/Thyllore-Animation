@@ -3,7 +3,7 @@ use cgmath::{Matrix4, SquareMatrix};
 use crate::asset::AssetStorage;
 use crate::ecs::resource::AnimationPlayback;
 use crate::ecs::world::{
-    AnimationState, Children, Entity, GlobalTransform, SkeletonRef, Transform, World,
+    Animator, Children, Entity, GlobalTransform, SkeletonRef, Transform, World,
 };
 
 pub fn animation_playback_system(
@@ -59,7 +59,7 @@ pub fn animation_time_system(world: &mut World, delta_time: f32, assets: &AssetS
     let animated_entities = world.query_animated();
 
     for entity in animated_entities {
-        let Some(state) = world.get_component_mut::<AnimationState>(entity) else {
+        let Some(state) = world.get_component_mut::<Animator>(entity) else {
             continue;
         };
 
@@ -101,7 +101,7 @@ pub fn skeleton_animation_system(world: &mut World, assets: &mut AssetStorage) {
     let mut animations_to_apply = Vec::new();
 
     for entity in animated_entities {
-        let Some(state) = world.get_component::<AnimationState>(entity) else {
+        let Some(state) = world.get_component::<Animator>(entity) else {
             continue;
         };
         let Some(skeleton_ref) = world.get_component::<SkeletonRef>(entity) else {

@@ -1,7 +1,8 @@
 use anyhow::Result;
 
 use crate::animation::{AnimationClipId, MorphAnimationSystem};
-use crate::ecs::resource::{AnimationPlayback, AnimationRegistry, ModelState};
+use crate::ecs::resource::{AnimationPlayback, AnimationType, ClipLibrary, HierarchyState, ModelState};
+use crate::ecs::world::{Animator, World};
 use crate::render::RenderBackend;
 use crate::app::graphics_resource::{GraphicsResources, NodeData};
 
@@ -27,41 +28,96 @@ pub fn playback_resume(playback: &mut AnimationPlayback) {
 pub fn playback_prepare_animations(
     graphics: &mut GraphicsResources,
     nodes: &mut [NodeData],
-    anim_registry: &mut AnimationRegistry,
+    clip_library: &mut ClipLibrary,
     model_state: &ModelState,
     _time: f32,
     playback: &mut AnimationPlayback,
 ) -> Vec<usize> {
     let current_time = playback.time;
 
-    let morph_updated = if !anim_registry.morph_animation.is_empty() {
-        playback_apply_morph_animation(graphics, &anim_registry.morph_animation, current_time)
+    let morph_updated = if !clip_library.morph_animation.is_empty() {
+        playback_apply_morph_animation(graphics, &clip_library.morph_animation, current_time)
     } else {
         Vec::new()
     };
 
-    if anim_registry.animation.clips.is_empty() {
+    if clip_library.animation.clips.is_empty() {
         return morph_updated;
     }
 
     let skeleton_id = graphics.meshes.first().and_then(|m| m.skeleton_id);
-    if let Some(skel_id) = skeleton_id {
-        anim_registry.animation.apply_to_skeleton(skel_id, playback);
+    if let (Some(skel_id), Some(clip_id)) = (skeleton_id, playback.current_clip_id) {
+        clip_library.animation.apply_to_skeleton(skel_id, clip_id, playback.time, playback.looping);
     }
 
-    let model_path = &playback.model_path;
-    let is_gltf = model_path.ends_with(".glb") || model_path.ends_with(".gltf");
-    let is_fbx = model_path.ends_with(".fbx");
-    let has_node_animation = (is_gltf || is_fbx) && !model_state.has_skinned_meshes;
+    let has_node_animation = model_state.animation_type == AnimationType::Node;
 
     let anim_updated = if has_node_animation {
         graphics.prepare_node_animation(
             nodes,
-            &anim_registry.animation,
+            &clip_library.animation,
             model_state.node_animation_scale,
         )
     } else {
-        graphics.prepare_skinned_vertices(&anim_registry.animation)
+        graphics.prepare_skinned_vertices(&clip_library.animation)
+    };
+
+    let mut all_updated = morph_updated;
+    for mesh_id in anim_updated {
+        if !all_updated.contains(&mesh_id) {
+            all_updated.push(mesh_id);
+        }
+    }
+    all_updated
+}
+
+pub fn evaluate_animators(
+    world: &World,
+    graphics: &mut GraphicsResources,
+    nodes: &mut [NodeData],
+    clip_library: &mut ClipLibrary,
+    model_state: &ModelState,
+    hierarchy_state: &HierarchyState,
+) -> Vec<usize> {
+    let animator = hierarchy_state
+        .selected_entity
+        .and_then(|entity| world.get_component::<Animator>(entity))
+        .or_else(|| {
+            world
+                .iter_animated_entities()
+                .next()
+                .map(|(e, _)| e)
+                .and_then(|e| world.get_component::<Animator>(e))
+        });
+
+    let current_time = animator.map(|a| a.time).unwrap_or(0.0);
+    let current_clip_id = animator.and_then(|a| a.current_clip_id);
+    let looping = animator.map(|a| a.looping).unwrap_or(true);
+
+    let morph_updated = if !clip_library.morph_animation.is_empty() {
+        playback_apply_morph_animation(graphics, &clip_library.morph_animation, current_time)
+    } else {
+        Vec::new()
+    };
+
+    if clip_library.animation.clips.is_empty() {
+        return morph_updated;
+    }
+
+    let skeleton_id = graphics.meshes.first().and_then(|m| m.skeleton_id);
+    if let (Some(skel_id), Some(clip_id)) = (skeleton_id, current_clip_id) {
+        clip_library
+            .animation
+            .apply_to_skeleton(skel_id, clip_id, current_time, looping);
+    }
+
+    let anim_updated = match model_state.animation_type {
+        AnimationType::Node => graphics.prepare_node_animation(
+            nodes,
+            &clip_library.animation,
+            model_state.node_animation_scale,
+        ),
+        _ => graphics.prepare_skinned_vertices(&clip_library.animation),
     };
 
     let mut all_updated = morph_updated;

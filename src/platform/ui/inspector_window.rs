@@ -1,5 +1,7 @@
 use imgui::Condition;
 
+use crate::app::graphics_resource::GraphicsResources;
+use crate::asset::AssetStorage;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::systems::collect_inspector_data;
@@ -10,6 +12,8 @@ pub fn build_inspector_window(
     ui_events: &mut UIEventQueue,
     world: &World,
     state: &HierarchyState,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
 ) {
     let display_size = ui.io().display_size;
     let inspector_width = 300.0;
@@ -26,12 +30,16 @@ pub fn build_inspector_window(
         .collapsible(false)
         .build(|| {
             if let Some(entity) = state.selected_entity {
-                let data = collect_inspector_data(world, entity);
+                let data = collect_inspector_data(world, entity, assets, graphics);
 
                 ui.text(&format!("[{}] {}", data.icon_char, data.name));
                 ui.separator();
 
                 build_transform_section(ui, ui_events, &data);
+
+                build_mesh_section(ui, &data);
+
+                build_material_section(ui, &data);
 
                 build_visible_section(ui, ui_events, &data);
             } else {
@@ -82,6 +90,57 @@ fn build_transform_section(
             }
         }
     }
+}
+
+fn build_mesh_section(ui: &imgui::Ui, data: &crate::ecs::systems::InspectorData) {
+    let Some(ref mesh) = data.mesh else {
+        return;
+    };
+
+    if ui.collapsing_header("Mesh", imgui::TreeNodeFlags::DEFAULT_OPEN) {
+        ui.text(&format!("Name        {}", mesh.name));
+        ui.text(&format!("Vertices    {}", format_number(mesh.vertex_count)));
+        ui.text(&format!(
+            "Triangles   {}",
+            format_number(mesh.triangle_count)
+        ));
+        ui.text(&format!(
+            "Skinned     {}",
+            if mesh.has_skin { "Yes" } else { "No" }
+        ));
+    }
+}
+
+fn build_material_section(ui: &imgui::Ui, data: &crate::ecs::systems::InspectorData) {
+    let Some(ref mat) = data.material else {
+        return;
+    };
+
+    if ui.collapsing_header("Material", imgui::TreeNodeFlags::DEFAULT_OPEN) {
+        ui.text(&format!("Name        {}", mat.name));
+        ui.text(&format!(
+            "Base Color  ({:.2}, {:.2}, {:.2}, {:.2})",
+            mat.base_color.x, mat.base_color.y, mat.base_color.z, mat.base_color.w
+        ));
+        ui.text(&format!("Metallic    {:.2}", mat.metallic));
+        ui.text(&format!("Roughness   {:.2}", mat.roughness));
+    }
+}
+
+fn format_number(n: usize) -> String {
+    let s = n.to_string();
+    let bytes = s.as_bytes();
+    let len = bytes.len();
+    let mut result = String::with_capacity(len + len / 3);
+
+    for (i, &b) in bytes.iter().enumerate() {
+        if i > 0 && (len - i) % 3 == 0 {
+            result.push(',');
+        }
+        result.push(b as char);
+    }
+
+    result
 }
 
 fn build_visible_section(

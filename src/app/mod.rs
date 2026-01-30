@@ -24,7 +24,7 @@ pub use init::*;
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::debugview::{DebugViewData, GridMeshData, RayTracingDebugState};
 use crate::ecs::{
-    AnimationPlayback, AnimationRegistry, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState,
+    AnimationPlayback, ClipLibrary, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState,
     NodeAssets, ResMut, ResRef, Resource,
 };
 use crate::platform::ImguiData;
@@ -176,12 +176,12 @@ impl App {
         self.resource_mut::<MaterialRegistry>()
     }
 
-    pub fn animation_registry(&self) -> ResRef<AnimationRegistry> {
-        self.resource::<AnimationRegistry>()
+    pub fn clip_library(&self) -> ResRef<ClipLibrary> {
+        self.resource::<ClipLibrary>()
     }
 
-    pub fn animation_registry_mut(&self) -> ResMut<AnimationRegistry> {
-        self.resource_mut::<AnimationRegistry>()
+    pub fn clip_library_mut(&self) -> ResMut<ClipLibrary> {
+        self.resource_mut::<ClipLibrary>()
     }
 
     pub fn model_state(&self) -> ResRef<ModelState> {

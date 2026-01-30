@@ -1,7 +1,25 @@
-use cgmath::{Quaternion, Rotation3, Vector3};
+use cgmath::{Quaternion, Rotation3, Vector3, Vector4};
 
+use crate::app::graphics_resource::GraphicsResources;
+use crate::asset::AssetStorage;
 use crate::ecs::component::EditorDisplay;
-use crate::ecs::world::{Entity, Name, Transform, Visible, World};
+use crate::ecs::world::{Entity, MeshRef, Name, Transform, Visible, World};
+
+#[derive(Clone, Debug)]
+pub struct MeshInspectorData {
+    pub name: String,
+    pub vertex_count: usize,
+    pub triangle_count: usize,
+    pub has_skin: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct MaterialInspectorData {
+    pub name: String,
+    pub base_color: Vector4<f32>,
+    pub metallic: f32,
+    pub roughness: f32,
+}
 
 #[derive(Clone, Debug)]
 pub struct InspectorData {
@@ -12,9 +30,16 @@ pub struct InspectorData {
     pub scale: Option<Vector3<f32>>,
     pub visible: Option<bool>,
     pub icon_char: char,
+    pub mesh: Option<MeshInspectorData>,
+    pub material: Option<MaterialInspectorData>,
 }
 
-pub fn collect_inspector_data(world: &World, entity: Entity) -> InspectorData {
+pub fn collect_inspector_data(
+    world: &World,
+    entity: Entity,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+) -> InspectorData {
     let name = world
         .get_component::<Name>(entity)
         .map(|n| n.0.clone())
@@ -32,6 +57,8 @@ pub fn collect_inspector_data(world: &World, entity: Entity) -> InspectorData {
         .map(|ed| ed.icon.to_char())
         .unwrap_or(' ');
 
+    let (mesh, material) = collect_mesh_and_material(world, entity, assets, graphics);
+
     InspectorData {
         entity,
         name,
@@ -40,7 +67,47 @@ pub fn collect_inspector_data(world: &World, entity: Entity) -> InspectorData {
         scale,
         visible,
         icon_char,
+        mesh,
+        material,
     }
+}
+
+fn collect_mesh_and_material(
+    world: &World,
+    entity: Entity,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+) -> (Option<MeshInspectorData>, Option<MaterialInspectorData>) {
+    let mesh_ref = match world.get_component::<MeshRef>(entity) {
+        Some(r) => r,
+        None => return (None, None),
+    };
+
+    let mesh_asset = match assets.get_mesh(mesh_ref.mesh_asset_id) {
+        Some(a) => a,
+        None => return (None, None),
+    };
+
+    let mesh_data = graphics.meshes.get(mesh_asset.graphics_mesh_index).map(|mb| {
+        MeshInspectorData {
+            name: mesh_asset.name.clone(),
+            vertex_count: mb.vertex_data.vertices.len(),
+            triangle_count: mb.vertex_data.indices.len() / 3,
+            has_skin: mb.skin_data.is_some(),
+        }
+    });
+
+    let material_data = mesh_asset
+        .material_id
+        .and_then(|mid| graphics.materials.get(mid))
+        .map(|mat| MaterialInspectorData {
+            name: mat.name.clone(),
+            base_color: mat.properties.base_color,
+            metallic: mat.properties.metallic,
+            roughness: mat.properties.roughness,
+        });
+
+    (mesh_data, material_data)
 }
 
 pub fn update_entity_translation(world: &mut World, entity: Entity, translation: Vector3<f32>) {

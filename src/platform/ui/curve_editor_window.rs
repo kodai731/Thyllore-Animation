@@ -2,9 +2,8 @@ use std::collections::HashSet;
 
 use imgui::Condition;
 
-use crate::animation::editable::{
-    EditableClipManager, KeyframeId, PropertyCurve, PropertyType,
-};
+use crate::animation::editable::{KeyframeId, PropertyCurve, PropertyType};
+use crate::ecs::resource::ClipLibrary;
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::TimelineState;
@@ -138,7 +137,7 @@ pub fn build_curve_editor_window(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     timeline_state: &TimelineState,
-    clip_manager: &EditableClipManager,
+    clip_library: &ClipLibrary,
     editor_state: &mut CurveEditorState,
 ) {
     if !editor_state.is_open {
@@ -173,7 +172,7 @@ pub fn build_curve_editor_window(
                     build_track_list(
                         ui,
                         timeline_state,
-                        clip_manager,
+                        clip_library,
                         editor_state,
                     );
                 });
@@ -190,7 +189,7 @@ pub fn build_curve_editor_window(
                         ui,
                         ui_events,
                         timeline_state,
-                        clip_manager,
+                        clip_library,
                         editor_state,
                     );
                 });
@@ -202,12 +201,12 @@ pub fn build_curve_editor_window(
 fn build_track_list(
     ui: &imgui::Ui,
     timeline_state: &TimelineState,
-    clip_manager: &EditableClipManager,
+    clip_library: &ClipLibrary,
     editor_state: &mut CurveEditorState,
 ) {
     let clip = match timeline_state
         .current_clip_id
-        .and_then(|id| clip_manager.get(id))
+        .and_then(|id| clip_library.get(id))
     {
         Some(c) => c,
         None => {
@@ -293,12 +292,12 @@ fn build_curve_view(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     timeline_state: &TimelineState,
-    clip_manager: &EditableClipManager,
+    clip_library: &ClipLibrary,
     editor_state: &mut CurveEditorState,
 ) {
     let clip = match timeline_state
         .current_clip_id
-        .and_then(|id| clip_manager.get(id))
+        .and_then(|id| clip_library.get(id))
     {
         Some(c) => c,
         None => {

@@ -129,7 +129,51 @@ Implemented multi-clip blending: Override crossfade, Additive blending, ClipGrou
 ### BlendMode Helper (`src/animation/editable/blend.rs`)
 - Added `BlendMode::default_ease_in()` method
 
+## Phase E: Tangent / Interpolation System (2026-02-01)
+
+### Summary
+Added per-keyframe interpolation types (Linear/Bezier/Stepped) and tangent handle editing to the Curve Editor.
+
+### Changes
+
+#### InterpolationType (`src/animation/editable/keyframe.rs`)
+- Added `InterpolationType` enum: `Linear` (default), `Bezier`, `Stepped`
+- Added `interpolation` field to `EditableKeyframe` with `#[serde(default)]` for backward compatibility
+
+#### Bezier Sampling & Tangent Calculation (`src/animation/editable/tangent.rs`) [NEW]
+- `sample_bezier()` - Cubic bezier sampling with Newton-Raphson time-axis inversion (8 iterations)
+- `apply_auto_tangent()` - Catmull-Rom style automatic tangent calculation
+- `apply_flat_tangent()` - Horizontal tangent (value_offset = 0)
+- `apply_linear_tangent()` - Straight-line tangent to neighboring keyframes
+- `apply_auto_tangents_to_all()` - Batch auto tangent for all keyframes
+- 5 unit tests covering bezier sampling, auto/flat tangent generation
+
+#### PropertyCurve Bezier Support (`src/animation/editable/curve.rs`)
+- `sample()` now dispatches per-keyframe: Stepped returns k0.value, Linear interpolates, Bezier calls `sample_bezier()`
+- Added `set_keyframe_interpolation()`, `set_keyframe_tangents()`, `recalculate_auto_tangents()`, `recalculate_auto_tangent_at()`, `has_bezier_keyframes()`
+
+#### UIEvents (`src/ecs/events/ui_events.rs`)
+- `TimelineSetKeyframeInterpolation` - Change keyframe interpolation type
+- `TimelineSetKeyframeTangent` - Set in/out tangent handles directly
+- `TimelineAutoTangent` - Auto-calculate tangent for a keyframe
+
+#### Event Handlers (`src/ecs/systems/timeline_systems.rs`, `ui_event_systems.rs`)
+- Pattern match for all 3 new events in both systems
+
+#### Curve Editor UI (`src/platform/ui/curve_editor_window.rs`)
+- `TangentHandleType` enum and `DraggingTangent` struct for tangent drag state
+- `draw_tangent_handles()` - Renders in/out handle lines and squares for Bezier keyframes
+- `draw_curve_with_keyframes()` rewritten: per-segment sampling (Stepped: 2-step staircase, Linear: 2 samples, Bezier: 20 samples)
+- `find_tangent_handle_at_position()` - Hit testing for tangent handle squares
+- `handle_curve_area_click()` prioritizes tangent handle hits over keyframe hits
+- `handle_mouse_release()` emits `TimelineSetKeyframeTangent` on tangent drag end
+- Right-click context menu: Interpolation type selection (Linear/Bezier/Stepped), Tangent presets (Auto/Flat/Reset)
+
+#### Bake Support (`src/animation/editable/clip.rs`)
+- `collect_bake_times()` inserts 10 intermediate samples per Bezier segment for dense linear bake
+- `to_animation_clip()` uses `collect_bake_times()` instead of `collect_unique_times()`
+
 ## Future Work
-- Keyframe editing (drag to move, value editing)
-- Curve editor with bezier handles
 - Undo/redo system
+- Tangent lock/break modes
+- Graph Editor zoom-to-fit for selected curves

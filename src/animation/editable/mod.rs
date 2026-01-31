@@ -6,6 +6,7 @@ mod curve;
 mod keyframe;
 mod manager;
 mod source_clip;
+mod tangent;
 mod track;
 
 pub use blend::*;
@@ -16,4 +17,5 @@ pub use curve::*;
 pub use keyframe::*;
 pub use manager::*;
 pub use source_clip::*;
+pub use tangent::*;
 pub use track::*;

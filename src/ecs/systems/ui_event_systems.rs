@@ -169,6 +169,9 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::TimelineMoveKeyframe { .. }
             | UIEvent::TimelineZoomIn
             | UIEvent::TimelineZoomOut
+            | UIEvent::TimelineSetKeyframeInterpolation { .. }
+            | UIEvent::TimelineSetKeyframeTangent { .. }
+            | UIEvent::TimelineAutoTangent { .. }
             | UIEvent::ClipInstanceSelect { .. }
             | UIEvent::ClipInstanceDeselect
             | UIEvent::ClipInstanceMove { .. }

@@ -1,7 +1,8 @@
 use cgmath::{Quaternion, Vector3};
 
 use crate::animation::editable::{
-    BlendMode, ClipGroupId, ClipInstanceId, KeyframeId, PropertyType, SourceClipId,
+    BezierHandle, BlendMode, ClipGroupId, ClipInstanceId, InterpolationType, KeyframeId,
+    PropertyType, SourceClipId,
 };
 use crate::animation::BoneId;
 use crate::app::data::LightMoveTarget;
@@ -70,6 +71,24 @@ pub enum UIEvent {
     },
     TimelineZoomIn,
     TimelineZoomOut,
+    TimelineSetKeyframeInterpolation {
+        bone_id: BoneId,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+        interpolation: InterpolationType,
+    },
+    TimelineSetKeyframeTangent {
+        bone_id: BoneId,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+        in_tangent: BezierHandle,
+        out_tangent: BezierHandle,
+    },
+    TimelineAutoTangent {
+        bone_id: BoneId,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+    },
 
     ClipInstanceSelect { entity: Entity, instance_id: ClipInstanceId },
     ClipInstanceDeselect,

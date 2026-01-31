@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::animation::{AnimationClip, BoneId, Keyframe, TransformChannel};
 
-use super::curve::PropertyType;
-use super::keyframe::SourceClipId;
+use super::curve::{PropertyCurve, PropertyType};
+use super::keyframe::{InterpolationType, SourceClipId};
 use super::track::BoneTrack;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -82,11 +82,12 @@ impl EditableAnimationClip {
         for (&bone_id, track) in &self.tracks {
             let mut channel = TransformChannel::default();
 
-            let translation_times = collect_unique_times(&[
+            let translation_curves = [
                 &track.translation_x,
                 &track.translation_y,
                 &track.translation_z,
-            ]);
+            ];
+            let translation_times = collect_bake_times(&translation_curves);
             for time in translation_times {
                 let x = track.translation_x.sample(time).unwrap_or(0.0);
                 let y = track.translation_y.sample(time).unwrap_or(0.0);
@@ -97,11 +98,12 @@ impl EditableAnimationClip {
                 });
             }
 
-            let rotation_times = collect_unique_times(&[
+            let rotation_curves = [
                 &track.rotation_x,
                 &track.rotation_y,
                 &track.rotation_z,
-            ]);
+            ];
+            let rotation_times = collect_bake_times(&rotation_curves);
             for time in rotation_times {
                 let ex = track.rotation_x.sample(time).unwrap_or(0.0);
                 let ey = track.rotation_y.sample(time).unwrap_or(0.0);
@@ -114,8 +116,9 @@ impl EditableAnimationClip {
                 });
             }
 
-            let scale_times =
-                collect_unique_times(&[&track.scale_x, &track.scale_y, &track.scale_z]);
+            let scale_curves =
+                [&track.scale_x, &track.scale_y, &track.scale_z];
+            let scale_times = collect_bake_times(&scale_curves);
             for time in scale_times {
                 let x = track.scale_x.sample(time).unwrap_or(1.0);
                 let y = track.scale_y.sample(time).unwrap_or(1.0);
@@ -196,11 +199,47 @@ impl EditableAnimationClip {
     }
 }
 
-fn collect_unique_times(curves: &[&super::curve::PropertyCurve]) -> Vec<f32> {
+fn collect_unique_times(curves: &[&PropertyCurve]) -> Vec<f32> {
     let mut times: Vec<f32> = curves
         .iter()
         .flat_map(|c| c.keyframes.iter().map(|k| k.time))
         .collect();
+
+    times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    times.dedup_by(|a, b| (*a - *b).abs() < 0.0001);
+    times
+}
+
+fn collect_bake_times(curves: &[&PropertyCurve]) -> Vec<f32> {
+    let has_bezier = curves
+        .iter()
+        .any(|c| c.has_bezier_keyframes());
+
+    if !has_bezier {
+        return collect_unique_times(curves);
+    }
+
+    let mut times: Vec<f32> = Vec::new();
+
+    for curve in curves {
+        for kf in &curve.keyframes {
+            times.push(kf.time);
+        }
+
+        for i in 0..curve.keyframes.len().saturating_sub(1) {
+            let k0 = &curve.keyframes[i];
+            let k1 = &curve.keyframes[i + 1];
+
+            if k0.interpolation == InterpolationType::Bezier {
+                let bezier_subdivisions = 10;
+                for s in 1..bezier_subdivisions {
+                    let frac = s as f32 / bezier_subdivisions as f32;
+                    let mid_time = k0.time + (k1.time - k0.time) * frac;
+                    times.push(mid_time);
+                }
+            }
+        }
+    }
 
     times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     times.dedup_by(|a, b| (*a - *b).abs() < 0.0001);

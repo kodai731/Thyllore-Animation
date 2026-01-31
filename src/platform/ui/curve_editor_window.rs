@@ -2,7 +2,9 @@ use std::collections::HashSet;
 
 use imgui::Condition;
 
-use crate::animation::editable::{KeyframeId, PropertyCurve, PropertyType};
+use crate::animation::editable::{
+    BezierHandle, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
+};
 use crate::ecs::resource::ClipLibrary;
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
@@ -81,6 +83,20 @@ pub struct SelectedKeyframe {
     pub original_value: f32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TangentHandleType {
+    In,
+    Out,
+}
+
+#[derive(Clone, Debug)]
+pub struct DraggingTangent {
+    pub property_type: PropertyType,
+    pub keyframe_id: KeyframeId,
+    pub handle_type: TangentHandleType,
+    pub original_handle: BezierHandle,
+}
+
 pub struct CurveEditorState {
     pub is_open: bool,
     pub selected_bone_id: Option<BoneId>,
@@ -99,6 +115,8 @@ pub struct CurveEditorState {
     pub is_panning: bool,
     pub pan_start_mouse_pos: [f32; 2],
     pub pan_start_offset: [f32; 2],
+    pub dragging_tangent: Option<DraggingTangent>,
+    pub context_menu_keyframe: Option<SelectedKeyframe>,
 }
 
 impl Default for CurveEditorState {
@@ -129,6 +147,8 @@ impl Default for CurveEditorState {
             is_panning: false,
             pan_start_mouse_pos: [0.0, 0.0],
             pan_start_offset: [0.0, 0.0],
+            dragging_tangent: None,
+            context_menu_keyframe: None,
         }
     }
 }
@@ -448,6 +468,13 @@ fn build_curve_view(
                     selected,
                     &vt,
                 );
+
+                draw_tangent_handles(
+                    &draw_list,
+                    &curves_to_draw,
+                    selected,
+                    &vt,
+                );
             }
 
             let playhead_x =
@@ -469,6 +496,13 @@ fn build_curve_view(
                     &draw_list,
                     ui.io().mouse_pos,
                     &vt,
+                );
+            }
+
+            if editor_state.dragging_tangent.is_some() {
+                draw_tangent_drag_preview(
+                    &draw_list,
+                    ui.io().mouse_pos,
                 );
             }
         },
@@ -498,9 +532,122 @@ fn build_curve_view(
         clip.duration,
     );
 
+    if ui.is_item_hovered()
+        && ui.is_mouse_clicked(imgui::MouseButton::Right)
+    {
+        let mouse_pos = ui.io().mouse_pos;
+        if let Some(hit) =
+            find_keyframe_at_position(mouse_pos, &curves_to_draw, &vt)
+        {
+            editor_state.context_menu_keyframe = Some(SelectedKeyframe {
+                property_type: hit.0,
+                keyframe_id: hit.1,
+                original_time: hit.2,
+                original_value: hit.3,
+            });
+            ui.open_popup("keyframe_context_menu");
+        }
+    }
+
+    build_keyframe_context_menu(ui, ui_events, editor_state, bone_id);
+
     ui.set_cursor_screen_pos(
         [cursor_pos[0], cursor_pos[1] + total_height],
     );
+}
+
+fn build_keyframe_context_menu(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    editor_state: &mut CurveEditorState,
+    bone_id: BoneId,
+) {
+    ui.popup("keyframe_context_menu", || {
+        let ctx_kf = match editor_state.context_menu_keyframe.clone() {
+            Some(kf) => kf,
+            None => return,
+        };
+
+        ui.text("Interpolation");
+        ui.separator();
+
+        if ui
+            .selectable_config("Linear")
+            .build()
+        {
+            ui_events.send(UIEvent::TimelineSetKeyframeInterpolation {
+                bone_id,
+                property_type: ctx_kf.property_type,
+                keyframe_id: ctx_kf.keyframe_id,
+                interpolation: InterpolationType::Linear,
+            });
+        }
+
+        if ui
+            .selectable_config("Bezier")
+            .build()
+        {
+            ui_events.send(UIEvent::TimelineSetKeyframeInterpolation {
+                bone_id,
+                property_type: ctx_kf.property_type,
+                keyframe_id: ctx_kf.keyframe_id,
+                interpolation: InterpolationType::Bezier,
+            });
+        }
+
+        if ui
+            .selectable_config("Stepped")
+            .build()
+        {
+            ui_events.send(UIEvent::TimelineSetKeyframeInterpolation {
+                bone_id,
+                property_type: ctx_kf.property_type,
+                keyframe_id: ctx_kf.keyframe_id,
+                interpolation: InterpolationType::Stepped,
+            });
+        }
+
+        ui.spacing();
+        ui.text("Tangent");
+        ui.separator();
+
+        if ui
+            .selectable_config("Auto")
+            .build()
+        {
+            ui_events.send(UIEvent::TimelineAutoTangent {
+                bone_id,
+                property_type: ctx_kf.property_type,
+                keyframe_id: ctx_kf.keyframe_id,
+            });
+        }
+
+        if ui
+            .selectable_config("Flat")
+            .build()
+        {
+            ui_events.send(UIEvent::TimelineSetKeyframeTangent {
+                bone_id,
+                property_type: ctx_kf.property_type,
+                keyframe_id: ctx_kf.keyframe_id,
+                in_tangent: BezierHandle::new(-0.166, 0.0),
+                out_tangent: BezierHandle::new(0.166, 0.0),
+            });
+        }
+
+        if ui
+            .selectable_config("Reset (Linear)")
+            .build()
+        {
+            ui_events.send(UIEvent::TimelineSetKeyframeTangent {
+                bone_id,
+                property_type: ctx_kf.property_type,
+                keyframe_id: ctx_kf.keyframe_id,
+                in_tangent: BezierHandle::linear(),
+                out_tangent: BezierHandle::linear(),
+            });
+        }
+    });
 }
 
 fn handle_mouse_interaction(
@@ -545,6 +692,7 @@ fn handle_mouse_interaction(
         mouse_pos,
         mouse_released,
         middle_released,
+        curves_to_draw,
     );
 
     if is_hovered && mouse_clicked && in_ruler_area {
@@ -558,6 +706,7 @@ fn handle_mouse_interaction(
         && in_curve_area
         && !editor_state.is_dragging_keyframe
         && !editor_state.is_panning
+        && editor_state.dragging_tangent.is_none()
     {
         handle_curve_area_click(
             editor_state, mouse_pos, curves_to_draw, vt,
@@ -594,9 +743,27 @@ fn handle_mouse_release(
     mouse_pos: [f32; 2],
     mouse_released: bool,
     middle_released: bool,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
 ) {
     if mouse_released {
-        if editor_state.is_dragging_keyframe {
+        if let Some(ref dragging) = editor_state.dragging_tangent.clone() {
+            if let Some(bone_id) = editor_state.selected_bone_id {
+                let (in_tangent, out_tangent) = compute_dragged_tangent(
+                    dragging,
+                    mouse_pos,
+                    curves_to_draw,
+                    vt,
+                );
+                ui_events.send(UIEvent::TimelineSetKeyframeTangent {
+                    bone_id,
+                    property_type: dragging.property_type,
+                    keyframe_id: dragging.keyframe_id,
+                    in_tangent,
+                    out_tangent,
+                });
+            }
+            editor_state.dragging_tangent = None;
+        } else if editor_state.is_dragging_keyframe {
             if let Some(ref selected) =
                 editor_state.selected_keyframe
             {
@@ -630,12 +797,63 @@ fn handle_mouse_release(
     }
 }
 
+fn compute_dragged_tangent(
+    dragging: &DraggingTangent,
+    mouse_pos: [f32; 2],
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    vt: &ViewTransform,
+) -> (BezierHandle, BezierHandle) {
+    for (curve, _, _) in curves_to_draw {
+        if curve.property_type != dragging.property_type {
+            continue;
+        }
+
+        let kf = match curve.get_keyframe(dragging.keyframe_id) {
+            Some(kf) => kf,
+            None => break,
+        };
+
+        let mouse_time = vt.x_to_time(mouse_pos[0]);
+        let mouse_value = vt.y_to_value(mouse_pos[1]);
+        let time_offset = mouse_time - kf.time;
+        let value_offset = mouse_value - kf.value;
+        let new_handle = BezierHandle::new(time_offset, value_offset);
+
+        return match dragging.handle_type {
+            TangentHandleType::In => (new_handle, kf.out_tangent.clone()),
+            TangentHandleType::Out => (kf.in_tangent.clone(), new_handle),
+        };
+    }
+
+    (BezierHandle::linear(), BezierHandle::linear())
+}
+
 fn handle_curve_area_click(
     editor_state: &mut CurveEditorState,
     mouse_pos: [f32; 2],
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
     vt: &ViewTransform,
 ) {
+    if let Some(ref selected) = editor_state.selected_keyframe {
+        if let Some((handle_type, property_type, keyframe_id, original_handle)) =
+            find_tangent_handle_at_position(
+                mouse_pos,
+                curves_to_draw,
+                selected,
+                vt,
+            )
+        {
+            editor_state.dragging_tangent = Some(DraggingTangent {
+                property_type,
+                keyframe_id,
+                handle_type,
+                original_handle,
+            });
+            editor_state.drag_start_mouse_pos = mouse_pos;
+            return;
+        }
+    }
+
     let hit_keyframe =
         find_keyframe_at_position(mouse_pos, curves_to_draw, vt);
 
@@ -927,29 +1145,89 @@ fn draw_curve_with_keyframes(
     draw_list: &imgui::DrawListMut,
     curve: &PropertyCurve,
     color: [f32; 4],
-    sample_count: usize,
+    _sample_count: usize,
     vt: &ViewTransform,
 ) {
     if curve.keyframes.is_empty() {
         return;
     }
 
-    let step = vt.duration / sample_count as f32;
-    let mut prev_point: Option<[f32; 2]> = None;
+    if curve.keyframes.len() == 1 {
+        let kf = &curve.keyframes[0];
+        let x = vt.time_to_x(kf.time);
+        let y = vt.value_to_y(kf.value);
+        draw_list
+            .add_circle([x, y], 5.0, color)
+            .filled(true)
+            .build();
+        draw_list
+            .add_circle([x, y], 5.0, [1.0, 1.0, 1.0, 0.8])
+            .build();
+        return;
+    }
 
-    for i in 0..=sample_count {
-        let time = (i as f32) * step;
-        if let Some(value) = curve.sample(time) {
-            let point = [vt.time_to_x(time), vt.value_to_y(value)];
+    if let Some(first) = curve.keyframes.first() {
+        let first_x = vt.time_to_x(first.time);
+        let start_x = vt.time_to_x(0.0);
+        if start_x < first_x {
+            let y = vt.value_to_y(first.value);
+            draw_list
+                .add_line([start_x, y], [first_x, y], color)
+                .thickness(1.5)
+                .build();
+        }
+    }
 
-            if let Some(prev) = prev_point {
+    for i in 0..curve.keyframes.len() - 1 {
+        let k0 = &curve.keyframes[i];
+        let k1 = &curve.keyframes[i + 1];
+
+        let segment_samples = match k0.interpolation {
+            InterpolationType::Stepped => {
+                let x0 = vt.time_to_x(k0.time);
+                let y0 = vt.value_to_y(k0.value);
+                let x1 = vt.time_to_x(k1.time);
+                let y1 = vt.value_to_y(k1.value);
                 draw_list
-                    .add_line(prev, point, color)
+                    .add_line([x0, y0], [x1, y0], color)
                     .thickness(1.5)
                     .build();
+                draw_list
+                    .add_line([x1, y0], [x1, y1], color)
+                    .thickness(1.5)
+                    .build();
+                continue;
             }
+            InterpolationType::Linear => 2,
+            InterpolationType::Bezier => 20,
+        };
 
-            prev_point = Some(point);
+        let mut prev_point: Option<[f32; 2]> = None;
+        for s in 0..segment_samples {
+            let frac = s as f32 / (segment_samples - 1) as f32;
+            let time = k0.time + (k1.time - k0.time) * frac;
+            if let Some(value) = curve.sample(time) {
+                let point = [vt.time_to_x(time), vt.value_to_y(value)];
+                if let Some(prev) = prev_point {
+                    draw_list
+                        .add_line(prev, point, color)
+                        .thickness(1.5)
+                        .build();
+                }
+                prev_point = Some(point);
+            }
+        }
+    }
+
+    if let Some(last) = curve.keyframes.last() {
+        let last_x = vt.time_to_x(last.time);
+        let end_x = vt.time_to_x(vt.duration);
+        if end_x > last_x {
+            let y = vt.value_to_y(last.value);
+            draw_list
+                .add_line([last_x, y], [end_x, y], color)
+                .thickness(1.5)
+                .build();
         }
     }
 
@@ -996,6 +1274,66 @@ fn draw_selected_keyframe_highlight(
     }
 }
 
+fn draw_tangent_handles(
+    draw_list: &imgui::DrawListMut,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    selected: &SelectedKeyframe,
+    vt: &ViewTransform,
+) {
+    for (curve, color, _) in curves_to_draw {
+        if curve.property_type != selected.property_type {
+            continue;
+        }
+
+        let kf = match curve.get_keyframe(selected.keyframe_id) {
+            Some(kf) => kf,
+            None => break,
+        };
+
+        if kf.interpolation != InterpolationType::Bezier {
+            break;
+        }
+
+        let kf_x = vt.time_to_x(kf.time);
+        let kf_y = vt.value_to_y(kf.value);
+        let handle_color = [color[0], color[1], color[2], 0.9];
+        let handle_size = 4.0;
+
+        let in_x = vt.time_to_x(kf.time + kf.in_tangent.time_offset);
+        let in_y = vt.value_to_y(kf.value + kf.in_tangent.value_offset);
+        draw_list
+            .add_line([kf_x, kf_y], [in_x, in_y], handle_color)
+            .thickness(1.0)
+            .build();
+        draw_list
+            .add_rect(
+                [in_x - handle_size, in_y - handle_size],
+                [in_x + handle_size, in_y + handle_size],
+                handle_color,
+            )
+            .filled(true)
+            .build();
+
+        let out_x = vt.time_to_x(kf.time + kf.out_tangent.time_offset);
+        let out_y =
+            vt.value_to_y(kf.value + kf.out_tangent.value_offset);
+        draw_list
+            .add_line([kf_x, kf_y], [out_x, out_y], handle_color)
+            .thickness(1.0)
+            .build();
+        draw_list
+            .add_rect(
+                [out_x - handle_size, out_y - handle_size],
+                [out_x + handle_size, out_y + handle_size],
+                handle_color,
+            )
+            .filled(true)
+            .build();
+
+        break;
+    }
+}
+
 fn draw_keyframe_drag_preview(
     draw_list: &imgui::DrawListMut,
     mouse_pos: [f32; 2],
@@ -1036,6 +1374,20 @@ fn draw_keyframe_drag_preview(
         [1.0, 1.0, 1.0, 1.0],
         &format!("t={:.2}s v={:.3}", preview_time, preview_value),
     );
+}
+
+fn draw_tangent_drag_preview(
+    draw_list: &imgui::DrawListMut,
+    mouse_pos: [f32; 2],
+) {
+    draw_list
+        .add_rect(
+            [mouse_pos[0] - 5.0, mouse_pos[1] - 5.0],
+            [mouse_pos[0] + 5.0, mouse_pos[1] + 5.0],
+            [1.0, 1.0, 0.0, 0.8],
+        )
+        .filled(true)
+        .build();
 }
 
 fn calculate_y_tick_count(height: f32) -> usize {
@@ -1121,6 +1473,61 @@ fn find_keyframe_at_position(
                 ));
             }
         }
+    }
+
+    None
+}
+
+const TANGENT_HANDLE_HIT_RADIUS: f32 = 10.0;
+
+fn find_tangent_handle_at_position(
+    mouse_pos: [f32; 2],
+    curves: &[(&PropertyCurve, [f32; 4], &str)],
+    selected: &SelectedKeyframe,
+    vt: &ViewTransform,
+) -> Option<(TangentHandleType, PropertyType, KeyframeId, BezierHandle)> {
+    for (curve, _, _) in curves {
+        if curve.property_type != selected.property_type {
+            continue;
+        }
+
+        let kf = match curve.get_keyframe(selected.keyframe_id) {
+            Some(kf) => kf,
+            None => break,
+        };
+
+        if kf.interpolation != InterpolationType::Bezier {
+            break;
+        }
+
+        let in_x = vt.time_to_x(kf.time + kf.in_tangent.time_offset);
+        let in_y = vt.value_to_y(kf.value + kf.in_tangent.value_offset);
+        let dx = mouse_pos[0] - in_x;
+        let dy = mouse_pos[1] - in_y;
+        if (dx * dx + dy * dy).sqrt() <= TANGENT_HANDLE_HIT_RADIUS {
+            return Some((
+                TangentHandleType::In,
+                curve.property_type,
+                kf.id,
+                kf.in_tangent.clone(),
+            ));
+        }
+
+        let out_x = vt.time_to_x(kf.time + kf.out_tangent.time_offset);
+        let out_y =
+            vt.value_to_y(kf.value + kf.out_tangent.value_offset);
+        let dx = mouse_pos[0] - out_x;
+        let dy = mouse_pos[1] - out_y;
+        if (dx * dx + dy * dy).sqrt() <= TANGENT_HANDLE_HIT_RADIUS {
+            return Some((
+                TangentHandleType::Out,
+                curve.property_type,
+                kf.id,
+                kf.out_tangent.clone(),
+            ));
+        }
+
+        break;
     }
 
     None

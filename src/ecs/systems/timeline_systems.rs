@@ -91,6 +91,59 @@ pub fn timeline_process_events(
                 timeline_state.zoom_out();
             }
 
+            UIEvent::TimelineSetKeyframeInterpolation {
+                bone_id,
+                property_type,
+                keyframe_id,
+                interpolation,
+            } => {
+                if let Some(clip_id) = timeline_state.current_clip_id {
+                    if let Some(clip) = clip_library.get_mut(clip_id) {
+                        if let Some(track) = clip.tracks.get_mut(bone_id) {
+                            track
+                                .get_curve_mut(*property_type)
+                                .set_keyframe_interpolation(*keyframe_id, *interpolation);
+                        }
+                    }
+                }
+            }
+
+            UIEvent::TimelineSetKeyframeTangent {
+                bone_id,
+                property_type,
+                keyframe_id,
+                in_tangent,
+                out_tangent,
+            } => {
+                if let Some(clip_id) = timeline_state.current_clip_id {
+                    if let Some(clip) = clip_library.get_mut(clip_id) {
+                        if let Some(track) = clip.tracks.get_mut(bone_id) {
+                            track.get_curve_mut(*property_type).set_keyframe_tangents(
+                                *keyframe_id,
+                                in_tangent.clone(),
+                                out_tangent.clone(),
+                            );
+                        }
+                    }
+                }
+            }
+
+            UIEvent::TimelineAutoTangent {
+                bone_id,
+                property_type,
+                keyframe_id,
+            } => {
+                if let Some(clip_id) = timeline_state.current_clip_id {
+                    if let Some(clip) = clip_library.get_mut(clip_id) {
+                        if let Some(track) = clip.tracks.get_mut(bone_id) {
+                            track
+                                .get_curve_mut(*property_type)
+                                .recalculate_auto_tangent_at(*keyframe_id);
+                        }
+                    }
+                }
+            }
+
             _ => {}
         }
     }

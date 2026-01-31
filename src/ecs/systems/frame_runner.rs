@@ -66,23 +66,12 @@ fn run_timeline_phase(ctx: &mut FrameContext) {
     drop(playback);
     drop(timeline_state);
 
-    sync_playback_to_animator(ctx, selected_entity);
+    sync_playback_to_all_animators(ctx);
 
     sync_editable_clips_to_registry(ctx);
 }
 
-fn sync_playback_to_animator(ctx: &mut FrameContext, selected_entity: Option<u64>) {
-    let entity = selected_entity.or_else(|| {
-        ctx.world
-            .iter_animated_entities()
-            .next()
-            .map(|(e, _)| e)
-    });
-
-    let Some(entity) = entity else {
-        return;
-    };
-
+fn sync_playback_to_all_animators(ctx: &mut FrameContext) {
     let playback_snapshot = {
         let playback = ctx.world.resource::<AnimationPlayback>();
         (
@@ -93,11 +82,15 @@ fn sync_playback_to_animator(ctx: &mut FrameContext, selected_entity: Option<u64
         )
     };
 
-    if let Some(animator) = ctx.world.get_component_mut::<Animator>(entity) {
-        animator.time = playback_snapshot.0;
-        animator.playing = playback_snapshot.1;
-        animator.speed = playback_snapshot.2;
-        animator.looping = playback_snapshot.3;
+    let animated_entities = ctx.world.query_animated();
+
+    for entity in animated_entities {
+        if let Some(animator) = ctx.world.get_component_mut::<Animator>(entity) {
+            animator.time = playback_snapshot.0;
+            animator.playing = playback_snapshot.1;
+            animator.speed = playback_snapshot.2;
+            animator.looping = playback_snapshot.3;
+        }
     }
 }
 

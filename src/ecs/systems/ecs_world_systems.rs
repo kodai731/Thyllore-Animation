@@ -2,29 +2,10 @@ use cgmath::{Matrix4, SquareMatrix};
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::resource::{AnimationPlayback, ClipLibrary};
+use crate::ecs::resource::ClipLibrary;
 use crate::ecs::world::{
     Animator, Children, Entity, GlobalTransform, SkeletonRef, Transform, World,
 };
-
-pub fn animation_playback_system(
-    playback: &mut AnimationPlayback,
-    delta_time: f32,
-    clip_duration: f32,
-) {
-    if !playback.playing || clip_duration <= 0.0 {
-        return;
-    }
-
-    playback.time += delta_time * playback.speed;
-
-    if playback.looping {
-        playback.time = playback.time % clip_duration;
-    } else if playback.time >= clip_duration {
-        playback.time = clip_duration;
-        playback.playing = false;
-    }
-}
 
 pub fn transform_propagation_system(world: &mut World) {
     let root_entities = world.get_root_entities();

@@ -1,9 +1,9 @@
 use anyhow::Result;
 
 use crate::app::FrameContext;
-use crate::ecs::resource::{ClipLibrary, HierarchyState, ModelState, NodeAssets};
+use crate::ecs::resource::{ClipLibrary, NodeAssets};
 use crate::ecs::{
-    animation_time_system, evaluate_animators, playback_upload_animations,
+    evaluate_all_animators, playback_upload_animations,
     transform_propagation_system,
 };
 
@@ -14,22 +14,17 @@ pub struct AnimationUpdates {
 pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
     let updated_meshes = {
         let clip_library = ctx.world.resource::<ClipLibrary>();
-        let model_state = ctx.world.resource::<ModelState>();
-        let hierarchy_state = ctx.world.resource::<HierarchyState>();
         let mut node_assets = ctx.world.resource_mut::<NodeAssets>();
 
-        evaluate_animators(
+        evaluate_all_animators(
             ctx.world,
             ctx.graphics,
             &mut node_assets.nodes,
             &*clip_library,
-            &*model_state,
-            &*hierarchy_state,
             ctx.assets,
         )
     };
 
-    animation_time_system(ctx.world, ctx.delta_time, ctx.assets);
     transform_propagation_system(ctx.world);
 
     AnimationUpdates { updated_meshes }

@@ -122,3 +122,38 @@ Introduced SourceClip/ClipInstance/ClipSchedule architecture to replace direct c
 ### Borrowing Issue Resolution
 - animation_time_system and skeleton_animation_system: pre-collect resolved clip IDs from ClipSchedule before mutable World borrow
 - build_initial_clip_schedule: constructed before entity builder loop to avoid simultaneous mutable/immutable World borrows
+
+---
+
+## Phase B: Multi-Entity Evaluation (2026-01-31)
+
+### Summary
+Replaced single-entity `evaluate_animators` with `evaluate_all_animators` that evaluates all animated entities independently. Introduced `AnimationMeta` component to hold per-entity animation type and scale. Removed animation-related fields from global `ModelState` resource. Deleted dead code (`playback_prepare_animations`, `animation_playback_system`).
+
+### New: AnimationMeta Component
+- `ecs/component/animation_meta.rs`: holds `animation_type: AnimationType` and `node_animation_scale: f32` per entity
+- Registered in World, added `with_animation_meta()` to EntityBuilder
+- Attached to each mesh entity in `create_ecs_entities` when animation is present
+
+### New: Single-Mesh Evaluation Functions
+- `GraphicsResources::apply_skinning_to_single_mesh()`: applies skinning to one mesh by index
+- `GraphicsResources::apply_node_animation_to_single_mesh()`: applies node animation to one mesh by index
+- `GraphicsResources::compute_node_global_transforms()` made public for external callers
+
+### evaluate_all_animators
+- Replaces `evaluate_animators` (which selected one entity and updated all meshes)
+- Iterates all entities with Animator + ClipSchedule + AnimationMeta + MeshRef
+- Groups entities by (skeleton_id, clip_id, time, looping) to share pose computation
+- Each mesh updated individually via single-mesh functions
+- Removed dependency on ModelState and HierarchyState parameters
+
+### ModelState Cleanup
+- Removed `animation_type` and `node_animation_scale` fields from ModelState
+- ModelState now only holds `has_skinned_meshes` and `model_path`
+- `setup_animation_system` no longer sets animation_type/scale on ModelState
+- `apply_initial_pose` reads scale from `load_result` directly
+
+### Dead Code Removed
+- `playback_prepare_animations` (superseded by evaluate_all_animators)
+- `animation_playback_system` in ecs_world_systems.rs (superseded by animation_time_system)
+- `find_target_entity` and `resolve_active_clip` private helpers (logic moved into collect_animated_entities)

@@ -6,7 +6,8 @@ use cgmath::{Matrix4, SquareMatrix, Vector3};
 
 use crate::asset::AssetId;
 use crate::ecs::component::{
-    Animated, ClipSchedule, EditorDisplay, EntityIcon, MeshHandle, Model, Skinned,
+    Animated, AnimationMeta, ClipSchedule, EditorDisplay, EntityIcon, MeshHandle,
+    Model, Skinned,
 };
 
 pub trait Resource: Any + 'static {}
@@ -263,6 +264,7 @@ impl World {
         world.register_component::<MeshHandle>();
         world.register_component::<EditorDisplay>();
         world.register_component::<ClipSchedule>();
+        world.register_component::<AnimationMeta>();
 
         world
     }
@@ -579,6 +581,11 @@ impl<'a> EntityBuilder<'a> {
 
     pub fn with_clip_schedule(self, schedule: ClipSchedule) -> Self {
         self.world.insert_component(self.entity, schedule);
+        self
+    }
+
+    pub fn with_animation_meta(self, meta: AnimationMeta) -> Self {
+        self.world.insert_component(self.entity, meta);
         self
     }
 

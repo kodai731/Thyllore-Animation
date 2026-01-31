@@ -161,6 +161,101 @@ impl GraphicsResources {
         updated_mesh_indices
     }
 
+    pub fn apply_skinning_to_single_mesh(
+        &mut self,
+        mesh_idx: usize,
+        global_transforms: &[Matrix4<f32>],
+        skeleton: &Skeleton,
+    ) -> bool {
+        use crate::ecs::apply_skinning;
+
+        if mesh_idx >= self.meshes.len() {
+            return false;
+        }
+
+        let skin_data = {
+            let mesh = &self.meshes[mesh_idx];
+            mesh.skin_data.clone()
+        };
+
+        let Some(skin_data) = skin_data else {
+            return false;
+        };
+
+        let vertex_count = skin_data.base_positions.len();
+        let mut skinned_positions =
+            vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
+        let mut skinned_normals =
+            vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
+
+        apply_skinning(
+            &skin_data,
+            global_transforms,
+            skeleton,
+            &mut skinned_positions,
+            &mut skinned_normals,
+        );
+
+        let mesh = &mut self.meshes[mesh_idx];
+        for (i, pos) in skinned_positions.iter().enumerate() {
+            if i < mesh.vertex_data.vertices.len() {
+                mesh.vertex_data.vertices[i].pos.x = pos.x;
+                mesh.vertex_data.vertices[i].pos.y = pos.y;
+                mesh.vertex_data.vertices[i].pos.z = pos.z;
+            }
+        }
+        for (i, normal) in skinned_normals.iter().enumerate() {
+            if i < mesh.vertex_data.vertices.len() {
+                mesh.vertex_data.vertices[i].normal.x = normal.x;
+                mesh.vertex_data.vertices[i].normal.y = normal.y;
+                mesh.vertex_data.vertices[i].normal.z = normal.z;
+            }
+        }
+
+        true
+    }
+
+    pub fn apply_node_animation_to_single_mesh(
+        &mut self,
+        mesh_idx: usize,
+        nodes: &[NodeData],
+        scale: f32,
+    ) -> bool {
+        if mesh_idx >= self.meshes.len() {
+            return false;
+        }
+
+        let mesh = &self.meshes[mesh_idx];
+        if mesh.skin_data.is_some() || mesh.base_vertices.is_empty() {
+            return false;
+        }
+
+        let Some(node_idx) = mesh.node_index else {
+            return false;
+        };
+
+        let node_found = nodes.iter().find(|n| n.index == node_idx);
+        let Some(node) = node_found else {
+            return false;
+        };
+
+        let transform = node.global_transform;
+
+        let mesh = &mut self.meshes[mesh_idx];
+        for (i, v) in mesh.vertex_data.vertices.iter_mut().enumerate() {
+            if i < mesh.base_vertices.len() {
+                let base = &mesh.base_vertices[i];
+                let pos = transform
+                    * Vector4::new(base.pos.x, base.pos.y, base.pos.z, 1.0);
+                v.pos.x = pos.x * scale;
+                v.pos.y = pos.y * scale;
+                v.pos.z = pos.z * scale;
+            }
+        }
+
+        true
+    }
+
     pub unsafe fn update_objects(
         &self,
         rrdevice: &RRDevice,
@@ -252,7 +347,7 @@ impl GraphicsResources {
         self.mesh_material_ids.clear();
     }
 
-    fn compute_node_global_transforms(
+    pub fn compute_node_global_transforms(
         nodes: &mut [NodeData],
         skeleton: &Skeleton,
         pose: &SkeletonPose,

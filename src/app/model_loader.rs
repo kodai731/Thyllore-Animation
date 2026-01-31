@@ -10,10 +10,11 @@ use crate::app::AppData;
 use crate::asset::{AnimationClipAsset, AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
 use crate::ecs::playback_play;
 use crate::ecs::resource::{
-    AnimationPlayback, ClipLibrary, MeshAssets, ModelState, NodeAssets, TimelineState,
+    AnimationPlayback, AnimationType, ClipLibrary, MeshAssets, ModelState,
+    NodeAssets, TimelineState,
 };
 use crate::animation::editable::SourceClipId;
-use crate::ecs::component::{ClipSchedule, EntityIcon};
+use crate::ecs::component::{AnimationMeta, ClipSchedule, EntityIcon};
 use crate::ecs::world::{Animator, Transform, World};
 use crate::loader::texture::load_png_image;
 use crate::loader::{ModelLoadResult, TextureSource};
@@ -116,7 +117,23 @@ unsafe fn apply_model_to_resources(
         update_billboard_descriptor(device, swapchain, &mut *billboard)?;
     }
 
-    create_ecs_entities(model_name, graphics, world, assets);
+    let animation_type = if load_result.has_skinned_meshes {
+        AnimationType::Skeletal
+    } else if !load_result.animation_system.clips.is_empty() {
+        AnimationType::Node
+    } else {
+        AnimationType::None
+    };
+    let node_animation_scale = load_result.node_animation_scale;
+
+    create_ecs_entities(
+        model_name,
+        graphics,
+        world,
+        assets,
+        animation_type,
+        node_animation_scale,
+    );
 
     Ok(())
 }
@@ -216,16 +233,6 @@ fn setup_animation_system(
     if world.contains_resource::<ModelState>() {
         let mut model_state = world.resource_mut::<ModelState>();
         model_state.has_skinned_meshes = load_result.has_skinned_meshes;
-        model_state.node_animation_scale = load_result.node_animation_scale;
-
-        let animation_type = if load_result.has_skinned_meshes {
-            crate::ecs::resource::AnimationType::Skeletal
-        } else if !load_result.animation_system.clips.is_empty() {
-            crate::ecs::resource::AnimationType::Node
-        } else {
-            crate::ecs::resource::AnimationType::None
-        };
-        model_state.animation_type = animation_type;
     }
 }
 
@@ -443,9 +450,8 @@ unsafe fn apply_initial_pose(
         !load_result.has_skinned_meshes && !graphics.meshes.is_empty();
     if has_node_animation {
         let clip_library = world.resource::<ClipLibrary>();
-        let model_state = world.resource::<ModelState>();
         let mut node_assets = world.resource_mut::<NodeAssets>();
-        let node_animation_scale = model_state.node_animation_scale;
+        let node_animation_scale = load_result.node_animation_scale;
 
         let skel_id =
             graphics.meshes.first().and_then(|m| m.skeleton_id);
@@ -454,7 +460,6 @@ unsafe fn apply_initial_pose(
         let clip_clone =
             clip_library.animation.clips.first().cloned();
         drop(clip_library);
-        drop(model_state);
 
         let updated_meshes =
             if let (Some(skeleton), Some(clip)) =
@@ -688,6 +693,8 @@ fn create_ecs_entities(
     graphics: &GraphicsResources,
     world: &mut World,
     assets: &mut AssetStorage,
+    animation_type: AnimationType,
+    node_animation_scale: f32,
 ) {
     let name = std::path::Path::new(model_name)
         .file_stem()
@@ -806,9 +813,14 @@ fn create_ecs_entities(
 
         if has_animation {
             let animator = Animator::new();
+            let meta = AnimationMeta {
+                animation_type: animation_type.clone(),
+                node_animation_scale,
+            };
             builder = builder
                 .with_animator(animator)
-                .with_clip_schedule(initial_schedule.clone());
+                .with_clip_schedule(initial_schedule.clone())
+                .with_animation_meta(meta);
         }
 
         let entity = builder.build();

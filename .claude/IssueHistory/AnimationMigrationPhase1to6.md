@@ -157,3 +157,29 @@ Replaced single-entity `evaluate_animators` with `evaluate_all_animators` that e
 - `playback_prepare_animations` (superseded by evaluate_all_animators)
 - `animation_playback_system` in ecs_world_systems.rs (superseded by animation_time_system)
 - `find_target_entity` and `resolve_active_clip` private helpers (logic moved into collect_animated_entities)
+
+---
+
+## Phase C: AnimationPlayback Resource Removal (2026-01-31)
+
+### Summary
+Completely removed the `AnimationPlayback` resource. `TimelineState` is now the single source of truth for playback state (time, playing, speed, looping). The bridge pattern where both `AnimationPlayback` and `TimelineState` were updated in parallel is eliminated.
+
+### Data Flow Change
+- **Before**: UI -> timeline_process_events(timeline_state, playback) -> both updated; sync_playback_to_all_animators reads from playback
+- **After**: UI -> timeline_process_events(timeline_state) -> TimelineState only; sync_timeline_to_all_animators reads from TimelineState
+
+### Files Changed
+- `ecs/systems/timeline_systems.rs`: Removed `playback` parameter from `timeline_process_events`, `timeline_select_clip`, `timeline_update`. Deleted `timeline_sync_from_playback` (dead code).
+- `ecs/systems/frame_runner.rs`: `sync_playback_to_all_animators` renamed to `sync_timeline_to_all_animators`, reads from `TimelineState` instead of `AnimationPlayback`. Removed `AnimationPlayback` import and resource access.
+- `ecs/systems/animation_playback_systems.rs`: Deleted `playback_play`, `playback_stop`, `playback_pause`, `playback_resume` functions.
+- `app/model_loader.rs`: Replaced `playback_play()` call with direct `TimelineState` field assignment. Replaced `playback.time`/`playback.looping` reads with `TimelineState` reads.
+- `platform/events.rs`: Removed `AnimationPlayback` resource access from `process_timeline_events_inline`, removed `playback` argument from `timeline_process_events` call.
+- `app/render.rs`: Replaced `self.animation_playback_mut().time = 0.0` with `TimelineState.current_time = 0.0`.
+- `app/mod.rs`: Deleted `animation_playback()` and `animation_playback_mut()` accessor methods.
+- `app/init/instance.rs`: Removed `AnimationPlayback::new()` resource registration.
+- `app/scene_model.rs`: Replaced `animation_playback().playing` with `TimelineState.playing` in debug dump.
+
+### Files Deleted
+- `ecs/resource/animation_playback.rs`: `AnimationPlayback` struct definition removed.
+- `ecs/resource/mod.rs`: Removed `mod animation_playback` and `pub use animation_playback::*`.

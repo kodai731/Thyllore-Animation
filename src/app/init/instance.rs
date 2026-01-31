@@ -8,7 +8,7 @@ use crate::ecs::systems::{
 };
 use crate::vulkanr::VulkanBackend;
 use crate::ecs::{
-    AnimationPlayback, ClipLibrary, GpuDescriptors, HierarchyState, MaterialRegistry, MeshAssets, ModelState,
+    ClipLibrary, GpuDescriptors, HierarchyState, MaterialRegistry, MeshAssets, ModelState,
     NodeAssets, PipelineManager, SceneState, TimelineState,
 };
 use crate::vulkanr::command::*;
@@ -641,10 +641,6 @@ impl App {
 
         let surface_state = SurfaceState::new(resources.surface, resources.messenger);
         data.ecs_world.insert_resource(surface_state);
-
-        if !data.ecs_world.contains_resource::<AnimationPlayback>() {
-            data.ecs_world.insert_resource(AnimationPlayback::new());
-        }
 
         {
             let mut model_state = data.ecs_world.resource_mut::<ModelState>();

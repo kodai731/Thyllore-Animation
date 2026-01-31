@@ -3,7 +3,7 @@ use cgmath::Vector3;
 
 use crate::app::FrameContext;
 use crate::ecs::context::EcsContext;
-use crate::ecs::resource::{AnimationPlayback, ClipLibrary, HierarchyState, TimelineState};
+use crate::ecs::resource::{ClipLibrary, HierarchyState, TimelineState};
 use crate::ecs::world::Animator;
 use crate::app::graphics_resource::GraphicsResources;
 use super::phases::{
@@ -59,26 +59,24 @@ fn run_timeline_phase(ctx: &mut FrameContext) {
     }
 
     let mut timeline_state = ctx.world.resource_mut::<TimelineState>();
-    let mut playback = ctx.world.resource_mut::<AnimationPlayback>();
     let clip_library = ctx.world.resource::<ClipLibrary>();
-    timeline_update(&mut timeline_state, &mut playback, &*clip_library, ctx.delta_time);
+    timeline_update(&mut timeline_state, &*clip_library, ctx.delta_time);
     drop(clip_library);
-    drop(playback);
     drop(timeline_state);
 
-    sync_playback_to_all_animators(ctx);
+    sync_timeline_to_all_animators(ctx);
 
     sync_editable_clips_to_registry(ctx);
 }
 
-fn sync_playback_to_all_animators(ctx: &mut FrameContext) {
-    let playback_snapshot = {
-        let playback = ctx.world.resource::<AnimationPlayback>();
+fn sync_timeline_to_all_animators(ctx: &mut FrameContext) {
+    let timeline_snapshot = {
+        let timeline = ctx.world.resource::<TimelineState>();
         (
-            playback.time,
-            playback.playing,
-            playback.speed,
-            playback.looping,
+            timeline.current_time,
+            timeline.playing,
+            timeline.speed,
+            timeline.looping,
         )
     };
 
@@ -86,10 +84,10 @@ fn sync_playback_to_all_animators(ctx: &mut FrameContext) {
 
     for entity in animated_entities {
         if let Some(animator) = ctx.world.get_component_mut::<Animator>(entity) {
-            animator.time = playback_snapshot.0;
-            animator.playing = playback_snapshot.1;
-            animator.speed = playback_snapshot.2;
-            animator.looping = playback_snapshot.3;
+            animator.time = timeline_snapshot.0;
+            animator.playing = timeline_snapshot.1;
+            animator.speed = timeline_snapshot.2;
+            animator.looping = timeline_snapshot.3;
         }
     }
 }

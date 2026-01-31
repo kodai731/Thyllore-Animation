@@ -16,7 +16,7 @@ use crate::ecs::systems::{
     timeline_process_events, update_entity_scale, update_entity_translation, update_entity_visible,
 };
 use crate::ecs::world::Transform;
-use crate::ecs::{process_ui_events_with_events_simple, AnimationPlayback, DeferredAction, UIEventQueue};
+use crate::ecs::{process_ui_events_with_events_simple, DeferredAction, UIEventQueue};
 use crate::scene::camera::Camera;
 
 fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
@@ -351,10 +351,9 @@ fn process_hierarchy_events_inline(events: &[UIEvent], app: &mut App) {
 
 fn process_timeline_events_inline(events: &[UIEvent], app: &mut App) {
     let mut timeline_state = app.data.ecs_world.resource_mut::<TimelineState>();
-    let mut playback = app.data.ecs_world.resource_mut::<AnimationPlayback>();
     let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
 
-    timeline_process_events(events, &mut timeline_state, &mut playback, &mut *clip_library);
+    timeline_process_events(events, &mut timeline_state, &mut *clip_library);
 }
 
 fn process_scene_events_inline(events: &[UIEvent], app: &mut App) {

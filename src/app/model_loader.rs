@@ -8,9 +8,8 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::AppData;
 use crate::asset::{AnimationClipAsset, AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
-use crate::ecs::playback_play;
 use crate::ecs::resource::{
-    AnimationPlayback, AnimationType, ClipLibrary, MeshAssets, ModelState,
+    AnimationType, ClipLibrary, MeshAssets, ModelState,
     NodeAssets, TimelineState,
 };
 use crate::animation::editable::SourceClipId;
@@ -391,24 +390,23 @@ unsafe fn apply_initial_pose(
 
     crate::log!("Applying initial pose (time=0) for animation...");
 
-    let first_clip_id =
-        load_result.animation_system.clips.first().map(|c| c.id);
-    if let Some(clip_id) = first_clip_id {
-        let has_playback = world.contains_resource::<AnimationPlayback>();
-        if has_playback {
-            let mut playback = world.resource_mut::<AnimationPlayback>();
-            playback_play(&mut playback, clip_id);
-        } else {
-            let mut playback = AnimationPlayback::new();
-            playback_play(&mut playback, clip_id);
-            world.insert_resource(playback);
+    if !load_result.animation_system.clips.is_empty() {
+        if world.contains_resource::<TimelineState>() {
+            let mut timeline = world.resource_mut::<TimelineState>();
+            timeline.playing = true;
+            timeline.current_time = 0.0;
         }
     }
 
     let skeleton_id = graphics.meshes.first().and_then(|m| m.skeleton_id);
 
     if let Some(skel_id) = skeleton_id {
-        let playback = world.resource::<AnimationPlayback>();
+        let (current_time, looping) = if world.contains_resource::<TimelineState>() {
+            let timeline = world.resource::<TimelineState>();
+            (timeline.current_time, timeline.looping)
+        } else {
+            (0.0, true)
+        };
         let clip_library = world.resource::<ClipLibrary>();
 
         let skeleton = assets.get_skeleton_by_skeleton_id(skel_id);
@@ -418,16 +416,15 @@ unsafe fn apply_initial_pose(
             let mut pose = create_pose_from_rest(skeleton);
             sample_clip_to_pose(
                 clip,
-                playback.time,
+                current_time,
                 skeleton,
                 &mut pose,
-                playback.looping,
+                looping,
             );
             let globals =
                 compute_pose_global_transforms(skeleton, &pose);
             let skeleton_clone = skeleton.clone();
             drop(clip_library);
-            drop(playback);
 
             for mesh_idx in 0..graphics.meshes.len() {
                 apply_skinning_to_mesh(
@@ -442,7 +439,6 @@ unsafe fn apply_initial_pose(
             }
         } else {
             drop(clip_library);
-            drop(playback);
         }
     }
 

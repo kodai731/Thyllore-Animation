@@ -24,7 +24,7 @@ pub use init::*;
 use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
 use crate::debugview::{DebugViewData, GridMeshData, RayTracingDebugState};
 use crate::ecs::{
-    AnimationPlayback, ClipLibrary, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState,
+    ClipLibrary, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState,
     NodeAssets, ResMut, ResRef, Resource,
 };
 use crate::platform::ImguiData;
@@ -102,14 +102,6 @@ impl App {
 
     pub fn pipeline_storage(&self) -> &crate::vulkanr::resource::PipelineStorage {
         &self.data.pipeline_storage
-    }
-
-    pub fn animation_playback(&self) -> ResRef<AnimationPlayback> {
-        self.resource::<AnimationPlayback>()
-    }
-
-    pub fn animation_playback_mut(&self) -> ResMut<AnimationPlayback> {
-        self.resource_mut::<AnimationPlayback>()
     }
 
     pub fn camera(&self) -> ResRef<Camera> {

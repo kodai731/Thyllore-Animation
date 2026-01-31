@@ -2,13 +2,19 @@
 
 ## Summary
 
-This document compares animation system architectures across major game engines (Unity, Unreal, Godot, Bevy), DCC tools (Blender, Maya, 3ds Max, Houdini, Cinema 4D), Pixar's proprietary Presto system, and includes the proposed architecture for this project. Key findings:
+This document compares animation system architectures across major game engines (Unity, Unreal, Godot, Bevy), DCC
+tools (Blender, Maya, 3ds Max, Houdini, Cinema 4D), Pixar's proprietary Presto system, and includes the proposed
+architecture for this project. Key findings:
 
-- **Game engines** split into State Machine (Unity), Dual-Graph (Unreal), Data/Control Separation (Godot), and ECS+DAG (Bevy) patterns
-- **DCC tools** universally use Non-Linear Animation (NLA) systems for clip composition, with varying degrees of proceduralism
-- **Pixar Presto** uses a unified composition engine (which became USD), multithreaded rig solving, and Hydra-based viewport rendering
+- **Game engines** split into State Machine (Unity), Dual-Graph (Unreal), Data/Control Separation (Godot), and ECS+DAG (
+  Bevy) patterns
+- **DCC tools** universally use Non-Linear Animation (NLA) systems for clip composition, with varying degrees of
+  proceduralism
+- **Pixar Presto** uses a unified composition engine (which became USD), multithreaded rig solving, and Hydra-based
+  viewport rendering
 - **Export pipeline** is almost always destructive: rich DCC data is baked to flat keyframes for runtime efficiency
-- **This project** adopts Blender's "Data/Control Separation" + Bevy's "ECS Pattern": ClipLibrary (asset data) + Animator (per-entity component) + system evaluation functions, without state machines or blend graphs
+- **This project** adopts Blender's "Data/Control Separation" + Bevy's "ECS Pattern": ClipLibrary (asset data) +
+  Animator (per-entity component) + system evaluation functions, without state machines or blend graphs
 
 ---
 
@@ -98,6 +104,7 @@ Sequencer (Cinematic)
 - `UAnimInstance`: Runtime instance, one per SkeletalMeshComponent
 
 Execution flow:
+
 1. **Initialize**: First use or mesh change
 2. **Update (EventGraph)**: Variable updates
 3. **Evaluate (AnimGraph)**: Pose calculation (parallelizable, highest cost)
@@ -105,8 +112,8 @@ Execution flow:
 #### Entity Binding
 
 - `SkeletalMeshComponent` has an Animation Mode:
-  - `Use Animation Asset`: Direct AnimSequence playback
-  - `Use Animation Blueprint`: Full controller
+    - `Use Animation Asset`: Direct AnimSequence playback
+    - `Use Animation Blueprint`: Full controller
 - AnimSequence is bound to Skeleton, not SkeletalMesh
 
 #### Blending & Transitions
@@ -154,9 +161,9 @@ AnimationTree (Playback Control)
 
 - **AnimationTree**: Pure playback control, references AnimationPlayer for data
 - Root node types:
-  - `AnimationNodeStateMachine`: State machine with A* pathfinding for `travel()`
-  - `AnimationNodeBlendTree`: Blend tree with various blend nodes
-  - `AnimationNodeBlendSpace2D/1D`: Parameter-space blending
+    - `AnimationNodeStateMachine`: State machine with A* pathfinding for `travel()`
+    - `AnimationNodeBlendTree`: Blend tree with various blend nodes
+    - `AnimationNodeBlendSpace2D/1D`: Parameter-space blending
 
 #### Blending & Transitions
 
@@ -222,7 +229,8 @@ bevy_animation/src/
 #### Animation Graph
 
 - **DAG (Directed Acyclic Graph)** based on `petgraph`, not a state machine
-- Three node types: **Clip** (references AnimationClip), **Blend** (weighted blend of children), **AdditiveBlend** (additive composition)
+- Three node types: **Clip** (references AnimationClip), **Blend** (weighted blend of children), **AdditiveBlend** (
+  additive composition)
 - `AnimationMask`: Bitfield for per-bone/target application control
 - Evaluated bottom-up from root
 
@@ -236,7 +244,7 @@ bevy_animation/src/
 ```rust
 // Typical setup
 let (graph, animation_index) = AnimationGraph::from_clip(animations.add(clip));
-let mut player = AnimationPlayer::default();
+let mut player = AnimationPlayer::default ();
 player.play(animation_index).repeat();
 commands.spawn((AnimationGraphHandle(graphs.add(graph)), player));
 ```
@@ -259,19 +267,19 @@ commands.spawn((AnimationGraphHandle(graphs.add(graph)), player));
 
 ### Game Engine Comparison Table
 
-| Aspect | Unity | Unreal Engine | Godot | Bevy (Rust) |
-|---|---|---|---|---|
-| Clip Type | `AnimationClip` (Asset) | `UAnimSequence` (Asset) | `Animation` (Resource) | `AnimationClip` (Asset) |
-| Control Pattern | State Machine | Graph + State Machine | Data/Control Split | DAG Graph |
-| State Machine | Central | Inside AnimGraph | StateMachine Node | None |
-| Blend Tree | BlendTree | BlendSpace 1D/2D | BlendSpace, BlendTree | Blend/AdditiveBlend nodes |
-| Binding | Animator Component | SkeletalMeshComponent + AnimInstance | NodePath | ECS Components |
-| Transitions | Crossfade + Params | TransitionRule + Inertialization | Crossfade + travel(A*) | Fade-out (weight decay) |
-| Layers/Masks | Layers + Avatar Mask | Layers + per-bone Override | Blend node combinations | AnimationMask (bitfield) |
-| Montage Equivalent | None (Timeline) | AnimMontage (Section/Slot) | None | None |
-| Timeline | Timeline (Playable API) | Sequencer | Built into AnimationPlayer | None (events only) |
-| Dynamic Graph | Playable API | Linked Anim Layers | Code AnimTree manipulation | Graph node add/remove |
-| Property Generality | Any property | Primarily Skeletal Transform | Almost all node properties | AnimatableProperty trait |
+| Aspect              | Unity                   | Unreal Engine                        | Godot                      | Bevy (Rust)               |
+|---------------------|-------------------------|--------------------------------------|----------------------------|---------------------------|
+| Clip Type           | `AnimationClip` (Asset) | `UAnimSequence` (Asset)              | `Animation` (Resource)     | `AnimationClip` (Asset)   |
+| Control Pattern     | State Machine           | Graph + State Machine                | Data/Control Split         | DAG Graph                 |
+| State Machine       | Central                 | Inside AnimGraph                     | StateMachine Node          | None                      |
+| Blend Tree          | BlendTree               | BlendSpace 1D/2D                     | BlendSpace, BlendTree      | Blend/AdditiveBlend nodes |
+| Binding             | Animator Component      | SkeletalMeshComponent + AnimInstance | NodePath                   | ECS Components            |
+| Transitions         | Crossfade + Params      | TransitionRule + Inertialization     | Crossfade + travel(A*)     | Fade-out (weight decay)   |
+| Layers/Masks        | Layers + Avatar Mask    | Layers + per-bone Override           | Blend node combinations    | AnimationMask (bitfield)  |
+| Montage Equivalent  | None (Timeline)         | AnimMontage (Section/Slot)           | None                       | None                      |
+| Timeline            | Timeline (Playable API) | Sequencer                            | Built into AnimationPlayer | None (events only)        |
+| Dynamic Graph       | Playable API            | Linked Anim Layers                   | Code AnimTree manipulation | Graph node add/remove     |
+| Property Generality | Any property            | Primarily Skeletal Transform         | Almost all node properties | AnimatableProperty trait  |
 
 ---
 
@@ -281,16 +289,20 @@ commands.spawn((AnimationGraphHandle(graphs.add(graph)), player));
 
 #### Internal Data Architecture
 
-- **DNA (Structure DNA)**: Binary struct descriptions embedded in `.blend` files. `makesdna` generates them at compile time. Enables backward compatibility (files from the 1990s still open).
-- **RNA (Runtime Navigable Access)**: Introspective API layer mapping DNA to high-level properties. Used by UI, scripting, and animation system.
+- **DNA (Structure DNA)**: Binary struct descriptions embedded in `.blend` files. `makesdna` generates them at compile
+  time. Enables backward compatibility (files from the 1990s still open).
+- **RNA (Runtime Navigable Access)**: Introspective API layer mapping DNA to high-level properties. Used by UI,
+  scripting, and animation system.
 
 #### F-Curves and Actions
 
 **F-Curves** are the fundamental animation unit:
+
 - Each F-Curve contains keyframes for a single property channel
 - Stores an RNA path (e.g., `pose.bones['Arm'].rotation_quaternion`) and `array_index` (0=X, 1=Y, 2=Z, 3=W)
 
 **Actions** are generic containers for F-Curves:
+
 - Can be attached to any data-block with matching RNA paths
 - Portable and reusable across objects
 - Action Groups organize F-Curves (typically by bone name)
@@ -298,6 +310,7 @@ commands.spawn((AnimationGraphHandle(graphs.add(graph)), player));
 #### Layered Action System (Blender 4.4+)
 
 Three top-level arrays in an Action:
+
 1. **Slots**: Labels that earmark animation data. Combined ID type + name is unique within an Action
 2. **StripData**: Contains actual F-Curves. Multiple Strips can reference the same StripData (instancing)
 3. **Layers**: Each Layer has an array of Strips that map StripData onto the Layer
@@ -312,6 +325,7 @@ Three top-level arrays in an Action:
 - **Tweak Mode**: Edit a strip's action in Action Editor while seeing NLA context
 
 Internal evaluation functions (`anim_sys.cc`):
+
 - `nla_blend_value()`, `nla_combine_value()`, `nla_combine_quaternion()`
 - `animsys_append_tweaked_strip()`
 
@@ -334,10 +348,11 @@ Internal evaluation functions (`anim_sys.cc`):
 
 - **Actions Mode (Default)**: Exports all actions bound to a single armature
 - **NLA Tracks Mode**: Each NLA Track becomes an independent glTF animation
-  - Tracks with same name on different objects merge into one glTF animation
+    - Tracks with same name on different objects merge into one glTF animation
 - **Merge Options**: By Action (using slot), by NLA Track Name, or no merge
 
 Recommended workflow for game engines:
+
 1. Apply all transforms on armature and mesh
 2. Give each action a Fake User
 3. Push Down each action to create NLA strips
@@ -352,16 +367,16 @@ Recommended workflow for game engines:
 
 Animation curves are DG nodes connecting to animatable attributes. Eight animCurve types:
 
-| Type | Input | Output |
-|---|---|---|
-| `animCurveTA` | Time | Angle |
-| `animCurveTL` | Time | Linear (distance) |
-| `animCurveTT` | Time | Time |
-| `animCurveTU` | Time | Unitless |
-| `animCurveUA` | Unitless | Angle |
-| `animCurveUL` | Unitless | Linear |
-| `animCurveUT` | Unitless | Time |
-| `animCurveUU` | Unitless | Unitless |
+| Type          | Input    | Output            |
+|---------------|----------|-------------------|
+| `animCurveTA` | Time     | Angle             |
+| `animCurveTL` | Time     | Linear (distance) |
+| `animCurveTT` | Time     | Time              |
+| `animCurveTU` | Time     | Unitless          |
+| `animCurveUA` | Unitless | Angle             |
+| `animCurveUL` | Unitless | Linear            |
+| `animCurveUT` | Unitless | Time              |
+| `animCurveUU` | Unitless | Unitless          |
 
 - **Implicit Time Connection**: Time-based types (TA, TL, TT, TU) connect to DG time node implicitly
 - **Static Optimization**: If all key values are equal and tangent Y-components are zero, evaluation is skipped
@@ -380,10 +395,12 @@ Animation curves are DG nodes connecting to animatable attributes. Eight animCur
 #### Time Editor vs Trax Editor
 
 **Trax Editor (Legacy)**:
+
 - Requires Character Sets (named attribute collections)
 - Creates clips arranged on a non-linear timeline
 
 **Time Editor (Modern)**:
+
 - Works with any animated attribute (no Character Set required)
 - Time Warp, Speed Curve, clip trimming/scaling/looping/splitting/grouping/crossfading
 - Audio clip editing
@@ -405,14 +422,16 @@ Animation curves are DG nodes connecting to animatable attributes. Eight animCur
 #### Controller System
 
 Controllers are plug-ins handling all animation:
+
 - **Single-Parameter Controllers**: One parameter (even multi-component like RGB)
 - **Compound Controllers**: Multiple sub-controllers
-  - **PRS (Position/Rotation/Scale)**: Default Transform controller
-  - **Euler XYZ Rotation**: Per-axis Bezier tangent control
-  - **List Controller**: Multiple controllers with weights
-  - **Transform Script**: Programmable controller
+    - **PRS (Position/Rotation/Scale)**: Default Transform controller
+    - **Euler XYZ Rotation**: Per-axis Bezier tangent control
+    - **List Controller**: Multiple controllers with weights
+    - **Transform Script**: Programmable controller
 
-Parameters don't receive a controller until animated. When a parameter changes at any non-zero frame with Auto Key enabled, a default controller is assigned.
+Parameters don't receive a controller until animated. When a parameter changes at any non-zero frame with Auto Key
+enabled, a default controller is assigned.
 
 #### Track View
 
@@ -423,21 +442,23 @@ Parameters don't receive a controller until animated. When a parameter changes a
 #### Motion Mixer
 
 Structure:
+
 - **Trackgroups**: Collections of tracks, filterable by body parts
 - **Tracks**: Weight curves controlling contribution within trackgroup
 - **Clips**: Motion files (BIP, XAF) placed on tracks
 
 Capabilities: Cross-fade, trim, time warp, weight curves for gradual blending
 
-Limitation: To edit mixer animation with Curve Editor, you must create a mixdown and exit mixer mode first. Euler tangents become quaternion in mixdown.
+Limitation: To edit mixer animation with Curve Editor, you must create a mixdown and exit mixer mode first. Euler
+tangents become quaternion in mixdown.
 
 #### Export Pipeline (FBX)
 
 - **Key limitation**: Only one animation track per object per FBX file
 - Workarounds:
-  1. Sequential arrangement on single timeline (frame-range slicing)
-  2. Separate FBX per animation (recommended)
-  3. MotionBuilder passthrough for multi-take FBX
+    1. Sequential arrangement on single timeline (frame-range slicing)
+    2. Separate FBX per animation (recommended)
+    3. MotionBuilder passthrough for multi-take FBX
 
 ---
 
@@ -455,6 +476,7 @@ Limitation: To edit mixer animation with Curve Editor, you must create a mixdown
 #### KineFX Framework
 
 Operates at the geometry (SOP) level:
+
 - Joints = points with name and transform attributes
 - Hierarchy = point connectivity
 - Clear separation: Rigging (control setup) vs Deformation (skin movement)
@@ -479,9 +501,9 @@ Operates at the geometry (SOP) level:
 - **Motion System Tag**: Applied to an object, affects entire hierarchy below
 - Nested Motion System tags within affected hierarchy are not allowed
 - Internal structure:
-  1. Motion System tag has NLA branch containing animation layers
-  2. Each layer has its own NLA branch holding Motion Sources
-  3. Original keyframe data lives inside nested branches
+    1. Motion System tag has NLA branch containing animation layers
+    2. Each layer has its own NLA branch holding Motion Sources
+    3. Original keyframe data lives inside nested branches
 
 #### Motion Clips and Timeline
 
@@ -508,16 +530,16 @@ Operates at the geometry (SOP) level:
 
 ### DCC Tool Comparison Table
 
-| Aspect | Blender | Maya | 3ds Max | Houdini | Cinema 4D |
-|---|---|---|---|---|---|
-| Clip Unit | Action (F-Curves) | AnimCurve nodes (DG) | Controllers | CHOP channels | Motion Clips |
-| NLA System | NLA Editor | Time Editor | Motion Mixer | CHOP networks | Motion System |
-| Layer System | NLA Tracks (4.4: Layers) | Animation Layers | List Controller | CHOP layers | Motion Layers |
-| Blend Modes | Replace, Combine, Add | Additive, Override | Weight curves | Signal processing | Crossfade, Override |
-| Procedural | Limited (drivers) | Expressions, MEL | MAXScript | Full procedural (CHOPs) | XPresso, MoGraph |
-| glTF Export | Actions/NLA Tracks mode | Via FBX conversion | Via FBX conversion | Dedicated SOP node | Native support |
-| FBX Export | Native | Native + Game Exporter | Native (1 track limit) | ROP FBX node | Native |
-| Multi-clip Export | NLA Track names | Game Exporter takes | Separate files | Separate files | Separate files |
+| Aspect            | Blender                  | Maya                   | 3ds Max                | Houdini                 | Cinema 4D           |
+|-------------------|--------------------------|------------------------|------------------------|-------------------------|---------------------|
+| Clip Unit         | Action (F-Curves)        | AnimCurve nodes (DG)   | Controllers            | CHOP channels           | Motion Clips        |
+| NLA System        | NLA Editor               | Time Editor            | Motion Mixer           | CHOP networks           | Motion System       |
+| Layer System      | NLA Tracks (4.4: Layers) | Animation Layers       | List Controller        | CHOP layers             | Motion Layers       |
+| Blend Modes       | Replace, Combine, Add    | Additive, Override     | Weight curves          | Signal processing       | Crossfade, Override |
+| Procedural        | Limited (drivers)        | Expressions, MEL       | MAXScript              | Full procedural (CHOPs) | XPresso, MoGraph    |
+| glTF Export       | Actions/NLA Tracks mode  | Via FBX conversion     | Via FBX conversion     | Dedicated SOP node      | Native support      |
+| FBX Export        | Native                   | Native + Game Exporter | Native (1 track limit) | ROP FBX node            | Native              |
+| Multi-clip Export | NLA Track names          | Game Exporter takes    | Separate files         | Separate files          | Separate files      |
 
 ---
 
@@ -525,15 +547,16 @@ Operates at the geometry (SOP) level:
 
 ### Destructive vs Non-Destructive Editing
 
-| Tool | Non-Destructive Features | Destructive Export Step |
-|---|---|---|
-| Blender | NLA strips, layered actions (4.4+), stashing | Bake for glTF/FBX (optional sampling) |
-| Maya | Animation layers, Time Editor clips | Bake layers + control rig for FBX |
-| 3ds Max | Motion Mixer tracks, animation layers | Mixdown for curve editing, FBX bake |
-| Houdini | CHOP networks, KineFX motion clips, procedural rigs | Bake procedural animation for FBX |
-| Cinema 4D | Motion System clips, NLA blending | Bake expressions/MoGraph for FBX/glTF |
+| Tool      | Non-Destructive Features                            | Destructive Export Step               |
+|-----------|-----------------------------------------------------|---------------------------------------|
+| Blender   | NLA strips, layered actions (4.4+), stashing        | Bake for glTF/FBX (optional sampling) |
+| Maya      | Animation layers, Time Editor clips                 | Bake layers + control rig for FBX     |
+| 3ds Max   | Motion Mixer tracks, animation layers               | Mixdown for curve editing, FBX bake   |
+| Houdini   | CHOP networks, KineFX motion clips, procedural rigs | Bake procedural animation for FBX     |
+| Cinema 4D | Motion System clips, NLA blending                   | Bake expressions/MoGraph for FBX/glTF |
 
-**Key insight**: DCC tools preserve rich non-destructive editing data internally, but game engine export is almost always destructive -- converting to flat keyframes for efficient runtime evaluation.
+**Key insight**: DCC tools preserve rich non-destructive editing data internally, but game engine export is almost
+always destructive -- converting to flat keyframes for efficient runtime evaluation.
 
 ### Action Concept (Blender) in Detail
 
@@ -545,12 +568,12 @@ Operates at the geometry (SOP) level:
 
 ### Maya Layers vs Game Engine Layers
 
-| Aspect | Maya (Authoring) | Game Engine (Runtime) |
-|---|---|---|
-| Driven by | Artist manual weight/mode settings | Game logic, parameters, state machines |
-| Blend modes | Additive, Override, Override-Passthrough | BlendSpaces, Montages, Layered Rigs |
-| Output | Single baked result for export | Real-time computed blends |
-| Purpose | Non-destructive animation refinement | Responsive gameplay animation |
+| Aspect      | Maya (Authoring)                         | Game Engine (Runtime)                  |
+|-------------|------------------------------------------|----------------------------------------|
+| Driven by   | Artist manual weight/mode settings       | Game logic, parameters, state machines |
+| Blend modes | Additive, Override, Override-Passthrough | BlendSpaces, Montages, Layered Rigs    |
+| Output      | Single baked result for export           | Real-time computed blends              |
+| Purpose     | Non-destructive animation refinement     | Responsive gameplay animation          |
 
 ---
 
@@ -568,7 +591,8 @@ Given this project's existing ECS architecture and Rust language, **Bevy's patte
 
 ### Godot's Data/Control Separation
 
-Also applicable: the existing `AnimationPlayback` (resource) as control layer and `AnimationClip` (asset) as data layer already follows this pattern.
+Also applicable: the existing `AnimationPlayback` (resource) as control layer and `AnimationClip` (asset) as data layer
+already follows this pattern.
 
 ### DCC Tool Export Considerations
 
@@ -584,10 +608,13 @@ Also applicable: the existing `AnimationPlayback` (resource) as control layer an
 
 #### Before Presto: Marionette (Menv)
 
-- **1988**: Eben Ostby and Bill Reeves developed **Menv (modeling environment)**. First used on the Oscar-winning short film "Tin Toy". Steve Jobs named it "Marionette" externally
+- **1988**: Eben Ostby and Bill Reeves developed **Menv (modeling environment)**. First used on the Oscar-winning short
+  film "Tin Toy". Steve Jobs named it "Marionette" externally
 - **1995**: "Toy Story" produced with Menv. Each shot was described as a single linear program file
-- **1998**: "A Bug's Life" introduced referencing, layering, editing, and variations. Finite state machine crowd animation was also added
-- **2004**: Marionette's organically evolved design became an impediment. Composition functionality was scattered across 3 different formats and "composition engines"
+- **1998**: "A Bug's Life" introduced referencing, layering, editing, and variations. Finite state machine crowd
+  animation was also added
+- **2004**: Marionette's organically evolved design became an impediment. Composition functionality was scattered across
+  3 different formats and "composition engines"
 
 #### Birth of Presto
 
@@ -595,9 +622,9 @@ Also applicable: the existing `AnimationPlayback` (resource) as control layer an
 - **2008**: Named after Doug Sweetland's short film "Presto"
 - **2012**: **"Brave"** was the first feature film produced with Presto. All subsequent Pixar films use Presto
 - **2018**: Received the Academy Scientific and Technical Achievement Award
-  - **Rob Jensen**: Foundation design and ongoing development
-  - **Thomas Hahn**: Animation toolset
-  - **George ElKoura, Adam Woodbury, Dirk Van Gelder**: High-performance execution engine
+    - **Rob Jensen**: Foundation design and ongoing development
+    - **Thomas Hahn**: Animation toolset
+    - **George ElKoura, Adam Woodbury, Dirk Van Gelder**: High-performance execution engine
 - **2025**: Walt Disney Animation Studios adopted Presto for "Zootopia 2" (partial migration mid-production)
 
 ### 5.2 Architecture
@@ -634,12 +661,14 @@ Presto Architecture
 #### Composition Engine -- The Heart of Presto (and USD)
 
 The composition engine is Presto's most fundamental technology:
+
 - Handles referencing, overrides, variations, and inheritance
 - Operates at every granularity: single mesh to entire environments and shots
 - Encoded in a single ASCII format
 - **This composition engine directly became the core of USD (Universal Scene Description)**
 
-Sebastian Grassia (USD project lead): "USD is the marriage of Presto's composition engine with a lazy-access, time-sampled data model, enhanced top-to-bottom for scalability and effective use of multi-core systems."
+Sebastian Grassia (USD project lead): "USD is the marriage of Presto's composition engine with a lazy-access,
+time-sampled data model, enhanced top-to-bottom for scalability and effective use of multi-core systems."
 
 #### Relationship with Maya
 
@@ -649,27 +678,27 @@ Sebastian Grassia (USD project lead): "USD is the marriage of Presto's compositi
 
 ### 5.3 Key Technical Features
 
-| Feature | Description |
-|---|---|
+| Feature                         | Description                                                                           |
+|---------------------------------|---------------------------------------------------------------------------------------|
 | Full-fidelity real-time preview | OpenSubdiv enables subdivision surfaces "within 1 pixel of final render" in real-time |
-| Real-time viewport rendering | Displacement, shadows, AO, DOF, PBR GLSL shading |
-| Collaborative workflow | USD-based layer editing allows multiple artists on the same scene simultaneously |
-| Crowd system (PCF) | Generation and control of tens of thousands of agents |
-| Sketch to Pose | Draw strokes to set multi-joint poses at once |
-| ML Posing | Neural IK for natural pose generation |
-| Invertible Rig | All rig components execute bidirectionally |
-| Interactive Motion Blur | Real-time motion blur in viewport |
+| Real-time viewport rendering    | Displacement, shadows, AO, DOF, PBR GLSL shading                                      |
+| Collaborative workflow          | USD-based layer editing allows multiple artists on the same scene simultaneously      |
+| Crowd system (PCF)              | Generation and control of tens of thousands of agents                                 |
+| Sketch to Pose                  | Draw strokes to set multi-joint poses at once                                         |
+| ML Posing                       | Neural IK for natural pose generation                                                 |
+| Invertible Rig                  | All rig components execute bidirectionally                                            |
+| Interactive Motion Blur         | Real-time motion blur in viewport                                                     |
 
 #### Presto vs Commercial DCC Tools
 
-| Aspect | Presto | Commercial Tools (Maya etc.) |
-|---|---|---|
-| Target | Optimized for Pixar's pipeline | General purpose |
-| Real-time | Full scene with fur, lighting, shadows | Limited |
-| Collaboration | USD-based concurrent editing | Limited |
-| Rig evaluation | Multithreaded parallel execution | Tool-dependent |
-| Customization | Source-code level modifications | Plugin API only |
-| Stability | "Like a race car -- sometimes crashes" | More stable |
+| Aspect         | Presto                                 | Commercial Tools (Maya etc.) |
+|----------------|----------------------------------------|------------------------------|
+| Target         | Optimized for Pixar's pipeline         | General purpose              |
+| Real-time      | Full scene with fur, lighting, shadows | Limited                      |
+| Collaboration  | USD-based concurrent editing           | Limited                      |
+| Rig evaluation | Multithreaded parallel execution       | Tool-dependent               |
+| Customization  | Source-code level modifications        | Plugin API only              |
+| Stability      | "Like a race car -- sometimes crashes" | More stable                  |
 
 ### 5.4 Animation Workflow
 
@@ -685,7 +714,8 @@ Story -> Layout -> Animation -> Simulation -> Lighting -> Rendering
 
 #### Animator's Work
 
-1. **Scene-context work**: Animators use full-resolution geometry and advanced rig controls interactively within scene context
+1. **Scene-context work**: Animators use full-resolution geometry and advanced rig controls interactively within scene
+   context
 2. **Real-time feedback**: Changes reflected immediately in viewport
 3. **Render delegate switching**: Dynamic switching between OpenGL (Storm) and RenderMan in viewport
 4. **Layer-based editing**: Edit in own layer without breaking other artists' work
@@ -705,6 +735,7 @@ USD is positioned as the **4th generation** of Pixar's "composed scene descripti
 4. **Gen 4**: **USD** -- fusion of Presto's composition engine with TidScene's lazy-access, time-sampled data model
 
 Key milestones:
+
 - 2012: USD project started
 - 2016: Open-sourced under Apache 2.0 license
 - "Finding Dory" was the first film with USD in production
@@ -713,14 +744,14 @@ Key milestones:
 
 ### 5.6 Pixar Open-Source Ecosystem
 
-| Project | Role | Relationship to Presto |
-|---|---|---|
-| **OpenUSD** | Scene description & composition | Presto's composition engine, open-sourced |
-| **OpenSubdiv** | Subdivision surface evaluation | Enables real-time limit surfaces in Presto (3ms vs 100ms with Maya) |
-| **Hydra** | Imaging framework (render delegates) | Presto's viewport backend; Storm (OpenGL) and RenderMan delegates |
-| **RenderMan** | Production renderer | Final frame rendering; interactive preview in Presto via Hydra |
-| **OpenEXR** | HDR image format | Output format for rendered frames |
-| **Alembic** | Geometry cache exchange | Baked geometry data exchange |
+| Project        | Role                                 | Relationship to Presto                                              |
+|----------------|--------------------------------------|---------------------------------------------------------------------|
+| **OpenUSD**    | Scene description & composition      | Presto's composition engine, open-sourced                           |
+| **OpenSubdiv** | Subdivision surface evaluation       | Enables real-time limit surfaces in Presto (3ms vs 100ms with Maya) |
+| **Hydra**      | Imaging framework (render delegates) | Presto's viewport backend; Storm (OpenGL) and RenderMan delegates   |
+| **RenderMan**  | Production renderer                  | Final frame rendering; interactive preview in Presto via Hydra      |
+| **OpenEXR**    | HDR image format                     | Output format for rendered frames                                   |
+| **Alembic**    | Geometry cache exchange              | Baked geometry data exchange                                        |
 
 #### Hydra Architecture in Presto
 
@@ -741,34 +772,36 @@ Hydra (Imaging Framework)
 #### RenderMan Integration
 
 - **RenderMan 22+**: Interactive path tracing in Presto viewport
-- **RenderMan 27**: XPU (extreme processing unit) GPU-accelerated rendering as primary; RIS (CPU) renderer in maintenance mode
+- **RenderMan 27**: XPU (extreme processing unit) GPU-accelerated rendering as primary; RIS (CPU) renderer in
+  maintenance mode
 
 ### 5.7 Disney Animation Studios
 
 Disney Animation is Pixar's sister studio with its own tools:
 
-| Tool | Description | First Used |
-|---|---|---|
-| **Hyperion** | Physics-based path tracer with sorted ray batch architecture | "Big Hero 6" (2014) |
-| **Meander** | 2D vector/raster hybrid animation (strokes following 3D motion) | "Paperman", "Feast" |
-| **Matterhorn** | Snow simulation (Material Point Method) | "Frozen" |
-| **Quicksilver** | Hair system | "Moana" |
-| **PhysGrid** | Muscle/soft tissue simulation | Various |
-| **Tonic** | Stylized hairstyle construction | Various |
+| Tool            | Description                                                     | First Used          |
+|-----------------|-----------------------------------------------------------------|---------------------|
+| **Hyperion**    | Physics-based path tracer with sorted ray batch architecture    | "Big Hero 6" (2014) |
+| **Meander**     | 2D vector/raster hybrid animation (strokes following 3D motion) | "Paperman", "Feast" |
+| **Matterhorn**  | Snow simulation (Material Point Method)                         | "Frozen"            |
+| **Quicksilver** | Hair system                                                     | "Moana"             |
+| **PhysGrid**    | Muscle/soft tissue simulation                                   | Various             |
+| **Tonic**       | Stylized hairstyle construction                                 | Various             |
 
-Disney adopted Presto for "Zootopia 2" (2025), marking convergence between the two studios' toolchains. The migration enabled cross-department dialogue and synchronous troubleshooting.
+Disney adopted Presto for "Zootopia 2" (2025), marking convergence between the two studios' toolchains. The migration
+enabled cross-department dialogue and synchronous troubleshooting.
 
 ### 5.8 Technical Publications
 
-| Year | Title | Venue |
-|---|---|---|
-| 2013 | Presto Execution System | Internal/SIGGRAPH |
-| 2015 | Sketch to Pose in Pixar's Presto Animation System | SIGGRAPH 2015 Talks |
-| 2016 | Real-Time Graphics in Pixar Film Production | SIGGRAPH 2016 Real-Time Live! |
-| 2019 | Multithreading in Pixar's Animation Tools | SIGGRAPH Asia 2019 Course |
-| 2020 | Next-Gen Rendering Technology at Pixar | GTC Digital 2020 |
-| 2022 | Presto Crowds Foundations (PCF) | SIGGRAPH 2022 |
-| 2023 | Pose and Skeleton-aware Neural IK | SIGGRAPH Asia 2023 |
+| Year | Title                                                                                 | Venue                              |
+|------|---------------------------------------------------------------------------------------|------------------------------------|
+| 2013 | Presto Execution System                                                               | Internal/SIGGRAPH                  |
+| 2015 | Sketch to Pose in Pixar's Presto Animation System                                     | SIGGRAPH 2015 Talks                |
+| 2016 | Real-Time Graphics in Pixar Film Production                                           | SIGGRAPH 2016 Real-Time Live!      |
+| 2019 | Multithreading in Pixar's Animation Tools                                             | SIGGRAPH Asia 2019 Course          |
+| 2020 | Next-Gen Rendering Technology at Pixar                                                | GTC Digital 2020                   |
+| 2022 | Presto Crowds Foundations (PCF)                                                       | SIGGRAPH 2022                      |
+| 2023 | Pose and Skeleton-aware Neural IK                                                     | SIGGRAPH Asia 2023                 |
 | 2024 | What's New in Pixar's Presto: ML Posing, Invertible Rigs, and Interactive Motion Blur | SIGGRAPH Asia 2024 Real-Time Live! |
 
 ---
@@ -780,12 +813,14 @@ Disney adopted Presto for "Zootopia 2" (2025), marking convergence between the t
 This project is a **Vulkan-based rendering engine with animation editing capabilities**, not a game engine.
 
 **Goals**:
+
 - Edit animations (keyframe editing, curve editing)
 - Save animation clips to files
 - See results via real-time Vulkan rendering
 - Models and rigs come from Maya (glTF/FBX import)
 
 **Constraints**:
+
 - ECS architecture is mandatory (data/behavior separation)
 - No state machines or blend graphs (too complex, not needed for editor)
 - No game engine build system
@@ -795,19 +830,22 @@ This project is a **Vulkan-based rendering engine with animation editing capabil
 
 The project already has a substantial animation foundation:
 
-| Layer | Current Implementation | Status |
-|---|---|---|
-| Data | `AnimationClip` / `EditableAnimationClip` | Working |
-| Editing | CurveEditor / Timeline UI | Working |
-| Persistence | RON format save/load | Working |
-| Playback | `AnimationPlayback` (global Resource) | Working |
-| Evaluation | `playback_prepare_animations` -> GPU | Working |
+| Layer       | Current Implementation                    | Status  |
+|-------------|-------------------------------------------|---------|
+| Data        | `AnimationClip` / `EditableAnimationClip` | Working |
+| Editing     | CurveEditor / Timeline UI                 | Working |
+| Persistence | RON format save/load                      | Working |
+| Playback    | `AnimationPlayback` (global Resource)     | Working |
+| Evaluation  | `playback_prepare_animations` -> GPU      | Working |
 
 **Structural issues in current design**:
 
-1. **Playback is global**: `AnimationPlayback` exists as a single Resource -- only one clip can play for the entire scene
-2. **Entity-clip binding is implicit**: Which entity plays which clip depends solely on `AnimationPlayback.current_clip_id`
-3. **`AnimationState` component is vestigial**: Defined but the actual evaluation path uses the `AnimationPlayback` Resource
+1. **Playback is global**: `AnimationPlayback` exists as a single Resource -- only one clip can play for the entire
+   scene
+2. **Entity-clip binding is implicit**: Which entity plays which clip depends solely on
+   `AnimationPlayback.current_clip_id`
+3. **`AnimationState` component is vestigial**: Defined but the actual evaluation path uses the `AnimationPlayback`
+   Resource
 4. **`EditableClipManager` lives outside proper ECS flow**: Synchronization with `AnimationRegistry` is manual
 
 ### 6.3 Design Philosophy
@@ -888,7 +926,8 @@ ClipMetadata
 +-- skeleton_id: Option<SkeletonId>
 ```
 
-**Role**: Centralized clip lifecycle management. Clips exist as "library items", not owned by entities. Same philosophy as Blender's Actions.
+**Role**: Centralized clip lifecycle management. Clips exist as "library items", not owned by entities. Same philosophy
+as Blender's Actions.
 
 #### Component Layer: Animator
 
@@ -921,7 +960,8 @@ Stickman Entity
 +-- EditorDisplay { icon: Model }
 ```
 
-**Benefit**: Each entity can independently play its own animation. Multiple characters can coexist with independent playback.
+**Benefit**: Each entity can independently play its own animation. Multiple characters can coexist with independent
+playback.
 
 #### System Layer: Evaluation Functions
 
@@ -1007,29 +1047,31 @@ TimelineState (Resource, UI state only)
 
 Initial migration plan (kept for reference):
 
-| Phase | Change | Files Affected |
-|---|---|---|
-| **Phase 1** | Define `Animator` component, spawn with model load | `world.rs`, `scene_model.rs` |
-| **Phase 2** | Migrate playback state from `AnimationPlayback` to `Animator` | `animation_playback_systems.rs`, `timeline_systems.rs` |
-| **Phase 3** | Remove playback state from `TimelineState`, add `target_entity` | `timeline_state.rs`, `timeline_window.rs` |
-| **Phase 4** | Unify `AnimationRegistry` + `EditableClipManager` -> `ClipLibrary` | `resource/`, `manager.rs` |
-| **Phase 5** | Add Animator section to Inspector UI | `inspector_systems.rs`, `inspector_window.rs` |
+| Phase       | Change                                                             | Files Affected                                         |
+|-------------|--------------------------------------------------------------------|--------------------------------------------------------|
+| **Phase 1** | Define `Animator` component, spawn with model load                 | `world.rs`, `scene_model.rs`                           |
+| **Phase 2** | Migrate playback state from `AnimationPlayback` to `Animator`      | `animation_playback_systems.rs`, `timeline_systems.rs` |
+| **Phase 3** | Remove playback state from `TimelineState`, add `target_entity`    | `timeline_state.rs`, `timeline_window.rs`              |
+| **Phase 4** | Unify `AnimationRegistry` + `EditableClipManager` -> `ClipLibrary` | `resource/`, `manager.rs`                              |
+| **Phase 5** | Add Animator section to Inspector UI                               | `inspector_systems.rs`, `inspector_window.rs`          |
 
-**This plan was superseded** -- see Section 6.8 for the revised migration plan that addresses ECS compliance issues found during review.
+**This plan was superseded** -- see Section 6.8 for the revised migration plan that addresses ECS compliance issues
+found during review.
 
 ### 6.7 Mapping to Blender / Presto
 
-| This Project | Blender | Presto |
-|---|---|---|
-| `AnimationClip` (Asset) | Action | Animation Data |
-| `EditableAnimationClip` | Action (F-Curves) | Internal curve representation |
-| `ClipLibrary` (Resource) | Data-blocks | USD Asset Database |
-| `Animator` (Component) | Object's active Action | Entity animation state |
-| Timeline Window | NLA Editor / Dope Sheet | Timeline |
-| Curve Editor | Graph Editor | Curve Editor |
-| `evaluate_animators` (System) | Dependency Graph evaluation | Execution Engine |
+| This Project                  | Blender                     | Presto                        |
+|-------------------------------|-----------------------------|-------------------------------|
+| `AnimationClip` (Asset)       | Action                      | Animation Data                |
+| `EditableAnimationClip`       | Action (F-Curves)           | Internal curve representation |
+| `ClipLibrary` (Resource)      | Data-blocks                 | USD Asset Database            |
+| `Animator` (Component)        | Object's active Action      | Entity animation state        |
+| Timeline Window               | NLA Editor / Dope Sheet     | Timeline                      |
+| Curve Editor                  | Graph Editor                | Curve Editor                  |
+| `evaluate_animators` (System) | Dependency Graph evaluation | Execution Engine              |
 
-The key similarity to Presto is the **clear separation between "clips as data" and "animator on entity"**. This matches Blender's pattern where Action = data, Object's active Action = binding.
+The key similarity to Presto is the **clear separation between "clips as data" and "animator on entity"**. This matches
+Blender's pattern where Action = data, Object's active Action = binding.
 
 ### 6.8 Revised Migration Plan (ECS-Compliant)
 
@@ -1045,7 +1087,9 @@ AnimationPlayback (Resource, global)
     -> skeleton_id obtained from graphics.meshes.first()
 ```
 
-**No Entity is involved in the evaluation path.** Creating an `Animator` component without changing the evaluation path would result in the same problem as the current vestigial `AnimationState` -- a component that exists but is never read by the actual animation systems.
+**No Entity is involved in the evaluation path.** Creating an `Animator` component without changing the evaluation path
+would result in the same problem as the current vestigial `AnimationState` -- a component that exists but is never read
+by the actual animation systems.
 
 #### Issue 2: model_path in AnimationPlayback
 
@@ -1053,26 +1097,29 @@ AnimationPlayback (Resource, global)
 
 ```rust
 let is_gltf = model_path.ends_with(".glb");
-let has_node_animation = (is_gltf || is_fbx) && !model_state.has_skinned_meshes;
+let has_node_animation = (is_gltf | | is_fbx) & & ! model_state.has_skinned_meshes;
 ```
 
-This is **model metadata**, not playback state. It does not belong in `Animator`, but removing it from `AnimationPlayback` breaks the evaluation path.
+This is **model metadata**, not playback state. It does not belong in `Animator`, but removing it from
+`AnimationPlayback` breaks the evaluation path.
 
 #### Issue 3: MorphAnimation is a Separate System
 
-`MorphAnimationSystem` has a fundamentally different data structure from skeletal animation. It stores per-mesh morph targets and weight arrays, not per-bone transform channels. It cannot be trivially unified into a `ClipLibrary` alongside `AnimationClip`.
+`MorphAnimationSystem` has a fundamentally different data structure from skeletal animation. It stores per-mesh morph
+targets and weight arrays, not per-bone transform channels. It cannot be trivially unified into a `ClipLibrary`
+alongside `AnimationClip`.
 
 #### Revised Phase Plan
 
-| Phase | Change | Risk | Key Files |
-|---|---|---|---|
-| **Phase 1** | Define `Animator` component (data only), attach to entities on model load | None | `world.rs`, `scene_model.rs` |
-| **Phase 2** | Bridge: sync selected entity's `Animator` -> `AnimationPlayback` | None | New system function, `animation_phase.rs` |
-| **Phase 3** | Move `model_path` from `AnimationPlayback` to `ModelState`, add `AnimationType` cache | Low | `animation_playback.rs`, `graphics.rs`, `animation_playback_systems.rs` |
-| **Phase 4** | Remove playback state from `TimelineState`, add `target_entity`; Timeline operates on Animator directly | Low | `timeline_state.rs`, `timeline_window.rs`, `timeline_systems.rs` |
-| **Phase 5** | Replace evaluation path: Entity-based `evaluate_animators` replaces `playback_prepare_animations` | **High** | `animation_playback_systems.rs`, `animation_phase.rs` |
-| **Phase 6** | Unify `AnimationRegistry` + `EditableClipManager` -> `ClipLibrary` (morph kept as separate field) | Medium | `resource/graphics.rs`, `editable/manager.rs` |
-| **Phase 7** | Add Animator section to Inspector UI | None | `inspector_systems.rs`, `inspector_window.rs` |
+| Phase       | Change                                                                                                  | Risk     | Key Files                                                               |
+|-------------|---------------------------------------------------------------------------------------------------------|----------|-------------------------------------------------------------------------|
+| **Phase 1** | Define `Animator` component (data only), attach to entities on model load                               | None     | `world.rs`, `scene_model.rs`                                            |
+| **Phase 2** | Bridge: sync selected entity's `Animator` -> `AnimationPlayback`                                        | None     | New system function, `animation_phase.rs`                               |
+| **Phase 3** | Move `model_path` from `AnimationPlayback` to `ModelState`, add `AnimationType` cache                   | Low      | `animation_playback.rs`, `graphics.rs`, `animation_playback_systems.rs` |
+| **Phase 4** | Remove playback state from `TimelineState`, add `target_entity`; Timeline operates on Animator directly | Low      | `timeline_state.rs`, `timeline_window.rs`, `timeline_systems.rs`        |
+| **Phase 5** | Replace evaluation path: Entity-based `evaluate_animators` replaces `playback_prepare_animations`       | **High** | `animation_playback_systems.rs`, `animation_phase.rs`                   |
+| **Phase 6** | Unify `AnimationRegistry` + `EditableClipManager` -> `ClipLibrary` (morph kept as separate field)       | Medium   | `resource/graphics.rs`, `editable/manager.rs`                           |
+| **Phase 7** | Add Animator section to Inspector UI                                                                    | None     | `inspector_systems.rs`, `inspector_window.rs`                           |
 
 #### Phase 1: Animator Component (Data Only)
 
@@ -1093,7 +1140,8 @@ pub struct Animator {
 
 #### Phase 2: Bridge (Animator -> AnimationPlayback Sync)
 
-Create a system that copies the selected entity's `Animator` state into the existing `AnimationPlayback` Resource. This allows the entire existing evaluation pipeline to continue working without modification.
+Create a system that copies the selected entity's `Animator` state into the existing `AnimationPlayback` Resource. This
+allows the entire existing evaluation pipeline to continue working without modification.
 
 ```rust
 pub fn sync_animator_to_playback(
@@ -1129,7 +1177,8 @@ pub fn sync_playback_to_animator(
 }
 ```
 
-**Key insight**: The existing `playback_prepare_animations` function is untouched. The bridge pattern ensures zero breakage.
+**Key insight**: The existing `playback_prepare_animations` function is untouched. The bridge pattern ensures zero
+breakage.
 
 #### Phase 3: model_path to ModelState
 
@@ -1150,11 +1199,13 @@ enum AnimationType {
 }
 ```
 
-Update `playback_prepare_animations` signature to read `model_path` and `animation_type` from `ModelState` instead of `AnimationPlayback`. The `AnimationPlayback.model_path` field is then removed.
+Update `playback_prepare_animations` signature to read `model_path` and `animation_type` from `ModelState` instead of
+`AnimationPlayback`. The `AnimationPlayback.model_path` field is then removed.
 
 #### Phase 4: TimelineState Cleanup
 
-Remove playback state from `TimelineState`. Timeline UI reads from / writes to the `Animator` component on `target_entity`.
+Remove playback state from `TimelineState`. Timeline UI reads from / writes to the `Animator` component on
+`target_entity`.
 
 ```
 TimelineState (Resource, UI state only) -- revised
@@ -1169,6 +1220,7 @@ TimelineState (Resource, UI state only) -- revised
 ```
 
 Timeline events route through `Animator`:
+
 - `TimelinePlay` -> set `animator.playing = true`
 - `TimelineSetTime(t)` -> set `animator.time = t`
 - `TimelineSelectClip(id)` -> set `animator.active_clip_id = Some(id)`
@@ -1219,11 +1271,13 @@ pub fn evaluate_animators(
 }
 ```
 
-**This is the highest-risk phase** because it replaces the core evaluation pipeline. The bridge from Phase 2 should be kept as a fallback during development.
+**This is the highest-risk phase** because it replaces the core evaluation pipeline. The bridge from Phase 2 should be
+kept as a fallback during development.
 
 #### Phase 6: ClipLibrary Unification
 
-Merge `AnimationRegistry` + `EditableClipManager` into `ClipLibrary`. `MorphAnimationSystem` is kept as a separate field due to its fundamentally different data model.
+Merge `AnimationRegistry` + `EditableClipManager` into `ClipLibrary`. `MorphAnimationSystem` is kept as a separate field
+due to its fundamentally different data model.
 
 ```
 ClipLibrary (Resource)
@@ -1247,20 +1301,21 @@ Add Animator information display to the Inspector window, similar to how Mesh/Ma
 
 #### Comparison: Initial vs Revised Plan
 
-| Aspect | Initial Plan (6.6) | Revised Plan (6.8) |
-|---|---|---|
-| AnimationPlayback handling | Replaced immediately in Phase 2 | Bridge in Phase 2, replaced in Phase 5 |
-| Evaluation path | Unchanged (implicit) | Explicitly converted to Entity-based in Phase 5 |
-| model_path | Not addressed | Moved to ModelState in Phase 3 |
-| MorphAnimation | Merged into ClipLibrary | Kept as separate field within ClipLibrary |
-| Breaking change risk | High at Phase 2 | Contained to Phase 5 only |
-| Existing pipeline survival | Phases 1-3 only | Phases 1-4 (bridge keeps old path alive) |
+| Aspect                     | Initial Plan (6.6)              | Revised Plan (6.8)                              |
+|----------------------------|---------------------------------|-------------------------------------------------|
+| AnimationPlayback handling | Replaced immediately in Phase 2 | Bridge in Phase 2, replaced in Phase 5          |
+| Evaluation path            | Unchanged (implicit)            | Explicitly converted to Entity-based in Phase 5 |
+| model_path                 | Not addressed                   | Moved to ModelState in Phase 3                  |
+| MorphAnimation             | Merged into ClipLibrary         | Kept as separate field within ClipLibrary       |
+| Breaking change risk       | High at Phase 2                 | Contained to Phase 5 only                       |
+| Existing pipeline survival | Phases 1-3 only                 | Phases 1-4 (bridge keeps old path alive)        |
 
 ---
 
 ## References
 
 ### Game Engines
+
 - [Unity - Animator Controller](https://docs.unity3d.com/6000.2/Documentation/Manual/class-AnimatorController.html)
 - [Unity - Playable API](https://docs.unity3d.com/Manual/Playables.html)
 - [Unreal - Animation Blueprints](https://dev.epicgames.com/documentation/en-us/unreal-engine/animation-blueprints-in-unreal-engine)
@@ -1273,6 +1328,7 @@ Add Animator information display to the Inspector window, similar to how Mesh/Ma
 - [Bevy - bevy_animation source](https://github.com/bevyengine/bevy/tree/main/crates/bevy_animation/src)
 
 ### DCC Tools
+
 - [Blender - NLA Editor](https://docs.blender.org/manual/en/latest/editors/nla/index.html)
 - [Blender - Actions](https://docs.blender.org/manual/en/latest/animation/actions.html)
 - [Blender - Animation 2025 (Layered Actions)](https://developer.blender.org/docs/features/animation/slotted-actions/)
@@ -1286,6 +1342,7 @@ Add Animator information display to the Inspector window, similar to how Mesh/Ma
 - [Cinema 4D - Motion System](https://help.maxon.net/c4d/en-us/Content/html/52080.html)
 
 ### Pixar Presto & Related
+
 - [Presto - Pixar Animation Studios](https://www.pixar.com/presto)
 - [Presto (animation software) - Wikipedia](https://en.wikipedia.org/wiki/Presto_(animation_software))
 - [A rare peek at Presto, Pixar's secret weapon - Digital Trends](https://www.digitaltrends.com/computing/pixar-shows-software-at-gtc-2016/)

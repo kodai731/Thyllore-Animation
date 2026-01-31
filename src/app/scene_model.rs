@@ -127,7 +127,8 @@ impl App {
         crate::log!("  position: {:?}", self.camera().position);
 
         crate::log!("--- Animation Info ---");
-        crate::log!("  animation_playing: {}", self.animation_playback().playing);
+        let timeline = self.data.ecs_world.resource::<crate::ecs::resource::TimelineState>();
+        crate::log!("  animation_playing: {}", timeline.playing);
         crate::log!("  clips count: {}", clip_library.animation.clips.len());
 
         crate::log!("========== END DEBUG INFORMATION ==========");

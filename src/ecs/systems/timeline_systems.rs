@@ -1,52 +1,43 @@
 use crate::animation::editable::SourceClipId;
 use crate::ecs::resource::ClipLibrary;
 use crate::ecs::events::UIEvent;
-use crate::ecs::resource::{AnimationPlayback, TimelineState};
+use crate::ecs::resource::TimelineState;
 
 pub fn timeline_process_events(
     events: &[UIEvent],
     timeline_state: &mut TimelineState,
-    playback: &mut AnimationPlayback,
     clip_library: &mut ClipLibrary,
 ) {
     for event in events {
         match event {
             UIEvent::TimelinePlay => {
                 timeline_state.playing = true;
-                playback.playing = true;
             }
 
             UIEvent::TimelinePause => {
                 timeline_state.playing = false;
-                playback.playing = false;
             }
 
             UIEvent::TimelineStop => {
                 timeline_state.playing = false;
                 timeline_state.current_time = 0.0;
-                playback.playing = false;
-                playback.time = 0.0;
             }
 
             UIEvent::TimelineSetTime(time) => {
                 timeline_state.playing = false;
                 timeline_state.set_time(*time);
-                playback.playing = false;
-                playback.time = *time;
             }
 
             UIEvent::TimelineSetSpeed(speed) => {
                 timeline_state.speed = *speed;
-                playback.speed = *speed;
             }
 
             UIEvent::TimelineToggleLoop => {
                 timeline_state.looping = !timeline_state.looping;
-                playback.looping = timeline_state.looping;
             }
 
             UIEvent::TimelineSelectClip(clip_id) => {
-                timeline_select_clip(timeline_state, playback, clip_library, *clip_id);
+                timeline_select_clip(timeline_state, clip_library, *clip_id);
             }
 
             UIEvent::TimelineToggleTrack(bone_id) => {
@@ -106,7 +97,6 @@ pub fn timeline_process_events(
 
 fn timeline_select_clip(
     timeline_state: &mut TimelineState,
-    playback: &mut AnimationPlayback,
     clip_library: &ClipLibrary,
     clip_id: SourceClipId,
 ) {
@@ -128,13 +118,10 @@ fn timeline_select_clip(
             clip.track_count()
         );
     }
-
-    playback.time = 0.0;
 }
 
 pub fn timeline_update(
     timeline_state: &mut TimelineState,
-    playback: &mut AnimationPlayback,
     clip_library: &ClipLibrary,
     delta_time: f32,
 ) {
@@ -159,20 +146,7 @@ pub fn timeline_update(
     } else if new_time >= duration {
         timeline_state.current_time = duration;
         timeline_state.playing = false;
-        playback.playing = false;
     } else {
         timeline_state.current_time = new_time;
     }
-
-    playback.time = timeline_state.current_time;
-}
-
-pub fn timeline_sync_from_playback(
-    timeline_state: &mut TimelineState,
-    playback: &AnimationPlayback,
-) {
-    timeline_state.current_time = playback.time;
-    timeline_state.playing = playback.playing;
-    timeline_state.looping = playback.looping;
-    timeline_state.speed = playback.speed;
 }

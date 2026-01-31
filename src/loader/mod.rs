@@ -4,7 +4,9 @@ pub mod texture;
 
 use cgmath::Matrix4;
 
-use crate::animation::{AnimationSystem, MorphAnimationSystem, SkeletonId, SkinData};
+use crate::animation::{
+    AnimationSystem, MorphAnimationSystem, Skeleton, SkeletonId, SkinData,
+};
 use crate::vulkanr::data::{Vertex, VertexData};
 
 #[derive(Clone, Debug)]
@@ -42,6 +44,7 @@ pub struct LoadedNode {
 pub struct ModelLoadResult {
     pub meshes: Vec<LoadedMesh>,
     pub nodes: Vec<LoadedNode>,
+    pub skeletons: Vec<Skeleton>,
     pub animation_system: AnimationSystem,
     pub morph_animation: MorphAnimationSystem,
     pub has_skinned_meshes: bool,
@@ -82,9 +85,12 @@ impl ModelLoadResult {
 
         let node_animation_scale = if result.has_armature { 0.01 } else { 1.0 };
 
+        let skeletons = result.animation_system.skeletons.clone();
+
         Self {
             meshes,
             nodes,
+            skeletons,
             animation_system: result.animation_system,
             morph_animation: result.morph_animation,
             has_skinned_meshes: result.has_skinned_meshes,
@@ -117,9 +123,12 @@ impl ModelLoadResult {
             })
             .collect();
 
+        let skeletons = result.animation_system.skeletons.clone();
+
         Self {
             meshes,
             nodes,
+            skeletons,
             animation_system: result.animation_system,
             morph_animation: MorphAnimationSystem::default(),
             has_skinned_meshes: result.has_skinned_meshes,

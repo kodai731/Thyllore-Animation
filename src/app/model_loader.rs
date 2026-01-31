@@ -94,7 +94,7 @@ unsafe fn apply_model_to_resources(
 ) -> Result<()> {
     cleanup_resources(device, graphics, raytracing, world, assets)?;
 
-    setup_animation_system(world, load_result);
+    setup_animation_system(world, load_result, assets);
     setup_nodes(world, load_result);
 
     for (i, loaded_mesh) in load_result.meshes.iter().enumerate() {
@@ -106,7 +106,7 @@ unsafe fn apply_model_to_resources(
         graphics.mesh_material_ids.push(material_id);
     }
 
-    apply_initial_pose(instance, device, command_pool, graphics, world, load_result)?;
+    apply_initial_pose(instance, device, command_pool, graphics, world, assets, load_result)?;
     rebuild_acceleration_structures(instance, device, command_pool, graphics, raytracing)?;
     update_ray_query_descriptor(device, raytracing)?;
 
@@ -192,11 +192,24 @@ pub unsafe fn cleanup_model_resources(rrdevice: &RRDevice, data: &mut AppData) {
     crate::log!("Model resources cleaned up");
 }
 
-fn setup_animation_system(world: &mut World, load_result: &ModelLoadResult) {
+fn setup_animation_system(
+    world: &mut World,
+    load_result: &ModelLoadResult,
+    assets: &mut AssetStorage,
+) {
     if world.contains_resource::<ClipLibrary>() {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
         clip_library.animation = load_result.animation_system.clone();
         clip_library.morph_animation = load_result.morph_animation.clone();
+    }
+
+    for skeleton in &load_result.skeletons {
+        let skeleton_asset = SkeletonAsset {
+            id: 0,
+            skeleton_id: skeleton.id,
+            skeleton: skeleton.clone(),
+        };
+        assets.add_skeleton(skeleton_asset);
     }
 
     if world.contains_resource::<ModelState>() {
@@ -356,15 +369,22 @@ unsafe fn apply_initial_pose(
     command_pool: &Rc<RRCommandPool>,
     graphics: &mut GraphicsResources,
     world: &mut World,
+    assets: &AssetStorage,
     load_result: &ModelLoadResult,
 ) -> Result<()> {
+    use crate::ecs::{
+        create_pose_from_rest, compute_pose_global_transforms,
+        sample_clip_to_pose,
+    };
+
     if load_result.animation_system.clips.is_empty() {
         return Ok(());
     }
 
     crate::log!("Applying initial pose (time=0) for animation...");
 
-    let first_clip_id = load_result.animation_system.clips.first().map(|c| c.id);
+    let first_clip_id =
+        load_result.animation_system.clips.first().map(|c| c.id);
     if let Some(clip_id) = first_clip_id {
         let has_playback = world.contains_resource::<AnimationPlayback>();
         if has_playback {
@@ -381,43 +401,94 @@ unsafe fn apply_initial_pose(
 
     if let Some(skel_id) = skeleton_id {
         let playback = world.resource::<AnimationPlayback>();
-        let mut clip_library = world.resource_mut::<ClipLibrary>();
-        if let Some(clip_id) = playback.current_clip_id {
-            clip_library.animation.apply_to_skeleton(skel_id, clip_id, playback.time, playback.looping);
-        }
-        drop(clip_library);
-        drop(playback);
-
         let clip_library = world.resource::<ClipLibrary>();
-        for mesh_idx in 0..graphics.meshes.len() {
-            apply_skinning_to_mesh(
-                instance,
-                device,
-                command_pool,
-                graphics,
-                &clip_library.animation,
-                mesh_idx,
-            )?;
+
+        let skeleton = assets.get_skeleton_by_skeleton_id(skel_id);
+        let clip = playback
+            .current_clip_id
+            .and_then(|cid| clip_library.animation.get_clip(cid));
+
+        if let (Some(skeleton), Some(clip)) = (skeleton, clip) {
+            let mut pose = create_pose_from_rest(skeleton);
+            sample_clip_to_pose(
+                clip,
+                playback.time,
+                skeleton,
+                &mut pose,
+                playback.looping,
+            );
+            let globals =
+                compute_pose_global_transforms(skeleton, &pose);
+            let skeleton_clone = skeleton.clone();
+            drop(clip_library);
+            drop(playback);
+
+            for mesh_idx in 0..graphics.meshes.len() {
+                apply_skinning_to_mesh(
+                    instance,
+                    device,
+                    command_pool,
+                    graphics,
+                    &globals,
+                    &skeleton_clone,
+                    mesh_idx,
+                )?;
+            }
+        } else {
+            drop(clip_library);
+            drop(playback);
         }
     }
 
-    let has_node_animation = !load_result.has_skinned_meshes && !graphics.meshes.is_empty();
+    let has_node_animation =
+        !load_result.has_skinned_meshes && !graphics.meshes.is_empty();
     if has_node_animation {
         let clip_library = world.resource::<ClipLibrary>();
         let model_state = world.resource::<ModelState>();
         let mut node_assets = world.resource_mut::<NodeAssets>();
-        let animation = clip_library.animation.clone();
         let node_animation_scale = model_state.node_animation_scale;
+
+        let skel_id =
+            graphics.meshes.first().and_then(|m| m.skeleton_id);
+        let skeleton_clone =
+            skel_id.and_then(|id| assets.get_skeleton_by_skeleton_id(id).cloned());
+        let clip_clone =
+            clip_library.animation.clips.first().cloned();
         drop(clip_library);
         drop(model_state);
 
         let updated_meshes =
-            graphics.prepare_node_animation(&mut node_assets.nodes, &animation, node_animation_scale);
+            if let (Some(skeleton), Some(clip)) =
+                (&skeleton_clone, &clip_clone)
+            {
+                let mut pose = create_pose_from_rest(skeleton);
+                sample_clip_to_pose(
+                    clip, 0.0, skeleton, &mut pose, false,
+                );
+
+                graphics.prepare_node_animation(
+                    &mut node_assets.nodes,
+                    skeleton,
+                    &pose,
+                    node_animation_scale,
+                )
+            } else {
+                Vec::new()
+            };
 
         for mesh_idx in updated_meshes {
-            if let Err(e) = upload_mesh_vertices(instance, device, command_pool, graphics, mesh_idx)
-            {
-                crate::log!("Failed to upload initial node animation mesh {}: {}", mesh_idx, e);
+            if let Err(e) = upload_mesh_vertices(
+                instance,
+                device,
+                command_pool,
+                graphics,
+                mesh_idx,
+            ) {
+                crate::log!(
+                    "Failed to upload initial node animation mesh {}: {}",
+                    mesh_idx,
+                    e
+                );
             }
         }
     }
@@ -431,53 +502,62 @@ unsafe fn apply_skinning_to_mesh(
     device: &RRDevice,
     command_pool: &Rc<RRCommandPool>,
     graphics: &mut GraphicsResources,
-    animation: &crate::animation::AnimationSystem,
+    global_transforms: &[cgmath::Matrix4<f32>],
+    skeleton: &crate::animation::Skeleton,
     mesh_idx: usize,
 ) -> Result<()> {
-    let (skin_data, skel_id) = {
+    use crate::ecs::apply_skinning;
+
+    let skin_data = {
         let mesh = &graphics.meshes[mesh_idx];
-        (mesh.skin_data.clone(), mesh.skeleton_id)
+        mesh.skin_data.clone()
     };
 
-    if let (Some(skin_data), Some(skel_id)) = (skin_data, skel_id) {
-        if let Some(skeleton) = animation.get_skeleton(skel_id) {
-            let vertex_count = skin_data.base_positions.len();
-            let mut skinned_positions = vec![cgmath::Vector3::new(0.0, 0.0, 0.0); vertex_count];
-            let mut skinned_normals = vec![cgmath::Vector3::new(0.0, 1.0, 0.0); vertex_count];
+    if let Some(skin_data) = skin_data {
+        let vertex_count = skin_data.base_positions.len();
+        let mut skinned_positions =
+            vec![cgmath::Vector3::new(0.0, 0.0, 0.0); vertex_count];
+        let mut skinned_normals =
+            vec![cgmath::Vector3::new(0.0, 1.0, 0.0); vertex_count];
 
-            skin_data.apply_skinning(skeleton, &mut skinned_positions, &mut skinned_normals);
+        apply_skinning(
+            &skin_data,
+            global_transforms,
+            skeleton,
+            &mut skinned_positions,
+            &mut skinned_normals,
+        );
 
-            let mesh = &mut graphics.meshes[mesh_idx];
-            for (i, pos) in skinned_positions.iter().enumerate() {
-                if i < mesh.vertex_data.vertices.len() {
-                    mesh.vertex_data.vertices[i].pos.x = pos.x;
-                    mesh.vertex_data.vertices[i].pos.y = pos.y;
-                    mesh.vertex_data.vertices[i].pos.z = pos.z;
-                }
+        let mesh = &mut graphics.meshes[mesh_idx];
+        for (i, pos) in skinned_positions.iter().enumerate() {
+            if i < mesh.vertex_data.vertices.len() {
+                mesh.vertex_data.vertices[i].pos.x = pos.x;
+                mesh.vertex_data.vertices[i].pos.y = pos.y;
+                mesh.vertex_data.vertices[i].pos.z = pos.z;
             }
-            for (i, normal) in skinned_normals.iter().enumerate() {
-                if i < mesh.vertex_data.vertices.len() {
-                    mesh.vertex_data.vertices[i].normal.x = normal.x;
-                    mesh.vertex_data.vertices[i].normal.y = normal.y;
-                    mesh.vertex_data.vertices[i].normal.z = normal.z;
-                }
+        }
+        for (i, normal) in skinned_normals.iter().enumerate() {
+            if i < mesh.vertex_data.vertices.len() {
+                mesh.vertex_data.vertices[i].normal.x = normal.x;
+                mesh.vertex_data.vertices[i].normal.y = normal.y;
+                mesh.vertex_data.vertices[i].normal.z = normal.z;
             }
+        }
 
-            if let Err(e) = mesh.vertex_buffer.update(
-                instance,
-                device,
-                command_pool,
-                (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len())
-                    as vk::DeviceSize,
-                mesh.vertex_data.vertices.as_ptr() as *const c_void,
-                mesh.vertex_data.vertices.len(),
-            ) {
-                crate::log!(
-                    "Failed to update vertex buffer for mesh {} with initial pose: {}",
-                    mesh_idx,
-                    e
-                );
-            }
+        if let Err(e) = mesh.vertex_buffer.update(
+            instance,
+            device,
+            command_pool,
+            (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len())
+                as vk::DeviceSize,
+            mesh.vertex_data.vertices.as_ptr() as *const c_void,
+            mesh.vertex_data.vertices.len(),
+        ) {
+            crate::log!(
+                "Failed to update vertex buffer for mesh {}: {}",
+                mesh_idx,
+                e
+            );
         }
     }
 
@@ -616,23 +696,13 @@ fn create_ecs_entities(
         .unwrap_or("model")
         .to_string();
 
-    let (skeletons, clips, has_animation, first_clip_id) = {
+    let (clips, has_animation, first_clip_id) = {
         let clip_library = world.resource::<ClipLibrary>();
-        let skeletons = clip_library.animation.skeletons.clone();
         let clips = clip_library.animation.clips.clone();
         let has_animation = !clips.is_empty();
         let first_clip_id = clips.first().map(|c| c.id);
-        (skeletons, clips, has_animation, first_clip_id)
+        (clips, has_animation, first_clip_id)
     };
-
-    for skeleton in &skeletons {
-        let skeleton_asset = SkeletonAsset {
-            id: 0,
-            skeleton_id: skeleton.id,
-            skeleton: skeleton.clone(),
-        };
-        assets.add_skeleton(skeleton_asset);
-    }
 
     for clip in &clips {
         let clip_asset = AnimationClipAsset {
@@ -643,9 +713,10 @@ fn create_ecs_entities(
         assets.add_animation_clip(clip_asset);
     }
 
-    let bone_names: std::collections::HashMap<u32, String> = skeletons
-        .iter()
-        .flat_map(|s| s.bones.iter().map(|b| (b.id, b.name.clone())))
+    let bone_names: std::collections::HashMap<u32, String> = assets
+        .skeletons
+        .values()
+        .flat_map(|sa| sa.skeleton.bones.iter().map(|b| (b.id, b.name.clone())))
         .collect();
 
     if !world.contains_resource::<ClipLibrary>() {

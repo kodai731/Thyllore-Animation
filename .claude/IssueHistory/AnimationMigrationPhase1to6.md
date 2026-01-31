@@ -46,3 +46,45 @@ Migrated animation system from global AnimationPlayback-centric to entity-based 
 - Animation evaluation now reads from entity Animator components, not global AnimationPlayback
 - Model type determined by AnimationType enum, not path string comparison
 - Single ClipLibrary resource replaces AnimationRegistry + EditableClipManager
+
+---
+
+## Skeleton Ownership Refactoring + ECS Compliance (2026-01-31)
+
+### Summary
+Separated Skeleton from AnimationSystem, made AssetStorage the single source of truth for Skeleton data, introduced SkeletonPose for per-frame pose calculation (eliminating bone.local_transform dual responsibility), and moved all animation calculation methods from data.rs to ECS system functions.
+
+### Problem
+1. AnimationSystem owned both skeletons and clips. Skeleton is mesh structure data, not runtime state.
+2. bone.local_transform served dual purpose: rest pose at load time, but overwritten each frame by sample_with_loop, losing rest pose.
+3. AnimationClip::sample, Skeleton::compute_global_transforms, SkinData::apply_skinning were methods on data structs, violating ECS data-behavior separation.
+
+### Solution
+
+**SkeletonPose + skeleton_pose_systems:**
+- Created `animation/pose.rs` with `BoneLocalPose` and `SkeletonPose` (data-only)
+- Created `ecs/systems/skeleton_pose_systems.rs` with all calculation logic:
+  - `create_pose_from_rest()`, `sample_clip_to_pose()`, `compute_pose_global_transforms()`, `compute_rest_global_transforms()`, `apply_skinning()`
+- Skeleton's bone.local_transform is never mutated at runtime
+
+**AssetStorage as single source of truth:**
+- Added `get_skeleton_by_skeleton_id(SkeletonId) -> Option<&Skeleton>` to AssetStorage
+- Skeletons registered in AssetStorage at load time (setup_animation_system)
+- evaluate_animators and all animation paths now read Skeleton from AssetStorage, not AnimationSystem
+
+**Removed from AnimationSystem:**
+- `apply_to_skeleton()` method deleted
+- Removed from AnimationClip: `sample()`, `sample_with_loop()`
+- Removed from Skeleton: `compute_global_transforms()`
+- Removed from SkinData: `apply_skinning()`
+- AnimationSystem.skeletons field still exists for loader compatibility but is no longer the authoritative source
+
+**Changed functions:**
+- `evaluate_animators`: now takes `&AssetStorage`, uses pose-based pipeline
+- `playback_prepare_animations`: now takes `&AssetStorage`, `&ClipLibrary` (no longer mut)
+- `prepare_skinned_vertices`: takes `&[Matrix4]` + `&Skeleton` instead of `&AnimationSystem`
+- `prepare_node_animation`: takes `&Skeleton` + `&SkeletonPose` instead of `&AnimationSystem`
+- `compute_node_global_transforms`: takes `&Skeleton` + `&SkeletonPose` instead of `&AnimationSystem`
+- `apply_skinning_to_mesh`: takes `&[Matrix4]` + `&Skeleton` instead of `&AnimationSystem`
+- `skeleton_animation_system`: takes `&AssetStorage` (immutable) instead of `&mut AssetStorage`
+- gltf loader: `clip.sample(0.0, skeleton)` replaced with `initialize_skeleton_from_clip()` helper

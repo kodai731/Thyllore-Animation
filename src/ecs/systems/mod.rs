@@ -10,6 +10,7 @@ mod hierarchy_systems;
 mod inspector_systems;
 pub mod phases;
 pub mod render_data_systems;
+mod skeleton_pose_systems;
 mod timeline_systems;
 mod ui_event_systems;
 
@@ -24,5 +25,6 @@ pub use grid_systems::*;
 pub use hierarchy_systems::*;
 pub use inspector_systems::*;
 pub use render_data_systems::*;
+pub use skeleton_pose_systems::*;
 pub use timeline_systems::*;
 pub use ui_event_systems::*;

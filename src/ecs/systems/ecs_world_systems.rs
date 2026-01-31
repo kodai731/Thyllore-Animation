@@ -89,16 +89,10 @@ pub fn animation_time_system(world: &mut World, delta_time: f32, assets: &AssetS
     }
 }
 
-pub fn skeleton_animation_system(world: &mut World, assets: &mut AssetStorage) {
+pub fn skeleton_animation_system(world: &mut World, assets: &AssetStorage) {
+    use crate::ecs::{create_pose_from_rest, sample_clip_to_pose};
+
     let animated_entities = world.query_animated();
-
-    struct AnimationData {
-        skeleton_asset_id: crate::asset::AssetId,
-        clip: crate::animation::AnimationClip,
-        time: f32,
-    }
-
-    let mut animations_to_apply = Vec::new();
 
     for entity in animated_entities {
         let Some(state) = world.get_component::<Animator>(entity) else {
@@ -112,6 +106,9 @@ pub fn skeleton_animation_system(world: &mut World, assets: &mut AssetStorage) {
             continue;
         };
 
+        let Some(skeleton_asset) = assets.get_skeleton(skeleton_ref.0) else {
+            continue;
+        };
         let Some(clip_asset) = assets
             .animation_clips
             .values()
@@ -120,18 +117,14 @@ pub fn skeleton_animation_system(world: &mut World, assets: &mut AssetStorage) {
             continue;
         };
 
-        animations_to_apply.push(AnimationData {
-            skeleton_asset_id: skeleton_ref.0,
-            clip: clip_asset.clip.clone(),
-            time: state.time,
-        });
-    }
-
-    for anim_data in animations_to_apply {
-        if let Some(skeleton_asset) = assets.get_skeleton_mut(anim_data.skeleton_asset_id) {
-            anim_data
-                .clip
-                .sample(anim_data.time, &mut skeleton_asset.skeleton);
-        }
+        let skeleton = &skeleton_asset.skeleton;
+        let mut pose = create_pose_from_rest(skeleton);
+        sample_clip_to_pose(
+            &clip_asset.clip,
+            state.time,
+            skeleton,
+            &mut pose,
+            state.looping,
+        );
     }
 }

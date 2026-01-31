@@ -144,6 +144,16 @@ impl AssetStorage {
         self.skeletons.get_mut(&id)
     }
 
+    pub fn get_skeleton_by_skeleton_id(
+        &self,
+        skel_id: SkeletonId,
+    ) -> Option<&Skeleton> {
+        self.skeletons
+            .values()
+            .find(|s| s.skeleton_id == skel_id)
+            .map(|s| &s.skeleton)
+    }
+
     pub fn get_animation_clip(&self, id: AssetId) -> Option<&AnimationClipAsset> {
         self.animation_clips.get(&id)
     }

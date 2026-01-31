@@ -5,6 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **IMPORTANT**: This file must be written in English for Claude's optimal understanding.
 Always respond to the user in user's Claude setting language, but keep this documentation in English.
 
+## Goal
+- this project targets Animation + Rendering Engine powered by ECS Architecture.
+
 ## Code Format
 **IMPORTANT**: Must follow PROJECT_ROOT/rustfmt.toml on coding
 
@@ -463,6 +466,10 @@ fn compose_transform(t: Vector3<f32>, r: Quaternion<f32>, s: Vector3<f32>) -> Ma
 - [glTF 2.0 Specification - Skins](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#skins)
 - [Bevy Engine - Animation](https://github.com/bevyengine/bevy/tree/main/crates/bevy_animation)
 - [cgmath crate documentation](https://docs.rs/cgmath/latest/cgmath/)
+
+## Single Source of Truth
+- **IMPORTANT**: Always follow the Single Source of Truth principle when designing the system.
+- For example, skeleton or mesh data in the timeline system, and animation curve data in the UI system, must each have a single authoritative source.
 
 ## Development Notes
 

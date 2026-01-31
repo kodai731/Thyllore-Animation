@@ -13,7 +13,7 @@ pub struct AnimationUpdates {
 
 pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
     let updated_meshes = {
-        let mut clip_library = ctx.world.resource_mut::<ClipLibrary>();
+        let clip_library = ctx.world.resource::<ClipLibrary>();
         let model_state = ctx.world.resource::<ModelState>();
         let hierarchy_state = ctx.world.resource::<HierarchyState>();
         let mut node_assets = ctx.world.resource_mut::<NodeAssets>();
@@ -22,9 +22,10 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
             ctx.world,
             ctx.graphics,
             &mut node_assets.nodes,
-            &mut *clip_library,
+            &*clip_library,
             &*model_state,
             &*hierarchy_state,
+            ctx.assets,
         )
     };
 

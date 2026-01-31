@@ -1,4 +1,4 @@
-use crate::animation::editable::EditableClipId;
+use crate::animation::editable::SourceClipId;
 use crate::ecs::resource::ClipLibrary;
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{AnimationPlayback, TimelineState};
@@ -108,7 +108,7 @@ fn timeline_select_clip(
     timeline_state: &mut TimelineState,
     playback: &mut AnimationPlayback,
     clip_library: &ClipLibrary,
-    clip_id: EditableClipId,
+    clip_id: SourceClipId,
 ) {
     if let Some(clip) = clip_library.get(clip_id) {
         timeline_state.current_clip_id = Some(clip_id);
@@ -129,10 +129,7 @@ fn timeline_select_clip(
         );
     }
 
-    if let Some(playable_clip) = clip_library.to_playable_clip(clip_id) {
-        playback.current_clip_id = Some(playable_clip.id);
-        playback.time = 0.0;
-    }
+    playback.time = 0.0;
 }
 
 pub fn timeline_update(

@@ -2,26 +2,22 @@ use anyhow::Result;
 
 use crate::animation::{AnimationClipId, MorphAnimationSystem};
 use crate::asset::AssetStorage;
+use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::{
     AnimationPlayback, AnimationType, ClipLibrary, HierarchyState, ModelState,
 };
-use crate::ecs::world::{Animator, World};
-use crate::ecs::{create_pose_from_rest, sample_clip_to_pose, compute_pose_global_transforms};
+use crate::ecs::world::{Animator, Entity, World};
+use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose};
 use crate::render::RenderBackend;
 use crate::app::graphics_resource::{GraphicsResources, NodeData};
 
-pub fn playback_play(
-    playback: &mut AnimationPlayback,
-    clip_id: AnimationClipId,
-) {
-    playback.current_clip_id = Some(clip_id);
+pub fn playback_play(playback: &mut AnimationPlayback, _clip_id: AnimationClipId) {
     playback.playing = true;
     playback.time = 0.0;
 }
 
 pub fn playback_stop(playback: &mut AnimationPlayback) {
     playback.playing = false;
-    playback.current_clip_id = None;
 }
 
 pub fn playback_pause(playback: &mut AnimationPlayback) {
@@ -61,12 +57,13 @@ pub fn playback_prepare_animations(
     let Some(skel_id) = skeleton_id else {
         return morph_updated;
     };
-    let Some(clip_id) = playback.current_clip_id else {
+    let first_clip = clip_library.animation.clips.first();
+    let Some(first_clip) = first_clip else {
         return morph_updated;
     };
 
     let skeleton = assets.get_skeleton_by_skeleton_id(skel_id);
-    let clip = clip_library.animation.get_clip(clip_id);
+    let clip = Some(first_clip);
     let (Some(skeleton), Some(clip)) = (skeleton, clip) else {
         return morph_updated;
     };
@@ -107,20 +104,17 @@ pub fn evaluate_animators(
     hierarchy_state: &HierarchyState,
     assets: &AssetStorage,
 ) -> Vec<usize> {
-    let animator = hierarchy_state
-        .selected_entity
-        .and_then(|entity| world.get_component::<Animator>(entity))
-        .or_else(|| {
-            world
-                .iter_animated_entities()
-                .next()
-                .map(|(e, _)| e)
-                .and_then(|e| world.get_component::<Animator>(e))
-        });
+    let target_entity = find_target_entity(world, hierarchy_state);
+
+    let animator = target_entity
+        .and_then(|e| world.get_component::<Animator>(e));
+    let schedule = target_entity
+        .and_then(|e| world.get_component::<ClipSchedule>(e));
 
     let current_time = animator.map(|a| a.time).unwrap_or(0.0);
-    let current_clip_id = animator.and_then(|a| a.current_clip_id);
     let looping = animator.map(|a| a.looping).unwrap_or(true);
+
+    let resolved_clip_id = resolve_active_clip(schedule, clip_library);
 
     let morph_updated = if !clip_library.morph_animation.is_empty() {
         playback_apply_morph_animation(
@@ -140,7 +134,7 @@ pub fn evaluate_animators(
     let Some(skel_id) = skeleton_id else {
         return morph_updated;
     };
-    let Some(clip_id) = current_clip_id else {
+    let Some(clip_id) = resolved_clip_id else {
         return morph_updated;
     };
 
@@ -175,6 +169,30 @@ pub fn evaluate_animators(
         }
     }
     all_updated
+}
+
+fn find_target_entity(
+    world: &World,
+    hierarchy_state: &HierarchyState,
+) -> Option<Entity> {
+    hierarchy_state
+        .selected_entity
+        .filter(|&e| world.has_component::<Animator>(e))
+        .or_else(|| {
+            world
+                .iter_animated_entities()
+                .next()
+                .map(|(e, _)| e)
+        })
+}
+
+fn resolve_active_clip(
+    schedule: Option<&ClipSchedule>,
+    clip_library: &ClipLibrary,
+) -> Option<AnimationClipId> {
+    schedule
+        .and_then(|s| s.first_instance())
+        .and_then(|inst| clip_library.get_anim_clip_id_for_source(inst.source_id))
 }
 
 pub unsafe fn playback_upload_animations(

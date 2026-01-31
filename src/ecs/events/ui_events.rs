@@ -1,6 +1,6 @@
 use cgmath::{Quaternion, Vector3};
 
-use crate::animation::editable::{EditableClipId, KeyframeId, PropertyType};
+use crate::animation::editable::{SourceClipId, KeyframeId, PropertyType};
 use crate::animation::BoneId;
 use crate::app::data::LightMoveTarget;
 use crate::ecs::world::Entity;
@@ -43,7 +43,7 @@ pub enum UIEvent {
     TimelineSetTime(f32),
     TimelineSetSpeed(f32),
     TimelineToggleLoop,
-    TimelineSelectClip(EditableClipId),
+    TimelineSelectClip(SourceClipId),
     TimelineToggleTrack(BoneId),
     TimelineExpandTrack(BoneId),
     TimelineCollapseTrack(BoneId),

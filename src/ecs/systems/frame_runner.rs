@@ -90,7 +90,6 @@ fn sync_playback_to_animator(ctx: &mut FrameContext, selected_entity: Option<u64
             playback.playing,
             playback.speed,
             playback.looping,
-            playback.current_clip_id,
         )
     };
 
@@ -99,7 +98,6 @@ fn sync_playback_to_animator(ctx: &mut FrameContext, selected_entity: Option<u64
         animator.playing = playback_snapshot.1;
         animator.speed = playback_snapshot.2;
         animator.looping = playback_snapshot.3;
-        animator.current_clip_id = playback_snapshot.4;
     }
 }
 

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::animation::editable::{EditableClipId, KeyframeId, PropertyType};
+use crate::animation::editable::{SourceClipId, KeyframeId, PropertyType};
 use crate::animation::BoneId;
 use crate::ecs::world::Entity;
 
@@ -23,7 +23,7 @@ impl SelectedKeyframe {
 
 #[derive(Clone, Debug)]
 pub struct TimelineState {
-    pub current_clip_id: Option<EditableClipId>,
+    pub current_clip_id: Option<SourceClipId>,
     pub current_time: f32,
     pub playing: bool,
     pub looping: bool,

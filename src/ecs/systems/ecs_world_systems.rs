@@ -1,7 +1,8 @@
 use cgmath::{Matrix4, SquareMatrix};
 
 use crate::asset::AssetStorage;
-use crate::ecs::resource::AnimationPlayback;
+use crate::ecs::component::ClipSchedule;
+use crate::ecs::resource::{AnimationPlayback, ClipLibrary};
 use crate::ecs::world::{
     Animator, Children, Entity, GlobalTransform, SkeletonRef, Transform, World,
 };
@@ -28,7 +29,11 @@ pub fn animation_playback_system(
 pub fn transform_propagation_system(world: &mut World) {
     let root_entities = world.get_root_entities();
 
-    fn propagate(world: &mut World, entity: Entity, parent_global: Matrix4<f32>) {
+    fn propagate(
+        world: &mut World,
+        entity: Entity,
+        parent_global: Matrix4<f32>,
+    ) {
         let local_matrix = world
             .get_component::<Transform>(entity)
             .map(|t| t.to_matrix())
@@ -55,10 +60,24 @@ pub fn transform_propagation_system(world: &mut World) {
     }
 }
 
-pub fn animation_time_system(world: &mut World, delta_time: f32, assets: &AssetStorage) {
+pub fn animation_time_system(
+    world: &mut World,
+    delta_time: f32,
+    assets: &AssetStorage,
+) {
     let animated_entities = world.query_animated();
 
-    for entity in animated_entities {
+    let resolved_clips: Vec<_> = {
+        let clip_library = world.resource::<ClipLibrary>();
+        animated_entities
+            .iter()
+            .map(|&entity| {
+                (entity, resolve_clip_id_for_entity(world, entity, &clip_library))
+            })
+            .collect()
+    };
+
+    for (entity, resolved_clip_id) in resolved_clips {
         let Some(state) = world.get_component_mut::<Animator>(entity) else {
             continue;
         };
@@ -67,7 +86,7 @@ pub fn animation_time_system(world: &mut World, delta_time: f32, assets: &AssetS
             continue;
         }
 
-        let Some(clip_id) = state.current_clip_id else {
+        let Some(clip_id) = resolved_clip_id else {
             continue;
         };
 
@@ -94,7 +113,17 @@ pub fn skeleton_animation_system(world: &mut World, assets: &AssetStorage) {
 
     let animated_entities = world.query_animated();
 
-    for entity in animated_entities {
+    let resolved_clips: Vec<_> = {
+        let clip_library = world.resource::<ClipLibrary>();
+        animated_entities
+            .iter()
+            .map(|&entity| {
+                (entity, resolve_clip_id_for_entity(world, entity, &clip_library))
+            })
+            .collect()
+    };
+
+    for (entity, resolved_clip_id) in resolved_clips {
         let Some(state) = world.get_component::<Animator>(entity) else {
             continue;
         };
@@ -102,7 +131,7 @@ pub fn skeleton_animation_system(world: &mut World, assets: &AssetStorage) {
             continue;
         };
 
-        let Some(clip_id) = state.current_clip_id else {
+        let Some(clip_id) = resolved_clip_id else {
             continue;
         };
 
@@ -127,4 +156,15 @@ pub fn skeleton_animation_system(world: &mut World, assets: &AssetStorage) {
             state.looping,
         );
     }
+}
+
+fn resolve_clip_id_for_entity(
+    world: &World,
+    entity: Entity,
+    clip_library: &ClipLibrary,
+) -> Option<crate::animation::AnimationClipId> {
+    world
+        .get_component::<ClipSchedule>(entity)
+        .and_then(|s| s.first_instance())
+        .and_then(|inst| clip_library.get_anim_clip_id_for_source(inst.source_id))
 }

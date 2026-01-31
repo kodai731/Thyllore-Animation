@@ -6,12 +6,12 @@ use serde::{Deserialize, Serialize};
 use crate::animation::{AnimationClip, BoneId, Keyframe, TransformChannel};
 
 use super::curve::PropertyType;
-use super::keyframe::EditableClipId;
+use super::keyframe::SourceClipId;
 use super::track::BoneTrack;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EditableAnimationClip {
-    pub id: EditableClipId,
+    pub id: SourceClipId,
     pub name: String,
     pub duration: f32,
     pub tracks: HashMap<BoneId, BoneTrack>,
@@ -20,7 +20,7 @@ pub struct EditableAnimationClip {
 }
 
 impl EditableAnimationClip {
-    pub fn new(id: EditableClipId, name: String) -> Self {
+    pub fn new(id: SourceClipId, name: String) -> Self {
         Self {
             id,
             name,
@@ -32,7 +32,7 @@ impl EditableAnimationClip {
     }
 
     pub fn from_animation_clip(
-        id: EditableClipId,
+        id: SourceClipId,
         clip: &AnimationClip,
         bone_names: &HashMap<BoneId, String>,
     ) -> Self {

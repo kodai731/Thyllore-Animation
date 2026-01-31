@@ -5,7 +5,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
-use crate::animation::editable::{EditableAnimationClip, EditableClipId};
+use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 use crate::animation::{
     AnimationClip, AnimationClipId, AnimationSystem, BoneId, MorphAnimationSystem,
 };
@@ -15,10 +15,10 @@ pub struct ClipLibrary {
     pub animation: AnimationSystem,
     pub morph_animation: MorphAnimationSystem,
 
-    editable_clips: HashMap<EditableClipId, EditableAnimationClip>,
-    dirty_clips: HashSet<EditableClipId>,
-    next_editable_id: EditableClipId,
-    editable_to_anim_id: HashMap<EditableClipId, AnimationClipId>,
+    source_clips: HashMap<SourceClipId, SourceClip>,
+    dirty_sources: HashSet<SourceClipId>,
+    next_source_id: SourceClipId,
+    source_to_anim_id: HashMap<SourceClipId, AnimationClipId>,
 }
 
 impl ClipLibrary {
@@ -26,10 +26,10 @@ impl ClipLibrary {
         Self {
             animation: AnimationSystem::new(),
             morph_animation: MorphAnimationSystem::new(),
-            editable_clips: HashMap::new(),
-            dirty_clips: HashSet::new(),
-            next_editable_id: 1,
-            editable_to_anim_id: HashMap::new(),
+            source_clips: HashMap::new(),
+            dirty_sources: HashSet::new(),
+            next_source_id: 1,
+            source_to_anim_id: HashMap::new(),
         }
     }
 
@@ -40,115 +40,167 @@ impl ClipLibrary {
     }
 
     pub fn clear_editable(&mut self) {
-        self.editable_clips.clear();
-        self.dirty_clips.clear();
-        self.editable_to_anim_id.clear();
+        self.source_clips.clear();
+        self.dirty_sources.clear();
+        self.source_to_anim_id.clear();
     }
 
     pub fn create_from_imported(
         &mut self,
         clip: &AnimationClip,
         bone_names: &HashMap<BoneId, String>,
-    ) -> EditableClipId {
-        let id = self.next_editable_id;
-        self.next_editable_id += 1;
+    ) -> SourceClipId {
+        let id = self.next_source_id;
+        self.next_source_id += 1;
 
         let editable = EditableAnimationClip::from_animation_clip(id, clip, bone_names);
-        self.editable_clips.insert(id, editable);
-        self.editable_to_anim_id.insert(id, clip.id);
+        let source = SourceClip::new(id, editable);
+        self.source_clips.insert(id, source);
+        self.source_to_anim_id.insert(id, clip.id);
         id
     }
 
-    pub fn create_empty(&mut self, name: String) -> EditableClipId {
-        let id = self.next_editable_id;
-        self.next_editable_id += 1;
+    pub fn create_empty(&mut self, name: String) -> SourceClipId {
+        let id = self.next_source_id;
+        self.next_source_id += 1;
 
-        let clip = EditableAnimationClip::new(id, name);
-        self.editable_clips.insert(id, clip);
+        let editable = EditableAnimationClip::new(id, name);
+        let source = SourceClip::new(id, editable);
+        self.source_clips.insert(id, source);
         id
     }
 
-    pub fn register_clip(&mut self, mut clip: EditableAnimationClip) -> EditableClipId {
-        let id = self.next_editable_id;
-        self.next_editable_id += 1;
+    pub fn register_clip(
+        &mut self,
+        mut clip: EditableAnimationClip,
+    ) -> SourceClipId {
+        let id = self.next_source_id;
+        self.next_source_id += 1;
         clip.id = id;
-        self.editable_clips.insert(id, clip);
+        let source = SourceClip::new(id, clip);
+        self.source_clips.insert(id, source);
         id
     }
 
-    pub fn get(&self, id: EditableClipId) -> Option<&EditableAnimationClip> {
-        self.editable_clips.get(&id)
+    pub fn get(&self, id: SourceClipId) -> Option<&EditableAnimationClip> {
+        self.source_clips.get(&id).map(|s| &s.editable_clip)
     }
 
-    pub fn get_mut(&mut self, id: EditableClipId) -> Option<&mut EditableAnimationClip> {
-        self.dirty_clips.insert(id);
-        self.editable_clips.get_mut(&id)
+    pub fn get_mut(
+        &mut self,
+        id: SourceClipId,
+    ) -> Option<&mut EditableAnimationClip> {
+        self.dirty_sources.insert(id);
+        self.source_clips
+            .get_mut(&id)
+            .map(|s| &mut s.editable_clip)
     }
 
-    pub fn remove(&mut self, id: EditableClipId) -> Option<EditableAnimationClip> {
-        self.dirty_clips.remove(&id);
-        self.editable_clips.remove(&id)
+    pub fn get_source(&self, id: SourceClipId) -> Option<&SourceClip> {
+        self.source_clips.get(&id)
     }
 
-    pub fn to_playable_clip(&self, id: EditableClipId) -> Option<AnimationClip> {
-        self.editable_clips.get(&id).map(|clip| clip.to_animation_clip())
+    pub fn get_source_mut(&mut self, id: SourceClipId) -> Option<&mut SourceClip> {
+        self.source_clips.get_mut(&id)
     }
 
-    pub fn is_dirty(&self, id: EditableClipId) -> bool {
-        self.dirty_clips.contains(&id)
+    pub fn get_anim_clip_id_for_source(
+        &self,
+        source_id: SourceClipId,
+    ) -> Option<AnimationClipId> {
+        self.source_to_anim_id.get(&source_id).copied()
     }
 
-    pub fn mark_clean(&mut self, id: EditableClipId) {
-        self.dirty_clips.remove(&id);
+    pub fn find_source_id_for_anim_clip(
+        &self,
+        anim_id: AnimationClipId,
+    ) -> Option<SourceClipId> {
+        self.source_to_anim_id
+            .iter()
+            .find(|(_, &aid)| aid == anim_id)
+            .map(|(&sid, _)| sid)
     }
 
-    pub fn mark_dirty(&mut self, id: EditableClipId) {
-        if self.editable_clips.contains_key(&id) {
-            self.dirty_clips.insert(id);
+    pub fn remove(
+        &mut self,
+        id: SourceClipId,
+    ) -> Option<EditableAnimationClip> {
+        self.dirty_sources.remove(&id);
+        self.source_clips
+            .remove(&id)
+            .map(|s| s.editable_clip)
+    }
+
+    pub fn to_playable_clip(
+        &self,
+        id: SourceClipId,
+    ) -> Option<AnimationClip> {
+        self.source_clips
+            .get(&id)
+            .map(|s| s.editable_clip.to_animation_clip())
+    }
+
+    pub fn is_dirty(&self, id: SourceClipId) -> bool {
+        self.dirty_sources.contains(&id)
+    }
+
+    pub fn mark_clean(&mut self, id: SourceClipId) {
+        self.dirty_sources.remove(&id);
+    }
+
+    pub fn mark_dirty(&mut self, id: SourceClipId) {
+        if self.source_clips.contains_key(&id) {
+            self.dirty_sources.insert(id);
         }
     }
 
-    pub fn dirty_clip_ids(&self) -> impl Iterator<Item = &EditableClipId> {
-        self.dirty_clips.iter()
+    pub fn dirty_clip_ids(&self) -> impl Iterator<Item = &SourceClipId> {
+        self.dirty_sources.iter()
     }
 
-    pub fn all_clip_ids(&self) -> impl Iterator<Item = &EditableClipId> {
-        self.editable_clips.keys()
+    pub fn all_clip_ids(&self) -> impl Iterator<Item = &SourceClipId> {
+        self.source_clips.keys()
     }
 
     pub fn clip_count(&self) -> usize {
-        self.editable_clips.len()
+        self.source_clips.len()
     }
 
     pub fn sync_dirty_clips(&mut self) {
-        for editable_id in self.dirty_clips.drain() {
+        for source_id in self.dirty_sources.drain() {
             let (clip, anim_id) = match (
-                self.editable_clips.get(&editable_id),
-                self.editable_to_anim_id.get(&editable_id),
+                self.source_clips.get(&source_id),
+                self.source_to_anim_id.get(&source_id),
             ) {
-                (Some(c), Some(&id)) => (c, id),
+                (Some(s), Some(&id)) => (&s.editable_clip, id),
                 _ => continue,
             };
 
             let mut playable = clip.to_animation_clip();
             playable.id = anim_id;
 
-            if let Some(target) = self.animation.clips.iter_mut().find(|c| c.id == anim_id) {
+            if let Some(target) =
+                self.animation.clips.iter_mut().find(|c| c.id == anim_id)
+            {
                 *target = playable;
             }
         }
     }
 
-    pub fn clip_names(&self) -> Vec<(EditableClipId, String)> {
-        self.editable_clips
+    pub fn clip_names(&self) -> Vec<(SourceClipId, String)> {
+        self.source_clips
             .iter()
-            .map(|(&id, clip)| (id, clip.name.clone()))
+            .map(|(&id, s)| (id, s.editable_clip.name.clone()))
             .collect()
     }
 
-    pub fn save_to_file(&self, id: EditableClipId, path: &Path) -> Result<()> {
-        let clip = self
-            .editable_clips
+    pub fn save_to_file(
+        &self,
+        id: SourceClipId,
+        path: &Path,
+    ) -> Result<()> {
+        let source = self
+            .source_clips
             .get(&id)
             .context("Clip not found")?;
 
@@ -156,23 +208,35 @@ impl ClipLibrary {
             .with_context(|| format!("Failed to create file: {:?}", path))?;
         let writer = BufWriter::new(file);
 
-        ron::ser::to_writer_pretty(writer, clip, ron::ser::PrettyConfig::default())
-            .with_context(|| format!("Failed to serialize clip to: {:?}", path))?;
+        ron::ser::to_writer_pretty(
+            writer,
+            &source.editable_clip,
+            ron::ser::PrettyConfig::default(),
+        )
+        .with_context(|| {
+            format!("Failed to serialize clip to: {:?}", path)
+        })?;
 
-        crate::log!("Saved animation clip '{}' to {:?}", clip.name, path);
+        crate::log!(
+            "Saved animation clip '{}' to {:?}",
+            source.editable_clip.name,
+            path
+        );
         Ok(())
     }
 
-    pub fn load_from_file(&mut self, path: &Path) -> Result<EditableClipId> {
+    pub fn load_from_file(&mut self, path: &Path) -> Result<SourceClipId> {
         let file = fs::File::open(path)
             .with_context(|| format!("Failed to open file: {:?}", path))?;
         let reader = BufReader::new(file);
 
         let mut clip: EditableAnimationClip = ron::de::from_reader(reader)
-            .with_context(|| format!("Failed to deserialize clip from: {:?}", path))?;
+            .with_context(|| {
+                format!("Failed to deserialize clip from: {:?}", path)
+            })?;
 
-        let id = self.next_editable_id;
-        self.next_editable_id += 1;
+        let id = self.next_source_id;
+        self.next_source_id += 1;
         clip.id = id;
         clip.source_path = Some(path.to_string_lossy().to_string());
 
@@ -183,7 +247,8 @@ impl ClipLibrary {
             id
         );
 
-        self.editable_clips.insert(id, clip);
+        let source = SourceClip::new(id, clip);
+        self.source_clips.insert(id, source);
         Ok(id)
     }
 }

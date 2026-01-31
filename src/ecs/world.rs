@@ -4,9 +4,10 @@ use std::collections::HashMap;
 
 use cgmath::{Matrix4, SquareMatrix, Vector3};
 
-use crate::animation::AnimationClipId;
 use crate::asset::AssetId;
-use crate::ecs::component::{Animated, EditorDisplay, EntityIcon, MeshHandle, Model, Skinned};
+use crate::ecs::component::{
+    Animated, ClipSchedule, EditorDisplay, EntityIcon, MeshHandle, Model, Skinned,
+};
 
 pub trait Resource: Any + 'static {}
 impl<T: Any + 'static> Resource for T {}
@@ -161,7 +162,6 @@ pub struct SkeletonRef(pub AssetId);
 
 #[derive(Clone, Debug, Default)]
 pub struct Animator {
-    pub current_clip_id: Option<AnimationClipId>,
     pub time: f32,
     pub speed: f32,
     pub playing: bool,
@@ -171,7 +171,6 @@ pub struct Animator {
 impl Animator {
     pub fn new() -> Self {
         Self {
-            current_clip_id: None,
             time: 0.0,
             speed: 1.0,
             playing: true,
@@ -263,6 +262,7 @@ impl World {
         world.register_component::<Model>();
         world.register_component::<MeshHandle>();
         world.register_component::<EditorDisplay>();
+        world.register_component::<ClipSchedule>();
 
         world
     }
@@ -574,6 +574,11 @@ impl<'a> EntityBuilder<'a> {
                 inverse_bind_matrices,
             },
         );
+        self
+    }
+
+    pub fn with_clip_schedule(self, schedule: ClipSchedule) -> Self {
+        self.world.insert_component(self.entity, schedule);
         self
     }
 

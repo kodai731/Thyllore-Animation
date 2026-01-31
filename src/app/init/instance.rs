@@ -928,7 +928,7 @@ impl App {
     fn register_loaded_clips(
         world: &mut crate::ecs::world::World,
         clips: Vec<crate::animation::editable::EditableAnimationClip>,
-    ) -> Vec<(crate::animation::editable::EditableClipId, String)> {
+    ) -> Vec<(crate::animation::editable::SourceClipId, String)> {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
         let mut result = Vec::new();
 

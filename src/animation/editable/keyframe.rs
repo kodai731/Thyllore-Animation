@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-pub type EditableClipId = u64;
+pub type SourceClipId = u64;
+pub type ClipInstanceId = u64;
 pub type KeyframeId = u64;
 pub type CurveId = u64;
 

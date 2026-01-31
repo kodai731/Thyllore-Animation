@@ -88,3 +88,37 @@ Separated Skeleton from AnimationSystem, made AssetStorage the single source of 
 - `apply_skinning_to_mesh`: takes `&[Matrix4]` + `&Skeleton` instead of `&AnimationSystem`
 - `skeleton_animation_system`: takes `&AssetStorage` (immutable) instead of `&mut AssetStorage`
 - gltf loader: `clip.sample(0.0, skeleton)` replaced with `initialize_skeleton_from_clip()` helper
+
+---
+
+## Phase A: Source/Instance + ClipSchedule Introduction (2026-01-31)
+
+### Summary
+Introduced SourceClip/ClipInstance/ClipSchedule architecture to replace direct current_clip_id references in Animator and AnimationPlayback. Renamed EditableClipId to SourceClipId across the codebase.
+
+### New Data Structures
+- `BlendMode` (Override, Additive) and `EaseType` (Linear, EaseIn, EaseOut, EaseInOut, Stepped) in `animation/editable/blend.rs`
+- `SourceClip` wraps EditableAnimationClip with id and ref_count in `animation/editable/source_clip.rs`
+- `ClipInstance` represents a placed clip on a timeline with timing, blend, and ease params in `animation/editable/clip_instance.rs`
+- `ClipSchedule` ECS component holds Vec<ClipInstance> per entity in `ecs/component/clip_schedule.rs`
+
+### ClipLibrary Refactoring
+- Internal storage changed from `HashMap<EditableClipId, EditableAnimationClip>` to `HashMap<SourceClipId, SourceClip>`
+- Fields renamed: editable_clips -> source_clips, dirty_clips -> dirty_sources, next_editable_id -> next_source_id, editable_to_anim_id -> source_to_anim_id
+- New methods: `get_source()`, `get_source_mut()`, `get_anim_clip_id_for_source()`, `find_source_id_for_anim_clip()`
+- Public API `get()` / `get_mut()` still return `&EditableAnimationClip` via delegation
+
+### EditableClipId -> SourceClipId Rename
+- Replaced across 9 files: keyframe.rs, clip.rs, manager.rs, clip_library.rs, timeline_state.rs, ui_events.rs, timeline_systems.rs, scene_io.rs, instance.rs
+- EditableClipId type alias removed after all references migrated
+
+### current_clip_id Removal
+- **Animator.current_clip_id** removed (7 references across 5 files)
+- **AnimationPlayback.current_clip_id** removed (5 references across 4 files)
+- Both replaced by ClipSchedule-based resolution via `resolve_active_clip()` and `resolve_clip_id_for_entity()` helpers
+- evaluate_animators, animation_time_system, skeleton_animation_system all now resolve clip from ClipSchedule
+- sync_playback_to_animator no longer syncs clip_id (only time, playing, speed, looping)
+
+### Borrowing Issue Resolution
+- animation_time_system and skeleton_animation_system: pre-collect resolved clip IDs from ClipSchedule before mutable World borrow
+- build_initial_clip_schedule: constructed before entity builder loop to avoid simultaneous mutable/immutable World borrows

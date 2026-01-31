@@ -9,7 +9,7 @@ use super::format::{
 };
 use super::Camera;
 
-use crate::animation::editable::EditableClipId;
+use crate::animation::editable::SourceClipId;
 use crate::ecs::resource::ClipLibrary;
 use crate::ecs::resource::{SceneState, TimelineState};
 use crate::ecs::world::World;
@@ -249,7 +249,7 @@ fn sanitize_filename(name: &str) -> String {
 pub fn apply_loaded_scene_to_world(
     loaded: &LoadedScene,
     world: &mut World,
-    clips_with_ids: &[(EditableClipId, String)],
+    clips_with_ids: &[(SourceClipId, String)],
 ) {
     if let Some(mut camera) = world.get_resource_mut::<Camera>() {
         camera.position = cgmath::Vector3::new(

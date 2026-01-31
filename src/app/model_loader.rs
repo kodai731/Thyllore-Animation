@@ -12,7 +12,8 @@ use crate::ecs::playback_play;
 use crate::ecs::resource::{
     AnimationPlayback, ClipLibrary, MeshAssets, ModelState, NodeAssets, TimelineState,
 };
-use crate::ecs::component::EntityIcon;
+use crate::animation::editable::SourceClipId;
+use crate::ecs::component::{ClipSchedule, EntityIcon};
 use crate::ecs::world::{Animator, Transform, World};
 use crate::loader::texture::load_png_image;
 use crate::loader::{ModelLoadResult, TextureSource};
@@ -404,9 +405,7 @@ unsafe fn apply_initial_pose(
         let clip_library = world.resource::<ClipLibrary>();
 
         let skeleton = assets.get_skeleton_by_skeleton_id(skel_id);
-        let clip = playback
-            .current_clip_id
-            .and_then(|cid| clip_library.animation.get_clip(cid));
+        let clip = clip_library.animation.clips.first();
 
         if let (Some(skeleton), Some(clip)) = (skeleton, clip) {
             let mut pose = create_pose_from_rest(skeleton);
@@ -696,12 +695,11 @@ fn create_ecs_entities(
         .unwrap_or("model")
         .to_string();
 
-    let (clips, has_animation, first_clip_id) = {
+    let (clips, has_animation) = {
         let clip_library = world.resource::<ClipLibrary>();
         let clips = clip_library.animation.clips.clone();
         let has_animation = !clips.is_empty();
-        let first_clip_id = clips.first().map(|c| c.id);
-        (clips, has_animation, first_clip_id)
+        (clips, has_animation)
     };
 
     for clip in &clips {
@@ -776,6 +774,12 @@ fn create_ecs_entities(
         parent_entity
     );
 
+    let initial_schedule = if has_animation {
+        build_initial_clip_schedule(first_editable_clip_id, world)
+    } else {
+        ClipSchedule::new()
+    };
+
     for (mesh_idx, mesh) in graphics.meshes.iter().enumerate() {
         let entity_name = format!("{}_{:02}", name, mesh_idx + 1);
 
@@ -801,9 +805,10 @@ fn create_ecs_entities(
             .with_mesh(asset_id, mesh.object_index);
 
         if has_animation {
-            let mut animator = Animator::new();
-            animator.current_clip_id = first_clip_id;
-            builder = builder.with_animator(animator);
+            let animator = Animator::new();
+            builder = builder
+                .with_animator(animator)
+                .with_clip_schedule(initial_schedule.clone());
         }
 
         let entity = builder.build();
@@ -825,4 +830,25 @@ fn create_ecs_entities(
         assets.animation_clips.len(),
         assets.nodes.len()
     );
+}
+
+fn build_initial_clip_schedule(
+    first_source_id: Option<SourceClipId>,
+    world: &World,
+) -> ClipSchedule {
+    let mut schedule = ClipSchedule::new();
+
+    let Some(source_id) = first_source_id else {
+        return schedule;
+    };
+
+    let clip_library = world.resource::<ClipLibrary>();
+    let duration = clip_library
+        .get(source_id)
+        .map(|c| c.duration)
+        .unwrap_or(1.0);
+    drop(clip_library);
+
+    schedule.add_instance(source_id, duration);
+    schedule
 }

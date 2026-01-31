@@ -1,11 +1,11 @@
 use imgui::Condition;
 
 use crate::animation::editable::{EditableAnimationClip, PropertyCurve};
-use crate::ecs::resource::ClipLibrary;
+use crate::ecs::resource::{ClipDragState, ClipDragType, ClipLibrary, TimelineState};
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::TimelineState;
 
+use super::clip_track_snapshot::{ClipTrackSnapshot, ClipInstanceSnapshot};
 use super::CurveEditorState;
 
 const TRACK_LABEL_WIDTH: f32 = 150.0;
@@ -15,6 +15,14 @@ const TIME_RULER_HEIGHT: f32 = 30.0;
 const MAX_VISIBLE_TRACKS: usize = 10;
 const PIXELS_PER_SECOND: f32 = 80.0;
 const PLAYHEAD_HANDLE_SIZE: f32 = 10.0;
+const CLIP_TRACK_HEIGHT: f32 = 28.0;
+const CLIP_EDGE_DRAG_WIDTH: f32 = 5.0;
+const CLIP_BLOCK_COLORS: [[f32; 4]; 4] = [
+    [0.3, 0.5, 0.8, 0.9],
+    [0.5, 0.7, 0.3, 0.9],
+    [0.8, 0.4, 0.3, 0.9],
+    [0.7, 0.5, 0.7, 0.9],
+];
 
 pub fn build_timeline_window(
     ui: &imgui::Ui,
@@ -22,6 +30,7 @@ pub fn build_timeline_window(
     state: &mut TimelineState,
     clip_library: &ClipLibrary,
     curve_editor_state: &mut CurveEditorState,
+    clip_track_snapshot: &ClipTrackSnapshot,
 ) {
     let display_size = ui.io().display_size;
     let timeline_height = 300.0;
@@ -37,7 +46,7 @@ pub fn build_timeline_window(
         .build(|| {
             build_transport_controls(ui, ui_events, state, clip_library, curve_editor_state);
             ui.separator();
-            build_timeline_content(ui, ui_events, state, clip_library);
+            build_timeline_content(ui, ui_events, state, clip_library, clip_track_snapshot);
         });
 }
 
@@ -138,6 +147,7 @@ fn build_timeline_content(
     ui_events: &mut UIEventQueue,
     state: &mut TimelineState,
     clip_library: &ClipLibrary,
+    clip_track_snapshot: &ClipTrackSnapshot,
 ) {
     let current_clip = match state.current_clip_id.and_then(|id| clip_library.get(id)) {
         Some(clip) => clip,
@@ -156,6 +166,12 @@ fn build_timeline_content(
         .build(|| {
             build_time_ruler_with_scrub(ui, ui_events, state, current_clip, timeline_width);
             ui.separator();
+
+            if !clip_track_snapshot.entries.is_empty() {
+                build_clip_tracks_section(ui, ui_events, state, clip_track_snapshot, timeline_width);
+                ui.separator();
+            }
+
             build_tracks_area(ui, ui_events, state, current_clip, timeline_width);
         });
 }
@@ -604,4 +620,291 @@ fn draw_track_playhead(
         )
         .thickness(2.0)
         .build();
+}
+
+fn build_clip_tracks_section(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    state: &mut TimelineState,
+    snapshot: &ClipTrackSnapshot,
+    timeline_width: f32,
+) {
+    let pixels_per_second = PIXELS_PER_SECOND * state.zoom_level;
+    let mouse_pos = ui.io().mouse_pos;
+    let mouse_down = ui.io().mouse_down[0];
+    let mouse_clicked = ui.is_mouse_clicked(imgui::MouseButton::Left);
+
+    handle_clip_drag_release(ui, ui_events, state, pixels_per_second);
+
+    let mut clicked_any_block = false;
+
+    for (entry_idx, entry) in snapshot.entries.iter().enumerate() {
+        let cursor_pos = ui.cursor_screen_pos();
+
+        ui.text(&truncate_label(&entry.entity_name, 15));
+        ui.same_line_with_pos(TRACK_LABEL_WIDTH);
+
+        let track_origin = [cursor_pos[0] + TRACK_LABEL_WIDTH, cursor_pos[1]];
+        let draw_list = ui.get_window_draw_list();
+
+        draw_list
+            .add_rect(
+                track_origin,
+                [track_origin[0] + timeline_width, track_origin[1] + CLIP_TRACK_HEIGHT],
+                [0.15, 0.15, 0.2, 1.0],
+            )
+            .filled(true)
+            .build();
+
+        for (inst_idx, inst) in entry.instances.iter().enumerate() {
+            let block_x = track_origin[0] + inst.start_time * pixels_per_second;
+            let block_w = (inst.end_time - inst.start_time) * pixels_per_second;
+            let block_min = [block_x, track_origin[1] + 2.0];
+            let block_max = [block_x + block_w, track_origin[1] + CLIP_TRACK_HEIGHT - 2.0];
+
+            let base_color = CLIP_BLOCK_COLORS[entry_idx % CLIP_BLOCK_COLORS.len()];
+            let color = compute_block_color(base_color, inst, state, entry.entity);
+            let border_color = compute_border_color(inst, state, entry.entity);
+
+            draw_clip_block(&draw_list, block_min, block_max, color, border_color, &inst.clip_name);
+
+            if mouse_clicked && is_point_in_rect(mouse_pos, block_min, block_max) {
+                clicked_any_block = true;
+
+                ui_events.send(UIEvent::ClipInstanceSelect {
+                    entity: entry.entity,
+                    instance_id: inst.instance_id,
+                });
+
+                begin_clip_drag(state, entry.entity, inst, mouse_pos, block_min, block_max, pixels_per_second);
+            }
+
+            handle_clip_mute_button(ui, ui_events, entry.entity, inst, inst_idx, entry_idx);
+        }
+
+        ui.dummy([timeline_width, CLIP_TRACK_HEIGHT]);
+    }
+
+    if mouse_clicked && !clicked_any_block {
+        let section_start_y = ui.cursor_screen_pos()[1]
+            - (snapshot.entries.len() as f32 * (CLIP_TRACK_HEIGHT + ui.text_line_height_with_spacing()));
+
+        if mouse_pos[1] >= section_start_y {
+            ui_events.send(UIEvent::ClipInstanceDeselect);
+        }
+    }
+
+    handle_delete_key(ui, ui_events, state);
+
+    update_clip_drag(state, mouse_pos, mouse_down, pixels_per_second);
+}
+
+fn handle_clip_drag_release(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    state: &mut TimelineState,
+    pixels_per_second: f32,
+) {
+    if !ui.is_mouse_down(imgui::MouseButton::Left) {
+        if let Some(drag) = state.dragging_clip.take() {
+            let mouse_pos = ui.io().mouse_pos;
+            let delta_x = mouse_pos[0] - drag.drag_start_x;
+            let delta_time = delta_x / pixels_per_second;
+
+            match drag.drag_type {
+                ClipDragType::Move => {
+                    let new_start = (drag.original_value + delta_time).max(0.0);
+                    ui_events.send(UIEvent::ClipInstanceMove {
+                        entity: drag.entity,
+                        instance_id: drag.instance_id,
+                        new_start_time: new_start,
+                    });
+                }
+                ClipDragType::TrimStart => {
+                    let new_clip_in = (drag.original_value + delta_time).max(0.0);
+                    ui_events.send(UIEvent::ClipInstanceTrimStart {
+                        entity: drag.entity,
+                        instance_id: drag.instance_id,
+                        new_clip_in,
+                    });
+                }
+                ClipDragType::TrimEnd => {
+                    let new_clip_out = (drag.original_value + delta_time).max(0.0);
+                    ui_events.send(UIEvent::ClipInstanceTrimEnd {
+                        entity: drag.entity,
+                        instance_id: drag.instance_id,
+                        new_clip_out,
+                    });
+                }
+            }
+        }
+    }
+}
+
+fn begin_clip_drag(
+    state: &mut TimelineState,
+    entity: crate::ecs::world::Entity,
+    inst: &ClipInstanceSnapshot,
+    mouse_pos: [f32; 2],
+    block_min: [f32; 2],
+    block_max: [f32; 2],
+    _pixels_per_second: f32,
+) {
+    let near_left_edge = (mouse_pos[0] - block_min[0]).abs() < CLIP_EDGE_DRAG_WIDTH;
+    let near_right_edge = (mouse_pos[0] - block_max[0]).abs() < CLIP_EDGE_DRAG_WIDTH;
+
+    let (drag_type, original_value) = if near_left_edge {
+        (ClipDragType::TrimStart, inst.clip_in)
+    } else if near_right_edge {
+        (ClipDragType::TrimEnd, inst.clip_out)
+    } else {
+        (ClipDragType::Move, inst.start_time)
+    };
+
+    state.dragging_clip = Some(ClipDragState {
+        entity,
+        instance_id: inst.instance_id,
+        drag_type,
+        original_value,
+        drag_start_x: mouse_pos[0],
+    });
+}
+
+fn update_clip_drag(
+    state: &mut TimelineState,
+    _mouse_pos: [f32; 2],
+    _mouse_down: bool,
+    _pixels_per_second: f32,
+) {
+    // Drag state is maintained in TimelineState.dragging_clip.
+    // Actual event emission happens on mouse release in handle_clip_drag_release.
+}
+
+fn handle_clip_mute_button(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    entity: crate::ecs::world::Entity,
+    inst: &ClipInstanceSnapshot,
+    inst_idx: usize,
+    entry_idx: usize,
+) {
+    let label = if inst.muted { "M##muted" } else { "M##unmuted" };
+    let button_id = format!("{}_{}_{}",  label, entry_idx, inst_idx);
+
+    ui.same_line();
+    if inst.muted {
+        let _color_token = ui.push_style_color(imgui::StyleColor::Button, [0.5, 0.2, 0.2, 1.0]);
+        if ui.small_button(&button_id) {
+            ui_events.send(UIEvent::ClipInstanceToggleMute {
+                entity,
+                instance_id: inst.instance_id,
+            });
+        }
+    } else if ui.small_button(&button_id) {
+        ui_events.send(UIEvent::ClipInstanceToggleMute {
+            entity,
+            instance_id: inst.instance_id,
+        });
+    }
+}
+
+fn handle_delete_key(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    state: &TimelineState,
+) {
+    if ui.is_key_pressed(imgui::Key::Delete) {
+        if let Some((entity, instance_id)) = state.selected_clip_instance {
+            ui_events.send(UIEvent::ClipInstanceDelete { entity, instance_id });
+        }
+    }
+}
+
+fn draw_clip_block(
+    draw_list: &imgui::DrawListMut,
+    block_min: [f32; 2],
+    block_max: [f32; 2],
+    fill_color: [f32; 4],
+    border_color: [f32; 4],
+    clip_name: &str,
+) {
+    draw_list
+        .add_rect(block_min, block_max, fill_color)
+        .filled(true)
+        .build();
+
+    draw_list
+        .add_rect(block_min, block_max, border_color)
+        .build();
+
+    let text_x = block_min[0] + 4.0;
+    let text_y = block_min[1] + 2.0;
+    let available_width = block_max[0] - block_min[0] - 8.0;
+
+    if available_width > 10.0 {
+        let display_name = truncate_label_by_width(clip_name, available_width);
+        draw_list.add_text([text_x, text_y], [1.0, 1.0, 1.0, 1.0], &display_name);
+    }
+}
+
+fn compute_block_color(
+    base_color: [f32; 4],
+    inst: &ClipInstanceSnapshot,
+    state: &TimelineState,
+    entity: crate::ecs::world::Entity,
+) -> [f32; 4] {
+    let alpha = if inst.muted { 0.4 } else { base_color[3] };
+
+    let is_dragging = state
+        .dragging_clip
+        .as_ref()
+        .map(|d| d.entity == entity && d.instance_id == inst.instance_id)
+        .unwrap_or(false);
+
+    let brightness = if is_dragging { 1.3 } else { 1.0 };
+
+    [
+        (base_color[0] * brightness).min(1.0),
+        (base_color[1] * brightness).min(1.0),
+        (base_color[2] * brightness).min(1.0),
+        alpha,
+    ]
+}
+
+fn compute_border_color(
+    inst: &ClipInstanceSnapshot,
+    state: &TimelineState,
+    entity: crate::ecs::world::Entity,
+) -> [f32; 4] {
+    let is_selected = state
+        .selected_clip_instance
+        .map(|(e, id)| e == entity && id == inst.instance_id)
+        .unwrap_or(false);
+
+    if is_selected {
+        [1.0, 1.0, 0.4, 1.0]
+    } else {
+        [0.6, 0.6, 0.6, 0.5]
+    }
+}
+
+fn truncate_label(name: &str, max_chars: usize) -> String {
+    if name.len() > max_chars {
+        format!("{}...", &name[..max_chars.saturating_sub(3)])
+    } else {
+        name.to_string()
+    }
+}
+
+fn truncate_label_by_width(name: &str, available_width: f32) -> String {
+    let approx_char_width = 7.0;
+    let max_chars = (available_width / approx_char_width) as usize;
+    truncate_label(name, max_chars)
+}
+
+fn is_point_in_rect(point: [f32; 2], rect_min: [f32; 2], rect_max: [f32; 2]) -> bool {
+    point[0] >= rect_min[0]
+        && point[0] <= rect_max[0]
+        && point[1] >= rect_min[1]
+        && point[1] <= rect_max[1]
 }

@@ -820,33 +820,35 @@ run_animation_phase_ecs 詳細:
 ```
 
 ## 段階的移行計画
+**重要**: 移行計画は改訂されました。こちらは参照しないでください。ページ末に記載の移行計画を参照してください。
 
-### Phase A: ClipSchedule コンポーネント導入
+
+~~### Phase A: ClipSchedule コンポーネント導入~~
 
 - ClipSchedule コンポーネントを新規定義（instances のみ）
 - Animator は再生状態のみ（変更なし）
 - 既存の current_clip_id を ClipSchedule.instances[0] に変換する互換レイヤー
 - UI は既存のまま
 
-### Phase B: Timeline Window マルチトラック化
+~~### Phase B: Timeline Window マルチトラック化~~
 
 - TimelineState に track_states, active_track 追加
 - Timeline Window の左パネルを Entity ベースに変更
 - クリップの矩形ブロック表示
 
-### Phase C: 複数 Entity 評価
+~~### Phase C: 複数 Entity 評価~~
 
 - evaluate_all_animators 実装
 - AnimationPlayback 依存の除去
 - 複数モデルの同時アニメーション
 
-### Phase D: クリップ操作 UI
+~~### Phase D: クリップ操作 UI~~
 
 - クリップのドラッグ移動/トリミング
 - クリップの Entity へのバインド/アンバインド（D&D）
 - Mute/Solo/Lock
 
-### Phase E: 詳細編集
+~~### Phase E: 詳細編集~~
 
 - Bone Track 展開 → Dopesheet 表示
 - Property Curve 展開 → Curve Editor 連携

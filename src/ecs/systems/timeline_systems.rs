@@ -1,7 +1,8 @@
 use crate::animation::editable::SourceClipId;
-use crate::ecs::resource::ClipLibrary;
+use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UIEvent;
-use crate::ecs::resource::TimelineState;
+use crate::ecs::resource::{ClipLibrary, TimelineState};
+use crate::ecs::world::World;
 
 pub fn timeline_process_events(
     events: &[UIEvent],
@@ -148,5 +149,78 @@ pub fn timeline_update(
         timeline_state.playing = false;
     } else {
         timeline_state.current_time = new_time;
+    }
+}
+
+pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
+    let mut deselect_after: Option<(crate::ecs::world::Entity, crate::animation::editable::ClipInstanceId)> = None;
+
+    for event in events {
+        match event {
+            UIEvent::ClipInstanceSelect { entity, instance_id } => {
+                let mut ts = world.resource_mut::<TimelineState>();
+                ts.selected_clip_instance = Some((*entity, *instance_id));
+            }
+
+            UIEvent::ClipInstanceDeselect => {
+                let mut ts = world.resource_mut::<TimelineState>();
+                ts.selected_clip_instance = None;
+            }
+
+            UIEvent::ClipInstanceMove { entity, instance_id, new_start_time } => {
+                modify_clip_instance(world, *entity, *instance_id, |inst| {
+                    inst.start_time = *new_start_time;
+                });
+            }
+
+            UIEvent::ClipInstanceTrimStart { entity, instance_id, new_clip_in } => {
+                modify_clip_instance(world, *entity, *instance_id, |inst| {
+                    inst.clip_in = new_clip_in.max(0.0);
+                });
+            }
+
+            UIEvent::ClipInstanceTrimEnd { entity, instance_id, new_clip_out } => {
+                modify_clip_instance(world, *entity, *instance_id, |inst| {
+                    inst.clip_out = new_clip_out.max(0.0);
+                });
+            }
+
+            UIEvent::ClipInstanceToggleMute { entity, instance_id } => {
+                modify_clip_instance(world, *entity, *instance_id, |inst| {
+                    inst.muted = !inst.muted;
+                });
+            }
+
+            UIEvent::ClipInstanceDelete { entity, instance_id } => {
+                if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
+                    schedule.remove_instance(*instance_id);
+                }
+                deselect_after = Some((*entity, *instance_id));
+            }
+
+            _ => {}
+        }
+    }
+
+    if let Some((entity, instance_id)) = deselect_after {
+        let mut ts = world.resource_mut::<TimelineState>();
+        if let Some((sel_entity, sel_id)) = ts.selected_clip_instance {
+            if sel_entity == entity && sel_id == instance_id {
+                ts.selected_clip_instance = None;
+            }
+        }
+    }
+}
+
+fn modify_clip_instance(
+    world: &mut World,
+    entity: crate::ecs::world::Entity,
+    instance_id: crate::animation::editable::ClipInstanceId,
+    f: impl FnOnce(&mut crate::animation::editable::ClipInstance),
+) {
+    if let Some(schedule) = world.get_component_mut::<ClipSchedule>(entity) {
+        if let Some(inst) = schedule.instances.iter_mut().find(|i| i.instance_id == instance_id) {
+            f(inst);
+        }
     }
 }

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::animation::editable::{SourceClipId, KeyframeId, PropertyType};
+use crate::animation::editable::{ClipInstanceId, SourceClipId, KeyframeId, PropertyType};
 use crate::animation::BoneId;
 use crate::ecs::world::Entity;
 
@@ -22,6 +22,22 @@ impl SelectedKeyframe {
 }
 
 #[derive(Clone, Debug)]
+pub struct ClipDragState {
+    pub entity: Entity,
+    pub instance_id: ClipInstanceId,
+    pub drag_type: ClipDragType,
+    pub original_value: f32,
+    pub drag_start_x: f32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ClipDragType {
+    Move,
+    TrimStart,
+    TrimEnd,
+}
+
+#[derive(Clone, Debug)]
 pub struct TimelineState {
     pub current_clip_id: Option<SourceClipId>,
     pub current_time: f32,
@@ -37,6 +53,8 @@ pub struct TimelineState {
     pub show_scale: bool,
     pub target_entity: Option<Entity>,
     pub scrubbing: bool,
+    pub selected_clip_instance: Option<(Entity, ClipInstanceId)>,
+    pub dragging_clip: Option<ClipDragState>,
 }
 
 impl TimelineState {
@@ -56,6 +74,8 @@ impl TimelineState {
             show_scale: true,
             target_entity: None,
             scrubbing: false,
+            selected_clip_instance: None,
+            dragging_clip: None,
         }
     }
 

@@ -1,6 +1,6 @@
 use cgmath::{Quaternion, Vector3};
 
-use crate::animation::editable::{SourceClipId, KeyframeId, PropertyType};
+use crate::animation::editable::{ClipInstanceId, SourceClipId, KeyframeId, PropertyType};
 use crate::animation::BoneId;
 use crate::app::data::LightMoveTarget;
 use crate::ecs::world::Entity;
@@ -68,6 +68,14 @@ pub enum UIEvent {
     },
     TimelineZoomIn,
     TimelineZoomOut,
+
+    ClipInstanceSelect { entity: Entity, instance_id: ClipInstanceId },
+    ClipInstanceDeselect,
+    ClipInstanceMove { entity: Entity, instance_id: ClipInstanceId, new_start_time: f32 },
+    ClipInstanceTrimStart { entity: Entity, instance_id: ClipInstanceId, new_clip_in: f32 },
+    ClipInstanceTrimEnd { entity: Entity, instance_id: ClipInstanceId, new_clip_out: f32 },
+    ClipInstanceToggleMute { entity: Entity, instance_id: ClipInstanceId },
+    ClipInstanceDelete { entity: Entity, instance_id: ClipInstanceId },
 
     SaveScene,
 }

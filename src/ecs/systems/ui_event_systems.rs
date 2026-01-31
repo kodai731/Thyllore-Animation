@@ -169,6 +169,13 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::TimelineMoveKeyframe { .. }
             | UIEvent::TimelineZoomIn
             | UIEvent::TimelineZoomOut
+            | UIEvent::ClipInstanceSelect { .. }
+            | UIEvent::ClipInstanceDeselect
+            | UIEvent::ClipInstanceMove { .. }
+            | UIEvent::ClipInstanceTrimStart { .. }
+            | UIEvent::ClipInstanceTrimEnd { .. }
+            | UIEvent::ClipInstanceToggleMute { .. }
+            | UIEvent::ClipInstanceDelete { .. }
             | UIEvent::SaveScene => {}
         }
     }

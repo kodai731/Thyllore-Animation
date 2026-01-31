@@ -5,15 +5,16 @@ use winit::event::{ElementState, Event, WindowEvent};
 use winit::keyboard::{Key, NamedKey};
 
 use super::platform::System;
-use super::ui::{build_click_debug_overlay, build_curve_editor_window, build_debug_window, build_hierarchy_window, build_inspector_window, build_timeline_window, build_viewport_window, CurveEditorState, DebugWindowState};
+use super::ui::{build_click_debug_overlay, build_curve_editor_window, build_debug_window, build_hierarchy_window, build_inspector_window, build_timeline_window, build_viewport_window, collect_clip_track_snapshot, CurveEditorState, DebugWindowState};
 use crate::ecs::resource::ClipLibrary;
 use crate::app::{App, GUIData};
 use crate::debugview::RayTracingDebugState;
 use crate::ecs::resource::{HierarchyState, SceneState, TimelineState};
 use crate::ecs::events::UIEvent;
 use crate::ecs::systems::{
-    camera_move_to_look_at, collapse_entity, expand_entity, rename_entity,
-    timeline_process_events, update_entity_scale, update_entity_translation, update_entity_visible,
+    camera_move_to_look_at, collapse_entity, expand_entity, process_clip_instance_events,
+    rename_entity, timeline_process_events, update_entity_scale, update_entity_translation,
+    update_entity_visible,
 };
 use crate::ecs::world::Transform;
 use crate::ecs::{process_ui_events_with_events_simple, DeferredAction, UIEventQueue};
@@ -176,12 +177,17 @@ impl System {
                                 }
                             }
 
+                            let clip_track_snapshot = {
+                                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+                                collect_clip_track_snapshot(&app.data.ecs_world, &*clip_library)
+                            };
+
                             {
                                 let mut timeline_state = app.data.ecs_world.resource_mut::<TimelineState>();
                                 let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
                                 let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
                                 let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
-                                build_timeline_window(ui, &mut *ui_events, &mut *timeline_state, &*clip_library, &mut *curve_editor);
+                                build_timeline_window(ui, &mut *ui_events, &mut *timeline_state, &*clip_library, &mut *curve_editor, &clip_track_snapshot);
                             }
 
                             {
@@ -222,6 +228,7 @@ impl System {
                                     } else {
                                         process_hierarchy_events_inline(&events, app);
                                         process_timeline_events_inline(&events, app);
+                                        process_clip_instance_events_inline(&events, app);
                                         process_scene_events_inline(&events, app);
 
                                         let model_bounds =
@@ -354,6 +361,10 @@ fn process_timeline_events_inline(events: &[UIEvent], app: &mut App) {
     let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
 
     timeline_process_events(events, &mut timeline_state, &mut *clip_library);
+}
+
+fn process_clip_instance_events_inline(events: &[UIEvent], app: &mut App) {
+    process_clip_instance_events(events, &mut app.data.ecs_world);
 }
 
 fn process_scene_events_inline(events: &[UIEvent], app: &mut App) {

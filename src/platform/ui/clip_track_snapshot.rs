@@ -1,4 +1,6 @@
-use crate::animation::editable::{ClipInstanceId, SourceClipId};
+use crate::animation::editable::{
+    BlendMode, ClipGroupId, ClipInstanceId, SourceClipId,
+};
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::ClipLibrary;
 use crate::ecs::world::{Entity, Name, World};
@@ -11,6 +13,7 @@ pub struct ClipTrackEntry {
     pub entity: Entity,
     pub entity_name: String,
     pub instances: Vec<ClipInstanceSnapshot>,
+    pub groups: Vec<ClipGroupSnapshot>,
 }
 
 pub struct ClipInstanceSnapshot {
@@ -22,9 +25,23 @@ pub struct ClipInstanceSnapshot {
     pub clip_in: f32,
     pub clip_out: f32,
     pub muted: bool,
+    pub weight: f32,
+    pub blend_mode: BlendMode,
+    pub group_id: Option<ClipGroupId>,
 }
 
-pub fn collect_clip_track_snapshot(world: &World, clip_library: &ClipLibrary) -> ClipTrackSnapshot {
+pub struct ClipGroupSnapshot {
+    pub id: ClipGroupId,
+    pub name: String,
+    pub muted: bool,
+    pub weight: f32,
+    pub instance_ids: Vec<ClipInstanceId>,
+}
+
+pub fn collect_clip_track_snapshot(
+    world: &World,
+    clip_library: &ClipLibrary,
+) -> ClipTrackSnapshot {
     let mut entries = Vec::new();
 
     for (entity, schedule) in world.iter_components::<ClipSchedule>() {
@@ -42,6 +59,10 @@ pub fn collect_clip_track_snapshot(world: &World, clip_library: &ClipLibrary) ->
                     .map(|s| s.name().to_string())
                     .unwrap_or_else(|| format!("Clip {}", inst.source_id));
 
+                let group_id = schedule
+                    .find_group_for_instance(inst.instance_id)
+                    .map(|g| g.id);
+
                 ClipInstanceSnapshot {
                     instance_id: inst.instance_id,
                     source_id: inst.source_id,
@@ -51,7 +72,22 @@ pub fn collect_clip_track_snapshot(world: &World, clip_library: &ClipLibrary) ->
                     clip_in: inst.clip_in,
                     clip_out: inst.clip_out,
                     muted: inst.muted,
+                    weight: inst.weight,
+                    blend_mode: inst.blend_mode,
+                    group_id,
                 }
+            })
+            .collect();
+
+        let groups: Vec<ClipGroupSnapshot> = schedule
+            .groups
+            .iter()
+            .map(|g| ClipGroupSnapshot {
+                id: g.id,
+                name: g.name.clone(),
+                muted: g.muted,
+                weight: g.weight,
+                instance_ids: g.instance_ids.clone(),
             })
             .collect();
 
@@ -60,6 +96,7 @@ pub fn collect_clip_track_snapshot(world: &World, clip_library: &ClipLibrary) ->
                 entity,
                 entity_name,
                 instances,
+                groups,
             });
         }
     }

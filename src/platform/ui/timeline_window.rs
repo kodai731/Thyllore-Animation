@@ -1,11 +1,13 @@
 use imgui::Condition;
 
-use crate::animation::editable::{EditableAnimationClip, PropertyCurve};
-use crate::ecs::resource::{ClipDragState, ClipDragType, ClipLibrary, TimelineState};
+use crate::animation::editable::{BlendMode, EditableAnimationClip, PropertyCurve};
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::resource::{ClipDragState, ClipDragType, ClipLibrary, TimelineState};
 
-use super::clip_track_snapshot::{ClipTrackSnapshot, ClipInstanceSnapshot};
+use super::clip_track_snapshot::{
+    ClipGroupSnapshot, ClipInstanceSnapshot, ClipTrackEntry, ClipTrackSnapshot,
+};
 use super::CurveEditorState;
 
 const TRACK_LABEL_WIDTH: f32 = 150.0;
@@ -639,55 +641,89 @@ fn build_clip_tracks_section(
     let mut clicked_any_block = false;
 
     for (entry_idx, entry) in snapshot.entries.iter().enumerate() {
-        let cursor_pos = ui.cursor_screen_pos();
+        build_group_headers(ui, ui_events, entry);
 
+        let cursor_pos = ui.cursor_screen_pos();
         ui.text(&truncate_label(&entry.entity_name, 15));
         ui.same_line_with_pos(TRACK_LABEL_WIDTH);
 
-        let track_origin = [cursor_pos[0] + TRACK_LABEL_WIDTH, cursor_pos[1]];
+        let track_origin =
+            [cursor_pos[0] + TRACK_LABEL_WIDTH, cursor_pos[1]];
         let draw_list = ui.get_window_draw_list();
 
         draw_list
             .add_rect(
                 track_origin,
-                [track_origin[0] + timeline_width, track_origin[1] + CLIP_TRACK_HEIGHT],
+                [
+                    track_origin[0] + timeline_width,
+                    track_origin[1] + CLIP_TRACK_HEIGHT,
+                ],
                 [0.15, 0.15, 0.2, 1.0],
             )
             .filled(true)
             .build();
 
         for (inst_idx, inst) in entry.instances.iter().enumerate() {
-            let block_x = track_origin[0] + inst.start_time * pixels_per_second;
-            let block_w = (inst.end_time - inst.start_time) * pixels_per_second;
+            let block_x =
+                track_origin[0] + inst.start_time * pixels_per_second;
+            let block_w =
+                (inst.end_time - inst.start_time) * pixels_per_second;
             let block_min = [block_x, track_origin[1] + 2.0];
-            let block_max = [block_x + block_w, track_origin[1] + CLIP_TRACK_HEIGHT - 2.0];
+            let block_max = [
+                block_x + block_w,
+                track_origin[1] + CLIP_TRACK_HEIGHT - 2.0,
+            ];
 
-            let base_color = CLIP_BLOCK_COLORS[entry_idx % CLIP_BLOCK_COLORS.len()];
-            let color = compute_block_color(base_color, inst, state, entry.entity);
-            let border_color = compute_border_color(inst, state, entry.entity);
+            let base_color =
+                CLIP_BLOCK_COLORS[entry_idx % CLIP_BLOCK_COLORS.len()];
+            let color =
+                compute_block_color(base_color, inst, state, entry.entity);
+            let border_color =
+                compute_border_color(inst, state, entry.entity);
 
-            draw_clip_block(&draw_list, block_min, block_max, color, border_color, &inst.clip_name);
+            draw_clip_block(
+                &draw_list,
+                block_min,
+                block_max,
+                color,
+                border_color,
+                inst,
+            );
 
-            if mouse_clicked && is_point_in_rect(mouse_pos, block_min, block_max) {
+            if mouse_clicked
+                && is_point_in_rect(mouse_pos, block_min, block_max)
+            {
                 clicked_any_block = true;
-
                 ui_events.send(UIEvent::ClipInstanceSelect {
                     entity: entry.entity,
                     instance_id: inst.instance_id,
                 });
-
-                begin_clip_drag(state, entry.entity, inst, mouse_pos, block_min, block_max, pixels_per_second);
+                begin_clip_drag(
+                    state,
+                    entry.entity,
+                    inst,
+                    mouse_pos,
+                    block_min,
+                    block_max,
+                    pixels_per_second,
+                );
             }
 
-            handle_clip_mute_button(ui, ui_events, entry.entity, inst, inst_idx, entry_idx);
+            handle_clip_mute_button(
+                ui, ui_events, entry.entity, inst, inst_idx, entry_idx,
+            );
         }
 
         ui.dummy([timeline_width, CLIP_TRACK_HEIGHT]);
+
+        build_clip_instance_properties(ui, ui_events, state, entry);
     }
 
     if mouse_clicked && !clicked_any_block {
         let section_start_y = ui.cursor_screen_pos()[1]
-            - (snapshot.entries.len() as f32 * (CLIP_TRACK_HEIGHT + ui.text_line_height_with_spacing()));
+            - (snapshot.entries.len() as f32
+                * (CLIP_TRACK_HEIGHT
+                    + ui.text_line_height_with_spacing()));
 
         if mouse_pos[1] >= section_start_y {
             ui_events.send(UIEvent::ClipInstanceDeselect);
@@ -695,8 +731,181 @@ fn build_clip_tracks_section(
     }
 
     handle_delete_key(ui, ui_events, state);
-
     update_clip_drag(state, mouse_pos, mouse_down, pixels_per_second);
+}
+
+fn build_group_headers(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    entry: &ClipTrackEntry,
+) {
+    for group in &entry.groups {
+        build_single_group_header(ui, ui_events, entry.entity, group);
+    }
+}
+
+fn build_single_group_header(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    entity: crate::ecs::world::Entity,
+    group: &ClipGroupSnapshot,
+) {
+    let mute_label = if group.muted { "[M]" } else { "[ ]" };
+    let header_text = format!(
+        "  {} {} (w:{:.2}, {})",
+        mute_label,
+        group.name,
+        group.weight,
+        group.instance_ids.len()
+    );
+    ui.text_colored([0.7, 0.8, 1.0, 1.0], &header_text);
+
+    ui.same_line();
+    let mute_btn_id = format!("Mute##grp_{}", group.id);
+    if ui.small_button(&mute_btn_id) {
+        ui_events.send(UIEvent::ClipGroupToggleMute {
+            entity,
+            group_id: group.id,
+        });
+    }
+
+    ui.same_line();
+    ui.set_next_item_width(60.0);
+    let mut weight = group.weight;
+    let slider_id = format!("##grp_w_{}", group.id);
+    if imgui::Drag::new(&slider_id)
+        .range(0.0, 1.0)
+        .speed(0.01)
+        .display_format("%.2f")
+        .build(ui, &mut weight)
+    {
+        ui_events.send(UIEvent::ClipGroupSetWeight {
+            entity,
+            group_id: group.id,
+            weight,
+        });
+    }
+
+    ui.same_line();
+    let del_btn_id = format!("X##grp_del_{}", group.id);
+    if ui.small_button(&del_btn_id) {
+        ui_events.send(UIEvent::ClipGroupDelete {
+            entity,
+            group_id: group.id,
+        });
+    }
+}
+
+fn build_clip_instance_properties(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    state: &TimelineState,
+    entry: &ClipTrackEntry,
+) {
+    let Some((sel_entity, sel_id)) = state.selected_clip_instance else {
+        return;
+    };
+
+    if sel_entity != entry.entity {
+        return;
+    }
+
+    let Some(inst) = entry
+        .instances
+        .iter()
+        .find(|i| i.instance_id == sel_id)
+    else {
+        return;
+    };
+
+    ui.text("  Properties:");
+    ui.same_line();
+
+    ui.set_next_item_width(60.0);
+    let mut weight = inst.weight;
+    if imgui::Drag::new("##inst_weight")
+        .range(0.0, 1.0)
+        .speed(0.01)
+        .display_format("W:%.2f")
+        .build(ui, &mut weight)
+    {
+        ui_events.send(UIEvent::ClipInstanceSetWeight {
+            entity: entry.entity,
+            instance_id: inst.instance_id,
+            weight,
+        });
+    }
+
+    ui.same_line();
+    let blend_names = ["Override", "Additive"];
+    let current_idx = match inst.blend_mode {
+        BlendMode::Override => 0,
+        BlendMode::Additive => 1,
+    };
+
+    ui.set_next_item_width(80.0);
+    if let Some(_token) =
+        ui.begin_combo("##blend_mode", blend_names[current_idx])
+    {
+        for (idx, &name) in blend_names.iter().enumerate() {
+            let is_selected = idx == current_idx;
+            if ui.selectable_config(name).selected(is_selected).build() {
+                let new_mode = match idx {
+                    0 => BlendMode::Override,
+                    _ => BlendMode::Additive,
+                };
+                ui_events.send(UIEvent::ClipInstanceSetBlendMode {
+                    entity: entry.entity,
+                    instance_id: inst.instance_id,
+                    blend_mode: new_mode,
+                });
+            }
+        }
+    }
+
+    if !entry.groups.is_empty() {
+        ui.same_line();
+        let current_group_name = inst
+            .group_id
+            .and_then(|gid| entry.groups.iter().find(|g| g.id == gid))
+            .map(|g| g.name.as_str())
+            .unwrap_or("No Group");
+
+        ui.set_next_item_width(100.0);
+        if let Some(_token) =
+            ui.begin_combo("##inst_group", current_group_name)
+        {
+            if ui
+                .selectable_config("No Group")
+                .selected(inst.group_id.is_none())
+                .build()
+            {
+                if let Some(gid) = inst.group_id {
+                    ui_events.send(UIEvent::ClipGroupRemoveInstance {
+                        entity: entry.entity,
+                        group_id: gid,
+                        instance_id: inst.instance_id,
+                    });
+                }
+            }
+
+            for group in &entry.groups {
+                let is_selected =
+                    inst.group_id.map(|gid| gid == group.id).unwrap_or(false);
+                if ui
+                    .selectable_config(&group.name)
+                    .selected(is_selected)
+                    .build()
+                {
+                    ui_events.send(UIEvent::ClipGroupAddInstance {
+                        entity: entry.entity,
+                        group_id: group.id,
+                        instance_id: inst.instance_id,
+                    });
+                }
+            }
+        }
+    }
 }
 
 fn handle_clip_drag_release(
@@ -771,13 +980,11 @@ fn begin_clip_drag(
 }
 
 fn update_clip_drag(
-    state: &mut TimelineState,
+    _state: &mut TimelineState,
     _mouse_pos: [f32; 2],
     _mouse_down: bool,
     _pixels_per_second: f32,
 ) {
-    // Drag state is maintained in TimelineState.dragging_clip.
-    // Actual event emission happens on mouse release in handle_clip_drag_release.
 }
 
 fn handle_clip_mute_button(
@@ -826,7 +1033,7 @@ fn draw_clip_block(
     block_max: [f32; 2],
     fill_color: [f32; 4],
     border_color: [f32; 4],
-    clip_name: &str,
+    inst: &ClipInstanceSnapshot,
 ) {
     draw_list
         .add_rect(block_min, block_max, fill_color)
@@ -842,8 +1049,18 @@ fn draw_clip_block(
     let available_width = block_max[0] - block_min[0] - 8.0;
 
     if available_width > 10.0 {
-        let display_name = truncate_label_by_width(clip_name, available_width);
-        draw_list.add_text([text_x, text_y], [1.0, 1.0, 1.0, 1.0], &display_name);
+        let mode_char = match inst.blend_mode {
+            BlendMode::Override => "O",
+            BlendMode::Additive => "A",
+        };
+        let label =
+            format!("{} [{} {:.2}]", inst.clip_name, mode_char, inst.weight);
+        let display = truncate_label_by_width(&label, available_width);
+        draw_list.add_text(
+            [text_x, text_y],
+            [1.0, 1.0, 1.0, 1.0],
+            &display,
+        );
     }
 }
 

@@ -1,6 +1,8 @@
 use cgmath::{Quaternion, Vector3};
 
-use crate::animation::editable::{ClipInstanceId, SourceClipId, KeyframeId, PropertyType};
+use crate::animation::editable::{
+    BlendMode, ClipGroupId, ClipInstanceId, KeyframeId, PropertyType, SourceClipId,
+};
 use crate::animation::BoneId;
 use crate::app::data::LightMoveTarget;
 use crate::ecs::world::Entity;
@@ -76,6 +78,15 @@ pub enum UIEvent {
     ClipInstanceTrimEnd { entity: Entity, instance_id: ClipInstanceId, new_clip_out: f32 },
     ClipInstanceToggleMute { entity: Entity, instance_id: ClipInstanceId },
     ClipInstanceDelete { entity: Entity, instance_id: ClipInstanceId },
+    ClipInstanceSetWeight { entity: Entity, instance_id: ClipInstanceId, weight: f32 },
+    ClipInstanceSetBlendMode { entity: Entity, instance_id: ClipInstanceId, blend_mode: BlendMode },
+
+    ClipGroupCreate { entity: Entity, name: String },
+    ClipGroupDelete { entity: Entity, group_id: ClipGroupId },
+    ClipGroupAddInstance { entity: Entity, group_id: ClipGroupId, instance_id: ClipInstanceId },
+    ClipGroupRemoveInstance { entity: Entity, group_id: ClipGroupId, instance_id: ClipInstanceId },
+    ClipGroupToggleMute { entity: Entity, group_id: ClipGroupId },
+    ClipGroupSetWeight { entity: Entity, group_id: ClipGroupId, weight: f32 },
 
     SaveScene,
 }

@@ -198,6 +198,74 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 deselect_after = Some((*entity, *instance_id));
             }
 
+            UIEvent::ClipInstanceSetWeight { entity, instance_id, weight } => {
+                modify_clip_instance(world, *entity, *instance_id, |inst| {
+                    inst.weight = weight.clamp(0.0, 1.0);
+                });
+            }
+
+            UIEvent::ClipInstanceSetBlendMode { entity, instance_id, blend_mode } => {
+                modify_clip_instance(world, *entity, *instance_id, |inst| {
+                    inst.blend_mode = *blend_mode;
+                });
+            }
+
+            UIEvent::ClipGroupCreate { entity, name } => {
+                if let Some(schedule) =
+                    world.get_component_mut::<ClipSchedule>(*entity)
+                {
+                    schedule.create_group(name.clone());
+                }
+            }
+
+            UIEvent::ClipGroupDelete { entity, group_id } => {
+                if let Some(schedule) =
+                    world.get_component_mut::<ClipSchedule>(*entity)
+                {
+                    schedule.remove_group(*group_id);
+                }
+            }
+
+            UIEvent::ClipGroupAddInstance { entity, group_id, instance_id } => {
+                if let Some(schedule) =
+                    world.get_component_mut::<ClipSchedule>(*entity)
+                {
+                    schedule.add_instance_to_group(*group_id, *instance_id);
+                }
+            }
+
+            UIEvent::ClipGroupRemoveInstance { entity, group_id, instance_id } => {
+                if let Some(schedule) =
+                    world.get_component_mut::<ClipSchedule>(*entity)
+                {
+                    schedule.remove_instance_from_group(*group_id, *instance_id);
+                }
+            }
+
+            UIEvent::ClipGroupToggleMute { entity, group_id } => {
+                if let Some(schedule) =
+                    world.get_component_mut::<ClipSchedule>(*entity)
+                {
+                    if let Some(group) =
+                        schedule.groups.iter_mut().find(|g| g.id == *group_id)
+                    {
+                        group.muted = !group.muted;
+                    }
+                }
+            }
+
+            UIEvent::ClipGroupSetWeight { entity, group_id, weight } => {
+                if let Some(schedule) =
+                    world.get_component_mut::<ClipSchedule>(*entity)
+                {
+                    if let Some(group) =
+                        schedule.groups.iter_mut().find(|g| g.id == *group_id)
+                    {
+                        group.weight = weight.clamp(0.0, 1.0);
+                    }
+                }
+            }
+
             _ => {}
         }
     }

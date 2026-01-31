@@ -1,5 +1,6 @@
 mod blend;
 mod clip;
+mod clip_group;
 mod clip_instance;
 mod curve;
 mod keyframe;
@@ -9,6 +10,7 @@ mod track;
 
 pub use blend::*;
 pub use clip::*;
+pub use clip_group::*;
 pub use clip_instance::*;
 pub use curve::*;
 pub use keyframe::*;

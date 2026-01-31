@@ -261,7 +261,7 @@ impl TransformChannel {
     }
 }
 
-fn slerp(a: Quaternion<f32>, b: Quaternion<f32>, t: f32) -> Quaternion<f32> {
+pub fn slerp(a: Quaternion<f32>, b: Quaternion<f32>, t: f32) -> Quaternion<f32> {
     let dot = a.s * b.s + a.v.x * b.v.x + a.v.y * b.v.y + a.v.z * b.v.z;
 
     let (b, dot) = if dot < 0.0 {
@@ -297,7 +297,7 @@ fn slerp(a: Quaternion<f32>, b: Quaternion<f32>, t: f32) -> Quaternion<f32> {
     normalize_quat(result)
 }
 
-fn normalize_quat(q: Quaternion<f32>) -> Quaternion<f32> {
+pub fn normalize_quat(q: Quaternion<f32>) -> Quaternion<f32> {
     let len = (q.s * q.s + q.v.x * q.v.x + q.v.y * q.v.y + q.v.z * q.v.z).sqrt();
     if len > 0.0 {
         Quaternion::new(q.s / len, q.v.x / len, q.v.y / len, q.v.z / len)

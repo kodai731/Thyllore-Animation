@@ -176,6 +176,14 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::ClipInstanceTrimEnd { .. }
             | UIEvent::ClipInstanceToggleMute { .. }
             | UIEvent::ClipInstanceDelete { .. }
+            | UIEvent::ClipInstanceSetWeight { .. }
+            | UIEvent::ClipInstanceSetBlendMode { .. }
+            | UIEvent::ClipGroupCreate { .. }
+            | UIEvent::ClipGroupDelete { .. }
+            | UIEvent::ClipGroupAddInstance { .. }
+            | UIEvent::ClipGroupRemoveInstance { .. }
+            | UIEvent::ClipGroupToggleMute { .. }
+            | UIEvent::ClipGroupSetWeight { .. }
             | UIEvent::SaveScene => {}
         }
     }

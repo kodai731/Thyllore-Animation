@@ -2,14 +2,15 @@ use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix, Vector3};
 
 use crate::app::FrameContext;
-use crate::debugview::gizmo::BoneGizmoData;
+use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData};
 use crate::ecs::systems::render_data_systems::{
     bone_gizmo_render_data, gizmo_mesh_render_data, gizmo_selectable_render_data,
     grid_mesh_render_data,
 };
+use crate::ecs::component::LineMesh;
 use crate::ecs::{
-    build_bone_line_mesh, gizmo_update_rotation, gizmo_update_vertex_buffer,
-    ProjectionData,
+    build_bone_line_mesh, build_octahedral_bone_meshes, gizmo_update_rotation,
+    gizmo_update_vertex_buffer, ProjectionData,
 };
 use crate::math::get_camera_axes_from_view;
 use crate::render::RenderBackend;
@@ -83,7 +84,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     if ctx.world.contains_resource::<BoneGizmoData>() {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
         if bone_gizmo.visible {
-            render_data_vec.push(bone_gizmo_render_data(&bone_gizmo));
+            render_data_vec.extend(bone_gizmo_render_data(&bone_gizmo));
         }
     }
 
@@ -146,10 +147,11 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
         return Ok(());
     }
 
-    let (visible, skeleton_id, transforms, offsets) = {
+    let (visible, display_style, skeleton_id, transforms, offsets) = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
         (
             bone_gizmo.visible,
+            bone_gizmo.display_style,
             bone_gizmo.cached_skeleton_id,
             bone_gizmo.cached_global_transforms.clone(),
             bone_gizmo.bone_local_offsets.clone(),
@@ -169,14 +171,32 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
     };
     let skeleton = skeleton.clone();
 
+    match display_style {
+        BoneDisplayStyle::Stick => {
+            update_stick_bone_mesh(ctx, &skeleton, &transforms, &offsets)?;
+        }
+        BoneDisplayStyle::Octahedral => {
+            update_octahedral_bone_mesh(ctx, &skeleton, &transforms, &offsets)?;
+        }
+    }
+
+    Ok(())
+}
+
+unsafe fn update_stick_bone_mesh(
+    ctx: &mut FrameContext,
+    skeleton: &crate::animation::Skeleton,
+    transforms: &[Matrix4<f32>],
+    offsets: &[[f32; 3]],
+) -> Result<()> {
     {
         let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
-        build_bone_line_mesh(&skeleton, &transforms, &offsets, &mut bone_gizmo.mesh);
+        build_bone_line_mesh(skeleton, transforms, offsets, &mut bone_gizmo.stick_mesh);
     }
 
     let mut mesh_clone = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
-        bone_gizmo.mesh.clone()
+        bone_gizmo.stick_mesh.clone()
     };
 
     {
@@ -186,8 +206,39 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
 
     {
         let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
-        bone_gizmo.mesh.vertex_buffer_handle = mesh_clone.vertex_buffer_handle;
-        bone_gizmo.mesh.index_buffer_handle = mesh_clone.index_buffer_handle;
+        bone_gizmo.stick_mesh.vertex_buffer_handle = mesh_clone.vertex_buffer_handle;
+        bone_gizmo.stick_mesh.index_buffer_handle = mesh_clone.index_buffer_handle;
+    }
+
+    Ok(())
+}
+
+unsafe fn update_octahedral_bone_mesh(
+    ctx: &mut FrameContext,
+    skeleton: &crate::animation::Skeleton,
+    transforms: &[Matrix4<f32>],
+    offsets: &[[f32; 3]],
+) -> Result<()> {
+    let mut solid_mesh = LineMesh::default();
+    let mut wire_mesh = LineMesh::default();
+    build_octahedral_bone_meshes(
+        skeleton,
+        transforms,
+        offsets,
+        &mut solid_mesh,
+        &mut wire_mesh,
+    );
+
+    {
+        let mut backend = ctx.create_backend();
+        backend.update_or_create_line_buffers(&mut solid_mesh)?;
+        backend.update_or_create_line_buffers(&mut wire_mesh)?;
+    }
+
+    {
+        let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
+        bone_gizmo.solid_mesh = solid_mesh;
+        bone_gizmo.wire_mesh = wire_mesh;
     }
 
     Ok(())

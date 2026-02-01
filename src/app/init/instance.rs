@@ -1,6 +1,6 @@
 use crate::app::{App, AppData};
 
-use crate::debugview::gizmo::BoneGizmoData;
+use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData};
 use crate::debugview::GridMeshData;
 use crate::ecs::component::{MeshScale, RenderInfo};
 use crate::ecs::systems::{
@@ -275,13 +275,66 @@ impl App {
                 .expect("Failed to create light gizmo buffers");
         }
 
-        let mut bone_gizmo_data = BoneGizmoData::default();
-        bone_gizmo_data.render_info.pipeline_id = Some(grid_pipeline_id);
-        bone_gizmo_data.render_info.object_index =
-            data.graphics_resources.objects.allocate_slot();
+        let bone_solid_pipeline = PipelineBuilder::new(
+            "assets/shaders/boneVert.spv",
+            "assets/shaders/boneFrag.spv",
+        )
+        .vertex_input(VertexInputConfig::Gizmo)
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .cull_mode(vk::CullModeFlags::BACK)
+        .no_depth_test()
+        .descriptor_layouts(render_layouts.to_vec())
+        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+        .expect("Failed to create bone solid pipeline");
+        let bone_solid_pipeline_id = data.pipeline_storage.register(bone_solid_pipeline);
+        pipeline_manager.allocate_id();
         crate::log!(
-            "Allocated object_index {} for BoneGizmo",
-            bone_gizmo_data.render_info.object_index
+            "Registered bone solid pipeline with id {}",
+            bone_solid_pipeline_id
+        );
+
+        let bone_wire_pipeline = PipelineBuilder::new(
+            "assets/shaders/boneVert.spv",
+            "assets/shaders/boneFrag.spv",
+        )
+        .vertex_input(VertexInputConfig::Gizmo)
+        .topology(vk::PrimitiveTopology::LINE_LIST)
+        .polygon_mode(vk::PolygonMode::LINE)
+        .no_depth_test()
+        .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
+        .descriptor_layouts(render_layouts.to_vec())
+        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+        .expect("Failed to create bone wire pipeline");
+        let bone_wire_pipeline_id = data.pipeline_storage.register(bone_wire_pipeline);
+        pipeline_manager.allocate_id();
+        crate::log!(
+            "Registered bone wire pipeline with id {}",
+            bone_wire_pipeline_id
+        );
+
+        let mut bone_gizmo_data = BoneGizmoData::default();
+        bone_gizmo_data.stick_render_info.pipeline_id = Some(grid_pipeline_id);
+        bone_gizmo_data.stick_render_info.object_index =
+            data.graphics_resources.objects.allocate_slot();
+        bone_gizmo_data.solid_render_info.pipeline_id = Some(bone_solid_pipeline_id);
+        bone_gizmo_data.solid_render_info.object_index =
+            data.graphics_resources.objects.allocate_slot();
+        bone_gizmo_data.wire_render_info.pipeline_id = Some(bone_wire_pipeline_id);
+        bone_gizmo_data.wire_render_info.object_index =
+            data.graphics_resources.objects.allocate_slot();
+        bone_gizmo_data.display_style = BoneDisplayStyle::Octahedral;
+        crate::log!(
+            "Allocated object_index {} for BoneGizmo stick",
+            bone_gizmo_data.stick_render_info.object_index
+        );
+        crate::log!(
+            "Allocated object_index {} for BoneGizmo solid",
+            bone_gizmo_data.solid_render_info.object_index
+        );
+        crate::log!(
+            "Allocated object_index {} for BoneGizmo wire",
+            bone_gizmo_data.wire_render_info.object_index
         );
         data.ecs_world.insert_resource(bone_gizmo_data);
 

@@ -3,7 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
 use crate::debugview::DebugViewMode;
-use crate::debugview::gizmo::BoneGizmoData;
+use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData};
 use crate::app::graphics_resource::GraphicsResources;
 use crate::ecs::component::LineMesh;
 use crate::vulkanr::core::Device;
@@ -504,26 +504,132 @@ impl<'a> CompositePass<'a> {
             None => return,
         };
 
-        if !bone_gizmo.visible || bone_gizmo.mesh.indices.is_empty() {
+        if !bone_gizmo.visible {
             return;
         }
 
-        let pipeline_id = match bone_gizmo.render_info.pipeline_id {
-            Some(id) => id,
+        match bone_gizmo.display_style {
+            BoneDisplayStyle::Stick => {
+                if bone_gizmo.stick_mesh.indices.is_empty() {
+                    return;
+                }
+                let pipeline_id = match bone_gizmo.stick_render_info.pipeline_id {
+                    Some(id) => id,
+                    None => return,
+                };
+                let pipeline = match self.pipeline_storage().get(pipeline_id) {
+                    Some(p) => p,
+                    None => return,
+                };
+                self.draw_line_mesh(
+                    &bone_gizmo.stick_mesh,
+                    pipeline,
+                    bone_gizmo.stick_render_info.object_index,
+                    command_buffer,
+                    image_index,
+                );
+            }
+            BoneDisplayStyle::Octahedral => {
+                if !bone_gizmo.solid_mesh.indices.is_empty() {
+                    if let Some(pid) = bone_gizmo.solid_render_info.pipeline_id {
+                        if let Some(pipeline) = self.pipeline_storage().get(pid) {
+                            self.draw_triangle_mesh(
+                                &bone_gizmo.solid_mesh,
+                                pipeline,
+                                bone_gizmo.solid_render_info.object_index,
+                                command_buffer,
+                                image_index,
+                            );
+                        }
+                    }
+                }
+
+                if !bone_gizmo.wire_mesh.indices.is_empty() {
+                    if let Some(pid) = bone_gizmo.wire_render_info.pipeline_id {
+                        if let Some(pipeline) = self.pipeline_storage().get(pid) {
+                            self.draw_line_mesh(
+                                &bone_gizmo.wire_mesh,
+                                pipeline,
+                                bone_gizmo.wire_render_info.object_index,
+                                command_buffer,
+                                image_index,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    unsafe fn draw_triangle_mesh(
+        &self,
+        mesh: &LineMesh,
+        pipeline: &RRPipeline,
+        object_index: usize,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+    ) {
+        if mesh.indices.is_empty() {
+            return;
+        }
+
+        let vertex_buffer = match self
+            .buffer_registry
+            .get_vertex_buffer(mesh.vertex_buffer_handle)
+        {
+            Some(vb) => vb,
             None => return,
         };
-        let pipeline = match self.pipeline_storage().get(pipeline_id) {
-            Some(p) => p,
+        let index_buffer = match self
+            .buffer_registry
+            .get_index_buffer(mesh.index_buffer_handle)
+        {
+            Some(ib) => ib,
             None => return,
         };
 
-        self.draw_line_mesh(
-            &bone_gizmo.mesh,
-            pipeline,
-            bone_gizmo.render_info.object_index,
+        self.device.cmd_bind_pipeline(
             command_buffer,
-            image_index,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline,
         );
+
+        self.device
+            .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
+
+        self.device.cmd_bind_index_buffer(
+            command_buffer,
+            index_buffer,
+            0,
+            vk::IndexType::UINT32,
+        );
+
+        let frame_set = self.graphics_resources.frame_set.sets[image_index];
+        self.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline_layout,
+            0,
+            &[frame_set],
+            &[],
+        );
+
+        let object_set_idx = self
+            .graphics_resources
+            .objects
+            .get_set_index(image_index, object_index);
+        let object_set = self.graphics_resources.objects.sets[object_set_idx];
+        self.device.cmd_bind_descriptor_sets(
+            command_buffer,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline_layout,
+            2,
+            &[object_set],
+            &[],
+        );
+
+        self.device
+            .cmd_draw_indexed(command_buffer, mesh.indices.len() as u32, 1, 0, 0, 0);
     }
 
     unsafe fn draw_billboard(

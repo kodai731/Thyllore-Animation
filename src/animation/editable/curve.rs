@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use super::keyframe::{CurveId, EditableKeyframe, KeyframeId};
+use super::keyframe::{BezierHandle, CurveId, EditableKeyframe, InterpolationType, KeyframeId};
+use super::tangent::{apply_auto_tangent, sample_bezier};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PropertyType {
@@ -131,12 +132,66 @@ impl PropertyCurve {
             let k1 = &self.keyframes[i + 1];
 
             if time >= k0.time && time < k1.time {
-                let t = (time - k0.time) / (k1.time - k0.time);
-                return Some(k0.value + (k1.value - k0.value) * t);
+                return Some(match k0.interpolation {
+                    InterpolationType::Stepped => k0.value,
+                    InterpolationType::Linear => {
+                        let t = (time - k0.time) / (k1.time - k0.time);
+                        k0.value + (k1.value - k0.value) * t
+                    }
+                    InterpolationType::Bezier => sample_bezier(
+                        k0.time,
+                        k0.value,
+                        &k0.out_tangent,
+                        k1.time,
+                        k1.value,
+                        &k1.in_tangent,
+                        time,
+                    ),
+                });
             }
         }
 
         Some(last.value)
+    }
+
+    pub fn set_keyframe_interpolation(
+        &mut self,
+        keyframe_id: KeyframeId,
+        interpolation: InterpolationType,
+    ) {
+        if let Some(kf) = self.get_keyframe_mut(keyframe_id) {
+            kf.interpolation = interpolation;
+        }
+    }
+
+    pub fn set_keyframe_tangents(
+        &mut self,
+        keyframe_id: KeyframeId,
+        in_tangent: BezierHandle,
+        out_tangent: BezierHandle,
+    ) {
+        if let Some(kf) = self.get_keyframe_mut(keyframe_id) {
+            kf.in_tangent = in_tangent;
+            kf.out_tangent = out_tangent;
+        }
+    }
+
+    pub fn recalculate_auto_tangents(&mut self) {
+        for i in 0..self.keyframes.len() {
+            apply_auto_tangent(&mut self.keyframes, i);
+        }
+    }
+
+    pub fn recalculate_auto_tangent_at(&mut self, keyframe_id: KeyframeId) {
+        if let Some(idx) = self.keyframes.iter().position(|k| k.id == keyframe_id) {
+            if idx > 0 {
+                apply_auto_tangent(&mut self.keyframes, idx - 1);
+            }
+            apply_auto_tangent(&mut self.keyframes, idx);
+            if idx + 1 < self.keyframes.len() {
+                apply_auto_tangent(&mut self.keyframes, idx + 1);
+            }
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -145,6 +200,12 @@ impl PropertyCurve {
 
     pub fn keyframe_count(&self) -> usize {
         self.keyframes.len()
+    }
+
+    pub fn has_bezier_keyframes(&self) -> bool {
+        self.keyframes
+            .iter()
+            .any(|k| k.interpolation == InterpolationType::Bezier)
     }
 }
 

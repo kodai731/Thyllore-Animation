@@ -7,9 +7,8 @@ use crate::ecs::systems::{
     create_grid_mesh, create_light_gizmo, gizmo_create_buffers,
 };
 use crate::vulkanr::VulkanBackend;
-use crate::animation::editable::EditableClipManager;
 use crate::ecs::{
-    AnimationPlayback, AnimationRegistry, GpuDescriptors, HierarchyState, MaterialRegistry, MeshAssets, ModelState,
+    ClipLibrary, GpuDescriptors, HierarchyState, MaterialRegistry, MeshAssets, ModelState,
     NodeAssets, PipelineManager, SceneState, TimelineState,
 };
 use crate::vulkanr::command::*;
@@ -150,7 +149,7 @@ impl App {
         let material_registry = MaterialRegistry::new(data.graphics_resources.materials.clone());
         data.ecs_world.insert_resource(gpu_descriptors);
         data.ecs_world.insert_resource(material_registry);
-        data.ecs_world.insert_resource(AnimationRegistry::new());
+        data.ecs_world.insert_resource(ClipLibrary::new());
         data.ecs_world.insert_resource(ModelState::default());
         data.ecs_world.insert_resource(MeshAssets::new());
         data.ecs_world.insert_resource(NodeAssets::new());
@@ -643,15 +642,11 @@ impl App {
         let surface_state = SurfaceState::new(resources.surface, resources.messenger);
         data.ecs_world.insert_resource(surface_state);
 
-        let has_playback = data.ecs_world.contains_resource::<AnimationPlayback>();
-        if has_playback {
-            let mut playback = data.ecs_world.resource_mut::<AnimationPlayback>();
-            if playback.model_path.is_empty() {
-                playback.model_path = model_path.to_string();
+        {
+            let mut model_state = data.ecs_world.resource_mut::<ModelState>();
+            if model_state.model_path.is_empty() {
+                model_state.model_path = model_path.to_string();
             }
-        } else {
-            let animation_playback = AnimationPlayback::with_model_path(model_path.to_string());
-            data.ecs_world.insert_resource(animation_playback);
         }
 
         if !data.ecs_world.contains_resource::<RenderConfig>() {
@@ -675,12 +670,24 @@ impl App {
             data.ecs_world.insert_resource(TimelineState::new());
         }
 
-        if !data.ecs_world.contains_resource::<EditableClipManager>() {
-            data.ecs_world.insert_resource(EditableClipManager::new());
-        }
-
         if !data.ecs_world.contains_resource::<crate::platform::CurveEditorState>() {
             data.ecs_world.insert_resource(crate::platform::CurveEditorState::default());
+        }
+
+        if !data.ecs_world.contains_resource::<crate::ecs::resource::KeyframeCopyBuffer>() {
+            data.ecs_world.insert_resource(crate::ecs::resource::KeyframeCopyBuffer::default());
+        }
+
+        if !data.ecs_world.contains_resource::<crate::ecs::resource::CurveEditorBuffer>() {
+            data.ecs_world.insert_resource(crate::ecs::resource::CurveEditorBuffer::default());
+        }
+
+        if !data.ecs_world.contains_resource::<crate::ecs::resource::EditHistory>() {
+            data.ecs_world.insert_resource(crate::ecs::resource::EditHistory::new(100));
+        }
+
+        if !data.ecs_world.contains_resource::<crate::ecs::resource::ClipBrowserState>() {
+            data.ecs_world.insert_resource(crate::ecs::resource::ClipBrowserState::default());
         }
     }
 
@@ -933,19 +940,13 @@ impl App {
     fn register_loaded_clips(
         world: &mut crate::ecs::world::World,
         clips: Vec<crate::animation::editable::EditableAnimationClip>,
-    ) -> Vec<(crate::animation::editable::EditableClipId, String)> {
-        use crate::animation::editable::EditableClipManager;
-
-        if !world.contains_resource::<EditableClipManager>() {
-            world.insert_resource(EditableClipManager::new());
-        }
-
-        let mut clip_manager = world.resource_mut::<EditableClipManager>();
+    ) -> Vec<(crate::animation::editable::SourceClipId, String)> {
+        let mut clip_library = world.resource_mut::<ClipLibrary>();
         let mut result = Vec::new();
 
         for clip in clips {
             let name = clip.name.clone();
-            let id = clip_manager.register_clip(clip);
+            let id = clip_library.register_clip(clip);
             result.push((id, name));
         }
 

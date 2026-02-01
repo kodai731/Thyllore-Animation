@@ -34,13 +34,13 @@ impl App {
     pub fn dump_debug_info(&self) {
         crate::log!("========== DUMP DEBUG INFORMATION ==========");
 
-        let anim_registry = self.animation_registry();
+        let clip_library = self.clip_library();
         let model_state = self.model_state();
 
         crate::log!("--- Model Info ---");
         crate::log!(
             "  current_model_path: {}",
-            self.animation_playback().model_path
+            model_state.model_path
         );
         crate::log!(
             "  meshes count: {}",
@@ -49,15 +49,15 @@ impl App {
         crate::log!("  has_skinned_meshes: {}", model_state.has_skinned_meshes);
         crate::log!(
             "  animation clips count: {}",
-            anim_registry.animation.clips.len()
+            clip_library.animation.clips.len()
         );
         crate::log!(
             "  morph_animations count: {}",
-            anim_registry.morph_animation.animations.len()
+            clip_library.morph_animation.animations.len()
         );
         crate::log!(
             "  skeletons count: {}",
-            anim_registry.animation.skeletons.len()
+            clip_library.animation.skeletons.len()
         );
 
         crate::log!("--- GraphicsResources Info ---");
@@ -127,8 +127,9 @@ impl App {
         crate::log!("  position: {:?}", self.camera().position);
 
         crate::log!("--- Animation Info ---");
-        crate::log!("  animation_playing: {}", self.animation_playback().playing);
-        crate::log!("  clips count: {}", anim_registry.animation.clips.len());
+        let timeline = self.data.ecs_world.resource::<crate::ecs::resource::TimelineState>();
+        crate::log!("  animation_playing: {}", timeline.playing);
+        crate::log!("  clips count: {}", clip_library.animation.clips.len());
 
         crate::log!("========== END DEBUG INFORMATION ==========");
     }

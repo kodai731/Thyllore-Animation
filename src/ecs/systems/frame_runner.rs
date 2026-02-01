@@ -3,10 +3,9 @@ use cgmath::Vector3;
 
 use crate::app::FrameContext;
 use crate::ecs::context::EcsContext;
-use crate::ecs::resource::{AnimationPlayback, AnimationRegistry, TimelineState};
-use crate::animation::editable::EditableClipManager;
+use crate::ecs::resource::{ClipLibrary, HierarchyState, TimelineState};
+use crate::ecs::world::Animator;
 use crate::app::graphics_resource::GraphicsResources;
-
 use super::phases::{
     run_animation_phase_ecs, run_animation_phase_gpu, run_input_phase, run_render_prep_phase,
     run_transform_phase_ecs, run_transform_phase_gpu,
@@ -45,25 +44,57 @@ fn run_timeline_phase(ctx: &mut FrameContext) {
     if !ctx.world.contains_resource::<TimelineState>() {
         return;
     }
-    if !ctx.world.contains_resource::<EditableClipManager>() {
+    if !ctx.world.contains_resource::<ClipLibrary>() {
         return;
     }
 
+    let selected_entity = {
+        let hierarchy_state = ctx.world.resource::<HierarchyState>();
+        hierarchy_state.selected_entity
+    };
+
+    {
+        let mut timeline_state = ctx.world.resource_mut::<TimelineState>();
+        timeline_state.target_entity = selected_entity;
+    }
+
     let mut timeline_state = ctx.world.resource_mut::<TimelineState>();
-    let mut playback = ctx.world.resource_mut::<AnimationPlayback>();
-    let clip_manager = ctx.world.resource::<EditableClipManager>();
-    timeline_update(&mut timeline_state, &mut playback, &*clip_manager, ctx.delta_time);
-    drop(clip_manager);
-    drop(playback);
+    let clip_library = ctx.world.resource::<ClipLibrary>();
+    timeline_update(&mut timeline_state, &*clip_library, ctx.delta_time);
+    drop(clip_library);
     drop(timeline_state);
+
+    sync_timeline_to_all_animators(ctx);
 
     sync_editable_clips_to_registry(ctx);
 }
 
+fn sync_timeline_to_all_animators(ctx: &mut FrameContext) {
+    let timeline_snapshot = {
+        let timeline = ctx.world.resource::<TimelineState>();
+        (
+            timeline.current_time,
+            timeline.playing,
+            timeline.speed,
+            timeline.looping,
+        )
+    };
+
+    let animated_entities = ctx.world.query_animated();
+
+    for entity in animated_entities {
+        if let Some(animator) = ctx.world.get_component_mut::<Animator>(entity) {
+            animator.time = timeline_snapshot.0;
+            animator.playing = timeline_snapshot.1;
+            animator.speed = timeline_snapshot.2;
+            animator.looping = timeline_snapshot.3;
+        }
+    }
+}
+
 fn sync_editable_clips_to_registry(ctx: &mut FrameContext) {
-    let mut clip_manager = ctx.world.resource_mut::<EditableClipManager>();
-    let mut anim_registry = ctx.world.resource_mut::<AnimationRegistry>();
-    clip_manager.sync_dirty_to_animation_clips(&mut anim_registry.animation.clips);
+    let mut clip_library = ctx.world.resource_mut::<ClipLibrary>();
+    clip_library.sync_dirty_clips();
 }
 
 fn collect_mesh_positions(graphics: &GraphicsResources) -> Vec<Vector3<f32>> {

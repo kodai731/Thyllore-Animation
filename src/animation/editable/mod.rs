@@ -1,11 +1,25 @@
+mod blend;
 mod clip;
+mod clip_group;
+mod clip_instance;
 mod curve;
 mod keyframe;
 mod manager;
+pub mod mirror;
+pub mod snap;
+mod source_clip;
+mod tangent;
 mod track;
 
+pub use blend::*;
 pub use clip::*;
+pub use clip_group::*;
+pub use clip_instance::*;
 pub use curve::*;
 pub use keyframe::*;
 pub use manager::*;
+pub use mirror::*;
+pub use snap::*;
+pub use source_clip::*;
+pub use tangent::*;
 pub use track::*;

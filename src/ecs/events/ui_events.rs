@@ -1,6 +1,10 @@
 use cgmath::{Quaternion, Vector3};
 
-use crate::animation::editable::{EditableClipId, KeyframeId, PropertyType};
+use crate::animation::editable::{
+    BezierHandle, BlendMode, ClipGroupId, ClipInstanceId, InterpolationType,
+    KeyframeId, PropertyType, SourceClipId,
+};
+use crate::ecs::resource::SelectionModifier;
 use crate::animation::BoneId;
 use crate::app::data::LightMoveTarget;
 use crate::ecs::world::Entity;
@@ -43,7 +47,7 @@ pub enum UIEvent {
     TimelineSetTime(f32),
     TimelineSetSpeed(f32),
     TimelineToggleLoop,
-    TimelineSelectClip(EditableClipId),
+    TimelineSelectClip(SourceClipId),
     TimelineToggleTrack(BoneId),
     TimelineExpandTrack(BoneId),
     TimelineCollapseTrack(BoneId),
@@ -51,6 +55,7 @@ pub enum UIEvent {
         bone_id: BoneId,
         property_type: PropertyType,
         keyframe_id: KeyframeId,
+        modifier: SelectionModifier,
     },
     TimelineAddKeyframe {
         bone_id: BoneId,
@@ -68,6 +73,65 @@ pub enum UIEvent {
     },
     TimelineZoomIn,
     TimelineZoomOut,
+    TimelineSetKeyframeInterpolation {
+        bone_id: BoneId,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+        interpolation: InterpolationType,
+    },
+    TimelineSetKeyframeTangent {
+        bone_id: BoneId,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+        in_tangent: BezierHandle,
+        out_tangent: BezierHandle,
+    },
+    TimelineAutoTangent {
+        bone_id: BoneId,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+    },
+
+    TimelineToggleViewMode,
+    TimelineSetSnapToFrame(bool),
+    TimelineSetSnapToKey(bool),
+    TimelineSetFrameRate(f32),
+
+    TimelineCopyKeyframes,
+    TimelinePasteKeyframes { paste_time: f32 },
+    TimelineMirrorPaste { paste_time: f32 },
+
+    TimelineCaptureBuffer,
+    TimelineSwapBuffer,
+
+    ClipInstanceSelect { entity: Entity, instance_id: ClipInstanceId },
+    ClipInstanceDeselect,
+    ClipInstanceMove { entity: Entity, instance_id: ClipInstanceId, new_start_time: f32 },
+    ClipInstanceTrimStart { entity: Entity, instance_id: ClipInstanceId, new_clip_in: f32 },
+    ClipInstanceTrimEnd { entity: Entity, instance_id: ClipInstanceId, new_clip_out: f32 },
+    ClipInstanceToggleMute { entity: Entity, instance_id: ClipInstanceId },
+    ClipInstanceDelete { entity: Entity, instance_id: ClipInstanceId },
+    ClipInstanceSetWeight { entity: Entity, instance_id: ClipInstanceId, weight: f32 },
+    ClipInstanceSetBlendMode { entity: Entity, instance_id: ClipInstanceId, blend_mode: BlendMode },
+
+    ClipGroupCreate { entity: Entity, name: String },
+    ClipGroupDelete { entity: Entity, group_id: ClipGroupId },
+    ClipGroupAddInstance { entity: Entity, group_id: ClipGroupId, instance_id: ClipInstanceId },
+    ClipGroupRemoveInstance { entity: Entity, group_id: ClipGroupId, instance_id: ClipInstanceId },
+    ClipGroupToggleMute { entity: Entity, group_id: ClipGroupId },
+    ClipGroupSetWeight { entity: Entity, group_id: ClipGroupId, weight: f32 },
+
+    Undo,
+    Redo,
+
+    ClipInstanceAdd {
+        entity: Entity,
+        source_id: SourceClipId,
+        start_time: f32,
+    },
+    ClipBrowserCreateEmpty,
+    ClipBrowserDuplicate(SourceClipId),
+    ClipBrowserDelete(SourceClipId),
 
     SaveScene,
 }

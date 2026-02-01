@@ -34,8 +34,14 @@ impl App {
                 &gui_data.selected_model_path,
             ) {
                 Ok(_) => {
-                    self.animation_playback_mut().model_path = gui_data.selected_model_path.clone();
-                    self.animation_playback_mut().time = 0.0;
+                    {
+                        let mut model_state = self.data.ecs_world.resource_mut::<crate::ecs::resource::ModelState>();
+                        model_state.model_path = gui_data.selected_model_path.clone();
+                    }
+                    {
+                        let mut timeline = self.data.ecs_world.resource_mut::<crate::ecs::resource::TimelineState>();
+                        timeline.current_time = 0.0;
+                    }
 
                     {
                         let mut scene_state =

@@ -1,76 +1,346 @@
 use anyhow::Result;
 
-use crate::animation::{AnimationClipId, MorphAnimationSystem};
-use crate::ecs::resource::{AnimationPlayback, AnimationRegistry, ModelState};
-use crate::render::RenderBackend;
+use crate::animation::editable::{BlendMode, ClipInstanceId, EaseType, SourceClipId};
+use crate::animation::{AnimationClipId, MorphAnimationSystem, SkeletonId, SkeletonPose};
 use crate::app::graphics_resource::{GraphicsResources, NodeData};
+use crate::asset::AssetStorage;
+use crate::ecs::component::{AnimationMeta, ClipSchedule};
+use crate::ecs::resource::{AnimationType, ClipLibrary};
+use crate::ecs::world::{Animator, MeshRef, World};
+use crate::ecs::{
+    blend_poses_override, compute_crossfade_factor, compute_local_time,
+    compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
+};
+use crate::render::RenderBackend;
 
-pub fn playback_play(playback: &mut AnimationPlayback, clip_id: AnimationClipId) {
-    playback.current_clip_id = Some(clip_id);
-    playback.playing = true;
-    playback.time = 0.0;
+use super::pose_blend_systems::blend_poses_additive;
+
+struct ActiveInstanceInfo {
+    source_id: SourceClipId,
+    clip_id: AnimationClipId,
+    instance_id: ClipInstanceId,
+    local_time: f32,
+    weight: f32,
+    blend_mode: BlendMode,
+    ease_out: EaseType,
+    start_time: f32,
+    end_time: f32,
 }
 
-pub fn playback_stop(playback: &mut AnimationPlayback) {
-    playback.playing = false;
-    playback.current_clip_id = None;
+struct AnimatedEntityInfo {
+    active_instances: Vec<ActiveInstanceInfo>,
+    skeleton_id: SkeletonId,
+    mesh_idx: usize,
+    animation_type: AnimationType,
+    node_animation_scale: f32,
+    looping: bool,
 }
 
-pub fn playback_pause(playback: &mut AnimationPlayback) {
-    playback.playing = false;
-}
-
-pub fn playback_resume(playback: &mut AnimationPlayback) {
-    playback.playing = true;
-}
-
-pub fn playback_prepare_animations(
+pub fn evaluate_all_animators(
+    world: &World,
     graphics: &mut GraphicsResources,
     nodes: &mut [NodeData],
-    anim_registry: &mut AnimationRegistry,
-    model_state: &ModelState,
-    _time: f32,
-    playback: &mut AnimationPlayback,
+    clip_library: &ClipLibrary,
+    assets: &AssetStorage,
 ) -> Vec<usize> {
-    let current_time = playback.time;
+    let entity_infos =
+        collect_animated_entities(world, graphics, clip_library, assets);
 
-    let morph_updated = if !anim_registry.morph_animation.is_empty() {
-        playback_apply_morph_animation(graphics, &anim_registry.morph_animation, current_time)
+    let first_time = world
+        .iter_components::<Animator>()
+        .next()
+        .map(|(_, a)| a.time)
+        .unwrap_or(0.0);
+
+    let morph_updated = if !clip_library.morph_animation.is_empty() {
+        playback_apply_morph_animation(
+            graphics,
+            &clip_library.morph_animation,
+            first_time,
+        )
     } else {
         Vec::new()
     };
 
-    if anim_registry.animation.clips.is_empty() {
+    if entity_infos.is_empty() {
         return morph_updated;
     }
 
-    let skeleton_id = graphics.meshes.first().and_then(|m| m.skeleton_id);
-    if let Some(skel_id) = skeleton_id {
-        anim_registry.animation.apply_to_skeleton(skel_id, playback);
+    let anim_updated =
+        apply_blended_animations(&entity_infos, graphics, nodes, assets);
+
+    merge_updated_indices(morph_updated, anim_updated)
+}
+
+fn collect_animated_entities(
+    world: &World,
+    graphics: &GraphicsResources,
+    clip_library: &ClipLibrary,
+    assets: &AssetStorage,
+) -> Vec<AnimatedEntityInfo> {
+    let mut infos = Vec::new();
+
+    for (entity, animator) in world.iter_components::<Animator>() {
+        let Some(schedule) =
+            world.get_component::<ClipSchedule>(entity)
+        else {
+            continue;
+        };
+        let Some(meta) =
+            world.get_component::<AnimationMeta>(entity)
+        else {
+            continue;
+        };
+        let Some(mesh_ref) =
+            world.get_component::<MeshRef>(entity)
+        else {
+            continue;
+        };
+
+        let Some(mesh_asset) = assets.get_mesh(mesh_ref.mesh_asset_id)
+        else {
+            continue;
+        };
+
+        let mesh_idx = mesh_asset.graphics_mesh_index;
+        if mesh_idx >= graphics.meshes.len() {
+            continue;
+        }
+
+        let skeleton_id = mesh_asset.skeleton_id.or_else(|| {
+            graphics.meshes.get(mesh_idx).and_then(|m| m.skeleton_id)
+        });
+        let Some(skel_id) = skeleton_id else {
+            continue;
+        };
+
+        let active_instances = build_active_instances(
+            schedule,
+            clip_library,
+            animator,
+        );
+
+        if active_instances.is_empty() {
+            continue;
+        }
+
+        infos.push(AnimatedEntityInfo {
+            active_instances,
+            skeleton_id: skel_id,
+            mesh_idx,
+            animation_type: meta.animation_type.clone(),
+            node_animation_scale: meta.node_animation_scale,
+            looping: animator.looping,
+        });
     }
 
-    let model_path = &playback.model_path;
-    let is_gltf = model_path.ends_with(".glb") || model_path.ends_with(".gltf");
-    let is_fbx = model_path.ends_with(".fbx");
-    let has_node_animation = (is_gltf || is_fbx) && !model_state.has_skinned_meshes;
+    infos
+}
 
-    let anim_updated = if has_node_animation {
-        graphics.prepare_node_animation(
-            nodes,
-            &anim_registry.animation,
-            model_state.node_animation_scale,
-        )
-    } else {
-        graphics.prepare_skinned_vertices(&anim_registry.animation)
-    };
+fn build_active_instances(
+    schedule: &ClipSchedule,
+    clip_library: &ClipLibrary,
+    animator: &Animator,
+) -> Vec<ActiveInstanceInfo> {
+    let active = schedule.active_instances_at(animator.time);
+    let mut instances: Vec<ActiveInstanceInfo> = active
+        .into_iter()
+        .filter_map(|inst| {
+            let clip_id =
+                clip_library.get_anim_clip_id_for_source(inst.source_id)?;
 
-    let mut all_updated = morph_updated;
-    for mesh_id in anim_updated {
-        if !all_updated.contains(&mesh_id) {
-            all_updated.push(mesh_id);
+            let local_time = compute_local_time(
+                animator.time,
+                inst.start_time,
+                inst.clip_in,
+                inst.clip_out,
+                inst.speed,
+                inst.cycle_count,
+                animator.looping,
+            );
+
+            let weight =
+                schedule.effective_instance_weight(inst.instance_id);
+
+            Some(ActiveInstanceInfo {
+                source_id: inst.source_id,
+                clip_id,
+                instance_id: inst.instance_id,
+                local_time,
+                weight,
+                blend_mode: inst.blend_mode,
+                ease_out: inst.ease_out,
+                start_time: inst.start_time,
+                end_time: inst.end_time(),
+            })
+        })
+        .collect();
+
+    instances.sort_by(|a, b| {
+        a.start_time
+            .partial_cmp(&b.start_time)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    instances
+}
+
+fn evaluate_entity_blend(
+    info: &AnimatedEntityInfo,
+    assets: &AssetStorage,
+) -> Option<SkeletonPose> {
+    let skeleton = assets.get_skeleton_by_skeleton_id(info.skeleton_id)?;
+    let rest_pose = create_pose_from_rest(skeleton);
+
+    let first_override = info
+        .active_instances
+        .iter()
+        .find(|i| i.blend_mode == BlendMode::Override)?;
+
+    let clip_asset = assets
+        .animation_clips
+        .values()
+        .find(|c| c.clip_id == first_override.clip_id)?;
+
+    let mut pose = rest_pose.clone();
+    sample_clip_to_pose(
+        &clip_asset.clip,
+        first_override.local_time,
+        skeleton,
+        &mut pose,
+        info.looping,
+    );
+
+    if first_override.weight < 1.0 {
+        pose = blend_poses_override(
+            &rest_pose,
+            &pose,
+            first_override.weight,
+        );
+    }
+
+    let mut prev_override = first_override;
+
+    for inst in &info.active_instances {
+        if std::ptr::eq(inst, first_override) {
+            continue;
+        }
+
+        let Some(clip_asset) = assets
+            .animation_clips
+            .values()
+            .find(|c| c.clip_id == inst.clip_id)
+        else {
+            continue;
+        };
+
+        match inst.blend_mode {
+            BlendMode::Override => {
+                let mut overlay = rest_pose.clone();
+                sample_clip_to_pose(
+                    &clip_asset.clip,
+                    inst.local_time,
+                    skeleton,
+                    &mut overlay,
+                    info.looping,
+                );
+
+                let crossfade = compute_crossfade_factor(
+                    first_override.local_time + first_override.start_time,
+                    prev_override.end_time,
+                    inst.start_time,
+                    prev_override.ease_out,
+                    inst.blend_mode.default_ease_in(),
+                );
+
+                let blend_weight = crossfade * inst.weight;
+                pose = blend_poses_override(&pose, &overlay, blend_weight);
+                prev_override = inst;
+            }
+            BlendMode::Additive => {
+                let mut additive_pose = rest_pose.clone();
+                sample_clip_to_pose(
+                    &clip_asset.clip,
+                    inst.local_time,
+                    skeleton,
+                    &mut additive_pose,
+                    info.looping,
+                );
+
+                pose = blend_poses_additive(
+                    &pose,
+                    &additive_pose,
+                    &rest_pose,
+                    inst.weight,
+                );
+            }
         }
     }
-    all_updated
+
+    Some(pose)
+}
+
+fn apply_blended_animations(
+    entities: &[AnimatedEntityInfo],
+    graphics: &mut GraphicsResources,
+    nodes: &mut [NodeData],
+    assets: &AssetStorage,
+) -> Vec<usize> {
+    let mut updated = Vec::new();
+
+    for info in entities {
+        let Some(pose) = evaluate_entity_blend(info, assets) else {
+            continue;
+        };
+
+        let skeleton =
+            assets.get_skeleton_by_skeleton_id(info.skeleton_id);
+        let Some(skeleton) = skeleton else {
+            continue;
+        };
+
+        if info.animation_type == AnimationType::Node {
+            GraphicsResources::compute_node_global_transforms(
+                nodes, skeleton, &pose,
+            );
+        }
+
+        let globals = compute_pose_global_transforms(skeleton, &pose);
+
+        let mesh_updated = match info.animation_type {
+            AnimationType::Node => {
+                graphics.apply_node_animation_to_single_mesh(
+                    info.mesh_idx,
+                    nodes,
+                    info.node_animation_scale,
+                )
+            }
+            _ => graphics.apply_skinning_to_single_mesh(
+                info.mesh_idx,
+                &globals,
+                skeleton,
+            ),
+        };
+
+        if mesh_updated && !updated.contains(&info.mesh_idx) {
+            updated.push(info.mesh_idx);
+        }
+    }
+
+    updated
+}
+
+fn merge_updated_indices(
+    morph: Vec<usize>,
+    anim: Vec<usize>,
+) -> Vec<usize> {
+    let mut all = morph;
+    for idx in anim {
+        if !all.contains(&idx) {
+            all.push(idx);
+        }
+    }
+    all
 }
 
 pub unsafe fn playback_upload_animations(
@@ -99,7 +369,8 @@ pub fn playback_apply_morph_animation(
     }
 
     let animation_index = morph_animation.get_animation_index(time);
-    let mesh_count = morph_animation.targets.len().min(graphics.meshes.len());
+    let mesh_count =
+        morph_animation.targets.len().min(graphics.meshes.len());
     let mut updated_mesh_indices = Vec::new();
 
     for mesh_idx in 0..mesh_count {
@@ -109,7 +380,8 @@ pub fn playback_apply_morph_animation(
         }
 
         let base_vertices = &morph_animation.base_vertices[mesh_idx];
-        let vertices = &mut graphics.meshes[mesh_idx].vertex_data.vertices;
+        let vertices =
+            &mut graphics.meshes[mesh_idx].vertex_data.vertices;
 
         for (i, v) in vertices.iter_mut().enumerate() {
             if i < base_vertices.len() {
@@ -122,16 +394,23 @@ pub fn playback_apply_morph_animation(
 
         let morph_anim = &morph_animation.animations[animation_index];
         let scale_factor = morph_animation.scale_factor;
-        for (weight_idx, &weight) in morph_anim.weights.iter().enumerate() {
+        for (weight_idx, &weight) in
+            morph_anim.weights.iter().enumerate()
+        {
             if weight_idx >= morph_targets.len() {
                 break;
             }
             let morph_target = &morph_targets[weight_idx];
-            for (j, delta_pos) in morph_target.positions.iter().enumerate() {
+            for (j, delta_pos) in
+                morph_target.positions.iter().enumerate()
+            {
                 if j < vertices.len() {
-                    vertices[j].pos.x += delta_pos[0] * weight * scale_factor;
-                    vertices[j].pos.y += delta_pos[1] * weight * scale_factor;
-                    vertices[j].pos.z += delta_pos[2] * weight * scale_factor;
+                    vertices[j].pos.x +=
+                        delta_pos[0] * weight * scale_factor;
+                    vertices[j].pos.y +=
+                        delta_pos[1] * weight * scale_factor;
+                    vertices[j].pos.z +=
+                        delta_pos[2] * weight * scale_factor;
                 }
             }
         }

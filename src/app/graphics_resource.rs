@@ -1,4 +1,4 @@
-use crate::animation::AnimationSystem;
+use crate::animation::{Skeleton, SkeletonPose};
 use crate::render::ObjectUBO;
 use crate::vulkanr::core::device::RRDevice;
 use crate::vulkanr::vulkan::*;
@@ -61,30 +61,38 @@ impl GraphicsResources {
         })
     }
 
-    pub fn prepare_skinned_vertices(&mut self, animation: &AnimationSystem) -> Vec<usize> {
+    pub fn prepare_skinned_vertices(
+        &mut self,
+        global_transforms: &[Matrix4<f32>],
+        skeleton: &Skeleton,
+    ) -> Vec<usize> {
+        use crate::ecs::apply_skinning;
+
         let mut updated_mesh_ids = Vec::new();
 
         for mesh_idx in 0..self.meshes.len() {
-            let (skin_data, skeleton_id) = {
+            let skin_data = {
                 let mesh = &self.meshes[mesh_idx];
-                (mesh.skin_data.clone(), mesh.skeleton_id)
+                mesh.skin_data.clone()
             };
 
             let Some(skin_data) = skin_data else {
                 continue;
             };
-            let Some(skeleton_id) = skeleton_id else {
-                continue;
-            };
-            let Some(skeleton) = animation.get_skeleton(skeleton_id) else {
-                continue;
-            };
 
             let vertex_count = skin_data.base_positions.len();
-            let mut skinned_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
-            let mut skinned_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
+            let mut skinned_positions =
+                vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
+            let mut skinned_normals =
+                vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
 
-            skin_data.apply_skinning(skeleton, &mut skinned_positions, &mut skinned_normals);
+            apply_skinning(
+                &skin_data,
+                global_transforms,
+                skeleton,
+                &mut skinned_positions,
+                &mut skinned_normals,
+            );
 
             let mesh = &mut self.meshes[mesh_idx];
             for (i, pos) in skinned_positions.iter().enumerate() {
@@ -111,12 +119,11 @@ impl GraphicsResources {
     pub fn prepare_node_animation(
         &mut self,
         nodes: &mut [NodeData],
-        animation: &AnimationSystem,
+        skeleton: &Skeleton,
+        pose: &SkeletonPose,
         node_animation_scale: f32,
     ) -> Vec<usize> {
-        static mut LOG_COUNT: u32 = 0;
-
-        Self::compute_node_global_transforms(nodes, animation);
+        Self::compute_node_global_transforms(nodes, skeleton, pose);
 
         let mut updated_mesh_indices = Vec::new();
         let scale = node_animation_scale;
@@ -140,7 +147,8 @@ impl GraphicsResources {
             for (i, v) in mesh.vertex_data.vertices.iter_mut().enumerate() {
                 if i < mesh.base_vertices.len() {
                     let base = &mesh.base_vertices[i];
-                    let pos = transform * Vector4::new(base.pos.x, base.pos.y, base.pos.z, 1.0);
+                    let pos = transform
+                        * Vector4::new(base.pos.x, base.pos.y, base.pos.z, 1.0);
                     v.pos.x = pos.x * scale;
                     v.pos.y = pos.y * scale;
                     v.pos.z = pos.z * scale;
@@ -150,17 +158,102 @@ impl GraphicsResources {
             updated_mesh_indices.push(mesh_idx);
         }
 
-        unsafe {
-            if LOG_COUNT < 1 && !updated_mesh_indices.is_empty() {
-                crate::log!(
-                    "prepare_node_anim: updated {} meshes",
-                    updated_mesh_indices.len()
-                );
-                LOG_COUNT += 1;
+        updated_mesh_indices
+    }
+
+    pub fn apply_skinning_to_single_mesh(
+        &mut self,
+        mesh_idx: usize,
+        global_transforms: &[Matrix4<f32>],
+        skeleton: &Skeleton,
+    ) -> bool {
+        use crate::ecs::apply_skinning;
+
+        if mesh_idx >= self.meshes.len() {
+            return false;
+        }
+
+        let skin_data = {
+            let mesh = &self.meshes[mesh_idx];
+            mesh.skin_data.clone()
+        };
+
+        let Some(skin_data) = skin_data else {
+            return false;
+        };
+
+        let vertex_count = skin_data.base_positions.len();
+        let mut skinned_positions =
+            vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
+        let mut skinned_normals =
+            vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
+
+        apply_skinning(
+            &skin_data,
+            global_transforms,
+            skeleton,
+            &mut skinned_positions,
+            &mut skinned_normals,
+        );
+
+        let mesh = &mut self.meshes[mesh_idx];
+        for (i, pos) in skinned_positions.iter().enumerate() {
+            if i < mesh.vertex_data.vertices.len() {
+                mesh.vertex_data.vertices[i].pos.x = pos.x;
+                mesh.vertex_data.vertices[i].pos.y = pos.y;
+                mesh.vertex_data.vertices[i].pos.z = pos.z;
+            }
+        }
+        for (i, normal) in skinned_normals.iter().enumerate() {
+            if i < mesh.vertex_data.vertices.len() {
+                mesh.vertex_data.vertices[i].normal.x = normal.x;
+                mesh.vertex_data.vertices[i].normal.y = normal.y;
+                mesh.vertex_data.vertices[i].normal.z = normal.z;
             }
         }
 
-        updated_mesh_indices
+        true
+    }
+
+    pub fn apply_node_animation_to_single_mesh(
+        &mut self,
+        mesh_idx: usize,
+        nodes: &[NodeData],
+        scale: f32,
+    ) -> bool {
+        if mesh_idx >= self.meshes.len() {
+            return false;
+        }
+
+        let mesh = &self.meshes[mesh_idx];
+        if mesh.skin_data.is_some() || mesh.base_vertices.is_empty() {
+            return false;
+        }
+
+        let Some(node_idx) = mesh.node_index else {
+            return false;
+        };
+
+        let node_found = nodes.iter().find(|n| n.index == node_idx);
+        let Some(node) = node_found else {
+            return false;
+        };
+
+        let transform = node.global_transform;
+
+        let mesh = &mut self.meshes[mesh_idx];
+        for (i, v) in mesh.vertex_data.vertices.iter_mut().enumerate() {
+            if i < mesh.base_vertices.len() {
+                let base = &mesh.base_vertices[i];
+                let pos = transform
+                    * Vector4::new(base.pos.x, base.pos.y, base.pos.z, 1.0);
+                v.pos.x = pos.x * scale;
+                v.pos.y = pos.y * scale;
+                v.pos.z = pos.z * scale;
+            }
+        }
+
+        true
     }
 
     pub unsafe fn update_objects(
@@ -254,105 +347,25 @@ impl GraphicsResources {
         self.mesh_material_ids.clear();
     }
 
-    fn compute_node_global_transforms(nodes: &mut [NodeData], animation: &AnimationSystem) {
-        static mut TRANSFORM_LOG: u32 = 0;
-
+    pub fn compute_node_global_transforms(
+        nodes: &mut [NodeData],
+        skeleton: &Skeleton,
+        pose: &SkeletonPose,
+    ) {
         if nodes.is_empty() {
             return;
         }
 
-        let mut matched_count = 0;
-        for skeleton in &animation.skeletons {
-            for bone in &skeleton.bones {
-                if let Some(node) = nodes.iter_mut().find(|n| n.name == bone.name) {
-                    unsafe {
-                        if TRANSFORM_LOG < 1 {
-                            let orig = node.local_transform;
-                            let anim = bone.local_transform;
-                            let orig_scale = (
-                                (orig[0][0] * orig[0][0]
-                                    + orig[0][1] * orig[0][1]
-                                    + orig[0][2] * orig[0][2])
-                                    .sqrt(),
-                                (orig[1][0] * orig[1][0]
-                                    + orig[1][1] * orig[1][1]
-                                    + orig[1][2] * orig[1][2])
-                                    .sqrt(),
-                                (orig[2][0] * orig[2][0]
-                                    + orig[2][1] * orig[2][1]
-                                    + orig[2][2] * orig[2][2])
-                                    .sqrt(),
-                            );
-                            let anim_scale = (
-                                (anim[0][0] * anim[0][0]
-                                    + anim[0][1] * anim[0][1]
-                                    + anim[0][2] * anim[0][2])
-                                    .sqrt(),
-                                (anim[1][0] * anim[1][0]
-                                    + anim[1][1] * anim[1][1]
-                                    + anim[1][2] * anim[1][2])
-                                    .sqrt(),
-                                (anim[2][0] * anim[2][0]
-                                    + anim[2][1] * anim[2][1]
-                                    + anim[2][2] * anim[2][2])
-                                    .sqrt(),
-                            );
-                            crate::log!(
-                                "  bone '{}' node[{}]: orig_t=[{:.2},{:.2},{:.2}] anim_t=[{:.2},{:.2},{:.2}]",
-                                bone.name, node.index,
-                                orig[3][0], orig[3][1], orig[3][2],
-                                anim[3][0], anim[3][1], anim[3][2]
-                            );
-                            crate::log!(
-                                "    orig_s=[{:.2},{:.2},{:.2}] anim_s=[{:.2},{:.2},{:.2}]",
-                                orig_scale.0,
-                                orig_scale.1,
-                                orig_scale.2,
-                                anim_scale.0,
-                                anim_scale.1,
-                                anim_scale.2
-                            );
-                        }
-                    }
-                    node.local_transform = bone.local_transform;
-                    matched_count += 1;
-                }
-            }
-        }
+        use crate::animation::compose_transform;
 
-        unsafe {
-            if TRANSFORM_LOG < 1 {
-                crate::log!(
-                    "compute_node_global_transforms: {} bones matched to {} nodes",
-                    matched_count,
-                    nodes.len()
-                );
-                crate::log!("=== Node Hierarchy (with transforms) ===");
-                for node in nodes.iter() {
-                    let parent_name = node
-                        .parent_index
-                        .and_then(|pi| nodes.iter().find(|pn| pn.index == pi))
-                        .map(|pn| pn.name.as_str())
-                        .unwrap_or("(root)");
-                    let lt = node.local_transform;
-                    let scale = (
-                        (lt[0][0] * lt[0][0] + lt[0][1] * lt[0][1] + lt[0][2] * lt[0][2]).sqrt(),
-                        (lt[1][0] * lt[1][0] + lt[1][1] * lt[1][1] + lt[1][2] * lt[1][2]).sqrt(),
-                        (lt[2][0] * lt[2][0] + lt[2][1] * lt[2][1] + lt[2][2] * lt[2][2]).sqrt(),
-                    );
-                    if scale.0 > 1.01 || scale.1 > 1.01 || scale.2 > 1.01 {
-                        crate::log!(
-                            "  node[{}] '{}' SCALE=[{:.1},{:.1},{:.1}] parent='{}'",
-                            node.index,
-                            node.name,
-                            scale.0,
-                            scale.1,
-                            scale.2,
-                            parent_name
-                        );
-                    }
+        for bone in &skeleton.bones {
+            if let Some(node) = nodes.iter_mut().find(|n| n.name == bone.name) {
+                let idx = bone.id as usize;
+                if idx < pose.bone_poses.len() {
+                    let bp = &pose.bone_poses[idx];
+                    node.local_transform =
+                        compose_transform(bp.translation, bp.rotation, bp.scale);
                 }
-                TRANSFORM_LOG += 1;
             }
         }
 
@@ -369,17 +382,24 @@ impl GraphicsResources {
             }
 
             let local = nodes[node_idx].local_transform;
-            let global = if let Some(parent_idx) = nodes[node_idx].parent_index {
-                if let Some(parent_array_idx) = nodes.iter().position(|n| n.index == parent_idx) {
-                    let parent_global =
-                        compute_global(nodes, parent_array_idx, computed, global_transforms);
-                    parent_global * local
+            let global =
+                if let Some(parent_idx) = nodes[node_idx].parent_index {
+                    if let Some(parent_array_idx) =
+                        nodes.iter().position(|n| n.index == parent_idx)
+                    {
+                        let parent_global = compute_global(
+                            nodes,
+                            parent_array_idx,
+                            computed,
+                            global_transforms,
+                        );
+                        parent_global * local
+                    } else {
+                        local
+                    }
                 } else {
                     local
-                }
-            } else {
-                local
-            };
+                };
 
             global_transforms[node_idx] = global;
             computed[node_idx] = true;

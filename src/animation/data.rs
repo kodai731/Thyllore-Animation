@@ -106,32 +106,6 @@ impl Skeleton {
     pub fn bone_count(&self) -> usize {
         self.bones.len()
     }
-
-    pub fn compute_global_transforms(&self) -> Vec<Matrix4<f32>> {
-        let mut global_transforms = vec![Matrix4::identity(); self.bones.len()];
-
-        fn compute_recursive(
-            skeleton: &Skeleton,
-            bone_id: BoneId,
-            parent_transform: Matrix4<f32>,
-            global_transforms: &mut Vec<Matrix4<f32>>,
-        ) {
-            if let Some(bone) = skeleton.get_bone(bone_id) {
-                let global = parent_transform * bone.local_transform;
-                global_transforms[bone_id as usize] = global;
-
-                for &child_id in &bone.children {
-                    compute_recursive(skeleton, child_id, global, global_transforms);
-                }
-            }
-        }
-
-        for &root_id in &self.root_bone_ids {
-            compute_recursive(self, root_id, self.root_transform, &mut global_transforms);
-        }
-
-        global_transforms
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -287,7 +261,7 @@ impl TransformChannel {
     }
 }
 
-fn slerp(a: Quaternion<f32>, b: Quaternion<f32>, t: f32) -> Quaternion<f32> {
+pub fn slerp(a: Quaternion<f32>, b: Quaternion<f32>, t: f32) -> Quaternion<f32> {
     let dot = a.s * b.s + a.v.x * b.v.x + a.v.y * b.v.y + a.v.z * b.v.z;
 
     let (b, dot) = if dot < 0.0 {
@@ -323,7 +297,7 @@ fn slerp(a: Quaternion<f32>, b: Quaternion<f32>, t: f32) -> Quaternion<f32> {
     normalize_quat(result)
 }
 
-fn normalize_quat(q: Quaternion<f32>) -> Quaternion<f32> {
+pub fn normalize_quat(q: Quaternion<f32>) -> Quaternion<f32> {
     let len = (q.s * q.s + q.v.x * q.v.x + q.v.y * q.v.y + q.v.z * q.v.z).sqrt();
     if len > 0.0 {
         Quaternion::new(q.s / len, q.v.x / len, q.v.y / len, q.v.z / len)
@@ -353,43 +327,9 @@ impl AnimationClip {
     pub fn add_channel(&mut self, bone_id: BoneId, channel: TransformChannel) {
         self.channels.insert(bone_id, channel);
     }
-
-    pub fn sample(&self, time: f32, skeleton: &mut Skeleton) {
-        self.sample_with_loop(time, skeleton, false)
-    }
-
-    pub fn sample_with_loop(&self, time: f32, skeleton: &mut Skeleton, looping: bool) {
-        for (&bone_id, channel) in &self.channels {
-            if let Some(bone) = skeleton.get_bone_mut(bone_id) {
-                let (rest_t, rest_r, rest_s) = decompose_transform(&bone.local_transform);
-
-                let (translation, rotation, scale) = if looping && self.duration > 0.0 {
-                    (
-                        channel
-                            .sample_translation_looped(time, self.duration)
-                            .unwrap_or(rest_t),
-                        channel
-                            .sample_rotation_looped(time, self.duration)
-                            .unwrap_or(rest_r),
-                        channel
-                            .sample_scale_looped(time, self.duration)
-                            .unwrap_or(rest_s),
-                    )
-                } else {
-                    (
-                        channel.sample_translation(time).unwrap_or(rest_t),
-                        channel.sample_rotation(time).unwrap_or(rest_r),
-                        channel.sample_scale(time).unwrap_or(rest_s),
-                    )
-                };
-
-                bone.local_transform = compose_transform(translation, rotation, scale);
-            }
-        }
-    }
 }
 
-fn compose_transform(
+pub fn compose_transform(
     translation: Vector3<f32>,
     rotation: Quaternion<f32>,
     scale: Vector3<f32>,
@@ -400,7 +340,7 @@ fn compose_transform(
     t * r * s
 }
 
-fn decompose_transform(m: &Matrix4<f32>) -> (Vector3<f32>, Quaternion<f32>, Vector3<f32>) {
+pub fn decompose_transform(m: &Matrix4<f32>) -> (Vector3<f32>, Quaternion<f32>, Vector3<f32>) {
     let translation = Vector3::new(m[3][0], m[3][1], m[3][2]);
 
     let sx = (m[0][0] * m[0][0] + m[0][1] * m[0][1] + m[0][2] * m[0][2]).sqrt();
@@ -441,186 +381,6 @@ impl Default for SkinData {
             bone_weights: Vec::new(),
             base_positions: Vec::new(),
             base_normals: Vec::new(),
-        }
-    }
-}
-
-impl SkinData {
-    pub fn apply_skinning(
-        &self,
-        skeleton: &Skeleton,
-        out_positions: &mut [Vector3<f32>],
-        out_normals: &mut [Vector3<f32>],
-    ) {
-        let is_gltf = skeleton.name.contains("gltf");
-        static mut GLTF_LOG_DONE: bool = false;
-        let should_log = unsafe {
-            if is_gltf && !GLTF_LOG_DONE {
-                GLTF_LOG_DONE = true;
-                true
-            } else {
-                false
-            }
-        };
-
-        let global_transforms = skeleton.compute_global_transforms();
-        let mut skin_matrices = Vec::with_capacity(skeleton.bone_count());
-
-        for bone in &skeleton.bones {
-            let global = global_transforms[bone.id as usize];
-            let skin_matrix = global * bone.inverse_bind_pose;
-
-            if should_log && bone.id < 3 {
-                crate::log!("=== Skinning Debug bone {} ({}) ===", bone.id, bone.name);
-                crate::log!(
-                    "  local_transform diag: [{:.4}, {:.4}, {:.4}]",
-                    bone.local_transform[0][0],
-                    bone.local_transform[1][1],
-                    bone.local_transform[2][2]
-                );
-                crate::log!(
-                    "  local_transform trans: [{:.4}, {:.4}, {:.4}]",
-                    bone.local_transform[3][0],
-                    bone.local_transform[3][1],
-                    bone.local_transform[3][2]
-                );
-                crate::log!(
-                    "  global_transform diag: [{:.4}, {:.4}, {:.4}]",
-                    global[0][0],
-                    global[1][1],
-                    global[2][2]
-                );
-                crate::log!(
-                    "  global_transform trans: [{:.4}, {:.4}, {:.4}]",
-                    global[3][0],
-                    global[3][1],
-                    global[3][2]
-                );
-                crate::log!(
-                    "  inverse_bind_pose trans: [{:.4}, {:.4}, {:.4}]",
-                    bone.inverse_bind_pose[3][0],
-                    bone.inverse_bind_pose[3][1],
-                    bone.inverse_bind_pose[3][2]
-                );
-                crate::log!(
-                    "  skin_matrix diag: [{:.4}, {:.4}, {:.4}]",
-                    skin_matrix[0][0],
-                    skin_matrix[1][1],
-                    skin_matrix[2][2]
-                );
-                crate::log!(
-                    "  skin_matrix trans: [{:.4}, {:.4}, {:.4}]",
-                    skin_matrix[3][0],
-                    skin_matrix[3][1],
-                    skin_matrix[3][2]
-                );
-            }
-
-            skin_matrices.push(skin_matrix);
-        }
-
-        if should_log && !self.base_positions.is_empty() {
-            let pos = self.base_positions[0];
-            crate::log!(
-                "=== base_positions[0]: [{:.4}, {:.4}, {:.4}] ===",
-                pos.x,
-                pos.y,
-                pos.z
-            );
-        }
-
-        for i in 0..self.base_positions.len() {
-            let indices = &self.bone_indices[i];
-            let weights = &self.bone_weights[i];
-
-            let mut skinned_pos = Vector3::new(0.0, 0.0, 0.0);
-            let mut skinned_normal = Vector3::new(0.0, 0.0, 0.0);
-
-            for j in 0..4 {
-                let bone_idx = match j {
-                    0 => indices.x,
-                    1 => indices.y,
-                    2 => indices.z,
-                    3 => indices.w,
-                    _ => 0,
-                } as usize;
-
-                let weight = match j {
-                    0 => weights.x,
-                    1 => weights.y,
-                    2 => weights.z,
-                    3 => weights.w,
-                    _ => 0.0,
-                };
-
-                if weight > 0.0 && bone_idx < skin_matrices.len() {
-                    let m = &skin_matrices[bone_idx];
-
-                    let pos = self.base_positions[i];
-                    let transformed = m * Vector4::new(pos.x, pos.y, pos.z, 1.0);
-                    skinned_pos +=
-                        Vector3::new(transformed.x, transformed.y, transformed.z) * weight;
-
-                    if i < self.base_normals.len() {
-                        let normal = self.base_normals[i];
-                        let transformed_n = m * Vector4::new(normal.x, normal.y, normal.z, 0.0);
-                        skinned_normal +=
-                            Vector3::new(transformed_n.x, transformed_n.y, transformed_n.z)
-                                * weight;
-                    }
-                }
-            }
-
-            if i < out_positions.len() {
-                out_positions[i] = skinned_pos;
-            }
-            if i < out_normals.len() {
-                let len = (skinned_normal.x * skinned_normal.x
-                    + skinned_normal.y * skinned_normal.y
-                    + skinned_normal.z * skinned_normal.z)
-                    .sqrt();
-                if len > 0.0 {
-                    out_normals[i] = skinned_normal / len;
-                }
-            }
-
-            if should_log && i < 3 {
-                let base = self.base_positions[i];
-                crate::log!("=== Skinning vertex {} ===", i);
-                crate::log!("  base_pos: [{:.4}, {:.4}, {:.4}]", base.x, base.y, base.z);
-                crate::log!(
-                    "  bone_indices: [{}, {}, {}, {}]",
-                    indices.x,
-                    indices.y,
-                    indices.z,
-                    indices.w
-                );
-                crate::log!(
-                    "  bone_weights: [{:.4}, {:.4}, {:.4}, {:.4}]",
-                    weights.x,
-                    weights.y,
-                    weights.z,
-                    weights.w
-                );
-                crate::log!(
-                    "  skinned_pos: [{:.4}, {:.4}, {:.4}]",
-                    skinned_pos.x,
-                    skinned_pos.y,
-                    skinned_pos.z
-                );
-            }
-        }
-
-        if should_log {
-            let mut max_coord = 0.0f32;
-            for pos in out_positions.iter() {
-                max_coord = max_coord.max(pos.x.abs()).max(pos.y.abs()).max(pos.z.abs());
-            }
-            crate::log!(
-                "=== Skinning result: max_coord={:.4}, vertex_count={} ===",
-                max_coord,
-                out_positions.len()
-            );
         }
     }
 }
@@ -669,26 +429,6 @@ impl AnimationSystem {
 
     pub fn get_clip(&self, id: AnimationClipId) -> Option<&AnimationClip> {
         self.clips.iter().find(|c| c.id == id)
-    }
-
-    pub fn apply_to_skeleton(
-        &mut self,
-        skeleton_id: SkeletonId,
-        playback: &crate::ecs::AnimationPlayback,
-    ) {
-        let clip_id = match playback.current_clip_id {
-            Some(id) => id,
-            None => return,
-        };
-
-        let clip = match self.clips.iter().find(|c| c.id == clip_id) {
-            Some(c) => c.clone(),
-            None => return,
-        };
-
-        if let Some(skeleton) = self.get_skeleton_mut(skeleton_id) {
-            clip.sample_with_loop(playback.time, skeleton, playback.looping);
-        }
     }
 
     pub fn clear(&mut self) {

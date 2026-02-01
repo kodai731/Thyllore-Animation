@@ -8,14 +8,14 @@ use anyhow::{Context, Result};
 use crate::animation::{AnimationClip, AnimationClipId, BoneId};
 
 use super::clip::EditableAnimationClip;
-use super::keyframe::EditableClipId;
+use super::keyframe::SourceClipId;
 
 #[derive(Clone, Debug, Default)]
 pub struct EditableClipManager {
-    clips: HashMap<EditableClipId, EditableAnimationClip>,
-    dirty_clips: HashSet<EditableClipId>,
-    next_clip_id: EditableClipId,
-    editable_to_anim_id: HashMap<EditableClipId, AnimationClipId>,
+    clips: HashMap<SourceClipId, EditableAnimationClip>,
+    dirty_clips: HashSet<SourceClipId>,
+    next_clip_id: SourceClipId,
+    editable_to_anim_id: HashMap<SourceClipId, AnimationClipId>,
 }
 
 impl EditableClipManager {
@@ -32,7 +32,7 @@ impl EditableClipManager {
         &mut self,
         clip: &AnimationClip,
         bone_names: &HashMap<BoneId, String>,
-    ) -> EditableClipId {
+    ) -> SourceClipId {
         let id = self.next_clip_id;
         self.next_clip_id += 1;
 
@@ -42,7 +42,7 @@ impl EditableClipManager {
         id
     }
 
-    pub fn create_empty(&mut self, name: String) -> EditableClipId {
+    pub fn create_empty(&mut self, name: String) -> SourceClipId {
         let id = self.next_clip_id;
         self.next_clip_id += 1;
 
@@ -51,7 +51,7 @@ impl EditableClipManager {
         id
     }
 
-    pub fn register_clip(&mut self, mut clip: EditableAnimationClip) -> EditableClipId {
+    pub fn register_clip(&mut self, mut clip: EditableAnimationClip) -> SourceClipId {
         let id = self.next_clip_id;
         self.next_clip_id += 1;
         clip.id = id;
@@ -59,43 +59,43 @@ impl EditableClipManager {
         id
     }
 
-    pub fn get(&self, id: EditableClipId) -> Option<&EditableAnimationClip> {
+    pub fn get(&self, id: SourceClipId) -> Option<&EditableAnimationClip> {
         self.clips.get(&id)
     }
 
-    pub fn get_mut(&mut self, id: EditableClipId) -> Option<&mut EditableAnimationClip> {
+    pub fn get_mut(&mut self, id: SourceClipId) -> Option<&mut EditableAnimationClip> {
         self.dirty_clips.insert(id);
         self.clips.get_mut(&id)
     }
 
-    pub fn remove(&mut self, id: EditableClipId) -> Option<EditableAnimationClip> {
+    pub fn remove(&mut self, id: SourceClipId) -> Option<EditableAnimationClip> {
         self.dirty_clips.remove(&id);
         self.clips.remove(&id)
     }
 
-    pub fn to_playable_clip(&self, id: EditableClipId) -> Option<AnimationClip> {
+    pub fn to_playable_clip(&self, id: SourceClipId) -> Option<AnimationClip> {
         self.clips.get(&id).map(|clip| clip.to_animation_clip())
     }
 
-    pub fn is_dirty(&self, id: EditableClipId) -> bool {
+    pub fn is_dirty(&self, id: SourceClipId) -> bool {
         self.dirty_clips.contains(&id)
     }
 
-    pub fn mark_clean(&mut self, id: EditableClipId) {
+    pub fn mark_clean(&mut self, id: SourceClipId) {
         self.dirty_clips.remove(&id);
     }
 
-    pub fn mark_dirty(&mut self, id: EditableClipId) {
+    pub fn mark_dirty(&mut self, id: SourceClipId) {
         if self.clips.contains_key(&id) {
             self.dirty_clips.insert(id);
         }
     }
 
-    pub fn dirty_clip_ids(&self) -> impl Iterator<Item = &EditableClipId> {
+    pub fn dirty_clip_ids(&self) -> impl Iterator<Item = &SourceClipId> {
         self.dirty_clips.iter()
     }
 
-    pub fn all_clip_ids(&self) -> impl Iterator<Item = &EditableClipId> {
+    pub fn all_clip_ids(&self) -> impl Iterator<Item = &SourceClipId> {
         self.clips.keys()
     }
 
@@ -128,14 +128,14 @@ impl EditableClipManager {
         }
     }
 
-    pub fn clip_names(&self) -> Vec<(EditableClipId, String)> {
+    pub fn clip_names(&self) -> Vec<(SourceClipId, String)> {
         self.clips
             .iter()
             .map(|(&id, clip)| (id, clip.name.clone()))
             .collect()
     }
 
-    pub fn save_to_file(&self, id: EditableClipId, path: &Path) -> Result<()> {
+    pub fn save_to_file(&self, id: SourceClipId, path: &Path) -> Result<()> {
         let clip = self
             .clips
             .get(&id)
@@ -152,7 +152,7 @@ impl EditableClipManager {
         Ok(())
     }
 
-    pub fn load_from_file(&mut self, path: &Path) -> Result<EditableClipId> {
+    pub fn load_from_file(&mut self, path: &Path) -> Result<SourceClipId> {
         let file = fs::File::open(path)
             .with_context(|| format!("Failed to open file: {:?}", path))?;
         let reader = BufReader::new(file);

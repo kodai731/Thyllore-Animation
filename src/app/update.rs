@@ -157,7 +157,16 @@ impl App {
             * std::mem::size_of::<imgui::DrawIdx>())
             as vk::DeviceSize;
 
-        if data.imgui.vertex_buffer.is_none() || vtx_buffer_size > data.imgui.vertex_buffer_size {
+        let needs_vertex_resize =
+            data.imgui.vertex_buffer.is_none() || vtx_buffer_size > data.imgui.vertex_buffer_size;
+        let needs_index_resize =
+            data.imgui.index_buffer.is_none() || idx_buffer_size > data.imgui.index_buffer_size;
+
+        if needs_vertex_resize || needs_index_resize {
+            rrdevice.device.device_wait_idle()?;
+        }
+
+        if needs_vertex_resize {
             if let Some(buffer) = data.imgui.vertex_buffer {
                 rrdevice.device.destroy_buffer(buffer, None);
             }
@@ -194,7 +203,7 @@ impl App {
             data.imgui.vertex_buffer_size = vtx_buffer_size;
         }
 
-        if data.imgui.index_buffer.is_none() || idx_buffer_size > data.imgui.index_buffer_size {
+        if needs_index_resize {
             if let Some(buffer) = data.imgui.index_buffer {
                 rrdevice.device.destroy_buffer(buffer, None);
             }

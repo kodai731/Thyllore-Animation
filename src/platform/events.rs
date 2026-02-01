@@ -5,18 +5,25 @@ use winit::event::{ElementState, Event, WindowEvent};
 use winit::keyboard::{Key, NamedKey};
 
 use super::platform::System;
-use super::ui::{build_click_debug_overlay, build_curve_editor_window, build_debug_window, build_hierarchy_window, build_inspector_window, build_timeline_window, build_viewport_window, CurveEditorState, DebugWindowState};
-use crate::animation::editable::EditableClipManager;
+use super::ui::{build_click_debug_overlay, build_clip_browser_window, build_curve_editor_window, build_debug_window, build_hierarchy_window, build_inspector_window, build_timeline_window, build_viewport_window, collect_clip_track_snapshot, CurveEditorState, DebugWindowState};
+use crate::ecs::resource::CurveEditorBuffer;
+use crate::ecs::resource::ClipLibrary;
 use crate::app::{App, GUIData};
 use crate::debugview::RayTracingDebugState;
 use crate::ecs::resource::{HierarchyState, SceneState, TimelineState};
 use crate::ecs::events::UIEvent;
+use crate::ecs::resource::KeyframeCopyBuffer;
+use crate::ecs::resource::{ClipBrowserState, EditHistory};
 use crate::ecs::systems::{
-    camera_move_to_look_at, collapse_entity, expand_entity, rename_entity,
-    timeline_process_events, update_entity_scale, update_entity_translation, update_entity_visible,
+    apply_redo, apply_undo, camera_move_to_look_at, collapse_entity,
+    expand_entity, process_clip_instance_events,
+    process_keyframe_clipboard_events, rename_entity,
+    timeline_process_events, update_entity_scale,
+    update_entity_translation, update_entity_visible,
 };
+use crate::ecs::component::ClipSchedule;
 use crate::ecs::world::Transform;
-use crate::ecs::{process_ui_events_with_events_simple, AnimationPlayback, DeferredAction, UIEventQueue};
+use crate::ecs::{process_ui_events_with_events_simple, DeferredAction, UIEventQueue};
 use crate::scene::camera::Camera;
 
 fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
@@ -118,7 +125,7 @@ impl System {
 
                             update_mouse_input(gui_data, ui);
 
-                            let model_path = app.animation_playback().model_path.clone();
+                            let model_path = app.model_state().model_path.clone();
                             let load_status = gui_data.load_status.clone();
 
                             let mut debug_state = {
@@ -145,9 +152,23 @@ impl System {
                             }
 
                             {
+                                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+                                let mut browser_state = app.data.ecs_world.resource_mut::<ClipBrowserState>();
+                                let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+                                build_clip_browser_window(ui, &mut *ui_events, &*clip_library, &mut *browser_state, &app.data.ecs_world);
+                            }
+
+                            {
                                 let hierarchy_state = app.data.ecs_world.resource::<HierarchyState>();
                                 let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                build_inspector_window(ui, &mut *ui_events, &app.data.ecs_world, &*hierarchy_state);
+                                build_inspector_window(
+                                    ui,
+                                    &mut *ui_events,
+                                    &app.data.ecs_world,
+                                    &*hierarchy_state,
+                                    &app.data.ecs_assets,
+                                    &app.data.graphics_resources,
+                                );
                             }
 
                             {
@@ -169,20 +190,26 @@ impl System {
                                 }
                             }
 
+                            let clip_track_snapshot = {
+                                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+                                collect_clip_track_snapshot(&app.data.ecs_world, &*clip_library)
+                            };
+
                             {
-                                let timeline_state = app.data.ecs_world.resource::<TimelineState>();
-                                let clip_manager = app.data.ecs_world.resource::<EditableClipManager>();
+                                let mut timeline_state = app.data.ecs_world.resource_mut::<TimelineState>();
+                                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
                                 let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
                                 let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
-                                build_timeline_window(ui, &mut *ui_events, &*timeline_state, &*clip_manager, &mut *curve_editor);
+                                build_timeline_window(ui, &mut *ui_events, &mut *timeline_state, &*clip_library, &mut *curve_editor, &clip_track_snapshot);
                             }
 
                             {
                                 let timeline_state = app.data.ecs_world.resource::<TimelineState>();
-                                let clip_manager = app.data.ecs_world.resource::<EditableClipManager>();
+                                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
                                 let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
                                 let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
-                                build_curve_editor_window(ui, &mut *ui_events, &*timeline_state, &*clip_manager, &mut *curve_editor);
+                                let curve_buffer = app.data.ecs_world.resource::<CurveEditorBuffer>();
+                                build_curve_editor_window(ui, &mut *ui_events, &*timeline_state, &*clip_library, &mut *curve_editor, &*curve_buffer);
                             }
 
                             {
@@ -215,6 +242,15 @@ impl System {
                                     } else {
                                         process_hierarchy_events_inline(&events, app);
                                         process_timeline_events_inline(&events, app);
+                                        process_keyframe_clipboard_events_inline(
+                                            &events, app,
+                                        );
+                                        process_buffer_events_inline(
+                                            &events, app,
+                                        );
+                                        process_clip_instance_events_inline(&events, app);
+                                        process_clip_browser_events_inline(&events, app);
+                                        process_edit_history_events_inline(&events, app);
                                         process_scene_events_inline(&events, app);
 
                                         let model_bounds =
@@ -343,19 +379,407 @@ fn process_hierarchy_events_inline(events: &[UIEvent], app: &mut App) {
 }
 
 fn process_timeline_events_inline(events: &[UIEvent], app: &mut App) {
-    let mut timeline_state = app.data.ecs_world.resource_mut::<TimelineState>();
-    let mut playback = app.data.ecs_world.resource_mut::<AnimationPlayback>();
-    let mut clip_manager = app.data.ecs_world.resource_mut::<EditableClipManager>();
+    let mut timeline_state =
+        app.data.ecs_world.resource_mut::<TimelineState>();
+    let mut clip_library =
+        app.data.ecs_world.resource_mut::<ClipLibrary>();
 
-    timeline_process_events(events, &mut timeline_state, &mut playback, &mut *clip_manager);
+    let clip_id = timeline_state.current_clip_id;
+    let before_clip =
+        clip_id.and_then(|id| clip_library.get(id).cloned());
+
+    let modified = timeline_process_events(
+        events,
+        &mut timeline_state,
+        &mut *clip_library,
+    );
+
+    if modified {
+        if let (Some(cid), Some(before)) = (clip_id, before_clip) {
+            if let Some(after) = clip_library.get(cid).cloned() {
+                if app
+                    .data
+                    .ecs_world
+                    .contains_resource::<EditHistory>()
+                {
+                    let mut edit_history = app
+                        .data
+                        .ecs_world
+                        .resource_mut::<EditHistory>();
+                    edit_history.push_clip_edit(
+                        cid,
+                        before,
+                        after,
+                        "timeline clip edit",
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn process_clip_instance_events_inline(
+    events: &[UIEvent],
+    app: &mut App,
+) {
+    let schedule_snapshots = collect_clip_schedule_snapshots(events, app);
+
+    process_clip_instance_events(events, &mut app.data.ecs_world);
+
+    record_schedule_changes(schedule_snapshots, app);
+}
+
+fn collect_clip_schedule_snapshots(
+    events: &[UIEvent],
+    app: &App,
+) -> Vec<(crate::ecs::world::Entity, ClipSchedule)> {
+    use std::collections::HashSet;
+
+    let mut entities = HashSet::new();
+    for event in events {
+        match event {
+            UIEvent::ClipInstanceMove { entity, .. }
+            | UIEvent::ClipInstanceTrimStart { entity, .. }
+            | UIEvent::ClipInstanceTrimEnd { entity, .. }
+            | UIEvent::ClipInstanceToggleMute { entity, .. }
+            | UIEvent::ClipInstanceDelete { entity, .. }
+            | UIEvent::ClipInstanceSetWeight { entity, .. }
+            | UIEvent::ClipInstanceSetBlendMode { entity, .. }
+            | UIEvent::ClipGroupCreate { entity, .. }
+            | UIEvent::ClipGroupDelete { entity, .. }
+            | UIEvent::ClipGroupAddInstance { entity, .. }
+            | UIEvent::ClipGroupRemoveInstance { entity, .. }
+            | UIEvent::ClipGroupToggleMute { entity, .. }
+            | UIEvent::ClipGroupSetWeight { entity, .. } => {
+                entities.insert(*entity);
+            }
+            _ => {}
+        }
+    }
+
+    entities
+        .into_iter()
+        .filter_map(|entity| {
+            app.data
+                .ecs_world
+                .get_component::<ClipSchedule>(entity)
+                .cloned()
+                .map(|s| (entity, s))
+        })
+        .collect()
+}
+
+fn record_schedule_changes(
+    snapshots: Vec<(crate::ecs::world::Entity, ClipSchedule)>,
+    app: &mut App,
+) {
+    if snapshots.is_empty() {
+        return;
+    }
+
+    if !app.data.ecs_world.contains_resource::<EditHistory>() {
+        return;
+    }
+
+    for (entity, before) in snapshots {
+        let after = app
+            .data
+            .ecs_world
+            .get_component::<ClipSchedule>(entity)
+            .cloned();
+
+        if let Some(after) = after {
+            let changed = before.instances.len() != after.instances.len()
+                || before.groups.len() != after.groups.len()
+                || format!("{:?}", before) != format!("{:?}", after);
+
+            if changed {
+                let mut edit_history =
+                    app.data.ecs_world.resource_mut::<EditHistory>();
+                edit_history.push_schedule_edit(
+                    entity,
+                    before,
+                    after,
+                    "clip schedule edit",
+                );
+            }
+        }
+    }
+}
+
+fn process_buffer_events_inline(events: &[UIEvent], app: &mut App) {
+    for event in events {
+        match event {
+            UIEvent::TimelineCaptureBuffer => {
+                let timeline_state =
+                    app.data.ecs_world.resource::<TimelineState>();
+                let clip_library =
+                    app.data.ecs_world.resource::<ClipLibrary>();
+                let curve_editor =
+                    app.data.ecs_world.resource::<CurveEditorState>();
+                let mut curve_buffer =
+                    app.data.ecs_world.resource_mut::<CurveEditorBuffer>();
+
+                if let Some(bone_id) = curve_editor.selected_bone_id {
+                    if let Some(clip_id) = timeline_state.current_clip_id {
+                        if let Some(clip) = clip_library.get(clip_id) {
+                            curve_buffer.capture_buffer(
+                                clip,
+                                bone_id,
+                                &curve_editor.visible_curves,
+                                clip.duration,
+                                100,
+                            );
+                        }
+                    }
+                }
+            }
+
+            UIEvent::TimelineSwapBuffer => {
+                let curve_editor =
+                    app.data.ecs_world.resource::<CurveEditorState>();
+                let timeline_state =
+                    app.data.ecs_world.resource::<TimelineState>();
+                let mut clip_library =
+                    app.data.ecs_world.resource_mut::<ClipLibrary>();
+                let mut curve_buffer =
+                    app.data.ecs_world.resource_mut::<CurveEditorBuffer>();
+
+                if let Some(bone_id) = curve_editor.selected_bone_id {
+                    if let Some(clip_id) = timeline_state.current_clip_id {
+                        if let Some(clip) = clip_library.get_mut(clip_id) {
+                            curve_buffer.swap_buffer(clip, bone_id);
+                        }
+                    }
+                }
+            }
+
+            _ => {}
+        }
+    }
+}
+
+fn process_keyframe_clipboard_events_inline(
+    events: &[UIEvent],
+    app: &mut App,
+) {
+    let timeline_state = app.data.ecs_world.resource::<TimelineState>();
+    let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
+    let mut copy_buffer =
+        app.data.ecs_world.resource_mut::<KeyframeCopyBuffer>();
+
+    process_keyframe_clipboard_events(
+        events,
+        &*timeline_state,
+        &mut *clip_library,
+        &mut *copy_buffer,
+    );
+}
+
+fn process_clip_browser_events_inline(
+    events: &[UIEvent],
+    app: &mut App,
+) {
+    for event in events {
+        match event {
+            UIEvent::ClipInstanceAdd {
+                entity,
+                source_id,
+                start_time,
+            } => {
+                let duration = {
+                    let clip_library =
+                        app.data.ecs_world.resource::<ClipLibrary>();
+                    clip_library
+                        .get(*source_id)
+                        .map(|c| c.duration)
+                        .unwrap_or(1.0)
+                };
+
+                if let Some(schedule) = app
+                    .data
+                    .ecs_world
+                    .get_component_mut::<ClipSchedule>(*entity)
+                {
+                    let mut inst = crate::animation::editable::ClipInstance::new(
+                        0, *source_id, duration,
+                    );
+                    inst.start_time = *start_time;
+                    schedule.add_instance(*source_id, duration);
+
+                    if let Some(last) = schedule.instances.last_mut()
+                    {
+                        last.start_time = *start_time;
+                    }
+                }
+            }
+
+            UIEvent::ClipBrowserCreateEmpty => {
+                let mut clip_library =
+                    app.data.ecs_world.resource_mut::<ClipLibrary>();
+                let id = clip_library
+                    .create_empty("New Clip".to_string());
+                crate::log!(
+                    "Created empty clip (id={})",
+                    id
+                );
+            }
+
+            UIEvent::ClipBrowserDuplicate(source_id) => {
+                let mut clip_library =
+                    app.data.ecs_world.resource_mut::<ClipLibrary>();
+                if let Some(original) =
+                    clip_library.get(*source_id).cloned()
+                {
+                    let mut duplicate = original;
+                    duplicate.name =
+                        format!("{} (copy)", duplicate.name);
+                    let new_id =
+                        clip_library.register_clip(duplicate);
+                    crate::log!(
+                        "Duplicated clip {} -> {}",
+                        source_id,
+                        new_id
+                    );
+                }
+            }
+
+            UIEvent::ClipBrowserDelete(source_id) => {
+                let ref_count = count_source_references(
+                    *source_id,
+                    &app.data.ecs_world,
+                );
+                if ref_count == 0 {
+                    let mut clip_library = app
+                        .data
+                        .ecs_world
+                        .resource_mut::<ClipLibrary>();
+                    clip_library.remove(*source_id);
+                    crate::log!(
+                        "Deleted clip (id={})",
+                        source_id
+                    );
+                } else {
+                    crate::log!(
+                        "Cannot delete clip {}: {} references remain",
+                        source_id,
+                        ref_count
+                    );
+                }
+            }
+
+            _ => {}
+        }
+    }
+}
+
+fn count_source_references(
+    source_id: crate::animation::editable::SourceClipId,
+    world: &crate::ecs::world::World,
+) -> usize {
+    let entities = world.component_entities::<ClipSchedule>();
+    let mut count = 0;
+    for entity in entities {
+        if let Some(schedule) =
+            world.get_component::<ClipSchedule>(entity)
+        {
+            count += schedule
+                .instances
+                .iter()
+                .filter(|i| i.source_id == source_id)
+                .count();
+        }
+    }
+    count
+}
+
+fn process_edit_history_events_inline(
+    events: &[UIEvent],
+    app: &mut App,
+) {
+    for event in events {
+        match event {
+            UIEvent::Undo => {
+                if !app
+                    .data
+                    .ecs_world
+                    .contains_resource::<EditHistory>()
+                {
+                    return;
+                }
+
+                let mut edit_history =
+                    app.data.ecs_world.resource_mut::<EditHistory>();
+                if !edit_history.can_undo() {
+                    return;
+                }
+                let edit_history_ptr: *mut EditHistory =
+                    &mut *edit_history;
+                drop(edit_history);
+
+                let mut clip_library =
+                    app.data.ecs_world.resource_mut::<ClipLibrary>();
+                let clip_library_ptr: *mut ClipLibrary =
+                    &mut *clip_library;
+                drop(clip_library);
+
+                unsafe {
+                    apply_undo(
+                        &mut *edit_history_ptr,
+                        &mut *clip_library_ptr,
+                        &mut app.data.ecs_world,
+                    );
+                }
+            }
+
+            UIEvent::Redo => {
+                if !app
+                    .data
+                    .ecs_world
+                    .contains_resource::<EditHistory>()
+                {
+                    return;
+                }
+
+                let mut edit_history =
+                    app.data.ecs_world.resource_mut::<EditHistory>();
+                if !edit_history.can_redo() {
+                    return;
+                }
+                let edit_history_ptr: *mut EditHistory =
+                    &mut *edit_history;
+                drop(edit_history);
+
+                let mut clip_library =
+                    app.data.ecs_world.resource_mut::<ClipLibrary>();
+                let clip_library_ptr: *mut ClipLibrary =
+                    &mut *clip_library;
+                drop(clip_library);
+
+                unsafe {
+                    apply_redo(
+                        &mut *edit_history_ptr,
+                        &mut *clip_library_ptr,
+                        &mut app.data.ecs_world,
+                    );
+                }
+            }
+
+            _ => {}
+        }
+    }
 }
 
 fn process_scene_events_inline(events: &[UIEvent], app: &mut App) {
     for event in events {
         if let UIEvent::SaveScene = event {
-            let scene_path = std::path::PathBuf::from("assets/scenes/default.scene.ron");
+            let scene_path =
+                std::path::PathBuf::from("assets/scenes/default.scene.ron");
 
-            match crate::scene::save_scene(&scene_path, &app.data.ecs_world) {
+            match crate::scene::save_scene(
+                &scene_path,
+                &app.data.ecs_world,
+            ) {
                 Ok(()) => {
                     crate::log!("Scene saved to {:?}", scene_path);
                 }

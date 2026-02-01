@@ -4,9 +4,11 @@ use std::collections::HashMap;
 
 use cgmath::{Matrix4, SquareMatrix, Vector3};
 
-use crate::animation::AnimationClipId;
 use crate::asset::AssetId;
-use crate::ecs::component::{Animated, EditorDisplay, EntityIcon, MeshHandle, Model, Skinned};
+use crate::ecs::component::{
+    Animated, AnimationMeta, ClipSchedule, EditorDisplay, EntityIcon, MeshHandle,
+    Model, Skinned,
+};
 
 pub trait Resource: Any + 'static {}
 impl<T: Any + 'static> Resource for T {}
@@ -160,18 +162,16 @@ pub struct MaterialRef(pub AssetId);
 pub struct SkeletonRef(pub AssetId);
 
 #[derive(Clone, Debug, Default)]
-pub struct AnimationState {
-    pub current_clip_id: Option<AnimationClipId>,
+pub struct Animator {
     pub time: f32,
     pub speed: f32,
     pub playing: bool,
     pub looping: bool,
 }
 
-impl AnimationState {
+impl Animator {
     pub fn new() -> Self {
         Self {
-            current_clip_id: None,
             time: 0.0,
             speed: 1.0,
             playing: true,
@@ -253,7 +253,7 @@ impl World {
         world.register_component::<MeshRef>();
         world.register_component::<MaterialRef>();
         world.register_component::<SkeletonRef>();
-        world.register_component::<AnimationState>();
+        world.register_component::<Animator>();
         world.register_component::<LineRendering>();
         world.register_component::<BillboardBehavior>();
         world.register_component::<NodeRef>();
@@ -263,6 +263,8 @@ impl World {
         world.register_component::<Model>();
         world.register_component::<MeshHandle>();
         world.register_component::<EditorDisplay>();
+        world.register_component::<ClipSchedule>();
+        world.register_component::<AnimationMeta>();
 
         world
     }
@@ -415,7 +417,7 @@ impl World {
     }
 
     pub fn query_animated(&self) -> Vec<Entity> {
-        self.iter_components::<AnimationState>()
+        self.iter_components::<Animator>()
             .map(|(e, _)| e)
             .collect()
     }
@@ -452,8 +454,8 @@ impl World {
             .filter(|(e, _)| self.has_component::<Model>(*e))
     }
 
-    pub fn iter_animated_entities(&self) -> impl Iterator<Item = (Entity, &AnimationState)> {
-        self.iter_components::<AnimationState>()
+    pub fn iter_animated_entities(&self) -> impl Iterator<Item = (Entity, &Animator)> {
+        self.iter_components::<Animator>()
             .filter(|(e, _)| self.has_component::<Animated>(*e))
     }
 
@@ -537,8 +539,8 @@ impl<'a> EntityBuilder<'a> {
         self
     }
 
-    pub fn with_animation_state(self, state: AnimationState) -> Self {
-        self.world.insert_component(self.entity, state);
+    pub fn with_animator(self, animator: Animator) -> Self {
+        self.world.insert_component(self.entity, animator);
         self
     }
 
@@ -574,6 +576,16 @@ impl<'a> EntityBuilder<'a> {
                 inverse_bind_matrices,
             },
         );
+        self
+    }
+
+    pub fn with_clip_schedule(self, schedule: ClipSchedule) -> Self {
+        self.world.insert_component(self.entity, schedule);
+        self
+    }
+
+    pub fn with_animation_meta(self, meta: AnimationMeta) -> Self {
+        self.world.insert_component(self.entity, meta);
         self
     }
 

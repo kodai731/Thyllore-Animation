@@ -1,8 +1,17 @@
 use serde::{Deserialize, Serialize};
 
-pub type EditableClipId = u64;
+pub type SourceClipId = u64;
+pub type ClipInstanceId = u64;
 pub type KeyframeId = u64;
 pub type CurveId = u64;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InterpolationType {
+    #[default]
+    Linear,
+    Bezier,
+    Stepped,
+}
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct BezierHandle {
@@ -33,6 +42,8 @@ pub struct EditableKeyframe {
     pub value: f32,
     pub in_tangent: BezierHandle,
     pub out_tangent: BezierHandle,
+    #[serde(default)]
+    pub interpolation: InterpolationType,
 }
 
 impl EditableKeyframe {
@@ -43,6 +54,7 @@ impl EditableKeyframe {
             value,
             in_tangent: BezierHandle::linear(),
             out_tangent: BezierHandle::linear(),
+            interpolation: InterpolationType::Linear,
         }
     }
 
@@ -59,6 +71,7 @@ impl EditableKeyframe {
             value,
             in_tangent,
             out_tangent,
+            interpolation: InterpolationType::Linear,
         }
     }
 }
@@ -71,6 +84,7 @@ impl Default for EditableKeyframe {
             value: 0.0,
             in_tangent: BezierHandle::linear(),
             out_tangent: BezierHandle::linear(),
+            interpolation: InterpolationType::Linear,
         }
     }
 }

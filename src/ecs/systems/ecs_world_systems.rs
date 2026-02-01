@@ -1,34 +1,20 @@
 use cgmath::{Matrix4, SquareMatrix};
 
 use crate::asset::AssetStorage;
-use crate::ecs::resource::AnimationPlayback;
+use crate::ecs::component::ClipSchedule;
+use crate::ecs::resource::ClipLibrary;
 use crate::ecs::world::{
-    AnimationState, Children, Entity, GlobalTransform, SkeletonRef, Transform, World,
+    Animator, Children, Entity, GlobalTransform, SkeletonRef, Transform, World,
 };
-
-pub fn animation_playback_system(
-    playback: &mut AnimationPlayback,
-    delta_time: f32,
-    clip_duration: f32,
-) {
-    if !playback.playing || clip_duration <= 0.0 {
-        return;
-    }
-
-    playback.time += delta_time * playback.speed;
-
-    if playback.looping {
-        playback.time = playback.time % clip_duration;
-    } else if playback.time >= clip_duration {
-        playback.time = clip_duration;
-        playback.playing = false;
-    }
-}
 
 pub fn transform_propagation_system(world: &mut World) {
     let root_entities = world.get_root_entities();
 
-    fn propagate(world: &mut World, entity: Entity, parent_global: Matrix4<f32>) {
+    fn propagate(
+        world: &mut World,
+        entity: Entity,
+        parent_global: Matrix4<f32>,
+    ) {
         let local_matrix = world
             .get_component::<Transform>(entity)
             .map(|t| t.to_matrix())
@@ -55,11 +41,25 @@ pub fn transform_propagation_system(world: &mut World) {
     }
 }
 
-pub fn animation_time_system(world: &mut World, delta_time: f32, assets: &AssetStorage) {
+pub fn animation_time_system(
+    world: &mut World,
+    delta_time: f32,
+    assets: &AssetStorage,
+) {
     let animated_entities = world.query_animated();
 
-    for entity in animated_entities {
-        let Some(state) = world.get_component_mut::<AnimationState>(entity) else {
+    let resolved_clips: Vec<_> = {
+        let clip_library = world.resource::<ClipLibrary>();
+        animated_entities
+            .iter()
+            .map(|&entity| {
+                (entity, resolve_clip_id_for_entity(world, entity, &clip_library))
+            })
+            .collect()
+    };
+
+    for (entity, resolved_clip_id) in resolved_clips {
+        let Some(state) = world.get_component_mut::<Animator>(entity) else {
             continue;
         };
 
@@ -67,7 +67,7 @@ pub fn animation_time_system(world: &mut World, delta_time: f32, assets: &AssetS
             continue;
         }
 
-        let Some(clip_id) = state.current_clip_id else {
+        let Some(clip_id) = resolved_clip_id else {
             continue;
         };
 
@@ -89,29 +89,36 @@ pub fn animation_time_system(world: &mut World, delta_time: f32, assets: &AssetS
     }
 }
 
-pub fn skeleton_animation_system(world: &mut World, assets: &mut AssetStorage) {
+pub fn skeleton_animation_system(world: &mut World, assets: &AssetStorage) {
+    use crate::ecs::{create_pose_from_rest, sample_clip_to_pose};
+
     let animated_entities = world.query_animated();
 
-    struct AnimationData {
-        skeleton_asset_id: crate::asset::AssetId,
-        clip: crate::animation::AnimationClip,
-        time: f32,
-    }
+    let resolved_clips: Vec<_> = {
+        let clip_library = world.resource::<ClipLibrary>();
+        animated_entities
+            .iter()
+            .map(|&entity| {
+                (entity, resolve_clip_id_for_entity(world, entity, &clip_library))
+            })
+            .collect()
+    };
 
-    let mut animations_to_apply = Vec::new();
-
-    for entity in animated_entities {
-        let Some(state) = world.get_component::<AnimationState>(entity) else {
+    for (entity, resolved_clip_id) in resolved_clips {
+        let Some(state) = world.get_component::<Animator>(entity) else {
             continue;
         };
         let Some(skeleton_ref) = world.get_component::<SkeletonRef>(entity) else {
             continue;
         };
 
-        let Some(clip_id) = state.current_clip_id else {
+        let Some(clip_id) = resolved_clip_id else {
             continue;
         };
 
+        let Some(skeleton_asset) = assets.get_skeleton(skeleton_ref.0) else {
+            continue;
+        };
         let Some(clip_asset) = assets
             .animation_clips
             .values()
@@ -120,18 +127,25 @@ pub fn skeleton_animation_system(world: &mut World, assets: &mut AssetStorage) {
             continue;
         };
 
-        animations_to_apply.push(AnimationData {
-            skeleton_asset_id: skeleton_ref.0,
-            clip: clip_asset.clip.clone(),
-            time: state.time,
-        });
+        let skeleton = &skeleton_asset.skeleton;
+        let mut pose = create_pose_from_rest(skeleton);
+        sample_clip_to_pose(
+            &clip_asset.clip,
+            state.time,
+            skeleton,
+            &mut pose,
+            state.looping,
+        );
     }
+}
 
-    for anim_data in animations_to_apply {
-        if let Some(skeleton_asset) = assets.get_skeleton_mut(anim_data.skeleton_asset_id) {
-            anim_data
-                .clip
-                .sample(anim_data.time, &mut skeleton_asset.skeleton);
-        }
-    }
+fn resolve_clip_id_for_entity(
+    world: &World,
+    entity: Entity,
+    clip_library: &ClipLibrary,
+) -> Option<crate::animation::AnimationClipId> {
+    world
+        .get_component::<ClipSchedule>(entity)
+        .and_then(|s| s.first_instance())
+        .and_then(|inst| clip_library.get_anim_clip_id_for_source(inst.source_id))
 }

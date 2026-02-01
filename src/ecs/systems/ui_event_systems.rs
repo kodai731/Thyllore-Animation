@@ -169,6 +169,39 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::TimelineMoveKeyframe { .. }
             | UIEvent::TimelineZoomIn
             | UIEvent::TimelineZoomOut
+            | UIEvent::TimelineSetKeyframeInterpolation { .. }
+            | UIEvent::TimelineSetKeyframeTangent { .. }
+            | UIEvent::TimelineAutoTangent { .. }
+            | UIEvent::TimelineToggleViewMode
+            | UIEvent::TimelineSetSnapToFrame(_)
+            | UIEvent::TimelineSetSnapToKey(_)
+            | UIEvent::TimelineSetFrameRate(_)
+            | UIEvent::TimelineCopyKeyframes
+            | UIEvent::TimelinePasteKeyframes { .. }
+            | UIEvent::TimelineMirrorPaste { .. }
+            | UIEvent::TimelineCaptureBuffer
+            | UIEvent::TimelineSwapBuffer
+            | UIEvent::ClipInstanceSelect { .. }
+            | UIEvent::ClipInstanceDeselect
+            | UIEvent::ClipInstanceMove { .. }
+            | UIEvent::ClipInstanceTrimStart { .. }
+            | UIEvent::ClipInstanceTrimEnd { .. }
+            | UIEvent::ClipInstanceToggleMute { .. }
+            | UIEvent::ClipInstanceDelete { .. }
+            | UIEvent::ClipInstanceSetWeight { .. }
+            | UIEvent::ClipInstanceSetBlendMode { .. }
+            | UIEvent::ClipGroupCreate { .. }
+            | UIEvent::ClipGroupDelete { .. }
+            | UIEvent::ClipGroupAddInstance { .. }
+            | UIEvent::ClipGroupRemoveInstance { .. }
+            | UIEvent::ClipGroupToggleMute { .. }
+            | UIEvent::ClipGroupSetWeight { .. }
+            | UIEvent::Undo
+            | UIEvent::Redo
+            | UIEvent::ClipInstanceAdd { .. }
+            | UIEvent::ClipBrowserCreateEmpty
+            | UIEvent::ClipBrowserDuplicate(_)
+            | UIEvent::ClipBrowserDelete(_)
             | UIEvent::SaveScene => {}
         }
     }

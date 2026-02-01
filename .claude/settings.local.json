@@ -25,7 +25,10 @@
       "Bash(1)",
       "Bash(find:*)",
       "Bash(ls:*)",
-      "WebFetch(domain:docs.unity3d.com)"
+      "WebFetch(domain:docs.unity3d.com)",
+      "Bash(Select-String -Pattern \"^error\")",
+      "Bash(Select-String \"error\\\\[\")",
+      "Bash(Select-Object -First 30)"
     ],
     "deny": [],
     "ask": []

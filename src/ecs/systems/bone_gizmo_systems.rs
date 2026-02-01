@@ -10,9 +10,42 @@ const BONE_LINE_COLOR: [f32; 3] = [0.0, 0.8, 0.0];
 const JOINT_MARKER_COLOR: [f32; 3] = [1.0, 1.0, 0.0];
 const JOINT_CROSS_SIZE: f32 = 0.02;
 
+pub fn compute_bone_local_offsets(
+    skeleton: &Skeleton,
+    rest_global_transforms: &[Matrix4<f32>],
+) -> Vec<[f32; 3]> {
+    skeleton
+        .bones
+        .iter()
+        .enumerate()
+        .map(|(idx, bone)| {
+            let has_ibp = bone.inverse_bind_pose != Matrix4::identity();
+
+            if has_ibp {
+                if let Some(bind_global) = bone.inverse_bind_pose.invert() {
+                    let bind_world_pos =
+                        bind_global * Vector4::new(0.0, 0.0, 0.0, 1.0);
+
+                    if idx < rest_global_transforms.len() {
+                        if let Some(inv_rest) = rest_global_transforms[idx].invert() {
+                            let local = inv_rest * bind_world_pos;
+                            return [local.x, local.y, local.z];
+                        }
+                    }
+
+                    return [bind_world_pos.x, bind_world_pos.y, bind_world_pos.z];
+                }
+            }
+
+            [0.0, 0.0, 0.0]
+        })
+        .collect()
+}
+
 pub fn build_bone_line_mesh(
     skeleton: &Skeleton,
     global_transforms: &[Matrix4<f32>],
+    bone_local_offsets: &[[f32; 3]],
     mesh: &mut LineMesh,
 ) {
     mesh.vertices.clear();
@@ -23,7 +56,7 @@ pub fn build_bone_line_mesh(
     }
 
     let display_transforms =
-        compute_display_transforms(skeleton, global_transforms);
+        compute_display_transforms(skeleton, global_transforms, bone_local_offsets);
 
     for bone in &skeleton.bones {
         let bone_idx = bone.id as usize;
@@ -61,6 +94,7 @@ pub fn build_bone_line_mesh(
 fn compute_display_transforms(
     skeleton: &Skeleton,
     global_transforms: &[Matrix4<f32>],
+    bone_local_offsets: &[[f32; 3]],
 ) -> Vec<[f32; 3]> {
     let inv_root = skeleton
         .root_transform
@@ -71,24 +105,20 @@ fn compute_display_transforms(
         .bones
         .iter()
         .enumerate()
-        .map(|(idx, bone)| {
+        .map(|(idx, _bone)| {
             if idx >= global_transforms.len() {
                 return [0.0, 0.0, 0.0];
             }
 
-            let has_ibp = bone.inverse_bind_pose != Matrix4::identity();
+            let offset = if idx < bone_local_offsets.len() {
+                bone_local_offsets[idx]
+            } else {
+                [0.0, 0.0, 0.0]
+            };
 
-            if has_ibp {
-                if let Some(bind_global) = bone.inverse_bind_pose.invert() {
-                    let bind_world_pos =
-                        bind_global * Vector4::new(0.0, 0.0, 0.0, 1.0);
-                    let display_pos = inv_root * bind_world_pos;
-                    return [display_pos.x, display_pos.y, display_pos.z];
-                }
-            }
-
-            let display_pos =
-                inv_root * global_transforms[idx] * Vector4::new(0.0, 0.0, 0.0, 1.0);
+            let animated_world_pos = global_transforms[idx]
+                * Vector4::new(offset[0], offset[1], offset[2], 1.0);
+            let display_pos = inv_root * animated_world_pos;
             [display_pos.x, display_pos.y, display_pos.z]
         })
         .collect()

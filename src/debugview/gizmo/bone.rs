@@ -10,6 +10,7 @@ pub struct BoneGizmoData {
     pub visible: bool,
     pub cached_global_transforms: Vec<Matrix4<f32>>,
     pub cached_skeleton_id: Option<SkeletonId>,
+    pub bone_local_offsets: Vec<[f32; 3]>,
 }
 
 impl Default for BoneGizmoData {
@@ -20,6 +21,7 @@ impl Default for BoneGizmoData {
             visible: false,
             cached_global_transforms: Vec::new(),
             cached_skeleton_id: None,
+            bone_local_offsets: Vec::new(),
         }
     }
 }

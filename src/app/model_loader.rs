@@ -872,16 +872,20 @@ fn initialize_bone_gizmo_visibility(
             bone_gizmo.cached_skeleton_id = Some(skel_asset.skeleton_id);
 
             let skeleton = &skel_asset.skeleton;
-            let globals = crate::ecs::compute_pose_global_transforms(
+            let rest_globals = crate::ecs::compute_pose_global_transforms(
                 skeleton,
                 &crate::ecs::create_pose_from_rest(skeleton),
             );
-            bone_gizmo.cached_global_transforms = globals;
+
+            bone_gizmo.bone_local_offsets =
+                crate::ecs::compute_bone_local_offsets(skeleton, &rest_globals);
+            bone_gizmo.cached_global_transforms = rest_globals;
         }
     } else {
         bone_gizmo.visible = false;
         bone_gizmo.cached_skeleton_id = None;
         bone_gizmo.cached_global_transforms.clear();
+        bone_gizmo.bone_local_offsets.clear();
     }
 }
 

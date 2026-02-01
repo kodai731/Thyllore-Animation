@@ -146,12 +146,13 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
         return Ok(());
     }
 
-    let (visible, skeleton_id, transforms) = {
+    let (visible, skeleton_id, transforms, offsets) = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
         (
             bone_gizmo.visible,
             bone_gizmo.cached_skeleton_id,
             bone_gizmo.cached_global_transforms.clone(),
+            bone_gizmo.bone_local_offsets.clone(),
         )
     };
 
@@ -170,7 +171,7 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
 
     {
         let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
-        build_bone_line_mesh(&skeleton, &transforms, &mut bone_gizmo.mesh);
+        build_bone_line_mesh(&skeleton, &transforms, &offsets, &mut bone_gizmo.mesh);
     }
 
     let mut mesh_clone = {

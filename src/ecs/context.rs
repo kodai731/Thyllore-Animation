@@ -2,7 +2,9 @@ use cgmath::Vector3;
 
 use crate::app::GUIData;
 use crate::asset::AssetStorage;
-use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
+use crate::debugview::gizmo::{
+    BoneSelectionState, GridGizmoData, LightGizmoData,
+};
 use crate::debugview::RayTracingDebugState;
 use crate::app::billboard::BillboardData;
 use crate::ecs::component::{LineMesh, MeshScale};
@@ -92,5 +94,13 @@ impl<'a> EcsContext<'a> {
 
     pub fn billboard_mut(&self) -> ResMut<BillboardData> {
         self.world.resource_mut::<BillboardData>()
+    }
+
+    pub fn bone_selection(&self) -> ResRef<BoneSelectionState> {
+        self.world.resource::<BoneSelectionState>()
+    }
+
+    pub fn bone_selection_mut(&self) -> ResMut<BoneSelectionState> {
+        self.world.resource_mut::<BoneSelectionState>()
     }
 }

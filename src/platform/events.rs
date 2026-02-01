@@ -28,12 +28,17 @@ use crate::scene::camera::Camera;
 
 fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
     gui_data.is_left_clicked = false;
+    gui_data.is_right_clicked = false;
     gui_data.is_wheel_clicked = false;
 
-    let allow_input = !gui_data.imgui_wants_mouse || gui_data.viewport_hovered;
+    let allow_input =
+        !gui_data.imgui_wants_mouse || gui_data.viewport_hovered;
     if allow_input {
         if ui.is_mouse_down(MouseButton::Left) {
             gui_data.is_left_clicked = true;
+        }
+        if ui.is_mouse_down(MouseButton::Right) {
+            gui_data.is_right_clicked = true;
         }
         if ui.is_mouse_down(MouseButton::Middle) {
             gui_data.is_wheel_clicked = true;
@@ -42,6 +47,7 @@ fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
 
     let io = ui.io();
     gui_data.is_ctrl_pressed = io.key_ctrl;
+    gui_data.is_shift_pressed = io.key_shift;
 }
 
 impl System {

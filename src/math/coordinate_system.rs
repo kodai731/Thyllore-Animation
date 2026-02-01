@@ -227,6 +227,46 @@ pub fn world_to_screen(
     Some(Vector2::new(screen_x, screen_y))
 }
 
+pub fn ray_to_triangle_intersection(
+    ray_origin: Vector3<f32>,
+    ray_direction: Vector3<f32>,
+    v0: Vector3<f32>,
+    v1: Vector3<f32>,
+    v2: Vector3<f32>,
+) -> Option<f32> {
+    let edge1 = v1 - v0;
+    let edge2 = v2 - v0;
+    let h = ray_direction.cross(edge2);
+    let a = edge1.dot(h);
+
+    if a.abs() < EPSILON {
+        return None;
+    }
+
+    let f = 1.0 / a;
+    let s = ray_origin - v0;
+    let u = f * s.dot(h);
+
+    if !(0.0..=1.0).contains(&u) {
+        return None;
+    }
+
+    let q = s.cross(edge1);
+    let v = f * ray_direction.dot(q);
+
+    if v < 0.0 || u + v > 1.0 {
+        return None;
+    }
+
+    let t = f * edge2.dot(q);
+
+    if t < EPSILON {
+        return None;
+    }
+
+    Some(t)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -285,5 +325,48 @@ mod tests {
         assert_eq!(m.y.z, 1.0);
         assert_eq!(m.z.y, 1.0);
         assert_eq!(m.w.w, 1.0);
+    }
+
+    #[test]
+    fn test_ray_triangle_intersection_hit() {
+        let origin = vec3(0.0, 0.0, -1.0);
+        let direction = vec3(0.0, 0.0, 1.0);
+        let v0 = vec3(-1.0, -1.0, 0.0);
+        let v1 = vec3(1.0, -1.0, 0.0);
+        let v2 = vec3(0.0, 1.0, 0.0);
+
+        let result = ray_to_triangle_intersection(
+            origin, direction, v0, v1, v2,
+        );
+        assert!(result.is_some());
+        assert!((result.unwrap() - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_ray_triangle_intersection_parallel() {
+        let origin = vec3(0.0, 0.0, -1.0);
+        let direction = vec3(1.0, 0.0, 0.0);
+        let v0 = vec3(-1.0, -1.0, 0.0);
+        let v1 = vec3(1.0, -1.0, 0.0);
+        let v2 = vec3(0.0, 1.0, 0.0);
+
+        let result = ray_to_triangle_intersection(
+            origin, direction, v0, v1, v2,
+        );
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_ray_triangle_intersection_behind() {
+        let origin = vec3(0.0, 0.0, 1.0);
+        let direction = vec3(0.0, 0.0, 1.0);
+        let v0 = vec3(-1.0, -1.0, 0.0);
+        let v1 = vec3(1.0, -1.0, 0.0);
+        let v2 = vec3(0.0, 1.0, 0.0);
+
+        let result = ray_to_triangle_intersection(
+            origin, direction, v0, v1, v2,
+        );
+        assert!(result.is_none());
     }
 }

@@ -1,9 +1,10 @@
 use anyhow::Result;
-use cgmath::{Matrix4, SquareMatrix, Vector4};
+use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 
 use crate::animation::Skeleton;
-use crate::debugview::gizmo::BoneGizmoData;
+use crate::debugview::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::ecs::component::{ColorVertex, LineMesh};
+use crate::math::ray_to_triangle_intersection;
 use crate::render::RenderBackend;
 
 const BONE_LINE_COLOR: [f32; 3] = [0.0, 0.8, 0.0];
@@ -12,6 +13,10 @@ const JOINT_CROSS_SIZE: f32 = 0.02;
 
 const BONE_SOLID_COLOR: [f32; 3] = [0.2, 0.45, 0.7];
 const BONE_WIRE_COLOR: [f32; 3] = [0.05, 0.15, 0.35];
+const BONE_SELECTED_SOLID_COLOR: [f32; 3] = [0.4, 0.7, 1.0];
+const BONE_SELECTED_WIRE_COLOR: [f32; 3] = [0.1, 0.3, 0.55];
+const BONE_ACTIVE_SOLID_COLOR: [f32; 3] = [1.0, 0.6, 0.2];
+const BONE_ACTIVE_WIRE_COLOR: [f32; 3] = [0.5, 0.3, 0.1];
 const OCTA_WIDTH_RATIO: f32 = 0.1;
 const OCTA_DEPTH_RATIO: f32 = 0.1;
 
@@ -103,6 +108,25 @@ pub fn build_octahedral_bone_meshes(
     solid_mesh: &mut LineMesh,
     wire_mesh: &mut LineMesh,
 ) {
+    let default_selection = BoneSelectionState::default();
+    build_octahedral_bone_meshes_with_selection(
+        skeleton,
+        global_transforms,
+        bone_local_offsets,
+        &default_selection,
+        solid_mesh,
+        wire_mesh,
+    );
+}
+
+pub fn build_octahedral_bone_meshes_with_selection(
+    skeleton: &Skeleton,
+    global_transforms: &[Matrix4<f32>],
+    bone_local_offsets: &[[f32; 3]],
+    selection: &BoneSelectionState,
+    solid_mesh: &mut LineMesh,
+    wire_mesh: &mut LineMesh,
+) {
     solid_mesh.vertices.clear();
     solid_mesh.indices.clear();
     wire_mesh.vertices.clear();
@@ -112,8 +136,11 @@ pub fn build_octahedral_bone_meshes(
         return;
     }
 
-    let display_transforms =
-        compute_display_transforms(skeleton, global_transforms, bone_local_offsets);
+    let display_transforms = compute_display_transforms(
+        skeleton,
+        global_transforms,
+        bone_local_offsets,
+    );
 
     for bone in &skeleton.bones {
         let bone_idx = bone.id as usize;
@@ -132,7 +159,9 @@ pub fn build_octahedral_bone_meshes(
         let head = display_transforms[parent_idx];
         let tail = display_transforms[bone_idx];
 
-        let Some((bone_length, bone_dir, right, forward)) = compute_bone_axes(head, tail) else {
+        let Some((bone_length, bone_dir, right, forward)) =
+            compute_bone_axes(head, tail)
+        else {
             continue;
         };
 
@@ -147,25 +176,73 @@ pub fn build_octahedral_bone_meshes(
 
         let verts: [[f32; 3]; 6] = [
             head,
-            [mid[0] + right[0] * w, mid[1] + right[1] * w, mid[2] + right[2] * w],
-            [mid[0] + forward[0] * w, mid[1] + forward[1] * w, mid[2] + forward[2] * w],
-            [mid[0] - right[0] * w, mid[1] - right[1] * w, mid[2] - right[2] * w],
-            [mid[0] - forward[0] * w, mid[1] - forward[1] * w, mid[2] - forward[2] * w],
+            [
+                mid[0] + right[0] * w,
+                mid[1] + right[1] * w,
+                mid[2] + right[2] * w,
+            ],
+            [
+                mid[0] + forward[0] * w,
+                mid[1] + forward[1] * w,
+                mid[2] + forward[2] * w,
+            ],
+            [
+                mid[0] - right[0] * w,
+                mid[1] - right[1] * w,
+                mid[2] - right[2] * w,
+            ],
+            [
+                mid[0] - forward[0] * w,
+                mid[1] - forward[1] * w,
+                mid[2] - forward[2] * w,
+            ],
             tail,
         ];
 
-        append_octahedral_solid(solid_mesh, &verts);
-        append_octahedral_wire(wire_mesh, &verts);
+        let (solid_color, wire_color) =
+            resolve_bone_colors(bone_idx, selection);
+        append_octahedral_solid_colored(
+            solid_mesh,
+            &verts,
+            solid_color,
+        );
+        append_octahedral_wire_colored(
+            wire_mesh,
+            &verts,
+            wire_color,
+        );
     }
 }
 
-fn append_octahedral_solid(mesh: &mut LineMesh, verts: &[[f32; 3]; 6]) {
+fn resolve_bone_colors(
+    bone_index: usize,
+    selection: &BoneSelectionState,
+) -> ([f32; 3], [f32; 3]) {
+    if selection.active_bone_index == Some(bone_index) {
+        return (BONE_ACTIVE_SOLID_COLOR, BONE_ACTIVE_WIRE_COLOR);
+    }
+
+    if selection.selected_bone_indices.contains(&bone_index) {
+        return (
+            BONE_SELECTED_SOLID_COLOR,
+            BONE_SELECTED_WIRE_COLOR,
+        );
+    }
+
+    (BONE_SOLID_COLOR, BONE_WIRE_COLOR)
+}
+
+fn append_octahedral_solid_colored(
+    mesh: &mut LineMesh,
+    verts: &[[f32; 3]; 6],
+    color: [f32; 3],
+) {
     let base = mesh.vertices.len() as u32;
 
     for v in verts {
         mesh.vertices.push(ColorVertex {
             pos: *v,
-            color: BONE_SOLID_COLOR,
+            color,
         });
     }
 
@@ -187,13 +264,17 @@ fn append_octahedral_solid(mesh: &mut LineMesh, verts: &[[f32; 3]; 6]) {
     }
 }
 
-fn append_octahedral_wire(mesh: &mut LineMesh, verts: &[[f32; 3]; 6]) {
+fn append_octahedral_wire_colored(
+    mesh: &mut LineMesh,
+    verts: &[[f32; 3]; 6],
+    color: [f32; 3],
+) {
     let base = mesh.vertices.len() as u32;
 
     for v in verts {
         mesh.vertices.push(ColorVertex {
             pos: *v,
-            color: BONE_WIRE_COLOR,
+            color,
         });
     }
 
@@ -312,6 +393,137 @@ fn append_joint_cross_marker(mesh: &mut LineMesh, pos: [f32; 3]) {
         mesh.indices.push(base);
         mesh.indices.push(base + 1);
     }
+}
+
+const OCTAHEDRAL_TRIANGLES: [[usize; 3]; 8] = [
+    [0, 1, 2],
+    [0, 2, 3],
+    [0, 3, 4],
+    [0, 4, 1],
+    [5, 2, 1],
+    [5, 3, 2],
+    [5, 4, 3],
+    [5, 1, 4],
+];
+
+pub fn compute_octahedral_vertices_per_bone(
+    skeleton: &Skeleton,
+    global_transforms: &[Matrix4<f32>],
+    bone_local_offsets: &[[f32; 3]],
+) -> Vec<(usize, [[f32; 3]; 6])> {
+    if global_transforms.is_empty() {
+        return Vec::new();
+    }
+
+    let display_transforms = compute_display_transforms(
+        skeleton,
+        global_transforms,
+        bone_local_offsets,
+    );
+
+    let mut result = Vec::new();
+
+    for bone in &skeleton.bones {
+        let bone_idx = bone.id as usize;
+        if bone_idx >= display_transforms.len() {
+            continue;
+        }
+
+        let Some(parent_id) = bone.parent_id else {
+            continue;
+        };
+        let parent_idx = parent_id as usize;
+        if parent_idx >= display_transforms.len() {
+            continue;
+        }
+
+        let head = display_transforms[parent_idx];
+        let tail = display_transforms[bone_idx];
+
+        let Some((bone_length, bone_dir, right, forward)) =
+            compute_bone_axes(head, tail)
+        else {
+            continue;
+        };
+
+        let w = bone_length * OCTA_WIDTH_RATIO;
+        let d = bone_length * OCTA_DEPTH_RATIO;
+
+        let mid = [
+            head[0] + bone_dir[0] * d,
+            head[1] + bone_dir[1] * d,
+            head[2] + bone_dir[2] * d,
+        ];
+
+        let verts: [[f32; 3]; 6] = [
+            head,
+            [
+                mid[0] + right[0] * w,
+                mid[1] + right[1] * w,
+                mid[2] + right[2] * w,
+            ],
+            [
+                mid[0] + forward[0] * w,
+                mid[1] + forward[1] * w,
+                mid[2] + forward[2] * w,
+            ],
+            [
+                mid[0] - right[0] * w,
+                mid[1] - right[1] * w,
+                mid[2] - right[2] * w,
+            ],
+            [
+                mid[0] - forward[0] * w,
+                mid[1] - forward[1] * w,
+                mid[2] - forward[2] * w,
+            ],
+            tail,
+        ];
+
+        result.push((bone_idx, verts));
+    }
+
+    result
+}
+
+pub fn select_bone_by_ray(
+    ray_origin: Vector3<f32>,
+    ray_direction: Vector3<f32>,
+    skeleton: &Skeleton,
+    global_transforms: &[Matrix4<f32>],
+    bone_local_offsets: &[[f32; 3]],
+) -> Option<(usize, f32)> {
+    let bone_verts = compute_octahedral_vertices_per_bone(
+        skeleton,
+        global_transforms,
+        bone_local_offsets,
+    );
+
+    let mut closest: Option<(usize, f32)> = None;
+
+    for (bone_idx, verts) in &bone_verts {
+        for tri_indices in &OCTAHEDRAL_TRIANGLES {
+            let v0 = verts[tri_indices[0]];
+            let v1 = verts[tri_indices[1]];
+            let v2 = verts[tri_indices[2]];
+
+            if let Some(t) = ray_to_triangle_intersection(
+                ray_origin,
+                ray_direction,
+                Vector3::new(v0[0], v0[1], v0[2]),
+                Vector3::new(v1[0], v1[1], v1[2]),
+                Vector3::new(v2[0], v2[1], v2[2]),
+            ) {
+                let is_closer = closest
+                    .map_or(true, |(_, prev_t)| t < prev_t);
+                if is_closer {
+                    closest = Some((*bone_idx, t));
+                }
+            }
+        }
+    }
+
+    closest
 }
 
 pub unsafe fn update_bone_gizmo_buffers(

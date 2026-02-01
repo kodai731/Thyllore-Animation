@@ -337,6 +337,9 @@ impl App {
             bone_gizmo_data.wire_render_info.object_index
         );
         data.ecs_world.insert_resource(bone_gizmo_data);
+        data.ecs_world.insert_resource(
+            crate::debugview::gizmo::BoneSelectionState::default(),
+        );
 
         let mut billboard_data = create_billboard();
         billboard_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();

@@ -16,10 +16,14 @@ pub fn create_camera(position: Vector3<f32>, target: Vector3<f32>) -> Camera {
     }
 }
 
-pub fn camera_input_system(camera: &mut Camera, gui_data: &GUIData, grid_scale: f32) {
+pub fn camera_input_system(
+    camera: &mut Camera,
+    gui_data: &GUIData,
+    grid_scale: f32,
+) {
     camera_input_system_inner(
         camera,
-        gui_data.is_left_clicked,
+        gui_data.is_right_clicked,
         gui_data.is_wheel_clicked,
         gui_data.mouse_wheel,
         gui_data.mouse_diff,
@@ -29,7 +33,7 @@ pub fn camera_input_system(camera: &mut Camera, gui_data: &GUIData, grid_scale: 
 
 pub fn camera_input_system_inner(
     camera: &mut Camera,
-    is_left_clicked: bool,
+    is_right_clicked: bool,
     is_wheel_clicked: bool,
     mouse_wheel: f32,
     mouse_diff: [f32; 2],
@@ -37,7 +41,7 @@ pub fn camera_input_system_inner(
 ) {
     let diff = Vector2::new(mouse_diff[0], mouse_diff[1]);
 
-    if is_left_clicked && diff.magnitude() > 0.001 {
+    if is_right_clicked && diff.magnitude() > 0.001 {
         camera_rotate(camera, diff);
     } else if is_wheel_clicked && diff.magnitude() > 0.001 {
         let base_x = camera_right(camera);

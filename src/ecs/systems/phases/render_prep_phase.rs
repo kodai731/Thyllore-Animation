@@ -8,9 +8,10 @@ use crate::ecs::systems::render_data_systems::{
     grid_mesh_render_data,
 };
 use crate::ecs::component::LineMesh;
+use crate::debugview::gizmo::BoneSelectionState;
 use crate::ecs::{
-    build_bone_line_mesh, build_octahedral_bone_meshes, gizmo_update_rotation,
-    gizmo_update_vertex_buffer, ProjectionData,
+    build_bone_line_mesh, build_octahedral_bone_meshes_with_selection,
+    gizmo_update_rotation, gizmo_update_vertex_buffer, ProjectionData,
 };
 use crate::math::get_camera_axes_from_view;
 use crate::render::RenderBackend;
@@ -219,12 +220,19 @@ unsafe fn update_octahedral_bone_mesh(
     transforms: &[Matrix4<f32>],
     offsets: &[[f32; 3]],
 ) -> Result<()> {
+    let selection = ctx
+        .world
+        .get_resource::<BoneSelectionState>()
+        .map(|s| (*s).clone())
+        .unwrap_or_default();
+
     let mut solid_mesh = LineMesh::default();
     let mut wire_mesh = LineMesh::default();
-    build_octahedral_bone_meshes(
+    build_octahedral_bone_meshes_with_selection(
         skeleton,
         transforms,
         offsets,
+        &selection,
         &mut solid_mesh,
         &mut wire_mesh,
     );

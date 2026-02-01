@@ -106,6 +106,48 @@ The hybrid approach handles this by falling back to `global_transforms` when IBP
 | `src/app/model_loader.rs` | Compute and cache offsets in `initialize_bone_gizmo_visibility` |
 | `src/ecs/systems/phases/render_prep_phase.rs` | Pass offsets to `build_bone_line_mesh` |
 
+## Phase 3: Bone Selection and Color Highlight (2026-02-02)
+
+### Implementation
+
+CPU raycast-based bone selection with octahedral bone triangle hit testing and color highlight.
+
+### Architecture Decisions
+- **CPU raycasting**: Sufficient accuracy for bone picking without G-Buffer Object ID integration
+- **BoneSelectionState separated from BoneGizmoData**: Keeps rendering data and selection state decoupled
+- **Shift+click multi-select**: Uses `gui_data.is_shift_pressed` from imgui io
+- **Octahedral mode only**: Stick mode selection deferred
+
+### Key Components
+- `ray_to_triangle_intersection()` in `math/coordinate_system.rs` — Moller-Trumbore algorithm
+- `BoneSelectionState` in `debugview/gizmo/bone_selection.rs` — HashSet<usize> + active_bone_index
+- `compute_octahedral_vertices_per_bone()` — Shared vertex computation for hit test and rendering
+- `select_bone_by_ray()` — Tests all octahedral triangles, returns closest hit
+- `process_bone_selection()` in input_phase — Handles click detection, shift-toggle, selection clear
+- `build_octahedral_bone_meshes_with_selection()` — Per-bone color based on selection state
+
+### Color Scheme
+| State | Solid Color | Wire Color |
+|-------|-------------|------------|
+| Normal | [0.2, 0.45, 0.7] | [0.05, 0.15, 0.35] |
+| Selected | [0.4, 0.7, 1.0] | [0.1, 0.3, 0.55] |
+| Active | [1.0, 0.6, 0.2] | [0.5, 0.3, 0.1] |
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `src/math/coordinate_system.rs` | Added `ray_to_triangle_intersection()` + tests |
+| `src/math/mod.rs` | Exported new function |
+| `src/debugview/gizmo/bone_selection.rs` | **New** — `BoneSelectionState` resource |
+| `src/debugview/gizmo/mod.rs` | Added module export |
+| `src/app/gui_data.rs` | Added `is_shift_pressed` field |
+| `src/platform/events.rs` | Added `io.key_shift` capture |
+| `src/app/init/instance.rs` | Added `BoneSelectionState::default()` initialization |
+| `src/ecs/systems/bone_gizmo_systems.rs` | Selection colors, vertex computation, ray selection |
+| `src/ecs/systems/phases/input_phase.rs` | Added `process_bone_selection()` |
+| `src/ecs/context.rs` | Added `bone_selection()` / `bone_selection_mut()` accessors |
+| `src/ecs/systems/phases/render_prep_phase.rs` | Uses selection state for mesh building |
+
 ## Debugging Tips
 
 When bone positions are wrong, check these in order:

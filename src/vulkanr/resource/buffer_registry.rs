@@ -220,6 +220,28 @@ impl GpuBufferRegistry {
         Ok(())
     }
 
+    pub fn get_vertex_buffer_size(&self, handle: VertexBufferHandle) -> u64 {
+        if !handle.is_valid() {
+            return 0;
+        }
+        self.vertex_buffers
+            .get(handle.index())
+            .and_then(|opt| opt.as_ref())
+            .map(|buf| buf.size)
+            .unwrap_or(0)
+    }
+
+    pub fn get_index_buffer_size(&self, handle: IndexBufferHandle) -> u64 {
+        if !handle.is_valid() {
+            return 0;
+        }
+        self.index_buffers
+            .get(handle.index())
+            .and_then(|opt| opt.as_ref())
+            .map(|buf| buf.size)
+            .unwrap_or(0)
+    }
+
     pub fn get_vertex_buffer(&self, handle: VertexBufferHandle) -> Option<vk::Buffer> {
         if !handle.is_valid() {
             return None;

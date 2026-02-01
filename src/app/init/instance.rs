@@ -1,5 +1,6 @@
 use crate::app::{App, AppData};
 
+use crate::debugview::gizmo::BoneGizmoData;
 use crate::debugview::GridMeshData;
 use crate::ecs::component::{MeshScale, RenderInfo};
 use crate::ecs::systems::{
@@ -273,6 +274,16 @@ impl App {
             gizmo_create_buffers(&mut light_gizmo_data.mesh, &mut backend, false)
                 .expect("Failed to create light gizmo buffers");
         }
+
+        let mut bone_gizmo_data = BoneGizmoData::default();
+        bone_gizmo_data.render_info.pipeline_id = Some(gizmo_pipeline_id);
+        bone_gizmo_data.render_info.object_index =
+            data.graphics_resources.objects.allocate_slot();
+        crate::log!(
+            "Allocated object_index {} for BoneGizmo",
+            bone_gizmo_data.render_info.object_index
+        );
+        data.ecs_world.insert_resource(bone_gizmo_data);
 
         let mut billboard_data = create_billboard();
         billboard_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();

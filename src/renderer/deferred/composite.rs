@@ -3,6 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
 use crate::debugview::DebugViewMode;
+use crate::debugview::gizmo::BoneGizmoData;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::ecs::component::LineMesh;
 use crate::vulkanr::core::Device;
@@ -113,6 +114,7 @@ impl<'a> CompositePass<'a> {
             }
         }
 
+        self.draw_bone_gizmo(command_buffer, image_index);
         self.draw_billboard(command_buffer, image_index)?;
 
         Ok(())
@@ -153,6 +155,7 @@ impl<'a> CompositePass<'a> {
             }
         }
 
+        self.draw_bone_gizmo(command_buffer, image_index);
         self.draw_billboard(command_buffer, image_index)?;
         self.device.cmd_end_render_pass(command_buffer);
 
@@ -489,6 +492,38 @@ impl<'a> CompositePass<'a> {
 
         self.device
             .cmd_draw_indexed(command_buffer, mesh.indices.len() as u32, 1, 0, 0, 0);
+    }
+
+    unsafe fn draw_bone_gizmo(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+    ) {
+        let bone_gizmo = match self.app.get_resource::<BoneGizmoData>() {
+            Some(bg) => bg,
+            None => return,
+        };
+
+        if !bone_gizmo.visible || bone_gizmo.mesh.indices.is_empty() {
+            return;
+        }
+
+        let pipeline_id = match bone_gizmo.render_info.pipeline_id {
+            Some(id) => id,
+            None => return,
+        };
+        let pipeline = match self.pipeline_storage().get(pipeline_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        self.draw_line_mesh(
+            &bone_gizmo.mesh,
+            pipeline,
+            bone_gizmo.render_info.object_index,
+            command_buffer,
+            image_index,
+        );
     }
 
     unsafe fn draw_billboard(

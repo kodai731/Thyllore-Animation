@@ -8,6 +8,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::AppData;
 use crate::asset::{AnimationClipAsset, AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
+use crate::debugview::gizmo::BoneGizmoData;
 use crate::ecs::resource::{
     AnimationType, ClipLibrary, MeshAssets, ModelState,
     NodeAssets, TimelineState,
@@ -134,6 +135,8 @@ unsafe fn apply_model_to_resources(
         node_animation_scale,
     );
 
+    initialize_bone_gizmo_visibility(world, assets, graphics);
+
     Ok(())
 }
 
@@ -156,7 +159,7 @@ unsafe fn cleanup_resources(
     graphics.clear_meshes(device);
     graphics.mesh_material_ids.clear();
     graphics.materials.clear_materials(&device.device);
-    graphics.objects.reset_to(3);
+    graphics.objects.reset_to(4);
 
     if world.contains_resource::<ClipLibrary>() {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
@@ -393,7 +396,7 @@ unsafe fn apply_initial_pose(
     if !load_result.animation_system.clips.is_empty() {
         if world.contains_resource::<TimelineState>() {
             let mut timeline = world.resource_mut::<TimelineState>();
-            timeline.playing = true;
+            timeline.playing = false;
             timeline.current_time = 0.0;
         }
     }
@@ -847,6 +850,39 @@ fn create_ecs_entities(
         assets.animation_clips.len(),
         assets.nodes.len()
     );
+}
+
+fn initialize_bone_gizmo_visibility(
+    world: &mut World,
+    assets: &AssetStorage,
+    graphics: &GraphicsResources,
+) {
+    if !world.contains_resource::<BoneGizmoData>() {
+        return;
+    }
+
+    let has_skeleton = !assets.skeletons.is_empty();
+    let mut bone_gizmo = world.resource_mut::<BoneGizmoData>();
+
+    if has_skeleton {
+        bone_gizmo.visible = true;
+
+        let first_skeleton = assets.skeletons.values().next();
+        if let Some(skel_asset) = first_skeleton {
+            bone_gizmo.cached_skeleton_id = Some(skel_asset.skeleton_id);
+
+            let skeleton = &skel_asset.skeleton;
+            let globals = crate::ecs::compute_pose_global_transforms(
+                skeleton,
+                &crate::ecs::create_pose_from_rest(skeleton),
+            );
+            bone_gizmo.cached_global_transforms = globals;
+        }
+    } else {
+        bone_gizmo.visible = false;
+        bone_gizmo.cached_skeleton_id = None;
+        bone_gizmo.cached_global_transforms.clear();
+    }
 }
 
 fn build_initial_clip_schedule(

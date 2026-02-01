@@ -1,4 +1,5 @@
 use anyhow::Result;
+use cgmath::Matrix4;
 
 use crate::animation::editable::{BlendMode, ClipInstanceId, EaseType, SourceClipId};
 use crate::animation::{AnimationClipId, MorphAnimationSystem, SkeletonId, SkeletonPose};
@@ -14,6 +15,11 @@ use crate::ecs::{
 use crate::render::RenderBackend;
 
 use super::pose_blend_systems::blend_poses_additive;
+
+pub struct AnimationEvalResult {
+    pub updated_meshes: Vec<usize>,
+    pub bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>)>,
+}
 
 struct ActiveInstanceInfo {
     source_id: SourceClipId,
@@ -42,7 +48,7 @@ pub fn evaluate_all_animators(
     nodes: &mut [NodeData],
     clip_library: &ClipLibrary,
     assets: &AssetStorage,
-) -> Vec<usize> {
+) -> AnimationEvalResult {
     let entity_infos =
         collect_animated_entities(world, graphics, clip_library, assets);
 
@@ -63,13 +69,19 @@ pub fn evaluate_all_animators(
     };
 
     if entity_infos.is_empty() {
-        return morph_updated;
+        return AnimationEvalResult {
+            updated_meshes: morph_updated,
+            bone_transforms: None,
+        };
     }
 
-    let anim_updated =
+    let (anim_updated, bone_transforms) =
         apply_blended_animations(&entity_infos, graphics, nodes, assets);
 
-    merge_updated_indices(morph_updated, anim_updated)
+    AnimationEvalResult {
+        updated_meshes: merge_updated_indices(morph_updated, anim_updated),
+        bone_transforms,
+    }
 }
 
 fn collect_animated_entities(
@@ -285,8 +297,10 @@ fn apply_blended_animations(
     graphics: &mut GraphicsResources,
     nodes: &mut [NodeData],
     assets: &AssetStorage,
-) -> Vec<usize> {
+) -> (Vec<usize>, Option<(SkeletonId, Vec<Matrix4<f32>>)>) {
     let mut updated = Vec::new();
+    let mut first_bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>)> =
+        None;
 
     for info in entities {
         let Some(pose) = evaluate_entity_blend(info, assets) else {
@@ -306,6 +320,11 @@ fn apply_blended_animations(
         }
 
         let globals = compute_pose_global_transforms(skeleton, &pose);
+
+        if first_bone_transforms.is_none() {
+            first_bone_transforms =
+                Some((info.skeleton_id, globals.clone()));
+        }
 
         let mesh_updated = match info.animation_type {
             AnimationType::Node => {
@@ -327,7 +346,7 @@ fn apply_blended_animations(
         }
     }
 
-    updated
+    (updated, first_bone_transforms)
 }
 
 fn merge_updated_indices(

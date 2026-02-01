@@ -2,10 +2,15 @@ use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix, Vector3};
 
 use crate::app::FrameContext;
+use crate::debugview::gizmo::BoneGizmoData;
 use crate::ecs::systems::render_data_systems::{
-    gizmo_mesh_render_data, gizmo_selectable_render_data, grid_mesh_render_data,
+    bone_gizmo_render_data, gizmo_mesh_render_data, gizmo_selectable_render_data,
+    grid_mesh_render_data,
 };
-use crate::ecs::{gizmo_update_rotation, gizmo_update_vertex_buffer, ProjectionData};
+use crate::ecs::{
+    build_bone_line_mesh, gizmo_update_rotation, gizmo_update_vertex_buffer,
+    ProjectionData,
+};
 use crate::math::get_camera_axes_from_view;
 use crate::render::RenderBackend;
 use crate::renderer::scene_renderer::update_object_ubo;
@@ -69,11 +74,19 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         )?;
     }
 
-    let render_data_vec = vec![
+    let mut render_data_vec = vec![
         grid_mesh_render_data(&ctx.grid_mesh()),
         gizmo_mesh_render_data(&ctx.gizmo()),
         gizmo_selectable_render_data(&ctx.light_gizmo(), camera_position),
     ];
+
+    if ctx.world.contains_resource::<BoneGizmoData>() {
+        let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
+        if bone_gizmo.visible {
+            render_data_vec.push(bone_gizmo_render_data(&bone_gizmo));
+        }
+    }
+
     let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
     if let Err(e) = update_object_ubo(
@@ -88,6 +101,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     update_billboard_ubo(ctx, view, proj)?;
 
     update_grid_gizmo_buffers(ctx, view)?;
+    update_bone_gizmo_mesh(ctx)?;
 
     Ok(())
 }
@@ -123,6 +137,63 @@ unsafe fn update_grid_gizmo_buffers(ctx: &mut FrameContext, view: Matrix4<f32>) 
     let mesh = ctx.gizmo().mesh.clone();
     let backend = ctx.create_backend();
     gizmo_update_vertex_buffer(&mesh, &backend)?;
+
+    Ok(())
+}
+
+unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
+    if !ctx.world.contains_resource::<BoneGizmoData>() {
+        return Ok(());
+    }
+
+    let (visible, skeleton_id, transforms) = {
+        let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
+        (
+            bone_gizmo.visible,
+            bone_gizmo.cached_skeleton_id,
+            bone_gizmo.cached_global_transforms.clone(),
+        )
+    };
+
+    if !visible {
+        return Ok(());
+    }
+
+    let Some(skel_id) = skeleton_id else {
+        return Ok(());
+    };
+
+    let Some(skeleton) =
+        ctx.assets.get_skeleton_by_skeleton_id(skel_id)
+    else {
+        return Ok(());
+    };
+    let skeleton = skeleton.clone();
+
+    {
+        let mut bone_gizmo =
+            ctx.world.resource_mut::<BoneGizmoData>();
+        build_bone_line_mesh(&skeleton, &transforms, &mut bone_gizmo.mesh);
+    }
+
+    let mut mesh_clone = {
+        let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
+        bone_gizmo.mesh.clone()
+    };
+
+    {
+        let mut backend = ctx.create_backend();
+        backend.update_or_create_line_buffers(&mut mesh_clone)?;
+    }
+
+    {
+        let mut bone_gizmo =
+            ctx.world.resource_mut::<BoneGizmoData>();
+        bone_gizmo.mesh.vertex_buffer_handle =
+            mesh_clone.vertex_buffer_handle;
+        bone_gizmo.mesh.index_buffer_handle =
+            mesh_clone.index_buffer_handle;
+    }
 
     Ok(())
 }

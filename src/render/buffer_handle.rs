@@ -1,5 +1,11 @@
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BufferHandle(pub u32);
+
+impl Default for BufferHandle {
+    fn default() -> Self {
+        Self::INVALID
+    }
+}
 
 impl BufferHandle {
     pub const INVALID: BufferHandle = BufferHandle(u32::MAX);

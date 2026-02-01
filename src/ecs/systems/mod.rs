@@ -1,5 +1,6 @@
 mod animation_playback_systems;
 mod billboard_systems;
+mod bone_gizmo_systems;
 mod camera_systems;
 mod ecs_world_systems;
 mod edit_history_systems;
@@ -19,6 +20,7 @@ mod ui_event_systems;
 
 pub use animation_playback_systems::*;
 pub use billboard_systems::*;
+pub use bone_gizmo_systems::*;
 pub use camera_systems::*;
 pub use ecs_world_systems::*;
 pub use edit_history_systems::*;

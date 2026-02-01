@@ -474,8 +474,8 @@ mod buffer_handle_tests {
     fn test_buffer_handle_default() {
         let handle = BufferHandle::default();
 
-        assert_eq!(handle.0, 0);
-        assert!(handle.is_valid());
+        assert_eq!(handle.0, u32::MAX);
+        assert!(!handle.is_valid());
     }
 
     #[test]

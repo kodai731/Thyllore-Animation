@@ -184,7 +184,17 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             return Ok(());
         }
 
-        if !mesh.vertex_buffer_handle.is_valid() {
+        let vertex_data_size =
+            (std::mem::size_of_val(mesh.vertices.as_slice())) as u64;
+
+        if !mesh.vertex_buffer_handle.is_valid()
+            || self.buffer_registry.get_vertex_buffer_size(mesh.vertex_buffer_handle)
+                < vertex_data_size
+        {
+            if mesh.vertex_buffer_handle.is_valid() {
+                self.buffer_registry
+                    .destroy_vertex_buffer(self.device, mesh.vertex_buffer_handle);
+            }
             let vertex_handle = self.buffer_registry.create_host_visible_vertex_buffer(
                 self.instance,
                 self.device,
@@ -200,7 +210,17 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             )?;
         }
 
-        if !mesh.index_buffer_handle.is_valid() {
+        let index_data_size =
+            (std::mem::size_of::<u32>() * mesh.indices.len()) as u64;
+
+        if !mesh.index_buffer_handle.is_valid()
+            || self.buffer_registry.get_index_buffer_size(mesh.index_buffer_handle)
+                < index_data_size
+        {
+            if mesh.index_buffer_handle.is_valid() {
+                self.buffer_registry
+                    .destroy_index_buffer(self.device, mesh.index_buffer_handle);
+            }
             let index_handle = self.buffer_registry.create_host_visible_index_buffer(
                 self.instance,
                 self.device,

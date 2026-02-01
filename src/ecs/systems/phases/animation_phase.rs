@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 use crate::app::FrameContext;
+use crate::debugview::gizmo::BoneGizmoData;
 use crate::ecs::resource::{ClipLibrary, NodeAssets};
 use crate::ecs::{
     evaluate_all_animators, playback_upload_animations,
@@ -12,7 +13,7 @@ pub struct AnimationUpdates {
 }
 
 pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
-    let updated_meshes = {
+    let eval_result = {
         let clip_library = ctx.world.resource::<ClipLibrary>();
         let mut node_assets = ctx.world.resource_mut::<NodeAssets>();
 
@@ -25,9 +26,20 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
         )
     };
 
+    if let Some((skel_id, transforms)) = &eval_result.bone_transforms {
+        if ctx.world.contains_resource::<BoneGizmoData>() {
+            let mut bone_gizmo =
+                ctx.world.resource_mut::<BoneGizmoData>();
+            bone_gizmo.cached_skeleton_id = Some(*skel_id);
+            bone_gizmo.cached_global_transforms = transforms.clone();
+        }
+    }
+
     transform_propagation_system(ctx.world);
 
-    AnimationUpdates { updated_meshes }
+    AnimationUpdates {
+        updated_meshes: eval_result.updated_meshes,
+    }
 }
 
 pub unsafe fn run_animation_phase_gpu(

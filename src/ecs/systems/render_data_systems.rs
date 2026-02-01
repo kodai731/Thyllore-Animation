@@ -1,7 +1,7 @@
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
 use crate::app::billboard::BillboardData;
-use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
+use crate::debugview::gizmo::{BoneGizmoData, GridGizmoData, LightGizmoData};
 use crate::debugview::GridMeshData;
 use crate::ecs::component::GpuMeshRef;
 use crate::ecs::RenderData;
@@ -55,6 +55,15 @@ pub fn billboard_render_data(billboard: &BillboardData) -> RenderData {
         billboard.mesh.indices.len() as u32,
     );
     RenderData::new(mesh_ref, billboard.render_info).with_model_matrix(model_matrix)
+}
+
+pub fn bone_gizmo_render_data(bone_gizmo: &BoneGizmoData) -> RenderData {
+    let mesh_ref = GpuMeshRef::new(
+        bone_gizmo.mesh.vertex_buffer_handle,
+        bone_gizmo.mesh.index_buffer_handle,
+        bone_gizmo.mesh.indices.len() as u32,
+    );
+    RenderData::new(mesh_ref, bone_gizmo.render_info)
 }
 
 pub fn collect_scene_render_data(

@@ -18,3 +18,6 @@ pub struct Skinned;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Model;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Constrained;

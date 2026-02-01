@@ -121,6 +121,18 @@ pub enum UIEvent {
     ClipGroupToggleMute { entity: Entity, group_id: ClipGroupId },
     ClipGroupSetWeight { entity: Entity, group_id: ClipGroupId, weight: f32 },
 
+    Undo,
+    Redo,
+
+    ClipInstanceAdd {
+        entity: Entity,
+        source_id: SourceClipId,
+        start_time: f32,
+    },
+    ClipBrowserCreateEmpty,
+    ClipBrowserDuplicate(SourceClipId),
+    ClipBrowserDelete(SourceClipId),
+
     SaveScene,
 }
 

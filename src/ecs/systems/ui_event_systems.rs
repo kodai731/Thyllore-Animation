@@ -196,6 +196,12 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::ClipGroupRemoveInstance { .. }
             | UIEvent::ClipGroupToggleMute { .. }
             | UIEvent::ClipGroupSetWeight { .. }
+            | UIEvent::Undo
+            | UIEvent::Redo
+            | UIEvent::ClipInstanceAdd { .. }
+            | UIEvent::ClipBrowserCreateEmpty
+            | UIEvent::ClipBrowserDuplicate(_)
+            | UIEvent::ClipBrowserDelete(_)
             | UIEvent::SaveScene => {}
         }
     }

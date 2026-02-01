@@ -1,5 +1,7 @@
+mod clip_browser_state;
 mod clip_library;
 mod curve_editor_buffer;
+mod edit_history;
 mod graphics;
 mod hierarchy_state;
 mod keyframe_copy_buffer;
@@ -7,8 +9,10 @@ mod pipeline_manager;
 mod scene_state;
 mod timeline_state;
 
+pub use clip_browser_state::*;
 pub use clip_library::*;
 pub use curve_editor_buffer::*;
+pub use edit_history::*;
 pub use graphics::*;
 pub use hierarchy_state::*;
 pub use keyframe_copy_buffer::*;

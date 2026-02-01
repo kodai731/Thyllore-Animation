@@ -1,6 +1,8 @@
 use imgui::Condition;
 
-use crate::animation::editable::{BlendMode, EditableAnimationClip, PropertyCurve};
+use crate::animation::editable::{
+    BlendMode, EditableAnimationClip, PropertyCurve, SourceClipId,
+};
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
@@ -772,6 +774,24 @@ fn build_clip_tracks_section(
 
         ui.dummy([timeline_width, CLIP_TRACK_HEIGHT]);
 
+        if let Some(target) = ui.drag_drop_target() {
+            let accepted = target.accept_payload::<SourceClipId, _>(
+                "CLIP_SOURCE",
+                imgui::DragDropFlags::empty(),
+            );
+            if let Some(Ok(payload)) = accepted {
+                let source_id = payload.data;
+                let drop_x = mouse_pos[0] - track_origin[0];
+                let start_time =
+                    (drop_x / pixels_per_second).max(0.0);
+                ui_events.send(UIEvent::ClipInstanceAdd {
+                    entity: entry.entity,
+                    source_id,
+                    start_time,
+                });
+            }
+        }
+
         build_clip_instance_properties(ui, ui_events, state, entry);
     }
 
@@ -1225,6 +1245,14 @@ fn handle_timeline_shortcuts(
     let io = ui.io();
     if !ui.is_window_focused() {
         return;
+    }
+
+    if io.key_ctrl && ui.is_key_pressed(imgui::Key::Z) {
+        ui_events.send(UIEvent::Undo);
+    }
+
+    if io.key_ctrl && ui.is_key_pressed(imgui::Key::Y) {
+        ui_events.send(UIEvent::Redo);
     }
 
     if io.key_ctrl && ui.is_key_pressed(imgui::Key::C) {

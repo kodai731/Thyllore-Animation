@@ -729,6 +729,12 @@ fn create_ecs_entities(
     if !world.contains_resource::<crate::ecs::resource::KeyframeCopyBuffer>() {
         world.insert_resource(crate::ecs::resource::KeyframeCopyBuffer::default());
     }
+    if !world.contains_resource::<crate::ecs::resource::EditHistory>() {
+        world.insert_resource(crate::ecs::resource::EditHistory::new(100));
+    }
+    if !world.contains_resource::<crate::ecs::resource::ClipBrowserState>() {
+        world.insert_resource(crate::ecs::resource::ClipBrowserState::default());
+    }
 
     let mut first_editable_clip_id = None;
     {

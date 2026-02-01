@@ -8,7 +8,9 @@ pub fn timeline_process_events(
     events: &[UIEvent],
     timeline_state: &mut TimelineState,
     clip_library: &mut ClipLibrary,
-) {
+) -> bool {
+    let mut clip_modified = false;
+
     for event in events {
         match event {
             UIEvent::TimelinePlay => {
@@ -79,6 +81,7 @@ pub fn timeline_process_events(
                             *time,
                             *value,
                         );
+                        clip_modified = true;
                     }
                 }
             }
@@ -87,15 +90,18 @@ pub fn timeline_process_events(
                 if let Some(clip_id) = timeline_state.current_clip_id {
                     let selected: Vec<_> =
                         timeline_state.selected_keyframes.iter().cloned().collect();
-                    if let Some(clip) = clip_library.get_mut(clip_id) {
-                        for sel in &selected {
-                            if let Some(track) =
-                                clip.tracks.get_mut(&sel.bone_id)
-                            {
-                                track
-                                    .get_curve_mut(sel.property_type)
-                                    .remove_keyframe(sel.keyframe_id);
+                    if !selected.is_empty() {
+                        if let Some(clip) = clip_library.get_mut(clip_id) {
+                            for sel in &selected {
+                                if let Some(track) =
+                                    clip.tracks.get_mut(&sel.bone_id)
+                                {
+                                    track
+                                        .get_curve_mut(sel.property_type)
+                                        .remove_keyframe(sel.keyframe_id);
+                                }
                             }
+                            clip_modified = true;
                         }
                     }
                     timeline_state.clear_selection();
@@ -113,6 +119,7 @@ pub fn timeline_process_events(
                     if let Some(clip) = clip_library.get_mut(clip_id) {
                         if let Some(track) = clip.tracks.get_mut(bone_id) {
                             track.move_keyframe(*property_type, *keyframe_id, *new_time, *new_value);
+                            clip_modified = true;
                         }
                     }
                 }
@@ -158,6 +165,7 @@ pub fn timeline_process_events(
                             track
                                 .get_curve_mut(*property_type)
                                 .set_keyframe_interpolation(*keyframe_id, *interpolation);
+                            clip_modified = true;
                         }
                     }
                 }
@@ -178,6 +186,7 @@ pub fn timeline_process_events(
                                 in_tangent.clone(),
                                 out_tangent.clone(),
                             );
+                            clip_modified = true;
                         }
                     }
                 }
@@ -194,6 +203,7 @@ pub fn timeline_process_events(
                             track
                                 .get_curve_mut(*property_type)
                                 .recalculate_auto_tangent_at(*keyframe_id);
+                            clip_modified = true;
                         }
                     }
                 }
@@ -202,6 +212,8 @@ pub fn timeline_process_events(
             _ => {}
         }
     }
+
+    clip_modified
 }
 
 fn timeline_select_clip(

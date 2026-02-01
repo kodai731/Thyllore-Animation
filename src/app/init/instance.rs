@@ -681,6 +681,14 @@ impl App {
         if !data.ecs_world.contains_resource::<crate::ecs::resource::CurveEditorBuffer>() {
             data.ecs_world.insert_resource(crate::ecs::resource::CurveEditorBuffer::default());
         }
+
+        if !data.ecs_world.contains_resource::<crate::ecs::resource::EditHistory>() {
+            data.ecs_world.insert_resource(crate::ecs::resource::EditHistory::new(100));
+        }
+
+        if !data.ecs_world.contains_resource::<crate::ecs::resource::ClipBrowserState>() {
+            data.ecs_world.insert_resource(crate::ecs::resource::ClipBrowserState::default());
+        }
     }
 
     pub unsafe fn init_imgui_rendering(

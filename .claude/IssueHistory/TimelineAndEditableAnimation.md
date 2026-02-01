@@ -209,8 +209,44 @@ Added Dope Sheet view mode, keyframe clipboard (copy/paste/mirror paste), snap s
 - Delete: Delete selected keyframes
 - Tab: Toggle Dope Sheet / Graph Editor
 
+## Phase G: Undo/Redo + Clip Browser (2026-02-01)
+
+### Summary
+Implemented Undo/Redo system (Snapshot pattern) and Clip Browser window with D&D clip binding to timeline tracks.
+
+### New Files
+- `src/ecs/resource/edit_history.rs` - EditHistory, EditCommand, EditEntry, EditCommandAfter (Snapshot-based undo/redo)
+- `src/ecs/resource/clip_browser_state.rs` - ClipBrowserState (filter, selection)
+- `src/ecs/systems/edit_history_systems.rs` - apply_undo(), apply_redo() system functions
+- `src/platform/ui/clip_browser_window.rs` - Clip Browser UI (list, filter, D&D source, toolbar)
+
+### Modified Files
+- `ui_events.rs` - Added Undo, Redo, ClipInstanceAdd, ClipBrowserCreateEmpty/Duplicate/Delete events
+- `ui_event_systems.rs` - Pattern match for new event variants
+- `timeline_systems.rs` - timeline_process_events() now returns bool (clip modified flag)
+- `timeline_window.rs` - Ctrl+Z/Y shortcuts, D&D target on clip tracks
+- `hierarchy_window.rs` - Height reduced to 60% of main area (Clip Browser uses remaining)
+- `events.rs` - process_edit_history_events_inline(), process_clip_browser_events_inline(), snapshot recording in timeline/clip instance processing
+- `instance.rs` / `model_loader.rs` - EditHistory and ClipBrowserState resource initialization
+- `resource/mod.rs` / `systems/mod.rs` / `ui/mod.rs` - Module registrations
+
+### Key Design Decisions
+- **Snapshot pattern** over Command pattern: EditableAnimationClip and ClipSchedule are Clone-able, making before/after snapshots trivial
+- **1 UIEvent = 1 Undo unit**: No grouping (future extension)
+- **RefCell borrow avoidance**: Raw pointer trick for simultaneous EditHistory + ClipLibrary + World mutation
+- **Clip Browser placement**: Below Hierarchy window (250px width, hierarchy=60% height, browser=40%)
+- **D&D protocol**: imgui drag_drop_source/target with "CLIP_SOURCE" payload containing SourceClipId (u64, Copy)
+- **Reference counting**: ClipBrowserDelete only succeeds if no ClipInstance references the source clip
+
+### Keyboard Shortcuts
+- Ctrl+Z: Undo
+- Ctrl+Y: Redo
+
+### Tests
+- 4 unit tests in edit_history.rs: push/undo, push/redo, redo_cleared_on_new_edit, max_history_limit
+
 ## Future Work
-- Undo/redo system
 - Tangent lock/break modes
 - Graph Editor zoom-to-fit for selected curves
 - Keyframe drag in Dope Sheet
+- Undo grouping for batch operations

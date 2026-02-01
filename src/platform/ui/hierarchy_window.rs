@@ -16,10 +16,11 @@ pub fn build_hierarchy_window(
     let debug_height = 250.0;
     let timeline_height = 300.0;
     let main_height = display_size[1] - debug_height - timeline_height;
+    let hierarchy_height = (main_height * 0.6).max(100.0);
 
     ui.window("Hierarchy")
         .position([0.0, 0.0], Condition::Always)
-        .size([hierarchy_width, main_height], Condition::Always)
+        .size([hierarchy_width, hierarchy_height], Condition::Always)
         .resizable(false)
         .movable(false)
         .collapsible(false)

@@ -5,10 +5,11 @@ use imgui::Condition;
 use crate::animation::editable::{
     BezierHandle, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
 };
-use crate::ecs::resource::ClipLibrary;
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::TimelineState;
+use crate::ecs::resource::{
+    ClipLibrary, CurveEditorBuffer, TimelineState,
+};
 
 const MIN_WINDOW_WIDTH: f32 = 400.0;
 const MIN_WINDOW_HEIGHT: f32 = 300.0;
@@ -159,6 +160,7 @@ pub fn build_curve_editor_window(
     timeline_state: &TimelineState,
     clip_library: &ClipLibrary,
     editor_state: &mut CurveEditorState,
+    curve_buffer: &CurveEditorBuffer,
 ) {
     if !editor_state.is_open {
         return;
@@ -211,6 +213,7 @@ pub fn build_curve_editor_window(
                         timeline_state,
                         clip_library,
                         editor_state,
+                        curve_buffer,
                     );
                 });
         });
@@ -314,6 +317,7 @@ fn build_curve_view(
     timeline_state: &TimelineState,
     clip_library: &ClipLibrary,
     editor_state: &mut CurveEditorState,
+    curve_buffer: &CurveEditorBuffer,
 ) {
     let clip = match timeline_state
         .current_clip_id
@@ -505,6 +509,14 @@ fn build_curve_view(
                     ui.io().mouse_pos,
                 );
             }
+
+            draw_buffer_curve_overlay(
+                &draw_list,
+                curve_buffer,
+                bone_id,
+                &editor_state.visible_curves,
+                &vt,
+            );
         },
     );
 
@@ -554,6 +566,8 @@ fn build_curve_view(
     ui.set_cursor_screen_pos(
         [cursor_pos[0], cursor_pos[1] + total_height],
     );
+
+    build_buffer_controls(ui, ui_events, curve_buffer);
 }
 
 fn build_keyframe_context_menu(
@@ -1531,4 +1545,77 @@ fn find_tangent_handle_at_position(
     }
 
     None
+}
+
+fn draw_buffer_curve_overlay(
+    draw_list: &imgui::DrawListMut,
+    buffer: &CurveEditorBuffer,
+    bone_id: BoneId,
+    visible_curves: &HashSet<PropertyType>,
+    vt: &ViewTransform,
+) {
+    if buffer.is_empty() {
+        return;
+    }
+
+    for (prop_type, color, _name) in ALL_PROPERTY_TYPES {
+        if !visible_curves.contains(prop_type) {
+            continue;
+        }
+
+        let snapshot =
+            match buffer.get_snapshot(bone_id, *prop_type) {
+                Some(s) => s,
+                None => continue,
+            };
+
+        if snapshot.len() < 2 {
+            continue;
+        }
+
+        let ghost_color = [color[0], color[1], color[2], 0.35];
+
+        for i in 0..snapshot.len() - 1 {
+            let (t0, v0) = snapshot[i];
+            let (t1, v1) = snapshot[i + 1];
+
+            let x0 = vt.time_to_x(t0);
+            let y0 = vt.value_to_y(v0);
+            let x1 = vt.time_to_x(t1);
+            let y1 = vt.value_to_y(v1);
+
+            draw_list
+                .add_line([x0, y0], [x1, y1], ghost_color)
+                .thickness(1.5)
+                .build();
+        }
+    }
+}
+
+fn build_buffer_controls(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    curve_buffer: &CurveEditorBuffer,
+) {
+    if ui.small_button("Capture") {
+        ui_events.send(UIEvent::TimelineCaptureBuffer);
+    }
+
+    ui.same_line();
+
+    if !curve_buffer.is_empty() {
+        if ui.small_button("Swap") {
+            ui_events.send(UIEvent::TimelineSwapBuffer);
+        }
+    } else {
+        ui.text_disabled("Swap");
+    }
+
+    if !curve_buffer.is_empty() {
+        ui.same_line();
+        ui.text_colored(
+            [0.5, 0.8, 0.5, 1.0],
+            &format!("Buffer: {} curves", curve_buffer.snapshots.len()),
+        );
+    }
 }

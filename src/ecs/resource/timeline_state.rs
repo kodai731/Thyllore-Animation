@@ -1,8 +1,43 @@
 use std::collections::HashSet;
 
-use crate::animation::editable::{ClipInstanceId, SourceClipId, KeyframeId, PropertyType};
+use crate::animation::editable::{
+    ClipInstanceId, KeyframeId, PropertyType, SourceClipId,
+};
 use crate::animation::BoneId;
 use crate::ecs::world::Entity;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TimelineViewMode {
+    #[default]
+    DopeSheet,
+    GraphEditor,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SelectionModifier {
+    Replace,
+    Add,
+    Toggle,
+}
+
+#[derive(Clone, Debug)]
+pub struct SnapSettings {
+    pub snap_to_frame: bool,
+    pub snap_to_key: bool,
+    pub frame_rate: f32,
+    pub snap_threshold_px: f32,
+}
+
+impl Default for SnapSettings {
+    fn default() -> Self {
+        Self {
+            snap_to_frame: false,
+            snap_to_key: false,
+            frame_rate: 30.0,
+            snap_threshold_px: 8.0,
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SelectedKeyframe {
@@ -55,6 +90,8 @@ pub struct TimelineState {
     pub scrubbing: bool,
     pub selected_clip_instance: Option<(Entity, ClipInstanceId)>,
     pub dragging_clip: Option<ClipDragState>,
+    pub view_mode: TimelineViewMode,
+    pub snap_settings: SnapSettings,
 }
 
 impl TimelineState {
@@ -76,6 +113,8 @@ impl TimelineState {
             scrubbing: false,
             selected_clip_instance: None,
             dragging_clip: None,
+            view_mode: TimelineViewMode::default(),
+            snap_settings: SnapSettings::default(),
         }
     }
 
@@ -94,6 +133,26 @@ impl TimelineState {
 
     pub fn clear_selection(&mut self) {
         self.selected_keyframes.clear();
+    }
+
+    pub fn apply_selection(
+        &mut self,
+        keyframe: SelectedKeyframe,
+        modifier: SelectionModifier,
+    ) {
+        match modifier {
+            SelectionModifier::Replace => self.select_keyframe(keyframe),
+            SelectionModifier::Add => {
+                self.add_keyframe_to_selection(keyframe);
+            }
+            SelectionModifier::Toggle => {
+                if self.selected_keyframes.contains(&keyframe) {
+                    self.selected_keyframes.remove(&keyframe);
+                } else {
+                    self.selected_keyframes.insert(keyframe);
+                }
+            }
+        }
     }
 
     pub fn is_keyframe_selected(&self, keyframe: &SelectedKeyframe) -> bool {

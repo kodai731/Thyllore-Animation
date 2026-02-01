@@ -673,6 +673,14 @@ impl App {
         if !data.ecs_world.contains_resource::<crate::platform::CurveEditorState>() {
             data.ecs_world.insert_resource(crate::platform::CurveEditorState::default());
         }
+
+        if !data.ecs_world.contains_resource::<crate::ecs::resource::KeyframeCopyBuffer>() {
+            data.ecs_world.insert_resource(crate::ecs::resource::KeyframeCopyBuffer::default());
+        }
+
+        if !data.ecs_world.contains_resource::<crate::ecs::resource::CurveEditorBuffer>() {
+            data.ecs_world.insert_resource(crate::ecs::resource::CurveEditorBuffer::default());
+        }
     }
 
     pub unsafe fn init_imgui_rendering(

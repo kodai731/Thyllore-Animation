@@ -6,15 +6,18 @@ use winit::keyboard::{Key, NamedKey};
 
 use super::platform::System;
 use super::ui::{build_click_debug_overlay, build_curve_editor_window, build_debug_window, build_hierarchy_window, build_inspector_window, build_timeline_window, build_viewport_window, collect_clip_track_snapshot, CurveEditorState, DebugWindowState};
+use crate::ecs::resource::CurveEditorBuffer;
 use crate::ecs::resource::ClipLibrary;
 use crate::app::{App, GUIData};
 use crate::debugview::RayTracingDebugState;
 use crate::ecs::resource::{HierarchyState, SceneState, TimelineState};
 use crate::ecs::events::UIEvent;
+use crate::ecs::resource::KeyframeCopyBuffer;
 use crate::ecs::systems::{
-    camera_move_to_look_at, collapse_entity, expand_entity, process_clip_instance_events,
-    rename_entity, timeline_process_events, update_entity_scale, update_entity_translation,
-    update_entity_visible,
+    camera_move_to_look_at, collapse_entity, expand_entity,
+    process_clip_instance_events, process_keyframe_clipboard_events,
+    rename_entity, timeline_process_events, update_entity_scale,
+    update_entity_translation, update_entity_visible,
 };
 use crate::ecs::world::Transform;
 use crate::ecs::{process_ui_events_with_events_simple, DeferredAction, UIEventQueue};
@@ -195,7 +198,8 @@ impl System {
                                 let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
                                 let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
                                 let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
-                                build_curve_editor_window(ui, &mut *ui_events, &*timeline_state, &*clip_library, &mut *curve_editor);
+                                let curve_buffer = app.data.ecs_world.resource::<CurveEditorBuffer>();
+                                build_curve_editor_window(ui, &mut *ui_events, &*timeline_state, &*clip_library, &mut *curve_editor, &*curve_buffer);
                             }
 
                             {
@@ -228,6 +232,12 @@ impl System {
                                     } else {
                                         process_hierarchy_events_inline(&events, app);
                                         process_timeline_events_inline(&events, app);
+                                        process_keyframe_clipboard_events_inline(
+                                            &events, app,
+                                        );
+                                        process_buffer_events_inline(
+                                            &events, app,
+                                        );
                                         process_clip_instance_events_inline(&events, app);
                                         process_scene_events_inline(&events, app);
 
@@ -365,6 +375,75 @@ fn process_timeline_events_inline(events: &[UIEvent], app: &mut App) {
 
 fn process_clip_instance_events_inline(events: &[UIEvent], app: &mut App) {
     process_clip_instance_events(events, &mut app.data.ecs_world);
+}
+
+fn process_buffer_events_inline(events: &[UIEvent], app: &mut App) {
+    for event in events {
+        match event {
+            UIEvent::TimelineCaptureBuffer => {
+                let timeline_state =
+                    app.data.ecs_world.resource::<TimelineState>();
+                let clip_library =
+                    app.data.ecs_world.resource::<ClipLibrary>();
+                let curve_editor =
+                    app.data.ecs_world.resource::<CurveEditorState>();
+                let mut curve_buffer =
+                    app.data.ecs_world.resource_mut::<CurveEditorBuffer>();
+
+                if let Some(bone_id) = curve_editor.selected_bone_id {
+                    if let Some(clip_id) = timeline_state.current_clip_id {
+                        if let Some(clip) = clip_library.get(clip_id) {
+                            curve_buffer.capture_buffer(
+                                clip,
+                                bone_id,
+                                &curve_editor.visible_curves,
+                                clip.duration,
+                                100,
+                            );
+                        }
+                    }
+                }
+            }
+
+            UIEvent::TimelineSwapBuffer => {
+                let curve_editor =
+                    app.data.ecs_world.resource::<CurveEditorState>();
+                let timeline_state =
+                    app.data.ecs_world.resource::<TimelineState>();
+                let mut clip_library =
+                    app.data.ecs_world.resource_mut::<ClipLibrary>();
+                let mut curve_buffer =
+                    app.data.ecs_world.resource_mut::<CurveEditorBuffer>();
+
+                if let Some(bone_id) = curve_editor.selected_bone_id {
+                    if let Some(clip_id) = timeline_state.current_clip_id {
+                        if let Some(clip) = clip_library.get_mut(clip_id) {
+                            curve_buffer.swap_buffer(clip, bone_id);
+                        }
+                    }
+                }
+            }
+
+            _ => {}
+        }
+    }
+}
+
+fn process_keyframe_clipboard_events_inline(
+    events: &[UIEvent],
+    app: &mut App,
+) {
+    let timeline_state = app.data.ecs_world.resource::<TimelineState>();
+    let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
+    let mut copy_buffer =
+        app.data.ecs_world.resource_mut::<KeyframeCopyBuffer>();
+
+    process_keyframe_clipboard_events(
+        events,
+        &*timeline_state,
+        &mut *clip_library,
+        &mut *copy_buffer,
+    );
 }
 
 fn process_scene_events_inline(events: &[UIEvent], app: &mut App) {

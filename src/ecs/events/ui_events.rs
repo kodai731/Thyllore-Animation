@@ -1,9 +1,10 @@
 use cgmath::{Quaternion, Vector3};
 
 use crate::animation::editable::{
-    BezierHandle, BlendMode, ClipGroupId, ClipInstanceId, InterpolationType, KeyframeId,
-    PropertyType, SourceClipId,
+    BezierHandle, BlendMode, ClipGroupId, ClipInstanceId, InterpolationType,
+    KeyframeId, PropertyType, SourceClipId,
 };
+use crate::ecs::resource::SelectionModifier;
 use crate::animation::BoneId;
 use crate::app::data::LightMoveTarget;
 use crate::ecs::world::Entity;
@@ -54,6 +55,7 @@ pub enum UIEvent {
         bone_id: BoneId,
         property_type: PropertyType,
         keyframe_id: KeyframeId,
+        modifier: SelectionModifier,
     },
     TimelineAddKeyframe {
         bone_id: BoneId,
@@ -89,6 +91,18 @@ pub enum UIEvent {
         property_type: PropertyType,
         keyframe_id: KeyframeId,
     },
+
+    TimelineToggleViewMode,
+    TimelineSetSnapToFrame(bool),
+    TimelineSetSnapToKey(bool),
+    TimelineSetFrameRate(f32),
+
+    TimelineCopyKeyframes,
+    TimelinePasteKeyframes { paste_time: f32 },
+    TimelineMirrorPaste { paste_time: f32 },
+
+    TimelineCaptureBuffer,
+    TimelineSwapBuffer,
 
     ClipInstanceSelect { entity: Entity, instance_id: ClipInstanceId },
     ClipInstanceDeselect,

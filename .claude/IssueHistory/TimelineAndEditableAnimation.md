@@ -173,7 +173,44 @@ Added per-keyframe interpolation types (Linear/Bezier/Stepped) and tangent handl
 - `collect_bake_times()` inserts 10 intermediate samples per Bezier segment for dense linear bake
 - `to_animation_clip()` uses `collect_bake_times()` instead of `collect_unique_times()`
 
+---
+
+## Phase F: Dope Sheet + Detailed Editing (2026-02-01)
+
+### Summary
+Added Dope Sheet view mode, keyframe clipboard (copy/paste/mirror paste), snap settings, and buffer curve system.
+
+### New Files
+- `src/animation/editable/snap.rs` - Snap-to-frame/key calculations
+- `src/animation/editable/mirror.rs` - Mirror mapping for L/R bone symmetry, mirror paste
+- `src/ecs/resource/keyframe_copy_buffer.rs` - Keyframe copy buffer for clipboard operations
+- `src/ecs/resource/curve_editor_buffer.rs` - Curve snapshot buffer for capture/swap
+- `src/ecs/systems/keyframe_clipboard_systems.rs` - Copy/paste/mirror paste system functions
+- `src/platform/ui/dope_sheet.rs` - Dope Sheet rendering (summary row, collapsed/expanded bone rows, diamond keyframe markers)
+
+### Modified Files
+- `timeline_state.rs` - Added TimelineViewMode, SnapSettings, SelectionModifier, apply_selection()
+- `ui_events.rs` - Added modifier field to TimelineSelectKeyframe, new events (Copy/Paste/Mirror/Snap/ViewMode/Buffer)
+- `timeline_systems.rs` - Implemented Add/Delete keyframe handlers, ViewMode/Snap handlers
+- `timeline_window.rs` - Tab switching (Dope Sheet / Graph Editor), snap controls, keyboard shortcuts
+- `curve_editor_window.rs` - Buffer curve overlay, Capture/Swap buttons
+- `events.rs` - Clipboard/buffer event processing, resource initialization
+
+### Key Design Decisions
+- Dope Sheet in separate file to avoid timeline_window.rs bloat
+- SelectionModifier determined from Shift/Ctrl keys at click time (not persisted state)
+- MirrorMapping built on-demand from bone names (L_/R_, Left/Right, .L/.R patterns)
+- Copy buffer stores relative times (base_time subtracted)
+
+### Keyboard Shortcuts (Timeline window focused)
+- Ctrl+C: Copy selected keyframes
+- Ctrl+V: Paste at current time
+- Ctrl+Shift+V: Mirror paste at current time
+- Delete: Delete selected keyframes
+- Tab: Toggle Dope Sheet / Graph Editor
+
 ## Future Work
 - Undo/redo system
 - Tangent lock/break modes
 - Graph Editor zoom-to-fit for selected curves
+- Keyframe drag in Dope Sheet

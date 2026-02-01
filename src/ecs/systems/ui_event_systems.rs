@@ -172,6 +172,15 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::TimelineSetKeyframeInterpolation { .. }
             | UIEvent::TimelineSetKeyframeTangent { .. }
             | UIEvent::TimelineAutoTangent { .. }
+            | UIEvent::TimelineToggleViewMode
+            | UIEvent::TimelineSetSnapToFrame(_)
+            | UIEvent::TimelineSetSnapToKey(_)
+            | UIEvent::TimelineSetFrameRate(_)
+            | UIEvent::TimelineCopyKeyframes
+            | UIEvent::TimelinePasteKeyframes { .. }
+            | UIEvent::TimelineMirrorPaste { .. }
+            | UIEvent::TimelineCaptureBuffer
+            | UIEvent::TimelineSwapBuffer
             | UIEvent::ClipInstanceSelect { .. }
             | UIEvent::ClipInstanceDeselect
             | UIEvent::ClipInstanceMove { .. }

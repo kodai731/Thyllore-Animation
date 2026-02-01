@@ -57,15 +57,50 @@ pub fn timeline_process_events(
                 bone_id,
                 property_type,
                 keyframe_id,
+                modifier,
             } => {
                 use crate::ecs::resource::SelectedKeyframe;
-                let selected = SelectedKeyframe::new(*bone_id, *property_type, *keyframe_id);
-                timeline_state.select_keyframe(selected);
+                let selected =
+                    SelectedKeyframe::new(*bone_id, *property_type, *keyframe_id);
+                timeline_state.apply_selection(selected, *modifier);
             }
 
-            UIEvent::TimelineAddKeyframe { .. } => {}
+            UIEvent::TimelineAddKeyframe {
+                bone_id,
+                property_type,
+                time,
+                value,
+            } => {
+                if let Some(clip_id) = timeline_state.current_clip_id {
+                    if let Some(clip) = clip_library.get_mut(clip_id) {
+                        clip.add_keyframe(
+                            *bone_id,
+                            *property_type,
+                            *time,
+                            *value,
+                        );
+                    }
+                }
+            }
 
-            UIEvent::TimelineDeleteSelectedKeyframes => {}
+            UIEvent::TimelineDeleteSelectedKeyframes => {
+                if let Some(clip_id) = timeline_state.current_clip_id {
+                    let selected: Vec<_> =
+                        timeline_state.selected_keyframes.iter().cloned().collect();
+                    if let Some(clip) = clip_library.get_mut(clip_id) {
+                        for sel in &selected {
+                            if let Some(track) =
+                                clip.tracks.get_mut(&sel.bone_id)
+                            {
+                                track
+                                    .get_curve_mut(sel.property_type)
+                                    .remove_keyframe(sel.keyframe_id);
+                            }
+                        }
+                    }
+                    timeline_state.clear_selection();
+                }
+            }
 
             UIEvent::TimelineMoveKeyframe {
                 bone_id,
@@ -89,6 +124,26 @@ pub fn timeline_process_events(
 
             UIEvent::TimelineZoomOut => {
                 timeline_state.zoom_out();
+            }
+
+            UIEvent::TimelineToggleViewMode => {
+                use crate::ecs::resource::TimelineViewMode;
+                timeline_state.view_mode = match timeline_state.view_mode {
+                    TimelineViewMode::DopeSheet => TimelineViewMode::GraphEditor,
+                    TimelineViewMode::GraphEditor => TimelineViewMode::DopeSheet,
+                };
+            }
+
+            UIEvent::TimelineSetSnapToFrame(enabled) => {
+                timeline_state.snap_settings.snap_to_frame = *enabled;
+            }
+
+            UIEvent::TimelineSetSnapToKey(enabled) => {
+                timeline_state.snap_settings.snap_to_key = *enabled;
+            }
+
+            UIEvent::TimelineSetFrameRate(rate) => {
+                timeline_state.snap_settings.frame_rate = *rate;
             }
 
             UIEvent::TimelineSetKeyframeInterpolation {

@@ -726,6 +726,9 @@ fn create_ecs_entities(
     if !world.contains_resource::<TimelineState>() {
         world.insert_resource(TimelineState::new());
     }
+    if !world.contains_resource::<crate::ecs::resource::KeyframeCopyBuffer>() {
+        world.insert_resource(crate::ecs::resource::KeyframeCopyBuffer::default());
+    }
 
     let mut first_editable_clip_id = None;
     {

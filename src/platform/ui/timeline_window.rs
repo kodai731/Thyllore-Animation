@@ -3,7 +3,11 @@ use imgui::Condition;
 use crate::animation::editable::{BlendMode, EditableAnimationClip, PropertyCurve};
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::{ClipDragState, ClipDragType, ClipLibrary, TimelineState};
+use crate::ecs::resource::{
+    ClipDragState, ClipDragType, ClipLibrary, TimelineState, TimelineViewMode,
+};
+
+use super::dope_sheet::build_dope_sheet;
 
 use super::clip_track_snapshot::{
     ClipGroupSnapshot, ClipInstanceSnapshot, ClipTrackEntry, ClipTrackSnapshot,
@@ -46,9 +50,22 @@ pub fn build_timeline_window(
         .movable(false)
         .collapsible(false)
         .build(|| {
-            build_transport_controls(ui, ui_events, state, clip_library, curve_editor_state);
+            build_transport_controls(
+                ui,
+                ui_events,
+                state,
+                clip_library,
+                curve_editor_state,
+            );
             ui.separator();
-            build_timeline_content(ui, ui_events, state, clip_library, clip_track_snapshot);
+            build_timeline_content(
+                ui,
+                ui_events,
+                state,
+                clip_library,
+                clip_track_snapshot,
+            );
+            handle_timeline_shortcuts(ui, ui_events, state);
         });
 }
 
@@ -104,12 +121,18 @@ fn build_transport_controls(
     ui.same_line();
     if ui.button("Curve Editor") {
         curve_editor_state.is_open = true;
-        if let Some(first_bone_id) = current_clip.and_then(|c| c.tracks.keys().next().copied()) {
+        if let Some(first_bone_id) =
+            current_clip.and_then(|c| c.tracks.keys().next().copied())
+        {
             curve_editor_state.selected_bone_id = Some(first_bone_id);
         }
     }
 
     build_clip_selector(ui, ui_events, state, clip_library);
+
+    build_view_mode_tabs(ui, ui_events, state);
+    ui.same_line();
+    build_snap_controls(ui, ui_events, state);
 }
 
 fn build_clip_selector(
@@ -166,15 +189,48 @@ fn build_timeline_content(
     ui.child_window("timeline_content")
         .size(content_region)
         .build(|| {
-            build_time_ruler_with_scrub(ui, ui_events, state, current_clip, timeline_width);
+            build_time_ruler_with_scrub(
+                ui,
+                ui_events,
+                state,
+                current_clip,
+                timeline_width,
+            );
             ui.separator();
 
             if !clip_track_snapshot.entries.is_empty() {
-                build_clip_tracks_section(ui, ui_events, state, clip_track_snapshot, timeline_width);
+                build_clip_tracks_section(
+                    ui,
+                    ui_events,
+                    state,
+                    clip_track_snapshot,
+                    timeline_width,
+                );
                 ui.separator();
             }
 
-            build_tracks_area(ui, ui_events, state, current_clip, timeline_width);
+            match state.view_mode {
+                TimelineViewMode::DopeSheet => {
+                    let remaining = ui.content_region_avail();
+                    build_dope_sheet(
+                        ui,
+                        ui_events,
+                        state,
+                        current_clip,
+                        remaining[0],
+                        remaining[1],
+                    );
+                }
+                TimelineViewMode::GraphEditor => {
+                    build_tracks_area(
+                        ui,
+                        ui_events,
+                        state,
+                        current_clip,
+                        timeline_width,
+                    );
+                }
+            }
         });
 }
 
@@ -1119,9 +1175,133 @@ fn truncate_label_by_width(name: &str, available_width: f32) -> String {
     truncate_label(name, max_chars)
 }
 
-fn is_point_in_rect(point: [f32; 2], rect_min: [f32; 2], rect_max: [f32; 2]) -> bool {
+fn is_point_in_rect(
+    point: [f32; 2],
+    rect_min: [f32; 2],
+    rect_max: [f32; 2],
+) -> bool {
     point[0] >= rect_min[0]
         && point[0] <= rect_max[0]
         && point[1] >= rect_min[1]
         && point[1] <= rect_max[1]
+}
+
+fn build_view_mode_tabs(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    state: &TimelineState,
+) {
+    let dope_label = if state.view_mode == TimelineViewMode::DopeSheet {
+        "[Dope Sheet]"
+    } else {
+        "Dope Sheet"
+    };
+
+    let graph_label = if state.view_mode == TimelineViewMode::GraphEditor {
+        "[Graph Editor]"
+    } else {
+        "Graph Editor"
+    };
+
+    if ui.small_button(dope_label) {
+        if state.view_mode != TimelineViewMode::DopeSheet {
+            ui_events.send(UIEvent::TimelineToggleViewMode);
+        }
+    }
+
+    ui.same_line();
+    if ui.small_button(graph_label) {
+        if state.view_mode != TimelineViewMode::GraphEditor {
+            ui_events.send(UIEvent::TimelineToggleViewMode);
+        }
+    }
+}
+
+fn handle_timeline_shortcuts(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    state: &TimelineState,
+) {
+    let io = ui.io();
+    if !ui.is_window_focused() {
+        return;
+    }
+
+    if io.key_ctrl && ui.is_key_pressed(imgui::Key::C) {
+        ui_events.send(UIEvent::TimelineCopyKeyframes);
+    }
+
+    if io.key_ctrl && !io.key_shift && ui.is_key_pressed(imgui::Key::V) {
+        ui_events.send(UIEvent::TimelinePasteKeyframes {
+            paste_time: state.current_time,
+        });
+    }
+
+    if io.key_ctrl && io.key_shift && ui.is_key_pressed(imgui::Key::V) {
+        ui_events.send(UIEvent::TimelineMirrorPaste {
+            paste_time: state.current_time,
+        });
+    }
+
+    if ui.is_key_pressed(imgui::Key::Delete) {
+        if !state.selected_keyframes.is_empty() {
+            ui_events.send(UIEvent::TimelineDeleteSelectedKeyframes);
+        }
+    }
+
+    if ui.is_key_pressed(imgui::Key::Tab) {
+        ui_events.send(UIEvent::TimelineToggleViewMode);
+    }
+}
+
+fn build_snap_controls(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    state: &TimelineState,
+) {
+    let snap = &state.snap_settings;
+
+    let frame_label = if snap.snap_to_frame {
+        "[Snap: F]"
+    } else {
+        "Snap: F"
+    };
+
+    if ui.small_button(frame_label) {
+        ui_events.send(UIEvent::TimelineSetSnapToFrame(!snap.snap_to_frame));
+    }
+
+    ui.same_line();
+
+    let key_label = if snap.snap_to_key {
+        "[Snap: K]"
+    } else {
+        "Snap: K"
+    };
+
+    if ui.small_button(key_label) {
+        ui_events.send(UIEvent::TimelineSetSnapToKey(!snap.snap_to_key));
+    }
+
+    ui.same_line();
+
+    let fps_options = [24.0_f32, 30.0, 60.0];
+    let current_fps_label = format!("{}fps", snap.frame_rate as u32);
+    ui.set_next_item_width(70.0);
+
+    if let Some(_token) =
+        ui.begin_combo("##fps_select", &current_fps_label)
+    {
+        for fps in &fps_options {
+            let label = format!("{}fps", *fps as u32);
+            let is_selected = (snap.frame_rate - fps).abs() < 0.1;
+            if ui
+                .selectable_config(&label)
+                .selected(is_selected)
+                .build()
+            {
+                ui_events.send(UIEvent::TimelineSetFrameRate(*fps));
+            }
+        }
+    }
 }

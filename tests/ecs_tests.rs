@@ -610,6 +610,305 @@ mod components_tests {
     }
 }
 
+mod constraint_solver_tests {
+    use cgmath::{assert_relative_eq, InnerSpace, Quaternion, Vector3};
+    use rust_rendering::animation::{
+        BoneLocalPose, ConstraintType, IkConstraintData,
+        PositionConstraintData, RotationConstraintData,
+        ScaleConstraintData, Skeleton, SkeletonPose, PRIORITY_IK,
+        PRIORITY_POSITION, PRIORITY_ROTATION, PRIORITY_SCALE,
+    };
+    use rust_rendering::ecs::component::ConstraintSet;
+    use rust_rendering::ecs::systems::apply_constraints;
+
+    fn create_chain_skeleton(bone_count: u32, bone_length: f32) -> Skeleton {
+        let mut skeleton = Skeleton::new("test_chain");
+        for i in 0..bone_count {
+            let parent = if i == 0 { None } else { Some(i - 1) };
+            let bone_id = skeleton.add_bone(
+                &format!("bone_{}", i),
+                parent,
+            );
+
+            let bone = skeleton.get_bone_mut(bone_id).unwrap();
+            bone.local_transform = cgmath::Matrix4::from_translation(
+                Vector3::new(0.0, if i == 0 { 0.0 } else { bone_length }, 0.0),
+            );
+        }
+        skeleton
+    }
+
+    fn create_rest_pose(skeleton: &Skeleton) -> SkeletonPose {
+        use rust_rendering::animation::decompose_transform;
+        let bone_poses = skeleton
+            .bones
+            .iter()
+            .map(|bone| {
+                let (t, r, s) = decompose_transform(&bone.local_transform);
+                BoneLocalPose {
+                    translation: t,
+                    rotation: r,
+                    scale: s,
+                }
+            })
+            .collect();
+
+        SkeletonPose {
+            skeleton_id: skeleton.id,
+            bone_poses,
+        }
+    }
+
+    #[test]
+    fn test_empty_constraints_noop() {
+        let skeleton = create_chain_skeleton(3, 1.0);
+        let mut pose = create_rest_pose(&skeleton);
+        let original = pose.clone();
+        let constraint_set = ConstraintSet::new();
+
+        apply_constraints(&constraint_set, &skeleton, &mut pose);
+
+        for (i, bp) in pose.bone_poses.iter().enumerate() {
+            assert_relative_eq!(
+                bp.translation.x,
+                original.bone_poses[i].translation.x,
+                epsilon = 0.001
+            );
+            assert_relative_eq!(
+                bp.translation.y,
+                original.bone_poses[i].translation.y,
+                epsilon = 0.001
+            );
+            assert_relative_eq!(
+                bp.translation.z,
+                original.bone_poses[i].translation.z,
+                epsilon = 0.001
+            );
+        }
+    }
+
+    #[test]
+    fn test_disabled_constraint_skipped() {
+        let skeleton = create_chain_skeleton(3, 1.0);
+        let mut pose = create_rest_pose(&skeleton);
+        let original = pose.clone();
+
+        let mut constraint_set = ConstraintSet::new();
+        constraint_set.add_constraint(
+            ConstraintType::Position(PositionConstraintData {
+                constrained_bone: 1,
+                target_bone: 2,
+                enabled: false,
+                weight: 1.0,
+                ..Default::default()
+            }),
+            PRIORITY_POSITION,
+        );
+
+        apply_constraints(&constraint_set, &skeleton, &mut pose);
+
+        assert_relative_eq!(
+            pose.bone_poses[1].translation.y,
+            original.bone_poses[1].translation.y,
+            epsilon = 0.001
+        );
+    }
+
+    #[test]
+    fn test_weight_zero_noop() {
+        let skeleton = create_chain_skeleton(3, 1.0);
+        let mut pose = create_rest_pose(&skeleton);
+        let original = pose.clone();
+
+        let mut constraint_set = ConstraintSet::new();
+        constraint_set.add_constraint(
+            ConstraintType::Position(PositionConstraintData {
+                constrained_bone: 1,
+                target_bone: 2,
+                enabled: true,
+                weight: 0.0,
+                ..Default::default()
+            }),
+            PRIORITY_POSITION,
+        );
+
+        apply_constraints(&constraint_set, &skeleton, &mut pose);
+
+        assert_relative_eq!(
+            pose.bone_poses[1].translation.y,
+            original.bone_poses[1].translation.y,
+            epsilon = 0.001
+        );
+    }
+
+    #[test]
+    fn test_position_constraint_basic() {
+        let skeleton = create_chain_skeleton(3, 1.0);
+        let mut pose = create_rest_pose(&skeleton);
+
+        pose.bone_poses[2].translation = Vector3::new(5.0, 5.0, 5.0);
+
+        let mut constraint_set = ConstraintSet::new();
+        constraint_set.add_constraint(
+            ConstraintType::Position(PositionConstraintData {
+                constrained_bone: 1,
+                target_bone: 2,
+                offset: Vector3::new(0.0, 0.0, 0.0),
+                affect_axes: [true, true, true],
+                enabled: true,
+                weight: 1.0,
+            }),
+            PRIORITY_POSITION,
+        );
+
+        let original_y = pose.bone_poses[1].translation.y;
+        apply_constraints(&constraint_set, &skeleton, &mut pose);
+
+        let moved =
+            (pose.bone_poses[1].translation - Vector3::new(0.0, original_y, 0.0))
+                .magnitude();
+        assert!(moved > 0.01, "bone should have moved");
+    }
+
+    #[test]
+    fn test_rotation_constraint_basic() {
+        let skeleton = create_chain_skeleton(3, 1.0);
+        let mut pose = create_rest_pose(&skeleton);
+
+        let target_rot = Quaternion::new(
+            0.7071,
+            0.0,
+            0.7071,
+            0.0,
+        );
+        pose.bone_poses[2].rotation = target_rot;
+
+        let mut constraint_set = ConstraintSet::new();
+        constraint_set.add_constraint(
+            ConstraintType::Rotation(RotationConstraintData {
+                constrained_bone: 1,
+                target_bone: 2,
+                offset: Quaternion::new(1.0, 0.0, 0.0, 0.0),
+                affect_axes: [true, true, true],
+                enabled: true,
+                weight: 1.0,
+            }),
+            PRIORITY_ROTATION,
+        );
+
+        let original_rot = pose.bone_poses[1].rotation;
+        apply_constraints(&constraint_set, &skeleton, &mut pose);
+
+        let dot = pose.bone_poses[1].rotation.s * original_rot.s
+            + pose.bone_poses[1].rotation.v.x * original_rot.v.x
+            + pose.bone_poses[1].rotation.v.y * original_rot.v.y
+            + pose.bone_poses[1].rotation.v.z * original_rot.v.z;
+        assert!(
+            dot.abs() < 0.999,
+            "rotation should have changed"
+        );
+    }
+
+    #[test]
+    fn test_scale_constraint_basic() {
+        let skeleton = create_chain_skeleton(3, 1.0);
+        let mut pose = create_rest_pose(&skeleton);
+
+        pose.bone_poses[2].scale = Vector3::new(2.0, 2.0, 2.0);
+
+        let mut constraint_set = ConstraintSet::new();
+        constraint_set.add_constraint(
+            ConstraintType::Scale(ScaleConstraintData {
+                constrained_bone: 1,
+                target_bone: 2,
+                offset: Vector3::new(1.0, 1.0, 1.0),
+                affect_axes: [true, true, true],
+                enabled: true,
+                weight: 1.0,
+            }),
+            PRIORITY_SCALE,
+        );
+
+        apply_constraints(&constraint_set, &skeleton, &mut pose);
+
+        assert!(
+            (pose.bone_poses[1].scale.x - 1.0).abs() > 0.01,
+            "scale should have changed from 1.0, got {}",
+            pose.bone_poses[1].scale.x
+        );
+    }
+
+    #[test]
+    fn test_ik_two_bone_reachable() {
+        let skeleton = create_chain_skeleton(4, 1.0);
+        let mut pose = create_rest_pose(&skeleton);
+
+        pose.bone_poses[3].translation = Vector3::new(1.0, 1.0, 0.0);
+
+        let mut constraint_set = ConstraintSet::new();
+        constraint_set.add_constraint(
+            ConstraintType::Ik(IkConstraintData {
+                chain_length: 2,
+                target_bone: 3,
+                effector_bone: 2,
+                pole_vector: Some(Vector3::new(0.0, 0.0, 1.0)),
+                pole_target: None,
+                twist: 0.0,
+                enabled: true,
+                weight: 1.0,
+            }),
+            PRIORITY_IK,
+        );
+
+        apply_constraints(&constraint_set, &skeleton, &mut pose);
+
+        let rot_changed = {
+            let rest = create_rest_pose(&skeleton);
+            let dot = pose.bone_poses[0].rotation.s * rest.bone_poses[0].rotation.s
+                + pose.bone_poses[0].rotation.v.x * rest.bone_poses[0].rotation.v.x
+                + pose.bone_poses[0].rotation.v.y * rest.bone_poses[0].rotation.v.y
+                + pose.bone_poses[0].rotation.v.z * rest.bone_poses[0].rotation.v.z;
+            dot.abs() < 0.9999
+        };
+        assert!(rot_changed, "IK should have modified bone rotations");
+    }
+
+    #[test]
+    fn test_ik_two_bone_unreachable() {
+        let skeleton = create_chain_skeleton(4, 1.0);
+        let mut pose = create_rest_pose(&skeleton);
+
+        pose.bone_poses[3].translation = Vector3::new(0.0, 100.0, 0.0);
+
+        let mut constraint_set = ConstraintSet::new();
+        constraint_set.add_constraint(
+            ConstraintType::Ik(IkConstraintData {
+                chain_length: 2,
+                target_bone: 3,
+                effector_bone: 2,
+                pole_vector: Some(Vector3::new(0.0, 0.0, 1.0)),
+                pole_target: None,
+                twist: 0.0,
+                enabled: true,
+                weight: 1.0,
+            }),
+            PRIORITY_IK,
+        );
+
+        apply_constraints(&constraint_set, &skeleton, &mut pose);
+
+        let rest = create_rest_pose(&skeleton);
+        let dot = pose.bone_poses[0].rotation.s * rest.bone_poses[0].rotation.s
+            + pose.bone_poses[0].rotation.v.x * rest.bone_poses[0].rotation.v.x
+            + pose.bone_poses[0].rotation.v.y * rest.bone_poses[0].rotation.v.y
+            + pose.bone_poses[0].rotation.v.z * rest.bone_poses[0].rotation.v.z;
+        assert!(
+            dot.abs() > 0.9,
+            "unreachable target should still produce valid (near-rest) pose"
+        );
+    }
+}
+
 mod transform_tests {
     use super::*;
     use cgmath::{assert_relative_eq, Quaternion, Vector3};

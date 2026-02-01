@@ -5,15 +5,16 @@ use crate::animation::editable::{BlendMode, ClipInstanceId, EaseType, SourceClip
 use crate::animation::{AnimationClipId, MorphAnimationSystem, SkeletonId, SkeletonPose};
 use crate::app::graphics_resource::{GraphicsResources, NodeData};
 use crate::asset::AssetStorage;
-use crate::ecs::component::{AnimationMeta, ClipSchedule};
+use crate::ecs::component::{AnimationMeta, ClipSchedule, ConstraintSet};
 use crate::ecs::resource::{AnimationType, ClipLibrary};
-use crate::ecs::world::{Animator, MeshRef, World};
+use crate::ecs::world::{Animator, Entity, MeshRef, World};
 use crate::ecs::{
     blend_poses_override, compute_crossfade_factor, compute_local_time,
     compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
 };
 use crate::render::RenderBackend;
 
+use super::constraint_solve_systems::apply_constraints;
 use super::pose_blend_systems::blend_poses_additive;
 
 pub struct AnimationEvalResult {
@@ -34,6 +35,7 @@ struct ActiveInstanceInfo {
 }
 
 struct AnimatedEntityInfo {
+    entity: Entity,
     active_instances: Vec<ActiveInstanceInfo>,
     skeleton_id: SkeletonId,
     mesh_idx: usize,
@@ -76,7 +78,7 @@ pub fn evaluate_all_animators(
     }
 
     let (anim_updated, bone_transforms) =
-        apply_blended_animations(&entity_infos, graphics, nodes, assets);
+        apply_blended_animations(&entity_infos, world, graphics, nodes, assets);
 
     AnimationEvalResult {
         updated_meshes: merge_updated_indices(morph_updated, anim_updated),
@@ -137,6 +139,7 @@ fn collect_animated_entities(
         }
 
         infos.push(AnimatedEntityInfo {
+            entity,
             active_instances,
             skeleton_id: skel_id,
             mesh_idx,
@@ -294,6 +297,7 @@ fn evaluate_entity_blend(
 
 fn apply_blended_animations(
     entities: &[AnimatedEntityInfo],
+    world: &World,
     graphics: &mut GraphicsResources,
     nodes: &mut [NodeData],
     assets: &AssetStorage,
@@ -303,15 +307,21 @@ fn apply_blended_animations(
         None;
 
     for info in entities {
-        let Some(pose) = evaluate_entity_blend(info, assets) else {
+        let Some(mut pose) = evaluate_entity_blend(info, assets) else {
             continue;
         };
 
-        let skeleton =
-            assets.get_skeleton_by_skeleton_id(info.skeleton_id);
-        let Some(skeleton) = skeleton else {
+        let Some(skeleton) =
+            assets.get_skeleton_by_skeleton_id(info.skeleton_id)
+        else {
             continue;
         };
+
+        if let Some(constraint_set) =
+            world.get_component::<ConstraintSet>(info.entity)
+        {
+            apply_constraints(constraint_set, skeleton, &mut pose);
+        }
 
         if info.animation_type == AnimationType::Node {
             GraphicsResources::compute_node_global_transforms(

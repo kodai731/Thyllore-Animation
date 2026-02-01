@@ -163,16 +163,13 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
         return Ok(());
     };
 
-    let Some(skeleton) =
-        ctx.assets.get_skeleton_by_skeleton_id(skel_id)
-    else {
+    let Some(skeleton) = ctx.assets.get_skeleton_by_skeleton_id(skel_id) else {
         return Ok(());
     };
     let skeleton = skeleton.clone();
 
     {
-        let mut bone_gizmo =
-            ctx.world.resource_mut::<BoneGizmoData>();
+        let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
         build_bone_line_mesh(&skeleton, &transforms, &mut bone_gizmo.mesh);
     }
 
@@ -187,12 +184,9 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
     }
 
     {
-        let mut bone_gizmo =
-            ctx.world.resource_mut::<BoneGizmoData>();
-        bone_gizmo.mesh.vertex_buffer_handle =
-            mesh_clone.vertex_buffer_handle;
-        bone_gizmo.mesh.index_buffer_handle =
-            mesh_clone.index_buffer_handle;
+        let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
+        bone_gizmo.mesh.vertex_buffer_handle = mesh_clone.vertex_buffer_handle;
+        bone_gizmo.mesh.index_buffer_handle = mesh_clone.index_buffer_handle;
     }
 
     Ok(())

@@ -276,7 +276,7 @@ impl App {
         }
 
         let mut bone_gizmo_data = BoneGizmoData::default();
-        bone_gizmo_data.render_info.pipeline_id = Some(gizmo_pipeline_id);
+        bone_gizmo_data.render_info.pipeline_id = Some(grid_pipeline_id);
         bone_gizmo_data.render_info.object_index =
             data.graphics_resources.objects.allocate_slot();
         crate::log!(

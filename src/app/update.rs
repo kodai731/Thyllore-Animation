@@ -13,17 +13,10 @@ impl App {
         let time = self.start.elapsed().as_secs_f32();
         let delta_time = 1.0 / 60.0;
 
-        let swapchain_extent = {
-            let swapchain = &self
-                .data
-                .ecs_world
-                .resource::<crate::vulkanr::context::SwapchainState>()
-                .swapchain;
-            (
-                swapchain.swapchain_extent.width,
-                swapchain.swapchain_extent.height,
-            )
-        };
+        let viewport_extent = (
+            self.data.viewport.width.max(1),
+            self.data.viewport.height.max(1),
+        );
         let command_pool = self
             .data
             .ecs_world
@@ -39,7 +32,7 @@ impl App {
                 time,
                 delta_time,
                 image_index,
-                swapchain_extent,
+                swapchain_extent: viewport_extent,
                 graphics: &mut self.data.graphics_resources,
                 raytracing: &mut self.data.raytracing,
                 buffer_registry: &mut self.data.buffer_registry,

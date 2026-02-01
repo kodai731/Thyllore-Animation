@@ -26,6 +26,8 @@ pub struct GUIData {
     pub move_light_to: LightMoveTarget,
     pub clicked_mouse_pos: Option<[f32; 2]>,
     pub viewport_resize_pending: Option<(u32, u32)>,
+    pub viewport_position: [f32; 2],
+    pub viewport_size: [f32; 2],
     pub viewport_hovered: bool,
     pub viewport_focused: bool,
 }
@@ -55,6 +57,8 @@ impl Default for GUIData {
             move_light_to: LightMoveTarget::None,
             clicked_mouse_pos: None,
             viewport_resize_pending: None,
+            viewport_position: [0.0, 0.0],
+            viewport_size: [0.0, 0.0],
             viewport_hovered: false,
             viewport_focused: false,
         }

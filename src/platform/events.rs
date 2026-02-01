@@ -31,6 +31,9 @@ fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
     gui_data.is_right_clicked = false;
     gui_data.is_wheel_clicked = false;
 
+    let io = ui.io();
+    gui_data.mouse_pos = io.mouse_pos;
+
     let allow_input =
         !gui_data.imgui_wants_mouse || gui_data.viewport_hovered;
     if allow_input {
@@ -45,7 +48,6 @@ fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
         }
     }
 
-    let io = ui.io();
     gui_data.is_ctrl_pressed = io.key_ctrl;
     gui_data.is_shift_pressed = io.key_shift;
 }
@@ -186,6 +188,8 @@ impl System {
                                 app.data.viewport.hovered = viewport_info.hovered;
                                 gui_data.viewport_focused = viewport_info.focused;
                                 gui_data.viewport_hovered = viewport_info.hovered;
+                                gui_data.viewport_position = viewport_info.position;
+                                gui_data.viewport_size = viewport_info.size;
 
                                 let new_width = viewport_info.size[0] as u32;
                                 let new_height = viewport_info.size[1] as u32;

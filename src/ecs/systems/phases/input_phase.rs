@@ -69,14 +69,22 @@ fn process_light_auto_target(ctx: &mut EcsContext) {
     ctx.gui_data.move_light_to = LightMoveTarget::None;
 }
 
+fn viewport_local_mouse_pos(
+    ctx: &EcsContext,
+) -> cgmath::Vector2<f32> {
+    cgmath::Vector2::new(
+        ctx.gui_data.mouse_pos[0]
+            - ctx.gui_data.viewport_position[0],
+        ctx.gui_data.mouse_pos[1]
+            - ctx.gui_data.viewport_position[1],
+    )
+}
+
 fn process_gizmo_interaction(
     ctx: &mut EcsContext,
     is_first_left_click: bool,
 ) -> Result<()> {
-    let mouse_pos = cgmath::Vector2::new(
-        ctx.gui_data.mouse_pos[0],
-        ctx.gui_data.mouse_pos[1],
-    );
+    let mouse_pos = viewport_local_mouse_pos(ctx);
 
     if !ctx.gui_data.imgui_wants_mouse
         && ctx.gui_data.is_left_clicked
@@ -217,10 +225,7 @@ fn process_bone_selection(
         return Ok(());
     }
 
-    let mouse_pos = cgmath::Vector2::new(
-        ctx.gui_data.mouse_pos[0],
-        ctx.gui_data.mouse_pos[1],
-    );
+    let mouse_pos = viewport_local_mouse_pos(ctx);
     let screen_size = cgmath::Vector2::new(
         ctx.swapchain_extent.0 as f32,
         ctx.swapchain_extent.1 as f32,
@@ -243,6 +248,24 @@ fn process_bone_selection(
 
     let (ray_origin, ray_direction) =
         screen_to_world_ray(mouse_pos, screen_size, view, proj);
+
+    crate::log!(
+        "bone_select: viewport_pos=({:.0},{:.0}) viewport_size=({:.0},{:.0}) mouse_raw=({:.0},{:.0}) mouse_local=({:.1},{:.1}) ray_origin=({:.2},{:.2},{:.2}) ray_dir=({:.3},{:.3},{:.3})",
+        ctx.gui_data.viewport_position[0],
+        ctx.gui_data.viewport_position[1],
+        ctx.gui_data.viewport_size[0],
+        ctx.gui_data.viewport_size[1],
+        ctx.gui_data.mouse_pos[0],
+        ctx.gui_data.mouse_pos[1],
+        mouse_pos.x,
+        mouse_pos.y,
+        ray_origin.x,
+        ray_origin.y,
+        ray_origin.z,
+        ray_direction.x,
+        ray_direction.y,
+        ray_direction.z,
+    );
 
     let (skeleton_id, transforms, offsets) = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();

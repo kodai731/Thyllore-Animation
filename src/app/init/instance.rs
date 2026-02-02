@@ -1,6 +1,6 @@
 use crate::app::{App, AppData};
 
-use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData};
+use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
 use crate::debugview::GridMeshData;
 use crate::ecs::component::{MeshScale, RenderInfo};
 use crate::ecs::systems::{
@@ -340,6 +340,17 @@ impl App {
         data.ecs_world.insert_resource(
             crate::debugview::gizmo::BoneSelectionState::default(),
         );
+
+        let mut constraint_gizmo_data = ConstraintGizmoData::default();
+        constraint_gizmo_data.wire_render_info.pipeline_id =
+            Some(bone_wire_pipeline_id);
+        constraint_gizmo_data.wire_render_info.object_index =
+            data.graphics_resources.objects.allocate_slot();
+        crate::log!(
+            "Allocated object_index {} for ConstraintGizmo wire",
+            constraint_gizmo_data.wire_render_info.object_index
+        );
+        data.ecs_world.insert_resource(constraint_gizmo_data);
 
         let mut billboard_data = create_billboard();
         billboard_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();

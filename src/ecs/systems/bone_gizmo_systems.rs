@@ -337,7 +337,7 @@ fn normalize(v: [f32; 3]) -> [f32; 3] {
     [v[0] * inv, v[1] * inv, v[2] * inv]
 }
 
-fn compute_display_transforms(
+pub(crate) fn compute_display_transforms(
     skeleton: &Skeleton,
     global_transforms: &[Matrix4<f32>],
     bone_local_offsets: &[[f32; 3]],

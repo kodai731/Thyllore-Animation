@@ -3,7 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
 use crate::debugview::DebugViewMode;
-use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData};
+use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
 use crate::app::graphics_resource::GraphicsResources;
 use crate::ecs::component::LineMesh;
 use crate::vulkanr::core::Device;
@@ -115,6 +115,7 @@ impl<'a> CompositePass<'a> {
         }
 
         self.draw_bone_gizmo(command_buffer, image_index);
+        self.draw_constraint_gizmo(command_buffer, image_index);
         self.draw_billboard(command_buffer, image_index)?;
 
         Ok(())
@@ -156,6 +157,7 @@ impl<'a> CompositePass<'a> {
         }
 
         self.draw_bone_gizmo(command_buffer, image_index);
+        self.draw_constraint_gizmo(command_buffer, image_index);
         self.draw_billboard(command_buffer, image_index)?;
         self.device.cmd_end_render_pass(command_buffer);
 
@@ -559,6 +561,43 @@ impl<'a> CompositePass<'a> {
                 }
             }
         }
+    }
+
+    unsafe fn draw_constraint_gizmo(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+    ) {
+        let constraint_gizmo =
+            match self.app.get_resource::<ConstraintGizmoData>() {
+                Some(cg) => cg,
+                None => return,
+            };
+
+        if !constraint_gizmo.visible {
+            return;
+        }
+        if constraint_gizmo.wire_mesh.indices.is_empty() {
+            return;
+        }
+
+        let pipeline_id =
+            match constraint_gizmo.wire_render_info.pipeline_id {
+                Some(id) => id,
+                None => return,
+            };
+        let pipeline = match self.pipeline_storage().get(pipeline_id) {
+            Some(p) => p,
+            None => return,
+        };
+
+        self.draw_line_mesh(
+            &constraint_gizmo.wire_mesh,
+            pipeline,
+            constraint_gizmo.wire_render_info.object_index,
+            command_buffer,
+            image_index,
+        );
     }
 
     unsafe fn draw_triangle_mesh(

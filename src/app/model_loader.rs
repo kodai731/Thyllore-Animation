@@ -8,7 +8,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::AppData;
 use crate::asset::{AnimationClipAsset, AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
-use crate::debugview::gizmo::BoneGizmoData;
+use crate::debugview::gizmo::{BoneGizmoData, ConstraintGizmoData};
 use crate::ecs::resource::{
     AnimationType, ClipLibrary, MeshAssets, ModelState,
     NodeAssets, TimelineState,
@@ -136,6 +136,7 @@ unsafe fn apply_model_to_resources(
     );
 
     initialize_bone_gizmo_visibility(world, assets, graphics);
+    initialize_constraint_gizmo_visibility(world);
 
     Ok(())
 }
@@ -887,6 +888,23 @@ fn initialize_bone_gizmo_visibility(
         bone_gizmo.cached_global_transforms.clear();
         bone_gizmo.bone_local_offsets.clear();
     }
+}
+
+fn initialize_constraint_gizmo_visibility(world: &mut World) {
+    if !world.contains_resource::<ConstraintGizmoData>() {
+        return;
+    }
+
+    let has_bone_gizmo_visible = world
+        .get_resource::<BoneGizmoData>()
+        .map(|bg| bg.visible)
+        .unwrap_or(false);
+
+    let has_constraints =
+        world.iter_constrained_entities().next().is_some();
+
+    let mut cg = world.resource_mut::<ConstraintGizmoData>();
+    cg.visible = has_bone_gizmo_visible && has_constraints;
 }
 
 fn build_initial_clip_schedule(

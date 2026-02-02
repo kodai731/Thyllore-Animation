@@ -1,7 +1,10 @@
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
 use crate::app::billboard::BillboardData;
-use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, GridGizmoData, LightGizmoData};
+use crate::debugview::gizmo::{
+    BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, GridGizmoData,
+    LightGizmoData,
+};
 use crate::debugview::GridMeshData;
 use crate::ecs::component::GpuMeshRef;
 use crate::ecs::RenderData;
@@ -84,6 +87,24 @@ pub fn bone_gizmo_render_data(bone_gizmo: &BoneGizmoData) -> Vec<RenderData> {
             ]
         }
     }
+}
+
+pub fn constraint_gizmo_render_data(
+    constraint_gizmo: &ConstraintGizmoData,
+) -> Vec<RenderData> {
+    if constraint_gizmo.wire_mesh.indices.is_empty() {
+        return Vec::new();
+    }
+
+    let mesh_ref = GpuMeshRef::new(
+        constraint_gizmo.wire_mesh.vertex_buffer_handle,
+        constraint_gizmo.wire_mesh.index_buffer_handle,
+        constraint_gizmo.wire_mesh.indices.len() as u32,
+    );
+    vec![RenderData::new(
+        mesh_ref,
+        constraint_gizmo.wire_render_info,
+    )]
 }
 
 pub fn collect_scene_render_data(

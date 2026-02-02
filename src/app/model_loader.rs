@@ -1,5 +1,6 @@
 use std::ffi::c_void;
 use std::mem::size_of;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use anyhow::{anyhow, Result};
@@ -101,7 +102,7 @@ unsafe fn apply_model_to_resources(
 
     for (i, loaded_mesh) in load_result.meshes.iter().enumerate() {
         let mesh_buffer =
-            create_mesh_buffer(instance, device, command_pool, graphics, loaded_mesh, i)?;
+            create_mesh_buffer(instance, device, command_pool, graphics, loaded_mesh, i, model_name)?;
         let material_id = create_material_for_mesh(instance, device, graphics, &mesh_buffer, i)?;
 
         graphics.meshes.push(mesh_buffer);
@@ -135,6 +136,7 @@ unsafe fn apply_model_to_resources(
         node_animation_scale,
     );
 
+    apply_loaded_constraints(load_result, world);
     initialize_bone_gizmo_visibility(world, assets, graphics);
     initialize_constraint_gizmo_visibility(world);
 
@@ -269,6 +271,7 @@ unsafe fn create_mesh_buffer(
     graphics: &mut GraphicsResources,
     loaded_mesh: &crate::loader::LoadedMesh,
     mesh_index: usize,
+    model_path: &str,
 ) -> Result<MeshBuffer> {
     let mut mesh = MeshBuffer::default();
 
@@ -283,24 +286,31 @@ unsafe fn create_mesh_buffer(
                 tex.height,
             )?;
         }
-        Some(TextureSource::File(path)) => match load_png_image(path) {
-            Ok((image_data, width, height)) => {
-                (mesh.image, mesh.image_memory, mesh.mip_level) = create_texture_image_pixel(
-                    instance,
-                    device,
-                    command_pool,
-                    &image_data,
-                    width,
-                    height,
-                )?;
+        Some(TextureSource::File(texture_path)) => {
+            let resolved = resolve_texture_path(texture_path, model_path);
+            let load_path = resolved.to_string_lossy();
+            match load_png_image(&load_path) {
+                Ok((image_data, width, height)) => {
+                    (mesh.image, mesh.image_memory, mesh.mip_level) =
+                        create_texture_image_pixel(
+                            instance,
+                            device,
+                            command_pool,
+                            &image_data,
+                            width,
+                            height,
+                        )?;
+                }
+                Err(e) => {
+                    crate::log!("Failed to load texture {}: {}", load_path, e);
+                    let white_pixel = vec![255u8, 255, 255, 255];
+                    (mesh.image, mesh.image_memory, mesh.mip_level) =
+                        create_texture_image_pixel(
+                            instance, device, command_pool, &white_pixel, 1, 1,
+                        )?;
+                }
             }
-            Err(e) => {
-                crate::log!("Failed to load texture {}: {}", path, e);
-                let white_pixel = vec![255u8, 255, 255, 255];
-                (mesh.image, mesh.image_memory, mesh.mip_level) =
-                    create_texture_image_pixel(instance, device, command_pool, &white_pixel, 1, 1)?;
-            }
-        },
+        }
         None => {
             let white_pixel = vec![255u8, 255, 255, 255];
             (mesh.image, mesh.image_memory, mesh.mip_level) =
@@ -890,6 +900,41 @@ fn initialize_bone_gizmo_visibility(
     }
 }
 
+fn apply_loaded_constraints(
+    load_result: &ModelLoadResult,
+    world: &mut World,
+) {
+    use crate::ecs::component::{ConstraintSet, Constrained};
+
+    if load_result.constraints.is_empty() {
+        return;
+    }
+
+    let animator_entities = world.component_entities::<Animator>();
+    if animator_entities.is_empty() {
+        return;
+    }
+
+    let model_entity = animator_entities[0];
+
+    let mut constraint_set = ConstraintSet::new();
+    for loaded in &load_result.constraints {
+        constraint_set.add_constraint(
+            loaded.constraint_type.clone(),
+            loaded.priority,
+        );
+    }
+
+    world.insert_component(model_entity, constraint_set);
+    world.insert_component(model_entity, Constrained);
+
+    crate::log!(
+        "Applied {} constraints to entity {}",
+        load_result.constraints.len(),
+        model_entity
+    );
+}
+
 fn initialize_constraint_gizmo_visibility(world: &mut World) {
     if !world.contains_resource::<ConstraintGizmoData>() {
         return;
@@ -926,4 +971,57 @@ fn build_initial_clip_schedule(
 
     schedule.add_instance(source_id, duration);
     schedule
+}
+
+fn resolve_texture_path(texture_path: &str, model_path: &str) -> PathBuf {
+    let original = Path::new(texture_path);
+    if original.exists() {
+        return original.to_path_buf();
+    }
+
+    let file_stem = original
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+    let file_name = original
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+
+    let model_dir = Path::new(model_path)
+        .parent()
+        .unwrap_or_else(|| Path::new("."));
+    let model_root = model_dir
+        .parent()
+        .unwrap_or(model_dir);
+
+    let search_dirs = [
+        model_dir.to_path_buf(),
+        model_dir.join("textures"),
+        model_root.join("textures"),
+    ];
+
+    let candidate_names: Vec<String> = vec![
+        file_name.to_string(),
+        format!("{}.png", file_name),
+        format!("{}.png", file_stem),
+        format!("{}.jpg", file_stem),
+    ];
+
+    for dir in &search_dirs {
+        for name in &candidate_names {
+            let candidate = dir.join(name);
+            if candidate.exists() {
+                crate::log!(
+                    "Resolved texture: {} -> {}",
+                    texture_path,
+                    candidate.display()
+                );
+                return candidate;
+            }
+        }
+    }
+
+    crate::log!("Texture not found, using original path: {}", texture_path);
+    original.to_path_buf()
 }

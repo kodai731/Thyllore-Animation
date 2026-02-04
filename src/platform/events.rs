@@ -265,6 +265,9 @@ impl System {
                                         process_debug_constraint_events_inline(
                                             &events, app,
                                         );
+                                        process_constraint_edit_events_inline(
+                                            &events, app,
+                                        );
 
                                         let model_bounds =
                                             app.data.graphics_resources.calculate_model_bounds();
@@ -822,6 +825,55 @@ fn process_debug_constraint_events_inline(
             }
             UIEvent::ClearTestConstraints => {
                 clear_test_constraints(&mut app.data.ecs_world);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn process_constraint_edit_events_inline(
+    events: &[UIEvent],
+    app: &mut App,
+) {
+    use crate::ecs::systems::constraint_edit_systems::{
+        handle_constraint_add, handle_constraint_remove,
+        handle_constraint_update,
+    };
+
+    for event in events {
+        match event {
+            UIEvent::ConstraintAdd {
+                entity,
+                constraint_type_index,
+            } => {
+                handle_constraint_add(
+                    &mut app.data.ecs_world,
+                    *entity,
+                    *constraint_type_index,
+                    &app.data.ecs_assets,
+                );
+            }
+            UIEvent::ConstraintRemove {
+                entity,
+                constraint_id,
+            } => {
+                handle_constraint_remove(
+                    &mut app.data.ecs_world,
+                    *entity,
+                    *constraint_id,
+                );
+            }
+            UIEvent::ConstraintUpdate {
+                entity,
+                constraint_id,
+                constraint,
+            } => {
+                handle_constraint_update(
+                    &mut app.data.ecs_world,
+                    *entity,
+                    *constraint_id,
+                    constraint,
+                );
             }
             _ => {}
         }

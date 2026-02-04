@@ -306,6 +306,8 @@ fn apply_blended_animations(
     let mut first_bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>)> =
         None;
 
+    let shared_constraints = find_shared_constraints(entities, world);
+
     for info in entities {
         let Some(mut pose) = evaluate_entity_blend(info, assets) else {
             continue;
@@ -317,10 +319,8 @@ fn apply_blended_animations(
             continue;
         };
 
-        if let Some(constraint_set) =
-            world.get_component::<ConstraintSet>(info.entity)
-        {
-            apply_constraints(constraint_set, skeleton, &mut pose);
+        if let Some(ref cs) = shared_constraints {
+            apply_constraints(cs, skeleton, &mut pose);
         }
 
         if info.animation_type == AnimationType::Node {
@@ -357,6 +357,17 @@ fn apply_blended_animations(
     }
 
     (updated, first_bone_transforms)
+}
+
+fn find_shared_constraints(
+    entities: &[AnimatedEntityInfo],
+    world: &World,
+) -> Option<ConstraintSet> {
+    entities.iter().find_map(|info| {
+        world
+            .get_component::<ConstraintSet>(info.entity)
+            .map(|cs| cs.clone())
+    })
 }
 
 fn merge_updated_indices(

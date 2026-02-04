@@ -767,6 +767,10 @@ impl App {
         if !data.ecs_world.contains_resource::<crate::ecs::resource::ClipBrowserState>() {
             data.ecs_world.insert_resource(crate::ecs::resource::ClipBrowserState::default());
         }
+
+        if !data.ecs_world.contains_resource::<crate::ecs::resource::ConstraintEditorState>() {
+            data.ecs_world.insert_resource(crate::ecs::resource::ConstraintEditorState::default());
+        }
     }
 
     pub unsafe fn init_imgui_rendering(

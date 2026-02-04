@@ -2,6 +2,7 @@ mod animation_playback_systems;
 mod billboard_systems;
 mod bone_gizmo_systems;
 mod camera_systems;
+pub mod constraint_edit_systems;
 mod constraint_gizmo_systems;
 mod constraint_solve_systems;
 pub mod debug_constraint_systems;

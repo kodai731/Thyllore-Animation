@@ -5,6 +5,7 @@ use crate::animation::editable::{
     KeyframeId, PropertyType, SourceClipId,
 };
 use crate::ecs::resource::SelectionModifier;
+use crate::animation::{ConstraintId, ConstraintType};
 use crate::animation::BoneId;
 use crate::app::data::LightMoveTarget;
 use crate::ecs::world::Entity;
@@ -137,6 +138,20 @@ pub enum UIEvent {
 
     CreateTestConstraints,
     ClearTestConstraints,
+
+    ConstraintAdd {
+        entity: Entity,
+        constraint_type_index: u8,
+    },
+    ConstraintRemove {
+        entity: Entity,
+        constraint_id: ConstraintId,
+    },
+    ConstraintUpdate {
+        entity: Entity,
+        constraint_id: ConstraintId,
+        constraint: ConstraintType,
+    },
 }
 
 #[derive(Default)]

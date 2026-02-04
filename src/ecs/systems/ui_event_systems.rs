@@ -204,7 +204,10 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::ClipBrowserDelete(_)
             | UIEvent::SaveScene
             | UIEvent::CreateTestConstraints
-            | UIEvent::ClearTestConstraints => {}
+            | UIEvent::ClearTestConstraints
+            | UIEvent::ConstraintAdd { .. }
+            | UIEvent::ConstraintRemove { .. }
+            | UIEvent::ConstraintUpdate { .. } => {}
         }
     }
 

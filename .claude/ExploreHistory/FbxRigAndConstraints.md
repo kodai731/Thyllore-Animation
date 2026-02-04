@@ -415,6 +415,57 @@ animation editing tool.
 
 ---
 
+## Constraint UI Patterns in Industry Tools
+
+### Common Pattern (Maya, Blender, Unity)
+
+All major tools share the same fundamental workflow:
+
+1. **Constrained object = current selection** — user selects a bone, then adds a constraint to it
+2. **Target starts EMPTY** — no default bone auto-assigned; constraint is non-functional until user sets target
+3. **Constraint has no effect until configured** — shown in red/disabled state until target is specified
+4. **Bone selection via dropdown/eyedropper** — user explicitly picks target bone from dropdown or viewport
+
+### Blender (Copy Location Constraint)
+
+- Workflow: Select bone in Pose Mode → Bone Constraints panel → Add Bone Constraint → Copy Location
+- **Target field starts empty** (constraint shows red/non-functional)
+- Target selection: Armature dropdown → Bone dropdown (appears after armature selected)
+- Head/Tail slider for precise target point on bone
+- Influence (weight) slider: 0.0 - 1.0
+- Axis filtering: X, Y, Z checkboxes with Invert options
+- Space: World / Local / Pose / Custom
+- Reference: [Copy Location Constraint](https://docs.blender.org/manual/en/latest/animation/constraints/transform/copy_location.html)
+
+### Maya (Point Constraint)
+
+- Workflow: Select driver → Shift+select driven → Constrain → Point
+- **Selection order determines roles** (no dropdown during creation)
+- Options panel: Maintain Offset toggle, All Axes / specific axis toggles
+- Weight per target object (default 1.0)
+- Post-creation editing via Channel Box / Attribute Editor
+- Reference: [Point Constraint](https://help.autodesk.com/view/MAYAUL/2024/ENU/?guid=GUID-DAE54462-3F5B-4F5E-B038-9482491B5429)
+
+### Unity (Animation Rigging - Position Constraint)
+
+- Component-based: attach Position Constraint component to GameObject
+- Source Objects: empty array → add via drag-and-drop or object picker
+- Constrained Object: the GameObject the component is on
+- Weight per source object
+- Reference: [Constraint Components](https://docs.unity3d.com/Packages/com.unity.animation.rigging@1.1/manual/ConstraintComponents.html)
+
+### Key Takeaway for This Project
+
+Our current implementation auto-assigns default bones and immediately enables the constraint. This causes
+destructive behavior (e.g., root bone constrained to leaf bone). Industry standard is:
+
+- **Add with `enabled: false`** — constraint created in inactive state
+- **Both bone fields default to 0** — harmless since constraint is disabled
+- **User selects bones via dropdown, then enables** — explicit user action required
+- **No `pick_default_bones` logic needed** — remove auto bone selection entirely
+
+---
+
 ## Rust FBX Parsing Crates Comparison
 
 ### Currently Used
@@ -516,12 +567,20 @@ Blender-style dual-pyramid bone display.
 - Reuse existing Gizmo pipeline for line-based visualizations
 - New gizmo shapes (sphere, cone) share `BoneSolid` pipeline
 
-### Phase 7: Constraint UI Editing
+### Phase 7: Constraint UI Editing (Implemented)
 
 - Constraint inspector panel in ImGui
-- Add/remove/reorder constraints per bone
-- Interactive parameter editing (weight, target, axes, pole vector)
+- Add/remove constraints with interactive parameter editing
+- Inspector auto-resolves Animator entity (not selected_entity)
+- Multi-mesh models: shared ConstraintSet applied to all Animator entities' poses
 - Visual feedback: gizmo updates in real-time as parameters change
+
+### Phase 7.1: Constraint UI Industry Standard Compliance
+
+- Create constraints with `enabled: false` (matching Blender/Maya/Unity pattern)
+- Bone selection via dropdown only — no auto bone selection on creation
+- User selects bones via dropdown, then manually enables the constraint
+- Remove `pick_default_bones` / `find_mid_hierarchy_pair` auto-selection logic
 
 ### Phase 8: Bake-to-Keyframes Export
 

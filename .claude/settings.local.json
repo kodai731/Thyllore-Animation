@@ -30,7 +30,8 @@
       "Bash(Select-String \"error\\\\[\")",
       "Bash(Select-Object -First 30)",
       "WebFetch(domain:crates.io)",
-      "WebFetch(domain:lib.rs)"
+      "WebFetch(domain:lib.rs)",
+      "WebFetch(domain:docs.blender.org)"
     ],
     "deny": [],
     "ask": []

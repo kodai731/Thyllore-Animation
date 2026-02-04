@@ -1,5 +1,6 @@
 mod clip_browser_state;
 mod clip_library;
+mod constraint_editor_state;
 mod curve_editor_buffer;
 mod edit_history;
 mod graphics;
@@ -11,6 +12,7 @@ mod timeline_state;
 
 pub use clip_browser_state::*;
 pub use clip_library::*;
+pub use constraint_editor_state::*;
 pub use curve_editor_buffer::*;
 pub use edit_history::*;
 pub use graphics::*;

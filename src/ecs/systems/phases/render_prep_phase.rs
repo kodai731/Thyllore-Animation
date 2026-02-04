@@ -291,7 +291,8 @@ unsafe fn update_constraint_gizmo_mesh(
     let Some(skel_id) = skeleton_id else {
         return Ok(());
     };
-    let Some(skeleton) = ctx.assets.get_skeleton_by_skeleton_id(skel_id)
+    let Some(skeleton) =
+        ctx.assets.get_skeleton_by_skeleton_id(skel_id)
     else {
         return Ok(());
     };

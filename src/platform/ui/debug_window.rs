@@ -237,6 +237,14 @@ fn build_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, gui_data: &mu
     if ui.button("Dump Debug Information") {
         ui_events.send(UIEvent::DumpDebugInfo);
     }
+
+    if ui.button("Add Test Constraints") {
+        ui_events.send(UIEvent::CreateTestConstraints);
+    }
+    ui.same_line();
+    if ui.button("Clear Constraints") {
+        ui_events.send(UIEvent::ClearTestConstraints);
+    }
 }
 
 fn build_fbx_debug_panel(ui: &imgui::Ui) {

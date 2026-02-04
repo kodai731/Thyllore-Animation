@@ -97,6 +97,22 @@ unsafe fn apply_model_to_resources(
 ) -> Result<()> {
     cleanup_resources(device, graphics, raytracing, world, assets)?;
 
+    let mesh_count = load_result.meshes.len();
+    let reserved_scene_objects = 4;
+    let required_materials = mesh_count as u32 + reserved_scene_objects as u32;
+    let required_objects =
+        graphics.objects.get_next_slot() + mesh_count + reserved_scene_objects;
+
+    graphics
+        .materials
+        .ensure_capacity(device, required_materials)?;
+    graphics.objects.ensure_capacity(
+        instance,
+        device,
+        swapchain.swapchain_images.len(),
+        required_objects,
+    )?;
+
     setup_animation_system(world, load_result, assets);
     setup_nodes(world, load_result);
 

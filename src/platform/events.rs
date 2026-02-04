@@ -262,6 +262,9 @@ impl System {
                                         process_clip_browser_events_inline(&events, app);
                                         process_edit_history_events_inline(&events, app);
                                         process_scene_events_inline(&events, app);
+                                        process_debug_constraint_events_inline(
+                                            &events, app,
+                                        );
 
                                         let model_bounds =
                                             app.data.graphics_resources.calculate_model_bounds();
@@ -797,6 +800,30 @@ fn process_scene_events_inline(events: &[UIEvent], app: &mut App) {
                     crate::log!("Failed to save scene: {:?}", e);
                 }
             }
+        }
+    }
+}
+
+fn process_debug_constraint_events_inline(
+    events: &[UIEvent],
+    app: &mut App,
+) {
+    use crate::ecs::systems::debug_constraint_systems::{
+        clear_test_constraints, create_test_constraints,
+    };
+
+    for event in events {
+        match event {
+            UIEvent::CreateTestConstraints => {
+                create_test_constraints(
+                    &mut app.data.ecs_world,
+                    &app.data.ecs_assets,
+                );
+            }
+            UIEvent::ClearTestConstraints => {
+                clear_test_constraints(&mut app.data.ecs_world);
+            }
+            _ => {}
         }
     }
 }

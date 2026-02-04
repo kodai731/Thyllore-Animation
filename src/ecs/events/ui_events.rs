@@ -134,6 +134,9 @@ pub enum UIEvent {
     ClipBrowserDelete(SourceClipId),
 
     SaveScene,
+
+    CreateTestConstraints,
+    ClearTestConstraints,
 }
 
 #[derive(Default)]

@@ -492,7 +492,6 @@ Blender-style dual-pyramid bone display.
 - Import constraint raw data from FBX (via ufbx or manual fbxcel parsing)
 
 ### Phase 5: Runtime Constraint Evaluation
-
 - Implement constraint solver systems in `ecs/systems/`
 - Insert into animation phase pipeline:
   ```

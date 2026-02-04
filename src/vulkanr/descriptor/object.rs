@@ -162,6 +162,54 @@ impl ObjectDescriptorSet {
         Ok(())
     }
 
+    pub unsafe fn ensure_capacity(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        swapchain_image_count: usize,
+        required_objects: usize,
+    ) -> anyhow::Result<()> {
+        if required_objects <= self.max_objects {
+            return Ok(());
+        }
+
+        for &buffer in &self.buffers {
+            rrdevice.device.destroy_buffer(buffer, None);
+        }
+        for &memory in &self.buffer_memories {
+            rrdevice.device.free_memory(memory, None);
+        }
+        if self.pool != vk::DescriptorPool::null() {
+            rrdevice.device.destroy_descriptor_pool(self.pool, None);
+        }
+
+        let total_sets = swapchain_image_count * required_objects;
+        self.pool = Self::create_pool(rrdevice, total_sets)?;
+        self.sets =
+            Self::allocate_sets(rrdevice, self.layout, self.pool, total_sets)?;
+
+        self.buffers = Vec::with_capacity(total_sets);
+        self.buffer_memories = Vec::with_capacity(total_sets);
+
+        for _ in 0..total_sets {
+            let (buffer, memory) = create_buffer(
+                instance,
+                rrdevice,
+                size_of::<ObjectUBO>() as u64,
+                vk::BufferUsageFlags::UNIFORM_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE
+                    | vk::MemoryPropertyFlags::HOST_COHERENT,
+            )?;
+            self.buffers.push(buffer);
+            self.buffer_memories.push(memory);
+        }
+
+        self.max_objects = required_objects;
+        self.write_descriptor_sets(rrdevice, swapchain_image_count);
+
+        Ok(())
+    }
+
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         for &buffer in &self.buffers {
             device.destroy_buffer(buffer, None);

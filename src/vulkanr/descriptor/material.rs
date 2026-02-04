@@ -29,6 +29,7 @@ pub struct MaterialManager {
     pub pool: vk::DescriptorPool,
     pub materials: HashMap<MaterialId, Material>,
     next_id: MaterialId,
+    capacity: u32,
 }
 
 impl MaterialManager {
@@ -41,7 +42,26 @@ impl MaterialManager {
             pool,
             materials: HashMap::new(),
             next_id: 0,
+            capacity: max_materials,
         })
+    }
+
+    pub unsafe fn ensure_capacity(
+        &mut self,
+        rrdevice: &RRDevice,
+        required: u32,
+    ) -> anyhow::Result<()> {
+        if required <= self.capacity {
+            return Ok(());
+        }
+
+        if self.pool != vk::DescriptorPool::null() {
+            rrdevice.device.destroy_descriptor_pool(self.pool, None);
+        }
+
+        self.pool = Self::create_pool(rrdevice, required)?;
+        self.capacity = required;
+        Ok(())
     }
 
     unsafe fn create_layout(rrdevice: &RRDevice) -> anyhow::Result<vk::DescriptorSetLayout> {

@@ -4,6 +4,7 @@ mod bone_gizmo_systems;
 mod camera_systems;
 mod constraint_gizmo_systems;
 mod constraint_solve_systems;
+pub mod debug_constraint_systems;
 mod ecs_world_systems;
 mod edit_history_systems;
 mod frame_runner;

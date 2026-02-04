@@ -132,8 +132,8 @@ impl App {
         let rrcommand_pool = Rc::new(RRCommandPool::new(&instance, &surface, &rrdevice));
         let rrrender = RRRender::new(&instance, &rrdevice, &rrswapchain, rrcommand_pool.as_ref());
         let swapchain_image_count = rrswapchain.swapchain_images.len();
-        let max_materials = 32;
-        let max_objects = 64;
+        let max_materials = 16;
+        let max_objects = 16;
         data.graphics_resources = GraphicsResources::new(
             &instance,
             &rrdevice,

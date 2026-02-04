@@ -199,9 +199,23 @@ pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
 
     let unit_scale = scene.settings.unit_meters as f32;
     log!(
-        "Scene unit_meters: {}, using as unit_scale",
-        unit_scale
+        "Scene: unit_meters={}, meshes={}, nodes={}, anim_stacks={}, constraints={}",
+        unit_scale,
+        scene.meshes.len(),
+        scene.nodes.len(),
+        scene.anim_stacks.len(),
+        scene.constraints.len()
     );
+
+    for (idx, c) in scene.constraints.iter().enumerate() {
+        log!(
+            "  Constraint[{}]: type={}, node={:?}, targets={}",
+            idx,
+            c.type_name,
+            c.node.as_ref().map(|n| n.element.name.to_string()),
+            c.targets.len()
+        );
+    }
 
     let mut fbx_model = FbxModel {
         unit_scale,

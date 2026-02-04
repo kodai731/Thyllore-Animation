@@ -202,7 +202,9 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::ClipBrowserCreateEmpty
             | UIEvent::ClipBrowserDuplicate(_)
             | UIEvent::ClipBrowserDelete(_)
-            | UIEvent::SaveScene => {}
+            | UIEvent::SaveScene
+            | UIEvent::CreateTestConstraints
+            | UIEvent::ClearTestConstraints => {}
         }
     }
 

@@ -147,6 +147,11 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::ExpandEntity(_)
             | UIEvent::CollapseEntity(_)
             | UIEvent::SetSearchFilter(_)
+            | UIEvent::SetHierarchyDisplayMode(_)
+            | UIEvent::SelectBone(_)
+            | UIEvent::DeselectBone
+            | UIEvent::ExpandBone(_)
+            | UIEvent::CollapseBone(_)
             | UIEvent::SetEntityVisible(_, _)
             | UIEvent::SetEntityTranslation(_, _)
             | UIEvent::SetEntityRotation(_, _)

@@ -58,6 +58,7 @@ pub fn build_inspector_window(
                     world,
                     entity,
                     assets,
+                    state,
                     &mut add_type_index,
                 );
 

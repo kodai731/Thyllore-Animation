@@ -9,6 +9,7 @@ use super::ui::{build_click_debug_overlay, build_clip_browser_window, build_curv
 use crate::ecs::resource::CurveEditorBuffer;
 use crate::ecs::resource::ClipLibrary;
 use crate::app::{App, GUIData};
+use crate::debugview::gizmo::BoneSelectionState;
 use crate::debugview::RayTracingDebugState;
 use crate::ecs::resource::{HierarchyState, SceneState, TimelineState};
 use crate::ecs::events::UIEvent;
@@ -156,7 +157,13 @@ impl System {
                             {
                                 let hierarchy_state = app.data.ecs_world.resource::<HierarchyState>();
                                 let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                build_hierarchy_window(ui, &mut *ui_events, &app.data.ecs_world, &*hierarchy_state);
+                                build_hierarchy_window(
+                                    ui,
+                                    &mut *ui_events,
+                                    &app.data.ecs_world,
+                                    &*hierarchy_state,
+                                    &app.data.ecs_assets,
+                                );
                             }
 
                             {
@@ -351,6 +358,71 @@ fn process_hierarchy_events_inline(events: &[UIEvent], app: &mut App) {
             UIEvent::SetSearchFilter(filter) => {
                 let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
                 hierarchy_state.search_filter = filter.clone();
+            }
+
+            UIEvent::SetHierarchyDisplayMode(mode) => {
+                let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
+                hierarchy_state.display_mode = *mode;
+            }
+
+            UIEvent::SelectBone(bone_id) => {
+                let bone_idx = *bone_id as usize;
+
+                let descendants: Vec<usize> = app
+                    .data
+                    .ecs_assets
+                    .skeletons
+                    .values()
+                    .next()
+                    .map(|skel_asset| {
+                        skel_asset
+                            .skeleton
+                            .collect_descendants(*bone_id)
+                            .into_iter()
+                            .map(|id| id as usize)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                {
+                    let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
+                    hierarchy_state.select_bone(*bone_id);
+                }
+
+                if let Some(mut selection) =
+                    app.data.ecs_world.get_resource_mut::<BoneSelectionState>()
+                {
+                    selection.selected_bone_indices.clear();
+                    selection.selected_bone_indices.insert(bone_idx);
+                    for desc_idx in descendants {
+                        selection.selected_bone_indices.insert(desc_idx);
+                    }
+                    selection.active_bone_index = Some(bone_idx);
+                }
+            }
+
+            UIEvent::DeselectBone => {
+                {
+                    let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
+                    hierarchy_state.deselect_bone();
+                }
+
+                if let Some(mut selection) =
+                    app.data.ecs_world.get_resource_mut::<BoneSelectionState>()
+                {
+                    selection.selected_bone_indices.clear();
+                    selection.active_bone_index = None;
+                }
+            }
+
+            UIEvent::ExpandBone(bone_id) => {
+                let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
+                hierarchy_state.expand_bone(*bone_id);
+            }
+
+            UIEvent::CollapseBone(bone_id) => {
+                let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
+                hierarchy_state.collapse_bone(*bone_id);
             }
 
             UIEvent::SetEntityVisible(entity, visible) => {
@@ -850,7 +922,6 @@ fn process_constraint_edit_events_inline(
                     &mut app.data.ecs_world,
                     *entity,
                     *constraint_type_index,
-                    &app.data.ecs_assets,
                 );
             }
             UIEvent::ConstraintRemove {

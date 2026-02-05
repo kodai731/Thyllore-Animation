@@ -1,9 +1,11 @@
 use anyhow::Result;
 use cgmath::Vector3;
 
+use crate::animation::BoneId;
 use crate::app::data::LightMoveTarget;
 use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData};
 use crate::ecs::context::EcsContext;
+use crate::ecs::resource::HierarchyDisplayMode;
 use crate::ecs::systems::select_bone_by_ray;
 use crate::ecs::GizmoAxis;
 use crate::ecs::{
@@ -298,8 +300,11 @@ fn process_bone_selection(
     let is_shift = ctx.gui_data.is_shift_pressed;
     let mut selection = ctx.bone_selection_mut();
 
-    match hit {
+    let new_active_bone: Option<BoneId> = match hit {
         Some((bone_idx, _distance)) => {
+            let bone_id = bone_idx as BoneId;
+            let descendants = skeleton.collect_descendants(bone_id);
+
             let bone_name = skeleton
                 .bones
                 .iter()
@@ -308,16 +313,12 @@ fn process_bone_selection(
                 .unwrap_or("unknown");
 
             if is_shift {
-                if selection
-                    .selected_bone_indices
-                    .contains(&bone_idx)
-                {
-                    selection
-                        .selected_bone_indices
-                        .remove(&bone_idx);
-                    if selection.active_bone_index
-                        == Some(bone_idx)
-                    {
+                if selection.selected_bone_indices.contains(&bone_idx) {
+                    selection.selected_bone_indices.remove(&bone_idx);
+                    for desc_id in &descendants {
+                        selection.selected_bone_indices.remove(&(*desc_id as usize));
+                    }
+                    if selection.active_bone_index == Some(bone_idx) {
                         selection.active_bone_index = selection
                             .selected_bone_indices
                             .iter()
@@ -325,34 +326,49 @@ fn process_bone_selection(
                             .next();
                     }
                 } else {
-                    selection
-                        .selected_bone_indices
-                        .insert(bone_idx);
-                    selection.active_bone_index =
-                        Some(bone_idx);
+                    selection.selected_bone_indices.insert(bone_idx);
+                    for desc_id in &descendants {
+                        selection.selected_bone_indices.insert(*desc_id as usize);
+                    }
+                    selection.active_bone_index = Some(bone_idx);
                 }
             } else {
                 selection.selected_bone_indices.clear();
-                selection
-                    .selected_bone_indices
-                    .insert(bone_idx);
+                selection.selected_bone_indices.insert(bone_idx);
+                for desc_id in &descendants {
+                    selection.selected_bone_indices.insert(*desc_id as usize);
+                }
                 selection.active_bone_index = Some(bone_idx);
             }
 
             crate::log!(
-                "Bone selected: [{}] '{}' (active={:?}, total={})",
+                "Bone selected: [{}] '{}' (active={:?}, total={}, descendants={})",
                 bone_idx,
                 bone_name,
                 selection.active_bone_index,
-                selection.selected_bone_indices.len()
+                selection.selected_bone_indices.len(),
+                descendants.len()
             );
+
+            Some(bone_id)
         }
         None => {
             if !is_shift {
                 selection.selected_bone_indices.clear();
                 selection.active_bone_index = None;
             }
+            None
         }
+    };
+
+    drop(selection);
+
+    if let Some(bone_id) = new_active_bone {
+        let mut hierarchy = ctx.hierarchy_state_mut();
+        hierarchy.selected_bone_id = Some(bone_id);
+        hierarchy.display_mode = HierarchyDisplayMode::Bones;
+    } else if !is_shift {
+        ctx.hierarchy_state_mut().selected_bone_id = None;
     }
 
     Ok(())

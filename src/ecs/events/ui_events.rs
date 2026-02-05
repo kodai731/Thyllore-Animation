@@ -4,7 +4,7 @@ use crate::animation::editable::{
     BezierHandle, BlendMode, ClipGroupId, ClipInstanceId, InterpolationType,
     KeyframeId, PropertyType, SourceClipId,
 };
-use crate::ecs::resource::SelectionModifier;
+use crate::ecs::resource::{HierarchyDisplayMode, SelectionModifier};
 use crate::animation::{ConstraintId, ConstraintType};
 use crate::animation::BoneId;
 use crate::app::data::LightMoveTarget;
@@ -34,6 +34,12 @@ pub enum UIEvent {
     ExpandEntity(Entity),
     CollapseEntity(Entity),
     SetSearchFilter(String),
+
+    SetHierarchyDisplayMode(HierarchyDisplayMode),
+    SelectBone(BoneId),
+    DeselectBone,
+    ExpandBone(BoneId),
+    CollapseBone(BoneId),
 
     SetEntityVisible(Entity, bool),
     SetEntityTranslation(Entity, Vector3<f32>),

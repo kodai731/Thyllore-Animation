@@ -90,24 +90,4 @@ impl MeshData {
     pub fn has_attribute(&self, id: VertexAttributeId) -> bool {
         self.attributes.contains_key(&id)
     }
-
-    pub fn validate(&self) -> Result<(), String> {
-        if self.attributes.is_empty() {
-            return Err("MeshData has no attributes".to_string());
-        }
-
-        let vertex_count = self.vertex_count();
-        for (id, values) in &self.attributes {
-            if values.len() != vertex_count {
-                return Err(format!(
-                    "Attribute {:?} has {} vertices, expected {}",
-                    id,
-                    values.len(),
-                    vertex_count
-                ));
-            }
-        }
-
-        Ok(())
-    }
 }

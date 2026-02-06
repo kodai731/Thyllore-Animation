@@ -94,7 +94,7 @@ fn sync_timeline_to_all_animators(ctx: &mut FrameContext) {
 
 fn sync_editable_clips_to_registry(ctx: &mut FrameContext) {
     let mut clip_library = ctx.world.resource_mut::<ClipLibrary>();
-    clip_library.sync_dirty_clips();
+    super::clip_library_systems::clip_library_sync_dirty(&mut clip_library);
 }
 
 fn collect_mesh_positions(graphics: &GraphicsResources) -> Vec<Vector3<f32>> {

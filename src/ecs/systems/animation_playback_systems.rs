@@ -157,7 +157,7 @@ fn build_active_instances(
     clip_library: &ClipLibrary,
     animator: &Animator,
 ) -> Vec<ActiveInstanceInfo> {
-    let active = schedule.active_instances_at(animator.time);
+    let active = super::clip_schedule_systems::clip_schedule_active_instances(schedule, animator.time);
     let mut instances: Vec<ActiveInstanceInfo> = active
         .into_iter()
         .filter_map(|inst| {
@@ -175,7 +175,7 @@ fn build_active_instances(
             );
 
             let weight =
-                schedule.effective_instance_weight(inst.instance_id);
+                super::clip_schedule_systems::clip_schedule_effective_weight(schedule, inst.instance_id);
 
             Some(ActiveInstanceInfo {
                 source_id: inst.source_id,

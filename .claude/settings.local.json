@@ -31,7 +31,8 @@
       "Bash(Select-Object -First 30)",
       "WebFetch(domain:crates.io)",
       "WebFetch(domain:lib.rs)",
-      "WebFetch(domain:docs.blender.org)"
+      "WebFetch(domain:docs.blender.org)",
+      "Bash(Select-String -Pattern \"error\")"
     ],
     "deny": [],
     "ask": []

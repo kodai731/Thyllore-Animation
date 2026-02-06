@@ -59,8 +59,7 @@ pub fn collect_clip_track_snapshot(
                     .map(|s| s.name().to_string())
                     .unwrap_or_else(|| format!("Clip {}", inst.source_id));
 
-                let group_id = schedule
-                    .find_group_for_instance(inst.instance_id)
+                let group_id = crate::ecs::systems::clip_schedule_systems::clip_schedule_find_group(schedule, inst.instance_id)
                     .map(|g| g.id);
 
                 ClipInstanceSnapshot {

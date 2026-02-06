@@ -4,7 +4,8 @@ use std::ptr::copy_nonoverlapping as memcpy;
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::component::mesh::{create_interleaved_buffer, MeshData, VertexLayout};
+use crate::ecs::component::mesh::{MeshData, VertexLayout};
+use crate::ecs::systems::mesh_systems::create_interleaved_buffer;
 use crate::render::{IndexBufferHandle, VertexBufferHandle};
 use crate::vulkanr::buffer::{copy_buffer, create_buffer};
 use crate::vulkanr::command::RRCommandPool;

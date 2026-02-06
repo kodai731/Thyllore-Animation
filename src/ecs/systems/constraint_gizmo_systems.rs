@@ -38,7 +38,7 @@ pub fn build_constraint_gizmo_mesh(
         bone_local_offsets,
     );
 
-    for entry in constraint_set.enabled_constraints() {
+    for entry in super::constraint_set_systems::constraint_set_enabled(constraint_set) {
         match &entry.constraint {
             ConstraintType::Position(data) => {
                 append_position_constraint_lines(

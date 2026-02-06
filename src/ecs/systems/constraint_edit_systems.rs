@@ -33,7 +33,7 @@ pub fn handle_constraint_add(
     if let Some(set) =
         world.get_component_mut::<ConstraintSet>(entity)
     {
-        set.add_constraint(constraint, priority);
+        super::constraint_set_systems::constraint_set_add(set, constraint, priority);
     }
 
     if let Some(mut gizmo) =
@@ -52,7 +52,7 @@ pub fn handle_constraint_remove(
         let set =
             world.get_component_mut::<ConstraintSet>(entity);
         if let Some(set) = set {
-            set.remove_constraint(id);
+            super::constraint_set_systems::constraint_set_remove(set, id);
             set.constraints.is_empty()
         } else {
             return;
@@ -80,7 +80,7 @@ pub fn handle_constraint_update(
     if let Some(set) =
         world.get_component_mut::<ConstraintSet>(entity)
     {
-        if let Some(entry) = set.find_constraint_mut(id) {
+        if let Some(entry) = super::constraint_set_systems::constraint_set_find_mut(set, id) {
             entry.constraint = constraint.clone();
         }
     }

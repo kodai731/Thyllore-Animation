@@ -741,7 +741,7 @@ impl App {
         }
 
         if !data.ecs_world.contains_resource::<HierarchyState>() {
-            data.ecs_world.insert_resource(HierarchyState::new());
+            data.ecs_world.insert_resource(HierarchyState::default());
         }
 
         if !data.ecs_world.contains_resource::<TimelineState>() {
@@ -1028,7 +1028,7 @@ impl App {
 
         for clip in clips {
             let name = clip.name.clone();
-            let id = clip_library.register_clip(clip);
+            let id = crate::ecs::systems::clip_library_systems::clip_library_register_clip(&mut clip_library, clip);
             result.push((id, name));
         }
 

@@ -227,47 +227,7 @@ fn process_bone_selection(
         return Ok(());
     }
 
-    let mouse_pos = viewport_local_mouse_pos(ctx);
-    let screen_size = cgmath::Vector2::new(
-        ctx.swapchain_extent.0 as f32,
-        ctx.swapchain_extent.1 as f32,
-    );
-
-    let camera_pos = ctx.camera().position;
-    let camera_dir = ctx.camera().direction;
-    let camera_up = ctx.camera().up;
-
-    let view = unsafe {
-        crate::math::view(camera_pos, camera_dir, camera_up)
-    };
-    let aspect = screen_size.x / screen_size.y;
-    let proj = crate::math::perspective(
-        cgmath::Deg(45.0),
-        aspect,
-        0.1,
-        10000.0,
-    );
-
-    let (ray_origin, ray_direction) =
-        screen_to_world_ray(mouse_pos, screen_size, view, proj);
-
-    crate::log!(
-        "bone_select: viewport_pos=({:.0},{:.0}) viewport_size=({:.0},{:.0}) mouse_raw=({:.0},{:.0}) mouse_local=({:.1},{:.1}) ray_origin=({:.2},{:.2},{:.2}) ray_dir=({:.3},{:.3},{:.3})",
-        ctx.gui_data.viewport_position[0],
-        ctx.gui_data.viewport_position[1],
-        ctx.gui_data.viewport_size[0],
-        ctx.gui_data.viewport_size[1],
-        ctx.gui_data.mouse_pos[0],
-        ctx.gui_data.mouse_pos[1],
-        mouse_pos.x,
-        mouse_pos.y,
-        ray_origin.x,
-        ray_origin.y,
-        ray_origin.z,
-        ray_direction.x,
-        ray_direction.y,
-        ray_direction.z,
-    );
+    let (ray_origin, ray_direction) = compute_bone_pick_ray(ctx);
 
     let (skeleton_id, transforms, offsets) = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
@@ -290,17 +250,69 @@ fn process_bone_selection(
     let skeleton = skeleton.clone();
 
     let hit = select_bone_by_ray(
-        ray_origin,
-        ray_direction,
-        &skeleton,
-        &transforms,
-        &offsets,
+        ray_origin, ray_direction, &skeleton, &transforms, &offsets,
     );
 
     let is_shift = ctx.gui_data.is_shift_pressed;
+    let new_active_bone = apply_bone_selection_result(
+        ctx, &skeleton, hit, is_shift,
+    );
+
+    sync_bone_selection_to_hierarchy(ctx, new_active_bone, is_shift);
+
+    Ok(())
+}
+
+fn compute_bone_pick_ray(
+    ctx: &EcsContext,
+) -> (Vector3<f32>, Vector3<f32>) {
+    let mouse_pos = viewport_local_mouse_pos(ctx);
+    let screen_size = cgmath::Vector2::new(
+        ctx.swapchain_extent.0 as f32,
+        ctx.swapchain_extent.1 as f32,
+    );
+
+    let camera_pos = ctx.camera().position;
+    let camera_dir = ctx.camera().direction;
+    let camera_up = ctx.camera().up;
+
+    let view = unsafe {
+        crate::math::view(camera_pos, camera_dir, camera_up)
+    };
+    let aspect = screen_size.x / screen_size.y;
+    let proj = crate::math::perspective(
+        cgmath::Deg(45.0), aspect, 0.1, 10000.0,
+    );
+
+    let (ray_origin, ray_direction) =
+        screen_to_world_ray(mouse_pos, screen_size, view, proj);
+
+    crate::log!(
+        "bone_select: viewport_pos=({:.0},{:.0}) viewport_size=({:.0},{:.0}) mouse_raw=({:.0},{:.0}) mouse_local=({:.1},{:.1}) ray_origin=({:.2},{:.2},{:.2}) ray_dir=({:.3},{:.3},{:.3})",
+        ctx.gui_data.viewport_position[0],
+        ctx.gui_data.viewport_position[1],
+        ctx.gui_data.viewport_size[0],
+        ctx.gui_data.viewport_size[1],
+        ctx.gui_data.mouse_pos[0],
+        ctx.gui_data.mouse_pos[1],
+        mouse_pos.x,
+        mouse_pos.y,
+        ray_origin.x, ray_origin.y, ray_origin.z,
+        ray_direction.x, ray_direction.y, ray_direction.z,
+    );
+
+    (ray_origin, ray_direction)
+}
+
+fn apply_bone_selection_result(
+    ctx: &mut EcsContext,
+    skeleton: &crate::animation::Skeleton,
+    hit: Option<(usize, f32)>,
+    is_shift: bool,
+) -> Option<BoneId> {
     let mut selection = ctx.bone_selection_mut();
 
-    let new_active_bone: Option<BoneId> = match hit {
+    match hit {
         Some((bone_idx, _distance)) => {
             let bone_id = bone_idx as BoneId;
             let descendants = skeleton.collect_descendants(bone_id);
@@ -343,8 +355,7 @@ fn process_bone_selection(
 
             crate::log!(
                 "Bone selected: [{}] '{}' (active={:?}, total={}, descendants={})",
-                bone_idx,
-                bone_name,
+                bone_idx, bone_name,
                 selection.active_bone_index,
                 selection.selected_bone_indices.len(),
                 descendants.len()
@@ -359,10 +370,14 @@ fn process_bone_selection(
             }
             None
         }
-    };
+    }
+}
 
-    drop(selection);
-
+fn sync_bone_selection_to_hierarchy(
+    ctx: &mut EcsContext,
+    new_active_bone: Option<BoneId>,
+    is_shift: bool,
+) {
     if let Some(bone_id) = new_active_bone {
         let mut hierarchy = ctx.hierarchy_state_mut();
         hierarchy.selected_bone_id = Some(bone_id);
@@ -370,6 +385,4 @@ fn process_bone_selection(
     } else if !is_shift {
         ctx.hierarchy_state_mut().selected_bone_id = None;
     }
-
-    Ok(())
 }

@@ -1,5 +1,5 @@
 ---
-name: ecs-check
+name: check-ecs
 description: Check if code follows ECS architecture rules defined in CLAUDE.md. Use when writing or reviewing systems, components, resources, or any ECS-related code.
 user-invocable: true
 allowed-tools: Read, Grep, Glob
@@ -11,13 +11,15 @@ Check the specified files or recent changes against project ECS rules.
 
 this skill is called as
 ```
-/ecs-check
+/check-ecs
 ```
 
 Or with file name as arguments
 ```
-/ecs-check file_name
+/check-ecs file_name
 ```
+
+MUST use ecs-architecture-checker agent to explore.
 
 ## Target
 

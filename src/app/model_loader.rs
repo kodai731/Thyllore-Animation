@@ -770,7 +770,7 @@ fn create_ecs_entities(
     {
         let mut clip_manager = world.resource_mut::<ClipLibrary>();
         for clip in &clips {
-            let editable_id = clip_manager.create_from_imported(clip, &bone_names);
+            let editable_id = crate::ecs::systems::clip_library_systems::clip_library_create_from_imported(&mut clip_manager, clip, &bone_names);
             if first_editable_clip_id.is_none() {
                 first_editable_clip_id = Some(editable_id);
             }
@@ -935,7 +935,8 @@ fn apply_loaded_constraints(
 
     let mut constraint_set = ConstraintSet::new();
     for loaded in &load_result.constraints {
-        constraint_set.add_constraint(
+        crate::ecs::systems::constraint_set_systems::constraint_set_add(
+            &mut constraint_set,
             loaded.constraint_type.clone(),
             loaded.priority,
         );
@@ -985,7 +986,7 @@ fn build_initial_clip_schedule(
         .unwrap_or(1.0);
     drop(clip_library);
 
-    schedule.add_instance(source_id, duration);
+    crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance(&mut schedule, source_id, duration);
     schedule
 }
 

@@ -4,7 +4,7 @@ use crate::animation::{BoneId, Skeleton};
 use crate::asset::AssetStorage;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
-use crate::ecs::systems::query_hierarchy_tree;
+use crate::ecs::systems::{hierarchy_is_bone_expanded, query_hierarchy_tree};
 use crate::ecs::world::World;
 
 pub fn build_hierarchy_window(
@@ -189,7 +189,7 @@ fn build_bone_entry_recursive(
     };
 
     let has_children = !bone.children.is_empty();
-    let expanded = state.is_bone_expanded(bone_id);
+    let expanded = hierarchy_is_bone_expanded(state, bone_id);
     let selected = state.selected_bone_id == Some(bone_id);
 
     let indent = depth as f32 * 16.0;

@@ -181,7 +181,7 @@ fn add_ik_constraints(set: &mut ConstraintSet, skeleton: &Skeleton) {
         weight: 1.0,
         ..Default::default()
     });
-    set.add_constraint(ik, PRIORITY_IK);
+    super::constraint_set_systems::constraint_set_add(set, ik, PRIORITY_IK);
 
     crate::log!(
         "  IK: effector={} target={}",
@@ -219,7 +219,7 @@ fn add_aim_constraint(set: &mut ConstraintSet, skeleton: &Skeleton) {
         weight: 1.0,
         ..Default::default()
     });
-    set.add_constraint(aim, PRIORITY_AIM);
+    super::constraint_set_systems::constraint_set_add(set, aim, PRIORITY_AIM);
 
     crate::log!(
         "  Aim: source={} target={}",
@@ -285,7 +285,7 @@ fn add_position_constraint(
         enabled: true,
         weight: 1.0,
     });
-    set.add_constraint(pos, PRIORITY_POSITION);
+    super::constraint_set_systems::constraint_set_add(set, pos, PRIORITY_POSITION);
 }
 
 fn bone_name(skeleton: &Skeleton, id: BoneId) -> String {

@@ -14,7 +14,7 @@ pub fn apply_constraints(
     skeleton: &Skeleton,
     pose: &mut SkeletonPose,
 ) {
-    let entries = constraint_set.enabled_constraints();
+    let entries = super::constraint_set_systems::constraint_set_enabled(constraint_set);
     if entries.is_empty() {
         return;
     }
@@ -451,6 +451,34 @@ fn solve_ik_constraint(
         return;
     }
 
+    solve_ik_root_bone_rotation(
+        data, skeleton, pose, globals, root_bone_id, mid_bone_id,
+    );
+
+    *globals = compute_pose_global_transforms(skeleton, pose);
+
+    solve_ik_mid_bone_rotation(
+        data, skeleton, pose, globals, mid_bone_id, effector_idx, target_idx,
+    );
+
+    apply_ik_twist(data, pose, globals, root_idx, target_idx);
+
+    *globals = compute_pose_global_transforms(skeleton, pose);
+}
+
+fn solve_ik_root_bone_rotation(
+    data: &IkConstraintData,
+    skeleton: &Skeleton,
+    pose: &mut SkeletonPose,
+    globals: &[Matrix4<f32>],
+    root_bone_id: BoneId,
+    mid_bone_id: BoneId,
+) {
+    let root_idx = root_bone_id as usize;
+    let mid_idx = mid_bone_id as usize;
+    let effector_idx = data.effector_bone as usize;
+    let target_idx = data.target_bone as usize;
+
     let root_pos = extract_translation(&globals[root_idx]);
     let mid_pos = extract_translation(&globals[mid_idx]);
     let effector_pos = extract_translation(&globals[effector_idx]);
@@ -458,7 +486,6 @@ fn solve_ik_constraint(
 
     let upper_len = (mid_pos - root_pos).magnitude();
     let lower_len = (effector_pos - mid_pos).magnitude();
-
     if upper_len < 1e-6 || lower_len < 1e-6 {
         return;
     }
@@ -482,19 +509,12 @@ fn solve_ik_constraint(
     let current_upper_dir = (mid_pos - root_pos).normalize();
 
     let pole_normal = compute_bend_plane_normal(
-        data,
-        root_pos,
-        mid_pos,
-        effector_pos,
-        target_dir,
-        globals,
+        data, root_pos, mid_pos, effector_pos, target_dir, globals,
     );
 
-    let base_rotation =
-        rotation_between_vectors(current_upper_dir, target_dir);
+    let base_rotation = rotation_between_vectors(current_upper_dir, target_dir);
     let angle_offset = quaternion_from_axis_angle(pole_normal, -root_angle);
-    let root_world_rot =
-        normalize_quat(quat_mul(angle_offset, base_rotation));
+    let root_world_rot = normalize_quat(quat_mul(angle_offset, base_rotation));
 
     let (_, old_root_rot, _) = decompose_transform(&globals[root_idx]);
     let root_correction =
@@ -505,37 +525,40 @@ fn solve_ik_constraint(
     let (_, root_parent_rot, _) = decompose_transform(&root_parent_global);
     let root_parent_inv = conjugate_quat(root_parent_rot);
 
-    let new_root_global_rot =
-        normalize_quat(quat_mul(root_correction, old_root_rot));
+    let new_root_global_rot = normalize_quat(quat_mul(root_correction, old_root_rot));
     let new_root_local_rot =
         normalize_quat(quat_mul(root_parent_inv, new_root_global_rot));
 
     let current_root_local = pose.bone_poses[root_idx].rotation;
     pose.bone_poses[root_idx].rotation =
         slerp(current_root_local, new_root_local_rot, data.weight);
+}
 
-    *globals = compute_pose_global_transforms(skeleton, pose);
-
+fn solve_ik_mid_bone_rotation(
+    data: &IkConstraintData,
+    skeleton: &Skeleton,
+    pose: &mut SkeletonPose,
+    globals: &[Matrix4<f32>],
+    mid_bone_id: BoneId,
+    effector_idx: usize,
+    target_idx: usize,
+) {
+    let mid_idx = mid_bone_id as usize;
     let (_, mid_global_rot, _) = decompose_transform(&globals[mid_idx]);
 
-    let new_mid_pos = extract_translation(&globals[mid_idx]);
-    let new_effector_pos = extract_translation(&globals[effector_idx]);
-    let current_lower_dir = (new_effector_pos - new_mid_pos).normalize();
+    let mid_pos = extract_translation(&globals[mid_idx]);
+    let effector_pos = extract_translation(&globals[effector_idx]);
+    let current_lower_dir = (effector_pos - mid_pos).normalize();
 
-    let desired_effector_pos = extract_translation(&globals[target_idx]);
-    let desired_lower_dir = if (desired_effector_pos - new_mid_pos)
-        .magnitude2()
-        > 1e-8
-    {
-        (desired_effector_pos - new_mid_pos).normalize()
+    let desired_pos = extract_translation(&globals[target_idx]);
+    let desired_lower_dir = if (desired_pos - mid_pos).magnitude2() > 1e-8 {
+        (desired_pos - mid_pos).normalize()
     } else {
         current_lower_dir
     };
 
-    let mid_correction =
-        rotation_between_vectors(current_lower_dir, desired_lower_dir);
-    let new_mid_global_rot =
-        normalize_quat(quat_mul(mid_correction, mid_global_rot));
+    let mid_correction = rotation_between_vectors(current_lower_dir, desired_lower_dir);
+    let new_mid_global_rot = normalize_quat(quat_mul(mid_correction, mid_global_rot));
 
     let mid_parent_global =
         get_parent_global_transform(mid_bone_id, skeleton, globals);
@@ -547,18 +570,31 @@ fn solve_ik_constraint(
     let current_mid_local = pose.bone_poses[mid_idx].rotation;
     pose.bone_poses[mid_idx].rotation =
         slerp(current_mid_local, new_mid_local_rot, data.weight);
+}
 
-    if data.twist.abs() > 1e-6 {
-        let twist_rot =
-            quaternion_from_axis_angle(target_dir, data.twist);
-        let twisted = normalize_quat(quat_mul(
-            twist_rot,
-            pose.bone_poses[root_idx].rotation,
-        ));
-        pose.bone_poses[root_idx].rotation = twisted;
+fn apply_ik_twist(
+    data: &IkConstraintData,
+    pose: &mut SkeletonPose,
+    globals: &[Matrix4<f32>],
+    root_idx: usize,
+    target_idx: usize,
+) {
+    if data.twist.abs() <= 1e-6 {
+        return;
     }
 
-    *globals = compute_pose_global_transforms(skeleton, pose);
+    let target_pos = extract_translation(&globals[target_idx]);
+    let root_pos = extract_translation(&globals[root_idx]);
+    let target_vec = target_pos - root_pos;
+    let target_dir = if target_vec.magnitude2() > 1e-8 {
+        target_vec.normalize()
+    } else {
+        Vector3::new(0.0, 1.0, 0.0)
+    };
+
+    let twist_rot = quaternion_from_axis_angle(target_dir, data.twist);
+    let twisted = normalize_quat(quat_mul(twist_rot, pose.bone_poses[root_idx].rotation));
+    pose.bone_poses[root_idx].rotation = twisted;
 }
 
 fn solve_ik_single_bone(

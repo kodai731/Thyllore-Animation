@@ -17,9 +17,11 @@ use crate::ecs::resource::KeyframeCopyBuffer;
 use crate::ecs::resource::{ClipBrowserState, EditHistory};
 use crate::ecs::systems::{
     apply_redo, apply_undo, camera_move_to_look_at, collapse_entity,
-    expand_entity, process_clip_instance_events,
-    process_keyframe_clipboard_events, rename_entity,
-    timeline_process_events, update_entity_scale,
+    expand_entity, hierarchy_collapse_bone, hierarchy_deselect_all,
+    hierarchy_deselect_bone, hierarchy_expand_bone, hierarchy_select,
+    hierarchy_select_bone, hierarchy_toggle_selection,
+    process_clip_instance_events, process_keyframe_clipboard_events,
+    rename_entity, timeline_process_events, update_entity_scale,
     update_entity_translation, update_entity_visible,
 };
 use crate::ecs::component::ClipSchedule;
@@ -334,17 +336,17 @@ fn process_hierarchy_events_inline(events: &[UIEvent], app: &mut App) {
         match event {
             UIEvent::SelectEntity(entity) => {
                 let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
-                hierarchy_state.select(*entity);
+                hierarchy_select(&mut hierarchy_state, *entity);
             }
 
             UIEvent::DeselectAll => {
                 let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
-                hierarchy_state.deselect_all();
+                hierarchy_deselect_all(&mut hierarchy_state);
             }
 
             UIEvent::ToggleEntitySelection(entity) => {
                 let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
-                hierarchy_state.toggle_selection(*entity);
+                hierarchy_toggle_selection(&mut hierarchy_state, *entity);
             }
 
             UIEvent::ExpandEntity(entity) => {
@@ -386,7 +388,7 @@ fn process_hierarchy_events_inline(events: &[UIEvent], app: &mut App) {
 
                 {
                     let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
-                    hierarchy_state.select_bone(*bone_id);
+                    hierarchy_select_bone(&mut hierarchy_state, *bone_id);
                 }
 
                 if let Some(mut selection) =
@@ -404,7 +406,7 @@ fn process_hierarchy_events_inline(events: &[UIEvent], app: &mut App) {
             UIEvent::DeselectBone => {
                 {
                     let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
-                    hierarchy_state.deselect_bone();
+                    hierarchy_deselect_bone(&mut hierarchy_state);
                 }
 
                 if let Some(mut selection) =
@@ -417,12 +419,12 @@ fn process_hierarchy_events_inline(events: &[UIEvent], app: &mut App) {
 
             UIEvent::ExpandBone(bone_id) => {
                 let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
-                hierarchy_state.expand_bone(*bone_id);
+                hierarchy_expand_bone(&mut hierarchy_state, *bone_id);
             }
 
             UIEvent::CollapseBone(bone_id) => {
                 let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
-                hierarchy_state.collapse_bone(*bone_id);
+                hierarchy_collapse_bone(&mut hierarchy_state, *bone_id);
             }
 
             UIEvent::SetEntityVisible(entity, visible) => {
@@ -693,7 +695,7 @@ fn process_clip_browser_events_inline(
                         0, *source_id, duration,
                     );
                     inst.start_time = *start_time;
-                    schedule.add_instance(*source_id, duration);
+                    crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance(schedule, *source_id, duration);
 
                     if let Some(last) = schedule.instances.last_mut()
                     {
@@ -705,8 +707,10 @@ fn process_clip_browser_events_inline(
             UIEvent::ClipBrowserCreateEmpty => {
                 let mut clip_library =
                     app.data.ecs_world.resource_mut::<ClipLibrary>();
-                let id = clip_library
-                    .create_empty("New Clip".to_string());
+                let id = crate::ecs::systems::clip_library_systems::clip_library_create_empty(
+                    &mut clip_library,
+                    "New Clip".to_string(),
+                );
                 crate::log!(
                     "Created empty clip (id={})",
                     id
@@ -722,8 +726,10 @@ fn process_clip_browser_events_inline(
                     let mut duplicate = original;
                     duplicate.name =
                         format!("{} (copy)", duplicate.name);
-                    let new_id =
-                        clip_library.register_clip(duplicate);
+                    let new_id = crate::ecs::systems::clip_library_systems::clip_library_register_clip(
+                        &mut clip_library,
+                        duplicate,
+                    );
                     crate::log!(
                         "Duplicated clip {} -> {}",
                         source_id,

@@ -34,3 +34,4 @@ vendor/
 
 # claude
 .claude/settings.local.json
+.claude/last-conversation.md

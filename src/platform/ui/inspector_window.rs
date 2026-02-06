@@ -47,10 +47,10 @@ pub fn build_inspector_window(
 
                 build_visible_section(ui, ui_events, &data);
 
-                let mut add_type_index = world
+                let (mut add_type_index, mut bake_fps) = world
                     .get_resource::<ConstraintEditorState>()
-                    .map(|s| s.add_type_index)
-                    .unwrap_or(3);
+                    .map(|s| (s.add_type_index, s.bake_fps))
+                    .unwrap_or((3, 30.0));
 
                 build_constraint_section(
                     ui,
@@ -60,12 +60,14 @@ pub fn build_inspector_window(
                     assets,
                     state,
                     &mut add_type_index,
+                    &mut bake_fps,
                 );
 
                 if let Some(mut editor_state) =
                     world.get_resource_mut::<ConstraintEditorState>()
                 {
                     editor_state.add_type_index = add_type_index;
+                    editor_state.bake_fps = bake_fps;
                 }
             } else {
                 ui.text("No entity selected");

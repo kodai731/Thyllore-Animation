@@ -277,6 +277,9 @@ impl System {
                                         process_constraint_edit_events_inline(
                                             &events, app,
                                         );
+                                        process_constraint_bake_events_inline(
+                                            &events, app,
+                                        );
 
                                         let model_bounds =
                                             app.data.graphics_resources.calculate_model_bounds();
@@ -954,5 +957,92 @@ fn process_constraint_edit_events_inline(
             }
             _ => {}
         }
+    }
+}
+
+fn process_constraint_bake_events_inline(
+    events: &[UIEvent],
+    app: &mut App,
+) {
+    use crate::ecs::component::ConstraintSet;
+    use crate::ecs::resource::{ClipLibrary, TimelineState};
+    use crate::ecs::systems::constraint_bake_systems::{
+        constraint_bake_evaluate, constraint_bake_register,
+        constraint_bake_rest_pose,
+    };
+
+    for event in events {
+        let UIEvent::ConstraintBakeToKeyframes { entity, sample_fps } = event
+        else {
+            continue;
+        };
+
+        let skeleton = match app.data.ecs_assets.skeletons.values().next() {
+            Some(skel_asset) => skel_asset.skeleton.clone(),
+            None => {
+                crate::log!("Bake failed: no skeleton found");
+                continue;
+            }
+        };
+
+        let constraint_set = match app
+            .data
+            .ecs_world
+            .get_component::<ConstraintSet>(*entity)
+        {
+            Some(set) => set.clone(),
+            None => {
+                crate::log!("Bake failed: no ConstraintSet on entity");
+                continue;
+            }
+        };
+
+        let timeline_state =
+            app.data.ecs_world.resource::<TimelineState>();
+        let clip_id = timeline_state.current_clip_id;
+        let looping = timeline_state.looping;
+        drop(timeline_state);
+
+        let mut baked = if let Some(source_id) = clip_id {
+            let clip_library =
+                app.data.ecs_world.resource::<ClipLibrary>();
+            match clip_library.get(source_id) {
+                Some(editable) => {
+                    let anim_clip = editable.to_animation_clip();
+                    let source_name = editable.name.clone();
+                    drop(clip_library);
+
+                    let mut result = constraint_bake_evaluate(
+                        &anim_clip,
+                        &skeleton,
+                        &constraint_set,
+                        *sample_fps,
+                        looping,
+                    );
+                    result.name = format!("{}_baked", source_name);
+                    result
+                }
+                None => {
+                    drop(clip_library);
+                    constraint_bake_rest_pose(&skeleton, &constraint_set)
+                }
+            }
+        } else {
+            constraint_bake_rest_pose(&skeleton, &constraint_set)
+        };
+
+        baked.name = if baked.name.is_empty() {
+            "baked".to_string()
+        } else {
+            baked.name
+        };
+
+        let mut clip_library =
+            app.data.ecs_world.resource_mut::<ClipLibrary>();
+        let new_id = constraint_bake_register(&mut clip_library, baked);
+        crate::log!(
+            "Baked constraints to new clip (id={})",
+            new_id
+        );
     }
 }

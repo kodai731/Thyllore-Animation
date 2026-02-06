@@ -158,6 +158,10 @@ pub enum UIEvent {
         constraint_id: ConstraintId,
         constraint: ConstraintType,
     },
+    ConstraintBakeToKeyframes {
+        entity: Entity,
+        sample_fps: f32,
+    },
 }
 
 #[derive(Default)]

@@ -212,7 +212,8 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::ClearTestConstraints
             | UIEvent::ConstraintAdd { .. }
             | UIEvent::ConstraintRemove { .. }
-            | UIEvent::ConstraintUpdate { .. } => {}
+            | UIEvent::ConstraintUpdate { .. }
+            | UIEvent::ConstraintBakeToKeyframes { .. } => {}
         }
     }
 

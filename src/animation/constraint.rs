@@ -32,7 +32,7 @@ impl Default for IkConstraintData {
             pole_vector: None,
             pole_target: None,
             twist: 0.0,
-            enabled: false,
+            enabled: true,
             weight: 1.0,
         }
     }
@@ -57,7 +57,7 @@ impl Default for AimConstraintData {
             aim_axis: Vector3::new(0.0, 0.0, 1.0),
             up_axis: Vector3::new(0.0, 1.0, 0.0),
             up_target: None,
-            enabled: false,
+            enabled: true,
             weight: 1.0,
         }
     }
@@ -80,7 +80,7 @@ impl Default for ParentConstraintData {
             sources: Vec::new(),
             affect_translation: true,
             affect_rotation: true,
-            enabled: false,
+            enabled: true,
             weight: 1.0,
         }
     }
@@ -103,7 +103,7 @@ impl Default for PositionConstraintData {
             target_bone: 0,
             offset: Vector3::new(0.0, 0.0, 0.0),
             affect_axes: [true, true, true],
-            enabled: false,
+            enabled: true,
             weight: 1.0,
         }
     }
@@ -126,7 +126,7 @@ impl Default for RotationConstraintData {
             target_bone: 0,
             offset: Quaternion::new(1.0, 0.0, 0.0, 0.0),
             affect_axes: [true, true, true],
-            enabled: false,
+            enabled: true,
             weight: 1.0,
         }
     }
@@ -149,7 +149,7 @@ impl Default for ScaleConstraintData {
             target_bone: 0,
             offset: Vector3::new(1.0, 1.0, 1.0),
             affect_axes: [true, true, true],
-            enabled: false,
+            enabled: true,
             weight: 1.0,
         }
     }

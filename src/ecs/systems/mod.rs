@@ -4,6 +4,7 @@ mod bone_gizmo_systems;
 mod camera_systems;
 pub mod clip_library_systems;
 pub mod clip_schedule_systems;
+pub mod constraint_bake_systems;
 pub mod constraint_edit_systems;
 mod constraint_gizmo_systems;
 pub mod constraint_set_systems;

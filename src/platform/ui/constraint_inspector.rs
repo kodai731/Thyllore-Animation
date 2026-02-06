@@ -27,6 +27,7 @@ pub fn build_constraint_section(
     assets: &AssetStorage,
     hierarchy_state: &HierarchyState,
     add_type_index: &mut i32,
+    bake_fps: &mut f32,
 ) {
     if !ui.collapsing_header(
         "Constraints",
@@ -72,6 +73,29 @@ pub fn build_constraint_section(
             &bone_list,
             hierarchy_state,
         );
+    }
+
+    build_bake_section(ui, ui_events, target_entity, bake_fps);
+}
+
+fn build_bake_section(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    target_entity: Entity,
+    bake_fps: &mut f32,
+) {
+    ui.separator();
+
+    ui.set_next_item_width(80.0);
+    ui.input_float("Sample FPS", bake_fps).build();
+    *bake_fps = bake_fps.clamp(1.0, 120.0);
+
+    ui.same_line();
+    if ui.button("Bake Constraints") {
+        ui_events.send(UIEvent::ConstraintBakeToKeyframes {
+            entity: target_entity,
+            sample_fps: *bake_fps,
+        });
     }
 }
 

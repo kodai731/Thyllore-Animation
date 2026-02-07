@@ -165,69 +165,85 @@ impl App {
         Ok(())
     }
     unsafe fn save_screenshot(&self, image_index: usize) -> Result<()> {
-        use std::fs::File;
-        use std::io::BufWriter;
-        use std::time::SystemTime;
-
         let device = &self.rrdevice.device;
         let swapchain = &self.swapchain_state().swapchain;
         let swapchain_image = swapchain.swapchain_images[image_index];
         let extent = swapchain.swapchain_extent;
         let width = extent.width;
         let height = extent.height;
+        let image_size = (width * height * 4) as vk::DeviceSize;
+        let command_pool = self.command_state().pool.command_pool;
 
-        // Create a buffer to copy the image to
-        let image_size = (width * height * 4) as vk::DeviceSize; // RGBA format
+        let (buffer, buffer_memory, command_buffer) = self.copy_swapchain_image_to_buffer(
+            swapchain_image,
+            extent,
+            image_size,
+            command_pool,
+        )?;
+
+        Self::encode_and_save_png(device, buffer_memory, image_size, width, height)?;
+
+        device.free_command_buffers(command_pool, &[command_buffer]);
+        device.free_memory(buffer_memory, None);
+        device.destroy_buffer(buffer, None);
+
+        Ok(())
+    }
+
+    unsafe fn copy_swapchain_image_to_buffer(
+        &self,
+        swapchain_image: vk::Image,
+        extent: vk::Extent2D,
+        image_size: vk::DeviceSize,
+        command_pool: vk::CommandPool,
+    ) -> Result<(vk::Buffer, vk::DeviceMemory, vk::CommandBuffer)> {
+        let device = &self.rrdevice.device;
+        let width = extent.width;
+        let height = extent.height;
+
         let buffer_info = vk::BufferCreateInfo::builder()
             .size(image_size)
             .usage(vk::BufferUsageFlags::TRANSFER_DST)
             .sharing_mode(vk::SharingMode::EXCLUSIVE);
-
         let buffer = device.create_buffer(&buffer_info, None)?;
 
-        // Allocate memory for the buffer
         let mem_requirements = device.get_buffer_memory_requirements(buffer);
         let memory_type_index = self.get_memory_type_index(
             mem_requirements.memory_type_bits,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
-
         let alloc_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(mem_requirements.size)
             .memory_type_index(memory_type_index);
-
         let buffer_memory = device.allocate_memory(&alloc_info, None)?;
         device.bind_buffer_memory(buffer, buffer_memory, 0)?;
 
-        // Create a command buffer for the copy operation
-        let command_pool = self.command_state().pool.command_pool;
-        let alloc_info = vk::CommandBufferAllocateInfo::builder()
+        let cmd_alloc_info = vk::CommandBufferAllocateInfo::builder()
             .command_pool(command_pool)
             .level(vk::CommandBufferLevel::PRIMARY)
             .command_buffer_count(1);
-
-        let command_buffers = device.allocate_command_buffers(&alloc_info)?;
+        let command_buffers = device.allocate_command_buffers(&cmd_alloc_info)?;
         let command_buffer = command_buffers[0];
 
-        // Begin command buffer
         let begin_info = vk::CommandBufferBeginInfo::builder()
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
         device.begin_command_buffer(command_buffer, &begin_info)?;
 
-        // Transition image layout to TRANSFER_SRC_OPTIMAL
-        let barrier = vk::ImageMemoryBarrier::builder()
+        let subresource_range = vk::ImageSubresourceRange {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            base_mip_level: 0,
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: 1,
+        };
+
+        let barrier_to_transfer = vk::ImageMemoryBarrier::builder()
             .old_layout(vk::ImageLayout::PRESENT_SRC_KHR)
             .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
             .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .image(swapchain_image)
-            .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: 0,
-                layer_count: 1,
-            })
+            .subresource_range(subresource_range)
             .src_access_mask(vk::AccessFlags::MEMORY_READ)
             .dst_access_mask(vk::AccessFlags::TRANSFER_READ);
 
@@ -238,10 +254,9 @@ impl App {
             vk::DependencyFlags::empty(),
             &[] as &[vk::MemoryBarrier],
             &[] as &[vk::BufferMemoryBarrier],
-            &[barrier.build()],
+            &[barrier_to_transfer.build()],
         );
 
-        // Copy image to buffer
         let region = vk::BufferImageCopy::builder()
             .buffer_offset(0)
             .buffer_row_length(0)
@@ -267,20 +282,13 @@ impl App {
             &[region.build()],
         );
 
-        // Transition image layout back to PRESENT_SRC_KHR
-        let barrier = vk::ImageMemoryBarrier::builder()
+        let barrier_to_present = vk::ImageMemoryBarrier::builder()
             .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
             .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
             .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .image(swapchain_image)
-            .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: 0,
-                layer_count: 1,
-            })
+            .subresource_range(subresource_range)
             .src_access_mask(vk::AccessFlags::TRANSFER_READ)
             .dst_access_mask(vk::AccessFlags::MEMORY_READ);
 
@@ -291,10 +299,9 @@ impl App {
             vk::DependencyFlags::empty(),
             &[] as &[vk::MemoryBarrier],
             &[] as &[vk::BufferMemoryBarrier],
-            &[barrier.build()],
+            &[barrier_to_present.build()],
         );
 
-        // End and submit command buffer
         device.end_command_buffer(command_buffer)?;
 
         let command_buffers_slice = [command_buffer];
@@ -306,48 +313,48 @@ impl App {
         )?;
         device.queue_wait_idle(self.rrdevice.graphics_queue)?;
 
-        // Map memory and read data
+        Ok((buffer, buffer_memory, command_buffer))
+    }
+
+    unsafe fn encode_and_save_png(
+        device: &crate::vulkanr::core::device::Device,
+        buffer_memory: vk::DeviceMemory,
+        image_size: vk::DeviceSize,
+        width: u32,
+        height: u32,
+    ) -> Result<()> {
+        use std::fs::File;
+        use std::io::BufWriter;
+        use std::time::SystemTime;
+
         let data = device.map_memory(buffer_memory, 0, image_size, vk::MemoryMapFlags::empty())?;
         let slice = std::slice::from_raw_parts(data as *const u8, image_size as usize);
 
-        // Convert BGRA to RGBA
         let mut rgba_data = vec![0u8; (width * height * 4) as usize];
-        for y in 0..height {
-            for x in 0..width {
-                let i = ((y * width + x) * 4) as usize;
-                rgba_data[i] = slice[i + 2]; // R = B
-                rgba_data[i + 1] = slice[i + 1]; // G = G
-                rgba_data[i + 2] = slice[i]; // B = R
-                rgba_data[i + 3] = slice[i + 3]; // A = A
-            }
+        for i in (0..rgba_data.len()).step_by(4) {
+            rgba_data[i] = slice[i + 2];
+            rgba_data[i + 1] = slice[i + 1];
+            rgba_data[i + 2] = slice[i];
+            rgba_data[i + 3] = slice[i + 3];
         }
 
         device.unmap_memory(buffer_memory);
 
-        // Generate filename with timestamp
         let timestamp = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)?
             .as_secs();
         let filename = format!("log/screenshot_{}.png", timestamp);
-
-        // Ensure log directory exists
         std::fs::create_dir_all("log")?;
 
-        // Save as PNG
         let file = File::create(&filename)?;
         let writer = BufWriter::new(file);
         let mut encoder = png::Encoder::new(writer, width, height);
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Eight);
-        let mut writer = encoder.write_header()?;
-        writer.write_image_data(&rgba_data)?;
+        let mut png_writer = encoder.write_header()?;
+        png_writer.write_image_data(&rgba_data)?;
 
         crate::log!("Screenshot saved to: {}", filename);
-
-        // Cleanup
-        device.free_command_buffers(command_pool, &[command_buffer]);
-        device.free_memory(buffer_memory, None);
-        device.destroy_buffer(buffer, None);
 
         Ok(())
     }
@@ -477,35 +484,10 @@ impl App {
     }
 
     unsafe fn render_models(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
-        static mut RENDER_LOG_COUNTER: u32 = 0;
-        static mut PREV_MESH_COUNT: usize = 0;
-
         let mesh_count = self.data.graphics_resources.meshes.len();
-        let mesh_count_changed = mesh_count != PREV_MESH_COUNT;
-        if mesh_count_changed {
-            RENDER_LOG_COUNTER = 0;
-            PREV_MESH_COUNT = mesh_count;
-        }
-
-        RENDER_LOG_COUNTER += 1;
-        let should_log = RENDER_LOG_COUNTER <= 3;
-
-        if should_log {
-            crate::log!("=== render_models: {} meshes ===", mesh_count);
-        }
 
         for i in 0..mesh_count {
             let mesh = &self.data.graphics_resources.meshes[i];
-
-            if should_log {
-                crate::log!(
-                    "  Mesh[{}]: vertex_buffer={:?}, indices={}, vertices={}",
-                    i,
-                    mesh.vertex_buffer.buffer,
-                    mesh.index_buffer.indices,
-                    mesh.vertex_data.vertices.len()
-                );
-            }
 
             let pipeline = &self.pipeline_state().model_pipeline;
             self.rrdevice.device.cmd_bind_pipeline(
@@ -698,7 +680,6 @@ impl App {
         );
     }
 
-    /// Record ImGui rendering commands
     pub unsafe fn record_imgui_rendering(
         &self,
         command_buffer: vk::CommandBuffer,
@@ -734,14 +715,42 @@ impl App {
             .index_buffer
             .ok_or_else(|| anyhow!("ImGui index buffer not initialized"))?;
 
-        // Bind pipeline
+        self.setup_imgui_render_state(
+            command_buffer,
+            draw_data,
+            pipeline,
+            pipeline_layout,
+            descriptor_set,
+            vertex_buffer,
+            index_buffer,
+        );
+
+        self.record_imgui_draw_commands(
+            command_buffer,
+            draw_data,
+            pipeline_layout,
+            descriptor_set,
+        );
+
+        Ok(())
+    }
+
+    unsafe fn setup_imgui_render_state(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        draw_data: &imgui::DrawData,
+        pipeline: vk::Pipeline,
+        pipeline_layout: vk::PipelineLayout,
+        descriptor_set: vk::DescriptorSet,
+        vertex_buffer: vk::Buffer,
+        index_buffer: vk::Buffer,
+    ) {
         self.rrdevice.device.cmd_bind_pipeline(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
             pipeline,
         );
 
-        // Bind descriptor sets
         self.rrdevice.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
@@ -751,7 +760,6 @@ impl App {
             &[],
         );
 
-        // Bind vertex and index buffers
         self.rrdevice
             .device
             .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
@@ -762,10 +770,8 @@ impl App {
             vk::IndexType::UINT16,
         );
 
-        // Setup viewport and scissor
         let fb_width = draw_data.display_size[0] * draw_data.framebuffer_scale[0];
         let fb_height = draw_data.display_size[1] * draw_data.framebuffer_scale[1];
-
         let viewport = vk::Viewport::builder()
             .x(0.0)
             .y(0.0)
@@ -777,7 +783,6 @@ impl App {
             .device
             .cmd_set_viewport(command_buffer, 0, &[viewport]);
 
-        // Setup scale and translation for ImGui coordinates -> NDC
         let scale = [
             2.0 / draw_data.display_size[0],
             2.0 / draw_data.display_size[1],
@@ -798,7 +803,15 @@ impl App {
                 std::mem::size_of_val(&push_constants),
             ),
         );
+    }
 
+    unsafe fn record_imgui_draw_commands(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        draw_data: &imgui::DrawData,
+        pipeline_layout: vk::PipelineLayout,
+        descriptor_set: vk::DescriptorSet,
+    ) {
         let font_texture_id = descriptor_set.as_raw() as usize;
         let viewport_texture_id = self.data.viewport.texture_id();
         let viewport_descriptor_set = self.data.viewport.descriptor_set;
@@ -868,7 +881,5 @@ impl App {
             vertex_offset += draw_list.vtx_buffer().len() as u32;
             index_offset += draw_list.idx_buffer().len() as u32;
         }
-
-        Ok(())
     }
 }

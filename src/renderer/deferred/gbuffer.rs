@@ -190,20 +190,6 @@ impl<'a> GBufferPass<'a> {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        static mut DRAW_LOG_COUNTER: u32 = 0;
-        static mut PREV_MESH_COUNT: usize = 0;
-        let mesh_count = self.meshes.len();
-        if mesh_count != PREV_MESH_COUNT {
-            DRAW_LOG_COUNTER = 0;
-            PREV_MESH_COUNT = mesh_count;
-        }
-        DRAW_LOG_COUNTER += 1;
-        let should_log = DRAW_LOG_COUNTER <= 3;
-
-        if should_log {
-            crate::log!("=== draw_meshes (GBuffer): {} meshes ===", mesh_count);
-        }
-
         if self.meshes.is_empty() {
             return Ok(());
         }
@@ -212,9 +198,9 @@ impl<'a> GBufferPass<'a> {
         let use_ecs = !renderable_entities.is_empty();
 
         if use_ecs {
-            self.draw_meshes_ecs(command_buffer, image_index, &renderable_entities, should_log)?;
+            self.draw_meshes_ecs(command_buffer, image_index, &renderable_entities)?;
         } else {
-            self.draw_meshes_legacy(command_buffer, image_index, should_log)?;
+            self.draw_meshes_legacy(command_buffer, image_index)?;
         }
 
         Ok(())
@@ -225,12 +211,7 @@ impl<'a> GBufferPass<'a> {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
         entities: &[crate::ecs::Entity],
-        should_log: bool,
     ) -> Result<()> {
-        if should_log {
-            crate::log!("  Using ECS rendering: {} entities", entities.len());
-        }
-
         for &entity in entities {
             let Some(mesh_ref) = self.ecs_world.get_component::<MeshRef>(entity) else {
                 continue;
@@ -245,22 +226,11 @@ impl<'a> GBufferPass<'a> {
                 continue;
             }
 
-            let mesh = &self.meshes[mesh_index];
-
-            if should_log {
-                crate::log!(
-                    "  ECS Entity {}: asset_id={}, mesh_index={}, render_to_gbuffer={}",
-                    entity,
-                    mesh_ref.mesh_asset_id,
-                    mesh_index,
-                    mesh_asset.render_to_gbuffer
-                );
-            }
-
             if !mesh_asset.render_to_gbuffer {
                 continue;
             }
 
+            let mesh = &self.meshes[mesh_index];
             self.draw_single_mesh(command_buffer, image_index, mesh, mesh_index)?;
         }
 
@@ -271,24 +241,9 @@ impl<'a> GBufferPass<'a> {
         &self,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
-        should_log: bool,
     ) -> Result<()> {
-        if should_log {
-            crate::log!("  Using legacy rendering: {} meshes", self.meshes.len());
-        }
-
         for i in 0..self.meshes.len() {
             let mesh = &self.meshes[i];
-
-            if should_log {
-                crate::log!(
-                    "  GBuffer Mesh[{}]: render_to_gbuffer={}, vertex_buffer={:?}, indices={}",
-                    i,
-                    mesh.render_to_gbuffer,
-                    mesh.vertex_buffer.buffer,
-                    mesh.index_buffer.indices
-                );
-            }
 
             if !mesh.render_to_gbuffer {
                 continue;

@@ -79,21 +79,16 @@ unsafe fn create_render_pass(
     rrswapchain: &RRSwapchain,
     rrrender: &mut RRRender,
 ) -> Result<()> {
-    // we need to tell Vulkan about the framebuffer attachments that will be used while rendering.
-    // We need to specify how many color and depth buffers there will be, how many samples to use for each of them and how their contents should be handled throughout the rendering operations.
-    // All of this information is wrapped in a render pass object
     let color_attachment = vk::AttachmentDescription::builder()
         .format(rrswapchain.swapchain_format)
         .samples(rrdevice.msaa_samples)
         .load_op(vk::AttachmentLoadOp::CLEAR)
         .store_op(vk::AttachmentStoreOp::STORE)
-        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE) // for stencil buffer
-        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE) // for stencil buffer
+        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
         .initial_layout(vk::ImageLayout::UNDEFINED)
         .final_layout(vk::ImageLayout::PRESENT_SRC_KHR);
 
-    // That's because multisampled images cannot be presented directly.
-    // We first need to resolve them to a regular image.
     let color_resolve_attachment = vk::AttachmentDescription::builder()
         .format(rrswapchain.swapchain_format)
         .samples(vk::SampleCountFlags::_1)
@@ -104,7 +99,6 @@ unsafe fn create_render_pass(
         .initial_layout(vk::ImageLayout::UNDEFINED)
         .final_layout(vk::ImageLayout::PRESENT_SRC_KHR);
 
-    //  Subpasses are subsequent rendering operations that depend on the contents of framebuffers in previous passes
     let color_attachment_ref = vk::AttachmentReference::builder()
         .attachment(0)
         .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
@@ -113,7 +107,6 @@ unsafe fn create_render_pass(
         .attachment(2)
         .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
 
-    // The index of the attachment in this array is directly referenced from the fragment shader with the layout(location = 0) out vec4 outColor directive!
     let color_attachments = &[color_attachment_ref];
     let resolve_attachments = &[color_resolve_attachement_ref];
 
@@ -137,17 +130,13 @@ unsafe fn create_render_pass(
         .depth_stencil_attachment(&depth_stencil_attachment_ref)
         .resolve_attachments(resolve_attachments);
 
-    // The subpasses in a render pass automatically take care of image layout transitions.
-    // These transitions are controlled by subpass dependencies, which specify memory and execution dependencies between subpasses
-    // The depth image is first accessed in the early fragment test pipeline stage
-    // and because we have a load operation that clears, we should specify the access mask for writes.
     let dependency = vk::SubpassDependency::builder()
         .src_subpass(vk::SUBPASS_EXTERNAL)
         .dst_subpass(0)
         .src_stage_mask(
             vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
                 | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
-        ) //  wait for the swapchain to finish reading from the image before we can access it
+        )
         .src_access_mask(vk::AccessFlags::empty())
         .dst_stage_mask(
             vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
@@ -220,7 +209,6 @@ pub unsafe fn create_depth_objects(
     rrcommand_buffer: &RRCommandPool,
     rrrender: &mut RRRender,
 ) -> Result<()> {
-    // The stencil component is used for stencil tests, which is an additional test that can be combined with depth testing.
     let format = get_depth_format(instance, rrdevice)?;
     let (depth_image, depth_image_memory) = create_image(
         instance,

@@ -49,7 +49,6 @@ impl RRUniformBuffer {
         &mut self,
         rrdevice: &RRDevice,
         ubo: &UniformBufferObject,
-        name: &str,
     ) -> anyhow::Result<()> {
         let memory = rrdevice.device.map_memory(
             self.buffer_memory,
@@ -62,19 +61,6 @@ impl RRUniformBuffer {
 
         self.uniform_buffer_object = ubo.clone();
 
-        static mut LOG_COUNTER: u32 = 0;
-        LOG_COUNTER += 1;
-        if LOG_COUNTER % 300 == 1 {
-            log!(
-                "RRUniformBuffer::update [{}] buffer={:?} model_translation=({:.2},{:.2},{:.2})",
-                name,
-                self.buffer,
-                ubo.model.w.x,
-                ubo.model.w.y,
-                ubo.model.w.z
-            );
-        }
-
         Ok(())
     }
 
@@ -83,30 +69,6 @@ impl RRUniformBuffer {
         rrdevice.device.free_memory(self.buffer_memory, None);
     }
 }
-
-// unsafe fn create_uniform_buffers(
-//     instance: &Instance,
-//     rrdevice: &RRDevice,
-//     rrswapchain: &RRSwapchain,
-// ) -> Result<()> {
-//     data.uniform_buffers.clear();
-//     data.uniform_buffer_memories.clear();
-//
-//     for _ in 0..data.swapchain_images.len() {
-//         let (uniform_buffer, uniform_buffer_memory) = Self::create_buffer(
-//             instance,
-//             device,
-//             data,
-//             size_of::<UniformBufferObject>() as u64,
-//             vk::BufferUsageFlags::UNIFORM_BUFFER,
-//             vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-//         )?;
-//         data.uniform_buffers.push(uniform_buffer);
-//         data.uniform_buffer_memories.push(uniform_buffer_memory);
-//     }
-//
-//     Ok(())
-// }
 
 #[derive(Clone, Debug, Default)]
 pub struct RRIndexBuffer {
@@ -263,7 +225,6 @@ impl RRVertexBuffer {
         self.vertices = 0;
     }
 
-    // TODO: efficiency
     pub unsafe fn update(
         &mut self,
         instance: &Instance,
@@ -423,7 +384,6 @@ pub unsafe fn copy_buffer_to_image(
             depth: 1,
         });
 
-    //  has already been transitioned to the layout that is optimal for copying pixels
     rrdevice.device.cmd_copy_buffer_to_image(
         command_buffer,
         buffer,

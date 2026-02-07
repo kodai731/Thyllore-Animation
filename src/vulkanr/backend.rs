@@ -376,9 +376,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             let rrdata = &mut billboard.render_state.descriptor_set.rrdata[i];
 
             let ubo = UniformBufferObject { model, view, proj };
-
-            let name = format!("billboard[{}]", i);
-            rrdata.rruniform_buffers[image_index].update(self.device, &ubo, &name)?;
+            rrdata.rruniform_buffers[image_index].update(self.device, &ubo)?;
         }
 
         Ok(())

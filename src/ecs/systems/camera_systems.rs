@@ -117,7 +117,7 @@ pub fn camera_pan_projection(
     let ndc_depth = pivot_clip.z / pivot_clip.w;
 
     let ndc_dx = -2.0 * mouse_diff.x / screen_size.x;
-    let ndc_dy = 2.0 * mouse_diff.y / screen_size.y;
+    let ndc_dy = -2.0 * mouse_diff.y / screen_size.y;
 
     let center_world = vp_inv * Vector4::new(0.0, 0.0, ndc_depth, 1.0);
     let shifted_world = vp_inv * Vector4::new(ndc_dx, ndc_dy, ndc_depth, 1.0);

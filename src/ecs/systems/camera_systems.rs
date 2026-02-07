@@ -1,4 +1,4 @@
-use cgmath::{InnerSpace, Matrix3, SquareMatrix, Vector2, Vector3};
+use cgmath::{Deg, InnerSpace, Matrix3, SquareMatrix, Vector2, Vector3, Vector4};
 
 use crate::app::GUIData;
 use crate::math::{coordinate_system::world_y_axis, rodrigues};
@@ -20,6 +20,7 @@ pub fn camera_input_system(
     camera: &mut Camera,
     gui_data: &GUIData,
     grid_scale: f32,
+    screen_size: [f32; 2],
 ) {
     camera_input_system_inner(
         camera,
@@ -28,6 +29,7 @@ pub fn camera_input_system(
         gui_data.mouse_wheel,
         gui_data.mouse_diff,
         grid_scale,
+        screen_size,
     );
 }
 
@@ -38,16 +40,15 @@ pub fn camera_input_system_inner(
     mouse_wheel: f32,
     mouse_diff: [f32; 2],
     grid_scale: f32,
+    screen_size: [f32; 2],
 ) {
     let diff = Vector2::new(mouse_diff[0], mouse_diff[1]);
 
     if is_right_clicked && diff.magnitude() > 0.001 {
         camera_rotate(camera, diff);
     } else if is_wheel_clicked && diff.magnitude() > 0.001 {
-        let base_x = camera_right(camera);
-        let base_y = camera.up;
-        let pan_speed = grid_scale * 0.01;
-        camera_pan_with_base(camera, diff, base_x, base_y, pan_speed);
+        let screen = Vector2::new(screen_size[0], screen_size[1]);
+        camera_pan_projection(camera, diff, screen, grid_scale);
     }
 
     if mouse_wheel != 0.0 {
@@ -74,33 +75,65 @@ pub fn camera_rotate(
     }
 
     let rotate = rotate_y * rotate_x;
-    camera.up = rotate * camera.up;
-    camera.direction = rotate * camera.direction;
+    camera.direction = (rotate * camera.direction).normalize();
 
-    camera.direction = camera.direction.normalize();
-    let camera_right_new = camera.up.cross(camera.direction).normalize();
-    camera.up = camera.direction.cross(camera_right_new).normalize();
+    let world_up = world_y_axis();
+    let right_candidate = camera.direction.cross(world_up);
+    if right_candidate.magnitude2() > 1e-6 {
+        let right = right_candidate.normalize();
+        camera.up = right.cross(camera.direction).normalize();
+    } else {
+        camera.up = rotate * camera.up;
+        let right = camera.up.cross(camera.direction).normalize();
+        camera.up = camera.direction.cross(right).normalize();
+    }
 
     (camera.direction, camera.up)
 }
 
-pub fn camera_pan(camera: &mut Camera, mouse_diff: Vector2<f32>, speed: f32) {
-    let cam_right = camera.up.cross(camera.direction).normalize();
-    let translate_x = -cam_right * mouse_diff.x * speed;
-    let translate_y = -camera.up * mouse_diff.y * speed;
-    camera.position += translate_x + translate_y;
-}
-
-pub fn camera_pan_with_base(
+pub fn camera_pan_projection(
     camera: &mut Camera,
     mouse_diff: Vector2<f32>,
-    base_x: Vector3<f32>,
-    base_y: Vector3<f32>,
-    speed: f32,
+    screen_size: Vector2<f32>,
+    pivot_distance: f32,
 ) {
-    let translate_x = base_x * mouse_diff.x * speed;
-    let translate_y = base_y * mouse_diff.y * speed;
-    camera.position += translate_x + translate_y;
+    let view_matrix = unsafe {
+        crate::math::view(camera.position, camera.direction, camera.up)
+    };
+    let aspect = screen_size.x / screen_size.y;
+    let proj_matrix = crate::math::perspective(
+        Deg(45.0),
+        aspect,
+        camera.near_plane,
+        camera.far_plane,
+    );
+    let vp = proj_matrix * view_matrix;
+    let Some(vp_inv) = vp.invert() else {
+        return;
+    };
+
+    let pivot = camera.position + camera.direction * pivot_distance;
+    let pivot_clip = vp * Vector4::new(pivot.x, pivot.y, pivot.z, 1.0);
+    let ndc_depth = pivot_clip.z / pivot_clip.w;
+
+    let ndc_dx = -2.0 * mouse_diff.x / screen_size.x;
+    let ndc_dy = -2.0 * mouse_diff.y / screen_size.y;
+
+    let center_world = vp_inv * Vector4::new(0.0, 0.0, ndc_depth, 1.0);
+    let shifted_world = vp_inv * Vector4::new(ndc_dx, ndc_dy, ndc_depth, 1.0);
+
+    let center = Vector3::new(
+        center_world.x / center_world.w,
+        center_world.y / center_world.w,
+        center_world.z / center_world.w,
+    );
+    let shifted = Vector3::new(
+        shifted_world.x / shifted_world.w,
+        shifted_world.y / shifted_world.w,
+        shifted_world.z / shifted_world.w,
+    );
+
+    camera.position += shifted - center;
 }
 
 pub fn camera_zoom(camera: &mut Camera, mouse_wheel: f32, speed: f32) {
@@ -137,8 +170,4 @@ pub fn camera_move_to_look_at(camera: &mut Camera, target: Vector3<f32>, offset:
     camera.position = target + offset;
     camera.direction = (target - camera.position).normalize();
     camera.up = Vector3::new(0.0, 1.0, 0.0);
-}
-
-pub fn camera_right(camera: &Camera) -> Vector3<f32> {
-    camera.up.cross(camera.direction).normalize()
 }

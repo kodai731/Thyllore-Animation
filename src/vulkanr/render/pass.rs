@@ -25,6 +25,20 @@ pub struct RRRender {
 }
 
 impl RRRender {
+    pub unsafe fn destroy_size_dependent(&self, device: &crate::vulkanr::core::device::Device) {
+        for &fb in &self.framebuffers {
+            device.destroy_framebuffer(fb, None);
+        }
+
+        device.destroy_image_view(self.depth_image_view, None);
+        device.free_memory(self.depth_image_memory, None);
+        device.destroy_image(self.depth_image, None);
+
+        device.destroy_image_view(self.color_image_view, None);
+        device.free_memory(self.color_image_memory, None);
+        device.destroy_image(self.color_image, None);
+    }
+
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -199,7 +213,7 @@ unsafe fn get_suppoted_format(
         .ok_or_else(|| anyhow!("Failed to find supported format"))
 }
 
-unsafe fn create_depth_objects(
+pub unsafe fn create_depth_objects(
     instance: &Instance,
     rrdevice: &RRDevice,
     rrswapchain: &RRSwapchain,

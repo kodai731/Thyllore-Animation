@@ -1,6 +1,13 @@
 use crate::app::App;
+use crate::vulkanr::command::RRCommandBuffer;
+use crate::vulkanr::context::{CommandState, RenderTargets, SwapchainState};
+use crate::vulkanr::render::framebuffer::{create_color_objects, create_framebuffers};
+use crate::vulkanr::render::pass::create_depth_objects;
+use crate::vulkanr::swapchain::RRSwapchain;
 
+use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
+use winit::window::Window;
 
 impl App {
     unsafe fn destroy(&mut self) {
@@ -45,7 +52,8 @@ impl App {
             crate::log!("Destroyed ray query pipeline");
         }
 
-        if let Some(mut acceleration_structure) = self.data.raytracing.acceleration_structure.take() {
+        if let Some(mut acceleration_structure) = self.data.raytracing.acceleration_structure.take()
+        {
             acceleration_structure.destroy(&self.rrdevice.device);
             crate::log!("Destroyed acceleration structure");
         }
@@ -61,97 +69,73 @@ impl App {
         crate::log!("All application resources destroyed");
     }
 
-    //unsafe fn recreate_swapchain(&mut self, window: &Window) -> Result<()> {
-    // self.rrdevice.device.device_wait_idle()?;
-    // self.destroy_swapchain();
-    // Self::create_swapchain(
-    //     window,
-    //     &self.instance,
-    //     &self.rrdevice.device,
-    //     &mut self.data,
-    // )?;
-    // Self::create_swapchain_image_view(&self.rrdevice.device, &mut self.data)?;
-    // Self::create_render_pass(&self.instance, &self.rrdevice.device, &mut self.data)?;
-    // Self::create_pipeline(&self.rrdevice.device, &mut self.data)?;
-    // Self::create_color_objects(&self.instance, &self.rrdevice.device, &mut self.data)?;
-    // Self::create_depth_objects(&self.instance, &self.rrdevice.device, &mut self.data)?;
-    // Self::create_framebuffers(&self.rrdevice.device, &mut self.data)?;
-    // Self::create_uniform_buffers(&self.instance, &self.rrdevice.device, &mut self.data)?;
-    // Self::create_uniform_buffers_grid(&self.instance, &self.rrdevice.device, &mut self.data)?;
-    // Self::create_descriptor_pool(&self.rrdevice.device, &mut self.data)?;
-    // Self::create_descriptor_sets(&self.rrdevice.device, &mut self.data)?;
-    // Self::create_descriptor_sets_grid(&self.rrdevice.device, &mut self.data)?;
-    // Self::create_command_buffers(&self.rrdevice.device, &mut self.data)?;
-    // self.data
-    //     .images_in_flight
-    //     .resize(self.data.swapchain_images.len(), vk::Fence::null());
-    //
-    //Ok(())
-    // }
+    pub unsafe fn recreate_swapchain(&mut self, window: &Window) -> Result<()> {
+        self.rrdevice.device.device_wait_idle()?;
 
-    unsafe fn destroy_swapchain(&mut self) {
-        // // depth objects
-        // self.rrdevice
-        //     .device
-        //     .destroy_image(self.data.depth_image, None);
-        // self.rrdevice
-        //     .device
-        //     .free_memory(self.data.depth_image_memory, None);
-        // self.rrdevice
-        //     .device
-        //     .destroy_image_view(self.data.depth_image_view, None);
-        // // color objects
-        // self.rrdevice
-        //     .device
-        //     .destroy_image(self.data.color_image, None);
-        // self.rrdevice
-        //     .device
-        //     .free_memory(self.data.color_image_memory, None);
-        // self.rrdevice
-        //     .device
-        //     .destroy_image_view(self.data.color_image_view, None);
-        // // descriptor pool
-        // self.rrdevice
-        //     .device
-        //     .destroy_descriptor_pool(self.data.descriptor_pool, None);
-        // // uniform buffers
-        // self.data
-        //     .uniform_buffers
-        //     .iter()
-        //     .for_each(|b| self.rrdevice.device.destroy_buffer(*b, None));
-        // self.data
-        //     .uniform_buffer_memories
-        //     .iter()
-        //     .for_each(|m| self.rrdevice.device.free_memory(*m, None));
-        // // framebuffers
-        // self.data
-        //     .framebuffers
-        //     .iter()
-        //     .for_each(|f| self.rrdevice.device.destroy_framebuffer(*f, None));
-        // // command buffers
-        // self.rrdevice
-        //     .device
-        //     .free_command_buffers(self.data.command_pool, &self.data.command_buffers);
-        // // The pipeline layout will be referenced throughout the program's lifetime
-        // self.rrdevice
-        //     .device
-        //     .destroy_pipeline_layout(self.data.pipeline_layout, None);
-        // // render pass
-        // self.rrdevice
-        //     .device
-        //     .destroy_render_pass(self.data.render_pass, None);
-        // // graphics pipeline
-        // self.rrdevice
-        //     .device
-        //     .destroy_pipeline(self.data.pipeline, None);
-        // // swapchain imageviews
-        // self.data
-        //     .swapchain_image_views
-        //     .iter()
-        //     .for_each(|v| self.rrdevice.device.destroy_image_view(*v, None));
-        // // swapchain
-        // self.rrdevice
-        //     .device
-        //     .destroy_swapchain_khr(self.data.swapchain, None);
+        {
+            let render_targets = self.resource::<RenderTargets>();
+            render_targets
+                .render
+                .destroy_size_dependent(&self.rrdevice.device);
+        }
+
+        {
+            let swapchain_state = self.resource::<SwapchainState>();
+            swapchain_state.swapchain.destroy(&self.rrdevice.device);
+        }
+
+        let command_pool_handle = {
+            let command_state = self.resource::<CommandState>();
+            let pool_handle = command_state.pool.command_pool;
+            self.rrdevice.device.free_command_buffers(
+                pool_handle,
+                &command_state.buffers.command_buffers,
+            );
+            pool_handle
+        };
+
+        let surface = self.surface_state().surface;
+        let new_swapchain =
+            RRSwapchain::new(window, &self.instance, &surface, &self.rrdevice);
+        let image_count = new_swapchain.swapchain_images.len();
+
+        {
+            let mut render_targets = self.resource_mut::<RenderTargets>();
+            create_depth_objects(
+                &self.instance,
+                &self.rrdevice,
+                &new_swapchain,
+                &crate::vulkanr::command::RRCommandPool {
+                    command_pool: command_pool_handle,
+                },
+                &mut render_targets.render,
+            )?;
+            create_color_objects(
+                &self.instance,
+                &self.rrdevice,
+                &new_swapchain,
+                &mut render_targets.render,
+            )?;
+            create_framebuffers(&self.rrdevice, &new_swapchain, &mut render_targets.render)?;
+        }
+
+        {
+            let mut command_state = self.resource_mut::<CommandState>();
+            let render_targets = self.resource::<RenderTargets>();
+            RRCommandBuffer::allocate_command_buffers(
+                &self.rrdevice,
+                &render_targets.render,
+                &mut command_state.buffers,
+            )?;
+        }
+
+        {
+            let mut swapchain_state = self.resource_mut::<SwapchainState>();
+            swapchain_state.swapchain = new_swapchain;
+            swapchain_state.images_in_flight = vec![vk::Fence::null(); image_count];
+        }
+
+        crate::log!("Swapchain recreated successfully");
+        Ok(())
     }
 }

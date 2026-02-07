@@ -17,6 +17,17 @@ impl App {
             self.data
                 .viewport
                 .resize(&self.instance, &self.rrdevice, command_pool, width, height)?;
+
+            if let (Some(ref hdr_buffer), Some(ref tonemap_descriptor)) = (
+                &self.data.viewport.hdr_buffer,
+                &self.data.raytracing.tonemap_descriptor,
+            ) {
+                tonemap_descriptor.update_hdr_sampler(
+                    &self.rrdevice,
+                    hdr_buffer.color_image_view,
+                    hdr_buffer.sampler,
+                )?;
+            }
         }
 
         if gui_data.file_changed {

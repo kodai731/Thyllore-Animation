@@ -8,7 +8,8 @@ use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::data::{self as vulkan_data, SceneUniformData};
 use crate::vulkanr::descriptor::{
-    RRRayQueryDescriptorSet, RRCompositeDescriptorSet, RRBillboardDescriptorSet
+    RRRayQueryDescriptorSet, RRCompositeDescriptorSet, RRBillboardDescriptorSet,
+    RRToneMapDescriptorSet,
 };
 use crate::vulkanr::image::{create_texture_sampler, create_nearest_sampler};
 use crate::vulkanr::pipeline::{PipelineBuilder, RRPipeline, VertexInputConfig, PushConstantConfig};
@@ -31,6 +32,9 @@ pub struct RayTracingData {
 
     pub composite_pipeline: Option<RRPipeline>,
     pub composite_descriptor: Option<RRCompositeDescriptorSet>,
+
+    pub tonemap_pipeline: Option<RRPipeline>,
+    pub tonemap_descriptor: Option<RRToneMapDescriptorSet>,
 
     pub scene_uniform_buffer: Option<vk::Buffer>,
     pub scene_uniform_buffer_memory: Option<vk::DeviceMemory>,
@@ -136,6 +140,7 @@ impl RayTracingData {
         billboard_descriptor_set: &mut RRBillboardDescriptorSet,
         offscreen_render_pass: Option<vk::RenderPass>,
         offscreen_extent: Option<vk::Extent2D>,
+        hdr_render_pass: Option<vk::RenderPass>,
     ) -> Result<()> {
         crate::log!("create_pipelines: starting...");
         crate::log!("create_pipelines: gbuffer is_some: {}", self.gbuffer.is_some());
@@ -278,7 +283,12 @@ impl RayTracingData {
             size: 4,
         });
 
-        if let Some(render_pass) = offscreen_render_pass {
+        if let Some(render_pass) = hdr_render_pass {
+            composite_builder = composite_builder
+                .custom_render_pass(render_pass)
+                .msaa_samples(vk::SampleCountFlags::_1);
+            crate::log!("create_pipelines: using HDR render pass for composite pipeline");
+        } else if let Some(render_pass) = offscreen_render_pass {
             composite_builder = composite_builder.custom_render_pass(render_pass);
             crate::log!("create_pipelines: using offscreen render pass for composite pipeline");
         }
@@ -291,6 +301,50 @@ impl RayTracingData {
         log::info!("Created composite descriptor set and pipeline");
 
         log::info!("Ray Tracing pipelines created successfully");
+        Ok(())
+    }
+
+    pub unsafe fn create_tonemap_pipeline(
+        &mut self,
+        rrdevice: &RRDevice,
+        rrrender: &RRRender,
+        hdr_image_view: vk::ImageView,
+        hdr_sampler: vk::Sampler,
+        offscreen_render_pass: vk::RenderPass,
+        offscreen_extent: vk::Extent2D,
+    ) -> Result<()> {
+        let mut tonemap_descriptor = RRToneMapDescriptorSet {
+            descriptor_set_layout: RRToneMapDescriptorSet::create_layout(rrdevice)?,
+            descriptor_pool: RRToneMapDescriptorSet::create_pool(rrdevice)?,
+            descriptor_set: vk::DescriptorSet::null(),
+        };
+
+        tonemap_descriptor.allocate_and_update(rrdevice, hdr_image_view, hdr_sampler)?;
+
+        let tonemap_pipeline = PipelineBuilder::new(
+            "assets/shaders/tonemapVert.spv",
+            "assets/shaders/tonemapFrag.spv",
+        )
+        .vertex_input(VertexInputConfig::Custom {
+            bindings: vec![],
+            attributes: vec![],
+        })
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .no_depth_test()
+        .custom_render_pass(offscreen_render_pass)
+        .descriptor_layouts(vec![tonemap_descriptor.descriptor_set_layout])
+        .push_constants(PushConstantConfig {
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            offset: 0,
+            size: 20,
+        })
+        .build(rrdevice, rrrender, Some(offscreen_extent))?;
+
+        self.tonemap_pipeline = Some(tonemap_pipeline);
+        self.tonemap_descriptor = Some(tonemap_descriptor);
+        log::info!("Created tonemap pipeline and descriptor set");
+
         Ok(())
     }
 }

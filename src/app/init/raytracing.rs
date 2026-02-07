@@ -63,16 +63,65 @@ impl App {
                 (None, None)
             };
 
-        let mut billboard = data.ecs_world.resource_mut::<BillboardData>();
-        data.raytracing.create_pipelines(
-            instance,
+        let hdr_render_pass = data
+            .viewport
+            .hdr_buffer
+            .as_ref()
+            .map(|hdr| hdr.render_pass);
+
+        {
+            let mut billboard = data.ecs_world.resource_mut::<BillboardData>();
+            data.raytracing.create_pipelines(
+                instance,
+                rrdevice,
+                rrswapchain,
+                rrrender,
+                &data.graphics_resources,
+                &mut billboard.render_state.descriptor_set,
+                offscreen_render_pass,
+                offscreen_extent,
+                hdr_render_pass,
+            )?;
+        }
+
+        Self::create_tonemap_pipeline_with_resources(rrdevice, data, rrrender)?;
+
+        Ok(())
+    }
+
+    pub(crate) unsafe fn create_tonemap_pipeline_with_resources(
+        rrdevice: &RRDevice,
+        data: &mut AppData,
+        rrrender: &RRRender,
+    ) -> Result<()> {
+        let (hdr_image_view, hdr_sampler) =
+            match data.viewport.hdr_buffer {
+                Some(ref hdr) => (hdr.color_image_view, hdr.sampler),
+                None => {
+                    crate::log!("HDR buffer not available, skipping tonemap pipeline");
+                    return Ok(());
+                }
+            };
+
+        let (offscreen_render_pass, offscreen_extent) =
+            match data.viewport.offscreen {
+                Some(ref offscreen) => (offscreen.render_pass, offscreen.extent()),
+                None => {
+                    crate::log!("Offscreen not available, skipping tonemap pipeline");
+                    return Ok(());
+                }
+            };
+
+        data.raytracing.create_tonemap_pipeline(
             rrdevice,
-            rrswapchain,
             rrrender,
-            &data.graphics_resources,
-            &mut billboard.render_state.descriptor_set,
+            hdr_image_view,
+            hdr_sampler,
             offscreen_render_pass,
             offscreen_extent,
-        )
+        )?;
+
+        crate::log!("Tonemap pipeline created successfully");
+        Ok(())
     }
 }

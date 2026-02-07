@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::animation::editable::EditableAnimationClip;
 
-pub const SCENE_FORMAT_VERSION: u32 = 2;
+pub const SCENE_FORMAT_VERSION: u32 = 4;
 pub const ANIMATION_FORMAT_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,6 +128,17 @@ pub struct CameraState {
     pub direction: Option<[f32; 3]>,
     #[serde(default)]
     pub up: Option<[f32; 3]>,
+
+    #[serde(default)]
+    pub physical_camera: Option<PhysicalCameraState>,
+    #[serde(default)]
+    pub exposure: Option<ExposureState>,
+    #[serde(default)]
+    pub depth_of_field: Option<DepthOfFieldState>,
+    #[serde(default)]
+    pub tone_mapping: Option<ToneMappingState>,
+    #[serde(default)]
+    pub lens_effects: Option<LensEffectsState>,
 }
 
 impl Default for CameraState {
@@ -142,6 +153,11 @@ impl Default for CameraState {
             position: None,
             direction: None,
             up: None,
+            physical_camera: None,
+            exposure: None,
+            depth_of_field: None,
+            tone_mapping: None,
+            lens_effects: None,
         }
     }
 }
@@ -178,4 +194,41 @@ impl Default for EditorState {
             curve_editor_open: false,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PhysicalCameraState {
+    pub focal_length_mm: f32,
+    pub sensor_height_mm: f32,
+    pub aperture_f_stops: f32,
+    pub shutter_speed_s: f32,
+    pub sensitivity_iso: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExposureState {
+    pub ev100: f32,
+    pub exposure_value: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepthOfFieldState {
+    pub enabled: bool,
+    pub focus_distance: f32,
+    pub max_blur_radius: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToneMappingState {
+    pub enabled: bool,
+    pub operator: String,
+    pub gamma: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LensEffectsState {
+    pub vignette_enabled: bool,
+    pub vignette_intensity: f32,
+    pub chromatic_aberration_enabled: bool,
+    pub chromatic_aberration_intensity: f32,
 }

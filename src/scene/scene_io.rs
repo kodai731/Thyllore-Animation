@@ -4,15 +4,16 @@ use std::path::{Path, PathBuf};
 use super::clip_io::{load_animation_clip, save_animation_clip};
 use super::error::{SceneError, SceneResult};
 use super::format::{
-    AnimationClipRef, CameraState, EditorState, SceneFile, SceneMetadata, TimelineConfig,
-    SCENE_FORMAT_VERSION,
+    AnimationClipRef, CameraState, DepthOfFieldState, EditorState, ExposureState,
+    LensEffectsState, PhysicalCameraState, SceneFile, SceneMetadata, TimelineConfig,
+    ToneMappingState, SCENE_FORMAT_VERSION,
 };
 use crate::animation::editable::SourceClipId;
-use crate::ecs::resource::Camera;
-use crate::ecs::resource::ClipLibrary;
-use crate::ecs::resource::{SceneState, TimelineState};
+use crate::ecs::resource::{
+    Camera, ClipLibrary, DepthOfField, Exposure, LensEffects, ModelState,
+    PhysicalCameraParameters, SceneState, TimelineState, ToneMapOperator, ToneMapping,
+};
 use crate::ecs::world::World;
-use crate::ecs::resource::ModelState;
 use crate::platform::CurveEditorState;
 
 pub fn save_scene(scene_path: &Path, world: &World) -> SceneResult<()> {
@@ -53,6 +54,59 @@ impl CollectedSceneState {
             .map(|s| s.model_path.clone())
             .unwrap_or_default();
 
+        let physical_camera =
+            world
+                .get_resource::<PhysicalCameraParameters>()
+                .map(|p| PhysicalCameraState {
+                    focal_length_mm: p.focal_length_mm,
+                    sensor_height_mm: p.sensor_height_mm,
+                    aperture_f_stops: p.aperture_f_stops,
+                    shutter_speed_s: p.shutter_speed_s,
+                    sensitivity_iso: p.sensitivity_iso,
+                });
+
+        let exposure = world
+            .get_resource::<Exposure>()
+            .map(|e| ExposureState {
+                ev100: e.ev100,
+                exposure_value: e.exposure_value,
+            });
+
+        let depth_of_field =
+            world
+                .get_resource::<DepthOfField>()
+                .map(|d| DepthOfFieldState {
+                    enabled: d.enabled,
+                    focus_distance: d.focus_distance,
+                    max_blur_radius: d.max_blur_radius,
+                });
+
+        let tone_mapping =
+            world
+                .get_resource::<ToneMapping>()
+                .map(|tm| {
+                    let operator_str = match tm.operator {
+                        ToneMapOperator::None => "None",
+                        ToneMapOperator::AcesFilmic => "AcesFilmic",
+                        ToneMapOperator::Reinhard => "Reinhard",
+                    };
+                    ToneMappingState {
+                        enabled: tm.enabled,
+                        operator: operator_str.to_string(),
+                        gamma: tm.gamma,
+                    }
+                });
+
+        let lens_effects =
+            world
+                .get_resource::<LensEffects>()
+                .map(|le| LensEffectsState {
+                    vignette_enabled: le.vignette_enabled,
+                    vignette_intensity: le.vignette_intensity,
+                    chromatic_aberration_enabled: le.chromatic_aberration_enabled,
+                    chromatic_aberration_intensity: le.chromatic_aberration_intensity,
+                });
+
         let camera = world
             .get_resource::<Camera>()
             .map(|c| CameraState {
@@ -64,6 +118,11 @@ impl CollectedSceneState {
                 position: None,
                 direction: None,
                 up: None,
+                physical_camera: physical_camera.clone(),
+                exposure: exposure.clone(),
+                depth_of_field: depth_of_field.clone(),
+                tone_mapping,
+                lens_effects,
             })
             .unwrap_or_default();
 
@@ -189,7 +248,11 @@ pub fn load_scene(scene_path: &Path) -> SceneResult<LoadedScene> {
     let content = fs::read_to_string(scene_path)?;
     let scene: SceneFile = ron::from_str(&content)?;
 
-    if scene.version != SCENE_FORMAT_VERSION && scene.version != 1 {
+    if scene.version != SCENE_FORMAT_VERSION
+        && scene.version != 1
+        && scene.version != 2
+        && scene.version != 3
+    {
         return Err(SceneError::VersionMismatch {
             expected: SCENE_FORMAT_VERSION,
             found: scene.version,
@@ -295,8 +358,69 @@ pub fn apply_loaded_scene_to_world(
         }
     }
 
-    if let Some(mut curve_editor) = world.get_resource_mut::<CurveEditorState>() {
-        curve_editor.selected_bone_id = loaded.scene.editor.selected_bone_id;
-        curve_editor.is_open = loaded.scene.editor.curve_editor_open;
+    if let Some(mut curve_editor) =
+        world.get_resource_mut::<CurveEditorState>()
+    {
+        curve_editor.selected_bone_id =
+            loaded.scene.editor.selected_bone_id;
+        curve_editor.is_open =
+            loaded.scene.editor.curve_editor_open;
+    }
+
+    if let Some(ref phys) = loaded.scene.camera.physical_camera {
+        if let Some(mut params) =
+            world.get_resource_mut::<PhysicalCameraParameters>()
+        {
+            params.focal_length_mm = phys.focal_length_mm;
+            params.sensor_height_mm = phys.sensor_height_mm;
+            params.aperture_f_stops = phys.aperture_f_stops;
+            params.shutter_speed_s = phys.shutter_speed_s;
+            params.sensitivity_iso = phys.sensitivity_iso;
+        }
+    }
+
+    if let Some(ref exp) = loaded.scene.camera.exposure {
+        if let Some(mut exposure) =
+            world.get_resource_mut::<Exposure>()
+        {
+            exposure.ev100 = exp.ev100;
+            exposure.exposure_value = exp.exposure_value;
+        }
+    }
+
+    if let Some(ref dof) = loaded.scene.camera.depth_of_field {
+        if let Some(mut depth_of_field) =
+            world.get_resource_mut::<DepthOfField>()
+        {
+            depth_of_field.enabled = dof.enabled;
+            depth_of_field.focus_distance = dof.focus_distance;
+            depth_of_field.max_blur_radius =
+                dof.max_blur_radius;
+        }
+    }
+
+    if let Some(ref tm) = loaded.scene.camera.tone_mapping {
+        if let Some(mut tone_mapping) =
+            world.get_resource_mut::<ToneMapping>()
+        {
+            tone_mapping.enabled = tm.enabled;
+            tone_mapping.operator = match tm.operator.as_str() {
+                "AcesFilmic" => ToneMapOperator::AcesFilmic,
+                "Reinhard" => ToneMapOperator::Reinhard,
+                _ => ToneMapOperator::None,
+            };
+            tone_mapping.gamma = tm.gamma;
+        }
+    }
+
+    if let Some(ref le) = loaded.scene.camera.lens_effects {
+        if let Some(mut lens_effects) =
+            world.get_resource_mut::<LensEffects>()
+        {
+            lens_effects.vignette_enabled = le.vignette_enabled;
+            lens_effects.vignette_intensity = le.vignette_intensity;
+            lens_effects.chromatic_aberration_enabled = le.chromatic_aberration_enabled;
+            lens_effects.chromatic_aberration_intensity = le.chromatic_aberration_intensity;
+        }
     }
 }

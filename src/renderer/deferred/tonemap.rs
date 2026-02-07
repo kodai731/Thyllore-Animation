@@ -2,123 +2,63 @@ use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
-use crate::debugview::DebugViewMode;
 use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
 use crate::app::graphics_resource::GraphicsResources;
 use crate::ecs::component::LineMesh;
+use crate::ecs::resource::{LensEffects, ToneMapping};
 use crate::vulkanr::core::Device;
-use crate::vulkanr::descriptor::RRCompositeDescriptorSet;
+use crate::vulkanr::descriptor::RRToneMapDescriptorSet;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};
 
-pub struct CompositePass<'a> {
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct ToneMapPushConstants {
+    tone_map_operator: i32,
+    gamma: f32,
+    exposure_value: f32,
+    vignette_intensity: f32,
+    chromatic_aberration_intensity: f32,
+}
+
+pub struct ToneMapPass<'a> {
     app: &'a App,
-    composite_pipeline: &'a RRPipeline,
-    composite_descriptor: &'a RRCompositeDescriptorSet,
+    tonemap_pipeline: &'a RRPipeline,
+    tonemap_descriptor: &'a RRToneMapDescriptorSet,
     graphics_resources: &'a GraphicsResources,
     buffer_registry: &'a GpuBufferRegistry,
     device: &'a Device,
-    swapchain_extent: vk::Extent2D,
-    debug_view_mode: DebugViewMode,
+    extent: vk::Extent2D,
 }
 
-impl<'a> CompositePass<'a> {
-    pub fn new(app: &'a App) -> Result<Self> {
-        let composite_pipeline = app
+impl<'a> ToneMapPass<'a> {
+    pub fn new(app: &'a App, extent: vk::Extent2D) -> Result<Self> {
+        let tonemap_pipeline = app
             .data
             .raytracing
-            .composite_pipeline
+            .tonemap_pipeline
             .as_ref()
-            .ok_or_else(|| anyhow!("Composite pipeline not initialized"))?;
-        let composite_descriptor = app
+            .ok_or_else(|| anyhow!("ToneMap pipeline not initialized"))?;
+        let tonemap_descriptor = app
             .data
             .raytracing
-            .composite_descriptor
+            .tonemap_descriptor
             .as_ref()
-            .ok_or_else(|| anyhow!("Composite descriptor set not initialized"))?;
+            .ok_or_else(|| anyhow!("ToneMap descriptor not initialized"))?;
 
         Ok(Self {
             app,
-            composite_pipeline,
-            composite_descriptor,
+            tonemap_pipeline,
+            tonemap_descriptor,
             graphics_resources: &app.data.graphics_resources,
             buffer_registry: &app.data.buffer_registry,
             device: &app.rrdevice.device,
-            swapchain_extent: app.swapchain_state().swapchain.swapchain_extent,
-            debug_view_mode: app.rt_debug_state().debug_view_mode,
-        })
-    }
-
-    pub fn new_for_offscreen(app: &'a App, offscreen_extent: vk::Extent2D) -> Result<Self> {
-        let composite_pipeline = app
-            .data
-            .raytracing
-            .composite_pipeline
-            .as_ref()
-            .ok_or_else(|| anyhow!("Composite pipeline not initialized"))?;
-        let composite_descriptor = app
-            .data
-            .raytracing
-            .composite_descriptor
-            .as_ref()
-            .ok_or_else(|| anyhow!("Composite descriptor set not initialized"))?;
-
-        Ok(Self {
-            app,
-            composite_pipeline,
-            composite_descriptor,
-            graphics_resources: &app.data.graphics_resources,
-            buffer_registry: &app.data.buffer_registry,
-            device: &app.rrdevice.device,
-            swapchain_extent: offscreen_extent,
-            debug_view_mode: app.rt_debug_state().debug_view_mode,
+            extent,
         })
     }
 
     fn pipeline_storage(&self) -> &PipelineStorage {
         self.app.pipeline_storage()
-    }
-
-    pub unsafe fn record(
-        &self,
-        command_buffer: vk::CommandBuffer,
-        render_pass: vk::RenderPass,
-        framebuffer: vk::Framebuffer,
-        image_index: usize,
-    ) -> Result<()> {
-        self.begin_render_pass(command_buffer, render_pass, framebuffer, 2);
-        self.draw_composite(command_buffer)?;
-        self.draw_grid(command_buffer, image_index)?;
-        self.draw_gizmo(command_buffer, image_index)?;
-
-        let grid_mesh = self.app.grid_mesh();
-        let light_gizmo = self.app.light_gizmo();
-        let pipeline_storage = self.pipeline_storage();
-
-        if let Some(pipeline_id) = grid_mesh.render_info.pipeline_id {
-            if let Some(pipeline) = pipeline_storage.get(pipeline_id) {
-                self.draw_line_mesh(
-                    &light_gizmo.ray_to_model,
-                    pipeline,
-                    grid_mesh.render_info.object_index,
-                    command_buffer,
-                    image_index,
-                );
-                self.draw_line_mesh(
-                    &light_gizmo.vertical_lines,
-                    pipeline,
-                    grid_mesh.render_info.object_index,
-                    command_buffer,
-                    image_index,
-                );
-            }
-        }
-
-        self.draw_bone_gizmo(command_buffer, image_index);
-        self.draw_constraint_gizmo(command_buffer, image_index);
-        self.draw_billboard(command_buffer, image_index)?;
-
-        Ok(())
     }
 
     pub unsafe fn record_to_offscreen(
@@ -128,8 +68,8 @@ impl<'a> CompositePass<'a> {
         framebuffer: vk::Framebuffer,
         image_index: usize,
     ) -> Result<()> {
-        self.begin_render_pass(command_buffer, render_pass, framebuffer, 3);
-        self.draw_composite(command_buffer)?;
+        self.begin_render_pass(command_buffer, render_pass, framebuffer);
+        self.draw_tonemap(command_buffer)?;
         self.draw_grid(command_buffer, image_index)?;
         self.draw_gizmo(command_buffer, image_index)?;
 
@@ -159,43 +99,6 @@ impl<'a> CompositePass<'a> {
         self.draw_bone_gizmo(command_buffer, image_index);
         self.draw_constraint_gizmo(command_buffer, image_index);
         self.draw_billboard(command_buffer, image_index)?;
-        self.device.cmd_end_render_pass(command_buffer);
-
-        Ok(())
-    }
-
-    pub unsafe fn record_to_hdr(
-        &self,
-        command_buffer: vk::CommandBuffer,
-        render_pass: vk::RenderPass,
-        framebuffer: vk::Framebuffer,
-    ) -> Result<()> {
-        let render_area = vk::Rect2D::builder()
-            .offset(vk::Offset2D::default())
-            .extent(self.swapchain_extent);
-
-        let color_clear_value = vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [0.0, 0.0, 0.0, 1.0],
-            },
-        };
-
-        let clear_values = [color_clear_value];
-
-        let render_pass_info = vk::RenderPassBeginInfo::builder()
-            .render_pass(render_pass)
-            .framebuffer(framebuffer)
-            .render_area(render_area)
-            .clear_values(&clear_values);
-
-        self.device.cmd_begin_render_pass(
-            command_buffer,
-            &render_pass_info,
-            vk::SubpassContents::INLINE,
-        );
-
-        self.draw_composite(command_buffer)?;
-
         self.device.cmd_end_render_pass(command_buffer);
 
         Ok(())
@@ -206,11 +109,10 @@ impl<'a> CompositePass<'a> {
         command_buffer: vk::CommandBuffer,
         render_pass: vk::RenderPass,
         framebuffer: vk::Framebuffer,
-        attachment_count: usize,
     ) {
         let render_area = vk::Rect2D::builder()
             .offset(vk::Offset2D::default())
-            .extent(self.swapchain_extent);
+            .extent(self.extent);
 
         let color_clear_value = vk::ClearValue {
             color: vk::ClearColorValue {
@@ -223,12 +125,13 @@ impl<'a> CompositePass<'a> {
                 stencil: 0,
             },
         };
-
-        let clear_values: Vec<vk::ClearValue> = if attachment_count == 3 {
-            vec![color_clear_value, depth_clear_value, color_clear_value]
-        } else {
-            vec![color_clear_value, depth_clear_value]
+        let resolve_clear_value = vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
         };
+
+        let clear_values = vec![color_clear_value, depth_clear_value, resolve_clear_value];
 
         let render_pass_info = vk::RenderPassBeginInfo::builder()
             .render_pass(render_pass)
@@ -243,24 +146,24 @@ impl<'a> CompositePass<'a> {
         );
     }
 
-    unsafe fn draw_composite(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
+    unsafe fn draw_tonemap(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
         self.device.cmd_bind_pipeline(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            self.composite_pipeline.pipeline,
+            self.tonemap_pipeline.pipeline,
         );
 
         let viewport = vk::Viewport::builder()
             .x(0.0)
             .y(0.0)
-            .width(self.swapchain_extent.width as f32)
-            .height(self.swapchain_extent.height as f32)
+            .width(self.extent.width as f32)
+            .height(self.extent.height as f32)
             .min_depth(0.0)
             .max_depth(1.0);
 
         let scissor = vk::Rect2D::builder()
             .offset(vk::Offset2D { x: 0, y: 0 })
-            .extent(self.swapchain_extent);
+            .extent(self.extent);
 
         self.device.cmd_set_viewport(command_buffer, 0, &[viewport]);
         self.device.cmd_set_scissor(command_buffer, 0, &[scissor]);
@@ -268,34 +171,62 @@ impl<'a> CompositePass<'a> {
         self.device.cmd_bind_descriptor_sets(
             command_buffer,
             vk::PipelineBindPoint::GRAPHICS,
-            self.composite_pipeline.pipeline_layout,
+            self.tonemap_pipeline.pipeline_layout,
             0,
-            &[self.composite_descriptor.descriptor_set],
+            &[self.tonemap_descriptor.descriptor_set],
             &[],
         );
 
-        let debug_view_mode_value = match self.debug_view_mode {
-            DebugViewMode::Final => 0,
-            DebugViewMode::Position => 1,
-            DebugViewMode::Normal => 2,
-            DebugViewMode::ShadowMask => 3,
-            DebugViewMode::NdotL => 4,
-            DebugViewMode::LightDirection => 5,
-            DebugViewMode::ViewDepth => 6,
-            DebugViewMode::ObjectID => 7,
-            DebugViewMode::SelectionView => 8,
-            DebugViewMode::SelectionUBO => 9,
+        let (operator, gamma) = match self.app.data.ecs_world.get_resource::<ToneMapping>() {
+            Some(tm) => {
+                let op = if tm.enabled { tm.operator.as_int() } else { 0 };
+                (op, tm.gamma)
+            }
+            None => (0, 2.2),
         };
 
-        let push_constants = [debug_view_mode_value];
+        let exposure_value = self
+            .app
+            .data
+            .ecs_world
+            .get_resource::<crate::ecs::resource::Exposure>()
+            .map(|e| e.exposure_value)
+            .unwrap_or(1.0);
+
+        let (vignette_intensity, ca_intensity) =
+            match self.app.data.ecs_world.get_resource::<LensEffects>() {
+                Some(le) => {
+                    let vi = if le.vignette_enabled {
+                        le.vignette_intensity
+                    } else {
+                        0.0
+                    };
+                    let ca = if le.chromatic_aberration_enabled {
+                        le.chromatic_aberration_intensity
+                    } else {
+                        0.0
+                    };
+                    (vi, ca)
+                }
+                None => (0.0, 0.0),
+            };
+
+        let push_constants = ToneMapPushConstants {
+            tone_map_operator: operator,
+            gamma,
+            exposure_value,
+            vignette_intensity,
+            chromatic_aberration_intensity: ca_intensity,
+        };
+
         let push_constant_bytes = std::slice::from_raw_parts(
-            push_constants.as_ptr() as *const u8,
-            std::mem::size_of_val(&push_constants),
+            &push_constants as *const ToneMapPushConstants as *const u8,
+            std::mem::size_of::<ToneMapPushConstants>(),
         );
 
         self.device.cmd_push_constants(
             command_buffer,
-            self.composite_pipeline.pipeline_layout,
+            self.tonemap_pipeline.pipeline_layout,
             vk::ShaderStageFlags::FRAGMENT,
             0,
             push_constant_bytes,

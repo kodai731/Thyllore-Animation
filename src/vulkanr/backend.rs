@@ -324,6 +324,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         debug_mode: i32,
         shadow_strength: f32,
         enable_distance_attenuation: bool,
+        exposure_value: f32,
     ) -> Result<()> {
         let (scene_buffer, scene_memory) = match (
             self.raytracing.scene_uniform_buffer,
@@ -341,7 +342,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             debug_mode,
             shadow_strength,
             enable_distance_attenuation: if enable_distance_attenuation { 1 } else { 0 },
-            _padding: 0,
+            exposure_value,
         };
 
         let data_ptr = self.device.device.map_memory(

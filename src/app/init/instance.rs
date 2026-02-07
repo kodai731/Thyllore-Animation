@@ -920,6 +920,46 @@ impl App {
         if !data.ecs_world.contains_resource::<crate::ecs::resource::ConstraintEditorState>() {
             data.ecs_world.insert_resource(crate::ecs::resource::ConstraintEditorState::default());
         }
+
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::PhysicalCameraParameters>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::PhysicalCameraParameters::default());
+        }
+
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::Exposure>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::Exposure::default());
+        }
+
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::DepthOfField>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::DepthOfField::default());
+        }
+
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::ToneMapping>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::ToneMapping::default());
+        }
+
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::LensEffects>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::LensEffects::default());
+        }
     }
 
     pub unsafe fn init_imgui_rendering(

@@ -6,6 +6,7 @@ pub mod layouts;
 pub mod frame;
 pub mod object;
 pub mod material;
+pub mod tonemap;
 
 pub use model::*;
 pub use ray_query::*;
@@ -15,3 +16,4 @@ pub use layouts::*;
 pub use frame::*;
 pub use object::*;
 pub use material::*;
+pub use tonemap::*;

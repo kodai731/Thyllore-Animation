@@ -34,7 +34,15 @@ impl App {
 
             deferred::record_ray_query_pass(self, command_buffer)?;
 
-            deferred::record_composite_to_offscreen(self, command_buffer, image_index)?;
+            let has_hdr_pipeline = self.data.viewport.hdr_buffer.is_some()
+                && self.data.raytracing.tonemap_pipeline.is_some();
+
+            if has_hdr_pipeline {
+                deferred::record_composite_to_hdr(self, command_buffer)?;
+                deferred::record_tonemap_to_offscreen(self, command_buffer, image_index)?;
+            } else {
+                deferred::record_composite_to_offscreen(self, command_buffer, image_index)?;
+            }
 
             self.begin_main_render_pass(command_buffer, image_index);
             self.record_imgui_rendering(command_buffer, draw_data)?;

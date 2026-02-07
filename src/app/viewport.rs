@@ -2,11 +2,12 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::resource::OffscreenFramebuffer;
+use crate::vulkanr::resource::{HdrBuffer, OffscreenFramebuffer};
 
 #[derive(Debug, Default)]
 pub struct ViewportState {
     pub offscreen: Option<OffscreenFramebuffer>,
+    pub hdr_buffer: Option<HdrBuffer>,
     pub descriptor_pool: vk::DescriptorPool,
     pub descriptor_set_layout: vk::DescriptorSetLayout,
     pub descriptor_set: vk::DescriptorSet,
@@ -36,11 +37,14 @@ impl ViewportState {
             swapchain_format,
         )?;
 
+        let hdr_buffer = HdrBuffer::new(instance, rrdevice, width, height)?;
+
         let (descriptor_pool, descriptor_set_layout, descriptor_set) =
             Self::create_imgui_descriptor(rrdevice, &offscreen)?;
 
         Ok(Self {
             offscreen: Some(offscreen),
+            hdr_buffer: Some(hdr_buffer),
             descriptor_pool,
             descriptor_set_layout,
             descriptor_set,
@@ -139,6 +143,10 @@ impl ViewportState {
             Self::update_descriptor_set(rrdevice, self.descriptor_set, offscreen)?;
         }
 
+        if let Some(ref mut hdr_buffer) = self.hdr_buffer {
+            hdr_buffer.resize(instance, rrdevice, new_width, new_height)?;
+        }
+
         self.width = new_width;
         self.height = new_height;
 
@@ -152,6 +160,10 @@ impl ViewportState {
 
         if let Some(ref mut offscreen) = self.offscreen {
             offscreen.destroy(device);
+        }
+
+        if let Some(ref mut hdr_buffer) = self.hdr_buffer {
+            hdr_buffer.destroy(device);
         }
 
         crate::log!("Destroyed viewport state");

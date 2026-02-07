@@ -1,6 +1,7 @@
 mod gbuffer;
 mod rayquery;
 mod composite;
+mod tonemap;
 
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
@@ -11,6 +12,7 @@ use crate::ecs::world::MeshRef;
 pub use gbuffer::{GBufferPass, create_gbuffer_framebuffer};
 pub use rayquery::RayQueryPass;
 pub use composite::CompositePass;
+pub use tonemap::ToneMapPass;
 
 pub unsafe fn record_gbuffer_pass(
     app: &App,
@@ -105,6 +107,52 @@ pub unsafe fn record_composite_to_offscreen(
     let extent = offscreen.extent();
 
     let pass = CompositePass::new_for_offscreen(app, extent)?;
+    pass.record_to_offscreen(
+        command_buffer,
+        render_pass,
+        framebuffer,
+        image_index,
+    )?;
+
+    Ok(())
+}
+
+pub unsafe fn record_composite_to_hdr(
+    app: &mut App,
+    command_buffer: vk::CommandBuffer,
+) -> Result<()> {
+    let selected_mesh_ids = collect_selected_mesh_ids(app);
+
+    if let Some(ref composite_descriptor) = app.data.raytracing.composite_descriptor {
+        composite_descriptor.update_selection(&app.rrdevice, &selected_mesh_ids)?;
+    }
+
+    let hdr_buffer = app.data.viewport.hdr_buffer.as_ref()
+        .ok_or_else(|| anyhow::anyhow!("HDR buffer not initialized"))?;
+
+    let render_pass = hdr_buffer.render_pass;
+    let framebuffer = hdr_buffer.framebuffer;
+    let extent = hdr_buffer.extent();
+
+    let pass = CompositePass::new_for_offscreen(app, extent)?;
+    pass.record_to_hdr(command_buffer, render_pass, framebuffer)?;
+
+    Ok(())
+}
+
+pub unsafe fn record_tonemap_to_offscreen(
+    app: &App,
+    command_buffer: vk::CommandBuffer,
+    image_index: usize,
+) -> Result<()> {
+    let offscreen = app.data.viewport.offscreen.as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Offscreen framebuffer not initialized"))?;
+
+    let render_pass = offscreen.render_pass;
+    let framebuffer = offscreen.framebuffer;
+    let extent = offscreen.extent();
+
+    let pass = ToneMapPass::new(app, extent)?;
     pass.record_to_offscreen(
         command_buffer,
         render_pass,

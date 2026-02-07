@@ -15,7 +15,7 @@ use crate::ecs::{
     build_sphere_bone_meshes_with_selection, gizmo_update_rotation,
     gizmo_update_vertex_buffer, ProjectionData,
 };
-use crate::ecs::resource::Camera;
+use crate::ecs::resource::{Camera, Exposure};
 use crate::math::get_camera_axes_from_view;
 use crate::render::RenderBackend;
 use crate::renderer::scene_renderer::update_object_ubo;
@@ -67,8 +67,15 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         let light_pos = rt_debug.light_position;
         let debug_mode = rt_debug.debug_view_mode.as_int();
         let shadow_strength = rt_debug.shadow_strength;
-        let enable_distance_attenuation = rt_debug.enable_distance_attenuation;
+        let enable_distance_attenuation =
+            rt_debug.enable_distance_attenuation;
         drop(rt_debug);
+
+        let exposure_value = ctx
+            .world
+            .get_resource::<Exposure>()
+            .map(|e| e.exposure_value)
+            .unwrap_or(1.0);
 
         let mut backend = ctx.create_backend();
         backend.update_scene_uniform(
@@ -79,6 +86,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
             debug_mode,
             shadow_strength,
             enable_distance_attenuation,
+            exposure_value,
         )?;
     }
 

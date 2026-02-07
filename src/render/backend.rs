@@ -52,6 +52,7 @@ pub trait RenderBackend {
         debug_mode: i32,
         shadow_strength: f32,
         enable_distance_attenuation: bool,
+        exposure_value: f32,
     ) -> Result<()>;
 
     unsafe fn update_billboard_ubo(

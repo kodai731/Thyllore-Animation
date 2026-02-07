@@ -9,6 +9,7 @@ use super::ui::{build_click_debug_overlay, build_clip_browser_window, build_curv
 use crate::ecs::resource::CurveEditorBuffer;
 use crate::ecs::resource::ClipLibrary;
 use crate::app::{App, GUIData};
+use crate::debugview::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::debugview::RayTracingDebugState;
 use crate::ecs::resource::{HierarchyState, SceneState, TimelineState};
 use crate::ecs::events::UIEvent;
@@ -16,9 +17,11 @@ use crate::ecs::resource::KeyframeCopyBuffer;
 use crate::ecs::resource::{ClipBrowserState, EditHistory};
 use crate::ecs::systems::{
     apply_redo, apply_undo, camera_move_to_look_at, collapse_entity,
-    expand_entity, process_clip_instance_events,
-    process_keyframe_clipboard_events, rename_entity,
-    timeline_process_events, update_entity_scale,
+    expand_entity, hierarchy_collapse_bone, hierarchy_deselect_all,
+    hierarchy_deselect_bone, hierarchy_expand_bone, hierarchy_select,
+    hierarchy_select_bone, hierarchy_toggle_selection,
+    process_clip_instance_events, process_keyframe_clipboard_events,
+    rename_entity, timeline_process_events, update_entity_scale,
     update_entity_translation, update_entity_visible,
 };
 use crate::ecs::component::ClipSchedule;
@@ -28,20 +31,28 @@ use crate::scene::camera::Camera;
 
 fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
     gui_data.is_left_clicked = false;
+    gui_data.is_right_clicked = false;
     gui_data.is_wheel_clicked = false;
 
-    let allow_input = !gui_data.imgui_wants_mouse || gui_data.viewport_hovered;
+    let io = ui.io();
+    gui_data.mouse_pos = io.mouse_pos;
+
+    let allow_input =
+        !gui_data.imgui_wants_mouse || gui_data.viewport_hovered;
     if allow_input {
         if ui.is_mouse_down(MouseButton::Left) {
             gui_data.is_left_clicked = true;
+        }
+        if ui.is_mouse_down(MouseButton::Right) {
+            gui_data.is_right_clicked = true;
         }
         if ui.is_mouse_down(MouseButton::Middle) {
             gui_data.is_wheel_clicked = true;
         }
     }
 
-    let io = ui.io();
     gui_data.is_ctrl_pressed = io.key_ctrl;
+    gui_data.is_shift_pressed = io.key_shift;
 }
 
 impl System {
@@ -148,7 +159,13 @@ impl System {
                             {
                                 let hierarchy_state = app.data.ecs_world.resource::<HierarchyState>();
                                 let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                build_hierarchy_window(ui, &mut *ui_events, &app.data.ecs_world, &*hierarchy_state);
+                                build_hierarchy_window(
+                                    ui,
+                                    &mut *ui_events,
+                                    &app.data.ecs_world,
+                                    &*hierarchy_state,
+                                    &app.data.ecs_assets,
+                                );
                             }
 
                             {
@@ -180,6 +197,8 @@ impl System {
                                 app.data.viewport.hovered = viewport_info.hovered;
                                 gui_data.viewport_focused = viewport_info.focused;
                                 gui_data.viewport_hovered = viewport_info.hovered;
+                                gui_data.viewport_position = viewport_info.position;
+                                gui_data.viewport_size = viewport_info.size;
 
                                 let new_width = viewport_info.size[0] as u32;
                                 let new_height = viewport_info.size[1] as u32;
@@ -252,6 +271,15 @@ impl System {
                                         process_clip_browser_events_inline(&events, app);
                                         process_edit_history_events_inline(&events, app);
                                         process_scene_events_inline(&events, app);
+                                        process_debug_constraint_events_inline(
+                                            &events, app,
+                                        );
+                                        process_constraint_edit_events_inline(
+                                            &events, app,
+                                        );
+                                        process_constraint_bake_events_inline(
+                                            &events, app,
+                                        );
 
                                         let model_bounds =
                                             app.data.graphics_resources.calculate_model_bounds();
@@ -311,17 +339,17 @@ fn process_hierarchy_events_inline(events: &[UIEvent], app: &mut App) {
         match event {
             UIEvent::SelectEntity(entity) => {
                 let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
-                hierarchy_state.select(*entity);
+                hierarchy_select(&mut hierarchy_state, *entity);
             }
 
             UIEvent::DeselectAll => {
                 let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
-                hierarchy_state.deselect_all();
+                hierarchy_deselect_all(&mut hierarchy_state);
             }
 
             UIEvent::ToggleEntitySelection(entity) => {
                 let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
-                hierarchy_state.toggle_selection(*entity);
+                hierarchy_toggle_selection(&mut hierarchy_state, *entity);
             }
 
             UIEvent::ExpandEntity(entity) => {
@@ -335,6 +363,71 @@ fn process_hierarchy_events_inline(events: &[UIEvent], app: &mut App) {
             UIEvent::SetSearchFilter(filter) => {
                 let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
                 hierarchy_state.search_filter = filter.clone();
+            }
+
+            UIEvent::SetHierarchyDisplayMode(mode) => {
+                let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
+                hierarchy_state.display_mode = *mode;
+            }
+
+            UIEvent::SelectBone(bone_id) => {
+                let bone_idx = *bone_id as usize;
+
+                let descendants: Vec<usize> = app
+                    .data
+                    .ecs_assets
+                    .skeletons
+                    .values()
+                    .next()
+                    .map(|skel_asset| {
+                        skel_asset
+                            .skeleton
+                            .collect_descendants(*bone_id)
+                            .into_iter()
+                            .map(|id| id as usize)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                {
+                    let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
+                    hierarchy_select_bone(&mut hierarchy_state, *bone_id);
+                }
+
+                if let Some(mut selection) =
+                    app.data.ecs_world.get_resource_mut::<BoneSelectionState>()
+                {
+                    selection.selected_bone_indices.clear();
+                    selection.selected_bone_indices.insert(bone_idx);
+                    for desc_idx in descendants {
+                        selection.selected_bone_indices.insert(desc_idx);
+                    }
+                    selection.active_bone_index = Some(bone_idx);
+                }
+            }
+
+            UIEvent::DeselectBone => {
+                {
+                    let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
+                    hierarchy_deselect_bone(&mut hierarchy_state);
+                }
+
+                if let Some(mut selection) =
+                    app.data.ecs_world.get_resource_mut::<BoneSelectionState>()
+                {
+                    selection.selected_bone_indices.clear();
+                    selection.active_bone_index = None;
+                }
+            }
+
+            UIEvent::ExpandBone(bone_id) => {
+                let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
+                hierarchy_expand_bone(&mut hierarchy_state, *bone_id);
+            }
+
+            UIEvent::CollapseBone(bone_id) => {
+                let mut hierarchy_state = app.data.ecs_world.resource_mut::<HierarchyState>();
+                hierarchy_collapse_bone(&mut hierarchy_state, *bone_id);
             }
 
             UIEvent::SetEntityVisible(entity, visible) => {
@@ -370,6 +463,38 @@ fn process_hierarchy_events_inline(events: &[UIEvent], app: &mut App) {
                     let offset = Vector3::new(5.0, 3.0, 5.0);
                     let mut camera = app.data.ecs_world.resource_mut::<Camera>();
                     camera_move_to_look_at(&mut camera, target, offset);
+                }
+            }
+
+            UIEvent::SetBoneDisplayStyle(style) => {
+                if let Some(mut bone_gizmo) =
+                    app.data.ecs_world.get_resource_mut::<BoneGizmoData>()
+                {
+                    bone_gizmo.display_style = *style;
+                }
+            }
+
+            UIEvent::SetBoneInFront(in_front) => {
+                if let Some(mut bone_gizmo) =
+                    app.data.ecs_world.get_resource_mut::<BoneGizmoData>()
+                {
+                    bone_gizmo.in_front = *in_front;
+                }
+            }
+
+            UIEvent::SetBoneDistanceScaling(enabled) => {
+                if let Some(mut bone_gizmo) =
+                    app.data.ecs_world.get_resource_mut::<BoneGizmoData>()
+                {
+                    bone_gizmo.distance_scaling_enabled = *enabled;
+                }
+            }
+
+            UIEvent::SetBoneDistanceScaleFactor(factor) => {
+                if let Some(mut bone_gizmo) =
+                    app.data.ecs_world.get_resource_mut::<BoneGizmoData>()
+                {
+                    bone_gizmo.distance_scaling_factor = *factor;
                 }
             }
 
@@ -605,7 +730,7 @@ fn process_clip_browser_events_inline(
                         0, *source_id, duration,
                     );
                     inst.start_time = *start_time;
-                    schedule.add_instance(*source_id, duration);
+                    crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance(schedule, *source_id, duration);
 
                     if let Some(last) = schedule.instances.last_mut()
                     {
@@ -617,8 +742,10 @@ fn process_clip_browser_events_inline(
             UIEvent::ClipBrowserCreateEmpty => {
                 let mut clip_library =
                     app.data.ecs_world.resource_mut::<ClipLibrary>();
-                let id = clip_library
-                    .create_empty("New Clip".to_string());
+                let id = crate::ecs::systems::clip_library_systems::clip_library_create_empty(
+                    &mut clip_library,
+                    "New Clip".to_string(),
+                );
                 crate::log!(
                     "Created empty clip (id={})",
                     id
@@ -634,8 +761,10 @@ fn process_clip_browser_events_inline(
                     let mut duplicate = original;
                     duplicate.name =
                         format!("{} (copy)", duplicate.name);
-                    let new_id =
-                        clip_library.register_clip(duplicate);
+                    let new_id = crate::ecs::systems::clip_library_systems::clip_library_register_clip(
+                        &mut clip_library,
+                        duplicate,
+                    );
                     crate::log!(
                         "Duplicated clip {} -> {}",
                         source_id,
@@ -788,5 +917,164 @@ fn process_scene_events_inline(events: &[UIEvent], app: &mut App) {
                 }
             }
         }
+    }
+}
+
+fn process_debug_constraint_events_inline(
+    events: &[UIEvent],
+    app: &mut App,
+) {
+    use crate::ecs::systems::debug_constraint_systems::{
+        clear_test_constraints, create_test_constraints,
+    };
+
+    for event in events {
+        match event {
+            UIEvent::CreateTestConstraints => {
+                create_test_constraints(
+                    &mut app.data.ecs_world,
+                    &app.data.ecs_assets,
+                );
+            }
+            UIEvent::ClearTestConstraints => {
+                clear_test_constraints(&mut app.data.ecs_world);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn process_constraint_edit_events_inline(
+    events: &[UIEvent],
+    app: &mut App,
+) {
+    use crate::ecs::systems::constraint_edit_systems::{
+        handle_constraint_add, handle_constraint_remove,
+        handle_constraint_update,
+    };
+
+    for event in events {
+        match event {
+            UIEvent::ConstraintAdd {
+                entity,
+                constraint_type_index,
+            } => {
+                handle_constraint_add(
+                    &mut app.data.ecs_world,
+                    *entity,
+                    *constraint_type_index,
+                );
+            }
+            UIEvent::ConstraintRemove {
+                entity,
+                constraint_id,
+            } => {
+                handle_constraint_remove(
+                    &mut app.data.ecs_world,
+                    *entity,
+                    *constraint_id,
+                );
+            }
+            UIEvent::ConstraintUpdate {
+                entity,
+                constraint_id,
+                constraint,
+            } => {
+                handle_constraint_update(
+                    &mut app.data.ecs_world,
+                    *entity,
+                    *constraint_id,
+                    constraint,
+                );
+            }
+            _ => {}
+        }
+    }
+}
+
+fn process_constraint_bake_events_inline(
+    events: &[UIEvent],
+    app: &mut App,
+) {
+    use crate::ecs::component::ConstraintSet;
+    use crate::ecs::resource::{ClipLibrary, TimelineState};
+    use crate::ecs::systems::constraint_bake_systems::{
+        constraint_bake_evaluate, constraint_bake_register,
+        constraint_bake_rest_pose,
+    };
+
+    for event in events {
+        let UIEvent::ConstraintBakeToKeyframes { entity, sample_fps } = event
+        else {
+            continue;
+        };
+
+        let skeleton = match app.data.ecs_assets.skeletons.values().next() {
+            Some(skel_asset) => skel_asset.skeleton.clone(),
+            None => {
+                crate::log!("Bake failed: no skeleton found");
+                continue;
+            }
+        };
+
+        let constraint_set = match app
+            .data
+            .ecs_world
+            .get_component::<ConstraintSet>(*entity)
+        {
+            Some(set) => set.clone(),
+            None => {
+                crate::log!("Bake failed: no ConstraintSet on entity");
+                continue;
+            }
+        };
+
+        let timeline_state =
+            app.data.ecs_world.resource::<TimelineState>();
+        let clip_id = timeline_state.current_clip_id;
+        let looping = timeline_state.looping;
+        drop(timeline_state);
+
+        let mut baked = if let Some(source_id) = clip_id {
+            let clip_library =
+                app.data.ecs_world.resource::<ClipLibrary>();
+            match clip_library.get(source_id) {
+                Some(editable) => {
+                    let anim_clip = editable.to_animation_clip();
+                    let source_name = editable.name.clone();
+                    drop(clip_library);
+
+                    let mut result = constraint_bake_evaluate(
+                        &anim_clip,
+                        &skeleton,
+                        &constraint_set,
+                        *sample_fps,
+                        looping,
+                    );
+                    result.name = format!("{}_baked", source_name);
+                    result
+                }
+                None => {
+                    drop(clip_library);
+                    constraint_bake_rest_pose(&skeleton, &constraint_set)
+                }
+            }
+        } else {
+            constraint_bake_rest_pose(&skeleton, &constraint_set)
+        };
+
+        baked.name = if baked.name.is_empty() {
+            "baked".to_string()
+        } else {
+            baked.name
+        };
+
+        let mut clip_library =
+            app.data.ecs_world.resource_mut::<ClipLibrary>();
+        let new_id = constraint_bake_register(&mut clip_library, baked);
+        crate::log!(
+            "Baked constraints to new clip (id={})",
+            new_id
+        );
     }
 }

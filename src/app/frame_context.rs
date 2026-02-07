@@ -4,7 +4,7 @@ use anyhow::Result;
 use cgmath::{Matrix4, Vector3};
 
 use crate::asset::AssetStorage;
-use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
+use crate::debugview::gizmo::{BoneGizmoData, GridGizmoData, LightGizmoData};
 use crate::debugview::{GridMeshData, RayTracingDebugState};
 use crate::ecs::world::{ResMut, ResRef, World};
 use crate::app::billboard::BillboardData;
@@ -106,6 +106,14 @@ impl<'a> FrameContext<'a> {
 
     pub fn light_gizmo_mut(&self) -> ResMut<LightGizmoData> {
         self.world.resource_mut::<LightGizmoData>()
+    }
+
+    pub fn bone_gizmo(&self) -> ResRef<BoneGizmoData> {
+        self.world.resource::<BoneGizmoData>()
+    }
+
+    pub fn bone_gizmo_mut(&self) -> ResMut<BoneGizmoData> {
+        self.world.resource_mut::<BoneGizmoData>()
     }
 
     pub fn billboard(&self) -> ResRef<BillboardData> {

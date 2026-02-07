@@ -4,9 +4,11 @@ use crate::animation::editable::{
     BezierHandle, BlendMode, ClipGroupId, ClipInstanceId, InterpolationType,
     KeyframeId, PropertyType, SourceClipId,
 };
-use crate::ecs::resource::SelectionModifier;
+use crate::ecs::resource::{HierarchyDisplayMode, SelectionModifier};
+use crate::animation::{ConstraintId, ConstraintType};
 use crate::animation::BoneId;
 use crate::app::data::LightMoveTarget;
+use crate::debugview::gizmo::BoneDisplayStyle;
 use crate::ecs::world::Entity;
 
 #[derive(Clone, Debug)]
@@ -33,6 +35,12 @@ pub enum UIEvent {
     ExpandEntity(Entity),
     CollapseEntity(Entity),
     SetSearchFilter(String),
+
+    SetHierarchyDisplayMode(HierarchyDisplayMode),
+    SelectBone(BoneId),
+    DeselectBone,
+    ExpandBone(BoneId),
+    CollapseBone(BoneId),
 
     SetEntityVisible(Entity, bool),
     SetEntityTranslation(Entity, Vector3<f32>),
@@ -134,6 +142,32 @@ pub enum UIEvent {
     ClipBrowserDelete(SourceClipId),
 
     SaveScene,
+
+    CreateTestConstraints,
+    ClearTestConstraints,
+
+    ConstraintAdd {
+        entity: Entity,
+        constraint_type_index: u8,
+    },
+    ConstraintRemove {
+        entity: Entity,
+        constraint_id: ConstraintId,
+    },
+    ConstraintUpdate {
+        entity: Entity,
+        constraint_id: ConstraintId,
+        constraint: ConstraintType,
+    },
+    ConstraintBakeToKeyframes {
+        entity: Entity,
+        sample_fps: f32,
+    },
+
+    SetBoneDisplayStyle(BoneDisplayStyle),
+    SetBoneInFront(bool),
+    SetBoneDistanceScaling(bool),
+    SetBoneDistanceScaleFactor(f32),
 }
 
 #[derive(Default)]

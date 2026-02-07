@@ -313,7 +313,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
 
             UIEvent::ClipInstanceDelete { entity, instance_id } => {
                 if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
-                    schedule.remove_instance(*instance_id);
+                    super::clip_schedule_systems::clip_schedule_remove_instance(schedule, *instance_id);
                 }
                 deselect_after = Some((*entity, *instance_id));
             }
@@ -334,7 +334,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 if let Some(schedule) =
                     world.get_component_mut::<ClipSchedule>(*entity)
                 {
-                    schedule.create_group(name.clone());
+                    super::clip_schedule_systems::clip_schedule_create_group(schedule, name.clone());
                 }
             }
 
@@ -342,7 +342,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 if let Some(schedule) =
                     world.get_component_mut::<ClipSchedule>(*entity)
                 {
-                    schedule.remove_group(*group_id);
+                    super::clip_schedule_systems::clip_schedule_remove_group(schedule, *group_id);
                 }
             }
 
@@ -350,7 +350,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 if let Some(schedule) =
                     world.get_component_mut::<ClipSchedule>(*entity)
                 {
-                    schedule.add_instance_to_group(*group_id, *instance_id);
+                    super::clip_schedule_systems::clip_schedule_add_to_group(schedule, *group_id, *instance_id);
                 }
             }
 
@@ -358,7 +358,7 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 if let Some(schedule) =
                     world.get_component_mut::<ClipSchedule>(*entity)
                 {
-                    schedule.remove_instance_from_group(*group_id, *instance_id);
+                    super::clip_schedule_systems::clip_schedule_remove_from_group(schedule, *group_id, *instance_id);
                 }
             }
 

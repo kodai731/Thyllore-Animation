@@ -95,7 +95,7 @@ fn build_clip_list(
     browser_state: &mut ClipBrowserState,
     world: &World,
 ) {
-    let clip_names = clip_library.clip_names();
+    let clip_names = crate::ecs::systems::clip_library_systems::clip_library_clip_names(clip_library);
 
     if clip_names.is_empty() {
         ui.text_disabled("No clips");

@@ -143,7 +143,7 @@ fn build_clip_selector(
     state: &TimelineState,
     clip_library: &ClipLibrary,
 ) {
-    let clip_names = clip_library.clip_names();
+    let clip_names = crate::ecs::systems::clip_library_systems::clip_library_clip_names(clip_library);
 
     if clip_names.is_empty() {
         ui.text("No clips available");

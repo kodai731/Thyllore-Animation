@@ -66,7 +66,9 @@ pub fn build_dope_sheet(
                 pixels_per_second,
             );
 
-            if ui.is_mouse_clicked(imgui::MouseButton::Right) {
+            if ui.is_window_hovered()
+                && ui.is_mouse_clicked(imgui::MouseButton::Right)
+            {
                 ui.open_popup("dope_sheet_context");
             }
             build_dope_sheet_context_menu(ui, ui_events, timeline_state);

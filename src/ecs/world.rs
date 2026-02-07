@@ -6,8 +6,8 @@ use cgmath::{Matrix4, SquareMatrix, Vector3};
 
 use crate::asset::AssetId;
 use crate::ecs::component::{
-    Animated, AnimationMeta, ClipSchedule, EditorDisplay, EntityIcon, MeshHandle,
-    Model, Skinned,
+    Animated, AnimationMeta, ClipSchedule, ConstraintSet, Constrained,
+    EditorDisplay, EntityIcon, MeshHandle, Model, Skinned,
 };
 
 pub trait Resource: Any + 'static {}
@@ -265,6 +265,8 @@ impl World {
         world.register_component::<EditorDisplay>();
         world.register_component::<ClipSchedule>();
         world.register_component::<AnimationMeta>();
+        world.register_component::<ConstraintSet>();
+        world.register_component::<Constrained>();
 
         world
     }
@@ -464,6 +466,13 @@ impl World {
             .filter(|(e, _)| self.has_component::<Skinned>(*e))
     }
 
+    pub fn iter_constrained_entities(
+        &self,
+    ) -> impl Iterator<Item = (Entity, &ConstraintSet)> {
+        self.iter_components::<ConstraintSet>()
+            .filter(|(e, _)| self.has_component::<Constrained>(*e))
+    }
+
     pub fn entity_count(&self) -> usize {
         self.component_entities::<Transform>().len()
     }
@@ -586,6 +595,17 @@ impl<'a> EntityBuilder<'a> {
 
     pub fn with_animation_meta(self, meta: AnimationMeta) -> Self {
         self.world.insert_component(self.entity, meta);
+        self
+    }
+
+    pub fn with_constraint_set(self, constraint_set: ConstraintSet) -> Self {
+        self.world.insert_component(self.entity, constraint_set);
+        self.world.insert_component(self.entity, Constrained);
+        self
+    }
+
+    pub fn with_constrained(self) -> Self {
+        self.world.insert_component(self.entity, Constrained);
         self
     }
 

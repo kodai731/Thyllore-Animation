@@ -1,19 +1,26 @@
 use anyhow::Result;
+use cgmath::Matrix4;
 
 use crate::animation::editable::{BlendMode, ClipInstanceId, EaseType, SourceClipId};
 use crate::animation::{AnimationClipId, MorphAnimationSystem, SkeletonId, SkeletonPose};
 use crate::app::graphics_resource::{GraphicsResources, NodeData};
 use crate::asset::AssetStorage;
-use crate::ecs::component::{AnimationMeta, ClipSchedule};
+use crate::ecs::component::{AnimationMeta, ClipSchedule, ConstraintSet};
 use crate::ecs::resource::{AnimationType, ClipLibrary};
-use crate::ecs::world::{Animator, MeshRef, World};
+use crate::ecs::world::{Animator, Entity, MeshRef, World};
 use crate::ecs::{
     blend_poses_override, compute_crossfade_factor, compute_local_time,
     compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
 };
 use crate::render::RenderBackend;
 
+use super::constraint_solve_systems::apply_constraints;
 use super::pose_blend_systems::blend_poses_additive;
+
+pub struct AnimationEvalResult {
+    pub updated_meshes: Vec<usize>,
+    pub bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>)>,
+}
 
 struct ActiveInstanceInfo {
     source_id: SourceClipId,
@@ -28,6 +35,7 @@ struct ActiveInstanceInfo {
 }
 
 struct AnimatedEntityInfo {
+    entity: Entity,
     active_instances: Vec<ActiveInstanceInfo>,
     skeleton_id: SkeletonId,
     mesh_idx: usize,
@@ -42,7 +50,7 @@ pub fn evaluate_all_animators(
     nodes: &mut [NodeData],
     clip_library: &ClipLibrary,
     assets: &AssetStorage,
-) -> Vec<usize> {
+) -> AnimationEvalResult {
     let entity_infos =
         collect_animated_entities(world, graphics, clip_library, assets);
 
@@ -63,13 +71,19 @@ pub fn evaluate_all_animators(
     };
 
     if entity_infos.is_empty() {
-        return morph_updated;
+        return AnimationEvalResult {
+            updated_meshes: morph_updated,
+            bone_transforms: None,
+        };
     }
 
-    let anim_updated =
-        apply_blended_animations(&entity_infos, graphics, nodes, assets);
+    let (anim_updated, bone_transforms) =
+        apply_blended_animations(&entity_infos, world, graphics, nodes, assets);
 
-    merge_updated_indices(morph_updated, anim_updated)
+    AnimationEvalResult {
+        updated_meshes: merge_updated_indices(morph_updated, anim_updated),
+        bone_transforms,
+    }
 }
 
 fn collect_animated_entities(
@@ -125,6 +139,7 @@ fn collect_animated_entities(
         }
 
         infos.push(AnimatedEntityInfo {
+            entity,
             active_instances,
             skeleton_id: skel_id,
             mesh_idx,
@@ -142,7 +157,7 @@ fn build_active_instances(
     clip_library: &ClipLibrary,
     animator: &Animator,
 ) -> Vec<ActiveInstanceInfo> {
-    let active = schedule.active_instances_at(animator.time);
+    let active = super::clip_schedule_systems::clip_schedule_active_instances(schedule, animator.time);
     let mut instances: Vec<ActiveInstanceInfo> = active
         .into_iter()
         .filter_map(|inst| {
@@ -160,7 +175,7 @@ fn build_active_instances(
             );
 
             let weight =
-                schedule.effective_instance_weight(inst.instance_id);
+                super::clip_schedule_systems::clip_schedule_effective_weight(schedule, inst.instance_id);
 
             Some(ActiveInstanceInfo {
                 source_id: inst.source_id,
@@ -282,22 +297,31 @@ fn evaluate_entity_blend(
 
 fn apply_blended_animations(
     entities: &[AnimatedEntityInfo],
+    world: &World,
     graphics: &mut GraphicsResources,
     nodes: &mut [NodeData],
     assets: &AssetStorage,
-) -> Vec<usize> {
+) -> (Vec<usize>, Option<(SkeletonId, Vec<Matrix4<f32>>)>) {
     let mut updated = Vec::new();
+    let mut first_bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>)> =
+        None;
+
+    let shared_constraints = find_shared_constraints(entities, world);
 
     for info in entities {
-        let Some(pose) = evaluate_entity_blend(info, assets) else {
+        let Some(mut pose) = evaluate_entity_blend(info, assets) else {
             continue;
         };
 
-        let skeleton =
-            assets.get_skeleton_by_skeleton_id(info.skeleton_id);
-        let Some(skeleton) = skeleton else {
+        let Some(skeleton) =
+            assets.get_skeleton_by_skeleton_id(info.skeleton_id)
+        else {
             continue;
         };
+
+        if let Some(ref cs) = shared_constraints {
+            apply_constraints(cs, skeleton, &mut pose);
+        }
 
         if info.animation_type == AnimationType::Node {
             GraphicsResources::compute_node_global_transforms(
@@ -306,6 +330,11 @@ fn apply_blended_animations(
         }
 
         let globals = compute_pose_global_transforms(skeleton, &pose);
+
+        if first_bone_transforms.is_none() {
+            first_bone_transforms =
+                Some((info.skeleton_id, globals.clone()));
+        }
 
         let mesh_updated = match info.animation_type {
             AnimationType::Node => {
@@ -327,7 +356,18 @@ fn apply_blended_animations(
         }
     }
 
-    updated
+    (updated, first_bone_transforms)
+}
+
+fn find_shared_constraints(
+    entities: &[AnimatedEntityInfo],
+    world: &World,
+) -> Option<ConstraintSet> {
+    entities.iter().find_map(|info| {
+        world
+            .get_component::<ConstraintSet>(info.entity)
+            .map(|cs| cs.clone())
+    })
 }
 
 fn merge_updated_indices(

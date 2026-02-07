@@ -7,6 +7,7 @@ use cgmath::Matrix4;
 use crate::animation::{
     AnimationSystem, MorphAnimationSystem, Skeleton, SkeletonId, SkinData,
 };
+use crate::loader::fbx::LoadedConstraint;
 use crate::vulkanr::data::{Vertex, VertexData};
 
 #[derive(Clone, Debug)]
@@ -49,6 +50,7 @@ pub struct ModelLoadResult {
     pub morph_animation: MorphAnimationSystem,
     pub has_skinned_meshes: bool,
     pub node_animation_scale: f32,
+    pub constraints: Vec<LoadedConstraint>,
 }
 
 impl ModelLoadResult {
@@ -95,6 +97,7 @@ impl ModelLoadResult {
             morph_animation: result.morph_animation,
             has_skinned_meshes: result.has_skinned_meshes,
             node_animation_scale,
+            constraints: Vec::new(),
         }
     }
 
@@ -133,6 +136,7 @@ impl ModelLoadResult {
             morph_animation: MorphAnimationSystem::default(),
             has_skinned_meshes: result.has_skinned_meshes,
             node_animation_scale: 1.0,
+            constraints: result.constraints,
         }
     }
 }

@@ -118,7 +118,7 @@ fn save_animation_clips(world: &World, animations_dir: &Path) -> SceneResult<Vec
 
     let mut animation_clips = Vec::new();
 
-    for (clip_id, clip_name) in clip_library.clip_names() {
+    for (clip_id, clip_name) in crate::ecs::systems::clip_library_systems::clip_library_clip_names(&clip_library) {
         if let Some(clip) = clip_library.get(clip_id) {
             let clip_filename = sanitize_filename(&clip_name);
             let clip_path = animations_dir.join(format!("{}.anim.ron", clip_filename));

@@ -644,3 +644,7 @@ At the top of each file, include a brief summary of the issue and its resolution
 ## explore history
 
 - explore history and summary reports can be placed at .claude/ExploreHistory if necessary.
+
+## Last Conversation
+- last conversation is saved at .claude//last-conversation.md
+- **IMPORTANT** MUST read the last conversation file and work continue.

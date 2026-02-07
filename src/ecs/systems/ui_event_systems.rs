@@ -147,6 +147,11 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::ExpandEntity(_)
             | UIEvent::CollapseEntity(_)
             | UIEvent::SetSearchFilter(_)
+            | UIEvent::SetHierarchyDisplayMode(_)
+            | UIEvent::SelectBone(_)
+            | UIEvent::DeselectBone
+            | UIEvent::ExpandBone(_)
+            | UIEvent::CollapseBone(_)
             | UIEvent::SetEntityVisible(_, _)
             | UIEvent::SetEntityTranslation(_, _)
             | UIEvent::SetEntityRotation(_, _)
@@ -202,7 +207,17 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::ClipBrowserCreateEmpty
             | UIEvent::ClipBrowserDuplicate(_)
             | UIEvent::ClipBrowserDelete(_)
-            | UIEvent::SaveScene => {}
+            | UIEvent::SaveScene
+            | UIEvent::CreateTestConstraints
+            | UIEvent::ClearTestConstraints
+            | UIEvent::ConstraintAdd { .. }
+            | UIEvent::ConstraintRemove { .. }
+            | UIEvent::ConstraintUpdate { .. }
+            | UIEvent::ConstraintBakeToKeyframes { .. }
+            | UIEvent::SetBoneDisplayStyle(_)
+            | UIEvent::SetBoneInFront(_)
+            | UIEvent::SetBoneDistanceScaling(_)
+            | UIEvent::SetBoneDistanceScaleFactor(_) => {}
         }
     }
 

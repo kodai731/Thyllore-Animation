@@ -28,7 +28,11 @@
       "WebFetch(domain:docs.unity3d.com)",
       "Bash(Select-String -Pattern \"^error\")",
       "Bash(Select-String \"error\\\\[\")",
-      "Bash(Select-Object -First 30)"
+      "Bash(Select-Object -First 30)",
+      "WebFetch(domain:crates.io)",
+      "WebFetch(domain:lib.rs)",
+      "WebFetch(domain:docs.blender.org)",
+      "Bash(Select-String -Pattern \"error\")"
     ],
     "deny": [],
     "ask": []

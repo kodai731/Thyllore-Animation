@@ -106,6 +106,21 @@ impl Skeleton {
     pub fn bone_count(&self) -> usize {
         self.bones.len()
     }
+
+    pub fn collect_descendants(&self, bone_id: BoneId) -> Vec<BoneId> {
+        let mut result = Vec::new();
+        self.collect_descendants_recursive(bone_id, &mut result);
+        result
+    }
+
+    fn collect_descendants_recursive(&self, bone_id: BoneId, result: &mut Vec<BoneId>) {
+        if let Some(bone) = self.get_bone(bone_id) {
+            for &child_id in &bone.children {
+                result.push(child_id);
+                self.collect_descendants_recursive(child_id, result);
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

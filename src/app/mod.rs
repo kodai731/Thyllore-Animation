@@ -21,7 +21,7 @@ pub use data::AppData;
 pub use gui_data::GUIData;
 pub use init::*;
 
-use crate::debugview::gizmo::{GridGizmoData, LightGizmoData};
+use crate::debugview::gizmo::{BoneGizmoData, GridGizmoData, LightGizmoData};
 use crate::debugview::{DebugViewData, GridMeshData, RayTracingDebugState};
 use crate::ecs::{
     ClipLibrary, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState,
@@ -222,6 +222,14 @@ impl App {
 
     pub fn light_gizmo_mut(&self) -> ResMut<LightGizmoData> {
         self.resource_mut::<LightGizmoData>()
+    }
+
+    pub fn bone_gizmo(&self) -> ResRef<BoneGizmoData> {
+        self.resource::<BoneGizmoData>()
+    }
+
+    pub fn bone_gizmo_mut(&self) -> ResMut<BoneGizmoData> {
+        self.resource_mut::<BoneGizmoData>()
     }
 
     pub fn billboard(&self) -> ResRef<BillboardData> {

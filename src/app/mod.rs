@@ -31,7 +31,7 @@ use crate::platform::ImguiData;
 use crate::app::billboard::BillboardData;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::app::raytracing::RayTracingData;
-use crate::scene::Camera;
+use crate::ecs::resource::Camera;
 use crate::vulkanr::context::{
     CommandState, FrameSync, PipelineState, RenderConfig, RenderTargets, SurfaceState,
     SwapchainState,

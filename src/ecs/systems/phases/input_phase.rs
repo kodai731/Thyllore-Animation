@@ -34,7 +34,6 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
     let viewport_hovered = ctx.gui_data.viewport_hovered;
     if !ctx.light_gizmo().selectable.is_selected && viewport_hovered
     {
-        let grid_scale = ctx.grid_scale().value();
         let is_right_clicked = ctx.gui_data.is_right_clicked;
         let is_wheel_clicked = ctx.gui_data.is_wheel_clicked;
         let mouse_wheel = ctx.gui_data.mouse_wheel;
@@ -50,7 +49,6 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
             is_wheel_clicked,
             mouse_wheel,
             mouse_diff,
-            grid_scale,
             screen_size,
         );
     }
@@ -63,7 +61,8 @@ fn process_light_auto_target(ctx: &mut EcsContext) {
         return;
     }
 
-    let camera_position = ctx.camera().position;
+    let camera_position =
+        crate::ecs::compute_camera_position(&ctx.camera());
     let move_light_to = ctx.gui_data.move_light_to;
     let mut rt_debug = ctx.rt_debug_mut();
     update_light_auto_target(
@@ -99,9 +98,16 @@ fn process_gizmo_interaction(
         ctx.light_gizmo_mut().draggable.just_selected = false;
 
         if is_first_left_click {
-            let camera_pos = ctx.camera().position;
-            let camera_dir = ctx.camera().direction;
-            let camera_up = ctx.camera().up;
+            let camera = ctx.camera();
+            let camera_pos =
+                crate::ecs::compute_camera_position(&camera);
+            let camera_dir =
+                crate::ecs::compute_camera_direction(&camera);
+            let camera_up =
+                crate::ecs::compute_camera_up(&camera);
+            let fov_y = camera.fov_y;
+            let near_plane = camera.near_plane;
+            drop(camera);
             {
                 let mut gizmo_ref = ctx.light_gizmo_mut();
                 let light_gizmo = &mut *gizmo_ref;
@@ -116,6 +122,8 @@ fn process_gizmo_interaction(
                     camera_up,
                     ctx.swapchain_extent,
                     ctx.gui_data.billboard_click_rect,
+                    fov_y,
+                    near_plane,
                 );
             }
         }
@@ -158,19 +166,27 @@ fn update_light_gizmo_position(
     ctx: &mut EcsContext,
     mouse_pos: cgmath::Vector2<f32>,
 ) -> Result<()> {
-    use crate::math::coordinate_system::perspective;
-    use cgmath::{Deg, InnerSpace};
+    use crate::math::coordinate_system::perspective_infinite_reverse;
+    use cgmath::InnerSpace;
 
-    let camera_pos = ctx.camera().position;
-    let camera_dir = ctx.camera().direction;
-    let camera_up = ctx.camera().up;
+    let camera = ctx.camera();
+    let camera_pos =
+        crate::ecs::compute_camera_position(&camera);
+    let camera_dir =
+        crate::ecs::compute_camera_direction(&camera);
+    let camera_up =
+        crate::ecs::compute_camera_up(&camera);
+    let fov_y = camera.fov_y;
+    let near_plane = camera.near_plane;
+    drop(camera);
 
     let view = unsafe {
         crate::math::view(camera_pos, camera_dir, camera_up)
     };
     let aspect = ctx.swapchain_extent.0 as f32
         / ctx.swapchain_extent.1 as f32;
-    let proj = perspective(Deg(45.0), aspect, 0.1, 10000.0);
+    let proj =
+        perspective_infinite_reverse(fov_y, aspect, near_plane);
     let screen_size = cgmath::Vector2::new(
         ctx.swapchain_extent.0 as f32,
         ctx.swapchain_extent.1 as f32,
@@ -277,17 +293,25 @@ fn compute_bone_pick_ray(
         ctx.swapchain_extent.1 as f32,
     );
 
-    let camera_pos = ctx.camera().position;
-    let camera_dir = ctx.camera().direction;
-    let camera_up = ctx.camera().up;
+    let camera = ctx.camera();
+    let camera_pos =
+        crate::ecs::compute_camera_position(&camera);
+    let camera_dir =
+        crate::ecs::compute_camera_direction(&camera);
+    let camera_up =
+        crate::ecs::compute_camera_up(&camera);
+    let fov_y = camera.fov_y;
+    let near_plane = camera.near_plane;
+    drop(camera);
 
     let view = unsafe {
         crate::math::view(camera_pos, camera_dir, camera_up)
     };
     let aspect = screen_size.x / screen_size.y;
-    let proj = crate::math::perspective(
-        cgmath::Deg(45.0), aspect, 0.1, 10000.0,
-    );
+    let proj =
+        crate::math::coordinate_system::perspective_infinite_reverse(
+            fov_y, aspect, near_plane,
+        );
 
     let (ray_origin, ray_direction) =
         screen_to_world_ray(mouse_pos, screen_size, view, proj);

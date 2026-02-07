@@ -15,7 +15,7 @@ use crate::ecs::{
     build_sphere_bone_meshes_with_selection, gizmo_update_rotation,
     gizmo_update_vertex_buffer, ProjectionData,
 };
-use crate::scene::Camera;
+use crate::ecs::resource::Camera;
 use crate::math::get_camera_axes_from_view;
 use crate::render::RenderBackend;
 use crate::renderer::scene_renderer::update_object_ubo;
@@ -31,7 +31,10 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         )
     };
 
-    let camera_position = ctx.camera().position;
+    let camera_position = {
+        use crate::ecs::systems::camera_systems::compute_camera_position;
+        compute_camera_position(&ctx.camera())
+    };
     let light_position = ctx.rt_debug().light_position;
 
     {
@@ -226,7 +229,10 @@ fn compute_visual_scale(
         return 1.0;
     }
 
-    let camera_pos = ctx.world.resource::<Camera>().position;
+    let camera_pos = {
+        use crate::ecs::systems::camera_systems::compute_camera_position;
+        compute_camera_position(&ctx.world.resource::<Camera>())
+    };
 
     let mut center = Vector3::new(0.0f32, 0.0, 0.0);
     for t in transforms.iter() {

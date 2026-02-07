@@ -121,7 +121,7 @@ impl RRCommandBuffer {
             };
             let depth_clear_value = vk::ClearValue {
                 depth_stencil: vk::ClearDepthStencilValue {
-                    depth: 1.0, // The range of depths in the depth buffer is 0.0 to 1.0 in Vulkan, where 1.0 lies at the far view plane and 0.0 at the near view plane
+                    depth: 0.0,
                     stencil: 0,
                 },
             };

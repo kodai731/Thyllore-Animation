@@ -375,7 +375,7 @@ impl App {
         };
         let depth_clear_value = vk::ClearValue {
             depth_stencil: vk::ClearDepthStencilValue {
-                depth: 1.0,
+                depth: 0.0,
                 stencil: 0,
             },
         };
@@ -421,7 +421,10 @@ impl App {
             .cmd_set_scissor(command_buffer, 0, &[scissor]);
 
         let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
-        let camera_pos = self.camera().position;
+        let camera_pos = {
+            use crate::ecs::systems::camera_systems::compute_camera_position;
+            compute_camera_position(&self.camera())
+        };
 
         let render_data_vec = vec![
             crate::ecs::systems::render_data_systems::grid_mesh_render_data(&self.grid_mesh()),
@@ -463,7 +466,7 @@ impl App {
         };
         let depth_clear_value = vk::ClearValue {
             depth_stencil: vk::ClearDepthStencilValue {
-                depth: 1.0,
+                depth: 0.0,
                 stencil: 0,
             },
         };
@@ -587,7 +590,10 @@ impl App {
             .cmd_set_scissor(command_buffer, 0, &[scissor]);
 
         let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
-        let camera_pos = self.camera().position;
+        let camera_pos = {
+            use crate::ecs::systems::camera_systems::compute_camera_position;
+            compute_camera_position(&self.camera())
+        };
 
         let render_data_vec = vec![
             grid_mesh_render_data(&self.grid_mesh()),

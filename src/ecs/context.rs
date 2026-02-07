@@ -9,7 +9,7 @@ use crate::debugview::RayTracingDebugState;
 use crate::app::billboard::BillboardData;
 use crate::ecs::component::{LineMesh, MeshScale};
 use crate::ecs::resource::HierarchyState;
-use crate::scene::camera::Camera;
+use crate::ecs::resource::Camera;
 
 use super::world::{ResMut, ResRef, World};
 
@@ -42,15 +42,18 @@ impl<'a> EcsContext<'a> {
     }
 
     pub fn camera_position(&self) -> Vector3<f32> {
-        self.camera().position
+        use crate::ecs::systems::camera_systems::compute_camera_position;
+        compute_camera_position(&self.camera())
     }
 
     pub fn camera_direction(&self) -> Vector3<f32> {
-        self.camera().direction
+        use crate::ecs::systems::camera_systems::compute_camera_direction;
+        compute_camera_direction(&self.camera())
     }
 
     pub fn camera_up(&self) -> Vector3<f32> {
-        self.camera().up
+        use crate::ecs::systems::camera_systems::compute_camera_up;
+        compute_camera_up(&self.camera())
     }
 
     pub fn light_position(&self) -> Vector3<f32> {

@@ -30,7 +30,7 @@ use crate::vulkanr::vulkan::*;
 
 use crate::debugview::*;
 use crate::app::graphics_resource::GraphicsResources;
-use crate::scene::Camera;
+use crate::ecs::resource::Camera;
 
 use vulkanalia::Device as VkDevice;
 
@@ -206,7 +206,7 @@ impl App {
         .depth_test(DepthTestConfig {
             test_enable: true,
             write_enable: false,
-            compare_op: vk::CompareOp::LESS,
+            compare_op: vk::CompareOp::GREATER_OR_EQUAL,
         })
         .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
         .descriptor_layouts(render_layouts.to_vec())
@@ -337,7 +337,7 @@ impl App {
         .depth_test(DepthTestConfig {
             test_enable: true,
             write_enable: false,
-            compare_op: vk::CompareOp::LESS,
+            compare_op: vk::CompareOp::GREATER_OR_EQUAL,
         })
         .push_constants(PushConstantConfig {
             stage_flags: vk::ShaderStageFlags::FRAGMENT,
@@ -365,7 +365,7 @@ impl App {
         .depth_test(DepthTestConfig {
             test_enable: true,
             write_enable: false,
-            compare_op: vk::CompareOp::LESS,
+            compare_op: vk::CompareOp::GREATER_OR_EQUAL,
         })
         .push_constants(PushConstantConfig {
             stage_flags: vk::ShaderStageFlags::FRAGMENT,
@@ -395,7 +395,7 @@ impl App {
         .depth_test(DepthTestConfig {
             test_enable: true,
             write_enable: false,
-            compare_op: vk::CompareOp::GREATER,
+            compare_op: vk::CompareOp::LESS_OR_EQUAL,
         })
         .blend(BlendConfig::default())
         .push_constants(PushConstantConfig {
@@ -424,7 +424,7 @@ impl App {
         .depth_test(DepthTestConfig {
             test_enable: true,
             write_enable: false,
-            compare_op: vk::CompareOp::GREATER,
+            compare_op: vk::CompareOp::LESS_OR_EQUAL,
         })
         .blend(BlendConfig::default())
         .push_constants(PushConstantConfig {

@@ -56,7 +56,7 @@ impl Default for DepthTestConfig {
         Self {
             test_enable: true,
             write_enable: true,
-            compare_op: vk::CompareOp::LESS,
+            compare_op: vk::CompareOp::GREATER_OR_EQUAL,
         }
     }
 }
@@ -511,7 +511,7 @@ impl RRPipeline {
             builder = builder.depth_test(DepthTestConfig {
                 test_enable: true,
                 write_enable: false,
-                compare_op: vk::CompareOp::LESS,
+                compare_op: vk::CompareOp::GREATER_OR_EQUAL,
             });
         }
 
@@ -544,7 +544,7 @@ impl RRPipeline {
             builder = builder.depth_test(DepthTestConfig {
                 test_enable: true,
                 write_enable: false,
-                compare_op: vk::CompareOp::LESS,
+                compare_op: vk::CompareOp::GREATER_OR_EQUAL,
             });
         }
 
@@ -577,7 +577,7 @@ impl RRPipeline {
             builder = builder.depth_test(DepthTestConfig {
                 test_enable: true,
                 write_enable: false,
-                compare_op: vk::CompareOp::LESS,
+                compare_op: vk::CompareOp::GREATER_OR_EQUAL,
             });
         }
 

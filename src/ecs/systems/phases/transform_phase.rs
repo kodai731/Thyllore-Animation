@@ -1,30 +1,41 @@
 use anyhow::Result;
-use cgmath::{InnerSpace, Vector2};
+use cgmath::Vector2;
 
 use crate::app::FrameContext;
 use crate::ecs::context::EcsContext;
+use crate::ecs::systems::camera_systems::{
+    compute_camera_position, compute_camera_up,
+};
 use crate::ecs::{
-    calculate_projection, gizmo_sync_position, gizmo_update_selection_color,
-    gizmo_update_vertex_buffer, update_billboard_transform, update_grid_gizmo_rotation_from_view,
+    calculate_projection, gizmo_sync_position,
+    gizmo_update_selection_color, gizmo_update_vertex_buffer,
+    update_billboard_transform, update_grid_gizmo_rotation_from_view,
 };
 use crate::math::calculate_billboard_click_rect;
 
 pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
-    update_camera_planes_ecs(ctx);
+    update_camera_near_plane(ctx);
 
-    let proj_data = calculate_projection(&*ctx.camera(), ctx.swapchain_extent);
+    let proj_data =
+        calculate_projection(&*ctx.camera(), ctx.swapchain_extent);
 
     let light_position = ctx.rt_debug().light_position;
-    gizmo_sync_position(&mut ctx.light_gizmo_mut().position, light_position);
+    gizmo_sync_position(
+        &mut ctx.light_gizmo_mut().position,
+        light_position,
+    );
 
     {
         let mut light_gizmo = ctx.light_gizmo_mut();
         let selectable = light_gizmo.selectable.clone();
-        gizmo_update_selection_color(&mut light_gizmo.mesh, &selectable);
+        gizmo_update_selection_color(
+            &mut light_gizmo.mesh,
+            &selectable,
+        );
     }
 
-    let camera_pos = ctx.camera().position;
-    let camera_up = ctx.camera().up;
+    let camera_pos = compute_camera_position(&ctx.camera());
+    let camera_up = compute_camera_up(&ctx.camera());
     update_billboard_transform(
         &mut ctx.billboard_mut(),
         light_position,
@@ -32,9 +43,15 @@ pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
         camera_up,
     );
 
-    update_grid_gizmo_rotation_from_view(&mut ctx.gizmo_mut(), proj_data.view);
+    update_grid_gizmo_rotation_from_view(
+        &mut ctx.gizmo_mut(),
+        proj_data.view,
+    );
 
-    let screen_size = Vector2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
+    let screen_size = Vector2::new(
+        ctx.swapchain_extent.0 as f32,
+        ctx.swapchain_extent.1 as f32,
+    );
     ctx.gui_data.billboard_click_rect = calculate_billboard_click_rect(
         light_position,
         screen_size,
@@ -47,7 +64,9 @@ pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
     ctx.world.insert_resource(proj_data);
 }
 
-pub unsafe fn run_transform_phase_gpu(ctx: &mut FrameContext) -> Result<()> {
+pub unsafe fn run_transform_phase_gpu(
+    ctx: &mut FrameContext,
+) -> Result<()> {
     let mesh = ctx.light_gizmo().mesh.clone();
     let backend = ctx.create_backend();
     gizmo_update_vertex_buffer(&mesh, &backend)
@@ -55,10 +74,9 @@ pub unsafe fn run_transform_phase_gpu(ctx: &mut FrameContext) -> Result<()> {
     Ok(())
 }
 
-fn update_camera_planes_ecs(ctx: &mut EcsContext) {
-    let camera_distance = ctx.camera().position.magnitude();
-    let grid_scale = ctx.grid_scale().value();
+fn update_camera_near_plane(ctx: &mut EcsContext) {
+    let camera_distance = ctx.camera().distance;
     let mut camera = ctx.camera_mut();
-    camera.near_plane = (camera_distance * 0.001).max(0.1).min(10.0);
-    camera.far_plane = (grid_scale * 1000.0).max(1000.0).min(100000.0);
+    camera.near_plane =
+        (camera_distance * 0.001).max(0.1).min(10.0);
 }

@@ -1,7 +1,7 @@
 mod animation_playback_systems;
 mod billboard_systems;
 mod bone_gizmo_systems;
-mod camera_systems;
+pub mod camera_systems;
 pub mod clip_library_systems;
 pub mod clip_schedule_systems;
 pub mod constraint_bake_systems;

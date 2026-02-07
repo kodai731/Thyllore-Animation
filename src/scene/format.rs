@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::animation::editable::EditableAnimationClip;
 
-pub const SCENE_FORMAT_VERSION: u32 = 1;
+pub const SCENE_FORMAT_VERSION: u32 = 2;
 pub const ANIMATION_FORMAT_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,17 +116,32 @@ impl AnimationClipFile {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CameraState {
-    pub position: [f32; 3],
-    pub direction: [f32; 3],
-    pub up: [f32; 3],
+    pub pivot: [f32; 3],
+    pub yaw: f32,
+    pub pitch: f32,
+    pub distance: f32,
+    pub fov_y: f32,
+
+    #[serde(default)]
+    pub position: Option<[f32; 3]>,
+    #[serde(default)]
+    pub direction: Option<[f32; 3]>,
+    #[serde(default)]
+    pub up: Option<[f32; 3]>,
 }
 
 impl Default for CameraState {
     fn default() -> Self {
+        use std::f32::consts::PI;
         Self {
-            position: [5.0, 5.0, 5.0],
-            direction: [-0.577, -0.577, -0.577],
-            up: [0.0, 1.0, 0.0],
+            pivot: [0.0, 0.0, 0.0],
+            yaw: PI / 4.0,
+            pitch: (5.0_f32 / 75.0_f32.sqrt()).asin(),
+            distance: 75.0_f32.sqrt(),
+            fov_y: 45.0,
+            position: None,
+            direction: None,
+            up: None,
         }
     }
 }

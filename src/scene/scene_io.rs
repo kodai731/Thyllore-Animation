@@ -7,9 +7,8 @@ use super::format::{
     AnimationClipRef, CameraState, EditorState, SceneFile, SceneMetadata, TimelineConfig,
     SCENE_FORMAT_VERSION,
 };
-use super::Camera;
-
 use crate::animation::editable::SourceClipId;
+use crate::ecs::resource::Camera;
 use crate::ecs::resource::ClipLibrary;
 use crate::ecs::resource::{SceneState, TimelineState};
 use crate::ecs::world::World;
@@ -57,9 +56,14 @@ impl CollectedSceneState {
         let camera = world
             .get_resource::<Camera>()
             .map(|c| CameraState {
-                position: [c.position.x, c.position.y, c.position.z],
-                direction: [c.direction.x, c.direction.y, c.direction.z],
-                up: [c.up.x, c.up.y, c.up.z],
+                pivot: [c.pivot.x, c.pivot.y, c.pivot.z],
+                yaw: c.yaw,
+                pitch: c.pitch,
+                distance: c.distance,
+                fov_y: c.fov_y.0,
+                position: None,
+                direction: None,
+                up: None,
             })
             .unwrap_or_default();
 
@@ -185,7 +189,7 @@ pub fn load_scene(scene_path: &Path) -> SceneResult<LoadedScene> {
     let content = fs::read_to_string(scene_path)?;
     let scene: SceneFile = ron::from_str(&content)?;
 
-    if scene.version != SCENE_FORMAT_VERSION {
+    if scene.version != SCENE_FORMAT_VERSION && scene.version != 1 {
         return Err(SceneError::VersionMismatch {
             expected: SCENE_FORMAT_VERSION,
             found: scene.version,
@@ -252,21 +256,27 @@ pub fn apply_loaded_scene_to_world(
     clips_with_ids: &[(SourceClipId, String)],
 ) {
     if let Some(mut camera) = world.get_resource_mut::<Camera>() {
-        camera.position = cgmath::Vector3::new(
-            loaded.scene.camera.position[0],
-            loaded.scene.camera.position[1],
-            loaded.scene.camera.position[2],
-        );
-        camera.direction = cgmath::Vector3::new(
-            loaded.scene.camera.direction[0],
-            loaded.scene.camera.direction[1],
-            loaded.scene.camera.direction[2],
-        );
-        camera.up = cgmath::Vector3::new(
-            loaded.scene.camera.up[0],
-            loaded.scene.camera.up[1],
-            loaded.scene.camera.up[2],
-        );
+        if let Some(pos) = loaded.scene.camera.position {
+            use crate::ecs::systems::camera_systems::create_camera;
+            let position = cgmath::Vector3::new(pos[0], pos[1], pos[2]);
+            let target = cgmath::Vector3::new(0.0, 0.0, 0.0);
+            *camera = create_camera(position, target);
+        } else {
+            camera.pivot = cgmath::Vector3::new(
+                loaded.scene.camera.pivot[0],
+                loaded.scene.camera.pivot[1],
+                loaded.scene.camera.pivot[2],
+            );
+            camera.yaw = loaded.scene.camera.yaw;
+            camera.pitch = loaded.scene.camera.pitch;
+            camera.distance = loaded.scene.camera.distance;
+            camera.fov_y = cgmath::Deg(loaded.scene.camera.fov_y);
+
+            camera.initial_pivot = camera.pivot;
+            camera.initial_yaw = camera.yaw;
+            camera.initial_pitch = camera.pitch;
+            camera.initial_distance = camera.distance;
+        }
     }
 
     if let Some(mut timeline) = world.get_resource_mut::<TimelineState>() {

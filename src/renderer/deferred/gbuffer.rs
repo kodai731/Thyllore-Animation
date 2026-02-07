@@ -151,7 +151,7 @@ impl<'a> GBufferPass<'a> {
         };
         let depth_clear = vk::ClearValue {
             depth_stencil: vk::ClearDepthStencilValue {
-                depth: 1.0,
+                depth: 0.0,
                 stencil: 0,
             },
         };

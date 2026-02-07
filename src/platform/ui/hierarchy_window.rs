@@ -2,6 +2,7 @@ use imgui::Condition;
 
 use crate::animation::{BoneId, Skeleton};
 use crate::asset::AssetStorage;
+use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData};
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
 use crate::ecs::systems::{hierarchy_is_bone_expanded, query_hierarchy_tree};
@@ -37,7 +38,7 @@ pub fn build_hierarchy_window(
                     build_entity_tree(ui, ui_events, world, state);
                 }
                 HierarchyDisplayMode::Bones => {
-                    build_bone_tree(ui, ui_events, state, assets);
+                    build_bone_tree(ui, ui_events, world, state, assets);
                 }
             }
         });
@@ -151,9 +152,15 @@ fn build_entity_tree(
 fn build_bone_tree(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
+    world: &World,
     state: &HierarchyState,
     assets: &AssetStorage,
 ) {
+    if let Some(bone_gizmo) = world.get_resource::<BoneGizmoData>() {
+        build_bone_display_panel(ui, ui_events, &bone_gizmo);
+        ui.separator();
+    }
+
     let skeleton = match assets.skeletons.values().next() {
         Some(skel_asset) => &skel_asset.skeleton,
         None => {
@@ -167,11 +174,62 @@ fn build_bone_tree(
         return;
     }
 
-    ui.text(&format!("Skeleton: {} ({} bones)", skeleton.name, skeleton.bones.len()));
+    ui.text(&format!(
+        "Skeleton: {} ({} bones)",
+        skeleton.name,
+        skeleton.bones.len()
+    ));
     ui.separator();
 
     for &root_id in &skeleton.root_bone_ids {
         build_bone_entry_recursive(ui, ui_events, state, skeleton, root_id, 0);
+    }
+}
+
+fn build_bone_display_panel(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    bone_gizmo: &BoneGizmoData,
+) {
+    ui.text("Bone Display");
+
+    let styles = [
+        (BoneDisplayStyle::Stick, "Stick"),
+        (BoneDisplayStyle::Octahedral, "Octa"),
+        (BoneDisplayStyle::Box, "Box"),
+        (BoneDisplayStyle::Sphere, "Sphere"),
+    ];
+
+    for (i, (style, label)) in styles.iter().enumerate() {
+        if i > 0 {
+            ui.same_line();
+        }
+        if ui
+            .radio_button_bool(label, bone_gizmo.display_style == *style)
+        {
+            ui_events.send(UIEvent::SetBoneDisplayStyle(*style));
+        }
+    }
+
+    let mut in_front = bone_gizmo.in_front;
+    if ui.checkbox("In Front", &mut in_front) {
+        ui_events.send(UIEvent::SetBoneInFront(in_front));
+    }
+
+    let mut dist_scaling = bone_gizmo.distance_scaling_enabled;
+    if ui.checkbox("Distance Scaling", &mut dist_scaling) {
+        ui_events.send(UIEvent::SetBoneDistanceScaling(dist_scaling));
+    }
+
+    if bone_gizmo.distance_scaling_enabled {
+        let mut factor = bone_gizmo.distance_scaling_factor;
+        ui.set_next_item_width(-1.0);
+        if imgui::Slider::new(ui, "Factor", 0.01f32, 0.1f32)
+            .display_format("%.3f")
+            .build(&mut factor)
+        {
+            ui_events.send(UIEvent::SetBoneDistanceScaleFactor(factor));
+        }
     }
 }
 

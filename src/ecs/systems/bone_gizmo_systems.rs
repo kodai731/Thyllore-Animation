@@ -19,6 +19,10 @@ const BONE_ACTIVE_SOLID_COLOR: [f32; 3] = [1.0, 0.6, 0.2];
 const BONE_ACTIVE_WIRE_COLOR: [f32; 3] = [0.5, 0.3, 0.1];
 const OCTA_WIDTH_RATIO: f32 = 0.1;
 const OCTA_DEPTH_RATIO: f32 = 0.1;
+const BOX_WIDTH_RATIO: f32 = 0.08;
+const SPHERE_RADIUS_RATIO: f32 = 0.06;
+const SPHERE_RING_COUNT: usize = 6;
+const SPHERE_SEGMENT_COUNT: usize = 8;
 
 pub fn compute_bone_local_offsets(
     skeleton: &Skeleton,
@@ -114,6 +118,7 @@ pub fn build_octahedral_bone_meshes(
         global_transforms,
         bone_local_offsets,
         &default_selection,
+        1.0,
         solid_mesh,
         wire_mesh,
     );
@@ -124,6 +129,7 @@ pub fn build_octahedral_bone_meshes_with_selection(
     global_transforms: &[Matrix4<f32>],
     bone_local_offsets: &[[f32; 3]],
     selection: &BoneSelectionState,
+    visual_scale: f32,
     solid_mesh: &mut LineMesh,
     wire_mesh: &mut LineMesh,
 ) {
@@ -165,8 +171,8 @@ pub fn build_octahedral_bone_meshes_with_selection(
             continue;
         };
 
-        let w = bone_length * OCTA_WIDTH_RATIO;
-        let d = bone_length * OCTA_DEPTH_RATIO;
+        let w = bone_length * OCTA_WIDTH_RATIO * visual_scale;
+        let d = bone_length * OCTA_DEPTH_RATIO * visual_scale;
 
         let mid = [
             head[0] + bone_dir[0] * d,
@@ -531,4 +537,311 @@ pub unsafe fn update_bone_gizmo_buffers(
     backend: &mut dyn RenderBackend,
 ) -> Result<()> {
     backend.update_or_create_line_buffers(&mut bone_gizmo.stick_mesh)
+}
+
+pub fn build_box_bone_meshes_with_selection(
+    skeleton: &Skeleton,
+    global_transforms: &[Matrix4<f32>],
+    bone_local_offsets: &[[f32; 3]],
+    selection: &BoneSelectionState,
+    visual_scale: f32,
+    solid_mesh: &mut LineMesh,
+    wire_mesh: &mut LineMesh,
+) {
+    solid_mesh.vertices.clear();
+    solid_mesh.indices.clear();
+    wire_mesh.vertices.clear();
+    wire_mesh.indices.clear();
+
+    if global_transforms.is_empty() {
+        return;
+    }
+
+    let display_transforms =
+        compute_display_transforms(skeleton, global_transforms, bone_local_offsets);
+
+    for bone in &skeleton.bones {
+        let bone_idx = bone.id as usize;
+        if bone_idx >= display_transforms.len() {
+            continue;
+        }
+
+        let Some(parent_id) = bone.parent_id else {
+            continue;
+        };
+        let parent_idx = parent_id as usize;
+        if parent_idx >= display_transforms.len() {
+            continue;
+        }
+
+        let head = display_transforms[parent_idx];
+        let tail = display_transforms[bone_idx];
+
+        let Some((bone_length, _bone_dir, right, forward)) =
+            compute_bone_axes(head, tail)
+        else {
+            continue;
+        };
+
+        let w = bone_length * BOX_WIDTH_RATIO * visual_scale;
+        let box_verts = compute_box_vertices(head, tail, right, forward, w);
+
+        let (solid_color, wire_color) = resolve_bone_colors(bone_idx, selection);
+        append_box_solid_colored(solid_mesh, &box_verts, solid_color);
+        append_box_wire_colored(wire_mesh, &box_verts, wire_color);
+    }
+}
+
+fn compute_box_vertices(
+    head: [f32; 3],
+    tail: [f32; 3],
+    right: [f32; 3],
+    forward: [f32; 3],
+    w: f32,
+) -> [[f32; 3]; 8] {
+    let mut verts = [[0.0f32; 3]; 8];
+
+    let signs: [[f32; 2]; 4] = [
+        [1.0, 1.0],
+        [-1.0, 1.0],
+        [-1.0, -1.0],
+        [1.0, -1.0],
+    ];
+
+    for (i, [sr, sf]) in signs.iter().enumerate() {
+        for k in 0..3 {
+            verts[i][k] = head[k] + right[k] * w * sr + forward[k] * w * sf;
+            verts[i + 4][k] = tail[k] + right[k] * w * sr + forward[k] * w * sf;
+        }
+    }
+
+    verts
+}
+
+fn append_box_solid_colored(
+    mesh: &mut LineMesh,
+    verts: &[[f32; 3]; 8],
+    color: [f32; 3],
+) {
+    let base = mesh.vertices.len() as u32;
+
+    for v in verts {
+        mesh.vertices.push(ColorVertex { pos: *v, color });
+    }
+
+    let tris: [[u32; 3]; 12] = [
+        [0, 1, 2], [0, 2, 3],
+        [4, 6, 5], [4, 7, 6],
+        [0, 4, 5], [0, 5, 1],
+        [2, 6, 7], [2, 7, 3],
+        [1, 5, 6], [1, 6, 2],
+        [0, 3, 7], [0, 7, 4],
+    ];
+
+    for tri in &tris {
+        mesh.indices.push(base + tri[0]);
+        mesh.indices.push(base + tri[1]);
+        mesh.indices.push(base + tri[2]);
+    }
+}
+
+fn append_box_wire_colored(
+    mesh: &mut LineMesh,
+    verts: &[[f32; 3]; 8],
+    color: [f32; 3],
+) {
+    let base = mesh.vertices.len() as u32;
+
+    for v in verts {
+        mesh.vertices.push(ColorVertex { pos: *v, color });
+    }
+
+    let edges: [[u32; 2]; 12] = [
+        [0, 1], [1, 2], [2, 3], [3, 0],
+        [4, 5], [5, 6], [6, 7], [7, 4],
+        [0, 4], [1, 5], [2, 6], [3, 7],
+    ];
+
+    for edge in &edges {
+        mesh.indices.push(base + edge[0]);
+        mesh.indices.push(base + edge[1]);
+    }
+}
+
+pub fn build_sphere_bone_meshes_with_selection(
+    skeleton: &Skeleton,
+    global_transforms: &[Matrix4<f32>],
+    bone_local_offsets: &[[f32; 3]],
+    selection: &BoneSelectionState,
+    visual_scale: f32,
+    solid_mesh: &mut LineMesh,
+    wire_mesh: &mut LineMesh,
+) {
+    solid_mesh.vertices.clear();
+    solid_mesh.indices.clear();
+    wire_mesh.vertices.clear();
+    wire_mesh.indices.clear();
+
+    if global_transforms.is_empty() {
+        return;
+    }
+
+    let display_transforms =
+        compute_display_transforms(skeleton, global_transforms, bone_local_offsets);
+
+    for bone in &skeleton.bones {
+        let bone_idx = bone.id as usize;
+        if bone_idx >= display_transforms.len() {
+            continue;
+        }
+
+        let Some(parent_id) = bone.parent_id else {
+            continue;
+        };
+        let parent_idx = parent_id as usize;
+        if parent_idx >= display_transforms.len() {
+            continue;
+        }
+
+        let head = display_transforms[parent_idx];
+        let tail = display_transforms[bone_idx];
+
+        let Some((bone_length, bone_dir, right, forward)) =
+            compute_bone_axes(head, tail)
+        else {
+            continue;
+        };
+
+        let center = [
+            (head[0] + tail[0]) * 0.5,
+            (head[1] + tail[1]) * 0.5,
+            (head[2] + tail[2]) * 0.5,
+        ];
+        let radius = bone_length * SPHERE_RADIUS_RATIO * visual_scale;
+
+        let (solid_color, wire_color) = resolve_bone_colors(bone_idx, selection);
+        append_sphere_solid_colored(
+            solid_mesh, center, radius, bone_dir, right, forward, solid_color,
+        );
+        append_sphere_wire_colored(
+            wire_mesh, center, radius, bone_dir, right, forward, wire_color,
+        );
+    }
+}
+
+fn sphere_point(
+    center: [f32; 3],
+    radius: f32,
+    bone_dir: [f32; 3],
+    right: [f32; 3],
+    forward: [f32; 3],
+    theta: f32,
+    phi: f32,
+) -> [f32; 3] {
+    let st = theta.sin();
+    let ct = theta.cos();
+    let sp = phi.sin();
+    let cp = phi.cos();
+
+    let x = st * cp;
+    let y = ct;
+    let z = st * sp;
+
+    [
+        center[0] + radius * (right[0] * x + bone_dir[0] * y + forward[0] * z),
+        center[1] + radius * (right[1] * x + bone_dir[1] * y + forward[1] * z),
+        center[2] + radius * (right[2] * x + bone_dir[2] * y + forward[2] * z),
+    ]
+}
+
+fn append_sphere_solid_colored(
+    mesh: &mut LineMesh,
+    center: [f32; 3],
+    radius: f32,
+    bone_dir: [f32; 3],
+    right: [f32; 3],
+    forward: [f32; 3],
+    color: [f32; 3],
+) {
+    let rings = SPHERE_RING_COUNT;
+    let segments = SPHERE_SEGMENT_COUNT;
+    let base = mesh.vertices.len() as u32;
+
+    for ring in 0..=rings {
+        let theta = std::f32::consts::PI * ring as f32 / rings as f32;
+        for seg in 0..=segments {
+            let phi = 2.0 * std::f32::consts::PI * seg as f32 / segments as f32;
+            let pos = sphere_point(center, radius, bone_dir, right, forward, theta, phi);
+            mesh.vertices.push(ColorVertex { pos, color });
+        }
+    }
+
+    let cols = (segments + 1) as u32;
+    for ring in 0..rings as u32 {
+        for seg in 0..segments as u32 {
+            let tl = base + ring * cols + seg;
+            let tr = tl + 1;
+            let bl = tl + cols;
+            let br = bl + 1;
+
+            mesh.indices.push(tl);
+            mesh.indices.push(bl);
+            mesh.indices.push(tr);
+
+            mesh.indices.push(tr);
+            mesh.indices.push(bl);
+            mesh.indices.push(br);
+        }
+    }
+}
+
+fn append_sphere_wire_colored(
+    mesh: &mut LineMesh,
+    center: [f32; 3],
+    radius: f32,
+    bone_dir: [f32; 3],
+    right: [f32; 3],
+    forward: [f32; 3],
+    color: [f32; 3],
+) {
+    let rings = SPHERE_RING_COUNT;
+    let segments = SPHERE_SEGMENT_COUNT;
+
+    for ring in 1..rings {
+        let theta = std::f32::consts::PI * ring as f32 / rings as f32;
+        let mut prev = sphere_point(center, radius, bone_dir, right, forward, theta, 0.0);
+
+        for seg in 1..=segments {
+            let phi = 2.0 * std::f32::consts::PI * seg as f32 / segments as f32;
+            let curr =
+                sphere_point(center, radius, bone_dir, right, forward, theta, phi);
+
+            let base = mesh.vertices.len() as u32;
+            mesh.vertices.push(ColorVertex { pos: prev, color });
+            mesh.vertices.push(ColorVertex { pos: curr, color });
+            mesh.indices.push(base);
+            mesh.indices.push(base + 1);
+
+            prev = curr;
+        }
+    }
+
+    for seg in 0..segments {
+        let phi = 2.0 * std::f32::consts::PI * seg as f32 / segments as f32;
+        let mut prev = sphere_point(center, radius, bone_dir, right, forward, 0.0, phi);
+
+        for ring in 1..=rings {
+            let theta = std::f32::consts::PI * ring as f32 / rings as f32;
+            let curr =
+                sphere_point(center, radius, bone_dir, right, forward, theta, phi);
+
+            let base = mesh.vertices.len() as u32;
+            mesh.vertices.push(ColorVertex { pos: prev, color });
+            mesh.vertices.push(ColorVertex { pos: curr, color });
+            mesh.indices.push(base);
+            mesh.indices.push(base + 1);
+
+            prev = curr;
+        }
+    }
 }

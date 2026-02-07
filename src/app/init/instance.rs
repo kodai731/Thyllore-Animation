@@ -20,7 +20,10 @@ use crate::vulkanr::context::{
 use crate::vulkanr::data::*;
 use crate::vulkanr::descriptor::*;
 use crate::vulkanr::device::*;
-use crate::vulkanr::pipeline::{DepthTestConfig, PipelineBuilder, RRPipeline, VertexInputConfig};
+use crate::vulkanr::pipeline::{
+    BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline,
+    VertexInputConfig,
+};
 use crate::vulkanr::render::*;
 use crate::vulkanr::swapchain::*;
 use crate::vulkanr::vulkan::*;
@@ -284,6 +287,11 @@ impl App {
         .polygon_mode(vk::PolygonMode::FILL)
         .cull_mode(vk::CullModeFlags::BACK)
         .no_depth_test()
+        .push_constants(PushConstantConfig {
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            offset: 0,
+            size: std::mem::size_of::<f32>() as u32,
+        })
         .descriptor_layouts(render_layouts.to_vec())
         .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
         .expect("Failed to create bone solid pipeline");
@@ -302,6 +310,11 @@ impl App {
         .topology(vk::PrimitiveTopology::LINE_LIST)
         .polygon_mode(vk::PolygonMode::LINE)
         .no_depth_test()
+        .push_constants(PushConstantConfig {
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            offset: 0,
+            size: std::mem::size_of::<f32>() as u32,
+        })
         .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
         .descriptor_layouts(render_layouts.to_vec())
         .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
@@ -311,6 +324,124 @@ impl App {
         crate::log!(
             "Registered bone wire pipeline with id {}",
             bone_wire_pipeline_id
+        );
+
+        let bone_solid_depth_pipeline = PipelineBuilder::new(
+            "assets/shaders/boneVert.spv",
+            "assets/shaders/boneFrag.spv",
+        )
+        .vertex_input(VertexInputConfig::Gizmo)
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .cull_mode(vk::CullModeFlags::BACK)
+        .depth_test(DepthTestConfig {
+            test_enable: true,
+            write_enable: false,
+            compare_op: vk::CompareOp::LESS,
+        })
+        .push_constants(PushConstantConfig {
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            offset: 0,
+            size: std::mem::size_of::<f32>() as u32,
+        })
+        .descriptor_layouts(render_layouts.to_vec())
+        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+        .expect("Failed to create bone solid depth pipeline");
+        let bone_solid_depth_pipeline_id =
+            data.pipeline_storage.register(bone_solid_depth_pipeline);
+        pipeline_manager.allocate_id();
+        crate::log!(
+            "Registered bone solid depth pipeline with id {}",
+            bone_solid_depth_pipeline_id
+        );
+
+        let bone_wire_depth_pipeline = PipelineBuilder::new(
+            "assets/shaders/boneVert.spv",
+            "assets/shaders/boneFrag.spv",
+        )
+        .vertex_input(VertexInputConfig::Gizmo)
+        .topology(vk::PrimitiveTopology::LINE_LIST)
+        .polygon_mode(vk::PolygonMode::LINE)
+        .depth_test(DepthTestConfig {
+            test_enable: true,
+            write_enable: false,
+            compare_op: vk::CompareOp::LESS,
+        })
+        .push_constants(PushConstantConfig {
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            offset: 0,
+            size: std::mem::size_of::<f32>() as u32,
+        })
+        .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
+        .descriptor_layouts(render_layouts.to_vec())
+        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+        .expect("Failed to create bone wire depth pipeline");
+        let bone_wire_depth_pipeline_id =
+            data.pipeline_storage.register(bone_wire_depth_pipeline);
+        pipeline_manager.allocate_id();
+        crate::log!(
+            "Registered bone wire depth pipeline with id {}",
+            bone_wire_depth_pipeline_id
+        );
+
+        let bone_solid_occluded_pipeline = PipelineBuilder::new(
+            "assets/shaders/boneVert.spv",
+            "assets/shaders/boneFrag.spv",
+        )
+        .vertex_input(VertexInputConfig::Gizmo)
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .cull_mode(vk::CullModeFlags::BACK)
+        .depth_test(DepthTestConfig {
+            test_enable: true,
+            write_enable: false,
+            compare_op: vk::CompareOp::GREATER,
+        })
+        .blend(BlendConfig::default())
+        .push_constants(PushConstantConfig {
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            offset: 0,
+            size: std::mem::size_of::<f32>() as u32,
+        })
+        .descriptor_layouts(render_layouts.to_vec())
+        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+        .expect("Failed to create bone solid occluded pipeline");
+        let bone_solid_occluded_pipeline_id =
+            data.pipeline_storage.register(bone_solid_occluded_pipeline);
+        pipeline_manager.allocate_id();
+        crate::log!(
+            "Registered bone solid occluded pipeline with id {}",
+            bone_solid_occluded_pipeline_id
+        );
+
+        let bone_wire_occluded_pipeline = PipelineBuilder::new(
+            "assets/shaders/boneVert.spv",
+            "assets/shaders/boneFrag.spv",
+        )
+        .vertex_input(VertexInputConfig::Gizmo)
+        .topology(vk::PrimitiveTopology::LINE_LIST)
+        .polygon_mode(vk::PolygonMode::LINE)
+        .depth_test(DepthTestConfig {
+            test_enable: true,
+            write_enable: false,
+            compare_op: vk::CompareOp::GREATER,
+        })
+        .blend(BlendConfig::default())
+        .push_constants(PushConstantConfig {
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            offset: 0,
+            size: std::mem::size_of::<f32>() as u32,
+        })
+        .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
+        .descriptor_layouts(render_layouts.to_vec())
+        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+        .expect("Failed to create bone wire occluded pipeline");
+        let bone_wire_occluded_pipeline_id =
+            data.pipeline_storage.register(bone_wire_occluded_pipeline);
+        pipeline_manager.allocate_id();
+        crate::log!(
+            "Registered bone wire occluded pipeline with id {}",
+            bone_wire_occluded_pipeline_id
         );
 
         let mut bone_gizmo_data = BoneGizmoData::default();
@@ -323,6 +454,24 @@ impl App {
         bone_gizmo_data.wire_render_info.pipeline_id = Some(bone_wire_pipeline_id);
         bone_gizmo_data.wire_render_info.object_index =
             data.graphics_resources.objects.allocate_slot();
+
+        bone_gizmo_data.solid_depth_render_info.pipeline_id =
+            Some(bone_solid_depth_pipeline_id);
+        bone_gizmo_data.solid_depth_render_info.object_index =
+            bone_gizmo_data.solid_render_info.object_index;
+        bone_gizmo_data.wire_depth_render_info.pipeline_id =
+            Some(bone_wire_depth_pipeline_id);
+        bone_gizmo_data.wire_depth_render_info.object_index =
+            bone_gizmo_data.wire_render_info.object_index;
+        bone_gizmo_data.solid_occluded_render_info.pipeline_id =
+            Some(bone_solid_occluded_pipeline_id);
+        bone_gizmo_data.solid_occluded_render_info.object_index =
+            bone_gizmo_data.solid_render_info.object_index;
+        bone_gizmo_data.wire_occluded_render_info.pipeline_id =
+            Some(bone_wire_occluded_pipeline_id);
+        bone_gizmo_data.wire_occluded_render_info.object_index =
+            bone_gizmo_data.wire_render_info.object_index;
+
         bone_gizmo_data.display_style = BoneDisplayStyle::Octahedral;
         crate::log!(
             "Allocated object_index {} for BoneGizmo stick",

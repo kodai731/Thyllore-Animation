@@ -70,7 +70,9 @@ pub fn bone_gizmo_render_data(bone_gizmo: &BoneGizmoData) -> Vec<RenderData> {
             );
             vec![RenderData::new(mesh_ref, bone_gizmo.stick_render_info)]
         }
-        BoneDisplayStyle::Octahedral => {
+        BoneDisplayStyle::Octahedral
+        | BoneDisplayStyle::Box
+        | BoneDisplayStyle::Sphere => {
             let solid_ref = GpuMeshRef::new(
                 bone_gizmo.solid_mesh.vertex_buffer_handle,
                 bone_gizmo.solid_mesh.index_buffer_handle,

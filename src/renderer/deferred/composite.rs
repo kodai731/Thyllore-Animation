@@ -496,6 +496,79 @@ impl<'a> CompositePass<'a> {
             .cmd_draw_indexed(command_buffer, mesh.indices.len() as u32, 1, 0, 0, 0);
     }
 
+    unsafe fn push_bone_alpha(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        pipeline: &RRPipeline,
+        alpha: f32,
+    ) {
+        let alpha_bytes = std::slice::from_raw_parts(
+            &alpha as *const f32 as *const u8,
+            std::mem::size_of::<f32>(),
+        );
+        self.device.cmd_push_constants(
+            command_buffer,
+            pipeline.pipeline_layout,
+            vk::ShaderStageFlags::FRAGMENT,
+            0,
+            alpha_bytes,
+        );
+    }
+
+    unsafe fn draw_bone_solid_pass(
+        &self,
+        mesh: &LineMesh,
+        render_info: &crate::ecs::component::RenderInfo,
+        alpha: f32,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+    ) {
+        if mesh.indices.is_empty() {
+            return;
+        }
+        let Some(pid) = render_info.pipeline_id else {
+            return;
+        };
+        let Some(pipeline) = self.pipeline_storage().get(pid) else {
+            return;
+        };
+        self.push_bone_alpha(command_buffer, pipeline, alpha);
+        self.draw_triangle_mesh(
+            mesh,
+            pipeline,
+            render_info.object_index,
+            command_buffer,
+            image_index,
+        );
+    }
+
+    unsafe fn draw_bone_wire_pass(
+        &self,
+        mesh: &LineMesh,
+        render_info: &crate::ecs::component::RenderInfo,
+        alpha: f32,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+    ) {
+        if mesh.indices.is_empty() {
+            return;
+        }
+        let Some(pid) = render_info.pipeline_id else {
+            return;
+        };
+        let Some(pipeline) = self.pipeline_storage().get(pid) else {
+            return;
+        };
+        self.push_bone_alpha(command_buffer, pipeline, alpha);
+        self.draw_line_mesh(
+            mesh,
+            pipeline,
+            render_info.object_index,
+            command_buffer,
+            image_index,
+        );
+    }
+
     unsafe fn draw_bone_gizmo(
         &self,
         command_buffer: vk::CommandBuffer,
@@ -531,33 +604,55 @@ impl<'a> CompositePass<'a> {
                     image_index,
                 );
             }
-            BoneDisplayStyle::Octahedral => {
-                if !bone_gizmo.solid_mesh.indices.is_empty() {
-                    if let Some(pid) = bone_gizmo.solid_render_info.pipeline_id {
-                        if let Some(pipeline) = self.pipeline_storage().get(pid) {
-                            self.draw_triangle_mesh(
-                                &bone_gizmo.solid_mesh,
-                                pipeline,
-                                bone_gizmo.solid_render_info.object_index,
-                                command_buffer,
-                                image_index,
-                            );
-                        }
-                    }
-                }
 
-                if !bone_gizmo.wire_mesh.indices.is_empty() {
-                    if let Some(pid) = bone_gizmo.wire_render_info.pipeline_id {
-                        if let Some(pipeline) = self.pipeline_storage().get(pid) {
-                            self.draw_line_mesh(
-                                &bone_gizmo.wire_mesh,
-                                pipeline,
-                                bone_gizmo.wire_render_info.object_index,
-                                command_buffer,
-                                image_index,
-                            );
-                        }
-                    }
+            BoneDisplayStyle::Octahedral
+            | BoneDisplayStyle::Box
+            | BoneDisplayStyle::Sphere => {
+                if bone_gizmo.in_front {
+                    self.draw_bone_solid_pass(
+                        &bone_gizmo.solid_mesh,
+                        &bone_gizmo.solid_render_info,
+                        1.0,
+                        command_buffer,
+                        image_index,
+                    );
+                    self.draw_bone_wire_pass(
+                        &bone_gizmo.wire_mesh,
+                        &bone_gizmo.wire_render_info,
+                        1.0,
+                        command_buffer,
+                        image_index,
+                    );
+                } else {
+                    self.draw_bone_solid_pass(
+                        &bone_gizmo.solid_mesh,
+                        &bone_gizmo.solid_depth_render_info,
+                        1.0,
+                        command_buffer,
+                        image_index,
+                    );
+                    self.draw_bone_wire_pass(
+                        &bone_gizmo.wire_mesh,
+                        &bone_gizmo.wire_depth_render_info,
+                        1.0,
+                        command_buffer,
+                        image_index,
+                    );
+
+                    self.draw_bone_solid_pass(
+                        &bone_gizmo.solid_mesh,
+                        &bone_gizmo.solid_occluded_render_info,
+                        0.25,
+                        command_buffer,
+                        image_index,
+                    );
+                    self.draw_bone_wire_pass(
+                        &bone_gizmo.wire_mesh,
+                        &bone_gizmo.wire_occluded_render_info,
+                        0.25,
+                        command_buffer,
+                        image_index,
+                    );
                 }
             }
         }

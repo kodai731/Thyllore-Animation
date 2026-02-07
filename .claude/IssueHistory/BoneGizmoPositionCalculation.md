@@ -148,6 +148,49 @@ CPU raycast-based bone selection with octahedral bone triangle hit testing and c
 | `src/ecs/context.rs` | Added `bone_selection()` / `bone_selection_mut()` accessors |
 | `src/ecs/systems/phases/render_prep_phase.rs` | Uses selection state for mesh building |
 
+## Phase 9: Advanced Visualization Features (2026-02-07)
+
+### Implementation
+
+4 features for bone visualization enhancement:
+
+1. **In Front Toggle** — Depth test ON/OFF for bone rendering
+2. **Two-Pass Rendering** — Visible parts solid (alpha 1.0), occluded parts semi-transparent (alpha 0.25)
+3. **Custom Bone Shapes** — Box and Sphere presets added to existing Stick/Octahedral
+4. **Distance-Based Scaling** — Camera distance-responsive bone sizing
+
+### Architecture
+
+- **Push Constants**: Fragment shader receives `float alpha` via push constant for transparency control
+- **4 New Pipelines**: `bone_solid_depth` (LESS), `bone_wire_depth` (LESS), `bone_solid_occluded` (GREATER+blend), `bone_wire_occluded` (GREATER+blend). All with depth write=false to avoid contaminating scene depth buffer
+- **Two-Pass Pattern**: When `in_front=false`, Pass 1 draws visible bones with depth LESS test, Pass 2 draws occluded bones with depth GREATER test + alpha blending
+- **Box Mesh**: 8 vertices (head face 4 + tail face 4), 12 triangles, 12 wire edges. Width = bone_length * 0.08
+- **Sphere Mesh**: UV sphere with 6 rings, 8 segments. Radius = bone_length * 0.06
+- **Visual Scale**: `(camera_distance_to_skeleton_center * factor).max(0.1)`, applied to width/radius calculations
+
+### UI Integration
+
+- Radio buttons for style selection (Stick/Octa/Box/Sphere)
+- "In Front" checkbox
+- "Distance Scaling" checkbox + Factor slider (0.01-0.1)
+- 4 new UIEvent variants: SetBoneDisplayStyle, SetBoneInFront, SetBoneDistanceScaling, SetBoneDistanceScaleFactor
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `shaders/boneFragment.frag` | Push constant alpha added |
+| `src/debugview/gizmo/bone.rs` | BoneDisplayStyle Box/Sphere, new fields, 4 RenderInfo fields |
+| `src/app/init/instance.rs` | 4 new pipelines, push_constants on existing pipelines |
+| `src/renderer/deferred/composite.rs` | Two-pass draw_bone_gizmo, helper functions |
+| `src/ecs/systems/bone_gizmo_systems.rs` | Box/Sphere mesh generation, visual_scale parameter |
+| `src/ecs/systems/phases/render_prep_phase.rs` | Box/Sphere update, compute_visual_scale |
+| `src/ecs/systems/render_data_systems.rs` | Box/Sphere added to render data match |
+| `src/platform/ui/hierarchy_window.rs` | Bone display settings panel |
+| `src/ecs/events/ui_events.rs` | 4 new UIEvent variants |
+| `src/ecs/systems/ui_event_systems.rs` | New events in catch-all arm |
+| `src/platform/events.rs` | Event handlers for bone display settings |
+
 ## Debugging Tips
 
 When bone positions are wrong, check these in order:

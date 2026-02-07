@@ -8,6 +8,7 @@ use crate::ecs::resource::{HierarchyDisplayMode, SelectionModifier};
 use crate::animation::{ConstraintId, ConstraintType};
 use crate::animation::BoneId;
 use crate::app::data::LightMoveTarget;
+use crate::debugview::gizmo::BoneDisplayStyle;
 use crate::ecs::world::Entity;
 
 #[derive(Clone, Debug)]
@@ -162,6 +163,11 @@ pub enum UIEvent {
         entity: Entity,
         sample_fps: f32,
     },
+
+    SetBoneDisplayStyle(BoneDisplayStyle),
+    SetBoneInFront(bool),
+    SetBoneDistanceScaling(bool),
+    SetBoneDistanceScaleFactor(f32),
 }
 
 #[derive(Default)]

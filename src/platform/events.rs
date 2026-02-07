@@ -9,7 +9,7 @@ use super::ui::{build_click_debug_overlay, build_clip_browser_window, build_curv
 use crate::ecs::resource::CurveEditorBuffer;
 use crate::ecs::resource::ClipLibrary;
 use crate::app::{App, GUIData};
-use crate::debugview::gizmo::BoneSelectionState;
+use crate::debugview::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::debugview::RayTracingDebugState;
 use crate::ecs::resource::{HierarchyState, SceneState, TimelineState};
 use crate::ecs::events::UIEvent;
@@ -463,6 +463,38 @@ fn process_hierarchy_events_inline(events: &[UIEvent], app: &mut App) {
                     let offset = Vector3::new(5.0, 3.0, 5.0);
                     let mut camera = app.data.ecs_world.resource_mut::<Camera>();
                     camera_move_to_look_at(&mut camera, target, offset);
+                }
+            }
+
+            UIEvent::SetBoneDisplayStyle(style) => {
+                if let Some(mut bone_gizmo) =
+                    app.data.ecs_world.get_resource_mut::<BoneGizmoData>()
+                {
+                    bone_gizmo.display_style = *style;
+                }
+            }
+
+            UIEvent::SetBoneInFront(in_front) => {
+                if let Some(mut bone_gizmo) =
+                    app.data.ecs_world.get_resource_mut::<BoneGizmoData>()
+                {
+                    bone_gizmo.in_front = *in_front;
+                }
+            }
+
+            UIEvent::SetBoneDistanceScaling(enabled) => {
+                if let Some(mut bone_gizmo) =
+                    app.data.ecs_world.get_resource_mut::<BoneGizmoData>()
+                {
+                    bone_gizmo.distance_scaling_enabled = *enabled;
+                }
+            }
+
+            UIEvent::SetBoneDistanceScaleFactor(factor) => {
+                if let Some(mut bone_gizmo) =
+                    app.data.ecs_world.get_resource_mut::<BoneGizmoData>()
+                {
+                    bone_gizmo.distance_scaling_factor = *factor;
                 }
             }
 

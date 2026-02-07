@@ -213,7 +213,11 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::ConstraintAdd { .. }
             | UIEvent::ConstraintRemove { .. }
             | UIEvent::ConstraintUpdate { .. }
-            | UIEvent::ConstraintBakeToKeyframes { .. } => {}
+            | UIEvent::ConstraintBakeToKeyframes { .. }
+            | UIEvent::SetBoneDisplayStyle(_)
+            | UIEvent::SetBoneInFront(_)
+            | UIEvent::SetBoneDistanceScaling(_)
+            | UIEvent::SetBoneDistanceScaleFactor(_) => {}
         }
     }
 

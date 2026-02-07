@@ -39,6 +39,10 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
         let is_wheel_clicked = ctx.gui_data.is_wheel_clicked;
         let mouse_wheel = ctx.gui_data.mouse_wheel;
         let mouse_diff = ctx.gui_data.mouse_diff;
+        let screen_size = [
+            ctx.swapchain_extent.0 as f32,
+            ctx.swapchain_extent.1 as f32,
+        ];
         let mut camera = ctx.camera_mut();
         crate::ecs::camera_input_system_inner(
             &mut *camera,
@@ -47,6 +51,7 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
             mouse_wheel,
             mouse_diff,
             grid_scale,
+            screen_size,
         );
     }
 

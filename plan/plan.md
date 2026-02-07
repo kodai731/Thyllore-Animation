@@ -1,25 +1,8 @@
-- 目標
-    - どんなfbxファイルについてもアニメーションを行う
-    - どんなglbファイルについてもアニメーションを行う
-    - guiを強化して、ファイルを選択できるようにする
-    
-- 問題
-    - glbファイルでstickmanがアニメーションできない
-
-- アプローチ
-    - fbx-cel ではなく russimp を使用する方式に移行
-    - スキニングアニメーションは phoenix-bird のモデルでテスト
-    - ノードアニメーションは stickman のモデルでテスト
-    - 不具合調査時と状況の調査時は、かならずlog/を確認してください
-
-- ログ
-    - log/ にログを保存しています。不具合修正や分析に積極的に使用してください
-    - log/log_N.txt にローテーションされたlogが記録される仕組みです
-    - 不具合発生時には原因究明のため、logに記載する内容を追加することを検討してください
-    - log/animation_export_2025... はfly.fbxのアニメーションをBlenderで出力したもの
-    - log/Blender_Matrix_stickman はBlenderでStickmanのt=0の時点の行列を出力したもの
-    - log/*.png は不具合調査のためにスクリーンショットを置きます
-
-- 重要
-    - CLAUDE.md にプロジェクト概要があるので、必ず参照してください
-    - 日本語で回答してください
+- Goals
+    - Animation and Rendering Engine
+    - ML animation suggestion system
+    - pure and clean architecture
+- todo list
+    - clean libraries, e.g. russimp
+    - fix scene view bone calculation
+    - 

@@ -33,6 +33,13 @@ impl RRSwapchain {
         println!("created swapchain");
         rrswapchain
     }
+
+    pub unsafe fn destroy(&self, device: &super::device::Device) {
+        for &view in &self.swapchain_image_views {
+            device.destroy_image_view(view, None);
+        }
+        device.destroy_swapchain_khr(self.swapchain, None);
+    }
 }
 
 impl SwapchainSupport {

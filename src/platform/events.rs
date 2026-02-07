@@ -316,9 +316,21 @@ impl System {
                                     }
                                 }
 
-                                let image_index = app.begin_frame(gui_data).unwrap();
-                                app.update(image_index, gui_data).unwrap();
-                                app.render(image_index, gui_data, draw_data).unwrap();
+                                let frame_result = (|| -> anyhow::Result<()> {
+                                    let image_index = app.begin_frame(gui_data)?;
+                                    app.update(image_index, gui_data)?;
+                                    app.render(image_index, gui_data, draw_data)?;
+                                    Ok(())
+                                })();
+
+                                if let Err(e) = frame_result {
+                                    let msg = e.to_string();
+                                    if msg.contains("SWAPCHAIN_OUT_OF_DATE") {
+                                        app.recreate_swapchain(&window).unwrap();
+                                    } else {
+                                        panic!("Frame error: {:?}", e);
+                                    }
+                                }
                             }
 
                             gui_data.mouse_wheel = 0.0;

@@ -80,6 +80,9 @@ impl App {
 
         let image_index = match result {
             Ok((image_index, _)) => image_index as usize,
+            Err(vk::ErrorCode::OUT_OF_DATE_KHR) => {
+                return Err(anyhow!("SWAPCHAIN_OUT_OF_DATE"))
+            }
             Err(e) => return Err(anyhow!(e)),
         };
 
@@ -143,6 +146,7 @@ impl App {
 
         if changed || self.resized {
             self.resized = false;
+            return Err(anyhow!("SWAPCHAIN_OUT_OF_DATE"));
         } else if let Err(e) = present_result {
             return Err(anyhow!(e));
         }

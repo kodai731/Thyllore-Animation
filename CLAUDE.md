@@ -634,7 +634,7 @@ The `memo.txt` file contains useful reference links for:
 
 Issue History Guidelines
 **IMPORTANT:** If you encounter an issue and resolve it, you must document the issue and its solution in detail at
-.claude/IssueHistory/
+.claude/local/IssueHistory/
 File names must use CamelCase (e.g., ImageLayoutTransition.md).
 Each issue must be documented in a separate file, but to avoid huge number of files, try to add issue in a existing file
 and recap it.
@@ -643,8 +643,8 @@ At the top of each file, include a brief summary of the issue and its resolution
 
 ## explore history
 
-- explore history and summary reports can be placed at .claude/ExploreHistory if necessary.
+- explore history and summary reports can be placed at .claude/local/ExploreHistory if necessary.
 
 ## Last Conversation
-- last conversation is saved at .claude//last-conversation.md
+- last conversation is saved at .claude/local/last-conversation.md
 - **IMPORTANT** MUST read the last conversation file and work continue.

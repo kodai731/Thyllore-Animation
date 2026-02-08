@@ -121,7 +121,7 @@ pub fn camera_pan(
         camera.distance * 2.0 * (fov_rad.0 / 2.0).tan() / screen_size.y;
 
     camera.pivot += right * (-mouse_diff.x * pan_speed);
-    camera.pivot += up * (-mouse_diff.y * pan_speed);
+    camera.pivot += up * (mouse_diff.y * pan_speed);
 }
 
 pub fn camera_zoom(

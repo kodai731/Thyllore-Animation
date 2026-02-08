@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
+use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3, Vector4};
 
 use crate::animation::Skeleton;
 use crate::debugview::gizmo::{BoneGizmoData, BoneSelectionState};
@@ -348,10 +348,17 @@ pub(crate) fn compute_display_transforms(
     global_transforms: &[Matrix4<f32>],
     bone_local_offsets: &[[f32; 3]],
 ) -> Vec<[f32; 3]> {
-    let inv_root = skeleton
-        .root_transform
-        .invert()
-        .unwrap_or(Matrix4::identity());
+    let root_col0 = Vector3::new(
+        skeleton.root_transform[0][0],
+        skeleton.root_transform[0][1],
+        skeleton.root_transform[0][2],
+    );
+    let root_scale = root_col0.magnitude();
+    let inv_scale = if root_scale > f32::EPSILON {
+        1.0 / root_scale
+    } else {
+        1.0
+    };
 
     skeleton
         .bones
@@ -370,8 +377,11 @@ pub(crate) fn compute_display_transforms(
 
             let world_pos = global_transforms[idx]
                 * Vector4::new(offset[0], offset[1], offset[2], 1.0);
-            let local_pos = inv_root * world_pos;
-            [local_pos.x, local_pos.y, local_pos.z]
+            [
+                world_pos.x * inv_scale,
+                world_pos.y * inv_scale,
+                world_pos.z * inv_scale,
+            ]
         })
         .collect()
 }

@@ -27,7 +27,7 @@ pub unsafe fn create_gbuffer_framebuffer(
         vk::SampleCountFlags::_1,
         get_depth_format(instance, rrdevice)?,
         vk::ImageTiling::OPTIMAL,
-        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
         vk::MemoryPropertyFlags::DEVICE_LOCAL,
     )?;
 
@@ -151,7 +151,7 @@ impl<'a> GBufferPass<'a> {
         };
         let depth_clear = vk::ClearValue {
             depth_stencil: vk::ClearDepthStencilValue {
-                depth: 1.0,
+                depth: 0.0,
                 stencil: 0,
             },
         };

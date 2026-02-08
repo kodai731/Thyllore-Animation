@@ -5,6 +5,7 @@ use crate::app::data::LightMoveTarget;
 use crate::app::GUIData;
 use crate::debugview::{DebugViewMode, FBX_DEBUG};
 use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::World;
 
 pub struct DebugWindowState {
     pub model_path: String,
@@ -20,6 +21,7 @@ pub fn build_debug_window(
     ui_events: &mut UIEventQueue,
     state: &mut DebugWindowState,
     gui_data: &mut GUIData,
+    ecs_world: &World,
 ) {
     let display_size = ui.io().display_size;
     let debug_height = 250.0;
@@ -51,6 +53,12 @@ pub fn build_debug_window(
             ui.separator();
 
             build_light_bounds_panel(ui, ui_events);
+            ui.separator();
+
+            build_dof_panel(ui, ecs_world);
+            ui.separator();
+
+            build_auto_exposure_panel(ui, ecs_world);
 
             build_mouse_info(ui, gui_data);
         });
@@ -294,6 +302,68 @@ fn build_light_bounds_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {
     ui.same_line();
     if ui.button("Z Max") {
         ui_events.send(UIEvent::MoveLightToBounds(LightMoveTarget::ZMax));
+    }
+}
+
+fn build_dof_panel(ui: &imgui::Ui, ecs_world: &World) {
+    use crate::ecs::resource::{DepthOfField, PhysicalCameraParameters};
+
+    ui.text("Depth of Field:");
+
+    if let Some(mut dof) = ecs_world.get_resource_mut::<DepthOfField>() {
+        ui.checkbox("DOF Enabled", &mut dof.enabled);
+
+        ui.slider_config("Focus Distance", 0.1, 100.0)
+            .build(&mut dof.focus_distance);
+
+        ui.slider_config("Max Blur Radius", 1.0, 32.0)
+            .build(&mut dof.max_blur_radius);
+    }
+
+    if let Some(mut params) = ecs_world.get_resource_mut::<PhysicalCameraParameters>() {
+        ui.slider_config("Aperture (f-stops)", 1.0, 22.0)
+            .build(&mut params.aperture_f_stops);
+
+        ui.slider_config("Focal Length (mm)", 10.0, 200.0)
+            .build(&mut params.focal_length_mm);
+    }
+}
+
+fn build_auto_exposure_panel(ui: &imgui::Ui, ecs_world: &World) {
+    use crate::ecs::resource::{AutoExposure, Exposure};
+
+    ui.text("Auto Exposure:");
+
+    if let Some(mut ae) =
+        ecs_world.get_resource_mut::<AutoExposure>()
+    {
+        ui.checkbox("Auto Exposure Enabled", &mut ae.enabled);
+
+        ui.slider_config("Min EV", -10.0, 10.0)
+            .build(&mut ae.min_ev);
+
+        ui.slider_config("Max EV", 0.0, 30.0)
+            .build(&mut ae.max_ev);
+
+        ui.slider_config("Speed Up", 0.1, 10.0)
+            .build(&mut ae.adaptation_speed_up);
+
+        ui.slider_config("Speed Down", 0.1, 10.0)
+            .build(&mut ae.adaptation_speed_down);
+
+        ui.slider_config("Low Percent", 0.0, 0.5)
+            .build(&mut ae.low_percent);
+
+        ui.slider_config("High Percent", 0.5, 1.0)
+            .build(&mut ae.high_percent);
+    }
+
+    if let Some(exposure) = ecs_world.get_resource::<Exposure>() {
+        ui.text(format!(
+            "Current Exposure: {:.4}",
+            exposure.exposure_value
+        ));
+        ui.text(format!("Current EV100: {:.2}", exposure.ev100));
     }
 }
 

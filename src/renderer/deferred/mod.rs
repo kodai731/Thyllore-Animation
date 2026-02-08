@@ -1,6 +1,10 @@
+mod auto_exposure;
+mod bloom;
+mod dof;
 mod gbuffer;
 mod rayquery;
 mod composite;
+mod tonemap;
 
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
@@ -8,9 +12,13 @@ use vulkanalia::prelude::v1_0::*;
 use crate::app::App;
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::MeshRef;
+pub use auto_exposure::AutoExposurePass;
+pub use bloom::BloomPass;
+pub use dof::DofPass;
 pub use gbuffer::{GBufferPass, create_gbuffer_framebuffer};
 pub use rayquery::RayQueryPass;
 pub use composite::CompositePass;
+pub use tonemap::ToneMapPass;
 
 pub unsafe fn record_gbuffer_pass(
     app: &App,
@@ -105,6 +113,134 @@ pub unsafe fn record_composite_to_offscreen(
     let extent = offscreen.extent();
 
     let pass = CompositePass::new_for_offscreen(app, extent)?;
+    pass.record_to_offscreen(
+        command_buffer,
+        render_pass,
+        framebuffer,
+        image_index,
+    )?;
+
+    Ok(())
+}
+
+pub unsafe fn record_composite_to_hdr(
+    app: &mut App,
+    command_buffer: vk::CommandBuffer,
+) -> Result<()> {
+    let selected_mesh_ids = collect_selected_mesh_ids(app);
+
+    if let Some(ref composite_descriptor) = app.data.raytracing.composite_descriptor {
+        composite_descriptor.update_selection(&app.rrdevice, &selected_mesh_ids)?;
+    }
+
+    let hdr_buffer = app.data.viewport.hdr_buffer.as_ref()
+        .ok_or_else(|| anyhow::anyhow!("HDR buffer not initialized"))?;
+
+    let render_pass = hdr_buffer.render_pass;
+    let framebuffer = hdr_buffer.framebuffer;
+    let extent = hdr_buffer.extent();
+
+    let pass = CompositePass::new_for_offscreen(app, extent)?;
+    pass.record_to_hdr(command_buffer, render_pass, framebuffer)?;
+
+    Ok(())
+}
+
+pub unsafe fn record_bloom(
+    app: &App,
+    command_buffer: vk::CommandBuffer,
+) -> Result<()> {
+    let bloom_settings = app.data.ecs_world.get_resource::<crate::ecs::resource::BloomSettings>();
+    let bloom_enabled = bloom_settings.map(|bs| bs.enabled).unwrap_or(false);
+
+    if !bloom_enabled {
+        return Ok(());
+    }
+
+    if app.data.viewport.bloom_chain.is_none()
+        || app.data.raytracing.bloom_downsample_pipeline.is_none()
+        || app.data.raytracing.bloom_upsample_pipeline.is_none()
+    {
+        return Ok(());
+    }
+
+    let pass = BloomPass::new(app)?;
+    pass.record(command_buffer)?;
+
+    Ok(())
+}
+
+pub unsafe fn record_dof(
+    app: &App,
+    command_buffer: vk::CommandBuffer,
+) -> Result<()> {
+    if app.data.raytracing.dof_pipeline.is_none()
+        || app.data.raytracing.dof_descriptor.is_none()
+        || app.data.viewport.dof_buffer.is_none()
+    {
+        return Ok(());
+    }
+
+    let pass = DofPass::new(app)?;
+    pass.record(command_buffer)?;
+
+    Ok(())
+}
+
+pub unsafe fn record_auto_exposure(
+    app: &App,
+    command_buffer: vk::CommandBuffer,
+) -> Result<()> {
+    let ae_settings = app
+        .data
+        .ecs_world
+        .get_resource::<crate::ecs::resource::AutoExposure>();
+    let ae_enabled = ae_settings.map(|ae| ae.enabled).unwrap_or(false);
+
+    if !ae_enabled {
+        return Ok(());
+    }
+
+    if app.data.raytracing.auto_exposure_histogram_pipeline.is_none()
+        || app
+            .data
+            .raytracing
+            .auto_exposure_average_pipeline
+            .is_none()
+        || app
+            .data
+            .raytracing
+            .auto_exposure_histogram_descriptor
+            .is_none()
+        || app
+            .data
+            .raytracing
+            .auto_exposure_average_descriptor
+            .is_none()
+        || app.data.viewport.auto_exposure_buffers.is_none()
+    {
+        return Ok(());
+    }
+
+    let pass = AutoExposurePass::new(app)?;
+    pass.record(command_buffer)?;
+
+    Ok(())
+}
+
+pub unsafe fn record_tonemap_to_offscreen(
+    app: &App,
+    command_buffer: vk::CommandBuffer,
+    image_index: usize,
+) -> Result<()> {
+    let offscreen = app.data.viewport.offscreen.as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Offscreen framebuffer not initialized"))?;
+
+    let render_pass = offscreen.render_pass;
+    let framebuffer = offscreen.framebuffer;
+    let extent = offscreen.extent();
+
+    let pass = ToneMapPass::new(app, extent)?;
     pass.record_to_offscreen(
         command_buffer,
         render_pass,

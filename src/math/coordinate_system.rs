@@ -66,6 +66,34 @@ pub fn perspective(fovy: Deg<f32>, aspect: f32, near: f32, far: f32) -> Matrix4<
     )
 }
 
+pub fn perspective_infinite_reverse(
+    fovy: Deg<f32>,
+    aspect: f32,
+    near: f32,
+) -> Matrix4<f32> {
+    let fovy_rad: Rad<f32> = fovy.into();
+    let f = 1.0 / (fovy_rad.0 / 2.0).tan();
+
+    Matrix4::new(
+        f / aspect,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -f,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -1.0,
+        0.0,
+        0.0,
+        near,
+        0.0,
+    )
+}
+
 /// FBX Z-up → ワールド Y-up 変換（X軸周りに-90度回転）
 pub fn fbx_to_world() -> Matrix4<f32> {
     Matrix4::new(
@@ -105,8 +133,8 @@ pub fn screen_to_world_ray(
     let ndc_x = (2.0 * screen_pos.x) / screen_size.x - 1.0;
     let ndc_y = (2.0 * screen_pos.y) / screen_size.y - 1.0;
 
-    let clip_near = cgmath::vec4(ndc_x, ndc_y, -1.0, 1.0);
-    let clip_far = cgmath::vec4(ndc_x, ndc_y, 1.0, 1.0);
+    let clip_near = cgmath::vec4(ndc_x, ndc_y, 1.0, 1.0);
+    let clip_far = cgmath::vec4(ndc_x, ndc_y, 0.0, 1.0);
 
     let view_proj_inverse = (proj_matrix * view_matrix).invert().unwrap();
 
@@ -295,6 +323,37 @@ mod tests {
     fn test_perspective_y_flip() {
         let proj = perspective(Deg(45.0), 1.0, 0.1, 100.0);
         assert!(proj.y.y < 0.0);
+    }
+
+    #[test]
+    fn test_perspective_infinite_reverse_y_flip() {
+        let proj = perspective_infinite_reverse(Deg(45.0), 1.0, 0.1);
+        assert!(proj.y.y < 0.0);
+    }
+
+    #[test]
+    fn test_perspective_infinite_reverse_near_maps_to_one() {
+        let near = 0.1;
+        let proj = perspective_infinite_reverse(Deg(45.0), 1.0, near);
+        let near_point = proj * vec4(0.0, 0.0, -near, 1.0);
+        let ndc_z = near_point.z / near_point.w;
+        assert!(
+            (ndc_z - 1.0).abs() < 1e-5,
+            "near should map to ndc_z=1.0, got {}",
+            ndc_z
+        );
+    }
+
+    #[test]
+    fn test_perspective_infinite_reverse_far_maps_to_zero() {
+        let proj = perspective_infinite_reverse(Deg(45.0), 1.0, 0.1);
+        let far_point = proj * vec4(0.0, 0.0, -100000.0, 1.0);
+        let ndc_z = far_point.z / far_point.w;
+        assert!(
+            ndc_z.abs() < 0.01,
+            "infinity should map to ndc_z≈0.0, got {}",
+            ndc_z
+        );
     }
 
     #[test]

@@ -23,14 +23,64 @@ impl App {
             crate::log!("Destroyed G-Buffer pipeline");
         }
 
+        if let Some(mut dof_descriptor) = self.data.raytracing.dof_descriptor.take() {
+            dof_descriptor.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(dof_pipeline) = self.data.raytracing.dof_pipeline.take() {
+            dof_pipeline.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(mut desc) =
+            self.data.raytracing.auto_exposure_histogram_descriptor.take()
+        {
+            desc.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(mut desc) =
+            self.data.raytracing.auto_exposure_average_descriptor.take()
+        {
+            desc.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(pipeline) =
+            self.data.raytracing.auto_exposure_histogram_pipeline.take()
+        {
+            pipeline.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(pipeline) =
+            self.data.raytracing.auto_exposure_average_pipeline.take()
+        {
+            pipeline.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(mut bloom_descriptors) = self.data.raytracing.bloom_descriptors.take() {
+            bloom_descriptors.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(bloom_downsample_pipeline) = self.data.raytracing.bloom_downsample_pipeline.take() {
+            bloom_downsample_pipeline.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(bloom_upsample_pipeline) = self.data.raytracing.bloom_upsample_pipeline.take() {
+            bloom_upsample_pipeline.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(mut tonemap_descriptor) = self.data.raytracing.tonemap_descriptor.take() {
+            tonemap_descriptor.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(tonemap_pipeline) = self.data.raytracing.tonemap_pipeline.take() {
+            tonemap_pipeline.destroy(&self.rrdevice.device);
+        }
+
         if let Some(mut composite_descriptor) = self.data.raytracing.composite_descriptor.take() {
             composite_descriptor.destroy(&self.rrdevice.device);
-            crate::log!("Destroyed composite descriptor set");
         }
 
         if let Some(composite_pipeline) = self.data.raytracing.composite_pipeline.take() {
             composite_pipeline.destroy(&self.rrdevice.device);
-            crate::log!("Destroyed composite pipeline");
         }
 
         if let (Some(buffer), Some(memory)) = (

@@ -17,6 +17,96 @@ impl App {
             self.data
                 .viewport
                 .resize(&self.instance, &self.rrdevice, command_pool, width, height)?;
+
+            if let (Some(ref hdr_buffer), Some(ref tonemap_descriptor)) = (
+                &self.data.viewport.hdr_buffer,
+                &self.data.raytracing.tonemap_descriptor,
+            ) {
+                tonemap_descriptor.update_hdr_sampler(
+                    &self.rrdevice,
+                    hdr_buffer.color_image_view,
+                    hdr_buffer.sampler,
+                )?;
+
+                let bloom_view_and_sampler = self
+                    .data
+                    .viewport
+                    .bloom_chain
+                    .as_ref()
+                    .and_then(|chain| {
+                        chain
+                            .mip_levels
+                            .first()
+                            .map(|mip| (mip.image_view, chain.sampler))
+                    });
+
+                if let Some((bloom_view, bloom_sampler)) = bloom_view_and_sampler {
+                    tonemap_descriptor.update_bloom_sampler(
+                        &self.rrdevice,
+                        bloom_view,
+                        bloom_sampler,
+                    )?;
+                } else {
+                    tonemap_descriptor.update_bloom_sampler(
+                        &self.rrdevice,
+                        hdr_buffer.color_image_view,
+                        hdr_buffer.sampler,
+                    )?;
+                }
+            }
+
+            if let (Some(ref hdr_buffer), Some(ref bloom_chain), Some(ref bloom_descriptors)) = (
+                &self.data.viewport.hdr_buffer,
+                &self.data.viewport.bloom_chain,
+                &self.data.raytracing.bloom_descriptors,
+            ) {
+                let mip_views: Vec<vk::ImageView> = bloom_chain
+                    .mip_levels
+                    .iter()
+                    .map(|m| m.image_view)
+                    .collect();
+
+                bloom_descriptors.update_image_views(
+                    &self.rrdevice,
+                    hdr_buffer.color_image_view,
+                    &mip_views,
+                    bloom_chain.sampler,
+                );
+            }
+
+            {
+                let render_targets = self.resource::<crate::vulkanr::context::RenderTargets>();
+                let depth_image_view = render_targets.render.gbuffer_depth_image_view;
+
+                if let (Some(ref hdr_buffer), Some(ref dof_descriptor)) = (
+                    &self.data.viewport.hdr_buffer,
+                    &self.data.raytracing.dof_descriptor,
+                ) {
+                    let depth_sampler =
+                        self.data.raytracing.gbuffer_sampler.unwrap_or(hdr_buffer.sampler);
+
+                    dof_descriptor.update_image_views(
+                        &self.rrdevice,
+                        hdr_buffer.color_image_view,
+                        hdr_buffer.sampler,
+                        depth_image_view,
+                        depth_sampler,
+                    );
+                }
+            }
+
+            if let (Some(ref dof_buffer), Some(ref tonemap_descriptor)) = (
+                &self.data.viewport.dof_buffer,
+                &self.data.raytracing.tonemap_descriptor,
+            ) {
+                tonemap_descriptor.update_hdr_sampler(
+                    &self.rrdevice,
+                    dof_buffer.output_image_view,
+                    dof_buffer.sampler,
+                )?;
+            }
+
+            self.update_auto_exposure_descriptors_on_resize();
         }
 
         if gui_data.file_changed {
@@ -69,6 +159,8 @@ impl App {
             .device
             .wait_for_fences(&[current_fence], true, u64::MAX)?;
 
+        self.update_auto_exposure();
+
         let swapchain = self.swapchain_state().swapchain.swapchain;
         let image_available = self.frame_sync().current_image_available();
         let result = self.rrdevice.device.acquire_next_image_khr(
@@ -97,6 +189,140 @@ impl App {
         self.resource_mut::<SwapchainState>().images_in_flight[image_index] = current_fence;
 
         Ok(image_index)
+    }
+
+    unsafe fn update_auto_exposure_descriptors_on_resize(
+        &self,
+    ) {
+        let (hdr_image_view, hdr_sampler) =
+            if let Some(ref dof_buffer) = self.data.viewport.dof_buffer {
+                (dof_buffer.output_image_view, dof_buffer.sampler)
+            } else if let Some(ref hdr_buffer) =
+                self.data.viewport.hdr_buffer
+            {
+                (hdr_buffer.color_image_view, hdr_buffer.sampler)
+            } else {
+                return;
+            };
+
+        let ae_buffers = match self.data.viewport.auto_exposure_buffers {
+            Some(ref buf) => buf,
+            None => return,
+        };
+
+        if let Some(ref hist_desc) =
+            self.data.raytracing.auto_exposure_histogram_descriptor
+        {
+            hist_desc.update_bindings(
+                &self.rrdevice,
+                hdr_image_view,
+                hdr_sampler,
+                ae_buffers.histogram_buffer,
+                (256 * 4) as u64,
+            );
+        }
+
+        if let Some(ref avg_desc) =
+            self.data.raytracing.auto_exposure_average_descriptor
+        {
+            avg_desc.update_bindings(
+                &self.rrdevice,
+                ae_buffers.histogram_buffer,
+                (256 * 4) as u64,
+                ae_buffers.luminance_buffer,
+                (2 * 4) as u64,
+            );
+        }
+    }
+
+    unsafe fn update_auto_exposure(&mut self) {
+        let ae_enabled = self
+            .data
+            .ecs_world
+            .get_resource::<crate::ecs::resource::AutoExposure>()
+            .map(|ae| ae.enabled)
+            .unwrap_or(false);
+
+        if !ae_enabled {
+            self.restore_manual_exposure_if_needed();
+            return;
+        }
+
+        self.save_manual_exposure_if_needed();
+
+        let adapted = match self.data.viewport.auto_exposure_buffers {
+            Some(ref ae_buffers) => {
+                ae_buffers.read_adapted_exposure(&self.rrdevice.device)
+            }
+            None => return,
+        };
+
+        if adapted > 0.0 {
+            if let Some(mut exposure) = self
+                .data
+                .ecs_world
+                .get_resource_mut::<crate::ecs::resource::Exposure>()
+            {
+                exposure.exposure_value = adapted;
+            }
+        }
+    }
+
+    fn save_manual_exposure_if_needed(&mut self) {
+        let already_saved = self
+            .data
+            .ecs_world
+            .get_resource::<crate::ecs::resource::AutoExposure>()
+            .map(|ae| ae.saved_manual_exposure.is_some())
+            .unwrap_or(true);
+
+        if already_saved {
+            return;
+        }
+
+        let current_exposure = self
+            .data
+            .ecs_world
+            .get_resource::<crate::ecs::resource::Exposure>()
+            .map(|e| e.exposure_value)
+            .unwrap_or(1.0);
+
+        if let Some(mut ae) = self
+            .data
+            .ecs_world
+            .get_resource_mut::<crate::ecs::resource::AutoExposure>()
+        {
+            ae.saved_manual_exposure = Some(current_exposure);
+        }
+    }
+
+    fn restore_manual_exposure_if_needed(&mut self) {
+        let saved = self
+            .data
+            .ecs_world
+            .get_resource::<crate::ecs::resource::AutoExposure>()
+            .and_then(|ae| ae.saved_manual_exposure);
+
+        let restore_value = match saved {
+            Some(v) => v,
+            None => return,
+        };
+
+        if let Some(mut exposure) = self
+            .data
+            .ecs_world
+            .get_resource_mut::<crate::ecs::resource::Exposure>()
+        {
+            exposure.exposure_value = restore_value;
+        }
+
+        if let Some(mut ae) = self
+            .data
+            .ecs_world
+            .get_resource_mut::<crate::ecs::resource::AutoExposure>()
+        {
+            ae.saved_manual_exposure = None;
+        }
     }
 
     pub unsafe fn render(
@@ -375,7 +601,7 @@ impl App {
         };
         let depth_clear_value = vk::ClearValue {
             depth_stencil: vk::ClearDepthStencilValue {
-                depth: 1.0,
+                depth: 0.0,
                 stencil: 0,
             },
         };
@@ -421,7 +647,10 @@ impl App {
             .cmd_set_scissor(command_buffer, 0, &[scissor]);
 
         let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
-        let camera_pos = self.camera().position;
+        let camera_pos = {
+            use crate::ecs::systems::camera_systems::compute_camera_position;
+            compute_camera_position(&self.camera())
+        };
 
         let render_data_vec = vec![
             crate::ecs::systems::render_data_systems::grid_mesh_render_data(&self.grid_mesh()),
@@ -463,7 +692,7 @@ impl App {
         };
         let depth_clear_value = vk::ClearValue {
             depth_stencil: vk::ClearDepthStencilValue {
-                depth: 1.0,
+                depth: 0.0,
                 stencil: 0,
             },
         };
@@ -587,7 +816,10 @@ impl App {
             .cmd_set_scissor(command_buffer, 0, &[scissor]);
 
         let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
-        let camera_pos = self.camera().position;
+        let camera_pos = {
+            use crate::ecs::systems::camera_systems::compute_camera_position;
+            compute_camera_position(&self.camera())
+        };
 
         let render_data_vec = vec![
             grid_mesh_render_data(&self.grid_mesh()),

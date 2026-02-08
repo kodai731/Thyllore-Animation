@@ -17,7 +17,7 @@ layout(binding = 4) uniform SceneData {
     int debugMode;
     float shadowStrength;
     int enableDistanceAttenuation;
-    int _padding;
+    float exposureValue;
 } sceneData;
 
 layout(binding = 5) uniform usampler2D objectIDSampler;

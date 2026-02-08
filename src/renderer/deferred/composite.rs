@@ -164,6 +164,43 @@ impl<'a> CompositePass<'a> {
         Ok(())
     }
 
+    pub unsafe fn record_to_hdr(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        framebuffer: vk::Framebuffer,
+    ) -> Result<()> {
+        let render_area = vk::Rect2D::builder()
+            .offset(vk::Offset2D::default())
+            .extent(self.swapchain_extent);
+
+        let color_clear_value = vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
+        };
+
+        let clear_values = [color_clear_value];
+
+        let render_pass_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(render_pass)
+            .framebuffer(framebuffer)
+            .render_area(render_area)
+            .clear_values(&clear_values);
+
+        self.device.cmd_begin_render_pass(
+            command_buffer,
+            &render_pass_info,
+            vk::SubpassContents::INLINE,
+        );
+
+        self.draw_composite(command_buffer)?;
+
+        self.device.cmd_end_render_pass(command_buffer);
+
+        Ok(())
+    }
+
     unsafe fn begin_render_pass(
         &self,
         command_buffer: vk::CommandBuffer,
@@ -182,7 +219,7 @@ impl<'a> CompositePass<'a> {
         };
         let depth_clear_value = vk::ClearValue {
             depth_stencil: vk::ClearDepthStencilValue {
-                depth: 1.0,
+                depth: 0.0,
                 stencil: 0,
             },
         };

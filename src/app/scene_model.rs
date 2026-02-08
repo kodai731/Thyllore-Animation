@@ -124,7 +124,7 @@ impl App {
         }
 
         crate::log!("--- Camera Info ---");
-        crate::log!("  position: {:?}", self.camera().position);
+        crate::log!("  pivot: {:?}", self.camera().pivot);
 
         crate::log!("--- Animation Info ---");
         let timeline = self.data.ecs_world.resource::<crate::ecs::resource::TimelineState>();

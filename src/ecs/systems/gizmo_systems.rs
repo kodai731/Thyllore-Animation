@@ -9,8 +9,9 @@ use crate::ecs::component::{
     ColorVertex, GizmoAxis, GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, RenderInfo,
 };
 use crate::math::{
-    coordinate_system::perspective, is_point_in_rect, ray_to_line_segment_distance,
-    ray_to_point_distance, screen_to_world_ray, view,
+    coordinate_system::perspective_infinite_reverse, is_point_in_rect,
+    ray_to_line_segment_distance, ray_to_point_distance,
+    screen_to_world_ray, view,
 };
 use crate::render::{IndexBufferHandle, RenderBackend, VertexBufferHandle};
 
@@ -133,12 +134,20 @@ pub fn gizmo_try_select(
     camera_up: Vector3<f32>,
     swapchain_extent: (u32, u32),
     billboard_click_rect: Option<[f32; 4]>,
+    fov_y: Deg<f32>,
+    near_plane: f32,
 ) {
     let light_pos = position.position;
-    let view_mat = unsafe { view(camera_pos, camera_direction, camera_up) };
-    let aspect = swapchain_extent.0 as f32 / swapchain_extent.1 as f32;
-    let proj = perspective(Deg(45.0), aspect, 0.1, 10000.0);
-    let screen_size = Vector2::new(swapchain_extent.0 as f32, swapchain_extent.1 as f32);
+    let view_mat =
+        unsafe { view(camera_pos, camera_direction, camera_up) };
+    let aspect =
+        swapchain_extent.0 as f32 / swapchain_extent.1 as f32;
+    let proj =
+        perspective_infinite_reverse(fov_y, aspect, near_plane);
+    let screen_size = Vector2::new(
+        swapchain_extent.0 as f32,
+        swapchain_extent.1 as f32,
+    );
 
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view_mat, proj);
 

@@ -1,3 +1,6 @@
+pub mod auto_exposure;
+pub mod bloom;
+pub mod dof;
 pub mod model;
 pub mod ray_query;
 pub mod composite;
@@ -6,7 +9,11 @@ pub mod layouts;
 pub mod frame;
 pub mod object;
 pub mod material;
+pub mod tonemap;
 
+pub use auto_exposure::*;
+pub use bloom::*;
+pub use dof::*;
 pub use model::*;
 pub use ray_query::*;
 pub use composite::*;
@@ -15,3 +22,4 @@ pub use layouts::*;
 pub use frame::*;
 pub use object::*;
 pub use material::*;
+pub use tonemap::*;

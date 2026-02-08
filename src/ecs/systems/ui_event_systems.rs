@@ -3,9 +3,9 @@ use cgmath::Vector3;
 use crate::debugview::RayTracingDebugState;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::systems::camera_systems::{
-    camera_move_to_look_at, camera_reset, camera_reset_up,
+    camera_move_to_look_at, camera_reset,
 };
-use crate::scene::camera::Camera;
+use crate::ecs::resource::Camera;
 use crate::app::graphics_resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
@@ -52,7 +52,7 @@ pub fn process_ui_events_with_events_simple(
             }
 
             UIEvent::ResetCameraUp => {
-                camera_reset_up(camera);
+                camera_reset(camera);
             }
 
             UIEvent::MoveCameraToModel => {

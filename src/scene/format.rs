@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::animation::editable::EditableAnimationClip;
 
-pub const SCENE_FORMAT_VERSION: u32 = 1;
+pub const SCENE_FORMAT_VERSION: u32 = 4;
 pub const ANIMATION_FORMAT_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,17 +116,54 @@ impl AnimationClipFile {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CameraState {
-    pub position: [f32; 3],
-    pub direction: [f32; 3],
-    pub up: [f32; 3],
+    pub pivot: [f32; 3],
+    pub yaw: f32,
+    pub pitch: f32,
+    pub distance: f32,
+    pub fov_y: f32,
+
+    #[serde(default)]
+    pub position: Option<[f32; 3]>,
+    #[serde(default)]
+    pub direction: Option<[f32; 3]>,
+    #[serde(default)]
+    pub up: Option<[f32; 3]>,
+
+    #[serde(default)]
+    pub physical_camera: Option<PhysicalCameraState>,
+    #[serde(default)]
+    pub exposure: Option<ExposureState>,
+    #[serde(default)]
+    pub depth_of_field: Option<DepthOfFieldState>,
+    #[serde(default)]
+    pub tone_mapping: Option<ToneMappingState>,
+    #[serde(default)]
+    pub lens_effects: Option<LensEffectsState>,
+    #[serde(default)]
+    pub bloom: Option<BloomState>,
+    #[serde(default)]
+    pub auto_exposure: Option<AutoExposureState>,
 }
 
 impl Default for CameraState {
     fn default() -> Self {
+        use std::f32::consts::PI;
         Self {
-            position: [5.0, 5.0, 5.0],
-            direction: [-0.577, -0.577, -0.577],
-            up: [0.0, 1.0, 0.0],
+            pivot: [0.0, 0.0, 0.0],
+            yaw: PI / 4.0,
+            pitch: (5.0_f32 / 75.0_f32.sqrt()).asin(),
+            distance: 75.0_f32.sqrt(),
+            fov_y: 45.0,
+            position: None,
+            direction: None,
+            up: None,
+            physical_camera: None,
+            exposure: None,
+            depth_of_field: None,
+            tone_mapping: None,
+            lens_effects: None,
+            bloom: None,
+            auto_exposure: None,
         }
     }
 }
@@ -163,4 +200,61 @@ impl Default for EditorState {
             curve_editor_open: false,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PhysicalCameraState {
+    pub focal_length_mm: f32,
+    pub sensor_height_mm: f32,
+    pub aperture_f_stops: f32,
+    pub shutter_speed_s: f32,
+    pub sensitivity_iso: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExposureState {
+    pub ev100: f32,
+    pub exposure_value: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepthOfFieldState {
+    pub enabled: bool,
+    pub focus_distance: f32,
+    pub max_blur_radius: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToneMappingState {
+    pub enabled: bool,
+    pub operator: String,
+    pub gamma: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LensEffectsState {
+    pub vignette_enabled: bool,
+    pub vignette_intensity: f32,
+    pub chromatic_aberration_enabled: bool,
+    pub chromatic_aberration_intensity: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BloomState {
+    pub enabled: bool,
+    pub intensity: f32,
+    pub threshold: f32,
+    pub knee: f32,
+    pub mip_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutoExposureState {
+    pub enabled: bool,
+    pub min_ev: f32,
+    pub max_ev: f32,
+    pub adaptation_speed_up: f32,
+    pub adaptation_speed_down: f32,
+    pub low_percent: f32,
+    pub high_percent: f32,
 }

@@ -146,7 +146,6 @@ impl Default for UniformBufferObject {
     }
 }
 
-/// Scene data for ray query and composite shaders
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct SceneUniformData {
@@ -157,7 +156,7 @@ pub struct SceneUniformData {
     pub debug_mode: i32,
     pub shadow_strength: f32,
     pub enable_distance_attenuation: i32,
-    pub _padding: i32,
+    pub exposure_value: f32,
 }
 
 impl Default for SceneUniformData {
@@ -171,7 +170,7 @@ impl Default for SceneUniformData {
             debug_mode: 0,
             shadow_strength: 1.0,
             enable_distance_attenuation: 0,
-            _padding: 0,
+            exposure_value: 1.0,
         }
     }
 }

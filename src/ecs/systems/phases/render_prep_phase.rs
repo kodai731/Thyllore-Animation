@@ -15,7 +15,7 @@ use crate::ecs::{
     build_sphere_bone_meshes_with_selection, gizmo_update_rotation,
     gizmo_update_vertex_buffer, ProjectionData,
 };
-use crate::scene::Camera;
+use crate::ecs::resource::{Camera, Exposure};
 use crate::math::get_camera_axes_from_view;
 use crate::render::RenderBackend;
 use crate::renderer::scene_renderer::update_object_ubo;
@@ -31,7 +31,10 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         )
     };
 
-    let camera_position = ctx.camera().position;
+    let camera_position = {
+        use crate::ecs::systems::camera_systems::compute_camera_position;
+        compute_camera_position(&ctx.camera())
+    };
     let light_position = ctx.rt_debug().light_position;
 
     {
@@ -64,8 +67,15 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         let light_pos = rt_debug.light_position;
         let debug_mode = rt_debug.debug_view_mode.as_int();
         let shadow_strength = rt_debug.shadow_strength;
-        let enable_distance_attenuation = rt_debug.enable_distance_attenuation;
+        let enable_distance_attenuation =
+            rt_debug.enable_distance_attenuation;
         drop(rt_debug);
+
+        let exposure_value = ctx
+            .world
+            .get_resource::<Exposure>()
+            .map(|e| e.exposure_value)
+            .unwrap_or(1.0);
 
         let mut backend = ctx.create_backend();
         backend.update_scene_uniform(
@@ -76,6 +86,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
             debug_mode,
             shadow_strength,
             enable_distance_attenuation,
+            exposure_value,
         )?;
     }
 
@@ -226,7 +237,10 @@ fn compute_visual_scale(
         return 1.0;
     }
 
-    let camera_pos = ctx.world.resource::<Camera>().position;
+    let camera_pos = {
+        use crate::ecs::systems::camera_systems::compute_camera_position;
+        compute_camera_position(&ctx.world.resource::<Camera>())
+    };
 
     let mut center = Vector3::new(0.0f32, 0.0, 0.0);
     for t in transforms.iter() {

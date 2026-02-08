@@ -299,11 +299,11 @@ pub unsafe fn create_gbuffer_render_pass(
         .format(get_depth_format(instance, rrdevice)?)
         .samples(vk::SampleCountFlags::_1)
         .load_op(vk::AttachmentLoadOp::CLEAR)
-        .store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .store_op(vk::AttachmentStoreOp::STORE)
         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
         .initial_layout(vk::ImageLayout::UNDEFINED)
-        .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+        .final_layout(vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL)
         .build();
 
     let position_attachment_ref = vk::AttachmentReference::builder()

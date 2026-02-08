@@ -61,16 +61,20 @@ impl App {
 
     fn log_billboard_debug_info(&self) {
         use crate::debugview::{log_billboard_debug_info, BillboardDebugInfo, GBufferDebugInfo};
+        use crate::ecs::systems::camera_systems::{
+            compute_camera_direction, compute_camera_position,
+            compute_camera_up,
+        };
 
         let camera = self.camera();
         let rt_debug = self.rt_debug_state();
         let info = BillboardDebugInfo {
             light_position: rt_debug.light_position,
-            camera_position: camera.position,
-            camera_direction: camera.direction,
-            camera_up: camera.up,
+            camera_position: compute_camera_position(&camera),
+            camera_direction: compute_camera_direction(&camera),
+            camera_up: compute_camera_up(&camera),
             near_plane: camera.near_plane,
-            far_plane: camera.far_plane,
+            fov_y: camera.fov_y,
         };
 
         let gbuffer_debug_info = self
@@ -281,8 +285,11 @@ impl App {
     }
 
     pub(crate) fn log_shadow_debug_info(&self) {
+        use crate::ecs::systems::camera_systems::compute_camera_position;
+
         let rt_debug = self.rt_debug_state();
         let camera = self.camera();
+        let cam_pos = compute_camera_position(&camera);
 
         crate::log!("=== Shadow Debug Info ===");
         crate::log!(
@@ -299,9 +306,9 @@ impl App {
         );
         crate::log!(
             "Camera position: ({:.2}, {:.2}, {:.2})",
-            camera.position.x,
-            camera.position.y,
-            camera.position.z
+            cam_pos.x,
+            cam_pos.y,
+            cam_pos.z
         );
 
         crate::log!("Shadow settings:");

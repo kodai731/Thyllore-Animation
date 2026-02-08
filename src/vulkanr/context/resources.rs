@@ -135,7 +135,11 @@ impl GpuAssets {
 use crate::debugview::{DebugViewData, RayTracingDebugState};
 use crate::platform::ImguiData;
 use crate::app::raytracing::RayTracingData;
-use crate::scene::Camera;
+use crate::ecs::resource::Camera;
+use crate::ecs::systems::camera_systems::{
+    compute_camera_direction, compute_camera_position,
+    compute_camera_up,
+};
 
 pub struct CameraState {
     pub camera: Camera,
@@ -147,15 +151,15 @@ impl CameraState {
     }
 
     pub fn position(&self) -> cgmath::Vector3<f32> {
-        self.camera.position
+        compute_camera_position(&self.camera)
     }
 
     pub fn direction(&self) -> cgmath::Vector3<f32> {
-        self.camera.direction
+        compute_camera_direction(&self.camera)
     }
 
     pub fn up(&self) -> cgmath::Vector3<f32> {
-        self.camera.up
+        compute_camera_up(&self.camera)
     }
 }
 

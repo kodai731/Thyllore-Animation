@@ -27,7 +27,7 @@ use crate::ecs::systems::{
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::world::Transform;
 use crate::ecs::{process_ui_events_with_events_simple, DeferredAction, UIEventQueue};
-use crate::scene::camera::Camera;
+use crate::ecs::resource::Camera;
 
 fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
     gui_data.is_left_clicked = false;
@@ -153,7 +153,7 @@ impl System {
 
                             {
                                 let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                build_debug_window(ui, &mut *ui_events, &mut debug_state, gui_data);
+                                build_debug_window(ui, &mut *ui_events, &mut debug_state, gui_data, &app.data.ecs_world);
                             }
 
                             {

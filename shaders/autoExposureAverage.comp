@@ -1,0 +1,96 @@
+#version 460
+
+layout(local_size_x = 256) in;
+
+layout(binding = 0) buffer HistogramBuffer { uint bins[256]; } histogram;
+layout(binding = 1) buffer LuminanceResult {
+    float avgLuminance;
+    float adaptedExposure;
+} result;
+
+layout(push_constant) uniform PushConstants {
+    float lowPercent;
+    float highPercent;
+    float timeDelta;
+    float adaptationSpeedUp;
+    float adaptationSpeedDown;
+    float minEv;
+    float maxEv;
+    float minLogLuminance;
+    float logLuminanceRange;
+    uint pixelCount;
+} pc;
+
+shared uint sharedHistogram[256];
+
+void main() {
+    uint localIndex = gl_LocalInvocationIndex;
+
+    sharedHistogram[localIndex] = histogram.bins[localIndex];
+    histogram.bins[localIndex] = 0;
+    barrier();
+
+    if (localIndex != 0) {
+        return;
+    }
+
+    uint totalPixels = pc.pixelCount;
+    uint lowCount = uint(float(totalPixels) * pc.lowPercent);
+    uint highCount = uint(float(totalPixels) * pc.highPercent);
+
+    uint accumulated = 0;
+    uint trimmedCount = 0;
+    float weightedLogSum = 0.0;
+
+    for (uint i = 0; i < 256; i++) {
+        uint binCount = sharedHistogram[i];
+        uint newAccumulated = accumulated + binCount;
+
+        uint effectiveLow = max(accumulated, lowCount);
+        uint effectiveHigh = min(newAccumulated, highCount);
+
+        if (effectiveHigh > effectiveLow) {
+            uint contributing = effectiveHigh - effectiveLow;
+            float binLogLum =
+                pc.minLogLuminance
+                + (float(i) - 0.5) / 254.0
+                * pc.logLuminanceRange;
+
+            if (i == 0) {
+                binLogLum = pc.minLogLuminance;
+            }
+
+            weightedLogSum += binLogLum * float(contributing);
+            trimmedCount += contributing;
+        }
+
+        accumulated = newAccumulated;
+    }
+
+    float avgLogLum = (trimmedCount > 0)
+        ? weightedLogSum / float(trimmedCount)
+        : pc.minLogLuminance;
+
+    float avgLum = exp2(avgLogLum);
+
+    float targetEv = log2(max(avgLum, 0.00001) * 100.0 / 12.5);
+    targetEv = clamp(targetEv, pc.minEv, pc.maxEv);
+
+    float targetExposure = 1.0 / (1.2 * exp2(targetEv));
+
+    float prevExposure = result.adaptedExposure;
+    if (prevExposure <= 0.0) {
+        prevExposure = targetExposure;
+    }
+
+    float speed = (targetExposure > prevExposure)
+        ? pc.adaptationSpeedUp
+        : pc.adaptationSpeedDown;
+
+    float adapted = prevExposure
+        + (targetExposure - prevExposure)
+        * (1.0 - exp(-pc.timeDelta * speed));
+
+    result.avgLuminance = avgLum;
+    result.adaptedExposure = adapted;
+}

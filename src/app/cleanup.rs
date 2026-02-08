@@ -23,14 +23,32 @@ impl App {
             crate::log!("Destroyed G-Buffer pipeline");
         }
 
+        if let Some(mut bloom_descriptors) = self.data.raytracing.bloom_descriptors.take() {
+            bloom_descriptors.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(bloom_downsample_pipeline) = self.data.raytracing.bloom_downsample_pipeline.take() {
+            bloom_downsample_pipeline.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(bloom_upsample_pipeline) = self.data.raytracing.bloom_upsample_pipeline.take() {
+            bloom_upsample_pipeline.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(mut tonemap_descriptor) = self.data.raytracing.tonemap_descriptor.take() {
+            tonemap_descriptor.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(tonemap_pipeline) = self.data.raytracing.tonemap_pipeline.take() {
+            tonemap_pipeline.destroy(&self.rrdevice.device);
+        }
+
         if let Some(mut composite_descriptor) = self.data.raytracing.composite_descriptor.take() {
             composite_descriptor.destroy(&self.rrdevice.device);
-            crate::log!("Destroyed composite descriptor set");
         }
 
         if let Some(composite_pipeline) = self.data.raytracing.composite_pipeline.take() {
             composite_pipeline.destroy(&self.rrdevice.device);
-            crate::log!("Destroyed composite pipeline");
         }
 
         if let (Some(buffer), Some(memory)) = (

@@ -39,6 +39,7 @@ impl App {
 
             if has_hdr_pipeline {
                 deferred::record_composite_to_hdr(self, command_buffer)?;
+                deferred::record_bloom(self, command_buffer)?;
                 deferred::record_tonemap_to_offscreen(self, command_buffer, image_index)?;
             } else {
                 deferred::record_composite_to_offscreen(self, command_buffer, image_index)?;

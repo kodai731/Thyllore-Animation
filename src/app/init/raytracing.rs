@@ -85,6 +85,7 @@ impl App {
         }
 
         Self::create_tonemap_pipeline_with_resources(rrdevice, data, rrrender)?;
+        Self::create_bloom_pipelines_with_resources(rrdevice, data, rrrender)?;
 
         Ok(())
     }
@@ -122,6 +123,51 @@ impl App {
         )?;
 
         crate::log!("Tonemap pipeline created successfully");
+        Ok(())
+    }
+
+    pub(crate) unsafe fn create_bloom_pipelines_with_resources(
+        rrdevice: &RRDevice,
+        data: &mut AppData,
+        rrrender: &RRRender,
+    ) -> Result<()> {
+        let hdr_image_view = match data.viewport.hdr_buffer {
+            Some(ref hdr) => hdr.color_image_view,
+            None => {
+                crate::log!("HDR buffer not available, skipping bloom pipelines");
+                return Ok(());
+            }
+        };
+
+        let bloom_chain = match data.viewport.bloom_chain {
+            Some(ref chain) => chain,
+            None => {
+                crate::log!("Bloom chain not available, skipping bloom pipelines");
+                return Ok(());
+            }
+        };
+
+        data.raytracing.create_bloom_pipelines(
+            rrdevice,
+            rrrender,
+            hdr_image_view,
+            bloom_chain,
+        )?;
+
+        if let (Some(ref bloom_chain), Some(ref tonemap_desc)) =
+            (&data.viewport.bloom_chain, &data.raytracing.tonemap_descriptor)
+        {
+            if let Some(ref first_mip) = bloom_chain.mip_levels.first() {
+                tonemap_desc.update_bloom_sampler(
+                    rrdevice,
+                    first_mip.image_view,
+                    bloom_chain.sampler,
+                )?;
+                crate::log!("Updated tonemap descriptor with bloom texture");
+            }
+        }
+
+        crate::log!("Bloom pipelines created successfully");
         Ok(())
     }
 }

@@ -960,6 +960,14 @@ impl App {
             data.ecs_world
                 .insert_resource(crate::ecs::resource::LensEffects::default());
         }
+
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::BloomSettings>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::BloomSettings::default());
+        }
     }
 
     pub unsafe fn init_imgui_rendering(

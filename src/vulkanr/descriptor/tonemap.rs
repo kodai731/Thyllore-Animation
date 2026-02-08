@@ -17,7 +17,14 @@ impl RRToneMapDescriptorSet {
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)
             .build();
 
-        let bindings = [hdr_sampler_binding];
+        let bloom_sampler_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(1)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build();
+
+        let bindings = [hdr_sampler_binding, bloom_sampler_binding];
         let info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings);
         let layout = rrdevice.device.create_descriptor_set_layout(&info, None)?;
 
@@ -27,7 +34,7 @@ impl RRToneMapDescriptorSet {
     pub unsafe fn create_pool(rrdevice: &RRDevice) -> Result<vk::DescriptorPool> {
         let sampler_size = vk::DescriptorPoolSize::builder()
             .type_(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(1);
+            .descriptor_count(2);
 
         let pool_sizes = [sampler_size];
         let info = vk::DescriptorPoolCreateInfo::builder()
@@ -53,6 +60,7 @@ impl RRToneMapDescriptorSet {
         self.descriptor_set = descriptor_sets[0];
 
         self.update_hdr_sampler(rrdevice, hdr_image_view, hdr_sampler)?;
+        self.update_bloom_sampler(rrdevice, hdr_image_view, hdr_sampler)?;
 
         Ok(())
     }
@@ -80,6 +88,33 @@ impl RRToneMapDescriptorSet {
         rrdevice
             .device
             .update_descriptor_sets(&[hdr_write], &[] as &[vk::CopyDescriptorSet]);
+
+        Ok(())
+    }
+
+    pub unsafe fn update_bloom_sampler(
+        &self,
+        rrdevice: &RRDevice,
+        bloom_image_view: vk::ImageView,
+        bloom_sampler: vk::Sampler,
+    ) -> Result<()> {
+        let bloom_image_info = vk::DescriptorImageInfo::builder()
+            .image_view(bloom_image_view)
+            .sampler(bloom_sampler)
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .build();
+
+        let bloom_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(1)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(std::slice::from_ref(&bloom_image_info))
+            .build();
+
+        rrdevice
+            .device
+            .update_descriptor_sets(&[bloom_write], &[] as &[vk::CopyDescriptorSet]);
 
         Ok(())
     }

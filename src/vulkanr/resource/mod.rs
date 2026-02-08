@@ -1,3 +1,4 @@
+pub mod bloom_chain;
 pub mod buffer;
 pub mod buffer_registry;
 pub mod dynamic_buffer;
@@ -8,6 +9,7 @@ pub mod mesh_buffer;
 pub mod offscreen;
 pub mod pipeline_storage;
 
+pub use bloom_chain::BloomChain;
 pub use buffer::*;
 pub use buffer_registry::GpuBufferRegistry;
 pub use dynamic_buffer::*;

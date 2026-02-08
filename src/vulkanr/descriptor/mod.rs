@@ -1,3 +1,4 @@
+pub mod bloom;
 pub mod model;
 pub mod ray_query;
 pub mod composite;
@@ -8,6 +9,7 @@ pub mod object;
 pub mod material;
 pub mod tonemap;
 
+pub use bloom::*;
 pub use model::*;
 pub use ray_query::*;
 pub use composite::*;

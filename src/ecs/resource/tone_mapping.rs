@@ -1,8 +1,9 @@
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[repr(i32)]
 pub enum ToneMapOperator {
-    None,
-    AcesFilmic,
-    Reinhard,
+    None = 0,
+    AcesFilmic = 1,
+    Reinhard = 2,
 }
 
 #[derive(Clone, Debug)]
@@ -18,16 +19,6 @@ impl Default for ToneMapping {
             enabled: true,
             operator: ToneMapOperator::AcesFilmic,
             gamma: 2.2,
-        }
-    }
-}
-
-impl ToneMapOperator {
-    pub fn as_int(&self) -> i32 {
-        match self {
-            ToneMapOperator::None => 0,
-            ToneMapOperator::AcesFilmic => 1,
-            ToneMapOperator::Reinhard => 2,
         }
     }
 }

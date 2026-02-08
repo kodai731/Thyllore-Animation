@@ -4,13 +4,13 @@ use std::path::{Path, PathBuf};
 use super::clip_io::{load_animation_clip, save_animation_clip};
 use super::error::{SceneError, SceneResult};
 use super::format::{
-    AnimationClipRef, CameraState, DepthOfFieldState, EditorState, ExposureState,
+    AnimationClipRef, BloomState, CameraState, DepthOfFieldState, EditorState, ExposureState,
     LensEffectsState, PhysicalCameraState, SceneFile, SceneMetadata, TimelineConfig,
     ToneMappingState, SCENE_FORMAT_VERSION,
 };
 use crate::animation::editable::SourceClipId;
 use crate::ecs::resource::{
-    Camera, ClipLibrary, DepthOfField, Exposure, LensEffects, ModelState,
+    BloomSettings, Camera, ClipLibrary, DepthOfField, Exposure, LensEffects, ModelState,
     PhysicalCameraParameters, SceneState, TimelineState, ToneMapOperator, ToneMapping,
 };
 use crate::ecs::world::World;
@@ -107,6 +107,16 @@ impl CollectedSceneState {
                     chromatic_aberration_intensity: le.chromatic_aberration_intensity,
                 });
 
+        let bloom = world
+            .get_resource::<BloomSettings>()
+            .map(|bs| BloomState {
+                enabled: bs.enabled,
+                intensity: bs.intensity,
+                threshold: bs.threshold,
+                knee: bs.knee,
+                mip_count: bs.mip_count,
+            });
+
         let camera = world
             .get_resource::<Camera>()
             .map(|c| CameraState {
@@ -123,6 +133,7 @@ impl CollectedSceneState {
                 depth_of_field: depth_of_field.clone(),
                 tone_mapping,
                 lens_effects,
+                bloom,
             })
             .unwrap_or_default();
 
@@ -421,6 +432,18 @@ pub fn apply_loaded_scene_to_world(
             lens_effects.vignette_intensity = le.vignette_intensity;
             lens_effects.chromatic_aberration_enabled = le.chromatic_aberration_enabled;
             lens_effects.chromatic_aberration_intensity = le.chromatic_aberration_intensity;
+        }
+    }
+
+    if let Some(ref bs) = loaded.scene.camera.bloom {
+        if let Some(mut bloom_settings) =
+            world.get_resource_mut::<BloomSettings>()
+        {
+            bloom_settings.enabled = bs.enabled;
+            bloom_settings.intensity = bs.intensity;
+            bloom_settings.threshold = bs.threshold;
+            bloom_settings.knee = bs.knee;
+            bloom_settings.mip_count = bs.mip_count;
         }
     }
 }

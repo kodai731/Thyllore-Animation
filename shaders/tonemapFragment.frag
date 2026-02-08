@@ -4,6 +4,7 @@ layout(location = 0) in vec2 fragTexCoord;
 layout(location = 0) out vec4 outColor;
 
 layout(binding = 0) uniform sampler2D hdrSampler;
+layout(binding = 1) uniform sampler2D bloomSampler;
 
 layout(push_constant) uniform PushConstants {
     int toneMapOperator;
@@ -11,6 +12,7 @@ layout(push_constant) uniform PushConstants {
     float exposureValue;
     float vignetteIntensity;
     float chromaticAberrationIntensity;
+    float bloomIntensity;
 } pc;
 
 vec3 acesFilmic(vec3 x) {
@@ -48,6 +50,11 @@ void main() {
         hdrColor = sampleWithChromaticAberration(fragTexCoord, pc.chromaticAberrationIntensity);
     } else {
         hdrColor = texture(hdrSampler, fragTexCoord).rgb;
+    }
+
+    if (pc.bloomIntensity > 0.0) {
+        vec3 bloomColor = texture(bloomSampler, fragTexCoord).rgb;
+        hdrColor += bloomColor * pc.bloomIntensity;
     }
 
     hdrColor *= pc.exposureValue;

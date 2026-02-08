@@ -139,6 +139,8 @@ pub struct CameraState {
     pub tone_mapping: Option<ToneMappingState>,
     #[serde(default)]
     pub lens_effects: Option<LensEffectsState>,
+    #[serde(default)]
+    pub bloom: Option<BloomState>,
 }
 
 impl Default for CameraState {
@@ -158,6 +160,7 @@ impl Default for CameraState {
             depth_of_field: None,
             tone_mapping: None,
             lens_effects: None,
+            bloom: None,
         }
     }
 }
@@ -231,4 +234,13 @@ pub struct LensEffectsState {
     pub vignette_intensity: f32,
     pub chromatic_aberration_enabled: bool,
     pub chromatic_aberration_intensity: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BloomState {
+    pub enabled: bool,
+    pub intensity: f32,
+    pub threshold: f32,
+    pub knee: f32,
+    pub mip_count: u32,
 }

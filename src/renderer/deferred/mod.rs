@@ -1,3 +1,4 @@
+mod bloom;
 mod gbuffer;
 mod rayquery;
 mod composite;
@@ -9,6 +10,7 @@ use vulkanalia::prelude::v1_0::*;
 use crate::app::App;
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::MeshRef;
+pub use bloom::BloomPass;
 pub use gbuffer::{GBufferPass, create_gbuffer_framebuffer};
 pub use rayquery::RayQueryPass;
 pub use composite::CompositePass;
@@ -136,6 +138,30 @@ pub unsafe fn record_composite_to_hdr(
 
     let pass = CompositePass::new_for_offscreen(app, extent)?;
     pass.record_to_hdr(command_buffer, render_pass, framebuffer)?;
+
+    Ok(())
+}
+
+pub unsafe fn record_bloom(
+    app: &App,
+    command_buffer: vk::CommandBuffer,
+) -> Result<()> {
+    let bloom_settings = app.data.ecs_world.get_resource::<crate::ecs::resource::BloomSettings>();
+    let bloom_enabled = bloom_settings.map(|bs| bs.enabled).unwrap_or(false);
+
+    if !bloom_enabled {
+        return Ok(());
+    }
+
+    if app.data.viewport.bloom_chain.is_none()
+        || app.data.raytracing.bloom_downsample_pipeline.is_none()
+        || app.data.raytracing.bloom_upsample_pipeline.is_none()
+    {
+        return Ok(());
+    }
+
+    let pass = BloomPass::new(app)?;
+    pass.record(command_buffer)?;
 
     Ok(())
 }

@@ -1,3 +1,4 @@
+mod bloom;
 mod camera;
 mod clip_browser_state;
 mod clip_library;
@@ -16,6 +17,7 @@ mod scene_state;
 mod timeline_state;
 mod tone_mapping;
 
+pub use bloom::*;
 pub use camera::*;
 pub use clip_browser_state::*;
 pub use clip_library::*;

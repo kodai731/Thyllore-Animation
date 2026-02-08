@@ -8,8 +8,8 @@ use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::data::{self as vulkan_data, SceneUniformData};
 use crate::vulkanr::descriptor::{
-    RRRayQueryDescriptorSet, RRCompositeDescriptorSet, RRBillboardDescriptorSet,
-    RRToneMapDescriptorSet,
+    RRBloomDescriptorSets, RRRayQueryDescriptorSet, RRCompositeDescriptorSet,
+    RRBillboardDescriptorSet, RRToneMapDescriptorSet,
 };
 use crate::vulkanr::image::{create_texture_sampler, create_nearest_sampler};
 use crate::vulkanr::pipeline::{PipelineBuilder, RRPipeline, VertexInputConfig, PushConstantConfig};
@@ -35,6 +35,10 @@ pub struct RayTracingData {
 
     pub tonemap_pipeline: Option<RRPipeline>,
     pub tonemap_descriptor: Option<RRToneMapDescriptorSet>,
+
+    pub bloom_downsample_pipeline: Option<RRPipeline>,
+    pub bloom_upsample_pipeline: Option<RRPipeline>,
+    pub bloom_descriptors: Option<RRBloomDescriptorSets>,
 
     pub scene_uniform_buffer: Option<vk::Buffer>,
     pub scene_uniform_buffer_memory: Option<vk::DeviceMemory>,
@@ -337,13 +341,97 @@ impl RayTracingData {
         .push_constants(PushConstantConfig {
             stage_flags: vk::ShaderStageFlags::FRAGMENT,
             offset: 0,
-            size: 20,
+            size: 24,
         })
         .build(rrdevice, rrrender, Some(offscreen_extent))?;
 
         self.tonemap_pipeline = Some(tonemap_pipeline);
         self.tonemap_descriptor = Some(tonemap_descriptor);
         log::info!("Created tonemap pipeline and descriptor set");
+
+        Ok(())
+    }
+
+    pub unsafe fn create_bloom_pipelines(
+        &mut self,
+        rrdevice: &RRDevice,
+        rrrender: &RRRender,
+        hdr_image_view: vk::ImageView,
+        bloom_chain: &crate::vulkanr::resource::BloomChain,
+    ) -> Result<()> {
+        let mip_count = bloom_chain.mip_levels.len();
+        let total_sets = (mip_count + mip_count.saturating_sub(1)) as u32;
+
+        let mut bloom_descriptors = RRBloomDescriptorSets {
+            descriptor_set_layout: RRBloomDescriptorSets::create_layout(rrdevice)?,
+            descriptor_pool: RRBloomDescriptorSets::create_pool(rrdevice, total_sets)?,
+            downsample_sets: Vec::new(),
+            upsample_sets: Vec::new(),
+        };
+
+        let mip_views: Vec<vk::ImageView> = bloom_chain
+            .mip_levels
+            .iter()
+            .map(|m| m.image_view)
+            .collect();
+
+        bloom_descriptors.allocate_and_update(
+            rrdevice,
+            hdr_image_view,
+            &mip_views,
+            bloom_chain.sampler,
+        )?;
+
+        let downsample_pipeline = PipelineBuilder::new(
+            "assets/shaders/tonemapVert.spv",
+            "assets/shaders/bloomDownsampleFrag.spv",
+        )
+        .vertex_input(VertexInputConfig::Custom {
+            bindings: vec![],
+            attributes: vec![],
+        })
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .no_depth_test()
+        .custom_render_pass(bloom_chain.downsample_render_pass)
+        .msaa_samples(vk::SampleCountFlags::_1)
+        .descriptor_layouts(vec![bloom_descriptors.descriptor_set_layout])
+        .push_constants(PushConstantConfig {
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            offset: 0,
+            size: 12,
+        })
+        .build(rrdevice, rrrender, None)?;
+
+        let upsample_pipeline = PipelineBuilder::new(
+            "assets/shaders/tonemapVert.spv",
+            "assets/shaders/bloomUpsampleFrag.spv",
+        )
+        .vertex_input(VertexInputConfig::Custom {
+            bindings: vec![],
+            attributes: vec![],
+        })
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .no_depth_test()
+        .custom_render_pass(bloom_chain.upsample_render_pass)
+        .msaa_samples(vk::SampleCountFlags::_1)
+        .blend(crate::vulkanr::pipeline::BlendConfig {
+            enable: true,
+            src_color_factor: vk::BlendFactor::ONE,
+            dst_color_factor: vk::BlendFactor::ONE,
+            color_op: vk::BlendOp::ADD,
+            src_alpha_factor: vk::BlendFactor::ONE,
+            dst_alpha_factor: vk::BlendFactor::ONE,
+            alpha_op: vk::BlendOp::ADD,
+        })
+        .descriptor_layouts(vec![bloom_descriptors.descriptor_set_layout])
+        .build(rrdevice, rrrender, None)?;
+
+        self.bloom_downsample_pipeline = Some(downsample_pipeline);
+        self.bloom_upsample_pipeline = Some(upsample_pipeline);
+        self.bloom_descriptors = Some(bloom_descriptors);
+        log::info!("Created bloom pipelines with {} mip levels", mip_count);
 
         Ok(())
     }

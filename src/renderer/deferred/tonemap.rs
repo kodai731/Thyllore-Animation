@@ -5,7 +5,7 @@ use crate::app::App;
 use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
 use crate::app::graphics_resource::GraphicsResources;
 use crate::ecs::component::LineMesh;
-use crate::ecs::resource::{LensEffects, ToneMapping};
+use crate::ecs::resource::{BloomSettings, LensEffects, ToneMapping};
 use crate::vulkanr::core::Device;
 use crate::vulkanr::descriptor::RRToneMapDescriptorSet;
 use crate::vulkanr::pipeline::RRPipeline;
@@ -19,6 +19,7 @@ struct ToneMapPushConstants {
     exposure_value: f32,
     vignette_intensity: f32,
     chromatic_aberration_intensity: f32,
+    bloom_intensity: f32,
 }
 
 pub struct ToneMapPass<'a> {
@@ -179,7 +180,7 @@ impl<'a> ToneMapPass<'a> {
 
         let (operator, gamma) = match self.app.data.ecs_world.get_resource::<ToneMapping>() {
             Some(tm) => {
-                let op = if tm.enabled { tm.operator.as_int() } else { 0 };
+                let op = if tm.enabled { tm.operator as i32 } else { 0 };
                 (op, tm.gamma)
             }
             None => (0, 2.2),
@@ -211,12 +212,21 @@ impl<'a> ToneMapPass<'a> {
                 None => (0.0, 0.0),
             };
 
+        let bloom_intensity = self
+            .app
+            .data
+            .ecs_world
+            .get_resource::<BloomSettings>()
+            .map(|bs| if bs.enabled { bs.intensity } else { 0.0 })
+            .unwrap_or(0.0);
+
         let push_constants = ToneMapPushConstants {
             tone_map_operator: operator,
             gamma,
             exposure_value,
             vignette_intensity,
             chromatic_aberration_intensity: ca_intensity,
+            bloom_intensity,
         };
 
         let push_constant_bytes = std::slice::from_raw_parts(

@@ -56,6 +56,9 @@ pub fn build_debug_window(
             ui.separator();
 
             build_dof_panel(ui, ecs_world);
+            ui.separator();
+
+            build_auto_exposure_panel(ui, ecs_world);
 
             build_mouse_info(ui, gui_data);
         });
@@ -323,6 +326,44 @@ fn build_dof_panel(ui: &imgui::Ui, ecs_world: &World) {
 
         ui.slider_config("Focal Length (mm)", 10.0, 200.0)
             .build(&mut params.focal_length_mm);
+    }
+}
+
+fn build_auto_exposure_panel(ui: &imgui::Ui, ecs_world: &World) {
+    use crate::ecs::resource::{AutoExposure, Exposure};
+
+    ui.text("Auto Exposure:");
+
+    if let Some(mut ae) =
+        ecs_world.get_resource_mut::<AutoExposure>()
+    {
+        ui.checkbox("Auto Exposure Enabled", &mut ae.enabled);
+
+        ui.slider_config("Min EV", -10.0, 10.0)
+            .build(&mut ae.min_ev);
+
+        ui.slider_config("Max EV", 0.0, 30.0)
+            .build(&mut ae.max_ev);
+
+        ui.slider_config("Speed Up", 0.1, 10.0)
+            .build(&mut ae.adaptation_speed_up);
+
+        ui.slider_config("Speed Down", 0.1, 10.0)
+            .build(&mut ae.adaptation_speed_down);
+
+        ui.slider_config("Low Percent", 0.0, 0.5)
+            .build(&mut ae.low_percent);
+
+        ui.slider_config("High Percent", 0.5, 1.0)
+            .build(&mut ae.high_percent);
+    }
+
+    if let Some(exposure) = ecs_world.get_resource::<Exposure>() {
+        ui.text(format!(
+            "Current Exposure: {:.4}",
+            exposure.exposure_value
+        ));
+        ui.text(format!("Current EV100: {:.2}", exposure.ev100));
     }
 }
 

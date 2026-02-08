@@ -968,6 +968,14 @@ impl App {
             data.ecs_world
                 .insert_resource(crate::ecs::resource::BloomSettings::default());
         }
+
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::AutoExposure>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::AutoExposure::default());
+        }
     }
 
     pub unsafe fn init_imgui_rendering(

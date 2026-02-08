@@ -31,6 +31,30 @@ impl App {
             dof_pipeline.destroy(&self.rrdevice.device);
         }
 
+        if let Some(mut desc) =
+            self.data.raytracing.auto_exposure_histogram_descriptor.take()
+        {
+            desc.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(mut desc) =
+            self.data.raytracing.auto_exposure_average_descriptor.take()
+        {
+            desc.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(pipeline) =
+            self.data.raytracing.auto_exposure_histogram_pipeline.take()
+        {
+            pipeline.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(pipeline) =
+            self.data.raytracing.auto_exposure_average_pipeline.take()
+        {
+            pipeline.destroy(&self.rrdevice.device);
+        }
+
         if let Some(mut bloom_descriptors) = self.data.raytracing.bloom_descriptors.take() {
             bloom_descriptors.destroy(&self.rrdevice.device);
         }

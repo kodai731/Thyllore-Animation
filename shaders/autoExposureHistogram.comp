@@ -1,0 +1,46 @@
+#version 460
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(binding = 0) uniform sampler2D hdrImage;
+layout(binding = 1) buffer HistogramBuffer { uint bins[256]; } histogram;
+
+layout(push_constant) uniform PushConstants {
+    float minLogLuminance;
+    float logLuminanceRange;
+    uint pixelCount;
+} pc;
+
+shared uint sharedHistogram[256];
+
+void main() {
+    uint localIndex = gl_LocalInvocationIndex;
+    sharedHistogram[localIndex] = 0;
+    barrier();
+
+    uvec2 pixelCoord = gl_GlobalInvocationID.xy;
+    ivec2 imageSize = textureSize(hdrImage, 0);
+
+    if (pixelCoord.x < imageSize.x && pixelCoord.y < imageSize.y) {
+        vec2 uv = (vec2(pixelCoord) + 0.5) / vec2(imageSize);
+        vec3 color = texture(hdrImage, uv).rgb;
+        float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
+
+        uint binIndex = 0;
+        if (luminance > 0.001) {
+            float logLum = log2(luminance);
+            float normalized = clamp(
+                (logLum - pc.minLogLuminance) / pc.logLuminanceRange,
+                0.0,
+                1.0
+            );
+            binIndex = uint(normalized * 254.0 + 1.0);
+        }
+
+        atomicAdd(sharedHistogram[binIndex], 1);
+    }
+
+    barrier();
+
+    atomicAdd(histogram.bins[localIndex], sharedHistogram[localIndex]);
+}

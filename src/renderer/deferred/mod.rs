@@ -1,3 +1,4 @@
+mod auto_exposure;
 mod bloom;
 mod dof;
 mod gbuffer;
@@ -11,6 +12,7 @@ use vulkanalia::prelude::v1_0::*;
 use crate::app::App;
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::MeshRef;
+pub use auto_exposure::AutoExposurePass;
 pub use bloom::BloomPass;
 pub use dof::DofPass;
 pub use gbuffer::{GBufferPass, create_gbuffer_framebuffer};
@@ -180,6 +182,47 @@ pub unsafe fn record_dof(
     }
 
     let pass = DofPass::new(app)?;
+    pass.record(command_buffer)?;
+
+    Ok(())
+}
+
+pub unsafe fn record_auto_exposure(
+    app: &App,
+    command_buffer: vk::CommandBuffer,
+) -> Result<()> {
+    let ae_settings = app
+        .data
+        .ecs_world
+        .get_resource::<crate::ecs::resource::AutoExposure>();
+    let ae_enabled = ae_settings.map(|ae| ae.enabled).unwrap_or(false);
+
+    if !ae_enabled {
+        return Ok(());
+    }
+
+    if app.data.raytracing.auto_exposure_histogram_pipeline.is_none()
+        || app
+            .data
+            .raytracing
+            .auto_exposure_average_pipeline
+            .is_none()
+        || app
+            .data
+            .raytracing
+            .auto_exposure_histogram_descriptor
+            .is_none()
+        || app
+            .data
+            .raytracing
+            .auto_exposure_average_descriptor
+            .is_none()
+        || app.data.viewport.auto_exposure_buffers.is_none()
+    {
+        return Ok(());
+    }
+
+    let pass = AutoExposurePass::new(app)?;
     pass.record(command_buffer)?;
 
     Ok(())

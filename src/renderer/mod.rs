@@ -41,6 +41,7 @@ impl App {
                 deferred::record_composite_to_hdr(self, command_buffer)?;
                 deferred::record_bloom(self, command_buffer)?;
                 deferred::record_dof(self, command_buffer)?;
+                deferred::record_auto_exposure(self, command_buffer)?;
                 deferred::record_tonemap_to_offscreen(self, command_buffer, image_index)?;
             } else {
                 deferred::record_composite_to_offscreen(self, command_buffer, image_index)?;

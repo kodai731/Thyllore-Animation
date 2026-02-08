@@ -1,3 +1,4 @@
+mod auto_exposure;
 mod bloom;
 mod camera;
 mod clip_browser_state;
@@ -17,6 +18,7 @@ mod scene_state;
 mod timeline_state;
 mod tone_mapping;
 
+pub use auto_exposure::*;
 pub use bloom::*;
 pub use camera::*;
 pub use clip_browser_state::*;

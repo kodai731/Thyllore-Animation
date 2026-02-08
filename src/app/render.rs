@@ -105,6 +105,8 @@ impl App {
                     dof_buffer.sampler,
                 )?;
             }
+
+            self.update_auto_exposure_descriptors_on_resize();
         }
 
         if gui_data.file_changed {
@@ -157,6 +159,8 @@ impl App {
             .device
             .wait_for_fences(&[current_fence], true, u64::MAX)?;
 
+        self.update_auto_exposure();
+
         let swapchain = self.swapchain_state().swapchain.swapchain;
         let image_available = self.frame_sync().current_image_available();
         let result = self.rrdevice.device.acquire_next_image_khr(
@@ -185,6 +189,140 @@ impl App {
         self.resource_mut::<SwapchainState>().images_in_flight[image_index] = current_fence;
 
         Ok(image_index)
+    }
+
+    unsafe fn update_auto_exposure_descriptors_on_resize(
+        &self,
+    ) {
+        let (hdr_image_view, hdr_sampler) =
+            if let Some(ref dof_buffer) = self.data.viewport.dof_buffer {
+                (dof_buffer.output_image_view, dof_buffer.sampler)
+            } else if let Some(ref hdr_buffer) =
+                self.data.viewport.hdr_buffer
+            {
+                (hdr_buffer.color_image_view, hdr_buffer.sampler)
+            } else {
+                return;
+            };
+
+        let ae_buffers = match self.data.viewport.auto_exposure_buffers {
+            Some(ref buf) => buf,
+            None => return,
+        };
+
+        if let Some(ref hist_desc) =
+            self.data.raytracing.auto_exposure_histogram_descriptor
+        {
+            hist_desc.update_bindings(
+                &self.rrdevice,
+                hdr_image_view,
+                hdr_sampler,
+                ae_buffers.histogram_buffer,
+                (256 * 4) as u64,
+            );
+        }
+
+        if let Some(ref avg_desc) =
+            self.data.raytracing.auto_exposure_average_descriptor
+        {
+            avg_desc.update_bindings(
+                &self.rrdevice,
+                ae_buffers.histogram_buffer,
+                (256 * 4) as u64,
+                ae_buffers.luminance_buffer,
+                (2 * 4) as u64,
+            );
+        }
+    }
+
+    unsafe fn update_auto_exposure(&mut self) {
+        let ae_enabled = self
+            .data
+            .ecs_world
+            .get_resource::<crate::ecs::resource::AutoExposure>()
+            .map(|ae| ae.enabled)
+            .unwrap_or(false);
+
+        if !ae_enabled {
+            self.restore_manual_exposure_if_needed();
+            return;
+        }
+
+        self.save_manual_exposure_if_needed();
+
+        let adapted = match self.data.viewport.auto_exposure_buffers {
+            Some(ref ae_buffers) => {
+                ae_buffers.read_adapted_exposure(&self.rrdevice.device)
+            }
+            None => return,
+        };
+
+        if adapted > 0.0 {
+            if let Some(mut exposure) = self
+                .data
+                .ecs_world
+                .get_resource_mut::<crate::ecs::resource::Exposure>()
+            {
+                exposure.exposure_value = adapted;
+            }
+        }
+    }
+
+    fn save_manual_exposure_if_needed(&mut self) {
+        let already_saved = self
+            .data
+            .ecs_world
+            .get_resource::<crate::ecs::resource::AutoExposure>()
+            .map(|ae| ae.saved_manual_exposure.is_some())
+            .unwrap_or(true);
+
+        if already_saved {
+            return;
+        }
+
+        let current_exposure = self
+            .data
+            .ecs_world
+            .get_resource::<crate::ecs::resource::Exposure>()
+            .map(|e| e.exposure_value)
+            .unwrap_or(1.0);
+
+        if let Some(mut ae) = self
+            .data
+            .ecs_world
+            .get_resource_mut::<crate::ecs::resource::AutoExposure>()
+        {
+            ae.saved_manual_exposure = Some(current_exposure);
+        }
+    }
+
+    fn restore_manual_exposure_if_needed(&mut self) {
+        let saved = self
+            .data
+            .ecs_world
+            .get_resource::<crate::ecs::resource::AutoExposure>()
+            .and_then(|ae| ae.saved_manual_exposure);
+
+        let restore_value = match saved {
+            Some(v) => v,
+            None => return,
+        };
+
+        if let Some(mut exposure) = self
+            .data
+            .ecs_world
+            .get_resource_mut::<crate::ecs::resource::Exposure>()
+        {
+            exposure.exposure_value = restore_value;
+        }
+
+        if let Some(mut ae) = self
+            .data
+            .ecs_world
+            .get_resource_mut::<crate::ecs::resource::AutoExposure>()
+        {
+            ae.saved_manual_exposure = None;
+        }
     }
 
     pub unsafe fn render(

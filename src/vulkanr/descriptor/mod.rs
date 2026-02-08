@@ -1,3 +1,4 @@
+pub mod auto_exposure;
 pub mod bloom;
 pub mod dof;
 pub mod model;
@@ -10,6 +11,7 @@ pub mod object;
 pub mod material;
 pub mod tonemap;
 
+pub use auto_exposure::*;
 pub use bloom::*;
 pub use dof::*;
 pub use model::*;

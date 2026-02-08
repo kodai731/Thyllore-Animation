@@ -141,6 +141,8 @@ pub struct CameraState {
     pub lens_effects: Option<LensEffectsState>,
     #[serde(default)]
     pub bloom: Option<BloomState>,
+    #[serde(default)]
+    pub auto_exposure: Option<AutoExposureState>,
 }
 
 impl Default for CameraState {
@@ -161,6 +163,7 @@ impl Default for CameraState {
             tone_mapping: None,
             lens_effects: None,
             bloom: None,
+            auto_exposure: None,
         }
     }
 }
@@ -243,4 +246,15 @@ pub struct BloomState {
     pub threshold: f32,
     pub knee: f32,
     pub mip_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutoExposureState {
+    pub enabled: bool,
+    pub min_ev: f32,
+    pub max_ev: f32,
+    pub adaptation_speed_up: f32,
+    pub adaptation_speed_down: f32,
+    pub low_percent: f32,
+    pub high_percent: f32,
 }

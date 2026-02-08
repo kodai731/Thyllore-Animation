@@ -87,6 +87,9 @@ impl App {
         Self::create_tonemap_pipeline_with_resources(rrdevice, data, rrrender)?;
         Self::create_bloom_pipelines_with_resources(rrdevice, data, rrrender)?;
         Self::create_dof_pipeline_with_resources(rrdevice, data, rrrender)?;
+        Self::create_auto_exposure_pipelines_with_resources(
+            rrdevice, data,
+        )?;
 
         Ok(())
     }
@@ -237,5 +240,69 @@ impl App {
 
         crate::log!("DOF pipeline created successfully");
         Ok(())
+    }
+
+    pub(crate) unsafe fn create_auto_exposure_pipelines_with_resources(
+        rrdevice: &RRDevice,
+        data: &mut AppData,
+    ) -> Result<()> {
+        let ae_buffers = match data.viewport.auto_exposure_buffers {
+            Some(ref buf) => buf,
+            None => {
+                crate::log!(
+                    "AutoExposure buffers not available, \
+                     skipping pipeline"
+                );
+                return Ok(());
+            }
+        };
+
+        let (hdr_image_view, hdr_sampler) =
+            Self::resolve_auto_exposure_input(data);
+
+        if hdr_image_view == vk::ImageView::null() {
+            crate::log!(
+                "No HDR input available for AutoExposure"
+            );
+            return Ok(());
+        }
+
+        let histogram_buffer = ae_buffers.histogram_buffer;
+        let histogram_buffer_size = (256 * 4) as u64;
+        let luminance_buffer = ae_buffers.luminance_buffer;
+        let luminance_buffer_size = (2 * 4) as u64;
+
+        data.raytracing.create_auto_exposure_pipelines(
+            rrdevice,
+            hdr_image_view,
+            hdr_sampler,
+            histogram_buffer,
+            histogram_buffer_size,
+            luminance_buffer,
+            luminance_buffer_size,
+        )?;
+
+        crate::log!("AutoExposure pipelines created successfully");
+        Ok(())
+    }
+
+    fn resolve_auto_exposure_input(
+        data: &AppData,
+    ) -> (vk::ImageView, vk::Sampler) {
+        if let Some(ref dof_buffer) = data.viewport.dof_buffer {
+            return (
+                dof_buffer.output_image_view,
+                dof_buffer.sampler,
+            );
+        }
+
+        if let Some(ref hdr_buffer) = data.viewport.hdr_buffer {
+            return (
+                hdr_buffer.color_image_view,
+                hdr_buffer.sampler,
+            );
+        }
+
+        (vk::ImageView::null(), vk::Sampler::null())
     }
 }

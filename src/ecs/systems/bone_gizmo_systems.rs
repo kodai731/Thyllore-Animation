@@ -368,10 +368,10 @@ pub(crate) fn compute_display_transforms(
                 [0.0, 0.0, 0.0]
             };
 
-            let animated_world_pos = global_transforms[idx]
+            let world_pos = global_transforms[idx]
                 * Vector4::new(offset[0], offset[1], offset[2], 1.0);
-            let display_pos = inv_root * animated_world_pos;
-            [display_pos.x, display_pos.y, display_pos.z]
+            let local_pos = inv_root * world_pos;
+            [local_pos.x, local_pos.y, local_pos.z]
         })
         .collect()
 }

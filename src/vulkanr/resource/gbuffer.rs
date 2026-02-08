@@ -169,6 +169,25 @@ impl RRGBuffer {
         })
     }
 
+    pub unsafe fn resize(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        new_width: u32,
+        new_height: u32,
+    ) -> Result<()> {
+        if new_width == self.width && new_height == self.height {
+            return Ok(());
+        }
+        if new_width == 0 || new_height == 0 {
+            return Ok(());
+        }
+
+        self.destroy(&rrdevice.device);
+        *self = RRGBuffer::new(instance, rrdevice, new_width, new_height)?;
+        Ok(())
+    }
+
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         device.destroy_image_view(self.position_image_view, None);
         device.destroy_image(self.position_image, None);

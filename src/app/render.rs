@@ -3,8 +3,9 @@ use crate::app::{App, GUIData};
 use crate::ecs::systems::render_data_systems::{
     gizmo_mesh_render_data, gizmo_selectable_render_data, grid_mesh_render_data,
 };
+use crate::renderer::deferred::create_gbuffer_framebuffer;
 use crate::renderer::scene_renderer::render_scene_objects;
-use crate::vulkanr::context::SwapchainState;
+use crate::vulkanr::context::{RenderTargets, SwapchainState};
 use crate::vulkanr::vulkan::*;
 
 use anyhow::{anyhow, Result};
@@ -17,6 +18,8 @@ impl App {
             self.data
                 .viewport
                 .resize(&self.instance, &self.rrdevice, command_pool, width, height)?;
+
+            self.resize_gbuffer(width, height)?;
 
             if let (Some(ref hdr_buffer), Some(ref tonemap_descriptor)) = (
                 &self.data.viewport.hdr_buffer,
@@ -233,6 +236,121 @@ impl App {
                 (2 * 4) as u64,
             );
         }
+    }
+
+    unsafe fn resize_gbuffer(&mut self, new_width: u32, new_height: u32) -> Result<()> {
+        let needs_resize = self
+            .data
+            .raytracing
+            .gbuffer
+            .as_ref()
+            .map(|gb| gb.width != new_width || gb.height != new_height)
+            .unwrap_or(false);
+
+        if !needs_resize {
+            return Ok(());
+        }
+
+        let command_pool = self.command_state().pool.command_pool;
+
+        if let Some(ref mut gbuffer) = self.data.raytracing.gbuffer {
+            gbuffer.resize(&self.instance, &self.rrdevice, new_width, new_height)?;
+            gbuffer.transition_layouts(&self.rrdevice, command_pool)?;
+        }
+
+        let (position_view, normal_view, shadow_mask_view, albedo_view, object_id_view) = {
+            let gbuffer = self.data.raytracing.gbuffer.as_ref().unwrap();
+            (
+                gbuffer.position_image_view,
+                gbuffer.normal_image_view,
+                gbuffer.shadow_mask_image_view,
+                gbuffer.albedo_image_view,
+                gbuffer.object_id_image_view,
+            )
+        };
+
+        {
+            let mut render_targets = self.resource_mut::<RenderTargets>();
+            let device = &self.rrdevice.device;
+
+            if render_targets.render.gbuffer_framebuffer != vk::Framebuffer::null() {
+                device.destroy_framebuffer(render_targets.render.gbuffer_framebuffer, None);
+                render_targets.render.gbuffer_framebuffer = vk::Framebuffer::null();
+            }
+            if render_targets.render.gbuffer_depth_image_view != vk::ImageView::null() {
+                device.destroy_image_view(render_targets.render.gbuffer_depth_image_view, None);
+                render_targets.render.gbuffer_depth_image_view = vk::ImageView::null();
+            }
+            if render_targets.render.gbuffer_depth_image != vk::Image::null() {
+                device.destroy_image(render_targets.render.gbuffer_depth_image, None);
+                render_targets.render.gbuffer_depth_image = vk::Image::null();
+            }
+            if render_targets.render.gbuffer_depth_image_memory != vk::DeviceMemory::null() {
+                device.free_memory(render_targets.render.gbuffer_depth_image_memory, None);
+                render_targets.render.gbuffer_depth_image_memory = vk::DeviceMemory::null();
+            }
+
+            let gbuffer = self.data.raytracing.gbuffer.as_ref().unwrap();
+            create_gbuffer_framebuffer(
+                &self.instance,
+                &self.rrdevice,
+                &mut render_targets.render,
+                gbuffer,
+            )?;
+        }
+
+        let gbuffer_sampler = self
+            .data
+            .raytracing
+            .gbuffer_sampler
+            .unwrap_or(vk::Sampler::null());
+        let object_id_sampler = self
+            .data
+            .raytracing
+            .object_id_sampler
+            .unwrap_or(vk::Sampler::null());
+
+        if let Some(ref composite_desc) = self.data.raytracing.composite_descriptor {
+            composite_desc.update_gbuffer_views(
+                &self.rrdevice,
+                position_view,
+                gbuffer_sampler,
+                normal_view,
+                gbuffer_sampler,
+                shadow_mask_view,
+                gbuffer_sampler,
+                albedo_view,
+                gbuffer_sampler,
+                object_id_view,
+                object_id_sampler,
+            );
+        }
+
+        if let Some(ref ray_query_desc) = self.data.raytracing.ray_query_descriptor {
+            ray_query_desc.update_gbuffer_views(
+                &self.rrdevice,
+                position_view,
+                normal_view,
+                shadow_mask_view,
+            );
+        }
+
+        {
+            let swapchain = self.swapchain_state().swapchain.clone();
+            let mut billboard = self.billboard_mut();
+            billboard
+                .render_state
+                .descriptor_set
+                .update_position_sampler(
+                    &self.rrdevice,
+                    &swapchain,
+                    position_view,
+                    gbuffer_sampler,
+                )?;
+        }
+
+        crate::log!("G-Buffer resized to: {}x{}", new_width, new_height);
+        Ok(())
     }
 
     unsafe fn update_auto_exposure(&mut self) {

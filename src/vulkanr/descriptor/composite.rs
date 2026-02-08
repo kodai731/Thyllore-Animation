@@ -265,6 +265,107 @@ impl RRCompositeDescriptorSet {
         Ok(())
     }
 
+    pub unsafe fn update_gbuffer_views(
+        &self,
+        rrdevice: &RRDevice,
+        position_image_view: vk::ImageView,
+        position_sampler: vk::Sampler,
+        normal_image_view: vk::ImageView,
+        normal_sampler: vk::Sampler,
+        shadow_mask_image_view: vk::ImageView,
+        shadow_mask_sampler: vk::Sampler,
+        albedo_image_view: vk::ImageView,
+        albedo_sampler: vk::Sampler,
+        object_id_image_view: vk::ImageView,
+        object_id_sampler: vk::Sampler,
+    ) {
+        if self.descriptor_set == vk::DescriptorSet::null() {
+            return;
+        }
+
+        let position_image_info = vk::DescriptorImageInfo::builder()
+            .image_view(position_image_view)
+            .sampler(position_sampler)
+            .image_layout(vk::ImageLayout::GENERAL)
+            .build();
+
+        let position_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(std::slice::from_ref(&position_image_info))
+            .build();
+
+        let normal_image_info = vk::DescriptorImageInfo::builder()
+            .image_view(normal_image_view)
+            .sampler(normal_sampler)
+            .image_layout(vk::ImageLayout::GENERAL)
+            .build();
+
+        let normal_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(1)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(std::slice::from_ref(&normal_image_info))
+            .build();
+
+        let shadow_mask_info = vk::DescriptorImageInfo::builder()
+            .image_view(shadow_mask_image_view)
+            .sampler(shadow_mask_sampler)
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .build();
+
+        let shadow_mask_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(2)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(std::slice::from_ref(&shadow_mask_info))
+            .build();
+
+        let albedo_image_info = vk::DescriptorImageInfo::builder()
+            .image_view(albedo_image_view)
+            .sampler(albedo_sampler)
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .build();
+
+        let albedo_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(3)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(std::slice::from_ref(&albedo_image_info))
+            .build();
+
+        let object_id_image_info = vk::DescriptorImageInfo::builder()
+            .image_view(object_id_image_view)
+            .sampler(object_id_sampler)
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .build();
+
+        let object_id_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(5)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(std::slice::from_ref(&object_id_image_info))
+            .build();
+
+        let writes = [
+            position_write,
+            normal_write,
+            shadow_mask_write,
+            albedo_write,
+            object_id_write,
+        ];
+
+        rrdevice
+            .device
+            .update_descriptor_sets(&writes, &[] as &[vk::CopyDescriptorSet]);
+    }
+
     unsafe fn create_selection_buffer(
         instance: &Instance,
         rrdevice: &RRDevice,

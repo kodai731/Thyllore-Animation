@@ -59,12 +59,17 @@ pub fn camera_input_system(
     gui_data: &GUIData,
     screen_size: [f32; 2],
 ) {
+    let mouse_pos = [
+        gui_data.mouse_pos[0] - gui_data.viewport_position[0],
+        gui_data.mouse_pos[1] - gui_data.viewport_position[1],
+    ];
     camera_input_system_inner(
         camera,
         gui_data.is_right_clicked,
         gui_data.is_wheel_clicked,
         gui_data.mouse_wheel,
         gui_data.mouse_diff,
+        mouse_pos,
         screen_size,
     );
 }
@@ -75,6 +80,7 @@ pub fn camera_input_system_inner(
     is_wheel_clicked: bool,
     mouse_wheel: f32,
     mouse_diff: [f32; 2],
+    mouse_pos: [f32; 2],
     screen_size: [f32; 2],
 ) {
     let diff = Vector2::new(mouse_diff[0], mouse_diff[1]);
@@ -87,7 +93,9 @@ pub fn camera_input_system_inner(
     }
 
     if mouse_wheel != 0.0 {
-        camera_zoom(camera, mouse_wheel);
+        let pos = Vector2::new(mouse_pos[0], mouse_pos[1]);
+        let screen = Vector2::new(screen_size[0], screen_size[1]);
+        camera_zoom(camera, mouse_wheel, pos, screen);
     }
 }
 
@@ -116,12 +124,35 @@ pub fn camera_pan(
     camera.pivot += up * (-mouse_diff.y * pan_speed);
 }
 
-pub fn camera_zoom(camera: &mut Camera, mouse_wheel: f32) {
+pub fn camera_zoom(
+    camera: &mut Camera,
+    mouse_wheel: f32,
+    mouse_pos: Vector2<f32>,
+    screen_size: Vector2<f32>,
+) {
+    let old_distance = camera.distance;
     let zoom_factor = (-mouse_wheel * 0.1).exp();
-    camera.distance *= zoom_factor;
+    let new_distance =
+        (old_distance * zoom_factor).max(camera.near_plane * 2.0);
 
-    let min_distance = camera.near_plane * 2.0;
-    camera.distance = camera.distance.max(min_distance);
+    let ndc_x = 2.0 * mouse_pos.x / screen_size.x - 1.0;
+    let ndc_y = 2.0 * mouse_pos.y / screen_size.y - 1.0;
+
+    let fov_rad: Rad<f32> = camera.fov_y.into();
+    let half_height = old_distance * (fov_rad.0 / 2.0).tan();
+    let aspect = screen_size.x / screen_size.y;
+    let half_width = half_height * aspect;
+
+    let right = compute_camera_right(camera);
+    let up = compute_camera_up(camera);
+    let cursor_world = camera.pivot
+        + right * (ndc_x * half_width)
+        + up * (-ndc_y * half_height);
+
+    let percentage = 1.0 - (new_distance / old_distance);
+    camera.pivot += (cursor_world - camera.pivot) * percentage;
+
+    camera.distance = new_distance;
 }
 
 pub fn camera_reset(camera: &mut Camera) {

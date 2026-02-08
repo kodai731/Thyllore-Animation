@@ -38,6 +38,12 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
         let is_wheel_clicked = ctx.gui_data.is_wheel_clicked;
         let mouse_wheel = ctx.gui_data.mouse_wheel;
         let mouse_diff = ctx.gui_data.mouse_diff;
+        let local_mouse_pos = [
+            ctx.gui_data.mouse_pos[0]
+                - ctx.gui_data.viewport_position[0],
+            ctx.gui_data.mouse_pos[1]
+                - ctx.gui_data.viewport_position[1],
+        ];
         let screen_size = [
             ctx.swapchain_extent.0 as f32,
             ctx.swapchain_extent.1 as f32,
@@ -49,6 +55,7 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
             is_wheel_clicked,
             mouse_wheel,
             mouse_diff,
+            local_mouse_pos,
             screen_size,
         );
     }

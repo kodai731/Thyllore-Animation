@@ -153,7 +153,13 @@ unsafe fn apply_model_to_resources(
     );
 
     apply_loaded_constraints(load_result, world);
-    initialize_bone_gizmo_visibility(world, assets, graphics, node_animation_scale);
+    initialize_bone_gizmo_visibility(
+        world,
+        assets,
+        graphics,
+        node_animation_scale,
+        load_result.has_skinned_meshes,
+    );
     initialize_constraint_gizmo_visibility(world);
 
     Ok(())
@@ -884,6 +890,7 @@ fn initialize_bone_gizmo_visibility(
     assets: &AssetStorage,
     graphics: &GraphicsResources,
     node_animation_scale: f32,
+    has_skinned_meshes: bool,
 ) {
     if !world.contains_resource::<BoneGizmoData>() {
         return;
@@ -894,11 +901,14 @@ fn initialize_bone_gizmo_visibility(
 
     if has_skeleton {
         bone_gizmo.visible = true;
-        bone_gizmo.mesh_scale = node_animation_scale;
 
         let first_skeleton = assets.skeletons.values().next();
         if let Some(skel_asset) = first_skeleton {
             bone_gizmo.cached_skeleton_id = Some(skel_asset.skeleton_id);
+            bone_gizmo.mesh_scale = compute_bone_gizmo_mesh_scale(
+                node_animation_scale,
+                has_skinned_meshes,
+            );
 
             let skeleton = &skel_asset.skeleton;
             let rest_globals = crate::ecs::compute_pose_global_transforms(
@@ -915,6 +925,17 @@ fn initialize_bone_gizmo_visibility(
         bone_gizmo.cached_skeleton_id = None;
         bone_gizmo.cached_global_transforms.clear();
         bone_gizmo.bone_local_offsets.clear();
+    }
+}
+
+fn compute_bone_gizmo_mesh_scale(
+    node_animation_scale: f32,
+    has_skinned_meshes: bool,
+) -> f32 {
+    if has_skinned_meshes {
+        1.0
+    } else {
+        node_animation_scale
     }
 }
 

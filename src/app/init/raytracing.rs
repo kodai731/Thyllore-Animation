@@ -86,6 +86,7 @@ impl App {
 
         Self::create_tonemap_pipeline_with_resources(rrdevice, data, rrrender)?;
         Self::create_bloom_pipelines_with_resources(rrdevice, data, rrrender)?;
+        Self::create_dof_pipeline_with_resources(rrdevice, data, rrrender)?;
 
         Ok(())
     }
@@ -168,6 +169,73 @@ impl App {
         }
 
         crate::log!("Bloom pipelines created successfully");
+        Ok(())
+    }
+
+    pub(crate) unsafe fn create_dof_pipeline_with_resources(
+        rrdevice: &RRDevice,
+        data: &mut AppData,
+        rrrender: &RRRender,
+    ) -> Result<()> {
+        let hdr_image_view = match data.viewport.hdr_buffer {
+            Some(ref hdr) => hdr.color_image_view,
+            None => {
+                crate::log!("HDR buffer not available, skipping DOF pipeline");
+                return Ok(());
+            }
+        };
+
+        let hdr_sampler = match data.viewport.hdr_buffer {
+            Some(ref hdr) => hdr.sampler,
+            None => return Ok(()),
+        };
+
+        let dof_buffer = match data.viewport.dof_buffer {
+            Some(ref buf) => buf,
+            None => {
+                crate::log!("DOF buffer not available, skipping DOF pipeline");
+                return Ok(());
+            }
+        };
+
+        let depth_image_view = rrrender.gbuffer_depth_image_view;
+        if depth_image_view == vk::ImageView::null() {
+            crate::log!("GBuffer depth image view not available, skipping DOF pipeline");
+            return Ok(());
+        }
+
+        let depth_sampler = match data.raytracing.gbuffer_sampler {
+            Some(s) => s,
+            None => {
+                crate::log!("GBuffer sampler not available, skipping DOF pipeline");
+                return Ok(());
+            }
+        };
+
+        let dof_render_pass = dof_buffer.render_pass;
+
+        data.raytracing.create_dof_pipeline(
+            rrdevice,
+            rrrender,
+            hdr_image_view,
+            hdr_sampler,
+            depth_image_view,
+            depth_sampler,
+            dof_render_pass,
+        )?;
+
+        if let (Some(ref dof_buffer), Some(ref tonemap_desc)) =
+            (&data.viewport.dof_buffer, &data.raytracing.tonemap_descriptor)
+        {
+            tonemap_desc.update_hdr_sampler(
+                rrdevice,
+                dof_buffer.output_image_view,
+                dof_buffer.sampler,
+            )?;
+            crate::log!("Updated tonemap descriptor binding 0 to DOF output");
+        }
+
+        crate::log!("DOF pipeline created successfully");
         Ok(())
     }
 }

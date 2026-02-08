@@ -1,4 +1,5 @@
 mod bloom;
+mod dof;
 mod gbuffer;
 mod rayquery;
 mod composite;
@@ -11,6 +12,7 @@ use crate::app::App;
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::MeshRef;
 pub use bloom::BloomPass;
+pub use dof::DofPass;
 pub use gbuffer::{GBufferPass, create_gbuffer_framebuffer};
 pub use rayquery::RayQueryPass;
 pub use composite::CompositePass;
@@ -161,6 +163,23 @@ pub unsafe fn record_bloom(
     }
 
     let pass = BloomPass::new(app)?;
+    pass.record(command_buffer)?;
+
+    Ok(())
+}
+
+pub unsafe fn record_dof(
+    app: &App,
+    command_buffer: vk::CommandBuffer,
+) -> Result<()> {
+    if app.data.raytracing.dof_pipeline.is_none()
+        || app.data.raytracing.dof_descriptor.is_none()
+        || app.data.viewport.dof_buffer.is_none()
+    {
+        return Ok(());
+    }
+
+    let pass = DofPass::new(app)?;
     pass.record(command_buffer)?;
 
     Ok(())

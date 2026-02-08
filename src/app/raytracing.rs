@@ -8,8 +8,8 @@ use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::data::{self as vulkan_data, SceneUniformData};
 use crate::vulkanr::descriptor::{
-    RRBloomDescriptorSets, RRRayQueryDescriptorSet, RRCompositeDescriptorSet,
-    RRBillboardDescriptorSet, RRToneMapDescriptorSet,
+    RRBloomDescriptorSets, RRDofDescriptorSet, RRRayQueryDescriptorSet,
+    RRCompositeDescriptorSet, RRBillboardDescriptorSet, RRToneMapDescriptorSet,
 };
 use crate::vulkanr::image::{create_texture_sampler, create_nearest_sampler};
 use crate::vulkanr::pipeline::{PipelineBuilder, RRPipeline, VertexInputConfig, PushConstantConfig};
@@ -39,6 +39,9 @@ pub struct RayTracingData {
     pub bloom_downsample_pipeline: Option<RRPipeline>,
     pub bloom_upsample_pipeline: Option<RRPipeline>,
     pub bloom_descriptors: Option<RRBloomDescriptorSets>,
+
+    pub dof_pipeline: Option<RRPipeline>,
+    pub dof_descriptor: Option<RRDofDescriptorSet>,
 
     pub scene_uniform_buffer: Option<vk::Buffer>,
     pub scene_uniform_buffer_memory: Option<vk::DeviceMemory>,
@@ -432,6 +435,58 @@ impl RayTracingData {
         self.bloom_upsample_pipeline = Some(upsample_pipeline);
         self.bloom_descriptors = Some(bloom_descriptors);
         log::info!("Created bloom pipelines with {} mip levels", mip_count);
+
+        Ok(())
+    }
+
+    pub unsafe fn create_dof_pipeline(
+        &mut self,
+        rrdevice: &RRDevice,
+        rrrender: &RRRender,
+        hdr_image_view: vk::ImageView,
+        hdr_sampler: vk::Sampler,
+        depth_image_view: vk::ImageView,
+        depth_sampler: vk::Sampler,
+        dof_render_pass: vk::RenderPass,
+    ) -> Result<()> {
+        let mut dof_descriptor = RRDofDescriptorSet {
+            descriptor_set_layout: RRDofDescriptorSet::create_layout(rrdevice)?,
+            descriptor_pool: RRDofDescriptorSet::create_pool(rrdevice)?,
+            descriptor_set: vk::DescriptorSet::null(),
+        };
+
+        dof_descriptor.allocate_and_update(
+            rrdevice,
+            hdr_image_view,
+            hdr_sampler,
+            depth_image_view,
+            depth_sampler,
+        )?;
+
+        let dof_pipeline = PipelineBuilder::new(
+            "assets/shaders/tonemapVert.spv",
+            "assets/shaders/dofFrag.spv",
+        )
+        .vertex_input(VertexInputConfig::Custom {
+            bindings: vec![],
+            attributes: vec![],
+        })
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .no_depth_test()
+        .custom_render_pass(dof_render_pass)
+        .msaa_samples(vk::SampleCountFlags::_1)
+        .descriptor_layouts(vec![dof_descriptor.descriptor_set_layout])
+        .push_constants(PushConstantConfig {
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            offset: 0,
+            size: 32,
+        })
+        .build(rrdevice, rrrender, None)?;
+
+        self.dof_pipeline = Some(dof_pipeline);
+        self.dof_descriptor = Some(dof_descriptor);
+        log::info!("Created DOF pipeline and descriptor set");
 
         Ok(())
     }

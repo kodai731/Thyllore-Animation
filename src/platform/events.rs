@@ -153,7 +153,7 @@ impl System {
 
                             {
                                 let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                build_debug_window(ui, &mut *ui_events, &mut debug_state, gui_data);
+                                build_debug_window(ui, &mut *ui_events, &mut debug_state, gui_data, &app.data.ecs_world);
                             }
 
                             {

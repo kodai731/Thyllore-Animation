@@ -23,6 +23,14 @@ impl App {
             crate::log!("Destroyed G-Buffer pipeline");
         }
 
+        if let Some(mut dof_descriptor) = self.data.raytracing.dof_descriptor.take() {
+            dof_descriptor.destroy(&self.rrdevice.device);
+        }
+
+        if let Some(dof_pipeline) = self.data.raytracing.dof_pipeline.take() {
+            dof_pipeline.destroy(&self.rrdevice.device);
+        }
+
         if let Some(mut bloom_descriptors) = self.data.raytracing.bloom_descriptors.take() {
             bloom_descriptors.destroy(&self.rrdevice.device);
         }

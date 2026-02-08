@@ -1,6 +1,7 @@
 pub mod bloom_chain;
 pub mod buffer;
 pub mod buffer_registry;
+pub mod dof_buffer;
 pub mod dynamic_buffer;
 pub mod gbuffer;
 pub mod hdr_buffer;
@@ -12,6 +13,7 @@ pub mod pipeline_storage;
 pub use bloom_chain::BloomChain;
 pub use buffer::*;
 pub use buffer_registry::GpuBufferRegistry;
+pub use dof_buffer::DofBuffer;
 pub use dynamic_buffer::*;
 pub use gbuffer::RRGBuffer;
 pub use hdr_buffer::HdrBuffer;

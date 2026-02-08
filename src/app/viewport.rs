@@ -2,13 +2,14 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::resource::{BloomChain, HdrBuffer, OffscreenFramebuffer};
+use crate::vulkanr::resource::{BloomChain, DofBuffer, HdrBuffer, OffscreenFramebuffer};
 
 #[derive(Debug, Default)]
 pub struct ViewportState {
     pub offscreen: Option<OffscreenFramebuffer>,
     pub hdr_buffer: Option<HdrBuffer>,
     pub bloom_chain: Option<BloomChain>,
+    pub dof_buffer: Option<DofBuffer>,
     pub descriptor_pool: vk::DescriptorPool,
     pub descriptor_set_layout: vk::DescriptorSetLayout,
     pub descriptor_set: vk::DescriptorSet,
@@ -42,6 +43,8 @@ impl ViewportState {
 
         let bloom_chain = BloomChain::new(instance, rrdevice, width, height, 5, command_pool)?;
 
+        let dof_buffer = DofBuffer::new(instance, rrdevice, width, height, command_pool)?;
+
         let (descriptor_pool, descriptor_set_layout, descriptor_set) =
             Self::create_imgui_descriptor(rrdevice, &offscreen)?;
 
@@ -49,6 +52,7 @@ impl ViewportState {
             offscreen: Some(offscreen),
             hdr_buffer: Some(hdr_buffer),
             bloom_chain: Some(bloom_chain),
+            dof_buffer: Some(dof_buffer),
             descriptor_pool,
             descriptor_set_layout,
             descriptor_set,
@@ -155,6 +159,10 @@ impl ViewportState {
             bloom_chain.resize(instance, rrdevice, new_width, new_height, command_pool)?;
         }
 
+        if let Some(ref mut dof_buffer) = self.dof_buffer {
+            dof_buffer.resize(instance, rrdevice, new_width, new_height, command_pool)?;
+        }
+
         self.width = new_width;
         self.height = new_height;
 
@@ -176,6 +184,10 @@ impl ViewportState {
 
         if let Some(ref mut bloom_chain) = self.bloom_chain {
             bloom_chain.destroy(device);
+        }
+
+        if let Some(ref mut dof_buffer) = self.dof_buffer {
+            dof_buffer.destroy(device);
         }
 
         crate::log!("Destroyed viewport state");

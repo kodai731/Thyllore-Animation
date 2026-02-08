@@ -27,7 +27,7 @@ pub unsafe fn create_gbuffer_framebuffer(
         vk::SampleCountFlags::_1,
         get_depth_format(instance, rrdevice)?,
         vk::ImageTiling::OPTIMAL,
-        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
+        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
         vk::MemoryPropertyFlags::DEVICE_LOCAL,
     )?;
 

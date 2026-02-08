@@ -73,6 +73,38 @@ impl App {
                     bloom_chain.sampler,
                 );
             }
+
+            {
+                let render_targets = self.resource::<crate::vulkanr::context::RenderTargets>();
+                let depth_image_view = render_targets.render.gbuffer_depth_image_view;
+
+                if let (Some(ref hdr_buffer), Some(ref dof_descriptor)) = (
+                    &self.data.viewport.hdr_buffer,
+                    &self.data.raytracing.dof_descriptor,
+                ) {
+                    let depth_sampler =
+                        self.data.raytracing.gbuffer_sampler.unwrap_or(hdr_buffer.sampler);
+
+                    dof_descriptor.update_image_views(
+                        &self.rrdevice,
+                        hdr_buffer.color_image_view,
+                        hdr_buffer.sampler,
+                        depth_image_view,
+                        depth_sampler,
+                    );
+                }
+            }
+
+            if let (Some(ref dof_buffer), Some(ref tonemap_descriptor)) = (
+                &self.data.viewport.dof_buffer,
+                &self.data.raytracing.tonemap_descriptor,
+            ) {
+                tonemap_descriptor.update_hdr_sampler(
+                    &self.rrdevice,
+                    dof_buffer.output_image_view,
+                    dof_buffer.sampler,
+                )?;
+            }
         }
 
         if gui_data.file_changed {

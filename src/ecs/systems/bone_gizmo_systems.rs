@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3, Vector4};
+use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 
 use crate::animation::Skeleton;
 use crate::debugview::gizmo::{BoneGizmoData, BoneSelectionState};
@@ -28,6 +28,18 @@ pub fn compute_bone_local_offsets(
     skeleton: &Skeleton,
     rest_global_transforms: &[Matrix4<f32>],
 ) -> Vec<[f32; 3]> {
+    let has_significant_translations =
+        rest_global_transforms.iter().any(|t| {
+            let tx = t[3][0].abs();
+            let ty = t[3][1].abs();
+            let tz = t[3][2].abs();
+            tx > 1e-4 || ty > 1e-4 || tz > 1e-4
+        });
+
+    if has_significant_translations {
+        return vec![[0.0, 0.0, 0.0]; skeleton.bones.len()];
+    }
+
     skeleton
         .bones
         .iter()
@@ -60,6 +72,7 @@ pub fn build_bone_line_mesh(
     skeleton: &Skeleton,
     global_transforms: &[Matrix4<f32>],
     bone_local_offsets: &[[f32; 3]],
+    mesh_scale: f32,
     mesh: &mut LineMesh,
 ) {
     mesh.vertices.clear();
@@ -70,7 +83,7 @@ pub fn build_bone_line_mesh(
     }
 
     let display_transforms =
-        compute_display_transforms(skeleton, global_transforms, bone_local_offsets);
+        compute_display_transforms(global_transforms, bone_local_offsets, mesh_scale);
 
     for bone in &skeleton.bones {
         let bone_idx = bone.id as usize;
@@ -109,6 +122,7 @@ pub fn build_octahedral_bone_meshes(
     skeleton: &Skeleton,
     global_transforms: &[Matrix4<f32>],
     bone_local_offsets: &[[f32; 3]],
+    mesh_scale: f32,
     solid_mesh: &mut LineMesh,
     wire_mesh: &mut LineMesh,
 ) {
@@ -119,6 +133,7 @@ pub fn build_octahedral_bone_meshes(
         bone_local_offsets,
         &default_selection,
         1.0,
+        mesh_scale,
         solid_mesh,
         wire_mesh,
     );
@@ -130,6 +145,7 @@ pub fn build_octahedral_bone_meshes_with_selection(
     bone_local_offsets: &[[f32; 3]],
     selection: &BoneSelectionState,
     visual_scale: f32,
+    mesh_scale: f32,
     solid_mesh: &mut LineMesh,
     wire_mesh: &mut LineMesh,
 ) {
@@ -143,9 +159,9 @@ pub fn build_octahedral_bone_meshes_with_selection(
     }
 
     let display_transforms = compute_display_transforms(
-        skeleton,
         global_transforms,
         bone_local_offsets,
+        mesh_scale,
     );
 
     for bone in &skeleton.bones {
@@ -344,43 +360,23 @@ fn normalize(v: [f32; 3]) -> [f32; 3] {
 }
 
 pub(crate) fn compute_display_transforms(
-    skeleton: &Skeleton,
     global_transforms: &[Matrix4<f32>],
     bone_local_offsets: &[[f32; 3]],
+    mesh_scale: f32,
 ) -> Vec<[f32; 3]> {
-    let root_col0 = Vector3::new(
-        skeleton.root_transform[0][0],
-        skeleton.root_transform[0][1],
-        skeleton.root_transform[0][2],
-    );
-    let root_scale = root_col0.magnitude();
-    let inv_scale = if root_scale > f32::EPSILON {
-        1.0 / root_scale
-    } else {
-        1.0
-    };
-
-    skeleton
-        .bones
-        .iter()
-        .enumerate()
-        .map(|(idx, _bone)| {
-            if idx >= global_transforms.len() {
-                return [0.0, 0.0, 0.0];
-            }
-
-            let offset = if idx < bone_local_offsets.len() {
-                bone_local_offsets[idx]
-            } else {
-                [0.0, 0.0, 0.0]
-            };
+    (0..global_transforms.len())
+        .map(|idx| {
+            let offset = bone_local_offsets
+                .get(idx)
+                .copied()
+                .unwrap_or([0.0; 3]);
 
             let world_pos = global_transforms[idx]
                 * Vector4::new(offset[0], offset[1], offset[2], 1.0);
             [
-                world_pos.x * inv_scale,
-                world_pos.y * inv_scale,
-                world_pos.z * inv_scale,
+                world_pos.x * mesh_scale,
+                world_pos.y * mesh_scale,
+                world_pos.z * mesh_scale,
             ]
         })
         .collect()
@@ -426,15 +422,16 @@ pub fn compute_octahedral_vertices_per_bone(
     skeleton: &Skeleton,
     global_transforms: &[Matrix4<f32>],
     bone_local_offsets: &[[f32; 3]],
+    mesh_scale: f32,
 ) -> Vec<(usize, [[f32; 3]; 6])> {
     if global_transforms.is_empty() {
         return Vec::new();
     }
 
     let display_transforms = compute_display_transforms(
-        skeleton,
         global_transforms,
         bone_local_offsets,
+        mesh_scale,
     );
 
     let mut result = Vec::new();
@@ -508,11 +505,13 @@ pub fn select_bone_by_ray(
     skeleton: &Skeleton,
     global_transforms: &[Matrix4<f32>],
     bone_local_offsets: &[[f32; 3]],
+    mesh_scale: f32,
 ) -> Option<(usize, f32)> {
     let bone_verts = compute_octahedral_vertices_per_bone(
         skeleton,
         global_transforms,
         bone_local_offsets,
+        mesh_scale,
     );
 
     let mut closest: Option<(usize, f32)> = None;
@@ -555,6 +554,7 @@ pub fn build_box_bone_meshes_with_selection(
     bone_local_offsets: &[[f32; 3]],
     selection: &BoneSelectionState,
     visual_scale: f32,
+    mesh_scale: f32,
     solid_mesh: &mut LineMesh,
     wire_mesh: &mut LineMesh,
 ) {
@@ -568,7 +568,7 @@ pub fn build_box_bone_meshes_with_selection(
     }
 
     let display_transforms =
-        compute_display_transforms(skeleton, global_transforms, bone_local_offsets);
+        compute_display_transforms(global_transforms, bone_local_offsets, mesh_scale);
 
     for bone in &skeleton.bones {
         let bone_idx = bone.id as usize;
@@ -684,6 +684,7 @@ pub fn build_sphere_bone_meshes_with_selection(
     bone_local_offsets: &[[f32; 3]],
     selection: &BoneSelectionState,
     visual_scale: f32,
+    mesh_scale: f32,
     solid_mesh: &mut LineMesh,
     wire_mesh: &mut LineMesh,
 ) {
@@ -697,7 +698,7 @@ pub fn build_sphere_bone_meshes_with_selection(
     }
 
     let display_transforms =
-        compute_display_transforms(skeleton, global_transforms, bone_local_offsets);
+        compute_display_transforms(global_transforms, bone_local_offsets, mesh_scale);
 
     for bone in &skeleton.bones {
         let bone_idx = bone.id as usize;

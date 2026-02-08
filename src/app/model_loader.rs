@@ -153,7 +153,7 @@ unsafe fn apply_model_to_resources(
     );
 
     apply_loaded_constraints(load_result, world);
-    initialize_bone_gizmo_visibility(world, assets, graphics);
+    initialize_bone_gizmo_visibility(world, assets, graphics, node_animation_scale);
     initialize_constraint_gizmo_visibility(world);
 
     Ok(())
@@ -883,6 +883,7 @@ fn initialize_bone_gizmo_visibility(
     world: &mut World,
     assets: &AssetStorage,
     graphics: &GraphicsResources,
+    node_animation_scale: f32,
 ) {
     if !world.contains_resource::<BoneGizmoData>() {
         return;
@@ -893,6 +894,7 @@ fn initialize_bone_gizmo_visibility(
 
     if has_skeleton {
         bone_gizmo.visible = true;
+        bone_gizmo.mesh_scale = node_animation_scale;
 
         let first_skeleton = assets.skeletons.values().next();
         if let Some(skel_asset) = first_skeleton {

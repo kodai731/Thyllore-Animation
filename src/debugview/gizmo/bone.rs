@@ -22,6 +22,7 @@ pub struct BoneGizmoData {
     pub cached_global_transforms: Vec<Matrix4<f32>>,
     pub cached_skeleton_id: Option<SkeletonId>,
     pub bone_local_offsets: Vec<[f32; 3]>,
+    pub mesh_scale: f32,
 
     pub stick_mesh: LineMesh,
     pub stick_render_info: RenderInfo,
@@ -49,6 +50,7 @@ impl Default for BoneGizmoData {
             cached_global_transforms: Vec::new(),
             cached_skeleton_id: None,
             bone_local_offsets: Vec::new(),
+            mesh_scale: 1.0,
             stick_mesh: LineMesh::default(),
             stick_render_info: RenderInfo::default(),
             solid_mesh: LineMesh::default(),

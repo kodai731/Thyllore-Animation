@@ -257,12 +257,13 @@ fn process_bone_selection(
 
     let (ray_origin, ray_direction) = compute_bone_pick_ray(ctx);
 
-    let (skeleton_id, transforms, offsets) = {
+    let (skeleton_id, transforms, offsets, mesh_scale) = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
         (
             bone_gizmo.cached_skeleton_id,
             bone_gizmo.cached_global_transforms.clone(),
             bone_gizmo.bone_local_offsets.clone(),
+            bone_gizmo.mesh_scale,
         )
     };
 
@@ -278,7 +279,7 @@ fn process_bone_selection(
     let skeleton = skeleton.clone();
 
     let hit = select_bone_by_ray(
-        ray_origin, ray_direction, &skeleton, &transforms, &offsets,
+        ray_origin, ray_direction, &skeleton, &transforms, &offsets, mesh_scale,
     );
 
     let is_shift = ctx.gui_data.is_shift_pressed;

@@ -208,7 +208,6 @@ impl App {
             write_enable: false,
             compare_op: vk::CompareOp::GREATER_OR_EQUAL,
         })
-        .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
         .descriptor_layouts(render_layouts.to_vec())
         .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
         .expect("Failed to create grid pipeline");
@@ -224,7 +223,6 @@ impl App {
         .topology(vk::PrimitiveTopology::LINE_LIST)
         .polygon_mode(vk::PolygonMode::LINE)
         .no_depth_test()
-        .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
         .descriptor_layouts(render_layouts.to_vec())
         .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
         .expect("Failed to create gizmo pipeline");
@@ -315,7 +313,6 @@ impl App {
             offset: 0,
             size: std::mem::size_of::<f32>() as u32,
         })
-        .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
         .descriptor_layouts(render_layouts.to_vec())
         .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
         .expect("Failed to create bone wire pipeline");
@@ -372,7 +369,6 @@ impl App {
             offset: 0,
             size: std::mem::size_of::<f32>() as u32,
         })
-        .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
         .descriptor_layouts(render_layouts.to_vec())
         .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
         .expect("Failed to create bone wire depth pipeline");
@@ -432,7 +428,6 @@ impl App {
             offset: 0,
             size: std::mem::size_of::<f32>() as u32,
         })
-        .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
         .descriptor_layouts(render_layouts.to_vec())
         .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
         .expect("Failed to create bone wire occluded pipeline");

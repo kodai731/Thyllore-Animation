@@ -504,7 +504,6 @@ impl RRPipeline {
             .topology(topology)
             .polygon_mode(polygon_mode)
             .cull_mode(cull_mode)
-            .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
             .descriptor_layouts(vec![rrdescriptor_set.descriptor_set_layout]);
 
         if topology == vk::PrimitiveTopology::LINE_LIST {
@@ -537,7 +536,6 @@ impl RRPipeline {
             .topology(topology)
             .polygon_mode(polygon_mode)
             .cull_mode(cull_mode)
-            .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
             .descriptor_layouts(layouts.to_vec());
 
         if topology == vk::PrimitiveTopology::LINE_LIST {
@@ -570,7 +568,6 @@ impl RRPipeline {
             .topology(topology)
             .polygon_mode(polygon_mode)
             .cull_mode(cull_mode)
-            .dynamic_states(vec![vk::DynamicState::LINE_WIDTH])
             .descriptor_layouts(layouts.to_vec());
 
         if topology == vk::PrimitiveTopology::LINE_LIST {

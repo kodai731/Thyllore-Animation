@@ -170,7 +170,7 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
         return Ok(());
     }
 
-    let (visible, display_style, skeleton_id, transforms, offsets, distance_scaling_enabled, distance_scaling_factor) = {
+    let (visible, display_style, skeleton_id, transforms, offsets, distance_scaling_enabled, distance_scaling_factor, mesh_scale) = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
         (
             bone_gizmo.visible,
@@ -180,6 +180,7 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
             bone_gizmo.bone_local_offsets.clone(),
             bone_gizmo.distance_scaling_enabled,
             bone_gizmo.distance_scaling_factor,
+            bone_gizmo.mesh_scale,
         )
     };
 
@@ -205,21 +206,21 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
 
     match display_style {
         BoneDisplayStyle::Stick => {
-            update_stick_bone_mesh(ctx, &skeleton, &transforms, &offsets)?;
+            update_stick_bone_mesh(ctx, &skeleton, &transforms, &offsets, mesh_scale)?;
         }
         BoneDisplayStyle::Octahedral => {
             update_octahedral_bone_mesh(
-                ctx, &skeleton, &transforms, &offsets, visual_scale,
+                ctx, &skeleton, &transforms, &offsets, visual_scale, mesh_scale,
             )?;
         }
         BoneDisplayStyle::Box => {
             update_box_bone_mesh(
-                ctx, &skeleton, &transforms, &offsets, visual_scale,
+                ctx, &skeleton, &transforms, &offsets, visual_scale, mesh_scale,
             )?;
         }
         BoneDisplayStyle::Sphere => {
             update_sphere_bone_mesh(
-                ctx, &skeleton, &transforms, &offsets, visual_scale,
+                ctx, &skeleton, &transforms, &offsets, visual_scale, mesh_scale,
             )?;
         }
     }
@@ -260,10 +261,11 @@ unsafe fn update_stick_bone_mesh(
     skeleton: &crate::animation::Skeleton,
     transforms: &[Matrix4<f32>],
     offsets: &[[f32; 3]],
+    mesh_scale: f32,
 ) -> Result<()> {
     {
         let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
-        build_bone_line_mesh(skeleton, transforms, offsets, &mut bone_gizmo.stick_mesh);
+        build_bone_line_mesh(skeleton, transforms, offsets, mesh_scale, &mut bone_gizmo.stick_mesh);
     }
 
     let mut mesh_clone = {
@@ -291,6 +293,7 @@ unsafe fn update_octahedral_bone_mesh(
     transforms: &[Matrix4<f32>],
     offsets: &[[f32; 3]],
     visual_scale: f32,
+    mesh_scale: f32,
 ) -> Result<()> {
     let selection = ctx
         .world
@@ -306,6 +309,7 @@ unsafe fn update_octahedral_bone_mesh(
         offsets,
         &selection,
         visual_scale,
+        mesh_scale,
         &mut solid_mesh,
         &mut wire_mesh,
     );
@@ -331,6 +335,7 @@ unsafe fn update_box_bone_mesh(
     transforms: &[Matrix4<f32>],
     offsets: &[[f32; 3]],
     visual_scale: f32,
+    mesh_scale: f32,
 ) -> Result<()> {
     let selection = ctx
         .world
@@ -346,6 +351,7 @@ unsafe fn update_box_bone_mesh(
         offsets,
         &selection,
         visual_scale,
+        mesh_scale,
         &mut solid_mesh,
         &mut wire_mesh,
     );
@@ -371,6 +377,7 @@ unsafe fn update_sphere_bone_mesh(
     transforms: &[Matrix4<f32>],
     offsets: &[[f32; 3]],
     visual_scale: f32,
+    mesh_scale: f32,
 ) -> Result<()> {
     let selection = ctx
         .world
@@ -386,6 +393,7 @@ unsafe fn update_sphere_bone_mesh(
         offsets,
         &selection,
         visual_scale,
+        mesh_scale,
         &mut solid_mesh,
         &mut wire_mesh,
     );
@@ -423,12 +431,13 @@ unsafe fn update_constraint_gizmo_mesh(
         return Ok(());
     }
 
-    let (skeleton_id, transforms, offsets) = {
+    let (skeleton_id, transforms, offsets, constraint_mesh_scale) = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
         (
             bone_gizmo.cached_skeleton_id,
             bone_gizmo.cached_global_transforms.clone(),
             bone_gizmo.bone_local_offsets.clone(),
+            bone_gizmo.mesh_scale,
         )
     };
 
@@ -458,6 +467,7 @@ unsafe fn update_constraint_gizmo_mesh(
         &skeleton,
         &transforms,
         &offsets,
+        constraint_mesh_scale,
         &mut wire_mesh,
     );
 

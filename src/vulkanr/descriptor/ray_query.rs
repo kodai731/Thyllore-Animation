@@ -197,6 +197,63 @@ impl RRRayQueryDescriptorSet {
         Ok(())
     }
 
+    pub unsafe fn update_gbuffer_views(
+        &self,
+        rrdevice: &RRDevice,
+        position_image_view: vk::ImageView,
+        normal_image_view: vk::ImageView,
+        shadow_mask_image_view: vk::ImageView,
+    ) {
+        if self.descriptor_set == vk::DescriptorSet::null() {
+            return;
+        }
+
+        let position_image_info = vk::DescriptorImageInfo::builder()
+            .image_view(position_image_view)
+            .image_layout(vk::ImageLayout::GENERAL)
+            .build();
+
+        let position_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+            .image_info(std::slice::from_ref(&position_image_info))
+            .build();
+
+        let normal_image_info = vk::DescriptorImageInfo::builder()
+            .image_view(normal_image_view)
+            .image_layout(vk::ImageLayout::GENERAL)
+            .build();
+
+        let normal_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(1)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+            .image_info(std::slice::from_ref(&normal_image_info))
+            .build();
+
+        let shadow_mask_info = vk::DescriptorImageInfo::builder()
+            .image_view(shadow_mask_image_view)
+            .image_layout(vk::ImageLayout::GENERAL)
+            .build();
+
+        let shadow_mask_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(2)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+            .image_info(std::slice::from_ref(&shadow_mask_info))
+            .build();
+
+        let writes = [position_write, normal_write, shadow_mask_write];
+
+        rrdevice
+            .device
+            .update_descriptor_sets(&writes, &[] as &[vk::CopyDescriptorSet]);
+    }
+
     pub unsafe fn update_tlas(
         &mut self,
         rrdevice: &RRDevice,

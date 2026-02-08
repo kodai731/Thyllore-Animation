@@ -23,6 +23,7 @@ pub fn build_constraint_gizmo_mesh(
     skeleton: &Skeleton,
     global_transforms: &[Matrix4<f32>],
     bone_local_offsets: &[[f32; 3]],
+    mesh_scale: f32,
     mesh: &mut LineMesh,
 ) {
     mesh.vertices.clear();
@@ -33,9 +34,9 @@ pub fn build_constraint_gizmo_mesh(
     }
 
     let display_positions = compute_display_transforms(
-        skeleton,
         global_transforms,
         bone_local_offsets,
+        mesh_scale,
     );
 
     for entry in super::constraint_set_systems::constraint_set_enabled(constraint_set) {

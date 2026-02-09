@@ -888,6 +888,14 @@ impl App {
             data.ecs_world.insert_resource(HierarchyState::default());
         }
 
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::ObjectIdReadback>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::ObjectIdReadback::default());
+        }
+
         if !data.ecs_world.contains_resource::<TimelineState>() {
             data.ecs_world.insert_resource(TimelineState::new());
         }

@@ -2,6 +2,7 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::vulkanr::core::RRDevice;
+use crate::vulkanr::resource::buffer::create_buffer;
 use crate::vulkanr::resource::image::{create_image, create_image_view, transition_image_layout};
 
 #[derive(Clone, Debug, Default)]
@@ -25,6 +26,9 @@ pub struct RRGBuffer {
     pub shadow_mask_image: vk::Image,
     pub shadow_mask_image_memory: vk::DeviceMemory,
     pub shadow_mask_image_view: vk::ImageView,
+
+    pub readback_staging_buffer: vk::Buffer,
+    pub readback_staging_memory: vk::DeviceMemory,
 
     pub width: u32,
     pub height: u32,
@@ -109,7 +113,9 @@ impl RRGBuffer {
             vk::SampleCountFlags::_1,
             vk::Format::R32_UINT,
             vk::ImageTiling::OPTIMAL,
-            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::SAMPLED
+                | vk::ImageUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 
@@ -142,6 +148,14 @@ impl RRGBuffer {
             1,
         )?;
 
+        let (readback_staging_buffer, readback_staging_memory) = create_buffer(
+            instance,
+            rrdevice,
+            std::mem::size_of::<u32>() as vk::DeviceSize,
+            vk::BufferUsageFlags::TRANSFER_DST,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+        )?;
+
         log::info!(
             "Created G-Buffer: {}x{} (position, normal, albedo, object_id, shadow mask)",
             width,
@@ -164,6 +178,8 @@ impl RRGBuffer {
             shadow_mask_image,
             shadow_mask_image_memory,
             shadow_mask_image_view,
+            readback_staging_buffer,
+            readback_staging_memory,
             width,
             height,
         })
@@ -208,6 +224,11 @@ impl RRGBuffer {
         device.destroy_image_view(self.shadow_mask_image_view, None);
         device.destroy_image(self.shadow_mask_image, None);
         device.free_memory(self.shadow_mask_image_memory, None);
+
+        if self.readback_staging_buffer != vk::Buffer::null() {
+            device.destroy_buffer(self.readback_staging_buffer, None);
+            device.free_memory(self.readback_staging_memory, None);
+        }
 
         log::info!("Destroyed G-Buffer");
     }

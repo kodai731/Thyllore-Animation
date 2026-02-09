@@ -166,6 +166,12 @@ impl AssetStorage {
         self.nodes.get_mut(&id)
     }
 
+    pub fn find_mesh_by_graphics_index(&self, graphics_mesh_index: usize) -> Option<&MeshAsset> {
+        self.meshes
+            .values()
+            .find(|m| m.graphics_mesh_index == graphics_mesh_index)
+    }
+
     pub fn clear(&mut self) {
         self.meshes.clear();
         self.materials.clear();

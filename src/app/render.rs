@@ -110,6 +110,20 @@ impl App {
             }
 
             self.update_auto_exposure_descriptors_on_resize();
+
+            if self
+                .data
+                .ecs_world
+                .contains_resource::<crate::ecs::resource::ObjectIdReadback>()
+            {
+                let mut readback = self
+                    .data
+                    .ecs_world
+                    .resource_mut::<crate::ecs::resource::ObjectIdReadback>();
+                readback.pending_pixel = None;
+                readback.copy_in_flight = false;
+                readback.last_read_object_id = None;
+            }
         }
 
         if gui_data.file_changed {
@@ -163,6 +177,7 @@ impl App {
             .wait_for_fences(&[current_fence], true, u64::MAX)?;
 
         self.update_auto_exposure();
+        self.read_object_id_readback();
 
         let swapchain = self.swapchain_state().swapchain.swapchain;
         let image_available = self.frame_sync().current_image_available();
@@ -351,6 +366,51 @@ impl App {
 
         crate::log!("G-Buffer resized to: {}x{}", new_width, new_height);
         Ok(())
+    }
+
+    unsafe fn read_object_id_readback(&mut self) {
+        use crate::ecs::resource::ObjectIdReadback;
+
+        if !self
+            .data
+            .ecs_world
+            .contains_resource::<ObjectIdReadback>()
+        {
+            return;
+        }
+
+        let readback = self.data.ecs_world.resource::<ObjectIdReadback>();
+        if !readback.copy_in_flight {
+            return;
+        }
+        drop(readback);
+
+        let Some(ref gbuffer) = self.data.raytracing.gbuffer else {
+            return;
+        };
+
+        let memory = self
+            .rrdevice
+            .device
+            .map_memory(
+                gbuffer.readback_staging_memory,
+                0,
+                std::mem::size_of::<u32>() as u64,
+                vk::MemoryMapFlags::empty(),
+            )
+            .ok();
+
+        let object_id = memory.map(|ptr| {
+            let value = *(ptr as *const u32);
+            self.rrdevice.device.unmap_memory(gbuffer.readback_staging_memory);
+            value
+        });
+
+        if let Some(value) = object_id {
+            let mut readback = self.data.ecs_world.resource_mut::<ObjectIdReadback>();
+            readback.last_read_object_id = Some(value);
+            readback.copy_in_flight = false;
+        }
     }
 
     unsafe fn update_auto_exposure(&mut self) {

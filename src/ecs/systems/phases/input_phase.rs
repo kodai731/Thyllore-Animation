@@ -28,7 +28,10 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
     process_gizmo_interaction(ctx, is_first_left_click)?;
 
     if is_first_left_click {
-        process_bone_selection(ctx)?;
+        let bone_hit = process_bone_selection(ctx)?;
+        if !bone_hit {
+            request_mesh_selection(ctx);
+        }
     }
 
     let viewport_hovered = ctx.gui_data.viewport_hovered;
@@ -237,9 +240,9 @@ fn update_light_gizmo_position(
 
 fn process_bone_selection(
     ctx: &mut EcsContext,
-) -> Result<()> {
+) -> Result<bool> {
     if !ctx.world.contains_resource::<BoneGizmoData>() {
-        return Ok(());
+        return Ok(false);
     }
 
     let (visible, display_style) = {
@@ -248,11 +251,11 @@ fn process_bone_selection(
     };
 
     if !visible || display_style != BoneDisplayStyle::Octahedral {
-        return Ok(());
+        return Ok(false);
     }
 
     if ctx.light_gizmo().selectable.is_selected {
-        return Ok(());
+        return Ok(false);
     }
 
     let (ray_origin, ray_direction) = compute_bone_pick_ray(ctx);
@@ -268,19 +271,21 @@ fn process_bone_selection(
     };
 
     let Some(skel_id) = skeleton_id else {
-        return Ok(());
+        return Ok(false);
     };
 
     let Some(skeleton) =
         ctx.assets.get_skeleton_by_skeleton_id(skel_id)
     else {
-        return Ok(());
+        return Ok(false);
     };
     let skeleton = skeleton.clone();
 
     let hit = select_bone_by_ray(
         ray_origin, ray_direction, &skeleton, &transforms, &offsets, mesh_scale,
     );
+
+    let bone_hit = hit.is_some();
 
     let is_shift = ctx.gui_data.is_shift_pressed;
     let new_active_bone = apply_bone_selection_result(
@@ -289,7 +294,7 @@ fn process_bone_selection(
 
     sync_bone_selection_to_hierarchy(ctx, new_active_bone, is_shift);
 
-    Ok(())
+    Ok(bone_hit)
 }
 
 fn compute_bone_pick_ray(
@@ -408,6 +413,54 @@ fn apply_bone_selection_result(
             None
         }
     }
+}
+
+fn request_mesh_selection(ctx: &mut EcsContext) {
+    if !ctx
+        .world
+        .contains_resource::<crate::ecs::resource::ObjectIdReadback>()
+    {
+        return;
+    }
+
+    if ctx.light_gizmo().selectable.is_selected {
+        return;
+    }
+
+    let readback = ctx.object_id_readback();
+    if readback.copy_in_flight {
+        return;
+    }
+    drop(readback);
+
+    let local_x =
+        ctx.gui_data.mouse_pos[0] - ctx.gui_data.viewport_position[0];
+    let local_y =
+        ctx.gui_data.mouse_pos[1] - ctx.gui_data.viewport_position[1];
+
+    let viewport_w = ctx.gui_data.viewport_size[0];
+    let viewport_h = ctx.gui_data.viewport_size[1];
+
+    if local_x < 0.0
+        || local_y < 0.0
+        || local_x >= viewport_w
+        || local_y >= viewport_h
+    {
+        return;
+    }
+
+    let gbuffer_w = ctx.swapchain_extent.0;
+    let gbuffer_h = ctx.swapchain_extent.1;
+
+    let px = ((local_x / viewport_w) * gbuffer_w as f32) as u32;
+    let py = ((local_y / viewport_h) * gbuffer_h as f32) as u32;
+    let px = px.min(gbuffer_w.saturating_sub(1));
+    let py = py.min(gbuffer_h.saturating_sub(1));
+
+    let mut readback = ctx.object_id_readback_mut();
+    readback.pending_pixel = Some((px, py));
+    readback.is_shift = ctx.gui_data.is_shift_pressed;
+    readback.is_ctrl = ctx.gui_data.is_ctrl_pressed;
 }
 
 fn sync_bone_selection_to_hierarchy(

@@ -32,6 +32,8 @@ impl App {
         if use_gbuffer {
             deferred::record_gbuffer_pass(self, command_buffer, image_index)?;
 
+            self.record_object_id_copy(command_buffer);
+
             deferred::record_ray_query_pass(self, command_buffer)?;
 
             let has_hdr_pipeline = self.data.viewport.hdr_buffer.is_some()
@@ -65,5 +67,116 @@ impl App {
         self.rrdevice.device.end_command_buffer(command_buffer)?;
 
         Ok(())
+    }
+
+    unsafe fn record_object_id_copy(&mut self, command_buffer: vk::CommandBuffer) {
+        use crate::ecs::resource::ObjectIdReadback;
+
+        if !self
+            .data
+            .ecs_world
+            .contains_resource::<ObjectIdReadback>()
+        {
+            return;
+        }
+
+        let readback = self.data.ecs_world.resource::<ObjectIdReadback>();
+        if readback.copy_in_flight {
+            drop(readback);
+            return;
+        }
+        let Some((px, py)) = readback.pending_pixel else {
+            drop(readback);
+            return;
+        };
+        drop(readback);
+
+        let Some(ref gbuffer) = self.data.raytracing.gbuffer else {
+            return;
+        };
+
+        let object_id_image = gbuffer.object_id_image;
+        let staging_buffer = gbuffer.readback_staging_buffer;
+
+        let subresource_range = vk::ImageSubresourceRange {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            base_mip_level: 0,
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: 1,
+        };
+
+        let barrier_to_transfer = vk::ImageMemoryBarrier::builder()
+            .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .image(object_id_image)
+            .subresource_range(subresource_range)
+            .src_access_mask(vk::AccessFlags::SHADER_READ)
+            .dst_access_mask(vk::AccessFlags::TRANSFER_READ);
+
+        self.rrdevice.device.cmd_pipeline_barrier(
+            command_buffer,
+            vk::PipelineStageFlags::FRAGMENT_SHADER,
+            vk::PipelineStageFlags::TRANSFER,
+            vk::DependencyFlags::empty(),
+            &[] as &[vk::MemoryBarrier],
+            &[] as &[vk::BufferMemoryBarrier],
+            &[barrier_to_transfer.build()],
+        );
+
+        let region = vk::BufferImageCopy::builder()
+            .buffer_offset(0)
+            .buffer_row_length(0)
+            .buffer_image_height(0)
+            .image_subresource(vk::ImageSubresourceLayers {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                mip_level: 0,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .image_offset(vk::Offset3D {
+                x: px as i32,
+                y: py as i32,
+                z: 0,
+            })
+            .image_extent(vk::Extent3D {
+                width: 1,
+                height: 1,
+                depth: 1,
+            });
+
+        self.rrdevice.device.cmd_copy_image_to_buffer(
+            command_buffer,
+            object_id_image,
+            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+            staging_buffer,
+            &[region.build()],
+        );
+
+        let barrier_to_shader = vk::ImageMemoryBarrier::builder()
+            .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+            .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .image(object_id_image)
+            .subresource_range(subresource_range)
+            .src_access_mask(vk::AccessFlags::TRANSFER_READ)
+            .dst_access_mask(vk::AccessFlags::SHADER_READ);
+
+        self.rrdevice.device.cmd_pipeline_barrier(
+            command_buffer,
+            vk::PipelineStageFlags::TRANSFER,
+            vk::PipelineStageFlags::FRAGMENT_SHADER,
+            vk::DependencyFlags::empty(),
+            &[] as &[vk::MemoryBarrier],
+            &[] as &[vk::BufferMemoryBarrier],
+            &[barrier_to_shader.build()],
+        );
+
+        let mut readback = self.data.ecs_world.resource_mut::<ObjectIdReadback>();
+        readback.pending_pixel = None;
+        readback.copy_in_flight = true;
     }
 }

@@ -9,6 +9,7 @@ use crate::debugview::RayTracingDebugState;
 use crate::app::billboard::BillboardData;
 use crate::ecs::component::{LineMesh, MeshScale};
 use crate::ecs::resource::HierarchyState;
+use crate::ecs::resource::ObjectIdReadback;
 use crate::ecs::resource::Camera;
 
 use super::world::{ResMut, ResRef, World};
@@ -114,5 +115,13 @@ impl<'a> EcsContext<'a> {
 
     pub fn hierarchy_state_mut(&self) -> ResMut<HierarchyState> {
         self.world.resource_mut::<HierarchyState>()
+    }
+
+    pub fn object_id_readback(&self) -> ResRef<ObjectIdReadback> {
+        self.world.resource::<ObjectIdReadback>()
+    }
+
+    pub fn object_id_readback_mut(&self) -> ResMut<ObjectIdReadback> {
+        self.world.resource_mut::<ObjectIdReadback>()
     }
 }

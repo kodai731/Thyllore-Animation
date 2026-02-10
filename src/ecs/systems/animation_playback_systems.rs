@@ -5,8 +5,11 @@ use crate::animation::editable::{BlendMode, ClipInstanceId, EaseType, SourceClip
 use crate::animation::{AnimationClipId, MorphAnimationSystem, SkeletonId, SkeletonPose};
 use crate::app::graphics_resource::{GraphicsResources, NodeData};
 use crate::asset::AssetStorage;
-use crate::ecs::component::{AnimationMeta, ClipSchedule, ConstraintSet};
-use crate::ecs::resource::{AnimationType, ClipLibrary};
+use crate::animation::BoneId;
+use crate::ecs::component::{
+    AnimationMeta, ClipSchedule, ConstraintSet, SpringBoneSetup, WithSpringBone,
+};
+use crate::ecs::resource::{AnimationType, ClipLibrary, SpringBoneState};
 use crate::ecs::world::{Animator, Entity, MeshRef, World};
 use crate::ecs::{
     blend_poses_override, compute_crossfade_factor, compute_local_time,
@@ -50,6 +53,7 @@ pub fn evaluate_all_animators(
     nodes: &mut [NodeData],
     clip_library: &ClipLibrary,
     assets: &AssetStorage,
+    dt: f32,
 ) -> AnimationEvalResult {
     let entity_infos =
         collect_animated_entities(world, graphics, clip_library, assets);
@@ -78,7 +82,7 @@ pub fn evaluate_all_animators(
     }
 
     let (anim_updated, bone_transforms) =
-        apply_blended_animations(&entity_infos, world, graphics, nodes, assets);
+        apply_blended_animations(&entity_infos, world, graphics, nodes, assets, dt);
 
     AnimationEvalResult {
         updated_meshes: merge_updated_indices(morph_updated, anim_updated),
@@ -301,6 +305,7 @@ fn apply_blended_animations(
     graphics: &mut GraphicsResources,
     nodes: &mut [NodeData],
     assets: &AssetStorage,
+    dt: f32,
 ) -> (Vec<usize>, Option<(SkeletonId, Vec<Matrix4<f32>>)>) {
     let mut updated = Vec::new();
     let mut first_bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>)> =
@@ -329,7 +334,24 @@ fn apply_blended_animations(
             );
         }
 
-        let globals = compute_pose_global_transforms(skeleton, &pose);
+        let mut globals =
+            compute_pose_global_transforms(skeleton, &pose);
+
+        if world.has_component::<WithSpringBone>(info.entity) {
+            if let Some(setup) =
+                world.get_component::<SpringBoneSetup>(info.entity)
+            {
+                let setup_clone = setup.clone();
+                apply_spring_bone_simulation(
+                    world,
+                    &setup_clone,
+                    skeleton,
+                    &mut globals,
+                    &mut pose,
+                    dt,
+                );
+            }
+        }
 
         if first_bone_transforms.is_none() {
             first_bone_transforms =
@@ -357,6 +379,44 @@ fn apply_blended_animations(
     }
 
     (updated, first_bone_transforms)
+}
+
+fn apply_spring_bone_simulation(
+    world: &World,
+    setup: &SpringBoneSetup,
+    skeleton: &crate::animation::Skeleton,
+    globals: &mut [Matrix4<f32>],
+    pose: &mut SkeletonPose,
+    dt: f32,
+) {
+    use super::spring_bone_systems::{
+        spring_bone_initialize, spring_bone_update,
+        spring_bone_write_back_to_pose,
+    };
+
+    if let Some(mut sb_state) =
+        world.get_resource_mut::<SpringBoneState>()
+    {
+        if !sb_state.initialized {
+            *sb_state = spring_bone_initialize(setup, skeleton, globals);
+        }
+
+        spring_bone_update(setup, &mut sb_state, skeleton, globals, dt);
+
+        let affected_ids: Vec<BoneId> = setup
+            .chains
+            .iter()
+            .filter(|c| c.enabled)
+            .flat_map(|c| c.joints.iter().map(|j| j.bone_id))
+            .collect();
+
+        spring_bone_write_back_to_pose(
+            skeleton,
+            globals,
+            pose,
+            &affected_ids,
+        );
+    }
 }
 
 fn find_shared_constraints(

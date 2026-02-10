@@ -217,7 +217,9 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::SetBoneDisplayStyle(_)
             | UIEvent::SetBoneInFront(_)
             | UIEvent::SetBoneDistanceScaling(_)
-            | UIEvent::SetBoneDistanceScaleFactor(_) => {}
+            | UIEvent::SetBoneDistanceScaleFactor(_)
+            | UIEvent::AddTestSpringBones
+            | UIEvent::ClearSpringBones => {}
         }
     }
 

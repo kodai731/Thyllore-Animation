@@ -253,6 +253,14 @@ fn build_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, gui_data: &mu
     if ui.button("Clear Constraints") {
         ui_events.send(UIEvent::ClearTestConstraints);
     }
+
+    if ui.button("Add Spring Bones") {
+        ui_events.send(UIEvent::AddTestSpringBones);
+    }
+    ui.same_line();
+    if ui.button("Clear Spring Bones") {
+        ui_events.send(UIEvent::ClearSpringBones);
+    }
 }
 
 fn build_fbx_debug_panel(ui: &imgui::Ui) {

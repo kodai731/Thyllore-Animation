@@ -8,6 +8,7 @@ use crate::asset::AssetId;
 use crate::ecs::component::{
     Animated, AnimationMeta, ClipSchedule, ConstraintSet, Constrained,
     EditorDisplay, EntityIcon, MeshHandle, Model, Skinned,
+    SpringBoneSetup, WithSpringBone,
 };
 
 pub trait Resource: Any + 'static {}
@@ -267,6 +268,8 @@ impl World {
         world.register_component::<AnimationMeta>();
         world.register_component::<ConstraintSet>();
         world.register_component::<Constrained>();
+        world.register_component::<SpringBoneSetup>();
+        world.register_component::<WithSpringBone>();
 
         world
     }
@@ -473,6 +476,12 @@ impl World {
             .filter(|(e, _)| self.has_component::<Constrained>(*e))
     }
 
+    pub fn query_spring_bone_entities(&self) -> Vec<Entity> {
+        self.iter_components::<WithSpringBone>()
+            .map(|(e, _)| e)
+            .collect()
+    }
+
     pub fn entity_count(&self) -> usize {
         self.component_entities::<Transform>().len()
     }
@@ -601,6 +610,12 @@ impl<'a> EntityBuilder<'a> {
     pub fn with_constraint_set(self, constraint_set: ConstraintSet) -> Self {
         self.world.insert_component(self.entity, constraint_set);
         self.world.insert_component(self.entity, Constrained);
+        self
+    }
+
+    pub fn with_spring_bone_setup(self, setup: SpringBoneSetup) -> Self {
+        self.world.insert_component(self.entity, setup);
+        self.world.insert_component(self.entity, WithSpringBone);
         self
     }
 

@@ -23,6 +23,7 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
             &mut node_assets.nodes,
             &*clip_library,
             ctx.assets,
+            ctx.delta_time,
         )
     };
 

@@ -939,6 +939,9 @@ fn process_debug_constraint_events_inline(
     use crate::ecs::systems::debug_constraint_systems::{
         clear_test_constraints, create_test_constraints,
     };
+    use crate::ecs::systems::debug_spring_bone_systems::{
+        clear_spring_bones, create_test_spring_bones,
+    };
 
     for event in events {
         match event {
@@ -950,6 +953,15 @@ fn process_debug_constraint_events_inline(
             }
             UIEvent::ClearTestConstraints => {
                 clear_test_constraints(&mut app.data.ecs_world);
+            }
+            UIEvent::AddTestSpringBones => {
+                create_test_spring_bones(
+                    &mut app.data.ecs_world,
+                    &app.data.ecs_assets,
+                );
+            }
+            UIEvent::ClearSpringBones => {
+                clear_spring_bones(&mut app.data.ecs_world);
             }
             _ => {}
         }

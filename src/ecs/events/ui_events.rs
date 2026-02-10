@@ -146,6 +146,9 @@ pub enum UIEvent {
     CreateTestConstraints,
     ClearTestConstraints,
 
+    AddTestSpringBones,
+    ClearSpringBones,
+
     ConstraintAdd {
         entity: Entity,
         constraint_type_index: u8,

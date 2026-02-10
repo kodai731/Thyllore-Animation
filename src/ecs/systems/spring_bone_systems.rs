@@ -1,4 +1,4 @@
-use cgmath::{Matrix4, SquareMatrix, Vector3};
+use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
 
 use crate::animation::spring_bone::{
     apply_length_constraint, compute_joint_rotation, compute_tail_position,
@@ -23,7 +23,10 @@ pub fn spring_bone_initialize(
 
     for chain in &setup.chains {
         if !chain.enabled {
-            crate::log!("[SpringBone]   Chain '{}' is disabled, skipping", chain.name);
+            crate::log!(
+                "[SpringBone]   Chain '{}' is disabled, skipping",
+                chain.name
+            );
             continue;
         }
 
@@ -40,9 +43,12 @@ pub fn spring_bone_initialize(
             let bone_id = joint_param.bone_id;
             let idx = bone_id as usize;
 
-            if idx >= skeleton.bones.len() || idx >= global_transforms.len() {
+            if idx >= skeleton.bones.len()
+                || idx >= global_transforms.len()
+            {
                 crate::log!(
-                    "[SpringBone]     bone_id={} out of range (bones={}, transforms={})",
+                    "[SpringBone]     bone_id={} out of range \
+                     (bones={}, transforms={})",
                     bone_id,
                     skeleton.bones.len(),
                     global_transforms.len()
@@ -55,25 +61,41 @@ pub fn spring_bone_initialize(
                 decompose_transform(&bone.local_transform);
 
             let (bone_length, bone_axis) =
-                compute_bone_length_and_axis(skeleton, bone_id, global_transforms);
+                compute_bone_length_and_axis(
+                    skeleton,
+                    bone_id,
+                    global_transforms,
+                );
 
-            let tail = compute_tail_position(
-                &global_transforms[idx],
+            let head_pos =
+                extract_world_position(&global_transforms[idx]);
+
+            let tail = compute_initial_tail_position(
+                skeleton,
+                bone_id,
+                global_transforms,
                 initial_local_rotation,
                 bone_axis,
                 bone_length,
             );
 
-            let head_pos = extract_world_position(&global_transforms[idx]);
             crate::log!(
-                "[SpringBone]     Joint '{}' (bone_id={}): head=({:.3},{:.3},{:.3}), \
-                 tail=({:.3},{:.3},{:.3}), length={:.4}, axis=({:.3},{:.3},{:.3})",
+                "[SpringBone]     Joint '{}' (bone_id={}): \
+                 head=({:.3},{:.3},{:.3}), \
+                 tail=({:.3},{:.3},{:.3}), \
+                 length={:.4}, axis=({:.3},{:.3},{:.3})",
                 bone.name,
                 bone_id,
-                head_pos.x, head_pos.y, head_pos.z,
-                tail.x, tail.y, tail.z,
+                head_pos.x,
+                head_pos.y,
+                head_pos.z,
+                tail.x,
+                tail.y,
+                tail.z,
                 bone_length,
-                bone_axis.x, bone_axis.y, bone_axis.z,
+                bone_axis.x,
+                bone_axis.y,
+                bone_axis.z,
             );
 
             joint_states.push(SpringJointState {
@@ -108,6 +130,7 @@ pub fn spring_bone_update(
     state: &mut SpringBoneState,
     skeleton: &Skeleton,
     global_transforms: &mut [Matrix4<f32>],
+    pose: &SkeletonPose,
     dt: f32,
 ) {
     let dt = dt.min(state.max_delta_time);
@@ -137,23 +160,31 @@ pub fn spring_bone_update(
 
         let chain_state = &mut state.chain_states[state_idx];
 
-        for (joint_idx, joint_param) in chain.joints.iter().enumerate() {
+        for (joint_idx, joint_param) in
+            chain.joints.iter().enumerate()
+        {
             if joint_idx >= chain_state.joint_states.len() {
                 break;
             }
 
             let bone_id = joint_param.bone_id;
             let idx = bone_id as usize;
-            if idx >= skeleton.bones.len() || idx >= global_transforms.len() {
+            if idx >= skeleton.bones.len()
+                || idx >= global_transforms.len()
+            {
                 continue;
             }
 
-            let head_pos = extract_world_position(&global_transforms[idx]);
-            let (_, parent_world_rot, _) =
-                decompose_transform(&global_transforms[idx]);
+            let head_pos =
+                extract_world_position(&global_transforms[idx]);
+            let parent_world_rot =
+                extract_parent_world_rotation(
+                    skeleton,
+                    idx,
+                    global_transforms,
+                );
 
             let joint_state = &chain_state.joint_states[joint_idx];
-            let prev_tail_before = joint_state.prev_tail;
             let current_tail_before = joint_state.current_tail;
 
             let next_tail = integrate_joint(
@@ -171,39 +202,26 @@ pub fn spring_bone_update(
                 dt,
             );
 
-            let constrained_tail =
-                apply_length_constraint(head_pos, next_tail, joint_state.bone_length);
+            let constrained_tail = apply_length_constraint(
+                head_pos,
+                next_tail,
+                joint_state.bone_length,
+            );
 
             if should_log {
-                let bone_name = skeleton
-                    .get_bone(bone_id)
-                    .map(|b| b.name.as_str())
-                    .unwrap_or("?");
-                let movement = Vector3::new(
-                    constrained_tail.x - current_tail_before.x,
-                    constrained_tail.y - current_tail_before.y,
-                    constrained_tail.z - current_tail_before.z,
-                );
-                let move_mag = (movement.x * movement.x
-                    + movement.y * movement.y
-                    + movement.z * movement.z)
-                    .sqrt();
-                crate::log!(
-                    "[SpringBone]   Joint '{}': head=({:.3},{:.3},{:.3}), \
-                     prev_tail=({:.3},{:.3},{:.3}), cur_tail=({:.3},{:.3},{:.3}), \
-                     next=({:.3},{:.3},{:.3}), constrained=({:.3},{:.3},{:.3}), \
-                     delta={:.6}",
-                    bone_name,
-                    head_pos.x, head_pos.y, head_pos.z,
-                    prev_tail_before.x, prev_tail_before.y, prev_tail_before.z,
-                    current_tail_before.x, current_tail_before.y, current_tail_before.z,
-                    next_tail.x, next_tail.y, next_tail.z,
-                    constrained_tail.x, constrained_tail.y, constrained_tail.z,
-                    move_mag,
+                log_joint_update(
+                    skeleton,
+                    bone_id,
+                    head_pos,
+                    joint_state,
+                    next_tail,
+                    constrained_tail,
+                    current_tail_before,
                 );
             }
 
-            let joint_state = &mut chain_state.joint_states[joint_idx];
+            let joint_state =
+                &mut chain_state.joint_states[joint_idx];
 
             let velocity = constrained_tail - joint_state.current_tail;
             let velocity_mag_sq = velocity.x * velocity.x
@@ -220,7 +238,8 @@ pub fn spring_bone_update(
             }
 
             let new_local_rotation = compute_joint_rotation(
-                global_transforms[idx],
+                head_pos,
+                parent_world_rot,
                 joint_state.initial_local_rotation,
                 joint_state.bone_axis,
                 constrained_tail,
@@ -231,6 +250,7 @@ pub fn spring_bone_update(
                 bone_id,
                 new_local_rotation,
                 global_transforms,
+                pose,
             );
         }
     }
@@ -279,6 +299,62 @@ pub fn spring_bone_write_back_to_pose(
     }
 }
 
+fn compute_initial_tail_position(
+    skeleton: &Skeleton,
+    bone_id: BoneId,
+    global_transforms: &[Matrix4<f32>],
+    initial_local_rotation: Quaternion<f32>,
+    bone_axis: Vector3<f32>,
+    bone_length: f32,
+) -> Vector3<f32> {
+    let idx = bone_id as usize;
+
+    if let Some(&child_id) = skeleton.bones[idx].children.first() {
+        let cidx = child_id as usize;
+        if cidx < global_transforms.len() {
+            return extract_world_position(&global_transforms[cidx]);
+        }
+    }
+
+    let head_pos = extract_world_position(&global_transforms[idx]);
+    let parent_rot = extract_parent_world_rotation(
+        skeleton,
+        idx,
+        global_transforms,
+    );
+    compute_tail_position(
+        head_pos,
+        parent_rot,
+        initial_local_rotation,
+        bone_axis,
+        bone_length,
+    )
+}
+
+fn extract_parent_world_rotation(
+    skeleton: &Skeleton,
+    bone_idx: usize,
+    global_transforms: &[Matrix4<f32>],
+) -> Quaternion<f32> {
+    match skeleton.bones[bone_idx].parent_id {
+        Some(parent_id) => {
+            let pidx = parent_id as usize;
+            if pidx < global_transforms.len() {
+                let (_, r, _) =
+                    decompose_transform(&global_transforms[pidx]);
+                r
+            } else {
+                Quaternion::new(1.0, 0.0, 0.0, 0.0)
+            }
+        }
+        None => {
+            let (_, r, _) =
+                decompose_transform(&skeleton.root_transform);
+            r
+        }
+    }
+}
+
 fn compute_bone_length_and_axis(
     skeleton: &Skeleton,
     bone_id: BoneId,
@@ -290,27 +366,35 @@ fn compute_bone_length_and_axis(
     if let Some(&child_id) = bone.children.first() {
         let cidx = child_id as usize;
         if cidx < global_transforms.len() {
-            let parent_pos = extract_world_position(&global_transforms[idx]);
-            let child_pos = extract_world_position(&global_transforms[cidx]);
+            let parent_pos =
+                extract_world_position(&global_transforms[idx]);
+            let child_pos =
+                extract_world_position(&global_transforms[cidx]);
             let diff = child_pos - parent_pos;
-            let length = (diff.x * diff.x + diff.y * diff.y + diff.z * diff.z).sqrt();
+            let length = (diff.x * diff.x
+                + diff.y * diff.y
+                + diff.z * diff.z)
+                .sqrt();
 
             if length > 1e-6 {
-                let (_, inv_rot, _) = decompose_transform(&global_transforms[idx]);
+                let (_, bone_rot, _) =
+                    decompose_transform(&global_transforms[idx]);
                 let inv_q = cgmath::Quaternion::new(
-                    inv_rot.s,
-                    -inv_rot.v.x,
-                    -inv_rot.v.y,
-                    -inv_rot.v.z,
+                    bone_rot.s,
+                    -bone_rot.v.x,
+                    -bone_rot.v.y,
+                    -bone_rot.v.z,
                 );
-                let local_dir = rotate_vec3_by_quat(inv_q, diff / length);
+                let local_dir =
+                    rotate_vec3_by_quat(inv_q, diff / length);
                 return (length, local_dir);
             }
         }
     }
 
     let (t, _, _) = decompose_transform(&bone.local_transform);
-    let length = (t.x * t.x + t.y * t.y + t.z * t.z).sqrt();
+    let length =
+        (t.x * t.x + t.y * t.y + t.z * t.z).sqrt();
 
     if length > 1e-6 {
         (length, t / length)
@@ -324,7 +408,8 @@ fn rotate_vec3_by_quat(
     v: Vector3<f32>,
 ) -> Vector3<f32> {
     let qv = cgmath::Quaternion::new(0.0, v.x, v.y, v.z);
-    let conj = cgmath::Quaternion::new(q.s, -q.v.x, -q.v.y, -q.v.z);
+    let conj =
+        cgmath::Quaternion::new(q.s, -q.v.x, -q.v.y, -q.v.z);
     let result = q * qv * conj;
     Vector3::new(result.v.x, result.v.y, result.v.z)
 }
@@ -334,6 +419,7 @@ fn update_global_transforms_for_bone(
     bone_id: BoneId,
     new_local_rotation: cgmath::Quaternion<f32>,
     global_transforms: &mut [Matrix4<f32>],
+    pose: &SkeletonPose,
 ) {
     let idx = bone_id as usize;
     if idx >= skeleton.bones.len() {
@@ -360,7 +446,12 @@ fn update_global_transforms_for_bone(
     global_transforms[idx] = new_global;
 
     for &child_id in &skeleton.bones[idx].children {
-        recompute_children_globals(skeleton, child_id, global_transforms);
+        recompute_children_globals(
+            skeleton,
+            child_id,
+            global_transforms,
+            pose,
+        );
     }
 }
 
@@ -368,9 +459,12 @@ fn recompute_children_globals(
     skeleton: &Skeleton,
     bone_id: BoneId,
     global_transforms: &mut [Matrix4<f32>],
+    pose: &SkeletonPose,
 ) {
     let idx = bone_id as usize;
-    if idx >= skeleton.bones.len() || idx >= global_transforms.len() {
+    if idx >= skeleton.bones.len()
+        || idx >= global_transforms.len()
+    {
         return;
     }
 
@@ -386,9 +480,70 @@ fn recompute_children_globals(
         None => skeleton.root_transform,
     };
 
-    global_transforms[idx] = parent_global * skeleton.bones[idx].local_transform;
+    let animated_local = if idx < pose.bone_poses.len() {
+        compose_transform(
+            pose.bone_poses[idx].translation,
+            pose.bone_poses[idx].rotation,
+            pose.bone_poses[idx].scale,
+        )
+    } else {
+        skeleton.bones[idx].local_transform
+    };
+
+    global_transforms[idx] = parent_global * animated_local;
 
     for &child_id in &skeleton.bones[idx].children {
-        recompute_children_globals(skeleton, child_id, global_transforms);
+        recompute_children_globals(
+            skeleton,
+            child_id,
+            global_transforms,
+            pose,
+        );
     }
+}
+
+fn log_joint_update(
+    skeleton: &Skeleton,
+    bone_id: BoneId,
+    head_pos: Vector3<f32>,
+    joint_state: &SpringJointState,
+    next_tail: Vector3<f32>,
+    constrained_tail: Vector3<f32>,
+    current_tail_before: Vector3<f32>,
+) {
+    let bone_name = skeleton
+        .get_bone(bone_id)
+        .map(|b| b.name.as_str())
+        .unwrap_or("?");
+    let movement = constrained_tail - current_tail_before;
+    let move_mag = (movement.x * movement.x
+        + movement.y * movement.y
+        + movement.z * movement.z)
+        .sqrt();
+    crate::log!(
+        "[SpringBone]   Joint '{}': \
+         head=({:.3},{:.3},{:.3}), \
+         prev_tail=({:.3},{:.3},{:.3}), \
+         cur_tail=({:.3},{:.3},{:.3}), \
+         next=({:.3},{:.3},{:.3}), \
+         constrained=({:.3},{:.3},{:.3}), \
+         delta={:.6}",
+        bone_name,
+        head_pos.x,
+        head_pos.y,
+        head_pos.z,
+        joint_state.prev_tail.x,
+        joint_state.prev_tail.y,
+        joint_state.prev_tail.z,
+        current_tail_before.x,
+        current_tail_before.y,
+        current_tail_before.z,
+        next_tail.x,
+        next_tail.y,
+        next_tail.z,
+        constrained_tail.x,
+        constrained_tail.y,
+        constrained_tail.z,
+        move_mag,
+    );
 }

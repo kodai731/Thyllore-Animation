@@ -44,16 +44,18 @@ pub fn apply_length_constraint(
 }
 
 pub fn compute_joint_rotation(
-    parent_world_transform: Matrix4<f32>,
+    head_position: Vector3<f32>,
+    parent_world_rotation: Quaternion<f32>,
     initial_local_rotation: Quaternion<f32>,
     bone_axis: Vector3<f32>,
     current_tail: Vector3<f32>,
 ) -> Quaternion<f32> {
-    let (parent_pos, parent_rot, _) = decompose_transform(&parent_world_transform);
-    let rest_dir =
-        rotate_vector(parent_rot * initial_local_rotation, bone_axis);
+    let rest_dir = rotate_vector(
+        parent_world_rotation * initial_local_rotation,
+        bone_axis,
+    );
 
-    let actual_dir = current_tail - parent_pos;
+    let actual_dir = current_tail - head_position;
     let actual_len = actual_dir.magnitude();
     if actual_len < 1e-8 {
         return initial_local_rotation;
@@ -62,10 +64,13 @@ pub fn compute_joint_rotation(
 
     let rotation_diff = rotation_between(rest_dir, actual_dir);
 
-    let parent_rot_inv = conjugate(parent_rot);
-    let new_local = normalize_quat(parent_rot_inv * rotation_diff * parent_rot * initial_local_rotation);
-
-    new_local
+    let parent_rot_inv = conjugate(parent_world_rotation);
+    normalize_quat(
+        parent_rot_inv
+            * rotation_diff
+            * parent_world_rotation
+            * initial_local_rotation,
+    )
 }
 
 pub fn extract_world_position(transform: &Matrix4<f32>) -> Vector3<f32> {
@@ -73,15 +78,17 @@ pub fn extract_world_position(transform: &Matrix4<f32>) -> Vector3<f32> {
 }
 
 pub fn compute_tail_position(
-    parent_global: &Matrix4<f32>,
+    head_position: Vector3<f32>,
+    parent_world_rotation: Quaternion<f32>,
     initial_local_rotation: Quaternion<f32>,
     bone_axis: Vector3<f32>,
     bone_length: f32,
 ) -> Vector3<f32> {
-    let head = extract_world_position(parent_global);
-    let (_, parent_rot, _) = decompose_transform(parent_global);
-    let dir = rotate_vector(parent_rot * initial_local_rotation, bone_axis);
-    head + dir * bone_length
+    let dir = rotate_vector(
+        parent_world_rotation * initial_local_rotation,
+        bone_axis,
+    );
+    head_position + dir * bone_length
 }
 
 pub fn recompute_global_transform(

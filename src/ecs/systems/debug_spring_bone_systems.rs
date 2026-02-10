@@ -183,6 +183,13 @@ fn build_chain_from_leaf(
             break;
         }
 
+        let Some(parent_bone) = skeleton.get_bone(parent_id) else {
+            break;
+        };
+        if parent_bone.children.len() > 1 {
+            break;
+        }
+
         chain.push(parent_id);
         current = parent_id;
     }

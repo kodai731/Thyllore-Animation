@@ -313,6 +313,10 @@ fn apply_blended_animations(
 
     let shared_constraints = find_shared_constraints(entities, world);
 
+    let spring_globals = compute_spring_bone_globals(
+        entities, world, assets, &shared_constraints, dt,
+    );
+
     for info in entities {
         let Some(mut pose) = evaluate_entity_blend(info, assets) else {
             continue;
@@ -334,24 +338,14 @@ fn apply_blended_animations(
             );
         }
 
-        let mut globals =
-            compute_pose_global_transforms(skeleton, &pose);
-
-        if world.has_component::<WithSpringBone>(info.entity) {
-            if let Some(setup) =
-                world.get_component::<SpringBoneSetup>(info.entity)
+        let globals = match spring_globals {
+            Some((skel_id, ref cached))
+                if skel_id == info.skeleton_id =>
             {
-                let setup_clone = setup.clone();
-                apply_spring_bone_simulation(
-                    world,
-                    &setup_clone,
-                    skeleton,
-                    &mut globals,
-                    &mut pose,
-                    dt,
-                );
+                cached.clone()
             }
-        }
+            _ => compute_pose_global_transforms(skeleton, &pose),
+        };
 
         if first_bone_transforms.is_none() {
             first_bone_transforms =
@@ -381,6 +375,43 @@ fn apply_blended_animations(
     (updated, first_bone_transforms)
 }
 
+fn compute_spring_bone_globals(
+    entities: &[AnimatedEntityInfo],
+    world: &World,
+    assets: &AssetStorage,
+    shared_constraints: &Option<ConstraintSet>,
+    dt: f32,
+) -> Option<(SkeletonId, Vec<Matrix4<f32>>)> {
+    let info = entities
+        .iter()
+        .find(|e| world.has_component::<WithSpringBone>(e.entity))?;
+
+    let setup =
+        world.get_component::<SpringBoneSetup>(info.entity)?;
+    let setup_clone = setup.clone();
+    let mut pose = evaluate_entity_blend(info, assets)?;
+    let skeleton =
+        assets.get_skeleton_by_skeleton_id(info.skeleton_id)?;
+
+    if let Some(ref cs) = shared_constraints {
+        apply_constraints(cs, skeleton, &mut pose);
+    }
+
+    let mut globals =
+        compute_pose_global_transforms(skeleton, &pose);
+
+    apply_spring_bone_simulation(
+        world,
+        &setup_clone,
+        skeleton,
+        &mut globals,
+        &mut pose,
+        dt,
+    );
+
+    Some((info.skeleton_id, globals))
+}
+
 fn apply_spring_bone_simulation(
     world: &World,
     setup: &SpringBoneSetup,
@@ -401,7 +432,7 @@ fn apply_spring_bone_simulation(
             *sb_state = spring_bone_initialize(setup, skeleton, globals);
         }
 
-        spring_bone_update(setup, &mut sb_state, skeleton, globals, dt);
+        spring_bone_update(setup, &mut sb_state, skeleton, globals, pose, dt);
 
         let affected_ids: Vec<BoneId> = setup
             .chains

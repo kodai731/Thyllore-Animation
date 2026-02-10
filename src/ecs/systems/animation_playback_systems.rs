@@ -313,38 +313,54 @@ fn apply_blended_animations(
 
     let shared_constraints = find_shared_constraints(entities, world);
 
-    let spring_globals = compute_spring_bone_globals(
+    let spring_result = compute_spring_bone_result(
         entities, world, assets, &shared_constraints, dt,
     );
 
     for info in entities {
-        let Some(mut pose) = evaluate_entity_blend(info, assets) else {
-            continue;
-        };
-
         let Some(skeleton) =
             assets.get_skeleton_by_skeleton_id(info.skeleton_id)
         else {
             continue;
         };
 
-        if let Some(ref cs) = shared_constraints {
-            apply_constraints(cs, skeleton, &mut pose);
-        }
+        let has_spring = spring_result
+            .as_ref()
+            .map_or(false, |(skel_id, _, _)| {
+                *skel_id == info.skeleton_id
+            });
 
-        if info.animation_type == AnimationType::Node {
-            GraphicsResources::compute_node_global_transforms(
-                nodes, skeleton, &pose,
-            );
-        }
+        let (globals, _pose) = if has_spring {
+            let (_, ref cached_globals, ref cached_pose) =
+                spring_result.as_ref().unwrap();
 
-        let globals = match spring_globals {
-            Some((skel_id, ref cached))
-                if skel_id == info.skeleton_id =>
-            {
-                cached.clone()
+            if info.animation_type == AnimationType::Node {
+                GraphicsResources::compute_node_global_transforms(
+                    nodes, skeleton, cached_pose,
+                );
             }
-            _ => compute_pose_global_transforms(skeleton, &pose),
+
+            (cached_globals.clone(), None)
+        } else {
+            let Some(mut pose) =
+                evaluate_entity_blend(info, assets)
+            else {
+                continue;
+            };
+
+            if let Some(ref cs) = shared_constraints {
+                apply_constraints(cs, skeleton, &mut pose);
+            }
+
+            if info.animation_type == AnimationType::Node {
+                GraphicsResources::compute_node_global_transforms(
+                    nodes, skeleton, &pose,
+                );
+            }
+
+            let globals =
+                compute_pose_global_transforms(skeleton, &pose);
+            (globals, Some(pose))
         };
 
         if first_bone_transforms.is_none() {
@@ -375,13 +391,13 @@ fn apply_blended_animations(
     (updated, first_bone_transforms)
 }
 
-fn compute_spring_bone_globals(
+fn compute_spring_bone_result(
     entities: &[AnimatedEntityInfo],
     world: &World,
     assets: &AssetStorage,
     shared_constraints: &Option<ConstraintSet>,
     dt: f32,
-) -> Option<(SkeletonId, Vec<Matrix4<f32>>)> {
+) -> Option<(SkeletonId, Vec<Matrix4<f32>>, SkeletonPose)> {
     let info = entities
         .iter()
         .find(|e| world.has_component::<WithSpringBone>(e.entity))?;
@@ -409,7 +425,7 @@ fn compute_spring_bone_globals(
         dt,
     );
 
-    Some((info.skeleton_id, globals))
+    Some((info.skeleton_id, globals, pose))
 }
 
 fn apply_spring_bone_simulation(

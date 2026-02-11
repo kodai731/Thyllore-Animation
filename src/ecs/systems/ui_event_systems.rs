@@ -1,12 +1,10 @@
 use cgmath::Vector3;
 
+use crate::app::graphics_resource::GraphicsResources;
 use crate::debugview::RayTracingDebugState;
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::systems::camera_systems::{
-    camera_move_to_look_at, camera_reset,
-};
 use crate::ecs::resource::Camera;
-use crate::app::graphics_resource::GraphicsResources;
+use crate::ecs::systems::camera_systems::{camera_move_to_look_at, camera_reset};
 
 #[derive(Clone, Debug)]
 pub enum DeferredAction {
@@ -90,24 +88,12 @@ pub fn process_ui_events_with_events_simple(
                     let offset = 2.0;
                     let current = rt_debug_state.light_position;
                     let new_pos = match target {
-                        LightMoveTarget::XMin => {
-                            Vector3::new(min.x - offset, current.y, current.z)
-                        }
-                        LightMoveTarget::XMax => {
-                            Vector3::new(max.x + offset, current.y, current.z)
-                        }
-                        LightMoveTarget::YMin => {
-                            Vector3::new(current.x, min.y - offset, current.z)
-                        }
-                        LightMoveTarget::YMax => {
-                            Vector3::new(current.x, max.y + offset, current.z)
-                        }
-                        LightMoveTarget::ZMin => {
-                            Vector3::new(current.x, current.y, min.z - offset)
-                        }
-                        LightMoveTarget::ZMax => {
-                            Vector3::new(current.x, current.y, max.z + offset)
-                        }
+                        LightMoveTarget::XMin => Vector3::new(min.x - offset, current.y, current.z),
+                        LightMoveTarget::XMax => Vector3::new(max.x + offset, current.y, current.z),
+                        LightMoveTarget::YMin => Vector3::new(current.x, min.y - offset, current.z),
+                        LightMoveTarget::YMax => Vector3::new(current.x, max.y + offset, current.z),
+                        LightMoveTarget::ZMin => Vector3::new(current.x, current.y, min.z - offset),
+                        LightMoveTarget::ZMax => Vector3::new(current.x, current.y, max.z + offset),
                         LightMoveTarget::None => current,
                     };
                     rt_debug_state.light_position = new_pos;
@@ -229,7 +215,18 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::SpringBoneBake
             | UIEvent::SpringBoneDiscardBake
             | UIEvent::SpringBoneSaveBake
-            | UIEvent::SpringBoneRebake => {}
+            | UIEvent::SpringBoneRebake
+            | UIEvent::SpringChainAdd { .. }
+            | UIEvent::SpringChainRemove { .. }
+            | UIEvent::SpringChainUpdate { .. }
+            | UIEvent::SpringJointUpdate { .. }
+            | UIEvent::SpringColliderAdd { .. }
+            | UIEvent::SpringColliderRemove { .. }
+            | UIEvent::SpringColliderUpdate { .. }
+            | UIEvent::SpringColliderGroupAdd { .. }
+            | UIEvent::SpringColliderGroupRemove { .. }
+            | UIEvent::SpringColliderGroupUpdate { .. }
+            | UIEvent::SpringBoneToggleGizmo(_) => {}
         }
     }
 

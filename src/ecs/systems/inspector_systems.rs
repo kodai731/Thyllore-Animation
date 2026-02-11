@@ -88,14 +88,15 @@ fn collect_mesh_and_material(
         None => return (None, None),
     };
 
-    let mesh_data = graphics.meshes.get(mesh_asset.graphics_mesh_index).map(|mb| {
-        MeshInspectorData {
+    let mesh_data = graphics
+        .meshes
+        .get(mesh_asset.graphics_mesh_index)
+        .map(|mb| MeshInspectorData {
             name: mesh_asset.name.clone(),
             vertex_count: mb.vertex_data.vertices.len(),
             triangle_count: mb.vertex_data.indices.len() / 3,
             has_skin: mb.skin_data.is_some(),
-        }
-    });
+        });
 
     let material_data = mesh_asset
         .material_id
@@ -161,11 +162,7 @@ fn quaternion_to_euler(q: &Quaternion<f32>) -> Vector3<f32> {
     let cosy_cosp = 1.0 - 2.0 * (q.v.y * q.v.y + q.v.z * q.v.z);
     let yaw = siny_cosp.atan2(cosy_cosp);
 
-    Vector3::new(
-        roll.to_degrees(),
-        pitch.to_degrees(),
-        yaw.to_degrees(),
-    )
+    Vector3::new(roll.to_degrees(), pitch.to_degrees(), yaw.to_degrees())
 }
 
 fn euler_to_quaternion(euler: &Vector3<f32>) -> Quaternion<f32> {

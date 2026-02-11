@@ -4,9 +4,7 @@ pub mod texture;
 
 use cgmath::Matrix4;
 
-use crate::animation::{
-    AnimationSystem, MorphAnimationSystem, Skeleton, SkeletonId, SkinData,
-};
+use crate::animation::{AnimationSystem, MorphAnimationSystem, Skeleton, SkeletonId, SkinData};
 use crate::loader::fbx::LoadedConstraint;
 use crate::vulkanr::data::{Vertex, VertexData};
 

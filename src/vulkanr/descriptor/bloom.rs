@@ -25,10 +25,7 @@ impl RRBloomDescriptorSets {
         Ok(layout)
     }
 
-    pub unsafe fn create_pool(
-        rrdevice: &RRDevice,
-        set_count: u32,
-    ) -> Result<vk::DescriptorPool> {
+    pub unsafe fn create_pool(rrdevice: &RRDevice, set_count: u32) -> Result<vk::DescriptorPool> {
         let sampler_size = vk::DescriptorPoolSize::builder()
             .type_(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .descriptor_count(set_count);
@@ -42,10 +39,7 @@ impl RRBloomDescriptorSets {
         Ok(pool)
     }
 
-    unsafe fn allocate_set(
-        &self,
-        rrdevice: &RRDevice,
-    ) -> Result<vk::DescriptorSet> {
+    unsafe fn allocate_set(&self, rrdevice: &RRDevice) -> Result<vk::DescriptorSet> {
         let layouts = [self.descriptor_set_layout];
         let alloc_info = vk::DescriptorSetAllocateInfo::builder()
             .descriptor_pool(self.descriptor_pool)

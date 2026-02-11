@@ -119,8 +119,8 @@ impl RRAccelerationStructure {
             as_memory_requirements,
         )?;
 
-        let mut memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
-            .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+        let mut memory_allocate_flags_info =
+            vk::MemoryAllocateFlagsInfo::builder().flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
 
         let as_memory_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(as_memory_requirements.size)
@@ -136,12 +136,15 @@ impl RRAccelerationStructure {
             .size(size_info.acceleration_structure_size)
             .type_(vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL);
 
-        let acceleration_structure = device.create_acceleration_structure_khr(&as_create_info, None)?;
+        let acceleration_structure =
+            device.create_acceleration_structure_khr(&as_create_info, None)?;
 
         // 7. スクラッチバッファ作成
         let scratch_buffer_info = vk::BufferCreateInfo::builder()
             .size(size_info.build_scratch_size)
-            .usage(vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS);
+            .usage(
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
+            );
 
         let scratch_buffer = device.create_buffer(&scratch_buffer_info, None)?;
         let scratch_memory_requirements = device.get_buffer_memory_requirements(scratch_buffer);
@@ -153,8 +156,8 @@ impl RRAccelerationStructure {
             scratch_memory_requirements,
         )?;
 
-        let mut scratch_memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
-            .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+        let mut scratch_memory_allocate_flags_info =
+            vk::MemoryAllocateFlagsInfo::builder().flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
 
         let scratch_memory_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(scratch_memory_requirements.size)
@@ -255,7 +258,9 @@ impl RRAccelerationStructure {
                         ],
                     },
                     instance_custom_index_and_mask: vk::Bitfield24_8::new(i as u32, 0xFF),
-                    instance_shader_binding_table_record_offset_and_flags: vk::Bitfield24_8::new(0, 0),
+                    instance_shader_binding_table_record_offset_and_flags: vk::Bitfield24_8::new(
+                        0, 0,
+                    ),
                     acceleration_structure_reference: blas.device_address,
                 }
             })
@@ -265,12 +270,10 @@ impl RRAccelerationStructure {
         let instances_size = (std::mem::size_of::<vk::AccelerationStructureInstanceKHR>()
             * instances.len()) as vk::DeviceSize;
 
-        let instances_buffer_info = vk::BufferCreateInfo::builder()
-            .size(instances_size)
-            .usage(
-                vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
-                    | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
-            );
+        let instances_buffer_info = vk::BufferCreateInfo::builder().size(instances_size).usage(
+            vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
+                | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
+        );
 
         let instances_buffer = device.create_buffer(&instances_buffer_info, None)?;
         let instances_memory_requirements = device.get_buffer_memory_requirements(instances_buffer);
@@ -282,8 +285,8 @@ impl RRAccelerationStructure {
             instances_memory_requirements,
         )?;
 
-        let mut instances_memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
-            .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+        let mut instances_memory_allocate_flags_info =
+            vk::MemoryAllocateFlagsInfo::builder().flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
 
         let instances_memory_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(instances_memory_requirements.size)
@@ -362,8 +365,8 @@ impl RRAccelerationStructure {
             as_memory_requirements,
         )?;
 
-        let mut memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
-            .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+        let mut memory_allocate_flags_info =
+            vk::MemoryAllocateFlagsInfo::builder().flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
 
         let as_memory_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(as_memory_requirements.size)
@@ -379,12 +382,15 @@ impl RRAccelerationStructure {
             .size(size_info.acceleration_structure_size)
             .type_(vk::AccelerationStructureTypeKHR::TOP_LEVEL);
 
-        let acceleration_structure = device.create_acceleration_structure_khr(&as_create_info, None)?;
+        let acceleration_structure =
+            device.create_acceleration_structure_khr(&as_create_info, None)?;
 
         // 8. スクラッチバッファ作成
         let scratch_buffer_info = vk::BufferCreateInfo::builder()
             .size(size_info.build_scratch_size)
-            .usage(vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS);
+            .usage(
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
+            );
 
         let scratch_buffer = device.create_buffer(&scratch_buffer_info, None)?;
         let scratch_memory_requirements = device.get_buffer_memory_requirements(scratch_buffer);
@@ -396,8 +402,8 @@ impl RRAccelerationStructure {
             scratch_memory_requirements,
         )?;
 
-        let mut scratch_memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
-            .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+        let mut scratch_memory_allocate_flags_info =
+            vk::MemoryAllocateFlagsInfo::builder().flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
 
         let scratch_memory_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(scratch_memory_requirements.size)
@@ -534,7 +540,9 @@ impl RRAccelerationStructure {
 
         let scratch_buffer_info = vk::BufferCreateInfo::builder()
             .size(size_info.update_scratch_size)
-            .usage(vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS);
+            .usage(
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
+            );
 
         let scratch_buffer = device.create_buffer(&scratch_buffer_info, None)?;
         let scratch_memory_requirements = device.get_buffer_memory_requirements(scratch_buffer);
@@ -546,8 +554,8 @@ impl RRAccelerationStructure {
             scratch_memory_requirements,
         )?;
 
-        let mut scratch_memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
-            .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+        let mut scratch_memory_allocate_flags_info =
+            vk::MemoryAllocateFlagsInfo::builder().flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
 
         let scratch_memory_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(scratch_memory_requirements.size)
@@ -625,31 +633,27 @@ impl RRAccelerationStructure {
         let instances: Vec<vk::AccelerationStructureInstanceKHR> = blas_list
             .iter()
             .enumerate()
-            .map(|(i, blas)| {
-                vk::AccelerationStructureInstanceKHR {
-                    transform: vk::TransformMatrixKHR {
-                        matrix: [
-                            [1.0, 0.0, 0.0, 0.0],
-                            [0.0, 1.0, 0.0, 0.0],
-                            [0.0, 0.0, 1.0, 0.0],
-                        ],
-                    },
-                    instance_custom_index_and_mask: vk::Bitfield24_8::new(i as u32, 0xFF),
-                    instance_shader_binding_table_record_offset_and_flags: vk::Bitfield24_8::new(0, 0),
-                    acceleration_structure_reference: blas.device_address,
-                }
+            .map(|(i, blas)| vk::AccelerationStructureInstanceKHR {
+                transform: vk::TransformMatrixKHR {
+                    matrix: [
+                        [1.0, 0.0, 0.0, 0.0],
+                        [0.0, 1.0, 0.0, 0.0],
+                        [0.0, 0.0, 1.0, 0.0],
+                    ],
+                },
+                instance_custom_index_and_mask: vk::Bitfield24_8::new(i as u32, 0xFF),
+                instance_shader_binding_table_record_offset_and_flags: vk::Bitfield24_8::new(0, 0),
+                acceleration_structure_reference: blas.device_address,
             })
             .collect();
 
         let instances_size = (std::mem::size_of::<vk::AccelerationStructureInstanceKHR>()
             * instances.len()) as vk::DeviceSize;
 
-        let instances_buffer_info = vk::BufferCreateInfo::builder()
-            .size(instances_size)
-            .usage(
-                vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
-                    | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
-            );
+        let instances_buffer_info = vk::BufferCreateInfo::builder().size(instances_size).usage(
+            vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
+                | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
+        );
 
         let instances_buffer = device.create_buffer(&instances_buffer_info, None)?;
         let instances_memory_requirements = device.get_buffer_memory_requirements(instances_buffer);
@@ -661,8 +665,8 @@ impl RRAccelerationStructure {
             instances_memory_requirements,
         )?;
 
-        let mut instances_memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
-            .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+        let mut instances_memory_allocate_flags_info =
+            vk::MemoryAllocateFlagsInfo::builder().flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
 
         let instances_memory_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(instances_memory_requirements.size)
@@ -721,7 +725,9 @@ impl RRAccelerationStructure {
 
         let scratch_buffer_info = vk::BufferCreateInfo::builder()
             .size(size_info.update_scratch_size)
-            .usage(vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS);
+            .usage(
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
+            );
 
         let scratch_buffer = device.create_buffer(&scratch_buffer_info, None)?;
         let scratch_memory_requirements = device.get_buffer_memory_requirements(scratch_buffer);
@@ -733,8 +739,8 @@ impl RRAccelerationStructure {
             scratch_memory_requirements,
         )?;
 
-        let mut scratch_memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::builder()
-            .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
+        let mut scratch_memory_allocate_flags_info =
+            vk::MemoryAllocateFlagsInfo::builder().flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
 
         let scratch_memory_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(scratch_memory_requirements.size)
@@ -832,7 +838,9 @@ impl RRAccelerationStructure {
         rrcommand_pool: &RRCommandPool,
         vertex_buffers: &[(&vk::Buffer, u32, u32, &vk::Buffer, u32)],
     ) -> Result<()> {
-        for (i, (vertex_buffer, vertex_count, vertex_stride, index_buffer, index_count)) in vertex_buffers.iter().enumerate() {
+        for (i, (vertex_buffer, vertex_count, vertex_stride, index_buffer, index_count)) in
+            vertex_buffers.iter().enumerate()
+        {
             if i < self.blas_list.len() {
                 Self::update_blas(
                     instance,

@@ -94,11 +94,8 @@ pub fn dump_animation_debug(
     let looping = timeline_state.looping;
     drop(timeline_state);
 
-    let (clip_name, clip_duration, anim_clip) = resolve_current_clip(
-        current_clip_id,
-        clip_library,
-        assets,
-    );
+    let (clip_name, clip_duration, anim_clip) =
+        resolve_current_clip(current_clip_id, clip_library, assets);
 
     let skeleton_dump = build_skeleton_dump(skeleton);
     let pose_dump = build_pose_dump(skeleton, anim_clip.as_ref(), current_time, looping);
@@ -200,7 +197,12 @@ fn build_pose_dump(
                 id: bone.id,
                 name: bone.name.clone(),
                 local_translation: [bp.translation.x, bp.translation.y, bp.translation.z],
-                local_rotation_quaternion: [bp.rotation.s, bp.rotation.v.x, bp.rotation.v.y, bp.rotation.v.z],
+                local_rotation_quaternion: [
+                    bp.rotation.s,
+                    bp.rotation.v.x,
+                    bp.rotation.v.y,
+                    bp.rotation.v.z,
+                ],
                 local_scale: [bp.scale.x, bp.scale.y, bp.scale.z],
                 global_matrix: matrix4_to_arrays(&global_transforms[idx]),
             }
@@ -234,10 +236,7 @@ fn build_clip_channels_dump(
         .channels
         .iter()
         .map(|(&bone_id, ch)| {
-            let bone_name = bone_name_map
-                .get(&bone_id)
-                .unwrap_or(&"?")
-                .to_string();
+            let bone_name = bone_name_map.get(&bone_id).unwrap_or(&"?").to_string();
 
             ChannelDump {
                 bone_id,

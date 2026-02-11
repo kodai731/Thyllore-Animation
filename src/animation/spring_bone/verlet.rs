@@ -18,8 +18,7 @@ pub fn integrate_joint(
 ) -> Vector3<f32> {
     let inertia = (current_tail - prev_tail) * (1.0 - drag_force);
 
-    let rest_dir =
-        rotate_vector(parent_world_rotation * initial_local_rotation, bone_axis);
+    let rest_dir = rotate_vector(parent_world_rotation * initial_local_rotation, bone_axis);
     let rest_tail = head_position + rest_dir * bone_length;
     let stiffness_force = (rest_tail - current_tail) * stiffness * dt;
 
@@ -50,10 +49,7 @@ pub fn compute_joint_rotation(
     bone_axis: Vector3<f32>,
     current_tail: Vector3<f32>,
 ) -> Quaternion<f32> {
-    let rest_dir = rotate_vector(
-        parent_world_rotation * initial_local_rotation,
-        bone_axis,
-    );
+    let rest_dir = rotate_vector(parent_world_rotation * initial_local_rotation, bone_axis);
 
     let actual_dir = current_tail - head_position;
     let actual_len = actual_dir.magnitude();
@@ -65,12 +61,7 @@ pub fn compute_joint_rotation(
     let rotation_diff = rotation_between(rest_dir, actual_dir);
 
     let parent_rot_inv = conjugate(parent_world_rotation);
-    normalize_quat(
-        parent_rot_inv
-            * rotation_diff
-            * parent_world_rotation
-            * initial_local_rotation,
-    )
+    normalize_quat(parent_rot_inv * rotation_diff * parent_world_rotation * initial_local_rotation)
 }
 
 pub fn extract_world_position(transform: &Matrix4<f32>) -> Vector3<f32> {
@@ -84,10 +75,7 @@ pub fn compute_tail_position(
     bone_axis: Vector3<f32>,
     bone_length: f32,
 ) -> Vector3<f32> {
-    let dir = rotate_vector(
-        parent_world_rotation * initial_local_rotation,
-        bone_axis,
-    );
+    let dir = rotate_vector(parent_world_rotation * initial_local_rotation, bone_axis);
     head_position + dir * bone_length
 }
 

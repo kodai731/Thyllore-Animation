@@ -5,7 +5,12 @@ pub type Mat3 = cgmath::Matrix3<f32>;
 pub type Mat4 = cgmath::Matrix4<f32>;
 
 pub fn array_from_mat4(m: Mat4) -> [[f32; 4]; 4] {
-    [m.x.to_array(), m.y.to_array(), m.z.to_array(), m.w.to_array()]
+    [
+        m.x.to_array(),
+        m.y.to_array(),
+        m.z.to_array(),
+        m.w.to_array(),
+    ]
 }
 
 pub fn mat4_from_array(a: [[f32; 4]; 4]) -> Mat4 {
@@ -14,10 +19,8 @@ pub fn mat4_from_array(a: [[f32; 4]; 4]) -> Mat4 {
 
 pub fn mat4_from_array_transpose(a: [[f32; 4]; 4]) -> Mat4 {
     Mat4::new(
-        a[0][0], a[1][0], a[2][0], a[3][0],
-        a[0][1], a[1][1], a[2][1], a[3][1],
-        a[0][2], a[1][2], a[2][2], a[3][2],
-        a[0][3], a[1][3], a[2][3], a[3][3],
+        a[0][0], a[1][0], a[2][0], a[3][0], a[0][1], a[1][1], a[2][1], a[3][1], a[0][2], a[1][2],
+        a[2][2], a[3][2], a[0][3], a[1][3], a[2][3], a[3][3],
     )
 }
 

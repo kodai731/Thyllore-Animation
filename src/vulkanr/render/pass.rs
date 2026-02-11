@@ -1,9 +1,9 @@
 use crate::vulkanr::command::*;
 use crate::vulkanr::core::device::*;
-use crate::vulkanr::resource::image::*;
 use crate::vulkanr::core::swapchain::*;
-use crate::vulkanr::vulkan::*;
 use crate::vulkanr::render::framebuffer::{create_color_objects, create_framebuffers};
+use crate::vulkanr::resource::image::*;
+use crate::vulkanr::vulkan::*;
 #[derive(Clone, Debug, Default)]
 pub struct RRRender {
     // Main render pass (for final presentation)
@@ -345,10 +345,19 @@ pub unsafe fn create_gbuffer_render_pass(
     let dependency = vk::SubpassDependency::builder()
         .src_subpass(vk::SUBPASS_EXTERNAL)
         .dst_subpass(0)
-        .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS)
+        .src_stage_mask(
+            vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+        )
         .src_access_mask(vk::AccessFlags::empty())
-        .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS)
-        .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE);
+        .dst_stage_mask(
+            vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                | vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+        )
+        .dst_access_mask(
+            vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+                | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+        );
 
     let attachments = [
         position_attachment,

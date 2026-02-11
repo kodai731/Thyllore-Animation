@@ -42,14 +42,9 @@ impl ClipLibrary {
         self.source_clips.get(&id).map(|s| &s.editable_clip)
     }
 
-    pub fn get_mut(
-        &mut self,
-        id: SourceClipId,
-    ) -> Option<&mut EditableAnimationClip> {
+    pub fn get_mut(&mut self, id: SourceClipId) -> Option<&mut EditableAnimationClip> {
         self.dirty_sources.insert(id);
-        self.source_clips
-            .get_mut(&id)
-            .map(|s| &mut s.editable_clip)
+        self.source_clips.get_mut(&id).map(|s| &mut s.editable_clip)
     }
 
     pub fn get_source(&self, id: SourceClipId) -> Option<&SourceClip> {
@@ -60,31 +55,20 @@ impl ClipLibrary {
         self.source_clips.get_mut(&id)
     }
 
-    pub fn get_anim_clip_id_for_source(
-        &self,
-        source_id: SourceClipId,
-    ) -> Option<AnimationClipId> {
+    pub fn get_anim_clip_id_for_source(&self, source_id: SourceClipId) -> Option<AnimationClipId> {
         self.source_to_anim_id.get(&source_id).copied()
     }
 
-    pub fn find_source_id_for_anim_clip(
-        &self,
-        anim_id: AnimationClipId,
-    ) -> Option<SourceClipId> {
+    pub fn find_source_id_for_anim_clip(&self, anim_id: AnimationClipId) -> Option<SourceClipId> {
         self.source_to_anim_id
             .iter()
             .find(|(_, &aid)| aid == anim_id)
             .map(|(&sid, _)| sid)
     }
 
-    pub fn remove(
-        &mut self,
-        id: SourceClipId,
-    ) -> Option<EditableAnimationClip> {
+    pub fn remove(&mut self, id: SourceClipId) -> Option<EditableAnimationClip> {
         self.dirty_sources.remove(&id);
-        self.source_clips
-            .remove(&id)
-            .map(|s| s.editable_clip)
+        self.source_clips.remove(&id).map(|s| s.editable_clip)
     }
 
     pub fn is_dirty(&self, id: SourceClipId) -> bool {

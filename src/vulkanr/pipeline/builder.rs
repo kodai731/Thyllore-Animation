@@ -1,9 +1,9 @@
-use crate::vulkanr::data::*;
-use crate::vulkanr::descriptor::*;
 use crate::vulkanr::core::device::*;
 use crate::vulkanr::core::swapchain::*;
-use crate::vulkanr::vulkan::*;
+use crate::vulkanr::data::*;
+use crate::vulkanr::descriptor::*;
 use crate::vulkanr::render::pass::RRRender;
+use crate::vulkanr::vulkan::*;
 use std::fs::File;
 use std::io::Read;
 use vulkanalia::bytecode::Bytecode;
@@ -124,7 +124,11 @@ impl PipelineBuilder {
             depth_test: DepthTestConfig::default(),
             blend: BlendConfig::default(),
             push_constants: None,
-            dynamic_states: vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR, vk::DynamicState::LINE_WIDTH],
+            dynamic_states: vec![
+                vk::DynamicState::VIEWPORT,
+                vk::DynamicState::SCISSOR,
+                vk::DynamicState::LINE_WIDTH,
+            ],
             descriptor_layouts: vec![],
             msaa_samples: vk::SampleCountFlags::empty(),
             custom_render_pass: None,
@@ -343,7 +347,10 @@ impl PipelineBuilder {
 
                 (bindings, attributes)
             }
-            VertexInputConfig::Custom { bindings, attributes } => (bindings, attributes),
+            VertexInputConfig::Custom {
+                bindings,
+                attributes,
+            } => (bindings, attributes),
         };
 
         let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
@@ -402,7 +409,11 @@ impl PipelineBuilder {
         };
         let multisample_state = vk::PipelineMultisampleStateCreateInfo::builder()
             .sample_shading_enable(msaa_samples != vk::SampleCountFlags::_1)
-            .min_sample_shading(if msaa_samples != vk::SampleCountFlags::_1 { 0.9 } else { 1.0 })
+            .min_sample_shading(if msaa_samples != vk::SampleCountFlags::_1 {
+                0.9
+            } else {
+                1.0
+            })
             .rasterization_samples(msaa_samples);
 
         // Depth stencil state
@@ -436,23 +447,28 @@ impl PipelineBuilder {
             .attachments(&color_blend_attachments);
 
         // Dynamic state
-        let dynamic_state = vk::PipelineDynamicStateCreateInfo::builder()
-            .dynamic_states(&self.dynamic_states);
+        let dynamic_state =
+            vk::PipelineDynamicStateCreateInfo::builder().dynamic_states(&self.dynamic_states);
 
         // Pipeline layout
-        let push_constant_ranges: Vec<vk::PushConstantRange> = self.push_constants
-            .map(|pc| vec![vk::PushConstantRange::builder()
-                .stage_flags(pc.stage_flags)
-                .offset(pc.offset)
-                .size(pc.size)
-                .build()])
+        let push_constant_ranges: Vec<vk::PushConstantRange> = self
+            .push_constants
+            .map(|pc| {
+                vec![vk::PushConstantRange::builder()
+                    .stage_flags(pc.stage_flags)
+                    .offset(pc.offset)
+                    .size(pc.size)
+                    .build()]
+            })
             .unwrap_or_default();
 
         let pipeline_layout_info = vk::PipelineLayoutCreateInfo::builder()
             .set_layouts(&self.descriptor_layouts)
             .push_constant_ranges(&push_constant_ranges);
 
-        rrpipeline.pipeline_layout = rrdevice.device.create_pipeline_layout(&pipeline_layout_info, None)?;
+        rrpipeline.pipeline_layout = rrdevice
+            .device
+            .create_pipeline_layout(&pipeline_layout_info, None)?;
 
         // Create graphics pipeline
         let render_pass = self.custom_render_pass.unwrap_or(rrrender.render_pass);
@@ -478,8 +494,12 @@ impl PipelineBuilder {
         rrpipeline.pipeline = pipelines.0[0];
 
         // Clean up shader modules
-        rrdevice.device.destroy_shader_module(vert_shader_module, None);
-        rrdevice.device.destroy_shader_module(frag_shader_module, None);
+        rrdevice
+            .device
+            .destroy_shader_module(vert_shader_module, None);
+        rrdevice
+            .device
+            .destroy_shader_module(frag_shader_module, None);
 
         println!("Pipeline created successfully");
         Ok(rrpipeline)
@@ -630,7 +650,12 @@ impl RRPipeline {
         compute_shader_path: &str,
         descriptor_set_layouts: &[vk::DescriptorSetLayout],
     ) -> Result<Self> {
-        Self::new_compute_with_push_constants(rrdevice, compute_shader_path, descriptor_set_layouts, &[])
+        Self::new_compute_with_push_constants(
+            rrdevice,
+            compute_shader_path,
+            descriptor_set_layouts,
+            &[],
+        )
     }
 
     /// Create compute pipeline with push constants
@@ -653,8 +678,8 @@ impl RRPipeline {
             .build();
 
         // Create pipeline layout
-        let mut layout_info = vk::PipelineLayoutCreateInfo::builder()
-            .set_layouts(descriptor_set_layouts);
+        let mut layout_info =
+            vk::PipelineLayoutCreateInfo::builder().set_layouts(descriptor_set_layouts);
         if !push_constant_ranges.is_empty() {
             layout_info = layout_info.push_constant_ranges(push_constant_ranges);
         }

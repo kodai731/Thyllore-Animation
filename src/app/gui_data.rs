@@ -76,15 +76,15 @@ impl GUIData {
         }
 
         let mouse_pos = Vector2::new(self.mouse_pos[0], self.mouse_pos[1]);
-        let is_dragging =
-            self.is_right_clicked || self.is_wheel_clicked;
+        let is_dragging = self.is_right_clicked || self.is_wheel_clicked;
 
         if is_dragging {
             if self.clicked_mouse_pos.is_none() {
                 self.clicked_mouse_pos = Some([mouse_pos.x, mouse_pos.y]);
             }
 
-            let clicked = self.clicked_mouse_pos
+            let clicked = self
+                .clicked_mouse_pos
                 .map(|p| Vector2::new(p[0], p[1]))
                 .unwrap_or(mouse_pos);
 

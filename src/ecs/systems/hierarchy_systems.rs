@@ -43,9 +43,7 @@ fn collect_hierarchy_entries(
         .unwrap_or_else(|| format!("Entity {}", entity));
 
     let editor_display = world.get_component::<EditorDisplay>(entity);
-    let icon_char = editor_display
-        .map(|ed| ed.icon.to_char())
-        .unwrap_or(' ');
+    let icon_char = editor_display.map(|ed| ed.icon.to_char()).unwrap_or(' ');
 
     let expanded = editor_display.map(|ed| ed.expanded).unwrap_or(false);
 

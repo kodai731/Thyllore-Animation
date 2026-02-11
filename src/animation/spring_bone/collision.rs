@@ -31,12 +31,7 @@ fn resolve_collision(
             tail,
             collider.radius,
         ),
-        None => resolve_sphere_vs_sphere(
-            position,
-            joint_radius,
-            collider.center,
-            collider.radius,
-        ),
+        None => resolve_sphere_vs_sphere(position, joint_radius, collider.center, collider.radius),
     }
 }
 
@@ -106,12 +101,7 @@ mod tests {
     #[test]
     fn test_no_collision_distant_spheres() {
         let pos = Vector3::new(5.0, 0.0, 0.0);
-        let result = resolve_sphere_vs_sphere(
-            pos,
-            0.1,
-            Vector3::new(0.0, 0.0, 0.0),
-            0.5,
-        );
+        let result = resolve_sphere_vs_sphere(pos, 0.1, Vector3::new(0.0, 0.0, 0.0), 0.5);
         assert!(approx_eq(result, pos, 1e-5));
     }
 
@@ -163,8 +153,7 @@ mod tests {
         let pos = Vector3::new(0.3, 0.0, 0.0);
 
         let sphere_result = resolve_sphere_vs_sphere(pos, 0.1, center, 0.5);
-        let capsule_result =
-            resolve_sphere_vs_capsule(pos, 0.1, center, center, 0.5);
+        let capsule_result = resolve_sphere_vs_capsule(pos, 0.1, center, center, 0.5);
 
         assert!(approx_eq(sphere_result, capsule_result, 1e-5));
     }

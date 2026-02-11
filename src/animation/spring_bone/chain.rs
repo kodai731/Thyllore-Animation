@@ -47,8 +47,7 @@ mod tests {
         let order = build_evaluation_order(&chains, &skeleton);
 
         let first_bone = chains[order[0].0].0[order[0].1];
-        let last_bone =
-            chains[order[order.len() - 1].0].0[order[order.len() - 1].1];
+        let last_bone = chains[order[order.len() - 1].0].0[order[order.len() - 1].1];
 
         assert_eq!(first_bone, root);
         assert_eq!(last_bone, grandchild);

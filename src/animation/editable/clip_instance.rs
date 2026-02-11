@@ -18,11 +18,7 @@ pub struct ClipInstance {
 }
 
 impl ClipInstance {
-    pub fn new(
-        instance_id: ClipInstanceId,
-        source_id: SourceClipId,
-        duration: f32,
-    ) -> Self {
+    pub fn new(instance_id: ClipInstanceId, source_id: SourceClipId, duration: f32) -> Self {
         Self {
             instance_id,
             source_id,

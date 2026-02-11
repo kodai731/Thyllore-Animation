@@ -34,7 +34,8 @@ impl BloomChain {
         mip_count: u32,
         command_pool: vk::CommandPool,
     ) -> Result<Self> {
-        let downsample_render_pass = Self::create_render_pass(rrdevice, vk::AttachmentLoadOp::DONT_CARE)?;
+        let downsample_render_pass =
+            Self::create_render_pass(rrdevice, vk::AttachmentLoadOp::DONT_CARE)?;
         let upsample_render_pass = Self::create_render_pass(rrdevice, vk::AttachmentLoadOp::LOAD)?;
         let sampler = Self::create_sampler(&rrdevice.device)?;
 
@@ -46,13 +47,8 @@ impl BloomChain {
             width = width.max(1);
             height = height.max(1);
 
-            let mip = Self::create_mip_level(
-                instance,
-                rrdevice,
-                downsample_render_pass,
-                width,
-                height,
-            )?;
+            let mip =
+                Self::create_mip_level(instance, rrdevice, downsample_render_pass, width, height)?;
 
             crate::log!("Created bloom mip {}: {}x{}", i, width, height);
             mip_levels.push(mip);
@@ -92,13 +88,8 @@ impl BloomChain {
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 
-        let image_view = create_image_view(
-            rrdevice,
-            image,
-            HDR_FORMAT,
-            vk::ImageAspectFlags::COLOR,
-            1,
-        )?;
+        let image_view =
+            create_image_view(rrdevice, image, HDR_FORMAT, vk::ImageAspectFlags::COLOR, 1)?;
 
         let attachments = [image_view];
         let framebuffer_info = vk::FramebufferCreateInfo::builder()
@@ -107,7 +98,9 @@ impl BloomChain {
             .width(width)
             .height(height)
             .layers(1);
-        let framebuffer = rrdevice.device.create_framebuffer(&framebuffer_info, None)?;
+        let framebuffer = rrdevice
+            .device
+            .create_framebuffer(&framebuffer_info, None)?;
 
         Ok(BloomMipLevel {
             image,
@@ -278,7 +271,12 @@ impl BloomChain {
             );
         }
 
-        end_single_time_commands(rrdevice, rrdevice.graphics_queue, command_pool, command_buffer)?;
+        end_single_time_commands(
+            rrdevice,
+            rrdevice.graphics_queue,
+            command_pool,
+            command_buffer,
+        )?;
         Ok(())
     }
 

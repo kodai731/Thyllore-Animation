@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use cgmath::{Matrix4, SquareMatrix};
 
 use crate::animation::{AnimationClip, AnimationClipId, Skeleton, SkeletonId};
-use crate::render::MaterialUBO;
 use crate::app::graphics_resource::MaterialId;
+use crate::render::MaterialUBO;
 
 pub type AssetId = u64;
 
@@ -144,10 +144,7 @@ impl AssetStorage {
         self.skeletons.get_mut(&id)
     }
 
-    pub fn get_skeleton_by_skeleton_id(
-        &self,
-        skel_id: SkeletonId,
-    ) -> Option<&Skeleton> {
+    pub fn get_skeleton_by_skeleton_id(&self, skel_id: SkeletonId) -> Option<&Skeleton> {
         self.skeletons
             .values()
             .find(|s| s.skeleton_id == skel_id)

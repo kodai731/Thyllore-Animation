@@ -50,7 +50,9 @@ impl RRGBuffer {
             vk::SampleCountFlags::_1,
             vk::Format::R32G32B32A32_SFLOAT,
             vk::ImageTiling::OPTIMAL,
-            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::STORAGE
+                | vk::ImageUsageFlags::SAMPLED,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 
@@ -71,7 +73,9 @@ impl RRGBuffer {
             vk::SampleCountFlags::_1,
             vk::Format::R32G32B32A32_SFLOAT,
             vk::ImageTiling::OPTIMAL,
-            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::STORAGE
+                | vk::ImageUsageFlags::SAMPLED,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 

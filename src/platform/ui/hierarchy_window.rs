@@ -44,11 +44,7 @@ pub fn build_hierarchy_window(
         });
 }
 
-fn build_mode_tabs(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    state: &HierarchyState,
-) {
+fn build_mode_tabs(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &HierarchyState) {
     let tab_width = 80.0;
 
     let entities_selected = state.display_mode == HierarchyDisplayMode::Entities;
@@ -82,11 +78,7 @@ fn build_mode_tabs(
     ui.separator();
 }
 
-fn build_search_bar(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    state: &HierarchyState,
-) {
+fn build_search_bar(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &HierarchyState) {
     let mut search_text = state.search_filter.clone();
     ui.set_next_item_width(-1.0);
     if ui
@@ -204,9 +196,7 @@ fn build_bone_display_panel(
         if i > 0 {
             ui.same_line();
         }
-        if ui
-            .radio_button_bool(label, bone_gizmo.display_style == *style)
-        {
+        if ui.radio_button_bool(label, bone_gizmo.display_style == *style) {
             ui_events.send(UIEvent::SetBoneDisplayStyle(*style));
         }
     }

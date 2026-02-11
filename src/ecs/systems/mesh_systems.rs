@@ -1,6 +1,4 @@
-use crate::ecs::component::mesh::{
-    MeshData, VertexAttributeValues, VertexFormat, VertexLayout,
-};
+use crate::ecs::component::mesh::{MeshData, VertexAttributeValues, VertexFormat, VertexLayout};
 
 pub fn validate_mesh_data(mesh: &MeshData) -> Result<(), String> {
     if mesh.vertex_count() == 0 && mesh.attribute_ids().next().is_none() {

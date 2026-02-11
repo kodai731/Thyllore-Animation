@@ -7,7 +7,6 @@ use crate::ecs::systems::{
     billboard_create_buffers, create_billboard, create_default_grid_scale, create_grid_gizmo,
     create_grid_mesh, create_light_gizmo, gizmo_create_buffers,
 };
-use crate::vulkanr::VulkanBackend;
 use crate::ecs::{
     ClipLibrary, GpuDescriptors, HierarchyState, MaterialRegistry, MeshAssets, ModelState,
     NodeAssets, PipelineManager, SceneState, TimelineState,
@@ -27,9 +26,10 @@ use crate::vulkanr::pipeline::{
 use crate::vulkanr::render::*;
 use crate::vulkanr::swapchain::*;
 use crate::vulkanr::vulkan::*;
+use crate::vulkanr::VulkanBackend;
 
-use crate::debugview::*;
 use crate::app::graphics_resource::GraphicsResources;
+use crate::debugview::*;
 use crate::ecs::resource::Camera;
 
 use vulkanalia::Device as VkDevice;
@@ -196,21 +196,19 @@ impl App {
         pipeline_manager.allocate_id();
         crate::log!("Registered model pipeline with id {}", model_pipeline_id);
 
-        let grid_pipeline = PipelineBuilder::new(
-            "assets/shaders/gridVert.spv",
-            "assets/shaders/gridFrag.spv",
-        )
-        .vertex_input(VertexInputConfig::Gizmo)
-        .topology(vk::PrimitiveTopology::LINE_LIST)
-        .polygon_mode(vk::PolygonMode::LINE)
-        .depth_test(DepthTestConfig {
-            test_enable: true,
-            write_enable: false,
-            compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-        })
-        .descriptor_layouts(render_layouts.to_vec())
-        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-        .expect("Failed to create grid pipeline");
+        let grid_pipeline =
+            PipelineBuilder::new("assets/shaders/gridVert.spv", "assets/shaders/gridFrag.spv")
+                .vertex_input(VertexInputConfig::Gizmo)
+                .topology(vk::PrimitiveTopology::LINE_LIST)
+                .polygon_mode(vk::PolygonMode::LINE)
+                .depth_test(DepthTestConfig {
+                    test_enable: true,
+                    write_enable: false,
+                    compare_op: vk::CompareOp::GREATER_OR_EQUAL,
+                })
+                .descriptor_layouts(render_layouts.to_vec())
+                .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+                .expect("Failed to create grid pipeline");
         let grid_pipeline_id = data.pipeline_storage.register(grid_pipeline);
         pipeline_manager.allocate_id();
         crate::log!("Registered grid pipeline with id {}", grid_pipeline_id);
@@ -276,23 +274,21 @@ impl App {
                 .expect("Failed to create light gizmo buffers");
         }
 
-        let bone_solid_pipeline = PipelineBuilder::new(
-            "assets/shaders/boneVert.spv",
-            "assets/shaders/boneFrag.spv",
-        )
-        .vertex_input(VertexInputConfig::Gizmo)
-        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-        .polygon_mode(vk::PolygonMode::FILL)
-        .cull_mode(vk::CullModeFlags::BACK)
-        .no_depth_test()
-        .push_constants(PushConstantConfig {
-            stage_flags: vk::ShaderStageFlags::FRAGMENT,
-            offset: 0,
-            size: std::mem::size_of::<f32>() as u32,
-        })
-        .descriptor_layouts(render_layouts.to_vec())
-        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-        .expect("Failed to create bone solid pipeline");
+        let bone_solid_pipeline =
+            PipelineBuilder::new("assets/shaders/boneVert.spv", "assets/shaders/boneFrag.spv")
+                .vertex_input(VertexInputConfig::Gizmo)
+                .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+                .polygon_mode(vk::PolygonMode::FILL)
+                .cull_mode(vk::CullModeFlags::BACK)
+                .no_depth_test()
+                .push_constants(PushConstantConfig {
+                    stage_flags: vk::ShaderStageFlags::FRAGMENT,
+                    offset: 0,
+                    size: std::mem::size_of::<f32>() as u32,
+                })
+                .descriptor_layouts(render_layouts.to_vec())
+                .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+                .expect("Failed to create bone solid pipeline");
         let bone_solid_pipeline_id = data.pipeline_storage.register(bone_solid_pipeline);
         pipeline_manager.allocate_id();
         crate::log!(
@@ -300,22 +296,20 @@ impl App {
             bone_solid_pipeline_id
         );
 
-        let bone_wire_pipeline = PipelineBuilder::new(
-            "assets/shaders/boneVert.spv",
-            "assets/shaders/boneFrag.spv",
-        )
-        .vertex_input(VertexInputConfig::Gizmo)
-        .topology(vk::PrimitiveTopology::LINE_LIST)
-        .polygon_mode(vk::PolygonMode::LINE)
-        .no_depth_test()
-        .push_constants(PushConstantConfig {
-            stage_flags: vk::ShaderStageFlags::FRAGMENT,
-            offset: 0,
-            size: std::mem::size_of::<f32>() as u32,
-        })
-        .descriptor_layouts(render_layouts.to_vec())
-        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-        .expect("Failed to create bone wire pipeline");
+        let bone_wire_pipeline =
+            PipelineBuilder::new("assets/shaders/boneVert.spv", "assets/shaders/boneFrag.spv")
+                .vertex_input(VertexInputConfig::Gizmo)
+                .topology(vk::PrimitiveTopology::LINE_LIST)
+                .polygon_mode(vk::PolygonMode::LINE)
+                .no_depth_test()
+                .push_constants(PushConstantConfig {
+                    stage_flags: vk::ShaderStageFlags::FRAGMENT,
+                    offset: 0,
+                    size: std::mem::size_of::<f32>() as u32,
+                })
+                .descriptor_layouts(render_layouts.to_vec())
+                .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+                .expect("Failed to create bone wire pipeline");
         let bone_wire_pipeline_id = data.pipeline_storage.register(bone_wire_pipeline);
         pipeline_manager.allocate_id();
         crate::log!(
@@ -323,27 +317,25 @@ impl App {
             bone_wire_pipeline_id
         );
 
-        let bone_solid_depth_pipeline = PipelineBuilder::new(
-            "assets/shaders/boneVert.spv",
-            "assets/shaders/boneFrag.spv",
-        )
-        .vertex_input(VertexInputConfig::Gizmo)
-        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-        .polygon_mode(vk::PolygonMode::FILL)
-        .cull_mode(vk::CullModeFlags::BACK)
-        .depth_test(DepthTestConfig {
-            test_enable: true,
-            write_enable: false,
-            compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-        })
-        .push_constants(PushConstantConfig {
-            stage_flags: vk::ShaderStageFlags::FRAGMENT,
-            offset: 0,
-            size: std::mem::size_of::<f32>() as u32,
-        })
-        .descriptor_layouts(render_layouts.to_vec())
-        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-        .expect("Failed to create bone solid depth pipeline");
+        let bone_solid_depth_pipeline =
+            PipelineBuilder::new("assets/shaders/boneVert.spv", "assets/shaders/boneFrag.spv")
+                .vertex_input(VertexInputConfig::Gizmo)
+                .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+                .polygon_mode(vk::PolygonMode::FILL)
+                .cull_mode(vk::CullModeFlags::BACK)
+                .depth_test(DepthTestConfig {
+                    test_enable: true,
+                    write_enable: false,
+                    compare_op: vk::CompareOp::GREATER_OR_EQUAL,
+                })
+                .push_constants(PushConstantConfig {
+                    stage_flags: vk::ShaderStageFlags::FRAGMENT,
+                    offset: 0,
+                    size: std::mem::size_of::<f32>() as u32,
+                })
+                .descriptor_layouts(render_layouts.to_vec())
+                .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+                .expect("Failed to create bone solid depth pipeline");
         let bone_solid_depth_pipeline_id =
             data.pipeline_storage.register(bone_solid_depth_pipeline);
         pipeline_manager.allocate_id();
@@ -352,56 +344,51 @@ impl App {
             bone_solid_depth_pipeline_id
         );
 
-        let bone_wire_depth_pipeline = PipelineBuilder::new(
-            "assets/shaders/boneVert.spv",
-            "assets/shaders/boneFrag.spv",
-        )
-        .vertex_input(VertexInputConfig::Gizmo)
-        .topology(vk::PrimitiveTopology::LINE_LIST)
-        .polygon_mode(vk::PolygonMode::LINE)
-        .depth_test(DepthTestConfig {
-            test_enable: true,
-            write_enable: false,
-            compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-        })
-        .push_constants(PushConstantConfig {
-            stage_flags: vk::ShaderStageFlags::FRAGMENT,
-            offset: 0,
-            size: std::mem::size_of::<f32>() as u32,
-        })
-        .descriptor_layouts(render_layouts.to_vec())
-        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-        .expect("Failed to create bone wire depth pipeline");
-        let bone_wire_depth_pipeline_id =
-            data.pipeline_storage.register(bone_wire_depth_pipeline);
+        let bone_wire_depth_pipeline =
+            PipelineBuilder::new("assets/shaders/boneVert.spv", "assets/shaders/boneFrag.spv")
+                .vertex_input(VertexInputConfig::Gizmo)
+                .topology(vk::PrimitiveTopology::LINE_LIST)
+                .polygon_mode(vk::PolygonMode::LINE)
+                .depth_test(DepthTestConfig {
+                    test_enable: true,
+                    write_enable: false,
+                    compare_op: vk::CompareOp::GREATER_OR_EQUAL,
+                })
+                .push_constants(PushConstantConfig {
+                    stage_flags: vk::ShaderStageFlags::FRAGMENT,
+                    offset: 0,
+                    size: std::mem::size_of::<f32>() as u32,
+                })
+                .descriptor_layouts(render_layouts.to_vec())
+                .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+                .expect("Failed to create bone wire depth pipeline");
+        let bone_wire_depth_pipeline_id = data.pipeline_storage.register(bone_wire_depth_pipeline);
         pipeline_manager.allocate_id();
         crate::log!(
             "Registered bone wire depth pipeline with id {}",
             bone_wire_depth_pipeline_id
         );
 
-        let bone_solid_occluded_pipeline = PipelineBuilder::new(
-            "assets/shaders/boneVert.spv",
-            "assets/shaders/boneFrag.spv",
-        )
-        .vertex_input(VertexInputConfig::Gizmo)
-        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-        .polygon_mode(vk::PolygonMode::FILL)
-        .cull_mode(vk::CullModeFlags::BACK)
-        .depth_test(DepthTestConfig {
-            test_enable: true,
-            write_enable: false,
-            compare_op: vk::CompareOp::LESS_OR_EQUAL,
-        })
-        .blend(BlendConfig::default())
-        .push_constants(PushConstantConfig {
-            stage_flags: vk::ShaderStageFlags::FRAGMENT,
-            offset: 0,
-            size: std::mem::size_of::<f32>() as u32,
-        })
-        .descriptor_layouts(render_layouts.to_vec())
-        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-        .expect("Failed to create bone solid occluded pipeline");
+        let bone_solid_occluded_pipeline =
+            PipelineBuilder::new("assets/shaders/boneVert.spv", "assets/shaders/boneFrag.spv")
+                .vertex_input(VertexInputConfig::Gizmo)
+                .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+                .polygon_mode(vk::PolygonMode::FILL)
+                .cull_mode(vk::CullModeFlags::BACK)
+                .depth_test(DepthTestConfig {
+                    test_enable: true,
+                    write_enable: false,
+                    compare_op: vk::CompareOp::LESS_OR_EQUAL,
+                })
+                .blend(BlendConfig::default())
+                .push_constants(PushConstantConfig {
+                    stage_flags: vk::ShaderStageFlags::FRAGMENT,
+                    offset: 0,
+                    size: std::mem::size_of::<f32>() as u32,
+                })
+                .descriptor_layouts(render_layouts.to_vec())
+                .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+                .expect("Failed to create bone solid occluded pipeline");
         let bone_solid_occluded_pipeline_id =
             data.pipeline_storage.register(bone_solid_occluded_pipeline);
         pipeline_manager.allocate_id();
@@ -410,27 +397,25 @@ impl App {
             bone_solid_occluded_pipeline_id
         );
 
-        let bone_wire_occluded_pipeline = PipelineBuilder::new(
-            "assets/shaders/boneVert.spv",
-            "assets/shaders/boneFrag.spv",
-        )
-        .vertex_input(VertexInputConfig::Gizmo)
-        .topology(vk::PrimitiveTopology::LINE_LIST)
-        .polygon_mode(vk::PolygonMode::LINE)
-        .depth_test(DepthTestConfig {
-            test_enable: true,
-            write_enable: false,
-            compare_op: vk::CompareOp::LESS_OR_EQUAL,
-        })
-        .blend(BlendConfig::default())
-        .push_constants(PushConstantConfig {
-            stage_flags: vk::ShaderStageFlags::FRAGMENT,
-            offset: 0,
-            size: std::mem::size_of::<f32>() as u32,
-        })
-        .descriptor_layouts(render_layouts.to_vec())
-        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-        .expect("Failed to create bone wire occluded pipeline");
+        let bone_wire_occluded_pipeline =
+            PipelineBuilder::new("assets/shaders/boneVert.spv", "assets/shaders/boneFrag.spv")
+                .vertex_input(VertexInputConfig::Gizmo)
+                .topology(vk::PrimitiveTopology::LINE_LIST)
+                .polygon_mode(vk::PolygonMode::LINE)
+                .depth_test(DepthTestConfig {
+                    test_enable: true,
+                    write_enable: false,
+                    compare_op: vk::CompareOp::LESS_OR_EQUAL,
+                })
+                .blend(BlendConfig::default())
+                .push_constants(PushConstantConfig {
+                    stage_flags: vk::ShaderStageFlags::FRAGMENT,
+                    offset: 0,
+                    size: std::mem::size_of::<f32>() as u32,
+                })
+                .descriptor_layouts(render_layouts.to_vec())
+                .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+                .expect("Failed to create bone wire occluded pipeline");
         let bone_wire_occluded_pipeline_id =
             data.pipeline_storage.register(bone_wire_occluded_pipeline);
         pipeline_manager.allocate_id();
@@ -450,12 +435,10 @@ impl App {
         bone_gizmo_data.wire_render_info.object_index =
             data.graphics_resources.objects.allocate_slot();
 
-        bone_gizmo_data.solid_depth_render_info.pipeline_id =
-            Some(bone_solid_depth_pipeline_id);
+        bone_gizmo_data.solid_depth_render_info.pipeline_id = Some(bone_solid_depth_pipeline_id);
         bone_gizmo_data.solid_depth_render_info.object_index =
             bone_gizmo_data.solid_render_info.object_index;
-        bone_gizmo_data.wire_depth_render_info.pipeline_id =
-            Some(bone_wire_depth_pipeline_id);
+        bone_gizmo_data.wire_depth_render_info.pipeline_id = Some(bone_wire_depth_pipeline_id);
         bone_gizmo_data.wire_depth_render_info.object_index =
             bone_gizmo_data.wire_render_info.object_index;
         bone_gizmo_data.solid_occluded_render_info.pipeline_id =
@@ -481,13 +464,11 @@ impl App {
             bone_gizmo_data.wire_render_info.object_index
         );
         data.ecs_world.insert_resource(bone_gizmo_data);
-        data.ecs_world.insert_resource(
-            crate::debugview::gizmo::BoneSelectionState::default(),
-        );
+        data.ecs_world
+            .insert_resource(crate::debugview::gizmo::BoneSelectionState::default());
 
         let mut constraint_gizmo_data = ConstraintGizmoData::default();
-        constraint_gizmo_data.wire_render_info.pipeline_id =
-            Some(bone_wire_pipeline_id);
+        constraint_gizmo_data.wire_render_info.pipeline_id = Some(bone_wire_pipeline_id);
         constraint_gizmo_data.wire_render_info.object_index =
             data.graphics_resources.objects.allocate_slot();
         crate::log!(
@@ -495,6 +476,14 @@ impl App {
             constraint_gizmo_data.wire_render_info.object_index
         );
         data.ecs_world.insert_resource(constraint_gizmo_data);
+
+        let mut spring_bone_gizmo_data = crate::debugview::gizmo::SpringBoneGizmoData::default();
+        spring_bone_gizmo_data.wire_render_info.pipeline_id = Some(bone_wire_pipeline_id);
+        spring_bone_gizmo_data.wire_render_info.object_index =
+            data.graphics_resources.objects.allocate_slot();
+        data.ecs_world.insert_resource(spring_bone_gizmo_data);
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::SpringBoneEditorState::default());
 
         let mut billboard_data = create_billboard();
         billboard_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
@@ -516,14 +505,14 @@ impl App {
                 .expect("Failed to create billboard buffers");
         }
 
-        billboard_data.render_state.descriptor_set = RRBillboardDescriptorSet::new(&rrdevice, &rrswapchain)
-            .expect("Failed to create billboard descriptor set");
-        billboard_data.render_state.descriptor_set.rrdata.push(RRData::new(
-            &instance,
-            &rrdevice,
-            &rrswapchain,
-            "billboard",
-        ));
+        billboard_data.render_state.descriptor_set =
+            RRBillboardDescriptorSet::new(&rrdevice, &rrswapchain)
+                .expect("Failed to create billboard descriptor set");
+        billboard_data
+            .render_state
+            .descriptor_set
+            .rrdata
+            .push(RRData::new(&instance, &rrdevice, &rrswapchain, "billboard"));
 
         billboard_data
             .render_state
@@ -543,7 +532,10 @@ impl App {
             &rrdevice,
             &rrrender,
             &rrswapchain,
-            billboard_data.render_state.descriptor_set.descriptor_set_layout,
+            billboard_data
+                .render_state
+                .descriptor_set
+                .descriptor_set_layout,
             "assets/shaders/billboardVert.spv",
             "assets/shaders/billboardFrag.spv",
         )
@@ -900,28 +892,52 @@ impl App {
             data.ecs_world.insert_resource(TimelineState::new());
         }
 
-        if !data.ecs_world.contains_resource::<crate::platform::CurveEditorState>() {
-            data.ecs_world.insert_resource(crate::platform::CurveEditorState::default());
+        if !data
+            .ecs_world
+            .contains_resource::<crate::platform::CurveEditorState>()
+        {
+            data.ecs_world
+                .insert_resource(crate::platform::CurveEditorState::default());
         }
 
-        if !data.ecs_world.contains_resource::<crate::ecs::resource::KeyframeCopyBuffer>() {
-            data.ecs_world.insert_resource(crate::ecs::resource::KeyframeCopyBuffer::default());
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::KeyframeCopyBuffer>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::KeyframeCopyBuffer::default());
         }
 
-        if !data.ecs_world.contains_resource::<crate::ecs::resource::CurveEditorBuffer>() {
-            data.ecs_world.insert_resource(crate::ecs::resource::CurveEditorBuffer::default());
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::CurveEditorBuffer>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::CurveEditorBuffer::default());
         }
 
-        if !data.ecs_world.contains_resource::<crate::ecs::resource::EditHistory>() {
-            data.ecs_world.insert_resource(crate::ecs::resource::EditHistory::new(100));
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::EditHistory>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::EditHistory::new(100));
         }
 
-        if !data.ecs_world.contains_resource::<crate::ecs::resource::ClipBrowserState>() {
-            data.ecs_world.insert_resource(crate::ecs::resource::ClipBrowserState::default());
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::ClipBrowserState>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::ClipBrowserState::default());
         }
 
-        if !data.ecs_world.contains_resource::<crate::ecs::resource::ConstraintEditorState>() {
-            data.ecs_world.insert_resource(crate::ecs::resource::ConstraintEditorState::default());
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::ConstraintEditorState>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::ConstraintEditorState::default());
         }
 
         if !data
@@ -1205,7 +1221,14 @@ impl App {
         Ok(())
     }
 
-    fn determine_startup_model() -> (String, Option<(std::path::PathBuf, crate::scene::LoadedScene, Vec<crate::animation::editable::EditableAnimationClip>)>) {
+    fn determine_startup_model() -> (
+        String,
+        Option<(
+            std::path::PathBuf,
+            crate::scene::LoadedScene,
+            Vec<crate::animation::editable::EditableAnimationClip>,
+        )>,
+    ) {
         use crate::scene::{find_default_scene, load_scene};
 
         let default_model_path = "assets/models/stickman/stickman.glb".to_string();
@@ -1236,7 +1259,10 @@ impl App {
 
         for clip in clips {
             let name = clip.name.clone();
-            let id = crate::ecs::systems::clip_library_systems::clip_library_register_clip(&mut clip_library, clip);
+            let id = crate::ecs::systems::clip_library_systems::clip_library_register_clip(
+                &mut clip_library,
+                clip,
+            );
             result.push((id, name));
         }
 

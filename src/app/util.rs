@@ -10,7 +10,9 @@ impl App {
         type_filter: u32,
         properties: vk::MemoryPropertyFlags,
     ) -> Result<u32> {
-        let mem_properties = self.instance.get_physical_device_memory_properties(self.rrdevice.physical_device);
+        let mem_properties = self
+            .instance
+            .get_physical_device_memory_properties(self.rrdevice.physical_device);
 
         for i in 0..mem_properties.memory_type_count {
             let has_type = (type_filter & (1 << i)) != 0;
@@ -131,8 +133,7 @@ impl App {
 
         // Submit command buffer
         let command_buffers = [command_buffer];
-        let submit_info = vk::SubmitInfo::builder()
-            .command_buffers(&command_buffers);
+        let submit_info = vk::SubmitInfo::builder().command_buffers(&command_buffers);
 
         device.queue_submit(*graphics_queue, &[submit_info], vk::Fence::null())?;
         device.queue_wait_idle(*graphics_queue)?;

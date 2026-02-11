@@ -1,16 +1,16 @@
 use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
+use crate::app::graphics_resource::{GraphicsResources, MeshBuffer};
 use crate::app::App;
 use crate::asset::AssetStorage;
 use crate::ecs::world::MeshRef;
 use crate::ecs::World;
-use crate::app::graphics_resource::{MeshBuffer, GraphicsResources};
-use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::core::{Device, RRDevice};
-use crate::vulkanr::resource::{RRGBuffer, create_image, create_image_view};
-use crate::vulkanr::render::RRRender;
+use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::render::pass::get_depth_format;
+use crate::vulkanr::render::RRRender;
+use crate::vulkanr::resource::{create_image, create_image_view, RRGBuffer};
 
 pub unsafe fn create_gbuffer_framebuffer(
     instance: &Instance,
@@ -60,7 +60,11 @@ pub unsafe fn create_gbuffer_framebuffer(
 
     rrrender.gbuffer_framebuffer = rrdevice.device.create_framebuffer(&info, None)?;
 
-    log::info!("Created G-Buffer framebuffer: {}x{}", gbuffer.width, gbuffer.height);
+    log::info!(
+        "Created G-Buffer framebuffer: {}x{}",
+        gbuffer.width,
+        gbuffer.height
+    );
     Ok(())
 }
 
@@ -76,9 +80,17 @@ pub struct GBufferPass<'a> {
 
 impl<'a> GBufferPass<'a> {
     pub fn new(app: &'a App) -> Result<Self> {
-        let gbuffer = app.data.raytracing.gbuffer.as_ref()
+        let gbuffer = app
+            .data
+            .raytracing
+            .gbuffer
+            .as_ref()
             .ok_or_else(|| anyhow!("G-Buffer not initialized"))?;
-        let pipeline = app.data.raytracing.gbuffer_pipeline.as_ref()
+        let pipeline = app
+            .data
+            .raytracing
+            .gbuffer_pipeline
+            .as_ref()
             .ok_or_else(|| anyhow!("G-Buffer pipeline not initialized"))?;
 
         Ok(Self {
@@ -156,7 +168,13 @@ impl<'a> GBufferPass<'a> {
             },
         };
 
-        [position_clear, normal_clear, albedo_clear, object_id_clear, depth_clear]
+        [
+            position_clear,
+            normal_clear,
+            albedo_clear,
+            object_id_clear,
+            depth_clear,
+        ]
     }
 
     unsafe fn bind_pipeline_and_state(&self, command_buffer: vk::CommandBuffer) {
@@ -262,12 +280,8 @@ impl<'a> GBufferPass<'a> {
         mesh: &MeshBuffer,
         mesh_index: usize,
     ) -> Result<()> {
-        self.device.cmd_bind_vertex_buffers(
-            command_buffer,
-            0,
-            &[mesh.vertex_buffer.buffer],
-            &[0],
-        );
+        self.device
+            .cmd_bind_vertex_buffers(command_buffer, 0, &[mesh.vertex_buffer.buffer], &[0]);
 
         self.device.cmd_bind_index_buffer(
             command_buffer,
@@ -323,14 +337,8 @@ impl<'a> GBufferPass<'a> {
             &object_id_bytes,
         );
 
-        self.device.cmd_draw_indexed(
-            command_buffer,
-            mesh.index_buffer.indices,
-            1,
-            0,
-            0,
-            0,
-        );
+        self.device
+            .cmd_draw_indexed(command_buffer, mesh.index_buffer.indices, 1, 0, 0, 0);
 
         Ok(())
     }

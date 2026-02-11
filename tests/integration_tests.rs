@@ -38,11 +38,7 @@ fn test_font_files_exist() {
     ];
 
     for font in &font_files {
-        assert!(
-            Path::new(font).exists(),
-            "Font file should exist: {}",
-            font
-        );
+        assert!(Path::new(font).exists(), "Font file should exist: {}", font);
     }
 }
 

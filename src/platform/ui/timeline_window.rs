@@ -1,8 +1,6 @@
 use imgui::Condition;
 
-use crate::animation::editable::{
-    BlendMode, EditableAnimationClip, PropertyCurve, SourceClipId,
-};
+use crate::animation::editable::{BlendMode, EditableAnimationClip, PropertyCurve, SourceClipId};
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
@@ -52,21 +50,9 @@ pub fn build_timeline_window(
         .movable(false)
         .collapsible(false)
         .build(|| {
-            build_transport_controls(
-                ui,
-                ui_events,
-                state,
-                clip_library,
-                curve_editor_state,
-            );
+            build_transport_controls(ui, ui_events, state, clip_library, curve_editor_state);
             ui.separator();
-            build_timeline_content(
-                ui,
-                ui_events,
-                state,
-                clip_library,
-                clip_track_snapshot,
-            );
+            build_timeline_content(ui, ui_events, state, clip_library, clip_track_snapshot);
             handle_timeline_shortcuts(ui, ui_events, state);
         });
 }
@@ -98,9 +84,7 @@ fn build_transport_controls(
     }
 
     ui.same_line();
-    let current_clip = state
-        .current_clip_id
-        .and_then(|id| clip_library.get(id));
+    let current_clip = state.current_clip_id.and_then(|id| clip_library.get(id));
 
     let duration = current_clip.map(|c| c.duration).unwrap_or(0.0);
 
@@ -123,9 +107,7 @@ fn build_transport_controls(
     ui.same_line();
     if ui.button("Curve Editor") {
         curve_editor_state.is_open = true;
-        if let Some(first_bone_id) =
-            current_clip.and_then(|c| c.tracks.keys().next().copied())
-        {
+        if let Some(first_bone_id) = current_clip.and_then(|c| c.tracks.keys().next().copied()) {
             curve_editor_state.selected_bone_id = Some(first_bone_id);
         }
     }
@@ -143,7 +125,8 @@ fn build_clip_selector(
     state: &TimelineState,
     clip_library: &ClipLibrary,
 ) {
-    let clip_names = crate::ecs::systems::clip_library_systems::clip_library_clip_names(clip_library);
+    let clip_names =
+        crate::ecs::systems::clip_library_systems::clip_library_clip_names(clip_library);
 
     if clip_names.is_empty() {
         ui.text("No clips available");
@@ -186,18 +169,13 @@ fn build_timeline_content(
 
     let content_region = ui.content_region_avail();
     let pixels_per_second = PIXELS_PER_SECOND * state.zoom_level;
-    let timeline_width = (current_clip.duration * pixels_per_second).max(content_region[0] - TRACK_LABEL_WIDTH);
+    let timeline_width =
+        (current_clip.duration * pixels_per_second).max(content_region[0] - TRACK_LABEL_WIDTH);
 
     ui.child_window("timeline_content")
         .size(content_region)
         .build(|| {
-            build_time_ruler_with_scrub(
-                ui,
-                ui_events,
-                state,
-                current_clip,
-                timeline_width,
-            );
+            build_time_ruler_with_scrub(ui, ui_events, state, current_clip, timeline_width);
             ui.separator();
 
             if !clip_track_snapshot.entries.is_empty() {
@@ -224,13 +202,7 @@ fn build_timeline_content(
                     );
                 }
                 TimelineViewMode::GraphEditor => {
-                    build_tracks_area(
-                        ui,
-                        ui_events,
-                        state,
-                        current_clip,
-                        timeline_width,
-                    );
+                    build_tracks_area(ui, ui_events, state, current_clip, timeline_width);
                 }
             }
         });
@@ -256,7 +228,10 @@ fn build_time_ruler_with_scrub(
     draw_list
         .add_rect(
             [ruler_start_x, cursor_pos[1]],
-            [ruler_start_x + ruler_width, cursor_pos[1] + TIME_RULER_HEIGHT],
+            [
+                ruler_start_x + ruler_width,
+                cursor_pos[1] + TIME_RULER_HEIGHT,
+            ],
             [0.2, 0.2, 0.25, 1.0],
         )
         .filled(true)
@@ -298,19 +273,26 @@ fn build_time_ruler_with_scrub(
     draw_playhead_handle(&draw_list, playhead_x, cursor_pos[1], TIME_RULER_HEIGHT);
 
     let ruler_rect_min = [ruler_start_x, cursor_pos[1]];
-    let ruler_rect_max = [ruler_start_x + ruler_width, cursor_pos[1] + TIME_RULER_HEIGHT];
+    let ruler_rect_max = [
+        ruler_start_x + ruler_width,
+        cursor_pos[1] + TIME_RULER_HEIGHT,
+    ];
 
-    handle_scrub_interaction(ui, ui_events, state, ruler_rect_min, ruler_rect_max, clip.duration, pixels_per_second, ruler_start_x);
+    handle_scrub_interaction(
+        ui,
+        ui_events,
+        state,
+        ruler_rect_min,
+        ruler_rect_max,
+        clip.duration,
+        pixels_per_second,
+        ruler_start_x,
+    );
 
     ui.dummy([ruler_width + TRACK_LABEL_WIDTH, TIME_RULER_HEIGHT]);
 }
 
-fn draw_playhead_handle(
-    draw_list: &imgui::DrawListMut,
-    x: f32,
-    y: f32,
-    ruler_height: f32,
-) {
+fn draw_playhead_handle(draw_list: &imgui::DrawListMut, x: f32, y: f32, ruler_height: f32) {
     draw_list
         .add_triangle(
             [x - PLAYHEAD_HANDLE_SIZE, y],
@@ -404,7 +386,10 @@ fn build_tracks(
     sorted_bone_ids.sort();
 
     let total_tracks = sorted_bone_ids.len();
-    let visible_tracks: Vec<_> = sorted_bone_ids.into_iter().take(MAX_VISIBLE_TRACKS).collect();
+    let visible_tracks: Vec<_> = sorted_bone_ids
+        .into_iter()
+        .take(MAX_VISIBLE_TRACKS)
+        .collect();
 
     if total_tracks > MAX_VISIBLE_TRACKS {
         ui.text_colored(
@@ -455,7 +440,11 @@ fn build_track_row(
 
     let is_spring_bone = state.baked_bone_ids.contains(&bone_id);
     let display_name = if is_spring_bone {
-        let name = if bone_name.len() > 11 { &bone_name[..8] } else { bone_name };
+        let name = if bone_name.len() > 11 {
+            &bone_name[..8]
+        } else {
+            bone_name
+        };
         format!("[SB] {}", name)
     } else if bone_name.len() > 15 {
         format!("{}...", &bone_name[..12])
@@ -473,7 +462,11 @@ fn build_track_row(
 
     ui.same_line_with_pos(TRACK_LABEL_WIDTH);
 
-    let row_height = if is_expanded { CURVE_HEIGHT } else { TRACK_HEIGHT };
+    let row_height = if is_expanded {
+        CURVE_HEIGHT
+    } else {
+        TRACK_HEIGHT
+    };
 
     ui.child_window(&format!("track_area_{}", bone_id))
         .size([timeline_width.max(200.0), row_height])
@@ -527,7 +520,13 @@ fn draw_keyframe_markers(
             .build();
     }
 
-    draw_track_playhead(&draw_list, cursor_pos, state.current_time, pixels_per_second, TRACK_HEIGHT);
+    draw_track_playhead(
+        &draw_list,
+        cursor_pos,
+        state.current_time,
+        pixels_per_second,
+        TRACK_HEIGHT,
+    );
 }
 
 fn draw_curve_area(
@@ -589,7 +588,13 @@ fn draw_curve_area(
         );
     }
 
-    draw_track_playhead(&draw_list, cursor_pos, state.current_time, pixels_per_second, CURVE_HEIGHT);
+    draw_track_playhead(
+        &draw_list,
+        cursor_pos,
+        state.current_time,
+        pixels_per_second,
+        CURVE_HEIGHT,
+    );
 }
 
 fn draw_single_curve(
@@ -709,8 +714,7 @@ fn build_clip_tracks_section(
         ui.text(&truncate_label(&entry.entity_name, 15));
         ui.same_line_with_pos(TRACK_LABEL_WIDTH);
 
-        let track_origin =
-            [cursor_pos[0] + TRACK_LABEL_WIDTH, cursor_pos[1]];
+        let track_origin = [cursor_pos[0] + TRACK_LABEL_WIDTH, cursor_pos[1]];
         let draw_list = ui.get_window_draw_list();
 
         draw_list
@@ -726,35 +730,18 @@ fn build_clip_tracks_section(
             .build();
 
         for (inst_idx, inst) in entry.instances.iter().enumerate() {
-            let block_x =
-                track_origin[0] + inst.start_time * pixels_per_second;
-            let block_w =
-                (inst.end_time - inst.start_time) * pixels_per_second;
+            let block_x = track_origin[0] + inst.start_time * pixels_per_second;
+            let block_w = (inst.end_time - inst.start_time) * pixels_per_second;
             let block_min = [block_x, track_origin[1] + 2.0];
-            let block_max = [
-                block_x + block_w,
-                track_origin[1] + CLIP_TRACK_HEIGHT - 2.0,
-            ];
+            let block_max = [block_x + block_w, track_origin[1] + CLIP_TRACK_HEIGHT - 2.0];
 
-            let base_color =
-                CLIP_BLOCK_COLORS[entry_idx % CLIP_BLOCK_COLORS.len()];
-            let color =
-                compute_block_color(base_color, inst, state, entry.entity);
-            let border_color =
-                compute_border_color(inst, state, entry.entity);
+            let base_color = CLIP_BLOCK_COLORS[entry_idx % CLIP_BLOCK_COLORS.len()];
+            let color = compute_block_color(base_color, inst, state, entry.entity);
+            let border_color = compute_border_color(inst, state, entry.entity);
 
-            draw_clip_block(
-                &draw_list,
-                block_min,
-                block_max,
-                color,
-                border_color,
-                inst,
-            );
+            draw_clip_block(&draw_list, block_min, block_max, color, border_color, inst);
 
-            if mouse_clicked
-                && is_point_in_rect(mouse_pos, block_min, block_max)
-            {
+            if mouse_clicked && is_point_in_rect(mouse_pos, block_min, block_max) {
                 clicked_any_block = true;
                 ui_events.send(UIEvent::ClipInstanceSelect {
                     entity: entry.entity,
@@ -771,23 +758,18 @@ fn build_clip_tracks_section(
                 );
             }
 
-            handle_clip_mute_button(
-                ui, ui_events, entry.entity, inst, inst_idx, entry_idx,
-            );
+            handle_clip_mute_button(ui, ui_events, entry.entity, inst, inst_idx, entry_idx);
         }
 
         ui.dummy([timeline_width, CLIP_TRACK_HEIGHT]);
 
         if let Some(target) = ui.drag_drop_target() {
-            let accepted = target.accept_payload::<SourceClipId, _>(
-                "CLIP_SOURCE",
-                imgui::DragDropFlags::empty(),
-            );
+            let accepted = target
+                .accept_payload::<SourceClipId, _>("CLIP_SOURCE", imgui::DragDropFlags::empty());
             if let Some(Ok(payload)) = accepted {
                 let source_id = payload.data;
                 let drop_x = mouse_pos[0] - track_origin[0];
-                let start_time =
-                    (drop_x / pixels_per_second).max(0.0);
+                let start_time = (drop_x / pixels_per_second).max(0.0);
                 ui_events.send(UIEvent::ClipInstanceAdd {
                     entity: entry.entity,
                     source_id,
@@ -802,8 +784,7 @@ fn build_clip_tracks_section(
     if mouse_clicked && !clicked_any_block {
         let section_start_y = ui.cursor_screen_pos()[1]
             - (snapshot.entries.len() as f32
-                * (CLIP_TRACK_HEIGHT
-                    + ui.text_line_height_with_spacing()));
+                * (CLIP_TRACK_HEIGHT + ui.text_line_height_with_spacing()));
 
         if mouse_pos[1] >= section_start_y {
             ui_events.send(UIEvent::ClipInstanceDeselect);
@@ -814,11 +795,7 @@ fn build_clip_tracks_section(
     update_clip_drag(state, mouse_pos, mouse_down, pixels_per_second);
 }
 
-fn build_group_headers(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    entry: &ClipTrackEntry,
-) {
+fn build_group_headers(ui: &imgui::Ui, ui_events: &mut UIEventQueue, entry: &ClipTrackEntry) {
     for group in &entry.groups {
         build_single_group_header(ui, ui_events, entry.entity, group);
     }
@@ -890,11 +867,7 @@ fn build_clip_instance_properties(
         return;
     }
 
-    let Some(inst) = entry
-        .instances
-        .iter()
-        .find(|i| i.instance_id == sel_id)
-    else {
+    let Some(inst) = entry.instances.iter().find(|i| i.instance_id == sel_id) else {
         return;
     };
 
@@ -924,9 +897,7 @@ fn build_clip_instance_properties(
     };
 
     ui.set_next_item_width(80.0);
-    if let Some(_token) =
-        ui.begin_combo("##blend_mode", blend_names[current_idx])
-    {
+    if let Some(_token) = ui.begin_combo("##blend_mode", blend_names[current_idx]) {
         for (idx, &name) in blend_names.iter().enumerate() {
             let is_selected = idx == current_idx;
             if ui.selectable_config(name).selected(is_selected).build() {
@@ -952,9 +923,7 @@ fn build_clip_instance_properties(
             .unwrap_or("No Group");
 
         ui.set_next_item_width(100.0);
-        if let Some(_token) =
-            ui.begin_combo("##inst_group", current_group_name)
-        {
+        if let Some(_token) = ui.begin_combo("##inst_group", current_group_name) {
             if ui
                 .selectable_config("No Group")
                 .selected(inst.group_id.is_none())
@@ -970,8 +939,7 @@ fn build_clip_instance_properties(
             }
 
             for group in &entry.groups {
-                let is_selected =
-                    inst.group_id.map(|gid| gid == group.id).unwrap_or(false);
+                let is_selected = inst.group_id.map(|gid| gid == group.id).unwrap_or(false);
                 if ui
                     .selectable_config(&group.name)
                     .selected(is_selected)
@@ -1076,7 +1044,7 @@ fn handle_clip_mute_button(
     entry_idx: usize,
 ) {
     let label = if inst.muted { "M##muted" } else { "M##unmuted" };
-    let button_id = format!("{}_{}_{}",  label, entry_idx, inst_idx);
+    let button_id = format!("{}_{}_{}", label, entry_idx, inst_idx);
 
     ui.same_line();
     if inst.muted {
@@ -1095,14 +1063,13 @@ fn handle_clip_mute_button(
     }
 }
 
-fn handle_delete_key(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    state: &TimelineState,
-) {
+fn handle_delete_key(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &TimelineState) {
     if ui.is_key_pressed(imgui::Key::Delete) {
         if let Some((entity, instance_id)) = state.selected_clip_instance {
-            ui_events.send(UIEvent::ClipInstanceDelete { entity, instance_id });
+            ui_events.send(UIEvent::ClipInstanceDelete {
+                entity,
+                instance_id,
+            });
         }
     }
 }
@@ -1133,14 +1100,9 @@ fn draw_clip_block(
             BlendMode::Override => "O",
             BlendMode::Additive => "A",
         };
-        let label =
-            format!("{} [{} {:.2}]", inst.clip_name, mode_char, inst.weight);
+        let label = format!("{} [{} {:.2}]", inst.clip_name, mode_char, inst.weight);
         let display = truncate_label_by_width(&label, available_width);
-        draw_list.add_text(
-            [text_x, text_y],
-            [1.0, 1.0, 1.0, 1.0],
-            &display,
-        );
+        draw_list.add_text([text_x, text_y], [1.0, 1.0, 1.0, 1.0], &display);
     }
 }
 
@@ -1199,22 +1161,14 @@ fn truncate_label_by_width(name: &str, available_width: f32) -> String {
     truncate_label(name, max_chars)
 }
 
-fn is_point_in_rect(
-    point: [f32; 2],
-    rect_min: [f32; 2],
-    rect_max: [f32; 2],
-) -> bool {
+fn is_point_in_rect(point: [f32; 2], rect_min: [f32; 2], rect_max: [f32; 2]) -> bool {
     point[0] >= rect_min[0]
         && point[0] <= rect_max[0]
         && point[1] >= rect_min[1]
         && point[1] <= rect_max[1]
 }
 
-fn build_view_mode_tabs(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    state: &TimelineState,
-) {
+fn build_view_mode_tabs(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &TimelineState) {
     let dope_label = if state.view_mode == TimelineViewMode::DopeSheet {
         "[Dope Sheet]"
     } else {
@@ -1241,11 +1195,7 @@ fn build_view_mode_tabs(
     }
 }
 
-fn handle_timeline_shortcuts(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    state: &TimelineState,
-) {
+fn handle_timeline_shortcuts(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &TimelineState) {
     let io = ui.io();
     if !ui.is_window_focused() {
         return;
@@ -1286,11 +1236,7 @@ fn handle_timeline_shortcuts(
     }
 }
 
-fn build_snap_controls(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    state: &TimelineState,
-) {
+fn build_snap_controls(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &TimelineState) {
     let snap = &state.snap_settings;
 
     let frame_label = if snap.snap_to_frame {
@@ -1321,17 +1267,11 @@ fn build_snap_controls(
     let current_fps_label = format!("{}fps", snap.frame_rate as u32);
     ui.set_next_item_width(70.0);
 
-    if let Some(_token) =
-        ui.begin_combo("##fps_select", &current_fps_label)
-    {
+    if let Some(_token) = ui.begin_combo("##fps_select", &current_fps_label) {
         for fps in &fps_options {
             let label = format!("{}fps", *fps as u32);
             let is_selected = (snap.frame_rate - fps).abs() < 0.1;
-            if ui
-                .selectable_config(&label)
-                .selected(is_selected)
-                .build()
-            {
+            if ui.selectable_config(&label).selected(is_selected).build() {
                 ui_events.send(UIEvent::TimelineSetFrameRate(*fps));
             }
         }

@@ -1,6 +1,6 @@
-use crate::vulkanr::data::*;
 use crate::vulkanr::core::device::*;
 use crate::vulkanr::core::swapchain::*;
+use crate::vulkanr::data::*;
 use crate::vulkanr::vulkan::*;
 
 #[derive(Clone, Debug, Default)]
@@ -53,7 +53,10 @@ impl RRBillboardDescriptorSet {
         Ok(layout)
     }
 
-    pub unsafe fn create_pool(rrdevice: &RRDevice, rrswapchain: &RRSwapchain) -> Result<vk::DescriptorPool> {
+    pub unsafe fn create_pool(
+        rrdevice: &RRDevice,
+        rrswapchain: &RRSwapchain,
+    ) -> Result<vk::DescriptorPool> {
         let max_sets = (rrswapchain.swapchain_images.len() * 5) as u32;
 
         let ubo_size = vk::DescriptorPoolSize::builder()
@@ -175,10 +178,9 @@ impl RRBillboardDescriptorSet {
                     .image_info(std::slice::from_ref(&position_info))
                     .build();
 
-                rrdevice.device.update_descriptor_sets(
-                    &[position_write],
-                    &[] as &[vk::CopyDescriptorSet],
-                );
+                rrdevice
+                    .device
+                    .update_descriptor_sets(&[position_write], &[] as &[vk::CopyDescriptorSet]);
             }
         }
 
@@ -187,10 +189,9 @@ impl RRBillboardDescriptorSet {
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         if !self.descriptor_sets.is_empty() {
-            device.free_descriptor_sets(
-                self.descriptor_pool,
-                &self.descriptor_sets,
-            ).ok();
+            device
+                .free_descriptor_sets(self.descriptor_pool, &self.descriptor_sets)
+                .ok();
             self.descriptor_sets.clear();
         }
 

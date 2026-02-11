@@ -26,20 +26,14 @@ pub fn constraint_set_remove(set: &mut ConstraintSet, id: ConstraintId) -> bool 
     set.constraints.len() < before
 }
 
-pub fn constraint_set_find_by_bone(
-    set: &ConstraintSet,
-    bone_id: BoneId,
-) -> Vec<&ConstraintEntry> {
+pub fn constraint_set_find_by_bone(set: &ConstraintSet, bone_id: BoneId) -> Vec<&ConstraintEntry> {
     set.constraints
         .iter()
         .filter(|e| e.constraint.constrained_bone_id() == bone_id)
         .collect()
 }
 
-pub fn constraint_set_find(
-    set: &ConstraintSet,
-    id: ConstraintId,
-) -> Option<&ConstraintEntry> {
+pub fn constraint_set_find(set: &ConstraintSet, id: ConstraintId) -> Option<&ConstraintEntry> {
     set.constraints.iter().find(|e| e.id == id)
 }
 

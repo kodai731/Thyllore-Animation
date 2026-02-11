@@ -1,8 +1,6 @@
 use crate::animation::{
-    AimConstraintData, BoneId, ConstraintType,
-    IkConstraintData, ParentConstraintData,
-    PositionConstraintData, RotationConstraintData,
-    ScaleConstraintData,
+    AimConstraintData, BoneId, ConstraintType, IkConstraintData, ParentConstraintData,
+    PositionConstraintData, RotationConstraintData, ScaleConstraintData,
 };
 use crate::asset::AssetStorage;
 use crate::ecs::component::{ConstraintEntry, ConstraintSet};
@@ -10,14 +8,7 @@ use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Animator, Entity, World};
 
-const CONSTRAINT_TYPE_NAMES: &[&str] = &[
-    "IK",
-    "Aim",
-    "Parent",
-    "Position",
-    "Rotation",
-    "Scale",
-];
+const CONSTRAINT_TYPE_NAMES: &[&str] = &["IK", "Aim", "Parent", "Position", "Rotation", "Scale"];
 
 pub fn build_constraint_section(
     ui: &imgui::Ui,
@@ -29,10 +20,7 @@ pub fn build_constraint_section(
     add_type_index: &mut i32,
     bake_fps: &mut f32,
 ) {
-    if !ui.collapsing_header(
-        "Constraints",
-        imgui::TreeNodeFlags::DEFAULT_OPEN,
-    ) {
+    if !ui.collapsing_header("Constraints", imgui::TreeNodeFlags::DEFAULT_OPEN) {
         return;
     }
 
@@ -50,12 +38,7 @@ pub fn build_constraint_section(
         }
     }
 
-    build_add_constraint_row(
-        ui,
-        ui_events,
-        target_entity,
-        add_type_index,
-    );
+    build_add_constraint_row(ui, ui_events, target_entity, add_type_index);
 
     let constraint_set = world.get_component::<ConstraintSet>(target_entity);
     let Some(set) = constraint_set else {
@@ -100,10 +83,7 @@ fn build_bake_section(
 }
 
 fn find_animated_entity(world: &World) -> Option<Entity> {
-    world
-        .component_entities::<Animator>()
-        .into_iter()
-        .next()
+    world.component_entities::<Animator>().into_iter().next()
 }
 
 fn build_add_constraint_row(
@@ -117,11 +97,7 @@ fn build_add_constraint_row(
     if let Some(token) = ui.begin_combo("##constraint_type", current_label) {
         for (i, name) in CONSTRAINT_TYPE_NAMES.iter().enumerate() {
             let selected = i as i32 == *add_type_index;
-            if ui
-                .selectable_config(name)
-                .selected(selected)
-                .build()
-            {
+            if ui.selectable_config(name).selected(selected).build() {
                 *add_type_index = i as i32;
             }
         }
@@ -153,10 +129,7 @@ fn build_constraint_entry(
         entry.priority, type_name, entry.id, entry.id
     );
 
-    let opened = ui.collapsing_header(
-        &header_label,
-        imgui::TreeNodeFlags::empty(),
-    );
+    let opened = ui.collapsing_header(&header_label, imgui::TreeNodeFlags::empty());
 
     if !opened {
         return;
@@ -203,11 +176,7 @@ fn build_constraint_entry(
     id_token.end();
 }
 
-fn build_common_fields(
-    ui: &imgui::Ui,
-    enabled: &mut bool,
-    weight: &mut f32,
-) -> bool {
+fn build_common_fields(ui: &imgui::Ui, enabled: &mut bool, weight: &mut f32) -> bool {
     let mut changed = false;
 
     if ui.checkbox("Enabled", enabled) {
@@ -230,11 +199,7 @@ fn build_ik_fields(
     hierarchy_state: &HierarchyState,
 ) -> Option<ConstraintType> {
     let mut modified = data.clone();
-    let mut changed = build_common_fields(
-        ui,
-        &mut modified.enabled,
-        &mut modified.weight,
-    );
+    let mut changed = build_common_fields(ui, &mut modified.enabled, &mut modified.weight);
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
@@ -262,11 +227,7 @@ fn build_ik_fields(
 
     let mut chain = modified.chain_length as i32;
     ui.set_next_item_width(-1.0);
-    if ui
-        .input_int("Chain Length", &mut chain)
-        .step(1)
-        .build()
-    {
+    if ui.input_int("Chain Length", &mut chain).step(1).build() {
         modified.chain_length = chain.max(1) as u32;
         changed = true;
     }
@@ -278,11 +239,7 @@ fn build_ik_fields(
     ui.text("Pole Vector");
     ui.set_next_item_width(-1.0);
     if ui.input_float3("##pole_vector", &mut pole_arr).build() {
-        modified.pole_vector = Some(cgmath::Vector3::new(
-            pole_arr[0],
-            pole_arr[1],
-            pole_arr[2],
-        ));
+        modified.pole_vector = Some(cgmath::Vector3::new(pole_arr[0], pole_arr[1], pole_arr[2]));
         changed = true;
     }
 
@@ -309,11 +266,7 @@ fn build_aim_fields(
     hierarchy_state: &HierarchyState,
 ) -> Option<ConstraintType> {
     let mut modified = data.clone();
-    let mut changed = build_common_fields(
-        ui,
-        &mut modified.enabled,
-        &mut modified.weight,
-    );
+    let mut changed = build_common_fields(ui, &mut modified.enabled, &mut modified.weight);
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
@@ -351,11 +304,7 @@ fn build_aim_fields(
         changed = true;
     }
 
-    let mut up = [
-        modified.up_axis.x,
-        modified.up_axis.y,
-        modified.up_axis.z,
-    ];
+    let mut up = [modified.up_axis.x, modified.up_axis.y, modified.up_axis.z];
     ui.text("Up Axis");
     ui.set_next_item_width(-1.0);
     if ui.input_float3("##up_axis", &mut up).build() {
@@ -378,11 +327,7 @@ fn build_parent_fields(
     hierarchy_state: &HierarchyState,
 ) -> Option<ConstraintType> {
     let mut modified = data.clone();
-    let mut changed = build_common_fields(
-        ui,
-        &mut modified.enabled,
-        &mut modified.weight,
-    );
+    let mut changed = build_common_fields(ui, &mut modified.enabled, &mut modified.weight);
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
@@ -396,17 +341,11 @@ fn build_parent_fields(
         changed = true;
     }
 
-    if ui.checkbox(
-        "Affect Translation",
-        &mut modified.affect_translation,
-    ) {
+    if ui.checkbox("Affect Translation", &mut modified.affect_translation) {
         changed = true;
     }
 
-    if ui.checkbox(
-        "Affect Rotation",
-        &mut modified.affect_rotation,
-    ) {
+    if ui.checkbox("Affect Rotation", &mut modified.affect_rotation) {
         changed = true;
     }
 
@@ -418,12 +357,7 @@ fn build_parent_fields(
         let source_token = ui.push_id_int(i as i32);
         let mut current_weight = *weight;
 
-        if let Some(bone) = build_bone_combo(
-            ui,
-            &format!("Src {}", i),
-            *bone_id,
-            bone_list,
-        ) {
+        if let Some(bone) = build_bone_combo(ui, &format!("Src {}", i), *bone_id, bone_list) {
             new_sources[i].0 = bone;
             sources_changed = true;
         }
@@ -474,11 +408,7 @@ fn build_position_fields(
     hierarchy_state: &HierarchyState,
 ) -> Option<ConstraintType> {
     let mut modified = data.clone();
-    let mut changed = build_common_fields(
-        ui,
-        &mut modified.enabled,
-        &mut modified.weight,
-    );
+    let mut changed = build_common_fields(ui, &mut modified.enabled, &mut modified.weight);
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
@@ -527,11 +457,7 @@ fn build_rotation_fields(
     hierarchy_state: &HierarchyState,
 ) -> Option<ConstraintType> {
     let mut modified = data.clone();
-    let mut changed = build_common_fields(
-        ui,
-        &mut modified.enabled,
-        &mut modified.weight,
-    );
+    let mut changed = build_common_fields(ui, &mut modified.enabled, &mut modified.weight);
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
@@ -561,10 +487,7 @@ fn build_rotation_fields(
     let mut euler_arr = [euler.x, euler.y, euler.z];
     ui.text("Offset (Euler)");
     ui.set_next_item_width(-1.0);
-    if ui
-        .input_float3("##rotation_offset", &mut euler_arr)
-        .build()
-    {
+    if ui.input_float3("##rotation_offset", &mut euler_arr).build() {
         modified.offset = euler_to_quaternion(&cgmath::Vector3::new(
             euler_arr[0],
             euler_arr[1],
@@ -592,11 +515,7 @@ fn build_scale_fields(
     hierarchy_state: &HierarchyState,
 ) -> Option<ConstraintType> {
     let mut modified = data.clone();
-    let mut changed = build_common_fields(
-        ui,
-        &mut modified.enabled,
-        &mut modified.weight,
-    );
+    let mut changed = build_common_fields(ui, &mut modified.enabled, &mut modified.weight);
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
@@ -637,7 +556,7 @@ fn build_scale_fields(
     }
 }
 
-fn build_bone_combo_with_select(
+pub fn build_bone_combo_with_select(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     label: &str,
@@ -691,7 +610,7 @@ fn build_bone_combo_with_select(
     result
 }
 
-fn build_bone_combo(
+pub fn build_bone_combo(
     ui: &imgui::Ui,
     label: &str,
     current_bone: BoneId,
@@ -710,11 +629,7 @@ fn build_bone_combo(
     if let Some(combo_token) = ui.begin_combo(&format!("##{}", label), current_name) {
         for (bone_id, bone_name) in bone_list {
             let selected = *bone_id == current_bone;
-            if ui
-                .selectable_config(bone_name)
-                .selected(selected)
-                .build()
-            {
+            if ui.selectable_config(bone_name).selected(selected).build() {
                 result = Some(*bone_id);
             }
         }
@@ -724,7 +639,7 @@ fn build_bone_combo(
     result
 }
 
-fn build_offset_vector3(
+pub fn build_offset_vector3(
     ui: &imgui::Ui,
     label: &str,
     offset: &mut cgmath::Vector3<f32>,
@@ -742,11 +657,7 @@ fn build_offset_vector3(
     false
 }
 
-fn build_axes_checkboxes(
-    ui: &imgui::Ui,
-    label: &str,
-    axes: &mut [bool; 3],
-) -> bool {
+fn build_axes_checkboxes(ui: &imgui::Ui, label: &str, axes: &mut [bool; 3]) -> bool {
     let mut changed = false;
 
     ui.text(label);
@@ -766,7 +677,7 @@ fn build_axes_checkboxes(
     changed
 }
 
-fn collect_bone_list(assets: &AssetStorage) -> Vec<(BoneId, String)> {
+pub fn collect_bone_list(assets: &AssetStorage) -> Vec<(BoneId, String)> {
     let skeleton = match assets.skeletons.values().next() {
         Some(skel_asset) => &skel_asset.skeleton,
         None => return Vec::new(),
@@ -806,11 +717,7 @@ fn quaternion_to_euler(q: &cgmath::Quaternion<f32>) -> cgmath::Vector3<f32> {
     let cosy_cosp = 1.0 - 2.0 * (q.v.y * q.v.y + q.v.z * q.v.z);
     let yaw = siny_cosp.atan2(cosy_cosp);
 
-    cgmath::Vector3::new(
-        roll.to_degrees(),
-        pitch.to_degrees(),
-        yaw.to_degrees(),
-    )
+    cgmath::Vector3::new(roll.to_degrees(), pitch.to_degrees(), yaw.to_degrees())
 }
 
 fn euler_to_quaternion(euler: &cgmath::Vector3<f32>) -> cgmath::Quaternion<f32> {

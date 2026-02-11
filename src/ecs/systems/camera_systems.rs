@@ -3,10 +3,7 @@ use cgmath::{Deg, InnerSpace, Rad, Vector2, Vector3};
 use crate::app::GUIData;
 use crate::ecs::resource::Camera;
 
-pub fn create_camera(
-    position: Vector3<f32>,
-    target: Vector3<f32>,
-) -> Camera {
+pub fn create_camera(position: Vector3<f32>, target: Vector3<f32>) -> Camera {
     let diff = position - target;
     let distance = diff.magnitude();
     let yaw = diff.x.atan2(diff.z);
@@ -54,11 +51,7 @@ pub fn compute_camera_up(camera: &Camera) -> Vector3<f32> {
     right.cross(-backward).normalize()
 }
 
-pub fn camera_input_system(
-    camera: &mut Camera,
-    gui_data: &GUIData,
-    screen_size: [f32; 2],
-) {
+pub fn camera_input_system(camera: &mut Camera, gui_data: &GUIData, screen_size: [f32; 2]) {
     let mouse_pos = [
         gui_data.mouse_pos[0] - gui_data.viewport_position[0],
         gui_data.mouse_pos[1] - gui_data.viewport_position[1],
@@ -108,17 +101,12 @@ pub fn camera_orbit(camera: &mut Camera, mouse_diff: Vector2<f32>) {
     camera.pitch = camera.pitch.clamp(-max_pitch, max_pitch);
 }
 
-pub fn camera_pan(
-    camera: &mut Camera,
-    mouse_diff: Vector2<f32>,
-    screen_size: Vector2<f32>,
-) {
+pub fn camera_pan(camera: &mut Camera, mouse_diff: Vector2<f32>, screen_size: Vector2<f32>) {
     let right = compute_camera_right(camera);
     let up = compute_camera_up(camera);
 
     let fov_rad: Rad<f32> = camera.fov_y.into();
-    let pan_speed =
-        camera.distance * 2.0 * (fov_rad.0 / 2.0).tan() / screen_size.y;
+    let pan_speed = camera.distance * 2.0 * (fov_rad.0 / 2.0).tan() / screen_size.y;
 
     camera.pivot += right * (-mouse_diff.x * pan_speed);
     camera.pivot += up * (mouse_diff.y * pan_speed);
@@ -132,8 +120,7 @@ pub fn camera_zoom(
 ) {
     let old_distance = camera.distance;
     let zoom_factor = (-mouse_wheel * 0.1).exp();
-    let new_distance =
-        (old_distance * zoom_factor).max(camera.near_plane * 2.0);
+    let new_distance = (old_distance * zoom_factor).max(camera.near_plane * 2.0);
 
     let ndc_x = 2.0 * mouse_pos.x / screen_size.x - 1.0;
     let ndc_y = 2.0 * mouse_pos.y / screen_size.y - 1.0;
@@ -145,9 +132,7 @@ pub fn camera_zoom(
 
     let right = compute_camera_right(camera);
     let up = compute_camera_up(camera);
-    let cursor_world = camera.pivot
-        + right * (ndc_x * half_width)
-        + up * (-ndc_y * half_height);
+    let cursor_world = camera.pivot + right * (ndc_x * half_width) + up * (-ndc_y * half_height);
 
     let percentage = 1.0 - (new_distance / old_distance);
     camera.pivot += (cursor_world - camera.pivot) * percentage;
@@ -178,11 +163,7 @@ pub fn camera_look_at(camera: &mut Camera, target: Vector3<f32>) {
     camera.pivot = target;
 }
 
-pub fn camera_move_to_look_at(
-    camera: &mut Camera,
-    target: Vector3<f32>,
-    offset: Vector3<f32>,
-) {
+pub fn camera_move_to_look_at(camera: &mut Camera, target: Vector3<f32>, offset: Vector3<f32>) {
     let new_position = target + offset;
     let diff = new_position - target;
     let distance = diff.magnitude();

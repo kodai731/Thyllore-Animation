@@ -52,8 +52,7 @@ pub fn spring_bone_bake(
     let globals = compute_pose_global_transforms(skeleton, &pose);
     let mut sb_state = spring_bone_initialize(setup, skeleton, &globals);
 
-    let mut editable =
-        EditableAnimationClip::new(0, format!("{}_spring_baked", base_clip.name));
+    let mut editable = EditableAnimationClip::new(0, format!("{}_spring_baked", base_clip.name));
 
     for &bone_id in &affected_ids {
         let bone_name = skeleton
@@ -63,8 +62,7 @@ pub fn spring_bone_bake(
         editable.add_track(bone_id, bone_name);
     }
 
-    let frame_count =
-        ((config.end_time - config.start_time) * config.sample_rate) as usize + 1;
+    let frame_count = ((config.end_time - config.start_time) * config.sample_rate) as usize + 1;
     let dt = 1.0 / config.sample_rate;
 
     for frame_index in 0..frame_count {
@@ -79,16 +77,10 @@ pub fn spring_bone_bake(
 
         let mut globals = compute_pose_global_transforms(skeleton, &pose);
 
-        spring_bone_update(
-            setup, &mut sb_state, skeleton, &mut globals, &pose, dt,
-        );
-        spring_bone_write_back_to_pose(
-            skeleton, &globals, &mut pose, &affected_ids,
-        );
+        spring_bone_update(setup, &mut sb_state, skeleton, &mut globals, &pose, dt);
+        spring_bone_write_back_to_pose(skeleton, &globals, &mut pose, &affected_ids);
 
-        capture_rotation_keyframes(
-            &pose, sample_time, &affected_ids, &mut editable,
-        );
+        capture_rotation_keyframes(&pose, sample_time, &affected_ids, &mut editable);
     }
 
     editable.duration = config.end_time - config.start_time;
@@ -135,10 +127,7 @@ pub fn merge_bake_into_clip(
     }
 }
 
-pub fn clear_baked_tracks(
-    clip: &mut EditableAnimationClip,
-    baked_bone_ids: &[BoneId],
-) {
+pub fn clear_baked_tracks(clip: &mut EditableAnimationClip, baked_bone_ids: &[BoneId]) {
     for &bone_id in baked_bone_ids {
         if let Some(track) = clip.tracks.get_mut(&bone_id) {
             track.rotation_x.keyframes.clear();
@@ -173,7 +162,7 @@ fn capture_rotation_keyframes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::{Bone, Skeleton, AnimationClip};
+    use crate::animation::{AnimationClip, Bone, Skeleton};
     use crate::ecs::component::{SpringBoneSetup, SpringChain, SpringJointParam};
     use cgmath::{Matrix4, Vector3};
 
@@ -184,9 +173,7 @@ mod tests {
                 name: "Root".to_string(),
                 parent_id: None,
                 children: vec![1],
-                local_transform: Matrix4::from_translation(
-                    Vector3::new(0.0, 0.0, 0.0),
-                ),
+                local_transform: Matrix4::from_translation(Vector3::new(0.0, 0.0, 0.0)),
                 ..Default::default()
             },
             Bone {
@@ -194,9 +181,7 @@ mod tests {
                 name: "Spring".to_string(),
                 parent_id: Some(0),
                 children: vec![2],
-                local_transform: Matrix4::from_translation(
-                    Vector3::new(0.0, 1.0, 0.0),
-                ),
+                local_transform: Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0)),
                 ..Default::default()
             },
             Bone {
@@ -204,9 +189,7 @@ mod tests {
                 name: "SpringTip".to_string(),
                 parent_id: Some(1),
                 children: vec![],
-                local_transform: Matrix4::from_translation(
-                    Vector3::new(0.0, 1.0, 0.0),
-                ),
+                local_transform: Matrix4::from_translation(Vector3::new(0.0, 1.0, 0.0)),
                 ..Default::default()
             },
         ];
@@ -263,8 +246,7 @@ mod tests {
             sample_rate: 30.0,
         };
 
-        let result =
-            spring_bone_bake(&config, &setup, &skeleton, &clip, None, false);
+        let result = spring_bone_bake(&config, &setup, &skeleton, &clip, None, false);
 
         let track = result.clip.get_track(1).unwrap();
         assert_eq!(track.rotation_x.keyframes.len(), 31);
@@ -291,8 +273,7 @@ mod tests {
             sample_rate: 30.0,
         };
 
-        let result =
-            spring_bone_bake(&config, &setup, &skeleton, &clip, None, false);
+        let result = spring_bone_bake(&config, &setup, &skeleton, &clip, None, false);
 
         assert!(result.baked_bone_ids.is_empty());
         assert!(result.clip.tracks.is_empty());
@@ -310,8 +291,7 @@ mod tests {
             sample_rate: 30.0,
         };
 
-        let result =
-            spring_bone_bake(&config, &setup, &skeleton, &clip, None, false);
+        let result = spring_bone_bake(&config, &setup, &skeleton, &clip, None, false);
 
         let track = result.clip.get_track(1).unwrap();
         for kf in &track.rotation_x.keyframes {

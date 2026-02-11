@@ -1,7 +1,5 @@
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::resource::{
-    ClipLibrary, EditCommand, EditCommandAfter, EditEntry, EditHistory,
-};
+use crate::ecs::resource::{ClipLibrary, EditCommand, EditCommandAfter, EditEntry, EditHistory};
 use crate::ecs::world::World;
 
 pub fn apply_undo(
@@ -51,9 +49,7 @@ pub fn apply_undo(
                 .cloned()
                 .unwrap_or_else(|| before.clone());
 
-            if let Some(schedule) =
-                world.get_component_mut::<ClipSchedule>(*entity)
-            {
+            if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
                 *schedule = before.clone();
             }
 
@@ -125,9 +121,7 @@ pub fn apply_redo(
                 .cloned()
                 .unwrap_or_else(|| after_schedule.clone());
 
-            if let Some(schedule) =
-                world.get_component_mut::<ClipSchedule>(*entity)
-            {
+            if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
                 *schedule = after_schedule.clone();
             }
 

@@ -53,7 +53,10 @@ impl<'a> DofPass<'a> {
             .ok_or_else(|| anyhow!("DOF buffer not initialized"))?;
 
         let dof_settings = app.data.ecs_world.get_resource::<DepthOfField>();
-        let camera_params = app.data.ecs_world.get_resource::<PhysicalCameraParameters>();
+        let camera_params = app
+            .data
+            .ecs_world
+            .get_resource::<PhysicalCameraParameters>();
         let camera = app.camera();
 
         let (enabled, focus_distance, max_blur_radius) = match dof_settings {
@@ -132,11 +135,7 @@ impl<'a> DofPass<'a> {
         Ok(())
     }
 
-    unsafe fn begin_render_pass(
-        &self,
-        command_buffer: vk::CommandBuffer,
-        extent: vk::Extent2D,
-    ) {
+    unsafe fn begin_render_pass(&self, command_buffer: vk::CommandBuffer, extent: vk::Extent2D) {
         let clear_value = vk::ClearValue {
             color: vk::ClearColorValue {
                 float32: [0.0, 0.0, 0.0, 1.0],

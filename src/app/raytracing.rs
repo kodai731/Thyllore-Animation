@@ -2,20 +2,20 @@ use anyhow::Result;
 use std::rc::Rc;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::graphics_resource::{MeshBuffer, GraphicsResources};
+use crate::app::graphics_resource::{GraphicsResources, MeshBuffer};
 use crate::vulkanr::buffer::create_buffer;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::data::{self as vulkan_data, SceneUniformData};
 use crate::vulkanr::descriptor::{
-    RRAutoExposureAverageDescriptorSet,
-    RRAutoExposureHistogramDescriptorSet, RRBloomDescriptorSets,
-    RRBillboardDescriptorSet, RRCompositeDescriptorSet,
-    RRDofDescriptorSet, RRRayQueryDescriptorSet,
-    RRToneMapDescriptorSet,
+    RRAutoExposureAverageDescriptorSet, RRAutoExposureHistogramDescriptorSet,
+    RRBillboardDescriptorSet, RRBloomDescriptorSets, RRCompositeDescriptorSet, RRDofDescriptorSet,
+    RRRayQueryDescriptorSet, RRToneMapDescriptorSet,
 };
-use crate::vulkanr::image::{create_texture_sampler, create_nearest_sampler};
-use crate::vulkanr::pipeline::{PipelineBuilder, RRPipeline, VertexInputConfig, PushConstantConfig};
+use crate::vulkanr::image::{create_nearest_sampler, create_texture_sampler};
+use crate::vulkanr::pipeline::{
+    PipelineBuilder, PushConstantConfig, RRPipeline, VertexInputConfig,
+};
 use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::RRGBuffer;
@@ -48,10 +48,8 @@ pub struct RayTracingData {
 
     pub auto_exposure_histogram_pipeline: Option<RRPipeline>,
     pub auto_exposure_average_pipeline: Option<RRPipeline>,
-    pub auto_exposure_histogram_descriptor:
-        Option<RRAutoExposureHistogramDescriptorSet>,
-    pub auto_exposure_average_descriptor:
-        Option<RRAutoExposureAverageDescriptorSet>,
+    pub auto_exposure_histogram_descriptor: Option<RRAutoExposureHistogramDescriptorSet>,
+    pub auto_exposure_average_descriptor: Option<RRAutoExposureAverageDescriptorSet>,
 
     pub scene_uniform_buffer: Option<vk::Buffer>,
     pub scene_uniform_buffer_memory: Option<vk::DeviceMemory>,
@@ -81,9 +79,11 @@ impl RayTracingData {
         rrcommand_pool: &RRCommandPool,
     ) -> Result<()> {
         crate::log!("init_gbuffer: starting...");
-        crate::log!("init_gbuffer: swapchain extent {}x{}",
+        crate::log!(
+            "init_gbuffer: swapchain extent {}x{}",
             rrswapchain.swapchain_extent.width,
-            rrswapchain.swapchain_extent.height);
+            rrswapchain.swapchain_extent.height
+        );
 
         let gbuffer = RRGBuffer::new(
             instance,
@@ -100,7 +100,10 @@ impl RayTracingData {
 
         self.gbuffer = Some(gbuffer);
 
-        crate::log!("init_gbuffer: completed, gbuffer is_some: {}", self.gbuffer.is_some());
+        crate::log!(
+            "init_gbuffer: completed, gbuffer is_some: {}",
+            self.gbuffer.is_some()
+        );
         Ok(())
     }
 
@@ -139,7 +142,10 @@ impl RayTracingData {
                 &acceleration_structure.blas_list,
             )?;
             acceleration_structure.tlas = tlas;
-            log::info!("Created TLAS with {} instances", acceleration_structure.blas_list.len());
+            log::info!(
+                "Created TLAS with {} instances",
+                acceleration_structure.blas_list.len()
+            );
         }
 
         self.acceleration_structure = Some(acceleration_structure);
@@ -160,8 +166,14 @@ impl RayTracingData {
         hdr_render_pass: Option<vk::RenderPass>,
     ) -> Result<()> {
         crate::log!("create_pipelines: starting...");
-        crate::log!("create_pipelines: gbuffer is_some: {}", self.gbuffer.is_some());
-        crate::log!("create_pipelines: acceleration_structure is_some: {}", self.acceleration_structure.is_some());
+        crate::log!(
+            "create_pipelines: gbuffer is_some: {}",
+            self.gbuffer.is_some()
+        );
+        crate::log!(
+            "create_pipelines: acceleration_structure is_some: {}",
+            self.acceleration_structure.is_some()
+        );
 
         let render_layouts = [
             graphics_resources.frame_set.layout,
@@ -213,7 +225,9 @@ impl RayTracingData {
             descriptor_set: vk::DescriptorSet::null(),
         };
 
-        if let (Some(ref gbuffer), Some(ref accel_struct)) = (&self.gbuffer, &self.acceleration_structure) {
+        if let (Some(ref gbuffer), Some(ref accel_struct)) =
+            (&self.gbuffer, &self.acceleration_structure)
+        {
             if let Some(tlas) = accel_struct.tlas.acceleration_structure {
                 ray_query_descriptor.allocate_and_update(
                     rrdevice,
@@ -511,18 +525,11 @@ impl RayTracingData {
         luminance_buffer: vk::Buffer,
         luminance_buffer_size: u64,
     ) -> Result<()> {
-        let mut histogram_descriptor =
-            RRAutoExposureHistogramDescriptorSet {
-                descriptor_set_layout:
-                    RRAutoExposureHistogramDescriptorSet::create_layout(
-                        rrdevice,
-                    )?,
-                descriptor_pool:
-                    RRAutoExposureHistogramDescriptorSet::create_pool(
-                        rrdevice,
-                    )?,
-                descriptor_set: vk::DescriptorSet::null(),
-            };
+        let mut histogram_descriptor = RRAutoExposureHistogramDescriptorSet {
+            descriptor_set_layout: RRAutoExposureHistogramDescriptorSet::create_layout(rrdevice)?,
+            descriptor_pool: RRAutoExposureHistogramDescriptorSet::create_pool(rrdevice)?,
+            descriptor_set: vk::DescriptorSet::null(),
+        };
 
         histogram_descriptor.allocate_and_update(
             rrdevice,
@@ -532,33 +539,24 @@ impl RayTracingData {
             histogram_buffer_size,
         )?;
 
-        let histogram_push_range =
-            vk::PushConstantRange::builder()
-                .stage_flags(vk::ShaderStageFlags::COMPUTE)
-                .offset(0)
-                .size(12)
-                .build();
+        let histogram_push_range = vk::PushConstantRange::builder()
+            .stage_flags(vk::ShaderStageFlags::COMPUTE)
+            .offset(0)
+            .size(12)
+            .build();
 
-        let histogram_pipeline =
-            RRPipeline::new_compute_with_push_constants(
-                rrdevice,
-                "assets/shaders/autoExposureHistogram.spv",
-                &[histogram_descriptor.descriptor_set_layout],
-                &[histogram_push_range],
-            )?;
+        let histogram_pipeline = RRPipeline::new_compute_with_push_constants(
+            rrdevice,
+            "assets/shaders/autoExposureHistogram.spv",
+            &[histogram_descriptor.descriptor_set_layout],
+            &[histogram_push_range],
+        )?;
 
-        let mut average_descriptor =
-            RRAutoExposureAverageDescriptorSet {
-                descriptor_set_layout:
-                    RRAutoExposureAverageDescriptorSet::create_layout(
-                        rrdevice,
-                    )?,
-                descriptor_pool:
-                    RRAutoExposureAverageDescriptorSet::create_pool(
-                        rrdevice,
-                    )?,
-                descriptor_set: vk::DescriptorSet::null(),
-            };
+        let mut average_descriptor = RRAutoExposureAverageDescriptorSet {
+            descriptor_set_layout: RRAutoExposureAverageDescriptorSet::create_layout(rrdevice)?,
+            descriptor_pool: RRAutoExposureAverageDescriptorSet::create_pool(rrdevice)?,
+            descriptor_set: vk::DescriptorSet::null(),
+        };
 
         average_descriptor.allocate_and_update(
             rrdevice,
@@ -574,22 +572,17 @@ impl RayTracingData {
             .size(40)
             .build();
 
-        let average_pipeline =
-            RRPipeline::new_compute_with_push_constants(
-                rrdevice,
-                "assets/shaders/autoExposureAverage.spv",
-                &[average_descriptor.descriptor_set_layout],
-                &[average_push_range],
-            )?;
+        let average_pipeline = RRPipeline::new_compute_with_push_constants(
+            rrdevice,
+            "assets/shaders/autoExposureAverage.spv",
+            &[average_descriptor.descriptor_set_layout],
+            &[average_push_range],
+        )?;
 
-        self.auto_exposure_histogram_pipeline =
-            Some(histogram_pipeline);
-        self.auto_exposure_average_pipeline =
-            Some(average_pipeline);
-        self.auto_exposure_histogram_descriptor =
-            Some(histogram_descriptor);
-        self.auto_exposure_average_descriptor =
-            Some(average_descriptor);
+        self.auto_exposure_histogram_pipeline = Some(histogram_pipeline);
+        self.auto_exposure_average_pipeline = Some(average_pipeline);
+        self.auto_exposure_histogram_descriptor = Some(histogram_descriptor);
+        self.auto_exposure_average_descriptor = Some(average_descriptor);
 
         log::info!("Created AutoExposure pipelines");
 

@@ -15,9 +15,13 @@ impl App {
         if let Some((width, height)) = gui_data.viewport_resize_pending.take() {
             self.rrdevice.device.device_wait_idle()?;
             let command_pool = self.command_state().pool.command_pool;
-            self.data
-                .viewport
-                .resize(&self.instance, &self.rrdevice, command_pool, width, height)?;
+            self.data.viewport.resize(
+                &self.instance,
+                &self.rrdevice,
+                command_pool,
+                width,
+                height,
+            )?;
 
             self.resize_gbuffer(width, height)?;
 
@@ -31,12 +35,8 @@ impl App {
                     hdr_buffer.sampler,
                 )?;
 
-                let bloom_view_and_sampler = self
-                    .data
-                    .viewport
-                    .bloom_chain
-                    .as_ref()
-                    .and_then(|chain| {
+                let bloom_view_and_sampler =
+                    self.data.viewport.bloom_chain.as_ref().and_then(|chain| {
                         chain
                             .mip_levels
                             .first()
@@ -85,8 +85,11 @@ impl App {
                     &self.data.viewport.hdr_buffer,
                     &self.data.raytracing.dof_descriptor,
                 ) {
-                    let depth_sampler =
-                        self.data.raytracing.gbuffer_sampler.unwrap_or(hdr_buffer.sampler);
+                    let depth_sampler = self
+                        .data
+                        .raytracing
+                        .gbuffer_sampler
+                        .unwrap_or(hdr_buffer.sampler);
 
                     dof_descriptor.update_image_views(
                         &self.rrdevice,
@@ -142,11 +145,17 @@ impl App {
             ) {
                 Ok(_) => {
                     {
-                        let mut model_state = self.data.ecs_world.resource_mut::<crate::ecs::resource::ModelState>();
+                        let mut model_state = self
+                            .data
+                            .ecs_world
+                            .resource_mut::<crate::ecs::resource::ModelState>();
                         model_state.model_path = gui_data.selected_model_path.clone();
                     }
                     {
-                        let mut timeline = self.data.ecs_world.resource_mut::<crate::ecs::resource::TimelineState>();
+                        let mut timeline = self
+                            .data
+                            .ecs_world
+                            .resource_mut::<crate::ecs::resource::TimelineState>();
                         timeline.current_time = 0.0;
                     }
 
@@ -190,9 +199,7 @@ impl App {
 
         let image_index = match result {
             Ok((image_index, _)) => image_index as usize,
-            Err(vk::ErrorCode::OUT_OF_DATE_KHR) => {
-                return Err(anyhow!("SWAPCHAIN_OUT_OF_DATE"))
-            }
+            Err(vk::ErrorCode::OUT_OF_DATE_KHR) => return Err(anyhow!("SWAPCHAIN_OUT_OF_DATE")),
             Err(e) => return Err(anyhow!(e)),
         };
 
@@ -209,15 +216,11 @@ impl App {
         Ok(image_index)
     }
 
-    unsafe fn update_auto_exposure_descriptors_on_resize(
-        &self,
-    ) {
+    unsafe fn update_auto_exposure_descriptors_on_resize(&self) {
         let (hdr_image_view, hdr_sampler) =
             if let Some(ref dof_buffer) = self.data.viewport.dof_buffer {
                 (dof_buffer.output_image_view, dof_buffer.sampler)
-            } else if let Some(ref hdr_buffer) =
-                self.data.viewport.hdr_buffer
-            {
+            } else if let Some(ref hdr_buffer) = self.data.viewport.hdr_buffer {
                 (hdr_buffer.color_image_view, hdr_buffer.sampler)
             } else {
                 return;
@@ -228,9 +231,7 @@ impl App {
             None => return,
         };
 
-        if let Some(ref hist_desc) =
-            self.data.raytracing.auto_exposure_histogram_descriptor
-        {
+        if let Some(ref hist_desc) = self.data.raytracing.auto_exposure_histogram_descriptor {
             hist_desc.update_bindings(
                 &self.rrdevice,
                 hdr_image_view,
@@ -240,9 +241,7 @@ impl App {
             );
         }
 
-        if let Some(ref avg_desc) =
-            self.data.raytracing.auto_exposure_average_descriptor
-        {
+        if let Some(ref avg_desc) = self.data.raytracing.auto_exposure_average_descriptor {
             avg_desc.update_bindings(
                 &self.rrdevice,
                 ae_buffers.histogram_buffer,
@@ -371,11 +370,7 @@ impl App {
     unsafe fn read_object_id_readback(&mut self) {
         use crate::ecs::resource::ObjectIdReadback;
 
-        if !self
-            .data
-            .ecs_world
-            .contains_resource::<ObjectIdReadback>()
-        {
+        if !self.data.ecs_world.contains_resource::<ObjectIdReadback>() {
             return;
         }
 
@@ -402,7 +397,9 @@ impl App {
 
         let object_id = memory.map(|ptr| {
             let value = *(ptr as *const u32);
-            self.rrdevice.device.unmap_memory(gbuffer.readback_staging_memory);
+            self.rrdevice
+                .device
+                .unmap_memory(gbuffer.readback_staging_memory);
             value
         });
 
@@ -429,9 +426,7 @@ impl App {
         self.save_manual_exposure_if_needed();
 
         let adapted = match self.data.viewport.auto_exposure_buffers {
-            Some(ref ae_buffers) => {
-                ae_buffers.read_adapted_exposure(&self.rrdevice.device)
-            }
+            Some(ref ae_buffers) => ae_buffers.read_adapted_exposure(&self.rrdevice.device),
             None => return,
         };
 
@@ -578,12 +573,8 @@ impl App {
         let image_size = (width * height * 4) as vk::DeviceSize;
         let command_pool = self.command_state().pool.command_pool;
 
-        let (buffer, buffer_memory, command_buffer) = self.copy_swapchain_image_to_buffer(
-            swapchain_image,
-            extent,
-            image_size,
-            command_pool,
-        )?;
+        let (buffer, buffer_memory, command_buffer) =
+            self.copy_swapchain_image_to_buffer(swapchain_image, extent, image_size, command_pool)?;
 
         Self::encode_and_save_png(device, buffer_memory, image_size, width, height)?;
 
@@ -833,7 +824,10 @@ impl App {
         let render_data_vec = vec![
             crate::ecs::systems::render_data_systems::grid_mesh_render_data(&self.grid_mesh()),
             crate::ecs::systems::render_data_systems::gizmo_mesh_render_data(&self.grid_gizmo()),
-            crate::ecs::systems::render_data_systems::gizmo_selectable_render_data(&self.light_gizmo(), camera_pos),
+            crate::ecs::systems::render_data_systems::gizmo_selectable_render_data(
+                &self.light_gizmo(),
+                camera_pos,
+            ),
         ];
         let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
@@ -1135,12 +1129,7 @@ impl App {
             index_buffer,
         );
 
-        self.record_imgui_draw_commands(
-            command_buffer,
-            draw_data,
-            pipeline_layout,
-            descriptor_set,
-        );
+        self.record_imgui_draw_commands(command_buffer, draw_data, pipeline_layout, descriptor_set);
 
         Ok(())
     }

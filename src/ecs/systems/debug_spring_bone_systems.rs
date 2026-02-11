@@ -3,8 +3,8 @@ use cgmath::Vector3;
 use crate::animation::{BoneId, Skeleton};
 use crate::asset::storage::AssetStorage;
 use crate::ecs::component::{
-    ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef,
-    SpringColliderGroup, SpringJointParam, WithSpringBone,
+    ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderGroup,
+    SpringJointParam, WithSpringBone,
 };
 use crate::ecs::resource::SpringBoneState;
 use crate::ecs::world::{Animator, World};
@@ -90,10 +90,7 @@ pub fn clear_spring_bones(world: &mut World) {
     for entity in entities {
         world.remove_component::<SpringBoneSetup>(entity);
         world.remove_component::<WithSpringBone>(entity);
-        crate::log!(
-            "Cleared spring bones from entity {:?}",
-            entity
-        );
+        crate::log!("Cleared spring bones from entity {:?}", entity);
     }
 
     if world.contains_resource::<SpringBoneState>() {
@@ -156,9 +153,7 @@ fn detect_spring_bone_chains(skeleton: &Skeleton) -> Vec<Vec<BoneId>> {
             );
             chains.push(unique_chain);
         } else {
-            crate::log!(
-                "[SpringBone]     -> skipped (all bones already used by other chains)"
-            );
+            crate::log!("[SpringBone]     -> skipped (all bones already used by other chains)");
         }
     }
 
@@ -166,11 +161,7 @@ fn detect_spring_bone_chains(skeleton: &Skeleton) -> Vec<Vec<BoneId>> {
     chains
 }
 
-fn build_chain_from_leaf(
-    skeleton: &Skeleton,
-    leaf_id: BoneId,
-    max_length: usize,
-) -> Vec<BoneId> {
+fn build_chain_from_leaf(skeleton: &Skeleton, leaf_id: BoneId, max_length: usize) -> Vec<BoneId> {
     let mut chain = vec![leaf_id];
     let mut current = leaf_id;
 
@@ -235,12 +226,8 @@ fn format_chain_name(skeleton: &Skeleton, bones: &[BoneId]) -> String {
     }
 }
 
-fn create_test_colliders(
-    setup: &mut SpringBoneSetup,
-    skeleton: &Skeleton,
-) {
-    const COLLIDER_BONE_PATTERNS: &[&str] =
-        &["head", "Head", "neck", "Neck", "spine", "Spine"];
+fn create_test_colliders(setup: &mut SpringBoneSetup, skeleton: &Skeleton) {
+    const COLLIDER_BONE_PATTERNS: &[&str] = &["head", "Head", "neck", "Neck", "spine", "Spine"];
 
     let mut collider_bone_ids: Vec<BoneId> = Vec::new();
 

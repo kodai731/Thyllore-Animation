@@ -1,16 +1,14 @@
 use cgmath::Vector3;
 
+use crate::app::billboard::BillboardData;
 use crate::app::GUIData;
 use crate::asset::AssetStorage;
-use crate::debugview::gizmo::{
-    BoneSelectionState, GridGizmoData, LightGizmoData,
-};
+use crate::debugview::gizmo::{BoneSelectionState, GridGizmoData, LightGizmoData};
 use crate::debugview::RayTracingDebugState;
-use crate::app::billboard::BillboardData;
 use crate::ecs::component::{LineMesh, MeshScale};
+use crate::ecs::resource::Camera;
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::resource::ObjectIdReadback;
-use crate::ecs::resource::Camera;
 
 use super::world::{ResMut, ResRef, World};
 

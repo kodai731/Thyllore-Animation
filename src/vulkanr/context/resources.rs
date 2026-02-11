@@ -132,14 +132,13 @@ impl GpuAssets {
     }
 }
 
-use crate::debugview::{DebugViewData, RayTracingDebugState};
-use crate::platform::ImguiData;
 use crate::app::raytracing::RayTracingData;
+use crate::debugview::{DebugViewData, RayTracingDebugState};
 use crate::ecs::resource::Camera;
 use crate::ecs::systems::camera_systems::{
-    compute_camera_direction, compute_camera_position,
-    compute_camera_up,
+    compute_camera_direction, compute_camera_position, compute_camera_up,
 };
+use crate::platform::ImguiData;
 
 pub struct CameraState {
     pub camera: Camera,

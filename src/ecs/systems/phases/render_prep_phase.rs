@@ -2,20 +2,22 @@ use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
 use crate::app::FrameContext;
-use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
-use crate::ecs::systems::render_data_systems::{
-    bone_gizmo_render_data, constraint_gizmo_render_data, gizmo_mesh_render_data,
-    gizmo_selectable_render_data, grid_mesh_render_data,
+use crate::debugview::gizmo::BoneSelectionState;
+use crate::debugview::gizmo::{
+    BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, SpringBoneGizmoData,
 };
 use crate::ecs::component::{ConstraintSet, LineMesh};
-use crate::debugview::gizmo::BoneSelectionState;
-use crate::ecs::{
-    build_bone_line_mesh, build_box_bone_meshes_with_selection,
-    build_constraint_gizmo_mesh, build_octahedral_bone_meshes_with_selection,
-    build_sphere_bone_meshes_with_selection, gizmo_update_rotation,
-    gizmo_update_vertex_buffer, ProjectionData,
-};
 use crate::ecs::resource::{Camera, Exposure};
+use crate::ecs::systems::render_data_systems::{
+    bone_gizmo_render_data, constraint_gizmo_render_data, gizmo_mesh_render_data,
+    gizmo_selectable_render_data, grid_mesh_render_data, spring_bone_gizmo_render_data,
+};
+use crate::ecs::{
+    build_bone_line_mesh, build_box_bone_meshes_with_selection, build_constraint_gizmo_mesh,
+    build_octahedral_bone_meshes_with_selection, build_sphere_bone_meshes_with_selection,
+    build_spring_bone_gizmo_mesh, gizmo_update_rotation, gizmo_update_vertex_buffer,
+    ProjectionData,
+};
 use crate::math::get_camera_axes_from_view;
 use crate::render::RenderBackend;
 use crate::renderer::scene_renderer::update_object_ubo;
@@ -67,8 +69,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         let light_pos = rt_debug.light_position;
         let debug_mode = rt_debug.debug_view_mode.as_int();
         let shadow_strength = rt_debug.shadow_strength;
-        let enable_distance_attenuation =
-            rt_debug.enable_distance_attenuation;
+        let enable_distance_attenuation = rt_debug.enable_distance_attenuation;
         drop(rt_debug);
 
         let exposure_value = ctx
@@ -110,6 +111,13 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         }
     }
 
+    if ctx.world.contains_resource::<SpringBoneGizmoData>() {
+        let sg = ctx.world.resource::<SpringBoneGizmoData>();
+        if sg.visible {
+            render_data_vec.extend(spring_bone_gizmo_render_data(&sg));
+        }
+    }
+
     let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
     if let Err(e) = update_object_ubo(
@@ -126,6 +134,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     update_grid_gizmo_buffers(ctx, view)?;
     update_bone_gizmo_mesh(ctx)?;
     update_constraint_gizmo_mesh(ctx)?;
+    update_spring_bone_gizmo_mesh(ctx)?;
 
     Ok(())
 }
@@ -153,8 +162,7 @@ unsafe fn update_billboard_ubo(
 unsafe fn update_grid_gizmo_buffers(ctx: &mut FrameContext, view: Matrix4<f32>) -> Result<()> {
     let (camera_right, camera_up_gizmo, camera_forward) = get_camera_axes_from_view(view);
 
-    let gizmo_rotation =
-        cgmath::Matrix3::from_cols(camera_right, camera_up_gizmo, camera_forward);
+    let gizmo_rotation = cgmath::Matrix3::from_cols(camera_right, camera_up_gizmo, camera_forward);
 
     gizmo_update_rotation(&mut ctx.gizmo_mut().mesh, &gizmo_rotation);
 
@@ -170,7 +178,16 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
         return Ok(());
     }
 
-    let (visible, display_style, skeleton_id, transforms, offsets, distance_scaling_enabled, distance_scaling_factor, mesh_scale) = {
+    let (
+        visible,
+        display_style,
+        skeleton_id,
+        transforms,
+        offsets,
+        distance_scaling_enabled,
+        distance_scaling_factor,
+        mesh_scale,
+    ) = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
         (
             bone_gizmo.visible,
@@ -210,17 +227,32 @@ unsafe fn update_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
         }
         BoneDisplayStyle::Octahedral => {
             update_octahedral_bone_mesh(
-                ctx, &skeleton, &transforms, &offsets, visual_scale, mesh_scale,
+                ctx,
+                &skeleton,
+                &transforms,
+                &offsets,
+                visual_scale,
+                mesh_scale,
             )?;
         }
         BoneDisplayStyle::Box => {
             update_box_bone_mesh(
-                ctx, &skeleton, &transforms, &offsets, visual_scale, mesh_scale,
+                ctx,
+                &skeleton,
+                &transforms,
+                &offsets,
+                visual_scale,
+                mesh_scale,
             )?;
         }
         BoneDisplayStyle::Sphere => {
             update_sphere_bone_mesh(
-                ctx, &skeleton, &transforms, &offsets, visual_scale, mesh_scale,
+                ctx,
+                &skeleton,
+                &transforms,
+                &offsets,
+                visual_scale,
+                mesh_scale,
             )?;
         }
     }
@@ -265,7 +297,13 @@ unsafe fn update_stick_bone_mesh(
 ) -> Result<()> {
     {
         let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
-        build_bone_line_mesh(skeleton, transforms, offsets, mesh_scale, &mut bone_gizmo.stick_mesh);
+        build_bone_line_mesh(
+            skeleton,
+            transforms,
+            offsets,
+            mesh_scale,
+            &mut bone_gizmo.stick_mesh,
+        );
     }
 
     let mut mesh_clone = {
@@ -413,9 +451,7 @@ unsafe fn update_sphere_bone_mesh(
     Ok(())
 }
 
-unsafe fn update_constraint_gizmo_mesh(
-    ctx: &mut FrameContext,
-) -> Result<()> {
+unsafe fn update_constraint_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
     if !ctx.world.contains_resource::<ConstraintGizmoData>() {
         return Ok(());
     }
@@ -444,9 +480,7 @@ unsafe fn update_constraint_gizmo_mesh(
     let Some(skel_id) = skeleton_id else {
         return Ok(());
     };
-    let Some(skeleton) =
-        ctx.assets.get_skeleton_by_skeleton_id(skel_id)
-    else {
+    let Some(skeleton) = ctx.assets.get_skeleton_by_skeleton_id(skel_id) else {
         return Ok(());
     };
     let skeleton = skeleton.clone();
@@ -479,6 +513,58 @@ unsafe fn update_constraint_gizmo_mesh(
     {
         let mut cg = ctx.world.resource_mut::<ConstraintGizmoData>();
         cg.wire_mesh = wire_mesh;
+    }
+
+    Ok(())
+}
+
+unsafe fn update_spring_bone_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
+    if !ctx.world.contains_resource::<SpringBoneGizmoData>() {
+        return Ok(());
+    }
+    if !ctx.world.contains_resource::<BoneGizmoData>() {
+        return Ok(());
+    }
+
+    let visible = {
+        let sg = ctx.world.resource::<SpringBoneGizmoData>();
+        sg.visible
+    };
+    if !visible {
+        return Ok(());
+    }
+
+    let (transforms, offsets, mesh_scale) = {
+        let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
+        (
+            bone_gizmo.cached_global_transforms.clone(),
+            bone_gizmo.bone_local_offsets.clone(),
+            bone_gizmo.mesh_scale,
+        )
+    };
+
+    use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
+    let setup = ctx
+        .world
+        .iter_components::<WithSpringBone>()
+        .next()
+        .and_then(|(e, _)| ctx.world.get_component::<SpringBoneSetup>(e).cloned());
+
+    let Some(setup) = setup else {
+        return Ok(());
+    };
+
+    let mut wire_mesh = LineMesh::default();
+    build_spring_bone_gizmo_mesh(&setup, &transforms, &offsets, mesh_scale, &mut wire_mesh);
+
+    {
+        let mut backend = ctx.create_backend();
+        backend.update_or_create_line_buffers(&mut wire_mesh)?;
+    }
+
+    {
+        let mut sg = ctx.world.resource_mut::<SpringBoneGizmoData>();
+        sg.wire_mesh = wire_mesh;
     }
 
     Ok(())

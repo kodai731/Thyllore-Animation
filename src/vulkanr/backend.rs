@@ -184,11 +184,12 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             return Ok(());
         }
 
-        let vertex_data_size =
-            (std::mem::size_of_val(mesh.vertices.as_slice())) as u64;
+        let vertex_data_size = (std::mem::size_of_val(mesh.vertices.as_slice())) as u64;
 
         if !mesh.vertex_buffer_handle.is_valid()
-            || self.buffer_registry.get_vertex_buffer_size(mesh.vertex_buffer_handle)
+            || self
+                .buffer_registry
+                .get_vertex_buffer_size(mesh.vertex_buffer_handle)
                 < vertex_data_size
         {
             if mesh.vertex_buffer_handle.is_valid() {
@@ -210,11 +211,12 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             )?;
         }
 
-        let index_data_size =
-            (std::mem::size_of::<u32>() * mesh.indices.len()) as u64;
+        let index_data_size = (std::mem::size_of::<u32>() * mesh.indices.len()) as u64;
 
         if !mesh.index_buffer_handle.is_valid()
-            || self.buffer_registry.get_index_buffer_size(mesh.index_buffer_handle)
+            || self
+                .buffer_registry
+                .get_index_buffer_size(mesh.index_buffer_handle)
                 < index_data_size
         {
             if mesh.index_buffer_handle.is_valid() {

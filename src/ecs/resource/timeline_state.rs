@@ -1,8 +1,6 @@
 use std::collections::HashSet;
 
-use crate::animation::editable::{
-    ClipInstanceId, KeyframeId, PropertyType, SourceClipId,
-};
+use crate::animation::editable::{ClipInstanceId, KeyframeId, PropertyType, SourceClipId};
 use crate::animation::BoneId;
 use crate::ecs::world::Entity;
 
@@ -137,11 +135,7 @@ impl TimelineState {
         self.selected_keyframes.clear();
     }
 
-    pub fn apply_selection(
-        &mut self,
-        keyframe: SelectedKeyframe,
-        modifier: SelectionModifier,
-    ) {
+    pub fn apply_selection(&mut self, keyframe: SelectedKeyframe, modifier: SelectionModifier) {
         match modifier {
             SelectionModifier::Replace => self.select_keyframe(keyframe),
             SelectionModifier::Add => {

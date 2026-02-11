@@ -6,9 +6,8 @@ use cgmath::{Matrix4, SquareMatrix, Vector3};
 
 use crate::asset::AssetId;
 use crate::ecs::component::{
-    Animated, AnimationMeta, ClipSchedule, ConstraintSet, Constrained,
-    EditorDisplay, EntityIcon, MeshHandle, Model, Skinned,
-    SpringBoneSetup, WithSpringBone,
+    Animated, AnimationMeta, ClipSchedule, Constrained, ConstraintSet, EditorDisplay, EntityIcon,
+    MeshHandle, Model, Skinned, SpringBoneSetup, WithSpringBone,
 };
 
 pub trait Resource: Any + 'static {}
@@ -422,9 +421,7 @@ impl World {
     }
 
     pub fn query_animated(&self) -> Vec<Entity> {
-        self.iter_components::<Animator>()
-            .map(|(e, _)| e)
-            .collect()
+        self.iter_components::<Animator>().map(|(e, _)| e).collect()
     }
 
     pub fn query_skinned(&self) -> Vec<Entity> {
@@ -469,9 +466,7 @@ impl World {
             .filter(|(e, _)| self.has_component::<Skinned>(*e))
     }
 
-    pub fn iter_constrained_entities(
-        &self,
-    ) -> impl Iterator<Item = (Entity, &ConstraintSet)> {
+    pub fn iter_constrained_entities(&self) -> impl Iterator<Item = (Entity, &ConstraintSet)> {
         self.iter_components::<ConstraintSet>()
             .filter(|(e, _)| self.has_component::<Constrained>(*e))
     }

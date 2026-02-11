@@ -17,11 +17,7 @@ impl CurveEditorBuffer {
         self.snapshots.clear();
     }
 
-    pub fn has_snapshot(
-        &self,
-        bone_id: BoneId,
-        property_type: PropertyType,
-    ) -> bool {
+    pub fn has_snapshot(&self, bone_id: BoneId, property_type: PropertyType) -> bool {
         self.snapshots.contains_key(&(bone_id, property_type))
     }
 
@@ -64,11 +60,7 @@ impl CurveEditorBuffer {
         }
     }
 
-    pub fn swap_buffer(
-        &mut self,
-        clip: &mut EditableAnimationClip,
-        bone_id: BoneId,
-    ) {
+    pub fn swap_buffer(&mut self, clip: &mut EditableAnimationClip, bone_id: BoneId) {
         let keys_to_swap: Vec<(BoneId, PropertyType)> = self
             .snapshots
             .keys()
@@ -93,14 +85,11 @@ impl CurveEditorBuffer {
                 .map(|kf| (kf.time, kf.value))
                 .collect();
 
-            if let Some(snapshot) = self.snapshots.get_mut(&(bone_id, *prop))
-            {
-                let old_snapshot =
-                    std::mem::replace(snapshot, current_keyframes);
+            if let Some(snapshot) = self.snapshots.get_mut(&(bone_id, *prop)) {
+                let old_snapshot = std::mem::replace(snapshot, current_keyframes);
 
                 let curve_mut = track.get_curve_mut(*prop);
-                let ids: Vec<_> =
-                    curve_mut.keyframes.iter().map(|kf| kf.id).collect();
+                let ids: Vec<_> = curve_mut.keyframes.iter().map(|kf| kf.id).collect();
                 for id in ids {
                     curve_mut.remove_keyframe(id);
                 }

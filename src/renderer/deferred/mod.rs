@@ -1,9 +1,9 @@
 mod auto_exposure;
 mod bloom;
+mod composite;
 mod dof;
 mod gbuffer;
 mod rayquery;
-mod composite;
 mod tonemap;
 
 use anyhow::Result;
@@ -14,10 +14,10 @@ use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::MeshRef;
 pub use auto_exposure::AutoExposurePass;
 pub use bloom::BloomPass;
-pub use dof::DofPass;
-pub use gbuffer::{GBufferPass, create_gbuffer_framebuffer};
-pub use rayquery::RayQueryPass;
 pub use composite::CompositePass;
+pub use dof::DofPass;
+pub use gbuffer::{create_gbuffer_framebuffer, GBufferPass};
+pub use rayquery::RayQueryPass;
 pub use tonemap::ToneMapPass;
 
 pub unsafe fn record_gbuffer_pass(
@@ -35,10 +35,7 @@ pub unsafe fn record_gbuffer_pass(
     )
 }
 
-pub unsafe fn record_ray_query_pass(
-    app: &App,
-    command_buffer: vk::CommandBuffer,
-) -> Result<()> {
+pub unsafe fn record_ray_query_pass(app: &App, command_buffer: vk::CommandBuffer) -> Result<()> {
     let pass = RayQueryPass::new(app)?;
     let normal_offset = app.rt_debug_state().shadow_normal_offset;
     pass.record(command_buffer, normal_offset)
@@ -80,12 +77,7 @@ pub unsafe fn record_composite_pass(
 
     {
         let pass = CompositePass::new(app)?;
-        pass.record(
-            command_buffer,
-            render_pass,
-            framebuffer,
-            image_index,
-        )?;
+        pass.record(command_buffer, render_pass, framebuffer, image_index)?;
     }
 
     app.record_imgui_rendering(command_buffer, draw_data)?;
@@ -105,7 +97,11 @@ pub unsafe fn record_composite_to_offscreen(
         composite_descriptor.update_selection(&app.rrdevice, &selected_mesh_ids)?;
     }
 
-    let offscreen = app.data.viewport.offscreen.as_ref()
+    let offscreen = app
+        .data
+        .viewport
+        .offscreen
+        .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Offscreen framebuffer not initialized"))?;
 
     let render_pass = offscreen.render_pass;
@@ -113,12 +109,7 @@ pub unsafe fn record_composite_to_offscreen(
     let extent = offscreen.extent();
 
     let pass = CompositePass::new_for_offscreen(app, extent)?;
-    pass.record_to_offscreen(
-        command_buffer,
-        render_pass,
-        framebuffer,
-        image_index,
-    )?;
+    pass.record_to_offscreen(command_buffer, render_pass, framebuffer, image_index)?;
 
     Ok(())
 }
@@ -133,7 +124,11 @@ pub unsafe fn record_composite_to_hdr(
         composite_descriptor.update_selection(&app.rrdevice, &selected_mesh_ids)?;
     }
 
-    let hdr_buffer = app.data.viewport.hdr_buffer.as_ref()
+    let hdr_buffer = app
+        .data
+        .viewport
+        .hdr_buffer
+        .as_ref()
         .ok_or_else(|| anyhow::anyhow!("HDR buffer not initialized"))?;
 
     let render_pass = hdr_buffer.render_pass;
@@ -146,11 +141,11 @@ pub unsafe fn record_composite_to_hdr(
     Ok(())
 }
 
-pub unsafe fn record_bloom(
-    app: &App,
-    command_buffer: vk::CommandBuffer,
-) -> Result<()> {
-    let bloom_settings = app.data.ecs_world.get_resource::<crate::ecs::resource::BloomSettings>();
+pub unsafe fn record_bloom(app: &App, command_buffer: vk::CommandBuffer) -> Result<()> {
+    let bloom_settings = app
+        .data
+        .ecs_world
+        .get_resource::<crate::ecs::resource::BloomSettings>();
     let bloom_enabled = bloom_settings.map(|bs| bs.enabled).unwrap_or(false);
 
     if !bloom_enabled {
@@ -170,10 +165,7 @@ pub unsafe fn record_bloom(
     Ok(())
 }
 
-pub unsafe fn record_dof(
-    app: &App,
-    command_buffer: vk::CommandBuffer,
-) -> Result<()> {
+pub unsafe fn record_dof(app: &App, command_buffer: vk::CommandBuffer) -> Result<()> {
     if app.data.raytracing.dof_pipeline.is_none()
         || app.data.raytracing.dof_descriptor.is_none()
         || app.data.viewport.dof_buffer.is_none()
@@ -187,10 +179,7 @@ pub unsafe fn record_dof(
     Ok(())
 }
 
-pub unsafe fn record_auto_exposure(
-    app: &App,
-    command_buffer: vk::CommandBuffer,
-) -> Result<()> {
+pub unsafe fn record_auto_exposure(app: &App, command_buffer: vk::CommandBuffer) -> Result<()> {
     let ae_settings = app
         .data
         .ecs_world
@@ -201,12 +190,12 @@ pub unsafe fn record_auto_exposure(
         return Ok(());
     }
 
-    if app.data.raytracing.auto_exposure_histogram_pipeline.is_none()
-        || app
-            .data
-            .raytracing
-            .auto_exposure_average_pipeline
-            .is_none()
+    if app
+        .data
+        .raytracing
+        .auto_exposure_histogram_pipeline
+        .is_none()
+        || app.data.raytracing.auto_exposure_average_pipeline.is_none()
         || app
             .data
             .raytracing
@@ -233,7 +222,11 @@ pub unsafe fn record_tonemap_to_offscreen(
     command_buffer: vk::CommandBuffer,
     image_index: usize,
 ) -> Result<()> {
-    let offscreen = app.data.viewport.offscreen.as_ref()
+    let offscreen = app
+        .data
+        .viewport
+        .offscreen
+        .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Offscreen framebuffer not initialized"))?;
 
     let render_pass = offscreen.render_pass;
@@ -241,12 +234,7 @@ pub unsafe fn record_tonemap_to_offscreen(
     let extent = offscreen.extent();
 
     let pass = ToneMapPass::new(app, extent)?;
-    pass.record_to_offscreen(
-        command_buffer,
-        render_pass,
-        framebuffer,
-        image_index,
-    )?;
+    pass.record_to_offscreen(command_buffer, render_pass, framebuffer, image_index)?;
 
     Ok(())
 }

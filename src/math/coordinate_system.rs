@@ -66,11 +66,7 @@ pub fn perspective(fovy: Deg<f32>, aspect: f32, near: f32, far: f32) -> Matrix4<
     )
 }
 
-pub fn perspective_infinite_reverse(
-    fovy: Deg<f32>,
-    aspect: f32,
-    near: f32,
-) -> Matrix4<f32> {
+pub fn perspective_infinite_reverse(fovy: Deg<f32>, aspect: f32, near: f32) -> Matrix4<f32> {
     let fovy_rad: Rad<f32> = fovy.into();
     let f = 1.0 / (fovy_rad.0 / 2.0).tan();
 
@@ -97,10 +93,7 @@ pub fn perspective_infinite_reverse(
 /// FBX Z-up → ワールド Y-up 変換（X軸周りに-90度回転）
 pub fn fbx_to_world() -> Matrix4<f32> {
     Matrix4::new(
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, -1.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 1.0,
+        1.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
     )
 }
 
@@ -394,9 +387,7 @@ mod tests {
         let v1 = vec3(1.0, -1.0, 0.0);
         let v2 = vec3(0.0, 1.0, 0.0);
 
-        let result = ray_to_triangle_intersection(
-            origin, direction, v0, v1, v2,
-        );
+        let result = ray_to_triangle_intersection(origin, direction, v0, v1, v2);
         assert!(result.is_some());
         assert!((result.unwrap() - 1.0).abs() < 1e-5);
     }
@@ -409,9 +400,7 @@ mod tests {
         let v1 = vec3(1.0, -1.0, 0.0);
         let v2 = vec3(0.0, 1.0, 0.0);
 
-        let result = ray_to_triangle_intersection(
-            origin, direction, v0, v1, v2,
-        );
+        let result = ray_to_triangle_intersection(origin, direction, v0, v1, v2);
         assert!(result.is_none());
     }
 
@@ -423,9 +412,7 @@ mod tests {
         let v1 = vec3(1.0, -1.0, 0.0);
         let v2 = vec3(0.0, 1.0, 0.0);
 
-        let result = ray_to_triangle_intersection(
-            origin, direction, v0, v1, v2,
-        );
+        let result = ray_to_triangle_intersection(origin, direction, v0, v1, v2);
         assert!(result.is_none());
     }
 }

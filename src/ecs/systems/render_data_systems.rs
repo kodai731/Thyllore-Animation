@@ -2,8 +2,8 @@ use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
 use crate::app::billboard::BillboardData;
 use crate::debugview::gizmo::{
-    BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, GridGizmoData,
-    LightGizmoData,
+    BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, GridGizmoData, LightGizmoData,
+    SpringBoneGizmoData,
 };
 use crate::debugview::GridMeshData;
 use crate::ecs::component::GpuMeshRef;
@@ -70,9 +70,7 @@ pub fn bone_gizmo_render_data(bone_gizmo: &BoneGizmoData) -> Vec<RenderData> {
             );
             vec![RenderData::new(mesh_ref, bone_gizmo.stick_render_info)]
         }
-        BoneDisplayStyle::Octahedral
-        | BoneDisplayStyle::Box
-        | BoneDisplayStyle::Sphere => {
+        BoneDisplayStyle::Octahedral | BoneDisplayStyle::Box | BoneDisplayStyle::Sphere => {
             let solid_ref = GpuMeshRef::new(
                 bone_gizmo.solid_mesh.vertex_buffer_handle,
                 bone_gizmo.solid_mesh.index_buffer_handle,
@@ -91,9 +89,7 @@ pub fn bone_gizmo_render_data(bone_gizmo: &BoneGizmoData) -> Vec<RenderData> {
     }
 }
 
-pub fn constraint_gizmo_render_data(
-    constraint_gizmo: &ConstraintGizmoData,
-) -> Vec<RenderData> {
+pub fn constraint_gizmo_render_data(constraint_gizmo: &ConstraintGizmoData) -> Vec<RenderData> {
     if constraint_gizmo.wire_mesh.indices.is_empty() {
         return Vec::new();
     }
@@ -103,10 +99,20 @@ pub fn constraint_gizmo_render_data(
         constraint_gizmo.wire_mesh.index_buffer_handle,
         constraint_gizmo.wire_mesh.indices.len() as u32,
     );
-    vec![RenderData::new(
-        mesh_ref,
-        constraint_gizmo.wire_render_info,
-    )]
+    vec![RenderData::new(mesh_ref, constraint_gizmo.wire_render_info)]
+}
+
+pub fn spring_bone_gizmo_render_data(gizmo: &SpringBoneGizmoData) -> Vec<RenderData> {
+    if gizmo.wire_mesh.indices.is_empty() {
+        return Vec::new();
+    }
+
+    let mesh_ref = GpuMeshRef::new(
+        gizmo.wire_mesh.vertex_buffer_handle,
+        gizmo.wire_mesh.index_buffer_handle,
+        gizmo.wire_mesh.indices.len() as u32,
+    );
+    vec![RenderData::new(mesh_ref, gizmo.wire_render_info)]
 }
 
 pub fn collect_scene_render_data(

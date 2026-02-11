@@ -2,10 +2,10 @@ use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
-use crate::vulkanr::resource::RRGBuffer;
-use crate::vulkanr::pipeline::RRPipeline;
-use crate::vulkanr::descriptor::RRRayQueryDescriptorSet;
 use crate::vulkanr::core::Device;
+use crate::vulkanr::descriptor::RRRayQueryDescriptorSet;
+use crate::vulkanr::pipeline::RRPipeline;
+use crate::vulkanr::resource::RRGBuffer;
 
 pub struct RayQueryPass<'a> {
     gbuffer: &'a RRGBuffer,
@@ -16,11 +16,23 @@ pub struct RayQueryPass<'a> {
 
 impl<'a> RayQueryPass<'a> {
     pub fn new(app: &'a App) -> Result<Self> {
-        let gbuffer = app.data.raytracing.gbuffer.as_ref()
+        let gbuffer = app
+            .data
+            .raytracing
+            .gbuffer
+            .as_ref()
             .ok_or_else(|| anyhow!("G-Buffer not initialized"))?;
-        let pipeline = app.data.raytracing.ray_query_pipeline.as_ref()
+        let pipeline = app
+            .data
+            .raytracing
+            .ray_query_pipeline
+            .as_ref()
             .ok_or_else(|| anyhow!("Ray Query pipeline not initialized"))?;
-        let descriptor_set = app.data.raytracing.ray_query_descriptor.as_ref()
+        let descriptor_set = app
+            .data
+            .raytracing
+            .ray_query_descriptor
+            .as_ref()
             .ok_or_else(|| anyhow!("Ray Query descriptor set not initialized"))?;
 
         Ok(Self {
@@ -31,7 +43,11 @@ impl<'a> RayQueryPass<'a> {
         })
     }
 
-    pub unsafe fn record(&self, command_buffer: vk::CommandBuffer, normal_offset: f32) -> Result<()> {
+    pub unsafe fn record(
+        &self,
+        command_buffer: vk::CommandBuffer,
+        normal_offset: f32,
+    ) -> Result<()> {
         self.insert_pre_compute_barriers(command_buffer);
         self.dispatch_compute(command_buffer, normal_offset);
         self.insert_post_compute_barriers(command_buffer);
@@ -126,7 +142,8 @@ impl<'a> RayQueryPass<'a> {
 
         let group_count_x = (self.gbuffer.width + 15) / 16;
         let group_count_y = (self.gbuffer.height + 15) / 16;
-        self.device.cmd_dispatch(command_buffer, group_count_x, group_count_y, 1);
+        self.device
+            .cmd_dispatch(command_buffer, group_count_x, group_count_y, 1);
     }
 
     unsafe fn insert_post_compute_barriers(&self, command_buffer: vk::CommandBuffer) {

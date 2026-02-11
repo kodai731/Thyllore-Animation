@@ -25,10 +25,7 @@ pub fn clip_library_create_from_imported(
     id
 }
 
-pub fn clip_library_create_empty(
-    lib: &mut ClipLibrary,
-    name: String,
-) -> SourceClipId {
+pub fn clip_library_create_empty(lib: &mut ClipLibrary, name: String) -> SourceClipId {
     let id = lib.next_source_id;
     lib.next_source_id += 1;
 
@@ -50,10 +47,7 @@ pub fn clip_library_register_clip(
     id
 }
 
-pub fn clip_library_to_playable(
-    lib: &ClipLibrary,
-    id: SourceClipId,
-) -> Option<AnimationClip> {
+pub fn clip_library_to_playable(lib: &ClipLibrary, id: SourceClipId) -> Option<AnimationClip> {
     lib.source_clips
         .get(&id)
         .map(|s| s.editable_clip.to_animation_clip())
@@ -85,18 +79,11 @@ pub fn clip_library_clip_names(lib: &ClipLibrary) -> Vec<(SourceClipId, String)>
         .collect()
 }
 
-pub fn clip_library_save_to_file(
-    lib: &ClipLibrary,
-    id: SourceClipId,
-    path: &Path,
-) -> Result<()> {
-    let source = lib
-        .source_clips
-        .get(&id)
-        .context("Clip not found")?;
+pub fn clip_library_save_to_file(lib: &ClipLibrary, id: SourceClipId, path: &Path) -> Result<()> {
+    let source = lib.source_clips.get(&id).context("Clip not found")?;
 
-    let file = fs::File::create(path)
-        .with_context(|| format!("Failed to create file: {:?}", path))?;
+    let file =
+        fs::File::create(path).with_context(|| format!("Failed to create file: {:?}", path))?;
     let writer = BufWriter::new(file);
 
     ron::ser::to_writer_pretty(
@@ -104,9 +91,7 @@ pub fn clip_library_save_to_file(
         &source.editable_clip,
         ron::ser::PrettyConfig::default(),
     )
-    .with_context(|| {
-        format!("Failed to serialize clip to: {:?}", path)
-    })?;
+    .with_context(|| format!("Failed to serialize clip to: {:?}", path))?;
 
     crate::log!(
         "Saved animation clip '{}' to {:?}",
@@ -149,11 +134,7 @@ pub fn clip_library_ensure_playable(
         );
     }
 
-    let existing_clip_ids: Vec<_> = assets
-        .animation_clips
-        .values()
-        .map(|a| a.clip_id)
-        .collect();
+    let existing_clip_ids: Vec<_> = assets.animation_clips.values().map(|a| a.clip_id).collect();
     crate::log!(
         "[EnsurePlayable] existing asset clip_ids={:?}",
         existing_clip_ids,
@@ -184,14 +165,11 @@ pub fn clip_library_load_from_file(
     path: &Path,
     bone_name_to_id: Option<&HashMap<String, BoneId>>,
 ) -> Result<SourceClipId> {
-    let file = fs::File::open(path)
-        .with_context(|| format!("Failed to open file: {:?}", path))?;
+    let file = fs::File::open(path).with_context(|| format!("Failed to open file: {:?}", path))?;
     let reader = BufReader::new(file);
 
     let mut clip: EditableAnimationClip = ron::de::from_reader(reader)
-        .with_context(|| {
-            format!("Failed to deserialize clip from: {:?}", path)
-        })?;
+        .with_context(|| format!("Failed to deserialize clip from: {:?}", path))?;
 
     if let Some(name_to_id) = bone_name_to_id {
         let needs_remap = clip.tracks.values().any(|track| {

@@ -5,5 +5,5 @@ pub mod platform;
 pub mod ui;
 
 pub use imgui::ImguiData;
-pub use platform::{System, init};
+pub use platform::{init, System};
 pub use ui::*;

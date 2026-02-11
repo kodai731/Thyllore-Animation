@@ -1,6 +1,4 @@
-use crate::ecs::component::{
-    GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, RenderInfo,
-};
+use crate::ecs::component::{GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, RenderInfo};
 
 #[derive(Clone, Debug, Default)]
 pub struct LightGizmoData {
@@ -12,4 +10,3 @@ pub struct LightGizmoData {
     pub ray_to_model: LineMesh,
     pub vertical_lines: LineMesh,
 }
-

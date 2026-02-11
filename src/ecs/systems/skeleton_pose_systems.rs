@@ -102,13 +102,7 @@ pub fn compute_pose_global_transforms(
         global_transforms[idx] = global;
 
         for &child_id in &bone.children {
-            compute_recursive(
-                skeleton,
-                pose,
-                child_id,
-                global,
-                global_transforms,
-            );
+            compute_recursive(skeleton, pose, child_id, global, global_transforms);
         }
     }
 
@@ -202,23 +196,14 @@ pub fn apply_skinning(
                 let m = &skin_matrices[bone_idx];
 
                 let pos = skin_data.base_positions[i];
-                let transformed =
-                    m * Vector4::new(pos.x, pos.y, pos.z, 1.0);
-                skinned_pos += Vector3::new(
-                    transformed.x,
-                    transformed.y,
-                    transformed.z,
-                ) * weight;
+                let transformed = m * Vector4::new(pos.x, pos.y, pos.z, 1.0);
+                skinned_pos += Vector3::new(transformed.x, transformed.y, transformed.z) * weight;
 
                 if i < skin_data.base_normals.len() {
                     let normal = skin_data.base_normals[i];
-                    let transformed_n =
-                        m * Vector4::new(normal.x, normal.y, normal.z, 0.0);
-                    skinned_normal += Vector3::new(
-                        transformed_n.x,
-                        transformed_n.y,
-                        transformed_n.z,
-                    ) * weight;
+                    let transformed_n = m * Vector4::new(normal.x, normal.y, normal.z, 0.0);
+                    skinned_normal +=
+                        Vector3::new(transformed_n.x, transformed_n.y, transformed_n.z) * weight;
                 }
             }
         }

@@ -62,8 +62,7 @@ impl App {
     fn log_billboard_debug_info(&self) {
         use crate::debugview::{log_billboard_debug_info, BillboardDebugInfo, GBufferDebugInfo};
         use crate::ecs::systems::camera_systems::{
-            compute_camera_direction, compute_camera_position,
-            compute_camera_up,
+            compute_camera_direction, compute_camera_position, compute_camera_up,
         };
 
         let camera = self.camera();

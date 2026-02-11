@@ -1,10 +1,10 @@
 use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::App;
-use crate::debugview::DebugViewMode;
-use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
 use crate::app::graphics_resource::GraphicsResources;
+use crate::app::App;
+use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
+use crate::debugview::DebugViewMode;
 use crate::ecs::component::LineMesh;
 use crate::vulkanr::core::Device;
 use crate::vulkanr::descriptor::RRCompositeDescriptorSet;
@@ -349,12 +349,8 @@ impl<'a> CompositePass<'a> {
         self.device
             .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
-        self.device.cmd_bind_index_buffer(
-            command_buffer,
-            index_buffer,
-            0,
-            vk::IndexType::UINT32,
-        );
+        self.device
+            .cmd_bind_index_buffer(command_buffer, index_buffer, 0, vk::IndexType::UINT32);
 
         let frame_set = self.graphics_resources.frame_set.sets[image_index];
         self.device.cmd_bind_descriptor_sets(
@@ -429,12 +425,8 @@ impl<'a> CompositePass<'a> {
         self.device
             .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
-        self.device.cmd_bind_index_buffer(
-            command_buffer,
-            index_buffer,
-            0,
-            vk::IndexType::UINT32,
-        );
+        self.device
+            .cmd_bind_index_buffer(command_buffer, index_buffer, 0, vk::IndexType::UINT32);
 
         let frame_set = self.graphics_resources.frame_set.sets[image_index];
         self.device.cmd_bind_descriptor_sets(
@@ -606,11 +598,7 @@ impl<'a> CompositePass<'a> {
         );
     }
 
-    unsafe fn draw_bone_gizmo(
-        &self,
-        command_buffer: vk::CommandBuffer,
-        image_index: usize,
-    ) {
+    unsafe fn draw_bone_gizmo(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
         let bone_gizmo = match self.app.get_resource::<BoneGizmoData>() {
             Some(bg) => bg,
             None => return,
@@ -642,9 +630,7 @@ impl<'a> CompositePass<'a> {
                 );
             }
 
-            BoneDisplayStyle::Octahedral
-            | BoneDisplayStyle::Box
-            | BoneDisplayStyle::Sphere => {
+            BoneDisplayStyle::Octahedral | BoneDisplayStyle::Box | BoneDisplayStyle::Sphere => {
                 if bone_gizmo.in_front {
                     self.draw_bone_solid_pass(
                         &bone_gizmo.solid_mesh,
@@ -695,16 +681,11 @@ impl<'a> CompositePass<'a> {
         }
     }
 
-    unsafe fn draw_constraint_gizmo(
-        &self,
-        command_buffer: vk::CommandBuffer,
-        image_index: usize,
-    ) {
-        let constraint_gizmo =
-            match self.app.get_resource::<ConstraintGizmoData>() {
-                Some(cg) => cg,
-                None => return,
-            };
+    unsafe fn draw_constraint_gizmo(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
+        let constraint_gizmo = match self.app.get_resource::<ConstraintGizmoData>() {
+            Some(cg) => cg,
+            None => return,
+        };
 
         if !constraint_gizmo.visible {
             return;
@@ -713,11 +694,10 @@ impl<'a> CompositePass<'a> {
             return;
         }
 
-        let pipeline_id =
-            match constraint_gizmo.wire_render_info.pipeline_id {
-                Some(id) => id,
-                None => return,
-            };
+        let pipeline_id = match constraint_gizmo.wire_render_info.pipeline_id {
+            Some(id) => id,
+            None => return,
+        };
         let pipeline = match self.pipeline_storage().get(pipeline_id) {
             Some(p) => p,
             None => return,
@@ -768,12 +748,8 @@ impl<'a> CompositePass<'a> {
         self.device
             .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
-        self.device.cmd_bind_index_buffer(
-            command_buffer,
-            index_buffer,
-            0,
-            vk::IndexType::UINT32,
-        );
+        self.device
+            .cmd_bind_index_buffer(command_buffer, index_buffer, 0, vk::IndexType::UINT32);
 
         let frame_set = self.graphics_resources.frame_set.sets[image_index];
         self.device.cmd_bind_descriptor_sets(
@@ -844,12 +820,8 @@ impl<'a> CompositePass<'a> {
         self.device
             .cmd_bind_vertex_buffers(command_buffer, 0, &[vertex_buffer], &[0]);
 
-        self.device.cmd_bind_index_buffer(
-            command_buffer,
-            index_buffer,
-            0,
-            vk::IndexType::UINT32,
-        );
+        self.device
+            .cmd_bind_index_buffer(command_buffer, index_buffer, 0, vk::IndexType::UINT32);
 
         let descriptor_set_index = image_index;
 

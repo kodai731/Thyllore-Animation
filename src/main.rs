@@ -8,8 +8,8 @@
 #[macro_use]
 extern crate rust_rendering;
 
-use rust_rendering::app::{App, GUIData};
 use rust_rendering::app::init::instance::cleanup_old_screenshots;
+use rust_rendering::app::{App, GUIData};
 use rust_rendering::platform;
 
 use anyhow::Result;

@@ -1,6 +1,6 @@
-use crate::vulkanr::data::*;
 use crate::vulkanr::core::device::*;
 use crate::vulkanr::core::swapchain::*;
+use crate::vulkanr::data::*;
 use crate::vulkanr::vulkan::*;
 
 #[derive(Clone, Debug, Default)]
@@ -33,10 +33,10 @@ impl RRDescriptorSet {
 
     pub unsafe fn delete_data(&mut self, rrdevice: &RRDevice) {
         if !self.descriptor_sets.is_empty() {
-            rrdevice.device.free_descriptor_sets(
-                self.descriptor_pool,
-                &self.descriptor_sets,
-            ).ok();
+            rrdevice
+                .device
+                .free_descriptor_sets(self.descriptor_pool, &self.descriptor_sets)
+                .ok();
             self.descriptor_sets.clear();
         }
 
@@ -47,10 +47,9 @@ impl RRDescriptorSet {
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         if !self.descriptor_sets.is_empty() {
-            device.free_descriptor_sets(
-                self.descriptor_pool,
-                &self.descriptor_sets,
-            ).ok();
+            device
+                .free_descriptor_sets(self.descriptor_pool, &self.descriptor_sets)
+                .ok();
             self.descriptor_sets.clear();
         }
 
@@ -122,10 +121,13 @@ unsafe fn create_descriptor_sets(
     rrdescriptor_set: &mut RRDescriptorSet,
 ) -> Result<()> {
     if !rrdescriptor_set.descriptor_sets.is_empty() {
-        rrdevice.device.free_descriptor_sets(
-            rrdescriptor_set.descriptor_pool,
-            &rrdescriptor_set.descriptor_sets,
-        ).ok();
+        rrdevice
+            .device
+            .free_descriptor_sets(
+                rrdescriptor_set.descriptor_pool,
+                &rrdescriptor_set.descriptor_sets,
+            )
+            .ok();
         rrdescriptor_set.descriptor_sets.clear();
     }
 

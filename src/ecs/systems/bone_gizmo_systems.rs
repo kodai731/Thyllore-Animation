@@ -28,13 +28,12 @@ pub fn compute_bone_local_offsets(
     skeleton: &Skeleton,
     rest_global_transforms: &[Matrix4<f32>],
 ) -> Vec<[f32; 3]> {
-    let has_significant_translations =
-        rest_global_transforms.iter().any(|t| {
-            let tx = t[3][0].abs();
-            let ty = t[3][1].abs();
-            let tz = t[3][2].abs();
-            tx > 1e-4 || ty > 1e-4 || tz > 1e-4
-        });
+    let has_significant_translations = rest_global_transforms.iter().any(|t| {
+        let tx = t[3][0].abs();
+        let ty = t[3][1].abs();
+        let tz = t[3][2].abs();
+        tx > 1e-4 || ty > 1e-4 || tz > 1e-4
+    });
 
     if has_significant_translations {
         return vec![[0.0, 0.0, 0.0]; skeleton.bones.len()];
@@ -49,8 +48,7 @@ pub fn compute_bone_local_offsets(
 
             if has_ibp {
                 if let Some(bind_global) = bone.inverse_bind_pose.invert() {
-                    let bind_world_pos =
-                        bind_global * Vector4::new(0.0, 0.0, 0.0, 1.0);
+                    let bind_world_pos = bind_global * Vector4::new(0.0, 0.0, 0.0, 1.0);
 
                     if idx < rest_global_transforms.len() {
                         if let Some(inv_rest) = rest_global_transforms[idx].invert() {
@@ -158,11 +156,8 @@ pub fn build_octahedral_bone_meshes_with_selection(
         return;
     }
 
-    let display_transforms = compute_display_transforms(
-        global_transforms,
-        bone_local_offsets,
-        mesh_scale,
-    );
+    let display_transforms =
+        compute_display_transforms(global_transforms, bone_local_offsets, mesh_scale);
 
     for bone in &skeleton.bones {
         let bone_idx = bone.id as usize;
@@ -181,9 +176,7 @@ pub fn build_octahedral_bone_meshes_with_selection(
         let head = display_transforms[parent_idx];
         let tail = display_transforms[bone_idx];
 
-        let Some((bone_length, bone_dir, right, forward)) =
-            compute_bone_axes(head, tail)
-        else {
+        let Some((bone_length, bone_dir, right, forward)) = compute_bone_axes(head, tail) else {
             continue;
         };
 
@@ -221,51 +214,29 @@ pub fn build_octahedral_bone_meshes_with_selection(
             tail,
         ];
 
-        let (solid_color, wire_color) =
-            resolve_bone_colors(bone_idx, selection);
-        append_octahedral_solid_colored(
-            solid_mesh,
-            &verts,
-            solid_color,
-        );
-        append_octahedral_wire_colored(
-            wire_mesh,
-            &verts,
-            wire_color,
-        );
+        let (solid_color, wire_color) = resolve_bone_colors(bone_idx, selection);
+        append_octahedral_solid_colored(solid_mesh, &verts, solid_color);
+        append_octahedral_wire_colored(wire_mesh, &verts, wire_color);
     }
 }
 
-fn resolve_bone_colors(
-    bone_index: usize,
-    selection: &BoneSelectionState,
-) -> ([f32; 3], [f32; 3]) {
+fn resolve_bone_colors(bone_index: usize, selection: &BoneSelectionState) -> ([f32; 3], [f32; 3]) {
     if selection.active_bone_index == Some(bone_index) {
         return (BONE_ACTIVE_SOLID_COLOR, BONE_ACTIVE_WIRE_COLOR);
     }
 
     if selection.selected_bone_indices.contains(&bone_index) {
-        return (
-            BONE_SELECTED_SOLID_COLOR,
-            BONE_SELECTED_WIRE_COLOR,
-        );
+        return (BONE_SELECTED_SOLID_COLOR, BONE_SELECTED_WIRE_COLOR);
     }
 
     (BONE_SOLID_COLOR, BONE_WIRE_COLOR)
 }
 
-fn append_octahedral_solid_colored(
-    mesh: &mut LineMesh,
-    verts: &[[f32; 3]; 6],
-    color: [f32; 3],
-) {
+fn append_octahedral_solid_colored(mesh: &mut LineMesh, verts: &[[f32; 3]; 6], color: [f32; 3]) {
     let base = mesh.vertices.len() as u32;
 
     for v in verts {
-        mesh.vertices.push(ColorVertex {
-            pos: *v,
-            color,
-        });
+        mesh.vertices.push(ColorVertex { pos: *v, color });
     }
 
     let tris: [[u32; 3]; 8] = [
@@ -286,24 +257,26 @@ fn append_octahedral_solid_colored(
     }
 }
 
-fn append_octahedral_wire_colored(
-    mesh: &mut LineMesh,
-    verts: &[[f32; 3]; 6],
-    color: [f32; 3],
-) {
+fn append_octahedral_wire_colored(mesh: &mut LineMesh, verts: &[[f32; 3]; 6], color: [f32; 3]) {
     let base = mesh.vertices.len() as u32;
 
     for v in verts {
-        mesh.vertices.push(ColorVertex {
-            pos: *v,
-            color,
-        });
+        mesh.vertices.push(ColorVertex { pos: *v, color });
     }
 
     let edges: [[u32; 2]; 12] = [
-        [0, 1], [0, 2], [0, 3], [0, 4],
-        [5, 1], [5, 2], [5, 3], [5, 4],
-        [1, 2], [2, 3], [3, 4], [4, 1],
+        [0, 1],
+        [0, 2],
+        [0, 3],
+        [0, 4],
+        [5, 1],
+        [5, 2],
+        [5, 3],
+        [5, 4],
+        [1, 2],
+        [2, 3],
+        [3, 4],
+        [4, 1],
     ];
 
     for edge in &edges {
@@ -366,13 +339,10 @@ pub(crate) fn compute_display_transforms(
 ) -> Vec<[f32; 3]> {
     (0..global_transforms.len())
         .map(|idx| {
-            let offset = bone_local_offsets
-                .get(idx)
-                .copied()
-                .unwrap_or([0.0; 3]);
+            let offset = bone_local_offsets.get(idx).copied().unwrap_or([0.0; 3]);
 
-            let world_pos = global_transforms[idx]
-                * Vector4::new(offset[0], offset[1], offset[2], 1.0);
+            let world_pos =
+                global_transforms[idx] * Vector4::new(offset[0], offset[1], offset[2], 1.0);
             [
                 world_pos.x * mesh_scale,
                 world_pos.y * mesh_scale,
@@ -428,11 +398,8 @@ pub fn compute_octahedral_vertices_per_bone(
         return Vec::new();
     }
 
-    let display_transforms = compute_display_transforms(
-        global_transforms,
-        bone_local_offsets,
-        mesh_scale,
-    );
+    let display_transforms =
+        compute_display_transforms(global_transforms, bone_local_offsets, mesh_scale);
 
     let mut result = Vec::new();
 
@@ -453,9 +420,7 @@ pub fn compute_octahedral_vertices_per_bone(
         let head = display_transforms[parent_idx];
         let tail = display_transforms[bone_idx];
 
-        let Some((bone_length, bone_dir, right, forward)) =
-            compute_bone_axes(head, tail)
-        else {
+        let Some((bone_length, bone_dir, right, forward)) = compute_bone_axes(head, tail) else {
             continue;
         };
 
@@ -529,8 +494,7 @@ pub fn select_bone_by_ray(
                 Vector3::new(v1[0], v1[1], v1[2]),
                 Vector3::new(v2[0], v2[1], v2[2]),
             ) {
-                let is_closer = closest
-                    .map_or(true, |(_, prev_t)| t < prev_t);
+                let is_closer = closest.map_or(true, |(_, prev_t)| t < prev_t);
                 if is_closer {
                     closest = Some((*bone_idx, t));
                 }
@@ -587,9 +551,7 @@ pub fn build_box_bone_meshes_with_selection(
         let head = display_transforms[parent_idx];
         let tail = display_transforms[bone_idx];
 
-        let Some((bone_length, _bone_dir, right, forward)) =
-            compute_bone_axes(head, tail)
-        else {
+        let Some((bone_length, _bone_dir, right, forward)) = compute_bone_axes(head, tail) else {
             continue;
         };
 
@@ -611,12 +573,7 @@ fn compute_box_vertices(
 ) -> [[f32; 3]; 8] {
     let mut verts = [[0.0f32; 3]; 8];
 
-    let signs: [[f32; 2]; 4] = [
-        [1.0, 1.0],
-        [-1.0, 1.0],
-        [-1.0, -1.0],
-        [1.0, -1.0],
-    ];
+    let signs: [[f32; 2]; 4] = [[1.0, 1.0], [-1.0, 1.0], [-1.0, -1.0], [1.0, -1.0]];
 
     for (i, [sr, sf]) in signs.iter().enumerate() {
         for k in 0..3 {
@@ -628,11 +585,7 @@ fn compute_box_vertices(
     verts
 }
 
-fn append_box_solid_colored(
-    mesh: &mut LineMesh,
-    verts: &[[f32; 3]; 8],
-    color: [f32; 3],
-) {
+fn append_box_solid_colored(mesh: &mut LineMesh, verts: &[[f32; 3]; 8], color: [f32; 3]) {
     let base = mesh.vertices.len() as u32;
 
     for v in verts {
@@ -640,12 +593,18 @@ fn append_box_solid_colored(
     }
 
     let tris: [[u32; 3]; 12] = [
-        [0, 1, 2], [0, 2, 3],
-        [4, 6, 5], [4, 7, 6],
-        [0, 4, 5], [0, 5, 1],
-        [2, 6, 7], [2, 7, 3],
-        [1, 5, 6], [1, 6, 2],
-        [0, 3, 7], [0, 7, 4],
+        [0, 1, 2],
+        [0, 2, 3],
+        [4, 6, 5],
+        [4, 7, 6],
+        [0, 4, 5],
+        [0, 5, 1],
+        [2, 6, 7],
+        [2, 7, 3],
+        [1, 5, 6],
+        [1, 6, 2],
+        [0, 3, 7],
+        [0, 7, 4],
     ];
 
     for tri in &tris {
@@ -655,11 +614,7 @@ fn append_box_solid_colored(
     }
 }
 
-fn append_box_wire_colored(
-    mesh: &mut LineMesh,
-    verts: &[[f32; 3]; 8],
-    color: [f32; 3],
-) {
+fn append_box_wire_colored(mesh: &mut LineMesh, verts: &[[f32; 3]; 8], color: [f32; 3]) {
     let base = mesh.vertices.len() as u32;
 
     for v in verts {
@@ -667,9 +622,18 @@ fn append_box_wire_colored(
     }
 
     let edges: [[u32; 2]; 12] = [
-        [0, 1], [1, 2], [2, 3], [3, 0],
-        [4, 5], [5, 6], [6, 7], [7, 4],
-        [0, 4], [1, 5], [2, 6], [3, 7],
+        [0, 1],
+        [1, 2],
+        [2, 3],
+        [3, 0],
+        [4, 5],
+        [5, 6],
+        [6, 7],
+        [7, 4],
+        [0, 4],
+        [1, 5],
+        [2, 6],
+        [3, 7],
     ];
 
     for edge in &edges {
@@ -717,9 +681,7 @@ pub fn build_sphere_bone_meshes_with_selection(
         let head = display_transforms[parent_idx];
         let tail = display_transforms[bone_idx];
 
-        let Some((bone_length, bone_dir, right, forward)) =
-            compute_bone_axes(head, tail)
-        else {
+        let Some((bone_length, bone_dir, right, forward)) = compute_bone_axes(head, tail) else {
             continue;
         };
 
@@ -732,7 +694,13 @@ pub fn build_sphere_bone_meshes_with_selection(
 
         let (solid_color, wire_color) = resolve_bone_colors(bone_idx, selection);
         append_sphere_solid_colored(
-            solid_mesh, center, radius, bone_dir, right, forward, solid_color,
+            solid_mesh,
+            center,
+            radius,
+            bone_dir,
+            right,
+            forward,
+            solid_color,
         );
         append_sphere_wire_colored(
             wire_mesh, center, radius, bone_dir, right, forward, wire_color,
@@ -824,8 +792,7 @@ fn append_sphere_wire_colored(
 
         for seg in 1..=segments {
             let phi = 2.0 * std::f32::consts::PI * seg as f32 / segments as f32;
-            let curr =
-                sphere_point(center, radius, bone_dir, right, forward, theta, phi);
+            let curr = sphere_point(center, radius, bone_dir, right, forward, theta, phi);
 
             let base = mesh.vertices.len() as u32;
             mesh.vertices.push(ColorVertex { pos: prev, color });
@@ -843,8 +810,7 @@ fn append_sphere_wire_colored(
 
         for ring in 1..=rings {
             let theta = std::f32::consts::PI * ring as f32 / rings as f32;
-            let curr =
-                sphere_point(center, radius, bone_dir, right, forward, theta, phi);
+            let curr = sphere_point(center, radius, bone_dir, right, forward, theta, phi);
 
             let base = mesh.vertices.len() as u32;
             mesh.vertices.push(ColorVertex { pos: prev, color });

@@ -7,9 +7,7 @@ pub fn snap_time(
     snap_threshold_time: f32,
 ) -> f32 {
     if snap_settings.snap_to_key {
-        if let Some(snapped) =
-            find_nearest_within(raw_time, nearby_times, snap_threshold_time)
-        {
+        if let Some(snapped) = find_nearest_within(raw_time, nearby_times, snap_threshold_time) {
             return snapped;
         }
     }
@@ -21,11 +19,7 @@ pub fn snap_time(
     raw_time
 }
 
-fn find_nearest_within(
-    time: f32,
-    candidates: &[f32],
-    threshold: f32,
-) -> Option<f32> {
+fn find_nearest_within(time: f32, candidates: &[f32], threshold: f32) -> Option<f32> {
     candidates
         .iter()
         .copied()
@@ -44,10 +38,7 @@ fn snap_to_frame(time: f32, frame_rate: f32) -> f32 {
     (time * frame_rate).round() / frame_rate
 }
 
-pub fn compute_snap_threshold_time(
-    threshold_px: f32,
-    pixels_per_second: f32,
-) -> f32 {
+pub fn compute_snap_threshold_time(threshold_px: f32, pixels_per_second: f32) -> f32 {
     if pixels_per_second <= 0.0 {
         return 0.0;
     }

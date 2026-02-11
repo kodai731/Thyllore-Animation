@@ -111,20 +111,20 @@ impl RRCommandBuffer {
             .device
             .begin_command_buffer(command_buffer, &begin_info)?;
 
-            let render_area = vk::Rect2D::builder()
-                .offset(vk::Offset2D::default())
-                .extent(rrswapchain.swapchain_extent);
-            let color_clear_value = vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: [0.0, 0.0, 0.0, 1.0],
-                },
-            };
-            let depth_clear_value = vk::ClearValue {
-                depth_stencil: vk::ClearDepthStencilValue {
-                    depth: 0.0,
-                    stencil: 0,
-                },
-            };
+        let render_area = vk::Rect2D::builder()
+            .offset(vk::Offset2D::default())
+            .extent(rrswapchain.swapchain_extent);
+        let color_clear_value = vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
+        };
+        let depth_clear_value = vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 0.0,
+                stencil: 0,
+            },
+        };
 
         let clear_values = &[color_clear_value, depth_clear_value];
         let info = vk::RenderPassBeginInfo::builder()
@@ -161,7 +161,9 @@ impl RRCommandBuffer {
 
             if let Some(graphics_resources) = bind_info.graphics_resources {
                 let frame_set = graphics_resources.frame_set.sets[frame_index];
-                let object_set_idx = graphics_resources.objects.get_set_index(frame_index, bind_info.object_index);
+                let object_set_idx = graphics_resources
+                    .objects
+                    .get_set_index(frame_index, bind_info.object_index);
                 let object_set = graphics_resources.objects.sets[object_set_idx];
 
                 rrdevice.device.cmd_bind_descriptor_sets(
@@ -195,9 +197,10 @@ impl RRCommandBuffer {
                     &[],
                 );
             } else {
-                let swapchain_images_len = bind_info.rrdescriptor_set.descriptor_sets.len() /
-                    bind_info.rrdescriptor_set.rrdata.len().max(1);
-                let descriptor_set_index = bind_info.data_index * swapchain_images_len + frame_index;
+                let swapchain_images_len = bind_info.rrdescriptor_set.descriptor_sets.len()
+                    / bind_info.rrdescriptor_set.rrdata.len().max(1);
+                let descriptor_set_index =
+                    bind_info.data_index * swapchain_images_len + frame_index;
                 rrdevice.device.cmd_bind_descriptor_sets(
                     command_buffer,
                     vk::PipelineBindPoint::GRAPHICS,

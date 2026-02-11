@@ -130,8 +130,43 @@ pub fn clip_library_ensure_playable(
         None => return false,
     };
 
+    crate::log!(
+        "[EnsurePlayable] source_id={}, channels={}, duration={:.3}",
+        source_id,
+        playable.channels.len(),
+        playable.duration,
+    );
+    for (&bone_id, ch) in playable.channels.iter().take(3) {
+        let rot_sample = ch.sample_rotation(0.0);
+        let trans_sample = ch.sample_translation(0.0);
+        crate::log!(
+            "[EnsurePlayable]   bone_id={}: rot@0={:?}, trans@0={:?}, rot_kf={}, trans_kf={}",
+            bone_id,
+            rot_sample,
+            trans_sample,
+            ch.rotation.len(),
+            ch.translation.len(),
+        );
+    }
+
+    let existing_clip_ids: Vec<_> = assets
+        .animation_clips
+        .values()
+        .map(|a| a.clip_id)
+        .collect();
+    crate::log!(
+        "[EnsurePlayable] existing asset clip_ids={:?}",
+        existing_clip_ids,
+    );
+
     let anim_id = lib.animation.add_clip(playable.clone());
     lib.source_to_anim_id.insert(source_id, anim_id);
+
+    crate::log!(
+        "[EnsurePlayable] assigned anim_id={}, source_to_anim_id={:?}",
+        anim_id,
+        lib.source_to_anim_id,
+    );
 
     let mut asset_clip = playable;
     asset_clip.id = anim_id;
@@ -147,6 +182,7 @@ pub fn clip_library_ensure_playable(
 pub fn clip_library_load_from_file(
     lib: &mut ClipLibrary,
     path: &Path,
+    bone_name_to_id: Option<&HashMap<String, BoneId>>,
 ) -> Result<SourceClipId> {
     let file = fs::File::open(path)
         .with_context(|| format!("Failed to open file: {:?}", path))?;
@@ -156,6 +192,24 @@ pub fn clip_library_load_from_file(
         .with_context(|| {
             format!("Failed to deserialize clip from: {:?}", path)
         })?;
+
+    if let Some(name_to_id) = bone_name_to_id {
+        let needs_remap = clip.tracks.values().any(|track| {
+            name_to_id
+                .get(&track.bone_name)
+                .map_or(false, |&expected_id| expected_id != track.bone_id)
+        });
+
+        if needs_remap {
+            let remapped_count = clip.tracks.len();
+            clip.remap_bone_ids(name_to_id);
+            crate::log!(
+                "Remapped {} bone_ids by bone_name for '{}'",
+                remapped_count,
+                clip.name,
+            );
+        }
+    }
 
     let id = lib.next_source_id;
     lib.next_source_id += 1;

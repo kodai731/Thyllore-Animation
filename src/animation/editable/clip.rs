@@ -187,6 +187,18 @@ impl EditableAnimationClip {
         self.duration = max_time;
     }
 
+    pub fn remap_bone_ids(&mut self, name_to_new_id: &HashMap<String, BoneId>) {
+        let old_tracks: Vec<(BoneId, BoneTrack)> = self.tracks.drain().collect();
+        for (_, mut track) in old_tracks {
+            let new_id = match name_to_new_id.get(&track.bone_name) {
+                Some(&id) => id,
+                None => continue,
+            };
+            track.bone_id = new_id;
+            self.tracks.insert(new_id, track);
+        }
+    }
+
     pub fn track_count(&self) -> usize {
         self.tracks.len()
     }

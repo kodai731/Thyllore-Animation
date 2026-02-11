@@ -317,6 +317,16 @@ impl System {
                                         DeferredAction::DumpDebugInfo => {
                                             app.dump_debug_info();
                                         }
+                                        DeferredAction::DumpAnimationDebug => {
+                                            let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+                                            if let Err(e) = crate::ecs::systems::animation_debug_dump::dump_animation_debug(
+                                                &app.data.ecs_world,
+                                                &app.data.ecs_assets,
+                                                &*clip_library,
+                                            ) {
+                                                crate::log!("Animation debug dump failed: {:?}", e);
+                                            }
+                                        }
                                     }
                                 }
 
@@ -575,6 +585,77 @@ fn process_timeline_events_inline(events: &[UIEvent], app: &mut App) {
                 .get(*source_id)
                 .map(|c| c.duration)
                 .unwrap_or(1.0);
+
+            let anim_id = lib.get_anim_clip_id_for_source(*source_id);
+            crate::log!(
+                "[ClipSelect] source_id={}, anim_id={:?}, duration={:.3}",
+                source_id,
+                anim_id,
+                duration,
+            );
+
+            if let Some(aid) = anim_id {
+                let found_in_assets = app
+                    .data
+                    .ecs_assets
+                    .animation_clips
+                    .values()
+                    .find(|a| a.clip_id == aid);
+                if let Some(asset) = found_in_assets {
+                    crate::log!(
+                        "[ClipSelect] asset found: clip_id={}, clip.name='{}', channels={}, duration={:.3}",
+                        asset.clip_id,
+                        asset.clip.name,
+                        asset.clip.channels.len(),
+                        asset.clip.duration,
+                    );
+                    for (&bone_id, ch) in asset.clip.channels.iter().take(3) {
+                        crate::log!(
+                            "[ClipSelect]   bone_id={}: rot@0={:?}, trans@0={:?}",
+                            bone_id,
+                            ch.sample_rotation(0.0),
+                            ch.sample_translation(0.0),
+                        );
+                    }
+                } else {
+                    crate::log!(
+                        "[ClipSelect] ERROR: no asset with clip_id={} found!",
+                        aid,
+                    );
+                }
+
+                let all_ids: Vec<_> = app
+                    .data
+                    .ecs_assets
+                    .animation_clips
+                    .values()
+                    .map(|a| (a.clip_id, a.clip.name.clone()))
+                    .collect();
+                crate::log!("[ClipSelect] all asset clips: {:?}", all_ids);
+
+                if let Some(original) = app
+                    .data
+                    .ecs_assets
+                    .animation_clips
+                    .values()
+                    .find(|a| a.clip_id != aid)
+                {
+                    crate::log!(
+                        "[ClipSelect] original clip: clip_id={}, name='{}', channels={}",
+                        original.clip_id,
+                        original.clip.name,
+                        original.clip.channels.len(),
+                    );
+                    for (&bone_id, ch) in original.clip.channels.iter().take(3) {
+                        crate::log!(
+                            "[ClipSelect]   original bone_id={}: rot@0={:?}, trans@0={:?}",
+                            bone_id,
+                            ch.sample_rotation(0.0),
+                            ch.sample_translation(0.0),
+                        );
+                    }
+                }
+            }
             drop(lib);
 
             let schedule_entities = app
@@ -834,11 +915,20 @@ fn process_clip_browser_events_inline(
                     .pick_file();
 
                 if let Some(path) = path {
+                    let bone_name_to_id = app
+                        .data
+                        .ecs_assets
+                        .skeletons
+                        .values()
+                        .next()
+                        .map(|sa| sa.skeleton.bone_name_to_id.clone());
+
                     let mut clip_library =
                         app.data.ecs_world.resource_mut::<ClipLibrary>();
                     match crate::ecs::systems::clip_library_systems::clip_library_load_from_file(
                         &mut clip_library,
                         &path,
+                        bone_name_to_id.as_ref(),
                     ) {
                         Ok(new_id) => {
                             clip_library_ensure_playable(

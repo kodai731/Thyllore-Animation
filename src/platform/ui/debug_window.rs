@@ -246,6 +246,12 @@ fn build_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, gui_data: &mu
         ui_events.send(UIEvent::DumpDebugInfo);
     }
 
+    ui.same_line();
+
+    if ui.button("Dump Animation Debug") {
+        ui_events.send(UIEvent::DumpAnimationDebug);
+    }
+
     if ui.button("Add Test Constraints") {
         ui_events.send(UIEvent::CreateTestConstraints);
     }

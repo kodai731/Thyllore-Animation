@@ -317,18 +317,24 @@ fn add_bone_recursive(
         }
     }
 
-    for (child_name, child_node) in nodes {
-        if let Some(ref parent) = child_node.parent {
-            if parent == name && !name_to_id.contains_key(child_name) {
-                add_bone_recursive(
-                    skeleton,
-                    child_name,
-                    nodes,
-                    name_to_id,
-                    needs_coord_conversion,
-                );
-            }
-        }
+    let mut child_names: Vec<&String> = nodes
+        .iter()
+        .filter(|(child_name, child_node)| {
+            child_node.parent.as_ref().map_or(false, |p| p == name)
+                && !name_to_id.contains_key(child_name.as_str())
+        })
+        .map(|(child_name, _)| child_name)
+        .collect();
+    child_names.sort();
+
+    for child_name in child_names {
+        add_bone_recursive(
+            skeleton,
+            child_name,
+            nodes,
+            name_to_id,
+            needs_coord_conversion,
+        );
     }
 
     bone_id

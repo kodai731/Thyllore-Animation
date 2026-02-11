@@ -1,3 +1,4 @@
+pub mod animation_debug_dump;
 mod animation_playback_systems;
 mod billboard_systems;
 mod bone_gizmo_systems;

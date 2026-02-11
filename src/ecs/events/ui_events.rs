@@ -28,6 +28,7 @@ pub enum UIEvent {
     DebugShadowInfo,
     DebugBillboardDepth,
     DumpDebugInfo,
+    DumpAnimationDebug,
 
     SelectEntity(Entity),
     DeselectAll,

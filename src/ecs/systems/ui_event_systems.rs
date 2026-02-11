@@ -15,6 +15,7 @@ pub enum DeferredAction {
     DebugShadowInfo,
     DebugBillboardDepth,
     DumpDebugInfo,
+    DumpAnimationDebug,
 }
 
 pub fn process_ui_events_system(
@@ -139,6 +140,10 @@ pub fn process_ui_events_with_events_simple(
 
             UIEvent::DumpDebugInfo => {
                 deferred.push(DeferredAction::DumpDebugInfo);
+            }
+
+            UIEvent::DumpAnimationDebug => {
+                deferred.push(DeferredAction::DumpAnimationDebug);
             }
 
             UIEvent::SelectEntity(_)

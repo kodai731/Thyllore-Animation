@@ -280,6 +280,9 @@ impl System {
                                         process_constraint_bake_events_inline(
                                             &events, app,
                                         );
+                                        process_spring_bone_bake_events_inline(
+                                            &events, app,
+                                        );
 
                                         let model_bounds =
                                             app.data.graphics_resources.calculate_model_bounds();
@@ -961,6 +964,14 @@ fn process_debug_constraint_events_inline(
                 );
             }
             UIEvent::ClearSpringBones => {
+                let is_baked = app
+                    .data
+                    .ecs_world
+                    .get_resource::<crate::ecs::resource::SpringBoneState>()
+                    .map_or(false, |s| s.baked_clip_source_id.is_some());
+                if is_baked {
+                    handle_spring_bone_discard(app);
+                }
                 clear_spring_bones(&mut app.data.ecs_world);
             }
             _ => {}
@@ -1100,5 +1111,249 @@ fn process_constraint_bake_events_inline(
             "Baked constraints to new clip (id={})",
             new_id
         );
+    }
+}
+
+fn process_spring_bone_bake_events_inline(
+    events: &[UIEvent],
+    app: &mut App,
+) {
+    for event in events {
+        match event {
+            UIEvent::SpringBoneBake => {
+                handle_spring_bone_bake(app);
+            }
+            UIEvent::SpringBoneDiscardBake => {
+                handle_spring_bone_discard(app);
+            }
+            UIEvent::SpringBoneSaveBake => {
+                handle_spring_bone_save(app);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn handle_spring_bone_bake(app: &mut App) {
+    use crate::ecs::component::{ConstraintSet, SpringBoneSetup, WithSpringBone};
+    use crate::ecs::resource::{SpringBoneMode, SpringBoneState};
+    use crate::ecs::resource::{ClipLibrary, TimelineState};
+    use crate::ecs::systems::clip_library_systems::clip_library_register_clip;
+    use crate::ecs::systems::spring_bone_bake_systems::{
+        merge_bake_into_clip, spring_bone_bake, BakeConfig,
+    };
+
+    let skeleton = match app.data.ecs_assets.skeletons.values().next() {
+        Some(skel_asset) => skel_asset.skeleton.clone(),
+        None => {
+            crate::log!("Spring bone bake failed: no skeleton found");
+            return;
+        }
+    };
+
+    let spring_entity = app
+        .data
+        .ecs_world
+        .iter_components::<WithSpringBone>()
+        .next()
+        .map(|(entity, _)| entity);
+
+    let Some(entity) = spring_entity else {
+        crate::log!("Spring bone bake failed: no WithSpringBone entity");
+        return;
+    };
+
+    let setup = match app.data.ecs_world.get_component::<SpringBoneSetup>(entity) {
+        Some(s) => s.clone(),
+        None => {
+            crate::log!("Spring bone bake failed: no SpringBoneSetup");
+            return;
+        }
+    };
+
+    let constraints = app
+        .data
+        .ecs_world
+        .get_component::<ConstraintSet>(entity)
+        .cloned();
+
+    let timeline_state = app.data.ecs_world.resource::<TimelineState>();
+    let source_id = timeline_state.current_clip_id;
+    let looping = timeline_state.looping;
+    drop(timeline_state);
+
+    let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+    let (anim_clip, source_editable) = match source_id.and_then(|id| clip_library.get(id)) {
+        Some(editable) => (editable.to_animation_clip(), editable.clone()),
+        None => {
+            drop(clip_library);
+            crate::log!("Spring bone bake failed: no current clip");
+            return;
+        }
+    };
+    drop(clip_library);
+
+    let config = BakeConfig {
+        start_time: 0.0,
+        end_time: anim_clip.duration,
+        sample_rate: 30.0,
+    };
+
+    let bake_result = spring_bone_bake(
+        &config,
+        &setup,
+        &skeleton,
+        &anim_clip,
+        constraints.as_ref(),
+        looping,
+    );
+
+    let mut merged = source_editable;
+    merge_bake_into_clip(&mut merged, &bake_result, &skeleton);
+    merged.name = format!("{}_spring_baked", merged.name);
+
+    crate::log!(
+        "[BakeDebug] bake_result: baked_bone_ids={:?}, clip_tracks={}",
+        bake_result.baked_bone_ids,
+        bake_result.clip.tracks.len()
+    );
+    crate::log!(
+        "[BakeDebug] merged clip: name={}, tracks={}, duration={}",
+        merged.name,
+        merged.tracks.len(),
+        merged.duration
+    );
+
+    let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
+    let new_id = clip_library_register_clip(&mut clip_library, merged);
+
+    let playable = clip_library
+        .source_clips
+        .get(&new_id)
+        .map(|s| s.editable_clip.to_animation_clip());
+    if let Some(mut playable) = playable {
+        let anim_id = clip_library.animation.add_clip(playable.clone());
+        clip_library.source_to_anim_id.insert(new_id, anim_id);
+
+        playable.id = anim_id;
+        let asset = crate::asset::AnimationClipAsset {
+            id: 0,
+            clip_id: anim_id,
+            clip: playable,
+        };
+        let asset_id = app.data.ecs_assets.add_animation_clip(asset);
+        crate::log!(
+            "[BakeDebug] registered runtime clip: source_id={}, anim_id={}, asset_id={}",
+            new_id, anim_id, asset_id
+        );
+    } else {
+        crate::log!("[BakeDebug] ERROR: failed to create playable clip for source_id={}", new_id);
+    }
+    drop(clip_library);
+
+    let mut updated_count = 0;
+    let schedule_entities = app.data.ecs_world.component_entities::<ClipSchedule>();
+    crate::log!(
+        "[BakeDebug] ClipSchedule entities count={}, original source_id={:?}",
+        schedule_entities.len(),
+        source_id
+    );
+    for sched_entity in &schedule_entities {
+        if let Some(schedule) = app.data.ecs_world.get_component_mut::<ClipSchedule>(*sched_entity) {
+            if let Some(first) = schedule.instances.first_mut() {
+                crate::log!(
+                    "[BakeDebug]   entity {:?}: schedule source_id={}, match={}",
+                    sched_entity, first.source_id, Some(first.source_id) == source_id
+                );
+                if Some(first.source_id) == source_id {
+                    first.source_id = new_id;
+                    updated_count += 1;
+                }
+            }
+        }
+    }
+    crate::log!("[BakeDebug] updated {} ClipSchedule(s) to new source_id={}", updated_count, new_id);
+
+    let mut spring_state = app.data.ecs_world.resource_mut::<SpringBoneState>();
+    spring_state.mode = SpringBoneMode::Baked;
+    spring_state.baked_clip_source_id = Some(new_id);
+    spring_state.baked_bone_ids = bake_result.baked_bone_ids;
+    spring_state.original_clip_source_id = source_id;
+
+    crate::log!("Spring bone baked to new clip (id={})", new_id);
+}
+
+fn handle_spring_bone_discard(app: &mut App) {
+    use crate::ecs::resource::{SpringBoneMode, SpringBoneState};
+    use crate::ecs::resource::ClipLibrary;
+
+    let mut spring_state = app.data.ecs_world.resource_mut::<SpringBoneState>();
+    let original_id = spring_state.original_clip_source_id;
+    let baked_id = spring_state.baked_clip_source_id;
+
+    spring_state.mode = SpringBoneMode::Realtime;
+    spring_state.baked_clip_source_id = None;
+    spring_state.baked_bone_ids = Vec::new();
+    spring_state.original_clip_source_id = None;
+    spring_state.initialized = false;
+    drop(spring_state);
+
+    if let (Some(orig_id), Some(baked_source_id)) = (original_id, baked_id) {
+        let schedule_entities = app.data.ecs_world.component_entities::<ClipSchedule>();
+        for entity in &schedule_entities {
+            if let Some(schedule) = app.data.ecs_world.get_component_mut::<ClipSchedule>(*entity) {
+                if let Some(first) = schedule.instances.first_mut() {
+                    if first.source_id == baked_source_id {
+                        first.source_id = orig_id;
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(baked_id) = baked_id {
+        let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
+        if let Some(anim_id) = clip_library.source_to_anim_id.remove(&baked_id) {
+            clip_library.animation.clips.retain(|c| c.id != anim_id);
+            app.data.ecs_assets.animation_clips.retain(|_, a| a.clip_id != anim_id);
+        }
+        clip_library.remove(baked_id);
+    }
+
+    crate::log!("Discarded spring bone bake, restored original clip");
+}
+
+fn handle_spring_bone_save(app: &mut App) {
+    use crate::ecs::resource::SpringBoneState;
+    use crate::ecs::resource::ClipLibrary;
+    use crate::ecs::systems::clip_library_systems::clip_library_save_to_file;
+
+    let spring_state = app.data.ecs_world.resource::<SpringBoneState>();
+    let baked_id = match spring_state.baked_clip_source_id {
+        Some(id) => id,
+        None => {
+            crate::log!("No baked clip to save");
+            return;
+        }
+    };
+    drop(spring_state);
+
+    let path = rfd::FileDialog::new()
+        .add_filter("Animation RON", &["anim.ron", "ron"])
+        .set_file_name("spring_baked.anim.ron")
+        .save_file();
+
+    let Some(path) = path else {
+        return;
+    };
+
+    let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+    match clip_library_save_to_file(&clip_library, baked_id, &path) {
+        Ok(()) => {
+            crate::log!("Saved spring bone bake to {:?}", path);
+        }
+        Err(e) => {
+            crate::log!("Failed to save spring bone bake: {:?}", e);
+        }
     }
 }

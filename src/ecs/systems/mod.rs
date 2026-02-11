@@ -27,6 +27,7 @@ mod physical_camera_systems;
 mod pose_blend_systems;
 pub mod render_data_systems;
 mod skeleton_pose_systems;
+pub mod spring_bone_bake_systems;
 mod spring_bone_systems;
 mod timeline_systems;
 mod ui_event_systems;

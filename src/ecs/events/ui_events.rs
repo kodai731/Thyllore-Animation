@@ -148,6 +148,9 @@ pub enum UIEvent {
 
     AddTestSpringBones,
     ClearSpringBones,
+    SpringBoneBake,
+    SpringBoneDiscardBake,
+    SpringBoneSaveBake,
 
     ConstraintAdd {
         entity: Entity,

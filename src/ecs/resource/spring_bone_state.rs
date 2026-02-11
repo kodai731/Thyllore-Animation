@@ -1,5 +1,6 @@
 use cgmath::{Quaternion, Vector3};
 
+use crate::animation::BoneId;
 use crate::ecs::component::SpringChainId;
 
 #[derive(Clone, Debug)]
@@ -29,6 +30,14 @@ pub struct SpringChainState {
     pub joint_states: Vec<SpringJointState>,
 }
 
+#[derive(Clone, Debug, PartialEq, Default)]
+pub enum SpringBoneMode {
+    #[default]
+    Realtime,
+    Baked,
+    BakedOverride,
+}
+
 #[derive(Clone, Debug)]
 pub struct SpringBoneState {
     pub chain_states: Vec<SpringChainState>,
@@ -36,6 +45,10 @@ pub struct SpringBoneState {
     pub max_delta_time: f32,
     pub frame_count: u32,
     pub log_frames: u32,
+    pub mode: SpringBoneMode,
+    pub baked_clip_source_id: Option<u64>,
+    pub baked_bone_ids: Vec<BoneId>,
+    pub original_clip_source_id: Option<u64>,
 }
 
 impl Default for SpringBoneState {
@@ -46,6 +59,10 @@ impl Default for SpringBoneState {
             max_delta_time: 1.0 / 30.0,
             frame_count: 0,
             log_frames: 10,
+            mode: SpringBoneMode::Realtime,
+            baked_clip_source_id: None,
+            baked_bone_ids: Vec::new(),
+            original_clip_source_id: None,
         }
     }
 }

@@ -9,7 +9,7 @@ use crate::animation::BoneId;
 use crate::ecs::component::{
     AnimationMeta, ClipSchedule, ConstraintSet, SpringBoneSetup, WithSpringBone,
 };
-use crate::ecs::resource::{AnimationType, ClipLibrary, SpringBoneState};
+use crate::ecs::resource::{AnimationType, ClipLibrary, SpringBoneMode, SpringBoneState};
 use crate::ecs::world::{Animator, Entity, MeshRef, World};
 use crate::ecs::{
     blend_poses_override, compute_crossfade_factor, compute_local_time,
@@ -98,10 +98,20 @@ fn collect_animated_entities(
 ) -> Vec<AnimatedEntityInfo> {
     let mut infos = Vec::new();
 
+    let is_baked = world
+        .get_resource::<SpringBoneState>()
+        .map_or(false, |s| s.mode == SpringBoneMode::Baked);
+    let should_log = is_baked && world
+        .get_resource::<SpringBoneState>()
+        .map_or(false, |s| s.frame_count < 3);
+
     for (entity, animator) in world.iter_components::<Animator>() {
         let Some(schedule) =
             world.get_component::<ClipSchedule>(entity)
         else {
+            if should_log {
+                crate::log!("[PlaybackDebug] entity {:?}: no ClipSchedule", entity);
+            }
             continue;
         };
         let Some(meta) =
@@ -132,11 +142,27 @@ fn collect_animated_entities(
             continue;
         };
 
+        if should_log {
+            let src_id = schedule.instances.first().map(|i| i.source_id);
+            let anim_id = src_id.and_then(|sid| clip_library.get_anim_clip_id_for_source(sid));
+            let anim_exists = anim_id.map_or(false, |aid| {
+                clip_library.animation.clips.iter().any(|c| c.id == aid)
+            });
+            crate::log!(
+                "[PlaybackDebug] entity {:?}: source_id={:?}, anim_id={:?}, anim_exists={}, time={:.3}, instances={}",
+                entity, src_id, anim_id, anim_exists, animator.time, schedule.instances.len()
+            );
+        }
+
         let active_instances = build_active_instances(
             schedule,
             clip_library,
             animator,
         );
+
+        if should_log && active_instances.is_empty() {
+            crate::log!("[PlaybackDebug] entity {:?}: active_instances is EMPTY", entity);
+        }
 
         if active_instances.is_empty() {
             continue;
@@ -151,6 +177,10 @@ fn collect_animated_entities(
             node_animation_scale: meta.node_animation_scale,
             looping: animator.looping,
         });
+    }
+
+    if should_log {
+        crate::log!("[PlaybackDebug] total animated entities: {}", infos.len());
     }
 
     infos
@@ -437,32 +467,31 @@ fn apply_spring_bone_simulation(
     dt: f32,
 ) {
     use super::spring_bone_systems::{
-        spring_bone_initialize, spring_bone_update,
-        spring_bone_write_back_to_pose,
+        collect_affected_bone_ids, spring_bone_initialize,
+        spring_bone_update, spring_bone_write_back_to_pose,
     };
 
     if let Some(mut sb_state) =
         world.get_resource_mut::<SpringBoneState>()
     {
-        if !sb_state.initialized {
-            *sb_state = spring_bone_initialize(setup, skeleton, globals);
+        match sb_state.mode {
+            SpringBoneMode::Realtime => {
+                if !sb_state.initialized {
+                    *sb_state =
+                        spring_bone_initialize(setup, skeleton, globals);
+                }
+
+                spring_bone_update(
+                    setup, &mut sb_state, skeleton, globals, pose, dt,
+                );
+
+                let affected_ids = collect_affected_bone_ids(setup);
+                spring_bone_write_back_to_pose(
+                    skeleton, globals, pose, &affected_ids,
+                );
+            }
+            SpringBoneMode::Baked | SpringBoneMode::BakedOverride => {}
         }
-
-        spring_bone_update(setup, &mut sb_state, skeleton, globals, pose, dt);
-
-        let affected_ids: Vec<BoneId> = setup
-            .chains
-            .iter()
-            .filter(|c| c.enabled)
-            .flat_map(|c| c.joints.iter().map(|j| j.bone_id))
-            .collect();
-
-        spring_bone_write_back_to_pose(
-            skeleton,
-            globals,
-            pose,
-            &affected_ids,
-        );
     }
 }
 

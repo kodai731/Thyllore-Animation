@@ -219,7 +219,10 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::SetBoneDistanceScaling(_)
             | UIEvent::SetBoneDistanceScaleFactor(_)
             | UIEvent::AddTestSpringBones
-            | UIEvent::ClearSpringBones => {}
+            | UIEvent::ClearSpringBones
+            | UIEvent::SpringBoneBake
+            | UIEvent::SpringBoneDiscardBake
+            | UIEvent::SpringBoneSaveBake => {}
         }
     }
 

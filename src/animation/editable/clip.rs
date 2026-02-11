@@ -246,7 +246,7 @@ fn collect_bake_times(curves: &[&PropertyCurve]) -> Vec<f32> {
     times
 }
 
-fn quaternion_to_euler_degrees(q: &Quaternion<f32>) -> Vector3<f32> {
+pub(crate) fn quaternion_to_euler_degrees(q: &Quaternion<f32>) -> Vector3<f32> {
     let w = q.s;
     let x = q.v.x;
     let y = q.v.y;

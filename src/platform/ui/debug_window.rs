@@ -46,7 +46,7 @@ pub fn build_debug_window(
             build_raytracing_panel(ui, ui_events, state);
             ui.separator();
 
-            build_debug_panel(ui, ui_events, gui_data);
+            build_debug_panel(ui, ui_events, gui_data, ecs_world);
             ui.separator();
 
             build_fbx_debug_panel(ui);
@@ -223,7 +223,7 @@ fn build_raytracing_panel(
     }
 }
 
-fn build_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, gui_data: &mut GUIData) {
+fn build_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, gui_data: &mut GUIData, ecs_world: &World) {
     ui.text("Debug Info:");
 
     ui.checkbox("Show Click Debug", &mut gui_data.show_click_debug);
@@ -260,6 +260,40 @@ fn build_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, gui_data: &mu
     ui.same_line();
     if ui.button("Clear Spring Bones") {
         ui_events.send(UIEvent::ClearSpringBones);
+    }
+
+    build_spring_bone_bake_panel(ui, ui_events, ecs_world);
+}
+
+fn build_spring_bone_bake_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+    use crate::ecs::resource::{SpringBoneMode, SpringBoneState};
+
+    let Some(state) = ecs_world.get_resource::<SpringBoneState>() else {
+        return;
+    };
+
+    ui.separator();
+    match state.mode {
+        SpringBoneMode::Realtime => {
+            ui.text("Spring Bone: Realtime (simulating)");
+            if ui.button("Bake Spring Bones") {
+                ui_events.send(UIEvent::SpringBoneBake);
+            }
+        }
+        SpringBoneMode::Baked => {
+            let clip_id = state.baked_clip_source_id.unwrap_or(0);
+            ui.text(format!("Spring Bone: Baked (clip_id={})", clip_id));
+            if ui.button("Discard Bake") {
+                ui_events.send(UIEvent::SpringBoneDiscardBake);
+            }
+            ui.same_line();
+            if ui.button("Save Bake (.ron)") {
+                ui_events.send(UIEvent::SpringBoneSaveBake);
+            }
+        }
+        SpringBoneMode::BakedOverride => {
+            ui.text("Spring Bone: BakedOverride");
+        }
     }
 }
 

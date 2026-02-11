@@ -603,6 +603,18 @@ fn approx_eq_vec3(a: Vector3<f32>, b: Vector3<f32>) -> bool {
     (d.x * d.x + d.y * d.y + d.z * d.z) < 1e-12
 }
 
+pub fn collect_affected_bone_ids(setup: &SpringBoneSetup) -> Vec<BoneId> {
+    let mut ids: Vec<BoneId> = setup
+        .chains
+        .iter()
+        .filter(|c| c.enabled)
+        .flat_map(|c| c.joints.iter().map(|j| j.bone_id))
+        .collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
+
 fn log_joint_update(
     skeleton: &Skeleton,
     bone_id: BoneId,

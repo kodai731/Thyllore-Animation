@@ -782,7 +782,8 @@ fn process_buffer_events_inline(events: &[UIEvent], app: &mut App) {
                 if let Some(bone_id) = curve_editor.selected_bone_id {
                     if let Some(clip_id) = timeline_state.current_clip_id {
                         if let Some(clip) = clip_library.get(clip_id) {
-                            curve_buffer.capture_buffer(
+                            crate::ecs::systems::curve_editor_capture_buffer(
+                                &mut curve_buffer,
                                 clip,
                                 bone_id,
                                 &curve_editor.visible_curves,
@@ -803,7 +804,11 @@ fn process_buffer_events_inline(events: &[UIEvent], app: &mut App) {
                 if let Some(bone_id) = curve_editor.selected_bone_id {
                     if let Some(clip_id) = timeline_state.current_clip_id {
                         if let Some(clip) = clip_library.get_mut(clip_id) {
-                            curve_buffer.swap_buffer(clip, bone_id);
+                            crate::ecs::systems::curve_editor_swap_buffer(
+                                &mut curve_buffer,
+                                clip,
+                                bone_id,
+                            );
                         }
                     }
                 }

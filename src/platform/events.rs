@@ -16,8 +16,9 @@ use crate::ecs::events::UIEvent;
 use crate::ecs::resource::KeyframeCopyBuffer;
 use crate::ecs::resource::{ClipBrowserState, EditHistory};
 use crate::ecs::systems::{
-    apply_redo, apply_undo, camera_move_to_look_at, collapse_entity,
-    expand_entity, hierarchy_collapse_bone, hierarchy_deselect_all,
+    apply_redo, apply_undo, camera_move_to_look_at,
+    clip_library_ensure_playable, collapse_entity, expand_entity,
+    hierarchy_collapse_bone, hierarchy_deselect_all,
     hierarchy_deselect_bone, hierarchy_expand_bone, hierarchy_select,
     hierarchy_select_bone, hierarchy_toggle_selection,
     process_clip_instance_events, process_keyframe_clipboard_events,
@@ -556,6 +557,45 @@ fn process_timeline_events_inline(events: &[UIEvent], app: &mut App) {
             }
         }
     }
+
+    drop(clip_library);
+    drop(timeline_state);
+
+    for event in events {
+        if let UIEvent::TimelineSelectClip(source_id) = event {
+            let mut lib =
+                app.data.ecs_world.resource_mut::<ClipLibrary>();
+            clip_library_ensure_playable(
+                &mut lib,
+                &mut app.data.ecs_assets,
+                *source_id,
+            );
+
+            let duration = lib
+                .get(*source_id)
+                .map(|c| c.duration)
+                .unwrap_or(1.0);
+            drop(lib);
+
+            let schedule_entities = app
+                .data
+                .ecs_world
+                .component_entities::<ClipSchedule>();
+            for entity in &schedule_entities {
+                if let Some(schedule) = app
+                    .data
+                    .ecs_world
+                    .get_component_mut::<ClipSchedule>(*entity)
+                {
+                    if let Some(first) = schedule.instances.first_mut()
+                    {
+                        first.source_id = *source_id;
+                        first.clip_out = duration;
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn process_clip_instance_events_inline(
@@ -785,6 +825,35 @@ fn process_clip_browser_events_inline(
                         source_id,
                         new_id
                     );
+                }
+            }
+
+            UIEvent::ClipBrowserLoadFromFile => {
+                let path = rfd::FileDialog::new()
+                    .add_filter("Animation RON", &["anim.ron", "ron"])
+                    .pick_file();
+
+                if let Some(path) = path {
+                    let mut clip_library =
+                        app.data.ecs_world.resource_mut::<ClipLibrary>();
+                    match crate::ecs::systems::clip_library_systems::clip_library_load_from_file(
+                        &mut clip_library,
+                        &path,
+                    ) {
+                        Ok(new_id) => {
+                            clip_library_ensure_playable(
+                                &mut clip_library,
+                                &mut app.data.ecs_assets,
+                                new_id,
+                            );
+                        }
+                        Err(e) => {
+                            crate::log!(
+                                "Failed to load clip: {:?}",
+                                e
+                            );
+                        }
+                    }
                 }
             }
 
@@ -1138,7 +1207,9 @@ fn handle_spring_bone_bake(app: &mut App) {
     use crate::ecs::component::{ConstraintSet, SpringBoneSetup, WithSpringBone};
     use crate::ecs::resource::{SpringBoneMode, SpringBoneState};
     use crate::ecs::resource::{ClipLibrary, TimelineState};
-    use crate::ecs::systems::clip_library_systems::clip_library_register_clip;
+    use crate::ecs::systems::clip_library_systems::{
+        clip_library_ensure_playable, clip_library_register_clip,
+    };
     use crate::ecs::systems::spring_bone_bake_systems::{
         merge_bake_into_clip, spring_bone_bake, BakeConfig,
     };
@@ -1226,29 +1297,11 @@ fn handle_spring_bone_bake(app: &mut App) {
 
     let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
     let new_id = clip_library_register_clip(&mut clip_library, merged);
-
-    let playable = clip_library
-        .source_clips
-        .get(&new_id)
-        .map(|s| s.editable_clip.to_animation_clip());
-    if let Some(mut playable) = playable {
-        let anim_id = clip_library.animation.add_clip(playable.clone());
-        clip_library.source_to_anim_id.insert(new_id, anim_id);
-
-        playable.id = anim_id;
-        let asset = crate::asset::AnimationClipAsset {
-            id: 0,
-            clip_id: anim_id,
-            clip: playable,
-        };
-        let asset_id = app.data.ecs_assets.add_animation_clip(asset);
-        crate::log!(
-            "[BakeDebug] registered runtime clip: source_id={}, anim_id={}, asset_id={}",
-            new_id, anim_id, asset_id
-        );
-    } else {
-        crate::log!("[BakeDebug] ERROR: failed to create playable clip for source_id={}", new_id);
-    }
+    clip_library_ensure_playable(
+        &mut clip_library,
+        &mut app.data.ecs_assets,
+        new_id,
+    );
     drop(clip_library);
 
     let mut updated_count = 0;

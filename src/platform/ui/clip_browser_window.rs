@@ -55,6 +55,11 @@ fn build_toolbar(
     }
 
     ui.same_line();
+    if ui.small_button("Load") {
+        ui_events.send(UIEvent::ClipBrowserLoadFromFile);
+    }
+
+    ui.same_line();
     let can_duplicate = browser_state.selected_clip_id.is_some();
     if can_duplicate {
         if ui.small_button("Dup") {

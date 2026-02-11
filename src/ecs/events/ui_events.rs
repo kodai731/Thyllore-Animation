@@ -140,6 +140,7 @@ pub enum UIEvent {
     ClipBrowserCreateEmpty,
     ClipBrowserDuplicate(SourceClipId),
     ClipBrowserDelete(SourceClipId),
+    ClipBrowserLoadFromFile,
 
     SaveScene,
 

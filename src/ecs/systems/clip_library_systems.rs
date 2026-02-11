@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 
 use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 use crate::animation::{AnimationClip, BoneId};
+use crate::asset::{AnimationClipAsset, AssetStorage};
 use crate::ecs::resource::ClipLibrary;
 
 pub fn clip_library_create_from_imported(
@@ -113,6 +114,34 @@ pub fn clip_library_save_to_file(
         path
     );
     Ok(())
+}
+
+pub fn clip_library_ensure_playable(
+    lib: &mut ClipLibrary,
+    assets: &mut AssetStorage,
+    source_id: SourceClipId,
+) -> bool {
+    if lib.source_to_anim_id.contains_key(&source_id) {
+        return false;
+    }
+
+    let playable = match lib.source_clips.get(&source_id) {
+        Some(source) => source.editable_clip.to_animation_clip(),
+        None => return false,
+    };
+
+    let anim_id = lib.animation.add_clip(playable.clone());
+    lib.source_to_anim_id.insert(source_id, anim_id);
+
+    let mut asset_clip = playable;
+    asset_clip.id = anim_id;
+    assets.add_animation_clip(AnimationClipAsset {
+        id: 0,
+        clip_id: anim_id,
+        clip: asset_clip,
+    });
+
+    true
 }
 
 pub fn clip_library_load_from_file(

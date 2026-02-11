@@ -14,6 +14,13 @@ use crate::ecs::resource::{
     SpringBoneState, SpringChainState, SpringJointState,
 };
 
+pub fn collider_shape_radius(shape: &ColliderShape) -> f32 {
+    match shape {
+        ColliderShape::Sphere { radius } => *radius,
+        ColliderShape::Capsule { radius, .. } => *radius,
+    }
+}
+
 pub fn spring_bone_initialize(
     setup: &SpringBoneSetup,
     skeleton: &Skeleton,
@@ -578,7 +585,7 @@ fn collect_world_colliders(
                 ColliderShape::Sphere { .. } => {
                     world_colliders.push(WorldCollider {
                         center,
-                        radius: def.shape_radius(),
+                        radius: collider_shape_radius(&def.shape),
                         tail: None,
                     });
                 }
@@ -587,7 +594,7 @@ fn collect_world_colliders(
                         transform_point(bone_transform, *tail);
                     world_colliders.push(WorldCollider {
                         center,
-                        radius: def.shape_radius(),
+                        radius: collider_shape_radius(&def.shape),
                         tail: Some(world_tail),
                     });
                 }

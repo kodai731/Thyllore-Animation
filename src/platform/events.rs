@@ -127,227 +127,13 @@ impl System {
                         }
 
                         WindowEvent::RedrawRequested => {
-                            let ui = imgui.frame();
-                            ui.dockspace_over_main_viewport();
-
-                            gui_data.monitor_value = 0.0;
-
-                            let io = ui.io();
-                            gui_data.imgui_wants_mouse = io.want_capture_mouse;
-
-                            update_mouse_input(gui_data, ui);
-
-                            let model_path = app.model_state().model_path.clone();
-                            let load_status = gui_data.load_status.clone();
-
-                            let mut debug_state = {
-                                let rt_debug = app.rt_debug_state();
-                                DebugWindowState {
-                                    model_path,
-                                    load_status,
-                                    light_position: rt_debug.light_position,
-                                    shadow_strength: rt_debug.shadow_strength,
-                                    enable_distance_attenuation: rt_debug.enable_distance_attenuation,
-                                    debug_view_mode: rt_debug.debug_view_mode,
-                                }
-                            };
-
-                            {
-                                let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                build_debug_window(ui, &mut *ui_events, &mut debug_state, gui_data, &app.data.ecs_world);
-                            }
-
-                            {
-                                let hierarchy_state = app.data.ecs_world.resource::<HierarchyState>();
-                                let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                build_hierarchy_window(
-                                    ui,
-                                    &mut *ui_events,
-                                    &app.data.ecs_world,
-                                    &*hierarchy_state,
-                                    &app.data.ecs_assets,
-                                );
-                            }
-
-                            {
-                                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
-                                let mut browser_state = app.data.ecs_world.resource_mut::<ClipBrowserState>();
-                                let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                build_clip_browser_window(ui, &mut *ui_events, &*clip_library, &mut *browser_state, &app.data.ecs_world);
-                            }
-
-                            {
-                                let hierarchy_state = app.data.ecs_world.resource::<HierarchyState>();
-                                let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                build_inspector_window(
-                                    ui,
-                                    &mut *ui_events,
-                                    &app.data.ecs_world,
-                                    &*hierarchy_state,
-                                    &app.data.ecs_assets,
-                                    &app.data.graphics_resources,
-                                );
-                            }
-
-                            {
-                                let texture_id = imgui::TextureId::new(app.data.viewport.texture_id());
-                                let current_size = [app.data.viewport.width as f32, app.data.viewport.height as f32];
-                                let viewport_info = build_viewport_window(ui, texture_id, current_size);
-
-                                app.data.viewport.focused = viewport_info.focused;
-                                app.data.viewport.hovered = viewport_info.hovered;
-                                gui_data.viewport_focused = viewport_info.focused;
-                                gui_data.viewport_hovered = viewport_info.hovered;
-                                gui_data.viewport_position = viewport_info.position;
-                                gui_data.viewport_size = viewport_info.size;
-
-                                let new_width = viewport_info.size[0] as u32;
-                                let new_height = viewport_info.size[1] as u32;
-                                if new_width > 0 && new_height > 0
-                                    && (new_width != app.data.viewport.width || new_height != app.data.viewport.height)
-                                {
-                                    gui_data.viewport_resize_pending = Some((new_width, new_height));
-                                }
-                            }
-
-                            let clip_track_snapshot = {
-                                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
-                                collect_clip_track_snapshot(&app.data.ecs_world, &*clip_library)
-                            };
-
-                            {
-                                let mut timeline_state = app.data.ecs_world.resource_mut::<TimelineState>();
-                                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
-                                let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
-                                build_timeline_window(ui, &mut *ui_events, &mut *timeline_state, &*clip_library, &mut *curve_editor, &clip_track_snapshot);
-                            }
-
-                            {
-                                let timeline_state = app.data.ecs_world.resource::<TimelineState>();
-                                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
-                                let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
-                                let curve_buffer = app.data.ecs_world.resource::<CurveEditorBuffer>();
-                                build_curve_editor_window(ui, &mut *ui_events, &*timeline_state, &*clip_library, &mut *curve_editor, &*curve_buffer);
-                            }
-
-                            {
-                                let mut rt_debug_mut = app.rt_debug_state_mut();
-                                rt_debug_mut.shadow_strength = debug_state.shadow_strength;
-                                rt_debug_mut.enable_distance_attenuation =
-                                    debug_state.enable_distance_attenuation;
-                                rt_debug_mut.debug_view_mode = debug_state.debug_view_mode;
-                            }
-
-                            build_click_debug_overlay(ui, gui_data);
-
-                            platform.prepare_render(ui, &window);
-                            let draw_data = imgui.render();
-
-                            unsafe {
-                                let deferred_actions = {
-                                    let events: Vec<_> = {
-                                        if let Some(mut ui_events) =
-                                            app.data.ecs_world.get_resource_mut::<UIEventQueue>()
-                                        {
-                                            ui_events.drain().collect()
-                                        } else {
-                                            Vec::new()
-                                        }
-                                    };
-
-                                    if events.is_empty() {
-                                        Vec::new()
-                                    } else {
-                                        process_hierarchy_events_inline(&events, app);
-                                        process_timeline_events_inline(&events, app);
-                                        process_keyframe_clipboard_events_inline(
-                                            &events, app,
-                                        );
-                                        process_buffer_events_inline(
-                                            &events, app,
-                                        );
-                                        process_clip_instance_events_inline(&events, app);
-                                        process_clip_browser_events_inline(&events, app);
-                                        process_edit_history_events_inline(&events, app);
-                                        process_scene_events_inline(&events, app);
-                                        process_debug_constraint_events_inline(
-                                            &events, app,
-                                        );
-                                        process_constraint_edit_events_inline(
-                                            &events, app,
-                                        );
-                                        process_constraint_bake_events_inline(
-                                            &events, app,
-                                        );
-                                        process_spring_bone_bake_events_inline(
-                                            &events, app,
-                                        );
-
-                                        let model_bounds =
-                                            app.data.graphics_resources.calculate_model_bounds();
-                                        let world = &app.data.ecs_world;
-                                        let mut camera = world.resource_mut::<Camera>();
-                                        let mut rt_debug = world.resource_mut::<RayTracingDebugState>();
-                                        crate::ecs::process_ui_events_with_events_simple(
-                                            events,
-                                            &mut camera,
-                                            &mut rt_debug,
-                                            model_bounds,
-                                        )
-                                    }
-                                };
-
-                                for action in deferred_actions {
-                                    match action {
-                                        DeferredAction::LoadModel { path } => {
-                                            gui_data.selected_model_path = path;
-                                            gui_data.file_changed = true;
-                                        }
-                                        DeferredAction::TakeScreenshot => {
-                                            gui_data.take_screenshot = true;
-                                        }
-                                        DeferredAction::DebugShadowInfo => {
-                                            app.log_shadow_debug_info();
-                                        }
-                                        DeferredAction::DebugBillboardDepth => {
-                                            gui_data.debug_billboard_depth = true;
-                                        }
-                                        DeferredAction::DumpDebugInfo => {
-                                            app.dump_debug_info();
-                                        }
-                                        DeferredAction::DumpAnimationDebug => {
-                                            let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
-                                            if let Err(e) = crate::ecs::systems::animation_debug_dump::dump_animation_debug(
-                                                &app.data.ecs_world,
-                                                &app.data.ecs_assets,
-                                                &*clip_library,
-                                            ) {
-                                                crate::log!("Animation debug dump failed: {:?}", e);
-                                            }
-                                        }
-                                    }
-                                }
-
-                                let frame_result = (|| -> anyhow::Result<()> {
-                                    let image_index = app.begin_frame(gui_data)?;
-                                    app.update(image_index, gui_data)?;
-                                    app.render(image_index, gui_data, draw_data)?;
-                                    Ok(())
-                                })();
-
-                                if let Err(e) = frame_result {
-                                    let msg = e.to_string();
-                                    if msg.contains("SWAPCHAIN_OUT_OF_DATE") {
-                                        app.recreate_swapchain(&window).unwrap();
-                                    } else {
-                                        panic!("Frame error: {:?}", e);
-                                    }
-                                }
-                            }
-
-                            gui_data.mouse_wheel = 0.0;
+                            handle_redraw_requested(
+                                &mut imgui,
+                                &mut platform,
+                                &window,
+                                app,
+                                gui_data,
+                            );
                         }
                         _ => {}
                     }
@@ -355,6 +141,239 @@ impl System {
                 _ => {}
             })
             .expect("EventLoop error");
+    }
+}
+
+fn handle_redraw_requested(
+    imgui: &mut imgui::Context,
+    platform: &mut imgui_winit_support::WinitPlatform,
+    window: &winit::window::Window,
+    app: &mut App,
+    gui_data: &mut GUIData,
+) {
+    let ui = imgui.frame();
+    ui.dockspace_over_main_viewport();
+
+    gui_data.monitor_value = 0.0;
+
+    let io = ui.io();
+    gui_data.imgui_wants_mouse = io.want_capture_mouse;
+
+    update_mouse_input(gui_data, ui);
+
+    let mut debug_state = {
+        let model_path = app.model_state().model_path.clone();
+        let load_status = gui_data.load_status.clone();
+        let rt_debug = app.rt_debug_state();
+        DebugWindowState {
+            model_path,
+            load_status,
+            light_position: rt_debug.light_position,
+            shadow_strength: rt_debug.shadow_strength,
+            enable_distance_attenuation: rt_debug.enable_distance_attenuation,
+            debug_view_mode: rt_debug.debug_view_mode,
+        }
+    };
+
+    build_ui_windows(ui, app, gui_data, &mut debug_state);
+
+    {
+        let mut rt_debug_mut = app.rt_debug_state_mut();
+        rt_debug_mut.shadow_strength = debug_state.shadow_strength;
+        rt_debug_mut.enable_distance_attenuation = debug_state.enable_distance_attenuation;
+        rt_debug_mut.debug_view_mode = debug_state.debug_view_mode;
+    }
+
+    build_click_debug_overlay(ui, gui_data);
+
+    platform.prepare_render(ui, window);
+    let draw_data = imgui.render();
+
+    unsafe {
+        process_ui_events_and_render_frame(app, gui_data, window, draw_data);
+    }
+
+    gui_data.mouse_wheel = 0.0;
+}
+
+fn build_ui_windows(
+    ui: &imgui::Ui,
+    app: &mut App,
+    gui_data: &mut GUIData,
+    debug_state: &mut DebugWindowState,
+) {
+    {
+        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+        build_debug_window(ui, &mut *ui_events, debug_state, gui_data, &app.data.ecs_world);
+    }
+
+    {
+        let hierarchy_state = app.data.ecs_world.resource::<HierarchyState>();
+        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+        build_hierarchy_window(
+            ui,
+            &mut *ui_events,
+            &app.data.ecs_world,
+            &*hierarchy_state,
+            &app.data.ecs_assets,
+        );
+    }
+
+    {
+        let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+        let mut browser_state = app.data.ecs_world.resource_mut::<ClipBrowserState>();
+        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+        build_clip_browser_window(ui, &mut *ui_events, &*clip_library, &mut *browser_state, &app.data.ecs_world);
+    }
+
+    {
+        let hierarchy_state = app.data.ecs_world.resource::<HierarchyState>();
+        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+        build_inspector_window(
+            ui,
+            &mut *ui_events,
+            &app.data.ecs_world,
+            &*hierarchy_state,
+            &app.data.ecs_assets,
+            &app.data.graphics_resources,
+        );
+    }
+
+    {
+        let texture_id = imgui::TextureId::new(app.data.viewport.texture_id());
+        let current_size = [app.data.viewport.width as f32, app.data.viewport.height as f32];
+        let viewport_info = build_viewport_window(ui, texture_id, current_size);
+
+        app.data.viewport.focused = viewport_info.focused;
+        app.data.viewport.hovered = viewport_info.hovered;
+        gui_data.viewport_focused = viewport_info.focused;
+        gui_data.viewport_hovered = viewport_info.hovered;
+        gui_data.viewport_position = viewport_info.position;
+        gui_data.viewport_size = viewport_info.size;
+
+        let new_width = viewport_info.size[0] as u32;
+        let new_height = viewport_info.size[1] as u32;
+        if new_width > 0 && new_height > 0
+            && (new_width != app.data.viewport.width || new_height != app.data.viewport.height)
+        {
+            gui_data.viewport_resize_pending = Some((new_width, new_height));
+        }
+    }
+
+    let clip_track_snapshot = {
+        let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+        collect_clip_track_snapshot(&app.data.ecs_world, &*clip_library)
+    };
+
+    {
+        let mut timeline_state = app.data.ecs_world.resource_mut::<TimelineState>();
+        let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+        let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
+        build_timeline_window(ui, &mut *ui_events, &mut *timeline_state, &*clip_library, &mut *curve_editor, &clip_track_snapshot);
+    }
+
+    {
+        let timeline_state = app.data.ecs_world.resource::<TimelineState>();
+        let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+        let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
+        let curve_buffer = app.data.ecs_world.resource::<CurveEditorBuffer>();
+        build_curve_editor_window(ui, &mut *ui_events, &*timeline_state, &*clip_library, &mut *curve_editor, &*curve_buffer);
+    }
+}
+
+unsafe fn process_ui_events_and_render_frame(
+    app: &mut App,
+    gui_data: &mut GUIData,
+    window: &winit::window::Window,
+    draw_data: &imgui::DrawData,
+) {
+    let deferred_actions = {
+        let events: Vec<_> = {
+            if let Some(mut ui_events) =
+                app.data.ecs_world.get_resource_mut::<UIEventQueue>()
+            {
+                ui_events.drain().collect()
+            } else {
+                Vec::new()
+            }
+        };
+
+        if events.is_empty() {
+            Vec::new()
+        } else {
+            process_hierarchy_events_inline(&events, app);
+            process_timeline_events_inline(&events, app);
+            process_keyframe_clipboard_events_inline(&events, app);
+            process_buffer_events_inline(&events, app);
+            process_clip_instance_events_inline(&events, app);
+            process_clip_browser_events_inline(&events, app);
+            process_edit_history_events_inline(&events, app);
+            process_scene_events_inline(&events, app);
+            process_debug_constraint_events_inline(&events, app);
+            process_constraint_edit_events_inline(&events, app);
+            process_constraint_bake_events_inline(&events, app);
+            process_spring_bone_bake_events_inline(&events, app);
+
+            let model_bounds = app.data.graphics_resources.calculate_model_bounds();
+            let world = &app.data.ecs_world;
+            let mut camera = world.resource_mut::<Camera>();
+            let mut rt_debug = world.resource_mut::<RayTracingDebugState>();
+            process_ui_events_with_events_simple(
+                events,
+                &mut camera,
+                &mut rt_debug,
+                model_bounds,
+            )
+        }
+    };
+
+    for action in deferred_actions {
+        match action {
+            DeferredAction::LoadModel { path } => {
+                gui_data.selected_model_path = path;
+                gui_data.file_changed = true;
+            }
+            DeferredAction::TakeScreenshot => {
+                gui_data.take_screenshot = true;
+            }
+            DeferredAction::DebugShadowInfo => {
+                app.log_shadow_debug_info();
+            }
+            DeferredAction::DebugBillboardDepth => {
+                gui_data.debug_billboard_depth = true;
+            }
+            DeferredAction::DumpDebugInfo => {
+                app.dump_debug_info();
+            }
+            DeferredAction::DumpAnimationDebug => {
+                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+                if let Err(e) = crate::ecs::systems::animation_debug_dump::dump_animation_debug(
+                    &app.data.ecs_world,
+                    &app.data.ecs_assets,
+                    &*clip_library,
+                ) {
+                    crate::log!("Animation debug dump failed: {:?}", e);
+                }
+            }
+        }
+    }
+
+    let frame_result = (|| -> anyhow::Result<()> {
+        let image_index = app.begin_frame(gui_data)?;
+        app.update(image_index, gui_data)?;
+        app.render(image_index, gui_data, draw_data)?;
+        Ok(())
+    })();
+
+    if let Err(e) = frame_result {
+        let msg = e.to_string();
+        if msg.contains("SWAPCHAIN_OUT_OF_DATE") {
+            app.recreate_swapchain(window).unwrap();
+        } else {
+            panic!("Frame error: {:?}", e);
+        }
     }
 }
 

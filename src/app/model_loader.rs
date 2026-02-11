@@ -166,6 +166,7 @@ unsafe fn apply_model_to_resources(
     );
 
     apply_loaded_constraints(load_result, world);
+    apply_loaded_spring_bones(load_result, world);
     initialize_bone_gizmo_visibility(
         world,
         assets,
@@ -958,6 +959,35 @@ fn apply_loaded_constraints(load_result: &ModelLoadResult, world: &mut World) {
         "Applied {} constraints to entity {}",
         load_result.constraints.len(),
         model_entity
+    );
+}
+
+fn apply_loaded_spring_bones(load_result: &ModelLoadResult, world: &mut World) {
+    use crate::ecs::component::{SpringBoneSetup, WithSpringBone};
+    use crate::ecs::resource::SpringBoneState;
+
+    let Some(ref setup) = load_result.spring_bone_setup else {
+        return;
+    };
+
+    let animator_entities = world.component_entities::<Animator>();
+    if animator_entities.is_empty() {
+        return;
+    }
+
+    let model_entity = animator_entities[0];
+    world.insert_component(model_entity, setup.clone());
+    world.insert_component(model_entity, WithSpringBone);
+
+    if !world.contains_resource::<SpringBoneState>() {
+        world.insert_resource(SpringBoneState::default());
+    }
+
+    crate::log!(
+        "Applied VRMC spring bones to entity {}: {} chains, {} colliders",
+        model_entity,
+        setup.chains.len(),
+        setup.colliders.len()
     );
 }
 

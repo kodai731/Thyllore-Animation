@@ -2,6 +2,7 @@ use crate::animation::{
     AnimationClip, AnimationSystem, Interpolation, Keyframe, MorphAnimation, MorphAnimationSystem,
     MorphTarget, Skeleton, SkinData, TransformChannel,
 };
+use crate::ecs::component::SpringBoneSetup;
 use crate::log;
 use crate::math::*;
 use crate::vulkanr::data::{Vertex, VertexData};
@@ -55,6 +56,7 @@ pub struct GltfLoadResult {
     pub morph_animation: MorphAnimationSystem,
     pub has_skinned_meshes: bool,
     pub has_armature: bool,
+    pub spring_bone_setup: Option<SpringBoneSetup>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -135,6 +137,10 @@ impl NodeJointMap {
         self.joint_to_node.get(&joint_index).copied()
     }
 
+    fn get_joint_index(&self, node_index: u16) -> Option<u16> {
+        self.node_to_joint.get(&node_index).copied()
+    }
+
     fn contain_node_index(&self, node_index: u16) -> bool {
         self.node_to_joint.contains_key(&node_index)
     }
@@ -171,6 +177,7 @@ struct GltfParseContext {
     has_skinned_meshes: bool,
     has_armature: bool,
     skeleton_root_transform: Option<[[f32; 4]; 4]>,
+    spring_bone_setup: Option<SpringBoneSetup>,
 }
 
 impl Default for GltfParseContext {
@@ -187,6 +194,7 @@ impl Default for GltfParseContext {
             has_skinned_meshes: false,
             has_armature: false,
             skeleton_root_transform: None,
+            spring_bone_setup: None,
         }
     }
 }
@@ -252,12 +260,40 @@ unsafe fn parse_gltf(ctx: &mut GltfParseContext, path: &str) {
         process_animation(&buffers, animation, ctx, morph_target_count).unwrap();
     }
 
+    ctx.spring_bone_setup = extract_spring_bone_extension(&gltf, &ctx.node_joint_map);
+
     log!(
         "Loaded: has_skinned_meshes={}, {} node_animations, {} joint_animations",
         ctx.has_skinned_meshes,
         ctx.node_animations.len(),
         ctx.joint_animations.len()
     );
+}
+
+fn extract_spring_bone_extension(
+    gltf: &Document,
+    node_joint_map: &NodeJointMap,
+) -> Option<SpringBoneSetup> {
+    let extension_json = gltf.extension_value("VRMC_springBone")?;
+
+    let resolve = |node_index: u32| -> Option<u32> {
+        node_joint_map
+            .get_joint_index(node_index as u16)
+            .map(|j| j as u32)
+    };
+
+    let setup = super::spring_bone_extension::parse_vrmc_spring_bone(extension_json, &resolve);
+
+    if let Some(ref s) = setup {
+        log!(
+            "VRMC_springBone loaded: {} chains, {} colliders, {} groups",
+            s.chains.len(),
+            s.colliders.len(),
+            s.collider_groups.len()
+        );
+    }
+
+    setup
 }
 
 fn set_joints(ctx: &mut GltfParseContext, skin: &gltf::Skin, buffers: &Vec<Data>) {
@@ -950,6 +986,7 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
         morph_animation: morph_system,
         has_skinned_meshes: ctx.has_skinned_meshes,
         has_armature: ctx.has_armature,
+        spring_bone_setup: ctx.spring_bone_setup,
     }
 }
 

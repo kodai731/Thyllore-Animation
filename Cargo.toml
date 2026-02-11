@@ -38,4 +38,4 @@ ron = "0.8"
 
 [dependencies.gltf]
 version = "1.4"
-features = ["extras", "names"]
+features = ["extras", "names", "extensions"]

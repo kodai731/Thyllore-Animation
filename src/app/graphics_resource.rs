@@ -81,10 +81,8 @@ impl GraphicsResources {
             };
 
             let vertex_count = skin_data.base_positions.len();
-            let mut skinned_positions =
-                vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
-            let mut skinned_normals =
-                vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
+            let mut skinned_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
+            let mut skinned_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
 
             apply_skinning(
                 &skin_data,
@@ -147,8 +145,7 @@ impl GraphicsResources {
             for (i, v) in mesh.vertex_data.vertices.iter_mut().enumerate() {
                 if i < mesh.base_vertices.len() {
                     let base = &mesh.base_vertices[i];
-                    let pos = transform
-                        * Vector4::new(base.pos.x, base.pos.y, base.pos.z, 1.0);
+                    let pos = transform * Vector4::new(base.pos.x, base.pos.y, base.pos.z, 1.0);
                     v.pos.x = pos.x * scale;
                     v.pos.y = pos.y * scale;
                     v.pos.z = pos.z * scale;
@@ -183,10 +180,8 @@ impl GraphicsResources {
         };
 
         let vertex_count = skin_data.base_positions.len();
-        let mut skinned_positions =
-            vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
-        let mut skinned_normals =
-            vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
+        let mut skinned_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
+        let mut skinned_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
 
         apply_skinning(
             &skin_data,
@@ -245,8 +240,7 @@ impl GraphicsResources {
         for (i, v) in mesh.vertex_data.vertices.iter_mut().enumerate() {
             if i < mesh.base_vertices.len() {
                 let base = &mesh.base_vertices[i];
-                let pos = transform
-                    * Vector4::new(base.pos.x, base.pos.y, base.pos.z, 1.0);
+                let pos = transform * Vector4::new(base.pos.x, base.pos.y, base.pos.z, 1.0);
                 v.pos.x = pos.x * scale;
                 v.pos.y = pos.y * scale;
                 v.pos.z = pos.z * scale;
@@ -363,8 +357,7 @@ impl GraphicsResources {
                 let idx = bone.id as usize;
                 if idx < pose.bone_poses.len() {
                     let bp = &pose.bone_poses[idx];
-                    node.local_transform =
-                        compose_transform(bp.translation, bp.rotation, bp.scale);
+                    node.local_transform = compose_transform(bp.translation, bp.rotation, bp.scale);
                 }
             }
         }
@@ -382,24 +375,17 @@ impl GraphicsResources {
             }
 
             let local = nodes[node_idx].local_transform;
-            let global =
-                if let Some(parent_idx) = nodes[node_idx].parent_index {
-                    if let Some(parent_array_idx) =
-                        nodes.iter().position(|n| n.index == parent_idx)
-                    {
-                        let parent_global = compute_global(
-                            nodes,
-                            parent_array_idx,
-                            computed,
-                            global_transforms,
-                        );
-                        parent_global * local
-                    } else {
-                        local
-                    }
+            let global = if let Some(parent_idx) = nodes[node_idx].parent_index {
+                if let Some(parent_array_idx) = nodes.iter().position(|n| n.index == parent_idx) {
+                    let parent_global =
+                        compute_global(nodes, parent_array_idx, computed, global_transforms);
+                    parent_global * local
                 } else {
                     local
-                };
+                }
+            } else {
+                local
+            };
 
             global_transforms[node_idx] = global;
             computed[node_idx] = true;

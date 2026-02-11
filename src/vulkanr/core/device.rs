@@ -1,6 +1,6 @@
 use super::swapchain::*;
-use crate::vulkanr::vulkan::*;
 use crate::log;
+use crate::vulkanr::vulkan::*;
 use std::collections::HashSet;
 use std::ops::Deref;
 use thiserror::Error;
@@ -133,14 +133,13 @@ unsafe fn create_logical_device(
         .fill_mode_non_solid(true)
         .independent_blend(true);
 
-    let mut acceleration_structure_features = vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
-        .acceleration_structure(true);
+    let mut acceleration_structure_features =
+        vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder().acceleration_structure(true);
 
-    let mut ray_query_features = vk::PhysicalDeviceRayQueryFeaturesKHR::builder()
-        .ray_query(true);
+    let mut ray_query_features = vk::PhysicalDeviceRayQueryFeaturesKHR::builder().ray_query(true);
 
-    let mut vulkan_12_features = vk::PhysicalDeviceVulkan12Features::builder()
-        .buffer_device_address(true);
+    let mut vulkan_12_features =
+        vk::PhysicalDeviceVulkan12Features::builder().buffer_device_address(true);
 
     let info = vk::DeviceCreateInfo::builder()
         .queue_create_infos(&queue_infos)
@@ -214,7 +213,8 @@ unsafe fn pick_physical_device(
         {
             log::warn!(
                 "Skipping Physical Device (`{}`): {}",
-                properties.device_name, error
+                properties.device_name,
+                error
             );
         } else {
             log::info!("Selected Physical Device (`{}`).", properties.device_name);
@@ -300,7 +300,15 @@ unsafe fn check_physical_device_extensions(
     log!("Required extensions: {}", device_extensions.len());
     for ext in device_extensions {
         let supported = extensions.contains(ext);
-        log!("  {} - {}", ext, if supported { "SUPPORTED" } else { "NOT SUPPORTED" });
+        log!(
+            "  {} - {}",
+            ext,
+            if supported {
+                "SUPPORTED"
+            } else {
+                "NOT SUPPORTED"
+            }
+        );
     }
 
     let missing_extensions: Vec<_> = device_extensions

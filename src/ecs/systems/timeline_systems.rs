@@ -62,8 +62,7 @@ pub fn timeline_process_events(
                 modifier,
             } => {
                 use crate::ecs::resource::SelectedKeyframe;
-                let selected =
-                    SelectedKeyframe::new(*bone_id, *property_type, *keyframe_id);
+                let selected = SelectedKeyframe::new(*bone_id, *property_type, *keyframe_id);
                 timeline_state.apply_selection(selected, *modifier);
             }
 
@@ -75,12 +74,7 @@ pub fn timeline_process_events(
             } => {
                 if let Some(clip_id) = timeline_state.current_clip_id {
                     if let Some(clip) = clip_library.get_mut(clip_id) {
-                        clip.add_keyframe(
-                            *bone_id,
-                            *property_type,
-                            *time,
-                            *value,
-                        );
+                        clip.add_keyframe(*bone_id, *property_type, *time, *value);
                         clip_modified = true;
                     }
                 }
@@ -93,9 +87,7 @@ pub fn timeline_process_events(
                     if !selected.is_empty() {
                         if let Some(clip) = clip_library.get_mut(clip_id) {
                             for sel in &selected {
-                                if let Some(track) =
-                                    clip.tracks.get_mut(&sel.bone_id)
-                                {
+                                if let Some(track) = clip.tracks.get_mut(&sel.bone_id) {
                                     track
                                         .get_curve_mut(sel.property_type)
                                         .remove_keyframe(sel.keyframe_id);
@@ -118,7 +110,12 @@ pub fn timeline_process_events(
                 if let Some(clip_id) = timeline_state.current_clip_id {
                     if let Some(clip) = clip_library.get_mut(clip_id) {
                         if let Some(track) = clip.tracks.get_mut(bone_id) {
-                            track.move_keyframe(*property_type, *keyframe_id, *new_time, *new_value);
+                            track.move_keyframe(
+                                *property_type,
+                                *keyframe_id,
+                                *new_time,
+                                *new_value,
+                            );
                             clip_modified = true;
                         }
                     }
@@ -273,11 +270,17 @@ pub fn timeline_update(
 }
 
 pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
-    let mut deselect_after: Option<(crate::ecs::world::Entity, crate::animation::editable::ClipInstanceId)> = None;
+    let mut deselect_after: Option<(
+        crate::ecs::world::Entity,
+        crate::animation::editable::ClipInstanceId,
+    )> = None;
 
     for event in events {
         match event {
-            UIEvent::ClipInstanceSelect { entity, instance_id } => {
+            UIEvent::ClipInstanceSelect {
+                entity,
+                instance_id,
+            } => {
                 let mut ts = world.resource_mut::<TimelineState>();
                 ts.selected_clip_instance = Some((*entity, *instance_id));
             }
@@ -287,100 +290,136 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 ts.selected_clip_instance = None;
             }
 
-            UIEvent::ClipInstanceMove { entity, instance_id, new_start_time } => {
+            UIEvent::ClipInstanceMove {
+                entity,
+                instance_id,
+                new_start_time,
+            } => {
                 modify_clip_instance(world, *entity, *instance_id, |inst| {
                     inst.start_time = *new_start_time;
                 });
             }
 
-            UIEvent::ClipInstanceTrimStart { entity, instance_id, new_clip_in } => {
+            UIEvent::ClipInstanceTrimStart {
+                entity,
+                instance_id,
+                new_clip_in,
+            } => {
                 modify_clip_instance(world, *entity, *instance_id, |inst| {
                     inst.clip_in = new_clip_in.max(0.0);
                 });
             }
 
-            UIEvent::ClipInstanceTrimEnd { entity, instance_id, new_clip_out } => {
+            UIEvent::ClipInstanceTrimEnd {
+                entity,
+                instance_id,
+                new_clip_out,
+            } => {
                 modify_clip_instance(world, *entity, *instance_id, |inst| {
                     inst.clip_out = new_clip_out.max(0.0);
                 });
             }
 
-            UIEvent::ClipInstanceToggleMute { entity, instance_id } => {
+            UIEvent::ClipInstanceToggleMute {
+                entity,
+                instance_id,
+            } => {
                 modify_clip_instance(world, *entity, *instance_id, |inst| {
                     inst.muted = !inst.muted;
                 });
             }
 
-            UIEvent::ClipInstanceDelete { entity, instance_id } => {
+            UIEvent::ClipInstanceDelete {
+                entity,
+                instance_id,
+            } => {
                 if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
-                    super::clip_schedule_systems::clip_schedule_remove_instance(schedule, *instance_id);
+                    super::clip_schedule_systems::clip_schedule_remove_instance(
+                        schedule,
+                        *instance_id,
+                    );
                 }
                 deselect_after = Some((*entity, *instance_id));
             }
 
-            UIEvent::ClipInstanceSetWeight { entity, instance_id, weight } => {
+            UIEvent::ClipInstanceSetWeight {
+                entity,
+                instance_id,
+                weight,
+            } => {
                 modify_clip_instance(world, *entity, *instance_id, |inst| {
                     inst.weight = weight.clamp(0.0, 1.0);
                 });
             }
 
-            UIEvent::ClipInstanceSetBlendMode { entity, instance_id, blend_mode } => {
+            UIEvent::ClipInstanceSetBlendMode {
+                entity,
+                instance_id,
+                blend_mode,
+            } => {
                 modify_clip_instance(world, *entity, *instance_id, |inst| {
                     inst.blend_mode = *blend_mode;
                 });
             }
 
             UIEvent::ClipGroupCreate { entity, name } => {
-                if let Some(schedule) =
-                    world.get_component_mut::<ClipSchedule>(*entity)
-                {
-                    super::clip_schedule_systems::clip_schedule_create_group(schedule, name.clone());
+                if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
+                    super::clip_schedule_systems::clip_schedule_create_group(
+                        schedule,
+                        name.clone(),
+                    );
                 }
             }
 
             UIEvent::ClipGroupDelete { entity, group_id } => {
-                if let Some(schedule) =
-                    world.get_component_mut::<ClipSchedule>(*entity)
-                {
+                if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
                     super::clip_schedule_systems::clip_schedule_remove_group(schedule, *group_id);
                 }
             }
 
-            UIEvent::ClipGroupAddInstance { entity, group_id, instance_id } => {
-                if let Some(schedule) =
-                    world.get_component_mut::<ClipSchedule>(*entity)
-                {
-                    super::clip_schedule_systems::clip_schedule_add_to_group(schedule, *group_id, *instance_id);
+            UIEvent::ClipGroupAddInstance {
+                entity,
+                group_id,
+                instance_id,
+            } => {
+                if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
+                    super::clip_schedule_systems::clip_schedule_add_to_group(
+                        schedule,
+                        *group_id,
+                        *instance_id,
+                    );
                 }
             }
 
-            UIEvent::ClipGroupRemoveInstance { entity, group_id, instance_id } => {
-                if let Some(schedule) =
-                    world.get_component_mut::<ClipSchedule>(*entity)
-                {
-                    super::clip_schedule_systems::clip_schedule_remove_from_group(schedule, *group_id, *instance_id);
+            UIEvent::ClipGroupRemoveInstance {
+                entity,
+                group_id,
+                instance_id,
+            } => {
+                if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
+                    super::clip_schedule_systems::clip_schedule_remove_from_group(
+                        schedule,
+                        *group_id,
+                        *instance_id,
+                    );
                 }
             }
 
             UIEvent::ClipGroupToggleMute { entity, group_id } => {
-                if let Some(schedule) =
-                    world.get_component_mut::<ClipSchedule>(*entity)
-                {
-                    if let Some(group) =
-                        schedule.groups.iter_mut().find(|g| g.id == *group_id)
-                    {
+                if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
+                    if let Some(group) = schedule.groups.iter_mut().find(|g| g.id == *group_id) {
                         group.muted = !group.muted;
                     }
                 }
             }
 
-            UIEvent::ClipGroupSetWeight { entity, group_id, weight } => {
-                if let Some(schedule) =
-                    world.get_component_mut::<ClipSchedule>(*entity)
-                {
-                    if let Some(group) =
-                        schedule.groups.iter_mut().find(|g| g.id == *group_id)
-                    {
+            UIEvent::ClipGroupSetWeight {
+                entity,
+                group_id,
+                weight,
+            } => {
+                if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
+                    if let Some(group) = schedule.groups.iter_mut().find(|g| g.id == *group_id) {
                         group.weight = weight.clamp(0.0, 1.0);
                     }
                 }
@@ -407,7 +446,11 @@ fn modify_clip_instance(
     f: impl FnOnce(&mut crate::animation::editable::ClipInstance),
 ) {
     if let Some(schedule) = world.get_component_mut::<ClipSchedule>(entity) {
-        if let Some(inst) = schedule.instances.iter_mut().find(|i| i.instance_id == instance_id) {
+        if let Some(inst) = schedule
+            .instances
+            .iter_mut()
+            .find(|i| i.instance_id == instance_id)
+        {
             f(inst);
         }
     }

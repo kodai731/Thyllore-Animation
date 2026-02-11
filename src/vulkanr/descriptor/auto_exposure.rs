@@ -9,40 +9,29 @@ pub struct RRAutoExposureHistogramDescriptorSet {
 }
 
 impl RRAutoExposureHistogramDescriptorSet {
-    pub unsafe fn create_layout(
-        rrdevice: &RRDevice,
-    ) -> Result<vk::DescriptorSetLayout> {
-        let image_sampler_binding =
-            vk::DescriptorSetLayoutBinding::builder()
-                .binding(0)
-                .descriptor_type(
-                    vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                )
-                .descriptor_count(1)
-                .stage_flags(vk::ShaderStageFlags::COMPUTE)
-                .build();
+    pub unsafe fn create_layout(rrdevice: &RRDevice) -> Result<vk::DescriptorSetLayout> {
+        let image_sampler_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::COMPUTE)
+            .build();
 
-        let histogram_binding =
-            vk::DescriptorSetLayoutBinding::builder()
-                .binding(1)
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(1)
-                .stage_flags(vk::ShaderStageFlags::COMPUTE)
-                .build();
+        let histogram_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(1)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::COMPUTE)
+            .build();
 
         let bindings = [image_sampler_binding, histogram_binding];
-        let info = vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(&bindings);
-        let layout = rrdevice
-            .device
-            .create_descriptor_set_layout(&info, None)?;
+        let info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings);
+        let layout = rrdevice.device.create_descriptor_set_layout(&info, None)?;
 
         Ok(layout)
     }
 
-    pub unsafe fn create_pool(
-        rrdevice: &RRDevice,
-    ) -> Result<vk::DescriptorPool> {
+    pub unsafe fn create_pool(rrdevice: &RRDevice) -> Result<vk::DescriptorPool> {
         let pool_sizes = [
             vk::DescriptorPoolSize::builder()
                 .type_(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
@@ -58,8 +47,7 @@ impl RRAutoExposureHistogramDescriptorSet {
             .pool_sizes(&pool_sizes)
             .max_sets(1);
 
-        let pool =
-            rrdevice.device.create_descriptor_pool(&info, None)?;
+        let pool = rrdevice.device.create_descriptor_pool(&info, None)?;
         Ok(pool)
     }
 
@@ -76,8 +64,7 @@ impl RRAutoExposureHistogramDescriptorSet {
             .descriptor_pool(self.descriptor_pool)
             .set_layouts(&layouts);
 
-        let descriptor_sets =
-            rrdevice.device.allocate_descriptor_sets(&alloc_info)?;
+        let descriptor_sets = rrdevice.device.allocate_descriptor_sets(&alloc_info)?;
         self.descriptor_set = descriptor_sets[0];
 
         self.update_bindings(
@@ -102,18 +89,14 @@ impl RRAutoExposureHistogramDescriptorSet {
         let image_info = vk::DescriptorImageInfo::builder()
             .image_view(hdr_image_view)
             .sampler(hdr_sampler)
-            .image_layout(
-                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            )
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .build();
 
         let image_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)
             .dst_binding(0)
             .dst_array_element(0)
-            .descriptor_type(
-                vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-            )
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .image_info(std::slice::from_ref(&image_info))
             .build();
 
@@ -137,25 +120,15 @@ impl RRAutoExposureHistogramDescriptorSet {
         );
     }
 
-    pub unsafe fn destroy(
-        &mut self,
-        device: &vulkanalia::Device,
-    ) {
+    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         if self.descriptor_pool != vk::DescriptorPool::null() {
-            device
-                .destroy_descriptor_pool(self.descriptor_pool, None);
+            device.destroy_descriptor_pool(self.descriptor_pool, None);
             self.descriptor_pool = vk::DescriptorPool::null();
         }
 
-        if self.descriptor_set_layout
-            != vk::DescriptorSetLayout::null()
-        {
-            device.destroy_descriptor_set_layout(
-                self.descriptor_set_layout,
-                None,
-            );
-            self.descriptor_set_layout =
-                vk::DescriptorSetLayout::null();
+        if self.descriptor_set_layout != vk::DescriptorSetLayout::null() {
+            device.destroy_descriptor_set_layout(self.descriptor_set_layout, None);
+            self.descriptor_set_layout = vk::DescriptorSetLayout::null();
         }
     }
 }
@@ -168,38 +141,29 @@ pub struct RRAutoExposureAverageDescriptorSet {
 }
 
 impl RRAutoExposureAverageDescriptorSet {
-    pub unsafe fn create_layout(
-        rrdevice: &RRDevice,
-    ) -> Result<vk::DescriptorSetLayout> {
-        let histogram_binding =
-            vk::DescriptorSetLayoutBinding::builder()
-                .binding(0)
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(1)
-                .stage_flags(vk::ShaderStageFlags::COMPUTE)
-                .build();
+    pub unsafe fn create_layout(rrdevice: &RRDevice) -> Result<vk::DescriptorSetLayout> {
+        let histogram_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::COMPUTE)
+            .build();
 
-        let luminance_binding =
-            vk::DescriptorSetLayoutBinding::builder()
-                .binding(1)
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .descriptor_count(1)
-                .stage_flags(vk::ShaderStageFlags::COMPUTE)
-                .build();
+        let luminance_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(1)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::COMPUTE)
+            .build();
 
         let bindings = [histogram_binding, luminance_binding];
-        let info = vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(&bindings);
-        let layout = rrdevice
-            .device
-            .create_descriptor_set_layout(&info, None)?;
+        let info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings);
+        let layout = rrdevice.device.create_descriptor_set_layout(&info, None)?;
 
         Ok(layout)
     }
 
-    pub unsafe fn create_pool(
-        rrdevice: &RRDevice,
-    ) -> Result<vk::DescriptorPool> {
+    pub unsafe fn create_pool(rrdevice: &RRDevice) -> Result<vk::DescriptorPool> {
         let pool_sizes = [vk::DescriptorPoolSize::builder()
             .type_(vk::DescriptorType::STORAGE_BUFFER)
             .descriptor_count(2)
@@ -209,8 +173,7 @@ impl RRAutoExposureAverageDescriptorSet {
             .pool_sizes(&pool_sizes)
             .max_sets(1);
 
-        let pool =
-            rrdevice.device.create_descriptor_pool(&info, None)?;
+        let pool = rrdevice.device.create_descriptor_pool(&info, None)?;
         Ok(pool)
     }
 
@@ -227,8 +190,7 @@ impl RRAutoExposureAverageDescriptorSet {
             .descriptor_pool(self.descriptor_pool)
             .set_layouts(&layouts);
 
-        let descriptor_sets =
-            rrdevice.device.allocate_descriptor_sets(&alloc_info)?;
+        let descriptor_sets = rrdevice.device.allocate_descriptor_sets(&alloc_info)?;
         self.descriptor_set = descriptor_sets[0];
 
         self.update_bindings(
@@ -284,25 +246,15 @@ impl RRAutoExposureAverageDescriptorSet {
         );
     }
 
-    pub unsafe fn destroy(
-        &mut self,
-        device: &vulkanalia::Device,
-    ) {
+    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         if self.descriptor_pool != vk::DescriptorPool::null() {
-            device
-                .destroy_descriptor_pool(self.descriptor_pool, None);
+            device.destroy_descriptor_pool(self.descriptor_pool, None);
             self.descriptor_pool = vk::DescriptorPool::null();
         }
 
-        if self.descriptor_set_layout
-            != vk::DescriptorSetLayout::null()
-        {
-            device.destroy_descriptor_set_layout(
-                self.descriptor_set_layout,
-                None,
-            );
-            self.descriptor_set_layout =
-                vk::DescriptorSetLayout::null();
+        if self.descriptor_set_layout != vk::DescriptorSetLayout::null() {
+            device.destroy_descriptor_set_layout(self.descriptor_set_layout, None);
+            self.descriptor_set_layout = vk::DescriptorSetLayout::null();
         }
     }
 }

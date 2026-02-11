@@ -82,10 +82,7 @@ impl<'a> BloomPass<'a> {
         Ok(())
     }
 
-    unsafe fn record_downsample_passes(
-        &self,
-        command_buffer: vk::CommandBuffer,
-    ) -> Result<()> {
+    unsafe fn record_downsample_passes(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
         let mip_count = self.bloom_chain.mip_levels.len();
 
         for i in 0..mip_count {
@@ -141,10 +138,7 @@ impl<'a> BloomPass<'a> {
         Ok(())
     }
 
-    unsafe fn record_upsample_passes(
-        &self,
-        command_buffer: vk::CommandBuffer,
-    ) -> Result<()> {
+    unsafe fn record_upsample_passes(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
         let mip_count = self.bloom_chain.mip_levels.len();
         if mip_count < 2 {
             return Ok(());
@@ -205,7 +199,9 @@ impl<'a> BloomPass<'a> {
                 layer_count: 1,
             })
             .src_access_mask(vk::AccessFlags::SHADER_READ)
-            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE);
+            .dst_access_mask(
+                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            );
 
         self.device.cmd_pipeline_barrier(
             command_buffer,

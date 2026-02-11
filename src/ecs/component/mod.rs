@@ -7,6 +7,7 @@ mod gizmo;
 mod marker;
 pub mod mesh;
 mod render;
+mod spring_bone;
 
 pub use animation_meta::*;
 pub use clip_schedule::*;
@@ -17,3 +18,4 @@ pub use gizmo::*;
 pub use marker::*;
 pub use mesh::*;
 pub use render::*;
+pub use spring_bone::*;

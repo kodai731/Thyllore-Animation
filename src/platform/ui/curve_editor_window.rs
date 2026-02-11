@@ -7,9 +7,7 @@ use crate::animation::editable::{
 };
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::{
-    ClipLibrary, CurveEditorBuffer, TimelineState,
-};
+use crate::ecs::resource::{ClipLibrary, CurveEditorBuffer, TimelineState};
 
 const MIN_WINDOW_WIDTH: f32 = 400.0;
 const MIN_WINDOW_HEIGHT: f32 = 300.0;
@@ -47,23 +45,20 @@ struct ViewTransform {
 impl ViewTransform {
     fn time_to_x(&self, time: f32) -> f32 {
         self.curve_origin[0]
-            + (time - self.view_time_offset)
-                / self.duration.max(0.001)
+            + (time - self.view_time_offset) / self.duration.max(0.001)
                 * self.zoom_x
                 * self.curve_width
     }
 
     fn value_to_y(&self, value: f32) -> f32 {
         self.curve_origin[1] + self.curve_height
-            - (value - self.view_value_offset)
-                / self.val_range.max(0.001)
+            - (value - self.view_value_offset) / self.val_range.max(0.001)
                 * self.zoom_y
                 * self.curve_height
     }
 
     fn x_to_time(&self, x: f32) -> f32 {
-        (x - self.curve_origin[0])
-            / (self.zoom_x * self.curve_width).max(0.001)
+        (x - self.curve_origin[0]) / (self.zoom_x * self.curve_width).max(0.001)
             * self.duration.max(0.001)
             + self.view_time_offset
     }
@@ -191,18 +186,12 @@ pub fn build_curve_editor_window(
                 .size([TRACK_LIST_WIDTH, content_region[1]])
                 .border(true)
                 .build(|| {
-                    build_track_list(
-                        ui,
-                        timeline_state,
-                        clip_library,
-                        editor_state,
-                    );
+                    build_track_list(ui, timeline_state, clip_library, editor_state);
                 });
 
             ui.same_line();
 
-            let curve_view_width =
-                content_region[0] - TRACK_LIST_WIDTH - 10.0;
+            let curve_view_width = content_region[0] - TRACK_LIST_WIDTH - 10.0;
             ui.child_window("curve_view")
                 .size([curve_view_width, content_region[1]])
                 .border(true)
@@ -241,25 +230,27 @@ fn build_track_list(
     ui.text("Bones:");
     ui.separator();
 
-    let mut sorted_bone_ids: Vec<BoneId> =
-        clip.tracks.keys().copied().collect();
+    let mut sorted_bone_ids: Vec<BoneId> = clip.tracks.keys().copied().collect();
     sorted_bone_ids.sort();
 
     for bone_id in sorted_bone_ids {
         if let Some(track) = clip.tracks.get(&bone_id) {
-            let is_selected =
-                editor_state.selected_bone_id == Some(bone_id);
-            let label = if track.bone_name.len() > 18 {
+            let is_selected = editor_state.selected_bone_id == Some(bone_id);
+            let is_spring_bone = timeline_state.baked_bone_ids.contains(&bone_id);
+            let label = if is_spring_bone {
+                let name = if track.bone_name.len() > 13 {
+                    &track.bone_name[..10]
+                } else {
+                    &track.bone_name
+                };
+                format!("[SB] {}", name)
+            } else if track.bone_name.len() > 18 {
                 format!("{}...", &track.bone_name[..15])
             } else {
                 track.bone_name.clone()
             };
 
-            if ui
-                .selectable_config(&label)
-                .selected(is_selected)
-                .build()
-            {
+            if ui.selectable_config(&label).selected(is_selected).build() {
                 editor_state.selected_bone_id = Some(bone_id);
                 editor_state.view_initialized = false;
             }
@@ -284,8 +275,7 @@ fn build_curve_selector_inline(
             continue;
         }
 
-        let mut visible =
-            editor_state.visible_curves.contains(prop_type);
+        let mut visible = editor_state.visible_curves.contains(prop_type);
         ui.text_colored(*color, "\u{25CF}");
         ui.same_line();
         if ui.checkbox(name, &mut visible) {
@@ -347,17 +337,14 @@ fn build_curve_view(
     };
 
     let content_region = ui.content_region_avail();
-    let curve_area_width =
-        content_region[0] - Y_AXIS_WIDTH - CURVE_PADDING * 2.0;
-    let curve_area_height =
-        content_region[1] - TIME_RULER_HEIGHT - CURVE_PADDING * 2.0;
+    let curve_area_width = content_region[0] - Y_AXIS_WIDTH - CURVE_PADDING * 2.0;
+    let curve_area_height = content_region[1] - TIME_RULER_HEIGHT - CURVE_PADDING * 2.0;
 
     if curve_area_width <= 0.0 || curve_area_height <= 0.0 {
         return;
     }
 
-    let mut curves_to_draw: Vec<(&PropertyCurve, [f32; 4], &str)> =
-        Vec::new();
+    let mut curves_to_draw: Vec<(&PropertyCurve, [f32; 4], &str)> = Vec::new();
     for (prop_type, color, name) in ALL_PROPERTY_TYPES {
         if editor_state.visible_curves.contains(prop_type) {
             let curve = track.get_curve(*prop_type);
@@ -367,8 +354,7 @@ fn build_curve_view(
         }
     }
 
-    let (global_min, global_max) =
-        calculate_global_value_range(&curves_to_draw);
+    let (global_min, global_max) = calculate_global_value_range(&curves_to_draw);
 
     if !editor_state.view_initialized {
         editor_state.view_value_offset = global_min;
@@ -413,16 +399,8 @@ fn build_curve_view(
         &vt,
     );
 
-    let ruler_pos = [
-        cursor_pos[0] + Y_AXIS_WIDTH + CURVE_PADDING,
-        cursor_pos[1],
-    ];
-    draw_time_ruler(
-        &draw_list,
-        ruler_pos,
-        curve_area_width,
-        &vt,
-    );
+    let ruler_pos = [cursor_pos[0] + Y_AXIS_WIDTH + CURVE_PADDING, cursor_pos[1]];
+    draw_time_ruler(&draw_list, ruler_pos, curve_area_width, &vt);
 
     draw_list
         .add_rect(
@@ -443,71 +421,36 @@ fn build_curve_view(
             curve_origin[1] + curve_area_height,
         ],
         || {
-            draw_grid(
-                &draw_list,
-                curve_area_width,
-                curve_area_height,
-                &vt,
-            );
+            draw_grid(&draw_list, curve_area_width, curve_area_height, &vt);
 
-            let sample_count =
-                calculate_sample_count(curve_area_width);
+            let sample_count = calculate_sample_count(curve_area_width);
 
             for (curve, color, _name) in &curves_to_draw {
-                draw_curve_with_keyframes(
-                    &draw_list,
-                    curve,
-                    *color,
-                    sample_count,
-                    &vt,
-                );
+                draw_curve_with_keyframes(&draw_list, curve, *color, sample_count, &vt);
             }
 
-            if let Some(ref selected) =
-                editor_state.selected_keyframe
-            {
-                draw_selected_keyframe_highlight(
-                    &draw_list,
-                    &curves_to_draw,
-                    selected,
-                    &vt,
-                );
+            if let Some(ref selected) = editor_state.selected_keyframe {
+                draw_selected_keyframe_highlight(&draw_list, &curves_to_draw, selected, &vt);
 
-                draw_tangent_handles(
-                    &draw_list,
-                    &curves_to_draw,
-                    selected,
-                    &vt,
-                );
+                draw_tangent_handles(&draw_list, &curves_to_draw, selected, &vt);
             }
 
-            let playhead_x =
-                vt.time_to_x(timeline_state.current_time);
+            let playhead_x = vt.time_to_x(timeline_state.current_time);
             draw_list
                 .add_line(
                     [playhead_x, curve_origin[1]],
-                    [
-                        playhead_x,
-                        curve_origin[1] + curve_area_height,
-                    ],
+                    [playhead_x, curve_origin[1] + curve_area_height],
                     [1.0, 0.2, 0.2, 1.0],
                 )
                 .thickness(2.0)
                 .build();
 
             if editor_state.is_dragging_keyframe {
-                draw_keyframe_drag_preview(
-                    &draw_list,
-                    ui.io().mouse_pos,
-                    &vt,
-                );
+                draw_keyframe_drag_preview(&draw_list, ui.io().mouse_pos, &vt);
             }
 
             if editor_state.dragging_tangent.is_some() {
-                draw_tangent_drag_preview(
-                    &draw_list,
-                    ui.io().mouse_pos,
-                );
+                draw_tangent_drag_preview(&draw_list, ui.io().mouse_pos);
             }
 
             draw_buffer_curve_overlay(
@@ -520,18 +463,11 @@ fn build_curve_view(
         },
     );
 
-    let total_width =
-        Y_AXIS_WIDTH + CURVE_PADDING + curve_area_width + CURVE_PADDING;
-    let total_height = TIME_RULER_HEIGHT
-        + CURVE_PADDING
-        + curve_area_height
-        + CURVE_PADDING;
+    let total_width = Y_AXIS_WIDTH + CURVE_PADDING + curve_area_width + CURVE_PADDING;
+    let total_height = TIME_RULER_HEIGHT + CURVE_PADDING + curve_area_height + CURVE_PADDING;
 
     ui.set_cursor_screen_pos([cursor_pos[0], cursor_pos[1]]);
-    ui.invisible_button(
-        "curve_interaction_area",
-        [total_width, total_height],
-    );
+    ui.invisible_button("curve_interaction_area", [total_width, total_height]);
 
     handle_mouse_interaction(
         ui,
@@ -544,13 +480,9 @@ fn build_curve_view(
         clip.duration,
     );
 
-    if ui.is_item_hovered()
-        && ui.is_mouse_clicked(imgui::MouseButton::Right)
-    {
+    if ui.is_item_hovered() && ui.is_mouse_clicked(imgui::MouseButton::Right) {
         let mouse_pos = ui.io().mouse_pos;
-        if let Some(hit) =
-            find_keyframe_at_position(mouse_pos, &curves_to_draw, &vt)
-        {
+        if let Some(hit) = find_keyframe_at_position(mouse_pos, &curves_to_draw, &vt) {
             editor_state.context_menu_keyframe = Some(SelectedKeyframe {
                 property_type: hit.0,
                 keyframe_id: hit.1,
@@ -563,9 +495,7 @@ fn build_curve_view(
 
     build_keyframe_context_menu(ui, ui_events, editor_state, bone_id);
 
-    ui.set_cursor_screen_pos(
-        [cursor_pos[0], cursor_pos[1] + total_height],
-    );
+    ui.set_cursor_screen_pos([cursor_pos[0], cursor_pos[1] + total_height]);
 
     build_buffer_controls(ui, ui_events, curve_buffer);
 }
@@ -585,10 +515,7 @@ fn build_keyframe_context_menu(
         ui.text("Interpolation");
         ui.separator();
 
-        if ui
-            .selectable_config("Linear")
-            .build()
-        {
+        if ui.selectable_config("Linear").build() {
             ui_events.send(UIEvent::TimelineSetKeyframeInterpolation {
                 bone_id,
                 property_type: ctx_kf.property_type,
@@ -597,10 +524,7 @@ fn build_keyframe_context_menu(
             });
         }
 
-        if ui
-            .selectable_config("Bezier")
-            .build()
-        {
+        if ui.selectable_config("Bezier").build() {
             ui_events.send(UIEvent::TimelineSetKeyframeInterpolation {
                 bone_id,
                 property_type: ctx_kf.property_type,
@@ -609,10 +533,7 @@ fn build_keyframe_context_menu(
             });
         }
 
-        if ui
-            .selectable_config("Stepped")
-            .build()
-        {
+        if ui.selectable_config("Stepped").build() {
             ui_events.send(UIEvent::TimelineSetKeyframeInterpolation {
                 bone_id,
                 property_type: ctx_kf.property_type,
@@ -625,10 +546,7 @@ fn build_keyframe_context_menu(
         ui.text("Tangent");
         ui.separator();
 
-        if ui
-            .selectable_config("Auto")
-            .build()
-        {
+        if ui.selectable_config("Auto").build() {
             ui_events.send(UIEvent::TimelineAutoTangent {
                 bone_id,
                 property_type: ctx_kf.property_type,
@@ -636,10 +554,7 @@ fn build_keyframe_context_menu(
             });
         }
 
-        if ui
-            .selectable_config("Flat")
-            .build()
-        {
+        if ui.selectable_config("Flat").build() {
             ui_events.send(UIEvent::TimelineSetKeyframeTangent {
                 bone_id,
                 property_type: ctx_kf.property_type,
@@ -649,10 +564,7 @@ fn build_keyframe_context_menu(
             });
         }
 
-        if ui
-            .selectable_config("Reset (Linear)")
-            .build()
-        {
+        if ui.selectable_config("Reset (Linear)").build() {
             ui_events.send(UIEvent::TimelineSetKeyframeTangent {
                 bone_id,
                 property_type: ctx_kf.property_type,
@@ -676,28 +588,21 @@ fn handle_mouse_interaction(
 ) {
     let is_hovered = ui.is_item_hovered();
     let mouse_pos = ui.io().mouse_pos;
-    let mouse_clicked =
-        ui.is_mouse_clicked(imgui::MouseButton::Left);
+    let mouse_clicked = ui.is_mouse_clicked(imgui::MouseButton::Left);
     let mouse_down = ui.io().mouse_down[0];
-    let mouse_released =
-        ui.is_mouse_released(imgui::MouseButton::Left);
-    let middle_clicked =
-        ui.is_mouse_clicked(imgui::MouseButton::Middle);
-    let middle_released =
-        ui.is_mouse_released(imgui::MouseButton::Middle);
+    let mouse_released = ui.is_mouse_released(imgui::MouseButton::Left);
+    let middle_clicked = ui.is_mouse_clicked(imgui::MouseButton::Middle);
+    let middle_released = ui.is_mouse_released(imgui::MouseButton::Middle);
 
     let in_ruler_area = mouse_pos[0] >= ruler_pos[0]
         && mouse_pos[0] <= ruler_pos[0] + curve_area_width
         && mouse_pos[1] >= ruler_pos[1]
         && mouse_pos[1] <= ruler_pos[1] + TIME_RULER_HEIGHT;
 
-    let in_curve_area =
-        mouse_pos[0] >= vt.curve_origin[0]
-            && mouse_pos[0]
-                <= vt.curve_origin[0] + vt.curve_width
-            && mouse_pos[1] >= vt.curve_origin[1]
-            && mouse_pos[1]
-                <= vt.curve_origin[1] + vt.curve_height;
+    let in_curve_area = mouse_pos[0] >= vt.curve_origin[0]
+        && mouse_pos[0] <= vt.curve_origin[0] + vt.curve_width
+        && mouse_pos[1] >= vt.curve_origin[1]
+        && mouse_pos[1] <= vt.curve_origin[1] + vt.curve_height;
 
     handle_mouse_release(
         ui_events,
@@ -722,9 +627,7 @@ fn handle_mouse_interaction(
         && !editor_state.is_panning
         && editor_state.dragging_tangent.is_none()
     {
-        handle_curve_area_click(
-            editor_state, mouse_pos, curves_to_draw, vt,
-        );
+        handle_curve_area_click(editor_state, mouse_pos, curves_to_draw, vt);
     }
 
     if is_hovered && middle_clicked && in_curve_area {
@@ -762,12 +665,8 @@ fn handle_mouse_release(
     if mouse_released {
         if let Some(ref dragging) = editor_state.dragging_tangent.clone() {
             if let Some(bone_id) = editor_state.selected_bone_id {
-                let (in_tangent, out_tangent) = compute_dragged_tangent(
-                    dragging,
-                    mouse_pos,
-                    curves_to_draw,
-                    vt,
-                );
+                let (in_tangent, out_tangent) =
+                    compute_dragged_tangent(dragging, mouse_pos, curves_to_draw, vt);
                 ui_events.send(UIEvent::TimelineSetKeyframeTangent {
                     bone_id,
                     property_type: dragging.property_type,
@@ -778,27 +677,18 @@ fn handle_mouse_release(
             }
             editor_state.dragging_tangent = None;
         } else if editor_state.is_dragging_keyframe {
-            if let Some(ref selected) =
-                editor_state.selected_keyframe
-            {
-                let new_time = vt
-                    .x_to_time(mouse_pos[0])
-                    .clamp(0.0, vt.duration);
+            if let Some(ref selected) = editor_state.selected_keyframe {
+                let new_time = vt.x_to_time(mouse_pos[0]).clamp(0.0, vt.duration);
                 let new_value = vt.y_to_value(mouse_pos[1]);
 
-                if let Some(bone_id) = editor_state.selected_bone_id
-                {
-                    ui_events.send(
-                        UIEvent::TimelineMoveKeyframe {
-                            bone_id,
-                            property_type: selected
-                                .property_type
-                                .clone(),
-                            keyframe_id: selected.keyframe_id,
-                            new_time,
-                            new_value,
-                        },
-                    );
+                if let Some(bone_id) = editor_state.selected_bone_id {
+                    ui_events.send(UIEvent::TimelineMoveKeyframe {
+                        bone_id,
+                        property_type: selected.property_type.clone(),
+                        keyframe_id: selected.keyframe_id,
+                        new_time,
+                        new_value,
+                    });
                 }
             }
         }
@@ -850,12 +740,7 @@ fn handle_curve_area_click(
 ) {
     if let Some(ref selected) = editor_state.selected_keyframe {
         if let Some((handle_type, property_type, keyframe_id, original_handle)) =
-            find_tangent_handle_at_position(
-                mouse_pos,
-                curves_to_draw,
-                selected,
-                vt,
-            )
+            find_tangent_handle_at_position(mouse_pos, curves_to_draw, selected, vt)
         {
             editor_state.dragging_tangent = Some(DraggingTangent {
                 property_type,
@@ -868,12 +753,9 @@ fn handle_curve_area_click(
         }
     }
 
-    let hit_keyframe =
-        find_keyframe_at_position(mouse_pos, curves_to_draw, vt);
+    let hit_keyframe = find_keyframe_at_position(mouse_pos, curves_to_draw, vt);
 
-    if let Some((property_type, keyframe_id, time, value)) =
-        hit_keyframe
-    {
+    if let Some((property_type, keyframe_id, time, value)) = hit_keyframe {
         editor_state.selected_keyframe = Some(SelectedKeyframe {
             property_type,
             keyframe_id,
@@ -887,23 +769,15 @@ fn handle_curve_area_click(
     }
 }
 
-fn handle_panning(
-    editor_state: &mut CurveEditorState,
-    mouse_pos: [f32; 2],
-    vt: &ViewTransform,
-) {
+fn handle_panning(editor_state: &mut CurveEditorState, mouse_pos: [f32; 2], vt: &ViewTransform) {
     let dx = mouse_pos[0] - editor_state.pan_start_mouse_pos[0];
     let dy = mouse_pos[1] - editor_state.pan_start_mouse_pos[1];
 
-    let time_per_pixel = vt.duration.max(0.001)
-        / (vt.zoom_x * vt.curve_width).max(0.001);
-    let value_per_pixel = vt.val_range.max(0.001)
-        / (vt.zoom_y * vt.curve_height).max(0.001);
+    let time_per_pixel = vt.duration.max(0.001) / (vt.zoom_x * vt.curve_width).max(0.001);
+    let value_per_pixel = vt.val_range.max(0.001) / (vt.zoom_y * vt.curve_height).max(0.001);
 
-    editor_state.view_time_offset =
-        editor_state.pan_start_offset[0] - dx * time_per_pixel;
-    editor_state.view_value_offset =
-        editor_state.pan_start_offset[1] + dy * value_per_pixel;
+    editor_state.view_time_offset = editor_state.pan_start_offset[0] - dx * time_per_pixel;
+    editor_state.view_value_offset = editor_state.pan_start_offset[1] + dy * value_per_pixel;
 }
 
 fn handle_wheel_input(
@@ -937,14 +811,11 @@ fn zoom_at_mouse(
     let mouse_value = vt.y_to_value(mouse_pos[1]);
 
     let factor = if wheel > 0.0 { 1.15 } else { 1.0 / 1.15 };
-    let new_zoom_x =
-        (editor_state.zoom_x * factor).clamp(0.1, 10.0);
-    let new_zoom_y =
-        (editor_state.zoom_y * factor).clamp(0.1, 10.0);
+    let new_zoom_x = (editor_state.zoom_x * factor).clamp(0.1, 10.0);
+    let new_zoom_y = (editor_state.zoom_y * factor).clamp(0.1, 10.0);
 
     editor_state.view_time_offset = mouse_time
-        - (mouse_pos[0] - vt.curve_origin[0])
-            / (new_zoom_x * vt.curve_width).max(0.001)
+        - (mouse_pos[0] - vt.curve_origin[0]) / (new_zoom_x * vt.curve_width).max(0.001)
             * vt.duration.max(0.001);
 
     editor_state.view_value_offset = mouse_value
@@ -963,15 +834,11 @@ fn pan_with_wheel(
     vt: &ViewTransform,
 ) {
     if shift {
-        let time_per_pixel = vt.duration.max(0.001)
-            / (vt.zoom_x * vt.curve_width).max(0.001);
-        editor_state.view_time_offset -=
-            wheel * PAN_SPEED * time_per_pixel;
+        let time_per_pixel = vt.duration.max(0.001) / (vt.zoom_x * vt.curve_width).max(0.001);
+        editor_state.view_time_offset -= wheel * PAN_SPEED * time_per_pixel;
     } else {
-        let value_per_pixel = vt.val_range.max(0.001)
-            / (vt.zoom_y * vt.curve_height).max(0.001);
-        editor_state.view_value_offset +=
-            wheel * PAN_SPEED * value_per_pixel;
+        let value_per_pixel = vt.val_range.max(0.001) / (vt.zoom_y * vt.curve_height).max(0.001);
+        editor_state.view_value_offset += wheel * PAN_SPEED * value_per_pixel;
     }
 }
 
@@ -982,12 +849,7 @@ fn calculate_sample_count(width: f32) -> usize {
     (base_samples + additional).min(200)
 }
 
-fn draw_time_ruler(
-    draw_list: &imgui::DrawListMut,
-    pos: [f32; 2],
-    width: f32,
-    vt: &ViewTransform,
-) {
+fn draw_time_ruler(draw_list: &imgui::DrawListMut, pos: [f32; 2], width: f32, vt: &ViewTransform) {
     draw_list
         .add_rect(
             pos,
@@ -997,15 +859,13 @@ fn draw_time_ruler(
         .filled(true)
         .build();
 
-    let visible_duration =
-        vt.duration / vt.zoom_x.max(0.001);
+    let visible_duration = vt.duration / vt.zoom_x.max(0.001);
     let tick_interval = compute_nice_step(visible_duration / 8.0);
 
     let view_start = vt.view_time_offset;
     let view_end = view_start + visible_duration;
 
-    let first_tick =
-        (view_start / tick_interval).floor() * tick_interval;
+    let first_tick = (view_start / tick_interval).floor() * tick_interval;
     let mut time = first_tick;
 
     while time <= view_end + tick_interval {
@@ -1015,8 +875,7 @@ fn draw_time_ruler(
             continue;
         }
 
-        let is_major =
-            (time / tick_interval).round() as i32 % 4 == 0;
+        let is_major = (time / tick_interval).round() as i32 % 4 == 0;
         let tick_height = if is_major { 10.0 } else { 5.0 };
 
         draw_list
@@ -1046,8 +905,7 @@ fn draw_y_axis_labels(
     height: f32,
     vt: &ViewTransform,
 ) {
-    let visible_range =
-        vt.val_range / vt.zoom_y.max(0.001);
+    let visible_range = vt.val_range / vt.zoom_y.max(0.001);
     if visible_range.abs() < 0.0001 {
         return;
     }
@@ -1066,19 +924,13 @@ fn draw_y_axis_labels(
     let mut value = first_tick;
     while value <= view_top + step {
         let y = vt.value_to_y(value);
-        if y < origin[1] - 10.0
-            || y > origin[1] + height + 10.0
-        {
+        if y < origin[1] - 10.0 || y > origin[1] + height + 10.0 {
             value += step;
             continue;
         }
 
         let label = format_value_label(value);
-        draw_list.add_text(
-            [origin[0] + 2.0, y - 7.0],
-            label_color,
-            &label,
-        );
+        draw_list.add_text([origin[0] + 2.0, y - 7.0], label_color, &label);
 
         draw_list
             .add_line(
@@ -1092,16 +944,10 @@ fn draw_y_axis_labels(
     }
 }
 
-fn draw_grid(
-    draw_list: &imgui::DrawListMut,
-    width: f32,
-    height: f32,
-    vt: &ViewTransform,
-) {
+fn draw_grid(draw_list: &imgui::DrawListMut, width: f32, height: f32, vt: &ViewTransform) {
     let grid_color = [0.25, 0.25, 0.28, 1.0];
 
-    let visible_duration =
-        vt.duration / vt.zoom_x.max(0.001);
+    let visible_duration = vt.duration / vt.zoom_x.max(0.001);
     let time_step = compute_nice_step(visible_duration / 8.0);
     let view_start_t = vt.view_time_offset;
     let view_end_t = view_start_t + visible_duration;
@@ -1110,9 +956,7 @@ fn draw_grid(
     let mut time = first_t;
     while time <= view_end_t + time_step {
         let x = vt.time_to_x(time);
-        if x >= vt.curve_origin[0]
-            && x <= vt.curve_origin[0] + width
-        {
+        if x >= vt.curve_origin[0] && x <= vt.curve_origin[0] + width {
             draw_list
                 .add_line(
                     [x, vt.curve_origin[1]],
@@ -1124,8 +968,7 @@ fn draw_grid(
         time += time_step;
     }
 
-    let visible_range =
-        vt.val_range / vt.zoom_y.max(0.001);
+    let visible_range = vt.val_range / vt.zoom_y.max(0.001);
     let value_step = compute_nice_step(visible_range / 6.0);
     let view_bottom = vt.view_value_offset;
     let view_top = view_bottom + visible_range;
@@ -1134,9 +977,7 @@ fn draw_grid(
     let mut value = first_v;
     while value <= view_top + value_step {
         let y = vt.value_to_y(value);
-        if y >= vt.curve_origin[1]
-            && y <= vt.curve_origin[1] + height
-        {
+        if y >= vt.curve_origin[1] && y <= vt.curve_origin[1] + height {
             let line_color = if value.abs() < value_step * 0.1 {
                 [0.4, 0.4, 0.43, 1.0]
             } else {
@@ -1268,18 +1109,12 @@ fn draw_selected_keyframe_highlight(
 ) {
     for (curve, _, _) in curves_to_draw {
         if curve.property_type == selected.property_type {
-            if let Some(kf) =
-                curve.get_keyframe(selected.keyframe_id)
-            {
+            if let Some(kf) = curve.get_keyframe(selected.keyframe_id) {
                 let x = vt.time_to_x(kf.time);
                 let y = vt.value_to_y(kf.value);
 
                 draw_list
-                    .add_circle(
-                        [x, y],
-                        8.0,
-                        [1.0, 1.0, 0.0, 1.0],
-                    )
+                    .add_circle([x, y], 8.0, [1.0, 1.0, 0.0, 1.0])
                     .thickness(2.0)
                     .build();
             }
@@ -1329,8 +1164,7 @@ fn draw_tangent_handles(
             .build();
 
         let out_x = vt.time_to_x(kf.time + kf.out_tangent.time_offset);
-        let out_y =
-            vt.value_to_y(kf.value + kf.out_tangent.value_offset);
+        let out_y = vt.value_to_y(kf.value + kf.out_tangent.value_offset);
         draw_list
             .add_line([kf_x, kf_y], [out_x, out_y], handle_color)
             .thickness(1.0)
@@ -1353,30 +1187,16 @@ fn draw_keyframe_drag_preview(
     mouse_pos: [f32; 2],
     vt: &ViewTransform,
 ) {
-    let preview_x = mouse_pos[0].clamp(
-        vt.curve_origin[0],
-        vt.curve_origin[0] + vt.curve_width,
-    );
-    let preview_y = mouse_pos[1].clamp(
-        vt.curve_origin[1],
-        vt.curve_origin[1] + vt.curve_height,
-    );
+    let preview_x = mouse_pos[0].clamp(vt.curve_origin[0], vt.curve_origin[0] + vt.curve_width);
+    let preview_y = mouse_pos[1].clamp(vt.curve_origin[1], vt.curve_origin[1] + vt.curve_height);
 
     draw_list
-        .add_circle(
-            [preview_x, preview_y],
-            7.0,
-            [1.0, 1.0, 0.0, 1.0],
-        )
+        .add_circle([preview_x, preview_y], 7.0, [1.0, 1.0, 0.0, 1.0])
         .filled(true)
         .build();
 
     draw_list
-        .add_circle(
-            [preview_x, preview_y],
-            7.0,
-            [1.0, 1.0, 1.0, 1.0],
-        )
+        .add_circle([preview_x, preview_y], 7.0, [1.0, 1.0, 1.0, 1.0])
         .thickness(2.0)
         .build();
 
@@ -1390,10 +1210,7 @@ fn draw_keyframe_drag_preview(
     );
 }
 
-fn draw_tangent_drag_preview(
-    draw_list: &imgui::DrawListMut,
-    mouse_pos: [f32; 2],
-) {
+fn draw_tangent_drag_preview(draw_list: &imgui::DrawListMut, mouse_pos: [f32; 2]) {
     draw_list
         .add_rect(
             [mouse_pos[0] - 5.0, mouse_pos[1] - 5.0],
@@ -1439,9 +1256,7 @@ fn format_value_label(value: f32) -> String {
     }
 }
 
-fn calculate_global_value_range(
-    curves: &[(&PropertyCurve, [f32; 4], &str)],
-) -> (f32, f32) {
+fn calculate_global_value_range(curves: &[(&PropertyCurve, [f32; 4], &str)]) -> (f32, f32) {
     let mut min_val = f32::MAX;
     let mut max_val = f32::MIN;
 
@@ -1479,12 +1294,7 @@ fn find_keyframe_at_position(
             let distance = (dx * dx + dy * dy).sqrt();
 
             if distance <= KEYFRAME_HIT_RADIUS {
-                return Some((
-                    curve.property_type.clone(),
-                    kf.id,
-                    kf.time,
-                    kf.value,
-                ));
+                return Some((curve.property_type.clone(), kf.id, kf.time, kf.value));
             }
         }
     }
@@ -1528,8 +1338,7 @@ fn find_tangent_handle_at_position(
         }
 
         let out_x = vt.time_to_x(kf.time + kf.out_tangent.time_offset);
-        let out_y =
-            vt.value_to_y(kf.value + kf.out_tangent.value_offset);
+        let out_y = vt.value_to_y(kf.value + kf.out_tangent.value_offset);
         let dx = mouse_pos[0] - out_x;
         let dy = mouse_pos[1] - out_y;
         if (dx * dx + dy * dy).sqrt() <= TANGENT_HANDLE_HIT_RADIUS {
@@ -1563,11 +1372,10 @@ fn draw_buffer_curve_overlay(
             continue;
         }
 
-        let snapshot =
-            match buffer.get_snapshot(bone_id, *prop_type) {
-                Some(s) => s,
-                None => continue,
-            };
+        let snapshot = match buffer.get_snapshot(bone_id, *prop_type) {
+            Some(s) => s,
+            None => continue,
+        };
 
         if snapshot.len() < 2 {
             continue;

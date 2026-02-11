@@ -21,3 +21,6 @@ pub struct Model;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Constrained;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WithSpringBone;

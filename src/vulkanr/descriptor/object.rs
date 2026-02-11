@@ -185,8 +185,7 @@ impl ObjectDescriptorSet {
 
         let total_sets = swapchain_image_count * required_objects;
         self.pool = Self::create_pool(rrdevice, total_sets)?;
-        self.sets =
-            Self::allocate_sets(rrdevice, self.layout, self.pool, total_sets)?;
+        self.sets = Self::allocate_sets(rrdevice, self.layout, self.pool, total_sets)?;
 
         self.buffers = Vec::with_capacity(total_sets);
         self.buffer_memories = Vec::with_capacity(total_sets);
@@ -197,8 +196,7 @@ impl ObjectDescriptorSet {
                 rrdevice,
                 size_of::<ObjectUBO>() as u64,
                 vk::BufferUsageFlags::UNIFORM_BUFFER,
-                vk::MemoryPropertyFlags::HOST_VISIBLE
-                    | vk::MemoryPropertyFlags::HOST_COHERENT,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
             )?;
             self.buffers.push(buffer);
             self.buffer_memories.push(memory);

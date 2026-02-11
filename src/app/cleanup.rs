@@ -31,27 +31,24 @@ impl App {
             dof_pipeline.destroy(&self.rrdevice.device);
         }
 
-        if let Some(mut desc) =
-            self.data.raytracing.auto_exposure_histogram_descriptor.take()
+        if let Some(mut desc) = self
+            .data
+            .raytracing
+            .auto_exposure_histogram_descriptor
+            .take()
         {
             desc.destroy(&self.rrdevice.device);
         }
 
-        if let Some(mut desc) =
-            self.data.raytracing.auto_exposure_average_descriptor.take()
-        {
+        if let Some(mut desc) = self.data.raytracing.auto_exposure_average_descriptor.take() {
             desc.destroy(&self.rrdevice.device);
         }
 
-        if let Some(pipeline) =
-            self.data.raytracing.auto_exposure_histogram_pipeline.take()
-        {
+        if let Some(pipeline) = self.data.raytracing.auto_exposure_histogram_pipeline.take() {
             pipeline.destroy(&self.rrdevice.device);
         }
 
-        if let Some(pipeline) =
-            self.data.raytracing.auto_exposure_average_pipeline.take()
-        {
+        if let Some(pipeline) = self.data.raytracing.auto_exposure_average_pipeline.take() {
             pipeline.destroy(&self.rrdevice.device);
         }
 
@@ -59,7 +56,9 @@ impl App {
             bloom_descriptors.destroy(&self.rrdevice.device);
         }
 
-        if let Some(bloom_downsample_pipeline) = self.data.raytracing.bloom_downsample_pipeline.take() {
+        if let Some(bloom_downsample_pipeline) =
+            self.data.raytracing.bloom_downsample_pipeline.take()
+        {
             bloom_downsample_pipeline.destroy(&self.rrdevice.device);
         }
 
@@ -137,16 +136,14 @@ impl App {
         let command_pool_handle = {
             let command_state = self.resource::<CommandState>();
             let pool_handle = command_state.pool.command_pool;
-            self.rrdevice.device.free_command_buffers(
-                pool_handle,
-                &command_state.buffers.command_buffers,
-            );
+            self.rrdevice
+                .device
+                .free_command_buffers(pool_handle, &command_state.buffers.command_buffers);
             pool_handle
         };
 
         let surface = self.surface_state().surface;
-        let new_swapchain =
-            RRSwapchain::new(window, &self.instance, &surface, &self.rrdevice);
+        let new_swapchain = RRSwapchain::new(window, &self.instance, &surface, &self.rrdevice);
         let image_count = new_swapchain.swapchain_images.len();
 
         {

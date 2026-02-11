@@ -10,11 +10,7 @@ use crate::ecs::world::{
 pub fn transform_propagation_system(world: &mut World) {
     let root_entities = world.get_root_entities();
 
-    fn propagate(
-        world: &mut World,
-        entity: Entity,
-        parent_global: Matrix4<f32>,
-    ) {
+    fn propagate(world: &mut World, entity: Entity, parent_global: Matrix4<f32>) {
         let local_matrix = world
             .get_component::<Transform>(entity)
             .map(|t| t.to_matrix())
@@ -41,11 +37,7 @@ pub fn transform_propagation_system(world: &mut World) {
     }
 }
 
-pub fn animation_time_system(
-    world: &mut World,
-    delta_time: f32,
-    assets: &AssetStorage,
-) {
+pub fn animation_time_system(world: &mut World, delta_time: f32, assets: &AssetStorage) {
     let animated_entities = world.query_animated();
 
     let resolved_clips: Vec<_> = {
@@ -53,7 +45,10 @@ pub fn animation_time_system(
         animated_entities
             .iter()
             .map(|&entity| {
-                (entity, resolve_clip_id_for_entity(world, entity, &clip_library))
+                (
+                    entity,
+                    resolve_clip_id_for_entity(world, entity, &clip_library),
+                )
             })
             .collect()
     };
@@ -99,7 +94,10 @@ pub fn skeleton_animation_system(world: &mut World, assets: &AssetStorage) {
         animated_entities
             .iter()
             .map(|&entity| {
-                (entity, resolve_clip_id_for_entity(world, entity, &clip_library))
+                (
+                    entity,
+                    resolve_clip_id_for_entity(world, entity, &clip_library),
+                )
             })
             .collect()
     };

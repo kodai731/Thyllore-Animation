@@ -2,11 +2,14 @@ use anyhow::Result;
 use cgmath::Matrix4;
 
 use crate::animation::editable::{BlendMode, ClipInstanceId, EaseType, SourceClipId};
+use crate::animation::BoneId;
 use crate::animation::{AnimationClipId, MorphAnimationSystem, SkeletonId, SkeletonPose};
 use crate::app::graphics_resource::{GraphicsResources, NodeData};
 use crate::asset::AssetStorage;
-use crate::ecs::component::{AnimationMeta, ClipSchedule, ConstraintSet};
-use crate::ecs::resource::{AnimationType, ClipLibrary};
+use crate::ecs::component::{
+    AnimationMeta, ClipSchedule, ConstraintSet, SpringBoneSetup, WithSpringBone,
+};
+use crate::ecs::resource::{AnimationType, ClipLibrary, SpringBoneMode, SpringBoneState};
 use crate::ecs::world::{Animator, Entity, MeshRef, World};
 use crate::ecs::{
     blend_poses_override, compute_crossfade_factor, compute_local_time,
@@ -50,9 +53,9 @@ pub fn evaluate_all_animators(
     nodes: &mut [NodeData],
     clip_library: &ClipLibrary,
     assets: &AssetStorage,
+    dt: f32,
 ) -> AnimationEvalResult {
-    let entity_infos =
-        collect_animated_entities(world, graphics, clip_library, assets);
+    let entity_infos = collect_animated_entities(world, graphics, clip_library, assets);
 
     let first_time = world
         .iter_components::<Animator>()
@@ -61,11 +64,7 @@ pub fn evaluate_all_animators(
         .unwrap_or(0.0);
 
     let morph_updated = if !clip_library.morph_animation.is_empty() {
-        playback_apply_morph_animation(
-            graphics,
-            &clip_library.morph_animation,
-            first_time,
-        )
+        playback_apply_morph_animation(graphics, &clip_library.morph_animation, first_time)
     } else {
         Vec::new()
     };
@@ -78,7 +77,7 @@ pub fn evaluate_all_animators(
     }
 
     let (anim_updated, bone_transforms) =
-        apply_blended_animations(&entity_infos, world, graphics, nodes, assets);
+        apply_blended_animations(&entity_infos, world, graphics, nodes, assets, dt);
 
     AnimationEvalResult {
         updated_meshes: merge_updated_indices(morph_updated, anim_updated),
@@ -94,25 +93,29 @@ fn collect_animated_entities(
 ) -> Vec<AnimatedEntityInfo> {
     let mut infos = Vec::new();
 
+    let is_baked = world
+        .get_resource::<SpringBoneState>()
+        .map_or(false, |s| s.mode == SpringBoneMode::Baked);
+    let should_log = is_baked
+        && world
+            .get_resource::<SpringBoneState>()
+            .map_or(false, |s| s.frame_count < 3);
+
     for (entity, animator) in world.iter_components::<Animator>() {
-        let Some(schedule) =
-            world.get_component::<ClipSchedule>(entity)
-        else {
+        let Some(schedule) = world.get_component::<ClipSchedule>(entity) else {
+            if should_log {
+                crate::log!("[PlaybackDebug] entity {:?}: no ClipSchedule", entity);
+            }
             continue;
         };
-        let Some(meta) =
-            world.get_component::<AnimationMeta>(entity)
-        else {
+        let Some(meta) = world.get_component::<AnimationMeta>(entity) else {
             continue;
         };
-        let Some(mesh_ref) =
-            world.get_component::<MeshRef>(entity)
-        else {
+        let Some(mesh_ref) = world.get_component::<MeshRef>(entity) else {
             continue;
         };
 
-        let Some(mesh_asset) = assets.get_mesh(mesh_ref.mesh_asset_id)
-        else {
+        let Some(mesh_asset) = assets.get_mesh(mesh_ref.mesh_asset_id) else {
             continue;
         };
 
@@ -121,18 +124,33 @@ fn collect_animated_entities(
             continue;
         }
 
-        let skeleton_id = mesh_asset.skeleton_id.or_else(|| {
-            graphics.meshes.get(mesh_idx).and_then(|m| m.skeleton_id)
-        });
+        let skeleton_id = mesh_asset
+            .skeleton_id
+            .or_else(|| graphics.meshes.get(mesh_idx).and_then(|m| m.skeleton_id));
         let Some(skel_id) = skeleton_id else {
             continue;
         };
 
-        let active_instances = build_active_instances(
-            schedule,
-            clip_library,
-            animator,
-        );
+        if should_log {
+            let src_id = schedule.instances.first().map(|i| i.source_id);
+            let anim_id = src_id.and_then(|sid| clip_library.get_anim_clip_id_for_source(sid));
+            let anim_exists = anim_id.map_or(false, |aid| {
+                clip_library.animation.clips.iter().any(|c| c.id == aid)
+            });
+            crate::log!(
+                "[PlaybackDebug] entity {:?}: source_id={:?}, anim_id={:?}, anim_exists={}, time={:.3}, instances={}",
+                entity, src_id, anim_id, anim_exists, animator.time, schedule.instances.len()
+            );
+        }
+
+        let active_instances = build_active_instances(schedule, clip_library, animator);
+
+        if should_log && active_instances.is_empty() {
+            crate::log!(
+                "[PlaybackDebug] entity {:?}: active_instances is EMPTY",
+                entity
+            );
+        }
 
         if active_instances.is_empty() {
             continue;
@@ -149,6 +167,10 @@ fn collect_animated_entities(
         });
     }
 
+    if should_log {
+        crate::log!("[PlaybackDebug] total animated entities: {}", infos.len());
+    }
+
     infos
 }
 
@@ -157,12 +179,12 @@ fn build_active_instances(
     clip_library: &ClipLibrary,
     animator: &Animator,
 ) -> Vec<ActiveInstanceInfo> {
-    let active = super::clip_schedule_systems::clip_schedule_active_instances(schedule, animator.time);
+    let active =
+        super::clip_schedule_systems::clip_schedule_active_instances(schedule, animator.time);
     let mut instances: Vec<ActiveInstanceInfo> = active
         .into_iter()
         .filter_map(|inst| {
-            let clip_id =
-                clip_library.get_anim_clip_id_for_source(inst.source_id)?;
+            let clip_id = clip_library.get_anim_clip_id_for_source(inst.source_id)?;
 
             let local_time = compute_local_time(
                 animator.time,
@@ -174,8 +196,10 @@ fn build_active_instances(
                 animator.looping,
             );
 
-            let weight =
-                super::clip_schedule_systems::clip_schedule_effective_weight(schedule, inst.instance_id);
+            let weight = super::clip_schedule_systems::clip_schedule_effective_weight(
+                schedule,
+                inst.instance_id,
+            );
 
             Some(ActiveInstanceInfo {
                 source_id: inst.source_id,
@@ -200,10 +224,7 @@ fn build_active_instances(
     instances
 }
 
-fn evaluate_entity_blend(
-    info: &AnimatedEntityInfo,
-    assets: &AssetStorage,
-) -> Option<SkeletonPose> {
+fn evaluate_entity_blend(info: &AnimatedEntityInfo, assets: &AssetStorage) -> Option<SkeletonPose> {
     let skeleton = assets.get_skeleton_by_skeleton_id(info.skeleton_id)?;
     let rest_pose = create_pose_from_rest(skeleton);
 
@@ -227,11 +248,7 @@ fn evaluate_entity_blend(
     );
 
     if first_override.weight < 1.0 {
-        pose = blend_poses_override(
-            &rest_pose,
-            &pose,
-            first_override.weight,
-        );
+        pose = blend_poses_override(&rest_pose, &pose, first_override.weight);
     }
 
     let mut prev_override = first_override;
@@ -282,12 +299,7 @@ fn evaluate_entity_blend(
                     info.looping,
                 );
 
-                pose = blend_poses_additive(
-                    &pose,
-                    &additive_pose,
-                    &rest_pose,
-                    inst.weight,
-                );
+                pose = blend_poses_additive(&pose, &additive_pose, &rest_pose, inst.weight);
             }
         }
     }
@@ -301,54 +313,61 @@ fn apply_blended_animations(
     graphics: &mut GraphicsResources,
     nodes: &mut [NodeData],
     assets: &AssetStorage,
+    dt: f32,
 ) -> (Vec<usize>, Option<(SkeletonId, Vec<Matrix4<f32>>)>) {
     let mut updated = Vec::new();
-    let mut first_bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>)> =
-        None;
+    let mut first_bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>)> = None;
 
     let shared_constraints = find_shared_constraints(entities, world);
 
+    let spring_result =
+        compute_spring_bone_result(entities, world, assets, &shared_constraints, dt);
+
     for info in entities {
-        let Some(mut pose) = evaluate_entity_blend(info, assets) else {
+        let Some(skeleton) = assets.get_skeleton_by_skeleton_id(info.skeleton_id) else {
             continue;
         };
 
-        let Some(skeleton) =
-            assets.get_skeleton_by_skeleton_id(info.skeleton_id)
-        else {
-            continue;
+        let has_spring = spring_result
+            .as_ref()
+            .map_or(false, |(skel_id, _, _)| *skel_id == info.skeleton_id);
+
+        let (globals, _pose) = if has_spring {
+            let (_, ref cached_globals, ref cached_pose) = spring_result.as_ref().unwrap();
+
+            if info.animation_type == AnimationType::Node {
+                GraphicsResources::compute_node_global_transforms(nodes, skeleton, cached_pose);
+            }
+
+            (cached_globals.clone(), None)
+        } else {
+            let Some(mut pose) = evaluate_entity_blend(info, assets) else {
+                continue;
+            };
+
+            if let Some(ref cs) = shared_constraints {
+                apply_constraints(cs, skeleton, &mut pose);
+            }
+
+            if info.animation_type == AnimationType::Node {
+                GraphicsResources::compute_node_global_transforms(nodes, skeleton, &pose);
+            }
+
+            let globals = compute_pose_global_transforms(skeleton, &pose);
+            (globals, Some(pose))
         };
-
-        if let Some(ref cs) = shared_constraints {
-            apply_constraints(cs, skeleton, &mut pose);
-        }
-
-        if info.animation_type == AnimationType::Node {
-            GraphicsResources::compute_node_global_transforms(
-                nodes, skeleton, &pose,
-            );
-        }
-
-        let globals = compute_pose_global_transforms(skeleton, &pose);
 
         if first_bone_transforms.is_none() {
-            first_bone_transforms =
-                Some((info.skeleton_id, globals.clone()));
+            first_bone_transforms = Some((info.skeleton_id, globals.clone()));
         }
 
         let mesh_updated = match info.animation_type {
-            AnimationType::Node => {
-                graphics.apply_node_animation_to_single_mesh(
-                    info.mesh_idx,
-                    nodes,
-                    info.node_animation_scale,
-                )
-            }
-            _ => graphics.apply_skinning_to_single_mesh(
+            AnimationType::Node => graphics.apply_node_animation_to_single_mesh(
                 info.mesh_idx,
-                &globals,
-                skeleton,
+                nodes,
+                info.node_animation_scale,
             ),
+            _ => graphics.apply_skinning_to_single_mesh(info.mesh_idx, &globals, skeleton),
         };
 
         if mesh_updated && !updated.contains(&info.mesh_idx) {
@@ -357,6 +376,63 @@ fn apply_blended_animations(
     }
 
     (updated, first_bone_transforms)
+}
+
+fn compute_spring_bone_result(
+    entities: &[AnimatedEntityInfo],
+    world: &World,
+    assets: &AssetStorage,
+    shared_constraints: &Option<ConstraintSet>,
+    dt: f32,
+) -> Option<(SkeletonId, Vec<Matrix4<f32>>, SkeletonPose)> {
+    let info = entities
+        .iter()
+        .find(|e| world.has_component::<WithSpringBone>(e.entity))?;
+
+    let setup = world.get_component::<SpringBoneSetup>(info.entity)?;
+    let setup_clone = setup.clone();
+    let mut pose = evaluate_entity_blend(info, assets)?;
+    let skeleton = assets.get_skeleton_by_skeleton_id(info.skeleton_id)?;
+
+    if let Some(ref cs) = shared_constraints {
+        apply_constraints(cs, skeleton, &mut pose);
+    }
+
+    let mut globals = compute_pose_global_transforms(skeleton, &pose);
+
+    apply_spring_bone_simulation(world, &setup_clone, skeleton, &mut globals, &mut pose, dt);
+
+    Some((info.skeleton_id, globals, pose))
+}
+
+fn apply_spring_bone_simulation(
+    world: &World,
+    setup: &SpringBoneSetup,
+    skeleton: &crate::animation::Skeleton,
+    globals: &mut [Matrix4<f32>],
+    pose: &mut SkeletonPose,
+    dt: f32,
+) {
+    use super::spring_bone_systems::{
+        collect_affected_bone_ids, spring_bone_initialize, spring_bone_update,
+        spring_bone_write_back_to_pose,
+    };
+
+    if let Some(mut sb_state) = world.get_resource_mut::<SpringBoneState>() {
+        match sb_state.mode {
+            SpringBoneMode::Realtime => {
+                if !sb_state.initialized {
+                    *sb_state = spring_bone_initialize(setup, skeleton, globals);
+                }
+
+                spring_bone_update(setup, &mut sb_state, skeleton, globals, pose, dt);
+
+                let affected_ids = collect_affected_bone_ids(setup);
+                spring_bone_write_back_to_pose(skeleton, globals, pose, &affected_ids);
+            }
+            SpringBoneMode::Baked | SpringBoneMode::BakedOverride => {}
+        }
+    }
 }
 
 fn find_shared_constraints(
@@ -370,10 +446,7 @@ fn find_shared_constraints(
     })
 }
 
-fn merge_updated_indices(
-    morph: Vec<usize>,
-    anim: Vec<usize>,
-) -> Vec<usize> {
+fn merge_updated_indices(morph: Vec<usize>, anim: Vec<usize>) -> Vec<usize> {
     let mut all = morph;
     for idx in anim {
         if !all.contains(&idx) {
@@ -409,8 +482,7 @@ pub fn playback_apply_morph_animation(
     }
 
     let animation_index = morph_animation.get_animation_index(time);
-    let mesh_count =
-        morph_animation.targets.len().min(graphics.meshes.len());
+    let mesh_count = morph_animation.targets.len().min(graphics.meshes.len());
     let mut updated_mesh_indices = Vec::new();
 
     for mesh_idx in 0..mesh_count {
@@ -420,8 +492,7 @@ pub fn playback_apply_morph_animation(
         }
 
         let base_vertices = &morph_animation.base_vertices[mesh_idx];
-        let vertices =
-            &mut graphics.meshes[mesh_idx].vertex_data.vertices;
+        let vertices = &mut graphics.meshes[mesh_idx].vertex_data.vertices;
 
         for (i, v) in vertices.iter_mut().enumerate() {
             if i < base_vertices.len() {
@@ -434,23 +505,16 @@ pub fn playback_apply_morph_animation(
 
         let morph_anim = &morph_animation.animations[animation_index];
         let scale_factor = morph_animation.scale_factor;
-        for (weight_idx, &weight) in
-            morph_anim.weights.iter().enumerate()
-        {
+        for (weight_idx, &weight) in morph_anim.weights.iter().enumerate() {
             if weight_idx >= morph_targets.len() {
                 break;
             }
             let morph_target = &morph_targets[weight_idx];
-            for (j, delta_pos) in
-                morph_target.positions.iter().enumerate()
-            {
+            for (j, delta_pos) in morph_target.positions.iter().enumerate() {
                 if j < vertices.len() {
-                    vertices[j].pos.x +=
-                        delta_pos[0] * weight * scale_factor;
-                    vertices[j].pos.y +=
-                        delta_pos[1] * weight * scale_factor;
-                    vertices[j].pos.z +=
-                        delta_pos[2] * weight * scale_factor;
+                    vertices[j].pos.x += delta_pos[0] * weight * scale_factor;
+                    vertices[j].pos.y += delta_pos[1] * weight * scale_factor;
+                    vertices[j].pos.z += delta_pos[2] * weight * scale_factor;
                 }
             }
         }

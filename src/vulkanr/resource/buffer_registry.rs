@@ -330,21 +330,9 @@ impl GpuBufferRegistry {
         let vertex_data = create_interleaved_buffer(mesh, &layout);
 
         let vertex_handle = if use_staging {
-            self.create_vertex_buffer_raw(
-                instance,
-                device,
-                command_pool,
-                &vertex_data,
-                true,
-            )?
+            self.create_vertex_buffer_raw(instance, device, command_pool, &vertex_data, true)?
         } else {
-            self.create_vertex_buffer_raw(
-                instance,
-                device,
-                command_pool,
-                &vertex_data,
-                false,
-            )?
+            self.create_vertex_buffer_raw(instance, device, command_pool, &vertex_data, false)?
         };
 
         let index_handle = if let Some(indices) = mesh.indices() {

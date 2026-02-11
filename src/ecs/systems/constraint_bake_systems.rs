@@ -3,14 +3,10 @@ use std::collections::HashMap;
 use cgmath::{Quaternion, Vector3};
 
 use crate::animation::editable::EditableAnimationClip;
-use crate::animation::{
-    AnimationClip, BoneId, Keyframe, Skeleton, SkeletonPose, TransformChannel,
-};
+use crate::animation::{AnimationClip, BoneId, Keyframe, Skeleton, SkeletonPose, TransformChannel};
 use crate::ecs::component::ConstraintSet;
 use crate::ecs::resource::ClipLibrary;
-use crate::ecs::systems::{
-    apply_constraints, create_pose_from_rest, sample_clip_to_pose,
-};
+use crate::ecs::systems::{apply_constraints, create_pose_from_rest, sample_clip_to_pose};
 
 use super::clip_library_systems::clip_library_register_clip;
 
@@ -29,8 +25,7 @@ pub fn constraint_bake_evaluate(
         vec![Vec::new(); skeleton.bone_count()];
     let mut bone_rotations: Vec<Vec<(f32, Quaternion<f32>)>> =
         vec![Vec::new(); skeleton.bone_count()];
-    let mut bone_scales: Vec<Vec<(f32, Vector3<f32>)>> =
-        vec![Vec::new(); skeleton.bone_count()];
+    let mut bone_scales: Vec<Vec<(f32, Vector3<f32>)>> = vec![Vec::new(); skeleton.bone_count()];
 
     for i in 0..frame_count {
         let time = (i as f32 / sample_fps).min(duration);
@@ -72,8 +67,7 @@ pub fn constraint_bake_rest_pose(
         vec![Vec::new(); skeleton.bone_count()];
     let mut bone_rotations: Vec<Vec<(f32, Quaternion<f32>)>> =
         vec![Vec::new(); skeleton.bone_count()];
-    let mut bone_scales: Vec<Vec<(f32, Vector3<f32>)>> =
-        vec![Vec::new(); skeleton.bone_count()];
+    let mut bone_scales: Vec<Vec<(f32, Vector3<f32>)>> = vec![Vec::new(); skeleton.bone_count()];
 
     record_pose_keyframes(
         &pose,
@@ -145,15 +139,24 @@ fn build_animation_clip(
         let channel = TransformChannel {
             translation: translations
                 .iter()
-                .map(|(t, v)| Keyframe { time: *t, value: *v })
+                .map(|(t, v)| Keyframe {
+                    time: *t,
+                    value: *v,
+                })
                 .collect(),
             rotation: rotations
                 .iter()
-                .map(|(t, q)| Keyframe { time: *t, value: *q })
+                .map(|(t, q)| Keyframe {
+                    time: *t,
+                    value: *q,
+                })
                 .collect(),
             scale: scales
                 .iter()
-                .map(|(t, v)| Keyframe { time: *t, value: *v })
+                .map(|(t, v)| Keyframe {
+                    time: *t,
+                    value: *v,
+                })
                 .collect(),
             ..Default::default()
         };

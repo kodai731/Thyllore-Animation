@@ -17,8 +17,7 @@ pub fn build_clip_browser_window(
     let hierarchy_width = 250.0;
     let debug_height = 250.0;
     let timeline_height = 300.0;
-    let main_height =
-        display_size[1] - debug_height - timeline_height;
+    let main_height = display_size[1] - debug_height - timeline_height;
 
     let hierarchy_height = (main_height * 0.6).max(100.0);
     let browser_height = (main_height - hierarchy_height).max(80.0);
@@ -35,23 +34,18 @@ pub fn build_clip_browser_window(
             ui.separator();
             build_filter_bar(ui, browser_state);
             ui.separator();
-            build_clip_list(
-                ui,
-                ui_events,
-                clip_library,
-                browser_state,
-                world,
-            );
+            build_clip_list(ui, ui_events, clip_library, browser_state, world);
         });
 }
 
-fn build_toolbar(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    browser_state: &ClipBrowserState,
-) {
+fn build_toolbar(ui: &imgui::Ui, ui_events: &mut UIEventQueue, browser_state: &ClipBrowserState) {
     if ui.small_button("+ New") {
         ui_events.send(UIEvent::ClipBrowserCreateEmpty);
+    }
+
+    ui.same_line();
+    if ui.small_button("Load") {
+        ui_events.send(UIEvent::ClipBrowserLoadFromFile);
     }
 
     ui.same_line();
@@ -78,10 +72,7 @@ fn build_toolbar(
     }
 }
 
-fn build_filter_bar(
-    ui: &imgui::Ui,
-    browser_state: &mut ClipBrowserState,
-) {
+fn build_filter_bar(ui: &imgui::Ui, browser_state: &mut ClipBrowserState) {
     ui.set_next_item_width(-1.0);
     ui.input_text("##clip_filter", &mut browser_state.filter_text)
         .hint("Filter...")
@@ -95,15 +86,15 @@ fn build_clip_list(
     browser_state: &mut ClipBrowserState,
     world: &World,
 ) {
-    let clip_names = crate::ecs::systems::clip_library_systems::clip_library_clip_names(clip_library);
+    let clip_names =
+        crate::ecs::systems::clip_library_systems::clip_library_clip_names(clip_library);
 
     if clip_names.is_empty() {
         ui.text_disabled("No clips");
         return;
     }
 
-    let reference_counts =
-        count_clip_references(clip_library, world);
+    let reference_counts = count_clip_references(clip_library, world);
 
     let filter_lower = browser_state.filter_text.to_lowercase();
 
@@ -112,35 +103,22 @@ fn build_clip_list(
         .size([remaining[0], remaining[1] - 4.0])
         .build(|| {
             for (id, name) in &clip_names {
-                if !filter_lower.is_empty()
-                    && !name.to_lowercase().contains(&filter_lower)
-                {
+                if !filter_lower.is_empty() && !name.to_lowercase().contains(&filter_lower) {
                     continue;
                 }
 
-                let is_selected =
-                    browser_state.selected_clip_id == Some(*id);
+                let is_selected = browser_state.selected_clip_id == Some(*id);
                 let ref_count = reference_counts
                     .iter()
                     .find(|(sid, _)| *sid == *id)
                     .map(|(_, c)| *c)
                     .unwrap_or(0);
 
-                let duration = clip_library
-                    .get(*id)
-                    .map(|c| c.duration)
-                    .unwrap_or(0.0);
+                let duration = clip_library.get(*id).map(|c| c.duration).unwrap_or(0.0);
 
-                let label = format!(
-                    "{} ({:.1}s) [{}]##clip_{}",
-                    name, duration, ref_count, id
-                );
+                let label = format!("{} ({:.1}s) [{}]##clip_{}", name, duration, ref_count, id);
 
-                if ui
-                    .selectable_config(&label)
-                    .selected(is_selected)
-                    .build()
-                {
+                if ui.selectable_config(&label).selected(is_selected).build() {
                     browser_state.selected_clip_id = Some(*id);
                 }
 
@@ -149,29 +127,20 @@ fn build_clip_list(
         });
 }
 
-fn build_clip_drag_source(
-    ui: &imgui::Ui,
-    clip_id: SourceClipId,
-    _name: &str,
-) {
+fn build_clip_drag_source(ui: &imgui::Ui, clip_id: SourceClipId, _name: &str) {
     let id = clip_id;
     let _source = ui
         .drag_drop_source_config("CLIP_SOURCE")
         .begin_payload(move || id);
 }
 
-fn count_clip_references(
-    _clip_library: &ClipLibrary,
-    world: &World,
-) -> Vec<(SourceClipId, usize)> {
+fn count_clip_references(_clip_library: &ClipLibrary, world: &World) -> Vec<(SourceClipId, usize)> {
     let mut counts: std::collections::HashMap<SourceClipId, usize> =
         std::collections::HashMap::new();
 
     let entities = world.component_entities::<ClipSchedule>();
     for entity in entities {
-        if let Some(schedule) =
-            world.get_component::<ClipSchedule>(entity)
-        {
+        if let Some(schedule) = world.get_component::<ClipSchedule>(entity) {
             for inst in &schedule.instances {
                 *counts.entry(inst.source_id).or_insert(0) += 1;
             }

@@ -98,9 +98,30 @@ pub fn create_grid_mesh() -> LineMesh {
     let grid_extent = 10000.0;
     let grid_spacing = 1.0;
 
-    add_grid_axis(&mut mesh, 0, grid_count, grid_extent, grid_spacing, [1.0, 0.0, 0.0]);
-    add_grid_axis(&mut mesh, 1, grid_count, grid_extent, grid_spacing, [0.0, 1.0, 0.0]);
-    add_grid_axis(&mut mesh, 2, grid_count, grid_extent, grid_spacing, [0.0, 0.0, 1.0]);
+    add_grid_axis(
+        &mut mesh,
+        0,
+        grid_count,
+        grid_extent,
+        grid_spacing,
+        [1.0, 0.0, 0.0],
+    );
+    add_grid_axis(
+        &mut mesh,
+        1,
+        grid_count,
+        grid_extent,
+        grid_spacing,
+        [0.0, 1.0, 0.0],
+    );
+    add_grid_axis(
+        &mut mesh,
+        2,
+        grid_count,
+        grid_extent,
+        grid_spacing,
+        [0.0, 0.0, 1.0],
+    );
 
     mesh
 }

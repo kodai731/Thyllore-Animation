@@ -16,6 +16,8 @@ mod object_id_readback;
 mod physical_camera;
 mod pipeline_manager;
 mod scene_state;
+mod spring_bone_editor_state;
+mod spring_bone_state;
 mod timeline_state;
 mod tone_mapping;
 
@@ -37,5 +39,7 @@ pub use object_id_readback::*;
 pub use physical_camera::*;
 pub use pipeline_manager::*;
 pub use scene_state::*;
+pub use spring_bone_editor_state::*;
+pub use spring_bone_state::*;
 pub use timeline_state::*;
 pub use tone_mapping::*;

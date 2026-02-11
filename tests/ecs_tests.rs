@@ -613,9 +613,8 @@ mod components_tests {
 mod constraint_solver_tests {
     use cgmath::{assert_relative_eq, InnerSpace, Quaternion, Vector3};
     use rust_rendering::animation::{
-        BoneLocalPose, ConstraintType, IkConstraintData,
-        PositionConstraintData, RotationConstraintData,
-        ScaleConstraintData, Skeleton, SkeletonPose, PRIORITY_IK,
+        BoneLocalPose, ConstraintType, IkConstraintData, PositionConstraintData,
+        RotationConstraintData, ScaleConstraintData, Skeleton, SkeletonPose, PRIORITY_IK,
         PRIORITY_POSITION, PRIORITY_ROTATION, PRIORITY_SCALE,
     };
     use rust_rendering::ecs::component::ConstraintSet;
@@ -626,15 +625,14 @@ mod constraint_solver_tests {
         let mut skeleton = Skeleton::new("test_chain");
         for i in 0..bone_count {
             let parent = if i == 0 { None } else { Some(i - 1) };
-            let bone_id = skeleton.add_bone(
-                &format!("bone_{}", i),
-                parent,
-            );
+            let bone_id = skeleton.add_bone(&format!("bone_{}", i), parent);
 
             let bone = skeleton.get_bone_mut(bone_id).unwrap();
-            bone.local_transform = cgmath::Matrix4::from_translation(
-                Vector3::new(0.0, if i == 0 { 0.0 } else { bone_length }, 0.0),
-            );
+            bone.local_transform = cgmath::Matrix4::from_translation(Vector3::new(
+                0.0,
+                if i == 0 { 0.0 } else { bone_length },
+                0.0,
+            ));
         }
         skeleton
     }
@@ -695,7 +693,8 @@ mod constraint_solver_tests {
         let original = pose.clone();
 
         let mut constraint_set = ConstraintSet::new();
-        constraint_set_add(&mut constraint_set,
+        constraint_set_add(
+            &mut constraint_set,
             ConstraintType::Position(PositionConstraintData {
                 constrained_bone: 1,
                 target_bone: 2,
@@ -722,7 +721,8 @@ mod constraint_solver_tests {
         let original = pose.clone();
 
         let mut constraint_set = ConstraintSet::new();
-        constraint_set_add(&mut constraint_set,
+        constraint_set_add(
+            &mut constraint_set,
             ConstraintType::Position(PositionConstraintData {
                 constrained_bone: 1,
                 target_bone: 2,
@@ -750,7 +750,8 @@ mod constraint_solver_tests {
         pose.bone_poses[2].translation = Vector3::new(5.0, 5.0, 5.0);
 
         let mut constraint_set = ConstraintSet::new();
-        constraint_set_add(&mut constraint_set,
+        constraint_set_add(
+            &mut constraint_set,
             ConstraintType::Position(PositionConstraintData {
                 constrained_bone: 1,
                 target_bone: 2,
@@ -766,8 +767,7 @@ mod constraint_solver_tests {
         apply_constraints(&constraint_set, &skeleton, &mut pose);
 
         let moved =
-            (pose.bone_poses[1].translation - Vector3::new(0.0, original_y, 0.0))
-                .magnitude();
+            (pose.bone_poses[1].translation - Vector3::new(0.0, original_y, 0.0)).magnitude();
         assert!(moved > 0.01, "bone should have moved");
     }
 
@@ -776,16 +776,12 @@ mod constraint_solver_tests {
         let skeleton = create_chain_skeleton(3, 1.0);
         let mut pose = create_rest_pose(&skeleton);
 
-        let target_rot = Quaternion::new(
-            0.7071,
-            0.0,
-            0.7071,
-            0.0,
-        );
+        let target_rot = Quaternion::new(0.7071, 0.0, 0.7071, 0.0);
         pose.bone_poses[2].rotation = target_rot;
 
         let mut constraint_set = ConstraintSet::new();
-        constraint_set_add(&mut constraint_set,
+        constraint_set_add(
+            &mut constraint_set,
             ConstraintType::Rotation(RotationConstraintData {
                 constrained_bone: 1,
                 target_bone: 2,
@@ -804,10 +800,7 @@ mod constraint_solver_tests {
             + pose.bone_poses[1].rotation.v.x * original_rot.v.x
             + pose.bone_poses[1].rotation.v.y * original_rot.v.y
             + pose.bone_poses[1].rotation.v.z * original_rot.v.z;
-        assert!(
-            dot.abs() < 0.999,
-            "rotation should have changed"
-        );
+        assert!(dot.abs() < 0.999, "rotation should have changed");
     }
 
     #[test]
@@ -818,7 +811,8 @@ mod constraint_solver_tests {
         pose.bone_poses[2].scale = Vector3::new(2.0, 2.0, 2.0);
 
         let mut constraint_set = ConstraintSet::new();
-        constraint_set_add(&mut constraint_set,
+        constraint_set_add(
+            &mut constraint_set,
             ConstraintType::Scale(ScaleConstraintData {
                 constrained_bone: 1,
                 target_bone: 2,
@@ -847,7 +841,8 @@ mod constraint_solver_tests {
         pose.bone_poses[3].translation = Vector3::new(1.0, 1.0, 0.0);
 
         let mut constraint_set = ConstraintSet::new();
-        constraint_set_add(&mut constraint_set,
+        constraint_set_add(
+            &mut constraint_set,
             ConstraintType::Ik(IkConstraintData {
                 chain_length: 2,
                 target_bone: 3,
@@ -882,7 +877,8 @@ mod constraint_solver_tests {
         pose.bone_poses[3].translation = Vector3::new(0.0, 100.0, 0.0);
 
         let mut constraint_set = ConstraintSet::new();
-        constraint_set_add(&mut constraint_set,
+        constraint_set_add(
+            &mut constraint_set,
             ConstraintType::Ik(IkConstraintData {
                 chain_length: 2,
                 target_bone: 3,

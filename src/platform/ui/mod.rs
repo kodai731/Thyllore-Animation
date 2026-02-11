@@ -6,6 +6,7 @@ mod debug_window;
 mod dope_sheet;
 mod hierarchy_window;
 mod inspector_window;
+mod spring_bone_inspector;
 mod timeline_window;
 mod viewport_window;
 
@@ -17,5 +18,6 @@ pub use debug_window::*;
 pub use dope_sheet::*;
 pub use hierarchy_window::*;
 pub use inspector_window::*;
+pub use spring_bone_inspector::*;
 pub use timeline_window::*;
 pub use viewport_window::*;

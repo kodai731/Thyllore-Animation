@@ -54,7 +54,12 @@ impl Default for RRData {
 }
 
 impl RRData {
-    pub unsafe fn new(instance: &Instance, rrdevice: &RRDevice, rrswapchain: &RRSwapchain, name: &str) -> Self {
+    pub unsafe fn new(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        rrswapchain: &RRSwapchain,
+        name: &str,
+    ) -> Self {
         let mut rrdata = RRData::default();
         Self::create_uniform_buffers(&mut rrdata, instance, rrdevice, rrswapchain, name);
         rrdata
@@ -92,22 +97,30 @@ impl RRData {
         }
 
         if self.vertex_buffer.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.vertex_buffer.buffer, None);
+            rrdevice
+                .device
+                .destroy_buffer(self.vertex_buffer.buffer, None);
             self.vertex_buffer.buffer = vk::Buffer::null();
         }
 
         if self.vertex_buffer.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.vertex_buffer.buffer_memory, None);
+            rrdevice
+                .device
+                .free_memory(self.vertex_buffer.buffer_memory, None);
             self.vertex_buffer.buffer_memory = vk::DeviceMemory::null();
         }
 
         if self.index_buffer.buffer != vk::Buffer::null() {
-            rrdevice.device.destroy_buffer(self.index_buffer.buffer, None);
+            rrdevice
+                .device
+                .destroy_buffer(self.index_buffer.buffer, None);
             self.index_buffer.buffer = vk::Buffer::null();
         }
 
         if self.index_buffer.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice.device.free_memory(self.index_buffer.buffer_memory, None);
+            rrdevice
+                .device
+                .free_memory(self.index_buffer.buffer_memory, None);
             self.index_buffer.buffer_memory = vk::DeviceMemory::null();
         }
     }
@@ -177,7 +190,10 @@ impl Default for SceneUniformData {
 
 impl PartialEq for Vertex {
     fn eq(&self, other: &Self) -> bool {
-        self.pos == other.pos && self.color == other.color && self.tex_coord == other.tex_coord && self.normal == other.normal
+        self.pos == other.pos
+            && self.color == other.color
+            && self.tex_coord == other.tex_coord
+            && self.normal == other.normal
     }
 }
 

@@ -39,7 +39,6 @@ impl OffscreenFramebuffer {
         msaa_samples: vk::SampleCountFlags,
         format: vk::Format,
     ) -> Result<Self> {
-
         let (msaa_color_image, msaa_color_image_memory) = create_image(
             instance,
             rrdevice,
@@ -117,14 +116,20 @@ impl OffscreenFramebuffer {
 
         let render_pass = Self::create_render_pass(instance, rrdevice, format, msaa_samples)?;
 
-        let attachments = [msaa_color_image_view, msaa_depth_image_view, resolve_color_image_view];
+        let attachments = [
+            msaa_color_image_view,
+            msaa_depth_image_view,
+            resolve_color_image_view,
+        ];
         let framebuffer_info = vk::FramebufferCreateInfo::builder()
             .render_pass(render_pass)
             .attachments(&attachments)
             .width(width)
             .height(height)
             .layers(1);
-        let framebuffer = rrdevice.device.create_framebuffer(&framebuffer_info, None)?;
+        let framebuffer = rrdevice
+            .device
+            .create_framebuffer(&framebuffer_info, None)?;
 
         let sampler = Self::create_sampler(&rrdevice.device)?;
 
@@ -230,7 +235,11 @@ impl OffscreenFramebuffer {
                     | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
             );
 
-        let attachments = [msaa_color_attachment, depth_attachment, resolve_color_attachment];
+        let attachments = [
+            msaa_color_attachment,
+            depth_attachment,
+            resolve_color_attachment,
+        ];
         let subpasses = [subpass];
         let dependencies = [dependency];
 
@@ -290,7 +299,11 @@ impl OffscreenFramebuffer {
         )?;
         *self = new_fb;
 
-        crate::log!("Resized offscreen framebuffer to: {}x{}", new_width, new_height);
+        crate::log!(
+            "Resized offscreen framebuffer to: {}x{}",
+            new_width,
+            new_height
+        );
         Ok(())
     }
 

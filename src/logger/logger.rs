@@ -2,8 +2,8 @@ use chrono::Local;
 use once_cell::sync::Lazy;
 use std::fs::{File, OpenOptions};
 use std::io::{Result, Write};
-use std::sync::Mutex;
 use std::path::Path;
+use std::sync::Mutex;
 
 pub static LOGGER: Lazy<Mutex<Logger>> = Lazy::new(|| {
     let logger = Logger::new("log/log").expect("Failed to initialize logger");

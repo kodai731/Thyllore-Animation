@@ -1,9 +1,10 @@
-use crate::log;
-use crate::math::*;
 use crate::animation::{
     AnimationClip, AnimationSystem, Interpolation, Keyframe, MorphAnimation, MorphAnimationSystem,
     MorphTarget, Skeleton, SkinData, TransformChannel,
 };
+use crate::ecs::component::SpringBoneSetup;
+use crate::log;
+use crate::math::*;
 use crate::vulkanr::data::{Vertex, VertexData};
 use anyhow::Result;
 use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3, Vector4};
@@ -55,6 +56,7 @@ pub struct GltfLoadResult {
     pub morph_animation: MorphAnimationSystem,
     pub has_skinned_meshes: bool,
     pub has_armature: bool,
+    pub spring_bone_setup: Option<SpringBoneSetup>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -135,6 +137,10 @@ impl NodeJointMap {
         self.joint_to_node.get(&joint_index).copied()
     }
 
+    fn get_joint_index(&self, node_index: u16) -> Option<u16> {
+        self.node_to_joint.get(&node_index).copied()
+    }
+
     fn contain_node_index(&self, node_index: u16) -> bool {
         self.node_to_joint.contains_key(&node_index)
     }
@@ -171,6 +177,7 @@ struct GltfParseContext {
     has_skinned_meshes: bool,
     has_armature: bool,
     skeleton_root_transform: Option<[[f32; 4]; 4]>,
+    spring_bone_setup: Option<SpringBoneSetup>,
 }
 
 impl Default for GltfParseContext {
@@ -187,6 +194,7 @@ impl Default for GltfParseContext {
             has_skinned_meshes: false,
             has_armature: false,
             skeleton_root_transform: None,
+            spring_bone_setup: None,
         }
     }
 }
@@ -252,12 +260,40 @@ unsafe fn parse_gltf(ctx: &mut GltfParseContext, path: &str) {
         process_animation(&buffers, animation, ctx, morph_target_count).unwrap();
     }
 
+    ctx.spring_bone_setup = extract_spring_bone_extension(&gltf, &ctx.node_joint_map);
+
     log!(
         "Loaded: has_skinned_meshes={}, {} node_animations, {} joint_animations",
         ctx.has_skinned_meshes,
         ctx.node_animations.len(),
         ctx.joint_animations.len()
     );
+}
+
+fn extract_spring_bone_extension(
+    gltf: &Document,
+    node_joint_map: &NodeJointMap,
+) -> Option<SpringBoneSetup> {
+    let extension_json = gltf.extension_value("VRMC_springBone")?;
+
+    let resolve = |node_index: u32| -> Option<u32> {
+        node_joint_map
+            .get_joint_index(node_index as u16)
+            .map(|j| j as u32)
+    };
+
+    let setup = super::spring_bone_extension::parse_vrmc_spring_bone(extension_json, &resolve);
+
+    if let Some(ref s) = setup {
+        log!(
+            "VRMC_springBone loaded: {} chains, {} colliders, {} groups",
+            s.chains.len(),
+            s.colliders.len(),
+            s.collider_groups.len()
+        );
+    }
+
+    setup
 }
 
 fn set_joints(ctx: &mut GltfParseContext, skin: &gltf::Skin, buffers: &Vec<Data>) {
@@ -432,13 +468,14 @@ unsafe fn process_node(
                 if node_name.contains("NurbsPath.009") {
                     crate::log!(
                         "=== Load-time transform for {} (has_joints={}) ===",
-                        node_name, mesh_data.has_joints
+                        node_name,
+                        mesh_data.has_joints
                     );
                     let ct = &cumulative_transform;
                     let scale = (
-                        (ct[0][0]*ct[0][0] + ct[0][1]*ct[0][1] + ct[0][2]*ct[0][2]).sqrt(),
-                        (ct[1][0]*ct[1][0] + ct[1][1]*ct[1][1] + ct[1][2]*ct[1][2]).sqrt(),
-                        (ct[2][0]*ct[2][0] + ct[2][1]*ct[2][1] + ct[2][2]*ct[2][2]).sqrt(),
+                        (ct[0][0] * ct[0][0] + ct[0][1] * ct[0][1] + ct[0][2] * ct[0][2]).sqrt(),
+                        (ct[1][0] * ct[1][0] + ct[1][1] * ct[1][1] + ct[1][2] * ct[1][2]).sqrt(),
+                        (ct[2][0] * ct[2][0] + ct[2][1] * ct[2][1] + ct[2][2] * ct[2][2]).sqrt(),
                     );
                     crate::log!(
                         "  cumulative_transform: scale=[{:.1},{:.1},{:.1}] trans=[{:.2},{:.2},{:.2}]",
@@ -450,7 +487,12 @@ unsafe fn process_node(
                         let pos = cumulative_transform * [raw[0], raw[1], raw[2], 1.0].to_vec4();
                         crate::log!(
                             "  raw[0]=({:.3},{:.3},{:.3}) -> transformed=({:.2},{:.2},{:.2})",
-                            raw[0], raw[1], raw[2], pos.x, pos.y, pos.z
+                            raw[0],
+                            raw[1],
+                            raw[2],
+                            pos.x,
+                            pos.y,
+                            pos.z
                         );
                     }
                 }
@@ -553,7 +595,10 @@ unsafe fn process_node(
                     let lv = &mesh_data.local_vertices[0];
                     crate::log!(
                         "  After processing: local_vertices[0]=({:.3},{:.3},{:.3}), count={}",
-                        lv.pos.x, lv.pos.y, lv.pos.z, mesh_data.local_vertices.len()
+                        lv.pos.x,
+                        lv.pos.y,
+                        lv.pos.z,
+                        mesh_data.local_vertices.len()
                     );
                 }
             }
@@ -843,9 +888,7 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
             clip.channels.len()
         );
         if clip.duration > 0.0 && !clip.channels.is_empty() {
-            if let Some(skeleton) =
-                animation_system.get_skeleton_mut(skeleton_id.unwrap())
-            {
+            if let Some(skeleton) = animation_system.get_skeleton_mut(skeleton_id.unwrap()) {
                 initialize_skeleton_from_clip(skeleton, &clip, 0.0);
                 log!("Initialized skeleton bones with animation t=0 values");
             }
@@ -943,6 +986,7 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
         morph_animation: morph_system,
         has_skinned_meshes: ctx.has_skinned_meshes,
         has_armature: ctx.has_armature,
+        spring_bone_setup: ctx.spring_bone_setup,
     }
 }
 
@@ -998,26 +1042,18 @@ fn log_gltf_scale_info(meshes: &[GltfMeshData]) {
     }
 }
 
-fn initialize_skeleton_from_clip(
-    skeleton: &mut Skeleton,
-    clip: &AnimationClip,
-    time: f32,
-) {
+fn initialize_skeleton_from_clip(skeleton: &mut Skeleton, clip: &AnimationClip, time: f32) {
     use crate::animation::{compose_transform, decompose_transform};
 
     for (&bone_id, channel) in &clip.channels {
         if let Some(bone) = skeleton.get_bone_mut(bone_id) {
-            let (rest_t, rest_r, rest_s) =
-                decompose_transform(&bone.local_transform);
+            let (rest_t, rest_r, rest_s) = decompose_transform(&bone.local_transform);
 
-            let translation =
-                channel.sample_translation(time).unwrap_or(rest_t);
-            let rotation =
-                channel.sample_rotation(time).unwrap_or(rest_r);
+            let translation = channel.sample_translation(time).unwrap_or(rest_t);
+            let rotation = channel.sample_rotation(time).unwrap_or(rest_r);
             let scale = channel.sample_scale(time).unwrap_or(rest_s);
 
-            bone.local_transform =
-                compose_transform(translation, rotation, scale);
+            bone.local_transform = compose_transform(translation, rotation, scale);
         }
     }
 }

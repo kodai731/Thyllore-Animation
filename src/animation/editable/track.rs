@@ -94,9 +94,7 @@ impl BoneTrack {
     }
 
     pub fn has_rotation_keyframes(&self) -> bool {
-        !self.rotation_x.is_empty()
-            || !self.rotation_y.is_empty()
-            || !self.rotation_z.is_empty()
+        !self.rotation_x.is_empty() || !self.rotation_y.is_empty() || !self.rotation_z.is_empty()
     }
 
     pub fn has_scale_keyframes(&self) -> bool {

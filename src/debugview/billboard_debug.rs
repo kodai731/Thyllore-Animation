@@ -1,8 +1,8 @@
+use crate::log;
+use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
+use crate::vulkanr::swapchain::RRSwapchain;
 use cgmath::{Deg, Vector3};
 use vulkanalia::prelude::v1_0::*;
-use crate::log;
-use crate::vulkanr::swapchain::RRSwapchain;
-use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
 
 pub struct BillboardDebugInfo {
     pub light_position: Vector3<f32>,
@@ -26,9 +26,7 @@ pub fn log_billboard_debug_info(
     gbuffer_info: Option<&GBufferDebugInfo>,
     gbuffer_sampler: Option<vk::Sampler>,
 ) {
-    use crate::math::{
-        coordinate_system::perspective_infinite_reverse, view,
-    };
+    use crate::math::{coordinate_system::perspective_infinite_reverse, view};
 
     log!("=== Billboard Depth Debug Info ===");
 
@@ -60,19 +58,15 @@ pub fn log_billboard_debug_info(
 
     if let Some(gbuffer) = gbuffer_info {
         log!("GBuffer:");
-        log!(
-            "  position_image_view: {:?}",
-            gbuffer.position_image_view
-        );
+        log!("  position_image_view: {:?}", gbuffer.position_image_view);
         log!(
             "  extent: {}x{}",
             gbuffer.extent_width,
             gbuffer.extent_height
         );
 
-        let gbuffer_matches_swapchain =
-            gbuffer.extent_width == swapchain_extent.width
-                && gbuffer.extent_height == swapchain_extent.height;
+        let gbuffer_matches_swapchain = gbuffer.extent_width == swapchain_extent.width
+            && gbuffer.extent_height == swapchain_extent.height;
         log!(
             "  GBuffer matches swapchain extent: {}",
             gbuffer_matches_swapchain
@@ -88,22 +82,13 @@ pub fn log_billboard_debug_info(
     }
 
     log!("Billboard Descriptor Set:");
-    log!(
-        "  rrdata count: {}",
-        billboard_descriptor_set.rrdata.len()
-    );
+    log!("  rrdata count: {}", billboard_descriptor_set.rrdata.len());
     log!(
         "  descriptor_sets count: {}",
         billboard_descriptor_set.descriptor_sets.len()
     );
 
-    let view_matrix = unsafe {
-        view(
-            info.camera_position,
-            info.camera_direction,
-            info.camera_up,
-        )
-    };
+    let view_matrix = unsafe { view(info.camera_position, info.camera_direction, info.camera_up) };
     let light_view_pos = view_matrix
         * cgmath::Vector4::new(
             info.light_position.x,
@@ -120,18 +105,10 @@ pub fn log_billboard_debug_info(
         light_view_pos.y,
         light_view_pos.z
     );
-    log!(
-        "  view_depth (=-view_pos.z): {:.4}",
-        billboard_view_depth
-    );
+    log!("  view_depth (=-view_pos.z): {:.4}", billboard_view_depth);
 
-    let aspect = swapchain_extent.width as f32
-        / swapchain_extent.height as f32;
-    let proj = perspective_infinite_reverse(
-        info.fov_y,
-        aspect,
-        info.near_plane,
-    );
+    let aspect = swapchain_extent.width as f32 / swapchain_extent.height as f32;
+    let proj = perspective_infinite_reverse(info.fov_y, aspect, info.near_plane);
 
     let light_clip_pos = proj * light_view_pos;
     let light_ndc = if light_clip_pos.w.abs() > 0.0001 {
@@ -150,10 +127,8 @@ pub fn log_billboard_debug_info(
         light_ndc.z
     );
 
-    let screen_x =
-        (light_ndc.x * 0.5 + 0.5) * swapchain_extent.width as f32;
-    let screen_y =
-        (light_ndc.y * 0.5 + 0.5) * swapchain_extent.height as f32;
+    let screen_x = (light_ndc.x * 0.5 + 0.5) * swapchain_extent.width as f32;
+    let screen_y = (light_ndc.y * 0.5 + 0.5) * swapchain_extent.height as f32;
     log!(
         "Billboard screen position: ({:.1}, {:.1})",
         screen_x,

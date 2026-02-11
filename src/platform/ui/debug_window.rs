@@ -46,7 +46,7 @@ pub fn build_debug_window(
             build_raytracing_panel(ui, ui_events, state);
             ui.separator();
 
-            build_debug_panel(ui, ui_events, gui_data);
+            build_debug_panel(ui, ui_events, gui_data, ecs_world);
             ui.separator();
 
             build_fbx_debug_panel(ui);
@@ -223,7 +223,12 @@ fn build_raytracing_panel(
     }
 }
 
-fn build_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, gui_data: &mut GUIData) {
+fn build_debug_panel(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    gui_data: &mut GUIData,
+    ecs_world: &World,
+) {
     ui.text("Debug Info:");
 
     ui.checkbox("Show Click Debug", &mut gui_data.show_click_debug);
@@ -246,12 +251,78 @@ fn build_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, gui_data: &mu
         ui_events.send(UIEvent::DumpDebugInfo);
     }
 
+    ui.same_line();
+
+    if ui.button("Dump Animation Debug") {
+        ui_events.send(UIEvent::DumpAnimationDebug);
+    }
+
     if ui.button("Add Test Constraints") {
         ui_events.send(UIEvent::CreateTestConstraints);
     }
     ui.same_line();
     if ui.button("Clear Constraints") {
         ui_events.send(UIEvent::ClearTestConstraints);
+    }
+
+    if ui.button("Add Spring Bones") {
+        ui_events.send(UIEvent::AddTestSpringBones);
+    }
+    ui.same_line();
+    if ui.button("Clear Spring Bones") {
+        ui_events.send(UIEvent::ClearSpringBones);
+    }
+
+    build_spring_bone_bake_panel(ui, ui_events, ecs_world);
+}
+
+fn build_spring_bone_bake_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+    use crate::ecs::resource::{SpringBoneMode, SpringBoneState};
+
+    let Some(state) = ecs_world.get_resource::<SpringBoneState>() else {
+        return;
+    };
+
+    ui.separator();
+    match state.mode {
+        SpringBoneMode::Realtime => {
+            ui.text("Spring Bone: Realtime");
+            ui.text_colored([0.5, 0.8, 0.5, 1.0], "  Simulating...");
+            if ui.button("Bake Spring Bones") {
+                ui_events.send(UIEvent::SpringBoneBake);
+            }
+        }
+        SpringBoneMode::Baked => {
+            let clip_id = state.baked_clip_source_id.unwrap_or(0);
+            ui.text(format!("Spring Bone: Baked (clip_id={})", clip_id));
+            ui.text_colored(
+                [0.7, 0.7, 0.5, 1.0],
+                "  Editing will switch to BakedOverride",
+            );
+            if ui.button("Discard Bake") {
+                ui_events.send(UIEvent::SpringBoneDiscardBake);
+            }
+            ui.same_line();
+            if ui.button("Save Bake (.ron)") {
+                ui_events.send(UIEvent::SpringBoneSaveBake);
+            }
+        }
+        SpringBoneMode::BakedOverride => {
+            let clip_id = state.baked_clip_source_id.unwrap_or(0);
+            ui.text(format!("Spring Bone: BakedOverride (clip_id={})", clip_id));
+            ui.text_colored([1.0, 0.7, 0.3, 1.0], "  Manually edited");
+            if ui.button("Re-bake") {
+                ui_events.send(UIEvent::SpringBoneRebake);
+            }
+            ui.same_line();
+            if ui.button("Discard Bake") {
+                ui_events.send(UIEvent::SpringBoneDiscardBake);
+            }
+            ui.same_line();
+            if ui.button("Save Bake (.ron)") {
+                ui_events.send(UIEvent::SpringBoneSaveBake);
+            }
+        }
     }
 }
 
@@ -334,16 +405,13 @@ fn build_auto_exposure_panel(ui: &imgui::Ui, ecs_world: &World) {
 
     ui.text("Auto Exposure:");
 
-    if let Some(mut ae) =
-        ecs_world.get_resource_mut::<AutoExposure>()
-    {
+    if let Some(mut ae) = ecs_world.get_resource_mut::<AutoExposure>() {
         ui.checkbox("Auto Exposure Enabled", &mut ae.enabled);
 
         ui.slider_config("Min EV", -10.0, 10.0)
             .build(&mut ae.min_ev);
 
-        ui.slider_config("Max EV", 0.0, 30.0)
-            .build(&mut ae.max_ev);
+        ui.slider_config("Max EV", 0.0, 30.0).build(&mut ae.max_ev);
 
         ui.slider_config("Speed Up", 0.1, 10.0)
             .build(&mut ae.adaptation_speed_up);
@@ -359,10 +427,7 @@ fn build_auto_exposure_panel(ui: &imgui::Ui, ecs_world: &World) {
     }
 
     if let Some(exposure) = ecs_world.get_resource::<Exposure>() {
-        ui.text(format!(
-            "Current Exposure: {:.4}",
-            exposure.exposure_value
-        ));
+        ui.text(format!("Current Exposure: {:.4}", exposure.exposure_value));
         ui.text(format!("Current EV100: {:.2}", exposure.ev100));
     }
 }
@@ -372,7 +437,10 @@ fn build_mouse_info(ui: &imgui::Ui, gui_data: &mut GUIData) {
         "Mouse Position: ({:.1},{:.1})",
         gui_data.mouse_pos[0], gui_data.mouse_pos[1]
     ));
-    ui.text(format!("is left clicked: ({:.1})", gui_data.is_left_clicked));
+    ui.text(format!(
+        "is left clicked: ({:.1})",
+        gui_data.is_left_clicked
+    ));
     ui.text(format!(
         "is wheel clicked: ({:.1})",
         gui_data.is_wheel_clicked

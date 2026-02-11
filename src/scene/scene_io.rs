@@ -4,16 +4,14 @@ use std::path::{Path, PathBuf};
 use super::clip_io::{load_animation_clip, save_animation_clip};
 use super::error::{SceneError, SceneResult};
 use super::format::{
-    AnimationClipRef, AutoExposureState, BloomState, CameraState,
-    DepthOfFieldState, EditorState, ExposureState, LensEffectsState,
-    PhysicalCameraState, SceneFile, SceneMetadata, TimelineConfig,
+    AnimationClipRef, AutoExposureState, BloomState, CameraState, DepthOfFieldState, EditorState,
+    ExposureState, LensEffectsState, PhysicalCameraState, SceneFile, SceneMetadata, TimelineConfig,
     ToneMappingState, SCENE_FORMAT_VERSION,
 };
 use crate::animation::editable::SourceClipId;
 use crate::ecs::resource::{
-    AutoExposure, BloomSettings, Camera, ClipLibrary, DepthOfField,
-    Exposure, LensEffects, ModelState, PhysicalCameraParameters,
-    SceneState, TimelineState, ToneMapOperator, ToneMapping,
+    AutoExposure, BloomSettings, Camera, ClipLibrary, DepthOfField, Exposure, LensEffects,
+    ModelState, PhysicalCameraParameters, SceneState, TimelineState, ToneMapOperator, ToneMapping,
 };
 use crate::ecs::world::World;
 use crate::platform::CurveEditorState;
@@ -67,57 +65,48 @@ impl CollectedSceneState {
                     sensitivity_iso: p.sensitivity_iso,
                 });
 
-        let exposure = world
-            .get_resource::<Exposure>()
-            .map(|e| ExposureState {
-                ev100: e.ev100,
-                exposure_value: e.exposure_value,
+        let exposure = world.get_resource::<Exposure>().map(|e| ExposureState {
+            ev100: e.ev100,
+            exposure_value: e.exposure_value,
+        });
+
+        let depth_of_field = world
+            .get_resource::<DepthOfField>()
+            .map(|d| DepthOfFieldState {
+                enabled: d.enabled,
+                focus_distance: d.focus_distance,
+                max_blur_radius: d.max_blur_radius,
             });
 
-        let depth_of_field =
-            world
-                .get_resource::<DepthOfField>()
-                .map(|d| DepthOfFieldState {
-                    enabled: d.enabled,
-                    focus_distance: d.focus_distance,
-                    max_blur_radius: d.max_blur_radius,
-                });
+        let tone_mapping = world.get_resource::<ToneMapping>().map(|tm| {
+            let operator_str = match tm.operator {
+                ToneMapOperator::None => "None",
+                ToneMapOperator::AcesFilmic => "AcesFilmic",
+                ToneMapOperator::Reinhard => "Reinhard",
+            };
+            ToneMappingState {
+                enabled: tm.enabled,
+                operator: operator_str.to_string(),
+                gamma: tm.gamma,
+            }
+        });
 
-        let tone_mapping =
-            world
-                .get_resource::<ToneMapping>()
-                .map(|tm| {
-                    let operator_str = match tm.operator {
-                        ToneMapOperator::None => "None",
-                        ToneMapOperator::AcesFilmic => "AcesFilmic",
-                        ToneMapOperator::Reinhard => "Reinhard",
-                    };
-                    ToneMappingState {
-                        enabled: tm.enabled,
-                        operator: operator_str.to_string(),
-                        gamma: tm.gamma,
-                    }
-                });
-
-        let lens_effects =
-            world
-                .get_resource::<LensEffects>()
-                .map(|le| LensEffectsState {
-                    vignette_enabled: le.vignette_enabled,
-                    vignette_intensity: le.vignette_intensity,
-                    chromatic_aberration_enabled: le.chromatic_aberration_enabled,
-                    chromatic_aberration_intensity: le.chromatic_aberration_intensity,
-                });
-
-        let bloom = world
-            .get_resource::<BloomSettings>()
-            .map(|bs| BloomState {
-                enabled: bs.enabled,
-                intensity: bs.intensity,
-                threshold: bs.threshold,
-                knee: bs.knee,
-                mip_count: bs.mip_count,
+        let lens_effects = world
+            .get_resource::<LensEffects>()
+            .map(|le| LensEffectsState {
+                vignette_enabled: le.vignette_enabled,
+                vignette_intensity: le.vignette_intensity,
+                chromatic_aberration_enabled: le.chromatic_aberration_enabled,
+                chromatic_aberration_intensity: le.chromatic_aberration_intensity,
             });
+
+        let bloom = world.get_resource::<BloomSettings>().map(|bs| BloomState {
+            enabled: bs.enabled,
+            intensity: bs.intensity,
+            threshold: bs.threshold,
+            knee: bs.knee,
+            mip_count: bs.mip_count,
+        });
 
         let auto_exposure = world
             .get_resource::<AutoExposure>()
@@ -187,8 +176,8 @@ fn collect_timeline_and_clip(world: &World) -> (TimelineConfig, Option<String>) 
         .unwrap_or_default();
 
     let current_clip_id = timeline_state.as_ref().and_then(|t| t.current_clip_id);
-    let current_clip_name =
-        current_clip_id.and_then(|id| clip_library.and_then(|cm| cm.get(id).map(|c| c.name.clone())));
+    let current_clip_name = current_clip_id
+        .and_then(|id| clip_library.and_then(|cm| cm.get(id).map(|c| c.name.clone())));
 
     (timeline, current_clip_name)
 }
@@ -199,7 +188,10 @@ fn collect_previous_metadata(world: &World) -> Option<SceneMetadata> {
         .and_then(|s| s.previous_metadata.clone())
 }
 
-fn save_animation_clips(world: &World, animations_dir: &Path) -> SceneResult<Vec<AnimationClipRef>> {
+fn save_animation_clips(
+    world: &World,
+    animations_dir: &Path,
+) -> SceneResult<Vec<AnimationClipRef>> {
     let clip_library = match world.get_resource::<ClipLibrary>() {
         Some(cm) => cm,
         None => return Ok(Vec::new()),
@@ -207,7 +199,9 @@ fn save_animation_clips(world: &World, animations_dir: &Path) -> SceneResult<Vec
 
     let mut animation_clips = Vec::new();
 
-    for (clip_id, clip_name) in crate::ecs::systems::clip_library_systems::clip_library_clip_names(&clip_library) {
+    for (clip_id, clip_name) in
+        crate::ecs::systems::clip_library_systems::clip_library_clip_names(&clip_library)
+    {
         if let Some(clip) = clip_library.get(clip_id) {
             let clip_filename = sanitize_filename(&clip_name);
             let clip_path = animations_dir.join(format!("{}.anim.ron", clip_filename));
@@ -384,19 +378,13 @@ pub fn apply_loaded_scene_to_world(
         }
     }
 
-    if let Some(mut curve_editor) =
-        world.get_resource_mut::<CurveEditorState>()
-    {
-        curve_editor.selected_bone_id =
-            loaded.scene.editor.selected_bone_id;
-        curve_editor.is_open =
-            loaded.scene.editor.curve_editor_open;
+    if let Some(mut curve_editor) = world.get_resource_mut::<CurveEditorState>() {
+        curve_editor.selected_bone_id = loaded.scene.editor.selected_bone_id;
+        curve_editor.is_open = loaded.scene.editor.curve_editor_open;
     }
 
     if let Some(ref phys) = loaded.scene.camera.physical_camera {
-        if let Some(mut params) =
-            world.get_resource_mut::<PhysicalCameraParameters>()
-        {
+        if let Some(mut params) = world.get_resource_mut::<PhysicalCameraParameters>() {
             params.focal_length_mm = phys.focal_length_mm;
             params.sensor_height_mm = phys.sensor_height_mm;
             params.aperture_f_stops = phys.aperture_f_stops;
@@ -406,29 +394,22 @@ pub fn apply_loaded_scene_to_world(
     }
 
     if let Some(ref exp) = loaded.scene.camera.exposure {
-        if let Some(mut exposure) =
-            world.get_resource_mut::<Exposure>()
-        {
+        if let Some(mut exposure) = world.get_resource_mut::<Exposure>() {
             exposure.ev100 = exp.ev100;
             exposure.exposure_value = exp.exposure_value;
         }
     }
 
     if let Some(ref dof) = loaded.scene.camera.depth_of_field {
-        if let Some(mut depth_of_field) =
-            world.get_resource_mut::<DepthOfField>()
-        {
+        if let Some(mut depth_of_field) = world.get_resource_mut::<DepthOfField>() {
             depth_of_field.enabled = dof.enabled;
             depth_of_field.focus_distance = dof.focus_distance;
-            depth_of_field.max_blur_radius =
-                dof.max_blur_radius;
+            depth_of_field.max_blur_radius = dof.max_blur_radius;
         }
     }
 
     if let Some(ref tm) = loaded.scene.camera.tone_mapping {
-        if let Some(mut tone_mapping) =
-            world.get_resource_mut::<ToneMapping>()
-        {
+        if let Some(mut tone_mapping) = world.get_resource_mut::<ToneMapping>() {
             tone_mapping.enabled = tm.enabled;
             tone_mapping.operator = match tm.operator.as_str() {
                 "AcesFilmic" => ToneMapOperator::AcesFilmic,
@@ -440,9 +421,7 @@ pub fn apply_loaded_scene_to_world(
     }
 
     if let Some(ref le) = loaded.scene.camera.lens_effects {
-        if let Some(mut lens_effects) =
-            world.get_resource_mut::<LensEffects>()
-        {
+        if let Some(mut lens_effects) = world.get_resource_mut::<LensEffects>() {
             lens_effects.vignette_enabled = le.vignette_enabled;
             lens_effects.vignette_intensity = le.vignette_intensity;
             lens_effects.chromatic_aberration_enabled = le.chromatic_aberration_enabled;
@@ -451,9 +430,7 @@ pub fn apply_loaded_scene_to_world(
     }
 
     if let Some(ref bs) = loaded.scene.camera.bloom {
-        if let Some(mut bloom_settings) =
-            world.get_resource_mut::<BloomSettings>()
-        {
+        if let Some(mut bloom_settings) = world.get_resource_mut::<BloomSettings>() {
             bloom_settings.enabled = bs.enabled;
             bloom_settings.intensity = bs.intensity;
             bloom_settings.threshold = bs.threshold;
@@ -463,16 +440,12 @@ pub fn apply_loaded_scene_to_world(
     }
 
     if let Some(ref ae) = loaded.scene.camera.auto_exposure {
-        if let Some(mut auto_exposure) =
-            world.get_resource_mut::<AutoExposure>()
-        {
+        if let Some(mut auto_exposure) = world.get_resource_mut::<AutoExposure>() {
             auto_exposure.enabled = ae.enabled;
             auto_exposure.min_ev = ae.min_ev;
             auto_exposure.max_ev = ae.max_ev;
-            auto_exposure.adaptation_speed_up =
-                ae.adaptation_speed_up;
-            auto_exposure.adaptation_speed_down =
-                ae.adaptation_speed_down;
+            auto_exposure.adaptation_speed_up = ae.adaptation_speed_up;
+            auto_exposure.adaptation_speed_down = ae.adaptation_speed_down;
             auto_exposure.low_percent = ae.low_percent;
             auto_exposure.high_percent = ae.high_percent;
         }

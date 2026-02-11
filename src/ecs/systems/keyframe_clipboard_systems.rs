@@ -1,8 +1,6 @@
 use crate::animation::editable::mirror::{build_mirror_mapping, mirror_keyframes};
 use crate::ecs::events::UIEvent;
-use crate::ecs::resource::{
-    ClipLibrary, CopiedKeyframe, KeyframeCopyBuffer, TimelineState,
-};
+use crate::ecs::resource::{ClipLibrary, CopiedKeyframe, KeyframeCopyBuffer, TimelineState};
 
 pub fn process_keyframe_clipboard_events(
     events: &[UIEvent],
@@ -17,21 +15,11 @@ pub fn process_keyframe_clipboard_events(
             }
 
             UIEvent::TimelinePasteKeyframes { paste_time } => {
-                paste_keyframes(
-                    *paste_time,
-                    timeline_state,
-                    clip_library,
-                    copy_buffer,
-                );
+                paste_keyframes(*paste_time, timeline_state, clip_library, copy_buffer);
             }
 
             UIEvent::TimelineMirrorPaste { paste_time } => {
-                mirror_paste_keyframes(
-                    *paste_time,
-                    timeline_state,
-                    clip_library,
-                    copy_buffer,
-                );
+                mirror_paste_keyframes(*paste_time, timeline_state, clip_library, copy_buffer);
             }
 
             _ => {}

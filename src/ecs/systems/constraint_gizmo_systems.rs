@@ -1,8 +1,6 @@
-use crate::animation::{
-    BoneId, ConstraintType, Skeleton,
-};
-use crate::ecs::component::{ColorVertex, LineMesh};
+use crate::animation::{BoneId, ConstraintType, Skeleton};
 use crate::ecs::component::ConstraintSet;
+use crate::ecs::component::{ColorVertex, LineMesh};
 use crate::ecs::systems::bone_gizmo_systems::compute_display_transforms;
 
 use cgmath::Matrix4;
@@ -33,11 +31,8 @@ pub fn build_constraint_gizmo_mesh(
         return;
     }
 
-    let display_positions = compute_display_transforms(
-        global_transforms,
-        bone_local_offsets,
-        mesh_scale,
-    );
+    let display_positions =
+        compute_display_transforms(global_transforms, bone_local_offsets, mesh_scale);
 
     for entry in super::constraint_set_systems::constraint_set_enabled(constraint_set) {
         match &entry.constraint {
@@ -102,11 +97,8 @@ fn append_position_constraint_lines(
     display_positions: &[[f32; 3]],
     mesh: &mut LineMesh,
 ) {
-    let (from, to) = match resolve_bone_positions(
-        constrained_bone,
-        target_bone,
-        display_positions,
-    ) {
+    let (from, to) = match resolve_bone_positions(constrained_bone, target_bone, display_positions)
+    {
         Some(pair) => pair,
         None => return,
     };
@@ -120,11 +112,8 @@ fn append_rotation_constraint_lines(
     display_positions: &[[f32; 3]],
     mesh: &mut LineMesh,
 ) {
-    let (from, to) = match resolve_bone_positions(
-        constrained_bone,
-        target_bone,
-        display_positions,
-    ) {
+    let (from, to) = match resolve_bone_positions(constrained_bone, target_bone, display_positions)
+    {
         Some(pair) => pair,
         None => return,
     };
@@ -138,11 +127,8 @@ fn append_scale_constraint_lines(
     display_positions: &[[f32; 3]],
     mesh: &mut LineMesh,
 ) {
-    let (from, to) = match resolve_bone_positions(
-        constrained_bone,
-        target_bone,
-        display_positions,
-    ) {
+    let (from, to) = match resolve_bone_positions(constrained_bone, target_bone, display_positions)
+    {
         Some(pair) => pair,
         None => return,
     };
@@ -178,11 +164,7 @@ fn append_aim_constraint_lines(
     display_positions: &[[f32; 3]],
     mesh: &mut LineMesh,
 ) {
-    let (from, to) = match resolve_bone_positions(
-        source_bone,
-        target_bone,
-        display_positions,
-    ) {
+    let (from, to) = match resolve_bone_positions(source_bone, target_bone, display_positions) {
         Some(pair) => pair,
         None => return,
     };
@@ -200,18 +182,12 @@ fn append_ik_constraint_lines(
     skeleton: &Skeleton,
     mesh: &mut LineMesh,
 ) {
-    let chain = collect_ik_chain(
-        effector_bone,
-        chain_length,
-        skeleton,
-    );
+    let chain = collect_ik_chain(effector_bone, chain_length, skeleton);
 
     for window in chain.windows(2) {
         let from_idx = window[0] as usize;
         let to_idx = window[1] as usize;
-        if from_idx >= display_positions.len()
-            || to_idx >= display_positions.len()
-        {
+        if from_idx >= display_positions.len() || to_idx >= display_positions.len() {
             continue;
         }
         append_solid_line(
@@ -224,9 +200,7 @@ fn append_ik_constraint_lines(
 
     let effector_idx = effector_bone as usize;
     let target_idx = target_bone as usize;
-    if effector_idx < display_positions.len()
-        && target_idx < display_positions.len()
-    {
+    if effector_idx < display_positions.len() && target_idx < display_positions.len() {
         append_dashed_line(
             mesh,
             display_positions[effector_idx],
@@ -241,9 +215,7 @@ fn append_ik_constraint_lines(
         if let Some(mid) = mid_bone {
             let mid_idx = mid as usize;
             let pole_idx = pole_bone as usize;
-            if mid_idx < display_positions.len()
-                && pole_idx < display_positions.len()
-            {
+            if mid_idx < display_positions.len() && pole_idx < display_positions.len() {
                 append_dashed_line(
                     mesh,
                     display_positions[mid_idx],
@@ -256,11 +228,7 @@ fn append_ik_constraint_lines(
     }
 }
 
-fn collect_ik_chain(
-    effector_bone: BoneId,
-    chain_length: u32,
-    skeleton: &Skeleton,
-) -> Vec<BoneId> {
+fn collect_ik_chain(effector_bone: BoneId, chain_length: u32, skeleton: &Skeleton) -> Vec<BoneId> {
     let mut chain = vec![effector_bone];
     let mut current = effector_bone;
 
@@ -300,9 +268,7 @@ fn resolve_bone_positions(
     let idx_a = bone_a as usize;
     let idx_b = bone_b as usize;
 
-    if idx_a >= display_positions.len()
-        || idx_b >= display_positions.len()
-    {
+    if idx_a >= display_positions.len() || idx_b >= display_positions.len() {
         return None;
     }
 
@@ -333,12 +299,7 @@ fn append_dashed_line(
     }
 }
 
-fn append_solid_line(
-    mesh: &mut LineMesh,
-    from: [f32; 3],
-    to: [f32; 3],
-    color: [f32; 3],
-) {
+fn append_solid_line(mesh: &mut LineMesh, from: [f32; 3], to: [f32; 3], color: [f32; 3]) {
     let base = mesh.vertices.len() as u32;
     mesh.vertices.push(ColorVertex { pos: from, color });
     mesh.vertices.push(ColorVertex { pos: to, color });

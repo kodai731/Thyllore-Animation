@@ -1,7 +1,6 @@
 use crate::animation::{
-    AimConstraintData, BoneId, ConstraintType, IkConstraintData,
-    ParentConstraintData, PositionConstraintData, RotationConstraintData,
-    ScaleConstraintData,
+    AimConstraintData, BoneId, ConstraintType, IkConstraintData, ParentConstraintData,
+    PositionConstraintData, RotationConstraintData, ScaleConstraintData,
 };
 use crate::log;
 use anyhow::{Context, Result};
@@ -128,9 +127,7 @@ fn ufbx_matrix_to_cgmath(m: &ufbx::Matrix) -> Matrix4<f32> {
     )
 }
 
-fn decompose_transform(
-    m: &Matrix4<f32>,
-) -> ([f32; 3], Quaternion<f32>, [f32; 3]) {
+fn decompose_transform(m: &Matrix4<f32>) -> ([f32; 3], Quaternion<f32>, [f32; 3]) {
     let translation = [m[3][0], m[3][1], m[3][2]];
 
     let sx = (m[0][0] * m[0][0] + m[0][1] * m[0][1] + m[0][2] * m[0][2]).sqrt();
@@ -155,36 +152,16 @@ fn decompose_transform(
     let trace = r00 + r11 + r22;
     let rotation = if trace > 0.0 {
         let s = 0.5 / (trace + 1.0).sqrt();
-        Quaternion::new(
-            0.25 / s,
-            (r12 - r21) * s,
-            (r20 - r02) * s,
-            (r01 - r10) * s,
-        )
+        Quaternion::new(0.25 / s, (r12 - r21) * s, (r20 - r02) * s, (r01 - r10) * s)
     } else if r00 > r11 && r00 > r22 {
         let s = 2.0 * (1.0 + r00 - r11 - r22).sqrt();
-        Quaternion::new(
-            (r12 - r21) / s,
-            0.25 * s,
-            (r10 + r01) / s,
-            (r20 + r02) / s,
-        )
+        Quaternion::new((r12 - r21) / s, 0.25 * s, (r10 + r01) / s, (r20 + r02) / s)
     } else if r11 > r22 {
         let s = 2.0 * (1.0 + r11 - r00 - r22).sqrt();
-        Quaternion::new(
-            (r20 - r02) / s,
-            (r10 + r01) / s,
-            0.25 * s,
-            (r12 + r21) / s,
-        )
+        Quaternion::new((r20 - r02) / s, (r10 + r01) / s, 0.25 * s, (r12 + r21) / s)
     } else {
         let s = 2.0 * (1.0 + r22 - r00 - r11).sqrt();
-        Quaternion::new(
-            (r01 - r10) / s,
-            (r20 + r02) / s,
-            (r12 + r21) / s,
-            0.25 * s,
-        )
+        Quaternion::new((r01 - r10) / s, (r20 + r02) / s, (r12 + r21) / s, 0.25 * s)
     };
 
     (translation, rotation, scale)
@@ -229,8 +206,7 @@ pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
 
     for (mesh_idx, ufbx_mesh) in scene.meshes.iter().enumerate() {
         let typed_id = ufbx_mesh.element.typed_id as usize;
-        let parts =
-            extract_mesh_data_by_material(ufbx_mesh, unit_scale);
+        let parts = extract_mesh_data_by_material(ufbx_mesh, unit_scale);
 
         for (fbx_data, vertex_map) in parts {
             split_infos.push(MeshSplitInfo {
@@ -253,14 +229,9 @@ pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
     extract_animations(&scene, &mut fbx_model, unit_scale);
 
     let bone_name_to_id = build_bone_name_to_id(&fbx_model.nodes);
-    fbx_model.constraints =
-        extract_constraints(&scene, &bone_name_to_id);
+    fbx_model.constraints = extract_constraints(&scene, &bone_name_to_id);
 
-    assign_mesh_parent_nodes(
-        &mut fbx_model,
-        &mesh_to_node,
-        &split_infos,
-    );
+    assign_mesh_parent_nodes(&mut fbx_model, &mesh_to_node, &split_infos);
 
     log!(
         "=== FBX loading complete: {} meshes, {} animations, {} constraints ===",
@@ -306,8 +277,7 @@ fn extract_mesh_data_by_material(
     unit_scale: f32,
 ) -> Vec<(FbxData, HashMap<u32, u32>)> {
     let num_materials = mesh.materials.len().max(1);
-    let mut parts: Vec<MaterialPart> =
-        (0..num_materials).map(|_| MaterialPart::new()).collect();
+    let mut parts: Vec<MaterialPart> = (0..num_materials).map(|_| MaterialPart::new()).collect();
 
     let max_tris = mesh.max_face_triangles;
     let mut tri_indices = vec![0u32; max_tris * 3];
@@ -329,8 +299,7 @@ fn extract_mesh_data_by_material(
             let uidx = idx as usize;
             let ctrl_idx = mesh.vertex_indices[uidx];
             let next_id = part.vertex_map.len() as u32;
-            let mapped =
-                *part.vertex_map.entry(ctrl_idx).or_insert(next_id);
+            let mapped = *part.vertex_map.entry(ctrl_idx).or_insert(next_id);
 
             if mapped == next_id {
                 let pos = mesh.vertex_position[uidx];
@@ -344,9 +313,7 @@ fn extract_mesh_data_by_material(
 
                 if mesh.vertex_normal.exists {
                     let n = mesh.vertex_normal[uidx];
-                    let normal = Vector3::new(
-                        n.x as f32, n.y as f32, n.z as f32,
-                    );
+                    let normal = Vector3::new(n.x as f32, n.y as f32, n.z as f32);
                     part.normals.push(normal);
                     part.local_normals.push(normal);
                 } else {
@@ -356,10 +323,7 @@ fn extract_mesh_data_by_material(
 
                 if mesh.vertex_uv.exists {
                     let uv = mesh.vertex_uv[uidx];
-                    part.tex_coords.push([
-                        uv.x as f32,
-                        1.0 - uv.y as f32,
-                    ]);
+                    part.tex_coords.push([uv.x as f32, 1.0 - uv.y as f32]);
                 } else {
                     part.tex_coords.push([0.5, 0.5]);
                 }
@@ -386,10 +350,8 @@ fn extract_mesh_data_by_material(
 
         if mat_idx < mesh.materials.len() {
             let mat = &mesh.materials[mat_idx];
-            fbx_data.material_name =
-                Some(mat.element.name.to_string());
-            fbx_data.diffuse_texture =
-                extract_texture_path(mat);
+            fbx_data.material_name = Some(mat.element.name.to_string());
+            fbx_data.diffuse_texture = extract_texture_path(mat);
         }
 
         results.push((fbx_data, part.vertex_map));
@@ -437,15 +399,12 @@ fn extract_skin_data(
                 .map(|n| n.element.name.to_string())
                 .unwrap_or_else(|| "Unknown".to_string());
 
-            let mut geometry_to_bone =
-                ufbx_matrix_to_cgmath(&cluster.geometry_to_bone);
+            let mut geometry_to_bone = ufbx_matrix_to_cgmath(&cluster.geometry_to_bone);
             geometry_to_bone[3][0] *= unit_scale;
             geometry_to_bone[3][1] *= unit_scale;
             geometry_to_bone[3][2] *= unit_scale;
 
-            let transform_link = geometry_to_bone
-                .invert()
-                .unwrap_or(Matrix4::identity());
+            let transform_link = geometry_to_bone.invert().unwrap_or(Matrix4::identity());
 
             for (fbx_idx, info) in split_infos.iter().enumerate() {
                 if info.ufbx_mesh_typed_id != typed_id {
@@ -459,41 +418,30 @@ fn extract_skin_data(
                     let ctrl_idx = cluster.vertices[i];
                     let weight = cluster.weights[i] as f32;
 
-                    if let Some(&mapped) =
-                        info.vertex_map.get(&ctrl_idx)
-                    {
+                    if let Some(&mapped) = info.vertex_map.get(&ctrl_idx) {
                         vertex_indices.push(mapped as usize);
                         vertex_weights.push(weight);
                     }
                 }
 
                 if !vertex_indices.is_empty() {
-                    fbx_model.fbx_data[fbx_idx].clusters.push(
-                        ClusterInfo {
-                            bone_name: bone_name.clone(),
-                            transform: Matrix4::identity(),
-                            transform_link,
-                            inverse_bind_pose: geometry_to_bone,
-                            vertex_indices,
-                            vertex_weights,
-                        },
-                    );
+                    fbx_model.fbx_data[fbx_idx].clusters.push(ClusterInfo {
+                        bone_name: bone_name.clone(),
+                        transform: Matrix4::identity(),
+                        transform_link,
+                        inverse_bind_pose: geometry_to_bone,
+                        vertex_indices,
+                        vertex_weights,
+                    });
                 }
             }
         }
 
-        log!(
-            "Extracted skin data for mesh typed_id={}",
-            typed_id
-        );
+        log!("Extracted skin data for mesh typed_id={}", typed_id);
     }
 }
 
-fn build_bone_hierarchy(
-    scene: &ufbx::Scene,
-    fbx_model: &mut FbxModel,
-    unit_scale: f32,
-) {
+fn build_bone_hierarchy(scene: &ufbx::Scene, fbx_model: &mut FbxModel, unit_scale: f32) {
     for node in &scene.nodes {
         if node.is_root {
             continue;
@@ -506,8 +454,7 @@ fn build_bone_hierarchy(
             .filter(|p| !p.is_root)
             .map(|p| p.element.name.to_string());
 
-        let mut local_transform =
-            ufbx_matrix_to_cgmath(&node.node_to_parent);
+        let mut local_transform = ufbx_matrix_to_cgmath(&node.node_to_parent);
         local_transform[3][0] *= unit_scale;
         local_transform[3][1] *= unit_scale;
         local_transform[3][2] *= unit_scale;
@@ -527,10 +474,7 @@ fn build_bone_hierarchy(
         fbx_model.nodes.insert(name, bone_node);
     }
 
-    log!(
-        "Built bone hierarchy with {} nodes",
-        fbx_model.nodes.len()
-    );
+    log!("Built bone hierarchy with {} nodes", fbx_model.nodes.len());
 }
 
 fn build_mesh_node_mapping(scene: &ufbx::Scene) -> HashMap<usize, String> {
@@ -547,11 +491,7 @@ fn build_mesh_node_mapping(scene: &ufbx::Scene) -> HashMap<usize, String> {
     mesh_to_node
 }
 
-fn extract_animations(
-    scene: &ufbx::Scene,
-    fbx_model: &mut FbxModel,
-    unit_scale: f32,
-) {
+fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel, unit_scale: f32) {
     for anim_stack in &scene.anim_stacks {
         let anim_name = anim_stack.element.name.to_string();
         let anim_name = if anim_name.is_empty() {
@@ -563,8 +503,7 @@ fn extract_animations(
         log!("Processing AnimStack: {}", anim_name);
 
         let bake_opts = ufbx::BakeOpts::default();
-        let baked = match ufbx::bake_anim(scene, &anim_stack.anim, bake_opts)
-        {
+        let baked = match ufbx::bake_anim(scene, &anim_stack.anim, bake_opts) {
             Ok(b) => b,
             Err(e) => {
                 log!(
@@ -576,8 +515,7 @@ fn extract_animations(
             }
         };
 
-        let duration =
-            (anim_stack.time_end - anim_stack.time_begin) as f32;
+        let duration = (anim_stack.time_end - anim_stack.time_begin) as f32;
 
         let mut bone_animations = HashMap::new();
 
@@ -625,17 +563,12 @@ fn extract_animations(
                 .iter()
                 .map(|k| KeyFrame {
                     time: k.time as f32,
-                    value: [
-                        k.value.x as f32,
-                        k.value.y as f32,
-                        k.value.z as f32,
-                    ],
+                    value: [k.value.x as f32, k.value.y as f32, k.value.z as f32],
                 })
                 .collect();
 
-            let has_keys = translation_keys.len() > 1
-                || rotation_keys.len() > 1
-                || scale_keys.len() > 1;
+            let has_keys =
+                translation_keys.len() > 1 || rotation_keys.len() > 1 || scale_keys.len() > 1;
 
             if has_keys {
                 bone_animations.insert(
@@ -665,9 +598,7 @@ fn extract_animations(
     }
 }
 
-fn build_bone_name_to_id(
-    nodes: &HashMap<String, BoneNode>,
-) -> HashMap<String, u32> {
+fn build_bone_name_to_id(nodes: &HashMap<String, BoneNode>) -> HashMap<String, u32> {
     let mut name_to_id = HashMap::new();
     let mut sorted_names: Vec<&String> = nodes.keys().collect();
     sorted_names.sort();
@@ -686,10 +617,7 @@ fn extract_constraints(
     let mut result = Vec::new();
 
     for constraint in &scene.constraints {
-        let constrained_bone_name = constraint
-            .node
-            .as_ref()
-            .map(|n| n.element.name.to_string());
+        let constrained_bone_name = constraint.node.as_ref().map(|n| n.element.name.to_string());
 
         let constrained_bone_id = constrained_bone_name
             .as_ref()
@@ -702,8 +630,7 @@ fn extract_constraints(
 
         let loaded = match constraint.type_ {
             ufbx::ConstraintType::Position => {
-                let target_bone_id =
-                    resolve_first_target(constraint, bone_name_to_id);
+                let target_bone_id = resolve_first_target(constraint, bone_name_to_id);
 
                 let affect_axes = [
                     constraint.constrain_translation[0],
@@ -712,26 +639,21 @@ fn extract_constraints(
                 ];
 
                 Some(LoadedConstraint {
-                    constraint_type: ConstraintType::Position(
-                        PositionConstraintData {
-                            constrained_bone: constrained_bone_id,
-                            target_bone: target_bone_id,
-                            offset: Vector3::new(0.0, 0.0, 0.0),
-                            affect_axes,
-                            enabled,
-                            weight,
-                        },
-                    ),
-                    priority: ConstraintType::Position(
-                        PositionConstraintData::default(),
-                    )
-                    .default_priority(),
+                    constraint_type: ConstraintType::Position(PositionConstraintData {
+                        constrained_bone: constrained_bone_id,
+                        target_bone: target_bone_id,
+                        offset: Vector3::new(0.0, 0.0, 0.0),
+                        affect_axes,
+                        enabled,
+                        weight,
+                    }),
+                    priority: ConstraintType::Position(PositionConstraintData::default())
+                        .default_priority(),
                 })
             }
 
             ufbx::ConstraintType::Rotation => {
-                let target_bone_id =
-                    resolve_first_target(constraint, bone_name_to_id);
+                let target_bone_id = resolve_first_target(constraint, bone_name_to_id);
 
                 let affect_axes = [
                     constraint.constrain_rotation[0],
@@ -740,26 +662,21 @@ fn extract_constraints(
                 ];
 
                 Some(LoadedConstraint {
-                    constraint_type: ConstraintType::Rotation(
-                        RotationConstraintData {
-                            constrained_bone: constrained_bone_id,
-                            target_bone: target_bone_id,
-                            offset: Quaternion::new(1.0, 0.0, 0.0, 0.0),
-                            affect_axes,
-                            enabled,
-                            weight,
-                        },
-                    ),
-                    priority: ConstraintType::Rotation(
-                        RotationConstraintData::default(),
-                    )
-                    .default_priority(),
+                    constraint_type: ConstraintType::Rotation(RotationConstraintData {
+                        constrained_bone: constrained_bone_id,
+                        target_bone: target_bone_id,
+                        offset: Quaternion::new(1.0, 0.0, 0.0, 0.0),
+                        affect_axes,
+                        enabled,
+                        weight,
+                    }),
+                    priority: ConstraintType::Rotation(RotationConstraintData::default())
+                        .default_priority(),
                 })
             }
 
             ufbx::ConstraintType::Scale => {
-                let target_bone_id =
-                    resolve_first_target(constraint, bone_name_to_id);
+                let target_bone_id = resolve_first_target(constraint, bone_name_to_id);
 
                 let affect_axes = [
                     constraint.constrain_scale[0],
@@ -768,20 +685,16 @@ fn extract_constraints(
                 ];
 
                 Some(LoadedConstraint {
-                    constraint_type: ConstraintType::Scale(
-                        ScaleConstraintData {
-                            constrained_bone: constrained_bone_id,
-                            target_bone: target_bone_id,
-                            offset: Vector3::new(1.0, 1.0, 1.0),
-                            affect_axes,
-                            enabled,
-                            weight,
-                        },
-                    ),
-                    priority: ConstraintType::Scale(
-                        ScaleConstraintData::default(),
-                    )
-                    .default_priority(),
+                    constraint_type: ConstraintType::Scale(ScaleConstraintData {
+                        constrained_bone: constrained_bone_id,
+                        target_bone: target_bone_id,
+                        offset: Vector3::new(1.0, 1.0, 1.0),
+                        affect_axes,
+                        enabled,
+                        weight,
+                    }),
+                    priority: ConstraintType::Scale(ScaleConstraintData::default())
+                        .default_priority(),
                 })
             }
 
@@ -791,39 +704,26 @@ fn extract_constraints(
                     .iter()
                     .filter_map(|t| {
                         let name = t.node.element.name.to_string();
-                        bone_name_to_id
-                            .get(&name)
-                            .map(|&id| (id, t.weight as f32))
+                        bone_name_to_id.get(&name).map(|&id| (id, t.weight as f32))
                     })
                     .collect();
 
                 Some(LoadedConstraint {
-                    constraint_type: ConstraintType::Parent(
-                        ParentConstraintData {
-                            constrained_bone: constrained_bone_id,
-                            sources,
-                            affect_translation: constraint
-                                .constrain_translation
-                                .iter()
-                                .any(|&v| v),
-                            affect_rotation: constraint
-                                .constrain_rotation
-                                .iter()
-                                .any(|&v| v),
-                            enabled,
-                            weight,
-                        },
-                    ),
-                    priority: ConstraintType::Parent(
-                        ParentConstraintData::default(),
-                    )
-                    .default_priority(),
+                    constraint_type: ConstraintType::Parent(ParentConstraintData {
+                        constrained_bone: constrained_bone_id,
+                        sources,
+                        affect_translation: constraint.constrain_translation.iter().any(|&v| v),
+                        affect_rotation: constraint.constrain_rotation.iter().any(|&v| v),
+                        enabled,
+                        weight,
+                    }),
+                    priority: ConstraintType::Parent(ParentConstraintData::default())
+                        .default_priority(),
                 })
             }
 
             ufbx::ConstraintType::Aim => {
-                let target_bone_id =
-                    resolve_first_target(constraint, bone_name_to_id);
+                let target_bone_id = resolve_first_target(constraint, bone_name_to_id);
 
                 let aim_axis = Vector3::new(
                     constraint.aim_vector.x as f32,
@@ -840,43 +740,29 @@ fn extract_constraints(
                 let up_target = constraint
                     .aim_up_node
                     .as_ref()
-                    .and_then(|n| {
-                        bone_name_to_id
-                            .get(&n.element.name.to_string())
-                            .copied()
-                    });
+                    .and_then(|n| bone_name_to_id.get(&n.element.name.to_string()).copied());
 
                 Some(LoadedConstraint {
-                    constraint_type: ConstraintType::Aim(
-                        AimConstraintData {
-                            source_bone: constrained_bone_id,
-                            target_bone: target_bone_id,
-                            aim_axis,
-                            up_axis,
-                            up_target,
-                            enabled,
-                            weight,
-                        },
-                    ),
-                    priority: ConstraintType::Aim(
-                        AimConstraintData::default(),
-                    )
-                    .default_priority(),
+                    constraint_type: ConstraintType::Aim(AimConstraintData {
+                        source_bone: constrained_bone_id,
+                        target_bone: target_bone_id,
+                        aim_axis,
+                        up_axis,
+                        up_target,
+                        enabled,
+                        weight,
+                    }),
+                    priority: ConstraintType::Aim(AimConstraintData::default()).default_priority(),
                 })
             }
 
             ufbx::ConstraintType::SingleChainIk => {
-                let target_bone_id =
-                    resolve_first_target(constraint, bone_name_to_id);
+                let target_bone_id = resolve_first_target(constraint, bone_name_to_id);
 
                 let effector_bone = constraint
                     .ik_effector
                     .as_ref()
-                    .and_then(|n| {
-                        bone_name_to_id
-                            .get(&n.element.name.to_string())
-                            .copied()
-                    })
+                    .and_then(|n| bone_name_to_id.get(&n.element.name.to_string()).copied())
                     .unwrap_or(constrained_bone_id);
 
                 let pole_vector = Vector3::new(
@@ -885,34 +771,25 @@ fn extract_constraints(
                     constraint.ik_pole_vector.z as f32,
                 );
 
-                let chain_length =
-                    compute_ik_chain_length(constraint, scene);
+                let chain_length = compute_ik_chain_length(constraint, scene);
 
                 Some(LoadedConstraint {
-                    constraint_type: ConstraintType::Ik(
-                        IkConstraintData {
-                            chain_length,
-                            target_bone: target_bone_id,
-                            effector_bone,
-                            pole_vector: Some(pole_vector),
-                            pole_target: None,
-                            twist: 0.0,
-                            enabled,
-                            weight,
-                        },
-                    ),
-                    priority: ConstraintType::Ik(
-                        IkConstraintData::default(),
-                    )
-                    .default_priority(),
+                    constraint_type: ConstraintType::Ik(IkConstraintData {
+                        chain_length,
+                        target_bone: target_bone_id,
+                        effector_bone,
+                        pole_vector: Some(pole_vector),
+                        pole_target: None,
+                        twist: 0.0,
+                        enabled,
+                        weight,
+                    }),
+                    priority: ConstraintType::Ik(IkConstraintData::default()).default_priority(),
                 })
             }
 
             _ => {
-                log!(
-                    "Unsupported constraint type: {}",
-                    constraint.type_name
-                );
+                log!("Unsupported constraint type: {}", constraint.type_name);
                 None
             }
         };
@@ -945,10 +822,7 @@ fn resolve_first_target(
         .unwrap_or(0)
 }
 
-fn compute_ik_chain_length(
-    constraint: &ufbx::Constraint,
-    scene: &ufbx::Scene,
-) -> u32 {
+fn compute_ik_chain_length(constraint: &ufbx::Constraint, scene: &ufbx::Scene) -> u32 {
     let effector = match &constraint.ik_effector {
         Some(n) => n,
         None => return 2,
@@ -983,27 +857,22 @@ fn assign_mesh_parent_nodes(
     split_infos: &[MeshSplitInfo],
 ) {
     let has_animations = !fbx_model.animations.is_empty();
-    let animated_nodes: std::collections::HashSet<String> =
-        if has_animations {
-            fbx_model.animations[0]
-                .bone_animations
-                .keys()
-                .cloned()
-                .collect()
-        } else {
-            std::collections::HashSet::new()
-        };
+    let animated_nodes: std::collections::HashSet<String> = if has_animations {
+        fbx_model.animations[0]
+            .bone_animations
+            .keys()
+            .cloned()
+            .collect()
+    } else {
+        std::collections::HashSet::new()
+    };
 
-    for (fbx_idx, fbx_data) in
-        fbx_model.fbx_data.iter_mut().enumerate()
-    {
+    for (fbx_idx, fbx_data) in fbx_model.fbx_data.iter_mut().enumerate() {
         if !fbx_data.clusters.is_empty() {
             continue;
         }
 
-        let ufbx_id = split_infos
-            .get(fbx_idx)
-            .map(|info| info.ufbx_mesh_typed_id);
+        let ufbx_id = split_infos.get(fbx_idx).map(|info| info.ufbx_mesh_typed_id);
 
         if let Some(id) = ufbx_id {
             if let Some(node_name) = mesh_to_node.get(&id) {
@@ -1093,10 +962,7 @@ mod tests {
         let mut data = FbxData::new();
         data.diffuse_texture = Some("texture.png".to_string());
 
-        assert_eq!(
-            data.diffuse_texture,
-            Some("texture.png".to_string())
-        );
+        assert_eq!(data.diffuse_texture, Some("texture.png".to_string()));
     }
 
     #[test]

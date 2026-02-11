@@ -260,7 +260,9 @@ impl RRCompositeDescriptorSet {
             selection_ubo_write,
         ];
 
-        rrdevice.device.update_descriptor_sets(&writes, &[] as &[vk::CopyDescriptorSet]);
+        rrdevice
+            .device
+            .update_descriptor_sets(&writes, &[] as &[vk::CopyDescriptorSet]);
 
         Ok(())
     }

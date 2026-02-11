@@ -105,8 +105,11 @@ impl PropertyCurve {
     }
 
     fn sort_keyframes(&mut self) {
-        self.keyframes
-            .sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap_or(std::cmp::Ordering::Equal));
+        self.keyframes.sort_by(|a, b| {
+            a.time
+                .partial_cmp(&b.time)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
     }
 
     pub fn sample(&self, time: f32) -> Option<f32> {

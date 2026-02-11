@@ -1,35 +1,22 @@
 use cgmath::Deg;
 
-use crate::ecs::resource::{
-    Camera, Exposure, PhysicalCameraParameters,
-};
+use crate::ecs::resource::{Camera, Exposure, PhysicalCameraParameters};
 
-pub fn compute_fov_from_physical_params(
-    params: &PhysicalCameraParameters,
-) -> Deg<f32> {
-    let half_angle = (params.sensor_height_mm
-        / (2.0 * params.focal_length_mm))
-        .atan();
+pub fn compute_fov_from_physical_params(params: &PhysicalCameraParameters) -> Deg<f32> {
+    let half_angle = (params.sensor_height_mm / (2.0 * params.focal_length_mm)).atan();
     Deg(half_angle.to_degrees() * 2.0)
 }
 
-pub fn compute_ev100_from_physical_params(
-    params: &PhysicalCameraParameters,
-) -> f32 {
-    let aperture_sq =
-        params.aperture_f_stops * params.aperture_f_stops;
-    (aperture_sq / params.shutter_speed_s).log2()
-        - (params.sensitivity_iso / 100.0).log2()
+pub fn compute_ev100_from_physical_params(params: &PhysicalCameraParameters) -> f32 {
+    let aperture_sq = params.aperture_f_stops * params.aperture_f_stops;
+    (aperture_sq / params.shutter_speed_s).log2() - (params.sensitivity_iso / 100.0).log2()
 }
 
 pub fn compute_exposure_value(ev100: f32) -> f32 {
     1.0 / (2.0_f32.powf(ev100) * 1.2)
 }
 
-pub fn update_camera_from_physical_params(
-    camera: &mut Camera,
-    params: &PhysicalCameraParameters,
-) {
+pub fn update_camera_from_physical_params(camera: &mut Camera, params: &PhysicalCameraParameters) {
     camera.fov_y = compute_fov_from_physical_params(params);
 }
 
@@ -37,10 +24,8 @@ pub fn update_exposure_from_physical_params(
     exposure: &mut Exposure,
     params: &PhysicalCameraParameters,
 ) {
-    exposure.ev100 =
-        compute_ev100_from_physical_params(params);
-    exposure.exposure_value =
-        compute_exposure_value(exposure.ev100);
+    exposure.ev100 = compute_ev100_from_physical_params(params);
+    exposure.exposure_value = compute_exposure_value(exposure.ev100);
 }
 
 #[cfg(test)]
@@ -55,8 +40,7 @@ mod tests {
             ..Default::default()
         };
         let fov = compute_fov_from_physical_params(&params);
-        let expected = 2.0
-            * (24.0_f32 / (2.0 * 35.0)).atan().to_degrees();
+        let expected = 2.0 * (24.0_f32 / (2.0 * 35.0)).atan().to_degrees();
         assert!(
             (fov.0 - expected).abs() < 0.01,
             "FOV was {} but expected {}",
@@ -73,8 +57,7 @@ mod tests {
             ..Default::default()
         };
         let fov = compute_fov_from_physical_params(&params);
-        let expected = 2.0
-            * (24.0_f32 / (2.0 * 50.0)).atan().to_degrees();
+        let expected = 2.0 * (24.0_f32 / (2.0 * 50.0)).atan().to_degrees();
         assert!(
             (fov.0 - expected).abs() < 0.01,
             "FOV was {} but expected {}",
@@ -91,10 +74,8 @@ mod tests {
             sensitivity_iso: 100.0,
             ..Default::default()
         };
-        let ev100 =
-            compute_ev100_from_physical_params(&params);
-        let expected =
-            (16.0_f32 * 16.0 / (1.0 / 100.0)).log2();
+        let ev100 = compute_ev100_from_physical_params(&params);
+        let expected = (16.0_f32 * 16.0 / (1.0 / 100.0)).log2();
         assert!(
             (ev100 - expected).abs() < 0.1,
             "EV100 was {} but expected ~{}",
@@ -107,8 +88,7 @@ mod tests {
     fn test_exposure_value_calculation() {
         let ev100 = 9.7_f32;
         let exposure = compute_exposure_value(ev100);
-        let expected =
-            1.0 / (2.0_f32.powf(9.7) * 1.2);
+        let expected = 1.0 / (2.0_f32.powf(9.7) * 1.2);
         assert!(
             (exposure - expected).abs() < 1e-6,
             "Exposure was {} but expected {}",
@@ -141,33 +121,19 @@ mod tests {
             sensor_height_mm: 24.0,
             ..Default::default()
         };
-        update_camera_from_physical_params(
-            &mut camera, &params,
-        );
-        let expected_fov =
-            compute_fov_from_physical_params(&params);
-        assert!(
-            (camera.fov_y.0 - expected_fov.0).abs() < 0.01
-        );
+        update_camera_from_physical_params(&mut camera, &params);
+        let expected_fov = compute_fov_from_physical_params(&params);
+        assert!((camera.fov_y.0 - expected_fov.0).abs() < 0.01);
     }
 
     #[test]
     fn test_update_exposure_from_physical_params() {
         let mut exposure = Exposure::default();
         let params = PhysicalCameraParameters::default();
-        update_exposure_from_physical_params(
-            &mut exposure, &params,
-        );
-        let expected_ev100 =
-            compute_ev100_from_physical_params(&params);
-        assert!(
-            (exposure.ev100 - expected_ev100).abs() < 0.01
-        );
-        let expected_val =
-            compute_exposure_value(expected_ev100);
-        assert!(
-            (exposure.exposure_value - expected_val).abs()
-                < 1e-6
-        );
+        update_exposure_from_physical_params(&mut exposure, &params);
+        let expected_ev100 = compute_ev100_from_physical_params(&params);
+        assert!((exposure.ev100 - expected_ev100).abs() < 0.01);
+        let expected_val = compute_exposure_value(expected_ev100);
+        assert!((exposure.exposure_value - expected_val).abs() < 1e-6);
     }
 }

@@ -61,7 +61,13 @@ impl RRDofDescriptorSet {
         let descriptor_sets = rrdevice.device.allocate_descriptor_sets(&alloc_info)?;
         self.descriptor_set = descriptor_sets[0];
 
-        self.update_image_views(rrdevice, hdr_image_view, hdr_sampler, depth_image_view, depth_sampler);
+        self.update_image_views(
+            rrdevice,
+            hdr_image_view,
+            hdr_sampler,
+            depth_image_view,
+            depth_sampler,
+        );
 
         Ok(())
     }

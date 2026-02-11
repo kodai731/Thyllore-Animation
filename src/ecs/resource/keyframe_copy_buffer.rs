@@ -1,6 +1,4 @@
-use crate::animation::editable::{
-    BezierHandle, InterpolationType, PropertyType, SourceClipId,
-};
+use crate::animation::editable::{BezierHandle, InterpolationType, PropertyType, SourceClipId};
 use crate::animation::BoneId;
 
 #[derive(Clone, Debug)]

@@ -98,11 +98,7 @@ impl EditableAnimationClip {
                 });
             }
 
-            let rotation_curves = [
-                &track.rotation_x,
-                &track.rotation_y,
-                &track.rotation_z,
-            ];
+            let rotation_curves = [&track.rotation_x, &track.rotation_y, &track.rotation_z];
             let rotation_times = collect_bake_times(&rotation_curves);
             for time in rotation_times {
                 let ex = track.rotation_x.sample(time).unwrap_or(0.0);
@@ -110,14 +106,10 @@ impl EditableAnimationClip {
                 let ez = track.rotation_z.sample(time).unwrap_or(0.0);
                 let q = euler_degrees_to_quaternion(ex, ey, ez);
 
-                channel.rotation.push(Keyframe {
-                    time,
-                    value: q,
-                });
+                channel.rotation.push(Keyframe { time, value: q });
             }
 
-            let scale_curves =
-                [&track.scale_x, &track.scale_y, &track.scale_z];
+            let scale_curves = [&track.scale_x, &track.scale_y, &track.scale_z];
             let scale_times = collect_bake_times(&scale_curves);
             for time in scale_times {
                 let x = track.scale_x.sample(time).unwrap_or(1.0);
@@ -187,15 +179,24 @@ impl EditableAnimationClip {
         self.duration = max_time;
     }
 
+    pub fn remap_bone_ids(&mut self, name_to_new_id: &HashMap<String, BoneId>) {
+        let old_tracks: Vec<(BoneId, BoneTrack)> = self.tracks.drain().collect();
+        for (_, mut track) in old_tracks {
+            let new_id = match name_to_new_id.get(&track.bone_name) {
+                Some(&id) => id,
+                None => continue,
+            };
+            track.bone_id = new_id;
+            self.tracks.insert(new_id, track);
+        }
+    }
+
     pub fn track_count(&self) -> usize {
         self.tracks.len()
     }
 
     pub fn total_keyframe_count(&self) -> usize {
-        self.tracks
-            .values()
-            .map(|t| t.total_keyframe_count())
-            .sum()
+        self.tracks.values().map(|t| t.total_keyframe_count()).sum()
     }
 }
 
@@ -211,9 +212,7 @@ fn collect_unique_times(curves: &[&PropertyCurve]) -> Vec<f32> {
 }
 
 fn collect_bake_times(curves: &[&PropertyCurve]) -> Vec<f32> {
-    let has_bezier = curves
-        .iter()
-        .any(|c| c.has_bezier_keyframes());
+    let has_bezier = curves.iter().any(|c| c.has_bezier_keyframes());
 
     if !has_bezier {
         return collect_unique_times(curves);
@@ -246,7 +245,7 @@ fn collect_bake_times(curves: &[&PropertyCurve]) -> Vec<f32> {
     times
 }
 
-fn quaternion_to_euler_degrees(q: &Quaternion<f32>) -> Vector3<f32> {
+pub(crate) fn quaternion_to_euler_degrees(q: &Quaternion<f32>) -> Vector3<f32> {
     let w = q.s;
     let x = q.v.x;
     let y = q.v.y;
@@ -267,11 +266,7 @@ fn quaternion_to_euler_degrees(q: &Quaternion<f32>) -> Vector3<f32> {
     let cosr = 1.0 - 2.0 * (y * y + z * z);
     let roll = sinr.atan2(cosr);
 
-    Vector3::new(
-        pitch.to_degrees(),
-        yaw.to_degrees(),
-        roll.to_degrees(),
-    )
+    Vector3::new(pitch.to_degrees(), yaw.to_degrees(), roll.to_degrees())
 }
 
 fn euler_degrees_to_quaternion(x_deg: f32, y_deg: f32, z_deg: f32) -> Quaternion<f32> {

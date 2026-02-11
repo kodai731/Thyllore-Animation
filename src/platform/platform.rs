@@ -1,9 +1,9 @@
 use imgui::{Context, FontConfig, FontGlyphRanges, FontSource};
+use imgui_winit_support::{HiDpiMode, WinitPlatform};
+use std::path::Path;
 use winit::dpi::LogicalSize;
 use winit::event_loop::EventLoop;
 use winit::window::{Window, WindowBuilder};
-use imgui_winit_support::{HiDpiMode, WinitPlatform};
-use std::path::Path;
 
 use super::clipboard;
 

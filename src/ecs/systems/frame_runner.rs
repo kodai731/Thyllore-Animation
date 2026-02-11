@@ -1,17 +1,17 @@
 use anyhow::Result;
 use cgmath::Vector3;
 
-use crate::app::FrameContext;
-use crate::ecs::context::EcsContext;
-use crate::ecs::resource::{ClipLibrary, HierarchyState, TimelineState};
-use crate::ecs::world::Animator;
-use crate::app::graphics_resource::GraphicsResources;
 use super::object_picking_systems::apply_mesh_selection;
 use super::phases::{
     run_animation_phase_ecs, run_animation_phase_gpu, run_input_phase, run_render_prep_phase,
     run_transform_phase_ecs, run_transform_phase_gpu,
 };
 use super::timeline_systems::timeline_update;
+use crate::app::graphics_resource::GraphicsResources;
+use crate::app::FrameContext;
+use crate::ecs::context::EcsContext;
+use crate::ecs::resource::{ClipLibrary, HierarchyState, TimelineState};
+use crate::ecs::world::Animator;
 
 pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
     let mesh_positions = collect_mesh_positions(ctx.graphics);

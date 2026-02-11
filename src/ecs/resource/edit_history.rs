@@ -116,18 +116,14 @@ impl EditHistory {
     pub fn undo_description(&self) -> Option<&str> {
         self.undo_stack.last().map(|e| match &e.command {
             EditCommand::ClipModified { description, .. } => *description,
-            EditCommand::ScheduleModified { description, .. } => {
-                *description
-            }
+            EditCommand::ScheduleModified { description, .. } => *description,
         })
     }
 
     pub fn redo_description(&self) -> Option<&str> {
         self.redo_stack.last().map(|e| match &e.command {
             EditCommand::ClipModified { description, .. } => *description,
-            EditCommand::ScheduleModified { description, .. } => {
-                *description
-            }
+            EditCommand::ScheduleModified { description, .. } => *description,
         })
     }
 }

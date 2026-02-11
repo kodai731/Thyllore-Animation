@@ -1,56 +1,41 @@
 use crate::animation::{
-    AimConstraintData, ConstraintId, ConstraintType,
-    IkConstraintData, ParentConstraintData,
-    PositionConstraintData, RotationConstraintData,
-    ScaleConstraintData,
+    AimConstraintData, ConstraintId, ConstraintType, IkConstraintData, ParentConstraintData,
+    PositionConstraintData, RotationConstraintData, ScaleConstraintData,
 };
 use crate::debugview::gizmo::ConstraintGizmoData;
 use crate::ecs::component::{Constrained, ConstraintSet};
 use crate::ecs::world::{Entity, World};
 
-pub fn handle_constraint_add(
-    world: &mut World,
-    entity: Entity,
-    type_index: u8,
-) {
+pub fn handle_constraint_add(world: &mut World, entity: Entity, type_index: u8) {
     let constraint = create_default_constraint(type_index);
     let priority = constraint.default_priority();
 
     crate::log!(
         "[ConstraintAdd] entity={:?} type={} priority={}",
-        entity, type_index, priority
+        entity,
+        type_index,
+        priority
     );
 
-    let has_set = world
-        .get_component::<ConstraintSet>(entity)
-        .is_some();
+    let has_set = world.get_component::<ConstraintSet>(entity).is_some();
 
     if !has_set {
         world.insert_component(entity, ConstraintSet::new());
         world.insert_component(entity, Constrained);
     }
 
-    if let Some(set) =
-        world.get_component_mut::<ConstraintSet>(entity)
-    {
+    if let Some(set) = world.get_component_mut::<ConstraintSet>(entity) {
         super::constraint_set_systems::constraint_set_add(set, constraint, priority);
     }
 
-    if let Some(mut gizmo) =
-        world.get_resource_mut::<ConstraintGizmoData>()
-    {
+    if let Some(mut gizmo) = world.get_resource_mut::<ConstraintGizmoData>() {
         gizmo.visible = true;
     }
 }
 
-pub fn handle_constraint_remove(
-    world: &mut World,
-    entity: Entity,
-    id: ConstraintId,
-) {
+pub fn handle_constraint_remove(world: &mut World, entity: Entity, id: ConstraintId) {
     let is_empty = {
-        let set =
-            world.get_component_mut::<ConstraintSet>(entity);
+        let set = world.get_component_mut::<ConstraintSet>(entity);
         if let Some(set) = set {
             super::constraint_set_systems::constraint_set_remove(set, id);
             set.constraints.is_empty()
@@ -63,9 +48,7 @@ pub fn handle_constraint_remove(
         world.remove_component::<ConstraintSet>(entity);
         world.remove_component::<Constrained>(entity);
 
-        if let Some(mut gizmo) =
-            world.get_resource_mut::<ConstraintGizmoData>()
-        {
+        if let Some(mut gizmo) = world.get_resource_mut::<ConstraintGizmoData>() {
             gizmo.visible = false;
         }
     }
@@ -77,9 +60,7 @@ pub fn handle_constraint_update(
     id: ConstraintId,
     constraint: &ConstraintType,
 ) {
-    if let Some(set) =
-        world.get_component_mut::<ConstraintSet>(entity)
-    {
+    if let Some(set) = world.get_component_mut::<ConstraintSet>(entity) {
         if let Some(entry) = super::constraint_set_systems::constraint_set_find_mut(set, id) {
             entry.constraint = constraint.clone();
         }

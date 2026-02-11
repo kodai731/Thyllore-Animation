@@ -24,13 +24,7 @@ pub fn sample_bezier(
     evaluate_cubic(p0_v, p1_v, p2_v, p3_v, u)
 }
 
-fn find_bezier_t_for_time(
-    p0: f32,
-    p1: f32,
-    p2: f32,
-    p3: f32,
-    target: f32,
-) -> f32 {
+fn find_bezier_t_for_time(p0: f32, p1: f32, p2: f32, p3: f32, target: f32) -> f32 {
     let mut t = (target - p0) / (p3 - p0).max(0.0001);
     t = t.clamp(0.0, 1.0);
 
@@ -65,13 +59,7 @@ fn evaluate_cubic(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
         + t2 * t * p3
 }
 
-fn evaluate_cubic_derivative(
-    p0: f32,
-    p1: f32,
-    p2: f32,
-    p3: f32,
-    t: f32,
-) -> f32 {
+fn evaluate_cubic_derivative(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
     let one_minus_t = 1.0 - t;
 
     3.0 * one_minus_t * one_minus_t * (p1 - p0)
@@ -126,7 +114,10 @@ pub fn apply_flat_tangent(keyframe: &mut EditableKeyframe, dt: f32) {
     keyframe.out_tangent = BezierHandle::new(handle_time, 0.0);
 }
 
-pub fn apply_linear_tangent(keyframes: &[EditableKeyframe], index: usize) -> (BezierHandle, BezierHandle) {
+pub fn apply_linear_tangent(
+    keyframes: &[EditableKeyframe],
+    index: usize,
+) -> (BezierHandle, BezierHandle) {
     let len = keyframes.len();
     if len < 2 || index >= len {
         return (BezierHandle::linear(), BezierHandle::linear());
@@ -189,9 +180,7 @@ mod tests {
         let out_handle = BezierHandle::new(0.33, 0.5);
         let in_handle = BezierHandle::new(-0.33, -0.5);
 
-        let result = sample_bezier(
-            0.0, 0.0, &out_handle, 1.0, 1.0, &in_handle, 0.5,
-        );
+        let result = sample_bezier(0.0, 0.0, &out_handle, 1.0, 1.0, &in_handle, 0.5);
         assert!(result > 0.3 && result < 0.7);
     }
 
@@ -219,13 +208,8 @@ mod tests {
         let expected_handle_time = (2.0 - 0.0) * 0.5 / 3.0;
         let expected_handle_value = slope * expected_handle_time;
 
-        assert!(
-            (keyframes[1].out_tangent.time_offset - expected_handle_time).abs() < 1e-4
-        );
-        assert!(
-            (keyframes[1].out_tangent.value_offset - expected_handle_value).abs()
-                < 1e-4
-        );
+        assert!((keyframes[1].out_tangent.time_offset - expected_handle_time).abs() < 1e-4);
+        assert!((keyframes[1].out_tangent.value_offset - expected_handle_value).abs() < 1e-4);
     }
 
     #[test]

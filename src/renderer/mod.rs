@@ -26,8 +26,8 @@ impl App {
             .device
             .begin_command_buffer(command_buffer, &begin_info)?;
 
-        let use_gbuffer = self.data.raytracing.is_available()
-            && self.data.viewport.offscreen.is_some();
+        let use_gbuffer =
+            self.data.raytracing.is_available() && self.data.viewport.offscreen.is_some();
 
         if use_gbuffer {
             deferred::record_gbuffer_pass(self, command_buffer, image_index)?;
@@ -72,11 +72,7 @@ impl App {
     unsafe fn record_object_id_copy(&mut self, command_buffer: vk::CommandBuffer) {
         use crate::ecs::resource::ObjectIdReadback;
 
-        if !self
-            .data
-            .ecs_world
-            .contains_resource::<ObjectIdReadback>()
-        {
+        if !self.data.ecs_world.contains_resource::<ObjectIdReadback>() {
             return;
         }
 

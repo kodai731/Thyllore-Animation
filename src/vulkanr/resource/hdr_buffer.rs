@@ -55,13 +55,17 @@ impl HdrBuffer {
             .width(width)
             .height(height)
             .layers(1);
-        let framebuffer = rrdevice.device.create_framebuffer(&framebuffer_info, None)?;
+        let framebuffer = rrdevice
+            .device
+            .create_framebuffer(&framebuffer_info, None)?;
 
         let sampler = Self::create_sampler(&rrdevice.device)?;
 
         crate::log!(
             "Created HDR buffer: {}x{} format {:?}",
-            width, height, HDR_FORMAT
+            width,
+            height,
+            HDR_FORMAT
         );
 
         Ok(Self {

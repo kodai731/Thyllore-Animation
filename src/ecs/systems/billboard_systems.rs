@@ -1,14 +1,14 @@
 use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, Vector3, Vector4};
 
+use crate::app::billboard::{
+    BillboardData, BillboardMesh, BillboardRenderState, BillboardTransform, BillboardVertex,
+};
 use crate::ecs::component::mesh::presets::{POSITION, TEX_COORD_0};
 use crate::ecs::component::mesh::{MeshData, PrimitiveTopology};
 use crate::ecs::component::{CameraState, RenderInfo};
 use crate::ecs::world::{BillboardBehavior, Transform, World};
 use crate::render::RenderBackend;
-use crate::app::billboard::{
-    BillboardData, BillboardMesh, BillboardRenderState, BillboardTransform, BillboardVertex,
-};
 
 pub fn create_billboard_mesh_data(size: f32) -> MeshData {
     let positions = vec![
@@ -18,12 +18,7 @@ pub fn create_billboard_mesh_data(size: f32) -> MeshData {
         [-size, size, 0.0],
     ];
 
-    let tex_coords = vec![
-        [0.0, 1.0],
-        [1.0, 1.0],
-        [1.0, 0.0],
-        [0.0, 0.0],
-    ];
+    let tex_coords = vec![[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]];
 
     let indices = vec![0, 1, 2, 0, 2, 3];
 
@@ -135,6 +130,9 @@ pub fn billboard_transform_update_look_at(
     transform.model_matrix = translation * rotation;
 }
 
-pub fn billboard_transform_set_position(transform: &mut BillboardTransform, position: Vector3<f32>) {
+pub fn billboard_transform_set_position(
+    transform: &mut BillboardTransform,
+    position: Vector3<f32>,
+) {
     transform.position = position;
 }

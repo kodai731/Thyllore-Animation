@@ -2,9 +2,7 @@ use std::path::Path;
 
 #[test]
 fn test_gltf_model_files_exist() {
-    let model_paths = [
-        "assets/models/stickman/stickman.glb",
-    ];
+    let model_paths = ["assets/models/stickman/stickman.glb"];
 
     for path in &model_paths {
         assert!(
@@ -61,16 +59,23 @@ fn test_nonexistent_model_file() {
 
 #[test]
 fn test_model_directory_structure() {
-    assert!(Path::new("assets/models").exists(), "models directory should exist");
-    assert!(Path::new("assets/models/stickman").exists(), "stickman directory should exist");
-    assert!(Path::new("assets/models/phoenix-bird").exists(), "phoenix-bird directory should exist");
+    assert!(
+        Path::new("assets/models").exists(),
+        "models directory should exist"
+    );
+    assert!(
+        Path::new("assets/models/stickman").exists(),
+        "stickman directory should exist"
+    );
+    assert!(
+        Path::new("assets/models/phoenix-bird").exists(),
+        "phoenix-bird directory should exist"
+    );
 }
 
 #[test]
 fn test_texture_files_exist() {
-    let texture_paths = [
-        "assets/textures/white.png",
-    ];
+    let texture_paths = ["assets/textures/white.png"];
 
     for path in &texture_paths {
         assert!(

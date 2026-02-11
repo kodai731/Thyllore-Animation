@@ -29,10 +29,7 @@ pub fn clip_schedule_remove_instance(
     schedule.instances.len() < before
 }
 
-pub fn clip_schedule_active_instances(
-    schedule: &ClipSchedule,
-    time: f32,
-) -> Vec<&ClipInstance> {
+pub fn clip_schedule_active_instances(schedule: &ClipSchedule, time: f32) -> Vec<&ClipInstance> {
     schedule
         .instances
         .iter()
@@ -48,20 +45,14 @@ pub fn clip_schedule_active_instances(
         .collect()
 }
 
-pub fn clip_schedule_create_group(
-    schedule: &mut ClipSchedule,
-    name: String,
-) -> ClipGroupId {
+pub fn clip_schedule_create_group(schedule: &mut ClipSchedule, name: String) -> ClipGroupId {
     let id = schedule.next_group_id;
     schedule.next_group_id += 1;
     schedule.groups.push(ClipGroup::new(id, name));
     id
 }
 
-pub fn clip_schedule_remove_group(
-    schedule: &mut ClipSchedule,
-    group_id: ClipGroupId,
-) {
+pub fn clip_schedule_remove_group(schedule: &mut ClipSchedule, group_id: ClipGroupId) {
     schedule.groups.retain(|g| g.id != group_id);
 }
 
@@ -99,10 +90,7 @@ pub fn clip_schedule_find_group(
         .find(|g| g.contains_instance(instance_id))
 }
 
-pub fn clip_schedule_effective_weight(
-    schedule: &ClipSchedule,
-    instance_id: ClipInstanceId,
-) -> f32 {
+pub fn clip_schedule_effective_weight(schedule: &ClipSchedule, instance_id: ClipInstanceId) -> f32 {
     let inst_weight = schedule
         .instances
         .iter()

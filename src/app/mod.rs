@@ -1,7 +1,9 @@
 pub mod billboard;
+pub mod cleanup;
 pub mod data;
 pub mod frame_context;
 pub mod graphics_resource;
+pub mod gui_data;
 pub mod init;
 pub mod model_loader;
 pub mod raytracing;
@@ -9,9 +11,7 @@ pub mod render;
 pub mod render_context;
 pub mod scene_model;
 pub mod update;
-pub mod cleanup;
 pub mod util;
-pub mod gui_data;
 pub mod viewport;
 
 pub use frame_context::FrameContext;
@@ -21,17 +21,17 @@ pub use data::AppData;
 pub use gui_data::GUIData;
 pub use init::*;
 
-use crate::debugview::gizmo::{BoneGizmoData, GridGizmoData, LightGizmoData};
-use crate::debugview::{DebugViewData, GridMeshData, RayTracingDebugState};
-use crate::ecs::{
-    ClipLibrary, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState,
-    NodeAssets, ResMut, ResRef, Resource,
-};
-use crate::platform::ImguiData;
 use crate::app::billboard::BillboardData;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::app::raytracing::RayTracingData;
+use crate::debugview::gizmo::{BoneGizmoData, GridGizmoData, LightGizmoData};
+use crate::debugview::{DebugViewData, GridMeshData, RayTracingDebugState};
 use crate::ecs::resource::Camera;
+use crate::ecs::{
+    ClipLibrary, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState, NodeAssets, ResMut,
+    ResRef, Resource,
+};
+use crate::platform::ImguiData;
 use crate::vulkanr::context::{
     CommandState, FrameSync, PipelineState, RenderConfig, RenderTargets, SurfaceState,
     SwapchainState,

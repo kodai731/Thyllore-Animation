@@ -1,19 +1,25 @@
 use cgmath::{Quaternion, Vector3};
 
 use crate::animation::editable::{
-    BezierHandle, BlendMode, ClipGroupId, ClipInstanceId, InterpolationType,
-    KeyframeId, PropertyType, SourceClipId,
+    BezierHandle, BlendMode, ClipGroupId, ClipInstanceId, InterpolationType, KeyframeId,
+    PropertyType, SourceClipId,
 };
-use crate::ecs::resource::{HierarchyDisplayMode, SelectionModifier};
-use crate::animation::{ConstraintId, ConstraintType};
 use crate::animation::BoneId;
+use crate::animation::{ConstraintId, ConstraintType};
 use crate::app::data::LightMoveTarget;
 use crate::debugview::gizmo::BoneDisplayStyle;
+use crate::ecs::component::{
+    ColliderShape, SpringChain, SpringChainId, SpringColliderDef, SpringColliderGroup,
+    SpringColliderGroupId, SpringColliderId, SpringJointParam,
+};
+use crate::ecs::resource::{HierarchyDisplayMode, SelectionModifier};
 use crate::ecs::world::Entity;
 
 #[derive(Clone, Debug)]
 pub enum UIEvent {
-    LoadModel { path: String },
+    LoadModel {
+        path: String,
+    },
 
     ResetCamera,
     ResetCameraUp,
@@ -28,6 +34,7 @@ pub enum UIEvent {
     DebugShadowInfo,
     DebugBillboardDepth,
     DumpDebugInfo,
+    DumpAnimationDebug,
 
     SelectEntity(Entity),
     DeselectAll,
@@ -106,28 +113,82 @@ pub enum UIEvent {
     TimelineSetFrameRate(f32),
 
     TimelineCopyKeyframes,
-    TimelinePasteKeyframes { paste_time: f32 },
-    TimelineMirrorPaste { paste_time: f32 },
+    TimelinePasteKeyframes {
+        paste_time: f32,
+    },
+    TimelineMirrorPaste {
+        paste_time: f32,
+    },
 
     TimelineCaptureBuffer,
     TimelineSwapBuffer,
 
-    ClipInstanceSelect { entity: Entity, instance_id: ClipInstanceId },
+    ClipInstanceSelect {
+        entity: Entity,
+        instance_id: ClipInstanceId,
+    },
     ClipInstanceDeselect,
-    ClipInstanceMove { entity: Entity, instance_id: ClipInstanceId, new_start_time: f32 },
-    ClipInstanceTrimStart { entity: Entity, instance_id: ClipInstanceId, new_clip_in: f32 },
-    ClipInstanceTrimEnd { entity: Entity, instance_id: ClipInstanceId, new_clip_out: f32 },
-    ClipInstanceToggleMute { entity: Entity, instance_id: ClipInstanceId },
-    ClipInstanceDelete { entity: Entity, instance_id: ClipInstanceId },
-    ClipInstanceSetWeight { entity: Entity, instance_id: ClipInstanceId, weight: f32 },
-    ClipInstanceSetBlendMode { entity: Entity, instance_id: ClipInstanceId, blend_mode: BlendMode },
+    ClipInstanceMove {
+        entity: Entity,
+        instance_id: ClipInstanceId,
+        new_start_time: f32,
+    },
+    ClipInstanceTrimStart {
+        entity: Entity,
+        instance_id: ClipInstanceId,
+        new_clip_in: f32,
+    },
+    ClipInstanceTrimEnd {
+        entity: Entity,
+        instance_id: ClipInstanceId,
+        new_clip_out: f32,
+    },
+    ClipInstanceToggleMute {
+        entity: Entity,
+        instance_id: ClipInstanceId,
+    },
+    ClipInstanceDelete {
+        entity: Entity,
+        instance_id: ClipInstanceId,
+    },
+    ClipInstanceSetWeight {
+        entity: Entity,
+        instance_id: ClipInstanceId,
+        weight: f32,
+    },
+    ClipInstanceSetBlendMode {
+        entity: Entity,
+        instance_id: ClipInstanceId,
+        blend_mode: BlendMode,
+    },
 
-    ClipGroupCreate { entity: Entity, name: String },
-    ClipGroupDelete { entity: Entity, group_id: ClipGroupId },
-    ClipGroupAddInstance { entity: Entity, group_id: ClipGroupId, instance_id: ClipInstanceId },
-    ClipGroupRemoveInstance { entity: Entity, group_id: ClipGroupId, instance_id: ClipInstanceId },
-    ClipGroupToggleMute { entity: Entity, group_id: ClipGroupId },
-    ClipGroupSetWeight { entity: Entity, group_id: ClipGroupId, weight: f32 },
+    ClipGroupCreate {
+        entity: Entity,
+        name: String,
+    },
+    ClipGroupDelete {
+        entity: Entity,
+        group_id: ClipGroupId,
+    },
+    ClipGroupAddInstance {
+        entity: Entity,
+        group_id: ClipGroupId,
+        instance_id: ClipInstanceId,
+    },
+    ClipGroupRemoveInstance {
+        entity: Entity,
+        group_id: ClipGroupId,
+        instance_id: ClipInstanceId,
+    },
+    ClipGroupToggleMute {
+        entity: Entity,
+        group_id: ClipGroupId,
+    },
+    ClipGroupSetWeight {
+        entity: Entity,
+        group_id: ClipGroupId,
+        weight: f32,
+    },
 
     Undo,
     Redo,
@@ -140,11 +201,19 @@ pub enum UIEvent {
     ClipBrowserCreateEmpty,
     ClipBrowserDuplicate(SourceClipId),
     ClipBrowserDelete(SourceClipId),
+    ClipBrowserLoadFromFile,
 
     SaveScene,
 
     CreateTestConstraints,
     ClearTestConstraints,
+
+    AddTestSpringBones,
+    ClearSpringBones,
+    SpringBoneBake,
+    SpringBoneDiscardBake,
+    SpringBoneSaveBake,
+    SpringBoneRebake,
 
     ConstraintAdd {
         entity: Entity,
@@ -163,6 +232,55 @@ pub enum UIEvent {
         entity: Entity,
         sample_fps: f32,
     },
+
+    SpringChainAdd {
+        entity: Entity,
+        root_bone_id: BoneId,
+        chain_length: u32,
+    },
+    SpringChainRemove {
+        entity: Entity,
+        chain_id: SpringChainId,
+    },
+    SpringChainUpdate {
+        entity: Entity,
+        chain_id: SpringChainId,
+        chain: SpringChain,
+    },
+    SpringJointUpdate {
+        entity: Entity,
+        chain_id: SpringChainId,
+        joint_index: usize,
+        joint: SpringJointParam,
+    },
+    SpringColliderAdd {
+        entity: Entity,
+        bone_id: BoneId,
+        shape: ColliderShape,
+    },
+    SpringColliderRemove {
+        entity: Entity,
+        collider_id: SpringColliderId,
+    },
+    SpringColliderUpdate {
+        entity: Entity,
+        collider_id: SpringColliderId,
+        collider: SpringColliderDef,
+    },
+    SpringColliderGroupAdd {
+        entity: Entity,
+        name: String,
+    },
+    SpringColliderGroupRemove {
+        entity: Entity,
+        group_id: SpringColliderGroupId,
+    },
+    SpringColliderGroupUpdate {
+        entity: Entity,
+        group_id: SpringColliderGroupId,
+        group: SpringColliderGroup,
+    },
+    SpringBoneToggleGizmo(bool),
 
     SetBoneDisplayStyle(BoneDisplayStyle),
     SetBoneInFront(bool),

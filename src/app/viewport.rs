@@ -3,8 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::resource::{
-    AutoExposureBuffers, BloomChain, DofBuffer, HdrBuffer,
-    OffscreenFramebuffer,
+    AutoExposureBuffers, BloomChain, DofBuffer, HdrBuffer, OffscreenFramebuffer,
 };
 
 #[derive(Debug, Default)]
@@ -49,8 +48,7 @@ impl ViewportState {
 
         let dof_buffer = DofBuffer::new(instance, rrdevice, width, height, command_pool)?;
 
-        let auto_exposure_buffers =
-            AutoExposureBuffers::new(instance, rrdevice, width, height)?;
+        let auto_exposure_buffers = AutoExposureBuffers::new(instance, rrdevice, width, height)?;
 
         let (descriptor_pool, descriptor_set_layout, descriptor_set) =
             Self::create_imgui_descriptor(rrdevice, &offscreen)?;
@@ -74,7 +72,11 @@ impl ViewportState {
     unsafe fn create_imgui_descriptor(
         rrdevice: &RRDevice,
         offscreen: &OffscreenFramebuffer,
-    ) -> Result<(vk::DescriptorPool, vk::DescriptorSetLayout, vk::DescriptorSet)> {
+    ) -> Result<(
+        vk::DescriptorPool,
+        vk::DescriptorSetLayout,
+        vk::DescriptorSet,
+    )> {
         let pool_sizes = [vk::DescriptorPoolSize::builder()
             .type_(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .descriptor_count(1)

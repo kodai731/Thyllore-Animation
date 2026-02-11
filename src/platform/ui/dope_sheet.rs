@@ -1,9 +1,7 @@
 use crate::animation::editable::{EditableAnimationClip, PropertyType};
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::{
-    SelectedKeyframe, SelectionModifier, TimelineState,
-};
+use crate::ecs::resource::{SelectedKeyframe, SelectionModifier, TimelineState};
 
 const DOPE_ROW_HEIGHT: f32 = 22.0;
 const DOPE_SUB_ROW_HEIGHT: f32 = 18.0;
@@ -34,28 +32,15 @@ pub fn build_dope_sheet(
     content_height: f32,
 ) {
     let pixels_per_second = DOPE_PIXELS_PER_SECOND * timeline_state.zoom_level;
-    let sheet_width =
-        (clip.duration * pixels_per_second).max(content_width - DOPE_LABEL_WIDTH);
+    let sheet_width = (clip.duration * pixels_per_second).max(content_width - DOPE_LABEL_WIDTH);
 
     ui.child_window("dope_sheet_area")
         .size([content_width, content_height])
         .horizontal_scrollbar(true)
         .build(|| {
-            draw_dope_sheet_ruler(
-                ui,
-                timeline_state,
-                clip,
-                sheet_width,
-                pixels_per_second,
-            );
+            draw_dope_sheet_ruler(ui, timeline_state, clip, sheet_width, pixels_per_second);
 
-            draw_summary_row(
-                ui,
-                timeline_state,
-                clip,
-                sheet_width,
-                pixels_per_second,
-            );
+            draw_summary_row(ui, timeline_state, clip, sheet_width, pixels_per_second);
 
             draw_bone_rows(
                 ui,
@@ -66,9 +51,7 @@ pub fn build_dope_sheet(
                 pixels_per_second,
             );
 
-            if ui.is_window_hovered()
-                && ui.is_mouse_clicked(imgui::MouseButton::Right)
-            {
+            if ui.is_window_hovered() && ui.is_mouse_clicked(imgui::MouseButton::Right) {
                 ui.open_popup("dope_sheet_context");
             }
             build_dope_sheet_context_menu(ui, ui_events, timeline_state);
@@ -168,9 +151,7 @@ fn draw_summary_row(
         all_times.extend(times);
     }
 
-    all_times.sort_by(|a, b| {
-        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-    });
+    all_times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     all_times.dedup_by(|a, b| (*a - *b).abs() < 0.001);
 
     let y_center = cursor_pos[1] + DOPE_ROW_HEIGHT * 0.5;
@@ -207,8 +188,7 @@ fn draw_bone_rows(
     sheet_width: f32,
     pixels_per_second: f32,
 ) {
-    let mut sorted_bone_ids: Vec<BoneId> =
-        clip.tracks.keys().copied().collect();
+    let mut sorted_bone_ids: Vec<BoneId> = clip.tracks.keys().copied().collect();
     sorted_bone_ids.sort();
 
     for bone_id in sorted_bone_ids.into_iter().take(MAX_VISIBLE_TRACKS) {
@@ -362,10 +342,7 @@ fn draw_bone_row_expanded(
         draw_list
             .add_rect(
                 [row_x, cursor_pos[1]],
-                [
-                    row_x + sheet_width,
-                    cursor_pos[1] + DOPE_SUB_ROW_HEIGHT,
-                ],
+                [row_x + sheet_width, cursor_pos[1] + DOPE_SUB_ROW_HEIGHT],
                 bg_color,
             )
             .filled(true)
@@ -386,13 +363,7 @@ fn draw_bone_row_expanded(
                 prop_color
             };
 
-            draw_diamond(
-                &draw_list,
-                x,
-                y_center,
-                KEYFRAME_DIAMOND_SIZE - 1.0,
-                color,
-            );
+            draw_diamond(&draw_list, x, y_center, KEYFRAME_DIAMOND_SIZE - 1.0, color);
         }
 
         draw_playhead_line(
@@ -572,24 +543,10 @@ fn determine_selection_modifier(ui: &imgui::Ui) -> SelectionModifier {
     }
 }
 
-fn draw_diamond(
-    draw_list: &imgui::DrawListMut,
-    x: f32,
-    y: f32,
-    size: f32,
-    color: [f32; 4],
-) {
-    let points = vec![
-        [x, y - size],
-        [x + size, y],
-        [x, y + size],
-        [x - size, y],
-    ];
+fn draw_diamond(draw_list: &imgui::DrawListMut, x: f32, y: f32, size: f32, color: [f32; 4]) {
+    let points = vec![[x, y - size], [x + size, y], [x, y + size], [x - size, y]];
 
-    draw_list
-        .add_polyline(points, color)
-        .filled(true)
-        .build();
+    draw_list.add_polyline(points, color).filled(true).build();
 }
 
 fn draw_playhead_line(
@@ -602,11 +559,7 @@ fn draw_playhead_line(
 ) {
     let px = row_x + current_time * pixels_per_second;
     draw_list
-        .add_line(
-            [px, row_y],
-            [px, row_y + row_height],
-            [1.0, 0.3, 0.3, 0.6],
-        )
+        .add_line([px, row_y], [px, row_y + row_height], [1.0, 0.3, 0.3, 0.6])
         .build();
 }
 

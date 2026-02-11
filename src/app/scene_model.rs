@@ -38,10 +38,7 @@ impl App {
         let model_state = self.model_state();
 
         crate::log!("--- Model Info ---");
-        crate::log!(
-            "  current_model_path: {}",
-            model_state.model_path
-        );
+        crate::log!("  current_model_path: {}", model_state.model_path);
         crate::log!(
             "  meshes count: {}",
             self.data.graphics_resources.meshes.len()
@@ -127,7 +124,10 @@ impl App {
         crate::log!("  pivot: {:?}", self.camera().pivot);
 
         crate::log!("--- Animation Info ---");
-        let timeline = self.data.ecs_world.resource::<crate::ecs::resource::TimelineState>();
+        let timeline = self
+            .data
+            .ecs_world
+            .resource::<crate::ecs::resource::TimelineState>();
         crate::log!("  animation_playing: {}", timeline.playing);
         crate::log!("  clips count: {}", clip_library.animation.clips.len());
 

@@ -1,9 +1,9 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
+use crate::app::graphics_resource::ObjectDescriptorSet;
 use crate::ecs::component::RenderData;
 use crate::render::ObjectUBO;
-use crate::app::graphics_resource::ObjectDescriptorSet;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};
 
@@ -38,11 +38,11 @@ pub unsafe fn render_scene_objects(
                 Some(b) => b,
                 None => continue,
             };
-        let index_buffer =
-            match buffer_registry.get_index_buffer(data.mesh_ref.index_buffer_handle) {
-                Some(b) => b,
-                None => continue,
-            };
+        let index_buffer = match buffer_registry.get_index_buffer(data.mesh_ref.index_buffer_handle)
+        {
+            Some(b) => b,
+            None => continue,
+        };
 
         let pipeline_id = match data.render_info.pipeline_id {
             Some(id) => id,

@@ -1,13 +1,12 @@
 use cgmath::Vector3;
 
 use crate::animation::{
-    AimConstraintData, BoneId, ConstraintType, IkConstraintData,
-    PositionConstraintData, Skeleton, PRIORITY_AIM, PRIORITY_IK,
-    PRIORITY_POSITION,
+    AimConstraintData, BoneId, ConstraintType, IkConstraintData, PositionConstraintData, Skeleton,
+    PRIORITY_AIM, PRIORITY_IK, PRIORITY_POSITION,
 };
 use crate::asset::storage::AssetStorage;
 use crate::debugview::gizmo::ConstraintGizmoData;
-use crate::ecs::component::{ConstraintSet, Constrained};
+use crate::ecs::component::{Constrained, ConstraintSet};
 use crate::ecs::world::{Animator, Entity, World};
 
 pub fn create_test_constraints(world: &mut World, assets: &AssetStorage) {
@@ -53,11 +52,7 @@ pub fn clear_test_constraints(world: &mut World) {
     }
 }
 
-fn create_constraints_for_entity(
-    world: &mut World,
-    skeleton: &Skeleton,
-    entity: Entity,
-) {
+fn create_constraints_for_entity(world: &mut World, skeleton: &Skeleton, entity: Entity) {
     if skeleton.bones.len() < 2 {
         crate::log!(
             "Skeleton '{}' has only {} bones, creating position-only constraint",
@@ -158,9 +153,8 @@ fn find_root_child(skeleton: &Skeleton) -> Option<BoneId> {
 }
 
 fn add_ik_constraints(set: &mut ConstraintSet, skeleton: &Skeleton) {
-    let effector =
-        find_bone_by_patterns(skeleton, &["hand", "wrist", "foot", "ankle"])
-            .or_else(|| find_leaf_bone_with_depth(skeleton, 2));
+    let effector = find_bone_by_patterns(skeleton, &["hand", "wrist", "foot", "ankle"])
+        .or_else(|| find_leaf_bone_with_depth(skeleton, 2));
 
     let effector_id = match effector {
         Some(id) => id,
@@ -197,8 +191,8 @@ fn find_ik_target(skeleton: &Skeleton, effector_id: BoneId) -> Option<BoneId> {
 }
 
 fn add_aim_constraint(set: &mut ConstraintSet, skeleton: &Skeleton) {
-    let source = find_bone_by_patterns(skeleton, &["head", "neck"])
-        .or_else(|| find_root_child(skeleton));
+    let source =
+        find_bone_by_patterns(skeleton, &["head", "neck"]).or_else(|| find_root_child(skeleton));
 
     let source_id = match source {
         Some(id) => id,
@@ -228,10 +222,7 @@ fn add_aim_constraint(set: &mut ConstraintSet, skeleton: &Skeleton) {
     );
 }
 
-fn add_position_constraint_from_skeleton(
-    set: &mut ConstraintSet,
-    skeleton: &Skeleton,
-) {
+fn add_position_constraint_from_skeleton(set: &mut ConstraintSet, skeleton: &Skeleton) {
     let constrained = find_bone_by_patterns(skeleton, &["spine", "chest"])
         .or_else(|| find_second_root_child(skeleton));
 
@@ -272,11 +263,7 @@ fn find_second_root_child(skeleton: &Skeleton) -> Option<BoneId> {
     None
 }
 
-fn add_position_constraint(
-    set: &mut ConstraintSet,
-    constrained_id: BoneId,
-    target_id: BoneId,
-) {
+fn add_position_constraint(set: &mut ConstraintSet, constrained_id: BoneId, target_id: BoneId) {
     let pos = ConstraintType::Position(PositionConstraintData {
         constrained_bone: constrained_id,
         target_bone: target_id,

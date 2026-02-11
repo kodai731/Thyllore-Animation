@@ -18,14 +18,14 @@ pub struct MirrorMapping {
     pub symmetry_axis: MirrorAxis,
 }
 
-pub fn build_mirror_mapping(
-    bone_names: &HashMap<BoneId, String>,
-) -> MirrorMapping {
+pub fn build_mirror_mapping(bone_names: &HashMap<BoneId, String>) -> MirrorMapping {
     let mut pairs = Vec::new();
     let mut matched = std::collections::HashSet::new();
 
-    let name_to_id: HashMap<&str, BoneId> =
-        bone_names.iter().map(|(id, name)| (name.as_str(), *id)).collect();
+    let name_to_id: HashMap<&str, BoneId> = bone_names
+        .iter()
+        .map(|(id, name)| (name.as_str(), *id))
+        .collect();
 
     for (id, name) in bone_names {
         if matched.contains(id) {
@@ -95,11 +95,8 @@ pub fn mirror_keyframes(
                 .copied()
                 .unwrap_or(entry.bone_id);
 
-            let mirrored_value = compute_mirrored_value(
-                entry.value,
-                entry.property_type,
-                mapping.symmetry_axis,
-            );
+            let mirrored_value =
+                compute_mirrored_value(entry.value, entry.property_type, mapping.symmetry_axis);
 
             CopiedKeyframe {
                 bone_id: mirrored_bone_id,
@@ -120,11 +117,7 @@ pub fn mirror_keyframes(
     }
 }
 
-fn compute_mirrored_value(
-    value: f32,
-    property_type: PropertyType,
-    axis: MirrorAxis,
-) -> f32 {
+fn compute_mirrored_value(value: f32, property_type: PropertyType, axis: MirrorAxis) -> f32 {
     match axis {
         MirrorAxis::X => match property_type {
             PropertyType::TranslationX => -value,
@@ -198,18 +191,9 @@ mod tests {
 
     #[test]
     fn test_find_mirror_name_patterns() {
-        assert_eq!(
-            find_mirror_name("L_Arm"),
-            Some("R_Arm".to_string())
-        );
-        assert_eq!(
-            find_mirror_name("R_Leg"),
-            Some("L_Leg".to_string())
-        );
-        assert_eq!(
-            find_mirror_name("Hand.L"),
-            Some("Hand.R".to_string())
-        );
+        assert_eq!(find_mirror_name("L_Arm"), Some("R_Arm".to_string()));
+        assert_eq!(find_mirror_name("R_Leg"), Some("L_Leg".to_string()));
+        assert_eq!(find_mirror_name("Hand.L"), Some("Hand.R".to_string()));
         assert_eq!(find_mirror_name("Spine"), None);
     }
 }

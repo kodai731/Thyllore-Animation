@@ -5,8 +5,7 @@ use crate::app::App;
 use crate::ecs::resource::AutoExposure;
 use crate::vulkanr::core::Device;
 use crate::vulkanr::descriptor::{
-    RRAutoExposureAverageDescriptorSet,
-    RRAutoExposureHistogramDescriptorSet,
+    RRAutoExposureAverageDescriptorSet, RRAutoExposureHistogramDescriptorSet,
 };
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::resource::AutoExposureBuffers;
@@ -52,58 +51,37 @@ impl<'a> AutoExposurePass<'a> {
             .raytracing
             .auto_exposure_histogram_pipeline
             .as_ref()
-            .ok_or_else(|| {
-                anyhow!(
-                    "AutoExposure histogram pipeline not initialized"
-                )
-            })?;
+            .ok_or_else(|| anyhow!("AutoExposure histogram pipeline not initialized"))?;
 
         let average_pipeline = app
             .data
             .raytracing
             .auto_exposure_average_pipeline
             .as_ref()
-            .ok_or_else(|| {
-                anyhow!(
-                    "AutoExposure average pipeline not initialized"
-                )
-            })?;
+            .ok_or_else(|| anyhow!("AutoExposure average pipeline not initialized"))?;
 
         let histogram_descriptor = app
             .data
             .raytracing
             .auto_exposure_histogram_descriptor
             .as_ref()
-            .ok_or_else(|| {
-                anyhow!(
-                    "AutoExposure histogram descriptor not initialized"
-                )
-            })?;
+            .ok_or_else(|| anyhow!("AutoExposure histogram descriptor not initialized"))?;
 
         let average_descriptor = app
             .data
             .raytracing
             .auto_exposure_average_descriptor
             .as_ref()
-            .ok_or_else(|| {
-                anyhow!(
-                    "AutoExposure average descriptor not initialized"
-                )
-            })?;
+            .ok_or_else(|| anyhow!("AutoExposure average descriptor not initialized"))?;
 
         let buffers = app
             .data
             .viewport
             .auto_exposure_buffers
             .as_ref()
-            .ok_or_else(|| {
-                anyhow!("AutoExposure buffers not initialized")
-            })?;
+            .ok_or_else(|| anyhow!("AutoExposure buffers not initialized"))?;
 
-        let ae_settings = app
-            .data
-            .ecs_world
-            .get_resource::<AutoExposure>();
+        let ae_settings = app.data.ecs_world.get_resource::<AutoExposure>();
         let (
             min_log_luminance,
             log_luminance_range,
@@ -168,10 +146,7 @@ impl<'a> AutoExposurePass<'a> {
         })
     }
 
-    pub unsafe fn record(
-        &self,
-        command_buffer: vk::CommandBuffer,
-    ) -> Result<()> {
+    pub unsafe fn record(&self, command_buffer: vk::CommandBuffer) -> Result<()> {
         self.insert_pre_histogram_barrier(command_buffer);
         self.dispatch_histogram(command_buffer);
         self.insert_histogram_to_average_barrier(command_buffer);
@@ -181,10 +156,7 @@ impl<'a> AutoExposurePass<'a> {
         Ok(())
     }
 
-    unsafe fn insert_pre_histogram_barrier(
-        &self,
-        command_buffer: vk::CommandBuffer,
-    ) {
+    unsafe fn insert_pre_histogram_barrier(&self, command_buffer: vk::CommandBuffer) {
         let barrier = vk::MemoryBarrier::builder()
             .src_access_mask(vk::AccessFlags::SHADER_WRITE)
             .dst_access_mask(vk::AccessFlags::SHADER_WRITE)
@@ -201,10 +173,7 @@ impl<'a> AutoExposurePass<'a> {
         );
     }
 
-    unsafe fn dispatch_histogram(
-        &self,
-        command_buffer: vk::CommandBuffer,
-    ) {
+    unsafe fn dispatch_histogram(&self, command_buffer: vk::CommandBuffer) {
         self.device.cmd_bind_pipeline(
             command_buffer,
             vk::PipelineBindPoint::COMPUTE,
@@ -221,9 +190,7 @@ impl<'a> AutoExposurePass<'a> {
         );
 
         let push_bytes = std::slice::from_raw_parts(
-            &self.histogram_push
-                as *const HistogramPushConstants
-                as *const u8,
+            &self.histogram_push as *const HistogramPushConstants as *const u8,
             std::mem::size_of::<HistogramPushConstants>(),
         );
 
@@ -237,18 +204,11 @@ impl<'a> AutoExposurePass<'a> {
 
         let group_count_x = (self.buffers.width + 15) / 16;
         let group_count_y = (self.buffers.height + 15) / 16;
-        self.device.cmd_dispatch(
-            command_buffer,
-            group_count_x,
-            group_count_y,
-            1,
-        );
+        self.device
+            .cmd_dispatch(command_buffer, group_count_x, group_count_y, 1);
     }
 
-    unsafe fn insert_histogram_to_average_barrier(
-        &self,
-        command_buffer: vk::CommandBuffer,
-    ) {
+    unsafe fn insert_histogram_to_average_barrier(&self, command_buffer: vk::CommandBuffer) {
         let barrier = vk::MemoryBarrier::builder()
             .src_access_mask(vk::AccessFlags::SHADER_WRITE)
             .dst_access_mask(vk::AccessFlags::SHADER_READ)
@@ -265,10 +225,7 @@ impl<'a> AutoExposurePass<'a> {
         );
     }
 
-    unsafe fn dispatch_average(
-        &self,
-        command_buffer: vk::CommandBuffer,
-    ) {
+    unsafe fn dispatch_average(&self, command_buffer: vk::CommandBuffer) {
         self.device.cmd_bind_pipeline(
             command_buffer,
             vk::PipelineBindPoint::COMPUTE,
@@ -285,9 +242,7 @@ impl<'a> AutoExposurePass<'a> {
         );
 
         let push_bytes = std::slice::from_raw_parts(
-            &self.average_push
-                as *const AveragePushConstants
-                as *const u8,
+            &self.average_push as *const AveragePushConstants as *const u8,
             std::mem::size_of::<AveragePushConstants>(),
         );
 
@@ -302,10 +257,7 @@ impl<'a> AutoExposurePass<'a> {
         self.device.cmd_dispatch(command_buffer, 1, 1, 1);
     }
 
-    unsafe fn insert_post_average_barrier(
-        &self,
-        command_buffer: vk::CommandBuffer,
-    ) {
+    unsafe fn insert_post_average_barrier(&self, command_buffer: vk::CommandBuffer) {
         let barrier = vk::MemoryBarrier::builder()
             .src_access_mask(vk::AccessFlags::SHADER_WRITE)
             .dst_access_mask(vk::AccessFlags::HOST_READ)

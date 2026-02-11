@@ -3,13 +3,12 @@ use imgui::Condition;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::asset::AssetStorage;
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::{
-    ConstraintEditorState, HierarchyState,
-};
+use crate::ecs::resource::{ConstraintEditorState, HierarchyState};
 use crate::ecs::systems::collect_inspector_data;
 use crate::ecs::world::World;
 
 use super::constraint_inspector::build_constraint_section;
+use super::spring_bone_inspector::build_spring_bone_section;
 
 pub fn build_inspector_window(
     ui: &imgui::Ui,
@@ -63,12 +62,12 @@ pub fn build_inspector_window(
                     &mut bake_fps,
                 );
 
-                if let Some(mut editor_state) =
-                    world.get_resource_mut::<ConstraintEditorState>()
-                {
+                if let Some(mut editor_state) = world.get_resource_mut::<ConstraintEditorState>() {
                     editor_state.add_type_index = add_type_index;
                     editor_state.bake_fps = bake_fps;
                 }
+
+                build_spring_bone_section(ui, ui_events, world, entity, assets, state);
             } else {
                 ui.text("No entity selected");
             }

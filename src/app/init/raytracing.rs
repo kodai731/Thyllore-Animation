@@ -1,6 +1,6 @@
+use crate::app::billboard::BillboardData;
 use crate::app::{App, AppData};
 use crate::renderer::deferred::create_gbuffer_framebuffer;
-use crate::app::billboard::BillboardData;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::render::{create_gbuffer_render_pass, RRRender};
@@ -63,11 +63,7 @@ impl App {
                 (None, None)
             };
 
-        let hdr_render_pass = data
-            .viewport
-            .hdr_buffer
-            .as_ref()
-            .map(|hdr| hdr.render_pass);
+        let hdr_render_pass = data.viewport.hdr_buffer.as_ref().map(|hdr| hdr.render_pass);
 
         {
             let mut billboard = data.ecs_world.resource_mut::<BillboardData>();
@@ -87,9 +83,7 @@ impl App {
         Self::create_tonemap_pipeline_with_resources(rrdevice, data, rrrender)?;
         Self::create_bloom_pipelines_with_resources(rrdevice, data, rrrender)?;
         Self::create_dof_pipeline_with_resources(rrdevice, data, rrrender)?;
-        Self::create_auto_exposure_pipelines_with_resources(
-            rrdevice, data,
-        )?;
+        Self::create_auto_exposure_pipelines_with_resources(rrdevice, data)?;
 
         Ok(())
     }
@@ -99,23 +93,21 @@ impl App {
         data: &mut AppData,
         rrrender: &RRRender,
     ) -> Result<()> {
-        let (hdr_image_view, hdr_sampler) =
-            match data.viewport.hdr_buffer {
-                Some(ref hdr) => (hdr.color_image_view, hdr.sampler),
-                None => {
-                    crate::log!("HDR buffer not available, skipping tonemap pipeline");
-                    return Ok(());
-                }
-            };
+        let (hdr_image_view, hdr_sampler) = match data.viewport.hdr_buffer {
+            Some(ref hdr) => (hdr.color_image_view, hdr.sampler),
+            None => {
+                crate::log!("HDR buffer not available, skipping tonemap pipeline");
+                return Ok(());
+            }
+        };
 
-        let (offscreen_render_pass, offscreen_extent) =
-            match data.viewport.offscreen {
-                Some(ref offscreen) => (offscreen.render_pass, offscreen.extent()),
-                None => {
-                    crate::log!("Offscreen not available, skipping tonemap pipeline");
-                    return Ok(());
-                }
-            };
+        let (offscreen_render_pass, offscreen_extent) = match data.viewport.offscreen {
+            Some(ref offscreen) => (offscreen.render_pass, offscreen.extent()),
+            None => {
+                crate::log!("Offscreen not available, skipping tonemap pipeline");
+                return Ok(());
+            }
+        };
 
         data.raytracing.create_tonemap_pipeline(
             rrdevice,
@@ -151,16 +143,13 @@ impl App {
             }
         };
 
-        data.raytracing.create_bloom_pipelines(
-            rrdevice,
-            rrrender,
-            hdr_image_view,
-            bloom_chain,
-        )?;
+        data.raytracing
+            .create_bloom_pipelines(rrdevice, rrrender, hdr_image_view, bloom_chain)?;
 
-        if let (Some(ref bloom_chain), Some(ref tonemap_desc)) =
-            (&data.viewport.bloom_chain, &data.raytracing.tonemap_descriptor)
-        {
+        if let (Some(ref bloom_chain), Some(ref tonemap_desc)) = (
+            &data.viewport.bloom_chain,
+            &data.raytracing.tonemap_descriptor,
+        ) {
             if let Some(ref first_mip) = bloom_chain.mip_levels.first() {
                 tonemap_desc.update_bloom_sampler(
                     rrdevice,
@@ -227,9 +216,10 @@ impl App {
             dof_render_pass,
         )?;
 
-        if let (Some(ref dof_buffer), Some(ref tonemap_desc)) =
-            (&data.viewport.dof_buffer, &data.raytracing.tonemap_descriptor)
-        {
+        if let (Some(ref dof_buffer), Some(ref tonemap_desc)) = (
+            &data.viewport.dof_buffer,
+            &data.raytracing.tonemap_descriptor,
+        ) {
             tonemap_desc.update_hdr_sampler(
                 rrdevice,
                 dof_buffer.output_image_view,
@@ -257,13 +247,10 @@ impl App {
             }
         };
 
-        let (hdr_image_view, hdr_sampler) =
-            Self::resolve_auto_exposure_input(data);
+        let (hdr_image_view, hdr_sampler) = Self::resolve_auto_exposure_input(data);
 
         if hdr_image_view == vk::ImageView::null() {
-            crate::log!(
-                "No HDR input available for AutoExposure"
-            );
+            crate::log!("No HDR input available for AutoExposure");
             return Ok(());
         }
 
@@ -286,21 +273,13 @@ impl App {
         Ok(())
     }
 
-    fn resolve_auto_exposure_input(
-        data: &AppData,
-    ) -> (vk::ImageView, vk::Sampler) {
+    fn resolve_auto_exposure_input(data: &AppData) -> (vk::ImageView, vk::Sampler) {
         if let Some(ref dof_buffer) = data.viewport.dof_buffer {
-            return (
-                dof_buffer.output_image_view,
-                dof_buffer.sampler,
-            );
+            return (dof_buffer.output_image_view, dof_buffer.sampler);
         }
 
         if let Some(ref hdr_buffer) = data.viewport.hdr_buffer {
-            return (
-                hdr_buffer.color_image_view,
-                hdr_buffer.sampler,
-            );
+            return (hdr_buffer.color_image_view, hdr_buffer.sampler);
         }
 
         (vk::ImageView::null(), vk::Sampler::null())

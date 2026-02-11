@@ -1,6 +1,4 @@
-use crate::animation::editable::{
-    BlendMode, ClipGroupId, ClipInstanceId, SourceClipId,
-};
+use crate::animation::editable::{BlendMode, ClipGroupId, ClipInstanceId, SourceClipId};
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::ClipLibrary;
 use crate::ecs::world::{Entity, Name, World};
@@ -38,10 +36,7 @@ pub struct ClipGroupSnapshot {
     pub instance_ids: Vec<ClipInstanceId>,
 }
 
-pub fn collect_clip_track_snapshot(
-    world: &World,
-    clip_library: &ClipLibrary,
-) -> ClipTrackSnapshot {
+pub fn collect_clip_track_snapshot(world: &World, clip_library: &ClipLibrary) -> ClipTrackSnapshot {
     let mut entries = Vec::new();
 
     for (entity, schedule) in world.iter_components::<ClipSchedule>() {
@@ -59,7 +54,11 @@ pub fn collect_clip_track_snapshot(
                     .map(|s| s.name().to_string())
                     .unwrap_or_else(|| format!("Clip {}", inst.source_id));
 
-                let group_id = crate::ecs::systems::clip_schedule_systems::clip_schedule_find_group(schedule, inst.instance_id)
+                let group_id =
+                    crate::ecs::systems::clip_schedule_systems::clip_schedule_find_group(
+                        schedule,
+                        inst.instance_id,
+                    )
                     .map(|g| g.id);
 
                 ClipInstanceSnapshot {

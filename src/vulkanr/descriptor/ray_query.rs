@@ -192,7 +192,9 @@ impl RRRayQueryDescriptorSet {
             scene_ubo_write,
         ];
 
-        rrdevice.device.update_descriptor_sets(&writes, &[] as &[vk::CopyDescriptorSet]);
+        rrdevice
+            .device
+            .update_descriptor_sets(&writes, &[] as &[vk::CopyDescriptorSet]);
 
         Ok(())
     }
@@ -276,7 +278,9 @@ impl RRRayQueryDescriptorSet {
             .build();
         tlas_write.descriptor_count = 1;
 
-        rrdevice.device.update_descriptor_sets(&[tlas_write], &[] as &[vk::CopyDescriptorSet]);
+        rrdevice
+            .device
+            .update_descriptor_sets(&[tlas_write], &[] as &[vk::CopyDescriptorSet]);
 
         Ok(())
     }

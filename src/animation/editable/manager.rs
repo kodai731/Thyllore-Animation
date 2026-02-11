@@ -136,13 +136,10 @@ impl EditableClipManager {
     }
 
     pub fn save_to_file(&self, id: SourceClipId, path: &Path) -> Result<()> {
-        let clip = self
-            .clips
-            .get(&id)
-            .context("Clip not found")?;
+        let clip = self.clips.get(&id).context("Clip not found")?;
 
-        let file = fs::File::create(path)
-            .with_context(|| format!("Failed to create file: {:?}", path))?;
+        let file =
+            fs::File::create(path).with_context(|| format!("Failed to create file: {:?}", path))?;
         let writer = BufWriter::new(file);
 
         ron::ser::to_writer_pretty(writer, clip, ron::ser::PrettyConfig::default())
@@ -153,8 +150,8 @@ impl EditableClipManager {
     }
 
     pub fn load_from_file(&mut self, path: &Path) -> Result<SourceClipId> {
-        let file = fs::File::open(path)
-            .with_context(|| format!("Failed to open file: {:?}", path))?;
+        let file =
+            fs::File::open(path).with_context(|| format!("Failed to open file: {:?}", path))?;
         let reader = BufReader::new(file);
 
         let mut clip: EditableAnimationClip = ron::de::from_reader(reader)

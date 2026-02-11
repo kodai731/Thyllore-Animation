@@ -3,12 +3,13 @@ use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
 use crate::animation::spring_bone::{
     apply_length_constraint, compute_joint_rotation, compute_tail_position,
     extract_world_position, integrate_joint, recompute_global_transform,
+    resolve_all_collisions, WorldCollider,
 };
 use crate::animation::{
     compose_transform, decompose_transform, BoneId, Skeleton,
     SkeletonPose,
 };
-use crate::ecs::component::SpringBoneSetup;
+use crate::ecs::component::{ColliderShape, SpringBoneSetup};
 use crate::ecs::resource::{
     SpringBoneState, SpringChainState, SpringJointState,
 };
@@ -158,6 +159,12 @@ pub fn spring_bone_update(
             break;
         }
 
+        let world_colliders = collect_world_colliders(
+            setup,
+            &chain.collider_group_ids,
+            global_transforms,
+        );
+
         let chain_state = &mut state.chain_states[state_idx];
 
         for (joint_idx, joint_param) in
@@ -208,6 +215,21 @@ pub fn spring_bone_update(
                 joint_state.bone_length,
             );
 
+            let collision_resolved = resolve_all_collisions(
+                constrained_tail,
+                joint_param.hit_radius,
+                &world_colliders,
+            );
+            let had_collision = !approx_eq_vec3(
+                collision_resolved,
+                constrained_tail,
+            );
+            let resolved_tail = apply_length_constraint(
+                head_pos,
+                collision_resolved,
+                joint_state.bone_length,
+            );
+
             if should_log {
                 log_joint_update(
                     skeleton,
@@ -215,26 +237,28 @@ pub fn spring_bone_update(
                     head_pos,
                     joint_state,
                     next_tail,
-                    constrained_tail,
+                    resolved_tail,
                     current_tail_before,
+                    had_collision,
                 );
             }
 
             let joint_state =
                 &mut chain_state.joint_states[joint_idx];
 
-            let velocity = constrained_tail - joint_state.current_tail;
+            let velocity =
+                resolved_tail - joint_state.current_tail;
             let velocity_mag_sq = velocity.x * velocity.x
                 + velocity.y * velocity.y
                 + velocity.z * velocity.z;
 
             const VELOCITY_THRESHOLD_SQ: f32 = 1e-8;
             if velocity_mag_sq < VELOCITY_THRESHOLD_SQ {
-                joint_state.prev_tail = constrained_tail;
-                joint_state.current_tail = constrained_tail;
+                joint_state.prev_tail = resolved_tail;
+                joint_state.current_tail = resolved_tail;
             } else {
                 joint_state.prev_tail = joint_state.current_tail;
-                joint_state.current_tail = constrained_tail;
+                joint_state.current_tail = resolved_tail;
             }
 
             let new_local_rotation = compute_joint_rotation(
@@ -242,7 +266,7 @@ pub fn spring_bone_update(
                 parent_world_rot,
                 joint_state.initial_local_rotation,
                 joint_state.bone_axis,
-                constrained_tail,
+                resolved_tail,
             );
 
             update_global_transforms_for_bone(
@@ -502,33 +526,113 @@ fn recompute_children_globals(
     }
 }
 
+fn transform_point(
+    matrix: &Matrix4<f32>,
+    offset: Vector3<f32>,
+) -> Vector3<f32> {
+    let x = matrix[0][0] * offset.x
+        + matrix[1][0] * offset.y
+        + matrix[2][0] * offset.z
+        + matrix[3][0];
+    let y = matrix[0][1] * offset.x
+        + matrix[1][1] * offset.y
+        + matrix[2][1] * offset.z
+        + matrix[3][1];
+    let z = matrix[0][2] * offset.x
+        + matrix[1][2] * offset.y
+        + matrix[2][2] * offset.z
+        + matrix[3][2];
+    Vector3::new(x, y, z)
+}
+
+fn collect_world_colliders(
+    setup: &SpringBoneSetup,
+    collider_group_ids: &[u32],
+    global_transforms: &[Matrix4<f32>],
+) -> Vec<WorldCollider> {
+    let mut world_colliders = Vec::new();
+
+    for &group_id in collider_group_ids {
+        let group = setup
+            .collider_groups
+            .iter()
+            .find(|g| g.id == group_id);
+        let Some(group) = group else { continue };
+
+        for &collider_id in &group.collider_ids {
+            let collider_def = setup
+                .colliders
+                .iter()
+                .find(|c| c.id == collider_id);
+            let Some(def) = collider_def else { continue };
+
+            let bone_idx = def.bone_id as usize;
+            if bone_idx >= global_transforms.len() {
+                continue;
+            }
+
+            let bone_transform = &global_transforms[bone_idx];
+            let center = transform_point(bone_transform, def.offset);
+
+            match &def.shape {
+                ColliderShape::Sphere { .. } => {
+                    world_colliders.push(WorldCollider {
+                        center,
+                        radius: def.shape_radius(),
+                        tail: None,
+                    });
+                }
+                ColliderShape::Capsule { tail, .. } => {
+                    let world_tail =
+                        transform_point(bone_transform, *tail);
+                    world_colliders.push(WorldCollider {
+                        center,
+                        radius: def.shape_radius(),
+                        tail: Some(world_tail),
+                    });
+                }
+            }
+        }
+    }
+
+    world_colliders
+}
+
+fn approx_eq_vec3(a: Vector3<f32>, b: Vector3<f32>) -> bool {
+    let d = a - b;
+    (d.x * d.x + d.y * d.y + d.z * d.z) < 1e-12
+}
+
 fn log_joint_update(
     skeleton: &Skeleton,
     bone_id: BoneId,
     head_pos: Vector3<f32>,
     joint_state: &SpringJointState,
     next_tail: Vector3<f32>,
-    constrained_tail: Vector3<f32>,
+    resolved_tail: Vector3<f32>,
     current_tail_before: Vector3<f32>,
+    had_collision: bool,
 ) {
     let bone_name = skeleton
         .get_bone(bone_id)
         .map(|b| b.name.as_str())
         .unwrap_or("?");
-    let movement = constrained_tail - current_tail_before;
+    let movement = resolved_tail - current_tail_before;
     let move_mag = (movement.x * movement.x
         + movement.y * movement.y
         + movement.z * movement.z)
         .sqrt();
+    let collision_marker = if had_collision { " [HIT]" } else { "" };
     crate::log!(
-        "[SpringBone]   Joint '{}': \
+        "[SpringBone]   Joint '{}'{}: \
          head=({:.3},{:.3},{:.3}), \
          prev_tail=({:.3},{:.3},{:.3}), \
          cur_tail=({:.3},{:.3},{:.3}), \
          next=({:.3},{:.3},{:.3}), \
-         constrained=({:.3},{:.3},{:.3}), \
+         resolved=({:.3},{:.3},{:.3}), \
          delta={:.6}",
         bone_name,
+        collision_marker,
         head_pos.x,
         head_pos.y,
         head_pos.z,
@@ -541,9 +645,9 @@ fn log_joint_update(
         next_tail.x,
         next_tail.y,
         next_tail.z,
-        constrained_tail.x,
-        constrained_tail.y,
-        constrained_tail.z,
+        resolved_tail.x,
+        resolved_tail.y,
+        resolved_tail.z,
         move_mag,
     );
 }

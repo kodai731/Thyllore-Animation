@@ -66,6 +66,15 @@ pub struct SpringColliderDef {
     pub shape: ColliderShape,
 }
 
+impl SpringColliderDef {
+    pub fn shape_radius(&self) -> f32 {
+        match &self.shape {
+            ColliderShape::Sphere { radius } => *radius,
+            ColliderShape::Capsule { radius, .. } => *radius,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct SpringColliderGroup {
     pub id: SpringColliderGroupId,

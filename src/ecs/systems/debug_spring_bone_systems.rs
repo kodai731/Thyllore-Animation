@@ -3,7 +3,8 @@ use cgmath::Vector3;
 use crate::animation::{BoneId, Skeleton};
 use crate::asset::storage::AssetStorage;
 use crate::ecs::component::{
-    SpringBoneSetup, SpringChain, SpringJointParam, WithSpringBone,
+    ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef,
+    SpringColliderGroup, SpringJointParam, WithSpringBone,
 };
 use crate::ecs::resource::SpringBoneState;
 use crate::ecs::world::{Animator, World};
@@ -71,6 +72,8 @@ pub fn create_test_spring_bones(world: &mut World, assets: &AssetStorage) {
             .collect();
         crate::log!("  Chain '{}': [{}]", chain.name, bone_names.join(" -> "));
     }
+
+    create_test_colliders(&mut setup, skeleton);
 
     world.insert_component(first_entity, setup);
     world.insert_component(first_entity, WithSpringBone);
@@ -230,6 +233,83 @@ fn format_chain_name(skeleton: &Skeleton, bones: &[BoneId]) -> String {
     } else {
         format!("{} -> {}", first, last)
     }
+}
+
+fn create_test_colliders(
+    setup: &mut SpringBoneSetup,
+    skeleton: &Skeleton,
+) {
+    const COLLIDER_BONE_PATTERNS: &[&str] =
+        &["head", "Head", "neck", "Neck", "spine", "Spine"];
+
+    let mut collider_bone_ids: Vec<BoneId> = Vec::new();
+
+    for bone in &skeleton.bones {
+        let name_lower = bone.name.to_lowercase();
+        let matches = COLLIDER_BONE_PATTERNS
+            .iter()
+            .any(|p| name_lower.contains(&p.to_lowercase()));
+        if matches {
+            collider_bone_ids.push(bone.id);
+        }
+    }
+
+    if collider_bone_ids.is_empty() {
+        for bone in &skeleton.bones {
+            let depth = compute_bone_depth(skeleton, bone.id);
+            if depth >= 1 && depth <= 2 && !bone.children.is_empty() {
+                collider_bone_ids.push(bone.id);
+            }
+        }
+    }
+
+    if collider_bone_ids.is_empty() {
+        crate::log!("[SpringBone] No suitable bones found for test colliders");
+        return;
+    }
+
+    let group_id = setup.next_group_id;
+    setup.next_group_id += 1;
+
+    let mut collider_ids = Vec::new();
+    for &bone_id in &collider_bone_ids {
+        let collider_id = setup.next_collider_id;
+        setup.next_collider_id += 1;
+
+        let bone_name_str = skeleton
+            .get_bone(bone_id)
+            .map(|b| b.name.as_str())
+            .unwrap_or("?");
+        crate::log!(
+            "[SpringBone] Adding sphere collider on '{}' (bone_id={})",
+            bone_name_str,
+            bone_id
+        );
+
+        setup.colliders.push(SpringColliderDef {
+            id: collider_id,
+            bone_id,
+            offset: Vector3::new(0.0, 0.0, 0.0),
+            shape: ColliderShape::Sphere { radius: 0.1 },
+        });
+        collider_ids.push(collider_id);
+    }
+
+    setup.collider_groups.push(SpringColliderGroup {
+        id: group_id,
+        name: String::from("test_colliders"),
+        collider_ids,
+    });
+
+    for chain in &mut setup.chains {
+        chain.collider_group_ids.push(group_id);
+    }
+
+    crate::log!(
+        "[SpringBone] Created test collider group (id={}) with {} colliders",
+        group_id,
+        collider_bone_ids.len()
+    );
 }
 
 fn bone_name(skeleton: &Skeleton, id: BoneId) -> String {

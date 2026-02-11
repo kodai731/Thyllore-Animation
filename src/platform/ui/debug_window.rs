@@ -281,7 +281,8 @@ fn build_spring_bone_bake_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ec
     ui.separator();
     match state.mode {
         SpringBoneMode::Realtime => {
-            ui.text("Spring Bone: Realtime (simulating)");
+            ui.text("Spring Bone: Realtime");
+            ui.text_colored([0.5, 0.8, 0.5, 1.0], "  Simulating...");
             if ui.button("Bake Spring Bones") {
                 ui_events.send(UIEvent::SpringBoneBake);
             }
@@ -289,6 +290,7 @@ fn build_spring_bone_bake_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ec
         SpringBoneMode::Baked => {
             let clip_id = state.baked_clip_source_id.unwrap_or(0);
             ui.text(format!("Spring Bone: Baked (clip_id={})", clip_id));
+            ui.text_colored([0.7, 0.7, 0.5, 1.0], "  Editing will switch to BakedOverride");
             if ui.button("Discard Bake") {
                 ui_events.send(UIEvent::SpringBoneDiscardBake);
             }
@@ -298,7 +300,20 @@ fn build_spring_bone_bake_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ec
             }
         }
         SpringBoneMode::BakedOverride => {
-            ui.text("Spring Bone: BakedOverride");
+            let clip_id = state.baked_clip_source_id.unwrap_or(0);
+            ui.text(format!("Spring Bone: BakedOverride (clip_id={})", clip_id));
+            ui.text_colored([1.0, 0.7, 0.3, 1.0], "  Manually edited");
+            if ui.button("Re-bake") {
+                ui_events.send(UIEvent::SpringBoneRebake);
+            }
+            ui.same_line();
+            if ui.button("Discard Bake") {
+                ui_events.send(UIEvent::SpringBoneDiscardBake);
+            }
+            ui.same_line();
+            if ui.button("Save Bake (.ron)") {
+                ui_events.send(UIEvent::SpringBoneSaveBake);
+            }
         }
     }
 }

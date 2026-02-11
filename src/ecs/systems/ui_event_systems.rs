@@ -228,7 +228,8 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::ClearSpringBones
             | UIEvent::SpringBoneBake
             | UIEvent::SpringBoneDiscardBake
-            | UIEvent::SpringBoneSaveBake => {}
+            | UIEvent::SpringBoneSaveBake
+            | UIEvent::SpringBoneRebake => {}
         }
     }
 

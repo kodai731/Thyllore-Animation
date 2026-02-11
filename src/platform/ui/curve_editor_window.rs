@@ -249,7 +249,11 @@ fn build_track_list(
         if let Some(track) = clip.tracks.get(&bone_id) {
             let is_selected =
                 editor_state.selected_bone_id == Some(bone_id);
-            let label = if track.bone_name.len() > 18 {
+            let is_spring_bone = timeline_state.baked_bone_ids.contains(&bone_id);
+            let label = if is_spring_bone {
+                let name = if track.bone_name.len() > 13 { &track.bone_name[..10] } else { &track.bone_name };
+                format!("[SB] {}", name)
+            } else if track.bone_name.len() > 18 {
                 format!("{}...", &track.bone_name[..15])
             } else {
                 track.bone_name.clone()

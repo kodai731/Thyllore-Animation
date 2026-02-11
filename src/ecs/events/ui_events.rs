@@ -153,6 +153,7 @@ pub enum UIEvent {
     SpringBoneBake,
     SpringBoneDiscardBake,
     SpringBoneSaveBake,
+    SpringBoneRebake,
 
     ConstraintAdd {
         entity: Entity,

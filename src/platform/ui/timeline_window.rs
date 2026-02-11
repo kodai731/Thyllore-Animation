@@ -453,7 +453,11 @@ fn build_track_row(
 
     ui.same_line();
 
-    let display_name = if bone_name.len() > 15 {
+    let is_spring_bone = state.baked_bone_ids.contains(&bone_id);
+    let display_name = if is_spring_bone {
+        let name = if bone_name.len() > 11 { &bone_name[..8] } else { bone_name };
+        format!("[SB] {}", name)
+    } else if bone_name.len() > 15 {
         format!("{}...", &bone_name[..12])
     } else {
         bone_name.to_string()

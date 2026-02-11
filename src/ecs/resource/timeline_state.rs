@@ -92,6 +92,7 @@ pub struct TimelineState {
     pub dragging_clip: Option<ClipDragState>,
     pub view_mode: TimelineViewMode,
     pub snap_settings: SnapSettings,
+    pub baked_bone_ids: Vec<BoneId>,
 }
 
 impl TimelineState {
@@ -115,6 +116,7 @@ impl TimelineState {
             dragging_clip: None,
             view_mode: TimelineViewMode::default(),
             snap_settings: SnapSettings::default(),
+            baked_bone_ids: Vec::new(),
         }
     }
 

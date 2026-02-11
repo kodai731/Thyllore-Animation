@@ -590,6 +590,10 @@ fn process_timeline_events_inline(events: &[UIEvent], app: &mut App) {
     drop(clip_library);
     drop(timeline_state);
 
+    if modified {
+        transition_to_baked_override_if_needed(app);
+    }
+
     for event in events {
         if let UIEvent::TimelineSelectClip(source_id) = event {
             let mut lib =
@@ -1307,7 +1311,22 @@ fn process_spring_bone_bake_events_inline(
             UIEvent::SpringBoneSaveBake => {
                 handle_spring_bone_save(app);
             }
+            UIEvent::SpringBoneRebake => {
+                handle_spring_bone_discard(app);
+                handle_spring_bone_bake(app);
+            }
             _ => {}
+        }
+    }
+}
+
+fn transition_to_baked_override_if_needed(app: &mut App) {
+    use crate::ecs::resource::{SpringBoneMode, SpringBoneState};
+
+    if let Some(mut state) = app.data.ecs_world.get_resource_mut::<SpringBoneState>() {
+        if state.mode == SpringBoneMode::Baked {
+            state.mode = SpringBoneMode::BakedOverride;
+            crate::log!("Spring bone mode: Baked -> BakedOverride (manual edit detected)");
         }
     }
 }
@@ -1436,11 +1455,17 @@ fn handle_spring_bone_bake(app: &mut App) {
     }
     crate::log!("[BakeDebug] updated {} ClipSchedule(s) to new source_id={}", updated_count, new_id);
 
+    let baked_bone_ids = bake_result.baked_bone_ids.clone();
+
     let mut spring_state = app.data.ecs_world.resource_mut::<SpringBoneState>();
     spring_state.mode = SpringBoneMode::Baked;
     spring_state.baked_clip_source_id = Some(new_id);
     spring_state.baked_bone_ids = bake_result.baked_bone_ids;
     spring_state.original_clip_source_id = source_id;
+
+    let mut timeline_state = app.data.ecs_world.resource_mut::<TimelineState>();
+    timeline_state.current_clip_id = Some(new_id);
+    timeline_state.baked_bone_ids = baked_bone_ids;
 
     crate::log!("Spring bone baked to new clip (id={})", new_id);
 }
@@ -1480,6 +1505,12 @@ fn handle_spring_bone_discard(app: &mut App) {
             app.data.ecs_assets.animation_clips.retain(|_, a| a.clip_id != anim_id);
         }
         clip_library.remove(baked_id);
+    }
+
+    let mut timeline_state = app.data.ecs_world.resource_mut::<TimelineState>();
+    timeline_state.baked_bone_ids.clear();
+    if let Some(orig) = original_id {
+        timeline_state.current_clip_id = Some(orig);
     }
 
     crate::log!("Discarded spring bone bake, restored original clip");

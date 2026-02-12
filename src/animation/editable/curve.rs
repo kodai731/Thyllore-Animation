@@ -130,31 +130,34 @@ impl PropertyCurve {
             return Some(last.value);
         }
 
-        for i in 0..self.keyframes.len() - 1 {
-            let k0 = &self.keyframes[i];
-            let k1 = &self.keyframes[i + 1];
+        let idx = self
+            .keyframes
+            .partition_point(|kf| kf.time <= time);
+        let i = if idx == 0 {
+            0
+        } else {
+            (idx - 1).min(self.keyframes.len().saturating_sub(2))
+        };
 
-            if time >= k0.time && time < k1.time {
-                return Some(match k0.interpolation {
-                    InterpolationType::Stepped => k0.value,
-                    InterpolationType::Linear => {
-                        let t = (time - k0.time) / (k1.time - k0.time);
-                        k0.value + (k1.value - k0.value) * t
-                    }
-                    InterpolationType::Bezier => sample_bezier(
-                        k0.time,
-                        k0.value,
-                        &k0.out_tangent,
-                        k1.time,
-                        k1.value,
-                        &k1.in_tangent,
-                        time,
-                    ),
-                });
+        let k0 = &self.keyframes[i];
+        let k1 = &self.keyframes[i + 1];
+
+        Some(match k0.interpolation {
+            InterpolationType::Stepped => k0.value,
+            InterpolationType::Linear => {
+                let t = (time - k0.time) / (k1.time - k0.time);
+                k0.value + (k1.value - k0.value) * t
             }
-        }
-
-        Some(last.value)
+            InterpolationType::Bezier => sample_bezier(
+                k0.time,
+                k0.value,
+                &k0.out_tangent,
+                k1.time,
+                k1.value,
+                &k1.in_tangent,
+                time,
+            ),
+        })
     }
 
     pub fn set_keyframe_interpolation(

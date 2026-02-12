@@ -140,6 +140,35 @@ impl Default for Interpolation {
 pub struct Keyframe<T> {
     pub time: f32,
     pub value: T,
+    pub interpolation: Interpolation,
+    pub in_tangent: Option<T>,
+    pub out_tangent: Option<T>,
+}
+
+impl<T> Keyframe<T> {
+    pub fn new(time: f32, value: T) -> Self {
+        Self {
+            time,
+            value,
+            interpolation: Interpolation::Linear,
+            in_tangent: None,
+            out_tangent: None,
+        }
+    }
+
+    pub fn with_interpolation(
+        time: f32,
+        value: T,
+        interpolation: Interpolation,
+    ) -> Self {
+        Self {
+            time,
+            value,
+            interpolation,
+            in_tangent: None,
+            out_tangent: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -147,38 +176,48 @@ pub struct TransformChannel {
     pub translation: Vec<Keyframe<Vector3<f32>>>,
     pub rotation: Vec<Keyframe<Quaternion<f32>>>,
     pub scale: Vec<Keyframe<Vector3<f32>>>,
-    pub interpolation: Interpolation,
 }
 
 impl TransformChannel {
     pub fn sample_translation(&self, time: f32) -> Option<Vector3<f32>> {
-        Self::sample_vec3(&self.translation, time, &self.interpolation, None)
+        Self::sample_vec3(&self.translation, time, None)
     }
 
-    pub fn sample_translation_looped(&self, time: f32, duration: f32) -> Option<Vector3<f32>> {
-        Self::sample_vec3(&self.translation, time, &self.interpolation, Some(duration))
+    pub fn sample_translation_looped(
+        &self,
+        time: f32,
+        duration: f32,
+    ) -> Option<Vector3<f32>> {
+        Self::sample_vec3(&self.translation, time, Some(duration))
     }
 
     pub fn sample_rotation(&self, time: f32) -> Option<Quaternion<f32>> {
-        Self::sample_quat(&self.rotation, time, &self.interpolation, None)
+        Self::sample_quat(&self.rotation, time, None)
     }
 
-    pub fn sample_rotation_looped(&self, time: f32, duration: f32) -> Option<Quaternion<f32>> {
-        Self::sample_quat(&self.rotation, time, &self.interpolation, Some(duration))
+    pub fn sample_rotation_looped(
+        &self,
+        time: f32,
+        duration: f32,
+    ) -> Option<Quaternion<f32>> {
+        Self::sample_quat(&self.rotation, time, Some(duration))
     }
 
     pub fn sample_scale(&self, time: f32) -> Option<Vector3<f32>> {
-        Self::sample_vec3(&self.scale, time, &self.interpolation, None)
+        Self::sample_vec3(&self.scale, time, None)
     }
 
-    pub fn sample_scale_looped(&self, time: f32, duration: f32) -> Option<Vector3<f32>> {
-        Self::sample_vec3(&self.scale, time, &self.interpolation, Some(duration))
+    pub fn sample_scale_looped(
+        &self,
+        time: f32,
+        duration: f32,
+    ) -> Option<Vector3<f32>> {
+        Self::sample_vec3(&self.scale, time, Some(duration))
     }
 
     fn sample_vec3(
         keyframes: &[Keyframe<Vector3<f32>>],
         time: f32,
-        interpolation: &Interpolation,
         duration: Option<f32>,
     ) -> Option<Vector3<f32>> {
         if keyframes.is_empty() {
@@ -200,35 +239,34 @@ impl TransformChannel {
                     let wrap_duration = dur - last_kf.time + first_kf.time;
                     if wrap_duration > 0.0001 {
                         let t = (time - last_kf.time) / wrap_duration;
-                        return Some(last_kf.value + (first_kf.value - last_kf.value) * t);
+                        return Some(
+                            last_kf.value + (first_kf.value - last_kf.value) * t,
+                        );
                     }
                 }
             }
             return Some(last_kf.value);
         }
 
-        for i in 0..keyframes.len() - 1 {
-            let k0 = &keyframes[i];
-            let k1 = &keyframes[i + 1];
+        let i = super::keyframe_search::find_keyframe_segment(keyframes, time);
+        let k0 = &keyframes[i];
+        let k1 = &keyframes[i + 1];
+        let t = (time - k0.time) / (k1.time - k0.time);
 
-            if time >= k0.time && time < k1.time {
-                let t = (time - k0.time) / (k1.time - k0.time);
-                return match interpolation {
-                    Interpolation::Step => Some(k1.value),
-                    Interpolation::Linear | Interpolation::CubicSpline => {
-                        Some(k0.value + (k1.value - k0.value) * t)
-                    }
-                };
+        match k0.interpolation {
+            Interpolation::Step => Some(k1.value),
+            Interpolation::Linear => {
+                Some(k0.value + (k1.value - k0.value) * t)
+            }
+            Interpolation::CubicSpline => {
+                Some(hermite_vec3(k0, k1, t))
             }
         }
-
-        Some(last_kf.value)
     }
 
     fn sample_quat(
         keyframes: &[Keyframe<Quaternion<f32>>],
         time: f32,
-        interpolation: &Interpolation,
         duration: Option<f32>,
     ) -> Option<Quaternion<f32>> {
         if keyframes.is_empty() {
@@ -257,23 +295,65 @@ impl TransformChannel {
             return Some(last_kf.value);
         }
 
-        for i in 0..keyframes.len() - 1 {
-            let k0 = &keyframes[i];
-            let k1 = &keyframes[i + 1];
+        let i = super::keyframe_search::find_keyframe_segment(keyframes, time);
+        let k0 = &keyframes[i];
+        let k1 = &keyframes[i + 1];
+        let t = (time - k0.time) / (k1.time - k0.time);
 
-            if time >= k0.time && time < k1.time {
-                let t = (time - k0.time) / (k1.time - k0.time);
-                return match interpolation {
-                    Interpolation::Step => Some(k1.value),
-                    Interpolation::Linear | Interpolation::CubicSpline => {
-                        Some(slerp(k0.value, k1.value, t))
-                    }
-                };
+        match k0.interpolation {
+            Interpolation::Step => Some(k1.value),
+            Interpolation::Linear => Some(slerp(k0.value, k1.value, t)),
+            Interpolation::CubicSpline => {
+                Some(normalize_quat(hermite_quat(k0, k1, t)))
             }
         }
-
-        Some(last_kf.value)
     }
+}
+
+fn hermite_vec3(
+    k0: &Keyframe<Vector3<f32>>,
+    k1: &Keyframe<Vector3<f32>>,
+    t: f32,
+) -> Vector3<f32> {
+    let dt = k1.time - k0.time;
+    let t2 = t * t;
+    let t3 = t2 * t;
+
+    let b0 = k0.out_tangent.unwrap_or(Vector3::new(0.0, 0.0, 0.0));
+    let a1 = k1.in_tangent.unwrap_or(Vector3::new(0.0, 0.0, 0.0));
+
+    let h00 = 2.0 * t3 - 3.0 * t2 + 1.0;
+    let h10 = (t3 - 2.0 * t2 + t) * dt;
+    let h01 = -2.0 * t3 + 3.0 * t2;
+    let h11 = (t3 - t2) * dt;
+
+    k0.value * h00 + b0 * h10 + k1.value * h01 + a1 * h11
+}
+
+fn hermite_quat(
+    k0: &Keyframe<Quaternion<f32>>,
+    k1: &Keyframe<Quaternion<f32>>,
+    t: f32,
+) -> Quaternion<f32> {
+    let dt = k1.time - k0.time;
+    let t2 = t * t;
+    let t3 = t2 * t;
+
+    let zero_q = Quaternion::new(0.0, 0.0, 0.0, 0.0);
+    let b0 = k0.out_tangent.unwrap_or(zero_q);
+    let a1 = k1.in_tangent.unwrap_or(zero_q);
+
+    let h00 = 2.0 * t3 - 3.0 * t2 + 1.0;
+    let h10 = (t3 - 2.0 * t2 + t) * dt;
+    let h01 = -2.0 * t3 + 3.0 * t2;
+    let h11 = (t3 - t2) * dt;
+
+    Quaternion::new(
+        k0.value.s * h00 + b0.s * h10 + k1.value.s * h01 + a1.s * h11,
+        k0.value.v.x * h00 + b0.v.x * h10 + k1.value.v.x * h01 + a1.v.x * h11,
+        k0.value.v.y * h00 + b0.v.y * h10 + k1.value.v.y * h01 + a1.v.y * h11,
+        k0.value.v.z * h00 + b0.v.z * h10 + k1.value.v.z * h01 + a1.v.z * h11,
+    )
 }
 
 pub fn slerp(a: Quaternion<f32>, b: Quaternion<f32>, t: f32) -> Quaternion<f32> {
@@ -513,17 +593,159 @@ impl MorphAnimationSystem {
         let period = end_key_frame - start_key_frame;
         let mod_time = time.rem_euclid(period);
 
-        for i in 0..self.animations.len() {
-            if mod_time <= self.animations[i].key_frame {
-                return i;
-            }
-        }
-        self.animations.len() - 1
+        let idx = self
+            .animations
+            .partition_point(|a| a.key_frame < mod_time);
+        idx.min(self.animations.len() - 1)
     }
 
     pub fn clear(&mut self) {
         self.animations.clear();
         self.targets.clear();
         self.base_vertices.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_linear_channel() -> TransformChannel {
+        TransformChannel {
+            translation: vec![
+                Keyframe::new(0.0, Vector3::new(0.0, 0.0, 0.0)),
+                Keyframe::new(1.0, Vector3::new(10.0, 0.0, 0.0)),
+            ],
+            rotation: vec![
+                Keyframe::new(
+                    0.0,
+                    Quaternion::new(1.0, 0.0, 0.0, 0.0),
+                ),
+                Keyframe::new(
+                    1.0,
+                    Quaternion::new(1.0, 0.0, 0.0, 0.0),
+                ),
+            ],
+            scale: vec![
+                Keyframe::new(0.0, Vector3::new(1.0, 1.0, 1.0)),
+                Keyframe::new(1.0, Vector3::new(2.0, 2.0, 2.0)),
+            ],
+        }
+    }
+
+    #[test]
+    fn test_linear_translation_midpoint() {
+        let ch = make_linear_channel();
+        let v = ch.sample_translation(0.5).unwrap();
+        assert!((v.x - 5.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_linear_translation_boundary() {
+        let ch = make_linear_channel();
+        let v0 = ch.sample_translation(0.0).unwrap();
+        let v1 = ch.sample_translation(1.0).unwrap();
+        assert!((v0.x - 0.0).abs() < 0.01);
+        assert!((v1.x - 10.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_step_interpolation() {
+        let ch = TransformChannel {
+            translation: vec![
+                Keyframe::with_interpolation(
+                    0.0,
+                    Vector3::new(0.0, 0.0, 0.0),
+                    Interpolation::Step,
+                ),
+                Keyframe::with_interpolation(
+                    1.0,
+                    Vector3::new(10.0, 0.0, 0.0),
+                    Interpolation::Step,
+                ),
+            ],
+            ..Default::default()
+        };
+        let v = ch.sample_translation(0.5).unwrap();
+        assert!((v.x - 10.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_hermite_vec3_at_endpoints() {
+        let k0 = Keyframe {
+            time: 0.0,
+            value: Vector3::new(0.0, 0.0, 0.0),
+            interpolation: Interpolation::CubicSpline,
+            in_tangent: Some(Vector3::new(0.0, 0.0, 0.0)),
+            out_tangent: Some(Vector3::new(1.0, 0.0, 0.0)),
+        };
+        let k1 = Keyframe {
+            time: 1.0,
+            value: Vector3::new(1.0, 0.0, 0.0),
+            interpolation: Interpolation::CubicSpline,
+            in_tangent: Some(Vector3::new(1.0, 0.0, 0.0)),
+            out_tangent: Some(Vector3::new(0.0, 0.0, 0.0)),
+        };
+
+        let v0 = hermite_vec3(&k0, &k1, 0.0);
+        assert!((v0.x - 0.0).abs() < 0.001);
+
+        let v1 = hermite_vec3(&k0, &k1, 1.0);
+        assert!((v1.x - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_hermite_vec3_midpoint() {
+        let k0 = Keyframe {
+            time: 0.0,
+            value: Vector3::new(0.0, 0.0, 0.0),
+            interpolation: Interpolation::CubicSpline,
+            in_tangent: Some(Vector3::new(0.0, 0.0, 0.0)),
+            out_tangent: Some(Vector3::new(1.0, 0.0, 0.0)),
+        };
+        let k1 = Keyframe {
+            time: 1.0,
+            value: Vector3::new(1.0, 0.0, 0.0),
+            interpolation: Interpolation::CubicSpline,
+            in_tangent: Some(Vector3::new(1.0, 0.0, 0.0)),
+            out_tangent: Some(Vector3::new(0.0, 0.0, 0.0)),
+        };
+
+        let mid = hermite_vec3(&k0, &k1, 0.5);
+        assert!(
+            mid.x > 0.0 && mid.x < 1.0,
+            "midpoint x={} should be between 0 and 1",
+            mid.x
+        );
+    }
+
+    #[test]
+    fn test_cubicspline_channel_sampling() {
+        let ch = TransformChannel {
+            translation: vec![
+                Keyframe {
+                    time: 0.0,
+                    value: Vector3::new(0.0, 0.0, 0.0),
+                    interpolation: Interpolation::CubicSpline,
+                    in_tangent: Some(Vector3::new(0.0, 0.0, 0.0)),
+                    out_tangent: Some(Vector3::new(3.0, 0.0, 0.0)),
+                },
+                Keyframe {
+                    time: 1.0,
+                    value: Vector3::new(3.0, 0.0, 0.0),
+                    interpolation: Interpolation::CubicSpline,
+                    in_tangent: Some(Vector3::new(3.0, 0.0, 0.0)),
+                    out_tangent: Some(Vector3::new(0.0, 0.0, 0.0)),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let v = ch.sample_translation(0.5).unwrap();
+        assert!(
+            (v.x - 1.5).abs() < 0.5,
+            "CubicSpline midpoint x={} should be near 1.5",
+            v.x
+        );
     }
 }

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::animation::{AnimationClip, BoneId, Keyframe, TransformChannel};
 
 use super::curve::{PropertyCurve, PropertyType};
-use super::keyframe::{InterpolationType, SourceClipId};
+use super::keyframe::{EditableKeyframe, InterpolationType, SourceClipId};
 use super::track::BoneTrack;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -36,6 +36,8 @@ impl EditableAnimationClip {
         clip: &AnimationClip,
         bone_names: &HashMap<BoneId, String>,
     ) -> Self {
+        use crate::animation::Interpolation;
+
         let mut editable = Self::new(id, clip.name.clone());
         editable.duration = clip.duration;
 
@@ -48,26 +50,89 @@ impl EditableAnimationClip {
             let base_curve_id = editable.next_curve_id;
             editable.next_curve_id += 10;
 
-            let mut track = BoneTrack::new(bone_id, bone_name, base_curve_id);
+            let mut track =
+                BoneTrack::new(bone_id, bone_name, base_curve_id);
 
-            for kf in &channel.translation {
-                track.translation_x.add_keyframe(kf.time, kf.value.x);
-                track.translation_y.add_keyframe(kf.time, kf.value.y);
-                track.translation_z.add_keyframe(kf.time, kf.value.z);
-            }
+            import_vec3_keyframes(
+                &channel.translation,
+                &mut [
+                    &mut track.translation_x,
+                    &mut track.translation_y,
+                    &mut track.translation_z,
+                ],
+            );
 
-            for kf in &channel.rotation {
+            for (idx, kf) in channel.rotation.iter().enumerate() {
                 let euler = quaternion_to_euler_degrees(&kf.value);
-                track.rotation_x.add_keyframe(kf.time, euler.x);
-                track.rotation_y.add_keyframe(kf.time, euler.y);
-                track.rotation_z.add_keyframe(kf.time, euler.z);
+                let kf_id_x =
+                    track.rotation_x.add_keyframe(kf.time, euler.x);
+                let kf_id_y =
+                    track.rotation_y.add_keyframe(kf.time, euler.y);
+                let kf_id_z =
+                    track.rotation_z.add_keyframe(kf.time, euler.z);
+
+                if kf.interpolation == Interpolation::CubicSpline {
+                    let next_kf = channel.rotation.get(idx + 1);
+                    let dt = next_kf
+                        .map(|n| n.time - kf.time)
+                        .unwrap_or(0.1);
+
+                    if let Some(out_t) = &kf.out_tangent {
+                        let out_euler =
+                            quaternion_to_euler_degrees(out_t);
+                        set_cubic_bezier_handles(
+                            &mut track.rotation_x,
+                            kf_id_x,
+                            dt,
+                            out_euler.x,
+                        );
+                        set_cubic_bezier_handles(
+                            &mut track.rotation_y,
+                            kf_id_y,
+                            dt,
+                            out_euler.y,
+                        );
+                        set_cubic_bezier_handles(
+                            &mut track.rotation_z,
+                            kf_id_z,
+                            dt,
+                            out_euler.z,
+                        );
+                    }
+
+                    if let Some(in_t) = &kf.in_tangent {
+                        let in_euler =
+                            quaternion_to_euler_degrees(in_t);
+                        set_cubic_bezier_in_handles(
+                            &mut track.rotation_x,
+                            kf_id_x,
+                            dt,
+                            in_euler.x,
+                        );
+                        set_cubic_bezier_in_handles(
+                            &mut track.rotation_y,
+                            kf_id_y,
+                            dt,
+                            in_euler.y,
+                        );
+                        set_cubic_bezier_in_handles(
+                            &mut track.rotation_z,
+                            kf_id_z,
+                            dt,
+                            in_euler.z,
+                        );
+                    }
+                }
             }
 
-            for kf in &channel.scale {
-                track.scale_x.add_keyframe(kf.time, kf.value.x);
-                track.scale_y.add_keyframe(kf.time, kf.value.y);
-                track.scale_z.add_keyframe(kf.time, kf.value.z);
-            }
+            import_vec3_keyframes(
+                &channel.scale,
+                &mut [
+                    &mut track.scale_x,
+                    &mut track.scale_y,
+                    &mut track.scale_z,
+                ],
+            );
 
             editable.tracks.insert(bone_id, track);
         }
@@ -92,10 +157,10 @@ impl EditableAnimationClip {
                 let x = track.translation_x.sample(time).unwrap_or(0.0);
                 let y = track.translation_y.sample(time).unwrap_or(0.0);
                 let z = track.translation_z.sample(time).unwrap_or(0.0);
-                channel.translation.push(Keyframe {
+                channel.translation.push(Keyframe::new(
                     time,
-                    value: Vector3::new(x, y, z),
-                });
+                    Vector3::new(x, y, z),
+                ));
             }
 
             let rotation_curves = [&track.rotation_x, &track.rotation_y, &track.rotation_z];
@@ -106,7 +171,7 @@ impl EditableAnimationClip {
                 let ez = track.rotation_z.sample(time).unwrap_or(0.0);
                 let q = euler_degrees_to_quaternion(ex, ey, ez);
 
-                channel.rotation.push(Keyframe { time, value: q });
+                channel.rotation.push(Keyframe::new(time, q));
             }
 
             let scale_curves = [&track.scale_x, &track.scale_y, &track.scale_z];
@@ -115,10 +180,10 @@ impl EditableAnimationClip {
                 let x = track.scale_x.sample(time).unwrap_or(1.0);
                 let y = track.scale_y.sample(time).unwrap_or(1.0);
                 let z = track.scale_z.sample(time).unwrap_or(1.0);
-                channel.scale.push(Keyframe {
+                channel.scale.push(Keyframe::new(
                     time,
-                    value: Vector3::new(x, y, z),
-                });
+                    Vector3::new(x, y, z),
+                ));
             }
 
             if !channel.translation.is_empty()
@@ -200,6 +265,78 @@ impl EditableAnimationClip {
     }
 }
 
+fn import_vec3_keyframes(
+    keyframes: &[crate::animation::Keyframe<Vector3<f32>>],
+    curves: &mut [&mut PropertyCurve; 3],
+) {
+    use crate::animation::Interpolation;
+
+    for (idx, kf) in keyframes.iter().enumerate() {
+        let values = [kf.value.x, kf.value.y, kf.value.z];
+        let is_cubic = kf.interpolation == Interpolation::CubicSpline;
+        let next_kf = keyframes.get(idx + 1);
+        let dt = next_kf.map(|n| n.time - kf.time).unwrap_or(0.1);
+
+        let out_tangent = kf.out_tangent.map(|t| [t.x, t.y, t.z]);
+        let in_tangent = kf.in_tangent.map(|t| [t.x, t.y, t.z]);
+
+        for (c_idx, curve) in curves.iter_mut().enumerate() {
+            let kf_id = curve.add_keyframe(kf.time, values[c_idx]);
+
+            if is_cubic {
+                if let Some(out_t) = &out_tangent {
+                    set_cubic_bezier_handles(
+                        curve,
+                        kf_id,
+                        dt,
+                        out_t[c_idx],
+                    );
+                }
+                if let Some(in_t) = &in_tangent {
+                    set_cubic_bezier_in_handles(
+                        curve,
+                        kf_id,
+                        dt,
+                        in_t[c_idx],
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn set_cubic_bezier_handles(
+    curve: &mut PropertyCurve,
+    kf_id: u64,
+    dt: f32,
+    tangent_value: f32,
+) {
+    use super::keyframe::BezierHandle;
+
+    if let Some(kf) = curve.get_keyframe_mut(kf_id) {
+        kf.interpolation = InterpolationType::Bezier;
+        let handle_time = dt / 3.0;
+        let handle_value = tangent_value * dt / 3.0;
+        kf.out_tangent = BezierHandle::new(handle_time, handle_value);
+    }
+}
+
+fn set_cubic_bezier_in_handles(
+    curve: &mut PropertyCurve,
+    kf_id: u64,
+    dt: f32,
+    tangent_value: f32,
+) {
+    use super::keyframe::BezierHandle;
+
+    if let Some(kf) = curve.get_keyframe_mut(kf_id) {
+        let handle_time = dt / 3.0;
+        let handle_value = tangent_value * dt / 3.0;
+        kf.in_tangent =
+            BezierHandle::new(-handle_time, -handle_value);
+    }
+}
+
 fn collect_unique_times(curves: &[&PropertyCurve]) -> Vec<f32> {
     let mut times: Vec<f32> = curves
         .iter()
@@ -209,6 +346,39 @@ fn collect_unique_times(curves: &[&PropertyCurve]) -> Vec<f32> {
     times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     times.dedup_by(|a, b| (*a - *b).abs() < 0.0001);
     times
+}
+
+fn estimate_bezier_curvature(
+    k0: &EditableKeyframe,
+    k1: &EditableKeyframe,
+) -> f32 {
+    let dt = k1.time - k0.time;
+    if dt.abs() < 1e-8 {
+        return 0.0;
+    }
+
+    let linear_slope = (k1.value - k0.value) / dt;
+    let out_deviation =
+        (k0.out_tangent.value_offset - linear_slope * k0.out_tangent.time_offset).abs();
+    let in_deviation =
+        (k1.in_tangent.value_offset - linear_slope * k1.in_tangent.time_offset).abs();
+
+    let value_range = (k1.value - k0.value).abs().max(1.0);
+    (out_deviation + in_deviation) / value_range
+}
+
+fn compute_bezier_subdivisions(
+    k0: &EditableKeyframe,
+    k1: &EditableKeyframe,
+) -> usize {
+    let duration = k1.time - k0.time;
+    let fps_based = (duration * 30.0).ceil() as usize;
+
+    let curvature = estimate_bezier_curvature(k0, k1);
+    let curvature_multiplier = 1.0 + curvature * 2.0;
+
+    let subdivisions = (fps_based as f32 * curvature_multiplier).ceil() as usize;
+    subdivisions.clamp(2, 64)
 }
 
 fn collect_bake_times(curves: &[&PropertyCurve]) -> Vec<f32> {
@@ -230,9 +400,9 @@ fn collect_bake_times(curves: &[&PropertyCurve]) -> Vec<f32> {
             let k1 = &curve.keyframes[i + 1];
 
             if k0.interpolation == InterpolationType::Bezier {
-                let bezier_subdivisions = 10;
-                for s in 1..bezier_subdivisions {
-                    let frac = s as f32 / bezier_subdivisions as f32;
+                let subdivisions = compute_bezier_subdivisions(k0, k1);
+                for s in 1..subdivisions {
+                    let frac = s as f32 / subdivisions as f32;
                     let mid_time = k0.time + (k1.time - k0.time) * frac;
                     times.push(mid_time);
                 }
@@ -299,5 +469,66 @@ impl Default for EditableAnimationClip {
             source_path: None,
             next_curve_id: 1,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::animation::editable::keyframe::{BezierHandle, EditableKeyframe};
+
+    fn make_bezier_kf(
+        time: f32,
+        value: f32,
+        out_t: f32,
+        out_v: f32,
+        in_t: f32,
+        in_v: f32,
+    ) -> EditableKeyframe {
+        let mut kf = EditableKeyframe::new(0, time, value);
+        kf.interpolation = InterpolationType::Bezier;
+        kf.out_tangent = BezierHandle::new(out_t, out_v);
+        kf.in_tangent = BezierHandle::new(in_t, in_v);
+        kf
+    }
+
+    #[test]
+    fn test_short_segment_few_subdivisions() {
+        let k0 = make_bezier_kf(0.0, 0.0, 0.01, 0.0, 0.0, 0.0);
+        let k1 = make_bezier_kf(0.05, 1.0, 0.0, 0.0, -0.01, 0.0);
+        let subs = compute_bezier_subdivisions(&k0, &k1);
+        assert!(subs >= 2 && subs <= 10, "short segment: got {}", subs);
+    }
+
+    #[test]
+    fn test_long_segment_many_subdivisions() {
+        let k0 = make_bezier_kf(0.0, 0.0, 0.3, 0.0, 0.0, 0.0);
+        let k1 = make_bezier_kf(3.0, 10.0, 0.0, 0.0, -0.3, 0.0);
+        let subs = compute_bezier_subdivisions(&k0, &k1);
+        assert!(subs >= 60, "long segment: got {}", subs);
+    }
+
+    #[test]
+    fn test_linear_bezier_minimal_subdivisions() {
+        let k0 = make_bezier_kf(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+        let k1 = make_bezier_kf(1.0, 1.0, 0.0, 0.0, 0.0, 0.0);
+        let subs = compute_bezier_subdivisions(&k0, &k1);
+        assert!(subs <= 31, "linear bezier: got {}", subs);
+    }
+
+    #[test]
+    fn test_s_curve_high_subdivisions() {
+        let k0 = make_bezier_kf(0.0, 0.0, 0.3, 5.0, 0.0, 0.0);
+        let k1 = make_bezier_kf(1.0, 1.0, 0.0, 0.0, -0.3, -5.0);
+        let subs = compute_bezier_subdivisions(&k0, &k1);
+        assert!(subs > 30, "s-curve: got {}", subs);
+    }
+
+    #[test]
+    fn test_curvature_zero_for_linear_handles() {
+        let k0 = make_bezier_kf(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+        let k1 = make_bezier_kf(1.0, 1.0, 0.0, 0.0, 0.0, 0.0);
+        let curvature = estimate_bezier_curvature(&k0, &k1);
+        assert!(curvature.abs() < 0.01, "curvature: {}", curvature);
     }
 }

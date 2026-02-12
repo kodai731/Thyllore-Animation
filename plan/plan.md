@@ -2,7 +2,7 @@
     - Animation and Rendering Engine
     - ML animation suggestion system
     - pure and clean architecture
-- todo list
+- todo
     - clean libraries, e.g. russimp
     - fix scene view bone calculation
-    - 
+    - improve UI upto practical level

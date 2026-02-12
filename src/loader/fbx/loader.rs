@@ -322,24 +322,21 @@ fn convert_fbx_animation_to_clip(
             let mut channel = TransformChannel::default();
 
             for key in &bone_anim.translation_keys {
-                channel.translation.push(Keyframe {
-                    time: key.time,
-                    value: Vector3::new(key.value[0], key.value[1], key.value[2]),
-                });
+                channel.translation.push(Keyframe::new(
+                    key.time,
+                    Vector3::new(key.value[0], key.value[1], key.value[2]),
+                ));
             }
 
             for key in &bone_anim.rotation_keys {
-                channel.rotation.push(Keyframe {
-                    time: key.time,
-                    value: key.value,
-                });
+                channel.rotation.push(Keyframe::new(key.time, key.value));
             }
 
             for key in &bone_anim.scale_keys {
-                channel.scale.push(Keyframe {
-                    time: key.time,
-                    value: Vector3::new(key.value[0], key.value[1], key.value[2]),
-                });
+                channel.scale.push(Keyframe::new(
+                    key.time,
+                    Vector3::new(key.value[0], key.value[1], key.value[2]),
+                ));
             }
 
             clip.add_channel(bid, channel);

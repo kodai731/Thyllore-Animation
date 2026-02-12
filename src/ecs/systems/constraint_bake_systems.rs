@@ -139,26 +139,16 @@ fn build_animation_clip(
         let channel = TransformChannel {
             translation: translations
                 .iter()
-                .map(|(t, v)| Keyframe {
-                    time: *t,
-                    value: *v,
-                })
+                .map(|(t, v)| Keyframe::new(*t, *v))
                 .collect(),
             rotation: rotations
                 .iter()
-                .map(|(t, q)| Keyframe {
-                    time: *t,
-                    value: *q,
-                })
+                .map(|(t, q)| Keyframe::new(*t, *q))
                 .collect(),
             scale: scales
                 .iter()
-                .map(|(t, v)| Keyframe {
-                    time: *t,
-                    value: *v,
-                })
+                .map(|(t, v)| Keyframe::new(*t, *v))
                 .collect(),
-            ..Default::default()
         };
 
         clip.add_channel(bone_idx as BoneId, channel);

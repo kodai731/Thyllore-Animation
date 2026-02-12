@@ -7,6 +7,7 @@ mod gizmo;
 mod marker;
 pub mod mesh;
 mod render;
+mod inference_actor;
 mod spring_bone;
 
 pub use animation_meta::*;
@@ -18,4 +19,5 @@ pub use gizmo::*;
 pub use marker::*;
 pub use mesh::*;
 pub use render::*;
+pub use inference_actor::*;
 pub use spring_bone::*;

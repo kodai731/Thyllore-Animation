@@ -157,6 +157,8 @@ impl App {
         data.ecs_world.insert_resource(ModelState::default());
         data.ecs_world.insert_resource(MeshAssets::new());
         data.ecs_world.insert_resource(NodeAssets::new());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::InferenceActorState::default());
 
         let viewport_width = rrswapchain.swapchain_extent.width;
         let viewport_height = rrswapchain.swapchain_extent.height;

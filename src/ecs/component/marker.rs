@@ -24,3 +24,6 @@ pub struct Constrained;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WithSpringBone;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct WithInferenceActor;

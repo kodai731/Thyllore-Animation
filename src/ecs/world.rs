@@ -7,7 +7,8 @@ use cgmath::{Matrix4, SquareMatrix, Vector3};
 use crate::asset::AssetId;
 use crate::ecs::component::{
     Animated, AnimationMeta, ClipSchedule, Constrained, ConstraintSet, EditorDisplay, EntityIcon,
-    MeshHandle, Model, Skinned, SpringBoneSetup, WithSpringBone,
+    InferenceActorSetup, MeshHandle, Model, Skinned, SpringBoneSetup, WithInferenceActor,
+    WithSpringBone,
 };
 
 pub trait Resource: Any + 'static {}
@@ -269,6 +270,8 @@ impl World {
         world.register_component::<Constrained>();
         world.register_component::<SpringBoneSetup>();
         world.register_component::<WithSpringBone>();
+        world.register_component::<InferenceActorSetup>();
+        world.register_component::<WithInferenceActor>();
 
         world
     }
@@ -611,6 +614,12 @@ impl<'a> EntityBuilder<'a> {
     pub fn with_spring_bone_setup(self, setup: SpringBoneSetup) -> Self {
         self.world.insert_component(self.entity, setup);
         self.world.insert_component(self.entity, WithSpringBone);
+        self
+    }
+
+    pub fn with_inference_actor(self, setup: InferenceActorSetup) -> Self {
+        self.world.insert_component(self.entity, setup);
+        self.world.insert_component(self.entity, WithInferenceActor);
         self
     }
 

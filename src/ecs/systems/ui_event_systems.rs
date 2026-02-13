@@ -227,6 +227,11 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::SpringColliderGroupRemove { .. }
             | UIEvent::SpringColliderGroupUpdate { .. }
             | UIEvent::SpringBoneToggleGizmo(_) => {}
+
+            #[cfg(feature = "ml")]
+            UIEvent::CurveSuggestionRequest { .. }
+            | UIEvent::CurveSuggestionAccept
+            | UIEvent::CurveSuggestionDismiss => {}
         }
     }
 

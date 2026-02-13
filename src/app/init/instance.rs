@@ -160,6 +160,9 @@ impl App {
         #[cfg(feature = "ml")]
         data.ecs_world
             .insert_resource(crate::ecs::resource::InferenceActorState::default());
+        #[cfg(feature = "ml")]
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::CurveSuggestionState::default());
 
         let viewport_width = rrswapchain.swapchain_extent.width;
         let viewport_height = rrswapchain.swapchain_extent.height;
@@ -997,6 +1000,22 @@ impl App {
         {
             data.ecs_world
                 .insert_resource(crate::ecs::resource::AutoExposure::default());
+        }
+
+        #[cfg(feature = "ml")]
+        {
+            use crate::ecs::component::InferenceActorSetup;
+            use crate::ecs::world::EntityBuilder;
+            use crate::ml::{InferenceModelKind, CURVE_COPILOT_ACTOR_ID};
+
+            EntityBuilder::new(&mut data.ecs_world).with_inference_actor(
+                InferenceActorSetup {
+                    actor_id: CURVE_COPILOT_ACTOR_ID,
+                    model_path: "assets/ml/curve_copilot_dummy.onnx".to_string(),
+                    model_kind: InferenceModelKind::CurveCopilot,
+                    enabled: true,
+                },
+            );
         }
     }
 

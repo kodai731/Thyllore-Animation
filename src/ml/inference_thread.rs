@@ -117,5 +117,41 @@ fn execute_inference(
                 output: output_vec,
             })
         }
+
+        InferenceRequestKind::CurveCopilotPredict {
+            context, ..
+        } => {
+            let context_len = context.len();
+            let input_tensor = Tensor::from_array((
+                vec![1i64, context_len as i64],
+                context.clone(),
+            ))?;
+
+            let outputs =
+                session.run(ort::inputs![input_tensor])?;
+
+            let (_shape, output_data) =
+                outputs[0].try_extract_tensor::<f32>()?;
+            let raw: Vec<f32> = output_data.to_vec();
+
+            if raw.is_empty() {
+                return Ok(InferenceResultKind::CurveCopilotPredict {
+                    points: Vec::new(),
+                    confidence: 0.0,
+                });
+            }
+
+            let confidence = raw[raw.len() - 1].clamp(0.0, 1.0);
+            let point_data = &raw[..raw.len() - 1];
+            let points: Vec<(f32, f32)> = point_data
+                .chunks_exact(2)
+                .map(|pair| (pair[0], pair[1]))
+                .collect();
+
+            Ok(InferenceResultKind::CurveCopilotPredict {
+                points,
+                confidence,
+            })
+        }
     }
 }

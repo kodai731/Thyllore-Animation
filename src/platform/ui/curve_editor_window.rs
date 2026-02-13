@@ -9,6 +9,12 @@ use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{ClipLibrary, CurveEditorBuffer, TimelineState};
 
+pub struct SuggestionOverlay {
+    pub property_type: PropertyType,
+    pub points: Vec<(f32, f32)>,
+    pub confidence: f32,
+}
+
 const MIN_WINDOW_WIDTH: f32 = 400.0;
 const MIN_WINDOW_HEIGHT: f32 = 300.0;
 const TRACK_LIST_WIDTH: f32 = 180.0;
@@ -156,6 +162,7 @@ pub fn build_curve_editor_window(
     clip_library: &ClipLibrary,
     editor_state: &mut CurveEditorState,
     curve_buffer: &CurveEditorBuffer,
+    suggestion_overlays: &[SuggestionOverlay],
 ) {
     if !editor_state.is_open {
         return;
@@ -203,6 +210,7 @@ pub fn build_curve_editor_window(
                         clip_library,
                         editor_state,
                         curve_buffer,
+                        suggestion_overlays,
                     );
                 });
         });
@@ -308,6 +316,7 @@ fn build_curve_view(
     clip_library: &ClipLibrary,
     editor_state: &mut CurveEditorState,
     curve_buffer: &CurveEditorBuffer,
+    suggestion_overlays: &[SuggestionOverlay],
 ) {
     let clip = match timeline_state
         .current_clip_id
@@ -460,6 +469,13 @@ fn build_curve_view(
                 &editor_state.visible_curves,
                 &vt,
             );
+
+            draw_suggestion_curve_overlay(
+                &draw_list,
+                suggestion_overlays,
+                &editor_state.visible_curves,
+                &vt,
+            );
         },
     );
 
@@ -498,6 +514,9 @@ fn build_curve_view(
     ui.set_cursor_screen_pos([cursor_pos[0], cursor_pos[1] + total_height]);
 
     build_buffer_controls(ui, ui_events, curve_buffer);
+
+    #[cfg(feature = "ml")]
+    handle_suggestion_keyboard(ui, ui_events, bone_id, editor_state, suggestion_overlays);
 }
 
 fn build_keyframe_context_menu(
@@ -1395,6 +1414,82 @@ fn draw_buffer_curve_overlay(
             draw_list
                 .add_line([x0, y0], [x1, y1], ghost_color)
                 .thickness(1.5)
+                .build();
+        }
+    }
+}
+
+#[cfg(feature = "ml")]
+fn handle_suggestion_keyboard(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    bone_id: BoneId,
+    editor_state: &CurveEditorState,
+    suggestion_overlays: &[SuggestionOverlay],
+) {
+    let io = ui.io();
+    let ctrl = io.key_ctrl;
+
+    if ctrl && ui.is_key_pressed(imgui::Key::Space) {
+        if let Some(first_visible) = editor_state.visible_curves.iter().next() {
+            ui_events.send(UIEvent::CurveSuggestionRequest {
+                bone_id,
+                property_type: *first_visible,
+            });
+        }
+    }
+
+    if ui.is_key_pressed(imgui::Key::Tab) && !suggestion_overlays.is_empty() {
+        ui_events.send(UIEvent::CurveSuggestionAccept);
+    }
+
+    if ui.is_key_pressed(imgui::Key::Escape) && !suggestion_overlays.is_empty() {
+        ui_events.send(UIEvent::CurveSuggestionDismiss);
+    }
+}
+
+fn draw_suggestion_curve_overlay(
+    draw_list: &imgui::DrawListMut,
+    overlays: &[SuggestionOverlay],
+    visible_curves: &HashSet<PropertyType>,
+    vt: &ViewTransform,
+) {
+    if overlays.is_empty() {
+        return;
+    }
+
+    for overlay in overlays {
+        if !visible_curves.contains(&overlay.property_type) {
+            continue;
+        }
+
+        if overlay.points.len() < 2 {
+            continue;
+        }
+
+        if overlay.confidence < 0.5 {
+            continue;
+        }
+
+        let alpha = if overlay.confidence > 0.8 { 0.5 } else { 0.35 };
+        let ghost_color = if overlay.confidence > 0.8 {
+            [0.3, 1.0, 0.3, alpha]
+        } else {
+            [1.0, 1.0, 0.3, alpha]
+        };
+
+        for i in 0..overlay.points.len() - 1 {
+            let (t0, v0) = overlay.points[i];
+            let (t1, v1) = overlay.points[i + 1];
+
+            let x0 = vt.time_to_x(t0);
+            let y0 = vt.value_to_y(v0);
+            let x1 = vt.time_to_x(t1);
+            let y1 = vt.value_to_y(v1);
+
+            draw_list
+                .add_line([x0, y0], [x1, y1], ghost_color)
+                .thickness(2.0)
                 .build();
         }
     }

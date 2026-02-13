@@ -143,6 +143,7 @@ mod tests {
             crate::ml::InferenceResultKind::CurvePredict { output } => {
                 assert_eq!(output.len(), 3);
             }
+            _ => panic!("Unexpected result kind"),
         }
     }
 

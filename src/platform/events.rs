@@ -303,6 +303,30 @@ fn build_ui_windows(
         let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
         let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
         let curve_buffer = app.data.ecs_world.resource::<CurveEditorBuffer>();
+
+        #[cfg(feature = "ml")]
+        let suggestion_overlays: Vec<super::ui::SuggestionOverlay> = {
+            if let Some(state) = app
+                .data
+                .ecs_world
+                .get_resource::<crate::ecs::resource::CurveSuggestionState>()
+            {
+                state
+                    .suggestions
+                    .iter()
+                    .map(|s| super::ui::SuggestionOverlay {
+                        property_type: s.property_type,
+                        points: s.points.clone(),
+                        confidence: s.confidence,
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            }
+        };
+        #[cfg(not(feature = "ml"))]
+        let suggestion_overlays: Vec<super::ui::SuggestionOverlay> = Vec::new();
+
         build_curve_editor_window(
             ui,
             &mut *ui_events,
@@ -310,6 +334,7 @@ fn build_ui_windows(
             &*clip_library,
             &mut *curve_editor,
             &*curve_buffer,
+            &suggestion_overlays,
         );
     }
 }
@@ -345,6 +370,8 @@ unsafe fn process_ui_events_and_render_frame(
             process_constraint_bake_events_inline(&events, app);
             process_spring_bone_bake_events_inline(&events, app);
             process_spring_bone_edit_events_inline(&events, app);
+            #[cfg(feature = "ml")]
+            process_curve_suggestion_events_inline(&events, app);
 
             let model_bounds = app.data.graphics_resources.calculate_model_bounds();
             let world = &app.data.ecs_world;
@@ -1568,6 +1595,83 @@ fn process_spring_bone_edit_events_inline(events: &[UIEvent], app: &mut App) {
                 {
                     gizmo.visible = *visible;
                 }
+            }
+
+            _ => {}
+        }
+    }
+}
+
+#[cfg(feature = "ml")]
+fn process_curve_suggestion_events_inline(events: &[UIEvent], app: &mut App) {
+    use crate::ecs::resource::{CurveSuggestionState, InferenceActorState};
+    use crate::ecs::systems::{curve_suggestion_apply, curve_suggestion_dismiss, curve_suggestion_submit};
+    use crate::ml::CURVE_COPILOT_ACTOR_ID;
+
+    for event in events {
+        match event {
+            UIEvent::CurveSuggestionRequest {
+                bone_id,
+                property_type,
+            } => {
+                let timeline_state = app.data.ecs_world.resource::<TimelineState>();
+                let clip_id = timeline_state.current_clip_id;
+                drop(timeline_state);
+
+                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+                let curve = clip_id
+                    .and_then(|id| clip_library.get(id))
+                    .and_then(|clip| clip.tracks.get(bone_id))
+                    .map(|track| track.get_curve(*property_type).clone());
+                drop(clip_library);
+
+                if let Some(curve) = curve {
+                    let mut suggestion_state =
+                        app.data.ecs_world.resource_mut::<CurveSuggestionState>();
+                    let mut inference_state =
+                        app.data.ecs_world.resource_mut::<InferenceActorState>();
+                    curve_suggestion_submit(
+                        &mut suggestion_state,
+                        &mut inference_state,
+                        CURVE_COPILOT_ACTOR_ID,
+                        &curve,
+                        *property_type,
+                        *bone_id,
+                    );
+                }
+            }
+
+            UIEvent::CurveSuggestionAccept => {
+                let suggestion = {
+                    let state = app.data.ecs_world.resource::<CurveSuggestionState>();
+                    state.suggestions.first().cloned()
+                };
+
+                if let Some(suggestion) = suggestion {
+                    let timeline_state = app.data.ecs_world.resource::<TimelineState>();
+                    let clip_id = timeline_state.current_clip_id;
+                    drop(timeline_state);
+
+                    if let Some(cid) = clip_id {
+                        let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
+                        if let Some(clip) = clip_library.get_mut(cid) {
+                            if let Some(track) = clip.tracks.get_mut(&suggestion.bone_id) {
+                                let curve = track.get_curve_mut(suggestion.property_type);
+                                curve_suggestion_apply(&suggestion, curve);
+                            }
+                        }
+                    }
+
+                    let mut state = app.data.ecs_world.resource_mut::<CurveSuggestionState>();
+                    curve_suggestion_dismiss(&mut state);
+                    crate::log!("CurveCopilot: suggestion accepted");
+                }
+            }
+
+            UIEvent::CurveSuggestionDismiss => {
+                let mut state = app.data.ecs_world.resource_mut::<CurveSuggestionState>();
+                curve_suggestion_dismiss(&mut state);
+                crate::log!("CurveCopilot: suggestion dismissed");
             }
 
             _ => {}

@@ -286,6 +286,16 @@ pub enum UIEvent {
     SetBoneInFront(bool),
     SetBoneDistanceScaling(bool),
     SetBoneDistanceScaleFactor(f32),
+
+    #[cfg(feature = "ml")]
+    CurveSuggestionRequest {
+        bone_id: BoneId,
+        property_type: PropertyType,
+    },
+    #[cfg(feature = "ml")]
+    CurveSuggestionAccept,
+    #[cfg(feature = "ml")]
+    CurveSuggestionDismiss,
 }
 
 #[derive(Default)]

@@ -7,6 +7,8 @@ use super::phases::{
     run_transform_phase_ecs, run_transform_phase_gpu,
 };
 #[cfg(feature = "ml")]
+use super::curve_suggestion_systems::curve_suggestion_poll_results;
+#[cfg(feature = "ml")]
 use super::inference_actor_systems::{
     inference_actor_initialize, inference_actor_poll,
 };
@@ -20,7 +22,7 @@ use crate::ecs::resource::{
     ClipLibrary, HierarchyState, TimelineState,
 };
 #[cfg(feature = "ml")]
-use crate::ecs::resource::InferenceActorState;
+use crate::ecs::resource::{CurveSuggestionState, InferenceActorState};
 use crate::ecs::world::Animator;
 
 pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
@@ -159,6 +161,11 @@ fn run_inference_actor_phase(ctx: &mut FrameContext) {
         inference_actor_initialize(setup, &mut state);
     }
     inference_actor_poll(&mut state);
+
+    if ctx.world.contains_resource::<CurveSuggestionState>() {
+        let mut suggestion_state = ctx.world.resource_mut::<CurveSuggestionState>();
+        curve_suggestion_poll_results(&mut suggestion_state, &mut state);
+    }
 }
 
 fn collect_mesh_positions(graphics: &GraphicsResources) -> Vec<Vector3<f32>> {

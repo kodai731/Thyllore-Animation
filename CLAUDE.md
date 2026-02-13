@@ -164,10 +164,12 @@ Each issue must be documented in a separate file, but to avoid huge number of fi
 and recap it.
 At the top of each file, include a brief summary of the issue and its resolution to read shortly.
 **IMPORTANT:** You must read all existing issue history files before adding a new one.
+**IMPORTANT:** MUST write in English.
 
 ## explore history
 
 - explore history and summary reports can be placed at .claude/local/ExploreHistory if necessary.
+- MUST write in English.
 
 ## Last Conversation
 - last conversation is saved at .claude/local/last-conversation.md

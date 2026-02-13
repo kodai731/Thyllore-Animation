@@ -119,39 +119,78 @@ fn execute_inference(
         }
 
         InferenceRequestKind::CurveCopilotPredict {
-            context, ..
+            context,
+            property_type_id,
+            joint_category,
+            query_time,
         } => {
-            let context_len = context.len();
-            let input_tensor = Tensor::from_array((
-                vec![1i64, context_len as i64],
-                context.clone(),
-            ))?;
-
-            let outputs =
-                session.run(ort::inputs![input_tensor])?;
-
-            let (_shape, output_data) =
-                outputs[0].try_extract_tensor::<f32>()?;
-            let raw: Vec<f32> = output_data.to_vec();
-
-            if raw.is_empty() {
-                return Ok(InferenceResultKind::CurveCopilotPredict {
-                    points: Vec::new(),
-                    confidence: 0.0,
-                });
-            }
-
-            let confidence = raw[raw.len() - 1].clamp(0.0, 1.0);
-            let point_data = &raw[..raw.len() - 1];
-            let points: Vec<(f32, f32)> = point_data
-                .chunks_exact(2)
-                .map(|pair| (pair[0], pair[1]))
-                .collect();
-
-            Ok(InferenceResultKind::CurveCopilotPredict {
-                points,
-                confidence,
-            })
+            execute_curve_copilot(session, context, *property_type_id, *joint_category, *query_time)
         }
     }
+}
+
+fn execute_curve_copilot(
+    session: &mut Session,
+    context: &[f32],
+    property_type_id: u32,
+    joint_category: u32,
+    query_time: f32,
+) -> Result<InferenceResultKind> {
+    let context_tensor = Tensor::from_array((
+        vec![1i64, 8, 6],
+        context.to_vec(),
+    ))?;
+
+    let property_type_tensor = Tensor::from_array((
+        vec![1i64],
+        vec![property_type_id as i64],
+    ))?;
+
+    let joint_category_tensor = Tensor::from_array((
+        vec![1i64],
+        vec![joint_category as i64],
+    ))?;
+
+    let query_time_tensor = Tensor::from_array((
+        vec![1i64],
+        vec![query_time],
+    ))?;
+
+    let outputs = session.run(ort::inputs![
+        "context_keyframes" => context_tensor,
+        "property_type" => property_type_tensor,
+        "joint_category" => joint_category_tensor,
+        "query_time" => query_time_tensor
+    ])?;
+
+    let (_shape, prediction_data) = outputs[0].try_extract_tensor::<f32>()?;
+    let pred: Vec<f32> = prediction_data.to_vec();
+
+    let (_shape, confidence_data) = outputs[1].try_extract_tensor::<f32>()?;
+    let conf: Vec<f32> = confidence_data.to_vec();
+
+    if pred.len() < 6 {
+        return Ok(InferenceResultKind::CurveCopilotPredict {
+            value: 0.0,
+            tangent_in: (0.0, 0.0),
+            tangent_out: (0.0, 0.0),
+            is_bezier: false,
+            confidence: 0.0,
+        });
+    }
+
+    let value = pred[0];
+    let tangent_in = (pred[1], pred[2]);
+    let tangent_out = (pred[3], pred[4]);
+    let interp_logit = pred[5];
+    let is_bezier = interp_logit > 0.0;
+    let confidence = conf.first().copied().unwrap_or(0.0).clamp(0.0, 1.0);
+
+    Ok(InferenceResultKind::CurveCopilotPredict {
+        value,
+        tangent_in,
+        tangent_out,
+        is_bezier,
+        confidence,
+    })
 }

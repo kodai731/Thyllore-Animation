@@ -74,6 +74,24 @@ impl PropertyCurve {
         id
     }
 
+    pub fn add_keyframe_with_tangents(
+        &mut self,
+        time: f32,
+        value: f32,
+        in_tangent: BezierHandle,
+        out_tangent: BezierHandle,
+        interpolation: InterpolationType,
+    ) -> KeyframeId {
+        let id = self.next_keyframe_id;
+        self.next_keyframe_id += 1;
+
+        let mut keyframe = EditableKeyframe::with_tangents(id, time, value, in_tangent, out_tangent);
+        keyframe.interpolation = interpolation;
+        self.keyframes.push(keyframe);
+        self.sort_keyframes();
+        id
+    }
+
     pub fn remove_keyframe(&mut self, keyframe_id: KeyframeId) -> bool {
         if let Some(pos) = self.keyframes.iter().position(|k| k.id == keyframe_id) {
             self.keyframes.remove(pos);

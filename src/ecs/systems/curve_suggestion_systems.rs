@@ -1,18 +1,27 @@
-use crate::animation::editable::{PropertyCurve, PropertyType};
+use crate::animation::editable::{BezierHandle, InterpolationType, PropertyCurve, PropertyType};
 use crate::animation::BoneId;
 use crate::ecs::resource::{CurveSuggestionState, GhostCurveSuggestion, InferenceActorState};
-use crate::ml::{InferenceActorId, InferenceRequestKind, InferenceResultKind};
+use crate::ml::{classify_bone_name, InferenceActorId, InferenceRequestKind, InferenceResultKind};
 
 use super::inference_actor_systems::{inference_actor_submit, inference_actor_take_results};
 
-const MAX_CONTEXT_KEYFRAMES: usize = 5;
-const FEATURES_PER_KEYFRAME: usize = 4;
+const MAX_CONTEXT_KEYFRAMES: usize = 8;
+const FEATURES_PER_KEYFRAME: usize = 6;
 const CONTEXT_SIZE: usize = MAX_CONTEXT_KEYFRAMES * FEATURES_PER_KEYFRAME;
+
+fn compute_value_scale(property_type: PropertyType) -> f32 {
+    match property_type {
+        PropertyType::RotationX | PropertyType::RotationY | PropertyType::RotationZ => 180.0,
+        _ => 1.0,
+    }
+}
 
 pub fn curve_suggestion_extract_context(
     curve: &PropertyCurve,
     _property_type: PropertyType,
     max_keyframes: usize,
+    clip_duration: f32,
+    value_scale: f32,
 ) -> Vec<f32> {
     let keyframes = &curve.keyframes;
     let count = keyframes.len().min(max_keyframes);
@@ -21,12 +30,19 @@ pub fn curve_suggestion_extract_context(
     let total_size = max_keyframes * FEATURES_PER_KEYFRAME;
     let mut context = vec![0.0f32; total_size];
 
+    let duration = clip_duration.max(0.001);
+    let scale = value_scale.max(0.001);
+
+    let padding_offset = (max_keyframes - count) * FEATURES_PER_KEYFRAME;
+
     for (i, kf) in keyframes[start..].iter().enumerate().take(count) {
-        let offset = i * FEATURES_PER_KEYFRAME;
-        context[offset] = kf.time;
-        context[offset + 1] = kf.value;
-        context[offset + 2] = kf.in_tangent.time_offset;
-        context[offset + 3] = kf.out_tangent.time_offset;
+        let offset = padding_offset + i * FEATURES_PER_KEYFRAME;
+        context[offset] = kf.time / duration;
+        context[offset + 1] = kf.value / scale;
+        context[offset + 2] = kf.in_tangent.time_offset / duration;
+        context[offset + 3] = kf.in_tangent.value_offset / scale;
+        context[offset + 4] = kf.out_tangent.time_offset / duration;
+        context[offset + 5] = kf.out_tangent.value_offset / scale;
     }
 
     context
@@ -53,23 +69,42 @@ pub fn curve_suggestion_submit(
     curve: &PropertyCurve,
     property_type: PropertyType,
     bone_id: BoneId,
+    bone_name: &str,
+    clip_duration: f32,
+    current_time: f32,
 ) {
     if !suggestion_state.enabled {
         return;
     }
 
-    let context = curve_suggestion_extract_context(curve, property_type, MAX_CONTEXT_KEYFRAMES);
+    let value_scale = compute_value_scale(property_type);
+
+    let context = curve_suggestion_extract_context(
+        curve,
+        property_type,
+        MAX_CONTEXT_KEYFRAMES,
+        clip_duration,
+        value_scale,
+    );
+
     let property_type_id = property_type_to_id(property_type);
+    let joint_category = classify_bone_name(bone_name) as u32;
+    let query_time = current_time / clip_duration.max(0.001);
 
     let kind = InferenceRequestKind::CurveCopilotPredict {
         context,
         property_type_id,
+        joint_category,
+        query_time,
     };
 
     if let Some(request_id) = inference_actor_submit(inference_state, actor_id, kind) {
         suggestion_state.pending_request_id = Some(request_id);
         suggestion_state.pending_bone_id = Some(bone_id);
         suggestion_state.pending_property_type = Some(property_type);
+        suggestion_state.pending_clip_duration = Some(clip_duration);
+        suggestion_state.pending_value_scale = Some(value_scale);
+        suggestion_state.pending_query_time = Some(current_time);
         crate::log!("CurveCopilot: submitted request {}", request_id);
     }
 }
@@ -93,16 +128,41 @@ pub fn curve_suggestion_poll_results(
             continue;
         }
 
-        if let InferenceResultKind::CurveCopilotPredict { points, confidence } = result.kind {
+        if let InferenceResultKind::CurveCopilotPredict {
+            value,
+            tangent_in,
+            tangent_out,
+            is_bezier,
+            confidence,
+        } = result.kind
+        {
             let bone_id = suggestion_state.pending_bone_id.unwrap_or(0);
             let property_type = suggestion_state
                 .pending_property_type
                 .unwrap_or(PropertyType::TranslationX);
 
+            let clip_duration = suggestion_state.pending_clip_duration.unwrap_or(1.0);
+            let value_scale = suggestion_state.pending_value_scale.unwrap_or(1.0);
+            let predicted_time = suggestion_state.pending_query_time.unwrap_or(0.0);
+
+            let denorm_value = value * value_scale;
+            let denorm_tan_in = (
+                tangent_in.0 * clip_duration,
+                tangent_in.1 * value_scale,
+            );
+            let denorm_tan_out = (
+                tangent_out.0 * clip_duration,
+                tangent_out.1 * value_scale,
+            );
+
             suggestion_state.suggestions.push(GhostCurveSuggestion {
                 bone_id,
                 property_type,
-                points,
+                predicted_time,
+                predicted_value: denorm_value,
+                tangent_in: denorm_tan_in,
+                tangent_out: denorm_tan_out,
+                is_bezier,
                 confidence,
                 request_id: result.request_id,
             });
@@ -110,6 +170,9 @@ pub fn curve_suggestion_poll_results(
             suggestion_state.pending_request_id = None;
             suggestion_state.pending_bone_id = None;
             suggestion_state.pending_property_type = None;
+            suggestion_state.pending_clip_duration = None;
+            suggestion_state.pending_value_scale = None;
+            suggestion_state.pending_query_time = None;
 
             crate::log!(
                 "CurveCopilot: received suggestion, confidence={:.2}",
@@ -123,11 +186,22 @@ pub fn curve_suggestion_apply(
     suggestion: &GhostCurveSuggestion,
     curve: &mut PropertyCurve,
 ) {
-    for &(time, value) in &suggestion.points {
-        curve.add_keyframe(time, value);
-    }
+    let interpolation = if suggestion.is_bezier {
+        InterpolationType::Bezier
+    } else {
+        InterpolationType::Linear
+    };
 
-    curve.recalculate_auto_tangents();
+    let in_tangent = BezierHandle::new(suggestion.tangent_in.0, suggestion.tangent_in.1);
+    let out_tangent = BezierHandle::new(suggestion.tangent_out.0, suggestion.tangent_out.1);
+
+    curve.add_keyframe_with_tangents(
+        suggestion.predicted_time,
+        suggestion.predicted_value,
+        in_tangent,
+        out_tangent,
+        interpolation,
+    );
 }
 
 pub fn curve_suggestion_dismiss(suggestion_state: &mut CurveSuggestionState) {
@@ -155,29 +229,55 @@ mod tests {
         let context = curve_suggestion_extract_context(
             &curve,
             PropertyType::TranslationX,
-            5,
+            8,
+            4.0,
+            1.0,
         );
 
         assert_eq!(context.len(), CONTEXT_SIZE);
-        assert_eq!(context[0], 0.5);
+
+        let padding = (8 - 5) * FEATURES_PER_KEYFRAME;
+        assert!(context[padding] > 0.0);
     }
 
     #[test]
-    fn test_extract_context_padding() {
+    fn test_extract_context_right_aligned_padding() {
         let curve = create_test_curve(2);
         let context = curve_suggestion_extract_context(
             &curve,
             PropertyType::TranslationX,
-            5,
+            8,
+            4.0,
+            1.0,
         );
 
         assert_eq!(context.len(), CONTEXT_SIZE);
 
-        assert_eq!(context[0], 0.5);
-
-        for i in (2 * FEATURES_PER_KEYFRAME)..CONTEXT_SIZE {
-            assert_eq!(context[i], 0.0, "padding at index {} should be 0", i);
+        let padding_size = (8 - 2) * FEATURES_PER_KEYFRAME;
+        for i in 0..padding_size {
+            assert_eq!(context[i], 0.0, "leading padding at index {} should be 0", i);
         }
+
+        assert!(context[padding_size] > 0.0, "first keyframe should be non-zero after padding");
+    }
+
+    #[test]
+    fn test_extract_context_normalization() {
+        let mut curve = PropertyCurve::new(1 as CurveId, PropertyType::RotationX);
+        curve.add_keyframe(1.0, 90.0);
+        curve.add_keyframe(2.0, 180.0);
+
+        let context = curve_suggestion_extract_context(
+            &curve,
+            PropertyType::RotationX,
+            8,
+            4.0,
+            180.0,
+        );
+
+        let padding = (8 - 2) * FEATURES_PER_KEYFRAME;
+        assert!((context[padding] - 0.25).abs() < 0.001, "time should be 1.0/4.0 = 0.25");
+        assert!((context[padding + 1] - 0.5).abs() < 0.001, "value should be 90.0/180.0 = 0.5");
     }
 
     #[test]
@@ -186,7 +286,11 @@ mod tests {
         state.suggestions.push(GhostCurveSuggestion {
             bone_id: 0,
             property_type: PropertyType::TranslationX,
-            points: vec![(1.0, 2.0)],
+            predicted_time: 1.0,
+            predicted_value: 2.0,
+            tangent_in: (0.0, 0.0),
+            tangent_out: (0.0, 0.0),
+            is_bezier: false,
             confidence: 0.9,
             request_id: 42,
         });
@@ -203,7 +307,11 @@ mod tests {
         let suggestion = GhostCurveSuggestion {
             bone_id: 0,
             property_type: PropertyType::TranslationX,
-            points: vec![(1.0, 0.5), (1.5, 0.8), (2.0, 1.0)],
+            predicted_time: 1.5,
+            predicted_value: 0.8,
+            tangent_in: (-0.1, 0.0),
+            tangent_out: (0.1, 0.0),
+            is_bezier: true,
             confidence: 0.9,
             request_id: 1,
         };
@@ -213,15 +321,21 @@ mod tests {
 
         curve_suggestion_apply(&suggestion, &mut curve);
 
-        assert_eq!(
-            curve.keyframe_count(),
-            before_count + suggestion.points.len()
-        );
+        assert_eq!(curve.keyframe_count(), before_count + 1);
     }
 
     #[test]
     fn test_property_type_to_id() {
         assert_eq!(property_type_to_id(PropertyType::TranslationX), 0);
         assert_eq!(property_type_to_id(PropertyType::ScaleZ), 8);
+    }
+
+    #[test]
+    fn test_value_scale_for_rotation() {
+        assert_eq!(compute_value_scale(PropertyType::RotationX), 180.0);
+        assert_eq!(compute_value_scale(PropertyType::RotationY), 180.0);
+        assert_eq!(compute_value_scale(PropertyType::RotationZ), 180.0);
+        assert_eq!(compute_value_scale(PropertyType::TranslationX), 1.0);
+        assert_eq!(compute_value_scale(PropertyType::ScaleX), 1.0);
     }
 }

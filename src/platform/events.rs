@@ -316,7 +316,11 @@ fn build_ui_windows(
                     .iter()
                     .map(|s| super::ui::SuggestionOverlay {
                         property_type: s.property_type,
-                        points: s.points.clone(),
+                        time: s.predicted_time,
+                        value: s.predicted_value,
+                        tangent_in: s.tangent_in,
+                        tangent_out: s.tangent_out,
+                        is_bezier: s.is_bezier,
                         confidence: s.confidence,
                     })
                     .collect()
@@ -1616,16 +1620,24 @@ fn process_curve_suggestion_events_inline(events: &[UIEvent], app: &mut App) {
             } => {
                 let timeline_state = app.data.ecs_world.resource::<TimelineState>();
                 let clip_id = timeline_state.current_clip_id;
+                let current_time = timeline_state.current_time;
                 drop(timeline_state);
 
                 let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
-                let curve = clip_id
+                let clip_info = clip_id
                     .and_then(|id| clip_library.get(id))
-                    .and_then(|clip| clip.tracks.get(bone_id))
-                    .map(|track| track.get_curve(*property_type).clone());
+                    .and_then(|clip| {
+                        clip.tracks.get(bone_id).map(|track| {
+                            (
+                                track.get_curve(*property_type).clone(),
+                                track.bone_name.clone(),
+                                clip.duration,
+                            )
+                        })
+                    });
                 drop(clip_library);
 
-                if let Some(curve) = curve {
+                if let Some((curve, bone_name, clip_duration)) = clip_info {
                     let mut suggestion_state =
                         app.data.ecs_world.resource_mut::<CurveSuggestionState>();
                     let mut inference_state =
@@ -1637,6 +1649,9 @@ fn process_curve_suggestion_events_inline(events: &[UIEvent], app: &mut App) {
                         &curve,
                         *property_type,
                         *bone_id,
+                        &bone_name,
+                        clip_duration,
+                        current_time,
                     );
                 }
             }

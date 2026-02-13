@@ -11,7 +11,11 @@ use crate::ecs::resource::{ClipLibrary, CurveEditorBuffer, TimelineState};
 
 pub struct SuggestionOverlay {
     pub property_type: PropertyType,
-    pub points: Vec<(f32, f32)>,
+    pub time: f32,
+    pub value: f32,
+    pub tangent_in: (f32, f32),
+    pub tangent_out: (f32, f32),
+    pub is_bezier: bool,
     pub confidence: f32,
 }
 
@@ -1463,33 +1467,77 @@ fn draw_suggestion_curve_overlay(
             continue;
         }
 
-        if overlay.points.len() < 2 {
+        if overlay.confidence < 0.3 {
             continue;
         }
 
-        if overlay.confidence < 0.5 {
-            continue;
-        }
-
-        let alpha = if overlay.confidence > 0.8 { 0.5 } else { 0.35 };
+        let alpha = if overlay.confidence > 0.8 { 0.7 } else { 0.45 };
         let ghost_color = if overlay.confidence > 0.8 {
             [0.3, 1.0, 0.3, alpha]
         } else {
             [1.0, 1.0, 0.3, alpha]
         };
 
-        for i in 0..overlay.points.len() - 1 {
-            let (t0, v0) = overlay.points[i];
-            let (t1, v1) = overlay.points[i + 1];
+        let kf_x = vt.time_to_x(overlay.time);
+        let kf_y = vt.value_to_y(overlay.value);
+        let diamond_size = 6.0;
 
-            let x0 = vt.time_to_x(t0);
-            let y0 = vt.value_to_y(v0);
-            let x1 = vt.time_to_x(t1);
-            let y1 = vt.value_to_y(v1);
+        draw_list
+            .add_line(
+                [kf_x, kf_y - diamond_size],
+                [kf_x + diamond_size, kf_y],
+                ghost_color,
+            )
+            .thickness(2.0)
+            .build();
+        draw_list
+            .add_line(
+                [kf_x + diamond_size, kf_y],
+                [kf_x, kf_y + diamond_size],
+                ghost_color,
+            )
+            .thickness(2.0)
+            .build();
+        draw_list
+            .add_line(
+                [kf_x, kf_y + diamond_size],
+                [kf_x - diamond_size, kf_y],
+                ghost_color,
+            )
+            .thickness(2.0)
+            .build();
+        draw_list
+            .add_line(
+                [kf_x - diamond_size, kf_y],
+                [kf_x, kf_y - diamond_size],
+                ghost_color,
+            )
+            .thickness(2.0)
+            .build();
 
+        if overlay.is_bezier {
+            let handle_color = [ghost_color[0], ghost_color[1], ghost_color[2], alpha * 0.7];
+
+            let in_x = vt.time_to_x(overlay.time + overlay.tangent_in.0);
+            let in_y = vt.value_to_y(overlay.value + overlay.tangent_in.1);
             draw_list
-                .add_line([x0, y0], [x1, y1], ghost_color)
-                .thickness(2.0)
+                .add_line([kf_x, kf_y], [in_x, in_y], handle_color)
+                .thickness(1.0)
+                .build();
+            draw_list
+                .add_circle([in_x, in_y], 3.0, handle_color)
+                .filled(true)
+                .build();
+
+            let out_x = vt.time_to_x(overlay.time + overlay.tangent_out.0);
+            let out_y = vt.value_to_y(overlay.value + overlay.tangent_out.1);
+            draw_list
+                .add_line([kf_x, kf_y], [out_x, out_y], handle_color)
+                .thickness(1.0)
+                .build();
+            draw_list
+                .add_circle([out_x, out_y], 3.0, handle_color)
+                .filled(true)
                 .build();
         }
     }

@@ -157,6 +157,7 @@ impl App {
         data.ecs_world.insert_resource(ModelState::default());
         data.ecs_world.insert_resource(MeshAssets::new());
         data.ecs_world.insert_resource(NodeAssets::new());
+        #[cfg(feature = "ml")]
         data.ecs_world
             .insert_resource(crate::ecs::resource::InferenceActorState::default());
 

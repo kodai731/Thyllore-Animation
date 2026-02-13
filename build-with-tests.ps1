@@ -45,9 +45,15 @@ if (Test-Path "log/log_test.txt") {
     Remove-Item "log/log_test.txt"
 }
 
-# テスト実行してファイルに保存
-Write-Host "Running cargo test..." -ForegroundColor Gray
-cargo test --no-fail-fast 2>&1 | Tee-Object -FilePath "log/log_test.txt"
+Write-Host "Running lib tests (with ML)..." -ForegroundColor Gray
+cargo test --lib --no-fail-fast 2>&1 | Tee-Object -FilePath "log/log_test.txt"
+$libResult = $LASTEXITCODE
+
+Write-Host "`nRunning integration tests..." -ForegroundColor Gray
+cargo test --test ecs_tests --no-default-features --no-fail-fast 2>&1 | Tee-Object -Append -FilePath "log/log_test.txt"
+$integrationResult = $LASTEXITCODE
+
+$LASTEXITCODE = if ($libResult -ne 0) { $libResult } else { $integrationResult }
 
 # 結果を表示
 if ($LASTEXITCODE -eq 0) {

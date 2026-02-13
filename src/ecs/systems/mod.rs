@@ -16,6 +16,7 @@ pub mod debug_spring_bone_systems;
 mod ecs_world_systems;
 mod edit_history_systems;
 mod frame_runner;
+#[cfg(feature = "ml")]
 mod inference_actor_systems;
 mod frame_systems;
 mod gizmo_systems;
@@ -50,6 +51,7 @@ pub use curve_editor_systems::*;
 pub use ecs_world_systems::*;
 pub use edit_history_systems::*;
 pub use frame_runner::*;
+#[cfg(feature = "ml")]
 pub use inference_actor_systems::*;
 pub use frame_systems::*;
 pub use gizmo_systems::*;

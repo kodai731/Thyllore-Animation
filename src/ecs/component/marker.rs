@@ -25,5 +25,6 @@ pub struct Constrained;
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WithSpringBone;
 
+#[cfg(feature = "ml")]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WithInferenceActor;

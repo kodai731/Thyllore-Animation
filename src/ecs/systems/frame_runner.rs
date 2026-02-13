@@ -6,17 +6,21 @@ use super::phases::{
     run_animation_phase_ecs, run_animation_phase_gpu, run_input_phase, run_render_prep_phase,
     run_transform_phase_ecs, run_transform_phase_gpu,
 };
+#[cfg(feature = "ml")]
 use super::inference_actor_systems::{
     inference_actor_initialize, inference_actor_poll,
 };
 use super::timeline_systems::timeline_update;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::app::FrameContext;
+#[cfg(feature = "ml")]
 use crate::ecs::component::InferenceActorSetup;
 use crate::ecs::context::EcsContext;
 use crate::ecs::resource::{
-    ClipLibrary, HierarchyState, InferenceActorState, TimelineState,
+    ClipLibrary, HierarchyState, TimelineState,
 };
+#[cfg(feature = "ml")]
+use crate::ecs::resource::InferenceActorState;
 use crate::ecs::world::Animator;
 
 pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
@@ -40,6 +44,7 @@ pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
     }
 
     run_timeline_phase(ctx);
+    #[cfg(feature = "ml")]
     run_inference_actor_phase(ctx);
 
     let animation_updates = run_animation_phase_ecs(ctx);
@@ -137,6 +142,7 @@ fn sync_editable_clips_to_registry(ctx: &mut FrameContext) {
     super::clip_library_systems::clip_library_sync_dirty(&mut clip_library);
 }
 
+#[cfg(feature = "ml")]
 fn run_inference_actor_phase(ctx: &mut FrameContext) {
     if !ctx.world.contains_resource::<InferenceActorState>() {
         return;

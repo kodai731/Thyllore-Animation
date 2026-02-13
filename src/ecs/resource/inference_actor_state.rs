@@ -5,14 +5,14 @@ use crate::ml::{
 };
 
 pub struct ActorRuntime {
-    pub thread_handle: InferenceThreadHandle,
-    pub enabled: bool,
+    pub(crate) thread_handle: InferenceThreadHandle,
+    pub(crate) enabled: bool,
 }
 
 pub struct InferenceActorState {
-    pub actors: HashMap<InferenceActorId, ActorRuntime>,
-    pub pending_results: Vec<InferenceResult>,
-    pub next_request_id: InferenceRequestId,
+    pub(crate) actors: HashMap<InferenceActorId, ActorRuntime>,
+    pub(crate) pending_results: Vec<InferenceResult>,
+    pub(crate) next_request_id: InferenceRequestId,
 }
 
 impl Default for InferenceActorState {

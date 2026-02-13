@@ -17,6 +17,8 @@ mod physical_camera;
 mod pipeline_manager;
 mod scene_state;
 mod spring_bone_editor_state;
+#[cfg(feature = "ml")]
+mod inference_actor_state;
 mod spring_bone_state;
 mod timeline_state;
 mod tone_mapping;
@@ -42,4 +44,6 @@ pub use scene_state::*;
 pub use spring_bone_editor_state::*;
 pub use spring_bone_state::*;
 pub use timeline_state::*;
+#[cfg(feature = "ml")]
+pub use inference_actor_state::*;
 pub use tone_mapping::*;

@@ -9,6 +9,8 @@ use crate::ecs::component::{
     Animated, AnimationMeta, ClipSchedule, Constrained, ConstraintSet, EditorDisplay, EntityIcon,
     MeshHandle, Model, Skinned, SpringBoneSetup, WithSpringBone,
 };
+#[cfg(feature = "ml")]
+use crate::ecs::component::{InferenceActorSetup, WithInferenceActor};
 
 pub trait Resource: Any + 'static {}
 impl<T: Any + 'static> Resource for T {}
@@ -269,6 +271,11 @@ impl World {
         world.register_component::<Constrained>();
         world.register_component::<SpringBoneSetup>();
         world.register_component::<WithSpringBone>();
+        #[cfg(feature = "ml")]
+        {
+            world.register_component::<InferenceActorSetup>();
+            world.register_component::<WithInferenceActor>();
+        }
 
         world
     }
@@ -611,6 +618,13 @@ impl<'a> EntityBuilder<'a> {
     pub fn with_spring_bone_setup(self, setup: SpringBoneSetup) -> Self {
         self.world.insert_component(self.entity, setup);
         self.world.insert_component(self.entity, WithSpringBone);
+        self
+    }
+
+    #[cfg(feature = "ml")]
+    pub fn with_inference_actor(self, setup: InferenceActorSetup) -> Self {
+        self.world.insert_component(self.entity, setup);
+        self.world.insert_component(self.entity, WithInferenceActor);
         self
     }
 

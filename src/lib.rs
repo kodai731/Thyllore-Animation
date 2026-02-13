@@ -17,4 +17,6 @@ pub mod platform;
 pub mod render;
 pub mod renderer;
 pub mod scene;
+#[cfg(feature = "ml")]
+pub mod ml;
 pub mod vulkanr;

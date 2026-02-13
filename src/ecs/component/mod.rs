@@ -7,6 +7,8 @@ mod gizmo;
 mod marker;
 pub mod mesh;
 mod render;
+#[cfg(feature = "ml")]
+mod inference_actor;
 mod spring_bone;
 
 pub use animation_meta::*;
@@ -18,4 +20,6 @@ pub use gizmo::*;
 pub use marker::*;
 pub use mesh::*;
 pub use render::*;
+#[cfg(feature = "ml")]
+pub use inference_actor::*;
 pub use spring_bone::*;

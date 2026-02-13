@@ -35,6 +35,11 @@ bincode = "*"
 ufbx = "0.10"
 rfd = "0.15"
 ron = "0.8"
+ort = { version = "2.0.0-rc.11", default-features = false, features = ["std", "ndarray", "load-dynamic", "download-binaries", "copy-dylibs", "tls-native"], optional = true }
+
+[features]
+default = ["ml"]
+ml = ["dep:ort"]
 
 [dependencies.gltf]
 version = "1.4"

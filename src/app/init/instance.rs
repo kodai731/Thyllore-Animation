@@ -1006,12 +1006,12 @@ impl App {
         {
             use crate::ecs::component::InferenceActorSetup;
             use crate::ecs::world::EntityBuilder;
-            use crate::ml::{InferenceModelKind, CURVE_COPILOT_ACTOR_ID};
+            use crate::ml::{resolve_curve_copilot_model_path, InferenceModelKind, CURVE_COPILOT_ACTOR_ID};
 
             EntityBuilder::new(&mut data.ecs_world).with_inference_actor(
                 InferenceActorSetup {
                     actor_id: CURVE_COPILOT_ACTOR_ID,
-                    model_path: "assets/ml/curve_copilot_dummy.onnx".to_string(),
+                    model_path: resolve_curve_copilot_model_path(),
                     model_kind: InferenceModelKind::CurveCopilot,
                     enabled: true,
                 },

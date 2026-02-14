@@ -91,6 +91,8 @@ pub fn curve_suggestion_submit(
     let joint_category = classify_bone_name(bone_name) as u32;
     let query_time = current_time / clip_duration.max(0.001);
 
+    let context_debug: Vec<f32> = context[..6.min(context.len())].to_vec();
+
     let kind = InferenceRequestKind::CurveCopilotPredict {
         context,
         property_type_id,
@@ -105,7 +107,10 @@ pub fn curve_suggestion_submit(
         suggestion_state.pending_clip_duration = Some(clip_duration);
         suggestion_state.pending_value_scale = Some(value_scale);
         suggestion_state.pending_query_time = Some(current_time);
-        crate::log!("CurveCopilot: submitted request {}", request_id);
+        crate::log!(
+            "CurveCopilot: submitted request {}, property={:?}, query_time_norm={:.4}, value_scale={:.1}, clip_dur={:.3}, context[0..6]={:?}",
+            request_id, property_type, query_time, value_scale, clip_duration, context_debug
+        );
     }
 }
 
@@ -175,8 +180,8 @@ pub fn curve_suggestion_poll_results(
             suggestion_state.pending_query_time = None;
 
             crate::log!(
-                "CurveCopilot: received suggestion, confidence={:.2}",
-                confidence
+                "CurveCopilot: received suggestion, confidence={:.2}, denorm_value={:.4}, time={:.4}, tan_in=({:.4},{:.4}), tan_out=({:.4},{:.4}), is_bezier={}",
+                confidence, denorm_value, predicted_time, denorm_tan_in.0, denorm_tan_in.1, denorm_tan_out.0, denorm_tan_out.1, is_bezier
             );
         }
     }

@@ -1,3 +1,14 @@
+pub fn resolve_curve_copilot_model_path() -> String {
+    let shared_path = std::path::Path::new(crate::paths::CURVE_COPILOT_MODEL);
+    if shared_path.exists() {
+        crate::log!("Using SharedData model: {}", crate::paths::CURVE_COPILOT_MODEL);
+        crate::paths::CURVE_COPILOT_MODEL.to_string()
+    } else {
+        crate::log!("SharedData model not found, falling back to dummy model");
+        crate::paths::CURVE_COPILOT_DUMMY_MODEL.to_string()
+    }
+}
+
 pub type InferenceActorId = u64;
 pub type InferenceRequestId = u64;
 

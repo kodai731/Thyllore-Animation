@@ -172,5 +172,18 @@ At the top of each file, include a brief summary of the issue and its resolution
 - MUST write in English.
 
 ## Last Conversation
+
 - last conversation is saved at .claude/local/last-conversation.md
 - **IMPORTANT** MUST read the last conversation file and work continue.
+
+## AnimationTraining
+
+### Shared Data
+
+The trained data for the copilot curve is stored in ../SharedData/exports/.
+
+### Interaction Log
+
+-If any issues occur (for example, the training collapses), report them using the Context Memory format so the training
+repository can fully understand the situation.
+- location at ../SharedData/log/Rendering is rendering side, and log/Training is training side.

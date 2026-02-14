@@ -186,6 +186,11 @@ fn execute_curve_copilot(
     let is_bezier = interp_logit > 0.0;
     let confidence = conf.first().copied().unwrap_or(0.0).clamp(0.0, 1.0);
 
+    crate::log!(
+        "CurveCopilot raw output: pred={:?}, conf={:.4}, query_time={:.4}",
+        pred, confidence, query_time
+    );
+
     Ok(InferenceResultKind::CurveCopilotPredict {
         value,
         tangent_in,

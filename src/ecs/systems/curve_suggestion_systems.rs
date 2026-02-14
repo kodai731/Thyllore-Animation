@@ -9,43 +9,48 @@ const MAX_CONTEXT_KEYFRAMES: usize = 8;
 const FEATURES_PER_KEYFRAME: usize = 6;
 const CONTEXT_SIZE: usize = MAX_CONTEXT_KEYFRAMES * FEATURES_PER_KEYFRAME;
 
-fn compute_value_scale(property_type: PropertyType) -> f32 {
-    match property_type {
-        PropertyType::RotationX | PropertyType::RotationY | PropertyType::RotationZ => 180.0,
-        _ => 1.0,
-    }
-}
-
 pub fn curve_suggestion_extract_context(
     curve: &PropertyCurve,
     _property_type: PropertyType,
     max_keyframes: usize,
     clip_duration: f32,
-    value_scale: f32,
-) -> Vec<f32> {
+) -> (Vec<f32>, f32, f32) {
     let keyframes = &curve.keyframes;
     let count = keyframes.len().min(max_keyframes);
     let start = keyframes.len().saturating_sub(max_keyframes);
 
+    let window = &keyframes[start..start + count];
+
+    let curve_mean = if count > 0 {
+        window.iter().map(|kf| kf.value).sum::<f32>() / count as f32
+    } else {
+        0.0
+    };
+
+    let curve_std = if count > 0 {
+        let variance =
+            window.iter().map(|kf| (kf.value - curve_mean).powi(2)).sum::<f32>() / count as f32;
+        variance.sqrt().max(1e-6)
+    } else {
+        1e-6
+    };
+
     let total_size = max_keyframes * FEATURES_PER_KEYFRAME;
     let mut context = vec![0.0f32; total_size];
-
     let duration = clip_duration.max(0.001);
-    let scale = value_scale.max(0.001);
-
     let padding_offset = (max_keyframes - count) * FEATURES_PER_KEYFRAME;
 
-    for (i, kf) in keyframes[start..].iter().enumerate().take(count) {
+    for (i, kf) in window.iter().enumerate() {
         let offset = padding_offset + i * FEATURES_PER_KEYFRAME;
         context[offset] = kf.time / duration;
-        context[offset + 1] = kf.value / scale;
+        context[offset + 1] = (kf.value - curve_mean) / curve_std;
         context[offset + 2] = kf.in_tangent.time_offset / duration;
-        context[offset + 3] = kf.in_tangent.value_offset / scale;
+        context[offset + 3] = kf.in_tangent.value_offset / curve_std;
         context[offset + 4] = kf.out_tangent.time_offset / duration;
-        context[offset + 5] = kf.out_tangent.value_offset / scale;
+        context[offset + 5] = kf.out_tangent.value_offset / curve_std;
     }
 
-    context
+    (context, curve_mean, curve_std)
 }
 
 fn property_type_to_id(property_type: PropertyType) -> u32 {
@@ -77,14 +82,11 @@ pub fn curve_suggestion_submit(
         return;
     }
 
-    let value_scale = compute_value_scale(property_type);
-
-    let context = curve_suggestion_extract_context(
+    let (context, curve_mean, curve_std) = curve_suggestion_extract_context(
         curve,
         property_type,
         MAX_CONTEXT_KEYFRAMES,
         clip_duration,
-        value_scale,
     );
 
     let property_type_id = property_type_to_id(property_type);
@@ -105,11 +107,12 @@ pub fn curve_suggestion_submit(
         suggestion_state.pending_bone_id = Some(bone_id);
         suggestion_state.pending_property_type = Some(property_type);
         suggestion_state.pending_clip_duration = Some(clip_duration);
-        suggestion_state.pending_value_scale = Some(value_scale);
+        suggestion_state.pending_curve_mean = Some(curve_mean);
+        suggestion_state.pending_curve_std = Some(curve_std);
         suggestion_state.pending_query_time = Some(current_time);
         crate::log!(
-            "CurveCopilot: submitted request {}, property={:?}, query_time_norm={:.4}, value_scale={:.1}, clip_dur={:.3}, context[0..6]={:?}",
-            request_id, property_type, query_time, value_scale, clip_duration, context_debug
+            "CurveCopilot: submitted request {}, property={:?}, query_time_norm={:.4}, curve_mean={:.4}, curve_std={:.4}, clip_dur={:.3}, context[0..6]={:?}",
+            request_id, property_type, query_time, curve_mean, curve_std, clip_duration, context_debug
         );
     }
 }
@@ -147,18 +150,13 @@ pub fn curve_suggestion_poll_results(
                 .unwrap_or(PropertyType::TranslationX);
 
             let clip_duration = suggestion_state.pending_clip_duration.unwrap_or(1.0);
-            let value_scale = suggestion_state.pending_value_scale.unwrap_or(1.0);
+            let curve_mean = suggestion_state.pending_curve_mean.unwrap_or(0.0);
+            let curve_std = suggestion_state.pending_curve_std.unwrap_or(1.0);
             let predicted_time = suggestion_state.pending_query_time.unwrap_or(0.0);
 
-            let denorm_value = value * value_scale;
-            let denorm_tan_in = (
-                tangent_in.0 * clip_duration,
-                tangent_in.1 * value_scale,
-            );
-            let denorm_tan_out = (
-                tangent_out.0 * clip_duration,
-                tangent_out.1 * value_scale,
-            );
+            let denorm_value = value * curve_std + curve_mean;
+            let denorm_tan_in = (tangent_in.0 * clip_duration, tangent_in.1 * curve_std);
+            let denorm_tan_out = (tangent_out.0 * clip_duration, tangent_out.1 * curve_std);
 
             suggestion_state.suggestions.push(GhostCurveSuggestion {
                 bone_id,
@@ -176,7 +174,8 @@ pub fn curve_suggestion_poll_results(
             suggestion_state.pending_bone_id = None;
             suggestion_state.pending_property_type = None;
             suggestion_state.pending_clip_duration = None;
-            suggestion_state.pending_value_scale = None;
+            suggestion_state.pending_curve_mean = None;
+            suggestion_state.pending_curve_std = None;
             suggestion_state.pending_query_time = None;
 
             crate::log!(
@@ -231,12 +230,11 @@ mod tests {
     #[test]
     fn test_extract_context_basic() {
         let curve = create_test_curve(5);
-        let context = curve_suggestion_extract_context(
+        let (context, _mean, _std) = curve_suggestion_extract_context(
             &curve,
             PropertyType::TranslationX,
             8,
             4.0,
-            1.0,
         );
 
         assert_eq!(context.len(), CONTEXT_SIZE);
@@ -248,12 +246,11 @@ mod tests {
     #[test]
     fn test_extract_context_right_aligned_padding() {
         let curve = create_test_curve(2);
-        let context = curve_suggestion_extract_context(
+        let (context, _mean, _std) = curve_suggestion_extract_context(
             &curve,
             PropertyType::TranslationX,
             8,
             4.0,
-            1.0,
         );
 
         assert_eq!(context.len(), CONTEXT_SIZE);
@@ -272,17 +269,44 @@ mod tests {
         curve.add_keyframe(1.0, 90.0);
         curve.add_keyframe(2.0, 180.0);
 
-        let context = curve_suggestion_extract_context(
+        let (context, curve_mean, curve_std) = curve_suggestion_extract_context(
             &curve,
             PropertyType::RotationX,
             8,
             4.0,
-            180.0,
         );
+
+        assert!((curve_mean - 135.0).abs() < 0.001, "mean should be 135.0");
+        assert!((curve_std - 45.0).abs() < 0.001, "std should be 45.0");
 
         let padding = (8 - 2) * FEATURES_PER_KEYFRAME;
         assert!((context[padding] - 0.25).abs() < 0.001, "time should be 1.0/4.0 = 0.25");
-        assert!((context[padding + 1] - 0.5).abs() < 0.001, "value should be 90.0/180.0 = 0.5");
+        assert!(
+            (context[padding + 1] - (-1.0)).abs() < 0.001,
+            "value should be (90.0 - 135.0) / 45.0 = -1.0"
+        );
+        assert!(
+            (context[padding + FEATURES_PER_KEYFRAME + 1] - 1.0).abs() < 0.001,
+            "value should be (180.0 - 135.0) / 45.0 = 1.0"
+        );
+    }
+
+    #[test]
+    fn test_extract_context_constant_curve() {
+        let mut curve = PropertyCurve::new(1 as CurveId, PropertyType::RotationX);
+        curve.add_keyframe(0.0, 42.0);
+        curve.add_keyframe(1.0, 42.0);
+        curve.add_keyframe(2.0, 42.0);
+
+        let (_context, curve_mean, curve_std) = curve_suggestion_extract_context(
+            &curve,
+            PropertyType::RotationX,
+            8,
+            4.0,
+        );
+
+        assert!((curve_mean - 42.0).abs() < 0.001, "mean should be 42.0");
+        assert!((curve_std - 1e-6).abs() < 1e-7, "std should be clamped to 1e-6");
     }
 
     #[test]
@@ -333,14 +357,5 @@ mod tests {
     fn test_property_type_to_id() {
         assert_eq!(property_type_to_id(PropertyType::TranslationX), 0);
         assert_eq!(property_type_to_id(PropertyType::ScaleZ), 8);
-    }
-
-    #[test]
-    fn test_value_scale_for_rotation() {
-        assert_eq!(compute_value_scale(PropertyType::RotationX), 180.0);
-        assert_eq!(compute_value_scale(PropertyType::RotationY), 180.0);
-        assert_eq!(compute_value_scale(PropertyType::RotationZ), 180.0);
-        assert_eq!(compute_value_scale(PropertyType::TranslationX), 1.0);
-        assert_eq!(compute_value_scale(PropertyType::ScaleX), 1.0);
     }
 }

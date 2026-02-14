@@ -21,7 +21,8 @@ pub struct CurveSuggestionState {
     pub pending_bone_id: Option<BoneId>,
     pub pending_property_type: Option<PropertyType>,
     pub pending_clip_duration: Option<f32>,
-    pub pending_value_scale: Option<f32>,
+    pub pending_curve_mean: Option<f32>,
+    pub pending_curve_std: Option<f32>,
     pub pending_query_time: Option<f32>,
     pub enabled: bool,
 }
@@ -34,7 +35,8 @@ impl Default for CurveSuggestionState {
             pending_bone_id: None,
             pending_property_type: None,
             pending_clip_duration: None,
-            pending_value_scale: None,
+            pending_curve_mean: None,
+            pending_curve_std: None,
             pending_query_time: None,
             enabled: true,
         }

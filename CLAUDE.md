@@ -177,6 +177,8 @@ At the top of each file, include a brief summary of the issue and its resolution
 - **IMPORTANT** MUST read the last conversation file and work continue.
 
 ## AnimationTraining
+### Repository
+repository is separated to ../AnimationModelTraining
 
 ### Shared Data
 

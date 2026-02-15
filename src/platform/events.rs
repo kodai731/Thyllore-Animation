@@ -728,6 +728,31 @@ fn process_clip_instance_events_inline(events: &[UIEvent], app: &mut App) {
 
     process_clip_instance_events(events, &mut app.data.ecs_world);
 
+    for event in events {
+        if let UIEvent::ClipInstanceSelect {
+            entity,
+            instance_id,
+        } = event
+        {
+            let source_id = app
+                .data
+                .ecs_world
+                .get_component::<ClipSchedule>(*entity)
+                .and_then(|schedule| {
+                    schedule
+                        .instances
+                        .iter()
+                        .find(|i| i.instance_id == *instance_id)
+                        .map(|i| i.source_id)
+                });
+
+            if let Some(source_id) = source_id {
+                let mut lib = app.data.ecs_world.resource_mut::<ClipLibrary>();
+                clip_library_ensure_playable(&mut lib, &mut app.data.ecs_assets, source_id);
+            }
+        }
+    }
+
     record_schedule_changes(schedule_snapshots, app);
 }
 
@@ -956,6 +981,40 @@ fn process_clip_browser_events_inline(events: &[UIEvent], app: &mut App) {
                 }
             }
 
+            UIEvent::ClipBrowserSaveToFile(source_id) => {
+                let current_name = {
+                    let lib = app.data.ecs_world.resource::<ClipLibrary>();
+                    lib.get(*source_id)
+                        .map(|c| c.name.clone())
+                        .unwrap_or_else(|| "clip".to_string())
+                };
+
+                let path = rfd::FileDialog::new()
+                    .add_filter("Animation RON", &["anim.ron", "ron"])
+                    .set_file_name(format!("{}.anim.ron", current_name))
+                    .save_file();
+
+                if let Some(path) = path {
+                    let new_name = extract_clip_name_from_path(&path);
+                    let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
+
+                    if let Some(clip) = clip_library.get_mut(*source_id) {
+                        clip.name = new_name.clone();
+                        clip.source_path = Some(path.to_string_lossy().to_string());
+                    }
+
+                    use crate::ecs::systems::clip_library_systems::clip_library_save_to_file;
+                    match clip_library_save_to_file(&clip_library, *source_id, &path) {
+                        Ok(()) => {
+                            crate::log!("Saved clip '{}' to {:?}", new_name, path);
+                        }
+                        Err(e) => {
+                            crate::log!("Failed to save clip: {:?}", e);
+                        }
+                    }
+                }
+            }
+
             UIEvent::ClipBrowserDelete(source_id) => {
                 let ref_count = count_source_references(*source_id, &app.data.ecs_world);
                 if ref_count == 0 {
@@ -974,6 +1033,19 @@ fn process_clip_browser_events_inline(events: &[UIEvent], app: &mut App) {
             _ => {}
         }
     }
+}
+
+fn extract_clip_name_from_path(path: &std::path::Path) -> String {
+    let filename = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("clip");
+
+    filename
+        .strip_suffix(".anim.ron")
+        .or_else(|| filename.strip_suffix(".ron"))
+        .unwrap_or(filename)
+        .to_string()
 }
 
 fn count_source_references(

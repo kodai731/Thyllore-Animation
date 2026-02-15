@@ -137,19 +137,22 @@ fn build_clip_selector(
         return;
     }
 
-    let current_name = state
+    let current_display = state
         .current_clip_id
         .and_then(|id| clip_library.get(id))
-        .map(|c| c.name.as_str())
-        .unwrap_or("Select Clip");
+        .map(|c| build_clip_display_name(&c.name, c.source_path.as_deref()))
+        .unwrap_or_else(|| "Select Clip".to_string());
 
     ui.same_line();
-    ui.set_next_item_width(150.0);
+    ui.set_next_item_width(200.0);
 
-    if let Some(_token) = ui.begin_combo("##clip_select", current_name) {
+    if let Some(_token) = ui.begin_combo("##clip_select", &current_display) {
         for (id, name) in &clip_names {
             let is_selected = state.current_clip_id == Some(*id);
-            if ui.selectable_config(name).selected(is_selected).build() {
+            let source_path = clip_library.get(*id).and_then(|c| c.source_path.clone());
+            let display = build_clip_display_name(name, source_path.as_deref());
+            let label = format!("{}##clip_select_{}", display, id);
+            if ui.selectable_config(&label).selected(is_selected).build() {
                 ui_events.send(UIEvent::TimelineSelectClip(*id));
             }
         }
@@ -1286,5 +1289,18 @@ fn build_snap_controls(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &Tim
                 ui_events.send(UIEvent::TimelineSetFrameRate(*fps));
             }
         }
+    }
+}
+
+fn build_clip_display_name(name: &str, source_path: Option<&str>) -> String {
+    let filename = source_path
+        .and_then(|p| std::path::Path::new(p).file_name())
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+
+    if filename.is_empty() {
+        name.to_string()
+    } else {
+        format!("{} <{}>", name, filename)
     }
 }

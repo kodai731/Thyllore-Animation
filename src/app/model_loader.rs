@@ -12,7 +12,7 @@ use crate::app::billboard::BillboardData;
 use crate::app::graphics_resource::{GraphicsResources, MaterialId, MeshBuffer, NodeData};
 use crate::app::raytracing::RayTracingData;
 use crate::app::AppData;
-use crate::asset::{AnimationClipAsset, AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
+use crate::asset::{AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
 use crate::debugview::gizmo::{BoneGizmoData, ConstraintGizmoData};
 use crate::ecs::component::{AnimationMeta, ClipSchedule, EntityIcon};
 use crate::ecs::resource::{
@@ -149,12 +149,13 @@ unsafe fn apply_model_to_resources(
 
     let animation_type = if load_result.has_skinned_meshes {
         AnimationType::Skeletal
-    } else if !load_result.animation_system.clips.is_empty() {
+    } else if !load_result.clips.is_empty() {
         AnimationType::Node
     } else {
         AnimationType::None
     };
     let node_animation_scale = load_result.node_animation_scale;
+    let loaded_clips = load_result.clips.clone();
 
     create_ecs_entities(
         model_name,
@@ -163,6 +164,7 @@ unsafe fn apply_model_to_resources(
         assets,
         animation_type,
         node_animation_scale,
+        &loaded_clips,
     );
 
     apply_loaded_constraints(load_result, world);
@@ -434,13 +436,13 @@ unsafe fn apply_initial_pose(
 ) -> Result<()> {
     use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose};
 
-    if load_result.animation_system.clips.is_empty() {
+    if load_result.clips.is_empty() {
         return Ok(());
     }
 
     crate::log!("Applying initial pose (time=0) for animation...");
 
-    if !load_result.animation_system.clips.is_empty() {
+    if !load_result.clips.is_empty() {
         if world.contains_resource::<TimelineState>() {
             let mut timeline = world.resource_mut::<TimelineState>();
             timeline.playing = false;
@@ -457,17 +459,14 @@ unsafe fn apply_initial_pose(
         } else {
             (0.0, true)
         };
-        let clip_library = world.resource::<ClipLibrary>();
-
         let skeleton = assets.get_skeleton_by_skeleton_id(skel_id);
-        let clip = clip_library.animation.clips.first();
+        let first_clip = assets.animation_clips.values().next().map(|a| &a.clip);
 
-        if let (Some(skeleton), Some(clip)) = (skeleton, clip) {
+        if let (Some(skeleton), Some(clip)) = (skeleton, first_clip) {
             let mut pose = create_pose_from_rest(skeleton);
             sample_clip_to_pose(clip, current_time, skeleton, &mut pose, looping);
             let globals = compute_pose_global_transforms(skeleton, &pose);
             let skeleton_clone = skeleton.clone();
-            drop(clip_library);
 
             for mesh_idx in 0..graphics.meshes.len() {
                 apply_skinning_to_mesh(
@@ -480,21 +479,17 @@ unsafe fn apply_initial_pose(
                     mesh_idx,
                 )?;
             }
-        } else {
-            drop(clip_library);
         }
     }
 
     let has_node_animation = !load_result.has_skinned_meshes && !graphics.meshes.is_empty();
     if has_node_animation {
-        let clip_library = world.resource::<ClipLibrary>();
         let mut node_assets = world.resource_mut::<NodeAssets>();
         let node_animation_scale = load_result.node_animation_scale;
 
         let skel_id = graphics.meshes.first().and_then(|m| m.skeleton_id);
         let skeleton_clone = skel_id.and_then(|id| assets.get_skeleton_by_skeleton_id(id).cloned());
-        let clip_clone = clip_library.animation.clips.first().cloned();
-        drop(clip_library);
+        let clip_clone = assets.animation_clips.values().next().map(|a| a.clip.clone());
 
         let updated_meshes = if let (Some(skeleton), Some(clip)) = (&skeleton_clone, &clip_clone) {
             let mut pose = create_pose_from_rest(skeleton);
@@ -717,6 +712,7 @@ fn create_ecs_entities(
     assets: &mut AssetStorage,
     animation_type: AnimationType,
     node_animation_scale: f32,
+    loaded_clips: &[crate::animation::AnimationClip],
 ) {
     let name = std::path::Path::new(model_name)
         .file_stem()
@@ -724,21 +720,7 @@ fn create_ecs_entities(
         .unwrap_or("model")
         .to_string();
 
-    let (clips, has_animation) = {
-        let clip_library = world.resource::<ClipLibrary>();
-        let clips = clip_library.animation.clips.clone();
-        let has_animation = !clips.is_empty();
-        (clips, has_animation)
-    };
-
-    for clip in &clips {
-        let clip_asset = AnimationClipAsset {
-            id: 0,
-            clip_id: clip.id,
-            clip: clip.clone(),
-        };
-        assets.add_animation_clip(clip_asset);
-    }
+    let has_animation = !loaded_clips.is_empty();
 
     let bone_names: std::collections::HashMap<u32, String> = assets
         .skeletons
@@ -764,11 +746,12 @@ fn create_ecs_entities(
 
     let mut first_editable_clip_id = None;
     {
-        let mut clip_manager = world.resource_mut::<ClipLibrary>();
-        for clip in &clips {
+        let mut clip_library = world.resource_mut::<ClipLibrary>();
+        for clip in loaded_clips {
             let editable_id =
                 crate::ecs::systems::clip_library_systems::clip_library_create_from_imported(
-                    &mut clip_manager,
+                    &mut clip_library,
+                    assets,
                     clip,
                     &bone_names,
                 );
@@ -776,10 +759,9 @@ fn create_ecs_entities(
                 first_editable_clip_id = Some(editable_id);
             }
             crate::log!(
-                "Registered editable clip '{}' (editable_id={}, original_id={})",
+                "Registered clip '{}' (source_id={})",
                 clip.name,
                 editable_id,
-                clip.id
             );
         }
     }

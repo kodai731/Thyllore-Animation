@@ -53,6 +53,7 @@ pub struct GltfLoadResult {
     pub meshes: Vec<GltfMeshData>,
     pub nodes: Vec<NodeInfo>,
     pub animation_system: AnimationSystem,
+    pub clips: Vec<AnimationClip>,
     pub morph_animation: MorphAnimationSystem,
     pub has_skinned_meshes: bool,
     pub has_armature: bool,
@@ -1045,6 +1046,7 @@ unsafe fn process_animation(
 
 fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
     let mut animation_system = AnimationSystem::new();
+    let mut clips = Vec::new();
 
     let skeleton_id = if !ctx.joints.is_empty() {
         let skeleton = convert_joints_to_skeleton(&ctx.joints, &ctx.skeleton_root_transform);
@@ -1061,7 +1063,7 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
             clip.channels.len()
         );
         if clip.duration > 0.0 && !clip.channels.is_empty() {
-            animation_system.add_clip(clip);
+            clips.push(clip);
         }
     }
 
@@ -1082,7 +1084,7 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
                 initialize_skeleton_from_clip(skeleton, &clip, 0.0);
                 log!("Initialized skeleton bones with animation t=0 values");
             }
-            animation_system.add_clip(clip);
+            clips.push(clip);
         }
     }
 
@@ -1173,6 +1175,7 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
         meshes,
         nodes: ctx.node_infos,
         animation_system,
+        clips,
         morph_animation: morph_system,
         has_skinned_meshes: ctx.has_skinned_meshes,
         has_armature: ctx.has_armature,

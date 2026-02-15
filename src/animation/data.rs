@@ -483,18 +483,14 @@ impl Default for SkinData {
 #[derive(Clone, Debug, Default)]
 pub struct AnimationSystem {
     pub skeletons: Vec<Skeleton>,
-    pub clips: Vec<AnimationClip>,
     next_skeleton_id: SkeletonId,
-    next_clip_id: AnimationClipId,
 }
 
 impl AnimationSystem {
     pub fn new() -> Self {
         Self {
             skeletons: Vec::new(),
-            clips: Vec::new(),
             next_skeleton_id: 0,
-            next_clip_id: 0,
         }
     }
 
@@ -506,14 +502,6 @@ impl AnimationSystem {
         id
     }
 
-    pub fn add_clip(&mut self, mut clip: AnimationClip) -> AnimationClipId {
-        let id = self.next_clip_id;
-        self.next_clip_id += 1;
-        clip.id = id;
-        self.clips.push(clip);
-        id
-    }
-
     pub fn get_skeleton(&self, id: SkeletonId) -> Option<&Skeleton> {
         self.skeletons.iter().find(|s| s.id == id)
     }
@@ -522,15 +510,9 @@ impl AnimationSystem {
         self.skeletons.iter_mut().find(|s| s.id == id)
     }
 
-    pub fn get_clip(&self, id: AnimationClipId) -> Option<&AnimationClip> {
-        self.clips.iter().find(|c| c.id == id)
-    }
-
     pub fn clear(&mut self) {
         self.skeletons.clear();
-        self.clips.clear();
         self.next_skeleton_id = 0;
-        self.next_clip_id = 0;
     }
 }
 

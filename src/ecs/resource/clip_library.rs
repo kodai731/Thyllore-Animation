@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
-use crate::animation::{AnimationClipId, AnimationSystem, MorphAnimationSystem};
+use crate::animation::{AnimationSystem, MorphAnimationSystem};
+use crate::asset::AssetId;
 
 #[derive(Clone, Debug, Default)]
 pub struct ClipLibrary {
@@ -11,7 +12,7 @@ pub struct ClipLibrary {
     pub source_clips: HashMap<SourceClipId, SourceClip>,
     pub dirty_sources: HashSet<SourceClipId>,
     pub next_source_id: SourceClipId,
-    pub source_to_anim_id: HashMap<SourceClipId, AnimationClipId>,
+    pub source_to_asset_id: HashMap<SourceClipId, AssetId>,
 }
 
 impl ClipLibrary {
@@ -22,7 +23,7 @@ impl ClipLibrary {
             source_clips: HashMap::new(),
             dirty_sources: HashSet::new(),
             next_source_id: 1,
-            source_to_anim_id: HashMap::new(),
+            source_to_asset_id: HashMap::new(),
         }
     }
 
@@ -35,7 +36,7 @@ impl ClipLibrary {
     pub fn clear_editable(&mut self) {
         self.source_clips.clear();
         self.dirty_sources.clear();
-        self.source_to_anim_id.clear();
+        self.source_to_asset_id.clear();
     }
 
     pub fn get(&self, id: SourceClipId) -> Option<&EditableAnimationClip> {
@@ -55,15 +56,8 @@ impl ClipLibrary {
         self.source_clips.get_mut(&id)
     }
 
-    pub fn get_anim_clip_id_for_source(&self, source_id: SourceClipId) -> Option<AnimationClipId> {
-        self.source_to_anim_id.get(&source_id).copied()
-    }
-
-    pub fn find_source_id_for_anim_clip(&self, anim_id: AnimationClipId) -> Option<SourceClipId> {
-        self.source_to_anim_id
-            .iter()
-            .find(|(_, &aid)| aid == anim_id)
-            .map(|(&sid, _)| sid)
+    pub fn get_asset_id_for_source(&self, source_id: SourceClipId) -> Option<AssetId> {
+        self.source_to_asset_id.get(&source_id).copied()
     }
 
     pub fn remove(&mut self, id: SourceClipId) -> Option<EditableAnimationClip> {

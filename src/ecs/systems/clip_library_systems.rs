@@ -10,41 +10,38 @@ use crate::animation::{AnimationClip, BoneId};
 use crate::asset::{AnimationClipAsset, AssetStorage};
 use crate::ecs::resource::ClipLibrary;
 
+pub fn clip_library_register_and_activate(
+    lib: &mut ClipLibrary,
+    assets: &mut AssetStorage,
+    editable: EditableAnimationClip,
+) -> SourceClipId {
+    let source_id = lib.next_source_id;
+    lib.next_source_id += 1;
+
+    let mut clip = editable;
+    clip.id = source_id;
+
+    let playable = clip.to_animation_clip();
+    let asset_id = assets.add_animation_clip(AnimationClipAsset {
+        id: 0,
+        clip: playable,
+    });
+
+    let source = SourceClip::new(source_id, clip);
+    lib.source_clips.insert(source_id, source);
+    lib.source_to_asset_id.insert(source_id, asset_id);
+
+    source_id
+}
+
 pub fn clip_library_create_from_imported(
     lib: &mut ClipLibrary,
+    assets: &mut AssetStorage,
     clip: &AnimationClip,
     bone_names: &HashMap<BoneId, String>,
 ) -> SourceClipId {
-    let id = lib.next_source_id;
-    lib.next_source_id += 1;
-
-    let editable = EditableAnimationClip::from_animation_clip(id, clip, bone_names);
-    let source = SourceClip::new(id, editable);
-    lib.source_clips.insert(id, source);
-    lib.source_to_anim_id.insert(id, clip.id);
-    id
-}
-
-pub fn clip_library_create_empty(lib: &mut ClipLibrary, name: String) -> SourceClipId {
-    let id = lib.next_source_id;
-    lib.next_source_id += 1;
-
-    let editable = EditableAnimationClip::new(id, name);
-    let source = SourceClip::new(id, editable);
-    lib.source_clips.insert(id, source);
-    id
-}
-
-pub fn clip_library_register_clip(
-    lib: &mut ClipLibrary,
-    mut clip: EditableAnimationClip,
-) -> SourceClipId {
-    let id = lib.next_source_id;
-    lib.next_source_id += 1;
-    clip.id = id;
-    let source = SourceClip::new(id, clip);
-    lib.source_clips.insert(id, source);
-    id
+    let editable = EditableAnimationClip::from_animation_clip(0, clip, bone_names);
+    clip_library_register_and_activate(lib, assets, editable)
 }
 
 pub fn clip_library_to_playable(lib: &ClipLibrary, id: SourceClipId) -> Option<AnimationClip> {
@@ -53,27 +50,18 @@ pub fn clip_library_to_playable(lib: &ClipLibrary, id: SourceClipId) -> Option<A
         .map(|s| s.editable_clip.to_animation_clip())
 }
 
-pub fn clip_library_sync_dirty(
-    lib: &mut ClipLibrary,
-    assets: &mut crate::asset::AssetStorage,
-) {
+pub fn clip_library_sync_dirty(lib: &mut ClipLibrary, assets: &mut AssetStorage) {
     for source_id in lib.dirty_sources.drain() {
-        let (clip, anim_id) = match (
+        let (editable, asset_id) = match (
             lib.source_clips.get(&source_id),
-            lib.source_to_anim_id.get(&source_id),
+            lib.source_to_asset_id.get(&source_id),
         ) {
-            (Some(s), Some(&id)) => (&s.editable_clip, id),
+            (Some(s), Some(&aid)) => (&s.editable_clip, aid),
             _ => continue,
         };
 
-        let mut playable = clip.to_animation_clip();
-        playable.id = anim_id;
-
-        if let Some(target) = lib.animation.clips.iter_mut().find(|c| c.id == anim_id) {
-            *target = playable.clone();
-        }
-
-        if let Some(asset) = assets.animation_clips.values_mut().find(|a| a.clip_id == anim_id) {
+        let playable = editable.to_animation_clip();
+        if let Some(asset) = assets.animation_clips.get_mut(&asset_id) {
             asset.clip = playable;
         }
     }
@@ -108,67 +96,9 @@ pub fn clip_library_save_to_file(lib: &ClipLibrary, id: SourceClipId, path: &Pat
     Ok(())
 }
 
-pub fn clip_library_ensure_playable(
-    lib: &mut ClipLibrary,
-    assets: &mut AssetStorage,
-    source_id: SourceClipId,
-) -> bool {
-    if lib.source_to_anim_id.contains_key(&source_id) {
-        return false;
-    }
-
-    let playable = match lib.source_clips.get(&source_id) {
-        Some(source) => source.editable_clip.to_animation_clip(),
-        None => return false,
-    };
-
-    crate::log!(
-        "[EnsurePlayable] source_id={}, channels={}, duration={:.3}",
-        source_id,
-        playable.channels.len(),
-        playable.duration,
-    );
-    for (&bone_id, ch) in playable.channels.iter().take(3) {
-        let rot_sample = ch.sample_rotation(0.0);
-        let trans_sample = ch.sample_translation(0.0);
-        crate::log!(
-            "[EnsurePlayable]   bone_id={}: rot@0={:?}, trans@0={:?}, rot_kf={}, trans_kf={}",
-            bone_id,
-            rot_sample,
-            trans_sample,
-            ch.rotation.len(),
-            ch.translation.len(),
-        );
-    }
-
-    let existing_clip_ids: Vec<_> = assets.animation_clips.values().map(|a| a.clip_id).collect();
-    crate::log!(
-        "[EnsurePlayable] existing asset clip_ids={:?}",
-        existing_clip_ids,
-    );
-
-    let anim_id = lib.animation.add_clip(playable.clone());
-    lib.source_to_anim_id.insert(source_id, anim_id);
-
-    crate::log!(
-        "[EnsurePlayable] assigned anim_id={}, source_to_anim_id={:?}",
-        anim_id,
-        lib.source_to_anim_id,
-    );
-
-    let mut asset_clip = playable;
-    asset_clip.id = anim_id;
-    assets.add_animation_clip(AnimationClipAsset {
-        id: 0,
-        clip_id: anim_id,
-        clip: asset_clip,
-    });
-
-    true
-}
-
 pub fn clip_library_load_from_file(
     lib: &mut ClipLibrary,
+    assets: &mut AssetStorage,
     path: &Path,
     bone_name_to_id: Option<&HashMap<String, BoneId>>,
 ) -> Result<SourceClipId> {
@@ -196,19 +126,14 @@ pub fn clip_library_load_from_file(
         }
     }
 
-    let id = lib.next_source_id;
-    lib.next_source_id += 1;
-    clip.id = id;
     clip.source_path = Some(path.to_string_lossy().to_string());
 
     crate::log!(
-        "Loaded animation clip '{}' from {:?} (id={})",
+        "Loaded animation clip '{}' from {:?}",
         clip.name,
-        path,
-        id
+        path
     );
 
-    let source = SourceClip::new(id, clip);
-    lib.source_clips.insert(id, source);
+    let id = clip_library_register_and_activate(lib, assets, clip);
     Ok(id)
 }

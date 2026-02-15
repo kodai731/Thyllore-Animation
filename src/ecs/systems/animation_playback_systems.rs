@@ -2,8 +2,8 @@ use anyhow::Result;
 use cgmath::Matrix4;
 
 use crate::animation::editable::{BlendMode, ClipInstanceId, EaseType, SourceClipId};
-use crate::animation::BoneId;
-use crate::animation::{AnimationClipId, MorphAnimationSystem, SkeletonId, SkeletonPose};
+use crate::animation::{MorphAnimationSystem, SkeletonId, SkeletonPose};
+use crate::asset::AssetId;
 use crate::app::graphics_resource::{GraphicsResources, NodeData};
 use crate::asset::AssetStorage;
 use crate::ecs::component::{
@@ -27,7 +27,7 @@ pub struct AnimationEvalResult {
 
 struct ActiveInstanceInfo {
     source_id: SourceClipId,
-    clip_id: AnimationClipId,
+    asset_id: AssetId,
     instance_id: ClipInstanceId,
     local_time: f32,
     weight: f32,
@@ -133,13 +133,12 @@ fn collect_animated_entities(
 
         if should_log {
             let src_id = schedule.instances.first().map(|i| i.source_id);
-            let anim_id = src_id.and_then(|sid| clip_library.get_anim_clip_id_for_source(sid));
-            let anim_exists = anim_id.map_or(false, |aid| {
-                clip_library.animation.clips.iter().any(|c| c.id == aid)
-            });
+            let asset_id = src_id.and_then(|sid| clip_library.get_asset_id_for_source(sid));
+            let asset_exists =
+                asset_id.map_or(false, |aid| assets.animation_clips.contains_key(&aid));
             crate::log!(
-                "[PlaybackDebug] entity {:?}: source_id={:?}, anim_id={:?}, anim_exists={}, time={:.3}, instances={}",
-                entity, src_id, anim_id, anim_exists, animator.time, schedule.instances.len()
+                "[PlaybackDebug] entity {:?}: source_id={:?}, asset_id={:?}, asset_exists={}, time={:.3}, instances={}",
+                entity, src_id, asset_id, asset_exists, animator.time, schedule.instances.len()
             );
         }
 
@@ -184,7 +183,7 @@ fn build_active_instances(
     let mut instances: Vec<ActiveInstanceInfo> = active
         .into_iter()
         .filter_map(|inst| {
-            let clip_id = clip_library.get_anim_clip_id_for_source(inst.source_id)?;
+            let asset_id = clip_library.get_asset_id_for_source(inst.source_id)?;
 
             let local_time = compute_local_time(
                 animator.time,
@@ -203,7 +202,7 @@ fn build_active_instances(
 
             Some(ActiveInstanceInfo {
                 source_id: inst.source_id,
-                clip_id,
+                asset_id,
                 instance_id: inst.instance_id,
                 local_time,
                 weight,
@@ -233,10 +232,7 @@ fn evaluate_entity_blend(info: &AnimatedEntityInfo, assets: &AssetStorage) -> Op
         .iter()
         .find(|i| i.blend_mode == BlendMode::Override)?;
 
-    let clip_asset = assets
-        .animation_clips
-        .values()
-        .find(|c| c.clip_id == first_override.clip_id)?;
+    let clip_asset = assets.animation_clips.get(&first_override.asset_id)?;
 
     let mut pose = rest_pose.clone();
     sample_clip_to_pose(
@@ -258,11 +254,7 @@ fn evaluate_entity_blend(info: &AnimatedEntityInfo, assets: &AssetStorage) -> Op
             continue;
         }
 
-        let Some(clip_asset) = assets
-            .animation_clips
-            .values()
-            .find(|c| c.clip_id == inst.clip_id)
-        else {
+        let Some(clip_asset) = assets.animation_clips.get(&inst.asset_id) else {
             continue;
         };
 

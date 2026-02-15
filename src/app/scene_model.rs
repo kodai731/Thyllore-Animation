@@ -46,7 +46,7 @@ impl App {
         crate::log!("  has_skinned_meshes: {}", model_state.has_skinned_meshes);
         crate::log!(
             "  animation clips count: {}",
-            clip_library.animation.clips.len()
+            clip_library.clip_count()
         );
         crate::log!(
             "  morph_animations count: {}",
@@ -129,7 +129,7 @@ impl App {
             .ecs_world
             .resource::<crate::ecs::resource::TimelineState>();
         crate::log!("  animation_playing: {}", timeline.playing);
-        crate::log!("  clips count: {}", clip_library.animation.clips.len());
+        crate::log!("  clips count: {}", clip_library.clip_count());
 
         crate::log!("========== END DEBUG INFORMATION ==========");
     }

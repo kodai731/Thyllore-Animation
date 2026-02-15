@@ -18,7 +18,7 @@ pub struct EcsContext<'a> {
     pub image_index: usize,
     pub swapchain_extent: (u32, u32),
     pub world: &'a mut World,
-    pub assets: &'a AssetStorage,
+    pub assets: &'a mut AssetStorage,
     pub gui_data: &'a mut GUIData,
     pub mesh_positions: Vec<Vector3<f32>>,
 }

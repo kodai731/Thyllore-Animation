@@ -53,7 +53,10 @@ pub fn clip_library_to_playable(lib: &ClipLibrary, id: SourceClipId) -> Option<A
         .map(|s| s.editable_clip.to_animation_clip())
 }
 
-pub fn clip_library_sync_dirty(lib: &mut ClipLibrary) {
+pub fn clip_library_sync_dirty(
+    lib: &mut ClipLibrary,
+    assets: &mut crate::asset::AssetStorage,
+) {
     for source_id in lib.dirty_sources.drain() {
         let (clip, anim_id) = match (
             lib.source_clips.get(&source_id),
@@ -67,7 +70,11 @@ pub fn clip_library_sync_dirty(lib: &mut ClipLibrary) {
         playable.id = anim_id;
 
         if let Some(target) = lib.animation.clips.iter_mut().find(|c| c.id == anim_id) {
-            *target = playable;
+            *target = playable.clone();
+        }
+
+        if let Some(asset) = assets.animation_clips.values_mut().find(|a| a.clip_id == anim_id) {
+            asset.clip = playable;
         }
     }
 }

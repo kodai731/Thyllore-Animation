@@ -163,6 +163,9 @@ impl App {
         #[cfg(feature = "ml")]
         data.ecs_world
             .insert_resource(crate::ecs::resource::CurveSuggestionState::default());
+        #[cfg(feature = "text-to-motion")]
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::TextToMotionState::default());
 
         let viewport_width = rrswapchain.swapchain_extent.width;
         let viewport_height = rrswapchain.swapchain_extent.height;

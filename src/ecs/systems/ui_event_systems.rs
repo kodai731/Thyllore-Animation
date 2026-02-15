@@ -232,6 +232,11 @@ pub fn process_ui_events_with_events_simple(
             UIEvent::CurveSuggestionRequest { .. }
             | UIEvent::CurveSuggestionAccept
             | UIEvent::CurveSuggestionDismiss => {}
+
+            #[cfg(feature = "text-to-motion")]
+            UIEvent::TextToMotionGenerate { .. }
+            | UIEvent::TextToMotionApply
+            | UIEvent::TextToMotionCancel => {}
         }
     }
 

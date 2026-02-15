@@ -21,6 +21,8 @@ mod spring_bone_editor_state;
 mod ghost_curve_data;
 #[cfg(feature = "ml")]
 mod inference_actor_state;
+#[cfg(feature = "text-to-motion")]
+mod text_to_motion_state;
 mod spring_bone_state;
 mod timeline_state;
 mod tone_mapping;
@@ -50,4 +52,6 @@ pub use timeline_state::*;
 pub use ghost_curve_data::*;
 #[cfg(feature = "ml")]
 pub use inference_actor_state::*;
+#[cfg(feature = "text-to-motion")]
+pub use text_to_motion_state::*;
 pub use tone_mapping::*;

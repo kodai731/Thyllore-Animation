@@ -296,6 +296,16 @@ pub enum UIEvent {
     CurveSuggestionAccept,
     #[cfg(feature = "ml")]
     CurveSuggestionDismiss,
+
+    #[cfg(feature = "text-to-motion")]
+    TextToMotionGenerate {
+        prompt: String,
+        duration_seconds: f32,
+    },
+    #[cfg(feature = "text-to-motion")]
+    TextToMotionApply,
+    #[cfg(feature = "text-to-motion")]
+    TextToMotionCancel,
 }
 
 #[derive(Default)]

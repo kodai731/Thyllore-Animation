@@ -376,6 +376,8 @@ unsafe fn process_ui_events_and_render_frame(
             process_spring_bone_edit_events_inline(&events, app);
             #[cfg(feature = "ml")]
             process_curve_suggestion_events_inline(&events, app);
+            #[cfg(feature = "text-to-motion")]
+            process_text_to_motion_events_inline(&events, app);
 
             let model_bounds = app.data.graphics_resources.calculate_model_bounds();
             let world = &app.data.ecs_world;
@@ -1687,6 +1689,106 @@ fn process_curve_suggestion_events_inline(events: &[UIEvent], app: &mut App) {
                 let mut state = app.data.ecs_world.resource_mut::<CurveSuggestionState>();
                 curve_suggestion_dismiss(&mut state);
                 crate::log!("CurveCopilot: suggestion dismissed");
+            }
+
+            _ => {}
+        }
+    }
+}
+
+#[cfg(feature = "text-to-motion")]
+fn process_text_to_motion_events_inline(
+    events: &[UIEvent],
+    app: &mut App,
+) {
+    use crate::ecs::resource::TextToMotionState;
+    use crate::ecs::systems::{
+        text_to_motion_cancel, text_to_motion_submit,
+    };
+    use crate::grpc::GrpcThreadHandle;
+
+    const DEFAULT_ENDPOINT: &str = "http://localhost:50051";
+
+    for event in events {
+        match event {
+            UIEvent::TextToMotionGenerate {
+                prompt,
+                duration_seconds,
+            } => {
+                if !app
+                    .data
+                    .ecs_world
+                    .contains_resource::<GrpcThreadHandle>()
+                {
+                    let handle =
+                        GrpcThreadHandle::spawn(DEFAULT_ENDPOINT);
+                    app.data.ecs_world.insert_resource(handle);
+                    crate::log!(
+                        "TextToMotion: spawned gRPC thread ({})",
+                        DEFAULT_ENDPOINT
+                    );
+                }
+
+                let handle =
+                    app.data.ecs_world.get_resource::<GrpcThreadHandle>();
+                let mut state =
+                    app.data.ecs_world.resource_mut::<TextToMotionState>();
+
+                if let Some(handle) = handle {
+                    text_to_motion_submit(
+                        &mut state,
+                        &*handle,
+                        prompt,
+                        *duration_seconds,
+                    );
+                }
+            }
+
+            UIEvent::TextToMotionApply => {
+                let clip = {
+                    let mut state = app
+                        .data
+                        .ecs_world
+                        .resource_mut::<TextToMotionState>();
+                    state.generated_clip.take()
+                };
+
+                if let Some(clip) = clip {
+                    let mut clip_library =
+                        app.data.ecs_world.resource_mut::<ClipLibrary>();
+                    let new_id = crate::ecs::systems::clip_library_systems::clip_library_register_clip(
+                        &mut clip_library,
+                        clip,
+                    );
+                    clip_library_ensure_playable(
+                        &mut clip_library,
+                        &mut app.data.ecs_assets,
+                        new_id,
+                    );
+                    drop(clip_library);
+
+                    let mut timeline =
+                        app.data.ecs_world.resource_mut::<TimelineState>();
+                    timeline.current_clip_id = Some(new_id);
+
+                    let mut state = app
+                        .data
+                        .ecs_world
+                        .resource_mut::<TextToMotionState>();
+                    text_to_motion_cancel(&mut state);
+
+                    crate::log!(
+                        "TextToMotion: applied clip (id={})",
+                        new_id
+                    );
+                }
+            }
+
+            UIEvent::TextToMotionCancel => {
+                let mut state =
+                    app.data.ecs_world.resource_mut::<TextToMotionState>();
+                text_to_motion_cancel(&mut state);
+                crate::log!("TextToMotion: cancelled");
             }
 
             _ => {}

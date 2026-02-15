@@ -23,6 +23,8 @@ use crate::ecs::resource::{
 };
 #[cfg(feature = "ml")]
 use crate::ecs::resource::{CurveSuggestionState, InferenceActorState};
+#[cfg(feature = "text-to-motion")]
+use crate::ecs::resource::TextToMotionState;
 use crate::ecs::world::Animator;
 
 pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
@@ -48,6 +50,8 @@ pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
     run_timeline_phase(ctx);
     #[cfg(feature = "ml")]
     run_inference_actor_phase(ctx);
+    #[cfg(feature = "text-to-motion")]
+    run_text_to_motion_phase(ctx);
 
     let animation_updates = run_animation_phase_ecs(ctx);
     run_animation_phase_gpu(ctx, &animation_updates)?;
@@ -165,6 +169,30 @@ fn run_inference_actor_phase(ctx: &mut FrameContext) {
     if ctx.world.contains_resource::<CurveSuggestionState>() {
         let mut suggestion_state = ctx.world.resource_mut::<CurveSuggestionState>();
         curve_suggestion_poll_results(&mut suggestion_state, &mut state);
+    }
+}
+
+#[cfg(feature = "text-to-motion")]
+fn run_text_to_motion_phase(ctx: &mut FrameContext) {
+    if !ctx.world.contains_resource::<TextToMotionState>() {
+        return;
+    }
+
+    let bone_name_to_id = ctx
+        .assets
+        .skeletons
+        .values()
+        .next()
+        .map(|sa| sa.skeleton.bone_name_to_id.clone());
+
+    if let Some(handle) = ctx.world.get_resource::<crate::grpc::GrpcThreadHandle>()
+    {
+        let mut state = ctx.world.resource_mut::<TextToMotionState>();
+        super::text_to_motion_systems::text_to_motion_poll(
+            &mut state,
+            &*handle,
+            bone_name_to_id.as_ref(),
+        );
     }
 }
 

@@ -14,6 +14,10 @@ use super::clip_track_snapshot::{
 };
 use super::CurveEditorState;
 
+pub fn ruler_padding(duration: f32) -> f32 {
+    (duration * 0.3).max(2.0)
+}
+
 const TRACK_LABEL_WIDTH: f32 = 150.0;
 const TRACK_HEIGHT: f32 = 24.0;
 const CURVE_HEIGHT: f32 = 60.0;
@@ -169,13 +173,20 @@ fn build_timeline_content(
 
     let content_region = ui.content_region_avail();
     let pixels_per_second = PIXELS_PER_SECOND * state.zoom_level;
+    let display_duration = current_clip.duration + ruler_padding(current_clip.duration);
     let timeline_width =
-        (current_clip.duration * pixels_per_second).max(content_region[0] - TRACK_LABEL_WIDTH);
+        (display_duration * pixels_per_second).max(content_region[0] - TRACK_LABEL_WIDTH);
 
     ui.child_window("timeline_content")
         .size(content_region)
         .build(|| {
-            build_time_ruler_with_scrub(ui, ui_events, state, current_clip, timeline_width);
+            build_time_ruler_with_scrub(
+                ui,
+                ui_events,
+                state,
+                timeline_width,
+                display_duration,
+            );
             ui.separator();
 
             if !clip_track_snapshot.entries.is_empty() {
@@ -212,8 +223,8 @@ fn build_time_ruler_with_scrub(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     state: &mut TimelineState,
-    clip: &EditableAnimationClip,
     timeline_width: f32,
+    display_duration: f32,
 ) {
     let cursor_pos = ui.cursor_screen_pos();
     let ruler_start_x = cursor_pos[0] + TRACK_LABEL_WIDTH;
@@ -239,7 +250,7 @@ fn build_time_ruler_with_scrub(
 
     let tick_interval = calculate_tick_interval(state.zoom_level);
     let mut time = 0.0;
-    while time <= clip.duration {
+    while time <= display_duration {
         let x = ruler_start_x + time * pixels_per_second;
         let is_major = (time / tick_interval).round() as i32 % 5 == 0;
 
@@ -284,7 +295,7 @@ fn build_time_ruler_with_scrub(
         state,
         ruler_rect_min,
         ruler_rect_max,
-        clip.duration,
+        display_duration,
         pixels_per_second,
         ruler_start_x,
     );

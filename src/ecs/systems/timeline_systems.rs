@@ -75,6 +75,7 @@ pub fn timeline_process_events(
                 if let Some(clip_id) = timeline_state.current_clip_id {
                     if let Some(clip) = clip_library.get_mut(clip_id) {
                         clip.add_keyframe(*bone_id, *property_type, *time, *value);
+                        clip.recalculate_duration();
                         clip_modified = true;
                     }
                 }
@@ -93,6 +94,7 @@ pub fn timeline_process_events(
                                         .remove_keyframe(sel.keyframe_id);
                                 }
                             }
+                            clip.recalculate_duration();
                             clip_modified = true;
                         }
                     }
@@ -116,8 +118,25 @@ pub fn timeline_process_events(
                                 *new_time,
                                 *new_value,
                             );
-                            clip_modified = true;
                         }
+                        clip.recalculate_duration();
+                        clip_modified = true;
+                    }
+                }
+            }
+
+            UIEvent::TimelineDeleteKeyframe {
+                bone_id,
+                property_type,
+                keyframe_id,
+            } => {
+                if let Some(clip_id) = timeline_state.current_clip_id {
+                    if let Some(clip) = clip_library.get_mut(clip_id) {
+                        if let Some(track) = clip.tracks.get_mut(bone_id) {
+                            track.get_curve_mut(*property_type).remove_keyframe(*keyframe_id);
+                        }
+                        clip.recalculate_duration();
+                        clip_modified = true;
                     }
                 }
             }

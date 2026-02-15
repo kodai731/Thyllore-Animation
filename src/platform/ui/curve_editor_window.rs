@@ -8,6 +8,7 @@ use crate::animation::editable::{
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{ClipLibrary, CurveEditorBuffer, TimelineState};
+use super::timeline_window::ruler_padding;
 
 pub struct SuggestionOverlay {
     pub property_type: PropertyType,
@@ -123,6 +124,8 @@ pub struct CurveEditorState {
     pub pan_start_offset: [f32; 2],
     pub dragging_tangent: Option<DraggingTangent>,
     pub context_menu_keyframe: Option<SelectedKeyframe>,
+    pub context_menu_click_time: f32,
+    pub context_menu_click_value: f32,
 }
 
 impl Default for CurveEditorState {
@@ -155,6 +158,8 @@ impl Default for CurveEditorState {
             pan_start_offset: [0.0, 0.0],
             dragging_tangent: None,
             context_menu_keyframe: None,
+            context_menu_click_time: 0.0,
+            context_menu_click_value: 0.0,
         }
     }
 }
@@ -392,7 +397,7 @@ fn build_curve_view(
         curve_origin,
         curve_width: curve_area_width,
         curve_height: curve_area_height,
-        duration: clip.duration,
+        duration: clip.duration + ruler_padding(clip.duration),
         val_range,
         zoom_x: editor_state.zoom_x,
         zoom_y: editor_state.zoom_y,
@@ -510,10 +515,15 @@ fn build_curve_view(
                 original_value: hit.3,
             });
             ui.open_popup("keyframe_context_menu");
+        } else {
+            editor_state.context_menu_click_time = vt.x_to_time(mouse_pos[0]);
+            editor_state.context_menu_click_value = vt.y_to_value(mouse_pos[1]);
+            ui.open_popup("curve_editor_context_menu");
         }
     }
 
     build_keyframe_context_menu(ui, ui_events, editor_state, bone_id);
+    build_curve_editor_context_menu(ui, ui_events, editor_state, bone_id);
 
     ui.set_cursor_screen_pos([cursor_pos[0], cursor_pos[1] + total_height]);
 
@@ -535,6 +545,15 @@ fn build_keyframe_context_menu(
             None => return,
         };
 
+        if ui.selectable_config("Delete Key").build() {
+            ui_events.send(UIEvent::TimelineDeleteKeyframe {
+                bone_id,
+                property_type: ctx_kf.property_type,
+                keyframe_id: ctx_kf.keyframe_id,
+            });
+        }
+
+        ui.separator();
         ui.text("Interpolation");
         ui.separator();
 
@@ -595,6 +614,34 @@ fn build_keyframe_context_menu(
                 in_tangent: BezierHandle::linear(),
                 out_tangent: BezierHandle::linear(),
             });
+        }
+    });
+}
+
+fn build_curve_editor_context_menu(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    editor_state: &CurveEditorState,
+    bone_id: BoneId,
+) {
+    ui.popup("curve_editor_context_menu", || {
+        if ui.selectable_config("Add Key").build() {
+            let visible: Vec<_> = editor_state.visible_curves.iter().copied().collect();
+            if visible.len() == 1 {
+                ui_events.send(UIEvent::TimelineAddKeyframe {
+                    bone_id,
+                    property_type: visible[0],
+                    time: editor_state.context_menu_click_time.max(0.0),
+                    value: editor_state.context_menu_click_value,
+                });
+            } else if let Some(&first) = visible.first() {
+                ui_events.send(UIEvent::TimelineAddKeyframe {
+                    bone_id,
+                    property_type: first,
+                    time: editor_state.context_menu_click_time.max(0.0),
+                    value: editor_state.context_menu_click_value,
+                });
+            }
         }
     });
 }

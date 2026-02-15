@@ -117,6 +117,7 @@ pub struct CurveEditorState {
     pub view_time_offset: f32,
     pub view_value_offset: f32,
     pub view_val_range: f32,
+    pub view_duration: f32,
     pub view_initialized: bool,
     pub is_scrubbing_ruler: bool,
     pub is_panning: bool,
@@ -151,6 +152,7 @@ impl Default for CurveEditorState {
             view_time_offset: 0.0,
             view_value_offset: 0.0,
             view_val_range: 2.0,
+            view_duration: 2.0,
             view_initialized: false,
             is_scrubbing_ruler: false,
             is_panning: false,
@@ -374,16 +376,22 @@ fn build_curve_view(
 
     let (global_min, global_max) = calculate_global_value_range(&curves_to_draw);
 
+    let display_duration = clip.duration + ruler_padding(clip.duration);
+
     if !editor_state.view_initialized {
         editor_state.view_value_offset = global_min;
         editor_state.view_val_range = global_max - global_min;
+        editor_state.view_duration = display_duration;
         editor_state.view_time_offset = 0.0;
         editor_state.zoom_x = 1.0;
         editor_state.zoom_y = 1.0;
         editor_state.view_initialized = true;
+    } else {
+        editor_state.view_duration = editor_state.view_duration.max(display_duration);
     }
 
     let val_range = editor_state.view_val_range;
+    let view_duration = editor_state.view_duration;
 
     let draw_list = ui.get_window_draw_list();
     let cursor_pos = ui.cursor_screen_pos();
@@ -397,7 +405,7 @@ fn build_curve_view(
         curve_origin,
         curve_width: curve_area_width,
         curve_height: curve_area_height,
-        duration: clip.duration + ruler_padding(clip.duration),
+        duration: view_duration,
         val_range,
         zoom_x: editor_state.zoom_x,
         zoom_y: editor_state.zoom_y,
@@ -464,7 +472,13 @@ fn build_curve_view(
                 .build();
 
             if editor_state.is_dragging_keyframe {
-                draw_keyframe_drag_preview(&draw_list, ui.io().mouse_pos, &vt);
+                draw_keyframe_drag_preview(
+                    &draw_list,
+                    ui.io().mouse_pos,
+                    &vt,
+                    &curves_to_draw,
+                    &editor_state.selected_keyframe,
+                );
             }
 
             if editor_state.dragging_tangent.is_some() {
@@ -748,7 +762,7 @@ fn handle_mouse_release(
             editor_state.dragging_tangent = None;
         } else if editor_state.is_dragging_keyframe {
             if let Some(ref selected) = editor_state.selected_keyframe {
-                let new_time = vt.x_to_time(mouse_pos[0]).clamp(0.0, vt.duration);
+                let new_time = vt.x_to_time(mouse_pos[0]).max(0.0);
                 let new_value = vt.y_to_value(mouse_pos[1]);
 
                 if let Some(bone_id) = editor_state.selected_bone_id {
@@ -1256,17 +1270,24 @@ fn draw_keyframe_drag_preview(
     draw_list: &imgui::DrawListMut,
     mouse_pos: [f32; 2],
     vt: &ViewTransform,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    selected: &Option<SelectedKeyframe>,
 ) {
     let preview_x = mouse_pos[0].clamp(vt.curve_origin[0], vt.curve_origin[0] + vt.curve_width);
     let preview_y = mouse_pos[1].clamp(vt.curve_origin[1], vt.curve_origin[1] + vt.curve_height);
+    let preview_pos = [preview_x, preview_y];
+
+    if let Some(sel) = selected {
+        draw_drag_neighbor_lines(draw_list, preview_pos, vt, curves_to_draw, sel);
+    }
 
     draw_list
-        .add_circle([preview_x, preview_y], 7.0, [1.0, 1.0, 0.0, 1.0])
+        .add_circle(preview_pos, 7.0, [1.0, 1.0, 0.0, 1.0])
         .filled(true)
         .build();
 
     draw_list
-        .add_circle([preview_x, preview_y], 7.0, [1.0, 1.0, 1.0, 1.0])
+        .add_circle(preview_pos, 7.0, [1.0, 1.0, 1.0, 1.0])
         .thickness(2.0)
         .build();
 
@@ -1278,6 +1299,51 @@ fn draw_keyframe_drag_preview(
         [1.0, 1.0, 1.0, 1.0],
         &format!("t={:.2}s v={:.3}", preview_time, preview_value),
     );
+}
+
+fn draw_drag_neighbor_lines(
+    draw_list: &imgui::DrawListMut,
+    preview_pos: [f32; 2],
+    vt: &ViewTransform,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    selected: &SelectedKeyframe,
+) {
+    for (curve, color, _) in curves_to_draw {
+        if curve.property_type != selected.property_type {
+            continue;
+        }
+
+        let kf_index = match curve
+            .keyframes
+            .iter()
+            .position(|kf| kf.id == selected.keyframe_id)
+        {
+            Some(idx) => idx,
+            None => break,
+        };
+
+        let line_color = [color[0], color[1], color[2], 0.6];
+
+        if kf_index > 0 {
+            let prev = &curve.keyframes[kf_index - 1];
+            let prev_pos = [vt.time_to_x(prev.time), vt.value_to_y(prev.value)];
+            draw_list
+                .add_line(prev_pos, preview_pos, line_color)
+                .thickness(1.5)
+                .build();
+        }
+
+        if kf_index + 1 < curve.keyframes.len() {
+            let next = &curve.keyframes[kf_index + 1];
+            let next_pos = [vt.time_to_x(next.time), vt.value_to_y(next.value)];
+            draw_list
+                .add_line(preview_pos, next_pos, line_color)
+                .thickness(1.5)
+                .build();
+        }
+
+        break;
+    }
 }
 
 fn draw_tangent_drag_preview(draw_list: &imgui::DrawListMut, mouse_pos: [f32; 2]) {

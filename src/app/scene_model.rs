@@ -17,6 +17,7 @@ impl App {
         rrcommand_pool: &Rc<RRCommandPool>,
         rrswapchain: &RRSwapchain,
         model_path: &str,
+        scene_will_provide_clips: bool,
     ) -> Result<()> {
         load_model_from_file_system(
             model_path,
@@ -28,6 +29,7 @@ impl App {
             &mut data.raytracing,
             &mut data.ecs_world,
             &mut data.ecs_assets,
+            scene_will_provide_clips,
         )
     }
 

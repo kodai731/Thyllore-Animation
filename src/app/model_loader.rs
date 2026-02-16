@@ -44,6 +44,7 @@ pub unsafe fn load_model_from_file_system(
     raytracing: &mut RayTracingData,
     world: &mut World,
     assets: &mut AssetStorage,
+    scene_will_provide_clips: bool,
 ) -> Result<()> {
     crate::log!("=== Loading model from path: {} ===", path);
 
@@ -60,6 +61,7 @@ pub unsafe fn load_model_from_file_system(
         raytracing,
         world,
         assets,
+        scene_will_provide_clips,
     )?;
 
     crate::log!("=== Model loaded successfully ===");
@@ -93,6 +95,7 @@ unsafe fn apply_model_to_resources(
     raytracing: &mut RayTracingData,
     world: &mut World,
     assets: &mut AssetStorage,
+    scene_will_provide_clips: bool,
 ) -> Result<()> {
     cleanup_resources(device, graphics, raytracing, world, assets)?;
 
@@ -165,6 +168,7 @@ unsafe fn apply_model_to_resources(
         animation_type,
         node_animation_scale,
         &loaded_clips,
+        scene_will_provide_clips,
     );
 
     apply_loaded_constraints(load_result, world);
@@ -713,6 +717,7 @@ fn create_ecs_entities(
     animation_type: AnimationType,
     node_animation_scale: f32,
     loaded_clips: &[crate::animation::AnimationClip],
+    scene_will_provide_clips: bool,
 ) {
     let name = std::path::Path::new(model_name)
         .file_stem()
@@ -745,7 +750,7 @@ fn create_ecs_entities(
     }
 
     let mut first_editable_clip_id = None;
-    {
+    if !scene_will_provide_clips {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
         for clip in loaded_clips {
             let editable_id =
@@ -764,12 +769,12 @@ fn create_ecs_entities(
                 editable_id,
             );
         }
-    }
 
-    if let Some(editable_id) = first_editable_clip_id {
-        let mut timeline_state = world.resource_mut::<TimelineState>();
-        timeline_state.current_clip_id = Some(editable_id);
-        crate::log!("Set timeline current_clip_id to {}", editable_id);
+        if let Some(editable_id) = first_editable_clip_id {
+            let mut timeline_state = world.resource_mut::<TimelineState>();
+            timeline_state.current_clip_id = Some(editable_id);
+            crate::log!("Set timeline current_clip_id to {}", editable_id);
+        }
     }
 
     {
@@ -799,7 +804,7 @@ fn create_ecs_entities(
         parent_entity
     );
 
-    let initial_schedule = if has_animation {
+    let initial_schedule = if has_animation && !scene_will_provide_clips {
         build_initial_clip_schedule(first_editable_clip_id, world)
     } else {
         ClipSchedule::new()
@@ -989,7 +994,7 @@ fn initialize_constraint_gizmo_visibility(world: &mut World) {
     cg.visible = has_bone_gizmo_visible && has_constraints;
 }
 
-fn build_initial_clip_schedule(
+pub fn build_initial_clip_schedule(
     first_source_id: Option<SourceClipId>,
     world: &World,
 ) -> ClipSchedule {

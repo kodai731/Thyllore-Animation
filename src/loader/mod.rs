@@ -4,7 +4,9 @@ pub mod texture;
 
 use cgmath::Matrix4;
 
-use crate::animation::{AnimationSystem, MorphAnimationSystem, Skeleton, SkeletonId, SkinData};
+use crate::animation::{
+    AnimationClip, AnimationSystem, MorphAnimationSystem, Skeleton, SkeletonId, SkinData,
+};
 use crate::ecs::component::SpringBoneSetup;
 use crate::loader::fbx::LoadedConstraint;
 use crate::vulkanr::data::{Vertex, VertexData};
@@ -46,6 +48,7 @@ pub struct ModelLoadResult {
     pub nodes: Vec<LoadedNode>,
     pub skeletons: Vec<Skeleton>,
     pub animation_system: AnimationSystem,
+    pub clips: Vec<AnimationClip>,
     pub morph_animation: MorphAnimationSystem,
     pub has_skinned_meshes: bool,
     pub node_animation_scale: f32,
@@ -94,6 +97,7 @@ impl ModelLoadResult {
             nodes,
             skeletons,
             animation_system: result.animation_system,
+            clips: result.clips,
             morph_animation: result.morph_animation,
             has_skinned_meshes: result.has_skinned_meshes,
             node_animation_scale,
@@ -134,6 +138,7 @@ impl ModelLoadResult {
             nodes,
             skeletons,
             animation_system: result.animation_system,
+            clips: result.clips,
             morph_animation: MorphAnimationSystem::default(),
             has_skinned_meshes: result.has_skinned_meshes,
             node_animation_scale: 1.0,

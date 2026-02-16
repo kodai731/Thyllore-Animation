@@ -79,6 +79,11 @@ pub enum UIEvent {
         value: f32,
     },
     TimelineDeleteSelectedKeyframes,
+    TimelineDeleteKeyframe {
+        bone_id: BoneId,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+    },
     TimelineMoveKeyframe {
         bone_id: BoneId,
         property_type: PropertyType,
@@ -202,6 +207,7 @@ pub enum UIEvent {
     ClipBrowserDuplicate(SourceClipId),
     ClipBrowserDelete(SourceClipId),
     ClipBrowserLoadFromFile,
+    ClipBrowserSaveToFile(SourceClipId),
 
     SaveScene,
 

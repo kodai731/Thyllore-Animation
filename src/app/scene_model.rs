@@ -17,6 +17,7 @@ impl App {
         rrcommand_pool: &Rc<RRCommandPool>,
         rrswapchain: &RRSwapchain,
         model_path: &str,
+        scene_will_provide_clips: bool,
     ) -> Result<()> {
         load_model_from_file_system(
             model_path,
@@ -28,6 +29,7 @@ impl App {
             &mut data.raytracing,
             &mut data.ecs_world,
             &mut data.ecs_assets,
+            scene_will_provide_clips,
         )
     }
 
@@ -46,7 +48,7 @@ impl App {
         crate::log!("  has_skinned_meshes: {}", model_state.has_skinned_meshes);
         crate::log!(
             "  animation clips count: {}",
-            clip_library.animation.clips.len()
+            clip_library.clip_count()
         );
         crate::log!(
             "  morph_animations count: {}",
@@ -129,7 +131,7 @@ impl App {
             .ecs_world
             .resource::<crate::ecs::resource::TimelineState>();
         crate::log!("  animation_playing: {}", timeline.playing);
-        crate::log!("  clips count: {}", clip_library.animation.clips.len());
+        crate::log!("  clips count: {}", clip_library.clip_count());
 
         crate::log!("========== END DEBUG INFORMATION ==========");
     }

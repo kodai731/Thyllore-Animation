@@ -35,7 +35,7 @@ pub struct FrameContext<'a> {
     pub buffer_registry: &'a mut GpuBufferRegistry,
 
     pub world: &'a mut World,
-    pub assets: &'a AssetStorage,
+    pub assets: &'a mut AssetStorage,
 
     pub gui_data: &'a mut GUIData,
 }

@@ -157,13 +157,16 @@ To load a new model, modify `App::load_model()`:
 ## issue history
 
 Issue History Guidelines
+
 **IMPORTANT:** If you encounter an issue and resolve it, you must document the issue and its solution in detail at
 .claude/local/IssueHistory/
+
 File names must use CamelCase (e.g., ImageLayoutTransition.md).
+
 Each issue must be documented in a separate file, but to avoid huge number of files, try to add issue in a existing file
 and recap it.
 At the top of each file, include a brief summary of the issue and its resolution to read shortly.
-**IMPORTANT:** You must read all existing issue history files before adding a new one.
+
 **IMPORTANT:** MUST write in English.
 
 ## explore history

@@ -162,6 +162,7 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::TimelineSelectKeyframe { .. }
             | UIEvent::TimelineAddKeyframe { .. }
             | UIEvent::TimelineDeleteSelectedKeyframes
+            | UIEvent::TimelineDeleteKeyframe { .. }
             | UIEvent::TimelineMoveKeyframe { .. }
             | UIEvent::TimelineZoomIn
             | UIEvent::TimelineZoomOut
@@ -199,6 +200,7 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::ClipBrowserDuplicate(_)
             | UIEvent::ClipBrowserDelete(_)
             | UIEvent::ClipBrowserLoadFromFile
+            | UIEvent::ClipBrowserSaveToFile(_)
             | UIEvent::SaveScene
             | UIEvent::CreateTestConstraints
             | UIEvent::ClearTestConstraints

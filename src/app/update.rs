@@ -37,7 +37,7 @@ impl App {
                 raytracing: &mut self.data.raytracing,
                 buffer_registry: &mut self.data.buffer_registry,
                 world: &mut self.data.ecs_world,
-                assets: &self.data.ecs_assets,
+                assets: &mut self.data.ecs_assets,
                 gui_data,
             };
 

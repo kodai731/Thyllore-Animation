@@ -75,6 +75,7 @@ pub fn timeline_process_events(
                 if let Some(clip_id) = timeline_state.current_clip_id {
                     if let Some(clip) = clip_library.get_mut(clip_id) {
                         clip.add_keyframe(*bone_id, *property_type, *time, *value);
+                        clip.recalculate_duration();
                         clip_modified = true;
                     }
                 }
@@ -93,6 +94,7 @@ pub fn timeline_process_events(
                                         .remove_keyframe(sel.keyframe_id);
                                 }
                             }
+                            clip.recalculate_duration();
                             clip_modified = true;
                         }
                     }
@@ -116,8 +118,25 @@ pub fn timeline_process_events(
                                 *new_time,
                                 *new_value,
                             );
-                            clip_modified = true;
                         }
+                        clip.recalculate_duration();
+                        clip_modified = true;
+                    }
+                }
+            }
+
+            UIEvent::TimelineDeleteKeyframe {
+                bone_id,
+                property_type,
+                keyframe_id,
+            } => {
+                if let Some(clip_id) = timeline_state.current_clip_id {
+                    if let Some(clip) = clip_library.get_mut(clip_id) {
+                        if let Some(track) = clip.tracks.get_mut(bone_id) {
+                            track.get_curve_mut(*property_type).remove_keyframe(*keyframe_id);
+                        }
+                        clip.recalculate_duration();
+                        clip_modified = true;
                     }
                 }
             }
@@ -281,8 +300,34 @@ pub fn process_clip_instance_events(events: &[UIEvent], world: &mut World) {
                 entity,
                 instance_id,
             } => {
+                let source_id = world
+                    .get_component::<ClipSchedule>(*entity)
+                    .and_then(|schedule| {
+                        schedule
+                            .instances
+                            .iter()
+                            .find(|i| i.instance_id == *instance_id)
+                            .map(|i| i.source_id)
+                    });
+
                 let mut ts = world.resource_mut::<TimelineState>();
                 ts.selected_clip_instance = Some((*entity, *instance_id));
+
+                if let Some(source_id) = source_id {
+                    if ts.current_clip_id != Some(source_id) {
+                        let clip_library = world.resource::<ClipLibrary>();
+                        if let Some(clip) = clip_library.get(source_id) {
+                            ts.current_clip_id = Some(source_id);
+                            ts.current_time = 0.0;
+                            ts.selected_keyframes.clear();
+                            ts.expanded_tracks.clear();
+
+                            if let Some((&first_bone_id, _)) = clip.tracks.iter().next() {
+                                ts.expand_track(first_bone_id);
+                            }
+                        }
+                    }
+                }
             }
 
             UIEvent::ClipInstanceDeselect => {

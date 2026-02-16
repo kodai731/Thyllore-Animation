@@ -145,7 +145,7 @@ fn sync_timeline_to_all_animators(ctx: &mut FrameContext) {
 
 fn sync_editable_clips_to_registry(ctx: &mut FrameContext) {
     let mut clip_library = ctx.world.resource_mut::<ClipLibrary>();
-    super::clip_library_systems::clip_library_sync_dirty(&mut clip_library);
+    super::clip_library_systems::clip_library_sync_dirty(&mut clip_library, ctx.assets);
 }
 
 #[cfg(feature = "ml")]

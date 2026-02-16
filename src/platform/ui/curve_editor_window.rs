@@ -1580,15 +1580,23 @@ fn draw_suggestion_curve_overlay(
             continue;
         }
 
-        if overlay.confidence < 0.3 {
+        if overlay.confidence < 0.05 {
             continue;
         }
 
-        let alpha = if overlay.confidence > 0.8 { 0.7 } else { 0.45 };
+        let alpha = if overlay.confidence > 0.8 {
+            0.7
+        } else if overlay.confidence > 0.3 {
+            0.45
+        } else {
+            0.25
+        };
         let ghost_color = if overlay.confidence > 0.8 {
             [0.3, 1.0, 0.3, alpha]
-        } else {
+        } else if overlay.confidence > 0.3 {
             [1.0, 1.0, 0.3, alpha]
+        } else {
+            [1.0, 0.7, 0.3, alpha]
         };
 
         let kf_x = vt.time_to_x(overlay.time);

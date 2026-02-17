@@ -163,6 +163,12 @@ impl App {
         #[cfg(feature = "ml")]
         data.ecs_world
             .insert_resource(crate::ecs::resource::CurveSuggestionState::default());
+        #[cfg(feature = "ml")]
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::BoneTopologyCache::default());
+        #[cfg(feature = "ml")]
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::BoneNameTokenCache::default());
         #[cfg(feature = "text-to-motion")]
         data.ecs_world
             .insert_resource(crate::ecs::resource::TextToMotionState::default());

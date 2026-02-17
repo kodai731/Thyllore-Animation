@@ -121,11 +121,17 @@ fn execute_inference(
         InferenceRequestKind::CurveCopilotPredict {
             context,
             property_type_id,
-            joint_category,
+            topology_features,
+            bone_name_tokens,
             query_time,
-        } => {
-            execute_curve_copilot(session, context, *property_type_id, *joint_category, *query_time)
-        }
+        } => execute_curve_copilot(
+            session,
+            context,
+            *property_type_id,
+            topology_features,
+            bone_name_tokens,
+            *query_time,
+        ),
     }
 }
 
@@ -133,33 +139,28 @@ fn execute_curve_copilot(
     session: &mut Session,
     context: &[f32],
     property_type_id: u32,
-    joint_category: u32,
+    topology_features: &[f32],
+    bone_name_tokens: &[i64],
     query_time: f32,
 ) -> Result<InferenceResultKind> {
-    let context_tensor = Tensor::from_array((
-        vec![1i64, 8, 6],
-        context.to_vec(),
-    ))?;
+    let context_tensor = Tensor::from_array((vec![1i64, 8, 6], context.to_vec()))?;
 
-    let property_type_tensor = Tensor::from_array((
-        vec![1i64],
-        vec![property_type_id as i64],
-    ))?;
+    let property_type_tensor =
+        Tensor::from_array((vec![1i64], vec![property_type_id as i64]))?;
 
-    let joint_category_tensor = Tensor::from_array((
-        vec![1i64],
-        vec![joint_category as i64],
-    ))?;
+    let topology_tensor =
+        Tensor::from_array((vec![1i64, 6], topology_features.to_vec()))?;
 
-    let query_time_tensor = Tensor::from_array((
-        vec![1i64],
-        vec![query_time],
-    ))?;
+    let name_tensor =
+        Tensor::from_array((vec![1i64, 32], bone_name_tokens.to_vec()))?;
+
+    let query_time_tensor = Tensor::from_array((vec![1i64], vec![query_time]))?;
 
     let outputs = session.run(ort::inputs![
         "context_keyframes" => context_tensor,
         "property_type" => property_type_tensor,
-        "joint_category" => joint_category_tensor,
+        "topology_features" => topology_tensor,
+        "bone_name_tokens" => name_tensor,
         "query_time" => query_time_tensor
     ])?;
 

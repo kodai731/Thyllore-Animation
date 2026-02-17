@@ -1,7 +1,10 @@
 use crate::animation::editable::{BezierHandle, InterpolationType, PropertyCurve, PropertyType};
 use crate::animation::BoneId;
-use crate::ecs::resource::{CurveSuggestionState, GhostCurveSuggestion, InferenceActorState};
-use crate::ml::{classify_bone_name, InferenceActorId, InferenceRequestKind, InferenceResultKind};
+use crate::ecs::resource::{
+    BoneNameTokenCache, BoneTopologyCache, CurveSuggestionState, GhostCurveSuggestion,
+    InferenceActorState,
+};
+use crate::ml::{InferenceActorId, InferenceRequestKind, InferenceResultKind};
 
 use super::inference_actor_systems::{inference_actor_submit, inference_actor_take_results};
 
@@ -74,9 +77,10 @@ pub fn curve_suggestion_submit(
     curve: &PropertyCurve,
     property_type: PropertyType,
     bone_id: BoneId,
-    bone_name: &str,
     clip_duration: f32,
     current_time: f32,
+    topology_cache: &BoneTopologyCache,
+    name_token_cache: &BoneNameTokenCache,
 ) {
     if !suggestion_state.enabled {
         return;
@@ -90,7 +94,8 @@ pub fn curve_suggestion_submit(
     );
 
     let property_type_id = property_type_to_id(property_type);
-    let joint_category = classify_bone_name(bone_name) as u32;
+    let topology_features = topology_cache.get(bone_id).to_vec();
+    let bone_name_tokens = name_token_cache.get(bone_id).to_vec();
     let query_time = current_time / clip_duration.max(0.001);
 
     let context_debug: Vec<f32> = context[..6.min(context.len())].to_vec();
@@ -98,7 +103,8 @@ pub fn curve_suggestion_submit(
     let kind = InferenceRequestKind::CurveCopilotPredict {
         context,
         property_type_id,
-        joint_category,
+        topology_features,
+        bone_name_tokens,
         query_time,
     };
 

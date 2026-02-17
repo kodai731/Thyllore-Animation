@@ -18,6 +18,10 @@ mod pipeline_manager;
 mod scene_state;
 mod spring_bone_editor_state;
 #[cfg(feature = "ml")]
+mod bone_name_token_cache;
+#[cfg(feature = "ml")]
+mod bone_topology_cache;
+#[cfg(feature = "ml")]
 mod ghost_curve_data;
 #[cfg(feature = "ml")]
 mod inference_actor_state;
@@ -48,6 +52,10 @@ pub use scene_state::*;
 pub use spring_bone_editor_state::*;
 pub use spring_bone_state::*;
 pub use timeline_state::*;
+#[cfg(feature = "ml")]
+pub use bone_name_token_cache::*;
+#[cfg(feature = "ml")]
+pub use bone_topology_cache::*;
 #[cfg(feature = "ml")]
 pub use ghost_curve_data::*;
 #[cfg(feature = "ml")]

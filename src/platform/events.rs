@@ -1610,8 +1610,12 @@ fn process_spring_bone_edit_events_inline(events: &[UIEvent], app: &mut App) {
 
 #[cfg(feature = "ml")]
 fn process_curve_suggestion_events_inline(events: &[UIEvent], app: &mut App) {
-    use crate::ecs::resource::{CurveSuggestionState, InferenceActorState};
-    use crate::ecs::systems::{curve_suggestion_apply, curve_suggestion_dismiss, curve_suggestion_submit};
+    use crate::ecs::resource::{
+        BoneNameTokenCache, BoneTopologyCache, CurveSuggestionState, InferenceActorState,
+    };
+    use crate::ecs::systems::{
+        curve_suggestion_apply, curve_suggestion_dismiss, curve_suggestion_submit,
+    };
     use crate::ml::CURVE_COPILOT_ACTOR_ID;
 
     for event in events {
@@ -1630,16 +1634,16 @@ fn process_curve_suggestion_events_inline(events: &[UIEvent], app: &mut App) {
                     .and_then(|id| clip_library.get(id))
                     .and_then(|clip| {
                         clip.tracks.get(bone_id).map(|track| {
-                            (
-                                track.get_curve(*property_type).clone(),
-                                track.bone_name.clone(),
-                                clip.duration,
-                            )
+                            (track.get_curve(*property_type).clone(), clip.duration)
                         })
                     });
                 drop(clip_library);
 
-                if let Some((curve, bone_name, clip_duration)) = clip_info {
+                if let Some((curve, clip_duration)) = clip_info {
+                    let topology_cache =
+                        app.data.ecs_world.resource::<BoneTopologyCache>();
+                    let name_token_cache =
+                        app.data.ecs_world.resource::<BoneNameTokenCache>();
                     let mut suggestion_state =
                         app.data.ecs_world.resource_mut::<CurveSuggestionState>();
                     let mut inference_state =
@@ -1651,9 +1655,10 @@ fn process_curve_suggestion_events_inline(events: &[UIEvent], app: &mut App) {
                         &curve,
                         *property_type,
                         *bone_id,
-                        &bone_name,
                         clip_duration,
                         current_time,
+                        &topology_cache,
+                        &name_token_cache,
                     );
                 }
             }

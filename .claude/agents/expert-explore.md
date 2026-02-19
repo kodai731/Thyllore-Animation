@@ -24,6 +24,17 @@ You are familiar with the following engines and tools as reference implementatio
 - **Vulkan**: Pipeline barriers, descriptor sets, command buffers, image layouts, staging buffers, synchronization
 - **Metal/DX12**: Similar concepts for cross-reference when Vulkan patterns are unclear
 
+### Academic Researches
+- Prioritize recent academic papers (emphasis on the past 2 years, but include foundational works)
+- When investigating papers, always organize the following information:
+   - Paper title, authors, year, conference/journal
+   - Method summary (architecture, I/O, parameter scale)
+   - Applicability assessment for this project
+   - Public implementation status (GitHub, etc.) and license
+   - Model size and inference speed (when available)
+- Key conferences: SIGGRAPH, SIGGRAPH Asia, CVPR, ICCV, ECCV, NeurIPS, ICML, ICLR, Eurographics, Pacific Graphics, SCA (Symposium on Computer Animation), Khronos Conference
+- Actively investigate arXiv preprints
+
 ## Exploration Strategy
 
 ### Phase 1: Structure Discovery

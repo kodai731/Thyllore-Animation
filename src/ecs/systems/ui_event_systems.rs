@@ -162,6 +162,7 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::TimelineSelectKeyframe { .. }
             | UIEvent::TimelineAddKeyframe { .. }
             | UIEvent::TimelineDeleteSelectedKeyframes
+            | UIEvent::TimelineDeleteKeyframe { .. }
             | UIEvent::TimelineMoveKeyframe { .. }
             | UIEvent::TimelineZoomIn
             | UIEvent::TimelineZoomOut
@@ -199,6 +200,7 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::ClipBrowserDuplicate(_)
             | UIEvent::ClipBrowserDelete(_)
             | UIEvent::ClipBrowserLoadFromFile
+            | UIEvent::ClipBrowserSaveToFile(_)
             | UIEvent::SaveScene
             | UIEvent::CreateTestConstraints
             | UIEvent::ClearTestConstraints
@@ -227,6 +229,16 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::SpringColliderGroupRemove { .. }
             | UIEvent::SpringColliderGroupUpdate { .. }
             | UIEvent::SpringBoneToggleGizmo(_) => {}
+
+            #[cfg(feature = "ml")]
+            UIEvent::CurveSuggestionRequest { .. }
+            | UIEvent::CurveSuggestionAccept
+            | UIEvent::CurveSuggestionDismiss => {}
+
+            #[cfg(feature = "text-to-motion")]
+            UIEvent::TextToMotionGenerate { .. }
+            | UIEvent::TextToMotionApply
+            | UIEvent::TextToMotionCancel => {}
         }
     }
 

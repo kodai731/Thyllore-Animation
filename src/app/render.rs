@@ -142,6 +142,7 @@ impl App {
                 &command_pool,
                 &swapchain,
                 &gui_data.selected_model_path,
+                false,
             ) {
                 Ok(_) => {
                     {

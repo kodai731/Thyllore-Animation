@@ -43,6 +43,7 @@ pub struct FbxLoadResult {
     pub meshes: Vec<FbxMeshData>,
     pub nodes: Vec<FbxNodeInfo>,
     pub animation_system: AnimationSystem,
+    pub clips: Vec<AnimationClip>,
     pub has_skinned_meshes: bool,
     pub has_armature: bool,
     pub constraints: Vec<LoadedConstraint>,
@@ -79,9 +80,10 @@ fn convert_fbx_model_to_graphics_resources(fbx_model: FbxModel) -> Result<FbxLoa
         }
     }
 
+    let mut clips = Vec::new();
     for fbx_anim in &fbx_model.animations {
         let clip = convert_fbx_animation_to_clip(fbx_anim, &animation_system, skeleton_id);
-        animation_system.add_clip(clip);
+        clips.push(clip);
     }
 
     let nodes = convert_bone_nodes_to_node_info(&fbx_model.nodes, has_skinned_meshes);
@@ -98,6 +100,7 @@ fn convert_fbx_model_to_graphics_resources(fbx_model: FbxModel) -> Result<FbxLoa
         meshes,
         nodes,
         animation_system,
+        clips,
         has_skinned_meshes,
         has_armature,
         constraints: fbx_model.constraints,

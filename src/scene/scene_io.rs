@@ -198,18 +198,21 @@ fn save_animation_clips(
     };
 
     let mut animation_clips = Vec::new();
+    let mut saved_paths = std::collections::HashSet::new();
 
     for (clip_id, clip_name) in
         crate::ecs::systems::clip_library_systems::clip_library_clip_names(&clip_library)
     {
         if let Some(clip) = clip_library.get(clip_id) {
             let clip_filename = sanitize_filename(&clip_name);
-            let clip_path = animations_dir.join(format!("{}.anim.ron", clip_filename));
+            let relative_path = format!("animations/{}.anim.ron", clip_filename);
 
+            let clip_path = animations_dir.join(format!("{}.anim.ron", clip_filename));
             save_animation_clip(&clip_path, clip)?;
 
-            let relative_path = format!("animations/{}.anim.ron", clip_filename);
-            animation_clips.push(AnimationClipRef::new(&relative_path));
+            if saved_paths.insert(relative_path.clone()) {
+                animation_clips.push(AnimationClipRef::new(&relative_path));
+            }
         }
     }
 
@@ -291,9 +294,14 @@ pub fn load_scene(scene_path: &Path) -> SceneResult<LoadedScene> {
     }
 
     let mut clips = Vec::new();
+    let mut loaded_paths = std::collections::HashSet::new();
     for clip_ref in &scene.animation_clips {
+        if !loaded_paths.insert(clip_ref.path.clone()) {
+            continue;
+        }
         let clip_path = assets_dir.join(&clip_ref.path);
-        let clip = load_animation_clip(&clip_path)?;
+        let mut clip = load_animation_clip(&clip_path)?;
+        clip.source_path = Some(clip_path.to_string_lossy().to_string());
         clips.push(clip);
     }
 

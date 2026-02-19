@@ -138,14 +138,9 @@ fn resolve_current_clip(
     let clip_duration = editable.map(|e| e.duration).unwrap_or(0.0);
 
     let anim_clip = clip_library
-        .get_anim_clip_id_for_source(source_id)
-        .and_then(|anim_id| {
-            assets
-                .animation_clips
-                .values()
-                .find(|a| a.clip_id == anim_id)
-                .map(|a| a.clip.clone())
-        });
+        .get_asset_id_for_source(source_id)
+        .and_then(|asset_id| assets.animation_clips.get(&asset_id))
+        .map(|a| a.clip.clone());
 
     (clip_name, clip_duration, anim_clip)
 }

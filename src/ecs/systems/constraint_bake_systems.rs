@@ -8,7 +8,7 @@ use crate::ecs::component::ConstraintSet;
 use crate::ecs::resource::ClipLibrary;
 use crate::ecs::systems::{apply_constraints, create_pose_from_rest, sample_clip_to_pose};
 
-use super::clip_library_systems::clip_library_register_clip;
+use super::clip_library_systems::clip_library_register_and_activate;
 
 pub fn constraint_bake_evaluate(
     source_clip: &AnimationClip,
@@ -90,9 +90,10 @@ pub fn constraint_bake_rest_pose(
 
 pub fn constraint_bake_register(
     clip_library: &mut ClipLibrary,
+    assets: &mut crate::asset::AssetStorage,
     baked_clip: EditableAnimationClip,
 ) -> crate::animation::editable::SourceClipId {
-    clip_library_register_clip(clip_library, baked_clip)
+    clip_library_register_and_activate(clip_library, assets, baked_clip)
 }
 
 fn collect_bone_names(skeleton: &Skeleton) -> HashMap<BoneId, String> {

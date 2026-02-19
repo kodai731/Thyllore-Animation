@@ -79,6 +79,11 @@ pub enum UIEvent {
         value: f32,
     },
     TimelineDeleteSelectedKeyframes,
+    TimelineDeleteKeyframe {
+        bone_id: BoneId,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+    },
     TimelineMoveKeyframe {
         bone_id: BoneId,
         property_type: PropertyType,
@@ -202,6 +207,7 @@ pub enum UIEvent {
     ClipBrowserDuplicate(SourceClipId),
     ClipBrowserDelete(SourceClipId),
     ClipBrowserLoadFromFile,
+    ClipBrowserSaveToFile(SourceClipId),
 
     SaveScene,
 
@@ -286,6 +292,26 @@ pub enum UIEvent {
     SetBoneInFront(bool),
     SetBoneDistanceScaling(bool),
     SetBoneDistanceScaleFactor(f32),
+
+    #[cfg(feature = "ml")]
+    CurveSuggestionRequest {
+        bone_id: BoneId,
+        property_type: PropertyType,
+    },
+    #[cfg(feature = "ml")]
+    CurveSuggestionAccept,
+    #[cfg(feature = "ml")]
+    CurveSuggestionDismiss,
+
+    #[cfg(feature = "text-to-motion")]
+    TextToMotionGenerate {
+        prompt: String,
+        duration_seconds: f32,
+    },
+    #[cfg(feature = "text-to-motion")]
+    TextToMotionApply,
+    #[cfg(feature = "text-to-motion")]
+    TextToMotionCancel,
 }
 
 #[derive(Default)]

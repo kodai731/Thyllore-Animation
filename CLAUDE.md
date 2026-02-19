@@ -157,18 +157,38 @@ To load a new model, modify `App::load_model()`:
 ## issue history
 
 Issue History Guidelines
+
 **IMPORTANT:** If you encounter an issue and resolve it, you must document the issue and its solution in detail at
 .claude/local/IssueHistory/
+
 File names must use CamelCase (e.g., ImageLayoutTransition.md).
+
 Each issue must be documented in a separate file, but to avoid huge number of files, try to add issue in a existing file
 and recap it.
 At the top of each file, include a brief summary of the issue and its resolution to read shortly.
-**IMPORTANT:** You must read all existing issue history files before adding a new one.
+
+**IMPORTANT:** MUST write in English.
 
 ## explore history
 
 - explore history and summary reports can be placed at .claude/local/ExploreHistory if necessary.
+- MUST write in English.
 
 ## Last Conversation
+
 - last conversation is saved at .claude/local/last-conversation.md
 - **IMPORTANT** MUST read the last conversation file and work continue.
+
+## AnimationTraining
+### Repository
+repository is separated to ../AnimationModelTraining
+
+### Shared Data
+
+The trained data for the copilot curve is stored in ../SharedData/exports/.
+
+### Interaction Log
+
+-If any issues occur (for example, the training collapses), report them using the Context Memory format so the training
+repository can fully understand the situation.
+- location at ../SharedData/log/Rendering is rendering side, and log/Training is training side.

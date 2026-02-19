@@ -8,6 +8,17 @@ use crate::animation::editable::{
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{ClipLibrary, CurveEditorBuffer, TimelineState};
+use super::timeline_window::ruler_padding;
+
+pub struct SuggestionOverlay {
+    pub property_type: PropertyType,
+    pub time: f32,
+    pub value: f32,
+    pub tangent_in: (f32, f32),
+    pub tangent_out: (f32, f32),
+    pub is_bezier: bool,
+    pub confidence: f32,
+}
 
 const MIN_WINDOW_WIDTH: f32 = 400.0;
 const MIN_WINDOW_HEIGHT: f32 = 300.0;
@@ -106,6 +117,7 @@ pub struct CurveEditorState {
     pub view_time_offset: f32,
     pub view_value_offset: f32,
     pub view_val_range: f32,
+    pub view_duration: f32,
     pub view_initialized: bool,
     pub is_scrubbing_ruler: bool,
     pub is_panning: bool,
@@ -113,6 +125,8 @@ pub struct CurveEditorState {
     pub pan_start_offset: [f32; 2],
     pub dragging_tangent: Option<DraggingTangent>,
     pub context_menu_keyframe: Option<SelectedKeyframe>,
+    pub context_menu_click_time: f32,
+    pub context_menu_click_value: f32,
 }
 
 impl Default for CurveEditorState {
@@ -138,6 +152,7 @@ impl Default for CurveEditorState {
             view_time_offset: 0.0,
             view_value_offset: 0.0,
             view_val_range: 2.0,
+            view_duration: 2.0,
             view_initialized: false,
             is_scrubbing_ruler: false,
             is_panning: false,
@@ -145,6 +160,8 @@ impl Default for CurveEditorState {
             pan_start_offset: [0.0, 0.0],
             dragging_tangent: None,
             context_menu_keyframe: None,
+            context_menu_click_time: 0.0,
+            context_menu_click_value: 0.0,
         }
     }
 }
@@ -156,6 +173,7 @@ pub fn build_curve_editor_window(
     clip_library: &ClipLibrary,
     editor_state: &mut CurveEditorState,
     curve_buffer: &CurveEditorBuffer,
+    suggestion_overlays: &[SuggestionOverlay],
 ) {
     if !editor_state.is_open {
         return;
@@ -203,6 +221,7 @@ pub fn build_curve_editor_window(
                         clip_library,
                         editor_state,
                         curve_buffer,
+                        suggestion_overlays,
                     );
                 });
         });
@@ -308,6 +327,7 @@ fn build_curve_view(
     clip_library: &ClipLibrary,
     editor_state: &mut CurveEditorState,
     curve_buffer: &CurveEditorBuffer,
+    suggestion_overlays: &[SuggestionOverlay],
 ) {
     let clip = match timeline_state
         .current_clip_id
@@ -356,16 +376,22 @@ fn build_curve_view(
 
     let (global_min, global_max) = calculate_global_value_range(&curves_to_draw);
 
+    let display_duration = clip.duration + ruler_padding(clip.duration);
+
     if !editor_state.view_initialized {
         editor_state.view_value_offset = global_min;
         editor_state.view_val_range = global_max - global_min;
+        editor_state.view_duration = display_duration;
         editor_state.view_time_offset = 0.0;
         editor_state.zoom_x = 1.0;
         editor_state.zoom_y = 1.0;
         editor_state.view_initialized = true;
+    } else {
+        editor_state.view_duration = editor_state.view_duration.max(display_duration);
     }
 
     let val_range = editor_state.view_val_range;
+    let view_duration = editor_state.view_duration;
 
     let draw_list = ui.get_window_draw_list();
     let cursor_pos = ui.cursor_screen_pos();
@@ -379,7 +405,7 @@ fn build_curve_view(
         curve_origin,
         curve_width: curve_area_width,
         curve_height: curve_area_height,
-        duration: clip.duration,
+        duration: view_duration,
         val_range,
         zoom_x: editor_state.zoom_x,
         zoom_y: editor_state.zoom_y,
@@ -446,7 +472,13 @@ fn build_curve_view(
                 .build();
 
             if editor_state.is_dragging_keyframe {
-                draw_keyframe_drag_preview(&draw_list, ui.io().mouse_pos, &vt);
+                draw_keyframe_drag_preview(
+                    &draw_list,
+                    ui.io().mouse_pos,
+                    &vt,
+                    &curves_to_draw,
+                    &editor_state.selected_keyframe,
+                );
             }
 
             if editor_state.dragging_tangent.is_some() {
@@ -457,6 +489,13 @@ fn build_curve_view(
                 &draw_list,
                 curve_buffer,
                 bone_id,
+                &editor_state.visible_curves,
+                &vt,
+            );
+
+            draw_suggestion_curve_overlay(
+                &draw_list,
+                suggestion_overlays,
                 &editor_state.visible_curves,
                 &vt,
             );
@@ -490,14 +529,22 @@ fn build_curve_view(
                 original_value: hit.3,
             });
             ui.open_popup("keyframe_context_menu");
+        } else {
+            editor_state.context_menu_click_time = vt.x_to_time(mouse_pos[0]);
+            editor_state.context_menu_click_value = vt.y_to_value(mouse_pos[1]);
+            ui.open_popup("curve_editor_context_menu");
         }
     }
 
     build_keyframe_context_menu(ui, ui_events, editor_state, bone_id);
+    build_curve_editor_context_menu(ui, ui_events, editor_state, bone_id);
 
     ui.set_cursor_screen_pos([cursor_pos[0], cursor_pos[1] + total_height]);
 
     build_buffer_controls(ui, ui_events, curve_buffer);
+
+    #[cfg(feature = "ml")]
+    handle_suggestion_keyboard(ui, ui_events, bone_id, editor_state, suggestion_overlays);
 }
 
 fn build_keyframe_context_menu(
@@ -512,6 +559,15 @@ fn build_keyframe_context_menu(
             None => return,
         };
 
+        if ui.selectable_config("Delete Key").build() {
+            ui_events.send(UIEvent::TimelineDeleteKeyframe {
+                bone_id,
+                property_type: ctx_kf.property_type,
+                keyframe_id: ctx_kf.keyframe_id,
+            });
+        }
+
+        ui.separator();
         ui.text("Interpolation");
         ui.separator();
 
@@ -572,6 +628,34 @@ fn build_keyframe_context_menu(
                 in_tangent: BezierHandle::linear(),
                 out_tangent: BezierHandle::linear(),
             });
+        }
+    });
+}
+
+fn build_curve_editor_context_menu(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    editor_state: &CurveEditorState,
+    bone_id: BoneId,
+) {
+    ui.popup("curve_editor_context_menu", || {
+        if ui.selectable_config("Add Key").build() {
+            let visible: Vec<_> = editor_state.visible_curves.iter().copied().collect();
+            if visible.len() == 1 {
+                ui_events.send(UIEvent::TimelineAddKeyframe {
+                    bone_id,
+                    property_type: visible[0],
+                    time: editor_state.context_menu_click_time.max(0.0),
+                    value: editor_state.context_menu_click_value,
+                });
+            } else if let Some(&first) = visible.first() {
+                ui_events.send(UIEvent::TimelineAddKeyframe {
+                    bone_id,
+                    property_type: first,
+                    time: editor_state.context_menu_click_time.max(0.0),
+                    value: editor_state.context_menu_click_value,
+                });
+            }
         }
     });
 }
@@ -678,7 +762,7 @@ fn handle_mouse_release(
             editor_state.dragging_tangent = None;
         } else if editor_state.is_dragging_keyframe {
             if let Some(ref selected) = editor_state.selected_keyframe {
-                let new_time = vt.x_to_time(mouse_pos[0]).clamp(0.0, vt.duration);
+                let new_time = vt.x_to_time(mouse_pos[0]).max(0.0);
                 let new_value = vt.y_to_value(mouse_pos[1]);
 
                 if let Some(bone_id) = editor_state.selected_bone_id {
@@ -1186,17 +1270,24 @@ fn draw_keyframe_drag_preview(
     draw_list: &imgui::DrawListMut,
     mouse_pos: [f32; 2],
     vt: &ViewTransform,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    selected: &Option<SelectedKeyframe>,
 ) {
     let preview_x = mouse_pos[0].clamp(vt.curve_origin[0], vt.curve_origin[0] + vt.curve_width);
     let preview_y = mouse_pos[1].clamp(vt.curve_origin[1], vt.curve_origin[1] + vt.curve_height);
+    let preview_pos = [preview_x, preview_y];
+
+    if let Some(sel) = selected {
+        draw_drag_neighbor_lines(draw_list, preview_pos, vt, curves_to_draw, sel);
+    }
 
     draw_list
-        .add_circle([preview_x, preview_y], 7.0, [1.0, 1.0, 0.0, 1.0])
+        .add_circle(preview_pos, 7.0, [1.0, 1.0, 0.0, 1.0])
         .filled(true)
         .build();
 
     draw_list
-        .add_circle([preview_x, preview_y], 7.0, [1.0, 1.0, 1.0, 1.0])
+        .add_circle(preview_pos, 7.0, [1.0, 1.0, 1.0, 1.0])
         .thickness(2.0)
         .build();
 
@@ -1208,6 +1299,51 @@ fn draw_keyframe_drag_preview(
         [1.0, 1.0, 1.0, 1.0],
         &format!("t={:.2}s v={:.3}", preview_time, preview_value),
     );
+}
+
+fn draw_drag_neighbor_lines(
+    draw_list: &imgui::DrawListMut,
+    preview_pos: [f32; 2],
+    vt: &ViewTransform,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    selected: &SelectedKeyframe,
+) {
+    for (curve, color, _) in curves_to_draw {
+        if curve.property_type != selected.property_type {
+            continue;
+        }
+
+        let kf_index = match curve
+            .keyframes
+            .iter()
+            .position(|kf| kf.id == selected.keyframe_id)
+        {
+            Some(idx) => idx,
+            None => break,
+        };
+
+        let line_color = [color[0], color[1], color[2], 0.6];
+
+        if kf_index > 0 {
+            let prev = &curve.keyframes[kf_index - 1];
+            let prev_pos = [vt.time_to_x(prev.time), vt.value_to_y(prev.value)];
+            draw_list
+                .add_line(prev_pos, preview_pos, line_color)
+                .thickness(1.5)
+                .build();
+        }
+
+        if kf_index + 1 < curve.keyframes.len() {
+            let next = &curve.keyframes[kf_index + 1];
+            let next_pos = [vt.time_to_x(next.time), vt.value_to_y(next.value)];
+            draw_list
+                .add_line(preview_pos, next_pos, line_color)
+                .thickness(1.5)
+                .build();
+        }
+
+        break;
+    }
 }
 
 fn draw_tangent_drag_preview(draw_list: &imgui::DrawListMut, mouse_pos: [f32; 2]) {
@@ -1395,6 +1531,134 @@ fn draw_buffer_curve_overlay(
             draw_list
                 .add_line([x0, y0], [x1, y1], ghost_color)
                 .thickness(1.5)
+                .build();
+        }
+    }
+}
+
+#[cfg(feature = "ml")]
+fn handle_suggestion_keyboard(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    bone_id: BoneId,
+    editor_state: &CurveEditorState,
+    suggestion_overlays: &[SuggestionOverlay],
+) {
+    let io = ui.io();
+    let ctrl = io.key_ctrl;
+
+    if ctrl && ui.is_key_pressed(imgui::Key::Space) {
+        if let Some(first_visible) = editor_state.visible_curves.iter().next() {
+            ui_events.send(UIEvent::CurveSuggestionRequest {
+                bone_id,
+                property_type: *first_visible,
+            });
+        }
+    }
+
+    if ui.is_key_pressed(imgui::Key::Tab) && !suggestion_overlays.is_empty() {
+        ui_events.send(UIEvent::CurveSuggestionAccept);
+    }
+
+    if ui.is_key_pressed(imgui::Key::Escape) && !suggestion_overlays.is_empty() {
+        ui_events.send(UIEvent::CurveSuggestionDismiss);
+    }
+}
+
+fn draw_suggestion_curve_overlay(
+    draw_list: &imgui::DrawListMut,
+    overlays: &[SuggestionOverlay],
+    visible_curves: &HashSet<PropertyType>,
+    vt: &ViewTransform,
+) {
+    if overlays.is_empty() {
+        return;
+    }
+
+    for overlay in overlays {
+        if !visible_curves.contains(&overlay.property_type) {
+            continue;
+        }
+
+        if overlay.confidence < 0.05 {
+            continue;
+        }
+
+        let alpha = if overlay.confidence > 0.8 {
+            0.7
+        } else if overlay.confidence > 0.3 {
+            0.45
+        } else {
+            0.25
+        };
+        let ghost_color = if overlay.confidence > 0.8 {
+            [0.3, 1.0, 0.3, alpha]
+        } else if overlay.confidence > 0.3 {
+            [1.0, 1.0, 0.3, alpha]
+        } else {
+            [1.0, 0.7, 0.3, alpha]
+        };
+
+        let kf_x = vt.time_to_x(overlay.time);
+        let kf_y = vt.value_to_y(overlay.value);
+        let diamond_size = 6.0;
+
+        draw_list
+            .add_line(
+                [kf_x, kf_y - diamond_size],
+                [kf_x + diamond_size, kf_y],
+                ghost_color,
+            )
+            .thickness(2.0)
+            .build();
+        draw_list
+            .add_line(
+                [kf_x + diamond_size, kf_y],
+                [kf_x, kf_y + diamond_size],
+                ghost_color,
+            )
+            .thickness(2.0)
+            .build();
+        draw_list
+            .add_line(
+                [kf_x, kf_y + diamond_size],
+                [kf_x - diamond_size, kf_y],
+                ghost_color,
+            )
+            .thickness(2.0)
+            .build();
+        draw_list
+            .add_line(
+                [kf_x - diamond_size, kf_y],
+                [kf_x, kf_y - diamond_size],
+                ghost_color,
+            )
+            .thickness(2.0)
+            .build();
+
+        if overlay.is_bezier {
+            let handle_color = [ghost_color[0], ghost_color[1], ghost_color[2], alpha * 0.7];
+
+            let in_x = vt.time_to_x(overlay.time + overlay.tangent_in.0);
+            let in_y = vt.value_to_y(overlay.value + overlay.tangent_in.1);
+            draw_list
+                .add_line([kf_x, kf_y], [in_x, in_y], handle_color)
+                .thickness(1.0)
+                .build();
+            draw_list
+                .add_circle([in_x, in_y], 3.0, handle_color)
+                .filled(true)
+                .build();
+
+            let out_x = vt.time_to_x(overlay.time + overlay.tangent_out.0);
+            let out_y = vt.value_to_y(overlay.value + overlay.tangent_out.1);
+            draw_list
+                .add_line([kf_x, kf_y], [out_x, out_y], handle_color)
+                .thickness(1.0)
+                .build();
+            draw_list
+                .add_circle([out_x, out_y], 3.0, handle_color)
+                .filled(true)
                 .build();
         }
     }

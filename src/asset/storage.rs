@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use cgmath::{Matrix4, SquareMatrix};
 
-use crate::animation::{AnimationClip, AnimationClipId, Skeleton, SkeletonId};
+use crate::animation::{AnimationClip, Skeleton, SkeletonId};
 use crate::app::graphics_resource::MaterialId;
 use crate::render::MaterialUBO;
 
@@ -38,7 +38,6 @@ pub struct SkeletonAsset {
 #[derive(Clone, Debug)]
 pub struct AnimationClipAsset {
     pub id: AssetId,
-    pub clip_id: AnimationClipId,
     pub clip: AnimationClip,
 }
 

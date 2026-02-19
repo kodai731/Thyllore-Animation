@@ -2,6 +2,7 @@ use crate::animation::editable::{EditableAnimationClip, PropertyType};
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{SelectedKeyframe, SelectionModifier, TimelineState};
+use super::timeline_window::ruler_padding;
 
 const DOPE_ROW_HEIGHT: f32 = 22.0;
 const DOPE_SUB_ROW_HEIGHT: f32 = 18.0;
@@ -32,13 +33,20 @@ pub fn build_dope_sheet(
     content_height: f32,
 ) {
     let pixels_per_second = DOPE_PIXELS_PER_SECOND * timeline_state.zoom_level;
-    let sheet_width = (clip.duration * pixels_per_second).max(content_width - DOPE_LABEL_WIDTH);
+    let display_duration = clip.duration + ruler_padding(clip.duration);
+    let sheet_width = (display_duration * pixels_per_second).max(content_width - DOPE_LABEL_WIDTH);
 
     ui.child_window("dope_sheet_area")
         .size([content_width, content_height])
         .horizontal_scrollbar(true)
         .build(|| {
-            draw_dope_sheet_ruler(ui, timeline_state, clip, sheet_width, pixels_per_second);
+            draw_dope_sheet_ruler(
+                ui,
+                timeline_state,
+                sheet_width,
+                pixels_per_second,
+                display_duration,
+            );
 
             draw_summary_row(ui, timeline_state, clip, sheet_width, pixels_per_second);
 
@@ -61,9 +69,9 @@ pub fn build_dope_sheet(
 fn draw_dope_sheet_ruler(
     ui: &imgui::Ui,
     state: &TimelineState,
-    clip: &EditableAnimationClip,
     sheet_width: f32,
     pixels_per_second: f32,
+    display_duration: f32,
 ) {
     let cursor_pos = ui.cursor_screen_pos();
     let ruler_x = cursor_pos[0] + DOPE_LABEL_WIDTH;
@@ -80,7 +88,7 @@ fn draw_dope_sheet_ruler(
 
     let tick_interval = calculate_tick_interval(state.zoom_level);
     let mut time = 0.0;
-    while time <= clip.duration {
+    while time <= display_duration {
         let x = ruler_x + time * pixels_per_second;
         let is_major = (time / tick_interval).round() as i32 % 5 == 0;
 

@@ -117,5 +117,86 @@ fn execute_inference(
                 output: output_vec,
             })
         }
+
+        InferenceRequestKind::CurveCopilotPredict {
+            context,
+            property_type_id,
+            topology_features,
+            bone_name_tokens,
+            query_time,
+        } => execute_curve_copilot(
+            session,
+            context,
+            *property_type_id,
+            topology_features,
+            bone_name_tokens,
+            *query_time,
+        ),
     }
+}
+
+fn execute_curve_copilot(
+    session: &mut Session,
+    context: &[f32],
+    property_type_id: u32,
+    topology_features: &[f32],
+    bone_name_tokens: &[i64],
+    query_time: f32,
+) -> Result<InferenceResultKind> {
+    let context_tensor = Tensor::from_array((vec![1i64, 8, 6], context.to_vec()))?;
+
+    let property_type_tensor =
+        Tensor::from_array((vec![1i64], vec![property_type_id as i64]))?;
+
+    let topology_tensor =
+        Tensor::from_array((vec![1i64, 6], topology_features.to_vec()))?;
+
+    let name_tensor =
+        Tensor::from_array((vec![1i64, 32], bone_name_tokens.to_vec()))?;
+
+    let query_time_tensor = Tensor::from_array((vec![1i64], vec![query_time]))?;
+
+    let outputs = session.run(ort::inputs![
+        "context_keyframes" => context_tensor,
+        "property_type" => property_type_tensor,
+        "topology_features" => topology_tensor,
+        "bone_name_tokens" => name_tensor,
+        "query_time" => query_time_tensor
+    ])?;
+
+    let (_shape, prediction_data) = outputs[0].try_extract_tensor::<f32>()?;
+    let pred: Vec<f32> = prediction_data.to_vec();
+
+    let (_shape, confidence_data) = outputs[1].try_extract_tensor::<f32>()?;
+    let conf: Vec<f32> = confidence_data.to_vec();
+
+    if pred.len() < 6 {
+        return Ok(InferenceResultKind::CurveCopilotPredict {
+            value: 0.0,
+            tangent_in: (0.0, 0.0),
+            tangent_out: (0.0, 0.0),
+            is_bezier: false,
+            confidence: 0.0,
+        });
+    }
+
+    let value = pred[0];
+    let tangent_in = (pred[1], pred[2]);
+    let tangent_out = (pred[3], pred[4]);
+    let interp_logit = pred[5];
+    let is_bezier = interp_logit > 0.0;
+    let confidence = conf.first().copied().unwrap_or(0.0).clamp(0.0, 1.0);
+
+    crate::log!(
+        "CurveCopilot raw output: pred={:?}, conf={:.4}, query_time={:.4}",
+        pred, confidence, query_time
+    );
+
+    Ok(InferenceResultKind::CurveCopilotPredict {
+        value,
+        tangent_in,
+        tangent_out,
+        is_bezier,
+        confidence,
+    })
 }

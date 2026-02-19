@@ -160,6 +160,18 @@ impl App {
         #[cfg(feature = "ml")]
         data.ecs_world
             .insert_resource(crate::ecs::resource::InferenceActorState::default());
+        #[cfg(feature = "ml")]
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::CurveSuggestionState::default());
+        #[cfg(feature = "ml")]
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::BoneTopologyCache::default());
+        #[cfg(feature = "ml")]
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::BoneNameTokenCache::default());
+        #[cfg(feature = "text-to-motion")]
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::TextToMotionState::default());
 
         let viewport_width = rrswapchain.swapchain_extent.width;
         let viewport_height = rrswapchain.swapchain_extent.height;
@@ -593,6 +605,7 @@ impl App {
             &rrcommand_pool,
             &rrswapchain,
             &model_path,
+            loaded_scene.is_some(),
         ) {
             eprintln!("Failed to load model: {:?}", e);
             crate::log!("Failed to load model: {:?}", e);
@@ -601,8 +614,27 @@ impl App {
 
         let mut scene_state = SceneState::new();
         if let Some((scene_path, scene, clips)) = loaded_scene {
-            let clips_with_ids = Self::register_loaded_clips(&mut data.ecs_world, clips);
+            let clips_with_ids =
+                Self::register_loaded_clips(&mut data.ecs_world, &mut data.ecs_assets, clips);
             crate::scene::apply_loaded_scene_to_world(&scene, &mut data.ecs_world, &clips_with_ids);
+
+            let active_clip_id = {
+                let timeline = data.ecs_world.resource::<TimelineState>();
+                timeline.current_clip_id
+            };
+
+            if let Some(clip_id) = active_clip_id {
+                let schedule = crate::app::model_loader::build_initial_clip_schedule(
+                    Some(clip_id),
+                    &data.ecs_world,
+                );
+                for (_, existing) in
+                    data.ecs_world.iter_components_mut::<crate::ecs::component::ClipSchedule>()
+                {
+                    *existing = schedule.clone();
+                }
+            }
+
             scene_state.set_from_loaded(scene_path, scene.scene.metadata.clone());
         }
         data.ecs_world.insert_resource(scene_state);
@@ -700,6 +732,7 @@ impl App {
             frame,
             resized,
             start,
+            last_update_time: 0.0,
         })
     }
 
@@ -998,6 +1031,22 @@ impl App {
             data.ecs_world
                 .insert_resource(crate::ecs::resource::AutoExposure::default());
         }
+
+        #[cfg(feature = "ml")]
+        {
+            use crate::ecs::component::InferenceActorSetup;
+            use crate::ecs::world::EntityBuilder;
+            use crate::ml::{resolve_curve_copilot_model_path, InferenceModelKind, CURVE_COPILOT_ACTOR_ID};
+
+            EntityBuilder::new(&mut data.ecs_world).with_inference_actor(
+                InferenceActorSetup {
+                    actor_id: CURVE_COPILOT_ACTOR_ID,
+                    model_path: resolve_curve_copilot_model_path(),
+                    model_kind: InferenceModelKind::CurveCopilot,
+                    enabled: true,
+                },
+            );
+        }
     }
 
     pub unsafe fn init_imgui_rendering(
@@ -1255,6 +1304,7 @@ impl App {
 
     fn register_loaded_clips(
         world: &mut crate::ecs::world::World,
+        assets: &mut crate::asset::AssetStorage,
         clips: Vec<crate::animation::editable::EditableAnimationClip>,
     ) -> Vec<(crate::animation::editable::SourceClipId, String)> {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
@@ -1262,10 +1312,12 @@ impl App {
 
         for clip in clips {
             let name = clip.name.clone();
-            let id = crate::ecs::systems::clip_library_systems::clip_library_register_clip(
-                &mut clip_library,
-                clip,
-            );
+            let id =
+                crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
+                    &mut clip_library,
+                    assets,
+                    clip,
+                );
             result.push((id, name));
         }
 

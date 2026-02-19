@@ -16,7 +16,10 @@ pub mod math;
 pub mod platform;
 pub mod render;
 pub mod renderer;
+pub mod paths;
 pub mod scene;
 #[cfg(feature = "ml")]
 pub mod ml;
+#[cfg(feature = "text-to-motion")]
+pub mod grpc;
 pub mod vulkanr;

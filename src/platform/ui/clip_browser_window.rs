@@ -49,7 +49,19 @@ fn build_toolbar(ui: &imgui::Ui, ui_events: &mut UIEventQueue, browser_state: &C
     }
 
     ui.same_line();
-    let can_duplicate = browser_state.selected_clip_id.is_some();
+    let has_selection = browser_state.selected_clip_id.is_some();
+    if has_selection {
+        if ui.small_button("Save") {
+            if let Some(id) = browser_state.selected_clip_id {
+                ui_events.send(UIEvent::ClipBrowserSaveToFile(id));
+            }
+        }
+    } else {
+        ui.text_disabled("Save");
+    }
+
+    ui.same_line();
+    let can_duplicate = has_selection;
     if can_duplicate {
         if ui.small_button("Dup") {
             if let Some(id) = browser_state.selected_clip_id {
@@ -114,9 +126,18 @@ fn build_clip_list(
                     .map(|(_, c)| *c)
                     .unwrap_or(0);
 
-                let duration = clip_library.get(*id).map(|c| c.duration).unwrap_or(0.0);
+                let clip = clip_library.get(*id);
+                let duration = clip.map(|c| c.duration).unwrap_or(0.0);
+                let source_filename = extract_source_filename(clip);
 
-                let label = format!("{} ({:.1}s) [{}]##clip_{}", name, duration, ref_count, id);
+                let label = if source_filename.is_empty() {
+                    format!("{} ({:.1}s) [{}]##clip_{}", name, duration, ref_count, id)
+                } else {
+                    format!(
+                        "{} ({:.1}s) [{}] <{}>##clip_{}",
+                        name, duration, ref_count, source_filename, id
+                    )
+                };
 
                 if ui.selectable_config(&label).selected(is_selected).build() {
                     browser_state.selected_clip_id = Some(*id);
@@ -148,4 +169,12 @@ fn count_clip_references(_clip_library: &ClipLibrary, world: &World) -> Vec<(Sou
     }
 
     counts.into_iter().collect()
+}
+
+fn extract_source_filename(clip: Option<&crate::animation::editable::EditableAnimationClip>) -> String {
+    clip.and_then(|c| c.source_path.as_ref())
+        .and_then(|p| std::path::Path::new(p).file_name())
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_string()
 }

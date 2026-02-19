@@ -49,6 +49,7 @@ pub struct App {
     pub frame: usize,
     pub resized: bool,
     pub start: Instant,
+    pub last_update_time: f32,
 }
 
 impl App {

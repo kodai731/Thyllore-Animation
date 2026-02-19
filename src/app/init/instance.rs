@@ -732,6 +732,7 @@ impl App {
             frame,
             resized,
             start,
+            last_update_time: 0.0,
         })
     }
 

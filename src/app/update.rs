@@ -11,7 +11,8 @@ use anyhow::Result;
 impl App {
     pub unsafe fn update(&mut self, image_index: usize, gui_data: &mut GUIData) -> Result<()> {
         let time = self.start.elapsed().as_secs_f32();
-        let delta_time = 1.0 / 60.0;
+        let delta_time = time - self.last_update_time;
+        self.last_update_time = time;
 
         let viewport_extent = (
             self.data.viewport.width.max(1),

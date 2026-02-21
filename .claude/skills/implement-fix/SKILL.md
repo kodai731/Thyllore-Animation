@@ -1,16 +1,17 @@
 ---
 name: implement-fix
-description: Takes an IssueHistory MD file (with a Detailed Fix Plan section) as input and enters plan mode to create a concrete implementation plan. Ensures CLAUDE.md compliance, SSOT, ECS architecture, and robust design. Use after /plan-fix has appended investigation results to the file.
+description: Takes an IssueHistory MD file as input and enters plan mode to create a concrete implementation plan. If the file lacks a Detailed Fix Plan, investigates the root cause first, then plans the fix — all in one pass. Ensures CLAUDE.md compliance, SSOT, ECS architecture, and robust design.
 user-invocable: true
 allowed-tools: Read, Grep, Glob, Task, Edit, EnterPlanMode, ExitPlanMode
 argument-hint: "<path-to-issue-md>"
 ---
 
-# Implement Fix — Plan Mode Implementation from Issue Reports
+# Implement Fix — Investigation + Plan Mode Implementation from Issue Reports
 
-Takes an IssueHistory MD file that already contains a "Detailed Fix Plan" section
-(typically created by `/plan-fix`) and enters plan mode to design a concrete,
-architecture-compliant implementation.
+Takes an IssueHistory MD file and enters plan mode to design a concrete,
+architecture-compliant implementation. If the file already contains a
+"Detailed Fix Plan" section, uses it directly. If not, performs investigation
+first (equivalent to `/plan-fix`) to avoid redundant agent launches.
 
 ## Usage
 
@@ -20,7 +21,7 @@ architecture-compliant implementation.
 
 ## Preconditions
 
-- The MD file specified in `$ARGUMENTS` must exist and contain a "Detailed Fix Plan" section.
+- The MD file specified in `$ARGUMENTS` must exist.
 - If `$ARGUMENTS` is empty, display an error message and stop.
 
 ## Execution Flow
@@ -34,13 +35,41 @@ Read the following files in parallel:
 3. `.claude/rules/coding.md` — for robust coding guidelines (industry-standard)
 4. `~/.claude/CLAUDE.md` (user global) — for personal coding preferences
 
-Extract from the issue MD:
-- Root Cause
-- Recommended Approach
-- Implementation Steps
-- Affected file paths and line numbers
+Check whether the issue MD file contains a "Detailed Fix Plan" section
+(or equivalent: "Implementation Steps", "Recommended Approach" with concrete
+code changes).
 
-### Step 2: Investigate Affected Code
+- **If a detailed fix plan exists** → extract Root Cause, Recommended Approach,
+  Implementation Steps, affected file paths → proceed to Step 2B.
+- **If NO detailed fix plan exists** → proceed to Step 2A.
+
+### Step 2A: Investigate Root Cause (only when fix plan is missing)
+
+This step replaces a separate `/plan-fix` invocation. Launch **one** agent
+using the Task tool:
+
+#### bug-investigator Agent
+
+Combined investigation and fix proposal. Instructions:
+
+- Trace the data flow through all related files mentioned in the issue
+- Identify all callers and callees of the affected functions
+- Check whether similar patterns exist elsewhere in the codebase
+- Form multiple hypotheses (at least 3) about the root cause and verify
+  each against the code
+- List at least 2-3 fix approaches
+- Score each approach on Correctness / Minimal Impact / Robustness /
+  Maintainability (1-5 scale)
+- Select the recommended approach and describe the fix steps at concrete
+  code-change level
+- List all locations where the fix could cause side effects
+- Do NOT modify any code. Research and planning only.
+
+After the agent returns, integrate the results into the issue MD file by
+appending a "Detailed Fix Plan" section (same format as `/plan-fix` output).
+Then proceed to Step 2B.
+
+### Step 2B: Investigate Affected Code for Implementation
 
 Launch the following agents **in parallel** using the Task tool:
 

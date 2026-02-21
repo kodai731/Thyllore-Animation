@@ -38,6 +38,29 @@ $env:RUST_LOG="debug"; cargo run --bin rust-rendering   # Run with debug logging
 .\build-with-tests.ps1 -SkipTests # Skip tests
 ```
 
+## Testing and Feature Flags
+
+**IMPORTANT**: The `ort` crate (ONNX Runtime) included via the `ml` feature (enabled by default) has CRT initializers
+that crash integration test binaries on Windows with `STATUS_ACCESS_VIOLATION`. This only affects integration tests
+(`tests/*.rs`), not lib tests (`cargo test --lib`).
+
+**Before running tests**, check `.cargo/config.toml` for test aliases and environment settings (e.g., `ORT_DYLIB_PATH`).
+
+**How to run tests correctly**:
+
+| Command | Description |
+|---------|-------------|
+| `.\build-with-tests.ps1` | Recommended. Runs lib tests (with ml) and integration tests (without ml) correctly |
+| `cargo test --lib` | Lib tests only (144 tests, ml enabled, safe) |
+| `cargo test --test ecs_tests --no-default-features` | Integration tests (59 tests, ml disabled, safe) |
+| `cargo test --no-default-features` | All tests with ml disabled (reduces functionality but avoids crash) |
+
+**Do NOT run**: `cargo test --test ecs_tests` (without `--no-default-features`) — this will crash.
+
+**If a test crashes with `STATUS_ACCESS_VIOLATION`**: The cause is the `ort` (ONNX Runtime) dependency linked via the
+`ml` feature. Add `--no-default-features` to exclude it. See `.claude/local/IssueHistory/FbxExportReimportIssues.md`
+Issue 4 for details.
+
 ## ECS Architecture
 
 ** IMPORTANT ** MUST follow architecture rule to add file or code, plan new function.

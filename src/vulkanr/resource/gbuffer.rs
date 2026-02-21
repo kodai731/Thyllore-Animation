@@ -140,7 +140,9 @@ impl RRGBuffer {
             vk::SampleCountFlags::_1,
             vk::Format::R32_SFLOAT,
             vk::ImageTiling::OPTIMAL,
-            vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED,
+            vk::ImageUsageFlags::STORAGE
+                | vk::ImageUsageFlags::SAMPLED
+                | vk::ImageUsageFlags::TRANSFER_DST,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
 

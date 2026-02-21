@@ -61,6 +61,17 @@ fn build_toolbar(ui: &imgui::Ui, ui_events: &mut UIEventQueue, browser_state: &C
     }
 
     ui.same_line();
+    if has_selection {
+        if ui.small_button("FBX") {
+            if let Some(id) = browser_state.selected_clip_id {
+                ui_events.send(UIEvent::ClipBrowserExportFbx(id));
+            }
+        }
+    } else {
+        ui.text_disabled("FBX");
+    }
+
+    ui.same_line();
     let can_duplicate = has_selection;
     if can_duplicate {
         if ui.small_button("Dup") {

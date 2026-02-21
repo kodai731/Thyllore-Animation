@@ -682,7 +682,6 @@ fn process_clip_instance_events_inline(events: &[UIEvent], app: &mut App) {
                         .find(|i| i.instance_id == *instance_id)
                         .map(|i| i.source_id)
                 });
-
         }
     }
 
@@ -859,8 +858,10 @@ fn process_clip_browser_events_inline(events: &[UIEvent], app: &mut App) {
 
             UIEvent::ClipBrowserCreateEmpty => {
                 let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
-                let editable =
-                    crate::animation::editable::EditableAnimationClip::new(0, "New Clip".to_string());
+                let editable = crate::animation::editable::EditableAnimationClip::new(
+                    0,
+                    "New Clip".to_string(),
+                );
                 let id =
                     crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
                         &mut clip_library,
@@ -948,6 +949,37 @@ fn process_clip_browser_events_inline(events: &[UIEvent], app: &mut App) {
                 }
             }
 
+            UIEvent::ClipBrowserExportFbx(source_id) => {
+                let clip = {
+                    let lib = app.data.ecs_world.resource::<ClipLibrary>();
+                    lib.get(*source_id).cloned()
+                };
+                let skeleton = app
+                    .data
+                    .ecs_assets
+                    .skeletons
+                    .values()
+                    .next()
+                    .map(|sa| sa.skeleton.clone());
+
+                if let (Some(clip), Some(skeleton)) = (clip, skeleton) {
+                    let default_filename = format!("{}.fbx", clip.name);
+                    let path = rfd::FileDialog::new()
+                        .add_filter("FBX Binary", &["fbx"])
+                        .set_file_name(&default_filename)
+                        .save_file();
+
+                    if let Some(path) = path {
+                        match crate::exporter::fbx_animation::export_animation_fbx(
+                            &clip, &skeleton, &path,
+                        ) {
+                            Ok(()) => crate::log!("FBX exported: {:?}", path),
+                            Err(e) => crate::log!("FBX export failed: {:?}", e),
+                        }
+                    }
+                }
+            }
+
             UIEvent::ClipBrowserDelete(source_id) => {
                 let ref_count = count_source_references(*source_id, &app.data.ecs_world);
                 if ref_count == 0 {
@@ -969,10 +1001,7 @@ fn process_clip_browser_events_inline(events: &[UIEvent], app: &mut App) {
 }
 
 fn extract_clip_name_from_path(path: &std::path::Path) -> String {
-    let filename = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("clip");
+    let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("clip");
 
     filename
         .strip_suffix(".anim.ron")
@@ -1212,8 +1241,7 @@ fn process_constraint_bake_events_inline(events: &[UIEvent], app: &mut App) {
         };
 
         let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
-        let new_id =
-            constraint_bake_register(&mut clip_library, &mut app.data.ecs_assets, baked);
+        let new_id = constraint_bake_register(&mut clip_library, &mut app.data.ecs_assets, baked);
         crate::log!("Baked constraints to new clip (id={})", new_id);
     }
 }
@@ -1633,17 +1661,15 @@ fn process_curve_suggestion_events_inline(events: &[UIEvent], app: &mut App) {
                 let clip_info = clip_id
                     .and_then(|id| clip_library.get(id))
                     .and_then(|clip| {
-                        clip.tracks.get(bone_id).map(|track| {
-                            (track.get_curve(*property_type).clone(), clip.duration)
-                        })
+                        clip.tracks
+                            .get(bone_id)
+                            .map(|track| (track.get_curve(*property_type).clone(), clip.duration))
                     });
                 drop(clip_library);
 
                 if let Some((curve, clip_duration)) = clip_info {
-                    let topology_cache =
-                        app.data.ecs_world.resource::<BoneTopologyCache>();
-                    let name_token_cache =
-                        app.data.ecs_world.resource::<BoneNameTokenCache>();
+                    let topology_cache = app.data.ecs_world.resource::<BoneTopologyCache>();
+                    let name_token_cache = app.data.ecs_world.resource::<BoneNameTokenCache>();
                     let mut suggestion_state =
                         app.data.ecs_world.resource_mut::<CurveSuggestionState>();
                     let mut inference_state =
@@ -1702,14 +1728,9 @@ fn process_curve_suggestion_events_inline(events: &[UIEvent], app: &mut App) {
 }
 
 #[cfg(feature = "text-to-motion")]
-fn process_text_to_motion_events_inline(
-    events: &[UIEvent],
-    app: &mut App,
-) {
+fn process_text_to_motion_events_inline(events: &[UIEvent], app: &mut App) {
     use crate::ecs::resource::TextToMotionState;
-    use crate::ecs::systems::{
-        text_to_motion_cancel, text_to_motion_submit,
-    };
+    use crate::ecs::systems::{text_to_motion_cancel, text_to_motion_submit};
     use crate::grpc::GrpcThreadHandle;
 
     const DEFAULT_ENDPOINT: &str = "http://localhost:50051";
@@ -1720,47 +1741,28 @@ fn process_text_to_motion_events_inline(
                 prompt,
                 duration_seconds,
             } => {
-                if !app
-                    .data
-                    .ecs_world
-                    .contains_resource::<GrpcThreadHandle>()
-                {
-                    let handle =
-                        GrpcThreadHandle::spawn(DEFAULT_ENDPOINT);
+                if !app.data.ecs_world.contains_resource::<GrpcThreadHandle>() {
+                    let handle = GrpcThreadHandle::spawn(DEFAULT_ENDPOINT);
                     app.data.ecs_world.insert_resource(handle);
-                    crate::log!(
-                        "TextToMotion: spawned gRPC thread ({})",
-                        DEFAULT_ENDPOINT
-                    );
+                    crate::log!("TextToMotion: spawned gRPC thread ({})", DEFAULT_ENDPOINT);
                 }
 
-                let handle =
-                    app.data.ecs_world.get_resource::<GrpcThreadHandle>();
-                let mut state =
-                    app.data.ecs_world.resource_mut::<TextToMotionState>();
+                let handle = app.data.ecs_world.get_resource::<GrpcThreadHandle>();
+                let mut state = app.data.ecs_world.resource_mut::<TextToMotionState>();
 
                 if let Some(handle) = handle {
-                    text_to_motion_submit(
-                        &mut state,
-                        &*handle,
-                        prompt,
-                        *duration_seconds,
-                    );
+                    text_to_motion_submit(&mut state, &*handle, prompt, *duration_seconds);
                 }
             }
 
             UIEvent::TextToMotionApply => {
                 let clip = {
-                    let mut state = app
-                        .data
-                        .ecs_world
-                        .resource_mut::<TextToMotionState>();
+                    let mut state = app.data.ecs_world.resource_mut::<TextToMotionState>();
                     state.generated_clip.take()
                 };
 
                 if let Some(clip) = clip {
-                    let mut clip_library =
-                        app.data.ecs_world.resource_mut::<ClipLibrary>();
+                    let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
                     let new_id = crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
                         &mut clip_library,
                         &mut app.data.ecs_assets,
@@ -1768,26 +1770,18 @@ fn process_text_to_motion_events_inline(
                     );
                     drop(clip_library);
 
-                    let mut timeline =
-                        app.data.ecs_world.resource_mut::<TimelineState>();
+                    let mut timeline = app.data.ecs_world.resource_mut::<TimelineState>();
                     timeline.current_clip_id = Some(new_id);
 
-                    let mut state = app
-                        .data
-                        .ecs_world
-                        .resource_mut::<TextToMotionState>();
+                    let mut state = app.data.ecs_world.resource_mut::<TextToMotionState>();
                     text_to_motion_cancel(&mut state);
 
-                    crate::log!(
-                        "TextToMotion: applied clip (id={})",
-                        new_id
-                    );
+                    crate::log!("TextToMotion: applied clip (id={})", new_id);
                 }
             }
 
             UIEvent::TextToMotionCancel => {
-                let mut state =
-                    app.data.ecs_world.resource_mut::<TextToMotionState>();
+                let mut state = app.data.ecs_world.resource_mut::<TextToMotionState>();
                 text_to_motion_cancel(&mut state);
                 crate::log!("TextToMotion: cancelled");
             }

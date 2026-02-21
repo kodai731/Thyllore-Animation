@@ -208,6 +208,7 @@ pub enum UIEvent {
     ClipBrowserDelete(SourceClipId),
     ClipBrowserLoadFromFile,
     ClipBrowserSaveToFile(SourceClipId),
+    ClipBrowserExportFbx(SourceClipId),
 
     SaveScene,
 

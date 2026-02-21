@@ -689,7 +689,11 @@ pub unsafe fn rebuild_acceleration_structures(
         );
     }
 
-    raytracing.acceleration_structure = Some(acceleration_structure);
+    if acceleration_structure.blas_list.is_empty() {
+        raytracing.acceleration_structure = None;
+    } else {
+        raytracing.acceleration_structure = Some(acceleration_structure);
+    }
     crate::log!("Acceleration structures rebuilt successfully");
     Ok(())
 }

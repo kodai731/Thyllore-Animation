@@ -10,6 +10,7 @@ pub mod app;
 pub mod asset;
 pub mod debugview;
 pub mod ecs;
+pub mod exporter;
 pub mod loader;
 pub mod logger;
 pub mod math;

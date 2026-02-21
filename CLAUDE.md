@@ -123,6 +123,14 @@ let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
 - For example, skeleton or mesh data in the timeline system, and animation curve data in the UI system, must each have a
   single authoritative source.
 
+## Robust Coding Guidelines
+
+- **IMPORTANT**: Follow the rules defined in `.claude/rules/coding.md` for all source code.
+- These rules are derived from Google C++ Style Guide, C++ Core Guidelines, Unreal Engine Coding Standard, Apple Swift
+  API Guidelines, Rust API Guidelines, and Microsoft Rust Guidelines.
+- Key principles: make invalid states unrepresentable, validate at boundaries, consistent error handling, RAII, exhaustive
+  matching, no boolean parameters, fail fast.
+
 ## Adding New Models
 
 To load a new model, modify `App::load_model()`:

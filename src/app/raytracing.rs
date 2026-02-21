@@ -56,19 +56,18 @@ pub struct RayTracingData {
 }
 
 impl RayTracingData {
+    pub fn has_valid_tlas(&self) -> bool {
+        self.acceleration_structure
+            .as_ref()
+            .and_then(|a| a.tlas.acceleration_structure)
+            .is_some()
+    }
+
     pub fn is_available(&self) -> bool {
-        let accel = self.acceleration_structure.is_some();
-        let gbuf = self.gbuffer.is_some();
-        let gbuf_pipe = self.gbuffer_pipeline.is_some();
-        let ray_query = self.ray_query_pipeline.is_some();
-        let composite = self.composite_pipeline.is_some();
-
-        crate::log!(
-            "RayTracingData::is_available - accel:{}, gbuffer:{}, gbuffer_pipe:{}, ray_query:{}, composite:{}",
-            accel, gbuf, gbuf_pipe, ray_query, composite
-        );
-
-        accel && gbuf && gbuf_pipe && ray_query && composite
+        self.gbuffer.is_some()
+            && self.gbuffer_pipeline.is_some()
+            && self.ray_query_pipeline.is_some()
+            && self.composite_pipeline.is_some()
     }
 
     pub unsafe fn init_gbuffer(
@@ -148,7 +147,11 @@ impl RayTracingData {
             );
         }
 
-        self.acceleration_structure = Some(acceleration_structure);
+        if acceleration_structure.blas_list.is_empty() {
+            self.acceleration_structure = None;
+        } else {
+            self.acceleration_structure = Some(acceleration_structure);
+        }
         log::info!("Acceleration structures built successfully");
         Ok(())
     }

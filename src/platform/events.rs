@@ -970,9 +970,29 @@ fn process_clip_browser_events_inline(events: &[UIEvent], app: &mut App) {
                         .save_file();
 
                     if let Some(path) = path {
-                        match crate::exporter::fbx_animation::export_animation_fbx(
-                            &clip, &skeleton, &path,
-                        ) {
+                        let has_fbx_cache = app
+                            .data
+                            .ecs_world
+                            .contains_resource::<crate::ecs::resource::FbxModelCache>();
+                        let fbx_model_ref = if has_fbx_cache {
+                            let cache =
+                                app.data.ecs_world.resource::<crate::ecs::resource::FbxModelCache>();
+                            cache.fbx_model.clone()
+                        } else {
+                            None
+                        };
+
+                        let result = if let Some(ref fbx_model) = fbx_model_ref {
+                            crate::exporter::fbx_exporter::export_full_fbx(
+                                fbx_model, Some(&clip), &skeleton, &path,
+                            )
+                        } else {
+                            crate::exporter::fbx_animation::export_animation_fbx(
+                                &clip, &skeleton, &path,
+                            )
+                        };
+
+                        match result {
                             Ok(()) => crate::log!("FBX exported: {:?}", path),
                             Err(e) => crate::log!("FBX export failed: {:?}", e),
                         }

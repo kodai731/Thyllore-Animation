@@ -97,6 +97,12 @@ pub fn fbx_to_world() -> Matrix4<f32> {
     )
 }
 
+pub fn world_to_fbx() -> Matrix4<f32> {
+    Matrix4::new(
+        1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+    )
+}
+
 /// glTF Y-up → ワールド Y-up 変換（恒等変換）
 pub fn gltf_to_world() -> Matrix4<f32> {
     Matrix4::identity()

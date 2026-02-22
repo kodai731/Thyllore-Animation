@@ -49,12 +49,13 @@ pub struct FbxLoadResult {
     pub constraints: Vec<LoadedConstraint>,
 }
 
-pub fn load_fbx_to_graphics_resources(path: &str) -> Result<FbxLoadResult> {
+pub fn load_fbx_to_graphics_resources(path: &str) -> Result<(FbxLoadResult, FbxModel)> {
     let fbx_model = load_fbx_with_ufbx(path)?;
-    convert_fbx_model_to_graphics_resources(fbx_model)
+    let result = convert_fbx_model_to_graphics_resources(&fbx_model)?;
+    Ok((result, fbx_model))
 }
 
-fn convert_fbx_model_to_graphics_resources(fbx_model: FbxModel) -> Result<FbxLoadResult> {
+fn convert_fbx_model_to_graphics_resources(fbx_model: &FbxModel) -> Result<FbxLoadResult> {
     let mut animation_system = AnimationSystem::new();
     let has_armature = !fbx_model.nodes.is_empty();
     let has_skinned_meshes = fbx_model.fbx_data.iter().any(|d| !d.clusters.is_empty());
@@ -103,7 +104,7 @@ fn convert_fbx_model_to_graphics_resources(fbx_model: FbxModel) -> Result<FbxLoa
         clips,
         has_skinned_meshes,
         has_armature,
-        constraints: fbx_model.constraints,
+        constraints: fbx_model.constraints.clone(),
     })
 }
 

@@ -58,12 +58,12 @@ that crash integration test binaries on Windows with `STATUS_ACCESS_VIOLATION`. 
 **Do NOT run**: `cargo test --test ecs_tests` (without `--no-default-features`) — this will crash.
 
 **If a test crashes with `STATUS_ACCESS_VIOLATION`**: The cause is the `ort` (ONNX Runtime) dependency linked via the
-`ml` feature. Add `--no-default-features` to exclude it. See `.claude/local/IssueHistory/FbxExportReimportIssues.md`
+`ml` feature. Add `--no-default-features` to exclude it. See `${IssueHistoryPath}/FbxExportReimportIssues.md`
 Issue 4 for details.
 
 ## ECS Architecture
 
-** IMPORTANT ** MUST follow architecture rule to add file or code, plan new function.
+**IMPORTANT:** MUST follow architecture rule to add file or code, plan new function.
 This project uses an Entity-Component-System (ECS) architecture inspired by [Bevy Engine](https://bevyengine.org/). The
 design follows these principles:
 
@@ -154,43 +154,24 @@ let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
 - Key principles: make invalid states unrepresentable, validate at boundaries, consistent error handling, RAII, exhaustive
   matching, no boolean parameters, fail fast.
 
-## Adding New Models
+## Path
 
-To load a new model, modify `App::load_model()`:
+MUST follow these file paths. All documentation for this project lives under `Rust_Rendering/`.
 
-- For glTF: Update `model_path` variable
-- For FBX: Update `model_path_fbx` variable
-- Ensure textures are in the same directory or adjust texture paths
+- ${SharedDataPath}: ../SharedData
+- ${DocumentPath}: ../SharedData/document/Rust_Rendering
+- ${ExploreHistoryPath}: ../SharedData/document/Rust_Rendering/ExploreHistory
+- ${IssueHistoryPath}: ../SharedData/document/Rust_Rendering/IssueHistory
 
-## Important Rules
+## Document
 
-- Always respond in Japanese
-- Do NOT perform git write operations (commit, push, etc.)
-    - read operation (diff log) is allowed
+**IMPORTANT:** All documents (research, design, issue history, explore history) MUST be saved under
+`../SharedData/document/Rust_Rendering/`. Never place documents directly under `../SharedData/document/`.
 
-## Logging
+## Issue History
 
-- Use the `log!` macro for logging
-- Logs are output to `log/log_N.txt`
-- Do NOT output to standard console; use the log files instead
-
-## app/update.rs
-
-- Contains the update processing
-- Do NOT write feature-specific processing here
-- Instead, write update processing in related files and call them from update
-
-## mod.rs
-
-- **IMPORTANT:** Don't write definition or implementation in mod.rs file
-- Only module publish responsibility on mod.rs
-
-## issue history
-
-Issue History Guidelines
-
-**IMPORTANT:** If you encounter an issue and resolve it, you must document the issue and its solution in detail at
-.claude/local/IssueHistory/
+**IMPORTANT:** If you encounter a complex issue and resolve it, you must document the issue and its solution in detail at
+`${IssueHistoryPath}`.
 
 File names must use CamelCase (e.g., ImageLayoutTransition.md).
 
@@ -199,11 +180,6 @@ and recap it.
 At the top of each file, include a brief summary of the issue and its resolution to read shortly.
 
 **IMPORTANT:** MUST write in English.
-
-## explore history
-
-- explore history and summary reports can be placed at .claude/local/ExploreHistory if necessary.
-- MUST write in English.
 
 ## Last Conversation
 
@@ -214,7 +190,7 @@ At the top of each file, include a brief summary of the issue and its resolution
 ### Repository
 repository is separated to ../AnimationModelTraining
 
-### Shared Data
+### Trained Data
 
 The trained data for the copilot curve is stored in ../SharedData/exports/.
 

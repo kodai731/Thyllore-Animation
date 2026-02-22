@@ -70,8 +70,9 @@ Report findings in Japanese with:
 
 ## Explore History
 
-- Save exploration results and summary reports to `.claude/local/ExploreHistory/` when the findings are significant or reusable
-- Use descriptive file names (e.g., `SceneViewInteraction.md`, `AnimationPipeline.md`)
+- Save exploration results and summary reports to `ExploreHistoryPath` when the findings are significant or reusable
+- Use descriptive file names in Pascal Case(e.g., `SceneViewInteraction.md`, `AnimationPipeline.md`)
+- write in English
 
 ## Rules
 
@@ -80,4 +81,3 @@ Report findings in Japanese with:
 - Report file paths and line numbers for every finding
 - When referencing external engines, explain the pattern briefly
 - Prioritize accuracy over speed; verify findings before reporting
-- Always respond in Japanese

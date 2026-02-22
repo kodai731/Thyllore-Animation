@@ -11,20 +11,20 @@ use crate::animation::editable::{
     PropertyCurve,
 };
 
-type FbxWriteResult<T> = Result<T, Box<dyn std::error::Error>>;
+pub(crate) type FbxWriteResult<T> = Result<T, Box<dyn std::error::Error>>;
 
-const KTIME_ONE_SECOND: f64 = 46_186_158_000.0;
+pub(crate) const KTIME_ONE_SECOND: f64 = 46_186_158_000.0;
 
-struct UidAllocator {
+pub(crate) struct UidAllocator {
     next: i64,
 }
 
 impl UidAllocator {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { next: 1_000_000 }
     }
 
-    fn allocate(&mut self) -> i64 {
+    pub(crate) fn allocate(&mut self) -> i64 {
         let uid = self.next;
         self.next += 1;
         uid
@@ -32,14 +32,14 @@ impl UidAllocator {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum FbxChannel {
+pub(crate) enum FbxChannel {
     Translation,
     Rotation,
     Scale,
 }
 
 impl FbxChannel {
-    fn property_name(&self) -> &'static str {
+    pub(crate) fn property_name(&self) -> &'static str {
         match self {
             FbxChannel::Translation => "Lcl Translation",
             FbxChannel::Rotation => "Lcl Rotation",
@@ -47,7 +47,7 @@ impl FbxChannel {
         }
     }
 
-    fn short_name(&self) -> &'static str {
+    pub(crate) fn short_name(&self) -> &'static str {
         match self {
             FbxChannel::Translation => "T",
             FbxChannel::Rotation => "R",
@@ -56,53 +56,53 @@ impl FbxChannel {
     }
 }
 
-struct FbxBoneExport {
-    model_uid: i64,
-    nodeattr_uid: i64,
-    name: String,
-    is_root: bool,
-    parent_model_uid: Option<i64>,
-    translation: [f64; 3],
-    rotation: [f64; 3],
-    scaling: [f64; 3],
+pub(crate) struct FbxBoneExport {
+    pub model_uid: i64,
+    pub nodeattr_uid: i64,
+    pub name: String,
+    pub is_root: bool,
+    pub parent_model_uid: Option<i64>,
+    pub translation: [f64; 3],
+    pub rotation: [f64; 3],
+    pub scaling: [f64; 3],
 }
 
-struct FbxCurveNodeExport {
-    uid: i64,
-    bone_model_uid: i64,
-    channel: FbxChannel,
-    default_values: [f64; 3],
-    curve_uids: [Option<i64>; 3],
+pub(crate) struct FbxCurveNodeExport {
+    pub uid: i64,
+    pub bone_model_uid: i64,
+    pub channel: FbxChannel,
+    pub default_values: [f64; 3],
+    pub curve_uids: [Option<i64>; 3],
 }
 
-struct FbxCurveExport {
-    uid: i64,
-    key_times: Vec<i64>,
-    key_values: Vec<f32>,
-    key_attr_flags: Vec<i32>,
-    key_attr_data: Vec<f32>,
-    key_attr_ref_count: Vec<i32>,
-    default_value: f64,
+pub(crate) struct FbxCurveExport {
+    pub uid: i64,
+    pub key_times: Vec<i64>,
+    pub key_values: Vec<f32>,
+    pub key_attr_flags: Vec<i32>,
+    pub key_attr_data: Vec<f32>,
+    pub key_attr_ref_count: Vec<i32>,
+    pub default_value: f64,
 }
 
-enum FbxConnection {
+pub(crate) enum FbxConnection {
     OO { child: i64, parent: i64 },
     OP { child: i64, parent: i64, property: String },
 }
 
-struct FbxExportData {
-    clip_name: String,
-    duration_ktime: i64,
-    bones: Vec<FbxBoneExport>,
-    stack_uid: i64,
-    layer_uid: i64,
-    document_uid: i64,
-    curve_nodes: Vec<FbxCurveNodeExport>,
-    curves: Vec<FbxCurveExport>,
-    connections: Vec<FbxConnection>,
+pub(crate) struct FbxExportData {
+    pub clip_name: String,
+    pub duration_ktime: i64,
+    pub bones: Vec<FbxBoneExport>,
+    pub stack_uid: i64,
+    pub layer_uid: i64,
+    pub document_uid: i64,
+    pub curve_nodes: Vec<FbxCurveNodeExport>,
+    pub curves: Vec<FbxCurveExport>,
+    pub connections: Vec<FbxConnection>,
 }
 
-fn seconds_to_ktime(seconds: f32) -> i64 {
+pub(crate) fn seconds_to_ktime(seconds: f32) -> i64 {
     (seconds as f64 * KTIME_ONE_SECOND) as i64
 }
 
@@ -133,7 +133,7 @@ fn convert_tangent_to_fbx_slope_weight(
     (slope, weight)
 }
 
-fn decompose_matrix_to_trs(m: &Matrix4<f32>) -> ([f64; 3], [f64; 3], [f64; 3]) {
+pub(crate) fn decompose_matrix_to_trs(m: &Matrix4<f32>) -> ([f64; 3], [f64; 3], [f64; 3]) {
     let tx = m[3][0] as f64;
     let ty = m[3][1] as f64;
     let tz = m[3][2] as f64;
@@ -181,18 +181,33 @@ fn validate_bone_names(
         .collect()
 }
 
-fn build_bone_export_list(
+pub(crate) fn build_bone_export_list(
     skeleton: &Skeleton,
     uid_alloc: &mut UidAllocator,
+    mesh_node_names: &std::collections::HashSet<String>,
 ) -> Vec<FbxBoneExport> {
-    let mut bones = Vec::with_capacity(skeleton.bones.len());
+    let mut bones = Vec::new();
+    let mut skeleton_idx_to_export_idx: Vec<Option<usize>> = Vec::with_capacity(skeleton.bones.len());
 
     for bone in &skeleton.bones {
+        if mesh_node_names.contains(&bone.name) {
+            skeleton_idx_to_export_idx.push(None);
+            continue;
+        }
+
+        let export_idx = bones.len();
+        skeleton_idx_to_export_idx.push(Some(export_idx));
+
         let model_uid = uid_alloc.allocate();
         let nodeattr_uid = uid_alloc.allocate();
         let is_root = bone.parent_id.is_none();
-        let (translation, rotation, scaling) =
-            decompose_matrix_to_trs(&bone.local_transform);
+
+        let export_transform = if is_root {
+            reverse_coord_conversion_for_export(&bone.local_transform)
+        } else {
+            bone.local_transform
+        };
+        let (translation, rotation, scaling) = decompose_matrix_to_trs(&export_transform);
 
         bones.push(FbxBoneExport {
             model_uid,
@@ -206,18 +221,34 @@ fn build_bone_export_list(
         });
     }
 
-    resolve_bone_parent_uids(&mut bones, skeleton);
+    resolve_bone_parent_uids(&mut bones, skeleton, &skeleton_idx_to_export_idx);
     bones
 }
 
-fn resolve_bone_parent_uids(bones: &mut [FbxBoneExport], skeleton: &Skeleton) {
+fn resolve_bone_parent_uids(
+    bones: &mut [FbxBoneExport],
+    skeleton: &Skeleton,
+    skeleton_idx_to_export_idx: &[Option<usize>],
+) {
     let model_uids: Vec<i64> = bones.iter().map(|b| b.model_uid).collect();
 
-    for (i, bone) in skeleton.bones.iter().enumerate() {
+    for (skel_idx, bone) in skeleton.bones.iter().enumerate() {
+        let Some(export_idx) = skeleton_idx_to_export_idx[skel_idx] else {
+            continue;
+        };
+
         if let Some(parent_id) = bone.parent_id {
-            bones[i].parent_model_uid = Some(model_uids[parent_id as usize]);
+            if let Some(parent_export_idx) = skeleton_idx_to_export_idx[parent_id as usize] {
+                bones[export_idx].parent_model_uid = Some(model_uids[parent_export_idx]);
+            }
         }
     }
+}
+
+fn reverse_coord_conversion_for_export(local_transform: &Matrix4<f32>) -> Matrix4<f32> {
+    use crate::math::coordinate_system::world_to_fbx;
+    let inv = world_to_fbx();
+    inv * *local_transform
 }
 
 fn build_key_attr_arrays(
@@ -272,7 +303,7 @@ fn build_key_attr_arrays(
     }
 }
 
-fn build_curve_export(curve: &PropertyCurve, uid: i64) -> FbxCurveExport {
+pub(crate) fn build_curve_export(curve: &PropertyCurve, uid: i64) -> FbxCurveExport {
     let key_times: Vec<i64> = curve
         .keyframes
         .iter()
@@ -308,7 +339,7 @@ fn build_curve_export(curve: &PropertyCurve, uid: i64) -> FbxCurveExport {
     }
 }
 
-fn build_channel_exports(
+pub(crate) fn build_channel_exports(
     curves: [&PropertyCurve; 3],
     bone_model_uid: i64,
     channel: FbxChannel,
@@ -418,7 +449,8 @@ fn build_export_data(
     }
 
     let mut uid_alloc = UidAllocator::new();
-    let bones = build_bone_export_list(skeleton, &mut uid_alloc);
+    let empty_set = std::collections::HashSet::new();
+    let bones = build_bone_export_list(skeleton, &mut uid_alloc, &empty_set);
 
     let stack_uid = uid_alloc.allocate();
     let layer_uid = uid_alloc.allocate();
@@ -490,7 +522,7 @@ fn build_export_data(
     Ok(data)
 }
 
-fn write_property_i32<W: Write + Seek>(
+pub(crate) fn write_property_i32<W: Write + Seek>(
     writer: &mut Writer<W>,
     name: &str,
     type1: &str,
@@ -509,7 +541,7 @@ fn write_property_i32<W: Write + Seek>(
     Ok(())
 }
 
-fn write_property_f64<W: Write + Seek>(
+pub(crate) fn write_property_f64<W: Write + Seek>(
     writer: &mut Writer<W>,
     name: &str,
     type1: &str,
@@ -528,7 +560,7 @@ fn write_property_f64<W: Write + Seek>(
     Ok(())
 }
 
-fn write_property_f64x3<W: Write + Seek>(
+pub(crate) fn write_property_f64x3<W: Write + Seek>(
     writer: &mut Writer<W>,
     name: &str,
     type1: &str,
@@ -551,7 +583,7 @@ fn write_property_f64x3<W: Write + Seek>(
     Ok(())
 }
 
-fn write_property_ktime<W: Write + Seek>(
+pub(crate) fn write_property_ktime<W: Write + Seek>(
     writer: &mut Writer<W>,
     name: &str,
     value: i64,
@@ -567,7 +599,7 @@ fn write_property_ktime<W: Write + Seek>(
     Ok(())
 }
 
-fn write_header_extension<W: Write + Seek>(
+pub(crate) fn write_header_extension<W: Write + Seek>(
     writer: &mut Writer<W>,
 ) -> FbxWriteResult<()> {
     drop(writer.new_node("FBXHeaderExtension")?);
@@ -597,7 +629,7 @@ fn write_header_extension<W: Write + Seek>(
     Ok(())
 }
 
-fn write_global_settings<W: Write + Seek>(
+pub(crate) fn write_global_settings<W: Write + Seek>(
     writer: &mut Writer<W>,
     duration_ktime: i64,
 ) -> FbxWriteResult<()> {
@@ -618,6 +650,7 @@ fn write_global_settings<W: Write + Seek>(
     write_property_i32(writer, "CoordAxis", "int", "Integer", "", 0)?;
     write_property_i32(writer, "CoordAxisSign", "int", "Integer", "", 1)?;
     write_property_f64(writer, "UnitScaleFactor", "double", "Number", "", 100.0)?;
+    write_property_i32(writer, "TimeMode", "enum", "", "", 6)?;
     write_property_f64(writer, "CustomFrameRate", "double", "Number", "", 30.0)?;
     write_property_ktime(writer, "TimeSpanStart", 0)?;
     write_property_ktime(writer, "TimeSpanStop", duration_ktime)?;
@@ -627,7 +660,7 @@ fn write_global_settings<W: Write + Seek>(
     Ok(())
 }
 
-fn write_documents<W: Write + Seek>(
+pub(crate) fn write_documents<W: Write + Seek>(
     writer: &mut Writer<W>,
     document_uid: i64,
 ) -> FbxWriteResult<()> {
@@ -661,13 +694,13 @@ fn write_documents<W: Write + Seek>(
     Ok(())
 }
 
-fn write_references<W: Write + Seek>(writer: &mut Writer<W>) -> FbxWriteResult<()> {
+pub(crate) fn write_references<W: Write + Seek>(writer: &mut Writer<W>) -> FbxWriteResult<()> {
     drop(writer.new_node("References")?);
     writer.close_node()?;
     Ok(())
 }
 
-fn write_object_type<W: Write + Seek>(
+pub(crate) fn write_object_type<W: Write + Seek>(
     writer: &mut Writer<W>,
     type_name: &str,
     count: i32,
@@ -732,7 +765,7 @@ fn write_definitions<W: Write + Seek>(
     Ok(())
 }
 
-fn write_bone_model<W: Write + Seek>(
+pub(crate) fn write_bone_model<W: Write + Seek>(
     writer: &mut Writer<W>,
     bone: &FbxBoneExport,
 ) -> FbxWriteResult<()> {
@@ -788,7 +821,7 @@ fn write_bone_model<W: Write + Seek>(
     Ok(())
 }
 
-fn write_bone_node_attribute<W: Write + Seek>(
+pub(crate) fn write_bone_node_attribute<W: Write + Seek>(
     writer: &mut Writer<W>,
     bone: &FbxBoneExport,
 ) -> FbxWriteResult<()> {
@@ -812,7 +845,7 @@ fn write_bone_node_attribute<W: Write + Seek>(
     Ok(())
 }
 
-fn write_anim_stack<W: Write + Seek>(
+pub(crate) fn write_anim_stack<W: Write + Seek>(
     writer: &mut Writer<W>,
     data: &FbxExportData,
 ) -> FbxWriteResult<()> {
@@ -834,7 +867,7 @@ fn write_anim_stack<W: Write + Seek>(
     Ok(())
 }
 
-fn write_anim_layer<W: Write + Seek>(
+pub(crate) fn write_anim_layer<W: Write + Seek>(
     writer: &mut Writer<W>,
     layer_uid: i64,
 ) -> FbxWriteResult<()> {
@@ -847,7 +880,7 @@ fn write_anim_layer<W: Write + Seek>(
     Ok(())
 }
 
-fn write_anim_curve_node<W: Write + Seek>(
+pub(crate) fn write_anim_curve_node<W: Write + Seek>(
     writer: &mut Writer<W>,
     cn: &FbxCurveNodeExport,
 ) -> FbxWriteResult<()> {
@@ -869,7 +902,7 @@ fn write_anim_curve_node<W: Write + Seek>(
     Ok(())
 }
 
-fn write_anim_curve<W: Write + Seek>(
+pub(crate) fn write_anim_curve<W: Write + Seek>(
     writer: &mut Writer<W>,
     curve: &FbxCurveExport,
 ) -> FbxWriteResult<()> {
@@ -961,7 +994,7 @@ fn write_objects<W: Write + Seek>(
     Ok(())
 }
 
-fn write_connections<W: Write + Seek>(
+pub(crate) fn write_connections<W: Write + Seek>(
     writer: &mut Writer<W>,
     data: &FbxExportData,
 ) -> FbxWriteResult<()> {

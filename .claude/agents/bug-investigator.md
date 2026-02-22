@@ -18,7 +18,7 @@ Follow this structured debugging process:
 
 ### Phase 1: Context Gathering
 1. Read `.claude/local/last-conversation.md` to understand the current working context.
-2. Read all files in `.claude/local/IssueHistory/` to check if this bug or a similar one has been encountered before. Never propose a solution that was already tried and failed unless circumstances have changed.
+2. Read all files in `IssueHistoryPath` to check if this bug or a similar one has been encountered before. Never propose a solution that was already tried and failed unless circumstances have changed.
 3. Understand the bug report thoroughly — what is expected vs. what is actually happening.
 4. Identify the affected subsystem (rendering, animation, ECS, model loading, UI, etc.).
 
@@ -82,7 +82,7 @@ Consider adding a **debug dump button** to the debug window (`platform/ui/debug_
 4. Check for regressions in related systems.
 
 ### Phase 7: Documentation
-1. Document the issue and its resolution in `.claude/local/IssueHistory/` following the project conventions:
+1. Document the issue and its resolution in `IssueHistoryPath` following the project conventions:
    - Use CamelCase file names.
    - Try to add to an existing relevant file before creating a new one.
    - Include a brief summary at the top of each file.

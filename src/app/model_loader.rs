@@ -16,9 +16,10 @@ use crate::asset::{AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
 use crate::debugview::gizmo::{BoneGizmoData, ConstraintGizmoData};
 use crate::ecs::component::{AnimationMeta, ClipSchedule, EntityIcon};
 use crate::ecs::resource::{
-    AnimationType, ClipLibrary, MeshAssets, ModelState, NodeAssets, TimelineState,
+    AnimationType, ClipLibrary, FbxModelCache, MeshAssets, ModelState, NodeAssets, TimelineState,
 };
 use crate::ecs::world::{Animator, Transform, World};
+use crate::loader::fbx::FbxModel;
 use crate::loader::texture::load_png_image;
 use crate::loader::{ModelLoadResult, TextureSource};
 use crate::render::MaterialUBO;
@@ -48,7 +49,7 @@ pub unsafe fn load_model_from_file_system(
 ) -> Result<()> {
     crate::log!("=== Loading model from path: {} ===", path);
 
-    let load_result = load_model_data(path)?;
+    let (load_result, fbx_model) = load_model_data(path)?;
 
     apply_model_to_resources(
         &load_result,
@@ -62,21 +63,22 @@ pub unsafe fn load_model_from_file_system(
         world,
         assets,
         scene_will_provide_clips,
+        fbx_model,
     )?;
 
     crate::log!("=== Model loaded successfully ===");
     Ok(())
 }
 
-unsafe fn load_model_data(path: &str) -> Result<ModelLoadResult> {
+unsafe fn load_model_data(path: &str) -> Result<(ModelLoadResult, Option<FbxModel>)> {
     let path_lower = path.to_lowercase();
 
     if path_lower.ends_with(".fbx") {
-        let result = crate::loader::fbx::load_fbx_to_graphics_resources(path)?;
-        Ok(ModelLoadResult::from_fbx(result))
+        let (result, fbx_model) = crate::loader::fbx::load_fbx_to_graphics_resources(path)?;
+        Ok((ModelLoadResult::from_fbx(result), Some(fbx_model)))
     } else if path_lower.ends_with(".gltf") || path_lower.ends_with(".glb") {
         let result = crate::loader::gltf::load_gltf_file(path);
-        Ok(ModelLoadResult::from_gltf(result))
+        Ok((ModelLoadResult::from_gltf(result), None))
     } else {
         Err(anyhow!(
             "Unsupported file format. Only FBX and glTF/GLB are supported."
@@ -96,8 +98,15 @@ unsafe fn apply_model_to_resources(
     world: &mut World,
     assets: &mut AssetStorage,
     scene_will_provide_clips: bool,
+    fbx_model: Option<FbxModel>,
 ) -> Result<()> {
     cleanup_resources(device, graphics, raytracing, world, assets)?;
+
+    if let Some(fbx) = fbx_model {
+        world.insert_resource(FbxModelCache::new(fbx, model_name.to_string()));
+    } else {
+        world.insert_resource(FbxModelCache::empty());
+    }
 
     let mesh_count = load_result.meshes.len();
     let reserved_scene_objects = 4;
@@ -217,6 +226,11 @@ unsafe fn cleanup_resources(
         timeline_state.current_time = 0.0;
         timeline_state.selected_keyframes.clear();
         timeline_state.expanded_tracks.clear();
+    }
+
+    if world.contains_resource::<FbxModelCache>() {
+        let mut cache = world.resource_mut::<FbxModelCache>();
+        cache.clear();
     }
 
     if world.contains_resource::<MeshAssets>() {

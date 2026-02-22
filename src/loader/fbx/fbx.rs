@@ -84,6 +84,7 @@ pub struct FbxData {
     pub clusters: Vec<ClusterInfo>,
     pub mesh_parts: Vec<MeshPart>,
     pub parent_node: Option<String>,
+    pub mesh_node_name: Option<String>,
     pub material_name: Option<String>,
     pub diffuse_texture: Option<String>,
 }
@@ -100,6 +101,7 @@ impl FbxData {
             clusters: Vec::new(),
             mesh_parts: Vec::new(),
             parent_node: None,
+            mesh_node_name: None,
             material_name: None,
             diffuse_texture: None,
         }
@@ -867,16 +869,23 @@ fn assign_mesh_parent_nodes(
         std::collections::HashSet::new()
     };
 
-    for (fbx_idx, fbx_data) in fbx_model.fbx_data.iter_mut().enumerate() {
-        if !fbx_data.clusters.is_empty() {
-            continue;
-        }
+    let mut name_usage_count: HashMap<String, usize> = HashMap::new();
 
+    for (fbx_idx, fbx_data) in fbx_model.fbx_data.iter_mut().enumerate() {
         let ufbx_id = split_infos.get(fbx_idx).map(|info| info.ufbx_mesh_typed_id);
 
         if let Some(id) = ufbx_id {
             if let Some(node_name) = mesh_to_node.get(&id) {
-                if !animated_nodes.is_empty() {
+                let count = name_usage_count.entry(node_name.clone()).or_insert(0);
+                let unique_name = if *count == 0 {
+                    node_name.clone()
+                } else {
+                    format!("{}_mat{}", node_name, count)
+                };
+                *count += 1;
+                fbx_data.mesh_node_name = Some(unique_name);
+
+                if fbx_data.clusters.is_empty() && !animated_nodes.is_empty() {
                     fbx_data.parent_node = Some(node_name.clone());
                 }
             }

@@ -13,8 +13,8 @@ use super::fbx_animation::{
     FbxBoneExport, FbxChannel, FbxConnection, FbxCurveExport, FbxCurveNodeExport, FbxExportData,
     FbxWriteResult, UidAllocator, build_bone_export_list, build_channel_exports,
     decompose_matrix_to_trs, seconds_to_ktime, write_anim_curve, write_anim_curve_node,
-    write_anim_layer, write_anim_stack, write_bone_model, write_bone_node_attribute,
-    write_connections, write_documents, write_global_settings, write_header_extension,
+    write_anim_layer, write_anim_stack, write_bone_model, write_connections,
+    write_documents, write_global_settings, write_header_extension,
     write_object_type, write_property_f64, write_property_f64x3, write_property_i32,
     write_references,
 };
@@ -546,11 +546,6 @@ fn matrix4_to_flat_f64_scaled(m: &Matrix4<f32>, inv_unit_scale: f32) -> [f64; 16
 
 fn generate_bone_connections(bones: &[FbxBoneExport], connections: &mut Vec<FbxConnection>) {
     for bone in bones {
-        connections.push(FbxConnection::OO {
-            child: bone.nodeattr_uid,
-            parent: bone.model_uid,
-        });
-
         let parent_uid = bone.parent_model_uid.unwrap_or(0);
         connections.push(FbxConnection::OO {
             child: bone.model_uid,
@@ -664,7 +659,6 @@ fn write_full_definitions<W: Write + Seek>(
 ) -> FbxWriteResult<()> {
     let model_count =
         data.anim_data.bones.len() as i32 + data.mesh_models.len() as i32;
-    let nodeattr_count = data.anim_data.bones.len() as i32;
     let geometry_count = data.geometries.len() as i32;
     let material_count = data.materials.len() as i32;
     let texture_count = data.textures.len() as i32;
@@ -674,7 +668,7 @@ fn write_full_definitions<W: Write + Seek>(
     let curve_node_count = data.anim_data.curve_nodes.len() as i32;
     let curve_count = data.anim_data.curves.len() as i32;
 
-    let total = 1 + model_count + nodeattr_count + geometry_count + material_count
+    let total = 1 + model_count + geometry_count + material_count
         + texture_count + video_count + deformer_count + sub_deformer_count
         + 1 + 1 + curve_node_count + curve_count;
 
@@ -696,7 +690,6 @@ fn write_full_definitions<W: Write + Seek>(
 
     write_object_type(writer, "GlobalSettings", 1)?;
     write_object_type(writer, "Model", model_count)?;
-    write_object_type(writer, "NodeAttribute", nodeattr_count)?;
 
     if geometry_count > 0 {
         write_object_type(writer, "Geometry", geometry_count)?;
@@ -1180,7 +1173,6 @@ fn write_full_objects<W: Write + Seek>(
 
     for bone in &data.anim_data.bones {
         write_bone_model(writer, bone)?;
-        write_bone_node_attribute(writer, bone)?;
     }
 
     for geo in &data.geometries {

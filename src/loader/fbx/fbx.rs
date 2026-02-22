@@ -1021,4 +1021,5 @@ mod tests {
 
         assert_eq!(model.fbx_data.len(), 1);
     }
+
 }

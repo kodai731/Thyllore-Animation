@@ -74,6 +74,7 @@ struct FullFbxExportData {
     materials: Vec<FbxMaterialExport>,
     textures: Vec<FbxTextureExport>,
     skins: Vec<FbxSkinExport>,
+    unit_scale: f32,
 }
 
 pub fn export_full_fbx(
@@ -213,6 +214,7 @@ fn build_full_export_data(
         materials,
         textures,
         skins,
+        unit_scale: fbx_model.unit_scale,
     })
 }
 
@@ -838,6 +840,7 @@ fn write_mesh_model<W: Write + Seek>(
 fn write_geometry<W: Write + Seek>(
     writer: &mut Writer<W>,
     geo: &FbxGeometryExport,
+    has_material: bool,
 ) -> FbxWriteResult<()> {
     let fbx_name = format!("\x00\x01Geometry");
     let mut attrs = writer.new_node("Geometry")?;
@@ -868,8 +871,12 @@ fn write_geometry<W: Write + Seek>(
         write_layer_element_uv(writer, &geo.uv_values, &geo.uv_indices)?;
     }
 
-    if !geo.normals.is_empty() || !geo.uv_values.is_empty() {
-        write_layer(writer, !geo.normals.is_empty(), !geo.uv_values.is_empty())?;
+    if has_material {
+        write_layer_element_material(writer)?;
+    }
+
+    if !geo.normals.is_empty() || !geo.uv_values.is_empty() || has_material {
+        write_layer(writer, !geo.normals.is_empty(), !geo.uv_values.is_empty(), has_material)?;
     }
 
     writer.close_node()?;
@@ -974,10 +981,55 @@ fn write_layer_element_uv<W: Write + Seek>(
     Ok(())
 }
 
+fn write_layer_element_material<W: Write + Seek>(
+    writer: &mut Writer<W>,
+) -> FbxWriteResult<()> {
+    drop(writer.new_node("LayerElementMaterial")?);
+
+    {
+        let mut va = writer.new_node("Version")?;
+        va.append_i32(101)?;
+        drop(va);
+        writer.close_node()?;
+    }
+
+    {
+        let mut va = writer.new_node("Name")?;
+        va.append_string_direct("")?;
+        drop(va);
+        writer.close_node()?;
+    }
+
+    {
+        let mut va = writer.new_node("MappingInformationType")?;
+        va.append_string_direct("AllSame")?;
+        drop(va);
+        writer.close_node()?;
+    }
+
+    {
+        let mut va = writer.new_node("ReferenceInformationType")?;
+        va.append_string_direct("IndexToDirect")?;
+        drop(va);
+        writer.close_node()?;
+    }
+
+    {
+        let mut va = writer.new_node("Materials")?;
+        va.append_arr_i32_from_iter(None, [0].iter().copied())?;
+        drop(va);
+        writer.close_node()?;
+    }
+
+    writer.close_node()?;
+    Ok(())
+}
+
 fn write_layer<W: Write + Seek>(
     writer: &mut Writer<W>,
     has_normal: bool,
     has_uv: bool,
+    has_material: bool,
 ) -> FbxWriteResult<()> {
     drop(writer.new_node("Layer")?);
 
@@ -1014,6 +1066,26 @@ fn write_layer<W: Write + Seek>(
         {
             let mut va = writer.new_node("Type")?;
             va.append_string_direct("LayerElementUV")?;
+            drop(va);
+            writer.close_node()?;
+        }
+
+        {
+            let mut va = writer.new_node("TypedIndex")?;
+            va.append_i32(0)?;
+            drop(va);
+            writer.close_node()?;
+        }
+
+        writer.close_node()?;
+    }
+
+    if has_material {
+        drop(writer.new_node("LayerElement")?);
+
+        {
+            let mut va = writer.new_node("Type")?;
+            va.append_string_direct("LayerElementMaterial")?;
             drop(va);
             writer.close_node()?;
         }
@@ -1234,8 +1306,9 @@ fn write_full_objects<W: Write + Seek>(
         write_bone_model(writer, bone)?;
     }
 
+    let has_material = !data.materials.is_empty();
     for geo in &data.geometries {
-        write_geometry(writer, geo)?;
+        write_geometry(writer, geo, has_material)?;
     }
 
     for mesh_model in &data.mesh_models {
@@ -1278,7 +1351,8 @@ fn write_full_fbx_binary<W: Write + Seek>(
     data: &FullFbxExportData,
 ) -> FbxWriteResult<()> {
     write_header_extension(&mut writer)?;
-    write_global_settings(&mut writer, data.anim_data.duration_ktime, &data.anim_data.axes, data.anim_data.fps)?;
+    let unit_scale_factor = (data.unit_scale * 100.0) as f64;
+    write_global_settings(&mut writer, data.anim_data.duration_ktime, &data.anim_data.axes, data.anim_data.fps, unit_scale_factor)?;
     write_documents(&mut writer, data.anim_data.document_uid)?;
     write_references(&mut writer)?;
     write_full_definitions(&mut writer, data)?;
@@ -1971,6 +2045,137 @@ mod tests {
         }
 
         eprintln!("  SUMMARY: bone-only animated={}, mesh-node animated={}", bone_only_animated, mesh_node_animated);
+    }
+
+    #[test]
+    fn test_fbx_roundtrip_skinned_fly() {
+        let original_path = "assets/models/phoenix-bird/source/fly.fbx";
+        if !std::path::Path::new(original_path).exists() {
+            eprintln!("Skipping: {} not found", original_path);
+            return;
+        }
+
+        let fbx_model = crate::loader::fbx::fbx::load_fbx_with_ufbx(original_path)
+            .expect("Failed to load original FBX");
+        let (load_result, _) =
+            crate::loader::fbx::loader::load_fbx_to_graphics_resources(original_path)
+                .expect("Failed to load graphics resources");
+
+        let skeleton = load_result
+            .animation_system
+            .get_skeleton(0)
+            .expect("No skeleton found")
+            .clone();
+
+        let export_dir = std::path::Path::new("assets/exports");
+        std::fs::create_dir_all(export_dir).ok();
+        let export_path = export_dir.join("roundtrip_skinned_fly.fbx");
+
+        export_full_fbx(&fbx_model, None, &skeleton, &export_path)
+            .expect("Failed to export FBX");
+
+        let original_scene = ufbx::load_file(original_path, ufbx::LoadOpts::default())
+            .expect("Failed to load original with ufbx");
+        let exported_scene =
+            ufbx::load_file(export_path.to_str().unwrap(), ufbx::LoadOpts::default())
+                .expect("Failed to load exported with ufbx");
+
+        assert!(
+            !exported_scene.meshes.is_empty(),
+            "Exported FBX should have at least one mesh",
+        );
+
+        assert!(
+            !exported_scene.materials.is_empty(),
+            "Exported FBX should have at least one material",
+        );
+
+        assert!(
+            !exported_scene.skin_clusters.is_empty(),
+            "Exported FBX should have skin clusters",
+        );
+
+        let orig_bone_names: std::collections::HashSet<String> = original_scene
+            .skin_clusters
+            .iter()
+            .filter_map(|c| c.bone_node.as_ref().map(|n| n.element.name.to_string()))
+            .collect();
+        let exp_bone_names: std::collections::HashSet<String> = exported_scene
+            .skin_clusters
+            .iter()
+            .filter_map(|c| c.bone_node.as_ref().map(|n| n.element.name.to_string()))
+            .collect();
+        let missing_bones: Vec<_> = orig_bone_names.difference(&exp_bone_names).collect();
+        assert!(
+            missing_bones.is_empty(),
+            "Missing bone references in exported clusters: {:?}",
+            missing_bones,
+        );
+
+        for exp_cluster in exported_scene.skin_clusters.iter() {
+            assert!(
+                exp_cluster.bone_node.is_some(),
+                "Exported cluster should have a bone_node reference",
+            );
+            assert!(
+                exp_cluster.num_weights > 0,
+                "Exported cluster should have vertex weights",
+            );
+        }
+
+        for exp_mesh in exported_scene.meshes.iter() {
+            assert!(
+                !exp_mesh.materials.is_empty(),
+                "Exported mesh should have at least one material reference",
+            );
+            assert!(
+                !exp_mesh.skin_deformers.is_empty(),
+                "Exported skinned mesh should have a skin deformer",
+            );
+        }
+
+        assert!(
+            (original_scene.settings.unit_meters - exported_scene.settings.unit_meters).abs() < 1e-6,
+            "UnitScaleFactor mismatch: original unit_meters={}, exported unit_meters={}",
+            original_scene.settings.unit_meters,
+            exported_scene.settings.unit_meters,
+        );
+
+        let orig_g2b_map: std::collections::HashMap<String, &ufbx::Matrix> = original_scene
+            .skin_clusters
+            .iter()
+            .filter_map(|c| {
+                c.bone_node
+                    .as_ref()
+                    .map(|n| (n.element.name.to_string(), &c.geometry_to_bone))
+            })
+            .collect();
+
+        for exp_cluster in exported_scene.skin_clusters.iter() {
+            let bone_name = exp_cluster
+                .bone_node
+                .as_ref()
+                .map(|n| n.element.name.to_string())
+                .unwrap_or_default();
+
+            if let Some(&orig_g2b) = orig_g2b_map.get(&bone_name) {
+                let diff = (orig_g2b.m03 - exp_cluster.geometry_to_bone.m03).abs()
+                    + (orig_g2b.m13 - exp_cluster.geometry_to_bone.m13).abs()
+                    + (orig_g2b.m23 - exp_cluster.geometry_to_bone.m23).abs();
+                assert!(
+                    diff < 0.1,
+                    "geometry_to_bone translation mismatch for bone '{}': \
+                     orig=[{:.4}, {:.4}, {:.4}], exp=[{:.4}, {:.4}, {:.4}]",
+                    bone_name,
+                    orig_g2b.m03, orig_g2b.m13, orig_g2b.m23,
+                    exp_cluster.geometry_to_bone.m03,
+                    exp_cluster.geometry_to_bone.m13,
+                    exp_cluster.geometry_to_bone.m23,
+                );
+            }
+        }
+
+        std::fs::remove_file(&export_path).ok();
     }
 
     fn print_anim_prop_connections(label: &str, scene: &ufbx::Scene) {

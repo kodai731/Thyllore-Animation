@@ -695,6 +695,7 @@ pub(crate) fn write_global_settings<W: Write + Seek>(
     duration_ktime: i64,
     axes: &FbxAxesInfo,
     fps: f32,
+    unit_scale_factor: f64,
 ) -> FbxWriteResult<()> {
     drop(writer.new_node("GlobalSettings")?);
 
@@ -714,7 +715,7 @@ pub(crate) fn write_global_settings<W: Write + Seek>(
     write_property_i32(writer, "FrontAxisSign", "int", "Integer", "", axes.front_axis_sign)?;
     write_property_i32(writer, "CoordAxis", "int", "Integer", "", axes.coord_axis)?;
     write_property_i32(writer, "CoordAxisSign", "int", "Integer", "", axes.coord_axis_sign)?;
-    write_property_f64(writer, "UnitScaleFactor", "double", "Number", "", 1.0)?;
+    write_property_f64(writer, "UnitScaleFactor", "double", "Number", "", unit_scale_factor)?;
     write_property_i32(writer, "TimeMode", "enum", "", "", time_mode)?;
     write_property_f64(writer, "CustomFrameRate", "double", "Number", "", fps as f64)?;
     write_property_ktime(writer, "TimeSpanStart", 0)?;
@@ -1072,7 +1073,7 @@ fn write_fbx_binary<W: Write + Seek>(
     data: &FbxExportData,
 ) -> FbxWriteResult<()> {
     write_header_extension(&mut writer)?;
-    write_global_settings(&mut writer, data.duration_ktime, &data.axes, data.fps)?;
+    write_global_settings(&mut writer, data.duration_ktime, &data.axes, data.fps, 1.0)?;
     write_documents(&mut writer, data.document_uid)?;
     write_references(&mut writer)?;
     write_definitions(&mut writer, data)?;

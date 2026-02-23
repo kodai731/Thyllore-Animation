@@ -495,11 +495,11 @@ fn build_mesh_node_mapping(scene: &ufbx::Scene) -> HashMap<usize, String> {
 
 fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel, unit_scale: f32) {
     for anim_stack in &scene.anim_stacks {
-        let anim_name = anim_stack.element.name.to_string();
-        let anim_name = if anim_name.is_empty() {
+        let raw_name = anim_stack.element.name.to_string();
+        let anim_name = if raw_name.is_empty() {
             "DefaultAnimation".to_string()
         } else {
-            anim_name
+            raw_name.replace('|', "-")
         };
 
         log!("Processing AnimStack: {}", anim_name);

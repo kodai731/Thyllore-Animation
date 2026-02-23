@@ -16,8 +16,10 @@ first (equivalent to `/plan-fix`) to avoid redundant agent launches.
 ## Usage
 
 ```
-/implement-fix .claude/local/IssueHistory/SomeIssue.md
+/implement-fix ${IssueHistoryPath}/SomeIssue.md
 ```
+
+Note: All `${...Path}` variables must be resolved by reading `.claude/local/paths.md` at PROJECT_ROOT, which contains absolute paths. Do NOT use relative paths from CLAUDE.md.
 
 ## Preconditions
 

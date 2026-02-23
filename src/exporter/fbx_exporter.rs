@@ -99,7 +99,7 @@ fn build_full_export_data(
     clip: Option<&EditableAnimationClip>,
     skeleton: &Skeleton,
 ) -> anyhow::Result<FullFbxExportData> {
-    let inv_unit_scale = 1.0_f32;
+    let inv_unit_scale = 1.0_f32 / fbx_model.unit_scale;
 
     let mesh_node_names: std::collections::HashSet<String> = fbx_model
         .fbx_data
@@ -107,8 +107,16 @@ fn build_full_export_data(
         .filter_map(|d| d.mesh_node_name.clone())
         .collect();
 
+    let needs_coord_conversion = fbx_model.fbx_data.iter().any(|d| !d.clusters.is_empty());
+
     let mut uid_alloc = UidAllocator::new();
-    let bones = build_bone_export_list(skeleton, &mut uid_alloc, &mesh_node_names);
+    let bones = build_bone_export_list(
+        skeleton,
+        &mut uid_alloc,
+        &mesh_node_names,
+        inv_unit_scale,
+        needs_coord_conversion,
+    );
 
     let stack_uid = uid_alloc.allocate();
     let layer_uid = uid_alloc.allocate();
@@ -145,6 +153,7 @@ fn build_full_export_data(
         &name_to_model_uid,
         &fbx_model.nodes,
         &mut uid_alloc,
+        inv_unit_scale,
     );
 
     for mesh_model in &mesh_models {
@@ -152,7 +161,7 @@ fn build_full_export_data(
     }
 
     let (curve_nodes, curves) =
-        build_animation_curves(clip, &name_to_model_uid, &mut uid_alloc);
+        build_animation_curves(clip, &name_to_model_uid, &mut uid_alloc, inv_unit_scale);
 
     let materials = build_material_exports(&fbx_model.fbx_data, &mesh_models, &mut uid_alloc);
     let textures = build_texture_exports(&fbx_model.fbx_data, &materials, &mut uid_alloc);
@@ -208,6 +217,7 @@ fn build_animation_curves(
     clip: Option<&EditableAnimationClip>,
     bone_name_to_model_uid: &std::collections::HashMap<String, i64>,
     uid_alloc: &mut UidAllocator,
+    inv_unit_scale: f32,
 ) -> (Vec<FbxCurveNodeExport>, Vec<FbxCurveExport>) {
     let mut curve_nodes = Vec::new();
     let mut curves = Vec::new();
@@ -231,6 +241,7 @@ fn build_animation_curves(
             bone_model_uid,
             FbxChannel::Translation,
             uid_alloc,
+            inv_unit_scale,
         ) {
             curve_nodes.push(node);
             curves.extend(node_curves);
@@ -241,6 +252,7 @@ fn build_animation_curves(
             bone_model_uid,
             FbxChannel::Rotation,
             uid_alloc,
+            inv_unit_scale,
         ) {
             curve_nodes.push(node);
             curves.extend(node_curves);
@@ -251,6 +263,7 @@ fn build_animation_curves(
             bone_model_uid,
             FbxChannel::Scale,
             uid_alloc,
+            inv_unit_scale,
         ) {
             curve_nodes.push(node);
             curves.extend(node_curves);
@@ -353,8 +366,11 @@ fn build_mesh_model_exports(
     bone_name_to_model_uid: &std::collections::HashMap<String, i64>,
     nodes: &std::collections::HashMap<String, crate::loader::fbx::fbx::BoneNode>,
     uid_alloc: &mut UidAllocator,
+    inv_unit_scale: f32,
 ) -> Vec<FbxMeshModelExport> {
     let mut mesh_models = Vec::new();
+    let mut mesh_name_to_uid: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+    let scale = inv_unit_scale as f64;
 
     for (i, fbx_data) in fbx_data_list.iter().enumerate() {
         let uid = if i < geometries.len() {
@@ -368,31 +384,64 @@ fn build_mesh_model_exports(
             .clone()
             .unwrap_or_else(|| format!("MeshModel_{}", i));
 
-        let parent_bone_uid = fbx_data
-            .mesh_node_name
-            .as_ref()
-            .and_then(|name| nodes.get(name))
-            .and_then(|node| node.parent.as_ref())
-            .and_then(|parent| bone_name_to_model_uid.get(parent.as_str()).copied());
+        mesh_name_to_uid.insert(mesh_name.clone(), uid);
 
-        let (translation, rotation, scaling) = fbx_data
+        let (mut translation, rotation, scaling) = fbx_data
             .mesh_node_name
             .as_ref()
             .and_then(|name| nodes.get(name))
             .map(|node| decompose_matrix_to_trs(&node.local_transform))
             .unwrap_or(([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]));
 
+        translation[0] *= scale;
+        translation[1] *= scale;
+        translation[2] *= scale;
+
         mesh_models.push(FbxMeshModelExport {
             uid,
             name: mesh_name,
-            parent_bone_uid,
+            parent_bone_uid: None,
             translation,
             rotation,
             scaling,
         });
     }
 
+    resolve_mesh_parent_uids(
+        &mut mesh_models,
+        fbx_data_list,
+        nodes,
+        bone_name_to_model_uid,
+        &mesh_name_to_uid,
+    );
+
     mesh_models
+}
+
+fn resolve_mesh_parent_uids(
+    mesh_models: &mut [FbxMeshModelExport],
+    fbx_data_list: &[FbxData],
+    nodes: &std::collections::HashMap<String, crate::loader::fbx::fbx::BoneNode>,
+    bone_name_to_model_uid: &std::collections::HashMap<String, i64>,
+    mesh_name_to_uid: &std::collections::HashMap<String, i64>,
+) {
+    for (i, fbx_data) in fbx_data_list.iter().enumerate() {
+        let parent_uid = fbx_data
+            .mesh_node_name
+            .as_ref()
+            .and_then(|name| nodes.get(name))
+            .and_then(|node| node.parent.as_ref())
+            .and_then(|parent| {
+                bone_name_to_model_uid
+                    .get(parent.as_str())
+                    .or_else(|| mesh_name_to_uid.get(parent.as_str()))
+                    .copied()
+            });
+
+        if i < mesh_models.len() {
+            mesh_models[i].parent_bone_uid = parent_uid;
+        }
+    }
 }
 
 fn build_material_exports(
@@ -623,6 +672,11 @@ fn generate_animation_connections(
     curve_nodes: &[FbxCurveNodeExport],
     connections: &mut Vec<FbxConnection>,
 ) {
+    connections.push(FbxConnection::OO {
+        child: stack_uid,
+        parent: 0,
+    });
+
     connections.push(FbxConnection::OO {
         child: layer_uid,
         parent: stack_uid,

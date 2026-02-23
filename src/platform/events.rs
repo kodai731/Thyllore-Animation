@@ -974,12 +974,12 @@ fn process_clip_browser_events_inline(events: &[UIEvent], app: &mut App) {
                             .data
                             .ecs_world
                             .contains_resource::<crate::ecs::resource::FbxModelCache>();
-                        let fbx_model_ref = if has_fbx_cache {
+                        let (fbx_model_ref, needs_coord_conversion) = if has_fbx_cache {
                             let cache =
                                 app.data.ecs_world.resource::<crate::ecs::resource::FbxModelCache>();
-                            cache.fbx_model.clone()
+                            (cache.fbx_model.clone(), cache.needs_coord_conversion)
                         } else {
-                            None
+                            (None, false)
                         };
 
                         let result = if let Some(ref fbx_model) = fbx_model_ref {
@@ -988,7 +988,7 @@ fn process_clip_browser_events_inline(events: &[UIEvent], app: &mut App) {
                             )
                         } else {
                             crate::exporter::fbx_animation::export_animation_fbx(
-                                &clip, &skeleton, &path,
+                                &clip, &skeleton, &path, needs_coord_conversion,
                             )
                         };
 

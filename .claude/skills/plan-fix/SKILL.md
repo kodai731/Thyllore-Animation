@@ -12,8 +12,10 @@ Takes an investigated issue MD file and appends a detailed, actionable fix plan 
 ## Usage
 
 ```
-/plan-fix .claude/local/IssueHistory/SomeIssue.md
+/plan-fix ${IssueHistoryPath}/SomeIssue.md
 ```
+
+Note: All `${...Path}` variables must be resolved by reading `.claude/local/paths.md` at PROJECT_ROOT, which contains absolute paths. Do NOT use relative paths from CLAUDE.md.
 
 ## Execution Flow
 

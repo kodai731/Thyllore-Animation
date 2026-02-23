@@ -156,12 +156,9 @@ let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
 
 ## Path
 
-MUST follow these file paths. All documentation for this project lives under `Rust_Rendering/`.
-
-- ${SharedDataPath}: ../SharedData
-- ${DocumentPath}: ../SharedData/document/Rust_Rendering
-- ${ExploreHistoryPath}: ../SharedData/document/Rust_Rendering/ExploreHistory
-- ${IssueHistoryPath}: ../SharedData/document/Rust_Rendering/IssueHistory
+**IMPORTANT:** All `${...Path}` variables MUST be resolved by reading `.claude/local/paths.md`.
+This file contains the absolute paths for this machine. Agents and subagents MUST read it before using any path variable.
+Do NOT resolve relative paths manually — always use the absolute paths from `.claude/local/paths.md`.
 
 ## Document
 

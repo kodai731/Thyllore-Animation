@@ -184,6 +184,8 @@ pub(crate) fn build_bone_export_list(
     skeleton: &Skeleton,
     uid_alloc: &mut UidAllocator,
     mesh_node_names: &std::collections::HashSet<String>,
+    inv_unit_scale: f32,
+    needs_coord_conversion: bool,
 ) -> Vec<FbxBoneExport> {
     let mut bones = Vec::new();
     let mut skeleton_idx_to_export_idx: Vec<Option<usize>> = Vec::with_capacity(skeleton.bones.len());
@@ -200,12 +202,24 @@ pub(crate) fn build_bone_export_list(
         let model_uid = uid_alloc.allocate();
         let is_root = bone.parent_id.is_none();
 
-        let export_transform = if is_root {
+        let is_root_or_root_child = bone.parent_id.is_none()
+            || bone.name == "RootNode"
+            || bone
+                .parent_id
+                .and_then(|pid| skeleton.get_bone(pid))
+                .map_or(false, |parent| parent.name == "RootNode");
+
+        let export_transform = if needs_coord_conversion && is_root_or_root_child {
             reverse_coord_conversion_for_export(&bone.local_transform)
         } else {
             bone.local_transform
         };
-        let (translation, rotation, scaling) = decompose_matrix_to_trs(&export_transform);
+        let (mut translation, rotation, scaling) = decompose_matrix_to_trs(&export_transform);
+
+        let scale = inv_unit_scale as f64;
+        translation[0] *= scale;
+        translation[1] *= scale;
+        translation[2] *= scale;
 
         bones.push(FbxBoneExport {
             model_uid,
@@ -300,19 +314,27 @@ fn build_key_attr_arrays(
     }
 }
 
-pub(crate) fn build_curve_export(curve: &PropertyCurve, uid: i64) -> FbxCurveExport {
+pub(crate) fn build_curve_export(
+    curve: &PropertyCurve,
+    uid: i64,
+    value_scale: f32,
+) -> FbxCurveExport {
     let key_times: Vec<i64> = curve
         .keyframes
         .iter()
         .map(|kf| seconds_to_ktime(kf.time))
         .collect();
 
-    let key_values: Vec<f32> = curve.keyframes.iter().map(|kf| kf.value).collect();
+    let key_values: Vec<f32> = curve
+        .keyframes
+        .iter()
+        .map(|kf| kf.value * value_scale)
+        .collect();
 
     let default_value = curve
         .keyframes
         .first()
-        .map(|kf| kf.value as f64)
+        .map(|kf| kf.value as f64 * value_scale as f64)
         .unwrap_or(0.0);
 
     let mut key_attr_flags = Vec::new();
@@ -341,11 +363,17 @@ pub(crate) fn build_channel_exports(
     bone_model_uid: i64,
     channel: FbxChannel,
     uid_alloc: &mut UidAllocator,
+    inv_unit_scale: f32,
 ) -> Option<(FbxCurveNodeExport, Vec<FbxCurveExport>)> {
     let has_any = curves.iter().any(|c| !c.is_empty());
     if !has_any {
         return None;
     }
+
+    let value_scale = match channel {
+        FbxChannel::Translation => inv_unit_scale,
+        FbxChannel::Rotation | FbxChannel::Scale => 1.0,
+    };
 
     let curvenode_uid = uid_alloc.allocate();
     let mut curve_uids: [Option<i64>; 3] = [None; 3];
@@ -355,25 +383,26 @@ pub(crate) fn build_channel_exports(
         if !curve.is_empty() {
             let curve_uid = uid_alloc.allocate();
             curve_uids[i] = Some(curve_uid);
-            curve_exports.push(build_curve_export(curve, curve_uid));
+            curve_exports.push(build_curve_export(curve, curve_uid, value_scale));
         }
     }
 
+    let scale_f64 = value_scale as f64;
     let default_values = [
         curves[0]
             .keyframes
             .first()
-            .map(|k| k.value as f64)
+            .map(|k| k.value as f64 * scale_f64)
             .unwrap_or(0.0),
         curves[1]
             .keyframes
             .first()
-            .map(|k| k.value as f64)
+            .map(|k| k.value as f64 * scale_f64)
             .unwrap_or(0.0),
         curves[2]
             .keyframes
             .first()
-            .map(|k| k.value as f64)
+            .map(|k| k.value as f64 * scale_f64)
             .unwrap_or(0.0),
     ];
 
@@ -398,6 +427,11 @@ fn generate_connections(data: &mut FbxExportData) {
             parent: parent_uid,
         });
     }
+
+    conns.push(FbxConnection::OO {
+        child: data.stack_uid,
+        parent: 0,
+    });
 
     conns.push(FbxConnection::OO {
         child: data.layer_uid,
@@ -434,15 +468,24 @@ fn generate_connections(data: &mut FbxExportData) {
 fn build_export_data(
     clip: &EditableAnimationClip,
     skeleton: &Skeleton,
+    needs_coord_conversion: bool,
 ) -> anyhow::Result<FbxExportData> {
     let missing = validate_bone_names(clip, skeleton);
     if !missing.is_empty() {
         anyhow::bail!("Bone name mismatch. Missing bones: {:?}", missing);
     }
 
+    let inv_unit_scale = 100.0_f32;
+
     let mut uid_alloc = UidAllocator::new();
     let empty_set = std::collections::HashSet::new();
-    let bones = build_bone_export_list(skeleton, &mut uid_alloc, &empty_set);
+    let bones = build_bone_export_list(
+        skeleton,
+        &mut uid_alloc,
+        &empty_set,
+        inv_unit_scale,
+        needs_coord_conversion,
+    );
 
     let stack_uid = uid_alloc.allocate();
     let layer_uid = uid_alloc.allocate();
@@ -472,6 +515,7 @@ fn build_export_data(
             bone_model_uid,
             FbxChannel::Translation,
             &mut uid_alloc,
+            inv_unit_scale,
         ) {
             curve_nodes.push(node);
             curves.extend(node_curves);
@@ -482,6 +526,7 @@ fn build_export_data(
             bone_model_uid,
             FbxChannel::Rotation,
             &mut uid_alloc,
+            inv_unit_scale,
         ) {
             curve_nodes.push(node);
             curves.extend(node_curves);
@@ -492,6 +537,7 @@ fn build_export_data(
             bone_model_uid,
             FbxChannel::Scale,
             &mut uid_alloc,
+            inv_unit_scale,
         ) {
             curve_nodes.push(node);
             curves.extend(node_curves);
@@ -635,13 +681,13 @@ pub(crate) fn write_global_settings<W: Write + Seek>(
     }
 
     drop(writer.new_node("Properties70")?);
-    write_property_i32(writer, "UpAxis", "int", "Integer", "", 1)?;
+    write_property_i32(writer, "UpAxis", "int", "Integer", "", 2)?;
     write_property_i32(writer, "UpAxisSign", "int", "Integer", "", 1)?;
-    write_property_i32(writer, "FrontAxis", "int", "Integer", "", 2)?;
+    write_property_i32(writer, "FrontAxis", "int", "Integer", "", 1)?;
     write_property_i32(writer, "FrontAxisSign", "int", "Integer", "", 1)?;
     write_property_i32(writer, "CoordAxis", "int", "Integer", "", 0)?;
     write_property_i32(writer, "CoordAxisSign", "int", "Integer", "", 1)?;
-    write_property_f64(writer, "UnitScaleFactor", "double", "Number", "", 100.0)?;
+    write_property_f64(writer, "UnitScaleFactor", "double", "Number", "", 1.0)?;
     write_property_i32(writer, "TimeMode", "enum", "", "", 6)?;
     write_property_f64(writer, "CustomFrameRate", "double", "Number", "", 30.0)?;
     write_property_ktime(writer, "TimeSpanStart", 0)?;
@@ -1013,8 +1059,9 @@ pub fn export_animation_fbx(
     clip: &EditableAnimationClip,
     skeleton: &Skeleton,
     path: &Path,
+    needs_coord_conversion: bool,
 ) -> anyhow::Result<()> {
-    let export_data = build_export_data(clip, skeleton)?;
+    let export_data = build_export_data(clip, skeleton, needs_coord_conversion)?;
 
     let file = std::fs::File::create(path)?;
     let writer = Writer::new(file, FbxVersion::V7_4)
@@ -1135,5 +1182,77 @@ mod tests {
         let missing = validate_bone_names(&clip, &skeleton);
         assert_eq!(missing.len(), 1);
         assert_eq!(missing[0], "NonExistent");
+    }
+
+    #[test]
+    fn test_coord_conversion_roundtrip() {
+        use crate::math::coordinate_system::{fbx_to_world, world_to_fbx};
+        use cgmath::SquareMatrix;
+
+        let original = Matrix4::from_translation(Vector3::new(1.0, 2.0, 3.0));
+        let roundtrip = world_to_fbx() * fbx_to_world() * original;
+
+        for col in 0..4 {
+            for row in 0..4 {
+                assert!(
+                    (roundtrip[col][row] - original[col][row]).abs() < 1e-5,
+                    "Mismatch at [{col}][{row}]: {} vs {}",
+                    roundtrip[col][row],
+                    original[col][row]
+                );
+            }
+        }
+    }
+
+    fn build_test_skeleton_with_rootnode() -> Skeleton {
+        let mut skeleton = Skeleton::new("test");
+        skeleton.add_bone("RootNode", None);
+        skeleton.add_bone("Armature", Some(0));
+        skeleton.add_bone("Hips", Some(1));
+        skeleton.add_bone("Spine", Some(2));
+        skeleton
+    }
+
+    #[test]
+    fn test_build_bone_export_list_with_coord_conversion() {
+        let skeleton = build_test_skeleton_with_rootnode();
+        let mut uid_alloc = UidAllocator::new();
+        let empty_set = std::collections::HashSet::new();
+
+        let bones_with = build_bone_export_list(
+            &skeleton, &mut uid_alloc, &empty_set, 1.0, true,
+        );
+        let mut uid_alloc2 = UidAllocator::new();
+        let bones_without = build_bone_export_list(
+            &skeleton, &mut uid_alloc2, &empty_set, 1.0, false,
+        );
+
+        let hips_with = bones_with.iter().find(|b| b.name == "Hips").unwrap();
+        let hips_without = bones_without.iter().find(|b| b.name == "Hips").unwrap();
+        assert_eq!(hips_with.translation, hips_without.translation);
+        assert_eq!(hips_with.rotation, hips_without.rotation);
+
+        let rootnode_with = bones_with.iter().find(|b| b.name == "RootNode").unwrap();
+        let rootnode_without = bones_without.iter().find(|b| b.name == "RootNode").unwrap();
+        assert_eq!(rootnode_without.translation, [0.0, 0.0, 0.0]);
+        assert_eq!(rootnode_with.translation, rootnode_without.translation);
+    }
+
+    #[test]
+    fn test_build_bone_export_list_without_coord_conversion() {
+        let skeleton = build_test_skeleton_with_rootnode();
+        let mut uid_alloc = UidAllocator::new();
+        let empty_set = std::collections::HashSet::new();
+
+        let bones = build_bone_export_list(
+            &skeleton, &mut uid_alloc, &empty_set, 1.0, false,
+        );
+
+        assert_eq!(bones.len(), 4);
+        for bone in &bones {
+            assert_eq!(bone.translation, [0.0, 0.0, 0.0]);
+            assert_eq!(bone.rotation, [0.0, 0.0, 0.0]);
+            assert_eq!(bone.scaling, [1.0, 1.0, 1.0]);
+        }
     }
 }

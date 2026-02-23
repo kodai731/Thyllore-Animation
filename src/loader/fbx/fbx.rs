@@ -23,13 +23,65 @@ pub struct BoneNode {
     pub default_scaling: [f32; 3],
 }
 
+#[derive(Clone, Debug)]
+pub struct FbxAxesInfo {
+    pub up_axis: i32,
+    pub up_axis_sign: i32,
+    pub front_axis: i32,
+    pub front_axis_sign: i32,
+    pub coord_axis: i32,
+    pub coord_axis_sign: i32,
+}
+
+impl Default for FbxAxesInfo {
+    fn default() -> Self {
+        Self {
+            up_axis: 1,
+            up_axis_sign: 1,
+            front_axis: 2,
+            front_axis_sign: 1,
+            coord_axis: 0,
+            coord_axis_sign: 1,
+        }
+    }
+}
+
+fn convert_coordinate_axis(axis: ufbx::CoordinateAxis) -> (i32, i32) {
+    match axis {
+        ufbx::CoordinateAxis::PositiveX => (0, 1),
+        ufbx::CoordinateAxis::NegativeX => (0, -1),
+        ufbx::CoordinateAxis::PositiveY => (1, 1),
+        ufbx::CoordinateAxis::NegativeY => (1, -1),
+        ufbx::CoordinateAxis::PositiveZ => (2, 1),
+        ufbx::CoordinateAxis::NegativeZ => (2, -1),
+        ufbx::CoordinateAxis::Unknown => (1, 1),
+    }
+}
+
+fn read_axes_from_scene(settings: &ufbx::SceneSettings) -> FbxAxesInfo {
+    let (up_axis, up_axis_sign) = convert_coordinate_axis(settings.axes.up);
+    let (front_axis, front_axis_sign) = convert_coordinate_axis(settings.axes.front);
+    let (coord_axis, coord_axis_sign) = convert_coordinate_axis(settings.axes.right);
+
+    FbxAxesInfo {
+        up_axis,
+        up_axis_sign,
+        front_axis,
+        front_axis_sign,
+        coord_axis,
+        coord_axis_sign,
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct FbxModel {
     pub fbx_data: Vec<FbxData>,
     pub animations: Vec<FbxAnimation>,
     pub nodes: HashMap<String, BoneNode>,
     pub unit_scale: f32,
+    pub fps: f32,
     pub constraints: Vec<LoadedConstraint>,
+    pub axes: FbxAxesInfo,
 }
 
 #[derive(Clone, Debug)]
@@ -196,8 +248,20 @@ pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
         );
     }
 
+    let axes = read_axes_from_scene(&scene.settings);
+    log!(
+        "FBX axes: up={}(sign={}), front={}(sign={}), coord={}(sign={})",
+        axes.up_axis, axes.up_axis_sign,
+        axes.front_axis, axes.front_axis_sign,
+        axes.coord_axis, axes.coord_axis_sign
+    );
+
+    let fps = scene.settings.frames_per_second as f32;
+
     let mut fbx_model = FbxModel {
         unit_scale,
+        fps,
+        axes,
         ..Default::default()
     };
 

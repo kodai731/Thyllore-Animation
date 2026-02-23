@@ -10,6 +10,7 @@ use crate::animation::editable::{
     BezierHandle, EditableAnimationClip, EditableKeyframe, InterpolationType,
     PropertyCurve,
 };
+use crate::loader::fbx::fbx::FbxAxesInfo;
 
 pub(crate) type FbxWriteResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -58,8 +59,10 @@ impl FbxChannel {
 
 pub(crate) struct FbxBoneExport {
     pub model_uid: i64,
+    pub node_attr_uid: i64,
     pub name: String,
     pub is_root: bool,
+    pub is_armature_root: bool,
     pub parent_model_uid: Option<i64>,
     pub translation: [f64; 3],
     pub rotation: [f64; 3],
@@ -92,6 +95,9 @@ pub(crate) enum FbxConnection {
 pub(crate) struct FbxExportData {
     pub clip_name: String,
     pub duration_ktime: i64,
+    pub needs_coord_conversion: bool,
+    pub axes: FbxAxesInfo,
+    pub fps: f32,
     pub bones: Vec<FbxBoneExport>,
     pub stack_uid: i64,
     pub layer_uid: i64,
@@ -200,6 +206,7 @@ pub(crate) fn build_bone_export_list(
         skeleton_idx_to_export_idx.push(Some(export_idx));
 
         let model_uid = uid_alloc.allocate();
+        let node_attr_uid = uid_alloc.allocate();
         let is_root = bone.parent_id.is_none();
 
         let is_root_or_root_child = bone.parent_id.is_none()
@@ -223,8 +230,10 @@ pub(crate) fn build_bone_export_list(
 
         bones.push(FbxBoneExport {
             model_uid,
+            node_attr_uid,
             name: bone.name.clone(),
             is_root,
+            is_armature_root: false,
             parent_model_uid: None,
             translation,
             rotation,
@@ -232,8 +241,32 @@ pub(crate) fn build_bone_export_list(
         });
     }
 
+    mark_armature_roots(&mut bones, skeleton, &skeleton_idx_to_export_idx);
     resolve_bone_parent_uids(&mut bones, skeleton, &skeleton_idx_to_export_idx);
     bones
+}
+
+fn mark_armature_roots(
+    bones: &mut [FbxBoneExport],
+    skeleton: &Skeleton,
+    skeleton_idx_to_export_idx: &[Option<usize>],
+) {
+    for (skel_idx, skel_bone) in skeleton.bones.iter().enumerate() {
+        let Some(export_idx) = skeleton_idx_to_export_idx[skel_idx] else {
+            continue;
+        };
+
+        if !bones[export_idx].is_root {
+            continue;
+        }
+
+        let has_exported_children = skeleton.bones.iter().enumerate().any(|(child_idx, child)| {
+            child.parent_id == Some(skel_idx as u32)
+                && skeleton_idx_to_export_idx[child_idx].is_some()
+        });
+
+        bones[export_idx].is_armature_root = has_exported_children;
+    }
 }
 
 fn resolve_bone_parent_uids(
@@ -426,6 +459,11 @@ fn generate_connections(data: &mut FbxExportData) {
             child: bone.model_uid,
             parent: parent_uid,
         });
+
+        conns.push(FbxConnection::OO {
+            child: bone.node_attr_uid,
+            parent: bone.model_uid,
+        });
     }
 
     conns.push(FbxConnection::OO {
@@ -469,6 +507,8 @@ fn build_export_data(
     clip: &EditableAnimationClip,
     skeleton: &Skeleton,
     needs_coord_conversion: bool,
+    axes: FbxAxesInfo,
+    fps: f32,
 ) -> anyhow::Result<FbxExportData> {
     let missing = validate_bone_names(clip, skeleton);
     if !missing.is_empty() {
@@ -547,6 +587,9 @@ fn build_export_data(
     let mut data = FbxExportData {
         clip_name: clip.name.clone(),
         duration_ktime,
+        needs_coord_conversion,
+        axes,
+        fps,
         bones,
         stack_uid,
         layer_uid,
@@ -667,9 +710,25 @@ pub(crate) fn write_header_extension<W: Write + Seek>(
     Ok(())
 }
 
+fn fps_to_time_mode(fps: f32) -> i32 {
+    let rounded = fps.round() as i32;
+    match rounded {
+        120 => 1,
+        100 => 2,
+        60 => 3,
+        50 => 4,
+        48 => 5,
+        30 => 6,
+        24 => 11,
+        _ => 0,
+    }
+}
+
 pub(crate) fn write_global_settings<W: Write + Seek>(
     writer: &mut Writer<W>,
     duration_ktime: i64,
+    axes: &FbxAxesInfo,
+    fps: f32,
 ) -> FbxWriteResult<()> {
     drop(writer.new_node("GlobalSettings")?);
 
@@ -680,16 +739,18 @@ pub(crate) fn write_global_settings<W: Write + Seek>(
         writer.close_node()?;
     }
 
+    let time_mode = fps_to_time_mode(fps);
+
     drop(writer.new_node("Properties70")?);
-    write_property_i32(writer, "UpAxis", "int", "Integer", "", 2)?;
-    write_property_i32(writer, "UpAxisSign", "int", "Integer", "", 1)?;
-    write_property_i32(writer, "FrontAxis", "int", "Integer", "", 1)?;
-    write_property_i32(writer, "FrontAxisSign", "int", "Integer", "", 1)?;
-    write_property_i32(writer, "CoordAxis", "int", "Integer", "", 0)?;
-    write_property_i32(writer, "CoordAxisSign", "int", "Integer", "", 1)?;
+    write_property_i32(writer, "UpAxis", "int", "Integer", "", axes.up_axis)?;
+    write_property_i32(writer, "UpAxisSign", "int", "Integer", "", axes.up_axis_sign)?;
+    write_property_i32(writer, "FrontAxis", "int", "Integer", "", axes.front_axis)?;
+    write_property_i32(writer, "FrontAxisSign", "int", "Integer", "", axes.front_axis_sign)?;
+    write_property_i32(writer, "CoordAxis", "int", "Integer", "", axes.coord_axis)?;
+    write_property_i32(writer, "CoordAxisSign", "int", "Integer", "", axes.coord_axis_sign)?;
     write_property_f64(writer, "UnitScaleFactor", "double", "Number", "", 1.0)?;
-    write_property_i32(writer, "TimeMode", "enum", "", "", 6)?;
-    write_property_f64(writer, "CustomFrameRate", "double", "Number", "", 30.0)?;
+    write_property_i32(writer, "TimeMode", "enum", "", "", time_mode)?;
+    write_property_f64(writer, "CustomFrameRate", "double", "Number", "", fps as f64)?;
     write_property_ktime(writer, "TimeSpanStart", 0)?;
     write_property_ktime(writer, "TimeSpanStop", duration_ktime)?;
     writer.close_node()?;
@@ -763,10 +824,12 @@ fn write_definitions<W: Write + Seek>(
     data: &FbxExportData,
 ) -> FbxWriteResult<()> {
     let model_count = data.bones.len() as i32;
+    let node_attr_count = data.bones.len() as i32;
     let curve_node_count = data.curve_nodes.len() as i32;
     let curve_count = data.curves.len() as i32;
 
-    let total = 1 + model_count + 1 + 1 + curve_node_count + curve_count;
+    let total =
+        1 + model_count + node_attr_count + 1 + 1 + curve_node_count + curve_count;
 
     drop(writer.new_node("Definitions")?);
 
@@ -786,6 +849,7 @@ fn write_definitions<W: Write + Seek>(
 
     write_object_type(writer, "GlobalSettings", 1)?;
     write_object_type(writer, "Model", model_count)?;
+    write_object_type(writer, "NodeAttribute", node_attr_count)?;
     write_object_type(writer, "AnimationStack", 1)?;
     write_object_type(writer, "AnimationLayer", 1)?;
 
@@ -805,10 +869,11 @@ pub(crate) fn write_bone_model<W: Write + Seek>(
     bone: &FbxBoneExport,
 ) -> FbxWriteResult<()> {
     let fbx_name = format!("{}\x00\x01Model", bone.name);
+    let model_type = if bone.is_armature_root { "Null" } else { "LimbNode" };
     let mut attrs = writer.new_node("Model")?;
     attrs.append_i64(bone.model_uid)?;
     attrs.append_string_direct(&fbx_name)?;
-    attrs.append_string_direct("Null")?;
+    attrs.append_string_direct(model_type)?;
     drop(attrs);
 
     {
@@ -851,6 +916,44 @@ pub(crate) fn write_bone_model<W: Write + Seek>(
     )?;
     write_property_i32(writer, "RotationOrder", "enum", "", "", 0)?;
     writer.close_node()?;
+
+    writer.close_node()?;
+    Ok(())
+}
+
+pub(crate) fn write_node_attribute<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    bone: &FbxBoneExport,
+) -> FbxWriteResult<()> {
+    let attr_type = if bone.is_armature_root {
+        "Null"
+    } else {
+        "LimbNode"
+    };
+    let fbx_name = format!("{}\x00\x01NodeAttribute", attr_type);
+    let mut attrs = writer.new_node("NodeAttribute")?;
+    attrs.append_i64(bone.node_attr_uid)?;
+    attrs.append_string_direct(&fbx_name)?;
+    attrs.append_string_direct(attr_type)?;
+    drop(attrs);
+
+    if !bone.is_armature_root {
+        drop(writer.new_node("Properties70")?);
+        write_property_f64(writer, "Size", "double", "Number", "", 1.0)?;
+        writer.close_node()?;
+    }
+
+    {
+        let mut ta = writer.new_node("TypeFlags")?;
+        let flags = if bone.is_armature_root {
+            "Null"
+        } else {
+            "Skeleton"
+        };
+        ta.append_string_direct(flags)?;
+        drop(ta);
+        writer.close_node()?;
+    }
 
     writer.close_node()?;
     Ok(())
@@ -987,6 +1090,7 @@ fn write_objects<W: Write + Seek>(
 
     for bone in &data.bones {
         write_bone_model(writer, bone)?;
+        write_node_attribute(writer, bone)?;
     }
 
     write_anim_stack(writer, data)?;
@@ -1045,7 +1149,7 @@ fn write_fbx_binary<W: Write + Seek>(
     data: &FbxExportData,
 ) -> FbxWriteResult<()> {
     write_header_extension(&mut writer)?;
-    write_global_settings(&mut writer, data.duration_ktime)?;
+    write_global_settings(&mut writer, data.duration_ktime, &data.axes, data.fps)?;
     write_documents(&mut writer, data.document_uid)?;
     write_references(&mut writer)?;
     write_definitions(&mut writer, data)?;
@@ -1060,8 +1164,10 @@ pub fn export_animation_fbx(
     skeleton: &Skeleton,
     path: &Path,
     needs_coord_conversion: bool,
+    axes: FbxAxesInfo,
+    fps: f32,
 ) -> anyhow::Result<()> {
-    let export_data = build_export_data(clip, skeleton, needs_coord_conversion)?;
+    let export_data = build_export_data(clip, skeleton, needs_coord_conversion, axes, fps)?;
 
     let file = std::fs::File::create(path)?;
     let writer = Writer::new(file, FbxVersion::V7_4)

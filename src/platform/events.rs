@@ -982,6 +982,12 @@ fn process_clip_browser_events_inline(events: &[UIEvent], app: &mut App) {
                             (None, false)
                         };
 
+                        let (axes, fps) = if let Some(ref fbx_model) = fbx_model_ref {
+                            (fbx_model.axes.clone(), fbx_model.fps)
+                        } else {
+                            (crate::loader::fbx::fbx::FbxAxesInfo::default(), 24.0)
+                        };
+
                         let result = if let Some(ref fbx_model) = fbx_model_ref {
                             crate::exporter::fbx_exporter::export_full_fbx(
                                 fbx_model, Some(&clip), &skeleton, &path,
@@ -989,6 +995,7 @@ fn process_clip_browser_events_inline(events: &[UIEvent], app: &mut App) {
                         } else {
                             crate::exporter::fbx_animation::export_animation_fbx(
                                 &clip, &skeleton, &path, needs_coord_conversion,
+                                axes, fps,
                             )
                         };
 

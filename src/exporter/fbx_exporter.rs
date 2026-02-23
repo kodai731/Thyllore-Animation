@@ -14,7 +14,7 @@ use super::fbx_animation::{
     FbxWriteResult, UidAllocator, build_bone_export_list, build_channel_exports,
     decompose_matrix_to_trs, seconds_to_ktime, write_anim_curve, write_anim_curve_node,
     write_anim_layer, write_anim_stack, write_bone_model, write_connections,
-    write_documents, write_global_settings, write_header_extension,
+    write_documents, write_global_settings, write_header_extension, write_node_attribute,
     write_object_type, write_property_f64, write_property_f64x3, write_property_i32,
     write_references,
 };
@@ -194,6 +194,9 @@ fn build_full_export_data(
     let anim_data = FbxExportData {
         clip_name,
         duration_ktime,
+        needs_coord_conversion,
+        axes: fbx_model.axes.clone(),
+        fps: fbx_model.fps,
         bones,
         stack_uid,
         layer_uid,
@@ -600,6 +603,11 @@ fn generate_bone_connections(bones: &[FbxBoneExport], connections: &mut Vec<FbxC
             child: bone.model_uid,
             parent: parent_uid,
         });
+
+        connections.push(FbxConnection::OO {
+            child: bone.node_attr_uid,
+            parent: bone.model_uid,
+        });
     }
 }
 
@@ -713,17 +721,20 @@ fn write_full_definitions<W: Write + Seek>(
 ) -> FbxWriteResult<()> {
     let model_count =
         data.anim_data.bones.len() as i32 + data.mesh_models.len() as i32;
+    let node_attr_count = data.anim_data.bones.len() as i32;
     let geometry_count = data.geometries.len() as i32;
     let material_count = data.materials.len() as i32;
     let texture_count = data.textures.len() as i32;
     let video_count = data.textures.len() as i32;
     let deformer_count = data.skins.len() as i32;
-    let sub_deformer_count: i32 = data.skins.iter().map(|s| s.clusters.len() as i32).sum();
+    let sub_deformer_count: i32 =
+        data.skins.iter().map(|s| s.clusters.len() as i32).sum();
     let curve_node_count = data.anim_data.curve_nodes.len() as i32;
     let curve_count = data.anim_data.curves.len() as i32;
 
-    let total = 1 + model_count + geometry_count + material_count
-        + texture_count + video_count + deformer_count + sub_deformer_count
+    let total = 1 + model_count + node_attr_count + geometry_count
+        + material_count + texture_count + video_count
+        + deformer_count + sub_deformer_count
         + 1 + 1 + curve_node_count + curve_count;
 
     drop(writer.new_node("Definitions")?);
@@ -744,6 +755,7 @@ fn write_full_definitions<W: Write + Seek>(
 
     write_object_type(writer, "GlobalSettings", 1)?;
     write_object_type(writer, "Model", model_count)?;
+    write_object_type(writer, "NodeAttribute", node_attr_count)?;
 
     if geometry_count > 0 {
         write_object_type(writer, "Geometry", geometry_count)?;
@@ -1227,6 +1239,7 @@ fn write_full_objects<W: Write + Seek>(
 
     for bone in &data.anim_data.bones {
         write_bone_model(writer, bone)?;
+        write_node_attribute(writer, bone)?;
     }
 
     for geo in &data.geometries {
@@ -1273,7 +1286,7 @@ fn write_full_fbx_binary<W: Write + Seek>(
     data: &FullFbxExportData,
 ) -> FbxWriteResult<()> {
     write_header_extension(&mut writer)?;
-    write_global_settings(&mut writer, data.anim_data.duration_ktime)?;
+    write_global_settings(&mut writer, data.anim_data.duration_ktime, &data.anim_data.axes, data.anim_data.fps)?;
     write_documents(&mut writer, data.anim_data.document_uid)?;
     write_references(&mut writer)?;
     write_full_definitions(&mut writer, data)?;
@@ -1332,5 +1345,272 @@ mod tests {
         assert!((positions[0] - 0.01).abs() < 1e-6);
         assert!((positions[1] - 0.02).abs() < 1e-6);
         assert!((positions[2] - 0.03).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_fbx_roundtrip_stickman() {
+        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        if !std::path::Path::new(original_path).exists() {
+            eprintln!("Skipping roundtrip test: {} not found", original_path);
+            return;
+        }
+
+        let fbx_model =
+            crate::loader::fbx::fbx::load_fbx_with_ufbx(original_path).expect("Failed to load original FBX");
+
+        let result = crate::loader::fbx::loader::load_fbx_to_graphics_resources(original_path)
+            .expect("Failed to load graphics resources");
+        let (load_result, _) = result;
+
+        let skeleton = load_result
+            .animation_system
+            .get_skeleton(0)
+            .expect("No skeleton found")
+            .clone();
+
+        let export_dir = std::path::Path::new("assets/exports");
+        std::fs::create_dir_all(export_dir).ok();
+        let export_path = export_dir.join("roundtrip_test.fbx");
+
+        export_full_fbx(&fbx_model, None, &skeleton, &export_path)
+            .expect("Failed to export FBX");
+
+        let original_scene = ufbx::load_file(original_path, ufbx::LoadOpts::default())
+            .expect("Failed to load original with ufbx");
+        let exported_scene = ufbx::load_file(export_path.to_str().unwrap(), ufbx::LoadOpts::default())
+            .expect("Failed to load exported with ufbx");
+
+        let orig_axes = &original_scene.settings.axes;
+        let exp_axes = &exported_scene.settings.axes;
+        assert_eq!(
+            orig_axes.up as i32, exp_axes.up as i32,
+            "UpAxis mismatch: original={:?}, exported={:?}",
+            orig_axes.up, exp_axes.up
+        );
+        assert_eq!(
+            orig_axes.front as i32, exp_axes.front as i32,
+            "FrontAxis mismatch: original={:?}, exported={:?}",
+            orig_axes.front, exp_axes.front
+        );
+        assert_eq!(
+            orig_axes.right as i32, exp_axes.right as i32,
+            "CoordAxis mismatch: original={:?}, exported={:?}",
+            orig_axes.right, exp_axes.right
+        );
+
+        let orig_non_root_nodes: Vec<_> = original_scene
+            .nodes
+            .iter()
+            .filter(|n| !n.is_root)
+            .collect();
+        let exp_non_root_nodes: Vec<_> = exported_scene
+            .nodes
+            .iter()
+            .filter(|n| !n.is_root)
+            .collect();
+
+        let orig_names: std::collections::HashSet<String> = orig_non_root_nodes
+            .iter()
+            .map(|n| n.element.name.to_string())
+            .collect();
+        let exp_names: std::collections::HashSet<String> = exp_non_root_nodes
+            .iter()
+            .map(|n| n.element.name.to_string())
+            .collect();
+
+        let missing_in_export: Vec<_> = orig_names.difference(&exp_names).collect();
+        let extra_in_export: Vec<_> = exp_names.difference(&orig_names).collect();
+        assert!(
+            missing_in_export.is_empty(),
+            "Nodes missing in exported FBX: {:?}",
+            missing_in_export
+        );
+        if !extra_in_export.is_empty() {
+            eprintln!("Extra nodes in export (acceptable): {:?}", extra_in_export);
+        }
+
+        for orig_node in &orig_non_root_nodes {
+            let name = orig_node.element.name.to_string();
+            let exp_node = exp_non_root_nodes
+                .iter()
+                .find(|n| n.element.name.to_string() == name);
+
+            let Some(exp_node) = exp_node else {
+                continue;
+            };
+
+            let orig_t = &orig_node.local_transform;
+            let exp_t = &exp_node.local_transform;
+
+            let position_tolerance = 0.1;
+            let orig_pos = [orig_t.translation.x, orig_t.translation.y, orig_t.translation.z];
+            let exp_pos = [exp_t.translation.x, exp_t.translation.y, exp_t.translation.z];
+
+            for axis in 0..3 {
+                let diff = (orig_pos[axis] - exp_pos[axis]).abs();
+                assert!(
+                    diff < position_tolerance,
+                    "Node '{}' position[{}] mismatch: original={}, exported={}, diff={}",
+                    name, axis, orig_pos[axis], exp_pos[axis], diff
+                );
+            }
+        }
+
+        assert!(
+            !exported_scene.anim_stacks.is_empty(),
+            "Exported FBX has no animation stacks"
+        );
+
+        std::fs::remove_file(&export_path).ok();
+    }
+
+    #[test]
+    fn test_fbx_roundtrip_stickman_with_animation() {
+        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        if !std::path::Path::new(original_path).exists() {
+            eprintln!("Skipping: {} not found", original_path);
+            return;
+        }
+
+        let fbx_model = crate::loader::fbx::fbx::load_fbx_with_ufbx(original_path)
+            .expect("Failed to load original FBX");
+        let (load_result, _) =
+            crate::loader::fbx::loader::load_fbx_to_graphics_resources(original_path)
+                .expect("Failed to load graphics resources");
+
+        let skeleton = load_result
+            .animation_system
+            .get_skeleton(0)
+            .expect("No skeleton found")
+            .clone();
+        let anim_clip = load_result.clips.first().expect("No animation clip found");
+
+        let bone_names: std::collections::HashMap<u32, String> = skeleton
+            .bones
+            .iter()
+            .enumerate()
+            .map(|(i, b)| (i as u32, b.name.clone()))
+            .collect();
+        let editable = crate::animation::editable::EditableAnimationClip::from_animation_clip(
+            1, anim_clip, &bone_names,
+        );
+        assert!(editable.duration > 0.0);
+        assert!(!editable.tracks.is_empty());
+
+        let export_dir = std::path::Path::new("assets/exports");
+        std::fs::create_dir_all(export_dir).ok();
+        let export_path = export_dir.join("roundtrip_anim_test.fbx");
+
+        export_full_fbx(&fbx_model, Some(&editable), &skeleton, &export_path)
+            .expect("Failed to export FBX with animation");
+
+        let original_scene = ufbx::load_file(original_path, ufbx::LoadOpts::default())
+            .expect("Failed to load original with ufbx");
+        let exported_scene =
+            ufbx::load_file(export_path.to_str().unwrap(), ufbx::LoadOpts::default())
+                .expect("Failed to load exported with ufbx");
+
+        assert!(!exported_scene.anim_stacks.is_empty());
+        assert!(
+            (exported_scene.settings.frames_per_second
+                - original_scene.settings.frames_per_second)
+                .abs()
+                < 1.0
+        );
+
+        let anim_stack = &exported_scene.anim_stacks[0];
+        let time_span = anim_stack.time_end - anim_stack.time_begin;
+        assert!(time_span > 0.1, "Animation time span too short: {:.4}s", time_span);
+
+        let baked = ufbx::bake_anim(
+            &exported_scene,
+            &exported_scene.anim_stacks[0].anim,
+            ufbx::BakeOpts::default(),
+        )
+        .expect("Failed to bake exported animation");
+
+        let orig_baked = ufbx::bake_anim(
+            &original_scene,
+            &original_scene.anim_stacks[0].anim,
+            ufbx::BakeOpts::default(),
+        )
+        .expect("Failed to bake original animation");
+
+        let animated_count = baked
+            .nodes
+            .iter()
+            .filter(|n| n.rotation_keys.len() > 1)
+            .count();
+        assert!(animated_count > 0, "Exported FBX has no animated nodes");
+
+        let mesh_node_names: Vec<String> = fbx_model
+            .fbx_data
+            .iter()
+            .filter_map(|d| d.mesh_node_name.clone())
+            .collect();
+
+        for mesh_name in &mesh_node_names {
+            let orig_parent = original_scene
+                .nodes
+                .iter()
+                .find(|n| n.element.name.to_string() == *mesh_name)
+                .and_then(|n| n.parent.as_ref())
+                .map(|p| p.element.name.to_string())
+                .unwrap_or_default();
+            let exp_parent = exported_scene
+                .nodes
+                .iter()
+                .find(|n| n.element.name.to_string() == *mesh_name)
+                .and_then(|n| n.parent.as_ref())
+                .map(|p| p.element.name.to_string())
+                .unwrap_or_default();
+            assert_eq!(orig_parent, exp_parent, "Parent mismatch for mesh '{}'", mesh_name);
+        }
+
+        for orig_bn in &orig_baked.nodes {
+            let orig_idx = orig_bn.typed_id as usize;
+            if orig_idx >= original_scene.nodes.len() || orig_bn.rotation_keys.len() <= 2 {
+                continue;
+            }
+            let name = original_scene.nodes[orig_idx].element.name.to_string();
+
+            let exp_bn = baked.nodes.iter().find(|bn| {
+                let idx = bn.typed_id as usize;
+                idx < exported_scene.nodes.len()
+                    && exported_scene.nodes[idx].element.name.to_string() == name
+            });
+            let exp_bn = match exp_bn {
+                Some(b) => b,
+                None => continue,
+            };
+
+            assert_eq!(
+                orig_bn.rotation_keys.len(),
+                exp_bn.rotation_keys.len(),
+                "Rotation key count mismatch for bone '{}'",
+                name
+            );
+
+            let sample_indices = [0, 100, 500, 1000];
+            for &idx in &sample_indices {
+                if idx >= orig_bn.rotation_keys.len() {
+                    break;
+                }
+                let o = &orig_bn.rotation_keys[idx];
+                let e = &exp_bn.rotation_keys[idx];
+                let max_diff = (o.value.w - e.value.w)
+                    .abs()
+                    .max((o.value.x - e.value.x).abs())
+                    .max((o.value.y - e.value.y).abs())
+                    .max((o.value.z - e.value.z).abs());
+                assert!(
+                    max_diff < 0.01,
+                    "Rotation value mismatch for bone '{}' at key {}: diff={}",
+                    name, idx, max_diff
+                );
+            }
+        }
+
+        std::fs::remove_file(&export_path).ok();
     }
 }

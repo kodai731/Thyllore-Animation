@@ -887,7 +887,7 @@ pub(crate) fn write_anim_stack<W: Write + Seek>(
     writer: &mut Writer<W>,
     data: &FbxExportData,
 ) -> FbxWriteResult<()> {
-    let fbx_name = format!("{}\x00\x01AnimationStack", data.clip_name);
+    let fbx_name = format!("{}\x00\x01AnimStack", data.clip_name);
     let mut attrs = writer.new_node("AnimationStack")?;
     attrs.append_i64(data.stack_uid)?;
     attrs.append_string_direct(&fbx_name)?;
@@ -911,7 +911,7 @@ pub(crate) fn write_anim_layer<W: Write + Seek>(
 ) -> FbxWriteResult<()> {
     let mut attrs = writer.new_node("AnimationLayer")?;
     attrs.append_i64(layer_uid)?;
-    attrs.append_string_direct("BaseLayer\x00\x01AnimationLayer")?;
+    attrs.append_string_direct("BaseLayer\x00\x01AnimLayer")?;
     attrs.append_string_direct("")?;
     drop(attrs);
     writer.close_node()?;
@@ -923,7 +923,7 @@ pub(crate) fn write_anim_curve_node<W: Write + Seek>(
     cn: &FbxCurveNodeExport,
 ) -> FbxWriteResult<()> {
     let fbx_name =
-        format!("{}\x00\x01AnimationCurveNode", cn.channel.short_name());
+        format!("{}\x00\x01AnimCurveNode", cn.channel.short_name());
     let mut attrs = writer.new_node("AnimationCurveNode")?;
     attrs.append_i64(cn.uid)?;
     attrs.append_string_direct(&fbx_name)?;
@@ -946,7 +946,7 @@ pub(crate) fn write_anim_curve<W: Write + Seek>(
 ) -> FbxWriteResult<()> {
     let mut attrs = writer.new_node("AnimationCurve")?;
     attrs.append_i64(curve.uid)?;
-    attrs.append_string_direct("\x00\x01AnimationCurve")?;
+    attrs.append_string_direct("\x00\x01AnimCurve")?;
     attrs.append_string_direct("")?;
     drop(attrs);
 

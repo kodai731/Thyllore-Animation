@@ -1602,8 +1602,6 @@ mod tests {
                 );
             }
         }
-
-        std::fs::remove_file(&export_path).ok();
     }
 
     #[test]
@@ -1706,5 +1704,313 @@ mod tests {
         );
 
         std::fs::remove_file(&export_path).ok();
+    }
+
+    #[test]
+    fn test_compare_anim_structure() {
+        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        if !std::path::Path::new(original_path).exists() {
+            eprintln!("Skipping: {} not found", original_path);
+            return;
+        }
+
+        let fbx_model = crate::loader::fbx::fbx::load_fbx_with_ufbx(original_path)
+            .expect("Failed to load original FBX");
+        let (load_result, _) =
+            crate::loader::fbx::loader::load_fbx_to_graphics_resources(original_path)
+                .expect("Failed to load graphics resources");
+
+        let skeleton = load_result
+            .animation_system
+            .get_skeleton(0)
+            .expect("No skeleton found")
+            .clone();
+        let anim_clip = load_result.clips.first().expect("No animation clip found");
+
+        let bone_names: std::collections::HashMap<u32, String> = skeleton
+            .bones
+            .iter()
+            .enumerate()
+            .map(|(i, b)| (i as u32, b.name.clone()))
+            .collect();
+        let editable = crate::animation::editable::EditableAnimationClip::from_animation_clip(
+            1, anim_clip, &bone_names,
+        );
+
+        let export_dir = std::path::Path::new("assets/exports");
+        std::fs::create_dir_all(export_dir).ok();
+        let export_path = export_dir.join("anim_structure_test.fbx");
+
+        export_full_fbx(&fbx_model, Some(&editable), &skeleton, &export_path)
+            .expect("Failed to export FBX with animation");
+
+        let original_scene = ufbx::load_file(original_path, ufbx::LoadOpts::default())
+            .expect("Failed to load original with ufbx");
+        let exported_scene =
+            ufbx::load_file(export_path.to_str().unwrap(), ufbx::LoadOpts::default())
+                .expect("Failed to load exported with ufbx");
+
+        print_scene_anim_structure("ORIGINAL", &original_scene);
+        eprintln!("\n{}\n", "=".repeat(80));
+        print_scene_anim_structure("EXPORTED", &exported_scene);
+
+        eprintln!("\n{}\n", "=".repeat(80));
+        print_anim_prop_connections("ORIGINAL", &original_scene);
+        eprintln!("\n{}\n", "=".repeat(80));
+        print_anim_prop_connections("EXPORTED", &exported_scene);
+
+        std::fs::remove_file(&export_path).ok();
+    }
+
+    fn read_blender_path() -> Option<String> {
+        let paths_file = std::path::Path::new(".claude/local/paths.md");
+        let content = std::fs::read_to_string(paths_file).ok()?;
+        for line in content.lines() {
+            if let Some(rest) = line.strip_prefix("- BlenderPath = ") {
+                let path = rest.trim().to_string();
+                if std::path::Path::new(&path).exists() {
+                    return Some(path);
+                }
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn test_blender_animation_import() {
+        let blender_path = match read_blender_path() {
+            Some(p) => p,
+            None => {
+                eprintln!("Skipping: BlenderPath not configured in .claude/local/paths.md");
+                return;
+            }
+        };
+
+        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        if !std::path::Path::new(original_path).exists() {
+            eprintln!("Skipping: {} not found", original_path);
+            return;
+        }
+
+        let script_path = "scripts/blender_fbx_diagnostic.py";
+        if !std::path::Path::new(script_path).exists() {
+            eprintln!("Skipping: {} not found", script_path);
+            return;
+        }
+
+        let fbx_model = crate::loader::fbx::fbx::load_fbx_with_ufbx(original_path)
+            .expect("Failed to load original FBX");
+        let (load_result, _) =
+            crate::loader::fbx::loader::load_fbx_to_graphics_resources(original_path)
+                .expect("Failed to load graphics resources");
+
+        let skeleton = load_result
+            .animation_system
+            .get_skeleton(0)
+            .expect("No skeleton found")
+            .clone();
+        let anim_clip = load_result.clips.first().expect("No animation clip found");
+
+        let bone_names: std::collections::HashMap<u32, String> = skeleton
+            .bones
+            .iter()
+            .enumerate()
+            .map(|(i, b)| (i as u32, b.name.clone()))
+            .collect();
+        let editable = crate::animation::editable::EditableAnimationClip::from_animation_clip(
+            1, anim_clip, &bone_names,
+        );
+
+        let export_dir = std::path::Path::new("assets/exports");
+        std::fs::create_dir_all(export_dir).ok();
+        let export_path = export_dir.join("blender_anim_test.fbx");
+
+        export_full_fbx(&fbx_model, Some(&editable), &skeleton, &export_path)
+            .expect("Failed to export FBX");
+
+        let abs_export = std::fs::canonicalize(&export_path)
+            .expect("Failed to get absolute path for exported FBX");
+        let abs_script = std::fs::canonicalize(script_path)
+            .expect("Failed to get absolute path for script");
+
+        let output_json = export_dir.join("blender_diagnostic.json");
+        let abs_output = std::path::Path::new("assets/exports")
+            .canonicalize()
+            .unwrap()
+            .join("blender_diagnostic.json");
+
+        let output = std::process::Command::new(&blender_path)
+            .args([
+                "--background",
+                "--python",
+                abs_script.to_str().unwrap(),
+                "--",
+                abs_export.to_str().unwrap(),
+                abs_output.to_str().unwrap(),
+            ])
+            .output()
+            .expect("Failed to run Blender");
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("Blender stdout:\n{}", stdout);
+        eprintln!("Blender stderr:\n{}", stderr);
+
+        assert!(
+            output.status.success(),
+            "Blender exited with error: {:?}",
+            output.status,
+        );
+
+        assert!(
+            abs_output.exists(),
+            "Blender diagnostic JSON not created at {:?}",
+            abs_output,
+        );
+
+        let json_content = std::fs::read_to_string(&abs_output)
+            .expect("Failed to read diagnostic JSON");
+        let diagnostic: serde_json::Value =
+            serde_json::from_str(&json_content).expect("Failed to parse diagnostic JSON");
+
+        let summary = &diagnostic["summary"];
+
+        let total_actions = summary["total_actions"].as_u64().unwrap_or(0);
+        eprintln!("Blender imported actions: {}", total_actions);
+        assert!(
+            total_actions > 0,
+            "Blender should import at least 1 action, got {}",
+            total_actions,
+        );
+
+        let total_fcurves = summary["total_fcurves"].as_u64().unwrap_or(0);
+        eprintln!("Blender imported FCurves: {}", total_fcurves);
+        assert!(
+            total_fcurves > 0,
+            "Blender should import FCurves, got {}",
+            total_fcurves,
+        );
+
+        let moved = summary["moved"]
+            .as_array()
+            .map(|a| a.len())
+            .unwrap_or(0);
+        eprintln!("Objects that moved during playback: {}", moved);
+        assert!(
+            moved > 0,
+            "At least some objects should move during animation playback, got {}",
+            moved,
+        );
+
+        std::fs::remove_file(&export_path).ok();
+        std::fs::remove_file(&abs_output).ok();
+    }
+
+    fn print_scene_anim_structure(label: &str, scene: &ufbx::Scene) {
+        eprintln!("--- {} ---", label);
+        eprintln!("  anim_stacks: {}", scene.anim_stacks.len());
+        eprintln!("  anim_layers: {}", scene.anim_layers.len());
+        eprintln!("  anim_values: {}", scene.anim_values.len());
+        eprintln!("  anim_curves: {}", scene.anim_curves.len());
+        eprintln!("  total nodes: {}", scene.nodes.len());
+
+        for (i, stack) in scene.anim_stacks.iter().enumerate() {
+            eprintln!(
+                "  AnimStack[{}]: name='{}', time_begin={:.4}, time_end={:.4}, layers={}",
+                i,
+                stack.element.name,
+                stack.time_begin,
+                stack.time_end,
+                stack.layers.len(),
+            );
+        }
+
+        let bake_opts = ufbx::BakeOpts::default();
+        let baked = ufbx::bake_anim(scene, &scene.anim_stacks[0].anim, bake_opts)
+            .expect("Failed to bake animation");
+
+        let mut bone_only_animated = 0u32;
+        let mut mesh_node_animated = 0u32;
+
+        eprintln!("  Baked nodes total: {}", baked.nodes.len());
+        for bn in &baked.nodes {
+            let has_translation_anim = bn.translation_keys.len() > 1;
+            let has_rotation_anim = bn.rotation_keys.len() > 1;
+            let has_scale_anim = bn.scale_keys.len() > 1;
+            if !has_translation_anim && !has_rotation_anim && !has_scale_anim {
+                continue;
+            }
+
+            let node_idx = bn.typed_id as usize;
+            if node_idx >= scene.nodes.len() {
+                continue;
+            }
+            let node = &scene.nodes[node_idx];
+            let name = node.element.name.to_string();
+            let has_mesh = node.mesh.is_some();
+            let attrib_type = node.attrib_type;
+
+            if has_mesh {
+                mesh_node_animated += 1;
+            } else {
+                bone_only_animated += 1;
+            }
+
+            eprintln!(
+                "    ANIMATED: '{}' attrib={:?} has_mesh={} t_keys={} r_keys={} s_keys={} const_t={} const_r={} const_s={}",
+                name,
+                attrib_type,
+                has_mesh,
+                bn.translation_keys.len(),
+                bn.rotation_keys.len(),
+                bn.scale_keys.len(),
+                bn.constant_translation,
+                bn.constant_rotation,
+                bn.constant_scale,
+            );
+        }
+
+        eprintln!("  SUMMARY: bone-only animated={}, mesh-node animated={}", bone_only_animated, mesh_node_animated);
+    }
+
+    fn print_anim_prop_connections(label: &str, scene: &ufbx::Scene) {
+        eprintln!("--- {} AnimProp connections ---", label);
+
+        if scene.anim_layers.is_empty() {
+            eprintln!("  No anim layers");
+            return;
+        }
+
+        let layer = &scene.anim_layers[0];
+        eprintln!("  AnimLayer '{}' has {} anim_props", layer.element.name, layer.anim_props.len());
+
+        let mut node_prop_map: std::collections::BTreeMap<String, Vec<String>> =
+            std::collections::BTreeMap::new();
+
+        for ap in &layer.anim_props {
+            let target_name = ap.element.name.to_string();
+            let prop_name = ap.prop_name.to_string();
+            node_prop_map
+                .entry(target_name)
+                .or_default()
+                .push(prop_name);
+        }
+
+        for (target_name, props) in &node_prop_map {
+            let node = scene
+                .nodes
+                .iter()
+                .find(|n| n.element.name.to_string() == *target_name);
+
+            let (has_mesh, attrib_type) = match node {
+                Some(n) => (n.mesh.is_some(), format!("{:?}", n.attrib_type)),
+                None => (false, "NOT_A_NODE".to_string()),
+            };
+
+            eprintln!(
+                "    target='{}' attrib={} has_mesh={} props={:?}",
+                target_name, attrib_type, has_mesh, props
+            );
+        }
     }
 }

@@ -469,11 +469,12 @@ fn build_material_exports(
             0
         };
 
+        let dc = fbx_data.diffuse_color;
         materials.push(FbxMaterialExport {
             uid: mat_uid,
             name: mat_name,
             mesh_model_uid,
-            diffuse_color: [0.8, 0.8, 0.8],
+            diffuse_color: [dc[0] as f64, dc[1] as f64, dc[2] as f64],
         });
     }
 
@@ -1129,7 +1130,15 @@ fn write_material<W: Write + Seek>(
         writer.close_node()?;
     }
 
+    {
+        let mut va = writer.new_node("MultiLayer")?;
+        va.append_i32(0)?;
+        drop(va);
+        writer.close_node()?;
+    }
+
     drop(writer.new_node("Properties70")?);
+
     write_property_f64x3(
         writer,
         "DiffuseColor",
@@ -1140,6 +1149,35 @@ fn write_material<W: Write + Seek>(
         mat.diffuse_color[1],
         mat.diffuse_color[2],
     )?;
+
+    write_property_f64(writer, "DiffuseFactor", "Number", "", "A", 1.0)?;
+    write_property_f64(writer, "Opacity", "Number", "", "A", 1.0)?;
+
+    write_property_f64x3(
+        writer,
+        "AmbientColor",
+        "Color",
+        "",
+        "A",
+        mat.diffuse_color[0],
+        mat.diffuse_color[1],
+        mat.diffuse_color[2],
+    )?;
+
+    write_property_f64x3(
+        writer,
+        "SpecularColor",
+        "Color",
+        "",
+        "A",
+        0.9,
+        0.9,
+        0.9,
+    )?;
+
+    write_property_f64(writer, "Shininess", "Number", "", "A", 20.0)?;
+    write_property_f64(writer, "ShininessExponent", "Number", "", "A", 20.0)?;
+
     writer.close_node()?;
 
     writer.close_node()?;
@@ -2171,6 +2209,33 @@ mod tests {
                     exp_cluster.geometry_to_bone.m03,
                     exp_cluster.geometry_to_bone.m13,
                     exp_cluster.geometry_to_bone.m23,
+                );
+            }
+        }
+
+        let orig_mat_map: std::collections::HashMap<String, &ufbx::Material> = original_scene
+            .materials
+            .iter()
+            .map(|m| (m.element.name.to_string(), m.as_ref()))
+            .collect();
+
+        for exp_mat in exported_scene.materials.iter() {
+            let name = exp_mat.element.name.to_string();
+            if let Some(orig_mat) = orig_mat_map.get(&name) {
+                let orig_dc = &orig_mat.fbx.diffuse_color.value_vec4;
+                let exp_dc = &exp_mat.fbx.diffuse_color.value_vec4;
+                let color_diff = (orig_dc.x - exp_dc.x).abs()
+                    + (orig_dc.y - exp_dc.y).abs()
+                    + (orig_dc.z - exp_dc.z).abs();
+                assert!(
+                    color_diff < 0.01,
+                    "DiffuseColor mismatch for '{}': orig=[{:.3},{:.3},{:.3}] exp=[{:.3},{:.3},{:.3}]",
+                    name, orig_dc.x, orig_dc.y, orig_dc.z, exp_dc.x, exp_dc.y, exp_dc.z,
+                );
+
+                assert!(
+                    exp_mat.fbx.diffuse_factor.has_value,
+                    "DiffuseFactor must be explicitly set for '{}'", name,
                 );
             }
         }

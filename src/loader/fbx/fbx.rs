@@ -139,6 +139,7 @@ pub struct FbxData {
     pub mesh_node_name: Option<String>,
     pub material_name: Option<String>,
     pub diffuse_texture: Option<String>,
+    pub diffuse_color: [f32; 3],
 }
 
 impl FbxData {
@@ -156,6 +157,7 @@ impl FbxData {
             mesh_node_name: None,
             material_name: None,
             diffuse_texture: None,
+            diffuse_color: [0.8, 0.8, 0.8],
         }
     }
 }
@@ -418,6 +420,8 @@ fn extract_mesh_data_by_material(
             let mat = &mesh.materials[mat_idx];
             fbx_data.material_name = Some(mat.element.name.to_string());
             fbx_data.diffuse_texture = extract_texture_path(mat);
+            let dc = &mat.fbx.diffuse_color.value_vec4;
+            fbx_data.diffuse_color = [dc.x as f32, dc.y as f32, dc.z as f32];
         }
 
         results.push((fbx_data, part.vertex_map));

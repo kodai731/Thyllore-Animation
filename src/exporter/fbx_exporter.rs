@@ -14,7 +14,7 @@ use super::fbx_animation::{
     FbxWriteResult, UidAllocator, build_bone_export_list, build_channel_exports,
     decompose_matrix_to_trs, seconds_to_ktime, write_anim_curve, write_anim_curve_node,
     write_anim_layer, write_anim_stack, write_bone_model, write_connections,
-    write_documents, write_global_settings, write_header_extension, write_node_attribute,
+    write_documents, write_global_settings, write_header_extension,
     write_object_type, write_property_f64, write_property_f64x3, write_property_i32,
     write_references,
 };
@@ -603,11 +603,6 @@ fn generate_bone_connections(bones: &[FbxBoneExport], connections: &mut Vec<FbxC
             child: bone.model_uid,
             parent: parent_uid,
         });
-
-        connections.push(FbxConnection::OO {
-            child: bone.node_attr_uid,
-            parent: bone.model_uid,
-        });
     }
 }
 
@@ -721,7 +716,6 @@ fn write_full_definitions<W: Write + Seek>(
 ) -> FbxWriteResult<()> {
     let model_count =
         data.anim_data.bones.len() as i32 + data.mesh_models.len() as i32;
-    let node_attr_count = data.anim_data.bones.len() as i32;
     let geometry_count = data.geometries.len() as i32;
     let material_count = data.materials.len() as i32;
     let texture_count = data.textures.len() as i32;
@@ -732,7 +726,7 @@ fn write_full_definitions<W: Write + Seek>(
     let curve_node_count = data.anim_data.curve_nodes.len() as i32;
     let curve_count = data.anim_data.curves.len() as i32;
 
-    let total = 1 + model_count + node_attr_count + geometry_count
+    let total = 1 + model_count + geometry_count
         + material_count + texture_count + video_count
         + deformer_count + sub_deformer_count
         + 1 + 1 + curve_node_count + curve_count;
@@ -755,7 +749,6 @@ fn write_full_definitions<W: Write + Seek>(
 
     write_object_type(writer, "GlobalSettings", 1)?;
     write_object_type(writer, "Model", model_count)?;
-    write_object_type(writer, "NodeAttribute", node_attr_count)?;
 
     if geometry_count > 0 {
         write_object_type(writer, "Geometry", geometry_count)?;
@@ -1239,7 +1232,6 @@ fn write_full_objects<W: Write + Seek>(
 
     for bone in &data.anim_data.bones {
         write_bone_model(writer, bone)?;
-        write_node_attribute(writer, bone)?;
     }
 
     for geo in &data.geometries {
@@ -1610,6 +1602,108 @@ mod tests {
                 );
             }
         }
+
+        std::fs::remove_file(&export_path).ok();
+    }
+
+    #[test]
+    fn test_exported_bone_node_types_match_original() {
+        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        if !std::path::Path::new(original_path).exists() {
+            eprintln!("Skipping: {} not found", original_path);
+            return;
+        }
+
+        let fbx_model = crate::loader::fbx::fbx::load_fbx_with_ufbx(original_path)
+            .expect("Failed to load original FBX");
+        let (load_result, _) =
+            crate::loader::fbx::loader::load_fbx_to_graphics_resources(original_path)
+                .expect("Failed to load graphics resources");
+
+        let skeleton = load_result
+            .animation_system
+            .get_skeleton(0)
+            .expect("No skeleton found")
+            .clone();
+        let anim_clip = load_result.clips.first().expect("No animation clip found");
+
+        let bone_names: std::collections::HashMap<u32, String> = skeleton
+            .bones
+            .iter()
+            .enumerate()
+            .map(|(i, b)| (i as u32, b.name.clone()))
+            .collect();
+        let editable = crate::animation::editable::EditableAnimationClip::from_animation_clip(
+            1, anim_clip, &bone_names,
+        );
+
+        let export_dir = std::path::Path::new("assets/exports");
+        std::fs::create_dir_all(export_dir).ok();
+        let export_path = export_dir.join("blender_compat_test.fbx");
+
+        export_full_fbx(&fbx_model, Some(&editable), &skeleton, &export_path)
+            .expect("Failed to export FBX");
+
+        let original_scene = ufbx::load_file(original_path, ufbx::LoadOpts::default())
+            .expect("Failed to load original with ufbx");
+        let exported_scene =
+            ufbx::load_file(export_path.to_str().unwrap(), ufbx::LoadOpts::default())
+                .expect("Failed to load exported with ufbx");
+
+        let mesh_node_names: std::collections::HashSet<String> = fbx_model
+            .fbx_data
+            .iter()
+            .filter_map(|d| d.mesh_node_name.clone())
+            .collect();
+
+        let bone_only_names: std::collections::HashSet<String> = skeleton
+            .bones
+            .iter()
+            .filter(|b| !mesh_node_names.contains(&b.name))
+            .map(|b| b.name.clone())
+            .collect();
+
+        for exp_node in exported_scene.nodes.iter() {
+            let name = exp_node.element.name.to_string();
+            if !bone_only_names.contains(&name) {
+                continue;
+            }
+
+            let orig_node = original_scene
+                .nodes
+                .iter()
+                .find(|n| n.element.name.to_string() == name);
+
+            if let Some(orig_node) = orig_node {
+                assert_eq!(
+                    exp_node.attrib_type as i32,
+                    orig_node.attrib_type as i32,
+                    "Node '{}' attrib_type mismatch: exported={:?}, original={:?}",
+                    name,
+                    exp_node.attrib_type,
+                    orig_node.attrib_type,
+                );
+            }
+
+            assert_eq!(
+                exp_node.attrib_type,
+                ufbx::ElementType::Unknown,
+                "Node '{}' should have no NodeAttribute (attrib_type=Unknown) for Blender object-level animation, got {:?}",
+                name,
+                exp_node.attrib_type,
+            );
+        }
+
+        let exported_bone_count = exported_scene
+            .nodes
+            .iter()
+            .filter(|n| n.attrib_type == ufbx::ElementType::Bone)
+            .count();
+        assert_eq!(
+            exported_bone_count, 0,
+            "Exported FBX should have 0 Bone-type nodes for object-level animation, found {}",
+            exported_bone_count,
+        );
 
         std::fs::remove_file(&export_path).ok();
     }

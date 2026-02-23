@@ -59,10 +59,8 @@ impl FbxChannel {
 
 pub(crate) struct FbxBoneExport {
     pub model_uid: i64,
-    pub node_attr_uid: i64,
     pub name: String,
     pub is_root: bool,
-    pub is_armature_root: bool,
     pub parent_model_uid: Option<i64>,
     pub translation: [f64; 3],
     pub rotation: [f64; 3],
@@ -206,7 +204,6 @@ pub(crate) fn build_bone_export_list(
         skeleton_idx_to_export_idx.push(Some(export_idx));
 
         let model_uid = uid_alloc.allocate();
-        let node_attr_uid = uid_alloc.allocate();
         let is_root = bone.parent_id.is_none();
 
         let is_root_or_root_child = bone.parent_id.is_none()
@@ -230,10 +227,8 @@ pub(crate) fn build_bone_export_list(
 
         bones.push(FbxBoneExport {
             model_uid,
-            node_attr_uid,
             name: bone.name.clone(),
             is_root,
-            is_armature_root: false,
             parent_model_uid: None,
             translation,
             rotation,
@@ -241,32 +236,8 @@ pub(crate) fn build_bone_export_list(
         });
     }
 
-    mark_armature_roots(&mut bones, skeleton, &skeleton_idx_to_export_idx);
     resolve_bone_parent_uids(&mut bones, skeleton, &skeleton_idx_to_export_idx);
     bones
-}
-
-fn mark_armature_roots(
-    bones: &mut [FbxBoneExport],
-    skeleton: &Skeleton,
-    skeleton_idx_to_export_idx: &[Option<usize>],
-) {
-    for (skel_idx, skel_bone) in skeleton.bones.iter().enumerate() {
-        let Some(export_idx) = skeleton_idx_to_export_idx[skel_idx] else {
-            continue;
-        };
-
-        if !bones[export_idx].is_root {
-            continue;
-        }
-
-        let has_exported_children = skeleton.bones.iter().enumerate().any(|(child_idx, child)| {
-            child.parent_id == Some(skel_idx as u32)
-                && skeleton_idx_to_export_idx[child_idx].is_some()
-        });
-
-        bones[export_idx].is_armature_root = has_exported_children;
-    }
 }
 
 fn resolve_bone_parent_uids(
@@ -458,11 +429,6 @@ fn generate_connections(data: &mut FbxExportData) {
         conns.push(FbxConnection::OO {
             child: bone.model_uid,
             parent: parent_uid,
-        });
-
-        conns.push(FbxConnection::OO {
-            child: bone.node_attr_uid,
-            parent: bone.model_uid,
         });
     }
 
@@ -824,12 +790,10 @@ fn write_definitions<W: Write + Seek>(
     data: &FbxExportData,
 ) -> FbxWriteResult<()> {
     let model_count = data.bones.len() as i32;
-    let node_attr_count = data.bones.len() as i32;
     let curve_node_count = data.curve_nodes.len() as i32;
     let curve_count = data.curves.len() as i32;
 
-    let total =
-        1 + model_count + node_attr_count + 1 + 1 + curve_node_count + curve_count;
+    let total = 1 + model_count + 1 + 1 + curve_node_count + curve_count;
 
     drop(writer.new_node("Definitions")?);
 
@@ -849,7 +813,6 @@ fn write_definitions<W: Write + Seek>(
 
     write_object_type(writer, "GlobalSettings", 1)?;
     write_object_type(writer, "Model", model_count)?;
-    write_object_type(writer, "NodeAttribute", node_attr_count)?;
     write_object_type(writer, "AnimationStack", 1)?;
     write_object_type(writer, "AnimationLayer", 1)?;
 
@@ -869,11 +832,10 @@ pub(crate) fn write_bone_model<W: Write + Seek>(
     bone: &FbxBoneExport,
 ) -> FbxWriteResult<()> {
     let fbx_name = format!("{}\x00\x01Model", bone.name);
-    let model_type = if bone.is_armature_root { "Null" } else { "LimbNode" };
     let mut attrs = writer.new_node("Model")?;
     attrs.append_i64(bone.model_uid)?;
     attrs.append_string_direct(&fbx_name)?;
-    attrs.append_string_direct(model_type)?;
+    attrs.append_string_direct("Null")?;
     drop(attrs);
 
     {
@@ -916,44 +878,6 @@ pub(crate) fn write_bone_model<W: Write + Seek>(
     )?;
     write_property_i32(writer, "RotationOrder", "enum", "", "", 0)?;
     writer.close_node()?;
-
-    writer.close_node()?;
-    Ok(())
-}
-
-pub(crate) fn write_node_attribute<W: Write + Seek>(
-    writer: &mut Writer<W>,
-    bone: &FbxBoneExport,
-) -> FbxWriteResult<()> {
-    let attr_type = if bone.is_armature_root {
-        "Null"
-    } else {
-        "LimbNode"
-    };
-    let fbx_name = format!("{}\x00\x01NodeAttribute", attr_type);
-    let mut attrs = writer.new_node("NodeAttribute")?;
-    attrs.append_i64(bone.node_attr_uid)?;
-    attrs.append_string_direct(&fbx_name)?;
-    attrs.append_string_direct(attr_type)?;
-    drop(attrs);
-
-    if !bone.is_armature_root {
-        drop(writer.new_node("Properties70")?);
-        write_property_f64(writer, "Size", "double", "Number", "", 1.0)?;
-        writer.close_node()?;
-    }
-
-    {
-        let mut ta = writer.new_node("TypeFlags")?;
-        let flags = if bone.is_armature_root {
-            "Null"
-        } else {
-            "Skeleton"
-        };
-        ta.append_string_direct(flags)?;
-        drop(ta);
-        writer.close_node()?;
-    }
 
     writer.close_node()?;
     Ok(())
@@ -1090,7 +1014,6 @@ fn write_objects<W: Write + Seek>(
 
     for bone in &data.bones {
         write_bone_model(writer, bone)?;
-        write_node_attribute(writer, bone)?;
     }
 
     write_anim_stack(writer, data)?;

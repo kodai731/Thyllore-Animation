@@ -58,7 +58,7 @@ fn load_and_analyze(path: &str) -> Result<FbxStructure, String> {
         let type_str = if let Some(mesh) = &node.mesh {
             structure.mesh_nodes.insert(name.clone());
             format!("Model(Mesh) - {} vertices", mesh.num_vertices)
-        } else if let Some(attr) = &node.attrib {
+        } else if let Some(_attr) = &node.attrib {
             format!("Model(NodeAttribute)")
         } else if !node.children.is_empty() {
             "Model(Transform/Armature)".to_string()
@@ -203,4 +203,140 @@ fn compare_structures(original: &FbxStructure, exported: &FbxStructure) {
     }
 
     println!("\n=== END COMPARISON ===\n");
+}
+
+#[test]
+fn inspect_exported_fbx_node_types() {
+    let path = "assets/exports/Armature-ArmatureAction.fbx";
+
+    println!("\n=== Exported FBX Node Type Inspection ===\n");
+    println!("File: {}\n", path);
+
+    match ufbx::load_file(path, ufbx::LoadOpts::default()) {
+        Ok(scene) => {
+            println!("Total Nodes: {}", scene.nodes.len());
+            println!("Total Meshes: {}", scene.meshes.len());
+            println!("Total AnimStacks: {}\n", scene.anim_stacks.len());
+
+            println!("Detailed check for bone-related nodes:");
+            for node in &scene.nodes {
+                if node.is_root {
+                    continue;
+                }
+                let name = node.element.name.to_string();
+                if name.contains("Bone") || name.contains("Armature") {
+                    println!("  {}: mesh={}, attrib={}, bone={}, attrib_type={:?}",
+                        name,
+                        node.mesh.is_some(),
+                        node.attrib.is_some(),
+                        node.bone.is_some(),
+                        node.attrib_type);
+                }
+            }
+        }
+        Err(e) => {
+            println!("Failed to load FBX: {}", e.description);
+        }
+    }
+}
+
+#[test]
+fn inspect_stickman_fbx_node_types() {
+    let path = "assets/models/stickman/stickman_bin.fbx";
+
+    println!("\n=== Stickman FBX Node Type Inspection ===\n");
+    println!("File: {}\n", path);
+
+    match ufbx::load_file(path, ufbx::LoadOpts::default()) {
+        Ok(scene) => {
+            println!("Total Nodes: {}", scene.nodes.len());
+            println!("Total Meshes: {}", scene.meshes.len());
+            println!("Total AnimStacks: {}\n", scene.anim_stacks.len());
+
+            println!("Node Details:");
+            println!("{:<30} | {:<40} | {:<30}", "Node Name", "Has Mesh", "Has Attrib");
+            println!("{}", "-".repeat(105));
+
+            for node in &scene.nodes {
+                if node.is_root {
+                    continue;
+                }
+
+                let name = node.element.name.to_string();
+                let has_mesh = node.mesh.as_ref()
+                    .map(|m| format!("Yes ({}v)", m.num_vertices))
+                    .unwrap_or_else(|| "No".to_string());
+                let has_attrib = node.attrib.as_ref()
+                    .map(|_| "Yes".to_string())
+                    .unwrap_or_else(|| "No".to_string());
+
+                println!("{:<30} | {:<40} | {:<30}", name, has_mesh, has_attrib);
+            }
+
+            println!("\nNode parent relationships:");
+            for node in &scene.nodes {
+                if node.is_root {
+                    continue;
+                }
+                let name = node.element.name.to_string();
+                if let Some(parent) = &node.parent {
+                    if !parent.is_root {
+                        println!("  {} <- {}", name, parent.element.name);
+                    }
+                }
+            }
+
+            println!("\nBone nodes (identified as having no mesh/attrib and being children of Armature-like nodes):");
+            let mut bone_count = 0;
+            for node in &scene.nodes {
+                if node.is_root {
+                    continue;
+                }
+                let name = node.element.name.to_string();
+                let has_mesh = node.mesh.is_some();
+                let has_attrib = node.attrib.is_some();
+                let has_bone = node.bone.is_some();
+                let attrib_type = format!("{:?}", node.attrib_type);
+
+                if !has_mesh && !has_attrib {
+                    println!("  {} (attrib_type: {}, has_bone: {})", name, attrib_type, has_bone);
+                    bone_count += 1;
+                }
+            }
+            println!("Total bone-like nodes: {}", bone_count);
+
+            println!("\nAttribute type breakdown of all non-root nodes:");
+            use std::collections::HashMap;
+            let mut type_counts: HashMap<String, usize> = HashMap::new();
+            for node in &scene.nodes {
+                if node.is_root {
+                    continue;
+                }
+                let attrib_type = format!("{:?}", node.attrib_type);
+                *type_counts.entry(attrib_type).or_insert(0) += 1;
+            }
+            for (attrib_type, count) in type_counts.iter() {
+                println!("  {}: {}", attrib_type, count);
+            }
+
+            println!("\nDetailed check for bone-related nodes:");
+            for node in &scene.nodes {
+                if node.is_root {
+                    continue;
+                }
+                let name = node.element.name.to_string();
+                if name.contains("Bone") || name.contains("Armature") {
+                    println!("  {}: mesh={}, attrib={}, bone={}, attrib_type={:?}",
+                        name,
+                        node.mesh.is_some(),
+                        node.attrib.is_some(),
+                        node.bone.is_some(),
+                        node.attrib_type);
+                }
+            }
+        }
+        Err(e) => {
+            println!("Failed to load FBX: {}", e.description);
+        }
+    }
 }

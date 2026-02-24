@@ -65,6 +65,8 @@ pub(crate) struct FbxBoneExport {
     pub translation: [f64; 3],
     pub rotation: [f64; 3],
     pub scaling: [f64; 3],
+    pub is_skinned: bool,
+    pub node_attribute_uid: Option<i64>,
 }
 
 pub(crate) struct FbxCurveNodeExport {
@@ -225,6 +227,12 @@ pub(crate) fn build_bone_export_list(
         translation[1] *= scale;
         translation[2] *= scale;
 
+        let node_attribute_uid = if needs_coord_conversion {
+            Some(uid_alloc.allocate())
+        } else {
+            None
+        };
+
         bones.push(FbxBoneExport {
             model_uid,
             name: bone.name.clone(),
@@ -233,6 +241,8 @@ pub(crate) fn build_bone_export_list(
             translation,
             rotation,
             scaling,
+            is_skinned: needs_coord_conversion,
+            node_attribute_uid,
         });
     }
 
@@ -430,6 +440,13 @@ fn generate_connections(data: &mut FbxExportData) {
             child: bone.model_uid,
             parent: parent_uid,
         });
+
+        if let Some(attr_uid) = bone.node_attribute_uid {
+            conns.push(FbxConnection::OO {
+                child: attr_uid,
+                parent: bone.model_uid,
+            });
+        }
     }
 
     conns.push(FbxConnection::OO {
@@ -791,10 +808,15 @@ fn write_definitions<W: Write + Seek>(
     data: &FbxExportData,
 ) -> FbxWriteResult<()> {
     let model_count = data.bones.len() as i32;
+    let node_attribute_count = data
+        .bones
+        .iter()
+        .filter(|b| b.node_attribute_uid.is_some())
+        .count() as i32;
     let curve_node_count = data.curve_nodes.len() as i32;
     let curve_count = data.curves.len() as i32;
 
-    let total = 1 + model_count + 1 + 1 + curve_node_count + curve_count;
+    let total = 1 + model_count + node_attribute_count + 1 + 1 + curve_node_count + curve_count;
 
     drop(writer.new_node("Definitions")?);
 
@@ -814,6 +836,11 @@ fn write_definitions<W: Write + Seek>(
 
     write_object_type(writer, "GlobalSettings", 1)?;
     write_object_type(writer, "Model", model_count)?;
+
+    if node_attribute_count > 0 {
+        write_object_type(writer, "NodeAttribute", node_attribute_count)?;
+    }
+
     write_object_type(writer, "AnimationStack", 1)?;
     write_object_type(writer, "AnimationLayer", 1)?;
 
@@ -833,10 +860,11 @@ pub(crate) fn write_bone_model<W: Write + Seek>(
     bone: &FbxBoneExport,
 ) -> FbxWriteResult<()> {
     let fbx_name = format!("{}\x00\x01Model", bone.name);
+    let subclass = if bone.is_skinned { "LimbNode" } else { "Null" };
     let mut attrs = writer.new_node("Model")?;
     attrs.append_i64(bone.model_uid)?;
     attrs.append_string_direct(&fbx_name)?;
-    attrs.append_string_direct("Null")?;
+    attrs.append_string_direct(subclass)?;
     drop(attrs);
 
     {
@@ -879,6 +907,32 @@ pub(crate) fn write_bone_model<W: Write + Seek>(
     )?;
     write_property_i32(writer, "RotationOrder", "enum", "", "", 0)?;
     writer.close_node()?;
+
+    writer.close_node()?;
+    Ok(())
+}
+
+pub(crate) fn write_node_attribute<W: Write + Seek>(
+    writer: &mut Writer<W>,
+    bone: &FbxBoneExport,
+) -> FbxWriteResult<()> {
+    let Some(attr_uid) = bone.node_attribute_uid else {
+        return Ok(());
+    };
+
+    let fbx_name = format!("{}\x00\x01NodeAttribute", bone.name);
+    let mut attrs = writer.new_node("NodeAttribute")?;
+    attrs.append_i64(attr_uid)?;
+    attrs.append_string_direct(&fbx_name)?;
+    attrs.append_string_direct("LimbNode")?;
+    drop(attrs);
+
+    {
+        let mut ta = writer.new_node("TypeFlags")?;
+        ta.append_string_direct("Skeleton")?;
+        drop(ta);
+        writer.close_node()?;
+    }
 
     writer.close_node()?;
     Ok(())
@@ -1015,6 +1069,10 @@ fn write_objects<W: Write + Seek>(
 
     for bone in &data.bones {
         write_bone_model(writer, bone)?;
+    }
+
+    for bone in &data.bones {
+        write_node_attribute(writer, bone)?;
     }
 
     write_anim_stack(writer, data)?;

@@ -14,7 +14,7 @@ use super::fbx_animation::{
     FbxWriteResult, UidAllocator, build_bone_export_list, build_channel_exports,
     decompose_matrix_to_trs, seconds_to_ktime, write_anim_curve, write_anim_curve_node,
     write_anim_layer, write_anim_stack, write_bone_model, write_connections,
-    write_documents, write_global_settings, write_header_extension,
+    write_documents, write_global_settings, write_header_extension, write_node_attribute,
     write_object_type, write_property_f64, write_property_f64x3, write_property_i32,
     write_references,
 };
@@ -26,7 +26,6 @@ struct FbxGeometryExport {
     polygon_vertex_index: Vec<i32>,
     normals: Vec<f64>,
     uv_values: Vec<f64>,
-    uv_indices: Vec<i32>,
 }
 
 struct FbxMeshModelExport {
@@ -168,7 +167,13 @@ fn build_full_export_data(
 
     let materials = build_material_exports(&fbx_model.fbx_data, &mesh_models, &mut uid_alloc);
     let export_dir = export_path.parent().unwrap_or_else(|| Path::new("."));
-    let textures = build_texture_exports(&fbx_model.fbx_data, &materials, &mut uid_alloc, export_dir);
+    let textures = build_texture_exports(
+        &fbx_model.fbx_data,
+        &materials,
+        &mut uid_alloc,
+        export_dir,
+        fbx_model.source_path.as_deref(),
+    );
 
     let skins = build_skin_exports(
         &fbx_model.fbx_data,
@@ -295,7 +300,7 @@ fn build_geometry_exports(
         let positions = convert_positions_to_fbx(fbx_data, inv_unit_scale);
         let polygon_vertex_index = encode_triangle_polygon_indices(&fbx_data.indices);
         let normals = convert_normals_to_fbx(fbx_data);
-        let (uv_values, uv_indices) = convert_uvs_to_fbx(fbx_data);
+        let uv_values = convert_uvs_to_fbx(fbx_data);
 
         geometries.push(FbxGeometryExport {
             uid: geometry_uid,
@@ -304,7 +309,6 @@ fn build_geometry_exports(
             polygon_vertex_index,
             normals,
             uv_values,
-            uv_indices,
         });
     }
 
@@ -343,16 +347,12 @@ fn convert_normals_to_fbx(fbx_data: &FbxData) -> Vec<f64> {
         .collect()
 }
 
-fn convert_uvs_to_fbx(fbx_data: &FbxData) -> (Vec<f64>, Vec<i32>) {
-    let uv_values: Vec<f64> = fbx_data
+fn convert_uvs_to_fbx(fbx_data: &FbxData) -> Vec<f64> {
+    fbx_data
         .tex_coords
         .iter()
         .flat_map(|uv| [uv[0] as f64, (1.0 - uv[1]) as f64])
-        .collect();
-
-    let uv_indices: Vec<i32> = (0..fbx_data.tex_coords.len() as i32).collect();
-
-    (uv_values, uv_indices)
+        .collect()
 }
 
 fn encode_triangle_polygon_indices(indices: &[u32]) -> Vec<i32> {
@@ -513,11 +513,92 @@ fn compute_relative_path(from_dir: &Path, to_path: &Path) -> String {
     result.to_string_lossy().replace('\\', "/")
 }
 
+fn canonicalize_clean(path: &Path) -> PathBuf {
+    let abs_path = if path.is_relative() {
+        std::env::current_dir()
+            .map(|cwd| cwd.join(path))
+            .unwrap_or_else(|_| path.to_path_buf())
+    } else {
+        path.to_path_buf()
+    };
+
+    match abs_path.canonicalize() {
+        Ok(canonical) => {
+            let s = canonical.to_string_lossy();
+            if let Some(stripped) = s.strip_prefix(r"\\?\") {
+                PathBuf::from(stripped)
+            } else {
+                canonical
+            }
+        }
+        Err(_) => abs_path,
+    }
+}
+
+fn resolve_texture_for_export(texture_path: &str, model_path: Option<&str>) -> PathBuf {
+    let original = Path::new(texture_path);
+    if original.exists() {
+        return original.to_path_buf();
+    }
+
+    let Some(model_path) = model_path else {
+        return original.to_path_buf();
+    };
+
+    let file_stem = original
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+    let file_name = original
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("");
+
+    let model_dir = Path::new(model_path)
+        .parent()
+        .unwrap_or_else(|| Path::new("."));
+    let model_root = model_dir.parent().unwrap_or(model_dir);
+
+    let texture_dir = original.parent().unwrap_or_else(|| Path::new("."));
+    let texture_root = texture_dir.parent().unwrap_or(texture_dir);
+
+    let mut search_dirs = vec![
+        model_dir.to_path_buf(),
+        model_dir.join("textures"),
+        model_root.join("textures"),
+    ];
+
+    if texture_dir != model_dir {
+        search_dirs.push(texture_dir.to_path_buf());
+        search_dirs.push(texture_dir.join("textures"));
+        search_dirs.push(texture_root.join("textures"));
+    }
+
+    let candidate_names: Vec<String> = vec![
+        file_name.to_string(),
+        format!("{}.png", file_name),
+        format!("{}.png", file_stem),
+        format!("{}.jpg", file_stem),
+    ];
+
+    for dir in &search_dirs {
+        for name in &candidate_names {
+            let candidate = dir.join(name);
+            if candidate.exists() {
+                return candidate;
+            }
+        }
+    }
+
+    original.to_path_buf()
+}
+
 fn build_texture_exports(
     fbx_data_list: &[FbxData],
     materials: &[FbxMaterialExport],
     uid_alloc: &mut UidAllocator,
     export_dir: &Path,
+    model_source_path: Option<&str>,
 ) -> Vec<FbxTextureExport> {
     let mut textures = Vec::new();
 
@@ -532,13 +613,16 @@ fn build_texture_exports(
                 0
             };
 
-            let relative_filename = compute_relative_path(export_dir, Path::new(tex_path));
+            let resolved = resolve_texture_for_export(tex_path, model_source_path);
+            let resolved_abs = canonicalize_clean(&resolved);
+            let resolved_str = resolved_abs.to_string_lossy().to_string();
+            let relative_filename = compute_relative_path(export_dir, &resolved_abs);
 
             textures.push(FbxTextureExport {
                 texture_uid,
                 video_uid,
                 material_uid,
-                filename: tex_path.clone(),
+                filename: resolved_str,
                 relative_filename,
             });
         }
@@ -642,6 +726,13 @@ fn generate_bone_connections(bones: &[FbxBoneExport], connections: &mut Vec<FbxC
             child: bone.model_uid,
             parent: parent_uid,
         });
+
+        if let Some(attr_uid) = bone.node_attribute_uid {
+            connections.push(FbxConnection::OO {
+                child: attr_uid,
+                parent: bone.model_uid,
+            });
+        }
     }
 }
 
@@ -755,6 +846,12 @@ fn write_full_definitions<W: Write + Seek>(
 ) -> FbxWriteResult<()> {
     let model_count =
         data.anim_data.bones.len() as i32 + data.mesh_models.len() as i32;
+    let node_attribute_count = data
+        .anim_data
+        .bones
+        .iter()
+        .filter(|b| b.node_attribute_uid.is_some())
+        .count() as i32;
     let geometry_count = data.geometries.len() as i32;
     let material_count = data.materials.len() as i32;
     let texture_count = data.textures.len() as i32;
@@ -765,7 +862,7 @@ fn write_full_definitions<W: Write + Seek>(
     let curve_node_count = data.anim_data.curve_nodes.len() as i32;
     let curve_count = data.anim_data.curves.len() as i32;
 
-    let total = 1 + model_count + geometry_count
+    let total = 1 + model_count + node_attribute_count + geometry_count
         + material_count + texture_count + video_count
         + deformer_count + sub_deformer_count
         + 1 + 1 + curve_node_count + curve_count;
@@ -788,6 +885,10 @@ fn write_full_definitions<W: Write + Seek>(
 
     write_object_type(writer, "GlobalSettings", 1)?;
     write_object_type(writer, "Model", model_count)?;
+
+    if node_attribute_count > 0 {
+        write_object_type(writer, "NodeAttribute", node_attribute_count)?;
+    }
 
     if geometry_count > 0 {
         write_object_type(writer, "Geometry", geometry_count)?;
@@ -905,7 +1006,7 @@ fn write_geometry<W: Write + Seek>(
     }
 
     if !geo.uv_values.is_empty() {
-        write_layer_element_uv(writer, &geo.uv_values, &geo.uv_indices)?;
+        write_layer_element_uv(writer, &geo.uv_values)?;
     }
 
     if has_material {
@@ -968,7 +1069,6 @@ fn write_layer_element_normal<W: Write + Seek>(
 fn write_layer_element_uv<W: Write + Seek>(
     writer: &mut Writer<W>,
     uv_values: &[f64],
-    uv_indices: &[i32],
 ) -> FbxWriteResult<()> {
     drop(writer.new_node("LayerElementUV")?);
 
@@ -995,7 +1095,7 @@ fn write_layer_element_uv<W: Write + Seek>(
 
     {
         let mut va = writer.new_node("ReferenceInformationType")?;
-        va.append_string_direct("IndexToDirect")?;
+        va.append_string_direct("Direct")?;
         drop(va);
         writer.close_node()?;
     }
@@ -1003,13 +1103,6 @@ fn write_layer_element_uv<W: Write + Seek>(
     {
         let mut va = writer.new_node("UV")?;
         va.append_arr_f64_from_iter(None, uv_values.iter().copied())?;
-        drop(va);
-        writer.close_node()?;
-    }
-
-    {
-        let mut va = writer.new_node("UVIndex")?;
-        va.append_arr_i32_from_iter(None, uv_indices.iter().copied())?;
         drop(va);
         writer.close_node()?;
     }
@@ -1372,6 +1465,10 @@ fn write_full_objects<W: Write + Seek>(
         write_bone_model(writer, bone)?;
     }
 
+    for bone in &data.anim_data.bones {
+        write_node_attribute(writer, bone)?;
+    }
+
     let has_material = !data.materials.is_empty();
     for geo in &data.geometries {
         write_geometry(writer, geo, has_material)?;
@@ -1450,7 +1547,7 @@ mod tests {
     fn test_convert_uvs_to_fbx_flip() {
         let mut fbx_data = FbxData::new();
         fbx_data.tex_coords = vec![[0.5, 0.3]];
-        let (uv_values, _) = convert_uvs_to_fbx(&fbx_data);
+        let uv_values = convert_uvs_to_fbx(&fbx_data);
         assert!((uv_values[0] - 0.5).abs() < 1e-6);
         assert!((uv_values[1] - 0.7).abs() < 1e-6);
     }
@@ -1902,6 +1999,20 @@ mod tests {
         std::fs::remove_file(&export_path).ok();
     }
 
+    fn canonicalize_no_prefix(path: &std::path::Path) -> PathBuf {
+        match path.canonicalize() {
+            Ok(p) => {
+                let s = p.to_string_lossy();
+                if let Some(stripped) = s.strip_prefix(r"\\?\") {
+                    PathBuf::from(stripped)
+                } else {
+                    p
+                }
+            }
+            Err(_) => path.to_path_buf(),
+        }
+    }
+
     fn read_blender_path() -> Option<String> {
         let paths_file = std::path::Path::new(".claude/local/paths.md");
         let content = std::fs::read_to_string(paths_file).ok()?;
@@ -1968,16 +2079,12 @@ mod tests {
         export_full_fbx(&fbx_model, Some(&editable), &skeleton, &export_path)
             .expect("Failed to export FBX");
 
-        let abs_export = std::fs::canonicalize(&export_path)
-            .expect("Failed to get absolute path for exported FBX");
-        let abs_script = std::fs::canonicalize(script_path)
-            .expect("Failed to get absolute path for script");
+        let abs_export = canonicalize_no_prefix(&export_path);
+        let abs_script = canonicalize_no_prefix(std::path::Path::new(script_path));
 
-        let output_json = export_dir.join("blender_diagnostic.json");
-        let abs_output = std::path::Path::new("assets/exports")
-            .canonicalize()
-            .unwrap()
-            .join("blender_diagnostic.json");
+        let abs_output =
+            canonicalize_no_prefix(std::path::Path::new("assets/exports"))
+                .join("blender_diagnostic.json");
 
         let output = std::process::Command::new(&blender_path)
             .args([
@@ -2283,8 +2390,8 @@ mod tests {
                     orig_mat.fbx.diffuse_color.texture.as_ref(),
                     exp_mat.fbx.diffuse_color.texture.as_ref(),
                 ) {
-                    let orig_basename = Path::new(&orig_tex.filename.to_string())
-                        .file_name()
+                    let orig_stem = Path::new(&orig_tex.filename.to_string())
+                        .file_stem()
                         .and_then(|n| n.to_str())
                         .unwrap_or("")
                         .to_string();
@@ -2293,10 +2400,10 @@ mod tests {
                         .and_then(|n| n.to_str())
                         .unwrap_or("")
                         .to_string();
-                    assert_eq!(
-                        orig_basename, exp_basename,
-                        "Texture filename mismatch for '{}': original='{}', exported='{}'",
-                        name, orig_basename, exp_basename,
+                    assert!(
+                        exp_basename.starts_with(&orig_stem),
+                        "Texture filename mismatch for '{}': original stem='{}', exported='{}'",
+                        name, orig_stem, exp_basename,
                     );
                 }
             }
@@ -2344,5 +2451,287 @@ mod tests {
                 target_name, attrib_type, has_mesh, props
             );
         }
+    }
+
+    #[test]
+    fn test_blender_skinned_fly_import() {
+        let blender_path = match read_blender_path() {
+            Some(p) => p,
+            None => {
+                eprintln!("Skipping: BlenderPath not configured");
+                return;
+            }
+        };
+
+        let original_path = "assets/models/phoenix-bird/source/fly.fbx";
+        if !std::path::Path::new(original_path).exists() {
+            eprintln!("Skipping: {} not found", original_path);
+            return;
+        }
+
+        let script_path = "scripts/blender_fbx_diagnostic.py";
+        if !std::path::Path::new(script_path).exists() {
+            eprintln!("Skipping: {} not found", script_path);
+            return;
+        }
+
+        let fbx_model = crate::loader::fbx::fbx::load_fbx_with_ufbx(original_path)
+            .expect("Failed to load original FBX");
+        let (load_result, _) =
+            crate::loader::fbx::loader::load_fbx_to_graphics_resources(original_path)
+                .expect("Failed to load graphics resources");
+
+        let skeleton = load_result
+            .animation_system
+            .get_skeleton(0)
+            .expect("No skeleton found")
+            .clone();
+
+        let export_dir = std::path::Path::new("assets/exports");
+        std::fs::create_dir_all(export_dir).ok();
+        let export_path = export_dir.join("blender_skinned_fly.fbx");
+
+        export_full_fbx(&fbx_model, None, &skeleton, &export_path)
+            .expect("Failed to export FBX");
+
+        let abs_export = canonicalize_no_prefix(&export_path);
+        let abs_script = canonicalize_no_prefix(std::path::Path::new(script_path));
+
+        let abs_output =
+            canonicalize_no_prefix(std::path::Path::new("assets/exports"))
+                .join("blender_skinned_diagnostic.json");
+
+        let output = std::process::Command::new(&blender_path)
+            .args([
+                "--background",
+                "--python",
+                abs_script.to_str().unwrap(),
+                "--",
+                abs_export.to_str().unwrap(),
+                abs_output.to_str().unwrap(),
+            ])
+            .output()
+            .expect("Failed to run Blender");
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        eprintln!("Blender stdout:\n{}", stdout);
+        if !stderr.is_empty() {
+            eprintln!("Blender stderr:\n{}", stderr);
+        }
+
+        assert!(
+            output.status.success(),
+            "Blender exited with error: {:?}",
+            output.status,
+        );
+
+        assert!(
+            abs_output.exists(),
+            "Blender diagnostic JSON not created at {:?}",
+            abs_output,
+        );
+
+        let json_content = std::fs::read_to_string(&abs_output)
+            .expect("Failed to read diagnostic JSON");
+        let diagnostic: serde_json::Value =
+            serde_json::from_str(&json_content).expect("Failed to parse diagnostic JSON");
+
+        let summary = &diagnostic["summary"];
+
+        let total_materials = summary["total_materials"].as_u64().unwrap_or(0);
+        eprintln!("Blender imported materials: {}", total_materials);
+        assert!(
+            total_materials > 0,
+            "Blender should import at least 1 material, got {}",
+            total_materials,
+        );
+
+        let missing_textures = summary["textures_missing"]
+            .as_array()
+            .map(|a| a.len())
+            .unwrap_or(0);
+        eprintln!("Missing textures: {}", missing_textures);
+        assert_eq!(
+            missing_textures, 0,
+            "All textures should be found, but {} are missing: {:?}",
+            missing_textures,
+            summary["textures_missing"],
+        );
+
+        if let Some(mesh_bounds) = diagnostic["mesh_bounds"].as_array() {
+            for mb in mesh_bounds {
+                let name = mb["name"].as_str().unwrap_or("");
+                let bbox_min = &mb["bbox_min"];
+                let bbox_max = &mb["bbox_max"];
+                eprintln!("Mesh '{}': min={}, max={}", name, bbox_min, bbox_max);
+
+                let max_coord = bbox_max
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.as_f64().unwrap_or(0.0).abs())
+                    .fold(0.0_f64, f64::max);
+                assert!(
+                    max_coord < 100.0,
+                    "Mesh '{}' bbox is too large (max_coord={}), likely wrong scale",
+                    name, max_coord,
+                );
+            }
+        }
+
+        std::fs::remove_file(&export_path).ok();
+        std::fs::remove_file(&abs_output).ok();
+    }
+
+    fn run_blender_import(blender_path: &str, fbx_path: &Path) -> (String, String, bool) {
+        let script = r#"
+import bpy, sys
+argv = sys.argv
+idx = argv.index("--") if "--" in argv else len(argv)
+fbx_path = argv[idx + 1]
+for obj in bpy.data.objects:
+    obj.select_set(True)
+bpy.ops.object.delete()
+bpy.ops.import_scene.fbx(filepath=fbx_path)
+print("IMPORT_DONE")
+"#;
+
+        let temp_script = std::env::temp_dir().join("blender_import_check.py");
+        std::fs::write(&temp_script, script).expect("Failed to write temp script");
+
+        let abs_fbx = canonicalize_no_prefix(fbx_path);
+
+        let output = std::process::Command::new(blender_path)
+            .args([
+                "--background",
+                "--python",
+                temp_script.to_str().unwrap(),
+                "--",
+                abs_fbx.to_str().unwrap(),
+            ])
+            .output()
+            .expect("Failed to run Blender");
+
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+        std::fs::remove_file(&temp_script).ok();
+        (stdout, stderr, output.status.success())
+    }
+
+    fn collect_fbx_import_warnings(stdout: &str) -> Vec<String> {
+        stdout
+            .lines()
+            .filter(|line| {
+                let lower = line.to_lowercase();
+                lower.starts_with("warning") && lower.contains("layer")
+            })
+            .map(|s| s.to_string())
+            .collect()
+    }
+
+    #[test]
+    fn test_blender_no_import_warnings_stickman() {
+        let blender_path = match read_blender_path() {
+            Some(p) => p,
+            None => {
+                eprintln!("Skipping: BlenderPath not configured");
+                return;
+            }
+        };
+
+        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        if !std::path::Path::new(original_path).exists() {
+            eprintln!("Skipping: {} not found", original_path);
+            return;
+        }
+
+        let fbx_model = crate::loader::fbx::fbx::load_fbx_with_ufbx(original_path)
+            .expect("Failed to load FBX");
+        let (load_result, _) =
+            crate::loader::fbx::loader::load_fbx_to_graphics_resources(original_path)
+                .expect("Failed to load graphics resources");
+        let skeleton = load_result
+            .animation_system
+            .get_skeleton(0)
+            .expect("No skeleton found")
+            .clone();
+
+        let export_dir = std::path::Path::new("assets/exports");
+        std::fs::create_dir_all(export_dir).ok();
+        let export_path = export_dir.join("blender_warn_test_stickman.fbx");
+
+        export_full_fbx(&fbx_model, None, &skeleton, &export_path)
+            .expect("Failed to export FBX");
+
+        let (stdout, _stderr, success) = run_blender_import(&blender_path, &export_path);
+        assert!(success, "Blender exited with error");
+        assert!(
+            stdout.contains("IMPORT_DONE"),
+            "Blender import did not complete",
+        );
+
+        let warnings = collect_fbx_import_warnings(&stdout);
+        eprintln!("FBX import warnings: {:?}", warnings);
+        assert!(
+            warnings.is_empty(),
+            "Blender FBX import produced warnings:\n{}",
+            warnings.join("\n"),
+        );
+
+        std::fs::remove_file(&export_path).ok();
+    }
+
+    #[test]
+    fn test_blender_no_import_warnings_skinned() {
+        let blender_path = match read_blender_path() {
+            Some(p) => p,
+            None => {
+                eprintln!("Skipping: BlenderPath not configured");
+                return;
+            }
+        };
+
+        let original_path = "assets/models/phoenix-bird/source/fly.fbx";
+        if !std::path::Path::new(original_path).exists() {
+            eprintln!("Skipping: {} not found", original_path);
+            return;
+        }
+
+        let fbx_model = crate::loader::fbx::fbx::load_fbx_with_ufbx(original_path)
+            .expect("Failed to load FBX");
+        let (load_result, _) =
+            crate::loader::fbx::loader::load_fbx_to_graphics_resources(original_path)
+                .expect("Failed to load graphics resources");
+        let skeleton = load_result
+            .animation_system
+            .get_skeleton(0)
+            .expect("No skeleton found")
+            .clone();
+
+        let export_dir = std::path::Path::new("assets/exports");
+        std::fs::create_dir_all(export_dir).ok();
+        let export_path = export_dir.join("blender_warn_test_skinned.fbx");
+
+        export_full_fbx(&fbx_model, None, &skeleton, &export_path)
+            .expect("Failed to export FBX");
+
+        let (stdout, _stderr, success) = run_blender_import(&blender_path, &export_path);
+        assert!(success, "Blender exited with error");
+        assert!(
+            stdout.contains("IMPORT_DONE"),
+            "Blender import did not complete",
+        );
+
+        let warnings = collect_fbx_import_warnings(&stdout);
+        eprintln!("FBX import warnings: {:?}", warnings);
+        assert!(
+            warnings.is_empty(),
+            "Blender FBX import produced warnings:\n{}",
+            warnings.join("\n"),
+        );
+
+        std::fs::remove_file(&export_path).ok();
     }
 }

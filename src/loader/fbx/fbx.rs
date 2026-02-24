@@ -82,6 +82,7 @@ pub struct FbxModel {
     pub fps: f32,
     pub constraints: Vec<LoadedConstraint>,
     pub axes: FbxAxesInfo,
+    pub source_path: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -264,6 +265,7 @@ pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
         unit_scale,
         fps,
         axes,
+        source_path: Some(path.to_string()),
         ..Default::default()
     };
 

@@ -97,6 +97,55 @@ def collect_animation_data_info():
     return results
 
 
+def collect_material_info():
+    materials = []
+    for mat in bpy.data.materials:
+        entry = {
+            "name": mat.name,
+            "use_nodes": mat.use_nodes,
+            "textures": [],
+        }
+
+        if mat.use_nodes and mat.node_tree:
+            for node in mat.node_tree.nodes:
+                if node.type == "TEX_IMAGE" and node.image:
+                    img = node.image
+                    entry["textures"].append({
+                        "node_name": node.name,
+                        "image_name": img.name,
+                        "filepath": img.filepath,
+                        "filepath_raw": img.filepath_raw,
+                        "file_exists": os.path.isfile(bpy.path.abspath(img.filepath)),
+                        "packed": img.packed_file is not None,
+                        "size": [img.size[0], img.size[1]],
+                    })
+
+        materials.append(entry)
+    return materials
+
+
+def collect_mesh_bounds():
+    mesh_bounds = []
+    for obj in bpy.data.objects:
+        if obj.type != "MESH":
+            continue
+        bb = obj.bound_box
+        world_corners = [obj.matrix_world @ (obj.matrix_basis.inverted() @ __import__('mathutils').Vector(c)) for c in bb]
+        xs = [c[0] for c in world_corners]
+        ys = [c[1] for c in world_corners]
+        zs = [c[2] for c in world_corners]
+        mesh_bounds.append({
+            "name": obj.name,
+            "world_location": [round(v, 6) for v in obj.matrix_world.translation],
+            "world_scale": [round(v, 6) for v in obj.matrix_world.to_scale()],
+            "bbox_min": [round(min(xs), 4), round(min(ys), 4), round(min(zs), 4)],
+            "bbox_max": [round(max(xs), 4), round(max(ys), 4), round(max(zs), 4)],
+            "vertex_count": len(obj.data.vertices) if obj.data else 0,
+            "has_armature_modifier": any(m.type == "ARMATURE" for m in obj.modifiers),
+        })
+    return mesh_bounds
+
+
 def check_animation_playback():
     scene = bpy.context.scene
     frame_a = int(scene.frame_start)
@@ -158,6 +207,8 @@ def main():
             "fps": bpy.context.scene.render.fps,
         },
         "objects": collect_object_info(),
+        "materials": collect_material_info(),
+        "mesh_bounds": collect_mesh_bounds(),
         "actions": collect_actions_info(),
         "animation_data": collect_animation_data_info(),
         "playback_test": check_animation_playback(),
@@ -171,9 +222,17 @@ def main():
     animated_count = sum(1 for a in diagnostic["animation_data"] if a["has_animation_data"])
     action_count = sum(1 for a in diagnostic["animation_data"] if a["active_action"])
 
+    tex_missing = []
+    for mat_info in diagnostic["materials"]:
+        for tex in mat_info["textures"]:
+            if not tex["file_exists"] and not tex["packed"]:
+                tex_missing.append({"material": mat_info["name"], "path": tex["filepath"]})
+
     diagnostic["summary"] = {
         "total_objects": len(diagnostic["objects"]),
         "object_types": obj_types,
+        "total_materials": len(diagnostic["materials"]),
+        "textures_missing": tex_missing,
         "total_actions": len(diagnostic["actions"]),
         "total_fcurves": sum(a["fcurve_count"] for a in diagnostic["actions"]),
         "objects_with_animation_data": animated_count,
@@ -189,12 +248,17 @@ def main():
     s = diagnostic["summary"]
     print(f"\nTotal objects: {s['total_objects']}")
     print(f"Object types: {s['object_types']}")
+    print(f"Total materials: {s['total_materials']}")
+    if s["textures_missing"]:
+        print(f"MISSING textures: {s['textures_missing']}")
     print(f"Total actions: {s['total_actions']}")
     print(f"Total FCurves: {s['total_fcurves']}")
     print(f"Objects with animation: {s['objects_with_animation_data']}")
     print(f"Objects with action: {s['objects_with_active_action']}")
     print(f"Moved (frame test): {s['moved']}")
     print(f"Static (frame test): {s['static']}")
+    for mb in diagnostic["mesh_bounds"]:
+        print(f"Mesh '{mb['name']}': loc={mb['world_location']}, scale={mb['world_scale']}, verts={mb['vertex_count']}")
     print(f"\nSaved to: {output_path}")
 
 

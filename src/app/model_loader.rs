@@ -1082,11 +1082,20 @@ fn resolve_texture_path(texture_path: &str, model_path: &str) -> PathBuf {
         .unwrap_or_else(|| Path::new("."));
     let model_root = model_dir.parent().unwrap_or(model_dir);
 
-    let search_dirs = [
+    let texture_dir = original.parent().unwrap_or_else(|| Path::new("."));
+    let texture_root = texture_dir.parent().unwrap_or(texture_dir);
+
+    let mut search_dirs = vec![
         model_dir.to_path_buf(),
         model_dir.join("textures"),
         model_root.join("textures"),
     ];
+
+    if texture_dir != model_dir {
+        search_dirs.push(texture_dir.to_path_buf());
+        search_dirs.push(texture_dir.join("textures"));
+        search_dirs.push(texture_root.join("textures"));
+    }
 
     let candidate_names: Vec<String> = vec![
         file_name.to_string(),

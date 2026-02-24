@@ -1,5 +1,5 @@
 use std::io::{Seek, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use cgmath::Matrix4;
 use fbxcel::low::FbxVersion;
@@ -50,6 +50,7 @@ struct FbxTextureExport {
     video_uid: i64,
     material_uid: i64,
     filename: String,
+    relative_filename: String,
 }
 
 struct FbxSkinExport {
@@ -83,7 +84,7 @@ pub fn export_full_fbx(
     skeleton: &Skeleton,
     path: &Path,
 ) -> anyhow::Result<()> {
-    let export_data = build_full_export_data(fbx_model, clip, skeleton)?;
+    let export_data = build_full_export_data(fbx_model, clip, skeleton, path)?;
 
     let file = std::fs::File::create(path)?;
     let writer = Writer::new(file, FbxVersion::V7_4)
@@ -99,6 +100,7 @@ fn build_full_export_data(
     fbx_model: &FbxModel,
     clip: Option<&EditableAnimationClip>,
     skeleton: &Skeleton,
+    export_path: &Path,
 ) -> anyhow::Result<FullFbxExportData> {
     let inv_unit_scale = 1.0_f32 / fbx_model.unit_scale;
 
@@ -165,7 +167,8 @@ fn build_full_export_data(
         build_animation_curves(clip, &name_to_model_uid, &mut uid_alloc, inv_unit_scale);
 
     let materials = build_material_exports(&fbx_model.fbx_data, &mesh_models, &mut uid_alloc);
-    let textures = build_texture_exports(&fbx_model.fbx_data, &materials, &mut uid_alloc);
+    let export_dir = export_path.parent().unwrap_or_else(|| Path::new("."));
+    let textures = build_texture_exports(&fbx_model.fbx_data, &materials, &mut uid_alloc, export_dir);
 
     let skins = build_skin_exports(
         &fbx_model.fbx_data,
@@ -481,10 +484,40 @@ fn build_material_exports(
     materials
 }
 
+fn compute_relative_path(from_dir: &Path, to_path: &Path) -> String {
+    let from_abs = std::env::current_dir()
+        .map(|cwd| cwd.join(from_dir))
+        .unwrap_or_else(|_| from_dir.to_path_buf());
+    let to_abs = std::env::current_dir()
+        .map(|cwd| cwd.join(to_path))
+        .unwrap_or_else(|_| to_path.to_path_buf());
+
+    let from_components: Vec<_> = from_abs.components().collect();
+    let to_components: Vec<_> = to_abs.components().collect();
+
+    let common_len = from_components
+        .iter()
+        .zip(to_components.iter())
+        .take_while(|(a, b)| a == b)
+        .count();
+
+    let up_count = from_components.len() - common_len;
+    let mut result = PathBuf::new();
+    for _ in 0..up_count {
+        result.push("..");
+    }
+    for comp in &to_components[common_len..] {
+        result.push(comp);
+    }
+
+    result.to_string_lossy().replace('\\', "/")
+}
+
 fn build_texture_exports(
     fbx_data_list: &[FbxData],
     materials: &[FbxMaterialExport],
     uid_alloc: &mut UidAllocator,
+    export_dir: &Path,
 ) -> Vec<FbxTextureExport> {
     let mut textures = Vec::new();
 
@@ -499,11 +532,14 @@ fn build_texture_exports(
                 0
             };
 
+            let relative_filename = compute_relative_path(export_dir, Path::new(tex_path));
+
             textures.push(FbxTextureExport {
                 texture_uid,
                 video_uid,
                 material_uid,
                 filename: tex_path.clone(),
+                relative_filename,
             });
         }
     }
@@ -1211,11 +1247,7 @@ fn write_texture<W: Write + Seek>(
 
     {
         let mut va = writer.new_node("RelativeFilename")?;
-        let relative = Path::new(&tex.filename)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(&tex.filename);
-        va.append_string_direct(relative)?;
+        va.append_string_direct(&tex.relative_filename)?;
         drop(va);
         writer.close_node()?;
     }
@@ -1244,11 +1276,7 @@ fn write_video<W: Write + Seek>(
 
     {
         let mut va = writer.new_node("RelativeFilename")?;
-        let relative = Path::new(&tex.filename)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or(&tex.filename);
-        va.append_string_direct(relative)?;
+        va.append_string_direct(&tex.relative_filename)?;
         drop(va);
         writer.close_node()?;
     }
@@ -2237,6 +2265,40 @@ mod tests {
                     exp_mat.fbx.diffuse_factor.has_value,
                     "DiffuseFactor must be explicitly set for '{}'", name,
                 );
+            }
+        }
+
+        for exp_mat in exported_scene.materials.iter() {
+            let name = exp_mat.element.name.to_string();
+            if let Some(orig_mat) = orig_mat_map.get(&name) {
+                let orig_has_tex = orig_mat.fbx.diffuse_color.texture.is_some();
+                let exp_has_tex = exp_mat.fbx.diffuse_color.texture.is_some();
+                assert_eq!(
+                    orig_has_tex, exp_has_tex,
+                    "Texture presence mismatch for '{}': original={}, exported={}",
+                    name, orig_has_tex, exp_has_tex,
+                );
+
+                if let (Some(orig_tex), Some(exp_tex)) = (
+                    orig_mat.fbx.diffuse_color.texture.as_ref(),
+                    exp_mat.fbx.diffuse_color.texture.as_ref(),
+                ) {
+                    let orig_basename = Path::new(&orig_tex.filename.to_string())
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let exp_basename = Path::new(&exp_tex.filename.to_string())
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("")
+                        .to_string();
+                    assert_eq!(
+                        orig_basename, exp_basename,
+                        "Texture filename mismatch for '{}': original='{}', exported='{}'",
+                        name, orig_basename, exp_basename,
+                    );
+                }
             }
         }
 

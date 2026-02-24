@@ -38,9 +38,32 @@ $env:RUST_LOG="debug"; cargo run --bin rust-rendering   # Run with debug logging
 .\build-with-tests.ps1 -SkipTests # Skip tests
 ```
 
+## Testing and Feature Flags
+
+**IMPORTANT**: The `ort` crate (ONNX Runtime) included via the `ml` feature (enabled by default) has CRT initializers
+that crash integration test binaries on Windows with `STATUS_ACCESS_VIOLATION`. This only affects integration tests
+(`tests/*.rs`), not lib tests (`cargo test --lib`).
+
+**Before running tests**, check `.cargo/config.toml` for test aliases and environment settings (e.g., `ORT_DYLIB_PATH`).
+
+**How to run tests correctly**:
+
+| Command | Description |
+|---------|-------------|
+| `.\build-with-tests.ps1` | Recommended. Runs lib tests (with ml) and integration tests (without ml) correctly |
+| `cargo test --lib` | Lib tests only (144 tests, ml enabled, safe) |
+| `cargo test --test ecs_tests --no-default-features` | Integration tests (59 tests, ml disabled, safe) |
+| `cargo test --no-default-features` | All tests with ml disabled (reduces functionality but avoids crash) |
+
+**Do NOT run**: `cargo test --test ecs_tests` (without `--no-default-features`) — this will crash.
+
+**If a test crashes with `STATUS_ACCESS_VIOLATION`**: The cause is the `ort` (ONNX Runtime) dependency linked via the
+`ml` feature. Add `--no-default-features` to exclude it. See `${IssueHistoryPath}/FbxExportReimportIssues.md`
+Issue 4 for details.
+
 ## ECS Architecture
 
-** IMPORTANT ** MUST follow architecture rule to add file or code, plan new function.
+**IMPORTANT:** MUST follow architecture rule to add file or code, plan new function.
 This project uses an Entity-Component-System (ECS) architecture inspired by [Bevy Engine](https://bevyengine.org/). The
 design follows these principles:
 
@@ -123,43 +146,29 @@ let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
 - For example, skeleton or mesh data in the timeline system, and animation curve data in the UI system, must each have a
   single authoritative source.
 
-## Adding New Models
+## Robust Coding Guidelines
 
-To load a new model, modify `App::load_model()`:
+- **IMPORTANT**: Follow the rules defined in `.claude/rules/coding.md` for all source code.
+- These rules are derived from Google C++ Style Guide, C++ Core Guidelines, Unreal Engine Coding Standard, Apple Swift
+  API Guidelines, Rust API Guidelines, and Microsoft Rust Guidelines.
+- Key principles: make invalid states unrepresentable, validate at boundaries, consistent error handling, RAII, exhaustive
+  matching, no boolean parameters, fail fast.
 
-- For glTF: Update `model_path` variable
-- For FBX: Update `model_path_fbx` variable
-- Ensure textures are in the same directory or adjust texture paths
+## Path
 
-## Important Rules
+**IMPORTANT:** All `${...Path}` variables MUST be resolved by reading `.claude/local/paths.md`.
+This file contains the absolute paths for this machine. Agents and subagents MUST read it before using any path variable.
+Do NOT resolve relative paths manually — always use the absolute paths from `.claude/local/paths.md`.
 
-- Always respond in Japanese
-- Do NOT perform git write operations (commit, push, etc.)
-    - read operation (diff log) is allowed
+## Document
 
-## Logging
+**IMPORTANT:** All documents (research, design, issue history, explore history) MUST be saved under
+`../SharedData/document/Rust_Rendering/`. Never place documents directly under `../SharedData/document/`.
 
-- Use the `log!` macro for logging
-- Logs are output to `log/log_N.txt`
-- Do NOT output to standard console; use the log files instead
+## Issue History
 
-## app/update.rs
-
-- Contains the update processing
-- Do NOT write feature-specific processing here
-- Instead, write update processing in related files and call them from update
-
-## mod.rs
-
-- **IMPORTANT:** Don't write definition or implementation in mod.rs file
-- Only module publish responsibility on mod.rs
-
-## issue history
-
-Issue History Guidelines
-
-**IMPORTANT:** If you encounter an issue and resolve it, you must document the issue and its solution in detail at
-.claude/local/IssueHistory/
+**IMPORTANT:** If you encounter a complex issue and resolve it, you must document the issue and its solution in detail at
+`${IssueHistoryPath}`.
 
 File names must use CamelCase (e.g., ImageLayoutTransition.md).
 
@@ -168,11 +177,6 @@ and recap it.
 At the top of each file, include a brief summary of the issue and its resolution to read shortly.
 
 **IMPORTANT:** MUST write in English.
-
-## explore history
-
-- explore history and summary reports can be placed at .claude/local/ExploreHistory if necessary.
-- MUST write in English.
 
 ## Last Conversation
 
@@ -183,7 +187,7 @@ At the top of each file, include a brief summary of the issue and its resolution
 ### Repository
 repository is separated to ../AnimationModelTraining
 
-### Shared Data
+### Trained Data
 
 The trained data for the copilot curve is stored in ../SharedData/exports/.
 

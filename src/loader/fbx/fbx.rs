@@ -23,13 +23,66 @@ pub struct BoneNode {
     pub default_scaling: [f32; 3],
 }
 
+#[derive(Clone, Debug)]
+pub struct FbxAxesInfo {
+    pub up_axis: i32,
+    pub up_axis_sign: i32,
+    pub front_axis: i32,
+    pub front_axis_sign: i32,
+    pub coord_axis: i32,
+    pub coord_axis_sign: i32,
+}
+
+impl Default for FbxAxesInfo {
+    fn default() -> Self {
+        Self {
+            up_axis: 1,
+            up_axis_sign: 1,
+            front_axis: 2,
+            front_axis_sign: 1,
+            coord_axis: 0,
+            coord_axis_sign: 1,
+        }
+    }
+}
+
+fn convert_coordinate_axis(axis: ufbx::CoordinateAxis) -> (i32, i32) {
+    match axis {
+        ufbx::CoordinateAxis::PositiveX => (0, 1),
+        ufbx::CoordinateAxis::NegativeX => (0, -1),
+        ufbx::CoordinateAxis::PositiveY => (1, 1),
+        ufbx::CoordinateAxis::NegativeY => (1, -1),
+        ufbx::CoordinateAxis::PositiveZ => (2, 1),
+        ufbx::CoordinateAxis::NegativeZ => (2, -1),
+        ufbx::CoordinateAxis::Unknown => (1, 1),
+    }
+}
+
+fn read_axes_from_scene(settings: &ufbx::SceneSettings) -> FbxAxesInfo {
+    let (up_axis, up_axis_sign) = convert_coordinate_axis(settings.axes.up);
+    let (front_axis, front_axis_sign) = convert_coordinate_axis(settings.axes.front);
+    let (coord_axis, coord_axis_sign) = convert_coordinate_axis(settings.axes.right);
+
+    FbxAxesInfo {
+        up_axis,
+        up_axis_sign,
+        front_axis,
+        front_axis_sign,
+        coord_axis,
+        coord_axis_sign,
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct FbxModel {
     pub fbx_data: Vec<FbxData>,
     pub animations: Vec<FbxAnimation>,
     pub nodes: HashMap<String, BoneNode>,
     pub unit_scale: f32,
+    pub fps: f32,
     pub constraints: Vec<LoadedConstraint>,
+    pub axes: FbxAxesInfo,
+    pub source_path: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -84,8 +137,10 @@ pub struct FbxData {
     pub clusters: Vec<ClusterInfo>,
     pub mesh_parts: Vec<MeshPart>,
     pub parent_node: Option<String>,
+    pub mesh_node_name: Option<String>,
     pub material_name: Option<String>,
     pub diffuse_texture: Option<String>,
+    pub diffuse_color: [f32; 3],
 }
 
 impl FbxData {
@@ -100,8 +155,10 @@ impl FbxData {
             clusters: Vec::new(),
             mesh_parts: Vec::new(),
             parent_node: None,
+            mesh_node_name: None,
             material_name: None,
             diffuse_texture: None,
+            diffuse_color: [0.8, 0.8, 0.8],
         }
     }
 }
@@ -194,8 +251,21 @@ pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
         );
     }
 
+    let axes = read_axes_from_scene(&scene.settings);
+    log!(
+        "FBX axes: up={}(sign={}), front={}(sign={}), coord={}(sign={})",
+        axes.up_axis, axes.up_axis_sign,
+        axes.front_axis, axes.front_axis_sign,
+        axes.coord_axis, axes.coord_axis_sign
+    );
+
+    let fps = scene.settings.frames_per_second as f32;
+
     let mut fbx_model = FbxModel {
         unit_scale,
+        fps,
+        axes,
+        source_path: Some(path.to_string()),
         ..Default::default()
     };
 
@@ -352,6 +422,8 @@ fn extract_mesh_data_by_material(
             let mat = &mesh.materials[mat_idx];
             fbx_data.material_name = Some(mat.element.name.to_string());
             fbx_data.diffuse_texture = extract_texture_path(mat);
+            let dc = &mat.fbx.diffuse_color.value_vec4;
+            fbx_data.diffuse_color = [dc.x as f32, dc.y as f32, dc.z as f32];
         }
 
         results.push((fbx_data, part.vertex_map));
@@ -493,11 +565,11 @@ fn build_mesh_node_mapping(scene: &ufbx::Scene) -> HashMap<usize, String> {
 
 fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel, unit_scale: f32) {
     for anim_stack in &scene.anim_stacks {
-        let anim_name = anim_stack.element.name.to_string();
-        let anim_name = if anim_name.is_empty() {
+        let raw_name = anim_stack.element.name.to_string();
+        let anim_name = if raw_name.is_empty() {
             "DefaultAnimation".to_string()
         } else {
-            anim_name
+            raw_name.replace('|', "-")
         };
 
         log!("Processing AnimStack: {}", anim_name);
@@ -867,16 +939,23 @@ fn assign_mesh_parent_nodes(
         std::collections::HashSet::new()
     };
 
-    for (fbx_idx, fbx_data) in fbx_model.fbx_data.iter_mut().enumerate() {
-        if !fbx_data.clusters.is_empty() {
-            continue;
-        }
+    let mut name_usage_count: HashMap<String, usize> = HashMap::new();
 
+    for (fbx_idx, fbx_data) in fbx_model.fbx_data.iter_mut().enumerate() {
         let ufbx_id = split_infos.get(fbx_idx).map(|info| info.ufbx_mesh_typed_id);
 
         if let Some(id) = ufbx_id {
             if let Some(node_name) = mesh_to_node.get(&id) {
-                if !animated_nodes.is_empty() {
+                let count = name_usage_count.entry(node_name.clone()).or_insert(0);
+                let unique_name = if *count == 0 {
+                    node_name.clone()
+                } else {
+                    format!("{}_mat{}", node_name, count)
+                };
+                *count += 1;
+                fbx_data.mesh_node_name = Some(unique_name);
+
+                if fbx_data.clusters.is_empty() && !animated_nodes.is_empty() {
                     fbx_data.parent_node = Some(node_name.clone());
                 }
             }
@@ -1012,4 +1091,5 @@ mod tests {
 
         assert_eq!(model.fbx_data.len(), 1);
     }
+
 }

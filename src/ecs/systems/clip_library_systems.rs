@@ -9,6 +9,7 @@ use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId
 use crate::animation::{AnimationClip, BoneId};
 use crate::asset::{AnimationClipAsset, AssetStorage};
 use crate::ecs::resource::ClipLibrary;
+use crate::scene::AnimationClipFile;
 
 pub fn clip_library_register_and_activate(
     lib: &mut ClipLibrary,
@@ -77,13 +78,15 @@ pub fn clip_library_clip_names(lib: &ClipLibrary) -> Vec<(SourceClipId, String)>
 pub fn clip_library_save_to_file(lib: &ClipLibrary, id: SourceClipId, path: &Path) -> Result<()> {
     let source = lib.source_clips.get(&id).context("Clip not found")?;
 
+    let clip_file = AnimationClipFile::new(source.editable_clip.clone());
+
     let file =
         fs::File::create(path).with_context(|| format!("Failed to create file: {:?}", path))?;
     let writer = BufWriter::new(file);
 
     ron::ser::to_writer_pretty(
         writer,
-        &source.editable_clip,
+        &clip_file,
         ron::ser::PrettyConfig::default(),
     )
     .with_context(|| format!("Failed to serialize clip to: {:?}", path))?;
@@ -102,10 +105,10 @@ pub fn clip_library_load_from_file(
     path: &Path,
     bone_name_to_id: Option<&HashMap<String, BoneId>>,
 ) -> Result<SourceClipId> {
-    let file = fs::File::open(path).with_context(|| format!("Failed to open file: {:?}", path))?;
-    let reader = BufReader::new(file);
+    let content = fs::read_to_string(path)
+        .with_context(|| format!("Failed to read file: {:?}", path))?;
 
-    let mut clip: EditableAnimationClip = ron::de::from_reader(reader)
+    let mut clip = deserialize_clip(&content)
         .with_context(|| format!("Failed to deserialize clip from: {:?}", path))?;
 
     if let Some(name_to_id) = bone_name_to_id {
@@ -136,4 +139,13 @@ pub fn clip_library_load_from_file(
 
     let id = clip_library_register_and_activate(lib, assets, clip);
     Ok(id)
+}
+
+fn deserialize_clip(content: &str) -> Result<EditableAnimationClip> {
+    if let Ok(clip_file) = ron::from_str::<AnimationClipFile>(content) {
+        return Ok(clip_file.clip);
+    }
+
+    let clip = ron::from_str::<EditableAnimationClip>(content)?;
+    Ok(clip)
 }

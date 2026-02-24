@@ -34,7 +34,11 @@ impl App {
 
             self.record_object_id_copy(command_buffer);
 
-            deferred::record_ray_query_pass(self, command_buffer)?;
+            if self.data.raytracing.has_valid_tlas() {
+                deferred::record_ray_query_pass(self, command_buffer)?;
+            } else {
+                self.prepare_empty_shadow_mask(command_buffer);
+            }
 
             let has_hdr_pipeline = self.data.viewport.hdr_buffer.is_some()
                 && self.data.raytracing.tonemap_pipeline.is_some();
@@ -67,6 +71,69 @@ impl App {
         self.rrdevice.device.end_command_buffer(command_buffer)?;
 
         Ok(())
+    }
+
+    unsafe fn prepare_empty_shadow_mask(&self, command_buffer: vk::CommandBuffer) {
+        let Some(ref gbuffer) = self.data.raytracing.gbuffer else {
+            return;
+        };
+
+        let subresource_range = vk::ImageSubresourceRange {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            base_mip_level: 0,
+            level_count: 1,
+            base_array_layer: 0,
+            layer_count: 1,
+        };
+
+        let to_transfer = vk::ImageMemoryBarrier::builder()
+            .src_access_mask(vk::AccessFlags::empty())
+            .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+            .old_layout(vk::ImageLayout::UNDEFINED)
+            .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .image(gbuffer.shadow_mask_image)
+            .subresource_range(subresource_range)
+            .build();
+
+        self.rrdevice.device.cmd_pipeline_barrier(
+            command_buffer,
+            vk::PipelineStageFlags::TOP_OF_PIPE,
+            vk::PipelineStageFlags::TRANSFER,
+            vk::DependencyFlags::empty(),
+            &[] as &[vk::MemoryBarrier],
+            &[] as &[vk::BufferMemoryBarrier],
+            &[to_transfer],
+        );
+
+        let clear_value = vk::ClearColorValue {
+            float32: [1.0, 1.0, 1.0, 1.0],
+        };
+        self.rrdevice.device.cmd_clear_color_image(
+            command_buffer,
+            gbuffer.shadow_mask_image,
+            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            &clear_value,
+            &[subresource_range],
+        );
+
+        let to_shader_read = vk::ImageMemoryBarrier::builder()
+            .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+            .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image(gbuffer.shadow_mask_image)
+            .subresource_range(subresource_range)
+            .build();
+
+        self.rrdevice.device.cmd_pipeline_barrier(
+            command_buffer,
+            vk::PipelineStageFlags::TRANSFER,
+            vk::PipelineStageFlags::FRAGMENT_SHADER,
+            vk::DependencyFlags::empty(),
+            &[] as &[vk::MemoryBarrier],
+            &[] as &[vk::BufferMemoryBarrier],
+            &[to_shader_read],
+        );
     }
 
     unsafe fn record_object_id_copy(&mut self, command_buffer: vk::CommandBuffer) {

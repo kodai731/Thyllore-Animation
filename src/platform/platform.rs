@@ -29,8 +29,8 @@ pub fn init(title: &str) -> System {
     let mut imgui = Context::create();
     imgui.set_ini_filename(None);
 
-    // Enable docking
     imgui.io_mut().config_flags |= imgui::ConfigFlags::DOCKING_ENABLE;
+    imgui.io_mut().backend_flags |= imgui::BackendFlags::RENDERER_HAS_VTX_OFFSET;
 
     if let Some(backend) = clipboard::init() {
         imgui.set_clipboard_backend(backend);

@@ -68,10 +68,17 @@ Report findings in Japanese with:
    SourceStruct.field → function_name() → TargetStruct.field
    ```
 
+## Path Resolution
+
+Before saving any files, read `.claude/local/paths.md` at PROJECT_ROOT to get absolute paths.
+This file contains resolved absolute paths for all `${...Path}` variables.
+Do NOT resolve paths from CLAUDE.md relative paths — always use the absolute paths from `.claude/local/paths.md`.
+
 ## Explore History
 
-- Save exploration results and summary reports to `.claude/local/ExploreHistory/` when the findings are significant or reusable
-- Use descriptive file names (e.g., `SceneViewInteraction.md`, `AnimationPipeline.md`)
+- Save exploration results and summary reports to the ExploreHistoryPath defined in `.claude/local/paths.md` when the findings are significant or reusable
+- Use descriptive file names in Pascal Case (e.g., `SceneViewInteraction.md`, `AnimationPipeline.md`)
+- write in English
 
 ## Rules
 
@@ -80,4 +87,3 @@ Report findings in Japanese with:
 - Report file paths and line numbers for every finding
 - When referencing external engines, explain the pattern briefly
 - Prioritize accuracy over speed; verify findings before reporting
-- Always respond in Japanese

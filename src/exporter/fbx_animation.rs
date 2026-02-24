@@ -65,7 +65,6 @@ pub(crate) struct FbxBoneExport {
     pub translation: [f64; 3],
     pub rotation: [f64; 3],
     pub scaling: [f64; 3],
-    pub is_skinned: bool,
     pub node_attribute_uid: Option<i64>,
 }
 
@@ -241,7 +240,6 @@ pub(crate) fn build_bone_export_list(
             translation,
             rotation,
             scaling,
-            is_skinned: needs_coord_conversion,
             node_attribute_uid,
         });
     }
@@ -860,7 +858,11 @@ pub(crate) fn write_bone_model<W: Write + Seek>(
     bone: &FbxBoneExport,
 ) -> FbxWriteResult<()> {
     let fbx_name = format!("{}\x00\x01Model", bone.name);
-    let subclass = if bone.is_skinned { "LimbNode" } else { "Null" };
+    let subclass = if bone.node_attribute_uid.is_some() {
+        "LimbNode"
+    } else {
+        "Null"
+    };
     let mut attrs = writer.new_node("Model")?;
     attrs.append_i64(bone.model_uid)?;
     attrs.append_string_direct(&fbx_name)?;

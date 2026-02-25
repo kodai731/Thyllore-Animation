@@ -16,7 +16,8 @@ use crate::asset::{AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
 use crate::debugview::gizmo::{BoneGizmoData, ConstraintGizmoData};
 use crate::ecs::component::{AnimationMeta, ClipSchedule, EntityIcon};
 use crate::ecs::resource::{
-    AnimationType, ClipLibrary, FbxModelCache, MeshAssets, ModelState, NodeAssets, TimelineState,
+    AnimationType, ClipLibrary, FbxModelCache, GltfModelCache, MeshAssets, ModelState, NodeAssets,
+    TimelineState,
 };
 use crate::ecs::world::{Animator, Transform, World};
 use crate::loader::fbx::FbxModel;
@@ -104,8 +105,15 @@ unsafe fn apply_model_to_resources(
 
     if let Some(fbx) = fbx_model {
         world.insert_resource(FbxModelCache::new(fbx, model_name.to_string()));
+        world.insert_resource(GltfModelCache::empty());
     } else {
         world.insert_resource(FbxModelCache::empty());
+        let path_lower = model_name.to_lowercase();
+        if path_lower.ends_with(".gltf") || path_lower.ends_with(".glb") {
+            world.insert_resource(GltfModelCache::new(model_name.to_string()));
+        } else {
+            world.insert_resource(GltfModelCache::empty());
+        }
     }
 
     let mesh_count = load_result.meshes.len();
@@ -230,6 +238,11 @@ unsafe fn cleanup_resources(
 
     if world.contains_resource::<FbxModelCache>() {
         let mut cache = world.resource_mut::<FbxModelCache>();
+        cache.clear();
+    }
+
+    if world.contains_resource::<GltfModelCache>() {
+        let mut cache = world.resource_mut::<GltfModelCache>();
         cache.clear();
     }
 

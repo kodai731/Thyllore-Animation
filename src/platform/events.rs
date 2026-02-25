@@ -1007,6 +1007,58 @@ fn process_clip_browser_events_inline(events: &[UIEvent], app: &mut App) {
                 }
             }
 
+            UIEvent::ClipBrowserExportGltf(source_id) => {
+                let clip = {
+                    let lib = app.data.ecs_world.resource::<ClipLibrary>();
+                    lib.get(*source_id).cloned()
+                };
+                let skeleton = app
+                    .data
+                    .ecs_assets
+                    .skeletons
+                    .values()
+                    .next()
+                    .map(|sa| sa.skeleton.clone());
+
+                if let (Some(clip), Some(skeleton)) = (clip, skeleton) {
+                    let has_gltf_cache = app
+                        .data
+                        .ecs_world
+                        .contains_resource::<crate::ecs::resource::GltfModelCache>();
+                    let source_path = if has_gltf_cache {
+                        let cache =
+                            app.data.ecs_world.resource::<crate::ecs::resource::GltfModelCache>();
+                        cache.source_path.clone()
+                    } else {
+                        None
+                    };
+
+                    if let Some(source_path) = source_path {
+                        let default_filename = format!("{}.glb", clip.name);
+                        let path = rfd::FileDialog::new()
+                            .add_filter("glTF Binary", &["glb"])
+                            .set_file_name(&default_filename)
+                            .save_file();
+
+                        if let Some(output_path) = path {
+                            let result = crate::exporter::gltf_exporter::export_gltf_animation(
+                                std::path::Path::new(&source_path),
+                                &clip,
+                                &skeleton,
+                                &output_path,
+                            );
+
+                            match result {
+                                Ok(()) => crate::log!("glTF exported: {:?}", output_path),
+                                Err(e) => crate::log!("glTF export failed: {:?}", e),
+                            }
+                        }
+                    } else {
+                        crate::log!("glTF export failed: no source glTF file cached");
+                    }
+                }
+            }
+
             UIEvent::ClipBrowserDelete(source_id) => {
                 let ref_count = count_source_references(*source_id, &app.data.ecs_world);
                 if ref_count == 0 {

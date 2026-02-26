@@ -4,21 +4,51 @@ use crate::animation::editable::SourceClipId;
 use crate::animation::{Skeleton, SkeletonId, SkinData};
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::resource::{ClipLibrary, GhostFrameInfo, OnionSkinningConfig};
+use crate::ecs::resource::{
+    ClipLibrary, GhostFrameInfo, GhostMeshData, OnionSkinningConfig, OnionSkinningResult,
+};
 use crate::ecs::world::{Animator, World};
 use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose};
 use crate::vulkanr::data::Vertex;
 
-#[derive(Clone, Debug)]
-pub struct GhostMeshData {
-    pub vertices: Vec<Vertex>,
-    pub tint_color: [f32; 3],
-    pub opacity: f32,
+pub struct OnionSkinMeshContext<'a> {
+    pub base_vertices: &'a [Vertex],
     pub mesh_index: usize,
+    pub skin_data: &'a SkinData,
 }
 
-pub struct OnionSkinningResult {
-    pub ghost_meshes: Vec<GhostMeshData>,
+pub fn compute_ghost_time_offsets(
+    config: &OnionSkinningConfig,
+) -> Vec<GhostFrameInfo> {
+    if !config.enabled {
+        return Vec::new();
+    }
+
+    let mut offsets = Vec::new();
+
+    for i in 1..=config.past_count {
+        let distance = i as f32;
+        let opacity =
+            config.opacity * (1.0 - (distance - 1.0) / config.past_count.max(1) as f32);
+        offsets.push(GhostFrameInfo {
+            time_offset: -(i as f32) * config.frame_step,
+            tint_color: config.past_color,
+            opacity,
+        });
+    }
+
+    for i in 1..=config.future_count {
+        let distance = i as f32;
+        let opacity =
+            config.opacity * (1.0 - (distance - 1.0) / config.future_count.max(1) as f32);
+        offsets.push(GhostFrameInfo {
+            time_offset: i as f32 * config.frame_step,
+            tint_color: config.future_color,
+            opacity,
+        });
+    }
+
+    offsets
 }
 
 pub fn compute_onion_skin_ghosts(
@@ -27,9 +57,7 @@ pub fn compute_onion_skin_ghosts(
     world: &World,
     assets: &AssetStorage,
     clip_library: &ClipLibrary,
-    base_vertices: &[Vertex],
-    mesh_index: usize,
-    skin_data: &SkinData,
+    mesh_ctx: &OnionSkinMeshContext,
 ) -> OnionSkinningResult {
     if !config.enabled {
         return OnionSkinningResult {
@@ -37,7 +65,7 @@ pub fn compute_onion_skin_ghosts(
         };
     }
 
-    let ghost_infos = config.ghost_time_offsets();
+    let ghost_infos = compute_ghost_time_offsets(config);
     if ghost_infos.is_empty() {
         return OnionSkinningResult {
             ghost_meshes: Vec::new(),
@@ -47,9 +75,8 @@ pub fn compute_onion_skin_ghosts(
     let animation_context = match collect_animation_context(
         world,
         assets,
-        clip_library,
-        mesh_index,
-        skin_data.clone(),
+        mesh_ctx.mesh_index,
+        mesh_ctx.skin_data.clone(),
     ) {
         Some(ctx) => ctx,
         None => {
@@ -68,8 +95,8 @@ pub fn compute_onion_skin_ghosts(
                 &animation_context,
                 assets,
                 clip_library,
-                base_vertices,
-                mesh_index,
+                mesh_ctx.base_vertices,
+                mesh_ctx.mesh_index,
             )
         })
         .collect();
@@ -87,7 +114,6 @@ struct AnimationContext {
 fn collect_animation_context(
     world: &World,
     assets: &AssetStorage,
-    _clip_library: &ClipLibrary,
     mesh_index: usize,
     skin_data: SkinData,
 ) -> Option<AnimationContext> {
@@ -101,9 +127,7 @@ fn collect_animation_context(
         }
 
         let skeleton_id = mesh_asset.skeleton_id?;
-
         let source_id = schedule.instances.first().map(|inst| inst.source_id)?;
-
         let _skeleton = assets.get_skeleton_by_skeleton_id(skeleton_id)?;
 
         return Some(AnimationContext {
@@ -165,6 +189,12 @@ fn apply_skinning_to_vertices(
         &mut skinned_normals,
     );
 
+    debug_assert_eq!(
+        skinned_positions.len(),
+        base_vertices.len(),
+        "skinned positions count must match base vertices count"
+    );
+
     let mut result = base_vertices.to_vec();
     for (i, pos) in skinned_positions.iter().enumerate() {
         if i < result.len() {
@@ -187,7 +217,7 @@ fn apply_skinning_to_vertices(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ecs::resource::OnionSkinningConfig;
+    use crate::ecs::resource::{GhostMeshData, OnionSkinningConfig, OnionSkinningResult};
 
     #[test]
     fn test_compute_ghosts_disabled() {
@@ -270,15 +300,18 @@ mod tests {
         let clip_library = ClipLibrary::default();
         let skin_data = SkinData::default();
 
+        let mesh_ctx = OnionSkinMeshContext {
+            base_vertices: &[],
+            mesh_index: 0,
+            skin_data: &skin_data,
+        };
         let result = compute_onion_skin_ghosts(
             &config,
             0.0,
             &world,
             &assets,
             &clip_library,
-            &[],
-            0,
-            &skin_data,
+            &mesh_ctx,
         );
         assert!(result.ghost_meshes.is_empty());
     }
@@ -297,16 +330,62 @@ mod tests {
         let clip_library = ClipLibrary::default();
         let skin_data = SkinData::default();
 
+        let mesh_ctx = OnionSkinMeshContext {
+            base_vertices: &[],
+            mesh_index: 0,
+            skin_data: &skin_data,
+        };
         let result = compute_onion_skin_ghosts(
             &config,
             1.0,
             &world,
             &assets,
             &clip_library,
-            &[],
-            0,
-            &skin_data,
+            &mesh_ctx,
         );
         assert!(result.ghost_meshes.is_empty());
+    }
+
+    #[test]
+    fn test_ghost_time_offsets_disabled() {
+        let config = OnionSkinningConfig::default();
+        assert!(compute_ghost_time_offsets(&config).is_empty());
+    }
+
+    #[test]
+    fn test_ghost_time_offsets_enabled() {
+        let mut config = OnionSkinningConfig::default();
+        config.enabled = true;
+        config.past_count = 2;
+        config.future_count = 1;
+
+        let offsets = compute_ghost_time_offsets(&config);
+        assert_eq!(offsets.len(), 3);
+
+        assert!(offsets[0].time_offset < 0.0);
+        assert!(offsets[1].time_offset < 0.0);
+        assert!(offsets[2].time_offset > 0.0);
+
+        assert!(offsets[0].opacity > 0.0);
+        assert!(offsets[1].opacity > 0.0);
+        assert!(offsets[2].opacity > 0.0);
+
+        assert_eq!(offsets[0].tint_color, config.past_color);
+        assert_eq!(offsets[2].tint_color, config.future_color);
+    }
+
+    #[test]
+    fn test_ghost_opacity_falloff() {
+        let mut config = OnionSkinningConfig::default();
+        config.enabled = true;
+        config.past_count = 3;
+        config.future_count = 0;
+        config.opacity = 0.6;
+
+        let offsets = compute_ghost_time_offsets(&config);
+        assert_eq!(offsets.len(), 3);
+
+        assert!(offsets[0].opacity >= offsets[1].opacity);
+        assert!(offsets[1].opacity >= offsets[2].opacity);
     }
 }

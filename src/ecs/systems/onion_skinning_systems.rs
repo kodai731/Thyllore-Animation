@@ -189,7 +189,7 @@ fn apply_skinning_to_vertices(
         &mut skinned_normals,
     );
 
-    debug_assert_eq!(
+    assert_eq!(
         skinned_positions.len(),
         base_vertices.len(),
         "skinned positions count must match base vertices count"
@@ -197,18 +197,14 @@ fn apply_skinning_to_vertices(
 
     let mut result = base_vertices.to_vec();
     for (i, pos) in skinned_positions.iter().enumerate() {
-        if i < result.len() {
-            result[i].pos.x = pos.x;
-            result[i].pos.y = pos.y;
-            result[i].pos.z = pos.z;
-        }
+        result[i].pos.x = pos.x;
+        result[i].pos.y = pos.y;
+        result[i].pos.z = pos.z;
     }
     for (i, normal) in skinned_normals.iter().enumerate() {
-        if i < result.len() {
-            result[i].normal.x = normal.x;
-            result[i].normal.y = normal.y;
-            result[i].normal.z = normal.z;
-        }
+        result[i].normal.x = normal.x;
+        result[i].normal.y = normal.y;
+        result[i].normal.z = normal.z;
     }
 
     result

@@ -16,6 +16,7 @@ pub mod debug_spring_bone_systems;
 mod ecs_world_systems;
 mod edit_history_systems;
 mod frame_runner;
+mod onion_skinning_systems;
 #[cfg(feature = "ml")]
 mod curve_suggestion_systems;
 #[cfg(feature = "ml")]
@@ -55,6 +56,7 @@ pub use curve_editor_systems::*;
 pub use ecs_world_systems::*;
 pub use edit_history_systems::*;
 pub use frame_runner::*;
+pub use onion_skinning_systems::*;
 #[cfg(feature = "ml")]
 pub use curve_suggestion_systems::*;
 #[cfg(feature = "ml")]

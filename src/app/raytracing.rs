@@ -18,6 +18,7 @@ use crate::vulkanr::pipeline::{
 };
 use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::render::RRRender;
+use crate::renderer::deferred::gbuffer::GBufferPushConstants;
 use crate::vulkanr::resource::RRGBuffer;
 use crate::vulkanr::swapchain::RRSwapchain;
 
@@ -184,12 +185,6 @@ impl RayTracingData {
             graphics_resources.objects.layout,
         ];
 
-        let push_constant_range = vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-            .offset(0)
-            .size(std::mem::size_of::<u32>() as u32)
-            .build();
-
         let gbuffer_pipeline = PipelineBuilder::new(
             "assets/shaders/gbufferVert.spv",
             "assets/shaders/gbufferFrag.spv",
@@ -205,7 +200,7 @@ impl RayTracingData {
         .push_constants(PushConstantConfig {
             stage_flags: vk::ShaderStageFlags::FRAGMENT,
             offset: 0,
-            size: std::mem::size_of::<u32>() as u32,
+            size: std::mem::size_of::<GBufferPushConstants>() as u32,
         })
         .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))?;
 

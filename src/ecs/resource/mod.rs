@@ -28,6 +28,7 @@ mod ghost_curve_data;
 mod inference_actor_state;
 #[cfg(feature = "text-to-motion")]
 mod text_to_motion_state;
+mod onion_skinning;
 mod spring_bone_state;
 mod timeline_state;
 mod tone_mapping;
@@ -52,6 +53,7 @@ pub use physical_camera::*;
 pub use pipeline_manager::*;
 pub use scene_state::*;
 pub use spring_bone_editor_state::*;
+pub use onion_skinning::*;
 pub use spring_bone_state::*;
 pub use timeline_state::*;
 #[cfg(feature = "ml")]

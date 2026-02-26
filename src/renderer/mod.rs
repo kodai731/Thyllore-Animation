@@ -1,4 +1,5 @@
 pub mod deferred;
+pub mod onion_skin_buffers;
 pub mod scene_renderer;
 
 use anyhow::Result;

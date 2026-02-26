@@ -2,7 +2,7 @@ mod auto_exposure;
 mod bloom;
 mod composite;
 mod dof;
-mod gbuffer;
+pub mod gbuffer;
 mod rayquery;
 mod tonemap;
 

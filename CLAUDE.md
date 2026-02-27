@@ -11,7 +11,8 @@ Always respond to the user in user's Claude setting language, but keep this docu
 
 ## Code Format
 
-**IMPORTANT**: Must follow PROJECT_ROOT/rustfmt.toml on coding
+**IMPORTANT**: Must follow PROJECT_ROOT/rustfmt.toml on coding.
+MUST Use ``cargo fmt`` to format after code written or before git commit.
 
 ## Project Overview
 

@@ -91,7 +91,7 @@ fn process_light_auto_target(ctx: &mut EcsContext) {
     ctx.gui_data.move_light_to = LightMoveTarget::None;
 }
 
-fn viewport_local_mouse_pos(ctx: &EcsContext) -> cgmath::Vector2<f32> {
+fn compute_viewport_local_mouse_pos(ctx: &EcsContext) -> cgmath::Vector2<f32> {
     cgmath::Vector2::new(
         ctx.gui_data.mouse_pos[0] - ctx.gui_data.viewport_position[0],
         ctx.gui_data.mouse_pos[1] - ctx.gui_data.viewport_position[1],
@@ -99,7 +99,7 @@ fn viewport_local_mouse_pos(ctx: &EcsContext) -> cgmath::Vector2<f32> {
 }
 
 fn process_gizmo_interaction(ctx: &mut EcsContext, is_first_left_click: bool) -> Result<()> {
-    let mouse_pos = viewport_local_mouse_pos(ctx);
+    let mouse_pos = compute_viewport_local_mouse_pos(ctx);
 
     if !ctx.gui_data.imgui_wants_mouse && ctx.gui_data.is_left_clicked {
         ctx.light_gizmo_mut().draggable.just_selected = false;
@@ -271,7 +271,7 @@ fn process_bone_selection(ctx: &mut EcsContext) -> Result<bool> {
 }
 
 fn compute_bone_pick_ray(ctx: &EcsContext) -> (Vector3<f32>, Vector3<f32>) {
-    let mouse_pos = viewport_local_mouse_pos(ctx);
+    let mouse_pos = compute_viewport_local_mouse_pos(ctx);
     let screen_size =
         cgmath::Vector2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
 
@@ -435,90 +435,13 @@ fn process_transform_gizmo_interaction(
         return Ok(false);
     }
 
-    let mouse_pos = viewport_local_mouse_pos(ctx);
+    let mouse_pos = compute_viewport_local_mouse_pos(ctx);
 
     if !ctx.gui_data.imgui_wants_mouse && ctx.gui_data.is_left_clicked {
         ctx.transform_gizmo_mut().draggable.just_selected = false;
 
         if is_first_left_click {
-            let camera = ctx.camera();
-            let camera_pos = crate::ecs::compute_camera_position(&camera);
-            let camera_dir = crate::ecs::compute_camera_direction(&camera);
-            let camera_up = crate::ecs::compute_camera_up(&camera);
-            let fov_y = camera.fov_y;
-            let near_plane = camera.near_plane;
-            drop(camera);
-
-            let mode = ctx.transform_gizmo_state().mode;
-            let tg = ctx.transform_gizmo();
-            let tg_clone_for_select = TransformGizmoData {
-                visible: tg.visible,
-                position: tg.position.clone(),
-                selectable: tg.selectable.clone(),
-                draggable: tg.draggable.clone(),
-                active_handle: tg.active_handle,
-                line_mesh: LineMesh::default(),
-                solid_mesh: LineMesh::default(),
-                line_render_info: tg.line_render_info,
-                solid_render_info: tg.solid_render_info,
-                drag_start_position: tg.drag_start_position,
-                drag_start_rotation: tg.drag_start_rotation,
-                drag_start_scale: tg.drag_start_scale,
-                drag_plane_normal: tg.drag_plane_normal,
-                drag_initial_hit: tg.drag_initial_hit,
-                drag_initial_angle: tg.drag_initial_angle,
-                target_bone_id: tg.target_bone_id,
-            };
-            drop(tg);
-
-            let handle = transform_gizmo_systems::transform_gizmo_try_select(
-                &tg_clone_for_select,
-                mode,
-                mouse_pos,
-                camera_pos,
-                camera_dir,
-                camera_up,
-                ctx.swapchain_extent,
-                fov_y,
-                near_plane,
-            );
-
-            if handle != TransformGizmoHandle::None {
-                let gizmo_pos = tg_clone_for_select.position.position;
-                let (plane_point, plane_normal) =
-                    transform_gizmo_systems::transform_gizmo_compute_drag_plane(
-                        handle, gizmo_pos, camera_dir,
-                    );
-
-                let view_mat = unsafe { crate::math::view(camera_pos, camera_dir, camera_up) };
-                let aspect = ctx.swapchain_extent.0 as f32 / ctx.swapchain_extent.1 as f32;
-                let proj = crate::math::coordinate_system::perspective_infinite_reverse(
-                    fov_y, aspect, near_plane,
-                );
-                let screen_size = cgmath::Vector2::new(
-                    ctx.swapchain_extent.0 as f32,
-                    ctx.swapchain_extent.1 as f32,
-                );
-                let (ray_origin, ray_direction) =
-                    screen_to_world_ray(mouse_pos, screen_size, view_mat, proj);
-                let initial_hit = crate::math::ray_plane_intersection(
-                    ray_origin,
-                    ray_direction,
-                    plane_point,
-                    plane_normal,
-                )
-                .unwrap_or(gizmo_pos);
-
-                let mut tg = ctx.transform_gizmo_mut();
-                tg.selectable.is_selected = true;
-                tg.active_handle = handle;
-                tg.draggable.just_selected = true;
-                tg.drag_start_position = tg.position.position;
-                tg.drag_plane_normal = plane_normal;
-                tg.drag_initial_hit = initial_hit;
-
-                crate::log!("TransformGizmo selected: handle={:?}", handle);
-            }
+            try_select_transform_gizmo_handle(ctx, mouse_pos);
         }
 
         let (is_selected, just_selected) = {
@@ -543,6 +466,79 @@ fn process_transform_gizmo_interaction(
     }
 
     Ok(false)
+}
+
+fn try_select_transform_gizmo_handle(ctx: &mut EcsContext, mouse_pos: cgmath::Vector2<f32>) {
+    let camera = ctx.camera();
+    let camera_pos = crate::ecs::compute_camera_position(&camera);
+    let camera_dir = crate::ecs::compute_camera_direction(&camera);
+    let camera_up = crate::ecs::compute_camera_up(&camera);
+    let fov_y = camera.fov_y;
+    let near_plane = camera.near_plane;
+    drop(camera);
+
+    let mode = ctx.transform_gizmo_state().mode;
+    let tg = ctx.transform_gizmo();
+    let tg_clone_for_select = TransformGizmoData {
+        visible: tg.visible,
+        position: tg.position.clone(),
+        selectable: tg.selectable.clone(),
+        draggable: tg.draggable.clone(),
+        active_handle: tg.active_handle,
+        line_mesh: LineMesh::default(),
+        solid_mesh: LineMesh::default(),
+        line_render_info: tg.line_render_info,
+        solid_render_info: tg.solid_render_info,
+        drag_start_position: tg.drag_start_position,
+        drag_start_rotation: tg.drag_start_rotation,
+        drag_start_scale: tg.drag_start_scale,
+        drag_plane_normal: tg.drag_plane_normal,
+        drag_initial_hit: tg.drag_initial_hit,
+        drag_initial_angle: tg.drag_initial_angle,
+        target_bone_id: tg.target_bone_id,
+    };
+    drop(tg);
+
+    let handle = transform_gizmo_systems::transform_gizmo_try_select(
+        &tg_clone_for_select,
+        mode,
+        mouse_pos,
+        camera_pos,
+        camera_dir,
+        camera_up,
+        ctx.swapchain_extent,
+        fov_y,
+        near_plane,
+    );
+
+    if handle == TransformGizmoHandle::None {
+        return;
+    }
+
+    let gizmo_pos = tg_clone_for_select.position.position;
+    let (plane_point, plane_normal) =
+        transform_gizmo_systems::transform_gizmo_compute_drag_plane(handle, gizmo_pos, camera_dir);
+
+    let view_mat = unsafe { crate::math::view(camera_pos, camera_dir, camera_up) };
+    let aspect = ctx.swapchain_extent.0 as f32 / ctx.swapchain_extent.1 as f32;
+    let proj =
+        crate::math::coordinate_system::perspective_infinite_reverse(fov_y, aspect, near_plane);
+    let screen_size =
+        cgmath::Vector2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
+    let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view_mat, proj);
+    let initial_hit =
+        crate::math::ray_plane_intersection(ray_origin, ray_direction, plane_point, plane_normal)
+            .unwrap_or(gizmo_pos);
+
+    let mut tg = ctx.transform_gizmo_mut();
+    tg.selectable.is_selected = true;
+    tg.active_handle = handle;
+    tg.draggable.just_selected = true;
+    tg.drag_start_position = tg.position.position;
+    tg.drag_plane_normal = plane_normal;
+    tg.drag_initial_hit = initial_hit;
+
+    crate::log!("TransformGizmo selected: handle={:?}", handle);
 }
 
 fn process_transform_gizmo_drag(

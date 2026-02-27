@@ -10,7 +10,6 @@ use crate::math::{
     ray_to_line_segment_distance, ray_to_point_distance, screen_to_world_ray, view,
 };
 
-// ───────────────────── Color Constants ─────────────────────
 const RED: [f32; 3] = [0.9, 0.1, 0.1];
 const GREEN: [f32; 3] = [0.1, 0.9, 0.1];
 const BLUE: [f32; 3] = [0.1, 0.1, 0.9];
@@ -19,8 +18,6 @@ const WHITE: [f32; 3] = [0.8, 0.8, 0.8];
 const PLANE_XY: [f32; 3] = [0.3, 0.3, 0.9];
 const PLANE_XZ: [f32; 3] = [0.3, 0.9, 0.3];
 const PLANE_YZ: [f32; 3] = [0.9, 0.3, 0.3];
-
-// ───────────────────── Translate Mode ─────────────────────
 
 pub fn build_translate_gizmo_meshes(
     active_handle: TransformGizmoHandle,
@@ -40,9 +37,9 @@ pub fn build_translate_gizmo_meshes(
     let plane_size = 0.15;
 
     // Axis shafts (LineList)
-    let x_color = handle_color(TransformGizmoHandle::AxisX, active_handle, RED);
-    let y_color = handle_color(TransformGizmoHandle::AxisY, active_handle, GREEN);
-    let z_color = handle_color(TransformGizmoHandle::AxisZ, active_handle, BLUE);
+    let x_color = resolve_handle_color(TransformGizmoHandle::AxisX, active_handle, RED);
+    let y_color = resolve_handle_color(TransformGizmoHandle::AxisY, active_handle, GREEN);
+    let z_color = resolve_handle_color(TransformGizmoHandle::AxisZ, active_handle, BLUE);
 
     push_line(
         line_mesh,
@@ -93,9 +90,9 @@ pub fn build_translate_gizmo_meshes(
     );
 
     // Plane handles (small quads)
-    let xy_color = handle_color(TransformGizmoHandle::PlaneXY, active_handle, PLANE_XY);
-    let xz_color = handle_color(TransformGizmoHandle::PlaneXZ, active_handle, PLANE_XZ);
-    let yz_color = handle_color(TransformGizmoHandle::PlaneYZ, active_handle, PLANE_YZ);
+    let xy_color = resolve_handle_color(TransformGizmoHandle::PlaneXY, active_handle, PLANE_XY);
+    let xz_color = resolve_handle_color(TransformGizmoHandle::PlaneXZ, active_handle, PLANE_XZ);
+    let yz_color = resolve_handle_color(TransformGizmoHandle::PlaneYZ, active_handle, PLANE_YZ);
 
     push_quad(
         solid_mesh,
@@ -123,8 +120,6 @@ pub fn build_translate_gizmo_meshes(
     );
 }
 
-// ───────────────────── Rotate Mode ─────────────────────
-
 pub fn build_rotate_gizmo_meshes(
     active_handle: TransformGizmoHandle,
     camera_dir: Vector3<f32>,
@@ -139,10 +134,10 @@ pub fn build_rotate_gizmo_meshes(
     let ring_segments = 64;
     let radius = 0.9;
 
-    let x_color = handle_color(TransformGizmoHandle::RingX, active_handle, RED);
-    let y_color = handle_color(TransformGizmoHandle::RingY, active_handle, GREEN);
-    let z_color = handle_color(TransformGizmoHandle::RingZ, active_handle, BLUE);
-    let tb_color = handle_color(TransformGizmoHandle::Trackball, active_handle, WHITE);
+    let x_color = resolve_handle_color(TransformGizmoHandle::RingX, active_handle, RED);
+    let y_color = resolve_handle_color(TransformGizmoHandle::RingY, active_handle, GREEN);
+    let z_color = resolve_handle_color(TransformGizmoHandle::RingZ, active_handle, BLUE);
+    let tb_color = resolve_handle_color(TransformGizmoHandle::Trackball, active_handle, WHITE);
 
     // X ring: rotate around X axis (normal = X)
     generate_circle_vertices(
@@ -182,8 +177,6 @@ pub fn build_rotate_gizmo_meshes(
     );
 }
 
-// ───────────────────── Scale Mode ─────────────────────
-
 pub fn build_scale_gizmo_meshes(
     active_handle: TransformGizmoHandle,
     line_mesh: &mut LineMesh,
@@ -197,10 +190,10 @@ pub fn build_scale_gizmo_meshes(
     let shaft_length = 1.0f32;
     let cube_half = 0.05;
 
-    let x_color = handle_color(TransformGizmoHandle::AxisX, active_handle, RED);
-    let y_color = handle_color(TransformGizmoHandle::AxisY, active_handle, GREEN);
-    let z_color = handle_color(TransformGizmoHandle::AxisZ, active_handle, BLUE);
-    let center_color = handle_color(TransformGizmoHandle::Center, active_handle, WHITE);
+    let x_color = resolve_handle_color(TransformGizmoHandle::AxisX, active_handle, RED);
+    let y_color = resolve_handle_color(TransformGizmoHandle::AxisY, active_handle, GREEN);
+    let z_color = resolve_handle_color(TransformGizmoHandle::AxisZ, active_handle, BLUE);
+    let center_color = resolve_handle_color(TransformGizmoHandle::Center, active_handle, WHITE);
 
     // Axis shafts
     push_line(
@@ -254,8 +247,6 @@ pub fn build_scale_gizmo_meshes(
         &mut solid_mesh.indices,
     );
 }
-
-// ───────────────────── Hit Testing ─────────────────────
 
 pub fn transform_gizmo_try_select(
     gizmo: &TransformGizmoData,
@@ -397,28 +388,28 @@ fn select_rotate_handle(
 ) -> TransformGizmoHandle {
     let radius = 0.9 * scale_factor;
 
-    let x_dist = ray_to_circle_distance(
+    let x_dist = compute_ray_to_circle_distance(
         ray_origin,
         ray_direction,
         gizmo_pos,
         vec3(1.0, 0.0, 0.0),
         radius,
     );
-    let y_dist = ray_to_circle_distance(
+    let y_dist = compute_ray_to_circle_distance(
         ray_origin,
         ray_direction,
         gizmo_pos,
         vec3(0.0, 1.0, 0.0),
         radius,
     );
-    let z_dist = ray_to_circle_distance(
+    let z_dist = compute_ray_to_circle_distance(
         ray_origin,
         ray_direction,
         gizmo_pos,
         vec3(0.0, 0.0, 1.0),
         radius,
     );
-    let tb_dist = ray_to_circle_distance(
+    let tb_dist = compute_ray_to_circle_distance(
         ray_origin,
         ray_direction,
         gizmo_pos,
@@ -488,17 +479,21 @@ fn select_scale_handle(
     selected
 }
 
-// ───────────────────── Drag Processing ─────────────────────
-
 pub fn transform_gizmo_compute_drag_plane(
     handle: TransformGizmoHandle,
     gizmo_pos: Vector3<f32>,
     camera_dir: Vector3<f32>,
 ) -> (Vector3<f32>, Vector3<f32>) {
     let plane_normal = match handle {
-        TransformGizmoHandle::AxisX => best_axis_drag_plane_normal(vec3(1.0, 0.0, 0.0), camera_dir),
-        TransformGizmoHandle::AxisY => best_axis_drag_plane_normal(vec3(0.0, 1.0, 0.0), camera_dir),
-        TransformGizmoHandle::AxisZ => best_axis_drag_plane_normal(vec3(0.0, 0.0, 1.0), camera_dir),
+        TransformGizmoHandle::AxisX => {
+            compute_best_axis_drag_plane_normal(vec3(1.0, 0.0, 0.0), camera_dir)
+        }
+        TransformGizmoHandle::AxisY => {
+            compute_best_axis_drag_plane_normal(vec3(0.0, 1.0, 0.0), camera_dir)
+        }
+        TransformGizmoHandle::AxisZ => {
+            compute_best_axis_drag_plane_normal(vec3(0.0, 0.0, 1.0), camera_dir)
+        }
         TransformGizmoHandle::PlaneXY => vec3(0.0, 0.0, 1.0),
         TransformGizmoHandle::PlaneXZ => vec3(0.0, 1.0, 0.0),
         TransformGizmoHandle::PlaneYZ => vec3(1.0, 0.0, 0.0),
@@ -512,7 +507,10 @@ pub fn transform_gizmo_compute_drag_plane(
     (gizmo_pos, plane_normal)
 }
 
-fn best_axis_drag_plane_normal(axis: Vector3<f32>, camera_dir: Vector3<f32>) -> Vector3<f32> {
+fn compute_best_axis_drag_plane_normal(
+    axis: Vector3<f32>,
+    camera_dir: Vector3<f32>,
+) -> Vector3<f32> {
     let cam_norm = camera_dir.normalize();
     let tangent = axis.cross(cam_norm);
     if tangent.magnitude() < 1e-6 {
@@ -561,9 +559,9 @@ pub fn transform_gizmo_process_translate_drag(
 
     let snapped = if let Some(snap_val) = snap {
         vec3(
-            snap_value(constrained_delta.x, snap_val),
-            snap_value(constrained_delta.y, snap_val),
-            snap_value(constrained_delta.z, snap_val),
+            apply_snap_value(constrained_delta.x, snap_val),
+            apply_snap_value(constrained_delta.y, snap_val),
+            apply_snap_value(constrained_delta.z, snap_val),
         )
     } else {
         constrained_delta
@@ -684,9 +682,9 @@ pub fn transform_gizmo_process_scale_drag(
 
     let final_scale = if let Some(snap_val) = snap {
         vec3(
-            snap_value(scale.x, snap_val),
-            snap_value(scale.y, snap_val),
-            snap_value(scale.z, snap_val),
+            apply_snap_value(scale.x, snap_val),
+            apply_snap_value(scale.y, snap_val),
+            apply_snap_value(scale.z, snap_val),
         )
     } else {
         scale
@@ -698,8 +696,6 @@ pub fn transform_gizmo_process_scale_drag(
         gizmo.drag_start_scale.z * final_scale.z,
     ))
 }
-
-// ───────────────── Sync to Target ─────────────────
 
 pub fn transform_gizmo_sync_to_bone(
     gizmo: &mut TransformGizmoData,
@@ -728,8 +724,6 @@ pub fn transform_gizmo_sync_to_bone(
     }
 }
 
-// ───────────────── Geometry Helpers ─────────────────
-
 fn generate_cone_vertices(
     base_center: Vector3<f32>,
     tip: Vector3<f32>,
@@ -740,7 +734,7 @@ fn generate_cone_vertices(
     indices: &mut Vec<u32>,
 ) {
     let axis = (tip - base_center).normalize();
-    let (tangent, bitangent) = orthonormal_basis(axis);
+    let (tangent, bitangent) = compute_orthonormal_basis(axis);
 
     let base_idx = verts.len() as u32;
     let tip_idx = base_idx;
@@ -830,7 +824,7 @@ fn generate_circle_vertices(
     verts: &mut Vec<ColorVertex>,
     indices: &mut Vec<u32>,
 ) {
-    let (tangent, bitangent) = orthonormal_basis(normal);
+    let (tangent, bitangent) = compute_orthonormal_basis(normal);
     let base = verts.len() as u32;
 
     for i in 0..segments {
@@ -850,7 +844,7 @@ fn generate_circle_vertices(
     }
 }
 
-fn orthonormal_basis(normal: Vector3<f32>) -> (Vector3<f32>, Vector3<f32>) {
+fn compute_orthonormal_basis(normal: Vector3<f32>) -> (Vector3<f32>, Vector3<f32>) {
     let n = normal.normalize();
     let up = if n.y.abs() < 0.99 {
         vec3(0.0, 1.0, 0.0)
@@ -894,7 +888,7 @@ fn indices_push_tri(indices: &mut Vec<u32>, a: u32, b: u32, c: u32) {
     indices.push(c);
 }
 
-fn handle_color(
+fn resolve_handle_color(
     handle: TransformGizmoHandle,
     active: TransformGizmoHandle,
     default_color: [f32; 3],
@@ -906,7 +900,7 @@ fn handle_color(
     }
 }
 
-fn snap_value(val: f32, snap: f32) -> f32 {
+fn apply_snap_value(val: f32, snap: f32) -> f32 {
     (val / snap).round() * snap
 }
 
@@ -933,7 +927,7 @@ fn check_plane_handle_hit(
     }
 }
 
-pub fn ray_to_circle_distance(
+pub fn compute_ray_to_circle_distance(
     ray_origin: Vector3<f32>,
     ray_direction: Vector3<f32>,
     center: Vector3<f32>,
@@ -958,8 +952,6 @@ pub fn ray_to_circle_distance(
 
     (dist_from_center - radius).abs()
 }
-
-// ───────────────────── Tests ─────────────────────
 
 #[cfg(test)]
 mod tests {
@@ -1043,17 +1035,17 @@ mod tests {
     }
 
     #[test]
-    fn test_snap_value() {
-        assert!((snap_value(0.3, 0.5) - 0.5).abs() < 1e-6);
-        assert!((snap_value(0.7, 0.5) - 0.5).abs() < 1e-6);
-        assert!((snap_value(0.8, 0.5) - 1.0).abs() < 1e-6);
-        assert!((snap_value(-0.3, 0.5) - (-0.5)).abs() < 1e-6);
+    fn test_apply_snap_value() {
+        assert!((apply_snap_value(0.3, 0.5) - 0.5).abs() < 1e-6);
+        assert!((apply_snap_value(0.7, 0.5) - 0.5).abs() < 1e-6);
+        assert!((apply_snap_value(0.8, 0.5) - 1.0).abs() < 1e-6);
+        assert!((apply_snap_value(-0.3, 0.5) - (-0.5)).abs() < 1e-6);
     }
 
     #[test]
-    fn test_ray_to_circle_distance() {
+    fn test_compute_ray_to_circle_distance() {
         // Ray pointing at the rim of a unit circle in XZ plane
-        let dist = ray_to_circle_distance(
+        let dist = compute_ray_to_circle_distance(
             vec3(1.0, 5.0, 0.0),
             vec3(0.0, -1.0, 0.0),
             vec3(0.0, 0.0, 0.0),
@@ -1066,7 +1058,7 @@ mod tests {
     #[test]
     fn test_handle_color_highlight() {
         assert_eq!(
-            handle_color(
+            resolve_handle_color(
                 TransformGizmoHandle::AxisX,
                 TransformGizmoHandle::AxisX,
                 RED
@@ -1074,7 +1066,7 @@ mod tests {
             YELLOW
         );
         assert_eq!(
-            handle_color(
+            resolve_handle_color(
                 TransformGizmoHandle::AxisX,
                 TransformGizmoHandle::AxisY,
                 RED

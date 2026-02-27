@@ -12,7 +12,7 @@ use crate::ecs::component::{
     ColliderShape, SpringChain, SpringChainId, SpringColliderDef, SpringColliderGroup,
     SpringColliderGroupId, SpringColliderId, SpringJointParam,
 };
-use crate::ecs::resource::{HierarchyDisplayMode, SelectionModifier};
+use crate::ecs::resource::{HierarchyDisplayMode, SelectedKeyframe, SelectionModifier};
 use crate::ecs::world::Entity;
 
 #[derive(Clone, Debug)]
@@ -79,6 +79,13 @@ pub enum UIEvent {
         value: f32,
     },
     TimelineDeleteSelectedKeyframes,
+    TimelineMoveSelectedKeyframes {
+        time_delta: f32,
+    },
+    TimelineSetKeyframeSelection {
+        keyframes: Vec<SelectedKeyframe>,
+        modifier: SelectionModifier,
+    },
     TimelineDeleteKeyframe {
         bone_id: BoneId,
         property_type: PropertyType,

@@ -4,6 +4,44 @@ use crate::animation::editable::{ClipInstanceId, KeyframeId, PropertyType, Sourc
 use crate::animation::BoneId;
 use crate::ecs::world::Entity;
 
+// --- Dope Sheet Interaction Types ---
+
+#[derive(Clone, Debug)]
+pub struct DopeSheetKeyframeHit {
+    pub screen_x: f32,
+    pub screen_y: f32,
+    pub bone_id: BoneId,
+    pub property_type: PropertyType,
+    pub keyframe_id: KeyframeId,
+    pub time: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct DopeSheetBoxSelect {
+    pub start_screen_pos: [f32; 2],
+    pub modifier: SelectionModifier,
+    pub original_selection: HashSet<SelectedKeyframe>,
+}
+
+#[derive(Clone, Debug)]
+pub struct DopeSheetKeyframeDrag {
+    pub drag_start_x: f32,
+    pub original_times: Vec<(SelectedKeyframe, f32)>,
+}
+
+#[derive(Clone, Debug)]
+pub enum DopeSheetInteraction {
+    None,
+    BoxSelecting(DopeSheetBoxSelect),
+    DraggingKeyframes(DopeSheetKeyframeDrag),
+}
+
+impl Default for DopeSheetInteraction {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TimelineViewMode {
     #[default]
@@ -91,6 +129,8 @@ pub struct TimelineState {
     pub view_mode: TimelineViewMode,
     pub snap_settings: SnapSettings,
     pub baked_bone_ids: Vec<BoneId>,
+    pub dope_sheet_interaction: DopeSheetInteraction,
+    pub dope_sheet_keyframe_hits: Vec<DopeSheetKeyframeHit>,
 }
 
 impl TimelineState {
@@ -115,6 +155,8 @@ impl TimelineState {
             view_mode: TimelineViewMode::default(),
             snap_settings: SnapSettings::default(),
             baked_bone_ids: Vec::new(),
+            dope_sheet_interaction: DopeSheetInteraction::default(),
+            dope_sheet_keyframe_hits: Vec::new(),
         }
     }
 
@@ -191,5 +233,62 @@ impl TimelineState {
 impl Default for TimelineState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::animation::editable::PropertyType;
+
+    #[test]
+    fn dope_sheet_interaction_defaults_to_none() {
+        let state = TimelineState::new();
+        assert!(matches!(
+            state.dope_sheet_interaction,
+            DopeSheetInteraction::None
+        ));
+        assert!(state.dope_sheet_keyframe_hits.is_empty());
+    }
+
+    #[test]
+    fn box_select_preserves_original_selection() {
+        let mut original = HashSet::new();
+        original.insert(SelectedKeyframe::new(1, PropertyType::TranslationX, 10));
+        original.insert(SelectedKeyframe::new(2, PropertyType::RotationY, 20));
+
+        let box_sel = DopeSheetBoxSelect {
+            start_screen_pos: [100.0, 50.0],
+            modifier: SelectionModifier::Add,
+            original_selection: original.clone(),
+        };
+
+        assert_eq!(box_sel.original_selection.len(), 2);
+        assert!(box_sel.original_selection.contains(&SelectedKeyframe::new(
+            1,
+            PropertyType::TranslationX,
+            10
+        )));
+    }
+
+    #[test]
+    fn keyframe_drag_stores_original_times() {
+        let drag = DopeSheetKeyframeDrag {
+            drag_start_x: 200.0,
+            original_times: vec![
+                (
+                    SelectedKeyframe::new(1, PropertyType::TranslationX, 10),
+                    0.5,
+                ),
+                (
+                    SelectedKeyframe::new(1, PropertyType::TranslationY, 11),
+                    1.0,
+                ),
+            ],
+        };
+
+        assert_eq!(drag.original_times.len(), 2);
+        assert!((drag.original_times[0].1 - 0.5).abs() < f32::EPSILON);
+        assert!((drag.original_times[1].1 - 1.0).abs() < f32::EPSILON);
     }
 }

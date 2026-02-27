@@ -2,7 +2,10 @@ use super::timeline_window::ruler_padding;
 use crate::animation::editable::{EditableAnimationClip, PropertyType};
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::{SelectedKeyframe, SelectionModifier, TimelineState};
+use crate::ecs::resource::{
+    DopeSheetBoxSelect, DopeSheetInteraction, DopeSheetKeyframeDrag, DopeSheetKeyframeHit,
+    SelectedKeyframe, SelectionModifier, TimelineState,
+};
 
 const DOPE_ROW_HEIGHT: f32 = 22.0;
 const DOPE_SUB_ROW_HEIGHT: f32 = 18.0;
@@ -11,6 +14,7 @@ const DOPE_PIXELS_PER_SECOND: f32 = 80.0;
 const KEYFRAME_DIAMOND_SIZE: f32 = 5.0;
 const RULER_HEIGHT: f32 = 24.0;
 const MAX_VISIBLE_TRACKS: usize = 10;
+const HIT_RADIUS: f32 = 6.0;
 
 const PROPERTY_COLORS: [[f32; 4]; 9] = [
     [0.9, 0.3, 0.3, 1.0],
@@ -24,10 +28,14 @@ const PROPERTY_COLORS: [[f32; 4]; 9] = [
     [0.9, 0.3, 0.9, 1.0],
 ];
 
+const BOX_SELECT_FILL: [f32; 4] = [0.3, 0.5, 0.9, 0.15];
+const BOX_SELECT_BORDER: [f32; 4] = [0.4, 0.6, 1.0, 0.7];
+const DRAG_PREVIEW_ALPHA: f32 = 0.5;
+
 pub fn build_dope_sheet(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
-    timeline_state: &TimelineState,
+    timeline_state: &mut TimelineState,
     clip: &EditableAnimationClip,
     content_width: f32,
     content_height: f32,
@@ -35,6 +43,8 @@ pub fn build_dope_sheet(
     let pixels_per_second = DOPE_PIXELS_PER_SECOND * timeline_state.zoom_level;
     let display_duration = clip.duration + ruler_padding(clip.duration);
     let sheet_width = (display_duration * pixels_per_second).max(content_width - DOPE_LABEL_WIDTH);
+
+    timeline_state.dope_sheet_keyframe_hits.clear();
 
     ui.child_window("dope_sheet_area")
         .size([content_width, content_height])
@@ -58,6 +68,10 @@ pub fn build_dope_sheet(
                 sheet_width,
                 pixels_per_second,
             );
+
+            handle_dope_sheet_interaction(ui, ui_events, timeline_state, pixels_per_second);
+
+            draw_interaction_overlays(ui, timeline_state, pixels_per_second);
 
             if ui.is_window_hovered() && ui.is_mouse_clicked(imgui::MouseButton::Right) {
                 ui.open_popup("dope_sheet_context");
@@ -191,7 +205,7 @@ fn draw_summary_row(
 fn draw_bone_rows(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
-    state: &TimelineState,
+    state: &mut TimelineState,
     clip: &EditableAnimationClip,
     sheet_width: f32,
     pixels_per_second: f32,
@@ -236,7 +250,7 @@ fn draw_bone_rows(
 fn draw_bone_row_collapsed(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
-    state: &TimelineState,
+    state: &mut TimelineState,
     bone_id: BoneId,
     bone_name: &str,
     track: &crate::animation::editable::BoneTrack,
@@ -257,17 +271,44 @@ fn draw_bone_row_collapsed(
         .build();
 
     let y_center = cursor_pos[1] + DOPE_ROW_HEIGHT * 0.5;
-    let keyframe_times = track.collect_all_keyframe_times();
 
-    for time in keyframe_times.iter().take(100) {
-        let x = row_x + time * pixels_per_second;
-        draw_diamond(
-            &draw_list,
-            x,
-            y_center,
-            KEYFRAME_DIAMOND_SIZE,
-            [0.9, 0.7, 0.2, 1.0],
-        );
+    let all_properties = [
+        PropertyType::TranslationX,
+        PropertyType::TranslationY,
+        PropertyType::TranslationZ,
+        PropertyType::RotationX,
+        PropertyType::RotationY,
+        PropertyType::RotationZ,
+        PropertyType::ScaleX,
+        PropertyType::ScaleY,
+        PropertyType::ScaleZ,
+    ];
+
+    for prop in &all_properties {
+        let curve = track.get_curve(*prop);
+        for kf in &curve.keyframes {
+            let x = row_x + kf.time * pixels_per_second;
+
+            let sel_key = SelectedKeyframe::new(bone_id, *prop, kf.id);
+            let is_selected = state.is_keyframe_selected(&sel_key);
+
+            let color = if is_selected {
+                [1.0, 1.0, 0.2, 1.0]
+            } else {
+                [0.9, 0.7, 0.2, 1.0]
+            };
+
+            draw_diamond(&draw_list, x, y_center, KEYFRAME_DIAMOND_SIZE, color);
+
+            state.dope_sheet_keyframe_hits.push(DopeSheetKeyframeHit {
+                screen_x: x,
+                screen_y: y_center,
+                bone_id,
+                property_type: *prop,
+                keyframe_id: kf.id,
+                time: kf.time,
+            });
+        }
     }
 
     draw_playhead_line(
@@ -276,18 +317,6 @@ fn draw_bone_row_collapsed(
         cursor_pos[1],
         DOPE_ROW_HEIGHT,
         state.current_time,
-        pixels_per_second,
-    );
-
-    handle_collapsed_row_click(
-        ui,
-        ui_events,
-        state,
-        bone_id,
-        track,
-        row_x,
-        cursor_pos[1],
-        sheet_width,
         pixels_per_second,
     );
 
@@ -305,7 +334,7 @@ fn draw_bone_row_collapsed(
 fn draw_bone_row_expanded(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
-    state: &TimelineState,
+    state: &mut TimelineState,
     bone_id: BoneId,
     bone_name: &str,
     track: &crate::animation::editable::BoneTrack,
@@ -372,6 +401,15 @@ fn draw_bone_row_expanded(
             };
 
             draw_diamond(&draw_list, x, y_center, KEYFRAME_DIAMOND_SIZE - 1.0, color);
+
+            state.dope_sheet_keyframe_hits.push(DopeSheetKeyframeHit {
+                screen_x: x,
+                screen_y: y_center,
+                bone_id,
+                property_type: *prop,
+                keyframe_id: kf.id,
+                time: kf.time,
+            });
         }
 
         draw_playhead_line(
@@ -383,119 +421,264 @@ fn draw_bone_row_expanded(
             pixels_per_second,
         );
 
-        handle_expanded_row_click(
-            ui,
-            ui_events,
-            state,
-            bone_id,
-            *prop,
-            curve,
-            row_x,
-            cursor_pos[1],
-            sheet_width,
-            pixels_per_second,
-        );
-
         ui.text_colored(prop_color, &format!("  {}", prop.short_name()));
         ui.same_line_with_pos(DOPE_LABEL_WIDTH);
         ui.dummy([sheet_width, DOPE_SUB_ROW_HEIGHT]);
     }
 }
 
-fn handle_collapsed_row_click(
+// --- Interaction State Machine ---
+
+fn handle_dope_sheet_interaction(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
-    state: &TimelineState,
-    bone_id: BoneId,
-    track: &crate::animation::editable::BoneTrack,
-    row_x: f32,
-    row_y: f32,
-    sheet_width: f32,
+    state: &mut TimelineState,
     pixels_per_second: f32,
 ) {
-    if !ui.is_mouse_clicked(imgui::MouseButton::Left) {
-        return;
-    }
+    let mouse_pos = ui.io().mouse_pos;
+    let mouse_down = ui.io().mouse_down[0];
+    let mouse_clicked = ui.is_mouse_clicked(imgui::MouseButton::Left);
+    let mouse_released = ui.is_mouse_released(imgui::MouseButton::Left);
 
-    let mouse = ui.io().mouse_pos;
-    if mouse[0] < row_x
-        || mouse[0] > row_x + sheet_width
-        || mouse[1] < row_y
-        || mouse[1] > row_y + DOPE_ROW_HEIGHT
+    if !ui.is_window_hovered_with_flags(imgui::WindowHoveredFlags::CHILD_WINDOWS)
+        && !matches!(
+            state.dope_sheet_interaction,
+            DopeSheetInteraction::BoxSelecting(_) | DopeSheetInteraction::DraggingKeyframes(_)
+        )
     {
         return;
     }
 
-    let click_time = (mouse[0] - row_x) / pixels_per_second;
-    let modifier = determine_selection_modifier(ui);
+    // Take ownership of current interaction to avoid borrow issues
+    let interaction = std::mem::replace(
+        &mut state.dope_sheet_interaction,
+        DopeSheetInteraction::None,
+    );
 
-    let all_properties = [
-        PropertyType::TranslationX,
-        PropertyType::TranslationY,
-        PropertyType::TranslationZ,
-        PropertyType::RotationX,
-        PropertyType::RotationY,
-        PropertyType::RotationZ,
-        PropertyType::ScaleX,
-        PropertyType::ScaleY,
-        PropertyType::ScaleZ,
-    ];
+    match interaction {
+        DopeSheetInteraction::None => {
+            if mouse_clicked {
+                handle_click_begin(ui, state, mouse_pos, pixels_per_second);
+            }
+        }
+        DopeSheetInteraction::BoxSelecting(box_sel) => {
+            if mouse_down && !mouse_released {
+                update_box_selection(state, &box_sel, mouse_pos);
+                state.dope_sheet_interaction = DopeSheetInteraction::BoxSelecting(box_sel);
+            } else {
+                // Mouse released: finalize selection, return to None
+                update_box_selection(state, &box_sel, mouse_pos);
+            }
+        }
+        DopeSheetInteraction::DraggingKeyframes(drag) => {
+            if mouse_down && !mouse_released {
+                // Continue dragging — just preserve state (visual preview drawn separately)
+                state.dope_sheet_interaction = DopeSheetInteraction::DraggingKeyframes(drag);
+            } else {
+                // Mouse released: commit the move
+                let delta_x = mouse_pos[0] - drag.drag_start_x;
+                let time_delta = delta_x / pixels_per_second;
+                let snapped_delta = apply_snap_to_delta(state, time_delta, pixels_per_second);
 
-    let threshold = 5.0 / pixels_per_second;
-    for prop in &all_properties {
-        let curve = track.get_curve(*prop);
-        for kf in &curve.keyframes {
-            if (kf.time - click_time).abs() < threshold {
-                ui_events.send(UIEvent::TimelineSelectKeyframe {
-                    bone_id,
-                    property_type: *prop,
-                    keyframe_id: kf.id,
-                    modifier,
-                });
-                return;
+                if snapped_delta.abs() > 0.001 {
+                    ui_events.send(UIEvent::TimelineMoveSelectedKeyframes {
+                        time_delta: snapped_delta,
+                    });
+                }
             }
         }
     }
 }
 
-fn handle_expanded_row_click(
+fn handle_click_begin(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    _state: &TimelineState,
-    bone_id: BoneId,
-    property_type: PropertyType,
-    curve: &crate::animation::editable::PropertyCurve,
-    row_x: f32,
-    row_y: f32,
-    sheet_width: f32,
-    pixels_per_second: f32,
+    state: &mut TimelineState,
+    mouse_pos: [f32; 2],
+    _pixels_per_second: f32,
 ) {
-    if !ui.is_mouse_clicked(imgui::MouseButton::Left) {
-        return;
-    }
-
-    let mouse = ui.io().mouse_pos;
-    if mouse[0] < row_x
-        || mouse[0] > row_x + sheet_width
-        || mouse[1] < row_y
-        || mouse[1] > row_y + DOPE_SUB_ROW_HEIGHT
-    {
-        return;
-    }
-
-    let click_time = (mouse[0] - row_x) / pixels_per_second;
-    let threshold = 5.0 / pixels_per_second;
     let modifier = determine_selection_modifier(ui);
 
-    for kf in &curve.keyframes {
-        if (kf.time - click_time).abs() < threshold {
-            ui_events.send(UIEvent::TimelineSelectKeyframe {
-                bone_id,
-                property_type,
-                keyframe_id: kf.id,
-                modifier,
+    // Check if clicking on an existing keyframe
+    if let Some(hit) = find_hit_keyframe(&state.dope_sheet_keyframe_hits, mouse_pos) {
+        let sel_key = SelectedKeyframe::new(hit.bone_id, hit.property_type, hit.keyframe_id);
+        let already_selected = state.is_keyframe_selected(&sel_key);
+
+        if !already_selected {
+            state.apply_selection(sel_key, modifier);
+        }
+
+        // Collect original times for all currently selected keyframes
+        let original_times: Vec<(SelectedKeyframe, f32)> = state
+            .selected_keyframes
+            .iter()
+            .filter_map(|sel| {
+                state
+                    .dope_sheet_keyframe_hits
+                    .iter()
+                    .find(|h| {
+                        h.bone_id == sel.bone_id
+                            && h.property_type == sel.property_type
+                            && h.keyframe_id == sel.keyframe_id
+                    })
+                    .map(|h| (sel.clone(), h.time))
+            })
+            .collect();
+
+        state.dope_sheet_interaction =
+            DopeSheetInteraction::DraggingKeyframes(DopeSheetKeyframeDrag {
+                drag_start_x: mouse_pos[0],
+                original_times,
             });
-            return;
+    } else {
+        // Clicked on empty space: start box selection
+        if matches!(modifier, SelectionModifier::Replace) {
+            state.selected_keyframes.clear();
+        }
+
+        let original_selection = state.selected_keyframes.clone();
+
+        state.dope_sheet_interaction = DopeSheetInteraction::BoxSelecting(DopeSheetBoxSelect {
+            start_screen_pos: mouse_pos,
+            modifier,
+            original_selection,
+        });
+    }
+}
+
+fn find_hit_keyframe(
+    hits: &[DopeSheetKeyframeHit],
+    mouse_pos: [f32; 2],
+) -> Option<DopeSheetKeyframeHit> {
+    let mut closest: Option<(f32, &DopeSheetKeyframeHit)> = None;
+
+    for hit in hits {
+        let dx = mouse_pos[0] - hit.screen_x;
+        let dy = mouse_pos[1] - hit.screen_y;
+        let dist_sq = dx * dx + dy * dy;
+
+        if dist_sq <= HIT_RADIUS * HIT_RADIUS {
+            match closest {
+                Some((best_dist, _)) if dist_sq < best_dist => {
+                    closest = Some((dist_sq, hit));
+                }
+                None => {
+                    closest = Some((dist_sq, hit));
+                }
+                _ => {}
+            }
+        }
+    }
+
+    closest.map(|(_, hit)| hit.clone())
+}
+
+fn update_box_selection(
+    state: &mut TimelineState,
+    box_sel: &DopeSheetBoxSelect,
+    mouse_pos: [f32; 2],
+) {
+    let min_x = box_sel.start_screen_pos[0].min(mouse_pos[0]);
+    let max_x = box_sel.start_screen_pos[0].max(mouse_pos[0]);
+    let min_y = box_sel.start_screen_pos[1].min(mouse_pos[1]);
+    let max_y = box_sel.start_screen_pos[1].max(mouse_pos[1]);
+
+    // Find keyframes inside the box
+    let hits_in_box: Vec<SelectedKeyframe> = state
+        .dope_sheet_keyframe_hits
+        .iter()
+        .filter(|h| {
+            h.screen_x >= min_x && h.screen_x <= max_x && h.screen_y >= min_y && h.screen_y <= max_y
+        })
+        .map(|h| SelectedKeyframe::new(h.bone_id, h.property_type, h.keyframe_id))
+        .collect();
+
+    match box_sel.modifier {
+        SelectionModifier::Replace => {
+            state.selected_keyframes.clear();
+            for kf in hits_in_box {
+                state.selected_keyframes.insert(kf);
+            }
+        }
+        SelectionModifier::Add => {
+            state.selected_keyframes = box_sel.original_selection.clone();
+            for kf in hits_in_box {
+                state.selected_keyframes.insert(kf);
+            }
+        }
+        SelectionModifier::Toggle => {
+            state.selected_keyframes = box_sel.original_selection.clone();
+            for kf in hits_in_box {
+                if box_sel.original_selection.contains(&kf) {
+                    state.selected_keyframes.remove(&kf);
+                } else {
+                    state.selected_keyframes.insert(kf);
+                }
+            }
+        }
+    }
+}
+
+fn apply_snap_to_delta(state: &TimelineState, time_delta: f32, pixels_per_second: f32) -> f32 {
+    if !state.snap_settings.snap_to_frame {
+        return time_delta;
+    }
+
+    let frame_duration = 1.0 / state.snap_settings.frame_rate;
+    let snap_threshold = state.snap_settings.snap_threshold_px / pixels_per_second;
+
+    // Round delta to nearest frame
+    let frames = (time_delta / frame_duration).round();
+    let snapped = frames * frame_duration;
+
+    if (snapped - time_delta).abs() < snap_threshold {
+        snapped
+    } else {
+        time_delta
+    }
+}
+
+// --- Visual Overlays ---
+
+fn draw_interaction_overlays(ui: &imgui::Ui, state: &TimelineState, pixels_per_second: f32) {
+    let draw_list = ui.get_window_draw_list();
+    let mouse_pos = ui.io().mouse_pos;
+
+    match &state.dope_sheet_interaction {
+        DopeSheetInteraction::None => {}
+        DopeSheetInteraction::BoxSelecting(box_sel) => {
+            let min_x = box_sel.start_screen_pos[0].min(mouse_pos[0]);
+            let max_x = box_sel.start_screen_pos[0].max(mouse_pos[0]);
+            let min_y = box_sel.start_screen_pos[1].min(mouse_pos[1]);
+            let max_y = box_sel.start_screen_pos[1].max(mouse_pos[1]);
+
+            draw_list
+                .add_rect([min_x, min_y], [max_x, max_y], BOX_SELECT_FILL)
+                .filled(true)
+                .build();
+            draw_list
+                .add_rect([min_x, min_y], [max_x, max_y], BOX_SELECT_BORDER)
+                .build();
+        }
+        DopeSheetInteraction::DraggingKeyframes(drag) => {
+            let delta_x = mouse_pos[0] - drag.drag_start_x;
+            let time_delta = delta_x / pixels_per_second;
+            let snapped_delta = apply_snap_to_delta(state, time_delta, pixels_per_second);
+            let pixel_delta = snapped_delta * pixels_per_second;
+
+            for hit in &state.dope_sheet_keyframe_hits {
+                let sel_key =
+                    SelectedKeyframe::new(hit.bone_id, hit.property_type, hit.keyframe_id);
+                if state.selected_keyframes.contains(&sel_key) {
+                    let preview_x = hit.screen_x + pixel_delta;
+                    draw_diamond(
+                        &draw_list,
+                        preview_x,
+                        hit.screen_y,
+                        KEYFRAME_DIAMOND_SIZE,
+                        [1.0, 1.0, 0.2, DRAG_PREVIEW_ALPHA],
+                    );
+                }
+            }
         }
     }
 }

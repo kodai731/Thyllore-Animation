@@ -81,6 +81,54 @@ pub fn timeline_process_events(
                 }
             }
 
+            UIEvent::TimelineMoveSelectedKeyframes { time_delta } => {
+                if let Some(clip_id) = timeline_state.current_clip_id {
+                    if let Some(clip) = clip_library.get_mut(clip_id) {
+                        for sel in &timeline_state.selected_keyframes {
+                            if let Some(track) = clip.tracks.get_mut(&sel.bone_id) {
+                                let curve = track.get_curve_mut(sel.property_type);
+                                if let Some(kf) =
+                                    curve.keyframes.iter_mut().find(|k| k.id == sel.keyframe_id)
+                                {
+                                    kf.time = (kf.time + time_delta).max(0.0);
+                                }
+                            }
+                        }
+                        clip.recalculate_duration();
+                        clip_modified = true;
+                    }
+                }
+            }
+
+            UIEvent::TimelineSetKeyframeSelection {
+                keyframes,
+                modifier,
+            } => {
+                use crate::ecs::resource::SelectionModifier;
+                match modifier {
+                    SelectionModifier::Replace => {
+                        timeline_state.selected_keyframes.clear();
+                        for kf in keyframes {
+                            timeline_state.selected_keyframes.insert(kf.clone());
+                        }
+                    }
+                    SelectionModifier::Add => {
+                        for kf in keyframes {
+                            timeline_state.selected_keyframes.insert(kf.clone());
+                        }
+                    }
+                    SelectionModifier::Toggle => {
+                        for kf in keyframes {
+                            if timeline_state.selected_keyframes.contains(kf) {
+                                timeline_state.selected_keyframes.remove(kf);
+                            } else {
+                                timeline_state.selected_keyframes.insert(kf.clone());
+                            }
+                        }
+                    }
+                }
+            }
+
             UIEvent::TimelineDeleteSelectedKeyframes => {
                 if let Some(clip_id) = timeline_state.current_clip_id {
                     let selected: Vec<_> =
@@ -500,5 +548,164 @@ fn modify_clip_instance(
         {
             f(inst);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::animation::editable::{
+        EditableAnimationClip, PropertyType, SourceClip, SourceClipId,
+    };
+    use crate::ecs::resource::{SelectedKeyframe, SelectionModifier};
+
+    fn setup_test_clip() -> (TimelineState, ClipLibrary) {
+        let clip_id: SourceClipId = 1;
+        let mut clip = EditableAnimationClip::new(clip_id, "test".to_string());
+        let bone_id = 0;
+        clip.add_track(bone_id, "bone0".to_string());
+
+        let kf1_id = clip
+            .add_keyframe(bone_id, PropertyType::TranslationX, 0.5, 1.0)
+            .unwrap();
+        let kf2_id = clip
+            .add_keyframe(bone_id, PropertyType::TranslationX, 1.0, 2.0)
+            .unwrap();
+        let kf3_id = clip
+            .add_keyframe(bone_id, PropertyType::TranslationY, 0.8, 3.0)
+            .unwrap();
+        clip.recalculate_duration();
+
+        let mut library = ClipLibrary::new();
+        library
+            .source_clips
+            .insert(clip_id, SourceClip::new(clip_id, clip));
+
+        let mut state = TimelineState::new();
+        state.current_clip_id = Some(clip_id);
+
+        state.selected_keyframes.insert(SelectedKeyframe::new(
+            bone_id,
+            PropertyType::TranslationX,
+            kf1_id,
+        ));
+        state.selected_keyframes.insert(SelectedKeyframe::new(
+            bone_id,
+            PropertyType::TranslationX,
+            kf2_id,
+        ));
+        state.selected_keyframes.insert(SelectedKeyframe::new(
+            bone_id,
+            PropertyType::TranslationY,
+            kf3_id,
+        ));
+
+        (state, library)
+    }
+
+    #[test]
+    fn move_selected_keyframes_shifts_time() {
+        let (mut state, mut library) = setup_test_clip();
+        let events = vec![UIEvent::TimelineMoveSelectedKeyframes { time_delta: 0.25 }];
+
+        let modified = timeline_process_events(&events, &mut state, &mut library);
+        assert!(modified);
+
+        let clip = library.get(1).unwrap();
+        let track = clip.tracks.get(&0).unwrap();
+        let tx_curve = track.get_curve(PropertyType::TranslationX);
+
+        let times: Vec<f32> = tx_curve.keyframes.iter().map(|k| k.time).collect();
+        assert!(
+            (times[0] - 0.75).abs() < 0.01,
+            "Expected 0.75, got {}",
+            times[0]
+        );
+        assert!(
+            (times[1] - 1.25).abs() < 0.01,
+            "Expected 1.25, got {}",
+            times[1]
+        );
+
+        let ty_curve = track.get_curve(PropertyType::TranslationY);
+        let ty_time = ty_curve.keyframes[0].time;
+        assert!(
+            (ty_time - 1.05).abs() < 0.01,
+            "Expected 1.05, got {}",
+            ty_time
+        );
+    }
+
+    #[test]
+    fn move_selected_keyframes_clamps_at_zero() {
+        let (mut state, mut library) = setup_test_clip();
+        let events = vec![UIEvent::TimelineMoveSelectedKeyframes { time_delta: -2.0 }];
+
+        timeline_process_events(&events, &mut state, &mut library);
+
+        let clip = library.get(1).unwrap();
+        let track = clip.tracks.get(&0).unwrap();
+        let tx_curve = track.get_curve(PropertyType::TranslationX);
+
+        for kf in &tx_curve.keyframes {
+            assert!(kf.time >= 0.0, "Time should be >= 0, got {}", kf.time);
+        }
+    }
+
+    #[test]
+    fn set_keyframe_selection_replace() {
+        let (mut state, mut library) = setup_test_clip();
+
+        let new_sel = vec![SelectedKeyframe::new(0, PropertyType::ScaleX, 999)];
+        let events = vec![UIEvent::TimelineSetKeyframeSelection {
+            keyframes: new_sel,
+            modifier: SelectionModifier::Replace,
+        }];
+
+        timeline_process_events(&events, &mut state, &mut library);
+
+        assert_eq!(state.selected_keyframes.len(), 1);
+        assert!(state.selected_keyframes.contains(&SelectedKeyframe::new(
+            0,
+            PropertyType::ScaleX,
+            999
+        )));
+    }
+
+    #[test]
+    fn set_keyframe_selection_add() {
+        let (mut state, mut library) = setup_test_clip();
+        let original_count = state.selected_keyframes.len();
+
+        let new_sel = vec![SelectedKeyframe::new(0, PropertyType::ScaleX, 999)];
+        let events = vec![UIEvent::TimelineSetKeyframeSelection {
+            keyframes: new_sel,
+            modifier: SelectionModifier::Add,
+        }];
+
+        timeline_process_events(&events, &mut state, &mut library);
+
+        assert_eq!(state.selected_keyframes.len(), original_count + 1);
+    }
+
+    #[test]
+    fn set_keyframe_selection_toggle() {
+        let (mut state, mut library) = setup_test_clip();
+
+        // Toggle off an existing keyframe, toggle on a new one
+        let existing = state.selected_keyframes.iter().next().unwrap().clone();
+        let new_kf = SelectedKeyframe::new(0, PropertyType::ScaleX, 999);
+        let events = vec![UIEvent::TimelineSetKeyframeSelection {
+            keyframes: vec![existing.clone(), new_kf.clone()],
+            modifier: SelectionModifier::Toggle,
+        }];
+
+        let before_count = state.selected_keyframes.len();
+        timeline_process_events(&events, &mut state, &mut library);
+
+        // One removed, one added → count stays same
+        assert_eq!(state.selected_keyframes.len(), before_count);
+        assert!(!state.selected_keyframes.contains(&existing));
+        assert!(state.selected_keyframes.contains(&new_kf));
     }
 }

@@ -21,9 +21,6 @@ impl BoneTopologyCache {
     }
 
     pub fn get(&self, bone_id: BoneId) -> BoneTopologyFeatures {
-        self.features
-            .get(&bone_id)
-            .cloned()
-            .unwrap_or_default()
+        self.features.get(&bone_id).cloned().unwrap_or_default()
     }
 }

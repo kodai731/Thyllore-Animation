@@ -156,11 +156,7 @@ impl<T> Keyframe<T> {
         }
     }
 
-    pub fn with_interpolation(
-        time: f32,
-        value: T,
-        interpolation: Interpolation,
-    ) -> Self {
+    pub fn with_interpolation(time: f32, value: T, interpolation: Interpolation) -> Self {
         Self {
             time,
             value,
@@ -183,11 +179,7 @@ impl TransformChannel {
         Self::sample_vec3(&self.translation, time, None)
     }
 
-    pub fn sample_translation_looped(
-        &self,
-        time: f32,
-        duration: f32,
-    ) -> Option<Vector3<f32>> {
+    pub fn sample_translation_looped(&self, time: f32, duration: f32) -> Option<Vector3<f32>> {
         Self::sample_vec3(&self.translation, time, Some(duration))
     }
 
@@ -195,11 +187,7 @@ impl TransformChannel {
         Self::sample_quat(&self.rotation, time, None)
     }
 
-    pub fn sample_rotation_looped(
-        &self,
-        time: f32,
-        duration: f32,
-    ) -> Option<Quaternion<f32>> {
+    pub fn sample_rotation_looped(&self, time: f32, duration: f32) -> Option<Quaternion<f32>> {
         Self::sample_quat(&self.rotation, time, Some(duration))
     }
 
@@ -207,11 +195,7 @@ impl TransformChannel {
         Self::sample_vec3(&self.scale, time, None)
     }
 
-    pub fn sample_scale_looped(
-        &self,
-        time: f32,
-        duration: f32,
-    ) -> Option<Vector3<f32>> {
+    pub fn sample_scale_looped(&self, time: f32, duration: f32) -> Option<Vector3<f32>> {
         Self::sample_vec3(&self.scale, time, Some(duration))
     }
 
@@ -239,9 +223,7 @@ impl TransformChannel {
                     let wrap_duration = dur - last_kf.time + first_kf.time;
                     if wrap_duration > 0.0001 {
                         let t = (time - last_kf.time) / wrap_duration;
-                        return Some(
-                            last_kf.value + (first_kf.value - last_kf.value) * t,
-                        );
+                        return Some(last_kf.value + (first_kf.value - last_kf.value) * t);
                     }
                 }
             }
@@ -255,12 +237,8 @@ impl TransformChannel {
 
         match k0.interpolation {
             Interpolation::Step => Some(k1.value),
-            Interpolation::Linear => {
-                Some(k0.value + (k1.value - k0.value) * t)
-            }
-            Interpolation::CubicSpline => {
-                Some(hermite_vec3(k0, k1, t))
-            }
+            Interpolation::Linear => Some(k0.value + (k1.value - k0.value) * t),
+            Interpolation::CubicSpline => Some(hermite_vec3(k0, k1, t)),
         }
     }
 
@@ -303,18 +281,12 @@ impl TransformChannel {
         match k0.interpolation {
             Interpolation::Step => Some(k1.value),
             Interpolation::Linear => Some(slerp(k0.value, k1.value, t)),
-            Interpolation::CubicSpline => {
-                Some(normalize_quat(hermite_quat(k0, k1, t)))
-            }
+            Interpolation::CubicSpline => Some(normalize_quat(hermite_quat(k0, k1, t))),
         }
     }
 }
 
-fn hermite_vec3(
-    k0: &Keyframe<Vector3<f32>>,
-    k1: &Keyframe<Vector3<f32>>,
-    t: f32,
-) -> Vector3<f32> {
+fn hermite_vec3(k0: &Keyframe<Vector3<f32>>, k1: &Keyframe<Vector3<f32>>, t: f32) -> Vector3<f32> {
     let dt = k1.time - k0.time;
     let t2 = t * t;
     let t3 = t2 * t;
@@ -575,9 +547,7 @@ impl MorphAnimationSystem {
         let period = end_key_frame - start_key_frame;
         let mod_time = time.rem_euclid(period);
 
-        let idx = self
-            .animations
-            .partition_point(|a| a.key_frame < mod_time);
+        let idx = self.animations.partition_point(|a| a.key_frame < mod_time);
         idx.min(self.animations.len() - 1)
     }
 
@@ -599,14 +569,8 @@ mod tests {
                 Keyframe::new(1.0, Vector3::new(10.0, 0.0, 0.0)),
             ],
             rotation: vec![
-                Keyframe::new(
-                    0.0,
-                    Quaternion::new(1.0, 0.0, 0.0, 0.0),
-                ),
-                Keyframe::new(
-                    1.0,
-                    Quaternion::new(1.0, 0.0, 0.0, 0.0),
-                ),
+                Keyframe::new(0.0, Quaternion::new(1.0, 0.0, 0.0, 0.0)),
+                Keyframe::new(1.0, Quaternion::new(1.0, 0.0, 0.0, 0.0)),
             ],
             scale: vec![
                 Keyframe::new(0.0, Vector3::new(1.0, 1.0, 1.0)),
@@ -635,11 +599,7 @@ mod tests {
     fn test_step_interpolation() {
         let ch = TransformChannel {
             translation: vec![
-                Keyframe::with_interpolation(
-                    0.0,
-                    Vector3::new(0.0, 0.0, 0.0),
-                    Interpolation::Step,
-                ),
+                Keyframe::with_interpolation(0.0, Vector3::new(0.0, 0.0, 0.0), Interpolation::Step),
                 Keyframe::with_interpolation(
                     1.0,
                     Vector3::new(10.0, 0.0, 0.0),

@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::animation::BoneId;
 use crate::ecs::resource::{TextToMotionState, TextToMotionStatus};
 use crate::grpc::{
-    convert_motion_response_to_clip, GrpcRequest, GrpcResponse,
-    GrpcThreadHandle, TextToMotionRequest,
+    convert_motion_response_to_clip, GrpcRequest, GrpcResponse, GrpcThreadHandle,
+    TextToMotionRequest,
 };
 
 pub fn text_to_motion_submit(
@@ -55,12 +55,9 @@ pub fn text_to_motion_poll(
             generation_time_ms,
             model_used,
         } => {
-            let bone_map = bone_name_to_id
-                .cloned()
-                .unwrap_or_default();
+            let bone_map = bone_name_to_id.cloned().unwrap_or_default();
 
-            let clip_name =
-                format!("T2M: {}", truncate_prompt(&state.last_prompt, 30));
+            let clip_name = format!("T2M: {}", truncate_prompt(&state.last_prompt, 30));
 
             let clip = convert_motion_response_to_clip(
                 &curves,

@@ -1,8 +1,8 @@
+use super::timeline_window::ruler_padding;
 use crate::animation::editable::{EditableAnimationClip, PropertyType};
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{SelectedKeyframe, SelectionModifier, TimelineState};
-use super::timeline_window::ruler_padding;
 
 const DOPE_ROW_HEIGHT: f32 = 22.0;
 const DOPE_SUB_ROW_HEIGHT: f32 = 18.0;

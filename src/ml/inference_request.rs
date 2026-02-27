@@ -1,7 +1,10 @@
 pub fn resolve_curve_copilot_model_path() -> String {
     let shared_path = std::path::Path::new(crate::paths::CURVE_COPILOT_MODEL);
     if shared_path.exists() {
-        crate::log!("Using SharedData model: {}", crate::paths::CURVE_COPILOT_MODEL);
+        crate::log!(
+            "Using SharedData model: {}",
+            crate::paths::CURVE_COPILOT_MODEL
+        );
         return crate::paths::CURVE_COPILOT_MODEL.to_string();
     }
 
@@ -44,7 +47,9 @@ pub enum InferenceModelKind {
 
 #[derive(Clone, Debug)]
 pub enum InferenceRequestKind {
-    CurvePredict { input: Vec<f32> },
+    CurvePredict {
+        input: Vec<f32>,
+    },
     CurveCopilotPredict {
         context: Vec<f32>,
         property_type_id: u32,
@@ -63,7 +68,9 @@ pub struct InferenceRequest {
 
 #[derive(Clone, Debug)]
 pub enum InferenceResultKind {
-    CurvePredict { output: Vec<f32> },
+    CurvePredict {
+        output: Vec<f32>,
+    },
     CurveCopilotPredict {
         value: f32,
         tangent_in: (f32, f32),

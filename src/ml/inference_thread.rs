@@ -6,8 +6,7 @@ use ort::session::Session;
 use ort::value::Tensor;
 
 use super::inference_request::{
-    InferenceActorId, InferenceRequest, InferenceRequestKind,
-    InferenceResult, InferenceResultKind,
+    InferenceActorId, InferenceRequest, InferenceRequestKind, InferenceResult, InferenceResultKind,
 };
 
 pub struct InferenceThreadHandle {
@@ -17,10 +16,7 @@ pub struct InferenceThreadHandle {
 }
 
 impl InferenceThreadHandle {
-    pub fn spawn(
-        model_path: &str,
-        actor_id: InferenceActorId,
-    ) -> Result<Self> {
+    pub fn spawn(model_path: &str, actor_id: InferenceActorId) -> Result<Self> {
         let (req_tx, req_rx) = mpsc::channel::<InferenceRequest>();
         let (res_tx, res_rx) = mpsc::channel::<InferenceResult>();
 
@@ -84,11 +80,7 @@ fn run_inference_loop(
                 }
             }
             Err(e) => {
-                crate::log!(
-                    "Inference error for actor {}: {:?}",
-                    request.actor_id,
-                    e
-                );
+                crate::log!("Inference error for actor {}: {:?}", request.actor_id, e);
             }
         }
     }
@@ -101,21 +93,14 @@ fn execute_inference(
     match &request.kind {
         InferenceRequestKind::CurvePredict { input } => {
             let input_len = input.len();
-            let input_tensor = Tensor::from_array((
-                vec![1i64, input_len as i64],
-                input.clone(),
-            ))?;
+            let input_tensor = Tensor::from_array((vec![1i64, input_len as i64], input.clone()))?;
 
-            let outputs =
-                session.run(ort::inputs![input_tensor])?;
+            let outputs = session.run(ort::inputs![input_tensor])?;
 
-            let (_shape, output_data) =
-                outputs[0].try_extract_tensor::<f32>()?;
+            let (_shape, output_data) = outputs[0].try_extract_tensor::<f32>()?;
             let output_vec: Vec<f32> = output_data.to_vec();
 
-            Ok(InferenceResultKind::CurvePredict {
-                output: output_vec,
-            })
+            Ok(InferenceResultKind::CurvePredict { output: output_vec })
         }
 
         InferenceRequestKind::CurveCopilotPredict {
@@ -145,14 +130,11 @@ fn execute_curve_copilot(
 ) -> Result<InferenceResultKind> {
     let context_tensor = Tensor::from_array((vec![1i64, 8, 6], context.to_vec()))?;
 
-    let property_type_tensor =
-        Tensor::from_array((vec![1i64], vec![property_type_id as i64]))?;
+    let property_type_tensor = Tensor::from_array((vec![1i64], vec![property_type_id as i64]))?;
 
-    let topology_tensor =
-        Tensor::from_array((vec![1i64, 6], topology_features.to_vec()))?;
+    let topology_tensor = Tensor::from_array((vec![1i64, 6], topology_features.to_vec()))?;
 
-    let name_tensor =
-        Tensor::from_array((vec![1i64, 32], bone_name_tokens.to_vec()))?;
+    let name_tensor = Tensor::from_array((vec![1i64, 32], bone_name_tokens.to_vec()))?;
 
     let query_time_tensor = Tensor::from_array((vec![1i64], vec![query_time]))?;
 
@@ -189,7 +171,9 @@ fn execute_curve_copilot(
 
     crate::log!(
         "CurveCopilot raw output: pred={:?}, conf={:.4}, query_time={:.4}",
-        pred, confidence, query_time
+        pred,
+        confidence,
+        query_time
     );
 
     Ok(InferenceResultKind::CurveCopilotPredict {

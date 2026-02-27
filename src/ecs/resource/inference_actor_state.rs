@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ml::{
-    InferenceActorId, InferenceRequestId, InferenceResult, InferenceThreadHandle,
-};
+use crate::ml::{InferenceActorId, InferenceRequestId, InferenceResult, InferenceThreadHandle};
 
 pub struct ActorRuntime {
     pub(crate) thread_handle: InferenceThreadHandle,

@@ -1,18 +1,13 @@
 use anyhow::Result;
 
 use crate::app::FrameContext;
-use crate::ecs::resource::{
-    ClipLibrary, HierarchyState, OnionSkinningConfig, TimelineState,
-};
+use crate::ecs::resource::{ClipLibrary, HierarchyState, OnionSkinningConfig, TimelineState};
 use crate::ecs::systems::onion_skinning_systems::{
     compute_onion_skin_ghosts, OnionSkinMeshContext,
 };
 use crate::ecs::world::MeshRef;
 
-pub unsafe fn run_onion_skin_phase(
-    ctx: &mut FrameContext,
-    updated_meshes: &[usize],
-) -> Result<()> {
+pub unsafe fn run_onion_skin_phase(ctx: &mut FrameContext, updated_meshes: &[usize]) -> Result<()> {
     let config = ctx
         .world
         .get_resource::<OnionSkinningConfig>()
@@ -77,9 +72,7 @@ pub unsafe fn run_onion_skin_phase(
 
     let vertex_capacity = base_vertices.len();
 
-    let gpu = ctx
-        .onion_skin_gpu
-        .get_or_insert_with(Default::default);
+    let gpu = ctx.onion_skin_gpu.get_or_insert_with(Default::default);
 
     gpu.ensure_capacity(ctx.instance, ctx.device, ghost_count, vertex_capacity)?;
 

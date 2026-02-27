@@ -81,12 +81,8 @@ impl OnionSkinGhostBuffer {
     }
 
     pub unsafe fn destroy(&self, rrdevice: &RRDevice) {
-        rrdevice
-            .device
-            .destroy_buffer(self.vertex_buffer, None);
-        rrdevice
-            .device
-            .free_memory(self.vertex_buffer_memory, None);
+        rrdevice.device.destroy_buffer(self.vertex_buffer, None);
+        rrdevice.device.free_memory(self.vertex_buffer_memory, None);
     }
 }
 

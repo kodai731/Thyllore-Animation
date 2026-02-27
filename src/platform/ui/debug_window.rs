@@ -463,10 +463,7 @@ fn build_onion_skinning_panel(ui: &imgui::Ui, ecs_world: &World) {
         ui.color_edit3("Past Color", &mut config.past_color);
         ui.color_edit3("Future Color", &mut config.future_color);
 
-        ui.text(format!(
-            "Total ghosts: {}",
-            config.total_ghost_count()
-        ));
+        ui.text(format!("Total ghosts: {}", config.total_ghost_count()));
     }
 }
 

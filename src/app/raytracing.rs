@@ -3,6 +3,7 @@ use std::rc::Rc;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::graphics_resource::{GraphicsResources, MeshBuffer};
+use crate::renderer::deferred::gbuffer::GBufferPushConstants;
 use crate::vulkanr::buffer::create_buffer;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
@@ -18,7 +19,6 @@ use crate::vulkanr::pipeline::{
 };
 use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::render::RRRender;
-use crate::renderer::deferred::gbuffer::GBufferPushConstants;
 use crate::vulkanr::resource::RRGBuffer;
 use crate::vulkanr::swapchain::RRSwapchain;
 

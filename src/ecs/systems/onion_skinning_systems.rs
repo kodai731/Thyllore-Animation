@@ -17,9 +17,7 @@ pub struct OnionSkinMeshContext<'a> {
     pub skin_data: &'a SkinData,
 }
 
-pub fn compute_ghost_time_offsets(
-    config: &OnionSkinningConfig,
-) -> Vec<GhostFrameInfo> {
+pub fn compute_ghost_time_offsets(config: &OnionSkinningConfig) -> Vec<GhostFrameInfo> {
     if !config.enabled {
         return Vec::new();
     }
@@ -28,8 +26,7 @@ pub fn compute_ghost_time_offsets(
 
     for i in 1..=config.past_count {
         let distance = i as f32;
-        let opacity =
-            config.opacity * (1.0 - (distance - 1.0) / config.past_count.max(1) as f32);
+        let opacity = config.opacity * (1.0 - (distance - 1.0) / config.past_count.max(1) as f32);
         offsets.push(GhostFrameInfo {
             time_offset: -(i as f32) * config.frame_step,
             tint_color: config.past_color,
@@ -39,8 +36,7 @@ pub fn compute_ghost_time_offsets(
 
     for i in 1..=config.future_count {
         let distance = i as f32;
-        let opacity =
-            config.opacity * (1.0 - (distance - 1.0) / config.future_count.max(1) as f32);
+        let opacity = config.opacity * (1.0 - (distance - 1.0) / config.future_count.max(1) as f32);
         offsets.push(GhostFrameInfo {
             time_offset: i as f32 * config.frame_step,
             tint_color: config.future_color,
@@ -156,7 +152,13 @@ fn compute_single_ghost(
     let clip_asset = assets.animation_clips.get(&asset_id)?;
 
     let mut pose = create_pose_from_rest(skeleton);
-    sample_clip_to_pose(&clip_asset.clip, ghost_time, skeleton, &mut pose, ctx.looping);
+    sample_clip_to_pose(
+        &clip_asset.clip,
+        ghost_time,
+        skeleton,
+        &mut pose,
+        ctx.looping,
+    );
 
     let globals = compute_pose_global_transforms(skeleton, &pose);
 
@@ -301,14 +303,8 @@ mod tests {
             mesh_index: 0,
             skin_data: &skin_data,
         };
-        let result = compute_onion_skin_ghosts(
-            &config,
-            0.0,
-            &world,
-            &assets,
-            &clip_library,
-            &mesh_ctx,
-        );
+        let result =
+            compute_onion_skin_ghosts(&config, 0.0, &world, &assets, &clip_library, &mesh_ctx);
         assert!(result.ghost_meshes.is_empty());
     }
 
@@ -331,14 +327,8 @@ mod tests {
             mesh_index: 0,
             skin_data: &skin_data,
         };
-        let result = compute_onion_skin_ghosts(
-            &config,
-            1.0,
-            &world,
-            &assets,
-            &clip_library,
-            &mesh_ctx,
-        );
+        let result =
+            compute_onion_skin_ghosts(&config, 1.0, &world, &assets, &clip_library, &mesh_ctx);
         assert!(result.ghost_meshes.is_empty());
     }
 

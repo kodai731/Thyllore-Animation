@@ -11,26 +11,24 @@ mod constraint_gizmo_systems;
 pub mod constraint_set_systems;
 mod constraint_solve_systems;
 mod curve_editor_systems;
+#[cfg(feature = "ml")]
+mod curve_suggestion_systems;
 pub mod debug_constraint_systems;
 pub mod debug_spring_bone_systems;
 mod ecs_world_systems;
 mod edit_history_systems;
 mod frame_runner;
-mod onion_skinning_systems;
-#[cfg(feature = "ml")]
-mod curve_suggestion_systems;
-#[cfg(feature = "ml")]
-mod inference_actor_systems;
-#[cfg(feature = "text-to-motion")]
-mod text_to_motion_systems;
 mod frame_systems;
 mod gizmo_systems;
 mod grid_systems;
 mod hierarchy_systems;
+#[cfg(feature = "ml")]
+mod inference_actor_systems;
 mod inspector_systems;
 mod keyframe_clipboard_systems;
 pub mod mesh_systems;
 pub mod object_picking_systems;
+mod onion_skinning_systems;
 pub mod phases;
 mod physical_camera_systems;
 mod pose_blend_systems;
@@ -40,6 +38,8 @@ pub mod spring_bone_bake_systems;
 pub mod spring_bone_edit_systems;
 mod spring_bone_gizmo_systems;
 mod spring_bone_systems;
+#[cfg(feature = "text-to-motion")]
+mod text_to_motion_systems;
 mod timeline_systems;
 mod ui_event_systems;
 
@@ -53,28 +53,28 @@ pub use constraint_gizmo_systems::*;
 pub use constraint_set_systems::*;
 pub use constraint_solve_systems::*;
 pub use curve_editor_systems::*;
+#[cfg(feature = "ml")]
+pub use curve_suggestion_systems::*;
 pub use ecs_world_systems::*;
 pub use edit_history_systems::*;
 pub use frame_runner::*;
-pub use onion_skinning_systems::*;
-#[cfg(feature = "ml")]
-pub use curve_suggestion_systems::*;
-#[cfg(feature = "ml")]
-pub use inference_actor_systems::*;
-#[cfg(feature = "text-to-motion")]
-pub use text_to_motion_systems::*;
 pub use frame_systems::*;
 pub use gizmo_systems::*;
 pub use grid_systems::*;
 pub use hierarchy_systems::*;
+#[cfg(feature = "ml")]
+pub use inference_actor_systems::*;
 pub use inspector_systems::*;
 pub use keyframe_clipboard_systems::*;
 pub use object_picking_systems::*;
+pub use onion_skinning_systems::*;
 pub use physical_camera_systems::*;
 pub use pose_blend_systems::*;
 pub use render_data_systems::*;
 pub use skeleton_pose_systems::*;
 pub use spring_bone_gizmo_systems::*;
 pub use spring_bone_systems::*;
+#[cfg(feature = "text-to-motion")]
+pub use text_to_motion_systems::*;
 pub use timeline_systems::*;
 pub use ui_event_systems::*;

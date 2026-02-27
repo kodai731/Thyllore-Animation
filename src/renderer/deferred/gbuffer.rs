@@ -6,11 +6,11 @@ use crate::app::App;
 use crate::asset::AssetStorage;
 use crate::ecs::world::MeshRef;
 use crate::ecs::World;
+use crate::renderer::onion_skin_buffers::OnionSkinGpuState;
 use crate::vulkanr::core::{Device, RRDevice};
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::render::pass::get_depth_format;
 use crate::vulkanr::render::RRRender;
-use crate::renderer::onion_skin_buffers::OnionSkinGpuState;
 use crate::vulkanr::resource::{create_image, create_image_view, RRGBuffer};
 
 #[repr(C)]
@@ -398,9 +398,7 @@ impl<'a> GBufferPass<'a> {
                 &[],
             );
 
-            if let Some(material_id) =
-                self.graphics_resources.get_material_id(source_mesh_index)
-            {
+            if let Some(material_id) = self.graphics_resources.get_material_id(source_mesh_index) {
                 if let Some(material) = self.graphics_resources.materials.get(material_id) {
                     self.device.cmd_bind_descriptor_sets(
                         command_buffer,
@@ -441,14 +439,8 @@ impl<'a> GBufferPass<'a> {
                 push_constants.as_bytes(),
             );
 
-            self.device.cmd_draw_indexed(
-                command_buffer,
-                onion_gpu.source_index_count,
-                1,
-                0,
-                0,
-                0,
-            );
+            self.device
+                .cmd_draw_indexed(command_buffer, onion_gpu.source_index_count, 1, 0, 0, 0);
         }
 
         Ok(())

@@ -5,11 +5,10 @@ use cgmath::{InnerSpace, Matrix4, Vector3};
 use fbxcel::low::FbxVersion;
 use fbxcel::writer::v7400::binary::{FbxFooter, Writer};
 
-use crate::animation::Skeleton;
 use crate::animation::editable::{
-    BezierHandle, EditableAnimationClip, EditableKeyframe, InterpolationType,
-    PropertyCurve,
+    BezierHandle, EditableAnimationClip, EditableKeyframe, InterpolationType, PropertyCurve,
 };
+use crate::animation::Skeleton;
 use crate::loader::fbx::fbx::FbxAxesInfo;
 
 pub(crate) type FbxWriteResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -87,8 +86,15 @@ pub(crate) struct FbxCurveExport {
 }
 
 pub(crate) enum FbxConnection {
-    OO { child: i64, parent: i64 },
-    OP { child: i64, parent: i64, property: String },
+    OO {
+        child: i64,
+        parent: i64,
+    },
+    OP {
+        child: i64,
+        parent: i64,
+        property: String,
+    },
 }
 
 pub(crate) struct FbxExportData {
@@ -118,10 +124,7 @@ fn convert_interpolation_to_flags(interp: InterpolationType) -> i32 {
     }
 }
 
-fn convert_tangent_to_fbx_slope_weight(
-    handle: &BezierHandle,
-    key_interval: f32,
-) -> (f32, f32) {
+fn convert_tangent_to_fbx_slope_weight(handle: &BezierHandle, key_interval: f32) -> (f32, f32) {
     let slope = if handle.time_offset.abs() > 1e-8 {
         handle.value_offset / handle.time_offset
     } else {
@@ -174,10 +177,7 @@ pub(crate) fn decompose_matrix_to_trs(m: &Matrix4<f32>) -> ([f64; 3], [f64; 3], 
     )
 }
 
-fn validate_bone_names(
-    clip: &EditableAnimationClip,
-    skeleton: &Skeleton,
-) -> Vec<String> {
+fn validate_bone_names(clip: &EditableAnimationClip, skeleton: &Skeleton) -> Vec<String> {
     clip.tracks
         .values()
         .filter(|track| !skeleton.bone_name_to_id.contains_key(&track.bone_name))
@@ -193,7 +193,8 @@ pub(crate) fn build_bone_export_list(
     needs_coord_conversion: bool,
 ) -> Vec<FbxBoneExport> {
     let mut bones = Vec::new();
-    let mut skeleton_idx_to_export_idx: Vec<Option<usize>> = Vec::with_capacity(skeleton.bones.len());
+    let mut skeleton_idx_to_export_idx: Vec<Option<usize>> =
+        Vec::with_capacity(skeleton.bones.len());
 
     for bone in &skeleton.bones {
         if mesh_node_names.contains(&bone.name) {
@@ -292,9 +293,7 @@ fn build_key_attr_arrays(
         let flag = convert_interpolation_to_flags(kf.interpolation);
         let next_kf = keyframes.get(i + 1);
 
-        let key_interval = next_kf
-            .map(|n| n.time - kf.time)
-            .unwrap_or(1.0 / 30.0);
+        let key_interval = next_kf.map(|n| n.time - kf.time).unwrap_or(1.0 / 30.0);
 
         let (right_slope, right_weight) =
             convert_tangent_to_fbx_slope_weight(&kf.out_tangent, key_interval);
@@ -725,14 +724,49 @@ pub(crate) fn write_global_settings<W: Write + Seek>(
 
     drop(writer.new_node("Properties70")?);
     write_property_i32(writer, "UpAxis", "int", "Integer", "", axes.up_axis)?;
-    write_property_i32(writer, "UpAxisSign", "int", "Integer", "", axes.up_axis_sign)?;
+    write_property_i32(
+        writer,
+        "UpAxisSign",
+        "int",
+        "Integer",
+        "",
+        axes.up_axis_sign,
+    )?;
     write_property_i32(writer, "FrontAxis", "int", "Integer", "", axes.front_axis)?;
-    write_property_i32(writer, "FrontAxisSign", "int", "Integer", "", axes.front_axis_sign)?;
+    write_property_i32(
+        writer,
+        "FrontAxisSign",
+        "int",
+        "Integer",
+        "",
+        axes.front_axis_sign,
+    )?;
     write_property_i32(writer, "CoordAxis", "int", "Integer", "", axes.coord_axis)?;
-    write_property_i32(writer, "CoordAxisSign", "int", "Integer", "", axes.coord_axis_sign)?;
-    write_property_f64(writer, "UnitScaleFactor", "double", "Number", "", unit_scale_factor)?;
+    write_property_i32(
+        writer,
+        "CoordAxisSign",
+        "int",
+        "Integer",
+        "",
+        axes.coord_axis_sign,
+    )?;
+    write_property_f64(
+        writer,
+        "UnitScaleFactor",
+        "double",
+        "Number",
+        "",
+        unit_scale_factor,
+    )?;
     write_property_i32(writer, "TimeMode", "enum", "", "", time_mode)?;
-    write_property_f64(writer, "CustomFrameRate", "double", "Number", "", fps as f64)?;
+    write_property_f64(
+        writer,
+        "CustomFrameRate",
+        "double",
+        "Number",
+        "",
+        fps as f64,
+    )?;
     write_property_ktime(writer, "TimeSpanStart", 0)?;
     write_property_ktime(writer, "TimeSpanStop", duration_ktime)?;
     writer.close_node()?;
@@ -979,8 +1013,7 @@ pub(crate) fn write_anim_curve_node<W: Write + Seek>(
     writer: &mut Writer<W>,
     cn: &FbxCurveNodeExport,
 ) -> FbxWriteResult<()> {
-    let fbx_name =
-        format!("{}\x00\x01AnimCurveNode", cn.channel.short_name());
+    let fbx_name = format!("{}\x00\x01AnimCurveNode", cn.channel.short_name());
     let mut attrs = writer.new_node("AnimationCurveNode")?;
     attrs.append_i64(cn.uid)?;
     attrs.append_string_direct(&fbx_name)?;
@@ -1051,10 +1084,7 @@ pub(crate) fn write_anim_curve<W: Write + Seek>(
 
     {
         let mut ra = writer.new_node("KeyAttrRefCount")?;
-        ra.append_arr_i32_from_iter(
-            None,
-            curve.key_attr_ref_count.iter().copied(),
-        )?;
+        ra.append_arr_i32_from_iter(None, curve.key_attr_ref_count.iter().copied())?;
         drop(ra);
         writer.close_node()?;
     }
@@ -1309,13 +1339,10 @@ mod tests {
         let mut uid_alloc = UidAllocator::new();
         let empty_set = std::collections::HashSet::new();
 
-        let bones_with = build_bone_export_list(
-            &skeleton, &mut uid_alloc, &empty_set, 1.0, true,
-        );
+        let bones_with = build_bone_export_list(&skeleton, &mut uid_alloc, &empty_set, 1.0, true);
         let mut uid_alloc2 = UidAllocator::new();
-        let bones_without = build_bone_export_list(
-            &skeleton, &mut uid_alloc2, &empty_set, 1.0, false,
-        );
+        let bones_without =
+            build_bone_export_list(&skeleton, &mut uid_alloc2, &empty_set, 1.0, false);
 
         let hips_with = bones_with.iter().find(|b| b.name == "Hips").unwrap();
         let hips_without = bones_without.iter().find(|b| b.name == "Hips").unwrap();
@@ -1334,9 +1361,7 @@ mod tests {
         let mut uid_alloc = UidAllocator::new();
         let empty_set = std::collections::HashSet::new();
 
-        let bones = build_bone_export_list(
-            &skeleton, &mut uid_alloc, &empty_set, 1.0, false,
-        );
+        let bones = build_bone_export_list(&skeleton, &mut uid_alloc, &empty_set, 1.0, false);
 
         assert_eq!(bones.len(), 4);
         for bone in &bones {

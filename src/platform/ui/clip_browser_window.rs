@@ -182,7 +182,9 @@ fn count_clip_references(_clip_library: &ClipLibrary, world: &World) -> Vec<(Sou
     counts.into_iter().collect()
 }
 
-fn extract_source_filename(clip: Option<&crate::animation::editable::EditableAnimationClip>) -> String {
+fn extract_source_filename(
+    clip: Option<&crate::animation::editable::EditableAnimationClip>,
+) -> String {
     clip.and_then(|c| c.source_path.as_ref())
         .and_then(|p| std::path::Path::new(p).file_name())
         .and_then(|n| n.to_str())

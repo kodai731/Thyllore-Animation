@@ -3,10 +3,13 @@ use cgmath::Vector3;
 
 use crate::animation::BoneId;
 use crate::app::data::LightMoveTarget;
-use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData};
+use crate::debugview::gizmo::transform::TransformGizmoHandle;
+use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, TransformGizmoData};
+use crate::ecs::component::LineMesh;
 use crate::ecs::context::EcsContext;
-use crate::ecs::resource::HierarchyDisplayMode;
+use crate::ecs::resource::{HierarchyDisplayMode, TransformGizmoMode, TransformGizmoState};
 use crate::ecs::systems::select_bone_by_ray;
+use crate::ecs::systems::transform_gizmo_systems;
 use crate::ecs::GizmoAxis;
 use crate::ecs::{
     gizmo_try_select, gizmo_update_position_with_constraint, update_light_auto_target,
@@ -24,17 +27,28 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
 
     ctx.gui_data.update();
 
-    process_gizmo_interaction(ctx, is_first_left_click)?;
+    let transform_gizmo_active = process_transform_gizmo_interaction(ctx, is_first_left_click)?;
 
-    if is_first_left_click {
+    if !transform_gizmo_active {
+        process_gizmo_interaction(ctx, is_first_left_click)?;
+    }
+
+    if is_first_left_click && !transform_gizmo_active {
         let bone_hit = process_bone_selection(ctx)?;
         if !bone_hit {
             request_mesh_selection(ctx);
         }
     }
 
+    sync_transform_gizmo_to_bone(ctx);
+
     let viewport_hovered = ctx.gui_data.viewport_hovered;
-    if !ctx.light_gizmo().selectable.is_selected && viewport_hovered {
+    let tg_selected = ctx
+        .world
+        .get_resource::<TransformGizmoData>()
+        .map(|tg| tg.selectable.is_selected)
+        .unwrap_or(false);
+    if !ctx.light_gizmo().selectable.is_selected && !tg_selected && viewport_hovered {
         let is_right_clicked = ctx.gui_data.is_right_clicked;
         let is_wheel_clicked = ctx.gui_data.is_wheel_clicked;
         let mouse_wheel = ctx.gui_data.mouse_wheel;
@@ -400,6 +414,332 @@ fn request_mesh_selection(ctx: &mut EcsContext) {
     readback.pending_pixel = Some((px, py));
     readback.is_shift = ctx.gui_data.is_shift_pressed;
     readback.is_ctrl = ctx.gui_data.is_ctrl_pressed;
+}
+
+fn process_transform_gizmo_interaction(
+    ctx: &mut EcsContext,
+    is_first_left_click: bool,
+) -> Result<bool> {
+    if !ctx.world.contains_resource::<TransformGizmoData>() {
+        return Ok(false);
+    }
+    if !ctx.world.contains_resource::<TransformGizmoState>() {
+        return Ok(false);
+    }
+
+    let visible = {
+        let tg = ctx.transform_gizmo();
+        tg.visible
+    };
+    if !visible {
+        return Ok(false);
+    }
+
+    let mouse_pos = viewport_local_mouse_pos(ctx);
+
+    if !ctx.gui_data.imgui_wants_mouse && ctx.gui_data.is_left_clicked {
+        ctx.transform_gizmo_mut().draggable.just_selected = false;
+
+        if is_first_left_click {
+            let camera = ctx.camera();
+            let camera_pos = crate::ecs::compute_camera_position(&camera);
+            let camera_dir = crate::ecs::compute_camera_direction(&camera);
+            let camera_up = crate::ecs::compute_camera_up(&camera);
+            let fov_y = camera.fov_y;
+            let near_plane = camera.near_plane;
+            drop(camera);
+
+            let mode = ctx.transform_gizmo_state().mode;
+            let tg = ctx.transform_gizmo();
+            let tg_clone_for_select = TransformGizmoData {
+                visible: tg.visible,
+                position: tg.position.clone(),
+                selectable: tg.selectable.clone(),
+                draggable: tg.draggable.clone(),
+                active_handle: tg.active_handle,
+                line_mesh: LineMesh::default(),
+                solid_mesh: LineMesh::default(),
+                line_render_info: tg.line_render_info,
+                solid_render_info: tg.solid_render_info,
+                drag_start_position: tg.drag_start_position,
+                drag_start_rotation: tg.drag_start_rotation,
+                drag_start_scale: tg.drag_start_scale,
+                drag_plane_normal: tg.drag_plane_normal,
+                drag_initial_hit: tg.drag_initial_hit,
+                drag_initial_angle: tg.drag_initial_angle,
+                target_bone_id: tg.target_bone_id,
+            };
+            drop(tg);
+
+            let handle = transform_gizmo_systems::transform_gizmo_try_select(
+                &tg_clone_for_select,
+                mode,
+                mouse_pos,
+                camera_pos,
+                camera_dir,
+                camera_up,
+                ctx.swapchain_extent,
+                fov_y,
+                near_plane,
+            );
+
+            if handle != TransformGizmoHandle::None {
+                let gizmo_pos = tg_clone_for_select.position.position;
+                let (plane_point, plane_normal) =
+                    transform_gizmo_systems::transform_gizmo_compute_drag_plane(
+                        handle, gizmo_pos, camera_dir,
+                    );
+
+                let view_mat = unsafe { crate::math::view(camera_pos, camera_dir, camera_up) };
+                let aspect = ctx.swapchain_extent.0 as f32 / ctx.swapchain_extent.1 as f32;
+                let proj = crate::math::coordinate_system::perspective_infinite_reverse(
+                    fov_y, aspect, near_plane,
+                );
+                let screen_size = cgmath::Vector2::new(
+                    ctx.swapchain_extent.0 as f32,
+                    ctx.swapchain_extent.1 as f32,
+                );
+                let (ray_origin, ray_direction) =
+                    screen_to_world_ray(mouse_pos, screen_size, view_mat, proj);
+                let initial_hit = crate::math::ray_plane_intersection(
+                    ray_origin,
+                    ray_direction,
+                    plane_point,
+                    plane_normal,
+                )
+                .unwrap_or(gizmo_pos);
+
+                let mut tg = ctx.transform_gizmo_mut();
+                tg.selectable.is_selected = true;
+                tg.active_handle = handle;
+                tg.draggable.just_selected = true;
+                tg.drag_start_position = tg.position.position;
+                tg.drag_plane_normal = plane_normal;
+                tg.drag_initial_hit = initial_hit;
+
+                crate::log!("TransformGizmo selected: handle={:?}", handle);
+            }
+        }
+
+        let (is_selected, just_selected) = {
+            let tg = ctx.transform_gizmo();
+            (tg.selectable.is_selected, tg.draggable.just_selected)
+        };
+
+        if is_selected && !just_selected {
+            process_transform_gizmo_drag(ctx, mouse_pos)?;
+        }
+
+        return Ok(is_selected);
+    } else if !ctx.gui_data.is_wheel_clicked {
+        let is_selected = ctx.transform_gizmo().selectable.is_selected;
+        if is_selected {
+            let mut tg = ctx.transform_gizmo_mut();
+            tg.selectable.is_selected = false;
+            tg.active_handle = TransformGizmoHandle::None;
+            tg.draggable.just_selected = false;
+            crate::log!("TransformGizmo released");
+        }
+    }
+
+    Ok(false)
+}
+
+fn process_transform_gizmo_drag(
+    ctx: &mut EcsContext,
+    mouse_pos: cgmath::Vector2<f32>,
+) -> Result<()> {
+    let camera = ctx.camera();
+    let camera_pos = crate::ecs::compute_camera_position(&camera);
+    let camera_dir = crate::ecs::compute_camera_direction(&camera);
+    let camera_up = crate::ecs::compute_camera_up(&camera);
+    let fov_y = camera.fov_y;
+    let near_plane = camera.near_plane;
+    drop(camera);
+
+    let mode = ctx.transform_gizmo_state().mode;
+    let state = ctx.transform_gizmo_state();
+    let snap_translate = if state.snap_enabled {
+        Some(state.translate_snap_value)
+    } else {
+        None
+    };
+    let snap_rotate = if state.snap_enabled {
+        Some(state.rotate_snap_degrees)
+    } else {
+        None
+    };
+    let snap_scale = if state.snap_enabled {
+        Some(state.scale_snap_value)
+    } else {
+        None
+    };
+    drop(state);
+
+    match mode {
+        TransformGizmoMode::Translate => {
+            let tg = ctx.transform_gizmo();
+            let tg_ref = &*tg;
+            let new_pos = transform_gizmo_systems::transform_gizmo_process_translate_drag(
+                tg_ref,
+                mouse_pos,
+                camera_pos,
+                camera_dir,
+                camera_up,
+                ctx.swapchain_extent,
+                fov_y,
+                near_plane,
+                snap_translate,
+            );
+            drop(tg);
+
+            if let Some(pos) = new_pos {
+                let target_bone = ctx.transform_gizmo().target_bone_id;
+                ctx.transform_gizmo_mut().position.position = pos;
+
+                if let Some(bone_id) = target_bone {
+                    apply_bone_translation(ctx, bone_id, pos);
+                }
+            }
+        }
+        TransformGizmoMode::Rotate => {
+            let tg = ctx.transform_gizmo();
+            let rotation = transform_gizmo_systems::transform_gizmo_process_rotate_drag(
+                &tg,
+                mouse_pos,
+                camera_pos,
+                camera_dir,
+                camera_up,
+                ctx.swapchain_extent,
+                fov_y,
+                near_plane,
+                snap_rotate,
+            );
+            let target_bone = tg.target_bone_id;
+            let gizmo_pos = tg.position.position;
+            drop(tg);
+
+            if let Some(rot) = rotation {
+                if let Some(bone_id) = target_bone {
+                    apply_bone_rotation(ctx, bone_id, gizmo_pos, rot);
+                }
+            }
+        }
+        TransformGizmoMode::Scale => {
+            let tg = ctx.transform_gizmo();
+            let new_scale = transform_gizmo_systems::transform_gizmo_process_scale_drag(
+                &tg,
+                mouse_pos,
+                camera_pos,
+                camera_dir,
+                camera_up,
+                ctx.swapchain_extent,
+                fov_y,
+                near_plane,
+                snap_scale,
+            );
+            let target_bone = tg.target_bone_id;
+            drop(tg);
+
+            if let Some(scale) = new_scale {
+                if let Some(bone_id) = target_bone {
+                    apply_bone_scale(ctx, bone_id, scale);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn apply_bone_translation(ctx: &mut EcsContext, bone_id: u32, new_pos: Vector3<f32>) {
+    if !ctx.world.contains_resource::<BoneGizmoData>() {
+        return;
+    }
+    let idx = bone_id as usize;
+    let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
+    if idx < bone_gizmo.cached_global_transforms.len() {
+        bone_gizmo.cached_global_transforms[idx][3][0] = new_pos.x;
+        bone_gizmo.cached_global_transforms[idx][3][1] = new_pos.y;
+        bone_gizmo.cached_global_transforms[idx][3][2] = new_pos.z;
+    }
+}
+
+fn apply_bone_rotation(
+    ctx: &mut EcsContext,
+    bone_id: u32,
+    gizmo_pos: Vector3<f32>,
+    rotation: cgmath::Quaternion<f32>,
+) {
+    if !ctx.world.contains_resource::<BoneGizmoData>() {
+        return;
+    }
+    let idx = bone_id as usize;
+    let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
+    if idx < bone_gizmo.cached_global_transforms.len() {
+        use cgmath::Matrix4;
+        let rot_mat: Matrix4<f32> = rotation.into();
+        let translate_to_origin = Matrix4::from_translation(-gizmo_pos);
+        let translate_back = Matrix4::from_translation(gizmo_pos);
+        let current = bone_gizmo.cached_global_transforms[idx];
+        bone_gizmo.cached_global_transforms[idx] =
+            translate_back * rot_mat * translate_to_origin * current;
+    }
+}
+
+fn apply_bone_scale(ctx: &mut EcsContext, bone_id: u32, scale: Vector3<f32>) {
+    if !ctx.world.contains_resource::<BoneGizmoData>() {
+        return;
+    }
+    let idx = bone_id as usize;
+    let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
+    if idx < bone_gizmo.cached_global_transforms.len() {
+        use cgmath::Matrix4;
+        let scale_mat = Matrix4::from_nonuniform_scale(scale.x, scale.y, scale.z);
+        bone_gizmo.cached_global_transforms[idx] =
+            bone_gizmo.cached_global_transforms[idx] * scale_mat;
+    }
+}
+
+fn sync_transform_gizmo_to_bone(ctx: &mut EcsContext) {
+    if !ctx.world.contains_resource::<TransformGizmoData>() {
+        return;
+    }
+    if !ctx.world.contains_resource::<BoneGizmoData>() {
+        return;
+    }
+
+    // Don't sync during active drag
+    let is_selected = ctx.transform_gizmo().selectable.is_selected;
+    if is_selected {
+        return;
+    }
+
+    let (active_bone, transforms, offsets) = {
+        let selection = ctx.bone_selection();
+        let active = selection.active_bone_index;
+        drop(selection);
+
+        let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
+        if !bone_gizmo.visible {
+            let mut tg = ctx.transform_gizmo_mut();
+            tg.visible = false;
+            return;
+        }
+        (
+            active,
+            bone_gizmo.cached_global_transforms.clone(),
+            bone_gizmo.bone_local_offsets.clone(),
+        )
+    };
+
+    let mut tg = ctx.transform_gizmo_mut();
+    transform_gizmo_systems::transform_gizmo_sync_to_bone(
+        &mut tg,
+        active_bone,
+        &transforms,
+        &offsets,
+    );
 }
 
 fn sync_bone_selection_to_hierarchy(

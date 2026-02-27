@@ -84,12 +84,8 @@ pub fn clip_library_save_to_file(lib: &ClipLibrary, id: SourceClipId, path: &Pat
         fs::File::create(path).with_context(|| format!("Failed to create file: {:?}", path))?;
     let writer = BufWriter::new(file);
 
-    ron::ser::to_writer_pretty(
-        writer,
-        &clip_file,
-        ron::ser::PrettyConfig::default(),
-    )
-    .with_context(|| format!("Failed to serialize clip to: {:?}", path))?;
+    ron::ser::to_writer_pretty(writer, &clip_file, ron::ser::PrettyConfig::default())
+        .with_context(|| format!("Failed to serialize clip to: {:?}", path))?;
 
     crate::log!(
         "Saved animation clip '{}' to {:?}",
@@ -105,8 +101,8 @@ pub fn clip_library_load_from_file(
     path: &Path,
     bone_name_to_id: Option<&HashMap<String, BoneId>>,
 ) -> Result<SourceClipId> {
-    let content = fs::read_to_string(path)
-        .with_context(|| format!("Failed to read file: {:?}", path))?;
+    let content =
+        fs::read_to_string(path).with_context(|| format!("Failed to read file: {:?}", path))?;
 
     let mut clip = deserialize_clip(&content)
         .with_context(|| format!("Failed to deserialize clip from: {:?}", path))?;
@@ -131,11 +127,7 @@ pub fn clip_library_load_from_file(
 
     clip.source_path = Some(path.to_string_lossy().to_string());
 
-    crate::log!(
-        "Loaded animation clip '{}' from {:?}",
-        clip.name,
-        path
-    );
+    crate::log!("Loaded animation clip '{}' from {:?}", clip.name, path);
 
     let id = clip_library_register_and_activate(lib, assets, clip);
     Ok(id)

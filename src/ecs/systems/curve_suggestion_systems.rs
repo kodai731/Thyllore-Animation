@@ -31,8 +31,11 @@ pub fn curve_suggestion_extract_context(
     };
 
     let curve_std = if count > 0 {
-        let variance =
-            window.iter().map(|kf| (kf.value - curve_mean).powi(2)).sum::<f32>() / count as f32;
+        let variance = window
+            .iter()
+            .map(|kf| (kf.value - curve_mean).powi(2))
+            .sum::<f32>()
+            / count as f32;
         variance.sqrt().max(1e-6)
     } else {
         1e-6
@@ -192,10 +195,7 @@ pub fn curve_suggestion_poll_results(
     }
 }
 
-pub fn curve_suggestion_apply(
-    suggestion: &GhostCurveSuggestion,
-    curve: &mut PropertyCurve,
-) {
+pub fn curve_suggestion_apply(suggestion: &GhostCurveSuggestion, curve: &mut PropertyCurve) {
     let interpolation = if suggestion.is_bezier {
         InterpolationType::Bezier
     } else {
@@ -236,12 +236,8 @@ mod tests {
     #[test]
     fn test_extract_context_basic() {
         let curve = create_test_curve(5);
-        let (context, _mean, _std) = curve_suggestion_extract_context(
-            &curve,
-            PropertyType::TranslationX,
-            8,
-            4.0,
-        );
+        let (context, _mean, _std) =
+            curve_suggestion_extract_context(&curve, PropertyType::TranslationX, 8, 4.0);
 
         assert_eq!(context.len(), CONTEXT_SIZE);
 
@@ -252,21 +248,24 @@ mod tests {
     #[test]
     fn test_extract_context_right_aligned_padding() {
         let curve = create_test_curve(2);
-        let (context, _mean, _std) = curve_suggestion_extract_context(
-            &curve,
-            PropertyType::TranslationX,
-            8,
-            4.0,
-        );
+        let (context, _mean, _std) =
+            curve_suggestion_extract_context(&curve, PropertyType::TranslationX, 8, 4.0);
 
         assert_eq!(context.len(), CONTEXT_SIZE);
 
         let padding_size = (8 - 2) * FEATURES_PER_KEYFRAME;
         for i in 0..padding_size {
-            assert_eq!(context[i], 0.0, "leading padding at index {} should be 0", i);
+            assert_eq!(
+                context[i], 0.0,
+                "leading padding at index {} should be 0",
+                i
+            );
         }
 
-        assert!(context[padding_size] > 0.0, "first keyframe should be non-zero after padding");
+        assert!(
+            context[padding_size] > 0.0,
+            "first keyframe should be non-zero after padding"
+        );
     }
 
     #[test]
@@ -275,18 +274,17 @@ mod tests {
         curve.add_keyframe(1.0, 90.0);
         curve.add_keyframe(2.0, 180.0);
 
-        let (context, curve_mean, curve_std) = curve_suggestion_extract_context(
-            &curve,
-            PropertyType::RotationX,
-            8,
-            4.0,
-        );
+        let (context, curve_mean, curve_std) =
+            curve_suggestion_extract_context(&curve, PropertyType::RotationX, 8, 4.0);
 
         assert!((curve_mean - 135.0).abs() < 0.001, "mean should be 135.0");
         assert!((curve_std - 45.0).abs() < 0.001, "std should be 45.0");
 
         let padding = (8 - 2) * FEATURES_PER_KEYFRAME;
-        assert!((context[padding] - 0.25).abs() < 0.001, "time should be 1.0/4.0 = 0.25");
+        assert!(
+            (context[padding] - 0.25).abs() < 0.001,
+            "time should be 1.0/4.0 = 0.25"
+        );
         assert!(
             (context[padding + 1] - (-1.0)).abs() < 0.001,
             "value should be (90.0 - 135.0) / 45.0 = -1.0"
@@ -304,15 +302,14 @@ mod tests {
         curve.add_keyframe(1.0, 42.0);
         curve.add_keyframe(2.0, 42.0);
 
-        let (_context, curve_mean, curve_std) = curve_suggestion_extract_context(
-            &curve,
-            PropertyType::RotationX,
-            8,
-            4.0,
-        );
+        let (_context, curve_mean, curve_std) =
+            curve_suggestion_extract_context(&curve, PropertyType::RotationX, 8, 4.0);
 
         assert!((curve_mean - 42.0).abs() < 0.001, "mean should be 42.0");
-        assert!((curve_std - 1e-6).abs() < 1e-7, "std should be clamped to 1e-6");
+        assert!(
+            (curve_std - 1e-6).abs() < 1e-7,
+            "std should be clamped to 1e-6"
+        );
     }
 
     #[test]

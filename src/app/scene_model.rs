@@ -46,10 +46,7 @@ impl App {
             self.data.graphics_resources.meshes.len()
         );
         crate::log!("  has_skinned_meshes: {}", model_state.has_skinned_meshes);
-        crate::log!(
-            "  animation clips count: {}",
-            clip_library.clip_count()
-        );
+        crate::log!("  animation clips count: {}", clip_library.clip_count());
         crate::log!(
             "  morph_animations count: {}",
             clip_library.morph_animation.animations.len()

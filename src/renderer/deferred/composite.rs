@@ -3,7 +3,9 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::graphics_resource::GraphicsResources;
 use crate::app::App;
-use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
+use crate::debugview::gizmo::{
+    BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, TransformGizmoData,
+};
 use crate::debugview::DebugViewMode;
 use crate::ecs::component::LineMesh;
 use crate::vulkanr::core::Device;
@@ -90,6 +92,7 @@ impl<'a> CompositePass<'a> {
         self.draw_composite(command_buffer)?;
         self.draw_grid(command_buffer, image_index)?;
         self.draw_gizmo(command_buffer, image_index)?;
+        self.draw_transform_gizmo(command_buffer, image_index);
 
         let grid_mesh = self.app.grid_mesh();
         let light_gizmo = self.app.light_gizmo();
@@ -132,6 +135,7 @@ impl<'a> CompositePass<'a> {
         self.draw_composite(command_buffer)?;
         self.draw_grid(command_buffer, image_index)?;
         self.draw_gizmo(command_buffer, image_index)?;
+        self.draw_transform_gizmo(command_buffer, image_index);
 
         let grid_mesh = self.app.grid_mesh();
         let light_gizmo = self.app.light_gizmo();
@@ -596,6 +600,50 @@ impl<'a> CompositePass<'a> {
             command_buffer,
             image_index,
         );
+    }
+
+    unsafe fn draw_transform_gizmo(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
+        let tg = match self.app.get_resource::<TransformGizmoData>() {
+            Some(tg) => tg,
+            None => return,
+        };
+
+        if !tg.visible {
+            return;
+        }
+
+        let pipeline_storage = self.pipeline_storage();
+
+        // Draw solid mesh (cones, cubes, plane quads)
+        if !tg.solid_mesh.indices.is_empty() {
+            if let Some(pid) = tg.solid_render_info.pipeline_id {
+                if let Some(pipeline) = pipeline_storage.get(pid) {
+                    self.push_bone_alpha(command_buffer, pipeline, 1.0);
+                    self.draw_triangle_mesh(
+                        &tg.solid_mesh,
+                        pipeline,
+                        tg.solid_render_info.object_index,
+                        command_buffer,
+                        image_index,
+                    );
+                }
+            }
+        }
+
+        // Draw line mesh (axis shafts, rings)
+        if !tg.line_mesh.indices.is_empty() {
+            if let Some(pid) = tg.line_render_info.pipeline_id {
+                if let Some(pipeline) = pipeline_storage.get(pid) {
+                    self.draw_line_mesh(
+                        &tg.line_mesh,
+                        pipeline,
+                        tg.line_render_info.object_index,
+                        command_buffer,
+                        image_index,
+                    );
+                }
+            }
+        }
     }
 
     unsafe fn draw_bone_gizmo(&self, command_buffer: vk::CommandBuffer, image_index: usize) {

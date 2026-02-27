@@ -3,6 +3,7 @@ use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
 use crate::app::FrameContext;
 use crate::debugview::gizmo::BoneSelectionState;
+use crate::debugview::gizmo::TransformGizmoData;
 use crate::debugview::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, SpringBoneGizmoData,
 };
@@ -11,6 +12,7 @@ use crate::ecs::resource::{Camera, Exposure};
 use crate::ecs::systems::render_data_systems::{
     bone_gizmo_render_data, constraint_gizmo_render_data, gizmo_mesh_render_data,
     gizmo_selectable_render_data, grid_mesh_render_data, spring_bone_gizmo_render_data,
+    transform_gizmo_render_data,
 };
 use crate::ecs::{
     build_bone_line_mesh, build_box_bone_meshes_with_selection, build_constraint_gizmo_mesh,
@@ -118,6 +120,11 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         }
     }
 
+    if ctx.world.contains_resource::<TransformGizmoData>() {
+        let tg = ctx.world.resource::<TransformGizmoData>();
+        render_data_vec.extend(transform_gizmo_render_data(&tg, camera_position));
+    }
+
     let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
     if let Err(e) = update_object_ubo(
@@ -132,6 +139,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     update_billboard_ubo(ctx, view, proj)?;
 
     update_grid_gizmo_buffers(ctx, view)?;
+    update_transform_gizmo_mesh(ctx)?;
     update_bone_gizmo_mesh(ctx)?;
     update_constraint_gizmo_mesh(ctx)?;
     update_spring_bone_gizmo_mesh(ctx)?;
@@ -169,6 +177,72 @@ unsafe fn update_grid_gizmo_buffers(ctx: &mut FrameContext, view: Matrix4<f32>) 
     let mesh = ctx.gizmo().mesh.clone();
     let backend = ctx.create_backend();
     gizmo_update_vertex_buffer(&mesh, &backend)?;
+
+    Ok(())
+}
+
+unsafe fn update_transform_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
+    if !ctx.world.contains_resource::<TransformGizmoData>() {
+        return Ok(());
+    }
+
+    let visible = {
+        let tg = ctx.world.resource::<TransformGizmoData>();
+        tg.visible
+    };
+    if !visible {
+        return Ok(());
+    }
+
+    let (mode, active_handle) = {
+        let tg = ctx.world.resource::<TransformGizmoData>();
+        let state = ctx
+            .world
+            .resource::<crate::ecs::resource::TransformGizmoState>();
+        (state.mode, tg.active_handle)
+    };
+
+    let camera_dir = ctx.camera_direction();
+
+    let mut line_mesh_clone = LineMesh::default();
+    let mut solid_mesh_clone = LineMesh::default();
+
+    match mode {
+        crate::ecs::resource::TransformGizmoMode::Translate => {
+            crate::ecs::systems::transform_gizmo_systems::build_translate_gizmo_meshes(
+                active_handle,
+                &mut line_mesh_clone,
+                &mut solid_mesh_clone,
+            );
+        }
+        crate::ecs::resource::TransformGizmoMode::Rotate => {
+            crate::ecs::systems::transform_gizmo_systems::build_rotate_gizmo_meshes(
+                active_handle,
+                camera_dir,
+                &mut line_mesh_clone,
+                &mut solid_mesh_clone,
+            );
+        }
+        crate::ecs::resource::TransformGizmoMode::Scale => {
+            crate::ecs::systems::transform_gizmo_systems::build_scale_gizmo_meshes(
+                active_handle,
+                &mut line_mesh_clone,
+                &mut solid_mesh_clone,
+            );
+        }
+    }
+
+    {
+        let mut backend = ctx.create_backend();
+        backend.update_or_create_line_buffers(&mut line_mesh_clone)?;
+        backend.update_or_create_line_buffers(&mut solid_mesh_clone)?;
+    }
+
+    {
+        let mut tg = ctx.world.resource_mut::<TransformGizmoData>();
+        tg.line_mesh = line_mesh_clone;
+        tg.solid_mesh = solid_mesh_clone;
+    }
 
     Ok(())
 }

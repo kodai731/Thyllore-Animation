@@ -28,17 +28,16 @@ pub fn convert_motion_response_to_clip(
             }
         };
 
-        let property_type =
-            match convert_proto_property_type(raw_curve.property_type) {
-                Some(pt) => pt,
-                None => {
-                    crate::log!(
-                        "TextToMotion: unknown property_type {}, skipping",
-                        raw_curve.property_type
-                    );
-                    continue;
-                }
-            };
+        let property_type = match convert_proto_property_type(raw_curve.property_type) {
+            Some(pt) => pt,
+            None => {
+                crate::log!(
+                    "TextToMotion: unknown property_type {}, skipping",
+                    raw_curve.property_type
+                );
+                continue;
+            }
+        };
 
         if !clip.tracks.contains_key(&bone_id) {
             clip.add_track(bone_id, raw_curve.bone_name.clone());
@@ -48,8 +47,7 @@ pub fn convert_motion_response_to_clip(
         let curve = track.get_curve_mut(property_type);
 
         for kf in &raw_curve.keyframes {
-            let (in_tangent, out_tangent, interpolation) =
-                convert_keyframe_tangents(kf);
+            let (in_tangent, out_tangent, interpolation) = convert_keyframe_tangents(kf);
 
             curve.add_keyframe_with_tangents(
                 kf.time,
@@ -85,10 +83,8 @@ fn convert_keyframe_tangents(
         InterpolationType::Linear
     };
 
-    let in_tangent =
-        BezierHandle::new(kf.tangent_in_dt, kf.tangent_in_dv);
-    let out_tangent =
-        BezierHandle::new(kf.tangent_out_dt, kf.tangent_out_dv);
+    let in_tangent = BezierHandle::new(kf.tangent_in_dt, kf.tangent_in_dv);
+    let out_tangent = BezierHandle::new(kf.tangent_out_dt, kf.tangent_out_dv);
 
     (in_tangent, out_tangent, interpolation)
 }
@@ -105,11 +101,7 @@ mod tests {
         map
     }
 
-    fn create_test_keyframe(
-        time: f32,
-        value: f32,
-        interpolation: i32,
-    ) -> RawCurveKeyframe {
+    fn create_test_keyframe(time: f32, value: f32, interpolation: i32) -> RawCurveKeyframe {
         RawCurveKeyframe {
             time,
             value,
@@ -124,12 +116,7 @@ mod tests {
     #[test]
     fn test_convert_empty_curves() {
         let bone_map = create_test_bone_map();
-        let clip = convert_motion_response_to_clip(
-            &[],
-            "test",
-            3.0,
-            &bone_map,
-        );
+        let clip = convert_motion_response_to_clip(&[], "test", 3.0, &bone_map);
         assert!(clip.tracks.is_empty());
         assert_eq!(clip.duration, 3.0);
     }
@@ -148,12 +135,7 @@ mod tests {
             ],
         }];
 
-        let clip = convert_motion_response_to_clip(
-            &curves,
-            "test_motion",
-            2.0,
-            &bone_map,
-        );
+        let clip = convert_motion_response_to_clip(&curves, "test_motion", 2.0, &bone_map);
 
         assert_eq!(clip.tracks.len(), 1);
         let track = clip.tracks.get(&0).unwrap();
@@ -173,12 +155,7 @@ mod tests {
             ],
         }];
 
-        let clip = convert_motion_response_to_clip(
-            &curves,
-            "test",
-            2.0,
-            &bone_map,
-        );
+        let clip = convert_motion_response_to_clip(&curves, "test", 2.0, &bone_map);
         assert!(clip.tracks.is_empty());
     }
 
@@ -213,12 +190,7 @@ mod tests {
             },
         ];
 
-        let clip = convert_motion_response_to_clip(
-            &curves,
-            "multi_bone",
-            1.0,
-            &bone_map,
-        );
+        let clip = convert_motion_response_to_clip(&curves, "multi_bone", 1.0, &bone_map);
 
         assert_eq!(clip.tracks.len(), 2);
 
@@ -248,12 +220,7 @@ mod tests {
             }],
         }];
 
-        let clip = convert_motion_response_to_clip(
-            &curves,
-            "bezier_test",
-            1.0,
-            &bone_map,
-        );
+        let clip = convert_motion_response_to_clip(&curves, "bezier_test", 1.0, &bone_map);
 
         let track = clip.tracks.get(&0).unwrap();
         let kf = &track.rotation_x.keyframes[0];

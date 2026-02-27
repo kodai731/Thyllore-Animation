@@ -146,10 +146,7 @@ fn build_animation_clip(
                 .iter()
                 .map(|(t, q)| Keyframe::new(*t, *q))
                 .collect(),
-            scale: scales
-                .iter()
-                .map(|(t, v)| Keyframe::new(*t, *v))
-                .collect(),
+            scale: scales.iter().map(|(t, v)| Keyframe::new(*t, *v)).collect(),
         };
 
         clip.add_channel(bone_idx as BoneId, channel);

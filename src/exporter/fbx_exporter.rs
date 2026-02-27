@@ -5,18 +5,17 @@ use cgmath::Matrix4;
 use fbxcel::low::FbxVersion;
 use fbxcel::writer::v7400::binary::{FbxFooter, Writer};
 
-use crate::animation::Skeleton;
 use crate::animation::editable::EditableAnimationClip;
+use crate::animation::Skeleton;
 use crate::loader::fbx::fbx::{FbxData, FbxModel};
 
 use super::fbx_animation::{
-    FbxBoneExport, FbxChannel, FbxConnection, FbxCurveExport, FbxCurveNodeExport, FbxExportData,
-    FbxWriteResult, UidAllocator, build_bone_export_list, build_channel_exports,
-    decompose_matrix_to_trs, seconds_to_ktime, write_anim_curve, write_anim_curve_node,
-    write_anim_layer, write_anim_stack, write_bone_model, write_connections,
-    write_documents, write_global_settings, write_header_extension, write_node_attribute,
-    write_object_type, write_property_f64, write_property_f64x3, write_property_i32,
-    write_references,
+    build_bone_export_list, build_channel_exports, decompose_matrix_to_trs, seconds_to_ktime,
+    write_anim_curve, write_anim_curve_node, write_anim_layer, write_anim_stack, write_bone_model,
+    write_connections, write_documents, write_global_settings, write_header_extension,
+    write_node_attribute, write_object_type, write_property_f64, write_property_f64x3,
+    write_property_i32, write_references, FbxBoneExport, FbxChannel, FbxConnection, FbxCurveExport,
+    FbxCurveNodeExport, FbxExportData, FbxWriteResult, UidAllocator,
 };
 
 struct FbxGeometryExport {
@@ -143,11 +142,7 @@ fn build_full_export_data(
         .map(|b| (b.name.clone(), b.model_uid))
         .collect();
 
-    let geometries = build_geometry_exports(
-        &fbx_model.fbx_data,
-        &mut uid_alloc,
-        inv_unit_scale,
-    );
+    let geometries = build_geometry_exports(&fbx_model.fbx_data, &mut uid_alloc, inv_unit_scale);
 
     let mesh_models = build_mesh_model_exports(
         &fbx_model.fbx_data,
@@ -193,12 +188,7 @@ fn build_full_export_data(
         &skins,
         &mut connections,
     );
-    generate_animation_connections(
-        stack_uid,
-        layer_uid,
-        &curve_nodes,
-        &mut connections,
-    );
+    generate_animation_connections(stack_uid, layer_uid, &curve_nodes, &mut connections);
 
     let anim_data = FbxExportData {
         clip_name,
@@ -377,7 +367,8 @@ fn build_mesh_model_exports(
     inv_unit_scale: f32,
 ) -> Vec<FbxMeshModelExport> {
     let mut mesh_models = Vec::new();
-    let mut mesh_name_to_uid: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+    let mut mesh_name_to_uid: std::collections::HashMap<String, i64> =
+        std::collections::HashMap::new();
     let scale = inv_unit_scale as f64;
 
     for (i, fbx_data) in fbx_data_list.iter().enumerate() {
@@ -545,14 +536,8 @@ fn resolve_texture_for_export(texture_path: &str, model_path: Option<&str>) -> P
         return original.to_path_buf();
     };
 
-    let file_stem = original
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("");
-    let file_name = original
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("");
+    let file_stem = original.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let file_name = original.file_name().and_then(|s| s.to_str()).unwrap_or("");
 
     let model_dir = Path::new(model_path)
         .parent()
@@ -656,24 +641,19 @@ fn build_skin_exports(
             .clusters
             .iter()
             .filter_map(|cluster| {
-                let bone_model_uid =
-                    bone_name_to_model_uid.get(cluster.bone_name.as_str()).copied()?;
+                let bone_model_uid = bone_name_to_model_uid
+                    .get(cluster.bone_name.as_str())
+                    .copied()?;
 
                 let cluster_uid = uid_alloc.allocate();
 
-                let indices: Vec<i32> =
-                    cluster.vertex_indices.iter().map(|&i| i as i32).collect();
-                let weights: Vec<f64> =
-                    cluster.vertex_weights.iter().map(|&w| w as f64).collect();
+                let indices: Vec<i32> = cluster.vertex_indices.iter().map(|&i| i as i32).collect();
+                let weights: Vec<f64> = cluster.vertex_weights.iter().map(|&w| w as f64).collect();
 
-                let transform = matrix4_to_flat_f64_scaled(
-                    &cluster.inverse_bind_pose,
-                    inv_unit_scale,
-                );
-                let transform_link = matrix4_to_flat_f64_scaled(
-                    &cluster.transform_link,
-                    inv_unit_scale,
-                );
+                let transform =
+                    matrix4_to_flat_f64_scaled(&cluster.inverse_bind_pose, inv_unit_scale);
+                let transform_link =
+                    matrix4_to_flat_f64_scaled(&cluster.transform_link, inv_unit_scale);
 
                 Some(FbxClusterExport {
                     uid: cluster_uid,
@@ -844,8 +824,7 @@ fn write_full_definitions<W: Write + Seek>(
     writer: &mut Writer<W>,
     data: &FullFbxExportData,
 ) -> FbxWriteResult<()> {
-    let model_count =
-        data.anim_data.bones.len() as i32 + data.mesh_models.len() as i32;
+    let model_count = data.anim_data.bones.len() as i32 + data.mesh_models.len() as i32;
     let node_attribute_count = data
         .anim_data
         .bones
@@ -857,15 +836,23 @@ fn write_full_definitions<W: Write + Seek>(
     let texture_count = data.textures.len() as i32;
     let video_count = data.textures.len() as i32;
     let deformer_count = data.skins.len() as i32;
-    let sub_deformer_count: i32 =
-        data.skins.iter().map(|s| s.clusters.len() as i32).sum();
+    let sub_deformer_count: i32 = data.skins.iter().map(|s| s.clusters.len() as i32).sum();
     let curve_node_count = data.anim_data.curve_nodes.len() as i32;
     let curve_count = data.anim_data.curves.len() as i32;
 
-    let total = 1 + model_count + node_attribute_count + geometry_count
-        + material_count + texture_count + video_count
-        + deformer_count + sub_deformer_count
-        + 1 + 1 + curve_node_count + curve_count;
+    let total = 1
+        + model_count
+        + node_attribute_count
+        + geometry_count
+        + material_count
+        + texture_count
+        + video_count
+        + deformer_count
+        + sub_deformer_count
+        + 1
+        + 1
+        + curve_node_count
+        + curve_count;
 
     drop(writer.new_node("Definitions")?);
 
@@ -1014,7 +1001,12 @@ fn write_geometry<W: Write + Seek>(
     }
 
     if !geo.normals.is_empty() || !geo.uv_values.is_empty() || has_material {
-        write_layer(writer, !geo.normals.is_empty(), !geo.uv_values.is_empty(), has_material)?;
+        write_layer(
+            writer,
+            !geo.normals.is_empty(),
+            !geo.uv_values.is_empty(),
+            has_material,
+        )?;
     }
 
     writer.close_node()?;
@@ -1111,9 +1103,7 @@ fn write_layer_element_uv<W: Write + Seek>(
     Ok(())
 }
 
-fn write_layer_element_material<W: Write + Seek>(
-    writer: &mut Writer<W>,
-) -> FbxWriteResult<()> {
+fn write_layer_element_material<W: Write + Seek>(writer: &mut Writer<W>) -> FbxWriteResult<()> {
     drop(writer.new_node("LayerElementMaterial")?);
 
     {
@@ -1293,16 +1283,7 @@ fn write_material<W: Write + Seek>(
         mat.diffuse_color[2],
     )?;
 
-    write_property_f64x3(
-        writer,
-        "SpecularColor",
-        "Color",
-        "",
-        "A",
-        0.9,
-        0.9,
-        0.9,
-    )?;
+    write_property_f64x3(writer, "SpecularColor", "Color", "", "A", 0.9, 0.9, 0.9)?;
 
     write_property_f64(writer, "Shininess", "Number", "", "A", 20.0)?;
     write_property_f64(writer, "ShininessExponent", "Number", "", "A", 20.0)?;
@@ -1515,7 +1496,13 @@ fn write_full_fbx_binary<W: Write + Seek>(
 ) -> FbxWriteResult<()> {
     write_header_extension(&mut writer)?;
     let unit_scale_factor = (data.unit_scale * 100.0) as f64;
-    write_global_settings(&mut writer, data.anim_data.duration_ktime, &data.anim_data.axes, data.anim_data.fps, unit_scale_factor)?;
+    write_global_settings(
+        &mut writer,
+        data.anim_data.duration_ktime,
+        &data.anim_data.axes,
+        data.anim_data.fps,
+        unit_scale_factor,
+    )?;
     write_documents(&mut writer, data.anim_data.document_uid)?;
     write_references(&mut writer)?;
     write_full_definitions(&mut writer, data)?;
@@ -1584,8 +1571,8 @@ mod tests {
             return;
         }
 
-        let fbx_model =
-            crate::loader::fbx::fbx::load_fbx_with_ufbx(original_path).expect("Failed to load original FBX");
+        let fbx_model = crate::loader::fbx::fbx::load_fbx_with_ufbx(original_path)
+            .expect("Failed to load original FBX");
 
         let result = crate::loader::fbx::loader::load_fbx_to_graphics_resources(original_path)
             .expect("Failed to load graphics resources");
@@ -1601,13 +1588,13 @@ mod tests {
         std::fs::create_dir_all(export_dir).ok();
         let export_path = export_dir.join("roundtrip_test.fbx");
 
-        export_full_fbx(&fbx_model, None, &skeleton, &export_path)
-            .expect("Failed to export FBX");
+        export_full_fbx(&fbx_model, None, &skeleton, &export_path).expect("Failed to export FBX");
 
         let original_scene = ufbx::load_file(original_path, ufbx::LoadOpts::default())
             .expect("Failed to load original with ufbx");
-        let exported_scene = ufbx::load_file(export_path.to_str().unwrap(), ufbx::LoadOpts::default())
-            .expect("Failed to load exported with ufbx");
+        let exported_scene =
+            ufbx::load_file(export_path.to_str().unwrap(), ufbx::LoadOpts::default())
+                .expect("Failed to load exported with ufbx");
 
         let orig_axes = &original_scene.settings.axes;
         let exp_axes = &exported_scene.settings.axes;
@@ -1627,16 +1614,10 @@ mod tests {
             orig_axes.right, exp_axes.right
         );
 
-        let orig_non_root_nodes: Vec<_> = original_scene
-            .nodes
-            .iter()
-            .filter(|n| !n.is_root)
-            .collect();
-        let exp_non_root_nodes: Vec<_> = exported_scene
-            .nodes
-            .iter()
-            .filter(|n| !n.is_root)
-            .collect();
+        let orig_non_root_nodes: Vec<_> =
+            original_scene.nodes.iter().filter(|n| !n.is_root).collect();
+        let exp_non_root_nodes: Vec<_> =
+            exported_scene.nodes.iter().filter(|n| !n.is_root).collect();
 
         let orig_names: std::collections::HashSet<String> = orig_non_root_nodes
             .iter()
@@ -1672,15 +1653,27 @@ mod tests {
             let exp_t = &exp_node.local_transform;
 
             let position_tolerance = 0.1;
-            let orig_pos = [orig_t.translation.x, orig_t.translation.y, orig_t.translation.z];
-            let exp_pos = [exp_t.translation.x, exp_t.translation.y, exp_t.translation.z];
+            let orig_pos = [
+                orig_t.translation.x,
+                orig_t.translation.y,
+                orig_t.translation.z,
+            ];
+            let exp_pos = [
+                exp_t.translation.x,
+                exp_t.translation.y,
+                exp_t.translation.z,
+            ];
 
             for axis in 0..3 {
                 let diff = (orig_pos[axis] - exp_pos[axis]).abs();
                 assert!(
                     diff < position_tolerance,
                     "Node '{}' position[{}] mismatch: original={}, exported={}, diff={}",
-                    name, axis, orig_pos[axis], exp_pos[axis], diff
+                    name,
+                    axis,
+                    orig_pos[axis],
+                    exp_pos[axis],
+                    diff
                 );
             }
         }
@@ -1721,7 +1714,9 @@ mod tests {
             .map(|(i, b)| (i as u32, b.name.clone()))
             .collect();
         let editable = crate::animation::editable::EditableAnimationClip::from_animation_clip(
-            1, anim_clip, &bone_names,
+            1,
+            anim_clip,
+            &bone_names,
         );
         assert!(editable.duration > 0.0);
         assert!(!editable.tracks.is_empty());
@@ -1741,15 +1736,18 @@ mod tests {
 
         assert!(!exported_scene.anim_stacks.is_empty());
         assert!(
-            (exported_scene.settings.frames_per_second
-                - original_scene.settings.frames_per_second)
+            (exported_scene.settings.frames_per_second - original_scene.settings.frames_per_second)
                 .abs()
                 < 1.0
         );
 
         let anim_stack = &exported_scene.anim_stacks[0];
         let time_span = anim_stack.time_end - anim_stack.time_begin;
-        assert!(time_span > 0.1, "Animation time span too short: {:.4}s", time_span);
+        assert!(
+            time_span > 0.1,
+            "Animation time span too short: {:.4}s",
+            time_span
+        );
 
         let baked = ufbx::bake_anim(
             &exported_scene,
@@ -1793,7 +1791,11 @@ mod tests {
                 .and_then(|n| n.parent.as_ref())
                 .map(|p| p.element.name.to_string())
                 .unwrap_or_default();
-            assert_eq!(orig_parent, exp_parent, "Parent mismatch for mesh '{}'", mesh_name);
+            assert_eq!(
+                orig_parent, exp_parent,
+                "Parent mismatch for mesh '{}'",
+                mesh_name
+            );
         }
 
         for orig_bn in &orig_baked.nodes {
@@ -1835,7 +1837,9 @@ mod tests {
                 assert!(
                     max_diff < 0.01,
                     "Rotation value mismatch for bone '{}' at key {}: diff={}",
-                    name, idx, max_diff
+                    name,
+                    idx,
+                    max_diff
                 );
             }
         }
@@ -1869,7 +1873,9 @@ mod tests {
             .map(|(i, b)| (i as u32, b.name.clone()))
             .collect();
         let editable = crate::animation::editable::EditableAnimationClip::from_animation_clip(
-            1, anim_clip, &bone_names,
+            1,
+            anim_clip,
+            &bone_names,
         );
 
         let export_dir = std::path::Path::new("assets/exports");
@@ -1911,12 +1917,9 @@ mod tests {
 
             if let Some(orig_node) = orig_node {
                 assert_eq!(
-                    exp_node.attrib_type as i32,
-                    orig_node.attrib_type as i32,
+                    exp_node.attrib_type as i32, orig_node.attrib_type as i32,
                     "Node '{}' attrib_type mismatch: exported={:?}, original={:?}",
-                    name,
-                    exp_node.attrib_type,
-                    orig_node.attrib_type,
+                    name, exp_node.attrib_type, orig_node.attrib_type,
                 );
             }
 
@@ -1971,7 +1974,9 @@ mod tests {
             .map(|(i, b)| (i as u32, b.name.clone()))
             .collect();
         let editable = crate::animation::editable::EditableAnimationClip::from_animation_clip(
-            1, anim_clip, &bone_names,
+            1,
+            anim_clip,
+            &bone_names,
         );
 
         let export_dir = std::path::Path::new("assets/exports");
@@ -2069,7 +2074,9 @@ mod tests {
             .map(|(i, b)| (i as u32, b.name.clone()))
             .collect();
         let editable = crate::animation::editable::EditableAnimationClip::from_animation_clip(
-            1, anim_clip, &bone_names,
+            1,
+            anim_clip,
+            &bone_names,
         );
 
         let export_dir = std::path::Path::new("assets/exports");
@@ -2082,9 +2089,8 @@ mod tests {
         let abs_export = canonicalize_no_prefix(&export_path);
         let abs_script = canonicalize_no_prefix(std::path::Path::new(script_path));
 
-        let abs_output =
-            canonicalize_no_prefix(std::path::Path::new("assets/exports"))
-                .join("blender_diagnostic.json");
+        let abs_output = canonicalize_no_prefix(std::path::Path::new("assets/exports"))
+            .join("blender_diagnostic.json");
 
         let output = std::process::Command::new(&blender_path)
             .args([
@@ -2115,8 +2121,8 @@ mod tests {
             abs_output,
         );
 
-        let json_content = std::fs::read_to_string(&abs_output)
-            .expect("Failed to read diagnostic JSON");
+        let json_content =
+            std::fs::read_to_string(&abs_output).expect("Failed to read diagnostic JSON");
         let diagnostic: serde_json::Value =
             serde_json::from_str(&json_content).expect("Failed to parse diagnostic JSON");
 
@@ -2138,10 +2144,7 @@ mod tests {
             total_fcurves,
         );
 
-        let moved = summary["moved"]
-            .as_array()
-            .map(|a| a.len())
-            .unwrap_or(0);
+        let moved = summary["moved"].as_array().map(|a| a.len()).unwrap_or(0);
         eprintln!("Objects that moved during playback: {}", moved);
         assert!(
             moved > 0,
@@ -2217,7 +2220,10 @@ mod tests {
             );
         }
 
-        eprintln!("  SUMMARY: bone-only animated={}, mesh-node animated={}", bone_only_animated, mesh_node_animated);
+        eprintln!(
+            "  SUMMARY: bone-only animated={}, mesh-node animated={}",
+            bone_only_animated, mesh_node_animated
+        );
     }
 
     #[test]
@@ -2244,8 +2250,7 @@ mod tests {
         std::fs::create_dir_all(export_dir).ok();
         let export_path = export_dir.join("roundtrip_skinned_fly.fbx");
 
-        export_full_fbx(&fbx_model, None, &skeleton, &export_path)
-            .expect("Failed to export FBX");
+        export_full_fbx(&fbx_model, None, &skeleton, &export_path).expect("Failed to export FBX");
 
         let original_scene = ufbx::load_file(original_path, ufbx::LoadOpts::default())
             .expect("Failed to load original with ufbx");
@@ -2308,7 +2313,8 @@ mod tests {
         }
 
         assert!(
-            (original_scene.settings.unit_meters - exported_scene.settings.unit_meters).abs() < 1e-6,
+            (original_scene.settings.unit_meters - exported_scene.settings.unit_meters).abs()
+                < 1e-6,
             "UnitScaleFactor mismatch: original unit_meters={}, exported unit_meters={}",
             original_scene.settings.unit_meters,
             exported_scene.settings.unit_meters,
@@ -2340,7 +2346,9 @@ mod tests {
                     "geometry_to_bone translation mismatch for bone '{}': \
                      orig=[{:.4}, {:.4}, {:.4}], exp=[{:.4}, {:.4}, {:.4}]",
                     bone_name,
-                    orig_g2b.m03, orig_g2b.m13, orig_g2b.m23,
+                    orig_g2b.m03,
+                    orig_g2b.m13,
+                    orig_g2b.m23,
                     exp_cluster.geometry_to_bone.m03,
                     exp_cluster.geometry_to_bone.m13,
                     exp_cluster.geometry_to_bone.m23,
@@ -2370,7 +2378,8 @@ mod tests {
 
                 assert!(
                     exp_mat.fbx.diffuse_factor.has_value,
-                    "DiffuseFactor must be explicitly set for '{}'", name,
+                    "DiffuseFactor must be explicitly set for '{}'",
+                    name,
                 );
             }
         }
@@ -2403,7 +2412,9 @@ mod tests {
                     assert!(
                         exp_basename.starts_with(&orig_stem),
                         "Texture filename mismatch for '{}': original stem='{}', exported='{}'",
-                        name, orig_stem, exp_basename,
+                        name,
+                        orig_stem,
+                        exp_basename,
                     );
                 }
             }
@@ -2421,7 +2432,11 @@ mod tests {
         }
 
         let layer = &scene.anim_layers[0];
-        eprintln!("  AnimLayer '{}' has {} anim_props", layer.element.name, layer.anim_props.len());
+        eprintln!(
+            "  AnimLayer '{}' has {} anim_props",
+            layer.element.name,
+            layer.anim_props.len()
+        );
 
         let mut node_prop_map: std::collections::BTreeMap<String, Vec<String>> =
             std::collections::BTreeMap::new();
@@ -2491,15 +2506,13 @@ mod tests {
         std::fs::create_dir_all(export_dir).ok();
         let export_path = export_dir.join("blender_skinned_fly.fbx");
 
-        export_full_fbx(&fbx_model, None, &skeleton, &export_path)
-            .expect("Failed to export FBX");
+        export_full_fbx(&fbx_model, None, &skeleton, &export_path).expect("Failed to export FBX");
 
         let abs_export = canonicalize_no_prefix(&export_path);
         let abs_script = canonicalize_no_prefix(std::path::Path::new(script_path));
 
-        let abs_output =
-            canonicalize_no_prefix(std::path::Path::new("assets/exports"))
-                .join("blender_skinned_diagnostic.json");
+        let abs_output = canonicalize_no_prefix(std::path::Path::new("assets/exports"))
+            .join("blender_skinned_diagnostic.json");
 
         let output = std::process::Command::new(&blender_path)
             .args([
@@ -2532,8 +2545,8 @@ mod tests {
             abs_output,
         );
 
-        let json_content = std::fs::read_to_string(&abs_output)
-            .expect("Failed to read diagnostic JSON");
+        let json_content =
+            std::fs::read_to_string(&abs_output).expect("Failed to read diagnostic JSON");
         let diagnostic: serde_json::Value =
             serde_json::from_str(&json_content).expect("Failed to parse diagnostic JSON");
 
@@ -2555,8 +2568,7 @@ mod tests {
         assert_eq!(
             missing_textures, 0,
             "All textures should be found, but {} are missing: {:?}",
-            missing_textures,
-            summary["textures_missing"],
+            missing_textures, summary["textures_missing"],
         );
 
         if let Some(mesh_bounds) = diagnostic["mesh_bounds"].as_array() {
@@ -2575,7 +2587,8 @@ mod tests {
                 assert!(
                     max_coord < 100.0,
                     "Mesh '{}' bbox is too large (max_coord={}), likely wrong scale",
-                    name, max_coord,
+                    name,
+                    max_coord,
                 );
             }
         }
@@ -2647,8 +2660,8 @@ print("IMPORT_DONE")
             return;
         }
 
-        let fbx_model = crate::loader::fbx::fbx::load_fbx_with_ufbx(original_path)
-            .expect("Failed to load FBX");
+        let fbx_model =
+            crate::loader::fbx::fbx::load_fbx_with_ufbx(original_path).expect("Failed to load FBX");
         let (load_result, _) =
             crate::loader::fbx::loader::load_fbx_to_graphics_resources(original_path)
                 .expect("Failed to load graphics resources");
@@ -2662,8 +2675,7 @@ print("IMPORT_DONE")
         std::fs::create_dir_all(export_dir).ok();
         let export_path = export_dir.join("blender_warn_test_stickman.fbx");
 
-        export_full_fbx(&fbx_model, None, &skeleton, &export_path)
-            .expect("Failed to export FBX");
+        export_full_fbx(&fbx_model, None, &skeleton, &export_path).expect("Failed to export FBX");
 
         let (stdout, _stderr, success) = run_blender_import(&blender_path, &export_path);
         assert!(success, "Blender exited with error");
@@ -2699,8 +2711,8 @@ print("IMPORT_DONE")
             return;
         }
 
-        let fbx_model = crate::loader::fbx::fbx::load_fbx_with_ufbx(original_path)
-            .expect("Failed to load FBX");
+        let fbx_model =
+            crate::loader::fbx::fbx::load_fbx_with_ufbx(original_path).expect("Failed to load FBX");
         let (load_result, _) =
             crate::loader::fbx::loader::load_fbx_to_graphics_resources(original_path)
                 .expect("Failed to load graphics resources");
@@ -2714,8 +2726,7 @@ print("IMPORT_DONE")
         std::fs::create_dir_all(export_dir).ok();
         let export_path = export_dir.join("blender_warn_test_skinned.fbx");
 
-        export_full_fbx(&fbx_model, None, &skeleton, &export_path)
-            .expect("Failed to export FBX");
+        export_full_fbx(&fbx_model, None, &skeleton, &export_path).expect("Failed to export FBX");
 
         let (stdout, _stderr, success) = run_blender_import(&blender_path, &export_path);
         assert!(success, "Blender exited with error");

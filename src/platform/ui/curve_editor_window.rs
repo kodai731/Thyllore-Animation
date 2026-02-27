@@ -2,13 +2,13 @@ use std::collections::HashSet;
 
 use imgui::Condition;
 
+use super::timeline_window::ruler_padding;
 use crate::animation::editable::{
     BezierHandle, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
 };
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{ClipLibrary, CurveEditorBuffer, TimelineState};
-use super::timeline_window::ruler_padding;
 
 pub struct SuggestionOverlay {
     pub property_type: PropertyType,

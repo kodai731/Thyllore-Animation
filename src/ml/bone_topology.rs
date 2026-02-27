@@ -61,11 +61,7 @@ pub fn compute_bone_topology(skeleton: &Skeleton) -> HashMap<BoneId, BoneTopolog
             .map(|parent| parent.children.len() as f32)
             .unwrap_or(0.0);
 
-        let is_leaf = if bone.children.is_empty() {
-            1.0
-        } else {
-            0.0
-        };
+        let is_leaf = if bone.children.is_empty() { 1.0 } else { 0.0 };
 
         let sibling_divisor = parent_child_count.max(1.0);
 
@@ -214,11 +210,7 @@ mod tests {
         for (_id, feat) in &features {
             let values = feat.to_vec();
             for v in &values {
-                assert!(
-                    *v >= 0.0 && *v <= 1.0,
-                    "value {} out of [0,1] range",
-                    v
-                );
+                assert!(*v >= 0.0 && *v <= 1.0, "value {} out of [0,1] range", v);
             }
         }
     }

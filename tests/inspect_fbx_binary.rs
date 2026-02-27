@@ -12,8 +12,7 @@ fn inspect_exported_fbx_binary() {
         let mut buffer = [0u8; 27];
         if file.read_exact(&mut buffer).is_ok() {
             println!("FBX Header:");
-            println!("  Signature: {}",
-                String::from_utf8_lossy(&buffer[0..23]));
+            println!("  Signature: {}", String::from_utf8_lossy(&buffer[0..23]));
 
             let version_bytes = &buffer[23..27];
             let version = u32::from_le_bytes([
@@ -38,12 +37,16 @@ fn inspect_exported_fbx_binary() {
                     let attr_count = content.matches("NodeAttribute").count();
 
                     if model_count > 0 {
-                        println!("  Found {} 'Model' strings in chunk at offset {}",
-                            model_count, total_read);
+                        println!(
+                            "  Found {} 'Model' strings in chunk at offset {}",
+                            model_count, total_read
+                        );
                     }
                     if attr_count > 0 {
-                        println!("  Found {} 'NodeAttribute' strings in chunk at offset {}",
-                            attr_count, total_read);
+                        println!(
+                            "  Found {} 'NodeAttribute' strings in chunk at offset {}",
+                            attr_count, total_read
+                        );
                     }
 
                     total_read += n;

@@ -11,10 +11,8 @@ fn compare_fbx_structures() {
     println!("Exported: {}", exported_path);
     println!("\n");
 
-    let original = load_and_analyze(original_path)
-        .expect("Failed to load original FBX");
-    let exported = load_and_analyze(exported_path)
-        .expect("Failed to load exported FBX");
+    let original = load_and_analyze(original_path).expect("Failed to load original FBX");
+    let exported = load_and_analyze(exported_path).expect("Failed to load exported FBX");
 
     compare_structures(&original, &exported);
 }
@@ -78,7 +76,8 @@ fn load_and_analyze(path: &str) -> Result<FbxStructure, String> {
             println!("    -> Mesh: {} vertices", mesh.num_vertices);
         }
 
-        let parent_model = node.parent
+        let parent_model = node
+            .parent
             .as_ref()
             .filter(|p| !p.is_root)
             .map(|p| p.element.name.to_string());
@@ -111,11 +110,13 @@ fn load_and_analyze(path: &str) -> Result<FbxStructure, String> {
                         || !bake_node.scale_keys.is_empty();
 
                     if has_anim {
-                        println!("      -> {}: T={} R={} S={}",
+                        println!(
+                            "      -> {}: T={} R={} S={}",
                             node.element.name,
                             bake_node.translation_keys.len(),
                             bake_node.rotation_keys.len(),
-                            bake_node.scale_keys.len());
+                            bake_node.scale_keys.len()
+                        );
                     }
                 }
             }
@@ -225,12 +226,14 @@ fn inspect_exported_fbx_node_types() {
                 }
                 let name = node.element.name.to_string();
                 if name.contains("Bone") || name.contains("Armature") {
-                    println!("  {}: mesh={}, attrib={}, bone={}, attrib_type={:?}",
+                    println!(
+                        "  {}: mesh={}, attrib={}, bone={}, attrib_type={:?}",
                         name,
                         node.mesh.is_some(),
                         node.attrib.is_some(),
                         node.bone.is_some(),
-                        node.attrib_type);
+                        node.attrib_type
+                    );
                 }
             }
         }
@@ -254,7 +257,10 @@ fn inspect_stickman_fbx_node_types() {
             println!("Total AnimStacks: {}\n", scene.anim_stacks.len());
 
             println!("Node Details:");
-            println!("{:<30} | {:<40} | {:<30}", "Node Name", "Has Mesh", "Has Attrib");
+            println!(
+                "{:<30} | {:<40} | {:<30}",
+                "Node Name", "Has Mesh", "Has Attrib"
+            );
             println!("{}", "-".repeat(105));
 
             for node in &scene.nodes {
@@ -263,10 +269,14 @@ fn inspect_stickman_fbx_node_types() {
                 }
 
                 let name = node.element.name.to_string();
-                let has_mesh = node.mesh.as_ref()
+                let has_mesh = node
+                    .mesh
+                    .as_ref()
                     .map(|m| format!("Yes ({}v)", m.num_vertices))
                     .unwrap_or_else(|| "No".to_string());
-                let has_attrib = node.attrib.as_ref()
+                let has_attrib = node
+                    .attrib
+                    .as_ref()
                     .map(|_| "Yes".to_string())
                     .unwrap_or_else(|| "No".to_string());
 
@@ -299,7 +309,10 @@ fn inspect_stickman_fbx_node_types() {
                 let attrib_type = format!("{:?}", node.attrib_type);
 
                 if !has_mesh && !has_attrib {
-                    println!("  {} (attrib_type: {}, has_bone: {})", name, attrib_type, has_bone);
+                    println!(
+                        "  {} (attrib_type: {}, has_bone: {})",
+                        name, attrib_type, has_bone
+                    );
                     bone_count += 1;
                 }
             }
@@ -326,12 +339,14 @@ fn inspect_stickman_fbx_node_types() {
                 }
                 let name = node.element.name.to_string();
                 if name.contains("Bone") || name.contains("Armature") {
-                    println!("  {}: mesh={}, attrib={}, bone={}, attrib_type={:?}",
+                    println!(
+                        "  {}: mesh={}, attrib={}, bone={}, attrib_type={:?}",
                         name,
                         node.mesh.is_some(),
                         node.attrib.is_some(),
                         node.bone.is_some(),
-                        node.attrib_type);
+                        node.attrib_type
+                    );
                 }
             }
         }

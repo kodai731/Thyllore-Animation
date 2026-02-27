@@ -14,10 +14,8 @@ fn test_compare_fbx_dom() {
     let mut exp_opts = ufbx::LoadOpts::default();
     exp_opts.retain_dom = true;
 
-    let original = ufbx::load_file(original_path, orig_opts)
-        .expect("Failed to load original FBX");
-    let exported = ufbx::load_file(exported_path, exp_opts)
-        .expect("Failed to load exported FBX");
+    let original = ufbx::load_file(original_path, orig_opts).expect("Failed to load original FBX");
+    let exported = ufbx::load_file(exported_path, exp_opts).expect("Failed to load exported FBX");
 
     let orig_dom = original.dom_root.as_ref().expect("No DOM root in original");
     let exp_dom = exported.dom_root.as_ref().expect("No DOM root in exported");
@@ -26,12 +24,22 @@ fn test_compare_fbx_dom() {
 
     println!("--- Original DOM top-level nodes ---");
     for child in orig_dom.children.iter() {
-        println!("  {}: {} values, {} children", child.name, child.values.len(), child.children.len());
+        println!(
+            "  {}: {} values, {} children",
+            child.name,
+            child.values.len(),
+            child.children.len()
+        );
     }
 
     println!("\n--- Exported DOM top-level nodes ---");
     for child in exp_dom.children.iter() {
-        println!("  {}: {} values, {} children", child.name, child.values.len(), child.children.len());
+        println!(
+            "  {}: {} values, {} children",
+            child.name,
+            child.values.len(),
+            child.children.len()
+        );
     }
 
     let orig_connections = ufbx::dom_find(orig_dom, "Connections");
@@ -48,7 +56,10 @@ fn test_compare_fbx_dom() {
                 let child_uid = conn.values[1].value_int;
                 let parent_uid = conn.values[2].value_int;
                 let prop = str_ref(&conn.values[3].value_str);
-                println!("  C: OP, child={}, parent={}, prop=\"{}\"", child_uid, parent_uid, prop);
+                println!(
+                    "  C: OP, child={}, parent={}, prop=\"{}\"",
+                    child_uid, parent_uid, prop
+                );
             }
         }
 
@@ -58,7 +69,10 @@ fn test_compare_fbx_dom() {
                 let child_uid = conn.values[1].value_int;
                 let parent_uid = conn.values[2].value_int;
                 let prop = str_ref(&conn.values[3].value_str);
-                println!("  C: OP, child={}, parent={}, prop=\"{}\"", child_uid, parent_uid, prop);
+                println!(
+                    "  C: OP, child={}, parent={}, prop=\"{}\"",
+                    child_uid, parent_uid, prop
+                );
             }
         }
 
@@ -117,10 +131,14 @@ fn test_compare_fbx_dom() {
         print_model_properties(exp_objs, "NurbsPath");
 
         println!("\n--- AnimationCurveNode comparison ---");
-        let orig_acns: Vec<_> = orig_objs.children.iter()
+        let orig_acns: Vec<_> = orig_objs
+            .children
+            .iter()
             .filter(|c| str_ref(&c.name) == "AnimationCurveNode")
             .collect();
-        let exp_acns: Vec<_> = exp_objs.children.iter()
+        let exp_acns: Vec<_> = exp_objs
+            .children
+            .iter()
             .filter(|c| str_ref(&c.name) == "AnimationCurveNode")
             .collect();
 
@@ -162,10 +180,14 @@ fn test_compare_fbx_dom() {
         }
 
         println!("\n--- AnimationCurve comparison (first 2) ---");
-        let orig_curves: Vec<_> = orig_objs.children.iter()
+        let orig_curves: Vec<_> = orig_objs
+            .children
+            .iter()
             .filter(|c| str_ref(&c.name) == "AnimationCurve")
             .collect();
-        let exp_curves: Vec<_> = exp_objs.children.iter()
+        let exp_curves: Vec<_> = exp_objs
+            .children
+            .iter()
             .filter(|c| str_ref(&c.name) == "AnimationCurve")
             .collect();
 
@@ -180,23 +202,39 @@ fn test_compare_fbx_dom() {
         }
 
         println!("\n--- AnimationStack ---");
-        for stack in orig_objs.children.iter().filter(|c| str_ref(&c.name) == "AnimationStack") {
+        for stack in orig_objs
+            .children
+            .iter()
+            .filter(|c| str_ref(&c.name) == "AnimationStack")
+        {
             println!("  Original AnimStack:");
             print_node_values(stack);
             print_properties70(stack, "    ");
         }
-        for stack in exp_objs.children.iter().filter(|c| str_ref(&c.name) == "AnimationStack") {
+        for stack in exp_objs
+            .children
+            .iter()
+            .filter(|c| str_ref(&c.name) == "AnimationStack")
+        {
             println!("  Exported AnimStack:");
             print_node_values(stack);
             print_properties70(stack, "    ");
         }
 
         println!("\n--- AnimationLayer ---");
-        for layer in orig_objs.children.iter().filter(|c| str_ref(&c.name) == "AnimationLayer") {
+        for layer in orig_objs
+            .children
+            .iter()
+            .filter(|c| str_ref(&c.name) == "AnimationLayer")
+        {
             println!("  Original AnimLayer:");
             print_node_values(layer);
         }
-        for layer in exp_objs.children.iter().filter(|c| str_ref(&c.name) == "AnimationLayer") {
+        for layer in exp_objs
+            .children
+            .iter()
+            .filter(|c| str_ref(&c.name) == "AnimationLayer")
+        {
             println!("  Exported AnimLayer:");
             print_node_values(layer);
         }
@@ -212,7 +250,10 @@ fn test_compare_fbx_dom() {
                             count = sub.values[0].value_int;
                         }
                     }
-                    println!("    ObjectType: {} (count={})", child.values[0].value_str, count);
+                    println!(
+                        "    ObjectType: {} (count={})",
+                        child.values[0].value_str, count
+                    );
                 }
             }
         }
@@ -226,7 +267,10 @@ fn test_compare_fbx_dom() {
                             count = sub.values[0].value_int;
                         }
                     }
-                    println!("    ObjectType: {} (count={})", child.values[0].value_str, count);
+                    println!(
+                        "    ObjectType: {} (count={})",
+                        child.values[0].value_str, count
+                    );
                 }
             }
         }
@@ -247,7 +291,10 @@ fn print_node_values(node: &ufbx::DomNode) {
     for (i, v) in node.values.iter().enumerate() {
         let s: &str = &v.value_str;
         let str_display = s.replace('\x00', "\\0").replace('\x01', "\\1");
-        println!("    values[{}]: type={:?}, str=\"{}\", int={}, float={}", i, v.type_, str_display, v.value_int, v.value_float);
+        println!(
+            "    values[{}]: type={:?}, str=\"{}\", int={}, float={}",
+            i, v.type_, str_display, v.value_int, v.value_float
+        );
     }
 }
 
@@ -270,7 +317,11 @@ fn print_model_properties(objects: &ufbx::DomNode, model_name: &str) {
 
         for child in obj.children.iter() {
             if str_ref(&child.name) != "Properties70" {
-                println!("    Other child: {} ({} values)", child.name, child.values.len());
+                println!(
+                    "    Other child: {} ({} values)",
+                    child.name,
+                    child.values.len()
+                );
             }
         }
         return;
@@ -283,10 +334,16 @@ fn print_properties70(node: &ufbx::DomNode, prefix: &str) {
         if str_ref(&child.name) != "Properties70" {
             continue;
         }
-        println!("{}Properties70 ({} properties):", prefix, child.children.len());
+        println!(
+            "{}Properties70 ({} properties):",
+            prefix,
+            child.children.len()
+        );
         for prop in child.children.iter() {
-            let vals: Vec<String> = prop.values.iter().map(|v| {
-                match v.type_ {
+            let vals: Vec<String> = prop
+                .values
+                .iter()
+                .map(|v| match v.type_ {
                     ufbx::DomValueType::String => {
                         let s: &str = &v.value_str;
                         format!("\"{}\"", s)
@@ -299,8 +356,8 @@ fn print_properties70(node: &ufbx::DomNode, prefix: &str) {
                         }
                     }
                     _ => format!("{:?}", v.type_),
-                }
-            }).collect();
+                })
+                .collect();
             println!("{}  P: {}", prefix, vals.join(", "));
         }
         return;

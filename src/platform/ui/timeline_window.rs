@@ -183,13 +183,7 @@ fn build_timeline_content(
     ui.child_window("timeline_content")
         .size(content_region)
         .build(|| {
-            build_time_ruler_with_scrub(
-                ui,
-                ui_events,
-                state,
-                timeline_width,
-                display_duration,
-            );
+            build_time_ruler_with_scrub(ui, ui_events, state, timeline_width, display_duration);
             ui.separator();
 
             if !clip_track_snapshot.entries.is_empty() {

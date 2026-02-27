@@ -1,14 +1,11 @@
 use crate::ecs::component::InferenceActorSetup;
 use crate::ecs::resource::{ActorRuntime, InferenceActorState};
 use crate::ml::{
-    InferenceActorId, InferenceRequest, InferenceRequestId,
-    InferenceRequestKind, InferenceResult, InferenceThreadHandle,
+    InferenceActorId, InferenceRequest, InferenceRequestId, InferenceRequestKind, InferenceResult,
+    InferenceThreadHandle,
 };
 
-pub fn inference_actor_initialize(
-    setup: &InferenceActorSetup,
-    state: &mut InferenceActorState,
-) {
+pub fn inference_actor_initialize(setup: &InferenceActorSetup, state: &mut InferenceActorState) {
     if !setup.enabled {
         return;
     }
@@ -17,19 +14,17 @@ pub fn inference_actor_initialize(
         return;
     }
 
-    let handle =
-        match InferenceThreadHandle::spawn(&setup.model_path, setup.actor_id)
-        {
-            Ok(h) => h,
-            Err(e) => {
-                crate::log!(
-                    "Failed to spawn inference actor {}: {:?}",
-                    setup.actor_id,
-                    e
-                );
-                return;
-            }
-        };
+    let handle = match InferenceThreadHandle::spawn(&setup.model_path, setup.actor_id) {
+        Ok(h) => h,
+        Err(e) => {
+            crate::log!(
+                "Failed to spawn inference actor {}: {:?}",
+                setup.actor_id,
+                e
+            );
+            return;
+        }
+    };
 
     state.actors.insert(
         setup.actor_id,
@@ -43,8 +38,7 @@ pub fn inference_actor_initialize(
 }
 
 pub fn inference_actor_poll(state: &mut InferenceActorState) {
-    let actor_ids: Vec<InferenceActorId> =
-        state.actors.keys().copied().collect();
+    let actor_ids: Vec<InferenceActorId> = state.actors.keys().copied().collect();
 
     for actor_id in actor_ids {
         if let Some(runtime) = state.actors.get(&actor_id) {
@@ -88,9 +82,7 @@ pub fn inference_actor_submit(
     }
 }
 
-pub fn inference_actor_take_results(
-    state: &mut InferenceActorState,
-) -> Vec<InferenceResult> {
+pub fn inference_actor_take_results(state: &mut InferenceActorState) -> Vec<InferenceResult> {
     std::mem::take(&mut state.pending_results)
 }
 
@@ -99,13 +91,9 @@ mod tests {
     use super::*;
     use crate::ml::InferenceModelKind;
 
-    const DUMMY_MODEL_PATH: &str =
-        "assets/ml/dummy_curve_predictor.onnx";
+    const DUMMY_MODEL_PATH: &str = "assets/ml/dummy_curve_predictor.onnx";
 
-    fn create_test_setup(
-        actor_id: InferenceActorId,
-        enabled: bool,
-    ) -> InferenceActorSetup {
+    fn create_test_setup(actor_id: InferenceActorId, enabled: bool) -> InferenceActorSetup {
         InferenceActorSetup {
             actor_id,
             model_path: DUMMY_MODEL_PATH.to_string(),
@@ -203,8 +191,7 @@ mod tests {
         let results = inference_actor_take_results(&mut state);
         assert_eq!(results.len(), 2);
 
-        let actor_ids: Vec<_> =
-            results.iter().map(|r| r.actor_id).collect();
+        let actor_ids: Vec<_> = results.iter().map(|r| r.actor_id).collect();
         assert!(actor_ids.contains(&100));
         assert!(actor_ids.contains(&200));
     }
@@ -242,11 +229,8 @@ mod tests {
         }
 
         let mut received = 0;
-        let timeout =
-            std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while received < iterations
-            && std::time::Instant::now() < timeout
-        {
+        let timeout = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while received < iterations && std::time::Instant::now() < timeout {
             inference_actor_poll(&mut state);
             let results = inference_actor_take_results(&mut state);
             received += results.len();
@@ -257,8 +241,7 @@ mod tests {
         }
 
         let elapsed = start.elapsed();
-        let avg_ms =
-            elapsed.as_secs_f64() * 1000.0 / iterations as f64;
+        let avg_ms = elapsed.as_secs_f64() * 1000.0 / iterations as f64;
 
         assert_eq!(received, iterations);
         assert!(

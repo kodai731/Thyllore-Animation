@@ -538,7 +538,11 @@ unsafe fn apply_initial_pose(
 
         let skel_id = graphics.meshes.first().and_then(|m| m.skeleton_id);
         let skeleton_clone = skel_id.and_then(|id| assets.get_skeleton_by_skeleton_id(id).cloned());
-        let clip_clone = assets.animation_clips.values().next().map(|a| a.clip.clone());
+        let clip_clone = assets
+            .animation_clips
+            .values()
+            .next()
+            .map(|a| a.clip.clone());
 
         let updated_meshes = if let (Some(skeleton), Some(clip)) = (&skeleton_clone, &clip_clone) {
             let mut pose = create_pose_from_rest(skeleton);

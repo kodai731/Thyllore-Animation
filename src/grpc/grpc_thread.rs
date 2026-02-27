@@ -2,8 +2,7 @@ use std::sync::mpsc;
 use std::thread;
 
 use super::request::{
-    GrpcRequest, GrpcResponse, RawAnimationCurve, RawCurveKeyframe,
-    TextToMotionRequest,
+    GrpcRequest, GrpcResponse, RawAnimationCurve, RawCurveKeyframe, TextToMotionRequest,
 };
 
 pub struct GrpcThreadHandle {
@@ -71,9 +70,7 @@ async fn run_grpc_loop(
     res_tx: mpsc::Sender<GrpcResponse>,
 ) {
     let mut client: Option<
-        proto::text_to_motion_service_client::TextToMotionServiceClient<
-            tonic::transport::Channel,
-        >,
+        proto::text_to_motion_service_client::TextToMotionServiceClient<tonic::transport::Channel>,
     > = None;
 
     while let Ok(request) = req_rx.recv() {
@@ -81,26 +78,18 @@ async fn run_grpc_loop(
             GrpcRequest::Shutdown => break,
 
             GrpcRequest::CheckStatus => {
-                handle_check_status(
-                    endpoint, &mut client, &res_tx,
-                )
-                .await;
+                handle_check_status(endpoint, &mut client, &res_tx).await;
             }
 
             GrpcRequest::GenerateMotion(req) => {
-                handle_generate_motion(
-                    endpoint, &mut client, &res_tx, req,
-                )
-                .await;
+                handle_generate_motion(endpoint, &mut client, &res_tx, req).await;
             }
         }
     }
 }
 
 type GrpcClient =
-    proto::text_to_motion_service_client::TextToMotionServiceClient<
-        tonic::transport::Channel,
-    >;
+    proto::text_to_motion_service_client::TextToMotionServiceClient<tonic::transport::Channel>;
 
 async fn ensure_connected(
     endpoint: &str,
@@ -121,10 +110,7 @@ async fn ensure_connected(
             }
             Err(e) => {
                 let _ = res_tx.send(GrpcResponse::Error {
-                    message: format!(
-                        "Failed to connect to {}: {}",
-                        endpoint, e
-                    ),
+                    message: format!("Failed to connect to {}: {}", endpoint, e),
                 });
                 false
             }
@@ -187,10 +173,7 @@ async fn handle_generate_motion(
         bone_mappings: vec![],
     };
 
-    match c
-        .generate_motion(tonic::Request::new(proto_request))
-        .await
-    {
+    match c.generate_motion(tonic::Request::new(proto_request)).await {
         Ok(response) => {
             let motion = response.into_inner();
             let curves = convert_proto_curves(&motion.curves);
@@ -210,9 +193,7 @@ async fn handle_generate_motion(
     }
 }
 
-fn convert_proto_curves(
-    proto_curves: &[proto::AnimationCurve],
-) -> Vec<RawAnimationCurve> {
+fn convert_proto_curves(proto_curves: &[proto::AnimationCurve]) -> Vec<RawAnimationCurve> {
     proto_curves
         .iter()
         .map(|c| RawAnimationCurve {

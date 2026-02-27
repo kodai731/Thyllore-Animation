@@ -85,7 +85,8 @@ impl PropertyCurve {
         let id = self.next_keyframe_id;
         self.next_keyframe_id += 1;
 
-        let mut keyframe = EditableKeyframe::with_tangents(id, time, value, in_tangent, out_tangent);
+        let mut keyframe =
+            EditableKeyframe::with_tangents(id, time, value, in_tangent, out_tangent);
         keyframe.interpolation = interpolation;
         self.keyframes.push(keyframe);
         self.sort_keyframes();
@@ -148,9 +149,7 @@ impl PropertyCurve {
             return Some(last.value);
         }
 
-        let idx = self
-            .keyframes
-            .partition_point(|kf| kf.time <= time);
+        let idx = self.keyframes.partition_point(|kf| kf.time <= time);
         let i = if idx == 0 {
             0
         } else {

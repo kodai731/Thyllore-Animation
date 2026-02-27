@@ -254,9 +254,12 @@ pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
     let axes = read_axes_from_scene(&scene.settings);
     log!(
         "FBX axes: up={}(sign={}), front={}(sign={}), coord={}(sign={})",
-        axes.up_axis, axes.up_axis_sign,
-        axes.front_axis, axes.front_axis_sign,
-        axes.coord_axis, axes.coord_axis_sign
+        axes.up_axis,
+        axes.up_axis_sign,
+        axes.front_axis,
+        axes.front_axis_sign,
+        axes.coord_axis,
+        axes.coord_axis_sign
     );
 
     let fps = scene.settings.frames_per_second as f32;
@@ -1091,5 +1094,4 @@ mod tests {
 
         assert_eq!(model.fbx_data.len(), 1);
     }
-
 }

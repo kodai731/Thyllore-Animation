@@ -628,8 +628,9 @@ impl App {
                     Some(clip_id),
                     &data.ecs_world,
                 );
-                for (_, existing) in
-                    data.ecs_world.iter_components_mut::<crate::ecs::component::ClipSchedule>()
+                for (_, existing) in data
+                    .ecs_world
+                    .iter_components_mut::<crate::ecs::component::ClipSchedule>()
                 {
                     *existing = schedule.clone();
                 }
@@ -1036,16 +1037,16 @@ impl App {
         {
             use crate::ecs::component::InferenceActorSetup;
             use crate::ecs::world::EntityBuilder;
-            use crate::ml::{resolve_curve_copilot_model_path, InferenceModelKind, CURVE_COPILOT_ACTOR_ID};
+            use crate::ml::{
+                resolve_curve_copilot_model_path, InferenceModelKind, CURVE_COPILOT_ACTOR_ID,
+            };
 
-            EntityBuilder::new(&mut data.ecs_world).with_inference_actor(
-                InferenceActorSetup {
-                    actor_id: CURVE_COPILOT_ACTOR_ID,
-                    model_path: resolve_curve_copilot_model_path(),
-                    model_kind: InferenceModelKind::CurveCopilot,
-                    enabled: true,
-                },
-            );
+            EntityBuilder::new(&mut data.ecs_world).with_inference_actor(InferenceActorSetup {
+                actor_id: CURVE_COPILOT_ACTOR_ID,
+                model_path: resolve_curve_copilot_model_path(),
+                model_kind: InferenceModelKind::CurveCopilot,
+                enabled: true,
+            });
         }
     }
 
@@ -1312,12 +1313,11 @@ impl App {
 
         for clip in clips {
             let name = clip.name.clone();
-            let id =
-                crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
-                    &mut clip_library,
-                    assets,
-                    clip,
-                );
+            let id = crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
+                &mut clip_library,
+                assets,
+                clip,
+            );
             result.push((id, name));
         }
 

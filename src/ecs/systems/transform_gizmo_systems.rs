@@ -371,9 +371,10 @@ fn select_translate_handle(
         selected = TransformGizmoHandle::AxisY;
     }
     if z_dist < threshold && z_dist < min_dist {
-        let _ = min_dist;
+        min_dist = z_dist;
         selected = TransformGizmoHandle::AxisZ;
     }
+    let _ = min_dist;
 
     selected
 }
@@ -433,9 +434,10 @@ fn select_rotate_handle(
         selected = TransformGizmoHandle::RingY;
     }
     if z_dist < threshold && z_dist < min_dist {
-        let _ = min_dist;
+        min_dist = z_dist;
         selected = TransformGizmoHandle::RingZ;
     }
+    let _ = min_dist;
 
     selected
 }
@@ -472,9 +474,10 @@ fn select_scale_handle(
         selected = TransformGizmoHandle::AxisY;
     }
     if z_dist < threshold && z_dist < min_dist {
-        let _ = min_dist;
+        min_dist = z_dist;
         selected = TransformGizmoHandle::AxisZ;
     }
+    let _ = min_dist;
 
     selected
 }
@@ -554,7 +557,11 @@ pub fn transform_gizmo_process_translate_drag(
         TransformGizmoHandle::PlaneXZ => vec3(raw_delta.x, 0.0, raw_delta.z),
         TransformGizmoHandle::PlaneYZ => vec3(0.0, raw_delta.y, raw_delta.z),
         TransformGizmoHandle::Center => raw_delta,
-        _ => return None,
+        TransformGizmoHandle::None
+        | TransformGizmoHandle::RingX
+        | TransformGizmoHandle::RingY
+        | TransformGizmoHandle::RingZ
+        | TransformGizmoHandle::Trackball => return None,
     };
 
     let snapped = if let Some(snap_val) = snap {
@@ -677,7 +684,14 @@ pub fn transform_gizmo_process_scale_drag(
             let ratio = current_dist / initial_dist;
             vec3(ratio, ratio, ratio)
         }
-        _ => return None,
+        TransformGizmoHandle::None
+        | TransformGizmoHandle::PlaneXY
+        | TransformGizmoHandle::PlaneXZ
+        | TransformGizmoHandle::PlaneYZ
+        | TransformGizmoHandle::RingX
+        | TransformGizmoHandle::RingY
+        | TransformGizmoHandle::RingZ
+        | TransformGizmoHandle::Trackball => return None,
     };
 
     let final_scale = if let Some(snap_val) = snap {
@@ -901,6 +915,9 @@ fn resolve_handle_color(
 }
 
 fn apply_snap_value(val: f32, snap: f32) -> f32 {
+    if snap.abs() < f32::EPSILON {
+        return val;
+    }
     (val / snap).round() * snap
 }
 

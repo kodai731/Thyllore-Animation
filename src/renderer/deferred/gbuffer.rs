@@ -156,7 +156,7 @@ pub unsafe fn create_gbuffer_framebuffer(
 
     rrrender.gbuffer_framebuffer = rrdevice.device.create_framebuffer(&info, None)?;
 
-    log::info!(
+    crate::log!(
         "Created G-Buffer framebuffer: {}x{}",
         gbuffer.width,
         gbuffer.height

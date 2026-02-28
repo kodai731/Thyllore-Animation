@@ -11,16 +11,6 @@ pub struct OnionSkinningConfig {
     pub opacity: f32,
 }
 
-impl OnionSkinningConfig {
-    pub fn total_ghost_count(&self) -> u32 {
-        if self.enabled {
-            self.past_count + self.future_count
-        } else {
-            0
-        }
-    }
-}
-
 impl Default for OnionSkinningConfig {
     fn default() -> Self {
         Self {
@@ -70,18 +60,5 @@ mod tests {
         assert_eq!(config.future_count, 2);
         assert!((config.frame_step - 1.0 / 30.0).abs() < f32::EPSILON);
         assert!((config.opacity - 0.2).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn test_total_ghost_count_disabled() {
-        let config = OnionSkinningConfig::default();
-        assert_eq!(config.total_ghost_count(), 0);
-    }
-
-    #[test]
-    fn test_total_ghost_count_enabled() {
-        let mut config = OnionSkinningConfig::default();
-        config.enabled = true;
-        assert_eq!(config.total_ghost_count(), 4);
     }
 }

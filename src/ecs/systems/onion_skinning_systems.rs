@@ -17,6 +17,14 @@ pub struct OnionSkinMeshContext<'a> {
     pub skin_data: &'a SkinData,
 }
 
+pub fn compute_total_ghost_count(config: &OnionSkinningConfig) -> u32 {
+    if config.enabled {
+        config.past_count + config.future_count
+    } else {
+        0
+    }
+}
+
 pub fn compute_ghost_time_offsets(config: &OnionSkinningConfig) -> Vec<GhostFrameInfo> {
     if !config.enabled {
         return Vec::new();
@@ -254,6 +262,19 @@ fn apply_skinning_to_vertices(
 mod tests {
     use super::*;
     use crate::ecs::resource::{GhostMeshData, OnionSkinningConfig, OnionSkinningResult};
+
+    #[test]
+    fn test_total_ghost_count_disabled() {
+        let config = OnionSkinningConfig::default();
+        assert_eq!(compute_total_ghost_count(&config), 0);
+    }
+
+    #[test]
+    fn test_total_ghost_count_enabled() {
+        let mut config = OnionSkinningConfig::default();
+        config.enabled = true;
+        assert_eq!(compute_total_ghost_count(&config), 4);
+    }
 
     #[test]
     fn test_compute_ghosts_disabled() {

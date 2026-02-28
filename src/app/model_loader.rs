@@ -757,70 +757,12 @@ fn create_ecs_entities(
         .unwrap_or("model")
         .to_string();
 
-    let has_animation = !loaded_clips.is_empty();
+    ensure_ecs_resources(world);
 
-    let bone_names: std::collections::HashMap<u32, String> = assets
-        .skeletons
-        .values()
-        .flat_map(|sa| sa.skeleton.bones.iter().map(|b| (b.id, b.name.clone())))
-        .collect();
+    let first_editable_clip_id =
+        register_clips_to_library(world, assets, loaded_clips, scene_will_provide_clips);
 
-    if !world.contains_resource::<ClipLibrary>() {
-        world.insert_resource(ClipLibrary::new());
-    }
-    if !world.contains_resource::<TimelineState>() {
-        world.insert_resource(TimelineState::new());
-    }
-    if !world.contains_resource::<crate::ecs::resource::KeyframeCopyBuffer>() {
-        world.insert_resource(crate::ecs::resource::KeyframeCopyBuffer::default());
-    }
-    if !world.contains_resource::<crate::ecs::resource::EditHistory>() {
-        world.insert_resource(crate::ecs::resource::EditHistory::new(100));
-    }
-    if !world.contains_resource::<crate::ecs::resource::ClipBrowserState>() {
-        world.insert_resource(crate::ecs::resource::ClipBrowserState::default());
-    }
-
-    let mut first_editable_clip_id = None;
-    if !scene_will_provide_clips {
-        let mut clip_library = world.resource_mut::<ClipLibrary>();
-        for clip in loaded_clips {
-            let editable_id =
-                crate::ecs::systems::clip_library_systems::clip_library_create_from_imported(
-                    &mut clip_library,
-                    assets,
-                    clip,
-                    &bone_names,
-                );
-            if first_editable_clip_id.is_none() {
-                first_editable_clip_id = Some(editable_id);
-            }
-            crate::log!(
-                "Registered clip '{}' (source_id={})",
-                clip.name,
-                editable_id,
-            );
-        }
-
-        if let Some(editable_id) = first_editable_clip_id {
-            let mut timeline_state = world.resource_mut::<TimelineState>();
-            timeline_state.current_clip_id = Some(editable_id);
-            crate::log!("Set timeline current_clip_id to {}", editable_id);
-        }
-    }
-
-    {
-        let node_assets = world.resource::<NodeAssets>();
-        for node in &node_assets.nodes {
-            let node_asset = NodeAsset {
-                id: node.index as u64,
-                name: node.name.clone(),
-                parent_id: node.parent_index.map(|i| i as u64),
-                local_transform: node.local_transform,
-            };
-            assets.add_node(node_asset);
-        }
-    }
+    register_node_assets(world, assets);
 
     let parent_entity = world
         .entity()
@@ -836,6 +778,120 @@ fn create_ecs_entities(
         parent_entity
     );
 
+    let has_animation = !loaded_clips.is_empty();
+    build_mesh_entities(
+        &name,
+        graphics,
+        world,
+        assets,
+        animation_type,
+        node_animation_scale,
+        has_animation,
+        scene_will_provide_clips,
+        first_editable_clip_id,
+        parent_entity,
+    );
+
+    crate::log!(
+        "Created {} ECS entities, {} mesh assets, {} skeletons, {} clips, {} nodes",
+        world.entity_count(),
+        assets.meshes.len(),
+        assets.skeletons.len(),
+        assets.animation_clips.len(),
+        assets.nodes.len()
+    );
+}
+
+fn ensure_ecs_resources(world: &mut World) {
+    if !world.contains_resource::<ClipLibrary>() {
+        world.insert_resource(ClipLibrary::new());
+    }
+    if !world.contains_resource::<TimelineState>() {
+        world.insert_resource(TimelineState::new());
+    }
+    if !world.contains_resource::<crate::ecs::resource::KeyframeCopyBuffer>() {
+        world.insert_resource(crate::ecs::resource::KeyframeCopyBuffer::default());
+    }
+    if !world.contains_resource::<crate::ecs::resource::EditHistory>() {
+        world.insert_resource(crate::ecs::resource::EditHistory::new(100));
+    }
+    if !world.contains_resource::<crate::ecs::resource::ClipBrowserState>() {
+        world.insert_resource(crate::ecs::resource::ClipBrowserState::default());
+    }
+}
+
+fn register_clips_to_library(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    loaded_clips: &[crate::animation::AnimationClip],
+    scene_will_provide_clips: bool,
+) -> Option<SourceClipId> {
+    if scene_will_provide_clips {
+        return None;
+    }
+
+    let bone_names: std::collections::HashMap<u32, String> = assets
+        .skeletons
+        .values()
+        .flat_map(|sa| sa.skeleton.bones.iter().map(|b| (b.id, b.name.clone())))
+        .collect();
+
+    let mut first_editable_clip_id = None;
+    let mut clip_library = world.resource_mut::<ClipLibrary>();
+
+    for clip in loaded_clips {
+        let editable_id =
+            crate::ecs::systems::clip_library_systems::clip_library_create_from_imported(
+                &mut clip_library,
+                assets,
+                clip,
+                &bone_names,
+            );
+        if first_editable_clip_id.is_none() {
+            first_editable_clip_id = Some(editable_id);
+        }
+        crate::log!(
+            "Registered clip '{}' (source_id={})",
+            clip.name,
+            editable_id,
+        );
+    }
+    drop(clip_library);
+
+    if let Some(editable_id) = first_editable_clip_id {
+        let mut timeline_state = world.resource_mut::<TimelineState>();
+        timeline_state.current_clip_id = Some(editable_id);
+        crate::log!("Set timeline current_clip_id to {}", editable_id);
+    }
+
+    first_editable_clip_id
+}
+
+fn register_node_assets(world: &World, assets: &mut AssetStorage) {
+    let node_assets = world.resource::<NodeAssets>();
+    for node in &node_assets.nodes {
+        let node_asset = NodeAsset {
+            id: node.index as u64,
+            name: node.name.clone(),
+            parent_id: node.parent_index.map(|i| i as u64),
+            local_transform: node.local_transform,
+        };
+        assets.add_node(node_asset);
+    }
+}
+
+fn build_mesh_entities(
+    name: &str,
+    graphics: &GraphicsResources,
+    world: &mut World,
+    assets: &mut AssetStorage,
+    animation_type: AnimationType,
+    node_animation_scale: f32,
+    has_animation: bool,
+    scene_will_provide_clips: bool,
+    first_editable_clip_id: Option<SourceClipId>,
+    parent_entity: crate::ecs::Entity,
+) {
     let initial_schedule = if has_animation && !scene_will_provide_clips {
         build_initial_clip_schedule(first_editable_clip_id, world)
     } else {
@@ -888,15 +944,6 @@ fn create_ecs_entities(
             parent_entity
         );
     }
-
-    crate::log!(
-        "Created {} ECS entities, {} mesh assets, {} skeletons, {} clips, {} nodes",
-        world.entity_count(),
-        assets.meshes.len(),
-        assets.skeletons.len(),
-        assets.animation_clips.len(),
-        assets.nodes.len()
-    );
 }
 
 fn initialize_bone_gizmo_visibility(

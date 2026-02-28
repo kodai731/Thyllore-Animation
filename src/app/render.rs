@@ -12,174 +12,8 @@ use anyhow::{anyhow, Result};
 
 impl App {
     pub unsafe fn begin_frame(&mut self, gui_data: &mut GUIData) -> Result<usize> {
-        if let Some((width, height)) = gui_data.viewport_resize_pending.take() {
-            self.rrdevice.device.device_wait_idle()?;
-            let command_pool = self.command_state().pool.command_pool;
-            self.data.viewport.resize(
-                &self.instance,
-                &self.rrdevice,
-                command_pool,
-                width,
-                height,
-            )?;
-
-            self.resize_gbuffer(width, height)?;
-
-            if let (Some(ref hdr_buffer), Some(ref tonemap_descriptor)) = (
-                &self.data.viewport.hdr_buffer,
-                &self.data.raytracing.tonemap_descriptor,
-            ) {
-                tonemap_descriptor.update_hdr_sampler(
-                    &self.rrdevice,
-                    hdr_buffer.color_image_view,
-                    hdr_buffer.sampler,
-                )?;
-
-                let bloom_view_and_sampler =
-                    self.data.viewport.bloom_chain.as_ref().and_then(|chain| {
-                        chain
-                            .mip_levels
-                            .first()
-                            .map(|mip| (mip.image_view, chain.sampler))
-                    });
-
-                if let Some((bloom_view, bloom_sampler)) = bloom_view_and_sampler {
-                    tonemap_descriptor.update_bloom_sampler(
-                        &self.rrdevice,
-                        bloom_view,
-                        bloom_sampler,
-                    )?;
-                } else {
-                    tonemap_descriptor.update_bloom_sampler(
-                        &self.rrdevice,
-                        hdr_buffer.color_image_view,
-                        hdr_buffer.sampler,
-                    )?;
-                }
-            }
-
-            if let (Some(ref hdr_buffer), Some(ref bloom_chain), Some(ref bloom_descriptors)) = (
-                &self.data.viewport.hdr_buffer,
-                &self.data.viewport.bloom_chain,
-                &self.data.raytracing.bloom_descriptors,
-            ) {
-                let mip_views: Vec<vk::ImageView> = bloom_chain
-                    .mip_levels
-                    .iter()
-                    .map(|m| m.image_view)
-                    .collect();
-
-                bloom_descriptors.update_image_views(
-                    &self.rrdevice,
-                    hdr_buffer.color_image_view,
-                    &mip_views,
-                    bloom_chain.sampler,
-                );
-            }
-
-            {
-                let render_targets = self.resource::<crate::vulkanr::context::RenderTargets>();
-                let depth_image_view = render_targets.render.gbuffer_depth_image_view;
-
-                if let (Some(ref hdr_buffer), Some(ref dof_descriptor)) = (
-                    &self.data.viewport.hdr_buffer,
-                    &self.data.raytracing.dof_descriptor,
-                ) {
-                    let depth_sampler = self
-                        .data
-                        .raytracing
-                        .gbuffer_sampler
-                        .unwrap_or(hdr_buffer.sampler);
-
-                    dof_descriptor.update_image_views(
-                        &self.rrdevice,
-                        hdr_buffer.color_image_view,
-                        hdr_buffer.sampler,
-                        depth_image_view,
-                        depth_sampler,
-                    );
-                }
-            }
-
-            if let (Some(ref dof_buffer), Some(ref tonemap_descriptor)) = (
-                &self.data.viewport.dof_buffer,
-                &self.data.raytracing.tonemap_descriptor,
-            ) {
-                tonemap_descriptor.update_hdr_sampler(
-                    &self.rrdevice,
-                    dof_buffer.output_image_view,
-                    dof_buffer.sampler,
-                )?;
-            }
-
-            self.update_auto_exposure_descriptors_on_resize();
-
-            if self
-                .data
-                .ecs_world
-                .contains_resource::<crate::ecs::resource::ObjectIdReadback>()
-            {
-                let mut readback = self
-                    .data
-                    .ecs_world
-                    .resource_mut::<crate::ecs::resource::ObjectIdReadback>();
-                readback.pending_pixel = None;
-                readback.copy_in_flight = false;
-                readback.last_read_object_id = None;
-            }
-        }
-
-        if gui_data.file_changed {
-            crate::log!("Loading new model from: {}", gui_data.selected_model_path);
-            self.rrdevice.device.device_wait_idle()?;
-
-            let command_pool = self.command_state().pool.clone();
-            let swapchain = self.swapchain_state().swapchain.clone();
-            match Self::load_model_from_path_with_resources(
-                &self.instance,
-                &self.rrdevice,
-                &mut self.data,
-                &command_pool,
-                &swapchain,
-                &gui_data.selected_model_path,
-                false,
-            ) {
-                Ok(_) => {
-                    {
-                        let mut model_state = self
-                            .data
-                            .ecs_world
-                            .resource_mut::<crate::ecs::resource::ModelState>();
-                        model_state.model_path = gui_data.selected_model_path.clone();
-                    }
-                    {
-                        let mut timeline = self
-                            .data
-                            .ecs_world
-                            .resource_mut::<crate::ecs::resource::TimelineState>();
-                        timeline.current_time = 0.0;
-                    }
-
-                    {
-                        let mut scene_state =
-                            self.data.ecs_world.resource_mut::<crate::ecs::SceneState>();
-                        scene_state.clear();
-                    }
-
-                    gui_data.load_status = format!("Loaded: {}", gui_data.selected_model_path);
-                    crate::log!(
-                        "Successfully loaded model: {}",
-                        gui_data.selected_model_path
-                    );
-                }
-                Err(e) => {
-                    gui_data.load_status = format!("Error: {}", e);
-                    crate::log!("Failed to load model: {:?}", e);
-                }
-            }
-
-            gui_data.file_changed = false;
-        }
+        self.handle_viewport_resize(gui_data)?;
+        self.handle_model_loading(gui_data)?;
 
         let current_fence = self.frame_sync().current_fence();
         self.rrdevice
@@ -215,6 +49,186 @@ impl App {
         self.resource_mut::<SwapchainState>().images_in_flight[image_index] = current_fence;
 
         Ok(image_index)
+    }
+
+    unsafe fn handle_viewport_resize(&mut self, gui_data: &mut GUIData) -> Result<()> {
+        let Some((width, height)) = gui_data.viewport_resize_pending.take() else {
+            return Ok(());
+        };
+
+        self.rrdevice.device.device_wait_idle()?;
+        let command_pool = self.command_state().pool.command_pool;
+        self.data
+            .viewport
+            .resize(&self.instance, &self.rrdevice, command_pool, width, height)?;
+
+        self.resize_gbuffer(width, height)?;
+        self.update_postprocessing_descriptors_on_resize()?;
+
+        if self
+            .data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::ObjectIdReadback>()
+        {
+            let mut readback = self
+                .data
+                .ecs_world
+                .resource_mut::<crate::ecs::resource::ObjectIdReadback>();
+            readback.pending_pixel = None;
+            readback.copy_in_flight = false;
+            readback.last_read_object_id = None;
+        }
+
+        Ok(())
+    }
+
+    unsafe fn update_postprocessing_descriptors_on_resize(&mut self) -> Result<()> {
+        if let (Some(ref hdr_buffer), Some(ref tonemap_descriptor)) = (
+            &self.data.viewport.hdr_buffer,
+            &self.data.raytracing.tonemap_descriptor,
+        ) {
+            tonemap_descriptor.update_hdr_sampler(
+                &self.rrdevice,
+                hdr_buffer.color_image_view,
+                hdr_buffer.sampler,
+            )?;
+
+            let bloom_view_and_sampler =
+                self.data.viewport.bloom_chain.as_ref().and_then(|chain| {
+                    chain
+                        .mip_levels
+                        .first()
+                        .map(|mip| (mip.image_view, chain.sampler))
+                });
+
+            if let Some((bloom_view, bloom_sampler)) = bloom_view_and_sampler {
+                tonemap_descriptor.update_bloom_sampler(
+                    &self.rrdevice,
+                    bloom_view,
+                    bloom_sampler,
+                )?;
+            } else {
+                tonemap_descriptor.update_bloom_sampler(
+                    &self.rrdevice,
+                    hdr_buffer.color_image_view,
+                    hdr_buffer.sampler,
+                )?;
+            }
+        }
+
+        if let (Some(ref hdr_buffer), Some(ref bloom_chain), Some(ref bloom_descriptors)) = (
+            &self.data.viewport.hdr_buffer,
+            &self.data.viewport.bloom_chain,
+            &self.data.raytracing.bloom_descriptors,
+        ) {
+            let mip_views: Vec<vk::ImageView> = bloom_chain
+                .mip_levels
+                .iter()
+                .map(|m| m.image_view)
+                .collect();
+
+            bloom_descriptors.update_image_views(
+                &self.rrdevice,
+                hdr_buffer.color_image_view,
+                &mip_views,
+                bloom_chain.sampler,
+            );
+        }
+
+        {
+            let render_targets = self.resource::<crate::vulkanr::context::RenderTargets>();
+            let depth_image_view = render_targets.render.gbuffer_depth_image_view;
+
+            if let (Some(ref hdr_buffer), Some(ref dof_descriptor)) = (
+                &self.data.viewport.hdr_buffer,
+                &self.data.raytracing.dof_descriptor,
+            ) {
+                let depth_sampler = self
+                    .data
+                    .raytracing
+                    .gbuffer_sampler
+                    .unwrap_or(hdr_buffer.sampler);
+
+                dof_descriptor.update_image_views(
+                    &self.rrdevice,
+                    hdr_buffer.color_image_view,
+                    hdr_buffer.sampler,
+                    depth_image_view,
+                    depth_sampler,
+                );
+            }
+        }
+
+        if let (Some(ref dof_buffer), Some(ref tonemap_descriptor)) = (
+            &self.data.viewport.dof_buffer,
+            &self.data.raytracing.tonemap_descriptor,
+        ) {
+            tonemap_descriptor.update_hdr_sampler(
+                &self.rrdevice,
+                dof_buffer.output_image_view,
+                dof_buffer.sampler,
+            )?;
+        }
+
+        self.update_auto_exposure_descriptors_on_resize();
+
+        Ok(())
+    }
+
+    unsafe fn handle_model_loading(&mut self, gui_data: &mut GUIData) -> Result<()> {
+        if !gui_data.file_changed {
+            return Ok(());
+        }
+
+        crate::log!("Loading new model from: {}", gui_data.selected_model_path);
+        self.rrdevice.device.device_wait_idle()?;
+
+        let command_pool = self.command_state().pool.clone();
+        let swapchain = self.swapchain_state().swapchain.clone();
+        match Self::load_model_from_path_with_resources(
+            &self.instance,
+            &self.rrdevice,
+            &mut self.data,
+            &command_pool,
+            &swapchain,
+            &gui_data.selected_model_path,
+            false,
+        ) {
+            Ok(_) => {
+                {
+                    let mut model_state = self
+                        .data
+                        .ecs_world
+                        .resource_mut::<crate::ecs::resource::ModelState>();
+                    model_state.model_path = gui_data.selected_model_path.clone();
+                }
+                {
+                    let mut timeline = self
+                        .data
+                        .ecs_world
+                        .resource_mut::<crate::ecs::resource::TimelineState>();
+                    timeline.current_time = 0.0;
+                }
+                {
+                    let mut scene_state =
+                        self.data.ecs_world.resource_mut::<crate::ecs::SceneState>();
+                    scene_state.clear();
+                }
+
+                gui_data.load_status = format!("Loaded: {}", gui_data.selected_model_path);
+                crate::log!(
+                    "Successfully loaded model: {}",
+                    gui_data.selected_model_path
+                );
+            }
+            Err(e) => {
+                gui_data.load_status = format!("Error: {}", e);
+                crate::log!("Failed to load model: {:?}", e);
+            }
+        }
+
+        gui_data.file_changed = false;
+        Ok(())
     }
 
     unsafe fn update_auto_exposure_descriptors_on_resize(&self) {
@@ -273,16 +287,14 @@ impl App {
             gbuffer.transition_layouts(&self.rrdevice, command_pool)?;
         }
 
-        let (position_view, normal_view, shadow_mask_view, albedo_view, object_id_view) = {
-            let gbuffer = self.data.raytracing.gbuffer.as_ref().unwrap();
-            (
-                gbuffer.position_image_view,
-                gbuffer.normal_image_view,
-                gbuffer.shadow_mask_image_view,
-                gbuffer.albedo_image_view,
-                gbuffer.object_id_image_view,
-            )
+        let Some(ref gbuffer) = self.data.raytracing.gbuffer else {
+            return Ok(());
         };
+        let position_view = gbuffer.position_image_view;
+        let normal_view = gbuffer.normal_image_view;
+        let shadow_mask_view = gbuffer.shadow_mask_image_view;
+        let albedo_view = gbuffer.albedo_image_view;
+        let object_id_view = gbuffer.object_id_image_view;
 
         {
             let mut render_targets = self.resource_mut::<RenderTargets>();
@@ -305,13 +317,14 @@ impl App {
                 render_targets.render.gbuffer_depth_image_memory = vk::DeviceMemory::null();
             }
 
-            let gbuffer = self.data.raytracing.gbuffer.as_ref().unwrap();
-            create_gbuffer_framebuffer(
-                &self.instance,
-                &self.rrdevice,
-                &mut render_targets.render,
-                gbuffer,
-            )?;
+            if let Some(ref gbuffer) = self.data.raytracing.gbuffer {
+                create_gbuffer_framebuffer(
+                    &self.instance,
+                    &self.rrdevice,
+                    &mut render_targets.render,
+                    gbuffer,
+                )?;
+            }
         }
 
         let gbuffer_sampler = self

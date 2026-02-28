@@ -68,6 +68,8 @@ pub unsafe fn run_onion_skin_phase(ctx: &mut FrameContext, updated_meshes: &[usi
             base_vertices.len(),
             skin_data.base_positions.len(),
         );
+        clear_ghost_buffers(ctx);
+        return Ok(());
     }
 
     let current_time = ctx

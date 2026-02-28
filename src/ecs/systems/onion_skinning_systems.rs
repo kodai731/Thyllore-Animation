@@ -180,6 +180,15 @@ fn apply_skinning_to_vertices(
     base_vertices: &[Vertex],
 ) -> Vec<Vertex> {
     let vertex_count = skin_data.base_positions.len();
+
+    if vertex_count != base_vertices.len() {
+        crate::log!(
+            "[skinning_to_verts] COUNT MISMATCH: skin_data.base_positions={} != base_vertices={}",
+            vertex_count,
+            base_vertices.len(),
+        );
+    }
+
     let mut skinned_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
     let mut skinned_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
 

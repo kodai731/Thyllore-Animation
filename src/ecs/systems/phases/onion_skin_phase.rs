@@ -41,6 +41,21 @@ pub unsafe fn run_onion_skin_phase(ctx: &mut FrameContext, updated_meshes: &[usi
         }
     };
 
+    crate::log!(
+        "[onion_phase] mesh_index={}, base_vertices={}, skin_data.base_positions={}",
+        mesh_index,
+        base_vertices.len(),
+        skin_data.base_positions.len(),
+    );
+
+    if base_vertices.len() != skin_data.base_positions.len() {
+        crate::log!(
+            "[onion_phase] MISMATCH: base_vertices.len()={} != skin_data.base_positions.len()={}",
+            base_vertices.len(),
+            skin_data.base_positions.len(),
+        );
+    }
+
     let current_time = ctx
         .world
         .get_resource::<TimelineState>()
@@ -92,10 +107,11 @@ pub unsafe fn run_onion_skin_phase(ctx: &mut FrameContext, updated_meshes: &[usi
         }
     }
 
-    log::debug!(
-        "Onion skin: {} ghosts computed for mesh {}",
+    crate::log!(
+        "[onion_phase] {} ghosts uploaded, index_count={}, time={:.4}",
         ghost_count,
-        mesh_index
+        gpu.source_index_count,
+        current_time,
     );
 
     Ok(())

@@ -174,6 +174,7 @@ pub fn apply_skinning(
 
         let mut skinned_pos = Vector3::new(0.0, 0.0, 0.0);
         let mut skinned_normal = Vector3::new(0.0, 0.0, 0.0);
+        let mut has_valid_weight = false;
 
         for j in 0..4 {
             let bone_idx = match j {
@@ -193,6 +194,7 @@ pub fn apply_skinning(
             };
 
             if weight > 0.0 && bone_idx < skin_matrices.len() {
+                has_valid_weight = true;
                 let m = &skin_matrices[bone_idx];
 
                 let pos = skin_data.base_positions[i];
@@ -205,6 +207,13 @@ pub fn apply_skinning(
                     skinned_normal +=
                         Vector3::new(transformed_n.x, transformed_n.y, transformed_n.z) * weight;
                 }
+            }
+        }
+
+        if !has_valid_weight {
+            skinned_pos = skin_data.base_positions[i];
+            if i < skin_data.base_normals.len() {
+                skinned_normal = skin_data.base_normals[i];
             }
         }
 

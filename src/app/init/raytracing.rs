@@ -84,7 +84,34 @@ impl App {
         Self::create_bloom_pipelines_with_resources(rrdevice, data, rrrender)?;
         Self::create_dof_pipeline_with_resources(rrdevice, data, rrrender)?;
         Self::create_auto_exposure_pipelines_with_resources(rrdevice, data)?;
+        Self::create_onion_skin_pipeline_with_resources(rrdevice, data, rrrender)?;
 
+        Ok(())
+    }
+
+    pub(crate) unsafe fn create_onion_skin_pipeline_with_resources(
+        rrdevice: &RRDevice,
+        data: &mut AppData,
+        rrrender: &RRRender,
+    ) -> Result<()> {
+        let hdr_buffer = match data.viewport.hdr_buffer {
+            Some(ref hdr) => hdr,
+            None => {
+                crate::log!("HDR buffer not available, skipping onion skin pipeline");
+                return Ok(());
+            }
+        };
+
+        data.raytracing.create_onion_skin_pipeline(
+            rrdevice,
+            rrrender,
+            &data.graphics_resources,
+            hdr_buffer.color_image_view,
+            hdr_buffer.width,
+            hdr_buffer.height,
+        )?;
+
+        crate::log!("Onion skin pipeline created successfully");
         Ok(())
     }
 

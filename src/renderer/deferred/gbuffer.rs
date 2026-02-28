@@ -6,7 +6,6 @@ use crate::app::App;
 use crate::asset::AssetStorage;
 use crate::ecs::world::MeshRef;
 use crate::ecs::World;
-use crate::renderer::onion_skin_buffers::OnionSkinGpuState;
 use crate::vulkanr::core::{Device, RRDevice};
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::render::pass::get_depth_format;
@@ -17,34 +16,47 @@ use crate::vulkanr::resource::{create_image, create_image_view, RRGBuffer};
 #[derive(Clone, Copy, Debug)]
 pub struct GBufferPushConstants {
     pub object_id: u32,
+}
+
+impl GBufferPushConstants {
+    pub fn new(object_id: u32) -> Self {
+        Self { object_id }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                (self as *const Self) as *const u8,
+                std::mem::size_of::<Self>(),
+            )
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct OnionSkinPushConstants {
     pub ghost_tint_r: f32,
     pub ghost_tint_g: f32,
     pub ghost_tint_b: f32,
     pub ghost_opacity: f32,
+    pub debug_mode: i32,
+    pub _pad: [f32; 3],
 }
 
-impl GBufferPushConstants {
-    pub fn normal(object_id: u32) -> Self {
+impl OnionSkinPushConstants {
+    pub fn new(tint_color: [f32; 3], opacity: f32) -> Self {
         Self {
-            object_id,
-            ghost_tint_r: 0.0,
-            ghost_tint_g: 0.0,
-            ghost_tint_b: 0.0,
-            ghost_opacity: 0.0,
-        }
-    }
-
-    pub fn ghost(object_id: u32, tint_color: [f32; 3], opacity: f32) -> Self {
-        Self {
-            object_id,
             ghost_tint_r: tint_color[0],
             ghost_tint_g: tint_color[1],
             ghost_tint_b: tint_color[2],
             ghost_opacity: opacity,
+            debug_mode: 0,
+            _pad: [0.0; 3],
         }
     }
 
-    fn as_bytes(&self) -> &[u8] {
+    pub fn as_bytes(&self) -> &[u8] {
         unsafe {
             std::slice::from_raw_parts(
                 (self as *const Self) as *const u8,
@@ -59,24 +71,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_push_constants_size() {
-        assert_eq!(std::mem::size_of::<GBufferPushConstants>(), 20);
+    fn test_gbuffer_push_constants_size() {
+        assert_eq!(std::mem::size_of::<GBufferPushConstants>(), 4);
     }
 
     #[test]
-    fn test_push_constants_normal() {
-        let pc = GBufferPushConstants::normal(42);
-        assert_eq!(pc.object_id, 42);
-        assert_eq!(pc.ghost_tint_r, 0.0);
-        assert_eq!(pc.ghost_tint_g, 0.0);
-        assert_eq!(pc.ghost_tint_b, 0.0);
-        assert_eq!(pc.ghost_opacity, 0.0);
+    fn test_gbuffer_push_constants_as_bytes() {
+        let pc = GBufferPushConstants::new(42);
+        let bytes = pc.as_bytes();
+        assert_eq!(bytes.len(), 4);
+        let object_id = u32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        assert_eq!(object_id, 42);
     }
 
     #[test]
-    fn test_push_constants_ghost() {
-        let pc = GBufferPushConstants::ghost(7, [0.2, 0.4, 1.0], 0.5);
-        assert_eq!(pc.object_id, 7);
+    fn test_onion_skin_push_constants_size() {
+        assert_eq!(std::mem::size_of::<OnionSkinPushConstants>(), 32);
+    }
+
+    #[test]
+    fn test_onion_skin_push_constants_values() {
+        let pc = OnionSkinPushConstants::new([0.2, 0.4, 1.0], 0.5);
         assert!((pc.ghost_tint_r - 0.2).abs() < f32::EPSILON);
         assert!((pc.ghost_tint_g - 0.4).abs() < f32::EPSILON);
         assert!((pc.ghost_tint_b - 1.0).abs() < f32::EPSILON);
@@ -84,21 +99,11 @@ mod tests {
     }
 
     #[test]
-    fn test_push_constants_as_bytes() {
-        let pc = GBufferPushConstants::normal(1);
+    fn test_onion_skin_push_constants_as_bytes() {
+        let pc = OnionSkinPushConstants::new([1.0, 2.0, 3.0], 4.0);
         let bytes = pc.as_bytes();
-        assert_eq!(bytes.len(), 20);
-    }
-
-    #[test]
-    fn test_push_constants_repr_c_layout() {
-        let pc = GBufferPushConstants::ghost(0xDEAD, [1.0, 2.0, 3.0], 4.0);
-        let bytes = pc.as_bytes();
-
-        let object_id = u32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-        assert_eq!(object_id, 0xDEAD);
-
-        let tint_r = f32::from_ne_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]);
+        assert_eq!(bytes.len(), 32);
+        let tint_r = f32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
         assert!((tint_r - 1.0).abs() < f32::EPSILON);
     }
 }
@@ -167,7 +172,6 @@ pub struct GBufferPass<'a> {
     device: &'a Device,
     ecs_world: &'a World,
     ecs_assets: &'a AssetStorage,
-    onion_skin_gpu: Option<&'a OnionSkinGpuState>,
 }
 
 impl<'a> GBufferPass<'a> {
@@ -193,7 +197,6 @@ impl<'a> GBufferPass<'a> {
             device: &app.rrdevice.device,
             ecs_world: &app.data.ecs_world,
             ecs_assets: &app.data.ecs_assets,
-            onion_skin_gpu: app.data.onion_skin_gpu.as_ref(),
         })
     }
 
@@ -323,8 +326,6 @@ impl<'a> GBufferPass<'a> {
         image_index: usize,
         entities: &[crate::ecs::Entity],
     ) -> Result<()> {
-        self.draw_onion_skin_ghosts(command_buffer, image_index)?;
-
         for &entity in entities {
             let Some(mesh_ref) = self.ecs_world.get_component::<MeshRef>(entity) else {
                 continue;
@@ -345,102 +346,6 @@ impl<'a> GBufferPass<'a> {
 
             let mesh = &self.meshes[mesh_index];
             self.draw_single_mesh(command_buffer, image_index, mesh, mesh_index)?;
-        }
-
-        Ok(())
-    }
-
-    unsafe fn draw_onion_skin_ghosts(
-        &self,
-        command_buffer: vk::CommandBuffer,
-        image_index: usize,
-    ) -> Result<()> {
-        let Some(onion_gpu) = self.onion_skin_gpu else {
-            return Ok(());
-        };
-
-        let Some(source_mesh_index) = onion_gpu.source_mesh_index else {
-            return Ok(());
-        };
-
-        if source_mesh_index >= self.meshes.len() {
-            return Ok(());
-        }
-
-        let source_mesh = &self.meshes[source_mesh_index];
-
-        for ghost_buffer in &onion_gpu.ghost_buffers {
-            if ghost_buffer.vertex_count == 0 {
-                continue;
-            }
-
-            self.device.cmd_bind_vertex_buffers(
-                command_buffer,
-                0,
-                &[ghost_buffer.vertex_buffer],
-                &[0],
-            );
-
-            self.device.cmd_bind_index_buffer(
-                command_buffer,
-                onion_gpu.source_index_buffer,
-                0,
-                vk::IndexType::UINT32,
-            );
-
-            let frame_set = self.graphics_resources.frame_set.sets[image_index];
-            self.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pipeline.pipeline_layout,
-                0,
-                &[frame_set],
-                &[],
-            );
-
-            if let Some(material_id) = self.graphics_resources.get_material_id(source_mesh_index) {
-                if let Some(material) = self.graphics_resources.materials.get(material_id) {
-                    self.device.cmd_bind_descriptor_sets(
-                        command_buffer,
-                        vk::PipelineBindPoint::GRAPHICS,
-                        self.pipeline.pipeline_layout,
-                        1,
-                        &[material.descriptor_set],
-                        &[],
-                    );
-                }
-            }
-
-            let object_set_idx = self
-                .graphics_resources
-                .objects
-                .get_set_index(image_index, source_mesh.object_index);
-            let object_set = self.graphics_resources.objects.sets[object_set_idx];
-            self.device.cmd_bind_descriptor_sets(
-                command_buffer,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pipeline.pipeline_layout,
-                2,
-                &[object_set],
-                &[],
-            );
-
-            let object_id: u32 = (source_mesh_index + 1) as u32;
-            let push_constants = GBufferPushConstants::ghost(
-                object_id,
-                ghost_buffer.tint_color,
-                ghost_buffer.opacity,
-            );
-            self.device.cmd_push_constants(
-                command_buffer,
-                self.pipeline.pipeline_layout,
-                vk::ShaderStageFlags::FRAGMENT,
-                0,
-                push_constants.as_bytes(),
-            );
-
-            self.device
-                .cmd_draw_indexed(command_buffer, onion_gpu.source_index_count, 1, 0, 0, 0);
         }
 
         Ok(())
@@ -519,7 +424,7 @@ impl<'a> GBufferPass<'a> {
         );
 
         let object_id: u32 = (mesh_index + 1) as u32;
-        let push_constants = GBufferPushConstants::normal(object_id);
+        let push_constants = GBufferPushConstants::new(object_id);
         self.device.cmd_push_constants(
             command_buffer,
             self.pipeline.pipeline_layout,

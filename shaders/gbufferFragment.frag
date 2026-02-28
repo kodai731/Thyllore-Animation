@@ -14,10 +14,6 @@ layout(set = 1, binding = 0) uniform sampler2D texSampler;
 
 layout(push_constant) uniform PushConstants {
     uint objectID;
-    float ghostTintR;
-    float ghostTintG;
-    float ghostTintB;
-    float ghostOpacity;
 } pc;
 
 void main() {
@@ -27,13 +23,6 @@ void main() {
 
     outPosition = vec4(fragWorldPos, 1.0);
     outNormal = vec4(normalize(fragWorldNormal), 1.0);
-
-    if (pc.ghostOpacity > 0.0) {
-        vec3 ghostColor = vec3(pc.ghostTintR, pc.ghostTintG, pc.ghostTintB);
-        outAlbedo = vec4(mix(albedo.rgb, ghostColor, pc.ghostOpacity), 1.0);
-    } else {
-        outAlbedo = albedo;
-    }
-
+    outAlbedo = albedo;
     outObjectID = pc.objectID;
 }

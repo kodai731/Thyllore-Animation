@@ -364,6 +364,18 @@ impl App {
                 )?;
         }
 
+        if let (Some(ref mut onion_pass), Some(ref hdr_buffer)) = (
+            &mut self.data.raytracing.onion_skin_pass,
+            &self.data.viewport.hdr_buffer,
+        ) {
+            onion_pass.recreate_framebuffer(
+                &self.rrdevice,
+                hdr_buffer.color_image_view,
+                hdr_buffer.width,
+                hdr_buffer.height,
+            )?;
+        }
+
         crate::log!("G-Buffer resized to: {}x{}", new_width, new_height);
         Ok(())
     }

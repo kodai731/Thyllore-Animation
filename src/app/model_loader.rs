@@ -262,27 +262,6 @@ unsafe fn cleanup_resources(
     Ok(())
 }
 
-pub unsafe fn cleanup_model_resources(rrdevice: &RRDevice, data: &mut AppData) {
-    crate::log!("Cleaning up model resources...");
-
-    rrdevice.device.device_wait_idle().ok();
-
-    if let Some(ref mut accel) = data.raytracing.acceleration_structure {
-        accel.destroy(&rrdevice.device);
-        crate::log!("Destroyed acceleration structure");
-    }
-    data.raytracing.acceleration_structure = None;
-
-    data.graphics_resources.clear_meshes(rrdevice);
-    data.graphics_resources.mesh_material_ids.clear();
-    data.graphics_resources
-        .materials
-        .clear_materials(&rrdevice.device);
-    crate::log!("Cleared materials");
-
-    crate::log!("Model resources cleaned up");
-}
-
 fn setup_animation_system(
     world: &mut World,
     load_result: &ModelLoadResult,

@@ -3,6 +3,7 @@ mod bloom;
 mod composite;
 mod dof;
 pub mod gbuffer;
+mod onion_skin;
 mod rayquery;
 mod tonemap;
 
@@ -17,6 +18,7 @@ pub use bloom::BloomPass;
 pub use composite::CompositePass;
 pub use dof::DofPass;
 pub use gbuffer::{create_gbuffer_framebuffer, GBufferPass};
+pub use onion_skin::OnionSkinRenderPass;
 pub use rayquery::RayQueryPass;
 pub use tonemap::ToneMapPass;
 
@@ -214,6 +216,17 @@ pub unsafe fn record_auto_exposure(app: &App, command_buffer: vk::CommandBuffer)
     let pass = AutoExposurePass::new(app)?;
     pass.record(command_buffer)?;
 
+    Ok(())
+}
+
+pub unsafe fn record_onion_skin_pass(
+    app: &App,
+    command_buffer: vk::CommandBuffer,
+    image_index: usize,
+) -> Result<()> {
+    if let Some(pass) = OnionSkinRenderPass::new(app)? {
+        pass.record(command_buffer, image_index)?;
+    }
     Ok(())
 }
 

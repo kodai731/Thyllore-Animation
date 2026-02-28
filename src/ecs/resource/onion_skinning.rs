@@ -38,10 +38,6 @@ pub struct GhostMeshData {
     pub tint_color: [f32; 3],
     pub opacity: f32,
     pub mesh_index: usize,
-    pub diag_zero_weight_count: u32,
-    pub diag_near_origin_count: u32,
-    pub diag_bounds_min: [f32; 3],
-    pub diag_bounds_max: [f32; 3],
 }
 
 pub struct OnionSkinningResult {

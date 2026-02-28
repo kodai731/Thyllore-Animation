@@ -162,15 +162,28 @@ fn compute_single_ghost(
 
     let globals = compute_pose_global_transforms(skeleton, &pose);
 
-    let skinned_vertices =
+    let skinning_result =
         apply_skinning_to_vertices(&ctx.skin_data, &globals, skeleton, base_vertices);
 
     Some(GhostMeshData {
-        vertices: skinned_vertices,
+        vertices: skinning_result.vertices,
         tint_color: info.tint_color,
         opacity: info.opacity,
         mesh_index,
+        diag_zero_weight_count: skinning_result.diagnostics.zero_weight_fallback_count,
+        diag_near_origin_count: skinning_result.diagnostics.near_origin_count,
+        diag_bounds_min: skinning_result.bounds_min,
+        diag_bounds_max: skinning_result.bounds_max,
     })
+}
+
+use crate::ecs::SkinningDiagnostics;
+
+struct SkinningResult {
+    vertices: Vec<Vertex>,
+    diagnostics: SkinningDiagnostics,
+    bounds_min: [f32; 3],
+    bounds_max: [f32; 3],
 }
 
 fn apply_skinning_to_vertices(
@@ -178,7 +191,7 @@ fn apply_skinning_to_vertices(
     global_transforms: &[Matrix4<f32>],
     skeleton: &Skeleton,
     base_vertices: &[Vertex],
-) -> Vec<Vertex> {
+) -> SkinningResult {
     let vertex_count = skin_data.base_positions.len();
 
     if vertex_count != base_vertices.len() {
@@ -192,7 +205,7 @@ fn apply_skinning_to_vertices(
     let mut skinned_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
     let mut skinned_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
 
-    crate::ecs::apply_skinning(
+    let diagnostics = crate::ecs::apply_skinning(
         skin_data,
         global_transforms,
         skeleton,
@@ -207,18 +220,34 @@ fn apply_skinning_to_vertices(
     );
 
     let mut result = base_vertices.to_vec();
+    let mut bounds_min = [f32::MAX; 3];
+    let mut bounds_max = [f32::MIN; 3];
+
     for (i, pos) in skinned_positions.iter().enumerate() {
         result[i].pos.x = pos.x;
         result[i].pos.y = pos.y;
         result[i].pos.z = pos.z;
+
+        bounds_min[0] = bounds_min[0].min(pos.x);
+        bounds_min[1] = bounds_min[1].min(pos.y);
+        bounds_min[2] = bounds_min[2].min(pos.z);
+        bounds_max[0] = bounds_max[0].max(pos.x);
+        bounds_max[1] = bounds_max[1].max(pos.y);
+        bounds_max[2] = bounds_max[2].max(pos.z);
     }
+
     for (i, normal) in skinned_normals.iter().enumerate() {
         result[i].normal.x = normal.x;
         result[i].normal.y = normal.y;
         result[i].normal.z = normal.z;
     }
 
-    result
+    SkinningResult {
+        vertices: result,
+        diagnostics,
+        bounds_min,
+        bounds_max,
+    }
 }
 
 #[cfg(test)]
@@ -243,6 +272,10 @@ mod tests {
             tint_color: [0.2, 0.4, 1.0],
             opacity: 0.3,
             mesh_index: 0,
+            diag_zero_weight_count: 0,
+            diag_near_origin_count: 0,
+            diag_bounds_min: [0.0; 3],
+            diag_bounds_max: [0.0; 3],
         };
         assert_eq!(ghost.tint_color, [0.2, 0.4, 1.0]);
         assert!((ghost.opacity - 0.3).abs() < f32::EPSILON);
@@ -256,6 +289,10 @@ mod tests {
             tint_color: [1.0, 0.4, 0.2],
             opacity: 0.5,
             mesh_index: 3,
+            diag_zero_weight_count: 0,
+            diag_near_origin_count: 0,
+            diag_bounds_min: [0.0; 3],
+            diag_bounds_max: [0.0; 3],
         };
         let cloned = ghost.clone();
         assert_eq!(cloned.tint_color, ghost.tint_color);
@@ -280,12 +317,20 @@ mod tests {
                     tint_color: [0.2, 0.4, 1.0],
                     opacity: 0.4,
                     mesh_index: 0,
+                    diag_zero_weight_count: 0,
+                    diag_near_origin_count: 0,
+                    diag_bounds_min: [0.0; 3],
+                    diag_bounds_max: [0.0; 3],
                 },
                 GhostMeshData {
                     vertices: Vec::new(),
                     tint_color: [1.0, 0.4, 0.2],
                     opacity: 0.3,
                     mesh_index: 0,
+                    diag_zero_weight_count: 0,
+                    diag_near_origin_count: 0,
+                    diag_bounds_min: [0.0; 3],
+                    diag_bounds_max: [0.0; 3],
                 },
             ],
         };

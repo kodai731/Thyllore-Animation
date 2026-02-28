@@ -574,7 +574,7 @@ unsafe fn apply_skinning_to_mesh(
         let mut skinned_positions = vec![cgmath::Vector3::new(0.0, 0.0, 0.0); vertex_count];
         let mut skinned_normals = vec![cgmath::Vector3::new(0.0, 1.0, 0.0); vertex_count];
 
-        apply_skinning(
+        let _ = apply_skinning(
             &skin_data,
             global_transforms,
             skeleton,

@@ -1,7 +1,9 @@
 use anyhow::Result;
 
 use crate::app::FrameContext;
-use crate::ecs::resource::{ClipLibrary, HierarchyState, OnionSkinningConfig, TimelineState};
+use crate::ecs::resource::{
+    ClipLibrary, GhostMeshData, HierarchyState, OnionSkinningConfig, TimelineState,
+};
 use crate::ecs::systems::onion_skinning_systems::{
     compute_onion_skin_ghosts, OnionSkinMeshContext,
 };
@@ -30,10 +32,19 @@ pub unsafe fn run_onion_skin_phase(ctx: &mut FrameContext, updated_meshes: &[usi
         }
     };
 
-    let (skin_data, base_vertices) = {
+    let (skin_data, base_vertices, vtx_buf_len, index_count, max_index) = {
         let mesh = &ctx.graphics.meshes[mesh_index];
         match &mesh.skin_data {
-            Some(sd) => (sd.clone(), mesh.base_vertices.clone()),
+            Some(sd) => {
+                let max_idx = mesh.vertex_data.indices.iter().copied().max().unwrap_or(0);
+                (
+                    sd.clone(),
+                    mesh.base_vertices.clone(),
+                    mesh.vertex_data.vertices.len(),
+                    mesh.vertex_data.indices.len(),
+                    max_idx,
+                )
+            }
             None => {
                 clear_ghost_buffers(ctx);
                 return Ok(());
@@ -42,9 +53,12 @@ pub unsafe fn run_onion_skin_phase(ctx: &mut FrameContext, updated_meshes: &[usi
     };
 
     crate::log!(
-        "[onion_phase] mesh_index={}, base_vertices={}, skin_data.base_positions={}",
+        "[onion_phase] mesh_index={}, base_vertices={}, vtx_buf={}, indices={}, max_index={}, skin_positions={}",
         mesh_index,
         base_vertices.len(),
+        vtx_buf_len,
+        index_count,
+        max_index,
         skin_data.base_positions.len(),
     );
 
@@ -105,6 +119,18 @@ pub unsafe fn run_onion_skin_phase(ctx: &mut FrameContext, updated_meshes: &[usi
                 ghost.opacity,
             )?;
         }
+
+        crate::log!(
+            "[onion_gpu] ghost[{}] verts={}, bounds=({:.3},{:.3},{:.3})..({:.3},{:.3},{:.3}), zero_weight={}, near_origin={}",
+            i,
+            ghost.vertices.len(),
+            ghost.diag_bounds_min[0], ghost.diag_bounds_min[1], ghost.diag_bounds_min[2],
+            ghost.diag_bounds_max[0], ghost.diag_bounds_max[1], ghost.diag_bounds_max[2],
+            ghost.diag_zero_weight_count,
+            ghost.diag_near_origin_count,
+        );
+
+        log_sample_vertices(ghost);
     }
 
     crate::log!(
@@ -130,5 +156,53 @@ fn clear_ghost_buffers(ctx: &mut FrameContext) {
         for buffer in &mut gpu.ghost_buffers {
             buffer.vertex_count = 0;
         }
+    }
+}
+
+fn log_sample_vertices(ghost: &GhostMeshData) {
+    let verts = &ghost.vertices;
+    if verts.is_empty() {
+        return;
+    }
+
+    let near_origin_threshold = 0.01;
+    let mut near_origin_samples: Vec<(usize, [f32; 3])> = Vec::new();
+    let mut spread_samples: Vec<(usize, [f32; 3])> = Vec::new();
+
+    let step = (verts.len() / 8).max(1);
+
+    for (i, v) in verts.iter().enumerate() {
+        let pos = [v.pos.x, v.pos.y, v.pos.z];
+        let dist = (pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]).sqrt();
+
+        if dist < near_origin_threshold && near_origin_samples.len() < 5 {
+            near_origin_samples.push((i, pos));
+        }
+
+        if i % step == 0 && spread_samples.len() < 8 {
+            spread_samples.push((i, pos));
+        }
+    }
+
+    if !near_origin_samples.is_empty() {
+        for (idx, pos) in &near_origin_samples {
+            crate::log!(
+                "[onion_gpu]   near_origin v[{}] pos=({:.6},{:.6},{:.6})",
+                idx,
+                pos[0],
+                pos[1],
+                pos[2],
+            );
+        }
+    }
+
+    for (idx, pos) in &spread_samples {
+        crate::log!(
+            "[onion_gpu]   sample v[{}] pos=({:.4},{:.4},{:.4})",
+            idx,
+            pos[0],
+            pos[1],
+            pos[2],
+        );
     }
 }

@@ -51,6 +51,7 @@ impl App {
                 deferred::record_dof(self, command_buffer)?;
                 deferred::record_auto_exposure(self, command_buffer)?;
                 deferred::record_tonemap_to_offscreen(self, command_buffer, image_index)?;
+                deferred::record_onion_skin_composite(self, command_buffer)?;
             } else {
                 deferred::record_composite_to_offscreen(self, command_buffer, image_index)?;
             }

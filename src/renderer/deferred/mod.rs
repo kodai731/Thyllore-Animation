@@ -225,7 +225,17 @@ pub unsafe fn record_onion_skin_pass(
     image_index: usize,
 ) -> Result<()> {
     if let Some(pass) = OnionSkinRenderPass::new(app)? {
-        pass.record(command_buffer, image_index)?;
+        pass.record_ghost_pass(command_buffer, image_index)?;
+    }
+    Ok(())
+}
+
+pub unsafe fn record_onion_skin_composite(
+    app: &App,
+    command_buffer: vk::CommandBuffer,
+) -> Result<()> {
+    if let Some(pass) = OnionSkinRenderPass::new(app)? {
+        pass.record_composite_pass(command_buffer);
     }
     Ok(())
 }

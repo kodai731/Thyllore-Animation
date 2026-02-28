@@ -84,12 +84,13 @@ impl App {
         Self::create_bloom_pipelines_with_resources(rrdevice, data, rrrender)?;
         Self::create_dof_pipeline_with_resources(rrdevice, data, rrrender)?;
         Self::create_auto_exposure_pipelines_with_resources(rrdevice, data)?;
-        Self::create_onion_skin_pipeline_with_resources(rrdevice, data, rrrender)?;
+        Self::create_onion_skin_pipeline_with_resources(instance, rrdevice, data, rrrender)?;
 
         Ok(())
     }
 
     pub(crate) unsafe fn create_onion_skin_pipeline_with_resources(
+        instance: &Instance,
         rrdevice: &RRDevice,
         data: &mut AppData,
         rrrender: &RRRender,
@@ -102,13 +103,28 @@ impl App {
             }
         };
 
+        let offscreen = match data.viewport.offscreen {
+            Some(ref o) => o,
+            None => {
+                crate::log!("Offscreen not available, skipping onion skin pipeline");
+                return Ok(());
+            }
+        };
+
+        let resolve_image_view = offscreen.resolve_color_image_view;
+        let offscreen_format = offscreen.format;
+        let width = hdr_buffer.width;
+        let height = hdr_buffer.height;
+
         data.raytracing.create_onion_skin_pipeline(
+            instance,
             rrdevice,
             rrrender,
             &data.graphics_resources,
-            hdr_buffer.color_image_view,
-            hdr_buffer.width,
-            hdr_buffer.height,
+            resolve_image_view,
+            offscreen_format,
+            width,
+            height,
         )?;
 
         crate::log!("Onion skin pipeline created successfully");

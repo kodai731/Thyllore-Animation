@@ -30,7 +30,7 @@ impl Default for OnionSkinningConfig {
             frame_step: 1.0 / 30.0,
             past_color: [0.2, 0.4, 1.0],
             future_color: [1.0, 0.4, 0.2],
-            opacity: 0.4,
+            opacity: 0.2,
         }
     }
 }
@@ -48,6 +48,10 @@ pub struct GhostMeshData {
     pub tint_color: [f32; 3],
     pub opacity: f32,
     pub mesh_index: usize,
+    pub diag_zero_weight_count: u32,
+    pub diag_near_origin_count: u32,
+    pub diag_bounds_min: [f32; 3],
+    pub diag_bounds_max: [f32; 3],
 }
 
 pub struct OnionSkinningResult {
@@ -65,7 +69,7 @@ mod tests {
         assert_eq!(config.past_count, 2);
         assert_eq!(config.future_count, 2);
         assert!((config.frame_step - 1.0 / 30.0).abs() < f32::EPSILON);
-        assert!((config.opacity - 0.4).abs() < f32::EPSILON);
+        assert!((config.opacity - 0.2).abs() < f32::EPSILON);
     }
 
     #[test]

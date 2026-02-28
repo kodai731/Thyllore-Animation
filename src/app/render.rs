@@ -364,15 +364,16 @@ impl App {
                 )?;
         }
 
-        if let (Some(ref mut onion_pass), Some(ref hdr_buffer)) = (
+        if let (Some(ref mut onion_pass), Some(ref offscreen)) = (
             &mut self.data.raytracing.onion_skin_pass,
-            &self.data.viewport.hdr_buffer,
+            &self.data.viewport.offscreen,
         ) {
-            onion_pass.recreate_framebuffer(
+            onion_pass.recreate_on_resize(
+                &self.instance,
                 &self.rrdevice,
-                hdr_buffer.color_image_view,
-                hdr_buffer.width,
-                hdr_buffer.height,
+                offscreen.resolve_color_image_view,
+                offscreen.width,
+                offscreen.height,
             )?;
         }
 

@@ -40,6 +40,7 @@ impl App {
                 world: &mut self.data.ecs_world,
                 assets: &mut self.data.ecs_assets,
                 gui_data,
+                onion_skin_gpu: &mut self.data.onion_skin_gpu,
             };
 
             run_frame(&mut ctx)?;

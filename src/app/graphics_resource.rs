@@ -84,7 +84,7 @@ impl GraphicsResources {
             let mut skinned_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
             let mut skinned_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
 
-            apply_skinning(
+            let _ = apply_skinning(
                 &skin_data,
                 global_transforms,
                 skeleton,
@@ -183,7 +183,7 @@ impl GraphicsResources {
         let mut skinned_positions = vec![Vector3::new(0.0, 0.0, 0.0); vertex_count];
         let mut skinned_normals = vec![Vector3::new(0.0, 1.0, 0.0); vertex_count];
 
-        apply_skinning(
+        let _ = apply_skinning(
             &skin_data,
             global_transforms,
             skeleton,

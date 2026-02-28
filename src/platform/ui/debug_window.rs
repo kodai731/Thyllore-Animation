@@ -59,6 +59,9 @@ pub fn build_debug_window(
             ui.separator();
 
             build_auto_exposure_panel(ui, ecs_world);
+            ui.separator();
+
+            build_onion_skinning_panel(ui, ecs_world);
 
             build_mouse_info(ui, gui_data);
         });
@@ -429,6 +432,41 @@ fn build_auto_exposure_panel(ui: &imgui::Ui, ecs_world: &World) {
     if let Some(exposure) = ecs_world.get_resource::<Exposure>() {
         ui.text(format!("Current Exposure: {:.4}", exposure.exposure_value));
         ui.text(format!("Current EV100: {:.2}", exposure.ev100));
+    }
+}
+
+fn build_onion_skinning_panel(ui: &imgui::Ui, ecs_world: &World) {
+    use crate::ecs::resource::OnionSkinningConfig;
+
+    ui.text("Onion Skinning:");
+
+    if let Some(mut config) = ecs_world.get_resource_mut::<OnionSkinningConfig>() {
+        ui.checkbox("Onion Skin Enabled", &mut config.enabled);
+
+        let mut past = config.past_count as i32;
+        if ui.slider_config("Past Frames", 0, 4).build(&mut past) {
+            config.past_count = past.max(0) as u32;
+        }
+
+        let mut future = config.future_count as i32;
+        if ui.slider_config("Future Frames", 0, 4).build(&mut future) {
+            config.future_count = future.max(0) as u32;
+        }
+
+        ui.slider_config("Frame Step", 0.001, 0.2)
+            .display_format("%.3f")
+            .build(&mut config.frame_step);
+
+        ui.slider_config("Ghost Opacity", 0.0, 1.0)
+            .build(&mut config.opacity);
+
+        ui.color_edit3("Past Color", &mut config.past_color);
+        ui.color_edit3("Future Color", &mut config.future_color);
+
+        ui.text(format!(
+            "Total ghosts: {}",
+            crate::ecs::compute_total_ghost_count(&config)
+        ));
     }
 }
 

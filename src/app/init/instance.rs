@@ -1052,6 +1052,14 @@ impl App {
                 .insert_resource(crate::ecs::resource::AutoExposure::default());
         }
 
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::OnionSkinningConfig>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::OnionSkinningConfig::default());
+        }
+
         #[cfg(feature = "ml")]
         {
             use crate::ecs::component::InferenceActorSetup;

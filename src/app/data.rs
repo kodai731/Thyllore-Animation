@@ -7,6 +7,7 @@ use crate::asset::AssetStorage;
 use crate::debugview::*;
 use crate::ecs::World;
 use crate::platform::ImguiData;
+use crate::renderer::onion_skin_buffers::OnionSkinGpuState;
 use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
@@ -31,4 +32,5 @@ pub struct AppData {
     pub buffer_registry: GpuBufferRegistry,
     pub pipeline_storage: PipelineStorage,
     pub viewport: ViewportState,
+    pub onion_skin_gpu: Option<OnionSkinGpuState>,
 }

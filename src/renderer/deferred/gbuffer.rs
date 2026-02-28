@@ -12,6 +12,102 @@ use crate::vulkanr::render::pass::get_depth_format;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{create_image, create_image_view, RRGBuffer};
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct GBufferPushConstants {
+    pub object_id: u32,
+}
+
+impl GBufferPushConstants {
+    pub fn new(object_id: u32) -> Self {
+        Self { object_id }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                (self as *const Self) as *const u8,
+                std::mem::size_of::<Self>(),
+            )
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct OnionSkinPushConstants {
+    pub ghost_tint_r: f32,
+    pub ghost_tint_g: f32,
+    pub ghost_tint_b: f32,
+    pub ghost_opacity: f32,
+    pub debug_mode: i32,
+    pub _pad: [f32; 3],
+}
+
+impl OnionSkinPushConstants {
+    pub fn new(tint_color: [f32; 3], opacity: f32) -> Self {
+        Self {
+            ghost_tint_r: tint_color[0],
+            ghost_tint_g: tint_color[1],
+            ghost_tint_b: tint_color[2],
+            ghost_opacity: opacity,
+            debug_mode: 0,
+            _pad: [0.0; 3],
+        }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                (self as *const Self) as *const u8,
+                std::mem::size_of::<Self>(),
+            )
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_gbuffer_push_constants_size() {
+        assert_eq!(std::mem::size_of::<GBufferPushConstants>(), 4);
+    }
+
+    #[test]
+    fn test_gbuffer_push_constants_as_bytes() {
+        let pc = GBufferPushConstants::new(42);
+        let bytes = pc.as_bytes();
+        assert_eq!(bytes.len(), 4);
+        let object_id = u32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        assert_eq!(object_id, 42);
+    }
+
+    #[test]
+    fn test_onion_skin_push_constants_size() {
+        assert_eq!(std::mem::size_of::<OnionSkinPushConstants>(), 32);
+    }
+
+    #[test]
+    fn test_onion_skin_push_constants_values() {
+        let pc = OnionSkinPushConstants::new([0.2, 0.4, 1.0], 0.5);
+        assert!((pc.ghost_tint_r - 0.2).abs() < f32::EPSILON);
+        assert!((pc.ghost_tint_g - 0.4).abs() < f32::EPSILON);
+        assert!((pc.ghost_tint_b - 1.0).abs() < f32::EPSILON);
+        assert!((pc.ghost_opacity - 0.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_onion_skin_push_constants_as_bytes() {
+        let pc = OnionSkinPushConstants::new([1.0, 2.0, 3.0], 4.0);
+        let bytes = pc.as_bytes();
+        assert_eq!(bytes.len(), 32);
+        let tint_r = f32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        assert!((tint_r - 1.0).abs() < f32::EPSILON);
+    }
+}
+
 pub unsafe fn create_gbuffer_framebuffer(
     instance: &Instance,
     rrdevice: &RRDevice,
@@ -60,7 +156,7 @@ pub unsafe fn create_gbuffer_framebuffer(
 
     rrrender.gbuffer_framebuffer = rrdevice.device.create_framebuffer(&info, None)?;
 
-    log::info!(
+    crate::log!(
         "Created G-Buffer framebuffer: {}x{}",
         gbuffer.width,
         gbuffer.height
@@ -328,13 +424,13 @@ impl<'a> GBufferPass<'a> {
         );
 
         let object_id: u32 = (mesh_index + 1) as u32;
-        let object_id_bytes = object_id.to_ne_bytes();
+        let push_constants = GBufferPushConstants::new(object_id);
         self.device.cmd_push_constants(
             command_buffer,
             self.pipeline.pipeline_layout,
             vk::ShaderStageFlags::FRAGMENT,
             0,
-            &object_id_bytes,
+            push_constants.as_bytes(),
         );
 
         self.device

@@ -12,6 +12,7 @@ use crate::debugview::{GridMeshData, RayTracingDebugState};
 use crate::ecs::resource::Camera;
 use crate::ecs::world::{ResMut, ResRef, World};
 use crate::render::RenderBackend;
+use crate::renderer::onion_skin_buffers::OnionSkinGpuState;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::GpuBufferRegistry;
@@ -38,6 +39,7 @@ pub struct FrameContext<'a> {
     pub assets: &'a mut AssetStorage,
 
     pub gui_data: &'a mut GUIData,
+    pub onion_skin_gpu: &'a mut Option<OnionSkinGpuState>,
 }
 
 impl<'a> FrameContext<'a> {

@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use anyhow::Result;
+use vulkanalia::prelude::v1_0::*;
 
 use crate::app::model_loader::load_model_from_file_system;
 use crate::app::{App, AppData};
@@ -19,6 +20,13 @@ impl App {
         model_path: &str,
         scene_will_provide_clips: bool,
     ) -> Result<()> {
+        rrdevice.device.device_wait_idle()?;
+
+        if let Some(ref mut gpu) = data.onion_skin_gpu {
+            gpu.destroy(rrdevice);
+        }
+        data.onion_skin_gpu = None;
+
         load_model_from_file_system(
             model_path,
             instance,

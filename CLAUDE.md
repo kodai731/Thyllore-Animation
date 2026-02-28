@@ -164,7 +164,10 @@ Do NOT resolve relative paths manually — always use the absolute paths from `.
 ## Document
 
 **IMPORTANT:** All documents (research, design, issue history, explore history) MUST be saved under
-`../SharedData/document/Rust_Rendering/`. Never place documents directly under `../SharedData/document/`.
+`${DocumentPath}/Rust_Rendering/`. Never place documents directly under `${DocumentPath}/`.
+MUST resolve `${DocumentPath}` by reading `.claude/local/paths.md` before writing any file.
+Do NOT use relative paths like `../SharedData/` — agents may have different working directories, causing files to be
+saved in wrong locations.
 
 ## Issue History
 
@@ -190,10 +193,10 @@ repository is separated to ../AnimationModelTraining
 
 ### Trained Data
 
-The trained data for the copilot curve is stored in ../SharedData/exports/.
+The trained data for the copilot curve is stored in `${SharedDataPath}/exports/`.
 
 ### Interaction Log
 
--If any issues occur (for example, the training collapses), report them using the Context Memory format so the training
+- If any issues occur (for example, the training collapses), report them using the Context Memory format so the training
 repository can fully understand the situation.
-- location at ../SharedData/log/Rendering is rendering side, and log/Training is training side.
+- location at `${SharedDataPath}/log/Rendering` is rendering side, and `log/Training` is training side.

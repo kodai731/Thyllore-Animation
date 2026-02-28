@@ -541,14 +541,12 @@ unsafe fn process_node(
                     normal: Vec3::new(normal[0], normal[1], normal[2]),
                 });
 
-                if !mesh_data.has_joints {
-                    mesh_data.local_vertices.push(Vertex {
-                        pos: Vec3::new(raw_pos[0], raw_pos[1], raw_pos[2]),
-                        color: Vec4::new(1.0, 1.0, 1.0, 1.0),
-                        tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
-                        normal: Vec3::new(normal[0], normal[1], normal[2]),
-                    });
-                }
+                mesh_data.local_vertices.push(Vertex {
+                    pos: Vec3::new(raw_pos[0], raw_pos[1], raw_pos[2]),
+                    color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+                    tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
+                    normal: Vec3::new(normal[0], normal[1], normal[2]),
+                });
 
                 mesh_data.base_positions.push(pos);
                 mesh_data
@@ -1061,13 +1059,9 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
                 bone_indices: mesh.bone_indices,
                 bone_weights: mesh.bone_weights,
                 base_positions: mesh
-                    .base_normals
+                    .base_positions
                     .iter()
-                    .enumerate()
-                    .map(|(i, _)| {
-                        let pos = mesh.base_positions.get(i).unwrap_or(&[0.0, 0.0, 0.0]);
-                        Vector3::new(pos[0], pos[1], pos[2])
-                    })
+                    .map(|p| Vector3::new(p[0], p[1], p[2]))
                     .collect(),
                 base_normals: mesh.base_normals,
             })

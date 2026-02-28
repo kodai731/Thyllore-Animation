@@ -7,8 +7,8 @@ use super::curve_suggestion_systems::curve_suggestion_poll_results;
 use super::inference_actor_systems::{inference_actor_initialize, inference_actor_poll};
 use super::object_picking_systems::apply_mesh_selection;
 use super::phases::{
-    run_animation_phase_ecs, run_animation_phase_gpu, run_input_phase, run_render_prep_phase,
-    run_transform_phase_ecs, run_transform_phase_gpu,
+    run_animation_phase_ecs, run_animation_phase_gpu, run_input_phase, run_onion_skin_phase,
+    run_render_prep_phase, run_transform_phase_ecs, run_transform_phase_gpu,
 };
 use super::timeline_systems::timeline_update;
 use crate::app::graphics_resource::GraphicsResources;
@@ -51,6 +51,7 @@ pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
 
     let animation_updates = run_animation_phase_ecs(ctx);
     run_animation_phase_gpu(ctx, &animation_updates)?;
+    run_onion_skin_phase(ctx, &animation_updates.updated_meshes)?;
 
     run_transform_phase_gpu(ctx)?;
     run_render_prep_phase(ctx)?;

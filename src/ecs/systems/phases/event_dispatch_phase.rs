@@ -6,15 +6,16 @@ use crate::debugview::RayTracingDebugState;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{
-    Camera, ClipLibrary, CurveEditorBuffer, EditHistory, HierarchyState, KeyframeCopyBuffer,
-    TimelineState,
+    BonePoseOverride, Camera, ClipLibrary, CurveEditorBuffer, EditHistory, HierarchyState,
+    KeyframeCopyBuffer, TimelineState,
 };
 use crate::ecs::systems::{
     apply_redo, apply_undo, camera_move_to_look_at, camera_reset, collapse_entity, expand_entity,
     hierarchy_collapse_bone, hierarchy_deselect_all, hierarchy_deselect_bone,
     hierarchy_expand_bone, hierarchy_select, hierarchy_select_bone, hierarchy_toggle_selection,
-    process_clip_instance_events, process_keyframe_clipboard_events, rename_entity,
-    timeline_process_events, update_entity_scale, update_entity_translation, update_entity_visible,
+    process_bone_set_key, process_clip_instance_events, process_keyframe_clipboard_events,
+    rename_entity, timeline_process_events, update_entity_scale, update_entity_translation,
+    update_entity_visible,
 };
 use crate::ecs::world::{Entity, Transform, World};
 use crate::ecs::UIEventQueue;
@@ -40,7 +41,7 @@ pub fn run_event_dispatch_phase(
     }
 
     dispatch_hierarchy_events(&events, world, assets);
-    dispatch_timeline_events(&events, world);
+    dispatch_timeline_events(&events, world, assets);
     dispatch_keyframe_clipboard_events(&events, world);
     dispatch_buffer_events(&events, world);
     dispatch_clip_instance_events(&events, world);
@@ -344,7 +345,7 @@ fn dispatch_hierarchy_bone_events(events: &[UIEvent], world: &mut World, assets:
     }
 }
 
-fn dispatch_timeline_events(events: &[UIEvent], world: &mut World) {
+fn dispatch_timeline_events(events: &[UIEvent], world: &mut World, assets: &AssetStorage) {
     let mut timeline_state = world.resource_mut::<TimelineState>();
     let mut clip_library = world.resource_mut::<ClipLibrary>();
 
@@ -372,27 +373,85 @@ fn dispatch_timeline_events(events: &[UIEvent], world: &mut World) {
     }
 
     for event in events {
-        if let UIEvent::TimelineSelectClip(source_id) = event {
-            let lib = world.resource::<ClipLibrary>();
-            let duration = lib.get(*source_id).map(|c| c.duration).unwrap_or(1.0);
-            let asset_id = lib.get_asset_id_for_source(*source_id);
-            crate::log!(
-                "[ClipSelect] source_id={}, asset_id={:?}, duration={:.3}",
-                source_id,
-                asset_id,
-                duration,
-            );
-            drop(lib);
+        match event {
+            UIEvent::TimelineSelectClip(source_id) => {
+                let lib = world.resource::<ClipLibrary>();
+                let duration = lib.get(*source_id).map(|c| c.duration).unwrap_or(1.0);
+                let asset_id = lib.get_asset_id_for_source(*source_id);
+                crate::log!(
+                    "[ClipSelect] source_id={}, asset_id={:?}, duration={:.3}",
+                    source_id,
+                    asset_id,
+                    duration,
+                );
+                drop(lib);
 
-            let schedule_entities = world.component_entities::<ClipSchedule>();
-            for entity in &schedule_entities {
-                if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
-                    if let Some(first) = schedule.instances.first_mut() {
-                        first.source_id = *source_id;
-                        first.clip_out = duration;
+                let schedule_entities = world.component_entities::<ClipSchedule>();
+                for entity in &schedule_entities {
+                    if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
+                        if let Some(first) = schedule.instances.first_mut() {
+                            first.source_id = *source_id;
+                            first.clip_out = duration;
+                        }
                     }
                 }
             }
+
+            UIEvent::TimelinePlay => {
+                if let Some(mut overrides) = world.get_resource_mut::<BonePoseOverride>() {
+                    overrides.clear();
+                }
+            }
+
+            _ => {}
+        }
+    }
+
+    dispatch_bone_set_key_events(events, world, assets);
+}
+
+fn dispatch_bone_set_key_events(events: &[UIEvent], world: &mut World, assets: &AssetStorage) {
+    if !events.iter().any(|e| matches!(e, UIEvent::BoneSetKey)) {
+        return;
+    }
+
+    let overrides = match world.get_resource::<BonePoseOverride>() {
+        Some(r) => r.overrides.clone(),
+        None => return,
+    };
+    if overrides.is_empty() {
+        return;
+    }
+
+    let skeleton_id = world
+        .get_resource::<crate::debugview::gizmo::BoneGizmoData>()
+        .and_then(|bg| bg.cached_skeleton_id);
+    let Some(skel_id) = skeleton_id else { return };
+    let Some(skeleton) = assets.get_skeleton_by_skeleton_id(skel_id) else {
+        return;
+    };
+    let skeleton = skeleton.clone();
+
+    let timeline_state = world.resource::<TimelineState>();
+    let mut clip_library = world.resource_mut::<ClipLibrary>();
+
+    let clip_id = timeline_state.current_clip_id;
+    let before_clip = clip_id.and_then(|id| clip_library.get(id).cloned());
+
+    let modified = process_bone_set_key(&overrides, &mut clip_library, &timeline_state, &skeleton);
+
+    if modified {
+        if let (Some(cid), Some(before)) = (clip_id, before_clip) {
+            if let Some(after) = clip_library.get(cid).cloned() {
+                if world.contains_resource::<EditHistory>() {
+                    let mut edit_history = world.resource_mut::<EditHistory>();
+                    edit_history.push_clip_edit(cid, before, after, "bone set key");
+                }
+            }
+        }
+
+        if let Some(mut pose_overrides) = world.get_resource_mut::<BonePoseOverride>() {
+            pose_overrides.clear();
         }
     }
 }

@@ -7,9 +7,13 @@ use crate::debugview::gizmo::transform::TransformGizmoHandle;
 use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, TransformGizmoData};
 use crate::ecs::component::LineMesh;
 use crate::ecs::context::EcsContext;
-use crate::ecs::resource::{HierarchyDisplayMode, TransformGizmoMode, TransformGizmoState};
-use crate::ecs::systems::select_bone_by_ray;
-use crate::ecs::systems::transform_gizmo_systems;
+use crate::ecs::resource::{
+    BonePoseOverride, HierarchyDisplayMode, TransformGizmoMode, TransformGizmoState,
+};
+use crate::ecs::systems::{
+    compute_local_override_from_global_rotation, compute_local_override_from_global_scale,
+    compute_local_override_from_global_translation, select_bone_by_ray, transform_gizmo_systems,
+};
 use crate::ecs::GizmoAxis;
 use crate::ecs::{
     gizmo_try_select, gizmo_update_position_with_constraint, update_light_auto_target,
@@ -689,12 +693,32 @@ fn apply_bone_translation(ctx: &mut EcsContext, bone_id: u32, new_pos: Vector3<f
     if !ctx.world.contains_resource::<BoneGizmoData>() {
         return;
     }
-    let idx = bone_id as usize;
-    let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
-    if idx < bone_gizmo.cached_global_transforms.len() {
-        bone_gizmo.cached_global_transforms[idx][3][0] = new_pos.x;
-        bone_gizmo.cached_global_transforms[idx][3][1] = new_pos.y;
-        bone_gizmo.cached_global_transforms[idx][3][2] = new_pos.z;
+
+    let (cached_globals, skeleton_id) = {
+        let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
+        (
+            bone_gizmo.cached_global_transforms.clone(),
+            bone_gizmo.cached_skeleton_id,
+        )
+    };
+
+    let Some(skel_id) = skeleton_id else { return };
+    let Some(skeleton) = ctx.assets.get_skeleton_by_skeleton_id(skel_id) else {
+        return;
+    };
+    let skeleton = skeleton.clone();
+
+    let local_pose = compute_local_override_from_global_translation(
+        &skeleton,
+        &cached_globals,
+        bone_id,
+        new_pos,
+    );
+
+    if let Some(pose) = local_pose {
+        if let Some(mut overrides) = ctx.world.get_resource_mut::<BonePoseOverride>() {
+            overrides.overrides.insert(bone_id, pose);
+        }
     }
 }
 
@@ -707,16 +731,33 @@ fn apply_bone_rotation(
     if !ctx.world.contains_resource::<BoneGizmoData>() {
         return;
     }
-    let idx = bone_id as usize;
-    let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
-    if idx < bone_gizmo.cached_global_transforms.len() {
-        use cgmath::Matrix4;
-        let rot_mat: Matrix4<f32> = rotation.into();
-        let translate_to_origin = Matrix4::from_translation(-gizmo_pos);
-        let translate_back = Matrix4::from_translation(gizmo_pos);
-        let current = bone_gizmo.cached_global_transforms[idx];
-        bone_gizmo.cached_global_transforms[idx] =
-            translate_back * rot_mat * translate_to_origin * current;
+
+    let (cached_globals, skeleton_id) = {
+        let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
+        (
+            bone_gizmo.cached_global_transforms.clone(),
+            bone_gizmo.cached_skeleton_id,
+        )
+    };
+
+    let Some(skel_id) = skeleton_id else { return };
+    let Some(skeleton) = ctx.assets.get_skeleton_by_skeleton_id(skel_id) else {
+        return;
+    };
+    let skeleton = skeleton.clone();
+
+    let local_pose = compute_local_override_from_global_rotation(
+        &skeleton,
+        &cached_globals,
+        bone_id,
+        gizmo_pos,
+        rotation,
+    );
+
+    if let Some(pose) = local_pose {
+        if let Some(mut overrides) = ctx.world.get_resource_mut::<BonePoseOverride>() {
+            overrides.overrides.insert(bone_id, pose);
+        }
     }
 }
 
@@ -724,13 +765,28 @@ fn apply_bone_scale(ctx: &mut EcsContext, bone_id: u32, scale: Vector3<f32>) {
     if !ctx.world.contains_resource::<BoneGizmoData>() {
         return;
     }
-    let idx = bone_id as usize;
-    let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
-    if idx < bone_gizmo.cached_global_transforms.len() {
-        use cgmath::Matrix4;
-        let scale_mat = Matrix4::from_nonuniform_scale(scale.x, scale.y, scale.z);
-        bone_gizmo.cached_global_transforms[idx] =
-            bone_gizmo.cached_global_transforms[idx] * scale_mat;
+
+    let (cached_globals, skeleton_id) = {
+        let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
+        (
+            bone_gizmo.cached_global_transforms.clone(),
+            bone_gizmo.cached_skeleton_id,
+        )
+    };
+
+    let Some(skel_id) = skeleton_id else { return };
+    let Some(skeleton) = ctx.assets.get_skeleton_by_skeleton_id(skel_id) else {
+        return;
+    };
+    let skeleton = skeleton.clone();
+
+    let local_pose =
+        compute_local_override_from_global_scale(&skeleton, &cached_globals, bone_id, scale);
+
+    if let Some(pose) = local_pose {
+        if let Some(mut overrides) = ctx.world.get_resource_mut::<BonePoseOverride>() {
+            overrides.overrides.insert(bone_id, pose);
+        }
     }
 }
 

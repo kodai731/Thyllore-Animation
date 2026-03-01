@@ -289,6 +289,8 @@ pub enum UIEvent {
     },
     SpringBoneToggleGizmo(bool),
 
+    BoneSetKey,
+
     SetBoneDisplayStyle(BoneDisplayStyle),
     SetBoneInFront(bool),
     SetBoneDistanceScaling(bool),

@@ -2,6 +2,7 @@ mod auto_exposure;
 mod bloom;
 #[cfg(feature = "ml")]
 mod bone_name_token_cache;
+mod bone_pose_override;
 #[cfg(feature = "ml")]
 mod bone_topology_cache;
 mod camera;
@@ -40,6 +41,7 @@ pub use auto_exposure::*;
 pub use bloom::*;
 #[cfg(feature = "ml")]
 pub use bone_name_token_cache::*;
+pub use bone_pose_override::*;
 #[cfg(feature = "ml")]
 pub use bone_topology_cache::*;
 pub use camera::*;

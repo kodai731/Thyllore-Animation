@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use cgmath::Matrix4;
 
 use crate::animation::editable::{BlendMode, ClipInstanceId, EaseType, SourceClipId};
-use crate::animation::{MorphAnimationSystem, SkeletonId, SkeletonPose};
+use crate::animation::{BoneId, BoneLocalPose, MorphAnimationSystem, SkeletonId, SkeletonPose};
 use crate::app::graphics_resource::{GraphicsResources, NodeData};
 use crate::asset::AssetId;
 use crate::asset::AssetStorage;
@@ -12,7 +14,7 @@ use crate::ecs::component::{
 use crate::ecs::resource::{AnimationType, ClipLibrary, SpringBoneMode, SpringBoneState};
 use crate::ecs::world::{Animator, Entity, MeshRef, World};
 use crate::ecs::{
-    blend_poses_override, compute_crossfade_factor, compute_local_time,
+    apply_pose_overrides, blend_poses_override, compute_crossfade_factor, compute_local_time,
     compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
 };
 use crate::render::RenderBackend;
@@ -54,6 +56,7 @@ pub fn evaluate_all_animators(
     clip_library: &ClipLibrary,
     assets: &AssetStorage,
     dt: f32,
+    pose_overrides: &HashMap<BoneId, BoneLocalPose>,
 ) -> AnimationEvalResult {
     let entity_infos = collect_animated_entities(world, graphics, clip_library, assets);
 
@@ -76,8 +79,15 @@ pub fn evaluate_all_animators(
         };
     }
 
-    let (anim_updated, bone_transforms) =
-        apply_blended_animations(&entity_infos, world, graphics, nodes, assets, dt);
+    let (anim_updated, bone_transforms) = apply_blended_animations(
+        &entity_infos,
+        world,
+        graphics,
+        nodes,
+        assets,
+        dt,
+        pose_overrides,
+    );
 
     AnimationEvalResult {
         updated_meshes: merge_updated_indices(morph_updated, anim_updated),
@@ -306,6 +316,7 @@ fn apply_blended_animations(
     nodes: &mut [NodeData],
     assets: &AssetStorage,
     dt: f32,
+    pose_overrides: &HashMap<BoneId, BoneLocalPose>,
 ) -> (Vec<usize>, Option<(SkeletonId, Vec<Matrix4<f32>>)>) {
     let mut updated = Vec::new();
     let mut first_bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>)> = None;
@@ -339,6 +350,10 @@ fn apply_blended_animations(
 
             if let Some(ref cs) = shared_constraints {
                 apply_constraints(cs, skeleton, &mut pose);
+            }
+
+            if !pose_overrides.is_empty() {
+                apply_pose_overrides(&mut pose, pose_overrides);
             }
 
             if info.animation_type == AnimationType::Node {

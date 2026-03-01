@@ -818,6 +818,9 @@ fn ensure_ecs_resources(world: &mut World) {
     if !world.contains_resource::<crate::ecs::resource::ClipBrowserState>() {
         world.insert_resource(crate::ecs::resource::ClipBrowserState::default());
     }
+    if !world.contains_resource::<crate::ecs::resource::BonePoseOverride>() {
+        world.insert_resource(crate::ecs::resource::BonePoseOverride::default());
+    }
 }
 
 fn register_clips_to_library(

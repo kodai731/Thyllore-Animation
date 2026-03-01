@@ -140,19 +140,22 @@ pub fn screen_to_world_ray(
     let world_near_4 = view_proj_inverse * clip_near;
     let world_far_4 = view_proj_inverse * clip_far;
 
-    let world_near = vec3(
+    let ray_origin = vec3(
         world_near_4.x / world_near_4.w,
         world_near_4.y / world_near_4.w,
         world_near_4.z / world_near_4.w,
     );
-    let world_far = vec3(
-        world_far_4.x / world_far_4.w,
-        world_far_4.y / world_far_4.w,
-        world_far_4.z / world_far_4.w,
-    );
 
-    let ray_origin = world_near;
-    let ray_direction = (world_far - world_near).normalize();
+    let ray_direction = if world_far_4.w.abs() < EPSILON {
+        vec3(world_far_4.x, world_far_4.y, world_far_4.z).normalize()
+    } else {
+        let world_far = vec3(
+            world_far_4.x / world_far_4.w,
+            world_far_4.y / world_far_4.w,
+            world_far_4.z / world_far_4.w,
+        );
+        (world_far - ray_origin).normalize()
+    };
 
     (ray_origin, ray_direction)
 }
@@ -420,5 +423,26 @@ mod tests {
 
         let result = ray_to_triangle_intersection(origin, direction, v0, v1, v2);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_screen_to_world_ray_infinite_reverse_z_no_nan() {
+        unsafe {
+            let camera_pos = vec3(0.0, 1.0, -3.0);
+            let direction = vec3(0.0, 0.0, 1.0);
+            let up = vec3(0.0, 1.0, 0.0);
+
+            let view_mat = view(camera_pos, direction, up);
+            let proj_mat = perspective_infinite_reverse(Deg(45.0), 16.0 / 9.0, 0.1);
+
+            let screen_center = Vector2::new(400.0, 300.0);
+            let screen_size = Vector2::new(800.0, 600.0);
+
+            let (origin, dir) = screen_to_world_ray(screen_center, screen_size, view_mat, proj_mat);
+
+            assert!(!origin.x.is_nan() && !origin.y.is_nan() && !origin.z.is_nan());
+            assert!(!dir.x.is_nan() && !dir.y.is_nan() && !dir.z.is_nan());
+            assert!((dir.magnitude() - 1.0).abs() < 1e-4);
+        }
     }
 }

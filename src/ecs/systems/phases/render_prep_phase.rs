@@ -190,6 +190,7 @@ unsafe fn update_transform_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
         let tg = ctx.world.resource::<TransformGizmoData>();
         tg.visible
     };
+
     if !visible {
         return Ok(());
     }

@@ -36,7 +36,6 @@ pub fn build_translate_gizmo_meshes(
     let plane_offset = 0.25;
     let plane_size = 0.15;
 
-    // Axis shafts (LineList)
     let x_color = resolve_handle_color(TransformGizmoHandle::AxisX, active_handle, RED);
     let y_color = resolve_handle_color(TransformGizmoHandle::AxisY, active_handle, GREEN);
     let z_color = resolve_handle_color(TransformGizmoHandle::AxisZ, active_handle, BLUE);
@@ -60,7 +59,6 @@ pub fn build_translate_gizmo_meshes(
         z_color,
     );
 
-    // Cone tips (solid triangles)
     generate_cone_vertices(
         vec3(cone_base, 0.0, 0.0),
         vec3(shaft_length, 0.0, 0.0),
@@ -89,7 +87,6 @@ pub fn build_translate_gizmo_meshes(
         &mut solid_mesh.indices,
     );
 
-    // Plane handles (small quads)
     let xy_color = resolve_handle_color(TransformGizmoHandle::PlaneXY, active_handle, PLANE_XY);
     let xz_color = resolve_handle_color(TransformGizmoHandle::PlaneXZ, active_handle, PLANE_XZ);
     let yz_color = resolve_handle_color(TransformGizmoHandle::PlaneYZ, active_handle, PLANE_YZ);
@@ -139,7 +136,6 @@ pub fn build_rotate_gizmo_meshes(
     let z_color = resolve_handle_color(TransformGizmoHandle::RingZ, active_handle, BLUE);
     let tb_color = resolve_handle_color(TransformGizmoHandle::Trackball, active_handle, WHITE);
 
-    // X ring: rotate around X axis (normal = X)
     generate_circle_vertices(
         vec3(1.0, 0.0, 0.0),
         radius,
@@ -148,7 +144,6 @@ pub fn build_rotate_gizmo_meshes(
         &mut line_mesh.vertices,
         &mut line_mesh.indices,
     );
-    // Y ring: rotate around Y axis (normal = Y)
     generate_circle_vertices(
         vec3(0.0, 1.0, 0.0),
         radius,
@@ -157,7 +152,6 @@ pub fn build_rotate_gizmo_meshes(
         &mut line_mesh.vertices,
         &mut line_mesh.indices,
     );
-    // Z ring: rotate around Z axis (normal = Z)
     generate_circle_vertices(
         vec3(0.0, 0.0, 1.0),
         radius,
@@ -166,7 +160,6 @@ pub fn build_rotate_gizmo_meshes(
         &mut line_mesh.vertices,
         &mut line_mesh.indices,
     );
-    // Trackball: camera-facing circle
     generate_circle_vertices(
         -camera_dir.normalize(),
         radius * 1.1,
@@ -195,7 +188,6 @@ pub fn build_scale_gizmo_meshes(
     let z_color = resolve_handle_color(TransformGizmoHandle::AxisZ, active_handle, BLUE);
     let center_color = resolve_handle_color(TransformGizmoHandle::Center, active_handle, WHITE);
 
-    // Axis shafts
     push_line(
         line_mesh,
         [0.0, 0.0, 0.0],
@@ -215,7 +207,6 @@ pub fn build_scale_gizmo_meshes(
         z_color,
     );
 
-    // Cube tips at axis ends
     generate_cube_vertices(
         vec3(shaft_length, 0.0, 0.0),
         cube_half,
@@ -238,7 +229,6 @@ pub fn build_scale_gizmo_meshes(
         &mut solid_mesh.indices,
     );
 
-    // Center cube for uniform scale
     generate_cube_vertices(
         vec3(0.0, 0.0, 0.0),
         cube_half * 1.5,
@@ -314,7 +304,6 @@ fn select_translate_handle(
     let z_dist = ray_to_line_segment_distance(ray_origin, ray_direction, gizmo_pos, z_end);
     let center_dist = ray_to_point_distance(ray_origin, ray_direction, gizmo_pos);
 
-    // Check plane handles
     let plane_offset = 0.25 * scale_factor;
     let plane_size = 0.15 * scale_factor;
 
@@ -769,7 +758,6 @@ fn generate_cone_vertices(
         });
     }
 
-    // Cone base center for bottom cap
     let base_center_idx = verts.len() as u32;
     verts.push(ColorVertex {
         pos: [base_center.x, base_center.y, base_center.z],
@@ -778,11 +766,10 @@ fn generate_cone_vertices(
 
     for i in 0..segments {
         let next = (i + 1) % segments;
-        // Side triangle
         indices.push(tip_idx);
         indices.push(base_idx + 1 + i);
         indices.push(base_idx + 1 + next);
-        // Bottom cap triangle
+
         indices.push(base_center_idx);
         indices.push(base_idx + 1 + next);
         indices.push(base_idx + 1 + i);
@@ -799,7 +786,6 @@ fn generate_cube_vertices(
     let h = half_size;
     let base = verts.len() as u32;
 
-    // 8 corner vertices
     let corners = [
         [-h, -h, -h],
         [h, -h, -h],
@@ -817,14 +803,9 @@ fn generate_cube_vertices(
         });
     }
 
-    // 12 triangles (6 faces, 2 tri each)
     let face_indices: [u32; 36] = [
-        0, 1, 2, 0, 2, 3, // front (-Z)
-        4, 6, 5, 4, 7, 6, // back (+Z)
-        0, 4, 5, 0, 5, 1, // bottom (-Y)
-        2, 6, 7, 2, 7, 3, // top (+Y)
-        0, 7, 4, 0, 3, 7, // left (-X)
-        1, 5, 6, 1, 6, 2, // right (+X)
+        0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 4, 5, 0, 5, 1, 2, 6, 7, 2, 7, 3, 0, 7, 4, 0, 3, 7,
+        1, 5, 6, 1, 6, 2,
     ];
     for fi in &face_indices {
         indices.push(base + fi);
@@ -851,7 +832,6 @@ fn generate_circle_vertices(
         });
     }
 
-    // LineList: each line is a separate pair
     for i in 0..segments {
         let next = (i + 1) % segments;
         indices.push(base + i);
@@ -892,7 +872,6 @@ fn push_quad(
     mesh.vertices.push(ColorVertex { pos: b, color });
     mesh.vertices.push(ColorVertex { pos: c, color });
     mesh.vertices.push(ColorVertex { pos: d, color });
-    // Two triangles
     indices_push_tri(&mut mesh.indices, base, base + 1, base + 2);
     indices_push_tri(&mut mesh.indices, base, base + 2, base + 3);
 }

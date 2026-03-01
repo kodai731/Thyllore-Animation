@@ -9,7 +9,7 @@ pub enum ButtonPhase {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ButtonState {
-    phase: ButtonPhase,
+    pub(crate) phase: ButtonPhase,
 }
 
 impl ButtonState {
@@ -24,17 +24,17 @@ impl ButtonState {
     pub fn just_released(&self) -> bool {
         self.phase == ButtonPhase::JustReleased
     }
+}
 
-    pub fn update(&mut self, is_down: bool) {
-        self.phase = match (self.phase, is_down) {
-            (ButtonPhase::Released, true) => ButtonPhase::JustPressed,
-            (ButtonPhase::JustPressed, true) => ButtonPhase::Held,
-            (ButtonPhase::Held, true) => ButtonPhase::Held,
-            (ButtonPhase::JustReleased, true) => ButtonPhase::JustPressed,
-            (ButtonPhase::JustPressed | ButtonPhase::Held, false) => ButtonPhase::JustReleased,
-            (ButtonPhase::Released | ButtonPhase::JustReleased, false) => ButtonPhase::Released,
-        };
-    }
+pub fn button_state_advance(state: &mut ButtonState, is_down: bool) {
+    state.phase = match (state.phase, is_down) {
+        (ButtonPhase::Released, true) => ButtonPhase::JustPressed,
+        (ButtonPhase::JustPressed, true) => ButtonPhase::Held,
+        (ButtonPhase::Held, true) => ButtonPhase::Held,
+        (ButtonPhase::JustReleased, true) => ButtonPhase::JustPressed,
+        (ButtonPhase::JustPressed | ButtonPhase::Held, false) => ButtonPhase::JustReleased,
+        (ButtonPhase::Released | ButtonPhase::JustReleased, false) => ButtonPhase::Released,
+    };
 }
 
 #[derive(Clone, Debug, Default)]
@@ -59,19 +59,19 @@ mod tests {
         assert!(!btn.just_pressed());
         assert!(!btn.held());
 
-        btn.update(true);
+        button_state_advance(&mut btn, true);
         assert!(btn.just_pressed());
         assert!(btn.held());
 
-        btn.update(true);
+        button_state_advance(&mut btn, true);
         assert!(!btn.just_pressed());
         assert!(btn.held());
 
-        btn.update(false);
+        button_state_advance(&mut btn, false);
         assert!(btn.just_released());
         assert!(!btn.held());
 
-        btn.update(false);
+        button_state_advance(&mut btn, false);
         assert!(!btn.just_released());
         assert!(!btn.held());
     }
@@ -79,11 +79,11 @@ mod tests {
     #[test]
     fn test_re_press_from_just_released() {
         let mut btn = ButtonState::default();
-        btn.update(true);
-        btn.update(false);
+        button_state_advance(&mut btn, true);
+        button_state_advance(&mut btn, false);
         assert!(btn.just_released());
 
-        btn.update(true);
+        button_state_advance(&mut btn, true);
         assert!(btn.just_pressed());
     }
 }

@@ -39,6 +39,40 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         use crate::ecs::systems::camera_systems::compute_camera_position;
         compute_camera_position(&ctx.camera())
     };
+
+    update_frame_and_scene_uniforms(ctx, view, proj, screen_size, aspect, camera_position)?;
+
+    let render_data_vec = collect_gizmo_render_data(ctx, camera_position);
+    let render_data_refs: Vec<_> = render_data_vec.iter().collect();
+
+    if let Err(e) = update_object_ubo(
+        &render_data_refs,
+        ctx.image_index,
+        &ctx.graphics.objects,
+        ctx.device,
+    ) {
+        eprintln!("Failed to update object UBOs: {}", e);
+    }
+
+    update_billboard_ubo(ctx, view, proj)?;
+
+    update_grid_gizmo_buffers(ctx, view)?;
+    update_transform_gizmo_mesh(ctx)?;
+    update_bone_gizmo_mesh(ctx)?;
+    update_constraint_gizmo_mesh(ctx)?;
+    update_spring_bone_gizmo_mesh(ctx)?;
+
+    Ok(())
+}
+
+unsafe fn update_frame_and_scene_uniforms(
+    ctx: &mut FrameContext,
+    view: Matrix4<f32>,
+    proj: Matrix4<f32>,
+    screen_size: cgmath::Vector2<f32>,
+    aspect: f32,
+    camera_position: Vector3<f32>,
+) -> Result<()> {
     let light_position = ctx.rt_debug().light_position;
 
     {
@@ -66,33 +100,38 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         eprintln!("Failed to update ObjectUBO: {}", e);
     }
 
-    {
-        let rt_debug = ctx.rt_debug();
-        let light_pos = rt_debug.light_position;
-        let debug_mode = rt_debug.debug_view_mode.as_int();
-        let shadow_strength = rt_debug.shadow_strength;
-        let enable_distance_attenuation = rt_debug.enable_distance_attenuation;
-        drop(rt_debug);
+    let rt_debug = ctx.rt_debug();
+    let light_pos = rt_debug.light_position;
+    let debug_mode = rt_debug.debug_view_mode.as_int();
+    let shadow_strength = rt_debug.shadow_strength;
+    let enable_distance_attenuation = rt_debug.enable_distance_attenuation;
+    drop(rt_debug);
 
-        let exposure_value = ctx
-            .world
-            .get_resource::<Exposure>()
-            .map(|e| e.exposure_value)
-            .unwrap_or(1.0);
+    let exposure_value = ctx
+        .world
+        .get_resource::<Exposure>()
+        .map(|e| e.exposure_value)
+        .unwrap_or(1.0);
 
-        let mut backend = ctx.create_backend();
-        backend.update_scene_uniform(
-            view,
-            proj,
-            light_pos,
-            Vector3::new(1.0, 1.0, 1.0),
-            debug_mode,
-            shadow_strength,
-            enable_distance_attenuation,
-            exposure_value,
-        )?;
-    }
+    let mut backend = ctx.create_backend();
+    backend.update_scene_uniform(
+        view,
+        proj,
+        light_pos,
+        Vector3::new(1.0, 1.0, 1.0),
+        debug_mode,
+        shadow_strength,
+        enable_distance_attenuation,
+        exposure_value,
+    )?;
 
+    Ok(())
+}
+
+fn collect_gizmo_render_data(
+    ctx: &FrameContext,
+    camera_position: Vector3<f32>,
+) -> Vec<crate::ecs::component::RenderData> {
     let mut render_data_vec = vec![
         grid_mesh_render_data(&ctx.grid_mesh()),
         gizmo_mesh_render_data(&ctx.gizmo()),
@@ -134,26 +173,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         ));
     }
 
-    let render_data_refs: Vec<_> = render_data_vec.iter().collect();
-
-    if let Err(e) = update_object_ubo(
-        &render_data_refs,
-        ctx.image_index,
-        &ctx.graphics.objects,
-        ctx.device,
-    ) {
-        eprintln!("Failed to update object UBOs: {}", e);
-    }
-
-    update_billboard_ubo(ctx, view, proj)?;
-
-    update_grid_gizmo_buffers(ctx, view)?;
-    update_transform_gizmo_mesh(ctx)?;
-    update_bone_gizmo_mesh(ctx)?;
-    update_constraint_gizmo_mesh(ctx)?;
-    update_spring_bone_gizmo_mesh(ctx)?;
-
-    Ok(())
+    render_data_vec
 }
 
 unsafe fn update_billboard_ubo(

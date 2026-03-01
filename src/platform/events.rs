@@ -382,142 +382,145 @@ unsafe fn process_ui_events_and_render_frame(
 fn process_platform_file_events(events: &[UIEvent], app: &mut App) {
     for event in events {
         match event {
-            UIEvent::ClipBrowserLoadFromFile => {
-                let path = rfd::FileDialog::new()
-                    .add_filter("Animation RON", &["anim.ron", "ron"])
-                    .pick_file();
-
-                if let Some(path) = path {
-                    let bone_name_to_id = app
-                        .data
-                        .ecs_assets
-                        .skeletons
-                        .values()
-                        .next()
-                        .map(|sa| sa.skeleton.bone_name_to_id.clone());
-
-                    let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
-                    match crate::ecs::systems::clip_library_systems::clip_library_load_from_file(
-                        &mut clip_library,
-                        &mut app.data.ecs_assets,
-                        &path,
-                        bone_name_to_id.as_ref(),
-                    ) {
-                        Ok(_new_id) => {}
-                        Err(e) => {
-                            crate::log!("Failed to load clip: {:?}", e);
-                        }
-                    }
-                }
-            }
-
-            UIEvent::ClipBrowserSaveToFile(source_id) => {
-                let current_name = {
-                    let lib = app.data.ecs_world.resource::<ClipLibrary>();
-                    lib.get(*source_id)
-                        .map(|c| c.name.clone())
-                        .unwrap_or_else(|| "clip".to_string())
-                };
-
-                let path = rfd::FileDialog::new()
-                    .add_filter("Animation RON", &["anim.ron", "ron"])
-                    .set_file_name(format!("{}.anim.ron", current_name))
-                    .save_file();
-
-                if let Some(path) = path {
-                    let new_name = extract_clip_name_from_path(&path);
-                    let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
-
-                    if let Some(clip) = clip_library.get_mut(*source_id) {
-                        clip.name = new_name.clone();
-                        clip.source_path = Some(path.to_string_lossy().to_string());
-                    }
-
-                    use crate::ecs::systems::clip_library_systems::clip_library_save_to_file;
-                    match clip_library_save_to_file(&clip_library, *source_id, &path) {
-                        Ok(()) => {
-                            crate::log!("Saved clip '{}' to {:?}", new_name, path);
-                        }
-                        Err(e) => {
-                            crate::log!("Failed to save clip: {:?}", e);
-                        }
-                    }
-                }
-            }
-
-            UIEvent::ClipBrowserExportFbx(source_id) => {
-                let clip = {
-                    let lib = app.data.ecs_world.resource::<ClipLibrary>();
-                    lib.get(*source_id).cloned()
-                };
-                let skeleton = app
-                    .data
-                    .ecs_assets
-                    .skeletons
-                    .values()
-                    .next()
-                    .map(|sa| sa.skeleton.clone());
-
-                if let (Some(clip), Some(skeleton)) = (clip, skeleton) {
-                    let default_filename = format!("{}.fbx", clip.name);
-                    let path = rfd::FileDialog::new()
-                        .add_filter("FBX Binary", &["fbx"])
-                        .set_file_name(&default_filename)
-                        .save_file();
-
-                    if let Some(path) = path {
-                        let has_fbx_cache = app
-                            .data
-                            .ecs_world
-                            .contains_resource::<crate::ecs::resource::FbxModelCache>();
-                        let (fbx_model_ref, needs_coord_conversion) = if has_fbx_cache {
-                            let cache = app
-                                .data
-                                .ecs_world
-                                .resource::<crate::ecs::resource::FbxModelCache>();
-                            (cache.fbx_model.clone(), cache.needs_coord_conversion)
-                        } else {
-                            (None, false)
-                        };
-
-                        let (axes, fps) = if let Some(ref fbx_model) = fbx_model_ref {
-                            (fbx_model.axes.clone(), fbx_model.fps)
-                        } else {
-                            (crate::loader::fbx::fbx::FbxAxesInfo::default(), 24.0)
-                        };
-
-                        let result = if let Some(ref fbx_model) = fbx_model_ref {
-                            crate::exporter::fbx_exporter::export_full_fbx(
-                                fbx_model,
-                                Some(&clip),
-                                &skeleton,
-                                &path,
-                            )
-                        } else {
-                            crate::exporter::fbx_animation::export_animation_fbx(
-                                &clip,
-                                &skeleton,
-                                &path,
-                                needs_coord_conversion,
-                                axes,
-                                fps,
-                            )
-                        };
-
-                        match result {
-                            Ok(()) => crate::log!("FBX exported: {:?}", path),
-                            Err(e) => crate::log!("FBX export failed: {:?}", e),
-                        }
-                    }
-                }
-            }
-
-            UIEvent::SpringBoneSaveBake => {
-                handle_spring_bone_save(app);
-            }
-
+            UIEvent::ClipBrowserLoadFromFile => handle_clip_load_from_file(app),
+            UIEvent::ClipBrowserSaveToFile(source_id) => handle_clip_save_to_file(app, *source_id),
+            UIEvent::ClipBrowserExportFbx(source_id) => handle_clip_export_fbx(app, *source_id),
+            UIEvent::SpringBoneSaveBake => handle_spring_bone_save(app),
             _ => {}
         }
+    }
+}
+
+fn handle_clip_load_from_file(app: &mut App) {
+    let path = rfd::FileDialog::new()
+        .add_filter("Animation RON", &["anim.ron", "ron"])
+        .pick_file();
+
+    let Some(path) = path else {
+        return;
+    };
+
+    let bone_name_to_id = app
+        .data
+        .ecs_assets
+        .skeletons
+        .values()
+        .next()
+        .map(|sa| sa.skeleton.bone_name_to_id.clone());
+
+    let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
+    match crate::ecs::systems::clip_library_systems::clip_library_load_from_file(
+        &mut clip_library,
+        &mut app.data.ecs_assets,
+        &path,
+        bone_name_to_id.as_ref(),
+    ) {
+        Ok(_new_id) => {}
+        Err(e) => {
+            crate::log!("Failed to load clip: {:?}", e);
+        }
+    }
+}
+
+fn handle_clip_save_to_file(app: &mut App, source_id: u64) {
+    let current_name = {
+        let lib = app.data.ecs_world.resource::<ClipLibrary>();
+        lib.get(source_id)
+            .map(|c| c.name.clone())
+            .unwrap_or_else(|| "clip".to_string())
+    };
+
+    let path = rfd::FileDialog::new()
+        .add_filter("Animation RON", &["anim.ron", "ron"])
+        .set_file_name(format!("{}.anim.ron", current_name))
+        .save_file();
+
+    let Some(path) = path else {
+        return;
+    };
+
+    let new_name = extract_clip_name_from_path(&path);
+    let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
+
+    if let Some(clip) = clip_library.get_mut(source_id) {
+        clip.name = new_name.clone();
+        clip.source_path = Some(path.to_string_lossy().to_string());
+    }
+
+    use crate::ecs::systems::clip_library_systems::clip_library_save_to_file;
+    match clip_library_save_to_file(&clip_library, source_id, &path) {
+        Ok(()) => {
+            crate::log!("Saved clip '{}' to {:?}", new_name, path);
+        }
+        Err(e) => {
+            crate::log!("Failed to save clip: {:?}", e);
+        }
+    }
+}
+
+fn handle_clip_export_fbx(app: &mut App, source_id: u64) {
+    let clip = {
+        let lib = app.data.ecs_world.resource::<ClipLibrary>();
+        lib.get(source_id).cloned()
+    };
+    let skeleton = app
+        .data
+        .ecs_assets
+        .skeletons
+        .values()
+        .next()
+        .map(|sa| sa.skeleton.clone());
+
+    let (Some(clip), Some(skeleton)) = (clip, skeleton) else {
+        return;
+    };
+
+    let default_filename = format!("{}.fbx", clip.name);
+    let path = rfd::FileDialog::new()
+        .add_filter("FBX Binary", &["fbx"])
+        .set_file_name(&default_filename)
+        .save_file();
+
+    let Some(path) = path else {
+        return;
+    };
+
+    let has_fbx_cache = app
+        .data
+        .ecs_world
+        .contains_resource::<crate::ecs::resource::FbxModelCache>();
+    let (fbx_model_ref, needs_coord_conversion) = if has_fbx_cache {
+        let cache = app
+            .data
+            .ecs_world
+            .resource::<crate::ecs::resource::FbxModelCache>();
+        (cache.fbx_model.clone(), cache.needs_coord_conversion)
+    } else {
+        (None, false)
+    };
+
+    let (axes, fps) = if let Some(ref fbx_model) = fbx_model_ref {
+        (fbx_model.axes.clone(), fbx_model.fps)
+    } else {
+        (crate::loader::fbx::fbx::FbxAxesInfo::default(), 24.0)
+    };
+
+    let result = if let Some(ref fbx_model) = fbx_model_ref {
+        crate::exporter::fbx_exporter::export_full_fbx(fbx_model, Some(&clip), &skeleton, &path)
+    } else {
+        crate::exporter::fbx_animation::export_animation_fbx(
+            &clip,
+            &skeleton,
+            &path,
+            needs_coord_conversion,
+            axes,
+            fps,
+        )
+    };
+
+    match result {
+        Ok(()) => crate::log!("FBX exported: {:?}", path),
+        Err(e) => crate::log!("FBX export failed: {:?}", e),
     }
 }
 

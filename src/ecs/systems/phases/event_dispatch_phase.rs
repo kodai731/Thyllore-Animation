@@ -180,6 +180,11 @@ fn dispatch_camera_light_debug_events(
 }
 
 fn dispatch_hierarchy_events(events: &[UIEvent], world: &mut World, assets: &AssetStorage) {
+    dispatch_hierarchy_entity_events(events, world);
+    dispatch_hierarchy_bone_events(events, world, assets);
+}
+
+fn dispatch_hierarchy_entity_events(events: &[UIEvent], world: &mut World) {
     for event in events {
         match event {
             UIEvent::SelectEntity(entity) => {
@@ -215,6 +220,48 @@ fn dispatch_hierarchy_events(events: &[UIEvent], world: &mut World, assets: &Ass
                 hierarchy_state.display_mode = *mode;
             }
 
+            UIEvent::SetEntityVisible(entity, visible) => {
+                update_entity_visible(world, *entity, *visible);
+            }
+
+            UIEvent::SetEntityTranslation(entity, translation) => {
+                update_entity_translation(world, *entity, *translation);
+            }
+
+            UIEvent::SetEntityRotation(entity, rotation) => {
+                if let Some(transform) = world.get_component_mut::<Transform>(*entity) {
+                    transform.rotation = *rotation;
+                }
+            }
+
+            UIEvent::SetEntityScale(entity, scale) => {
+                update_entity_scale(world, *entity, *scale);
+            }
+
+            UIEvent::RenameEntity(entity, new_name) => {
+                rename_entity(world, *entity, new_name.clone());
+            }
+
+            UIEvent::FocusOnEntity(entity) => {
+                let target = world
+                    .get_component::<Transform>(*entity)
+                    .map(|t| t.translation);
+
+                if let Some(target) = target {
+                    let offset = Vector3::new(5.0, 3.0, 5.0);
+                    let mut camera = world.resource_mut::<Camera>();
+                    camera_move_to_look_at(&mut camera, target, offset);
+                }
+            }
+
+            _ => {}
+        }
+    }
+}
+
+fn dispatch_hierarchy_bone_events(events: &[UIEvent], world: &mut World, assets: &AssetStorage) {
+    for event in events {
+        match event {
             UIEvent::SelectBone(bone_id) => {
                 let descendants: Vec<usize> = assets
                     .skeletons
@@ -266,40 +313,6 @@ fn dispatch_hierarchy_events(events: &[UIEvent], world: &mut World, assets: &Ass
             UIEvent::CollapseBone(bone_id) => {
                 let mut hierarchy_state = world.resource_mut::<HierarchyState>();
                 hierarchy_collapse_bone(&mut hierarchy_state, *bone_id);
-            }
-
-            UIEvent::SetEntityVisible(entity, visible) => {
-                update_entity_visible(world, *entity, *visible);
-            }
-
-            UIEvent::SetEntityTranslation(entity, translation) => {
-                update_entity_translation(world, *entity, *translation);
-            }
-
-            UIEvent::SetEntityRotation(entity, rotation) => {
-                if let Some(transform) = world.get_component_mut::<Transform>(*entity) {
-                    transform.rotation = *rotation;
-                }
-            }
-
-            UIEvent::SetEntityScale(entity, scale) => {
-                update_entity_scale(world, *entity, *scale);
-            }
-
-            UIEvent::RenameEntity(entity, new_name) => {
-                rename_entity(world, *entity, new_name.clone());
-            }
-
-            UIEvent::FocusOnEntity(entity) => {
-                let target = world
-                    .get_component::<Transform>(*entity)
-                    .map(|t| t.translation);
-
-                if let Some(target) = target {
-                    let offset = Vector3::new(5.0, 3.0, 5.0);
-                    let mut camera = world.resource_mut::<Camera>();
-                    camera_move_to_look_at(&mut camera, target, offset);
-                }
             }
 
             UIEvent::SetBoneDisplayStyle(style) => {
@@ -883,7 +896,6 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
     use crate::ecs::component::{ConstraintSet, SpringBoneSetup, WithSpringBone};
     use crate::ecs::resource::{ClipLibrary, TimelineState};
     use crate::ecs::resource::{SpringBoneMode, SpringBoneState};
-    use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
     use crate::ecs::systems::spring_bone_bake_systems::{
         merge_bake_into_clip, spring_bone_bake, BakeConfig,
     };
@@ -963,8 +975,33 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
         merged.duration
     );
 
+    let new_id = register_baked_clip_and_update_schedules(world, assets, merged, source_id);
+
+    let baked_bone_ids = bake_result.baked_bone_ids.clone();
+
+    let mut spring_state = world.resource_mut::<SpringBoneState>();
+    spring_state.mode = SpringBoneMode::Baked;
+    spring_state.baked_clip_source_id = Some(new_id);
+    spring_state.baked_bone_ids = bake_result.baked_bone_ids;
+    spring_state.original_clip_source_id = source_id;
+
+    let mut timeline_state = world.resource_mut::<TimelineState>();
+    timeline_state.current_clip_id = Some(new_id);
+    timeline_state.baked_bone_ids = baked_bone_ids;
+
+    crate::log!("Spring bone baked to new clip (id={})", new_id);
+}
+
+fn register_baked_clip_and_update_schedules(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    clip: crate::animation::editable::EditableAnimationClip,
+    source_id: Option<u64>,
+) -> u64 {
+    use crate::ecs::systems::clip_library_systems::clip_library_register_and_activate;
+
     let mut clip_library = world.resource_mut::<ClipLibrary>();
-    let new_id = clip_library_register_and_activate(&mut clip_library, assets, merged);
+    let new_id = clip_library_register_and_activate(&mut clip_library, assets, clip);
     drop(clip_library);
 
     let mut updated_count = 0;
@@ -996,19 +1033,7 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
         new_id
     );
 
-    let baked_bone_ids = bake_result.baked_bone_ids.clone();
-
-    let mut spring_state = world.resource_mut::<SpringBoneState>();
-    spring_state.mode = SpringBoneMode::Baked;
-    spring_state.baked_clip_source_id = Some(new_id);
-    spring_state.baked_bone_ids = bake_result.baked_bone_ids;
-    spring_state.original_clip_source_id = source_id;
-
-    let mut timeline_state = world.resource_mut::<TimelineState>();
-    timeline_state.current_clip_id = Some(new_id);
-    timeline_state.baked_bone_ids = baked_bone_ids;
-
-    crate::log!("Spring bone baked to new clip (id={})", new_id);
+    new_id
 }
 
 fn handle_spring_bone_discard(world: &mut World, assets: &mut AssetStorage) {

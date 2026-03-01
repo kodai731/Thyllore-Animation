@@ -230,6 +230,7 @@ impl<'a> OverlayRenderer<'a> {
         if !tg.line_mesh.indices.is_empty() {
             if let Some(pid) = tg.line_render_info.pipeline_id {
                 if let Some(pipeline) = pipeline_storage.get(pid) {
+                    self.push_bone_alpha(command_buffer, pipeline, 1.0);
                     self.draw_line_mesh(
                         &tg.line_mesh,
                         pipeline,

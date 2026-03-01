@@ -118,6 +118,7 @@ pub fn spring_bone_gizmo_render_data(gizmo: &SpringBoneGizmoData) -> Vec<RenderD
 pub fn transform_gizmo_render_data(
     gizmo: &TransformGizmoData,
     camera_position: Vector3<f32>,
+    gizmo_scale: f32,
 ) -> Vec<RenderData> {
     if !gizmo.visible {
         return Vec::new();
@@ -125,7 +126,7 @@ pub fn transform_gizmo_render_data(
 
     let gizmo_pos = gizmo.position.position;
     let distance = (gizmo_pos - camera_position).magnitude();
-    let scale_factor = distance * 0.03;
+    let scale_factor = distance * gizmo_scale;
     let model_matrix = Matrix4::from_translation(gizmo_pos) * Matrix4::from_scale(scale_factor);
 
     let mut result = Vec::new();

@@ -20,6 +20,7 @@ pub struct TransformGizmoState {
     pub translate_snap_value: f32,
     pub rotate_snap_degrees: f32,
     pub scale_snap_value: f32,
+    pub gizmo_scale: f32,
 }
 
 impl Default for TransformGizmoState {
@@ -31,6 +32,7 @@ impl Default for TransformGizmoState {
             translate_snap_value: 0.5,
             rotate_snap_degrees: 15.0,
             scale_snap_value: 0.1,
+            gizmo_scale: 0.08,
         }
     }
 }

@@ -8,7 +8,7 @@ use crate::debugview::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, SpringBoneGizmoData,
 };
 use crate::ecs::component::{ConstraintSet, LineMesh};
-use crate::ecs::resource::{Camera, Exposure};
+use crate::ecs::resource::{Camera, Exposure, TransformGizmoState};
 use crate::ecs::systems::render_data_systems::{
     bone_gizmo_render_data, constraint_gizmo_render_data, gizmo_mesh_render_data,
     gizmo_selectable_render_data, grid_mesh_render_data, spring_bone_gizmo_render_data,
@@ -122,7 +122,16 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
 
     if ctx.world.contains_resource::<TransformGizmoData>() {
         let tg = ctx.world.resource::<TransformGizmoData>();
-        render_data_vec.extend(transform_gizmo_render_data(&tg, camera_position));
+        let gizmo_scale = ctx
+            .world
+            .get_resource::<TransformGizmoState>()
+            .map(|s| s.gizmo_scale)
+            .unwrap_or(0.08);
+        render_data_vec.extend(transform_gizmo_render_data(
+            &tg,
+            camera_position,
+            gizmo_scale,
+        ));
     }
 
     let render_data_refs: Vec<_> = render_data_vec.iter().collect();

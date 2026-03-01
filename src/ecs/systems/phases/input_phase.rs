@@ -477,7 +477,11 @@ fn try_select_transform_gizmo_handle(ctx: &mut EcsContext, mouse_pos: cgmath::Ve
     let near_plane = camera.near_plane;
     drop(camera);
 
-    let mode = ctx.transform_gizmo_state().mode;
+    let state = ctx.transform_gizmo_state();
+    let mode = state.mode;
+    let gizmo_scale = state.gizmo_scale;
+    drop(state);
+
     let tg = ctx.transform_gizmo();
     let tg_clone_for_select = TransformGizmoData {
         visible: tg.visible,
@@ -509,6 +513,7 @@ fn try_select_transform_gizmo_handle(ctx: &mut EcsContext, mouse_pos: cgmath::Ve
         ctx.swapchain_extent,
         fov_y,
         near_plane,
+        gizmo_scale,
     );
 
     if handle == TransformGizmoHandle::None {

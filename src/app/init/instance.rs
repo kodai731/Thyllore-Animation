@@ -502,7 +502,7 @@ impl App {
 
         {
             let mut tg = crate::debugview::gizmo::TransformGizmoData::default();
-            tg.line_render_info.pipeline_id = Some(gizmo_pipeline_id);
+            tg.line_render_info.pipeline_id = Some(bone_wire_pipeline_id);
             tg.line_render_info.object_index = data.graphics_resources.objects.allocate_slot();
             tg.solid_render_info.pipeline_id = Some(bone_solid_pipeline_id);
             tg.solid_render_info.object_index = data.graphics_resources.objects.allocate_slot();

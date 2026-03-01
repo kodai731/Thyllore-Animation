@@ -258,6 +258,7 @@ pub fn transform_gizmo_try_select(
     swapchain_extent: (u32, u32),
     fov_y: Deg<f32>,
     near_plane: f32,
+    gizmo_scale: f32,
 ) -> TransformGizmoHandle {
     let gizmo_pos = gizmo.position.position;
     let view_mat = unsafe { view(camera_pos, camera_dir, camera_up) };
@@ -268,7 +269,7 @@ pub fn transform_gizmo_try_select(
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view_mat, proj);
 
     let distance = (gizmo_pos - camera_pos).magnitude();
-    let scale_factor = distance * 0.03;
+    let scale_factor = distance * gizmo_scale;
     let threshold = 0.05 * scale_factor;
 
     match mode {

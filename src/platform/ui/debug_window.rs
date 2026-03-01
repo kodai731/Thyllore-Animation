@@ -412,6 +412,10 @@ fn build_transform_gizmo_panel(ui: &imgui::Ui, ecs_world: &World) {
             }
         }
     }
+
+    ui.slider_config("Gizmo Scale", 0.01, 0.3)
+        .display_format("%.3f")
+        .build(&mut state.gizmo_scale);
 }
 
 fn build_fbx_debug_panel(ui: &imgui::Ui) {

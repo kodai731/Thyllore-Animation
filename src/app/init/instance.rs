@@ -519,6 +519,11 @@ impl App {
                 .insert_resource(crate::ecs::resource::TransformGizmoState::default());
         }
 
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::PointerState::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::PointerCapture::default());
+
         let mut billboard_data = create_billboard();
         billboard_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!(

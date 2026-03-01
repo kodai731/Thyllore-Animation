@@ -17,23 +17,27 @@ use crate::ecs::{
 use crate::math::screen_to_world_ray;
 
 pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
-    process_light_auto_target(ctx);
+    update_pointer_state(ctx);
 
-    let is_first_left_click = ctx.gui_data.is_left_clicked
-        && !ctx.gui_data.is_right_clicked
-        && !ctx.gui_data.is_wheel_clicked
-        && ctx.gui_data.clicked_mouse_pos.is_none()
-        && ctx.gui_data.viewport_hovered;
-
-    ctx.gui_data.update();
-
-    let transform_gizmo_active = process_transform_gizmo_interaction(ctx, is_first_left_click)?;
-
-    if !transform_gizmo_active {
-        process_gizmo_interaction(ctx, is_first_left_click)?;
+    ctx.pointer_capture_mut().active = false;
+    let wants_pointer = ctx.pointer_state().imgui_wants_pointer;
+    let viewport_hovered = ctx.pointer_state().viewport_hovered;
+    if wants_pointer && !viewport_hovered {
+        ctx.pointer_capture_mut().active = true;
     }
 
-    if is_first_left_click && !transform_gizmo_active {
+    process_light_auto_target(ctx);
+    ctx.gui_data.update();
+
+    let transform_gizmo_active = process_transform_gizmo_interaction(ctx)?;
+
+    if !transform_gizmo_active {
+        process_gizmo_interaction(ctx)?;
+    }
+
+    let capture_active = ctx.pointer_capture().active;
+    let left_just_pressed = ctx.pointer_state().left.just_pressed();
+    if left_just_pressed && !capture_active {
         let bone_hit = process_bone_selection(ctx)?;
         if !bone_hit {
             request_mesh_selection(ctx);
@@ -42,13 +46,9 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
 
     sync_transform_gizmo_to_bone(ctx);
 
-    let viewport_hovered = ctx.gui_data.viewport_hovered;
-    let tg_selected = ctx
-        .world
-        .get_resource::<TransformGizmoData>()
-        .map(|tg| tg.selectable.is_selected)
-        .unwrap_or(false);
-    if !ctx.light_gizmo().selectable.is_selected && !tg_selected && viewport_hovered {
+    let capture_active = ctx.pointer_capture().active;
+    let viewport_hovered = ctx.pointer_state().viewport_hovered;
+    if !capture_active && viewport_hovered {
         let is_right_clicked = ctx.gui_data.is_right_clicked;
         let is_wheel_clicked = ctx.gui_data.is_wheel_clicked;
         let mouse_wheel = ctx.gui_data.mouse_wheel;
@@ -71,6 +71,30 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn update_pointer_state(ctx: &mut EcsContext) {
+    let is_left = ctx.gui_data.is_left_clicked;
+    let is_right = ctx.gui_data.is_right_clicked;
+    let is_wheel = ctx.gui_data.is_wheel_clicked;
+    let mouse_pos = ctx.gui_data.mouse_pos;
+    let viewport_pos = ctx.gui_data.viewport_position;
+    let mouse_wheel = ctx.gui_data.mouse_wheel;
+    let viewport_hovered = ctx.gui_data.viewport_hovered;
+    let imgui_wants_mouse = ctx.gui_data.imgui_wants_mouse;
+
+    let mut pointer = ctx.pointer_state_mut();
+    pointer.left.update(is_left);
+    pointer.right.update(is_right);
+    pointer.middle.update(is_wheel);
+    pointer.position = mouse_pos;
+    pointer.viewport_position = [
+        mouse_pos[0] - viewport_pos[0],
+        mouse_pos[1] - viewport_pos[1],
+    ];
+    pointer.wheel_delta = mouse_wheel;
+    pointer.viewport_hovered = viewport_hovered;
+    pointer.imgui_wants_pointer = imgui_wants_mouse;
 }
 
 fn process_light_auto_target(ctx: &mut EcsContext) {
@@ -98,64 +122,71 @@ fn compute_viewport_local_mouse_pos(ctx: &EcsContext) -> cgmath::Vector2<f32> {
     )
 }
 
-fn process_gizmo_interaction(ctx: &mut EcsContext, is_first_left_click: bool) -> Result<()> {
+fn process_gizmo_interaction(ctx: &mut EcsContext) -> Result<()> {
     let mouse_pos = compute_viewport_local_mouse_pos(ctx);
+    let drag_active = ctx.light_gizmo().drag_active;
 
-    if !ctx.gui_data.imgui_wants_mouse && ctx.gui_data.is_left_clicked {
-        ctx.light_gizmo_mut().draggable.just_selected = false;
+    if drag_active {
+        ctx.pointer_capture_mut().active = true;
 
-        if is_first_left_click {
-            let camera = ctx.camera();
-            let camera_pos = crate::ecs::compute_camera_position(&camera);
-            let camera_dir = crate::ecs::compute_camera_direction(&camera);
-            let camera_up = crate::ecs::compute_camera_up(&camera);
-            let fov_y = camera.fov_y;
-            let near_plane = camera.near_plane;
-            drop(camera);
-            {
-                let mut gizmo_ref = ctx.light_gizmo_mut();
-                let light_gizmo = &mut *gizmo_ref;
-                let position = light_gizmo.position.clone();
-                gizmo_try_select(
-                    &position,
-                    &mut light_gizmo.selectable,
-                    &mut light_gizmo.draggable,
-                    mouse_pos,
-                    camera_pos,
-                    camera_dir,
-                    camera_up,
-                    ctx.swapchain_extent,
-                    ctx.gui_data.billboard_click_rect,
-                    fov_y,
-                    near_plane,
-                );
-            }
-        }
-
-        let (is_selected, just_selected) = {
-            let gizmo = ctx.light_gizmo();
-            (gizmo.selectable.is_selected, gizmo.draggable.just_selected)
-        };
-
-        if is_selected && ctx.gui_data.is_left_clicked && !just_selected {
+        if ctx.pointer_state().left.held() {
             update_light_gizmo_position(ctx, mouse_pos)?;
         }
-    } else if !ctx.gui_data.is_wheel_clicked {
-        if ctx.light_gizmo().selectable.is_selected {
-            gizmo_handle_mouse_release(ctx);
+
+        if ctx.pointer_state().left.just_released() {
+            reset_light_gizmo_drag(ctx);
+        }
+
+        return Ok(());
+    }
+
+    let left_just_pressed = ctx.pointer_state().left.just_pressed();
+    let capture_active = ctx.pointer_capture().active;
+    if left_just_pressed && !capture_active && ctx.pointer_state().viewport_hovered {
+        let camera = ctx.camera();
+        let camera_pos = crate::ecs::compute_camera_position(&camera);
+        let camera_dir = crate::ecs::compute_camera_direction(&camera);
+        let camera_up = crate::ecs::compute_camera_up(&camera);
+        let fov_y = camera.fov_y;
+        let near_plane = camera.near_plane;
+        drop(camera);
+
+        {
+            let mut gizmo_ref = ctx.light_gizmo_mut();
+            let light_gizmo = &mut *gizmo_ref;
+            let position = light_gizmo.position.clone();
+            gizmo_try_select(
+                &position,
+                &mut light_gizmo.selectable,
+                &mut light_gizmo.draggable,
+                mouse_pos,
+                camera_pos,
+                camera_dir,
+                camera_up,
+                ctx.swapchain_extent,
+                ctx.gui_data.billboard_click_rect,
+                fov_y,
+                near_plane,
+            );
+        }
+
+        let hit = ctx.light_gizmo().selectable.is_selected;
+        if hit {
+            ctx.light_gizmo_mut().drag_active = true;
+            ctx.pointer_capture_mut().active = true;
         }
     }
 
     Ok(())
 }
 
-fn gizmo_handle_mouse_release(ctx: &mut EcsContext) {
+fn reset_light_gizmo_drag(ctx: &mut EcsContext) {
     crate::log!("Mouse released - resetting light gizmo state");
     let mut gizmo = ctx.light_gizmo_mut();
+    gizmo.drag_active = false;
     gizmo.selectable.is_selected = false;
     gizmo.selectable.selected_axis = GizmoAxis::None;
     gizmo.draggable.drag_axis = GizmoAxis::None;
-    gizmo.draggable.just_selected = false;
     gizmo.draggable.initial_position = Vector3::new(0.0, 0.0, 0.0);
 }
 
@@ -226,7 +257,7 @@ fn process_bone_selection(ctx: &mut EcsContext) -> Result<bool> {
         return Ok(false);
     }
 
-    if ctx.light_gizmo().selectable.is_selected {
+    if ctx.light_gizmo().drag_active {
         return Ok(false);
     }
 
@@ -382,7 +413,7 @@ fn request_mesh_selection(ctx: &mut EcsContext) {
         return;
     }
 
-    if ctx.light_gizmo().selectable.is_selected {
+    if ctx.light_gizmo().drag_active {
         return;
     }
 
@@ -416,10 +447,7 @@ fn request_mesh_selection(ctx: &mut EcsContext) {
     readback.is_ctrl = ctx.gui_data.is_ctrl_pressed;
 }
 
-fn process_transform_gizmo_interaction(
-    ctx: &mut EcsContext,
-    is_first_left_click: bool,
-) -> Result<bool> {
+fn process_transform_gizmo_interaction(ctx: &mut EcsContext) -> Result<bool> {
     if !ctx.world.contains_resource::<TransformGizmoData>() {
         return Ok(false);
     }
@@ -427,48 +455,50 @@ fn process_transform_gizmo_interaction(
         return Ok(false);
     }
 
-    let visible = {
-        let tg = ctx.transform_gizmo();
-        tg.visible
-    };
+    let visible = ctx.transform_gizmo().visible;
     if !visible {
         return Ok(false);
     }
 
+    let drag_active = ctx.transform_gizmo().drag_active;
     let mouse_pos = compute_viewport_local_mouse_pos(ctx);
 
-    if !ctx.gui_data.imgui_wants_mouse && ctx.gui_data.is_left_clicked {
-        ctx.transform_gizmo_mut().draggable.just_selected = false;
+    if drag_active {
+        ctx.pointer_capture_mut().active = true;
 
-        if is_first_left_click {
-            try_select_transform_gizmo_handle(ctx, mouse_pos);
-        }
-
-        let (is_selected, just_selected) = {
-            let tg = ctx.transform_gizmo();
-            (tg.selectable.is_selected, tg.draggable.just_selected)
-        };
-
-        if is_selected && !just_selected {
+        if ctx.pointer_state().left.held() {
             process_transform_gizmo_drag(ctx, mouse_pos)?;
         }
 
-        return Ok(is_selected);
-    } else if !ctx.gui_data.is_wheel_clicked {
-        let is_selected = ctx.transform_gizmo().selectable.is_selected;
-        if is_selected {
+        if ctx.pointer_state().left.just_released() {
             let mut tg = ctx.transform_gizmo_mut();
+            tg.drag_active = false;
             tg.selectable.is_selected = false;
             tg.active_handle = TransformGizmoHandle::None;
-            tg.draggable.just_selected = false;
             crate::log!("TransformGizmo released");
+        }
+
+        return Ok(true);
+    }
+
+    let left_just_pressed = ctx.pointer_state().left.just_pressed();
+    let capture_active = ctx.pointer_capture().active;
+    if left_just_pressed && !capture_active && ctx.pointer_state().viewport_hovered {
+        let hit = try_select_transform_gizmo_handle(ctx, mouse_pos);
+        if hit {
+            ctx.transform_gizmo_mut().drag_active = true;
+            ctx.pointer_capture_mut().active = true;
+            return Ok(true);
         }
     }
 
     Ok(false)
 }
 
-fn try_select_transform_gizmo_handle(ctx: &mut EcsContext, mouse_pos: cgmath::Vector2<f32>) {
+fn try_select_transform_gizmo_handle(
+    ctx: &mut EcsContext,
+    mouse_pos: cgmath::Vector2<f32>,
+) -> bool {
     let camera = ctx.camera();
     let camera_pos = crate::ecs::compute_camera_position(&camera);
     let camera_dir = crate::ecs::compute_camera_direction(&camera);
@@ -489,6 +519,7 @@ fn try_select_transform_gizmo_handle(ctx: &mut EcsContext, mouse_pos: cgmath::Ve
         selectable: tg.selectable.clone(),
         draggable: tg.draggable.clone(),
         active_handle: tg.active_handle,
+        drag_active: false,
         line_mesh: LineMesh::default(),
         solid_mesh: LineMesh::default(),
         line_render_info: tg.line_render_info,
@@ -517,7 +548,7 @@ fn try_select_transform_gizmo_handle(ctx: &mut EcsContext, mouse_pos: cgmath::Ve
     );
 
     if handle == TransformGizmoHandle::None {
-        return;
+        return false;
     }
 
     let gizmo_pos = tg_clone_for_select.position.position;
@@ -538,12 +569,12 @@ fn try_select_transform_gizmo_handle(ctx: &mut EcsContext, mouse_pos: cgmath::Ve
     let mut tg = ctx.transform_gizmo_mut();
     tg.selectable.is_selected = true;
     tg.active_handle = handle;
-    tg.draggable.just_selected = true;
     tg.drag_start_position = tg.position.position;
     tg.drag_plane_normal = plane_normal;
     tg.drag_initial_hit = initial_hit;
 
     crate::log!("TransformGizmo selected: handle={:?}", handle);
+    true
 }
 
 fn process_transform_gizmo_drag(
@@ -710,9 +741,7 @@ fn sync_transform_gizmo_to_bone(ctx: &mut EcsContext) {
         return;
     }
 
-    // Don't sync during active drag
-    let is_selected = ctx.transform_gizmo().selectable.is_selected;
-    if is_selected {
+    if ctx.transform_gizmo().drag_active {
         return;
     }
 

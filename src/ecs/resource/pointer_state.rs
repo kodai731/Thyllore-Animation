@@ -1,0 +1,89 @@
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ButtonPhase {
+    #[default]
+    Released,
+    JustPressed,
+    Held,
+    JustReleased,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ButtonState {
+    phase: ButtonPhase,
+}
+
+impl ButtonState {
+    pub fn just_pressed(&self) -> bool {
+        self.phase == ButtonPhase::JustPressed
+    }
+
+    pub fn held(&self) -> bool {
+        matches!(self.phase, ButtonPhase::JustPressed | ButtonPhase::Held)
+    }
+
+    pub fn just_released(&self) -> bool {
+        self.phase == ButtonPhase::JustReleased
+    }
+
+    pub fn update(&mut self, is_down: bool) {
+        self.phase = match (self.phase, is_down) {
+            (ButtonPhase::Released, true) => ButtonPhase::JustPressed,
+            (ButtonPhase::JustPressed, true) => ButtonPhase::Held,
+            (ButtonPhase::Held, true) => ButtonPhase::Held,
+            (ButtonPhase::JustReleased, true) => ButtonPhase::JustPressed,
+            (ButtonPhase::JustPressed | ButtonPhase::Held, false) => ButtonPhase::JustReleased,
+            (ButtonPhase::Released | ButtonPhase::JustReleased, false) => ButtonPhase::Released,
+        };
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct PointerState {
+    pub left: ButtonState,
+    pub right: ButtonState,
+    pub middle: ButtonState,
+    pub position: [f32; 2],
+    pub viewport_position: [f32; 2],
+    pub wheel_delta: f32,
+    pub viewport_hovered: bool,
+    pub imgui_wants_pointer: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_button_state_transitions() {
+        let mut btn = ButtonState::default();
+        assert!(!btn.just_pressed());
+        assert!(!btn.held());
+
+        btn.update(true);
+        assert!(btn.just_pressed());
+        assert!(btn.held());
+
+        btn.update(true);
+        assert!(!btn.just_pressed());
+        assert!(btn.held());
+
+        btn.update(false);
+        assert!(btn.just_released());
+        assert!(!btn.held());
+
+        btn.update(false);
+        assert!(!btn.just_released());
+        assert!(!btn.held());
+    }
+
+    #[test]
+    fn test_re_press_from_just_released() {
+        let mut btn = ButtonState::default();
+        btn.update(true);
+        btn.update(false);
+        assert!(btn.just_released());
+
+        btn.update(true);
+        assert!(btn.just_pressed());
+    }
+}

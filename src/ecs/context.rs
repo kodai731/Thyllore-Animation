@@ -11,6 +11,8 @@ use crate::ecs::component::{LineMesh, MeshScale};
 use crate::ecs::resource::Camera;
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::resource::ObjectIdReadback;
+use crate::ecs::resource::PointerCapture;
+use crate::ecs::resource::PointerState;
 use crate::ecs::resource::TransformGizmoState;
 
 use super::world::{ResMut, ResRef, World};
@@ -140,5 +142,21 @@ impl<'a> EcsContext<'a> {
 
     pub fn object_id_readback_mut(&self) -> ResMut<ObjectIdReadback> {
         self.world.resource_mut::<ObjectIdReadback>()
+    }
+
+    pub fn pointer_state(&self) -> ResRef<PointerState> {
+        self.world.resource::<PointerState>()
+    }
+
+    pub fn pointer_state_mut(&self) -> ResMut<PointerState> {
+        self.world.resource_mut::<PointerState>()
+    }
+
+    pub fn pointer_capture(&self) -> ResRef<PointerCapture> {
+        self.world.resource::<PointerCapture>()
+    }
+
+    pub fn pointer_capture_mut(&self) -> ResMut<PointerCapture> {
+        self.world.resource_mut::<PointerCapture>()
     }
 }

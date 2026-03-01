@@ -27,6 +27,7 @@ pub struct TransformGizmoData {
     pub selectable: GizmoSelectable,
     pub draggable: GizmoDraggable,
     pub active_handle: TransformGizmoHandle,
+    pub drag_active: bool,
     // Line-based meshes (axis shafts, rings)
     pub line_mesh: LineMesh,
     // Solid triangle meshes (cone tips, cubes, plane quads)
@@ -54,6 +55,7 @@ impl Default for TransformGizmoData {
             selectable: GizmoSelectable::default(),
             draggable: GizmoDraggable::default(),
             active_handle: TransformGizmoHandle::None,
+            drag_active: false,
             line_mesh: LineMesh::default(),
             solid_mesh: LineMesh::default(),
             line_render_info: RenderInfo::default(),

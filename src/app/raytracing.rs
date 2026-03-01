@@ -3,6 +3,7 @@ use std::rc::Rc;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::graphics_resource::{GraphicsResources, MeshBuffer};
+use crate::renderer::deferred::gbuffer::{GBufferPushConstants, OnionSkinPushConstants};
 use crate::vulkanr::buffer::create_buffer;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
@@ -18,7 +19,7 @@ use crate::vulkanr::pipeline::{
 };
 use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::render::RRRender;
-use crate::vulkanr::resource::RRGBuffer;
+use crate::vulkanr::resource::{OnionSkinPassResources, RRGBuffer};
 use crate::vulkanr::swapchain::RRSwapchain;
 
 #[derive(Clone, Debug, Default)]
@@ -50,6 +51,8 @@ pub struct RayTracingData {
     pub auto_exposure_average_pipeline: Option<RRPipeline>,
     pub auto_exposure_histogram_descriptor: Option<RRAutoExposureHistogramDescriptorSet>,
     pub auto_exposure_average_descriptor: Option<RRAutoExposureAverageDescriptorSet>,
+
+    pub onion_skin_pass: Option<OnionSkinPassResources>,
 
     pub scene_uniform_buffer: Option<vk::Buffer>,
     pub scene_uniform_buffer_memory: Option<vk::DeviceMemory>,
@@ -184,12 +187,6 @@ impl RayTracingData {
             graphics_resources.objects.layout,
         ];
 
-        let push_constant_range = vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-            .offset(0)
-            .size(std::mem::size_of::<u32>() as u32)
-            .build();
-
         let gbuffer_pipeline = PipelineBuilder::new(
             "assets/shaders/gbufferVert.spv",
             "assets/shaders/gbufferFrag.spv",
@@ -205,7 +202,7 @@ impl RayTracingData {
         .push_constants(PushConstantConfig {
             stage_flags: vk::ShaderStageFlags::FRAGMENT,
             offset: 0,
-            size: std::mem::size_of::<u32>() as u32,
+            size: std::mem::size_of::<GBufferPushConstants>() as u32,
         })
         .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))?;
 
@@ -335,6 +332,134 @@ impl RayTracingData {
         log::info!("Created composite descriptor set and pipeline");
 
         log::info!("Ray Tracing pipelines created successfully");
+        Ok(())
+    }
+
+    pub unsafe fn create_onion_skin_pipeline(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        rrrender: &RRRender,
+        graphics_resources: &GraphicsResources,
+        offscreen_resolve_image_view: vk::ImageView,
+        offscreen_format: vk::Format,
+        width: u32,
+        height: u32,
+    ) -> Result<()> {
+        let (ghost_image, ghost_image_memory, ghost_image_view, ghost_sampler) =
+            OnionSkinPassResources::create_ghost_buffer(instance, rrdevice, width, height)?;
+
+        let ghost_render_pass = OnionSkinPassResources::create_ghost_render_pass(rrdevice)?;
+
+        let render_layouts = [
+            graphics_resources.frame_set.layout,
+            graphics_resources.materials.layout,
+            graphics_resources.objects.layout,
+        ];
+
+        let ghost_pipeline = PipelineBuilder::new(
+            "assets/shaders/gbufferVert.spv",
+            "assets/shaders/onionSkinFrag.spv",
+        )
+        .vertex_input(VertexInputConfig::Standard)
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .cull_mode(vk::CullModeFlags::BACK)
+        .custom_render_pass(ghost_render_pass)
+        .mrt_attachments(1)
+        .msaa_samples(vk::SampleCountFlags::_1)
+        .depth_test(crate::vulkanr::pipeline::DepthTestConfig {
+            test_enable: false,
+            write_enable: false,
+            compare_op: vk::CompareOp::ALWAYS,
+        })
+        .blend(crate::vulkanr::pipeline::BlendConfig {
+            enable: true,
+            src_color_factor: vk::BlendFactor::SRC_ALPHA,
+            dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+            color_op: vk::BlendOp::ADD,
+            src_alpha_factor: vk::BlendFactor::SRC_ALPHA,
+            dst_alpha_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+            alpha_op: vk::BlendOp::ADD,
+        })
+        .descriptor_layouts(render_layouts.to_vec())
+        .push_constants(PushConstantConfig {
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            offset: 0,
+            size: std::mem::size_of::<OnionSkinPushConstants>() as u32,
+        })
+        .build(rrdevice, rrrender, Some(vk::Extent2D { width, height }))?;
+
+        let ghost_framebuffer = OnionSkinPassResources::create_single_framebuffer(
+            rrdevice,
+            ghost_render_pass,
+            ghost_image_view,
+            width,
+            height,
+        )?;
+
+        let composite_render_pass =
+            OnionSkinPassResources::create_composite_render_pass(rrdevice, offscreen_format)?;
+
+        let (composite_descriptor_layout, composite_descriptor_pool, composite_descriptor_set) =
+            OnionSkinPassResources::create_composite_descriptor(
+                rrdevice,
+                ghost_image_view,
+                ghost_sampler,
+            )?;
+
+        let composite_pipeline = PipelineBuilder::new(
+            "assets/shaders/tonemapVert.spv",
+            "assets/shaders/onionSkinCompositeFrag.spv",
+        )
+        .vertex_input(VertexInputConfig::Custom {
+            bindings: vec![],
+            attributes: vec![],
+        })
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .no_depth_test()
+        .custom_render_pass(composite_render_pass)
+        .msaa_samples(vk::SampleCountFlags::_1)
+        .blend(crate::vulkanr::pipeline::BlendConfig {
+            enable: true,
+            src_color_factor: vk::BlendFactor::ONE,
+            dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+            color_op: vk::BlendOp::ADD,
+            src_alpha_factor: vk::BlendFactor::ONE,
+            dst_alpha_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+            alpha_op: vk::BlendOp::ADD,
+        })
+        .descriptor_layouts(vec![composite_descriptor_layout])
+        .build(rrdevice, rrrender, Some(vk::Extent2D { width, height }))?;
+
+        let composite_framebuffer = OnionSkinPassResources::create_single_framebuffer(
+            rrdevice,
+            composite_render_pass,
+            offscreen_resolve_image_view,
+            width,
+            height,
+        )?;
+
+        self.onion_skin_pass = Some(OnionSkinPassResources {
+            ghost_image,
+            ghost_image_memory,
+            ghost_image_view,
+            ghost_sampler,
+            ghost_render_pass,
+            ghost_framebuffer,
+            ghost_pipeline,
+            composite_render_pass,
+            composite_framebuffer,
+            composite_pipeline,
+            composite_descriptor_layout,
+            composite_descriptor_pool,
+            composite_descriptor_set,
+            width,
+            height,
+        });
+
+        crate::log!("Created onion skin pass: {}x{}", width, height);
         Ok(())
     }
 

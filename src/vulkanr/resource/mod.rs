@@ -9,6 +9,7 @@ pub mod hdr_buffer;
 pub mod image;
 pub mod mesh_buffer;
 pub mod offscreen;
+pub mod onion_skin_pass;
 pub mod pipeline_storage;
 
 pub use auto_exposure_buffers::AutoExposureBuffers;
@@ -22,4 +23,5 @@ pub use hdr_buffer::HdrBuffer;
 pub use image::*;
 pub use mesh_buffer::*;
 pub use offscreen::OffscreenFramebuffer;
+pub use onion_skin_pass::OnionSkinPassResources;
 pub use pipeline_storage::PipelineStorage;

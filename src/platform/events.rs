@@ -2,8 +2,8 @@ use std::time::Instant;
 
 use imgui::MouseButton;
 use winit::event::{ElementState, Event, WindowEvent};
-use winit::keyboard::Key;
 
+use super::key_bindings::{default_bindings, dispatch_keyboard_shortcut};
 use super::platform::System;
 use super::ui::{
     build_click_debug_overlay, build_clip_browser_window, build_curve_editor_window,
@@ -38,6 +38,7 @@ impl System {
             mut platform,
         } = self;
         let mut last_frame = Instant::now();
+        let bindings = default_bindings();
 
         event_loop
             .run(move |event, window_target| match event {
@@ -89,13 +90,17 @@ impl System {
                         }
 
                         WindowEvent::KeyboardInput { event, .. } => {
-                            if event.state == ElementState::Pressed && gui_data.is_ctrl_pressed {
-                                if let Key::Character(ref c) = event.logical_key {
-                                    if c.eq_ignore_ascii_case("s") {
-                                        let mut ui_events =
-                                            app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                        ui_events.send(UIEvent::SaveScene);
-                                    }
+                            if event.state == ElementState::Pressed {
+                                if let Some(ui_event) = dispatch_keyboard_shortcut(
+                                    &event.logical_key,
+                                    gui_data.is_ctrl_pressed,
+                                    gui_data.is_shift_pressed,
+                                    imgui.io().want_capture_keyboard,
+                                    &bindings,
+                                ) {
+                                    let mut ui_events =
+                                        app.data.ecs_world.resource_mut::<UIEventQueue>();
+                                    ui_events.send(ui_event);
                                 }
                             }
                         }

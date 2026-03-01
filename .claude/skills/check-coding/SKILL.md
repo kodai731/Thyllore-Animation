@@ -21,8 +21,14 @@ defined in `.claude/rules/coding.md`.
 
 ## Target
 
-If `$ARGUMENTS` is provided, check those files or directories. Otherwise, check
-recently modified `.rs` files under `src/`.
+If `$ARGUMENTS` is provided, check those files or directories.
+
+If no arguments are given:
+1. Check recently modified `.rs` files under `src/` (git diff / git status)
+2. **Additionally**, run mechanical pattern checks (Rules 3, 5, 6, 8) across
+   **all** `.rs` files under `src/` to catch violations in unchanged files.
+   This is essential because coding violations (e.g., oversized functions,
+   `.unwrap()` calls) can exist in files that haven't been recently modified.
 
 ## Rules to Verify
 
@@ -137,7 +143,9 @@ fn do_something(x: i32, y: i32, verbose: bool) { .. }
 
 ### Agent A: Static Pattern Check (expert-explore)
 
-Scan for mechanical violations that can be detected by pattern matching:
+Scan for mechanical violations that can be detected by pattern matching.
+**Scope**: Search across ALL `.rs` files under `src/`, not just target files.
+These rules are cheap to check mechanically and catch long-standing violations.
 
 - Rule 1: Search for `Option<.*>` + `bool` field pairs in structs
 - Rule 3: Search for `.unwrap()` in non-test code (`src/` excluding `tests`)
@@ -149,7 +157,10 @@ Scan for mechanical violations that can be detected by pattern matching:
 
 ### Agent B: Design Pattern Check (expert-explore)
 
-Review code for design-level violations requiring understanding of context:
+Review code for design-level violations requiring understanding of context.
+**Scope**: Focus on target files (from arguments or recent changes), but also
+spot-check high-risk areas (`src/platform/`, `src/app/`, `src/render/`) for
+Rules 2 and 4.
 
 - Rule 1: Identify structs with impossible state combinations
 - Rule 2: Check if boundary functions validate inputs properly

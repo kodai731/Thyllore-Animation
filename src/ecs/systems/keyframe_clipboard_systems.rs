@@ -67,6 +67,7 @@ fn copy_keyframes(
                     interpolation: kf.interpolation,
                     in_tangent: kf.in_tangent.clone(),
                     out_tangent: kf.out_tangent.clone(),
+                    weight_mode: kf.weight_mode,
                 });
             }
         }
@@ -111,6 +112,7 @@ fn paste_keyframes(
                 entry.in_tangent.clone(),
                 entry.out_tangent.clone(),
             );
+            curve.set_keyframe_weight_mode(new_id, entry.weight_mode);
         }
     }
 }
@@ -158,6 +160,7 @@ fn mirror_paste_keyframes(
                 entry.in_tangent.clone(),
                 entry.out_tangent.clone(),
             );
+            curve.set_keyframe_weight_mode(new_id, entry.weight_mode);
         }
     }
 }

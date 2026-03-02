@@ -169,6 +169,7 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::TimelineSetKeyframeInterpolation { .. }
             | UIEvent::TimelineSetKeyframeTangent { .. }
             | UIEvent::TimelineAutoTangent { .. }
+            | UIEvent::TimelineSetTangentWeightMode { .. }
             | UIEvent::TimelineToggleViewMode
             | UIEvent::TimelineSetSnapToFrame(_)
             | UIEvent::TimelineSetSnapToKey(_)

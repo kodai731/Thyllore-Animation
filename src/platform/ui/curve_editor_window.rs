@@ -4,7 +4,7 @@ use imgui::Condition;
 
 use super::timeline_window::ruler_padding;
 use crate::animation::editable::{
-    BezierHandle, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
+    BezierHandle, InterpolationType, KeyframeId, PropertyCurve, PropertyType, TangentWeightMode,
 };
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
@@ -654,6 +654,28 @@ fn build_keyframe_context_menu(
                 keyframe_id: ctx_kf.keyframe_id,
                 in_tangent: BezierHandle::linear(),
                 out_tangent: BezierHandle::linear(),
+            });
+        }
+
+        ui.spacing();
+        ui.text("Weight");
+        ui.separator();
+
+        if ui.selectable_config("Non-Weighted Tangents").build() {
+            ui_events.send(UIEvent::TimelineSetTangentWeightMode {
+                bone_id,
+                property_type: ctx_kf.property_type,
+                keyframe_id: ctx_kf.keyframe_id,
+                weight_mode: TangentWeightMode::NonWeighted,
+            });
+        }
+
+        if ui.selectable_config("Weighted Tangents").build() {
+            ui_events.send(UIEvent::TimelineSetTangentWeightMode {
+                bone_id,
+                property_type: ctx_kf.property_type,
+                keyframe_id: ctx_kf.keyframe_id,
+                weight_mode: TangentWeightMode::Weighted,
             });
         }
     });
@@ -1398,6 +1420,7 @@ fn draw_tangent_handles(
             let kf_y = vt.value_to_y(kf.value);
             let handle_color = [color[0], color[1], color[2], 0.9];
             let handle_size = 4.0;
+            let is_weighted = kf.weight_mode == TangentWeightMode::Weighted;
 
             let in_x = vt.time_to_x(kf.time + kf.in_tangent.time_offset);
             let in_y = vt.value_to_y(kf.value + kf.in_tangent.value_offset);
@@ -1405,14 +1428,21 @@ fn draw_tangent_handles(
                 .add_line([kf_x, kf_y], [in_x, in_y], handle_color)
                 .thickness(1.0)
                 .build();
-            draw_list
-                .add_rect(
-                    [in_x - handle_size, in_y - handle_size],
-                    [in_x + handle_size, in_y + handle_size],
-                    handle_color,
-                )
-                .filled(true)
-                .build();
+            if is_weighted {
+                draw_list
+                    .add_circle([in_x, in_y], handle_size, handle_color)
+                    .filled(true)
+                    .build();
+            } else {
+                draw_list
+                    .add_rect(
+                        [in_x - handle_size, in_y - handle_size],
+                        [in_x + handle_size, in_y + handle_size],
+                        handle_color,
+                    )
+                    .filled(true)
+                    .build();
+            }
 
             let out_x = vt.time_to_x(kf.time + kf.out_tangent.time_offset);
             let out_y = vt.value_to_y(kf.value + kf.out_tangent.value_offset);
@@ -1420,14 +1450,21 @@ fn draw_tangent_handles(
                 .add_line([kf_x, kf_y], [out_x, out_y], handle_color)
                 .thickness(1.0)
                 .build();
-            draw_list
-                .add_rect(
-                    [out_x - handle_size, out_y - handle_size],
-                    [out_x + handle_size, out_y + handle_size],
-                    handle_color,
-                )
-                .filled(true)
-                .build();
+            if is_weighted {
+                draw_list
+                    .add_circle([out_x, out_y], handle_size, handle_color)
+                    .filled(true)
+                    .build();
+            } else {
+                draw_list
+                    .add_rect(
+                        [out_x - handle_size, out_y - handle_size],
+                        [out_x + handle_size, out_y + handle_size],
+                        handle_color,
+                    )
+                    .filled(true)
+                    .build();
+            }
 
             break;
         }

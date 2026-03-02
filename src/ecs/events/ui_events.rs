@@ -2,7 +2,7 @@ use cgmath::{Quaternion, Vector3};
 
 use crate::animation::editable::{
     BezierHandle, BlendMode, ClipGroupId, ClipInstanceId, InterpolationType, KeyframeId,
-    PropertyType, SourceClipId,
+    PropertyType, SourceClipId, TangentWeightMode,
 };
 use crate::animation::BoneId;
 use crate::animation::{ConstraintId, ConstraintType};
@@ -110,6 +110,13 @@ pub enum UIEvent {
         bone_id: BoneId,
         property_type: PropertyType,
         keyframe_id: KeyframeId,
+    },
+
+    TimelineSetTangentWeightMode {
+        bone_id: BoneId,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+        weight_mode: TangentWeightMode,
     },
 
     TimelineToggleViewMode,

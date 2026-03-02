@@ -1,4 +1,4 @@
-use super::keyframe::{BezierHandle, EditableKeyframe};
+use super::keyframe::{BezierHandle, EditableKeyframe, TangentWeightMode};
 
 pub fn sample_bezier(
     k0_time: f32,
@@ -67,6 +67,40 @@ fn evaluate_cubic_derivative(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 
         + 3.0 * t * t * (p3 - p2)
 }
 
+pub fn handle_length(handle: &BezierHandle) -> f32 {
+    (handle.time_offset * handle.time_offset + handle.value_offset * handle.value_offset).sqrt()
+}
+
+pub fn handle_from_slope_and_length(slope: f32, length: f32, direction_sign: f32) -> BezierHandle {
+    if length.abs() < 1e-8 {
+        return BezierHandle::linear();
+    }
+    let denom = (1.0 + slope * slope).sqrt();
+    let time_offset = direction_sign * (length / denom);
+    let value_offset = slope * time_offset;
+    BezierHandle::new(time_offset, value_offset)
+}
+
+pub fn initialize_weighted_handle_lengths(keyframe: &mut EditableKeyframe, dt: f32) {
+    let default_len = dt / 3.0;
+    if handle_length(&keyframe.in_tangent) < 1e-8 {
+        let slope = if keyframe.in_tangent.time_offset.abs() > 1e-8 {
+            keyframe.in_tangent.value_offset / keyframe.in_tangent.time_offset
+        } else {
+            0.0
+        };
+        keyframe.in_tangent = handle_from_slope_and_length(slope, default_len, -1.0);
+    }
+    if handle_length(&keyframe.out_tangent) < 1e-8 {
+        let slope = if keyframe.out_tangent.time_offset.abs() > 1e-8 {
+            keyframe.out_tangent.value_offset / keyframe.out_tangent.time_offset
+        } else {
+            0.0
+        };
+        keyframe.out_tangent = handle_from_slope_and_length(slope, default_len, 1.0);
+    }
+}
+
 pub fn apply_auto_tangent(keyframes: &mut [EditableKeyframe], index: usize) {
     let len = keyframes.len();
     if len < 2 || index >= len {
@@ -101,17 +135,36 @@ pub fn apply_auto_tangent(keyframes: &mut [EditableKeyframe], index: usize) {
         (slope, dt)
     };
 
-    let handle_time = dt / 3.0;
-    let handle_value = slope * handle_time;
-
-    keyframes[index].in_tangent = BezierHandle::new(-handle_time, -handle_value);
-    keyframes[index].out_tangent = BezierHandle::new(handle_time, handle_value);
+    match keyframes[index].weight_mode {
+        TangentWeightMode::Weighted => {
+            let in_len = handle_length(&keyframes[index].in_tangent);
+            let out_len = handle_length(&keyframes[index].out_tangent);
+            keyframes[index].in_tangent = handle_from_slope_and_length(slope, in_len, -1.0);
+            keyframes[index].out_tangent = handle_from_slope_and_length(slope, out_len, 1.0);
+        }
+        TangentWeightMode::NonWeighted => {
+            let handle_time = dt / 3.0;
+            let handle_value = slope * handle_time;
+            keyframes[index].in_tangent = BezierHandle::new(-handle_time, -handle_value);
+            keyframes[index].out_tangent = BezierHandle::new(handle_time, handle_value);
+        }
+    }
 }
 
 pub fn apply_flat_tangent(keyframe: &mut EditableKeyframe, dt: f32) {
-    let handle_time = dt / 3.0;
-    keyframe.in_tangent = BezierHandle::new(-handle_time, 0.0);
-    keyframe.out_tangent = BezierHandle::new(handle_time, 0.0);
+    match keyframe.weight_mode {
+        TangentWeightMode::Weighted => {
+            let in_len = handle_length(&keyframe.in_tangent);
+            let out_len = handle_length(&keyframe.out_tangent);
+            keyframe.in_tangent = BezierHandle::new(-in_len, 0.0);
+            keyframe.out_tangent = BezierHandle::new(out_len, 0.0);
+        }
+        TangentWeightMode::NonWeighted => {
+            let handle_time = dt / 3.0;
+            keyframe.in_tangent = BezierHandle::new(-handle_time, 0.0);
+            keyframe.out_tangent = BezierHandle::new(handle_time, 0.0);
+        }
+    }
 }
 
 pub fn apply_linear_tangent(
@@ -123,14 +176,22 @@ pub fn apply_linear_tangent(
         return (BezierHandle::linear(), BezierHandle::linear());
     }
 
+    let weighted = keyframes[index].weight_mode == TangentWeightMode::Weighted;
+
     let in_handle = if index > 0 {
         let prev = &keyframes[index - 1];
         let curr = &keyframes[index];
         let dt = curr.time - prev.time;
         let dv = curr.value - prev.value;
-        let handle_time = dt / 3.0;
-        let handle_value = dv / 3.0;
-        BezierHandle::new(-handle_time, -handle_value)
+        if weighted {
+            let existing_len = handle_length(&curr.in_tangent);
+            let slope = if dt.abs() > 1e-8 { dv / dt } else { 0.0 };
+            handle_from_slope_and_length(slope, existing_len, -1.0)
+        } else {
+            let handle_time = dt / 3.0;
+            let handle_value = dv / 3.0;
+            BezierHandle::new(-handle_time, -handle_value)
+        }
     } else {
         BezierHandle::linear()
     };
@@ -140,9 +201,15 @@ pub fn apply_linear_tangent(
         let next = &keyframes[index + 1];
         let dt = next.time - curr.time;
         let dv = next.value - curr.value;
-        let handle_time = dt / 3.0;
-        let handle_value = dv / 3.0;
-        BezierHandle::new(handle_time, handle_value)
+        if weighted {
+            let existing_len = handle_length(&curr.out_tangent);
+            let slope = if dt.abs() > 1e-8 { dv / dt } else { 0.0 };
+            handle_from_slope_and_length(slope, existing_len, 1.0)
+        } else {
+            let handle_time = dt / 3.0;
+            let handle_value = dv / 3.0;
+            BezierHandle::new(handle_time, handle_value)
+        }
     } else {
         BezierHandle::linear()
     };
@@ -216,5 +283,136 @@ mod tests {
     fn test_stepped_sample() {
         let k0_value: f32 = 3.0;
         assert!((k0_value - 3.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_weighted_auto_tangent_preserves_handle_length() {
+        let mut keyframes = vec![
+            EditableKeyframe::new(1, 0.0, 0.0),
+            EditableKeyframe::new(2, 1.0, 2.0),
+            EditableKeyframe::new(3, 2.0, 4.0),
+        ];
+
+        // Set initial tangent with known handle length
+        let initial_length = 0.5;
+        keyframes[1].in_tangent = BezierHandle::new(-initial_length, 0.0);
+        keyframes[1].out_tangent = BezierHandle::new(initial_length, 0.0);
+        keyframes[1].weight_mode = TangentWeightMode::Weighted;
+
+        apply_auto_tangent(&mut keyframes, 1);
+
+        let in_len = handle_length(&keyframes[1].in_tangent);
+        let out_len = handle_length(&keyframes[1].out_tangent);
+        assert!(
+            (in_len - initial_length).abs() < 1e-4,
+            "In handle length changed: {} vs {}",
+            in_len,
+            initial_length
+        );
+        assert!(
+            (out_len - initial_length).abs() < 1e-4,
+            "Out handle length changed: {} vs {}",
+            out_len,
+            initial_length
+        );
+    }
+
+    #[test]
+    fn test_non_weighted_auto_tangent_resets_handle_length() {
+        let mut keyframes = vec![
+            EditableKeyframe::new(1, 0.0, 0.0),
+            EditableKeyframe::new(2, 1.0, 2.0),
+            EditableKeyframe::new(3, 2.0, 4.0),
+        ];
+
+        // Set non-standard tangent
+        keyframes[1].in_tangent = BezierHandle::new(-0.8, -0.5);
+        keyframes[1].out_tangent = BezierHandle::new(0.8, 0.5);
+        keyframes[1].weight_mode = TangentWeightMode::NonWeighted;
+
+        apply_auto_tangent(&mut keyframes, 1);
+
+        let dt = (2.0 - 0.0) * 0.5;
+        let expected_handle_time = dt / 3.0;
+        assert!(
+            (keyframes[1].out_tangent.time_offset - expected_handle_time).abs() < 1e-4,
+            "NonWeighted should reset to dt/3.0"
+        );
+    }
+
+    #[test]
+    fn test_weighted_flat_tangent_preserves_length() {
+        let mut kf = EditableKeyframe::new(1, 1.0, 5.0);
+        kf.in_tangent = BezierHandle::new(-0.4, -0.3);
+        kf.out_tangent = BezierHandle::new(0.4, 0.3);
+        kf.weight_mode = TangentWeightMode::Weighted;
+
+        let in_len_before = handle_length(&kf.in_tangent);
+        let out_len_before = handle_length(&kf.out_tangent);
+
+        apply_flat_tangent(&mut kf, 1.0);
+
+        let in_len_after = handle_length(&kf.in_tangent);
+        let out_len_after = handle_length(&kf.out_tangent);
+
+        assert!(
+            (in_len_after - in_len_before).abs() < 1e-4,
+            "Weighted flat should preserve in handle length"
+        );
+        assert!(
+            (out_len_after - out_len_before).abs() < 1e-4,
+            "Weighted flat should preserve out handle length"
+        );
+        assert!(
+            kf.in_tangent.value_offset.abs() < 1e-6,
+            "Flat tangent should have zero value_offset"
+        );
+        assert!(
+            kf.out_tangent.value_offset.abs() < 1e-6,
+            "Flat tangent should have zero value_offset"
+        );
+    }
+
+    #[test]
+    fn test_default_weight_mode_is_non_weighted() {
+        let kf = EditableKeyframe::new(1, 0.0, 0.0);
+        assert_eq!(kf.weight_mode, TangentWeightMode::NonWeighted);
+
+        let kf_default = EditableKeyframe::default();
+        assert_eq!(kf_default.weight_mode, TangentWeightMode::NonWeighted);
+    }
+
+    #[test]
+    fn test_handle_length_calculation() {
+        let h1 = BezierHandle::new(3.0, 4.0);
+        assert!((handle_length(&h1) - 5.0).abs() < 1e-6);
+
+        let h2 = BezierHandle::new(0.0, 0.0);
+        assert!(handle_length(&h2).abs() < 1e-6);
+
+        let h3 = BezierHandle::new(-1.0, 0.0);
+        assert!((handle_length(&h3) - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_handle_from_slope_and_length() {
+        // slope=0 should produce horizontal handle
+        let h = handle_from_slope_and_length(0.0, 0.5, 1.0);
+        assert!((h.time_offset - 0.5).abs() < 1e-4);
+        assert!(h.value_offset.abs() < 1e-4);
+
+        // slope=1 at 45 degrees, length=sqrt(2)
+        let h = handle_from_slope_and_length(1.0, 2.0_f32.sqrt(), 1.0);
+        assert!((h.time_offset - 1.0).abs() < 1e-4);
+        assert!((h.value_offset - 1.0).abs() < 1e-4);
+
+        // negative direction
+        let h = handle_from_slope_and_length(1.0, 2.0_f32.sqrt(), -1.0);
+        assert!((h.time_offset - (-1.0)).abs() < 1e-4);
+        assert!((h.value_offset - (-1.0)).abs() < 1e-4);
+
+        // zero length
+        let h = handle_from_slope_and_length(1.0, 0.0, 1.0);
+        assert!(handle_length(&h).abs() < 1e-6);
     }
 }

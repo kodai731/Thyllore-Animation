@@ -106,6 +106,7 @@ pub fn mirror_keyframes(
                 interpolation: entry.interpolation,
                 in_tangent: entry.in_tangent.clone(),
                 out_tangent: entry.out_tangent.clone(),
+                weight_mode: entry.weight_mode,
             }
         })
         .collect();
@@ -162,7 +163,7 @@ mod tests {
 
     #[test]
     fn test_mirror_keyframes_translation_x_negated() {
-        use crate::animation::editable::{BezierHandle, InterpolationType};
+        use crate::animation::editable::{BezierHandle, InterpolationType, TangentWeightMode};
 
         let buffer = KeyframeCopyBuffer {
             entries: vec![CopiedKeyframe {
@@ -173,6 +174,7 @@ mod tests {
                 interpolation: InterpolationType::Linear,
                 in_tangent: BezierHandle::linear(),
                 out_tangent: BezierHandle::linear(),
+                weight_mode: TangentWeightMode::NonWeighted,
             }],
             base_time: 0.0,
             source_clip_id: None,

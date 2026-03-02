@@ -1,4 +1,6 @@
-use crate::animation::editable::SourceClipId;
+use crate::animation::editable::{
+    initialize_weighted_handle_lengths, SourceClipId, TangentWeightMode,
+};
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{ClipLibrary, TimelineState};
@@ -221,6 +223,42 @@ pub fn timeline_process_events(
                             track
                                 .get_curve_mut(*property_type)
                                 .recalculate_auto_tangent_at(*keyframe_id);
+                            clip_modified = true;
+                        }
+                    }
+                }
+            }
+
+            UIEvent::TimelineSetTangentWeightMode {
+                bone_id,
+                property_type,
+                keyframe_id,
+                weight_mode,
+            } => {
+                if let Some(clip_id) = timeline_state.current_clip_id {
+                    if let Some(clip) = clip_library.get_mut(clip_id) {
+                        if let Some(track) = clip.tracks.get_mut(bone_id) {
+                            let curve = track.get_curve_mut(*property_type);
+                            curve.set_keyframe_weight_mode(*keyframe_id, *weight_mode);
+                            if *weight_mode == TangentWeightMode::Weighted {
+                                if let Some(idx) =
+                                    curve.keyframes.iter().position(|k| k.id == *keyframe_id)
+                                {
+                                    let dt = if curve.keyframes.len() >= 2 {
+                                        let first = curve.keyframes.first().unwrap().time;
+                                        let last = curve.keyframes.last().unwrap().time;
+                                        ((last - first)
+                                            / (curve.keyframes.len() as f32 - 1.0).max(1.0))
+                                        .max(0.1)
+                                    } else {
+                                        1.0
+                                    };
+                                    initialize_weighted_handle_lengths(
+                                        &mut curve.keyframes[idx],
+                                        dt,
+                                    );
+                                }
+                            }
                             clip_modified = true;
                         }
                     }

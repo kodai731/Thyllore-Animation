@@ -4,7 +4,8 @@ use imgui::Condition;
 
 use super::timeline_window::ruler_padding;
 use crate::animation::editable::{
-    BezierHandle, InterpolationType, KeyframeId, PropertyCurve, PropertyType, TangentWeightMode,
+    curve_sample, BezierHandle, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
+    TangentWeightMode,
 };
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
@@ -1331,7 +1332,7 @@ fn draw_curve_with_keyframes(
         for s in 0..segment_samples {
             let frac = s as f32 / (segment_samples - 1) as f32;
             let time = k0.time + (k1.time - k0.time) * frac;
-            if let Some(value) = curve.sample(time) {
+            if let Some(value) = curve_sample(curve, time) {
                 let point = [vt.time_to_x(time), vt.value_to_y(value)];
                 if let Some(prev) = prev_point {
                     draw_list

@@ -1,5 +1,6 @@
 use crate::animation::editable::{
-    initialize_weighted_handle_lengths, SourceClipId, TangentWeightMode,
+    curve_recalculate_auto_tangent_at, curve_remove_keyframe, initialize_weighted_handle_lengths,
+    SourceClipId, TangentWeightMode,
 };
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UIEvent;
@@ -91,9 +92,10 @@ pub fn timeline_process_events(
                         if let Some(clip) = clip_library.get_mut(clip_id) {
                             for sel in &selected {
                                 if let Some(track) = clip.tracks.get_mut(&sel.bone_id) {
-                                    track
-                                        .get_curve_mut(sel.property_type)
-                                        .remove_keyframe(sel.keyframe_id);
+                                    curve_remove_keyframe(
+                                        track.get_curve_mut(sel.property_type),
+                                        sel.keyframe_id,
+                                    );
                                 }
                             }
                             clip.recalculate_duration();
@@ -135,9 +137,10 @@ pub fn timeline_process_events(
                 if let Some(clip_id) = timeline_state.current_clip_id {
                     if let Some(clip) = clip_library.get_mut(clip_id) {
                         if let Some(track) = clip.tracks.get_mut(bone_id) {
-                            track
-                                .get_curve_mut(*property_type)
-                                .remove_keyframe(*keyframe_id);
+                            curve_remove_keyframe(
+                                track.get_curve_mut(*property_type),
+                                *keyframe_id,
+                            );
                         }
                         clip.recalculate_duration();
                         clip_modified = true;
@@ -220,9 +223,10 @@ pub fn timeline_process_events(
                 if let Some(clip_id) = timeline_state.current_clip_id {
                     if let Some(clip) = clip_library.get_mut(clip_id) {
                         if let Some(track) = clip.tracks.get_mut(bone_id) {
-                            track
-                                .get_curve_mut(*property_type)
-                                .recalculate_auto_tangent_at(*keyframe_id);
+                            curve_recalculate_auto_tangent_at(
+                                track.get_curve_mut(*property_type),
+                                *keyframe_id,
+                            );
                             clip_modified = true;
                         }
                     }

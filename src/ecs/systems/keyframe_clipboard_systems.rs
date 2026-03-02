@@ -1,3 +1,4 @@
+use crate::animation::editable::curve_add_keyframe;
 use crate::animation::editable::mirror::{build_mirror_mapping, mirror_keyframes};
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{ClipLibrary, CopiedKeyframe, KeyframeCopyBuffer, TimelineState};
@@ -105,7 +106,7 @@ fn paste_keyframes(
         let time = paste_time + entry.relative_time;
         if let Some(track) = clip.tracks.get_mut(&entry.bone_id) {
             let curve = track.get_curve_mut(entry.property_type);
-            let new_id = curve.add_keyframe(time, entry.value);
+            let new_id = curve_add_keyframe(curve, time, entry.value);
             curve.set_keyframe_interpolation(new_id, entry.interpolation);
             curve.set_keyframe_tangents(
                 new_id,
@@ -153,7 +154,7 @@ fn mirror_paste_keyframes(
         let time = paste_time + entry.relative_time;
         if let Some(track) = clip.tracks.get_mut(&entry.bone_id) {
             let curve = track.get_curve_mut(entry.property_type);
-            let new_id = curve.add_keyframe(time, entry.value);
+            let new_id = curve_add_keyframe(curve, time, entry.value);
             curve.set_keyframe_interpolation(new_id, entry.interpolation);
             curve.set_keyframe_tangents(
                 new_id,

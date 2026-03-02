@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::animation::editable::{
-    BezierHandle, EditableAnimationClip, InterpolationType, PropertyType,
+    curve_add_keyframe_with_tangents, BezierHandle, EditableAnimationClip, InterpolationType,
+    PropertyType,
 };
 use crate::animation::BoneId;
 
@@ -49,7 +50,8 @@ pub fn convert_motion_response_to_clip(
         for kf in &raw_curve.keyframes {
             let (in_tangent, out_tangent, interpolation) = convert_keyframe_tangents(kf);
 
-            curve.add_keyframe_with_tangents(
+            curve_add_keyframe_with_tangents(
+                curve,
                 kf.time,
                 kf.value,
                 in_tangent,

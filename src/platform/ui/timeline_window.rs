@@ -1,6 +1,8 @@
 use imgui::Condition;
 
-use crate::animation::editable::{BlendMode, EditableAnimationClip, PropertyCurve, SourceClipId};
+use crate::animation::editable::{
+    curve_sample, BlendMode, EditableAnimationClip, PropertyCurve, SourceClipId,
+};
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
@@ -629,7 +631,7 @@ fn draw_single_curve(
 
     for i in 0..=sample_count {
         let time = (i as f32) * step;
-        if let Some(value) = curve.sample(time) {
+        if let Some(value) = curve_sample(curve, time) {
             let x = cursor_pos[0] + time * pixels_per_second;
             let normalized = (value - min_val) / value_range;
             let y = cursor_pos[1] + height - (normalized * height * 0.8 + height * 0.1);

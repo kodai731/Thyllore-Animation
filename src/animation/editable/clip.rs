@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::animation::{AnimationClip, BoneId, Keyframe, TransformChannel};
 
 use super::curve::{PropertyCurve, PropertyType};
+use super::curve_ops::{curve_add_keyframe, curve_sample};
 use super::keyframe::{EditableKeyframe, InterpolationType, SourceClipId};
 use super::track::BoneTrack;
 
@@ -63,9 +64,9 @@ impl EditableAnimationClip {
 
             for (idx, kf) in channel.rotation.iter().enumerate() {
                 let euler = quaternion_to_euler_degrees(&kf.value);
-                let kf_id_x = track.rotation_x.add_keyframe(kf.time, euler.x);
-                let kf_id_y = track.rotation_y.add_keyframe(kf.time, euler.y);
-                let kf_id_z = track.rotation_z.add_keyframe(kf.time, euler.z);
+                let kf_id_x = curve_add_keyframe(&mut track.rotation_x, kf.time, euler.x);
+                let kf_id_y = curve_add_keyframe(&mut track.rotation_y, kf.time, euler.y);
+                let kf_id_z = curve_add_keyframe(&mut track.rotation_z, kf.time, euler.z);
 
                 if kf.interpolation == Interpolation::CubicSpline {
                     let next_kf = channel.rotation.get(idx + 1);
@@ -112,9 +113,9 @@ impl EditableAnimationClip {
             ];
             let translation_times = collect_bake_times(&translation_curves);
             for time in translation_times {
-                let x = track.translation_x.sample(time).unwrap_or(0.0);
-                let y = track.translation_y.sample(time).unwrap_or(0.0);
-                let z = track.translation_z.sample(time).unwrap_or(0.0);
+                let x = curve_sample(&track.translation_x, time).unwrap_or(0.0);
+                let y = curve_sample(&track.translation_y, time).unwrap_or(0.0);
+                let z = curve_sample(&track.translation_z, time).unwrap_or(0.0);
                 channel
                     .translation
                     .push(Keyframe::new(time, Vector3::new(x, y, z)));
@@ -123,9 +124,9 @@ impl EditableAnimationClip {
             let rotation_curves = [&track.rotation_x, &track.rotation_y, &track.rotation_z];
             let rotation_times = collect_bake_times(&rotation_curves);
             for time in rotation_times {
-                let ex = track.rotation_x.sample(time).unwrap_or(0.0);
-                let ey = track.rotation_y.sample(time).unwrap_or(0.0);
-                let ez = track.rotation_z.sample(time).unwrap_or(0.0);
+                let ex = curve_sample(&track.rotation_x, time).unwrap_or(0.0);
+                let ey = curve_sample(&track.rotation_y, time).unwrap_or(0.0);
+                let ez = curve_sample(&track.rotation_z, time).unwrap_or(0.0);
                 let q = euler_degrees_to_quaternion(ex, ey, ez);
 
                 channel.rotation.push(Keyframe::new(time, q));
@@ -134,9 +135,9 @@ impl EditableAnimationClip {
             let scale_curves = [&track.scale_x, &track.scale_y, &track.scale_z];
             let scale_times = collect_bake_times(&scale_curves);
             for time in scale_times {
-                let x = track.scale_x.sample(time).unwrap_or(1.0);
-                let y = track.scale_y.sample(time).unwrap_or(1.0);
-                let z = track.scale_z.sample(time).unwrap_or(1.0);
+                let x = curve_sample(&track.scale_x, time).unwrap_or(1.0);
+                let y = curve_sample(&track.scale_y, time).unwrap_or(1.0);
+                let z = curve_sample(&track.scale_z, time).unwrap_or(1.0);
                 channel
                     .scale
                     .push(Keyframe::new(time, Vector3::new(x, y, z)));
@@ -183,7 +184,7 @@ impl EditableAnimationClip {
     ) -> Option<u64> {
         self.tracks
             .get_mut(&bone_id)
-            .map(|track| track.get_curve_mut(property_type).add_keyframe(time, value))
+            .map(|track| curve_add_keyframe(track.get_curve_mut(property_type), time, value))
     }
 
     pub fn recalculate_duration(&mut self) {
@@ -237,7 +238,7 @@ fn import_vec3_keyframes(
         let in_tangent = kf.in_tangent.map(|t| [t.x, t.y, t.z]);
 
         for (c_idx, curve) in curves.iter_mut().enumerate() {
-            let kf_id = curve.add_keyframe(kf.time, values[c_idx]);
+            let kf_id = curve_add_keyframe(curve, kf.time, values[c_idx]);
 
             if is_cubic {
                 if let Some(out_t) = &out_tangent {

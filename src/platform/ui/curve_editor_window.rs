@@ -4,7 +4,7 @@ use imgui::Condition;
 
 use super::timeline_window::ruler_padding;
 use crate::animation::editable::{
-    BezierHandle, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
+    BezierHandle, InterpolationType, KeyframeId, PropertyCurve, PropertyType, TangentType,
 };
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
@@ -629,32 +629,24 @@ fn build_keyframe_context_menu(
         ui.text("Tangent");
         ui.separator();
 
-        if ui.selectable_config("Auto").build() {
-            ui_events.send(UIEvent::TimelineAutoTangent {
-                bone_id,
-                property_type: ctx_kf.property_type,
-                keyframe_id: ctx_kf.keyframe_id,
-            });
-        }
+        let tangent_options: &[(&str, TangentType)] = &[
+            ("Spline (Auto)", TangentType::Spline),
+            ("Flat", TangentType::Flat),
+            ("Linear", TangentType::Linear),
+            ("Clamped", TangentType::Clamped),
+            ("Plateau", TangentType::Plateau),
+            ("Manual (Free)", TangentType::Manual),
+        ];
 
-        if ui.selectable_config("Flat").build() {
-            ui_events.send(UIEvent::TimelineSetKeyframeTangent {
-                bone_id,
-                property_type: ctx_kf.property_type,
-                keyframe_id: ctx_kf.keyframe_id,
-                in_tangent: BezierHandle::new(-0.166, 0.0),
-                out_tangent: BezierHandle::new(0.166, 0.0),
-            });
-        }
-
-        if ui.selectable_config("Reset (Linear)").build() {
-            ui_events.send(UIEvent::TimelineSetKeyframeTangent {
-                bone_id,
-                property_type: ctx_kf.property_type,
-                keyframe_id: ctx_kf.keyframe_id,
-                in_tangent: BezierHandle::linear(),
-                out_tangent: BezierHandle::linear(),
-            });
+        for (label, tangent_type) in tangent_options {
+            if ui.selectable_config(label).build() {
+                ui_events.send(UIEvent::TimelineSetTangentType {
+                    bone_id,
+                    property_type: ctx_kf.property_type,
+                    keyframe_id: ctx_kf.keyframe_id,
+                    tangent_type: *tangent_type,
+                });
+            }
         }
     });
 }

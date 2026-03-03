@@ -199,7 +199,11 @@ pub fn timeline_process_events(
                 if let Some(clip_id) = timeline_state.current_clip_id {
                     if let Some(clip) = clip_library.get_mut(clip_id) {
                         if let Some(track) = clip.tracks.get_mut(bone_id) {
-                            track.get_curve_mut(*property_type).set_keyframe_tangents(
+                            let curve = track.get_curve_mut(*property_type);
+                            if let Some(kf) = curve.get_keyframe_mut(*keyframe_id) {
+                                kf.tangent_type = crate::animation::editable::TangentType::Manual;
+                            }
+                            curve.set_keyframe_tangents(
                                 *keyframe_id,
                                 in_tangent.clone(),
                                 out_tangent.clone(),
@@ -218,9 +222,31 @@ pub fn timeline_process_events(
                 if let Some(clip_id) = timeline_state.current_clip_id {
                     if let Some(clip) = clip_library.get_mut(clip_id) {
                         if let Some(track) = clip.tracks.get_mut(bone_id) {
-                            track
-                                .get_curve_mut(*property_type)
-                                .recalculate_auto_tangent_at(*keyframe_id);
+                            let curve = track.get_curve_mut(*property_type);
+                            if let Some(kf) = curve.get_keyframe_mut(*keyframe_id) {
+                                kf.tangent_type = crate::animation::editable::TangentType::Spline;
+                            }
+                            curve.recalculate_tangent_at(*keyframe_id);
+                            clip_modified = true;
+                        }
+                    }
+                }
+            }
+
+            UIEvent::TimelineSetTangentType {
+                bone_id,
+                property_type,
+                keyframe_id,
+                tangent_type,
+            } => {
+                if let Some(clip_id) = timeline_state.current_clip_id {
+                    if let Some(clip) = clip_library.get_mut(clip_id) {
+                        if let Some(track) = clip.tracks.get_mut(bone_id) {
+                            let curve = track.get_curve_mut(*property_type);
+                            if let Some(kf) = curve.get_keyframe_mut(*keyframe_id) {
+                                kf.tangent_type = *tangent_type;
+                            }
+                            curve.recalculate_tangent_at(*keyframe_id);
                             clip_modified = true;
                         }
                     }

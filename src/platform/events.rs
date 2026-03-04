@@ -7,8 +7,9 @@ use winit::keyboard::{Key, NamedKey};
 use super::platform::System;
 use super::ui::{
     build_click_debug_overlay, build_clip_browser_window, build_curve_editor_window,
-    build_debug_window, build_hierarchy_window, build_inspector_window, build_timeline_window,
-    build_viewport_window, collect_clip_track_snapshot, CurveEditorState, DebugWindowState,
+    build_debug_window, build_hierarchy_window, build_inspector_window, build_status_bar_overlay,
+    build_timeline_window, build_viewport_window, collect_clip_track_snapshot, CurveEditorState,
+    DebugWindowState, StatusBarState,
 };
 use crate::app::{App, GUIData};
 use crate::debugview::gizmo::{BoneGizmoData, BoneSelectionState};
@@ -65,6 +66,7 @@ impl System {
             mut platform,
         } = self;
         let mut last_frame = Instant::now();
+        let mut status_bar_state = StatusBarState::default();
 
         event_loop
             .run(move |event, window_target| match event {
@@ -134,6 +136,7 @@ impl System {
                                 &window,
                                 app,
                                 gui_data,
+                                &mut status_bar_state,
                             );
                         }
                         _ => {}
@@ -151,6 +154,7 @@ fn handle_redraw_requested(
     window: &winit::window::Window,
     app: &mut App,
     gui_data: &mut GUIData,
+    status_bar_state: &mut StatusBarState,
 ) {
     let ui = imgui.frame();
     ui.dockspace_over_main_viewport();
@@ -176,7 +180,7 @@ fn handle_redraw_requested(
         }
     };
 
-    build_ui_windows(ui, app, gui_data, &mut debug_state);
+    build_ui_windows(ui, app, gui_data, &mut debug_state, status_bar_state);
 
     {
         let mut rt_debug_mut = app.rt_debug_state_mut();
@@ -202,6 +206,7 @@ fn build_ui_windows(
     app: &mut App,
     gui_data: &mut GUIData,
     debug_state: &mut DebugWindowState,
+    status_bar_state: &mut StatusBarState,
 ) {
     {
         let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
@@ -252,30 +257,31 @@ fn build_ui_windows(
         );
     }
 
-    {
+    let viewport_info = {
         let texture_id = imgui::TextureId::new(app.data.viewport.texture_id());
         let current_size = [
             app.data.viewport.width as f32,
             app.data.viewport.height as f32,
         ];
-        let viewport_info = build_viewport_window(ui, texture_id, current_size);
+        let info = build_viewport_window(ui, texture_id, current_size);
 
-        app.data.viewport.focused = viewport_info.focused;
-        app.data.viewport.hovered = viewport_info.hovered;
-        gui_data.viewport_focused = viewport_info.focused;
-        gui_data.viewport_hovered = viewport_info.hovered;
-        gui_data.viewport_position = viewport_info.position;
-        gui_data.viewport_size = viewport_info.size;
+        app.data.viewport.focused = info.focused;
+        app.data.viewport.hovered = info.hovered;
+        gui_data.viewport_focused = info.focused;
+        gui_data.viewport_hovered = info.hovered;
+        gui_data.viewport_position = info.position;
+        gui_data.viewport_size = info.size;
 
-        let new_width = viewport_info.size[0] as u32;
-        let new_height = viewport_info.size[1] as u32;
+        let new_width = info.size[0] as u32;
+        let new_height = info.size[1] as u32;
         if new_width > 0
             && new_height > 0
             && (new_width != app.data.viewport.width || new_height != app.data.viewport.height)
         {
             gui_data.viewport_resize_pending = Some((new_width, new_height));
         }
-    }
+        info
+    };
 
     let clip_track_snapshot = {
         let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
@@ -339,6 +345,26 @@ fn build_ui_windows(
             &mut *curve_editor,
             &*curve_buffer,
             &suggestion_overlays,
+        );
+    }
+
+    {
+        let delta_time = (app.start.elapsed().as_secs_f32() - app.last_update_time).max(0.001);
+        let timeline_state = app.data.ecs_world.resource::<TimelineState>();
+        let clip_duration = timeline_state
+            .current_clip_id
+            .and_then(|id| {
+                let lib = app.data.ecs_world.resource::<ClipLibrary>();
+                lib.get(id).map(|c| c.duration)
+            })
+            .unwrap_or(0.0);
+        build_status_bar_overlay(
+            ui,
+            status_bar_state,
+            delta_time,
+            &viewport_info,
+            &*timeline_state,
+            clip_duration,
         );
     }
 }

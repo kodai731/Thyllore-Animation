@@ -5,7 +5,8 @@ use std::process::Command;
 
 use crate::app::graphics_resource::{GraphicsResources, NodeData};
 use crate::ecs::systems::{
-    apply_skinning, compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
+    apply_pose_overrides, apply_skinning, compute_local_override_from_global_translation,
+    compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
 };
 use crate::loader::ModelLoadResult;
 
@@ -415,4 +416,480 @@ fn test_gltf_stickman_bounds_match_blender() {
     };
 
     run_bounds_test(model_path, compute_fn, &load_result, &blender_bounds);
+}
+
+#[test]
+fn test_fbx_stickman_bone_vs_node_positions() {
+    let model_path = "assets/models/stickman/stickman_bin.fbx";
+    if !Path::new(model_path).exists() {
+        eprintln!("Skipping: {} not found", model_path);
+        return;
+    }
+
+    let (fbx_result, _) = crate::loader::fbx::loader::load_fbx_to_graphics_resources(model_path)
+        .expect("Failed to load FBX");
+
+    let has_skinned = fbx_result.has_skinned_meshes;
+    let load_result = ModelLoadResult::from_fbx(fbx_result);
+
+    eprintln!("has_skinned_meshes: {}", has_skinned);
+    eprintln!("node_animation_scale: {}", load_result.node_animation_scale);
+    eprintln!("skeletons: {}", load_result.skeletons.len());
+    eprintln!("nodes: {}", load_result.nodes.len());
+    eprintln!("meshes: {}", load_result.meshes.len());
+
+    let skeleton = load_result.skeletons.first().expect("No skeleton");
+    eprintln!(
+        "skeleton.root_transform diagonal: ({}, {}, {}, {})",
+        skeleton.root_transform[0][0],
+        skeleton.root_transform[1][1],
+        skeleton.root_transform[2][2],
+        skeleton.root_transform[3][3]
+    );
+    eprintln!(
+        "skeleton.root_transform translation: ({}, {}, {})",
+        skeleton.root_transform[3][0], skeleton.root_transform[3][1], skeleton.root_transform[3][2]
+    );
+
+    let rest_pose = create_pose_from_rest(skeleton);
+    let bone_globals = compute_pose_global_transforms(skeleton, &rest_pose);
+
+    let mut nodes: Vec<NodeData> = load_result
+        .nodes
+        .iter()
+        .map(|n| NodeData {
+            index: n.index,
+            name: n.name.clone(),
+            parent_index: n.parent_index,
+            local_transform: n.local_transform,
+            global_transform: Matrix4::identity(),
+        })
+        .collect();
+    GraphicsResources::compute_node_global_transforms(&mut nodes, skeleton, &rest_pose);
+
+    eprintln!("\n--- Bone positions (skeleton path) ---");
+    for bone in &skeleton.bones {
+        let idx = bone.id as usize;
+        if idx < bone_globals.len() {
+            let t = &bone_globals[idx];
+            eprintln!(
+                "  bone[{}] '{}': pos=({:.4}, {:.4}, {:.4})",
+                idx, bone.name, t[3][0], t[3][1], t[3][2]
+            );
+        }
+    }
+
+    eprintln!("\n--- Node positions (node path) ---");
+    for node in &nodes {
+        let t = &node.global_transform;
+        eprintln!(
+            "  node[{}] '{}': pos=({:.4}, {:.4}, {:.4})",
+            node.index, node.name, t[3][0], t[3][1], t[3][2]
+        );
+    }
+
+    eprintln!("\n--- Comparing bone vs node by name ---");
+    let mut max_diff = 0.0f32;
+    for bone in &skeleton.bones {
+        let idx = bone.id as usize;
+        if idx >= bone_globals.len() {
+            continue;
+        }
+        let bone_pos = Vector3::new(
+            bone_globals[idx][3][0],
+            bone_globals[idx][3][1],
+            bone_globals[idx][3][2],
+        );
+
+        if let Some(node) = nodes.iter().find(|n| n.name == bone.name) {
+            let node_pos = Vector3::new(
+                node.global_transform[3][0],
+                node.global_transform[3][1],
+                node.global_transform[3][2],
+            );
+            let diff = ((bone_pos.x - node_pos.x).powi(2)
+                + (bone_pos.y - node_pos.y).powi(2)
+                + (bone_pos.z - node_pos.z).powi(2))
+            .sqrt();
+            if diff > 0.001 {
+                eprintln!(
+                    "  MISMATCH '{}': bone=({:.4}, {:.4}, {:.4}), node=({:.4}, {:.4}, {:.4}), diff={:.4}",
+                    bone.name, bone_pos.x, bone_pos.y, bone_pos.z,
+                    node_pos.x, node_pos.y, node_pos.z, diff
+                );
+            }
+            max_diff = max_diff.max(diff);
+        } else {
+            eprintln!("  bone '{}' has no matching node", bone.name);
+        }
+    }
+    eprintln!("\nMax bone-node position difference: {:.6}", max_diff);
+
+    let mesh_scale = if has_skinned {
+        1.0
+    } else {
+        load_result.node_animation_scale
+    };
+    eprintln!("bone gizmo mesh_scale: {}", mesh_scale);
+
+    eprintln!("\n--- Mesh vertex ranges ---");
+    for (i, mesh) in load_result.meshes.iter().enumerate() {
+        let mut min = Vector3::new(f32::MAX, f32::MAX, f32::MAX);
+        let mut max = Vector3::new(f32::MIN, f32::MIN, f32::MIN);
+        for v in &mesh.local_vertices {
+            min.x = min.x.min(v.pos.x);
+            min.y = min.y.min(v.pos.y);
+            min.z = min.z.min(v.pos.z);
+            max.x = max.x.max(v.pos.x);
+            max.y = max.y.max(v.pos.y);
+            max.z = max.z.max(v.pos.z);
+        }
+        eprintln!(
+            "  mesh[{}] node={:?}: local_verts min=({:.4},{:.4},{:.4}) max=({:.4},{:.4},{:.4})",
+            i, mesh.node_index, min.x, min.y, min.z, max.x, max.y, max.z
+        );
+    }
+}
+
+#[test]
+fn test_bone_pose_override_roundtrip() {
+    let model_path = "assets/models/stickman/stickman_bin.fbx";
+    if !Path::new(model_path).exists() {
+        eprintln!("Skipping: {} not found", model_path);
+        return;
+    }
+
+    let (fbx_result, _) = crate::loader::fbx::loader::load_fbx_to_graphics_resources(model_path)
+        .expect("Failed to load FBX");
+    let load_result = ModelLoadResult::from_fbx(fbx_result);
+    let skeleton = load_result.skeletons.first().expect("No skeleton");
+
+    let rest_pose = create_pose_from_rest(skeleton);
+    let rest_globals = compute_pose_global_transforms(skeleton, &rest_pose);
+
+    eprintln!(
+        "Skeleton: {} bones, root_transform_is_identity={}",
+        skeleton.bones.len(),
+        skeleton.root_transform == Matrix4::identity()
+    );
+
+    for bone in &skeleton.bones {
+        let idx = bone.id as usize;
+        if idx >= rest_globals.len() {
+            continue;
+        }
+
+        let original_pos = Vector3::new(
+            rest_globals[idx][3][0],
+            rest_globals[idx][3][1],
+            rest_globals[idx][3][2],
+        );
+        let new_pos = original_pos + Vector3::new(0.5, 0.0, 0.0);
+
+        let override_local = compute_local_override_from_global_translation(
+            skeleton,
+            &rest_globals,
+            bone.id,
+            new_pos,
+        );
+        let Some(override_pose) = override_local else {
+            eprintln!(
+                "  bone[{}] '{}': override computation failed",
+                idx, bone.name
+            );
+            continue;
+        };
+
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert(bone.id, override_pose);
+
+        let mut overridden_pose = rest_pose.clone();
+        apply_pose_overrides(&mut overridden_pose, &overrides);
+
+        let pose_globals = compute_pose_global_transforms(skeleton, &overridden_pose);
+
+        let mut nodes: Vec<NodeData> = load_result
+            .nodes
+            .iter()
+            .map(|n| NodeData {
+                index: n.index,
+                name: n.name.clone(),
+                parent_index: n.parent_index,
+                local_transform: n.local_transform,
+                global_transform: Matrix4::identity(),
+            })
+            .collect();
+        GraphicsResources::compute_node_global_transforms(&mut nodes, skeleton, &overridden_pose);
+
+        let pose_pos = Vector3::new(
+            pose_globals[idx][3][0],
+            pose_globals[idx][3][1],
+            pose_globals[idx][3][2],
+        );
+
+        let node_pos = nodes.iter().find(|n| n.name == bone.name).map(|n| {
+            Vector3::new(
+                n.global_transform[3][0],
+                n.global_transform[3][1],
+                n.global_transform[3][2],
+            )
+        });
+
+        let pose_diff = ((pose_pos.x - new_pos.x).powi(2)
+            + (pose_pos.y - new_pos.y).powi(2)
+            + (pose_pos.z - new_pos.z).powi(2))
+        .sqrt();
+
+        let node_diff = node_pos.map(|np| {
+            ((np.x - new_pos.x).powi(2) + (np.y - new_pos.y).powi(2) + (np.z - new_pos.z).powi(2))
+                .sqrt()
+        });
+
+        let bone_node_diff = node_pos.map(|np| {
+            ((np.x - pose_pos.x).powi(2)
+                + (np.y - pose_pos.y).powi(2)
+                + (np.z - pose_pos.z).powi(2))
+            .sqrt()
+        });
+
+        if bone_node_diff.unwrap_or(0.0) > 0.001 {
+            eprintln!(
+                "  MISMATCH bone[{}] '{}': expected=({:.4},{:.4},{:.4}), \
+                 pose_global=({:.4},{:.4},{:.4}) diff={:.4}, \
+                 node_global=({:.4},{:.4},{:.4}) diff={:.4}, \
+                 bone_vs_node={:.4}",
+                idx,
+                bone.name,
+                new_pos.x,
+                new_pos.y,
+                new_pos.z,
+                pose_pos.x,
+                pose_pos.y,
+                pose_pos.z,
+                pose_diff,
+                node_pos.map_or(f32::NAN, |p| p.x),
+                node_pos.map_or(f32::NAN, |p| p.y),
+                node_pos.map_or(f32::NAN, |p| p.z),
+                node_diff.unwrap_or(f32::NAN),
+                bone_node_diff.unwrap_or(f32::NAN),
+            );
+        }
+
+        assert!(
+            pose_diff < 0.01,
+            "bone[{}] '{}': pose global didn't match expected position, diff={}",
+            idx,
+            bone.name,
+            pose_diff
+        );
+
+        if let Some(bnd) = bone_node_diff {
+            assert!(
+                bnd < 0.01,
+                "bone[{}] '{}': pose global vs node global mismatch, diff={}",
+                idx,
+                bone.name,
+                bnd
+            );
+        }
+    }
+
+    eprintln!("All bones passed override roundtrip test");
+}
+
+#[test]
+fn test_gltf_bone_pose_override_roundtrip() {
+    let model_path = "assets/models/stickman/stickman.glb";
+    if !Path::new(model_path).exists() {
+        eprintln!("Skipping: {} not found", model_path);
+        return;
+    }
+
+    let gltf_result = unsafe { crate::loader::gltf::load_gltf_file(model_path) };
+    let load_result = ModelLoadResult::from_gltf(gltf_result);
+    let skeleton = load_result.skeletons.first().expect("No skeleton");
+
+    let rest_pose = create_pose_from_rest(skeleton);
+    let rest_globals = compute_pose_global_transforms(skeleton, &rest_pose);
+
+    let root_is_identity = skeleton.root_transform == Matrix4::identity();
+    eprintln!(
+        "glTF Skeleton: {} bones, root_transform_is_identity={}, node_animation_scale={}",
+        skeleton.bones.len(),
+        root_is_identity,
+        load_result.node_animation_scale,
+    );
+    if !root_is_identity {
+        eprintln!(
+            "  root_transform diag=({:.4},{:.4},{:.4}), trans=({:.4},{:.4},{:.4})",
+            skeleton.root_transform[0][0],
+            skeleton.root_transform[1][1],
+            skeleton.root_transform[2][2],
+            skeleton.root_transform[3][0],
+            skeleton.root_transform[3][1],
+            skeleton.root_transform[3][2],
+        );
+    }
+
+    let has_skin = load_result.meshes.iter().any(|m| m.skin_data.is_some());
+    eprintln!("has_skin: {}", has_skin);
+
+    let mut max_bone_node_diff = 0.0f32;
+
+    for bone in &skeleton.bones {
+        let idx = bone.id as usize;
+        if idx >= rest_globals.len() {
+            continue;
+        }
+
+        let original_pos = Vector3::new(
+            rest_globals[idx][3][0],
+            rest_globals[idx][3][1],
+            rest_globals[idx][3][2],
+        );
+        let new_pos = original_pos + Vector3::new(0.5, 0.0, 0.0);
+
+        let override_local = compute_local_override_from_global_translation(
+            skeleton,
+            &rest_globals,
+            bone.id,
+            new_pos,
+        );
+        let Some(override_pose) = override_local else {
+            continue;
+        };
+
+        let mut overrides = std::collections::HashMap::new();
+        overrides.insert(bone.id, override_pose);
+
+        let mut overridden_pose = rest_pose.clone();
+        apply_pose_overrides(&mut overridden_pose, &overrides);
+
+        let pose_globals = compute_pose_global_transforms(skeleton, &overridden_pose);
+
+        let mut nodes: Vec<NodeData> = load_result
+            .nodes
+            .iter()
+            .map(|n| NodeData {
+                index: n.index,
+                name: n.name.clone(),
+                parent_index: n.parent_index,
+                local_transform: n.local_transform,
+                global_transform: Matrix4::identity(),
+            })
+            .collect();
+        GraphicsResources::compute_node_global_transforms(&mut nodes, skeleton, &overridden_pose);
+
+        let pose_pos = Vector3::new(
+            pose_globals[idx][3][0],
+            pose_globals[idx][3][1],
+            pose_globals[idx][3][2],
+        );
+
+        let node_pos = nodes.iter().find(|n| n.name == bone.name).map(|n| {
+            Vector3::new(
+                n.global_transform[3][0],
+                n.global_transform[3][1],
+                n.global_transform[3][2],
+            )
+        });
+
+        let bone_node_diff = node_pos.map(|np| {
+            ((np.x - pose_pos.x).powi(2)
+                + (np.y - pose_pos.y).powi(2)
+                + (np.z - pose_pos.z).powi(2))
+            .sqrt()
+        });
+
+        if let Some(bnd) = bone_node_diff {
+            max_bone_node_diff = max_bone_node_diff.max(bnd);
+
+            if bnd > 0.001 {
+                eprintln!(
+                    "  MISMATCH bone[{}] '{}' (parent={:?}): \
+                     pose=({:.4},{:.4},{:.4}), node=({:.4},{:.4},{:.4}), diff={:.4}",
+                    idx,
+                    bone.name,
+                    bone.parent_id,
+                    pose_pos.x,
+                    pose_pos.y,
+                    pose_pos.z,
+                    node_pos.unwrap().x,
+                    node_pos.unwrap().y,
+                    node_pos.unwrap().z,
+                    bnd,
+                );
+            }
+        }
+    }
+
+    eprintln!(
+        "Max bone-node diff after override: {:.6}",
+        max_bone_node_diff
+    );
+
+    let mut matched_count = 0;
+    let mut unmatched_count = 0;
+    for bone in &skeleton.bones {
+        if load_result.nodes.iter().any(|n| n.name == bone.name) {
+            matched_count += 1;
+        } else {
+            unmatched_count += 1;
+            eprintln!("  bone '{}' has no matching node", bone.name);
+        }
+    }
+    eprintln!("Matched: {}, Unmatched: {}", matched_count, unmatched_count);
+
+    for &root_id in &skeleton.root_bone_ids {
+        let root_bone = skeleton.get_bone(root_id);
+        if let Some(rb) = root_bone {
+            let idx = rb.id as usize;
+            eprintln!(
+                "Root bone: id={}, name='{}', parent={:?}",
+                rb.id, rb.name, rb.parent_id
+            );
+
+            if idx < rest_globals.len() {
+                let pose_g = &rest_globals[idx];
+                eprintln!(
+                    "  pose_global[root] trans=({:.4},{:.4},{:.4})",
+                    pose_g[3][0], pose_g[3][1], pose_g[3][2]
+                );
+            }
+
+            let test_nodes: Vec<NodeData> = load_result
+                .nodes
+                .iter()
+                .map(|n| NodeData {
+                    index: n.index,
+                    name: n.name.clone(),
+                    parent_index: n.parent_index,
+                    local_transform: n.local_transform,
+                    global_transform: Matrix4::identity(),
+                })
+                .collect();
+            if let Some(rn) = test_nodes.iter().find(|n| n.name == rb.name) {
+                eprintln!(
+                    "  node '{}' orig local trans=({:.4},{:.4},{:.4}), parent={:?}",
+                    rn.name,
+                    rn.local_transform[3][0],
+                    rn.local_transform[3][1],
+                    rn.local_transform[3][2],
+                    rn.parent_index
+                );
+            }
+
+            let bp = &rest_pose.bone_poses[idx];
+            eprintln!(
+                "  bone rest local: t=({:.4},{:.4},{:.4})",
+                bp.translation.x, bp.translation.y, bp.translation.z
+            );
+        }
+    }
+
+    assert!(
+        max_bone_node_diff < 0.01,
+        "glTF bone-node transform mismatch after override: max_diff={}",
+        max_bone_node_diff
+    );
 }

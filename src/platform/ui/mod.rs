@@ -6,6 +6,8 @@ mod debug_window;
 mod dope_sheet;
 mod hierarchy_window;
 mod inspector_window;
+mod layout_snapshot;
+mod panel_splitter;
 mod spring_bone_inspector;
 #[cfg(feature = "text-to-motion")]
 mod text_to_motion_dialog;
@@ -20,6 +22,8 @@ pub use debug_window::*;
 pub use dope_sheet::*;
 pub use hierarchy_window::*;
 pub use inspector_window::*;
+pub use layout_snapshot::*;
+pub use panel_splitter::*;
 pub use spring_bone_inspector::*;
 #[cfg(feature = "text-to-motion")]
 pub use text_to_motion_dialog::*;

@@ -8,7 +8,8 @@ use super::platform::System;
 use super::ui::{
     build_click_debug_overlay, build_clip_browser_window, build_curve_editor_window,
     build_debug_window, build_hierarchy_window, build_inspector_window, build_timeline_window,
-    build_viewport_window, collect_clip_track_snapshot, CurveEditorState, DebugWindowState,
+    build_viewport_window, collect_clip_track_snapshot, handle_splitters, CurveEditorState,
+    DebugWindowState, LayoutSnapshot,
 };
 use crate::app::{App, GUIData};
 use crate::debugview::gizmo::{BoneGizmoData, BoneSelectionState};
@@ -19,6 +20,7 @@ use crate::ecs::resource::Camera;
 use crate::ecs::resource::ClipLibrary;
 use crate::ecs::resource::CurveEditorBuffer;
 use crate::ecs::resource::KeyframeCopyBuffer;
+use crate::ecs::resource::PanelLayout;
 use crate::ecs::resource::{ClipBrowserState, EditHistory};
 use crate::ecs::resource::{HierarchyState, SceneState, TimelineState};
 use crate::ecs::systems::{
@@ -203,6 +205,14 @@ fn build_ui_windows(
     gui_data: &mut GUIData,
     debug_state: &mut DebugWindowState,
 ) {
+    let display_size = ui.io().display_size;
+
+    let layout_snapshot = {
+        let mut panel_layout = app.data.ecs_world.resource_mut::<PanelLayout>();
+        panel_layout.clamp_to_display(display_size[0], display_size[1]);
+        LayoutSnapshot::from_layout(&panel_layout, display_size)
+    };
+
     {
         let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
         build_debug_window(
@@ -211,6 +221,7 @@ fn build_ui_windows(
             debug_state,
             gui_data,
             &app.data.ecs_world,
+            &layout_snapshot,
         );
     }
 
@@ -223,6 +234,7 @@ fn build_ui_windows(
             &app.data.ecs_world,
             &*hierarchy_state,
             &app.data.ecs_assets,
+            &layout_snapshot,
         );
     }
 
@@ -236,6 +248,7 @@ fn build_ui_windows(
             &*clip_library,
             &mut *browser_state,
             &app.data.ecs_world,
+            &layout_snapshot,
         );
     }
 
@@ -249,6 +262,7 @@ fn build_ui_windows(
             &*hierarchy_state,
             &app.data.ecs_assets,
             &app.data.graphics_resources,
+            &layout_snapshot,
         );
     }
 
@@ -258,7 +272,7 @@ fn build_ui_windows(
             app.data.viewport.width as f32,
             app.data.viewport.height as f32,
         ];
-        let viewport_info = build_viewport_window(ui, texture_id, current_size);
+        let viewport_info = build_viewport_window(ui, texture_id, current_size, &layout_snapshot);
 
         app.data.viewport.focused = viewport_info.focused;
         app.data.viewport.hovered = viewport_info.hovered;
@@ -294,6 +308,7 @@ fn build_ui_windows(
             &*clip_library,
             &mut *curve_editor,
             &clip_track_snapshot,
+            &layout_snapshot,
         );
     }
 
@@ -340,6 +355,11 @@ fn build_ui_windows(
             &*curve_buffer,
             &suggestion_overlays,
         );
+    }
+
+    {
+        let mut panel_layout = app.data.ecs_world.resource_mut::<PanelLayout>();
+        handle_splitters(ui, &mut panel_layout, &layout_snapshot);
     }
 }
 

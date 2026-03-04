@@ -12,6 +12,7 @@ use super::dope_sheet::build_dope_sheet;
 use super::clip_track_snapshot::{
     ClipGroupSnapshot, ClipInstanceSnapshot, ClipTrackEntry, ClipTrackSnapshot,
 };
+use super::layout_snapshot::LayoutSnapshot;
 use super::CurveEditorState;
 
 pub fn ruler_padding(duration: f32) -> f32 {
@@ -41,15 +42,14 @@ pub fn build_timeline_window(
     clip_library: &ClipLibrary,
     curve_editor_state: &mut CurveEditorState,
     clip_track_snapshot: &ClipTrackSnapshot,
+    layout: &LayoutSnapshot,
 ) {
-    let display_size = ui.io().display_size;
-    let timeline_height = 300.0;
-    let debug_window_height = 250.0;
-    let timeline_y = display_size[1] - debug_window_height - timeline_height;
-
     ui.window("Timeline")
-        .position([0.0, timeline_y], Condition::Always)
-        .size([display_size[0], timeline_height], Condition::Always)
+        .position([0.0, layout.timeline_y], Condition::Always)
+        .size(
+            [layout.display_size[0], layout.timeline_height],
+            Condition::Always,
+        )
         .resizable(false)
         .movable(false)
         .collapsible(false)

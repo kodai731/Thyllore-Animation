@@ -8,23 +8,22 @@ use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
 use crate::ecs::systems::{hierarchy_is_bone_expanded, query_hierarchy_tree};
 use crate::ecs::world::World;
 
+use super::layout_snapshot::LayoutSnapshot;
+
 pub fn build_hierarchy_window(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     world: &World,
     state: &HierarchyState,
     assets: &AssetStorage,
+    layout: &LayoutSnapshot,
 ) {
-    let display_size = ui.io().display_size;
-    let hierarchy_width = 250.0;
-    let debug_height = 250.0;
-    let timeline_height = 300.0;
-    let main_height = display_size[1] - debug_height - timeline_height;
-    let hierarchy_height = (main_height * 0.6).max(100.0);
-
     ui.window("Hierarchy")
         .position([0.0, 0.0], Condition::Always)
-        .size([hierarchy_width, hierarchy_height], Condition::Always)
+        .size(
+            [layout.hierarchy_width, layout.hierarchy_height],
+            Condition::Always,
+        )
         .resizable(false)
         .movable(false)
         .collapsible(false)

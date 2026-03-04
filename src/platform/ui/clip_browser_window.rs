@@ -3,8 +3,10 @@ use imgui::Condition;
 use crate::animation::editable::SourceClipId;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::{ClipBrowserState, ClipLibrary};
+use crate::ecs::resource::{ClipBrowserState, ClipLibrary, PoseLibrary};
 use crate::ecs::world::World;
+
+use super::build_pose_library_panel;
 
 pub fn build_clip_browser_window(
     ui: &imgui::Ui,
@@ -12,6 +14,7 @@ pub fn build_clip_browser_window(
     clip_library: &ClipLibrary,
     browser_state: &mut ClipBrowserState,
     world: &World,
+    pose_library: &mut PoseLibrary,
 ) {
     let display_size = ui.io().display_size;
     let hierarchy_width = 250.0;
@@ -35,6 +38,8 @@ pub fn build_clip_browser_window(
             build_filter_bar(ui, browser_state);
             ui.separator();
             build_clip_list(ui, ui_events, clip_library, browser_state, world);
+            ui.separator();
+            build_pose_library_panel(ui, ui_events, pose_library, clip_library);
         });
 }
 

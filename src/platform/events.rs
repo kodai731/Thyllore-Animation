@@ -19,7 +19,7 @@ use crate::ecs::resource::Camera;
 use crate::ecs::resource::ClipLibrary;
 use crate::ecs::resource::CurveEditorBuffer;
 use crate::ecs::resource::KeyframeCopyBuffer;
-use crate::ecs::resource::{ClipBrowserState, EditHistory};
+use crate::ecs::resource::{ClipBrowserState, EditHistory, PoseLibrary};
 use crate::ecs::resource::{HierarchyState, SceneState, TimelineState};
 use crate::ecs::systems::{
     apply_redo, apply_undo, camera_move_to_look_at, collapse_entity, expand_entity,
@@ -229,6 +229,7 @@ fn build_ui_windows(
     {
         let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
         let mut browser_state = app.data.ecs_world.resource_mut::<ClipBrowserState>();
+        let mut pose_library = app.data.ecs_world.resource_mut::<PoseLibrary>();
         let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
         build_clip_browser_window(
             ui,
@@ -236,6 +237,7 @@ fn build_ui_windows(
             &*clip_library,
             &mut *browser_state,
             &app.data.ecs_world,
+            &mut *pose_library,
         );
     }
 
@@ -1115,6 +1117,73 @@ fn process_edit_history_events_inline(events: &[UIEvent], app: &mut App) {
                         &mut app.data.ecs_world,
                     );
                 }
+            }
+
+            UIEvent::PoseLibrarySaveCurrent { name } => {
+                let timeline_state = app.data.ecs_world.resource::<TimelineState>();
+                let current_clip_id = timeline_state.current_clip_id;
+                let current_time = timeline_state.current_time;
+                drop(timeline_state);
+
+                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+                if let Some(pose_clip) =
+                    crate::ecs::systems::pose_library_systems::capture_current_pose(
+                        name,
+                        &*clip_library,
+                        &app.data.ecs_assets,
+                        current_clip_id,
+                        current_time,
+                    )
+                {
+                    drop(clip_library);
+                    let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
+                    let pose_id =
+                        crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
+                            &mut clip_library,
+                            &mut app.data.ecs_assets,
+                            pose_clip,
+                        );
+                    drop(clip_library);
+                    let mut pose_lib = app.data.ecs_world.resource_mut::<PoseLibrary>();
+                    pose_lib.add_pose(pose_id);
+                    crate::log!("Saved pose '{}' (id={})", name, pose_id);
+                }
+            }
+
+            UIEvent::PoseLibraryApply(pose_id) => {
+                let timeline_state = app.data.ecs_world.resource::<TimelineState>();
+                let target_clip_id = timeline_state.current_clip_id;
+                let target_time = timeline_state.current_time;
+                drop(timeline_state);
+
+                if let Some(target_id) = target_clip_id {
+                    let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
+                    let pose_clip = clip_library.get(*pose_id).cloned();
+                    if let Some(pose) = pose_clip {
+                        if let Some(target) = clip_library.get_mut(target_id) {
+                            crate::ecs::systems::pose_library_systems::apply_pose_to_clip(
+                                &pose,
+                                target,
+                                target_time,
+                            );
+                            crate::log!(
+                                "Applied pose {} to clip {} at t={:.3}",
+                                pose_id,
+                                target_id,
+                                target_time
+                            );
+                        }
+                    }
+                }
+            }
+
+            UIEvent::PoseLibraryDelete(pose_id) => {
+                let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
+                clip_library.remove(*pose_id);
+                drop(clip_library);
+                let mut pose_lib = app.data.ecs_world.resource_mut::<PoseLibrary>();
+                pose_lib.remove_pose(*pose_id);
+                crate::log!("Deleted pose (id={})", pose_id);
             }
 
             _ => {}

@@ -229,7 +229,10 @@ pub fn process_ui_events_with_events_simple(
             | UIEvent::SpringColliderGroupAdd { .. }
             | UIEvent::SpringColliderGroupRemove { .. }
             | UIEvent::SpringColliderGroupUpdate { .. }
-            | UIEvent::SpringBoneToggleGizmo(_) => {}
+            | UIEvent::SpringBoneToggleGizmo(_)
+            | UIEvent::PoseLibrarySaveCurrent { .. }
+            | UIEvent::PoseLibraryApply(_)
+            | UIEvent::PoseLibraryDelete(_) => {}
 
             #[cfg(feature = "ml")]
             UIEvent::CurveSuggestionRequest { .. }

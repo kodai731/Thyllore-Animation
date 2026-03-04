@@ -971,6 +971,14 @@ impl App {
 
         if !data
             .ecs_world
+            .contains_resource::<crate::ecs::resource::PoseLibrary>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::PoseLibrary::default());
+        }
+
+        if !data
+            .ecs_world
             .contains_resource::<crate::ecs::resource::ConstraintEditorState>()
         {
             data.ecs_world

@@ -548,13 +548,6 @@ pub fn process_bone_set_key(
         clip.add_keyframe(bone_id, PropertyType::ScaleX, time, s.x);
         clip.add_keyframe(bone_id, PropertyType::ScaleY, time, s.y);
         clip.add_keyframe(bone_id, PropertyType::ScaleZ, time, s.z);
-
-        crate::log!(
-            "[BoneSetKey] bone='{}' (id={}) at time={:.3}",
-            bone_name,
-            bone_id,
-            time,
-        );
     }
 
     clip.recalculate_duration();

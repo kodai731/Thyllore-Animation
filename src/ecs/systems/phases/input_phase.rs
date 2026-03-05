@@ -694,11 +694,12 @@ fn apply_bone_translation(ctx: &mut EcsContext, bone_id: u32, new_pos: Vector3<f
         return;
     }
 
-    let (cached_globals, skeleton_id) = {
+    let (cached_globals, skeleton_id, mesh_scale) = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
         (
             bone_gizmo.cached_global_transforms.clone(),
             bone_gizmo.cached_skeleton_id,
+            bone_gizmo.mesh_scale,
         )
     };
 
@@ -708,11 +709,22 @@ fn apply_bone_translation(ctx: &mut EcsContext, bone_id: u32, new_pos: Vector3<f
     };
     let skeleton = skeleton.clone();
 
+    let inv_scale = if mesh_scale.abs() > f32::EPSILON {
+        1.0 / mesh_scale
+    } else {
+        1.0
+    };
+    let skeleton_pos = Vector3::new(
+        new_pos.x * inv_scale,
+        new_pos.y * inv_scale,
+        new_pos.z * inv_scale,
+    );
+
     let local_pose = compute_local_override_from_global_translation(
         &skeleton,
         &cached_globals,
         bone_id,
-        new_pos,
+        skeleton_pos,
     );
 
     if let Some(pose) = local_pose {
@@ -732,11 +744,12 @@ fn apply_bone_rotation(
         return;
     }
 
-    let (cached_globals, skeleton_id) = {
+    let (cached_globals, skeleton_id, mesh_scale) = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
         (
             bone_gizmo.cached_global_transforms.clone(),
             bone_gizmo.cached_skeleton_id,
+            bone_gizmo.mesh_scale,
         )
     };
 
@@ -746,11 +759,22 @@ fn apply_bone_rotation(
     };
     let skeleton = skeleton.clone();
 
+    let inv_scale = if mesh_scale.abs() > f32::EPSILON {
+        1.0 / mesh_scale
+    } else {
+        1.0
+    };
+    let skeleton_gizmo_pos = Vector3::new(
+        gizmo_pos.x * inv_scale,
+        gizmo_pos.y * inv_scale,
+        gizmo_pos.z * inv_scale,
+    );
+
     let local_pose = compute_local_override_from_global_rotation(
         &skeleton,
         &cached_globals,
         bone_id,
-        gizmo_pos,
+        skeleton_gizmo_pos,
         rotation,
     );
 
@@ -802,7 +826,7 @@ fn sync_transform_gizmo_to_bone(ctx: &mut EcsContext) {
         return;
     }
 
-    let (active_bone, transforms, offsets) = {
+    let (active_bone, transforms, offsets, mesh_scale) = {
         let selection = ctx.bone_selection();
         let active = selection.active_bone_index;
         drop(selection);
@@ -817,6 +841,7 @@ fn sync_transform_gizmo_to_bone(ctx: &mut EcsContext) {
             active,
             bone_gizmo.cached_global_transforms.clone(),
             bone_gizmo.bone_local_offsets.clone(),
+            bone_gizmo.mesh_scale,
         )
     };
 
@@ -826,6 +851,7 @@ fn sync_transform_gizmo_to_bone(ctx: &mut EcsContext) {
         active_bone,
         &transforms,
         &offsets,
+        mesh_scale,
     );
 }
 

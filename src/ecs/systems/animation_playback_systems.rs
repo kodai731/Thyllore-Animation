@@ -361,6 +361,7 @@ fn apply_blended_animations(
             }
 
             let globals = compute_pose_global_transforms(skeleton, &pose);
+
             (globals, Some(pose))
         };
 

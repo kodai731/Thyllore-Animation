@@ -167,6 +167,15 @@ unsafe fn apply_model_to_resources(
         AnimationType::None
     };
     let node_animation_scale = load_result.node_animation_scale;
+    let mesh_scale_debug =
+        compute_bone_gizmo_mesh_scale(node_animation_scale, load_result.has_skinned_meshes);
+    crate::log!(
+        "[ModelLoad] type={:?}, has_skinned={}, node_anim_scale={}, mesh_scale={}",
+        animation_type,
+        load_result.has_skinned_meshes,
+        node_animation_scale,
+        mesh_scale_debug
+    );
     let loaded_clips = load_result.clips.clone();
 
     create_ecs_entities(

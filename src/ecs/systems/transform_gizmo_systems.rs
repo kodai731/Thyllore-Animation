@@ -706,18 +706,31 @@ pub fn transform_gizmo_sync_to_bone(
     active_bone_index: Option<usize>,
     cached_transforms: &[cgmath::Matrix4<f32>],
     bone_offsets: &[[f32; 3]],
+    mesh_scale: f32,
 ) {
     match active_bone_index {
         Some(idx) if idx < cached_transforms.len() => {
             let transform = cached_transforms[idx];
-            let mut pos = vec3(transform[3][0], transform[3][1], transform[3][2]);
-            if idx < bone_offsets.len() {
-                let off = bone_offsets[idx];
-                pos.x += off[0];
-                pos.y += off[1];
-                pos.z += off[2];
+            let offset = if idx < bone_offsets.len() {
+                bone_offsets[idx]
+            } else {
+                [0.0, 0.0, 0.0]
+            };
+            let world_pos = transform * cgmath::Vector4::new(offset[0], offset[1], offset[2], 1.0);
+            let raw_pos = vec3(world_pos.x, world_pos.y, world_pos.z);
+            gizmo.position.position = vec3(
+                world_pos.x * mesh_scale,
+                world_pos.y * mesh_scale,
+                world_pos.z * mesh_scale,
+            );
+            if !gizmo.visible {
+                crate::log!(
+                    "[GizmoSync] bone={}, raw=({:.4},{:.4},{:.4}), scaled=({:.4},{:.4},{:.4}), mesh_scale={}",
+                    idx, raw_pos.x, raw_pos.y, raw_pos.z,
+                    gizmo.position.position.x, gizmo.position.position.y, gizmo.position.position.z,
+                    mesh_scale,
+                );
             }
-            gizmo.position.position = pos;
             gizmo.visible = true;
             gizmo.target_bone_id = Some(idx as u32);
         }

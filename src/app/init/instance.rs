@@ -594,6 +594,15 @@ impl App {
         data.ecs_world.insert_resource(light_gizmo_data);
         data.ecs_world.insert_resource(billboard_data);
 
+        let grid_object_index = data.graphics_resources.objects.allocate_slot();
+        crate::log!("Allocated object_index {} for Grid", grid_object_index);
+
+        data.graphics_resources.objects.seal_reserved_slots();
+        crate::log!(
+            "Sealed reserved object slots at {}",
+            data.graphics_resources.objects.get_next_slot()
+        );
+
         crate::log!("Starting ray tracing initialization...");
         crate::log!(
             "swapchain extent: {}x{}",
@@ -695,9 +704,6 @@ impl App {
             &grid_mesh.indices,
         )?;
         println!("created grid index buffer");
-
-        let grid_object_index = data.graphics_resources.objects.allocate_slot();
-        crate::log!("Allocated object_index {} for Grid", grid_object_index);
 
         let grid_render_info = RenderInfo::new(Some(grid_pipeline_id), grid_object_index);
 

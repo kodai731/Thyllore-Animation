@@ -222,7 +222,7 @@ unsafe fn cleanup_resources(
     graphics.clear_meshes(device);
     graphics.mesh_material_ids.clear();
     graphics.materials.clear_materials(&device.device);
-    graphics.objects.reset_to(4);
+    graphics.objects.reset_to_reserved();
 
     if world.contains_resource::<ClipLibrary>() {
         let mut clip_library = world.resource_mut::<ClipLibrary>();

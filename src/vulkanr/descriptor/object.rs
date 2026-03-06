@@ -19,6 +19,7 @@ pub struct ObjectDescriptorSet {
     pub buffer_memories: Vec<vk::DeviceMemory>,
     pub max_objects: usize,
     next_slot: usize,
+    reserved_slot_count: usize,
 }
 
 impl ObjectDescriptorSet {
@@ -56,6 +57,7 @@ impl ObjectDescriptorSet {
             buffer_memories,
             max_objects,
             next_slot: 0,
+            reserved_slot_count: 0,
         };
         object_set.write_descriptor_sets(rrdevice, swapchain_image_count);
 
@@ -139,8 +141,12 @@ impl ObjectDescriptorSet {
         self.next_slot
     }
 
-    pub fn reset_to(&mut self, slot: usize) {
-        self.next_slot = slot;
+    pub fn seal_reserved_slots(&mut self) {
+        self.reserved_slot_count = self.next_slot;
+    }
+
+    pub fn reset_to_reserved(&mut self) {
+        self.next_slot = self.reserved_slot_count;
     }
 
     pub unsafe fn update(

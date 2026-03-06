@@ -133,6 +133,12 @@ impl ObjectDescriptorSet {
 
     pub fn allocate_slot(&mut self) -> usize {
         let slot = self.next_slot;
+        if slot >= self.max_objects {
+            crate::log!(
+                "[ObjectDescriptorSet] WARNING: slot {} exceeds max_objects {}. GPU buffer overflow!",
+                slot, self.max_objects
+            );
+        }
         self.next_slot += 1;
         slot
     }
@@ -156,6 +162,13 @@ impl ObjectDescriptorSet {
         object_index: usize,
         ubo: &ObjectUBO,
     ) -> anyhow::Result<()> {
+        if object_index >= self.max_objects {
+            anyhow::bail!(
+                "object_index {} exceeds max_objects {}",
+                object_index,
+                self.max_objects
+            );
+        }
         let idx = self.get_set_index(image_index, object_index);
         let memory = rrdevice.device.map_memory(
             self.buffer_memories[idx],

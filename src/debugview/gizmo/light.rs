@@ -7,6 +7,7 @@ pub struct LightGizmoData {
     pub position: GizmoPosition,
     pub selectable: GizmoSelectable,
     pub draggable: GizmoDraggable,
+    pub drag_active: bool,
     pub ray_to_model: LineMesh,
     pub vertical_lines: LineMesh,
 }

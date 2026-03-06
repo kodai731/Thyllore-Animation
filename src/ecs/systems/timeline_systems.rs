@@ -1,4 +1,7 @@
-use crate::animation::editable::SourceClipId;
+use std::collections::HashMap;
+
+use crate::animation::editable::{PropertyType, SourceClipId};
+use crate::animation::{BoneId, BoneLocalPose};
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{ClipLibrary, TimelineState};
@@ -549,6 +552,54 @@ fn modify_clip_instance(
             f(inst);
         }
     }
+}
+
+pub fn process_bone_set_key(
+    overrides: &HashMap<BoneId, BoneLocalPose>,
+    clip_library: &mut ClipLibrary,
+    timeline_state: &TimelineState,
+    skeleton: &crate::animation::Skeleton,
+) -> bool {
+    let Some(clip_id) = timeline_state.current_clip_id else {
+        return false;
+    };
+    let Some(clip) = clip_library.get_mut(clip_id) else {
+        return false;
+    };
+
+    if overrides.is_empty() {
+        return false;
+    }
+
+    let time = timeline_state.current_time;
+
+    for (&bone_id, local_pose) in overrides {
+        let bone_name = skeleton
+            .get_bone(bone_id)
+            .map(|b| b.name.clone())
+            .unwrap_or_else(|| format!("bone_{}", bone_id));
+
+        if !clip.tracks.contains_key(&bone_id) {
+            clip.add_track(bone_id, bone_name.clone());
+        }
+
+        let euler = crate::animation::editable::quaternion_to_euler_degrees(&local_pose.rotation);
+
+        let t = &local_pose.translation;
+        let s = &local_pose.scale;
+        clip.add_keyframe(bone_id, PropertyType::TranslationX, time, t.x);
+        clip.add_keyframe(bone_id, PropertyType::TranslationY, time, t.y);
+        clip.add_keyframe(bone_id, PropertyType::TranslationZ, time, t.z);
+        clip.add_keyframe(bone_id, PropertyType::RotationX, time, euler.x);
+        clip.add_keyframe(bone_id, PropertyType::RotationY, time, euler.y);
+        clip.add_keyframe(bone_id, PropertyType::RotationZ, time, euler.z);
+        clip.add_keyframe(bone_id, PropertyType::ScaleX, time, s.x);
+        clip.add_keyframe(bone_id, PropertyType::ScaleY, time, s.y);
+        clip.add_keyframe(bone_id, PropertyType::ScaleZ, time, s.z);
+    }
+
+    clip.recalculate_duration();
+    true
 }
 
 #[cfg(test)]

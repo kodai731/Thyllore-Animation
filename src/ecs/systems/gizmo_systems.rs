@@ -82,6 +82,7 @@ pub fn create_light_gizmo(position: Vector3<f32>) -> LightGizmoData {
         position: GizmoPosition { position },
         selectable: GizmoSelectable::default(),
         draggable: GizmoDraggable::default(),
+        drag_active: false,
         ray_to_model: LineMesh::default(),
         vertical_lines: LineMesh::default(),
     }
@@ -202,8 +203,6 @@ pub fn gizmo_try_select(
             selected_axis,
             drag_depth
         );
-
-        draggable.just_selected = true;
     }
 }
 
@@ -215,7 +214,6 @@ pub fn gizmo_reset_selection(selectable: &mut GizmoSelectable, draggable: &mut G
     selectable.is_selected = false;
     selectable.selected_axis = GizmoAxis::None;
     draggable.drag_axis = GizmoAxis::None;
-    draggable.just_selected = false;
     draggable.initial_position = Vector3::new(0.0, 0.0, 0.0);
 }
 

@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 
+use crate::animation::{BoneId, BoneLocalPose};
 use crate::app::FrameContext;
 use crate::debugview::gizmo::BoneGizmoData;
-use crate::ecs::resource::{ClipLibrary, NodeAssets};
+use crate::ecs::resource::{BonePoseOverride, ClipLibrary, NodeAssets};
 use crate::ecs::{
     evaluate_all_animators, playback_upload_animations, transform_propagation_system,
 };
@@ -12,6 +15,12 @@ pub struct AnimationUpdates {
 }
 
 pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
+    let pose_overrides: HashMap<BoneId, BoneLocalPose> = ctx
+        .world
+        .get_resource::<BonePoseOverride>()
+        .map(|r| r.overrides.clone())
+        .unwrap_or_default();
+
     let eval_result = {
         let clip_library = ctx.world.resource::<ClipLibrary>();
         let mut node_assets = ctx.world.resource_mut::<NodeAssets>();
@@ -23,6 +32,7 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
             &*clip_library,
             ctx.assets,
             ctx.delta_time,
+            &pose_overrides,
         )
     };
 

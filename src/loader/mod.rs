@@ -2,6 +2,11 @@ pub mod fbx;
 pub mod gltf;
 pub mod texture;
 
+#[cfg(test)]
+mod bounds_validation_tests;
+#[cfg(test)]
+mod scale_matrix_tests;
+
 use cgmath::Matrix4;
 
 use crate::animation::{

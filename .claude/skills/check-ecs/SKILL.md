@@ -98,12 +98,73 @@ pub use my_component::MyComponent;
 - [ ] No manual component insertion sequences
 - [ ] Located in `src/ecs/world.rs`
 
+### 7. Layer Boundary Rules
+
+ECS business logic MUST live inside `src/ecs/systems/`. Code outside `src/ecs/`
+(especially `src/platform/`, `src/app/`) must NOT contain ECS domain logic.
+
+**Allowed in platform layer** (`src/platform/`):
+- Reading resources for UI display (`resource::<T>()`, `get_resource::<T>()`)
+- Sending events to `UIEventQueue` (`ui_events.send(...)`)
+- Calling a single ECS dispatch entry point (e.g., `run_event_dispatch_phase(...)`)
+- Platform-specific I/O (file dialogs via `rfd`, window management, imgui frame orchestration)
+- Handling `DeferredAction` that requires `App`/`GUIData` (model loading, screenshots)
+
+**NOT allowed in platform layer**:
+- Directly calling multiple ECS system functions to process events
+- Match-dispatching `UIEvent` variants to mutate `World`/`AssetStorage`
+- Implementing event handler logic inline (e.g., `process_*_events_inline`)
+- Accessing `resource_mut::<T>()` or `get_component_mut::<T>()` for business logic
+
+**Detection patterns** (search in files outside `src/ecs/`):
+```rust
+// Suspicious: multiple resource_mut calls with business logic
+world.resource_mut::<ClipLibrary>();
+world.resource_mut::<TimelineState>();
+world.get_component_mut::<ClipSchedule>(entity);
+
+// Suspicious: match on UIEvent with mutation logic
+match event {
+    UIEvent::TimelinePlay => { /* logic here */ }
+    UIEvent::Undo => { /* logic here */ }
+}
+```
+
+**Violation example:**
+```rust
+// BAD: ECS logic in platform layer
+// src/platform/events.rs
+fn process_timeline_events(events: &[UIEvent], app: &mut App) {
+    let mut timeline = app.data.ecs_world.resource_mut::<TimelineState>();
+    let mut clips = app.data.ecs_world.resource_mut::<ClipLibrary>();
+    timeline_process_events(events, &mut timeline, &mut clips);
+}
+
+// GOOD: Platform calls single ECS entry point
+// src/platform/events.rs
+let (platform_events, deferred) = run_event_dispatch_phase(
+    &mut app.data.ecs_world,
+    &mut app.data.ecs_assets,
+    model_bounds,
+);
+
+// GOOD: ECS logic in ECS layer
+// src/ecs/systems/phases/event_dispatch_phase.rs
+fn dispatch_timeline_events(events: &[UIEvent], world: &mut World) { ... }
+```
+
+**Scope**: This rule applies to ALL `.rs` files outside `src/ecs/`, not just
+recently modified ones. When running `/check-ecs` without arguments, also scan
+`src/platform/` and `src/app/` for layer violations.
+
 ## Check Process
 
 1. Read the target files
 2. For each file, verify against applicable rules
-3. Report violations with file path and line number
-4. Suggest corrections
+3. **If no arguments given**: also scan `src/platform/*.rs` and `src/app/*.rs`
+   for Rule 7 (layer boundary) violations
+4. Report violations with file path and line number
+5. Suggest corrections
 
 ## Output Format
 

@@ -167,6 +167,15 @@ unsafe fn apply_model_to_resources(
         AnimationType::None
     };
     let node_animation_scale = load_result.node_animation_scale;
+    let mesh_scale_debug =
+        compute_bone_gizmo_mesh_scale(node_animation_scale, load_result.has_skinned_meshes);
+    crate::log!(
+        "[ModelLoad] type={:?}, has_skinned={}, node_anim_scale={}, mesh_scale={}",
+        animation_type,
+        load_result.has_skinned_meshes,
+        node_animation_scale,
+        mesh_scale_debug
+    );
     let loaded_clips = load_result.clips.clone();
 
     create_ecs_entities(
@@ -213,7 +222,7 @@ unsafe fn cleanup_resources(
     graphics.clear_meshes(device);
     graphics.mesh_material_ids.clear();
     graphics.materials.clear_materials(&device.device);
-    graphics.objects.reset_to(4);
+    graphics.objects.reset_to_reserved();
 
     if world.contains_resource::<ClipLibrary>() {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
@@ -817,6 +826,9 @@ fn ensure_ecs_resources(world: &mut World) {
     }
     if !world.contains_resource::<crate::ecs::resource::ClipBrowserState>() {
         world.insert_resource(crate::ecs::resource::ClipBrowserState::default());
+    }
+    if !world.contains_resource::<crate::ecs::resource::BonePoseOverride>() {
+        world.insert_resource(crate::ecs::resource::BonePoseOverride::default());
     }
 }
 

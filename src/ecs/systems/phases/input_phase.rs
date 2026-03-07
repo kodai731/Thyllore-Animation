@@ -8,7 +8,8 @@ use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, TransformGizmoDat
 use crate::ecs::component::LineMesh;
 use crate::ecs::context::EcsContext;
 use crate::ecs::resource::{
-    BonePoseOverride, HierarchyDisplayMode, TransformGizmoMode, TransformGizmoState,
+    BonePoseOverride, ClipLibrary, HierarchyDisplayMode, TimelineState, TransformGizmoMode,
+    TransformGizmoState,
 };
 use crate::ecs::systems::{
     compute_local_override_from_global_rotation, compute_local_override_from_global_scale,
@@ -19,6 +20,7 @@ use crate::ecs::{
     gizmo_try_select, gizmo_update_position_with_constraint, update_light_auto_target,
 };
 use crate::math::screen_to_world_ray;
+use crate::platform::ui::CurveEditorState;
 
 pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
     update_pointer_state(ctx);
@@ -302,6 +304,7 @@ fn process_bone_selection(ctx: &mut EcsContext) -> Result<bool> {
     let new_active_bone = apply_bone_selection_result(ctx, &skeleton, hit, is_shift);
 
     sync_bone_selection_to_hierarchy(ctx, new_active_bone, is_shift);
+    sync_curve_editor_bone(ctx, new_active_bone);
 
     Ok(bone_hit)
 }
@@ -866,5 +869,34 @@ fn sync_bone_selection_to_hierarchy(
         hierarchy.display_mode = HierarchyDisplayMode::Bones;
     } else if !is_shift {
         ctx.hierarchy_state_mut().selected_bone_id = None;
+    }
+}
+
+fn sync_curve_editor_bone(ctx: &mut EcsContext, new_active_bone: Option<BoneId>) {
+    let Some(bone_id) = new_active_bone else {
+        return;
+    };
+
+    let is_open = ctx
+        .world
+        .get_resource::<CurveEditorState>()
+        .map(|s| s.is_open)
+        .unwrap_or(false);
+    if !is_open {
+        return;
+    }
+
+    let has_track = {
+        let clip_library = ctx.world.resource::<ClipLibrary>();
+        let source_id = ctx.world.resource::<TimelineState>().current_clip_id;
+        source_id
+            .and_then(|id| clip_library.get(id))
+            .map(|clip| clip.tracks.contains_key(&bone_id))
+            .unwrap_or(false)
+    };
+
+    if has_track {
+        let mut editor = ctx.world.resource_mut::<CurveEditorState>();
+        editor.selected_bone_id = Some(bone_id);
     }
 }

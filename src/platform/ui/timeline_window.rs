@@ -46,6 +46,7 @@ pub fn build_timeline_window(
         .resizable(false)
         .movable(false)
         .collapsible(false)
+        .bring_to_front_on_focus(false)
         .build(|| {
             build_transport_controls(ui, ui_events, state, clip_library, curve_editor_state);
             ui.separator();

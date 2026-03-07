@@ -14,8 +14,8 @@ use crate::ecs::systems::{
     hierarchy_collapse_bone, hierarchy_deselect_all, hierarchy_deselect_bone,
     hierarchy_expand_bone, hierarchy_select, hierarchy_select_bone, hierarchy_toggle_selection,
     process_bone_set_key, process_clip_instance_events, process_keyframe_clipboard_events,
-    rename_entity, timeline_process_events, update_entity_scale, update_entity_translation,
-    update_entity_visible,
+    rename_entity, resolve_mesh_bone_id, timeline_process_events, update_entity_scale,
+    update_entity_translation, update_entity_visible,
 };
 use crate::ecs::world::{Entity, Transform, World};
 use crate::ecs::UIEventQueue;
@@ -183,6 +183,7 @@ fn dispatch_camera_light_debug_events(
 fn dispatch_hierarchy_events(events: &[UIEvent], world: &mut World, assets: &AssetStorage) {
     dispatch_hierarchy_entity_events(events, world);
     dispatch_hierarchy_bone_events(events, world, assets);
+    sync_curve_editor_on_selection(events, world, assets);
 }
 
 fn dispatch_hierarchy_entity_events(events: &[UIEvent], world: &mut World) {
@@ -337,6 +338,51 @@ fn dispatch_hierarchy_bone_events(events: &[UIEvent], world: &mut World, assets:
             UIEvent::SetBoneDistanceScaleFactor(factor) => {
                 if let Some(mut bone_gizmo) = world.get_resource_mut::<BoneGizmoData>() {
                     bone_gizmo.distance_scaling_factor = *factor;
+                }
+            }
+
+            _ => {}
+        }
+    }
+}
+
+fn sync_curve_editor_on_selection(events: &[UIEvent], world: &mut World, assets: &AssetStorage) {
+    let is_open = world
+        .get_resource::<CurveEditorState>()
+        .map(|s| s.is_open)
+        .unwrap_or(false);
+    if !is_open {
+        return;
+    }
+
+    for event in events {
+        match event {
+            UIEvent::SelectEntity(entity) => {
+                let clip_library = world.resource::<ClipLibrary>();
+                let source_id = world.resource::<TimelineState>().current_clip_id;
+                let bone_id =
+                    resolve_mesh_bone_id(world, *entity, assets, &clip_library, source_id);
+                drop(clip_library);
+
+                if let Some(bone_id) = bone_id {
+                    let mut editor = world.resource_mut::<CurveEditorState>();
+                    editor.selected_bone_id = Some(bone_id);
+                }
+            }
+
+            UIEvent::SelectBone(bone_id) => {
+                let has_track = {
+                    let clip_library = world.resource::<ClipLibrary>();
+                    let source_id = world.resource::<TimelineState>().current_clip_id;
+                    source_id
+                        .and_then(|id| clip_library.get(id))
+                        .map(|clip| clip.tracks.contains_key(bone_id))
+                        .unwrap_or(false)
+                };
+
+                if has_track {
+                    let mut editor = world.resource_mut::<CurveEditorState>();
+                    editor.selected_bone_id = Some(*bone_id);
                 }
             }
 

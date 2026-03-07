@@ -34,6 +34,7 @@ pub fn build_debug_window(
         .resizable(false)
         .movable(false)
         .collapsible(false)
+        .bring_to_front_on_focus(false)
         .build(|| {
             build_model_panel(ui, ui_events, state, gui_data);
             ui.separator();

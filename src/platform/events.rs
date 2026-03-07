@@ -3,7 +3,7 @@ use std::time::Instant;
 use imgui::MouseButton;
 use winit::event::{ElementState, Event, WindowEvent};
 
-use super::key_bindings::{default_bindings, dispatch_keyboard_shortcut};
+use super::key_bindings::{default_bindings, dispatch_keyboard_shortcut, ModifierKeys};
 use super::platform::System;
 use super::ui::{
     build_click_debug_overlay, build_clip_browser_window, build_curve_editor_window,
@@ -94,10 +94,13 @@ impl System {
 
                         WindowEvent::KeyboardInput { event, .. } => {
                             if event.state == ElementState::Pressed {
+                                let modifiers = ModifierKeys {
+                                    ctrl: gui_data.is_ctrl_pressed,
+                                    shift: gui_data.is_shift_pressed,
+                                };
                                 if let Some(ui_event) = dispatch_keyboard_shortcut(
                                     &event.logical_key,
-                                    gui_data.is_ctrl_pressed,
-                                    gui_data.is_shift_pressed,
+                                    modifiers,
                                     imgui.io().want_capture_keyboard,
                                     &bindings,
                                 ) {

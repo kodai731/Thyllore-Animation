@@ -63,9 +63,10 @@ pub fn curve_sample(curve: &PropertyCurve, time: f32) -> Option<f32> {
         return Some(curve.keyframes[0].value);
     }
 
-    let last = curve.keyframes.last().unwrap();
-    if time >= last.time {
-        return Some(last.value);
+    if let Some(last) = curve.keyframes.last() {
+        if time >= last.time {
+            return Some(last.value);
+        }
     }
 
     let idx = curve.keyframes.partition_point(|kf| kf.time <= time);

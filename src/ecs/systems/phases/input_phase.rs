@@ -93,11 +93,19 @@ fn update_pointer_state(ctx: &mut EcsContext) {
     let viewport_hovered = ctx.gui_data.viewport_hovered;
     let imgui_wants_mouse = ctx.gui_data.imgui_wants_mouse;
 
-    use crate::ecs::resource::button_state_advance;
+    use crate::ecs::resource::{button_state_advance, RawButtonInput};
+    let to_input = |down: bool| {
+        if down {
+            RawButtonInput::Pressed
+        } else {
+            RawButtonInput::Released
+        }
+    };
+
     let mut pointer = ctx.pointer_state_mut();
-    button_state_advance(&mut pointer.left, is_left);
-    button_state_advance(&mut pointer.right, is_right);
-    button_state_advance(&mut pointer.middle, is_wheel);
+    button_state_advance(&mut pointer.left, to_input(is_left));
+    button_state_advance(&mut pointer.right, to_input(is_right));
+    button_state_advance(&mut pointer.middle, to_input(is_wheel));
     pointer.position = mouse_pos;
     pointer.viewport_position = [
         mouse_pos[0] - viewport_pos[0],

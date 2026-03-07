@@ -117,8 +117,11 @@ fn build_transport_controls(
     ui.same_line();
     if ui.button("Curve Editor") {
         curve_editor_state.is_open = true;
-        if let Some(first_bone_id) = current_clip.and_then(|c| c.tracks.keys().next().copied()) {
+        if let Some(first_bone_id) =
+            current_clip.and_then(|c| c.tracks.keys().min().copied())
+        {
             curve_editor_state.selected_bone_id = Some(first_bone_id);
+            curve_editor_state.view_initialized = false;
         }
     }
 
@@ -1278,21 +1281,10 @@ fn open_curve_editor_for_clip(
     curve_editor_state.is_open = true;
 
     if let Some(clip) = clip_library.get(source_id) {
-        let track_bone_ids: Vec<BoneId> = clip.tracks.keys().copied().collect();
-        crate::log!(
-            "[open_curve_editor] mesh_bone_id={:?}, track_bone_ids={:?}",
-            mesh_bone_id,
-            track_bone_ids
-        );
-
         let target_bone = mesh_bone_id.filter(|id| clip.tracks.contains_key(id));
 
         curve_editor_state.selected_bone_id =
-            target_bone.or_else(|| clip.tracks.keys().next().copied());
-
-        crate::log!(
-            "[open_curve_editor] -> selected_bone_id={:?}",
-            curve_editor_state.selected_bone_id
-        );
+            target_bone.or_else(|| clip.tracks.keys().min().copied());
+        curve_editor_state.view_initialized = false;
     }
 }

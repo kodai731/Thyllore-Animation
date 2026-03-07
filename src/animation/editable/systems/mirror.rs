@@ -3,20 +3,8 @@ use std::collections::HashMap;
 use crate::animation::BoneId;
 use crate::ecs::resource::{CopiedKeyframe, KeyframeCopyBuffer};
 
-use super::PropertyType;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MirrorAxis {
-    X,
-    Y,
-    Z,
-}
-
-#[derive(Clone, Debug)]
-pub struct MirrorMapping {
-    pub pairs: Vec<(BoneId, BoneId)>,
-    pub symmetry_axis: MirrorAxis,
-}
+use crate::animation::editable::components::curve::PropertyType;
+use crate::animation::editable::components::mirror::{MirrorAxis, MirrorMapping};
 
 pub fn build_mirror_mapping(bone_names: &HashMap<BoneId, String>) -> MirrorMapping {
     let mut pairs = Vec::new();

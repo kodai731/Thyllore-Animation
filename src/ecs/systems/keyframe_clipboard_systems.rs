@@ -1,5 +1,4 @@
-use crate::animation::editable::curve_add_keyframe;
-use crate::animation::editable::mirror::{build_mirror_mapping, mirror_keyframes};
+use crate::animation::editable::{build_mirror_mapping, curve_add_keyframe, mirror_keyframes};
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{ClipLibrary, CopiedKeyframe, KeyframeCopyBuffer, TimelineState};
 

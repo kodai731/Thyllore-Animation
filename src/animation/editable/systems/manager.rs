@@ -7,8 +7,8 @@ use anyhow::{Context, Result};
 
 use crate::animation::{AnimationClip, AnimationClipId, BoneId};
 
-use super::clip::EditableAnimationClip;
-use super::keyframe::SourceClipId;
+use super::super::components::clip::EditableAnimationClip;
+use super::super::components::keyframe::SourceClipId;
 
 #[derive(Clone, Debug, Default)]
 pub struct EditableClipManager {

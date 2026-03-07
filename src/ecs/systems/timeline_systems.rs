@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::animation::editable::{
     apply_tangent_by_type, curve_recalculate_auto_tangent_at, curve_remove_keyframe,
-    initialize_weighted_handle_lengths, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
-    SourceClipId, TangentWeightMode,
+    curve_set_keyframe_time, initialize_weighted_handle_lengths, InterpolationType, KeyframeId,
+    PropertyCurve, PropertyType, SourceClipId, TangentWeightMode,
 };
 use crate::animation::{BoneId, BoneLocalPose};
 use crate::ecs::component::ClipSchedule;
@@ -183,7 +183,9 @@ fn dispatch_keyframe_edit_events(
             } => {
                 if let Some(clip) = clip_library.get_mut(clip_id) {
                     if let Some(track) = clip.tracks.get_mut(bone_id) {
-                        track.move_keyframe(*property_type, *keyframe_id, *new_time, *new_value);
+                        let curve = track.get_curve_mut(*property_type);
+                        curve_set_keyframe_time(curve, *keyframe_id, *new_time);
+                        curve.set_keyframe_value(*keyframe_id, *new_value);
                     }
                     clip.recalculate_duration();
                     clip_modified = true;

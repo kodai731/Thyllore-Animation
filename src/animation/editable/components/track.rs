@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use crate::animation::BoneId;
 
 use super::curve::{PropertyCurve, PropertyType};
-use super::curve_ops::curve_set_keyframe_time;
 use super::keyframe::CurveId;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -112,17 +111,5 @@ impl BoneTrack {
         times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         times.dedup_by(|a, b| (*a - *b).abs() < 0.001);
         times
-    }
-
-    pub fn move_keyframe(
-        &mut self,
-        property_type: PropertyType,
-        keyframe_id: super::keyframe::KeyframeId,
-        new_time: f32,
-        new_value: f32,
-    ) {
-        let curve = self.get_curve_mut(property_type);
-        curve_set_keyframe_time(curve, keyframe_id, new_time);
-        curve.set_keyframe_value(keyframe_id, new_value);
     }
 }

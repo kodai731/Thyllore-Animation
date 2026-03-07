@@ -1,4 +1,6 @@
-use super::keyframe::{BezierHandle, EditableKeyframe, TangentType, TangentWeightMode};
+use super::super::components::keyframe::{
+    BezierHandle, EditableKeyframe, TangentType, TangentWeightMode,
+};
 
 pub fn sample_bezier(
     k0_time: f32,
@@ -376,7 +378,7 @@ pub fn apply_tangent_by_type(keyframes: &mut [EditableKeyframe], index: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::keyframe::InterpolationType;
+    use crate::animation::editable::InterpolationType;
 
     #[test]
     fn test_sample_bezier_linear_equivalent() {

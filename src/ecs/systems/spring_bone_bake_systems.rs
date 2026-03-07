@@ -1,4 +1,6 @@
-use crate::animation::editable::{quaternion_to_euler_degrees, EditableAnimationClip};
+use crate::animation::editable::{
+    curve_add_keyframe, quaternion_to_euler_degrees, EditableAnimationClip,
+};
 use crate::animation::{AnimationClip, BoneId, Skeleton};
 use crate::ecs::component::{ConstraintSet, SpringBoneSetup};
 
@@ -116,13 +118,13 @@ pub fn merge_bake_into_clip(
         };
 
         for kf in &source_track.rotation_x.keyframes {
-            track.rotation_x.add_keyframe(kf.time, kf.value);
+            curve_add_keyframe(&mut track.rotation_x, kf.time, kf.value);
         }
         for kf in &source_track.rotation_y.keyframes {
-            track.rotation_y.add_keyframe(kf.time, kf.value);
+            curve_add_keyframe(&mut track.rotation_y, kf.time, kf.value);
         }
         for kf in &source_track.rotation_z.keyframes {
-            track.rotation_z.add_keyframe(kf.time, kf.value);
+            curve_add_keyframe(&mut track.rotation_z, kf.time, kf.value);
         }
     }
 }
@@ -152,9 +154,9 @@ fn capture_rotation_keyframes(
         let euler = quaternion_to_euler_degrees(&pose.bone_poses[idx].rotation);
 
         if let Some(track) = clip.tracks.get_mut(&bone_id) {
-            track.rotation_x.add_keyframe(time, euler.x);
-            track.rotation_y.add_keyframe(time, euler.y);
-            track.rotation_z.add_keyframe(time, euler.z);
+            curve_add_keyframe(&mut track.rotation_x, time, euler.x);
+            curve_add_keyframe(&mut track.rotation_y, time, euler.y);
+            curve_add_keyframe(&mut track.rotation_z, time, euler.z);
         }
     }
 }

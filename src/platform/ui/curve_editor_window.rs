@@ -4,7 +4,8 @@ use imgui::Condition;
 
 use super::timeline_window::ruler_padding;
 use crate::animation::editable::{
-    BezierHandle, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
+    curve_sample, segment_uses_bezier, BezierHandle, InterpolationType, KeyframeId, PropertyCurve,
+    PropertyType, TangentWeightMode,
 };
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
@@ -367,8 +368,25 @@ fn build_curve_view(
     }
 
     let curves_to_draw = collect_visible_curves(track, editor_state);
-    let vt = initialize_view(editor_state, &curves_to_draw, clip.duration);
+    initialize_view_range(editor_state, &curves_to_draw, clip.duration);
     let cursor_pos = ui.cursor_screen_pos();
+
+    let curve_origin = [
+        cursor_pos[0] + Y_AXIS_WIDTH + CURVE_PADDING,
+        cursor_pos[1] + TIME_RULER_HEIGHT + CURVE_PADDING,
+    ];
+
+    let vt = ViewTransform {
+        curve_origin,
+        curve_width: curve_area_width,
+        curve_height: curve_area_height,
+        duration: editor_state.view_duration,
+        val_range: editor_state.view_val_range,
+        zoom_x: editor_state.zoom_x,
+        zoom_y: editor_state.zoom_y,
+        view_time_offset: editor_state.view_time_offset,
+        view_value_offset: editor_state.view_value_offset,
+    };
 
     draw_curve_area(
         ui,
@@ -426,11 +444,11 @@ fn collect_visible_curves<'a>(
     curves
 }
 
-fn initialize_view(
+fn initialize_view_range(
     editor_state: &mut CurveEditorState,
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
     clip_duration: f32,
-) -> ViewTransform {
+) {
     let (global_min, global_max) = calculate_global_value_range(curves_to_draw);
     let display_duration = clip_duration + ruler_padding(clip_duration);
 
@@ -445,23 +463,11 @@ fn initialize_view(
     } else {
         editor_state.view_duration = editor_state.view_duration.max(display_duration);
     }
-
-    ViewTransform {
-        curve_origin: [0.0, 0.0],
-        curve_width: 0.0,
-        curve_height: 0.0,
-        duration: editor_state.view_duration,
-        val_range: editor_state.view_val_range,
-        zoom_x: editor_state.zoom_x,
-        zoom_y: editor_state.zoom_y,
-        view_time_offset: editor_state.view_time_offset,
-        view_value_offset: editor_state.view_value_offset,
-    }
 }
 
 fn draw_curve_area(
     ui: &imgui::Ui,
-    vt_template: &ViewTransform,
+    vt: &ViewTransform,
     cursor_pos: [f32; 2],
     curve_area_width: f32,
     curve_area_height: f32,
@@ -472,18 +478,6 @@ fn draw_curve_area(
     suggestion_overlays: &[SuggestionOverlay],
     bone_id: BoneId,
 ) {
-    let curve_origin = [
-        cursor_pos[0] + Y_AXIS_WIDTH + CURVE_PADDING,
-        cursor_pos[1] + TIME_RULER_HEIGHT + CURVE_PADDING,
-    ];
-
-    let vt = ViewTransform {
-        curve_origin,
-        curve_width: curve_area_width,
-        curve_height: curve_area_height,
-        ..*vt_template
-    };
-
     let draw_list = ui.get_window_draw_list();
 
     let y_axis_origin = [
@@ -495,35 +489,30 @@ fn draw_curve_area(
         y_axis_origin,
         Y_AXIS_WIDTH,
         curve_area_height,
-        &vt,
+        vt,
     );
 
     let ruler_pos = [cursor_pos[0] + Y_AXIS_WIDTH + CURVE_PADDING, cursor_pos[1]];
-    draw_time_ruler(&draw_list, ruler_pos, curve_area_width, &vt);
+    draw_time_ruler(&draw_list, ruler_pos, curve_area_width, vt);
 
+    let co = vt.curve_origin;
     draw_list
         .add_rect(
-            curve_origin,
-            [
-                curve_origin[0] + curve_area_width,
-                curve_origin[1] + curve_area_height,
-            ],
+            co,
+            [co[0] + curve_area_width, co[1] + curve_area_height],
             [0.12, 0.12, 0.15, 1.0],
         )
         .filled(true)
         .build();
 
     draw_list.with_clip_rect_intersect(
-        curve_origin,
-        [
-            curve_origin[0] + curve_area_width,
-            curve_origin[1] + curve_area_height,
-        ],
+        co,
+        [co[0] + curve_area_width, co[1] + curve_area_height],
         || {
             draw_clipped_curve_content(
                 ui,
                 &draw_list,
-                &vt,
+                vt,
                 curve_area_width,
                 curve_area_height,
                 timeline_state,
@@ -692,11 +681,13 @@ fn build_keyframe_context_menu(
             }
         }
 
+        let section_color = [0.6, 0.8, 1.0, 1.0];
+
         ui.separator();
-        ui.text("Interpolation");
+        ui.text_colored(section_color, "Interpolation");
         ui.separator();
 
-        if ui.selectable_config("Linear").build() {
+        if ui.selectable_config("  Linear").build() {
             ui_events.send(UIEvent::TimelineSetKeyframeInterpolation {
                 bone_id,
                 property_type: ctx_kf.property_type,
@@ -705,7 +696,7 @@ fn build_keyframe_context_menu(
             });
         }
 
-        if ui.selectable_config("Bezier").build() {
+        if ui.selectable_config("  Bezier").build() {
             ui_events.send(UIEvent::TimelineSetKeyframeInterpolation {
                 bone_id,
                 property_type: ctx_kf.property_type,
@@ -714,7 +705,7 @@ fn build_keyframe_context_menu(
             });
         }
 
-        if ui.selectable_config("Stepped").build() {
+        if ui.selectable_config("  Stepped").build() {
             ui_events.send(UIEvent::TimelineSetKeyframeInterpolation {
                 bone_id,
                 property_type: ctx_kf.property_type,
@@ -724,10 +715,10 @@ fn build_keyframe_context_menu(
         }
 
         ui.spacing();
-        ui.text("Tangent");
+        ui.text_colored(section_color, "Tangent");
         ui.separator();
 
-        if ui.selectable_config("Auto").build() {
+        if ui.selectable_config("  Auto").build() {
             ui_events.send(UIEvent::TimelineAutoTangent {
                 bone_id,
                 property_type: ctx_kf.property_type,
@@ -735,23 +726,33 @@ fn build_keyframe_context_menu(
             });
         }
 
-        if ui.selectable_config("Flat").build() {
-            ui_events.send(UIEvent::TimelineSetKeyframeTangent {
+        if ui.selectable_config("  Flat").build() {
+            ui_events.send(UIEvent::TimelineFlatTangent {
                 bone_id,
                 property_type: ctx_kf.property_type,
                 keyframe_id: ctx_kf.keyframe_id,
-                in_tangent: BezierHandle::new(-0.166, 0.0),
-                out_tangent: BezierHandle::new(0.166, 0.0),
             });
         }
 
-        if ui.selectable_config("Reset (Linear)").build() {
-            ui_events.send(UIEvent::TimelineSetKeyframeTangent {
+        ui.spacing();
+        ui.text_colored(section_color, "Weight");
+        ui.separator();
+
+        if ui.selectable_config("  Non-Weighted").build() {
+            ui_events.send(UIEvent::TimelineSetTangentWeightMode {
                 bone_id,
                 property_type: ctx_kf.property_type,
                 keyframe_id: ctx_kf.keyframe_id,
-                in_tangent: BezierHandle::linear(),
-                out_tangent: BezierHandle::linear(),
+                weight_mode: TangentWeightMode::NonWeighted,
+            });
+        }
+
+        if ui.selectable_config("  Weighted").build() {
+            ui_events.send(UIEvent::TimelineSetTangentWeightMode {
+                bone_id,
+                property_type: ctx_kf.property_type,
+                keyframe_id: ctx_kf.keyframe_id,
+                weight_mode: TangentWeightMode::Weighted,
             });
         }
     });
@@ -1412,31 +1413,31 @@ fn draw_curve_with_keyframes(
         let k0 = &curve.keyframes[i];
         let k1 = &curve.keyframes[i + 1];
 
-        let segment_samples = match k0.interpolation {
-            InterpolationType::Stepped => {
-                let x0 = vt.time_to_x(k0.time);
-                let y0 = vt.value_to_y(k0.value);
-                let x1 = vt.time_to_x(k1.time);
-                let y1 = vt.value_to_y(k1.value);
-                draw_list
-                    .add_line([x0, y0], [x1, y0], color)
-                    .thickness(1.5)
-                    .build();
-                draw_list
-                    .add_line([x1, y0], [x1, y1], color)
-                    .thickness(1.5)
-                    .build();
-                continue;
-            }
-            InterpolationType::Linear => 2,
-            InterpolationType::Bezier => 20,
+        let segment_samples = if k0.interpolation == InterpolationType::Stepped {
+            let x0 = vt.time_to_x(k0.time);
+            let y0 = vt.value_to_y(k0.value);
+            let x1 = vt.time_to_x(k1.time);
+            let y1 = vt.value_to_y(k1.value);
+            draw_list
+                .add_line([x0, y0], [x1, y0], color)
+                .thickness(1.5)
+                .build();
+            draw_list
+                .add_line([x1, y0], [x1, y1], color)
+                .thickness(1.5)
+                .build();
+            continue;
+        } else if segment_uses_bezier(k0, k1) {
+            20
+        } else {
+            2
         };
 
         let mut prev_point: Option<[f32; 2]> = None;
         for s in 0..segment_samples {
             let frac = s as f32 / (segment_samples - 1) as f32;
             let time = k0.time + (k1.time - k0.time) * frac;
-            if let Some(value) = curve.sample(time) {
+            if let Some(value) = curve_sample(curve, time) {
                 let point = [vt.time_to_x(time), vt.value_to_y(value)];
                 if let Some(prev) = prev_point {
                     draw_list
@@ -1525,6 +1526,7 @@ fn draw_tangent_handles(
             let kf_y = vt.value_to_y(kf.value);
             let handle_color = [color[0], color[1], color[2], 0.9];
             let handle_size = 4.0;
+            let is_weighted = kf.weight_mode == TangentWeightMode::Weighted;
 
             let in_x = vt.time_to_x(kf.time + kf.in_tangent.time_offset);
             let in_y = vt.value_to_y(kf.value + kf.in_tangent.value_offset);
@@ -1532,14 +1534,21 @@ fn draw_tangent_handles(
                 .add_line([kf_x, kf_y], [in_x, in_y], handle_color)
                 .thickness(1.0)
                 .build();
-            draw_list
-                .add_rect(
-                    [in_x - handle_size, in_y - handle_size],
-                    [in_x + handle_size, in_y + handle_size],
-                    handle_color,
-                )
-                .filled(true)
-                .build();
+            if is_weighted {
+                draw_list
+                    .add_circle([in_x, in_y], handle_size, handle_color)
+                    .filled(true)
+                    .build();
+            } else {
+                draw_list
+                    .add_rect(
+                        [in_x - handle_size, in_y - handle_size],
+                        [in_x + handle_size, in_y + handle_size],
+                        handle_color,
+                    )
+                    .filled(true)
+                    .build();
+            }
 
             let out_x = vt.time_to_x(kf.time + kf.out_tangent.time_offset);
             let out_y = vt.value_to_y(kf.value + kf.out_tangent.value_offset);
@@ -1547,14 +1556,21 @@ fn draw_tangent_handles(
                 .add_line([kf_x, kf_y], [out_x, out_y], handle_color)
                 .thickness(1.0)
                 .build();
-            draw_list
-                .add_rect(
-                    [out_x - handle_size, out_y - handle_size],
-                    [out_x + handle_size, out_y + handle_size],
-                    handle_color,
-                )
-                .filled(true)
-                .build();
+            if is_weighted {
+                draw_list
+                    .add_circle([out_x, out_y], handle_size, handle_color)
+                    .filled(true)
+                    .build();
+            } else {
+                draw_list
+                    .add_rect(
+                        [out_x - handle_size, out_y - handle_size],
+                        [out_x + handle_size, out_y + handle_size],
+                        handle_color,
+                    )
+                    .filled(true)
+                    .build();
+            }
 
             break;
         }

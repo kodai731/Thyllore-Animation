@@ -1,7 +1,9 @@
 use anyhow::Result;
 use cgmath::Vector3;
 
-use crate::animation::BoneId;
+use cgmath::Matrix4;
+
+use crate::animation::{BoneId, SkeletonId};
 use crate::app::data::LightMoveTarget;
 use crate::debugview::gizmo::transform::TransformGizmoHandle;
 use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, TransformGizmoData};
@@ -15,7 +17,9 @@ use crate::ecs::systems::{
     compute_local_override_from_global_rotation, compute_local_override_from_global_scale,
     compute_local_override_from_global_translation, select_bone_by_ray, transform_gizmo_systems,
 };
-use crate::ecs::GizmoAxis;
+use crate::ecs::{
+    compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose, GizmoAxis,
+};
 use crate::ecs::{
     gizmo_try_select, gizmo_update_position_with_constraint, update_light_auto_target,
 };
@@ -89,11 +93,19 @@ fn update_pointer_state(ctx: &mut EcsContext) {
     let viewport_hovered = ctx.gui_data.viewport_hovered;
     let imgui_wants_mouse = ctx.gui_data.imgui_wants_mouse;
 
-    use crate::ecs::resource::button_state_advance;
+    use crate::ecs::resource::{button_state_advance, RawButtonInput};
+    let to_input = |down: bool| {
+        if down {
+            RawButtonInput::Pressed
+        } else {
+            RawButtonInput::Released
+        }
+    };
+
     let mut pointer = ctx.pointer_state_mut();
-    button_state_advance(&mut pointer.left, is_left);
-    button_state_advance(&mut pointer.right, is_right);
-    button_state_advance(&mut pointer.middle, is_wheel);
+    button_state_advance(&mut pointer.left, to_input(is_left));
+    button_state_advance(&mut pointer.right, to_input(is_right));
+    button_state_advance(&mut pointer.middle, to_input(is_wheel));
     pointer.position = mouse_pos;
     pointer.viewport_position = [
         mouse_pos[0] - viewport_pos[0],
@@ -697,16 +709,15 @@ fn apply_bone_translation(ctx: &mut EcsContext, bone_id: u32, new_pos: Vector3<f
         return;
     }
 
-    let (cached_globals, skeleton_id, mesh_scale) = {
+    let (skeleton_id, mesh_scale) = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
-        (
-            bone_gizmo.cached_global_transforms.clone(),
-            bone_gizmo.cached_skeleton_id,
-            bone_gizmo.mesh_scale,
-        )
+        (bone_gizmo.cached_skeleton_id, bone_gizmo.mesh_scale)
     };
 
     let Some(skel_id) = skeleton_id else { return };
+    let Some(globals) = compute_animation_globals(ctx, skel_id) else {
+        return;
+    };
     let Some(skeleton_ref) = ctx.assets.get_skeleton_by_skeleton_id(skel_id) else {
         return;
     };
@@ -723,12 +734,8 @@ fn apply_bone_translation(ctx: &mut EcsContext, bone_id: u32, new_pos: Vector3<f
         new_pos.z * inv_scale,
     );
 
-    let local_pose = compute_local_override_from_global_translation(
-        &skeleton,
-        &cached_globals,
-        bone_id,
-        skeleton_pos,
-    );
+    let local_pose =
+        compute_local_override_from_global_translation(&skeleton, &globals, bone_id, skeleton_pos);
 
     if let Some(pose) = local_pose {
         if let Some(mut overrides) = ctx.world.get_resource_mut::<BonePoseOverride>() {
@@ -747,16 +754,15 @@ fn apply_bone_rotation(
         return;
     }
 
-    let (cached_globals, skeleton_id, mesh_scale) = {
+    let (skeleton_id, mesh_scale) = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
-        (
-            bone_gizmo.cached_global_transforms.clone(),
-            bone_gizmo.cached_skeleton_id,
-            bone_gizmo.mesh_scale,
-        )
+        (bone_gizmo.cached_skeleton_id, bone_gizmo.mesh_scale)
     };
 
     let Some(skel_id) = skeleton_id else { return };
+    let Some(globals) = compute_animation_globals(ctx, skel_id) else {
+        return;
+    };
     let Some(skeleton_ref) = ctx.assets.get_skeleton_by_skeleton_id(skel_id) else {
         return;
     };
@@ -775,7 +781,7 @@ fn apply_bone_rotation(
 
     let local_pose = compute_local_override_from_global_rotation(
         &skeleton,
-        &cached_globals,
+        &globals,
         bone_id,
         skeleton_gizmo_pos,
         rotation,
@@ -793,22 +799,21 @@ fn apply_bone_scale(ctx: &mut EcsContext, bone_id: u32, scale: Vector3<f32>) {
         return;
     }
 
-    let (cached_globals, skeleton_id) = {
+    let skeleton_id = {
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
-        (
-            bone_gizmo.cached_global_transforms.clone(),
-            bone_gizmo.cached_skeleton_id,
-        )
+        bone_gizmo.cached_skeleton_id
     };
 
     let Some(skel_id) = skeleton_id else { return };
+    let Some(globals) = compute_animation_globals(ctx, skel_id) else {
+        return;
+    };
     let Some(skeleton_ref) = ctx.assets.get_skeleton_by_skeleton_id(skel_id) else {
         return;
     };
     let skeleton = skeleton_ref.clone();
 
-    let local_pose =
-        compute_local_override_from_global_scale(&skeleton, &cached_globals, bone_id, scale);
+    let local_pose = compute_local_override_from_global_scale(&skeleton, &globals, bone_id, scale);
 
     if let Some(pose) = local_pose {
         if let Some(mut overrides) = ctx.world.get_resource_mut::<BonePoseOverride>() {
@@ -899,4 +904,27 @@ fn sync_curve_editor_bone(ctx: &mut EcsContext, new_active_bone: Option<BoneId>)
         let mut editor = ctx.world.resource_mut::<CurveEditorState>();
         editor.selected_bone_id = Some(bone_id);
     }
+}
+
+fn compute_animation_globals(
+    ctx: &EcsContext,
+    skeleton_id: SkeletonId,
+) -> Option<Vec<Matrix4<f32>>> {
+    let skeleton = ctx.assets.get_skeleton_by_skeleton_id(skeleton_id)?;
+
+    let timeline = ctx.world.resource::<TimelineState>();
+    let current_time = timeline.current_time;
+    let clip_id = timeline.current_clip_id?;
+    drop(timeline);
+
+    let clip_library = ctx.world.resource::<ClipLibrary>();
+    let asset_id = clip_library.get_asset_id_for_source(clip_id)?;
+    drop(clip_library);
+
+    let clip_asset = ctx.assets.animation_clips.get(&asset_id)?;
+
+    let mut pose = create_pose_from_rest(skeleton);
+    sample_clip_to_pose(&clip_asset.clip, current_time, skeleton, &mut pose, false);
+
+    Some(compute_pose_global_transforms(skeleton, &pose))
 }

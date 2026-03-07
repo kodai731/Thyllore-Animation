@@ -167,8 +167,12 @@ unsafe fn apply_model_to_resources(
         AnimationType::None
     };
     let node_animation_scale = load_result.node_animation_scale;
-    let mesh_scale_debug =
-        compute_bone_gizmo_mesh_scale(node_animation_scale, load_result.has_skinned_meshes);
+    let mesh_category = if load_result.has_skinned_meshes {
+        MeshCategory::Skinned
+    } else {
+        MeshCategory::Unskinned
+    };
+    let mesh_scale_debug = compute_bone_gizmo_mesh_scale(node_animation_scale, mesh_category);
     crate::log!(
         "[ModelLoad] type={:?}, has_skinned={}, node_anim_scale={}, mesh_scale={}",
         animation_type,
@@ -978,8 +982,12 @@ fn initialize_bone_gizmo_visibility(
         let first_skeleton = assets.skeletons.values().next();
         if let Some(skel_asset) = first_skeleton {
             bone_gizmo.cached_skeleton_id = Some(skel_asset.skeleton_id);
-            bone_gizmo.mesh_scale =
-                compute_bone_gizmo_mesh_scale(node_animation_scale, has_skinned_meshes);
+            let category = if has_skinned_meshes {
+                MeshCategory::Skinned
+            } else {
+                MeshCategory::Unskinned
+            };
+            bone_gizmo.mesh_scale = compute_bone_gizmo_mesh_scale(node_animation_scale, category);
 
             let skeleton = &skel_asset.skeleton;
             let rest_globals = crate::ecs::compute_pose_global_transforms(
@@ -999,11 +1007,15 @@ fn initialize_bone_gizmo_visibility(
     }
 }
 
-fn compute_bone_gizmo_mesh_scale(node_animation_scale: f32, has_skinned_meshes: bool) -> f32 {
-    if has_skinned_meshes {
-        1.0
-    } else {
-        node_animation_scale
+enum MeshCategory {
+    Skinned,
+    Unskinned,
+}
+
+fn compute_bone_gizmo_mesh_scale(node_animation_scale: f32, category: MeshCategory) -> f32 {
+    match category {
+        MeshCategory::Skinned => 1.0,
+        MeshCategory::Unskinned => node_animation_scale,
     }
 }
 

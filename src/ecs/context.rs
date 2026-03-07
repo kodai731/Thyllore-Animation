@@ -3,12 +3,17 @@ use cgmath::Vector3;
 use crate::app::billboard::BillboardData;
 use crate::app::GUIData;
 use crate::asset::AssetStorage;
-use crate::debugview::gizmo::{BoneSelectionState, GridGizmoData, LightGizmoData};
+use crate::debugview::gizmo::{
+    BoneSelectionState, GridGizmoData, LightGizmoData, TransformGizmoData,
+};
 use crate::debugview::RayTracingDebugState;
 use crate::ecs::component::{LineMesh, MeshScale};
 use crate::ecs::resource::Camera;
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::resource::ObjectIdReadback;
+use crate::ecs::resource::PointerCapture;
+use crate::ecs::resource::PointerState;
+use crate::ecs::resource::TransformGizmoState;
 
 use super::world::{ResMut, ResRef, World};
 
@@ -107,6 +112,22 @@ impl<'a> EcsContext<'a> {
         self.world.resource_mut::<BoneSelectionState>()
     }
 
+    pub fn transform_gizmo(&self) -> ResRef<TransformGizmoData> {
+        self.world.resource::<TransformGizmoData>()
+    }
+
+    pub fn transform_gizmo_mut(&self) -> ResMut<TransformGizmoData> {
+        self.world.resource_mut::<TransformGizmoData>()
+    }
+
+    pub fn transform_gizmo_state(&self) -> ResRef<TransformGizmoState> {
+        self.world.resource::<TransformGizmoState>()
+    }
+
+    pub fn transform_gizmo_state_mut(&self) -> ResMut<TransformGizmoState> {
+        self.world.resource_mut::<TransformGizmoState>()
+    }
+
     pub fn hierarchy_state(&self) -> ResRef<HierarchyState> {
         self.world.resource::<HierarchyState>()
     }
@@ -121,5 +142,21 @@ impl<'a> EcsContext<'a> {
 
     pub fn object_id_readback_mut(&self) -> ResMut<ObjectIdReadback> {
         self.world.resource_mut::<ObjectIdReadback>()
+    }
+
+    pub fn pointer_state(&self) -> ResRef<PointerState> {
+        self.world.resource::<PointerState>()
+    }
+
+    pub fn pointer_state_mut(&self) -> ResMut<PointerState> {
+        self.world.resource_mut::<PointerState>()
+    }
+
+    pub fn pointer_capture(&self) -> ResRef<PointerCapture> {
+        self.world.resource::<PointerCapture>()
+    }
+
+    pub fn pointer_capture_mut(&self) -> ResMut<PointerCapture> {
+        self.world.resource_mut::<PointerCapture>()
     }
 }

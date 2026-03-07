@@ -3,7 +3,7 @@ use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 use crate::app::billboard::BillboardData;
 use crate::debugview::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, GridGizmoData, LightGizmoData,
-    SpringBoneGizmoData,
+    SpringBoneGizmoData, TransformGizmoData,
 };
 use crate::debugview::GridMeshData;
 use crate::ecs::component::GpuMeshRef;
@@ -113,6 +113,47 @@ pub fn spring_bone_gizmo_render_data(gizmo: &SpringBoneGizmoData) -> Vec<RenderD
         gizmo.wire_mesh.indices.len() as u32,
     );
     vec![RenderData::new(mesh_ref, gizmo.wire_render_info)]
+}
+
+pub fn transform_gizmo_render_data(
+    gizmo: &TransformGizmoData,
+    camera_position: Vector3<f32>,
+    gizmo_scale: f32,
+) -> Vec<RenderData> {
+    if !gizmo.visible {
+        return Vec::new();
+    }
+
+    let gizmo_pos = gizmo.position.position;
+    let distance = (gizmo_pos - camera_position).magnitude();
+    let scale_factor = distance * gizmo_scale;
+    let model_matrix = Matrix4::from_translation(gizmo_pos) * Matrix4::from_scale(scale_factor);
+
+    let mut result = Vec::new();
+
+    if !gizmo.line_mesh.indices.is_empty() {
+        let line_ref = GpuMeshRef::new(
+            gizmo.line_mesh.vertex_buffer_handle,
+            gizmo.line_mesh.index_buffer_handle,
+            gizmo.line_mesh.indices.len() as u32,
+        );
+        result.push(
+            RenderData::new(line_ref, gizmo.line_render_info).with_model_matrix(model_matrix),
+        );
+    }
+
+    if !gizmo.solid_mesh.indices.is_empty() {
+        let solid_ref = GpuMeshRef::new(
+            gizmo.solid_mesh.vertex_buffer_handle,
+            gizmo.solid_mesh.index_buffer_handle,
+            gizmo.solid_mesh.indices.len() as u32,
+        );
+        result.push(
+            RenderData::new(solid_ref, gizmo.solid_render_info).with_model_matrix(model_matrix),
+        );
+    }
+
+    result
 }
 
 pub fn collect_scene_render_data(

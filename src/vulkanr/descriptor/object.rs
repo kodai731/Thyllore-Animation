@@ -19,6 +19,7 @@ pub struct ObjectDescriptorSet {
     pub buffer_memories: Vec<vk::DeviceMemory>,
     pub max_objects: usize,
     next_slot: usize,
+    reserved_slot_count: usize,
 }
 
 impl ObjectDescriptorSet {
@@ -56,6 +57,7 @@ impl ObjectDescriptorSet {
             buffer_memories,
             max_objects,
             next_slot: 0,
+            reserved_slot_count: 0,
         };
         object_set.write_descriptor_sets(rrdevice, swapchain_image_count);
 
@@ -131,6 +133,12 @@ impl ObjectDescriptorSet {
 
     pub fn allocate_slot(&mut self) -> usize {
         let slot = self.next_slot;
+        if slot >= self.max_objects {
+            crate::log!(
+                "[ObjectDescriptorSet] WARNING: slot {} exceeds max_objects {}. GPU buffer overflow!",
+                slot, self.max_objects
+            );
+        }
         self.next_slot += 1;
         slot
     }
@@ -139,8 +147,12 @@ impl ObjectDescriptorSet {
         self.next_slot
     }
 
-    pub fn reset_to(&mut self, slot: usize) {
-        self.next_slot = slot;
+    pub fn seal_reserved_slots(&mut self) {
+        self.reserved_slot_count = self.next_slot;
+    }
+
+    pub fn reset_to_reserved(&mut self) {
+        self.next_slot = self.reserved_slot_count;
     }
 
     pub unsafe fn update(
@@ -150,6 +162,13 @@ impl ObjectDescriptorSet {
         object_index: usize,
         ubo: &ObjectUBO,
     ) -> anyhow::Result<()> {
+        if object_index >= self.max_objects {
+            anyhow::bail!(
+                "object_index {} exceeds max_objects {}",
+                object_index,
+                self.max_objects
+            );
+        }
         let idx = self.get_set_index(image_index, object_index);
         let memory = rrdevice.device.map_memory(
             self.buffer_memories[idx],

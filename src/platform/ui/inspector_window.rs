@@ -31,6 +31,7 @@ pub fn build_inspector_window(
         .resizable(false)
         .movable(false)
         .collapsible(false)
+        .bring_to_front_on_focus(false)
         .build(|| {
             if let Some(entity) = state.selected_entity {
                 let data = collect_inspector_data(world, entity, assets, graphics);

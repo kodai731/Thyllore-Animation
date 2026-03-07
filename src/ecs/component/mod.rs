@@ -1,5 +1,6 @@
 mod animation_meta;
 mod clip_schedule;
+mod clip_track_snapshot;
 mod constraint_set;
 mod core;
 mod editor;
@@ -13,6 +14,7 @@ mod spring_bone;
 
 pub use animation_meta::*;
 pub use clip_schedule::*;
+pub use clip_track_snapshot::*;
 pub use constraint_set::*;
 pub use core::*;
 pub use editor::*;

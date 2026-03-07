@@ -119,7 +119,6 @@ pub enum UIEvent {
         keyframe_id: KeyframeId,
     },
 
-    TimelineToggleViewMode,
     TimelineSetSnapToFrame(bool),
     TimelineSetSnapToKey(bool),
     TimelineSetFrameRate(f32),

@@ -8,13 +8,14 @@ use super::platform::System;
 use super::ui::{
     build_click_debug_overlay, build_clip_browser_window, build_curve_editor_window,
     build_debug_window, build_hierarchy_window, build_inspector_window, build_timeline_window,
-    build_viewport_window, collect_clip_track_snapshot, CurveEditorState, DebugWindowState,
+    build_viewport_window, CurveEditorState, DebugWindowState,
 };
 use crate::app::{App, GUIData};
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{
     ClipBrowserState, ClipLibrary, CurveEditorBuffer, HierarchyState, TimelineState,
 };
+use crate::ecs::systems::clip_track_systems::query_clip_tracks;
 use crate::ecs::systems::phases::run_event_dispatch_phase;
 use crate::ecs::DeferredAction;
 use crate::ecs::UIEventQueue;
@@ -257,7 +258,7 @@ fn build_ui_windows(
 
     let clip_track_snapshot = {
         let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
-        collect_clip_track_snapshot(&app.data.ecs_world, &*clip_library)
+        query_clip_tracks(&app.data.ecs_world, &*clip_library, &app.data.ecs_assets)
     };
 
     {

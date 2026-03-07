@@ -1,7 +1,9 @@
 use crate::animation::editable::{BlendMode, ClipGroupId, ClipInstanceId, SourceClipId};
+use crate::animation::{BoneId, Skeleton};
+use crate::asset::storage::AssetStorage;
 use crate::ecs::component::ClipSchedule;
-use crate::ecs::resource::ClipLibrary;
-use crate::ecs::world::{Entity, Name, World};
+use crate::ecs::resource::{ClipLibrary, NodeAssets};
+use crate::ecs::world::{Entity, MeshRef, Name, World};
 
 pub struct ClipTrackSnapshot {
     pub entries: Vec<ClipTrackEntry>,
@@ -10,6 +12,7 @@ pub struct ClipTrackSnapshot {
 pub struct ClipTrackEntry {
     pub entity: Entity,
     pub entity_name: String,
+    pub mesh_bone_id: Option<BoneId>,
     pub instances: Vec<ClipInstanceSnapshot>,
     pub groups: Vec<ClipGroupSnapshot>,
 }
@@ -36,7 +39,11 @@ pub struct ClipGroupSnapshot {
     pub instance_ids: Vec<ClipInstanceId>,
 }
 
-pub fn collect_clip_track_snapshot(world: &World, clip_library: &ClipLibrary) -> ClipTrackSnapshot {
+pub fn query_clip_tracks(
+    world: &World,
+    clip_library: &ClipLibrary,
+    assets: &AssetStorage,
+) -> ClipTrackSnapshot {
     let mut entries = Vec::new();
 
     for (entity, schedule) in world.iter_components::<ClipSchedule>() {
@@ -44,6 +51,10 @@ pub fn collect_clip_track_snapshot(world: &World, clip_library: &ClipLibrary) ->
             .get_component::<Name>(entity)
             .map(|n| n.0.clone())
             .unwrap_or_else(|| format!("Entity {}", entity));
+
+        let first_source_id = schedule.instances.first().map(|i| i.source_id);
+        let mesh_bone_id =
+            resolve_mesh_bone_id(world, entity, assets, clip_library, first_source_id);
 
         let instances: Vec<ClipInstanceSnapshot> = schedule
             .instances
@@ -93,6 +104,7 @@ pub fn collect_clip_track_snapshot(world: &World, clip_library: &ClipLibrary) ->
             entries.push(ClipTrackEntry {
                 entity,
                 entity_name,
+                mesh_bone_id,
                 instances,
                 groups,
             });
@@ -100,4 +112,53 @@ pub fn collect_clip_track_snapshot(world: &World, clip_library: &ClipLibrary) ->
     }
 
     ClipTrackSnapshot { entries }
+}
+
+pub fn resolve_mesh_bone_id(
+    world: &World,
+    entity: Entity,
+    assets: &AssetStorage,
+    clip_library: &ClipLibrary,
+    source_id: Option<SourceClipId>,
+) -> Option<BoneId> {
+    let mesh_ref = world.get_component::<MeshRef>(entity)?;
+    let mesh_asset = assets.get_mesh(mesh_ref.mesh_asset_id)?;
+    let skeleton_id = mesh_asset.skeleton_id?;
+    let skeleton = assets.get_skeleton_by_skeleton_id(skeleton_id)?;
+    let node_index = mesh_asset.node_index?;
+
+    let node_name = find_node_name_by_index(world, node_index)?;
+    let bone_id = *skeleton.bone_name_to_id.get(&node_name)?;
+
+    let clip = source_id.and_then(|id| clip_library.get(id));
+    match clip {
+        Some(c) if c.tracks.contains_key(&bone_id) => Some(bone_id),
+        Some(c) => find_ancestor_with_track(skeleton, bone_id, c),
+        None => Some(bone_id),
+    }
+}
+
+fn find_node_name_by_index(world: &World, node_index: usize) -> Option<String> {
+    let node_assets = world.get_resource::<NodeAssets>()?;
+    node_assets
+        .nodes
+        .iter()
+        .find(|n| n.index == node_index)
+        .map(|n| n.name.clone())
+}
+
+fn find_ancestor_with_track(
+    skeleton: &Skeleton,
+    bone_id: BoneId,
+    clip: &crate::animation::editable::EditableAnimationClip,
+) -> Option<BoneId> {
+    let mut current = bone_id;
+    for _ in 0..skeleton.bones.len() {
+        let parent_id = skeleton.bones.get(current as usize)?.parent_id?;
+        if clip.tracks.contains_key(&parent_id) {
+            return Some(parent_id);
+        }
+        current = parent_id;
+    }
+    None
 }

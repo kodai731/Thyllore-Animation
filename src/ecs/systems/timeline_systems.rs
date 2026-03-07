@@ -212,14 +212,6 @@ pub fn timeline_process_events(
                 timeline_state.zoom_out();
             }
 
-            UIEvent::TimelineToggleViewMode => {
-                use crate::ecs::resource::TimelineViewMode;
-                timeline_state.view_mode = match timeline_state.view_mode {
-                    TimelineViewMode::DopeSheet => TimelineViewMode::GraphEditor,
-                    TimelineViewMode::GraphEditor => TimelineViewMode::DopeSheet,
-                };
-            }
-
             UIEvent::TimelineSetSnapToFrame(enabled) => {
                 timeline_state.snap_settings.snap_to_frame = *enabled;
             }

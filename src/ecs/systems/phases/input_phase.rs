@@ -284,10 +284,10 @@ fn process_bone_selection(ctx: &mut EcsContext) -> Result<bool> {
         return Ok(false);
     };
 
-    let Some(skeleton) = ctx.assets.get_skeleton_by_skeleton_id(skel_id) else {
+    let Some(skeleton_ref) = ctx.assets.get_skeleton_by_skeleton_id(skel_id) else {
         return Ok(false);
     };
-    let skeleton = skeleton.clone();
+    let skeleton = skeleton_ref.clone();
 
     let hit = select_bone_by_ray(
         ray_origin,
@@ -707,10 +707,10 @@ fn apply_bone_translation(ctx: &mut EcsContext, bone_id: u32, new_pos: Vector3<f
     };
 
     let Some(skel_id) = skeleton_id else { return };
-    let Some(skeleton) = ctx.assets.get_skeleton_by_skeleton_id(skel_id) else {
+    let Some(skeleton_ref) = ctx.assets.get_skeleton_by_skeleton_id(skel_id) else {
         return;
     };
-    let skeleton = skeleton.clone();
+    let skeleton = skeleton_ref.clone();
 
     let inv_scale = if mesh_scale.abs() > f32::EPSILON {
         1.0 / mesh_scale
@@ -757,10 +757,10 @@ fn apply_bone_rotation(
     };
 
     let Some(skel_id) = skeleton_id else { return };
-    let Some(skeleton) = ctx.assets.get_skeleton_by_skeleton_id(skel_id) else {
+    let Some(skeleton_ref) = ctx.assets.get_skeleton_by_skeleton_id(skel_id) else {
         return;
     };
-    let skeleton = skeleton.clone();
+    let skeleton = skeleton_ref.clone();
 
     let inv_scale = if mesh_scale.abs() > f32::EPSILON {
         1.0 / mesh_scale
@@ -802,10 +802,10 @@ fn apply_bone_scale(ctx: &mut EcsContext, bone_id: u32, scale: Vector3<f32>) {
     };
 
     let Some(skel_id) = skeleton_id else { return };
-    let Some(skeleton) = ctx.assets.get_skeleton_by_skeleton_id(skel_id) else {
+    let Some(skeleton_ref) = ctx.assets.get_skeleton_by_skeleton_id(skel_id) else {
         return;
     };
-    let skeleton = skeleton.clone();
+    let skeleton = skeleton_ref.clone();
 
     let local_pose =
         compute_local_override_from_global_scale(&skeleton, &cached_globals, bone_id, scale);

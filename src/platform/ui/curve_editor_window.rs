@@ -366,19 +366,73 @@ fn build_curve_view(
         return;
     }
 
-    let mut curves_to_draw: Vec<(&PropertyCurve, [f32; 4], &str)> = Vec::new();
+    let curves_to_draw = collect_visible_curves(track, editor_state);
+    let vt = initialize_view(editor_state, &curves_to_draw, clip.duration);
+    let cursor_pos = ui.cursor_screen_pos();
+
+    draw_curve_area(
+        ui,
+        &vt,
+        cursor_pos,
+        curve_area_width,
+        curve_area_height,
+        timeline_state,
+        editor_state,
+        &curves_to_draw,
+        curve_buffer,
+        suggestion_overlays,
+        bone_id,
+    );
+
+    let total_width = Y_AXIS_WIDTH + CURVE_PADDING + curve_area_width + CURVE_PADDING;
+    let total_height = TIME_RULER_HEIGHT + CURVE_PADDING + curve_area_height + CURVE_PADDING;
+
+    ui.set_cursor_screen_pos([cursor_pos[0], cursor_pos[1]]);
+    ui.invisible_button("curve_interaction_area", [total_width, total_height]);
+
+    handle_curve_view_interaction(
+        ui,
+        ui_events,
+        editor_state,
+        &vt,
+        &curves_to_draw,
+        cursor_pos,
+        curve_area_width,
+        clip.duration,
+        bone_id,
+    );
+
+    ui.set_cursor_screen_pos([cursor_pos[0], cursor_pos[1] + total_height]);
+
+    build_buffer_controls(ui, ui_events, curve_buffer);
+
+    #[cfg(feature = "ml")]
+    handle_suggestion_keyboard(ui, ui_events, bone_id, editor_state, suggestion_overlays);
+}
+
+fn collect_visible_curves<'a>(
+    track: &'a crate::animation::editable::BoneTrack,
+    editor_state: &CurveEditorState,
+) -> Vec<(&'a PropertyCurve, [f32; 4], &'static str)> {
+    let mut curves = Vec::new();
     for (prop_type, color, name) in ALL_PROPERTY_TYPES {
         if editor_state.visible_curves.contains(prop_type) {
             let curve = track.get_curve(*prop_type);
             if !curve.is_empty() {
-                curves_to_draw.push((curve, *color, name));
+                curves.push((curve, *color, *name));
             }
         }
     }
+    curves
+}
 
-    let (global_min, global_max) = calculate_global_value_range(&curves_to_draw);
-
-    let display_duration = clip.duration + ruler_padding(clip.duration);
+fn initialize_view(
+    editor_state: &mut CurveEditorState,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    clip_duration: f32,
+) -> ViewTransform {
+    let (global_min, global_max) = calculate_global_value_range(curves_to_draw);
+    let display_duration = clip_duration + ruler_padding(clip_duration);
 
     if !editor_state.view_initialized {
         editor_state.view_value_offset = global_min;
@@ -392,12 +446,32 @@ fn build_curve_view(
         editor_state.view_duration = editor_state.view_duration.max(display_duration);
     }
 
-    let val_range = editor_state.view_val_range;
-    let view_duration = editor_state.view_duration;
+    ViewTransform {
+        curve_origin: [0.0, 0.0],
+        curve_width: 0.0,
+        curve_height: 0.0,
+        duration: editor_state.view_duration,
+        val_range: editor_state.view_val_range,
+        zoom_x: editor_state.zoom_x,
+        zoom_y: editor_state.zoom_y,
+        view_time_offset: editor_state.view_time_offset,
+        view_value_offset: editor_state.view_value_offset,
+    }
+}
 
-    let draw_list = ui.get_window_draw_list();
-    let cursor_pos = ui.cursor_screen_pos();
-
+fn draw_curve_area(
+    ui: &imgui::Ui,
+    vt_template: &ViewTransform,
+    cursor_pos: [f32; 2],
+    curve_area_width: f32,
+    curve_area_height: f32,
+    timeline_state: &TimelineState,
+    editor_state: &CurveEditorState,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curve_buffer: &CurveEditorBuffer,
+    suggestion_overlays: &[SuggestionOverlay],
+    bone_id: BoneId,
+) {
     let curve_origin = [
         cursor_pos[0] + Y_AXIS_WIDTH + CURVE_PADDING,
         cursor_pos[1] + TIME_RULER_HEIGHT + CURVE_PADDING,
@@ -407,13 +481,10 @@ fn build_curve_view(
         curve_origin,
         curve_width: curve_area_width,
         curve_height: curve_area_height,
-        duration: view_duration,
-        val_range,
-        zoom_x: editor_state.zoom_x,
-        zoom_y: editor_state.zoom_y,
-        view_time_offset: editor_state.view_time_offset,
-        view_value_offset: editor_state.view_value_offset,
+        ..*vt_template
     };
+
+    let draw_list = ui.get_window_draw_list();
 
     let y_axis_origin = [
         cursor_pos[0],
@@ -449,91 +520,126 @@ fn build_curve_view(
             curve_origin[1] + curve_area_height,
         ],
         || {
-            draw_grid(&draw_list, curve_area_width, curve_area_height, &vt);
-
-            let sample_count = calculate_sample_count(curve_area_width);
-
-            for (curve, color, _name) in &curves_to_draw {
-                draw_curve_with_keyframes(&draw_list, curve, *color, sample_count, &vt);
-            }
-
-            if !editor_state.selected_keyframes.is_empty() {
-                draw_selected_keyframes_highlight(
-                    &draw_list,
-                    &curves_to_draw,
-                    &editor_state.selected_keyframes,
-                    &vt,
-                );
-                draw_tangent_handles(
-                    &draw_list,
-                    &curves_to_draw,
-                    &editor_state.selected_keyframes,
-                    &vt,
-                );
-            }
-
-            let playhead_x = vt.time_to_x(timeline_state.current_time);
-            draw_list
-                .add_line(
-                    [playhead_x, curve_origin[1]],
-                    [playhead_x, curve_origin[1] + curve_area_height],
-                    [1.0, 0.2, 0.2, 1.0],
-                )
-                .thickness(2.0)
-                .build();
-
-            if editor_state.is_dragging_keyframe {
-                draw_keyframe_drag_preview(
-                    &draw_list,
-                    ui.io().mouse_pos,
-                    editor_state.drag_start_mouse_pos,
-                    &vt,
-                    &curves_to_draw,
-                    &editor_state.selected_keyframes,
-                );
-            }
-
-            if editor_state.dragging_tangent.is_some() {
-                draw_tangent_drag_preview(&draw_list, ui.io().mouse_pos);
-            }
-
-            draw_buffer_curve_overlay(
+            draw_clipped_curve_content(
+                ui,
                 &draw_list,
+                &vt,
+                curve_area_width,
+                curve_area_height,
+                timeline_state,
+                editor_state,
+                curves_to_draw,
                 curve_buffer,
-                bone_id,
-                &editor_state.visible_curves,
-                &vt,
-            );
-
-            draw_suggestion_curve_overlay(
-                &draw_list,
                 suggestion_overlays,
-                &editor_state.visible_curves,
-                &vt,
+                bone_id,
             );
         },
     );
+}
 
-    let total_width = Y_AXIS_WIDTH + CURVE_PADDING + curve_area_width + CURVE_PADDING;
-    let total_height = TIME_RULER_HEIGHT + CURVE_PADDING + curve_area_height + CURVE_PADDING;
+fn draw_clipped_curve_content(
+    ui: &imgui::Ui,
+    draw_list: &imgui::DrawListMut,
+    vt: &ViewTransform,
+    curve_area_width: f32,
+    curve_area_height: f32,
+    timeline_state: &TimelineState,
+    editor_state: &CurveEditorState,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    curve_buffer: &CurveEditorBuffer,
+    suggestion_overlays: &[SuggestionOverlay],
+    bone_id: BoneId,
+) {
+    draw_grid(draw_list, curve_area_width, curve_area_height, vt);
 
-    ui.set_cursor_screen_pos([cursor_pos[0], cursor_pos[1]]);
-    ui.invisible_button("curve_interaction_area", [total_width, total_height]);
+    let sample_count = calculate_sample_count(curve_area_width);
+    for (curve, color, _name) in curves_to_draw {
+        draw_curve_with_keyframes(draw_list, curve, *color, sample_count, vt);
+    }
+
+    if !editor_state.selected_keyframes.is_empty() {
+        draw_selected_keyframes_highlight(
+            draw_list,
+            curves_to_draw,
+            &editor_state.selected_keyframes,
+            vt,
+        );
+        draw_tangent_handles(
+            draw_list,
+            curves_to_draw,
+            &editor_state.selected_keyframes,
+            vt,
+        );
+    }
+
+    let playhead_x = vt.time_to_x(timeline_state.current_time);
+    draw_list
+        .add_line(
+            [playhead_x, vt.curve_origin[1]],
+            [playhead_x, vt.curve_origin[1] + curve_area_height],
+            [1.0, 0.2, 0.2, 1.0],
+        )
+        .thickness(2.0)
+        .build();
+
+    if editor_state.is_dragging_keyframe {
+        draw_keyframe_drag_preview(
+            draw_list,
+            ui.io().mouse_pos,
+            editor_state.drag_start_mouse_pos,
+            vt,
+            curves_to_draw,
+            &editor_state.selected_keyframes,
+        );
+    }
+
+    if editor_state.dragging_tangent.is_some() {
+        draw_tangent_drag_preview(draw_list, ui.io().mouse_pos);
+    }
+
+    draw_buffer_curve_overlay(
+        draw_list,
+        curve_buffer,
+        bone_id,
+        &editor_state.visible_curves,
+        vt,
+    );
+
+    draw_suggestion_curve_overlay(
+        draw_list,
+        suggestion_overlays,
+        &editor_state.visible_curves,
+        vt,
+    );
+}
+
+fn handle_curve_view_interaction(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    editor_state: &mut CurveEditorState,
+    vt: &ViewTransform,
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    cursor_pos: [f32; 2],
+    curve_area_width: f32,
+    clip_duration: f32,
+    bone_id: BoneId,
+) {
+    let ruler_pos = [cursor_pos[0] + Y_AXIS_WIDTH + CURVE_PADDING, cursor_pos[1]];
 
     handle_mouse_interaction(
         ui,
         ui_events,
         editor_state,
-        &vt,
-        &curves_to_draw,
+        vt,
+        curves_to_draw,
         ruler_pos,
         curve_area_width,
-        clip.duration,
+        clip_duration,
     );
 
     if ui.is_item_hovered() && ui.is_mouse_clicked(imgui::MouseButton::Right) {
         let mouse_pos = ui.io().mouse_pos;
-        if let Some(hit) = find_keyframe_at_position(mouse_pos, &curves_to_draw, &vt) {
+        if let Some(hit) = find_keyframe_at_position(mouse_pos, curves_to_draw, vt) {
             editor_state.context_menu_keyframe = Some(SelectedKeyframe {
                 property_type: hit.0,
                 keyframe_id: hit.1,
@@ -550,13 +656,6 @@ fn build_curve_view(
 
     build_keyframe_context_menu(ui, ui_events, editor_state, bone_id);
     build_curve_editor_context_menu(ui, ui_events, editor_state, bone_id);
-
-    ui.set_cursor_screen_pos([cursor_pos[0], cursor_pos[1] + total_height]);
-
-    build_buffer_controls(ui, ui_events, curve_buffer);
-
-    #[cfg(feature = "ml")]
-    handle_suggestion_keyboard(ui, ui_events, bone_id, editor_state, suggestion_overlays);
 }
 
 fn build_keyframe_context_menu(

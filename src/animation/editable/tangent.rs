@@ -9,19 +9,43 @@ pub fn sample_bezier(
     k1_in: &BezierHandle,
     time: f32,
 ) -> f32 {
+    let dt = k1_time - k0_time;
+    let (out_time, out_value) = clamp_handle_to_segment(k0_out.time_offset, k0_out.value_offset, dt);
+    let (in_time, in_value) = clamp_handle_to_segment(k1_in.time_offset, k1_in.value_offset, -dt);
+
     let p0_t = k0_time;
-    let p1_t = k0_time + k0_out.time_offset;
-    let p2_t = k1_time + k1_in.time_offset;
+    let p1_t = k0_time + out_time;
+    let p2_t = k1_time + in_time;
     let p3_t = k1_time;
 
     let p0_v = k0_value;
-    let p1_v = k0_value + k0_out.value_offset;
-    let p2_v = k1_value + k1_in.value_offset;
+    let p1_v = k0_value + out_value;
+    let p2_v = k1_value + in_value;
     let p3_v = k1_value;
 
     let u = find_bezier_t_for_time(p0_t, p1_t, p2_t, p3_t, time);
 
     evaluate_cubic(p0_v, p1_v, p2_v, p3_v, u)
+}
+
+fn clamp_handle_to_segment(
+    time_offset: f32,
+    value_offset: f32,
+    max_abs_time: f32,
+) -> (f32, f32) {
+    let limit = max_abs_time.abs();
+    if time_offset.abs() <= limit {
+        return (time_offset, value_offset);
+    }
+
+    if time_offset.abs() < 1e-8 {
+        return (0.0, value_offset);
+    }
+
+    let ratio = limit / time_offset.abs();
+    let clamped_time = time_offset.signum() * limit;
+    let clamped_value = value_offset * ratio;
+    (clamped_time, clamped_value)
 }
 
 fn find_bezier_t_for_time(p0: f32, p1: f32, p2: f32, p3: f32, target: f32) -> f32 {

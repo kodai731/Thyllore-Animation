@@ -1,6 +1,7 @@
 mod clipboard;
 pub mod events;
 pub mod imgui;
+pub mod key_bindings;
 pub mod platform;
 pub mod ui;
 

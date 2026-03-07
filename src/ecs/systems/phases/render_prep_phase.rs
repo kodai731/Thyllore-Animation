@@ -3,14 +3,16 @@ use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
 use crate::app::FrameContext;
 use crate::debugview::gizmo::BoneSelectionState;
+use crate::debugview::gizmo::TransformGizmoData;
 use crate::debugview::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, SpringBoneGizmoData,
 };
 use crate::ecs::component::{ConstraintSet, LineMesh};
-use crate::ecs::resource::{Camera, Exposure};
+use crate::ecs::resource::{Camera, Exposure, TransformGizmoState};
 use crate::ecs::systems::render_data_systems::{
     bone_gizmo_render_data, constraint_gizmo_render_data, gizmo_mesh_render_data,
     gizmo_selectable_render_data, grid_mesh_render_data, spring_bone_gizmo_render_data,
+    transform_gizmo_render_data,
 };
 use crate::ecs::{
     build_bone_line_mesh, build_box_bone_meshes_with_selection, build_constraint_gizmo_mesh,
@@ -37,6 +39,40 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         use crate::ecs::systems::camera_systems::compute_camera_position;
         compute_camera_position(&ctx.camera())
     };
+
+    update_frame_and_scene_uniforms(ctx, view, proj, screen_size, aspect, camera_position)?;
+
+    let render_data_vec = collect_gizmo_render_data(ctx, camera_position);
+    let render_data_refs: Vec<_> = render_data_vec.iter().collect();
+
+    if let Err(e) = update_object_ubo(
+        &render_data_refs,
+        ctx.image_index,
+        &ctx.graphics.objects,
+        ctx.device,
+    ) {
+        eprintln!("Failed to update object UBOs: {}", e);
+    }
+
+    update_billboard_ubo(ctx, view, proj)?;
+
+    update_grid_gizmo_buffers(ctx, view)?;
+    update_transform_gizmo_mesh(ctx)?;
+    update_bone_gizmo_mesh(ctx)?;
+    update_constraint_gizmo_mesh(ctx)?;
+    update_spring_bone_gizmo_mesh(ctx)?;
+
+    Ok(())
+}
+
+unsafe fn update_frame_and_scene_uniforms(
+    ctx: &mut FrameContext,
+    view: Matrix4<f32>,
+    proj: Matrix4<f32>,
+    screen_size: cgmath::Vector2<f32>,
+    aspect: f32,
+    camera_position: Vector3<f32>,
+) -> Result<()> {
     let light_position = ctx.rt_debug().light_position;
 
     {
@@ -64,33 +100,38 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         eprintln!("Failed to update ObjectUBO: {}", e);
     }
 
-    {
-        let rt_debug = ctx.rt_debug();
-        let light_pos = rt_debug.light_position;
-        let debug_mode = rt_debug.debug_view_mode.as_int();
-        let shadow_strength = rt_debug.shadow_strength;
-        let enable_distance_attenuation = rt_debug.enable_distance_attenuation;
-        drop(rt_debug);
+    let rt_debug = ctx.rt_debug();
+    let light_pos = rt_debug.light_position;
+    let debug_mode = rt_debug.debug_view_mode.as_int();
+    let shadow_strength = rt_debug.shadow_strength;
+    let enable_distance_attenuation = rt_debug.enable_distance_attenuation;
+    drop(rt_debug);
 
-        let exposure_value = ctx
-            .world
-            .get_resource::<Exposure>()
-            .map(|e| e.exposure_value)
-            .unwrap_or(1.0);
+    let exposure_value = ctx
+        .world
+        .get_resource::<Exposure>()
+        .map(|e| e.exposure_value)
+        .unwrap_or(1.0);
 
-        let mut backend = ctx.create_backend();
-        backend.update_scene_uniform(
-            view,
-            proj,
-            light_pos,
-            Vector3::new(1.0, 1.0, 1.0),
-            debug_mode,
-            shadow_strength,
-            enable_distance_attenuation,
-            exposure_value,
-        )?;
-    }
+    let mut backend = ctx.create_backend();
+    backend.update_scene_uniform(
+        view,
+        proj,
+        light_pos,
+        Vector3::new(1.0, 1.0, 1.0),
+        debug_mode,
+        shadow_strength,
+        enable_distance_attenuation,
+        exposure_value,
+    )?;
 
+    Ok(())
+}
+
+fn collect_gizmo_render_data(
+    ctx: &FrameContext,
+    camera_position: Vector3<f32>,
+) -> Vec<crate::ecs::component::RenderData> {
     let mut render_data_vec = vec![
         grid_mesh_render_data(&ctx.grid_mesh()),
         gizmo_mesh_render_data(&ctx.gizmo()),
@@ -118,25 +159,21 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         }
     }
 
-    let render_data_refs: Vec<_> = render_data_vec.iter().collect();
-
-    if let Err(e) = update_object_ubo(
-        &render_data_refs,
-        ctx.image_index,
-        &ctx.graphics.objects,
-        ctx.device,
-    ) {
-        eprintln!("Failed to update object UBOs: {}", e);
+    if ctx.world.contains_resource::<TransformGizmoData>() {
+        let tg = ctx.world.resource::<TransformGizmoData>();
+        let gizmo_scale = ctx
+            .world
+            .get_resource::<TransformGizmoState>()
+            .map(|s| s.gizmo_scale)
+            .unwrap_or(0.08);
+        render_data_vec.extend(transform_gizmo_render_data(
+            &tg,
+            camera_position,
+            gizmo_scale,
+        ));
     }
 
-    update_billboard_ubo(ctx, view, proj)?;
-
-    update_grid_gizmo_buffers(ctx, view)?;
-    update_bone_gizmo_mesh(ctx)?;
-    update_constraint_gizmo_mesh(ctx)?;
-    update_spring_bone_gizmo_mesh(ctx)?;
-
-    Ok(())
+    render_data_vec
 }
 
 unsafe fn update_billboard_ubo(
@@ -169,6 +206,73 @@ unsafe fn update_grid_gizmo_buffers(ctx: &mut FrameContext, view: Matrix4<f32>) 
     let mesh = ctx.gizmo().mesh.clone();
     let backend = ctx.create_backend();
     gizmo_update_vertex_buffer(&mesh, &backend)?;
+
+    Ok(())
+}
+
+unsafe fn update_transform_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {
+    if !ctx.world.contains_resource::<TransformGizmoData>() {
+        return Ok(());
+    }
+
+    let visible = {
+        let tg = ctx.world.resource::<TransformGizmoData>();
+        tg.visible
+    };
+
+    if !visible {
+        return Ok(());
+    }
+
+    let (mode, active_handle) = {
+        let tg = ctx.world.resource::<TransformGizmoData>();
+        let state = ctx
+            .world
+            .resource::<crate::ecs::resource::TransformGizmoState>();
+        (state.mode, tg.active_handle)
+    };
+
+    let camera_dir = ctx.camera_direction();
+
+    let mut line_mesh_clone = LineMesh::default();
+    let mut solid_mesh_clone = LineMesh::default();
+
+    match mode {
+        crate::ecs::resource::TransformGizmoMode::Translate => {
+            crate::ecs::systems::transform_gizmo_systems::build_translate_gizmo_meshes(
+                active_handle,
+                &mut line_mesh_clone,
+                &mut solid_mesh_clone,
+            );
+        }
+        crate::ecs::resource::TransformGizmoMode::Rotate => {
+            crate::ecs::systems::transform_gizmo_systems::build_rotate_gizmo_meshes(
+                active_handle,
+                camera_dir,
+                &mut line_mesh_clone,
+                &mut solid_mesh_clone,
+            );
+        }
+        crate::ecs::resource::TransformGizmoMode::Scale => {
+            crate::ecs::systems::transform_gizmo_systems::build_scale_gizmo_meshes(
+                active_handle,
+                &mut line_mesh_clone,
+                &mut solid_mesh_clone,
+            );
+        }
+    }
+
+    {
+        let mut backend = ctx.create_backend();
+        backend.update_or_create_line_buffers(&mut line_mesh_clone)?;
+        backend.update_or_create_line_buffers(&mut solid_mesh_clone)?;
+    }
+
+    {
+        let mut tg = ctx.world.resource_mut::<TransformGizmoData>();
+        tg.line_mesh = line_mesh_clone;
+        tg.solid_mesh = solid_mesh_clone;
+    }
 
     Ok(())
 }

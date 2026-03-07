@@ -14,6 +14,13 @@ pub enum InterpolationType {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TangentWeightMode {
+    #[default]
+    NonWeighted,
+    Weighted,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TangentType {
     #[default]
     Manual,
@@ -56,6 +63,8 @@ pub struct EditableKeyframe {
     #[serde(default)]
     pub interpolation: InterpolationType,
     #[serde(default)]
+    pub weight_mode: TangentWeightMode,
+    #[serde(default)]
     pub tangent_type: TangentType,
 }
 
@@ -68,6 +77,7 @@ impl EditableKeyframe {
             in_tangent: BezierHandle::linear(),
             out_tangent: BezierHandle::linear(),
             interpolation: InterpolationType::Linear,
+            weight_mode: TangentWeightMode::NonWeighted,
             tangent_type: TangentType::Manual,
         }
     }
@@ -86,6 +96,7 @@ impl EditableKeyframe {
             in_tangent,
             out_tangent,
             interpolation: InterpolationType::Linear,
+            weight_mode: TangentWeightMode::NonWeighted,
             tangent_type: TangentType::Manual,
         }
     }
@@ -150,6 +161,28 @@ mod tests {
                 "Roundtrip failed for {:?}",
                 variant
             );
+            weight_mode: TangentWeightMode::NonWeighted,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_serde_backward_compat_no_weight_mode() {
+        let json = r#"{
+            "id": 1,
+            "time": 0.5,
+            "value": 1.0,
+            "in_tangent": { "time_offset": -0.1, "value_offset": -0.2 },
+            "out_tangent": { "time_offset": 0.1, "value_offset": 0.2 },
+            "interpolation": "Bezier"
+        }"#;
+
+        let kf: EditableKeyframe = serde_json::from_str(json).expect("Should deserialize");
+        assert_eq!(kf.id, 1);
+        assert_eq!(kf.weight_mode, TangentWeightMode::NonWeighted);
     }
 }

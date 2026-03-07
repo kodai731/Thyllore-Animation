@@ -1,4 +1,7 @@
-use crate::animation::editable::{BezierHandle, InterpolationType, PropertyCurve, PropertyType};
+use crate::animation::editable::{
+    curve_add_keyframe, curve_add_keyframe_with_tangents, BezierHandle, InterpolationType,
+    PropertyCurve, PropertyType,
+};
 use crate::animation::BoneId;
 use crate::ecs::resource::{
     BoneNameTokenCache, BoneTopologyCache, CurveSuggestionState, GhostCurveSuggestion,
@@ -205,7 +208,8 @@ pub fn curve_suggestion_apply(suggestion: &GhostCurveSuggestion, curve: &mut Pro
     let in_tangent = BezierHandle::new(suggestion.tangent_in.0, suggestion.tangent_in.1);
     let out_tangent = BezierHandle::new(suggestion.tangent_out.0, suggestion.tangent_out.1);
 
-    curve.add_keyframe_with_tangents(
+    curve_add_keyframe_with_tangents(
+        curve,
         suggestion.predicted_time,
         suggestion.predicted_value,
         in_tangent,
@@ -228,7 +232,7 @@ mod tests {
         let mut curve = PropertyCurve::new(1 as CurveId, PropertyType::TranslationX);
         for i in 0..keyframe_count {
             let time = (i + 1) as f32 * 0.5;
-            curve.add_keyframe(time, (i as f32).sin());
+            curve_add_keyframe(&mut curve, time, (i as f32).sin());
         }
         curve
     }
@@ -271,8 +275,8 @@ mod tests {
     #[test]
     fn test_extract_context_normalization() {
         let mut curve = PropertyCurve::new(1 as CurveId, PropertyType::RotationX);
-        curve.add_keyframe(1.0, 90.0);
-        curve.add_keyframe(2.0, 180.0);
+        curve_add_keyframe(&mut curve, 1.0, 90.0);
+        curve_add_keyframe(&mut curve, 2.0, 180.0);
 
         let (context, curve_mean, curve_std) =
             curve_suggestion_extract_context(&curve, PropertyType::RotationX, 8, 4.0);
@@ -298,9 +302,9 @@ mod tests {
     #[test]
     fn test_extract_context_constant_curve() {
         let mut curve = PropertyCurve::new(1 as CurveId, PropertyType::RotationX);
-        curve.add_keyframe(0.0, 42.0);
-        curve.add_keyframe(1.0, 42.0);
-        curve.add_keyframe(2.0, 42.0);
+        curve_add_keyframe(&mut curve, 0.0, 42.0);
+        curve_add_keyframe(&mut curve, 1.0, 42.0);
+        curve_add_keyframe(&mut curve, 2.0, 42.0);
 
         let (_context, curve_mean, curve_std) =
             curve_suggestion_extract_context(&curve, PropertyType::RotationX, 8, 4.0);

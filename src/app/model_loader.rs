@@ -167,6 +167,19 @@ unsafe fn apply_model_to_resources(
         AnimationType::None
     };
     let node_animation_scale = load_result.node_animation_scale;
+    let mesh_category = if load_result.has_skinned_meshes {
+        MeshCategory::Skinned
+    } else {
+        MeshCategory::Unskinned
+    };
+    let mesh_scale_debug = compute_bone_gizmo_mesh_scale(node_animation_scale, mesh_category);
+    crate::log!(
+        "[ModelLoad] type={:?}, has_skinned={}, node_anim_scale={}, mesh_scale={}",
+        animation_type,
+        load_result.has_skinned_meshes,
+        node_animation_scale,
+        mesh_scale_debug
+    );
     let loaded_clips = load_result.clips.clone();
 
     create_ecs_entities(
@@ -213,7 +226,7 @@ unsafe fn cleanup_resources(
     graphics.clear_meshes(device);
     graphics.mesh_material_ids.clear();
     graphics.materials.clear_materials(&device.device);
-    graphics.objects.reset_to(4);
+    graphics.objects.reset_to_reserved();
 
     if world.contains_resource::<ClipLibrary>() {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
@@ -818,6 +831,9 @@ fn ensure_ecs_resources(world: &mut World) {
     if !world.contains_resource::<crate::ecs::resource::ClipBrowserState>() {
         world.insert_resource(crate::ecs::resource::ClipBrowserState::default());
     }
+    if !world.contains_resource::<crate::ecs::resource::BonePoseOverride>() {
+        world.insert_resource(crate::ecs::resource::BonePoseOverride::default());
+    }
 }
 
 fn register_clips_to_library(
@@ -966,8 +982,12 @@ fn initialize_bone_gizmo_visibility(
         let first_skeleton = assets.skeletons.values().next();
         if let Some(skel_asset) = first_skeleton {
             bone_gizmo.cached_skeleton_id = Some(skel_asset.skeleton_id);
-            bone_gizmo.mesh_scale =
-                compute_bone_gizmo_mesh_scale(node_animation_scale, has_skinned_meshes);
+            let category = if has_skinned_meshes {
+                MeshCategory::Skinned
+            } else {
+                MeshCategory::Unskinned
+            };
+            bone_gizmo.mesh_scale = compute_bone_gizmo_mesh_scale(node_animation_scale, category);
 
             let skeleton = &skel_asset.skeleton;
             let rest_globals = crate::ecs::compute_pose_global_transforms(
@@ -987,11 +1007,15 @@ fn initialize_bone_gizmo_visibility(
     }
 }
 
-fn compute_bone_gizmo_mesh_scale(node_animation_scale: f32, has_skinned_meshes: bool) -> f32 {
-    if has_skinned_meshes {
-        1.0
-    } else {
-        node_animation_scale
+enum MeshCategory {
+    Skinned,
+    Unskinned,
+}
+
+fn compute_bone_gizmo_mesh_scale(node_animation_scale: f32, category: MeshCategory) -> f32 {
+    match category {
+        MeshCategory::Skinned => 1.0,
+        MeshCategory::Unskinned => node_animation_scale,
     }
 }
 

@@ -28,6 +28,7 @@ pub fn build_hierarchy_window(
         .resizable(false)
         .movable(false)
         .collapsible(false)
+        .bring_to_front_on_focus(false)
         .build(|| {
             build_mode_tabs(ui, ui_events, state);
             build_search_bar(ui, ui_events, state);

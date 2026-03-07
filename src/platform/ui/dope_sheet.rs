@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::timeline_window::ruler_padding;
 use crate::animation::editable::{EditableAnimationClip, PropertyType};
 use crate::animation::BoneId;
@@ -458,27 +460,35 @@ fn handle_dope_sheet_interaction(
     match interaction {
         DopeSheetInteraction::None => {
             if mouse_clicked {
-                handle_click_begin(ui, state, mouse_pos, pixels_per_second);
+                handle_click_begin(ui, ui_events, state, mouse_pos);
             }
         }
         DopeSheetInteraction::BoxSelecting(box_sel) => {
+            let computed =
+                compute_box_selection(&state.dope_sheet_keyframe_hits, &box_sel, mouse_pos);
+            ui_events.send(UIEvent::TimelineSetKeyframeSelection {
+                keyframes: computed,
+                modifier: SelectionModifier::Replace,
+            });
+
             if mouse_down && !mouse_released {
-                update_box_selection(state, &box_sel, mouse_pos);
                 state.dope_sheet_interaction = DopeSheetInteraction::BoxSelecting(box_sel);
-            } else {
-                // Mouse released: finalize selection, return to None
-                update_box_selection(state, &box_sel, mouse_pos);
             }
         }
         DopeSheetInteraction::DraggingKeyframes(drag) => {
             if mouse_down && !mouse_released {
-                // Continue dragging — just preserve state (visual preview drawn separately)
                 state.dope_sheet_interaction = DopeSheetInteraction::DraggingKeyframes(drag);
             } else {
-                // Mouse released: commit the move
                 let delta_x = mouse_pos[0] - drag.drag_start_x;
                 let time_delta = delta_x / pixels_per_second;
                 let snapped_delta = apply_snap_to_delta(state, time_delta, pixels_per_second);
+
+                crate::log!(
+                    "[DopeSheet] drag_end: original_times={}, selected={}, delta={:.4}",
+                    drag.original_times.len(),
+                    state.selected_keyframes.len(),
+                    snapped_delta
+                );
 
                 if snapped_delta.abs() > 0.001 {
                     ui_events.send(UIEvent::TimelineMoveSelectedKeyframes {
@@ -492,37 +502,45 @@ fn handle_dope_sheet_interaction(
 
 fn handle_click_begin(
     ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
     state: &mut TimelineState,
     mouse_pos: [f32; 2],
-    _pixels_per_second: f32,
 ) {
     let modifier = determine_selection_modifier(ui);
 
-    // Check if clicking on an existing keyframe
     if let Some(hit) = find_hit_keyframe(&state.dope_sheet_keyframe_hits, mouse_pos) {
         let sel_key = SelectedKeyframe::new(hit.bone_id, hit.property_type, hit.keyframe_id);
         let already_selected = state.is_keyframe_selected(&sel_key);
 
+        crate::log!(
+            "[DopeSheet] click_begin: hit bone={} prop={:?} kf={}, modifier={:?}, already_selected={}, current_selection={}",
+            hit.bone_id, hit.property_type, hit.keyframe_id,
+            modifier, already_selected, state.selected_keyframes.len()
+        );
+
         if !already_selected {
-            state.apply_selection(sel_key, modifier);
+            ui_events.send(UIEvent::TimelineSelectKeyframe {
+                bone_id: hit.bone_id,
+                property_type: hit.property_type,
+                keyframe_id: hit.keyframe_id,
+                modifier,
+            });
         }
 
-        // Collect original times for all currently selected keyframes
-        let original_times: Vec<(SelectedKeyframe, f32)> = state
-            .selected_keyframes
-            .iter()
-            .filter_map(|sel| {
-                state
-                    .dope_sheet_keyframe_hits
-                    .iter()
-                    .find(|h| {
-                        h.bone_id == sel.bone_id
-                            && h.property_type == sel.property_type
-                            && h.keyframe_id == sel.keyframe_id
-                    })
-                    .map(|h| (sel.clone(), h.time))
-            })
-            .collect();
+        let expected_selection = compute_expected_selection(
+            &state.selected_keyframes,
+            &sel_key,
+            modifier,
+            already_selected,
+        );
+        let original_times =
+            collect_original_times(&expected_selection, &state.dope_sheet_keyframe_hits);
+
+        crate::log!(
+            "[DopeSheet] drag_start: expected_selection={}, original_times={}",
+            expected_selection.len(),
+            original_times.len()
+        );
 
         state.dope_sheet_interaction =
             DopeSheetInteraction::DraggingKeyframes(DopeSheetKeyframeDrag {
@@ -530,12 +548,18 @@ fn handle_click_begin(
                 original_times,
             });
     } else {
-        // Clicked on empty space: start box selection
-        if matches!(modifier, SelectionModifier::Replace) {
-            state.selected_keyframes.clear();
-        }
+        let original_selection = if matches!(modifier, SelectionModifier::Replace) {
+            HashSet::new()
+        } else {
+            state.selected_keyframes.clone()
+        };
 
-        let original_selection = state.selected_keyframes.clone();
+        if matches!(modifier, SelectionModifier::Replace) && !state.selected_keyframes.is_empty() {
+            ui_events.send(UIEvent::TimelineSetKeyframeSelection {
+                keyframes: Vec::new(),
+                modifier: SelectionModifier::Replace,
+            });
+        }
 
         state.dope_sheet_interaction = DopeSheetInteraction::BoxSelecting(DopeSheetBoxSelect {
             start_screen_pos: mouse_pos,
@@ -572,19 +596,58 @@ fn find_hit_keyframe(
     closest.map(|(_, hit)| hit.clone())
 }
 
-fn update_box_selection(
-    state: &mut TimelineState,
+fn compute_expected_selection(
+    current: &HashSet<SelectedKeyframe>,
+    sel_key: &SelectedKeyframe,
+    modifier: SelectionModifier,
+    already_selected: bool,
+) -> HashSet<SelectedKeyframe> {
+    if already_selected {
+        return current.clone();
+    }
+
+    let mut result = current.clone();
+    match modifier {
+        SelectionModifier::Replace => {
+            result.clear();
+            result.insert(sel_key.clone());
+        }
+        SelectionModifier::Add | SelectionModifier::Toggle => {
+            result.insert(sel_key.clone());
+        }
+    }
+    result
+}
+
+fn collect_original_times(
+    selection: &HashSet<SelectedKeyframe>,
+    hits: &[DopeSheetKeyframeHit],
+) -> Vec<(SelectedKeyframe, f32)> {
+    selection
+        .iter()
+        .filter_map(|sel| {
+            hits.iter()
+                .find(|h| {
+                    h.bone_id == sel.bone_id
+                        && h.property_type == sel.property_type
+                        && h.keyframe_id == sel.keyframe_id
+                })
+                .map(|h| (sel.clone(), h.time))
+        })
+        .collect()
+}
+
+fn compute_box_selection(
+    hits: &[DopeSheetKeyframeHit],
     box_sel: &DopeSheetBoxSelect,
     mouse_pos: [f32; 2],
-) {
+) -> Vec<SelectedKeyframe> {
     let min_x = box_sel.start_screen_pos[0].min(mouse_pos[0]);
     let max_x = box_sel.start_screen_pos[0].max(mouse_pos[0]);
     let min_y = box_sel.start_screen_pos[1].min(mouse_pos[1]);
     let max_y = box_sel.start_screen_pos[1].max(mouse_pos[1]);
 
-    // Find keyframes inside the box
-    let hits_in_box: Vec<SelectedKeyframe> = state
-        .dope_sheet_keyframe_hits
+    let hits_in_box: Vec<SelectedKeyframe> = hits
         .iter()
         .filter(|h| {
             h.screen_x >= min_x && h.screen_x <= max_x && h.screen_y >= min_y && h.screen_y <= max_y
@@ -592,30 +655,31 @@ fn update_box_selection(
         .map(|h| SelectedKeyframe::new(h.bone_id, h.property_type, h.keyframe_id))
         .collect();
 
+    let mut result = box_sel.original_selection.clone();
     match box_sel.modifier {
         SelectionModifier::Replace => {
-            state.selected_keyframes.clear();
+            result.clear();
             for kf in hits_in_box {
-                state.selected_keyframes.insert(kf);
+                result.insert(kf);
             }
         }
         SelectionModifier::Add => {
-            state.selected_keyframes = box_sel.original_selection.clone();
             for kf in hits_in_box {
-                state.selected_keyframes.insert(kf);
+                result.insert(kf);
             }
         }
         SelectionModifier::Toggle => {
-            state.selected_keyframes = box_sel.original_selection.clone();
             for kf in hits_in_box {
                 if box_sel.original_selection.contains(&kf) {
-                    state.selected_keyframes.remove(&kf);
+                    result.remove(&kf);
                 } else {
-                    state.selected_keyframes.insert(kf);
+                    result.insert(kf);
                 }
             }
         }
     }
+
+    result.into_iter().collect()
 }
 
 fn apply_snap_to_delta(state: &TimelineState, time_delta: f32, pixels_per_second: f32) -> f32 {
@@ -665,10 +729,12 @@ fn draw_interaction_overlays(ui: &imgui::Ui, state: &TimelineState, pixels_per_s
             let snapped_delta = apply_snap_to_delta(state, time_delta, pixels_per_second);
             let pixel_delta = snapped_delta * pixels_per_second;
 
-            for hit in &state.dope_sheet_keyframe_hits {
-                let sel_key =
-                    SelectedKeyframe::new(hit.bone_id, hit.property_type, hit.keyframe_id);
-                if state.selected_keyframes.contains(&sel_key) {
+            for (sel, _) in &drag.original_times {
+                if let Some(hit) = state.dope_sheet_keyframe_hits.iter().find(|h| {
+                    h.bone_id == sel.bone_id
+                        && h.property_type == sel.property_type
+                        && h.keyframe_id == sel.keyframe_id
+                }) {
                     let preview_x = hit.screen_x + pixel_delta;
                     draw_diamond(
                         &draw_list,

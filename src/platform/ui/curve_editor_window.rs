@@ -111,7 +111,6 @@ pub struct CurveEditorState {
     pub window_size: [f32; 2],
     pub selected_keyframes: Vec<SelectedKeyframe>,
     pub selection_anchor: Option<(PropertyType, KeyframeId)>,
-    pub dragging_keyframe: Option<SelectedKeyframe>,
     pub is_dragging_keyframe: bool,
     pub drag_start_mouse_pos: [f32; 2],
     pub zoom_x: f32,
@@ -148,7 +147,6 @@ impl Default for CurveEditorState {
             window_size: [800.0, 500.0],
             selected_keyframes: Vec::new(),
             selection_anchor: None,
-            dragging_keyframe: None,
             is_dragging_keyframe: false,
             drag_start_mouse_pos: [0.0, 0.0],
             zoom_x: 1.0,
@@ -488,9 +486,10 @@ fn build_curve_view(
                 draw_keyframe_drag_preview(
                     &draw_list,
                     ui.io().mouse_pos,
+                    editor_state.drag_start_mouse_pos,
                     &vt,
                     &curves_to_draw,
-                    &editor_state.dragging_keyframe,
+                    &editor_state.selected_keyframes,
                 );
             }
 
@@ -797,23 +796,24 @@ fn handle_mouse_release(
             }
             editor_state.dragging_tangent = None;
         } else if editor_state.is_dragging_keyframe {
-            if let Some(ref dragging) = editor_state.dragging_keyframe {
-                let new_time = vt.x_to_time(mouse_pos[0]).max(0.0);
-                let new_value = vt.y_to_value(mouse_pos[1]);
+            if let Some(bone_id) = editor_state.selected_bone_id {
+                let time_delta =
+                    vt.x_to_time(mouse_pos[0]) - vt.x_to_time(editor_state.drag_start_mouse_pos[0]);
+                let value_delta = vt.y_to_value(mouse_pos[1])
+                    - vt.y_to_value(editor_state.drag_start_mouse_pos[1]);
 
-                if let Some(bone_id) = editor_state.selected_bone_id {
+                for sel in &editor_state.selected_keyframes {
                     ui_events.send(UIEvent::TimelineMoveKeyframe {
                         bone_id,
-                        property_type: dragging.property_type.clone(),
-                        keyframe_id: dragging.keyframe_id,
-                        new_time,
-                        new_value,
+                        property_type: sel.property_type.clone(),
+                        keyframe_id: sel.keyframe_id,
+                        new_time: (sel.original_time + time_delta).max(0.0),
+                        new_value: sel.original_value + value_delta,
                     });
                 }
             }
         }
         editor_state.is_dragging_keyframe = false;
-        editor_state.dragging_keyframe = None;
         editor_state.is_scrubbing_ruler = false;
     }
 
@@ -915,20 +915,48 @@ fn handle_curve_area_click(
                 value,
             );
         } else {
-            editor_state.selected_keyframes.clear();
-            editor_state.selected_keyframes.push(new_selected.clone());
-            editor_state.selection_anchor = Some((property_type, keyframe_id));
+            let already_selected = editor_state
+                .selected_keyframes
+                .iter()
+                .any(|s| s.keyframe_id == keyframe_id && s.property_type == property_type);
+
+            if !already_selected {
+                editor_state.selected_keyframes.clear();
+                editor_state.selected_keyframes.push(new_selected.clone());
+                editor_state.selection_anchor = Some((property_type, keyframe_id));
+            }
             should_drag = true;
         }
 
         if should_drag {
-            editor_state.dragging_keyframe = Some(new_selected);
+            refresh_selected_keyframe_positions(
+                &mut editor_state.selected_keyframes,
+                curves_to_draw,
+            );
             editor_state.is_dragging_keyframe = true;
             editor_state.drag_start_mouse_pos = mouse_pos;
         }
     } else if !ctrl_held && !shift_held {
         editor_state.selected_keyframes.clear();
         editor_state.selection_anchor = None;
+    }
+}
+
+fn refresh_selected_keyframe_positions(
+    selected: &mut [SelectedKeyframe],
+    curves: &[(&PropertyCurve, [f32; 4], &str)],
+) {
+    for sel in selected.iter_mut() {
+        for (curve, _, _) in curves {
+            if curve.property_type != sel.property_type {
+                continue;
+            }
+            if let Some(kf) = curve.get_keyframe(sel.keyframe_id) {
+                sel.original_time = kf.time;
+                sel.original_value = kf.value;
+            }
+            break;
+        }
     }
 }
 
@@ -1437,36 +1465,44 @@ fn draw_tangent_handles(
 fn draw_keyframe_drag_preview(
     draw_list: &imgui::DrawListMut,
     mouse_pos: [f32; 2],
+    drag_start: [f32; 2],
     vt: &ViewTransform,
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
-    selected: &Option<SelectedKeyframe>,
+    selected_keyframes: &[SelectedKeyframe],
 ) {
-    let preview_x = mouse_pos[0].clamp(vt.curve_origin[0], vt.curve_origin[0] + vt.curve_width);
-    let preview_y = mouse_pos[1].clamp(vt.curve_origin[1], vt.curve_origin[1] + vt.curve_height);
-    let preview_pos = [preview_x, preview_y];
+    let time_delta = vt.x_to_time(mouse_pos[0]) - vt.x_to_time(drag_start[0]);
+    let value_delta = vt.y_to_value(mouse_pos[1]) - vt.y_to_value(drag_start[1]);
 
-    if let Some(sel) = selected {
+    for sel in selected_keyframes {
+        let preview_x = vt
+            .time_to_x(sel.original_time + time_delta)
+            .clamp(vt.curve_origin[0], vt.curve_origin[0] + vt.curve_width);
+        let preview_y = vt
+            .value_to_y(sel.original_value + value_delta)
+            .clamp(vt.curve_origin[1], vt.curve_origin[1] + vt.curve_height);
+        let preview_pos = [preview_x, preview_y];
+
         draw_drag_neighbor_lines(draw_list, preview_pos, vt, curves_to_draw, sel);
+
+        draw_list
+            .add_circle(preview_pos, 7.0, [1.0, 1.0, 0.0, 1.0])
+            .filled(true)
+            .build();
+
+        draw_list
+            .add_circle(preview_pos, 7.0, [1.0, 1.0, 1.0, 1.0])
+            .thickness(2.0)
+            .build();
+
+        let preview_time = (sel.original_time + time_delta).max(0.0);
+        let preview_value = sel.original_value + value_delta;
+
+        draw_list.add_text(
+            [preview_x + 10.0, preview_y - 10.0],
+            [1.0, 1.0, 1.0, 1.0],
+            &format!("t={:.2}s v={:.3}", preview_time, preview_value),
+        );
     }
-
-    draw_list
-        .add_circle(preview_pos, 7.0, [1.0, 1.0, 0.0, 1.0])
-        .filled(true)
-        .build();
-
-    draw_list
-        .add_circle(preview_pos, 7.0, [1.0, 1.0, 1.0, 1.0])
-        .thickness(2.0)
-        .build();
-
-    let preview_time = vt.x_to_time(preview_x);
-    let preview_value = vt.y_to_value(preview_y);
-
-    draw_list.add_text(
-        [preview_x + 10.0, preview_y - 10.0],
-        [1.0, 1.0, 1.0, 1.0],
-        &format!("t={:.2}s v={:.3}", preview_time, preview_value),
-    );
 }
 
 fn draw_drag_neighbor_lines(

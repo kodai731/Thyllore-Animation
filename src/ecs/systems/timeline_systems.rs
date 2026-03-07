@@ -85,6 +85,11 @@ pub fn timeline_process_events(
             }
 
             UIEvent::TimelineMoveSelectedKeyframes { time_delta } => {
+                crate::log!(
+                    "[Timeline] MoveSelectedKeyframes: selected={}, delta={:.4}",
+                    timeline_state.selected_keyframes.len(),
+                    time_delta
+                );
                 if let Some(clip_id) = timeline_state.current_clip_id {
                     if let Some(clip) = clip_library.get_mut(clip_id) {
                         for sel in &timeline_state.selected_keyframes {
@@ -93,6 +98,11 @@ pub fn timeline_process_events(
                                 if let Some(kf) =
                                     curve.keyframes.iter_mut().find(|k| k.id == sel.keyframe_id)
                                 {
+                                    crate::log!(
+                                        "[Timeline]   moved: bone={} {:?} kf={} time {:.3} -> {:.3}",
+                                        sel.bone_id, sel.property_type, sel.keyframe_id,
+                                        kf.time, (kf.time + time_delta).max(0.0)
+                                    );
                                     kf.time = (kf.time + time_delta).max(0.0);
                                 }
                             }

@@ -126,13 +126,6 @@ pub enum UIEvent {
         weight_mode: TangentWeightMode,
     },
 
-    TimelineSetTangentWeightMode {
-        bone_id: BoneId,
-        property_type: PropertyType,
-        keyframe_id: KeyframeId,
-        weight_mode: TangentWeightMode,
-    },
-
     TimelineSetSnapToFrame(bool),
     TimelineSetSnapToKey(bool),
     TimelineSetFrameRate(f32),

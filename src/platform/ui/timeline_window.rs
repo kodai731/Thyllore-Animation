@@ -1,7 +1,7 @@
 use imgui::Condition;
 
 use crate::animation::editable::{
-    curve_sample, BlendMode, SourceClipId,
+    curve_sample, BlendMode, EditableAnimationClip, PropertyCurve, SourceClipId,
 };
 use crate::animation::BoneId;
 use crate::ecs::component::{
@@ -22,6 +22,9 @@ const PIXELS_PER_SECOND: f32 = 80.0;
 const PLAYHEAD_HANDLE_SIZE: f32 = 10.0;
 const CLIP_TRACK_HEIGHT: f32 = 28.0;
 const CLIP_EDGE_DRAG_WIDTH: f32 = 5.0;
+const TRACK_HEIGHT: f32 = 24.0;
+const CURVE_HEIGHT: f32 = 80.0;
+const MAX_VISIBLE_TRACKS: usize = 64;
 const CLIP_BLOCK_COLORS: [[f32; 4]; 4] = [
     [0.3, 0.5, 0.8, 0.9],
     [0.5, 0.7, 0.3, 0.9],
@@ -611,7 +614,7 @@ fn draw_single_curve(
 
     for i in 0..=sample_count {
         let time = (i as f32) * step;
-        if let Some(value) = curve.sample(time) {
+        if let Some(value) = curve_sample(curve, time) {
             let x = cursor_pos[0] + time * pixels_per_second;
             let normalized = (value - min_val) / value_range;
             let y = cursor_pos[1] + height - (normalized * height * 0.8 + height * 0.1);

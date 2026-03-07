@@ -7,5 +7,3 @@ pub enum DeferredAction {
     DumpDebugInfo,
     DumpAnimationDebug,
 }
-
-

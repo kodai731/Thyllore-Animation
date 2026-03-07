@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use crate::animation::editable::{PropertyType, {
+use crate::animation::editable::{
     curve_recalculate_auto_tangent_at, curve_remove_keyframe, initialize_weighted_handle_lengths,
-    SourceClipId};
-use crate::animation::{BoneId, BoneLocalPose}, TangentWeightMode,
+    PropertyType, SourceClipId, TangentWeightMode,
 };
+use crate::animation::{BoneId, BoneLocalPose};
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{ClipLibrary, TimelineState};

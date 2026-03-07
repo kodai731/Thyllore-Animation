@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use super::keyframe::{
     BezierHandle, CurveId, EditableKeyframe, InterpolationType, KeyframeId, TangentWeightMode,
 };
-use super::keyframe::{BezierHandle, CurveId, EditableKeyframe, InterpolationType, KeyframeId};
 use super::tangent::{apply_auto_tangent, apply_tangent_by_type, sample_bezier};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -116,6 +115,9 @@ impl PropertyCurve {
     ) {
         if let Some(kf) = self.get_keyframe_mut(keyframe_id) {
             kf.weight_mode = weight_mode;
+        }
+    }
+
     pub fn recalculate_all_tangents(&mut self) {
         for i in 0..self.keyframes.len() {
             apply_tangent_by_type(&mut self.keyframes, i);

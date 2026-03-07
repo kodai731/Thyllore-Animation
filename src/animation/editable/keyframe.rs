@@ -111,6 +111,7 @@ impl Default for EditableKeyframe {
             in_tangent: BezierHandle::linear(),
             out_tangent: BezierHandle::linear(),
             interpolation: InterpolationType::Linear,
+            weight_mode: TangentWeightMode::NonWeighted,
             tangent_type: TangentType::Manual,
         }
     }
@@ -122,7 +123,6 @@ mod tests {
 
     #[test]
     fn test_serde_backward_compat_no_tangent_type() {
-        // Old JSON without tangent_type field should deserialize with Manual default
         let json = r#"{
             "id": 1,
             "time": 0.5,
@@ -161,14 +161,8 @@ mod tests {
                 "Roundtrip failed for {:?}",
                 variant
             );
-            weight_mode: TangentWeightMode::NonWeighted,
         }
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
 
     #[test]
     fn test_serde_backward_compat_no_weight_mode() {

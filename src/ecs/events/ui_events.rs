@@ -2,7 +2,7 @@ use cgmath::{Quaternion, Vector3};
 
 use crate::animation::editable::{
     BezierHandle, BlendMode, ClipGroupId, ClipInstanceId, InterpolationType, KeyframeId,
-    PropertyType, SourceClipId, TangentWeightMode, TangentType,
+    PropertyType, SourceClipId, TangentType, TangentWeightMode,
 };
 use crate::animation::BoneId;
 use crate::animation::{ConstraintId, ConstraintType};
@@ -113,21 +113,11 @@ pub enum UIEvent {
         in_tangent: BezierHandle,
         out_tangent: BezierHandle,
     },
-    TimelineAutoTangent {
-        bone_id: BoneId,
-        property_type: PropertyType,
-        keyframe_id: KeyframeId,
-    },
     TimelineSetTangentType {
         bone_id: BoneId,
         property_type: PropertyType,
         keyframe_id: KeyframeId,
         tangent_type: TangentType,
-    },
-    TimelineFlatTangent {
-        bone_id: BoneId,
-        property_type: PropertyType,
-        keyframe_id: KeyframeId,
     },
 
     TimelineSetTangentWeightMode {

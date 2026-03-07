@@ -1,4 +1,4 @@
-use super::keyframe::{BezierHandle, EditableKeyframe, TangentWeightMode, TangentType};
+use super::keyframe::{BezierHandle, EditableKeyframe, TangentType, TangentWeightMode};
 
 pub fn sample_bezier(
     k0_time: f32,

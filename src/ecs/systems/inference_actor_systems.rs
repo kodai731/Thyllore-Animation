@@ -93,6 +93,18 @@ mod tests {
 
     const DUMMY_MODEL_PATH: &str = "assets/ml/dummy_curve_predictor.onnx";
 
+    /// Check if ONNX Runtime library is available on this platform.
+    /// ORT_DYLIB_PATH is set in .cargo/config.toml; if the library file
+    /// does not exist (e.g. Windows DLL on Linux), ORT initialization will
+    /// panic and poison global state, so we skip those tests.
+    fn is_ort_available() -> bool {
+        let ort_path = match std::env::var("ORT_DYLIB_PATH") {
+            Ok(p) if !p.is_empty() => p,
+            _ => return false,
+        };
+        std::path::Path::new(&ort_path).exists()
+    }
+
     fn create_test_setup(actor_id: InferenceActorId, enabled: bool) -> InferenceActorSetup {
         InferenceActorSetup {
             actor_id,
@@ -104,6 +116,10 @@ mod tests {
 
     #[test]
     fn test_actor_roundtrip() {
+        if !is_ort_available() {
+            return;
+        }
+
         let mut state = InferenceActorState::default();
         let setup = create_test_setup(1, true);
 
@@ -137,6 +153,10 @@ mod tests {
 
     #[test]
     fn test_actor_disabled_without_model() {
+        if !is_ort_available() {
+            return;
+        }
+
         let mut state = InferenceActorState::default();
         let setup = InferenceActorSetup {
             actor_id: 10,
@@ -160,6 +180,10 @@ mod tests {
 
     #[test]
     fn test_multiple_actors() {
+        if !is_ort_available() {
+            return;
+        }
+
         let mut state = InferenceActorState::default();
 
         let setup_a = create_test_setup(100, true);
@@ -198,6 +222,10 @@ mod tests {
 
     #[test]
     fn test_actor_graceful_shutdown() {
+        if !is_ort_available() {
+            return;
+        }
+
         let mut state = InferenceActorState::default();
         let setup = create_test_setup(300, true);
 
@@ -210,6 +238,10 @@ mod tests {
 
     #[test]
     fn test_actor_inference_latency() {
+        if !is_ort_available() {
+            return;
+        }
+
         let mut state = InferenceActorState::default();
         let setup = create_test_setup(400, true);
 

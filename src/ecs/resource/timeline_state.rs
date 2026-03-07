@@ -4,13 +4,6 @@ use crate::animation::editable::{ClipInstanceId, KeyframeId, PropertyType, Sourc
 use crate::animation::BoneId;
 use crate::ecs::world::Entity;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum TimelineViewMode {
-    #[default]
-    DopeSheet,
-    GraphEditor,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SelectionModifier {
     Replace,
@@ -88,7 +81,6 @@ pub struct TimelineState {
     pub scrubbing: bool,
     pub selected_clip_instance: Option<(Entity, ClipInstanceId)>,
     pub dragging_clip: Option<ClipDragState>,
-    pub view_mode: TimelineViewMode,
     pub snap_settings: SnapSettings,
     pub baked_bone_ids: Vec<BoneId>,
 }
@@ -112,7 +104,6 @@ impl TimelineState {
             scrubbing: false,
             selected_clip_instance: None,
             dragging_clip: None,
-            view_mode: TimelineViewMode::default(),
             snap_settings: SnapSettings::default(),
             baked_bone_ids: Vec::new(),
         }

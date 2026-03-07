@@ -5,6 +5,7 @@ mod debug_window;
 mod hierarchy_window;
 mod inspector_window;
 mod spring_bone_inspector;
+mod status_bar;
 #[cfg(feature = "text-to-motion")]
 mod text_to_motion_dialog;
 mod timeline_window;
@@ -17,6 +18,7 @@ pub use debug_window::*;
 pub use hierarchy_window::*;
 pub use inspector_window::*;
 pub use spring_bone_inspector::*;
+pub use status_bar::*;
 #[cfg(feature = "text-to-motion")]
 pub use text_to_motion_dialog::*;
 pub use timeline_window::*;

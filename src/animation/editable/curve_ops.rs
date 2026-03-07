@@ -133,7 +133,7 @@ pub fn curve_recalculate_auto_tangent_at(curve: &mut PropertyCurve, keyframe_id:
 mod tests {
     use super::*;
     use crate::animation::editable::keyframe::TangentWeightMode;
-    use crate::animation::editable::tangent::handle_length;
+    use crate::animation::editable::tangent::compute_handle_length;
 
     fn make_curve_with_keyframes(times_values: &[(f32, f32)]) -> PropertyCurve {
         let mut curve = PropertyCurve::new(1, super::super::curve::PropertyType::TranslationX);
@@ -281,14 +281,14 @@ mod tests {
         curve.keyframes[1].in_tangent = BezierHandle::new(-0.3, 0.0);
         curve.keyframes[1].out_tangent = BezierHandle::new(0.3, 0.0);
 
-        let in_len_before = handle_length(&curve.keyframes[1].in_tangent);
-        let out_len_before = handle_length(&curve.keyframes[1].out_tangent);
+        let in_len_before = compute_handle_length(&curve.keyframes[1].in_tangent);
+        let out_len_before = compute_handle_length(&curve.keyframes[1].out_tangent);
 
         let mid_id = curve.keyframes[1].id;
         curve_recalculate_auto_tangent_at(&mut curve, mid_id);
 
-        let in_len_after = handle_length(&curve.keyframes[1].in_tangent);
-        let out_len_after = handle_length(&curve.keyframes[1].out_tangent);
+        let in_len_after = compute_handle_length(&curve.keyframes[1].in_tangent);
+        let out_len_after = compute_handle_length(&curve.keyframes[1].out_tangent);
 
         assert!(
             (in_len_after - in_len_before).abs() < 1e-4,

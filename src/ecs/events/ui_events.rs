@@ -118,6 +118,11 @@ pub enum UIEvent {
         property_type: PropertyType,
         keyframe_id: KeyframeId,
     },
+    TimelineFlatTangent {
+        bone_id: BoneId,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+    },
 
     TimelineSetTangentWeightMode {
         bone_id: BoneId,

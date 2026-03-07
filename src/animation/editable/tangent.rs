@@ -107,22 +107,24 @@ pub fn apply_auto_tangent(keyframes: &mut [EditableKeyframe], index: usize) {
         return;
     }
 
-    let (slope, dt) = if index == 0 {
-        let k0 = &keyframes[0];
+    let curr_val = keyframes[index].value;
+
+    let (slope, dt_in, dt_out) = if index == 0 {
         let k1 = &keyframes[1];
-        let dt = k1.time - k0.time;
+        let dt = k1.time - keyframes[0].time;
         if dt.abs() < 1e-8 {
             return;
         }
-        ((k1.value - k0.value) / dt, dt)
+        let s = (k1.value - curr_val) / dt;
+        (s, dt, dt)
     } else if index == len - 1 {
         let k0 = &keyframes[len - 2];
-        let k1 = &keyframes[len - 1];
-        let dt = k1.time - k0.time;
+        let dt = keyframes[len - 1].time - k0.time;
         if dt.abs() < 1e-8 {
             return;
         }
-        ((k1.value - k0.value) / dt, dt)
+        let s = (curr_val - k0.value) / dt;
+        (s, dt, dt)
     } else {
         let prev = &keyframes[index - 1];
         let next = &keyframes[index + 1];
@@ -130,10 +132,23 @@ pub fn apply_auto_tangent(keyframes: &mut [EditableKeyframe], index: usize) {
         if dt_total.abs() < 1e-8 {
             return;
         }
-        let slope = (next.value - prev.value) / dt_total;
-        let dt = (next.time - prev.time) * 0.5;
-        (slope, dt)
+
+        let is_peak = curr_val >= prev.value && curr_val >= next.value;
+        let is_valley = curr_val <= prev.value && curr_val <= next.value;
+
+        let slope = if is_peak || is_valley {
+            0.0
+        } else {
+            (next.value - prev.value) / dt_total
+        };
+
+        let dt_in = keyframes[index].time - prev.time;
+        let dt_out = next.time - keyframes[index].time;
+        (slope, dt_in, dt_out)
     };
+
+    let in_handle_time = dt_in / 3.0;
+    let out_handle_time = dt_out / 3.0;
 
     match keyframes[index].weight_mode {
         TangentWeightMode::Weighted => {
@@ -143,12 +158,27 @@ pub fn apply_auto_tangent(keyframes: &mut [EditableKeyframe], index: usize) {
             keyframes[index].out_tangent = handle_from_slope_and_length(slope, out_len, 1.0);
         }
         TangentWeightMode::NonWeighted => {
-            let handle_time = dt / 3.0;
-            let handle_value = slope * handle_time;
-            keyframes[index].in_tangent = BezierHandle::new(-handle_time, -handle_value);
-            keyframes[index].out_tangent = BezierHandle::new(handle_time, handle_value);
+            let in_value = slope * in_handle_time;
+            let out_value = slope * out_handle_time;
+
+            let (clamped_in, clamped_out) = if index > 0 && index < len - 1 {
+                let prev_val = keyframes[index - 1].value;
+                let next_val = keyframes[index + 1].value;
+                let max_in = (prev_val - curr_val).abs();
+                let max_out = (next_val - curr_val).abs();
+                (clamp_abs(in_value, max_in), clamp_abs(out_value, max_out))
+            } else {
+                (in_value, out_value)
+            };
+
+            keyframes[index].in_tangent = BezierHandle::new(-in_handle_time, -clamped_in);
+            keyframes[index].out_tangent = BezierHandle::new(out_handle_time, clamped_out);
         }
     }
+}
+
+fn clamp_abs(value: f32, max_abs: f32) -> f32 {
+    value.clamp(-max_abs, max_abs)
 }
 
 pub fn apply_flat_tangent(keyframe: &mut EditableKeyframe, dt: f32) {
@@ -392,6 +422,111 @@ mod tests {
 
         let h3 = BezierHandle::new(-1.0, 0.0);
         assert!((handle_length(&h3) - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_initialize_weighted_handle_lengths_from_zero() {
+        let mut kf = EditableKeyframe::new(1, 1.0, 5.0);
+        kf.in_tangent = BezierHandle::linear();
+        kf.out_tangent = BezierHandle::linear();
+
+        let dt = 1.5;
+        initialize_weighted_handle_lengths(&mut kf, dt);
+
+        let expected_len = dt / 3.0;
+        let in_len = handle_length(&kf.in_tangent);
+        let out_len = handle_length(&kf.out_tangent);
+        assert!(
+            (in_len - expected_len).abs() < 1e-4,
+            "In handle should be dt/3: {} vs {}",
+            in_len,
+            expected_len
+        );
+        assert!(
+            (out_len - expected_len).abs() < 1e-4,
+            "Out handle should be dt/3: {} vs {}",
+            out_len,
+            expected_len
+        );
+    }
+
+    #[test]
+    fn test_initialize_weighted_handle_lengths_preserves_existing() {
+        let mut kf = EditableKeyframe::new(1, 1.0, 5.0);
+        kf.in_tangent = BezierHandle::new(-0.4, -0.3);
+        kf.out_tangent = BezierHandle::new(0.4, 0.3);
+
+        let in_len_before = handle_length(&kf.in_tangent);
+        let out_len_before = handle_length(&kf.out_tangent);
+
+        initialize_weighted_handle_lengths(&mut kf, 1.0);
+
+        let in_len_after = handle_length(&kf.in_tangent);
+        let out_len_after = handle_length(&kf.out_tangent);
+        assert!(
+            (in_len_after - in_len_before).abs() < 1e-6,
+            "Existing in handle should not change"
+        );
+        assert!(
+            (out_len_after - out_len_before).abs() < 1e-6,
+            "Existing out handle should not change"
+        );
+    }
+
+    #[test]
+    fn test_initialize_weighted_handle_preserves_slope() {
+        let mut kf = EditableKeyframe::new(1, 1.0, 5.0);
+        kf.in_tangent = BezierHandle::new(-0.001, -0.002);
+        kf.out_tangent = BezierHandle::new(0.001, 0.002);
+
+        let in_slope_before = kf.in_tangent.value_offset / kf.in_tangent.time_offset;
+        let out_slope_before = kf.out_tangent.value_offset / kf.out_tangent.time_offset;
+
+        initialize_weighted_handle_lengths(&mut kf, 1.5);
+
+        let in_slope_after = kf.in_tangent.value_offset / kf.in_tangent.time_offset;
+        let out_slope_after = kf.out_tangent.value_offset / kf.out_tangent.time_offset;
+        assert!(
+            (in_slope_after - in_slope_before).abs() < 1e-2,
+            "In slope should be preserved: {} vs {}",
+            in_slope_after,
+            in_slope_before
+        );
+        assert!(
+            (out_slope_after - out_slope_before).abs() < 1e-2,
+            "Out slope should be preserved: {} vs {}",
+            out_slope_after,
+            out_slope_before
+        );
+    }
+
+    #[test]
+    fn test_weighted_linear_tangent_preserves_length() {
+        let mut keyframes = vec![
+            EditableKeyframe::new(1, 0.0, 0.0),
+            EditableKeyframe::new(2, 1.0, 3.0),
+            EditableKeyframe::new(3, 2.0, 1.0),
+        ];
+
+        keyframes[1].in_tangent = BezierHandle::new(-0.4, 0.0);
+        keyframes[1].out_tangent = BezierHandle::new(0.4, 0.0);
+        keyframes[1].weight_mode = TangentWeightMode::Weighted;
+
+        let in_len_before = handle_length(&keyframes[1].in_tangent);
+        let out_len_before = handle_length(&keyframes[1].out_tangent);
+
+        let (new_in, new_out) = apply_linear_tangent(&keyframes, 1);
+
+        let in_len_after = handle_length(&new_in);
+        let out_len_after = handle_length(&new_out);
+        assert!(
+            (in_len_after - in_len_before).abs() < 1e-4,
+            "Weighted linear should preserve in handle length"
+        );
+        assert!(
+            (out_len_after - out_len_before).abs() < 1e-4,
+            "Weighted linear should preserve out handle length"
+        );
     }
 
     #[test]

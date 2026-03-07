@@ -323,8 +323,14 @@ fn apply_blended_animations(
 
     let shared_constraints = find_shared_constraints(entities, world);
 
-    let spring_result =
-        compute_spring_bone_result(entities, world, assets, &shared_constraints, dt);
+    let spring_result = compute_spring_bone_result(
+        entities,
+        world,
+        assets,
+        &shared_constraints,
+        pose_overrides,
+        dt,
+    );
 
     for info in entities {
         let Some(skeleton) = assets.get_skeleton_by_skeleton_id(info.skeleton_id) else {
@@ -391,6 +397,7 @@ fn compute_spring_bone_result(
     world: &World,
     assets: &AssetStorage,
     shared_constraints: &Option<ConstraintSet>,
+    pose_overrides: &HashMap<BoneId, BoneLocalPose>,
     dt: f32,
 ) -> Option<(SkeletonId, Vec<Matrix4<f32>>, SkeletonPose)> {
     let info = entities
@@ -404,6 +411,10 @@ fn compute_spring_bone_result(
 
     if let Some(ref cs) = shared_constraints {
         apply_constraints(cs, skeleton, &mut pose);
+    }
+
+    if !pose_overrides.is_empty() {
+        apply_pose_overrides(&mut pose, pose_overrides);
     }
 
     let mut globals = compute_pose_global_transforms(skeleton, &pose);

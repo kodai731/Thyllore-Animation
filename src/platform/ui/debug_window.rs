@@ -5,6 +5,7 @@ use crate::app::data::LightMoveTarget;
 use crate::app::GUIData;
 use crate::debugview::{DebugViewMode, FBX_DEBUG};
 use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::resource::{CoordinateSpace, TransformGizmoMode, TransformGizmoState};
 use crate::ecs::World;
 
 pub struct DebugWindowState {
@@ -33,6 +34,7 @@ pub fn build_debug_window(
         .resizable(false)
         .movable(false)
         .collapsible(false)
+        .bring_to_front_on_focus(false)
         .build(|| {
             build_model_panel(ui, ui_events, state, gui_data);
             ui.separator();
@@ -47,6 +49,9 @@ pub fn build_debug_window(
             ui.separator();
 
             build_debug_panel(ui, ui_events, gui_data, ecs_world);
+            ui.separator();
+
+            build_transform_gizmo_panel(ui, ecs_world);
             ui.separator();
 
             build_fbx_debug_panel(ui);
@@ -327,6 +332,91 @@ fn build_spring_bone_bake_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ec
             }
         }
     }
+}
+
+fn build_transform_gizmo_panel(ui: &imgui::Ui, ecs_world: &World) {
+    let Some(mut state) = ecs_world.get_resource_mut::<TransformGizmoState>() else {
+        return;
+    };
+
+    ui.text("Transform Gizmo:");
+
+    // Mode buttons with keyboard shortcut hints
+    let translate_label = if state.mode == TransformGizmoMode::Translate {
+        "[W] Translate *"
+    } else {
+        "[W] Translate"
+    };
+    let rotate_label = if state.mode == TransformGizmoMode::Rotate {
+        "[E] Rotate *"
+    } else {
+        "[E] Rotate"
+    };
+    let scale_label = if state.mode == TransformGizmoMode::Scale {
+        "[R] Scale *"
+    } else {
+        "[R] Scale"
+    };
+
+    if ui.button(translate_label) {
+        state.mode = TransformGizmoMode::Translate;
+    }
+    ui.same_line();
+    if ui.button(rotate_label) {
+        state.mode = TransformGizmoMode::Rotate;
+    }
+    ui.same_line();
+    if ui.button(scale_label) {
+        state.mode = TransformGizmoMode::Scale;
+    }
+
+    // Keyboard shortcuts (W/E/R)
+    if ui.is_key_pressed(imgui::Key::W) && !ui.io().key_ctrl {
+        state.mode = TransformGizmoMode::Translate;
+    }
+    if ui.is_key_pressed(imgui::Key::E) && !ui.io().key_ctrl {
+        state.mode = TransformGizmoMode::Rotate;
+    }
+    if ui.is_key_pressed(imgui::Key::R) && !ui.io().key_ctrl {
+        state.mode = TransformGizmoMode::Scale;
+    }
+
+    // Coordinate space toggle
+    let space_label = match state.coordinate_space {
+        CoordinateSpace::World => "World",
+        CoordinateSpace::Local => "Local",
+    };
+    if ui.button(format!("Space: {}", space_label)) {
+        state.coordinate_space = match state.coordinate_space {
+            CoordinateSpace::World => CoordinateSpace::Local,
+            CoordinateSpace::Local => CoordinateSpace::World,
+        };
+    }
+
+    // Snap controls
+    ui.same_line();
+    ui.checkbox("Snap", &mut state.snap_enabled);
+
+    if state.snap_enabled {
+        match state.mode {
+            TransformGizmoMode::Translate => {
+                ui.slider_config("Snap Value", 0.01, 10.0)
+                    .build(&mut state.translate_snap_value);
+            }
+            TransformGizmoMode::Rotate => {
+                ui.slider_config("Snap Degrees", 1.0, 90.0)
+                    .build(&mut state.rotate_snap_degrees);
+            }
+            TransformGizmoMode::Scale => {
+                ui.slider_config("Snap Value", 0.01, 1.0)
+                    .build(&mut state.scale_snap_value);
+            }
+        }
+    }
+
+    ui.slider_config("Gizmo Scale", 0.01, 0.3)
+        .display_format("%.3f")
+        .build(&mut state.gizmo_scale);
 }
 
 fn build_fbx_debug_panel(ui: &imgui::Ui) {

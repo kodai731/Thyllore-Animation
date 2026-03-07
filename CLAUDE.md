@@ -135,6 +135,24 @@ let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
 4. Implement system functions in `ecs/systems/`
 5. Spawn entity with the bundle in initialization
 
+### Layer Boundary Rules
+
+**IMPORTANT:** ECS business logic MUST live inside `src/ecs/systems/`. Code outside `src/ecs/` (especially
+`src/platform/`, `src/app/`) must NOT contain ECS domain logic.
+
+**Allowed in platform layer** (`src/platform/`):
+- Reading resources for UI display (immutable access)
+- Sending events to `UIEventQueue`
+- Calling a single ECS dispatch entry point (e.g., `run_event_dispatch_phase`)
+- Platform-specific I/O (file dialogs, window management, imgui orchestration)
+- Handling `DeferredAction` that requires `App`/`GUIData`
+
+**NOT allowed in platform layer**:
+- Directly calling multiple ECS system functions to process events
+- Match-dispatching `UIEvent` variants to mutate `World`/`AssetStorage`
+- Implementing event handler logic inline
+- Using `resource_mut` or `get_component_mut` for business logic mutations
+
 ### Reference Projects
 
 - [Bevy Engine](https://github.com/bevyengine/bevy) - Primary reference for ECS patterns

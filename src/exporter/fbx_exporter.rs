@@ -1565,7 +1565,7 @@ mod tests {
 
     #[test]
     fn test_fbx_roundtrip_stickman() {
-        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        let original_path = "tests/testmodels/fbx/node/stickman_bin.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping roundtrip test: {} not found", original_path);
             return;
@@ -1688,7 +1688,7 @@ mod tests {
 
     #[test]
     fn test_fbx_roundtrip_stickman_with_animation() {
-        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        let original_path = "tests/testmodels/fbx/node/stickman_bin.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping: {} not found", original_path);
             return;
@@ -1847,7 +1847,7 @@ mod tests {
 
     #[test]
     fn test_exported_bone_node_types_match_original() {
-        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        let original_path = "tests/testmodels/fbx/node/stickman_bin.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping: {} not found", original_path);
             return;
@@ -1948,7 +1948,7 @@ mod tests {
 
     #[test]
     fn test_compare_anim_structure() {
-        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        let original_path = "tests/testmodels/fbx/node/stickman_bin.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping: {} not found", original_path);
             return;
@@ -2042,7 +2042,7 @@ mod tests {
             }
         };
 
-        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        let original_path = "tests/testmodels/fbx/node/stickman_bin.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping: {} not found", original_path);
             return;
@@ -2228,7 +2228,7 @@ mod tests {
 
     #[test]
     fn test_fbx_roundtrip_skinned_fly() {
-        let original_path = "assets/models/phoenix-bird/source/fly.fbx";
+        let original_path = "tests/testmodels/fbx/skinning/source/fly.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping: {} not found", original_path);
             return;
@@ -2478,7 +2478,7 @@ mod tests {
             }
         };
 
-        let original_path = "assets/models/phoenix-bird/source/fly.fbx";
+        let original_path = "tests/testmodels/fbx/skinning/source/fly.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping: {} not found", original_path);
             return;
@@ -2654,7 +2654,7 @@ print("IMPORT_DONE")
             }
         };
 
-        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        let original_path = "tests/testmodels/fbx/node/stickman_bin.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping: {} not found", original_path);
             return;
@@ -2705,7 +2705,7 @@ print("IMPORT_DONE")
             }
         };
 
-        let original_path = "assets/models/phoenix-bird/source/fly.fbx";
+        let original_path = "tests/testmodels/fbx/skinning/source/fly.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping: {} not found", original_path);
             return;

@@ -39,7 +39,6 @@ pub struct GizmoSelectable {
 #[derive(Clone, Debug)]
 pub struct GizmoDraggable {
     pub drag_axis: GizmoAxis,
-    pub just_selected: bool,
     pub initial_position: Vector3<f32>,
 }
 
@@ -47,7 +46,6 @@ impl Default for GizmoDraggable {
     fn default() -> Self {
         Self {
             drag_axis: GizmoAxis::None,
-            just_selected: false,
             initial_position: Vector3::new(0.0, 0.0, 0.0),
         }
     }

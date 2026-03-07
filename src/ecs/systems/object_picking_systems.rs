@@ -1,9 +1,11 @@
 use crate::asset::AssetStorage;
-use crate::ecs::resource::{HierarchyDisplayMode, ObjectIdReadback};
+use crate::ecs::resource::{ClipLibrary, HierarchyDisplayMode, ObjectIdReadback, TimelineState};
+use crate::ecs::systems::clip_track_systems::resolve_mesh_bone_id;
 use crate::ecs::systems::hierarchy_systems::{
     hierarchy_deselect_all, hierarchy_select, hierarchy_toggle_selection,
 };
 use crate::ecs::world::{Entity, MeshRef, World};
+use crate::platform::ui::CurveEditorState;
 
 pub fn find_entity_by_object_id(
     world: &World,
@@ -56,4 +58,26 @@ pub fn apply_mesh_selection(
         hierarchy_select(&mut state, entity);
     }
     state.display_mode = HierarchyDisplayMode::Entities;
+
+    sync_curve_editor_on_mesh_select(world, assets, entity);
+}
+
+fn sync_curve_editor_on_mesh_select(world: &World, assets: &AssetStorage, entity: Entity) {
+    let is_open = world
+        .get_resource::<CurveEditorState>()
+        .map(|s| s.is_open)
+        .unwrap_or(false);
+    if !is_open {
+        return;
+    }
+
+    let clip_library = world.resource::<ClipLibrary>();
+    let source_id = world.resource::<TimelineState>().current_clip_id;
+    let bone_id = resolve_mesh_bone_id(world, entity, assets, &clip_library, source_id);
+    drop(clip_library);
+
+    if let Some(bone_id) = bone_id {
+        let mut editor = world.resource_mut::<CurveEditorState>();
+        editor.selected_bone_id = Some(bone_id);
+    }
 }

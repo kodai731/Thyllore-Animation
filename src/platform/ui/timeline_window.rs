@@ -2,11 +2,11 @@ use imgui::Condition;
 
 use crate::animation::editable::{BlendMode, SourceClipId};
 use crate::animation::BoneId;
-use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::{ClipDragState, ClipDragType, ClipLibrary, TimelineState};
-use crate::ecs::systems::clip_track_systems::{
+use crate::ecs::component::{
     ClipGroupSnapshot, ClipInstanceSnapshot, ClipTrackEntry, ClipTrackSnapshot,
 };
+use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::resource::{ClipDragState, ClipDragType, ClipLibrary, TimelineState};
 
 use super::CurveEditorState;
 

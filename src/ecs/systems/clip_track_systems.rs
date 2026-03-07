@@ -1,43 +1,11 @@
-use crate::animation::editable::{BlendMode, ClipGroupId, ClipInstanceId, SourceClipId};
+use crate::animation::editable::SourceClipId;
 use crate::animation::{BoneId, Skeleton};
 use crate::asset::storage::AssetStorage;
-use crate::ecs::component::ClipSchedule;
+use crate::ecs::component::{
+    ClipGroupSnapshot, ClipInstanceSnapshot, ClipSchedule, ClipTrackEntry, ClipTrackSnapshot,
+};
 use crate::ecs::resource::{ClipLibrary, NodeAssets};
 use crate::ecs::world::{Entity, MeshRef, Name, World};
-
-pub struct ClipTrackSnapshot {
-    pub entries: Vec<ClipTrackEntry>,
-}
-
-pub struct ClipTrackEntry {
-    pub entity: Entity,
-    pub entity_name: String,
-    pub mesh_bone_id: Option<BoneId>,
-    pub instances: Vec<ClipInstanceSnapshot>,
-    pub groups: Vec<ClipGroupSnapshot>,
-}
-
-pub struct ClipInstanceSnapshot {
-    pub instance_id: ClipInstanceId,
-    pub source_id: SourceClipId,
-    pub clip_name: String,
-    pub start_time: f32,
-    pub end_time: f32,
-    pub clip_in: f32,
-    pub clip_out: f32,
-    pub muted: bool,
-    pub weight: f32,
-    pub blend_mode: BlendMode,
-    pub group_id: Option<ClipGroupId>,
-}
-
-pub struct ClipGroupSnapshot {
-    pub id: ClipGroupId,
-    pub name: String,
-    pub muted: bool,
-    pub weight: f32,
-    pub instance_ids: Vec<ClipInstanceId>,
-}
 
 pub fn query_clip_tracks(
     world: &World,

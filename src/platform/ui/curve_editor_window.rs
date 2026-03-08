@@ -2,7 +2,6 @@ use std::collections::HashSet;
 
 use imgui::Condition;
 
-use super::timeline_window::ruler_padding;
 use crate::animation::editable::{
     curve_sample, sample_bezier, segment_uses_bezier, BezierHandle, EditableAnimationClip,
     EditableKeyframe, InterpolationType, KeyframeId, PropertyCurve, PropertyType, TangentType,
@@ -460,7 +459,7 @@ fn initialize_view_range(
     clip_duration: f32,
 ) {
     let (global_min, global_max) = calculate_global_value_range(curves_to_draw);
-    let display_duration = clip_duration + ruler_padding(clip_duration);
+    let display_duration = clip_duration;
 
     if !editor_state.view_initialized {
         editor_state.view_value_offset = global_min;

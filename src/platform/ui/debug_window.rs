@@ -5,7 +5,10 @@ use crate::app::data::LightMoveTarget;
 use crate::app::GUIData;
 use crate::debugview::{DebugViewMode, FBX_DEBUG};
 use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::resource::{CoordinateSpace, TransformGizmoMode, TransformGizmoState};
 use crate::ecs::World;
+
+use super::layout_snapshot::LayoutSnapshot;
 
 pub struct DebugWindowState {
     pub model_path: String,
@@ -22,17 +25,18 @@ pub fn build_debug_window(
     state: &mut DebugWindowState,
     gui_data: &mut GUIData,
     ecs_world: &World,
+    layout: &LayoutSnapshot,
 ) {
-    let display_size = ui.io().display_size;
-    let debug_height = 250.0;
-    let debug_y = display_size[1] - debug_height;
-
     ui.window("debug window")
-        .position([0.0, debug_y], Condition::Always)
-        .size([display_size[0], debug_height], Condition::Always)
+        .position([0.0, layout.debug_y], Condition::Always)
+        .size(
+            [layout.display_size[0], layout.debug_height],
+            Condition::Always,
+        )
         .resizable(false)
         .movable(false)
         .collapsible(false)
+        .bring_to_front_on_focus(false)
         .build(|| {
             build_model_panel(ui, ui_events, state, gui_data);
             ui.separator();
@@ -49,6 +53,9 @@ pub fn build_debug_window(
             build_debug_panel(ui, ui_events, gui_data, ecs_world);
             ui.separator();
 
+            build_transform_gizmo_panel(ui, ecs_world);
+            ui.separator();
+
             build_fbx_debug_panel(ui);
             ui.separator();
 
@@ -59,6 +66,9 @@ pub fn build_debug_window(
             ui.separator();
 
             build_auto_exposure_panel(ui, ecs_world);
+            ui.separator();
+
+            build_onion_skinning_panel(ui, ecs_world);
 
             build_mouse_info(ui, gui_data);
         });
@@ -326,6 +336,91 @@ fn build_spring_bone_bake_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ec
     }
 }
 
+fn build_transform_gizmo_panel(ui: &imgui::Ui, ecs_world: &World) {
+    let Some(mut state) = ecs_world.get_resource_mut::<TransformGizmoState>() else {
+        return;
+    };
+
+    ui.text("Transform Gizmo:");
+
+    // Mode buttons with keyboard shortcut hints
+    let translate_label = if state.mode == TransformGizmoMode::Translate {
+        "[W] Translate *"
+    } else {
+        "[W] Translate"
+    };
+    let rotate_label = if state.mode == TransformGizmoMode::Rotate {
+        "[E] Rotate *"
+    } else {
+        "[E] Rotate"
+    };
+    let scale_label = if state.mode == TransformGizmoMode::Scale {
+        "[R] Scale *"
+    } else {
+        "[R] Scale"
+    };
+
+    if ui.button(translate_label) {
+        state.mode = TransformGizmoMode::Translate;
+    }
+    ui.same_line();
+    if ui.button(rotate_label) {
+        state.mode = TransformGizmoMode::Rotate;
+    }
+    ui.same_line();
+    if ui.button(scale_label) {
+        state.mode = TransformGizmoMode::Scale;
+    }
+
+    // Keyboard shortcuts (W/E/R)
+    if ui.is_key_pressed(imgui::Key::W) && !ui.io().key_ctrl {
+        state.mode = TransformGizmoMode::Translate;
+    }
+    if ui.is_key_pressed(imgui::Key::E) && !ui.io().key_ctrl {
+        state.mode = TransformGizmoMode::Rotate;
+    }
+    if ui.is_key_pressed(imgui::Key::R) && !ui.io().key_ctrl {
+        state.mode = TransformGizmoMode::Scale;
+    }
+
+    // Coordinate space toggle
+    let space_label = match state.coordinate_space {
+        CoordinateSpace::World => "World",
+        CoordinateSpace::Local => "Local",
+    };
+    if ui.button(format!("Space: {}", space_label)) {
+        state.coordinate_space = match state.coordinate_space {
+            CoordinateSpace::World => CoordinateSpace::Local,
+            CoordinateSpace::Local => CoordinateSpace::World,
+        };
+    }
+
+    // Snap controls
+    ui.same_line();
+    ui.checkbox("Snap", &mut state.snap_enabled);
+
+    if state.snap_enabled {
+        match state.mode {
+            TransformGizmoMode::Translate => {
+                ui.slider_config("Snap Value", 0.01, 10.0)
+                    .build(&mut state.translate_snap_value);
+            }
+            TransformGizmoMode::Rotate => {
+                ui.slider_config("Snap Degrees", 1.0, 90.0)
+                    .build(&mut state.rotate_snap_degrees);
+            }
+            TransformGizmoMode::Scale => {
+                ui.slider_config("Snap Value", 0.01, 1.0)
+                    .build(&mut state.scale_snap_value);
+            }
+        }
+    }
+
+    ui.slider_config("Gizmo Scale", 0.01, 0.3)
+        .display_format("%.3f")
+        .build(&mut state.gizmo_scale);
+}
+
 fn build_fbx_debug_panel(ui: &imgui::Ui) {
     ui.text("FBX Debug Logs:");
 
@@ -429,6 +524,41 @@ fn build_auto_exposure_panel(ui: &imgui::Ui, ecs_world: &World) {
     if let Some(exposure) = ecs_world.get_resource::<Exposure>() {
         ui.text(format!("Current Exposure: {:.4}", exposure.exposure_value));
         ui.text(format!("Current EV100: {:.2}", exposure.ev100));
+    }
+}
+
+fn build_onion_skinning_panel(ui: &imgui::Ui, ecs_world: &World) {
+    use crate::ecs::resource::OnionSkinningConfig;
+
+    ui.text("Onion Skinning:");
+
+    if let Some(mut config) = ecs_world.get_resource_mut::<OnionSkinningConfig>() {
+        ui.checkbox("Onion Skin Enabled", &mut config.enabled);
+
+        let mut past = config.past_count as i32;
+        if ui.slider_config("Past Frames", 0, 4).build(&mut past) {
+            config.past_count = past.max(0) as u32;
+        }
+
+        let mut future = config.future_count as i32;
+        if ui.slider_config("Future Frames", 0, 4).build(&mut future) {
+            config.future_count = future.max(0) as u32;
+        }
+
+        ui.slider_config("Frame Step", 0.001, 0.2)
+            .display_format("%.3f")
+            .build(&mut config.frame_step);
+
+        ui.slider_config("Ghost Opacity", 0.0, 1.0)
+            .build(&mut config.opacity);
+
+        ui.color_edit3("Past Color", &mut config.past_color);
+        ui.color_edit3("Future Color", &mut config.future_color);
+
+        ui.text(format!(
+            "Total ghosts: {}",
+            crate::ecs::compute_total_ghost_count(&config)
+        ));
     }
 }
 

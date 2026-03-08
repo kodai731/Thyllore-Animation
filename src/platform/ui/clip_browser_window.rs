@@ -1,10 +1,11 @@
 use imgui::Condition;
 
 use crate::animation::editable::SourceClipId;
-use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{ClipBrowserState, ClipLibrary};
 use crate::ecs::world::World;
+
+use super::layout_snapshot::LayoutSnapshot;
 
 pub fn build_clip_browser_window(
     ui: &imgui::Ui,
@@ -12,20 +13,14 @@ pub fn build_clip_browser_window(
     clip_library: &ClipLibrary,
     browser_state: &mut ClipBrowserState,
     world: &World,
+    layout: &LayoutSnapshot,
 ) {
-    let display_size = ui.io().display_size;
-    let hierarchy_width = 250.0;
-    let debug_height = 250.0;
-    let timeline_height = 300.0;
-    let main_height = display_size[1] - debug_height - timeline_height;
-
-    let hierarchy_height = (main_height * 0.6).max(100.0);
-    let browser_height = (main_height - hierarchy_height).max(80.0);
-    let browser_y = hierarchy_height;
-
     ui.window("Clip Browser")
-        .position([0.0, browser_y], Condition::Always)
-        .size([hierarchy_width, browser_height], Condition::Always)
+        .position([0.0, layout.clip_browser_y], Condition::Always)
+        .size(
+            [layout.hierarchy_width, layout.clip_browser_height],
+            Condition::Always,
+        )
         .resizable(false)
         .movable(false)
         .collapsible(false)
@@ -128,7 +123,8 @@ fn build_clip_list(
         return;
     }
 
-    let reference_counts = count_clip_references(clip_library, world);
+    let reference_counts =
+        crate::ecs::systems::clip_library_systems::clip_library_count_references(world);
 
     let filter_lower = browser_state.filter_text.to_lowercase();
 
@@ -177,23 +173,9 @@ fn build_clip_drag_source(ui: &imgui::Ui, clip_id: SourceClipId, _name: &str) {
         .begin_payload(move || id);
 }
 
-fn count_clip_references(_clip_library: &ClipLibrary, world: &World) -> Vec<(SourceClipId, usize)> {
-    let mut counts: std::collections::HashMap<SourceClipId, usize> =
-        std::collections::HashMap::new();
-
-    let entities = world.component_entities::<ClipSchedule>();
-    for entity in entities {
-        if let Some(schedule) = world.get_component::<ClipSchedule>(entity) {
-            for inst in &schedule.instances {
-                *counts.entry(inst.source_id).or_insert(0) += 1;
-            }
-        }
-    }
-
-    counts.into_iter().collect()
-}
-
-fn extract_source_filename(clip: Option<&crate::animation::editable::EditableAnimationClip>) -> String {
+fn extract_source_filename(
+    clip: Option<&crate::animation::editable::EditableAnimationClip>,
+) -> String {
     clip.and_then(|c| c.source_path.as_ref())
         .and_then(|p| std::path::Path::new(p).file_name())
         .and_then(|n| n.to_str())

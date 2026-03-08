@@ -1,5 +1,7 @@
 use imgui::Condition;
 
+use super::layout_snapshot::LayoutSnapshot;
+
 #[derive(Clone, Debug, Default)]
 pub struct ViewportInfo {
     pub size: [f32; 2],
@@ -12,24 +14,20 @@ pub fn build_viewport_window(
     ui: &imgui::Ui,
     texture_id: imgui::TextureId,
     current_size: [f32; 2],
+    layout: &LayoutSnapshot,
 ) -> ViewportInfo {
     let mut info = ViewportInfo::default();
 
-    let display_size = ui.io().display_size;
-    let hierarchy_width = 250.0;
-    let inspector_width = 300.0;
-    let debug_height = 250.0;
-    let timeline_height = 300.0;
-    let main_height = display_size[1] - debug_height - timeline_height;
-    let viewport_width = display_size[0] - hierarchy_width - inspector_width;
-    let viewport_x = hierarchy_width;
-
     ui.window("Scene")
-        .position([viewport_x, 0.0], Condition::Always)
-        .size([viewport_width, main_height], Condition::Always)
+        .position([layout.viewport_x, 0.0], Condition::Always)
+        .size(
+            [layout.viewport_width, layout.main_height],
+            Condition::Always,
+        )
         .resizable(false)
         .movable(false)
         .collapsible(false)
+        .bring_to_front_on_focus(false)
         .build(|| {
             let content_region = ui.content_region_avail();
             info.size = content_region;

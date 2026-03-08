@@ -8,6 +8,7 @@ use crate::ecs::systems::collect_inspector_data;
 use crate::ecs::world::World;
 
 use super::constraint_inspector::build_constraint_section;
+use super::layout_snapshot::LayoutSnapshot;
 use super::spring_bone_inspector::build_spring_bone_section;
 
 pub fn build_inspector_window(
@@ -17,20 +18,18 @@ pub fn build_inspector_window(
     state: &HierarchyState,
     assets: &AssetStorage,
     graphics: &GraphicsResources,
+    layout: &LayoutSnapshot,
 ) {
-    let display_size = ui.io().display_size;
-    let inspector_width = 300.0;
-    let debug_height = 250.0;
-    let timeline_height = 300.0;
-    let main_height = display_size[1] - debug_height - timeline_height;
-    let inspector_x = display_size[0] - inspector_width;
-
     ui.window("Inspector")
-        .position([inspector_x, 0.0], Condition::Always)
-        .size([inspector_width, main_height], Condition::Always)
+        .position([layout.inspector_x, 0.0], Condition::Always)
+        .size(
+            [layout.inspector_width, layout.main_height],
+            Condition::Always,
+        )
         .resizable(false)
         .movable(false)
         .collapsible(false)
+        .bring_to_front_on_focus(false)
         .build(|| {
             if let Some(entity) = state.selected_entity {
                 let data = collect_inspector_data(world, entity, assets, graphics);

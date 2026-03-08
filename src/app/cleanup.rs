@@ -18,6 +18,10 @@ impl App {
             crate::log!("Destroyed G-Buffer sampler");
         }
 
+        if let Some(onion_skin_pass) = self.data.raytracing.onion_skin_pass.take() {
+            onion_skin_pass.destroy(&self.rrdevice.device);
+        }
+
         if let Some(gbuffer_pipeline) = self.data.raytracing.gbuffer_pipeline.take() {
             gbuffer_pipeline.destroy(&self.rrdevice.device);
             crate::log!("Destroyed G-Buffer pipeline");

@@ -227,13 +227,18 @@ fn decompose_transform(m: &Matrix4<f32>) -> ([f32; 3], Quaternion<f32>, [f32; 3]
 pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
     log!("=== Loading FBX file with ufbx: {} ===", path);
 
-    let scene = ufbx::load_file(path, ufbx::LoadOpts::default())
+    let opts = ufbx::LoadOpts {
+        target_unit_meters: 1.0,
+        space_conversion: ufbx::SpaceConversion::ModifyGeometry,
+        ..Default::default()
+    };
+    let scene = ufbx::load_file(path, opts)
         .map_err(|e| anyhow::anyhow!("ufbx load failed: {}", e.description))
         .context(format!("Failed to load FBX: {}", path))?;
 
-    let unit_scale = scene.settings.unit_meters as f32;
+    let unit_scale = scene.settings.original_unit_meters as f32;
     log!(
-        "Scene: unit_meters={}, meshes={}, nodes={}, anim_stacks={}, constraints={}",
+        "Scene: original_unit_meters={}, meshes={}, nodes={}, anim_stacks={}, constraints={}",
         unit_scale,
         scene.meshes.len(),
         scene.nodes.len(),
@@ -254,9 +259,12 @@ pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
     let axes = read_axes_from_scene(&scene.settings);
     log!(
         "FBX axes: up={}(sign={}), front={}(sign={}), coord={}(sign={})",
-        axes.up_axis, axes.up_axis_sign,
-        axes.front_axis, axes.front_axis_sign,
-        axes.coord_axis, axes.coord_axis_sign
+        axes.up_axis,
+        axes.up_axis_sign,
+        axes.front_axis,
+        axes.front_axis_sign,
+        axes.coord_axis,
+        axes.coord_axis_sign
     );
 
     let fps = scene.settings.frames_per_second as f32;
@@ -269,14 +277,14 @@ pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
         ..Default::default()
     };
 
-    build_bone_hierarchy(&scene, &mut fbx_model, unit_scale);
+    build_bone_hierarchy(&scene, &mut fbx_model);
 
     let mesh_to_node = build_mesh_node_mapping(&scene);
     let mut split_infos: Vec<MeshSplitInfo> = Vec::new();
 
     for (mesh_idx, ufbx_mesh) in scene.meshes.iter().enumerate() {
         let typed_id = ufbx_mesh.element.typed_id as usize;
-        let parts = extract_mesh_data_by_material(ufbx_mesh, unit_scale);
+        let parts = extract_mesh_data_by_material(ufbx_mesh);
 
         for (fbx_data, vertex_map) in parts {
             split_infos.push(MeshSplitInfo {
@@ -295,8 +303,8 @@ pub fn load_fbx_with_ufbx(path: &str) -> Result<FbxModel> {
         );
     }
 
-    extract_skin_data(&scene, &mut fbx_model, &split_infos, unit_scale);
-    extract_animations(&scene, &mut fbx_model, unit_scale);
+    extract_skin_data(&scene, &mut fbx_model, &split_infos);
+    extract_animations(&scene, &mut fbx_model);
 
     let bone_name_to_id = build_bone_name_to_id(&fbx_model.nodes);
     fbx_model.constraints = extract_constraints(&scene, &bone_name_to_id);
@@ -342,10 +350,7 @@ impl MaterialPart {
     }
 }
 
-fn extract_mesh_data_by_material(
-    mesh: &ufbx::Mesh,
-    unit_scale: f32,
-) -> Vec<(FbxData, HashMap<u32, u32>)> {
+fn extract_mesh_data_by_material(mesh: &ufbx::Mesh) -> Vec<(FbxData, HashMap<u32, u32>)> {
     let num_materials = mesh.materials.len().max(1);
     let mut parts: Vec<MaterialPart> = (0..num_materials).map(|_| MaterialPart::new()).collect();
 
@@ -373,13 +378,9 @@ fn extract_mesh_data_by_material(
 
             if mapped == next_id {
                 let pos = mesh.vertex_position[uidx];
-                let scaled = Vector3::new(
-                    pos.x as f32 * unit_scale,
-                    pos.y as f32 * unit_scale,
-                    pos.z as f32 * unit_scale,
-                );
-                part.positions.push(scaled);
-                part.local_positions.push(scaled);
+                let v = Vector3::new(pos.x as f32, pos.y as f32, pos.z as f32);
+                part.positions.push(v);
+                part.local_positions.push(v);
 
                 if mesh.vertex_normal.exists {
                     let n = mesh.vertex_normal[uidx];
@@ -450,12 +451,7 @@ fn extract_texture_path(mat: &ufbx::Material) -> Option<String> {
     None
 }
 
-fn extract_skin_data(
-    scene: &ufbx::Scene,
-    fbx_model: &mut FbxModel,
-    split_infos: &[MeshSplitInfo],
-    unit_scale: f32,
-) {
+fn extract_skin_data(scene: &ufbx::Scene, fbx_model: &mut FbxModel, split_infos: &[MeshSplitInfo]) {
     for ufbx_mesh in &scene.meshes {
         if ufbx_mesh.skin_deformers.is_empty() {
             continue;
@@ -471,10 +467,7 @@ fn extract_skin_data(
                 .map(|n| n.element.name.to_string())
                 .unwrap_or_else(|| "Unknown".to_string());
 
-            let mut geometry_to_bone = ufbx_matrix_to_cgmath(&cluster.geometry_to_bone);
-            geometry_to_bone[3][0] *= unit_scale;
-            geometry_to_bone[3][1] *= unit_scale;
-            geometry_to_bone[3][2] *= unit_scale;
+            let geometry_to_bone = ufbx_matrix_to_cgmath(&cluster.geometry_to_bone);
 
             let transform_link = geometry_to_bone.invert().unwrap_or(Matrix4::identity());
 
@@ -513,7 +506,7 @@ fn extract_skin_data(
     }
 }
 
-fn build_bone_hierarchy(scene: &ufbx::Scene, fbx_model: &mut FbxModel, unit_scale: f32) {
+fn build_bone_hierarchy(scene: &ufbx::Scene, fbx_model: &mut FbxModel) {
     for node in &scene.nodes {
         if node.is_root {
             continue;
@@ -526,10 +519,7 @@ fn build_bone_hierarchy(scene: &ufbx::Scene, fbx_model: &mut FbxModel, unit_scal
             .filter(|p| !p.is_root)
             .map(|p| p.element.name.to_string());
 
-        let mut local_transform = ufbx_matrix_to_cgmath(&node.node_to_parent);
-        local_transform[3][0] *= unit_scale;
-        local_transform[3][1] *= unit_scale;
-        local_transform[3][2] *= unit_scale;
+        let local_transform = ufbx_matrix_to_cgmath(&node.node_to_parent);
 
         let (default_translation, default_rotation, default_scaling) =
             decompose_transform(&local_transform);
@@ -563,7 +553,7 @@ fn build_mesh_node_mapping(scene: &ufbx::Scene) -> HashMap<usize, String> {
     mesh_to_node
 }
 
-fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel, unit_scale: f32) {
+fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel) {
     for anim_stack in &scene.anim_stacks {
         let raw_name = anim_stack.element.name.to_string();
         let anim_name = if raw_name.is_empty() {
@@ -608,11 +598,7 @@ fn extract_animations(scene: &ufbx::Scene, fbx_model: &mut FbxModel, unit_scale:
                 .iter()
                 .map(|k| KeyFrame {
                     time: k.time as f32,
-                    value: [
-                        k.value.x as f32 * unit_scale,
-                        k.value.y as f32 * unit_scale,
-                        k.value.z as f32 * unit_scale,
-                    ],
+                    value: [k.value.x as f32, k.value.y as f32, k.value.z as f32],
                 })
                 .collect();
 
@@ -1091,5 +1077,4 @@ mod tests {
 
         assert_eq!(model.fbx_data.len(), 1);
     }
-
 }

@@ -1,16 +1,14 @@
 use anyhow::Result;
 use cgmath::Vector3;
 
-use super::object_picking_systems::apply_mesh_selection;
-use super::phases::{
-    run_animation_phase_ecs, run_animation_phase_gpu, run_input_phase, run_render_prep_phase,
-    run_transform_phase_ecs, run_transform_phase_gpu,
-};
 #[cfg(feature = "ml")]
 use super::curve_suggestion_systems::curve_suggestion_poll_results;
 #[cfg(feature = "ml")]
-use super::inference_actor_systems::{
-    inference_actor_initialize, inference_actor_poll,
+use super::inference_actor_systems::{inference_actor_initialize, inference_actor_poll};
+use super::object_picking_systems::apply_mesh_selection;
+use super::phases::{
+    run_animation_phase_ecs, run_animation_phase_gpu, run_input_phase, run_onion_skin_phase,
+    run_render_prep_phase, run_transform_phase_ecs, run_transform_phase_gpu,
 };
 use super::timeline_systems::timeline_update;
 use crate::app::graphics_resource::GraphicsResources;
@@ -18,13 +16,11 @@ use crate::app::FrameContext;
 #[cfg(feature = "ml")]
 use crate::ecs::component::InferenceActorSetup;
 use crate::ecs::context::EcsContext;
-use crate::ecs::resource::{
-    ClipLibrary, HierarchyState, TimelineState,
-};
-#[cfg(feature = "ml")]
-use crate::ecs::resource::{CurveSuggestionState, InferenceActorState};
 #[cfg(feature = "text-to-motion")]
 use crate::ecs::resource::TextToMotionState;
+use crate::ecs::resource::{ClipLibrary, HierarchyState, TimelineState};
+#[cfg(feature = "ml")]
+use crate::ecs::resource::{CurveSuggestionState, InferenceActorState};
 use crate::ecs::world::Animator;
 
 pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
@@ -55,6 +51,7 @@ pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
 
     let animation_updates = run_animation_phase_ecs(ctx);
     run_animation_phase_gpu(ctx, &animation_updates)?;
+    run_onion_skin_phase(ctx, &animation_updates.updated_meshes)?;
 
     run_transform_phase_gpu(ctx)?;
     run_render_prep_phase(ctx)?;
@@ -185,8 +182,7 @@ fn run_text_to_motion_phase(ctx: &mut FrameContext) {
         .next()
         .map(|sa| sa.skeleton.bone_name_to_id.clone());
 
-    if let Some(handle) = ctx.world.get_resource::<crate::grpc::GrpcThreadHandle>()
-    {
+    if let Some(handle) = ctx.world.get_resource::<crate::grpc::GrpcThreadHandle>() {
         let mut state = ctx.world.resource_mut::<TextToMotionState>();
         super::text_to_motion_systems::text_to_motion_poll(
             &mut state,

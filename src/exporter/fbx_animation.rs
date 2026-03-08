@@ -5,11 +5,11 @@ use cgmath::{InnerSpace, Matrix4, Vector3};
 use fbxcel::low::FbxVersion;
 use fbxcel::writer::v7400::binary::{FbxFooter, Writer};
 
-use crate::animation::Skeleton;
 use crate::animation::editable::{
-    BezierHandle, EditableAnimationClip, EditableKeyframe, InterpolationType,
-    PropertyCurve,
+    BezierHandle, EditableAnimationClip, EditableKeyframe, InterpolationType, PropertyCurve,
+    TangentWeightMode,
 };
+use crate::animation::Skeleton;
 use crate::loader::fbx::fbx::FbxAxesInfo;
 
 pub(crate) type FbxWriteResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -87,8 +87,15 @@ pub(crate) struct FbxCurveExport {
 }
 
 pub(crate) enum FbxConnection {
-    OO { child: i64, parent: i64 },
-    OP { child: i64, parent: i64, property: String },
+    OO {
+        child: i64,
+        parent: i64,
+    },
+    OP {
+        child: i64,
+        parent: i64,
+        property: String,
+    },
 }
 
 pub(crate) struct FbxExportData {
@@ -118,10 +125,7 @@ fn convert_interpolation_to_flags(interp: InterpolationType) -> i32 {
     }
 }
 
-fn convert_tangent_to_fbx_slope_weight(
-    handle: &BezierHandle,
-    key_interval: f32,
-) -> (f32, f32) {
+fn convert_tangent_to_fbx_slope_weight(handle: &BezierHandle, key_interval: f32) -> (f32, f32) {
     let slope = if handle.time_offset.abs() > 1e-8 {
         handle.value_offset / handle.time_offset
     } else {
@@ -174,10 +178,7 @@ pub(crate) fn decompose_matrix_to_trs(m: &Matrix4<f32>) -> ([f64; 3], [f64; 3], 
     )
 }
 
-fn validate_bone_names(
-    clip: &EditableAnimationClip,
-    skeleton: &Skeleton,
-) -> Vec<String> {
+fn validate_bone_names(clip: &EditableAnimationClip, skeleton: &Skeleton) -> Vec<String> {
     clip.tracks
         .values()
         .filter(|track| !skeleton.bone_name_to_id.contains_key(&track.bone_name))
@@ -193,7 +194,8 @@ pub(crate) fn build_bone_export_list(
     needs_coord_conversion: bool,
 ) -> Vec<FbxBoneExport> {
     let mut bones = Vec::new();
-    let mut skeleton_idx_to_export_idx: Vec<Option<usize>> = Vec::with_capacity(skeleton.bones.len());
+    let mut skeleton_idx_to_export_idx: Vec<Option<usize>> =
+        Vec::with_capacity(skeleton.bones.len());
 
     for bone in &skeleton.bones {
         if mesh_node_names.contains(&bone.name) {
@@ -288,13 +290,23 @@ fn build_key_attr_arrays(
     let mut current_data: [f32; 4] = [0.0; 4];
     let mut current_count: i32 = 0;
 
+    // FBX SDK tangent weight flags (OR'd with interpolation flags for Bezier curves)
+    const WEIGHTED_RIGHT: i32 = 0x0100_0000;
+    const WEIGHTED_NEXT_LEFT: i32 = 0x0400_0000;
+
     for (i, kf) in keyframes.iter().enumerate() {
-        let flag = convert_interpolation_to_flags(kf.interpolation);
+        let mut flag = convert_interpolation_to_flags(kf.interpolation);
         let next_kf = keyframes.get(i + 1);
 
-        let key_interval = next_kf
-            .map(|n| n.time - kf.time)
-            .unwrap_or(1.0 / 30.0);
+        // Set weighted tangent flags when current or next keyframe uses weighted mode
+        if kf.weight_mode == TangentWeightMode::Weighted {
+            flag |= WEIGHTED_RIGHT;
+        }
+        if next_kf.is_some_and(|n| n.weight_mode == TangentWeightMode::Weighted) {
+            flag |= WEIGHTED_NEXT_LEFT;
+        }
+
+        let key_interval = next_kf.map(|n| n.time - kf.time).unwrap_or(1.0 / 30.0);
 
         let (right_slope, right_weight) =
             convert_tangent_to_fbx_slope_weight(&kf.out_tangent, key_interval);
@@ -725,14 +737,49 @@ pub(crate) fn write_global_settings<W: Write + Seek>(
 
     drop(writer.new_node("Properties70")?);
     write_property_i32(writer, "UpAxis", "int", "Integer", "", axes.up_axis)?;
-    write_property_i32(writer, "UpAxisSign", "int", "Integer", "", axes.up_axis_sign)?;
+    write_property_i32(
+        writer,
+        "UpAxisSign",
+        "int",
+        "Integer",
+        "",
+        axes.up_axis_sign,
+    )?;
     write_property_i32(writer, "FrontAxis", "int", "Integer", "", axes.front_axis)?;
-    write_property_i32(writer, "FrontAxisSign", "int", "Integer", "", axes.front_axis_sign)?;
+    write_property_i32(
+        writer,
+        "FrontAxisSign",
+        "int",
+        "Integer",
+        "",
+        axes.front_axis_sign,
+    )?;
     write_property_i32(writer, "CoordAxis", "int", "Integer", "", axes.coord_axis)?;
-    write_property_i32(writer, "CoordAxisSign", "int", "Integer", "", axes.coord_axis_sign)?;
-    write_property_f64(writer, "UnitScaleFactor", "double", "Number", "", unit_scale_factor)?;
+    write_property_i32(
+        writer,
+        "CoordAxisSign",
+        "int",
+        "Integer",
+        "",
+        axes.coord_axis_sign,
+    )?;
+    write_property_f64(
+        writer,
+        "UnitScaleFactor",
+        "double",
+        "Number",
+        "",
+        unit_scale_factor,
+    )?;
     write_property_i32(writer, "TimeMode", "enum", "", "", time_mode)?;
-    write_property_f64(writer, "CustomFrameRate", "double", "Number", "", fps as f64)?;
+    write_property_f64(
+        writer,
+        "CustomFrameRate",
+        "double",
+        "Number",
+        "",
+        fps as f64,
+    )?;
     write_property_ktime(writer, "TimeSpanStart", 0)?;
     write_property_ktime(writer, "TimeSpanStop", duration_ktime)?;
     writer.close_node()?;
@@ -979,8 +1026,7 @@ pub(crate) fn write_anim_curve_node<W: Write + Seek>(
     writer: &mut Writer<W>,
     cn: &FbxCurveNodeExport,
 ) -> FbxWriteResult<()> {
-    let fbx_name =
-        format!("{}\x00\x01AnimCurveNode", cn.channel.short_name());
+    let fbx_name = format!("{}\x00\x01AnimCurveNode", cn.channel.short_name());
     let mut attrs = writer.new_node("AnimationCurveNode")?;
     attrs.append_i64(cn.uid)?;
     attrs.append_string_direct(&fbx_name)?;
@@ -1051,10 +1097,7 @@ pub(crate) fn write_anim_curve<W: Write + Seek>(
 
     {
         let mut ra = writer.new_node("KeyAttrRefCount")?;
-        ra.append_arr_i32_from_iter(
-            None,
-            curve.key_attr_ref_count.iter().copied(),
-        )?;
+        ra.append_arr_i32_from_iter(None, curve.key_attr_ref_count.iter().copied())?;
         drop(ra);
         writer.close_node()?;
     }
@@ -1309,13 +1352,10 @@ mod tests {
         let mut uid_alloc = UidAllocator::new();
         let empty_set = std::collections::HashSet::new();
 
-        let bones_with = build_bone_export_list(
-            &skeleton, &mut uid_alloc, &empty_set, 1.0, true,
-        );
+        let bones_with = build_bone_export_list(&skeleton, &mut uid_alloc, &empty_set, 1.0, true);
         let mut uid_alloc2 = UidAllocator::new();
-        let bones_without = build_bone_export_list(
-            &skeleton, &mut uid_alloc2, &empty_set, 1.0, false,
-        );
+        let bones_without =
+            build_bone_export_list(&skeleton, &mut uid_alloc2, &empty_set, 1.0, false);
 
         let hips_with = bones_with.iter().find(|b| b.name == "Hips").unwrap();
         let hips_without = bones_without.iter().find(|b| b.name == "Hips").unwrap();
@@ -1329,14 +1369,81 @@ mod tests {
     }
 
     #[test]
+    fn test_weighted_tangent_flags_in_key_attr() {
+        let mut kf0 = EditableKeyframe::new(0, 0.0, 0.0);
+        kf0.interpolation = InterpolationType::Bezier;
+        kf0.weight_mode = TangentWeightMode::Weighted;
+
+        let mut kf1 = EditableKeyframe::new(1, 1.0, 1.0);
+        kf1.interpolation = InterpolationType::Bezier;
+        kf1.weight_mode = TangentWeightMode::Weighted;
+
+        let mut kf2 = EditableKeyframe::new(2, 2.0, 2.0);
+        kf2.interpolation = InterpolationType::Bezier;
+        kf2.weight_mode = TangentWeightMode::NonWeighted;
+
+        let kfs = vec![kf0, kf1, kf2];
+        let mut flags = Vec::new();
+        let mut data = Vec::new();
+        let mut ref_count = Vec::new();
+        build_key_attr_arrays(&kfs, &mut flags, &mut data, &mut ref_count);
+
+        // kf0: weighted out + next(kf1) weighted in => WEIGHTED_RIGHT | WEIGHTED_NEXT_LEFT
+        // kf1: weighted out + next(kf2) non-weighted in => WEIGHTED_RIGHT only
+        // kf2: non-weighted out + no next => no weight flags
+        // All three have different flag combinations, so RLE won't merge them
+        let base_bezier = 0x0000_0408;
+        let weighted_right = 0x0100_0000;
+        let weighted_next_left = 0x0400_0000;
+
+        assert!(flags.len() >= 2, "Expected at least 2 RLE groups");
+        assert_eq!(
+            flags[0],
+            base_bezier | weighted_right | weighted_next_left,
+            "kf0 should have both weight flags"
+        );
+    }
+
+    #[test]
+    fn test_non_weighted_tangent_no_extra_flags() {
+        let mut kf0 = EditableKeyframe::new(0, 0.0, 0.0);
+        kf0.interpolation = InterpolationType::Bezier;
+        kf0.weight_mode = TangentWeightMode::NonWeighted;
+
+        let mut kf1 = EditableKeyframe::new(1, 1.0, 1.0);
+        kf1.interpolation = InterpolationType::Bezier;
+        kf1.weight_mode = TangentWeightMode::NonWeighted;
+
+        let kfs = vec![kf0, kf1];
+        let mut flags = Vec::new();
+        let mut data = Vec::new();
+        let mut ref_count = Vec::new();
+        build_key_attr_arrays(&kfs, &mut flags, &mut data, &mut ref_count);
+
+        let base_bezier = 0x0000_0408;
+        let weighted_right = 0x0100_0000;
+        let weighted_next_left = 0x0400_0000;
+        for &flag in &flags {
+            assert_eq!(
+                flag & weighted_right,
+                0,
+                "NonWeighted should not have WEIGHTED_RIGHT flag"
+            );
+            assert_eq!(
+                flag & weighted_next_left,
+                0,
+                "NonWeighted should not have WEIGHTED_NEXT_LEFT flag"
+            );
+        }
+    }
+
+    #[test]
     fn test_build_bone_export_list_without_coord_conversion() {
         let skeleton = build_test_skeleton_with_rootnode();
         let mut uid_alloc = UidAllocator::new();
         let empty_set = std::collections::HashSet::new();
 
-        let bones = build_bone_export_list(
-            &skeleton, &mut uid_alloc, &empty_set, 1.0, false,
-        );
+        let bones = build_bone_export_list(&skeleton, &mut uid_alloc, &empty_set, 1.0, false);
 
         assert_eq!(bones.len(), 4);
         for bone in &bones {

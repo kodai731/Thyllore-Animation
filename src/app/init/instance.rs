@@ -136,7 +136,7 @@ impl App {
         let rrrender = RRRender::new(&instance, &rrdevice, &rrswapchain, rrcommand_pool.as_ref());
         let swapchain_image_count = rrswapchain.swapchain_images.len();
         let max_materials = 16;
-        let max_objects = 16;
+        let max_objects = 64;
         data.graphics_resources = GraphicsResources::new(
             &instance,
             &rrdevice,
@@ -500,6 +500,30 @@ impl App {
         data.ecs_world
             .insert_resource(crate::ecs::resource::SpringBoneEditorState::default());
 
+        {
+            let mut tg = crate::debugview::gizmo::TransformGizmoData::default();
+            tg.line_render_info.pipeline_id = Some(bone_wire_pipeline_id);
+            tg.line_render_info.object_index = data.graphics_resources.objects.allocate_slot();
+            tg.solid_render_info.pipeline_id = Some(bone_solid_pipeline_id);
+            tg.solid_render_info.object_index = data.graphics_resources.objects.allocate_slot();
+            crate::log!(
+                "Allocated object_index {} for TransformGizmo line",
+                tg.line_render_info.object_index
+            );
+            crate::log!(
+                "Allocated object_index {} for TransformGizmo solid",
+                tg.solid_render_info.object_index
+            );
+            data.ecs_world.insert_resource(tg);
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::TransformGizmoState::default());
+        }
+
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::PointerState::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::PointerCapture::default());
+
         let mut billboard_data = create_billboard();
         billboard_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!(
@@ -570,6 +594,15 @@ impl App {
         data.ecs_world.insert_resource(light_gizmo_data);
         data.ecs_world.insert_resource(billboard_data);
 
+        let grid_object_index = data.graphics_resources.objects.allocate_slot();
+        crate::log!("Allocated object_index {} for Grid", grid_object_index);
+
+        data.graphics_resources.objects.seal_reserved_slots();
+        crate::log!(
+            "Sealed reserved object slots at {}",
+            data.graphics_resources.objects.get_next_slot()
+        );
+
         crate::log!("Starting ray tracing initialization...");
         crate::log!(
             "swapchain extent: {}x{}",
@@ -612,6 +645,14 @@ impl App {
         }
         crate::log!("loaded initial model: {}", model_path);
 
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::PanelLayout>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::PanelLayout::default());
+        }
+
         let mut scene_state = SceneState::new();
         if let Some((scene_path, scene, clips)) = loaded_scene {
             let clips_with_ids =
@@ -628,8 +669,9 @@ impl App {
                     Some(clip_id),
                     &data.ecs_world,
                 );
-                for (_, existing) in
-                    data.ecs_world.iter_components_mut::<crate::ecs::component::ClipSchedule>()
+                for (_, existing) in data
+                    .ecs_world
+                    .iter_components_mut::<crate::ecs::component::ClipSchedule>()
                 {
                     *existing = schedule.clone();
                 }
@@ -670,9 +712,6 @@ impl App {
             &grid_mesh.indices,
         )?;
         println!("created grid index buffer");
-
-        let grid_object_index = data.graphics_resources.objects.allocate_slot();
-        crate::log!("Allocated object_index {} for Grid", grid_object_index);
 
         let grid_render_info = RenderInfo::new(Some(grid_pipeline_id), grid_object_index);
 
@@ -970,6 +1009,14 @@ impl App {
 
         if !data
             .ecs_world
+            .contains_resource::<crate::ecs::resource::PoseLibrary>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::PoseLibrary::default());
+        }
+
+        if !data
+            .ecs_world
             .contains_resource::<crate::ecs::resource::ConstraintEditorState>()
         {
             data.ecs_world
@@ -1032,20 +1079,36 @@ impl App {
                 .insert_resource(crate::ecs::resource::AutoExposure::default());
         }
 
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::OnionSkinningConfig>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::OnionSkinningConfig::default());
+        }
+
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::PanelLayout>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::PanelLayout::default());
+        }
+
         #[cfg(feature = "ml")]
         {
             use crate::ecs::component::InferenceActorSetup;
             use crate::ecs::world::EntityBuilder;
-            use crate::ml::{resolve_curve_copilot_model_path, InferenceModelKind, CURVE_COPILOT_ACTOR_ID};
+            use crate::ml::{
+                resolve_curve_copilot_model_path, InferenceModelKind, CURVE_COPILOT_ACTOR_ID,
+            };
 
-            EntityBuilder::new(&mut data.ecs_world).with_inference_actor(
-                InferenceActorSetup {
-                    actor_id: CURVE_COPILOT_ACTOR_ID,
-                    model_path: resolve_curve_copilot_model_path(),
-                    model_kind: InferenceModelKind::CurveCopilot,
-                    enabled: true,
-                },
-            );
+            EntityBuilder::new(&mut data.ecs_world).with_inference_actor(InferenceActorSetup {
+                actor_id: CURVE_COPILOT_ACTOR_ID,
+                model_path: resolve_curve_copilot_model_path(),
+                model_kind: InferenceModelKind::CurveCopilot,
+                enabled: true,
+            });
         }
     }
 
@@ -1312,12 +1375,11 @@ impl App {
 
         for clip in clips {
             let name = clip.name.clone();
-            let id =
-                crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
-                    &mut clip_library,
-                    assets,
-                    clip,
-                );
+            let id = crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
+                &mut clip_library,
+                assets,
+                clip,
+            );
             result.push((id, name));
         }
 

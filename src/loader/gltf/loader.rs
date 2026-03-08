@@ -541,14 +541,12 @@ unsafe fn process_node(
                     normal: Vec3::new(normal[0], normal[1], normal[2]),
                 });
 
-                if !mesh_data.has_joints {
-                    mesh_data.local_vertices.push(Vertex {
-                        pos: Vec3::new(raw_pos[0], raw_pos[1], raw_pos[2]),
-                        color: Vec4::new(1.0, 1.0, 1.0, 1.0),
-                        tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
-                        normal: Vec3::new(normal[0], normal[1], normal[2]),
-                    });
-                }
+                mesh_data.local_vertices.push(Vertex {
+                    pos: Vec3::new(raw_pos[0], raw_pos[1], raw_pos[2]),
+                    color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+                    tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
+                    normal: Vec3::new(normal[0], normal[1], normal[2]),
+                });
 
                 mesh_data.base_positions.push(pos);
                 mesh_data
@@ -725,10 +723,8 @@ unsafe fn process_animation(
     use gltf::animation::util::ReadOutputs;
 
     for channel in animation.channels() {
-        let reader =
-            channel.reader(|buffer| Some(&buffers[buffer.index()]));
-        let key_frames: Vec<f32> =
-            reader.read_inputs().unwrap().collect();
+        let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
+        let key_frames: Vec<f32> = reader.read_inputs().unwrap().collect();
 
         let gltf_interp = channel.sampler().interpolation();
         let is_cubic = gltf_interp == gltf::animation::Interpolation::CubicSpline;
@@ -741,14 +737,11 @@ unsafe fn process_animation(
 
         let mut node_translations: Vec<Vector3<f32>> = Vec::new();
         let mut node_translation_in_tangents: Vec<Vector3<f32>> = Vec::new();
-        let mut node_translation_out_tangents: Vec<Vector3<f32>> =
-            Vec::new();
+        let mut node_translation_out_tangents: Vec<Vector3<f32>> = Vec::new();
 
         let mut node_rotation_quats: Vec<Quaternion<f32>> = Vec::new();
-        let mut node_rotation_in_tangents: Vec<Quaternion<f32>> =
-            Vec::new();
-        let mut node_rotation_out_tangents: Vec<Quaternion<f32>> =
-            Vec::new();
+        let mut node_rotation_in_tangents: Vec<Quaternion<f32>> = Vec::new();
+        let mut node_rotation_out_tangents: Vec<Quaternion<f32>> = Vec::new();
 
         let mut node_scale_values: Vec<Vector3<f32>> = Vec::new();
         let mut node_scale_in_tangents: Vec<Vector3<f32>> = Vec::new();
@@ -764,33 +757,23 @@ unsafe fn process_animation(
                                 let in_t = chunk[0];
                                 let val = chunk[1];
                                 let out_t = chunk[2];
-                                let matrix = Matrix4::from_translation(
-                                    Vector3::new(val[0], val[1], val[2]),
-                                );
+                                let matrix =
+                                    Matrix4::from_translation(Vector3::new(val[0], val[1], val[2]));
                                 joint_translations.push(matrix);
-                                node_translations.push(Vector3::new(
-                                    val[0], val[1], val[2],
-                                ));
-                                node_translation_in_tangents.push(
-                                    Vector3::new(
-                                        in_t[0], in_t[1], in_t[2],
-                                    ),
-                                );
-                                node_translation_out_tangents.push(
-                                    Vector3::new(
-                                        out_t[0], out_t[1], out_t[2],
-                                    ),
-                                );
+                                node_translations.push(Vector3::new(val[0], val[1], val[2]));
+                                node_translation_in_tangents
+                                    .push(Vector3::new(in_t[0], in_t[1], in_t[2]));
+                                node_translation_out_tangents
+                                    .push(Vector3::new(out_t[0], out_t[1], out_t[2]));
                             }
                         }
                     } else {
                         for translation in translations {
-                            let matrix =
-                                Matrix4::from_translation(Vector3::new(
-                                    translation[0],
-                                    translation[1],
-                                    translation[2],
-                                ));
+                            let matrix = Matrix4::from_translation(Vector3::new(
+                                translation[0],
+                                translation[1],
+                                translation[2],
+                            ));
                             joint_translations.push(matrix);
                             node_translations.push(Vector3::new(
                                 translation[0],
@@ -808,35 +791,20 @@ unsafe fn process_animation(
                                 let in_t = chunk[0];
                                 let val = chunk[1];
                                 let out_t = chunk[2];
-                                let quat = Quaternion::new(
-                                    val[3], val[0], val[1], val[2],
-                                );
+                                let quat = Quaternion::new(val[3], val[0], val[1], val[2]);
                                 joint_rotation_quats.push(quat);
-                                joint_rotations
-                                    .push(Matrix4::from(quat));
+                                joint_rotations.push(Matrix4::from(quat));
                                 node_rotation_quats.push(quat);
-                                node_rotation_in_tangents.push(
-                                    Quaternion::new(
-                                        in_t[3], in_t[0], in_t[1],
-                                        in_t[2],
-                                    ),
-                                );
-                                node_rotation_out_tangents.push(
-                                    Quaternion::new(
-                                        out_t[3], out_t[0], out_t[1],
-                                        out_t[2],
-                                    ),
-                                );
+                                node_rotation_in_tangents
+                                    .push(Quaternion::new(in_t[3], in_t[0], in_t[1], in_t[2]));
+                                node_rotation_out_tangents
+                                    .push(Quaternion::new(out_t[3], out_t[0], out_t[1], out_t[2]));
                             }
                         }
                     } else {
                         for rotation in rotations.into_f32() {
-                            let quat = Quaternion::new(
-                                rotation[3],
-                                rotation[0],
-                                rotation[1],
-                                rotation[2],
-                            );
+                            let quat =
+                                Quaternion::new(rotation[3], rotation[0], rotation[1], rotation[2]);
                             joint_rotation_quats.push(quat);
                             joint_rotations.push(Matrix4::from(quat));
                             node_rotation_quats.push(quat);
@@ -851,36 +819,21 @@ unsafe fn process_animation(
                                 let in_t = chunk[0];
                                 let val = chunk[1];
                                 let out_t = chunk[2];
-                                let matrix =
-                                    Matrix4::from_nonuniform_scale(
-                                        val[0], val[1], val[2],
-                                    );
+                                let matrix = Matrix4::from_nonuniform_scale(val[0], val[1], val[2]);
                                 joint_scales.push(matrix);
-                                node_scale_values.push(Vector3::new(
-                                    val[0], val[1], val[2],
-                                ));
-                                node_scale_in_tangents.push(
-                                    Vector3::new(
-                                        in_t[0], in_t[1], in_t[2],
-                                    ),
-                                );
-                                node_scale_out_tangents.push(
-                                    Vector3::new(
-                                        out_t[0], out_t[1], out_t[2],
-                                    ),
-                                );
+                                node_scale_values.push(Vector3::new(val[0], val[1], val[2]));
+                                node_scale_in_tangents
+                                    .push(Vector3::new(in_t[0], in_t[1], in_t[2]));
+                                node_scale_out_tangents
+                                    .push(Vector3::new(out_t[0], out_t[1], out_t[2]));
                             }
                         }
                     } else {
                         for scale in scales {
                             let matrix =
-                                Matrix4::from_nonuniform_scale(
-                                    scale[0], scale[1], scale[2],
-                                );
+                                Matrix4::from_nonuniform_scale(scale[0], scale[1], scale[2]);
                             joint_scales.push(matrix);
-                            node_scale_values.push(Vector3::new(
-                                scale[0], scale[1], scale[2],
-                            ));
+                            node_scale_values.push(Vector3::new(scale[0], scale[1], scale[2]));
                         }
                     }
                 }
@@ -889,9 +842,7 @@ unsafe fn process_animation(
                         let mut weight = Vec::new();
                         let mut weights = Vec::new();
 
-                        for morph_target_weight in
-                            morph_target_weights.into_f32()
-                        {
+                        for morph_target_weight in morph_target_weights.into_f32() {
                             weight.push(morph_target_weight);
                             if weight.len() >= morph_target_count {
                                 weights.push(weight.clone());
@@ -899,14 +850,12 @@ unsafe fn process_animation(
                             }
                         }
 
-                        for (i, weight_set) in weights.iter().enumerate()
-                        {
+                        for (i, weight_set) in weights.iter().enumerate() {
                             if i < key_frames.len() {
-                                ctx.morph_animations
-                                    .push(MorphAnimationRaw {
-                                        key_frame: key_frames[i],
-                                        weights: weight_set.clone(),
-                                    });
+                                ctx.morph_animations.push(MorphAnimationRaw {
+                                    key_frame: key_frames[i],
+                                    weights: weight_set.clone(),
+                                });
                             }
                         }
                     }
@@ -929,14 +878,12 @@ unsafe fn process_animation(
                 .get(&(node.index() as u16))
                 .unwrap();
 
-            ctx.joint_animations[joint_id as usize].push(
-                JointAnimation {
-                    key_frames: key_frames.clone(),
-                    translations: joint_translations.clone(),
-                    rotations: joint_rotations.clone(),
-                    scales: joint_scales.clone(),
-                },
-            );
+            ctx.joint_animations[joint_id as usize].push(JointAnimation {
+                key_frames: key_frames.clone(),
+                translations: joint_translations.clone(),
+                rotations: joint_rotations.clone(),
+                scales: joint_scales.clone(),
+            });
         } else {
             let existing = ctx
                 .node_animations
@@ -947,9 +894,7 @@ unsafe fn process_animation(
                 na
             } else {
                 let (default_trans, default_rot, default_scale) =
-                    decompose(&mat4_from_array(
-                        node.transform().matrix(),
-                    ));
+                    decompose(&mat4_from_array(node.transform().matrix()));
                 ctx.node_animations.push(NodeAnimation {
                     node_index: node.index(),
                     default_translation: default_trans,
@@ -965,11 +910,8 @@ unsafe fn process_animation(
                 for (i, &kf) in key_frames.iter().enumerate() {
                     if i < node_translations.len() {
                         node_animation.translation_keyframes.push(kf);
-                        node_animation
-                            .translations
-                            .push(node_translations[i]);
-                        if is_cubic && i < node_translation_in_tangents.len()
-                        {
+                        node_animation.translations.push(node_translations[i]);
+                        if is_cubic && i < node_translation_in_tangents.len() {
                             node_animation
                                 .translation_in_tangents
                                 .push(node_translation_in_tangents[i]);
@@ -985,11 +927,8 @@ unsafe fn process_animation(
                 for (i, &kf) in key_frames.iter().enumerate() {
                     if i < node_rotation_quats.len() {
                         node_animation.rotation_keyframes.push(kf);
-                        node_animation
-                            .rotations
-                            .push(node_rotation_quats[i]);
-                        if is_cubic && i < node_rotation_in_tangents.len()
-                        {
+                        node_animation.rotations.push(node_rotation_quats[i]);
+                        if is_cubic && i < node_rotation_in_tangents.len() {
                             node_animation
                                 .rotation_in_tangents
                                 .push(node_rotation_in_tangents[i]);
@@ -1003,9 +942,7 @@ unsafe fn process_animation(
                 for (i, &kf) in key_frames.iter().enumerate() {
                     if i < joint_rotation_quats.len() {
                         node_animation.rotation_keyframes.push(kf);
-                        node_animation
-                            .rotations
-                            .push(joint_rotation_quats[i]);
+                        node_animation.rotations.push(joint_rotation_quats[i]);
                     }
                 }
             }
@@ -1014,9 +951,7 @@ unsafe fn process_animation(
                 for (i, &kf) in key_frames.iter().enumerate() {
                     if i < node_scale_values.len() {
                         node_animation.scale_keyframes.push(kf);
-                        node_animation
-                            .scales
-                            .push(node_scale_values[i]);
+                        node_animation.scales.push(node_scale_values[i]);
                         if is_cubic && i < node_scale_in_tangents.len() {
                             node_animation
                                 .scale_in_tangents
@@ -1032,9 +967,9 @@ unsafe fn process_animation(
                     if i < joint_scales.len() {
                         node_animation.scale_keyframes.push(kf);
                         let mat = joint_scales[i];
-                        node_animation.scales.push(Vector3::new(
-                            mat[0][0], mat[1][1], mat[2][2],
-                        ));
+                        node_animation
+                            .scales
+                            .push(Vector3::new(mat[0][0], mat[1][1], mat[2][2]));
                     }
                 }
             }
@@ -1055,6 +990,52 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
         None
     };
 
+    collect_animation_clips(&ctx, skeleton_id, &mut animation_system, &mut clips);
+
+    let scale = if ctx.has_armature { 0.01 } else { 1.0 };
+    log!(
+        "glTF scale: {} (has_armature={}, has_skinned_meshes={})",
+        scale,
+        ctx.has_armature,
+        ctx.has_skinned_meshes
+    );
+
+    let (meshes, morph_system) = build_meshes_and_morph(
+        ctx.meshes,
+        &ctx.morph_animations,
+        &ctx.joints,
+        skeleton_id,
+        scale,
+    );
+
+    log_gltf_scale_info(&meshes);
+
+    if !morph_system.animations.is_empty() {
+        log!(
+            "Morph animation loaded: {} keyframes, {} meshes",
+            morph_system.animations.len(),
+            morph_system.targets.len()
+        );
+    }
+
+    GltfLoadResult {
+        meshes,
+        nodes: ctx.node_infos,
+        animation_system,
+        clips,
+        morph_animation: morph_system,
+        has_skinned_meshes: ctx.has_skinned_meshes,
+        has_armature: ctx.has_armature,
+        spring_bone_setup: ctx.spring_bone_setup,
+    }
+}
+
+fn collect_animation_clips(
+    ctx: &GltfParseContext,
+    skeleton_id: Option<u32>,
+    animation_system: &mut AnimationSystem,
+    clips: &mut Vec<AnimationClip>,
+) {
     if !ctx.joint_animations.is_empty() {
         let clip = convert_joint_animations_to_clip(&ctx.joint_animations);
         log!(
@@ -1071,7 +1052,7 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
         let clip = convert_node_animations_to_clip(
             &ctx.node_animations,
             &ctx.rrnodes,
-            &animation_system,
+            animation_system,
             skeleton_id.unwrap(),
         );
         log!(
@@ -1087,27 +1068,27 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
             clips.push(clip);
         }
     }
+}
 
-    let scale = if ctx.has_armature { 0.01 } else { 1.0 };
-    log!(
-        "glTF scale: {} (has_armature={}, has_skinned_meshes={})",
-        scale,
-        ctx.has_armature,
-        ctx.has_skinned_meshes
-    );
-
+fn build_meshes_and_morph(
+    source_meshes: Vec<MeshBuildData>,
+    morph_animations: &[MorphAnimationRaw],
+    joints: &[Joint],
+    skeleton_id: Option<u32>,
+    scale: f32,
+) -> (Vec<GltfMeshData>, MorphAnimationSystem) {
     let mut meshes = Vec::new();
     let mut morph_system = MorphAnimationSystem::new();
     morph_system.scale_factor = scale;
 
-    for anim in &ctx.morph_animations {
+    for anim in morph_animations {
         morph_system.animations.push(MorphAnimation {
             key_frame: anim.key_frame,
             weights: anim.weights.clone(),
         });
     }
 
-    for mesh in ctx.meshes {
+    for mesh in source_meshes {
         let mut vertex_data = mesh.vertex_data;
 
         if scale != 1.0 {
@@ -1118,19 +1099,15 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
             }
         }
 
-        let skin_data = if !ctx.joints.is_empty() && skeleton_id.is_some() && mesh.has_joints {
+        let skin_data = if !joints.is_empty() && skeleton_id.is_some() && mesh.has_joints {
             Some(SkinData {
                 skeleton_id: skeleton_id.unwrap(),
                 bone_indices: mesh.bone_indices,
                 bone_weights: mesh.bone_weights,
                 base_positions: mesh
-                    .base_normals
+                    .base_positions
                     .iter()
-                    .enumerate()
-                    .map(|(i, _)| {
-                        let pos = mesh.base_positions.get(i).unwrap_or(&[0.0, 0.0, 0.0]);
-                        Vector3::new(pos[0], pos[1], pos[2])
-                    })
+                    .map(|p| Vector3::new(p[0], p[1], p[2]))
                     .collect(),
                 base_normals: mesh.base_normals,
             })
@@ -1161,26 +1138,7 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
         });
     }
 
-    log_gltf_scale_info(&meshes);
-
-    if !morph_system.animations.is_empty() {
-        log!(
-            "Morph animation loaded: {} keyframes, {} meshes",
-            morph_system.animations.len(),
-            morph_system.targets.len()
-        );
-    }
-
-    GltfLoadResult {
-        meshes,
-        nodes: ctx.node_infos,
-        animation_system,
-        clips,
-        morph_animation: morph_system,
-        has_skinned_meshes: ctx.has_skinned_meshes,
-        has_armature: ctx.has_armature,
-        spring_bone_setup: ctx.spring_bone_setup,
-    }
+    (meshes, morph_system)
 }
 
 fn log_gltf_scale_info(meshes: &[GltfMeshData]) {
@@ -1277,15 +1235,11 @@ fn convert_joints_to_skeleton(
     skeleton
 }
 
-fn convert_gltf_interpolation(
-    gltf_interp: gltf::animation::Interpolation,
-) -> Interpolation {
+fn convert_gltf_interpolation(gltf_interp: gltf::animation::Interpolation) -> Interpolation {
     match gltf_interp {
         gltf::animation::Interpolation::Step => Interpolation::Step,
         gltf::animation::Interpolation::Linear => Interpolation::Linear,
-        gltf::animation::Interpolation::CubicSpline => {
-            Interpolation::CubicSpline
-        }
+        gltf::animation::Interpolation::CubicSpline => Interpolation::CubicSpline,
     }
 }
 
@@ -1331,20 +1285,16 @@ fn convert_joint_animations_to_clip(joint_animations: &[Vec<JointAnimation>]) ->
             let mut combined_scale = Matrix4::identity();
 
             for anim in anims {
-                let key_frame_id =
-                    identify_key_frame_index_step(&anim.key_frames, time);
+                let key_frame_id = identify_key_frame_index_step(&anim.key_frames, time);
 
                 if key_frame_id < anim.scales.len() {
-                    combined_scale =
-                        anim.scales[key_frame_id] * combined_scale;
+                    combined_scale = anim.scales[key_frame_id] * combined_scale;
                 }
                 if key_frame_id < anim.rotations.len() {
-                    combined_rotation =
-                        anim.rotations[key_frame_id] * combined_rotation;
+                    combined_rotation = anim.rotations[key_frame_id] * combined_rotation;
                 }
                 if key_frame_id < anim.translations.len() {
-                    combined_translate =
-                        anim.translations[key_frame_id] * combined_translate;
+                    combined_translate = anim.translations[key_frame_id] * combined_translate;
                 }
             }
 
@@ -1428,20 +1378,13 @@ fn convert_node_animations_to_clip(
         let mut channel = TransformChannel::default();
         let interp = &node_anim.interpolation;
 
-        for (i, &time) in
-            node_anim.translation_keyframes.iter().enumerate()
-        {
+        for (i, &time) in node_anim.translation_keyframes.iter().enumerate() {
             if i < node_anim.translations.len() {
-                let mut kf = Keyframe::with_interpolation(
-                    time,
-                    node_anim.translations[i],
-                    interp.clone(),
-                );
+                let mut kf =
+                    Keyframe::with_interpolation(time, node_anim.translations[i], interp.clone());
                 if i < node_anim.translation_in_tangents.len() {
-                    kf.in_tangent =
-                        Some(node_anim.translation_in_tangents[i]);
-                    kf.out_tangent =
-                        Some(node_anim.translation_out_tangents[i]);
+                    kf.in_tangent = Some(node_anim.translation_in_tangents[i]);
+                    kf.out_tangent = Some(node_anim.translation_out_tangents[i]);
                 }
                 channel.translation.push(kf);
                 if time > max_duration {
@@ -1450,20 +1393,13 @@ fn convert_node_animations_to_clip(
             }
         }
 
-        for (i, &time) in
-            node_anim.rotation_keyframes.iter().enumerate()
-        {
+        for (i, &time) in node_anim.rotation_keyframes.iter().enumerate() {
             if i < node_anim.rotations.len() {
-                let mut kf = Keyframe::with_interpolation(
-                    time,
-                    node_anim.rotations[i],
-                    interp.clone(),
-                );
+                let mut kf =
+                    Keyframe::with_interpolation(time, node_anim.rotations[i], interp.clone());
                 if i < node_anim.rotation_in_tangents.len() {
-                    kf.in_tangent =
-                        Some(node_anim.rotation_in_tangents[i]);
-                    kf.out_tangent =
-                        Some(node_anim.rotation_out_tangents[i]);
+                    kf.in_tangent = Some(node_anim.rotation_in_tangents[i]);
+                    kf.out_tangent = Some(node_anim.rotation_out_tangents[i]);
                 }
                 channel.rotation.push(kf);
                 if time > max_duration {
@@ -1472,20 +1408,13 @@ fn convert_node_animations_to_clip(
             }
         }
 
-        for (i, &time) in
-            node_anim.scale_keyframes.iter().enumerate()
-        {
+        for (i, &time) in node_anim.scale_keyframes.iter().enumerate() {
             if i < node_anim.scales.len() {
-                let mut kf = Keyframe::with_interpolation(
-                    time,
-                    node_anim.scales[i],
-                    interp.clone(),
-                );
+                let mut kf =
+                    Keyframe::with_interpolation(time, node_anim.scales[i], interp.clone());
                 if i < node_anim.scale_in_tangents.len() {
-                    kf.in_tangent =
-                        Some(node_anim.scale_in_tangents[i]);
-                    kf.out_tangent =
-                        Some(node_anim.scale_out_tangents[i]);
+                    kf.in_tangent = Some(node_anim.scale_in_tangents[i]);
+                    kf.out_tangent = Some(node_anim.scale_out_tangents[i]);
                 }
                 channel.scale.push(kf);
                 if time > max_duration {

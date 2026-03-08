@@ -59,18 +59,11 @@ pub fn build_text_to_motion_dialog(
                 &mut should_close,
             );
             ui.separator();
-            build_status_section(
-                ui, &status, &error_msg, gen_time, &model_used,
-            );
+            build_status_section(ui, &status, &error_msg, gen_time, &model_used);
 
             if has_clip {
                 ui.separator();
-                build_result_section(
-                    ui,
-                    ui_events,
-                    track_count,
-                    &mut should_close,
-                );
+                build_result_section(ui, ui_events, track_count, &mut should_close);
             }
         });
 
@@ -103,8 +96,7 @@ fn build_input_section(
         .display_format("%.1f")
         .build(ui, duration);
 
-    let can_generate =
-        !is_generating && !prompt_buf.trim().is_empty();
+    let can_generate = !is_generating && !prompt_buf.trim().is_empty();
 
     ui.spacing();
     if is_generating {
@@ -112,21 +104,17 @@ fn build_input_section(
     } else {
         let _disabled = ui.begin_disabled(!can_generate);
         if ui.button("Generate") {
-            ui_events.send(
-                crate::ecs::events::UIEvent::TextToMotionGenerate {
-                    prompt: prompt_buf.trim().to_string(),
-                    duration_seconds: *duration,
-                },
-            );
+            ui_events.send(crate::ecs::events::UIEvent::TextToMotionGenerate {
+                prompt: prompt_buf.trim().to_string(),
+                duration_seconds: *duration,
+            });
         }
     }
 
     ui.same_line();
     if ui.button("Cancel") {
         if is_generating {
-            ui_events.send(
-                crate::ecs::events::UIEvent::TextToMotionCancel,
-            );
+            ui_events.send(crate::ecs::events::UIEvent::TextToMotionCancel);
         } else {
             *should_close = true;
         }
@@ -158,10 +146,7 @@ fn build_status_section(
     }
 
     if let Some(err) = error_msg {
-        ui.text_colored(
-            [1.0, 0.3, 0.3, 1.0],
-            format!("Error: {}", err),
-        );
+        ui.text_colored([1.0, 0.3, 0.3, 1.0], format!("Error: {}", err));
     }
 }
 
@@ -175,14 +160,12 @@ fn build_result_section(
     ui.spacing();
 
     if ui.button("Apply to Timeline") {
-        ui_events
-            .send(crate::ecs::events::UIEvent::TextToMotionApply);
+        ui_events.send(crate::ecs::events::UIEvent::TextToMotionApply);
         *should_close = true;
     }
 
     ui.same_line();
     if ui.button("Dismiss") {
-        ui_events
-            .send(crate::ecs::events::UIEvent::TextToMotionCancel);
+        ui_events.send(crate::ecs::events::UIEvent::TextToMotionCancel);
     }
 }

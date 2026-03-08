@@ -379,3 +379,144 @@ This project has several features that are rare or absent in traditional DCC too
 | Rust Safety        | Memory-safe engine without GC overhead                                  |
 
 These differentiators should be preserved and enhanced as the project evolves.
+
+---
+
+## GPU Resource Management: Bindless Descriptor Design
+
+### Current Architecture
+
+Each rendered object (gizmo, mesh, grid, etc.) owns a dedicated Vulkan Uniform Buffer for its per-object
+model matrix (`ObjectUBO`). Slots are pre-allocated at startup:
+
+```
+total_buffers = swapchain_image_count × max_objects
+```
+
+With `max_objects = 64` and 3 swapchain images, this creates **192 Vulkan buffers + device memory
+allocations** at initialization, regardless of how many objects are actually used.
+
+#### Limitations
+
+| Problem | Impact |
+|---------|--------|
+| Fixed `max_objects` ceiling | Adding objects beyond the limit requires full reallocation (destroy all buffers, recreate pool) |
+| Per-object buffer allocation | Each slot = 1 `vkCreateBuffer` + 1 `vkAllocateMemory` call; hundreds of small allocations stress the driver |
+| Per-object `vkMapMemory` | Every frame maps/unmaps N buffers; high CPU overhead at scale |
+| Descriptor set explosion | N objects × M swapchain images descriptor sets; pool size grows quadratically with scene complexity |
+
+### Proposed Design: Single Storage Buffer + Bindless Descriptors
+
+Replace per-object Uniform Buffers with a single large `VK_BUFFER_USAGE_STORAGE_BUFFER_BIT` buffer.
+All object matrices are packed contiguously, and the shader indexes into the array using a push constant
+or instance index.
+
+#### Memory Layout
+
+```
+┌────────────────────────────────────────────────────┐
+│  StorageBuffer (per swapchain image)               │
+│  ┌──────────┬──────────┬──────────┬─────────────┐  │
+│  │ Object 0 │ Object 1 │ Object 2 │ ...         │  │
+│  │ (mat4)   │ (mat4)   │ (mat4)   │             │  │
+│  └──────────┴──────────┴──────────┴─────────────┘  │
+│  Total size = sizeof(ObjectUBO) × object_count     │
+└────────────────────────────────────────────────────┘
+```
+
+#### Shader Changes
+
+```glsl
+// Before (Uniform Buffer, one binding per object)
+layout(set = 1, binding = 0) uniform ObjectUBO {
+    mat4 model;
+} object;
+
+// After (Storage Buffer, single binding, indexed by push constant)
+layout(set = 1, binding = 0) readonly buffer ObjectBuffer {
+    mat4 models[];
+} objects;
+
+layout(push_constant) uniform PushConstants {
+    uint object_index;
+};
+
+void main() {
+    mat4 model = objects.models[object_index];
+    // ...
+}
+```
+
+#### Host-Side Update
+
+```rust
+// Before: N map/unmap calls per frame
+for each object {
+    vkMapMemory(object_buffer[i]);
+    memcpy(&ubo, mapped, 1);
+    vkUnmapMemory(object_buffer[i]);
+}
+
+// After: single persistent map, batch write
+let base_ptr = persistently_mapped_ptr;  // mapped once at creation
+for (i, ubo) in object_ubos.iter().enumerate() {
+    let offset = i * size_of::<ObjectUBO>();
+    memcpy(ubo, base_ptr.add(offset), 1);
+}
+// No unmap needed (persistent mapping)
+```
+
+#### Dynamic Growth
+
+When `object_count` exceeds current capacity:
+
+1. Allocate a new Storage Buffer with `capacity × 2`
+2. Copy existing data (optional, can skip if all objects are re-written each frame)
+3. Update the descriptor set to point to the new buffer
+4. Destroy the old buffer after the in-flight frames complete (use a deletion queue)
+
+This avoids the current "destroy everything and recreate" approach.
+
+#### Benefits
+
+| Aspect | Current (per-object UBO) | Proposed (bindless SSBO) |
+|--------|--------------------------|--------------------------|
+| Buffer count | N × swapchain_images | 1 × swapchain_images |
+| Memory allocations | N × swapchain_images | 1 × swapchain_images |
+| Map/Unmap per frame | N calls | 0 (persistent mapping) |
+| Descriptor sets | N × swapchain_images | 1 × swapchain_images |
+| Adding objects | Realloc if > max | Amortized O(1) grow |
+| GPU cache efficiency | Scattered buffers | Contiguous, cache-friendly |
+
+#### Implementation Steps
+
+1. **Create `ObjectStorageBuffer` struct** replacing `ObjectDescriptorSet`
+   - Single `vk::Buffer` per swapchain image with `STORAGE_BUFFER` usage
+   - Persistent mapping via `vkMapMemory` (kept mapped for the buffer's lifetime)
+   - Dynamic capacity with doubling strategy
+
+2. **Update descriptor layout**
+   - Change binding type from `UNIFORM_BUFFER` to `STORAGE_BUFFER`
+   - Single descriptor set per swapchain image (not per object)
+
+3. **Add push constant for object index**
+   - Pass `object_index` via `vkCmdPushConstants` during draw call
+   - Alternatively, use `gl_InstanceIndex` if instanced drawing is adopted
+
+4. **Update shaders**
+   - Replace `uniform ObjectUBO` with `readonly buffer ObjectBuffer`
+   - Index into the array using push constant
+
+5. **Batch update path**
+   - Write all object matrices to the mapped buffer in one pass
+   - Use `vkFlushMappedMemoryRanges` if not using `HOST_COHERENT`
+
+6. **Deletion queue for safe growth**
+   - Track in-flight buffers and defer destruction until GPU is done
+
+#### Compatibility Notes
+
+- `VK_BUFFER_USAGE_STORAGE_BUFFER_BIT` is core Vulkan 1.0 (no extensions needed)
+- Persistent mapping with `HOST_VISIBLE | HOST_COHERENT` is universally supported
+- `maxStorageBufferRange` is at least 128 MB on all desktop GPUs (enough for millions of objects)
+- Push constants are limited to 128 bytes minimum guaranteed, but `uint object_index` (4 bytes) fits easily

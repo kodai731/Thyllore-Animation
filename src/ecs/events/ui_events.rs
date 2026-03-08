@@ -2,7 +2,7 @@ use cgmath::{Quaternion, Vector3};
 
 use crate::animation::editable::{
     BezierHandle, BlendMode, ClipGroupId, ClipInstanceId, InterpolationType, KeyframeId,
-    PropertyType, SourceClipId,
+    PropertyType, SourceClipId, TangentType, TangentWeightMode,
 };
 use crate::animation::BoneId;
 use crate::animation::{ConstraintId, ConstraintType};
@@ -12,7 +12,7 @@ use crate::ecs::component::{
     ColliderShape, SpringChain, SpringChainId, SpringColliderDef, SpringColliderGroup,
     SpringColliderGroupId, SpringColliderId, SpringJointParam,
 };
-use crate::ecs::resource::{HierarchyDisplayMode, SelectionModifier};
+use crate::ecs::resource::{HierarchyDisplayMode, SelectedKeyframe, SelectionModifier};
 use crate::ecs::world::Entity;
 
 #[derive(Clone, Debug)]
@@ -79,6 +79,13 @@ pub enum UIEvent {
         value: f32,
     },
     TimelineDeleteSelectedKeyframes,
+    TimelineMoveSelectedKeyframes {
+        time_delta: f32,
+    },
+    TimelineSetKeyframeSelection {
+        keyframes: Vec<SelectedKeyframe>,
+        modifier: SelectionModifier,
+    },
     TimelineDeleteKeyframe {
         bone_id: BoneId,
         property_type: PropertyType,
@@ -106,13 +113,20 @@ pub enum UIEvent {
         in_tangent: BezierHandle,
         out_tangent: BezierHandle,
     },
-    TimelineAutoTangent {
+    TimelineSetTangentType {
         bone_id: BoneId,
         property_type: PropertyType,
         keyframe_id: KeyframeId,
+        tangent_type: TangentType,
     },
 
-    TimelineToggleViewMode,
+    TimelineSetTangentWeightMode {
+        bone_id: BoneId,
+        property_type: PropertyType,
+        keyframe_id: KeyframeId,
+        weight_mode: TangentWeightMode,
+    },
+
     TimelineSetSnapToFrame(bool),
     TimelineSetSnapToKey(bool),
     TimelineSetFrameRate(f32),
@@ -213,6 +227,12 @@ pub enum UIEvent {
 
     SaveScene,
 
+    PoseLibrarySaveCurrent {
+        name: String,
+    },
+    PoseLibraryApply(SourceClipId),
+    PoseLibraryDelete(SourceClipId),
+
     CreateTestConstraints,
     ClearTestConstraints,
 
@@ -289,6 +309,8 @@ pub enum UIEvent {
         group: SpringColliderGroup,
     },
     SpringBoneToggleGizmo(bool),
+
+    BoneSetKey,
 
     SetBoneDisplayStyle(BoneDisplayStyle),
     SetBoneInFront(bool),

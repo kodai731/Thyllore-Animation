@@ -175,6 +175,19 @@ unsafe fn apply_model_to_resources(
         AnimationType::None
     };
     let node_animation_scale = load_result.node_animation_scale;
+    let mesh_category = if load_result.has_skinned_meshes {
+        MeshCategory::Skinned
+    } else {
+        MeshCategory::Unskinned
+    };
+    let mesh_scale_debug = compute_bone_gizmo_mesh_scale(node_animation_scale, mesh_category);
+    crate::log!(
+        "[ModelLoad] type={:?}, has_skinned={}, node_anim_scale={}, mesh_scale={}",
+        animation_type,
+        load_result.has_skinned_meshes,
+        node_animation_scale,
+        mesh_scale_debug
+    );
     let loaded_clips = load_result.clips.clone();
 
     create_ecs_entities(
@@ -221,7 +234,7 @@ unsafe fn cleanup_resources(
     graphics.clear_meshes(device);
     graphics.mesh_material_ids.clear();
     graphics.materials.clear_materials(&device.device);
-    graphics.objects.reset_to(4);
+    graphics.objects.reset_to_reserved();
 
     if world.contains_resource::<ClipLibrary>() {
         let mut clip_library = world.resource_mut::<ClipLibrary>();
@@ -273,27 +286,6 @@ unsafe fn cleanup_resources(
 
     crate::log!("Model resources cleaned up");
     Ok(())
-}
-
-pub unsafe fn cleanup_model_resources(rrdevice: &RRDevice, data: &mut AppData) {
-    crate::log!("Cleaning up model resources...");
-
-    rrdevice.device.device_wait_idle().ok();
-
-    if let Some(ref mut accel) = data.raytracing.acceleration_structure {
-        accel.destroy(&rrdevice.device);
-        crate::log!("Destroyed acceleration structure");
-    }
-    data.raytracing.acceleration_structure = None;
-
-    data.graphics_resources.clear_meshes(rrdevice);
-    data.graphics_resources.mesh_material_ids.clear();
-    data.graphics_resources
-        .materials
-        .clear_materials(&rrdevice.device);
-    crate::log!("Cleared materials");
-
-    crate::log!("Model resources cleaned up");
 }
 
 fn setup_animation_system(
@@ -551,7 +543,11 @@ unsafe fn apply_initial_pose(
 
         let skel_id = graphics.meshes.first().and_then(|m| m.skeleton_id);
         let skeleton_clone = skel_id.and_then(|id| assets.get_skeleton_by_skeleton_id(id).cloned());
-        let clip_clone = assets.animation_clips.values().next().map(|a| a.clip.clone());
+        let clip_clone = assets
+            .animation_clips
+            .values()
+            .next()
+            .map(|a| a.clip.clone());
 
         let updated_meshes = if let (Some(skeleton), Some(clip)) = (&skeleton_clone, &clip_clone) {
             let mut pose = create_pose_from_rest(skeleton);
@@ -604,7 +600,7 @@ unsafe fn apply_skinning_to_mesh(
         let mut skinned_positions = vec![cgmath::Vector3::new(0.0, 0.0, 0.0); vertex_count];
         let mut skinned_normals = vec![cgmath::Vector3::new(0.0, 1.0, 0.0); vertex_count];
 
-        apply_skinning(
+        let _ = apply_skinning(
             &skin_data,
             global_transforms,
             skeleton,
@@ -787,70 +783,12 @@ fn create_ecs_entities(
         .unwrap_or("model")
         .to_string();
 
-    let has_animation = !loaded_clips.is_empty();
+    ensure_ecs_resources(world);
 
-    let bone_names: std::collections::HashMap<u32, String> = assets
-        .skeletons
-        .values()
-        .flat_map(|sa| sa.skeleton.bones.iter().map(|b| (b.id, b.name.clone())))
-        .collect();
+    let first_editable_clip_id =
+        register_clips_to_library(world, assets, loaded_clips, scene_will_provide_clips);
 
-    if !world.contains_resource::<ClipLibrary>() {
-        world.insert_resource(ClipLibrary::new());
-    }
-    if !world.contains_resource::<TimelineState>() {
-        world.insert_resource(TimelineState::new());
-    }
-    if !world.contains_resource::<crate::ecs::resource::KeyframeCopyBuffer>() {
-        world.insert_resource(crate::ecs::resource::KeyframeCopyBuffer::default());
-    }
-    if !world.contains_resource::<crate::ecs::resource::EditHistory>() {
-        world.insert_resource(crate::ecs::resource::EditHistory::new(100));
-    }
-    if !world.contains_resource::<crate::ecs::resource::ClipBrowserState>() {
-        world.insert_resource(crate::ecs::resource::ClipBrowserState::default());
-    }
-
-    let mut first_editable_clip_id = None;
-    if !scene_will_provide_clips {
-        let mut clip_library = world.resource_mut::<ClipLibrary>();
-        for clip in loaded_clips {
-            let editable_id =
-                crate::ecs::systems::clip_library_systems::clip_library_create_from_imported(
-                    &mut clip_library,
-                    assets,
-                    clip,
-                    &bone_names,
-                );
-            if first_editable_clip_id.is_none() {
-                first_editable_clip_id = Some(editable_id);
-            }
-            crate::log!(
-                "Registered clip '{}' (source_id={})",
-                clip.name,
-                editable_id,
-            );
-        }
-
-        if let Some(editable_id) = first_editable_clip_id {
-            let mut timeline_state = world.resource_mut::<TimelineState>();
-            timeline_state.current_clip_id = Some(editable_id);
-            crate::log!("Set timeline current_clip_id to {}", editable_id);
-        }
-    }
-
-    {
-        let node_assets = world.resource::<NodeAssets>();
-        for node in &node_assets.nodes {
-            let node_asset = NodeAsset {
-                id: node.index as u64,
-                name: node.name.clone(),
-                parent_id: node.parent_index.map(|i| i as u64),
-                local_transform: node.local_transform,
-            };
-            assets.add_node(node_asset);
-        }
-    }
+    register_node_assets(world, assets);
 
     let parent_entity = world
         .entity()
@@ -866,6 +804,123 @@ fn create_ecs_entities(
         parent_entity
     );
 
+    let has_animation = !loaded_clips.is_empty();
+    build_mesh_entities(
+        &name,
+        graphics,
+        world,
+        assets,
+        animation_type,
+        node_animation_scale,
+        has_animation,
+        scene_will_provide_clips,
+        first_editable_clip_id,
+        parent_entity,
+    );
+
+    crate::log!(
+        "Created {} ECS entities, {} mesh assets, {} skeletons, {} clips, {} nodes",
+        world.entity_count(),
+        assets.meshes.len(),
+        assets.skeletons.len(),
+        assets.animation_clips.len(),
+        assets.nodes.len()
+    );
+}
+
+fn ensure_ecs_resources(world: &mut World) {
+    if !world.contains_resource::<ClipLibrary>() {
+        world.insert_resource(ClipLibrary::new());
+    }
+    if !world.contains_resource::<TimelineState>() {
+        world.insert_resource(TimelineState::new());
+    }
+    if !world.contains_resource::<crate::ecs::resource::KeyframeCopyBuffer>() {
+        world.insert_resource(crate::ecs::resource::KeyframeCopyBuffer::default());
+    }
+    if !world.contains_resource::<crate::ecs::resource::EditHistory>() {
+        world.insert_resource(crate::ecs::resource::EditHistory::new(100));
+    }
+    if !world.contains_resource::<crate::ecs::resource::ClipBrowserState>() {
+        world.insert_resource(crate::ecs::resource::ClipBrowserState::default());
+    }
+    if !world.contains_resource::<crate::ecs::resource::BonePoseOverride>() {
+        world.insert_resource(crate::ecs::resource::BonePoseOverride::default());
+    }
+}
+
+fn register_clips_to_library(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    loaded_clips: &[crate::animation::AnimationClip],
+    scene_will_provide_clips: bool,
+) -> Option<SourceClipId> {
+    if scene_will_provide_clips {
+        return None;
+    }
+
+    let bone_names: std::collections::HashMap<u32, String> = assets
+        .skeletons
+        .values()
+        .flat_map(|sa| sa.skeleton.bones.iter().map(|b| (b.id, b.name.clone())))
+        .collect();
+
+    let mut first_editable_clip_id = None;
+    let mut clip_library = world.resource_mut::<ClipLibrary>();
+
+    for clip in loaded_clips {
+        let editable_id =
+            crate::ecs::systems::clip_library_systems::clip_library_create_from_imported(
+                &mut clip_library,
+                assets,
+                clip,
+                &bone_names,
+            );
+        if first_editable_clip_id.is_none() {
+            first_editable_clip_id = Some(editable_id);
+        }
+        crate::log!(
+            "Registered clip '{}' (source_id={})",
+            clip.name,
+            editable_id,
+        );
+    }
+    drop(clip_library);
+
+    if let Some(editable_id) = first_editable_clip_id {
+        let mut timeline_state = world.resource_mut::<TimelineState>();
+        timeline_state.current_clip_id = Some(editable_id);
+        crate::log!("Set timeline current_clip_id to {}", editable_id);
+    }
+
+    first_editable_clip_id
+}
+
+fn register_node_assets(world: &World, assets: &mut AssetStorage) {
+    let node_assets = world.resource::<NodeAssets>();
+    for node in &node_assets.nodes {
+        let node_asset = NodeAsset {
+            id: node.index as u64,
+            name: node.name.clone(),
+            parent_id: node.parent_index.map(|i| i as u64),
+            local_transform: node.local_transform,
+        };
+        assets.add_node(node_asset);
+    }
+}
+
+fn build_mesh_entities(
+    name: &str,
+    graphics: &GraphicsResources,
+    world: &mut World,
+    assets: &mut AssetStorage,
+    animation_type: AnimationType,
+    node_animation_scale: f32,
+    has_animation: bool,
+    scene_will_provide_clips: bool,
+    first_editable_clip_id: Option<SourceClipId>,
+    parent_entity: crate::ecs::Entity,
+) {
     let initial_schedule = if has_animation && !scene_will_provide_clips {
         build_initial_clip_schedule(first_editable_clip_id, world)
     } else {
@@ -918,15 +973,6 @@ fn create_ecs_entities(
             parent_entity
         );
     }
-
-    crate::log!(
-        "Created {} ECS entities, {} mesh assets, {} skeletons, {} clips, {} nodes",
-        world.entity_count(),
-        assets.meshes.len(),
-        assets.skeletons.len(),
-        assets.animation_clips.len(),
-        assets.nodes.len()
-    );
 }
 
 fn initialize_bone_gizmo_visibility(
@@ -949,8 +995,12 @@ fn initialize_bone_gizmo_visibility(
         let first_skeleton = assets.skeletons.values().next();
         if let Some(skel_asset) = first_skeleton {
             bone_gizmo.cached_skeleton_id = Some(skel_asset.skeleton_id);
-            bone_gizmo.mesh_scale =
-                compute_bone_gizmo_mesh_scale(node_animation_scale, has_skinned_meshes);
+            let category = if has_skinned_meshes {
+                MeshCategory::Skinned
+            } else {
+                MeshCategory::Unskinned
+            };
+            bone_gizmo.mesh_scale = compute_bone_gizmo_mesh_scale(node_animation_scale, category);
 
             let skeleton = &skel_asset.skeleton;
             let rest_globals = crate::ecs::compute_pose_global_transforms(
@@ -970,11 +1020,15 @@ fn initialize_bone_gizmo_visibility(
     }
 }
 
-fn compute_bone_gizmo_mesh_scale(node_animation_scale: f32, has_skinned_meshes: bool) -> f32 {
-    if has_skinned_meshes {
-        1.0
-    } else {
-        node_animation_scale
+enum MeshCategory {
+    Skinned,
+    Unskinned,
+}
+
+fn compute_bone_gizmo_mesh_scale(node_animation_scale: f32, category: MeshCategory) -> f32 {
+    match category {
+        MeshCategory::Skinned => 1.0,
+        MeshCategory::Unskinned => node_animation_scale,
     }
 }
 

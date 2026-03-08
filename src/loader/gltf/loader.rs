@@ -990,6 +990,52 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
         None
     };
 
+    collect_animation_clips(&ctx, skeleton_id, &mut animation_system, &mut clips);
+
+    let scale = if ctx.has_armature { 0.01 } else { 1.0 };
+    log!(
+        "glTF scale: {} (has_armature={}, has_skinned_meshes={})",
+        scale,
+        ctx.has_armature,
+        ctx.has_skinned_meshes
+    );
+
+    let (meshes, morph_system) = build_meshes_and_morph(
+        ctx.meshes,
+        &ctx.morph_animations,
+        &ctx.joints,
+        skeleton_id,
+        scale,
+    );
+
+    log_gltf_scale_info(&meshes);
+
+    if !morph_system.animations.is_empty() {
+        log!(
+            "Morph animation loaded: {} keyframes, {} meshes",
+            morph_system.animations.len(),
+            morph_system.targets.len()
+        );
+    }
+
+    GltfLoadResult {
+        meshes,
+        nodes: ctx.node_infos,
+        animation_system,
+        clips,
+        morph_animation: morph_system,
+        has_skinned_meshes: ctx.has_skinned_meshes,
+        has_armature: ctx.has_armature,
+        spring_bone_setup: ctx.spring_bone_setup,
+    }
+}
+
+fn collect_animation_clips(
+    ctx: &GltfParseContext,
+    skeleton_id: Option<u32>,
+    animation_system: &mut AnimationSystem,
+    clips: &mut Vec<AnimationClip>,
+) {
     if !ctx.joint_animations.is_empty() {
         let clip = convert_joint_animations_to_clip(&ctx.joint_animations);
         log!(
@@ -1006,7 +1052,7 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
         let clip = convert_node_animations_to_clip(
             &ctx.node_animations,
             &ctx.rrnodes,
-            &animation_system,
+            animation_system,
             skeleton_id.unwrap(),
         );
         log!(
@@ -1022,27 +1068,27 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
             clips.push(clip);
         }
     }
+}
 
-    let scale = if ctx.has_armature { 0.01 } else { 1.0 };
-    log!(
-        "glTF scale: {} (has_armature={}, has_skinned_meshes={})",
-        scale,
-        ctx.has_armature,
-        ctx.has_skinned_meshes
-    );
-
+fn build_meshes_and_morph(
+    source_meshes: Vec<MeshBuildData>,
+    morph_animations: &[MorphAnimationRaw],
+    joints: &[Joint],
+    skeleton_id: Option<u32>,
+    scale: f32,
+) -> (Vec<GltfMeshData>, MorphAnimationSystem) {
     let mut meshes = Vec::new();
     let mut morph_system = MorphAnimationSystem::new();
     morph_system.scale_factor = scale;
 
-    for anim in &ctx.morph_animations {
+    for anim in morph_animations {
         morph_system.animations.push(MorphAnimation {
             key_frame: anim.key_frame,
             weights: anim.weights.clone(),
         });
     }
 
-    for mesh in ctx.meshes {
+    for mesh in source_meshes {
         let mut vertex_data = mesh.vertex_data;
 
         if scale != 1.0 {
@@ -1053,7 +1099,7 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
             }
         }
 
-        let skin_data = if !ctx.joints.is_empty() && skeleton_id.is_some() && mesh.has_joints {
+        let skin_data = if !joints.is_empty() && skeleton_id.is_some() && mesh.has_joints {
             Some(SkinData {
                 skeleton_id: skeleton_id.unwrap(),
                 bone_indices: mesh.bone_indices,
@@ -1092,26 +1138,7 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
         });
     }
 
-    log_gltf_scale_info(&meshes);
-
-    if !morph_system.animations.is_empty() {
-        log!(
-            "Morph animation loaded: {} keyframes, {} meshes",
-            morph_system.animations.len(),
-            morph_system.targets.len()
-        );
-    }
-
-    GltfLoadResult {
-        meshes,
-        nodes: ctx.node_infos,
-        animation_system,
-        clips,
-        morph_animation: morph_system,
-        has_skinned_meshes: ctx.has_skinned_meshes,
-        has_armature: ctx.has_armature,
-        spring_bone_setup: ctx.spring_bone_setup,
-    }
+    (meshes, morph_system)
 }
 
 fn log_gltf_scale_info(meshes: &[GltfMeshData]) {

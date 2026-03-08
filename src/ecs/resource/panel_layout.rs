@@ -11,15 +11,20 @@ pub enum ActiveSplitter {
     Lower,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct DragState {
+    pub splitter: ActiveSplitter,
+    pub start_pos: f32,
+    pub start_value: f32,
+}
+
 pub struct PanelLayout {
     pub hierarchy_width: f32,
     pub inspector_width: f32,
     pub timeline_height: f32,
     pub debug_height: f32,
 
-    pub active_splitter: Option<ActiveSplitter>,
-    pub drag_start_pos: f32,
-    pub drag_start_value: f32,
+    pub drag: Option<DragState>,
 }
 
 impl Default for PanelLayout {
@@ -29,9 +34,7 @@ impl Default for PanelLayout {
             inspector_width: INSPECTOR_WIDTH_DEFAULT,
             timeline_height: TIMELINE_HEIGHT_DEFAULT,
             debug_height: DEBUG_HEIGHT_DEFAULT,
-            active_splitter: None,
-            drag_start_pos: 0.0,
-            drag_start_value: 0.0,
+            drag: None,
         }
     }
 }
@@ -80,5 +83,11 @@ mod tests {
         let layout = PanelLayout::default();
         let result = layout.viewport_width(1920.0);
         assert!((result - 1370.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_drag_state_none_by_default() {
+        let layout = PanelLayout::default();
+        assert!(layout.drag.is_none());
     }
 }

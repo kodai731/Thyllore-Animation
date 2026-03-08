@@ -217,7 +217,8 @@ fn run_roundtrip_and_verify(
 
     let reloaded = unsafe {
         rust_rendering::loader::gltf::load_gltf_file(&blender_output_path.to_string_lossy())
-    };
+    }
+    .expect("Failed to load exported glTF");
 
     assert!(
         !reloaded.clips.is_empty(),

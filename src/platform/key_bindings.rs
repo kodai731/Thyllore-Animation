@@ -51,6 +51,16 @@ impl KeyBinding {
 pub fn default_bindings() -> Vec<KeyBinding> {
     vec![
         KeyBinding {
+            key: "z",
+            modifiers: ModifierKeys::ctrl(),
+            make_event: || UIEvent::Undo,
+        },
+        KeyBinding {
+            key: "y",
+            modifiers: ModifierKeys::ctrl(),
+            make_event: || UIEvent::Redo,
+        },
+        KeyBinding {
             key: "s",
             modifiers: ModifierKeys::ctrl(),
             make_event: || UIEvent::SaveScene,

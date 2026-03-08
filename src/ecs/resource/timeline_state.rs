@@ -78,9 +78,7 @@ pub struct TimelineState {
     pub show_rotation: bool,
     pub show_scale: bool,
     pub target_entity: Option<Entity>,
-    pub scrubbing: bool,
     pub selected_clip_instance: Option<(Entity, ClipInstanceId)>,
-    pub dragging_clip: Option<ClipDragState>,
     pub snap_settings: SnapSettings,
     pub baked_bone_ids: Vec<BoneId>,
 }
@@ -101,9 +99,7 @@ impl TimelineState {
             show_rotation: true,
             show_scale: true,
             target_entity: None,
-            scrubbing: false,
             selected_clip_instance: None,
-            dragging_clip: None,
             snap_settings: SnapSettings::default(),
             baked_bone_ids: Vec::new(),
         }

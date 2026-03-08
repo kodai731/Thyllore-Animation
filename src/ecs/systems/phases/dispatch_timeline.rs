@@ -6,7 +6,8 @@ use crate::ecs::resource::{
     TimelineState,
 };
 use crate::ecs::systems::{
-    process_bone_set_key, process_keyframe_clipboard_events, timeline_process_events,
+    edit_history_push_clip_mergeable, process_bone_set_key, process_keyframe_clipboard_events,
+    timeline_process_events,
 };
 use crate::ecs::world::World;
 use crate::platform::ui::CurveEditorState;
@@ -27,7 +28,13 @@ pub fn dispatch_timeline_events(events: &[UIEvent], world: &mut World, assets: &
             if let Some(after) = clip_library.get(cid).cloned() {
                 if world.contains_resource::<EditHistory>() {
                     let mut edit_history = world.resource_mut::<EditHistory>();
-                    edit_history.push_clip_edit(cid, before, after, "timeline clip edit");
+                    edit_history_push_clip_mergeable(
+                        &mut edit_history,
+                        cid,
+                        before,
+                        after,
+                        "timeline clip edit",
+                    );
                 }
             }
         }
@@ -57,10 +64,9 @@ pub fn dispatch_timeline_events(events: &[UIEvent], world: &mut World, assets: &
                 let schedule_entities = world.component_entities::<ClipSchedule>();
                 for entity in &schedule_entities {
                     if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
-                        if let Some(first) = schedule.instances.first_mut() {
-                            first.source_id = *source_id;
-                            first.clip_out = duration;
-                        }
+                        crate::ecs::systems::clip_schedule_systems::clip_schedule_switch_source(
+                            schedule, *source_id, duration,
+                        );
                     }
                 }
             }
@@ -125,9 +131,23 @@ fn dispatch_bone_set_key_events(events: &[UIEvent], world: &mut World, assets: &
 }
 
 pub fn dispatch_keyframe_clipboard_events(events: &[UIEvent], world: &mut World) {
+    let has_paste = events.iter().any(|e| {
+        matches!(
+            e,
+            UIEvent::TimelinePasteKeyframes { .. } | UIEvent::TimelineMirrorPaste { .. }
+        )
+    });
+
     let timeline_state = world.resource::<TimelineState>();
     let mut clip_library = world.resource_mut::<ClipLibrary>();
     let mut copy_buffer = world.resource_mut::<KeyframeCopyBuffer>();
+
+    let clip_id = timeline_state.current_clip_id;
+    let before_clip = if has_paste {
+        clip_id.and_then(|id| clip_library.get(id).cloned())
+    } else {
+        None
+    };
 
     process_keyframe_clipboard_events(
         events,
@@ -135,6 +155,21 @@ pub fn dispatch_keyframe_clipboard_events(events: &[UIEvent], world: &mut World)
         &mut *clip_library,
         &mut *copy_buffer,
     );
+
+    if has_paste {
+        if let (Some(cid), Some(before)) = (clip_id, before_clip) {
+            if let Some(after) = clip_library.get(cid).cloned() {
+                drop(clip_library);
+                drop(timeline_state);
+                drop(copy_buffer);
+                if world.contains_resource::<EditHistory>() {
+                    let mut edit_history = world.resource_mut::<EditHistory>();
+                    edit_history.push_clip_edit(cid, before, after, "paste keyframes");
+                }
+                return;
+            }
+        }
+    }
 }
 
 pub fn dispatch_buffer_events(events: &[UIEvent], world: &mut World) {
@@ -168,14 +203,30 @@ pub fn dispatch_buffer_events(events: &[UIEvent], world: &mut World) {
                 let mut clip_library = world.resource_mut::<ClipLibrary>();
                 let mut curve_buffer = world.resource_mut::<CurveEditorBuffer>();
 
+                let clip_id = timeline_state.current_clip_id;
+                let before_clip = clip_id.and_then(|id| clip_library.get(id).cloned());
+
                 if let Some(bone_id) = curve_editor.selected_bone_id {
-                    if let Some(clip_id) = timeline_state.current_clip_id {
-                        if let Some(clip) = clip_library.get_mut(clip_id) {
+                    if let Some(cid) = clip_id {
+                        if let Some(clip) = clip_library.get_mut(cid) {
                             crate::ecs::systems::curve_editor_swap_buffer(
                                 &mut curve_buffer,
                                 clip,
                                 bone_id,
                             );
+                        }
+                    }
+                }
+
+                if let (Some(cid), Some(before)) = (clip_id, before_clip) {
+                    if let Some(after) = clip_library.get(cid).cloned() {
+                        drop(clip_library);
+                        drop(curve_buffer);
+                        drop(timeline_state);
+                        drop(curve_editor);
+                        if world.contains_resource::<EditHistory>() {
+                            let mut edit_history = world.resource_mut::<EditHistory>();
+                            edit_history.push_clip_edit(cid, before, after, "swap buffer");
                         }
                     }
                 }

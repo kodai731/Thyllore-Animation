@@ -1,4 +1,4 @@
-use crate::animation::editable::{EditableAnimationClip, SourceClipId};
+use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::world::Entity;
 
@@ -14,12 +14,23 @@ pub enum EditCommand {
         before: ClipSchedule,
         description: &'static str,
     },
+    ClipAdded {
+        clip_id: SourceClipId,
+        description: &'static str,
+    },
+    ClipRemoved {
+        clip_id: SourceClipId,
+        removed: SourceClip,
+        description: &'static str,
+    },
 }
 
 #[derive(Clone, Debug)]
 pub enum EditCommandAfter {
     Clip(EditableAnimationClip),
     Schedule(ClipSchedule),
+    ClipCreated(SourceClip),
+    Empty,
 }
 
 #[derive(Clone, Debug)]
@@ -62,6 +73,10 @@ impl EditHistory {
         self.push_entry(entry);
     }
 
+    pub fn last_undo_mut(&mut self) -> Option<&mut EditEntry> {
+        self.undo_stack.last_mut()
+    }
+
     pub fn push_schedule_edit(
         &mut self,
         entity: Entity,
@@ -76,6 +91,39 @@ impl EditHistory {
                 description,
             },
             after: EditCommandAfter::Schedule(after),
+        };
+        self.push_entry(entry);
+    }
+
+    pub fn push_clip_added(
+        &mut self,
+        clip_id: SourceClipId,
+        source: SourceClip,
+        description: &'static str,
+    ) {
+        let entry = EditEntry {
+            command: EditCommand::ClipAdded {
+                clip_id,
+                description,
+            },
+            after: EditCommandAfter::ClipCreated(source),
+        };
+        self.push_entry(entry);
+    }
+
+    pub fn push_clip_removed(
+        &mut self,
+        clip_id: SourceClipId,
+        removed: SourceClip,
+        description: &'static str,
+    ) {
+        let entry = EditEntry {
+            command: EditCommand::ClipRemoved {
+                clip_id,
+                removed,
+                description,
+            },
+            after: EditCommandAfter::Empty,
         };
         self.push_entry(entry);
     }
@@ -114,17 +162,20 @@ impl EditHistory {
     }
 
     pub fn undo_description(&self) -> Option<&str> {
-        self.undo_stack.last().map(|e| match &e.command {
-            EditCommand::ClipModified { description, .. } => *description,
-            EditCommand::ScheduleModified { description, .. } => *description,
-        })
+        self.undo_stack.last().map(|e| Self::entry_description(e))
     }
 
     pub fn redo_description(&self) -> Option<&str> {
-        self.redo_stack.last().map(|e| match &e.command {
-            EditCommand::ClipModified { description, .. } => *description,
-            EditCommand::ScheduleModified { description, .. } => *description,
-        })
+        self.redo_stack.last().map(|e| Self::entry_description(e))
+    }
+
+    fn entry_description(entry: &EditEntry) -> &str {
+        match &entry.command {
+            EditCommand::ClipModified { description, .. } => description,
+            EditCommand::ScheduleModified { description, .. } => description,
+            EditCommand::ClipAdded { description, .. } => description,
+            EditCommand::ClipRemoved { description, .. } => description,
+        }
     }
 }
 
@@ -212,5 +263,21 @@ mod tests {
             count += 1;
         }
         assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn test_last_undo_mut_returns_entry() {
+        let mut history = EditHistory::new(100);
+        let before = make_dummy_clip("before");
+        let after = make_dummy_clip("after");
+        history.push_clip_edit(1, before, after, "edit");
+
+        assert!(history.last_undo_mut().is_some());
+    }
+
+    #[test]
+    fn test_last_undo_mut_empty() {
+        let mut history = EditHistory::new(100);
+        assert!(history.last_undo_mut().is_none());
     }
 }

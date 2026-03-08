@@ -14,7 +14,7 @@ use super::ui::{
 use crate::app::{App, GUIData};
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{
-    ClipBrowserState, ClipLibrary, CurveEditorBuffer, HierarchyState, TimelineState,
+    ClipBrowserState, ClipLibrary, CurveEditorBuffer, HierarchyState, PoseLibrary, TimelineState,
 };
 use crate::ecs::systems::clip_track_systems::query_clip_tracks;
 use crate::ecs::systems::phases::run_event_dispatch_phase;
@@ -291,6 +291,7 @@ fn build_ui_windows(
         let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
         let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
         let curve_buffer = app.data.ecs_world.resource::<CurveEditorBuffer>();
+        let mut pose_library = app.data.ecs_world.resource_mut::<PoseLibrary>();
 
         #[cfg(feature = "ml")]
         let suggestion_overlays: Vec<super::ui::SuggestionOverlay> = {
@@ -327,6 +328,7 @@ fn build_ui_windows(
             &mut *curve_editor,
             &*curve_buffer,
             &suggestion_overlays,
+            &mut *pose_library,
         );
     }
 

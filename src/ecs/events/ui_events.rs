@@ -226,6 +226,12 @@ pub enum UIEvent {
 
     SaveScene,
 
+    PoseLibrarySaveCurrent {
+        name: String,
+    },
+    PoseLibraryApply(SourceClipId),
+    PoseLibraryDelete(SourceClipId),
+
     CreateTestConstraints,
     ClearTestConstraints,
 

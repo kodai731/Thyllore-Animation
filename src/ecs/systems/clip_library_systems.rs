@@ -133,6 +133,25 @@ pub fn clip_library_load_from_file(
     Ok(id)
 }
 
+pub fn clip_library_count_references(
+    world: &crate::ecs::world::World,
+) -> Vec<(SourceClipId, usize)> {
+    use crate::ecs::component::ClipSchedule;
+
+    let mut counts: HashMap<SourceClipId, usize> = HashMap::new();
+
+    let entities = world.component_entities::<ClipSchedule>();
+    for entity in entities {
+        if let Some(schedule) = world.get_component::<ClipSchedule>(entity) {
+            for inst in &schedule.instances {
+                *counts.entry(inst.source_id).or_insert(0) += 1;
+            }
+        }
+    }
+
+    counts.into_iter().collect()
+}
+
 fn deserialize_clip(content: &str) -> Result<EditableAnimationClip> {
     if let Ok(clip_file) = ron::from_str::<AnimationClipFile>(content) {
         return Ok(clip_file.clip);

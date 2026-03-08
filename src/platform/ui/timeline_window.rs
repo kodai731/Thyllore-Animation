@@ -13,6 +13,12 @@ use crate::ecs::resource::{ClipDragState, ClipDragType, ClipLibrary, TimelineSta
 use super::layout_snapshot::LayoutSnapshot;
 use super::CurveEditorState;
 
+#[derive(Clone, Debug, Default)]
+pub struct TimelineInteractionState {
+    pub scrubbing: bool,
+    pub dragging_clip: Option<ClipDragState>,
+}
+
 pub fn ruler_padding(duration: f32) -> f32 {
     (duration * 0.3).max(2.0)
 }
@@ -37,6 +43,7 @@ pub fn build_timeline_window(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     state: &mut TimelineState,
+    interaction: &mut TimelineInteractionState,
     clip_library: &ClipLibrary,
     curve_editor_state: &mut CurveEditorState,
     clip_track_snapshot: &ClipTrackSnapshot,
@@ -59,6 +66,7 @@ pub fn build_timeline_window(
                 ui,
                 ui_events,
                 state,
+                interaction,
                 clip_library,
                 curve_editor_state,
                 clip_track_snapshot,
@@ -168,6 +176,7 @@ fn build_timeline_content(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     state: &mut TimelineState,
+    interaction: &mut TimelineInteractionState,
     clip_library: &ClipLibrary,
     curve_editor_state: &mut CurveEditorState,
     clip_track_snapshot: &ClipTrackSnapshot,
@@ -181,7 +190,14 @@ fn build_timeline_content(
     let timeline_width =
         (display_duration * pixels_per_second).max(content_region[0] - TRACK_LABEL_WIDTH);
 
-    build_time_ruler_with_scrub(ui, ui_events, state, timeline_width, display_duration);
+    build_time_ruler_with_scrub(
+        ui,
+        ui_events,
+        state,
+        interaction,
+        timeline_width,
+        display_duration,
+    );
     ui.separator();
 
     let remaining = ui.content_region_avail();
@@ -193,6 +209,7 @@ fn build_timeline_content(
                     ui,
                     ui_events,
                     state,
+                    interaction,
                     clip_library,
                     curve_editor_state,
                     clip_track_snapshot,
@@ -206,6 +223,7 @@ fn build_time_ruler_with_scrub(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     state: &mut TimelineState,
+    interaction: &mut TimelineInteractionState,
     timeline_width: f32,
     display_duration: f32,
 ) {
@@ -275,7 +293,7 @@ fn build_time_ruler_with_scrub(
     handle_scrub_interaction(
         ui,
         ui_events,
-        state,
+        interaction,
         ruler_rect_min,
         ruler_rect_max,
         display_duration,
@@ -310,7 +328,7 @@ fn draw_playhead_handle(draw_list: &imgui::DrawListMut, x: f32, y: f32, ruler_he
 fn handle_scrub_interaction(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
-    state: &mut TimelineState,
+    interaction: &mut TimelineInteractionState,
     rect_min: [f32; 2],
     rect_max: [f32; 2],
     duration: f32,
@@ -321,7 +339,7 @@ fn handle_scrub_interaction(
     let mouse_down = ui.io().mouse_down[0];
 
     if !mouse_down {
-        state.scrubbing = false;
+        interaction.scrubbing = false;
         return;
     }
 
@@ -330,11 +348,11 @@ fn handle_scrub_interaction(
         && mouse_pos[1] >= rect_min[1]
         && mouse_pos[1] <= rect_max[1];
 
-    if !state.scrubbing && !is_mouse_in_ruler {
+    if !interaction.scrubbing && !is_mouse_in_ruler {
         return;
     }
 
-    state.scrubbing = true;
+    interaction.scrubbing = true;
     let relative_x = mouse_pos[0] - ruler_start_x;
     let new_time = (relative_x / pixels_per_second).clamp(0.0, duration);
     ui_events.send(UIEvent::TimelineSetTime(new_time));
@@ -689,6 +707,7 @@ fn build_clip_tracks_section(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     state: &mut TimelineState,
+    interaction: &mut TimelineInteractionState,
     clip_library: &ClipLibrary,
     curve_editor_state: &mut CurveEditorState,
     snapshot: &ClipTrackSnapshot,
@@ -700,7 +719,7 @@ fn build_clip_tracks_section(
     let mouse_clicked = ui.is_mouse_clicked(imgui::MouseButton::Left);
     let mouse_double_clicked = ui.is_mouse_double_clicked(imgui::MouseButton::Left);
 
-    handle_clip_drag_release(ui, ui_events, state, pixels_per_second);
+    handle_clip_drag_release(ui, ui_events, interaction, pixels_per_second);
 
     let mut clicked_any_block = false;
 
@@ -733,7 +752,7 @@ fn build_clip_tracks_section(
             let block_max = [block_x + block_w, track_origin[1] + CLIP_TRACK_HEIGHT - 2.0];
 
             let base_color = CLIP_BLOCK_COLORS[entry_idx % CLIP_BLOCK_COLORS.len()];
-            let color = compute_block_color(base_color, inst, state, entry.entity);
+            let color = compute_block_color(base_color, inst, interaction, entry.entity);
             let border_color = compute_border_color(inst, state, entry.entity);
 
             draw_clip_block(&draw_list, block_min, block_max, color, border_color, inst);
@@ -758,7 +777,7 @@ fn build_clip_tracks_section(
                     instance_id: inst.instance_id,
                 });
                 begin_clip_drag(
-                    state,
+                    interaction,
                     entry.entity,
                     inst,
                     mouse_pos,
@@ -802,7 +821,7 @@ fn build_clip_tracks_section(
     }
 
     handle_delete_key(ui, ui_events, state);
-    update_clip_drag(state, mouse_pos, mouse_down, pixels_per_second);
+    update_clip_drag(interaction, mouse_pos, mouse_down, pixels_per_second);
 }
 
 fn build_group_headers(ui: &imgui::Ui, ui_events: &mut UIEventQueue, entry: &ClipTrackEntry) {
@@ -969,11 +988,11 @@ fn build_clip_instance_properties(
 fn handle_clip_drag_release(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
-    state: &mut TimelineState,
+    interaction: &mut TimelineInteractionState,
     pixels_per_second: f32,
 ) {
     if !ui.is_mouse_down(imgui::MouseButton::Left) {
-        if let Some(drag) = state.dragging_clip.take() {
+        if let Some(drag) = interaction.dragging_clip.take() {
             let mouse_pos = ui.io().mouse_pos;
             let delta_x = mouse_pos[0] - drag.drag_start_x;
             let delta_time = delta_x / pixels_per_second;
@@ -1009,7 +1028,7 @@ fn handle_clip_drag_release(
 }
 
 fn begin_clip_drag(
-    state: &mut TimelineState,
+    interaction: &mut TimelineInteractionState,
     entity: crate::ecs::world::Entity,
     inst: &ClipInstanceSnapshot,
     mouse_pos: [f32; 2],
@@ -1028,7 +1047,7 @@ fn begin_clip_drag(
         (ClipDragType::Move, inst.start_time)
     };
 
-    state.dragging_clip = Some(ClipDragState {
+    interaction.dragging_clip = Some(ClipDragState {
         entity,
         instance_id: inst.instance_id,
         drag_type,
@@ -1038,7 +1057,7 @@ fn begin_clip_drag(
 }
 
 fn update_clip_drag(
-    _state: &mut TimelineState,
+    _interaction: &mut TimelineInteractionState,
     _mouse_pos: [f32; 2],
     _mouse_down: bool,
     _pixels_per_second: f32,
@@ -1119,12 +1138,12 @@ fn draw_clip_block(
 fn compute_block_color(
     base_color: [f32; 4],
     inst: &ClipInstanceSnapshot,
-    state: &TimelineState,
+    interaction: &TimelineInteractionState,
     entity: crate::ecs::world::Entity,
 ) -> [f32; 4] {
     let alpha = if inst.muted { 0.4 } else { base_color[3] };
 
-    let is_dragging = state
+    let is_dragging = interaction
         .dragging_clip
         .as_ref()
         .map(|d| d.entity == entity && d.instance_id == inst.instance_id)
@@ -1182,14 +1201,6 @@ fn handle_timeline_shortcuts(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state
     let io = ui.io();
     if !ui.is_window_focused() {
         return;
-    }
-
-    if io.key_ctrl && ui.is_key_pressed(imgui::Key::Z) {
-        ui_events.send(UIEvent::Undo);
-    }
-
-    if io.key_ctrl && ui.is_key_pressed(imgui::Key::Y) {
-        ui_events.send(UIEvent::Redo);
     }
 
     if io.key_ctrl && ui.is_key_pressed(imgui::Key::C) {

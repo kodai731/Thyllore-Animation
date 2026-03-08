@@ -2,7 +2,7 @@ use crate::animation::editable::SourceClipId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UIEvent;
-use crate::ecs::resource::ClipLibrary;
+use crate::ecs::resource::{ClipLibrary, EditHistory};
 use crate::ecs::world::World;
 
 pub fn dispatch_clip_browser_ecs_events(
@@ -48,6 +48,13 @@ pub fn dispatch_clip_browser_ecs_events(
                         assets,
                         editable,
                     );
+
+                let source = clip_library.source_clips.get(&id).cloned();
+                drop(clip_library);
+
+                if let Some(source) = source {
+                    record_clip_added(world, id, source);
+                }
                 crate::log!("Created empty clip (id={})", id);
             }
 
@@ -62,6 +69,13 @@ pub fn dispatch_clip_browser_ecs_events(
                             assets,
                             duplicate,
                         );
+
+                    let source = clip_library.source_clips.get(&new_id).cloned();
+                    drop(clip_library);
+
+                    if let Some(source) = source {
+                        record_clip_added(world, new_id, source);
+                    }
                     crate::log!("Duplicated clip {} -> {}", source_id, new_id);
                 }
             }
@@ -69,8 +83,18 @@ pub fn dispatch_clip_browser_ecs_events(
             UIEvent::ClipBrowserDelete(source_id) => {
                 let ref_count = count_source_references(*source_id, world);
                 if ref_count == 0 {
+                    let removed_source = {
+                        let clip_library = world.resource::<ClipLibrary>();
+                        clip_library.source_clips.get(source_id).cloned()
+                    };
+
                     let mut clip_library = world.resource_mut::<ClipLibrary>();
                     clip_library.remove(*source_id);
+                    drop(clip_library);
+
+                    if let Some(removed) = removed_source {
+                        record_clip_removed(world, *source_id, removed);
+                    }
                     crate::log!("Deleted clip (id={})", source_id);
                 } else {
                     crate::log!(
@@ -83,6 +107,28 @@ pub fn dispatch_clip_browser_ecs_events(
 
             _ => {}
         }
+    }
+}
+
+fn record_clip_added(
+    world: &mut World,
+    clip_id: SourceClipId,
+    source: crate::animation::editable::SourceClip,
+) {
+    if world.contains_resource::<EditHistory>() {
+        let mut edit_history = world.resource_mut::<EditHistory>();
+        edit_history.push_clip_added(clip_id, source, "add clip");
+    }
+}
+
+fn record_clip_removed(
+    world: &mut World,
+    clip_id: SourceClipId,
+    removed: crate::animation::editable::SourceClip,
+) {
+    if world.contains_resource::<EditHistory>() {
+        let mut edit_history = world.resource_mut::<EditHistory>();
+        edit_history.push_clip_removed(clip_id, removed, "delete clip");
     }
 }
 

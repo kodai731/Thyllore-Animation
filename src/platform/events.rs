@@ -9,7 +9,7 @@ use super::ui::{
     build_click_debug_overlay, build_clip_browser_window, build_curve_editor_window,
     build_debug_window, build_hierarchy_window, build_inspector_window, build_status_bar_overlay,
     build_timeline_window, build_viewport_window, handle_splitters, CurveEditorState,
-    DebugWindowState, LayoutSnapshot, StatusBarState,
+    DebugWindowState, LayoutSnapshot, StatusBarState, TimelineInteractionState,
 };
 use crate::app::{App, GUIData};
 use crate::ecs::events::UIEvent;
@@ -285,6 +285,10 @@ fn build_ui_windows(
 
     {
         let mut timeline_state = app.data.ecs_world.resource_mut::<TimelineState>();
+        let mut timeline_interaction = app
+            .data
+            .ecs_world
+            .resource_mut::<TimelineInteractionState>();
         let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
         let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
         let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
@@ -292,6 +296,7 @@ fn build_ui_windows(
             ui,
             &mut *ui_events,
             &mut *timeline_state,
+            &mut *timeline_interaction,
             &*clip_library,
             &mut *curve_editor,
             &clip_track_snapshot,

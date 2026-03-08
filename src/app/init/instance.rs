@@ -977,6 +977,14 @@ impl App {
 
         if !data
             .ecs_world
+            .contains_resource::<crate::platform::TimelineInteractionState>()
+        {
+            data.ecs_world
+                .insert_resource(crate::platform::TimelineInteractionState::default());
+        }
+
+        if !data
+            .ecs_world
             .contains_resource::<crate::ecs::resource::KeyframeCopyBuffer>()
         {
             data.ecs_world

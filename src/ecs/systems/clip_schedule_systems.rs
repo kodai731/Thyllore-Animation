@@ -90,6 +90,17 @@ pub fn clip_schedule_find_group(
         .find(|g| g.contains_instance(instance_id))
 }
 
+pub fn clip_schedule_switch_source(
+    schedule: &mut ClipSchedule,
+    source_id: SourceClipId,
+    duration: f32,
+) {
+    if let Some(first) = schedule.instances.first_mut() {
+        first.source_id = source_id;
+        first.clip_out = duration;
+    }
+}
+
 pub fn clip_schedule_effective_weight(schedule: &ClipSchedule, instance_id: ClipInstanceId) -> f32 {
     let inst_weight = schedule
         .instances

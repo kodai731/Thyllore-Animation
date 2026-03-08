@@ -1,5 +1,6 @@
 use crate::animation::editable::{
-    curve_add_keyframe, curve_sample, EditableAnimationClip, PropertyType, SourceClipId,
+    clip_recalculate_duration, curve_add_keyframe, curve_sample, EditableAnimationClip,
+    PropertyType, SourceClipId,
 };
 use crate::ecs::resource::ClipLibrary;
 
@@ -62,7 +63,7 @@ pub fn apply_pose_to_clip(
         }
     }
 
-    target_clip.recalculate_duration();
+    clip_recalculate_duration(target_clip);
 }
 
 #[cfg(test)]

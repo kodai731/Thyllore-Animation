@@ -1713,11 +1713,7 @@ mod tests {
             .enumerate()
             .map(|(i, b)| (i as u32, b.name.clone()))
             .collect();
-        let editable = crate::animation::editable::EditableAnimationClip::from_animation_clip(
-            1,
-            anim_clip,
-            &bone_names,
-        );
+        let editable = crate::animation::editable::clip_from_animation(1, anim_clip, &bone_names);
         assert!(editable.duration > 0.0);
         assert!(!editable.tracks.is_empty());
 
@@ -1872,11 +1868,7 @@ mod tests {
             .enumerate()
             .map(|(i, b)| (i as u32, b.name.clone()))
             .collect();
-        let editable = crate::animation::editable::EditableAnimationClip::from_animation_clip(
-            1,
-            anim_clip,
-            &bone_names,
-        );
+        let editable = crate::animation::editable::clip_from_animation(1, anim_clip, &bone_names);
 
         let export_dir = std::path::Path::new("assets/exports");
         std::fs::create_dir_all(export_dir).ok();
@@ -1973,11 +1965,7 @@ mod tests {
             .enumerate()
             .map(|(i, b)| (i as u32, b.name.clone()))
             .collect();
-        let editable = crate::animation::editable::EditableAnimationClip::from_animation_clip(
-            1,
-            anim_clip,
-            &bone_names,
-        );
+        let editable = crate::animation::editable::clip_from_animation(1, anim_clip, &bone_names);
 
         let export_dir = std::path::Path::new("assets/exports");
         std::fs::create_dir_all(export_dir).ok();
@@ -2073,11 +2061,7 @@ mod tests {
             .enumerate()
             .map(|(i, b)| (i as u32, b.name.clone()))
             .collect();
-        let editable = crate::animation::editable::EditableAnimationClip::from_animation_clip(
-            1,
-            anim_clip,
-            &bone_names,
-        );
+        let editable = crate::animation::editable::clip_from_animation(1, anim_clip, &bone_names);
 
         let export_dir = std::path::Path::new("assets/exports");
         std::fs::create_dir_all(export_dir).ok();
@@ -2811,11 +2795,7 @@ print("IMPORT_DONE")
         };
 
         let bone_names = build_bone_name_map(&skeleton);
-        let mut editable = crate::animation::editable::EditableAnimationClip::from_animation_clip(
-            1,
-            &clip,
-            &bone_names,
-        );
+        let mut editable = crate::animation::editable::clip_from_animation(1, &clip, &bone_names);
 
         let target_bone_name = skeleton.bones[2].name.clone();
 
@@ -2935,16 +2915,8 @@ print("IMPORT_DONE")
         };
 
         let bone_names = build_bone_name_map(&skeleton);
-        let mut editable_a = crate::animation::editable::EditableAnimationClip::from_animation_clip(
-            1,
-            &clip,
-            &bone_names,
-        );
-        let mut editable_b = crate::animation::editable::EditableAnimationClip::from_animation_clip(
-            2,
-            &clip,
-            &bone_names,
-        );
+        let mut editable_a = crate::animation::editable::clip_from_animation(1, &clip, &bone_names);
+        let mut editable_b = crate::animation::editable::clip_from_animation(2, &clip, &bone_names);
 
         let target_bone_name = skeleton.bones[2].name.clone();
 

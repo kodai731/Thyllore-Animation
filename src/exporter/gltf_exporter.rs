@@ -11,7 +11,7 @@ use gltf::json::animation::{Interpolation, Property};
 use gltf::json::validation::{Checked, USize64};
 use gltf::json::{self, Index};
 
-use crate::animation::editable::EditableAnimationClip;
+use crate::animation::editable::{clip_to_animation, EditableAnimationClip};
 use crate::animation::{AnimationClip, BoneId, Skeleton, TransformChannel};
 
 pub fn export_gltf_animation(
@@ -28,7 +28,7 @@ pub fn export_gltf_animation(
 
     let mut bin = glb.bin.map(|b| b.into_owned()).unwrap_or_default();
 
-    let baked_clip = clip.to_animation_clip();
+    let baked_clip = clip_to_animation(clip);
 
     replace_animations(&mut root, &mut bin, &baked_clip, skeleton)?;
 

@@ -96,7 +96,7 @@ fn test_gltf_blender_roundtrip_node_animation() {
     let skeleton = build_skeleton_from_gltf(&original_root);
 
     let clip = build_roundtrip_test_clip(&skeleton);
-    let baked_clip = clip.to_animation_clip();
+    let baked_clip = rust_rendering::animation::editable::clip_to_animation(&clip);
 
     let exported_path = std::env::temp_dir().join("gltf_roundtrip_node_exported.glb");
     let blender_output_path = std::env::temp_dir().join("gltf_roundtrip_node_blender.glb");
@@ -135,7 +135,7 @@ fn test_gltf_blender_roundtrip_skeletal_animation() {
     );
 
     let clip = build_skeletal_roundtrip_test_clip(&skeleton);
-    let baked_clip = clip.to_animation_clip();
+    let baked_clip = rust_rendering::animation::editable::clip_to_animation(&clip);
 
     let exported_path = std::env::temp_dir().join("gltf_roundtrip_skeletal_exported.glb");
     let blender_output_path = std::env::temp_dir().join("gltf_roundtrip_skeletal_blender.glb");

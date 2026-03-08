@@ -1,3 +1,4 @@
+pub mod clip_convert;
 pub mod curve_ops;
 pub mod manager;
 pub mod mirror;

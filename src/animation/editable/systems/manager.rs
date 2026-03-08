@@ -9,6 +9,7 @@ use crate::animation::{AnimationClip, AnimationClipId, BoneId};
 
 use super::super::components::clip::EditableAnimationClip;
 use super::super::components::keyframe::SourceClipId;
+use super::clip_convert::{clip_from_animation, clip_to_animation};
 
 #[derive(Clone, Debug, Default)]
 pub struct EditableClipManager {
@@ -36,7 +37,7 @@ impl EditableClipManager {
         let id = self.next_clip_id;
         self.next_clip_id += 1;
 
-        let editable = EditableAnimationClip::from_animation_clip(id, clip, bone_names);
+        let editable = clip_from_animation(id, clip, bone_names);
         self.clips.insert(id, editable);
         self.editable_to_anim_id.insert(id, clip.id);
         id
@@ -74,7 +75,7 @@ impl EditableClipManager {
     }
 
     pub fn to_playable_clip(&self, id: SourceClipId) -> Option<AnimationClip> {
-        self.clips.get(&id).map(|clip| clip.to_animation_clip())
+        self.clips.get(&id).map(|clip| clip_to_animation(clip))
     }
 
     pub fn is_dirty(&self, id: SourceClipId) -> bool {
@@ -119,7 +120,7 @@ impl EditableClipManager {
                 _ => continue,
             };
 
-            let mut playable = clip.to_animation_clip();
+            let mut playable = clip_to_animation(clip);
             playable.id = anim_id;
 
             if let Some(target) = anim_clips.iter_mut().find(|c| c.id == anim_id) {

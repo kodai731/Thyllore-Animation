@@ -645,6 +645,14 @@ impl App {
         }
         crate::log!("loaded initial model: {}", model_path);
 
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::PanelLayout>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::PanelLayout::default());
+        }
+
         let mut scene_state = SceneState::new();
         if let Some((scene_path, scene, clips)) = loaded_scene {
             let clips_with_ids =
@@ -1077,6 +1085,14 @@ impl App {
         {
             data.ecs_world
                 .insert_resource(crate::ecs::resource::OnionSkinningConfig::default());
+        }
+
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::PanelLayout>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::PanelLayout::default());
         }
 
         #[cfg(feature = "ml")]

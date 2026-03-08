@@ -15,6 +15,8 @@ pub struct SceneFile {
     pub camera: CameraState,
     pub timeline: TimelineConfig,
     pub editor: EditorState,
+    #[serde(default)]
+    pub panel_layout: Option<PanelLayoutState>,
 }
 
 impl SceneFile {
@@ -28,6 +30,7 @@ impl SceneFile {
             camera: CameraState::default(),
             timeline: TimelineConfig::default(),
             editor: EditorState::default(),
+            panel_layout: None,
         }
     }
 }
@@ -200,6 +203,14 @@ impl Default for EditorState {
             curve_editor_open: false,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PanelLayoutState {
+    pub hierarchy_width: f32,
+    pub inspector_width: f32,
+    pub timeline_height: f32,
+    pub debug_height: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

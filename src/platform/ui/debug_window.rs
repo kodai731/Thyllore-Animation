@@ -8,6 +8,8 @@ use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{CoordinateSpace, TransformGizmoMode, TransformGizmoState};
 use crate::ecs::World;
 
+use super::layout_snapshot::LayoutSnapshot;
+
 pub struct DebugWindowState {
     pub model_path: String,
     pub load_status: String,
@@ -23,14 +25,14 @@ pub fn build_debug_window(
     state: &mut DebugWindowState,
     gui_data: &mut GUIData,
     ecs_world: &World,
+    layout: &LayoutSnapshot,
 ) {
-    let display_size = ui.io().display_size;
-    let debug_height = 250.0;
-    let debug_y = display_size[1] - debug_height;
-
     ui.window("debug window")
-        .position([0.0, debug_y], Condition::Always)
-        .size([display_size[0], debug_height], Condition::Always)
+        .position([0.0, layout.debug_y], Condition::Always)
+        .size(
+            [layout.display_size[0], layout.debug_height],
+            Condition::Always,
+        )
         .resizable(false)
         .movable(false)
         .collapsible(false)

@@ -5,13 +5,14 @@ use super::clip_io::{load_animation_clip, save_animation_clip};
 use super::error::{SceneError, SceneResult};
 use super::format::{
     AnimationClipRef, AutoExposureState, BloomState, CameraState, DepthOfFieldState, EditorState,
-    ExposureState, LensEffectsState, PhysicalCameraState, SceneFile, SceneMetadata, TimelineConfig,
-    ToneMappingState, SCENE_FORMAT_VERSION,
+    ExposureState, LensEffectsState, PanelLayoutState, PhysicalCameraState, SceneFile,
+    SceneMetadata, TimelineConfig, ToneMappingState, SCENE_FORMAT_VERSION,
 };
 use crate::animation::editable::SourceClipId;
 use crate::ecs::resource::{
     AutoExposure, BloomSettings, Camera, ClipLibrary, DepthOfField, Exposure, LensEffects,
-    ModelState, PhysicalCameraParameters, SceneState, TimelineState, ToneMapOperator, ToneMapping,
+    ModelState, PanelLayout, PhysicalCameraParameters, SceneState, TimelineState, ToneMapOperator,
+    ToneMapping,
 };
 use crate::ecs::world::World;
 use crate::platform::CurveEditorState;
@@ -45,6 +46,7 @@ struct CollectedSceneState {
     timeline: TimelineConfig,
     editor: EditorState,
     current_clip_name: Option<String>,
+    panel_layout: Option<PanelLayoutState>,
 }
 
 impl CollectedSceneState {
@@ -151,12 +153,22 @@ impl CollectedSceneState {
             })
             .unwrap_or_default();
 
+        let panel_layout = world
+            .get_resource::<PanelLayout>()
+            .map(|l| PanelLayoutState {
+                hierarchy_width: l.hierarchy_width,
+                inspector_width: l.inspector_width,
+                timeline_height: l.timeline_height,
+                debug_height: l.debug_height,
+            });
+
         Self {
             model_path,
             camera,
             timeline,
             editor,
             current_clip_name,
+            panel_layout,
         }
     }
 }
@@ -235,6 +247,7 @@ fn build_scene_file(
     scene.camera = collected.camera;
     scene.timeline = collected.timeline;
     scene.editor = collected.editor;
+    scene.panel_layout = collected.panel_layout;
 
     if let Some(prev) = previous_metadata {
         scene.metadata.created_at = prev.created_at;
@@ -456,6 +469,22 @@ pub fn apply_loaded_scene_to_world(
             auto_exposure.adaptation_speed_down = ae.adaptation_speed_down;
             auto_exposure.low_percent = ae.low_percent;
             auto_exposure.high_percent = ae.high_percent;
+        }
+    }
+
+    if let Some(ref pl) = loaded.scene.panel_layout {
+        if let Some(mut layout) = world.get_resource_mut::<PanelLayout>() {
+            layout.hierarchy_width = pl.hierarchy_width;
+            layout.inspector_width = pl.inspector_width;
+            layout.timeline_height = pl.timeline_height;
+            layout.debug_height = pl.debug_height;
+            crate::log!(
+                "Restored panel layout: hierarchy={:.0}, inspector={:.0}, timeline={:.0}, debug={:.0}",
+                pl.hierarchy_width,
+                pl.inspector_width,
+                pl.timeline_height,
+                pl.debug_height,
+            );
         }
     }
 }

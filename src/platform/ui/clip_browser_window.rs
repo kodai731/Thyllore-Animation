@@ -5,26 +5,22 @@ use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{ClipBrowserState, ClipLibrary};
 use crate::ecs::world::World;
 
+use super::layout_snapshot::LayoutSnapshot;
+
 pub fn build_clip_browser_window(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     clip_library: &ClipLibrary,
     browser_state: &mut ClipBrowserState,
     world: &World,
+    layout: &LayoutSnapshot,
 ) {
-    let display_size = ui.io().display_size;
-    let hierarchy_width = 250.0;
-    let debug_height = 250.0;
-    let timeline_height = 300.0;
-    let main_height = display_size[1] - debug_height - timeline_height;
-
-    let hierarchy_height = (main_height * 0.6).max(100.0);
-    let browser_height = (main_height - hierarchy_height).max(80.0);
-    let browser_y = hierarchy_height;
-
     ui.window("Clip Browser")
-        .position([0.0, browser_y], Condition::Always)
-        .size([hierarchy_width, browser_height], Condition::Always)
+        .position([0.0, layout.clip_browser_y], Condition::Always)
+        .size(
+            [layout.hierarchy_width, layout.clip_browser_height],
+            Condition::Always,
+        )
         .resizable(false)
         .movable(false)
         .collapsible(false)

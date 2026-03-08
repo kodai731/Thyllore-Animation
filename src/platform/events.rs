@@ -8,18 +8,19 @@ use super::platform::System;
 use super::ui::{
     build_click_debug_overlay, build_clip_browser_window, build_curve_editor_window,
     build_debug_window, build_hierarchy_window, build_inspector_window, build_status_bar_overlay,
-    build_timeline_window, build_viewport_window, CurveEditorState, DebugWindowState,
-    StatusBarState,
+    build_timeline_window, build_viewport_window, handle_splitters, CurveEditorState,
+    DebugWindowState, LayoutSnapshot, StatusBarState,
 };
 use crate::app::{App, GUIData};
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{
-    ClipBrowserState, ClipLibrary, CurveEditorBuffer, HierarchyState, PoseLibrary, TimelineState,
+    ClipBrowserState, ClipLibrary, CurveEditorBuffer, HierarchyState, PanelLayout, PoseLibrary,
+    TimelineState,
 };
 use crate::ecs::systems::clip_track_systems::query_clip_tracks;
+use crate::ecs::systems::panel_layout_systems::panel_layout_clamp_to_display;
 use crate::ecs::systems::phases::run_event_dispatch_phase;
-use crate::ecs::DeferredAction;
-use crate::ecs::UIEventQueue;
+use crate::ecs::{DeferredAction, UIEventQueue};
 
 fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
     let io = ui.io();
@@ -190,6 +191,14 @@ fn build_ui_windows(
     debug_state: &mut DebugWindowState,
     status_bar_state: &mut StatusBarState,
 ) {
+    let display_size = ui.io().display_size;
+
+    let layout_snapshot = {
+        let mut panel_layout = app.data.ecs_world.resource_mut::<PanelLayout>();
+        panel_layout_clamp_to_display(&mut panel_layout, display_size[0], display_size[1]);
+        LayoutSnapshot::from_layout(&panel_layout, display_size)
+    };
+
     {
         let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
         build_debug_window(
@@ -198,6 +207,7 @@ fn build_ui_windows(
             debug_state,
             gui_data,
             &app.data.ecs_world,
+            &layout_snapshot,
         );
     }
 
@@ -210,6 +220,7 @@ fn build_ui_windows(
             &app.data.ecs_world,
             &*hierarchy_state,
             &app.data.ecs_assets,
+            &layout_snapshot,
         );
     }
 
@@ -223,6 +234,7 @@ fn build_ui_windows(
             &*clip_library,
             &mut *browser_state,
             &app.data.ecs_world,
+            &layout_snapshot,
         );
     }
 
@@ -236,6 +248,7 @@ fn build_ui_windows(
             &*hierarchy_state,
             &app.data.ecs_assets,
             &app.data.graphics_resources,
+            &layout_snapshot,
         );
     }
 
@@ -245,7 +258,7 @@ fn build_ui_windows(
             app.data.viewport.width as f32,
             app.data.viewport.height as f32,
         ];
-        let info = build_viewport_window(ui, texture_id, current_size);
+        let info = build_viewport_window(ui, texture_id, current_size, &layout_snapshot);
 
         app.data.viewport.focused = info.focused;
         app.data.viewport.hovered = info.hovered;
@@ -282,6 +295,7 @@ fn build_ui_windows(
             &*clip_library,
             &mut *curve_editor,
             &clip_track_snapshot,
+            &layout_snapshot,
         );
     }
 
@@ -350,6 +364,11 @@ fn build_ui_windows(
             &*timeline_state,
             clip_duration,
         );
+    }
+
+    {
+        let mut panel_layout = app.data.ecs_world.resource_mut::<PanelLayout>();
+        handle_splitters(ui, &mut panel_layout, &layout_snapshot);
     }
 }
 

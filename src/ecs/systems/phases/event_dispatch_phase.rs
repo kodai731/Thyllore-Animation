@@ -979,7 +979,7 @@ fn dispatch_pose_library_events(events: &[UIEvent], world: &mut World, assets: &
                 drop(timeline_state);
 
                 if let Some(pose) =
-                    capture_current_pose(name, &clip_library, assets, current_clip_id, current_time)
+                    capture_current_pose(name, &clip_library, current_clip_id, current_time)
                 {
                     drop(clip_library);
                     let mut clip_library = world.resource_mut::<ClipLibrary>();
@@ -992,8 +992,14 @@ fn dispatch_pose_library_events(events: &[UIEvent], world: &mut World, assets: &
                     drop(clip_library);
 
                     let mut pose_library = world.resource_mut::<PoseLibrary>();
-                    pose_library.add_pose(pose_id);
-                    crate::log!("Saved pose '{}' (id={})", name, pose_id);
+                    pose_library.add_pose(pose_id, current_time);
+                    pose_library.selected_pose_id = Some(pose_id);
+                    crate::log!(
+                        "Saved pose '{}' (id={}) at time {:.3}",
+                        name,
+                        pose_id,
+                        current_time
+                    );
                 }
             }
 

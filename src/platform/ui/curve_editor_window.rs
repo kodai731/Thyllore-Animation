@@ -10,7 +10,7 @@ use crate::animation::editable::{
 };
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::{ClipLibrary, CurveEditorBuffer, TimelineState};
+use crate::ecs::resource::{ClipLibrary, CurveEditorBuffer, PoseLibrary, TimelineState};
 
 pub struct SuggestionOverlay {
     pub property_type: PropertyType,
@@ -178,6 +178,7 @@ pub fn build_curve_editor_window(
     editor_state: &mut CurveEditorState,
     curve_buffer: &CurveEditorBuffer,
     suggestion_overlays: &[SuggestionOverlay],
+    pose_library: &mut PoseLibrary,
 ) {
     if !editor_state.is_open {
         return;
@@ -226,6 +227,7 @@ pub fn build_curve_editor_window(
                         editor_state,
                         curve_buffer,
                         suggestion_overlays,
+                        pose_library,
                     );
                 });
         });
@@ -335,7 +337,11 @@ fn build_curve_view(
     editor_state: &mut CurveEditorState,
     curve_buffer: &CurveEditorBuffer,
     suggestion_overlays: &[SuggestionOverlay],
+    pose_library: &mut PoseLibrary,
 ) {
+    build_curve_toolbar(ui, ui_events, curve_buffer, pose_library, clip_library);
+    ui.separator();
+
     let Some(clip) = get_current_clip(timeline_state, clip_library) else {
         ui.text("No clip selected");
         return;
@@ -392,6 +398,7 @@ fn build_curve_view(
         curve_buffer,
         suggestion_overlays,
         bone_id,
+        pose_library,
     );
 
     let total_width = Y_AXIS_WIDTH + CURVE_PADDING + curve_area_width + CURVE_PADDING;
@@ -413,8 +420,6 @@ fn build_curve_view(
     );
 
     ui.set_cursor_screen_pos([cursor_pos[0], cursor_pos[1] + total_height]);
-
-    build_buffer_controls(ui, ui_events, curve_buffer);
 
     #[cfg(feature = "ml")]
     handle_suggestion_keyboard(ui, ui_events, bone_id, editor_state, suggestion_overlays);
@@ -469,6 +474,7 @@ fn draw_curve_area(
     curve_buffer: &CurveEditorBuffer,
     suggestion_overlays: &[SuggestionOverlay],
     bone_id: BoneId,
+    pose_library: &PoseLibrary,
 ) {
     let draw_list = ui.get_window_draw_list();
 
@@ -513,6 +519,7 @@ fn draw_curve_area(
                 curve_buffer,
                 suggestion_overlays,
                 bone_id,
+                pose_library,
             );
         },
     );
@@ -530,6 +537,7 @@ fn draw_clipped_curve_content(
     curve_buffer: &CurveEditorBuffer,
     suggestion_overlays: &[SuggestionOverlay],
     bone_id: BoneId,
+    pose_library: &PoseLibrary,
 ) {
     draw_grid(draw_list, curve_area_width, curve_area_height, vt);
 
@@ -552,6 +560,8 @@ fn draw_clipped_curve_content(
             vt,
         );
     }
+
+    draw_pose_markers(draw_list, vt, curve_area_height, pose_library);
 
     let playhead_x = vt.time_to_x(timeline_state.current_time);
     draw_list
@@ -1313,6 +1323,69 @@ fn draw_y_axis_labels(
             .build();
 
         value += step;
+    }
+}
+
+fn draw_pose_markers(
+    draw_list: &imgui::DrawListMut,
+    vt: &ViewTransform,
+    curve_area_height: f32,
+    pose_library: &PoseLibrary,
+) {
+    let unselected_color = [0.8, 0.7, 0.2, 0.35];
+    let selected_color = [1.0, 0.85, 0.0, 0.9];
+
+    for entry in &pose_library.poses {
+        let x = vt.time_to_x(entry.captured_time);
+        let is_selected = pose_library.selected_pose_id == Some(entry.id);
+        let top = vt.curve_origin[1];
+        let bottom = top + curve_area_height;
+
+        if is_selected {
+            draw_list
+                .add_line([x, top], [x, bottom], selected_color)
+                .thickness(2.0)
+                .build();
+        } else {
+            let dash_len = 6.0;
+            let gap_len = 4.0;
+            let mut y = top;
+            while y < bottom {
+                let y_end = (y + dash_len).min(bottom);
+                draw_list
+                    .add_line([x, y], [x, y_end], unselected_color)
+                    .thickness(1.0)
+                    .build();
+                y += dash_len + gap_len;
+            }
+        }
+
+        let diamond_size = 5.0;
+        let diamond_y = top + 8.0;
+        let color = if is_selected {
+            selected_color
+        } else {
+            unselected_color
+        };
+        let top_pt = [x, diamond_y - diamond_size];
+        let right_pt = [x + diamond_size, diamond_y];
+        let bottom_pt = [x, diamond_y + diamond_size];
+        let left_pt = [x - diamond_size, diamond_y];
+        if is_selected {
+            draw_list
+                .add_triangle(top_pt, right_pt, bottom_pt, color)
+                .filled(true)
+                .build();
+            draw_list
+                .add_triangle(top_pt, bottom_pt, left_pt, color)
+                .filled(true)
+                .build();
+        } else {
+            draw_list.add_line(top_pt, right_pt, color).build();
+            draw_list.add_line(right_pt, bottom_pt, color).build();
+            draw_list.add_line(bottom_pt, left_pt, color).build();
+            draw_list.add_line(left_pt, top_pt, color).build();
+        }
     }
 }
 
@@ -2140,17 +2213,18 @@ fn draw_suggestion_curve_overlay(
     }
 }
 
-fn build_buffer_controls(
+fn build_curve_toolbar(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     curve_buffer: &CurveEditorBuffer,
+    pose_library: &mut PoseLibrary,
+    clip_library: &ClipLibrary,
 ) {
     if ui.small_button("Capture") {
         ui_events.send(UIEvent::TimelineCaptureBuffer);
     }
 
     ui.same_line();
-
     if !curve_buffer.is_empty() {
         if ui.small_button("Swap") {
             ui_events.send(UIEvent::TimelineSwapBuffer);
@@ -2163,7 +2237,59 @@ fn build_buffer_controls(
         ui.same_line();
         ui.text_colored(
             [0.5, 0.8, 0.5, 1.0],
-            &format!("Buffer: {} curves", curve_buffer.snapshots.len()),
+            &format!("Buf: {}", curve_buffer.snapshots.len()),
         );
+    }
+
+    ui.same_line_with_spacing(0.0, 20.0);
+    ui.text("|");
+    ui.same_line();
+
+    if ui.small_button("Save Pose") {
+        let name = format!("Pose {}", pose_library.poses.len() + 1);
+        ui_events.send(UIEvent::PoseLibrarySaveCurrent { name });
+    }
+
+    ui.same_line();
+    if !pose_library.poses.is_empty() {
+        let preview = pose_library
+            .selected_pose_id
+            .and_then(|id| clip_library.get(id))
+            .map(|c| c.name.as_str())
+            .unwrap_or("(none)");
+
+        ui.set_next_item_width(120.0);
+        if let Some(_token) = ui.begin_combo("##pose_select", preview) {
+            let pose_ids = pose_library.pose_ids();
+            for &pose_id in &pose_ids {
+                let name = clip_library
+                    .get(pose_id)
+                    .map(|c| c.name.as_str())
+                    .unwrap_or("(unknown)");
+
+                let is_selected = pose_library.selected_pose_id == Some(pose_id);
+                let label = format!("{}##pose_{}", name, pose_id);
+
+                if ui.selectable_config(&label).selected(is_selected).build() {
+                    pose_library.selected_pose_id = Some(pose_id);
+                }
+            }
+        }
+
+        ui.same_line();
+    }
+
+    if let Some(id) = pose_library.selected_pose_id {
+        if ui.small_button("Apply##pose") {
+            ui_events.send(UIEvent::PoseLibraryApply(id));
+        }
+        ui.same_line();
+        if ui.small_button("Del##pose") {
+            ui_events.send(UIEvent::PoseLibraryDelete(id));
+        }
+    } else {
+        ui.text_disabled("Apply");
+        ui.same_line();
+        ui.text_disabled("Del");
     }
 }

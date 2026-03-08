@@ -1,53 +1,45 @@
 use crate::animation::editable::{
-    curve_add_keyframe, quaternion_to_euler_degrees, EditableAnimationClip, SourceClipId,
+    curve_add_keyframe, curve_sample, EditableAnimationClip, PropertyType, SourceClipId,
 };
-use crate::asset::AssetStorage;
 use crate::ecs::resource::ClipLibrary;
-use crate::ecs::systems::skeleton_pose_systems::{create_pose_from_rest, sample_clip_to_pose};
+
+const ALL_PROPERTIES: [PropertyType; 9] = [
+    PropertyType::TranslationX,
+    PropertyType::TranslationY,
+    PropertyType::TranslationZ,
+    PropertyType::RotationX,
+    PropertyType::RotationY,
+    PropertyType::RotationZ,
+    PropertyType::ScaleX,
+    PropertyType::ScaleY,
+    PropertyType::ScaleZ,
+];
 
 pub fn capture_current_pose(
     name: &str,
     clip_library: &ClipLibrary,
-    assets: &AssetStorage,
     current_clip_id: Option<SourceClipId>,
     current_time: f32,
 ) -> Option<EditableAnimationClip> {
     let clip_id = current_clip_id?;
-    let asset_id = clip_library.get_asset_id_for_source(clip_id)?;
-    let clip_asset = assets.animation_clips.get(&asset_id)?;
-    let skeleton_asset = assets.skeletons.values().next()?;
-    let skeleton = &skeleton_asset.skeleton;
+    let source_clip = clip_library.get(clip_id)?;
 
-    let mut pose = create_pose_from_rest(skeleton);
-    sample_clip_to_pose(&clip_asset.clip, current_time, skeleton, &mut pose, false);
+    let mut pose_clip = EditableAnimationClip::new(0, name.to_string());
+    pose_clip.duration = 0.0;
 
-    let mut editable = EditableAnimationClip::new(0, name.to_string());
-    editable.duration = 0.0;
+    for (&bone_id, source_track) in &source_clip.tracks {
+        let pose_track = pose_clip.add_track(bone_id, source_track.bone_name.clone());
 
-    for bone in &skeleton.bones {
-        let idx = bone.id as usize;
-        if idx >= pose.bone_poses.len() {
-            continue;
+        for &prop in &ALL_PROPERTIES {
+            let source_curve = source_track.get_curve(prop);
+            if let Some(value) = curve_sample(source_curve, current_time) {
+                let pose_curve = pose_track.get_curve_mut(prop);
+                curve_add_keyframe(pose_curve, 0.0, value);
+            }
         }
-
-        let bp = &pose.bone_poses[idx];
-        let track = editable.add_track(bone.id, bone.name.clone());
-
-        curve_add_keyframe(&mut track.translation_x, 0.0, bp.translation.x);
-        curve_add_keyframe(&mut track.translation_y, 0.0, bp.translation.y);
-        curve_add_keyframe(&mut track.translation_z, 0.0, bp.translation.z);
-
-        let euler = quaternion_to_euler_degrees(&bp.rotation);
-        curve_add_keyframe(&mut track.rotation_x, 0.0, euler.x);
-        curve_add_keyframe(&mut track.rotation_y, 0.0, euler.y);
-        curve_add_keyframe(&mut track.rotation_z, 0.0, euler.z);
-
-        curve_add_keyframe(&mut track.scale_x, 0.0, bp.scale.x);
-        curve_add_keyframe(&mut track.scale_y, 0.0, bp.scale.y);
-        curve_add_keyframe(&mut track.scale_z, 0.0, bp.scale.z);
     }
 
-    Some(editable)
+    Some(pose_clip)
 }
 
 pub fn apply_pose_to_clip(
@@ -116,8 +108,7 @@ mod tests {
     #[test]
     fn test_capture_without_clip_returns_none() {
         let clip_library = ClipLibrary::default();
-        let assets = AssetStorage::default();
-        let result = capture_current_pose("Test", &clip_library, &assets, None, 0.0);
+        let result = capture_current_pose("Test", &clip_library, None, 0.0);
         assert!(result.is_none());
     }
 

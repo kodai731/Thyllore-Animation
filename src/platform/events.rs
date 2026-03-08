@@ -216,7 +216,6 @@ fn build_ui_windows(
     {
         let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
         let mut browser_state = app.data.ecs_world.resource_mut::<ClipBrowserState>();
-        let mut pose_library = app.data.ecs_world.resource_mut::<PoseLibrary>();
         let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
         build_clip_browser_window(
             ui,
@@ -224,7 +223,6 @@ fn build_ui_windows(
             &*clip_library,
             &mut *browser_state,
             &app.data.ecs_world,
-            &mut *pose_library,
         );
     }
 
@@ -293,6 +291,7 @@ fn build_ui_windows(
         let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
         let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
         let curve_buffer = app.data.ecs_world.resource::<CurveEditorBuffer>();
+        let mut pose_library = app.data.ecs_world.resource_mut::<PoseLibrary>();
 
         #[cfg(feature = "ml")]
         let suggestion_overlays: Vec<super::ui::SuggestionOverlay> = {
@@ -329,6 +328,7 @@ fn build_ui_windows(
             &mut *curve_editor,
             &*curve_buffer,
             &suggestion_overlays,
+            &mut *pose_library,
         );
     }
 

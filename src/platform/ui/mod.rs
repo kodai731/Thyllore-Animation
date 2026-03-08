@@ -4,7 +4,6 @@ mod curve_editor_window;
 mod debug_window;
 mod hierarchy_window;
 mod inspector_window;
-mod pose_library_panel;
 mod spring_bone_inspector;
 mod status_bar;
 #[cfg(feature = "text-to-motion")]
@@ -18,7 +17,6 @@ pub use curve_editor_window::*;
 pub use debug_window::*;
 pub use hierarchy_window::*;
 pub use inspector_window::*;
-pub use pose_library_panel::*;
 pub use spring_bone_inspector::*;
 pub use status_bar::*;
 #[cfg(feature = "text-to-motion")]

@@ -1,5 +1,5 @@
 use crate::animation::editable::{
-    quaternion_to_euler_degrees, EditableAnimationClip, PropertyCurve, SourceClipId,
+    curve_add_keyframe, quaternion_to_euler_degrees, EditableAnimationClip, SourceClipId,
 };
 use crate::asset::AssetStorage;
 use crate::ecs::resource::ClipLibrary;
@@ -33,18 +33,18 @@ pub fn capture_current_pose(
         let bp = &pose.bone_poses[idx];
         let track = editable.add_track(bone.id, bone.name.clone());
 
-        track.translation_x.add_keyframe(0.0, bp.translation.x);
-        track.translation_y.add_keyframe(0.0, bp.translation.y);
-        track.translation_z.add_keyframe(0.0, bp.translation.z);
+        curve_add_keyframe(&mut track.translation_x, 0.0, bp.translation.x);
+        curve_add_keyframe(&mut track.translation_y, 0.0, bp.translation.y);
+        curve_add_keyframe(&mut track.translation_z, 0.0, bp.translation.z);
 
         let euler = quaternion_to_euler_degrees(&bp.rotation);
-        track.rotation_x.add_keyframe(0.0, euler.x);
-        track.rotation_y.add_keyframe(0.0, euler.y);
-        track.rotation_z.add_keyframe(0.0, euler.z);
+        curve_add_keyframe(&mut track.rotation_x, 0.0, euler.x);
+        curve_add_keyframe(&mut track.rotation_y, 0.0, euler.y);
+        curve_add_keyframe(&mut track.rotation_z, 0.0, euler.z);
 
-        track.scale_x.add_keyframe(0.0, bp.scale.x);
-        track.scale_y.add_keyframe(0.0, bp.scale.y);
-        track.scale_z.add_keyframe(0.0, bp.scale.z);
+        curve_add_keyframe(&mut track.scale_x, 0.0, bp.scale.x);
+        curve_add_keyframe(&mut track.scale_y, 0.0, bp.scale.y);
+        curve_add_keyframe(&mut track.scale_z, 0.0, bp.scale.z);
     }
 
     Some(editable)
@@ -101,12 +101,12 @@ pub fn apply_pose_to_clip(
 }
 
 fn insert_keyframe_from_pose(
-    source_curve: &PropertyCurve,
-    target_curve: &mut PropertyCurve,
+    source_curve: &crate::animation::editable::PropertyCurve,
+    target_curve: &mut crate::animation::editable::PropertyCurve,
     target_time: f32,
 ) {
     if let Some(kf) = source_curve.keyframes.first() {
-        target_curve.add_keyframe(target_time, kf.value);
+        curve_add_keyframe(target_curve, target_time, kf.value);
     }
 }
 
@@ -126,20 +126,20 @@ mod tests {
         let mut pose_clip = EditableAnimationClip::new(0, "Pose".to_string());
         pose_clip.duration = 0.0;
         let track = pose_clip.add_track(0, "Bone0".to_string());
-        track.translation_x.add_keyframe(0.0, 1.5);
-        track.translation_y.add_keyframe(0.0, 2.0);
-        track.translation_z.add_keyframe(0.0, 3.0);
-        track.rotation_x.add_keyframe(0.0, 10.0);
-        track.rotation_y.add_keyframe(0.0, 20.0);
-        track.rotation_z.add_keyframe(0.0, 30.0);
-        track.scale_x.add_keyframe(0.0, 1.0);
-        track.scale_y.add_keyframe(0.0, 1.0);
-        track.scale_z.add_keyframe(0.0, 1.0);
+        curve_add_keyframe(&mut track.translation_x, 0.0, 1.5);
+        curve_add_keyframe(&mut track.translation_y, 0.0, 2.0);
+        curve_add_keyframe(&mut track.translation_z, 0.0, 3.0);
+        curve_add_keyframe(&mut track.rotation_x, 0.0, 10.0);
+        curve_add_keyframe(&mut track.rotation_y, 0.0, 20.0);
+        curve_add_keyframe(&mut track.rotation_z, 0.0, 30.0);
+        curve_add_keyframe(&mut track.scale_x, 0.0, 1.0);
+        curve_add_keyframe(&mut track.scale_y, 0.0, 1.0);
+        curve_add_keyframe(&mut track.scale_z, 0.0, 1.0);
 
         let mut target = EditableAnimationClip::new(1, "Target".to_string());
         target.duration = 5.0;
         let t_track = target.add_track(0, "Bone0".to_string());
-        t_track.translation_x.add_keyframe(0.0, 0.0);
+        curve_add_keyframe(&mut t_track.translation_x, 0.0, 0.0);
 
         apply_pose_to_clip(&pose_clip, &mut target, 2.5);
 
@@ -159,7 +159,7 @@ mod tests {
     fn test_apply_creates_track_if_missing() {
         let mut pose_clip = EditableAnimationClip::new(0, "Pose".to_string());
         let track = pose_clip.add_track(5, "NewBone".to_string());
-        track.translation_x.add_keyframe(0.0, 7.0);
+        curve_add_keyframe(&mut track.translation_x, 0.0, 7.0);
 
         let mut target = EditableAnimationClip::new(1, "Target".to_string());
         assert!(target.get_track(5).is_none());
@@ -178,7 +178,7 @@ mod tests {
     fn test_apply_recalculates_duration() {
         let mut pose_clip = EditableAnimationClip::new(0, "Pose".to_string());
         let track = pose_clip.add_track(0, "Bone".to_string());
-        track.translation_x.add_keyframe(0.0, 1.0);
+        curve_add_keyframe(&mut track.translation_x, 0.0, 1.0);
 
         let mut target = EditableAnimationClip::new(1, "Target".to_string());
         target.duration = 1.0;

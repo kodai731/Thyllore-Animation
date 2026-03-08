@@ -54,52 +54,16 @@ pub fn apply_pose_to_clip(
             target_clip.add_track(bone_id, pose_track.bone_name.clone())
         };
 
-        insert_keyframe_from_pose(
-            &pose_track.translation_x,
-            &mut target_track.translation_x,
-            target_time,
-        );
-        insert_keyframe_from_pose(
-            &pose_track.translation_y,
-            &mut target_track.translation_y,
-            target_time,
-        );
-        insert_keyframe_from_pose(
-            &pose_track.translation_z,
-            &mut target_track.translation_z,
-            target_time,
-        );
-        insert_keyframe_from_pose(
-            &pose_track.rotation_x,
-            &mut target_track.rotation_x,
-            target_time,
-        );
-        insert_keyframe_from_pose(
-            &pose_track.rotation_y,
-            &mut target_track.rotation_y,
-            target_time,
-        );
-        insert_keyframe_from_pose(
-            &pose_track.rotation_z,
-            &mut target_track.rotation_z,
-            target_time,
-        );
-        insert_keyframe_from_pose(&pose_track.scale_x, &mut target_track.scale_x, target_time);
-        insert_keyframe_from_pose(&pose_track.scale_y, &mut target_track.scale_y, target_time);
-        insert_keyframe_from_pose(&pose_track.scale_z, &mut target_track.scale_z, target_time);
+        for &prop in &ALL_PROPERTIES {
+            let source_curve = pose_track.get_curve(prop);
+            if let Some(kf) = source_curve.keyframes.first() {
+                let target_curve = target_track.get_curve_mut(prop);
+                curve_add_keyframe(target_curve, target_time, kf.value);
+            }
+        }
     }
 
     target_clip.recalculate_duration();
-}
-
-fn insert_keyframe_from_pose(
-    source_curve: &crate::animation::editable::PropertyCurve,
-    target_curve: &mut crate::animation::editable::PropertyCurve,
-    target_time: f32,
-) {
-    if let Some(kf) = source_curve.keyframes.first() {
-        curve_add_keyframe(target_curve, target_time, kf.value);
-    }
 }
 
 #[cfg(test)]

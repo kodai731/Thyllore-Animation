@@ -1,7 +1,6 @@
 use imgui::Condition;
 
 use crate::animation::editable::SourceClipId;
-use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{ClipBrowserState, ClipLibrary};
 use crate::ecs::world::World;
@@ -117,7 +116,8 @@ fn build_clip_list(
         return;
     }
 
-    let reference_counts = count_clip_references(clip_library, world);
+    let reference_counts =
+        crate::ecs::systems::clip_library_systems::clip_library_count_references(world);
 
     let filter_lower = browser_state.filter_text.to_lowercase();
 
@@ -164,22 +164,6 @@ fn build_clip_drag_source(ui: &imgui::Ui, clip_id: SourceClipId, _name: &str) {
     let _source = ui
         .drag_drop_source_config("CLIP_SOURCE")
         .begin_payload(move || id);
-}
-
-fn count_clip_references(_clip_library: &ClipLibrary, world: &World) -> Vec<(SourceClipId, usize)> {
-    let mut counts: std::collections::HashMap<SourceClipId, usize> =
-        std::collections::HashMap::new();
-
-    let entities = world.component_entities::<ClipSchedule>();
-    for entity in entities {
-        if let Some(schedule) = world.get_component::<ClipSchedule>(entity) {
-            for inst in &schedule.instances {
-                *counts.entry(inst.source_id).or_insert(0) += 1;
-            }
-        }
-    }
-
-    counts.into_iter().collect()
 }
 
 fn extract_source_filename(

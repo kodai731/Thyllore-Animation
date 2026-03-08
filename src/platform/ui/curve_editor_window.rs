@@ -4,8 +4,9 @@ use imgui::Condition;
 
 use super::timeline_window::ruler_padding;
 use crate::animation::editable::{
-    curve_sample, sample_bezier, segment_uses_bezier, BezierHandle, EditableKeyframe,
-    InterpolationType, KeyframeId, PropertyCurve, PropertyType, TangentType, TangentWeightMode,
+    curve_sample, sample_bezier, segment_uses_bezier, BezierHandle, EditableAnimationClip,
+    EditableKeyframe, InterpolationType, KeyframeId, PropertyCurve, PropertyType, TangentType,
+    TangentWeightMode,
 };
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
@@ -232,21 +233,24 @@ pub fn build_curve_editor_window(
     editor_state.is_open = is_open;
 }
 
+fn get_current_clip<'a>(
+    timeline_state: &TimelineState,
+    clip_library: &'a ClipLibrary,
+) -> Option<&'a EditableAnimationClip> {
+    timeline_state
+        .current_clip_id
+        .and_then(|id| clip_library.get(id))
+}
+
 fn build_track_list(
     ui: &imgui::Ui,
     timeline_state: &TimelineState,
     clip_library: &ClipLibrary,
     editor_state: &mut CurveEditorState,
 ) {
-    let clip = match timeline_state
-        .current_clip_id
-        .and_then(|id| clip_library.get(id))
-    {
-        Some(c) => c,
-        None => {
-            ui.text("No clip selected");
-            return;
-        }
+    let Some(clip) = get_current_clip(timeline_state, clip_library) else {
+        ui.text("No clip selected");
+        return;
     };
 
     ui.text("Bones:");
@@ -332,31 +336,19 @@ fn build_curve_view(
     curve_buffer: &CurveEditorBuffer,
     suggestion_overlays: &[SuggestionOverlay],
 ) {
-    let clip = match timeline_state
-        .current_clip_id
-        .and_then(|id| clip_library.get(id))
-    {
-        Some(c) => c,
-        None => {
-            ui.text("No clip selected");
-            return;
-        }
+    let Some(clip) = get_current_clip(timeline_state, clip_library) else {
+        ui.text("No clip selected");
+        return;
     };
 
-    let bone_id = match editor_state.selected_bone_id {
-        Some(id) => id,
-        None => {
-            ui.text("Select a bone from the list");
-            return;
-        }
+    let Some(bone_id) = editor_state.selected_bone_id else {
+        ui.text("Select a bone from the list");
+        return;
     };
 
-    let track = match clip.tracks.get(&bone_id) {
-        Some(t) => t,
-        None => {
-            ui.text("Track not found");
-            return;
-        }
+    let Some(track) = clip.tracks.get(&bone_id) else {
+        ui.text("Track not found");
+        return;
     };
 
     let content_region = ui.content_region_avail();

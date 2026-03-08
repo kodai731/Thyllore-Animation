@@ -117,9 +117,7 @@ fn build_transport_controls(
     ui.same_line();
     if ui.button("Curve Editor") {
         curve_editor_state.is_open = true;
-        if let Some(first_bone_id) =
-            current_clip.and_then(|c| c.tracks.keys().min().copied())
-        {
+        if let Some(first_bone_id) = current_clip.and_then(|c| c.tracks.keys().min().copied()) {
             curve_editor_state.selected_bone_id = Some(first_bone_id);
             curve_editor_state.view_initialized = false;
         }

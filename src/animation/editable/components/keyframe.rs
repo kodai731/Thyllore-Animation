@@ -20,6 +20,17 @@ pub enum TangentWeightMode {
     Weighted,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TangentType {
+    #[default]
+    Manual,
+    Spline,
+    Flat,
+    Linear,
+    Clamped,
+    Plateau,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct BezierHandle {
     pub time_offset: f32,
@@ -53,6 +64,8 @@ pub struct EditableKeyframe {
     pub interpolation: InterpolationType,
     #[serde(default)]
     pub weight_mode: TangentWeightMode,
+    #[serde(default)]
+    pub tangent_type: TangentType,
 }
 
 impl EditableKeyframe {
@@ -65,6 +78,7 @@ impl EditableKeyframe {
             out_tangent: BezierHandle::linear(),
             interpolation: InterpolationType::Linear,
             weight_mode: TangentWeightMode::NonWeighted,
+            tangent_type: TangentType::Manual,
         }
     }
 
@@ -83,6 +97,7 @@ impl EditableKeyframe {
             out_tangent,
             interpolation: InterpolationType::Linear,
             weight_mode: TangentWeightMode::NonWeighted,
+            tangent_type: TangentType::Manual,
         }
     }
 }
@@ -97,6 +112,7 @@ impl Default for EditableKeyframe {
             out_tangent: BezierHandle::linear(),
             interpolation: InterpolationType::Linear,
             weight_mode: TangentWeightMode::NonWeighted,
+            tangent_type: TangentType::Manual,
         }
     }
 }
@@ -104,6 +120,49 @@ impl Default for EditableKeyframe {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_serde_backward_compat_no_tangent_type() {
+        let json = r#"{
+            "id": 1,
+            "time": 0.5,
+            "value": 3.0,
+            "in_tangent": {"time_offset": -0.1, "value_offset": -0.5},
+            "out_tangent": {"time_offset": 0.1, "value_offset": 0.5}
+        }"#;
+
+        let kf: EditableKeyframe = serde_json::from_str(json).unwrap();
+        assert_eq!(kf.tangent_type, TangentType::Manual);
+        assert_eq!(kf.interpolation, InterpolationType::Linear);
+        assert_eq!(kf.id, 1);
+        assert!((kf.time - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_tangent_type_serde_roundtrip() {
+        let variants = [
+            TangentType::Manual,
+            TangentType::Spline,
+            TangentType::Flat,
+            TangentType::Linear,
+            TangentType::Clamped,
+            TangentType::Plateau,
+        ];
+
+        for variant in &variants {
+            let mut kf = EditableKeyframe::new(1, 1.0, 5.0);
+            kf.tangent_type = *variant;
+
+            let json = serde_json::to_string(&kf).unwrap();
+            let deserialized: EditableKeyframe = serde_json::from_str(&json).unwrap();
+
+            assert_eq!(
+                deserialized.tangent_type, *variant,
+                "Roundtrip failed for {:?}",
+                variant
+            );
+        }
+    }
 
     #[test]
     fn test_serde_backward_compat_no_weight_mode() {

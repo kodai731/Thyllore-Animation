@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 use crate::animation::{AnimationClip, BoneId, Keyframe, TransformChannel};
 
 use super::curve::{PropertyCurve, PropertyType};
-use super::curve_ops::{curve_add_keyframe, curve_sample};
 use super::keyframe::{EditableKeyframe, InterpolationType, SourceClipId};
 use super::track::BoneTrack;
+use crate::animation::editable::systems::curve_ops::{curve_add_keyframe, curve_sample};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EditableAnimationClip {
@@ -405,7 +405,7 @@ impl Default for EditableAnimationClip {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::keyframe::{BezierHandle, EditableKeyframe};
+    use crate::animation::editable::{BezierHandle, EditableKeyframe};
 
     fn make_bezier_kf(
         time: f32,

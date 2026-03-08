@@ -1,4 +1,6 @@
-use super::keyframe::{BezierHandle, EditableKeyframe, TangentWeightMode};
+use super::super::components::keyframe::{
+    BezierHandle, EditableKeyframe, TangentType, TangentWeightMode,
+};
 
 pub fn sample_bezier(
     k0_time: f32,
@@ -274,10 +276,109 @@ pub fn apply_auto_tangents_to_all(keyframes: &mut [EditableKeyframe]) {
     }
 }
 
+fn compute_dt_for_index(keyframes: &[EditableKeyframe], index: usize) -> f32 {
+    let len = keyframes.len();
+    if len < 2 || index >= len {
+        return 1.0;
+    }
+
+    if index == 0 {
+        keyframes[1].time - keyframes[0].time
+    } else if index == len - 1 {
+        keyframes[len - 1].time - keyframes[len - 2].time
+    } else {
+        (keyframes[index + 1].time - keyframes[index - 1].time) * 0.5
+    }
+}
+
+pub fn apply_clamped_tangent(keyframes: &mut [EditableKeyframe], index: usize) {
+    let len = keyframes.len();
+    if len < 2 || index >= len {
+        return;
+    }
+
+    // Start from Spline baseline
+    apply_auto_tangent(keyframes, index);
+
+    // Clamp out_tangent to prevent overshoot toward next keyframe
+    if index + 1 < len {
+        let dv_next = keyframes[index + 1].value - keyframes[index].value;
+        let out_val = keyframes[index].out_tangent.value_offset;
+
+        if dv_next.abs() < 1e-8 {
+            // Next keyframe has same value: force flat outgoing
+            keyframes[index].out_tangent.value_offset = 0.0;
+        } else if out_val * dv_next < 0.0 || out_val.abs() > dv_next.abs() {
+            // Overshooting: clamp to neighbor delta
+            keyframes[index].out_tangent.value_offset = dv_next;
+        }
+    }
+
+    // Clamp in_tangent to prevent overshoot toward previous keyframe
+    if index > 0 {
+        let dv_prev = keyframes[index].value - keyframes[index - 1].value;
+        let in_val = keyframes[index].in_tangent.value_offset;
+
+        if dv_prev.abs() < 1e-8 {
+            // Previous keyframe has same value: force flat incoming
+            keyframes[index].in_tangent.value_offset = 0.0;
+        } else if in_val * dv_prev > 0.0 || in_val.abs() > dv_prev.abs() {
+            // Overshooting: clamp to negative neighbor delta (in_tangent points backward)
+            keyframes[index].in_tangent.value_offset = -dv_prev;
+        }
+    }
+}
+
+pub fn apply_plateau_tangent(keyframes: &mut [EditableKeyframe], index: usize) {
+    let len = keyframes.len();
+    if len < 2 || index >= len {
+        return;
+    }
+
+    let is_extremum = if index == 0 || index == len - 1 {
+        // Endpoints are treated as extrema
+        true
+    } else {
+        let prev_val = keyframes[index - 1].value;
+        let curr_val = keyframes[index].value;
+        let next_val = keyframes[index + 1].value;
+        (curr_val - prev_val) * (next_val - curr_val) <= 0.0
+    };
+
+    if is_extremum {
+        let dt = compute_dt_for_index(keyframes, index);
+        apply_flat_tangent(&mut keyframes[index], dt);
+    } else {
+        apply_clamped_tangent(keyframes, index);
+    }
+}
+
+pub fn apply_tangent_by_type(keyframes: &mut [EditableKeyframe], index: usize) {
+    if index >= keyframes.len() {
+        return;
+    }
+
+    match keyframes[index].tangent_type {
+        TangentType::Manual => {} // no-op: user-set handles preserved
+        TangentType::Spline => apply_auto_tangent(keyframes, index),
+        TangentType::Flat => {
+            let dt = compute_dt_for_index(keyframes, index);
+            apply_flat_tangent(&mut keyframes[index], dt);
+        }
+        TangentType::Linear => {
+            let (in_handle, out_handle) = apply_linear_tangent(keyframes, index);
+            keyframes[index].in_tangent = in_handle;
+            keyframes[index].out_tangent = out_handle;
+        }
+        TangentType::Clamped => apply_clamped_tangent(keyframes, index),
+        TangentType::Plateau => apply_plateau_tangent(keyframes, index),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::keyframe::InterpolationType;
+    use crate::animation::editable::InterpolationType;
 
     #[test]
     fn test_sample_bezier_linear_equivalent() {
@@ -570,5 +671,153 @@ mod tests {
         // zero length
         let h = create_handle_from_slope(1.0, 0.0, 1.0);
         assert!(compute_handle_length(&h).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_apply_clamped_no_overshoot() {
+        // Keys: 0→10→5, tangent at index 1 should not overshoot
+        let mut keyframes = vec![
+            EditableKeyframe::new(1, 0.0, 0.0),
+            EditableKeyframe::new(2, 1.0, 10.0),
+            EditableKeyframe::new(3, 2.0, 5.0),
+        ];
+
+        apply_clamped_tangent(&mut keyframes, 1);
+
+        // out_tangent should not overshoot: value at index 2 is 5, curr is 10,
+        // dv_next = -5, so out_tangent.value_offset should be <= 0 and >= -5
+        assert!(keyframes[1].out_tangent.value_offset <= 0.0);
+        assert!(keyframes[1].out_tangent.value_offset >= -5.0);
+
+        // in_tangent should not overshoot: value at index 0 is 0, curr is 10,
+        // dv_prev = 10, so in_tangent.value_offset should be <= 0 and >= -10
+        assert!(keyframes[1].in_tangent.value_offset <= 0.0);
+        assert!(keyframes[1].in_tangent.value_offset >= -10.0);
+    }
+
+    #[test]
+    fn test_apply_clamped_monotone_matches_spline() {
+        // Monotone: 0→5→10, clamped should match spline (no clamping needed)
+        let mut kf_spline = vec![
+            EditableKeyframe::new(1, 0.0, 0.0),
+            EditableKeyframe::new(2, 1.0, 5.0),
+            EditableKeyframe::new(3, 2.0, 10.0),
+        ];
+        apply_auto_tangent(&mut kf_spline, 1);
+        let spline_out = kf_spline[1].out_tangent.value_offset;
+        let spline_in = kf_spline[1].in_tangent.value_offset;
+
+        let mut kf_clamped = vec![
+            EditableKeyframe::new(1, 0.0, 0.0),
+            EditableKeyframe::new(2, 1.0, 5.0),
+            EditableKeyframe::new(3, 2.0, 10.0),
+        ];
+        apply_clamped_tangent(&mut kf_clamped, 1);
+
+        assert!((kf_clamped[1].out_tangent.value_offset - spline_out).abs() < 1e-6);
+        assert!((kf_clamped[1].in_tangent.value_offset - spline_in).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_apply_plateau_flat_at_peak() {
+        // Peak: 0→10→0, index 1 is a local max → should be flat
+        let mut keyframes = vec![
+            EditableKeyframe::new(1, 0.0, 0.0),
+            EditableKeyframe::new(2, 1.0, 10.0),
+            EditableKeyframe::new(3, 2.0, 0.0),
+        ];
+
+        apply_plateau_tangent(&mut keyframes, 1);
+
+        assert!((keyframes[1].in_tangent.value_offset).abs() < 1e-6);
+        assert!((keyframes[1].out_tangent.value_offset).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_apply_plateau_slope_uses_clamped() {
+        // Monotone: 0→5→10, not an extremum → should use clamped
+        let mut kf_plateau = vec![
+            EditableKeyframe::new(1, 0.0, 0.0),
+            EditableKeyframe::new(2, 1.0, 5.0),
+            EditableKeyframe::new(3, 2.0, 10.0),
+        ];
+        apply_plateau_tangent(&mut kf_plateau, 1);
+
+        let mut kf_clamped = vec![
+            EditableKeyframe::new(1, 0.0, 0.0),
+            EditableKeyframe::new(2, 1.0, 5.0),
+            EditableKeyframe::new(3, 2.0, 10.0),
+        ];
+        apply_clamped_tangent(&mut kf_clamped, 1);
+
+        assert!(
+            (kf_plateau[1].out_tangent.value_offset - kf_clamped[1].out_tangent.value_offset).abs()
+                < 1e-6
+        );
+        assert!(
+            (kf_plateau[1].in_tangent.value_offset - kf_clamped[1].in_tangent.value_offset).abs()
+                < 1e-6
+        );
+    }
+
+    #[test]
+    fn test_apply_tangent_by_type_manual_noop() {
+        let mut keyframes = vec![
+            EditableKeyframe::new(1, 0.0, 0.0),
+            EditableKeyframe::new(2, 1.0, 5.0),
+            EditableKeyframe::new(3, 2.0, 10.0),
+        ];
+
+        // Set custom handles
+        keyframes[1].in_tangent = BezierHandle::new(-0.2, -1.0);
+        keyframes[1].out_tangent = BezierHandle::new(0.2, 1.0);
+        keyframes[1].tangent_type = TangentType::Manual;
+
+        apply_tangent_by_type(&mut keyframes, 1);
+
+        // Manual should not change handles
+        assert!((keyframes[1].in_tangent.time_offset - (-0.2)).abs() < 1e-6);
+        assert!((keyframes[1].in_tangent.value_offset - (-1.0)).abs() < 1e-6);
+        assert!((keyframes[1].out_tangent.time_offset - 0.2).abs() < 1e-6);
+        assert!((keyframes[1].out_tangent.value_offset - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_apply_tangent_by_type_all_variants() {
+        // Verify each variant runs without panic and produces expected behavior
+        let variants = [
+            TangentType::Manual,
+            TangentType::Spline,
+            TangentType::Flat,
+            TangentType::Linear,
+            TangentType::Clamped,
+            TangentType::Plateau,
+        ];
+
+        for variant in &variants {
+            let mut keyframes = vec![
+                EditableKeyframe::new(1, 0.0, 0.0),
+                EditableKeyframe::new(2, 1.0, 5.0),
+                EditableKeyframe::new(3, 2.0, 10.0),
+            ];
+            keyframes[1].tangent_type = *variant;
+            apply_tangent_by_type(&mut keyframes, 1);
+
+            match variant {
+                TangentType::Flat => {
+                    assert!(
+                        (keyframes[1].out_tangent.value_offset).abs() < 1e-6,
+                        "Flat should produce zero value_offset"
+                    );
+                }
+                TangentType::Spline => {
+                    assert!(
+                        keyframes[1].out_tangent.time_offset > 0.0,
+                        "Spline should produce positive out time_offset"
+                    );
+                }
+                _ => {} // other variants: just confirm no panic
+            }
+        }
     }
 }

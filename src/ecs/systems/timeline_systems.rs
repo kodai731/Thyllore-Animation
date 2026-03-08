@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::animation::editable::{
-    apply_auto_tangent, apply_flat_tangent, curve_recalculate_auto_tangent_at,
-    curve_remove_keyframe, initialize_weighted_handle_lengths, InterpolationType, KeyframeId,
+    apply_tangent_by_type, curve_recalculate_auto_tangent_at, curve_remove_keyframe,
+    curve_set_keyframe_time, initialize_weighted_handle_lengths, InterpolationType, KeyframeId,
     PropertyCurve, PropertyType, SourceClipId, TangentWeightMode,
 };
 use crate::animation::{BoneId, BoneLocalPose};
@@ -183,7 +183,9 @@ fn dispatch_keyframe_edit_events(
             } => {
                 if let Some(clip) = clip_library.get_mut(clip_id) {
                     if let Some(track) = clip.tracks.get_mut(bone_id) {
-                        track.move_keyframe(*property_type, *keyframe_id, *new_time, *new_value);
+                        let curve = track.get_curve_mut(*property_type);
+                        curve_set_keyframe_time(curve, *keyframe_id, *new_time);
+                        curve.set_keyframe_value(*keyframe_id, *new_value);
                     }
                     clip.recalculate_duration();
                     clip_modified = true;
@@ -248,7 +250,11 @@ fn dispatch_tangent_edit_events(
             } => {
                 if let Some(clip) = clip_library.get_mut(clip_id) {
                     if let Some(track) = clip.tracks.get_mut(bone_id) {
-                        track.get_curve_mut(*property_type).set_keyframe_tangents(
+                        let curve = track.get_curve_mut(*property_type);
+                        if let Some(kf) = curve.get_keyframe_mut(*keyframe_id) {
+                            kf.tangent_type = crate::animation::editable::TangentType::Manual;
+                        }
+                        curve.set_keyframe_tangents(
                             *keyframe_id,
                             in_tangent.clone(),
                             out_tangent.clone(),
@@ -258,10 +264,11 @@ fn dispatch_tangent_edit_events(
                 }
             }
 
-            UIEvent::TimelineAutoTangent {
+            UIEvent::TimelineSetTangentType {
                 bone_id,
                 property_type,
                 keyframe_id,
+                tangent_type,
             } => {
                 if let Some(clip) = clip_library.get_mut(clip_id) {
                     if let Some(track) = clip.tracks.get_mut(bone_id) {
@@ -269,26 +276,8 @@ fn dispatch_tangent_edit_events(
                         ensure_bezier_for_tangent(curve, *keyframe_id);
                         if let Some(idx) = curve.keyframes.iter().position(|k| k.id == *keyframe_id)
                         {
-                            apply_auto_tangent(&mut curve.keyframes, idx);
-                        }
-                        clip_modified = true;
-                    }
-                }
-            }
-
-            UIEvent::TimelineFlatTangent {
-                bone_id,
-                property_type,
-                keyframe_id,
-            } => {
-                if let Some(clip) = clip_library.get_mut(clip_id) {
-                    if let Some(track) = clip.tracks.get_mut(bone_id) {
-                        let curve = track.get_curve_mut(*property_type);
-                        ensure_bezier_for_tangent(curve, *keyframe_id);
-                        if let Some(idx) = curve.keyframes.iter().position(|k| k.id == *keyframe_id)
-                        {
-                            let dt = compute_average_keyframe_interval(curve);
-                            apply_flat_tangent(&mut curve.keyframes[idx], dt);
+                            curve.keyframes[idx].tangent_type = *tangent_type;
+                            apply_tangent_by_type(&mut curve.keyframes, idx);
                         }
                         clip_modified = true;
                     }

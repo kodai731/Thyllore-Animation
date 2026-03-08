@@ -4,8 +4,9 @@ use imgui::Condition;
 
 use super::timeline_window::ruler_padding;
 use crate::animation::editable::{
-    curve_sample, segment_uses_bezier, BezierHandle, InterpolationType, KeyframeId, PropertyCurve,
-    PropertyType, TangentWeightMode,
+    curve_sample, sample_bezier, segment_uses_bezier, BezierHandle, EditableAnimationClip,
+    EditableKeyframe, InterpolationType, KeyframeId, PropertyCurve, PropertyType, TangentType,
+    TangentWeightMode,
 };
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
@@ -232,21 +233,24 @@ pub fn build_curve_editor_window(
     editor_state.is_open = is_open;
 }
 
+fn get_current_clip<'a>(
+    timeline_state: &TimelineState,
+    clip_library: &'a ClipLibrary,
+) -> Option<&'a EditableAnimationClip> {
+    timeline_state
+        .current_clip_id
+        .and_then(|id| clip_library.get(id))
+}
+
 fn build_track_list(
     ui: &imgui::Ui,
     timeline_state: &TimelineState,
     clip_library: &ClipLibrary,
     editor_state: &mut CurveEditorState,
 ) {
-    let clip = match timeline_state
-        .current_clip_id
-        .and_then(|id| clip_library.get(id))
-    {
-        Some(c) => c,
-        None => {
-            ui.text("No clip selected");
-            return;
-        }
+    let Some(clip) = get_current_clip(timeline_state, clip_library) else {
+        ui.text("No clip selected");
+        return;
     };
 
     ui.text("Bones:");
@@ -332,31 +336,19 @@ fn build_curve_view(
     curve_buffer: &CurveEditorBuffer,
     suggestion_overlays: &[SuggestionOverlay],
 ) {
-    let clip = match timeline_state
-        .current_clip_id
-        .and_then(|id| clip_library.get(id))
-    {
-        Some(c) => c,
-        None => {
-            ui.text("No clip selected");
-            return;
-        }
+    let Some(clip) = get_current_clip(timeline_state, clip_library) else {
+        ui.text("No clip selected");
+        return;
     };
 
-    let bone_id = match editor_state.selected_bone_id {
-        Some(id) => id,
-        None => {
-            ui.text("Select a bone from the list");
-            return;
-        }
+    let Some(bone_id) = editor_state.selected_bone_id else {
+        ui.text("Select a bone from the list");
+        return;
     };
 
-    let track = match clip.tracks.get(&bone_id) {
-        Some(t) => t,
-        None => {
-            ui.text("Track not found");
-            return;
-        }
+    let Some(track) = clip.tracks.get(&bone_id) else {
+        ui.text("Track not found");
+        return;
     };
 
     let content_region = ui.content_region_avail();
@@ -582,8 +574,8 @@ fn draw_clipped_curve_content(
         );
     }
 
-    if editor_state.dragging_tangent.is_some() {
-        draw_tangent_drag_preview(draw_list, ui.io().mouse_pos);
+    if let Some(ref dragging) = editor_state.dragging_tangent {
+        draw_tangent_drag_curve_preview(draw_list, dragging, ui.io().mouse_pos, curves_to_draw, vt);
     }
 
     draw_buffer_curve_overlay(
@@ -718,20 +710,24 @@ fn build_keyframe_context_menu(
         ui.text_colored(section_color, "Tangent");
         ui.separator();
 
-        if ui.selectable_config("  Auto").build() {
-            ui_events.send(UIEvent::TimelineAutoTangent {
-                bone_id,
-                property_type: ctx_kf.property_type,
-                keyframe_id: ctx_kf.keyframe_id,
-            });
-        }
+        let tangent_options = [
+            ("  Spline", TangentType::Spline),
+            ("  Linear", TangentType::Linear),
+            ("  Flat", TangentType::Flat),
+            ("  Clamped", TangentType::Clamped),
+            ("  Plateau", TangentType::Plateau),
+            ("  Manual", TangentType::Manual),
+        ];
 
-        if ui.selectable_config("  Flat").build() {
-            ui_events.send(UIEvent::TimelineFlatTangent {
-                bone_id,
-                property_type: ctx_kf.property_type,
-                keyframe_id: ctx_kf.keyframe_id,
-            });
+        for (label, tangent_type) in &tangent_options {
+            if ui.selectable_config(label).build() {
+                ui_events.send(UIEvent::TimelineSetTangentType {
+                    bone_id,
+                    property_type: ctx_kf.property_type,
+                    keyframe_id: ctx_kf.keyframe_id,
+                    tangent_type: *tangent_type,
+                });
+            }
         }
 
         ui.spacing();
@@ -1665,15 +1661,174 @@ fn draw_drag_neighbor_lines(
     }
 }
 
-fn draw_tangent_drag_preview(draw_list: &imgui::DrawListMut, mouse_pos: [f32; 2]) {
+fn draw_tangent_drag_curve_preview(
+    draw_list: &imgui::DrawListMut,
+    dragging: &DraggingTangent,
+    mouse_pos: [f32; 2],
+    curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
+    vt: &ViewTransform,
+) {
+    let (curve, color) = match curves_to_draw
+        .iter()
+        .find(|(c, _, _)| c.property_type == dragging.property_type)
+    {
+        Some((c, col, _)) => (*c, *col),
+        None => return,
+    };
+
+    let kf_idx = match curve
+        .keyframes
+        .iter()
+        .position(|k| k.id == dragging.keyframe_id)
+    {
+        Some(idx) => idx,
+        None => return,
+    };
+
+    let mouse_time = vt.x_to_time(mouse_pos[0]);
+    let mouse_value = vt.y_to_value(mouse_pos[1]);
+    let kf = &curve.keyframes[kf_idx];
+    let new_handle = BezierHandle::new(mouse_time - kf.time, mouse_value - kf.value);
+
+    let preview_in = match dragging.handle_type {
+        TangentHandleType::In => new_handle.clone(),
+        TangentHandleType::Out => kf.in_tangent.clone(),
+    };
+    let preview_out = match dragging.handle_type {
+        TangentHandleType::In => kf.out_tangent.clone(),
+        TangentHandleType::Out => new_handle.clone(),
+    };
+
+    let preview_color = [
+        (color[0] + 1.0) * 0.5,
+        (color[1] + 1.0) * 0.5,
+        (color[2] + 1.0) * 0.5,
+        0.9,
+    ];
+
+    draw_preview_segment_before(draw_list, curve, kf_idx, &preview_in, preview_color, vt);
+    draw_preview_segment_after(draw_list, curve, kf_idx, &preview_out, preview_color, vt);
+
+    let kf_x = vt.time_to_x(kf.time);
+    let kf_y = vt.value_to_y(kf.value);
+    let handle_x = mouse_pos[0];
+    let handle_y = mouse_pos[1];
+
+    draw_list
+        .add_line([kf_x, kf_y], [handle_x, handle_y], [1.0, 1.0, 0.0, 0.8])
+        .thickness(1.0)
+        .build();
     draw_list
         .add_rect(
-            [mouse_pos[0] - 5.0, mouse_pos[1] - 5.0],
-            [mouse_pos[0] + 5.0, mouse_pos[1] + 5.0],
+            [handle_x - 5.0, handle_y - 5.0],
+            [handle_x + 5.0, handle_y + 5.0],
             [1.0, 1.0, 0.0, 0.8],
         )
         .filled(true)
         .build();
+}
+
+fn draw_preview_segment_before(
+    draw_list: &imgui::DrawListMut,
+    curve: &PropertyCurve,
+    kf_idx: usize,
+    preview_in: &BezierHandle,
+    color: [f32; 4],
+    vt: &ViewTransform,
+) {
+    if kf_idx == 0 {
+        return;
+    }
+
+    let k0 = &curve.keyframes[kf_idx - 1];
+    let k1 = &curve.keyframes[kf_idx];
+
+    if k0.interpolation == InterpolationType::Stepped {
+        return;
+    }
+
+    if !segment_uses_bezier(k0, k1) {
+        return;
+    }
+
+    draw_preview_bezier_segment(draw_list, k0, k1, &k0.out_tangent, preview_in, color, vt);
+}
+
+fn draw_preview_segment_after(
+    draw_list: &imgui::DrawListMut,
+    curve: &PropertyCurve,
+    kf_idx: usize,
+    preview_out: &BezierHandle,
+    color: [f32; 4],
+    vt: &ViewTransform,
+) {
+    if kf_idx + 1 >= curve.keyframes.len() {
+        return;
+    }
+
+    let k0 = &curve.keyframes[kf_idx];
+    let k1 = &curve.keyframes[kf_idx + 1];
+
+    if k0.interpolation == InterpolationType::Stepped {
+        return;
+    }
+
+    if !segment_uses_bezier(k0, k1) {
+        return;
+    }
+
+    draw_preview_bezier_segment(draw_list, k0, k1, preview_out, &k1.in_tangent, color, vt);
+}
+
+fn draw_preview_bezier_segment(
+    draw_list: &imgui::DrawListMut,
+    k0: &EditableKeyframe,
+    k1: &EditableKeyframe,
+    out_handle: &BezierHandle,
+    in_handle: &BezierHandle,
+    color: [f32; 4],
+    vt: &ViewTransform,
+) {
+    let samples = 20;
+    let mut prev_point: Option<[f32; 2]> = None;
+
+    for s in 0..samples {
+        let frac = s as f32 / (samples - 1) as f32;
+        let time = k0.time + (k1.time - k0.time) * frac;
+
+        let dt = k1.time - k0.time;
+        let dv = k1.value - k0.value;
+
+        let effective_out = if k0.interpolation == InterpolationType::Bezier {
+            out_handle.clone()
+        } else {
+            BezierHandle::new(dt / 3.0, dv / 3.0)
+        };
+        let effective_in = if k1.interpolation == InterpolationType::Bezier {
+            in_handle.clone()
+        } else {
+            BezierHandle::new(-dt / 3.0, -dv / 3.0)
+        };
+
+        let value = sample_bezier(
+            k0.time,
+            k0.value,
+            &effective_out,
+            k1.time,
+            k1.value,
+            &effective_in,
+            time,
+        );
+
+        let point = [vt.time_to_x(time), vt.value_to_y(value)];
+        if let Some(prev) = prev_point {
+            draw_list
+                .add_line(prev, point, color)
+                .thickness(2.5)
+                .build();
+        }
+        prev_point = Some(point);
+    }
 }
 
 fn calculate_y_tick_count(height: f32) -> usize {

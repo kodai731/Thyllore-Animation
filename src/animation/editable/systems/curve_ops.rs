@@ -1,5 +1,7 @@
-use super::curve::PropertyCurve;
-use super::keyframe::{BezierHandle, EditableKeyframe, InterpolationType, KeyframeId};
+use super::super::components::curve::PropertyCurve;
+use super::super::components::keyframe::{
+    BezierHandle, EditableKeyframe, InterpolationType, KeyframeId,
+};
 use super::tangent::{apply_auto_tangent, sample_bezier};
 
 pub fn curve_add_keyframe(curve: &mut PropertyCurve, time: f32, value: f32) -> KeyframeId {
@@ -133,11 +135,12 @@ pub fn curve_recalculate_auto_tangent_at(curve: &mut PropertyCurve, keyframe_id:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::animation::editable::keyframe::TangentWeightMode;
-    use crate::animation::editable::tangent::compute_handle_length;
+    use crate::animation::editable::compute_handle_length;
+    use crate::animation::editable::TangentWeightMode;
 
     fn make_curve_with_keyframes(times_values: &[(f32, f32)]) -> PropertyCurve {
-        let mut curve = PropertyCurve::new(1, super::super::curve::PropertyType::TranslationX);
+        let mut curve =
+            PropertyCurve::new(1, crate::animation::editable::PropertyType::TranslationX);
         for &(time, value) in times_values {
             curve_add_keyframe(&mut curve, time, value);
         }
@@ -173,13 +176,14 @@ mod tests {
 
     #[test]
     fn test_curve_sample_empty() {
-        let curve = PropertyCurve::new(1, super::super::curve::PropertyType::TranslationX);
+        let curve = PropertyCurve::new(1, crate::animation::editable::PropertyType::TranslationX);
         assert!(curve_sample(&curve, 0.5).is_none());
     }
 
     #[test]
     fn test_curve_add_and_remove_keyframe() {
-        let mut curve = PropertyCurve::new(1, super::super::curve::PropertyType::TranslationX);
+        let mut curve =
+            PropertyCurve::new(1, crate::animation::editable::PropertyType::TranslationX);
         let id1 = curve_add_keyframe(&mut curve, 0.0, 1.0);
         let id2 = curve_add_keyframe(&mut curve, 1.0, 2.0);
         assert_eq!(curve.keyframe_count(), 2);
@@ -191,7 +195,8 @@ mod tests {
 
     #[test]
     fn test_curve_sort_after_add() {
-        let mut curve = PropertyCurve::new(1, super::super::curve::PropertyType::TranslationX);
+        let mut curve =
+            PropertyCurve::new(1, crate::animation::editable::PropertyType::TranslationX);
         curve_add_keyframe(&mut curve, 2.0, 20.0);
         curve_add_keyframe(&mut curve, 0.0, 0.0);
         curve_add_keyframe(&mut curve, 1.0, 10.0);

@@ -1,10 +1,23 @@
 pub mod animation_phase;
+mod dispatch_camera;
+mod dispatch_clip_browser;
+mod dispatch_clip_instance;
+mod dispatch_constraint;
+mod dispatch_edit_history;
+mod dispatch_hierarchy;
+mod dispatch_ml;
+mod dispatch_pose_library;
+mod dispatch_scene;
+mod dispatch_spring_bone;
+mod dispatch_timeline;
+pub mod event_dispatch_phase;
 pub mod input_phase;
 pub mod onion_skin_phase;
 pub mod render_prep_phase;
 pub mod transform_phase;
 
 pub use animation_phase::*;
+pub use event_dispatch_phase::*;
 pub use input_phase::*;
 pub use onion_skin_phase::*;
 pub use render_prep_phase::*;

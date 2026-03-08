@@ -15,7 +15,7 @@ pub struct AutoExposure {
 impl Default for AutoExposure {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             min_ev: -4.0,
             max_ev: 16.0,
             adaptation_speed_up: 3.0,

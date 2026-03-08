@@ -27,6 +27,7 @@ pub fn build_viewport_window(
         .resizable(false)
         .movable(false)
         .collapsible(false)
+        .bring_to_front_on_focus(false)
         .build(|| {
             let content_region = ui.content_region_avail();
             info.size = content_region;

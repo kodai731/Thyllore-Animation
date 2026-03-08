@@ -1565,7 +1565,7 @@ mod tests {
 
     #[test]
     fn test_fbx_roundtrip_stickman() {
-        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        let original_path = "tests/testmodels/fbx/node/stickman_bin.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping roundtrip test: {} not found", original_path);
             return;
@@ -1688,7 +1688,7 @@ mod tests {
 
     #[test]
     fn test_fbx_roundtrip_stickman_with_animation() {
-        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        let original_path = "tests/testmodels/fbx/node/stickman_bin.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping: {} not found", original_path);
             return;
@@ -1847,7 +1847,7 @@ mod tests {
 
     #[test]
     fn test_exported_bone_node_types_match_original() {
-        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        let original_path = "tests/testmodels/fbx/node/stickman_bin.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping: {} not found", original_path);
             return;
@@ -1948,7 +1948,7 @@ mod tests {
 
     #[test]
     fn test_compare_anim_structure() {
-        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        let original_path = "tests/testmodels/fbx/node/stickman_bin.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping: {} not found", original_path);
             return;
@@ -2042,7 +2042,7 @@ mod tests {
             }
         };
 
-        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        let original_path = "tests/testmodels/fbx/node/stickman_bin.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping: {} not found", original_path);
             return;
@@ -2228,7 +2228,7 @@ mod tests {
 
     #[test]
     fn test_fbx_roundtrip_skinned_fly() {
-        let original_path = "assets/models/phoenix-bird/source/fly.fbx";
+        let original_path = "tests/testmodels/fbx/skinning/source/fly.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping: {} not found", original_path);
             return;
@@ -2478,7 +2478,7 @@ mod tests {
             }
         };
 
-        let original_path = "assets/models/phoenix-bird/source/fly.fbx";
+        let original_path = "tests/testmodels/fbx/skinning/source/fly.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping: {} not found", original_path);
             return;
@@ -2654,7 +2654,7 @@ print("IMPORT_DONE")
             }
         };
 
-        let original_path = "assets/models/stickman/stickman_bin.fbx";
+        let original_path = "tests/testmodels/fbx/node/stickman_bin.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping: {} not found", original_path);
             return;
@@ -2705,7 +2705,7 @@ print("IMPORT_DONE")
             }
         };
 
-        let original_path = "assets/models/phoenix-bird/source/fly.fbx";
+        let original_path = "tests/testmodels/fbx/skinning/source/fly.fbx";
         if !std::path::Path::new(original_path).exists() {
             eprintln!("Skipping: {} not found", original_path);
             return;
@@ -2744,5 +2744,279 @@ print("IMPORT_DONE")
         );
 
         std::fs::remove_file(&export_path).ok();
+    }
+
+    fn load_stickman_for_roundtrip() -> Option<(
+        FbxModel,
+        crate::animation::Skeleton,
+        crate::animation::AnimationClip,
+    )> {
+        let path = "tests/testmodels/fbx/node/stickman_bin.fbx";
+        if !std::path::Path::new(path).exists() {
+            return None;
+        }
+
+        let fbx_model =
+            crate::loader::fbx::fbx::load_fbx_with_ufbx(path).expect("Failed to load FBX");
+        let (load_result, _) = crate::loader::fbx::loader::load_fbx_to_graphics_resources(path)
+            .expect("Failed to load graphics");
+
+        let skeleton = load_result
+            .animation_system
+            .get_skeleton(0)
+            .expect("No skeleton")
+            .clone();
+        let clip = load_result.clips.first().expect("No clip").clone();
+
+        Some((fbx_model, skeleton, clip))
+    }
+
+    fn build_bone_name_map(
+        skeleton: &crate::animation::Skeleton,
+    ) -> std::collections::HashMap<u32, String> {
+        skeleton
+            .bones
+            .iter()
+            .enumerate()
+            .map(|(i, b)| (i as u32, b.name.clone()))
+            .collect()
+    }
+
+    fn find_rotation_x_curve_for_bone<'a>(
+        scene: &'a ufbx::Scene,
+        bone_name: &str,
+    ) -> Option<&'a ufbx::AnimCurve> {
+        if scene.anim_layers.is_empty() {
+            return None;
+        }
+
+        let layer = &scene.anim_layers[0];
+        for ap in &layer.anim_props {
+            let target_name = ap.element.name.to_string();
+            let prop_name = ap.prop_name.to_string();
+
+            if target_name == bone_name && prop_name == "Lcl Rotation" {
+                return ap.anim_value.curves[0].as_ref().map(|r| &**r);
+            }
+        }
+
+        None
+    }
+
+    #[test]
+    fn test_weighted_tangent_preserved_on_fbx_roundtrip() {
+        let Some((fbx_model, skeleton, clip)) = load_stickman_for_roundtrip() else {
+            eprintln!("Skipping: stickman model not found");
+            return;
+        };
+
+        let bone_names = build_bone_name_map(&skeleton);
+        let mut editable = crate::animation::editable::EditableAnimationClip::from_animation_clip(
+            1,
+            &clip,
+            &bone_names,
+        );
+
+        let target_bone_name = skeleton.bones[2].name.clone();
+
+        use crate::animation::editable::{BezierHandle, InterpolationType, TangentWeightMode};
+
+        fn set_weighted_tangents(
+            editable: &mut EditableAnimationClip,
+            bone_id: u32,
+            in_handle: &BezierHandle,
+            out_handle: &BezierHandle,
+        ) {
+            let track = editable
+                .tracks
+                .get_mut(&bone_id)
+                .expect("Bone track not found");
+            for kf in &mut track.rotation_x.keyframes {
+                kf.interpolation = InterpolationType::Bezier;
+                kf.weight_mode = TangentWeightMode::Weighted;
+                kf.out_tangent = out_handle.clone();
+                kf.in_tangent = in_handle.clone();
+            }
+        }
+
+        set_weighted_tangents(
+            &mut editable,
+            2,
+            &BezierHandle::new(-0.15, -5.0),
+            &BezierHandle::new(0.15, 5.0),
+        );
+
+        let export_dir = std::path::Path::new("assets/exports");
+        std::fs::create_dir_all(export_dir).ok();
+        let weighted_path = export_dir.join("weighted_tangent_roundtrip.fbx");
+        let flat_path = export_dir.join("flat_tangent_roundtrip.fbx");
+
+        export_full_fbx(&fbx_model, Some(&editable), &skeleton, &weighted_path)
+            .expect("Failed to export weighted");
+
+        set_weighted_tangents(
+            &mut editable,
+            2,
+            &BezierHandle::new(-0.15, 0.0),
+            &BezierHandle::new(0.15, 0.0),
+        );
+
+        export_full_fbx(&fbx_model, Some(&editable), &skeleton, &flat_path)
+            .expect("Failed to export flat");
+
+        let weighted_scene =
+            ufbx::load_file(weighted_path.to_str().unwrap(), ufbx::LoadOpts::default())
+                .expect("Failed to reload weighted");
+        let flat_scene = ufbx::load_file(flat_path.to_str().unwrap(), ufbx::LoadOpts::default())
+            .expect("Failed to reload flat");
+
+        let weighted_curve = find_rotation_x_curve_for_bone(&weighted_scene, &target_bone_name)
+            .expect("Weighted curve not found");
+        let flat_curve = find_rotation_x_curve_for_bone(&flat_scene, &target_bone_name)
+            .expect("Flat curve not found");
+
+        assert!(
+            weighted_curve.keyframes.len() >= 2,
+            "Weighted curve should have keyframes"
+        );
+        assert_eq!(
+            weighted_curve.keyframes.len(),
+            flat_curve.keyframes.len(),
+            "Both exports should have the same number of keyframes"
+        );
+
+        let has_cubic = weighted_curve
+            .keyframes
+            .iter()
+            .any(|kf| kf.interpolation == ufbx::Interpolation::Cubic);
+        assert!(
+            has_cubic,
+            "Re-imported curve should have cubic interpolation"
+        );
+
+        let mut max_shape_diff: f64 = 0.0;
+        let duration = editable.duration as f64;
+        for i in 1..10 {
+            let t = i as f64 * duration / 10.0;
+            let weighted_val = ufbx::evaluate_curve(weighted_curve, t, 0.0);
+            let flat_val = ufbx::evaluate_curve(flat_curve, t, 0.0);
+            let diff = (weighted_val - flat_val).abs();
+            if diff > max_shape_diff {
+                max_shape_diff = diff;
+            }
+        }
+
+        assert!(
+            max_shape_diff > 0.5,
+            "Weighted tangent handles should produce a different curve shape than flat handles, max_diff={:.4}",
+            max_shape_diff
+        );
+
+        let has_nonzero_tangent = weighted_curve.keyframes.iter().any(|kf| {
+            kf.right.dx.abs() > 1e-6
+                || kf.right.dy.abs() > 1e-6
+                || kf.left.dx.abs() > 1e-6
+                || kf.left.dy.abs() > 1e-6
+        });
+        assert!(
+            has_nonzero_tangent,
+            "Weighted tangent should have at least one non-zero tangent"
+        );
+
+        std::fs::remove_file(&weighted_path).ok();
+        std::fs::remove_file(&flat_path).ok();
+    }
+
+    #[test]
+    fn test_non_weighted_tangent_unchanged_on_fbx_roundtrip() {
+        let Some((fbx_model, skeleton, clip)) = load_stickman_for_roundtrip() else {
+            eprintln!("Skipping: stickman model not found");
+            return;
+        };
+
+        let bone_names = build_bone_name_map(&skeleton);
+        let mut editable_a = crate::animation::editable::EditableAnimationClip::from_animation_clip(
+            1,
+            &clip,
+            &bone_names,
+        );
+        let mut editable_b = crate::animation::editable::EditableAnimationClip::from_animation_clip(
+            2,
+            &clip,
+            &bone_names,
+        );
+
+        let target_bone_name = skeleton.bones[2].name.clone();
+
+        use crate::animation::editable::{
+            curve_recalculate_auto_tangents, InterpolationType, TangentWeightMode,
+        };
+
+        for editable in [&mut editable_a, &mut editable_b] {
+            let track = editable.tracks.get_mut(&2).expect("Bone track not found");
+            for kf in &mut track.rotation_x.keyframes {
+                kf.interpolation = InterpolationType::Bezier;
+                kf.weight_mode = TangentWeightMode::NonWeighted;
+            }
+            curve_recalculate_auto_tangents(&mut track.rotation_x);
+        }
+
+        let export_dir = std::path::Path::new("assets/exports");
+        std::fs::create_dir_all(export_dir).ok();
+        let path_a = export_dir.join("non_weighted_roundtrip_a.fbx");
+        let path_b = export_dir.join("non_weighted_roundtrip_b.fbx");
+
+        export_full_fbx(&fbx_model, Some(&editable_a), &skeleton, &path_a)
+            .expect("Failed to export A");
+        export_full_fbx(&fbx_model, Some(&editable_b), &skeleton, &path_b)
+            .expect("Failed to export B");
+
+        let scene_a = ufbx::load_file(path_a.to_str().unwrap(), ufbx::LoadOpts::default())
+            .expect("Failed to reload A");
+        let scene_b = ufbx::load_file(path_b.to_str().unwrap(), ufbx::LoadOpts::default())
+            .expect("Failed to reload B");
+
+        let curve_a =
+            find_rotation_x_curve_for_bone(&scene_a, &target_bone_name).expect("Curve A not found");
+        let curve_b =
+            find_rotation_x_curve_for_bone(&scene_b, &target_bone_name).expect("Curve B not found");
+
+        assert!(
+            curve_a.keyframes.len() >= 2,
+            "Re-imported curve should have keyframes"
+        );
+        assert_eq!(
+            curve_a.keyframes.len(),
+            curve_b.keyframes.len(),
+            "Both exports should have the same number of keyframes"
+        );
+
+        let duration = editable_a.duration as f64;
+        for i in 0..=10 {
+            let t = i as f64 * duration / 10.0;
+            let val_a = ufbx::evaluate_curve(curve_a, t, 0.0);
+            let val_b = ufbx::evaluate_curve(curve_b, t, 0.0);
+            let diff = (val_a - val_b).abs();
+            assert!(
+                diff < 1e-4,
+                "Non-weighted tangent exports should be identical at t={:.2}: a={:.4}, b={:.4}, diff={:.6}",
+                t, val_a, val_b, diff
+            );
+        }
+
+        for (kf_a, kf_b) in curve_a.keyframes.iter().zip(curve_b.keyframes.iter()) {
+            assert!(
+                (kf_a.right.dx - kf_b.right.dx).abs() < 1e-4
+                    && (kf_a.right.dy - kf_b.right.dy).abs() < 1e-4,
+                "Non-weighted tangent data should be identical: a=({}, {}), b=({}, {})",
+                kf_a.right.dx,
+                kf_a.right.dy,
+                kf_b.right.dx,
+                kf_b.right.dy
+            );
+        }
+
+        std::fs::remove_file(&path_a).ok();
+        std::fs::remove_file(&path_b).ok();
     }
 }

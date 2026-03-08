@@ -7,7 +7,7 @@ use crate::app::billboard::BillboardData;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::app::raytracing::RayTracingData;
 use crate::asset::AssetStorage;
-use crate::debugview::gizmo::{BoneGizmoData, GridGizmoData, LightGizmoData};
+use crate::debugview::gizmo::{BoneGizmoData, GridGizmoData, LightGizmoData, TransformGizmoData};
 use crate::debugview::{GridMeshData, RayTracingDebugState};
 use crate::ecs::resource::Camera;
 use crate::ecs::world::{ResMut, ResRef, World};
@@ -127,6 +127,14 @@ impl<'a> FrameContext<'a> {
 
     pub fn billboard_mut(&self) -> ResMut<BillboardData> {
         self.world.resource_mut::<BillboardData>()
+    }
+
+    pub fn transform_gizmo(&self) -> ResRef<TransformGizmoData> {
+        self.world.resource::<TransformGizmoData>()
+    }
+
+    pub fn transform_gizmo_mut(&self) -> ResMut<TransformGizmoData> {
+        self.world.resource_mut::<TransformGizmoData>()
     }
 
     pub unsafe fn update_billboard_ubo_internal(

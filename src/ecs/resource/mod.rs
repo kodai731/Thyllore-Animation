@@ -2,6 +2,7 @@ mod auto_exposure;
 mod bloom;
 #[cfg(feature = "ml")]
 mod bone_name_token_cache;
+mod bone_pose_override;
 #[cfg(feature = "ml")]
 mod bone_topology_cache;
 mod camera;
@@ -26,6 +27,9 @@ mod onion_skinning;
 mod panel_layout;
 mod physical_camera;
 mod pipeline_manager;
+mod pointer_capture;
+mod pointer_state;
+mod pose_library;
 mod scene_state;
 mod spring_bone_editor_state;
 mod spring_bone_state;
@@ -33,11 +37,13 @@ mod spring_bone_state;
 mod text_to_motion_state;
 mod timeline_state;
 mod tone_mapping;
+mod transform_gizmo_state;
 
 pub use auto_exposure::*;
 pub use bloom::*;
 #[cfg(feature = "ml")]
 pub use bone_name_token_cache::*;
+pub use bone_pose_override::*;
 #[cfg(feature = "ml")]
 pub use bone_topology_cache::*;
 pub use camera::*;
@@ -62,6 +68,9 @@ pub use onion_skinning::*;
 pub use panel_layout::*;
 pub use physical_camera::*;
 pub use pipeline_manager::*;
+pub use pointer_capture::*;
+pub use pointer_state::*;
+pub use pose_library::*;
 pub use scene_state::*;
 pub use spring_bone_editor_state::*;
 pub use spring_bone_state::*;
@@ -69,3 +78,4 @@ pub use spring_bone_state::*;
 pub use text_to_motion_state::*;
 pub use timeline_state::*;
 pub use tone_mapping::*;
+pub use transform_gizmo_state::*;

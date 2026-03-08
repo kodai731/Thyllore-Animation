@@ -136,7 +136,7 @@ impl App {
         let rrrender = RRRender::new(&instance, &rrdevice, &rrswapchain, rrcommand_pool.as_ref());
         let swapchain_image_count = rrswapchain.swapchain_images.len();
         let max_materials = 16;
-        let max_objects = 16;
+        let max_objects = 64;
         data.graphics_resources = GraphicsResources::new(
             &instance,
             &rrdevice,
@@ -500,6 +500,30 @@ impl App {
         data.ecs_world
             .insert_resource(crate::ecs::resource::SpringBoneEditorState::default());
 
+        {
+            let mut tg = crate::debugview::gizmo::TransformGizmoData::default();
+            tg.line_render_info.pipeline_id = Some(bone_wire_pipeline_id);
+            tg.line_render_info.object_index = data.graphics_resources.objects.allocate_slot();
+            tg.solid_render_info.pipeline_id = Some(bone_solid_pipeline_id);
+            tg.solid_render_info.object_index = data.graphics_resources.objects.allocate_slot();
+            crate::log!(
+                "Allocated object_index {} for TransformGizmo line",
+                tg.line_render_info.object_index
+            );
+            crate::log!(
+                "Allocated object_index {} for TransformGizmo solid",
+                tg.solid_render_info.object_index
+            );
+            data.ecs_world.insert_resource(tg);
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::TransformGizmoState::default());
+        }
+
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::PointerState::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::PointerCapture::default());
+
         let mut billboard_data = create_billboard();
         billboard_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
         crate::log!(
@@ -569,6 +593,15 @@ impl App {
         data.ecs_world.insert_resource(gizmo_data);
         data.ecs_world.insert_resource(light_gizmo_data);
         data.ecs_world.insert_resource(billboard_data);
+
+        let grid_object_index = data.graphics_resources.objects.allocate_slot();
+        crate::log!("Allocated object_index {} for Grid", grid_object_index);
+
+        data.graphics_resources.objects.seal_reserved_slots();
+        crate::log!(
+            "Sealed reserved object slots at {}",
+            data.graphics_resources.objects.get_next_slot()
+        );
 
         crate::log!("Starting ray tracing initialization...");
         crate::log!(
@@ -671,9 +704,6 @@ impl App {
             &grid_mesh.indices,
         )?;
         println!("created grid index buffer");
-
-        let grid_object_index = data.graphics_resources.objects.allocate_slot();
-        crate::log!("Allocated object_index {} for Grid", grid_object_index);
 
         let grid_render_info = RenderInfo::new(Some(grid_pipeline_id), grid_object_index);
 
@@ -967,6 +997,14 @@ impl App {
         {
             data.ecs_world
                 .insert_resource(crate::ecs::resource::ClipBrowserState::default());
+        }
+
+        if !data
+            .ecs_world
+            .contains_resource::<crate::ecs::resource::PoseLibrary>()
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::PoseLibrary::default());
         }
 
         if !data

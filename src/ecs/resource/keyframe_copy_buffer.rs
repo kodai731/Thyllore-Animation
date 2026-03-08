@@ -1,4 +1,6 @@
-use crate::animation::editable::{BezierHandle, InterpolationType, PropertyType, SourceClipId};
+use crate::animation::editable::{
+    BezierHandle, InterpolationType, PropertyType, SourceClipId, TangentWeightMode,
+};
 use crate::animation::BoneId;
 
 #[derive(Clone, Debug)]
@@ -10,6 +12,7 @@ pub struct CopiedKeyframe {
     pub interpolation: InterpolationType,
     pub in_tangent: BezierHandle,
     pub out_tangent: BezierHandle,
+    pub weight_mode: TangentWeightMode,
 }
 
 #[derive(Clone, Debug, Default)]

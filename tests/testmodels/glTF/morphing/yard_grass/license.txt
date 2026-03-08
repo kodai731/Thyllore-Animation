@@ -1,0 +1,11 @@
+Model Information:
+* title:	Yard Grass
+* source:	https://sketchfab.com/3d-models/yard-grass-3a67e76decc849c694c228eb590a9902
+* author:	ebmclachlan (https://sketchfab.com/ebmclachlan)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Yard Grass" (https://sketchfab.com/3d-models/yard-grass-3a67e76decc849c694c228eb590a9902) by ebmclachlan (https://sketchfab.com/ebmclachlan) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

@@ -11,6 +11,7 @@ pub use components::mirror::*;
 pub use components::source_clip::*;
 pub use components::track::*;
 
+pub use systems::clip_convert::*;
 pub use systems::curve_ops::*;
 pub use systems::manager::*;
 pub use systems::mirror::*;

@@ -80,7 +80,10 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
 
     let clip_library = world.resource::<ClipLibrary>();
     let (anim_clip, source_editable) = match source_id.and_then(|id| clip_library.get(id)) {
-        Some(editable) => (editable.to_animation_clip(), editable.clone()),
+        Some(editable) => (
+            crate::animation::editable::clip_to_animation(editable),
+            editable.clone(),
+        ),
         None => {
             drop(clip_library);
             crate::log!("Spring bone bake failed: no current clip");

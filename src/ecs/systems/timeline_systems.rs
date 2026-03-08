@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use crate::animation::editable::{
-    apply_tangent_by_type, curve_recalculate_auto_tangent_at, curve_remove_keyframe,
-    curve_set_keyframe_time, initialize_weighted_handle_lengths, InterpolationType, KeyframeId,
-    PropertyCurve, PropertyType, SourceClipId, TangentWeightMode,
+    apply_tangent_by_type, clip_recalculate_duration, curve_recalculate_auto_tangent_at,
+    curve_remove_keyframe, curve_set_keyframe_time, initialize_weighted_handle_lengths,
+    InterpolationType, KeyframeId, PropertyCurve, PropertyType, SourceClipId, TangentWeightMode,
 };
 use crate::animation::{BoneId, BoneLocalPose};
 use crate::ecs::component::ClipSchedule;
@@ -133,7 +133,7 @@ fn dispatch_keyframe_edit_events(
             } => {
                 if let Some(clip) = clip_library.get_mut(clip_id) {
                     clip.add_keyframe(*bone_id, *property_type, *time, *value);
-                    clip.recalculate_duration();
+                    clip_recalculate_duration(clip);
                     clip_modified = true;
                 }
             }
@@ -150,7 +150,7 @@ fn dispatch_keyframe_edit_events(
                             }
                         }
                     }
-                    clip.recalculate_duration();
+                    clip_recalculate_duration(clip);
                     clip_modified = true;
                 }
             }
@@ -167,7 +167,7 @@ fn dispatch_keyframe_edit_events(
                                 );
                             }
                         }
-                        clip.recalculate_duration();
+                        clip_recalculate_duration(clip);
                         clip_modified = true;
                     }
                 }
@@ -187,7 +187,7 @@ fn dispatch_keyframe_edit_events(
                         curve_set_keyframe_time(curve, *keyframe_id, *new_time);
                         curve.set_keyframe_value(*keyframe_id, *new_value);
                     }
-                    clip.recalculate_duration();
+                    clip_recalculate_duration(clip);
                     clip_modified = true;
                 }
             }
@@ -201,7 +201,7 @@ fn dispatch_keyframe_edit_events(
                     if let Some(track) = clip.tracks.get_mut(bone_id) {
                         curve_remove_keyframe(track.get_curve_mut(*property_type), *keyframe_id);
                     }
-                    clip.recalculate_duration();
+                    clip_recalculate_duration(clip);
                     clip_modified = true;
                 }
             }
@@ -653,7 +653,7 @@ pub fn process_bone_set_key(
         clip.add_keyframe(bone_id, PropertyType::ScaleZ, time, s.z);
     }
 
-    clip.recalculate_duration();
+    clip_recalculate_duration(clip);
     true
 }
 
@@ -680,7 +680,7 @@ mod tests {
         let kf3_id = clip
             .add_keyframe(bone_id, PropertyType::TranslationY, 0.8, 3.0)
             .unwrap();
-        clip.recalculate_duration();
+        clip_recalculate_duration(&mut clip);
 
         let mut library = ClipLibrary::new();
         library

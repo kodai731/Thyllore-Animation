@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use cgmath::{Quaternion, Vector3};
 
-use crate::animation::editable::EditableAnimationClip;
+use crate::animation::editable::{clip_from_animation, EditableAnimationClip};
 use crate::animation::{AnimationClip, BoneId, Keyframe, Skeleton, SkeletonPose, TransformChannel};
 use crate::ecs::component::ConstraintSet;
 use crate::ecs::resource::ClipLibrary;
@@ -51,7 +51,7 @@ pub fn constraint_bake_evaluate(
         &bone_scales,
     );
 
-    EditableAnimationClip::from_animation_clip(0, &baked_clip, &bone_names)
+    clip_from_animation(0, &baked_clip, &bone_names)
 }
 
 pub fn constraint_bake_rest_pose(
@@ -85,7 +85,7 @@ pub fn constraint_bake_rest_pose(
         &bone_scales,
     );
 
-    EditableAnimationClip::from_animation_clip(0, &baked_clip, &bone_names)
+    clip_from_animation(0, &baked_clip, &bone_names)
 }
 
 pub fn constraint_bake_register(

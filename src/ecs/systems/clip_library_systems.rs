@@ -5,7 +5,10 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
-use crate::animation::editable::{EditableAnimationClip, SourceClip, SourceClipId};
+use crate::animation::editable::{
+    clip_from_animation, clip_remap_bone_ids, clip_to_animation, EditableAnimationClip, SourceClip,
+    SourceClipId,
+};
 use crate::animation::{AnimationClip, BoneId};
 use crate::asset::{AnimationClipAsset, AssetStorage};
 use crate::ecs::resource::ClipLibrary;
@@ -22,7 +25,7 @@ pub fn clip_library_register_and_activate(
     let mut clip = editable;
     clip.id = source_id;
 
-    let playable = clip.to_animation_clip();
+    let playable = clip_to_animation(&clip);
     let asset_id = assets.add_animation_clip(AnimationClipAsset {
         id: 0,
         clip: playable,
@@ -41,14 +44,14 @@ pub fn clip_library_create_from_imported(
     clip: &AnimationClip,
     bone_names: &HashMap<BoneId, String>,
 ) -> SourceClipId {
-    let editable = EditableAnimationClip::from_animation_clip(0, clip, bone_names);
+    let editable = crate::animation::editable::clip_from_animation(0, clip, bone_names);
     clip_library_register_and_activate(lib, assets, editable)
 }
 
 pub fn clip_library_to_playable(lib: &ClipLibrary, id: SourceClipId) -> Option<AnimationClip> {
     lib.source_clips
         .get(&id)
-        .map(|s| s.editable_clip.to_animation_clip())
+        .map(|s| clip_to_animation(&s.editable_clip))
 }
 
 pub fn clip_library_sync_dirty(lib: &mut ClipLibrary, assets: &mut AssetStorage) {
@@ -61,7 +64,7 @@ pub fn clip_library_sync_dirty(lib: &mut ClipLibrary, assets: &mut AssetStorage)
             _ => continue,
         };
 
-        let playable = editable.to_animation_clip();
+        let playable = clip_to_animation(editable);
         if let Some(asset) = assets.animation_clips.get_mut(&asset_id) {
             asset.clip = playable;
         }
@@ -116,7 +119,7 @@ pub fn clip_library_load_from_file(
 
         if needs_remap {
             let remapped_count = clip.tracks.len();
-            clip.remap_bone_ids(name_to_id);
+            clip_remap_bone_ids(&mut clip, name_to_id);
             crate::log!(
                 "Remapped {} bone_ids by bone_name for '{}'",
                 remapped_count,

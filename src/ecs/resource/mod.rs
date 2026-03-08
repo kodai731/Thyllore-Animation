@@ -16,6 +16,7 @@ mod exposure;
 mod fbx_model_cache;
 #[cfg(feature = "ml")]
 mod ghost_curve_data;
+mod gltf_model_cache;
 mod graphics;
 mod hierarchy_state;
 #[cfg(feature = "ml")]
@@ -57,6 +58,7 @@ pub use exposure::*;
 pub use fbx_model_cache::*;
 #[cfg(feature = "ml")]
 pub use ghost_curve_data::*;
+pub use gltf_model_cache::*;
 pub use graphics::*;
 pub use hierarchy_state::*;
 #[cfg(feature = "ml")]

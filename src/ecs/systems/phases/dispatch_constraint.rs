@@ -111,7 +111,7 @@ pub fn dispatch_constraint_bake_events(
             let clip_library = world.resource::<ClipLibrary>();
             match clip_library.get(source_id) {
                 Some(editable) => {
-                    let anim_clip = editable.to_animation_clip();
+                    let anim_clip = crate::animation::editable::clip_to_animation(editable);
                     let source_name = editable.name.clone();
                     drop(clip_library);
 

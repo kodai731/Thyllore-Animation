@@ -67,6 +67,17 @@ fn build_toolbar(ui: &imgui::Ui, ui_events: &mut UIEventQueue, browser_state: &C
     }
 
     ui.same_line();
+    if has_selection {
+        if ui.small_button("glTF") {
+            if let Some(id) = browser_state.selected_clip_id {
+                ui_events.send(UIEvent::ClipBrowserExportGltf(id));
+            }
+        }
+    } else {
+        ui.text_disabled("glTF");
+    }
+
+    ui.same_line();
     let can_duplicate = has_selection;
     if can_duplicate {
         if ui.small_button("Dup") {

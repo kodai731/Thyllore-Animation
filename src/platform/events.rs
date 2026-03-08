@@ -441,6 +441,7 @@ fn process_platform_file_events(events: &[UIEvent], app: &mut App) {
             UIEvent::ClipBrowserLoadFromFile => handle_clip_load_from_file(app),
             UIEvent::ClipBrowserSaveToFile(source_id) => handle_clip_save_to_file(app, *source_id),
             UIEvent::ClipBrowserExportFbx(source_id) => handle_clip_export_fbx(app, *source_id),
+            UIEvent::ClipBrowserExportGltf(source_id) => handle_clip_export_gltf(app, *source_id),
             UIEvent::SpringBoneSaveBake => handle_spring_bone_save(app),
             _ => {}
         }
@@ -577,6 +578,55 @@ fn handle_clip_export_fbx(app: &mut App, source_id: u64) {
     match result {
         Ok(()) => crate::log!("FBX exported: {:?}", path),
         Err(e) => crate::log!("FBX export failed: {:?}", e),
+    }
+}
+
+fn handle_clip_export_gltf(app: &mut App, source_id: u64) {
+    let clip = {
+        let lib = app.data.ecs_world.resource::<ClipLibrary>();
+        lib.get(source_id).cloned()
+    };
+    let skeleton = app
+        .data
+        .ecs_assets
+        .skeletons
+        .values()
+        .next()
+        .map(|sa| sa.skeleton.clone());
+
+    let (Some(clip), Some(skeleton)) = (clip, skeleton) else {
+        return;
+    };
+
+    let source_glb_path = app
+        .data
+        .ecs_world
+        .get_resource::<crate::ecs::resource::GltfModelCache>()
+        .and_then(|cache| cache.source_path.clone());
+
+    let Some(source_glb_path) = source_glb_path else {
+        crate::log!("glTF export failed: no source glTF/GLB model loaded");
+        return;
+    };
+
+    let default_filename = format!("{}.glb", clip.name);
+    let path = rfd::FileDialog::new()
+        .add_filter("glTF Binary", &["glb"])
+        .set_file_name(&default_filename)
+        .save_file();
+
+    let Some(path) = path else {
+        return;
+    };
+
+    match crate::exporter::gltf_exporter::export_gltf_animation(
+        std::path::Path::new(&source_glb_path),
+        &clip,
+        &skeleton,
+        &path,
+    ) {
+        Ok(()) => crate::log!("glTF exported: {:?}", path),
+        Err(e) => crate::log!("glTF export failed: {:?}", e),
     }
 }
 

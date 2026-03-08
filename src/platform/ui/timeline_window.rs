@@ -19,10 +19,6 @@ pub struct TimelineInteractionState {
     pub dragging_clip: Option<ClipDragState>,
 }
 
-pub fn ruler_padding(duration: f32) -> f32 {
-    (duration * 0.3).max(2.0)
-}
-
 const TRACK_LABEL_WIDTH: f32 = 150.0;
 const TIME_RULER_HEIGHT: f32 = 30.0;
 const PIXELS_PER_SECOND: f32 = 80.0;
@@ -72,6 +68,7 @@ pub fn build_timeline_window(
                 clip_track_snapshot,
             );
             handle_timeline_shortcuts(ui, ui_events, state);
+            handle_mouse_wheel_zoom(ui, state);
         });
 }
 
@@ -192,7 +189,7 @@ fn build_timeline_content(
 
     let duration = current_clip.map(|c| c.duration).unwrap_or(5.0);
     let pixels_per_second = PIXELS_PER_SECOND * state.zoom_level;
-    let display_duration = duration + ruler_padding(duration);
+    let display_duration = duration;
     let timeline_width =
         (display_duration * pixels_per_second).max(content_region[0] - TRACK_LABEL_WIDTH);
 
@@ -1229,6 +1226,20 @@ fn handle_timeline_shortcuts(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state
         if !state.selected_keyframes.is_empty() {
             ui_events.send(UIEvent::TimelineDeleteSelectedKeyframes);
         }
+    }
+}
+
+fn handle_mouse_wheel_zoom(ui: &imgui::Ui, state: &mut TimelineState) {
+    let hovered = ui.is_window_hovered_with_flags(imgui::WindowHoveredFlags::CHILD_WINDOWS);
+    if !hovered || !ui.io().key_ctrl {
+        return;
+    }
+
+    let wheel = ui.io().mouse_wheel;
+    if wheel > 0.0 {
+        state.zoom_in();
+    } else if wheel < 0.0 {
+        state.zoom_out();
     }
 }
 

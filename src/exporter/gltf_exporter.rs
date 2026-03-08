@@ -6,13 +6,13 @@ use std::path::Path;
 
 use anyhow::{anyhow, Result};
 use gltf::binary::Glb;
-use gltf::json::{self, Index};
 use gltf::json::accessor::{ComponentType, GenericComponentType, Type};
 use gltf::json::animation::{Interpolation, Property};
 use gltf::json::validation::{Checked, USize64};
+use gltf::json::{self, Index};
 
-use crate::animation::{AnimationClip, BoneId, Skeleton, TransformChannel};
 use crate::animation::editable::EditableAnimationClip;
+use crate::animation::{AnimationClip, BoneId, Skeleton, TransformChannel};
 
 pub fn export_gltf_animation(
     source_glb_path: &Path,
@@ -21,21 +21,19 @@ pub fn export_gltf_animation(
     output_path: &Path,
 ) -> Result<()> {
     let raw_bytes = fs::read(source_glb_path)?;
-    let glb = Glb::from_slice(&raw_bytes)
-        .map_err(|e| anyhow!("Failed to parse GLB: {:?}", e))?;
+    let glb = Glb::from_slice(&raw_bytes).map_err(|e| anyhow!("Failed to parse GLB: {:?}", e))?;
 
     let mut root: json::Root = json::Root::from_slice(&glb.json)
         .map_err(|e| anyhow!("Failed to parse glTF JSON: {:?}", e))?;
 
-    let mut bin = glb.bin
-        .map(|b| b.into_owned())
-        .unwrap_or_default();
+    let mut bin = glb.bin.map(|b| b.into_owned()).unwrap_or_default();
 
     let baked_clip = clip.to_animation_clip();
 
     replace_animations(&mut root, &mut bin, &baked_clip, skeleton)?;
 
-    let json_bytes = root.to_vec()
+    let json_bytes = root
+        .to_vec()
         .map_err(|e| anyhow!("Failed to serialize glTF JSON: {:?}", e))?;
 
     let output_glb = Glb {
@@ -45,12 +43,17 @@ pub fn export_gltf_animation(
             length: 0,
         },
         json: Cow::Owned(json_bytes),
-        bin: if bin.is_empty() { None } else { Some(Cow::Owned(bin)) },
+        bin: if bin.is_empty() {
+            None
+        } else {
+            Some(Cow::Owned(bin))
+        },
     };
 
     let file = fs::File::create(output_path)?;
     let writer = BufWriter::new(file);
-    output_glb.to_writer(writer)
+    output_glb
+        .to_writer(writer)
         .map_err(|e| anyhow!("Failed to write GLB: {:?}", e))?;
 
     crate::log!("glTF animation exported to {:?}", output_path);
@@ -67,7 +70,9 @@ fn replace_animations(
 
     let bone_to_node = build_bone_to_node_map(skeleton, &root.nodes);
     if bone_to_node.is_empty() {
-        return Err(anyhow!("No bone-to-node mapping found. Skeleton bone names may not match glTF node names."));
+        return Err(anyhow!(
+            "No bone-to-node mapping found. Skeleton bone names may not match glTF node names."
+        ));
     }
 
     let buffer_index = Index::<json::Buffer>::new(0);
@@ -81,18 +86,33 @@ fn replace_animations(
         let node_idx = Index::new(node_index);
 
         append_translation_channel(
-            root, bin, buffer_index, channel, node_idx,
-            &mut channels, &mut samplers,
+            root,
+            bin,
+            buffer_index,
+            channel,
+            node_idx,
+            &mut channels,
+            &mut samplers,
         );
 
         append_rotation_channel(
-            root, bin, buffer_index, channel, node_idx,
-            &mut channels, &mut samplers,
+            root,
+            bin,
+            buffer_index,
+            channel,
+            node_idx,
+            &mut channels,
+            &mut samplers,
         );
 
         append_scale_channel(
-            root, bin, buffer_index, channel, node_idx,
-            &mut channels, &mut samplers,
+            root,
+            bin,
+            buffer_index,
+            channel,
+            node_idx,
+            &mut channels,
+            &mut samplers,
         );
     }
 
@@ -135,7 +155,9 @@ fn append_translation_channel(
     }
 
     let times: Vec<f32> = channel.translation.iter().map(|k| k.time).collect();
-    let values: Vec<f32> = channel.translation.iter()
+    let values: Vec<f32> = channel
+        .translation
+        .iter()
         .flat_map(|k| [k.value.x, k.value.y, k.value.z])
         .collect();
 
@@ -178,7 +200,9 @@ fn append_rotation_channel(
     }
 
     let times: Vec<f32> = channel.rotation.iter().map(|k| k.time).collect();
-    let values: Vec<f32> = channel.rotation.iter()
+    let values: Vec<f32> = channel
+        .rotation
+        .iter()
         .flat_map(|k| quaternion_to_gltf_array(k.value))
         .collect();
 
@@ -221,7 +245,9 @@ fn append_scale_channel(
     }
 
     let times: Vec<f32> = channel.scale.iter().map(|k| k.time).collect();
-    let values: Vec<f32> = channel.scale.iter()
+    let values: Vec<f32> = channel
+        .scale
+        .iter()
         .flat_map(|k| [k.value.x, k.value.y, k.value.z])
         .collect();
 
@@ -388,11 +414,10 @@ fn build_bone_to_node_map(
 ) -> HashMap<BoneId, u32> {
     let mut map = HashMap::new();
 
-    let node_name_to_index: HashMap<&str, u32> = nodes.iter()
+    let node_name_to_index: HashMap<&str, u32> = nodes
+        .iter()
         .enumerate()
-        .filter_map(|(i, node)| {
-            node.name.as_ref().map(|name| (name.as_str(), i as u32))
-        })
+        .filter_map(|(i, node)| node.name.as_ref().map(|name| (name.as_str(), i as u32)))
         .collect();
 
     for bone in &skeleton.bones {
@@ -492,12 +517,10 @@ mod tests {
     #[test]
     fn test_bone_to_node_mapping_missing_nodes() {
         let skeleton = create_test_skeleton();
-        let nodes = vec![
-            json::scene::Node {
-                name: Some("Hips".to_string()),
-                ..Default::default()
-            },
-        ];
+        let nodes = vec![json::scene::Node {
+            name: Some("Hips".to_string()),
+            ..Default::default()
+        }];
 
         let map = build_bone_to_node_map(&skeleton, &nodes);
 
@@ -547,10 +570,7 @@ mod tests {
 
     #[test]
     fn test_compute_min_max_vec3() {
-        let data = [
-            1.0, 2.0, 3.0,
-            -1.0, 5.0, 0.0,
-        ];
+        let data = [1.0, 2.0, 3.0, -1.0, 5.0, 0.0];
         let (min, max) = compute_min_max_vec3(&data);
 
         assert_eq!(min, [-1.0, 2.0, 0.0]);

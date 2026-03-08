@@ -214,15 +214,15 @@ impl Default for GltfParseContext {
     }
 }
 
-pub unsafe fn load_gltf_file(path: &str) -> GltfLoadResult {
+pub unsafe fn load_gltf_file(path: &str) -> Result<GltfLoadResult> {
     let mut ctx = GltfParseContext::default();
-    parse_gltf(&mut ctx, path);
-    build_result(ctx)
+    parse_gltf(&mut ctx, path)?;
+    Ok(build_result(ctx))
 }
 
-unsafe fn parse_gltf(ctx: &mut GltfParseContext, path: &str) {
+unsafe fn parse_gltf(ctx: &mut GltfParseContext, path: &str) -> Result<()> {
     log!("Loading glTF file: {}", path);
-    let (gltf, buffers, images) = gltf::import(format!("{}", path)).expect("Failed to load model");
+    let (gltf, buffers, images) = gltf::import(format!("{}", path))?;
 
     log!(
         "glTF: {} skins, {} nodes, {} meshes, {} animations",
@@ -258,8 +258,7 @@ unsafe fn parse_gltf(ctx: &mut GltfParseContext, path: &str) {
                 ctx,
                 &Matrix4::identity(),
                 None,
-            )
-            .unwrap();
+            )?;
         }
     }
 
@@ -272,7 +271,7 @@ unsafe fn parse_gltf(ctx: &mut GltfParseContext, path: &str) {
         .map(|m| m.morph_targets.len())
         .unwrap_or(0);
     for animation in gltf.animations() {
-        process_animation(&buffers, animation, ctx, morph_target_count).unwrap();
+        process_animation(&buffers, animation, ctx, morph_target_count)?;
     }
 
     ctx.spring_bone_setup = extract_spring_bone_extension(&gltf, &ctx.node_joint_map);
@@ -283,6 +282,8 @@ unsafe fn parse_gltf(ctx: &mut GltfParseContext, path: &str) {
         ctx.node_animations.len(),
         ctx.joint_animations.len()
     );
+
+    Ok(())
 }
 
 fn extract_spring_bone_extension(
@@ -317,10 +318,9 @@ fn set_joints(ctx: &mut GltfParseContext, skin: &gltf::Skin, buffers: &Vec<Data>
     let temp_joints: Vec<_> = skin.joints().collect();
     for (joint_index, node) in temp_joints.iter().enumerate() {
         let joint_transform = mat4_from_array(node.transform().matrix());
-        let node_index = ctx
-            .node_joint_map
-            .get_node_index(joint_index as u16)
-            .unwrap();
+        let Some(node_index) = ctx.node_joint_map.get_node_index(joint_index as u16) else {
+            continue;
+        };
         log!(
             "Joint Pushed: Node Index: {}, Node Name: {}, Joint Index: {}",
             node_index,
@@ -633,21 +633,13 @@ unsafe fn process_node(
         local_transform: node_transform,
     });
 
-    if ctx.node_joint_map.contain_node_index(node.index() as u16) {
-        let joint_index = *ctx
-            .node_joint_map
-            .node_to_joint
-            .get(&(node.index() as u16))
-            .unwrap();
+    if let Some(&joint_index) = ctx.node_joint_map.node_to_joint.get(&(node.index() as u16)) {
         ctx.joints[joint_index as usize].transform = array_from_mat4(node_transform);
 
         if let Some(parent_index) = parent_node_index {
-            if ctx.node_joint_map.contain_node_index(parent_index as u16) {
-                let parent_joint_index = *ctx
-                    .node_joint_map
-                    .node_to_joint
-                    .get(&(parent_index as u16))
-                    .unwrap();
+            if let Some(&parent_joint_index) =
+                ctx.node_joint_map.node_to_joint.get(&(parent_index as u16))
+            {
                 ctx.joints[parent_joint_index as usize]
                     .child_joint_indices
                     .push(joint_index);
@@ -724,7 +716,10 @@ unsafe fn process_animation(
 
     for channel in animation.channels() {
         let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
-        let key_frames: Vec<f32> = reader.read_inputs().unwrap().collect();
+        let Some(inputs) = reader.read_inputs() else {
+            continue;
+        };
+        let key_frames: Vec<f32> = inputs.collect();
 
         let gltf_interp = channel.sampler().interpolation();
         let is_cubic = gltf_interp == gltf::animation::Interpolation::CubicSpline;
@@ -872,11 +867,10 @@ unsafe fn process_animation(
             .contains_key(&(node.index() as u16));
 
         if is_joint_node && ctx.has_skinned_meshes {
-            let joint_id = *ctx
-                .node_joint_map
-                .node_to_joint
-                .get(&(node.index() as u16))
-                .unwrap();
+            let Some(&joint_id) = ctx.node_joint_map.node_to_joint.get(&(node.index() as u16))
+            else {
+                continue;
+            };
 
             ctx.joint_animations[joint_id as usize].push(JointAnimation {
                 key_frames: key_frames.clone(),
@@ -903,7 +897,9 @@ unsafe fn process_animation(
                     interpolation: interp.clone(),
                     ..Default::default()
                 });
-                ctx.node_animations.last_mut().unwrap()
+                ctx.node_animations
+                    .last_mut()
+                    .expect("just pushed node_animation")
             };
 
             if !node_translations.is_empty() {
@@ -1048,24 +1044,26 @@ fn collect_animation_clips(
         }
     }
 
-    if !ctx.node_animations.is_empty() && skeleton_id.is_some() {
-        let clip = convert_node_animations_to_clip(
-            &ctx.node_animations,
-            &ctx.rrnodes,
-            animation_system,
-            skeleton_id.unwrap(),
-        );
-        log!(
-            "Node animation clip: duration={}, channels={}",
-            clip.duration,
-            clip.channels.len()
-        );
-        if clip.duration > 0.0 && !clip.channels.is_empty() {
-            if let Some(skeleton) = animation_system.get_skeleton_mut(skeleton_id.unwrap()) {
-                initialize_skeleton_from_clip(skeleton, &clip, 0.0);
-                log!("Initialized skeleton bones with animation t=0 values");
+    if let Some(skel_id) = skeleton_id {
+        if !ctx.node_animations.is_empty() {
+            let clip = convert_node_animations_to_clip(
+                &ctx.node_animations,
+                &ctx.rrnodes,
+                animation_system,
+                skel_id,
+            );
+            log!(
+                "Node animation clip: duration={}, channels={}",
+                clip.duration,
+                clip.channels.len()
+            );
+            if clip.duration > 0.0 && !clip.channels.is_empty() {
+                if let Some(skeleton) = animation_system.get_skeleton_mut(skel_id) {
+                    initialize_skeleton_from_clip(skeleton, &clip, 0.0);
+                    log!("Initialized skeleton bones with animation t=0 values");
+                }
+                clips.push(clip);
             }
-            clips.push(clip);
         }
     }
 }

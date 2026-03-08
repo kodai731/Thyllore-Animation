@@ -9,7 +9,7 @@ use super::ui::{
     build_click_debug_overlay, build_clip_browser_window, build_curve_editor_window,
     build_debug_window, build_hierarchy_window, build_inspector_window, build_status_bar_overlay,
     build_timeline_window, build_viewport_window, handle_splitters, CurveEditorState,
-    DebugWindowState, LayoutSnapshot, StatusBarState, TimelineInteractionState,
+    DebugWindowState, LayoutSnapshot, StatusBarState, TimelineInteractionState, ViewportInfo,
 };
 use crate::app::{App, GUIData};
 use crate::ecs::events::UIEvent;
@@ -199,6 +199,19 @@ fn build_ui_windows(
         LayoutSnapshot::from_layout(&panel_layout, display_size)
     };
 
+    build_side_panel_windows(ui, app, gui_data, debug_state, &layout_snapshot);
+    let viewport_info = build_viewport_and_update_state(ui, app, gui_data, &layout_snapshot);
+    build_animation_editor_windows(ui, app, &layout_snapshot);
+    build_status_and_splitters(ui, app, status_bar_state, &viewport_info, &layout_snapshot);
+}
+
+fn build_side_panel_windows(
+    ui: &imgui::Ui,
+    app: &mut App,
+    gui_data: &mut GUIData,
+    debug_state: &mut DebugWindowState,
+    layout_snapshot: &LayoutSnapshot,
+) {
     {
         let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
         build_debug_window(
@@ -207,7 +220,7 @@ fn build_ui_windows(
             debug_state,
             gui_data,
             &app.data.ecs_world,
-            &layout_snapshot,
+            layout_snapshot,
         );
     }
 
@@ -220,7 +233,7 @@ fn build_ui_windows(
             &app.data.ecs_world,
             &*hierarchy_state,
             &app.data.ecs_assets,
-            &layout_snapshot,
+            layout_snapshot,
         );
     }
 
@@ -234,7 +247,7 @@ fn build_ui_windows(
             &*clip_library,
             &mut *browser_state,
             &app.data.ecs_world,
-            &layout_snapshot,
+            layout_snapshot,
         );
     }
 
@@ -248,36 +261,44 @@ fn build_ui_windows(
             &*hierarchy_state,
             &app.data.ecs_assets,
             &app.data.graphics_resources,
-            &layout_snapshot,
+            layout_snapshot,
         );
     }
+}
 
-    let viewport_info = {
-        let texture_id = imgui::TextureId::new(app.data.viewport.texture_id());
-        let current_size = [
-            app.data.viewport.width as f32,
-            app.data.viewport.height as f32,
-        ];
-        let info = build_viewport_window(ui, texture_id, current_size, &layout_snapshot);
+fn build_viewport_and_update_state(
+    ui: &imgui::Ui,
+    app: &mut App,
+    gui_data: &mut GUIData,
+    layout_snapshot: &LayoutSnapshot,
+) -> ViewportInfo {
+    let texture_id = imgui::TextureId::new(app.data.viewport.texture_id());
+    let current_size = [
+        app.data.viewport.width as f32,
+        app.data.viewport.height as f32,
+    ];
+    let info = build_viewport_window(ui, texture_id, current_size, layout_snapshot);
 
-        app.data.viewport.focused = info.focused;
-        app.data.viewport.hovered = info.hovered;
-        gui_data.viewport_focused = info.focused;
-        gui_data.viewport_hovered = info.hovered;
-        gui_data.viewport_position = info.position;
-        gui_data.viewport_size = info.size;
+    app.data.viewport.focused = info.focused;
+    app.data.viewport.hovered = info.hovered;
+    gui_data.viewport_focused = info.focused;
+    gui_data.viewport_hovered = info.hovered;
+    gui_data.viewport_position = info.position;
+    gui_data.viewport_size = info.size;
 
-        let new_width = info.size[0] as u32;
-        let new_height = info.size[1] as u32;
-        if new_width > 0
-            && new_height > 0
-            && (new_width != app.data.viewport.width || new_height != app.data.viewport.height)
-        {
-            gui_data.viewport_resize_pending = Some((new_width, new_height));
-        }
-        info
-    };
+    let new_width = info.size[0] as u32;
+    let new_height = info.size[1] as u32;
+    if new_width > 0
+        && new_height > 0
+        && (new_width != app.data.viewport.width || new_height != app.data.viewport.height)
+    {
+        gui_data.viewport_resize_pending = Some((new_width, new_height));
+    }
 
+    info
+}
+
+fn build_animation_editor_windows(ui: &imgui::Ui, app: &mut App, layout_snapshot: &LayoutSnapshot) {
     let clip_track_snapshot = {
         let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
         query_clip_tracks(&app.data.ecs_world, &*clip_library, &app.data.ecs_assets)
@@ -300,7 +321,7 @@ fn build_ui_windows(
             &*clip_library,
             &mut *curve_editor,
             &clip_track_snapshot,
-            &layout_snapshot,
+            layout_snapshot,
         );
     }
 
@@ -350,31 +371,35 @@ fn build_ui_windows(
             &mut *pose_library,
         );
     }
+}
 
-    {
-        let delta_time = (app.start.elapsed().as_secs_f32() - app.last_update_time).max(0.001);
-        let timeline_state = app.data.ecs_world.resource::<TimelineState>();
-        let clip_duration = timeline_state
-            .current_clip_id
-            .and_then(|id| {
-                let lib = app.data.ecs_world.resource::<ClipLibrary>();
-                lib.get(id).map(|c| c.duration)
-            })
-            .unwrap_or(0.0);
-        build_status_bar_overlay(
-            ui,
-            status_bar_state,
-            delta_time,
-            &viewport_info,
-            &*timeline_state,
-            clip_duration,
-        );
-    }
+fn build_status_and_splitters(
+    ui: &imgui::Ui,
+    app: &mut App,
+    status_bar_state: &mut StatusBarState,
+    viewport_info: &ViewportInfo,
+    layout_snapshot: &LayoutSnapshot,
+) {
+    let delta_time = (app.start.elapsed().as_secs_f32() - app.last_update_time).max(0.001);
+    let timeline_state = app.data.ecs_world.resource::<TimelineState>();
+    let clip_duration = timeline_state
+        .current_clip_id
+        .and_then(|id| {
+            let lib = app.data.ecs_world.resource::<ClipLibrary>();
+            lib.get(id).map(|c| c.duration)
+        })
+        .unwrap_or(0.0);
+    build_status_bar_overlay(
+        ui,
+        status_bar_state,
+        delta_time,
+        viewport_info,
+        &*timeline_state,
+        clip_duration,
+    );
 
-    {
-        let mut panel_layout = app.data.ecs_world.resource_mut::<PanelLayout>();
-        handle_splitters(ui, &mut panel_layout, &layout_snapshot);
-    }
+    let mut panel_layout = app.data.ecs_world.resource_mut::<PanelLayout>();
+    handle_splitters(ui, &mut panel_layout, layout_snapshot);
 }
 
 unsafe fn process_ui_events_and_render_frame(

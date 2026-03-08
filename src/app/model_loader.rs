@@ -78,7 +78,7 @@ unsafe fn load_model_data(path: &str) -> Result<(ModelLoadResult, Option<FbxMode
         let (result, fbx_model) = crate::loader::fbx::load_fbx_to_graphics_resources(path)?;
         Ok((ModelLoadResult::from_fbx(result), Some(fbx_model)))
     } else if path_lower.ends_with(".gltf") || path_lower.ends_with(".glb") {
-        let result = crate::loader::gltf::load_gltf_file(path);
+        let result = crate::loader::gltf::load_gltf_file(path)?;
         Ok((ModelLoadResult::from_gltf(result), None))
     } else {
         Err(anyhow!(

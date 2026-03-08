@@ -903,33 +903,44 @@ impl App {
         model_path: &str,
         msaa_samples: vk::SampleCountFlags,
     ) {
-        let frame_sync = FrameSync::new(
+        Self::register_vulkan_resources(data, resources, model_path, msaa_samples);
+        Self::register_editor_resources(data);
+        Self::register_post_processing_resources(data);
+
+        #[cfg(feature = "ml")]
+        Self::register_ml_resources(data);
+    }
+
+    fn register_vulkan_resources(
+        data: &mut AppData,
+        resources: &VulkanResources,
+        model_path: &str,
+        msaa_samples: vk::SampleCountFlags,
+    ) {
+        data.ecs_world.insert_resource(FrameSync::new(
             resources.image_available_semaphores.clone(),
             resources.render_finish_semaphores.clone(),
             resources.in_flight_fences.clone(),
-        );
-        data.ecs_world.insert_resource(frame_sync);
+        ));
 
-        let swapchain_state = SwapchainState::new(
+        data.ecs_world.insert_resource(SwapchainState::new(
             resources.rrswapchain.clone(),
             resources.rrswapchain.swapchain_images.len(),
-        );
-        data.ecs_world.insert_resource(swapchain_state);
+        ));
 
-        let render_targets = RenderTargets::new(resources.rrrender.clone());
-        data.ecs_world.insert_resource(render_targets);
+        data.ecs_world
+            .insert_resource(RenderTargets::new(resources.rrrender.clone()));
 
-        let command_state = CommandState::new(
+        data.ecs_world.insert_resource(CommandState::new(
             resources.rrcommand_pool.clone(),
             resources.rrcommand_buffer.clone(),
-        );
-        data.ecs_world.insert_resource(command_state);
+        ));
 
-        let pipeline_state = PipelineState::new(resources.model_pipeline.clone());
-        data.ecs_world.insert_resource(pipeline_state);
+        data.ecs_world
+            .insert_resource(PipelineState::new(resources.model_pipeline.clone()));
 
-        let surface_state = SurfaceState::new(resources.surface, resources.messenger);
-        data.ecs_world.insert_resource(surface_state);
+        data.ecs_world
+            .insert_resource(SurfaceState::new(resources.surface, resources.messenger));
 
         {
             let mut model_state = data.ecs_world.resource_mut::<ModelState>();
@@ -939,64 +950,26 @@ impl App {
         }
 
         if !data.ecs_world.contains_resource::<RenderConfig>() {
-            let render_config = RenderConfig::new(msaa_samples);
-            data.ecs_world.insert_resource(render_config);
-        }
-
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::UIEventQueue>()
-        {
-            let ui_event_queue = crate::ecs::UIEventQueue::new();
-            data.ecs_world.insert_resource(ui_event_queue);
-        }
-
-        if !data.ecs_world.contains_resource::<HierarchyState>() {
-            data.ecs_world.insert_resource(HierarchyState::default());
-        }
-
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::ObjectIdReadback>()
-        {
             data.ecs_world
-                .insert_resource(crate::ecs::resource::ObjectIdReadback::default());
+                .insert_resource(RenderConfig::new(msaa_samples));
         }
+    }
+
+    fn register_editor_resources(data: &mut AppData) {
+        Self::insert_default_if_missing::<crate::ecs::UIEventQueue>(data);
+        Self::insert_default_if_missing::<HierarchyState>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::ObjectIdReadback>(data);
+        Self::insert_default_if_missing::<crate::platform::CurveEditorState>(data);
+        Self::insert_default_if_missing::<crate::platform::TimelineInteractionState>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::KeyframeCopyBuffer>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::CurveEditorBuffer>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::ClipBrowserState>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::PoseLibrary>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::ConstraintEditorState>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::PanelLayout>(data);
 
         if !data.ecs_world.contains_resource::<TimelineState>() {
             data.ecs_world.insert_resource(TimelineState::new());
-        }
-
-        if !data
-            .ecs_world
-            .contains_resource::<crate::platform::CurveEditorState>()
-        {
-            data.ecs_world
-                .insert_resource(crate::platform::CurveEditorState::default());
-        }
-
-        if !data
-            .ecs_world
-            .contains_resource::<crate::platform::TimelineInteractionState>()
-        {
-            data.ecs_world
-                .insert_resource(crate::platform::TimelineInteractionState::default());
-        }
-
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::KeyframeCopyBuffer>()
-        {
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::KeyframeCopyBuffer::default());
-        }
-
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::CurveEditorBuffer>()
-        {
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::CurveEditorBuffer::default());
         }
 
         if !data
@@ -1006,117 +979,38 @@ impl App {
             data.ecs_world
                 .insert_resource(crate::ecs::resource::EditHistory::new(100));
         }
+    }
 
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::ClipBrowserState>()
-        {
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::ClipBrowserState::default());
-        }
+    fn register_post_processing_resources(data: &mut AppData) {
+        Self::insert_default_if_missing::<crate::ecs::resource::PhysicalCameraParameters>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::Exposure>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::DepthOfField>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::ToneMapping>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::LensEffects>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::BloomSettings>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::AutoExposure>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::OnionSkinningConfig>(data);
+    }
 
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::PoseLibrary>()
-        {
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::PoseLibrary::default());
-        }
+    #[cfg(feature = "ml")]
+    fn register_ml_resources(data: &mut AppData) {
+        use crate::ecs::component::InferenceActorSetup;
+        use crate::ecs::world::EntityBuilder;
+        use crate::ml::{
+            resolve_curve_copilot_model_path, InferenceModelKind, CURVE_COPILOT_ACTOR_ID,
+        };
 
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::ConstraintEditorState>()
-        {
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::ConstraintEditorState::default());
-        }
+        EntityBuilder::new(&mut data.ecs_world).with_inference_actor(InferenceActorSetup {
+            actor_id: CURVE_COPILOT_ACTOR_ID,
+            model_path: resolve_curve_copilot_model_path(),
+            model_kind: InferenceModelKind::CurveCopilot,
+            enabled: true,
+        });
+    }
 
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::PhysicalCameraParameters>()
-        {
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::PhysicalCameraParameters::default());
-        }
-
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::Exposure>()
-        {
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::Exposure::default());
-        }
-
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::DepthOfField>()
-        {
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::DepthOfField::default());
-        }
-
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::ToneMapping>()
-        {
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::ToneMapping::default());
-        }
-
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::LensEffects>()
-        {
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::LensEffects::default());
-        }
-
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::BloomSettings>()
-        {
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::BloomSettings::default());
-        }
-
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::AutoExposure>()
-        {
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::AutoExposure::default());
-        }
-
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::OnionSkinningConfig>()
-        {
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::OnionSkinningConfig::default());
-        }
-
-        if !data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::PanelLayout>()
-        {
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::PanelLayout::default());
-        }
-
-        #[cfg(feature = "ml")]
-        {
-            use crate::ecs::component::InferenceActorSetup;
-            use crate::ecs::world::EntityBuilder;
-            use crate::ml::{
-                resolve_curve_copilot_model_path, InferenceModelKind, CURVE_COPILOT_ACTOR_ID,
-            };
-
-            EntityBuilder::new(&mut data.ecs_world).with_inference_actor(InferenceActorSetup {
-                actor_id: CURVE_COPILOT_ACTOR_ID,
-                model_path: resolve_curve_copilot_model_path(),
-                model_kind: InferenceModelKind::CurveCopilot,
-                enabled: true,
-            });
+    fn insert_default_if_missing<T: Default + 'static>(data: &mut AppData) {
+        if !data.ecs_world.contains_resource::<T>() {
+            data.ecs_world.insert_resource(T::default());
         }
     }
 

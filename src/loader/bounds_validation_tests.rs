@@ -411,7 +411,8 @@ fn test_gltf_stickman_bounds_match_blender() {
         return;
     }
 
-    let gltf_result = unsafe { crate::loader::gltf::load_gltf_file(model_path) };
+    let gltf_result = unsafe { crate::loader::gltf::load_gltf_file(model_path) }
+        .expect("Failed to load glTF file");
     let load_result = ModelLoadResult::from_gltf(gltf_result);
 
     let blender_bounds = run_blender_bounds(&blender_path, model_path);
@@ -713,7 +714,8 @@ fn test_gltf_bone_pose_override_roundtrip() {
         return;
     }
 
-    let gltf_result = unsafe { crate::loader::gltf::load_gltf_file(model_path) };
+    let gltf_result = unsafe { crate::loader::gltf::load_gltf_file(model_path) }
+        .expect("Failed to load glTF file");
     let load_result = ModelLoadResult::from_gltf(gltf_result);
     let skeleton = load_result.skeletons.first().expect("No skeleton");
 

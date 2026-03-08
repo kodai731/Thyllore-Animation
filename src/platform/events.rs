@@ -9,26 +9,18 @@ use super::ui::{
     build_click_debug_overlay, build_clip_browser_window, build_curve_editor_window,
     build_debug_window, build_hierarchy_window, build_inspector_window, build_status_bar_overlay,
     build_timeline_window, build_viewport_window, handle_splitters, CurveEditorState,
-    DebugWindowState, LayoutSnapshot,
-    StatusBarState,
+    DebugWindowState, LayoutSnapshot, StatusBarState,
 };
 use crate::app::{App, GUIData};
 use crate::ecs::events::UIEvent;
-use crate::ecs::resource::Camera;
-use crate::ecs::resource::ClipLibrary;
-use crate::ecs::resource::CurveEditorBuffer;
-use crate::ecs::resource::KeyframeCopyBuffer;
-use crate::ecs::resource::{ClipBrowserState, EditHistory};
-use crate::ecs::resource::{HierarchyState, SceneState, TimelineState};
-use crate::ecs::systems::{
-    apply_redo, apply_undo, camera_move_to_look_at, collapse_entity, expand_entity,
-    hierarchy_collapse_bone, hierarchy_deselect_all, hierarchy_deselect_bone,
-    hierarchy_expand_bone, hierarchy_select, hierarchy_select_bone, hierarchy_toggle_selection,
-    process_clip_instance_events, process_keyframe_clipboard_events, rename_entity,
-    timeline_process_events, update_entity_scale, update_entity_translation, update_entity_visible,
+use crate::ecs::resource::{
+    ClipBrowserState, ClipLibrary, CurveEditorBuffer, HierarchyState, PanelLayout, PoseLibrary,
+    TimelineState,
 };
-use crate::ecs::world::Transform;
-use crate::ecs::{process_ui_events_with_events_simple, DeferredAction, UIEventQueue};
+use crate::ecs::systems::clip_track_systems::query_clip_tracks;
+use crate::ecs::systems::panel_layout_systems::panel_layout_clamp_to_display;
+use crate::ecs::systems::phases::run_event_dispatch_phase;
+use crate::ecs::{DeferredAction, UIEventQueue};
 
 fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
     let io = ui.io();
@@ -203,7 +195,7 @@ fn build_ui_windows(
 
     let layout_snapshot = {
         let mut panel_layout = app.data.ecs_world.resource_mut::<PanelLayout>();
-        panel_layout.clamp_to_display(display_size[0], display_size[1]);
+        panel_layout_clamp_to_display(&mut panel_layout, display_size[0], display_size[1]);
         LayoutSnapshot::from_layout(&panel_layout, display_size)
     };
 

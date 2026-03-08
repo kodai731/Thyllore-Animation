@@ -1,6 +1,7 @@
 use imgui::MouseButton;
 
 use crate::ecs::resource::{ActiveSplitter, PanelLayout};
+use crate::ecs::systems::panel_layout_systems::panel_layout_clamp_to_display;
 
 use super::layout_snapshot::LayoutSnapshot;
 
@@ -30,7 +31,6 @@ pub fn handle_splitters(ui: &imgui::Ui, layout: &mut PanelLayout, snap: &LayoutS
 
     let hovered_splitter = rects.iter().find(|r| hit_test(r, mouse_pos));
 
-    // Handle double-click reset
     if mouse_double_clicked {
         if let Some(rect) = &hovered_splitter {
             reset_to_default(layout, rect.kind);
@@ -39,7 +39,6 @@ pub fn handle_splitters(ui: &imgui::Ui, layout: &mut PanelLayout, snap: &LayoutS
         }
     }
 
-    // Handle drag start
     if mouse_clicked && layout.active_splitter.is_none() {
         if let Some(rect) = &hovered_splitter {
             layout.active_splitter = Some(rect.kind);
@@ -52,23 +51,20 @@ pub fn handle_splitters(ui: &imgui::Ui, layout: &mut PanelLayout, snap: &LayoutS
         }
     }
 
-    // Handle drag update
     if mouse_down {
         if let Some(splitter) = layout.active_splitter {
             let is_horiz = matches!(splitter, ActiveSplitter::Upper | ActiveSplitter::Lower);
             let current_pos = if is_horiz { mouse_pos[1] } else { mouse_pos[0] };
             let delta = current_pos - layout.drag_start_pos;
             apply_drag(layout, splitter, delta);
-            layout.clamp_to_display(snap.display_size[0], snap.display_size[1]);
+            panel_layout_clamp_to_display(layout, snap.display_size[0], snap.display_size[1]);
         }
     }
 
-    // Handle drag end
     if mouse_released {
         layout.active_splitter = None;
     }
 
-    // Set cursor
     if layout.active_splitter.is_some() {
         let is_horiz = matches!(
             layout.active_splitter,
@@ -87,7 +83,6 @@ pub fn handle_splitters(ui: &imgui::Ui, layout: &mut PanelLayout, snap: &LayoutS
         }
     }
 
-    // Draw splitter lines
     let draw_list = ui.get_foreground_draw_list();
     for rect in &rects {
         let color = if layout.active_splitter == Some(rect.kind) {
@@ -120,7 +115,6 @@ pub fn handle_splitters(ui: &imgui::Ui, layout: &mut PanelLayout, snap: &LayoutS
 fn compute_splitter_rects(snap: &LayoutSnapshot) -> [SplitterRect; 4] {
     let half = SPLITTER_THICKNESS * 0.5;
     [
-        // Left splitter (right edge of hierarchy)
         SplitterRect {
             kind: ActiveSplitter::Left,
             x_min: snap.hierarchy_width - half,
@@ -129,7 +123,6 @@ fn compute_splitter_rects(snap: &LayoutSnapshot) -> [SplitterRect; 4] {
             y_max: snap.main_height,
             is_horizontal: false,
         },
-        // Right splitter (left edge of inspector)
         SplitterRect {
             kind: ActiveSplitter::Right,
             x_min: snap.inspector_x - half,
@@ -138,7 +131,6 @@ fn compute_splitter_rects(snap: &LayoutSnapshot) -> [SplitterRect; 4] {
             y_max: snap.main_height,
             is_horizontal: false,
         },
-        // Upper splitter (top of timeline)
         SplitterRect {
             kind: ActiveSplitter::Upper,
             x_min: 0.0,
@@ -147,7 +139,6 @@ fn compute_splitter_rects(snap: &LayoutSnapshot) -> [SplitterRect; 4] {
             y_max: snap.timeline_y + half,
             is_horizontal: true,
         },
-        // Lower splitter (top of debug window)
         SplitterRect {
             kind: ActiveSplitter::Lower,
             x_min: 0.0,
@@ -179,11 +170,8 @@ fn apply_drag(layout: &mut PanelLayout, splitter: ActiveSplitter, delta: f32) {
     let new_value = layout.drag_start_value
         + match splitter {
             ActiveSplitter::Left => delta,
-            // Moving mouse right shrinks inspector
             ActiveSplitter::Right => -delta,
-            // Moving mouse down shrinks timeline (since timeline grows upward from bottom)
             ActiveSplitter::Upper => -delta,
-            // Moving mouse down shrinks debug
             ActiveSplitter::Lower => -delta,
         };
 

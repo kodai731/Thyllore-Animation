@@ -1,17 +1,15 @@
 use imgui::Condition;
 
-use crate::animation::editable::{BlendMode, EditableAnimationClip, PropertyCurve, SourceClipId};
-use crate::animation::BoneId;
-use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::{
-    ClipDragState, ClipDragType, ClipLibrary, TimelineState, TimelineViewMode,
+use crate::animation::editable::{
+    curve_sample, BlendMode, EditableAnimationClip, PropertyCurve, SourceClipId,
 };
-
-use super::dope_sheet::build_dope_sheet;
-
-use super::clip_track_snapshot::{
+use crate::animation::BoneId;
+use crate::ecs::component::{
     ClipGroupSnapshot, ClipInstanceSnapshot, ClipTrackEntry, ClipTrackSnapshot,
 };
+use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::resource::{ClipDragState, ClipDragType, ClipLibrary, TimelineState};
+
 use super::CurveEditorState;
 
 pub fn ruler_padding(duration: f32) -> f32 {
@@ -19,14 +17,14 @@ pub fn ruler_padding(duration: f32) -> f32 {
 }
 
 const TRACK_LABEL_WIDTH: f32 = 150.0;
-const TRACK_HEIGHT: f32 = 24.0;
-const CURVE_HEIGHT: f32 = 60.0;
 const TIME_RULER_HEIGHT: f32 = 30.0;
-const MAX_VISIBLE_TRACKS: usize = 10;
 const PIXELS_PER_SECOND: f32 = 80.0;
 const PLAYHEAD_HANDLE_SIZE: f32 = 10.0;
 const CLIP_TRACK_HEIGHT: f32 = 28.0;
 const CLIP_EDGE_DRAG_WIDTH: f32 = 5.0;
+const TRACK_HEIGHT: f32 = 24.0;
+const CURVE_HEIGHT: f32 = 80.0;
+const MAX_VISIBLE_TRACKS: usize = 64;
 const CLIP_BLOCK_COLORS: [[f32; 4]; 4] = [
     [0.3, 0.5, 0.8, 0.9],
     [0.5, 0.7, 0.3, 0.9],
@@ -53,10 +51,18 @@ pub fn build_timeline_window(
         .resizable(false)
         .movable(false)
         .collapsible(false)
+        .bring_to_front_on_focus(false)
         .build(|| {
             build_transport_controls(ui, ui_events, state, clip_library, curve_editor_state);
             ui.separator();
-            build_timeline_content(ui, ui_events, state, clip_library, clip_track_snapshot);
+            build_timeline_content(
+                ui,
+                ui_events,
+                state,
+                clip_library,
+                curve_editor_state,
+                clip_track_snapshot,
+            );
             handle_timeline_shortcuts(ui, ui_events, state);
         });
 }
@@ -111,15 +117,14 @@ fn build_transport_controls(
     ui.same_line();
     if ui.button("Curve Editor") {
         curve_editor_state.is_open = true;
-        if let Some(first_bone_id) = current_clip.and_then(|c| c.tracks.keys().next().copied()) {
+        if let Some(first_bone_id) = current_clip.and_then(|c| c.tracks.keys().min().copied()) {
             curve_editor_state.selected_bone_id = Some(first_bone_id);
+            curve_editor_state.view_initialized = false;
         }
     }
 
     build_clip_selector(ui, ui_events, state, clip_library);
 
-    build_view_mode_tabs(ui, ui_events, state);
-    ui.same_line();
     build_snap_controls(ui, ui_events, state);
 }
 
@@ -164,54 +169,35 @@ fn build_timeline_content(
     ui_events: &mut UIEventQueue,
     state: &mut TimelineState,
     clip_library: &ClipLibrary,
+    curve_editor_state: &mut CurveEditorState,
     clip_track_snapshot: &ClipTrackSnapshot,
 ) {
-    let current_clip = match state.current_clip_id.and_then(|id| clip_library.get(id)) {
-        Some(clip) => clip,
-        None => {
-            ui.text("Select a clip to edit");
-            return;
-        }
-    };
-
     let content_region = ui.content_region_avail();
+    let current_clip = state.current_clip_id.and_then(|id| clip_library.get(id));
+
+    let duration = current_clip.map(|c| c.duration).unwrap_or(5.0);
     let pixels_per_second = PIXELS_PER_SECOND * state.zoom_level;
-    let display_duration = current_clip.duration + ruler_padding(current_clip.duration);
+    let display_duration = duration + ruler_padding(duration);
     let timeline_width =
         (display_duration * pixels_per_second).max(content_region[0] - TRACK_LABEL_WIDTH);
 
-    ui.child_window("timeline_content")
-        .size(content_region)
-        .build(|| {
-            build_time_ruler_with_scrub(ui, ui_events, state, timeline_width, display_duration);
-            ui.separator();
+    build_time_ruler_with_scrub(ui, ui_events, state, timeline_width, display_duration);
+    ui.separator();
 
+    let remaining = ui.content_region_avail();
+    ui.child_window("timeline_tracks")
+        .size(remaining)
+        .build(|| {
             if !clip_track_snapshot.entries.is_empty() {
                 build_clip_tracks_section(
                     ui,
                     ui_events,
                     state,
+                    clip_library,
+                    curve_editor_state,
                     clip_track_snapshot,
                     timeline_width,
                 );
-                ui.separator();
-            }
-
-            match state.view_mode {
-                TimelineViewMode::DopeSheet => {
-                    let remaining = ui.content_region_avail();
-                    build_dope_sheet(
-                        ui,
-                        ui_events,
-                        state,
-                        current_clip,
-                        remaining[0],
-                        remaining[1],
-                    );
-                }
-                TimelineViewMode::GraphEditor => {
-                    build_tracks_area(ui, ui_events, state, current_clip, timeline_width);
-                }
             }
         });
 }
@@ -629,7 +615,7 @@ fn draw_single_curve(
 
     for i in 0..=sample_count {
         let time = (i as f32) * step;
-        if let Some(value) = curve.sample(time) {
+        if let Some(value) = curve_sample(curve, time) {
             let x = cursor_pos[0] + time * pixels_per_second;
             let normalized = (value - min_val) / value_range;
             let y = cursor_pos[1] + height - (normalized * height * 0.8 + height * 0.1);
@@ -703,6 +689,8 @@ fn build_clip_tracks_section(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     state: &mut TimelineState,
+    clip_library: &ClipLibrary,
+    curve_editor_state: &mut CurveEditorState,
     snapshot: &ClipTrackSnapshot,
     timeline_width: f32,
 ) {
@@ -710,6 +698,7 @@ fn build_clip_tracks_section(
     let mouse_pos = ui.io().mouse_pos;
     let mouse_down = ui.io().mouse_down[0];
     let mouse_clicked = ui.is_mouse_clicked(imgui::MouseButton::Left);
+    let mouse_double_clicked = ui.is_mouse_double_clicked(imgui::MouseButton::Left);
 
     handle_clip_drag_release(ui, ui_events, state, pixels_per_second);
 
@@ -749,8 +738,21 @@ fn build_clip_tracks_section(
 
             draw_clip_block(&draw_list, block_min, block_max, color, border_color, inst);
 
-            if mouse_clicked && is_point_in_rect(mouse_pos, block_min, block_max) {
+            let hit_block = is_point_in_rect(mouse_pos, block_min, block_max);
+
+            if mouse_double_clicked && hit_block {
                 clicked_any_block = true;
+                ui_events.send(UIEvent::SelectEntity(entry.entity));
+                ui_events.send(UIEvent::TimelineSelectClip(inst.source_id));
+                open_curve_editor_for_clip(
+                    curve_editor_state,
+                    clip_library,
+                    inst.source_id,
+                    entry.mesh_bone_id,
+                );
+            } else if mouse_clicked && hit_block {
+                clicked_any_block = true;
+                ui_events.send(UIEvent::SelectEntity(entry.entity));
                 ui_events.send(UIEvent::ClipInstanceSelect {
                     entity: entry.entity,
                     instance_id: inst.instance_id,
@@ -1176,33 +1178,6 @@ fn is_point_in_rect(point: [f32; 2], rect_min: [f32; 2], rect_max: [f32; 2]) -> 
         && point[1] <= rect_max[1]
 }
 
-fn build_view_mode_tabs(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &TimelineState) {
-    let dope_label = if state.view_mode == TimelineViewMode::DopeSheet {
-        "[Dope Sheet]"
-    } else {
-        "Dope Sheet"
-    };
-
-    let graph_label = if state.view_mode == TimelineViewMode::GraphEditor {
-        "[Graph Editor]"
-    } else {
-        "Graph Editor"
-    };
-
-    if ui.small_button(dope_label) {
-        if state.view_mode != TimelineViewMode::DopeSheet {
-            ui_events.send(UIEvent::TimelineToggleViewMode);
-        }
-    }
-
-    ui.same_line();
-    if ui.small_button(graph_label) {
-        if state.view_mode != TimelineViewMode::GraphEditor {
-            ui_events.send(UIEvent::TimelineToggleViewMode);
-        }
-    }
-}
-
 fn handle_timeline_shortcuts(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &TimelineState) {
     let io = ui.io();
     if !ui.is_window_focused() {
@@ -1237,10 +1212,6 @@ fn handle_timeline_shortcuts(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state
         if !state.selected_keyframes.is_empty() {
             ui_events.send(UIEvent::TimelineDeleteSelectedKeyframes);
         }
-    }
-
-    if ui.is_key_pressed(imgui::Key::Tab) {
-        ui_events.send(UIEvent::TimelineToggleViewMode);
     }
 }
 
@@ -1296,5 +1267,22 @@ fn build_clip_display_name(name: &str, source_path: Option<&str>) -> String {
         name.to_string()
     } else {
         format!("{} <{}>", name, filename)
+    }
+}
+
+fn open_curve_editor_for_clip(
+    curve_editor_state: &mut CurveEditorState,
+    clip_library: &ClipLibrary,
+    source_id: SourceClipId,
+    mesh_bone_id: Option<BoneId>,
+) {
+    curve_editor_state.is_open = true;
+
+    if let Some(clip) = clip_library.get(source_id) {
+        let target_bone = mesh_bone_id.filter(|id| clip.tracks.contains_key(id));
+
+        curve_editor_state.selected_bone_id =
+            target_bone.or_else(|| clip.tracks.keys().min().copied());
+        curve_editor_state.view_initialized = false;
     }
 }

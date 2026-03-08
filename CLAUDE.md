@@ -64,82 +64,8 @@ Issue 4 for details.
 
 ## ECS Architecture
 
-**IMPORTANT:** MUST follow architecture rule to add file or code, plan new function.
-This project uses an Entity-Component-System (ECS) architecture inspired by [Bevy Engine](https://bevyengine.org/). The
-design follows these principles:
-
-### Design Philosophy
-
-1. **Data-Behavior Separation**: Data structures hold only data; all behavior is implemented as system functions
-2. **Composition over Inheritance**: Build complex objects by combining simple components
-3. **Single Responsibility**: Each component/system has one clear purpose
-
-### Directory Structure
-
-```
-src/ecs/
-├── component/           # Component definitions (data attached to entities)
-├── bundle/              # Common component combinations
-├── resource/            # Global dynamic state (changes per frame)
-├── systems/             # System functions (behavior/logic)
-├── world.rs             # World container for entities and resources
-├── query.rs             # Query functions for entity filtering
-└── mod.rs
-```
-
-### Core Concepts
-
-#### Components
-
-Data-only structs attached to entities. Located in `ecs/component/`.
-
-#### Resources
-
-Global state that changes per frame. Located in `ecs/resource/`. **Only use for dynamic data.**
-
-#### Systems
-
-Pure functions that operate on components and resources. Located in `ecs/systems/`.
-
-```rust
-// System function naming convention: <domain>_<action>
-pub fn camera_rotate(camera: &mut Camera, delta: Vector2<f32>);
-pub fn animation_update(playback: &mut AnimationPlayback, registry: &mut AnimationRegistry, dt: f32);
-```
-
-#### Bundles
-
-Predefined component combinations for common entity types. Located in `ecs/bundle/`.
-
-### Query Pattern
-
-Use query functions instead of storing entity IDs:
-
-```rust
-pub fn query_grid(world: &World) -> Option<Entity>;
-pub fn query_selectable_entities(world: &World) -> Vec<Entity>;
-```
-
-### RefCell-Based Interior Mutability
-
-```rust
-let camera = app.resource::<Camera>();           // ResRef<Camera> (immutable)
-let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
-```
-
-### Adding New Scene Objects
-
-1. Define components in `ecs/component/`
-2. Create a bundle in `ecs/bundle/`
-3. Add a marker component for queries
-4. Implement system functions in `ecs/systems/`
-5. Spawn entity with the bundle in initialization
-
-### Reference Projects
-
-- [Bevy Engine](https://github.com/bevyengine/bevy) - Primary reference for ECS patterns
-- [Hecs](https://github.com/Ralith/hecs) - Lightweight ECS library
-- [Legion](https://github.com/amethyst/legion) - Another Rust ECS implementation
+**IMPORTANT:** MUST follow the rules defined in `.claude/rules/ecs-architecture.md` for all ECS-related code.
+This includes core ECS layer (`src/ecs/`), domain ECS modules (`src/animation/editable/`), and layer boundary rules.
 
 ## Single Source of Truth
 

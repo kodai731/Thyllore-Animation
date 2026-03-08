@@ -22,6 +22,14 @@ impl Logger {
         // Max file size: 10MB
         let max_file_size = 10 * 1024 * 1024;
 
+        // Ensure parent directory exists
+        let path = Path::new(base_path);
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() && !parent.exists() {
+                std::fs::create_dir_all(parent)?;
+            }
+        }
+
         // Delete all existing log files before creating new one
         Self::delete_old_logs(base_path)?;
 

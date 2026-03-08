@@ -7,6 +7,7 @@ use fbxcel::writer::v7400::binary::{FbxFooter, Writer};
 
 use crate::animation::editable::{
     BezierHandle, EditableAnimationClip, EditableKeyframe, InterpolationType, PropertyCurve,
+    TangentWeightMode,
 };
 use crate::animation::Skeleton;
 use crate::loader::fbx::fbx::FbxAxesInfo;
@@ -289,9 +290,21 @@ fn build_key_attr_arrays(
     let mut current_data: [f32; 4] = [0.0; 4];
     let mut current_count: i32 = 0;
 
+    // FBX SDK tangent weight flags (OR'd with interpolation flags for Bezier curves)
+    const WEIGHTED_RIGHT: i32 = 0x0100_0000;
+    const WEIGHTED_NEXT_LEFT: i32 = 0x0400_0000;
+
     for (i, kf) in keyframes.iter().enumerate() {
-        let flag = convert_interpolation_to_flags(kf.interpolation);
+        let mut flag = convert_interpolation_to_flags(kf.interpolation);
         let next_kf = keyframes.get(i + 1);
+
+        // Set weighted tangent flags when current or next keyframe uses weighted mode
+        if kf.weight_mode == TangentWeightMode::Weighted {
+            flag |= WEIGHTED_RIGHT;
+        }
+        if next_kf.is_some_and(|n| n.weight_mode == TangentWeightMode::Weighted) {
+            flag |= WEIGHTED_NEXT_LEFT;
+        }
 
         let key_interval = next_kf.map(|n| n.time - kf.time).unwrap_or(1.0 / 30.0);
 
@@ -1353,6 +1366,75 @@ mod tests {
         let rootnode_without = bones_without.iter().find(|b| b.name == "RootNode").unwrap();
         assert_eq!(rootnode_without.translation, [0.0, 0.0, 0.0]);
         assert_eq!(rootnode_with.translation, rootnode_without.translation);
+    }
+
+    #[test]
+    fn test_weighted_tangent_flags_in_key_attr() {
+        let mut kf0 = EditableKeyframe::new(0, 0.0, 0.0);
+        kf0.interpolation = InterpolationType::Bezier;
+        kf0.weight_mode = TangentWeightMode::Weighted;
+
+        let mut kf1 = EditableKeyframe::new(1, 1.0, 1.0);
+        kf1.interpolation = InterpolationType::Bezier;
+        kf1.weight_mode = TangentWeightMode::Weighted;
+
+        let mut kf2 = EditableKeyframe::new(2, 2.0, 2.0);
+        kf2.interpolation = InterpolationType::Bezier;
+        kf2.weight_mode = TangentWeightMode::NonWeighted;
+
+        let kfs = vec![kf0, kf1, kf2];
+        let mut flags = Vec::new();
+        let mut data = Vec::new();
+        let mut ref_count = Vec::new();
+        build_key_attr_arrays(&kfs, &mut flags, &mut data, &mut ref_count);
+
+        // kf0: weighted out + next(kf1) weighted in => WEIGHTED_RIGHT | WEIGHTED_NEXT_LEFT
+        // kf1: weighted out + next(kf2) non-weighted in => WEIGHTED_RIGHT only
+        // kf2: non-weighted out + no next => no weight flags
+        // All three have different flag combinations, so RLE won't merge them
+        let base_bezier = 0x0000_0408;
+        let weighted_right = 0x0100_0000;
+        let weighted_next_left = 0x0400_0000;
+
+        assert!(flags.len() >= 2, "Expected at least 2 RLE groups");
+        assert_eq!(
+            flags[0],
+            base_bezier | weighted_right | weighted_next_left,
+            "kf0 should have both weight flags"
+        );
+    }
+
+    #[test]
+    fn test_non_weighted_tangent_no_extra_flags() {
+        let mut kf0 = EditableKeyframe::new(0, 0.0, 0.0);
+        kf0.interpolation = InterpolationType::Bezier;
+        kf0.weight_mode = TangentWeightMode::NonWeighted;
+
+        let mut kf1 = EditableKeyframe::new(1, 1.0, 1.0);
+        kf1.interpolation = InterpolationType::Bezier;
+        kf1.weight_mode = TangentWeightMode::NonWeighted;
+
+        let kfs = vec![kf0, kf1];
+        let mut flags = Vec::new();
+        let mut data = Vec::new();
+        let mut ref_count = Vec::new();
+        build_key_attr_arrays(&kfs, &mut flags, &mut data, &mut ref_count);
+
+        let base_bezier = 0x0000_0408;
+        let weighted_right = 0x0100_0000;
+        let weighted_next_left = 0x0400_0000;
+        for &flag in &flags {
+            assert_eq!(
+                flag & weighted_right,
+                0,
+                "NonWeighted should not have WEIGHTED_RIGHT flag"
+            );
+            assert_eq!(
+                flag & weighted_next_left,
+                0,
+                "NonWeighted should not have WEIGHTED_NEXT_LEFT flag"
+            );
+        }
     }
 
     #[test]

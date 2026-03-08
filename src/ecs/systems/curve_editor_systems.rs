@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 
-use crate::animation::editable::{EditableAnimationClip, PropertyType};
+use crate::animation::editable::{
+    curve_add_keyframe, curve_remove_keyframe, curve_sample, EditableAnimationClip, PropertyType,
+};
 use crate::animation::BoneId;
 use crate::ecs::resource::CurveEditorBuffer;
 
@@ -27,7 +29,7 @@ pub fn curve_editor_capture_buffer(
 
         for i in 0..sample_count {
             let t = duration * (i as f32) / (sample_count - 1) as f32;
-            let value = curve.sample(t).unwrap_or(0.0);
+            let value = curve_sample(curve, t).unwrap_or(0.0);
             points.push((t, value));
         }
 
@@ -70,11 +72,11 @@ pub fn curve_editor_swap_buffer(
             let curve_mut = track.get_curve_mut(*prop);
             let ids: Vec<_> = curve_mut.keyframes.iter().map(|kf| kf.id).collect();
             for id in ids {
-                curve_mut.remove_keyframe(id);
+                curve_remove_keyframe(curve_mut, id);
             }
 
             for (time, value) in &old_snapshot {
-                curve_mut.add_keyframe(*time, *value);
+                curve_add_keyframe(curve_mut, *time, *value);
             }
         }
     }

@@ -48,10 +48,9 @@ pub fn apply_pose_to_clip(
     target_time: f32,
 ) {
     for (&bone_id, pose_track) in &pose_clip.tracks {
-        let target_track = if target_clip.tracks.contains_key(&bone_id) {
-            target_clip.tracks.get_mut(&bone_id).unwrap()
-        } else {
-            target_clip.add_track(bone_id, pose_track.bone_name.clone())
+        let target_track = match target_clip.tracks.get_mut(&bone_id) {
+            Some(track) => track,
+            None => target_clip.add_track(bone_id, pose_track.bone_name.clone()),
         };
 
         for &prop in &ALL_PROPERTIES {

@@ -98,6 +98,19 @@ pub enum TangentHandleType {
     Out,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SelectionModifier {
+    None,
+    Toggle,
+    Range,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ReleasedButton {
+    Left,
+    Middle,
+}
+
 #[derive(Clone, Debug)]
 pub struct DraggingTangent {
     pub property_type: PropertyType,
@@ -820,15 +833,26 @@ fn handle_mouse_interaction(
         && mouse_pos[1] >= vt.curve_origin[1]
         && mouse_pos[1] <= vt.curve_origin[1] + vt.curve_height;
 
-    handle_mouse_release(
-        ui_events,
-        editor_state,
-        vt,
-        mouse_pos,
-        mouse_released,
-        middle_released,
-        curves_to_draw,
-    );
+    if mouse_released {
+        handle_mouse_release(
+            ui_events,
+            editor_state,
+            vt,
+            mouse_pos,
+            ReleasedButton::Left,
+            curves_to_draw,
+        );
+    }
+    if middle_released {
+        handle_mouse_release(
+            ui_events,
+            editor_state,
+            vt,
+            mouse_pos,
+            ReleasedButton::Middle,
+            curves_to_draw,
+        );
+    }
 
     if is_hovered && mouse_clicked && in_ruler_area {
         editor_state.is_scrubbing_ruler = true;
@@ -843,16 +867,14 @@ fn handle_mouse_interaction(
         && !editor_state.is_panning
         && editor_state.dragging_tangent.is_none()
     {
-        let ctrl_held = ui.io().key_ctrl;
-        let shift_held = ui.io().key_shift;
-        handle_curve_area_click(
-            editor_state,
-            mouse_pos,
-            curves_to_draw,
-            vt,
-            ctrl_held,
-            shift_held,
-        );
+        let modifier = if ui.io().key_ctrl {
+            SelectionModifier::Toggle
+        } else if ui.io().key_shift {
+            SelectionModifier::Range
+        } else {
+            SelectionModifier::None
+        };
+        handle_curve_area_click(editor_state, mouse_pos, curves_to_draw, vt, modifier);
     }
 
     if is_hovered && middle_clicked && in_curve_area {
@@ -883,48 +905,49 @@ fn handle_mouse_release(
     editor_state: &mut CurveEditorState,
     vt: &ViewTransform,
     mouse_pos: [f32; 2],
-    mouse_released: bool,
-    middle_released: bool,
+    button: ReleasedButton,
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
 ) {
-    if mouse_released {
-        if let Some(ref dragging) = editor_state.dragging_tangent.clone() {
-            if let Some(bone_id) = editor_state.selected_bone_id {
-                let (in_tangent, out_tangent) =
-                    compute_dragged_tangent(dragging, mouse_pos, curves_to_draw, vt);
-                ui_events.send(UIEvent::TimelineSetKeyframeTangent {
-                    bone_id,
-                    property_type: dragging.property_type,
-                    keyframe_id: dragging.keyframe_id,
-                    in_tangent,
-                    out_tangent,
-                });
-            }
-            editor_state.dragging_tangent = None;
-        } else if editor_state.is_dragging_keyframe {
-            if let Some(bone_id) = editor_state.selected_bone_id {
-                let time_delta =
-                    vt.x_to_time(mouse_pos[0]) - vt.x_to_time(editor_state.drag_start_mouse_pos[0]);
-                let value_delta = vt.y_to_value(mouse_pos[1])
-                    - vt.y_to_value(editor_state.drag_start_mouse_pos[1]);
-
-                for sel in &editor_state.selected_keyframes {
-                    ui_events.send(UIEvent::TimelineMoveKeyframe {
+    match button {
+        ReleasedButton::Left => {
+            if let Some(ref dragging) = editor_state.dragging_tangent.clone() {
+                if let Some(bone_id) = editor_state.selected_bone_id {
+                    let (in_tangent, out_tangent) =
+                        compute_dragged_tangent(dragging, mouse_pos, curves_to_draw, vt);
+                    ui_events.send(UIEvent::TimelineSetKeyframeTangent {
                         bone_id,
-                        property_type: sel.property_type.clone(),
-                        keyframe_id: sel.keyframe_id,
-                        new_time: (sel.original_time + time_delta).max(0.0),
-                        new_value: sel.original_value + value_delta,
+                        property_type: dragging.property_type,
+                        keyframe_id: dragging.keyframe_id,
+                        in_tangent,
+                        out_tangent,
                     });
                 }
-            }
-        }
-        editor_state.is_dragging_keyframe = false;
-        editor_state.is_scrubbing_ruler = false;
-    }
+                editor_state.dragging_tangent = None;
+            } else if editor_state.is_dragging_keyframe {
+                if let Some(bone_id) = editor_state.selected_bone_id {
+                    let time_delta = vt.x_to_time(mouse_pos[0])
+                        - vt.x_to_time(editor_state.drag_start_mouse_pos[0]);
+                    let value_delta = vt.y_to_value(mouse_pos[1])
+                        - vt.y_to_value(editor_state.drag_start_mouse_pos[1]);
 
-    if middle_released {
-        editor_state.is_panning = false;
+                    for sel in &editor_state.selected_keyframes {
+                        ui_events.send(UIEvent::TimelineMoveKeyframe {
+                            bone_id,
+                            property_type: sel.property_type.clone(),
+                            keyframe_id: sel.keyframe_id,
+                            new_time: (sel.original_time + time_delta).max(0.0),
+                            new_value: sel.original_value + value_delta,
+                        });
+                    }
+                }
+            }
+            editor_state.is_dragging_keyframe = false;
+            editor_state.is_scrubbing_ruler = false;
+        }
+
+        ReleasedButton::Middle => {
+            editor_state.is_panning = false;
+        }
     }
 }
 
@@ -964,8 +987,7 @@ fn handle_curve_area_click(
     mouse_pos: [f32; 2],
     curves_to_draw: &[(&PropertyCurve, [f32; 4], &str)],
     vt: &ViewTransform,
-    ctrl_held: bool,
-    shift_held: bool,
+    modifier: SelectionModifier,
 ) {
     if let Some((handle_type, property_type, keyframe_id, original_handle)) =
         find_tangent_handle_at_position(
@@ -995,44 +1017,47 @@ fn handle_curve_area_click(
             original_value: value,
         };
 
-        let should_drag;
+        let should_drag = match modifier {
+            SelectionModifier::Toggle => {
+                let existing = editor_state
+                    .selected_keyframes
+                    .iter()
+                    .position(|s| s.keyframe_id == keyframe_id && s.property_type == property_type);
 
-        if ctrl_held {
-            let existing = editor_state
-                .selected_keyframes
-                .iter()
-                .position(|s| s.keyframe_id == keyframe_id && s.property_type == property_type);
-
-            if let Some(pos) = existing {
-                editor_state.selected_keyframes.remove(pos);
-                should_drag = false;
-            } else {
-                editor_state.selected_keyframes.push(new_selected.clone());
-                should_drag = true;
+                let drag = if let Some(pos) = existing {
+                    editor_state.selected_keyframes.remove(pos);
+                    false
+                } else {
+                    editor_state.selected_keyframes.push(new_selected.clone());
+                    true
+                };
+                editor_state.selection_anchor = Some((property_type, keyframe_id));
+                drag
             }
-            editor_state.selection_anchor = Some((property_type, keyframe_id));
-        } else if shift_held {
-            should_drag = apply_shift_range_selection(
+
+            SelectionModifier::Range => apply_shift_range_selection(
                 editor_state,
                 curves_to_draw,
                 &property_type,
                 keyframe_id,
                 time,
                 value,
-            );
-        } else {
-            let already_selected = editor_state
-                .selected_keyframes
-                .iter()
-                .any(|s| s.keyframe_id == keyframe_id && s.property_type == property_type);
+            ),
 
-            if !already_selected {
-                editor_state.selected_keyframes.clear();
-                editor_state.selected_keyframes.push(new_selected.clone());
-                editor_state.selection_anchor = Some((property_type, keyframe_id));
+            SelectionModifier::None => {
+                let already_selected = editor_state
+                    .selected_keyframes
+                    .iter()
+                    .any(|s| s.keyframe_id == keyframe_id && s.property_type == property_type);
+
+                if !already_selected {
+                    editor_state.selected_keyframes.clear();
+                    editor_state.selected_keyframes.push(new_selected.clone());
+                    editor_state.selection_anchor = Some((property_type, keyframe_id));
+                }
+                true
             }
-            should_drag = true;
-        }
+        };
 
         if should_drag {
             refresh_selected_keyframe_positions(
@@ -1042,7 +1067,7 @@ fn handle_curve_area_click(
             editor_state.is_dragging_keyframe = true;
             editor_state.drag_start_mouse_pos = mouse_pos;
         }
-    } else if !ctrl_held && !shift_held {
+    } else if modifier == SelectionModifier::None {
         editor_state.selected_keyframes.clear();
         editor_state.selection_anchor = None;
     }

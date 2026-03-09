@@ -10,7 +10,6 @@ pub struct GhostCurveSuggestion {
     pub predicted_value: f32,
     pub tangent_in: (f32, f32),
     pub tangent_out: (f32, f32),
-    pub is_bezier: bool,
     pub confidence: f32,
     pub request_id: InferenceRequestId,
 }
@@ -23,7 +22,7 @@ pub struct CurveSuggestionState {
     pub pending_clip_duration: Option<f32>,
     pub pending_curve_mean: Option<f32>,
     pub pending_curve_std: Option<f32>,
-    pub pending_query_time: Option<f32>,
+    pub pending_query_times: Option<Vec<f32>>,
     pub enabled: bool,
 }
 
@@ -37,7 +36,7 @@ impl Default for CurveSuggestionState {
             pending_clip_duration: None,
             pending_curve_mean: None,
             pending_curve_std: None,
-            pending_query_time: None,
+            pending_query_times: None,
             enabled: true,
         }
     }

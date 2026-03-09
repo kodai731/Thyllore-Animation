@@ -349,7 +349,6 @@ fn build_animation_editor_windows(ui: &imgui::Ui, app: &mut App, layout_snapshot
                         value: s.predicted_value,
                         tangent_in: s.tangent_in,
                         tangent_out: s.tangent_out,
-                        is_bezier: s.is_bezier,
                         confidence: s.confidence,
                     })
                     .collect()
@@ -529,12 +528,11 @@ fn handle_clip_save_to_file(app: &mut App, source_id: u64) {
     let new_name = extract_clip_name_from_path(&path);
     let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
 
-    if let Some(clip) = clip_library.get_mut(source_id) {
-        clip.name = new_name.clone();
-        clip.source_path = Some(path.to_string_lossy().to_string());
-    }
+    use crate::ecs::systems::clip_library_systems::{
+        clip_library_save_to_file, clip_library_update_save_metadata,
+    };
+    clip_library_update_save_metadata(&mut clip_library, source_id, new_name.clone(), &path);
 
-    use crate::ecs::systems::clip_library_systems::clip_library_save_to_file;
     match clip_library_save_to_file(&clip_library, source_id, &path) {
         Ok(()) => {
             crate::log!("Saved clip '{}' to {:?}", new_name, path);

@@ -55,7 +55,8 @@ pub enum InferenceRequestKind {
         property_type_id: u32,
         topology_features: Vec<f32>,
         bone_name_tokens: Vec<i64>,
-        query_time: f32,
+        query_times: Vec<f32>,
+        curve_window: Vec<f32>,
     },
 }
 
@@ -67,17 +68,17 @@ pub struct InferenceRequest {
 }
 
 #[derive(Clone, Debug)]
+pub struct CopilotStepPrediction {
+    pub value: f32,
+    pub tangent_in: (f32, f32),
+    pub tangent_out: (f32, f32),
+    pub confidence: f32,
+}
+
+#[derive(Clone, Debug)]
 pub enum InferenceResultKind {
-    CurvePredict {
-        output: Vec<f32>,
-    },
-    CurveCopilotPredict {
-        value: f32,
-        tangent_in: (f32, f32),
-        tangent_out: (f32, f32),
-        is_bezier: bool,
-        confidence: f32,
-    },
+    CurvePredict { output: Vec<f32> },
+    CurveCopilotPredict { steps: Vec<CopilotStepPrediction> },
 }
 
 #[derive(Clone, Debug)]

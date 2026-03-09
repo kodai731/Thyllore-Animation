@@ -78,6 +78,18 @@ pub fn clip_library_clip_names(lib: &ClipLibrary) -> Vec<(SourceClipId, String)>
         .collect()
 }
 
+pub fn clip_library_update_save_metadata(
+    lib: &mut ClipLibrary,
+    id: SourceClipId,
+    name: String,
+    path: &Path,
+) {
+    if let Some(clip) = lib.get_mut(id) {
+        clip.name = name;
+        clip.source_path = Some(path.to_string_lossy().to_string());
+    }
+}
+
 pub fn clip_library_save_to_file(lib: &ClipLibrary, id: SourceClipId, path: &Path) -> Result<()> {
     let source = lib.source_clips.get(&id).context("Clip not found")?;
 

@@ -14,6 +14,8 @@ use super::inference_actor_systems::{inference_actor_submit, inference_actor_tak
 const MAX_CONTEXT_KEYFRAMES: usize = 8;
 const FEATURES_PER_KEYFRAME: usize = 6;
 const CONTEXT_SIZE: usize = MAX_CONTEXT_KEYFRAMES * FEATURES_PER_KEYFRAME;
+const MAX_STEPS: usize = 8;
+const PAE_WINDOW_SIZE: usize = 64;
 
 pub fn curve_suggestion_extract_context(
     curve: &PropertyCurve,
@@ -76,6 +78,75 @@ fn property_type_to_id(property_type: PropertyType) -> u32 {
     }
 }
 
+fn sample_curve_linear(curve: &PropertyCurve, t: f32) -> f32 {
+    let keyframes = &curve.keyframes;
+    if keyframes.is_empty() {
+        return 0.0;
+    }
+    if keyframes.len() == 1 || t <= keyframes[0].time {
+        return keyframes[0].value;
+    }
+    let last = &keyframes[keyframes.len() - 1];
+    if t >= last.time {
+        return last.value;
+    }
+
+    for w in keyframes.windows(2) {
+        let (a, b) = (&w[0], &w[1]);
+        if t >= a.time && t <= b.time {
+            let dt = b.time - a.time;
+            if dt < 1e-9 {
+                return a.value;
+            }
+            let ratio = (t - a.time) / dt;
+            return a.value + (b.value - a.value) * ratio;
+        }
+    }
+
+    last.value
+}
+
+pub fn curve_suggestion_extract_window(
+    curve: &PropertyCurve,
+    clip_duration: f32,
+    curve_mean: f32,
+    curve_std: f32,
+) -> Vec<f32> {
+    let duration = clip_duration.max(0.001);
+    let mut window = vec![0.0f32; PAE_WINDOW_SIZE];
+
+    if curve.keyframes.is_empty() {
+        return window;
+    }
+
+    for i in 0..PAE_WINDOW_SIZE {
+        let t = (i as f32 / (PAE_WINDOW_SIZE - 1) as f32) * duration;
+        let value = sample_curve_linear(curve, t);
+        window[i] = (value - curve_mean) / curve_std;
+    }
+
+    window
+}
+
+fn generate_query_times(current_time: f32, clip_duration: f32) -> Vec<f32> {
+    let duration = clip_duration.max(0.001);
+    let remaining = duration - current_time;
+
+    if remaining <= 0.0 {
+        return vec![current_time / duration];
+    }
+
+    let step_count = MAX_STEPS.min(8);
+    let mut times = Vec::with_capacity(step_count);
+
+    for i in 0..step_count {
+        let t = current_time + remaining * (i as f32 + 1.0) / step_count as f32;
+        times.push(t / duration);
+    }
+
+    times
+}
+
 pub fn curve_suggestion_submit(
     suggestion_state: &mut CurveSuggestionState,
     inference_state: &mut InferenceActorState,
@@ -102,7 +173,14 @@ pub fn curve_suggestion_submit(
     let property_type_id = property_type_to_id(property_type);
     let topology_features = topology_cache.get(bone_id).to_vec();
     let bone_name_tokens = name_token_cache.get(bone_id).to_vec();
-    let query_time = current_time / clip_duration.max(0.001);
+
+    let query_times = generate_query_times(current_time, clip_duration);
+    let curve_window = curve_suggestion_extract_window(curve, clip_duration, curve_mean, curve_std);
+
+    let denorm_query_times: Vec<f32> = query_times
+        .iter()
+        .map(|t| t * clip_duration.max(0.001))
+        .collect();
 
     let context_debug: Vec<f32> = context[..6.min(context.len())].to_vec();
 
@@ -111,7 +189,8 @@ pub fn curve_suggestion_submit(
         property_type_id,
         topology_features,
         bone_name_tokens,
-        query_time,
+        query_times,
+        curve_window,
     };
 
     if let Some(request_id) = inference_actor_submit(inference_state, actor_id, kind) {
@@ -121,10 +200,10 @@ pub fn curve_suggestion_submit(
         suggestion_state.pending_clip_duration = Some(clip_duration);
         suggestion_state.pending_curve_mean = Some(curve_mean);
         suggestion_state.pending_curve_std = Some(curve_std);
-        suggestion_state.pending_query_time = Some(current_time);
+        suggestion_state.pending_query_times = Some(denorm_query_times);
         crate::log!(
-            "CurveCopilot: submitted request {}, property={:?}, query_time_norm={:.4}, curve_mean={:.4}, curve_std={:.4}, clip_dur={:.3}, context[0..6]={:?}",
-            request_id, property_type, query_time, curve_mean, curve_std, clip_duration, context_debug
+            "CurveCopilot: submitted request {}, property={:?}, steps={}, curve_mean={:.4}, curve_std={:.4}, clip_dur={:.3}, context[0..6]={:?}",
+            request_id, property_type, MAX_STEPS, curve_mean, curve_std, clip_duration, context_debug
         );
     }
 }
@@ -148,14 +227,7 @@ pub fn curve_suggestion_poll_results(
             continue;
         }
 
-        if let InferenceResultKind::CurveCopilotPredict {
-            value,
-            tangent_in,
-            tangent_out,
-            is_bezier,
-            confidence,
-        } = result.kind
-        {
+        if let InferenceResultKind::CurveCopilotPredict { steps } = result.kind {
             let bone_id = suggestion_state.pending_bone_id.unwrap_or(0);
             let property_type = suggestion_state
                 .pending_property_type
@@ -164,23 +236,44 @@ pub fn curve_suggestion_poll_results(
             let clip_duration = suggestion_state.pending_clip_duration.unwrap_or(1.0);
             let curve_mean = suggestion_state.pending_curve_mean.unwrap_or(0.0);
             let curve_std = suggestion_state.pending_curve_std.unwrap_or(1.0);
-            let predicted_time = suggestion_state.pending_query_time.unwrap_or(0.0);
+            let query_times = suggestion_state
+                .pending_query_times
+                .clone()
+                .unwrap_or_default();
 
-            let denorm_value = value * curve_std + curve_mean;
-            let denorm_tan_in = (tangent_in.0 * clip_duration, tangent_in.1 * curve_std);
-            let denorm_tan_out = (tangent_out.0 * clip_duration, tangent_out.1 * curve_std);
+            for (i, step) in steps.iter().enumerate() {
+                let predicted_time = query_times.get(i).copied().unwrap_or(0.0);
 
-            suggestion_state.suggestions.push(GhostCurveSuggestion {
-                bone_id,
-                property_type,
-                predicted_time,
-                predicted_value: denorm_value,
-                tangent_in: denorm_tan_in,
-                tangent_out: denorm_tan_out,
-                is_bezier,
-                confidence,
-                request_id: result.request_id,
-            });
+                let denorm_value = step.value * curve_std + curve_mean;
+                let denorm_tan_in = (
+                    step.tangent_in.0 * clip_duration,
+                    step.tangent_in.1 * curve_std,
+                );
+                let denorm_tan_out = (
+                    step.tangent_out.0 * clip_duration,
+                    step.tangent_out.1 * curve_std,
+                );
+
+                suggestion_state.suggestions.push(GhostCurveSuggestion {
+                    bone_id,
+                    property_type,
+                    predicted_time,
+                    predicted_value: denorm_value,
+                    tangent_in: denorm_tan_in,
+                    tangent_out: denorm_tan_out,
+                    confidence: step.confidence,
+                    request_id: result.request_id,
+                });
+
+                crate::log!(
+                    "CurveCopilot: step {}/{}, confidence={:.2}, denorm_value={:.4}, time={:.4}",
+                    i + 1,
+                    steps.len(),
+                    step.confidence,
+                    denorm_value,
+                    predicted_time,
+                );
+            }
 
             suggestion_state.pending_request_id = None;
             suggestion_state.pending_bone_id = None;
@@ -188,23 +281,12 @@ pub fn curve_suggestion_poll_results(
             suggestion_state.pending_clip_duration = None;
             suggestion_state.pending_curve_mean = None;
             suggestion_state.pending_curve_std = None;
-            suggestion_state.pending_query_time = None;
-
-            crate::log!(
-                "CurveCopilot: received suggestion, confidence={:.2}, denorm_value={:.4}, time={:.4}, tan_in=({:.4},{:.4}), tan_out=({:.4},{:.4}), is_bezier={}",
-                confidence, denorm_value, predicted_time, denorm_tan_in.0, denorm_tan_in.1, denorm_tan_out.0, denorm_tan_out.1, is_bezier
-            );
+            suggestion_state.pending_query_times = None;
         }
     }
 }
 
 pub fn curve_suggestion_apply(suggestion: &GhostCurveSuggestion, curve: &mut PropertyCurve) {
-    let interpolation = if suggestion.is_bezier {
-        InterpolationType::Bezier
-    } else {
-        InterpolationType::Linear
-    };
-
     let in_tangent = BezierHandle::new(suggestion.tangent_in.0, suggestion.tangent_in.1);
     let out_tangent = BezierHandle::new(suggestion.tangent_out.0, suggestion.tangent_out.1);
 
@@ -214,7 +296,7 @@ pub fn curve_suggestion_apply(suggestion: &GhostCurveSuggestion, curve: &mut Pro
         suggestion.predicted_value,
         in_tangent,
         out_tangent,
-        interpolation,
+        InterpolationType::Bezier,
     );
 }
 
@@ -326,7 +408,6 @@ mod tests {
             predicted_value: 2.0,
             tangent_in: (0.0, 0.0),
             tangent_out: (0.0, 0.0),
-            is_bezier: false,
             confidence: 0.9,
             request_id: 42,
         });
@@ -347,7 +428,6 @@ mod tests {
             predicted_value: 0.8,
             tangent_in: (-0.1, 0.0),
             tangent_out: (0.1, 0.0),
-            is_bezier: true,
             confidence: 0.9,
             request_id: 1,
         };

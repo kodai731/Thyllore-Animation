@@ -17,7 +17,6 @@ pub struct SuggestionOverlay {
     pub value: f32,
     pub tangent_in: (f32, f32),
     pub tangent_out: (f32, f32),
-    pub is_bezier: bool,
     pub confidence: f32,
 }
 
@@ -2209,31 +2208,29 @@ fn draw_suggestion_curve_overlay(
             .thickness(2.0)
             .build();
 
-        if overlay.is_bezier {
-            let handle_color = [ghost_color[0], ghost_color[1], ghost_color[2], alpha * 0.7];
+        let handle_color = [ghost_color[0], ghost_color[1], ghost_color[2], alpha * 0.7];
 
-            let in_x = vt.time_to_x(overlay.time + overlay.tangent_in.0);
-            let in_y = vt.value_to_y(overlay.value + overlay.tangent_in.1);
-            draw_list
-                .add_line([kf_x, kf_y], [in_x, in_y], handle_color)
-                .thickness(1.0)
-                .build();
-            draw_list
-                .add_circle([in_x, in_y], 3.0, handle_color)
-                .filled(true)
-                .build();
+        let in_x = vt.time_to_x(overlay.time + overlay.tangent_in.0);
+        let in_y = vt.value_to_y(overlay.value + overlay.tangent_in.1);
+        draw_list
+            .add_line([kf_x, kf_y], [in_x, in_y], handle_color)
+            .thickness(1.0)
+            .build();
+        draw_list
+            .add_circle([in_x, in_y], 3.0, handle_color)
+            .filled(true)
+            .build();
 
-            let out_x = vt.time_to_x(overlay.time + overlay.tangent_out.0);
-            let out_y = vt.value_to_y(overlay.value + overlay.tangent_out.1);
-            draw_list
-                .add_line([kf_x, kf_y], [out_x, out_y], handle_color)
-                .thickness(1.0)
-                .build();
-            draw_list
-                .add_circle([out_x, out_y], 3.0, handle_color)
-                .filled(true)
-                .build();
-        }
+        let out_x = vt.time_to_x(overlay.time + overlay.tangent_out.0);
+        let out_y = vt.value_to_y(overlay.value + overlay.tangent_out.1);
+        draw_list
+            .add_line([kf_x, kf_y], [out_x, out_y], handle_color)
+            .thickness(1.0)
+            .build();
+        draw_list
+            .add_circle([out_x, out_y], 3.0, handle_color)
+            .filled(true)
+            .build();
     }
 }
 

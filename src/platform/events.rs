@@ -349,7 +349,6 @@ fn build_animation_editor_windows(ui: &imgui::Ui, app: &mut App, layout_snapshot
                         value: s.predicted_value,
                         tangent_in: s.tangent_in,
                         tangent_out: s.tangent_out,
-                        is_bezier: s.is_bezier,
                         confidence: s.confidence,
                     })
                     .collect()

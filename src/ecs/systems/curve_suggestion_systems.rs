@@ -16,6 +16,7 @@ const FEATURES_PER_KEYFRAME: usize = 6;
 const CONTEXT_SIZE: usize = MAX_CONTEXT_KEYFRAMES * FEATURES_PER_KEYFRAME;
 const MAX_STEPS: usize = 8;
 const PAE_WINDOW_SIZE: usize = 64;
+const MIN_CURVE_STD: f32 = 0.01;
 
 pub fn curve_suggestion_extract_context(
     curve: &PropertyCurve,
@@ -108,19 +109,19 @@ fn sample_curve_linear(curve: &PropertyCurve, t: f32) -> f32 {
 
 pub fn curve_suggestion_extract_window(
     curve: &PropertyCurve,
-    clip_duration: f32,
+    t_start: f32,
+    t_end: f32,
     curve_mean: f32,
     curve_std: f32,
 ) -> Vec<f32> {
-    let duration = clip_duration.max(0.001);
     let mut window = vec![0.0f32; PAE_WINDOW_SIZE];
 
-    if curve.keyframes.is_empty() {
+    if curve.keyframes.is_empty() || (t_end - t_start).abs() < 1e-8 {
         return window;
     }
 
     for i in 0..PAE_WINDOW_SIZE {
-        let t = (i as f32 / (PAE_WINDOW_SIZE - 1) as f32) * duration;
+        let t = t_start + (i as f32 / (PAE_WINDOW_SIZE - 1) as f32) * (t_end - t_start);
         let value = sample_curve_linear(curve, t);
         window[i] = (value - curve_mean) / curve_std;
     }
@@ -128,22 +129,32 @@ pub fn curve_suggestion_extract_window(
     window
 }
 
-fn generate_query_times(current_time: f32, clip_duration: f32) -> Vec<f32> {
+fn generate_query_times(curve: &PropertyCurve, current_time: f32, clip_duration: f32) -> Vec<f32> {
     let duration = clip_duration.max(0.001);
-    let remaining = duration - current_time;
 
+    let future_kf_times: Vec<f32> = curve
+        .keyframes
+        .iter()
+        .filter(|kf| kf.time > current_time + 1e-6)
+        .take(MAX_STEPS)
+        .map(|kf| kf.time / duration)
+        .collect();
+
+    if !future_kf_times.is_empty() {
+        return future_kf_times;
+    }
+
+    let remaining = duration - current_time;
     if remaining <= 0.0 {
         return vec![current_time / duration];
     }
 
-    let step_count = MAX_STEPS.min(8);
+    let step_count = MAX_STEPS;
     let mut times = Vec::with_capacity(step_count);
-
     for i in 0..step_count {
         let t = current_time + remaining * (i as f32 + 1.0) / step_count as f32;
         times.push(t / duration);
     }
-
     times
 }
 
@@ -170,12 +181,40 @@ pub fn curve_suggestion_submit(
         clip_duration,
     );
 
+    if curve_std < MIN_CURVE_STD {
+        crate::log!(
+            "CurveCopilot: skipped, curve_std={:.6} < MIN_CURVE_STD={:.2}",
+            curve_std,
+            MIN_CURVE_STD
+        );
+        return;
+    }
+
     let property_type_id = property_type_to_id(property_type);
     let topology_features = topology_cache.get(bone_id).to_vec();
     let bone_name_tokens = name_token_cache.get(bone_id).to_vec();
 
-    let query_times = generate_query_times(current_time, clip_duration);
-    let curve_window = curve_suggestion_extract_window(curve, clip_duration, curve_mean, curve_std);
+    let query_times = generate_query_times(curve, current_time, clip_duration);
+
+    let context_start_time = curve
+        .keyframes
+        .iter()
+        .rev()
+        .take(MAX_CONTEXT_KEYFRAMES)
+        .last()
+        .map(|kf| kf.time)
+        .unwrap_or(0.0);
+    let last_query_time = query_times
+        .last()
+        .map(|t| t * clip_duration.max(0.001))
+        .unwrap_or(clip_duration);
+    let curve_window = curve_suggestion_extract_window(
+        curve,
+        context_start_time,
+        last_query_time,
+        curve_mean,
+        curve_std,
+    );
 
     let denorm_query_times: Vec<f32> = query_times
         .iter()

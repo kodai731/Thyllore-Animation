@@ -435,7 +435,7 @@ unsafe fn create_mesh_buffer(
         (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len()) as vk::DeviceSize,
         mesh.vertex_data.vertices.as_ptr() as *const c_void,
         mesh.vertex_data.vertices.len(),
-    );
+    )?;
 
     mesh.index_buffer = RRIndexBuffer::new(
         instance,
@@ -444,7 +444,7 @@ unsafe fn create_mesh_buffer(
         (size_of::<u32>() * mesh.vertex_data.indices.len()) as u64,
         mesh.vertex_data.indices.as_ptr() as *const c_void,
         mesh.vertex_data.indices.len(),
-    );
+    )?;
 
     mesh.object_index = graphics.objects.allocate_slot();
     crate::log!(

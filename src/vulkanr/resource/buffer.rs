@@ -20,17 +20,15 @@ impl RRUniformBuffer {
         rrdevice: &RRDevice,
         uniform_buffer_object: UniformBufferObject,
         name: &str,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut rruniform_buffer = Self::default();
-        let Ok((uniform_buffer, uniform_buffer_memory)) = create_buffer(
+        let (uniform_buffer, uniform_buffer_memory) = create_buffer(
             instance,
             rrdevice,
             size_of::<UniformBufferObject>() as u64,
             vk::BufferUsageFlags::UNIFORM_BUFFER,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        ) else {
-            panic!("Unable to create uniform buffer");
-        };
+        )?;
 
         log!(
             "RRUniformBuffer::new [{}] buffer={:?}, memory={:?}",
@@ -42,7 +40,7 @@ impl RRUniformBuffer {
         rruniform_buffer.buffer = uniform_buffer;
         rruniform_buffer.buffer_memory = uniform_buffer_memory;
         rruniform_buffer.uniform_buffer_object = uniform_buffer_object;
-        rruniform_buffer
+        Ok(rruniform_buffer)
     }
 
     pub unsafe fn update(
@@ -85,29 +83,26 @@ impl RRIndexBuffer {
         size: u64,
         data: *const c_void,
         length: usize,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut rrindex_buffer = RRIndexBuffer::default();
-        let Ok((staging_buffer, staging_buffer_memory)) = create_buffer(
+        let (staging_buffer, staging_buffer_memory) = create_buffer(
             instance,
             rrdevice,
             size,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-        ) else {
-            panic!("Unable to create buffer");
-        };
-        let Ok(map_memory) =
-            rrdevice
-                .device
-                .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())
-        else {
-            panic!("Failed to map staging buffer");
-        };
+        )?;
+        let map_memory = rrdevice.device.map_memory(
+            staging_buffer_memory,
+            0,
+            size,
+            vk::MemoryMapFlags::empty(),
+        )?;
 
         memcpy(data, map_memory.cast(), size as usize);
         rrdevice.device.unmap_memory(staging_buffer_memory);
 
-        let Ok((index_buffer, index_buffer_memory)) = create_buffer(
+        let (index_buffer, index_buffer_memory) = create_buffer(
             instance,
             rrdevice,
             size,
@@ -116,9 +111,7 @@ impl RRIndexBuffer {
                 | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                 | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
-        ) else {
-            panic!("failed to create buffer")
-        };
+        )?;
 
         copy_buffer(
             rrdevice,
@@ -126,8 +119,7 @@ impl RRIndexBuffer {
             staging_buffer,
             index_buffer,
             size,
-        )
-        .expect("failed to create buffer");
+        )?;
 
         rrdevice.device.destroy_buffer(staging_buffer, None);
         rrdevice.device.free_memory(staging_buffer_memory, None);
@@ -136,7 +128,7 @@ impl RRIndexBuffer {
         rrindex_buffer.buffer_memory = index_buffer_memory;
         rrindex_buffer.indices = length as u32;
 
-        rrindex_buffer
+        Ok(rrindex_buffer)
     }
 
     pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
@@ -161,31 +153,26 @@ impl RRVertexBuffer {
         size: u64,
         data: *const c_void,
         length: usize,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut rrvertex_buffer = RRVertexBuffer::default();
-        let Ok((staging_buffer, staging_buffer_memory)) = create_buffer(
+        let (staging_buffer, staging_buffer_memory) = create_buffer(
             instance,
             rrdevice,
             size,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-        ) else {
-            panic!("failed to create buffer");
-        };
-        println!("created staging buffer");
-        let Ok(map_memory) =
-            rrdevice
-                .device
-                .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())
-        else {
-            panic!("failed to map buffer")
-        };
+        )?;
+        let map_memory = rrdevice.device.map_memory(
+            staging_buffer_memory,
+            0,
+            size,
+            vk::MemoryMapFlags::empty(),
+        )?;
 
         memcpy(data, map_memory.cast(), size as usize);
         rrdevice.device.unmap_memory(staging_buffer_memory);
-        println!("mapped staging buffer");
 
-        let Ok((vertex_buffer, vertex_buffer_memory)) = create_buffer(
+        let (vertex_buffer, vertex_buffer_memory) = create_buffer(
             instance,
             rrdevice,
             size,
@@ -194,20 +181,15 @@ impl RRVertexBuffer {
                 | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                 | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
-        ) else {
-            panic!("failed to create buffer");
-        };
-        println!("created vertex buffer");
+        )?;
 
-        if let Err(e) = copy_buffer(
+        copy_buffer(
             rrdevice,
             rr_command_pool,
             staging_buffer,
             vertex_buffer,
             size,
-        ) {
-            panic!("failed to copy buffer");
-        }
+        )?;
 
         rrdevice.device.destroy_buffer(staging_buffer, None);
         rrdevice.device.free_memory(staging_buffer_memory, None);
@@ -216,7 +198,7 @@ impl RRVertexBuffer {
         rrvertex_buffer.buffer_memory = vertex_buffer_memory;
         rrvertex_buffer.vertices = length as u32;
 
-        rrvertex_buffer
+        Ok(rrvertex_buffer)
     }
 
     pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
@@ -234,22 +216,19 @@ impl RRVertexBuffer {
         data: *const c_void,
         length: usize,
     ) -> Result<()> {
-        let Ok((staging_buffer, staging_buffer_memory)) = create_buffer(
+        let (staging_buffer, staging_buffer_memory) = create_buffer(
             instance,
             rrdevice,
             size,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_COHERENT | vk::MemoryPropertyFlags::HOST_VISIBLE,
-        ) else {
-            panic!("failed to create buffer");
-        };
-        let Ok(map_memory) =
-            rrdevice
-                .device
-                .map_memory(staging_buffer_memory, 0, size, vk::MemoryMapFlags::empty())
-        else {
-            panic!("failed to map buffer")
-        };
+        )?;
+        let map_memory = rrdevice.device.map_memory(
+            staging_buffer_memory,
+            0,
+            size,
+            vk::MemoryMapFlags::empty(),
+        )?;
 
         memcpy(data, map_memory.cast(), size as usize);
         rrdevice.device.unmap_memory(staging_buffer_memory);
@@ -277,16 +256,12 @@ impl RRBuffer {
         size: vk::DeviceSize,
         usage: vk::BufferUsageFlags,
         properties: vk::MemoryPropertyFlags,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut rrbuffer = RRBuffer::default();
-        let Ok((buffer, buffer_memory)) =
-            create_buffer(instance, rrdevice, size, usage, properties)
-        else {
-            panic!("failed to create buffer")
-        };
+        let (buffer, buffer_memory) = create_buffer(instance, rrdevice, size, usage, properties)?;
         rrbuffer.buffer = buffer;
         rrbuffer.buffer_memory = buffer_memory;
-        rrbuffer
+        Ok(rrbuffer)
     }
 
     pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {

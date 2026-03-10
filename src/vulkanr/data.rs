@@ -59,10 +59,10 @@ impl RRData {
         rrdevice: &RRDevice,
         rrswapchain: &RRSwapchain,
         name: &str,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         let mut rrdata = RRData::default();
-        Self::create_uniform_buffers(&mut rrdata, instance, rrdevice, rrswapchain, name);
-        rrdata
+        Self::create_uniform_buffers(&mut rrdata, instance, rrdevice, rrswapchain, name)?;
+        Ok(rrdata)
     }
 
     pub unsafe fn create_uniform_buffers(
@@ -71,13 +71,14 @@ impl RRData {
         rrdevice: &RRDevice,
         rrswapchain: &RRSwapchain,
         name: &str,
-    ) {
+    ) -> anyhow::Result<()> {
         for i in 0..rrswapchain.swapchain_images.len() {
             let ubo = UniformBufferObject::default();
             let buffer_name = format!("{}[{}]", name, i);
-            let rruniform_buffer = RRUniformBuffer::new(instance, rrdevice, ubo, &buffer_name);
+            let rruniform_buffer = RRUniformBuffer::new(instance, rrdevice, ubo, &buffer_name)?;
             rrdata.rruniform_buffers.push(rruniform_buffer);
         }
+        Ok(())
     }
 
     pub unsafe fn delete_buffers(&mut self, rrdevice: &RRDevice) {

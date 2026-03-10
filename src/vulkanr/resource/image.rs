@@ -19,33 +19,23 @@ impl RRImage {
         instance: &Instance,
         rrdevice: &RRDevice,
         rrcommand_pool: &RRCommandPool,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut rrimage = RRImage::default();
-        let Ok((image, image_memory, mip_levels)) =
-            create_texture_image(instance, rrdevice, rrcommand_pool)
-        else {
-            panic!("failed to create texture image");
-        };
-        println!("texture image created {:?} {:?}", image, image_memory);
-        let Ok(image_view) = create_image_view(
+        let (image, image_memory, mip_levels) =
+            create_texture_image(instance, rrdevice, rrcommand_pool)?;
+        let image_view = create_image_view(
             rrdevice,
             image,
             vk::Format::R8G8B8A8_SRGB,
             vk::ImageAspectFlags::COLOR,
             mip_levels,
-        ) else {
-            panic!("Image view creation failed");
-        };
-        println!("image view created");
+        )?;
         rrimage.image = image;
         rrimage.image_memory = image_memory;
         rrimage.image_view = image_view;
-        let Ok(sampler) = create_texture_sampler(&rrdevice, mip_levels) else {
-            panic!("error creating sampler")
-        };
+        let sampler = create_texture_sampler(&rrdevice, mip_levels)?;
         rrimage.sampler = sampler;
-        println!("created image");
-        rrimage
+        Ok(rrimage)
     }
 
     pub unsafe fn new_from_file(

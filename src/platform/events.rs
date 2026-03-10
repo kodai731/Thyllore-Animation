@@ -459,7 +459,8 @@ unsafe fn process_ui_events_and_render_frame(
         if msg.contains("SWAPCHAIN_OUT_OF_DATE") {
             app.recreate_swapchain(window).unwrap();
         } else {
-            panic!("Frame error: {:?}", e);
+            crate::log!("[ERROR] Frame error: {:?}", e);
+            return;
         }
     }
 }

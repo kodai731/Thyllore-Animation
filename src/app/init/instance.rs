@@ -34,7 +34,7 @@ use crate::ecs::resource::Camera;
 
 use vulkanalia::Device as VkDevice;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use std::collections::HashSet;
 use std::ffi::CStr;
 use std::os::raw::c_void;
@@ -144,7 +144,7 @@ impl App {
             max_materials,
             max_objects,
         )
-        .expect("Failed to create render resources");
+        .context("Failed to create render resources")?;
 
         let gpu_descriptors = GpuDescriptors::new(
             data.graphics_resources.frame_set.clone(),
@@ -184,7 +184,7 @@ impl App {
             rrdevice.msaa_samples,
             rrswapchain.swapchain_format,
         )
-        .expect("Failed to create viewport state");
+        .context("Failed to create viewport state")?;
         crate::log!(
             "Created viewport state: {}x{} with MSAA {:?}, format {:?}",
             viewport_width,
@@ -223,7 +223,7 @@ impl App {
                 })
                 .descriptor_layouts(render_layouts.to_vec())
                 .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-                .expect("Failed to create grid pipeline");
+                .context("Failed to create grid pipeline")?;
         let grid_pipeline_id = data.pipeline_storage.register(grid_pipeline);
         pipeline_manager.allocate_id();
         crate::log!("Registered grid pipeline with id {}", grid_pipeline_id);
@@ -238,7 +238,7 @@ impl App {
         .no_depth_test()
         .descriptor_layouts(render_layouts.to_vec())
         .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-        .expect("Failed to create gizmo pipeline");
+        .context("Failed to create gizmo pipeline")?;
         let gizmo_pipeline_id = data.pipeline_storage.register(gizmo_pipeline);
         pipeline_manager.allocate_id();
         crate::log!("Registered gizmo pipeline with id {}", gizmo_pipeline_id);
@@ -262,7 +262,7 @@ impl App {
                 &mut data.buffer_registry,
             );
             gizmo_create_buffers(&mut gizmo_data.mesh, &mut backend, true)
-                .expect("Failed to create gizmo buffers");
+                .context("Failed to create gizmo buffers")?;
         }
 
         let light_position = data
@@ -286,7 +286,7 @@ impl App {
                 &mut data.buffer_registry,
             );
             gizmo_create_buffers(&mut light_gizmo_data.mesh, &mut backend, false)
-                .expect("Failed to create light gizmo buffers");
+                .context("Failed to create light gizmo buffers")?;
         }
 
         let bone_solid_pipeline =
@@ -303,7 +303,7 @@ impl App {
                 })
                 .descriptor_layouts(render_layouts.to_vec())
                 .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-                .expect("Failed to create bone solid pipeline");
+                .context("Failed to create bone solid pipeline")?;
         let bone_solid_pipeline_id = data.pipeline_storage.register(bone_solid_pipeline);
         pipeline_manager.allocate_id();
         crate::log!(
@@ -324,7 +324,7 @@ impl App {
                 })
                 .descriptor_layouts(render_layouts.to_vec())
                 .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-                .expect("Failed to create bone wire pipeline");
+                .context("Failed to create bone wire pipeline")?;
         let bone_wire_pipeline_id = data.pipeline_storage.register(bone_wire_pipeline);
         pipeline_manager.allocate_id();
         crate::log!(
@@ -350,7 +350,7 @@ impl App {
                 })
                 .descriptor_layouts(render_layouts.to_vec())
                 .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-                .expect("Failed to create bone solid depth pipeline");
+                .context("Failed to create bone solid depth pipeline")?;
         let bone_solid_depth_pipeline_id =
             data.pipeline_storage.register(bone_solid_depth_pipeline);
         pipeline_manager.allocate_id();
@@ -376,7 +376,7 @@ impl App {
                 })
                 .descriptor_layouts(render_layouts.to_vec())
                 .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-                .expect("Failed to create bone wire depth pipeline");
+                .context("Failed to create bone wire depth pipeline")?;
         let bone_wire_depth_pipeline_id = data.pipeline_storage.register(bone_wire_depth_pipeline);
         pipeline_manager.allocate_id();
         crate::log!(
@@ -403,7 +403,7 @@ impl App {
                 })
                 .descriptor_layouts(render_layouts.to_vec())
                 .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-                .expect("Failed to create bone solid occluded pipeline");
+                .context("Failed to create bone solid occluded pipeline")?;
         let bone_solid_occluded_pipeline_id =
             data.pipeline_storage.register(bone_solid_occluded_pipeline);
         pipeline_manager.allocate_id();
@@ -430,7 +430,7 @@ impl App {
                 })
                 .descriptor_layouts(render_layouts.to_vec())
                 .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-                .expect("Failed to create bone wire occluded pipeline");
+                .context("Failed to create bone wire occluded pipeline")?;
         let bone_wire_occluded_pipeline_id =
             data.pipeline_storage.register(bone_wire_occluded_pipeline);
         pipeline_manager.allocate_id();
@@ -541,30 +541,35 @@ impl App {
                 &mut data.buffer_registry,
             );
             billboard_create_buffers(&mut billboard_data, &mut backend)
-                .expect("Failed to create billboard buffers");
+                .context("Failed to create billboard buffers")?;
         }
 
         billboard_data.render_state.descriptor_set =
             RRBillboardDescriptorSet::new(&rrdevice, &rrswapchain)
-                .expect("Failed to create billboard descriptor set");
+                .context("Failed to create billboard descriptor set")?;
         billboard_data
             .render_state
             .descriptor_set
             .rrdata
-            .push(RRData::new(&instance, &rrdevice, &rrswapchain, "billboard"));
+            .push(RRData::new(
+                &instance,
+                &rrdevice,
+                &rrswapchain,
+                "billboard",
+            )?);
 
         billboard_data
             .render_state
             .descriptor_set
             .allocate_descriptor_sets(&rrdevice, &rrswapchain)
-            .expect("Failed to allocate billboard descriptor sets");
+            .context("Failed to allocate billboard descriptor sets")?;
 
         if let Some(ref billboard_texture) = billboard_data.render_state.texture {
             billboard_data
                 .render_state
                 .descriptor_set
                 .update_descriptor_sets(&rrdevice, &rrswapchain, billboard_texture)
-                .expect("Failed to update billboard descriptor sets");
+                .context("Failed to update billboard descriptor sets")?;
         }
 
         let billboard_pipeline = RRPipeline::new_billboard(
@@ -578,7 +583,7 @@ impl App {
             "assets/shaders/billboardVert.spv",
             "assets/shaders/billboardFrag.spv",
         )
-        .expect("Failed to create billboard pipeline");
+        .context("Failed to create billboard pipeline")?;
         let billboard_pipeline_id = data.pipeline_storage.register(billboard_pipeline);
         pipeline_manager.allocate_id();
         billboard_data.render_info.pipeline_id = Some(billboard_pipeline_id);

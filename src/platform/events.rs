@@ -6,12 +6,13 @@ use winit::event::{ElementState, Event, WindowEvent};
 use super::key_bindings::{default_bindings, dispatch_keyboard_shortcut, ModifierKeys};
 use super::platform::System;
 use super::ui::{
-    build_bottom_panel, build_click_debug_overlay, build_clip_browser_window,
-    build_curve_editor_window, build_hierarchy_window, build_inspector_window, build_scene_overlay,
-    build_status_bar_overlay, build_timeline_window, build_viewport_window, handle_splitters,
-    CurveEditorState, DebugWindowState, LayoutSnapshot, SceneOverlayState, StatusBarState,
-    TimelineInteractionState, ViewportInfo,
+    build_bottom_panel, build_clip_browser_window, build_curve_editor_window,
+    build_hierarchy_window, build_inspector_window, build_scene_overlay, build_status_bar_overlay,
+    build_timeline_window, build_viewport_window, handle_splitters, CurveEditorState,
+    LayoutSnapshot, SceneOverlayState, StatusBarState, TimelineInteractionState, ViewportInfo,
 };
+#[cfg(debug_assertions)]
+use super::ui::{build_click_debug_overlay, DebugWindowState};
 use crate::app::{App, GUIData};
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{
@@ -150,6 +151,7 @@ fn handle_redraw_requested(
 
     update_mouse_input(gui_data, ui);
 
+    #[cfg(debug_assertions)]
     let mut debug_state = {
         let rt_debug = app.rt_debug_state();
         DebugWindowState {
@@ -166,16 +168,19 @@ fn handle_redraw_requested(
         ui,
         app,
         gui_data,
+        #[cfg(debug_assertions)]
         &mut debug_state,
         &mut overlay_state,
         status_bar_state,
     );
 
+    #[cfg(debug_assertions)]
     {
         let mut rt_debug_mut = app.rt_debug_state_mut();
         rt_debug_mut.debug_view_mode = debug_state.debug_view_mode;
     }
 
+    #[cfg(debug_assertions)]
     build_click_debug_overlay(ui, gui_data);
 
     platform.prepare_render(ui, window);
@@ -192,7 +197,7 @@ fn build_ui_windows(
     ui: &imgui::Ui,
     app: &mut App,
     gui_data: &mut GUIData,
-    debug_state: &mut DebugWindowState,
+    #[cfg(debug_assertions)] debug_state: &mut DebugWindowState,
     overlay_state: &mut SceneOverlayState,
     status_bar_state: &mut StatusBarState,
 ) {
@@ -204,7 +209,14 @@ fn build_ui_windows(
         LayoutSnapshot::from_layout(&panel_layout, display_size)
     };
 
-    build_side_panel_windows(ui, app, gui_data, debug_state, &layout_snapshot);
+    build_side_panel_windows(
+        ui,
+        app,
+        gui_data,
+        #[cfg(debug_assertions)]
+        debug_state,
+        &layout_snapshot,
+    );
     let viewport_info = build_viewport_and_update_state(ui, app, gui_data, &layout_snapshot);
 
     {
@@ -227,7 +239,7 @@ fn build_side_panel_windows(
     ui: &imgui::Ui,
     app: &mut App,
     gui_data: &mut GUIData,
-    debug_state: &mut DebugWindowState,
+    #[cfg(debug_assertions)] debug_state: &mut DebugWindowState,
     layout_snapshot: &LayoutSnapshot,
 ) {
     {
@@ -241,6 +253,7 @@ fn build_side_panel_windows(
         build_bottom_panel(
             ui,
             &mut *ui_events,
+            #[cfg(debug_assertions)]
             debug_state,
             gui_data,
             &app.data.ecs_world,

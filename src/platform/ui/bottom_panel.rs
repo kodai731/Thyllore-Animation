@@ -5,6 +5,7 @@ use crate::ecs::events::UIEventQueue;
 use crate::ecs::resource::MessageLog;
 use crate::ecs::World;
 
+#[cfg(debug_assertions)]
 use super::debug_window::{build_debug_panel_content, DebugWindowState};
 use super::layout_snapshot::LayoutSnapshot;
 use super::message_window::build_message_window_content;
@@ -12,7 +13,7 @@ use super::message_window::build_message_window_content;
 pub fn build_bottom_panel(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
-    debug_state: &mut DebugWindowState,
+    #[cfg(debug_assertions)] debug_state: &mut DebugWindowState,
     gui_data: &mut GUIData,
     ecs_world: &World,
     message_log: &mut MessageLog,
@@ -32,6 +33,7 @@ pub fn build_bottom_panel(
             let msg_tab_label = build_message_tab_label(message_log);
 
             imgui::TabBar::new("bottom_tabs").build(ui, || {
+                #[cfg(debug_assertions)]
                 imgui::TabItem::new("Debug").build(ui, || {
                     build_debug_panel_content(ui, ui_events, debug_state, gui_data, ecs_world);
                 });

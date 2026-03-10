@@ -3,6 +3,102 @@ use rust_rendering::ecs::storage::{Components, SparseSet};
 use rust_rendering::ecs::world::{Entity, Name, Resources, Transform, Visible, World};
 use rust_rendering::render::{BufferHandle, IndexBufferHandle, VertexBufferHandle};
 
+mod release_build_tests {
+    use rust_rendering::debugview::GridMeshData;
+    use rust_rendering::ecs::systems::create_grid_mesh;
+    use rust_rendering::ecs::world::World;
+    use rust_rendering::loader::ModelLoadResult;
+
+    #[allow(deprecated)]
+    #[test]
+    fn test_grid_mesh_xz_toggle_in_release() {
+        let (mesh, xz_only_index_count) = create_grid_mesh();
+
+        let grid = GridMeshData {
+            mesh,
+            xz_only_index_count,
+            show_y_axis_grid: false,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            grid.xz_only_index_count, xz_only_index_count,
+            "XZ-only count should match"
+        );
+        assert!(
+            grid.xz_only_index_count < grid.mesh.indices.len() as u32,
+            "XZ-only count should be less than total"
+        );
+    }
+
+    #[test]
+    fn test_gltf_model_load_stickman() {
+        let path = "assets/models/stickman/stickman.glb";
+        if !std::path::Path::new(path).exists() {
+            println!("Skipping: {} not found", path);
+            return;
+        }
+
+        let gltf_result = unsafe { rust_rendering::loader::gltf::load_gltf_file(path) };
+        assert!(gltf_result.is_ok(), "glTF load should succeed");
+
+        let result = ModelLoadResult::from_gltf(gltf_result.unwrap());
+        assert!(!result.meshes.is_empty(), "Should have at least one mesh");
+        assert!(!result.nodes.is_empty(), "Should have nodes");
+    }
+
+    #[test]
+    fn test_gltf_model_load_phoenix_bird() {
+        let path = "assets/models/phoenix-bird/glb/phoenixBird.glb";
+        if !std::path::Path::new(path).exists() {
+            println!("Skipping: {} not found", path);
+            return;
+        }
+
+        let gltf_result = unsafe { rust_rendering::loader::gltf::load_gltf_file(path) };
+        assert!(gltf_result.is_ok(), "glTF load should succeed");
+
+        let result = ModelLoadResult::from_gltf(gltf_result.unwrap());
+        assert!(!result.meshes.is_empty(), "Should have at least one mesh");
+        assert!(!result.skeletons.is_empty(), "Should have a skeleton");
+        assert!(result.has_skinned_meshes, "Should have skinned meshes");
+    }
+
+    #[test]
+    fn test_ecs_world_resource_roundtrip_in_release() {
+        let mut world = World::new();
+
+        let (mesh, xz_only_index_count) = {
+            #[allow(deprecated)]
+            let (m, c) = create_grid_mesh();
+            (m, c)
+        };
+
+        world.insert_resource(GridMeshData {
+            mesh,
+            xz_only_index_count,
+            show_y_axis_grid: true,
+            ..Default::default()
+        });
+
+        {
+            let grid = world.get_resource::<GridMeshData>().unwrap();
+            assert!(grid.show_y_axis_grid);
+            assert!(grid.xz_only_index_count > 0);
+        }
+
+        {
+            let mut grid = world.get_resource_mut::<GridMeshData>().unwrap();
+            grid.show_y_axis_grid = false;
+        }
+
+        {
+            let grid = world.get_resource::<GridMeshData>().unwrap();
+            assert!(!grid.show_y_axis_grid);
+        }
+    }
+}
+
 mod sparse_set_tests {
     use super::*;
 

@@ -91,7 +91,7 @@ fn add_line_vertex_data(
 }
 
 #[deprecated(note = "Use create_grid_mesh_data() instead")]
-pub fn create_grid_mesh() -> LineMesh {
+pub fn create_grid_mesh() -> (LineMesh, u32) {
     let mut mesh = LineMesh::default();
 
     let grid_count = 1000;
@@ -108,14 +108,6 @@ pub fn create_grid_mesh() -> LineMesh {
     );
     add_grid_axis(
         &mut mesh,
-        1,
-        grid_count,
-        grid_extent,
-        grid_spacing,
-        [0.0, 1.0, 0.0],
-    );
-    add_grid_axis(
-        &mut mesh,
         2,
         grid_count,
         grid_extent,
@@ -123,7 +115,18 @@ pub fn create_grid_mesh() -> LineMesh {
         [0.0, 0.0, 1.0],
     );
 
-    mesh
+    let xz_only_index_count = mesh.indices.len() as u32;
+
+    add_grid_axis(
+        &mut mesh,
+        1,
+        grid_count,
+        grid_extent,
+        grid_spacing,
+        [0.0, 1.0, 0.0],
+    );
+
+    (mesh, xz_only_index_count)
 }
 
 #[allow(deprecated)]

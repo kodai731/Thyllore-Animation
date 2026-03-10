@@ -693,7 +693,7 @@ impl App {
             crate::log!("Ray tracing pipelines created successfully");
         }
 
-        let mut grid_mesh = create_grid_mesh();
+        let (mut grid_mesh, xz_only_index_count) = create_grid_mesh();
         let grid_scale = create_default_grid_scale();
 
         grid_mesh.vertex_buffer_handle = data.buffer_registry.create_vertex_buffer(
@@ -719,6 +719,8 @@ impl App {
             mesh: grid_mesh,
             render_info: grid_render_info,
             scale: grid_scale,
+            show_y_axis_grid: true,
+            xz_only_index_count,
         };
         println!("allocated grid object_index");
 

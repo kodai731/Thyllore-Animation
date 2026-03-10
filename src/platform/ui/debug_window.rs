@@ -1,5 +1,5 @@
 use crate::app::GUIData;
-use crate::debugview::DebugViewMode;
+use crate::debugview::{DebugViewMode, GridMeshData};
 use crate::ecs::events::UIEventQueue;
 use crate::ecs::World;
 
@@ -18,6 +18,9 @@ pub fn build_debug_panel_content(
     ui.separator();
 
     build_debug_panel(ui, ui_events, gui_data, ecs_world);
+    ui.separator();
+
+    build_grid_debug_panel(ui, ecs_world);
     ui.separator();
 
     build_fbx_debug_panel(ui);
@@ -163,6 +166,13 @@ fn build_spring_bone_bake_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ec
                 ui_events.send(UIEvent::SpringBoneSaveBake);
             }
         }
+    }
+}
+
+fn build_grid_debug_panel(ui: &imgui::Ui, ecs_world: &World) {
+    ui.text("Grid:");
+    if let Some(mut grid) = ecs_world.get_resource_mut::<GridMeshData>() {
+        ui.checkbox("Show Y-Axis Grid", &mut grid.show_y_axis_grid);
     }
 }
 

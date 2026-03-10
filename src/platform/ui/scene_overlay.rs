@@ -1,6 +1,7 @@
 use imgui::Condition;
 
 use crate::app::GUIData;
+use crate::debugview::gizmo::BoneGizmoData;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{CoordinateSpace, TransformGizmoMode, TransformGizmoState};
 use crate::ecs::World;
@@ -43,6 +44,8 @@ pub fn build_scene_overlay(
 
             build_screenshot_section(ui, ui_events);
             ui.separator();
+
+            build_overlay_section(ui, ecs_world);
 
             build_transform_gizmo_section(ui, ecs_world);
 
@@ -110,6 +113,14 @@ fn build_camera_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {
 fn build_screenshot_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {
     if ui.button("Screenshot") {
         ui_events.send(UIEvent::TakeScreenshot);
+    }
+}
+
+fn build_overlay_section(ui: &imgui::Ui, ecs_world: &World) {
+    if ui.collapsing_header("Overlay", imgui::TreeNodeFlags::DEFAULT_OPEN) {
+        if let Some(mut bone_gizmo) = ecs_world.get_resource_mut::<BoneGizmoData>() {
+            ui.checkbox("Show Bones", &mut bone_gizmo.visible);
+        }
     }
 }
 

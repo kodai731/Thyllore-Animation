@@ -48,8 +48,7 @@ use winit::window::Window;
 // Constants
 pub const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
 pub const VALIDATION_ENABLED: bool = cfg!(debug_assertions);
-pub const VALIDATION_LAYER: vk::ExtensionName =
-    vk::ExtensionName::from_bytes(b"VK_LAYER_KHRONOS_validation");
+pub use crate::vulkanr::core::device::VALIDATION_LAYER;
 pub const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
     vk::KHR_SWAPCHAIN_EXTENSION.name,
     vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION.name,

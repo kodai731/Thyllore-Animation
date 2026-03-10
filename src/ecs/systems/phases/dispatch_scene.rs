@@ -8,10 +8,10 @@ pub fn dispatch_scene_events(events: &[UIEvent], world: &mut World) {
 
             match crate::scene::save_scene(&scene_path, world) {
                 Ok(()) => {
-                    crate::log!("Scene saved to {:?}", scene_path);
+                    crate::msg_info!("Scene saved to {:?}", scene_path);
                 }
                 Err(e) => {
-                    crate::log!("Failed to save scene: {:?}", e);
+                    crate::msg_error!("Failed to save scene: {:?}", e);
                 }
             }
         }

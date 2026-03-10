@@ -1,0 +1,287 @@
+use imgui::Condition;
+
+use crate::app::GUIData;
+use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::resource::{CoordinateSpace, TransformGizmoMode, TransformGizmoState};
+use crate::ecs::World;
+
+use super::viewport_window::ViewportInfo;
+
+const OVERLAY_MARGIN: f32 = 8.0;
+const OVERLAY_WIDTH: f32 = 280.0;
+
+pub struct SceneOverlayState {
+    pub model_path: String,
+    pub load_status: String,
+}
+
+pub fn build_scene_overlay(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    overlay_state: &mut SceneOverlayState,
+    gui_data: &mut GUIData,
+    ecs_world: &World,
+    viewport_info: &ViewportInfo,
+) {
+    let pos_x = viewport_info.position[0] + OVERLAY_MARGIN;
+    let pos_y = viewport_info.position[1] + OVERLAY_MARGIN;
+
+    ui.window("Scene Overlay")
+        .position([pos_x, pos_y], Condition::Always)
+        .size_constraints([OVERLAY_WIDTH, 0.0], [OVERLAY_WIDTH, f32::MAX])
+        .no_decoration()
+        .bg_alpha(0.7)
+        .no_nav()
+        .focus_on_appearing(false)
+        .save_settings(false)
+        .build(|| {
+            build_model_section(ui, ui_events, overlay_state, gui_data);
+            ui.separator();
+
+            build_camera_section(ui, ui_events);
+            ui.separator();
+
+            build_screenshot_section(ui, ui_events);
+            ui.separator();
+
+            build_transform_gizmo_section(ui, ecs_world);
+
+            build_dof_section(ui, ecs_world);
+
+            build_auto_exposure_section(ui, ecs_world);
+
+            build_onion_skinning_section(ui, ecs_world);
+        });
+}
+
+fn build_model_section(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    state: &SceneOverlayState,
+    _gui_data: &mut GUIData,
+) {
+    if ui.button("Open FBX") {
+        if let Some(path) = rfd::FileDialog::new()
+            .add_filter("FBX Files", &["fbx"])
+            .pick_file()
+        {
+            let path_str = path.to_string_lossy().to_string();
+            crate::log!("Selected FBX file: {}", path_str);
+            ui_events.send(UIEvent::LoadModel { path: path_str });
+        }
+    }
+
+    ui.same_line();
+
+    if ui.button("Open glTF") {
+        if let Some(path) = rfd::FileDialog::new()
+            .add_filter("glTF Files", &["gltf", "glb"])
+            .pick_file()
+        {
+            let path_str = path.to_string_lossy().to_string();
+            crate::log!("Selected glTF file: {}", path_str);
+            ui_events.send(UIEvent::LoadModel { path: path_str });
+        }
+    }
+
+    let model_name = if state.model_path.is_empty() {
+        "None"
+    } else {
+        &state.model_path
+    };
+    ui.text_wrapped(format!("Model: {}", model_name));
+    ui.text(format!("Status: {}", state.load_status));
+}
+
+fn build_camera_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {
+    if ui.button("Reset Camera") {
+        ui_events.send(UIEvent::ResetCamera);
+    }
+    ui.same_line();
+    if ui.button("Reset Up") {
+        ui_events.send(UIEvent::ResetCameraUp);
+    }
+    ui.same_line();
+    if ui.button("To Model") {
+        ui_events.send(UIEvent::MoveCameraToModel);
+    }
+}
+
+fn build_screenshot_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {
+    if ui.button("Screenshot") {
+        ui_events.send(UIEvent::TakeScreenshot);
+    }
+}
+
+fn build_transform_gizmo_section(ui: &imgui::Ui, ecs_world: &World) {
+    let Some(mut state) = ecs_world.get_resource_mut::<TransformGizmoState>() else {
+        return;
+    };
+
+    if ui.collapsing_header("Transform Gizmo", imgui::TreeNodeFlags::DEFAULT_OPEN) {
+        let translate_label = if state.mode == TransformGizmoMode::Translate {
+            "[W] Translate *"
+        } else {
+            "[W] Translate"
+        };
+        let rotate_label = if state.mode == TransformGizmoMode::Rotate {
+            "[E] Rotate *"
+        } else {
+            "[E] Rotate"
+        };
+        let scale_label = if state.mode == TransformGizmoMode::Scale {
+            "[R] Scale *"
+        } else {
+            "[R] Scale"
+        };
+
+        if ui.button(translate_label) {
+            state.mode = TransformGizmoMode::Translate;
+        }
+        ui.same_line();
+        if ui.button(rotate_label) {
+            state.mode = TransformGizmoMode::Rotate;
+        }
+        ui.same_line();
+        if ui.button(scale_label) {
+            state.mode = TransformGizmoMode::Scale;
+        }
+
+        // Keyboard shortcuts (W/E/R)
+        if ui.is_key_pressed(imgui::Key::W) && !ui.io().key_ctrl {
+            state.mode = TransformGizmoMode::Translate;
+        }
+        if ui.is_key_pressed(imgui::Key::E) && !ui.io().key_ctrl {
+            state.mode = TransformGizmoMode::Rotate;
+        }
+        if ui.is_key_pressed(imgui::Key::R) && !ui.io().key_ctrl {
+            state.mode = TransformGizmoMode::Scale;
+        }
+
+        let space_label = match state.coordinate_space {
+            CoordinateSpace::World => "World",
+            CoordinateSpace::Local => "Local",
+        };
+        if ui.button(format!("Space: {}", space_label)) {
+            state.coordinate_space = match state.coordinate_space {
+                CoordinateSpace::World => CoordinateSpace::Local,
+                CoordinateSpace::Local => CoordinateSpace::World,
+            };
+        }
+
+        ui.same_line();
+        ui.checkbox("Snap", &mut state.snap_enabled);
+
+        if state.snap_enabled {
+            match state.mode {
+                TransformGizmoMode::Translate => {
+                    ui.slider_config("Snap Value", 0.01, 10.0)
+                        .build(&mut state.translate_snap_value);
+                }
+                TransformGizmoMode::Rotate => {
+                    ui.slider_config("Snap Degrees", 1.0, 90.0)
+                        .build(&mut state.rotate_snap_degrees);
+                }
+                TransformGizmoMode::Scale => {
+                    ui.slider_config("Snap Value", 0.01, 1.0)
+                        .build(&mut state.scale_snap_value);
+                }
+            }
+        }
+
+        ui.slider_config("Gizmo Scale", 0.01, 0.3)
+            .display_format("%.3f")
+            .build(&mut state.gizmo_scale);
+    }
+}
+
+fn build_dof_section(ui: &imgui::Ui, ecs_world: &World) {
+    use crate::ecs::resource::{DepthOfField, PhysicalCameraParameters};
+
+    if ui.collapsing_header("Depth of Field", imgui::TreeNodeFlags::empty()) {
+        if let Some(mut dof) = ecs_world.get_resource_mut::<DepthOfField>() {
+            ui.checkbox("DOF Enabled", &mut dof.enabled);
+
+            ui.slider_config("Focus Distance", 0.1, 100.0)
+                .build(&mut dof.focus_distance);
+
+            ui.slider_config("Max Blur Radius", 1.0, 32.0)
+                .build(&mut dof.max_blur_radius);
+        }
+
+        if let Some(mut params) = ecs_world.get_resource_mut::<PhysicalCameraParameters>() {
+            ui.slider_config("Aperture (f-stops)", 1.0, 22.0)
+                .build(&mut params.aperture_f_stops);
+
+            ui.slider_config("Focal Length (mm)", 10.0, 200.0)
+                .build(&mut params.focal_length_mm);
+        }
+    }
+}
+
+fn build_auto_exposure_section(ui: &imgui::Ui, ecs_world: &World) {
+    use crate::ecs::resource::{AutoExposure, Exposure};
+
+    if ui.collapsing_header("Auto Exposure", imgui::TreeNodeFlags::empty()) {
+        if let Some(mut ae) = ecs_world.get_resource_mut::<AutoExposure>() {
+            ui.checkbox("Auto Exposure Enabled", &mut ae.enabled);
+
+            ui.slider_config("Min EV", -10.0, 10.0)
+                .build(&mut ae.min_ev);
+
+            ui.slider_config("Max EV", 0.0, 30.0).build(&mut ae.max_ev);
+
+            ui.slider_config("Speed Up", 0.1, 10.0)
+                .build(&mut ae.adaptation_speed_up);
+
+            ui.slider_config("Speed Down", 0.1, 10.0)
+                .build(&mut ae.adaptation_speed_down);
+
+            ui.slider_config("Low Percent", 0.0, 0.5)
+                .build(&mut ae.low_percent);
+
+            ui.slider_config("High Percent", 0.5, 1.0)
+                .build(&mut ae.high_percent);
+        }
+
+        if let Some(exposure) = ecs_world.get_resource::<Exposure>() {
+            ui.text(format!("Current Exposure: {:.4}", exposure.exposure_value));
+            ui.text(format!("Current EV100: {:.2}", exposure.ev100));
+        }
+    }
+}
+
+fn build_onion_skinning_section(ui: &imgui::Ui, ecs_world: &World) {
+    use crate::ecs::resource::OnionSkinningConfig;
+
+    if ui.collapsing_header("Onion Skinning", imgui::TreeNodeFlags::empty()) {
+        if let Some(mut config) = ecs_world.get_resource_mut::<OnionSkinningConfig>() {
+            ui.checkbox("Onion Skin Enabled", &mut config.enabled);
+
+            let mut past = config.past_count as i32;
+            if ui.slider_config("Past Frames", 0, 4).build(&mut past) {
+                config.past_count = past.max(0) as u32;
+            }
+
+            let mut future = config.future_count as i32;
+            if ui.slider_config("Future Frames", 0, 4).build(&mut future) {
+                config.future_count = future.max(0) as u32;
+            }
+
+            ui.slider_config("Frame Step", 0.001, 0.2)
+                .display_format("%.3f")
+                .build(&mut config.frame_step);
+
+            ui.slider_config("Ghost Opacity", 0.0, 1.0)
+                .build(&mut config.opacity);
+
+            ui.color_edit3("Past Color", &mut config.past_color);
+            ui.color_edit3("Future Color", &mut config.future_color);
+
+            ui.text(format!(
+                "Total ghosts: {}",
+                crate::ecs::compute_total_ghost_count(&config)
+            ));
+        }
+    }
+}

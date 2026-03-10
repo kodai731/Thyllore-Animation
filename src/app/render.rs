@@ -216,14 +216,11 @@ impl App {
                 }
 
                 gui_data.load_status = format!("Loaded: {}", gui_data.selected_model_path);
-                crate::log!(
-                    "Successfully loaded model: {}",
-                    gui_data.selected_model_path
-                );
+                crate::msg_info!("Model loaded: {}", gui_data.selected_model_path);
             }
             Err(e) => {
                 gui_data.load_status = format!("Error: {}", e);
-                crate::log!("Failed to load model: {:?}", e);
+                crate::msg_error!("Failed to load model: {:?}", e);
             }
         }
 
@@ -581,7 +578,7 @@ impl App {
             crate::log!("Taking screenshot...");
             self.save_screenshot(image_index)?;
             gui_data.take_screenshot = false;
-            crate::log!("Screenshot saved!");
+            crate::msg_info!("Screenshot saved");
         }
 
         self.frame_sync_mut().advance(MAX_FRAMES_IN_FLIGHT);

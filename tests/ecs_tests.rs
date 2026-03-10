@@ -962,3 +962,154 @@ mod transform_tests {
         assert_relative_eq!(matrix[2][2], 4.0, epsilon = 0.0001);
     }
 }
+
+mod message_log_tests {
+    use rust_rendering::ecs::resource::{MessageFilter, MessageLog};
+    use rust_rendering::logger::message_buffer::{MessageBuffer, MessageLevel};
+
+    fn make_log_with_messages() -> MessageLog {
+        let mut log = MessageLog::default();
+        log.messages = vec![
+            rust_rendering::logger::message_buffer::Message {
+                level: MessageLevel::Info,
+                text: "Model loaded".to_string(),
+                timestamp: "12:00:00".to_string(),
+            },
+            rust_rendering::logger::message_buffer::Message {
+                level: MessageLevel::Warning,
+                text: "Missing bone: Spine2".to_string(),
+                timestamp: "12:00:01".to_string(),
+            },
+            rust_rendering::logger::message_buffer::Message {
+                level: MessageLevel::Error,
+                text: "Failed to load texture".to_string(),
+                timestamp: "12:00:02".to_string(),
+            },
+            rust_rendering::logger::message_buffer::Message {
+                level: MessageLevel::Info,
+                text: "Screenshot saved".to_string(),
+                timestamp: "12:00:03".to_string(),
+            },
+        ];
+        log.info_count = 2;
+        log.warning_count = 1;
+        log.error_count = 1;
+        log
+    }
+
+    #[test]
+    fn test_message_buffer_push_populates_and_snapshot_returns_all() {
+        let mut buf = MessageBuffer::new();
+        buf.push(MessageLevel::Info, "info msg".to_string());
+        buf.push(MessageLevel::Warning, "warn msg".to_string());
+        buf.push(MessageLevel::Error, "error msg".to_string());
+
+        let snap = buf.snapshot();
+        assert_eq!(snap.len(), 3);
+        assert_eq!(snap[0].level, MessageLevel::Info);
+        assert_eq!(snap[1].level, MessageLevel::Warning);
+        assert_eq!(snap[2].level, MessageLevel::Error);
+    }
+
+    #[test]
+    fn test_message_log_filter_all_returns_every_message() {
+        let mut log = make_log_with_messages();
+        log.filter = MessageFilter::All;
+        assert_eq!(log.filtered_messages().len(), 4);
+    }
+
+    #[test]
+    fn test_message_log_filter_warning_and_error_excludes_info() {
+        let mut log = make_log_with_messages();
+        log.filter = MessageFilter::WarningAndError;
+        let filtered = log.filtered_messages();
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered.iter().all(|m| m.level != MessageLevel::Info));
+    }
+
+    #[test]
+    fn test_message_log_filter_error_only() {
+        let mut log = make_log_with_messages();
+        log.filter = MessageFilter::ErrorOnly;
+        let filtered = log.filtered_messages();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].level, MessageLevel::Error);
+        assert_eq!(filtered[0].text, "Failed to load texture");
+    }
+
+    #[test]
+    fn test_message_log_default_state() {
+        let log = MessageLog::default();
+        assert!(log.messages.is_empty());
+        assert_eq!(log.filter, MessageFilter::All);
+        assert!(log.auto_scroll);
+        assert_eq!(log.info_count, 0);
+        assert_eq!(log.warning_count, 0);
+        assert_eq!(log.error_count, 0);
+    }
+
+    #[test]
+    fn test_message_buffer_ring_buffer_evicts_oldest() {
+        let mut buf = MessageBuffer::new();
+        // Push more than capacity (256)
+        for i in 0..300 {
+            buf.push(MessageLevel::Info, format!("msg {}", i));
+        }
+        let snap = buf.snapshot();
+        assert_eq!(snap.len(), 256);
+        // Oldest messages (0-43) should have been evicted
+        assert_eq!(snap[0].text, "msg 44");
+        assert_eq!(snap[255].text, "msg 299");
+    }
+
+    #[test]
+    fn test_message_buffer_count_by_level() {
+        let mut buf = MessageBuffer::new();
+        buf.push(MessageLevel::Info, "a".to_string());
+        buf.push(MessageLevel::Info, "b".to_string());
+        buf.push(MessageLevel::Warning, "c".to_string());
+        buf.push(MessageLevel::Error, "d".to_string());
+        buf.push(MessageLevel::Error, "e".to_string());
+        buf.push(MessageLevel::Error, "f".to_string());
+
+        assert_eq!(buf.count_by_level(MessageLevel::Info), 2);
+        assert_eq!(buf.count_by_level(MessageLevel::Warning), 1);
+        assert_eq!(buf.count_by_level(MessageLevel::Error), 3);
+    }
+
+    #[test]
+    fn test_message_buffer_clear_empties_all() {
+        let mut buf = MessageBuffer::new();
+        buf.push(MessageLevel::Info, "test".to_string());
+        buf.push(MessageLevel::Error, "err".to_string());
+        buf.clear();
+
+        assert_eq!(buf.snapshot().len(), 0);
+        assert_eq!(buf.count_by_level(MessageLevel::Info), 0);
+        assert_eq!(buf.count_by_level(MessageLevel::Error), 0);
+    }
+
+    #[test]
+    fn test_message_log_clear_buffer_resets_counts() {
+        let mut log = make_log_with_messages();
+        assert_eq!(log.info_count, 2);
+        assert_eq!(log.error_count, 1);
+
+        log.clear_buffer();
+
+        assert!(log.messages.is_empty());
+        assert_eq!(log.info_count, 0);
+        assert_eq!(log.warning_count, 0);
+        assert_eq!(log.error_count, 0);
+    }
+
+    #[test]
+    fn test_message_timestamp_is_populated() {
+        let mut buf = MessageBuffer::new();
+        buf.push(MessageLevel::Info, "hello".to_string());
+        let snap = buf.snapshot();
+        assert!(!snap[0].timestamp.is_empty());
+        // Timestamp should match HH:MM:SS format (8 chars)
+        assert_eq!(snap[0].timestamp.len(), 8);
+    }
+}

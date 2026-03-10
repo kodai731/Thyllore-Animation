@@ -967,6 +967,7 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::PoseLibrary>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::ConstraintEditorState>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::PanelLayout>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::MessageLog>(data);
 
         if !data.ecs_world.contains_resource::<TimelineState>() {
             data.ecs_world.insert_resource(TimelineState::new());

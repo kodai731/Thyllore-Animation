@@ -55,7 +55,7 @@ fn build_filter_buttons(
 
     ui.same_line();
     if ui.button("Clear") {
-        message_log.clear_buffer();
+        crate::ecs::systems::message_log_clear_buffer(message_log);
     }
 
     ui.same_line();
@@ -63,7 +63,7 @@ fn build_filter_buttons(
 }
 
 fn build_message_list(ui: &imgui::Ui, message_log: &MessageLog) {
-    let filtered = message_log.filtered_messages();
+    let filtered = crate::ecs::systems::message_log_filtered_messages(message_log);
 
     ui.child_window("message_list").build(|| {
         for msg in &filtered {

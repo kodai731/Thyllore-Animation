@@ -7,8 +7,7 @@ use super::{
 };
 use crate::app::billboard::BillboardData;
 use crate::app::data::LightMoveTarget;
-use crate::ecs::resource::Camera;
-use crate::ecs::resource::LightState;
+use crate::ecs::resource::{Camera, LightState};
 use crate::math::coordinate_system::perspective_infinite_reverse;
 use crate::render::RenderBackend;
 
@@ -104,13 +103,72 @@ fn get_camera_axes_from_view(view: Matrix4<f32>) -> (Vector3<f32>, Vector3<f32>,
 pub fn update_light_auto_target(
     light_state: &mut LightState,
     all_positions: &[Vector3<f32>],
-    camera_position: Vector3<f32>,
+    _camera_position: Vector3<f32>,
     move_light_to: LightMoveTarget,
 ) {
-    match move_light_to {
-        LightMoveTarget::None => {}
-        _ => {
-            light_state.update_light_position(all_positions, camera_position, move_light_to);
-        }
+    if matches!(move_light_to, LightMoveTarget::None) {
+        return;
     }
+
+    crate::log!("LIGHT MOVE BUTTON PRESSED: {:?}", move_light_to);
+
+    if all_positions.is_empty() {
+        crate::log!("WARNING: No model positions found!");
+        return;
+    }
+
+    let (min, max) = compute_model_bounds(all_positions);
+
+    let model_size = ((max.x - min.x).abs() + (max.y - min.y).abs() + (max.z - min.z).abs()) / 3.0;
+
+    let offset = 2.0;
+    let current = light_state.light_position;
+    let new_pos = match move_light_to {
+        LightMoveTarget::XMin => Vector3::new(min.x - offset, current.y, current.z),
+        LightMoveTarget::XMax => Vector3::new(max.x + offset, current.y, current.z),
+        LightMoveTarget::YMin => Vector3::new(current.x, min.y - offset, current.z),
+        LightMoveTarget::YMax => Vector3::new(current.x, max.y + offset, current.z),
+        LightMoveTarget::ZMin => Vector3::new(current.x, current.y, min.z - offset),
+        LightMoveTarget::ZMax => Vector3::new(current.x, current.y, max.z + offset),
+        LightMoveTarget::None => current,
+    };
+
+    light_state.shadow_normal_offset = (model_size * 0.005).max(0.5);
+
+    crate::log!(
+        "Model bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
+        min.x,
+        max.x,
+        min.y,
+        max.y,
+        min.z,
+        max.z
+    );
+    crate::log!(
+        "Light position: ({:.2}, {:.2}, {:.2}) -> ({:.2}, {:.2}, {:.2})",
+        current.x,
+        current.y,
+        current.z,
+        new_pos.x,
+        new_pos.y,
+        new_pos.z,
+    );
+
+    light_state.light_position = new_pos;
+}
+
+fn compute_model_bounds(positions: &[Vector3<f32>]) -> (Vector3<f32>, Vector3<f32>) {
+    let mut min = Vector3::new(f32::MAX, f32::MAX, f32::MAX);
+    let mut max = Vector3::new(f32::MIN, f32::MIN, f32::MIN);
+
+    for pos in positions {
+        min.x = min.x.min(pos.x);
+        max.x = max.x.max(pos.x);
+        min.y = min.y.min(pos.y);
+        max.y = max.y.max(pos.y);
+        min.z = min.z.min(pos.z);
+        max.z = max.z.max(pos.z);
+    }
+
+    (min, max)
 }

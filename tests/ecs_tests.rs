@@ -1131,6 +1131,9 @@ mod transform_tests {
 
 mod message_log_tests {
     use rust_rendering::ecs::resource::{MessageFilter, MessageLog};
+    use rust_rendering::ecs::systems::message_log_systems::{
+        message_log_clear_buffer, message_log_filtered_messages,
+    };
     use rust_rendering::logger::message_buffer::{MessageBuffer, MessageLevel};
 
     fn make_log_with_messages() -> MessageLog {
@@ -1181,14 +1184,14 @@ mod message_log_tests {
     fn test_message_log_filter_all_returns_every_message() {
         let mut log = make_log_with_messages();
         log.filter = MessageFilter::All;
-        assert_eq!(log.filtered_messages().len(), 4);
+        assert_eq!(message_log_filtered_messages(&log).len(), 4);
     }
 
     #[test]
     fn test_message_log_filter_warning_and_error_excludes_info() {
         let mut log = make_log_with_messages();
         log.filter = MessageFilter::WarningAndError;
-        let filtered = log.filtered_messages();
+        let filtered = message_log_filtered_messages(&log);
         assert_eq!(filtered.len(), 2);
         assert!(filtered.iter().all(|m| m.level != MessageLevel::Info));
     }
@@ -1197,7 +1200,7 @@ mod message_log_tests {
     fn test_message_log_filter_error_only() {
         let mut log = make_log_with_messages();
         log.filter = MessageFilter::ErrorOnly;
-        let filtered = log.filtered_messages();
+        let filtered = message_log_filtered_messages(&log);
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].level, MessageLevel::Error);
         assert_eq!(filtered[0].text, "Failed to load texture");
@@ -1261,7 +1264,7 @@ mod message_log_tests {
         assert_eq!(log.info_count, 2);
         assert_eq!(log.error_count, 1);
 
-        log.clear_buffer();
+        message_log_clear_buffer(&mut log);
 
         assert!(log.messages.is_empty());
         assert_eq!(log.info_count, 0);

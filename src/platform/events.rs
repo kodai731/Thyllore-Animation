@@ -240,7 +240,7 @@ fn build_side_panel_windows(
 ) {
     {
         let mut msg_log = app.data.ecs_world.resource_mut::<MessageLog>();
-        msg_log.sync_from_buffer();
+        crate::ecs::systems::message_log_sync_from_buffer(&mut msg_log);
     }
 
     {

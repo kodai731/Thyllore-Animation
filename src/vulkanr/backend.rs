@@ -265,15 +265,17 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
                 &billboard.mesh.indices,
             )?;
 
-        let texture_path = std::path::Path::new("assets/textures/lightIcon.png");
+        let white_pixel: [u8; 4] = [255, 255, 255, 255];
         billboard.render_state.texture = Some(
-            RRImage::new_from_file(
+            RRImage::new_from_pixels(
                 self.instance,
                 self.device,
-                self.command_pool.as_ref(),
-                texture_path,
+                &self.command_pool,
+                &white_pixel,
+                1,
+                1,
             )
-            .map_err(|e| anyhow::anyhow!("Failed to load billboard texture: {}", e))?,
+            .map_err(|e| anyhow::anyhow!("Failed to create billboard texture: {}", e))?,
         );
 
         Ok(())

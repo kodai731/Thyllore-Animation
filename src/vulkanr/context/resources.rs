@@ -133,8 +133,9 @@ impl GpuAssets {
 }
 
 use crate::app::raytracing::RayTracingData;
-use crate::debugview::{DebugViewData, RayTracingDebugState};
+use crate::debugview::DebugViewState;
 use crate::ecs::resource::Camera;
+use crate::ecs::resource::LightState;
 use crate::ecs::systems::camera_systems::{
     compute_camera_direction, compute_camera_position, compute_camera_up,
 };
@@ -185,24 +186,21 @@ impl Default for RayTracingState {
 }
 
 pub struct DebugState {
-    pub rt_debug: RayTracingDebugState,
-    pub view_data: DebugViewData,
+    pub light: LightState,
+    pub view: DebugViewState,
 }
 
 impl DebugState {
-    pub fn new(rt_debug: RayTracingDebugState, view_data: DebugViewData) -> Self {
-        Self {
-            rt_debug,
-            view_data,
-        }
+    pub fn new(light: LightState, view: DebugViewState) -> Self {
+        Self { light, view }
     }
 }
 
 impl Default for DebugState {
     fn default() -> Self {
         Self {
-            rt_debug: RayTracingDebugState::default(),
-            view_data: DebugViewData::default(),
+            light: LightState::default(),
+            view: DebugViewState::default(),
         }
     }
 }

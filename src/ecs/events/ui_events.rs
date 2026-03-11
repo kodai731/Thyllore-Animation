@@ -98,8 +98,6 @@ pub enum UIEvent {
         new_time: f32,
         new_value: f32,
     },
-    TimelineZoomIn,
-    TimelineZoomOut,
     TimelineSetKeyframeInterpolation {
         bone_id: BoneId,
         property_type: PropertyType,

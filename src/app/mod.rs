@@ -25,8 +25,9 @@ use crate::app::billboard::BillboardData;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::app::raytracing::RayTracingData;
 use crate::debugview::gizmo::{BoneGizmoData, GridGizmoData, LightGizmoData, TransformGizmoData};
-use crate::debugview::{DebugViewData, GridMeshData, RayTracingDebugState};
+use crate::debugview::DebugViewState;
 use crate::ecs::resource::Camera;
+use crate::ecs::resource::{GridMeshData, LightState};
 use crate::ecs::{
     ClipLibrary, GpuDescriptors, MaterialRegistry, MeshAssets, ModelState, NodeAssets, ResMut,
     ResRef, Resource,
@@ -121,20 +122,20 @@ impl App {
         &mut self.data.raytracing
     }
 
-    pub fn rt_debug_state(&self) -> ResRef<RayTracingDebugState> {
-        self.resource::<RayTracingDebugState>()
+    pub fn light_state(&self) -> ResRef<LightState> {
+        self.resource::<LightState>()
     }
 
-    pub fn rt_debug_state_mut(&self) -> ResMut<RayTracingDebugState> {
-        self.resource_mut::<RayTracingDebugState>()
+    pub fn light_state_mut(&self) -> ResMut<LightState> {
+        self.resource_mut::<LightState>()
     }
 
-    pub fn debug_view_data(&self) -> &DebugViewData {
-        &self.data.debug_view_data
+    pub fn debug_view_state(&self) -> ResRef<DebugViewState> {
+        self.resource::<DebugViewState>()
     }
 
-    pub fn debug_view_data_mut(&mut self) -> &mut DebugViewData {
-        &mut self.data.debug_view_data
+    pub fn debug_view_state_mut(&self) -> ResMut<DebugViewState> {
+        self.resource_mut::<DebugViewState>()
     }
 
     pub fn imgui_data(&self) -> &ImguiData {

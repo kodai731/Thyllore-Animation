@@ -6,7 +6,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::component::mesh::{MeshData, VertexLayout};
 use crate::ecs::systems::mesh_systems::create_interleaved_buffer;
-use crate::render::{IndexBufferHandle, VertexBufferHandle};
+use crate::render::{BufferMemoryType, IndexBufferHandle, VertexBufferHandle};
 use crate::vulkanr::buffer::{copy_buffer, create_buffer};
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
@@ -44,11 +44,11 @@ impl GpuBufferRegistry {
         device: &RRDevice,
         command_pool: &RRCommandPool,
         data: &[T],
-        use_staging: bool,
+        memory_type: BufferMemoryType,
     ) -> Result<VertexBufferHandle> {
         let buffer_size = (size_of::<T>() * data.len()) as u64;
 
-        let gpu_buffer = if use_staging {
+        let gpu_buffer = if memory_type == BufferMemoryType::DeviceLocal {
             self.create_device_local_buffer(
                 instance,
                 device,
@@ -324,16 +324,18 @@ impl GpuBufferRegistry {
         device: &RRDevice,
         command_pool: &RRCommandPool,
         mesh: &MeshData,
-        use_staging: bool,
+        memory_type: BufferMemoryType,
     ) -> Result<(VertexBufferHandle, Option<IndexBufferHandle>)> {
         let layout = VertexLayout::from_mesh_data(mesh);
         let vertex_data = create_interleaved_buffer(mesh, &layout);
 
-        let vertex_handle = if use_staging {
-            self.create_vertex_buffer_raw(instance, device, command_pool, &vertex_data, true)?
-        } else {
-            self.create_vertex_buffer_raw(instance, device, command_pool, &vertex_data, false)?
-        };
+        let vertex_handle = self.create_vertex_buffer_raw(
+            instance,
+            device,
+            command_pool,
+            &vertex_data,
+            memory_type,
+        )?;
 
         let index_handle = if let Some(indices) = mesh.indices() {
             Some(self.create_index_buffer(instance, device, command_pool, indices)?)
@@ -350,11 +352,11 @@ impl GpuBufferRegistry {
         device: &RRDevice,
         command_pool: &RRCommandPool,
         data: &[u8],
-        use_staging: bool,
+        memory_type: BufferMemoryType,
     ) -> Result<VertexBufferHandle> {
         let buffer_size = data.len() as u64;
 
-        let gpu_buffer = if use_staging {
+        let gpu_buffer = if memory_type == BufferMemoryType::DeviceLocal {
             self.create_device_local_buffer(
                 instance,
                 device,

@@ -215,7 +215,9 @@ impl TransformChannel {
             return Some(keyframes[0].value);
         }
 
-        let last_kf = keyframes.last().unwrap();
+        let Some(last_kf) = keyframes.last() else {
+            return None;
+        };
         if time >= last_kf.time {
             if let Some(dur) = duration {
                 if dur > last_kf.time && time < dur {
@@ -258,7 +260,9 @@ impl TransformChannel {
             return Some(keyframes[0].value);
         }
 
-        let last_kf = keyframes.last().unwrap();
+        let Some(last_kf) = keyframes.last() else {
+            return None;
+        };
         if time >= last_kf.time {
             if let Some(dur) = duration {
                 if dur > last_kf.time && time < dur {

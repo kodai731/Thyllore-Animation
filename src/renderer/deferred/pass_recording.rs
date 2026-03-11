@@ -27,7 +27,7 @@ pub unsafe fn record_gbuffer_pass(
 
 pub unsafe fn record_ray_query_pass(app: &App, command_buffer: vk::CommandBuffer) -> Result<()> {
     let pass = RayQueryPass::new(app)?;
-    let normal_offset = app.rt_debug_state().shadow_normal_offset;
+    let normal_offset = app.light_state().shadow_normal_offset;
     pass.record(command_buffer, normal_offset)
 }
 

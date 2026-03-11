@@ -9,9 +9,7 @@ pub struct RRRayQueryDescriptorSet {
 }
 
 impl RRRayQueryDescriptorSet {
-    /// Create Ray Query descriptor set layout
     pub unsafe fn create_layout(rrdevice: &RRDevice) -> Result<vk::DescriptorSetLayout> {
-        // Binding 0: Position image (storage image, read)
         let position_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
             .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
@@ -19,7 +17,6 @@ impl RRRayQueryDescriptorSet {
             .stage_flags(vk::ShaderStageFlags::COMPUTE)
             .build();
 
-        // Binding 1: Normal image (storage image, read)
         let normal_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(1)
             .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
@@ -27,7 +24,6 @@ impl RRRayQueryDescriptorSet {
             .stage_flags(vk::ShaderStageFlags::COMPUTE)
             .build();
 
-        // Binding 2: Shadow mask image (storage image, write)
         let shadow_mask_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(2)
             .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
@@ -35,7 +31,6 @@ impl RRRayQueryDescriptorSet {
             .stage_flags(vk::ShaderStageFlags::COMPUTE)
             .build();
 
-        // Binding 3: Top-level acceleration structure
         let tlas_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(3)
             .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
@@ -43,7 +38,6 @@ impl RRRayQueryDescriptorSet {
             .stage_flags(vk::ShaderStageFlags::COMPUTE)
             .build();
 
-        // Binding 4: Scene uniform buffer (light position, etc.)
         let scene_ubo_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(4)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
@@ -67,7 +61,6 @@ impl RRRayQueryDescriptorSet {
         Ok(layout)
     }
 
-    /// Create descriptor pool for Ray Query
     pub unsafe fn create_pool(rrdevice: &RRDevice) -> Result<vk::DescriptorPool> {
         let storage_image_size = vk::DescriptorPoolSize::builder()
             .type_(vk::DescriptorType::STORAGE_IMAGE)
@@ -93,7 +86,6 @@ impl RRRayQueryDescriptorSet {
         Ok(pool)
     }
 
-    /// Allocate and update descriptor set with G-Buffer images, TLAS, and scene uniform buffer
     pub unsafe fn allocate_and_update(
         &mut self,
         rrdevice: &RRDevice,
@@ -103,7 +95,6 @@ impl RRRayQueryDescriptorSet {
         tlas: vk::AccelerationStructureKHR,
         scene_uniform_buffer: vk::Buffer,
     ) -> Result<()> {
-        // Allocate descriptor set
         let layouts = [self.descriptor_set_layout];
         let alloc_info = vk::DescriptorSetAllocateInfo::builder()
             .descriptor_pool(self.descriptor_pool)
@@ -112,7 +103,6 @@ impl RRRayQueryDescriptorSet {
         let descriptor_sets = rrdevice.device.allocate_descriptor_sets(&alloc_info)?;
         self.descriptor_set = descriptor_sets[0];
 
-        // Binding 0: Position image (storage image, read)
         let position_image_info = vk::DescriptorImageInfo::builder()
             .image_view(position_image_view)
             .image_layout(vk::ImageLayout::GENERAL)
@@ -126,7 +116,6 @@ impl RRRayQueryDescriptorSet {
             .image_info(std::slice::from_ref(&position_image_info))
             .build();
 
-        // Binding 1: Normal image (storage image, read)
         let normal_image_info = vk::DescriptorImageInfo::builder()
             .image_view(normal_image_view)
             .image_layout(vk::ImageLayout::GENERAL)
@@ -140,7 +129,6 @@ impl RRRayQueryDescriptorSet {
             .image_info(std::slice::from_ref(&normal_image_info))
             .build();
 
-        // Binding 2: Shadow mask image (storage image, write)
         let shadow_mask_info = vk::DescriptorImageInfo::builder()
             .image_view(shadow_mask_image_view)
             .image_layout(vk::ImageLayout::GENERAL)
@@ -154,21 +142,19 @@ impl RRRayQueryDescriptorSet {
             .image_info(std::slice::from_ref(&shadow_mask_info))
             .build();
 
-        // Binding 3: TLAS (acceleration structure)
-        let tlas_info = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
-            .acceleration_structures(std::slice::from_ref(&tlas))
-            .build();
+        let tlas_handles = [tlas];
+        let mut tlas_info = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
+            .acceleration_structures(&tlas_handles);
 
         let mut tlas_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)
             .dst_binding(3)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
-            .push_next(&mut tlas_info.clone())
+            .push_next(&mut tlas_info)
             .build();
         tlas_write.descriptor_count = 1;
 
-        // Binding 4: Scene uniform buffer
         let scene_buffer_info = vk::DescriptorBufferInfo::builder()
             .buffer(scene_uniform_buffer)
             .offset(0)
@@ -183,7 +169,6 @@ impl RRRayQueryDescriptorSet {
             .buffer_info(std::slice::from_ref(&scene_buffer_info))
             .build();
 
-        // Update descriptor sets
         let writes = [
             position_write,
             normal_write,
@@ -265,16 +250,16 @@ impl RRRayQueryDescriptorSet {
             return Ok(());
         }
 
-        let tlas_info = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
-            .acceleration_structures(std::slice::from_ref(&tlas))
-            .build();
+        let tlas_handles = [tlas];
+        let mut tlas_info = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
+            .acceleration_structures(&tlas_handles);
 
         let mut tlas_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.descriptor_set)
             .dst_binding(3)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
-            .push_next(&mut tlas_info.clone())
+            .push_next(&mut tlas_info)
             .build();
         tlas_write.descriptor_count = 1;
 

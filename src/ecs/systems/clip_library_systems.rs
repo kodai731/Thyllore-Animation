@@ -142,7 +142,7 @@ pub fn clip_library_load_from_file(
 
     clip.source_path = Some(path.to_string_lossy().to_string());
 
-    crate::log!("Loaded animation clip '{}' from {:?}", clip.name, path);
+    crate::msg_info!("Loaded animation clip '{}' from {:?}", clip.name, path);
 
     let id = clip_library_register_and_activate(lib, assets, clip);
     Ok(id)

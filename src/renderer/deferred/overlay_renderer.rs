@@ -118,8 +118,14 @@ impl<'a> OverlayRenderer<'a> {
             &[],
         );
 
+        let index_count = if grid.show_y_axis_grid {
+            grid.mesh.indices.len() as u32
+        } else {
+            grid.xz_only_index_count
+        };
+
         self.device
-            .cmd_draw_indexed(command_buffer, grid.mesh.indices.len() as u32, 1, 0, 0, 0);
+            .cmd_draw_indexed(command_buffer, index_count, 1, 0, 0, 0);
 
         Ok(())
     }

@@ -1,9 +1,9 @@
 use cgmath::Vector3;
 
 use crate::asset::AssetStorage;
-use crate::debugview::RayTracingDebugState;
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::Camera;
+use crate::ecs::resource::LightState;
 use crate::ecs::systems::{camera_move_to_look_at, camera_reset};
 use crate::ecs::world::World;
 
@@ -15,7 +15,7 @@ pub fn dispatch_camera_light_debug_events(
     model_bounds: Option<(Vector3<f32>, Vector3<f32>, Vector3<f32>)>,
 ) -> Vec<DeferredAction> {
     let mut camera = world.resource_mut::<Camera>();
-    let mut rt_debug = world.resource_mut::<RayTracingDebugState>();
+    let mut rt_debug = world.resource_mut::<LightState>();
     let mut deferred = Vec::new();
 
     for event in events {

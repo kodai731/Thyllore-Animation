@@ -5,15 +5,21 @@ use crate::debugview::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, GridGizmoData, LightGizmoData,
     SpringBoneGizmoData, TransformGizmoData,
 };
-use crate::debugview::GridMeshData;
 use crate::ecs::component::GpuMeshRef;
+use crate::ecs::resource::GridMeshData;
 use crate::ecs::RenderData;
 
 pub fn grid_mesh_render_data(grid: &GridMeshData) -> RenderData {
+    let index_count = if grid.show_y_axis_grid {
+        grid.mesh.indices.len() as u32
+    } else {
+        grid.xz_only_index_count
+    };
+
     let mesh_ref = GpuMeshRef::new(
         grid.mesh.vertex_buffer_handle,
         grid.mesh.index_buffer_handle,
-        grid.mesh.indices.len() as u32,
+        index_count,
     );
     RenderData::new(mesh_ref, grid.render_info)
         .with_model_matrix(Matrix4::from_scale(grid.scale.value()))

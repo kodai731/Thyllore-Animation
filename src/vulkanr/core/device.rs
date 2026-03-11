@@ -6,6 +6,16 @@ use std::ops::Deref;
 use thiserror::Error;
 use vulkanalia::Device as VulkanDevice;
 
+pub const VALIDATION_LAYER: vk::ExtensionName =
+    vk::ExtensionName::from_bytes(b"VK_LAYER_KHRONOS_validation");
+
+pub const HEADLESS_DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
+    vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION.name,
+    vk::KHR_ACCELERATION_STRUCTURE_EXTENSION.name,
+    vk::KHR_RAY_QUERY_EXTENSION.name,
+    vk::KHR_DEFERRED_HOST_OPERATIONS_EXTENSION.name,
+];
+
 #[derive(Clone, Debug)]
 pub struct Device(VulkanDevice);
 
@@ -37,6 +47,7 @@ pub struct RRDevice {
     pub physical_device: vk::PhysicalDevice,
     pub graphics_queue: vk::Queue,
     pub present_queue: vk::Queue,
+    pub graphics_queue_family_index: u32,
     pub msaa_samples: vk::SampleCountFlags,
     pub min_uniform_buffer_offset_alignment: u64,
 }
@@ -48,10 +59,12 @@ impl RRDevice {
             physical_device: vk::PhysicalDevice::default(),
             graphics_queue: vk::Queue::default(),
             present_queue: vk::Queue::default(),
+            graphics_queue_family_index: 0,
             msaa_samples: vk::SampleCountFlags::default(),
             min_uniform_buffer_offset_alignment: 256,
         }
     }
+
     pub unsafe fn new(
         entry: &Entry,
         instance: &Instance,
@@ -63,10 +76,15 @@ impl RRDevice {
     ) -> Result<RRDevice> {
         let (physical_device, sample_count) =
             pick_physical_device(instance, surface, device_extensions)?;
-        let (device, graphics_queue, present_queue) = create_logical_device(
+
+        let graphics_index = GraphicsQueueIndex::find(instance, &physical_device)?;
+        let present_index = PresentQueueIndex::find(instance, surface, &physical_device)?;
+
+        let (device, graphics_queue, present_queue) = create_logical_device_with_present(
             entry,
             instance,
-            surface,
+            graphics_index,
+            present_index,
             validation_enabled,
             validation_layer,
             device_extensions,
@@ -79,39 +97,148 @@ impl RRDevice {
 
         println!("created logical device");
         Ok(Self {
-            device: device,
-            physical_device: physical_device,
-            graphics_queue: graphics_queue,
-            present_queue: present_queue,
+            device,
+            physical_device,
+            graphics_queue,
+            present_queue,
+            graphics_queue_family_index: graphics_index.0,
             msaa_samples: sample_count,
             min_uniform_buffer_offset_alignment: min_ubo_alignment,
         })
     }
+
+    pub unsafe fn new_headless(
+        entry: &Entry,
+        instance: &Instance,
+        device_extensions: &[vk::ExtensionName],
+        validation_enabled: bool,
+        validation_layer: vk::ExtensionName,
+        portability_macro_version: Version,
+    ) -> Result<RRDevice> {
+        let (physical_device, sample_count) =
+            pick_physical_device_headless(instance, device_extensions)?;
+
+        let graphics_index = GraphicsQueueIndex::find(instance, &physical_device)?;
+
+        let (device, graphics_queue) = create_logical_device_headless(
+            entry,
+            instance,
+            graphics_index,
+            validation_enabled,
+            validation_layer,
+            device_extensions,
+            portability_macro_version,
+            &physical_device,
+        )?;
+
+        let properties = instance.get_physical_device_properties(physical_device);
+        let min_ubo_alignment = properties.limits.min_uniform_buffer_offset_alignment;
+
+        println!("created headless logical device");
+        Ok(Self {
+            device,
+            physical_device,
+            graphics_queue,
+            present_queue: vk::Queue::null(),
+            graphics_queue_family_index: graphics_index.0,
+            msaa_samples: sample_count,
+            min_uniform_buffer_offset_alignment: min_ubo_alignment,
+        })
+    }
+
+    pub unsafe fn connect_surface(
+        &mut self,
+        instance: &Instance,
+        surface: &vk::SurfaceKHR,
+    ) -> Result<()> {
+        let present_index = PresentQueueIndex::find(instance, surface, &self.physical_device)?;
+        self.present_queue = self.device.get_device_queue(present_index.0, 0);
+        Ok(())
+    }
 }
 
-unsafe fn create_logical_device(
+#[derive(Copy, Clone, Debug, Default)]
+pub struct GraphicsQueueIndex(pub u32);
+
+impl GraphicsQueueIndex {
+    pub unsafe fn find(instance: &Instance, physical_device: &vk::PhysicalDevice) -> Result<Self> {
+        let properties = instance.get_physical_device_queue_family_properties(*physical_device);
+        let index = properties
+            .iter()
+            .position(|p| p.queue_flags.contains(vk::QueueFlags::GRAPHICS))
+            .map(|i| i as u32)
+            .ok_or_else(|| anyhow!(SuitabilityError("No graphics queue family")))?;
+        Ok(Self(index))
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct PresentQueueIndex(pub u32);
+
+impl PresentQueueIndex {
+    pub unsafe fn find(
+        instance: &Instance,
+        surface: &vk::SurfaceKHR,
+        physical_device: &vk::PhysicalDevice,
+    ) -> Result<Self> {
+        let properties = instance.get_physical_device_queue_family_properties(*physical_device);
+        for (index, _) in properties.iter().enumerate() {
+            if instance.get_physical_device_surface_support_khr(
+                *physical_device,
+                index as u32,
+                *surface,
+            )? {
+                return Ok(Self(index as u32));
+            }
+        }
+        Err(anyhow!(SuitabilityError("No present queue family")))
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct QueueFamilyIndices {
+    pub graphics: u32,
+    pub present: u32,
+}
+
+impl QueueFamilyIndices {
+    pub unsafe fn get(
+        instance: &Instance,
+        surface: &vk::SurfaceKHR,
+        physical_device: &vk::PhysicalDevice,
+    ) -> Result<Self> {
+        let graphics = GraphicsQueueIndex::find(instance, physical_device)?;
+        let present = PresentQueueIndex::find(instance, surface, physical_device)?;
+        Ok(Self {
+            graphics: graphics.0,
+            present: present.0,
+        })
+    }
+}
+
+#[derive(Debug, Error)]
+#[error("Missing {0}.")]
+pub struct SuitabilityError(pub &'static str);
+
+unsafe fn create_device_common(
     entry: &Entry,
     instance: &Instance,
-    surface: &vk::SurfaceKHR,
+    queue_family_indices: &[u32],
     validation_enabled: bool,
     validation_layer: vk::ExtensionName,
     device_extensions: &[vk::ExtensionName],
     portability_macro_version: Version,
     physical_device: &vk::PhysicalDevice,
-) -> Result<(Device, vk::Queue, vk::Queue)> {
-    let indices = QueueFamilyIndices::get(instance, surface, physical_device)?;
-    let mut unique_indices = HashSet::new();
-    unique_indices.insert(indices.graphics);
-    unique_indices.insert(indices.present);
+) -> Result<Device> {
     let queue_priorities = &[1.0];
-    let queue_infos = unique_indices
+    let queue_infos: Vec<_> = queue_family_indices
         .iter()
         .map(|i| {
             vk::DeviceQueueCreateInfo::builder()
                 .queue_family_index(*i)
                 .queue_priorities(queue_priorities)
         })
-        .collect::<Vec<_>>();
+        .collect();
 
     let layers = if validation_enabled {
         vec![validation_layer.as_ptr()]
@@ -119,10 +246,7 @@ unsafe fn create_logical_device(
         vec![]
     };
 
-    let mut extensions = device_extensions
-        .iter()
-        .map(|n| n.as_ptr())
-        .collect::<Vec<_>>();
+    let mut extensions: Vec<*const i8> = device_extensions.iter().map(|n| n.as_ptr()).collect();
     if cfg!(target_os = "macos") && entry.version()? >= portability_macro_version {
         extensions.push(vk::KHR_PORTABILITY_SUBSET_EXTENSION.name.as_ptr());
     }
@@ -133,11 +257,9 @@ unsafe fn create_logical_device(
         .fill_mode_non_solid(true)
         .independent_blend(true);
 
-    let mut acceleration_structure_features =
+    let mut accel_features =
         vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder().acceleration_structure(true);
-
     let mut ray_query_features = vk::PhysicalDeviceRayQueryFeaturesKHR::builder().ray_query(true);
-
     let mut vulkan_12_features =
         vk::PhysicalDeviceVulkan12Features::builder().buffer_device_address(true);
 
@@ -147,59 +269,70 @@ unsafe fn create_logical_device(
         .enabled_extension_names(&extensions)
         .enabled_features(&features)
         .push_next(&mut vulkan_12_features)
-        .push_next(&mut acceleration_structure_features)
+        .push_next(&mut accel_features)
         .push_next(&mut ray_query_features);
 
     let vulkan_device = instance.create_device(*physical_device, &info, None)?;
-    let device = Device::new(vulkan_device);
+    Ok(Device::new(vulkan_device))
+}
 
-    let graphics_queue = device.get_device_queue(indices.graphics, 0);
-    let present_queue = device.get_device_queue(indices.present, 0);
+unsafe fn create_logical_device_headless(
+    entry: &Entry,
+    instance: &Instance,
+    graphics_index: GraphicsQueueIndex,
+    validation_enabled: bool,
+    validation_layer: vk::ExtensionName,
+    device_extensions: &[vk::ExtensionName],
+    portability_macro_version: Version,
+    physical_device: &vk::PhysicalDevice,
+) -> Result<(Device, vk::Queue)> {
+    let device = create_device_common(
+        entry,
+        instance,
+        &[graphics_index.0],
+        validation_enabled,
+        validation_layer,
+        device_extensions,
+        portability_macro_version,
+        physical_device,
+    )?;
+
+    let graphics_queue = device.get_device_queue(graphics_index.0, 0);
+    Ok((device, graphics_queue))
+}
+
+unsafe fn create_logical_device_with_present(
+    entry: &Entry,
+    instance: &Instance,
+    graphics_index: GraphicsQueueIndex,
+    present_index: PresentQueueIndex,
+    validation_enabled: bool,
+    validation_layer: vk::ExtensionName,
+    device_extensions: &[vk::ExtensionName],
+    portability_macro_version: Version,
+    physical_device: &vk::PhysicalDevice,
+) -> Result<(Device, vk::Queue, vk::Queue)> {
+    let mut unique_indices = HashSet::new();
+    unique_indices.insert(graphics_index.0);
+    unique_indices.insert(present_index.0);
+    let queue_family_indices: Vec<u32> = unique_indices.into_iter().collect();
+
+    let device = create_device_common(
+        entry,
+        instance,
+        &queue_family_indices,
+        validation_enabled,
+        validation_layer,
+        device_extensions,
+        portability_macro_version,
+        physical_device,
+    )?;
+
+    let graphics_queue = device.get_device_queue(graphics_index.0, 0);
+    let present_queue = device.get_device_queue(present_index.0, 0);
     Ok((device, graphics_queue, present_queue))
 }
 
-#[derive(Copy, Clone, Debug, Default)]
-pub struct QueueFamilyIndices {
-    pub graphics: u32,
-    pub present: u32,
-}
-// TODO: system for trasfer bit, see https://kylemayes.github.io/vulkanalia/vertex/staging_buffer.html
-
-impl QueueFamilyIndices {
-    pub unsafe fn get(
-        instance: &Instance,
-        surface: &vk::SurfaceKHR,
-        physical_device: &vk::PhysicalDevice,
-    ) -> Result<Self> {
-        let properties = instance.get_physical_device_queue_family_properties(*physical_device);
-        let graphics = properties
-            .iter()
-            .position(|p| p.queue_flags.contains(vk::QueueFlags::GRAPHICS))
-            .map(|i| i as u32);
-
-        let mut present = None;
-        for (index, properties) in properties.iter().enumerate() {
-            if instance.get_physical_device_surface_support_khr(
-                *physical_device,
-                index as u32,
-                *surface,
-            )? {
-                present = Some(index as u32);
-                break;
-            }
-        }
-
-        if let (Some(graphics), Some(present)) = (graphics, present) {
-            Ok(Self { graphics, present })
-        } else {
-            Err(anyhow!(SuitabilityError("Missing required queue families")))
-        }
-    }
-}
-
-#[derive(Debug, Error)]
-#[error("Missing {0}.")]
-pub struct SuitabilityError(pub &'static str);
 unsafe fn pick_physical_device(
     instance: &Instance,
     surface: &vk::SurfaceKHR,
@@ -209,26 +342,67 @@ unsafe fn pick_physical_device(
         let properties = instance.get_physical_device_properties(physical_device);
 
         if let Err(error) =
-            check_physical_device(instance, surface, &physical_device, device_extensions)
+            check_physical_device_capabilities(instance, &physical_device, device_extensions)
         {
-            log::warn!(
+            log!(
                 "Skipping Physical Device (`{}`): {}",
                 properties.device_name,
                 error
             );
-        } else {
-            log::info!("Selected Physical Device (`{}`).", properties.device_name);
-            let sample_count = get_max_msaa_samples(instance, physical_device);
-            return Ok((physical_device, sample_count));
+            continue;
         }
+
+        if let Err(error) = check_physical_device_presentation(instance, surface, &physical_device)
+        {
+            log!(
+                "Skipping Physical Device (`{}`): {}",
+                properties.device_name,
+                error
+            );
+            continue;
+        }
+
+        log!("Selected Physical Device (`{}`).", properties.device_name);
+        let sample_count = get_max_msaa_samples(instance, physical_device);
+        return Ok((physical_device, sample_count));
     }
 
     Err(anyhow!("Failed to find suitable physical device"))
 }
 
-unsafe fn check_physical_device(
+unsafe fn pick_physical_device_headless(
     instance: &Instance,
-    surface: &vk::SurfaceKHR,
+    device_extensions: &[vk::ExtensionName],
+) -> Result<(vk::PhysicalDevice, vk::SampleCountFlags)> {
+    for physical_device in instance.enumerate_physical_devices()? {
+        let properties = instance.get_physical_device_properties(physical_device);
+
+        if let Err(error) =
+            check_physical_device_capabilities(instance, &physical_device, device_extensions)
+        {
+            log!(
+                "Skipping Physical Device (`{}`): {}",
+                properties.device_name,
+                error
+            );
+            continue;
+        }
+
+        log!(
+            "Selected Physical Device headless (`{}`).",
+            properties.device_name
+        );
+        let sample_count = get_max_msaa_samples(instance, physical_device);
+        return Ok((physical_device, sample_count));
+    }
+
+    Err(anyhow!(
+        "Failed to find suitable physical device (headless)"
+    ))
+}
+
+unsafe fn check_physical_device_capabilities(
+    instance: &Instance,
     physical_device: &vk::PhysicalDevice,
     device_extensions: &[vk::ExtensionName],
 ) -> Result<()> {
@@ -259,7 +433,7 @@ unsafe fn check_physical_device(
     }
     log!("Geometry shader check passed");
 
-    match QueueFamilyIndices::get(instance, surface, physical_device) {
+    match GraphicsQueueIndex::find(instance, physical_device) {
         Ok(_) => log!("Queue family check passed"),
         Err(e) => {
             log!("Device rejected: Queue family check failed - {}", e);
@@ -275,6 +449,18 @@ unsafe fn check_physical_device(
         }
     }
 
+    log!("All device capability checks passed!");
+    Ok(())
+}
+
+unsafe fn check_physical_device_presentation(
+    instance: &Instance,
+    surface: &vk::SurfaceKHR,
+    physical_device: &vk::PhysicalDevice,
+) -> Result<()> {
+    PresentQueueIndex::find(instance, surface, physical_device)?;
+    log!("Present queue check passed");
+
     let support = SwapchainSupport::get(instance, surface, physical_device)?;
     if support.formats.is_empty() || support.present_modes.is_empty() {
         log!("Device rejected: Insufficient swapchain system");
@@ -282,7 +468,6 @@ unsafe fn check_physical_device(
     }
     log!("Swapchain system check passed");
 
-    log!("All device checks passed!");
     Ok(())
 }
 
@@ -346,4 +531,70 @@ unsafe fn get_max_msaa_samples(
     .cloned()
     .find(|c| counts.contains(*c))
     .unwrap_or(vk::SampleCountFlags::_1)
+}
+
+pub unsafe fn create_headless_instance(entry: &Entry) -> Result<Instance> {
+    let application_info = vk::ApplicationInfo::builder()
+        .application_name(b"Headless Test\0")
+        .application_version(vk::make_version(1, 0, 0))
+        .engine_name(b"No Engine\0")
+        .engine_version(vk::make_version(1, 0, 0))
+        .api_version(vk::make_version(1, 2, 0));
+
+    let validation_enabled = cfg!(debug_assertions);
+
+    let mut extensions: Vec<*const i8> = Vec::new();
+    if validation_enabled {
+        extensions.push(vk::EXT_DEBUG_UTILS_EXTENSION.name.as_ptr());
+    }
+
+    let available_layers = entry
+        .enumerate_instance_layer_properties()?
+        .iter()
+        .map(|l| l.layer_name)
+        .collect::<HashSet<_>>();
+
+    let layers = if validation_enabled && available_layers.contains(&VALIDATION_LAYER) {
+        vec![VALIDATION_LAYER.as_ptr()]
+    } else {
+        Vec::new()
+    };
+
+    let info = vk::InstanceCreateInfo::builder()
+        .application_info(&application_info)
+        .enabled_layer_names(&layers)
+        .enabled_extension_names(&extensions);
+
+    let instance = entry.create_instance(&info, None)?;
+    Ok(instance)
+}
+
+pub unsafe fn destroy_headless_instance(instance: &Instance) {
+    instance.destroy_instance(None);
+}
+
+pub unsafe fn destroy_headless_device(device: &RRDevice, instance: &Instance) {
+    device.device.device_wait_idle().ok();
+    device.device.destroy_device(None);
+    destroy_headless_instance(instance);
+}
+
+impl RRDevice {
+    pub fn has_graphics_queue(&self) -> bool {
+        self.graphics_queue != vk::Queue::null()
+    }
+
+    pub fn has_present_queue(&self) -> bool {
+        self.present_queue != vk::Queue::null()
+    }
+
+    pub unsafe fn wait_graphics_queue_idle(&self) -> Result<()> {
+        self.device.queue_wait_idle(self.graphics_queue)?;
+        Ok(())
+    }
+
+    pub unsafe fn query_physical_device_api_version(&self, instance: &Instance) -> u32 {
+        let properties = instance.get_physical_device_properties(self.physical_device);
+        properties.api_version
+    }
 }

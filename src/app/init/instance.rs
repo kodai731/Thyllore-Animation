@@ -1,15 +1,15 @@
 use crate::app::{App, AppData};
 
 use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
-use crate::debugview::GridMeshData;
 use crate::ecs::component::{MeshScale, RenderInfo};
+use crate::ecs::resource::GridMeshData;
 use crate::ecs::systems::{
     billboard_create_buffers, create_billboard, create_default_grid_scale, create_grid_gizmo,
     create_grid_mesh, create_light_gizmo, gizmo_create_buffers,
 };
 use crate::ecs::{
-    ClipLibrary, GpuDescriptors, HierarchyState, MaterialRegistry, MeshAssets, ModelState,
-    NodeAssets, PipelineManager, SceneState, TimelineState,
+    ClipLibrary, GpuDescriptors, HierarchyState, LightState, MaterialRegistry, MeshAssets,
+    ModelState, NodeAssets, PipelineManager, SceneState, TimelineState,
 };
 use crate::vulkanr::command::*;
 use crate::vulkanr::context::{
@@ -116,8 +116,9 @@ impl App {
         let mut data = AppData::default();
 
         data.ecs_world.insert_resource(Camera::default());
+        data.ecs_world.insert_resource(LightState::default());
         data.ecs_world
-            .insert_resource(RayTracingDebugState::default());
+            .insert_resource(crate::debugview::DebugViewState::default());
 
         let (instance, messenger) = Self::create_instance_with_messenger(window, &entry)?;
         let surface = vk_window::create_surface(&instance, &window, &window)?;
@@ -264,10 +265,7 @@ impl App {
                 .expect("Failed to create gizmo buffers");
         }
 
-        let light_position = data
-            .ecs_world
-            .resource::<RayTracingDebugState>()
-            .light_position;
+        let light_position = data.ecs_world.resource::<LightState>().light_position;
         let mut light_gizmo_data = create_light_gizmo(light_position);
         light_gizmo_data.render_info.pipeline_id = Some(gizmo_pipeline_id);
         light_gizmo_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();

@@ -7,8 +7,8 @@ use super::{
 };
 use crate::app::billboard::BillboardData;
 use crate::app::data::LightMoveTarget;
-use crate::debugview::view_mode::RayTracingDebugState;
 use crate::ecs::resource::Camera;
+use crate::ecs::resource::LightState;
 use crate::math::coordinate_system::perspective_infinite_reverse;
 use crate::render::RenderBackend;
 
@@ -102,7 +102,7 @@ fn get_camera_axes_from_view(view: Matrix4<f32>) -> (Vector3<f32>, Vector3<f32>,
 }
 
 pub fn update_light_auto_target(
-    rt_debug_state: &mut RayTracingDebugState,
+    light_state: &mut LightState,
     all_positions: &[Vector3<f32>],
     camera_position: Vector3<f32>,
     move_light_to: LightMoveTarget,
@@ -110,7 +110,7 @@ pub fn update_light_auto_target(
     match move_light_to {
         LightMoveTarget::None => {}
         _ => {
-            rt_debug_state.update_light_position(all_positions, camera_position, move_light_to);
+            light_state.update_light_position(all_positions, camera_position, move_light_to);
         }
     }
 }

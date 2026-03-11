@@ -68,9 +68,9 @@ impl App {
         };
 
         let camera = self.camera();
-        let rt_debug = self.rt_debug_state();
+        let light = self.light_state();
         let info = BillboardDebugInfo {
-            light_position: rt_debug.light_position,
+            light_position: light.light_position,
             camera_position: compute_camera_position(&camera),
             camera_direction: compute_camera_direction(&camera),
             camera_up: compute_camera_up(&camera),
@@ -288,16 +288,16 @@ impl App {
     pub(crate) fn log_shadow_debug_info(&self) {
         use crate::ecs::systems::camera_systems::compute_camera_position;
 
-        let rt_debug = self.rt_debug_state();
+        let light = self.light_state();
         let camera = self.camera();
         let cam_pos = compute_camera_position(&camera);
 
         crate::log!("=== Shadow Debug Info ===");
         crate::log!(
-            "Light position (rt_debug_state): ({:.2}, {:.2}, {:.2})",
-            rt_debug.light_position.x,
-            rt_debug.light_position.y,
-            rt_debug.light_position.z
+            "Light position: ({:.2}, {:.2}, {:.2})",
+            light.light_position.x,
+            light.light_position.y,
+            light.light_position.z
         );
         crate::log!(
             "Light gizmo position: ({:.2}, {:.2}, {:.2})",
@@ -313,12 +313,15 @@ impl App {
         );
 
         crate::log!("Shadow settings:");
-        crate::log!("  strength: {:.2}", rt_debug.shadow_strength);
-        crate::log!("  normal_offset: {:.2}", rt_debug.shadow_normal_offset);
-        crate::log!("  debug_view_mode: {:?}", rt_debug.debug_view_mode);
+        crate::log!("  strength: {:.2}", light.shadow_strength);
+        crate::log!("  normal_offset: {:.2}", light.shadow_normal_offset);
+        crate::log!(
+            "  debug_view_mode: {:?}",
+            self.debug_view_state().debug_view_mode
+        );
         crate::log!(
             "  distance_attenuation: {}",
-            rt_debug.enable_distance_attenuation
+            light.enable_distance_attenuation
         );
 
         if let Some(ref accel_struct) = self.data.raytracing.acceleration_structure {

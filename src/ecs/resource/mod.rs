@@ -18,11 +18,13 @@ mod fbx_model_cache;
 mod ghost_curve_data;
 mod gltf_model_cache;
 mod graphics;
+mod grid_state;
 mod hierarchy_state;
 #[cfg(feature = "ml")]
 mod inference_actor_state;
 mod keyframe_copy_buffer;
 mod lens_effects;
+mod light_state;
 mod message_log;
 mod object_id_readback;
 mod onion_skinning;
@@ -61,11 +63,13 @@ pub use fbx_model_cache::*;
 pub use ghost_curve_data::*;
 pub use gltf_model_cache::*;
 pub use graphics::*;
+pub use grid_state::*;
 pub use hierarchy_state::*;
 #[cfg(feature = "ml")]
 pub use inference_actor_state::*;
 pub use keyframe_copy_buffer::*;
 pub use lens_effects::*;
+pub use light_state::*;
 pub use message_log::*;
 pub use object_id_readback::*;
 pub use onion_skinning::*;

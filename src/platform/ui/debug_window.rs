@@ -1,6 +1,7 @@
 use crate::app::GUIData;
-use crate::debugview::{DebugViewMode, GridMeshData};
+use crate::debugview::DebugViewMode;
 use crate::ecs::events::UIEventQueue;
+use crate::ecs::resource::GridMeshData;
 use crate::ecs::World;
 
 pub struct DebugWindowState {

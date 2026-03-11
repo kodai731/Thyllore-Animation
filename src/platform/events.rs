@@ -152,11 +152,8 @@ fn handle_redraw_requested(
     update_mouse_input(gui_data, ui);
 
     #[cfg(debug_assertions)]
-    let mut debug_state = {
-        let rt_debug = app.rt_debug_state();
-        DebugWindowState {
-            debug_view_mode: rt_debug.debug_view_mode,
-        }
+    let mut debug_state = DebugWindowState {
+        debug_view_mode: app.debug_view_state().debug_view_mode,
     };
 
     let mut overlay_state = SceneOverlayState {
@@ -176,8 +173,7 @@ fn handle_redraw_requested(
 
     #[cfg(debug_assertions)]
     {
-        let mut rt_debug_mut = app.rt_debug_state_mut();
-        rt_debug_mut.debug_view_mode = debug_state.debug_view_mode;
+        app.debug_view_state_mut().debug_view_mode = debug_state.debug_view_mode;
     }
 
     #[cfg(debug_assertions)]

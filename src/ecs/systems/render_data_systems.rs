@@ -5,8 +5,8 @@ use crate::debugview::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, GridGizmoData, LightGizmoData,
     SpringBoneGizmoData, TransformGizmoData,
 };
-use crate::debugview::GridMeshData;
 use crate::ecs::component::GpuMeshRef;
+use crate::ecs::resource::GridMeshData;
 use crate::ecs::RenderData;
 
 pub fn grid_mesh_render_data(grid: &GridMeshData) -> RenderData {

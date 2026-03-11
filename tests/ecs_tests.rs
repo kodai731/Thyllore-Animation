@@ -4,7 +4,7 @@ use rust_rendering::ecs::world::{Entity, Name, Resources, Transform, Visible, Wo
 use rust_rendering::render::{BufferHandle, IndexBufferHandle, VertexBufferHandle};
 
 mod release_build_tests {
-    use rust_rendering::debugview::GridMeshData;
+    use rust_rendering::ecs::resource::GridMeshData;
     use rust_rendering::ecs::systems::create_grid_mesh;
     use rust_rendering::ecs::world::World;
     use rust_rendering::loader::ModelLoadResult;

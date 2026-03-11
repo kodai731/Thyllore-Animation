@@ -73,7 +73,7 @@ unsafe fn update_frame_and_scene_uniforms(
     aspect: f32,
     camera_position: Vector3<f32>,
 ) -> Result<()> {
-    let light_position = ctx.rt_debug().light_position;
+    let light_position = ctx.light_state().light_position;
 
     {
         let proj_data = ProjectionData {
@@ -100,12 +100,13 @@ unsafe fn update_frame_and_scene_uniforms(
         eprintln!("Failed to update ObjectUBO: {}", e);
     }
 
-    let rt_debug = ctx.rt_debug();
-    let light_pos = rt_debug.light_position;
-    let debug_mode = rt_debug.debug_view_mode.as_int();
-    let shadow_strength = rt_debug.shadow_strength;
-    let enable_distance_attenuation = rt_debug.enable_distance_attenuation;
-    drop(rt_debug);
+    let light = ctx.light_state();
+    let light_pos = light.light_position;
+    let shadow_strength = light.shadow_strength;
+    let enable_distance_attenuation = light.enable_distance_attenuation;
+    drop(light);
+
+    let debug_mode = ctx.debug_view_state().debug_view_mode.as_int();
 
     let exposure_value = ctx
         .world

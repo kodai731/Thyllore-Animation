@@ -67,15 +67,20 @@ pub fn build_timeline_window(
                 curve_editor_state,
                 clip_track_snapshot,
             );
+            let clip_duration = state
+                .current_clip_id
+                .and_then(|id| clip_library.get(id))
+                .map(|c| c.duration)
+                .unwrap_or(5.0);
             handle_timeline_shortcuts(ui, ui_events, state);
-            handle_mouse_wheel_zoom(ui, state);
+            handle_mouse_wheel_zoom(ui, state, clip_duration);
         });
 }
 
 fn build_transport_controls(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
-    state: &TimelineState,
+    state: &mut TimelineState,
     clip_library: &ClipLibrary,
     curve_editor_state: &mut CurveEditorState,
 ) {
@@ -108,13 +113,21 @@ fn build_transport_controls(
         state.current_time, duration
     ));
 
+    let available_width = ui.content_region_avail()[0] - TRACK_LABEL_WIDTH;
+    let clip_duration = duration.max(1.0);
+    let (min_zoom, max_zoom) = compute_zoom_limits(
+        available_width,
+        clip_duration,
+        state.snap_settings.frame_rate,
+    );
+
     ui.same_line();
     if ui.button("-") {
-        ui_events.send(UIEvent::TimelineZoomOut);
+        state.zoom_out(min_zoom);
     }
     ui.same_line();
     if ui.button("+") {
-        ui_events.send(UIEvent::TimelineZoomIn);
+        state.zoom_in(max_zoom);
     }
     ui.same_line();
     ui.text(format!("Zoom: {:.1}x", state.zoom_level));
@@ -1229,17 +1242,38 @@ fn handle_timeline_shortcuts(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state
     }
 }
 
-fn handle_mouse_wheel_zoom(ui: &imgui::Ui, state: &mut TimelineState) {
+fn compute_zoom_limits(available_width: f32, clip_duration: f32, frame_rate: f32) -> (f32, f32) {
+    let width = available_width.max(1.0);
+    let fps = frame_rate.max(1.0);
+    let duration = clip_duration.max(0.1);
+
+    let three_frames_duration = 3.0 / fps;
+    let max_zoom = width / (three_frames_duration * PIXELS_PER_SECOND);
+
+    let four_clips_duration = duration * 4.0;
+    let min_zoom = width / (four_clips_duration * PIXELS_PER_SECOND);
+
+    (min_zoom.max(0.01), max_zoom)
+}
+
+fn handle_mouse_wheel_zoom(ui: &imgui::Ui, state: &mut TimelineState, clip_duration: f32) {
     let hovered = ui.is_window_hovered_with_flags(imgui::WindowHoveredFlags::CHILD_WINDOWS);
     if !hovered || !ui.io().key_ctrl {
         return;
     }
 
+    let available_width = ui.content_region_avail()[0] - TRACK_LABEL_WIDTH;
+    let (min_zoom, max_zoom) = compute_zoom_limits(
+        available_width,
+        clip_duration,
+        state.snap_settings.frame_rate,
+    );
+
     let wheel = ui.io().mouse_wheel;
     if wheel > 0.0 {
-        state.zoom_in();
+        state.zoom_in(max_zoom);
     } else if wheel < 0.0 {
-        state.zoom_out();
+        state.zoom_out(min_zoom);
     }
 }
 

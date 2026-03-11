@@ -62,8 +62,6 @@ pub fn timeline_process_events(
             } => {
                 dispatch_set_keyframe_selection(timeline_state, keyframes, *modifier);
             }
-            UIEvent::TimelineZoomIn => timeline_state.zoom_in(),
-            UIEvent::TimelineZoomOut => timeline_state.zoom_out(),
             UIEvent::TimelineSetSnapToFrame(enabled) => {
                 timeline_state.snap_settings.snap_to_frame = *enabled;
             }

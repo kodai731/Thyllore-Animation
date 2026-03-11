@@ -718,7 +718,7 @@ impl App {
             mesh: grid_mesh,
             render_info: grid_render_info,
             scale: grid_scale,
-            show_y_axis_grid: true,
+            show_y_axis_grid: cfg!(debug_assertions),
             xz_only_index_count,
         };
         println!("allocated grid object_index");

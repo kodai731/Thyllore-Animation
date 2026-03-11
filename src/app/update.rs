@@ -321,7 +321,7 @@ impl App {
         );
         crate::log!(
             "  distance_attenuation: {}",
-            light.enable_distance_attenuation
+            light.distance_attenuation.is_enabled()
         );
 
         if let Some(ref accel_struct) = self.data.raytracing.acceleration_structure {

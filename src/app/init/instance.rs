@@ -261,8 +261,12 @@ impl App {
                 &mut data.raytracing,
                 &mut data.buffer_registry,
             );
-            gizmo_create_buffers(&mut gizmo_data.mesh, &mut backend, true)
-                .expect("Failed to create gizmo buffers");
+            gizmo_create_buffers(
+                &mut gizmo_data.mesh,
+                &mut backend,
+                crate::render::BufferMemoryType::DeviceLocal,
+            )
+            .expect("Failed to create gizmo buffers");
         }
 
         let light_position = data.ecs_world.resource::<LightState>().light_position;
@@ -282,8 +286,12 @@ impl App {
                 &mut data.raytracing,
                 &mut data.buffer_registry,
             );
-            gizmo_create_buffers(&mut light_gizmo_data.mesh, &mut backend, false)
-                .expect("Failed to create light gizmo buffers");
+            gizmo_create_buffers(
+                &mut light_gizmo_data.mesh,
+                &mut backend,
+                crate::render::BufferMemoryType::HostVisible,
+            )
+            .expect("Failed to create light gizmo buffers");
         }
 
         let bone_solid_pipeline =
@@ -698,7 +706,7 @@ impl App {
             &rrdevice,
             &rrcommand_pool,
             &grid_mesh.vertices,
-            true,
+            crate::render::BufferMemoryType::DeviceLocal,
         )?;
         println!("created grid vertex buffers");
 

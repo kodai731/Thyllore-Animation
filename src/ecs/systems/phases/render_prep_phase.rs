@@ -103,7 +103,7 @@ unsafe fn update_frame_and_scene_uniforms(
     let light = ctx.light_state();
     let light_pos = light.light_position;
     let shadow_strength = light.shadow_strength;
-    let enable_distance_attenuation = light.enable_distance_attenuation;
+    let distance_attenuation = light.distance_attenuation;
     drop(light);
 
     let debug_mode = ctx.debug_view_state().debug_view_mode.as_int();
@@ -122,7 +122,7 @@ unsafe fn update_frame_and_scene_uniforms(
         Vector3::new(1.0, 1.0, 1.0),
         debug_mode,
         shadow_strength,
-        enable_distance_attenuation,
+        distance_attenuation,
         exposure_value,
     )?;
 

@@ -10,9 +10,11 @@ use crate::app::billboard::BillboardData;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::app::raytracing::RayTracingData;
 use crate::ecs::component::LineMesh;
+use crate::ecs::resource::DistanceAttenuation;
 use crate::ecs::systems::ProjectionData;
 use crate::render::{
-    FrameUBO, IndexBufferHandle, MeshId, ObjectUBO, RenderBackend, VertexBufferHandle,
+    BufferMemoryType, FrameUBO, IndexBufferHandle, MeshId, ObjectUBO, RenderBackend,
+    VertexBufferHandle,
 };
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::device::RRDevice;
@@ -130,15 +132,15 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
     unsafe fn create_gizmo_buffers(
         &mut self,
         mesh: &mut LineMesh,
-        use_staging: bool,
+        memory_type: BufferMemoryType,
     ) -> Result<()> {
-        let vertex_handle = if use_staging {
+        let vertex_handle = if memory_type == BufferMemoryType::DeviceLocal {
             self.buffer_registry.create_vertex_buffer(
                 self.instance,
                 self.device,
                 self.command_pool.as_ref(),
                 &mesh.vertices,
-                true,
+                BufferMemoryType::DeviceLocal,
             )?
         } else {
             self.buffer_registry.create_host_visible_vertex_buffer(
@@ -327,7 +329,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         light_color: Vector3<f32>,
         debug_mode: i32,
         shadow_strength: f32,
-        enable_distance_attenuation: bool,
+        distance_attenuation: DistanceAttenuation,
         exposure_value: f32,
     ) -> Result<()> {
         let (scene_buffer, scene_memory) = match (
@@ -345,7 +347,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             proj,
             debug_mode,
             shadow_strength,
-            enable_distance_attenuation: if enable_distance_attenuation { 1 } else { 0 },
+            enable_distance_attenuation: distance_attenuation.as_int(),
             exposure_value,
         };
 

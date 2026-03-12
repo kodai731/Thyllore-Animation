@@ -177,6 +177,8 @@ fn compute_node_animation_bounds(
 
     GraphicsResources::compute_node_global_transforms(&mut nodes, skeleton, &pose);
 
+    let display_scale = load_result.node_animation_scale;
+
     let mut min = Vector3::new(f32::MAX, f32::MAX, f32::MAX);
     let mut max = Vector3::new(f32::MIN, f32::MIN, f32::MIN);
     let mut has_vertex = false;
@@ -198,7 +200,11 @@ fn compute_node_animation_bounds(
             has_vertex = true;
             let pos = Vector4::new(v.pos.x, v.pos.y, v.pos.z, 1.0);
             let world_pos = transform * pos;
-            let p = Vector3::new(world_pos.x, world_pos.y, world_pos.z);
+            let p = Vector3::new(
+                world_pos.x * display_scale,
+                world_pos.y * display_scale,
+                world_pos.z * display_scale,
+            );
             min.x = min.x.min(p.x);
             min.y = min.y.min(p.y);
             min.z = min.z.min(p.z);

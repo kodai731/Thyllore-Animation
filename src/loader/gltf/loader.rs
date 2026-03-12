@@ -1003,7 +1003,7 @@ fn build_result(ctx: GltfParseContext) -> GltfLoadResult {
         scale,
     );
 
-    log_gltf_scale_info(&meshes);
+    log_gltf_scale_info(&meshes, ctx.has_skinned_meshes);
 
     if !morph_system.animations.is_empty() {
         log!(
@@ -1139,7 +1139,7 @@ fn build_meshes_and_morph(
     (meshes, morph_system)
 }
 
-fn log_gltf_scale_info(meshes: &[GltfMeshData]) {
+fn log_gltf_scale_info(meshes: &[GltfMeshData], has_skinned_meshes: bool) {
     let mut min_x = f32::MAX;
     let mut min_y = f32::MAX;
     let mut min_z = f32::MAX;
@@ -1160,34 +1160,37 @@ fn log_gltf_scale_info(meshes: &[GltfMeshData]) {
         }
     }
 
-    if total_vertices > 0 {
-        let size_x = max_x - min_x;
-        let size_y = max_y - min_y;
-        let size_z = max_z - min_z;
-        let max_dimension = size_x.max(size_y).max(size_z);
+    if total_vertices == 0 {
+        return;
+    }
 
-        log!("=== glTF Scale Info ===");
-        log!("  Total vertices: {}", total_vertices);
-        log!(
-            "  Bounding box min: ({:.4}, {:.4}, {:.4})",
-            min_x,
-            min_y,
-            min_z
-        );
-        log!(
-            "  Bounding box max: ({:.4}, {:.4}, {:.4})",
-            max_x,
-            max_y,
-            max_z
-        );
-        log!("  Size: ({:.4}, {:.4}, {:.4})", size_x, size_y, size_z);
-        log!("  Max dimension: {:.4} (glTF spec: meters)", max_dimension);
+    let size_x = max_x - min_x;
+    let size_y = max_y - min_y;
+    let size_z = max_z - min_z;
+    let max_dimension = size_x.max(size_y).max(size_z);
 
-        if max_dimension > 100.0 {
-            log!("  WARNING: Model appears very large. Might be in mm or cm units.");
-        } else if max_dimension < 0.01 {
-            log!("  WARNING: Model appears very small. Check unit scale.");
-        }
+    log!("=== glTF Scale Info ===");
+    log!("  Total vertices: {}", total_vertices);
+    log!(
+        "  Bounding box min: ({:.4}, {:.4}, {:.4})",
+        min_x, min_y, min_z
+    );
+    log!(
+        "  Bounding box max: ({:.4}, {:.4}, {:.4})",
+        max_x, max_y, max_z
+    );
+    log!("  Size: ({:.4}, {:.4}, {:.4})", size_x, size_y, size_z);
+    log!("  Max dimension: {:.4} (glTF spec: meters)", max_dimension);
+
+    if has_skinned_meshes {
+        log!("  Skinned mesh: vertex positions are in bind pose (small bounds expected)");
+        return;
+    }
+
+    if max_dimension > 100.0 {
+        log_warn!("Model appears very large ({:.4}m). Might be in mm or cm units.", max_dimension);
+    } else if max_dimension < 0.01 {
+        log_warn!("Model appears very small ({:.4}m). Check unit scale.", max_dimension);
     }
 }
 

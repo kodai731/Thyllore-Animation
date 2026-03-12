@@ -123,9 +123,11 @@ impl Logger {
 macro_rules! log {
     ($($arg:tt)*) => {{
         if let Ok(mut logger) = $crate::logger::logger::LOGGER.lock() {
-            let _ = logger.log(format_args!($($arg)*));
+            if logger.log(format_args!($($arg)*)).is_err() {
+                eprintln!("[LOG WRITE ERROR] {}", format_args!($($arg)*));
+            }
         } else {
-            eprintln!("[LOG FALLBACK] {}", format_args!($($arg)*));
+            eprintln!("[LOG LOCK ERROR] {}", format_args!($($arg)*));
         }
     }};
 }

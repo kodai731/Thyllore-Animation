@@ -101,14 +101,13 @@ fn build_full_export_data(
     export_path: &Path,
 ) -> anyhow::Result<FullFbxExportData> {
     let inv_unit_scale = 1.0_f32 / fbx_model.unit_scale;
+    let needs_coord_conversion = fbx_model.fbx_data.iter().any(|d| !d.clusters.is_empty());
 
     let mesh_node_names: std::collections::HashSet<String> = fbx_model
         .fbx_data
         .iter()
         .filter_map(|d| d.mesh_node_name.clone())
         .collect();
-
-    let needs_coord_conversion = fbx_model.fbx_data.iter().any(|d| !d.clusters.is_empty());
 
     let mut uid_alloc = UidAllocator::new();
     let bones = build_bone_export_list(
@@ -123,72 +122,35 @@ fn build_full_export_data(
     let layer_uid = uid_alloc.allocate();
     let document_uid = uid_alloc.allocate();
 
-    let duration_ktime = clip
-        .map(|c| seconds_to_ktime(c.duration))
-        .unwrap_or_else(|| {
-            fbx_model
-                .animations
-                .first()
-                .map(|a| seconds_to_ktime(a.duration))
-                .unwrap_or(0)
-        });
-
-    let clip_name = clip
-        .map(|c| c.name.clone())
-        .unwrap_or_else(|| "DefaultAnimation".to_string());
+    let (clip_name, duration_ktime) = resolve_clip_metadata(clip, fbx_model);
 
     let mut name_to_model_uid: std::collections::HashMap<String, i64> = bones
         .iter()
         .map(|b| (b.name.clone(), b.model_uid))
         .collect();
 
-    let geometries = build_geometry_exports(&fbx_model.fbx_data, &mut uid_alloc, inv_unit_scale);
-
-    let mesh_models = build_mesh_model_exports(
-        &fbx_model.fbx_data,
-        &geometries,
-        &name_to_model_uid,
-        &fbx_model.nodes,
+    let (geometries, mesh_models, materials, textures, skins) = build_mesh_assets(
+        fbx_model,
+        &mut name_to_model_uid,
         &mut uid_alloc,
         inv_unit_scale,
+        export_path,
     );
-
-    for mesh_model in &mesh_models {
-        name_to_model_uid.insert(mesh_model.name.clone(), mesh_model.uid);
-    }
 
     let (curve_nodes, curves) =
         build_animation_curves(clip, &name_to_model_uid, &mut uid_alloc, inv_unit_scale);
 
-    let materials = build_material_exports(&fbx_model.fbx_data, &mesh_models, &mut uid_alloc);
-    let export_dir = export_path.parent().unwrap_or_else(|| Path::new("."));
-    let textures = build_texture_exports(
-        &fbx_model.fbx_data,
-        &materials,
-        &mut uid_alloc,
-        export_dir,
-        fbx_model.source_path.as_deref(),
-    );
-
-    let skins = build_skin_exports(
-        &fbx_model.fbx_data,
-        &geometries,
-        &name_to_model_uid,
-        &mut uid_alloc,
-        inv_unit_scale,
-    );
-
-    let mut connections = Vec::new();
-    generate_bone_connections(&bones, &mut connections);
-    generate_mesh_connections(
+    let connections = build_all_connections(
+        &bones,
         &mesh_models,
         &geometries,
         &materials,
         &textures,
         &skins,
-        &mut connections,
+        stack_uid,
+        layer_uid,
+        &curve_nodes,
     );
-    generate_animation_connections(stack_uid, layer_uid, &curve_nodes, &mut connections);
 
     let anim_data = FbxExportData {
         clip_name,
@@ -214,6 +176,101 @@ fn build_full_export_data(
         skins,
         unit_scale: fbx_model.unit_scale,
     })
+}
+
+fn resolve_clip_metadata(
+    clip: Option<&EditableAnimationClip>,
+    fbx_model: &FbxModel,
+) -> (String, i64) {
+    let duration_ktime = clip
+        .map(|c| seconds_to_ktime(c.duration))
+        .unwrap_or_else(|| {
+            fbx_model
+                .animations
+                .first()
+                .map(|a| seconds_to_ktime(a.duration))
+                .unwrap_or(0)
+        });
+
+    let clip_name = clip
+        .map(|c| c.name.clone())
+        .unwrap_or_else(|| "DefaultAnimation".to_string());
+
+    (clip_name, duration_ktime)
+}
+
+fn build_mesh_assets(
+    fbx_model: &FbxModel,
+    name_to_model_uid: &mut std::collections::HashMap<String, i64>,
+    uid_alloc: &mut UidAllocator,
+    inv_unit_scale: f32,
+    export_path: &Path,
+) -> (
+    Vec<FbxGeometryExport>,
+    Vec<FbxMeshModelExport>,
+    Vec<FbxMaterialExport>,
+    Vec<FbxTextureExport>,
+    Vec<FbxSkinExport>,
+) {
+    let geometries = build_geometry_exports(&fbx_model.fbx_data, uid_alloc, inv_unit_scale);
+
+    let mesh_models = build_mesh_model_exports(
+        &fbx_model.fbx_data,
+        &geometries,
+        name_to_model_uid,
+        &fbx_model.nodes,
+        uid_alloc,
+        inv_unit_scale,
+    );
+
+    for mesh_model in &mesh_models {
+        name_to_model_uid.insert(mesh_model.name.clone(), mesh_model.uid);
+    }
+
+    let materials = build_material_exports(&fbx_model.fbx_data, &mesh_models, uid_alloc);
+    let export_dir = export_path.parent().unwrap_or_else(|| Path::new("."));
+    let textures = build_texture_exports(
+        &fbx_model.fbx_data,
+        &materials,
+        uid_alloc,
+        export_dir,
+        fbx_model.source_path.as_deref(),
+    );
+
+    let skins = build_skin_exports(
+        &fbx_model.fbx_data,
+        &geometries,
+        name_to_model_uid,
+        uid_alloc,
+        inv_unit_scale,
+    );
+
+    (geometries, mesh_models, materials, textures, skins)
+}
+
+fn build_all_connections(
+    bones: &[FbxBoneExport],
+    mesh_models: &[FbxMeshModelExport],
+    geometries: &[FbxGeometryExport],
+    materials: &[FbxMaterialExport],
+    textures: &[FbxTextureExport],
+    skins: &[FbxSkinExport],
+    stack_uid: i64,
+    layer_uid: i64,
+    curve_nodes: &[FbxCurveNodeExport],
+) -> Vec<FbxConnection> {
+    let mut connections = Vec::new();
+    generate_bone_connections(bones, &mut connections);
+    generate_mesh_connections(
+        mesh_models,
+        geometries,
+        materials,
+        textures,
+        skins,
+        &mut connections,
+    );
+    generate_animation_connections(stack_uid, layer_uid, curve_nodes, &mut connections);
+    connections
 }
 
 fn build_animation_curves(

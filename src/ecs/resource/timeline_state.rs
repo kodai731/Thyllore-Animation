@@ -166,12 +166,12 @@ impl TimelineState {
         self.current_time = time.max(0.0);
     }
 
-    pub fn zoom_in(&mut self) {
-        self.zoom_level = (self.zoom_level * 1.2).min(10.0);
+    pub fn zoom_in(&mut self, max_zoom: f32) {
+        self.zoom_level = (self.zoom_level * 1.2).min(max_zoom);
     }
 
-    pub fn zoom_out(&mut self) {
-        self.zoom_level = (self.zoom_level / 1.2).max(0.1);
+    pub fn zoom_out(&mut self, min_zoom: f32) {
+        self.zoom_level = (self.zoom_level / 1.2).max(min_zoom);
     }
 }
 

@@ -1,203 +1,36 @@
-use cgmath::Vector3;
-use imgui::Condition;
-
-use crate::app::data::LightMoveTarget;
 use crate::app::GUIData;
-use crate::debugview::{DebugViewMode, FBX_DEBUG};
-use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::{CoordinateSpace, TransformGizmoMode, TransformGizmoState};
+use crate::debugview::DebugViewMode;
+use crate::ecs::events::UIEventQueue;
+use crate::ecs::resource::GridMeshData;
 use crate::ecs::World;
 
-use super::layout_snapshot::LayoutSnapshot;
-
 pub struct DebugWindowState {
-    pub model_path: String,
-    pub load_status: String,
-    pub light_position: Vector3<f32>,
-    pub shadow_strength: f32,
-    pub enable_distance_attenuation: bool,
     pub debug_view_mode: DebugViewMode,
 }
 
-pub fn build_debug_window(
+pub fn build_debug_panel_content(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     state: &mut DebugWindowState,
     gui_data: &mut GUIData,
     ecs_world: &World,
-    layout: &LayoutSnapshot,
 ) {
-    ui.window("debug window")
-        .position([0.0, layout.debug_y], Condition::Always)
-        .size(
-            [layout.display_size[0], layout.debug_height],
-            Condition::Always,
-        )
-        .resizable(false)
-        .movable(false)
-        .collapsible(false)
-        .bring_to_front_on_focus(false)
-        .build(|| {
-            build_model_panel(ui, ui_events, state, gui_data);
-            ui.separator();
+    build_debug_view_mode_panel(ui, state);
+    ui.separator();
 
-            build_camera_panel(ui, ui_events);
-            ui.separator();
+    build_debug_panel(ui, ui_events, gui_data, ecs_world);
+    ui.separator();
 
-            build_screenshot_panel(ui, ui_events);
-            ui.separator();
+    build_grid_debug_panel(ui, ecs_world);
+    ui.separator();
 
-            build_raytracing_panel(ui, ui_events, state);
-            ui.separator();
+    build_fbx_debug_panel(ui);
+    ui.separator();
 
-            build_debug_panel(ui, ui_events, gui_data, ecs_world);
-            ui.separator();
-
-            build_transform_gizmo_panel(ui, ecs_world);
-            ui.separator();
-
-            build_fbx_debug_panel(ui);
-            ui.separator();
-
-            build_light_bounds_panel(ui, ui_events);
-            ui.separator();
-
-            build_dof_panel(ui, ecs_world);
-            ui.separator();
-
-            build_auto_exposure_panel(ui, ecs_world);
-            ui.separator();
-
-            build_onion_skinning_panel(ui, ecs_world);
-
-            build_mouse_info(ui, gui_data);
-        });
+    build_mouse_info(ui, gui_data);
 }
 
-fn build_model_panel(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    state: &DebugWindowState,
-    _gui_data: &mut GUIData,
-) {
-    ui.text("Model Loading:");
-
-    if ui.button("Open FBX Model") {
-        if let Some(path) = rfd::FileDialog::new()
-            .add_filter("FBX Files", &["fbx"])
-            .pick_file()
-        {
-            let path_str = path.to_string_lossy().to_string();
-            crate::log!("Selected FBX file: {}", path_str);
-            ui_events.send(UIEvent::LoadModel { path: path_str });
-        }
-    }
-
-    ui.same_line();
-
-    if ui.button("Open glTF Model") {
-        if let Some(path) = rfd::FileDialog::new()
-            .add_filter("glTF Files", &["gltf", "glb"])
-            .pick_file()
-        {
-            let path_str = path.to_string_lossy().to_string();
-            crate::log!("Selected glTF file: {}", path_str);
-            ui_events.send(UIEvent::LoadModel { path: path_str });
-        }
-    }
-
-    ui.text(format!(
-        "Current Model: {}",
-        if state.model_path.is_empty() {
-            "None"
-        } else {
-            &state.model_path
-        }
-    ));
-
-    ui.text(format!("Status: {}", state.load_status));
-}
-
-fn build_camera_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {
-    ui.text("Camera Controls:");
-
-    if ui.button("reset camera") {
-        ui_events.send(UIEvent::ResetCamera);
-    }
-
-    ui.same_line();
-
-    if ui.button("reset camera up") {
-        ui_events.send(UIEvent::ResetCameraUp);
-    }
-
-    if ui.button("move to light gizmo") {
-        ui_events.send(UIEvent::MoveCameraToLightGizmo);
-    }
-
-    if ui.button("move to model") {
-        ui_events.send(UIEvent::MoveCameraToModel);
-    }
-}
-
-fn build_screenshot_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {
-    ui.text("Screenshot:");
-
-    if ui.button("Take Screenshot") {
-        ui_events.send(UIEvent::TakeScreenshot);
-    }
-}
-
-fn build_raytracing_panel(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    state: &mut DebugWindowState,
-) {
-    ui.text("Ray Tracing Controls:");
-
-    let mut light_pos = [
-        state.light_position.x,
-        state.light_position.y,
-        state.light_position.z,
-    ];
-
-    let mut light_changed = false;
-
-    if ui
-        .slider_config("Light X", -50.0, 50.0)
-        .build(&mut light_pos[0])
-    {
-        light_changed = true;
-    }
-
-    if ui
-        .slider_config("Light Y", -50.0, 50.0)
-        .build(&mut light_pos[1])
-    {
-        light_changed = true;
-    }
-
-    if ui
-        .slider_config("Light Z", -50.0, 50.0)
-        .build(&mut light_pos[2])
-    {
-        light_changed = true;
-    }
-
-    if light_changed {
-        let new_pos = Vector3::new(light_pos[0], light_pos[1], light_pos[2]);
-        state.light_position = new_pos;
-        ui_events.send(UIEvent::SetLightPosition(new_pos));
-    }
-
-    ui.slider_config("Shadow Strength", 0.0, 1.0)
-        .build(&mut state.shadow_strength);
-
-    ui.checkbox(
-        "Distance Attenuation",
-        &mut state.enable_distance_attenuation,
-    );
-
+fn build_debug_view_mode_panel(ui: &imgui::Ui, state: &mut DebugWindowState) {
     ui.text("Debug View Mode:");
     let mut current_mode = state.debug_view_mode.as_int();
 
@@ -248,45 +81,46 @@ fn build_debug_panel(
     );
 
     if ui.button("Debug Shadow Info") {
-        ui_events.send(UIEvent::DebugShadowInfo);
+        ui_events.send(crate::ecs::events::UIEvent::DebugShadowInfo);
     }
 
     ui.same_line();
 
     if ui.button("Debug Billboard Depth") {
-        ui_events.send(UIEvent::DebugBillboardDepth);
+        ui_events.send(crate::ecs::events::UIEvent::DebugBillboardDepth);
     }
 
     if ui.button("Dump Debug Information") {
-        ui_events.send(UIEvent::DumpDebugInfo);
+        ui_events.send(crate::ecs::events::UIEvent::DumpDebugInfo);
     }
 
     ui.same_line();
 
     if ui.button("Dump Animation Debug") {
-        ui_events.send(UIEvent::DumpAnimationDebug);
+        ui_events.send(crate::ecs::events::UIEvent::DumpAnimationDebug);
     }
 
     if ui.button("Add Test Constraints") {
-        ui_events.send(UIEvent::CreateTestConstraints);
+        ui_events.send(crate::ecs::events::UIEvent::CreateTestConstraints);
     }
     ui.same_line();
     if ui.button("Clear Constraints") {
-        ui_events.send(UIEvent::ClearTestConstraints);
+        ui_events.send(crate::ecs::events::UIEvent::ClearTestConstraints);
     }
 
     if ui.button("Add Spring Bones") {
-        ui_events.send(UIEvent::AddTestSpringBones);
+        ui_events.send(crate::ecs::events::UIEvent::AddTestSpringBones);
     }
     ui.same_line();
     if ui.button("Clear Spring Bones") {
-        ui_events.send(UIEvent::ClearSpringBones);
+        ui_events.send(crate::ecs::events::UIEvent::ClearSpringBones);
     }
 
     build_spring_bone_bake_panel(ui, ui_events, ecs_world);
 }
 
 fn build_spring_bone_bake_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+    use crate::ecs::events::UIEvent;
     use crate::ecs::resource::{SpringBoneMode, SpringBoneState};
 
     let Some(state) = ecs_world.get_resource::<SpringBoneState>() else {
@@ -336,92 +170,16 @@ fn build_spring_bone_bake_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ec
     }
 }
 
-fn build_transform_gizmo_panel(ui: &imgui::Ui, ecs_world: &World) {
-    let Some(mut state) = ecs_world.get_resource_mut::<TransformGizmoState>() else {
-        return;
-    };
-
-    ui.text("Transform Gizmo:");
-
-    // Mode buttons with keyboard shortcut hints
-    let translate_label = if state.mode == TransformGizmoMode::Translate {
-        "[W] Translate *"
-    } else {
-        "[W] Translate"
-    };
-    let rotate_label = if state.mode == TransformGizmoMode::Rotate {
-        "[E] Rotate *"
-    } else {
-        "[E] Rotate"
-    };
-    let scale_label = if state.mode == TransformGizmoMode::Scale {
-        "[R] Scale *"
-    } else {
-        "[R] Scale"
-    };
-
-    if ui.button(translate_label) {
-        state.mode = TransformGizmoMode::Translate;
+fn build_grid_debug_panel(ui: &imgui::Ui, ecs_world: &World) {
+    ui.text("Grid:");
+    if let Some(mut grid) = ecs_world.get_resource_mut::<GridMeshData>() {
+        ui.checkbox("Show Y-Axis Grid", &mut grid.show_y_axis_grid);
     }
-    ui.same_line();
-    if ui.button(rotate_label) {
-        state.mode = TransformGizmoMode::Rotate;
-    }
-    ui.same_line();
-    if ui.button(scale_label) {
-        state.mode = TransformGizmoMode::Scale;
-    }
-
-    // Keyboard shortcuts (W/E/R)
-    if ui.is_key_pressed(imgui::Key::W) && !ui.io().key_ctrl {
-        state.mode = TransformGizmoMode::Translate;
-    }
-    if ui.is_key_pressed(imgui::Key::E) && !ui.io().key_ctrl {
-        state.mode = TransformGizmoMode::Rotate;
-    }
-    if ui.is_key_pressed(imgui::Key::R) && !ui.io().key_ctrl {
-        state.mode = TransformGizmoMode::Scale;
-    }
-
-    // Coordinate space toggle
-    let space_label = match state.coordinate_space {
-        CoordinateSpace::World => "World",
-        CoordinateSpace::Local => "Local",
-    };
-    if ui.button(format!("Space: {}", space_label)) {
-        state.coordinate_space = match state.coordinate_space {
-            CoordinateSpace::World => CoordinateSpace::Local,
-            CoordinateSpace::Local => CoordinateSpace::World,
-        };
-    }
-
-    // Snap controls
-    ui.same_line();
-    ui.checkbox("Snap", &mut state.snap_enabled);
-
-    if state.snap_enabled {
-        match state.mode {
-            TransformGizmoMode::Translate => {
-                ui.slider_config("Snap Value", 0.01, 10.0)
-                    .build(&mut state.translate_snap_value);
-            }
-            TransformGizmoMode::Rotate => {
-                ui.slider_config("Snap Degrees", 1.0, 90.0)
-                    .build(&mut state.rotate_snap_degrees);
-            }
-            TransformGizmoMode::Scale => {
-                ui.slider_config("Snap Value", 0.01, 1.0)
-                    .build(&mut state.scale_snap_value);
-            }
-        }
-    }
-
-    ui.slider_config("Gizmo Scale", 0.01, 0.3)
-        .display_format("%.3f")
-        .build(&mut state.gizmo_scale);
 }
 
 fn build_fbx_debug_panel(ui: &imgui::Ui) {
+    use crate::debugview::FBX_DEBUG;
+
     ui.text("FBX Debug Logs:");
 
     let mut fbx_anim = FBX_DEBUG.animation_enabled();
@@ -440,125 +198,6 @@ fn build_fbx_debug_panel(ui: &imgui::Ui) {
     }
     if ui.checkbox("Transform", &mut fbx_trans) {
         FBX_DEBUG.set_transform(fbx_trans);
-    }
-}
-
-fn build_light_bounds_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {
-    ui.text("Move Light to Model Bounds:");
-
-    if ui.button("X Min") {
-        ui_events.send(UIEvent::MoveLightToBounds(LightMoveTarget::XMin));
-    }
-    ui.same_line();
-    if ui.button("X Max") {
-        ui_events.send(UIEvent::MoveLightToBounds(LightMoveTarget::XMax));
-    }
-
-    if ui.button("Y Min") {
-        ui_events.send(UIEvent::MoveLightToBounds(LightMoveTarget::YMin));
-    }
-    ui.same_line();
-    if ui.button("Y Max") {
-        ui_events.send(UIEvent::MoveLightToBounds(LightMoveTarget::YMax));
-    }
-
-    if ui.button("Z Min") {
-        ui_events.send(UIEvent::MoveLightToBounds(LightMoveTarget::ZMin));
-    }
-    ui.same_line();
-    if ui.button("Z Max") {
-        ui_events.send(UIEvent::MoveLightToBounds(LightMoveTarget::ZMax));
-    }
-}
-
-fn build_dof_panel(ui: &imgui::Ui, ecs_world: &World) {
-    use crate::ecs::resource::{DepthOfField, PhysicalCameraParameters};
-
-    ui.text("Depth of Field:");
-
-    if let Some(mut dof) = ecs_world.get_resource_mut::<DepthOfField>() {
-        ui.checkbox("DOF Enabled", &mut dof.enabled);
-
-        ui.slider_config("Focus Distance", 0.1, 100.0)
-            .build(&mut dof.focus_distance);
-
-        ui.slider_config("Max Blur Radius", 1.0, 32.0)
-            .build(&mut dof.max_blur_radius);
-    }
-
-    if let Some(mut params) = ecs_world.get_resource_mut::<PhysicalCameraParameters>() {
-        ui.slider_config("Aperture (f-stops)", 1.0, 22.0)
-            .build(&mut params.aperture_f_stops);
-
-        ui.slider_config("Focal Length (mm)", 10.0, 200.0)
-            .build(&mut params.focal_length_mm);
-    }
-}
-
-fn build_auto_exposure_panel(ui: &imgui::Ui, ecs_world: &World) {
-    use crate::ecs::resource::{AutoExposure, Exposure};
-
-    ui.text("Auto Exposure:");
-
-    if let Some(mut ae) = ecs_world.get_resource_mut::<AutoExposure>() {
-        ui.checkbox("Auto Exposure Enabled", &mut ae.enabled);
-
-        ui.slider_config("Min EV", -10.0, 10.0)
-            .build(&mut ae.min_ev);
-
-        ui.slider_config("Max EV", 0.0, 30.0).build(&mut ae.max_ev);
-
-        ui.slider_config("Speed Up", 0.1, 10.0)
-            .build(&mut ae.adaptation_speed_up);
-
-        ui.slider_config("Speed Down", 0.1, 10.0)
-            .build(&mut ae.adaptation_speed_down);
-
-        ui.slider_config("Low Percent", 0.0, 0.5)
-            .build(&mut ae.low_percent);
-
-        ui.slider_config("High Percent", 0.5, 1.0)
-            .build(&mut ae.high_percent);
-    }
-
-    if let Some(exposure) = ecs_world.get_resource::<Exposure>() {
-        ui.text(format!("Current Exposure: {:.4}", exposure.exposure_value));
-        ui.text(format!("Current EV100: {:.2}", exposure.ev100));
-    }
-}
-
-fn build_onion_skinning_panel(ui: &imgui::Ui, ecs_world: &World) {
-    use crate::ecs::resource::OnionSkinningConfig;
-
-    ui.text("Onion Skinning:");
-
-    if let Some(mut config) = ecs_world.get_resource_mut::<OnionSkinningConfig>() {
-        ui.checkbox("Onion Skin Enabled", &mut config.enabled);
-
-        let mut past = config.past_count as i32;
-        if ui.slider_config("Past Frames", 0, 4).build(&mut past) {
-            config.past_count = past.max(0) as u32;
-        }
-
-        let mut future = config.future_count as i32;
-        if ui.slider_config("Future Frames", 0, 4).build(&mut future) {
-            config.future_count = future.max(0) as u32;
-        }
-
-        ui.slider_config("Frame Step", 0.001, 0.2)
-            .display_format("%.3f")
-            .build(&mut config.frame_step);
-
-        ui.slider_config("Ghost Opacity", 0.0, 1.0)
-            .build(&mut config.opacity);
-
-        ui.color_edit3("Past Color", &mut config.past_color);
-        ui.color_edit3("Future Color", &mut config.future_color);
-
-        ui.text(format!(
-            "Total ghosts: {}",
-            crate::ecs::compute_total_ghost_count(&config)
-        ));
     }
 }
 

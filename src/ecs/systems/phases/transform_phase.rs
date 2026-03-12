@@ -15,7 +15,7 @@ pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
 
     let proj_data = calculate_projection(&*ctx.camera(), ctx.swapchain_extent);
 
-    let light_position = ctx.rt_debug().light_position;
+    let light_position = ctx.light_state().light_position;
     gizmo_sync_position(&mut ctx.light_gizmo_mut().position, light_position);
 
     {
@@ -42,7 +42,7 @@ pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
         proj_data.view,
         proj_data.proj,
         0.5,
-        0.1,
+        0.15,
     );
 
     ctx.world.insert_resource(proj_data);

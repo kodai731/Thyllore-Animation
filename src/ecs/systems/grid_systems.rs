@@ -91,7 +91,7 @@ fn add_line_vertex_data(
 }
 
 #[deprecated(note = "Use create_grid_mesh_data() instead")]
-pub fn create_grid_mesh() -> LineMesh {
+pub fn create_grid_mesh() -> (LineMesh, u32) {
     let mut mesh = LineMesh::default();
 
     let grid_count = 1000;
@@ -108,14 +108,6 @@ pub fn create_grid_mesh() -> LineMesh {
     );
     add_grid_axis(
         &mut mesh,
-        1,
-        grid_count,
-        grid_extent,
-        grid_spacing,
-        [0.0, 1.0, 0.0],
-    );
-    add_grid_axis(
-        &mut mesh,
         2,
         grid_count,
         grid_extent,
@@ -123,7 +115,18 @@ pub fn create_grid_mesh() -> LineMesh {
         [0.0, 0.0, 1.0],
     );
 
-    mesh
+    let xz_only_index_count = mesh.indices.len() as u32;
+
+    add_grid_axis(
+        &mut mesh,
+        1,
+        grid_count,
+        grid_extent,
+        grid_spacing,
+        [0.0, 1.0, 0.0],
+    );
+
+    (mesh, xz_only_index_count)
 }
 
 #[allow(deprecated)]
@@ -176,4 +179,59 @@ fn add_line_vertices(mesh: &mut LineMesh, pos: [f32; 3], color: [f32; 3]) {
 
 pub fn create_default_grid_scale() -> MeshScale {
     MeshScale::new(1.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[allow(deprecated)]
+    #[test]
+    fn test_grid_mesh_xz_only_index_count() {
+        let (mesh, xz_only_index_count) = create_grid_mesh();
+        let total_index_count = mesh.indices.len() as u32;
+
+        assert!(xz_only_index_count > 0);
+        assert!(xz_only_index_count < total_index_count);
+
+        let y_axis_index_count = total_index_count - xz_only_index_count;
+        let expected_per_axis = total_index_count / 3;
+        assert_eq!(xz_only_index_count, expected_per_axis * 2);
+        assert_eq!(y_axis_index_count, expected_per_axis);
+    }
+
+    #[allow(deprecated)]
+    #[test]
+    fn test_grid_mesh_xz_vertices_have_zero_y() {
+        let (mesh, xz_only_index_count) = create_grid_mesh();
+
+        for i in 0..xz_only_index_count as usize {
+            let vertex = &mesh.vertices[mesh.indices[i] as usize];
+            assert_eq!(
+                vertex.pos[1], 0.0,
+                "XZ grid vertex at index {} should have y=0, got y={}",
+                i, vertex.pos[1]
+            );
+        }
+    }
+
+    #[allow(deprecated)]
+    #[test]
+    fn test_grid_mesh_y_axis_vertices_exist_after_xz() {
+        let (mesh, xz_only_index_count) = create_grid_mesh();
+        let total = mesh.indices.len();
+
+        let mut has_nonzero_y = false;
+        for i in xz_only_index_count as usize..total {
+            let vertex = &mesh.vertices[mesh.indices[i] as usize];
+            if vertex.pos[1] != 0.0 {
+                has_nonzero_y = true;
+                break;
+            }
+        }
+        assert!(
+            has_nonzero_y,
+            "Y-axis grid should have vertices with non-zero Y"
+        );
+    }
 }

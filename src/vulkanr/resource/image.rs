@@ -38,6 +38,41 @@ impl RRImage {
         Ok(rrimage)
     }
 
+    pub unsafe fn new_from_pixels(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        rrcommand_pool: &Rc<RRCommandPool>,
+        pixels: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let (image, image_memory, mip_levels) = create_texture_image_pixel(
+            instance,
+            rrdevice,
+            rrcommand_pool,
+            &pixels.to_vec(),
+            width,
+            height,
+        )?;
+
+        let image_view = create_image_view(
+            rrdevice,
+            image,
+            vk::Format::R8G8B8A8_SRGB,
+            vk::ImageAspectFlags::COLOR,
+            mip_levels,
+        )?;
+
+        let sampler = create_texture_sampler(rrdevice, mip_levels)?;
+
+        Ok(Self {
+            image,
+            image_memory,
+            image_view,
+            sampler,
+        })
+    }
+
     pub unsafe fn new_from_file(
         instance: &Instance,
         rrdevice: &RRDevice,

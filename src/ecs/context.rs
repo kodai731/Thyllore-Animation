@@ -6,10 +6,10 @@ use crate::asset::AssetStorage;
 use crate::debugview::gizmo::{
     BoneSelectionState, GridGizmoData, LightGizmoData, TransformGizmoData,
 };
-use crate::debugview::RayTracingDebugState;
 use crate::ecs::component::{LineMesh, MeshScale};
 use crate::ecs::resource::Camera;
 use crate::ecs::resource::HierarchyState;
+use crate::ecs::resource::LightState;
 use crate::ecs::resource::ObjectIdReadback;
 use crate::ecs::resource::PointerCapture;
 use crate::ecs::resource::PointerState;
@@ -37,12 +37,12 @@ impl<'a> EcsContext<'a> {
         self.world.resource_mut::<Camera>()
     }
 
-    pub fn rt_debug(&self) -> ResRef<RayTracingDebugState> {
-        self.world.resource::<RayTracingDebugState>()
+    pub fn light_state(&self) -> ResRef<LightState> {
+        self.world.resource::<LightState>()
     }
 
-    pub fn rt_debug_mut(&self) -> ResMut<RayTracingDebugState> {
-        self.world.resource_mut::<RayTracingDebugState>()
+    pub fn light_state_mut(&self) -> ResMut<LightState> {
+        self.world.resource_mut::<LightState>()
     }
 
     pub fn camera_position(&self) -> Vector3<f32> {
@@ -61,7 +61,7 @@ impl<'a> EcsContext<'a> {
     }
 
     pub fn light_position(&self) -> Vector3<f32> {
-        self.rt_debug().light_position
+        self.light_state().light_position
     }
 
     pub fn grid_mesh(&self) -> ResRef<LineMesh> {

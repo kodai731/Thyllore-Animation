@@ -48,7 +48,7 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
     let skeleton = match assets.skeletons.values().next() {
         Some(skel_asset) => skel_asset.skeleton.clone(),
         None => {
-            crate::log!("Spring bone bake failed: no skeleton found");
+            crate::msg_warn!("Spring bone bake failed: no skeleton found");
             return;
         }
     };
@@ -59,14 +59,14 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
         .map(|(entity, _)| entity);
 
     let Some(entity) = spring_entity else {
-        crate::log!("Spring bone bake failed: no WithSpringBone entity");
+        crate::msg_warn!("Spring bone bake failed: no WithSpringBone entity");
         return;
     };
 
     let setup = match world.get_component::<SpringBoneSetup>(entity) {
         Some(s) => s.clone(),
         None => {
-            crate::log!("Spring bone bake failed: no SpringBoneSetup");
+            crate::msg_warn!("Spring bone bake failed: no SpringBoneSetup");
             return;
         }
     };
@@ -86,7 +86,7 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
         ),
         None => {
             drop(clip_library);
-            crate::log!("Spring bone bake failed: no current clip");
+            crate::msg_warn!("Spring bone bake failed: no current clip");
             return;
         }
     };

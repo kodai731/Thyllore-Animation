@@ -1,15 +1,15 @@
 use crate::app::{App, AppData};
 
 use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
-use crate::debugview::GridMeshData;
 use crate::ecs::component::{MeshScale, RenderInfo};
+use crate::ecs::resource::GridMeshData;
 use crate::ecs::systems::{
     billboard_create_buffers, create_billboard, create_default_grid_scale, create_grid_gizmo,
     create_grid_mesh, create_light_gizmo, gizmo_create_buffers,
 };
 use crate::ecs::{
-    ClipLibrary, GpuDescriptors, HierarchyState, MaterialRegistry, MeshAssets, ModelState,
-    NodeAssets, PipelineManager, SceneState, TimelineState,
+    ClipLibrary, GpuDescriptors, HierarchyState, LightState, MaterialRegistry, MeshAssets,
+    ModelState, NodeAssets, PipelineManager, SceneState, TimelineState,
 };
 use crate::vulkanr::command::*;
 use crate::vulkanr::context::{
@@ -48,8 +48,7 @@ use winit::window::Window;
 // Constants
 pub const PORTABILITY_MACOS_VERSION: Version = Version::new(1, 3, 216);
 pub const VALIDATION_ENABLED: bool = cfg!(debug_assertions);
-pub const VALIDATION_LAYER: vk::ExtensionName =
-    vk::ExtensionName::from_bytes(b"VK_LAYER_KHRONOS_validation");
+pub use crate::vulkanr::core::device::VALIDATION_LAYER;
 pub const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
     vk::KHR_SWAPCHAIN_EXTENSION.name,
     vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION.name,
@@ -117,8 +116,9 @@ impl App {
         let mut data = AppData::default();
 
         data.ecs_world.insert_resource(Camera::default());
+        data.ecs_world.insert_resource(LightState::default());
         data.ecs_world
-            .insert_resource(RayTracingDebugState::default());
+            .insert_resource(crate::debugview::DebugViewState::default());
 
         let (instance, messenger) = Self::create_instance_with_messenger(window, &entry)?;
         let surface = vk_window::create_surface(&instance, &window, &window)?;
@@ -261,14 +261,15 @@ impl App {
                 &mut data.raytracing,
                 &mut data.buffer_registry,
             );
-            gizmo_create_buffers(&mut gizmo_data.mesh, &mut backend, true)
-                .context("Failed to create gizmo buffers")?;
+            gizmo_create_buffers(
+                &mut gizmo_data.mesh,
+                &mut backend,
+                crate::render::BufferMemoryType::DeviceLocal,
+            )
+            .expect("Failed to create gizmo buffers");
         }
 
-        let light_position = data
-            .ecs_world
-            .resource::<RayTracingDebugState>()
-            .light_position;
+        let light_position = data.ecs_world.resource::<LightState>().light_position;
         let mut light_gizmo_data = create_light_gizmo(light_position);
         light_gizmo_data.render_info.pipeline_id = Some(gizmo_pipeline_id);
         light_gizmo_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
@@ -285,8 +286,12 @@ impl App {
                 &mut data.raytracing,
                 &mut data.buffer_registry,
             );
-            gizmo_create_buffers(&mut light_gizmo_data.mesh, &mut backend, false)
-                .context("Failed to create light gizmo buffers")?;
+            gizmo_create_buffers(
+                &mut light_gizmo_data.mesh,
+                &mut backend,
+                crate::render::BufferMemoryType::HostVisible,
+            )
+            .expect("Failed to create light gizmo buffers");
         }
 
         let bone_solid_pipeline =
@@ -698,7 +703,7 @@ impl App {
             crate::log!("Ray tracing pipelines created successfully");
         }
 
-        let mut grid_mesh = create_grid_mesh();
+        let (mut grid_mesh, xz_only_index_count) = create_grid_mesh();
         let grid_scale = create_default_grid_scale();
 
         grid_mesh.vertex_buffer_handle = data.buffer_registry.create_vertex_buffer(
@@ -706,7 +711,7 @@ impl App {
             &rrdevice,
             &rrcommand_pool,
             &grid_mesh.vertices,
-            true,
+            crate::render::BufferMemoryType::DeviceLocal,
         )?;
         println!("created grid vertex buffers");
 
@@ -724,6 +729,8 @@ impl App {
             mesh: grid_mesh,
             render_info: grid_render_info,
             scale: grid_scale,
+            show_y_axis_grid: cfg!(debug_assertions),
+            xz_only_index_count,
         };
         println!("allocated grid object_index");
 
@@ -972,6 +979,7 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::PoseLibrary>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::ConstraintEditorState>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::PanelLayout>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::MessageLog>(data);
 
         if !data.ecs_world.contains_resource::<TimelineState>() {
             data.ecs_world.insert_resource(TimelineState::new());

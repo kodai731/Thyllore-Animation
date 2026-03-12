@@ -3,9 +3,16 @@ use cgmath::{Matrix4, Vector3};
 
 use crate::app::billboard::BillboardData;
 use crate::ecs::component::LineMesh;
+use crate::ecs::resource::DistanceAttenuation;
 use crate::ecs::systems::ProjectionData;
 
 pub type MeshId = usize;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BufferMemoryType {
+    DeviceLocal,
+    HostVisible,
+}
 
 pub trait RenderBackend {
     unsafe fn upload_mesh_vertices(&mut self, mesh_id: MeshId) -> Result<()>;
@@ -14,8 +21,11 @@ pub trait RenderBackend {
 
     unsafe fn rebuild_tlas(&mut self) -> Result<()>;
 
-    unsafe fn create_gizmo_buffers(&mut self, mesh: &mut LineMesh, use_staging: bool)
-        -> Result<()>;
+    unsafe fn create_gizmo_buffers(
+        &mut self,
+        mesh: &mut LineMesh,
+        memory_type: BufferMemoryType,
+    ) -> Result<()>;
 
     unsafe fn update_gizmo_vertex_buffer(&self, mesh: &LineMesh) -> Result<()>;
 
@@ -51,7 +61,7 @@ pub trait RenderBackend {
         light_color: Vector3<f32>,
         debug_mode: i32,
         shadow_strength: f32,
-        enable_distance_attenuation: bool,
+        distance_attenuation: DistanceAttenuation,
         exposure_value: f32,
     ) -> Result<()>;
 

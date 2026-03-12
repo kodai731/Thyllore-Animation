@@ -3,6 +3,172 @@ use rust_rendering::ecs::storage::{Components, SparseSet};
 use rust_rendering::ecs::world::{Entity, Name, Resources, Transform, Visible, World};
 use rust_rendering::render::{BufferHandle, IndexBufferHandle, VertexBufferHandle};
 
+mod release_build_tests {
+    use rust_rendering::ecs::resource::GridMeshData;
+    use rust_rendering::ecs::systems::create_grid_mesh;
+    use rust_rendering::ecs::world::World;
+    use rust_rendering::loader::ModelLoadResult;
+
+    #[allow(deprecated)]
+    #[test]
+    fn test_grid_mesh_xz_toggle_in_release() {
+        let (mesh, xz_only_index_count) = create_grid_mesh();
+
+        let grid = GridMeshData {
+            mesh,
+            xz_only_index_count,
+            show_y_axis_grid: false,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            grid.xz_only_index_count, xz_only_index_count,
+            "XZ-only count should match"
+        );
+        assert!(
+            grid.xz_only_index_count < grid.mesh.indices.len() as u32,
+            "XZ-only count should be less than total"
+        );
+    }
+
+    #[test]
+    fn test_gltf_model_load_stickman() {
+        let path = "assets/models/stickman/stickman.glb";
+        if !std::path::Path::new(path).exists() {
+            println!("Skipping: {} not found", path);
+            return;
+        }
+
+        let gltf_result = unsafe { rust_rendering::loader::gltf::load_gltf_file(path) };
+        assert!(gltf_result.is_ok(), "glTF load should succeed");
+
+        let result = ModelLoadResult::from_gltf(gltf_result.unwrap());
+        assert!(!result.meshes.is_empty(), "Should have at least one mesh");
+        assert!(!result.nodes.is_empty(), "Should have nodes");
+    }
+
+    #[test]
+    fn test_gltf_model_load_phoenix_bird() {
+        let path = "assets/models/phoenix-bird/glb/phoenixBird.glb";
+        if !std::path::Path::new(path).exists() {
+            println!("Skipping: {} not found", path);
+            return;
+        }
+
+        let gltf_result = unsafe { rust_rendering::loader::gltf::load_gltf_file(path) };
+        assert!(gltf_result.is_ok(), "glTF load should succeed");
+
+        let result = ModelLoadResult::from_gltf(gltf_result.unwrap());
+        assert!(!result.meshes.is_empty(), "Should have at least one mesh");
+        assert!(!result.skeletons.is_empty(), "Should have a skeleton");
+        assert!(result.has_skinned_meshes, "Should have skinned meshes");
+    }
+
+    #[test]
+    fn test_ecs_world_resource_roundtrip_in_release() {
+        let mut world = World::new();
+
+        let (mesh, xz_only_index_count) = {
+            #[allow(deprecated)]
+            let (m, c) = create_grid_mesh();
+            (m, c)
+        };
+
+        world.insert_resource(GridMeshData {
+            mesh,
+            xz_only_index_count,
+            show_y_axis_grid: true,
+            ..Default::default()
+        });
+
+        {
+            let grid = world.get_resource::<GridMeshData>().unwrap();
+            assert!(grid.show_y_axis_grid);
+            assert!(grid.xz_only_index_count > 0);
+        }
+
+        {
+            let mut grid = world.get_resource_mut::<GridMeshData>().unwrap();
+            grid.show_y_axis_grid = false;
+        }
+
+        {
+            let grid = world.get_resource::<GridMeshData>().unwrap();
+            assert!(!grid.show_y_axis_grid);
+        }
+    }
+
+    use rust_rendering::vulkanr;
+
+    unsafe fn create_headless_test_device(
+    ) -> Option<(vulkanr::Entry, vulkanr::Instance, vulkanr::RRDevice)> {
+        let loader = vulkanr::LibloadingLoader::new(vulkanr::LIBRARY).ok()?;
+        let entry = vulkanr::Entry::new(loader).ok()?;
+        let instance = vulkanr::create_headless_instance(&entry).ok()?;
+
+        match vulkanr::RRDevice::new_headless(
+            &entry,
+            &instance,
+            vulkanr::HEADLESS_DEVICE_EXTENSIONS,
+            cfg!(debug_assertions),
+            vulkanr::VALIDATION_LAYER,
+            vulkanr::Version::new(1, 3, 216),
+        ) {
+            Ok(device) => Some((entry, instance, device)),
+            Err(_) => {
+                vulkanr::destroy_headless_instance(&instance);
+                None
+            }
+        }
+    }
+
+    #[test]
+    fn test_vulkan_headless_device_creation() {
+        let result = unsafe { create_headless_test_device() };
+        let Some((_entry, instance, device)) = result else {
+            println!("Skipping: Vulkan headless device not available");
+            return;
+        };
+
+        assert!(device.has_graphics_queue());
+        assert!(device.min_uniform_buffer_offset_alignment > 0);
+
+        unsafe { vulkanr::destroy_headless_device(&device, &instance) };
+    }
+
+    #[test]
+    fn test_vulkan_headless_physical_device_properties() {
+        let result = unsafe { create_headless_test_device() };
+        let Some((_entry, instance, device)) = result else {
+            println!("Skipping: Vulkan headless device not available");
+            return;
+        };
+
+        let api_version = unsafe { device.query_physical_device_api_version(&instance) };
+        assert!(api_version > 0);
+        assert!(device.msaa_samples.bits() > 0);
+
+        unsafe { vulkanr::destroy_headless_device(&device, &instance) };
+    }
+
+    #[test]
+    fn test_vulkan_headless_queue_operations() {
+        let result = unsafe { create_headless_test_device() };
+        let Some((_entry, instance, device)) = result else {
+            println!("Skipping: Vulkan headless device not available");
+            return;
+        };
+
+        assert!(device.has_graphics_queue());
+        assert!(!device.has_present_queue());
+
+        unsafe {
+            device.wait_graphics_queue_idle().unwrap();
+            vulkanr::destroy_headless_device(&device, &instance);
+        }
+    }
+}
+
 mod sparse_set_tests {
     use super::*;
 
@@ -960,5 +1126,159 @@ mod transform_tests {
         assert_relative_eq!(matrix[0][0], 2.0, epsilon = 0.0001);
         assert_relative_eq!(matrix[1][1], 3.0, epsilon = 0.0001);
         assert_relative_eq!(matrix[2][2], 4.0, epsilon = 0.0001);
+    }
+}
+
+mod message_log_tests {
+    use rust_rendering::ecs::resource::{MessageFilter, MessageLog};
+    use rust_rendering::ecs::systems::message_log_systems::{
+        message_log_clear_buffer, message_log_filtered_messages,
+    };
+    use rust_rendering::logger::message_buffer::{MessageBuffer, MessageLevel};
+
+    fn make_log_with_messages() -> MessageLog {
+        let mut log = MessageLog::default();
+        log.messages = vec![
+            rust_rendering::logger::message_buffer::Message {
+                level: MessageLevel::Info,
+                text: "Model loaded".to_string(),
+                timestamp: "12:00:00".to_string(),
+            },
+            rust_rendering::logger::message_buffer::Message {
+                level: MessageLevel::Warning,
+                text: "Missing bone: Spine2".to_string(),
+                timestamp: "12:00:01".to_string(),
+            },
+            rust_rendering::logger::message_buffer::Message {
+                level: MessageLevel::Error,
+                text: "Failed to load texture".to_string(),
+                timestamp: "12:00:02".to_string(),
+            },
+            rust_rendering::logger::message_buffer::Message {
+                level: MessageLevel::Info,
+                text: "Screenshot saved".to_string(),
+                timestamp: "12:00:03".to_string(),
+            },
+        ];
+        log.info_count = 2;
+        log.warning_count = 1;
+        log.error_count = 1;
+        log
+    }
+
+    #[test]
+    fn test_message_buffer_push_populates_and_snapshot_returns_all() {
+        let mut buf = MessageBuffer::new();
+        buf.push(MessageLevel::Info, "info msg".to_string());
+        buf.push(MessageLevel::Warning, "warn msg".to_string());
+        buf.push(MessageLevel::Error, "error msg".to_string());
+
+        let snap = buf.snapshot();
+        assert_eq!(snap.len(), 3);
+        assert_eq!(snap[0].level, MessageLevel::Info);
+        assert_eq!(snap[1].level, MessageLevel::Warning);
+        assert_eq!(snap[2].level, MessageLevel::Error);
+    }
+
+    #[test]
+    fn test_message_log_filter_all_returns_every_message() {
+        let mut log = make_log_with_messages();
+        log.filter = MessageFilter::All;
+        assert_eq!(message_log_filtered_messages(&log).len(), 4);
+    }
+
+    #[test]
+    fn test_message_log_filter_warning_and_error_excludes_info() {
+        let mut log = make_log_with_messages();
+        log.filter = MessageFilter::WarningAndError;
+        let filtered = message_log_filtered_messages(&log);
+        assert_eq!(filtered.len(), 2);
+        assert!(filtered.iter().all(|m| m.level != MessageLevel::Info));
+    }
+
+    #[test]
+    fn test_message_log_filter_error_only() {
+        let mut log = make_log_with_messages();
+        log.filter = MessageFilter::ErrorOnly;
+        let filtered = message_log_filtered_messages(&log);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].level, MessageLevel::Error);
+        assert_eq!(filtered[0].text, "Failed to load texture");
+    }
+
+    #[test]
+    fn test_message_log_default_state() {
+        let log = MessageLog::default();
+        assert!(log.messages.is_empty());
+        assert_eq!(log.filter, MessageFilter::All);
+        assert!(log.auto_scroll);
+        assert_eq!(log.info_count, 0);
+        assert_eq!(log.warning_count, 0);
+        assert_eq!(log.error_count, 0);
+    }
+
+    #[test]
+    fn test_message_buffer_ring_buffer_evicts_oldest() {
+        let mut buf = MessageBuffer::new();
+        // Push more than capacity (256)
+        for i in 0..300 {
+            buf.push(MessageLevel::Info, format!("msg {}", i));
+        }
+        let snap = buf.snapshot();
+        assert_eq!(snap.len(), 256);
+        // Oldest messages (0-43) should have been evicted
+        assert_eq!(snap[0].text, "msg 44");
+        assert_eq!(snap[255].text, "msg 299");
+    }
+
+    #[test]
+    fn test_message_buffer_count_by_level() {
+        let mut buf = MessageBuffer::new();
+        buf.push(MessageLevel::Info, "a".to_string());
+        buf.push(MessageLevel::Info, "b".to_string());
+        buf.push(MessageLevel::Warning, "c".to_string());
+        buf.push(MessageLevel::Error, "d".to_string());
+        buf.push(MessageLevel::Error, "e".to_string());
+        buf.push(MessageLevel::Error, "f".to_string());
+
+        assert_eq!(buf.count_by_level(MessageLevel::Info), 2);
+        assert_eq!(buf.count_by_level(MessageLevel::Warning), 1);
+        assert_eq!(buf.count_by_level(MessageLevel::Error), 3);
+    }
+
+    #[test]
+    fn test_message_buffer_clear_empties_all() {
+        let mut buf = MessageBuffer::new();
+        buf.push(MessageLevel::Info, "test".to_string());
+        buf.push(MessageLevel::Error, "err".to_string());
+        buf.clear();
+
+        assert_eq!(buf.snapshot().len(), 0);
+        assert_eq!(buf.count_by_level(MessageLevel::Info), 0);
+        assert_eq!(buf.count_by_level(MessageLevel::Error), 0);
+    }
+
+    #[test]
+    fn test_message_log_clear_buffer_resets_counts() {
+        let mut log = make_log_with_messages();
+        assert_eq!(log.info_count, 2);
+        assert_eq!(log.error_count, 1);
+
+        message_log_clear_buffer(&mut log);
+
+        assert!(log.messages.is_empty());
+        assert_eq!(log.info_count, 0);
+        assert_eq!(log.warning_count, 0);
+        assert_eq!(log.error_count, 0);
+    }
+
+    #[test]
+    fn test_message_timestamp_is_populated() {
+        let mut buf = MessageBuffer::new();
+        buf.push(MessageLevel::Info, "hello".to_string());
+        let snap = buf.snapshot();
+        assert!(!snap[0].timestamp.is_empty());
+        // Timestamp should match HH:MM:SS format (8 chars)
+        assert_eq!(snap[0].timestamp.len(), 8);
     }
 }

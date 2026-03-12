@@ -12,7 +12,7 @@ use crate::math::{
     coordinate_system::perspective_infinite_reverse, is_point_in_rect,
     ray_to_line_segment_distance, ray_to_point_distance, screen_to_world_ray, view,
 };
-use crate::render::{IndexBufferHandle, RenderBackend, VertexBufferHandle};
+use crate::render::{BufferMemoryType, IndexBufferHandle, RenderBackend, VertexBufferHandle};
 
 pub fn create_axis_gizmo_mesh_data(axis_length: f32, origin_color: [f32; 3]) -> MeshData {
     let positions = vec![
@@ -321,9 +321,9 @@ pub fn gizmo_update_rotation(mesh: &mut LineMesh, rotation_matrix: &Matrix3<f32>
 pub unsafe fn gizmo_create_buffers(
     mesh: &mut LineMesh,
     backend: &mut dyn RenderBackend,
-    use_staging: bool,
+    memory_type: BufferMemoryType,
 ) -> Result<()> {
-    backend.create_gizmo_buffers(mesh, use_staging)
+    backend.create_gizmo_buffers(mesh, memory_type)
 }
 
 pub unsafe fn gizmo_update_vertex_buffer(

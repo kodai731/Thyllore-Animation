@@ -6,16 +6,18 @@ use winit::event::{ElementState, Event, WindowEvent};
 use super::key_bindings::{default_bindings, dispatch_keyboard_shortcut, ModifierKeys};
 use super::platform::System;
 use super::ui::{
-    build_click_debug_overlay, build_clip_browser_window, build_curve_editor_window,
-    build_debug_window, build_hierarchy_window, build_inspector_window, build_status_bar_overlay,
+    build_bottom_panel, build_clip_browser_window, build_curve_editor_window,
+    build_hierarchy_window, build_inspector_window, build_scene_overlay, build_status_bar_overlay,
     build_timeline_window, build_viewport_window, handle_splitters, CurveEditorState,
-    DebugWindowState, LayoutSnapshot, StatusBarState, TimelineInteractionState, ViewportInfo,
+    LayoutSnapshot, SceneOverlayState, StatusBarState, TimelineInteractionState, ViewportInfo,
 };
+#[cfg(debug_assertions)]
+use super::ui::{build_click_debug_overlay, DebugWindowState};
 use crate::app::{App, GUIData};
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{
-    ClipBrowserState, ClipLibrary, CurveEditorBuffer, HierarchyState, PanelLayout, PoseLibrary,
-    TimelineState,
+    ClipBrowserState, ClipLibrary, CurveEditorBuffer, HierarchyState, MessageLog, PanelLayout,
+    PoseLibrary, TimelineState,
 };
 use crate::ecs::systems::clip_track_systems::query_clip_tracks;
 use crate::ecs::systems::panel_layout_systems::panel_layout_clamp_to_display;
@@ -149,29 +151,32 @@ fn handle_redraw_requested(
 
     update_mouse_input(gui_data, ui);
 
-    let mut debug_state = {
-        let model_path = app.model_state().model_path.clone();
-        let load_status = gui_data.load_status.clone();
-        let rt_debug = app.rt_debug_state();
-        DebugWindowState {
-            model_path,
-            load_status,
-            light_position: rt_debug.light_position,
-            shadow_strength: rt_debug.shadow_strength,
-            enable_distance_attenuation: rt_debug.enable_distance_attenuation,
-            debug_view_mode: rt_debug.debug_view_mode,
-        }
+    #[cfg(debug_assertions)]
+    let mut debug_state = DebugWindowState {
+        debug_view_mode: app.debug_view_state().debug_view_mode,
     };
 
-    build_ui_windows(ui, app, gui_data, &mut debug_state, status_bar_state);
+    let mut overlay_state = SceneOverlayState {
+        model_path: app.model_state().model_path.clone(),
+        load_status: gui_data.load_status.clone(),
+    };
 
+    build_ui_windows(
+        ui,
+        app,
+        gui_data,
+        #[cfg(debug_assertions)]
+        &mut debug_state,
+        &mut overlay_state,
+        status_bar_state,
+    );
+
+    #[cfg(debug_assertions)]
     {
-        let mut rt_debug_mut = app.rt_debug_state_mut();
-        rt_debug_mut.shadow_strength = debug_state.shadow_strength;
-        rt_debug_mut.enable_distance_attenuation = debug_state.enable_distance_attenuation;
-        rt_debug_mut.debug_view_mode = debug_state.debug_view_mode;
+        app.debug_view_state_mut().debug_view_mode = debug_state.debug_view_mode;
     }
 
+    #[cfg(debug_assertions)]
     build_click_debug_overlay(ui, gui_data);
 
     platform.prepare_render(ui, window);
@@ -188,7 +193,8 @@ fn build_ui_windows(
     ui: &imgui::Ui,
     app: &mut App,
     gui_data: &mut GUIData,
-    debug_state: &mut DebugWindowState,
+    #[cfg(debug_assertions)] debug_state: &mut DebugWindowState,
+    overlay_state: &mut SceneOverlayState,
     status_bar_state: &mut StatusBarState,
 ) {
     let display_size = ui.io().display_size;
@@ -199,8 +205,28 @@ fn build_ui_windows(
         LayoutSnapshot::from_layout(&panel_layout, display_size)
     };
 
-    build_side_panel_windows(ui, app, gui_data, debug_state, &layout_snapshot);
+    build_side_panel_windows(
+        ui,
+        app,
+        gui_data,
+        #[cfg(debug_assertions)]
+        debug_state,
+        &layout_snapshot,
+    );
     let viewport_info = build_viewport_and_update_state(ui, app, gui_data, &layout_snapshot);
+
+    {
+        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+        build_scene_overlay(
+            ui,
+            &mut *ui_events,
+            overlay_state,
+            gui_data,
+            &app.data.ecs_world,
+            &viewport_info,
+        );
+    }
+
     build_animation_editor_windows(ui, app, &layout_snapshot);
     build_status_and_splitters(ui, app, status_bar_state, &viewport_info, &layout_snapshot);
 }
@@ -209,17 +235,25 @@ fn build_side_panel_windows(
     ui: &imgui::Ui,
     app: &mut App,
     gui_data: &mut GUIData,
-    debug_state: &mut DebugWindowState,
+    #[cfg(debug_assertions)] debug_state: &mut DebugWindowState,
     layout_snapshot: &LayoutSnapshot,
 ) {
     {
+        let mut msg_log = app.data.ecs_world.resource_mut::<MessageLog>();
+        crate::ecs::systems::message_log_sync_from_buffer(&mut msg_log);
+    }
+
+    {
         let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-        build_debug_window(
+        let mut msg_log = app.data.ecs_world.resource_mut::<MessageLog>();
+        build_bottom_panel(
             ui,
             &mut *ui_events,
+            #[cfg(debug_assertions)]
             debug_state,
             gui_data,
             &app.data.ecs_world,
+            &mut *msg_log,
             layout_snapshot,
         );
     }
@@ -504,7 +538,7 @@ fn handle_clip_load_from_file(app: &mut App) {
     ) {
         Ok(_new_id) => {}
         Err(e) => {
-            crate::log!("Failed to load clip: {:?}", e);
+            crate::msg_error!("Failed to load clip: {:?}", e);
         }
     }
 }
@@ -536,10 +570,10 @@ fn handle_clip_save_to_file(app: &mut App, source_id: u64) {
 
     match clip_library_save_to_file(&clip_library, source_id, &path) {
         Ok(()) => {
-            crate::log!("Saved clip '{}' to {:?}", new_name, path);
+            crate::msg_info!("Saved clip '{}' to {:?}", new_name, path);
         }
         Err(e) => {
-            crate::log!("Failed to save clip: {:?}", e);
+            crate::msg_error!("Failed to save clip: {:?}", e);
         }
     }
 }
@@ -605,8 +639,8 @@ fn handle_clip_export_fbx(app: &mut App, source_id: u64) {
     };
 
     match result {
-        Ok(()) => crate::log!("FBX exported: {:?}", path),
-        Err(e) => crate::log!("FBX export failed: {:?}", e),
+        Ok(()) => crate::msg_info!("FBX exported: {:?}", path),
+        Err(e) => crate::msg_error!("FBX export failed: {:?}", e),
     }
 }
 
@@ -634,7 +668,7 @@ fn handle_clip_export_gltf(app: &mut App, source_id: u64) {
         .and_then(|cache| cache.source_path.clone());
 
     let Some(source_glb_path) = source_glb_path else {
-        crate::log!("glTF export failed: no source glTF/GLB model loaded");
+        crate::msg_error!("glTF export failed: no source glTF/GLB model loaded");
         return;
     };
 
@@ -654,8 +688,8 @@ fn handle_clip_export_gltf(app: &mut App, source_id: u64) {
         &skeleton,
         &path,
     ) {
-        Ok(()) => crate::log!("glTF exported: {:?}", path),
-        Err(e) => crate::log!("glTF export failed: {:?}", e),
+        Ok(()) => crate::msg_info!("glTF exported: {:?}", path),
+        Err(e) => crate::msg_error!("glTF export failed: {:?}", e),
     }
 }
 
@@ -677,7 +711,7 @@ fn handle_spring_bone_save(app: &mut App) {
     let baked_id = match spring_state.baked_clip_source_id {
         Some(id) => id,
         None => {
-            crate::log!("No baked clip to save");
+            crate::msg_warn!("No baked clip to save");
             return;
         }
     };
@@ -695,10 +729,10 @@ fn handle_spring_bone_save(app: &mut App) {
     let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
     match clip_library_save_to_file(&clip_library, baked_id, &path) {
         Ok(()) => {
-            crate::log!("Saved spring bone bake to {:?}", path);
+            crate::msg_info!("Saved spring bone bake to {:?}", path);
         }
         Err(e) => {
-            crate::log!("Failed to save spring bone bake: {:?}", e);
+            crate::msg_error!("Failed to save spring bone bake: {:?}", e);
         }
     }
 }

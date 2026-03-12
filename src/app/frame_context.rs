@@ -8,8 +8,8 @@ use crate::app::graphics_resource::GraphicsResources;
 use crate::app::raytracing::RayTracingData;
 use crate::asset::AssetStorage;
 use crate::debugview::gizmo::{BoneGizmoData, GridGizmoData, LightGizmoData, TransformGizmoData};
-use crate::debugview::{GridMeshData, RayTracingDebugState};
-use crate::ecs::resource::Camera;
+use crate::debugview::DebugViewState;
+use crate::ecs::resource::{Camera, GridMeshData, LightState};
 use crate::ecs::world::{ResMut, ResRef, World};
 use crate::render::RenderBackend;
 use crate::renderer::onion_skin_buffers::OnionSkinGpuState;
@@ -62,12 +62,16 @@ impl<'a> FrameContext<'a> {
         self.world.resource_mut::<Camera>()
     }
 
-    pub fn rt_debug(&self) -> ResRef<RayTracingDebugState> {
-        self.world.resource::<RayTracingDebugState>()
+    pub fn light_state(&self) -> ResRef<LightState> {
+        self.world.resource::<LightState>()
     }
 
-    pub fn rt_debug_mut(&self) -> ResMut<RayTracingDebugState> {
-        self.world.resource_mut::<RayTracingDebugState>()
+    pub fn light_state_mut(&self) -> ResMut<LightState> {
+        self.world.resource_mut::<LightState>()
+    }
+
+    pub fn debug_view_state(&self) -> ResRef<DebugViewState> {
+        self.world.resource::<DebugViewState>()
     }
 
     pub fn camera_position(&self) -> Vector3<f32> {
@@ -86,7 +90,7 @@ impl<'a> FrameContext<'a> {
     }
 
     pub fn light_position(&self) -> Vector3<f32> {
-        self.rt_debug().light_position
+        self.light_state().light_position
     }
 
     pub fn grid_mesh(&self) -> ResRef<GridMeshData> {

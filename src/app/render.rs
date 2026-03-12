@@ -216,14 +216,11 @@ impl App {
                 }
 
                 gui_data.load_status = format!("Loaded: {}", gui_data.selected_model_path);
-                crate::log!(
-                    "Successfully loaded model: {}",
-                    gui_data.selected_model_path
-                );
+                crate::msg_info!("Model loaded: {}", gui_data.selected_model_path);
             }
             Err(e) => {
                 gui_data.load_status = format!("Error: {}", e);
-                crate::log!("Failed to load model: {:?}", e);
+                crate::msg_error!("Failed to load model: {:?}", e);
             }
         }
 
@@ -579,9 +576,9 @@ impl App {
 
         if gui_data.take_screenshot {
             crate::log!("Taking screenshot...");
-            self.save_screenshot(image_index)?;
+            let path = self.save_screenshot(image_index)?;
             gui_data.take_screenshot = false;
-            crate::log!("Screenshot saved!");
+            crate::msg_info!("Screenshot saved: {}", path);
         }
 
         self.frame_sync_mut().advance(MAX_FRAMES_IN_FLIGHT);
@@ -590,7 +587,7 @@ impl App {
 
         Ok(())
     }
-    unsafe fn save_screenshot(&self, image_index: usize) -> Result<()> {
+    unsafe fn save_screenshot(&self, image_index: usize) -> Result<String> {
         let device = &self.rrdevice.device;
         let swapchain = &self.swapchain_state().swapchain;
         let swapchain_image = swapchain.swapchain_images[image_index];
@@ -603,13 +600,13 @@ impl App {
         let (buffer, buffer_memory, command_buffer) =
             self.copy_swapchain_image_to_buffer(swapchain_image, extent, image_size, command_pool)?;
 
-        Self::encode_and_save_png(device, buffer_memory, image_size, width, height)?;
+        let path = Self::encode_and_save_png(device, buffer_memory, image_size, width, height)?;
 
         device.free_command_buffers(command_pool, &[command_buffer]);
         device.free_memory(buffer_memory, None);
         device.destroy_buffer(buffer, None);
 
-        Ok(())
+        Ok(path)
     }
 
     unsafe fn copy_swapchain_image_to_buffer(
@@ -744,7 +741,7 @@ impl App {
         image_size: vk::DeviceSize,
         width: u32,
         height: u32,
-    ) -> Result<()> {
+    ) -> Result<String> {
         use std::fs::File;
         use std::io::BufWriter;
         use std::time::SystemTime;
@@ -776,9 +773,13 @@ impl App {
         let mut png_writer = encoder.write_header()?;
         png_writer.write_image_data(&rgba_data)?;
 
-        crate::log!("Screenshot saved to: {}", filename);
+        let absolute_path = std::fs::canonicalize(&filename)
+            .unwrap_or_else(|_| std::path::PathBuf::from(&filename));
+        let path_str = absolute_path.to_string_lossy().to_string();
 
-        Ok(())
+        crate::log!("Screenshot saved to: {}", path_str);
+
+        Ok(path_str)
     }
 
     pub unsafe fn begin_offscreen_render_pass(

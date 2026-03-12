@@ -21,7 +21,7 @@ pub fn save_animation_clip(path: &Path, clip: &EditableAnimationClip) -> SceneRe
     }
 
     fs::write(path, content)?;
-    crate::log!("Saved animation clip to: {}", path.display());
+    log!("Saved animation clip to: {}", path.display());
 
     Ok(())
 }
@@ -41,6 +41,6 @@ pub fn load_animation_clip(path: &Path) -> SceneResult<EditableAnimationClip> {
         });
     }
 
-    crate::log!("Loaded animation clip from: {}", path.display());
+    log!("Loaded animation clip from: {}", path.display());
     Ok(clip_file.clip)
 }

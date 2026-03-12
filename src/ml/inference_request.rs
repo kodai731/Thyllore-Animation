@@ -1,7 +1,7 @@
 pub fn resolve_curve_copilot_model_path() -> String {
     let shared_path = std::path::Path::new(crate::paths::CURVE_COPILOT_MODEL);
     if shared_path.exists() {
-        crate::log!(
+        log!(
             "Using SharedData model: {}",
             crate::paths::CURVE_COPILOT_MODEL
         );
@@ -9,11 +9,11 @@ pub fn resolve_curve_copilot_model_path() -> String {
     }
 
     if let Some(latest) = find_latest_curve_copilot_model() {
-        crate::log!("Using dated SharedData model: {}", latest);
+        log!("Using dated SharedData model: {}", latest);
         return latest;
     }
 
-    crate::log!("SharedData model not found, falling back to dummy model");
+    log!("SharedData model not found, falling back to dummy model");
     crate::paths::CURVE_COPILOT_DUMMY_MODEL.to_string()
 }
 

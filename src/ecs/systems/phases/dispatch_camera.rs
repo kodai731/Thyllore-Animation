@@ -31,7 +31,7 @@ pub fn dispatch_camera_light_debug_events(
                     let distance = max_dim * 2.0;
                     let offset = Vector3::new(0.0, 0.0, distance);
                     camera_move_to_look_at(&mut camera, center, offset);
-                    crate::log!(
+                    log!(
                         "Moved camera to model: center=({:.2}, {:.2}, {:.2}), distance={:.2}",
                         center.x,
                         center.y,
@@ -68,7 +68,7 @@ pub fn dispatch_camera_light_debug_events(
                     };
                     rt_debug.light_position = new_pos;
 
-                    crate::log!(
+                    log!(
                         "Light moved to bounds {:?}: ({:.2}, {:.2}, {:.2})",
                         target,
                         new_pos.x,

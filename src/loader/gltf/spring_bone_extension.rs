@@ -4,7 +4,6 @@ use crate::ecs::component::{
     ColliderShape, SpringBoneSetup, SpringChain, SpringColliderDef, SpringColliderGroup,
     SpringJointParam,
 };
-use crate::log;
 
 #[derive(Deserialize)]
 struct VrmcSpringBone {

@@ -80,8 +80,8 @@ impl RayTracingData {
         rrswapchain: &RRSwapchain,
         rrcommand_pool: &RRCommandPool,
     ) -> Result<()> {
-        crate::log!("init_gbuffer: starting...");
-        crate::log!(
+        log!("init_gbuffer: starting...");
+        log!(
             "init_gbuffer: swapchain extent {}x{}",
             rrswapchain.swapchain_extent.width,
             rrswapchain.swapchain_extent.height
@@ -94,15 +94,15 @@ impl RayTracingData {
             rrswapchain.swapchain_extent.height,
         )?;
 
-        crate::log!("init_gbuffer: RRGBuffer::new succeeded");
+        log!("init_gbuffer: RRGBuffer::new succeeded");
 
         if let Err(e) = gbuffer.transition_layouts(rrdevice, rrcommand_pool.command_pool) {
-            crate::log!("init_gbuffer: transition_layouts failed (ignored): {:?}", e);
+            log_warn!("init_gbuffer: transition_layouts failed (ignored): {:?}", e);
         }
 
         self.gbuffer = Some(gbuffer);
 
-        crate::log!(
+        log!(
             "init_gbuffer: completed, gbuffer is_some: {}",
             self.gbuffer.is_some()
         );
@@ -171,12 +171,12 @@ impl RayTracingData {
         offscreen_extent: Option<vk::Extent2D>,
         hdr_render_pass: Option<vk::RenderPass>,
     ) -> Result<()> {
-        crate::log!("create_pipelines: starting...");
-        crate::log!(
+        log!("create_pipelines: starting...");
+        log!(
             "create_pipelines: gbuffer is_some: {}",
             self.gbuffer.is_some()
         );
-        crate::log!(
+        log!(
             "create_pipelines: acceleration_structure is_some: {}",
             self.acceleration_structure.is_some()
         );
@@ -318,10 +318,10 @@ impl RayTracingData {
             composite_builder = composite_builder
                 .custom_render_pass(render_pass)
                 .msaa_samples(vk::SampleCountFlags::_1);
-            crate::log!("create_pipelines: using HDR render pass for composite pipeline");
+            log!("create_pipelines: using HDR render pass for composite pipeline");
         } else if let Some(render_pass) = offscreen_render_pass {
             composite_builder = composite_builder.custom_render_pass(render_pass);
-            crate::log!("create_pipelines: using offscreen render pass for composite pipeline");
+            log!("create_pipelines: using offscreen render pass for composite pipeline");
         }
 
         let extent = offscreen_extent.unwrap_or(rrswapchain.swapchain_extent);
@@ -459,7 +459,7 @@ impl RayTracingData {
             height,
         });
 
-        crate::log!("Created onion skin pass: {}x{}", width, height);
+        log!("Created onion skin pass: {}x{}", width, height);
         Ok(())
     }
 

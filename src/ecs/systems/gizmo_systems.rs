@@ -198,7 +198,7 @@ pub fn gizmo_try_select(
         draggable.initial_position = light_pos;
 
         let drag_depth = (light_pos - camera_pos).magnitude();
-        crate::log!(
+        log!(
             "Gizmo selected - axis: {:?}, depth: {:.2}",
             selected_axis,
             drag_depth
@@ -222,14 +222,14 @@ pub fn gizmo_sync_position(position: &mut GizmoPosition, source_position: Vector
         || position.position.y != source_position.y
         || position.position.z != source_position.z
     {
-        crate::log!("GizmoPosition: syncing from source");
-        crate::log!(
+        log!("GizmoPosition: syncing from source");
+        log!(
             "  Before: ({:.2}, {:.2}, {:.2})",
             position.position.x,
             position.position.y,
             position.position.z
         );
-        crate::log!(
+        log!(
             "  After:  ({:.2}, {:.2}, {:.2})",
             source_position.x,
             source_position.y,
@@ -261,7 +261,7 @@ pub fn gizmo_update_position_with_constraint(
             Vector3::new(initial.x, initial.y, initial.z + delta.z)
         };
 
-        crate::log!(
+        log!(
             "Ctrl pressed - axis constrained: initial({:.2}, {:.2}, {:.2}) -> delta({:.2}, {:.2}, {:.2}) -> constrained({:.2}, {:.2}, {:.2})",
             initial.x,
             initial.y,

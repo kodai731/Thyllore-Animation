@@ -28,7 +28,7 @@ impl RRSwapchain {
     ) -> Result<Self> {
         let mut rrswapchain = create_swapchain(window, instance, surface, rrdevice)?;
         create_swapchain_image_view(rrdevice, &mut rrswapchain)?;
-        crate::log!("Created swapchain");
+        log!("Created swapchain");
         Ok(rrswapchain)
     }
 

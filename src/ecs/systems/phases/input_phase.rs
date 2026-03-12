@@ -200,7 +200,7 @@ fn process_gizmo_interaction(ctx: &mut EcsContext) -> Result<()> {
 }
 
 fn reset_light_gizmo_drag(ctx: &mut EcsContext) {
-    crate::log!("Mouse released - resetting light gizmo state");
+    log!("Mouse released - resetting light gizmo state");
     let mut gizmo = ctx.light_gizmo_mut();
     gizmo.drag_active = false;
     gizmo.selectable.is_selected = false;
@@ -341,7 +341,7 @@ fn compute_bone_pick_ray(ctx: &EcsContext) -> (Vector3<f32>, Vector3<f32>) {
 
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
 
-    crate::log!(
+    log!(
         "bone_select: viewport_pos=({:.0},{:.0}) viewport_size=({:.0},{:.0}) mouse_raw=({:.0},{:.0}) mouse_local=({:.1},{:.1}) ray_origin=({:.2},{:.2},{:.2}) ray_dir=({:.3},{:.3},{:.3})",
         ctx.gui_data.viewport_position[0],
         ctx.gui_data.viewport_position[1],
@@ -404,7 +404,7 @@ fn apply_bone_selection_result(
                 selection.active_bone_index = Some(bone_idx);
             }
 
-            crate::log!(
+            log!(
                 "Bone selected: [{}] '{}' (active={:?}, total={}, descendants={})",
                 bone_idx,
                 bone_name,
@@ -495,7 +495,7 @@ fn process_transform_gizmo_interaction(ctx: &mut EcsContext) -> Result<bool> {
             tg.drag_active = false;
             tg.selectable.is_selected = false;
             tg.active_handle = TransformGizmoHandle::None;
-            crate::log!("TransformGizmo released");
+            log!("TransformGizmo released");
         }
 
         return Ok(true);
@@ -593,7 +593,7 @@ fn try_select_transform_gizmo_handle(
     tg.drag_plane_normal = plane_normal;
     tg.drag_initial_hit = initial_hit;
 
-    crate::log!("TransformGizmo selected: handle={:?}", handle);
+    log!("TransformGizmo selected: handle={:?}", handle);
     true
 }
 

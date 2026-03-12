@@ -98,7 +98,7 @@ impl App {
         let hdr_buffer = match data.viewport.hdr_buffer {
             Some(ref hdr) => hdr,
             None => {
-                crate::log!("HDR buffer not available, skipping onion skin pipeline");
+                log!("HDR buffer not available, skipping onion skin pipeline");
                 return Ok(());
             }
         };
@@ -106,7 +106,7 @@ impl App {
         let offscreen = match data.viewport.offscreen {
             Some(ref o) => o,
             None => {
-                crate::log!("Offscreen not available, skipping onion skin pipeline");
+                log!("Offscreen not available, skipping onion skin pipeline");
                 return Ok(());
             }
         };
@@ -127,7 +127,7 @@ impl App {
             height,
         )?;
 
-        crate::log!("Onion skin pipeline created successfully");
+        log!("Onion skin pipeline created successfully");
         Ok(())
     }
 
@@ -139,7 +139,7 @@ impl App {
         let (hdr_image_view, hdr_sampler) = match data.viewport.hdr_buffer {
             Some(ref hdr) => (hdr.color_image_view, hdr.sampler),
             None => {
-                crate::log!("HDR buffer not available, skipping tonemap pipeline");
+                log!("HDR buffer not available, skipping tonemap pipeline");
                 return Ok(());
             }
         };
@@ -147,7 +147,7 @@ impl App {
         let (offscreen_render_pass, offscreen_extent) = match data.viewport.offscreen {
             Some(ref offscreen) => (offscreen.render_pass, offscreen.extent()),
             None => {
-                crate::log!("Offscreen not available, skipping tonemap pipeline");
+                log!("Offscreen not available, skipping tonemap pipeline");
                 return Ok(());
             }
         };
@@ -161,7 +161,7 @@ impl App {
             offscreen_extent,
         )?;
 
-        crate::log!("Tonemap pipeline created successfully");
+        log!("Tonemap pipeline created successfully");
         Ok(())
     }
 
@@ -173,7 +173,7 @@ impl App {
         let hdr_image_view = match data.viewport.hdr_buffer {
             Some(ref hdr) => hdr.color_image_view,
             None => {
-                crate::log!("HDR buffer not available, skipping bloom pipelines");
+                log!("HDR buffer not available, skipping bloom pipelines");
                 return Ok(());
             }
         };
@@ -181,7 +181,7 @@ impl App {
         let bloom_chain = match data.viewport.bloom_chain {
             Some(ref chain) => chain,
             None => {
-                crate::log!("Bloom chain not available, skipping bloom pipelines");
+                log!("Bloom chain not available, skipping bloom pipelines");
                 return Ok(());
             }
         };
@@ -199,11 +199,11 @@ impl App {
                     first_mip.image_view,
                     bloom_chain.sampler,
                 )?;
-                crate::log!("Updated tonemap descriptor with bloom texture");
+                log!("Updated tonemap descriptor with bloom texture");
             }
         }
 
-        crate::log!("Bloom pipelines created successfully");
+        log!("Bloom pipelines created successfully");
         Ok(())
     }
 
@@ -215,7 +215,7 @@ impl App {
         let hdr_image_view = match data.viewport.hdr_buffer {
             Some(ref hdr) => hdr.color_image_view,
             None => {
-                crate::log!("HDR buffer not available, skipping DOF pipeline");
+                log!("HDR buffer not available, skipping DOF pipeline");
                 return Ok(());
             }
         };
@@ -228,21 +228,21 @@ impl App {
         let dof_buffer = match data.viewport.dof_buffer {
             Some(ref buf) => buf,
             None => {
-                crate::log!("DOF buffer not available, skipping DOF pipeline");
+                log!("DOF buffer not available, skipping DOF pipeline");
                 return Ok(());
             }
         };
 
         let depth_image_view = rrrender.gbuffer_depth_image_view;
         if depth_image_view == vk::ImageView::null() {
-            crate::log!("GBuffer depth image view not available, skipping DOF pipeline");
+            log!("GBuffer depth image view not available, skipping DOF pipeline");
             return Ok(());
         }
 
         let depth_sampler = match data.raytracing.gbuffer_sampler {
             Some(s) => s,
             None => {
-                crate::log!("GBuffer sampler not available, skipping DOF pipeline");
+                log!("GBuffer sampler not available, skipping DOF pipeline");
                 return Ok(());
             }
         };
@@ -268,10 +268,10 @@ impl App {
                 dof_buffer.output_image_view,
                 dof_buffer.sampler,
             )?;
-            crate::log!("Updated tonemap descriptor binding 0 to DOF output");
+            log!("Updated tonemap descriptor binding 0 to DOF output");
         }
 
-        crate::log!("DOF pipeline created successfully");
+        log!("DOF pipeline created successfully");
         Ok(())
     }
 
@@ -282,7 +282,7 @@ impl App {
         let ae_buffers = match data.viewport.auto_exposure_buffers {
             Some(ref buf) => buf,
             None => {
-                crate::log!(
+                log!(
                     "AutoExposure buffers not available, \
                      skipping pipeline"
                 );
@@ -293,7 +293,7 @@ impl App {
         let (hdr_image_view, hdr_sampler) = Self::resolve_auto_exposure_input(data);
 
         if hdr_image_view == vk::ImageView::null() {
-            crate::log!("No HDR input available for AutoExposure");
+            log!("No HDR input available for AutoExposure");
             return Ok(());
         }
 
@@ -312,7 +312,7 @@ impl App {
             luminance_buffer_size,
         )?;
 
-        crate::log!("AutoExposure pipelines created successfully");
+        log!("AutoExposure pipelines created successfully");
         Ok(())
     }
 

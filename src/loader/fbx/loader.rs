@@ -8,7 +8,6 @@ use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3, Vector4};
 use std::collections::HashMap;
 
 use super::fbx::{load_fbx_with_ufbx, FbxModel, LoadedConstraint};
-use crate::log;
 
 #[derive(Clone, Debug)]
 pub struct FbxNodeInfo {
@@ -180,7 +179,7 @@ fn log_fbx_scale_info(meshes: &[FbxMeshData]) {
         let size_z = max_z - min_z;
         let max_dimension = size_x.max(size_y).max(size_z);
 
-        crate::log!(
+        log!(
             "FBX Scale Info: {} vertices, size=({:.4}, {:.4}, {:.4}), max={:.4}m",
             total_vertices,
             size_x,

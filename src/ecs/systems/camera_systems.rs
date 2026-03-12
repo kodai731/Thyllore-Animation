@@ -147,7 +147,7 @@ pub fn camera_reset(camera: &mut Camera) {
     camera.distance = camera.initial_distance;
 
     let position = compute_camera_position(camera);
-    crate::log!(
+    log!(
         "camera_reset - position: ({:.2}, {:.2}, {:.2}), \
          pivot: ({:.2}, {:.2}, {:.2})",
         position.x,

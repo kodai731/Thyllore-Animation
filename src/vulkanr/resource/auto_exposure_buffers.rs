@@ -44,7 +44,7 @@ impl AutoExposureBuffers {
 
         Self::zero_luminance_buffer(&rrdevice.device, luminance_buffer_memory)?;
 
-        crate::log!("Created AutoExposure buffers: {}x{}", width, height);
+        log!("Created AutoExposure buffers: {}x{}", width, height);
 
         Ok(Self {
             histogram_buffer,
@@ -123,6 +123,6 @@ impl AutoExposureBuffers {
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         self.destroy_resources(device);
-        crate::log!("Destroyed AutoExposure buffers");
+        log!("Destroyed AutoExposure buffers");
     }
 }

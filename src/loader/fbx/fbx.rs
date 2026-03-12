@@ -2,7 +2,6 @@ use crate::animation::{
     AimConstraintData, BoneId, ConstraintType, IkConstraintData, ParentConstraintData,
     PositionConstraintData, RotationConstraintData, ScaleConstraintData,
 };
-use crate::log;
 use anyhow::{Context, Result};
 use cgmath::{Matrix4, Quaternion, SquareMatrix, Vector3};
 use std::collections::HashMap;

@@ -21,7 +21,7 @@ pub fn convert_motion_response_to_clip(
         let bone_id = match bone_name_to_id.get(&raw_curve.bone_name) {
             Some(&id) => id,
             None => {
-                crate::log!(
+                log!(
                     "TextToMotion: unknown bone_name '{}', skipping",
                     raw_curve.bone_name
                 );
@@ -32,7 +32,7 @@ pub fn convert_motion_response_to_clip(
         let property_type = match convert_proto_property_type(raw_curve.property_type) {
             Some(pt) => pt,
             None => {
-                crate::log!(
+                log!(
                     "TextToMotion: unknown property_type {}, skipping",
                     raw_curve.property_type
                 );

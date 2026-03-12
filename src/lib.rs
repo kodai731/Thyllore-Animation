@@ -5,6 +5,9 @@
 
 extern crate core;
 
+#[macro_use]
+pub mod logger;
+
 pub mod animation;
 pub mod app;
 pub mod asset;
@@ -14,7 +17,6 @@ pub mod exporter;
 #[cfg(feature = "text-to-motion")]
 pub mod grpc;
 pub mod loader;
-pub mod logger;
 pub mod math;
 #[cfg(feature = "ml")]
 pub mod ml;

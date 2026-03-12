@@ -1,5 +1,4 @@
 use super::swapchain::*;
-use crate::log;
 use crate::vulkanr::vulkan::*;
 use std::collections::HashSet;
 use std::ops::Deref;

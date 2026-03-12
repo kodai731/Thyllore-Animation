@@ -118,7 +118,7 @@ pub fn dump_animation_debug(
     let json = serde_json::to_string_pretty(&dump)?;
     std::fs::write(&filename, &json)?;
 
-    crate::log!("Animation debug dumped to {}", filename);
+    log!("Animation debug dumped to {}", filename);
     Ok(())
 }
 

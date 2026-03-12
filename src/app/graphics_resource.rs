@@ -315,7 +315,7 @@ impl GraphicsResources {
             (min.z + max.z) * 0.5,
         );
 
-        crate::log!("Model bounds: min=({:.2}, {:.2}, {:.2}), max=({:.2}, {:.2}, {:.2}), center=({:.2}, {:.2}, {:.2})",
+        log!("Model bounds: min=({:.2}, {:.2}, {:.2}), max=({:.2}, {:.2}, {:.2}), center=({:.2}, {:.2}, {:.2})",
             min.x, min.y, min.z, max.x, max.y, max.z, center.x, center.y, center.z);
 
         Some((min, max, center))

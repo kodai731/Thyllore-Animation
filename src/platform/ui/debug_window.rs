@@ -233,7 +233,7 @@ pub fn build_click_debug_overlay(ui: &imgui::Ui, gui_data: &GUIData) {
     unsafe {
         if !IMGUI_SIZE_LOGGED {
             let display_size = ui.io().display_size;
-            crate::log!(
+            log!(
                 "ImGui display size: {:.1} x {:.1}",
                 display_size[0],
                 display_size[1]

@@ -180,7 +180,7 @@ impl App {
             return Ok(());
         }
 
-        crate::log!("Loading new model from: {}", gui_data.selected_model_path);
+        log!("Loading new model from: {}", gui_data.selected_model_path);
         self.rrdevice.device.device_wait_idle()?;
 
         let command_pool = self.command_state().pool.clone();
@@ -216,11 +216,11 @@ impl App {
                 }
 
                 gui_data.load_status = format!("Loaded: {}", gui_data.selected_model_path);
-                crate::msg_info!("Model loaded: {}", gui_data.selected_model_path);
+                msg_info!("Model loaded: {}", gui_data.selected_model_path);
             }
             Err(e) => {
                 gui_data.load_status = format!("Error: {}", e);
-                crate::msg_error!("Failed to load model: {:?}", e);
+                msg_error!("Failed to load model: {:?}", e);
             }
         }
 
@@ -387,7 +387,7 @@ impl App {
             )?;
         }
 
-        crate::log!("G-Buffer resized to: {}x{}", new_width, new_height);
+        log!("G-Buffer resized to: {}x{}", new_width, new_height);
         Ok(())
     }
 
@@ -575,10 +575,10 @@ impl App {
         }
 
         if gui_data.take_screenshot {
-            crate::log!("Taking screenshot...");
+            log!("Taking screenshot...");
             let path = self.save_screenshot(image_index)?;
             gui_data.take_screenshot = false;
-            crate::msg_info!("Screenshot saved: {}", path);
+            msg_info!("Screenshot saved: {}", path);
         }
 
         self.frame_sync_mut().advance(MAX_FRAMES_IN_FLIGHT);
@@ -777,7 +777,7 @@ impl App {
             .unwrap_or_else(|_| std::path::PathBuf::from(&filename));
         let path_str = absolute_path.to_string_lossy().to_string();
 
-        crate::log!("Screenshot saved to: {}", path_str);
+        log!("Screenshot saved to: {}", path_str);
 
         Ok(path_str)
     }

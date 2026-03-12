@@ -65,11 +65,10 @@ pub fn push_message(level: MessageLevel, text: String) {
         .push(level, text);
 }
 
-#[macro_export]
 macro_rules! msg_info {
     ($($arg:tt)*) => {{
         let text = format!($($arg)*);
-        crate::log!("[INFO] {}", &text);
+        log!("[INFO] {}", &text);
         $crate::logger::message_buffer::push_message(
             $crate::logger::message_buffer::MessageLevel::Info,
             text,
@@ -77,11 +76,10 @@ macro_rules! msg_info {
     }};
 }
 
-#[macro_export]
 macro_rules! msg_warn {
     ($($arg:tt)*) => {{
         let text = format!($($arg)*);
-        crate::log!("[WARN] {}", &text);
+        log_warn!("{}", &text);
         $crate::logger::message_buffer::push_message(
             $crate::logger::message_buffer::MessageLevel::Warning,
             text,
@@ -89,11 +87,10 @@ macro_rules! msg_warn {
     }};
 }
 
-#[macro_export]
 macro_rules! msg_error {
     ($($arg:tt)*) => {{
         let text = format!($($arg)*);
-        crate::log!("[ERROR] {}", &text);
+        log_error!("{}", &text);
         $crate::logger::message_buffer::push_message(
             $crate::logger::message_buffer::MessageLevel::Error,
             text,

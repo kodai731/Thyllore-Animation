@@ -103,10 +103,10 @@ pub fn update_light_auto_target(
         return;
     }
 
-    crate::log!("LIGHT MOVE BUTTON PRESSED: {:?}", move_light_to);
+    log!("LIGHT MOVE BUTTON PRESSED: {:?}", move_light_to);
 
     if all_positions.is_empty() {
-        crate::log!("WARNING: No model positions found!");
+        log_warn!("No model positions found!");
         return;
     }
 
@@ -128,7 +128,7 @@ pub fn update_light_auto_target(
 
     light_state.shadow_normal_offset = (model_size * 0.005).max(0.5);
 
-    crate::log!(
+    log!(
         "Model bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
         min.x,
         max.x,
@@ -137,7 +137,7 @@ pub fn update_light_auto_target(
         min.z,
         max.z
     );
-    crate::log!(
+    log!(
         "Light position: ({:.2}, {:.2}, {:.2}) -> ({:.2}, {:.2}, {:.2})",
         current.x,
         current.y,

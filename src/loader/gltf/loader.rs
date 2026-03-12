@@ -3,7 +3,6 @@ use crate::animation::{
     MorphTarget, Skeleton, SkinData, TransformChannel,
 };
 use crate::ecs::component::SpringBoneSetup;
-use crate::log;
 use crate::math::*;
 use crate::vulkanr::data::{Vertex, VertexData};
 use anyhow::Result;
@@ -481,7 +480,7 @@ unsafe fn process_node(
             let positions: Vec<[f32; 3]> = {
                 let node_name = node.name().unwrap_or("");
                 if node_name.contains("NurbsPath.009") {
-                    crate::log!(
+                    log!(
                         "=== Load-time transform for {} (has_joints={}) ===",
                         node_name,
                         mesh_data.has_joints
@@ -492,7 +491,7 @@ unsafe fn process_node(
                         (ct[1][0] * ct[1][0] + ct[1][1] * ct[1][1] + ct[1][2] * ct[1][2]).sqrt(),
                         (ct[2][0] * ct[2][0] + ct[2][1] * ct[2][1] + ct[2][2] * ct[2][2]).sqrt(),
                     );
-                    crate::log!(
+                    log!(
                         "  cumulative_transform: scale=[{:.1},{:.1},{:.1}] trans=[{:.2},{:.2},{:.2}]",
                         scale.0, scale.1, scale.2,
                         ct[3][0], ct[3][1], ct[3][2]
@@ -500,7 +499,7 @@ unsafe fn process_node(
                     if !raw_positions.is_empty() {
                         let raw = raw_positions[0];
                         let pos = cumulative_transform * [raw[0], raw[1], raw[2], 1.0].to_vec4();
-                        crate::log!(
+                        log!(
                             "  raw[0]=({:.3},{:.3},{:.3}) -> transformed=({:.2},{:.2},{:.2})",
                             raw[0],
                             raw[1],
@@ -606,7 +605,7 @@ unsafe fn process_node(
             if node.name().unwrap_or("").contains("NurbsPath.009") {
                 if !mesh_data.local_vertices.is_empty() {
                     let lv = &mesh_data.local_vertices[0];
-                    crate::log!(
+                    log!(
                         "  After processing: local_vertices[0]=({:.3},{:.3},{:.3}), count={}",
                         lv.pos.x,
                         lv.pos.y,

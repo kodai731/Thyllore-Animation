@@ -42,7 +42,7 @@ pub unsafe fn run_onion_skin_phase(ctx: &mut FrameContext, updated_meshes: &[usi
     };
 
     if base_vertices.len() != skin_data.base_positions.len() {
-        crate::log!(
+        log!(
             "[onion_phase] MISMATCH: base_vertices.len()={} != skin_data.base_positions.len()={}",
             base_vertices.len(),
             skin_data.base_positions.len(),
@@ -102,7 +102,7 @@ pub unsafe fn run_onion_skin_phase(ctx: &mut FrameContext, updated_meshes: &[usi
         }
     }
 
-    crate::log!(
+    log!(
         "[onion_phase] {} ghosts uploaded, index_count={}, time={:.4}",
         ghost_count,
         gpu.source_index_count,

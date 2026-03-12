@@ -309,7 +309,7 @@ impl OnionSkinPassResources {
         device.destroy_image(self.ghost_image, None);
         device.free_memory(self.ghost_image_memory, None);
 
-        crate::log!("Destroyed onion skin pass resources");
+        log!("Destroyed onion skin pass resources");
     }
 
     pub unsafe fn recreate_on_resize(
@@ -362,7 +362,7 @@ impl OnionSkinPassResources {
         self.width = width;
         self.height = height;
 
-        crate::log!("Recreated onion skin resources: {}x{}", width, height);
+        log!("Recreated onion skin resources: {}x{}", width, height);
         Ok(())
     }
 }

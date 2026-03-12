@@ -180,7 +180,7 @@ impl ViewportState {
         self.width = new_width;
         self.height = new_height;
 
-        crate::log!("Viewport resized to: {}x{}", new_width, new_height);
+        log!("Viewport resized to: {}x{}", new_width, new_height);
         Ok(())
     }
 
@@ -208,7 +208,7 @@ impl ViewportState {
             ae_buffers.destroy(device);
         }
 
-        crate::log!("Destroyed viewport state");
+        log!("Destroyed viewport state");
     }
 
     pub fn texture_id(&self) -> usize {

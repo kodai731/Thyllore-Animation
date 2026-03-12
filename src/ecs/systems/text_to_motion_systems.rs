@@ -28,7 +28,7 @@ pub fn text_to_motion_submit(
     };
 
     handle.send(GrpcRequest::GenerateMotion(request));
-    crate::log!(
+    log!(
         "TextToMotion: submitted '{}' (duration={}s)",
         prompt,
         duration_seconds
@@ -66,7 +66,7 @@ pub fn text_to_motion_poll(
                 &bone_map,
             );
 
-            crate::log!(
+            log!(
                 "TextToMotion: generated clip '{}' with {} tracks in {:.0}ms (model: {})",
                 clip_name,
                 clip.tracks.len(),
@@ -90,7 +90,7 @@ pub fn text_to_motion_poll(
         }
 
         GrpcResponse::Error { message } => {
-            crate::log!("TextToMotion: error - {}", message);
+            log_error!("TextToMotion: error - {}", message);
             state.status = TextToMotionStatus::Error;
             state.error_message = Some(message);
         }

@@ -342,7 +342,9 @@ fn apply_blended_animations(
             .map_or(false, |(skel_id, _, _)| *skel_id == info.skeleton_id);
 
         let (globals, _pose) = if has_spring {
-            let (_, ref cached_globals, ref cached_pose) = spring_result.as_ref().unwrap();
+            let (_, ref cached_globals, ref cached_pose) = spring_result
+                .as_ref()
+                .expect("has_spring is true so spring_result is Some");
 
             if info.animation_type == AnimationType::Node {
                 GraphicsResources::compute_node_global_transforms(nodes, skeleton, cached_pose);

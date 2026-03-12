@@ -1,8 +1,8 @@
-use crate::animation::editable::SourceClip;
+use crate::animation::editable::{EditableAnimationClip, SourceClip};
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{ClipLibrary, EditCommand, EditCommandAfter, EditEntry, EditHistory};
-use crate::ecs::world::World;
+use crate::ecs::world::{Entity, World};
 
 pub fn dispatch_edit_history_events(events: &[UIEvent], world: &mut World) {
     for event in events {
@@ -146,29 +146,7 @@ fn dispatch_redo(world: &mut World) {
             },
             EditCommandAfter::Clip(after_clip),
         ) => {
-            let current = {
-                let mut clip_library = world.resource_mut::<ClipLibrary>();
-                let current = clip_library
-                    .get(*clip_id)
-                    .cloned()
-                    .unwrap_or_else(|| after_clip.clone());
-                if let Some(clip) = clip_library.get_mut(*clip_id) {
-                    *clip = after_clip.clone();
-                }
-                current
-            };
-
-            let undo_entry = EditEntry {
-                command: EditCommand::ClipModified {
-                    clip_id: *clip_id,
-                    before: current,
-                    description,
-                },
-                after: entry.after.clone(),
-            };
-
-            world.resource_mut::<EditHistory>().push_to_undo(undo_entry);
-            crate::log!("Redo: {}", description);
+            redo_clip_modified(world, *clip_id, after_clip, &entry.after, description);
         }
 
         (
@@ -179,25 +157,7 @@ fn dispatch_redo(world: &mut World) {
             },
             EditCommandAfter::Schedule(after_schedule),
         ) => {
-            let current = world
-                .get_component::<ClipSchedule>(*entity)
-                .cloned()
-                .unwrap_or_else(|| after_schedule.clone());
-            if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*entity) {
-                *schedule = after_schedule.clone();
-            }
-
-            let undo_entry = EditEntry {
-                command: EditCommand::ScheduleModified {
-                    entity: *entity,
-                    before: current,
-                    description,
-                },
-                after: entry.after.clone(),
-            };
-
-            world.resource_mut::<EditHistory>().push_to_undo(undo_entry);
-            crate::log!("Redo: {}", description);
+            redo_schedule_modified(world, *entity, after_schedule, &entry.after, description);
         }
 
         (
@@ -207,18 +167,7 @@ fn dispatch_redo(world: &mut World) {
             },
             EditCommandAfter::ClipCreated(source),
         ) => {
-            restore_source_clip(world, *clip_id, source.clone());
-
-            let undo_entry = EditEntry {
-                command: EditCommand::ClipAdded {
-                    clip_id: *clip_id,
-                    description,
-                },
-                after: EditCommandAfter::ClipCreated(source.clone()),
-            };
-
-            world.resource_mut::<EditHistory>().push_to_undo(undo_entry);
-            crate::log!("Redo: {}", description);
+            redo_clip_added(world, *clip_id, source, description);
         }
 
         (
@@ -229,24 +178,113 @@ fn dispatch_redo(world: &mut World) {
             },
             EditCommandAfter::Empty,
         ) => {
-            let mut clip_library = world.resource_mut::<ClipLibrary>();
-            clip_library.source_clips.remove(clip_id);
-
-            let undo_entry = EditEntry {
-                command: EditCommand::ClipRemoved {
-                    clip_id: *clip_id,
-                    removed: removed.clone(),
-                    description,
-                },
-                after: EditCommandAfter::Empty,
-            };
-
-            world.resource_mut::<EditHistory>().push_to_undo(undo_entry);
-            crate::log!("Redo: {}", description);
+            redo_clip_removed(world, *clip_id, removed, description);
         }
 
         _ => {}
     }
+}
+
+fn redo_clip_modified(
+    world: &mut World,
+    clip_id: u64,
+    after_clip: &EditableAnimationClip,
+    after: &EditCommandAfter,
+    description: &'static str,
+) {
+    let current = {
+        let mut clip_library = world.resource_mut::<ClipLibrary>();
+        let current = clip_library
+            .get(clip_id)
+            .cloned()
+            .unwrap_or_else(|| after_clip.clone());
+        if let Some(clip) = clip_library.get_mut(clip_id) {
+            *clip = after_clip.clone();
+        }
+        current
+    };
+
+    let undo_entry = EditEntry {
+        command: EditCommand::ClipModified {
+            clip_id,
+            before: current,
+            description,
+        },
+        after: after.clone(),
+    };
+
+    world.resource_mut::<EditHistory>().push_to_undo(undo_entry);
+    crate::log!("Redo: {}", description);
+}
+
+fn redo_schedule_modified(
+    world: &mut World,
+    entity: Entity,
+    after_schedule: &ClipSchedule,
+    after: &EditCommandAfter,
+    description: &'static str,
+) {
+    let current = world
+        .get_component::<ClipSchedule>(entity)
+        .cloned()
+        .unwrap_or_else(|| after_schedule.clone());
+    if let Some(schedule) = world.get_component_mut::<ClipSchedule>(entity) {
+        *schedule = after_schedule.clone();
+    }
+
+    let undo_entry = EditEntry {
+        command: EditCommand::ScheduleModified {
+            entity,
+            before: current,
+            description,
+        },
+        after: after.clone(),
+    };
+
+    world.resource_mut::<EditHistory>().push_to_undo(undo_entry);
+    crate::log!("Redo: {}", description);
+}
+
+fn redo_clip_added(
+    world: &mut World,
+    clip_id: u64,
+    source: &SourceClip,
+    description: &'static str,
+) {
+    restore_source_clip(world, clip_id, source.clone());
+
+    let undo_entry = EditEntry {
+        command: EditCommand::ClipAdded {
+            clip_id,
+            description,
+        },
+        after: EditCommandAfter::ClipCreated(source.clone()),
+    };
+
+    world.resource_mut::<EditHistory>().push_to_undo(undo_entry);
+    crate::log!("Redo: {}", description);
+}
+
+fn redo_clip_removed(
+    world: &mut World,
+    clip_id: u64,
+    removed: &SourceClip,
+    description: &'static str,
+) {
+    let mut clip_library = world.resource_mut::<ClipLibrary>();
+    clip_library.source_clips.remove(&clip_id);
+
+    let undo_entry = EditEntry {
+        command: EditCommand::ClipRemoved {
+            clip_id,
+            removed: removed.clone(),
+            description,
+        },
+        after: EditCommandAfter::Empty,
+    };
+
+    world.resource_mut::<EditHistory>().push_to_undo(undo_entry);
+    crate::log!("Redo: {}", description);
 }
 
 fn restore_source_clip(world: &mut World, clip_id: u64, source: SourceClip) {

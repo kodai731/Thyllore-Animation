@@ -6,6 +6,18 @@ use std::ops::Deref;
 use thiserror::Error;
 use vulkanalia::Device as VulkanDevice;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ValidationMode {
+    Enabled,
+    Disabled,
+}
+
+impl ValidationMode {
+    pub fn is_enabled(self) -> bool {
+        self == ValidationMode::Enabled
+    }
+}
+
 pub const VALIDATION_LAYER: vk::ExtensionName =
     vk::ExtensionName::from_bytes(b"VK_LAYER_KHRONOS_validation");
 
@@ -69,7 +81,7 @@ impl RRDevice {
         entry: &Entry,
         instance: &Instance,
         surface: &vk::SurfaceKHR,
-        validation_enabled: bool,
+        validation: ValidationMode,
         validation_layer: vk::ExtensionName,
         device_extensions: &[vk::ExtensionName],
         portability_macro_version: Version,
@@ -85,7 +97,7 @@ impl RRDevice {
             instance,
             graphics_index,
             present_index,
-            validation_enabled,
+            validation,
             validation_layer,
             device_extensions,
             portability_macro_version,
@@ -111,7 +123,7 @@ impl RRDevice {
         entry: &Entry,
         instance: &Instance,
         device_extensions: &[vk::ExtensionName],
-        validation_enabled: bool,
+        validation: ValidationMode,
         validation_layer: vk::ExtensionName,
         portability_macro_version: Version,
     ) -> Result<RRDevice> {
@@ -124,7 +136,7 @@ impl RRDevice {
             entry,
             instance,
             graphics_index,
-            validation_enabled,
+            validation,
             validation_layer,
             device_extensions,
             portability_macro_version,
@@ -224,7 +236,7 @@ unsafe fn create_device_common(
     entry: &Entry,
     instance: &Instance,
     queue_family_indices: &[u32],
-    validation_enabled: bool,
+    validation: ValidationMode,
     validation_layer: vk::ExtensionName,
     device_extensions: &[vk::ExtensionName],
     portability_macro_version: Version,
@@ -240,7 +252,7 @@ unsafe fn create_device_common(
         })
         .collect();
 
-    let layers = if validation_enabled {
+    let layers = if validation.is_enabled() {
         vec![validation_layer.as_ptr()]
     } else {
         vec![]
@@ -280,7 +292,7 @@ unsafe fn create_logical_device_headless(
     entry: &Entry,
     instance: &Instance,
     graphics_index: GraphicsQueueIndex,
-    validation_enabled: bool,
+    validation: ValidationMode,
     validation_layer: vk::ExtensionName,
     device_extensions: &[vk::ExtensionName],
     portability_macro_version: Version,
@@ -290,7 +302,7 @@ unsafe fn create_logical_device_headless(
         entry,
         instance,
         &[graphics_index.0],
-        validation_enabled,
+        validation,
         validation_layer,
         device_extensions,
         portability_macro_version,
@@ -306,7 +318,7 @@ unsafe fn create_logical_device_with_present(
     instance: &Instance,
     graphics_index: GraphicsQueueIndex,
     present_index: PresentQueueIndex,
-    validation_enabled: bool,
+    validation: ValidationMode,
     validation_layer: vk::ExtensionName,
     device_extensions: &[vk::ExtensionName],
     portability_macro_version: Version,
@@ -321,7 +333,7 @@ unsafe fn create_logical_device_with_present(
         entry,
         instance,
         &queue_family_indices,
-        validation_enabled,
+        validation,
         validation_layer,
         device_extensions,
         portability_macro_version,

@@ -133,7 +133,9 @@ async fn handle_check_status(
         return;
     }
 
-    let c = client.as_mut().unwrap();
+    let c = client
+        .as_mut()
+        .expect("ensure_connected returned true so client is Some");
     let request = tonic::Request::new(proto::StatusRequest {});
 
     match c.get_server_status(request).await {
@@ -164,7 +166,9 @@ async fn handle_generate_motion(
         return;
     }
 
-    let c = client.as_mut().unwrap();
+    let c = client
+        .as_mut()
+        .expect("ensure_connected returned true so client is Some");
     let proto_request = proto::MotionRequest {
         prompt: req.prompt,
         duration_seconds: req.duration_seconds,

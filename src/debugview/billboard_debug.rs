@@ -26,10 +26,27 @@ pub fn log_billboard_debug_info(
     gbuffer_info: Option<&GBufferDebugInfo>,
     gbuffer_sampler: Option<vk::Sampler>,
 ) {
-    use crate::math::{coordinate_system::perspective_infinite_reverse, view};
-
     log!("=== Billboard Depth Debug Info ===");
 
+    log_basic_info(
+        info,
+        swapchain,
+        billboard_descriptor_set,
+        gbuffer_info,
+        gbuffer_sampler,
+    );
+    log_view_to_screen_transforms(info, swapchain);
+
+    log!("=================================");
+}
+
+fn log_basic_info(
+    info: &BillboardDebugInfo,
+    swapchain: &RRSwapchain,
+    billboard_descriptor_set: &RRBillboardDescriptorSet,
+    gbuffer_info: Option<&GBufferDebugInfo>,
+    gbuffer_sampler: Option<vk::Sampler>,
+) {
     log!(
         "Light position: ({:.2}, {:.2}, {:.2})",
         info.light_position.x,
@@ -87,6 +104,12 @@ pub fn log_billboard_debug_info(
         "  descriptor_sets count: {}",
         billboard_descriptor_set.descriptor_sets.len()
     );
+}
+
+fn log_view_to_screen_transforms(info: &BillboardDebugInfo, swapchain: &RRSwapchain) {
+    use crate::math::{coordinate_system::perspective_infinite_reverse, view};
+
+    let swapchain_extent = swapchain.swapchain_extent;
 
     let view_matrix = unsafe { view(info.camera_position, info.camera_direction, info.camera_up) };
     let light_view_pos = view_matrix
@@ -144,6 +167,4 @@ pub fn log_billboard_debug_info(
     );
 
     log!("Near plane: {:.4}", info.near_plane);
-
-    log!("=================================");
 }

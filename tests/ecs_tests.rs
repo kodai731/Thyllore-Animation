@@ -110,7 +110,11 @@ mod release_build_tests {
             &entry,
             &instance,
             vulkanr::HEADLESS_DEVICE_EXTENSIONS,
-            cfg!(debug_assertions),
+            if cfg!(debug_assertions) {
+                vulkanr::ValidationMode::Enabled
+            } else {
+                vulkanr::ValidationMode::Disabled
+            },
             vulkanr::VALIDATION_LAYER,
             vulkanr::Version::new(1, 3, 216),
         ) {

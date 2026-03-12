@@ -1099,7 +1099,8 @@ fn build_meshes_and_morph(
 
         let skin_data = if !joints.is_empty() && skeleton_id.is_some() && mesh.has_joints {
             Some(SkinData {
-                skeleton_id: skeleton_id.unwrap(),
+                skeleton_id: skeleton_id
+                    .expect("skeleton_id verified as Some by is_some() check above"),
                 bone_indices: mesh.bone_indices,
                 bone_weights: mesh.bone_weights,
                 base_positions: mesh
@@ -1267,7 +1268,7 @@ fn convert_joint_animations_to_clip(joint_animations: &[Vec<JointAnimation>]) ->
                 }
             }
         }
-        all_times.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        all_times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         if let Some(&last) = all_times.last() {
             if last > max_duration {
@@ -1339,7 +1340,9 @@ fn identify_key_frame_index_step(key_frames: &[f32], time: f32) -> usize {
     if key_frames.is_empty() {
         return 0;
     }
-    let period = *key_frames.last().unwrap();
+    let period = *key_frames
+        .last()
+        .expect("key_frames verified non-empty by early return above");
     if period <= 0.0 {
         return 0;
     }

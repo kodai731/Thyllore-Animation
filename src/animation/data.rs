@@ -541,12 +541,12 @@ impl MorphAnimationSystem {
         let start_key_frame = self
             .animations
             .first()
-            .expect("morph_animations is empty")
+            .expect("animations verified non-empty by early return above")
             .key_frame;
         let end_key_frame = self
             .animations
             .last()
-            .expect("morph_animations is empty")
+            .expect("animations verified non-empty by early return above")
             .key_frame;
         let period = end_key_frame - start_key_frame;
         let mod_time = time.rem_euclid(period);

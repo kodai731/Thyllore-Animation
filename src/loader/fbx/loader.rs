@@ -393,12 +393,9 @@ fn convert_fbx_data_to_mesh(
     };
 
     let skin_data = if !fbx_data.clusters.is_empty() && skeleton_id.is_some() {
-        let skeleton = animation_system.get_skeleton(skeleton_id.unwrap());
-        Some(convert_clusters_to_skin_data(
-            fbx_data,
-            skeleton_id.unwrap(),
-            skeleton,
-        ))
+        let sid = skeleton_id.expect("skeleton_id verified as Some by is_some() check above");
+        let skeleton = animation_system.get_skeleton(sid);
+        Some(convert_clusters_to_skin_data(fbx_data, sid, skeleton))
     } else {
         None
     };

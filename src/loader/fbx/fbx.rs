@@ -687,165 +687,49 @@ fn extract_constraints(
         let enabled = constraint.active;
 
         let loaded = match constraint.type_ {
-            ufbx::ConstraintType::Position => {
-                let target_bone_id = resolve_first_target(constraint, bone_name_to_id);
-
-                let affect_axes = [
-                    constraint.constrain_translation[0],
-                    constraint.constrain_translation[1],
-                    constraint.constrain_translation[2],
-                ];
-
-                Some(LoadedConstraint {
-                    constraint_type: ConstraintType::Position(PositionConstraintData {
-                        constrained_bone: constrained_bone_id,
-                        target_bone: target_bone_id,
-                        offset: Vector3::new(0.0, 0.0, 0.0),
-                        affect_axes,
-                        enabled,
-                        weight,
-                    }),
-                    priority: ConstraintType::Position(PositionConstraintData::default())
-                        .default_priority(),
-                })
-            }
-
-            ufbx::ConstraintType::Rotation => {
-                let target_bone_id = resolve_first_target(constraint, bone_name_to_id);
-
-                let affect_axes = [
-                    constraint.constrain_rotation[0],
-                    constraint.constrain_rotation[1],
-                    constraint.constrain_rotation[2],
-                ];
-
-                Some(LoadedConstraint {
-                    constraint_type: ConstraintType::Rotation(RotationConstraintData {
-                        constrained_bone: constrained_bone_id,
-                        target_bone: target_bone_id,
-                        offset: Quaternion::new(1.0, 0.0, 0.0, 0.0),
-                        affect_axes,
-                        enabled,
-                        weight,
-                    }),
-                    priority: ConstraintType::Rotation(RotationConstraintData::default())
-                        .default_priority(),
-                })
-            }
-
-            ufbx::ConstraintType::Scale => {
-                let target_bone_id = resolve_first_target(constraint, bone_name_to_id);
-
-                let affect_axes = [
-                    constraint.constrain_scale[0],
-                    constraint.constrain_scale[1],
-                    constraint.constrain_scale[2],
-                ];
-
-                Some(LoadedConstraint {
-                    constraint_type: ConstraintType::Scale(ScaleConstraintData {
-                        constrained_bone: constrained_bone_id,
-                        target_bone: target_bone_id,
-                        offset: Vector3::new(1.0, 1.0, 1.0),
-                        affect_axes,
-                        enabled,
-                        weight,
-                    }),
-                    priority: ConstraintType::Scale(ScaleConstraintData::default())
-                        .default_priority(),
-                })
-            }
-
-            ufbx::ConstraintType::Parent => {
-                let sources: Vec<(BoneId, f32)> = constraint
-                    .targets
-                    .iter()
-                    .filter_map(|t| {
-                        let name = t.node.element.name.to_string();
-                        bone_name_to_id.get(&name).map(|&id| (id, t.weight as f32))
-                    })
-                    .collect();
-
-                Some(LoadedConstraint {
-                    constraint_type: ConstraintType::Parent(ParentConstraintData {
-                        constrained_bone: constrained_bone_id,
-                        sources,
-                        affect_translation: constraint.constrain_translation.iter().any(|&v| v),
-                        affect_rotation: constraint.constrain_rotation.iter().any(|&v| v),
-                        enabled,
-                        weight,
-                    }),
-                    priority: ConstraintType::Parent(ParentConstraintData::default())
-                        .default_priority(),
-                })
-            }
-
-            ufbx::ConstraintType::Aim => {
-                let target_bone_id = resolve_first_target(constraint, bone_name_to_id);
-
-                let aim_axis = Vector3::new(
-                    constraint.aim_vector.x as f32,
-                    constraint.aim_vector.y as f32,
-                    constraint.aim_vector.z as f32,
-                );
-
-                let up_axis = Vector3::new(
-                    constraint.aim_up_vector.x as f32,
-                    constraint.aim_up_vector.y as f32,
-                    constraint.aim_up_vector.z as f32,
-                );
-
-                let up_target = constraint
-                    .aim_up_node
-                    .as_ref()
-                    .and_then(|n| bone_name_to_id.get(&n.element.name.to_string()).copied());
-
-                Some(LoadedConstraint {
-                    constraint_type: ConstraintType::Aim(AimConstraintData {
-                        source_bone: constrained_bone_id,
-                        target_bone: target_bone_id,
-                        aim_axis,
-                        up_axis,
-                        up_target,
-                        enabled,
-                        weight,
-                    }),
-                    priority: ConstraintType::Aim(AimConstraintData::default()).default_priority(),
-                })
-            }
-
-            ufbx::ConstraintType::SingleChainIk => {
-                let target_bone_id = resolve_first_target(constraint, bone_name_to_id);
-
-                let effector_bone = constraint
-                    .ik_effector
-                    .as_ref()
-                    .and_then(|n| bone_name_to_id.get(&n.element.name.to_string()).copied())
-                    .unwrap_or(constrained_bone_id);
-
-                let pole_vector = Vector3::new(
-                    constraint.ik_pole_vector.x as f32,
-                    constraint.ik_pole_vector.y as f32,
-                    constraint.ik_pole_vector.z as f32,
-                );
-
-                let chain_length = compute_ik_chain_length(constraint, scene);
-
-                Some(LoadedConstraint {
-                    constraint_type: ConstraintType::Ik(IkConstraintData {
-                        chain_length,
-                        target_bone: target_bone_id,
-                        effector_bone,
-                        pole_vector: Some(pole_vector),
-                        pole_target: None,
-                        twist: 0.0,
-                        enabled,
-                        weight,
-                    }),
-                    priority: ConstraintType::Ik(IkConstraintData::default()).default_priority(),
-                })
-            }
-
+            ufbx::ConstraintType::Position => Some(extract_position_constraint(
+                constraint,
+                bone_name_to_id,
+                constrained_bone_id,
+                enabled,
+                weight,
+            )),
+            ufbx::ConstraintType::Rotation => Some(extract_rotation_constraint(
+                constraint,
+                bone_name_to_id,
+                constrained_bone_id,
+                enabled,
+                weight,
+            )),
+            ufbx::ConstraintType::Scale => Some(extract_scale_constraint(
+                constraint,
+                bone_name_to_id,
+                constrained_bone_id,
+                enabled,
+                weight,
+            )),
+            ufbx::ConstraintType::Parent => Some(extract_parent_constraint(
+                constraint,
+                bone_name_to_id,
+                constrained_bone_id,
+                enabled,
+                weight,
+            )),
+            ufbx::ConstraintType::Aim => Some(extract_aim_constraint(
+                constraint,
+                bone_name_to_id,
+                constrained_bone_id,
+                enabled,
+                weight,
+            )),
+            ufbx::ConstraintType::SingleChainIk => Some(extract_ik_constraint(
+                constraint,
+                bone_name_to_id,
+                scene,
+                constrained_bone_id,
+                enabled,
+                weight,
+            )),
             _ => {
                 log!("Unsupported constraint type: {}", constraint.type_name);
                 None
@@ -863,6 +747,195 @@ fn extract_constraints(
     }
 
     result
+}
+
+fn extract_position_constraint(
+    constraint: &ufbx::Constraint,
+    bone_name_to_id: &HashMap<String, u32>,
+    constrained_bone_id: u32,
+    enabled: bool,
+    weight: f32,
+) -> LoadedConstraint {
+    let target_bone_id = resolve_first_target(constraint, bone_name_to_id);
+    let affect_axes = [
+        constraint.constrain_translation[0],
+        constraint.constrain_translation[1],
+        constraint.constrain_translation[2],
+    ];
+
+    LoadedConstraint {
+        constraint_type: ConstraintType::Position(PositionConstraintData {
+            constrained_bone: constrained_bone_id,
+            target_bone: target_bone_id,
+            offset: Vector3::new(0.0, 0.0, 0.0),
+            affect_axes,
+            enabled,
+            weight,
+        }),
+        priority: ConstraintType::Position(PositionConstraintData::default()).default_priority(),
+    }
+}
+
+fn extract_rotation_constraint(
+    constraint: &ufbx::Constraint,
+    bone_name_to_id: &HashMap<String, u32>,
+    constrained_bone_id: u32,
+    enabled: bool,
+    weight: f32,
+) -> LoadedConstraint {
+    let target_bone_id = resolve_first_target(constraint, bone_name_to_id);
+    let affect_axes = [
+        constraint.constrain_rotation[0],
+        constraint.constrain_rotation[1],
+        constraint.constrain_rotation[2],
+    ];
+
+    LoadedConstraint {
+        constraint_type: ConstraintType::Rotation(RotationConstraintData {
+            constrained_bone: constrained_bone_id,
+            target_bone: target_bone_id,
+            offset: Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            affect_axes,
+            enabled,
+            weight,
+        }),
+        priority: ConstraintType::Rotation(RotationConstraintData::default()).default_priority(),
+    }
+}
+
+fn extract_scale_constraint(
+    constraint: &ufbx::Constraint,
+    bone_name_to_id: &HashMap<String, u32>,
+    constrained_bone_id: u32,
+    enabled: bool,
+    weight: f32,
+) -> LoadedConstraint {
+    let target_bone_id = resolve_first_target(constraint, bone_name_to_id);
+    let affect_axes = [
+        constraint.constrain_scale[0],
+        constraint.constrain_scale[1],
+        constraint.constrain_scale[2],
+    ];
+
+    LoadedConstraint {
+        constraint_type: ConstraintType::Scale(ScaleConstraintData {
+            constrained_bone: constrained_bone_id,
+            target_bone: target_bone_id,
+            offset: Vector3::new(1.0, 1.0, 1.0),
+            affect_axes,
+            enabled,
+            weight,
+        }),
+        priority: ConstraintType::Scale(ScaleConstraintData::default()).default_priority(),
+    }
+}
+
+fn extract_parent_constraint(
+    constraint: &ufbx::Constraint,
+    bone_name_to_id: &HashMap<String, u32>,
+    constrained_bone_id: u32,
+    enabled: bool,
+    weight: f32,
+) -> LoadedConstraint {
+    let sources: Vec<(BoneId, f32)> = constraint
+        .targets
+        .iter()
+        .filter_map(|t| {
+            let name = t.node.element.name.to_string();
+            bone_name_to_id.get(&name).map(|&id| (id, t.weight as f32))
+        })
+        .collect();
+
+    LoadedConstraint {
+        constraint_type: ConstraintType::Parent(ParentConstraintData {
+            constrained_bone: constrained_bone_id,
+            sources,
+            affect_translation: constraint.constrain_translation.iter().any(|&v| v),
+            affect_rotation: constraint.constrain_rotation.iter().any(|&v| v),
+            enabled,
+            weight,
+        }),
+        priority: ConstraintType::Parent(ParentConstraintData::default()).default_priority(),
+    }
+}
+
+fn extract_aim_constraint(
+    constraint: &ufbx::Constraint,
+    bone_name_to_id: &HashMap<String, u32>,
+    constrained_bone_id: u32,
+    enabled: bool,
+    weight: f32,
+) -> LoadedConstraint {
+    let target_bone_id = resolve_first_target(constraint, bone_name_to_id);
+
+    let aim_axis = Vector3::new(
+        constraint.aim_vector.x as f32,
+        constraint.aim_vector.y as f32,
+        constraint.aim_vector.z as f32,
+    );
+
+    let up_axis = Vector3::new(
+        constraint.aim_up_vector.x as f32,
+        constraint.aim_up_vector.y as f32,
+        constraint.aim_up_vector.z as f32,
+    );
+
+    let up_target = constraint
+        .aim_up_node
+        .as_ref()
+        .and_then(|n| bone_name_to_id.get(&n.element.name.to_string()).copied());
+
+    LoadedConstraint {
+        constraint_type: ConstraintType::Aim(AimConstraintData {
+            source_bone: constrained_bone_id,
+            target_bone: target_bone_id,
+            aim_axis,
+            up_axis,
+            up_target,
+            enabled,
+            weight,
+        }),
+        priority: ConstraintType::Aim(AimConstraintData::default()).default_priority(),
+    }
+}
+
+fn extract_ik_constraint(
+    constraint: &ufbx::Constraint,
+    bone_name_to_id: &HashMap<String, u32>,
+    scene: &ufbx::Scene,
+    constrained_bone_id: u32,
+    enabled: bool,
+    weight: f32,
+) -> LoadedConstraint {
+    let target_bone_id = resolve_first_target(constraint, bone_name_to_id);
+
+    let effector_bone = constraint
+        .ik_effector
+        .as_ref()
+        .and_then(|n| bone_name_to_id.get(&n.element.name.to_string()).copied())
+        .unwrap_or(constrained_bone_id);
+
+    let pole_vector = Vector3::new(
+        constraint.ik_pole_vector.x as f32,
+        constraint.ik_pole_vector.y as f32,
+        constraint.ik_pole_vector.z as f32,
+    );
+
+    let chain_length = compute_ik_chain_length(constraint, scene);
+
+    LoadedConstraint {
+        constraint_type: ConstraintType::Ik(IkConstraintData {
+            chain_length,
+            target_bone: target_bone_id,
+            effector_bone,
+            pole_vector: Some(pole_vector),
+            pole_target: None,
+            twist: 0.0,
+            enabled,
+            weight,
+        }),
+        priority: ConstraintType::Ik(IkConstraintData::default()).default_priority(),
+    }
 }
 
 fn resolve_first_target(

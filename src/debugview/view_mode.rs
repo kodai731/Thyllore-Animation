@@ -35,7 +35,10 @@ impl DebugViewMode {
             7 => DebugViewMode::ObjectID,
             8 => DebugViewMode::SelectionView,
             9 => DebugViewMode::SelectionUBO,
-            _ => DebugViewMode::Final,
+            other => {
+                debug_assert!(false, "Invalid DebugViewMode value: {}", other);
+                DebugViewMode::Final
+            }
         }
     }
 

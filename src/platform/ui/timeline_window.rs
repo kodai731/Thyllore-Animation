@@ -948,7 +948,8 @@ fn build_clip_instance_properties(
             if ui.selectable_config(name).selected(is_selected).build() {
                 let new_mode = match idx {
                     0 => BlendMode::Override,
-                    _ => BlendMode::Additive,
+                    1 => BlendMode::Additive,
+                    _ => continue,
                 };
                 ui_events.send(UIEvent::ClipInstanceSetBlendMode {
                     entity: entry.entity,

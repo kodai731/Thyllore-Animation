@@ -358,10 +358,11 @@ fn build_collider_fields(
                     current_shape_idx = i as i32;
                     modified.shape = match i {
                         0 => ColliderShape::Sphere { radius: 0.1 },
-                        _ => ColliderShape::Capsule {
+                        1 => ColliderShape::Capsule {
                             radius: 0.1,
                             tail: cgmath::Vector3::new(0.0, 0.1, 0.0),
                         },
+                        _ => continue,
                     };
                     changed = true;
                 }

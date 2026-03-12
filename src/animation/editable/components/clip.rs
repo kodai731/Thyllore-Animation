@@ -37,7 +37,9 @@ impl EditableAnimationClip {
 
         let track = BoneTrack::new(bone_id, bone_name, base_curve_id);
         self.tracks.insert(bone_id, track);
-        self.tracks.get_mut(&bone_id).unwrap()
+        self.tracks
+            .get_mut(&bone_id)
+            .expect("track was just inserted above")
     }
 
     pub fn remove_track(&mut self, bone_id: BoneId) -> Option<BoneTrack> {

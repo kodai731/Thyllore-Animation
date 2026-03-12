@@ -104,7 +104,10 @@ pub fn merge_bake_into_clip(
         };
 
         let track = if target.tracks.contains_key(&bone_id) {
-            let t = target.tracks.get_mut(&bone_id).unwrap();
+            let t = target
+                .tracks
+                .get_mut(&bone_id)
+                .expect("bone_id verified in target.tracks by contains_key check above");
             t.rotation_x.keyframes.clear();
             t.rotation_y.keyframes.clear();
             t.rotation_z.keyframes.clear();

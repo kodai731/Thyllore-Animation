@@ -359,22 +359,30 @@ pub fn apply_loaded_scene_to_world(
     world: &mut World,
     clips_with_ids: &[(SourceClipId, String)],
 ) {
+    apply_camera_state(&loaded.scene.camera, world);
+    apply_timeline_state(&loaded.scene, world, clips_with_ids);
+    apply_editor_state(&loaded.scene.editor, world);
+    apply_rendering_params(&loaded.scene.camera, world);
+    apply_panel_layout(loaded.scene.panel_layout.as_ref(), world);
+}
+
+fn apply_camera_state(camera_state: &CameraState, world: &mut World) {
     if let Some(mut camera) = world.get_resource_mut::<Camera>() {
-        if let Some(pos) = loaded.scene.camera.position {
+        if let Some(pos) = camera_state.position {
             use crate::ecs::systems::camera_systems::create_camera;
             let position = cgmath::Vector3::new(pos[0], pos[1], pos[2]);
             let target = cgmath::Vector3::new(0.0, 0.0, 0.0);
             *camera = create_camera(position, target);
         } else {
             camera.pivot = cgmath::Vector3::new(
-                loaded.scene.camera.pivot[0],
-                loaded.scene.camera.pivot[1],
-                loaded.scene.camera.pivot[2],
+                camera_state.pivot[0],
+                camera_state.pivot[1],
+                camera_state.pivot[2],
             );
-            camera.yaw = loaded.scene.camera.yaw;
-            camera.pitch = loaded.scene.camera.pitch;
-            camera.distance = loaded.scene.camera.distance;
-            camera.fov_y = cgmath::Deg(loaded.scene.camera.fov_y);
+            camera.yaw = camera_state.yaw;
+            camera.pitch = camera_state.pitch;
+            camera.distance = camera_state.distance;
+            camera.fov_y = cgmath::Deg(camera_state.fov_y);
 
             camera.initial_pivot = camera.pivot;
             camera.initial_yaw = camera.yaw;
@@ -382,14 +390,20 @@ pub fn apply_loaded_scene_to_world(
             camera.initial_distance = camera.distance;
         }
     }
+}
 
+fn apply_timeline_state(
+    scene: &SceneFile,
+    world: &mut World,
+    clips_with_ids: &[(SourceClipId, String)],
+) {
     if let Some(mut timeline) = world.get_resource_mut::<TimelineState>() {
-        timeline.current_time = loaded.scene.timeline.current_time;
-        timeline.playing = loaded.scene.timeline.playing;
-        timeline.looping = loaded.scene.timeline.looping;
-        timeline.speed = loaded.scene.timeline.speed;
+        timeline.current_time = scene.timeline.current_time;
+        timeline.playing = scene.timeline.playing;
+        timeline.looping = scene.timeline.looping;
+        timeline.speed = scene.timeline.speed;
 
-        if let Some(ref clip_name) = loaded.scene.current_clip {
+        if let Some(ref clip_name) = scene.current_clip {
             for (id, name) in clips_with_ids {
                 if name == clip_name {
                     timeline.current_clip_id = Some(*id);
@@ -398,13 +412,17 @@ pub fn apply_loaded_scene_to_world(
             }
         }
     }
+}
 
+fn apply_editor_state(editor: &EditorState, world: &mut World) {
     if let Some(mut curve_editor) = world.get_resource_mut::<CurveEditorState>() {
-        curve_editor.selected_bone_id = loaded.scene.editor.selected_bone_id;
-        curve_editor.is_open = loaded.scene.editor.curve_editor_open;
+        curve_editor.selected_bone_id = editor.selected_bone_id;
+        curve_editor.is_open = editor.curve_editor_open;
     }
+}
 
-    if let Some(ref phys) = loaded.scene.camera.physical_camera {
+fn apply_rendering_params(camera_state: &CameraState, world: &mut World) {
+    if let Some(ref phys) = camera_state.physical_camera {
         if let Some(mut params) = world.get_resource_mut::<PhysicalCameraParameters>() {
             params.focal_length_mm = phys.focal_length_mm;
             params.sensor_height_mm = phys.sensor_height_mm;
@@ -414,14 +432,14 @@ pub fn apply_loaded_scene_to_world(
         }
     }
 
-    if let Some(ref exp) = loaded.scene.camera.exposure {
+    if let Some(ref exp) = camera_state.exposure {
         if let Some(mut exposure) = world.get_resource_mut::<Exposure>() {
             exposure.ev100 = exp.ev100;
             exposure.exposure_value = exp.exposure_value;
         }
     }
 
-    if let Some(ref dof) = loaded.scene.camera.depth_of_field {
+    if let Some(ref dof) = camera_state.depth_of_field {
         if let Some(mut depth_of_field) = world.get_resource_mut::<DepthOfField>() {
             depth_of_field.enabled = dof.enabled;
             depth_of_field.focus_distance = dof.focus_distance;
@@ -429,19 +447,26 @@ pub fn apply_loaded_scene_to_world(
         }
     }
 
-    if let Some(ref tm) = loaded.scene.camera.tone_mapping {
+    if let Some(ref tm) = camera_state.tone_mapping {
         if let Some(mut tone_mapping) = world.get_resource_mut::<ToneMapping>() {
             tone_mapping.enabled = tm.enabled;
             tone_mapping.operator = match tm.operator.as_str() {
                 "AcesFilmic" => ToneMapOperator::AcesFilmic,
                 "Reinhard" => ToneMapOperator::Reinhard,
-                _ => ToneMapOperator::None,
+                "None" => ToneMapOperator::None,
+                unknown => {
+                    crate::log!(
+                        "Scene load: unknown tone map operator '{}', defaulting to None",
+                        unknown
+                    );
+                    ToneMapOperator::None
+                }
             };
             tone_mapping.gamma = tm.gamma;
         }
     }
 
-    if let Some(ref le) = loaded.scene.camera.lens_effects {
+    if let Some(ref le) = camera_state.lens_effects {
         if let Some(mut lens_effects) = world.get_resource_mut::<LensEffects>() {
             lens_effects.vignette_enabled = le.vignette_enabled;
             lens_effects.vignette_intensity = le.vignette_intensity;
@@ -450,7 +475,7 @@ pub fn apply_loaded_scene_to_world(
         }
     }
 
-    if let Some(ref bs) = loaded.scene.camera.bloom {
+    if let Some(ref bs) = camera_state.bloom {
         if let Some(mut bloom_settings) = world.get_resource_mut::<BloomSettings>() {
             bloom_settings.enabled = bs.enabled;
             bloom_settings.intensity = bs.intensity;
@@ -460,7 +485,7 @@ pub fn apply_loaded_scene_to_world(
         }
     }
 
-    if let Some(ref ae) = loaded.scene.camera.auto_exposure {
+    if let Some(ref ae) = camera_state.auto_exposure {
         if let Some(mut auto_exposure) = world.get_resource_mut::<AutoExposure>() {
             auto_exposure.enabled = ae.enabled;
             auto_exposure.min_ev = ae.min_ev;
@@ -471,8 +496,10 @@ pub fn apply_loaded_scene_to_world(
             auto_exposure.high_percent = ae.high_percent;
         }
     }
+}
 
-    if let Some(ref pl) = loaded.scene.panel_layout {
+fn apply_panel_layout(panel_layout: Option<&PanelLayoutState>, world: &mut World) {
+    if let Some(pl) = panel_layout {
         if let Some(mut layout) = world.get_resource_mut::<PanelLayout>() {
             layout.hierarchy_width = pl.hierarchy_width;
             layout.inspector_width = pl.inspector_width;

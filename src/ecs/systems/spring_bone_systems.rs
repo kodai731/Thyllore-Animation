@@ -158,89 +158,107 @@ pub fn spring_bone_update(
                 break;
             }
 
-            let bone_id = joint_param.bone_id;
-            let idx = bone_id as usize;
-            if idx >= skeleton.bones.len() || idx >= global_transforms.len() {
-                continue;
-            }
-
-            let head_pos = extract_world_position(&global_transforms[idx]);
-            let parent_world_rot = extract_parent_world_rotation(skeleton, idx, global_transforms);
-
-            let joint_state = &chain_state.joint_states[joint_idx];
-            let current_tail_before = joint_state.current_tail;
-
-            let next_tail = integrate_joint(
-                joint_state.current_tail,
-                joint_state.prev_tail,
-                joint_param.drag_force,
-                joint_param.stiffness,
-                joint_param.gravity_dir,
-                joint_param.gravity_power,
-                parent_world_rot,
-                joint_state.initial_local_rotation,
-                joint_state.bone_axis,
-                joint_state.bone_length,
-                head_pos,
-                dt,
-            );
-
-            let constrained_tail =
-                apply_length_constraint(head_pos, next_tail, joint_state.bone_length);
-
-            let collision_resolved =
-                resolve_all_collisions(constrained_tail, joint_param.hit_radius, &world_colliders);
-            let had_collision = !approx_eq_vec3(collision_resolved, constrained_tail);
-            let resolved_tail =
-                apply_length_constraint(head_pos, collision_resolved, joint_state.bone_length);
-
-            if should_log {
-                log_joint_update(
-                    skeleton,
-                    bone_id,
-                    head_pos,
-                    joint_state,
-                    next_tail,
-                    resolved_tail,
-                    current_tail_before,
-                    had_collision,
-                );
-            }
-
-            let joint_state = &mut chain_state.joint_states[joint_idx];
-
-            let velocity = resolved_tail - joint_state.current_tail;
-            let velocity_mag_sq =
-                velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z;
-
-            const VELOCITY_THRESHOLD_SQ: f32 = 1e-8;
-            if velocity_mag_sq < VELOCITY_THRESHOLD_SQ {
-                joint_state.prev_tail = resolved_tail;
-                joint_state.current_tail = resolved_tail;
-            } else {
-                joint_state.prev_tail = joint_state.current_tail;
-                joint_state.current_tail = resolved_tail;
-            }
-
-            let new_local_rotation = compute_joint_rotation(
-                head_pos,
-                parent_world_rot,
-                joint_state.initial_local_rotation,
-                joint_state.bone_axis,
-                resolved_tail,
-            );
-
-            update_global_transforms_for_bone(
+            update_single_joint(
+                joint_param,
+                &mut chain_state.joint_states[joint_idx],
                 skeleton,
-                bone_id,
-                new_local_rotation,
                 global_transforms,
                 pose,
+                &world_colliders,
+                should_log,
+                dt,
             );
         }
     }
 
     state.frame_count += 1;
+}
+
+fn update_single_joint(
+    joint_param: &crate::ecs::component::SpringJointParam,
+    joint_state: &mut SpringJointState,
+    skeleton: &Skeleton,
+    global_transforms: &mut [Matrix4<f32>],
+    pose: &SkeletonPose,
+    world_colliders: &[WorldCollider],
+    should_log: bool,
+    dt: f32,
+) {
+    let bone_id = joint_param.bone_id;
+    let idx = bone_id as usize;
+    if idx >= skeleton.bones.len() || idx >= global_transforms.len() {
+        return;
+    }
+
+    let head_pos = extract_world_position(&global_transforms[idx]);
+    let parent_world_rot = extract_parent_world_rotation(skeleton, idx, global_transforms);
+
+    let current_tail_before = joint_state.current_tail;
+
+    let next_tail = integrate_joint(
+        joint_state.current_tail,
+        joint_state.prev_tail,
+        joint_param.drag_force,
+        joint_param.stiffness,
+        joint_param.gravity_dir,
+        joint_param.gravity_power,
+        parent_world_rot,
+        joint_state.initial_local_rotation,
+        joint_state.bone_axis,
+        joint_state.bone_length,
+        head_pos,
+        dt,
+    );
+
+    let constrained_tail = apply_length_constraint(head_pos, next_tail, joint_state.bone_length);
+
+    let collision_resolved =
+        resolve_all_collisions(constrained_tail, joint_param.hit_radius, world_colliders);
+    let had_collision = !approx_eq_vec3(collision_resolved, constrained_tail);
+    let resolved_tail =
+        apply_length_constraint(head_pos, collision_resolved, joint_state.bone_length);
+
+    if should_log {
+        log_joint_update(
+            skeleton,
+            bone_id,
+            head_pos,
+            joint_state,
+            next_tail,
+            resolved_tail,
+            current_tail_before,
+            had_collision,
+        );
+    }
+
+    let velocity = resolved_tail - joint_state.current_tail;
+    let velocity_mag_sq =
+        velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z;
+
+    const VELOCITY_THRESHOLD_SQ: f32 = 1e-8;
+    if velocity_mag_sq < VELOCITY_THRESHOLD_SQ {
+        joint_state.prev_tail = resolved_tail;
+        joint_state.current_tail = resolved_tail;
+    } else {
+        joint_state.prev_tail = joint_state.current_tail;
+        joint_state.current_tail = resolved_tail;
+    }
+
+    let new_local_rotation = compute_joint_rotation(
+        head_pos,
+        parent_world_rot,
+        joint_state.initial_local_rotation,
+        joint_state.bone_axis,
+        resolved_tail,
+    );
+
+    update_global_transforms_for_bone(
+        skeleton,
+        bone_id,
+        new_local_rotation,
+        global_transforms,
+        pose,
+    );
 }
 
 pub fn spring_bone_write_back_to_pose(

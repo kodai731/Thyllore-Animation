@@ -119,7 +119,10 @@ impl PipelineManager {
             self.cache.insert(key.clone(), pipeline);
         }
 
-        Ok(self.cache.get(&key).unwrap())
+        Ok(self
+            .cache
+            .get(&key)
+            .expect("pipeline was just inserted into cache above"))
     }
 
     pub fn get(&self, key: &PipelineKey) -> Option<&RRPipeline> {

@@ -217,7 +217,12 @@ fn format_chain_name(skeleton: &Skeleton, bones: &[BoneId]) -> String {
     }
 
     let first = bone_name(skeleton, bones[0]);
-    let last = bone_name(skeleton, *bones.last().unwrap());
+    let last = bone_name(
+        skeleton,
+        *bones
+            .last()
+            .expect("bones verified non-empty by early return above"),
+    );
 
     if bones.len() == 1 {
         first

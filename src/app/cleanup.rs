@@ -147,7 +147,7 @@ impl App {
         };
 
         let surface = self.surface_state().surface;
-        let new_swapchain = RRSwapchain::new(window, &self.instance, &surface, &self.rrdevice);
+        let new_swapchain = RRSwapchain::new(window, &self.instance, &surface, &self.rrdevice)?;
         let image_count = new_swapchain.swapchain_images.len();
 
         {

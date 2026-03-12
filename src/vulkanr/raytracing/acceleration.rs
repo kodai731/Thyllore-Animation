@@ -569,19 +569,24 @@ impl RRAccelerationStructure {
             &vk::BufferDeviceAddressInfo::builder().buffer(scratch_buffer),
         );
 
-        let build_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
-            .type_(vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL)
-            .flags(
-                vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE
-                    | vk::BuildAccelerationStructureFlagsKHR::ALLOW_UPDATE,
-            )
-            .mode(vk::BuildAccelerationStructureModeKHR::UPDATE)
-            .src_acceleration_structure(blas.acceleration_structure.unwrap())
-            .dst_acceleration_structure(blas.acceleration_structure.unwrap())
-            .geometries(std::slice::from_ref(&geometry))
-            .scratch_data(vk::DeviceOrHostAddressKHR {
-                device_address: scratch_buffer_address,
-            });
+        let build_info =
+            vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+                .type_(vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL)
+                .flags(
+                    vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE
+                        | vk::BuildAccelerationStructureFlagsKHR::ALLOW_UPDATE,
+                )
+                .mode(vk::BuildAccelerationStructureModeKHR::UPDATE)
+                .src_acceleration_structure(blas.acceleration_structure.ok_or_else(|| {
+                    anyhow::anyhow!("BLAS acceleration structure not initialized")
+                })?)
+                .dst_acceleration_structure(blas.acceleration_structure.ok_or_else(|| {
+                    anyhow::anyhow!("BLAS acceleration structure not initialized")
+                })?)
+                .geometries(std::slice::from_ref(&geometry))
+                .scratch_data(vk::DeviceOrHostAddressKHR {
+                    device_address: scratch_buffer_address,
+                });
 
         let build_range_info = vk::AccelerationStructureBuildRangeInfoKHR::builder()
             .primitive_count(primitive_count)
@@ -754,19 +759,24 @@ impl RRAccelerationStructure {
             &vk::BufferDeviceAddressInfo::builder().buffer(scratch_buffer),
         );
 
-        let build_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
-            .type_(vk::AccelerationStructureTypeKHR::TOP_LEVEL)
-            .flags(
-                vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE
-                    | vk::BuildAccelerationStructureFlagsKHR::ALLOW_UPDATE,
-            )
-            .mode(vk::BuildAccelerationStructureModeKHR::UPDATE)
-            .src_acceleration_structure(tlas.acceleration_structure.unwrap())
-            .dst_acceleration_structure(tlas.acceleration_structure.unwrap())
-            .geometries(std::slice::from_ref(&geometry))
-            .scratch_data(vk::DeviceOrHostAddressKHR {
-                device_address: scratch_buffer_address,
-            });
+        let build_info =
+            vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+                .type_(vk::AccelerationStructureTypeKHR::TOP_LEVEL)
+                .flags(
+                    vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE
+                        | vk::BuildAccelerationStructureFlagsKHR::ALLOW_UPDATE,
+                )
+                .mode(vk::BuildAccelerationStructureModeKHR::UPDATE)
+                .src_acceleration_structure(tlas.acceleration_structure.ok_or_else(|| {
+                    anyhow::anyhow!("TLAS acceleration structure not initialized")
+                })?)
+                .dst_acceleration_structure(tlas.acceleration_structure.ok_or_else(|| {
+                    anyhow::anyhow!("TLAS acceleration structure not initialized")
+                })?)
+                .geometries(std::slice::from_ref(&geometry))
+                .scratch_data(vk::DeviceOrHostAddressKHR {
+                    device_address: scratch_buffer_address,
+                });
 
         let build_range_info = vk::AccelerationStructureBuildRangeInfoKHR::builder()
             .primitive_count(primitive_count)

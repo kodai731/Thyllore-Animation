@@ -135,7 +135,10 @@ pub fn screen_to_world_ray(
     let clip_near = cgmath::vec4(ndc_x, ndc_y, 1.0, 1.0);
     let clip_far = cgmath::vec4(ndc_x, ndc_y, 0.0, 1.0);
 
-    let view_proj_inverse = (proj_matrix * view_matrix).invert().unwrap();
+    let view_proj_inverse = match (proj_matrix * view_matrix).invert() {
+        Some(inv) => inv,
+        None => return (vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, -1.0)),
+    };
 
     let world_near_4 = view_proj_inverse * clip_near;
     let world_far_4 = view_proj_inverse * clip_far;
@@ -226,7 +229,16 @@ pub fn ray_plane_intersection(
 }
 
 pub fn get_camera_axes_from_view(view_matrix: Mat4) -> (Vector3<f32>, Vector3<f32>, Vector3<f32>) {
-    let view_inverse = view_matrix.invert().unwrap();
+    let view_inverse = match view_matrix.invert() {
+        Some(inv) => inv,
+        None => {
+            return (
+                vec3(1.0, 0.0, 0.0),
+                vec3(0.0, 1.0, 0.0),
+                vec3(0.0, 0.0, -1.0),
+            )
+        }
+    };
 
     let camera_right = vec3(view_inverse.x.x, view_inverse.y.x, view_inverse.z.x);
     let camera_up = vec3(view_inverse.x.y, view_inverse.y.y, view_inverse.z.y);

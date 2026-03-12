@@ -491,7 +491,10 @@ unsafe fn process_ui_events_and_render_frame(
     if let Err(e) = frame_result {
         let msg = e.to_string();
         if msg.contains("SWAPCHAIN_OUT_OF_DATE") {
-            app.recreate_swapchain(window).unwrap();
+            if let Err(e) = app.recreate_swapchain(window) {
+                crate::log!("[ERROR] Failed to recreate swapchain: {:?}", e);
+                return;
+            }
         } else {
             crate::log!("[ERROR] Frame error: {:?}", e);
             return;

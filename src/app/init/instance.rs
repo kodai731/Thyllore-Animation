@@ -131,7 +131,7 @@ impl App {
             DEVICE_EXTENSIONS,
             PORTABILITY_MACOS_VERSION,
         )?;
-        let rrswapchain = RRSwapchain::new(window, &instance, &surface, &rrdevice);
+        let rrswapchain = RRSwapchain::new(window, &instance, &surface, &rrdevice)?;
         let rrcommand_pool = Rc::new(RRCommandPool::new(&instance, &surface, &rrdevice));
         let rrrender = RRRender::new(&instance, &rrdevice, &rrswapchain, rrcommand_pool.as_ref());
         let swapchain_image_count = rrswapchain.swapchain_images.len();
@@ -206,7 +206,8 @@ impl App {
             vk::PrimitiveTopology::TRIANGLE_LIST,
             vk::PolygonMode::FILL,
             vk::CullModeFlags::BACK,
-        );
+        )
+        .context("Failed to create model pipeline")?;
         let model_pipeline_id = data.pipeline_storage.register(model_pipeline.clone());
         pipeline_manager.allocate_id();
         crate::log!("Registered model pipeline with id {}", model_pipeline_id);

@@ -530,25 +530,22 @@ fn build_collider_group_list(
 }
 
 fn build_add_collider_group_row(ui: &imgui::Ui, ui_events: &mut UIEventQueue, entity: Entity) {
-    static mut GROUP_NAME_BUF: Option<String> = None;
-
-    let name_buf = unsafe {
-        if GROUP_NAME_BUF.is_none() {
-            GROUP_NAME_BUF = Some("NewGroup".to_string());
-        }
-        GROUP_NAME_BUF.as_mut().unwrap()
-    };
-
-    ui.set_next_item_width(150.0);
-    ui.input_text("##new_group_name", name_buf).build();
-
-    ui.same_line();
-    if ui.button("Add Group") {
-        ui_events.send(UIEvent::SpringColliderGroupAdd {
-            entity,
-            name: name_buf.to_string(),
-        });
+    thread_local! {
+        static GROUP_NAME_BUF: std::cell::RefCell<String> = std::cell::RefCell::new("NewGroup".to_string());
     }
+
+    GROUP_NAME_BUF.with_borrow_mut(|name_buf| {
+        ui.set_next_item_width(150.0);
+        ui.input_text("##new_group_name", name_buf).build();
+
+        ui.same_line();
+        if ui.button("Add Group") {
+            ui_events.send(UIEvent::SpringColliderGroupAdd {
+                entity,
+                name: name_buf.to_string(),
+            });
+        }
+    });
 }
 
 fn build_gizmo_toggle(ui: &imgui::Ui, ui_events: &mut UIEventQueue, world: &World) {

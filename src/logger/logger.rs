@@ -122,10 +122,10 @@ impl Logger {
 #[macro_export]
 macro_rules! log {
     ($($arg:tt)*) => {{
-        $crate::logger::logger::LOGGER
-            .lock()
-            .expect("Failed to lock logger")
-            .log(format_args!($($arg)*))
-            .expect("Failed to write log");
+        if let Ok(mut logger) = $crate::logger::logger::LOGGER.lock() {
+            let _ = logger.log(format_args!($($arg)*));
+        } else {
+            eprintln!("[LOG FALLBACK] {}", format_args!($($arg)*));
+        }
     }};
 }

@@ -141,7 +141,12 @@ pub unsafe fn create_texture_image(
     let mip_levels = (width.max(height) as f32).log2().floor() as u32 + 1;
 
     if width != 1024 || height != 1024 || reader.info().color_type != png::ColorType::Rgba {
-        panic!("invalid texture image");
+        return Err(anyhow!(
+            "Invalid texture image: expected 1024x1024 RGBA, got {}x{} {:?}",
+            width,
+            height,
+            reader.info().color_type
+        ));
     }
 
     let (staging_buffer, staging_buffer_memory) = create_buffer(

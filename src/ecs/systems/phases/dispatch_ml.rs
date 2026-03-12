@@ -112,7 +112,7 @@ pub fn dispatch_text_to_motion_events(
                 if !world.contains_resource::<GrpcThreadHandle>() {
                     let handle = GrpcThreadHandle::spawn(DEFAULT_ENDPOINT);
                     world.insert_resource(handle);
-                    crate::log!("TextToMotion: spawned gRPC thread ({})", DEFAULT_ENDPOINT);
+                    log!("TextToMotion: spawned gRPC thread ({})", DEFAULT_ENDPOINT);
                 }
 
                 let handle = world.get_resource::<GrpcThreadHandle>();
@@ -145,14 +145,14 @@ pub fn dispatch_text_to_motion_events(
                     let mut state = world.resource_mut::<TextToMotionState>();
                     text_to_motion_cancel(&mut state);
 
-                    crate::log!("TextToMotion: applied clip (id={})", new_id);
+                    log!("TextToMotion: applied clip (id={})", new_id);
                 }
             }
 
             UIEvent::TextToMotionCancel => {
                 let mut state = world.resource_mut::<TextToMotionState>();
                 text_to_motion_cancel(&mut state);
-                crate::log!("TextToMotion: cancelled");
+                log!("TextToMotion: cancelled");
             }
 
             _ => {}

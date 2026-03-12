@@ -88,7 +88,7 @@ pub fn cleanup_old_screenshots() -> Result<()> {
                     if filename_str.starts_with("screenshot_") {
                         fs::remove_file(&path)?;
                         deleted_count += 1;
-                        crate::log!("Deleted old screenshot: {:?}", filename_str);
+                        log!("Deleted old screenshot: {:?}", filename_str);
                     }
                 }
             }
@@ -96,7 +96,7 @@ pub fn cleanup_old_screenshots() -> Result<()> {
     }
 
     if deleted_count > 0 {
-        crate::log!("Cleaned up {} old screenshot(s)", deleted_count);
+        log!("Cleaned up {} old screenshot(s)", deleted_count);
     }
 
     Ok(())
@@ -191,7 +191,7 @@ impl App {
             rrswapchain.swapchain_format,
         )
         .context("Failed to create viewport state")?;
-        crate::log!(
+        log!(
             "Created viewport state: {}x{} with MSAA {:?}, format {:?}",
             viewport_width,
             viewport_height,
@@ -216,7 +216,7 @@ impl App {
         .context("Failed to create model pipeline")?;
         let model_pipeline_id = data.pipeline_storage.register(model_pipeline.clone());
         pipeline_manager.allocate_id();
-        crate::log!("Registered model pipeline with id {}", model_pipeline_id);
+        log!("Registered model pipeline with id {}", model_pipeline_id);
 
         let grid_pipeline =
             PipelineBuilder::new("assets/shaders/gridVert.spv", "assets/shaders/gridFrag.spv")
@@ -233,7 +233,7 @@ impl App {
                 .context("Failed to create grid pipeline")?;
         let grid_pipeline_id = data.pipeline_storage.register(grid_pipeline);
         pipeline_manager.allocate_id();
-        crate::log!("Registered grid pipeline with id {}", grid_pipeline_id);
+        log!("Registered grid pipeline with id {}", grid_pipeline_id);
 
         let gizmo_pipeline = PipelineBuilder::new(
             "assets/shaders/gizmoVert.spv",
@@ -248,12 +248,12 @@ impl App {
         .context("Failed to create gizmo pipeline")?;
         let gizmo_pipeline_id = data.pipeline_storage.register(gizmo_pipeline);
         pipeline_manager.allocate_id();
-        crate::log!("Registered gizmo pipeline with id {}", gizmo_pipeline_id);
+        log!("Registered gizmo pipeline with id {}", gizmo_pipeline_id);
 
         let mut gizmo_data = create_grid_gizmo();
         gizmo_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
         gizmo_data.render_info.pipeline_id = Some(gizmo_pipeline_id);
-        crate::log!(
+        log!(
             "Allocated object_index {} for Gizmo",
             gizmo_data.render_info.object_index
         );
@@ -280,7 +280,7 @@ impl App {
         let mut light_gizmo_data = create_light_gizmo(light_position);
         light_gizmo_data.render_info.pipeline_id = Some(gizmo_pipeline_id);
         light_gizmo_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
-        crate::log!(
+        log!(
             "Allocated object_index {} for LightGizmo",
             light_gizmo_data.render_info.object_index
         );
@@ -318,7 +318,7 @@ impl App {
                 .context("Failed to create bone solid pipeline")?;
         let bone_solid_pipeline_id = data.pipeline_storage.register(bone_solid_pipeline);
         pipeline_manager.allocate_id();
-        crate::log!(
+        log!(
             "Registered bone solid pipeline with id {}",
             bone_solid_pipeline_id
         );
@@ -339,7 +339,7 @@ impl App {
                 .context("Failed to create bone wire pipeline")?;
         let bone_wire_pipeline_id = data.pipeline_storage.register(bone_wire_pipeline);
         pipeline_manager.allocate_id();
-        crate::log!(
+        log!(
             "Registered bone wire pipeline with id {}",
             bone_wire_pipeline_id
         );
@@ -366,7 +366,7 @@ impl App {
         let bone_solid_depth_pipeline_id =
             data.pipeline_storage.register(bone_solid_depth_pipeline);
         pipeline_manager.allocate_id();
-        crate::log!(
+        log!(
             "Registered bone solid depth pipeline with id {}",
             bone_solid_depth_pipeline_id
         );
@@ -391,7 +391,7 @@ impl App {
                 .context("Failed to create bone wire depth pipeline")?;
         let bone_wire_depth_pipeline_id = data.pipeline_storage.register(bone_wire_depth_pipeline);
         pipeline_manager.allocate_id();
-        crate::log!(
+        log!(
             "Registered bone wire depth pipeline with id {}",
             bone_wire_depth_pipeline_id
         );
@@ -419,7 +419,7 @@ impl App {
         let bone_solid_occluded_pipeline_id =
             data.pipeline_storage.register(bone_solid_occluded_pipeline);
         pipeline_manager.allocate_id();
-        crate::log!(
+        log!(
             "Registered bone solid occluded pipeline with id {}",
             bone_solid_occluded_pipeline_id
         );
@@ -446,7 +446,7 @@ impl App {
         let bone_wire_occluded_pipeline_id =
             data.pipeline_storage.register(bone_wire_occluded_pipeline);
         pipeline_manager.allocate_id();
-        crate::log!(
+        log!(
             "Registered bone wire occluded pipeline with id {}",
             bone_wire_occluded_pipeline_id
         );
@@ -478,15 +478,15 @@ impl App {
             bone_gizmo_data.wire_render_info.object_index;
 
         bone_gizmo_data.display_style = BoneDisplayStyle::Octahedral;
-        crate::log!(
+        log!(
             "Allocated object_index {} for BoneGizmo stick",
             bone_gizmo_data.stick_render_info.object_index
         );
-        crate::log!(
+        log!(
             "Allocated object_index {} for BoneGizmo solid",
             bone_gizmo_data.solid_render_info.object_index
         );
-        crate::log!(
+        log!(
             "Allocated object_index {} for BoneGizmo wire",
             bone_gizmo_data.wire_render_info.object_index
         );
@@ -498,7 +498,7 @@ impl App {
         constraint_gizmo_data.wire_render_info.pipeline_id = Some(bone_wire_pipeline_id);
         constraint_gizmo_data.wire_render_info.object_index =
             data.graphics_resources.objects.allocate_slot();
-        crate::log!(
+        log!(
             "Allocated object_index {} for ConstraintGizmo wire",
             constraint_gizmo_data.wire_render_info.object_index
         );
@@ -518,11 +518,11 @@ impl App {
             tg.line_render_info.object_index = data.graphics_resources.objects.allocate_slot();
             tg.solid_render_info.pipeline_id = Some(bone_solid_pipeline_id);
             tg.solid_render_info.object_index = data.graphics_resources.objects.allocate_slot();
-            crate::log!(
+            log!(
                 "Allocated object_index {} for TransformGizmo line",
                 tg.line_render_info.object_index
             );
-            crate::log!(
+            log!(
                 "Allocated object_index {} for TransformGizmo solid",
                 tg.solid_render_info.object_index
             );
@@ -538,7 +538,7 @@ impl App {
 
         let mut billboard_data = create_billboard();
         billboard_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
-        crate::log!(
+        log!(
             "Allocated object_index {} for Billboard",
             billboard_data.render_info.object_index
         );
@@ -599,7 +599,7 @@ impl App {
         let billboard_pipeline_id = data.pipeline_storage.register(billboard_pipeline);
         pipeline_manager.allocate_id();
         billboard_data.render_info.pipeline_id = Some(billboard_pipeline_id);
-        crate::log!(
+        log!(
             "Registered billboard pipeline with id {}",
             billboard_pipeline_id
         );
@@ -612,16 +612,16 @@ impl App {
         data.ecs_world.insert_resource(billboard_data);
 
         let grid_object_index = data.graphics_resources.objects.allocate_slot();
-        crate::log!("Allocated object_index {} for Grid", grid_object_index);
+        log!("Allocated object_index {} for Grid", grid_object_index);
 
         data.graphics_resources.objects.seal_reserved_slots();
-        crate::log!(
+        log!(
             "Sealed reserved object slots at {}",
             data.graphics_resources.objects.get_next_slot()
         );
 
-        crate::log!("Starting ray tracing initialization...");
-        crate::log!(
+        log!("Starting ray tracing initialization...");
+        log!(
             "swapchain extent: {}x{}",
             rrswapchain.swapchain_extent.width,
             rrswapchain.swapchain_extent.height
@@ -637,15 +637,15 @@ impl App {
             &mut rrrender_mut,
         ) {
             Ok(_) => {
-                crate::log!("init_ray_tracing succeeded");
-                crate::log!("gbuffer is_some: {}", data.raytracing.gbuffer.is_some());
+                log!("init_ray_tracing succeeded");
+                log!("gbuffer is_some: {}", data.raytracing.gbuffer.is_some());
             }
             Err(e) => {
-                crate::log!("Failed to initialize ray tracing: {:?}", e);
+                log_warn!("Failed to initialize ray tracing: {:?}", e);
             }
         }
         let rrrender = rrrender_mut;
-        crate::log!("initialized ray tracing resources");
+        log!("initialized ray tracing resources");
 
         let (model_path, loaded_scene) = Self::determine_startup_model();
         if let Err(e) = Self::load_model_from_path_with_resources(
@@ -658,9 +658,9 @@ impl App {
             loaded_scene.is_some(),
         ) {
             eprintln!("Failed to load model: {:?}", e);
-            crate::log!("Failed to load model: {:?}", e);
+            log_error!("Failed to load model: {:?}", e);
         }
-        crate::log!("loaded initial model: {}", model_path);
+        log!("loaded initial model: {}", model_path);
 
         if !data
             .ecs_world
@@ -705,9 +705,9 @@ impl App {
             &rrswapchain,
             &rrrender,
         ) {
-            crate::log!("Failed to create ray tracing pipelines: {:?}", e);
+            log_warn!("Failed to create ray tracing pipelines: {:?}", e);
         } else {
-            crate::log!("Ray tracing pipelines created successfully");
+            log!("Ray tracing pipelines created successfully");
         }
 
         let (mut grid_mesh, xz_only_index_count) = create_grid_mesh();
@@ -807,16 +807,16 @@ impl App {
         use log::{debug, error, trace, warn};
         if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::ERROR {
             error!("({:?}) {}", type_, message);
-            crate::log!("ERROR ({:?}) {}", type_, message);
+            log_error!("({:?}) {}", type_, message);
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::WARNING {
             warn!("({:?}) {}", type_, message);
-            crate::log!("WARN ({:?}) {}", type_, message);
+            log_warn!("({:?}) {}", type_, message);
         } else if severity >= vk::DebugUtilsMessageSeverityFlagsEXT::INFO {
             debug!("({:?}) {}", type_, message);
-            crate::log!("INFO ({:?}) {}", type_, message);
+            log!("({:?}) {}", type_, message);
         } else {
             trace!("({:?}) {}", type_, message);
-            crate::log!("DEBUG ({:?}) {}", type_, message);
+            log!("DEBUG ({:?}) {}", type_, message);
         }
 
         vk::FALSE
@@ -1042,7 +1042,7 @@ impl App {
         rrcommand_pool: &RRCommandPool,
         rrrender: &RRRender,
     ) -> Result<()> {
-        crate::log!("Initializing ImGui Vulkan rendering resources");
+        log!("Initializing ImGui Vulkan rendering resources");
 
         // Get font texture data from ImGui
         let font_atlas = imgui.fonts();
@@ -1051,7 +1051,7 @@ impl App {
         let height = font_texture.height;
         let font_data: &[u8] = &font_texture.data;
 
-        crate::log!("Font texture size: {}x{}", width, height);
+        log!("Font texture size: {}x{}", width, height);
 
         // Create font image
         let extent = vk::Extent3D {
@@ -1251,9 +1251,9 @@ impl App {
         data.imgui.font_image_view = Some(image_view);
         data.imgui.sampler = Some(sampler);
 
-        crate::log!("ImGui rendering resources initialized successfully");
-        crate::log!("  Pipeline: {:?}", imgui_pipeline.pipeline);
-        crate::log!("  Descriptor Set: {:?}", descriptor_set);
+        log!("ImGui rendering resources initialized successfully");
+        log!("  Pipeline: {:?}", imgui_pipeline.pipeline);
+        log!("  Descriptor Set: {:?}", descriptor_set);
 
         Ok(())
     }
@@ -1275,11 +1275,11 @@ impl App {
                 Ok(loaded) => {
                     let model_path = loaded.model_path.to_string_lossy().to_string();
                     let clips = loaded.clips.clone();
-                    crate::log!("Loaded default scene from: {}", scene_path.display());
+                    log!("Loaded default scene from: {}", scene_path.display());
                     return (model_path, Some((scene_path, loaded, clips)));
                 }
                 Err(e) => {
-                    crate::log!("Failed to load default scene: {:?}", e);
+                    log_error!("Failed to load default scene: {:?}", e);
                 }
             }
         }

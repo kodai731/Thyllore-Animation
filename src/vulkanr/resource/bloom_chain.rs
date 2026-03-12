@@ -50,7 +50,7 @@ impl BloomChain {
             let mip =
                 Self::create_mip_level(instance, rrdevice, downsample_render_pass, width, height)?;
 
-            crate::log!("Created bloom mip {}: {}x{}", i, width, height);
+            log!("Created bloom mip {}: {}x{}", i, width, height);
             mip_levels.push(mip);
 
             width /= 2;
@@ -223,7 +223,7 @@ impl BloomChain {
                 height,
             )?;
 
-            crate::log!("Resized bloom mip {}: {}x{}", i, width, height);
+            log!("Resized bloom mip {}: {}x{}", i, width, height);
             self.mip_levels.push(mip);
 
             width /= 2;
@@ -232,7 +232,7 @@ impl BloomChain {
 
         Self::transition_mip_layouts(rrdevice, command_pool, &self.mip_levels)?;
 
-        crate::log!("Resized bloom chain for {}x{}", new_width, new_height);
+        log!("Resized bloom chain for {}x{}", new_width, new_height);
         Ok(())
     }
 
@@ -295,6 +295,6 @@ impl BloomChain {
         device.destroy_sampler(self.sampler, None);
         device.destroy_render_pass(self.downsample_render_pass, None);
         device.destroy_render_pass(self.upsample_render_pass, None);
-        crate::log!("Destroyed bloom chain");
+        log!("Destroyed bloom chain");
     }
 }

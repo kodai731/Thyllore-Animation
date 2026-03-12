@@ -12,14 +12,14 @@ use crate::ecs::world::{Animator, Entity, World};
 pub fn create_test_constraints(world: &mut World, assets: &AssetStorage) {
     let entities = world.component_entities::<Animator>();
     if entities.is_empty() {
-        crate::log!("No animated entity found for test constraints");
+        log!("No animated entity found for test constraints");
         return;
     }
 
     let skeleton = match assets.skeletons.values().next() {
         Some(asset) => &asset.skeleton,
         None => {
-            crate::log!("No skeleton found in AssetStorage");
+            log!("No skeleton found in AssetStorage");
             return;
         }
     };
@@ -36,14 +36,14 @@ pub fn create_test_constraints(world: &mut World, assets: &AssetStorage) {
 pub fn clear_test_constraints(world: &mut World) {
     let entities = world.component_entities::<Constrained>();
     if entities.is_empty() {
-        crate::log!("No constrained entities to clear");
+        log!("No constrained entities to clear");
         return;
     }
 
     for entity in entities {
         world.remove_component::<ConstraintSet>(entity);
         world.remove_component::<Constrained>(entity);
-        crate::log!("Cleared test constraints from entity {:?}", entity);
+        log!("Cleared test constraints from entity {:?}", entity);
     }
 
     if world.contains_resource::<ConstraintGizmoData>() {
@@ -54,7 +54,7 @@ pub fn clear_test_constraints(world: &mut World) {
 
 fn create_constraints_for_entity(world: &mut World, skeleton: &Skeleton, entity: Entity) {
     if skeleton.bones.len() < 2 {
-        crate::log!(
+        log!(
             "Skeleton '{}' has only {} bones, creating position-only constraint",
             skeleton.name,
             skeleton.bones.len()
@@ -75,21 +75,21 @@ fn create_constraints_for_entity(world: &mut World, skeleton: &Skeleton, entity:
 
     let count = set.constraints.len();
     if count == 0 {
-        crate::log!(
+        log!(
             "Could not create any test constraints for skeleton '{}'",
             skeleton.name
         );
         return;
     }
 
-    crate::log!(
+    log!(
         "Created {} test constraints for skeleton '{}' (entity {:?})",
         count,
         skeleton.name,
         entity
     );
     for entry in &set.constraints {
-        crate::log!("  {:?} priority={}", entry.constraint, entry.priority);
+        log!("  {:?} priority={}", entry.constraint, entry.priority);
     }
 
     apply_constraint_set(world, entity, set);
@@ -177,7 +177,7 @@ fn add_ik_constraints(set: &mut ConstraintSet, skeleton: &Skeleton) {
     });
     super::constraint_set_systems::constraint_set_add(set, ik, PRIORITY_IK);
 
-    crate::log!(
+    log!(
         "  IK: effector={} target={}",
         bone_name(skeleton, effector_id),
         bone_name(skeleton, target_id)
@@ -215,7 +215,7 @@ fn add_aim_constraint(set: &mut ConstraintSet, skeleton: &Skeleton) {
     });
     super::constraint_set_systems::constraint_set_add(set, aim, PRIORITY_AIM);
 
-    crate::log!(
+    log!(
         "  Aim: source={} target={}",
         bone_name(skeleton, source_id),
         bone_name(skeleton, target_id)
@@ -245,7 +245,7 @@ fn add_position_constraint_from_skeleton(set: &mut ConstraintSet, skeleton: &Ske
 
     add_position_constraint(set, constrained_id, target_id);
 
-    crate::log!(
+    log!(
         "  Position: constrained={} target={}",
         bone_name(skeleton, constrained_id),
         bone_name(skeleton, target_id)

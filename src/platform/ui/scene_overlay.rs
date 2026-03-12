@@ -69,7 +69,7 @@ fn build_model_section(
             .pick_file()
         {
             let path_str = path.to_string_lossy().to_string();
-            crate::log!("Selected FBX file: {}", path_str);
+            log!("Selected FBX file: {}", path_str);
             ui_events.send(UIEvent::LoadModel { path: path_str });
         }
     }
@@ -82,7 +82,7 @@ fn build_model_section(
             .pick_file()
         {
             let path_str = path.to_string_lossy().to_string();
-            crate::log!("Selected glTF file: {}", path_str);
+            log!("Selected glTF file: {}", path_str);
             ui_events.send(UIEvent::LoadModel { path: path_str });
         }
     }

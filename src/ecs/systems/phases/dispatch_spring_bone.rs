@@ -32,7 +32,7 @@ pub fn transition_to_baked_override_if_needed(world: &mut World) {
     if let Some(mut state) = world.get_resource_mut::<SpringBoneState>() {
         if state.mode == SpringBoneMode::Baked {
             state.mode = SpringBoneMode::BakedOverride;
-            crate::log!("Spring bone mode: Baked -> BakedOverride (manual edit detected)");
+            log!("Spring bone mode: Baked -> BakedOverride (manual edit detected)");
         }
     }
 }
@@ -48,7 +48,7 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
     let skeleton = match assets.skeletons.values().next() {
         Some(skel_asset) => skel_asset.skeleton.clone(),
         None => {
-            crate::msg_warn!("Spring bone bake failed: no skeleton found");
+            msg_warn!("Spring bone bake failed: no skeleton found");
             return;
         }
     };
@@ -59,14 +59,14 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
         .map(|(entity, _)| entity);
 
     let Some(entity) = spring_entity else {
-        crate::msg_warn!("Spring bone bake failed: no WithSpringBone entity");
+        msg_warn!("Spring bone bake failed: no WithSpringBone entity");
         return;
     };
 
     let setup = match world.get_component::<SpringBoneSetup>(entity) {
         Some(s) => s.clone(),
         None => {
-            crate::msg_warn!("Spring bone bake failed: no SpringBoneSetup");
+            msg_warn!("Spring bone bake failed: no SpringBoneSetup");
             return;
         }
     };
@@ -86,7 +86,7 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
         ),
         None => {
             drop(clip_library);
-            crate::msg_warn!("Spring bone bake failed: no current clip");
+            msg_warn!("Spring bone bake failed: no current clip");
             return;
         }
     };
@@ -111,12 +111,12 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
     merge_bake_into_clip(&mut merged, &bake_result, &skeleton);
     merged.name = format!("{}_spring_baked", merged.name);
 
-    crate::log!(
+    log!(
         "[BakeDebug] bake_result: baked_bone_ids={:?}, clip_tracks={}",
         bake_result.baked_bone_ids,
         bake_result.clip.tracks.len()
     );
-    crate::log!(
+    log!(
         "[BakeDebug] merged clip: name={}, tracks={}, duration={}",
         merged.name,
         merged.tracks.len(),
@@ -137,7 +137,7 @@ fn handle_spring_bone_bake(world: &mut World, assets: &mut AssetStorage) {
     timeline_state.current_clip_id = Some(new_id);
     timeline_state.baked_bone_ids = baked_bone_ids;
 
-    crate::log!("Spring bone baked to new clip (id={})", new_id);
+    log!("Spring bone baked to new clip (id={})", new_id);
 }
 
 fn register_baked_clip_and_update_schedules(
@@ -154,7 +154,7 @@ fn register_baked_clip_and_update_schedules(
 
     let mut updated_count = 0;
     let schedule_entities = world.component_entities::<ClipSchedule>();
-    crate::log!(
+    log!(
         "[BakeDebug] ClipSchedule entities count={}, original source_id={:?}",
         schedule_entities.len(),
         source_id
@@ -162,7 +162,7 @@ fn register_baked_clip_and_update_schedules(
     for sched_entity in &schedule_entities {
         if let Some(schedule) = world.get_component_mut::<ClipSchedule>(*sched_entity) {
             if let Some(first) = schedule.instances.first_mut() {
-                crate::log!(
+                log!(
                     "[BakeDebug]   entity {:?}: schedule source_id={}, match={}",
                     sched_entity,
                     first.source_id,
@@ -175,7 +175,7 @@ fn register_baked_clip_and_update_schedules(
             }
         }
     }
-    crate::log!(
+    log!(
         "[BakeDebug] updated {} ClipSchedule(s) to new source_id={}",
         updated_count,
         new_id
@@ -225,7 +225,7 @@ pub fn handle_spring_bone_discard(world: &mut World, assets: &mut AssetStorage) 
         timeline_state.current_clip_id = Some(orig);
     }
 
-    crate::log!("Discarded spring bone bake, restored original clip");
+    log!("Discarded spring bone bake, restored original clip");
 }
 
 pub fn dispatch_spring_bone_edit_events(

@@ -36,7 +36,7 @@ pub fn save_scene(scene_path: &Path, world: &World) -> SceneResult<()> {
 
     write_scene_file(scene_path, &scene)?;
 
-    crate::log!("Saved scene to: {}", scene_path.display());
+    log!("Saved scene to: {}", scene_path.display());
     Ok(())
 }
 
@@ -318,7 +318,7 @@ pub fn load_scene(scene_path: &Path) -> SceneResult<LoadedScene> {
         clips.push(clip);
     }
 
-    crate::log!("Loaded scene from: {}", scene_path.display());
+    log!("Loaded scene from: {}", scene_path.display());
 
     Ok(LoadedScene {
         scene,
@@ -455,7 +455,7 @@ fn apply_rendering_params(camera_state: &CameraState, world: &mut World) {
                 "Reinhard" => ToneMapOperator::Reinhard,
                 "None" => ToneMapOperator::None,
                 unknown => {
-                    crate::log!(
+                    log!(
                         "Scene load: unknown tone map operator '{}', defaulting to None",
                         unknown
                     );
@@ -505,7 +505,7 @@ fn apply_panel_layout(panel_layout: Option<&PanelLayoutState>, world: &mut World
             layout.inspector_width = pl.inspector_width;
             layout.timeline_height = pl.timeline_height;
             layout.debug_height = pl.debug_height;
-            crate::log!(
+            log!(
                 "Restored panel layout: hierarchy={:.0}, inspector={:.0}, timeline={:.0}, debug={:.0}",
                 pl.hierarchy_width,
                 pl.inspector_width,

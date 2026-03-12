@@ -12,14 +12,14 @@ use crate::ecs::world::{Animator, World};
 pub fn create_test_spring_bones(world: &mut World, assets: &AssetStorage) {
     let entities = world.component_entities::<Animator>();
     if entities.is_empty() {
-        crate::log!("No animated entity found for spring bones");
+        log!("No animated entity found for spring bones");
         return;
     }
 
     let skeleton = match assets.skeletons.values().next() {
         Some(asset) => &asset.skeleton,
         None => {
-            crate::log!("No skeleton found in AssetStorage");
+            log!("No skeleton found in AssetStorage");
             return;
         }
     };
@@ -28,7 +28,7 @@ pub fn create_test_spring_bones(world: &mut World, assets: &AssetStorage) {
 
     let chains = detect_spring_bone_chains(skeleton);
     if chains.is_empty() {
-        crate::log!("No suitable bone chains detected for spring bones");
+        log!("No suitable bone chains detected for spring bones");
         return;
     }
 
@@ -59,7 +59,7 @@ pub fn create_test_spring_bones(world: &mut World, assets: &AssetStorage) {
         setup.next_chain_id = (chain_idx + 1) as u32;
     }
 
-    crate::log!(
+    log!(
         "Created {} spring bone chains for entity {:?}:",
         setup.chains.len(),
         first_entity
@@ -70,7 +70,7 @@ pub fn create_test_spring_bones(world: &mut World, assets: &AssetStorage) {
             .iter()
             .map(|j| bone_name(skeleton, j.bone_id))
             .collect();
-        crate::log!("  Chain '{}': [{}]", chain.name, bone_names.join(" -> "));
+        log!("  Chain '{}': [{}]", chain.name, bone_names.join(" -> "));
     }
 
     create_test_colliders(&mut setup, skeleton);
@@ -83,14 +83,14 @@ pub fn create_test_spring_bones(world: &mut World, assets: &AssetStorage) {
 pub fn clear_spring_bones(world: &mut World) {
     let entities = world.component_entities::<WithSpringBone>();
     if entities.is_empty() {
-        crate::log!("No spring bone entities to clear");
+        log!("No spring bone entities to clear");
         return;
     }
 
     for entity in entities {
         world.remove_component::<SpringBoneSetup>(entity);
         world.remove_component::<WithSpringBone>(entity);
-        crate::log!("Cleared spring bones from entity {:?}", entity);
+        log!("Cleared spring bones from entity {:?}", entity);
     }
 
     if world.contains_resource::<SpringBoneState>() {
@@ -99,7 +99,7 @@ pub fn clear_spring_bones(world: &mut World) {
 }
 
 fn detect_spring_bone_chains(skeleton: &Skeleton) -> Vec<Vec<BoneId>> {
-    crate::log!(
+    log!(
         "[SpringBone] Detecting chains from skeleton '{}' ({} bones)",
         skeleton.name,
         skeleton.bones.len()
@@ -114,7 +114,7 @@ fn detect_spring_bone_chains(skeleton: &Skeleton) -> Vec<Vec<BoneId>> {
         }
 
         let depth = compute_bone_depth(skeleton, bone.id);
-        crate::log!(
+        log!(
             "[SpringBone]   Leaf bone '{}' (id={}): depth={}",
             bone.name,
             bone.id,
@@ -122,12 +122,12 @@ fn detect_spring_bone_chains(skeleton: &Skeleton) -> Vec<Vec<BoneId>> {
         );
 
         if depth < 3 {
-            crate::log!("[SpringBone]     -> skipped (depth < 3)");
+            log!("[SpringBone]     -> skipped (depth < 3)");
             continue;
         }
 
         if is_near_root(skeleton, bone.id) {
-            crate::log!("[SpringBone]     -> skipped (near root)");
+            log!("[SpringBone]     -> skipped (near root)");
             continue;
         }
 
@@ -146,18 +146,18 @@ fn detect_spring_bone_chains(skeleton: &Skeleton) -> Vec<Vec<BoneId>> {
                 .iter()
                 .map(|&id| bone_name(skeleton, id))
                 .collect();
-            crate::log!(
+            log!(
                 "[SpringBone]     -> chain detected ({} bones): [{}]",
                 unique_chain.len(),
                 names.join(" -> ")
             );
             chains.push(unique_chain);
         } else {
-            crate::log!("[SpringBone]     -> skipped (all bones already used by other chains)");
+            log!("[SpringBone]     -> skipped (all bones already used by other chains)");
         }
     }
 
-    crate::log!("[SpringBone] Total chains detected: {}", chains.len());
+    log!("[SpringBone] Total chains detected: {}", chains.len());
     chains
 }
 
@@ -256,7 +256,7 @@ fn create_test_colliders(setup: &mut SpringBoneSetup, skeleton: &Skeleton) {
     }
 
     if collider_bone_ids.is_empty() {
-        crate::log!("[SpringBone] No suitable bones found for test colliders");
+        log!("[SpringBone] No suitable bones found for test colliders");
         return;
     }
 
@@ -272,7 +272,7 @@ fn create_test_colliders(setup: &mut SpringBoneSetup, skeleton: &Skeleton) {
             .get_bone(bone_id)
             .map(|b| b.name.as_str())
             .unwrap_or("?");
-        crate::log!(
+        log!(
             "[SpringBone] Adding sphere collider on '{}' (bone_id={})",
             bone_name_str,
             bone_id
@@ -297,7 +297,7 @@ fn create_test_colliders(setup: &mut SpringBoneSetup, skeleton: &Skeleton) {
         chain.collider_group_ids.push(group_id);
     }
 
-    crate::log!(
+    log!(
         "[SpringBone] Created test collider group (id={}) with {} colliders",
         group_id,
         collider_bone_ids.len()

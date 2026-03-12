@@ -45,7 +45,7 @@ pub fn init(title: &str) -> System {
             match factor.parse::<f64>() {
                 Ok(f) => HiDpiMode::Locked(f),
                 Err(e) => {
-                    crate::log!("Invalid scaling factor '{}': {}, using default", factor, e);
+                    log_warn!("Invalid scaling factor '{}': {}, using default", factor, e);
                     HiDpiMode::Default
                 }
             }

@@ -20,19 +20,19 @@ pub fn spring_bone_initialize(
     skeleton: &Skeleton,
     global_transforms: &[Matrix4<f32>],
 ) -> SpringBoneState {
-    crate::log!("[SpringBone] Initializing spring bone state...");
+    log!("[SpringBone] Initializing spring bone state...");
     let mut chain_states = Vec::new();
 
     for chain in &setup.chains {
         if !chain.enabled {
-            crate::log!(
+            log!(
                 "[SpringBone]   Chain '{}' is disabled, skipping",
                 chain.name
             );
             continue;
         }
 
-        crate::log!(
+        log!(
             "[SpringBone]   Chain '{}' (id={}, joints={})",
             chain.name,
             chain.id,
@@ -46,7 +46,7 @@ pub fn spring_bone_initialize(
             let idx = bone_id as usize;
 
             if idx >= skeleton.bones.len() || idx >= global_transforms.len() {
-                crate::log!(
+                log!(
                     "[SpringBone]     bone_id={} out of range \
                      (bones={}, transforms={})",
                     bone_id,
@@ -73,7 +73,7 @@ pub fn spring_bone_initialize(
                 bone_length,
             );
 
-            crate::log!(
+            log!(
                 "[SpringBone]     Joint '{}' (bone_id={}): \
                  head=({:.3},{:.3},{:.3}), \
                  tail=({:.3},{:.3},{:.3}), \
@@ -107,7 +107,7 @@ pub fn spring_bone_initialize(
         });
     }
 
-    crate::log!(
+    log!(
         "[SpringBone] Initialization complete: {} chain states",
         chain_states.len()
     );
@@ -134,7 +134,7 @@ pub fn spring_bone_update(
 
     let should_log = state.frame_count < state.log_frames;
     if should_log {
-        crate::log!(
+        log!(
             "[SpringBone] Update frame={}, dt={:.4}",
             state.frame_count,
             dt
@@ -566,7 +566,7 @@ fn log_joint_update(
     let move_mag =
         (movement.x * movement.x + movement.y * movement.y + movement.z * movement.z).sqrt();
     let collision_marker = if had_collision { " [HIT]" } else { "" };
-    crate::log!(
+    log!(
         "[SpringBone]   Joint '{}'{}: \
          head=({:.3},{:.3},{:.3}), \
          prev_tail=({:.3},{:.3},{:.3}), \

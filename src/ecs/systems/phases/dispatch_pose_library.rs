@@ -44,7 +44,7 @@ pub fn dispatch_pose_library_events(
                         }
                     }
 
-                    crate::log!(
+                    log!(
                         "Saved pose '{}' (id={}) at time {:.3}",
                         name,
                         pose_id,
@@ -81,7 +81,7 @@ pub fn dispatch_pose_library_events(
                         }
                     }
 
-                    crate::log!("Applied pose (id={}) at time {:.3}", pose_id, target_time);
+                    log!("Applied pose (id={}) at time {:.3}", pose_id, target_time);
                 }
             }
 
@@ -105,7 +105,7 @@ pub fn dispatch_pose_library_events(
                     }
                 }
 
-                crate::log!("Deleted pose (id={})", pose_id);
+                log!("Deleted pose (id={})", pose_id);
             }
 
             _ => {}

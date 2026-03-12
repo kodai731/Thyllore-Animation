@@ -52,7 +52,7 @@ fn dispatch_undo(world: &mut World) {
             };
 
             world.resource_mut::<EditHistory>().push_to_redo(redo_entry);
-            crate::log!("Undo: {}", description);
+            log!("Undo: {}", description);
         }
 
         EditCommand::ScheduleModified {
@@ -78,7 +78,7 @@ fn dispatch_undo(world: &mut World) {
             };
 
             world.resource_mut::<EditHistory>().push_to_redo(redo_entry);
-            crate::log!("Undo: {}", description);
+            log!("Undo: {}", description);
         }
 
         EditCommand::ClipAdded {
@@ -102,7 +102,7 @@ fn dispatch_undo(world: &mut World) {
             };
 
             world.resource_mut::<EditHistory>().push_to_redo(redo_entry);
-            crate::log!("Undo: {}", description);
+            log!("Undo: {}", description);
         }
 
         EditCommand::ClipRemoved {
@@ -122,7 +122,7 @@ fn dispatch_undo(world: &mut World) {
             };
 
             world.resource_mut::<EditHistory>().push_to_redo(redo_entry);
-            crate::log!("Undo: {}", description);
+            log!("Undo: {}", description);
         }
     }
 }
@@ -214,7 +214,7 @@ fn redo_clip_modified(
     };
 
     world.resource_mut::<EditHistory>().push_to_undo(undo_entry);
-    crate::log!("Redo: {}", description);
+    log!("Redo: {}", description);
 }
 
 fn redo_schedule_modified(
@@ -242,7 +242,7 @@ fn redo_schedule_modified(
     };
 
     world.resource_mut::<EditHistory>().push_to_undo(undo_entry);
-    crate::log!("Redo: {}", description);
+    log!("Redo: {}", description);
 }
 
 fn redo_clip_added(
@@ -262,7 +262,7 @@ fn redo_clip_added(
     };
 
     world.resource_mut::<EditHistory>().push_to_undo(undo_entry);
-    crate::log!("Redo: {}", description);
+    log!("Redo: {}", description);
 }
 
 fn redo_clip_removed(
@@ -284,7 +284,7 @@ fn redo_clip_removed(
     };
 
     world.resource_mut::<EditHistory>().push_to_undo(undo_entry);
-    crate::log!("Redo: {}", description);
+    log!("Redo: {}", description);
 }
 
 fn restore_source_clip(world: &mut World, clip_id: u64, source: SourceClip) {

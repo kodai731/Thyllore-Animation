@@ -133,7 +133,7 @@ impl OffscreenFramebuffer {
 
         let sampler = Self::create_sampler(&rrdevice.device)?;
 
-        crate::log!(
+        log!(
             "Created offscreen framebuffer: {}x{} with MSAA {:?}",
             width,
             height,
@@ -299,7 +299,7 @@ impl OffscreenFramebuffer {
         )?;
         *self = new_fb;
 
-        crate::log!(
+        log!(
             "Resized offscreen framebuffer to: {}x{}",
             new_width,
             new_height
@@ -324,7 +324,7 @@ impl OffscreenFramebuffer {
         device.destroy_image(self.msaa_depth_image, None);
         device.free_memory(self.msaa_depth_image_memory, None);
 
-        crate::log!("Destroyed offscreen framebuffer");
+        log!("Destroyed offscreen framebuffer");
     }
 
     pub fn extent(&self) -> vk::Extent2D {

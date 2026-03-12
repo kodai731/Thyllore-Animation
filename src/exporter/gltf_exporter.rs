@@ -56,7 +56,7 @@ pub fn export_gltf_animation(
         .to_writer(writer)
         .map_err(|e| anyhow!("Failed to write GLB: {:?}", e))?;
 
-    crate::log!("glTF animation exported to {:?}", output_path);
+    log!("glTF animation exported to {:?}", output_path);
     Ok(())
 }
 

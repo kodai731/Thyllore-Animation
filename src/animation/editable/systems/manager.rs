@@ -146,7 +146,7 @@ impl EditableClipManager {
         ron::ser::to_writer_pretty(writer, clip, ron::ser::PrettyConfig::default())
             .with_context(|| format!("Failed to serialize clip to: {:?}", path))?;
 
-        crate::log!("Saved animation clip '{}' to {:?}", clip.name, path);
+        log!("Saved animation clip '{}' to {:?}", clip.name, path);
         Ok(())
     }
 
@@ -163,7 +163,7 @@ impl EditableClipManager {
         clip.id = id;
         clip.source_path = Some(path.to_string_lossy().to_string());
 
-        crate::log!(
+        log!(
             "Loaded animation clip '{}' from {:?} (id={})",
             clip.name,
             path,

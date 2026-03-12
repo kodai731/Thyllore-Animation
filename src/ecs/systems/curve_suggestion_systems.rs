@@ -293,7 +293,7 @@ pub fn curve_suggestion_poll_results(
                     request_id: result.request_id,
                 });
 
-                crate::log!(
+                log!(
                     "CurveCopilot: step {}/{}, confidence={:.2}, denorm_value={:.4}, time={:.4}",
                     i + 1,
                     steps.len(),

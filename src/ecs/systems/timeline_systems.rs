@@ -342,7 +342,7 @@ fn timeline_select_clip(
             timeline_state.expand_track(first_bone_id);
         }
 
-        crate::log!(
+        log!(
             "Timeline: Selected clip '{}' (id={}, duration={:.2}s, tracks={})",
             clip.name,
             clip_id,

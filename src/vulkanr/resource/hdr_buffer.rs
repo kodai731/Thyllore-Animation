@@ -61,7 +61,7 @@ impl HdrBuffer {
 
         let sampler = Self::create_sampler(&rrdevice.device)?;
 
-        crate::log!(
+        log!(
             "Created HDR buffer: {}x{} format {:?}",
             width,
             height,
@@ -166,7 +166,7 @@ impl HdrBuffer {
         let new_buf = Self::new(instance, rrdevice, new_width, new_height)?;
         *self = new_buf;
 
-        crate::log!("Resized HDR buffer to: {}x{}", new_width, new_height);
+        log!("Resized HDR buffer to: {}x{}", new_width, new_height);
         Ok(())
     }
 
@@ -178,7 +178,7 @@ impl HdrBuffer {
         device.destroy_image(self.color_image, None);
         device.free_memory(self.color_image_memory, None);
 
-        crate::log!("Destroyed HDR buffer");
+        log!("Destroyed HDR buffer");
     }
 
     pub fn extent(&self) -> vk::Extent2D {

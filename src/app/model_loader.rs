@@ -48,7 +48,7 @@ pub unsafe fn load_model_from_file_system(
     assets: &mut AssetStorage,
     scene_will_provide_clips: bool,
 ) -> Result<()> {
-    crate::log!("=== Loading model from path: {} ===", path);
+    log!("=== Loading model from path: {} ===", path);
 
     let (load_result, fbx_model) = load_model_data(path)?;
 
@@ -67,7 +67,7 @@ pub unsafe fn load_model_from_file_system(
         fbx_model,
     )?;
 
-    crate::log!("=== Model loaded successfully ===");
+    log!("=== Model loaded successfully ===");
     Ok(())
 }
 
@@ -181,7 +181,7 @@ unsafe fn apply_model_to_resources(
         MeshCategory::Unskinned
     };
     let mesh_scale_debug = compute_bone_gizmo_mesh_scale(node_animation_scale, mesh_category);
-    crate::log!(
+    log!(
         "[ModelLoad] type={:?}, has_skinned={}, node_anim_scale={}, mesh_scale={}",
         animation_type,
         load_result.has_skinned_meshes,
@@ -222,7 +222,7 @@ unsafe fn cleanup_resources(
     world: &mut World,
     assets: &mut AssetStorage,
 ) -> Result<()> {
-    crate::log!("Cleaning up model resources...");
+    log!("Cleaning up model resources...");
 
     device.device.device_wait_idle()?;
 
@@ -284,7 +284,7 @@ unsafe fn cleanup_resources(
     world.clear();
     assets.clear();
 
-    crate::log!("Model resources cleaned up");
+    log!("Model resources cleaned up");
     Ok(())
 }
 
@@ -353,7 +353,7 @@ fn setup_nodes(world: &mut World, load_result: &ModelLoadResult) {
         node_assets.nodes = nodes;
     }
 
-    crate::log!("Loaded {} nodes into NodeAssets", node_count);
+    log!("Loaded {} nodes into NodeAssets", node_count);
 }
 
 unsafe fn create_mesh_buffer(
@@ -393,7 +393,7 @@ unsafe fn create_mesh_buffer(
                     )?;
                 }
                 Err(e) => {
-                    crate::log!("Failed to load texture {}: {}", load_path, e);
+                    log_warn!("Failed to load texture {}: {}", load_path, e);
                     let white_pixel = vec![255u8, 255, 255, 255];
                     (mesh.image, mesh.image_memory, mesh.mip_level) = create_texture_image_pixel(
                         instance,
@@ -447,7 +447,7 @@ unsafe fn create_mesh_buffer(
     )?;
 
     mesh.object_index = graphics.objects.allocate_slot();
-    crate::log!(
+    log!(
         "Allocated object_index {} for mesh {}",
         mesh.object_index,
         mesh_index
@@ -475,7 +475,7 @@ unsafe fn create_material_for_mesh(
         material_properties,
     )?;
 
-    crate::log!("Created material {} for mesh {}", material_id, mesh_index);
+    log!("Created material {} for mesh {}", material_id, mesh_index);
     Ok(material_id)
 }
 
@@ -494,7 +494,7 @@ unsafe fn apply_initial_pose(
         return Ok(());
     }
 
-    crate::log!("Applying initial pose (time=0) for animation...");
+    log!("Applying initial pose (time=0) for animation...");
 
     if !load_result.clips.is_empty() {
         if world.contains_resource::<TimelineState>() {
@@ -566,7 +566,7 @@ unsafe fn apply_initial_pose(
         for mesh_idx in updated_meshes {
             if let Err(e) = upload_mesh_vertices(instance, device, command_pool, graphics, mesh_idx)
             {
-                crate::log!(
+                log!(
                     "Failed to upload initial node animation mesh {}: {}",
                     mesh_idx,
                     e
@@ -575,7 +575,7 @@ unsafe fn apply_initial_pose(
         }
     }
 
-    crate::log!("Initial pose applied successfully");
+    log!("Initial pose applied successfully");
     Ok(())
 }
 
@@ -632,7 +632,7 @@ unsafe fn apply_skinning_to_mesh(
             mesh.vertex_data.vertices.as_ptr() as *const c_void,
             mesh.vertex_data.vertices.len(),
         ) {
-            crate::log!(
+            log!(
                 "Failed to update vertex buffer for mesh {}: {}",
                 mesh_idx,
                 e
@@ -678,7 +678,7 @@ pub unsafe fn rebuild_acceleration_structures(
     graphics: &GraphicsResources,
     raytracing: &mut RayTracingData,
 ) -> Result<()> {
-    crate::log!("Rebuilding acceleration structures...");
+    log!("Rebuilding acceleration structures...");
 
     let mut acceleration_structure = RRAccelerationStructure::new();
 
@@ -695,7 +695,7 @@ pub unsafe fn rebuild_acceleration_structures(
         )?;
 
         acceleration_structure.blas_list.push(blas);
-        crate::log!("Created BLAS for mesh");
+        log!("Created BLAS for mesh");
     }
 
     if !acceleration_structure.blas_list.is_empty() {
@@ -706,7 +706,7 @@ pub unsafe fn rebuild_acceleration_structures(
             &acceleration_structure.blas_list,
         )?;
         acceleration_structure.tlas = tlas;
-        crate::log!(
+        log!(
             "Created TLAS with {} instances",
             acceleration_structure.blas_list.len()
         );
@@ -717,7 +717,7 @@ pub unsafe fn rebuild_acceleration_structures(
     } else {
         raytracing.acceleration_structure = Some(acceleration_structure);
     }
-    crate::log!("Acceleration structures rebuilt successfully");
+    log!("Acceleration structures rebuilt successfully");
     Ok(())
 }
 
@@ -744,7 +744,7 @@ unsafe fn update_ray_query_descriptor(
         if let Some(tlas) = accel_struct.tlas.acceleration_structure {
             if let Some(ref mut ray_query_desc) = raytracing.ray_query_descriptor {
                 ray_query_desc.update_tlas(device, tlas)?;
-                crate::log!("Updated ray_query_descriptor with new TLAS");
+                log!("Updated ray_query_descriptor with new TLAS");
             }
         }
     }
@@ -762,7 +762,7 @@ unsafe fn update_billboard_descriptor(
             .render_state
             .descriptor_set
             .update_descriptor_sets(device, swapchain, billboard_texture)?;
-        crate::log!("Re-updated billboard.render_state.descriptor_set after model reload");
+        log!("Re-updated billboard.render_state.descriptor_set after model reload");
     }
     Ok(())
 }
@@ -798,7 +798,7 @@ fn create_ecs_entities(
         .with_editor_display(EntityIcon::Model, true)
         .build();
 
-    crate::log!(
+    log!(
         "Created parent entity '{}': entity_id={}",
         name,
         parent_entity
@@ -818,7 +818,7 @@ fn create_ecs_entities(
         parent_entity,
     );
 
-    crate::log!(
+    log!(
         "Created {} ECS entities, {} mesh assets, {} skeletons, {} clips, {} nodes",
         world.entity_count(),
         assets.meshes.len(),
@@ -879,7 +879,7 @@ fn register_clips_to_library(
         if first_editable_clip_id.is_none() {
             first_editable_clip_id = Some(editable_id);
         }
-        crate::log!(
+        log!(
             "Registered clip '{}' (source_id={})",
             clip.name,
             editable_id,
@@ -890,7 +890,7 @@ fn register_clips_to_library(
     if let Some(editable_id) = first_editable_clip_id {
         let mut timeline_state = world.resource_mut::<TimelineState>();
         timeline_state.current_clip_id = Some(editable_id);
-        crate::log!("Set timeline current_clip_id to {}", editable_id);
+        log!("Set timeline current_clip_id to {}", editable_id);
     }
 
     first_editable_clip_id
@@ -964,7 +964,7 @@ fn build_mesh_entities(
         }
 
         let entity = builder.build();
-        crate::log!(
+        log!(
             "Created ECS entity {} (asset_id={}) for mesh {}: entity_id={}, parent={}",
             entity_name,
             asset_id,
@@ -1058,7 +1058,7 @@ fn apply_loaded_constraints(load_result: &ModelLoadResult, world: &mut World) {
     world.insert_component(model_entity, constraint_set);
     world.insert_component(model_entity, Constrained);
 
-    crate::log!(
+    log!(
         "Applied {} constraints to entity {}",
         load_result.constraints.len(),
         model_entity
@@ -1086,7 +1086,7 @@ fn apply_loaded_spring_bones(load_result: &ModelLoadResult, world: &mut World) {
         world.insert_resource(SpringBoneState::default());
     }
 
-    crate::log!(
+    log!(
         "Applied VRMC spring bones to entity {}: {} chains, {} colliders",
         model_entity,
         setup.chains.len(),
@@ -1175,7 +1175,7 @@ fn resolve_texture_path(texture_path: &str, model_path: &str) -> PathBuf {
         for name in &candidate_names {
             let candidate = dir.join(name);
             if candidate.exists() {
-                crate::log!(
+                log!(
                     "Resolved texture: {} -> {}",
                     texture_path,
                     candidate.display()
@@ -1185,6 +1185,6 @@ fn resolve_texture_path(texture_path: &str, model_path: &str) -> PathBuf {
         }
     }
 
-    crate::log!("Texture not found, using original path: {}", texture_path);
+    log!("Texture not found, using original path: {}", texture_path);
     original.to_path_buf()
 }

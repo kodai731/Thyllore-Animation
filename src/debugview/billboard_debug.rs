@@ -1,4 +1,3 @@
-use crate::log;
 use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
 use crate::vulkanr::swapchain::RRSwapchain;
 use cgmath::{Deg, Vector3};

@@ -475,7 +475,7 @@ unsafe fn process_ui_events_and_render_frame(
                     &app.data.ecs_assets,
                     &*clip_library,
                 ) {
-                    crate::log!("Animation debug dump failed: {:?}", e);
+                    log_warn!("Animation debug dump failed: {:?}", e);
                 }
             }
         }
@@ -492,11 +492,11 @@ unsafe fn process_ui_events_and_render_frame(
         let msg = e.to_string();
         if msg.contains("SWAPCHAIN_OUT_OF_DATE") {
             if let Err(e) = app.recreate_swapchain(window) {
-                crate::log!("[ERROR] Failed to recreate swapchain: {:?}", e);
+                log_error!("Failed to recreate swapchain: {:?}", e);
                 return;
             }
         } else {
-            crate::log!("[ERROR] Frame error: {:?}", e);
+            log_error!("Frame error: {:?}", e);
             return;
         }
     }
@@ -541,7 +541,7 @@ fn handle_clip_load_from_file(app: &mut App) {
     ) {
         Ok(_new_id) => {}
         Err(e) => {
-            crate::msg_error!("Failed to load clip: {:?}", e);
+            msg_error!("Failed to load clip: {:?}", e);
         }
     }
 }
@@ -573,10 +573,10 @@ fn handle_clip_save_to_file(app: &mut App, source_id: u64) {
 
     match clip_library_save_to_file(&clip_library, source_id, &path) {
         Ok(()) => {
-            crate::msg_info!("Saved clip '{}' to {:?}", new_name, path);
+            msg_info!("Saved clip '{}' to {:?}", new_name, path);
         }
         Err(e) => {
-            crate::msg_error!("Failed to save clip: {:?}", e);
+            msg_error!("Failed to save clip: {:?}", e);
         }
     }
 }
@@ -642,8 +642,8 @@ fn handle_clip_export_fbx(app: &mut App, source_id: u64) {
     };
 
     match result {
-        Ok(()) => crate::msg_info!("FBX exported: {:?}", path),
-        Err(e) => crate::msg_error!("FBX export failed: {:?}", e),
+        Ok(()) => msg_info!("FBX exported: {:?}", path),
+        Err(e) => msg_error!("FBX export failed: {:?}", e),
     }
 }
 
@@ -671,7 +671,7 @@ fn handle_clip_export_gltf(app: &mut App, source_id: u64) {
         .and_then(|cache| cache.source_path.clone());
 
     let Some(source_glb_path) = source_glb_path else {
-        crate::msg_error!("glTF export failed: no source glTF/GLB model loaded");
+        msg_error!("glTF export failed: no source glTF/GLB model loaded");
         return;
     };
 
@@ -691,8 +691,8 @@ fn handle_clip_export_gltf(app: &mut App, source_id: u64) {
         &skeleton,
         &path,
     ) {
-        Ok(()) => crate::msg_info!("glTF exported: {:?}", path),
-        Err(e) => crate::msg_error!("glTF export failed: {:?}", e),
+        Ok(()) => msg_info!("glTF exported: {:?}", path),
+        Err(e) => msg_error!("glTF export failed: {:?}", e),
     }
 }
 
@@ -714,7 +714,7 @@ fn handle_spring_bone_save(app: &mut App) {
     let baked_id = match spring_state.baked_clip_source_id {
         Some(id) => id,
         None => {
-            crate::msg_warn!("No baked clip to save");
+            msg_warn!("No baked clip to save");
             return;
         }
     };
@@ -732,10 +732,10 @@ fn handle_spring_bone_save(app: &mut App) {
     let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
     match clip_library_save_to_file(&clip_library, baked_id, &path) {
         Ok(()) => {
-            crate::msg_info!("Saved spring bone bake to {:?}", path);
+            msg_info!("Saved spring bone bake to {:?}", path);
         }
         Err(e) => {
-            crate::msg_error!("Failed to save spring bone bake: {:?}", e);
+            msg_error!("Failed to save spring bone bake: {:?}", e);
         }
     }
 }

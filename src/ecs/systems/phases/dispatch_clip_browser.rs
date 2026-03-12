@@ -55,7 +55,7 @@ pub fn dispatch_clip_browser_ecs_events(
                 if let Some(source) = source {
                     record_clip_added(world, id, source);
                 }
-                crate::log!("Created empty clip (id={})", id);
+                log!("Created empty clip (id={})", id);
             }
 
             UIEvent::ClipBrowserDuplicate(source_id) => {
@@ -76,7 +76,7 @@ pub fn dispatch_clip_browser_ecs_events(
                     if let Some(source) = source {
                         record_clip_added(world, new_id, source);
                     }
-                    crate::log!("Duplicated clip {} -> {}", source_id, new_id);
+                    log!("Duplicated clip {} -> {}", source_id, new_id);
                 }
             }
 
@@ -95,9 +95,9 @@ pub fn dispatch_clip_browser_ecs_events(
                     if let Some(removed) = removed_source {
                         record_clip_removed(world, *source_id, removed);
                     }
-                    crate::log!("Deleted clip (id={})", source_id);
+                    log!("Deleted clip (id={})", source_id);
                 } else {
-                    crate::log!(
+                    log!(
                         "Cannot delete clip {}: {} references remain",
                         source_id,
                         ref_count

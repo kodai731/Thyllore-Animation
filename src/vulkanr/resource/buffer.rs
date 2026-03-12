@@ -1,4 +1,3 @@
-use crate::log;
 use crate::vulkanr::command::*;
 use crate::vulkanr::core::device::*;
 use crate::vulkanr::data::UniformBufferObject;

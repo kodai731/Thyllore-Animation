@@ -53,7 +53,7 @@ pub fn dispatch_timeline_events(events: &[UIEvent], world: &mut World, assets: &
                 let lib = world.resource::<ClipLibrary>();
                 let duration = lib.get(*source_id).map(|c| c.duration).unwrap_or(1.0);
                 let asset_id = lib.get_asset_id_for_source(*source_id);
-                crate::log!(
+                log!(
                     "[ClipSelect] source_id={}, asset_id={:?}, duration={:.3}",
                     source_id,
                     asset_id,

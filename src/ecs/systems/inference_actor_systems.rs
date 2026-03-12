@@ -17,7 +17,7 @@ pub fn inference_actor_initialize(setup: &InferenceActorSetup, state: &mut Infer
     let handle = match InferenceThreadHandle::spawn(&setup.model_path, setup.actor_id) {
         Ok(h) => h,
         Err(e) => {
-            crate::log!(
+            log!(
                 "Failed to spawn inference actor {}: {:?}",
                 setup.actor_id,
                 e
@@ -34,7 +34,7 @@ pub fn inference_actor_initialize(setup: &InferenceActorSetup, state: &mut Infer
         },
     );
 
-    crate::log!("Initialized inference actor {}", setup.actor_id);
+    log!("Initialized inference actor {}", setup.actor_id);
 }
 
 pub fn inference_actor_poll(state: &mut InferenceActorState) {
@@ -72,7 +72,7 @@ pub fn inference_actor_submit(
     match runtime.thread_handle.send(request) {
         Ok(()) => Some(request_id),
         Err(e) => {
-            crate::log!(
+            log!(
                 "Failed to send inference request to actor {}: {:?}",
                 actor_id,
                 e

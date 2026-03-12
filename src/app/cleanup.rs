@@ -11,11 +11,11 @@ use winit::window::Window;
 
 impl App {
     unsafe fn destroy(&mut self) {
-        crate::log!("Destroying application resources...");
+        log!("Destroying application resources...");
 
         if let Some(sampler) = self.data.raytracing.gbuffer_sampler {
             self.rrdevice.device.destroy_sampler(sampler, None);
-            crate::log!("Destroyed G-Buffer sampler");
+            log!("Destroyed G-Buffer sampler");
         }
 
         if let Some(onion_skin_pass) = self.data.raytracing.onion_skin_pass.take() {
@@ -24,7 +24,7 @@ impl App {
 
         if let Some(gbuffer_pipeline) = self.data.raytracing.gbuffer_pipeline.take() {
             gbuffer_pipeline.destroy(&self.rrdevice.device);
-            crate::log!("Destroyed G-Buffer pipeline");
+            log!("Destroyed G-Buffer pipeline");
         }
 
         if let Some(mut dof_descriptor) = self.data.raytracing.dof_descriptor.take() {
@@ -92,34 +92,34 @@ impl App {
         ) {
             self.rrdevice.device.destroy_buffer(buffer, None);
             self.rrdevice.device.free_memory(memory, None);
-            crate::log!("Destroyed scene uniform buffer");
+            log!("Destroyed scene uniform buffer");
         }
 
         if let Some(mut ray_query_descriptor) = self.data.raytracing.ray_query_descriptor.take() {
             ray_query_descriptor.destroy(&self.rrdevice.device);
-            crate::log!("Destroyed ray query descriptor set");
+            log!("Destroyed ray query descriptor set");
         }
 
         if let Some(ray_query_pipeline) = self.data.raytracing.ray_query_pipeline.take() {
             ray_query_pipeline.destroy(&self.rrdevice.device);
-            crate::log!("Destroyed ray query pipeline");
+            log!("Destroyed ray query pipeline");
         }
 
         if let Some(mut acceleration_structure) = self.data.raytracing.acceleration_structure.take()
         {
             acceleration_structure.destroy(&self.rrdevice.device);
-            crate::log!("Destroyed acceleration structure");
+            log!("Destroyed acceleration structure");
         }
 
         if let Some(mut gbuffer) = self.data.raytracing.gbuffer.take() {
             gbuffer.destroy(&*self.rrdevice.device);
-            crate::log!("Destroyed G-Buffer");
+            log!("Destroyed G-Buffer");
         }
 
         self.data.graphics_resources.destroy(&self.rrdevice);
-        crate::log!("Destroyed render resources");
+        log!("Destroyed render resources");
 
-        crate::log!("All application resources destroyed");
+        log!("All application resources destroyed");
     }
 
     pub unsafe fn recreate_swapchain(&mut self, window: &Window) -> Result<()> {
@@ -186,7 +186,7 @@ impl App {
             swapchain_state.images_in_flight = vec![vk::Fence::null(); image_count];
         }
 
-        crate::log!("Swapchain recreated successfully");
+        log!("Swapchain recreated successfully");
         Ok(())
     }
 }

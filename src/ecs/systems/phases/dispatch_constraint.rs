@@ -89,7 +89,7 @@ pub fn dispatch_constraint_bake_events(
         let skeleton = match assets.skeletons.values().next() {
             Some(skel_asset) => skel_asset.skeleton.clone(),
             None => {
-                crate::log!("Bake failed: no skeleton found");
+                log_error!("Bake failed: no skeleton found");
                 continue;
             }
         };
@@ -97,7 +97,7 @@ pub fn dispatch_constraint_bake_events(
         let constraint_set = match world.get_component::<ConstraintSet>(*entity) {
             Some(set) => set.clone(),
             None => {
-                crate::log!("Bake failed: no ConstraintSet on entity");
+                log_error!("Bake failed: no ConstraintSet on entity");
                 continue;
             }
         };
@@ -142,6 +142,6 @@ pub fn dispatch_constraint_bake_events(
 
         let mut clip_library = world.resource_mut::<ClipLibrary>();
         let new_id = constraint_bake_register(&mut clip_library, assets, baked);
-        crate::log!("Baked constraints to new clip (id={})", new_id);
+        log!("Baked constraints to new clip (id={})", new_id);
     }
 }

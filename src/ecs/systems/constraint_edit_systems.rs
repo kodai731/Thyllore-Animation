@@ -12,7 +12,7 @@ pub fn handle_constraint_add(world: &mut World, entity: Entity, type_index: u8) 
     };
     let priority = constraint.default_priority();
 
-    crate::log!(
+    log!(
         "[ConstraintAdd] entity={:?} type={} priority={}",
         entity,
         type_index,
@@ -78,7 +78,7 @@ fn create_default_constraint(type_index: u8) -> Option<ConstraintType> {
         4 => Some(ConstraintType::Rotation(RotationConstraintData::default())),
         5 => Some(ConstraintType::Scale(ScaleConstraintData::default())),
         _ => {
-            crate::log!(
+            log!(
                 "Invalid constraint type index: {}. Valid range: 0-5",
                 type_index
             );

@@ -42,59 +42,59 @@ impl App {
     }
 
     pub fn dump_debug_info(&self) {
-        crate::log!("========== DUMP DEBUG INFORMATION ==========");
+        log!("========== DUMP DEBUG INFORMATION ==========");
 
         let clip_library = self.clip_library();
         let model_state = self.model_state();
 
-        crate::log!("--- Model Info ---");
-        crate::log!("  current_model_path: {}", model_state.model_path);
-        crate::log!(
+        log!("--- Model Info ---");
+        log!("  current_model_path: {}", model_state.model_path);
+        log!(
             "  meshes count: {}",
             self.data.graphics_resources.meshes.len()
         );
-        crate::log!("  has_skinned_meshes: {}", model_state.has_skinned_meshes);
-        crate::log!("  animation clips count: {}", clip_library.clip_count());
-        crate::log!(
+        log!("  has_skinned_meshes: {}", model_state.has_skinned_meshes);
+        log!("  animation clips count: {}", clip_library.clip_count());
+        log!(
             "  morph_animations count: {}",
             clip_library.morph_animation.animations.len()
         );
-        crate::log!(
+        log!(
             "  skeletons count: {}",
             clip_library.animation.skeletons.len()
         );
 
-        crate::log!("--- GraphicsResources Info ---");
-        crate::log!(
+        log!("--- GraphicsResources Info ---");
+        log!(
             "  meshes count: {}",
             self.data.graphics_resources.meshes.len()
         );
-        crate::log!(
+        log!(
             "  materials count: {}",
             self.data.graphics_resources.materials.materials.len()
         );
-        crate::log!(
+        log!(
             "  mesh_material_ids: {:?}",
             self.data.graphics_resources.mesh_material_ids
         );
 
         for (i, mesh) in self.data.graphics_resources.meshes.iter().enumerate() {
-            crate::log!(
+            log!(
                 "  mesh[{}]: render_to_gbuffer={}, vertex_buffer={:?}, indices={}",
                 i,
                 mesh.render_to_gbuffer,
                 mesh.vertex_buffer.buffer,
                 mesh.index_buffer.indices
             );
-            crate::log!(
+            log!(
                 "    vertex_data.vertices count: {}",
                 mesh.vertex_data.vertices.len()
             );
-            crate::log!("    object_index: {}", mesh.object_index);
+            log!("    object_index: {}", mesh.object_index);
 
             if !mesh.vertex_data.vertices.is_empty() {
                 let v = &mesh.vertex_data.vertices[0];
-                crate::log!(
+                log!(
                     "    vertex_data[0].pos: ({:.4}, {:.4}, {:.4})",
                     v.pos.x,
                     v.pos.y,
@@ -115,7 +115,7 @@ impl App {
                     min_z = min_z.min(v.pos.z);
                     max_z = max_z.max(v.pos.z);
                 }
-                crate::log!(
+                log!(
                     "    bounds: X[{:.2}, {:.2}], Y[{:.2}, {:.2}], Z[{:.2}, {:.2}]",
                     min_x,
                     max_x,
@@ -127,17 +127,17 @@ impl App {
             }
         }
 
-        crate::log!("--- Camera Info ---");
-        crate::log!("  pivot: {:?}", self.camera().pivot);
+        log!("--- Camera Info ---");
+        log!("  pivot: {:?}", self.camera().pivot);
 
-        crate::log!("--- Animation Info ---");
+        log!("--- Animation Info ---");
         let timeline = self
             .data
             .ecs_world
             .resource::<crate::ecs::resource::TimelineState>();
-        crate::log!("  animation_playing: {}", timeline.playing);
-        crate::log!("  clips count: {}", clip_library.clip_count());
+        log!("  animation_playing: {}", timeline.playing);
+        log!("  clips count: {}", clip_library.clip_count());
 
-        crate::log!("========== END DEBUG INFORMATION ==========");
+        log!("========== END DEBUG INFORMATION ==========");
     }
 }

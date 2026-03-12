@@ -80,7 +80,7 @@ fn run_inference_loop(
                 }
             }
             Err(e) => {
-                crate::log!("Inference error for actor {}: {:?}", request.actor_id, e);
+                log_error!("Inference error for actor {}: {:?}", request.actor_id, e);
             }
         }
     }
@@ -159,7 +159,7 @@ fn execute_curve_copilot(
     let (_shape, confidence_data) = outputs[1].try_extract_tensor::<f32>()?;
     let conf_raw: Vec<f32> = confidence_data.to_vec();
 
-    crate::log!("CurveCopilot raw confidence (pre-sigmoid): {:?}", &conf_raw);
+    log!("CurveCopilot raw confidence (pre-sigmoid): {:?}", &conf_raw);
 
     let conf: Vec<f32> = conf_raw.iter().map(|&x| 1.0 / (1.0 + (-x).exp())).collect();
 
@@ -185,7 +185,7 @@ fn execute_curve_copilot(
         });
     }
 
-    crate::log!(
+    log!(
         "CurveCopilot raw output: {} steps, pred_len={}, conf_len={}, query_times={:?}",
         steps.len(),
         pred.len(),

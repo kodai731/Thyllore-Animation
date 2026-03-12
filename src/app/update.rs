@@ -292,60 +292,60 @@ impl App {
         let camera = self.camera();
         let cam_pos = compute_camera_position(&camera);
 
-        crate::log!("=== Shadow Debug Info ===");
-        crate::log!(
+        log!("=== Shadow Debug Info ===");
+        log!(
             "Light position: ({:.2}, {:.2}, {:.2})",
             light.light_position.x,
             light.light_position.y,
             light.light_position.z
         );
-        crate::log!(
+        log!(
             "Light gizmo position: ({:.2}, {:.2}, {:.2})",
             self.light_gizmo().position.position.x,
             self.light_gizmo().position.position.y,
             self.light_gizmo().position.position.z
         );
-        crate::log!(
+        log!(
             "Camera position: ({:.2}, {:.2}, {:.2})",
             cam_pos.x,
             cam_pos.y,
             cam_pos.z
         );
 
-        crate::log!("Shadow settings:");
-        crate::log!("  strength: {:.2}", light.shadow_strength);
-        crate::log!("  normal_offset: {:.2}", light.shadow_normal_offset);
-        crate::log!(
+        log!("Shadow settings:");
+        log!("  strength: {:.2}", light.shadow_strength);
+        log!("  normal_offset: {:.2}", light.shadow_normal_offset);
+        log!(
             "  debug_view_mode: {:?}",
             self.debug_view_state().debug_view_mode
         );
-        crate::log!(
+        log!(
             "  distance_attenuation: {}",
             light.distance_attenuation.is_enabled()
         );
 
         if let Some(ref accel_struct) = self.data.raytracing.acceleration_structure {
-            crate::log!("Acceleration Structure:");
-            crate::log!("  BLAS count: {}", accel_struct.blas_list.len());
+            log!("Acceleration Structure:");
+            log!("  BLAS count: {}", accel_struct.blas_list.len());
             for (i, blas) in accel_struct.blas_list.iter().enumerate() {
-                crate::log!(
+                log!(
                     "    BLAS[{}]: AS={:?}, device_addr={:#x}",
                     i,
                     blas.acceleration_structure.is_some(),
                     blas.device_address
                 );
             }
-            crate::log!(
+            log!(
                 "  TLAS: AS={:?}",
                 accel_struct.tlas.acceleration_structure.is_some()
             );
         } else {
-            crate::log!("WARNING: No acceleration structure!");
+            log_warn!("No acceleration structure!");
         }
 
-        crate::log!("Vertex buffers (GPU):");
+        log!("Vertex buffers (GPU):");
         for (i, mesh) in self.data.graphics_resources.meshes.iter().enumerate() {
-            crate::log!(
+            log!(
                 "  Mesh[{}]: {} vertices, {} indices",
                 i,
                 mesh.vertex_data.vertices.len(),
@@ -353,13 +353,13 @@ impl App {
             );
             if !mesh.vertex_data.vertices.is_empty() {
                 let v = &mesh.vertex_data.vertices[0];
-                crate::log!(
+                log!(
                     "    vertex[0].pos: ({:.2}, {:.2}, {:.2})",
                     v.pos.x,
                     v.pos.y,
                     v.pos.z
                 );
-                crate::log!(
+                log!(
                     "    vertex[0].normal: ({:.3}, {:.3}, {:.3})",
                     v.normal.x,
                     v.normal.y,
@@ -368,6 +368,6 @@ impl App {
             }
         }
 
-        crate::log!("=========================");
+        log!("=========================");
     }
 }

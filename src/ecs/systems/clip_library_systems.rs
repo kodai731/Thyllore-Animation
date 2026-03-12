@@ -102,7 +102,7 @@ pub fn clip_library_save_to_file(lib: &ClipLibrary, id: SourceClipId, path: &Pat
     ron::ser::to_writer_pretty(writer, &clip_file, ron::ser::PrettyConfig::default())
         .with_context(|| format!("Failed to serialize clip to: {:?}", path))?;
 
-    crate::log!(
+    log!(
         "Saved animation clip '{}' to {:?}",
         source.editable_clip.name,
         path
@@ -132,7 +132,7 @@ pub fn clip_library_load_from_file(
         if needs_remap {
             let remapped_count = clip.tracks.len();
             clip_remap_bone_ids(&mut clip, name_to_id);
-            crate::log!(
+            log!(
                 "Remapped {} bone_ids by bone_name for '{}'",
                 remapped_count,
                 clip.name,
@@ -142,7 +142,7 @@ pub fn clip_library_load_from_file(
 
     clip.source_path = Some(path.to_string_lossy().to_string());
 
-    crate::msg_info!("Loaded animation clip '{}' from {:?}", clip.name, path);
+    msg_info!("Loaded animation clip '{}' from {:?}", clip.name, path);
 
     let id = clip_library_register_and_activate(lib, assets, clip);
     Ok(id)

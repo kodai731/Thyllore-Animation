@@ -114,7 +114,7 @@ fn collect_animated_entities(
     for (entity, animator) in world.iter_components::<Animator>() {
         let Some(schedule) = world.get_component::<ClipSchedule>(entity) else {
             if should_log {
-                crate::log!("[PlaybackDebug] entity {:?}: no ClipSchedule", entity);
+                log!("[PlaybackDebug] entity {:?}: no ClipSchedule", entity);
             }
             continue;
         };
@@ -146,7 +146,7 @@ fn collect_animated_entities(
             let asset_id = src_id.and_then(|sid| clip_library.get_asset_id_for_source(sid));
             let asset_exists =
                 asset_id.map_or(false, |aid| assets.animation_clips.contains_key(&aid));
-            crate::log!(
+            log!(
                 "[PlaybackDebug] entity {:?}: source_id={:?}, asset_id={:?}, asset_exists={}, time={:.3}, instances={}",
                 entity, src_id, asset_id, asset_exists, animator.time, schedule.instances.len()
             );
@@ -155,7 +155,7 @@ fn collect_animated_entities(
         let active_instances = build_active_instances(schedule, clip_library, animator);
 
         if should_log && active_instances.is_empty() {
-            crate::log!(
+            log!(
                 "[PlaybackDebug] entity {:?}: active_instances is EMPTY",
                 entity
             );
@@ -177,7 +177,7 @@ fn collect_animated_entities(
     }
 
     if should_log {
-        crate::log!("[PlaybackDebug] total animated entities: {}", infos.len());
+        log!("[PlaybackDebug] total animated entities: {}", infos.len());
     }
 
     infos

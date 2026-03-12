@@ -64,7 +64,7 @@ impl DofBuffer {
 
         Self::transition_initial_layout(rrdevice, command_pool, output_image)?;
 
-        crate::log!("Created DOF buffer: {}x{}", width, height);
+        log!("Created DOF buffer: {}x{}", width, height);
 
         Ok(Self {
             output_image,
@@ -209,7 +209,7 @@ impl DofBuffer {
         *self = new_buf;
         rrdevice.device.destroy_render_pass(render_pass, None);
 
-        crate::log!("Resized DOF buffer to: {}x{}", new_width, new_height);
+        log!("Resized DOF buffer to: {}x{}", new_width, new_height);
         Ok(())
     }
 
@@ -224,7 +224,7 @@ impl DofBuffer {
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         self.destroy_resources(device);
         device.destroy_render_pass(self.render_pass, None);
-        crate::log!("Destroyed DOF buffer");
+        log!("Destroyed DOF buffer");
     }
 
     pub fn extent(&self) -> vk::Extent2D {

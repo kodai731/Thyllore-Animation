@@ -724,7 +724,7 @@ pub fn transform_gizmo_sync_to_bone(
                 world_pos.z * mesh_scale,
             );
             if !gizmo.visible {
-                crate::log!(
+                log!(
                     "[GizmoSync] bone={}, raw=({:.4},{:.4},{:.4}), scaled=({:.4},{:.4},{:.4}), mesh_scale={}",
                     idx, raw_pos.x, raw_pos.y, raw_pos.z,
                     gizmo.position.position.x, gizmo.position.position.y, gizmo.position.position.z,

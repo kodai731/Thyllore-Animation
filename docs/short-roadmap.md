@@ -83,9 +83,58 @@
 
 ### ログの改善
 
-- 他アプリでどのようにログを収集するか調べる
-- 開発モードでは手元にログを書く
-- リリースモードではどうするか調べる
+#### 調査結果: 主要エンジンのリリースビルド時のログ戦略
+
+| エンジン | 方式 | リリースで残るレベル |
+|---------|------|-------------------|
+| Unreal Engine | コンパイルアウト (`NO_LOGGING`, `UE_BUILD_SHIPPING`) | Error / Warning / Display のみ |
+| Bevy (Rust) | `release_max_level_warn` feature でゼロコスト除去 | Warn / Error のみ |
+| Blender | ランタイム verbosity 制御 (Clog) | Warn / Error が実質有効 |
+| Unity | 自動除去なし（手動でラッパーが必要） | 全ログ残存 |
+| Godot | `is_debug_build()` での条件分岐 | 全ログ残存 |
+
+- Unreal / Bevy が業界のベストプラクティス: リリースでは Warn 以上のみ、Debug/Info はコンパイル除去
+- ML推論ログはリリースでは Warn 以上のみ残すのが標準 (Unreal NNE, Bevy 共通)
+
+#### 調査結果: ログファイルの保存場所
+
+現状はプロジェクトディレクトリ内の `log/` にログを書いている。
+主要アプリはユーザーディレクトリ配下の標準パスを使用している。
+
+| アプリ | Windows ログパス |
+|-------|----------------|
+| Unreal (エディタ) | `<Project>\Saved\Logs\` |
+| Unreal (パッケージ済) | `%LOCALAPPDATA%\<GameName>\Saved\Logs\` |
+| Unity (エディタ) | `%LOCALAPPDATA%\Unity\Editor\` |
+| Unity (ビルド済) | `%LOCALAPPDATA%Low\<Company>\<Product>\` |
+| Blender | `%APPDATA%\Blender Foundation\Blender\<ver>\` |
+| Maya | `%LOCALAPPDATA%\Autodesk\Maya\<ver>\logs\` |
+| VS Code | `%APPDATA%\Code\logs\` |
+| Chrome | `%LOCALAPPDATA%\Google\Chrome\User Data\` |
+
+OS別の標準ログパス:
+
+| OS | 推奨パス |
+|---|---------|
+| Windows | `%LOCALAPPDATA%\<AppName>\logs\` |
+| macOS | `~/Library/Logs/<AppName>/` |
+| Linux | `$XDG_STATE_HOME/<appname>/` (`~/.local/state/<appname>/`) |
+
+v0.0.1 は GitHub zip 配布のため、ユーザーが展開先を自由に選べる。
+`Program Files` へのインストールではないので、アプリ同梱の `log/` で権限問題は起きない。
+`%LOCALAPPDATA%` への移行はインストーラー対応時に検討する。
+
+#### 対応方針
+
+- 現在の `crate::log!()` は単一レベルで debug/release の区別がない
+- Bevy / Unreal に倣い、ログレベルを導入する:
+    - `crate::log_error!` → Error（リリースでも残す）
+    - `crate::log_warn!` → Warning（リリースでも残す）
+    - `crate::log!` → Info 相当（リリースでは `#[cfg(debug_assertions)]` で除去）
+- CurveCopilot 等の数値診断ログは Info 相当 → リリースでは除去
+- v0.0.1: ログ出力先は現状の `log/` を維持（zip 配布のため問題なし）
+- 将来（インストーラー対応時）: `%LOCALAPPDATA%\<AppName>\logs\` に移行
+    - `directories` クレートでクロスプラットフォーム対応
 
 ### 描画順の整理
 

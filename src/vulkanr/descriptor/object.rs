@@ -134,7 +134,7 @@ impl ObjectDescriptorSet {
     pub fn allocate_slot(&mut self) -> usize {
         let slot = self.next_slot;
         if slot >= self.max_objects {
-            crate::log!(
+            log!(
                 "[ObjectDescriptorSet] WARNING: slot {} exceeds max_objects {}. GPU buffer overflow!",
                 slot, self.max_objects
             );

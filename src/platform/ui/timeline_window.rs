@@ -73,7 +73,7 @@ pub fn build_timeline_window(
                 .map(|c| c.duration)
                 .unwrap_or(5.0);
             handle_timeline_shortcuts(ui, ui_events, state);
-            handle_mouse_wheel_zoom(ui, state, clip_duration);
+            handle_mouse_wheel_zoom(ui, ui_events, state, clip_duration);
         });
 }
 
@@ -123,11 +123,11 @@ fn build_transport_controls(
 
     ui.same_line();
     if ui.button("-") {
-        state.zoom_out(min_zoom);
+        ui_events.send(UIEvent::TimelineZoomOut { min_zoom });
     }
     ui.same_line();
     if ui.button("+") {
-        state.zoom_in(max_zoom);
+        ui_events.send(UIEvent::TimelineZoomIn { max_zoom });
     }
     ui.same_line();
     ui.text(format!("Zoom: {:.1}x", state.zoom_level));
@@ -1256,7 +1256,12 @@ fn compute_zoom_limits(available_width: f32, clip_duration: f32, frame_rate: f32
     (min_zoom.max(0.01), max_zoom)
 }
 
-fn handle_mouse_wheel_zoom(ui: &imgui::Ui, state: &mut TimelineState, clip_duration: f32) {
+fn handle_mouse_wheel_zoom(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    state: &TimelineState,
+    clip_duration: f32,
+) {
     let hovered = ui.is_window_hovered_with_flags(imgui::WindowHoveredFlags::CHILD_WINDOWS);
     if !hovered || !ui.io().key_ctrl {
         return;
@@ -1271,9 +1276,9 @@ fn handle_mouse_wheel_zoom(ui: &imgui::Ui, state: &mut TimelineState, clip_durat
 
     let wheel = ui.io().mouse_wheel;
     if wheel > 0.0 {
-        state.zoom_in(max_zoom);
+        ui_events.send(UIEvent::TimelineZoomIn { max_zoom });
     } else if wheel < 0.0 {
-        state.zoom_out(min_zoom);
+        ui_events.send(UIEvent::TimelineZoomOut { min_zoom });
     }
 }
 

@@ -12,7 +12,11 @@ use crate::ecs::component::{
     ColliderShape, SpringChain, SpringChainId, SpringColliderDef, SpringColliderGroup,
     SpringColliderGroupId, SpringColliderId, SpringJointParam,
 };
-use crate::ecs::resource::{HierarchyDisplayMode, SelectedKeyframe, SelectionModifier};
+use crate::ecs::resource::{
+    AutoExposure, CoordinateSpace, DepthOfField, HierarchyDisplayMode, OnionSkinningConfig,
+    PhysicalCameraParameters, SelectedKeyframe, SelectionModifier, TransformGizmoMode,
+    TransformGizmoState,
+};
 use crate::ecs::world::Entity;
 
 #[derive(Clone, Debug)]
@@ -334,6 +338,24 @@ pub enum UIEvent {
     TextToMotionApply,
     #[cfg(feature = "text-to-motion")]
     TextToMotionCancel,
+
+    TimelineZoomIn {
+        max_zoom: f32,
+    },
+    TimelineZoomOut {
+        min_zoom: f32,
+    },
+
+    SetBoneGizmoVisible(bool),
+    SetTransformGizmoMode(TransformGizmoMode),
+    SetTransformGizmoSpace(CoordinateSpace),
+    UpdateTransformGizmoState(Box<TransformGizmoState>),
+    UpdateDepthOfField(DepthOfField),
+    UpdatePhysicalCamera(PhysicalCameraParameters),
+    UpdateAutoExposure(AutoExposure),
+    UpdateOnionSkinning(OnionSkinningConfig),
+    SetGridShowYAxis(bool),
+    ClearMessageLog,
 }
 
 #[derive(Default)]

@@ -6,6 +6,7 @@ mod dispatch_constraint;
 mod dispatch_edit_history;
 mod dispatch_hierarchy;
 mod dispatch_ml;
+mod dispatch_overlay;
 mod dispatch_pose_library;
 mod dispatch_scene;
 mod dispatch_spring_bone;

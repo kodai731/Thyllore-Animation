@@ -13,6 +13,7 @@ pub enum CoordinateSpace {
     Local,
 }
 
+#[derive(Clone, Debug)]
 pub struct TransformGizmoState {
     pub mode: TransformGizmoMode,
     pub coordinate_space: CoordinateSpace,

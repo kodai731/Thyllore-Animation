@@ -39,7 +39,7 @@ pub fn build_bottom_panel(
                 });
 
                 imgui::TabItem::new(&msg_tab_label).build(ui, || {
-                    build_message_window_content(ui, message_log);
+                    build_message_window_content(ui, ui_events, message_log);
                 });
             });
         });

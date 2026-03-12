@@ -15,6 +15,7 @@ use super::dispatch_constraint::{
 };
 use super::dispatch_edit_history::dispatch_edit_history_events;
 use super::dispatch_hierarchy::dispatch_hierarchy_events;
+use super::dispatch_overlay::dispatch_overlay_events;
 use super::dispatch_pose_library::dispatch_pose_library_events;
 use super::dispatch_scene::dispatch_scene_events;
 use super::dispatch_spring_bone::{
@@ -49,6 +50,7 @@ pub fn run_event_dispatch_phase(
     dispatch_clip_browser_ecs_events(&events, world, assets);
     dispatch_edit_history_events(&events, world);
     dispatch_scene_events(&events, world);
+    dispatch_overlay_events(&events, world);
     dispatch_debug_constraint_events(&events, world, assets);
     dispatch_constraint_edit_events(&events, world);
     dispatch_constraint_bake_events(&events, world, assets);

@@ -77,14 +77,12 @@ pub fn dispatch_curve_suggestion_events(
 
                     let mut state = world.resource_mut::<CurveSuggestionState>();
                     curve_suggestion_dismiss(&mut state);
-                    crate::log!("CurveCopilot: suggestion accepted");
                 }
             }
 
             UIEvent::CurveSuggestionDismiss => {
                 let mut state = world.resource_mut::<CurveSuggestionState>();
                 curve_suggestion_dismiss(&mut state);
-                crate::log!("CurveCopilot: suggestion dismissed");
             }
 
             _ => {}

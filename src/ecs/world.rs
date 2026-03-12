@@ -39,20 +39,26 @@ pub struct ResMut<'a, T: 'static>(RefMut<'a, Box<dyn Any>>, std::marker::Phantom
 impl<'a, T: 'static> std::ops::Deref for ResRef<'a, T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        self.0.downcast_ref::<T>().unwrap()
+        self.0
+            .downcast_ref::<T>()
+            .expect("type mismatch in ResRef: TypeId guarantees correct type")
     }
 }
 
 impl<'a, T: 'static> std::ops::Deref for ResMut<'a, T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        self.0.downcast_ref::<T>().unwrap()
+        self.0
+            .downcast_ref::<T>()
+            .expect("type mismatch in ResMut: TypeId guarantees correct type")
     }
 }
 
 impl<'a, T: 'static> std::ops::DerefMut for ResMut<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.downcast_mut::<T>().unwrap()
+        self.0
+            .downcast_mut::<T>()
+            .expect("type mismatch in ResMut: TypeId guarantees correct type")
     }
 }
 
@@ -377,17 +383,15 @@ impl World {
     }
 
     pub fn resource<R: Resource>(&self) -> ResRef<R> {
-        self.resources.get::<R>().expect(&format!(
-            "Resource {} not found",
-            std::any::type_name::<R>()
-        ))
+        self.resources
+            .get::<R>()
+            .unwrap_or_else(|| panic!("Resource {} not found", std::any::type_name::<R>()))
     }
 
     pub fn resource_mut<R: Resource>(&self) -> ResMut<R> {
-        self.resources.get_mut::<R>().expect(&format!(
-            "Resource {} not found",
-            std::any::type_name::<R>()
-        ))
+        self.resources
+            .get_mut::<R>()
+            .unwrap_or_else(|| panic!("Resource {} not found", std::any::type_name::<R>()))
     }
 
     pub fn get_resource<R: Resource>(&self) -> Option<ResRef<R>> {

@@ -63,7 +63,8 @@ impl Components {
             typed.insert(entity, component);
         } else {
             panic!(
-                "Component type {} not registered",
+                "Component type {} not registered. Call register::<{}>() before inserting.",
+                std::any::type_name::<T>(),
                 std::any::type_name::<T>()
             );
         }

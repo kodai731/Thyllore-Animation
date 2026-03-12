@@ -25,13 +25,11 @@ impl RRSwapchain {
         instance: &Instance,
         surface: &vk::SurfaceKHR,
         rrdevice: &RRDevice,
-    ) -> Self {
-        let mut rrswapchain = create_swapchain(window, instance, surface, rrdevice).unwrap();
-        if let Err(e) = create_swapchain_image_view(rrdevice, &mut rrswapchain) {
-            eprintln!("Created swapchain image view {:?}", e);
-        }
-        println!("created swapchain");
-        rrswapchain
+    ) -> Result<Self> {
+        let mut rrswapchain = create_swapchain(window, instance, surface, rrdevice)?;
+        create_swapchain_image_view(rrdevice, &mut rrswapchain)?;
+        crate::log!("Created swapchain");
+        Ok(rrswapchain)
     }
 
     pub unsafe fn destroy(&self, device: &super::device::Device) {

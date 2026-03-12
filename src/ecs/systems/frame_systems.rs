@@ -7,16 +7,9 @@ use super::{
 };
 use crate::app::billboard::BillboardData;
 use crate::app::data::LightMoveTarget;
-use crate::ecs::resource::{Camera, LightState};
+use crate::ecs::resource::{Camera, LightState, ProjectionData};
 use crate::math::coordinate_system::perspective_infinite_reverse;
 use crate::render::RenderBackend;
-
-pub struct ProjectionData {
-    pub view: Matrix4<f32>,
-    pub proj: Matrix4<f32>,
-    pub screen_size: Vector2<f32>,
-    pub aspect: f32,
-}
 
 pub fn calculate_projection(camera: &Camera, swapchain_extent: (u32, u32)) -> ProjectionData {
     let position = compute_camera_position(camera);

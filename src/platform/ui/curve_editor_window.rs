@@ -2120,10 +2120,10 @@ fn handle_suggestion_keyboard(
     let ctrl = io.key_ctrl;
 
     if ctrl && ui.is_key_pressed(imgui::Key::Space) {
-        if let Some(first_visible) = editor_state.visible_curves.iter().next() {
+        for property_type in &editor_state.visible_curves {
             ui_events.send(UIEvent::CurveSuggestionRequest {
                 bone_id,
-                property_type: *first_visible,
+                property_type: *property_type,
             });
         }
     }

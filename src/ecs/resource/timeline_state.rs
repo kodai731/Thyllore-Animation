@@ -122,32 +122,8 @@ impl TimelineState {
         self.selected_keyframes.clear();
     }
 
-    pub fn apply_selection(&mut self, keyframe: SelectedKeyframe, modifier: SelectionModifier) {
-        match modifier {
-            SelectionModifier::Replace => self.select_keyframe(keyframe),
-            SelectionModifier::Add => {
-                self.add_keyframe_to_selection(keyframe);
-            }
-            SelectionModifier::Toggle => {
-                if self.selected_keyframes.contains(&keyframe) {
-                    self.selected_keyframes.remove(&keyframe);
-                } else {
-                    self.selected_keyframes.insert(keyframe);
-                }
-            }
-        }
-    }
-
     pub fn is_keyframe_selected(&self, keyframe: &SelectedKeyframe) -> bool {
         self.selected_keyframes.contains(keyframe)
-    }
-
-    pub fn toggle_track_expanded(&mut self, bone_id: BoneId) {
-        if self.expanded_tracks.contains(&bone_id) {
-            self.expanded_tracks.remove(&bone_id);
-        } else {
-            self.expanded_tracks.insert(bone_id);
-        }
     }
 
     pub fn is_track_expanded(&self, bone_id: BoneId) -> bool {
@@ -164,14 +140,6 @@ impl TimelineState {
 
     pub fn set_time(&mut self, time: f32) {
         self.current_time = time.max(0.0);
-    }
-
-    pub fn zoom_in(&mut self, max_zoom: f32) {
-        self.zoom_level = (self.zoom_level * 1.2).min(max_zoom);
-    }
-
-    pub fn zoom_out(&mut self, min_zoom: f32) {
-        self.zoom_level = (self.zoom_level / 1.2).max(min_zoom);
     }
 }
 

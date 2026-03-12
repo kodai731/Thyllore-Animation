@@ -42,7 +42,7 @@ pub fn timeline_process_events(
                 timeline_select_clip(timeline_state, clip_library, *clip_id);
             }
             UIEvent::TimelineToggleTrack(bone_id) => {
-                timeline_state.toggle_track_expanded(*bone_id);
+                timeline_toggle_track_expanded(timeline_state, *bone_id);
             }
             UIEvent::TimelineExpandTrack(bone_id) => timeline_state.expand_track(*bone_id),
             UIEvent::TimelineCollapseTrack(bone_id) => timeline_state.collapse_track(*bone_id),
@@ -54,7 +54,7 @@ pub fn timeline_process_events(
             } => {
                 use crate::ecs::resource::SelectedKeyframe;
                 let selected = SelectedKeyframe::new(*bone_id, *property_type, *keyframe_id);
-                timeline_state.apply_selection(selected, *modifier);
+                timeline_apply_selection(timeline_state, selected, *modifier);
             }
             UIEvent::TimelineSetKeyframeSelection {
                 keyframes,
@@ -70,6 +70,12 @@ pub fn timeline_process_events(
             }
             UIEvent::TimelineSetFrameRate(rate) => {
                 timeline_state.snap_settings.frame_rate = *rate;
+            }
+            UIEvent::TimelineZoomIn { max_zoom } => {
+                timeline_zoom_in(timeline_state, *max_zoom);
+            }
+            UIEvent::TimelineZoomOut { min_zoom } => {
+                timeline_zoom_out(timeline_state, *min_zoom);
             }
             _ => {}
         }
@@ -344,6 +350,46 @@ fn timeline_select_clip(
             clip.track_count()
         );
     }
+}
+
+pub fn timeline_apply_selection(
+    state: &mut TimelineState,
+    keyframe: crate::ecs::resource::SelectedKeyframe,
+    modifier: crate::ecs::resource::SelectionModifier,
+) {
+    use crate::ecs::resource::SelectionModifier;
+    match modifier {
+        SelectionModifier::Replace => {
+            state.selected_keyframes.clear();
+            state.selected_keyframes.insert(keyframe);
+        }
+        SelectionModifier::Add => {
+            state.selected_keyframes.insert(keyframe);
+        }
+        SelectionModifier::Toggle => {
+            if state.selected_keyframes.contains(&keyframe) {
+                state.selected_keyframes.remove(&keyframe);
+            } else {
+                state.selected_keyframes.insert(keyframe);
+            }
+        }
+    }
+}
+
+pub fn timeline_toggle_track_expanded(state: &mut TimelineState, bone_id: BoneId) {
+    if state.expanded_tracks.contains(&bone_id) {
+        state.expanded_tracks.remove(&bone_id);
+    } else {
+        state.expanded_tracks.insert(bone_id);
+    }
+}
+
+pub fn timeline_zoom_in(state: &mut TimelineState, max_zoom: f32) {
+    state.zoom_level = (state.zoom_level * 1.2).min(max_zoom);
+}
+
+pub fn timeline_zoom_out(state: &mut TimelineState, min_zoom: f32) {
+    state.zoom_level = (state.zoom_level / 1.2).max(min_zoom);
 }
 
 pub fn timeline_update(

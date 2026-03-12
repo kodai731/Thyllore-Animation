@@ -518,7 +518,7 @@ impl RRPipeline {
         topology: PrimitiveTopology,
         polygon_mode: vk::PolygonMode,
         cull_mode: vk::CullModeFlags,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut builder = PipelineBuilder::new(vertex_shader_path, fragment_shader_path)
             .vertex_input(VertexInputConfig::Standard)
             .topology(topology)
@@ -534,9 +534,7 @@ impl RRPipeline {
             });
         }
 
-        builder
-            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
-            .expect("Failed to create pipeline")
+        builder.build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
     }
 
     /// Create a pipeline with GraphicsResources layouts (Set 0, 1, 2)
@@ -550,7 +548,7 @@ impl RRPipeline {
         topology: PrimitiveTopology,
         polygon_mode: vk::PolygonMode,
         cull_mode: vk::CullModeFlags,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut builder = PipelineBuilder::new(vertex_shader_path, fragment_shader_path)
             .vertex_input(VertexInputConfig::Standard)
             .topology(topology)
@@ -566,9 +564,7 @@ impl RRPipeline {
             });
         }
 
-        builder
-            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
-            .expect("Failed to create pipeline")
+        builder.build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
     }
 
     /// Create a pipeline with GraphicsResources layouts (Set 0, Set 2 only - no material)
@@ -582,7 +578,7 @@ impl RRPipeline {
         topology: PrimitiveTopology,
         polygon_mode: vk::PolygonMode,
         cull_mode: vk::CullModeFlags,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut builder = PipelineBuilder::new(vertex_shader_path, fragment_shader_path)
             .vertex_input(VertexInputConfig::Standard)
             .topology(topology)
@@ -598,9 +594,7 @@ impl RRPipeline {
             });
         }
 
-        builder
-            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
-            .expect("Failed to create pipeline")
+        builder.build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
     }
 
     /// Create ImGui rendering pipeline (backward compatibility)
@@ -725,7 +719,8 @@ unsafe fn load_shader_module(rrdevice: &RRDevice, path: &str) -> Result<vk::Shad
 
 /// Create shader module from bytecode
 unsafe fn create_shader_module(rrdevice: &RRDevice, bytecode: &[u8]) -> Result<vk::ShaderModule> {
-    let bytecode = Bytecode::new(bytecode).unwrap();
+    let bytecode =
+        Bytecode::new(bytecode).map_err(|e| anyhow::anyhow!("Invalid shader bytecode: {:?}", e))?;
     let info = vk::ShaderModuleCreateInfo::builder()
         .code_size(bytecode.code_size())
         .code(bytecode.code());

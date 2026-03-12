@@ -157,7 +157,11 @@ fn execute_curve_copilot(
     let pred: Vec<f32> = prediction_data.to_vec();
 
     let (_shape, confidence_data) = outputs[1].try_extract_tensor::<f32>()?;
-    let conf: Vec<f32> = confidence_data.to_vec();
+    let conf_raw: Vec<f32> = confidence_data.to_vec();
+
+    crate::log!("CurveCopilot raw confidence (pre-sigmoid): {:?}", &conf_raw);
+
+    let conf: Vec<f32> = conf_raw.iter().map(|&x| 1.0 / (1.0 + (-x).exp())).collect();
 
     const VALUES_PER_STEP: usize = 5;
     let step_count = num_steps as usize;

@@ -232,10 +232,15 @@ fn build_add_chain_row(
 ) {
     ui.text("Add Chain");
 
-    static mut ADD_CHAIN_ROOT_BONE: BoneId = 0;
-    static mut ADD_CHAIN_LENGTH: i32 = 3;
+    thread_local! {
+        static ADD_CHAIN_ROOT_BONE: std::cell::RefCell<BoneId> = const { std::cell::RefCell::new(0) };
+        static ADD_CHAIN_LENGTH: std::cell::RefCell<i32> = const { std::cell::RefCell::new(3) };
+    }
 
-    let (root_bone, chain_length) = unsafe { (&mut ADD_CHAIN_ROOT_BONE, &mut ADD_CHAIN_LENGTH) };
+    let mut root_bone_val = ADD_CHAIN_ROOT_BONE.with(|v| *v.borrow());
+    let mut chain_length_val = ADD_CHAIN_LENGTH.with(|v| *v.borrow());
+    let root_bone = &mut root_bone_val;
+    let chain_length = &mut chain_length_val;
 
     if let Some(bone) = build_bone_combo_with_select(
         ui,
@@ -262,6 +267,9 @@ fn build_add_chain_row(
             chain_length: *chain_length as u32,
         });
     }
+
+    ADD_CHAIN_ROOT_BONE.with(|v| *v.borrow_mut() = *root_bone);
+    ADD_CHAIN_LENGTH.with(|v| *v.borrow_mut() = *chain_length);
 }
 
 fn build_collider_list(
@@ -350,10 +358,11 @@ fn build_collider_fields(
                     current_shape_idx = i as i32;
                     modified.shape = match i {
                         0 => ColliderShape::Sphere { radius: 0.1 },
-                        _ => ColliderShape::Capsule {
+                        1 => ColliderShape::Capsule {
                             radius: 0.1,
                             tail: cgmath::Vector3::new(0.0, 0.1, 0.0),
                         },
+                        _ => continue,
                     };
                     changed = true;
                 }
@@ -396,10 +405,15 @@ fn build_add_collider_row(
     entity: Entity,
     bone_list: &[(BoneId, String)],
 ) {
-    static mut ADD_COLLIDER_BONE: BoneId = 0;
-    static mut ADD_COLLIDER_SHAPE_IDX: i32 = 0;
+    thread_local! {
+        static ADD_COLLIDER_BONE: std::cell::RefCell<BoneId> = const { std::cell::RefCell::new(0) };
+        static ADD_COLLIDER_SHAPE_IDX: std::cell::RefCell<i32> = const { std::cell::RefCell::new(0) };
+    }
 
-    let (bone, shape_idx) = unsafe { (&mut ADD_COLLIDER_BONE, &mut ADD_COLLIDER_SHAPE_IDX) };
+    let mut bone_val = ADD_COLLIDER_BONE.with(|v| *v.borrow());
+    let mut shape_idx_val = ADD_COLLIDER_SHAPE_IDX.with(|v| *v.borrow());
+    let bone = &mut bone_val;
+    let shape_idx = &mut shape_idx_val;
 
     let current_name = bone_list
         .iter()
@@ -447,6 +461,9 @@ fn build_add_collider_row(
             shape,
         });
     }
+
+    ADD_COLLIDER_BONE.with(|v| *v.borrow_mut() = *bone);
+    ADD_COLLIDER_SHAPE_IDX.with(|v| *v.borrow_mut() = *shape_idx);
 }
 
 fn build_collider_group_list(
@@ -530,25 +547,22 @@ fn build_collider_group_list(
 }
 
 fn build_add_collider_group_row(ui: &imgui::Ui, ui_events: &mut UIEventQueue, entity: Entity) {
-    static mut GROUP_NAME_BUF: Option<String> = None;
-
-    let name_buf = unsafe {
-        if GROUP_NAME_BUF.is_none() {
-            GROUP_NAME_BUF = Some("NewGroup".to_string());
-        }
-        GROUP_NAME_BUF.as_mut().unwrap()
-    };
-
-    ui.set_next_item_width(150.0);
-    ui.input_text("##new_group_name", name_buf).build();
-
-    ui.same_line();
-    if ui.button("Add Group") {
-        ui_events.send(UIEvent::SpringColliderGroupAdd {
-            entity,
-            name: name_buf.to_string(),
-        });
+    thread_local! {
+        static GROUP_NAME_BUF: std::cell::RefCell<String> = std::cell::RefCell::new("NewGroup".to_string());
     }
+
+    GROUP_NAME_BUF.with_borrow_mut(|name_buf| {
+        ui.set_next_item_width(150.0);
+        ui.input_text("##new_group_name", name_buf).build();
+
+        ui.same_line();
+        if ui.button("Add Group") {
+            ui_events.send(UIEvent::SpringColliderGroupAdd {
+                entity,
+                name: name_buf.to_string(),
+            });
+        }
+    });
 }
 
 fn build_gizmo_toggle(ui: &imgui::Ui, ui_events: &mut UIEventQueue, world: &World) {

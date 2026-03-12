@@ -21,7 +21,7 @@ pub fn build_debug_panel_content(
     build_debug_panel(ui, ui_events, gui_data, ecs_world);
     ui.separator();
 
-    build_grid_debug_panel(ui, ecs_world);
+    build_grid_debug_panel(ui, ui_events, ecs_world);
     ui.separator();
 
     build_fbx_debug_panel(ui);
@@ -170,10 +170,15 @@ fn build_spring_bone_bake_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ec
     }
 }
 
-fn build_grid_debug_panel(ui: &imgui::Ui, ecs_world: &World) {
+fn build_grid_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+    use crate::ecs::events::UIEvent;
+
     ui.text("Grid:");
-    if let Some(mut grid) = ecs_world.get_resource_mut::<GridMeshData>() {
-        ui.checkbox("Show Y-Axis Grid", &mut grid.show_y_axis_grid);
+    if let Some(grid) = ecs_world.get_resource::<GridMeshData>() {
+        let mut show_y = grid.show_y_axis_grid;
+        if ui.checkbox("Show Y-Axis Grid", &mut show_y) {
+            ui_events.send(UIEvent::SetGridShowYAxis(show_y));
+        }
     }
 }
 

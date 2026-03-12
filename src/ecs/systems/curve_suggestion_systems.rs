@@ -182,11 +182,6 @@ pub fn curve_suggestion_submit(
     );
 
     if curve_std < MIN_CURVE_STD {
-        crate::log!(
-            "CurveCopilot: skipped, curve_std={:.6} < MIN_CURVE_STD={:.2}",
-            curve_std,
-            MIN_CURVE_STD
-        );
         return;
     }
 
@@ -221,8 +216,6 @@ pub fn curve_suggestion_submit(
         .map(|t| t * clip_duration.max(0.001))
         .collect();
 
-    let context_debug: Vec<f32> = context[..6.min(context.len())].to_vec();
-
     let kind = InferenceRequestKind::CurveCopilotPredict {
         context,
         property_type_id,
@@ -240,10 +233,6 @@ pub fn curve_suggestion_submit(
         suggestion_state.pending_curve_mean = Some(curve_mean);
         suggestion_state.pending_curve_std = Some(curve_std);
         suggestion_state.pending_query_times = Some(denorm_query_times);
-        crate::log!(
-            "CurveCopilot: submitted request {}, property={:?}, steps={}, curve_mean={:.4}, curve_std={:.4}, clip_dur={:.3}, context[0..6]={:?}",
-            request_id, property_type, MAX_STEPS, curve_mean, curve_std, clip_duration, context_debug
-        );
     }
 }
 

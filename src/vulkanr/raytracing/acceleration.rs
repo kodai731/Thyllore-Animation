@@ -538,6 +538,10 @@ impl RRAccelerationStructure {
             &mut size_info,
         );
 
+        let accel_structure = blas
+            .acceleration_structure
+            .ok_or_else(|| anyhow::anyhow!("BLAS acceleration structure not initialized"))?;
+
         let scratch_buffer_info = vk::BufferCreateInfo::builder()
             .size(size_info.update_scratch_size)
             .usage(
@@ -576,8 +580,8 @@ impl RRAccelerationStructure {
                     | vk::BuildAccelerationStructureFlagsKHR::ALLOW_UPDATE,
             )
             .mode(vk::BuildAccelerationStructureModeKHR::UPDATE)
-            .src_acceleration_structure(blas.acceleration_structure.unwrap())
-            .dst_acceleration_structure(blas.acceleration_structure.unwrap())
+            .src_acceleration_structure(accel_structure)
+            .dst_acceleration_structure(accel_structure)
             .geometries(std::slice::from_ref(&geometry))
             .scratch_data(vk::DeviceOrHostAddressKHR {
                 device_address: scratch_buffer_address,
@@ -723,6 +727,10 @@ impl RRAccelerationStructure {
             &mut size_info,
         );
 
+        let accel_structure = tlas
+            .acceleration_structure
+            .ok_or_else(|| anyhow::anyhow!("TLAS acceleration structure not initialized"))?;
+
         let scratch_buffer_info = vk::BufferCreateInfo::builder()
             .size(size_info.update_scratch_size)
             .usage(
@@ -761,8 +769,8 @@ impl RRAccelerationStructure {
                     | vk::BuildAccelerationStructureFlagsKHR::ALLOW_UPDATE,
             )
             .mode(vk::BuildAccelerationStructureModeKHR::UPDATE)
-            .src_acceleration_structure(tlas.acceleration_structure.unwrap())
-            .dst_acceleration_structure(tlas.acceleration_structure.unwrap())
+            .src_acceleration_structure(accel_structure)
+            .dst_acceleration_structure(accel_structure)
             .geometries(std::slice::from_ref(&geometry))
             .scratch_data(vk::DeviceOrHostAddressKHR {
                 device_address: scratch_buffer_address,

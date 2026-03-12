@@ -11,7 +11,7 @@ use crate::app::graphics_resource::GraphicsResources;
 use crate::app::raytracing::RayTracingData;
 use crate::ecs::component::LineMesh;
 use crate::ecs::resource::DistanceAttenuation;
-use crate::ecs::systems::ProjectionData;
+use crate::ecs::resource::ProjectionData;
 use crate::render::{
     BufferMemoryType, FrameUBO, IndexBufferHandle, MeshId, ObjectUBO, RenderBackend,
     VertexBufferHandle,

@@ -19,33 +19,23 @@ impl RRImage {
         instance: &Instance,
         rrdevice: &RRDevice,
         rrcommand_pool: &RRCommandPool,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut rrimage = RRImage::default();
-        let Ok((image, image_memory, mip_levels)) =
-            create_texture_image(instance, rrdevice, rrcommand_pool)
-        else {
-            panic!("failed to create texture image");
-        };
-        println!("texture image created {:?} {:?}", image, image_memory);
-        let Ok(image_view) = create_image_view(
+        let (image, image_memory, mip_levels) =
+            create_texture_image(instance, rrdevice, rrcommand_pool)?;
+        let image_view = create_image_view(
             rrdevice,
             image,
             vk::Format::R8G8B8A8_SRGB,
             vk::ImageAspectFlags::COLOR,
             mip_levels,
-        ) else {
-            panic!("Image view creation failed");
-        };
-        println!("image view created");
+        )?;
         rrimage.image = image;
         rrimage.image_memory = image_memory;
         rrimage.image_view = image_view;
-        let Ok(sampler) = create_texture_sampler(&rrdevice, mip_levels) else {
-            panic!("error creating sampler")
-        };
+        let sampler = create_texture_sampler(&rrdevice, mip_levels)?;
         rrimage.sampler = sampler;
-        println!("created image");
-        rrimage
+        Ok(rrimage)
     }
 
     pub unsafe fn new_from_pixels(
@@ -151,7 +141,12 @@ pub unsafe fn create_texture_image(
     let mip_levels = (width.max(height) as f32).log2().floor() as u32 + 1;
 
     if width != 1024 || height != 1024 || reader.info().color_type != png::ColorType::Rgba {
-        panic!("invalid texture image");
+        return Err(anyhow!(
+            "Invalid texture image: expected 1024x1024 RGBA, got {}x{} {:?}",
+            width,
+            height,
+            reader.info().color_type
+        ));
     }
 
     let (staging_buffer, staging_buffer_memory) = create_buffer(

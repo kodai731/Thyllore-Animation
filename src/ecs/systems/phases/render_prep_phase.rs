@@ -8,6 +8,7 @@ use crate::debugview::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, SpringBoneGizmoData,
 };
 use crate::ecs::component::{ConstraintSet, LineMesh};
+use crate::ecs::resource::ProjectionData;
 use crate::ecs::resource::{Camera, Exposure, TransformGizmoState};
 use crate::ecs::systems::render_data_systems::{
     bone_gizmo_render_data, constraint_gizmo_render_data, gizmo_mesh_render_data,
@@ -18,7 +19,6 @@ use crate::ecs::{
     build_bone_line_mesh, build_box_bone_meshes_with_selection, build_constraint_gizmo_mesh,
     build_octahedral_bone_meshes_with_selection, build_sphere_bone_meshes_with_selection,
     build_spring_bone_gizmo_mesh, gizmo_update_rotation, gizmo_update_vertex_buffer,
-    ProjectionData,
 };
 use crate::math::get_camera_axes_from_view;
 use crate::render::RenderBackend;

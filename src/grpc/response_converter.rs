@@ -44,7 +44,10 @@ pub fn convert_motion_response_to_clip(
             clip.add_track(bone_id, raw_curve.bone_name.clone());
         }
 
-        let track = clip.tracks.get_mut(&bone_id).unwrap();
+        let track = clip
+            .tracks
+            .get_mut(&bone_id)
+            .expect("track was just inserted by add_track above");
         let curve = track.get_curve_mut(property_type);
 
         for kf in &raw_curve.keyframes {

@@ -7,7 +7,9 @@ use crate::ecs::component::{Constrained, ConstraintSet};
 use crate::ecs::world::{Entity, World};
 
 pub fn handle_constraint_add(world: &mut World, entity: Entity, type_index: u8) {
-    let constraint = create_default_constraint(type_index);
+    let Some(constraint) = create_default_constraint(type_index) else {
+        return;
+    };
     let priority = constraint.default_priority();
 
     crate::log!(
@@ -67,14 +69,20 @@ pub fn handle_constraint_update(
     }
 }
 
-fn create_default_constraint(type_index: u8) -> ConstraintType {
+fn create_default_constraint(type_index: u8) -> Option<ConstraintType> {
     match type_index {
-        0 => ConstraintType::Ik(IkConstraintData::default()),
-        1 => ConstraintType::Aim(AimConstraintData::default()),
-        2 => ConstraintType::Parent(ParentConstraintData::default()),
-        3 => ConstraintType::Position(PositionConstraintData::default()),
-        4 => ConstraintType::Rotation(RotationConstraintData::default()),
-        5 => ConstraintType::Scale(ScaleConstraintData::default()),
-        _ => ConstraintType::Position(PositionConstraintData::default()),
+        0 => Some(ConstraintType::Ik(IkConstraintData::default())),
+        1 => Some(ConstraintType::Aim(AimConstraintData::default())),
+        2 => Some(ConstraintType::Parent(ParentConstraintData::default())),
+        3 => Some(ConstraintType::Position(PositionConstraintData::default())),
+        4 => Some(ConstraintType::Rotation(RotationConstraintData::default())),
+        5 => Some(ConstraintType::Scale(ScaleConstraintData::default())),
+        _ => {
+            crate::log!(
+                "Invalid constraint type index: {}. Valid range: 0-5",
+                type_index
+            );
+            None
+        }
     }
 }

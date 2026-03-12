@@ -101,7 +101,11 @@ fn write_attribute_value(
         (VertexAttributeValues::Float32x4(data), VertexFormat::Float32x4) => {
             write_f32_array(&mut buffer[offset..], &data[index]);
         }
-        _ => panic!("Format mismatch in write_attribute_value"),
+        _ => unreachable!(
+            "Format mismatch in write_attribute_value: values={:?}, format={:?}",
+            std::mem::discriminant(values),
+            format
+        ),
     }
 }
 

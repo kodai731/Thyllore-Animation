@@ -16,7 +16,7 @@ pub struct System {
 
 pub fn init(title: &str) -> System {
     let title = match Path::new(&title).file_name() {
-        Some(file_name) => file_name.to_str().unwrap(),
+        Some(file_name) => file_name.to_str().unwrap_or(title),
         None => title,
     };
     let event_loop = EventLoop::new().expect("Failed to create EventLoop");
@@ -44,7 +44,10 @@ pub fn init(title: &str) -> System {
             // Allow forcing of HiDPI factor for debugging purposes
             match factor.parse::<f64>() {
                 Ok(f) => HiDpiMode::Locked(f),
-                Err(e) => panic!("Invalid scaling factor: {}", e),
+                Err(e) => {
+                    crate::log!("Invalid scaling factor '{}': {}, using default", factor, e);
+                    HiDpiMode::Default
+                }
             }
         } else {
             HiDpiMode::Default

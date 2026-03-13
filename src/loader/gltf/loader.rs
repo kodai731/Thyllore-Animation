@@ -1173,11 +1173,15 @@ fn log_gltf_scale_info(meshes: &[GltfMeshData], has_skinned_meshes: bool) {
     log!("  Total vertices: {}", total_vertices);
     log!(
         "  Bounding box min: ({:.4}, {:.4}, {:.4})",
-        min_x, min_y, min_z
+        min_x,
+        min_y,
+        min_z
     );
     log!(
         "  Bounding box max: ({:.4}, {:.4}, {:.4})",
-        max_x, max_y, max_z
+        max_x,
+        max_y,
+        max_z
     );
     log!("  Size: ({:.4}, {:.4}, {:.4})", size_x, size_y, size_z);
     log!("  Max dimension: {:.4} (glTF spec: meters)", max_dimension);
@@ -1188,9 +1192,15 @@ fn log_gltf_scale_info(meshes: &[GltfMeshData], has_skinned_meshes: bool) {
     }
 
     if max_dimension > 100.0 {
-        log_warn!("Model appears very large ({:.4}m). Might be in mm or cm units.", max_dimension);
+        log_warn!(
+            "Model appears very large ({:.4}m). Might be in mm or cm units.",
+            max_dimension
+        );
     } else if max_dimension < 0.01 {
-        log_warn!("Model appears very small ({:.4}m). Check unit scale.", max_dimension);
+        log_warn!(
+            "Model appears very small ({:.4}m). Check unit scale.",
+            max_dimension
+        );
     }
 }
 

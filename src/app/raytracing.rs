@@ -15,7 +15,7 @@ use crate::vulkanr::descriptor::{
 };
 use crate::vulkanr::image::{create_nearest_sampler, create_texture_sampler};
 use crate::vulkanr::pipeline::{
-    PipelineBuilder, PushConstantConfig, RRPipeline, VertexInputConfig,
+    DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline, VertexInputConfig,
 };
 use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::render::RRRender;
@@ -306,7 +306,11 @@ impl RayTracingData {
         })
         .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
         .polygon_mode(vk::PolygonMode::FILL)
-        .no_depth_test()
+        .depth_test(DepthTestConfig {
+            test_enable: true,
+            write_enable: true,
+            compare_op: vk::CompareOp::ALWAYS,
+        })
         .descriptor_layouts(vec![composite_descriptor.descriptor_set_layout])
         .push_constants(PushConstantConfig {
             stage_flags: vk::ShaderStageFlags::FRAGMENT,

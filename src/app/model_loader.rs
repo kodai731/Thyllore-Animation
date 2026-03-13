@@ -104,7 +104,12 @@ unsafe fn apply_model_to_resources(
     cleanup_resources(device, graphics, raytracing, world, assets)?;
 
     if let Some(fbx) = fbx_model {
-        world.insert_resource(FbxModelCache::new(fbx, model_name.to_string()));
+        let needs_coord_conversion = fbx.fbx_data.iter().any(|d| !d.clusters.is_empty());
+        world.insert_resource(FbxModelCache::new(
+            fbx,
+            model_name.to_string(),
+            needs_coord_conversion,
+        ));
         world.insert_resource(GltfModelCache::empty());
     } else {
         world.insert_resource(FbxModelCache::empty());

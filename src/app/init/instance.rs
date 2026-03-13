@@ -2,6 +2,7 @@ use crate::app::{App, AppData};
 
 use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
 use crate::ecs::component::{MeshScale, RenderInfo};
+use crate::ecs::resource::pipeline_allocate_id;
 use crate::ecs::resource::GridMeshData;
 use crate::ecs::systems::{
     billboard_create_buffers, create_billboard, create_default_grid_scale, create_grid_gizmo,
@@ -215,7 +216,7 @@ impl App {
         )
         .context("Failed to create model pipeline")?;
         let model_pipeline_id = data.pipeline_storage.register(model_pipeline.clone());
-        pipeline_manager.allocate_id();
+        pipeline_allocate_id(&mut pipeline_manager);
         log!("Registered model pipeline with id {}", model_pipeline_id);
 
         let grid_pipeline =
@@ -232,7 +233,7 @@ impl App {
                 .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
                 .context("Failed to create grid pipeline")?;
         let grid_pipeline_id = data.pipeline_storage.register(grid_pipeline);
-        pipeline_manager.allocate_id();
+        pipeline_allocate_id(&mut pipeline_manager);
         log!("Registered grid pipeline with id {}", grid_pipeline_id);
 
         let gizmo_pipeline = PipelineBuilder::new(
@@ -247,7 +248,7 @@ impl App {
         .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
         .context("Failed to create gizmo pipeline")?;
         let gizmo_pipeline_id = data.pipeline_storage.register(gizmo_pipeline);
-        pipeline_manager.allocate_id();
+        pipeline_allocate_id(&mut pipeline_manager);
         log!("Registered gizmo pipeline with id {}", gizmo_pipeline_id);
 
         let mut gizmo_data = create_grid_gizmo();
@@ -317,7 +318,7 @@ impl App {
                 .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
                 .context("Failed to create bone solid pipeline")?;
         let bone_solid_pipeline_id = data.pipeline_storage.register(bone_solid_pipeline);
-        pipeline_manager.allocate_id();
+        pipeline_allocate_id(&mut pipeline_manager);
         log!(
             "Registered bone solid pipeline with id {}",
             bone_solid_pipeline_id
@@ -338,7 +339,7 @@ impl App {
                 .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
                 .context("Failed to create bone wire pipeline")?;
         let bone_wire_pipeline_id = data.pipeline_storage.register(bone_wire_pipeline);
-        pipeline_manager.allocate_id();
+        pipeline_allocate_id(&mut pipeline_manager);
         log!(
             "Registered bone wire pipeline with id {}",
             bone_wire_pipeline_id
@@ -365,7 +366,7 @@ impl App {
                 .context("Failed to create bone solid depth pipeline")?;
         let bone_solid_depth_pipeline_id =
             data.pipeline_storage.register(bone_solid_depth_pipeline);
-        pipeline_manager.allocate_id();
+        pipeline_allocate_id(&mut pipeline_manager);
         log!(
             "Registered bone solid depth pipeline with id {}",
             bone_solid_depth_pipeline_id
@@ -390,7 +391,7 @@ impl App {
                 .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
                 .context("Failed to create bone wire depth pipeline")?;
         let bone_wire_depth_pipeline_id = data.pipeline_storage.register(bone_wire_depth_pipeline);
-        pipeline_manager.allocate_id();
+        pipeline_allocate_id(&mut pipeline_manager);
         log!(
             "Registered bone wire depth pipeline with id {}",
             bone_wire_depth_pipeline_id
@@ -418,7 +419,7 @@ impl App {
                 .context("Failed to create bone solid occluded pipeline")?;
         let bone_solid_occluded_pipeline_id =
             data.pipeline_storage.register(bone_solid_occluded_pipeline);
-        pipeline_manager.allocate_id();
+        pipeline_allocate_id(&mut pipeline_manager);
         log!(
             "Registered bone solid occluded pipeline with id {}",
             bone_solid_occluded_pipeline_id
@@ -445,7 +446,7 @@ impl App {
                 .context("Failed to create bone wire occluded pipeline")?;
         let bone_wire_occluded_pipeline_id =
             data.pipeline_storage.register(bone_wire_occluded_pipeline);
-        pipeline_manager.allocate_id();
+        pipeline_allocate_id(&mut pipeline_manager);
         log!(
             "Registered bone wire occluded pipeline with id {}",
             bone_wire_occluded_pipeline_id
@@ -597,7 +598,7 @@ impl App {
         )
         .context("Failed to create billboard pipeline")?;
         let billboard_pipeline_id = data.pipeline_storage.register(billboard_pipeline);
-        pipeline_manager.allocate_id();
+        pipeline_allocate_id(&mut pipeline_manager);
         billboard_data.render_info.pipeline_id = Some(billboard_pipeline_id);
         log!(
             "Registered billboard pipeline with id {}",

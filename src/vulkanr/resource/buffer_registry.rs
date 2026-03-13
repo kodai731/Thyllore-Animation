@@ -4,8 +4,8 @@ use std::ptr::copy_nonoverlapping as memcpy;
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::component::mesh::{MeshData, VertexLayout};
-use crate::ecs::systems::mesh_systems::create_interleaved_buffer;
+use crate::ecs::component::mesh::MeshData;
+use crate::ecs::systems::mesh_systems::{compute_vertex_layout, create_interleaved_buffer};
 use crate::render::{BufferMemoryType, IndexBufferHandle, VertexBufferHandle};
 use crate::vulkanr::buffer::{copy_buffer, create_buffer};
 use crate::vulkanr::command::RRCommandPool;
@@ -326,7 +326,7 @@ impl GpuBufferRegistry {
         mesh: &MeshData,
         memory_type: BufferMemoryType,
     ) -> Result<(VertexBufferHandle, Option<IndexBufferHandle>)> {
-        let layout = VertexLayout::from_mesh_data(mesh);
+        let layout = compute_vertex_layout(mesh);
         let vertex_data = create_interleaved_buffer(mesh, &layout);
 
         let vertex_handle = self.create_vertex_buffer_raw(

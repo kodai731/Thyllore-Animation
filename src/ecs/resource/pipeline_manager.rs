@@ -23,13 +23,13 @@ impl PipelineManager {
         Self { count: 0 }
     }
 
-    pub fn allocate_id(&mut self) -> PipelineId {
-        let id = self.count;
-        self.count += 1;
-        id
-    }
-
     pub fn count(&self) -> usize {
         self.count
     }
+}
+
+pub fn pipeline_allocate_id(manager: &mut PipelineManager) -> PipelineId {
+    let id = manager.count;
+    manager.count += 1;
+    id
 }

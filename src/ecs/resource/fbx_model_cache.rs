@@ -7,8 +7,7 @@ pub struct FbxModelCache {
 }
 
 impl FbxModelCache {
-    pub fn new(fbx_model: FbxModel, source_path: String) -> Self {
-        let needs_coord_conversion = fbx_model.fbx_data.iter().any(|d| !d.clusters.is_empty());
+    pub fn new(fbx_model: FbxModel, source_path: String, needs_coord_conversion: bool) -> Self {
         Self {
             fbx_model: Some(fbx_model),
             source_path: Some(source_path),

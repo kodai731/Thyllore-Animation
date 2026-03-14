@@ -15,7 +15,7 @@ use crate::vulkanr::descriptor::{
 };
 use crate::vulkanr::image::{create_nearest_sampler, create_texture_sampler};
 use crate::vulkanr::pipeline::{
-    PipelineBuilder, PushConstantConfig, RRPipeline, VertexInputConfig,
+    DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline, VertexInputConfig,
 };
 use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
 use crate::vulkanr::render::RRRender;
@@ -116,7 +116,7 @@ impl RayTracingData {
         rrcommand_pool: &Rc<RRCommandPool>,
         meshes: &[MeshBuffer],
     ) -> Result<()> {
-        log::info!("Building acceleration structures...");
+        log!("Building acceleration structures...");
 
         let mut acceleration_structure = RRAccelerationStructure::new();
 
@@ -133,7 +133,7 @@ impl RayTracingData {
             )?;
 
             acceleration_structure.blas_list.push(blas);
-            log::info!("Created BLAS for mesh");
+            log!("Created BLAS for mesh");
         }
 
         if !acceleration_structure.blas_list.is_empty() {
@@ -144,7 +144,7 @@ impl RayTracingData {
                 &acceleration_structure.blas_list,
             )?;
             acceleration_structure.tlas = tlas;
-            log::info!(
+            log!(
                 "Created TLAS with {} instances",
                 acceleration_structure.blas_list.len()
             );
@@ -155,7 +155,7 @@ impl RayTracingData {
         } else {
             self.acceleration_structure = Some(acceleration_structure);
         }
-        log::info!("Acceleration structures built successfully");
+        log!("Acceleration structures built successfully");
         Ok(())
     }
 
@@ -372,6 +372,10 @@ impl RayTracingData {
         rrrender: &RRRender,
         hdr_image_view: vk::ImageView,
         hdr_sampler: vk::Sampler,
+        position_image_view: vk::ImageView,
+        position_sampler: vk::Sampler,
+        scene_buffer: vk::Buffer,
+        scene_buffer_size: vk::DeviceSize,
         offscreen_render_pass: vk::RenderPass,
         offscreen_extent: vk::Extent2D,
     ) -> Result<()> {
@@ -381,7 +385,15 @@ impl RayTracingData {
             descriptor_set: vk::DescriptorSet::null(),
         };
 
-        tonemap_descriptor.allocate_and_update(rrdevice, hdr_image_view, hdr_sampler)?;
+        tonemap_descriptor.allocate_and_update(
+            rrdevice,
+            hdr_image_view,
+            hdr_sampler,
+            position_image_view,
+            position_sampler,
+            scene_buffer,
+            scene_buffer_size,
+        )?;
 
         let tonemap_pipeline = PipelineBuilder::new(
             "assets/shaders/tonemapVert.spv",
@@ -393,7 +405,11 @@ impl RayTracingData {
         })
         .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
         .polygon_mode(vk::PolygonMode::FILL)
-        .no_depth_test()
+        .depth_test(DepthTestConfig {
+            test_enable: true,
+            write_enable: true,
+            compare_op: vk::CompareOp::ALWAYS,
+        })
         .custom_render_pass(offscreen_render_pass)
         .descriptor_layouts(vec![tonemap_descriptor.descriptor_set_layout])
         .push_constants(PushConstantConfig {
@@ -405,7 +421,6 @@ impl RayTracingData {
 
         self.tonemap_pipeline = Some(tonemap_pipeline);
         self.tonemap_descriptor = Some(tonemap_descriptor);
-        log::info!("Created tonemap pipeline and descriptor set");
 
         Ok(())
     }
@@ -489,7 +504,7 @@ impl RayTracingData {
         self.bloom_downsample_pipeline = Some(downsample_pipeline);
         self.bloom_upsample_pipeline = Some(upsample_pipeline);
         self.bloom_descriptors = Some(bloom_descriptors);
-        log::info!("Created bloom pipelines with {} mip levels", mip_count);
+        log!("Created bloom pipelines with {} mip levels", mip_count);
 
         Ok(())
     }
@@ -541,7 +556,7 @@ impl RayTracingData {
 
         self.dof_pipeline = Some(dof_pipeline);
         self.dof_descriptor = Some(dof_descriptor);
-        log::info!("Created DOF pipeline and descriptor set");
+        log!("Created DOF pipeline and descriptor set");
 
         Ok(())
     }
@@ -744,7 +759,6 @@ unsafe fn build_composite_pipeline(
     })
     .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
     .polygon_mode(vk::PolygonMode::FILL)
-    .no_depth_test()
     .descriptor_layouts(vec![descriptor.descriptor_set_layout])
     .push_constants(PushConstantConfig {
         stage_flags: vk::ShaderStageFlags::FRAGMENT,
@@ -754,10 +768,23 @@ unsafe fn build_composite_pipeline(
 
     if let Some(render_pass) = hdr_render_pass {
         builder = builder
+            .no_depth_test()
             .custom_render_pass(render_pass)
             .msaa_samples(vk::SampleCountFlags::_1);
     } else if let Some(render_pass) = offscreen_render_pass {
-        builder = builder.custom_render_pass(render_pass);
+        builder = builder
+            .depth_test(DepthTestConfig {
+                test_enable: true,
+                write_enable: true,
+                compare_op: vk::CompareOp::ALWAYS,
+            })
+            .custom_render_pass(render_pass);
+    } else {
+        builder = builder.depth_test(DepthTestConfig {
+            test_enable: true,
+            write_enable: true,
+            compare_op: vk::CompareOp::ALWAYS,
+        });
     }
 
     let extent = offscreen_extent.unwrap_or(rrswapchain.swapchain_extent);

@@ -1,8 +1,12 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+
+#include "include/depth.glsl"
 
 layout(location = 0) in vec2 fragTexCoord;
 
 layout(location = 0) out vec4 outColor;
+layout(depth_any) out float gl_FragDepth;
 
 layout(binding = 0) uniform sampler2D positionSampler;
 layout(binding = 1) uniform sampler2D normalSampler;
@@ -75,6 +79,13 @@ void main() {
 
     // Check if this is a valid fragment (normal length check)
     bool isBackground = length(worldNormal) < 0.01;
+
+    // Write scene depth for overlay depth testing
+    if (isBackground) {
+        gl_FragDepth = DEPTH_FAR;
+    } else {
+        gl_FragDepth = worldToClipDepth(worldPosition, sceneData.view, sceneData.proj);
+    }
 
     if (isBackground) {
         // Background pixel - simple sky color

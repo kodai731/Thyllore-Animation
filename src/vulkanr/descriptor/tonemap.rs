@@ -24,7 +24,26 @@ impl RRToneMapDescriptorSet {
             .stage_flags(vk::ShaderStageFlags::FRAGMENT)
             .build();
 
-        let bindings = [hdr_sampler_binding, bloom_sampler_binding];
+        let position_sampler_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(2)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build();
+
+        let scene_ubo_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(3)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build();
+
+        let bindings = [
+            hdr_sampler_binding,
+            bloom_sampler_binding,
+            position_sampler_binding,
+            scene_ubo_binding,
+        ];
         let info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings);
         let layout = rrdevice.device.create_descriptor_set_layout(&info, None)?;
 
@@ -34,9 +53,13 @@ impl RRToneMapDescriptorSet {
     pub unsafe fn create_pool(rrdevice: &RRDevice) -> Result<vk::DescriptorPool> {
         let sampler_size = vk::DescriptorPoolSize::builder()
             .type_(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(2);
+            .descriptor_count(3);
 
-        let pool_sizes = [sampler_size];
+        let ubo_size = vk::DescriptorPoolSize::builder()
+            .type_(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1);
+
+        let pool_sizes = [sampler_size, ubo_size];
         let info = vk::DescriptorPoolCreateInfo::builder()
             .pool_sizes(&pool_sizes)
             .max_sets(1);
@@ -50,6 +73,10 @@ impl RRToneMapDescriptorSet {
         rrdevice: &RRDevice,
         hdr_image_view: vk::ImageView,
         hdr_sampler: vk::Sampler,
+        position_image_view: vk::ImageView,
+        position_sampler: vk::Sampler,
+        scene_buffer: vk::Buffer,
+        scene_buffer_size: vk::DeviceSize,
     ) -> Result<()> {
         let layouts = [self.descriptor_set_layout];
         let alloc_info = vk::DescriptorSetAllocateInfo::builder()
@@ -61,6 +88,8 @@ impl RRToneMapDescriptorSet {
 
         self.update_hdr_sampler(rrdevice, hdr_image_view, hdr_sampler)?;
         self.update_bloom_sampler(rrdevice, hdr_image_view, hdr_sampler)?;
+        self.update_position_sampler(rrdevice, position_image_view, position_sampler)?;
+        self.update_scene_buffer(rrdevice, scene_buffer, scene_buffer_size)?;
 
         Ok(())
     }
@@ -115,6 +144,60 @@ impl RRToneMapDescriptorSet {
         rrdevice
             .device
             .update_descriptor_sets(&[bloom_write], &[] as &[vk::CopyDescriptorSet]);
+
+        Ok(())
+    }
+
+    pub unsafe fn update_position_sampler(
+        &self,
+        rrdevice: &RRDevice,
+        position_image_view: vk::ImageView,
+        position_sampler: vk::Sampler,
+    ) -> Result<()> {
+        let position_image_info = vk::DescriptorImageInfo::builder()
+            .image_view(position_image_view)
+            .sampler(position_sampler)
+            .image_layout(vk::ImageLayout::GENERAL)
+            .build();
+
+        let position_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(2)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(std::slice::from_ref(&position_image_info))
+            .build();
+
+        rrdevice
+            .device
+            .update_descriptor_sets(&[position_write], &[] as &[vk::CopyDescriptorSet]);
+
+        Ok(())
+    }
+
+    pub unsafe fn update_scene_buffer(
+        &self,
+        rrdevice: &RRDevice,
+        scene_buffer: vk::Buffer,
+        scene_buffer_size: vk::DeviceSize,
+    ) -> Result<()> {
+        let buffer_info = vk::DescriptorBufferInfo::builder()
+            .buffer(scene_buffer)
+            .offset(0)
+            .range(scene_buffer_size)
+            .build();
+
+        let scene_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(3)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .buffer_info(std::slice::from_ref(&buffer_info))
+            .build();
+
+        rrdevice
+            .device
+            .update_descriptor_sets(&[scene_write], &[] as &[vk::CopyDescriptorSet]);
 
         Ok(())
     }

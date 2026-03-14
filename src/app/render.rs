@@ -170,6 +170,22 @@ impl App {
             )?;
         }
 
+        if let (
+            Some(ref gbuffer),
+            Some(gbuffer_sampler),
+            Some(ref tonemap_descriptor),
+        ) = (
+            &self.data.raytracing.gbuffer,
+            self.data.raytracing.gbuffer_sampler,
+            &self.data.raytracing.tonemap_descriptor,
+        ) {
+            tonemap_descriptor.update_position_sampler(
+                &self.rrdevice,
+                gbuffer.position_image_view,
+                gbuffer_sampler,
+            )?;
+        }
+
         self.update_auto_exposure_descriptors_on_resize();
 
         Ok(())

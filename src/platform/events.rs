@@ -371,15 +371,6 @@ fn build_timeline_and_fixed_overlays(
         );
     }
 
-    let curve_editor_rect = {
-        let ce = app.data.ecs_world.resource::<CurveEditorState>();
-        if ce.is_open {
-            Some(ce.window_rect())
-        } else {
-            None
-        }
-    };
-
     let delta_time = (app.start.elapsed().as_secs_f32() - app.last_update_time).max(0.001);
     let timeline_state = app.data.ecs_world.resource::<TimelineState>();
     let clip_duration = timeline_state
@@ -396,11 +387,10 @@ fn build_timeline_and_fixed_overlays(
         viewport_info,
         &*timeline_state,
         clip_duration,
-        curve_editor_rect,
     );
 
     let mut panel_layout = app.data.ecs_world.resource_mut::<PanelLayout>();
-    handle_splitters(ui, &mut panel_layout, layout_snapshot, curve_editor_rect);
+    handle_splitters(ui, &mut panel_layout, layout_snapshot);
 }
 
 fn build_curve_editor(ui: &imgui::Ui, app: &mut App) {

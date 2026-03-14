@@ -66,7 +66,6 @@ pub fn build_status_bar_overlay(
     viewport_info: &ViewportInfo,
     timeline_state: &TimelineState,
     clip_duration: f32,
-    exclude_rect: Option<[f32; 4]>,
 ) {
     state.update_fps(delta_time);
     state.update_memory();
@@ -93,20 +92,9 @@ pub fn build_status_bar_overlay(
         vp_right - text_size[0] - OVERLAY_PADDING * 2.0,
         vp_bottom - text_size[1] - OVERLAY_PADDING * 2.0,
     ];
-
-    if let Some([ex_left, ex_top, ex_right, ex_bottom]) = exclude_rect {
-        let overlaps = rect_min[0] < ex_right
-            && rect_max[0] > ex_left
-            && rect_min[1] < ex_bottom
-            && rect_max[1] > ex_top;
-        if overlaps {
-            return;
-        }
-    }
-
     let text_pos = [rect_min[0] + OVERLAY_PADDING, rect_min[1] + OVERLAY_PADDING];
 
-    let draw_list = ui.get_foreground_draw_list();
+    let draw_list = ui.get_background_draw_list();
     draw_list
         .add_rect(rect_min, rect_max, BG_COLOR)
         .filled(true)

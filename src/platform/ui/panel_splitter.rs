@@ -21,12 +21,7 @@ struct SplitterRect {
     is_horizontal: bool,
 }
 
-pub fn handle_splitters(
-    ui: &imgui::Ui,
-    layout: &mut PanelLayout,
-    snap: &LayoutSnapshot,
-    exclude_rect: Option<[f32; 4]>,
-) {
+pub fn handle_splitters(ui: &imgui::Ui, layout: &mut PanelLayout, snap: &LayoutSnapshot) {
     let rects = compute_splitter_rects(snap);
     let mouse_pos = ui.io().mouse_pos;
     let mouse_down = ui.is_mouse_down(MouseButton::Left);
@@ -89,7 +84,7 @@ pub fn handle_splitters(
         }
     }
 
-    let draw_list = ui.get_foreground_draw_list();
+    let draw_list = ui.get_background_draw_list();
     for rect in &rects {
         let color = if active_splitter == Some(rect.kind) {
             COLOR_ACTIVE
@@ -104,101 +99,17 @@ pub fn handle_splitters(
 
         if rect.is_horizontal {
             let center_y = (rect.y_min + rect.y_max) * 0.5;
-            draw_splitter_line_horizontal(
-                &draw_list,
-                rect.x_min,
-                rect.x_max,
-                center_y,
-                color,
-                exclude_rect,
-            );
+            draw_list
+                .add_line([rect.x_min, center_y], [rect.x_max, center_y], color)
+                .thickness(SPLITTER_VISUAL_THICKNESS)
+                .build();
         } else {
             let center_x = (rect.x_min + rect.x_max) * 0.5;
-            draw_splitter_line_vertical(
-                &draw_list,
-                center_x,
-                rect.y_min,
-                rect.y_max,
-                color,
-                exclude_rect,
-            );
-        }
-    }
-}
-
-fn draw_splitter_line_horizontal(
-    draw_list: &imgui::DrawListMut,
-    x_min: f32,
-    x_max: f32,
-    y: f32,
-    color: [f32; 4],
-    exclude_rect: Option<[f32; 4]>,
-) {
-    if let Some([ex_left, ex_top, ex_right, ex_bottom]) = exclude_rect {
-        if y < ex_top || y > ex_bottom {
             draw_list
-                .add_line([x_min, y], [x_max, y], color)
-                .thickness(SPLITTER_VISUAL_THICKNESS)
-                .build();
-            return;
-        }
-
-        if x_min < ex_left {
-            draw_list
-                .add_line([x_min, y], [ex_left, y], color)
+                .add_line([center_x, rect.y_min], [center_x, rect.y_max], color)
                 .thickness(SPLITTER_VISUAL_THICKNESS)
                 .build();
         }
-
-        if x_max > ex_right {
-            draw_list
-                .add_line([ex_right, y], [x_max, y], color)
-                .thickness(SPLITTER_VISUAL_THICKNESS)
-                .build();
-        }
-    } else {
-        draw_list
-            .add_line([x_min, y], [x_max, y], color)
-            .thickness(SPLITTER_VISUAL_THICKNESS)
-            .build();
-    }
-}
-
-fn draw_splitter_line_vertical(
-    draw_list: &imgui::DrawListMut,
-    x: f32,
-    y_min: f32,
-    y_max: f32,
-    color: [f32; 4],
-    exclude_rect: Option<[f32; 4]>,
-) {
-    if let Some([ex_left, ex_top, ex_right, ex_bottom]) = exclude_rect {
-        if x < ex_left || x > ex_right {
-            draw_list
-                .add_line([x, y_min], [x, y_max], color)
-                .thickness(SPLITTER_VISUAL_THICKNESS)
-                .build();
-            return;
-        }
-
-        if y_min < ex_top {
-            draw_list
-                .add_line([x, y_min], [x, ex_top], color)
-                .thickness(SPLITTER_VISUAL_THICKNESS)
-                .build();
-        }
-
-        if y_max > ex_bottom {
-            draw_list
-                .add_line([x, ex_bottom], [x, y_max], color)
-                .thickness(SPLITTER_VISUAL_THICKNESS)
-                .build();
-        }
-    } else {
-        draw_list
-            .add_line([x, y_min], [x, y_max], color)
-            .thickness(SPLITTER_VISUAL_THICKNESS)
-            .build();
     }
 }
 

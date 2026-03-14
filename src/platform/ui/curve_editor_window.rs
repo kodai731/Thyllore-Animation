@@ -10,8 +10,8 @@ use crate::animation::editable::{
 use crate::animation::BoneId;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
-    ClipLibrary, CurveEditorBuffer, CurveEditorState, CurveSelectedKeyframe, DraggingTangent,
-    PoseLibrary, TangentHandleType, TimelineState,
+    ClipLibrary, CurveEditorBuffer, CurveEditorState, CurveInteractionMode, CurveSelectedKeyframe,
+    DraggingTangent, PoseLibrary, TangentHandleType, TimelineState,
 };
 
 pub struct SuggestionOverlay {
@@ -509,7 +509,10 @@ fn draw_clipped_curve_content(
         .thickness(2.0)
         .build();
 
-    if editor_state.is_dragging_keyframe {
+    if matches!(
+        editor_state.interaction,
+        CurveInteractionMode::DraggingKeyframe
+    ) {
         draw_keyframe_drag_preview(
             draw_list,
             ui.io().mouse_pos,
@@ -520,7 +523,7 @@ fn draw_clipped_curve_content(
         );
     }
 
-    if let Some(ref dragging) = editor_state.dragging_tangent {
+    if let CurveInteractionMode::DraggingTangent(ref dragging) = editor_state.interaction {
         draw_tangent_drag_curve_preview(draw_list, dragging, ui.io().mouse_pos, curves_to_draw, vt);
     }
 
@@ -778,7 +781,7 @@ fn handle_mouse_interaction(
     }
 
     if is_hovered && mouse_clicked && in_ruler_area {
-        editor_state.is_scrubbing_ruler = true;
+        editor_state.interaction = CurveInteractionMode::ScrubbingRuler;
         let time = vt.x_to_time(mouse_pos[0]).clamp(0.0, duration);
         ui_events.send(UIEvent::TimelineSetTime(time));
     }
@@ -786,9 +789,7 @@ fn handle_mouse_interaction(
     if is_hovered
         && mouse_clicked
         && in_curve_area
-        && !editor_state.is_dragging_keyframe
-        && !editor_state.is_panning
-        && editor_state.dragging_tangent.is_none()
+        && matches!(editor_state.interaction, CurveInteractionMode::Idle)
     {
         let modifier = if ui.io().key_ctrl {
             SelectionModifier::Toggle
@@ -801,19 +802,28 @@ fn handle_mouse_interaction(
     }
 
     if is_hovered && middle_clicked && in_curve_area {
-        editor_state.is_panning = true;
-        editor_state.pan_start_mouse_pos = mouse_pos;
-        editor_state.pan_start_offset = [
-            editor_state.view_time_offset,
-            editor_state.view_value_offset,
-        ];
+        editor_state.interaction = CurveInteractionMode::Panning {
+            start_mouse_pos: mouse_pos,
+            start_offset: [
+                editor_state.view_time_offset,
+                editor_state.view_value_offset,
+            ],
+        };
     }
 
-    if editor_state.is_panning && ui.io().mouse_down[2] {
+    if matches!(
+        editor_state.interaction,
+        CurveInteractionMode::Panning { .. }
+    ) && ui.io().mouse_down[2]
+    {
         handle_panning(editor_state, mouse_pos, vt);
     }
 
-    if editor_state.is_scrubbing_ruler && mouse_down {
+    if matches!(
+        editor_state.interaction,
+        CurveInteractionMode::ScrubbingRuler
+    ) && mouse_down
+    {
         let time = vt.x_to_time(mouse_pos[0]).clamp(0.0, duration);
         ui_events.send(UIEvent::TimelineSetTime(time));
     }
@@ -833,7 +843,9 @@ fn handle_mouse_release(
 ) {
     match button {
         ReleasedButton::Left => {
-            if let Some(ref dragging) = editor_state.dragging_tangent.clone() {
+            if let CurveInteractionMode::DraggingTangent(ref dragging) =
+                editor_state.interaction.clone()
+            {
                 if let Some(bone_id) = editor_state.selected_bone_id {
                     let (in_tangent, out_tangent) =
                         compute_dragged_tangent(dragging, mouse_pos, curves_to_draw, vt);
@@ -845,8 +857,10 @@ fn handle_mouse_release(
                         out_tangent,
                     });
                 }
-                editor_state.dragging_tangent = None;
-            } else if editor_state.is_dragging_keyframe {
+            } else if matches!(
+                editor_state.interaction,
+                CurveInteractionMode::DraggingKeyframe
+            ) {
                 if let Some(bone_id) = editor_state.selected_bone_id {
                     let time_delta = vt.x_to_time(mouse_pos[0])
                         - vt.x_to_time(editor_state.drag_start_mouse_pos[0]);
@@ -864,12 +878,11 @@ fn handle_mouse_release(
                     }
                 }
             }
-            editor_state.is_dragging_keyframe = false;
-            editor_state.is_scrubbing_ruler = false;
+            editor_state.interaction = CurveInteractionMode::Idle;
         }
 
         ReleasedButton::Middle => {
-            editor_state.is_panning = false;
+            editor_state.interaction = CurveInteractionMode::Idle;
         }
     }
 }
@@ -920,7 +933,7 @@ fn handle_curve_area_click(
             vt,
         )
     {
-        editor_state.dragging_tangent = Some(DraggingTangent {
+        editor_state.interaction = CurveInteractionMode::DraggingTangent(DraggingTangent {
             property_type,
             keyframe_id,
             handle_type,
@@ -987,7 +1000,7 @@ fn handle_curve_area_click(
                 &mut editor_state.selected_keyframes,
                 curves_to_draw,
             );
-            editor_state.is_dragging_keyframe = true;
+            editor_state.interaction = CurveInteractionMode::DraggingKeyframe;
             editor_state.drag_start_mouse_pos = mouse_pos;
         }
     } else if modifier == SelectionModifier::None {
@@ -1100,14 +1113,22 @@ fn collect_keyframes_in_range(
 }
 
 fn handle_panning(editor_state: &mut CurveEditorState, mouse_pos: [f32; 2], vt: &ViewTransform) {
-    let dx = mouse_pos[0] - editor_state.pan_start_mouse_pos[0];
-    let dy = mouse_pos[1] - editor_state.pan_start_mouse_pos[1];
+    let CurveInteractionMode::Panning {
+        start_mouse_pos,
+        start_offset,
+    } = editor_state.interaction
+    else {
+        return;
+    };
+
+    let dx = mouse_pos[0] - start_mouse_pos[0];
+    let dy = mouse_pos[1] - start_mouse_pos[1];
 
     let time_per_pixel = vt.duration.max(0.001) / (vt.zoom_x * vt.curve_width).max(0.001);
     let value_per_pixel = vt.val_range.max(0.001) / (vt.zoom_y * vt.curve_height).max(0.001);
 
-    editor_state.view_time_offset = editor_state.pan_start_offset[0] - dx * time_per_pixel;
-    editor_state.view_value_offset = editor_state.pan_start_offset[1] + dy * value_per_pixel;
+    editor_state.view_time_offset = start_offset[0] - dx * time_per_pixel;
+    editor_state.view_value_offset = start_offset[1] + dy * value_per_pixel;
 }
 
 fn handle_wheel_input(

@@ -58,6 +58,8 @@ impl PanelLayout {
     }
 
     pub fn constrain_to_display(&mut self, display_w: f32, display_h: f32) {
+        debug_assert!(display_w > 0.0, "display_w must be positive");
+        debug_assert!(display_h > 0.0, "display_h must be positive");
         const HIERARCHY_WIDTH_MIN: f32 = 150.0;
         const HIERARCHY_WIDTH_MAX: f32 = 500.0;
         const INSPECTOR_WIDTH_MIN: f32 = 200.0;

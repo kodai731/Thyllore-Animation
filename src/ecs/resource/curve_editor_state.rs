@@ -25,6 +25,24 @@ pub struct DraggingTangent {
     pub original_handle: BezierHandle,
 }
 
+#[derive(Clone, Debug)]
+pub enum CurveInteractionMode {
+    Idle,
+    DraggingKeyframe,
+    ScrubbingRuler,
+    Panning {
+        start_mouse_pos: [f32; 2],
+        start_offset: [f32; 2],
+    },
+    DraggingTangent(DraggingTangent),
+}
+
+impl Default for CurveInteractionMode {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
 pub struct CurveEditorState {
     pub is_open: bool,
     pub selected_bone_id: Option<BoneId>,
@@ -32,7 +50,7 @@ pub struct CurveEditorState {
     pub window_size: [f32; 2],
     pub selected_keyframes: Vec<CurveSelectedKeyframe>,
     pub selection_anchor: Option<(PropertyType, KeyframeId)>,
-    pub is_dragging_keyframe: bool,
+    pub interaction: CurveInteractionMode,
     pub drag_start_mouse_pos: [f32; 2],
     pub zoom_x: f32,
     pub zoom_y: f32,
@@ -41,11 +59,6 @@ pub struct CurveEditorState {
     pub view_val_range: f32,
     pub view_duration: f32,
     pub view_initialized: bool,
-    pub is_scrubbing_ruler: bool,
-    pub is_panning: bool,
-    pub pan_start_mouse_pos: [f32; 2],
-    pub pan_start_offset: [f32; 2],
-    pub dragging_tangent: Option<DraggingTangent>,
     pub context_menu_keyframe: Option<CurveSelectedKeyframe>,
     pub context_menu_click_time: f32,
     pub context_menu_click_value: f32,
@@ -69,7 +82,7 @@ impl Default for CurveEditorState {
             window_size: [800.0, 500.0],
             selected_keyframes: Vec::new(),
             selection_anchor: None,
-            is_dragging_keyframe: false,
+            interaction: CurveInteractionMode::Idle,
             drag_start_mouse_pos: [0.0, 0.0],
             zoom_x: 1.0,
             zoom_y: 1.0,
@@ -78,11 +91,6 @@ impl Default for CurveEditorState {
             view_val_range: 2.0,
             view_duration: 2.0,
             view_initialized: false,
-            is_scrubbing_ruler: false,
-            is_panning: false,
-            pan_start_mouse_pos: [0.0, 0.0],
-            pan_start_offset: [0.0, 0.0],
-            dragging_tangent: None,
             context_menu_keyframe: None,
             context_menu_click_time: 0.0,
             context_menu_click_value: 0.0,

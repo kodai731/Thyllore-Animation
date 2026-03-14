@@ -425,199 +425,205 @@ fn determine_skeleton_root_transform(
     None
 }
 
-unsafe fn process_node(
-    gltf: &Document,
-    buffers: &Vec<Data>,
-    images: &Vec<gltf::image::Data>,
-    node: &Node,
-    ctx: &mut GltfParseContext,
-    parent_transform: &Matrix4<f32>,
-    parent_node_index: Option<usize>,
-) -> Result<()> {
-    let node_transform = mat4_from_array(node.transform().matrix());
-    let cumulative_transform = *parent_transform * node_transform;
+struct RawVertexAttributes {
+    positions: Vec<[f32; 3]>,
+    normals: Vec<[f32; 3]>,
+    tex_coords: Vec<[f32; 2]>,
+    joint_indices: Vec<[u16; 4]>,
+    joint_weights: Vec<[f32; 4]>,
+    has_joints: bool,
+}
 
-    if let Some(mesh) = node.mesh() {
-        for primitive in mesh.primitives() {
-            let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
-            let mut mesh_data = MeshBuildData {
-                vertex_data: VertexData::default(),
-                bone_indices: Vec::new(),
-                bone_weights: Vec::new(),
-                base_positions: Vec::new(),
-                base_normals: Vec::new(),
-                morph_targets: Vec::new(),
-                image_data: Vec::new(),
-                has_joints: false,
-                node_index: node.index(),
-                local_vertices: Vec::new(),
-            };
+fn read_vertex_attributes<'a, 's, F>(reader: &gltf::mesh::Reader<'a, 's, F>) -> RawVertexAttributes
+where
+    F: Clone + Fn(gltf::Buffer<'a>) -> Option<&'s [u8]>,
+{
+    let positions: Vec<[f32; 3]> = reader
+        .read_positions()
+        .map(|iter| iter.map(|p| [p[0], p[1], p[2]]).collect())
+        .unwrap_or_default();
 
-            let mut raw_positions: Vec<[f32; 3]> = Vec::new();
-            let mut normals: Vec<[f32; 3]> = Vec::new();
-            let mut tex_coords: Vec<[f32; 2]> = Vec::new();
-            let mut joint_indices: Vec<[u16; 4]> = Vec::new();
-            let mut joint_weights: Vec<[f32; 4]> = Vec::new();
+    let normals: Vec<[f32; 3]> = reader
+        .read_normals()
+        .map(|iter| iter.collect())
+        .unwrap_or_default();
 
-            if let Some(iter) = reader.read_positions() {
-                raw_positions = iter.map(|p| [p[0], p[1], p[2]]).collect();
-            }
+    let tex_coords: Vec<[f32; 2]> = reader
+        .read_tex_coords(0)
+        .map(|iter| iter.into_f32().collect())
+        .unwrap_or_default();
 
-            if let Some(iter) = reader.read_normals() {
-                normals = iter.collect();
-            }
+    let mut has_joints = false;
+    let joint_indices: Vec<[u16; 4]> = reader
+        .read_joints(0)
+        .map(|iter| {
+            has_joints = true;
+            iter.into_u16().collect()
+        })
+        .unwrap_or_default();
 
-            if let Some(iter) = reader.read_tex_coords(0) {
-                tex_coords = iter.into_f32().collect();
-            }
+    let joint_weights: Vec<[f32; 4]> = reader
+        .read_weights(0)
+        .map(|iter| iter.into_f32().collect())
+        .unwrap_or_default();
 
-            if let Some(iter) = reader.read_joints(0) {
-                mesh_data.has_joints = true;
-                ctx.has_skinned_meshes = true;
-                joint_indices = iter.into_u16().collect();
-            }
+    RawVertexAttributes {
+        positions,
+        normals,
+        tex_coords,
+        joint_indices,
+        joint_weights,
+        has_joints,
+    }
+}
 
-            let positions: Vec<[f32; 3]> = {
-                let node_name = node.name().unwrap_or("");
-                if node_name.contains("NurbsPath.009") {
-                    log!(
-                        "=== Load-time transform for {} (has_joints={}) ===",
-                        node_name,
-                        mesh_data.has_joints
-                    );
-                    let ct = &cumulative_transform;
-                    let scale = (
-                        (ct[0][0] * ct[0][0] + ct[0][1] * ct[0][1] + ct[0][2] * ct[0][2]).sqrt(),
-                        (ct[1][0] * ct[1][0] + ct[1][1] * ct[1][1] + ct[1][2] * ct[1][2]).sqrt(),
-                        (ct[2][0] * ct[2][0] + ct[2][1] * ct[2][1] + ct[2][2] * ct[2][2]).sqrt(),
-                    );
-                    log!(
-                        "  cumulative_transform: scale=[{:.1},{:.1},{:.1}] trans=[{:.2},{:.2},{:.2}]",
-                        scale.0, scale.1, scale.2,
-                        ct[3][0], ct[3][1], ct[3][2]
-                    );
-                    if !raw_positions.is_empty() {
-                        let raw = raw_positions[0];
-                        let pos = cumulative_transform * [raw[0], raw[1], raw[2], 1.0].to_vec4();
-                        log!(
-                            "  raw[0]=({:.3},{:.3},{:.3}) -> transformed=({:.2},{:.2},{:.2})",
-                            raw[0],
-                            raw[1],
-                            raw[2],
-                            pos.x,
-                            pos.y,
-                            pos.z
-                        );
-                    }
-                }
-                if mesh_data.has_joints {
-                    raw_positions.clone()
-                } else {
-                    raw_positions
-                        .iter()
-                        .map(|p| {
-                            let pos = cumulative_transform * [p[0], p[1], p[2], 1.0].to_vec4();
-                            [pos.x, pos.y, pos.z]
-                        })
-                        .collect()
-                }
-            };
-
-            if let Some(iter) = reader.read_weights(0) {
-                joint_weights = iter.into_f32().collect();
-            }
-
-            for i in 0..positions.len() {
-                let pos = positions[i];
-                let raw_pos = raw_positions[i];
-                let normal = normals.get(i).copied().unwrap_or([0.0, 0.0, 1.0]);
-                let tex_coord = tex_coords.get(i).copied().unwrap_or([0.0, 0.0]);
-
-                mesh_data.vertex_data.vertices.push(Vertex {
-                    pos: Vec3::new(pos[0], pos[1], pos[2]),
-                    color: Vec4::new(1.0, 1.0, 1.0, 1.0),
-                    tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
-                    normal: Vec3::new(normal[0], normal[1], normal[2]),
-                });
-
-                mesh_data.local_vertices.push(Vertex {
-                    pos: Vec3::new(raw_pos[0], raw_pos[1], raw_pos[2]),
-                    color: Vec4::new(1.0, 1.0, 1.0, 1.0),
-                    tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
-                    normal: Vec3::new(normal[0], normal[1], normal[2]),
-                });
-
-                mesh_data.base_positions.push(pos);
-                mesh_data
-                    .base_normals
-                    .push(Vector3::new(normal[0], normal[1], normal[2]));
-
-                let ji = joint_indices.get(i).copied().unwrap_or([0, 0, 0, 0]);
-                let jw = joint_weights
-                    .get(i)
-                    .copied()
-                    .unwrap_or([0.0, 0.0, 0.0, 0.0]);
-                mesh_data.bone_indices.push(Vector4::new(
-                    ji[0] as u32,
-                    ji[1] as u32,
-                    ji[2] as u32,
-                    ji[3] as u32,
-                ));
-                mesh_data
-                    .bone_weights
-                    .push(Vector4::new(jw[0], jw[1], jw[2], jw[3]));
-            }
-
-            if let Some(iter) = reader.read_indices() {
-                mesh_data.vertex_data.indices = iter.into_u32().collect();
-            }
-
-            for (positions, normals, tangents) in reader.read_morph_targets() {
-                let mut morph_target = MorphTarget::default();
-                if let Some(pos_iter) = positions {
-                    morph_target.positions = pos_iter.collect();
-                }
-                if let Some(norm_iter) = normals {
-                    morph_target.normals = norm_iter.collect();
-                }
-                if let Some(tan_iter) = tangents {
-                    morph_target.tangents = tan_iter.collect();
-                }
-                mesh_data.morph_targets.push(morph_target);
-            }
-
-            if let Some(material) = primitive
-                .material()
-                .pbr_metallic_roughness()
-                .base_color_texture()
-            {
-                let texture = material.texture();
-                let source = texture.source();
-                let image_index = source.index();
-
-                if image_index < images.len() {
-                    let image = &images[image_index];
-                    let image_data = convert_image_data(image);
-                    mesh_data.image_data.push(image_data);
-                }
-            }
-
-            if node.name().unwrap_or("").contains("NurbsPath.009") {
-                if !mesh_data.local_vertices.is_empty() {
-                    let lv = &mesh_data.local_vertices[0];
-                    log!(
-                        "  After processing: local_vertices[0]=({:.3},{:.3},{:.3}), count={}",
-                        lv.pos.x,
-                        lv.pos.y,
-                        lv.pos.z,
-                        mesh_data.local_vertices.len()
-                    );
-                }
-            }
-            ctx.meshes.push(mesh_data);
+fn transform_positions(
+    raw_positions: &[[f32; 3]],
+    has_joints: bool,
+    cumulative_transform: &Matrix4<f32>,
+    node_name: &str,
+) -> Vec<[f32; 3]> {
+    if node_name.contains("NurbsPath.009") {
+        log!(
+            "=== Load-time transform for {} (has_joints={}) ===",
+            node_name,
+            has_joints
+        );
+        let ct = cumulative_transform;
+        let scale = (
+            (ct[0][0] * ct[0][0] + ct[0][1] * ct[0][1] + ct[0][2] * ct[0][2]).sqrt(),
+            (ct[1][0] * ct[1][0] + ct[1][1] * ct[1][1] + ct[1][2] * ct[1][2]).sqrt(),
+            (ct[2][0] * ct[2][0] + ct[2][1] * ct[2][1] + ct[2][2] * ct[2][2]).sqrt(),
+        );
+        log!(
+            "  cumulative_transform: scale=[{:.1},{:.1},{:.1}] trans=[{:.2},{:.2},{:.2}]",
+            scale.0,
+            scale.1,
+            scale.2,
+            ct[3][0],
+            ct[3][1],
+            ct[3][2]
+        );
+        if !raw_positions.is_empty() {
+            let raw = raw_positions[0];
+            let pos = *cumulative_transform * [raw[0], raw[1], raw[2], 1.0].to_vec4();
+            log!(
+                "  raw[0]=({:.3},{:.3},{:.3}) -> transformed=({:.2},{:.2},{:.2})",
+                raw[0],
+                raw[1],
+                raw[2],
+                pos.x,
+                pos.y,
+                pos.z
+            );
         }
     }
 
+    if has_joints {
+        raw_positions.to_vec()
+    } else {
+        raw_positions
+            .iter()
+            .map(|p| {
+                let pos = *cumulative_transform * [p[0], p[1], p[2], 1.0].to_vec4();
+                [pos.x, pos.y, pos.z]
+            })
+            .collect()
+    }
+}
+
+fn build_vertices(
+    mesh_data: &mut MeshBuildData,
+    attrs: &RawVertexAttributes,
+    positions: &[[f32; 3]],
+) {
+    for i in 0..positions.len() {
+        let pos = positions[i];
+        let raw_pos = attrs.positions[i];
+        let normal = attrs.normals.get(i).copied().unwrap_or([0.0, 0.0, 1.0]);
+        let tex_coord = attrs.tex_coords.get(i).copied().unwrap_or([0.0, 0.0]);
+
+        mesh_data.vertex_data.vertices.push(Vertex {
+            pos: Vec3::new(pos[0], pos[1], pos[2]),
+            color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+            tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
+            normal: Vec3::new(normal[0], normal[1], normal[2]),
+        });
+
+        mesh_data.local_vertices.push(Vertex {
+            pos: Vec3::new(raw_pos[0], raw_pos[1], raw_pos[2]),
+            color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+            tex_coord: Vec2::new(tex_coord[0], tex_coord[1]),
+            normal: Vec3::new(normal[0], normal[1], normal[2]),
+        });
+
+        mesh_data.base_positions.push(pos);
+        mesh_data
+            .base_normals
+            .push(Vector3::new(normal[0], normal[1], normal[2]));
+
+        let ji = attrs.joint_indices.get(i).copied().unwrap_or([0, 0, 0, 0]);
+        let jw = attrs
+            .joint_weights
+            .get(i)
+            .copied()
+            .unwrap_or([0.0, 0.0, 0.0, 0.0]);
+        mesh_data.bone_indices.push(Vector4::new(
+            ji[0] as u32,
+            ji[1] as u32,
+            ji[2] as u32,
+            ji[3] as u32,
+        ));
+        mesh_data
+            .bone_weights
+            .push(Vector4::new(jw[0], jw[1], jw[2], jw[3]));
+    }
+}
+
+fn read_morph_targets<'a, 's, F>(reader: &gltf::mesh::Reader<'a, 's, F>) -> Vec<MorphTarget>
+where
+    F: Clone + Fn(gltf::Buffer<'a>) -> Option<&'s [u8]>,
+{
+    let mut morph_targets = Vec::new();
+    for (positions, normals, tangents) in reader.read_morph_targets() {
+        let mut morph_target = MorphTarget::default();
+        if let Some(pos_iter) = positions {
+            morph_target.positions = pos_iter.collect::<Vec<_>>();
+        }
+        if let Some(norm_iter) = normals {
+            morph_target.normals = norm_iter.collect::<Vec<_>>();
+        }
+        if let Some(tan_iter) = tangents {
+            morph_target.tangents = tan_iter.collect::<Vec<_>>();
+        }
+        morph_targets.push(morph_target);
+    }
+    morph_targets
+}
+
+fn load_primitive_texture(
+    primitive: &gltf::Primitive,
+    images: &[gltf::image::Data],
+) -> Option<ImageData> {
+    let material = primitive
+        .material()
+        .pbr_metallic_roughness()
+        .base_color_texture()?;
+
+    let image_index = material.texture().source().index();
+    if image_index < images.len() {
+        Some(convert_image_data(&images[image_index]))
+    } else {
+        None
+    }
+}
+
+fn register_node_info(
+    ctx: &mut GltfParseContext,
+    node: &Node,
+    node_transform: Matrix4<f32>,
+    parent_node_index: Option<usize>,
+) {
     ctx.rrnodes.push(RRNode {
         index: node.index() as u16,
         name: node.name().unwrap_or("").to_string(),
@@ -631,7 +637,14 @@ unsafe fn process_node(
         parent_index: parent_node_index,
         local_transform: node_transform,
     });
+}
 
+fn update_joint_hierarchy(
+    ctx: &mut GltfParseContext,
+    node: &Node,
+    node_transform: Matrix4<f32>,
+    parent_node_index: Option<usize>,
+) {
     if let Some(&joint_index) = ctx.node_joint_map.node_to_joint.get(&(node.index() as u16)) {
         ctx.joints[joint_index as usize].transform = array_from_mat4(node_transform);
 
@@ -645,6 +658,77 @@ unsafe fn process_node(
             }
         }
     }
+}
+
+unsafe fn process_node(
+    gltf: &Document,
+    buffers: &Vec<Data>,
+    images: &Vec<gltf::image::Data>,
+    node: &Node,
+    ctx: &mut GltfParseContext,
+    parent_transform: &Matrix4<f32>,
+    parent_node_index: Option<usize>,
+) -> Result<()> {
+    let node_transform = mat4_from_array(node.transform().matrix());
+    let cumulative_transform = *parent_transform * node_transform;
+    let node_name = node.name().unwrap_or("");
+
+    if let Some(mesh) = node.mesh() {
+        for primitive in mesh.primitives() {
+            let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+
+            let attrs = read_vertex_attributes(&reader);
+            let mut mesh_data = MeshBuildData {
+                vertex_data: VertexData::default(),
+                bone_indices: Vec::new(),
+                bone_weights: Vec::new(),
+                base_positions: Vec::new(),
+                base_normals: Vec::new(),
+                morph_targets: Vec::new(),
+                image_data: Vec::new(),
+                has_joints: attrs.has_joints,
+                node_index: node.index(),
+                local_vertices: Vec::new(),
+            };
+            if attrs.has_joints {
+                ctx.has_skinned_meshes = true;
+            }
+
+            let positions = transform_positions(
+                &attrs.positions,
+                attrs.has_joints,
+                &cumulative_transform,
+                node_name,
+            );
+            build_vertices(&mut mesh_data, &attrs, &positions);
+
+            if let Some(iter) = reader.read_indices() {
+                mesh_data.vertex_data.indices = iter.into_u32().collect();
+            }
+
+            mesh_data.morph_targets = read_morph_targets(&reader);
+
+            if let Some(image_data) = load_primitive_texture(&primitive, images) {
+                mesh_data.image_data.push(image_data);
+            }
+
+            if node_name.contains("NurbsPath.009") && !mesh_data.local_vertices.is_empty() {
+                let lv = &mesh_data.local_vertices[0];
+                log!(
+                    "  After processing: local_vertices[0]=({:.3},{:.3},{:.3}), count={}",
+                    lv.pos.x,
+                    lv.pos.y,
+                    lv.pos.z,
+                    mesh_data.local_vertices.len()
+                );
+            }
+
+            ctx.meshes.push(mesh_data);
+        }
+    }
+
+    register_node_info(ctx, node, node_transform, parent_node_index);
+    update_joint_hierarchy(ctx, node, node_transform, parent_node_index);
 
     for child in node.children() {
         process_node(
@@ -705,6 +789,34 @@ fn initialize_joint_animation(ctx: &mut GltfParseContext) {
     }
 }
 
+enum ParsedChannelData {
+    Translation(TranslationChannelData),
+    Rotation(RotationChannelData),
+    Scale(ScaleChannelData),
+    MorphWeights,
+}
+
+struct TranslationChannelData {
+    joint_matrices: Vec<Mat4>,
+    values: Vec<Vector3<f32>>,
+    in_tangents: Vec<Vector3<f32>>,
+    out_tangents: Vec<Vector3<f32>>,
+}
+
+struct RotationChannelData {
+    joint_matrices: Vec<Mat4>,
+    quats: Vec<Quaternion<f32>>,
+    in_tangents: Vec<Quaternion<f32>>,
+    out_tangents: Vec<Quaternion<f32>>,
+}
+
+struct ScaleChannelData {
+    joint_matrices: Vec<Mat4>,
+    values: Vec<Vector3<f32>>,
+    in_tangents: Vec<Vector3<f32>>,
+    out_tangents: Vec<Vector3<f32>>,
+}
+
 unsafe fn process_animation(
     buffers: &Vec<Data>,
     animation: gltf::Animation,
@@ -724,138 +836,25 @@ unsafe fn process_animation(
         let is_cubic = gltf_interp == gltf::animation::Interpolation::CubicSpline;
         let interp = convert_gltf_interpolation(gltf_interp);
 
-        let mut joint_translations: Vec<Mat4> = Vec::new();
-        let mut joint_rotations: Vec<Mat4> = Vec::new();
-        let mut joint_rotation_quats: Vec<Quaternion<f32>> = Vec::new();
-        let mut joint_scales: Vec<Mat4> = Vec::new();
+        let Some(outputs) = reader.read_outputs() else {
+            continue;
+        };
 
-        let mut node_translations: Vec<Vector3<f32>> = Vec::new();
-        let mut node_translation_in_tangents: Vec<Vector3<f32>> = Vec::new();
-        let mut node_translation_out_tangents: Vec<Vector3<f32>> = Vec::new();
-
-        let mut node_rotation_quats: Vec<Quaternion<f32>> = Vec::new();
-        let mut node_rotation_in_tangents: Vec<Quaternion<f32>> = Vec::new();
-        let mut node_rotation_out_tangents: Vec<Quaternion<f32>> = Vec::new();
-
-        let mut node_scale_values: Vec<Vector3<f32>> = Vec::new();
-        let mut node_scale_in_tangents: Vec<Vector3<f32>> = Vec::new();
-        let mut node_scale_out_tangents: Vec<Vector3<f32>> = Vec::new();
-
-        if let Some(outputs) = reader.read_outputs() {
-            match outputs {
-                ReadOutputs::Translations(translations) => {
-                    if is_cubic {
-                        let all: Vec<_> = translations.collect();
-                        for chunk in all.chunks(3) {
-                            if chunk.len() == 3 {
-                                let in_t = chunk[0];
-                                let val = chunk[1];
-                                let out_t = chunk[2];
-                                let matrix =
-                                    Matrix4::from_translation(Vector3::new(val[0], val[1], val[2]));
-                                joint_translations.push(matrix);
-                                node_translations.push(Vector3::new(val[0], val[1], val[2]));
-                                node_translation_in_tangents
-                                    .push(Vector3::new(in_t[0], in_t[1], in_t[2]));
-                                node_translation_out_tangents
-                                    .push(Vector3::new(out_t[0], out_t[1], out_t[2]));
-                            }
-                        }
-                    } else {
-                        for translation in translations {
-                            let matrix = Matrix4::from_translation(Vector3::new(
-                                translation[0],
-                                translation[1],
-                                translation[2],
-                            ));
-                            joint_translations.push(matrix);
-                            node_translations.push(Vector3::new(
-                                translation[0],
-                                translation[1],
-                                translation[2],
-                            ));
-                        }
-                    }
-                }
-                ReadOutputs::Rotations(rotations) => {
-                    if is_cubic {
-                        let all: Vec<_> = rotations.into_f32().collect();
-                        for chunk in all.chunks(3) {
-                            if chunk.len() == 3 {
-                                let in_t = chunk[0];
-                                let val = chunk[1];
-                                let out_t = chunk[2];
-                                let quat = Quaternion::new(val[3], val[0], val[1], val[2]);
-                                joint_rotation_quats.push(quat);
-                                joint_rotations.push(Matrix4::from(quat));
-                                node_rotation_quats.push(quat);
-                                node_rotation_in_tangents
-                                    .push(Quaternion::new(in_t[3], in_t[0], in_t[1], in_t[2]));
-                                node_rotation_out_tangents
-                                    .push(Quaternion::new(out_t[3], out_t[0], out_t[1], out_t[2]));
-                            }
-                        }
-                    } else {
-                        for rotation in rotations.into_f32() {
-                            let quat =
-                                Quaternion::new(rotation[3], rotation[0], rotation[1], rotation[2]);
-                            joint_rotation_quats.push(quat);
-                            joint_rotations.push(Matrix4::from(quat));
-                            node_rotation_quats.push(quat);
-                        }
-                    }
-                }
-                ReadOutputs::Scales(scales) => {
-                    if is_cubic {
-                        let all: Vec<_> = scales.collect();
-                        for chunk in all.chunks(3) {
-                            if chunk.len() == 3 {
-                                let in_t = chunk[0];
-                                let val = chunk[1];
-                                let out_t = chunk[2];
-                                let matrix = Matrix4::from_nonuniform_scale(val[0], val[1], val[2]);
-                                joint_scales.push(matrix);
-                                node_scale_values.push(Vector3::new(val[0], val[1], val[2]));
-                                node_scale_in_tangents
-                                    .push(Vector3::new(in_t[0], in_t[1], in_t[2]));
-                                node_scale_out_tangents
-                                    .push(Vector3::new(out_t[0], out_t[1], out_t[2]));
-                            }
-                        }
-                    } else {
-                        for scale in scales {
-                            let matrix =
-                                Matrix4::from_nonuniform_scale(scale[0], scale[1], scale[2]);
-                            joint_scales.push(matrix);
-                            node_scale_values.push(Vector3::new(scale[0], scale[1], scale[2]));
-                        }
-                    }
-                }
-                ReadOutputs::MorphTargetWeights(morph_target_weights) => {
-                    if morph_target_count > 0 {
-                        let mut weight = Vec::new();
-                        let mut weights = Vec::new();
-
-                        for morph_target_weight in morph_target_weights.into_f32() {
-                            weight.push(morph_target_weight);
-                            if weight.len() >= morph_target_count {
-                                weights.push(weight.clone());
-                                weight.clear();
-                            }
-                        }
-
-                        for (i, weight_set) in weights.iter().enumerate() {
-                            if i < key_frames.len() {
-                                ctx.morph_animations.push(MorphAnimationRaw {
-                                    key_frame: key_frames[i],
-                                    weights: weight_set.clone(),
-                                });
-                            }
-                        }
-                    }
-                }
+        let parsed = match outputs {
+            ReadOutputs::Translations(translations) => {
+                ParsedChannelData::Translation(parse_translation_outputs(translations, is_cubic))
             }
-        }
+            ReadOutputs::Rotations(rotations) => {
+                ParsedChannelData::Rotation(parse_rotation_outputs(rotations, is_cubic))
+            }
+            ReadOutputs::Scales(scales) => {
+                ParsedChannelData::Scale(parse_scale_outputs(scales, is_cubic))
+            }
+            ReadOutputs::MorphTargetWeights(weights) => {
+                collect_morph_weights(weights, morph_target_count, &key_frames, ctx);
+                ParsedChannelData::MorphWeights
+            }
+        };
 
         let target = channel.target();
         let node = target.node();
@@ -870,108 +869,258 @@ unsafe fn process_animation(
             else {
                 continue;
             };
-
-            ctx.joint_animations[joint_id as usize].push(JointAnimation {
-                key_frames: key_frames.clone(),
-                translations: joint_translations.clone(),
-                rotations: joint_rotations.clone(),
-                scales: joint_scales.clone(),
-            });
+            apply_joint_animation(&parsed, &key_frames, joint_id, ctx);
         } else {
-            let existing = ctx
-                .node_animations
-                .iter_mut()
-                .find(|na| na.node_index == node.index());
-
-            let node_animation = if let Some(na) = existing {
-                na
-            } else {
-                let (default_trans, default_rot, default_scale) =
-                    decompose(&mat4_from_array(node.transform().matrix()));
-                ctx.node_animations.push(NodeAnimation {
-                    node_index: node.index(),
-                    default_translation: default_trans,
-                    default_rotation: default_rot,
-                    default_scale: default_scale,
-                    interpolation: interp.clone(),
-                    ..Default::default()
-                });
-                ctx.node_animations
-                    .last_mut()
-                    .expect("just pushed node_animation")
-            };
-
-            if !node_translations.is_empty() {
-                for (i, &kf) in key_frames.iter().enumerate() {
-                    if i < node_translations.len() {
-                        node_animation.translation_keyframes.push(kf);
-                        node_animation.translations.push(node_translations[i]);
-                        if is_cubic && i < node_translation_in_tangents.len() {
-                            node_animation
-                                .translation_in_tangents
-                                .push(node_translation_in_tangents[i]);
-                            node_animation
-                                .translation_out_tangents
-                                .push(node_translation_out_tangents[i]);
-                        }
-                    }
-                }
-            }
-
-            if !node_rotation_quats.is_empty() {
-                for (i, &kf) in key_frames.iter().enumerate() {
-                    if i < node_rotation_quats.len() {
-                        node_animation.rotation_keyframes.push(kf);
-                        node_animation.rotations.push(node_rotation_quats[i]);
-                        if is_cubic && i < node_rotation_in_tangents.len() {
-                            node_animation
-                                .rotation_in_tangents
-                                .push(node_rotation_in_tangents[i]);
-                            node_animation
-                                .rotation_out_tangents
-                                .push(node_rotation_out_tangents[i]);
-                        }
-                    }
-                }
-            } else if !joint_rotation_quats.is_empty() {
-                for (i, &kf) in key_frames.iter().enumerate() {
-                    if i < joint_rotation_quats.len() {
-                        node_animation.rotation_keyframes.push(kf);
-                        node_animation.rotations.push(joint_rotation_quats[i]);
-                    }
-                }
-            }
-
-            if !node_scale_values.is_empty() {
-                for (i, &kf) in key_frames.iter().enumerate() {
-                    if i < node_scale_values.len() {
-                        node_animation.scale_keyframes.push(kf);
-                        node_animation.scales.push(node_scale_values[i]);
-                        if is_cubic && i < node_scale_in_tangents.len() {
-                            node_animation
-                                .scale_in_tangents
-                                .push(node_scale_in_tangents[i]);
-                            node_animation
-                                .scale_out_tangents
-                                .push(node_scale_out_tangents[i]);
-                        }
-                    }
-                }
-            } else if !joint_scales.is_empty() {
-                for (i, &kf) in key_frames.iter().enumerate() {
-                    if i < joint_scales.len() {
-                        node_animation.scale_keyframes.push(kf);
-                        let mat = joint_scales[i];
-                        node_animation
-                            .scales
-                            .push(Vector3::new(mat[0][0], mat[1][1], mat[2][2]));
-                    }
-                }
-            }
+            let node_animation = find_or_create_node_animation(ctx, &node, interp);
+            apply_node_animation(&parsed, &key_frames, is_cubic, node_animation);
         }
     }
 
     Ok(())
+}
+
+fn parse_translation_outputs(
+    translations: gltf::animation::util::Translations,
+    is_cubic: bool,
+) -> TranslationChannelData {
+    let mut data = TranslationChannelData {
+        joint_matrices: Vec::new(),
+        values: Vec::new(),
+        in_tangents: Vec::new(),
+        out_tangents: Vec::new(),
+    };
+
+    if is_cubic {
+        let all: Vec<_> = translations.collect();
+        for chunk in all.chunks(3) {
+            if chunk.len() == 3 {
+                let vec = Vector3::new(chunk[1][0], chunk[1][1], chunk[1][2]);
+                data.joint_matrices.push(Matrix4::from_translation(vec));
+                data.values.push(vec);
+                data.in_tangents
+                    .push(Vector3::new(chunk[0][0], chunk[0][1], chunk[0][2]));
+                data.out_tangents
+                    .push(Vector3::new(chunk[2][0], chunk[2][1], chunk[2][2]));
+            }
+        }
+    } else {
+        for t in translations {
+            let vec = Vector3::new(t[0], t[1], t[2]);
+            data.joint_matrices.push(Matrix4::from_translation(vec));
+            data.values.push(vec);
+        }
+    }
+
+    data
+}
+
+fn parse_rotation_outputs(
+    rotations: gltf::animation::util::Rotations,
+    is_cubic: bool,
+) -> RotationChannelData {
+    let mut data = RotationChannelData {
+        joint_matrices: Vec::new(),
+        quats: Vec::new(),
+        in_tangents: Vec::new(),
+        out_tangents: Vec::new(),
+    };
+
+    if is_cubic {
+        let all: Vec<_> = rotations.into_f32().collect();
+        for chunk in all.chunks(3) {
+            if chunk.len() == 3 {
+                let quat = Quaternion::new(chunk[1][3], chunk[1][0], chunk[1][1], chunk[1][2]);
+                data.quats.push(quat);
+                data.joint_matrices.push(Matrix4::from(quat));
+                data.in_tangents.push(Quaternion::new(
+                    chunk[0][3],
+                    chunk[0][0],
+                    chunk[0][1],
+                    chunk[0][2],
+                ));
+                data.out_tangents.push(Quaternion::new(
+                    chunk[2][3],
+                    chunk[2][0],
+                    chunk[2][1],
+                    chunk[2][2],
+                ));
+            }
+        }
+    } else {
+        for r in rotations.into_f32() {
+            let quat = Quaternion::new(r[3], r[0], r[1], r[2]);
+            data.quats.push(quat);
+            data.joint_matrices.push(Matrix4::from(quat));
+        }
+    }
+
+    data
+}
+
+fn parse_scale_outputs(scales: gltf::animation::util::Scales, is_cubic: bool) -> ScaleChannelData {
+    let mut data = ScaleChannelData {
+        joint_matrices: Vec::new(),
+        values: Vec::new(),
+        in_tangents: Vec::new(),
+        out_tangents: Vec::new(),
+    };
+
+    if is_cubic {
+        let all: Vec<_> = scales.collect();
+        for chunk in all.chunks(3) {
+            if chunk.len() == 3 {
+                let vec = Vector3::new(chunk[1][0], chunk[1][1], chunk[1][2]);
+                data.joint_matrices
+                    .push(Matrix4::from_nonuniform_scale(vec.x, vec.y, vec.z));
+                data.values.push(vec);
+                data.in_tangents
+                    .push(Vector3::new(chunk[0][0], chunk[0][1], chunk[0][2]));
+                data.out_tangents
+                    .push(Vector3::new(chunk[2][0], chunk[2][1], chunk[2][2]));
+            }
+        }
+    } else {
+        for s in scales {
+            let vec = Vector3::new(s[0], s[1], s[2]);
+            data.joint_matrices
+                .push(Matrix4::from_nonuniform_scale(vec.x, vec.y, vec.z));
+            data.values.push(vec);
+        }
+    }
+
+    data
+}
+
+fn collect_morph_weights(
+    morph_target_weights: gltf::animation::util::MorphTargetWeights,
+    morph_target_count: usize,
+    key_frames: &[f32],
+    ctx: &mut GltfParseContext,
+) {
+    if morph_target_count == 0 {
+        return;
+    }
+
+    let mut current_weight_set = Vec::new();
+    let mut grouped_weights = Vec::new();
+
+    for w in morph_target_weights.into_f32() {
+        current_weight_set.push(w);
+        if current_weight_set.len() >= morph_target_count {
+            grouped_weights.push(current_weight_set.clone());
+            current_weight_set.clear();
+        }
+    }
+
+    for (i, weight_set) in grouped_weights.iter().enumerate() {
+        if i < key_frames.len() {
+            ctx.morph_animations.push(MorphAnimationRaw {
+                key_frame: key_frames[i],
+                weights: weight_set.clone(),
+            });
+        }
+    }
+}
+
+fn apply_joint_animation(
+    parsed: &ParsedChannelData,
+    key_frames: &[f32],
+    joint_id: u16,
+    ctx: &mut GltfParseContext,
+) {
+    let mut translations = Vec::new();
+    let mut rotations = Vec::new();
+    let mut scales = Vec::new();
+
+    match parsed {
+        ParsedChannelData::Translation(d) => translations = d.joint_matrices.clone(),
+        ParsedChannelData::Rotation(d) => rotations = d.joint_matrices.clone(),
+        ParsedChannelData::Scale(d) => scales = d.joint_matrices.clone(),
+        ParsedChannelData::MorphWeights => {}
+    }
+
+    ctx.joint_animations[joint_id as usize].push(JointAnimation {
+        key_frames: key_frames.to_vec(),
+        translations,
+        rotations,
+        scales,
+    });
+}
+
+fn find_or_create_node_animation<'a>(
+    ctx: &'a mut GltfParseContext,
+    node: &Node,
+    interp: Interpolation,
+) -> &'a mut NodeAnimation {
+    let node_index = node.index();
+    let existing_index = ctx
+        .node_animations
+        .iter()
+        .position(|na| na.node_index == node_index);
+
+    if let Some(idx) = existing_index {
+        return &mut ctx.node_animations[idx];
+    }
+
+    let (default_trans, default_rot, default_scale) =
+        decompose(&mat4_from_array(node.transform().matrix()));
+
+    ctx.node_animations.push(NodeAnimation {
+        node_index,
+        default_translation: default_trans,
+        default_rotation: default_rot,
+        default_scale,
+        interpolation: interp,
+        ..Default::default()
+    });
+
+    ctx.node_animations
+        .last_mut()
+        .expect("just pushed node_animation")
+}
+
+fn apply_node_animation(
+    parsed: &ParsedChannelData,
+    key_frames: &[f32],
+    is_cubic: bool,
+    anim: &mut NodeAnimation,
+) {
+    match parsed {
+        ParsedChannelData::Translation(d) => {
+            for (i, &kf) in key_frames.iter().enumerate().take(d.values.len()) {
+                anim.translation_keyframes.push(kf);
+                anim.translations.push(d.values[i]);
+                if is_cubic && i < d.in_tangents.len() {
+                    anim.translation_in_tangents.push(d.in_tangents[i]);
+                    anim.translation_out_tangents.push(d.out_tangents[i]);
+                }
+            }
+        }
+
+        ParsedChannelData::Rotation(d) => {
+            for (i, &kf) in key_frames.iter().enumerate().take(d.quats.len()) {
+                anim.rotation_keyframes.push(kf);
+                anim.rotations.push(d.quats[i]);
+                if is_cubic && i < d.in_tangents.len() {
+                    anim.rotation_in_tangents.push(d.in_tangents[i]);
+                    anim.rotation_out_tangents.push(d.out_tangents[i]);
+                }
+            }
+        }
+
+        ParsedChannelData::Scale(d) => {
+            for (i, &kf) in key_frames.iter().enumerate().take(d.values.len()) {
+                anim.scale_keyframes.push(kf);
+                anim.scales.push(d.values[i]);
+                if is_cubic && i < d.in_tangents.len() {
+                    anim.scale_in_tangents.push(d.in_tangents[i]);
+                    anim.scale_out_tangents.push(d.out_tangents[i]);
+                }
+            }
+        }
+
+        ParsedChannelData::MorphWeights => {}
+    }
 }
 
 fn build_result(ctx: GltfParseContext) -> GltfLoadResult {

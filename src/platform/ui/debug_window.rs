@@ -229,17 +229,16 @@ pub fn build_click_debug_overlay(ui: &imgui::Ui, gui_data: &GUIData) {
         return;
     }
 
-    static mut IMGUI_SIZE_LOGGED: bool = false;
-    unsafe {
-        if !IMGUI_SIZE_LOGGED {
-            let display_size = ui.io().display_size;
-            log!(
-                "ImGui display size: {:.1} x {:.1}",
-                display_size[0],
-                display_size[1]
-            );
-            IMGUI_SIZE_LOGGED = true;
-        }
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static IMGUI_SIZE_LOGGED: AtomicBool = AtomicBool::new(false);
+    if !IMGUI_SIZE_LOGGED.load(Ordering::Relaxed) {
+        let display_size = ui.io().display_size;
+        log!(
+            "ImGui display size: {:.1} x {:.1}",
+            display_size[0],
+            display_size[1]
+        );
+        IMGUI_SIZE_LOGGED.store(true, Ordering::Relaxed);
     }
 
     if let Some(rect) = gui_data.billboard_click_rect {

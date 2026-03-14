@@ -56,93 +56,7 @@ impl CollectedSceneState {
             .map(|s| s.model_path.clone())
             .unwrap_or_default();
 
-        let physical_camera =
-            world
-                .get_resource::<PhysicalCameraParameters>()
-                .map(|p| PhysicalCameraState {
-                    focal_length_mm: p.focal_length_mm,
-                    sensor_height_mm: p.sensor_height_mm,
-                    aperture_f_stops: p.aperture_f_stops,
-                    shutter_speed_s: p.shutter_speed_s,
-                    sensitivity_iso: p.sensitivity_iso,
-                });
-
-        let exposure = world.get_resource::<Exposure>().map(|e| ExposureState {
-            ev100: e.ev100,
-            exposure_value: e.exposure_value,
-        });
-
-        let depth_of_field = world
-            .get_resource::<DepthOfField>()
-            .map(|d| DepthOfFieldState {
-                enabled: d.enabled,
-                focus_distance: d.focus_distance,
-                max_blur_radius: d.max_blur_radius,
-            });
-
-        let tone_mapping = world.get_resource::<ToneMapping>().map(|tm| {
-            let operator_str = match tm.operator {
-                ToneMapOperator::None => "None",
-                ToneMapOperator::AcesFilmic => "AcesFilmic",
-                ToneMapOperator::Reinhard => "Reinhard",
-            };
-            ToneMappingState {
-                enabled: tm.enabled,
-                operator: operator_str.to_string(),
-                gamma: tm.gamma,
-            }
-        });
-
-        let lens_effects = world
-            .get_resource::<LensEffects>()
-            .map(|le| LensEffectsState {
-                vignette_enabled: le.vignette_enabled,
-                vignette_intensity: le.vignette_intensity,
-                chromatic_aberration_enabled: le.chromatic_aberration_enabled,
-                chromatic_aberration_intensity: le.chromatic_aberration_intensity,
-            });
-
-        let bloom = world.get_resource::<BloomSettings>().map(|bs| BloomState {
-            enabled: bs.enabled,
-            intensity: bs.intensity,
-            threshold: bs.threshold,
-            knee: bs.knee,
-            mip_count: bs.mip_count,
-        });
-
-        let auto_exposure = world
-            .get_resource::<AutoExposure>()
-            .map(|ae| AutoExposureState {
-                enabled: ae.enabled,
-                min_ev: ae.min_ev,
-                max_ev: ae.max_ev,
-                adaptation_speed_up: ae.adaptation_speed_up,
-                adaptation_speed_down: ae.adaptation_speed_down,
-                low_percent: ae.low_percent,
-                high_percent: ae.high_percent,
-            });
-
-        let camera = world
-            .get_resource::<Camera>()
-            .map(|c| CameraState {
-                pivot: [c.pivot.x, c.pivot.y, c.pivot.z],
-                yaw: c.yaw,
-                pitch: c.pitch,
-                distance: c.distance,
-                fov_y: c.fov_y.0,
-                position: None,
-                direction: None,
-                up: None,
-                physical_camera: physical_camera.clone(),
-                exposure: exposure.clone(),
-                depth_of_field: depth_of_field.clone(),
-                tone_mapping,
-                lens_effects,
-                bloom,
-                auto_exposure,
-            })
-            .unwrap_or_default();
-
+        let camera = collect_camera_state(world);
         let (timeline, current_clip_name) = collect_timeline_and_clip(world);
 
         let editor = world
@@ -171,6 +85,95 @@ impl CollectedSceneState {
             panel_layout,
         }
     }
+}
+
+fn collect_camera_state(world: &World) -> CameraState {
+    let physical_camera =
+        world
+            .get_resource::<PhysicalCameraParameters>()
+            .map(|p| PhysicalCameraState {
+                focal_length_mm: p.focal_length_mm,
+                sensor_height_mm: p.sensor_height_mm,
+                aperture_f_stops: p.aperture_f_stops,
+                shutter_speed_s: p.shutter_speed_s,
+                sensitivity_iso: p.sensitivity_iso,
+            });
+
+    let exposure = world.get_resource::<Exposure>().map(|e| ExposureState {
+        ev100: e.ev100,
+        exposure_value: e.exposure_value,
+    });
+
+    let depth_of_field = world
+        .get_resource::<DepthOfField>()
+        .map(|d| DepthOfFieldState {
+            enabled: d.enabled,
+            focus_distance: d.focus_distance,
+            max_blur_radius: d.max_blur_radius,
+        });
+
+    let tone_mapping = world.get_resource::<ToneMapping>().map(|tm| {
+        let operator_str = match tm.operator {
+            ToneMapOperator::None => "None",
+            ToneMapOperator::AcesFilmic => "AcesFilmic",
+            ToneMapOperator::Reinhard => "Reinhard",
+        };
+        ToneMappingState {
+            enabled: tm.enabled,
+            operator: operator_str.to_string(),
+            gamma: tm.gamma,
+        }
+    });
+
+    let lens_effects = world
+        .get_resource::<LensEffects>()
+        .map(|le| LensEffectsState {
+            vignette_enabled: le.vignette_enabled,
+            vignette_intensity: le.vignette_intensity,
+            chromatic_aberration_enabled: le.chromatic_aberration_enabled,
+            chromatic_aberration_intensity: le.chromatic_aberration_intensity,
+        });
+
+    let bloom = world.get_resource::<BloomSettings>().map(|bs| BloomState {
+        enabled: bs.enabled,
+        intensity: bs.intensity,
+        threshold: bs.threshold,
+        knee: bs.knee,
+        mip_count: bs.mip_count,
+    });
+
+    let auto_exposure = world
+        .get_resource::<AutoExposure>()
+        .map(|ae| AutoExposureState {
+            enabled: ae.enabled,
+            min_ev: ae.min_ev,
+            max_ev: ae.max_ev,
+            adaptation_speed_up: ae.adaptation_speed_up,
+            adaptation_speed_down: ae.adaptation_speed_down,
+            low_percent: ae.low_percent,
+            high_percent: ae.high_percent,
+        });
+
+    world
+        .get_resource::<Camera>()
+        .map(|c| CameraState {
+            pivot: [c.pivot.x, c.pivot.y, c.pivot.z],
+            yaw: c.yaw,
+            pitch: c.pitch,
+            distance: c.distance,
+            fov_y: c.fov_y.0,
+            position: None,
+            direction: None,
+            up: None,
+            physical_camera: physical_camera.clone(),
+            exposure: exposure.clone(),
+            depth_of_field: depth_of_field.clone(),
+            tone_mapping,
+            lens_effects,
+            bloom,
+            auto_exposure,
+        })
+        .unwrap_or_default()
 }
 
 fn collect_timeline_and_clip(world: &World) -> (TimelineConfig, Option<String>) {

@@ -102,39 +102,8 @@ unsafe fn apply_model_to_resources(
     fbx_model: Option<FbxModel>,
 ) -> Result<()> {
     cleanup_resources(device, graphics, raytracing, world, assets)?;
-
-    if let Some(fbx) = fbx_model {
-        let needs_coord_conversion = fbx.fbx_data.iter().any(|d| !d.clusters.is_empty());
-        world.insert_resource(FbxModelCache::new(
-            fbx,
-            model_name.to_string(),
-            needs_coord_conversion,
-        ));
-        world.insert_resource(GltfModelCache::empty());
-    } else {
-        world.insert_resource(FbxModelCache::empty());
-        let path_lower = model_name.to_lowercase();
-        if path_lower.ends_with(".gltf") || path_lower.ends_with(".glb") {
-            world.insert_resource(GltfModelCache::new(model_name.to_string()));
-        } else {
-            world.insert_resource(GltfModelCache::empty());
-        }
-    }
-
-    let mesh_count = load_result.meshes.len();
-    let reserved_scene_objects = 4;
-    let required_materials = mesh_count as u32 + reserved_scene_objects as u32;
-    let required_objects = graphics.objects.get_next_slot() + mesh_count + reserved_scene_objects;
-
-    graphics
-        .materials
-        .ensure_capacity(device, required_materials)?;
-    graphics.objects.ensure_capacity(
-        instance,
-        device,
-        swapchain.swapchain_images.len(),
-        required_objects,
-    )?;
+    insert_model_caches(world, model_name, fbx_model);
+    ensure_graphics_capacity(load_result, instance, device, swapchain, graphics)?;
 
     setup_animation_system(world, load_result, assets);
     setup_nodes(world, load_result);
@@ -172,28 +141,9 @@ unsafe fn apply_model_to_resources(
         update_billboard_descriptor(device, swapchain, &mut *billboard)?;
     }
 
-    let animation_type = if load_result.has_skinned_meshes {
-        AnimationType::Skeletal
-    } else if !load_result.clips.is_empty() {
-        AnimationType::Node
-    } else {
-        AnimationType::None
-    };
+    let animation_type = determine_animation_type(load_result);
     let node_animation_scale = load_result.node_animation_scale;
-    let mesh_category = if load_result.has_skinned_meshes {
-        MeshCategory::Skinned
-    } else {
-        MeshCategory::Unskinned
-    };
-    let mesh_scale_debug = compute_bone_gizmo_mesh_scale(node_animation_scale, mesh_category);
-    log!(
-        "[ModelLoad] type={:?}, has_skinned={}, node_anim_scale={}, mesh_scale={}",
-        animation_type,
-        load_result.has_skinned_meshes,
-        node_animation_scale,
-        mesh_scale_debug
-    );
-    let loaded_clips = load_result.clips.clone();
+    log_model_load_info(load_result, animation_type.clone(), node_animation_scale);
 
     create_ecs_entities(
         model_name,
@@ -202,7 +152,7 @@ unsafe fn apply_model_to_resources(
         assets,
         animation_type,
         node_animation_scale,
-        &loaded_clips,
+        &load_result.clips.clone(),
         scene_will_provide_clips,
     );
 
@@ -218,6 +168,81 @@ unsafe fn apply_model_to_resources(
     initialize_constraint_gizmo_visibility(world);
 
     Ok(())
+}
+
+fn insert_model_caches(world: &mut World, model_name: &str, fbx_model: Option<FbxModel>) {
+    if let Some(fbx) = fbx_model {
+        let needs_coord_conversion = fbx.fbx_data.iter().any(|d| !d.clusters.is_empty());
+        world.insert_resource(FbxModelCache::new(
+            fbx,
+            model_name.to_string(),
+            needs_coord_conversion,
+        ));
+        world.insert_resource(GltfModelCache::empty());
+    } else {
+        world.insert_resource(FbxModelCache::empty());
+        let path_lower = model_name.to_lowercase();
+        if path_lower.ends_with(".gltf") || path_lower.ends_with(".glb") {
+            world.insert_resource(GltfModelCache::new(model_name.to_string()));
+        } else {
+            world.insert_resource(GltfModelCache::empty());
+        }
+    }
+}
+
+unsafe fn ensure_graphics_capacity(
+    load_result: &ModelLoadResult,
+    instance: &Instance,
+    device: &RRDevice,
+    swapchain: &RRSwapchain,
+    graphics: &mut GraphicsResources,
+) -> Result<()> {
+    let mesh_count = load_result.meshes.len();
+    let reserved_scene_objects = 4;
+    let required_materials = mesh_count as u32 + reserved_scene_objects as u32;
+    let required_objects = graphics.objects.get_next_slot() + mesh_count + reserved_scene_objects;
+
+    graphics
+        .materials
+        .ensure_capacity(device, required_materials)?;
+    graphics.objects.ensure_capacity(
+        instance,
+        device,
+        swapchain.swapchain_images.len(),
+        required_objects,
+    )?;
+
+    Ok(())
+}
+
+fn determine_animation_type(load_result: &ModelLoadResult) -> AnimationType {
+    if load_result.has_skinned_meshes {
+        AnimationType::Skeletal
+    } else if !load_result.clips.is_empty() {
+        AnimationType::Node
+    } else {
+        AnimationType::None
+    }
+}
+
+fn log_model_load_info(
+    load_result: &ModelLoadResult,
+    animation_type: AnimationType,
+    node_animation_scale: f32,
+) {
+    let mesh_category = if load_result.has_skinned_meshes {
+        MeshCategory::Skinned
+    } else {
+        MeshCategory::Unskinned
+    };
+    let mesh_scale_debug = compute_bone_gizmo_mesh_scale(node_animation_scale, mesh_category);
+    log!(
+        "[ModelLoad] type={:?}, has_skinned={}, node_anim_scale={}, mesh_scale={}",
+        animation_type,
+        load_result.has_skinned_meshes,
+        node_animation_scale,
+        mesh_scale_debug
+    );
 }
 
 unsafe fn cleanup_resources(

@@ -1,7 +1,7 @@
 use crate::app::{App, AppData};
 
 use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
-use crate::ecs::component::{MeshScale, RenderInfo};
+use crate::ecs::component::RenderInfo;
 use crate::ecs::resource::pipeline_allocate_id;
 use crate::ecs::resource::GridMeshData;
 use crate::ecs::systems::{
@@ -30,7 +30,6 @@ use crate::vulkanr::vulkan::*;
 use crate::vulkanr::VulkanBackend;
 
 use crate::app::graphics_resource::GraphicsResources;
-use crate::debugview::*;
 use crate::ecs::resource::Camera;
 
 use vulkanalia::Device as VkDevice;
@@ -116,16 +115,24 @@ struct VulkanResources {
     in_flight_fences: Vec<vk::Fence>,
 }
 
+struct GizmoPipelineIds {
+    grid: usize,
+    gizmo: usize,
+    bone_solid: usize,
+    bone_wire: usize,
+    bone_solid_depth: usize,
+    bone_wire_depth: usize,
+    bone_solid_occluded: usize,
+    bone_wire_occluded: usize,
+}
+
 impl App {
     pub unsafe fn create(window: &Window) -> Result<Self> {
         let loader = LibloadingLoader::new(LIBRARY)?;
         let entry = Entry::new(loader).map_err(|b| anyhow!("{}", b))?;
         let mut data = AppData::default();
 
-        data.ecs_world.insert_resource(Camera::default());
-        data.ecs_world.insert_resource(LightState::default());
-        data.ecs_world
-            .insert_resource(crate::debugview::DebugViewState::default());
+        Self::initialize_core_ecs_resources(&mut data);
 
         let (instance, messenger) = Self::create_instance_with_messenger(window, &entry)?;
         let surface = vk_window::create_surface(&instance, &window, &window)?;
@@ -141,64 +148,14 @@ impl App {
         let rrswapchain = RRSwapchain::new(window, &instance, &surface, &rrdevice)?;
         let rrcommand_pool = Rc::new(RRCommandPool::new(&instance, &surface, &rrdevice));
         let rrrender = RRRender::new(&instance, &rrdevice, &rrswapchain, rrcommand_pool.as_ref());
-        let swapchain_image_count = rrswapchain.swapchain_images.len();
-        let max_materials = 16;
-        let max_objects = 64;
-        data.graphics_resources = GraphicsResources::new(
+
+        Self::initialize_graphics_and_ecs(
             &instance,
             &rrdevice,
-            swapchain_image_count,
-            max_materials,
-            max_objects,
-        )
-        .context("Failed to create render resources")?;
-
-        let gpu_descriptors = GpuDescriptors::new(
-            data.graphics_resources.frame_set.clone(),
-            data.graphics_resources.objects.clone(),
-        );
-        let material_registry = MaterialRegistry::new(data.graphics_resources.materials.clone());
-        data.ecs_world.insert_resource(gpu_descriptors);
-        data.ecs_world.insert_resource(material_registry);
-        data.ecs_world.insert_resource(ClipLibrary::new());
-        data.ecs_world.insert_resource(ModelState::default());
-        data.ecs_world.insert_resource(MeshAssets::new());
-        data.ecs_world.insert_resource(NodeAssets::new());
-        #[cfg(feature = "ml")]
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::InferenceActorState::default());
-        #[cfg(feature = "ml")]
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::CurveSuggestionState::default());
-        #[cfg(feature = "ml")]
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::BoneTopologyCache::default());
-        #[cfg(feature = "ml")]
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::BoneNameTokenCache::default());
-        #[cfg(feature = "text-to-motion")]
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::TextToMotionState::default());
-
-        let viewport_width = rrswapchain.swapchain_extent.width;
-        let viewport_height = rrswapchain.swapchain_extent.height;
-        data.viewport = crate::app::viewport::ViewportState::new(
-            &instance,
-            &rrdevice,
-            rrcommand_pool.command_pool,
-            viewport_width,
-            viewport_height,
-            rrdevice.msaa_samples,
-            rrswapchain.swapchain_format,
-        )
-        .context("Failed to create viewport state")?;
-        log!(
-            "Created viewport state: {}x{} with MSAA {:?}, format {:?}",
-            viewport_width,
-            viewport_height,
-            rrdevice.msaa_samples,
-            rrswapchain.swapchain_format
-        );
+            &rrswapchain,
+            &rrcommand_pool,
+            &mut data,
+        )?;
 
         let render_layouts = data.graphics_resources.get_layouts();
         let mut pipeline_manager = PipelineManager::new();
@@ -215,11 +172,200 @@ impl App {
             vk::CullModeFlags::BACK,
         )
         .context("Failed to create model pipeline")?;
-        let model_pipeline_id = data.pipeline_storage.register(model_pipeline.clone());
+        data.pipeline_storage.register(model_pipeline.clone());
         pipeline_allocate_id(&mut pipeline_manager);
-        log!("Registered model pipeline with id {}", model_pipeline_id);
 
-        let grid_pipeline =
+        let pipeline_ids = Self::build_gizmo_pipelines(
+            &rrdevice,
+            &rrswapchain,
+            &rrrender,
+            &render_layouts,
+            &mut data.pipeline_storage,
+            &mut pipeline_manager,
+        )?;
+
+        Self::initialize_gizmo_resources(
+            &instance,
+            &rrdevice,
+            &rrcommand_pool,
+            &rrswapchain,
+            &rrrender,
+            &pipeline_ids,
+            &mut data,
+            &mut pipeline_manager,
+        )?;
+
+        data.ecs_world.insert_resource(pipeline_manager);
+
+        let grid_object_index = data.graphics_resources.objects.allocate_slot();
+        data.graphics_resources.objects.seal_reserved_slots();
+
+        let rrrender = Self::initialize_ray_tracing(
+            &instance,
+            &rrdevice,
+            &rrswapchain,
+            &rrcommand_pool,
+            &rrrender,
+            &mut data,
+        )?;
+
+        let (model_path, loaded_scene) = Self::determine_startup_model();
+        Self::load_startup_model(
+            &instance,
+            &rrdevice,
+            &rrcommand_pool,
+            &rrswapchain,
+            &mut data,
+            &model_path,
+            loaded_scene.is_some(),
+        );
+
+        Self::apply_loaded_scene(&mut data, loaded_scene);
+
+        if let Err(e) = Self::create_ray_tracing_pipelines_with_resources(
+            &instance,
+            &rrdevice,
+            &mut data,
+            &rrswapchain,
+            &rrrender,
+        ) {
+            log_warn!("Failed to create ray tracing pipelines: {:?}", e);
+        }
+
+        let grid_mesh_data = Self::build_grid_mesh(
+            &instance,
+            &rrdevice,
+            &rrcommand_pool,
+            &mut data,
+            pipeline_ids.grid,
+            grid_object_index,
+        )?;
+
+        let mut rrcommand_buffer = RRCommandBuffer::new(&rrcommand_pool);
+        if let Err(e) =
+            RRCommandBuffer::allocate_command_buffers(&rrdevice, &rrrender, &mut rrcommand_buffer)
+        {
+            eprintln!("failed to allocate command buffers: {:?}", e);
+        }
+
+        let (image_available_semaphores, render_finish_semaphores, in_flight_fences) =
+            Self::create_sync_objects(&rrdevice.device)?;
+
+        let vulkan_resources = VulkanResources {
+            messenger,
+            surface,
+            rrswapchain,
+            rrrender,
+            rrcommand_pool,
+            rrcommand_buffer,
+            model_pipeline,
+            image_available_semaphores,
+            render_finish_semaphores,
+            in_flight_fences,
+        };
+
+        Self::register_resources(
+            &mut data,
+            &vulkan_resources,
+            &model_path,
+            rrdevice.msaa_samples,
+        );
+
+        let grid_scale = create_default_grid_scale();
+        data.ecs_world.insert_resource(grid_mesh_data);
+        data.ecs_world.insert_resource(grid_scale);
+
+        Ok(Self {
+            entry,
+            instance,
+            rrdevice,
+            data,
+            frame: 0,
+            resized: false,
+            start: Instant::now(),
+            last_update_time: 0.0,
+        })
+    }
+
+    fn initialize_core_ecs_resources(data: &mut AppData) {
+        data.ecs_world.insert_resource(Camera::default());
+        data.ecs_world.insert_resource(LightState::default());
+        data.ecs_world
+            .insert_resource(crate::debugview::DebugViewState::default());
+    }
+
+    unsafe fn initialize_graphics_and_ecs(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        rrswapchain: &RRSwapchain,
+        rrcommand_pool: &Rc<RRCommandPool>,
+        data: &mut AppData,
+    ) -> Result<()> {
+        let swapchain_image_count = rrswapchain.swapchain_images.len();
+        data.graphics_resources =
+            GraphicsResources::new(instance, rrdevice, swapchain_image_count, 16, 64)
+                .context("Failed to create render resources")?;
+
+        let gpu_descriptors = GpuDescriptors::new(
+            data.graphics_resources.frame_set.clone(),
+            data.graphics_resources.objects.clone(),
+        );
+        let material_registry = MaterialRegistry::new(data.graphics_resources.materials.clone());
+        data.ecs_world.insert_resource(gpu_descriptors);
+        data.ecs_world.insert_resource(material_registry);
+        data.ecs_world.insert_resource(ClipLibrary::new());
+        data.ecs_world.insert_resource(ModelState::default());
+        data.ecs_world.insert_resource(MeshAssets::new());
+        data.ecs_world.insert_resource(NodeAssets::new());
+
+        #[cfg(feature = "ml")]
+        {
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::InferenceActorState::default());
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::CurveSuggestionState::default());
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::BoneTopologyCache::default());
+            data.ecs_world
+                .insert_resource(crate::ecs::resource::BoneNameTokenCache::default());
+        }
+
+        #[cfg(feature = "text-to-motion")]
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::TextToMotionState::default());
+
+        let viewport_width = rrswapchain.swapchain_extent.width;
+        let viewport_height = rrswapchain.swapchain_extent.height;
+        data.viewport = crate::app::viewport::ViewportState::new(
+            instance,
+            rrdevice,
+            rrcommand_pool.command_pool,
+            viewport_width,
+            viewport_height,
+            rrdevice.msaa_samples,
+            rrswapchain.swapchain_format,
+        )
+        .context("Failed to create viewport state")?;
+        log!(
+            "Created viewport state: {}x{} with MSAA {:?}, format {:?}",
+            viewport_width,
+            viewport_height,
+            rrdevice.msaa_samples,
+            rrswapchain.swapchain_format
+        );
+
+        Ok(())
+    }
+
+    unsafe fn build_gizmo_pipelines(
+        rrdevice: &RRDevice,
+        rrswapchain: &RRSwapchain,
+        rrrender: &RRRender,
+        render_layouts: &[vk::DescriptorSetLayout],
+        pipeline_storage: &mut crate::vulkanr::resource::PipelineStorage,
+        pipeline_manager: &mut PipelineManager,
+    ) -> Result<GizmoPipelineIds> {
+        let grid =
             PipelineBuilder::new("assets/shaders/gridVert.spv", "assets/shaders/gridFrag.spv")
                 .vertex_input(VertexInputConfig::Gizmo)
                 .topology(vk::PrimitiveTopology::LINE_LIST)
@@ -230,13 +376,12 @@ impl App {
                     compare_op: vk::CompareOp::GREATER_OR_EQUAL,
                 })
                 .descriptor_layouts(render_layouts.to_vec())
-                .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+                .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
                 .context("Failed to create grid pipeline")?;
-        let grid_pipeline_id = data.pipeline_storage.register(grid_pipeline);
-        pipeline_allocate_id(&mut pipeline_manager);
-        log!("Registered grid pipeline with id {}", grid_pipeline_id);
+        let grid = pipeline_storage.register(grid);
+        pipeline_allocate_id(pipeline_manager);
 
-        let gizmo_pipeline = PipelineBuilder::new(
+        let gizmo = PipelineBuilder::new(
             "assets/shaders/gizmoVert.spv",
             "assets/shaders/gizmoFrag.spv",
         )
@@ -245,25 +390,200 @@ impl App {
         .polygon_mode(vk::PolygonMode::LINE)
         .no_depth_test()
         .descriptor_layouts(render_layouts.to_vec())
-        .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
+        .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
         .context("Failed to create gizmo pipeline")?;
-        let gizmo_pipeline_id = data.pipeline_storage.register(gizmo_pipeline);
-        pipeline_allocate_id(&mut pipeline_manager);
-        log!("Registered gizmo pipeline with id {}", gizmo_pipeline_id);
+        let gizmo = pipeline_storage.register(gizmo);
+        pipeline_allocate_id(pipeline_manager);
 
+        let bone_push_constants = PushConstantConfig {
+            stage_flags: vk::ShaderStageFlags::FRAGMENT,
+            offset: 0,
+            size: std::mem::size_of::<f32>() as u32,
+        };
+        let depth_front = DepthTestConfig {
+            test_enable: true,
+            write_enable: false,
+            compare_op: vk::CompareOp::GREATER_OR_EQUAL,
+        };
+        let depth_behind = DepthTestConfig {
+            test_enable: true,
+            write_enable: false,
+            compare_op: vk::CompareOp::LESS_OR_EQUAL,
+        };
+
+        let bone_solid = Self::build_bone_pipeline(
+            rrdevice,
+            rrswapchain,
+            rrrender,
+            render_layouts,
+            vk::PrimitiveTopology::TRIANGLE_LIST,
+            vk::PolygonMode::FILL,
+            Some(vk::CullModeFlags::BACK),
+            None,
+            None,
+            bone_push_constants,
+            pipeline_storage,
+            pipeline_manager,
+            "bone solid",
+        )?;
+
+        let bone_wire = Self::build_bone_pipeline(
+            rrdevice,
+            rrswapchain,
+            rrrender,
+            render_layouts,
+            vk::PrimitiveTopology::LINE_LIST,
+            vk::PolygonMode::LINE,
+            None,
+            None,
+            None,
+            bone_push_constants,
+            pipeline_storage,
+            pipeline_manager,
+            "bone wire",
+        )?;
+
+        let bone_solid_depth = Self::build_bone_pipeline(
+            rrdevice,
+            rrswapchain,
+            rrrender,
+            render_layouts,
+            vk::PrimitiveTopology::TRIANGLE_LIST,
+            vk::PolygonMode::FILL,
+            Some(vk::CullModeFlags::BACK),
+            Some(depth_front),
+            None,
+            bone_push_constants,
+            pipeline_storage,
+            pipeline_manager,
+            "bone solid depth",
+        )?;
+
+        let bone_wire_depth = Self::build_bone_pipeline(
+            rrdevice,
+            rrswapchain,
+            rrrender,
+            render_layouts,
+            vk::PrimitiveTopology::LINE_LIST,
+            vk::PolygonMode::LINE,
+            None,
+            Some(depth_front),
+            None,
+            bone_push_constants,
+            pipeline_storage,
+            pipeline_manager,
+            "bone wire depth",
+        )?;
+
+        let bone_solid_occluded = Self::build_bone_pipeline(
+            rrdevice,
+            rrswapchain,
+            rrrender,
+            render_layouts,
+            vk::PrimitiveTopology::TRIANGLE_LIST,
+            vk::PolygonMode::FILL,
+            Some(vk::CullModeFlags::BACK),
+            Some(depth_behind),
+            Some(BlendConfig::default()),
+            bone_push_constants,
+            pipeline_storage,
+            pipeline_manager,
+            "bone solid occluded",
+        )?;
+
+        let bone_wire_occluded = Self::build_bone_pipeline(
+            rrdevice,
+            rrswapchain,
+            rrrender,
+            render_layouts,
+            vk::PrimitiveTopology::LINE_LIST,
+            vk::PolygonMode::LINE,
+            None,
+            Some(depth_behind),
+            Some(BlendConfig::default()),
+            bone_push_constants,
+            pipeline_storage,
+            pipeline_manager,
+            "bone wire occluded",
+        )?;
+
+        Ok(GizmoPipelineIds {
+            grid,
+            gizmo,
+            bone_solid,
+            bone_wire,
+            bone_solid_depth,
+            bone_wire_depth,
+            bone_solid_occluded,
+            bone_wire_occluded,
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn build_bone_pipeline(
+        rrdevice: &RRDevice,
+        rrswapchain: &RRSwapchain,
+        rrrender: &RRRender,
+        render_layouts: &[vk::DescriptorSetLayout],
+        topology: vk::PrimitiveTopology,
+        polygon_mode: vk::PolygonMode,
+        cull_mode: Option<vk::CullModeFlags>,
+        depth_test: Option<DepthTestConfig>,
+        blend: Option<BlendConfig>,
+        push_constants: PushConstantConfig,
+        pipeline_storage: &mut crate::vulkanr::resource::PipelineStorage,
+        pipeline_manager: &mut PipelineManager,
+        label: &str,
+    ) -> Result<usize> {
+        let mut builder =
+            PipelineBuilder::new("assets/shaders/boneVert.spv", "assets/shaders/boneFrag.spv")
+                .vertex_input(VertexInputConfig::Gizmo)
+                .topology(topology)
+                .polygon_mode(polygon_mode)
+                .push_constants(push_constants)
+                .descriptor_layouts(render_layouts.to_vec());
+
+        if let Some(cull) = cull_mode {
+            builder = builder.cull_mode(cull);
+        }
+
+        match depth_test {
+            Some(config) => builder = builder.depth_test(config),
+            None => builder = builder.no_depth_test(),
+        }
+
+        if let Some(blend_config) = blend {
+            builder = builder.blend(blend_config);
+        }
+
+        let pipeline = builder
+            .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+            .context(format!("Failed to create {} pipeline", label))?;
+        let id = pipeline_storage.register(pipeline);
+        pipeline_allocate_id(pipeline_manager);
+        log!("Registered {} pipeline with id {}", label, id);
+
+        Ok(id)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn initialize_gizmo_resources(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        rrcommand_pool: &Rc<RRCommandPool>,
+        rrswapchain: &RRSwapchain,
+        rrrender: &RRRender,
+        pipeline_ids: &GizmoPipelineIds,
+        data: &mut AppData,
+        pipeline_manager: &mut PipelineManager,
+    ) -> Result<()> {
         let mut gizmo_data = create_grid_gizmo();
         gizmo_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
-        gizmo_data.render_info.pipeline_id = Some(gizmo_pipeline_id);
-        log!(
-            "Allocated object_index {} for Gizmo",
-            gizmo_data.render_info.object_index
-        );
-        println!("allocated gizmo object_index");
-
+        gizmo_data.render_info.pipeline_id = Some(pipeline_ids.gizmo);
         {
             let mut backend = VulkanBackend::new(
-                &instance,
-                &rrdevice,
+                instance,
+                rrdevice,
                 rrcommand_pool.clone(),
                 &mut data.graphics_resources,
                 &mut data.raytracing,
@@ -279,16 +599,12 @@ impl App {
 
         let light_position = data.ecs_world.resource::<LightState>().light_position;
         let mut light_gizmo_data = create_light_gizmo(light_position);
-        light_gizmo_data.render_info.pipeline_id = Some(gizmo_pipeline_id);
+        light_gizmo_data.render_info.pipeline_id = Some(pipeline_ids.gizmo);
         light_gizmo_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
-        log!(
-            "Allocated object_index {} for LightGizmo",
-            light_gizmo_data.render_info.object_index
-        );
         {
             let mut backend = VulkanBackend::new(
-                &instance,
-                &rrdevice,
+                instance,
+                rrdevice,
                 rrcommand_pool.clone(),
                 &mut data.graphics_resources,
                 &mut data.raytracing,
@@ -302,252 +618,105 @@ impl App {
             .expect("Failed to create light gizmo buffers");
         }
 
-        let bone_solid_pipeline =
-            PipelineBuilder::new("assets/shaders/boneVert.spv", "assets/shaders/boneFrag.spv")
-                .vertex_input(VertexInputConfig::Gizmo)
-                .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-                .polygon_mode(vk::PolygonMode::FILL)
-                .cull_mode(vk::CullModeFlags::BACK)
-                .no_depth_test()
-                .push_constants(PushConstantConfig {
-                    stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                    offset: 0,
-                    size: std::mem::size_of::<f32>() as u32,
-                })
-                .descriptor_layouts(render_layouts.to_vec())
-                .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-                .context("Failed to create bone solid pipeline")?;
-        let bone_solid_pipeline_id = data.pipeline_storage.register(bone_solid_pipeline);
-        pipeline_allocate_id(&mut pipeline_manager);
-        log!(
-            "Registered bone solid pipeline with id {}",
-            bone_solid_pipeline_id
-        );
-
-        let bone_wire_pipeline =
-            PipelineBuilder::new("assets/shaders/boneVert.spv", "assets/shaders/boneFrag.spv")
-                .vertex_input(VertexInputConfig::Gizmo)
-                .topology(vk::PrimitiveTopology::LINE_LIST)
-                .polygon_mode(vk::PolygonMode::LINE)
-                .no_depth_test()
-                .push_constants(PushConstantConfig {
-                    stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                    offset: 0,
-                    size: std::mem::size_of::<f32>() as u32,
-                })
-                .descriptor_layouts(render_layouts.to_vec())
-                .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-                .context("Failed to create bone wire pipeline")?;
-        let bone_wire_pipeline_id = data.pipeline_storage.register(bone_wire_pipeline);
-        pipeline_allocate_id(&mut pipeline_manager);
-        log!(
-            "Registered bone wire pipeline with id {}",
-            bone_wire_pipeline_id
-        );
-
-        let bone_solid_depth_pipeline =
-            PipelineBuilder::new("assets/shaders/boneVert.spv", "assets/shaders/boneFrag.spv")
-                .vertex_input(VertexInputConfig::Gizmo)
-                .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-                .polygon_mode(vk::PolygonMode::FILL)
-                .cull_mode(vk::CullModeFlags::BACK)
-                .depth_test(DepthTestConfig {
-                    test_enable: true,
-                    write_enable: false,
-                    compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-                })
-                .push_constants(PushConstantConfig {
-                    stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                    offset: 0,
-                    size: std::mem::size_of::<f32>() as u32,
-                })
-                .descriptor_layouts(render_layouts.to_vec())
-                .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-                .context("Failed to create bone solid depth pipeline")?;
-        let bone_solid_depth_pipeline_id =
-            data.pipeline_storage.register(bone_solid_depth_pipeline);
-        pipeline_allocate_id(&mut pipeline_manager);
-        log!(
-            "Registered bone solid depth pipeline with id {}",
-            bone_solid_depth_pipeline_id
-        );
-
-        let bone_wire_depth_pipeline =
-            PipelineBuilder::new("assets/shaders/boneVert.spv", "assets/shaders/boneFrag.spv")
-                .vertex_input(VertexInputConfig::Gizmo)
-                .topology(vk::PrimitiveTopology::LINE_LIST)
-                .polygon_mode(vk::PolygonMode::LINE)
-                .depth_test(DepthTestConfig {
-                    test_enable: true,
-                    write_enable: false,
-                    compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-                })
-                .push_constants(PushConstantConfig {
-                    stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                    offset: 0,
-                    size: std::mem::size_of::<f32>() as u32,
-                })
-                .descriptor_layouts(render_layouts.to_vec())
-                .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-                .context("Failed to create bone wire depth pipeline")?;
-        let bone_wire_depth_pipeline_id = data.pipeline_storage.register(bone_wire_depth_pipeline);
-        pipeline_allocate_id(&mut pipeline_manager);
-        log!(
-            "Registered bone wire depth pipeline with id {}",
-            bone_wire_depth_pipeline_id
-        );
-
-        let bone_solid_occluded_pipeline =
-            PipelineBuilder::new("assets/shaders/boneVert.spv", "assets/shaders/boneFrag.spv")
-                .vertex_input(VertexInputConfig::Gizmo)
-                .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-                .polygon_mode(vk::PolygonMode::FILL)
-                .cull_mode(vk::CullModeFlags::BACK)
-                .depth_test(DepthTestConfig {
-                    test_enable: true,
-                    write_enable: false,
-                    compare_op: vk::CompareOp::LESS_OR_EQUAL,
-                })
-                .blend(BlendConfig::default())
-                .push_constants(PushConstantConfig {
-                    stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                    offset: 0,
-                    size: std::mem::size_of::<f32>() as u32,
-                })
-                .descriptor_layouts(render_layouts.to_vec())
-                .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-                .context("Failed to create bone solid occluded pipeline")?;
-        let bone_solid_occluded_pipeline_id =
-            data.pipeline_storage.register(bone_solid_occluded_pipeline);
-        pipeline_allocate_id(&mut pipeline_manager);
-        log!(
-            "Registered bone solid occluded pipeline with id {}",
-            bone_solid_occluded_pipeline_id
-        );
-
-        let bone_wire_occluded_pipeline =
-            PipelineBuilder::new("assets/shaders/boneVert.spv", "assets/shaders/boneFrag.spv")
-                .vertex_input(VertexInputConfig::Gizmo)
-                .topology(vk::PrimitiveTopology::LINE_LIST)
-                .polygon_mode(vk::PolygonMode::LINE)
-                .depth_test(DepthTestConfig {
-                    test_enable: true,
-                    write_enable: false,
-                    compare_op: vk::CompareOp::LESS_OR_EQUAL,
-                })
-                .blend(BlendConfig::default())
-                .push_constants(PushConstantConfig {
-                    stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                    offset: 0,
-                    size: std::mem::size_of::<f32>() as u32,
-                })
-                .descriptor_layouts(render_layouts.to_vec())
-                .build(&rrdevice, &rrrender, Some(rrswapchain.swapchain_extent))
-                .context("Failed to create bone wire occluded pipeline")?;
-        let bone_wire_occluded_pipeline_id =
-            data.pipeline_storage.register(bone_wire_occluded_pipeline);
-        pipeline_allocate_id(&mut pipeline_manager);
-        log!(
-            "Registered bone wire occluded pipeline with id {}",
-            bone_wire_occluded_pipeline_id
-        );
-
-        let mut bone_gizmo_data = BoneGizmoData::default();
-        bone_gizmo_data.stick_render_info.pipeline_id = Some(grid_pipeline_id);
-        bone_gizmo_data.stick_render_info.object_index =
-            data.graphics_resources.objects.allocate_slot();
-        bone_gizmo_data.solid_render_info.pipeline_id = Some(bone_solid_pipeline_id);
-        bone_gizmo_data.solid_render_info.object_index =
-            data.graphics_resources.objects.allocate_slot();
-        bone_gizmo_data.wire_render_info.pipeline_id = Some(bone_wire_pipeline_id);
-        bone_gizmo_data.wire_render_info.object_index =
-            data.graphics_resources.objects.allocate_slot();
-
-        bone_gizmo_data.solid_depth_render_info.pipeline_id = Some(bone_solid_depth_pipeline_id);
-        bone_gizmo_data.solid_depth_render_info.object_index =
-            bone_gizmo_data.solid_render_info.object_index;
-        bone_gizmo_data.wire_depth_render_info.pipeline_id = Some(bone_wire_depth_pipeline_id);
-        bone_gizmo_data.wire_depth_render_info.object_index =
-            bone_gizmo_data.wire_render_info.object_index;
-        bone_gizmo_data.solid_occluded_render_info.pipeline_id =
-            Some(bone_solid_occluded_pipeline_id);
-        bone_gizmo_data.solid_occluded_render_info.object_index =
-            bone_gizmo_data.solid_render_info.object_index;
-        bone_gizmo_data.wire_occluded_render_info.pipeline_id =
-            Some(bone_wire_occluded_pipeline_id);
-        bone_gizmo_data.wire_occluded_render_info.object_index =
-            bone_gizmo_data.wire_render_info.object_index;
-
-        bone_gizmo_data.display_style = BoneDisplayStyle::Octahedral;
-        log!(
-            "Allocated object_index {} for BoneGizmo stick",
-            bone_gizmo_data.stick_render_info.object_index
-        );
-        log!(
-            "Allocated object_index {} for BoneGizmo solid",
-            bone_gizmo_data.solid_render_info.object_index
-        );
-        log!(
-            "Allocated object_index {} for BoneGizmo wire",
-            bone_gizmo_data.wire_render_info.object_index
-        );
-        data.ecs_world.insert_resource(bone_gizmo_data);
-        data.ecs_world
-            .insert_resource(crate::debugview::gizmo::BoneSelectionState::default());
-
-        let mut constraint_gizmo_data = ConstraintGizmoData::default();
-        constraint_gizmo_data.wire_render_info.pipeline_id = Some(bone_wire_pipeline_id);
-        constraint_gizmo_data.wire_render_info.object_index =
-            data.graphics_resources.objects.allocate_slot();
-        log!(
-            "Allocated object_index {} for ConstraintGizmo wire",
-            constraint_gizmo_data.wire_render_info.object_index
-        );
-        data.ecs_world.insert_resource(constraint_gizmo_data);
-
-        let mut spring_bone_gizmo_data = crate::debugview::gizmo::SpringBoneGizmoData::default();
-        spring_bone_gizmo_data.wire_render_info.pipeline_id = Some(bone_wire_pipeline_id);
-        spring_bone_gizmo_data.wire_render_info.object_index =
-            data.graphics_resources.objects.allocate_slot();
-        data.ecs_world.insert_resource(spring_bone_gizmo_data);
-        data.ecs_world
-            .insert_resource(crate::ecs::resource::SpringBoneEditorState::default());
-
-        {
-            let mut tg = crate::debugview::gizmo::TransformGizmoData::default();
-            tg.line_render_info.pipeline_id = Some(bone_wire_pipeline_id);
-            tg.line_render_info.object_index = data.graphics_resources.objects.allocate_slot();
-            tg.solid_render_info.pipeline_id = Some(bone_solid_pipeline_id);
-            tg.solid_render_info.object_index = data.graphics_resources.objects.allocate_slot();
-            log!(
-                "Allocated object_index {} for TransformGizmo line",
-                tg.line_render_info.object_index
-            );
-            log!(
-                "Allocated object_index {} for TransformGizmo solid",
-                tg.solid_render_info.object_index
-            );
-            data.ecs_world.insert_resource(tg);
-            data.ecs_world
-                .insert_resource(crate::ecs::resource::TransformGizmoState::default());
-        }
+        Self::setup_bone_gizmo_resources(pipeline_ids, data);
+        Self::setup_transform_gizmo_resources(pipeline_ids, data);
 
         data.ecs_world
             .insert_resource(crate::ecs::resource::PointerState::default());
         data.ecs_world
             .insert_resource(crate::ecs::resource::PointerCapture::default());
 
+        let billboard_data = Self::initialize_billboard(
+            instance,
+            rrdevice,
+            rrcommand_pool,
+            rrswapchain,
+            rrrender,
+            data,
+            pipeline_manager,
+        )?;
+
+        data.ecs_world.insert_resource(gizmo_data);
+        data.ecs_world.insert_resource(light_gizmo_data);
+        data.ecs_world.insert_resource(billboard_data);
+
+        Ok(())
+    }
+
+    fn setup_bone_gizmo_resources(pipeline_ids: &GizmoPipelineIds, data: &mut AppData) {
+        let mut bone_gizmo_data = BoneGizmoData::default();
+        bone_gizmo_data.stick_render_info.pipeline_id = Some(pipeline_ids.grid);
+        bone_gizmo_data.stick_render_info.object_index =
+            data.graphics_resources.objects.allocate_slot();
+        bone_gizmo_data.solid_render_info.pipeline_id = Some(pipeline_ids.bone_solid);
+        bone_gizmo_data.solid_render_info.object_index =
+            data.graphics_resources.objects.allocate_slot();
+        bone_gizmo_data.wire_render_info.pipeline_id = Some(pipeline_ids.bone_wire);
+        bone_gizmo_data.wire_render_info.object_index =
+            data.graphics_resources.objects.allocate_slot();
+
+        bone_gizmo_data.solid_depth_render_info.pipeline_id = Some(pipeline_ids.bone_solid_depth);
+        bone_gizmo_data.solid_depth_render_info.object_index =
+            bone_gizmo_data.solid_render_info.object_index;
+        bone_gizmo_data.wire_depth_render_info.pipeline_id = Some(pipeline_ids.bone_wire_depth);
+        bone_gizmo_data.wire_depth_render_info.object_index =
+            bone_gizmo_data.wire_render_info.object_index;
+        bone_gizmo_data.solid_occluded_render_info.pipeline_id =
+            Some(pipeline_ids.bone_solid_occluded);
+        bone_gizmo_data.solid_occluded_render_info.object_index =
+            bone_gizmo_data.solid_render_info.object_index;
+        bone_gizmo_data.wire_occluded_render_info.pipeline_id =
+            Some(pipeline_ids.bone_wire_occluded);
+        bone_gizmo_data.wire_occluded_render_info.object_index =
+            bone_gizmo_data.wire_render_info.object_index;
+
+        bone_gizmo_data.display_style = BoneDisplayStyle::Octahedral;
+        data.ecs_world.insert_resource(bone_gizmo_data);
+        data.ecs_world
+            .insert_resource(crate::debugview::gizmo::BoneSelectionState::default());
+
+        let mut constraint_gizmo_data = ConstraintGizmoData::default();
+        constraint_gizmo_data.wire_render_info.pipeline_id = Some(pipeline_ids.bone_wire);
+        constraint_gizmo_data.wire_render_info.object_index =
+            data.graphics_resources.objects.allocate_slot();
+        data.ecs_world.insert_resource(constraint_gizmo_data);
+
+        let mut spring_bone_gizmo_data = crate::debugview::gizmo::SpringBoneGizmoData::default();
+        spring_bone_gizmo_data.wire_render_info.pipeline_id = Some(pipeline_ids.bone_wire);
+        spring_bone_gizmo_data.wire_render_info.object_index =
+            data.graphics_resources.objects.allocate_slot();
+        data.ecs_world.insert_resource(spring_bone_gizmo_data);
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::SpringBoneEditorState::default());
+    }
+
+    fn setup_transform_gizmo_resources(pipeline_ids: &GizmoPipelineIds, data: &mut AppData) {
+        let mut tg = crate::debugview::gizmo::TransformGizmoData::default();
+        tg.line_render_info.pipeline_id = Some(pipeline_ids.bone_wire);
+        tg.line_render_info.object_index = data.graphics_resources.objects.allocate_slot();
+        tg.solid_render_info.pipeline_id = Some(pipeline_ids.bone_solid);
+        tg.solid_render_info.object_index = data.graphics_resources.objects.allocate_slot();
+        data.ecs_world.insert_resource(tg);
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::TransformGizmoState::default());
+    }
+
+    unsafe fn initialize_billboard(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        rrcommand_pool: &Rc<RRCommandPool>,
+        rrswapchain: &RRSwapchain,
+        rrrender: &RRRender,
+        data: &mut AppData,
+        pipeline_manager: &mut PipelineManager,
+    ) -> Result<crate::app::billboard::BillboardData> {
         let mut billboard_data = create_billboard();
         billboard_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
-        log!(
-            "Allocated object_index {} for Billboard",
-            billboard_data.render_info.object_index
-        );
 
         {
             let mut backend = VulkanBackend::new(
-                &instance,
-                &rrdevice,
+                instance,
+                rrdevice,
                 rrcommand_pool.clone(),
                 &mut data.graphics_resources,
                 &mut data.raytracing,
@@ -558,37 +727,32 @@ impl App {
         }
 
         billboard_data.render_state.descriptor_set =
-            RRBillboardDescriptorSet::new(&rrdevice, &rrswapchain)
+            RRBillboardDescriptorSet::new(rrdevice, rrswapchain)
                 .context("Failed to create billboard descriptor set")?;
         billboard_data
             .render_state
             .descriptor_set
             .rrdata
-            .push(RRData::new(
-                &instance,
-                &rrdevice,
-                &rrswapchain,
-                "billboard",
-            )?);
+            .push(RRData::new(instance, rrdevice, rrswapchain, "billboard")?);
 
         billboard_data
             .render_state
             .descriptor_set
-            .allocate_descriptor_sets(&rrdevice, &rrswapchain)
+            .allocate_descriptor_sets(rrdevice, rrswapchain)
             .context("Failed to allocate billboard descriptor sets")?;
 
         if let Some(ref billboard_texture) = billboard_data.render_state.texture {
             billboard_data
                 .render_state
                 .descriptor_set
-                .update_descriptor_sets(&rrdevice, &rrswapchain, billboard_texture)
+                .update_descriptor_sets(rrdevice, rrswapchain, billboard_texture)
                 .context("Failed to update billboard descriptor sets")?;
         }
 
         let billboard_pipeline = RRPipeline::new_billboard(
-            &rrdevice,
-            &rrrender,
-            &rrswapchain,
+            rrdevice,
+            rrrender,
+            rrswapchain,
             billboard_data
                 .render_state
                 .descriptor_set
@@ -598,71 +762,71 @@ impl App {
         )
         .context("Failed to create billboard pipeline")?;
         let billboard_pipeline_id = data.pipeline_storage.register(billboard_pipeline);
-        pipeline_allocate_id(&mut pipeline_manager);
+        pipeline_allocate_id(pipeline_manager);
         billboard_data.render_info.pipeline_id = Some(billboard_pipeline_id);
-        log!(
-            "Registered billboard pipeline with id {}",
-            billboard_pipeline_id
-        );
 
-        println!("created pipeline");
+        Ok(billboard_data)
+    }
 
-        data.ecs_world.insert_resource(pipeline_manager);
-        data.ecs_world.insert_resource(gizmo_data);
-        data.ecs_world.insert_resource(light_gizmo_data);
-        data.ecs_world.insert_resource(billboard_data);
-
-        let grid_object_index = data.graphics_resources.objects.allocate_slot();
-        log!("Allocated object_index {} for Grid", grid_object_index);
-
-        data.graphics_resources.objects.seal_reserved_slots();
-        log!(
-            "Sealed reserved object slots at {}",
-            data.graphics_resources.objects.get_next_slot()
-        );
-
-        log!("Starting ray tracing initialization...");
-        log!(
-            "swapchain extent: {}x{}",
-            rrswapchain.swapchain_extent.width,
-            rrswapchain.swapchain_extent.height
-        );
-
+    unsafe fn initialize_ray_tracing(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        rrswapchain: &RRSwapchain,
+        rrcommand_pool: &Rc<RRCommandPool>,
+        rrrender: &RRRender,
+        data: &mut AppData,
+    ) -> Result<RRRender> {
         let mut rrrender_mut = rrrender.clone();
         match Self::init_ray_tracing_with_resources(
-            &instance,
-            &rrdevice,
-            &mut data,
-            &rrswapchain,
+            instance,
+            rrdevice,
+            data,
+            rrswapchain,
             rrcommand_pool.as_ref(),
             &mut rrrender_mut,
         ) {
             Ok(_) => {
                 log!("init_ray_tracing succeeded");
-                log!("gbuffer is_some: {}", data.raytracing.gbuffer.is_some());
             }
             Err(e) => {
                 log_warn!("Failed to initialize ray tracing: {:?}", e);
             }
         }
-        let rrrender = rrrender_mut;
-        log!("initialized ray tracing resources");
+        Ok(rrrender_mut)
+    }
 
-        let (model_path, loaded_scene) = Self::determine_startup_model();
+    unsafe fn load_startup_model(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        rrcommand_pool: &Rc<RRCommandPool>,
+        rrswapchain: &RRSwapchain,
+        data: &mut AppData,
+        model_path: &str,
+        has_scene: bool,
+    ) {
         if let Err(e) = Self::load_model_from_path_with_resources(
-            &instance,
-            &rrdevice,
-            &mut data,
-            &rrcommand_pool,
-            &rrswapchain,
-            &model_path,
-            loaded_scene.is_some(),
+            instance,
+            rrdevice,
+            data,
+            rrcommand_pool,
+            rrswapchain,
+            model_path,
+            has_scene,
         ) {
             eprintln!("Failed to load model: {:?}", e);
             log_error!("Failed to load model: {:?}", e);
         }
         log!("loaded initial model: {}", model_path);
+    }
 
+    fn apply_loaded_scene(
+        data: &mut AppData,
+        loaded_scene: Option<(
+            std::path::PathBuf,
+            crate::scene::LoadedScene,
+            Vec<crate::animation::editable::EditableAnimationClip>,
+        )>,
+    ) {
         if !data
             .ecs_world
             .contains_resource::<crate::ecs::resource::PanelLayout>()
@@ -698,100 +862,40 @@ impl App {
             scene_state.set_from_loaded(scene_path, scene.scene.metadata.clone());
         }
         data.ecs_world.insert_resource(scene_state);
+    }
 
-        if let Err(e) = Self::create_ray_tracing_pipelines_with_resources(
-            &instance,
-            &rrdevice,
-            &mut data,
-            &rrswapchain,
-            &rrrender,
-        ) {
-            log_warn!("Failed to create ray tracing pipelines: {:?}", e);
-        } else {
-            log!("Ray tracing pipelines created successfully");
-        }
-
+    unsafe fn build_grid_mesh(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        rrcommand_pool: &Rc<RRCommandPool>,
+        data: &mut AppData,
+        grid_pipeline_id: usize,
+        grid_object_index: usize,
+    ) -> Result<GridMeshData> {
         let (mut grid_mesh, xz_only_index_count) = create_grid_mesh();
         let grid_scale = create_default_grid_scale();
 
         grid_mesh.vertex_buffer_handle = data.buffer_registry.create_vertex_buffer(
-            &instance,
-            &rrdevice,
-            &rrcommand_pool,
+            instance,
+            rrdevice,
+            rrcommand_pool,
             &grid_mesh.vertices,
             crate::render::BufferMemoryType::DeviceLocal,
         )?;
-        println!("created grid vertex buffers");
 
         grid_mesh.index_buffer_handle = data.buffer_registry.create_index_buffer(
-            &instance,
-            &rrdevice,
-            &rrcommand_pool,
+            instance,
+            rrdevice,
+            rrcommand_pool,
             &grid_mesh.indices,
         )?;
-        println!("created grid index buffer");
 
-        let grid_render_info = RenderInfo::new(Some(grid_pipeline_id), grid_object_index);
-
-        let grid_mesh_data = GridMeshData {
+        Ok(GridMeshData {
             mesh: grid_mesh,
-            render_info: grid_render_info,
+            render_info: RenderInfo::new(Some(grid_pipeline_id), grid_object_index),
             scale: grid_scale,
             show_y_axis_grid: cfg!(debug_assertions),
             xz_only_index_count,
-        };
-        println!("allocated grid object_index");
-
-        let mut rrcommand_buffer = RRCommandBuffer::new(&rrcommand_pool);
-        if let Err(e) =
-            RRCommandBuffer::allocate_command_buffers(&rrdevice, &rrrender, &mut rrcommand_buffer)
-        {
-            eprintln!("failed to allocate command buffers: {:?}", e);
-        }
-        println!("created command buffers");
-
-        let (image_available_semaphores, render_finish_semaphores, in_flight_fences) =
-            Self::create_sync_objects(&rrdevice.device)?;
-        println!("created sync objects");
-
-        let vulkan_resources = VulkanResources {
-            messenger,
-            surface,
-            rrswapchain,
-            rrrender,
-            rrcommand_pool,
-            rrcommand_buffer,
-            model_pipeline,
-            image_available_semaphores,
-            render_finish_semaphores,
-            in_flight_fences,
-        };
-
-        Self::register_resources(
-            &mut data,
-            &vulkan_resources,
-            &model_path,
-            rrdevice.msaa_samples,
-        );
-        println!("registered ECS resources");
-
-        let frame = 0 as usize;
-        let resized = false;
-        let start = Instant::now();
-
-        data.ecs_world.insert_resource(grid_mesh_data);
-        data.ecs_world.insert_resource(grid_scale);
-
-        println!("initialized finished");
-        Ok(Self {
-            entry,
-            instance,
-            rrdevice,
-            data,
-            frame,
-            resized,
-            start,
-            last_update_time: 0.0,
         })
     }
 
@@ -1045,185 +1149,31 @@ impl App {
     ) -> Result<()> {
         log!("Initializing ImGui Vulkan rendering resources");
 
-        // Get font texture data from ImGui
         let font_atlas = imgui.fonts();
         let font_texture = font_atlas.build_rgba32_texture();
         let width = font_texture.width;
         let height = font_texture.height;
         let font_data: &[u8] = &font_texture.data;
-
         log!("Font texture size: {}x{}", width, height);
 
-        // Create font image
-        let extent = vk::Extent3D {
-            width,
-            height,
-            depth: 1,
-        };
+        let (image, image_memory) = Self::create_font_image(instance, rrdevice, width, height)?;
 
-        let image_info = vk::ImageCreateInfo::builder()
-            .image_type(vk::ImageType::_2D)
-            .format(vk::Format::R8G8B8A8_UNORM)
-            .extent(extent)
-            .mip_levels(1)
-            .array_layers(1)
-            .samples(vk::SampleCountFlags::_1)
-            .tiling(vk::ImageTiling::OPTIMAL)
-            .usage(vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .initial_layout(vk::ImageLayout::UNDEFINED);
-
-        let image = rrdevice.device.create_image(&image_info, None)?;
-
-        // Allocate image memory
-        let requirements = rrdevice.device.get_image_memory_requirements(image);
-        let memory_type_index = get_memory_type_index(
+        Self::upload_font_data_via_staging(
             instance,
-            rrdevice.physical_device,
-            vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            requirements,
-        )?;
-
-        let allocate_info = vk::MemoryAllocateInfo::builder()
-            .allocation_size(requirements.size)
-            .memory_type_index(memory_type_index);
-
-        let image_memory = rrdevice.device.allocate_memory(&allocate_info, None)?;
-        rrdevice.device.bind_image_memory(image, image_memory, 0)?;
-
-        // Create staging buffer
-        let buffer_size = (width * height * 4) as vk::DeviceSize;
-
-        let buffer_info = vk::BufferCreateInfo::builder()
-            .size(buffer_size)
-            .usage(vk::BufferUsageFlags::TRANSFER_SRC)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE);
-
-        let staging_buffer = rrdevice.device.create_buffer(&buffer_info, None)?;
-        let buffer_requirements = rrdevice
-            .device
-            .get_buffer_memory_requirements(staging_buffer);
-
-        let memory_type_index = get_memory_type_index(
-            instance,
-            rrdevice.physical_device,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            buffer_requirements,
-        )?;
-
-        let allocate_info = vk::MemoryAllocateInfo::builder()
-            .allocation_size(buffer_requirements.size)
-            .memory_type_index(memory_type_index);
-
-        let staging_buffer_memory = rrdevice.device.allocate_memory(&allocate_info, None)?;
-        rrdevice
-            .device
-            .bind_buffer_memory(staging_buffer, staging_buffer_memory, 0)?;
-
-        // Copy font data to staging buffer
-        let memory_ptr = rrdevice.device.map_memory(
-            staging_buffer_memory,
-            0,
-            buffer_size,
-            vk::MemoryMapFlags::empty(),
-        )?;
-        memcpy(font_data.as_ptr(), memory_ptr.cast(), font_data.len());
-        rrdevice.device.unmap_memory(staging_buffer_memory);
-
-        // Transition image layout and copy from staging buffer
-        Self::transition_image_layout_and_copy(
-            &rrdevice.device,
+            rrdevice,
             rrcommand_pool,
-            &rrdevice.graphics_queue,
             image,
-            staging_buffer,
+            font_data,
             width,
             height,
         )?;
 
-        // Cleanup staging buffer
-        rrdevice.device.destroy_buffer(staging_buffer, None);
-        rrdevice.device.free_memory(staging_buffer_memory, None);
+        let image_view = Self::create_font_image_view(&rrdevice.device, image)?;
+        let sampler = Self::create_font_sampler(&rrdevice.device)?;
 
-        // Create image view
-        let view_info = vk::ImageViewCreateInfo::builder()
-            .image(image)
-            .view_type(vk::ImageViewType::_2D)
-            .format(vk::Format::R8G8B8A8_UNORM)
-            .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: 0,
-                layer_count: 1,
-            });
+        let (descriptor_pool, descriptor_set_layout, descriptor_set) =
+            Self::setup_imgui_descriptors(&rrdevice.device, image_view, sampler)?;
 
-        let image_view = rrdevice.device.create_image_view(&view_info, None)?;
-
-        // Create sampler
-        let sampler_info = vk::SamplerCreateInfo::builder()
-            .mag_filter(vk::Filter::LINEAR)
-            .min_filter(vk::Filter::LINEAR)
-            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
-            .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-            .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-            .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-            .min_lod(0.0)
-            .max_lod(1.0);
-
-        let sampler = rrdevice.device.create_sampler(&sampler_info, None)?;
-
-        // Create descriptor pool for ImGui
-        let pool_sizes = [vk::DescriptorPoolSize::builder()
-            .type_(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(1)];
-
-        let pool_info = vk::DescriptorPoolCreateInfo::builder()
-            .pool_sizes(&pool_sizes)
-            .max_sets(1);
-
-        let descriptor_pool = rrdevice.device.create_descriptor_pool(&pool_info, None)?;
-
-        // Create descriptor set layout
-        let bindings = [vk::DescriptorSetLayoutBinding::builder()
-            .binding(0)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)];
-
-        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings);
-
-        let descriptor_set_layout = rrdevice
-            .device
-            .create_descriptor_set_layout(&layout_info, None)?;
-
-        // Allocate descriptor set
-        let layouts = [descriptor_set_layout];
-        let allocate_info = vk::DescriptorSetAllocateInfo::builder()
-            .descriptor_pool(descriptor_pool)
-            .set_layouts(&layouts);
-
-        let descriptor_sets = rrdevice.device.allocate_descriptor_sets(&allocate_info)?;
-        let descriptor_set = descriptor_sets[0];
-
-        // Update descriptor set with font texture
-        let image_info = [vk::DescriptorImageInfo::builder()
-            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .image_view(image_view)
-            .sampler(sampler)];
-
-        let descriptor_writes = [vk::WriteDescriptorSet::builder()
-            .dst_set(descriptor_set)
-            .dst_binding(0)
-            .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .image_info(&image_info)];
-
-        rrdevice
-            .device
-            .update_descriptor_sets(&descriptor_writes, &[] as &[vk::CopyDescriptorSet]);
-
-        // Create ImGui pipeline using RRPipeline
         let msaa_samples = {
             let render_config = data.ecs_world.resource::<RenderConfig>();
             if !render_config.msaa_samples.is_empty() {
@@ -1307,5 +1257,194 @@ impl App {
         }
 
         result
+    }
+
+    unsafe fn create_font_image(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        width: u32,
+        height: u32,
+    ) -> Result<(vk::Image, vk::DeviceMemory)> {
+        let extent = vk::Extent3D {
+            width,
+            height,
+            depth: 1,
+        };
+
+        let image_info = vk::ImageCreateInfo::builder()
+            .image_type(vk::ImageType::_2D)
+            .format(vk::Format::R8G8B8A8_UNORM)
+            .extent(extent)
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::TRANSFER_DST)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .initial_layout(vk::ImageLayout::UNDEFINED);
+
+        let image = rrdevice.device.create_image(&image_info, None)?;
+
+        let requirements = rrdevice.device.get_image_memory_requirements(image);
+        let memory_type_index = get_memory_type_index(
+            instance,
+            rrdevice.physical_device,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            requirements,
+        )?;
+
+        let allocate_info = vk::MemoryAllocateInfo::builder()
+            .allocation_size(requirements.size)
+            .memory_type_index(memory_type_index);
+
+        let image_memory = rrdevice.device.allocate_memory(&allocate_info, None)?;
+        rrdevice.device.bind_image_memory(image, image_memory, 0)?;
+
+        Ok((image, image_memory))
+    }
+
+    unsafe fn upload_font_data_via_staging(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        rrcommand_pool: &RRCommandPool,
+        image: vk::Image,
+        font_data: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Result<()> {
+        let buffer_size = (width * height * 4) as vk::DeviceSize;
+
+        let buffer_info = vk::BufferCreateInfo::builder()
+            .size(buffer_size)
+            .usage(vk::BufferUsageFlags::TRANSFER_SRC)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+
+        let staging_buffer = rrdevice.device.create_buffer(&buffer_info, None)?;
+        let buffer_requirements = rrdevice
+            .device
+            .get_buffer_memory_requirements(staging_buffer);
+
+        let memory_type_index = get_memory_type_index(
+            instance,
+            rrdevice.physical_device,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            buffer_requirements,
+        )?;
+
+        let allocate_info = vk::MemoryAllocateInfo::builder()
+            .allocation_size(buffer_requirements.size)
+            .memory_type_index(memory_type_index);
+
+        let staging_buffer_memory = rrdevice.device.allocate_memory(&allocate_info, None)?;
+        rrdevice
+            .device
+            .bind_buffer_memory(staging_buffer, staging_buffer_memory, 0)?;
+
+        let memory_ptr = rrdevice.device.map_memory(
+            staging_buffer_memory,
+            0,
+            buffer_size,
+            vk::MemoryMapFlags::empty(),
+        )?;
+        memcpy(font_data.as_ptr(), memory_ptr.cast(), font_data.len());
+        rrdevice.device.unmap_memory(staging_buffer_memory);
+
+        Self::transition_image_layout_and_copy(
+            &rrdevice.device,
+            rrcommand_pool,
+            &rrdevice.graphics_queue,
+            image,
+            staging_buffer,
+            width,
+            height,
+        )?;
+
+        rrdevice.device.destroy_buffer(staging_buffer, None);
+        rrdevice.device.free_memory(staging_buffer_memory, None);
+
+        Ok(())
+    }
+
+    unsafe fn create_font_image_view(device: &VkDevice, image: vk::Image) -> Result<vk::ImageView> {
+        let view_info = vk::ImageViewCreateInfo::builder()
+            .image(image)
+            .view_type(vk::ImageViewType::_2D)
+            .format(vk::Format::R8G8B8A8_UNORM)
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            });
+
+        Ok(device.create_image_view(&view_info, None)?)
+    }
+
+    unsafe fn create_font_sampler(device: &VkDevice) -> Result<vk::Sampler> {
+        let sampler_info = vk::SamplerCreateInfo::builder()
+            .mag_filter(vk::Filter::LINEAR)
+            .min_filter(vk::Filter::LINEAR)
+            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+            .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+            .min_lod(0.0)
+            .max_lod(1.0);
+
+        Ok(device.create_sampler(&sampler_info, None)?)
+    }
+
+    unsafe fn setup_imgui_descriptors(
+        device: &VkDevice,
+        image_view: vk::ImageView,
+        sampler: vk::Sampler,
+    ) -> Result<(
+        vk::DescriptorPool,
+        vk::DescriptorSetLayout,
+        vk::DescriptorSet,
+    )> {
+        let pool_sizes = [vk::DescriptorPoolSize::builder()
+            .type_(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)];
+
+        let pool_info = vk::DescriptorPoolCreateInfo::builder()
+            .pool_sizes(&pool_sizes)
+            .max_sets(1);
+
+        let descriptor_pool = device.create_descriptor_pool(&pool_info, None)?;
+
+        let bindings = [vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)];
+
+        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(&bindings);
+        let descriptor_set_layout = device.create_descriptor_set_layout(&layout_info, None)?;
+
+        let layouts = [descriptor_set_layout];
+        let allocate_info = vk::DescriptorSetAllocateInfo::builder()
+            .descriptor_pool(descriptor_pool)
+            .set_layouts(&layouts);
+
+        let descriptor_sets = device.allocate_descriptor_sets(&allocate_info)?;
+        let descriptor_set = descriptor_sets[0];
+
+        let image_info = [vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(image_view)
+            .sampler(sampler)];
+
+        let descriptor_writes = [vk::WriteDescriptorSet::builder()
+            .dst_set(descriptor_set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&image_info)];
+
+        device.update_descriptor_sets(&descriptor_writes, &[] as &[vk::CopyDescriptorSet]);
+
+        Ok((descriptor_pool, descriptor_set_layout, descriptor_set))
     }
 }

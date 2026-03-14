@@ -8,16 +8,12 @@ use crate::ecs::component::{
     ClipGroupSnapshot, ClipInstanceSnapshot, ClipTrackEntry, ClipTrackSnapshot,
 };
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::{ClipDragState, ClipDragType, ClipLibrary, TimelineState};
+use crate::ecs::resource::{
+    ClipDragState, ClipDragType, ClipLibrary, CurveEditorState, TimelineInteractionState,
+    TimelineState,
+};
 
 use super::layout_snapshot::LayoutSnapshot;
-use super::CurveEditorState;
-
-#[derive(Clone, Debug, Default)]
-pub struct TimelineInteractionState {
-    pub scrubbing: bool,
-    pub dragging_clip: Option<ClipDragState>,
-}
 
 const TRACK_LABEL_WIDTH: f32 = 150.0;
 const TIME_RULER_HEIGHT: f32 = 30.0;
@@ -135,6 +131,7 @@ fn build_transport_controls(
     ui.same_line();
     if ui.button("Curve Editor") {
         curve_editor_state.is_open = true;
+        curve_editor_state.needs_focus = true;
         let previous_bone_exists = current_clip
             .zip(curve_editor_state.selected_bone_id)
             .is_some_and(|(c, id)| c.tracks.contains_key(&id));
@@ -1345,6 +1342,7 @@ fn open_curve_editor_for_clip(
     mesh_bone_id: Option<BoneId>,
 ) {
     curve_editor_state.is_open = true;
+    curve_editor_state.needs_focus = true;
 
     if let Some(clip) = clip_library.get(source_id) {
         let previous_bone_exists = curve_editor_state

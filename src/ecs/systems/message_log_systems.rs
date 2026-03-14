@@ -2,13 +2,7 @@ use crate::ecs::resource::{MessageFilter, MessageLog};
 use crate::logger::message_buffer::{Message, MessageLevel, MESSAGE_BUFFER};
 
 pub fn message_log_sync_from_buffer(log: &mut MessageLog) {
-    let buf = MESSAGE_BUFFER
-        .lock()
-        .expect("Failed to lock message buffer");
-    log.messages = buf.snapshot();
-    log.info_count = buf.count_by_level(MessageLevel::Info);
-    log.warning_count = buf.count_by_level(MessageLevel::Warning);
-    log.error_count = buf.count_by_level(MessageLevel::Error);
+    log.sync_from_buffer();
 }
 
 pub fn message_log_filtered_messages(log: &MessageLog) -> Vec<&Message> {

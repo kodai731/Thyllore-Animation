@@ -20,7 +20,8 @@ fn main() -> Result<()> {
     cleanup_old_screenshots()?;
 
     // imgui
-    let mut system = platform::init(file!());
+    let window_title = format!("Rust Rendering v{}", env!("CARGO_PKG_VERSION"));
+    let mut system = platform::init(&window_title);
     let mut gui_data = GUIData::default();
 
     // App

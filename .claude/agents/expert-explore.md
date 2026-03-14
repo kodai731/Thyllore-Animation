@@ -74,6 +74,12 @@ Before saving any files, read `.claude/local/paths.md` at PROJECT_ROOT to get ab
 This file contains resolved absolute paths for all `${...Path}` variables.
 Do NOT resolve paths from CLAUDE.md relative paths — always use the absolute paths from `.claude/local/paths.md`.
 
+## File Name
+file must have date prefix and under score separator, like
+```
+20260313_reports.md
+```
+
 ## Explore History
 
 - Save exploration results and summary reports to the ExploreHistoryPath defined in `.claude/local/paths.md` when the findings are significant or reusable

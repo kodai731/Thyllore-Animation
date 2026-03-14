@@ -3,6 +3,7 @@ use cgmath::Vector3;
 use crate::asset::AssetStorage;
 use crate::debugview::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::ecs::events::UIEvent;
+use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::{Camera, ClipLibrary, HierarchyState, TimelineState};
 use crate::ecs::systems::{
     camera_move_to_look_at, collapse_entity, expand_entity, hierarchy_collapse_bone,
@@ -11,7 +12,6 @@ use crate::ecs::systems::{
     update_entity_scale, update_entity_translation, update_entity_visible,
 };
 use crate::ecs::world::{Transform, World};
-use crate::platform::ui::CurveEditorState;
 
 pub fn dispatch_hierarchy_events(events: &[UIEvent], world: &mut World, assets: &AssetStorage) {
     dispatch_hierarchy_entity_events(events, world);

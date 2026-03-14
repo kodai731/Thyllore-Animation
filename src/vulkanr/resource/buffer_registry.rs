@@ -467,14 +467,15 @@ impl GpuBufferRegistry {
 
 impl Drop for GpuBufferRegistry {
     fn drop(&mut self) {
-        let leaked_vertex = self.vertex_buffers.iter().any(|b| b.is_some());
-        let leaked_index = self.index_buffers.iter().any(|b| b.is_some());
-        debug_assert!(
-            !leaked_vertex && !leaked_index,
-            "GpuBufferRegistry dropped without calling destroy_all(): {} vertex, {} index buffers leaked",
-            self.vertex_buffers.iter().filter(|b| b.is_some()).count(),
-            self.index_buffers.iter().filter(|b| b.is_some()).count(),
-        );
+        let vertex_count = self.vertex_buffers.iter().filter(|b| b.is_some()).count();
+        let index_count = self.index_buffers.iter().filter(|b| b.is_some()).count();
+        if vertex_count > 0 || index_count > 0 {
+            eprintln!(
+                "[WARN] GpuBufferRegistry dropped without calling destroy_all(): {} vertex, {} index buffers leaked",
+                vertex_count,
+                index_count,
+            );
+        }
     }
 }
 

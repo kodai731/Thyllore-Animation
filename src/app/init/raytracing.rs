@@ -152,11 +152,43 @@ impl App {
             }
         };
 
+        let gbuffer = match data.raytracing.gbuffer {
+            Some(ref gb) => gb,
+            None => {
+                log!("GBuffer not available, skipping tonemap pipeline");
+                return Ok(());
+            }
+        };
+        let position_image_view = gbuffer.position_image_view;
+
+        let gbuffer_sampler = match data.raytracing.gbuffer_sampler {
+            Some(s) => s,
+            None => {
+                log!("GBuffer sampler not available, skipping tonemap pipeline");
+                return Ok(());
+            }
+        };
+
+        let scene_buffer = match data.raytracing.scene_uniform_buffer {
+            Some(b) => b,
+            None => {
+                log!("Scene buffer not available, skipping tonemap pipeline");
+                return Ok(());
+            }
+        };
+
+        let scene_buffer_size =
+            std::mem::size_of::<crate::vulkanr::data::SceneUniformData>() as vk::DeviceSize;
+
         data.raytracing.create_tonemap_pipeline(
             rrdevice,
             rrrender,
             hdr_image_view,
             hdr_sampler,
+            position_image_view,
+            gbuffer_sampler,
+            scene_buffer,
+            scene_buffer_size,
             offscreen_render_pass,
             offscreen_extent,
         )?;

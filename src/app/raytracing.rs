@@ -372,6 +372,10 @@ impl RayTracingData {
         rrrender: &RRRender,
         hdr_image_view: vk::ImageView,
         hdr_sampler: vk::Sampler,
+        position_image_view: vk::ImageView,
+        position_sampler: vk::Sampler,
+        scene_buffer: vk::Buffer,
+        scene_buffer_size: vk::DeviceSize,
         offscreen_render_pass: vk::RenderPass,
         offscreen_extent: vk::Extent2D,
     ) -> Result<()> {
@@ -381,7 +385,15 @@ impl RayTracingData {
             descriptor_set: vk::DescriptorSet::null(),
         };
 
-        tonemap_descriptor.allocate_and_update(rrdevice, hdr_image_view, hdr_sampler)?;
+        tonemap_descriptor.allocate_and_update(
+            rrdevice,
+            hdr_image_view,
+            hdr_sampler,
+            position_image_view,
+            position_sampler,
+            scene_buffer,
+            scene_buffer_size,
+        )?;
 
         let tonemap_pipeline = PipelineBuilder::new(
             "assets/shaders/tonemapVert.spv",
@@ -393,7 +405,11 @@ impl RayTracingData {
         })
         .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
         .polygon_mode(vk::PolygonMode::FILL)
-        .no_depth_test()
+        .depth_test(DepthTestConfig {
+            test_enable: true,
+            write_enable: true,
+            compare_op: vk::CompareOp::ALWAYS,
+        })
         .custom_render_pass(offscreen_render_pass)
         .descriptor_layouts(vec![tonemap_descriptor.descriptor_set_layout])
         .push_constants(PushConstantConfig {
@@ -405,7 +421,6 @@ impl RayTracingData {
 
         self.tonemap_pipeline = Some(tonemap_pipeline);
         self.tonemap_descriptor = Some(tonemap_descriptor);
-        log::info!("Created tonemap pipeline and descriptor set");
 
         Ok(())
     }
@@ -744,7 +759,6 @@ unsafe fn build_composite_pipeline(
     })
     .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
     .polygon_mode(vk::PolygonMode::FILL)
-    .no_depth_test()
     .descriptor_layouts(vec![descriptor.descriptor_set_layout])
     .push_constants(PushConstantConfig {
         stage_flags: vk::ShaderStageFlags::FRAGMENT,
@@ -754,10 +768,23 @@ unsafe fn build_composite_pipeline(
 
     if let Some(render_pass) = hdr_render_pass {
         builder = builder
+            .no_depth_test()
             .custom_render_pass(render_pass)
             .msaa_samples(vk::SampleCountFlags::_1);
     } else if let Some(render_pass) = offscreen_render_pass {
-        builder = builder.custom_render_pass(render_pass);
+        builder = builder
+            .depth_test(DepthTestConfig {
+                test_enable: true,
+                write_enable: true,
+                compare_op: vk::CompareOp::ALWAYS,
+            })
+            .custom_render_pass(render_pass);
+    } else {
+        builder = builder.depth_test(DepthTestConfig {
+            test_enable: true,
+            write_enable: true,
+            compare_op: vk::CompareOp::ALWAYS,
+        });
     }
 
     let extent = offscreen_extent.unwrap_or(rrswapchain.swapchain_extent);

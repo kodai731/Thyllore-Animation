@@ -1,10 +1,27 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
+
+#include "include/depth.glsl"
 
 layout(location = 0) in vec2 fragTexCoord;
+
 layout(location = 0) out vec4 outColor;
+layout(depth_any) out float gl_FragDepth;
 
 layout(binding = 0) uniform sampler2D hdrSampler;
 layout(binding = 1) uniform sampler2D bloomSampler;
+layout(binding = 2) uniform sampler2D positionSampler;
+
+layout(binding = 3) uniform SceneData {
+    vec4 lightPosition;
+    vec4 lightColor;
+    mat4 view;
+    mat4 proj;
+    int debugMode;
+    float shadowStrength;
+    int enableDistanceAttenuation;
+    float exposureValue;
+} sceneData;
 
 layout(push_constant) uniform PushConstants {
     int toneMapOperator;
@@ -45,6 +62,13 @@ float computeVignette(vec2 uv, float intensity) {
 }
 
 void main() {
+    vec4 positionData = texture(positionSampler, fragTexCoord);
+    if (positionData.w < 0.5) {
+        gl_FragDepth = DEPTH_FAR;
+    } else {
+        gl_FragDepth = worldToClipDepth(positionData.xyz, sceneData.view, sceneData.proj);
+    }
+
     vec3 hdrColor;
     if (pc.chromaticAberrationIntensity > 0.0) {
         hdrColor = sampleWithChromaticAberration(fragTexCoord, pc.chromaticAberrationIntensity);

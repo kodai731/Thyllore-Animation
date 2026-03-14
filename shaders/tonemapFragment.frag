@@ -45,6 +45,8 @@ vec3 reinhard(vec3 x) {
     return x / (x + vec3(1.0));
 }
 
+const vec3 BACKGROUND_LINEAR = vec3(0.051);
+
 vec3 sampleWithChromaticAberration(vec2 uv, float intensity) {
     vec2 center = vec2(0.5);
     vec2 offset = (uv - center) * intensity;
@@ -67,6 +69,33 @@ void main() {
         gl_FragDepth = DEPTH_FAR;
     } else {
         gl_FragDepth = worldToClipDepth(positionData.xyz, sceneData.view, sceneData.proj);
+    }
+
+    bool isBackground = positionData.w < 0.5;
+
+    if (isBackground) {
+        vec3 bg = BACKGROUND_LINEAR;
+
+        if (pc.bloomIntensity > 0.0) {
+            vec3 bloomColor = texture(bloomSampler, fragTexCoord).rgb;
+            vec3 bloomGlow = bloomColor * pc.bloomIntensity * pc.exposureValue;
+
+            if (pc.toneMapOperator == 1) {
+                bloomGlow = acesFilmic(bloomGlow);
+            } else if (pc.toneMapOperator == 2) {
+                bloomGlow = reinhard(bloomGlow);
+            } else {
+                bloomGlow = clamp(bloomGlow, 0.0, 1.0);
+            }
+
+            bloomGlow = pow(bloomGlow, vec3(1.0 / pc.gamma));
+            bg = pow(bg, vec3(1.0 / pc.gamma)) + bloomGlow;
+        } else {
+            bg = pow(bg, vec3(1.0 / pc.gamma));
+        }
+
+        outColor = vec4(bg, 1.0);
+        return;
     }
 
     vec3 hdrColor;

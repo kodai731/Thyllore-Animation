@@ -88,8 +88,7 @@ void main() {
     }
 
     if (isBackground) {
-        // Background pixel - simple sky color
-        outColor = vec4(0.5, 0.7, 1.0, 1.0);
+        outColor = vec4(0.0, 0.0, 0.0, 0.0);
         return;
     }
 
@@ -176,6 +175,10 @@ void main() {
     else if (pc.debugMode == 9) {
         float countVis = float(selection.selectedCount) / 5.0;
         outColor = vec4(countVis, countVis, countVis, 1.0);
+        return;
+    }
+    else if (pc.debugMode == 10) {
+        outColor = vec4(albedo.rgb, 1.0);
         return;
     }
 

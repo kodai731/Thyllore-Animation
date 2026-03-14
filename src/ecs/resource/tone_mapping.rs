@@ -18,7 +18,7 @@ impl Default for ToneMapping {
         Self {
             enabled: true,
             operator: ToneMapOperator::AcesFilmic,
-            gamma: 2.2,
+            gamma: 1.0,
         }
     }
 }

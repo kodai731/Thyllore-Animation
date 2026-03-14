@@ -23,7 +23,11 @@ void main() {
 
     if (pixelCoord.x < imageSize.x && pixelCoord.y < imageSize.y) {
         vec2 uv = (vec2(pixelCoord) + 0.5) / vec2(imageSize);
-        vec3 color = texture(hdrImage, uv).rgb;
+        vec4 hdrData = texture(hdrImage, uv);
+
+        if (hdrData.a < 0.5) return;
+
+        vec3 color = hdrData.rgb;
         float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
 
         uint binIndex = 0;

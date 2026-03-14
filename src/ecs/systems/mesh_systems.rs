@@ -1,6 +1,8 @@
 use cgmath::Vector3;
 
-use crate::ecs::component::mesh::{MeshData, VertexAttributeValues, VertexFormat, VertexLayout};
+use crate::ecs::component::mesh::{
+    MeshData, VertexAttribute, VertexAttributeValues, VertexFormat, VertexLayout,
+};
 use crate::ecs::resource::MeshAssets;
 
 pub fn mesh_calculate_model_bounds(
@@ -59,6 +61,25 @@ pub fn validate_mesh_data(mesh: &MeshData) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+pub fn compute_vertex_layout(mesh: &MeshData) -> VertexLayout {
+    let mut attributes = Vec::new();
+    let mut offset = 0u32;
+
+    for id in mesh.attribute_ids() {
+        if let Some(values) = mesh.attribute(*id) {
+            let format = values.format();
+            let attr = VertexAttribute::new(*id, format, id.default_location());
+            attributes.push(attr);
+            offset += format.size();
+        }
+    }
+
+    VertexLayout {
+        attributes,
+        stride: offset,
+    }
 }
 
 pub fn create_interleaved_buffer(mesh: &MeshData, layout: &VertexLayout) -> Vec<u8> {
@@ -129,7 +150,7 @@ mod tests {
             .with_inserted_attribute(POSITION, vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
             .with_inserted_attribute(COLOR, vec![[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]);
 
-        let layout = VertexLayout::from_mesh_data(&mesh);
+        let layout = compute_vertex_layout(&mesh);
         assert_eq!(layout.stride, 24);
 
         let buffer = create_interleaved_buffer(&mesh, &layout);

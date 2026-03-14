@@ -322,8 +322,8 @@ fn compute_average_keyframe_interval(curve: &PropertyCurve) -> f32 {
     if curve.keyframes.len() <= 1 {
         return 1.0;
     }
-    let first = curve.keyframes.first().unwrap().time;
-    let last = curve.keyframes.last().unwrap().time;
+    let first = curve.keyframes.first().expect("guarded by len > 1").time;
+    let last = curve.keyframes.last().expect("guarded by len > 1").time;
     (last - first) / (curve.keyframes.len() as f32 - 1.0)
 }
 

@@ -3,7 +3,7 @@ use cgmath::{Quaternion, Rotation3, Vector3, Vector4};
 use crate::app::graphics_resource::GraphicsResources;
 use crate::asset::AssetStorage;
 use crate::ecs::component::EditorDisplay;
-use crate::ecs::world::{Entity, MeshRef, Name, Transform, Visible, World};
+use crate::ecs::world::{Entity, MeshRef, Name, Transform, Visibility, Visible, World};
 
 #[derive(Clone, Debug)]
 pub struct MeshInspectorData {
@@ -50,7 +50,9 @@ pub fn collect_inspector_data(
     let rotation_euler = transform.map(|t| quaternion_to_euler(&t.rotation));
     let scale = transform.map(|t| t.scale);
 
-    let visible = world.get_component::<Visible>(entity).map(|v| v.0);
+    let visible = world
+        .get_component::<Visible>(entity)
+        .map(|v| v.0.is_visible());
 
     let icon_char = world
         .get_component::<EditorDisplay>(entity)
@@ -134,9 +136,9 @@ pub fn update_entity_scale(world: &mut World, entity: Entity, scale: Vector3<f32
     }
 }
 
-pub fn update_entity_visible(world: &mut World, entity: Entity, visible: bool) {
+pub fn update_entity_visible(world: &mut World, entity: Entity, visibility: Visibility) {
     if let Some(vis) = world.get_component_mut::<Visible>(entity) {
-        vis.0 = visible;
+        vis.0 = visibility;
     }
 }
 

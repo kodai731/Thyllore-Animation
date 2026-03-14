@@ -293,37 +293,61 @@ impl App {
         let albedo_view = gbuffer.albedo_image_view;
         let object_id_view = gbuffer.object_id_image_view;
 
-        {
-            let mut render_targets = self.resource_mut::<RenderTargets>();
-            let device = &self.rrdevice.device;
+        self.recreate_gbuffer_framebuffer()?;
+        self.update_gbuffer_descriptors(
+            position_view,
+            normal_view,
+            shadow_mask_view,
+            albedo_view,
+            object_id_view,
+        )?;
+        self.recreate_onion_skin_on_resize()?;
 
-            if render_targets.render.gbuffer_framebuffer != vk::Framebuffer::null() {
-                device.destroy_framebuffer(render_targets.render.gbuffer_framebuffer, None);
-                render_targets.render.gbuffer_framebuffer = vk::Framebuffer::null();
-            }
-            if render_targets.render.gbuffer_depth_image_view != vk::ImageView::null() {
-                device.destroy_image_view(render_targets.render.gbuffer_depth_image_view, None);
-                render_targets.render.gbuffer_depth_image_view = vk::ImageView::null();
-            }
-            if render_targets.render.gbuffer_depth_image != vk::Image::null() {
-                device.destroy_image(render_targets.render.gbuffer_depth_image, None);
-                render_targets.render.gbuffer_depth_image = vk::Image::null();
-            }
-            if render_targets.render.gbuffer_depth_image_memory != vk::DeviceMemory::null() {
-                device.free_memory(render_targets.render.gbuffer_depth_image_memory, None);
-                render_targets.render.gbuffer_depth_image_memory = vk::DeviceMemory::null();
-            }
+        log!("G-Buffer resized to: {}x{}", new_width, new_height);
+        Ok(())
+    }
 
-            if let Some(ref gbuffer) = self.data.raytracing.gbuffer {
-                create_gbuffer_framebuffer(
-                    &self.instance,
-                    &self.rrdevice,
-                    &mut render_targets.render,
-                    gbuffer,
-                )?;
-            }
+    unsafe fn recreate_gbuffer_framebuffer(&mut self) -> Result<()> {
+        let mut render_targets = self.resource_mut::<RenderTargets>();
+        let device = &self.rrdevice.device;
+
+        if render_targets.render.gbuffer_framebuffer != vk::Framebuffer::null() {
+            device.destroy_framebuffer(render_targets.render.gbuffer_framebuffer, None);
+            render_targets.render.gbuffer_framebuffer = vk::Framebuffer::null();
+        }
+        if render_targets.render.gbuffer_depth_image_view != vk::ImageView::null() {
+            device.destroy_image_view(render_targets.render.gbuffer_depth_image_view, None);
+            render_targets.render.gbuffer_depth_image_view = vk::ImageView::null();
+        }
+        if render_targets.render.gbuffer_depth_image != vk::Image::null() {
+            device.destroy_image(render_targets.render.gbuffer_depth_image, None);
+            render_targets.render.gbuffer_depth_image = vk::Image::null();
+        }
+        if render_targets.render.gbuffer_depth_image_memory != vk::DeviceMemory::null() {
+            device.free_memory(render_targets.render.gbuffer_depth_image_memory, None);
+            render_targets.render.gbuffer_depth_image_memory = vk::DeviceMemory::null();
         }
 
+        if let Some(ref gbuffer) = self.data.raytracing.gbuffer {
+            create_gbuffer_framebuffer(
+                &self.instance,
+                &self.rrdevice,
+                &mut render_targets.render,
+                gbuffer,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    unsafe fn update_gbuffer_descriptors(
+        &mut self,
+        position_view: vk::ImageView,
+        normal_view: vk::ImageView,
+        shadow_mask_view: vk::ImageView,
+        albedo_view: vk::ImageView,
+        object_id_view: vk::ImageView,
+    ) -> Result<()> {
         let gbuffer_sampler = self
             .data
             .raytracing
@@ -374,6 +398,10 @@ impl App {
                 )?;
         }
 
+        Ok(())
+    }
+
+    unsafe fn recreate_onion_skin_on_resize(&mut self) -> Result<()> {
         if let (Some(ref mut onion_pass), Some(ref offscreen)) = (
             &mut self.data.raytracing.onion_skin_pass,
             &self.data.viewport.offscreen,
@@ -387,7 +415,6 @@ impl App {
             )?;
         }
 
-        log!("G-Buffer resized to: {}x{}", new_width, new_height);
         Ok(())
     }
 
@@ -617,9 +644,43 @@ impl App {
         command_pool: vk::CommandPool,
     ) -> Result<(vk::Buffer, vk::DeviceMemory, vk::CommandBuffer)> {
         let device = &self.rrdevice.device;
-        let width = extent.width;
-        let height = extent.height;
 
+        let (buffer, buffer_memory) = self.allocate_transfer_buffer(device, image_size)?;
+
+        let command_buffer = allocate_one_time_command_buffer(device, command_pool)?;
+
+        let begin_info = vk::CommandBufferBeginInfo::builder()
+            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+        device.begin_command_buffer(command_buffer, &begin_info)?;
+
+        record_image_to_buffer_copy(
+            device,
+            command_buffer,
+            swapchain_image,
+            buffer,
+            extent.width,
+            extent.height,
+        );
+
+        device.end_command_buffer(command_buffer)?;
+
+        let command_buffers_slice = [command_buffer];
+        let submit_info = vk::SubmitInfo::builder().command_buffers(&command_buffers_slice);
+        device.queue_submit(
+            self.rrdevice.graphics_queue,
+            &[submit_info.build()],
+            vk::Fence::null(),
+        )?;
+        device.queue_wait_idle(self.rrdevice.graphics_queue)?;
+
+        Ok((buffer, buffer_memory, command_buffer))
+    }
+
+    unsafe fn allocate_transfer_buffer(
+        &self,
+        device: &crate::vulkanr::core::device::Device,
+        image_size: vk::DeviceSize,
+    ) -> Result<(vk::Buffer, vk::DeviceMemory)> {
         let buffer_info = vk::BufferCreateInfo::builder()
             .size(image_size)
             .usage(vk::BufferUsageFlags::TRANSFER_DST)
@@ -637,102 +698,7 @@ impl App {
         let buffer_memory = device.allocate_memory(&alloc_info, None)?;
         device.bind_buffer_memory(buffer, buffer_memory, 0)?;
 
-        let cmd_alloc_info = vk::CommandBufferAllocateInfo::builder()
-            .command_pool(command_pool)
-            .level(vk::CommandBufferLevel::PRIMARY)
-            .command_buffer_count(1);
-        let command_buffers = device.allocate_command_buffers(&cmd_alloc_info)?;
-        let command_buffer = command_buffers[0];
-
-        let begin_info = vk::CommandBufferBeginInfo::builder()
-            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-        device.begin_command_buffer(command_buffer, &begin_info)?;
-
-        let subresource_range = vk::ImageSubresourceRange {
-            aspect_mask: vk::ImageAspectFlags::COLOR,
-            base_mip_level: 0,
-            level_count: 1,
-            base_array_layer: 0,
-            layer_count: 1,
-        };
-
-        let barrier_to_transfer = vk::ImageMemoryBarrier::builder()
-            .old_layout(vk::ImageLayout::PRESENT_SRC_KHR)
-            .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .image(swapchain_image)
-            .subresource_range(subresource_range)
-            .src_access_mask(vk::AccessFlags::MEMORY_READ)
-            .dst_access_mask(vk::AccessFlags::TRANSFER_READ);
-
-        device.cmd_pipeline_barrier(
-            command_buffer,
-            vk::PipelineStageFlags::TRANSFER,
-            vk::PipelineStageFlags::TRANSFER,
-            vk::DependencyFlags::empty(),
-            &[] as &[vk::MemoryBarrier],
-            &[] as &[vk::BufferMemoryBarrier],
-            &[barrier_to_transfer.build()],
-        );
-
-        let region = vk::BufferImageCopy::builder()
-            .buffer_offset(0)
-            .buffer_row_length(0)
-            .buffer_image_height(0)
-            .image_subresource(vk::ImageSubresourceLayers {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                mip_level: 0,
-                base_array_layer: 0,
-                layer_count: 1,
-            })
-            .image_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
-            .image_extent(vk::Extent3D {
-                width,
-                height,
-                depth: 1,
-            });
-
-        device.cmd_copy_image_to_buffer(
-            command_buffer,
-            swapchain_image,
-            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-            buffer,
-            &[region.build()],
-        );
-
-        let barrier_to_present = vk::ImageMemoryBarrier::builder()
-            .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-            .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
-            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .image(swapchain_image)
-            .subresource_range(subresource_range)
-            .src_access_mask(vk::AccessFlags::TRANSFER_READ)
-            .dst_access_mask(vk::AccessFlags::MEMORY_READ);
-
-        device.cmd_pipeline_barrier(
-            command_buffer,
-            vk::PipelineStageFlags::TRANSFER,
-            vk::PipelineStageFlags::TRANSFER,
-            vk::DependencyFlags::empty(),
-            &[] as &[vk::MemoryBarrier],
-            &[] as &[vk::BufferMemoryBarrier],
-            &[barrier_to_present.build()],
-        );
-
-        device.end_command_buffer(command_buffer)?;
-
-        let command_buffers_slice = [command_buffer];
-        let submit_info = vk::SubmitInfo::builder().command_buffers(&command_buffers_slice);
-        device.queue_submit(
-            self.rrdevice.graphics_queue,
-            &[submit_info.build()],
-            vk::Fence::null(),
-        )?;
-        device.queue_wait_idle(self.rrdevice.graphics_queue)?;
-
-        Ok((buffer, buffer_memory, command_buffer))
+        Ok((buffer, buffer_memory))
     }
 
     unsafe fn encode_and_save_png(
@@ -1309,4 +1275,98 @@ impl App {
             index_offset += draw_list.idx_buffer().len() as u32;
         }
     }
+}
+
+unsafe fn allocate_one_time_command_buffer(
+    device: &crate::vulkanr::core::device::Device,
+    command_pool: vk::CommandPool,
+) -> Result<vk::CommandBuffer> {
+    let cmd_alloc_info = vk::CommandBufferAllocateInfo::builder()
+        .command_pool(command_pool)
+        .level(vk::CommandBufferLevel::PRIMARY)
+        .command_buffer_count(1);
+    let command_buffers = device.allocate_command_buffers(&cmd_alloc_info)?;
+    Ok(command_buffers[0])
+}
+
+unsafe fn record_image_to_buffer_copy(
+    device: &crate::vulkanr::core::device::Device,
+    command_buffer: vk::CommandBuffer,
+    image: vk::Image,
+    buffer: vk::Buffer,
+    width: u32,
+    height: u32,
+) {
+    let subresource_range = vk::ImageSubresourceRange {
+        aspect_mask: vk::ImageAspectFlags::COLOR,
+        base_mip_level: 0,
+        level_count: 1,
+        base_array_layer: 0,
+        layer_count: 1,
+    };
+
+    let barrier_to_transfer = vk::ImageMemoryBarrier::builder()
+        .old_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+        .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+        .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+        .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+        .image(image)
+        .subresource_range(subresource_range)
+        .src_access_mask(vk::AccessFlags::MEMORY_READ)
+        .dst_access_mask(vk::AccessFlags::TRANSFER_READ);
+
+    device.cmd_pipeline_barrier(
+        command_buffer,
+        vk::PipelineStageFlags::TRANSFER,
+        vk::PipelineStageFlags::TRANSFER,
+        vk::DependencyFlags::empty(),
+        &[] as &[vk::MemoryBarrier],
+        &[] as &[vk::BufferMemoryBarrier],
+        &[barrier_to_transfer.build()],
+    );
+
+    let region = vk::BufferImageCopy::builder()
+        .buffer_offset(0)
+        .buffer_row_length(0)
+        .buffer_image_height(0)
+        .image_subresource(vk::ImageSubresourceLayers {
+            aspect_mask: vk::ImageAspectFlags::COLOR,
+            mip_level: 0,
+            base_array_layer: 0,
+            layer_count: 1,
+        })
+        .image_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
+        .image_extent(vk::Extent3D {
+            width,
+            height,
+            depth: 1,
+        });
+
+    device.cmd_copy_image_to_buffer(
+        command_buffer,
+        image,
+        vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+        buffer,
+        &[region.build()],
+    );
+
+    let barrier_to_present = vk::ImageMemoryBarrier::builder()
+        .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+        .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+        .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+        .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+        .image(image)
+        .subresource_range(subresource_range)
+        .src_access_mask(vk::AccessFlags::TRANSFER_READ)
+        .dst_access_mask(vk::AccessFlags::MEMORY_READ);
+
+    device.cmd_pipeline_barrier(
+        command_buffer,
+        vk::PipelineStageFlags::TRANSFER,
+        vk::PipelineStageFlags::TRANSFER,
+        vk::DependencyFlags::empty(),
+        &[] as &[vk::MemoryBarrier],
+        &[] as &[vk::BufferMemoryBarrier],
+        &[barrier_to_present.build()],
+    );
 }

@@ -617,7 +617,7 @@ fn handle_clip_export_fbx(app: &mut App, source_id: u64) {
             .data
             .ecs_world
             .resource::<crate::ecs::resource::FbxModelCache>();
-        (cache.fbx_model.clone(), cache.needs_coord_conversion)
+        (cache.fbx_model().cloned(), cache.needs_coord_conversion())
     } else {
         (None, false)
     };

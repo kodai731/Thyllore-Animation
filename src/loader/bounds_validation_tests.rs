@@ -198,6 +198,7 @@ fn compute_node_animation_bounds(
             has_vertex = true;
             let pos = Vector4::new(v.pos.x, v.pos.y, v.pos.z, 1.0);
             let world_pos = transform * pos;
+            // Compare in world-space (no node_animation_scale) to match Blender's coordinates
             let p = Vector3::new(world_pos.x, world_pos.y, world_pos.z);
             min.x = min.x.min(p.x);
             min.y = min.y.min(p.y);

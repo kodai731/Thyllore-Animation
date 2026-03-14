@@ -44,7 +44,7 @@ fn vertex_format_to_vk(format: VertexFormat) -> vk::Format {
     }
 }
 
-/// Depth test configuration
+#[derive(Clone, Copy)]
 pub struct DepthTestConfig {
     pub test_enable: bool,
     pub write_enable: bool,
@@ -86,7 +86,7 @@ impl Default for BlendConfig {
     }
 }
 
-/// Push constant configuration
+#[derive(Clone, Copy)]
 pub struct PushConstantConfig {
     pub stage_flags: vk::ShaderStageFlags,
     pub offset: u32,

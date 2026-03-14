@@ -5,7 +5,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{ConstraintEditorState, HierarchyState};
 use crate::ecs::systems::collect_inspector_data;
-use crate::ecs::world::World;
+use crate::ecs::world::{Visibility, World};
 
 use super::constraint_inspector::build_constraint_section;
 use super::layout_snapshot::LayoutSnapshot;
@@ -177,7 +177,10 @@ fn build_visible_section(
         if ui.collapsing_header("Visible", imgui::TreeNodeFlags::DEFAULT_OPEN) {
             let mut vis = visible;
             if ui.checkbox("Visible##checkbox", &mut vis) {
-                ui_events.send(UIEvent::SetEntityVisible(data.entity, vis));
+                ui_events.send(UIEvent::SetEntityVisible(
+                    data.entity,
+                    Visibility::from(vis),
+                ));
             }
         }
     }

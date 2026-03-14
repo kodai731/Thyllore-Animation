@@ -171,44 +171,61 @@ impl RayTracingData {
         offscreen_extent: Option<vk::Extent2D>,
         hdr_render_pass: Option<vk::RenderPass>,
     ) -> Result<()> {
-        log!("create_pipelines: starting...");
-        log!(
-            "create_pipelines: gbuffer is_some: {}",
-            self.gbuffer.is_some()
-        );
-        log!(
-            "create_pipelines: acceleration_structure is_some: {}",
-            self.acceleration_structure.is_some()
-        );
-
         let render_layouts = [
             graphics_resources.frame_set.layout,
             graphics_resources.materials.layout,
             graphics_resources.objects.layout,
         ];
 
-        let gbuffer_pipeline = PipelineBuilder::new(
-            "assets/shaders/gbufferVert.spv",
-            "assets/shaders/gbufferFrag.spv",
-        )
-        .vertex_input(VertexInputConfig::Standard)
-        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-        .polygon_mode(vk::PolygonMode::FILL)
-        .custom_render_pass(rrrender.gbuffer_render_pass)
-        .mrt_attachments(4)
-        .no_blend_attachment(3)
-        .msaa_samples(vk::SampleCountFlags::_1)
-        .descriptor_layouts(render_layouts.to_vec())
-        .push_constants(PushConstantConfig {
-            stage_flags: vk::ShaderStageFlags::FRAGMENT,
-            offset: 0,
-            size: std::mem::size_of::<GBufferPushConstants>() as u32,
-        })
-        .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))?;
+        self.gbuffer_pipeline = Some(build_gbuffer_pipeline(
+            rrdevice,
+            rrrender,
+            rrswapchain,
+            &render_layouts,
+        )?);
 
-        self.gbuffer_pipeline = Some(gbuffer_pipeline);
-        log::info!("Created G-Buffer descriptor set and pipeline");
+        let scene_buffer = self.init_scene_uniform_buffer(instance, rrdevice)?;
 
+        let (ray_query_descriptor, ray_query_pipeline) = build_ray_query_pipeline(
+            rrdevice,
+            &self.gbuffer,
+            &self.acceleration_structure,
+            scene_buffer,
+        )?;
+        self.ray_query_pipeline = Some(ray_query_pipeline);
+        self.ray_query_descriptor = Some(ray_query_descriptor);
+
+        let gbuffer_sampler = create_texture_sampler(rrdevice, 1)?;
+        self.gbuffer_sampler = Some(gbuffer_sampler);
+
+        let object_id_sampler = create_nearest_sampler(rrdevice)?;
+        self.object_id_sampler = Some(object_id_sampler);
+
+        let (composite_descriptor, composite_pipeline) = build_composite_pipeline(
+            instance,
+            rrdevice,
+            rrswapchain,
+            rrrender,
+            &self.gbuffer,
+            gbuffer_sampler,
+            object_id_sampler,
+            scene_buffer,
+            billboard_descriptor_set,
+            offscreen_render_pass,
+            offscreen_extent,
+            hdr_render_pass,
+        )?;
+        self.composite_pipeline = Some(composite_pipeline);
+        self.composite_descriptor = Some(composite_descriptor);
+
+        Ok(())
+    }
+
+    unsafe fn init_scene_uniform_buffer(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+    ) -> Result<vk::Buffer> {
         let (scene_buffer, scene_memory) = create_buffer(
             instance,
             rrdevice,
@@ -218,125 +235,7 @@ impl RayTracingData {
         )?;
         self.scene_uniform_buffer = Some(scene_buffer);
         self.scene_uniform_buffer_memory = Some(scene_memory);
-
-        let mut ray_query_descriptor = RRRayQueryDescriptorSet {
-            descriptor_set_layout: RRRayQueryDescriptorSet::create_layout(rrdevice)?,
-            descriptor_pool: RRRayQueryDescriptorSet::create_pool(rrdevice)?,
-            descriptor_set: vk::DescriptorSet::null(),
-        };
-
-        if let (Some(ref gbuffer), Some(ref accel_struct)) =
-            (&self.gbuffer, &self.acceleration_structure)
-        {
-            if let Some(tlas) = accel_struct.tlas.acceleration_structure {
-                ray_query_descriptor.allocate_and_update(
-                    rrdevice,
-                    gbuffer.position_image_view,
-                    gbuffer.normal_image_view,
-                    gbuffer.shadow_mask_image_view,
-                    tlas,
-                    scene_buffer,
-                )?;
-            }
-        }
-
-        let push_constant_range = vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::COMPUTE)
-            .offset(0)
-            .size(std::mem::size_of::<f32>() as u32)
-            .build();
-
-        let ray_query_pipeline = RRPipeline::new_compute_with_push_constants(
-            rrdevice,
-            "assets/shaders/rayQueryShadow.spv",
-            &[ray_query_descriptor.descriptor_set_layout],
-            &[push_constant_range],
-        )?;
-        self.ray_query_pipeline = Some(ray_query_pipeline);
-        self.ray_query_descriptor = Some(ray_query_descriptor);
-        log::info!("Created Ray Query descriptor set and pipeline");
-
-        let gbuffer_sampler = create_texture_sampler(rrdevice, 1)?;
-        self.gbuffer_sampler = Some(gbuffer_sampler);
-
-        let object_id_sampler = create_nearest_sampler(rrdevice)?;
-        self.object_id_sampler = Some(object_id_sampler);
-
-        let mut composite_descriptor = RRCompositeDescriptorSet {
-            descriptor_set_layout: RRCompositeDescriptorSet::create_layout(rrdevice)?,
-            descriptor_pool: RRCompositeDescriptorSet::create_pool(rrdevice)?,
-            descriptor_set: vk::DescriptorSet::null(),
-            selection_buffer: vk::Buffer::null(),
-            selection_buffer_memory: vk::DeviceMemory::null(),
-        };
-
-        if let Some(ref gbuffer) = self.gbuffer {
-            composite_descriptor.allocate_and_update(
-                instance,
-                rrdevice,
-                gbuffer.position_image_view,
-                gbuffer_sampler,
-                gbuffer.normal_image_view,
-                gbuffer_sampler,
-                gbuffer.shadow_mask_image_view,
-                gbuffer_sampler,
-                gbuffer.albedo_image_view,
-                gbuffer_sampler,
-                scene_buffer,
-                gbuffer.object_id_image_view,
-                object_id_sampler,
-            )?;
-
-            billboard_descriptor_set.update_position_sampler(
-                rrdevice,
-                rrswapchain,
-                gbuffer.position_image_view,
-                gbuffer_sampler,
-            )?;
-            log::info!("Updated billboard descriptor set with G-Buffer position sampler");
-        }
-
-        let mut composite_builder = PipelineBuilder::new(
-            "assets/shaders/compositeVert.spv",
-            "assets/shaders/compositeFrag.spv",
-        )
-        .vertex_input(VertexInputConfig::Custom {
-            bindings: vec![],
-            attributes: vec![],
-        })
-        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-        .polygon_mode(vk::PolygonMode::FILL)
-        .depth_test(DepthTestConfig {
-            test_enable: true,
-            write_enable: true,
-            compare_op: vk::CompareOp::ALWAYS,
-        })
-        .descriptor_layouts(vec![composite_descriptor.descriptor_set_layout])
-        .push_constants(PushConstantConfig {
-            stage_flags: vk::ShaderStageFlags::FRAGMENT,
-            offset: 0,
-            size: 4,
-        });
-
-        if let Some(render_pass) = hdr_render_pass {
-            composite_builder = composite_builder
-                .custom_render_pass(render_pass)
-                .msaa_samples(vk::SampleCountFlags::_1);
-            log!("create_pipelines: using HDR render pass for composite pipeline");
-        } else if let Some(render_pass) = offscreen_render_pass {
-            composite_builder = composite_builder.custom_render_pass(render_pass);
-            log!("create_pipelines: using offscreen render pass for composite pipeline");
-        }
-
-        let extent = offscreen_extent.unwrap_or(rrswapchain.swapchain_extent);
-        let composite_pipeline = composite_builder.build(rrdevice, rrrender, Some(extent))?;
-
-        self.composite_pipeline = Some(composite_pipeline);
-        self.composite_descriptor = Some(composite_descriptor);
-        log::info!("Created composite descriptor set and pipeline");
-
-        log::info!("Ray Tracing pipelines created successfully");
-        Ok(())
+        Ok(scene_buffer)
     }
 
     pub unsafe fn create_onion_skin_pipeline(
@@ -716,8 +615,153 @@ impl RayTracingData {
         self.auto_exposure_histogram_descriptor = Some(histogram_descriptor);
         self.auto_exposure_average_descriptor = Some(average_descriptor);
 
-        log::info!("Created AutoExposure pipelines");
-
         Ok(())
     }
+}
+
+unsafe fn build_gbuffer_pipeline(
+    rrdevice: &RRDevice,
+    rrrender: &RRRender,
+    rrswapchain: &RRSwapchain,
+    render_layouts: &[vk::DescriptorSetLayout],
+) -> Result<RRPipeline> {
+    PipelineBuilder::new(
+        "assets/shaders/gbufferVert.spv",
+        "assets/shaders/gbufferFrag.spv",
+    )
+    .vertex_input(VertexInputConfig::Standard)
+    .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+    .polygon_mode(vk::PolygonMode::FILL)
+    .custom_render_pass(rrrender.gbuffer_render_pass)
+    .mrt_attachments(4)
+    .no_blend_attachment(3)
+    .msaa_samples(vk::SampleCountFlags::_1)
+    .descriptor_layouts(render_layouts.to_vec())
+    .push_constants(PushConstantConfig {
+        stage_flags: vk::ShaderStageFlags::FRAGMENT,
+        offset: 0,
+        size: std::mem::size_of::<GBufferPushConstants>() as u32,
+    })
+    .build(rrdevice, rrrender, Some(rrswapchain.swapchain_extent))
+}
+
+unsafe fn build_ray_query_pipeline(
+    rrdevice: &RRDevice,
+    gbuffer: &Option<RRGBuffer>,
+    acceleration_structure: &Option<RRAccelerationStructure>,
+    scene_buffer: vk::Buffer,
+) -> Result<(RRRayQueryDescriptorSet, RRPipeline)> {
+    let mut descriptor = RRRayQueryDescriptorSet {
+        descriptor_set_layout: RRRayQueryDescriptorSet::create_layout(rrdevice)?,
+        descriptor_pool: RRRayQueryDescriptorSet::create_pool(rrdevice)?,
+        descriptor_set: vk::DescriptorSet::null(),
+    };
+
+    if let (Some(gbuffer), Some(accel_struct)) = (gbuffer, acceleration_structure) {
+        if let Some(tlas) = accel_struct.tlas.acceleration_structure {
+            descriptor.allocate_and_update(
+                rrdevice,
+                gbuffer.position_image_view,
+                gbuffer.normal_image_view,
+                gbuffer.shadow_mask_image_view,
+                tlas,
+                scene_buffer,
+            )?;
+        }
+    }
+
+    let push_constant_range = vk::PushConstantRange::builder()
+        .stage_flags(vk::ShaderStageFlags::COMPUTE)
+        .offset(0)
+        .size(std::mem::size_of::<f32>() as u32)
+        .build();
+
+    let pipeline = RRPipeline::new_compute_with_push_constants(
+        rrdevice,
+        "assets/shaders/rayQueryShadow.spv",
+        &[descriptor.descriptor_set_layout],
+        &[push_constant_range],
+    )?;
+
+    Ok((descriptor, pipeline))
+}
+
+#[allow(clippy::too_many_arguments)]
+unsafe fn build_composite_pipeline(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+    rrswapchain: &RRSwapchain,
+    rrrender: &RRRender,
+    gbuffer: &Option<RRGBuffer>,
+    gbuffer_sampler: vk::Sampler,
+    object_id_sampler: vk::Sampler,
+    scene_buffer: vk::Buffer,
+    billboard_descriptor_set: &mut RRBillboardDescriptorSet,
+    offscreen_render_pass: Option<vk::RenderPass>,
+    offscreen_extent: Option<vk::Extent2D>,
+    hdr_render_pass: Option<vk::RenderPass>,
+) -> Result<(RRCompositeDescriptorSet, RRPipeline)> {
+    let mut descriptor = RRCompositeDescriptorSet {
+        descriptor_set_layout: RRCompositeDescriptorSet::create_layout(rrdevice)?,
+        descriptor_pool: RRCompositeDescriptorSet::create_pool(rrdevice)?,
+        descriptor_set: vk::DescriptorSet::null(),
+        selection_buffer: vk::Buffer::null(),
+        selection_buffer_memory: vk::DeviceMemory::null(),
+    };
+
+    if let Some(gbuffer) = gbuffer {
+        descriptor.allocate_and_update(
+            instance,
+            rrdevice,
+            gbuffer.position_image_view,
+            gbuffer_sampler,
+            gbuffer.normal_image_view,
+            gbuffer_sampler,
+            gbuffer.shadow_mask_image_view,
+            gbuffer_sampler,
+            gbuffer.albedo_image_view,
+            gbuffer_sampler,
+            scene_buffer,
+            gbuffer.object_id_image_view,
+            object_id_sampler,
+        )?;
+
+        billboard_descriptor_set.update_position_sampler(
+            rrdevice,
+            rrswapchain,
+            gbuffer.position_image_view,
+            gbuffer_sampler,
+        )?;
+    }
+
+    let mut builder = PipelineBuilder::new(
+        "assets/shaders/compositeVert.spv",
+        "assets/shaders/compositeFrag.spv",
+    )
+    .vertex_input(VertexInputConfig::Custom {
+        bindings: vec![],
+        attributes: vec![],
+    })
+    .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+    .polygon_mode(vk::PolygonMode::FILL)
+    .no_depth_test()
+    .descriptor_layouts(vec![descriptor.descriptor_set_layout])
+    .push_constants(PushConstantConfig {
+        stage_flags: vk::ShaderStageFlags::FRAGMENT,
+        offset: 0,
+        size: 4,
+    });
+
+    if let Some(render_pass) = hdr_render_pass {
+        builder = builder
+            .custom_render_pass(render_pass)
+            .msaa_samples(vk::SampleCountFlags::_1);
+    } else if let Some(render_pass) = offscreen_render_pass {
+        builder = builder.custom_render_pass(render_pass);
+    }
+
+    let extent = offscreen_extent.unwrap_or(rrswapchain.swapchain_extent);
+    let pipeline = builder.build(rrdevice, rrrender, Some(extent))?;
+
+    Ok((descriptor, pipeline))
 }

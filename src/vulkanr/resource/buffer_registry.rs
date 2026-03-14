@@ -4,8 +4,8 @@ use std::ptr::copy_nonoverlapping as memcpy;
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::component::mesh::{MeshData, VertexLayout};
-use crate::ecs::systems::mesh_systems::create_interleaved_buffer;
+use crate::ecs::component::mesh::MeshData;
+use crate::ecs::systems::mesh_systems::{compute_vertex_layout, create_interleaved_buffer};
 use crate::render::{BufferMemoryType, IndexBufferHandle, VertexBufferHandle};
 use crate::vulkanr::buffer::{copy_buffer, create_buffer};
 use crate::vulkanr::command::RRCommandPool;
@@ -326,7 +326,7 @@ impl GpuBufferRegistry {
         mesh: &MeshData,
         memory_type: BufferMemoryType,
     ) -> Result<(VertexBufferHandle, Option<IndexBufferHandle>)> {
-        let layout = VertexLayout::from_mesh_data(mesh);
+        let layout = compute_vertex_layout(mesh);
         let vertex_data = create_interleaved_buffer(mesh, &layout);
 
         let vertex_handle = self.create_vertex_buffer_raw(
@@ -463,7 +463,23 @@ impl GpuBufferRegistry {
             is_host_visible: false,
         })
     }
+}
 
+impl Drop for GpuBufferRegistry {
+    fn drop(&mut self) {
+        let vertex_count = self.vertex_buffers.iter().filter(|b| b.is_some()).count();
+        let index_count = self.index_buffers.iter().filter(|b| b.is_some()).count();
+        if vertex_count > 0 || index_count > 0 {
+            eprintln!(
+                "[WARN] GpuBufferRegistry dropped without calling destroy_all(): {} vertex, {} index buffers leaked",
+                vertex_count,
+                index_count,
+            );
+        }
+    }
+}
+
+impl GpuBufferRegistry {
     unsafe fn create_host_visible_buffer<T>(
         &self,
         instance: &Instance,

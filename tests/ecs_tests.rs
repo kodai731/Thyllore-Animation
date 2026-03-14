@@ -1,6 +1,6 @@
 use rust_rendering::ecs::registry::ComponentRegistry;
 use rust_rendering::ecs::storage::{Components, SparseSet};
-use rust_rendering::ecs::world::{Entity, Name, Resources, Transform, Visible, World};
+use rust_rendering::ecs::world::{Entity, Name, Resources, Transform, Visibility, Visible, World};
 use rust_rendering::render::{BufferHandle, IndexBufferHandle, VertexBufferHandle};
 
 mod release_build_tests {
@@ -507,7 +507,7 @@ mod world_tests {
 
         world.insert_component(entity, Name("Entity1".to_string()));
         world.insert_component(entity, Transform::default());
-        world.insert_component(entity, Visible(true));
+        world.insert_component(entity, Visible(Visibility::Shown));
 
         assert!(world.has_component::<Name>(entity));
         assert!(world.has_component::<Transform>(entity));

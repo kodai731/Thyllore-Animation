@@ -93,7 +93,8 @@ fn update_pointer_state(ctx: &mut EcsContext) {
     let viewport_hovered = ctx.gui_data.viewport_hovered;
     let imgui_wants_mouse = ctx.gui_data.imgui_wants_mouse;
 
-    use crate::ecs::resource::{button_state_advance, RawButtonInput};
+    use crate::ecs::resource::RawButtonInput;
+    use crate::ecs::systems::button_state_advance;
     let to_input = |down: bool| {
         if down {
             RawButtonInput::Pressed

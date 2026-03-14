@@ -88,7 +88,7 @@ void main() {
     }
 
     if (isBackground) {
-        outColor = vec4(0.0, 0.0, 0.0, 0.0);
+        outColor = vec4(0.0, 0.0, 0.0, 1.0);
         return;
     }
 

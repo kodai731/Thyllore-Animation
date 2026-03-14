@@ -116,7 +116,7 @@ impl RayTracingData {
         rrcommand_pool: &Rc<RRCommandPool>,
         meshes: &[MeshBuffer],
     ) -> Result<()> {
-        log::info!("Building acceleration structures...");
+        log!("Building acceleration structures...");
 
         let mut acceleration_structure = RRAccelerationStructure::new();
 
@@ -133,7 +133,7 @@ impl RayTracingData {
             )?;
 
             acceleration_structure.blas_list.push(blas);
-            log::info!("Created BLAS for mesh");
+            log!("Created BLAS for mesh");
         }
 
         if !acceleration_structure.blas_list.is_empty() {
@@ -144,7 +144,7 @@ impl RayTracingData {
                 &acceleration_structure.blas_list,
             )?;
             acceleration_structure.tlas = tlas;
-            log::info!(
+            log!(
                 "Created TLAS with {} instances",
                 acceleration_structure.blas_list.len()
             );
@@ -155,7 +155,7 @@ impl RayTracingData {
         } else {
             self.acceleration_structure = Some(acceleration_structure);
         }
-        log::info!("Acceleration structures built successfully");
+        log!("Acceleration structures built successfully");
         Ok(())
     }
 
@@ -504,7 +504,7 @@ impl RayTracingData {
         self.bloom_downsample_pipeline = Some(downsample_pipeline);
         self.bloom_upsample_pipeline = Some(upsample_pipeline);
         self.bloom_descriptors = Some(bloom_descriptors);
-        log::info!("Created bloom pipelines with {} mip levels", mip_count);
+        log!("Created bloom pipelines with {} mip levels", mip_count);
 
         Ok(())
     }
@@ -556,7 +556,7 @@ impl RayTracingData {
 
         self.dof_pipeline = Some(dof_pipeline);
         self.dof_descriptor = Some(dof_descriptor);
-        log::info!("Created DOF pipeline and descriptor set");
+        log!("Created DOF pipeline and descriptor set");
 
         Ok(())
     }

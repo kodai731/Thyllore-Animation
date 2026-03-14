@@ -1,11 +1,11 @@
 use crate::asset::AssetStorage;
+use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::{ClipLibrary, HierarchyDisplayMode, ObjectIdReadback, TimelineState};
 use crate::ecs::systems::clip_track_systems::resolve_mesh_bone_id;
 use crate::ecs::systems::hierarchy_systems::{
     hierarchy_deselect_all, hierarchy_select, hierarchy_toggle_selection,
 };
 use crate::ecs::world::{Entity, MeshRef, World};
-use crate::platform::ui::CurveEditorState;
 
 pub fn find_entity_by_object_id(
     world: &World,

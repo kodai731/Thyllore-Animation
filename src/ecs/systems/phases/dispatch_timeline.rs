@@ -1,6 +1,7 @@
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::events::UIEvent;
+use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::{
     BonePoseOverride, ClipLibrary, CurveEditorBuffer, EditHistory, KeyframeCopyBuffer,
     TimelineState,
@@ -10,7 +11,6 @@ use crate::ecs::systems::{
     timeline_process_events,
 };
 use crate::ecs::world::World;
-use crate::platform::ui::CurveEditorState;
 
 use super::dispatch_spring_bone::transition_to_baked_override_if_needed;
 

@@ -8,19 +8,18 @@ use super::platform::System;
 use super::ui::{
     build_bottom_panel, build_clip_browser_window, build_curve_editor_window,
     build_hierarchy_window, build_inspector_window, build_scene_overlay, build_timeline_window,
-    build_viewport_window, draw_status_bar, handle_splitters, CurveEditorState, LayoutSnapshot,
-    SceneOverlayState, StatusBarState, TimelineInteractionState, ViewportInfo,
+    build_viewport_window, draw_status_bar, handle_splitters, LayoutSnapshot, SceneOverlayState,
+    StatusBarState, ViewportInfo,
 };
 #[cfg(debug_assertions)]
 use super::ui::{build_click_debug_overlay, DebugWindowState};
 use crate::app::{App, GUIData};
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{
-    ClipBrowserState, ClipLibrary, CurveEditorBuffer, HierarchyState, MessageLog, PanelLayout,
-    PoseLibrary, TimelineState,
+    ClipBrowserState, ClipLibrary, CurveEditorBuffer, CurveEditorState, HierarchyState, MessageLog,
+    PanelLayout, PoseLibrary, TimelineInteractionState, TimelineState,
 };
 use crate::ecs::systems::clip_track_systems::query_clip_tracks;
-use crate::ecs::systems::panel_layout_systems::panel_layout_clamp_to_display;
 use crate::ecs::systems::phases::run_event_dispatch_phase;
 use crate::ecs::{DeferredAction, UIEventQueue};
 
@@ -200,7 +199,7 @@ fn build_ui_windows(
 
     let layout_snapshot = {
         let mut panel_layout = app.data.ecs_world.resource_mut::<PanelLayout>();
-        panel_layout_clamp_to_display(&mut panel_layout, display_size[0], display_size[1]);
+        panel_layout.constrain_to_display(display_size[0], display_size[1]);
         LayoutSnapshot::from_layout(&panel_layout, display_size)
     };
 
@@ -246,7 +245,7 @@ fn build_side_panel_windows(
 ) {
     {
         let mut msg_log = app.data.ecs_world.resource_mut::<MessageLog>();
-        crate::ecs::systems::message_log_sync_from_buffer(&mut msg_log);
+        msg_log.sync_from_buffer();
     }
 
     {

@@ -9,6 +9,7 @@ use crate::debugview::gizmo::transform::TransformGizmoHandle;
 use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, TransformGizmoData};
 use crate::ecs::component::LineMesh;
 use crate::ecs::context::EcsContext;
+use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::{
     BonePoseOverride, ClipLibrary, HierarchyDisplayMode, TimelineState, TransformGizmoMode,
     TransformGizmoState,
@@ -24,7 +25,6 @@ use crate::ecs::{
     gizmo_try_select, gizmo_update_position_with_constraint, update_light_auto_target,
 };
 use crate::math::screen_to_world_ray;
-use crate::platform::ui::CurveEditorState;
 
 pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
     update_pointer_state(ctx);

@@ -1083,8 +1083,8 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::UIEventQueue>(data);
         Self::insert_default_if_missing::<HierarchyState>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::ObjectIdReadback>(data);
-        Self::insert_default_if_missing::<crate::platform::CurveEditorState>(data);
-        Self::insert_default_if_missing::<crate::platform::TimelineInteractionState>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::CurveEditorState>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::TimelineInteractionState>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::KeyframeCopyBuffer>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::CurveEditorBuffer>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::ClipBrowserState>(data);

@@ -8,16 +8,12 @@ use crate::ecs::component::{
     ClipGroupSnapshot, ClipInstanceSnapshot, ClipTrackEntry, ClipTrackSnapshot,
 };
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::{ClipDragState, ClipDragType, ClipLibrary, TimelineState};
+use crate::ecs::resource::{
+    ClipDragState, ClipDragType, ClipLibrary, CurveEditorState, TimelineInteractionState,
+    TimelineState,
+};
 
 use super::layout_snapshot::LayoutSnapshot;
-use super::CurveEditorState;
-
-#[derive(Clone, Debug, Default)]
-pub struct TimelineInteractionState {
-    pub scrubbing: bool,
-    pub dragging_clip: Option<ClipDragState>,
-}
 
 const TRACK_LABEL_WIDTH: f32 = 150.0;
 const TIME_RULER_HEIGHT: f32 = 30.0;

@@ -1,7 +1,6 @@
 use imgui::MouseButton;
 
 use crate::ecs::resource::{ActiveSplitter, DragState, PanelLayout};
-use crate::ecs::systems::panel_layout_systems::panel_layout_clamp_to_display;
 
 use super::layout_snapshot::LayoutSnapshot;
 
@@ -59,7 +58,7 @@ pub fn handle_splitters(ui: &imgui::Ui, layout: &mut PanelLayout, snap: &LayoutS
             let current_pos = if is_horiz { mouse_pos[1] } else { mouse_pos[0] };
             let delta = current_pos - drag.start_pos;
             apply_drag(layout, drag.splitter, drag.start_value, delta);
-            panel_layout_clamp_to_display(layout, snap.display_size[0], snap.display_size[1]);
+            layout.constrain_to_display(snap.display_size[0], snap.display_size[1]);
         }
     }
 

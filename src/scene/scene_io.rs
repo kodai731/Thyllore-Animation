@@ -9,13 +9,13 @@ use super::format::{
     SceneMetadata, TimelineConfig, ToneMappingState, SCENE_FORMAT_VERSION,
 };
 use crate::animation::editable::SourceClipId;
+use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::{
     AutoExposure, BloomSettings, Camera, ClipLibrary, DepthOfField, Exposure, LensEffects,
     ModelState, PanelLayout, PhysicalCameraParameters, SceneState, TimelineState, ToneMapOperator,
     ToneMapping,
 };
 use crate::ecs::world::World;
-use crate::platform::CurveEditorState;
 
 pub fn save_scene(scene_path: &Path, world: &World) -> SceneResult<()> {
     let collected = CollectedSceneState::from_world(world);

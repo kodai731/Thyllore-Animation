@@ -34,3 +34,15 @@ impl Default for MessageLog {
         }
     }
 }
+
+impl MessageLog {
+    pub fn sync_from_buffer(&mut self) {
+        let buf = MESSAGE_BUFFER
+            .lock()
+            .expect("Failed to lock message buffer");
+        self.messages = buf.snapshot();
+        self.info_count = buf.count_by_level(MessageLevel::Info);
+        self.warning_count = buf.count_by_level(MessageLevel::Warning);
+        self.error_count = buf.count_by_level(MessageLevel::Error);
+    }
+}

@@ -142,7 +142,6 @@ fn handle_redraw_requested(
     status_bar_state: &mut StatusBarState,
 ) {
     let ui = imgui.frame();
-    ui.dockspace_over_main_viewport();
 
     gui_data.monitor_value = 0.0;
 
@@ -227,8 +226,15 @@ fn build_ui_windows(
         );
     }
 
-    build_animation_editor_windows(ui, app, &layout_snapshot);
-    build_status_and_splitters(ui, app, status_bar_state, &viewport_info, &layout_snapshot);
+    build_timeline_and_fixed_overlays(ui, app, status_bar_state, &viewport_info, &layout_snapshot);
+    build_curve_editor(ui, app);
+
+    consume_needs_focus(app);
+}
+
+fn consume_needs_focus(app: &mut App) {
+    let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
+    curve_editor.needs_focus = false;
 }
 
 fn build_side_panel_windows(
@@ -332,7 +338,13 @@ fn build_viewport_and_update_state(
     info
 }
 
-fn build_animation_editor_windows(ui: &imgui::Ui, app: &mut App, layout_snapshot: &LayoutSnapshot) {
+fn build_timeline_and_fixed_overlays(
+    ui: &imgui::Ui,
+    app: &mut App,
+    status_bar_state: &mut StatusBarState,
+    viewport_info: &ViewportInfo,
+    layout_snapshot: &LayoutSnapshot,
+) {
     let clip_track_snapshot = {
         let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
         query_clip_tracks(&app.data.ecs_world, &*clip_library, &app.data.ecs_assets)
@@ -359,60 +371,15 @@ fn build_animation_editor_windows(ui: &imgui::Ui, app: &mut App, layout_snapshot
         );
     }
 
-    {
-        let timeline_state = app.data.ecs_world.resource::<TimelineState>();
-        let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
-        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
-        let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
-        let curve_buffer = app.data.ecs_world.resource::<CurveEditorBuffer>();
-        let mut pose_library = app.data.ecs_world.resource_mut::<PoseLibrary>();
+    let curve_editor_rect = {
+        let ce = app.data.ecs_world.resource::<CurveEditorState>();
+        if ce.is_open {
+            Some(ce.window_rect())
+        } else {
+            None
+        }
+    };
 
-        #[cfg(feature = "ml")]
-        let suggestion_overlays: Vec<super::ui::SuggestionOverlay> = {
-            if let Some(state) = app
-                .data
-                .ecs_world
-                .get_resource::<crate::ecs::resource::CurveSuggestionState>()
-            {
-                state
-                    .suggestions
-                    .iter()
-                    .map(|s| super::ui::SuggestionOverlay {
-                        property_type: s.property_type,
-                        time: s.predicted_time,
-                        value: s.predicted_value,
-                        tangent_in: s.tangent_in,
-                        tangent_out: s.tangent_out,
-                        confidence: s.confidence,
-                    })
-                    .collect()
-            } else {
-                Vec::new()
-            }
-        };
-        #[cfg(not(feature = "ml"))]
-        let suggestion_overlays: Vec<super::ui::SuggestionOverlay> = Vec::new();
-
-        build_curve_editor_window(
-            ui,
-            &mut *ui_events,
-            &*timeline_state,
-            &*clip_library,
-            &mut *curve_editor,
-            &*curve_buffer,
-            &suggestion_overlays,
-            &mut *pose_library,
-        );
-    }
-}
-
-fn build_status_and_splitters(
-    ui: &imgui::Ui,
-    app: &mut App,
-    status_bar_state: &mut StatusBarState,
-    viewport_info: &ViewportInfo,
-    layout_snapshot: &LayoutSnapshot,
-) {
     let delta_time = (app.start.elapsed().as_secs_f32() - app.last_update_time).max(0.001);
     let timeline_state = app.data.ecs_world.resource::<TimelineState>();
     let clip_duration = timeline_state
@@ -429,10 +396,57 @@ fn build_status_and_splitters(
         viewport_info,
         &*timeline_state,
         clip_duration,
+        curve_editor_rect,
     );
 
     let mut panel_layout = app.data.ecs_world.resource_mut::<PanelLayout>();
-    handle_splitters(ui, &mut panel_layout, layout_snapshot);
+    handle_splitters(ui, &mut panel_layout, layout_snapshot, curve_editor_rect);
+}
+
+fn build_curve_editor(ui: &imgui::Ui, app: &mut App) {
+    let timeline_state = app.data.ecs_world.resource::<TimelineState>();
+    let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+    let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+    let mut curve_editor = app.data.ecs_world.resource_mut::<CurveEditorState>();
+    let curve_buffer = app.data.ecs_world.resource::<CurveEditorBuffer>();
+    let mut pose_library = app.data.ecs_world.resource_mut::<PoseLibrary>();
+
+    #[cfg(feature = "ml")]
+    let suggestion_overlays: Vec<super::ui::SuggestionOverlay> = {
+        if let Some(state) = app
+            .data
+            .ecs_world
+            .get_resource::<crate::ecs::resource::CurveSuggestionState>()
+        {
+            state
+                .suggestions
+                .iter()
+                .map(|s| super::ui::SuggestionOverlay {
+                    property_type: s.property_type,
+                    time: s.predicted_time,
+                    value: s.predicted_value,
+                    tangent_in: s.tangent_in,
+                    tangent_out: s.tangent_out,
+                    confidence: s.confidence,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    };
+    #[cfg(not(feature = "ml"))]
+    let suggestion_overlays: Vec<super::ui::SuggestionOverlay> = Vec::new();
+
+    build_curve_editor_window(
+        ui,
+        &mut *ui_events,
+        &*timeline_state,
+        &*clip_library,
+        &mut *curve_editor,
+        &*curve_buffer,
+        &suggestion_overlays,
+        &mut *pose_library,
+    );
 }
 
 unsafe fn process_ui_events_and_render_frame(

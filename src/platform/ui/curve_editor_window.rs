@@ -121,6 +121,7 @@ pub struct CurveEditorState {
     pub is_open: bool,
     pub selected_bone_id: Option<BoneId>,
     pub visible_curves: HashSet<PropertyType>,
+    pub window_pos: [f32; 2],
     pub window_size: [f32; 2],
     pub selected_keyframes: Vec<SelectedKeyframe>,
     pub selection_anchor: Option<(PropertyType, KeyframeId)>,
@@ -141,6 +142,7 @@ pub struct CurveEditorState {
     pub context_menu_keyframe: Option<SelectedKeyframe>,
     pub context_menu_click_time: f32,
     pub context_menu_click_value: f32,
+    pub needs_focus: bool,
 }
 
 impl Default for CurveEditorState {
@@ -157,6 +159,7 @@ impl Default for CurveEditorState {
             is_open: false,
             selected_bone_id: None,
             visible_curves,
+            window_pos: [0.0, 0.0],
             window_size: [800.0, 500.0],
             selected_keyframes: Vec::new(),
             selection_anchor: None,
@@ -177,7 +180,19 @@ impl Default for CurveEditorState {
             context_menu_keyframe: None,
             context_menu_click_time: 0.0,
             context_menu_click_value: 0.0,
+            needs_focus: false,
         }
+    }
+}
+
+impl CurveEditorState {
+    pub fn window_rect(&self) -> [f32; 4] {
+        [
+            self.window_pos[0],
+            self.window_pos[1],
+            self.window_pos[0] + self.window_size[0],
+            self.window_pos[1] + self.window_size[1],
+        ]
     }
 }
 
@@ -202,46 +217,55 @@ pub fn build_curve_editor_window(
     ];
 
     let mut is_open = editor_state.is_open;
+    let should_focus = editor_state.needs_focus;
 
-    ui.window("Curve Editor")
+    let mut window = ui
+        .window("Curve Editor")
         .position(initial_pos, Condition::FirstUseEver)
         .size(editor_state.window_size, Condition::FirstUseEver)
         .size_constraints(
             [MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT],
             [display_size[0], display_size[1]],
         )
-        .opened(&mut is_open)
-        .build(|| {
-            editor_state.window_size = ui.window_size();
+        .bg_alpha(1.0)
+        .opened(&mut is_open);
 
-            let content_region = ui.content_region_avail();
+    if should_focus {
+        window = window.focused(true);
+    }
 
-            ui.child_window("left_panel")
-                .size([TRACK_LIST_WIDTH, content_region[1]])
-                .border(true)
-                .build(|| {
-                    build_track_list(ui, timeline_state, clip_library, editor_state);
-                });
+    window.build(|| {
+        editor_state.window_pos = ui.window_pos();
+        editor_state.window_size = ui.window_size();
 
-            ui.same_line();
+        let content_region = ui.content_region_avail();
 
-            let curve_view_width = content_region[0] - TRACK_LIST_WIDTH - 10.0;
-            ui.child_window("curve_view")
-                .size([curve_view_width, content_region[1]])
-                .border(true)
-                .build(|| {
-                    build_curve_view(
-                        ui,
-                        ui_events,
-                        timeline_state,
-                        clip_library,
-                        editor_state,
-                        curve_buffer,
-                        suggestion_overlays,
-                        pose_library,
-                    );
-                });
-        });
+        ui.child_window("left_panel")
+            .size([TRACK_LIST_WIDTH, content_region[1]])
+            .border(true)
+            .build(|| {
+                build_track_list(ui, timeline_state, clip_library, editor_state);
+            });
+
+        ui.same_line();
+
+        let curve_view_width = content_region[0] - TRACK_LIST_WIDTH - 10.0;
+        ui.child_window("curve_view")
+            .size([curve_view_width, content_region[1]])
+            .border(true)
+            .build(|| {
+                build_curve_view(
+                    ui,
+                    ui_events,
+                    timeline_state,
+                    clip_library,
+                    editor_state,
+                    curve_buffer,
+                    suggestion_overlays,
+                    pose_library,
+                );
+            });
+    });
 
     editor_state.is_open = is_open;
 }

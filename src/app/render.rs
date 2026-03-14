@@ -170,11 +170,7 @@ impl App {
             )?;
         }
 
-        if let (
-            Some(ref gbuffer),
-            Some(gbuffer_sampler),
-            Some(ref tonemap_descriptor),
-        ) = (
+        if let (Some(ref gbuffer), Some(gbuffer_sampler), Some(ref tonemap_descriptor)) = (
             &self.data.raytracing.gbuffer,
             self.data.raytracing.gbuffer_sampler,
             &self.data.raytracing.tonemap_descriptor,

@@ -119,14 +119,8 @@ fn test_all_asset_file_references_exist() {
 
     eprintln!("--- Asset Dependency Scan Results ---");
     eprintln!("Checked: {} unique asset paths", checked_assets.len());
-    eprintln!(
-        "Skipped (output-only): {} paths",
-        skipped_output_only.len()
-    );
-    eprintln!(
-        "Skipped (test-only): {} paths",
-        skipped_test_only.len()
-    );
+    eprintln!("Skipped (output-only): {} paths", skipped_output_only.len());
+    eprintln!("Skipped (test-only): {} paths", skipped_test_only.len());
 
     if !missing_assets.is_empty() {
         let mut msg = format!("\n{} asset file(s) missing:\n", missing_assets.len());
@@ -139,10 +133,7 @@ fn test_all_asset_file_references_exist() {
 
 #[test]
 fn test_asset_directories_exist() {
-    let required_dirs = [
-        "assets/shaders",
-        "assets/models",
-    ];
+    let required_dirs = ["assets/shaders", "assets/models"];
 
     for dir in &required_dirs {
         assert!(
@@ -174,9 +165,7 @@ fn test_no_hardcoded_asset_paths_outside_constants() {
     for rs_file in &rs_files {
         let normalized = rs_file.replace('\\', "/");
 
-        let is_allowed = allowed_files
-            .iter()
-            .any(|a| normalized.ends_with(a));
+        let is_allowed = allowed_files.iter().any(|a| normalized.ends_with(a));
         if is_allowed {
             continue;
         }
@@ -188,10 +177,16 @@ fn test_no_hardcoded_asset_paths_outside_constants() {
 
         for (line_num, line) in source.lines().enumerate() {
             if line.contains("\"assets/") {
-                if is_in_test_block(&source, source.lines().take(line_num).map(|l| l.len() + 1).sum()) {
+                if is_in_test_block(
+                    &source,
+                    source.lines().take(line_num).map(|l| l.len() + 1).sum(),
+                ) {
                     continue;
                 }
-                unexpected.push((format!("{}:{}", rs_file, line_num + 1), line.trim().to_string()));
+                unexpected.push((
+                    format!("{}:{}", rs_file, line_num + 1),
+                    line.trim().to_string(),
+                ));
             }
         }
     }

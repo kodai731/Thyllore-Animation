@@ -7,9 +7,9 @@ use super::key_bindings::{default_bindings, dispatch_keyboard_shortcut, Modifier
 use super::platform::System;
 use super::ui::{
     build_bottom_panel, build_clip_browser_window, build_curve_editor_window,
-    build_hierarchy_window, build_inspector_window, build_scene_overlay, build_status_bar_overlay,
-    build_timeline_window, build_viewport_window, handle_splitters, CurveEditorState,
-    LayoutSnapshot, SceneOverlayState, StatusBarState, TimelineInteractionState, ViewportInfo,
+    build_hierarchy_window, build_inspector_window, build_scene_overlay, build_timeline_window,
+    build_viewport_window, draw_status_bar, handle_splitters, CurveEditorState, LayoutSnapshot,
+    SceneOverlayState, StatusBarState, TimelineInteractionState, ViewportInfo,
 };
 #[cfg(debug_assertions)]
 use super::ui::{build_click_debug_overlay, DebugWindowState};
@@ -380,7 +380,7 @@ fn build_timeline_and_fixed_overlays(
             lib.get(id).map(|c| c.duration)
         })
         .unwrap_or(0.0);
-    build_status_bar_overlay(
+    draw_status_bar(
         ui,
         status_bar_state,
         delta_time,

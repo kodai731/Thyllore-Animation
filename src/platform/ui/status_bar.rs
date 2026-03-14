@@ -59,7 +59,7 @@ impl StatusBarState {
     }
 }
 
-pub fn build_status_bar_overlay(
+pub fn draw_status_bar(
     ui: &imgui::Ui,
     state: &mut StatusBarState,
     delta_time: f32,
@@ -87,19 +87,22 @@ pub fn build_status_bar_overlay(
     let vp_right = viewport_info.position[0] + viewport_info.size[0];
     let vp_bottom = viewport_info.position[1] + viewport_info.size[1];
 
-    let rect_max = [vp_right, vp_bottom];
-    let rect_min = [
-        vp_right - text_size[0] - OVERLAY_PADDING * 2.0,
-        vp_bottom - text_size[1] - OVERLAY_PADDING * 2.0,
-    ];
-    let text_pos = [rect_min[0] + OVERLAY_PADDING, rect_min[1] + OVERLAY_PADDING];
+    let window_width = text_size[0] + OVERLAY_PADDING * 2.0;
+    let window_height = text_size[1] + OVERLAY_PADDING * 2.0;
+    let window_pos = [vp_right - window_width, vp_bottom - window_height];
 
-    let draw_list = ui.get_background_draw_list();
-    draw_list
-        .add_rect(rect_min, rect_max, BG_COLOR)
-        .filled(true)
-        .build();
-    draw_list.add_text(text_pos, TEXT_COLOR, &text);
+    ui.window("##status_bar")
+        .position(window_pos, imgui::Condition::Always)
+        .size([window_width, window_height], imgui::Condition::Always)
+        .no_decoration()
+        .no_nav()
+        .mouse_inputs(false)
+        .bg_alpha(BG_COLOR[3])
+        .focus_on_appearing(false)
+        .save_settings(false)
+        .build(|| {
+            ui.text_colored(TEXT_COLOR, &text);
+        });
 }
 
 fn read_rss_mb() -> f32 {

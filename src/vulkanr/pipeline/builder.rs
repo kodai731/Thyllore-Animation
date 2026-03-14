@@ -245,113 +245,8 @@ impl PipelineBuilder {
             .name(b"main\0");
         let shader_stages = [vert_stage, frag_stage];
 
-        // Vertex input state
-        let (binding_descriptions, attribute_descriptions) = match self.vertex_input {
-            VertexInputConfig::Standard => {
-                let bindings = vec![Vertex::binding_description()];
-                let attributes = Vertex::attribute_descriptions().to_vec();
-                (bindings, attributes)
-            }
-            VertexInputConfig::ImGui => {
-                let bindings = vec![vk::VertexInputBindingDescription::builder()
-                    .binding(0)
-                    .stride(std::mem::size_of::<imgui::DrawVert>() as u32)
-                    .input_rate(vk::VertexInputRate::VERTEX)
-                    .build()];
-                let attributes = vec![
-                    vk::VertexInputAttributeDescription::builder()
-                        .binding(0)
-                        .location(0)
-                        .format(vk::Format::R32G32_SFLOAT)
-                        .offset(0)
-                        .build(),
-                    vk::VertexInputAttributeDescription::builder()
-                        .binding(0)
-                        .location(1)
-                        .format(vk::Format::R32G32_SFLOAT)
-                        .offset(8)
-                        .build(),
-                    vk::VertexInputAttributeDescription::builder()
-                        .binding(0)
-                        .location(2)
-                        .format(vk::Format::R8G8B8A8_UNORM)
-                        .offset(16)
-                        .build(),
-                ];
-                (bindings, attributes)
-            }
-            VertexInputConfig::Gizmo => {
-                let bindings = vec![vk::VertexInputBindingDescription::builder()
-                    .binding(0)
-                    .stride(std::mem::size_of::<[f32; 6]>() as u32)
-                    .input_rate(vk::VertexInputRate::VERTEX)
-                    .build()];
-                let attributes = vec![
-                    vk::VertexInputAttributeDescription::builder()
-                        .binding(0)
-                        .location(0)
-                        .format(vk::Format::R32G32B32_SFLOAT)
-                        .offset(0)
-                        .build(),
-                    vk::VertexInputAttributeDescription::builder()
-                        .binding(0)
-                        .location(1)
-                        .format(vk::Format::R32G32B32_SFLOAT)
-                        .offset(std::mem::size_of::<[f32; 3]>() as u32)
-                        .build(),
-                ];
-                (bindings, attributes)
-            }
-            VertexInputConfig::Billboard => {
-                let bindings = vec![vk::VertexInputBindingDescription::builder()
-                    .binding(0)
-                    .stride(std::mem::size_of::<[f32; 5]>() as u32)
-                    .input_rate(vk::VertexInputRate::VERTEX)
-                    .build()];
-                let attributes = vec![
-                    vk::VertexInputAttributeDescription::builder()
-                        .binding(0)
-                        .location(0)
-                        .format(vk::Format::R32G32B32_SFLOAT)
-                        .offset(0)
-                        .build(),
-                    vk::VertexInputAttributeDescription::builder()
-                        .binding(0)
-                        .location(1)
-                        .format(vk::Format::R32G32_SFLOAT)
-                        .offset(std::mem::size_of::<[f32; 3]>() as u32)
-                        .build(),
-                ];
-                (bindings, attributes)
-            }
-            VertexInputConfig::FromLayout(layout) => {
-                let bindings = vec![vk::VertexInputBindingDescription::builder()
-                    .binding(0)
-                    .stride(layout.stride)
-                    .input_rate(vk::VertexInputRate::VERTEX)
-                    .build()];
-
-                let mut attributes = Vec::new();
-                let mut offset = 0u32;
-                for attr in &layout.attributes {
-                    attributes.push(
-                        vk::VertexInputAttributeDescription::builder()
-                            .binding(0)
-                            .location(attr.shader_location)
-                            .format(vertex_format_to_vk(attr.format))
-                            .offset(offset)
-                            .build(),
-                    );
-                    offset += attr.format.size();
-                }
-
-                (bindings, attributes)
-            }
-            VertexInputConfig::Custom {
-                bindings,
-                attributes,
-            } => (bindings, attributes),
-        };
+        let (binding_descriptions, attribute_descriptions) =
+            resolve_vertex_input(self.vertex_input);
 
         let vertex_input_state = vk::PipelineVertexInputStateCreateInfo::builder()
             .vertex_binding_descriptions(&binding_descriptions)
@@ -726,4 +621,121 @@ unsafe fn create_shader_module(rrdevice: &RRDevice, bytecode: &[u8]) -> Result<v
         .code(bytecode.code());
 
     Ok(rrdevice.device.create_shader_module(&info, None)?)
+}
+
+type VertexInputDescriptions = (
+    Vec<vk::VertexInputBindingDescription>,
+    Vec<vk::VertexInputAttributeDescription>,
+);
+
+fn resolve_vertex_input(config: VertexInputConfig) -> VertexInputDescriptions {
+    match config {
+        VertexInputConfig::Standard => {
+            let bindings = vec![Vertex::binding_description()];
+            let attributes = Vertex::attribute_descriptions().to_vec();
+            (bindings, attributes)
+        }
+        VertexInputConfig::ImGui => resolve_imgui_vertex_input(),
+        VertexInputConfig::Gizmo => resolve_simple_vertex_input(
+            std::mem::size_of::<[f32; 6]>() as u32,
+            &[
+                (vk::Format::R32G32B32_SFLOAT, 0),
+                (
+                    vk::Format::R32G32B32_SFLOAT,
+                    std::mem::size_of::<[f32; 3]>() as u32,
+                ),
+            ],
+        ),
+        VertexInputConfig::Billboard => resolve_simple_vertex_input(
+            std::mem::size_of::<[f32; 5]>() as u32,
+            &[
+                (vk::Format::R32G32B32_SFLOAT, 0),
+                (
+                    vk::Format::R32G32_SFLOAT,
+                    std::mem::size_of::<[f32; 3]>() as u32,
+                ),
+            ],
+        ),
+        VertexInputConfig::FromLayout(layout) => resolve_layout_vertex_input(&layout),
+        VertexInputConfig::Custom {
+            bindings,
+            attributes,
+        } => (bindings, attributes),
+    }
+}
+
+fn resolve_imgui_vertex_input() -> VertexInputDescriptions {
+    let bindings = vec![vk::VertexInputBindingDescription::builder()
+        .binding(0)
+        .stride(std::mem::size_of::<imgui::DrawVert>() as u32)
+        .input_rate(vk::VertexInputRate::VERTEX)
+        .build()];
+    let attributes = vec![
+        vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(0)
+            .format(vk::Format::R32G32_SFLOAT)
+            .offset(0)
+            .build(),
+        vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(1)
+            .format(vk::Format::R32G32_SFLOAT)
+            .offset(8)
+            .build(),
+        vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(2)
+            .format(vk::Format::R8G8B8A8_UNORM)
+            .offset(16)
+            .build(),
+    ];
+    (bindings, attributes)
+}
+
+fn resolve_simple_vertex_input(
+    stride: u32,
+    attrs: &[(vk::Format, u32)],
+) -> VertexInputDescriptions {
+    let bindings = vec![vk::VertexInputBindingDescription::builder()
+        .binding(0)
+        .stride(stride)
+        .input_rate(vk::VertexInputRate::VERTEX)
+        .build()];
+    let attributes = attrs
+        .iter()
+        .enumerate()
+        .map(|(i, (format, offset))| {
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(i as u32)
+                .format(*format)
+                .offset(*offset)
+                .build()
+        })
+        .collect();
+    (bindings, attributes)
+}
+
+fn resolve_layout_vertex_input(layout: &VertexLayout) -> VertexInputDescriptions {
+    let bindings = vec![vk::VertexInputBindingDescription::builder()
+        .binding(0)
+        .stride(layout.stride)
+        .input_rate(vk::VertexInputRate::VERTEX)
+        .build()];
+
+    let mut attributes = Vec::new();
+    let mut offset = 0u32;
+    for attr in &layout.attributes {
+        attributes.push(
+            vk::VertexInputAttributeDescription::builder()
+                .binding(0)
+                .location(attr.shader_location)
+                .format(vertex_format_to_vk(attr.format))
+                .offset(offset)
+                .build(),
+        );
+        offset += attr.format.size();
+    }
+    (bindings, attributes)
 }

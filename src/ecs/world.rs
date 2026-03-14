@@ -148,8 +148,36 @@ impl GlobalTransform {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct Visible(pub bool);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Visibility {
+    Shown,
+    Hidden,
+}
+
+impl Visibility {
+    pub fn is_visible(self) -> bool {
+        self == Visibility::Shown
+    }
+}
+
+impl From<bool> for Visibility {
+    fn from(visible: bool) -> Self {
+        if visible {
+            Visibility::Shown
+        } else {
+            Visibility::Hidden
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Visible(pub Visibility);
+
+impl Default for Visible {
+    fn default() -> Self {
+        Self(Visibility::Shown)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct Parent(pub Entity);
@@ -424,7 +452,7 @@ impl World {
         self.iter_components::<MeshRef>()
             .filter(|(e, _)| {
                 self.get_component::<Visible>(*e)
-                    .map(|v| v.0)
+                    .map(|v| v.0.is_visible())
                     .unwrap_or(true)
             })
             .map(|(e, _)| e)
@@ -530,7 +558,8 @@ impl<'a> EntityBuilder<'a> {
     }
 
     pub fn with_visible(self, visible: bool) -> Self {
-        self.world.insert_component(self.entity, Visible(visible));
+        self.world
+            .insert_component(self.entity, Visible(Visibility::from(visible)));
         self
     }
 

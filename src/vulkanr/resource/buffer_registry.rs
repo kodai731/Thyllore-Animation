@@ -463,7 +463,22 @@ impl GpuBufferRegistry {
             is_host_visible: false,
         })
     }
+}
 
+impl Drop for GpuBufferRegistry {
+    fn drop(&mut self) {
+        let leaked_vertex = self.vertex_buffers.iter().any(|b| b.is_some());
+        let leaked_index = self.index_buffers.iter().any(|b| b.is_some());
+        debug_assert!(
+            !leaked_vertex && !leaked_index,
+            "GpuBufferRegistry dropped without calling destroy_all(): {} vertex, {} index buffers leaked",
+            self.vertex_buffers.iter().filter(|b| b.is_some()).count(),
+            self.index_buffers.iter().filter(|b| b.is_some()).count(),
+        );
+    }
+}
+
+impl GpuBufferRegistry {
     unsafe fn create_host_visible_buffer<T>(
         &self,
         instance: &Instance,

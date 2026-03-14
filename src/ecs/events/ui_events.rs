@@ -18,6 +18,7 @@ use crate::ecs::resource::{
     TransformGizmoState,
 };
 use crate::ecs::world::Entity;
+use crate::ecs::world::Visibility;
 
 #[derive(Clone, Debug)]
 pub enum UIEvent {
@@ -53,7 +54,7 @@ pub enum UIEvent {
     ExpandBone(BoneId),
     CollapseBone(BoneId),
 
-    SetEntityVisible(Entity, bool),
+    SetEntityVisible(Entity, Visibility),
     SetEntityTranslation(Entity, Vector3<f32>),
     SetEntityRotation(Entity, Quaternion<f32>),
     SetEntityScale(Entity, Vector3<f32>),

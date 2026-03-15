@@ -144,7 +144,7 @@ impl<'a> ToneMapPass<'a> {
                 let op = if tm.enabled { tm.operator as i32 } else { 0 };
                 (op, tm.gamma)
             }
-            None => (0, 2.2),
+            None => (0, 1.0),
         };
 
         let exposure_value = self

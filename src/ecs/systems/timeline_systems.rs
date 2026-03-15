@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
 use crate::animation::editable::{
-    apply_tangent_by_type, clip_recalculate_duration, curve_recalculate_auto_tangent_at,
-    curve_remove_keyframe, curve_set_keyframe_time, initialize_weighted_handle_lengths,
-    InterpolationType, KeyframeId, PropertyCurve, PropertyType, SourceClipId, TangentWeightMode,
+    apply_tangent_by_type, clip_add_keyframe, clip_recalculate_duration,
+    curve_recalculate_auto_tangent_at, curve_remove_keyframe, curve_set_keyframe_time,
+    initialize_weighted_handle_lengths, InterpolationType, KeyframeId, PropertyCurve, PropertyType,
+    SourceClipId, TangentWeightMode,
 };
 use crate::animation::{BoneId, BoneLocalPose};
 use crate::ecs::component::ClipSchedule;
@@ -136,7 +137,7 @@ fn dispatch_keyframe_edit_events(
                 value,
             } => {
                 if let Some(clip) = clip_library.get_mut(clip_id) {
-                    clip.add_keyframe(*bone_id, *property_type, *time, *value);
+                    clip_add_keyframe(clip, *bone_id, *property_type, *time, *value);
                     clip_recalculate_duration(clip);
                     clip_modified = true;
                 }
@@ -686,15 +687,15 @@ pub fn process_bone_set_key(
 
         let t = &local_pose.translation;
         let s = &local_pose.scale;
-        clip.add_keyframe(bone_id, PropertyType::TranslationX, time, t.x);
-        clip.add_keyframe(bone_id, PropertyType::TranslationY, time, t.y);
-        clip.add_keyframe(bone_id, PropertyType::TranslationZ, time, t.z);
-        clip.add_keyframe(bone_id, PropertyType::RotationX, time, euler.x);
-        clip.add_keyframe(bone_id, PropertyType::RotationY, time, euler.y);
-        clip.add_keyframe(bone_id, PropertyType::RotationZ, time, euler.z);
-        clip.add_keyframe(bone_id, PropertyType::ScaleX, time, s.x);
-        clip.add_keyframe(bone_id, PropertyType::ScaleY, time, s.y);
-        clip.add_keyframe(bone_id, PropertyType::ScaleZ, time, s.z);
+        clip_add_keyframe(clip, bone_id, PropertyType::TranslationX, time, t.x);
+        clip_add_keyframe(clip, bone_id, PropertyType::TranslationY, time, t.y);
+        clip_add_keyframe(clip, bone_id, PropertyType::TranslationZ, time, t.z);
+        clip_add_keyframe(clip, bone_id, PropertyType::RotationX, time, euler.x);
+        clip_add_keyframe(clip, bone_id, PropertyType::RotationY, time, euler.y);
+        clip_add_keyframe(clip, bone_id, PropertyType::RotationZ, time, euler.z);
+        clip_add_keyframe(clip, bone_id, PropertyType::ScaleX, time, s.x);
+        clip_add_keyframe(clip, bone_id, PropertyType::ScaleY, time, s.y);
+        clip_add_keyframe(clip, bone_id, PropertyType::ScaleZ, time, s.z);
     }
 
     clip_recalculate_duration(clip);
@@ -715,15 +716,12 @@ mod tests {
         let bone_id = 0;
         clip.add_track(bone_id, "bone0".to_string());
 
-        let kf1_id = clip
-            .add_keyframe(bone_id, PropertyType::TranslationX, 0.5, 1.0)
-            .unwrap();
-        let kf2_id = clip
-            .add_keyframe(bone_id, PropertyType::TranslationX, 1.0, 2.0)
-            .unwrap();
-        let kf3_id = clip
-            .add_keyframe(bone_id, PropertyType::TranslationY, 0.8, 3.0)
-            .unwrap();
+        let kf1_id =
+            clip_add_keyframe(&mut clip, bone_id, PropertyType::TranslationX, 0.5, 1.0).unwrap();
+        let kf2_id =
+            clip_add_keyframe(&mut clip, bone_id, PropertyType::TranslationX, 1.0, 2.0).unwrap();
+        let kf3_id =
+            clip_add_keyframe(&mut clip, bone_id, PropertyType::TranslationY, 0.8, 3.0).unwrap();
         clip_recalculate_duration(&mut clip);
 
         let mut library = ClipLibrary::new();

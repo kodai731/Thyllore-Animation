@@ -1,8 +1,10 @@
-use super::super::components::curve::PropertyCurve;
+use super::super::components::clip::EditableAnimationClip;
+use super::super::components::curve::{PropertyCurve, PropertyType};
 use super::super::components::keyframe::{
     BezierHandle, EditableKeyframe, InterpolationType, KeyframeId,
 };
 use super::tangent::{apply_auto_tangent, sample_bezier};
+use crate::animation::BoneId;
 
 pub fn curve_add_keyframe(curve: &mut PropertyCurve, time: f32, value: f32) -> KeyframeId {
     let id = curve.allocate_keyframe_id();
@@ -118,6 +120,17 @@ pub fn curve_recalculate_auto_tangents(curve: &mut PropertyCurve) {
     for i in 0..curve.keyframes.len() {
         apply_auto_tangent(&mut curve.keyframes, i);
     }
+}
+
+pub fn clip_add_keyframe(
+    clip: &mut EditableAnimationClip,
+    bone_id: BoneId,
+    property_type: PropertyType,
+    time: f32,
+    value: f32,
+) -> Option<KeyframeId> {
+    clip.get_track_mut(bone_id)
+        .map(|track| curve_add_keyframe(track.get_curve_mut(property_type), time, value))
 }
 
 pub fn curve_recalculate_auto_tangent_at(curve: &mut PropertyCurve, keyframe_id: KeyframeId) {

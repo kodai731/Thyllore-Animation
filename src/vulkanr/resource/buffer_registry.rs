@@ -465,17 +465,137 @@ impl GpuBufferRegistry {
     }
 }
 
+impl GpuBufferRegistry {
+    pub fn active_vertex_count(&self) -> usize {
+        self.vertex_buffers.iter().filter(|b| b.is_some()).count()
+    }
+
+    pub fn active_index_count(&self) -> usize {
+        self.index_buffers.iter().filter(|b| b.is_some()).count()
+    }
+
+    pub fn has_leaked_buffers(&self) -> bool {
+        self.active_vertex_count() > 0 || self.active_index_count() > 0
+    }
+
+    #[cfg(test)]
+    fn insert_dummy_vertex(&mut self) {
+        self.vertex_buffers.push(Some(GpuBuffer {
+            buffer: vk::Buffer::null(),
+            memory: vk::DeviceMemory::null(),
+            size: 0,
+            is_host_visible: false,
+        }));
+    }
+
+    #[cfg(test)]
+    fn insert_dummy_index(&mut self) {
+        self.index_buffers.push(Some(GpuBuffer {
+            buffer: vk::Buffer::null(),
+            memory: vk::DeviceMemory::null(),
+            size: 0,
+            is_host_visible: false,
+        }));
+    }
+
+    pub fn clear_tracking(&mut self) {
+        self.vertex_buffers.clear();
+        self.index_buffers.clear();
+        self.free_vertex_slots.clear();
+        self.free_index_slots.clear();
+    }
+}
+
 impl Drop for GpuBufferRegistry {
     fn drop(&mut self) {
-        let vertex_count = self.vertex_buffers.iter().filter(|b| b.is_some()).count();
-        let index_count = self.index_buffers.iter().filter(|b| b.is_some()).count();
-        if vertex_count > 0 || index_count > 0 {
+        if self.has_leaked_buffers() {
             eprintln!(
                 "[WARN] GpuBufferRegistry dropped without calling destroy_all(): {} vertex, {} index buffers leaked",
-                vertex_count,
-                index_count,
+                self.active_vertex_count(),
+                self.active_index_count(),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_empty_registry_no_leak() {
+        let registry = GpuBufferRegistry::new();
+        assert!(!registry.has_leaked_buffers());
+        assert_eq!(registry.active_vertex_count(), 0);
+        assert_eq!(registry.active_index_count(), 0);
+    }
+
+    #[test]
+    fn test_registry_with_buffers_reports_leak() {
+        let mut registry = GpuBufferRegistry::new();
+        registry.insert_dummy_vertex();
+        registry.insert_dummy_index();
+
+        assert!(registry.has_leaked_buffers());
+        assert_eq!(registry.active_vertex_count(), 1);
+        assert_eq!(registry.active_index_count(), 1);
+    }
+
+    #[test]
+    fn test_clear_tracking_prevents_leak() {
+        let mut registry = GpuBufferRegistry::new();
+        registry.insert_dummy_vertex();
+        registry.insert_dummy_vertex();
+        registry.insert_dummy_index();
+
+        assert!(registry.has_leaked_buffers());
+
+        registry.clear_tracking();
+
+        assert!(!registry.has_leaked_buffers());
+        assert_eq!(registry.active_vertex_count(), 0);
+        assert_eq!(registry.active_index_count(), 0);
+    }
+
+    #[test]
+    fn test_removed_slot_not_counted_as_leak() {
+        let mut registry = GpuBufferRegistry::new();
+        registry.insert_dummy_vertex();
+        registry.insert_dummy_vertex();
+        registry.insert_dummy_index();
+
+        registry.vertex_buffers[0] = None;
+
+        assert_eq!(registry.active_vertex_count(), 1);
+        assert_eq!(registry.active_index_count(), 1);
+        assert!(registry.has_leaked_buffers());
+
+        registry.vertex_buffers[1] = None;
+        registry.index_buffers[0] = None;
+
+        assert!(!registry.has_leaked_buffers());
+    }
+
+    #[test]
+    fn test_destroy_all_clears_buffers_and_free_slots() {
+        let mut registry = GpuBufferRegistry::new();
+
+        for _ in 0..10 {
+            registry.insert_dummy_vertex();
+            registry.insert_dummy_index();
+        }
+
+        registry.free_vertex_slots.push(0);
+        registry.free_index_slots.push(0);
+
+        assert_eq!(registry.active_vertex_count(), 10);
+        assert_eq!(registry.active_index_count(), 10);
+
+        registry.clear_tracking();
+
+        assert!(!registry.has_leaked_buffers());
+        assert!(registry.free_vertex_slots.is_empty());
+        assert!(registry.free_index_slots.is_empty());
     }
 }
 

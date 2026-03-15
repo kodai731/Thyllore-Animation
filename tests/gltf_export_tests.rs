@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use rust_rendering::animation::editable::{EditableAnimationClip, PropertyType};
+use rust_rendering::animation::editable::{clip_add_keyframe, EditableAnimationClip, PropertyType};
 use rust_rendering::animation::{AnimationClip, Skeleton};
 
 #[test]
@@ -439,12 +439,12 @@ fn build_test_clip_translation_only(skeleton: &Skeleton) -> EditableAnimationCli
 
     for bone in &skeleton.bones {
         clip.add_track(bone.id, bone.name.clone());
-        clip.add_keyframe(bone.id, PropertyType::TranslationX, 0.0, 0.0);
-        clip.add_keyframe(bone.id, PropertyType::TranslationX, 1.0, 1.0);
-        clip.add_keyframe(bone.id, PropertyType::TranslationY, 0.0, 0.0);
-        clip.add_keyframe(bone.id, PropertyType::TranslationY, 1.0, 0.0);
-        clip.add_keyframe(bone.id, PropertyType::TranslationZ, 0.0, 0.0);
-        clip.add_keyframe(bone.id, PropertyType::TranslationZ, 1.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationX, 0.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationX, 1.0, 1.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationY, 0.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationY, 1.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationZ, 0.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationZ, 1.0, 0.0);
     }
 
     clip
@@ -457,34 +457,34 @@ fn build_roundtrip_test_clip(skeleton: &Skeleton) -> EditableAnimationClip {
     for bone in &skeleton.bones {
         clip.add_track(bone.id, bone.name.clone());
 
-        clip.add_keyframe(bone.id, PropertyType::TranslationX, 0.0, 0.0);
-        clip.add_keyframe(bone.id, PropertyType::TranslationX, 0.5, 0.5);
-        clip.add_keyframe(bone.id, PropertyType::TranslationX, 1.0, 1.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationX, 0.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationX, 0.5, 0.5);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationX, 1.0, 1.0);
 
-        clip.add_keyframe(bone.id, PropertyType::TranslationY, 0.0, 0.0);
-        clip.add_keyframe(bone.id, PropertyType::TranslationY, 0.5, 0.25);
-        clip.add_keyframe(bone.id, PropertyType::TranslationY, 1.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationY, 0.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationY, 0.5, 0.25);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationY, 1.0, 0.0);
 
-        clip.add_keyframe(bone.id, PropertyType::TranslationZ, 0.0, 0.0);
-        clip.add_keyframe(bone.id, PropertyType::TranslationZ, 1.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationZ, 0.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationZ, 1.0, 0.0);
 
-        clip.add_keyframe(bone.id, PropertyType::RotationX, 0.0, 0.0);
-        clip.add_keyframe(bone.id, PropertyType::RotationX, 1.0, 15.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::RotationX, 0.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::RotationX, 1.0, 15.0);
 
-        clip.add_keyframe(bone.id, PropertyType::RotationY, 0.0, 0.0);
-        clip.add_keyframe(bone.id, PropertyType::RotationY, 1.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::RotationY, 0.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::RotationY, 1.0, 0.0);
 
-        clip.add_keyframe(bone.id, PropertyType::RotationZ, 0.0, 0.0);
-        clip.add_keyframe(bone.id, PropertyType::RotationZ, 1.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::RotationZ, 0.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::RotationZ, 1.0, 0.0);
 
-        clip.add_keyframe(bone.id, PropertyType::ScaleX, 0.0, 1.0);
-        clip.add_keyframe(bone.id, PropertyType::ScaleX, 1.0, 1.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::ScaleX, 0.0, 1.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::ScaleX, 1.0, 1.0);
 
-        clip.add_keyframe(bone.id, PropertyType::ScaleY, 0.0, 1.0);
-        clip.add_keyframe(bone.id, PropertyType::ScaleY, 1.0, 1.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::ScaleY, 0.0, 1.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::ScaleY, 1.0, 1.0);
 
-        clip.add_keyframe(bone.id, PropertyType::ScaleZ, 0.0, 1.0);
-        clip.add_keyframe(bone.id, PropertyType::ScaleZ, 1.0, 1.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::ScaleZ, 0.0, 1.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::ScaleZ, 1.0, 1.0);
     }
 
     clip
@@ -497,34 +497,34 @@ fn build_skeletal_roundtrip_test_clip(skeleton: &Skeleton) -> EditableAnimationC
     for bone in &skeleton.bones {
         clip.add_track(bone.id, bone.name.clone());
 
-        clip.add_keyframe(bone.id, PropertyType::TranslationX, 0.0, 0.0);
-        clip.add_keyframe(bone.id, PropertyType::TranslationX, 1.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationX, 0.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationX, 1.0, 0.0);
 
-        clip.add_keyframe(bone.id, PropertyType::TranslationY, 0.0, 0.0);
-        clip.add_keyframe(bone.id, PropertyType::TranslationY, 1.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationY, 0.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationY, 1.0, 0.0);
 
-        clip.add_keyframe(bone.id, PropertyType::TranslationZ, 0.0, 0.0);
-        clip.add_keyframe(bone.id, PropertyType::TranslationZ, 1.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationZ, 0.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::TranslationZ, 1.0, 0.0);
 
-        clip.add_keyframe(bone.id, PropertyType::RotationX, 0.0, 0.0);
-        clip.add_keyframe(bone.id, PropertyType::RotationX, 0.5, 10.0);
-        clip.add_keyframe(bone.id, PropertyType::RotationX, 1.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::RotationX, 0.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::RotationX, 0.5, 10.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::RotationX, 1.0, 0.0);
 
-        clip.add_keyframe(bone.id, PropertyType::RotationY, 0.0, 0.0);
-        clip.add_keyframe(bone.id, PropertyType::RotationY, 0.5, 5.0);
-        clip.add_keyframe(bone.id, PropertyType::RotationY, 1.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::RotationY, 0.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::RotationY, 0.5, 5.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::RotationY, 1.0, 0.0);
 
-        clip.add_keyframe(bone.id, PropertyType::RotationZ, 0.0, 0.0);
-        clip.add_keyframe(bone.id, PropertyType::RotationZ, 1.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::RotationZ, 0.0, 0.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::RotationZ, 1.0, 0.0);
 
-        clip.add_keyframe(bone.id, PropertyType::ScaleX, 0.0, 1.0);
-        clip.add_keyframe(bone.id, PropertyType::ScaleX, 1.0, 1.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::ScaleX, 0.0, 1.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::ScaleX, 1.0, 1.0);
 
-        clip.add_keyframe(bone.id, PropertyType::ScaleY, 0.0, 1.0);
-        clip.add_keyframe(bone.id, PropertyType::ScaleY, 1.0, 1.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::ScaleY, 0.0, 1.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::ScaleY, 1.0, 1.0);
 
-        clip.add_keyframe(bone.id, PropertyType::ScaleZ, 0.0, 1.0);
-        clip.add_keyframe(bone.id, PropertyType::ScaleZ, 1.0, 1.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::ScaleZ, 0.0, 1.0);
+        clip_add_keyframe(&mut clip, bone.id, PropertyType::ScaleZ, 1.0, 1.0);
     }
 
     clip

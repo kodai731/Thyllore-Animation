@@ -1,5 +1,6 @@
 pub mod billboard;
 pub mod cleanup;
+pub mod color_test_quad;
 pub mod data;
 pub mod frame_context;
 pub mod graphics_resource;

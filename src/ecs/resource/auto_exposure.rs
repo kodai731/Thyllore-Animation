@@ -16,8 +16,8 @@ impl Default for AutoExposure {
     fn default() -> Self {
         Self {
             enabled: true,
-            min_ev: -4.0,
-            max_ev: 16.0,
+            min_ev: 0.0,
+            max_ev: 12.0,
             adaptation_speed_up: 3.0,
             adaptation_speed_down: 1.0,
             low_percent: 0.1,

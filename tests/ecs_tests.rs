@@ -1,13 +1,13 @@
-use rust_rendering::ecs::registry::ComponentRegistry;
-use rust_rendering::ecs::storage::{Components, SparseSet};
-use rust_rendering::ecs::world::{Entity, Name, Resources, Transform, Visibility, Visible, World};
-use rust_rendering::render::{BufferHandle, IndexBufferHandle, VertexBufferHandle};
+use thyllore_animation::ecs::registry::ComponentRegistry;
+use thyllore_animation::ecs::storage::{Components, SparseSet};
+use thyllore_animation::ecs::world::{Entity, Name, Resources, Transform, Visibility, Visible, World};
+use thyllore_animation::render::{BufferHandle, IndexBufferHandle, VertexBufferHandle};
 
 mod release_build_tests {
-    use rust_rendering::ecs::resource::GridMeshData;
-    use rust_rendering::ecs::systems::create_grid_mesh;
-    use rust_rendering::ecs::world::World;
-    use rust_rendering::loader::ModelLoadResult;
+    use thyllore_animation::ecs::resource::GridMeshData;
+    use thyllore_animation::ecs::systems::create_grid_mesh;
+    use thyllore_animation::ecs::world::World;
+    use thyllore_animation::loader::ModelLoadResult;
 
     #[allow(deprecated)]
     #[test]
@@ -39,7 +39,7 @@ mod release_build_tests {
             return;
         }
 
-        let gltf_result = unsafe { rust_rendering::loader::gltf::load_gltf_file(path) };
+        let gltf_result = unsafe { thyllore_animation::loader::gltf::load_gltf_file(path) };
         assert!(gltf_result.is_ok(), "glTF load should succeed");
 
         let result = ModelLoadResult::from_gltf(gltf_result.unwrap());
@@ -55,7 +55,7 @@ mod release_build_tests {
             return;
         }
 
-        let gltf_result = unsafe { rust_rendering::loader::gltf::load_gltf_file(path) };
+        let gltf_result = unsafe { thyllore_animation::loader::gltf::load_gltf_file(path) };
         assert!(gltf_result.is_ok(), "glTF load should succeed");
 
         let result = ModelLoadResult::from_gltf(gltf_result.unwrap());
@@ -98,7 +98,7 @@ mod release_build_tests {
         }
     }
 
-    use rust_rendering::vulkanr;
+    use thyllore_animation::vulkanr;
 
     unsafe fn create_headless_test_device(
     ) -> Option<(vulkanr::Entry, vulkanr::Instance, vulkanr::RRDevice)> {
@@ -782,14 +782,14 @@ mod components_tests {
 
 mod constraint_solver_tests {
     use cgmath::{assert_relative_eq, InnerSpace, Quaternion, Vector3};
-    use rust_rendering::animation::{
+    use thyllore_animation::animation::{
         BoneLocalPose, ConstraintType, IkConstraintData, PositionConstraintData,
         RotationConstraintData, ScaleConstraintData, Skeleton, SkeletonPose, PRIORITY_IK,
         PRIORITY_POSITION, PRIORITY_ROTATION, PRIORITY_SCALE,
     };
-    use rust_rendering::ecs::component::ConstraintSet;
-    use rust_rendering::ecs::systems::apply_constraints;
-    use rust_rendering::ecs::systems::constraint_set_add;
+    use thyllore_animation::ecs::component::ConstraintSet;
+    use thyllore_animation::ecs::systems::apply_constraints;
+    use thyllore_animation::ecs::systems::constraint_set_add;
 
     fn create_chain_skeleton(bone_count: u32, bone_length: f32) -> Skeleton {
         let mut skeleton = Skeleton::new("test_chain");
@@ -808,7 +808,7 @@ mod constraint_solver_tests {
     }
 
     fn create_rest_pose(skeleton: &Skeleton) -> SkeletonPose {
-        use rust_rendering::animation::decompose_transform;
+        use thyllore_animation::animation::decompose_transform;
         let bone_poses = skeleton
             .bones
             .iter()
@@ -1134,31 +1134,31 @@ mod transform_tests {
 }
 
 mod message_log_tests {
-    use rust_rendering::ecs::resource::{MessageFilter, MessageLog};
-    use rust_rendering::ecs::systems::message_log_systems::{
+    use thyllore_animation::ecs::resource::{MessageFilter, MessageLog};
+    use thyllore_animation::ecs::systems::message_log_systems::{
         message_log_clear_buffer, message_log_filtered_messages,
     };
-    use rust_rendering::logger::message_buffer::{MessageBuffer, MessageLevel};
+    use thyllore_animation::logger::message_buffer::{MessageBuffer, MessageLevel};
 
     fn make_log_with_messages() -> MessageLog {
         let mut log = MessageLog::default();
         log.messages = vec![
-            rust_rendering::logger::message_buffer::Message {
+            thyllore_animation::logger::message_buffer::Message {
                 level: MessageLevel::Info,
                 text: "Model loaded".to_string(),
                 timestamp: "12:00:00".to_string(),
             },
-            rust_rendering::logger::message_buffer::Message {
+            thyllore_animation::logger::message_buffer::Message {
                 level: MessageLevel::Warning,
                 text: "Missing bone: Spine2".to_string(),
                 timestamp: "12:00:01".to_string(),
             },
-            rust_rendering::logger::message_buffer::Message {
+            thyllore_animation::logger::message_buffer::Message {
                 level: MessageLevel::Error,
                 text: "Failed to load texture".to_string(),
                 timestamp: "12:00:02".to_string(),
             },
-            rust_rendering::logger::message_buffer::Message {
+            thyllore_animation::logger::message_buffer::Message {
                 level: MessageLevel::Info,
                 text: "Screenshot saved".to_string(),
                 timestamp: "12:00:03".to_string(),

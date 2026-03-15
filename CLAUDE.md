@@ -28,7 +28,7 @@ This is a Rust-based Vulkan rendering engine with support for:
 ```bash
 cargo build                                             # Standard build
 cargo test                                              # Run all tests
-$env:RUST_LOG="debug"; cargo run --bin rust-rendering   # Run with debug logging
+$env:RUST_LOG="debug"; cargo run --bin thyllore-animation   # Run with debug logging
 ```
 
 **Build with tests (recommended)**:
@@ -94,6 +94,11 @@ Do NOT resolve relative paths manually — always use the absolute paths from `.
 MUST resolve `${DocumentPath}` by reading `.claude/local/paths.md` before writing any file.
 Do NOT use relative paths like `../SharedData/` — agents may have different working directories, causing files to be
 saved in wrong locations.
+
+- You MUST name files with date prefix, like
+```
+20260315_new_file.md
+```
 
 ## Issue History
 

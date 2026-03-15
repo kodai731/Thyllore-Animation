@@ -6,11 +6,11 @@
 )]
 
 #[macro_use]
-extern crate rust_rendering;
+extern crate thyllore_animation;
 
-use rust_rendering::app::init::instance::cleanup_old_screenshots;
-use rust_rendering::app::{App, GUIData};
-use rust_rendering::platform;
+use thyllore_animation::app::init::instance::cleanup_old_screenshots;
+use thyllore_animation::app::{App, GUIData};
+use thyllore_animation::platform;
 
 use anyhow::Result;
 
@@ -20,7 +20,7 @@ fn main() -> Result<()> {
     cleanup_old_screenshots()?;
 
     // imgui
-    let window_title = format!("Rust Rendering v{}", env!("CARGO_PKG_VERSION"));
+    let window_title = format!("Thyllore Animation v{}", env!("CARGO_PKG_VERSION"));
     let mut system = platform::init(&window_title);
     let mut gui_data = GUIData::default();
 

@@ -694,7 +694,7 @@ pub(crate) fn write_header_extension<W: Write + Seek>(
 
     {
         let mut attrs = writer.new_node("Creator")?;
-        attrs.append_string_direct("Rust Rendering Engine")?;
+        attrs.append_string_direct("Thyllore Animation Engine")?;
         drop(attrs);
         writer.close_node()?;
     }

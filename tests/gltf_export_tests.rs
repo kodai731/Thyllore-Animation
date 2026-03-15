@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use rust_rendering::animation::editable::{clip_add_keyframe, EditableAnimationClip, PropertyType};
-use rust_rendering::animation::{AnimationClip, Skeleton};
+use thyllore_animation::animation::editable::{clip_add_keyframe, EditableAnimationClip, PropertyType};
+use thyllore_animation::animation::{AnimationClip, Skeleton};
 
 #[test]
 fn test_gltf_export_preserves_structure() {
@@ -31,7 +31,7 @@ fn test_gltf_export_preserves_structure() {
 
     let output_path = std::env::temp_dir().join("test_gltf_export.glb");
 
-    rust_rendering::exporter::gltf_exporter::export_gltf_animation(
+    thyllore_animation::exporter::gltf_exporter::export_gltf_animation(
         source_path,
         &clip,
         &skeleton,
@@ -96,7 +96,7 @@ fn test_gltf_blender_roundtrip_node_animation() {
     let skeleton = build_skeleton_from_gltf(&original_root);
 
     let clip = build_roundtrip_test_clip(&skeleton);
-    let baked_clip = rust_rendering::animation::editable::clip_to_animation(&clip);
+    let baked_clip = thyllore_animation::animation::editable::clip_to_animation(&clip);
 
     let exported_path = std::env::temp_dir().join("gltf_roundtrip_node_exported.glb");
     let blender_output_path = std::env::temp_dir().join("gltf_roundtrip_node_blender.glb");
@@ -135,7 +135,7 @@ fn test_gltf_blender_roundtrip_skeletal_animation() {
     );
 
     let clip = build_skeletal_roundtrip_test_clip(&skeleton);
-    let baked_clip = rust_rendering::animation::editable::clip_to_animation(&clip);
+    let baked_clip = thyllore_animation::animation::editable::clip_to_animation(&clip);
 
     let exported_path = std::env::temp_dir().join("gltf_roundtrip_skeletal_exported.glb");
     let blender_output_path = std::env::temp_dir().join("gltf_roundtrip_skeletal_blender.glb");
@@ -179,7 +179,7 @@ fn run_roundtrip_and_verify(
         return;
     }
 
-    rust_rendering::exporter::gltf_exporter::export_gltf_animation(
+    thyllore_animation::exporter::gltf_exporter::export_gltf_animation(
         source_path,
         clip,
         skeleton,
@@ -216,7 +216,7 @@ fn run_roundtrip_and_verify(
     );
 
     let reloaded = unsafe {
-        rust_rendering::loader::gltf::load_gltf_file(&blender_output_path.to_string_lossy())
+        thyllore_animation::loader::gltf::load_gltf_file(&blender_output_path.to_string_lossy())
     }
     .expect("Failed to load exported glTF");
 
@@ -531,9 +531,9 @@ fn build_skeletal_roundtrip_test_clip(skeleton: &Skeleton) -> EditableAnimationC
 }
 
 fn find_nearest_keyframe_vec3<'a>(
-    keyframes: &'a [rust_rendering::animation::Keyframe<cgmath::Vector3<f32>>],
+    keyframes: &'a [thyllore_animation::animation::Keyframe<cgmath::Vector3<f32>>],
     target_time: f32,
-) -> Option<&'a rust_rendering::animation::Keyframe<cgmath::Vector3<f32>>> {
+) -> Option<&'a thyllore_animation::animation::Keyframe<cgmath::Vector3<f32>>> {
     keyframes
         .iter()
         .min_by(|a, b| {
@@ -545,9 +545,9 @@ fn find_nearest_keyframe_vec3<'a>(
 }
 
 fn find_nearest_keyframe_quat<'a>(
-    keyframes: &'a [rust_rendering::animation::Keyframe<cgmath::Quaternion<f32>>],
+    keyframes: &'a [thyllore_animation::animation::Keyframe<cgmath::Quaternion<f32>>],
     target_time: f32,
-) -> Option<&'a rust_rendering::animation::Keyframe<cgmath::Quaternion<f32>>> {
+) -> Option<&'a thyllore_animation::animation::Keyframe<cgmath::Quaternion<f32>>> {
     keyframes
         .iter()
         .min_by(|a, b| {

@@ -10,8 +10,10 @@ use vulkanalia::prelude::v1_0::*;
 use winit::window::Window;
 
 impl App {
-    unsafe fn destroy(&mut self) {
+    pub unsafe fn destroy(&mut self) {
         log!("Destroying application resources...");
+
+        let _ = self.rrdevice.device.device_wait_idle();
 
         if let Some(sampler) = self.data.raytracing.gbuffer_sampler {
             self.rrdevice.device.destroy_sampler(sampler, None);
@@ -115,6 +117,8 @@ impl App {
             gbuffer.destroy(&*self.rrdevice.device);
             log!("Destroyed G-Buffer");
         }
+
+        self.data.buffer_registry.destroy_all(&self.rrdevice);
 
         self.data.graphics_resources.destroy(&self.rrdevice);
         log!("Destroyed render resources");

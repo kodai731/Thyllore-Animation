@@ -126,6 +126,9 @@ impl System {
                         _ => {}
                     }
                 }
+                Event::LoopExiting => {
+                    unsafe { app.destroy() };
+                }
                 _ => {}
             })
             .expect("EventLoop error");

@@ -136,8 +136,7 @@ mod tests {
     #[test]
     fn test_pipeline_gamma1_matches_blender_standard() {
         for tc in test_colors() {
-            let pipeline_output =
-                simulate_pipeline(tc.linear, 1.0, ToneMapOperator::None, 1.0);
+            let pipeline_output = simulate_pipeline(tc.linear, 1.0, ToneMapOperator::None, 1.0);
             let blender_output = blender_standard_output(tc.linear);
 
             assert_color_eq(
@@ -170,8 +169,7 @@ mod tests {
         ];
 
         for tc in non_saturated_colors {
-            let pipeline_output =
-                simulate_pipeline(tc.linear, 1.0, ToneMapOperator::None, 2.2);
+            let pipeline_output = simulate_pipeline(tc.linear, 1.0, ToneMapOperator::None, 2.2);
             let blender_output = blender_standard_output(tc.linear);
 
             let max_component_diff = (0..3)

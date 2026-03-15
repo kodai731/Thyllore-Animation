@@ -7,8 +7,6 @@ use crate::animation::BoneId;
 use super::curve::PropertyType;
 use super::keyframe::SourceClipId;
 use super::track::BoneTrack;
-use crate::animation::editable::systems::curve_ops::curve_add_keyframe;
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EditableAnimationClip {
     pub id: SourceClipId,
@@ -52,18 +50,6 @@ impl EditableAnimationClip {
 
     pub fn get_track_mut(&mut self, bone_id: BoneId) -> Option<&mut BoneTrack> {
         self.tracks.get_mut(&bone_id)
-    }
-
-    pub fn add_keyframe(
-        &mut self,
-        bone_id: BoneId,
-        property_type: PropertyType,
-        time: f32,
-        value: f32,
-    ) -> Option<u64> {
-        self.tracks
-            .get_mut(&bone_id)
-            .map(|track| curve_add_keyframe(track.get_curve_mut(property_type), time, value))
     }
 
     pub fn track_count(&self) -> usize {

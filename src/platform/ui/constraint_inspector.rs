@@ -7,6 +7,7 @@ use crate::ecs::component::{ConstraintEntry, ConstraintSet};
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Animator, Entity, World};
+use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
 
 const CONSTRAINT_TYPE_NAMES: &[&str] = &["IK", "Aim", "Parent", "Position", "Rotation", "Scale"];
 
@@ -483,12 +484,12 @@ fn build_rotation_fields(
         changed = true;
     }
 
-    let euler = quaternion_to_euler(&modified.offset);
+    let euler = quaternion_to_euler_degrees(&modified.offset);
     let mut euler_arr = [euler.x, euler.y, euler.z];
     ui.text("Offset (Euler)");
     ui.set_next_item_width(-1.0);
     if ui.input_float3("##rotation_offset", &mut euler_arr).build() {
-        modified.offset = euler_to_quaternion(&cgmath::Vector3::new(
+        modified.offset = euler_degrees_to_quaternion(&cgmath::Vector3::new(
             euler_arr[0],
             euler_arr[1],
             euler_arr[2],
@@ -699,37 +700,4 @@ fn constraint_type_name(ct: &ConstraintType) -> &'static str {
         ConstraintType::Rotation(_) => "Rotation",
         ConstraintType::Scale(_) => "Scale",
     }
-}
-
-fn quaternion_to_euler(q: &cgmath::Quaternion<f32>) -> cgmath::Vector3<f32> {
-    let sinr_cosp = 2.0 * (q.s * q.v.x + q.v.y * q.v.z);
-    let cosr_cosp = 1.0 - 2.0 * (q.v.x * q.v.x + q.v.y * q.v.y);
-    let roll = sinr_cosp.atan2(cosr_cosp);
-
-    let sinp = 2.0 * (q.s * q.v.y - q.v.z * q.v.x);
-    let pitch = if sinp.abs() >= 1.0 {
-        std::f32::consts::FRAC_PI_2.copysign(sinp)
-    } else {
-        sinp.asin()
-    };
-
-    let siny_cosp = 2.0 * (q.s * q.v.z + q.v.x * q.v.y);
-    let cosy_cosp = 1.0 - 2.0 * (q.v.y * q.v.y + q.v.z * q.v.z);
-    let yaw = siny_cosp.atan2(cosy_cosp);
-
-    cgmath::Vector3::new(roll.to_degrees(), pitch.to_degrees(), yaw.to_degrees())
-}
-
-fn euler_to_quaternion(euler: &cgmath::Vector3<f32>) -> cgmath::Quaternion<f32> {
-    use cgmath::Rotation3;
-
-    let roll = euler.x.to_radians();
-    let pitch = euler.y.to_radians();
-    let yaw = euler.z.to_radians();
-
-    let qx = cgmath::Quaternion::from_angle_x(cgmath::Rad(roll));
-    let qy = cgmath::Quaternion::from_angle_y(cgmath::Rad(pitch));
-    let qz = cgmath::Quaternion::from_angle_z(cgmath::Rad(yaw));
-
-    qz * qy * qx
 }

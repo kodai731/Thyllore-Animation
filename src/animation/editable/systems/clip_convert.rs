@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cgmath::{Quaternion, Vector3};
+use cgmath::Vector3;
 
 use crate::animation::editable::components::clip::EditableAnimationClip;
 use crate::animation::editable::components::curve::PropertyCurve;
@@ -10,6 +10,7 @@ use crate::animation::editable::components::keyframe::{
 use crate::animation::editable::components::track::BoneTrack;
 use crate::animation::editable::systems::curve_ops::{curve_add_keyframe, curve_sample};
 use crate::animation::{AnimationClip, BoneId, Keyframe, TransformChannel};
+use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
 
 pub fn clip_from_animation(
     id: SourceClipId,
@@ -101,7 +102,7 @@ pub fn clip_to_animation(clip: &EditableAnimationClip) -> AnimationClip {
             let ex = curve_sample(&track.rotation_x, time).unwrap_or(0.0);
             let ey = curve_sample(&track.rotation_y, time).unwrap_or(0.0);
             let ez = curve_sample(&track.rotation_z, time).unwrap_or(0.0);
-            let q = euler_degrees_to_quaternion(ex, ey, ez);
+            let q = euler_degrees_to_quaternion(&Vector3::new(ex, ey, ez));
             channel.rotation.push(Keyframe::new(time, q));
         }
 
@@ -153,50 +154,6 @@ pub fn clip_remap_bone_ids(
         track.bone_id = new_id;
         clip.tracks.insert(new_id, track);
     }
-}
-
-pub fn quaternion_to_euler_degrees(q: &Quaternion<f32>) -> Vector3<f32> {
-    let w = q.s;
-    let x = q.v.x;
-    let y = q.v.y;
-    let z = q.v.z;
-
-    let sinp = 2.0 * (w * x + y * z);
-    let cosp = 1.0 - 2.0 * (x * x + y * y);
-    let pitch = sinp.atan2(cosp);
-
-    let siny = 2.0 * (w * y - z * x);
-    let yaw = if siny.abs() >= 1.0 {
-        std::f32::consts::FRAC_PI_2.copysign(siny)
-    } else {
-        siny.asin()
-    };
-
-    let sinr = 2.0 * (w * z + x * y);
-    let cosr = 1.0 - 2.0 * (y * y + z * z);
-    let roll = sinr.atan2(cosr);
-
-    Vector3::new(pitch.to_degrees(), yaw.to_degrees(), roll.to_degrees())
-}
-
-fn euler_degrees_to_quaternion(x_deg: f32, y_deg: f32, z_deg: f32) -> Quaternion<f32> {
-    let x_rad = x_deg.to_radians();
-    let y_rad = y_deg.to_radians();
-    let z_rad = z_deg.to_radians();
-
-    let cx = (x_rad * 0.5).cos();
-    let sx = (x_rad * 0.5).sin();
-    let cy = (y_rad * 0.5).cos();
-    let sy = (y_rad * 0.5).sin();
-    let cz = (z_rad * 0.5).cos();
-    let sz = (z_rad * 0.5).sin();
-
-    Quaternion::new(
-        cx * cy * cz + sx * sy * sz,
-        sx * cy * cz - cx * sy * sz,
-        cx * sy * cz + sx * cy * sz,
-        cx * cy * sz - sx * sy * cz,
-    )
 }
 
 fn import_vec3_keyframes(

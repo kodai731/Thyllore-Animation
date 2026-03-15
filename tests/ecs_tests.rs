@@ -1,6 +1,8 @@
 use thyllore_animation::ecs::registry::ComponentRegistry;
 use thyllore_animation::ecs::storage::{Components, SparseSet};
-use thyllore_animation::ecs::world::{Entity, Name, Resources, Transform, Visibility, Visible, World};
+use thyllore_animation::ecs::world::{
+    Entity, Name, Resources, Transform, Visibility, Visible, World,
+};
 use thyllore_animation::render::{BufferHandle, IndexBufferHandle, VertexBufferHandle};
 
 mod release_build_tests {

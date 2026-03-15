@@ -1,8 +1,7 @@
-use crate::animation::editable::{
-    curve_add_keyframe, quaternion_to_euler_degrees, EditableAnimationClip,
-};
+use crate::animation::editable::{curve_add_keyframe, EditableAnimationClip};
 use crate::animation::{AnimationClip, BoneId, Skeleton};
 use crate::ecs::component::{ConstraintSet, SpringBoneSetup};
+use crate::math::quaternion_to_euler_degrees;
 
 use super::constraint_solve_systems::apply_constraints;
 use super::skeleton_pose_systems::{

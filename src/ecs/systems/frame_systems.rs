@@ -1,9 +1,9 @@
 use anyhow::Result;
-use cgmath::{Matrix3, Matrix4, Vector2, Vector3};
+use cgmath::{Matrix4, Vector2, Vector3};
 
 use super::{
     billboard_transform_update_look_at, compute_camera_direction, compute_camera_position,
-    compute_camera_up, create_billboard_transform, gizmo_update_rotation,
+    compute_camera_up, create_billboard_transform,
 };
 use crate::app::billboard::BillboardData;
 use crate::app::data::LightMoveTarget;
@@ -69,28 +69,6 @@ pub fn update_billboard_transform(
         transform.position = light_position;
         billboard_transform_update_look_at(transform, camera_position, camera_up);
     }
-}
-
-pub fn update_grid_gizmo_rotation_from_view(
-    gizmo: &mut crate::debugview::gizmo::GridGizmoData,
-    view: Matrix4<f32>,
-) {
-    let (camera_right, camera_up, camera_forward) = get_camera_axes_from_view(view);
-
-    let rotation_matrix = Matrix3::from_cols(
-        Vector3::new(camera_right.x, camera_up.x, camera_forward.x),
-        Vector3::new(camera_right.y, camera_up.y, camera_forward.y),
-        Vector3::new(camera_right.z, camera_up.z, camera_forward.z),
-    );
-
-    gizmo_update_rotation(&mut gizmo.mesh, &rotation_matrix);
-}
-
-fn get_camera_axes_from_view(view: Matrix4<f32>) -> (Vector3<f32>, Vector3<f32>, Vector3<f32>) {
-    let camera_right = Vector3::new(view[0][0], view[1][0], view[2][0]);
-    let camera_up = Vector3::new(view[0][1], view[1][1], view[2][1]);
-    let camera_forward = Vector3::new(view[0][2], view[1][2], view[2][2]);
-    (camera_right, camera_up, camera_forward)
 }
 
 pub fn update_light_auto_target(

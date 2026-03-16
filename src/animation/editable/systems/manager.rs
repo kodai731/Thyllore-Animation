@@ -11,6 +11,7 @@ use super::super::components::clip::EditableAnimationClip;
 use super::super::components::keyframe::SourceClipId;
 use super::clip_convert::{clip_from_animation, clip_to_animation};
 
+// can be divided into data and free functions in the future
 #[derive(Clone, Debug, Default)]
 pub struct EditableClipManager {
     clips: HashMap<SourceClipId, EditableAnimationClip>,

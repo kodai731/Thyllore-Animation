@@ -1,7 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use thyllore_animation::animation::editable::{clip_add_keyframe, EditableAnimationClip, PropertyType};
+use thyllore_animation::animation::editable::{
+    clip_add_keyframe, EditableAnimationClip, PropertyType,
+};
 use thyllore_animation::animation::{AnimationClip, Skeleton};
 
 #[test]

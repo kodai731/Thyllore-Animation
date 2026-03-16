@@ -36,19 +36,47 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
         )
     };
 
+    transform_propagation_system(ctx.world);
+
     if let Some((skel_id, transforms)) = &eval_result.bone_transforms {
         if ctx.world.contains_resource::<BoneGizmoData>() {
+            let entity_transform = find_skin_entity_transform(ctx.world);
+            let final_transforms = apply_entity_transform(transforms, &entity_transform);
+
             let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
             bone_gizmo.cached_skeleton_id = Some(*skel_id);
-            bone_gizmo.cached_global_transforms = transforms.clone();
+            bone_gizmo.cached_global_transforms = final_transforms;
         }
     }
-
-    transform_propagation_system(ctx.world);
 
     AnimationUpdates {
         updated_meshes: eval_result.updated_meshes,
     }
+}
+
+fn find_skin_entity_transform(world: &crate::ecs::World) -> cgmath::Matrix4<f32> {
+    use crate::ecs::world::{GlobalTransform, SkinRef};
+    use cgmath::SquareMatrix;
+
+    world
+        .iter_components::<SkinRef>()
+        .next()
+        .and_then(|(entity, _)| {
+            world
+                .get_component::<GlobalTransform>(entity)
+                .map(|gt| gt.0)
+        })
+        .unwrap_or_else(cgmath::Matrix4::identity)
+}
+
+fn apply_entity_transform(
+    bone_transforms: &[cgmath::Matrix4<f32>],
+    entity_transform: &cgmath::Matrix4<f32>,
+) -> Vec<cgmath::Matrix4<f32>> {
+    bone_transforms
+        .iter()
+        .map(|bt| entity_transform * bt)
+        .collect()
 }
 
 pub unsafe fn run_animation_phase_gpu(

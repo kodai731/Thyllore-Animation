@@ -741,6 +741,17 @@ pub fn transform_gizmo_sync_to_bone(
     }
 }
 
+pub fn transform_gizmo_sync_to_entity(
+    gizmo: &mut TransformGizmoData,
+    world_position: Vector3<f32>,
+    entity: crate::ecs::Entity,
+) {
+    gizmo.position.position = world_position;
+    gizmo.visible = true;
+    gizmo.target_entity = Some(entity);
+    gizmo.target_bone_id = None;
+}
+
 fn generate_cone_vertices(
     base_center: Vector3<f32>,
     tip: Vector3<f32>,

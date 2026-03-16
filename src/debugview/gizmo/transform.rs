@@ -2,6 +2,7 @@ use cgmath::{Quaternion, Vector3};
 
 use crate::animation::BoneId;
 use crate::ecs::component::{GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, RenderInfo};
+use crate::ecs::Entity;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum TransformGizmoHandle {
@@ -45,6 +46,7 @@ pub struct TransformGizmoData {
     pub drag_initial_angle: f32,
     // Target tracking
     pub target_bone_id: Option<BoneId>,
+    pub target_entity: Option<Entity>,
 }
 
 impl Default for TransformGizmoData {
@@ -67,6 +69,7 @@ impl Default for TransformGizmoData {
             drag_initial_hit: Vector3::new(0.0, 0.0, 0.0),
             drag_initial_angle: 0.0,
             target_bone_id: None,
+            target_entity: None,
         }
     }
 }

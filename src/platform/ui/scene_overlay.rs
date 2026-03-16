@@ -39,9 +39,6 @@ pub fn build_scene_overlay(
             build_model_section(ui, ui_events, overlay_state, gui_data);
             ui.separator();
 
-            build_camera_section(ui, ui_events);
-            ui.separator();
-
             build_screenshot_section(ui, ui_events);
             ui.separator();
 
@@ -94,20 +91,6 @@ fn build_model_section(
     };
     ui.text_wrapped(format!("Model: {}", model_name));
     ui.text(format!("Status: {}", state.load_status));
-}
-
-fn build_camera_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {
-    if ui.button("Reset Camera") {
-        ui_events.send(UIEvent::ResetCamera);
-    }
-    ui.same_line();
-    if ui.button("Reset Up") {
-        ui_events.send(UIEvent::ResetCameraUp);
-    }
-    ui.same_line();
-    if ui.button("To Model") {
-        ui_events.send(UIEvent::MoveCameraToModel);
-    }
 }
 
 fn build_screenshot_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {

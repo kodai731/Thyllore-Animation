@@ -456,13 +456,32 @@ impl World {
 
     pub fn query_renderable(&self) -> Vec<Entity> {
         self.iter_components::<MeshRef>()
-            .filter(|(e, _)| {
-                self.get_component::<Visible>(*e)
-                    .map(|v| v.0.is_visible())
-                    .unwrap_or(true)
-            })
+            .filter(|(e, _)| self.is_hierarchy_visible(*e))
             .map(|(e, _)| e)
             .collect()
+    }
+
+    fn is_hierarchy_visible(&self, entity: Entity) -> bool {
+        let mut current = entity;
+        loop {
+            let visible = self
+                .get_component::<Visible>(current)
+                .map(|v| v.0.is_visible())
+                .unwrap_or(true);
+
+            if !visible {
+                return false;
+            }
+
+            match self.get_component::<Parent>(current) {
+                Some(parent) => current = parent.0,
+                None => return true,
+            }
+        }
+    }
+
+    pub fn has_mesh_entities(&self) -> bool {
+        self.iter_components::<MeshRef>().next().is_some()
     }
 
     pub fn query_animated(&self) -> Vec<Entity> {

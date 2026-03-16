@@ -308,10 +308,8 @@ impl<'a> GBufferPass<'a> {
             return Ok(());
         }
 
-        let renderable_entities = self.ecs_world.query_renderable();
-        let use_ecs = !renderable_entities.is_empty();
-
-        if use_ecs {
+        if self.ecs_world.has_mesh_entities() {
+            let renderable_entities = self.ecs_world.query_renderable();
             self.draw_meshes_ecs(command_buffer, image_index, &renderable_entities)?;
         } else {
             self.draw_meshes_legacy(command_buffer, image_index)?;

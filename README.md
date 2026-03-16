@@ -16,8 +16,14 @@ Thyllore Animation supports glTF/FBX model loading, skeletal animation, node ani
 - **Morph Targets** - Blend shape animation support
 - **ML Curve Copilot** - ONNX-based machine learning model for animation curve suggestions
 - **Timeline Editor** - Keyframe editing with Bezier curve interpolation
+- **Ray Tracing** - Hardware-accelerated ray tracing via Vulkan RT extensions
+- **Onion Skinning** - Ghost overlay of previous/next frames for animation reference
 - **ImGui Integration** - Debug UI with docking support
 - **ECS Architecture** - Data-driven Entity-Component-System design inspired by Bevy
+
+## Roadmap
+
+See [docs/roadmap.md](docs/roadmap.md) for planned features including rig propagation, text-to-motion, and more.
 
 ## Prerequisites
 

@@ -31,7 +31,7 @@ pub struct LightState {
 impl Default for LightState {
     fn default() -> Self {
         Self {
-            light_position: Vector3::new(1.0, 1.0, 1.0),
+            light_position: Vector3::new(1.0, 1.0, 2.0),
             shadow_strength: 1.0,
             shadow_normal_offset: 0.5,
             distance_attenuation: DistanceAttenuation::Disabled,

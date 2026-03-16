@@ -2,6 +2,14 @@ use crate::ecs::component::mesh::presets::{COLOR, POSITION};
 use crate::ecs::component::mesh::{MeshData, PrimitiveTopology};
 use crate::ecs::component::{ColorVertex, LineMesh, MeshScale};
 
+/// Grid line color: light gray, visible against black background
+const GRID_LINE_COLOR: [f32; 3] = [0.25, 0.25, 0.25];
+
+/// Axis center line colors: muted RGB (50% blend with grid color, Blender-style)
+const X_AXIS_COLOR: [f32; 3] = [0.63, 0.13, 0.13];
+const Y_AXIS_COLOR: [f32; 3] = [0.13, 0.63, 0.13];
+const Z_AXIS_COLOR: [f32; 3] = [0.13, 0.13, 0.63];
+
 pub fn create_grid_mesh_data() -> MeshData {
     let grid_count = 1000;
     let grid_extent = 10000.0;
@@ -19,7 +27,8 @@ pub fn create_grid_mesh_data() -> MeshData {
         grid_count,
         grid_extent,
         grid_spacing,
-        [1.0, 0.0, 0.0],
+        GRID_LINE_COLOR,
+        X_AXIS_COLOR,
     );
     add_grid_axis_data(
         &mut positions,
@@ -29,7 +38,8 @@ pub fn create_grid_mesh_data() -> MeshData {
         grid_count,
         grid_extent,
         grid_spacing,
-        [0.0, 1.0, 0.0],
+        GRID_LINE_COLOR,
+        Y_AXIS_COLOR,
     );
     add_grid_axis_data(
         &mut positions,
@@ -39,7 +49,8 @@ pub fn create_grid_mesh_data() -> MeshData {
         grid_count,
         grid_extent,
         grid_spacing,
-        [0.0, 0.0, 1.0],
+        GRID_LINE_COLOR,
+        Z_AXIS_COLOR,
     );
 
     MeshData::new(PrimitiveTopology::LineList)
@@ -56,10 +67,13 @@ fn add_grid_axis_data(
     count: u32,
     extent: f32,
     spacing: f32,
-    color: [f32; 3],
+    line_color: [f32; 3],
+    axis_color: [f32; 3],
 ) {
     for i in 0..count {
         let offset = i as f32 * spacing;
+        // Center line (offset=0) uses axis color, others use grid color
+        let color = if i == 0 { axis_color } else { line_color };
 
         let (pos1, pos2) = match axis {
             0 => ([extent, 0.0, offset], [-extent, 0.0, offset]),
@@ -104,7 +118,8 @@ pub fn create_grid_mesh() -> (LineMesh, u32) {
         grid_count,
         grid_extent,
         grid_spacing,
-        [1.0, 0.0, 0.0],
+        GRID_LINE_COLOR,
+        X_AXIS_COLOR,
     );
     add_grid_axis(
         &mut mesh,
@@ -112,7 +127,8 @@ pub fn create_grid_mesh() -> (LineMesh, u32) {
         grid_count,
         grid_extent,
         grid_spacing,
-        [0.0, 0.0, 1.0],
+        GRID_LINE_COLOR,
+        Z_AXIS_COLOR,
     );
 
     let xz_only_index_count = mesh.indices.len() as u32;
@@ -123,7 +139,8 @@ pub fn create_grid_mesh() -> (LineMesh, u32) {
         grid_count,
         grid_extent,
         grid_spacing,
-        [0.0, 1.0, 0.0],
+        GRID_LINE_COLOR,
+        Y_AXIS_COLOR,
     );
 
     (mesh, xz_only_index_count)
@@ -136,10 +153,12 @@ fn add_grid_axis(
     count: u32,
     extent: f32,
     spacing: f32,
-    color: [f32; 3],
+    line_color: [f32; 3],
+    axis_color: [f32; 3],
 ) {
     for i in 0..count {
         let offset = i as f32 * spacing;
+        let color = if i == 0 { axis_color } else { line_color };
 
         let (pos1, pos2) = match axis {
             0 => {

@@ -3,9 +3,10 @@ name = "thyllore-animation"
 version = "0.0.1-preview"
 edition = "2021"
 license = "Apache-2.0"
+authors = ["kodai731"]
+description = "A real-time animation and rendering engine powered by ECS architecture, built in Rust with Vulkan"
+repository = "https://github.com/kodai731/Thyllore-Animation"
 build = "build.rs"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [[bin]]
 name = "thyllore-animation"

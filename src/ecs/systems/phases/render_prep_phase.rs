@@ -18,9 +18,8 @@ use crate::ecs::systems::render_data_systems::{
 use crate::ecs::{
     build_bone_line_mesh, build_box_bone_meshes_with_selection, build_constraint_gizmo_mesh,
     build_octahedral_bone_meshes_with_selection, build_sphere_bone_meshes_with_selection,
-    build_spring_bone_gizmo_mesh, gizmo_update_rotation, gizmo_update_vertex_buffer,
+    build_spring_bone_gizmo_mesh, gizmo_update_vertex_buffer,
 };
-use crate::math::get_camera_axes_from_view;
 use crate::render::RenderBackend;
 use crate::renderer::scene_renderer::update_object_ubo;
 
@@ -56,7 +55,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
 
     update_billboard_ubo(ctx, view, proj)?;
 
-    update_grid_gizmo_buffers(ctx, view)?;
+    update_grid_gizmo_buffers(ctx)?;
     update_transform_gizmo_mesh(ctx)?;
     update_bone_gizmo_mesh(ctx)?;
     update_constraint_gizmo_mesh(ctx)?;
@@ -197,13 +196,7 @@ unsafe fn update_billboard_ubo(
     Ok(())
 }
 
-unsafe fn update_grid_gizmo_buffers(ctx: &mut FrameContext, view: Matrix4<f32>) -> Result<()> {
-    let (camera_right, camera_up_gizmo, camera_forward) = get_camera_axes_from_view(view);
-
-    let gizmo_rotation = cgmath::Matrix3::from_cols(camera_right, camera_up_gizmo, camera_forward);
-
-    gizmo_update_rotation(&mut ctx.gizmo_mut().mesh, &gizmo_rotation);
-
+unsafe fn update_grid_gizmo_buffers(ctx: &mut FrameContext) -> Result<()> {
     let mesh = ctx.gizmo().mesh.clone();
     let backend = ctx.create_backend();
     gizmo_update_vertex_buffer(&mesh, &backend)?;

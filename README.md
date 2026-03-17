@@ -142,69 +142,10 @@ cargo test --no-default-features
 > **Note**: Do NOT run `cargo test --test ecs_tests` without `--no-default-features`. The ONNX Runtime dependency causes integration test crashes. See [CLAUDE.md](CLAUDE.md) for details.
 
 ## Keyboard Shortcuts
-
-### Global
-
-| Shortcut | Action |
-|----------|--------|
-| Ctrl+Z | Undo |
-| Ctrl+Y | Redo |
-| Ctrl+S | Save scene |
-| S | Set bone keyframe |
-
-### Transform Gizmo
-
-| Shortcut | Action |
-|----------|--------|
-| W | Translate mode |
-| E | Rotate mode |
-| R | Scale mode |
-
-### Timeline Editor
-
-| Shortcut | Action |
-|----------|--------|
-| Ctrl + Mouse Wheel | Zoom in/out |
-| Ctrl+C | Copy keyframes |
-| Ctrl+V | Paste keyframes |
-| Ctrl+Shift+V | Paste keyframes (mirrored) |
-| Delete | Delete selected clip/keyframe |
-
-### Curve Editor
-
-| Shortcut | Action |
-|----------|--------|
-| Ctrl+Space | Request ML curve suggestion |
-| Tab | Accept suggestion overlay |
-| Escape | Dismiss suggestion overlay |
-| Ctrl + Mouse Wheel | Zoom at cursor position |
-| Shift + Mouse Wheel | Horizontal pan |
-| Mouse Wheel | Horizontal pan |
-| Ctrl+Click | Toggle keyframe selection |
-| Shift+Click | Range select keyframes |
+see [docs/keyboard_shortcuts.md](docs/keyboard_shortcuts.md)
 
 ## Project Structure
-
-```
-src/
-├── ecs/                 # Entity-Component-System core
-│   ├── component/       # Component definitions (data)
-│   ├── bundle/          # Common component combinations
-│   ├── resource/        # Global dynamic state
-│   ├── systems/         # System functions (behavior)
-│   ├── events/          # Event definitions
-│   ├── world.rs         # World container
-│   └── query.rs         # Entity query functions
-├── animation/           # Animation system
-│   └── editable/        # Editable animation (components/ + systems/)
-├── app/                 # Application initialization and main loop
-├── loader/              # Asset loading (glTF, FBX)
-├── renderer/            # Rendering pipeline
-├── platform/            # Platform layer (windowing, UI)
-├── vulkanr/             # Vulkan resource management
-├── ml/                  # Machine learning integration
-└── main.rs              # Entry point
-```
+see [docs/structure.md](docs/structure.md)
 
 ## Dependencies
 

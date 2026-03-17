@@ -4,8 +4,7 @@ A real-time animation and rendering engine powered by ECS architecture, built in
 
 Thyllore Animation supports glTF/FBX model loading, skeletal animation, node animation, morph targets, and ML-assisted animation editing via an integrated curve copilot.
 
-<!-- TODO: Add screenshot or GIF here -->
-<!-- ![Screenshot](docs/images/screenshot.png) -->
+![ScreenShot](docs/images/ProjectView.png)
 
 ## Features
 

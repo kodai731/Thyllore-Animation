@@ -15,7 +15,7 @@ use thyllore_animation::platform;
 use anyhow::Result;
 
 fn main() -> Result<()> {
-    pretty_env_logger::init();
+    env_logger::init();
 
     cleanup_old_screenshots()?;
 

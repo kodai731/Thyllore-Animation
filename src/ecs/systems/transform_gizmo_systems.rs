@@ -2,7 +2,9 @@ use std::f32::consts::PI;
 
 use cgmath::{vec3, Deg, InnerSpace, Quaternion, Rotation3, Vector2, Vector3};
 
-use crate::debugview::gizmo::transform::{TransformGizmoData, TransformGizmoHandle};
+use crate::debugview::gizmo::transform::{
+    TransformGizmoData, TransformGizmoHandle, TransformGizmoTarget,
+};
 use crate::ecs::component::{ColorVertex, LineMesh};
 use crate::ecs::resource::{CoordinateSpace, TransformGizmoMode, TransformGizmoState};
 use crate::math::{
@@ -701,55 +703,48 @@ pub fn transform_gizmo_process_scale_drag(
     ))
 }
 
-pub fn transform_gizmo_sync_to_bone(
-    gizmo: &mut TransformGizmoData,
-    active_bone_index: Option<usize>,
-    cached_transforms: &[cgmath::Matrix4<f32>],
-    bone_offsets: &[[f32; 3]],
+pub fn compute_transform_gizmo_position(
+    target: &TransformGizmoTarget,
+    transforms: &[cgmath::Matrix4<f32>],
+    offsets: &[[f32; 3]],
     mesh_scale: f32,
-) {
-    match active_bone_index {
-        Some(idx) if idx < cached_transforms.len() => {
-            let transform = cached_transforms[idx];
-            let offset = if idx < bone_offsets.len() {
-                bone_offsets[idx]
-            } else {
-                [0.0, 0.0, 0.0]
-            };
+) -> Option<Vector3<f32>> {
+    match target {
+        TransformGizmoTarget::Bone(bone_id) => {
+            let idx = *bone_id as usize;
+            if idx >= transforms.len() {
+                return None;
+            }
+            let transform = transforms[idx];
+            let offset = offsets.get(idx).copied().unwrap_or([0.0; 3]);
             let world_pos = transform * cgmath::Vector4::new(offset[0], offset[1], offset[2], 1.0);
-            let raw_pos = vec3(world_pos.x, world_pos.y, world_pos.z);
-            gizmo.position.position = vec3(
+            Some(vec3(
                 world_pos.x * mesh_scale,
                 world_pos.y * mesh_scale,
                 world_pos.z * mesh_scale,
-            );
-            if !gizmo.visible {
-                log!(
-                    "[GizmoSync] bone={}, raw=({:.4},{:.4},{:.4}), scaled=({:.4},{:.4},{:.4}), mesh_scale={}",
-                    idx, raw_pos.x, raw_pos.y, raw_pos.z,
-                    gizmo.position.position.x, gizmo.position.position.y, gizmo.position.position.z,
-                    mesh_scale,
-                );
-            }
-            gizmo.visible = true;
-            gizmo.target_bone_id = Some(idx as u32);
+            ))
         }
-        _ => {
-            gizmo.visible = false;
-            gizmo.target_bone_id = None;
+        TransformGizmoTarget::Entity(_) => {
+            if transforms.is_empty() {
+                return None;
+            }
+            let mut sum = Vector3::new(0.0f32, 0.0, 0.0);
+            for (i, transform) in transforms.iter().enumerate() {
+                let offset = offsets.get(i).copied().unwrap_or([0.0; 3]);
+                let world_pos =
+                    transform * cgmath::Vector4::new(offset[0], offset[1], offset[2], 1.0);
+                sum.x += world_pos.x;
+                sum.y += world_pos.y;
+                sum.z += world_pos.z;
+            }
+            let count = transforms.len() as f32;
+            Some(vec3(
+                sum.x / count * mesh_scale,
+                sum.y / count * mesh_scale,
+                sum.z / count * mesh_scale,
+            ))
         }
     }
-}
-
-pub fn transform_gizmo_sync_to_entity(
-    gizmo: &mut TransformGizmoData,
-    world_position: Vector3<f32>,
-    entity: crate::ecs::Entity,
-) {
-    gizmo.position.position = world_position;
-    gizmo.visible = true;
-    gizmo.target_entity = Some(entity);
-    gizmo.target_bone_id = None;
 }
 
 fn generate_cone_vertices(
@@ -1105,5 +1100,238 @@ mod tests {
         assert!((state.translate_snap_value - 0.5).abs() < 1e-6);
         assert!((state.rotate_snap_degrees - 15.0).abs() < 1e-6);
         assert!((state.scale_snap_value - 0.1).abs() < 1e-6);
+    }
+
+    use crate::ecs::systems::bone_gizmo_systems::compute_display_transforms;
+    use cgmath::{Matrix4, Vector4};
+
+    fn build_rest_transforms(positions: &[[f32; 3]]) -> Vec<Matrix4<f32>> {
+        positions
+            .iter()
+            .map(|p| Matrix4::from_translation(vec3(p[0], p[1], p[2])))
+            .collect()
+    }
+
+    fn apply_entity_transform(
+        bone_transforms: &[Matrix4<f32>],
+        entity_transform: &Matrix4<f32>,
+    ) -> Vec<Matrix4<f32>> {
+        bone_transforms
+            .iter()
+            .map(|bt| entity_transform * bt)
+            .collect()
+    }
+
+    fn assert_vec3_approx_eq(a: Vector3<f32>, b: Vector3<f32>, label: &str) {
+        let diff = (a - b).magnitude();
+        assert!(
+            diff < 1e-4,
+            "{}: ({:.4},{:.4},{:.4}) != ({:.4},{:.4},{:.4}), diff={}",
+            label,
+            a.x,
+            a.y,
+            a.z,
+            b.x,
+            b.y,
+            b.z,
+            diff,
+        );
+    }
+
+    #[test]
+    fn test_transform_gizmo_follows_entity_translation() {
+        let rest = build_rest_transforms(&[[0.0, 1.0, 0.0], [0.0, 2.0, 0.0], [1.0, 1.0, 0.0]]);
+        let offsets: Vec<[f32; 3]> = vec![[0.0; 3]; 3];
+        let mesh_scale = 1.0;
+
+        let entity_offset = vec3(5.0, 0.0, 3.0);
+        let entity_transform = Matrix4::from_translation(entity_offset);
+        let moved = apply_entity_transform(&rest, &entity_transform);
+
+        let pos_before = compute_transform_gizmo_position(
+            &TransformGizmoTarget::Bone(0),
+            &rest,
+            &offsets,
+            mesh_scale,
+        )
+        .unwrap();
+
+        let pos_after = compute_transform_gizmo_position(
+            &TransformGizmoTarget::Bone(0),
+            &moved,
+            &offsets,
+            mesh_scale,
+        )
+        .unwrap();
+
+        let delta = pos_after - pos_before;
+        assert_vec3_approx_eq(delta, entity_offset, "bone0 delta");
+
+        let pos_before_1 = compute_transform_gizmo_position(
+            &TransformGizmoTarget::Bone(1),
+            &rest,
+            &offsets,
+            mesh_scale,
+        )
+        .unwrap();
+        let pos_after_1 = compute_transform_gizmo_position(
+            &TransformGizmoTarget::Bone(1),
+            &moved,
+            &offsets,
+            mesh_scale,
+        )
+        .unwrap();
+        assert_vec3_approx_eq(pos_after_1 - pos_before_1, entity_offset, "bone1 delta");
+    }
+
+    #[test]
+    fn test_transform_gizmo_entity_target_follows_entity_translation() {
+        let rest = build_rest_transforms(&[[0.0, 1.0, 0.0], [0.0, 2.0, 0.0], [1.0, 1.0, 0.0]]);
+        let offsets: Vec<[f32; 3]> = vec![[0.0; 3]; 3];
+        let mesh_scale = 1.0;
+        let entity = 99u64;
+
+        let entity_offset = vec3(5.0, 0.0, 3.0);
+        let entity_transform = Matrix4::from_translation(entity_offset);
+        let moved = apply_entity_transform(&rest, &entity_transform);
+
+        let center_before = compute_transform_gizmo_position(
+            &TransformGizmoTarget::Entity(entity),
+            &rest,
+            &offsets,
+            mesh_scale,
+        )
+        .unwrap();
+
+        let center_after = compute_transform_gizmo_position(
+            &TransformGizmoTarget::Entity(entity),
+            &moved,
+            &offsets,
+            mesh_scale,
+        )
+        .unwrap();
+
+        assert_vec3_approx_eq(
+            center_after - center_before,
+            entity_offset,
+            "entity center delta",
+        );
+    }
+
+    #[test]
+    fn test_bone_gizmo_follows_entity_translation() {
+        let rest = build_rest_transforms(&[[0.0, 1.0, 0.0], [0.0, 2.0, 0.0], [1.0, 1.0, 0.0]]);
+        let offsets: Vec<[f32; 3]> = vec![[0.0; 3]; 3];
+        let mesh_scale = 1.0;
+
+        let entity_offset = vec3(5.0, 0.0, 3.0);
+        let entity_transform = Matrix4::from_translation(entity_offset);
+        let moved = apply_entity_transform(&rest, &entity_transform);
+
+        let display_before = compute_display_transforms(&rest, &offsets, mesh_scale);
+        let display_after = compute_display_transforms(&moved, &offsets, mesh_scale);
+
+        for (i, (before, after)) in display_before.iter().zip(display_after.iter()).enumerate() {
+            let delta = vec3(
+                after[0] - before[0],
+                after[1] - before[1],
+                after[2] - before[2],
+            );
+            assert_vec3_approx_eq(delta, entity_offset, &format!("bone_display[{}] delta", i));
+        }
+    }
+
+    #[test]
+    fn test_transform_gizmo_matches_bone_gizmo_position() {
+        let rest = build_rest_transforms(&[[0.0, 1.0, 0.0], [0.0, 2.0, 0.0], [1.0, 1.0, 0.0]]);
+        let offsets: Vec<[f32; 3]> = vec![[0.0; 3]; 3];
+        let mesh_scale = 1.0;
+
+        let entity_transform = Matrix4::from_translation(vec3(5.0, 0.0, 3.0));
+        let transformed = apply_entity_transform(&rest, &entity_transform);
+
+        let display = compute_display_transforms(&transformed, &offsets, mesh_scale);
+
+        for bone_idx in 0..transformed.len() {
+            let gizmo_pos = compute_transform_gizmo_position(
+                &TransformGizmoTarget::Bone(bone_idx as u32),
+                &transformed,
+                &offsets,
+                mesh_scale,
+            )
+            .unwrap();
+
+            let bone_display = display[bone_idx];
+            assert_vec3_approx_eq(
+                gizmo_pos,
+                vec3(bone_display[0], bone_display[1], bone_display[2]),
+                &format!("bone[{}] gizmo vs display match", bone_idx),
+            );
+        }
+    }
+
+    #[test]
+    fn test_gizmo_positions_match_with_mesh_scale() {
+        let rest = build_rest_transforms(&[[0.0, 1.0, 0.0], [0.0, 2.0, 0.0]]);
+        let offsets = vec![[0.1, 0.2, 0.0], [0.0, 0.1, 0.3]];
+        let mesh_scale = 0.01;
+
+        let entity_transform = Matrix4::from_translation(vec3(3.0, -1.0, 2.0));
+        let transformed = apply_entity_transform(&rest, &entity_transform);
+
+        let display = compute_display_transforms(&transformed, &offsets, mesh_scale);
+
+        for bone_idx in 0..transformed.len() {
+            let gizmo_pos = compute_transform_gizmo_position(
+                &TransformGizmoTarget::Bone(bone_idx as u32),
+                &transformed,
+                &offsets,
+                mesh_scale,
+            )
+            .unwrap();
+
+            let bone_display = display[bone_idx];
+            assert_vec3_approx_eq(
+                gizmo_pos,
+                vec3(bone_display[0], bone_display[1], bone_display[2]),
+                &format!("scaled bone[{}] gizmo vs display", bone_idx),
+            );
+        }
+    }
+
+    #[test]
+    fn test_entity_center_matches_bone_average_after_move() {
+        let rest = build_rest_transforms(&[
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ]);
+        let offsets: Vec<[f32; 3]> = vec![[0.0; 3]; 4];
+        let mesh_scale = 1.0;
+        let entity = 1u64;
+
+        let entity_transform = Matrix4::from_translation(vec3(10.0, 20.0, 30.0));
+        let transformed = apply_entity_transform(&rest, &entity_transform);
+
+        let center = compute_transform_gizmo_position(
+            &TransformGizmoTarget::Entity(entity),
+            &transformed,
+            &offsets,
+            mesh_scale,
+        )
+        .unwrap();
+
+        let display = compute_display_transforms(&transformed, &offsets, mesh_scale);
+        let mut avg = vec3(0.0f32, 0.0, 0.0);
+        for d in &display {
+            avg.x += d[0];
+            avg.y += d[1];
+            avg.z += d[2];
+        }
+        let count = display.len() as f32;
+        avg /= count;
+
+        assert_vec3_approx_eq(center, avg, "entity center vs bone average");
     }
 }

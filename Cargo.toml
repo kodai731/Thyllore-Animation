@@ -20,7 +20,7 @@ anyhow = "1"
 log = "0.4"
 cgmath = "0.18"
 png = "0.17"
-pretty_env_logger = "0.4"
+env_logger = "0.11"
 thiserror = "1"
 vulkanalia = { version = "=0.26.0", features = ["libloading", "provisional", "window"] }
 copypasta = "0.8"

@@ -29,8 +29,9 @@ fn main() -> Result<()> {
 
     // Initialize ImGui rendering resources
     unsafe {
-        let command_pool = app.command_state().pool.clone();
-        let rrrender = app.render_targets().render.clone();
+        use thyllore_animation::vulkanr::context::{CommandState, RenderTargets};
+        let command_pool = app.resource::<CommandState>().pool.clone();
+        let rrrender = app.resource::<RenderTargets>().render.clone();
         App::init_imgui_rendering(
             &app.instance,
             &app.rrdevice,

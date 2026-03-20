@@ -150,7 +150,9 @@ impl App {
             pool_handle
         };
 
-        let surface = self.surface_state().surface;
+        let surface = self
+            .resource::<crate::vulkanr::context::SurfaceState>()
+            .surface;
         let new_swapchain = RRSwapchain::new(window, &self.instance, &surface, &self.rrdevice)?;
         let image_count = new_swapchain.swapchain_images.len();
 

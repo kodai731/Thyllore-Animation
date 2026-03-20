@@ -57,7 +57,7 @@ impl<'a> DofPass<'a> {
             .data
             .ecs_world
             .get_resource::<PhysicalCameraParameters>();
-        let camera = app.camera();
+        let camera = app.resource::<crate::ecs::resource::Camera>();
 
         let (enabled, focus_distance, max_blur_radius) = match dof_settings {
             Some(dof) => (dof.enabled, dof.focus_distance, dof.max_blur_radius),

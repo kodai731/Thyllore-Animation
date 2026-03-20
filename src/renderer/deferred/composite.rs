@@ -37,8 +37,13 @@ impl<'a> CompositePass<'a> {
             composite_pipeline,
             composite_descriptor,
             device: &app.rrdevice.device,
-            swapchain_extent: app.swapchain_state().swapchain.swapchain_extent,
-            debug_view_mode: app.debug_view_state().debug_view_mode,
+            swapchain_extent: app
+                .resource::<crate::vulkanr::context::SwapchainState>()
+                .swapchain
+                .swapchain_extent,
+            debug_view_mode: app
+                .resource::<crate::debugview::DebugViewState>()
+                .debug_view_mode,
         })
     }
 
@@ -62,7 +67,9 @@ impl<'a> CompositePass<'a> {
             composite_descriptor,
             device: &app.rrdevice.device,
             swapchain_extent: offscreen_extent,
-            debug_view_mode: app.debug_view_state().debug_view_mode,
+            debug_view_mode: app
+                .resource::<crate::debugview::DebugViewState>()
+                .debug_view_mode,
         })
     }
 

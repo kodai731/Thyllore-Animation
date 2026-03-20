@@ -44,8 +44,9 @@ impl App {
     pub fn dump_debug_info(&self) {
         log!("========== DUMP DEBUG INFORMATION ==========");
 
-        let clip_library = self.clip_library();
-        let model_state = self.model_state();
+        use crate::ecs::{ClipLibrary, ModelState};
+        let clip_library = self.resource::<ClipLibrary>();
+        let model_state = self.resource::<ModelState>();
 
         log!("--- Model Info ---");
         log!("  current_model_path: {}", model_state.model_path);
@@ -128,7 +129,10 @@ impl App {
         }
 
         log!("--- Camera Info ---");
-        log!("  pivot: {:?}", self.camera().pivot);
+        log!(
+            "  pivot: {:?}",
+            self.resource::<crate::ecs::resource::Camera>().pivot
+        );
 
         log!("--- Animation Info ---");
         let timeline = self

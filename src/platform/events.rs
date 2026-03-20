@@ -154,11 +154,13 @@ fn handle_redraw_requested(
 
     #[cfg(debug_assertions)]
     let mut debug_state = DebugWindowState {
-        debug_view_mode: app.debug_view_state().debug_view_mode,
+        debug_view_mode: app
+            .resource::<crate::debugview::DebugViewState>()
+            .debug_view_mode,
     };
 
     let mut overlay_state = SceneOverlayState {
-        model_path: app.model_state().model_path.clone(),
+        model_path: app.resource::<crate::ecs::ModelState>().model_path.clone(),
         load_status: gui_data.load_status.clone(),
     };
 
@@ -174,7 +176,8 @@ fn handle_redraw_requested(
 
     #[cfg(debug_assertions)]
     {
-        app.debug_view_state_mut().debug_view_mode = debug_state.debug_view_mode;
+        app.resource_mut::<crate::debugview::DebugViewState>()
+            .debug_view_mode = debug_state.debug_view_mode;
     }
 
     #[cfg(debug_assertions)]

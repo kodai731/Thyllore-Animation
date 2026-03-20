@@ -10,7 +10,10 @@ impl App {
         gui_data: &mut crate::app::GUIData,
         draw_data: &imgui::DrawData,
     ) -> Result<()> {
-        let command_buffer = self.command_state().buffers.command_buffers[image_index];
+        let command_buffer = self
+            .resource::<crate::vulkanr::context::CommandState>()
+            .buffers
+            .command_buffers[image_index];
 
         self.rrdevice
             .device

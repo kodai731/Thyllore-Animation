@@ -1,12 +1,15 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
+use crate::app::billboard::BillboardData;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::app::App;
 use crate::ecs::component::{LineMesh, RenderInfo};
 use crate::ecs::resource::gizmo::{
-    BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, TransformGizmoData,
+    BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, GridGizmoData, LightGizmoData,
+    TransformGizmoData,
 };
+use crate::ecs::resource::GridMeshData;
 use crate::vulkanr::core::Device;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};
@@ -53,7 +56,7 @@ impl<'a> OverlayRenderer<'a> {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        let grid = self.app.grid_mesh();
+        let grid = self.app.resource::<GridMeshData>();
         let pipeline_storage = self.pipeline_storage();
 
         let vertex_buffer = match self
@@ -135,7 +138,7 @@ impl<'a> OverlayRenderer<'a> {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        let gizmo = self.app.grid_gizmo();
+        let gizmo = self.app.resource::<GridGizmoData>();
         let pipeline_storage = self.pipeline_storage();
 
         let vertex_buffer = match self
@@ -250,8 +253,8 @@ impl<'a> OverlayRenderer<'a> {
     }
 
     unsafe fn draw_light_lines(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
-        let grid_mesh = self.app.grid_mesh();
-        let light_gizmo = self.app.light_gizmo();
+        let grid_mesh = self.app.resource::<GridMeshData>();
+        let light_gizmo = self.app.resource::<LightGizmoData>();
         let pipeline_storage = self.pipeline_storage();
 
         let Some(pipeline_id) = grid_mesh.render_info.pipeline_id else {
@@ -396,7 +399,7 @@ impl<'a> OverlayRenderer<'a> {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        let billboard = self.app.billboard();
+        let billboard = self.app.resource::<BillboardData>();
         let pipeline_storage = self.pipeline_storage();
 
         let vertex_buffer = match self

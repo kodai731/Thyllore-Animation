@@ -588,7 +588,8 @@ unsafe fn apply_initial_pose(
             let mut pose = create_pose_from_rest(skeleton);
             sample_clip_to_pose(clip, 0.0, skeleton, &mut pose, false);
 
-            graphics.prepare_node_animation(
+            crate::ecs::systems::animation::apply::prepare_node_animation(
+                graphics,
                 &mut node_assets.nodes,
                 skeleton,
                 &pose,
@@ -623,56 +624,26 @@ unsafe fn apply_skinning_to_mesh(
     skeleton: &crate::animation::Skeleton,
     mesh_idx: usize,
 ) -> Result<()> {
-    use crate::ecs::apply_skinning;
+    use crate::ecs::systems::animation::apply::apply_skinning_to_single_mesh;
 
-    let skin_data = {
-        let mesh = &graphics.meshes[mesh_idx];
-        mesh.skin_data.clone()
-    };
+    if !apply_skinning_to_single_mesh(graphics, mesh_idx, global_transforms, skeleton) {
+        return Ok(());
+    }
 
-    if let Some(skin_data) = skin_data {
-        let vertex_count = skin_data.base_positions.len();
-        let mut skinned_positions = vec![cgmath::Vector3::new(0.0, 0.0, 0.0); vertex_count];
-        let mut skinned_normals = vec![cgmath::Vector3::new(0.0, 1.0, 0.0); vertex_count];
-
-        let _ = apply_skinning(
-            &skin_data,
-            global_transforms,
-            skeleton,
-            &mut skinned_positions,
-            &mut skinned_normals,
+    let mesh = &mut graphics.meshes[mesh_idx];
+    if let Err(e) = mesh.vertex_buffer.update(
+        instance,
+        device,
+        command_pool,
+        (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len()) as vk::DeviceSize,
+        mesh.vertex_data.vertices.as_ptr() as *const c_void,
+        mesh.vertex_data.vertices.len(),
+    ) {
+        log!(
+            "Failed to update vertex buffer for mesh {}: {}",
+            mesh_idx,
+            e
         );
-
-        let mesh = &mut graphics.meshes[mesh_idx];
-        for (i, pos) in skinned_positions.iter().enumerate() {
-            if i < mesh.vertex_data.vertices.len() {
-                mesh.vertex_data.vertices[i].pos.x = pos.x;
-                mesh.vertex_data.vertices[i].pos.y = pos.y;
-                mesh.vertex_data.vertices[i].pos.z = pos.z;
-            }
-        }
-        for (i, normal) in skinned_normals.iter().enumerate() {
-            if i < mesh.vertex_data.vertices.len() {
-                mesh.vertex_data.vertices[i].normal.x = normal.x;
-                mesh.vertex_data.vertices[i].normal.y = normal.y;
-                mesh.vertex_data.vertices[i].normal.z = normal.z;
-            }
-        }
-
-        if let Err(e) = mesh.vertex_buffer.update(
-            instance,
-            device,
-            command_pool,
-            (size_of::<vulkan_data::Vertex>() * mesh.vertex_data.vertices.len()) as vk::DeviceSize,
-            mesh.vertex_data.vertices.as_ptr() as *const c_void,
-            mesh.vertex_data.vertices.len(),
-        ) {
-            log!(
-                "Failed to update vertex buffer for mesh {}: {}",
-                mesh_idx,
-                e
-            );
-        }
     }
 
     Ok(())

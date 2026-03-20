@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::app::graphics_resource::{GraphicsResources, NodeData};
+use crate::app::graphics_resource::NodeData;
 use crate::ecs::systems::{
     apply_pose_overrides, apply_skinning, compute_local_override_from_global_translation,
     compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
@@ -175,7 +175,9 @@ fn compute_node_animation_bounds(
         })
         .collect();
 
-    GraphicsResources::compute_node_global_transforms(&mut nodes, skeleton, &pose);
+    crate::ecs::systems::animation::apply::compute_node_global_transforms(
+        &mut nodes, skeleton, &pose,
+    );
 
     let mut min = Vector3::new(f32::MAX, f32::MAX, f32::MAX);
     let mut max = Vector3::new(f32::MIN, f32::MIN, f32::MIN);
@@ -475,7 +477,9 @@ fn test_fbx_stickman_bone_vs_node_positions() {
             global_transform: Matrix4::identity(),
         })
         .collect();
-    GraphicsResources::compute_node_global_transforms(&mut nodes, skeleton, &rest_pose);
+    crate::ecs::systems::animation::apply::compute_node_global_transforms(
+        &mut nodes, skeleton, &rest_pose,
+    );
 
     eprintln!("\n--- Bone positions (skeleton path) ---");
     for bone in &skeleton.bones {
@@ -629,7 +633,11 @@ fn test_bone_pose_override_roundtrip() {
                 global_transform: Matrix4::identity(),
             })
             .collect();
-        GraphicsResources::compute_node_global_transforms(&mut nodes, skeleton, &overridden_pose);
+        crate::ecs::systems::animation::apply::compute_node_global_transforms(
+            &mut nodes,
+            skeleton,
+            &overridden_pose,
+        );
 
         let pose_pos = Vector3::new(
             pose_globals[idx][3][0],
@@ -789,7 +797,11 @@ fn test_gltf_bone_pose_override_roundtrip() {
                 global_transform: Matrix4::identity(),
             })
             .collect();
-        GraphicsResources::compute_node_global_transforms(&mut nodes, skeleton, &overridden_pose);
+        crate::ecs::systems::animation::apply::compute_node_global_transforms(
+            &mut nodes,
+            skeleton,
+            &overridden_pose,
+        );
 
         let pose_pos = Vector3::new(
             pose_globals[idx][3][0],

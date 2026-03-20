@@ -1132,14 +1132,14 @@ mod tests {
         result: &ModelLoadResult,
         skeleton: &Skeleton,
     ) -> Vec<Matrix4<f32>> {
-        use crate::app::graphics_resource::{GraphicsResources, NodeData};
+        use crate::app::graphics_resource::NodeData;
 
         let pose = create_pose_from_rest(skeleton);
         let mut nodes = to_node_data(&result.nodes);
-        GraphicsResources::compute_node_global_transforms(&mut nodes, skeleton, &pose);
-        crate::ecs::systems::animation_playback_systems::build_node_based_bone_transforms(
-            &nodes, skeleton,
-        )
+        crate::ecs::systems::animation::apply::compute_node_global_transforms(
+            &mut nodes, skeleton, &pose,
+        );
+        crate::ecs::systems::animation::apply::build_node_based_bone_transforms(&nodes, skeleton)
     }
 
     #[test]
@@ -1437,10 +1437,9 @@ mod tests {
             global_transform: node_transform,
         }];
 
-        let transforms =
-            crate::ecs::systems::animation_playback_systems::build_node_based_bone_transforms(
-                &nodes, &skeleton,
-            );
+        let transforms = crate::ecs::systems::animation::apply::build_node_based_bone_transforms(
+            &nodes, &skeleton,
+        );
 
         assert_eq!(
             transforms[0], node_transform,
@@ -1478,10 +1477,9 @@ mod tests {
             },
         ];
 
-        let transforms =
-            crate::ecs::systems::animation_playback_systems::build_node_based_bone_transforms(
-                &nodes, &skeleton,
-            );
+        let transforms = crate::ecs::systems::animation::apply::build_node_based_bone_transforms(
+            &nodes, &skeleton,
+        );
 
         assert_eq!(
             transforms[0], name_transform,

@@ -1,5 +1,5 @@
+pub mod animation;
 pub mod animation_debug_dump;
-mod animation_playback_systems;
 mod billboard_systems;
 mod bone_gizmo_systems;
 mod bone_pose_override_systems;
@@ -50,7 +50,7 @@ mod timeline_systems;
 pub mod transform_gizmo_systems;
 mod ui_event_systems;
 
-pub use animation_playback_systems::*;
+pub use animation::*;
 pub use billboard_systems::*;
 pub use bone_gizmo_systems::*;
 pub use bone_pose_override_systems::*;

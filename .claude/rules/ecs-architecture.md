@@ -11,6 +11,12 @@ This project uses an Entity-Component-System (ECS) architecture. The design foll
 3. **Single Responsibility**: Each component/system has one clear purpose
 4. **Components/Systems Directory Separation**: Within a feature domain, data types and logic are separated
    into `components/` and `systems/` subdirectories (inspired by Unity DOTS and Flecs module patterns)
+5. **Small, Atomic Components**: Prefer multiple small components over one large component.
+   Components that are always accessed together may share a struct, but data accessed by different systems
+   should be in separate components (Flecs design principle: reduces cache misses and unnecessary data loading)
+6. **Module Independence**: Feature modules depend on shared component types, not on each other's system
+   functions. Inter-module communication happens through components, resources, and events — never through
+   direct system-to-system calls across module boundaries (Flecs module design)
 
 ## Directory Structure
 
@@ -22,6 +28,7 @@ src/ecs/
 ├── bundle/              # Common component combinations
 ├── resource/            # Global dynamic state (changes per frame)
 ├── systems/             # System functions (behavior/logic)
+│   └── phases/          # Phase coordinators (execution order)
 ├── events/              # Event definitions
 ├── world.rs             # World container for entities and resources
 ├── query.rs             # Query functions for entity filtering
@@ -85,12 +92,16 @@ Data-only structs attached to entities. Located in `ecs/component/`.
 
 Global state that changes per frame. Located in `ecs/resource/`. **Only use for dynamic data.**
 
+Resources correspond to **singleton components** in other ECS frameworks:
+- Flecs: singletons (component added to its own entity)
+- Unity DOTS: singleton components (`GetSingleton<T>()`)
+- EnTT: context variables (`registry.ctx()`)
+
 ### Systems
 
 Pure functions that operate on components and resources. Located in `ecs/systems/`.
 
 ```rust
-// System function naming convention: <domain>_<action>
 pub fn camera_rotate(camera: &mut Camera, delta: Vector2<f32>);
 pub fn animation_update(playback: &mut AnimationPlayback, registry: &mut AnimationRegistry, dt: f32);
 ```
@@ -98,6 +109,41 @@ pub fn animation_update(playback: &mut AnimationPlayback, registry: &mut Animati
 ### Bundles
 
 Predefined component combinations for common entity types. Located in `ecs/bundle/`.
+
+## Phase Pipeline
+
+Systems execute in a fixed phase order, defined in `src/ecs/systems/phases/`. Each phase is a coordinator
+function that calls the appropriate systems in sequence.
+
+```
+run_frame()
+├── run_input_phase()              # Input handling, gizmo interaction
+├── run_transform_phase_ecs()      # Transform propagation
+├── run_animation_phase_ecs()      # Animation evaluation, blending, skinning
+├── run_onion_skin_phase()         # Ghost frame generation
+├── run_render_prep_phase()        # Gizmo mesh building, render data collection
+└── run_event_dispatch_phase()     # UI event processing, deferred actions
+```
+
+### Phase Design Principles (from Flecs, Unity DOTS, Bevy)
+
+- **Phases are sequential**: Each phase completes before the next begins
+- **Systems within a phase may have internal ordering**: Expressed through call sequence in the phase
+  coordinator function
+- **Animation completes before Transform propagation**: Standard in all major engines
+  (Bevy: `.before(TransformSystems::Propagate)`, Unity DOTS: animation in SimulationSystemGroup
+  before TransformSystemGroup)
+- **Event dispatch is last**: Deferred structural changes (entity creation/destruction, component
+  add/remove) are processed at the end of the frame, similar to Unity DOTS EntityCommandBuffer
+  pattern and Flecs sync points
+
+### Adding New Phases
+
+When adding a new phase:
+1. Create a coordinator function in `phases/`
+2. The function receives `FrameContext` and calls system functions in order
+3. Add the call in `run_frame()` at the correct position
+4. Document ordering dependencies (what must complete before this phase)
 
 ## Query Pattern
 
@@ -107,6 +153,9 @@ Use query functions instead of storing entity IDs:
 pub fn query_grid(world: &World) -> Option<Entity>;
 pub fn query_selectable_entities(world: &World) -> Vec<Entity>;
 ```
+
+For frequently called queries, consider caching results in a resource to avoid repeated iteration
+(analogous to Flecs cached queries vs uncached queries).
 
 ## RefCell-Based Interior Mutability
 
@@ -138,6 +187,24 @@ When a feature domain has enough data types and logic to warrant separation:
 **IMPORTANT:** ECS business logic MUST live inside `src/ecs/systems/`. Code outside `src/ecs/` (especially
 `src/platform/`, `src/app/`) must NOT contain ECS domain logic.
 
+### Dependency Direction
+
+Following Flecs module design, dependencies flow in one direction:
+
+```
+Platform Layer (src/platform/, src/app/)
+    │  reads resources, sends events, calls phase entry points
+    ▼
+ECS Systems Layer (src/ecs/systems/)
+    │  calls pure domain functions, operates on components/resources
+    ▼
+Domain Layer (src/animation/editable/, src/animation/)
+    │  pure data types and pure functions, no World dependency
+    ▼
+Core Types (src/ecs/component/, src/ecs/resource/)
+    data definitions only
+```
+
 **Allowed in platform layer** (`src/platform/`):
 - Reading resources for UI display (immutable access)
 - Sending events to `UIEventQueue`
@@ -151,42 +218,115 @@ When a feature domain has enough data types and logic to warrant separation:
 - Implementing event handler logic inline
 - Using `resource_mut` or `get_component_mut` for business logic mutations
 
+### Domain Layer Independence
+
+Domain modules (`src/animation/editable/`) must be **pure** — no dependency on `World`, `Entity`,
+`AssetStorage`, or `GraphicsResources`. This enables:
+- Unit testing without ECS infrastructure
+- Reuse across different ECS contexts
+- Clear separation between "what the data is" and "how the engine uses it"
+
+## Event System
+
+Events follow a **record-then-dispatch** pattern (similar to Unity DOTS EntityCommandBuffer
+and Flecs deferred events):
+
+1. **Platform layer** records events into `UIEventQueue` (immutable World access only)
+2. **Event dispatch phase** processes all queued events (mutable World access)
+3. **Structural changes** (entity creation/destruction) happen only during dispatch
+
+This prevents mutation during iteration and ensures deterministic ordering.
+
 ## Bones are NOT Entities
 
 - Bones are data within `Skeleton.bones: Vec<Bone>`
 - Bones identified by `BoneId` (u32 index), not `Entity`
 - Constraints reference bones via `BoneId`
 
+This is a deliberate design choice: skeleton data is a small, structured hierarchy that benefits from
+contiguous memory (Vec) rather than ECS entity overhead. Flecs also recognizes this pattern —
+small structural hierarchies can use optimized storage rather than full entity relationships.
+
 ## Reference Projects
 
-### Rust ECS
+### Tier 1: Industry Standard (Production-Proven)
 
-- [Bevy Engine](https://github.com/bevyengine/bevy) - Feature-per-crate, data and systems co-located
-  within each crate. Primary reference for this project's core ECS patterns.
-- [Hecs](https://github.com/Ralith/hecs) - Lightweight ECS library
-- [Legion](https://github.com/amethyst/legion) - Another Rust ECS implementation
+- **[Unity DOTS (Entities)](https://docs.unity3d.com/Packages/com.unity.entities@1.0/manual/)**
+  - Archetype ECS with chunk-based memory layout
+  - 3 root SystemGroups: Initialization → Simulation → Presentation
+  - `UpdateBefore`/`UpdateAfter` attributes for system ordering within groups
+  - EntityCommandBuffer for deferred structural changes (record → playback)
+  - Singleton components for global state (equivalent to this project's Resources)
+  - Baker/Authoring pattern: separates editor data from runtime ECS data
+  - **Primary reference for**: phase ordering, deferred action pattern, directory layout
 
-### C/C++ ECS
+- **[Unreal Mass Entity](https://dev.epicgames.com/documentation/en-us/unreal-engine/mass-entity-in-unreal-engine)**
+  - Plugin-per-feature (MassMovement, MassRepresentation)
+  - Fragments (Components) and Processors (Systems) co-located per plugin
+  - **Primary reference for**: feature-per-plugin organization
 
-- [Flecs](https://github.com/SanderMertens/flecs) - Recommends `components.*` and `systems.*` module
-  separation per feature domain. Primary reference for this project's domain module organization.
-- [EnTT](https://github.com/skypjack/entt) - Header-only C++ ECS. No prescribed structure; users organize
-  freely. Systems are plain functions/lambdas.
+### Tier 2: High-Quality ECS Libraries
 
-### C# / Engine ECS
+- **[Flecs](https://github.com/SanderMertens/flecs)** (C/C++, ~7k stars)
+  - Archetype ECS with 8 built-in pipeline phases
+  - `DependsOn` relationships for topological sort of phase ordering
+  - Module design: components are shared types; systems depend only on components, not other systems
+  - Small atomic components recommended (Position + Rotation + Scale, not Transform)
+  - Relationship system (ChildOf, IsA) with cleanup traits
+  - Observer system with lifecycle events (OnAdd, OnRemove, OnSet)
+  - [Design with Flecs](https://www.flecs.dev/flecs/md_docs_2DesignWithFlecs.html) — essential reading
+  - **Primary reference for**: module boundary design, phase pipeline, component granularity
 
-- [Unity DOTS (Entities)](https://github.com/Unity-Technologies/EntityComponentSystemSamples) - Uses
-  `Components/`, `Systems/`, `Authoring/` directory separation. Primary reference for directory layout.
-- [Unreal Mass Entity](https://dev.epicgames.com/documentation/en-us/unreal-engine/mass-entity-in-unreal-engine) -
-  Plugin-per-feature (MassMovement, MassRepresentation), Fragments and Processors co-located per plugin.
+- **[EnTT](https://github.com/skypjack/entt)** (C++, ~10k stars)
+  - Sparse set ECS (vs archetype): O(1) component add/remove, fast single-component queries
+  - Registry as coordinator (not monolithic container)
+  - View (flexible, no ownership) vs Group (high-performance, owns component pools)
+  - Signal system: on_construct, on_update, on_destroy per component type
+  - Context variables for singleton/resource data
+  - No prescribed project structure — library, not framework
+  - **Primary reference for**: sparse set trade-offs, signal/event patterns, minimal API design
 
-### Pattern Summary
+- **[Bevy Engine](https://github.com/bevyengine/bevy)** (Rust, ~44k stars)
+  - Archetype ECS with Schedule + SystemSet for execution ordering
+  - Feature-per-crate, data and systems co-located within each crate
+  - Animation pipeline: 6 chained systems in PostUpdate, before TransformSystems::Propagate
+  - Plugin architecture for modular feature registration
+  - **Primary reference for**: Rust ECS patterns, animation pipeline phases, system ordering
 
-| Project        | Data/Logic Separation     | Organization Unit     |
-|----------------|---------------------------|-----------------------|
-| Bevy           | Mixed per file            | Crate (feature)       |
-| Flecs          | Separate modules          | Module (feature)      |
-| Unity DOTS     | Separate directories      | Directory (feature)   |
-| Unreal Mass    | Mixed per plugin          | Plugin (feature)      |
-| EnTT           | User-defined              | Free-form             |
-| **This project** | **Separate directories** | **Directory (feature)** |
+### Tier 3: Specialized References
+
+- **[Fyrox](https://github.com/FyroxEngine/Fyrox)** (Rust)
+  - Scene graph + Generational Arena (Pool), not pure ECS
+  - Animation Blending State Machine (ABSM): layers + states + transitions + blend nodes
+  - Each layer has its own state machine; all layers blend to final pose
+  - Plugin system with hot-reload support
+  - **Primary reference for**: animation blending architecture (ABSM, layers)
+
+- **[Hecs](https://github.com/Ralith/hecs)** (Rust, ~1.2k stars)
+  - Minimal archetype ECS. Clean, small codebase
+  - **Primary reference for**: understanding core ECS internals
+
+### Architecture Comparison
+
+| Feature | This Project | Flecs | Unity DOTS | EnTT | Bevy |
+|---------|-------------|-------|------------|------|------|
+| Storage | Custom (HashMap) | Archetype | Archetype (Chunk) | Sparse Set | Archetype |
+| Data/Logic Split | Separate dirs | Separate modules | Flat per feature | Free-form | Mixed per crate |
+| Organization Unit | Directory | Module | Directory | Free-form | Crate |
+| Phase System | Coordinator fns | DependsOn pipeline | SystemGroup hierarchy | User-defined | Schedule + SystemSet |
+| Global State | Resource | Singleton | Singleton Component | Context Variable | Resource |
+| Events | UIEventQueue | Observer + emit | ECB + SystemGroup | Signal (sigh/sink) | Event\<T\> + EventReader |
+| Deferred Changes | DeferredAction | Sync point flush | EntityCommandBuffer | - | Commands |
+
+### Key Patterns Adopted from Each
+
+| Pattern | Source | Implementation in This Project |
+|---------|--------|-------------------------------|
+| components/ + systems/ directory split | Flecs, Unity DOTS | `animation/editable/components/` + `systems/` |
+| Phase pipeline with explicit ordering | Flecs, Unity DOTS, Bevy | `phases/` directory with coordinator functions |
+| Resources for global state | All (unanimous) | `ecs/resource/` |
+| Record-then-dispatch events | Unity DOTS (ECB), Flecs (deferred) | `UIEventQueue` → `event_dispatch_phase` |
+| Module depends on types only, not logic | Flecs | Platform layer reads resources, sends events only |
+| Pure domain layer (no World dependency) | Bevy (per-crate), Flecs (module independence) | `animation/editable/` has no ECS dependency |
+| Contiguous memory for bulk data | Flecs, Bevy, Unreal | `Vec<Bone>`, `Vec<Keyframe>` for animation data |
+| Animation before Transform propagation | Bevy, Unity DOTS | `run_animation_phase` before `run_transform_phase` |

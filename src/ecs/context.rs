@@ -3,10 +3,10 @@ use cgmath::Vector3;
 use crate::app::billboard::BillboardData;
 use crate::app::GUIData;
 use crate::asset::AssetStorage;
-use crate::debugview::gizmo::{
+use crate::ecs::component::{LineMesh, MeshScale};
+use crate::ecs::resource::gizmo::{
     BoneSelectionState, GridGizmoData, LightGizmoData, TransformGizmoData,
 };
-use crate::ecs::component::{LineMesh, MeshScale};
 use crate::ecs::resource::Camera;
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::resource::LightState;

@@ -2,8 +2,8 @@ use imgui::Condition;
 
 use crate::animation::{BoneId, Skeleton};
 use crate::asset::AssetStorage;
-use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData};
 use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData};
 use crate::ecs::resource::{HierarchyDisplayMode, HierarchyState};
 use crate::ecs::systems::{hierarchy_is_bone_expanded, query_hierarchy_tree};
 use crate::ecs::world::World;

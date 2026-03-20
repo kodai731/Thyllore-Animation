@@ -1,11 +1,11 @@
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
 use crate::app::billboard::BillboardData;
-use crate::debugview::gizmo::{
+use crate::ecs::component::GpuMeshRef;
+use crate::ecs::resource::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, GridGizmoData, LightGizmoData,
     SpringBoneGizmoData, TransformGizmoData,
 };
-use crate::ecs::component::GpuMeshRef;
 use crate::ecs::resource::GridMeshData;
 use crate::ecs::RenderData;
 

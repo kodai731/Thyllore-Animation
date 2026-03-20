@@ -4,7 +4,7 @@ use anyhow::Result;
 
 use crate::animation::{BoneId, BoneLocalPose};
 use crate::app::FrameContext;
-use crate::debugview::gizmo::BoneGizmoData;
+use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{BonePoseOverride, ClipLibrary, NodeAssets};
 use crate::ecs::{
     playback_upload_animations, run_animation_pipeline, transform_propagation_system,

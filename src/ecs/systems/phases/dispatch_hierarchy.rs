@@ -1,8 +1,8 @@
 use cgmath::Vector3;
 
 use crate::asset::AssetStorage;
-use crate::debugview::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::ecs::events::UIEvent;
+use crate::ecs::resource::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::{Camera, ClipLibrary, HierarchyState, TimelineState};
 use crate::ecs::systems::{

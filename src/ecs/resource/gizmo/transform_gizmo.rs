@@ -29,22 +29,16 @@ pub struct TransformGizmoData {
     pub draggable: GizmoDraggable,
     pub active_handle: TransformGizmoHandle,
     pub drag_active: bool,
-    // Line-based meshes (axis shafts, rings)
     pub line_mesh: LineMesh,
-    // Solid triangle meshes (cone tips, cubes, plane quads)
     pub solid_mesh: LineMesh,
-    // Render info for line pipeline (no-depth line)
     pub line_render_info: RenderInfo,
-    // Render info for solid pipeline (no-depth triangle)
     pub solid_render_info: RenderInfo,
-    // Drag state
     pub drag_start_position: Vector3<f32>,
     pub drag_start_rotation: Quaternion<f32>,
     pub drag_start_scale: Vector3<f32>,
     pub drag_plane_normal: Vector3<f32>,
     pub drag_initial_hit: Vector3<f32>,
     pub drag_initial_angle: f32,
-    // Target tracking
     pub target_bone_id: Option<BoneId>,
     pub target_entity: Option<Entity>,
 }

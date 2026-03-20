@@ -1,7 +1,7 @@
 use crate::app::{App, AppData};
 
-use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
 use crate::ecs::component::RenderInfo;
+use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData};
 use crate::ecs::resource::pipeline_allocate_id;
 use crate::ecs::resource::GridMeshData;
 use crate::ecs::systems::{
@@ -673,7 +673,7 @@ impl App {
         bone_gizmo_data.display_style = BoneDisplayStyle::Octahedral;
         data.ecs_world.insert_resource(bone_gizmo_data);
         data.ecs_world
-            .insert_resource(crate::debugview::gizmo::BoneSelectionState::default());
+            .insert_resource(crate::ecs::resource::gizmo::BoneSelectionState::default());
 
         let mut constraint_gizmo_data = ConstraintGizmoData::default();
         constraint_gizmo_data.wire_render_info.pipeline_id = Some(pipeline_ids.bone_wire);
@@ -681,7 +681,8 @@ impl App {
             data.graphics_resources.objects.allocate_slot();
         data.ecs_world.insert_resource(constraint_gizmo_data);
 
-        let mut spring_bone_gizmo_data = crate::debugview::gizmo::SpringBoneGizmoData::default();
+        let mut spring_bone_gizmo_data =
+            crate::ecs::resource::gizmo::SpringBoneGizmoData::default();
         spring_bone_gizmo_data.wire_render_info.pipeline_id = Some(pipeline_ids.bone_wire);
         spring_bone_gizmo_data.wire_render_info.object_index =
             data.graphics_resources.objects.allocate_slot();
@@ -691,7 +692,7 @@ impl App {
     }
 
     fn setup_transform_gizmo_resources(pipeline_ids: &GizmoPipelineIds, data: &mut AppData) {
-        let mut tg = crate::debugview::gizmo::TransformGizmoData::default();
+        let mut tg = crate::ecs::resource::gizmo::TransformGizmoData::default();
         tg.line_render_info.pipeline_id = Some(pipeline_ids.bone_wire);
         tg.line_render_info.object_index = data.graphics_resources.objects.allocate_slot();
         tg.solid_render_info.pipeline_id = Some(pipeline_ids.bone_solid);

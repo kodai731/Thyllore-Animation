@@ -5,10 +5,10 @@ use cgmath::Matrix4;
 
 use crate::animation::{BoneId, SkeletonId};
 use crate::app::data::LightMoveTarget;
-use crate::debugview::gizmo::transform::TransformGizmoHandle;
-use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, TransformGizmoData};
 use crate::ecs::component::LineMesh;
 use crate::ecs::context::EcsContext;
+use crate::ecs::resource::gizmo::transform_gizmo::TransformGizmoHandle;
+use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData, TransformGizmoData};
 use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::{
     BonePoseOverride, ClipLibrary, HierarchyDisplayMode, TimelineState, TransformGizmoMode,

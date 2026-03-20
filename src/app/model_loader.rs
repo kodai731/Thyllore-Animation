@@ -13,8 +13,8 @@ use crate::app::graphics_resource::{GraphicsResources, MaterialId, MeshBuffer, N
 use crate::app::raytracing::RayTracingData;
 use crate::app::AppData;
 use crate::asset::{AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
-use crate::debugview::gizmo::{BoneGizmoData, ConstraintGizmoData};
 use crate::ecs::component::{AnimationMeta, ClipSchedule, EntityIcon};
+use crate::ecs::resource::gizmo::{BoneGizmoData, ConstraintGizmoData};
 use crate::ecs::resource::{
     AnimationType, ClipLibrary, FbxModelCache, GltfModelCache, MeshAssets, ModelState, NodeAssets,
     TimelineState,

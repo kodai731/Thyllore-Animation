@@ -2,12 +2,12 @@ use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
 use crate::app::FrameContext;
-use crate::debugview::gizmo::BoneSelectionState;
-use crate::debugview::gizmo::TransformGizmoData;
-use crate::debugview::gizmo::{
+use crate::ecs::component::{ConstraintSet, LineMesh};
+use crate::ecs::resource::gizmo::BoneSelectionState;
+use crate::ecs::resource::gizmo::TransformGizmoData;
+use crate::ecs::resource::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, SpringBoneGizmoData,
 };
-use crate::ecs::component::{ConstraintSet, LineMesh};
 use crate::ecs::resource::ProjectionData;
 use crate::ecs::resource::{Camera, Exposure, TransformGizmoState};
 use crate::ecs::systems::render_data_systems::{

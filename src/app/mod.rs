@@ -25,8 +25,10 @@ pub use init::*;
 use crate::app::billboard::BillboardData;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::app::raytracing::RayTracingData;
-use crate::debugview::gizmo::{BoneGizmoData, GridGizmoData, LightGizmoData, TransformGizmoData};
 use crate::debugview::DebugViewState;
+use crate::ecs::resource::gizmo::{
+    BoneGizmoData, GridGizmoData, LightGizmoData, TransformGizmoData,
+};
 use crate::ecs::resource::Camera;
 use crate::ecs::resource::{GridMeshData, LightState};
 use crate::ecs::{

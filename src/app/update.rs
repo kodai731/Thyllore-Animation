@@ -132,7 +132,7 @@ impl App {
         let mut gizmo = self
             .data
             .ecs_world
-            .resource_mut::<crate::debugview::gizmo::LightGizmoData>();
+            .resource_mut::<crate::ecs::resource::gizmo::LightGizmoData>();
         gizmo_update_or_create_vertical_line_buffers(&mut gizmo.vertical_lines, &mut backend)?;
 
         Ok(())

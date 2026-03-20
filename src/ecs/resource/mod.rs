@@ -1,3 +1,5 @@
+pub mod gizmo;
+
 mod auto_exposure;
 mod bloom;
 #[cfg(feature = "ml")]
@@ -45,6 +47,8 @@ mod timeline_interaction_state;
 mod timeline_state;
 mod tone_mapping;
 mod transform_gizmo_state;
+
+pub use gizmo::*;
 
 pub use auto_exposure::*;
 pub use bloom::*;

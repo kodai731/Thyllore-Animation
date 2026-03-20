@@ -7,8 +7,10 @@ use crate::app::billboard::BillboardData;
 use crate::app::graphics_resource::GraphicsResources;
 use crate::app::raytracing::RayTracingData;
 use crate::asset::AssetStorage;
-use crate::debugview::gizmo::{BoneGizmoData, GridGizmoData, LightGizmoData, TransformGizmoData};
 use crate::debugview::DebugViewState;
+use crate::ecs::resource::gizmo::{
+    BoneGizmoData, GridGizmoData, LightGizmoData, TransformGizmoData,
+};
 use crate::ecs::resource::{Camera, GridMeshData, LightState};
 use crate::ecs::world::{ResMut, ResRef, World};
 use crate::render::RenderBackend;

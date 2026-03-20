@@ -2,8 +2,8 @@ use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 
 use crate::animation::Skeleton;
-use crate::debugview::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::ecs::component::{ColorVertex, LineMesh};
+use crate::ecs::resource::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::math::ray_to_triangle_intersection;
 use crate::render::RenderBackend;
 
@@ -1322,7 +1322,7 @@ mod tests {
         let transforms = simulate_runtime_node_gizmo_transforms(&result, skeleton);
         let offsets = compute_bone_local_offsets(skeleton, &transforms);
 
-        let mut gizmo = crate::debugview::gizmo::TransformGizmoData::default();
+        let mut gizmo = crate::ecs::resource::gizmo::TransformGizmoData::default();
         let mut at_origin_count = 0u32;
         let mut total = 0u32;
 
@@ -1371,7 +1371,7 @@ mod tests {
 
         let display = compute_display_transforms(&globals, &offsets, 1.0);
 
-        let mut gizmo = crate::debugview::gizmo::TransformGizmoData::default();
+        let mut gizmo = crate::ecs::resource::gizmo::TransformGizmoData::default();
         let mut failures = Vec::new();
 
         for (idx, bone) in skeleton.bones.iter().enumerate() {

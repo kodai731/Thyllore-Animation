@@ -5,8 +5,8 @@ use crate::animation::{
     PRIORITY_AIM, PRIORITY_IK, PRIORITY_POSITION,
 };
 use crate::asset::storage::AssetStorage;
-use crate::debugview::gizmo::ConstraintGizmoData;
 use crate::ecs::component::{Constrained, ConstraintSet};
+use crate::ecs::resource::gizmo::ConstraintGizmoData;
 use crate::ecs::world::{Animator, Entity, World};
 
 pub fn create_test_constraints(world: &mut World, assets: &AssetStorage) {

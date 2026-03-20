@@ -3,10 +3,10 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::graphics_resource::GraphicsResources;
 use crate::app::App;
-use crate::debugview::gizmo::{
+use crate::ecs::component::{LineMesh, RenderInfo};
+use crate::ecs::resource::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, TransformGizmoData,
 };
-use crate::ecs::component::{LineMesh, RenderInfo};
 use crate::vulkanr::core::Device;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};

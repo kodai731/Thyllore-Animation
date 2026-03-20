@@ -1,8 +1,8 @@
 use imgui::Condition;
 
 use crate::app::GUIData;
-use crate::debugview::gizmo::BoneGizmoData;
 use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{CoordinateSpace, TransformGizmoMode, TransformGizmoState};
 use crate::ecs::World;
 

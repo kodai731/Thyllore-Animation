@@ -411,21 +411,17 @@ impl World {
     }
 
     pub fn resource<R: Resource>(&self) -> ResRef<R> {
-        self.resources.get::<R>().unwrap_or_else(|| {
-            panic!(
-                "Resource {} not registered. Call world.insert_resource() first.",
-                std::any::type_name::<R>()
-            )
-        })
+        self.resources.get::<R>().expect(&format!(
+            "resource<{}> not found: call insert_resource() first",
+            std::any::type_name::<R>()
+        ))
     }
 
     pub fn resource_mut<R: Resource>(&self) -> ResMut<R> {
-        self.resources.get_mut::<R>().unwrap_or_else(|| {
-            panic!(
-                "Resource {} not registered. Call world.insert_resource() first.",
-                std::any::type_name::<R>()
-            )
-        })
+        self.resources.get_mut::<R>().expect(&format!(
+            "resource_mut<{}> not found: call insert_resource() first",
+            std::any::type_name::<R>()
+        ))
     }
 
     pub fn get_resource<R: Resource>(&self) -> Option<ResRef<R>> {

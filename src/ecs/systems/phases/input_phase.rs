@@ -920,9 +920,11 @@ fn sync_transform_gizmo_to_entity(ctx: &mut EcsContext) {
         return;
     };
 
+    let transform_entity = crate::ecs::systems::resolve_transform_entity(ctx.world, entity);
+
     let world_pos = ctx
         .world
-        .get_component::<GlobalTransform>(entity)
+        .get_component::<GlobalTransform>(transform_entity)
         .map(|gt| {
             let m = gt.0;
             Vector3::new(m[3][0], m[3][1], m[3][2])
@@ -936,7 +938,7 @@ fn sync_transform_gizmo_to_entity(ctx: &mut EcsContext) {
     };
 
     let mut tg = ctx.transform_gizmo_mut();
-    transform_gizmo_systems::transform_gizmo_sync_to_entity(&mut tg, pos, entity);
+    transform_gizmo_systems::transform_gizmo_sync_to_entity(&mut tg, pos, transform_entity);
 }
 
 fn sync_bone_selection_to_hierarchy(

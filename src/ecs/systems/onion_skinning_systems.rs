@@ -121,25 +121,28 @@ fn collect_animation_context(
     mesh_index: usize,
     skin_data: SkinData,
 ) -> Option<AnimationContext> {
-    for (entity, animator) in world.iter_components::<Animator>() {
-        let schedule = world.get_component::<ClipSchedule>(entity)?;
-        let mesh_ref = world.get_component::<crate::ecs::world::MeshRef>(entity)?;
-        let mesh_asset = assets.get_mesh(mesh_ref.mesh_asset_id)?;
+    for (parent_entity, animator) in world.iter_components::<Animator>() {
+        let schedule = world.get_component::<ClipSchedule>(parent_entity)?;
 
-        if mesh_asset.graphics_mesh_index != mesh_index {
-            continue;
+        for mesh_entity in world.find_child_mesh_entities(parent_entity) {
+            let mesh_ref = world.get_component::<crate::ecs::world::MeshRef>(mesh_entity)?;
+            let mesh_asset = assets.get_mesh(mesh_ref.mesh_asset_id)?;
+
+            if mesh_asset.graphics_mesh_index != mesh_index {
+                continue;
+            }
+
+            let skeleton_id = mesh_asset.skeleton_id?;
+            let source_id = schedule.instances.first().map(|inst| inst.source_id)?;
+            let _skeleton = assets.get_skeleton_by_skeleton_id(skeleton_id)?;
+
+            return Some(AnimationContext {
+                skeleton_id,
+                source_id,
+                looping: animator.looping,
+                skin_data,
+            });
         }
-
-        let skeleton_id = mesh_asset.skeleton_id?;
-        let source_id = schedule.instances.first().map(|inst| inst.source_id)?;
-        let _skeleton = assets.get_skeleton_by_skeleton_id(skeleton_id)?;
-
-        return Some(AnimationContext {
-            skeleton_id,
-            source_id,
-            looping: animator.looping,
-            skin_data,
-        });
     }
 
     None

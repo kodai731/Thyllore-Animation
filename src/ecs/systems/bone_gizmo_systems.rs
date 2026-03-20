@@ -1488,4 +1488,76 @@ mod tests {
             "name match should take priority over node_index fallback"
         );
     }
+
+    #[test]
+    fn debug_phoenix_bone_usage_per_mesh() {
+        let Some(result) = load_phoenix() else {
+            eprintln!("Skipping: phoenix model not found");
+            return;
+        };
+        let skeleton = result.skeletons.first().expect("no skeleton");
+
+        let skinned_meshes: Vec<_> = result
+            .meshes
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| m.skin_data.is_some())
+            .collect();
+
+        eprintln!(
+            "Phoenix: {} skinned meshes, {} bones",
+            skinned_meshes.len(),
+            skeleton.bones.len()
+        );
+
+        let mut per_mesh_bones: Vec<std::collections::HashSet<u32>> = Vec::new();
+
+        for (mi, mesh) in &skinned_meshes {
+            let sd = mesh.skin_data.as_ref().unwrap();
+            let mut used_bones = std::collections::HashSet::new();
+
+            for (vi, indices) in sd.bone_indices.iter().enumerate() {
+                let weights = &sd.bone_weights[vi];
+                if weights.x > 0.0 {
+                    used_bones.insert(indices.x);
+                }
+                if weights.y > 0.0 {
+                    used_bones.insert(indices.y);
+                }
+                if weights.z > 0.0 {
+                    used_bones.insert(indices.z);
+                }
+                if weights.w > 0.0 {
+                    used_bones.insert(indices.w);
+                }
+            }
+
+            eprintln!(
+                "  mesh[{}]: {} verts, {} bones used",
+                mi,
+                sd.base_positions.len(),
+                used_bones.len(),
+            );
+            per_mesh_bones.push(used_bones);
+        }
+
+        if per_mesh_bones.len() == 2 {
+            let shared: std::collections::HashSet<_> =
+                per_mesh_bones[0].intersection(&per_mesh_bones[1]).collect();
+            let only_0: std::collections::HashSet<_> =
+                per_mesh_bones[0].difference(&per_mesh_bones[1]).collect();
+            let only_1: std::collections::HashSet<_> =
+                per_mesh_bones[1].difference(&per_mesh_bones[0]).collect();
+
+            eprintln!("  shared bones: {}", shared.len());
+            eprintln!("  only mesh[0]: {}", only_0.len());
+            eprintln!("  only mesh[1]: {}", only_1.len());
+
+            for &b in &shared {
+                if let Some(bone) = skeleton.bones.get(*b as usize) {
+                    eprintln!("    shared: bone[{}] '{}'", b, bone.name);
+                }
+            }
+        }
+    }
 }

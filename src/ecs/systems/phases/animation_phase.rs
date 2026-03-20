@@ -100,19 +100,25 @@ mod tests {
 
         let mut transform = Transform::default();
         transform.translation = translation;
-
         let global_matrix = Matrix4::from_translation(translation);
 
-        let entity = world
+        let parent = world
             .entity()
-            .with_name("test_mesh")
+            .with_name("test_model")
             .with_transform(transform)
             .with_visible(true)
-            .with_mesh(1, 0)
             .with_animator(Animator::new())
             .build();
+        world.insert_component(parent, GlobalTransform(global_matrix));
 
-        world.insert_component(entity, GlobalTransform(global_matrix));
+        world
+            .entity()
+            .with_name("test_mesh")
+            .with_global_transform()
+            .with_visible(true)
+            .with_parent(parent)
+            .with_mesh(1, 0)
+            .build();
 
         world
     }

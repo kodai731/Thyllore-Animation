@@ -509,7 +509,7 @@ impl World {
     }
 
     pub fn get_root_entities(&self) -> Vec<Entity> {
-        self.iter_components::<Transform>()
+        self.iter_components::<GlobalTransform>()
             .filter(|(e, _)| !self.has_component::<Parent>(*e))
             .map(|(e, _)| e)
             .collect()
@@ -542,7 +542,20 @@ impl World {
     }
 
     pub fn entity_count(&self) -> usize {
-        self.component_entities::<Transform>().len()
+        self.component_entities::<GlobalTransform>().len()
+    }
+
+    pub fn find_child_mesh_entities(&self, parent: Entity) -> Vec<Entity> {
+        self.get_component::<Children>(parent)
+            .map(|children| {
+                children
+                    .0
+                    .iter()
+                    .copied()
+                    .filter(|&child| self.has_component::<MeshRef>(child))
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     pub fn clear(&mut self) {
@@ -577,6 +590,12 @@ impl<'a> EntityBuilder<'a> {
 
     pub fn with_transform(self, transform: Transform) -> Self {
         self.world.insert_component(self.entity, transform);
+        self.world
+            .insert_component(self.entity, GlobalTransform::new());
+        self
+    }
+
+    pub fn with_global_transform(self) -> Self {
         self.world
             .insert_component(self.entity, GlobalTransform::new());
         self

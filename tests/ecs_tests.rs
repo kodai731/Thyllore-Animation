@@ -613,11 +613,9 @@ mod world_tests {
     fn test_world_entity_count() {
         let mut world = World::new();
 
-        let e1 = world.spawn();
-        world.insert_component(e1, Transform::default());
+        world.entity().with_transform(Transform::default()).build();
 
-        let e2 = world.spawn();
-        world.insert_component(e2, Transform::default());
+        world.entity().with_transform(Transform::default()).build();
 
         assert_eq!(world.entity_count(), 2);
     }

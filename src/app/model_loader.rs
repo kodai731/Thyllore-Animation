@@ -825,13 +825,32 @@ fn create_ecs_entities(
 
     register_node_assets(world, assets);
 
-    let parent_entity = world
+    let has_animation = !loaded_clips.is_empty();
+
+    let initial_schedule = if has_animation && !scene_will_provide_clips {
+        build_initial_clip_schedule(first_editable_clip_id, world)
+    } else {
+        ClipSchedule::new()
+    };
+
+    let mut parent_builder = world
         .entity()
         .with_name(&name)
         .with_transform(Transform::default())
         .with_visible(true)
-        .with_editor_display(EntityIcon::Model, true)
-        .build();
+        .with_editor_display(EntityIcon::Model, true);
+
+    if has_animation {
+        parent_builder = parent_builder
+            .with_animator(Animator::new())
+            .with_clip_schedule(initial_schedule)
+            .with_animation_meta(AnimationMeta {
+                animation_type,
+                node_animation_scale,
+            });
+    }
+
+    let parent_entity = parent_builder.build();
 
     log!(
         "Created parent entity '{}': entity_id={}",
@@ -839,19 +858,7 @@ fn create_ecs_entities(
         parent_entity
     );
 
-    let has_animation = !loaded_clips.is_empty();
-    build_mesh_entities(
-        &name,
-        graphics,
-        world,
-        assets,
-        animation_type,
-        node_animation_scale,
-        has_animation,
-        scene_will_provide_clips,
-        first_editable_clip_id,
-        parent_entity,
-    );
+    build_mesh_entities(&name, graphics, world, assets, parent_entity);
 
     log!(
         "Created {} ECS entities, {} mesh assets, {} skeletons, {} clips, {} nodes",
@@ -949,19 +956,8 @@ fn build_mesh_entities(
     graphics: &GraphicsResources,
     world: &mut World,
     assets: &mut AssetStorage,
-    animation_type: AnimationType,
-    node_animation_scale: f32,
-    has_animation: bool,
-    scene_will_provide_clips: bool,
-    first_editable_clip_id: Option<SourceClipId>,
     parent_entity: crate::ecs::Entity,
 ) {
-    let initial_schedule = if has_animation && !scene_will_provide_clips {
-        build_initial_clip_schedule(first_editable_clip_id, world)
-    } else {
-        ClipSchedule::new()
-    };
-
     for (mesh_idx, mesh) in graphics.meshes.iter().enumerate() {
         let entity_name = format!("{}_{:02}", name, mesh_idx + 1);
 
@@ -977,28 +973,16 @@ fn build_mesh_entities(
         };
         let asset_id = assets.add_mesh(mesh_asset);
 
-        let mut builder = world
+        let entity = world
             .entity()
             .with_name(&entity_name)
-            .with_transform(Transform::default())
+            .with_global_transform()
             .with_visible(true)
             .with_parent(parent_entity)
             .with_editor_display(EntityIcon::Mesh, false)
-            .with_mesh(asset_id, mesh.object_index);
+            .with_mesh(asset_id, mesh.object_index)
+            .build();
 
-        if has_animation {
-            let animator = Animator::new();
-            let meta = AnimationMeta {
-                animation_type: animation_type.clone(),
-                node_animation_scale,
-            };
-            builder = builder
-                .with_animator(animator)
-                .with_clip_schedule(initial_schedule.clone())
-                .with_animation_meta(meta);
-        }
-
-        let entity = builder.build();
         log!(
             "Created ECS entity {} (asset_id={}) for mesh {}: entity_id={}, parent={}",
             entity_name,

@@ -5,7 +5,7 @@ use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
 use crate::app::graphics_resource::GraphicsResources;
 use crate::asset::AssetStorage;
 use crate::ecs::component::EditorDisplay;
-use crate::ecs::world::{Entity, MeshRef, Name, Transform, Visibility, Visible, World};
+use crate::ecs::world::{Entity, MeshRef, Name, Parent, Transform, Visibility, Visible, World};
 
 #[derive(Clone, Debug)]
 pub struct MeshInspectorData {
@@ -47,7 +47,8 @@ pub fn collect_inspector_data(
         .map(|n| n.0.clone())
         .unwrap_or_else(|| format!("Entity {}", entity));
 
-    let transform = world.get_component::<Transform>(entity);
+    let transform_entity = resolve_transform_entity(world, entity);
+    let transform = world.get_component::<Transform>(transform_entity);
     let translation = transform.map(|t| t.translation);
     let rotation_euler = transform.map(|t| quaternion_to_euler_degrees(&t.rotation));
     let scale = transform.map(|t| t.scale);
@@ -115,14 +116,27 @@ fn collect_mesh_and_material(
     (mesh_data, material_data)
 }
 
+pub fn resolve_transform_entity(world: &World, entity: Entity) -> Entity {
+    if world.has_component::<Transform>(entity) {
+        return entity;
+    }
+    world
+        .get_component::<Parent>(entity)
+        .map(|p| p.0)
+        .filter(|&p| world.has_component::<Transform>(p))
+        .unwrap_or(entity)
+}
+
 pub fn update_entity_translation(world: &mut World, entity: Entity, translation: Vector3<f32>) {
-    if let Some(transform) = world.get_component_mut::<Transform>(entity) {
+    let target = resolve_transform_entity(world, entity);
+    if let Some(transform) = world.get_component_mut::<Transform>(target) {
         transform.translation = translation;
     }
 }
 
 pub fn update_entity_rotation(world: &mut World, entity: Entity, rotation: Quaternion<f32>) {
-    if let Some(transform) = world.get_component_mut::<Transform>(entity) {
+    let target = resolve_transform_entity(world, entity);
+    if let Some(transform) = world.get_component_mut::<Transform>(target) {
         transform.rotation = rotation;
     }
 }
@@ -133,7 +147,8 @@ pub fn update_entity_rotation_euler(world: &mut World, entity: Entity, euler: Ve
 }
 
 pub fn update_entity_scale(world: &mut World, entity: Entity, scale: Vector3<f32>) {
-    if let Some(transform) = world.get_component_mut::<Transform>(entity) {
+    let target = resolve_transform_entity(world, entity);
+    if let Some(transform) = world.get_component_mut::<Transform>(target) {
         transform.scale = scale;
     }
 }

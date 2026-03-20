@@ -1,10 +1,10 @@
 use crate::debugview::gizmo::BoneGizmoData;
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{
-    AutoExposure, DepthOfField, GridMeshData, MessageLog, OnionSkinningConfig,
+    AutoExposure, DepthOfField, GridMeshData, HierarchyState, MessageLog, OnionSkinningConfig,
     PhysicalCameraParameters, TransformGizmoState,
 };
-use crate::ecs::world::World;
+use crate::ecs::world::{Animator, World};
 
 pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
     for event in events {
@@ -45,6 +45,9 @@ pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
                 }
             }
             UIEvent::UpdateOnionSkinning(new_config) => {
+                if new_config.enabled {
+                    auto_select_animator_entity(world);
+                }
                 if let Some(mut config) = world.get_resource_mut::<OnionSkinningConfig>() {
                     *config = new_config.clone();
                 }
@@ -61,5 +64,21 @@ pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
             }
             _ => {}
         }
+    }
+}
+
+fn auto_select_animator_entity(world: &mut World) {
+    let already_selected = world
+        .get_resource::<HierarchyState>()
+        .and_then(|h| h.selected_entity)
+        .is_some();
+    if already_selected {
+        return;
+    }
+
+    let first_animator = world.iter_components::<Animator>().next().map(|(e, _)| e);
+    if let Some(entity) = first_animator {
+        let mut hierarchy = world.resource_mut::<HierarchyState>();
+        crate::ecs::systems::hierarchy_select(&mut hierarchy, entity);
     }
 }

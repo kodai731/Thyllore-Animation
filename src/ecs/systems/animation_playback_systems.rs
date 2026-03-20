@@ -24,9 +24,10 @@ use super::pose_blend_systems::blend_poses_additive;
 
 pub struct AnimationEvalResult {
     pub updated_meshes: Vec<usize>,
-    pub bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>)>,
+    pub bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)>,
 }
 
+#[derive(Clone)]
 struct ActiveInstanceInfo {
     source_id: SourceClipId,
     asset_id: AssetId,
@@ -111,33 +112,17 @@ fn collect_animated_entities(
             .get_resource::<SpringBoneState>()
             .map_or(false, |s| s.frame_count < 3);
 
-    for (entity, animator) in world.iter_components::<Animator>() {
-        let Some(schedule) = world.get_component::<ClipSchedule>(entity) else {
+    for (parent_entity, animator) in world.iter_components::<Animator>() {
+        let Some(schedule) = world.get_component::<ClipSchedule>(parent_entity) else {
             if should_log {
-                log!("[PlaybackDebug] entity {:?}: no ClipSchedule", entity);
+                log!(
+                    "[PlaybackDebug] entity {:?}: no ClipSchedule",
+                    parent_entity
+                );
             }
             continue;
         };
-        let Some(meta) = world.get_component::<AnimationMeta>(entity) else {
-            continue;
-        };
-        let Some(mesh_ref) = world.get_component::<MeshRef>(entity) else {
-            continue;
-        };
-
-        let Some(mesh_asset) = assets.get_mesh(mesh_ref.mesh_asset_id) else {
-            continue;
-        };
-
-        let mesh_idx = mesh_asset.graphics_mesh_index;
-        if mesh_idx >= graphics.meshes.len() {
-            continue;
-        }
-
-        let skeleton_id = mesh_asset
-            .skeleton_id
-            .or_else(|| graphics.meshes.get(mesh_idx).and_then(|m| m.skeleton_id));
-        let Some(skel_id) = skeleton_id else {
+        let Some(meta) = world.get_component::<AnimationMeta>(parent_entity) else {
             continue;
         };
 
@@ -148,7 +133,7 @@ fn collect_animated_entities(
                 asset_id.map_or(false, |aid| assets.animation_clips.contains_key(&aid));
             log!(
                 "[PlaybackDebug] entity {:?}: source_id={:?}, asset_id={:?}, asset_exists={}, time={:.3}, instances={}",
-                entity, src_id, asset_id, asset_exists, animator.time, schedule.instances.len()
+                parent_entity, src_id, asset_id, asset_exists, animator.time, schedule.instances.len()
             );
         }
 
@@ -157,7 +142,7 @@ fn collect_animated_entities(
         if should_log && active_instances.is_empty() {
             log!(
                 "[PlaybackDebug] entity {:?}: active_instances is EMPTY",
-                entity
+                parent_entity
             );
         }
 
@@ -165,15 +150,37 @@ fn collect_animated_entities(
             continue;
         }
 
-        infos.push(AnimatedEntityInfo {
-            entity,
-            active_instances,
-            skeleton_id: skel_id,
-            mesh_idx,
-            animation_type: meta.animation_type.clone(),
-            node_animation_scale: meta.node_animation_scale,
-            looping: animator.looping,
-        });
+        let child_meshes = world.find_child_mesh_entities(parent_entity);
+        for mesh_entity in child_meshes {
+            let Some(mesh_ref) = world.get_component::<MeshRef>(mesh_entity) else {
+                continue;
+            };
+            let Some(mesh_asset) = assets.get_mesh(mesh_ref.mesh_asset_id) else {
+                continue;
+            };
+
+            let mesh_idx = mesh_asset.graphics_mesh_index;
+            if mesh_idx >= graphics.meshes.len() {
+                continue;
+            }
+
+            let skeleton_id = mesh_asset
+                .skeleton_id
+                .or_else(|| graphics.meshes.get(mesh_idx).and_then(|m| m.skeleton_id));
+            let Some(skel_id) = skeleton_id else {
+                continue;
+            };
+
+            infos.push(AnimatedEntityInfo {
+                entity: parent_entity,
+                active_instances: active_instances.clone(),
+                skeleton_id: skel_id,
+                mesh_idx,
+                animation_type: meta.animation_type.clone(),
+                node_animation_scale: meta.node_animation_scale,
+                looping: animator.looping,
+            });
+        }
     }
 
     if should_log {
@@ -317,9 +324,12 @@ fn apply_blended_animations(
     assets: &AssetStorage,
     dt: f32,
     pose_overrides: &HashMap<BoneId, BoneLocalPose>,
-) -> (Vec<usize>, Option<(SkeletonId, Vec<Matrix4<f32>>)>) {
+) -> (
+    Vec<usize>,
+    Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)>,
+) {
     let mut updated = Vec::new();
-    let mut first_bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>)> = None;
+    let mut first_bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)> = None;
 
     let shared_constraints = find_shared_constraints(entities, world);
 
@@ -374,7 +384,16 @@ fn apply_blended_animations(
         };
 
         if first_bone_transforms.is_none() {
-            first_bone_transforms = Some((info.skeleton_id, globals.clone()));
+            let gizmo_transforms = if info.animation_type == AnimationType::Node {
+                build_node_based_bone_transforms(nodes, skeleton)
+            } else {
+                globals.clone()
+            };
+            first_bone_transforms = Some((
+                info.skeleton_id,
+                gizmo_transforms,
+                info.animation_type.clone(),
+            ));
         }
 
         let mesh_updated = match info.animation_type {
@@ -392,6 +411,25 @@ fn apply_blended_animations(
     }
 
     (updated, first_bone_transforms)
+}
+
+pub(crate) fn build_node_based_bone_transforms(
+    nodes: &[NodeData],
+    skeleton: &crate::animation::Skeleton,
+) -> Vec<Matrix4<f32>> {
+    use cgmath::SquareMatrix;
+    let mut transforms = vec![Matrix4::identity(); skeleton.bones.len()];
+    for bone in &skeleton.bones {
+        let matched_node = nodes.iter().find(|n| n.name == bone.name).or_else(|| {
+            bone.node_index
+                .and_then(|idx| nodes.iter().find(|n| n.index == idx))
+        });
+
+        if let Some(node) = matched_node {
+            transforms[bone.id as usize] = node.global_transform;
+        }
+    }
+    transforms
 }
 
 fn compute_spring_bone_result(

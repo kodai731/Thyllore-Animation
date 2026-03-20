@@ -21,8 +21,13 @@ pub fn query_clip_tracks(
             .unwrap_or_else(|| format!("Entity {}", entity));
 
         let first_source_id = schedule.instances.first().map(|i| i.source_id);
+        let mesh_entity = world
+            .find_child_mesh_entities(entity)
+            .into_iter()
+            .next()
+            .unwrap_or(entity);
         let mesh_bone_id =
-            resolve_mesh_bone_id(world, entity, assets, clip_library, first_source_id);
+            resolve_mesh_bone_id(world, mesh_entity, assets, clip_library, first_source_id);
 
         let instances: Vec<ClipInstanceSnapshot> = schedule
             .instances

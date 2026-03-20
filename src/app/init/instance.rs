@@ -894,7 +894,7 @@ impl App {
             mesh: grid_mesh,
             render_info: RenderInfo::new(Some(grid_pipeline_id), grid_object_index),
             scale: grid_scale,
-            show_y_axis_grid: cfg!(debug_assertions),
+            show_y_axis_grid: false,
             xz_only_index_count,
         })
     }

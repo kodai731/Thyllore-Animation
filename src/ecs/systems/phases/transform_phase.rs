@@ -6,7 +6,7 @@ use crate::ecs::context::EcsContext;
 use crate::ecs::systems::camera_systems::{compute_camera_position, compute_camera_up};
 use crate::ecs::{
     calculate_projection, gizmo_sync_position, gizmo_update_selection_color,
-    gizmo_update_vertex_buffer, update_billboard_transform, update_grid_gizmo_rotation_from_view,
+    gizmo_update_vertex_buffer, update_billboard_transform,
 };
 use crate::math::calculate_billboard_click_rect;
 
@@ -32,8 +32,6 @@ pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
         camera_pos,
         camera_up,
     );
-
-    update_grid_gizmo_rotation_from_view(&mut ctx.gizmo_mut(), proj_data.view);
 
     let screen_size = Vector2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
     ctx.gui_data.billboard_click_rect = calculate_billboard_click_rect(

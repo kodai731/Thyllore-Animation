@@ -1,6 +1,6 @@
 use crate::app::GUIData;
 use crate::debugview::DebugViewMode;
-use crate::ecs::events::UIEventQueue;
+use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::GridMeshData;
 use crate::ecs::World;
 
@@ -15,6 +15,9 @@ pub fn build_debug_panel_content(
     gui_data: &mut GUIData,
     ecs_world: &World,
 ) {
+    build_camera_debug_panel(ui, ui_events);
+    ui.separator();
+
     build_debug_view_mode_panel(ui, state);
     ui.separator();
 
@@ -28,6 +31,21 @@ pub fn build_debug_panel_content(
     ui.separator();
 
     build_mouse_info(ui, gui_data);
+}
+
+fn build_camera_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {
+    ui.text("Camera:");
+    if ui.button("Reset Camera") {
+        ui_events.send(UIEvent::ResetCamera);
+    }
+    ui.same_line();
+    if ui.button("Reset Up") {
+        ui_events.send(UIEvent::ResetCameraUp);
+    }
+    ui.same_line();
+    if ui.button("To Model") {
+        ui_events.send(UIEvent::MoveCameraToModel);
+    }
 }
 
 fn build_debug_view_mode_panel(ui: &imgui::Ui, state: &mut DebugWindowState) {

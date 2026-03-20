@@ -18,9 +18,8 @@ use crate::ecs::systems::render_data_systems::{
 use crate::ecs::{
     build_bone_line_mesh, build_box_bone_meshes_with_selection, build_constraint_gizmo_mesh,
     build_octahedral_bone_meshes_with_selection, build_sphere_bone_meshes_with_selection,
-    build_spring_bone_gizmo_mesh, gizmo_update_rotation, gizmo_update_vertex_buffer,
+    build_spring_bone_gizmo_mesh, gizmo_update_vertex_buffer,
 };
-use crate::math::get_camera_axes_from_view;
 use crate::render::RenderBackend;
 use crate::renderer::scene_renderer::update_object_ubo;
 
@@ -56,11 +55,40 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
 
     update_billboard_ubo(ctx, view, proj)?;
 
-    update_grid_gizmo_buffers(ctx, view)?;
+    update_grid_gizmo_buffers(ctx)?;
     update_transform_gizmo_mesh(ctx)?;
     update_bone_gizmo_mesh(ctx)?;
     update_constraint_gizmo_mesh(ctx)?;
     update_spring_bone_gizmo_mesh(ctx)?;
+
+    Ok(())
+}
+
+unsafe fn update_mesh_entity_transforms(ctx: &mut FrameContext) -> Result<()> {
+    use crate::ecs::world::{GlobalTransform, MeshRef};
+    use crate::render::ObjectUBO;
+
+    let transforms: Vec<(usize, Matrix4<f32>)> = ctx
+        .world
+        .iter_components::<MeshRef>()
+        .map(|(entity, mesh_ref)| {
+            let model_matrix = ctx
+                .world
+                .get_component::<GlobalTransform>(entity)
+                .map(|gt| gt.0)
+                .unwrap_or_else(Matrix4::identity);
+            (mesh_ref.object_index, model_matrix)
+        })
+        .collect();
+
+    for (object_index, model_matrix) in transforms {
+        let ubo = ObjectUBO {
+            model: model_matrix,
+        };
+        ctx.graphics
+            .objects
+            .update(ctx.device, ctx.image_index, object_index, &ubo)?;
+    }
 
     Ok(())
 }
@@ -93,12 +121,7 @@ unsafe fn update_frame_and_scene_uniforms(
         )?;
     }
 
-    if let Err(e) = ctx
-        .graphics
-        .update_objects(ctx.device, ctx.image_index, Matrix4::identity())
-    {
-        eprintln!("Failed to update ObjectUBO: {}", e);
-    }
+    update_mesh_entity_transforms(ctx)?;
 
     let light = ctx.light_state();
     let light_pos = light.light_position;
@@ -197,13 +220,7 @@ unsafe fn update_billboard_ubo(
     Ok(())
 }
 
-unsafe fn update_grid_gizmo_buffers(ctx: &mut FrameContext, view: Matrix4<f32>) -> Result<()> {
-    let (camera_right, camera_up_gizmo, camera_forward) = get_camera_axes_from_view(view);
-
-    let gizmo_rotation = cgmath::Matrix3::from_cols(camera_right, camera_up_gizmo, camera_forward);
-
-    gizmo_update_rotation(&mut ctx.gizmo_mut().mesh, &gizmo_rotation);
-
+unsafe fn update_grid_gizmo_buffers(ctx: &mut FrameContext) -> Result<()> {
     let mesh = ctx.gizmo().mesh.clone();
     let backend = ctx.create_backend();
     gizmo_update_vertex_buffer(&mesh, &backend)?;
@@ -407,6 +424,7 @@ unsafe fn update_stick_bone_mesh(
             transforms,
             offsets,
             mesh_scale,
+            None,
             &mut bone_gizmo.stick_mesh,
         );
     }
@@ -453,6 +471,7 @@ unsafe fn update_octahedral_bone_mesh(
         &selection,
         visual_scale,
         mesh_scale,
+        None,
         &mut solid_mesh,
         &mut wire_mesh,
     );
@@ -495,6 +514,7 @@ unsafe fn update_box_bone_mesh(
         &selection,
         visual_scale,
         mesh_scale,
+        None,
         &mut solid_mesh,
         &mut wire_mesh,
     );
@@ -537,6 +557,7 @@ unsafe fn update_sphere_bone_mesh(
         &selection,
         visual_scale,
         mesh_scale,
+        None,
         &mut solid_mesh,
         &mut wire_mesh,
     );

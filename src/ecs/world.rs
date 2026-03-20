@@ -273,50 +273,12 @@ impl Default for World {
 
 impl World {
     pub fn new() -> Self {
-        let mut world = Self {
+        Self {
             next_entity: 1,
             resources: Resources::new(),
             components: crate::ecs::storage::Components::new(),
             component_registry: crate::ecs::registry::ComponentRegistry::new(),
-        };
-
-        world.register_component::<Name>();
-        world.register_component::<Transform>();
-        world.register_component::<GlobalTransform>();
-        world.register_component::<Visible>();
-        world.register_component::<Parent>();
-        world.register_component::<Children>();
-        world.register_component::<MeshRef>();
-        world.register_component::<MaterialRef>();
-        world.register_component::<SkeletonRef>();
-        world.register_component::<Animator>();
-        world.register_component::<LineRendering>();
-        world.register_component::<BillboardBehavior>();
-        world.register_component::<NodeRef>();
-        world.register_component::<SkinRef>();
-        world.register_component::<Animated>();
-        world.register_component::<Skinned>();
-        world.register_component::<Model>();
-        world.register_component::<MeshHandle>();
-        world.register_component::<EditorDisplay>();
-        world.register_component::<ClipSchedule>();
-        world.register_component::<AnimationMeta>();
-        world.register_component::<ConstraintSet>();
-        world.register_component::<Constrained>();
-        world.register_component::<SpringBoneSetup>();
-        world.register_component::<WithSpringBone>();
-        #[cfg(feature = "ml")]
-        {
-            world.register_component::<InferenceActorSetup>();
-            world.register_component::<WithInferenceActor>();
         }
-
-        world
-    }
-
-    pub fn register_component<T: crate::ecs::storage::Component>(&mut self) {
-        self.component_registry.register::<T>();
-        self.components.register::<T>();
     }
 
     pub fn get_component<T: crate::ecs::storage::Component>(&self, entity: Entity) -> Option<&T> {
@@ -349,6 +311,7 @@ impl World {
         entity: Entity,
         component: T,
     ) {
+        self.component_registry.register::<T>();
         self.components.insert(entity, component);
     }
 

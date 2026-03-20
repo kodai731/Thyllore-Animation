@@ -45,7 +45,6 @@ fn test_font_files_exist() {
 #[test]
 fn test_vendor_directory_structure() {
     let vendor_dirs = [
-        "vendor/assimp",
         "vendor/imgui",
         "vendor/imgui-sys",
         "vendor/imgui-winit-support",

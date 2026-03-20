@@ -311,6 +311,11 @@ unsafe fn cleanup_resources(
         }
     }
 
+    if world.contains_resource::<crate::ecs::resource::BonePoseOverride>() {
+        let mut overrides = world.resource_mut::<crate::ecs::resource::BonePoseOverride>();
+        overrides.overrides.clear();
+    }
+
     world.clear();
     assets.clear();
 
@@ -1017,64 +1022,43 @@ fn initialize_bone_gizmo_visibility(
     }
 
     let has_skeleton = !assets.skeletons.is_empty();
+    let mut bone_gizmo = world.resource_mut::<BoneGizmoData>();
 
-    if !has_skeleton {
-        let mut bone_gizmo = world.resource_mut::<BoneGizmoData>();
+    bone_gizmo.stick_mesh.vertices.clear();
+    bone_gizmo.stick_mesh.indices.clear();
+    bone_gizmo.solid_mesh.vertices.clear();
+    bone_gizmo.solid_mesh.indices.clear();
+    bone_gizmo.wire_mesh.vertices.clear();
+    bone_gizmo.wire_mesh.indices.clear();
+
+    if has_skeleton {
+        bone_gizmo.visible = true;
+
+        let first_skeleton = assets.skeletons.values().next();
+        if let Some(skel_asset) = first_skeleton {
+            bone_gizmo.cached_skeleton_id = Some(skel_asset.skeleton_id);
+            let category = if has_skinned_meshes {
+                MeshCategory::Skinned
+            } else {
+                MeshCategory::Unskinned
+            };
+            bone_gizmo.mesh_scale = compute_bone_gizmo_mesh_scale(node_animation_scale, category);
+
+            let skeleton = &skel_asset.skeleton;
+            let rest_globals = crate::ecs::compute_pose_global_transforms(
+                skeleton,
+                &crate::ecs::create_pose_from_rest(skeleton),
+            );
+
+            bone_gizmo.bone_local_offsets =
+                crate::ecs::compute_bone_local_offsets(skeleton, &rest_globals);
+            bone_gizmo.cached_global_transforms = rest_globals;
+        }
+    } else {
         bone_gizmo.visible = false;
         bone_gizmo.cached_skeleton_id = None;
         bone_gizmo.cached_global_transforms.clear();
         bone_gizmo.bone_local_offsets.clear();
-        return;
-    }
-
-    let node_transforms: Option<Vec<(String, cgmath::Matrix4<f32>)>> = if !has_skinned_meshes {
-        world
-            .get_resource::<crate::ecs::resource::NodeAssets>()
-            .map(|na| {
-                na.nodes
-                    .iter()
-                    .map(|n| (n.name.clone(), n.global_transform))
-                    .collect()
-            })
-    } else {
-        None
-    };
-
-    let mut bone_gizmo = world.resource_mut::<BoneGizmoData>();
-
-    let first_skeleton = assets.skeletons.values().next();
-    let Some(skel_asset) = first_skeleton else {
-        return;
-    };
-
-    bone_gizmo.visible = true;
-    bone_gizmo.cached_skeleton_id = Some(skel_asset.skeleton_id);
-
-    let category = if has_skinned_meshes {
-        MeshCategory::Skinned
-    } else {
-        MeshCategory::Unskinned
-    };
-    bone_gizmo.mesh_scale = compute_bone_gizmo_mesh_scale(node_animation_scale, category);
-
-    let skeleton = &skel_asset.skeleton;
-    let rest_globals = crate::ecs::compute_pose_global_transforms(
-        skeleton,
-        &crate::ecs::create_pose_from_rest(skeleton),
-    );
-
-    bone_gizmo.bone_local_offsets = crate::ecs::compute_bone_local_offsets(skeleton, &rest_globals);
-
-    if let Some(node_data) = node_transforms {
-        let mut transforms = rest_globals.clone();
-        for bone in &skeleton.bones {
-            if let Some((_, gt)) = node_data.iter().find(|(name, _)| *name == bone.name) {
-                transforms[bone.id as usize] = *gt;
-            }
-        }
-        bone_gizmo.cached_global_transforms = transforms;
-    } else {
-        bone_gizmo.cached_global_transforms = rest_globals;
     }
 }
 

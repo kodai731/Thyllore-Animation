@@ -5,7 +5,7 @@ use cgmath::Matrix4;
 
 use crate::animation::{BoneId, SkeletonId};
 use crate::app::data::LightMoveTarget;
-use crate::debugview::gizmo::transform::{TransformGizmoHandle, TransformGizmoTarget};
+use crate::debugview::gizmo::transform::TransformGizmoHandle;
 use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, TransformGizmoData};
 use crate::ecs::component::LineMesh;
 use crate::ecs::context::EcsContext;
@@ -552,8 +552,8 @@ fn try_select_transform_gizmo_handle(
         drag_plane_normal: tg.drag_plane_normal,
         drag_initial_hit: tg.drag_initial_hit,
         drag_initial_angle: tg.drag_initial_angle,
-        target: tg.target,
-        entity_position_offset: tg.entity_position_offset,
+        target_bone_id: tg.target_bone_id,
+        target_entity: tg.target_entity,
     };
     drop(tg);
 
@@ -591,12 +591,8 @@ fn try_select_transform_gizmo_handle(
 
     let entity_scale = {
         let tg = ctx.transform_gizmo();
-        match tg.target {
-            Some(TransformGizmoTarget::Entity(e)) => {
-                ctx.world.get_component::<Transform>(e).map(|t| t.scale)
-            }
-            _ => None,
-        }
+        tg.target_entity
+            .and_then(|e| ctx.world.get_component::<Transform>(e).map(|t| t.scale))
     };
 
     let mut tg = ctx.transform_gizmo_mut();
@@ -662,17 +658,14 @@ fn process_transform_gizmo_drag(
             drop(tg);
 
             if let Some(pos) = new_pos {
-                let target = ctx.transform_gizmo().target;
+                let target_bone = ctx.transform_gizmo().target_bone_id;
+                let target_entity = ctx.transform_gizmo().target_entity;
                 ctx.transform_gizmo_mut().position.position = pos;
 
-                match target {
-                    Some(TransformGizmoTarget::Bone(bone_id)) => {
-                        apply_bone_translation(ctx, bone_id, pos);
-                    }
-                    Some(TransformGizmoTarget::Entity(entity)) => {
-                        apply_entity_translation(ctx, entity, pos);
-                    }
-                    None => {}
+                if let Some(bone_id) = target_bone {
+                    apply_bone_translation(ctx, bone_id, pos);
+                } else if let Some(entity) = target_entity {
+                    apply_entity_translation(ctx, entity, pos);
                 }
             }
         }
@@ -689,19 +682,16 @@ fn process_transform_gizmo_drag(
                 near_plane,
                 snap_rotate,
             );
-            let target = tg.target;
+            let target_bone = tg.target_bone_id;
+            let target_entity = tg.target_entity;
             drop(tg);
 
             if let Some(rot) = rotation {
-                match target {
-                    Some(TransformGizmoTarget::Bone(bone_id)) => {
-                        let gizmo_pos = ctx.transform_gizmo().position.position;
-                        apply_bone_rotation(ctx, bone_id, gizmo_pos, rot);
-                    }
-                    Some(TransformGizmoTarget::Entity(entity)) => {
-                        apply_entity_rotation(ctx, entity, rot);
-                    }
-                    None => {}
+                if let Some(bone_id) = target_bone {
+                    let gizmo_pos = ctx.transform_gizmo().position.position;
+                    apply_bone_rotation(ctx, bone_id, gizmo_pos, rot);
+                } else if let Some(entity) = target_entity {
+                    apply_entity_rotation(ctx, entity, rot);
                 }
             }
         }
@@ -718,18 +708,15 @@ fn process_transform_gizmo_drag(
                 near_plane,
                 snap_scale,
             );
-            let target = tg.target;
+            let target_bone = tg.target_bone_id;
+            let target_entity = tg.target_entity;
             drop(tg);
 
             if let Some(scale) = new_scale {
-                match target {
-                    Some(TransformGizmoTarget::Bone(bone_id)) => {
-                        apply_bone_scale(ctx, bone_id, scale);
-                    }
-                    Some(TransformGizmoTarget::Entity(entity)) => {
-                        apply_entity_scale(ctx, entity, scale);
-                    }
-                    None => {}
+                if let Some(bone_id) = target_bone {
+                    apply_bone_scale(ctx, bone_id, scale);
+                } else if let Some(entity) = target_entity {
+                    apply_entity_scale(ctx, entity, scale);
                 }
             }
         }
@@ -857,9 +844,8 @@ fn apply_bone_scale(ctx: &mut EcsContext, bone_id: u32, scale: Vector3<f32>) {
 }
 
 fn apply_entity_translation(ctx: &mut EcsContext, entity: Entity, new_pos: Vector3<f32>) {
-    let offset = ctx.transform_gizmo().entity_position_offset;
     if let Some(mut transform) = ctx.world.get_component_mut::<Transform>(entity) {
-        transform.translation = new_pos - offset;
+        transform.translation = new_pos;
     }
 }
 
@@ -879,48 +865,44 @@ fn sync_transform_gizmo_to_bone(ctx: &mut EcsContext) {
     if !ctx.world.contains_resource::<TransformGizmoData>() {
         return;
     }
+    if !ctx.world.contains_resource::<BoneGizmoData>() {
+        return;
+    }
 
     if ctx.transform_gizmo().drag_active {
         return;
     }
 
-    if ctx.world.contains_resource::<BoneGizmoData>() {
+    let (active_bone, transforms, offsets, mesh_scale) = {
+        let selection = ctx.bone_selection();
+        let active = selection.active_bone_index;
+        drop(selection);
+
         let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
-        let bone_visible = bone_gizmo.visible;
-        drop(bone_gizmo);
-
-        if bone_visible {
-            let active_bone = ctx.bone_selection().active_bone_index;
-
-            if let Some(bone_idx) = active_bone {
-                let bone_id = bone_idx as u32;
-                let target = TransformGizmoTarget::Bone(bone_id);
-
-                let bone_gizmo = ctx.world.resource::<BoneGizmoData>();
-                let transforms = bone_gizmo.cached_global_transforms.clone();
-                let offsets = bone_gizmo.bone_local_offsets.clone();
-                let mesh_scale = bone_gizmo.mesh_scale;
-                drop(bone_gizmo);
-
-                let position = transform_gizmo_systems::compute_transform_gizmo_position(
-                    &target,
-                    &transforms,
-                    &offsets,
-                    mesh_scale,
-                );
-
-                let mut tg = ctx.transform_gizmo_mut();
-                if let Some(pos) = position {
-                    tg.position.position = pos;
-                    tg.visible = true;
-                    tg.target = Some(target);
-                } else {
-                    tg.visible = false;
-                    tg.target = None;
-                }
-                return;
-            }
+        if !bone_gizmo.visible {
+            let mut tg = ctx.transform_gizmo_mut();
+            tg.visible = false;
+            return;
         }
+        (
+            active,
+            bone_gizmo.cached_global_transforms.clone(),
+            bone_gizmo.bone_local_offsets.clone(),
+            bone_gizmo.mesh_scale,
+        )
+    };
+
+    if active_bone.is_some() {
+        let mut tg = ctx.transform_gizmo_mut();
+        transform_gizmo_systems::transform_gizmo_sync_to_bone(
+            &mut tg,
+            active_bone,
+            &transforms,
+            &offsets,
+            mesh_scale,
+        );
+        tg.target_entity = None;
+        return;
     }
 
     sync_transform_gizmo_to_entity(ctx);
@@ -932,50 +914,28 @@ fn sync_transform_gizmo_to_entity(ctx: &mut EcsContext) {
     let Some(entity) = selected_entity else {
         let mut tg = ctx.transform_gizmo_mut();
         tg.visible = false;
-        tg.target = None;
+        tg.target_bone_id = None;
+        tg.target_entity = None;
         return;
     };
 
-    let has_global_transform = ctx.world.get_component::<GlobalTransform>(entity).is_some();
-
-    if !has_global_transform {
-        let mut tg = ctx.transform_gizmo_mut();
-        tg.visible = false;
-        tg.target = None;
-        return;
-    }
-
-    let entity_pos = ctx
+    let world_pos = ctx
         .world
         .get_component::<GlobalTransform>(entity)
         .map(|gt| {
             let m = gt.0;
             Vector3::new(m[3][0], m[3][1], m[3][2])
-        })
-        .unwrap_or(Vector3::new(0.0, 0.0, 0.0));
+        });
 
-    let target = TransformGizmoTarget::Entity(entity);
-
-    let display_pos = ctx
-        .world
-        .get_resource::<BoneGizmoData>()
-        .and_then(|bg| {
-            transform_gizmo_systems::compute_transform_gizmo_position(
-                &target,
-                &bg.cached_global_transforms,
-                &bg.bone_local_offsets,
-                bg.mesh_scale,
-            )
-        })
-        .unwrap_or(entity_pos);
-
-    let offset = display_pos - entity_pos;
+    let Some(pos) = world_pos else {
+        let mut tg = ctx.transform_gizmo_mut();
+        tg.visible = false;
+        tg.target_entity = None;
+        return;
+    };
 
     let mut tg = ctx.transform_gizmo_mut();
-    tg.entity_position_offset = offset;
-    tg.position.position = display_pos;
-    tg.visible = true;
-    tg.target = Some(target);
+    transform_gizmo_systems::transform_gizmo_sync_to_entity(&mut tg, pos, entity);
 }
 
 fn sync_bone_selection_to_hierarchy(

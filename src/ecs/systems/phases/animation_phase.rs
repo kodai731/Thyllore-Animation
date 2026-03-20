@@ -40,7 +40,7 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
 
     if let Some((skel_id, transforms)) = &eval_result.bone_transforms {
         if ctx.world.contains_resource::<BoneGizmoData>() {
-            let entity_transform = find_mesh_entity_transform(ctx.world);
+            let entity_transform = find_skin_entity_transform(ctx.world);
             let final_transforms = apply_entity_transform(transforms, &entity_transform);
 
             let mut bone_gizmo = ctx.world.resource_mut::<BoneGizmoData>();
@@ -54,12 +54,12 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
     }
 }
 
-fn find_mesh_entity_transform(world: &crate::ecs::World) -> cgmath::Matrix4<f32> {
-    use crate::ecs::world::{GlobalTransform, MeshRef};
+fn find_skin_entity_transform(world: &crate::ecs::World) -> cgmath::Matrix4<f32> {
+    use crate::ecs::world::{GlobalTransform, SkinRef};
     use cgmath::SquareMatrix;
 
     world
-        .iter_components::<MeshRef>()
+        .iter_components::<SkinRef>()
         .next()
         .and_then(|(entity, _)| {
             world

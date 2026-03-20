@@ -2,7 +2,6 @@ use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
 use crate::app::FrameContext;
-use crate::debugview::gizmo::transform::TransformGizmoTarget;
 use crate::debugview::gizmo::BoneSelectionState;
 use crate::debugview::gizmo::TransformGizmoData;
 use crate::debugview::gizmo::{
@@ -41,8 +40,6 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     };
 
     update_frame_and_scene_uniforms(ctx, view, proj, screen_size, aspect, camera_position)?;
-
-    resync_transform_gizmo_position(ctx);
 
     let render_data_vec = collect_gizmo_render_data(ctx, camera_position);
     let render_data_refs: Vec<_> = render_data_vec.iter().collect();
@@ -229,56 +226,6 @@ unsafe fn update_grid_gizmo_buffers(ctx: &mut FrameContext) -> Result<()> {
     gizmo_update_vertex_buffer(&mesh, &backend)?;
 
     Ok(())
-}
-
-fn resync_transform_gizmo_position(ctx: &mut FrameContext) {
-    if !ctx.world.contains_resource::<TransformGizmoData>() {
-        return;
-    }
-    if !ctx.world.contains_resource::<BoneGizmoData>() {
-        return;
-    }
-
-    let drag_active = ctx.transform_gizmo().drag_active;
-    if drag_active {
-        return;
-    }
-
-    let target = ctx.transform_gizmo().target;
-    let Some(target) = target else { return };
-
-    let (transforms, offsets, mesh_scale) = {
-        let bg = ctx.bone_gizmo();
-        (
-            bg.cached_global_transforms.clone(),
-            bg.bone_local_offsets.clone(),
-            bg.mesh_scale,
-        )
-    };
-
-    let new_pos = crate::ecs::systems::transform_gizmo_systems::compute_transform_gizmo_position(
-        &target,
-        &transforms,
-        &offsets,
-        mesh_scale,
-    );
-
-    if let Some(pos) = new_pos {
-        let mut tg = ctx.transform_gizmo_mut();
-        tg.position.position = pos;
-
-        if let TransformGizmoTarget::Entity(entity) = target {
-            let entity_pos = ctx
-                .world
-                .get_component::<crate::ecs::world::GlobalTransform>(entity)
-                .map(|gt| {
-                    let m = gt.0;
-                    Vector3::new(m[3][0], m[3][1], m[3][2])
-                })
-                .unwrap_or(Vector3::new(0.0, 0.0, 0.0));
-            tg.entity_position_offset = pos - entity_pos;
-        }
-    }
 }
 
 unsafe fn update_transform_gizmo_mesh(ctx: &mut FrameContext) -> Result<()> {

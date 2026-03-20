@@ -405,13 +405,11 @@ fn build_node_based_bone_transforms(
 ) -> Vec<Matrix4<f32>> {
     use cgmath::SquareMatrix;
     let mut transforms = vec![Matrix4::identity(); skeleton.bones.len()];
-
     for bone in &skeleton.bones {
         if let Some(node) = nodes.iter().find(|n| n.name == bone.name) {
             transforms[bone.id as usize] = node.global_transform;
         }
     }
-
     transforms
 }
 

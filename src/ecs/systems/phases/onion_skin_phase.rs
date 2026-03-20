@@ -17,14 +17,30 @@ pub unsafe fn run_onion_skin_phase(ctx: &mut FrameContext, updated_meshes: &[usi
     let config = match config {
         Some(c) => c,
         None => {
+            log!("[onion_phase] SKIP: config not enabled");
             clear_ghost_buffers(ctx);
             return Ok(());
         }
     };
 
-    let mesh_index = match find_selected_mesh_index(ctx) {
+    let selected = ctx
+        .world
+        .get_resource::<HierarchyState>()
+        .and_then(|h| h.selected_entity);
+    let found_mesh_index = find_selected_mesh_index(ctx);
+    log!(
+        "[onion_phase] selected_entity={:?}, found_mesh_index={:?}",
+        selected,
+        found_mesh_index
+    );
+    let mesh_index = match found_mesh_index {
         Some(idx) if updated_meshes.contains(&idx) => idx,
         _ => {
+            log!(
+                "[onion_phase] SKIP: mesh_index={:?}, updated_meshes={:?}",
+                found_mesh_index,
+                updated_meshes
+            );
             clear_ghost_buffers(ctx);
             return Ok(());
         }
@@ -35,6 +51,10 @@ pub unsafe fn run_onion_skin_phase(ctx: &mut FrameContext, updated_meshes: &[usi
         match &mesh.skin_data {
             Some(sd) => (sd.clone(), mesh.base_vertices.clone()),
             None => {
+                log!(
+                    "[onion_phase] SKIP: no skin_data for mesh_index={}",
+                    mesh_index
+                );
                 clear_ghost_buffers(ctx);
                 return Ok(());
             }
@@ -76,6 +96,12 @@ pub unsafe fn run_onion_skin_phase(ctx: &mut FrameContext, updated_meshes: &[usi
     };
 
     let ghost_count = result.ghost_meshes.len();
+    log!(
+        "[onion_phase] ghost_count={}, mesh_index={}, time={:.4}",
+        ghost_count,
+        mesh_index,
+        current_time
+    );
     if ghost_count == 0 {
         return Ok(());
     }
@@ -115,7 +141,21 @@ pub unsafe fn run_onion_skin_phase(ctx: &mut FrameContext, updated_meshes: &[usi
 fn find_selected_mesh_index(ctx: &FrameContext) -> Option<usize> {
     let hierarchy = ctx.world.get_resource::<HierarchyState>()?;
     let entity = hierarchy.selected_entity?;
-    let mesh_ref = ctx.world.get_component::<MeshRef>(entity)?;
+
+    if let Some(mesh_ref) = ctx.world.get_component::<MeshRef>(entity) {
+        let mesh_asset = ctx.assets.get_mesh(mesh_ref.mesh_asset_id)?;
+        return Some(mesh_asset.graphics_mesh_index);
+    }
+
+    let children = ctx.world.find_child_mesh_entities(entity);
+    log!(
+        "[onion_phase] find_selected_mesh_index: entity={}, has_MeshRef=false, child_meshes={}",
+        entity,
+        children.len()
+    );
+
+    let first_child = children.into_iter().next()?;
+    let mesh_ref = ctx.world.get_component::<MeshRef>(first_child)?;
     let mesh_asset = ctx.assets.get_mesh(mesh_ref.mesh_asset_id)?;
     Some(mesh_asset.graphics_mesh_index)
 }

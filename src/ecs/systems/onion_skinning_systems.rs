@@ -122,19 +122,32 @@ fn collect_animation_context(
     skin_data: SkinData,
 ) -> Option<AnimationContext> {
     for (parent_entity, animator) in world.iter_components::<Animator>() {
-        let schedule = world.get_component::<ClipSchedule>(parent_entity)?;
+        let Some(schedule) = world.get_component::<ClipSchedule>(parent_entity) else {
+            continue;
+        };
 
         for mesh_entity in world.find_child_mesh_entities(parent_entity) {
-            let mesh_ref = world.get_component::<crate::ecs::world::MeshRef>(mesh_entity)?;
-            let mesh_asset = assets.get_mesh(mesh_ref.mesh_asset_id)?;
+            let Some(mesh_ref) = world.get_component::<crate::ecs::world::MeshRef>(mesh_entity)
+            else {
+                continue;
+            };
+            let Some(mesh_asset) = assets.get_mesh(mesh_ref.mesh_asset_id) else {
+                continue;
+            };
 
             if mesh_asset.graphics_mesh_index != mesh_index {
                 continue;
             }
 
-            let skeleton_id = mesh_asset.skeleton_id?;
-            let source_id = schedule.instances.first().map(|inst| inst.source_id)?;
-            let _skeleton = assets.get_skeleton_by_skeleton_id(skeleton_id)?;
+            let Some(skeleton_id) = mesh_asset.skeleton_id else {
+                continue;
+            };
+            let Some(source_id) = schedule.instances.first().map(|inst| inst.source_id) else {
+                continue;
+            };
+            if assets.get_skeleton_by_skeleton_id(skeleton_id).is_none() {
+                continue;
+            }
 
             return Some(AnimationContext {
                 skeleton_id,

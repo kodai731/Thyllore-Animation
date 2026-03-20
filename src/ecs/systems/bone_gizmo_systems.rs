@@ -28,17 +28,6 @@ pub fn compute_bone_local_offsets(
     skeleton: &Skeleton,
     rest_global_transforms: &[Matrix4<f32>],
 ) -> Vec<[f32; 3]> {
-    let has_significant_translations = rest_global_transforms.iter().any(|t| {
-        let tx = t[3][0].abs();
-        let ty = t[3][1].abs();
-        let tz = t[3][2].abs();
-        tx > 1e-4 || ty > 1e-4 || tz > 1e-4
-    });
-
-    if has_significant_translations {
-        return vec![[0.0, 0.0, 0.0]; skeleton.bones.len()];
-    }
-
     skeleton
         .bones
         .iter()

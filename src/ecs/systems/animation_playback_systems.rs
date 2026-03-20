@@ -374,7 +374,12 @@ fn apply_blended_animations(
         };
 
         if first_bone_transforms.is_none() {
-            first_bone_transforms = Some((info.skeleton_id, globals.clone()));
+            let gizmo_transforms = if info.animation_type == AnimationType::Node {
+                build_node_based_bone_transforms(nodes, skeleton)
+            } else {
+                globals.clone()
+            };
+            first_bone_transforms = Some((info.skeleton_id, gizmo_transforms));
         }
 
         let mesh_updated = match info.animation_type {
@@ -392,6 +397,22 @@ fn apply_blended_animations(
     }
 
     (updated, first_bone_transforms)
+}
+
+fn build_node_based_bone_transforms(
+    nodes: &[NodeData],
+    skeleton: &crate::animation::Skeleton,
+) -> Vec<Matrix4<f32>> {
+    use cgmath::SquareMatrix;
+    let mut transforms = vec![Matrix4::identity(); skeleton.bones.len()];
+
+    for bone in &skeleton.bones {
+        if let Some(node) = nodes.iter().find(|n| n.name == bone.name) {
+            transforms[bone.id as usize] = node.global_transform;
+        }
+    }
+
+    transforms
 }
 
 fn compute_spring_bone_result(

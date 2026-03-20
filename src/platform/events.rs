@@ -466,7 +466,11 @@ unsafe fn process_ui_events_and_render_frame(
                 gui_data.take_screenshot = true;
             }
             DeferredAction::DebugShadowInfo => {
-                app.log_shadow_debug_info();
+                crate::debugview::log_shadow_debug_info(
+                    &app.data.ecs_world,
+                    &app.data.raytracing,
+                    &app.data.graphics_resources,
+                );
             }
             DeferredAction::DebugBillboardDepth => {
                 gui_data.debug_billboard_depth = true;

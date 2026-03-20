@@ -60,6 +60,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     update_bone_gizmo_mesh(ctx)?;
     update_constraint_gizmo_mesh(ctx)?;
     update_spring_bone_gizmo_mesh(ctx)?;
+    crate::ecs::systems::gizmo_systems::run_vertical_lines_update(ctx)?;
 
     Ok(())
 }

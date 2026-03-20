@@ -387,6 +387,34 @@ pub unsafe fn gizmo_destroy_ray_buffers(ray: &mut LineMesh, backend: &mut dyn Re
     backend.destroy_line_buffers(ray);
 }
 
+pub unsafe fn run_vertical_lines_update(ctx: &mut crate::app::FrameContext) -> Result<()> {
+    let model_tops: Vec<cgmath::Vector3<f32>> = Vec::new();
+
+    {
+        let mut gizmo = ctx.light_gizmo_mut();
+        let position = gizmo.position.clone();
+        gizmo_update_vertical_lines(&mut gizmo.vertical_lines, &position, &model_tops);
+    }
+
+    let mut mesh_clone = {
+        let gizmo = ctx.light_gizmo();
+        gizmo.vertical_lines.clone()
+    };
+
+    {
+        let mut backend = ctx.create_backend();
+        backend.update_or_create_line_buffers(&mut mesh_clone)?;
+    }
+
+    {
+        let mut gizmo = ctx.light_gizmo_mut();
+        gizmo.vertical_lines.vertex_buffer_handle = mesh_clone.vertex_buffer_handle;
+        gizmo.vertical_lines.index_buffer_handle = mesh_clone.index_buffer_handle;
+    }
+
+    Ok(())
+}
+
 pub fn gizmo_update_vertical_lines(
     lines: &mut LineMesh,
     position: &GizmoPosition,

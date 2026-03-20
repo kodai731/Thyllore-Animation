@@ -66,6 +66,7 @@ struct Joint {
     child_joint_indices: Vec<u16>,
     inverse_bind_pose: [[f32; 4]; 4],
     transform: [[f32; 4]; 4],
+    original_node_index: Option<usize>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -332,6 +333,7 @@ fn set_joints(ctx: &mut GltfParseContext, skin: &gltf::Skin, buffers: &Vec<Data>
             child_joint_indices: Vec::new(),
             inverse_bind_pose: [[0.0; 4]; 4],
             transform: array_from_mat4(joint_transform),
+            original_node_index: Some(node.index()),
         });
     }
 
@@ -1389,6 +1391,7 @@ fn convert_joints_to_skeleton(
         if let Some(bone) = skeleton.get_bone_mut(bone_id) {
             bone.local_transform = mat4_from_array(joint.transform);
             bone.inverse_bind_pose = mat4_from_array(joint.inverse_bind_pose);
+            bone.node_index = joint.original_node_index;
         }
     }
 

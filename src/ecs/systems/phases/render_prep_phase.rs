@@ -424,6 +424,7 @@ unsafe fn update_stick_bone_mesh(
             transforms,
             offsets,
             mesh_scale,
+            None,
             &mut bone_gizmo.stick_mesh,
         );
     }
@@ -470,6 +471,7 @@ unsafe fn update_octahedral_bone_mesh(
         &selection,
         visual_scale,
         mesh_scale,
+        None,
         &mut solid_mesh,
         &mut wire_mesh,
     );
@@ -512,6 +514,7 @@ unsafe fn update_box_bone_mesh(
         &selection,
         visual_scale,
         mesh_scale,
+        None,
         &mut solid_mesh,
         &mut wire_mesh,
     );
@@ -554,6 +557,7 @@ unsafe fn update_sphere_bone_mesh(
         &selection,
         visual_scale,
         mesh_scale,
+        None,
         &mut solid_mesh,
         &mut wire_mesh,
     );

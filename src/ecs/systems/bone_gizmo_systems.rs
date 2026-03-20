@@ -36,6 +36,7 @@ pub fn build_bone_line_mesh(
     global_transforms: &[Matrix4<f32>],
     bone_local_offsets: &[[f32; 3]],
     mesh_scale: f32,
+    skeleton_for_display: Option<&Skeleton>,
     mesh: &mut LineMesh,
 ) {
     mesh.vertices.clear();
@@ -45,8 +46,12 @@ pub fn build_bone_line_mesh(
         return;
     }
 
-    let display_transforms =
-        compute_display_transforms(global_transforms, bone_local_offsets, mesh_scale);
+    let display_transforms = compute_display_transforms_with_skeleton(
+        global_transforms,
+        bone_local_offsets,
+        mesh_scale,
+        skeleton_for_display,
+    );
 
     for bone in &skeleton.bones {
         let bone_idx = bone.id as usize;
@@ -97,6 +102,7 @@ pub fn build_octahedral_bone_meshes(
         &default_selection,
         1.0,
         mesh_scale,
+        None,
         solid_mesh,
         wire_mesh,
     );
@@ -109,6 +115,7 @@ pub fn build_octahedral_bone_meshes_with_selection(
     selection: &BoneSelectionState,
     visual_scale: f32,
     mesh_scale: f32,
+    skeleton_for_display: Option<&Skeleton>,
     solid_mesh: &mut LineMesh,
     wire_mesh: &mut LineMesh,
 ) {
@@ -121,8 +128,12 @@ pub fn build_octahedral_bone_meshes_with_selection(
         return;
     }
 
-    let display_transforms =
-        compute_display_transforms(global_transforms, bone_local_offsets, mesh_scale);
+    let display_transforms = compute_display_transforms_with_skeleton(
+        global_transforms,
+        bone_local_offsets,
+        mesh_scale,
+        skeleton_for_display,
+    );
 
     for bone in &skeleton.bones {
         let bone_idx = bone.id as usize;
@@ -381,13 +392,18 @@ pub fn compute_octahedral_vertices_per_bone(
     global_transforms: &[Matrix4<f32>],
     bone_local_offsets: &[[f32; 3]],
     mesh_scale: f32,
+    skeleton_for_display: Option<&Skeleton>,
 ) -> Vec<(usize, [[f32; 3]; 6])> {
     if global_transforms.is_empty() {
         return Vec::new();
     }
 
-    let display_transforms =
-        compute_display_transforms(global_transforms, bone_local_offsets, mesh_scale);
+    let display_transforms = compute_display_transforms_with_skeleton(
+        global_transforms,
+        bone_local_offsets,
+        mesh_scale,
+        skeleton_for_display,
+    );
 
     let mut result = Vec::new();
 
@@ -459,12 +475,14 @@ pub fn select_bone_by_ray(
     global_transforms: &[Matrix4<f32>],
     bone_local_offsets: &[[f32; 3]],
     mesh_scale: f32,
+    skeleton_for_display: Option<&Skeleton>,
 ) -> Option<(usize, f32)> {
     let bone_verts = compute_octahedral_vertices_per_bone(
         skeleton,
         global_transforms,
         bone_local_offsets,
         mesh_scale,
+        skeleton_for_display,
     );
 
     let mut closest: Option<(usize, f32)> = None;
@@ -507,6 +525,7 @@ pub fn build_box_bone_meshes_with_selection(
     selection: &BoneSelectionState,
     visual_scale: f32,
     mesh_scale: f32,
+    skeleton_for_display: Option<&Skeleton>,
     solid_mesh: &mut LineMesh,
     wire_mesh: &mut LineMesh,
 ) {
@@ -519,8 +538,12 @@ pub fn build_box_bone_meshes_with_selection(
         return;
     }
 
-    let display_transforms =
-        compute_display_transforms(global_transforms, bone_local_offsets, mesh_scale);
+    let display_transforms = compute_display_transforms_with_skeleton(
+        global_transforms,
+        bone_local_offsets,
+        mesh_scale,
+        skeleton_for_display,
+    );
 
     for bone in &skeleton.bones {
         let bone_idx = bone.id as usize;
@@ -637,6 +660,7 @@ pub fn build_sphere_bone_meshes_with_selection(
     selection: &BoneSelectionState,
     visual_scale: f32,
     mesh_scale: f32,
+    skeleton_for_display: Option<&Skeleton>,
     solid_mesh: &mut LineMesh,
     wire_mesh: &mut LineMesh,
 ) {
@@ -649,8 +673,12 @@ pub fn build_sphere_bone_meshes_with_selection(
         return;
     }
 
-    let display_transforms =
-        compute_display_transforms(global_transforms, bone_local_offsets, mesh_scale);
+    let display_transforms = compute_display_transforms_with_skeleton(
+        global_transforms,
+        bone_local_offsets,
+        mesh_scale,
+        skeleton_for_display,
+    );
 
     for bone in &skeleton.bones {
         let bone_idx = bone.id as usize;
@@ -1084,6 +1112,380 @@ mod tests {
             failures.is_empty(),
             "bones too far from mesh:\n{}",
             failures.join("\n")
+        );
+    }
+
+    fn to_node_data(nodes: &[LoadedNode]) -> Vec<crate::app::graphics_resource::NodeData> {
+        nodes
+            .iter()
+            .map(|n| crate::app::graphics_resource::NodeData {
+                index: n.index,
+                name: n.name.clone(),
+                parent_index: n.parent_index,
+                local_transform: n.local_transform,
+                global_transform: Matrix4::identity(),
+            })
+            .collect()
+    }
+
+    fn simulate_runtime_node_gizmo_transforms(
+        result: &ModelLoadResult,
+        skeleton: &Skeleton,
+    ) -> Vec<Matrix4<f32>> {
+        use crate::app::graphics_resource::{GraphicsResources, NodeData};
+
+        let pose = create_pose_from_rest(skeleton);
+        let mut nodes = to_node_data(&result.nodes);
+        GraphicsResources::compute_node_global_transforms(&mut nodes, skeleton, &pose);
+        crate::ecs::systems::animation_playback_systems::build_node_based_bone_transforms(
+            &nodes, skeleton,
+        )
+    }
+
+    #[test]
+    fn skinned_bone_gizmo_must_not_collapse_to_origin() {
+        let Some(result) = load_phoenix() else {
+            eprintln!("Skipping: phoenix model not found");
+            return;
+        };
+        let skeleton = result.skeletons.first().expect("no skeleton");
+        let pose = create_pose_from_rest(skeleton);
+        let globals = compute_pose_global_transforms(skeleton, &pose);
+
+        let offsets = compute_bone_local_offsets(skeleton, &globals);
+        let display = compute_display_transforms(&globals, &offsets, 1.0);
+
+        let mut collapsed = 0u32;
+        let mut tested = 0u32;
+
+        for (idx, bone) in skeleton.bones.iter().enumerate() {
+            if bone.parent_id.is_none() {
+                continue;
+            }
+            tested += 1;
+
+            let pos = display[idx];
+            let dist_from_origin = (pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]).sqrt();
+
+            if dist_from_origin < 0.01 {
+                collapsed += 1;
+            }
+        }
+
+        assert!(tested > 0);
+        assert!(
+            collapsed == 0,
+            "{}/{} bones collapsed to origin. Bone gizmo display is broken.",
+            collapsed,
+            tested,
+        );
+    }
+
+    #[test]
+    fn runtime_skinned_bone_gizmo_display_matches_mesh() {
+        let Some(result) = load_phoenix() else {
+            eprintln!("Skipping: phoenix model not found");
+            return;
+        };
+        let skeleton = result.skeletons.first().expect("no skeleton");
+        let pose = create_pose_from_rest(skeleton);
+        let globals = compute_pose_global_transforms(skeleton, &pose);
+
+        let skin_mesh = result.meshes.iter().find(|m| m.skin_data.is_some());
+        let Some(mesh) = skin_mesh else {
+            panic!("phoenix should have skinned mesh");
+        };
+        let skin_data = mesh.skin_data.as_ref().unwrap();
+
+        let offsets = compute_bone_local_offsets(skeleton, &globals);
+        let display = compute_display_transforms(&globals, &offsets, 1.0);
+        let mesh_centers = compute_skinned_mesh_center_per_bone(skin_data, &globals, skeleton);
+
+        let tolerance = 0.5;
+        let mut tested = 0u32;
+        let mut failures = Vec::new();
+
+        for (bi, center) in mesh_centers.iter().enumerate() {
+            let Some(center) = center else { continue };
+            tested += 1;
+
+            let gizmo = Vector3::new(display[bi][0], display[bi][1], display[bi][2]);
+            let dist = (gizmo - center).magnitude();
+
+            if dist >= tolerance {
+                failures.push(format!(
+                    "  bone[{}] '{}': gizmo=({:.3},{:.3},{:.3}) mesh=({:.3},{:.3},{:.3}) dist={:.3}",
+                    bi, skeleton.bones[bi].name,
+                    gizmo.x, gizmo.y, gizmo.z,
+                    center.x, center.y, center.z, dist,
+                ));
+            }
+        }
+
+        assert!(tested > 0, "should test at least one bone");
+        assert!(
+            failures.is_empty(),
+            "Bone gizmo display (with current skeleton_for_display) too far from mesh:\n{}",
+            failures.join("\n"),
+        );
+    }
+
+    #[test]
+    fn runtime_node_gizmo_transforms_are_not_identity() {
+        let Some(result) = load_stickman() else {
+            eprintln!("Skipping: stickman model not found");
+            return;
+        };
+        let skeleton = result.skeletons.first().expect("no skeleton");
+        let transforms = simulate_runtime_node_gizmo_transforms(&result, skeleton);
+
+        let mut identity_count = 0u32;
+        let mut total = 0u32;
+
+        for (idx, bone) in skeleton.bones.iter().enumerate() {
+            if bone.parent_id.is_none() {
+                continue;
+            }
+            total += 1;
+
+            if transforms[idx] == Matrix4::identity() {
+                identity_count += 1;
+                eprintln!(
+                    "  bone[{}] '{}' has identity transform (node_index={:?})",
+                    idx, bone.name, bone.node_index,
+                );
+            }
+        }
+
+        assert!(total > 0);
+        assert!(
+            identity_count == 0,
+            "{}/{} non-root bones have identity transforms. \
+             build_node_based_bone_transforms failed to match these bones to nodes.",
+            identity_count,
+            total,
+        );
+    }
+
+    #[test]
+    fn runtime_node_bone_gizmo_matches_mesh() {
+        let Some(result) = load_stickman() else {
+            eprintln!("Skipping: stickman model not found");
+            return;
+        };
+        let skeleton = result.skeletons.first().expect("no skeleton");
+        let scale = result.node_animation_scale;
+        let transforms = simulate_runtime_node_gizmo_transforms(&result, skeleton);
+
+        let offsets = compute_bone_local_offsets(skeleton, &transforms);
+        let display = compute_display_transforms(&transforms, &offsets, scale);
+
+        let mesh_centers = compute_node_mesh_center_per_bone(&result, skeleton);
+
+        let tolerance = 0.3;
+        let mut tested = 0u32;
+        let mut failures = Vec::new();
+
+        for (bi, center) in mesh_centers.iter().enumerate() {
+            let Some(center) = center else { continue };
+            tested += 1;
+
+            let gizmo = Vector3::new(display[bi][0], display[bi][1], display[bi][2]);
+            let dist = (gizmo - center).magnitude();
+
+            if dist >= tolerance {
+                failures.push(format!(
+                    "  bone[{}] '{}': gizmo=({:.3},{:.3},{:.3}) mesh=({:.3},{:.3},{:.3}) dist={:.3}",
+                    bi, skeleton.bones[bi].name,
+                    gizmo.x, gizmo.y, gizmo.z,
+                    center.x, center.y, center.z, dist,
+                ));
+            }
+        }
+
+        assert!(tested > 0, "should test at least one bone");
+        assert!(
+            failures.is_empty(),
+            "Node bone gizmo (runtime path) too far from mesh:\n{}",
+            failures.join("\n"),
+        );
+    }
+
+    #[test]
+    fn runtime_node_transform_gizmo_not_at_origin() {
+        let Some(result) = load_stickman() else {
+            eprintln!("Skipping: stickman model not found");
+            return;
+        };
+        let skeleton = result.skeletons.first().expect("no skeleton");
+        let scale = result.node_animation_scale;
+        let transforms = simulate_runtime_node_gizmo_transforms(&result, skeleton);
+        let offsets = compute_bone_local_offsets(skeleton, &transforms);
+
+        let mut gizmo = crate::debugview::gizmo::TransformGizmoData::default();
+        let mut at_origin_count = 0u32;
+        let mut total = 0u32;
+
+        for (idx, bone) in skeleton.bones.iter().enumerate() {
+            if bone.parent_id.is_none() {
+                continue;
+            }
+            total += 1;
+
+            crate::ecs::systems::transform_gizmo_systems::transform_gizmo_sync_to_bone(
+                &mut gizmo,
+                Some(idx),
+                &transforms,
+                &offsets,
+                scale,
+            );
+
+            let pos = gizmo.position.position;
+            let dist = (pos.x * pos.x + pos.y * pos.y + pos.z * pos.z).sqrt();
+
+            if dist < 0.001 {
+                at_origin_count += 1;
+                eprintln!("  bone[{}] '{}': transform gizmo at origin", idx, bone.name,);
+            }
+        }
+
+        assert!(total > 0);
+        assert!(
+            at_origin_count == 0,
+            "{}/{} bones have transform gizmo stuck at origin.",
+            at_origin_count,
+            total,
+        );
+    }
+
+    #[test]
+    fn runtime_skinned_transform_gizmo_matches_bone_display() {
+        let Some(result) = load_phoenix() else {
+            eprintln!("Skipping: phoenix model not found");
+            return;
+        };
+        let skeleton = result.skeletons.first().expect("no skeleton");
+        let pose = create_pose_from_rest(skeleton);
+        let globals = compute_pose_global_transforms(skeleton, &pose);
+        let offsets = compute_bone_local_offsets(skeleton, &globals);
+
+        let display = compute_display_transforms(&globals, &offsets, 1.0);
+
+        let mut gizmo = crate::debugview::gizmo::TransformGizmoData::default();
+        let mut failures = Vec::new();
+
+        for (idx, bone) in skeleton.bones.iter().enumerate() {
+            if bone.parent_id.is_none() {
+                continue;
+            }
+
+            crate::ecs::systems::transform_gizmo_systems::transform_gizmo_sync_to_bone(
+                &mut gizmo,
+                Some(idx),
+                &globals,
+                &offsets,
+                1.0,
+            );
+
+            let gizmo_pos = gizmo.position.position;
+            let bone_display = display[idx];
+
+            let dist = ((gizmo_pos.x - bone_display[0]).powi(2)
+                + (gizmo_pos.y - bone_display[1]).powi(2)
+                + (gizmo_pos.z - bone_display[2]).powi(2))
+            .sqrt();
+
+            if dist > 0.01 {
+                failures.push(format!(
+                    "  bone[{}] '{}': tg=({:.4},{:.4},{:.4}) bone=({:.4},{:.4},{:.4}) dist={:.4}",
+                    idx,
+                    bone.name,
+                    gizmo_pos.x,
+                    gizmo_pos.y,
+                    gizmo_pos.z,
+                    bone_display[0],
+                    bone_display[1],
+                    bone_display[2],
+                    dist,
+                ));
+            }
+        }
+
+        assert!(
+            failures.is_empty(),
+            "Transform gizmo and bone gizmo display positions differ:\n{}",
+            failures.join("\n"),
+        );
+    }
+
+    #[test]
+    fn node_index_fallback_finds_bone_transform() {
+        use crate::app::graphics_resource::NodeData;
+
+        let mut skeleton = Skeleton::new("test");
+        let bone_id = skeleton.add_bone("mismatched_name", None);
+        if let Some(bone) = skeleton.get_bone_mut(bone_id) {
+            bone.node_index = Some(42);
+        }
+
+        let node_transform = Matrix4::from_translation(Vector3::new(1.0, 2.0, 3.0));
+        let nodes = vec![NodeData {
+            index: 42,
+            name: "different_name".to_string(),
+            parent_index: None,
+            local_transform: node_transform,
+            global_transform: node_transform,
+        }];
+
+        let transforms =
+            crate::ecs::systems::animation_playback_systems::build_node_based_bone_transforms(
+                &nodes, &skeleton,
+            );
+
+        assert_eq!(
+            transforms[0], node_transform,
+            "node_index fallback should match the node by index when name does not match"
+        );
+    }
+
+    #[test]
+    fn node_index_fallback_prefers_name_match() {
+        use crate::app::graphics_resource::NodeData;
+
+        let mut skeleton = Skeleton::new("test");
+        let bone_id = skeleton.add_bone("correct_name", None);
+        if let Some(bone) = skeleton.get_bone_mut(bone_id) {
+            bone.node_index = Some(99);
+        }
+
+        let name_transform = Matrix4::from_translation(Vector3::new(1.0, 0.0, 0.0));
+        let index_transform = Matrix4::from_translation(Vector3::new(9.0, 9.0, 9.0));
+
+        let nodes = vec![
+            NodeData {
+                index: 0,
+                name: "correct_name".to_string(),
+                parent_index: None,
+                local_transform: name_transform,
+                global_transform: name_transform,
+            },
+            NodeData {
+                index: 99,
+                name: "other_name".to_string(),
+                parent_index: None,
+                local_transform: index_transform,
+                global_transform: index_transform,
+            },
+        ];
+
+        let transforms =
+            crate::ecs::systems::animation_playback_systems::build_node_based_bone_transforms(
+                &nodes, &skeleton,
+            );
+
+        assert_eq!(
+            transforms[0], name_transform,
+            "name match should take priority over node_index fallback"
         );
     }
 }

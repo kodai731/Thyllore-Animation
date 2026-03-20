@@ -24,7 +24,7 @@ use super::pose_blend_systems::blend_poses_additive;
 
 pub struct AnimationEvalResult {
     pub updated_meshes: Vec<usize>,
-    pub bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>)>,
+    pub bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)>,
 }
 
 struct ActiveInstanceInfo {
@@ -317,9 +317,12 @@ fn apply_blended_animations(
     assets: &AssetStorage,
     dt: f32,
     pose_overrides: &HashMap<BoneId, BoneLocalPose>,
-) -> (Vec<usize>, Option<(SkeletonId, Vec<Matrix4<f32>>)>) {
+) -> (
+    Vec<usize>,
+    Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)>,
+) {
     let mut updated = Vec::new();
-    let mut first_bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>)> = None;
+    let mut first_bone_transforms: Option<(SkeletonId, Vec<Matrix4<f32>>, AnimationType)> = None;
 
     let shared_constraints = find_shared_constraints(entities, world);
 
@@ -379,7 +382,11 @@ fn apply_blended_animations(
             } else {
                 globals.clone()
             };
-            first_bone_transforms = Some((info.skeleton_id, gizmo_transforms));
+            first_bone_transforms = Some((
+                info.skeleton_id,
+                gizmo_transforms,
+                info.animation_type.clone(),
+            ));
         }
 
         let mesh_updated = match info.animation_type {
@@ -399,14 +406,19 @@ fn apply_blended_animations(
     (updated, first_bone_transforms)
 }
 
-fn build_node_based_bone_transforms(
+pub(crate) fn build_node_based_bone_transforms(
     nodes: &[NodeData],
     skeleton: &crate::animation::Skeleton,
 ) -> Vec<Matrix4<f32>> {
     use cgmath::SquareMatrix;
     let mut transforms = vec![Matrix4::identity(); skeleton.bones.len()];
     for bone in &skeleton.bones {
-        if let Some(node) = nodes.iter().find(|n| n.name == bone.name) {
+        let matched_node = nodes.iter().find(|n| n.name == bone.name).or_else(|| {
+            bone.node_index
+                .and_then(|idx| nodes.iter().find(|n| n.index == idx))
+        });
+
+        if let Some(node) = matched_node {
             transforms[bone.id as usize] = node.global_transform;
         }
     }

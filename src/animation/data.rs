@@ -13,6 +13,7 @@ pub struct Bone {
     pub children: Vec<BoneId>,
     pub local_transform: Matrix4<f32>,
     pub inverse_bind_pose: Matrix4<f32>,
+    pub node_index: Option<usize>,
 }
 
 impl Default for Bone {
@@ -24,6 +25,7 @@ impl Default for Bone {
             children: Vec::new(),
             local_transform: Matrix4::identity(),
             inverse_bind_pose: Matrix4::identity(),
+            node_index: None,
         }
     }
 }
@@ -72,6 +74,7 @@ impl Skeleton {
             children: Vec::new(),
             local_transform: Matrix4::identity(),
             inverse_bind_pose: Matrix4::identity(),
+            node_index: None,
         };
 
         self.bone_name_to_id.insert(name.to_string(), id);

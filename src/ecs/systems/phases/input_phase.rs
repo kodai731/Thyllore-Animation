@@ -310,6 +310,7 @@ fn process_bone_selection(ctx: &mut EcsContext) -> Result<bool> {
         &transforms,
         &offsets,
         mesh_scale,
+        None,
     );
 
     let bone_hit = hit.is_some();

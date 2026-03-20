@@ -29,8 +29,8 @@ use crate::vulkanr::swapchain::*;
 use crate::vulkanr::vulkan::*;
 use crate::vulkanr::VulkanBackend;
 
-use crate::app::graphics_resource::GraphicsResources;
 use crate::ecs::resource::Camera;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use vulkanalia::Device as VkDevice;
 
@@ -710,7 +710,7 @@ impl App {
         rrrender: &RRRender,
         data: &mut AppData,
         pipeline_manager: &mut PipelineManager,
-    ) -> Result<crate::app::billboard::BillboardData> {
+    ) -> Result<crate::ecs::resource::billboard::BillboardData> {
         let mut billboard_data = create_billboard();
         billboard_data.render_info.object_index = data.graphics_resources.objects.allocate_slot();
 

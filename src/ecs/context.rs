@@ -1,9 +1,9 @@
 use cgmath::Vector3;
 
-use crate::app::billboard::BillboardData;
 use crate::app::GUIData;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{LineMesh, MeshScale};
+use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::gizmo::{
     BoneSelectionState, GridGizmoData, LightGizmoData, TransformGizmoData,
 };

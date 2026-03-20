@@ -3,11 +3,9 @@ use std::rc::Rc;
 use anyhow::Result;
 use cgmath::{Matrix4, Vector3};
 
-use crate::app::billboard::BillboardData;
-use crate::app::graphics_resource::GraphicsResources;
-use crate::app::raytracing::RayTracingData;
 use crate::asset::AssetStorage;
 use crate::debugview::DebugViewState;
+use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::gizmo::{
     BoneGizmoData, GridGizmoData, LightGizmoData, TransformGizmoData,
 };
@@ -17,6 +15,8 @@ use crate::render::RenderBackend;
 use crate::renderer::onion_skin_buffers::OnionSkinGpuState;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use crate::vulkanr::resource::raytracing_data::RayTracingData;
 use crate::vulkanr::resource::GpuBufferRegistry;
 use crate::vulkanr::vulkan::Instance;
 use crate::vulkanr::VulkanBackend;

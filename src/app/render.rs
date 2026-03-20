@@ -1,6 +1,6 @@
-use crate::app::billboard::BillboardData;
 use crate::app::init::MAX_FRAMES_IN_FLIGHT;
 use crate::app::{App, GUIData};
+use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::gizmo::{GridGizmoData, LightGizmoData};
 use crate::ecs::resource::{Camera, GridMeshData};
 use crate::ecs::systems::render_data_systems::{

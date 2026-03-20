@@ -1,5 +1,4 @@
-use crate::app::billboard::BillboardData;
-use crate::app::raytracing::RayTracingData;
+use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::{Camera, LightState};
 use crate::ecs::systems::camera_systems::{
     compute_camera_direction, compute_camera_position, compute_camera_up,
@@ -7,6 +6,7 @@ use crate::ecs::systems::camera_systems::{
 use crate::ecs::world::World;
 use crate::vulkanr::context::SwapchainState;
 use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
+use crate::vulkanr::resource::raytracing_data::RayTracingData;
 use crate::vulkanr::swapchain::RRSwapchain;
 use cgmath::{Deg, Vector3};
 use vulkanalia::prelude::v1_0::*;

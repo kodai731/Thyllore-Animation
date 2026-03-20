@@ -1,10 +1,9 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::billboard::BillboardData;
-use crate::app::graphics_resource::GraphicsResources;
 use crate::app::App;
 use crate::ecs::component::{LineMesh, RenderInfo};
+use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, GridGizmoData, LightGizmoData,
     TransformGizmoData,
@@ -12,6 +11,7 @@ use crate::ecs::resource::gizmo::{
 use crate::ecs::resource::GridMeshData;
 use crate::vulkanr::core::Device;
 use crate::vulkanr::pipeline::RRPipeline;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};
 
 pub struct OverlayRenderer<'a> {

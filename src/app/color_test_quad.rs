@@ -5,8 +5,6 @@ use std::rc::Rc;
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::graphics_resource::GraphicsResources;
-use crate::app::raytracing::RayTracingData;
 use crate::asset::{AssetStorage, MeshAsset};
 use crate::ecs::world::{Transform, World};
 use crate::math::{Vec2, Vec3, Vec4};
@@ -18,6 +16,8 @@ use crate::vulkanr::data::{Vertex, VertexData};
 use crate::vulkanr::image::{
     create_image_view, create_texture_image_pixel, create_texture_sampler,
 };
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use crate::vulkanr::resource::raytracing_data::RayTracingData;
 use crate::vulkanr::resource::MeshBuffer;
 use crate::vulkanr::vulkan::Instance;
 
@@ -202,7 +202,7 @@ unsafe fn create_quad_material(
     graphics: &mut GraphicsResources,
     mesh: &MeshBuffer,
     index: usize,
-) -> Result<crate::app::graphics_resource::MaterialId> {
+) -> Result<crate::vulkanr::resource::graphics_resource::MaterialId> {
     let name = format!("color_test_material_{}", index);
     let material_id = graphics.materials.create_material_with_texture(
         instance,

@@ -1,4 +1,4 @@
-use crate::app::graphics_resource::{
+use crate::vulkanr::resource::graphics_resource::{
     FrameDescriptorSet, MaterialId, MaterialManager, MeshBuffer, NodeData, ObjectDescriptorSet,
 };
 

@@ -8,12 +8,10 @@ use cgmath::SquareMatrix;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::animation::editable::SourceClipId;
-use crate::app::billboard::BillboardData;
-use crate::app::graphics_resource::{GraphicsResources, MaterialId, MeshBuffer, NodeData};
-use crate::app::raytracing::RayTracingData;
 use crate::app::AppData;
 use crate::asset::{AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
 use crate::ecs::component::{AnimationMeta, ClipSchedule, EntityIcon};
+use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::gizmo::{BoneGizmoData, ConstraintGizmoData};
 use crate::ecs::resource::{
     AnimationType, ClipLibrary, FbxModelCache, GltfModelCache, MeshAssets, ModelState, NodeAssets,
@@ -33,6 +31,10 @@ use crate::vulkanr::image::{
     create_image_view, create_texture_image_pixel, create_texture_sampler,
 };
 use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
+use crate::vulkanr::resource::graphics_resource::{
+    GraphicsResources, MaterialId, MeshBuffer, NodeData,
+};
+use crate::vulkanr::resource::raytracing_data::RayTracingData;
 use crate::vulkanr::swapchain::RRSwapchain;
 use crate::vulkanr::vulkan::Instance;
 

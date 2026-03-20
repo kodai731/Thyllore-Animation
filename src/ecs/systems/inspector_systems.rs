@@ -2,10 +2,10 @@ use cgmath::{Quaternion, Vector3, Vector4};
 
 use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
 
-use crate::app::graphics_resource::GraphicsResources;
 use crate::asset::AssetStorage;
 use crate::ecs::component::EditorDisplay;
 use crate::ecs::world::{Entity, MeshRef, Name, Parent, Transform, Visibility, Visible, World};
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub struct MeshInspectorData {

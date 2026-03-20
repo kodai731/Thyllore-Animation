@@ -2,9 +2,9 @@ use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 
 use crate::animation::{compose_transform, MorphAnimationSystem, Skeleton, SkeletonPose};
-use crate::app::graphics_resource::{GraphicsResources, NodeData};
 use crate::ecs::apply_skinning;
 use crate::render::RenderBackend;
+use crate::vulkanr::resource::graphics_resource::{GraphicsResources, NodeData};
 
 pub(crate) fn build_node_based_bone_transforms(
     nodes: &[NodeData],

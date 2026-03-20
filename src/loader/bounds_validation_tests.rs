@@ -3,12 +3,12 @@ use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::app::graphics_resource::NodeData;
 use crate::ecs::systems::{
     apply_pose_overrides, apply_skinning, compute_local_override_from_global_translation,
     compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose,
 };
 use crate::loader::ModelLoadResult;
+use crate::vulkanr::resource::graphics_resource::NodeData;
 
 #[allow(dead_code)]
 #[derive(Deserialize)]

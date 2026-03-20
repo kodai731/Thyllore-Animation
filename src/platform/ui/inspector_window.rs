@@ -1,12 +1,12 @@
 use imgui::Condition;
 
-use crate::app::graphics_resource::GraphicsResources;
 use crate::asset::AssetStorage;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{ConstraintEditorState, HierarchyState};
 use crate::ecs::systems::collect_inspector_data;
 use crate::ecs::world::{Visibility, World};
 use crate::math::euler_degrees_to_quaternion;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::constraint_inspector::build_constraint_section;
 use super::layout_snapshot::LayoutSnapshot;

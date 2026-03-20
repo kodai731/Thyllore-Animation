@@ -5,8 +5,8 @@ use super::{
     billboard_transform_update_look_at, compute_camera_direction, compute_camera_position,
     compute_camera_up, create_billboard_transform,
 };
-use crate::app::billboard::BillboardData;
 use crate::app::data::LightMoveTarget;
+use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::{Camera, LightState, ProjectionData};
 use crate::math::coordinate_system::perspective_infinite_reverse;
 use crate::render::RenderBackend;

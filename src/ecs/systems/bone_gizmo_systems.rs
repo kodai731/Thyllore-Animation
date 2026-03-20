@@ -1115,10 +1115,12 @@ mod tests {
         );
     }
 
-    fn to_node_data(nodes: &[LoadedNode]) -> Vec<crate::app::graphics_resource::NodeData> {
+    fn to_node_data(
+        nodes: &[LoadedNode],
+    ) -> Vec<crate::vulkanr::resource::graphics_resource::NodeData> {
         nodes
             .iter()
-            .map(|n| crate::app::graphics_resource::NodeData {
+            .map(|n| crate::vulkanr::resource::graphics_resource::NodeData {
                 index: n.index,
                 name: n.name.clone(),
                 parent_index: n.parent_index,
@@ -1132,7 +1134,7 @@ mod tests {
         result: &ModelLoadResult,
         skeleton: &Skeleton,
     ) -> Vec<Matrix4<f32>> {
-        use crate::app::graphics_resource::NodeData;
+        use crate::vulkanr::resource::graphics_resource::NodeData;
 
         let pose = create_pose_from_rest(skeleton);
         let mut nodes = to_node_data(&result.nodes);
@@ -1420,7 +1422,7 @@ mod tests {
 
     #[test]
     fn node_index_fallback_finds_bone_transform() {
-        use crate::app::graphics_resource::NodeData;
+        use crate::vulkanr::resource::graphics_resource::NodeData;
 
         let mut skeleton = Skeleton::new("test");
         let bone_id = skeleton.add_bone("mismatched_name", None);
@@ -1449,7 +1451,7 @@ mod tests {
 
     #[test]
     fn node_index_fallback_prefers_name_match() {
-        use crate::app::graphics_resource::NodeData;
+        use crate::vulkanr::resource::graphics_resource::NodeData;
 
         let mut skeleton = Skeleton::new("test");
         let bone_id = skeleton.add_bone("correct_name", None);

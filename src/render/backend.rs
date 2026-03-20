@@ -1,8 +1,8 @@
 use anyhow::Result;
 use cgmath::{Matrix4, Vector3};
 
-use crate::app::billboard::BillboardData;
 use crate::ecs::component::LineMesh;
+use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::DistanceAttenuation;
 use crate::ecs::resource::ProjectionData;
 

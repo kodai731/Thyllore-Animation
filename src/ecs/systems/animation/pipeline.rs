@@ -3,11 +3,11 @@ use std::collections::HashMap;
 use cgmath::Matrix4;
 
 use crate::animation::{BoneId, BoneLocalPose, SkeletonId};
-use crate::app::graphics_resource::{GraphicsResources, NodeData};
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{AnimationType, ClipLibrary};
 use crate::ecs::world::{Animator, World};
 use crate::ecs::{apply_pose_overrides, compute_pose_global_transforms};
+use crate::vulkanr::resource::graphics_resource::{GraphicsResources, NodeData};
 
 use super::apply::{
     apply_morph_animation, apply_node_animation_to_single_mesh, apply_skinning_to_single_mesh,

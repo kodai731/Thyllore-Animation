@@ -1,9 +1,9 @@
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 
 use crate::animation::{Skeleton, SkeletonPose, SkinData};
-use crate::app::graphics_resource::NodeData;
 use crate::ecs::{apply_skinning, compute_pose_global_transforms, create_pose_from_rest};
 use crate::loader::LoadedNode;
+use crate::vulkanr::resource::graphics_resource::NodeData;
 
 const TOLERANCE: f32 = 0.001;
 const EXPECTED_POSITION: Vector3<f32> = Vector3::new(0.5, 1.0, 0.0);

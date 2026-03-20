@@ -1,3 +1,4 @@
+pub mod billboard;
 pub mod gizmo;
 
 mod auto_exposure;
@@ -48,6 +49,7 @@ mod timeline_state;
 mod tone_mapping;
 mod transform_gizmo_state;
 
+pub use billboard::*;
 pub use gizmo::*;
 
 pub use auto_exposure::*;

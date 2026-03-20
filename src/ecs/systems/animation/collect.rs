@@ -1,10 +1,10 @@
 use crate::animation::SkeletonId;
-use crate::app::graphics_resource::GraphicsResources;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{AnimationMeta, ClipSchedule};
 use crate::ecs::compute_local_time;
 use crate::ecs::resource::{ClipLibrary, SpringBoneMode, SpringBoneState};
 use crate::ecs::world::{Animator, Entity, MeshRef, World};
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::{ActiveInstanceInfo, AnimatedEntityInfo};
 

@@ -6,10 +6,8 @@ use anyhow::Result;
 use cgmath::{Matrix4, Vector3, Vector4};
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::billboard::BillboardData;
-use crate::app::graphics_resource::GraphicsResources;
-use crate::app::raytracing::RayTracingData;
 use crate::ecs::component::LineMesh;
+use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::DistanceAttenuation;
 use crate::ecs::resource::ProjectionData;
 use crate::render::{
@@ -21,6 +19,8 @@ use crate::vulkanr::core::device::RRDevice;
 use crate::vulkanr::data::{SceneUniformData, Vertex};
 use crate::vulkanr::image::RRImage;
 use crate::vulkanr::raytracing::acceleration::RRAccelerationStructure;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use crate::vulkanr::resource::raytracing_data::RayTracingData;
 use crate::vulkanr::resource::GpuBufferRegistry;
 use crate::vulkanr::vulkan::Instance;
 

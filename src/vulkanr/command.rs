@@ -1,10 +1,10 @@
 use super::device::*;
 use super::vulkan::*;
-use crate::app::graphics_resource::GraphicsResources;
 use crate::vulkanr::buffer::{RRIndexBuffer, RRVertexBuffer};
 use crate::vulkanr::descriptor::model::RRDescriptorSet;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::render::pass::RRRender;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::swapchain::RRSwapchain;
 use std::rc::Rc;
 
@@ -244,7 +244,7 @@ unsafe fn create_command_pool(
     Ok(())
 }
 
-use crate::app::graphics_resource::MaterialId;
+use crate::vulkanr::resource::graphics_resource::MaterialId;
 
 #[derive(Clone, Debug)]
 pub struct RRBindInfo<'a> {

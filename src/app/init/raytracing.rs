@@ -1,5 +1,5 @@
-use crate::app::billboard::BillboardData;
 use crate::app::{App, AppData};
+use crate::ecs::resource::billboard::BillboardData;
 use crate::renderer::deferred::create_gbuffer_framebuffer;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;

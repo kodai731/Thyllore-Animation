@@ -1,7 +1,7 @@
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
-use crate::app::billboard::BillboardData;
 use crate::ecs::component::GpuMeshRef;
+use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, GridGizmoData, LightGizmoData,
     SpringBoneGizmoData, TransformGizmoData,

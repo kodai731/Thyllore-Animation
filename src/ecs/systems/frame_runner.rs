@@ -11,7 +11,6 @@ use super::phases::{
     run_render_prep_phase, run_transform_phase_ecs, run_transform_phase_gpu,
 };
 use super::timeline_systems::timeline_update;
-use crate::app::graphics_resource::GraphicsResources;
 use crate::app::FrameContext;
 #[cfg(feature = "ml")]
 use crate::ecs::component::InferenceActorSetup;
@@ -22,6 +21,7 @@ use crate::ecs::resource::{ClipLibrary, HierarchyState, TimelineState};
 #[cfg(feature = "ml")]
 use crate::ecs::resource::{CurveSuggestionState, InferenceActorState};
 use crate::ecs::world::Animator;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
     let mesh_positions = collect_mesh_positions(ctx.graphics);

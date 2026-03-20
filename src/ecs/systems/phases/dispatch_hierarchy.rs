@@ -9,7 +9,8 @@ use crate::ecs::systems::{
     camera_move_to_look_at, collapse_entity, expand_entity, hierarchy_collapse_bone,
     hierarchy_deselect_all, hierarchy_deselect_bone, hierarchy_expand_bone, hierarchy_select,
     hierarchy_select_bone, hierarchy_toggle_selection, rename_entity, resolve_mesh_bone_id,
-    update_entity_scale, update_entity_translation, update_entity_visible,
+    resolve_transform_entity, update_entity_scale, update_entity_translation,
+    update_entity_visible,
 };
 use crate::ecs::world::{Transform, World};
 
@@ -64,7 +65,8 @@ fn dispatch_hierarchy_entity_events(events: &[UIEvent], world: &mut World) {
             }
 
             UIEvent::SetEntityRotation(entity, rotation) => {
-                if let Some(transform) = world.get_component_mut::<Transform>(*entity) {
+                let target = resolve_transform_entity(world, *entity);
+                if let Some(transform) = world.get_component_mut::<Transform>(target) {
                     transform.rotation = *rotation;
                 }
             }
@@ -78,8 +80,9 @@ fn dispatch_hierarchy_entity_events(events: &[UIEvent], world: &mut World) {
             }
 
             UIEvent::FocusOnEntity(entity) => {
+                let transform_entity = resolve_transform_entity(world, *entity);
                 let target = world
-                    .get_component::<Transform>(*entity)
+                    .get_component::<Transform>(transform_entity)
                     .map(|t| t.translation);
 
                 if let Some(target) = target {

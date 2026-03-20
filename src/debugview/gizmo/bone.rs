@@ -2,6 +2,7 @@ use cgmath::Matrix4;
 
 use crate::animation::SkeletonId;
 use crate::ecs::component::{LineMesh, RenderInfo};
+use crate::ecs::resource::AnimationType;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum BoneDisplayStyle {
@@ -21,6 +22,7 @@ pub struct BoneGizmoData {
     pub distance_scaling_factor: f32,
     pub cached_global_transforms: Vec<Matrix4<f32>>,
     pub cached_skeleton_id: Option<SkeletonId>,
+    pub cached_animation_type: AnimationType,
     pub bone_local_offsets: Vec<[f32; 3]>,
     pub mesh_scale: f32,
 
@@ -49,6 +51,7 @@ impl Default for BoneGizmoData {
             distance_scaling_factor: 0.03,
             cached_global_transforms: Vec::new(),
             cached_skeleton_id: None,
+            cached_animation_type: AnimationType::default(),
             bone_local_offsets: Vec::new(),
             mesh_scale: 1.0,
             stick_mesh: LineMesh::default(),

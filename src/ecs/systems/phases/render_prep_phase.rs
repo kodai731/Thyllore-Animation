@@ -64,6 +64,35 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     Ok(())
 }
 
+unsafe fn update_mesh_entity_transforms(ctx: &mut FrameContext) -> Result<()> {
+    use crate::ecs::world::{GlobalTransform, MeshRef};
+    use crate::render::ObjectUBO;
+
+    let transforms: Vec<(usize, Matrix4<f32>)> = ctx
+        .world
+        .iter_components::<MeshRef>()
+        .map(|(entity, mesh_ref)| {
+            let model_matrix = ctx
+                .world
+                .get_component::<GlobalTransform>(entity)
+                .map(|gt| gt.0)
+                .unwrap_or_else(Matrix4::identity);
+            (mesh_ref.object_index, model_matrix)
+        })
+        .collect();
+
+    for (object_index, model_matrix) in transforms {
+        let ubo = ObjectUBO {
+            model: model_matrix,
+        };
+        ctx.graphics
+            .objects
+            .update(ctx.device, ctx.image_index, object_index, &ubo)?;
+    }
+
+    Ok(())
+}
+
 unsafe fn update_frame_and_scene_uniforms(
     ctx: &mut FrameContext,
     view: Matrix4<f32>,
@@ -92,12 +121,7 @@ unsafe fn update_frame_and_scene_uniforms(
         )?;
     }
 
-    if let Err(e) = ctx
-        .graphics
-        .update_objects(ctx.device, ctx.image_index, Matrix4::identity())
-    {
-        eprintln!("Failed to update ObjectUBO: {}", e);
-    }
+    update_mesh_entity_transforms(ctx)?;
 
     let light = ctx.light_state();
     let light_pos = light.light_position;
@@ -400,6 +424,7 @@ unsafe fn update_stick_bone_mesh(
             transforms,
             offsets,
             mesh_scale,
+            None,
             &mut bone_gizmo.stick_mesh,
         );
     }
@@ -446,6 +471,7 @@ unsafe fn update_octahedral_bone_mesh(
         &selection,
         visual_scale,
         mesh_scale,
+        None,
         &mut solid_mesh,
         &mut wire_mesh,
     );
@@ -488,6 +514,7 @@ unsafe fn update_box_bone_mesh(
         &selection,
         visual_scale,
         mesh_scale,
+        None,
         &mut solid_mesh,
         &mut wire_mesh,
     );
@@ -530,6 +557,7 @@ unsafe fn update_sphere_bone_mesh(
         &selection,
         visual_scale,
         mesh_scale,
+        None,
         &mut solid_mesh,
         &mut wire_mesh,
     );

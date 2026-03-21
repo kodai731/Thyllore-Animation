@@ -70,83 +70,100 @@ impl System {
                     ..
                 } => {
                     platform.handle_event(imgui.io_mut(), &window, &event);
-
-                    match window_event {
-                        WindowEvent::CursorMoved { position, .. } => {
-                            let mut mouse = app.data.ecs_world.resource_mut::<MouseInput>();
-                            mouse.position = [position.x as f32, position.y as f32];
-                        }
-
-                        WindowEvent::MouseWheel { delta, .. } => {
-                            let mut mouse = app.data.ecs_world.resource_mut::<MouseInput>();
-                            match delta {
-                                winit::event::MouseScrollDelta::LineDelta(_, y) => {
-                                    mouse.wheel = *y;
-                                }
-                                winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                                    mouse.wheel = pos.y as f32;
-                                }
-                            }
-                        }
-
-                        WindowEvent::Resized(new_size) => {
-                            if new_size.width > 0 && new_size.height > 0 {
-                                app.resized = true;
-                            }
-                        }
-
-                        WindowEvent::CloseRequested => window_target.exit(),
-
-                        WindowEvent::DroppedFile(path_buf) => {
-                            if let Some(path) = path_buf.to_str() {
-                                let mut ui_events =
-                                    app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                ui_events.send(UIEvent::LoadModel {
-                                    path: path.to_string(),
-                                });
-                            }
-                        }
-
-                        WindowEvent::KeyboardInput { event, .. } => {
-                            if event.state == ElementState::Pressed {
-                                let modifiers_res =
-                                    app.data.ecs_world.resource::<KeyboardModifiers>();
-                                let modifiers = ModifierKeys {
-                                    ctrl: modifiers_res.ctrl,
-                                    shift: modifiers_res.shift,
-                                };
-                                drop(modifiers_res);
-                                if let Some(ui_event) = dispatch_keyboard_shortcut(
-                                    &event.logical_key,
-                                    modifiers,
-                                    imgui.io().want_capture_keyboard,
-                                    &bindings,
-                                ) {
-                                    let mut ui_events =
-                                        app.data.ecs_world.resource_mut::<UIEventQueue>();
-                                    ui_events.send(ui_event);
-                                }
-                            }
-                        }
-
-                        WindowEvent::RedrawRequested => {
-                            handle_redraw_requested(
-                                &mut imgui,
-                                &mut platform,
-                                &window,
-                                app,
-                                &mut status_bar_state,
-                            );
-                        }
-                        _ => {}
-                    }
+                    dispatch_window_event(
+                        window_event,
+                        window_target,
+                        app,
+                        &mut imgui,
+                        &mut platform,
+                        &window,
+                        &bindings,
+                        &mut status_bar_state,
+                    );
                 }
+
                 Event::LoopExiting => {
                     unsafe { app.destroy() };
                 }
+
                 _ => {}
             })
             .expect("EventLoop error");
+    }
+}
+
+fn dispatch_window_event(
+    event: &WindowEvent,
+    window_target: &winit::event_loop::EventLoopWindowTarget<()>,
+    app: &mut App,
+    imgui: &mut imgui::Context,
+    platform: &mut imgui_winit_support::WinitPlatform,
+    window: &winit::window::Window,
+    bindings: &[super::key_bindings::KeyBinding],
+    status_bar_state: &mut StatusBarState,
+) {
+    match event {
+        WindowEvent::CloseRequested => window_target.exit(),
+
+        WindowEvent::Resized(size) if size.width > 0 && size.height > 0 => {
+            app.resized = true;
+        }
+
+        WindowEvent::CursorMoved { position, .. } => {
+            let mut mouse = app.data.ecs_world.resource_mut::<MouseInput>();
+            mouse.position = [position.x as f32, position.y as f32];
+        }
+
+        WindowEvent::MouseWheel { delta, .. } => {
+            let mut mouse = app.data.ecs_world.resource_mut::<MouseInput>();
+            mouse.wheel = match delta {
+                winit::event::MouseScrollDelta::LineDelta(_, y) => *y,
+                winit::event::MouseScrollDelta::PixelDelta(pos) => pos.y as f32,
+            };
+        }
+
+        WindowEvent::DroppedFile(path_buf) => {
+            if let Some(path) = path_buf.to_str() {
+                let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+                ui_events.send(UIEvent::LoadModel {
+                    path: path.to_string(),
+                });
+            }
+        }
+
+        WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
+            dispatch_keyboard_input(app, event, imgui, bindings);
+        }
+
+        WindowEvent::RedrawRequested => {
+            handle_redraw_requested(imgui, platform, window, app, status_bar_state);
+        }
+
+        _ => {}
+    }
+}
+
+fn dispatch_keyboard_input(
+    app: &mut App,
+    event: &winit::event::KeyEvent,
+    imgui: &imgui::Context,
+    bindings: &[super::key_bindings::KeyBinding],
+) {
+    let modifiers_res = app.data.ecs_world.resource::<KeyboardModifiers>();
+    let modifiers = ModifierKeys {
+        ctrl: modifiers_res.ctrl,
+        shift: modifiers_res.shift,
+    };
+    drop(modifiers_res);
+
+    if let Some(ui_event) = dispatch_keyboard_shortcut(
+        &event.logical_key,
+        modifiers,
+        imgui.io().want_capture_keyboard,
+        bindings,
+    ) {
+        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+        ui_events.send(ui_event);
     }
 }
 
@@ -476,99 +493,115 @@ unsafe fn process_ui_events_and_render_frame(
     all_deferred.append(&mut platform_deferred);
 
     for action in all_deferred {
-        match action {
-            DeferredAction::LoadModel { path } => {
-                if let Err(e) = app.load_model(&path) {
-                    log_error!("Failed to load model: {:?}", e);
-                }
-            }
-            DeferredAction::TakeScreenshot => {
-                log!("Taking screenshot...");
-                let image_index = app.frame % crate::app::init::MAX_FRAMES_IN_FLIGHT;
-                match app.save_screenshot(image_index) {
-                    Ok(path) => msg_info!("Screenshot saved: {}", path),
-                    Err(e) => log_error!("Screenshot failed: {:?}", e),
-                }
-            }
-            #[cfg(debug_assertions)]
-            DeferredAction::DebugShadowInfo => {
-                crate::debugview::log_shadow_debug_info(
-                    &app.data.ecs_world,
-                    &app.data.raytracing,
-                    &app.data.graphics_resources,
-                );
-            }
-            #[cfg(debug_assertions)]
-            DeferredAction::DebugBillboardDepth => {
-                crate::debugview::collect_and_log_billboard_debug(
-                    &app.data.ecs_world,
-                    &app.data.raytracing,
-                );
-            }
-            DeferredAction::DumpDebugInfo => {
-                app.dump_debug_info();
-            }
-            DeferredAction::DumpAnimationDebug => {
-                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
-                if let Err(e) = crate::ecs::systems::animation_debug_dump::dump_animation_debug(
-                    &app.data.ecs_world,
-                    &app.data.ecs_assets,
-                    &*clip_library,
-                ) {
-                    log_warn!("Animation debug dump failed: {:?}", e);
-                }
-            }
-            DeferredAction::LoadClipFromFile { path } => {
-                let bone_name_to_id = app
-                    .data
-                    .ecs_assets
-                    .skeletons
-                    .values()
-                    .next()
-                    .map(|sa| sa.skeleton.bone_name_to_id.clone());
+        execute_deferred_action(app, action);
+    }
 
-                let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
-                match crate::ecs::systems::clip_library_systems::clip_library_load_from_file(
-                    &mut clip_library,
-                    &mut app.data.ecs_assets,
-                    &path,
-                    bone_name_to_id.as_ref(),
-                ) {
-                    Ok(_) => {}
-                    Err(e) => msg_error!("Failed to load clip: {:?}", e),
-                }
+    render_frame(app, window, draw_data);
+}
+
+unsafe fn execute_deferred_action(app: &mut App, action: DeferredAction) {
+    match action {
+        DeferredAction::LoadModel { path } => {
+            if let Err(e) = app.load_model(&path) {
+                log_error!("Failed to load model: {:?}", e);
             }
-            DeferredAction::SaveClipToFile { source_id, path } => {
-                use crate::ecs::systems::clip_library_systems::{
-                    clip_library_save_to_file, clip_library_update_save_metadata,
-                };
+        }
 
-                let new_name = extract_clip_name_from_path(&path);
-                let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
-                clip_library_update_save_metadata(
-                    &mut clip_library,
-                    source_id,
-                    new_name.clone(),
-                    &path,
-                );
-
-                match clip_library_save_to_file(&clip_library, source_id, &path) {
-                    Ok(()) => msg_info!("Saved clip '{}' to {:?}", new_name, path),
-                    Err(e) => msg_error!("Failed to save clip: {:?}", e),
-                }
+        DeferredAction::TakeScreenshot => {
+            log!("Taking screenshot...");
+            let image_index = app.frame % crate::app::init::MAX_FRAMES_IN_FLIGHT;
+            match app.save_screenshot(image_index) {
+                Ok(path) => msg_info!("Screenshot saved: {}", path),
+                Err(e) => log_error!("Screenshot failed: {:?}", e),
             }
-            DeferredAction::SaveSpringBoneBake { baked_id, path } => {
-                use crate::ecs::systems::clip_library_systems::clip_library_save_to_file;
+        }
 
-                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
-                match clip_library_save_to_file(&clip_library, baked_id, &path) {
-                    Ok(()) => msg_info!("Saved spring bone bake to {:?}", path),
-                    Err(e) => msg_error!("Failed to save spring bone bake: {:?}", e),
-                }
+        #[cfg(debug_assertions)]
+        DeferredAction::DebugShadowInfo => {
+            crate::debugview::log_shadow_debug_info(
+                &app.data.ecs_world,
+                &app.data.raytracing,
+                &app.data.graphics_resources,
+            );
+        }
+
+        #[cfg(debug_assertions)]
+        DeferredAction::DebugBillboardDepth => {
+            crate::debugview::collect_and_log_billboard_debug(
+                &app.data.ecs_world,
+                &app.data.raytracing,
+            );
+        }
+
+        DeferredAction::DumpDebugInfo => {
+            app.dump_debug_info();
+        }
+
+        DeferredAction::DumpAnimationDebug => {
+            let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+            if let Err(e) = crate::ecs::systems::animation_debug_dump::dump_animation_debug(
+                &app.data.ecs_world,
+                &app.data.ecs_assets,
+                &*clip_library,
+            ) {
+                log_warn!("Animation debug dump failed: {:?}", e);
+            }
+        }
+
+        DeferredAction::LoadClipFromFile { path } => {
+            let bone_name_to_id = app
+                .data
+                .ecs_assets
+                .skeletons
+                .values()
+                .next()
+                .map(|sa| sa.skeleton.bone_name_to_id.clone());
+
+            let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
+            match crate::ecs::systems::clip_library_systems::clip_library_load_from_file(
+                &mut clip_library,
+                &mut app.data.ecs_assets,
+                &path,
+                bone_name_to_id.as_ref(),
+            ) {
+                Ok(_) => {}
+                Err(e) => msg_error!("Failed to load clip: {:?}", e),
+            }
+        }
+
+        DeferredAction::SaveClipToFile { source_id, path } => {
+            use crate::ecs::systems::clip_library_systems::{
+                clip_library_save_to_file, clip_library_update_save_metadata,
+            };
+
+            let new_name = extract_clip_name_from_path(&path);
+            let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
+            clip_library_update_save_metadata(
+                &mut clip_library,
+                source_id,
+                new_name.clone(),
+                &path,
+            );
+
+            match clip_library_save_to_file(&clip_library, source_id, &path) {
+                Ok(()) => msg_info!("Saved clip '{}' to {:?}", new_name, path),
+                Err(e) => msg_error!("Failed to save clip: {:?}", e),
+            }
+        }
+
+        DeferredAction::SaveSpringBoneBake { baked_id, path } => {
+            use crate::ecs::systems::clip_library_systems::clip_library_save_to_file;
+
+            let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+            match clip_library_save_to_file(&clip_library, baked_id, &path) {
+                Ok(()) => msg_info!("Saved spring bone bake to {:?}", path),
+                Err(e) => msg_error!("Failed to save spring bone bake: {:?}", e),
             }
         }
     }
+}
 
+unsafe fn render_frame(app: &mut App, window: &winit::window::Window, draw_data: &imgui::DrawData) {
     let frame_result = (|| -> anyhow::Result<()> {
         let image_index = app.begin_frame()?;
         app.update(image_index)?;
@@ -585,7 +618,6 @@ unsafe fn process_ui_events_and_render_frame(
             }
         } else {
             log_error!("Frame error: {:?}", e);
-            return;
         }
     }
 }

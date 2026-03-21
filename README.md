@@ -153,10 +153,10 @@ cargo test --no-default-features
 > **Note**: Do NOT run `cargo test --test ecs_tests` without `--no-default-features`. The ONNX Runtime dependency causes integration test crashes. See [CLAUDE.md](CLAUDE.md) for details.
 
 ## Keyboard Shortcuts
-see [docs/keyboard_shortcuts.md](docs/keyboard_shortcuts.md)
+See [docs/keyboard_shortcuts.md](docs/keyboard_shortcuts.md)
 
 ## Project Structure
-see [docs/structure.md](docs/structure.md)
+See [docs/structure.md](docs/structure.md)
 
 ## Dependencies
 

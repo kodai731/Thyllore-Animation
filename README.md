@@ -1,24 +1,20 @@
 # Thyllore Animation
 
-A real-time animation and rendering engine powered by ECS architecture, built in Rust with Vulkan.
+A real-time animation editing tool powered by ECS architecture, built in Rust with Vulkan.
 
-Thyllore Animation supports glTF/FBX model loading, skeletal animation, node animation, morph targets, and ML-assisted animation editing via an integrated curve copilot.
+Import animation model files (glTF / FBX), edit animation curves on a timeline with Bezier interpolation, and export the result back to glTF / FBX. An ML-powered curve copilot suggests keyframe values as you work.
 
 ![ScreenShot](docs/images/ProjectView.png)
 
 ## Features
 
-- **Vulkan Rendering** - Deferred rendering pipeline with tone mapping and depth compositing
-- **3D Model Loading** - glTF and FBX format support via `gltf` and `ufbx` crates
-- **Skeletal Animation** - Bone-driven animation with hierarchical transforms
-- **Node Animation** - Transform-level animation for scene objects
-- **Morph Targets** - Blend shape animation support
-- **ML Curve Copilot** - ONNX-based machine learning model for animation curve suggestions
-- **Timeline Editor** - Keyframe editing with Bezier curve interpolation
-- **Ray Tracing** - Hardware-accelerated ray tracing via Vulkan RT extensions
-- **Onion Skinning** - Ghost overlay of previous/next frames for animation reference
-- **ImGui Integration** - Debug UI with docking support
-- **ECS Architecture** - Data-driven Entity-Component-System design inspired by Bevy
+- **Import / Export** — Load glTF and FBX models, edit animations, and export back to both formats
+- **Timeline & Curve Editor** — Keyframe editing with Bezier interpolation and onion skinning
+- **ML Curve Copilot** — ONNX-based model that suggests animation curves as you edit
+- **Vulkan Rendering** — Deferred pipeline with ray tracing, bloom, tone mapping, and depth of field
+- **ECS Architecture** — Data-driven design inspired by Bevy Engine
+
+See [docs/features.md](docs/features.md) for a full list of features.
 
 ## Roadmap
 

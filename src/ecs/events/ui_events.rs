@@ -36,7 +36,9 @@ pub enum UIEvent {
 
     TakeScreenshot,
 
+    #[cfg(debug_assertions)]
     DebugShadowInfo,
+    #[cfg(debug_assertions)]
     DebugBillboardDepth,
     DumpDebugInfo,
     DumpAnimationDebug,

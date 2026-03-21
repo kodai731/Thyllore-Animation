@@ -4,11 +4,11 @@ use anyhow::Result;
 use cgmath::{Matrix4, Vector3};
 
 use crate::asset::AssetStorage;
-use crate::debugview::DebugViewState;
 use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::gizmo::{
     BoneGizmoData, GridGizmoData, LightGizmoData, TransformGizmoData,
 };
+use crate::ecs::resource::DebugViewState;
 use crate::ecs::resource::{Camera, GridMeshData, LightState};
 use crate::ecs::world::{ResMut, ResRef, World};
 use crate::render::RenderBackend;

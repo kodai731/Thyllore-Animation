@@ -53,6 +53,7 @@ mod timeline_interaction_state;
 mod timeline_state;
 mod tone_mapping;
 mod transform_gizmo_state;
+mod view_mode;
 
 pub use billboard::*;
 pub use gizmo::*;
@@ -109,3 +110,4 @@ pub use timeline_interaction_state::*;
 pub use timeline_state::*;
 pub use tone_mapping::*;
 pub use transform_gizmo_state::*;
+pub use view_mode::*;

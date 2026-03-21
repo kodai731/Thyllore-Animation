@@ -168,7 +168,7 @@ fn process_gizmo_interaction(ctx: &mut EcsContext) -> Result<()> {
 
         let billboard_click_rect = ctx
             .world
-            .get_resource::<crate::debugview::DebugViewState>()
+            .get_resource::<crate::ecs::resource::DebugViewState>()
             .map(|s| s.billboard_click_rect)
             .unwrap_or(None);
 

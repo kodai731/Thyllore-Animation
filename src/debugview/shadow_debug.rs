@@ -1,5 +1,5 @@
-use crate::debugview::DebugViewState;
 use crate::ecs::resource::gizmo::LightGizmoData;
+use crate::ecs::resource::DebugViewState;
 use crate::ecs::resource::{Camera, LightState};
 use crate::ecs::systems::camera_systems::compute_camera_position;
 use crate::ecs::world::World;

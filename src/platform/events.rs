@@ -170,7 +170,7 @@ fn handle_redraw_requested(
     #[cfg(debug_assertions)]
     let mut debug_state = DebugWindowState {
         debug_view_mode: app
-            .resource::<crate::debugview::DebugViewState>()
+            .resource::<crate::ecs::resource::DebugViewState>()
             .debug_view_mode,
     };
 
@@ -192,7 +192,7 @@ fn handle_redraw_requested(
 
     #[cfg(debug_assertions)]
     {
-        app.resource_mut::<crate::debugview::DebugViewState>()
+        app.resource_mut::<crate::ecs::resource::DebugViewState>()
             .debug_view_mode = debug_state.debug_view_mode;
     }
 
@@ -487,6 +487,7 @@ unsafe fn process_ui_events_and_render_frame(
                     Err(e) => log_error!("Screenshot failed: {:?}", e),
                 }
             }
+            #[cfg(debug_assertions)]
             DeferredAction::DebugShadowInfo => {
                 crate::debugview::log_shadow_debug_info(
                     &app.data.ecs_world,
@@ -494,6 +495,7 @@ unsafe fn process_ui_events_and_render_frame(
                     &app.data.graphics_resources,
                 );
             }
+            #[cfg(debug_assertions)]
             DeferredAction::DebugBillboardDepth => {
                 crate::debugview::collect_and_log_billboard_debug(
                     &app.data.ecs_world,

@@ -1,5 +1,5 @@
-use crate::debugview::{DebugViewMode, DebugViewState};
 use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::resource::{DebugViewMode, DebugViewState};
 use crate::ecs::resource::{GridMeshData, MouseInput};
 use crate::ecs::World;
 

@@ -132,8 +132,8 @@ impl GpuAssets {
     }
 }
 
-use crate::debugview::DebugViewState;
 use crate::ecs::resource::Camera;
+use crate::ecs::resource::DebugViewState;
 use crate::ecs::resource::LightState;
 use crate::ecs::systems::camera_systems::{
     compute_camera_direction, compute_camera_position, compute_camera_up,

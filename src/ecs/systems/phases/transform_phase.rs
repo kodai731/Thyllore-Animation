@@ -44,7 +44,7 @@ pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
     );
     if let Some(mut debug_view) = ctx
         .world
-        .get_resource_mut::<crate::debugview::DebugViewState>()
+        .get_resource_mut::<crate::ecs::resource::DebugViewState>()
     {
         debug_view.billboard_click_rect = billboard_rect;
     }

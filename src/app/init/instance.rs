@@ -291,7 +291,7 @@ impl App {
         data.ecs_world.insert_resource(Camera::default());
         data.ecs_world.insert_resource(LightState::default());
         data.ecs_world
-            .insert_resource(crate::debugview::DebugViewState::default());
+            .insert_resource(crate::ecs::resource::DebugViewState::default());
     }
 
     unsafe fn initialize_graphics_and_ecs(

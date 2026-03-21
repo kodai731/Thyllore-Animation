@@ -34,7 +34,6 @@ pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
             swapchain_extent: ctx.swapchain_extent,
             world: ctx.world,
             assets: ctx.assets,
-            gui_data: ctx.gui_data,
             mesh_positions,
         };
 

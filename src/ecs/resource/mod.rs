@@ -1,6 +1,11 @@
 pub mod billboard;
 pub mod gizmo;
 
+mod imgui_capture;
+mod keyboard_modifiers;
+mod mouse_input;
+mod viewport_input;
+
 mod auto_exposure;
 mod bloom;
 #[cfg(feature = "ml")]
@@ -51,6 +56,11 @@ mod transform_gizmo_state;
 
 pub use billboard::*;
 pub use gizmo::*;
+
+pub use imgui_capture::*;
+pub use keyboard_modifiers::*;
+pub use mouse_input::*;
+pub use viewport_input::*;
 
 pub use auto_exposure::*;
 pub use bloom::*;

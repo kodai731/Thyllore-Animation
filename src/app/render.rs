@@ -1,5 +1,5 @@
 use crate::app::init::MAX_FRAMES_IN_FLIGHT;
-use crate::app::{App, GUIData};
+use crate::app::App;
 use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::gizmo::{GridGizmoData, LightGizmoData};
 use crate::ecs::resource::{Camera, GridMeshData};
@@ -16,9 +16,9 @@ use crate::vulkanr::vulkan::*;
 use anyhow::{anyhow, Result};
 
 impl App {
-    pub unsafe fn begin_frame(&mut self, gui_data: &mut GUIData) -> Result<usize> {
-        self.handle_viewport_resize(gui_data)?;
-        self.handle_model_loading(gui_data)?;
+    pub unsafe fn begin_frame(&mut self) -> Result<usize> {
+        self.handle_viewport_resize()?;
+        self.handle_model_loading()?;
 
         let current_fence = self.resource::<FrameSync>().current_fence();
         self.rrdevice
@@ -56,8 +56,14 @@ impl App {
         Ok(image_index)
     }
 
-    unsafe fn handle_viewport_resize(&mut self, gui_data: &mut GUIData) -> Result<()> {
-        let Some((width, height)) = gui_data.viewport_resize_pending.take() else {
+    unsafe fn handle_viewport_resize(&mut self) -> Result<()> {
+        let pending = self
+            .data
+            .ecs_world
+            .resource_mut::<crate::ecs::resource::ViewportInput>()
+            .resize_pending
+            .take();
+        let Some((width, height)) = pending else {
             return Ok(());
         };
 
@@ -192,12 +198,8 @@ impl App {
         Ok(())
     }
 
-    unsafe fn handle_model_loading(&mut self, gui_data: &mut GUIData) -> Result<()> {
-        if !gui_data.file_changed {
-            return Ok(());
-        }
-
-        log!("Loading new model from: {}", gui_data.selected_model_path);
+    pub unsafe fn load_model(&mut self, path: &str) -> Result<()> {
+        log!("Loading new model from: {}", path);
         self.rrdevice.device.device_wait_idle()?;
 
         let command_pool = self.resource::<CommandState>().pool.clone();
@@ -208,7 +210,7 @@ impl App {
             &mut self.data,
             &command_pool,
             &swapchain,
-            &gui_data.selected_model_path,
+            path,
             false,
         ) {
             Ok(_) => {
@@ -217,7 +219,8 @@ impl App {
                         .data
                         .ecs_world
                         .resource_mut::<crate::ecs::resource::ModelState>();
-                    model_state.model_path = gui_data.selected_model_path.clone();
+                    model_state.model_path = path.to_string();
+                    model_state.load_status = format!("Loaded: {}", path);
                 }
                 {
                     let mut timeline = self
@@ -232,16 +235,22 @@ impl App {
                     scene_state.clear();
                 }
 
-                gui_data.load_status = format!("Loaded: {}", gui_data.selected_model_path);
-                msg_info!("Model loaded: {}", gui_data.selected_model_path);
+                msg_info!("Model loaded: {}", path);
             }
             Err(e) => {
-                gui_data.load_status = format!("Error: {}", e);
+                let mut model_state = self
+                    .data
+                    .ecs_world
+                    .resource_mut::<crate::ecs::resource::ModelState>();
+                model_state.load_status = format!("Error: {}", e);
                 msg_error!("Failed to load model: {:?}", e);
             }
         }
 
-        gui_data.file_changed = false;
+        Ok(())
+    }
+
+    unsafe fn handle_model_loading(&mut self) -> Result<()> {
         Ok(())
     }
 
@@ -566,15 +575,10 @@ impl App {
         }
     }
 
-    pub unsafe fn render(
-        &mut self,
-        image_index: usize,
-        gui_data: &mut GUIData,
-        draw_data: &imgui::DrawData,
-    ) -> Result<()> {
+    pub unsafe fn render(&mut self, image_index: usize, draw_data: &imgui::DrawData) -> Result<()> {
         Self::update_imgui_buffers(&self.instance, &self.rrdevice, &mut self.data, draw_data)?;
 
-        self.record_command_buffer(image_index, gui_data, draw_data)?;
+        self.record_command_buffer(image_index, draw_data)?;
 
         let image_available = self.resource::<FrameSync>().current_image_available();
         let render_finished = self.resource::<FrameSync>().current_render_finished();
@@ -619,13 +623,6 @@ impl App {
             return Err(anyhow!(e));
         }
 
-        if gui_data.take_screenshot {
-            log!("Taking screenshot...");
-            let path = self.save_screenshot(image_index)?;
-            gui_data.take_screenshot = false;
-            msg_info!("Screenshot saved: {}", path);
-        }
-
         self.resource_mut::<FrameSync>()
             .advance(MAX_FRAMES_IN_FLIGHT);
         let current_frame = self.resource::<FrameSync>().current_frame;
@@ -633,7 +630,7 @@ impl App {
 
         Ok(())
     }
-    unsafe fn save_screenshot(&self, image_index: usize) -> Result<String> {
+    pub unsafe fn save_screenshot(&self, image_index: usize) -> Result<String> {
         let device = &self.rrdevice.device;
         let swapchain = &self.resource::<SwapchainState>().swapchain;
         let swapchain_image = swapchain.swapchain_images[image_index];

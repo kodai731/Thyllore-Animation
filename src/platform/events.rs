@@ -13,28 +13,33 @@ use super::ui::{
 };
 #[cfg(debug_assertions)]
 use super::ui::{build_click_debug_overlay, DebugWindowState};
-use crate::app::{App, GUIData};
+use crate::app::App;
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{
-    ClipBrowserState, ClipLibrary, CurveEditorBuffer, CurveEditorState, HierarchyState, MessageLog,
-    PanelLayout, PoseLibrary, TimelineInteractionState, TimelineState,
+    ClipBrowserState, ClipLibrary, CurveEditorBuffer, CurveEditorState, HierarchyState,
+    ImGuiInputCapture, KeyboardModifiers, MessageLog, MouseInput, PanelLayout, PoseLibrary,
+    TimelineInteractionState, TimelineState, ViewportInput,
 };
 use crate::ecs::systems::clip_track_systems::query_clip_tracks;
 use crate::ecs::systems::phases::run_event_dispatch_phase;
 use crate::ecs::{DeferredAction, UIEventQueue};
 
-fn update_mouse_input(gui_data: &mut GUIData, ui: &imgui::Ui) {
+fn update_mouse_input(world: &crate::ecs::World, ui: &imgui::Ui) {
     let io = ui.io();
-    gui_data.mouse_pos = io.mouse_pos;
-    gui_data.is_left_clicked = ui.is_mouse_down(MouseButton::Left);
-    gui_data.is_right_clicked = ui.is_mouse_down(MouseButton::Right);
-    gui_data.is_wheel_clicked = ui.is_mouse_down(MouseButton::Middle);
-    gui_data.is_ctrl_pressed = io.key_ctrl;
-    gui_data.is_shift_pressed = io.key_shift;
+    let mut mouse = world.resource_mut::<MouseInput>();
+    mouse.position = io.mouse_pos;
+    mouse.left_pressed = ui.is_mouse_down(MouseButton::Left);
+    mouse.right_pressed = ui.is_mouse_down(MouseButton::Right);
+    mouse.middle_pressed = ui.is_mouse_down(MouseButton::Middle);
+    drop(mouse);
+
+    let mut modifiers = world.resource_mut::<KeyboardModifiers>();
+    modifiers.ctrl = io.key_ctrl;
+    modifiers.shift = io.key_shift;
 }
 
 impl System {
-    pub fn main_loop(self, app: &mut App, gui_data: &mut GUIData) {
+    pub fn main_loop(self, app: &mut App) {
         let System {
             event_loop,
             window,
@@ -68,17 +73,21 @@ impl System {
 
                     match window_event {
                         WindowEvent::CursorMoved { position, .. } => {
-                            gui_data.mouse_pos = [position.x as f32, position.y as f32];
+                            let mut mouse = app.data.ecs_world.resource_mut::<MouseInput>();
+                            mouse.position = [position.x as f32, position.y as f32];
                         }
 
-                        WindowEvent::MouseWheel { delta, .. } => match delta {
-                            winit::event::MouseScrollDelta::LineDelta(_, y) => {
-                                gui_data.mouse_wheel = *y;
+                        WindowEvent::MouseWheel { delta, .. } => {
+                            let mut mouse = app.data.ecs_world.resource_mut::<MouseInput>();
+                            match delta {
+                                winit::event::MouseScrollDelta::LineDelta(_, y) => {
+                                    mouse.wheel = *y;
+                                }
+                                winit::event::MouseScrollDelta::PixelDelta(pos) => {
+                                    mouse.wheel = pos.y as f32;
+                                }
                             }
-                            winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                                gui_data.mouse_wheel = pos.y as f32;
-                            }
-                        },
+                        }
 
                         WindowEvent::Resized(new_size) => {
                             if new_size.width > 0 && new_size.height > 0 {
@@ -90,16 +99,23 @@ impl System {
 
                         WindowEvent::DroppedFile(path_buf) => {
                             if let Some(path) = path_buf.to_str() {
-                                gui_data.file_path = path.to_string();
+                                let mut ui_events =
+                                    app.data.ecs_world.resource_mut::<UIEventQueue>();
+                                ui_events.send(UIEvent::LoadModel {
+                                    path: path.to_string(),
+                                });
                             }
                         }
 
                         WindowEvent::KeyboardInput { event, .. } => {
                             if event.state == ElementState::Pressed {
+                                let modifiers_res =
+                                    app.data.ecs_world.resource::<KeyboardModifiers>();
                                 let modifiers = ModifierKeys {
-                                    ctrl: gui_data.is_ctrl_pressed,
-                                    shift: gui_data.is_shift_pressed,
+                                    ctrl: modifiers_res.ctrl,
+                                    shift: modifiers_res.shift,
                                 };
+                                drop(modifiers_res);
                                 if let Some(ui_event) = dispatch_keyboard_shortcut(
                                     &event.logical_key,
                                     modifiers,
@@ -119,7 +135,6 @@ impl System {
                                 &mut platform,
                                 &window,
                                 app,
-                                gui_data,
                                 &mut status_bar_state,
                             );
                         }
@@ -140,17 +155,17 @@ fn handle_redraw_requested(
     platform: &mut imgui_winit_support::WinitPlatform,
     window: &winit::window::Window,
     app: &mut App,
-    gui_data: &mut GUIData,
     status_bar_state: &mut StatusBarState,
 ) {
     let ui = imgui.frame();
 
-    gui_data.monitor_value = 0.0;
-
     let io = ui.io();
-    gui_data.imgui_wants_mouse = io.want_capture_mouse;
+    {
+        let mut capture = app.data.ecs_world.resource_mut::<ImGuiInputCapture>();
+        capture.wants_mouse = io.want_capture_mouse;
+    }
 
-    update_mouse_input(gui_data, ui);
+    update_mouse_input(&app.data.ecs_world, ui);
 
     #[cfg(debug_assertions)]
     let mut debug_state = DebugWindowState {
@@ -159,15 +174,16 @@ fn handle_redraw_requested(
             .debug_view_mode,
     };
 
+    let model_state = app.resource::<crate::ecs::ModelState>();
     let mut overlay_state = SceneOverlayState {
-        model_path: app.resource::<crate::ecs::ModelState>().model_path.clone(),
-        load_status: gui_data.load_status.clone(),
+        model_path: model_state.model_path.clone(),
+        load_status: model_state.load_status.clone(),
     };
+    drop(model_state);
 
     build_ui_windows(
         ui,
         app,
-        gui_data,
         #[cfg(debug_assertions)]
         &mut debug_state,
         &mut overlay_state,
@@ -181,22 +197,21 @@ fn handle_redraw_requested(
     }
 
     #[cfg(debug_assertions)]
-    build_click_debug_overlay(ui, gui_data);
+    build_click_debug_overlay(ui, &app.data.ecs_world);
 
     platform.prepare_render(ui, window);
     let draw_data = imgui.render();
 
     unsafe {
-        process_ui_events_and_render_frame(app, gui_data, window, draw_data);
+        process_ui_events_and_render_frame(app, window, draw_data);
     }
 
-    gui_data.mouse_wheel = 0.0;
+    app.data.ecs_world.resource_mut::<MouseInput>().end_frame();
 }
 
 fn build_ui_windows(
     ui: &imgui::Ui,
     app: &mut App,
-    gui_data: &mut GUIData,
     #[cfg(debug_assertions)] debug_state: &mut DebugWindowState,
     overlay_state: &mut SceneOverlayState,
     status_bar_state: &mut StatusBarState,
@@ -212,12 +227,11 @@ fn build_ui_windows(
     build_side_panel_windows(
         ui,
         app,
-        gui_data,
         #[cfg(debug_assertions)]
         debug_state,
         &layout_snapshot,
     );
-    let viewport_info = build_viewport_and_update_state(ui, app, gui_data, &layout_snapshot);
+    let viewport_info = build_viewport_and_update_state(ui, app, &layout_snapshot);
 
     {
         let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
@@ -225,7 +239,6 @@ fn build_ui_windows(
             ui,
             &mut *ui_events,
             overlay_state,
-            gui_data,
             &app.data.ecs_world,
             &viewport_info,
         );
@@ -245,7 +258,6 @@ fn consume_needs_focus(app: &mut App) {
 fn build_side_panel_windows(
     ui: &imgui::Ui,
     app: &mut App,
-    gui_data: &mut GUIData,
     #[cfg(debug_assertions)] debug_state: &mut DebugWindowState,
     layout_snapshot: &LayoutSnapshot,
 ) {
@@ -262,7 +274,6 @@ fn build_side_panel_windows(
             &mut *ui_events,
             #[cfg(debug_assertions)]
             debug_state,
-            gui_data,
             &app.data.ecs_world,
             &mut *msg_log,
             layout_snapshot,
@@ -314,7 +325,6 @@ fn build_side_panel_windows(
 fn build_viewport_and_update_state(
     ui: &imgui::Ui,
     app: &mut App,
-    gui_data: &mut GUIData,
     layout_snapshot: &LayoutSnapshot,
 ) -> ViewportInfo {
     let texture_id = imgui::TextureId::new(app.data.viewport.texture_id());
@@ -326,18 +336,22 @@ fn build_viewport_and_update_state(
 
     app.data.viewport.focused = info.focused;
     app.data.viewport.hovered = info.hovered;
-    gui_data.viewport_focused = info.focused;
-    gui_data.viewport_hovered = info.hovered;
-    gui_data.viewport_position = info.position;
-    gui_data.viewport_size = info.size;
 
-    let new_width = info.size[0] as u32;
-    let new_height = info.size[1] as u32;
-    if new_width > 0
-        && new_height > 0
-        && (new_width != app.data.viewport.width || new_height != app.data.viewport.height)
     {
-        gui_data.viewport_resize_pending = Some((new_width, new_height));
+        let mut viewport = app.data.ecs_world.resource_mut::<ViewportInput>();
+        viewport.focused = info.focused;
+        viewport.hovered = info.hovered;
+        viewport.position = info.position;
+        viewport.size = info.size;
+
+        let new_width = info.size[0] as u32;
+        let new_height = info.size[1] as u32;
+        if new_width > 0
+            && new_height > 0
+            && (new_width != app.data.viewport.width || new_height != app.data.viewport.height)
+        {
+            viewport.resize_pending = Some((new_width, new_height));
+        }
     }
 
     info
@@ -446,7 +460,6 @@ fn build_curve_editor(ui: &imgui::Ui, app: &mut App) {
 
 unsafe fn process_ui_events_and_render_frame(
     app: &mut App,
-    gui_data: &mut GUIData,
     window: &winit::window::Window,
     draw_data: &imgui::DrawData,
 ) {
@@ -462,11 +475,17 @@ unsafe fn process_ui_events_and_render_frame(
     for action in deferred_actions {
         match action {
             DeferredAction::LoadModel { path } => {
-                gui_data.selected_model_path = path;
-                gui_data.file_changed = true;
+                if let Err(e) = app.load_model(&path) {
+                    log_error!("Failed to load model: {:?}", e);
+                }
             }
             DeferredAction::TakeScreenshot => {
-                gui_data.take_screenshot = true;
+                log!("Taking screenshot...");
+                let image_index = app.frame % crate::app::init::MAX_FRAMES_IN_FLIGHT;
+                match app.save_screenshot(image_index) {
+                    Ok(path) => msg_info!("Screenshot saved: {}", path),
+                    Err(e) => log_error!("Screenshot failed: {:?}", e),
+                }
             }
             DeferredAction::DebugShadowInfo => {
                 crate::debugview::log_shadow_debug_info(
@@ -476,7 +495,10 @@ unsafe fn process_ui_events_and_render_frame(
                 );
             }
             DeferredAction::DebugBillboardDepth => {
-                gui_data.debug_billboard_depth = true;
+                crate::debugview::collect_and_log_billboard_debug(
+                    &app.data.ecs_world,
+                    &app.data.raytracing,
+                );
             }
             DeferredAction::DumpDebugInfo => {
                 app.dump_debug_info();
@@ -495,9 +517,9 @@ unsafe fn process_ui_events_and_render_frame(
     }
 
     let frame_result = (|| -> anyhow::Result<()> {
-        let image_index = app.begin_frame(gui_data)?;
-        app.update(image_index, gui_data)?;
-        app.render(image_index, gui_data, draw_data)?;
+        let image_index = app.begin_frame()?;
+        app.update(image_index)?;
+        app.render(image_index, draw_data)?;
         Ok(())
     })();
 

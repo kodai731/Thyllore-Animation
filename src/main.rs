@@ -9,7 +9,7 @@
 extern crate thyllore_animation;
 
 use thyllore_animation::app::init::instance::cleanup_old_screenshots;
-use thyllore_animation::app::{App, GUIData};
+use thyllore_animation::app::App;
 use thyllore_animation::platform;
 
 use anyhow::Result;
@@ -19,15 +19,11 @@ fn main() -> Result<()> {
 
     cleanup_old_screenshots()?;
 
-    // imgui
     let window_title = format!("Thyllore Animation v{}", env!("CARGO_PKG_VERSION"));
     let mut system = platform::init(&window_title);
-    let mut gui_data = GUIData::default();
 
-    // App
     let mut app = unsafe { App::create(&system.window)? };
 
-    // Initialize ImGui rendering resources
     unsafe {
         use thyllore_animation::vulkanr::context::{CommandState, RenderTargets};
         let command_pool = app.resource::<CommandState>().pool.clone();
@@ -42,7 +38,7 @@ fn main() -> Result<()> {
         )?;
     }
 
-    system.main_loop(&mut app, &mut gui_data);
+    system.main_loop(&mut app);
 
     Ok(())
 }

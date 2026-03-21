@@ -21,8 +21,6 @@ use crate::vulkanr::resource::GpuBufferRegistry;
 use crate::vulkanr::vulkan::Instance;
 use crate::vulkanr::VulkanBackend;
 
-use super::GUIData;
-
 pub struct FrameContext<'a> {
     pub instance: &'a Instance,
     pub device: &'a RRDevice,
@@ -40,7 +38,6 @@ pub struct FrameContext<'a> {
     pub world: &'a mut World,
     pub assets: &'a mut AssetStorage,
 
-    pub gui_data: &'a mut GUIData,
     pub onion_skin_gpu: &'a mut Option<OnionSkinGpuState>,
 }
 

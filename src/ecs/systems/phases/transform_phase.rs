@@ -34,7 +34,7 @@ pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
     );
 
     let screen_size = Vector2::new(ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32);
-    ctx.gui_data.billboard_click_rect = calculate_billboard_click_rect(
+    let billboard_rect = calculate_billboard_click_rect(
         light_position,
         screen_size,
         proj_data.view,
@@ -42,6 +42,12 @@ pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
         0.5,
         0.15,
     );
+    if let Some(mut debug_view) = ctx
+        .world
+        .get_resource_mut::<crate::debugview::DebugViewState>()
+    {
+        debug_view.billboard_click_rect = billboard_rect;
+    }
 
     ctx.world.insert_resource(proj_data);
 }

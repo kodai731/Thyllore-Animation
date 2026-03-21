@@ -1,4 +1,4 @@
-use crate::app::{App, AppData, FrameContext, GUIData};
+use crate::app::{App, AppData, FrameContext};
 use crate::ecs::run_frame;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::vulkan::*;
@@ -6,7 +6,7 @@ use crate::vulkanr::vulkan::*;
 use anyhow::Result;
 
 impl App {
-    pub unsafe fn update(&mut self, image_index: usize, gui_data: &mut GUIData) -> Result<()> {
+    pub unsafe fn update(&mut self, image_index: usize) -> Result<()> {
         let time = self.start.elapsed().as_secs_f32();
         let delta_time = time - self.last_update_time;
         self.last_update_time = time;
@@ -36,25 +36,10 @@ impl App {
                 buffer_registry: &mut self.data.buffer_registry,
                 world: &mut self.data.ecs_world,
                 assets: &mut self.data.ecs_assets,
-                gui_data,
                 onion_skin_gpu: &mut self.data.onion_skin_gpu,
             };
 
             run_frame(&mut ctx)?;
-        }
-
-        self.process_debug_commands(gui_data)?;
-
-        Ok(())
-    }
-
-    unsafe fn process_debug_commands(&self, gui_data: &mut GUIData) -> Result<()> {
-        if gui_data.debug_billboard_depth {
-            crate::debugview::collect_and_log_billboard_debug(
-                &self.data.ecs_world,
-                &self.data.raytracing,
-            );
-            gui_data.debug_billboard_depth = false;
         }
 
         Ok(())

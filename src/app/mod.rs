@@ -2,7 +2,6 @@ pub mod cleanup;
 pub mod color_test_quad;
 pub mod data;
 pub mod frame_context;
-pub mod gui_data;
 pub mod init;
 pub mod model_loader;
 pub mod render;
@@ -16,7 +15,6 @@ pub use frame_context::FrameContext;
 pub use render_context::RenderContext;
 
 pub use data::AppData;
-pub use gui_data::GUIData;
 pub use init::*;
 
 use crate::ecs::{ResMut, ResRef, Resource};

@@ -7,7 +7,6 @@ impl App {
     pub unsafe fn record_command_buffer(
         &mut self,
         image_index: usize,
-        gui_data: &mut crate::app::GUIData,
         draw_data: &imgui::DrawData,
     ) -> Result<()> {
         let command_buffer = self

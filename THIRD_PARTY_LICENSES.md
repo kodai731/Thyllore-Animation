@@ -35,7 +35,7 @@ These libraries are directly included in the repository source tree.
 
 | Model | File | License | Author |
 |-------|------|---------|--------|
-| Phoenix Bird | `assets/models/phoenix-bird/` | CC BY 4.0 | NORBERTO-3D |
+| Phoenix Bird | `assets/models/phoenix-bird/`, `tests/testmodels/glTF/skinning/glb/phoenixBird.glb` | CC BY 4.0 | NORBERTO-3D |
 | Yard Grass | `assets/models/yard_grass/`, `tests/testmodels/glTF/morphing/yard_grass/` | CC BY 4.0 | ebmclachlan |
 
 - **Phoenix Bird Source:** https://sketchfab.com/3d-models/phoenix-bird-844ba0cf144a413ea92c779f18912042

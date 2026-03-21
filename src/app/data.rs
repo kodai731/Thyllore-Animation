@@ -4,7 +4,7 @@ use crate::app::viewport::ViewportState;
 use crate::asset::AssetStorage;
 use crate::ecs::World;
 use crate::platform::ImguiData;
-use crate::renderer::onion_skin_buffers::OnionSkinGpuState;
+use crate::vulkanr::renderer::onion_skin_buffers::OnionSkinGpuState;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::raytracing_data::RayTracingData;
 use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};

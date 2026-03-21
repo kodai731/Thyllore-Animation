@@ -7,6 +7,7 @@ pub mod descriptor;
 pub mod pipeline;
 pub mod raytracing;
 pub mod render;
+pub mod renderer;
 pub mod resource;
 pub mod vulkan;
 

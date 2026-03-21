@@ -6,11 +6,11 @@ use crate::ecs::resource::{Camera, GridMeshData};
 use crate::ecs::systems::render_data_systems::{
     gizmo_mesh_render_data, gizmo_selectable_render_data, grid_mesh_render_data,
 };
-use crate::renderer::deferred::create_gbuffer_framebuffer;
-use crate::renderer::scene_renderer::render_scene_objects;
 use crate::vulkanr::context::{
     CommandState, FrameSync, PipelineState, RenderTargets, SwapchainState,
 };
+use crate::vulkanr::renderer::deferred::create_gbuffer_framebuffer;
+use crate::vulkanr::renderer::scene_renderer::render_scene_objects;
 use crate::vulkanr::vulkan::*;
 
 use anyhow::{anyhow, Result};
@@ -845,7 +845,7 @@ impl App {
         ];
         let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
-        crate::renderer::scene_renderer::render_scene_objects(
+        crate::vulkanr::renderer::scene_renderer::render_scene_objects(
             &render_data_refs,
             command_buffer,
             image_index,

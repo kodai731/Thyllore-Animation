@@ -12,9 +12,9 @@ use crate::ecs::resource::gizmo::{
 use crate::ecs::resource::{Camera, GridMeshData, LightState};
 use crate::ecs::world::{ResMut, ResRef, World};
 use crate::render::RenderBackend;
-use crate::renderer::onion_skin_buffers::OnionSkinGpuState;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
+use crate::vulkanr::renderer::onion_skin_buffers::OnionSkinGpuState;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::raytracing_data::RayTracingData;
 use crate::vulkanr::resource::GpuBufferRegistry;

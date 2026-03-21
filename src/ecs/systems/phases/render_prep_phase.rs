@@ -21,7 +21,7 @@ use crate::ecs::{
     build_spring_bone_gizmo_mesh, gizmo_update_vertex_buffer,
 };
 use crate::render::RenderBackend;
-use crate::renderer::scene_renderer::update_object_ubo;
+use crate::vulkanr::renderer::scene_renderer::update_object_ubo;
 
 pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     let (view, proj, screen_size, aspect) = {

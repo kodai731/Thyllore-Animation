@@ -348,7 +348,7 @@ fn test_fbx_stickman_bounds_match_blender() {
         }
     };
 
-    let model_path = "tests/testmodels/fbx/node/stickman_bin.fbx";
+    let model_path = "assets/models/stickman/stickman_bin.fbx";
     if !Path::new(model_path).exists() {
         eprintln!("Skipping: {} not found", model_path);
         return;
@@ -408,7 +408,7 @@ fn test_gltf_stickman_bounds_match_blender() {
         }
     };
 
-    let model_path = "tests/testmodels/glTF/node/stickman.glb";
+    let model_path = "assets/models/stickman/stickman.glb";
     if !Path::new(model_path).exists() {
         eprintln!("Skipping: {} not found", model_path);
         return;
@@ -432,7 +432,7 @@ fn test_gltf_stickman_bounds_match_blender() {
 
 #[test]
 fn test_fbx_stickman_bone_vs_node_positions() {
-    let model_path = "tests/testmodels/fbx/node/stickman_bin.fbx";
+    let model_path = "assets/models/stickman/stickman_bin.fbx";
     if !Path::new(model_path).exists() {
         eprintln!("Skipping: {} not found", model_path);
         return;
@@ -567,7 +567,7 @@ fn test_fbx_stickman_bone_vs_node_positions() {
 
 #[test]
 fn test_bone_pose_override_roundtrip() {
-    let model_path = "tests/testmodels/fbx/node/stickman_bin.fbx";
+    let model_path = "assets/models/stickman/stickman_bin.fbx";
     if !Path::new(model_path).exists() {
         eprintln!("Skipping: {} not found", model_path);
         return;
@@ -717,7 +717,7 @@ fn test_bone_pose_override_roundtrip() {
 
 #[test]
 fn test_gltf_bone_pose_override_roundtrip() {
-    let model_path = "tests/testmodels/glTF/node/stickman.glb";
+    let model_path = "assets/models/stickman/stickman.glb";
     if !Path::new(model_path).exists() {
         eprintln!("Skipping: {} not found", model_path);
         return;

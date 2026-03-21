@@ -202,10 +202,11 @@ impl DofBuffer {
             return Ok(());
         }
 
-        self.destroy_resources(&rrdevice.device);
+        let render_pass = self.render_pass;
+        self.render_pass = vk::RenderPass::null();
+        self.destroy(&rrdevice.device);
 
         let new_buf = Self::new(instance, rrdevice, new_width, new_height, command_pool)?;
-        let render_pass = self.render_pass;
         *self = new_buf;
         rrdevice.device.destroy_render_pass(render_pass, None);
 
@@ -213,17 +214,32 @@ impl DofBuffer {
         Ok(())
     }
 
-    unsafe fn destroy_resources(&self, device: &vulkanalia::Device) {
-        device.destroy_framebuffer(self.framebuffer, None);
-        device.destroy_image_view(self.output_image_view, None);
-        device.destroy_image(self.output_image, None);
-        device.free_memory(self.output_image_memory, None);
-        device.destroy_sampler(self.sampler, None);
-    }
-
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.destroy_resources(device);
-        device.destroy_render_pass(self.render_pass, None);
+        if self.framebuffer != vk::Framebuffer::null() {
+            device.destroy_framebuffer(self.framebuffer, None);
+            self.framebuffer = vk::Framebuffer::null();
+        }
+        if self.output_image_view != vk::ImageView::null() {
+            device.destroy_image_view(self.output_image_view, None);
+            self.output_image_view = vk::ImageView::null();
+        }
+        if self.output_image != vk::Image::null() {
+            device.destroy_image(self.output_image, None);
+            self.output_image = vk::Image::null();
+        }
+        if self.output_image_memory != vk::DeviceMemory::null() {
+            device.free_memory(self.output_image_memory, None);
+            self.output_image_memory = vk::DeviceMemory::null();
+        }
+        if self.sampler != vk::Sampler::null() {
+            device.destroy_sampler(self.sampler, None);
+            self.sampler = vk::Sampler::null();
+        }
+        if self.render_pass != vk::RenderPass::null() {
+            device.destroy_render_pass(self.render_pass, None);
+            self.render_pass = vk::RenderPass::null();
+        }
+
         log!("Destroyed DOF buffer");
     }
 
@@ -231,6 +247,14 @@ impl DofBuffer {
         vk::Extent2D {
             width: self.width,
             height: self.height,
+        }
+    }
+}
+
+impl Drop for DofBuffer {
+    fn drop(&mut self) {
+        if self.output_image != vk::Image::null() {
+            log_warn!("DofBuffer dropped without calling destroy()");
         }
     }
 }

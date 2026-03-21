@@ -121,6 +121,14 @@ impl RRImage {
     }
 }
 
+impl Drop for RRImage {
+    fn drop(&mut self) {
+        if self.image != vk::Image::null() {
+            log_warn!("RRImage dropped without calling destroy()");
+        }
+    }
+}
+
 pub unsafe fn create_texture_image(
     instance: &Instance,
     rrdevice: &RRDevice,

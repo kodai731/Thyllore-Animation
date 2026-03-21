@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 #[derive(Clone, Debug)]
 pub enum DeferredAction {
     LoadModel {
@@ -10,4 +12,15 @@ pub enum DeferredAction {
     DebugBillboardDepth,
     DumpDebugInfo,
     DumpAnimationDebug,
+    LoadClipFromFile {
+        path: PathBuf,
+    },
+    SaveClipToFile {
+        source_id: u64,
+        path: PathBuf,
+    },
+    SaveSpringBoneBake {
+        baked_id: u64,
+        path: PathBuf,
+    },
 }

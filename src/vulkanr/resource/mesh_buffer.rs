@@ -88,3 +88,11 @@ impl MeshBuffer {
         }
     }
 }
+
+impl Drop for MeshBuffer {
+    fn drop(&mut self) {
+        if self.vertex_buffer.buffer != vk::Buffer::null() {
+            log_warn!("MeshBuffer dropped without calling destroy()");
+        }
+    }
+}

@@ -114,7 +114,7 @@ impl App {
         }
 
         if let Some(mut gbuffer) = self.data.raytracing.gbuffer.take() {
-            gbuffer.destroy(&*self.rrdevice.device);
+            gbuffer.destroy(&self.rrdevice);
             log!("Destroyed G-Buffer");
         }
 

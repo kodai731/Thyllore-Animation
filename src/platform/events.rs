@@ -470,9 +470,12 @@ unsafe fn process_ui_events_and_render_frame(
         model_bounds,
     );
 
-    process_platform_file_events(&platform_events, app);
+    let mut platform_deferred = process_platform_file_events(&platform_events, app);
 
-    for action in deferred_actions {
+    let mut all_deferred = deferred_actions;
+    all_deferred.append(&mut platform_deferred);
+
+    for action in all_deferred {
         match action {
             DeferredAction::LoadModel { path } => {
                 if let Err(e) = app.load_model(&path) {
@@ -515,6 +518,54 @@ unsafe fn process_ui_events_and_render_frame(
                     log_warn!("Animation debug dump failed: {:?}", e);
                 }
             }
+            DeferredAction::LoadClipFromFile { path } => {
+                let bone_name_to_id = app
+                    .data
+                    .ecs_assets
+                    .skeletons
+                    .values()
+                    .next()
+                    .map(|sa| sa.skeleton.bone_name_to_id.clone());
+
+                let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
+                match crate::ecs::systems::clip_library_systems::clip_library_load_from_file(
+                    &mut clip_library,
+                    &mut app.data.ecs_assets,
+                    &path,
+                    bone_name_to_id.as_ref(),
+                ) {
+                    Ok(_) => {}
+                    Err(e) => msg_error!("Failed to load clip: {:?}", e),
+                }
+            }
+            DeferredAction::SaveClipToFile { source_id, path } => {
+                use crate::ecs::systems::clip_library_systems::{
+                    clip_library_save_to_file, clip_library_update_save_metadata,
+                };
+
+                let new_name = extract_clip_name_from_path(&path);
+                let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
+                clip_library_update_save_metadata(
+                    &mut clip_library,
+                    source_id,
+                    new_name.clone(),
+                    &path,
+                );
+
+                match clip_library_save_to_file(&clip_library, source_id, &path) {
+                    Ok(()) => msg_info!("Saved clip '{}' to {:?}", new_name, path),
+                    Err(e) => msg_error!("Failed to save clip: {:?}", e),
+                }
+            }
+            DeferredAction::SaveSpringBoneBake { baked_id, path } => {
+                use crate::ecs::systems::clip_library_systems::clip_library_save_to_file;
+
+                let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
+                match clip_library_save_to_file(&clip_library, baked_id, &path) {
+                    Ok(()) => msg_info!("Saved spring bone bake to {:?}", path),
+                    Err(e) => msg_error!("Failed to save spring bone bake: {:?}", e),
+                }
+            }
         }
     }
 
@@ -539,51 +590,44 @@ unsafe fn process_ui_events_and_render_frame(
     }
 }
 
-fn process_platform_file_events(events: &[UIEvent], app: &mut App) {
+fn process_platform_file_events(events: &[UIEvent], app: &mut App) -> Vec<DeferredAction> {
+    let mut deferred = Vec::new();
+
     for event in events {
         match event {
-            UIEvent::ClipBrowserLoadFromFile => handle_clip_load_from_file(app),
-            UIEvent::ClipBrowserSaveToFile(source_id) => handle_clip_save_to_file(app, *source_id),
+            UIEvent::ClipBrowserLoadFromFile => {
+                if let Some(action) = open_clip_load_dialog() {
+                    deferred.push(action);
+                }
+            }
+            UIEvent::ClipBrowserSaveToFile(source_id) => {
+                if let Some(action) = open_clip_save_dialog(app, *source_id) {
+                    deferred.push(action);
+                }
+            }
             UIEvent::ClipBrowserExportFbx(source_id) => handle_clip_export_fbx(app, *source_id),
             UIEvent::ClipBrowserExportGltf(source_id) => handle_clip_export_gltf(app, *source_id),
-            UIEvent::SpringBoneSaveBake => handle_spring_bone_save(app),
+            UIEvent::SpringBoneSaveBake => {
+                if let Some(action) = open_spring_bone_save_dialog(app) {
+                    deferred.push(action);
+                }
+            }
             _ => {}
         }
     }
+
+    deferred
 }
 
-fn handle_clip_load_from_file(app: &mut App) {
+fn open_clip_load_dialog() -> Option<DeferredAction> {
     let path = rfd::FileDialog::new()
         .add_filter("Animation RON", &["anim.ron", "ron"])
-        .pick_file();
+        .pick_file()?;
 
-    let Some(path) = path else {
-        return;
-    };
-
-    let bone_name_to_id = app
-        .data
-        .ecs_assets
-        .skeletons
-        .values()
-        .next()
-        .map(|sa| sa.skeleton.bone_name_to_id.clone());
-
-    let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
-    match crate::ecs::systems::clip_library_systems::clip_library_load_from_file(
-        &mut clip_library,
-        &mut app.data.ecs_assets,
-        &path,
-        bone_name_to_id.as_ref(),
-    ) {
-        Ok(_new_id) => {}
-        Err(e) => {
-            msg_error!("Failed to load clip: {:?}", e);
-        }
-    }
+    Some(DeferredAction::LoadClipFromFile { path })
 }
 
-fn handle_clip_save_to_file(app: &mut App, source_id: u64) {
+fn open_clip_save_dialog(app: &App, source_id: u64) -> Option<DeferredAction> {
     let current_name = {
         let lib = app.data.ecs_world.resource::<ClipLibrary>();
         lib.get(source_id)
@@ -594,28 +638,9 @@ fn handle_clip_save_to_file(app: &mut App, source_id: u64) {
     let path = rfd::FileDialog::new()
         .add_filter("Animation RON", &["anim.ron", "ron"])
         .set_file_name(format!("{}.anim.ron", current_name))
-        .save_file();
+        .save_file()?;
 
-    let Some(path) = path else {
-        return;
-    };
-
-    let new_name = extract_clip_name_from_path(&path);
-    let mut clip_library = app.data.ecs_world.resource_mut::<ClipLibrary>();
-
-    use crate::ecs::systems::clip_library_systems::{
-        clip_library_save_to_file, clip_library_update_save_metadata,
-    };
-    clip_library_update_save_metadata(&mut clip_library, source_id, new_name.clone(), &path);
-
-    match clip_library_save_to_file(&clip_library, source_id, &path) {
-        Ok(()) => {
-            msg_info!("Saved clip '{}' to {:?}", new_name, path);
-        }
-        Err(e) => {
-            msg_error!("Failed to save clip: {:?}", e);
-        }
-    }
+    Some(DeferredAction::SaveClipToFile { source_id, path })
 }
 
 fn handle_clip_export_fbx(app: &mut App, source_id: u64) {
@@ -743,36 +768,17 @@ fn extract_clip_name_from_path(path: &std::path::Path) -> String {
         .to_string()
 }
 
-fn handle_spring_bone_save(app: &mut App) {
+fn open_spring_bone_save_dialog(app: &App) -> Option<DeferredAction> {
     use crate::ecs::resource::SpringBoneState;
-    use crate::ecs::systems::clip_library_systems::clip_library_save_to_file;
 
     let spring_state = app.data.ecs_world.resource::<SpringBoneState>();
-    let baked_id = match spring_state.baked_clip_source_id {
-        Some(id) => id,
-        None => {
-            msg_warn!("No baked clip to save");
-            return;
-        }
-    };
+    let baked_id = spring_state.baked_clip_source_id?;
     drop(spring_state);
 
     let path = rfd::FileDialog::new()
         .add_filter("Animation RON", &["anim.ron", "ron"])
         .set_file_name("spring_baked.anim.ron")
-        .save_file();
+        .save_file()?;
 
-    let Some(path) = path else {
-        return;
-    };
-
-    let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
-    match clip_library_save_to_file(&clip_library, baked_id, &path) {
-        Ok(()) => {
-            msg_info!("Saved spring bone bake to {:?}", path);
-        }
-        Err(e) => {
-            msg_error!("Failed to save spring bone bake: {:?}", e);
-        }
-    }
+    Some(DeferredAction::SaveSpringBoneBake { baked_id, path })
 }

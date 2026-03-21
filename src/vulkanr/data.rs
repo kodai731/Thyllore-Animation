@@ -82,8 +82,8 @@ impl RRData {
     }
 
     pub unsafe fn delete_buffers(&mut self, rrdevice: &RRDevice) {
-        for uniform_buffer in &self.rruniform_buffers {
-            uniform_buffer.delete(rrdevice);
+        for uniform_buffer in &mut self.rruniform_buffers {
+            uniform_buffer.destroy(rrdevice);
         }
         self.rruniform_buffers.clear();
 

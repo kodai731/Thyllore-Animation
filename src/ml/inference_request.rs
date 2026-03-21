@@ -1,11 +1,20 @@
 pub fn resolve_curve_copilot_model_path() -> String {
-    let shared_path = std::path::Path::new(crate::paths::CURVE_COPILOT_MODEL);
+    let local_path = std::path::Path::new(crate::paths::CURVE_COPILOT_LOCAL_MODEL);
+    if local_path.exists() {
+        log!(
+            "Using local model: {}",
+            crate::paths::CURVE_COPILOT_LOCAL_MODEL
+        );
+        return crate::paths::CURVE_COPILOT_LOCAL_MODEL.to_string();
+    }
+
+    let shared_path = std::path::Path::new(crate::paths::CURVE_COPILOT_SHARED_MODEL);
     if shared_path.exists() {
         log!(
             "Using SharedData model: {}",
-            crate::paths::CURVE_COPILOT_MODEL
+            crate::paths::CURVE_COPILOT_SHARED_MODEL
         );
-        return crate::paths::CURVE_COPILOT_MODEL.to_string();
+        return crate::paths::CURVE_COPILOT_SHARED_MODEL.to_string();
     }
 
     if let Some(latest) = find_latest_curve_copilot_model() {
@@ -13,7 +22,7 @@ pub fn resolve_curve_copilot_model_path() -> String {
         return latest;
     }
 
-    log!("SharedData model not found, falling back to dummy model");
+    log!("No trained model found, falling back to dummy model");
     crate::paths::CURVE_COPILOT_DUMMY_MODEL.to_string()
 }
 

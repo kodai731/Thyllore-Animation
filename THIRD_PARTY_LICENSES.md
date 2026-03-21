@@ -31,7 +31,20 @@ These libraries are directly included in the repository source tree.
 
 ---
 
-## 3. ML Model & Training Data
+## 3. 3D Models
+
+| Model | File | License | Author |
+|-------|------|---------|--------|
+| Phoenix Bird | `assets/models/phoenix-bird/`, `tests/testmodels/glTF/skinning/glb/phoenixBird.glb` | CC BY 4.0 | NORBERTO-3D |
+| Yard Grass | `assets/models/yard_grass/`, `tests/testmodels/glTF/morphing/yard_grass/` | CC BY 4.0 | ebmclachlan |
+
+- **Phoenix Bird Source:** https://sketchfab.com/3d-models/phoenix-bird-844ba0cf144a413ea92c779f18912042
+- **Yard Grass Source:** https://sketchfab.com/3d-models/yard-grass-3a67e76decc849c694c228eb590a9902
+- **License URL:** https://creativecommons.org/licenses/by/4.0/
+
+---
+
+## 4. ML Model & Training Data
 
 ### ONNX Runtime
 
@@ -48,7 +61,7 @@ These libraries are directly included in the repository source tree.
 
 ---
 
-## 4. Cargo Dependencies
+## 5. Cargo Dependencies
 
 All Rust crate dependencies pulled via Cargo, grouped by license. Crates with multiple
 versions in the dependency tree are listed once with a version range. Crates offering
@@ -485,7 +498,7 @@ The majority of the Rust ecosystem uses this dual license.
 
 ---
 
-## 5. Runtime Dependencies
+## 6. Runtime Dependencies
 
 These are not bundled but required at runtime.
 

@@ -848,7 +848,7 @@ mod tests {
     use cgmath::InnerSpace;
 
     fn load_stickman() -> Option<ModelLoadResult> {
-        let path = "tests/testmodels/glTF/node/stickman.glb";
+        let path = "assets/models/stickman/stickman.glb";
         if !std::path::Path::new(path).exists() {
             return None;
         }

@@ -28,6 +28,9 @@ src/cpp/
 # log
 log/
 
+# distribution packages
+dist/
+
 # lib
 vendor/
 

@@ -30,10 +30,53 @@
 
 - `cargo build --release` で .exe ファイル作成
 - 一旦アイコンテクスチャは無くても良い
-- 配布パッケージ構成を決定:
-    - exe + DLL (onnxruntime.dll) + assets + shaders + ML モデル + LICENSE 群
-    - zip 配布を想定
-- ORT DLL の同梱方法を確立する（または ml 機能なしビルドの手順を README に記載）
+
+#### 配布パッケージ構成
+
+zip 配布。PowerShell スクリプト (`scripts/package.ps1`) で自動化する。
+
+```
+thyllore-animation-v0.0.1-preview-win-x64/
+├── thyllore-animation.exe                    # Release ビルド
+├── onnxruntime.dll                           # vendor/onnxruntime/ からコピー
+├── onnxruntime_providers_shared.dll           # 同上
+├── ml/
+│   └── model/
+│       └── curve_copilot.onnx                # ml/model/ からそのままコピー
+├── assets/
+│   ├── shaders/*.spv                         # build.rs がコンパイル済み (26個)
+│   ├── fonts/
+│   │   ├── Roboto-Regular.ttf
+│   │   ├── mplus-1p-regular.ttf
+│   │   ├── Dokdo-Regular.ttf
+│   │   ├── LICENSE-Roboto.txt
+│   │   └── LICENSE-Dokdo.txt
+│   ├── textures/
+│   │   ├── lightIcon.png
+│   │   └── white.png
+│   └── models/stickman/stickman.glb          # サンプルモデル (任意)
+├── LICENSE
+├── THIRD_PARTY_LICENSES
+└── README.md
+```
+
+ML モデル解決順序 (`resolve_curve_copilot_model_path`): [solved]
+1. `ml/model/curve_copilot.onnx` — ローカル (配布パッケージ同梱)
+2. `../SharedData/exports/curve_copilot.onnx` — 開発時 SharedData
+3. `../SharedData/exports/curve_copilot_*.onnx` — 日付付きバージョン
+4. `assets/ml/curve_copilot_dummy.onnx` — フォールバック (ダミー)
+
+#### 対応事項
+
+- [x] `paths.rs` の ML モデル解決パスに `ml/model/curve_copilot.onnx` を追加
+- [ ] ORT DLL の同梱: `vendor/onnxruntime/.../lib/` から exe と同階層にコピー
+  - Windows は exe と同ディレクトリの DLL を自動ロードする
+- [ ] `scripts/package.ps1` を作成
+  - `cargo build --release` → 必要ファイル収集 → zip 作成
+- [ ] ml 機能なしビルドの手順を README に記載 (`--no-default-features`)
+- [ ] サンプルモデルのライセンス確認
+  - stickman: 自作 or ライセンス確認済みか要確認
+  - サードパーティモデル (fuse-woman, phoenix-bird 等) は配布に含めない
 
 ### ReadMe 整理 [solved]
 

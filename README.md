@@ -90,8 +90,8 @@ vulkaninfo --summary
 
 ```bash
 # Clone the repository
-git clone https://github.com/kodai731/RustRendering.git
-cd RustRendering
+git clone https://github.com/kodai731/Thyllore-Animation.git
+cd Thyllore-Animation
 
 # Build
 cargo build

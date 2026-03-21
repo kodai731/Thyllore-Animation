@@ -1,7 +1,46 @@
+use crate::ecs::resource::billboard::BillboardData;
+use crate::ecs::resource::{Camera, LightState};
+use crate::ecs::systems::camera_systems::{
+    compute_camera_direction, compute_camera_position, compute_camera_up,
+};
+use crate::ecs::world::World;
+use crate::vulkanr::context::SwapchainState;
 use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
+use crate::vulkanr::resource::raytracing_data::RayTracingData;
 use crate::vulkanr::swapchain::RRSwapchain;
 use cgmath::{Deg, Vector3};
 use vulkanalia::prelude::v1_0::*;
+
+pub fn collect_and_log_billboard_debug(world: &World, raytracing: &RayTracingData) {
+    let camera = world.resource::<Camera>();
+    let light = world.resource::<LightState>();
+
+    let info = BillboardDebugInfo {
+        light_position: light.light_position,
+        camera_position: compute_camera_position(&camera),
+        camera_direction: compute_camera_direction(&camera),
+        camera_up: compute_camera_up(&camera),
+        near_plane: camera.near_plane,
+        fov_y: camera.fov_y,
+    };
+
+    let gbuffer_debug_info = raytracing.gbuffer.as_ref().map(|gb| GBufferDebugInfo {
+        position_image_view: gb.position_image_view,
+        extent_width: gb.width,
+        extent_height: gb.height,
+    });
+
+    let swapchain = &world.resource::<SwapchainState>().swapchain;
+    let billboard = world.resource::<BillboardData>();
+
+    log_billboard_debug_info(
+        &info,
+        swapchain,
+        &billboard.render_state.descriptor_set,
+        gbuffer_debug_info.as_ref(),
+        raytracing.gbuffer_sampler,
+    );
+}
 
 pub struct BillboardDebugInfo {
     pub light_position: Vector3<f32>,

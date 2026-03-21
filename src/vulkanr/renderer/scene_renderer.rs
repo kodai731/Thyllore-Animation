@@ -1,10 +1,10 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::graphics_resource::ObjectDescriptorSet;
 use crate::ecs::component::RenderData;
 use crate::render::ObjectUBO;
 use crate::vulkanr::device::RRDevice;
+use crate::vulkanr::resource::graphics_resource::ObjectDescriptorSet;
 use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};
 
 pub unsafe fn update_object_ubo(

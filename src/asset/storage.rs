@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use cgmath::{Matrix4, SquareMatrix};
 
 use crate::animation::{AnimationClip, Skeleton, SkeletonId};
-use crate::app::graphics_resource::MaterialId;
 use crate::render::MaterialUBO;
+use crate::vulkanr::resource::graphics_resource::MaterialId;
 
 pub type AssetId = u64;
 

@@ -4,15 +4,14 @@ use cgmath::Vector3;
 use cgmath::Matrix4;
 
 use crate::animation::{BoneId, SkeletonId};
-use crate::app::data::LightMoveTarget;
-use crate::debugview::gizmo::transform::TransformGizmoHandle;
-use crate::debugview::gizmo::{BoneDisplayStyle, BoneGizmoData, TransformGizmoData};
 use crate::ecs::component::LineMesh;
 use crate::ecs::context::EcsContext;
+use crate::ecs::resource::gizmo::transform_gizmo::TransformGizmoHandle;
+use crate::ecs::resource::gizmo::{BoneDisplayStyle, BoneGizmoData, TransformGizmoData};
 use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::{
-    BonePoseOverride, ClipLibrary, HierarchyDisplayMode, TimelineState, TransformGizmoMode,
-    TransformGizmoState,
+    BonePoseOverride, ClipLibrary, HierarchyDisplayMode, ImGuiInputCapture, KeyboardModifiers,
+    MouseInput, TimelineState, TransformGizmoMode, TransformGizmoState, ViewportInput,
 };
 use crate::ecs::systems::{
     compute_local_override_from_global_rotation, compute_local_override_from_global_scale,
@@ -22,9 +21,7 @@ use crate::ecs::world::{Entity, GlobalTransform, Transform};
 use crate::ecs::{
     compute_pose_global_transforms, create_pose_from_rest, sample_clip_to_pose, GizmoAxis,
 };
-use crate::ecs::{
-    gizmo_try_select, gizmo_update_position_with_constraint, update_light_auto_target,
-};
+use crate::ecs::{gizmo_try_select, gizmo_update_position_with_constraint};
 use crate::math::screen_to_world_ray;
 
 pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
@@ -37,8 +34,13 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
         ctx.pointer_capture_mut().active = true;
     }
 
-    process_light_auto_target(ctx);
-    ctx.gui_data.update();
+    {
+        let imgui_wants_mouse = ctx.world.resource::<ImGuiInputCapture>().wants_mouse;
+        let viewport_hovered = ctx.world.resource::<ViewportInput>().hovered;
+        ctx.world
+            .resource_mut::<MouseInput>()
+            .compute_drag_delta(imgui_wants_mouse, viewport_hovered);
+    }
 
     let transform_gizmo_active = process_transform_gizmo_interaction(ctx)?;
 
@@ -60,13 +62,18 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
     let capture_active = ctx.pointer_capture().active;
     let viewport_hovered = ctx.pointer_state().viewport_hovered;
     if !capture_active && viewport_hovered {
-        let is_right_clicked = ctx.gui_data.is_right_clicked;
-        let is_wheel_clicked = ctx.gui_data.is_wheel_clicked;
-        let mouse_wheel = ctx.gui_data.mouse_wheel;
-        let mouse_diff = ctx.gui_data.mouse_diff;
+        let mouse = ctx.world.resource::<MouseInput>();
+        let is_right_clicked = mouse.right_pressed;
+        let is_wheel_clicked = mouse.middle_pressed;
+        let mouse_wheel = mouse.wheel;
+        let mouse_diff = mouse.delta;
+        let mouse_pos = mouse.position;
+        drop(mouse);
+
+        let viewport_pos = ctx.world.resource::<ViewportInput>().position;
         let local_mouse_pos = [
-            ctx.gui_data.mouse_pos[0] - ctx.gui_data.viewport_position[0],
-            ctx.gui_data.mouse_pos[1] - ctx.gui_data.viewport_position[1],
+            mouse_pos[0] - viewport_pos[0],
+            mouse_pos[1] - viewport_pos[1],
         ];
         let screen_size = [ctx.swapchain_extent.0 as f32, ctx.swapchain_extent.1 as f32];
         let mut camera = ctx.camera_mut();
@@ -85,14 +92,17 @@ pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
 }
 
 fn update_pointer_state(ctx: &mut EcsContext) {
-    let is_left = ctx.gui_data.is_left_clicked;
-    let is_right = ctx.gui_data.is_right_clicked;
-    let is_wheel = ctx.gui_data.is_wheel_clicked;
-    let mouse_pos = ctx.gui_data.mouse_pos;
-    let viewport_pos = ctx.gui_data.viewport_position;
-    let mouse_wheel = ctx.gui_data.mouse_wheel;
-    let viewport_hovered = ctx.gui_data.viewport_hovered;
-    let imgui_wants_mouse = ctx.gui_data.imgui_wants_mouse;
+    let mouse = ctx.world.resource::<MouseInput>();
+    let is_left = mouse.left_pressed;
+    let is_right = mouse.right_pressed;
+    let is_wheel = mouse.middle_pressed;
+    let mouse_pos = mouse.position;
+    let mouse_wheel = mouse.wheel;
+    drop(mouse);
+
+    let viewport_pos = ctx.world.resource::<ViewportInput>().position;
+    let viewport_hovered = ctx.world.resource::<ViewportInput>().hovered;
+    let imgui_wants_mouse = ctx.world.resource::<ImGuiInputCapture>().wants_mouse;
 
     use crate::ecs::resource::RawButtonInput;
     use crate::ecs::systems::button_state_advance;
@@ -118,28 +128,12 @@ fn update_pointer_state(ctx: &mut EcsContext) {
     pointer.imgui_wants_pointer = imgui_wants_mouse;
 }
 
-fn process_light_auto_target(ctx: &mut EcsContext) {
-    if ctx.gui_data.move_light_to == LightMoveTarget::None {
-        return;
-    }
-
-    let camera_position = crate::ecs::compute_camera_position(&ctx.camera());
-    let move_light_to = ctx.gui_data.move_light_to;
-    let mut light = ctx.light_state_mut();
-    update_light_auto_target(
-        &mut *light,
-        &ctx.mesh_positions,
-        camera_position,
-        move_light_to,
-    );
-    drop(light);
-    ctx.gui_data.move_light_to = LightMoveTarget::None;
-}
-
 fn compute_viewport_local_mouse_pos(ctx: &EcsContext) -> cgmath::Vector2<f32> {
+    let mouse_pos = ctx.world.resource::<MouseInput>().position;
+    let viewport_pos = ctx.world.resource::<ViewportInput>().position;
     cgmath::Vector2::new(
-        ctx.gui_data.mouse_pos[0] - ctx.gui_data.viewport_position[0],
-        ctx.gui_data.mouse_pos[1] - ctx.gui_data.viewport_position[1],
+        mouse_pos[0] - viewport_pos[0],
+        mouse_pos[1] - viewport_pos[1],
     )
 }
 
@@ -172,6 +166,12 @@ fn process_gizmo_interaction(ctx: &mut EcsContext) -> Result<()> {
         let near_plane = camera.near_plane;
         drop(camera);
 
+        let billboard_click_rect = ctx
+            .world
+            .get_resource::<crate::ecs::resource::DebugViewState>()
+            .map(|s| s.billboard_click_rect)
+            .unwrap_or(None);
+
         {
             let mut gizmo_ref = ctx.light_gizmo_mut();
             let light_gizmo = &mut *gizmo_ref;
@@ -185,7 +185,7 @@ fn process_gizmo_interaction(ctx: &mut EcsContext) -> Result<()> {
                 camera_dir,
                 camera_up,
                 ctx.swapchain_extent,
-                ctx.gui_data.billboard_click_rect,
+                billboard_click_rect,
                 fov_y,
                 near_plane,
             );
@@ -246,6 +246,7 @@ fn update_light_gizmo_position(
         if t >= 0.0 {
             let intersection = ray_origin + ray_direction * t;
 
+            let is_ctrl = ctx.world.resource::<KeyboardModifiers>().ctrl;
             {
                 let mut gizmo = ctx.light_gizmo_mut();
                 let draggable = gizmo.draggable.clone();
@@ -253,7 +254,7 @@ fn update_light_gizmo_position(
                     &mut gizmo.position,
                     intersection,
                     &draggable,
-                    ctx.gui_data.is_ctrl_pressed,
+                    is_ctrl,
                 );
             }
 
@@ -315,7 +316,7 @@ fn process_bone_selection(ctx: &mut EcsContext) -> Result<bool> {
 
     let bone_hit = hit.is_some();
 
-    let is_shift = ctx.gui_data.is_shift_pressed;
+    let is_shift = ctx.world.resource::<KeyboardModifiers>().shift;
     let new_active_bone = apply_bone_selection_result(ctx, &skeleton, hit, is_shift);
 
     sync_bone_selection_to_hierarchy(ctx, new_active_bone, is_shift);
@@ -344,14 +345,17 @@ fn compute_bone_pick_ray(ctx: &EcsContext) -> (Vector3<f32>, Vector3<f32>) {
 
     let (ray_origin, ray_direction) = screen_to_world_ray(mouse_pos, screen_size, view, proj);
 
+    let mouse_raw = ctx.world.resource::<MouseInput>().position;
+    let viewport_position = ctx.world.resource::<ViewportInput>().position;
+    let viewport_size = ctx.world.resource::<ViewportInput>().size;
     log!(
         "bone_select: viewport_pos=({:.0},{:.0}) viewport_size=({:.0},{:.0}) mouse_raw=({:.0},{:.0}) mouse_local=({:.1},{:.1}) ray_origin=({:.2},{:.2},{:.2}) ray_dir=({:.3},{:.3},{:.3})",
-        ctx.gui_data.viewport_position[0],
-        ctx.gui_data.viewport_position[1],
-        ctx.gui_data.viewport_size[0],
-        ctx.gui_data.viewport_size[1],
-        ctx.gui_data.mouse_pos[0],
-        ctx.gui_data.mouse_pos[1],
+        viewport_position[0],
+        viewport_position[1],
+        viewport_size[0],
+        viewport_size[1],
+        mouse_raw[0],
+        mouse_raw[1],
         mouse_pos.x,
         mouse_pos.y,
         ray_origin.x, ray_origin.y, ray_origin.z,
@@ -446,28 +450,37 @@ fn request_mesh_selection(ctx: &mut EcsContext) {
     }
     drop(readback);
 
-    let local_x = ctx.gui_data.mouse_pos[0] - ctx.gui_data.viewport_position[0];
-    let local_y = ctx.gui_data.mouse_pos[1] - ctx.gui_data.viewport_position[1];
+    let mouse_pos = ctx.world.resource::<MouseInput>().position;
+    let viewport = ctx.world.resource::<ViewportInput>();
+    let viewport_pos = viewport.position;
+    let viewport_size = viewport.size;
+    drop(viewport);
 
-    let viewport_w = ctx.gui_data.viewport_size[0];
-    let viewport_h = ctx.gui_data.viewport_size[1];
+    let local_x = mouse_pos[0] - viewport_pos[0];
+    let local_y = mouse_pos[1] - viewport_pos[1];
 
-    if local_x < 0.0 || local_y < 0.0 || local_x >= viewport_w || local_y >= viewport_h {
+    if local_x < 0.0 || local_y < 0.0 || local_x >= viewport_size[0] || local_y >= viewport_size[1]
+    {
         return;
     }
 
     let gbuffer_w = ctx.swapchain_extent.0;
     let gbuffer_h = ctx.swapchain_extent.1;
 
-    let px = ((local_x / viewport_w) * gbuffer_w as f32) as u32;
-    let py = ((local_y / viewport_h) * gbuffer_h as f32) as u32;
+    let px = ((local_x / viewport_size[0]) * gbuffer_w as f32) as u32;
+    let py = ((local_y / viewport_size[1]) * gbuffer_h as f32) as u32;
     let px = px.min(gbuffer_w.saturating_sub(1));
     let py = py.min(gbuffer_h.saturating_sub(1));
 
+    let modifiers = ctx.world.resource::<KeyboardModifiers>();
+    let is_shift = modifiers.shift;
+    let is_ctrl = modifiers.ctrl;
+    drop(modifiers);
+
     let mut readback = ctx.object_id_readback_mut();
     readback.pending_pixel = Some((px, py));
-    readback.is_shift = ctx.gui_data.is_shift_pressed;
-    readback.is_ctrl = ctx.gui_data.is_ctrl_pressed;
+    readback.is_shift = is_shift;
+    readback.is_ctrl = is_ctrl;
 }
 
 fn process_transform_gizmo_interaction(ctx: &mut EcsContext) -> Result<bool> {

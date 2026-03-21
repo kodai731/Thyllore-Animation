@@ -3,23 +3,23 @@ use std::rc::Rc;
 use anyhow::Result;
 use cgmath::{Matrix4, Vector3};
 
-use crate::app::billboard::BillboardData;
-use crate::app::graphics_resource::GraphicsResources;
-use crate::app::raytracing::RayTracingData;
 use crate::asset::AssetStorage;
-use crate::debugview::gizmo::{BoneGizmoData, GridGizmoData, LightGizmoData, TransformGizmoData};
-use crate::debugview::DebugViewState;
+use crate::ecs::resource::billboard::BillboardData;
+use crate::ecs::resource::gizmo::{
+    BoneGizmoData, GridGizmoData, LightGizmoData, TransformGizmoData,
+};
+use crate::ecs::resource::DebugViewState;
 use crate::ecs::resource::{Camera, GridMeshData, LightState};
 use crate::ecs::world::{ResMut, ResRef, World};
 use crate::render::RenderBackend;
-use crate::renderer::onion_skin_buffers::OnionSkinGpuState;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::device::RRDevice;
+use crate::vulkanr::renderer::onion_skin_buffers::OnionSkinGpuState;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use crate::vulkanr::resource::raytracing_data::RayTracingData;
 use crate::vulkanr::resource::GpuBufferRegistry;
 use crate::vulkanr::vulkan::Instance;
 use crate::vulkanr::VulkanBackend;
-
-use super::GUIData;
 
 pub struct FrameContext<'a> {
     pub instance: &'a Instance,
@@ -38,7 +38,6 @@ pub struct FrameContext<'a> {
     pub world: &'a mut World,
     pub assets: &'a mut AssetStorage,
 
-    pub gui_data: &'a mut GUIData,
     pub onion_skin_gpu: &'a mut Option<OnionSkinGpuState>,
 }
 

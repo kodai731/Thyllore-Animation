@@ -3,7 +3,7 @@ name: check-all
 description: Unified code quality check combining ECS architecture, robust coding guidelines, and safe code patterns. Runs all checks in parallel for token efficiency.
 user-invocable: true
 allowed-tools: Read, Grep, Glob, Bash, Agent
-argument-hint: "[file-or-directory]"
+argument-hint: "[--full | file-or-directory]"
 ---
 
 # Unified Code Quality Check
@@ -16,15 +16,17 @@ Run all three code quality checks in parallel:
 ## Usage
 
 ```
-/check-all
+/check-all              # Check recently modified files
+/check-all --full       # Check entire project (all src/**/*.rs)
 /check-all src/ecs/systems/animation_systems.rs
-/check-all src/renderer/
+/check-all src/vulkanr/
 ```
 
 ## Target
 
-If `$ARGUMENTS` is provided, check those files or directories.
-If no arguments, check recently modified `.rs` files plus full-project pattern scans.
+- If `$ARGUMENTS` contains `--full`, check **all** `src/**/*.rs` files across the entire project.
+- If `$ARGUMENTS` is a file or directory path, check those files or directories.
+- If no arguments, check recently modified `.rs` files plus full-project pattern scans.
 
 ## Execution Strategy
 
@@ -35,8 +37,8 @@ Each agent receives only the rules it needs — no redundant rule loading.
 
 Prompt the agent with these specific checks:
 
-**Scope**: If arguments given, check those files. Otherwise, check `src/ecs/` for rules 1-6
-and `src/platform/` + `src/app/` for rule 7.
+**Scope**: If `--full`, check all of `src/ecs/`, `src/platform/`, `src/app/`.
+If specific files/directories given, check those. Otherwise, check recently modified files.
 
 1. **Components data-only**: In `src/ecs/component/**/*.rs`, search for `impl` blocks
    with `fn` methods that do computation (not just `new()`, `Default`, getters).
@@ -54,7 +56,7 @@ Report: file path, line number, violation description.
 
 Prompt the agent with these specific Grep patterns:
 
-**Scope**: All `src/**/*.rs` excluding test code.
+**Scope**: All `src/**/*.rs` excluding test code. (Same for both `--full` and default modes — this agent always scans all source.)
 
 1. `panic!` — Search pattern: `panic!` in `src/` (exclude `#[test]`, `#[cfg(test)]`, `tests/`)
 2. `.unwrap()` — Search pattern: `\.unwrap()` in `src/` (exclude test code)
@@ -75,7 +77,8 @@ Report: file path, line number, category, violation or exception.
 
 Prompt the agent with these specific checks on TARGET files only (from arguments or recent changes):
 
-**Scope**: Target files only (for token efficiency).
+**Scope**: If `--full`, check all `src/**/*.rs`. If specific files/directories given, check those.
+Otherwise, check recently modified files only (for token efficiency).
 
 1. **Invalid states**: Search for structs with `Option<T>` + `bool` field combinations
 2. **Boundary validation**: Check if file I/O / FFI functions validate inputs

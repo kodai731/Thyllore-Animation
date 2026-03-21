@@ -2,8 +2,8 @@ use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 
 use crate::animation::Skeleton;
-use crate::debugview::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::ecs::component::{ColorVertex, LineMesh};
+use crate::ecs::resource::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::math::ray_to_triangle_intersection;
 use crate::render::RenderBackend;
 
@@ -1115,10 +1115,12 @@ mod tests {
         );
     }
 
-    fn to_node_data(nodes: &[LoadedNode]) -> Vec<crate::app::graphics_resource::NodeData> {
+    fn to_node_data(
+        nodes: &[LoadedNode],
+    ) -> Vec<crate::vulkanr::resource::graphics_resource::NodeData> {
         nodes
             .iter()
-            .map(|n| crate::app::graphics_resource::NodeData {
+            .map(|n| crate::vulkanr::resource::graphics_resource::NodeData {
                 index: n.index,
                 name: n.name.clone(),
                 parent_index: n.parent_index,
@@ -1132,14 +1134,14 @@ mod tests {
         result: &ModelLoadResult,
         skeleton: &Skeleton,
     ) -> Vec<Matrix4<f32>> {
-        use crate::app::graphics_resource::{GraphicsResources, NodeData};
+        use crate::vulkanr::resource::graphics_resource::NodeData;
 
         let pose = create_pose_from_rest(skeleton);
         let mut nodes = to_node_data(&result.nodes);
-        GraphicsResources::compute_node_global_transforms(&mut nodes, skeleton, &pose);
-        crate::ecs::systems::animation_playback_systems::build_node_based_bone_transforms(
-            &nodes, skeleton,
-        )
+        crate::ecs::systems::animation::apply::compute_node_global_transforms(
+            &mut nodes, skeleton, &pose,
+        );
+        crate::ecs::systems::animation::apply::build_node_based_bone_transforms(&nodes, skeleton)
     }
 
     #[test]
@@ -1322,7 +1324,7 @@ mod tests {
         let transforms = simulate_runtime_node_gizmo_transforms(&result, skeleton);
         let offsets = compute_bone_local_offsets(skeleton, &transforms);
 
-        let mut gizmo = crate::debugview::gizmo::TransformGizmoData::default();
+        let mut gizmo = crate::ecs::resource::gizmo::TransformGizmoData::default();
         let mut at_origin_count = 0u32;
         let mut total = 0u32;
 
@@ -1371,7 +1373,7 @@ mod tests {
 
         let display = compute_display_transforms(&globals, &offsets, 1.0);
 
-        let mut gizmo = crate::debugview::gizmo::TransformGizmoData::default();
+        let mut gizmo = crate::ecs::resource::gizmo::TransformGizmoData::default();
         let mut failures = Vec::new();
 
         for (idx, bone) in skeleton.bones.iter().enumerate() {
@@ -1420,7 +1422,7 @@ mod tests {
 
     #[test]
     fn node_index_fallback_finds_bone_transform() {
-        use crate::app::graphics_resource::NodeData;
+        use crate::vulkanr::resource::graphics_resource::NodeData;
 
         let mut skeleton = Skeleton::new("test");
         let bone_id = skeleton.add_bone("mismatched_name", None);
@@ -1437,10 +1439,9 @@ mod tests {
             global_transform: node_transform,
         }];
 
-        let transforms =
-            crate::ecs::systems::animation_playback_systems::build_node_based_bone_transforms(
-                &nodes, &skeleton,
-            );
+        let transforms = crate::ecs::systems::animation::apply::build_node_based_bone_transforms(
+            &nodes, &skeleton,
+        );
 
         assert_eq!(
             transforms[0], node_transform,
@@ -1450,7 +1451,7 @@ mod tests {
 
     #[test]
     fn node_index_fallback_prefers_name_match() {
-        use crate::app::graphics_resource::NodeData;
+        use crate::vulkanr::resource::graphics_resource::NodeData;
 
         let mut skeleton = Skeleton::new("test");
         let bone_id = skeleton.add_bone("correct_name", None);
@@ -1478,10 +1479,9 @@ mod tests {
             },
         ];
 
-        let transforms =
-            crate::ecs::systems::animation_playback_systems::build_node_based_bone_transforms(
-                &nodes, &skeleton,
-            );
+        let transforms = crate::ecs::systems::animation::apply::build_node_based_bone_transforms(
+            &nodes, &skeleton,
+        );
 
         assert_eq!(
             transforms[0], name_transform,

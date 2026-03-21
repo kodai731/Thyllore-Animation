@@ -55,19 +55,15 @@ impl Components {
 
     pub fn insert<T: Component>(&mut self, entity: Entity, component: T) {
         let type_id = TypeId::of::<T>();
-        if let Some(storage) = self.storages.get_mut(&type_id) {
-            let typed = storage
-                .as_any_mut()
-                .downcast_mut::<TypedStorage<T>>()
-                .expect("Type mismatch in component storage");
-            typed.insert(entity, component);
-        } else {
-            panic!(
-                "Component type {} not registered. Call register::<{}>() before inserting.",
-                std::any::type_name::<T>(),
-                std::any::type_name::<T>()
-            );
-        }
+        let storage = self
+            .storages
+            .entry(type_id)
+            .or_insert_with(|| Box::new(TypedStorage::<T>::new()));
+        let typed = storage
+            .as_any_mut()
+            .downcast_mut::<TypedStorage<T>>()
+            .expect("Type mismatch in component storage");
+        typed.insert(entity, component);
     }
 
     pub fn get<T: Component>(&self, entity: Entity) -> Option<&T> {

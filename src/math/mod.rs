@@ -1,6 +1,7 @@
 mod billboard;
 pub mod coordinate_system;
 mod matrix;
+mod quaternion;
 mod vector;
 
 pub use billboard::*;
@@ -11,6 +12,7 @@ pub use coordinate_system::{
     world_y_down,
 };
 pub use matrix::*;
+pub use quaternion::*;
 pub use vector::*;
 
 pub use cgmath::Quaternion;

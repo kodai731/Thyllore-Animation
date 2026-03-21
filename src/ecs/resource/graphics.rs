@@ -1,4 +1,4 @@
-use crate::app::graphics_resource::{
+use crate::vulkanr::resource::graphics_resource::{
     FrameDescriptorSet, MaterialId, MaterialManager, MeshBuffer, NodeData, ObjectDescriptorSet,
 };
 
@@ -50,6 +50,7 @@ impl Default for AnimationType {
 pub struct ModelState {
     pub has_skinned_meshes: bool,
     pub model_path: String,
+    pub load_status: String,
 }
 
 impl Default for ModelState {
@@ -57,6 +58,7 @@ impl Default for ModelState {
         Self {
             has_skinned_meshes: false,
             model_path: String::new(),
+            load_status: String::from("No model loaded"),
         }
     }
 }

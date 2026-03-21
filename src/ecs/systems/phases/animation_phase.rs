@@ -4,10 +4,10 @@ use anyhow::Result;
 
 use crate::animation::{BoneId, BoneLocalPose};
 use crate::app::FrameContext;
-use crate::debugview::gizmo::BoneGizmoData;
+use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{BonePoseOverride, ClipLibrary, NodeAssets};
 use crate::ecs::{
-    evaluate_all_animators, playback_upload_animations, transform_propagation_system,
+    playback_upload_animations, run_animation_pipeline, transform_propagation_system,
 };
 
 pub struct AnimationUpdates {
@@ -25,7 +25,7 @@ pub fn run_animation_phase_ecs(ctx: &mut FrameContext) -> AnimationUpdates {
         let clip_library = ctx.world.resource::<ClipLibrary>();
         let mut node_assets = ctx.world.resource_mut::<NodeAssets>();
 
-        evaluate_all_animators(
+        run_animation_pipeline(
             ctx.world,
             ctx.graphics,
             &mut node_assets.nodes,

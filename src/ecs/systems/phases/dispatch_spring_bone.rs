@@ -315,7 +315,7 @@ pub fn dispatch_spring_bone_edit_events(
 
             UIEvent::SpringBoneToggleGizmo(visible) => {
                 if let Some(mut gizmo) =
-                    world.get_resource_mut::<crate::debugview::gizmo::SpringBoneGizmoData>()
+                    world.get_resource_mut::<crate::ecs::resource::gizmo::SpringBoneGizmoData>()
                 {
                     gizmo.visible = *visible;
                 }

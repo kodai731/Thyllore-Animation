@@ -205,38 +205,57 @@ impl RRGBuffer {
             return Ok(());
         }
 
-        self.destroy(&rrdevice.device);
+        self.destroy(rrdevice);
         *self = RRGBuffer::new(instance, rrdevice, new_width, new_height)?;
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        device.destroy_image_view(self.position_image_view, None);
-        device.destroy_image(self.position_image, None);
-        device.free_memory(self.position_image_memory, None);
-
-        device.destroy_image_view(self.normal_image_view, None);
-        device.destroy_image(self.normal_image, None);
-        device.free_memory(self.normal_image_memory, None);
-
-        device.destroy_image_view(self.albedo_image_view, None);
-        device.destroy_image(self.albedo_image, None);
-        device.free_memory(self.albedo_image_memory, None);
-
-        device.destroy_image_view(self.object_id_image_view, None);
-        device.destroy_image(self.object_id_image, None);
-        device.free_memory(self.object_id_image_memory, None);
-
-        device.destroy_image_view(self.shadow_mask_image_view, None);
-        device.destroy_image(self.shadow_mask_image, None);
-        device.free_memory(self.shadow_mask_image_memory, None);
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        destroy_image_set(
+            &rrdevice.device,
+            &mut self.position_image_view,
+            &mut self.position_image,
+            &mut self.position_image_memory,
+        );
+        destroy_image_set(
+            &rrdevice.device,
+            &mut self.normal_image_view,
+            &mut self.normal_image,
+            &mut self.normal_image_memory,
+        );
+        destroy_image_set(
+            &rrdevice.device,
+            &mut self.albedo_image_view,
+            &mut self.albedo_image,
+            &mut self.albedo_image_memory,
+        );
+        destroy_image_set(
+            &rrdevice.device,
+            &mut self.object_id_image_view,
+            &mut self.object_id_image,
+            &mut self.object_id_image_memory,
+        );
+        destroy_image_set(
+            &rrdevice.device,
+            &mut self.shadow_mask_image_view,
+            &mut self.shadow_mask_image,
+            &mut self.shadow_mask_image_memory,
+        );
 
         if self.readback_staging_buffer != vk::Buffer::null() {
-            device.destroy_buffer(self.readback_staging_buffer, None);
-            device.free_memory(self.readback_staging_memory, None);
+            rrdevice
+                .device
+                .destroy_buffer(self.readback_staging_buffer, None);
+            self.readback_staging_buffer = vk::Buffer::null();
+        }
+        if self.readback_staging_memory != vk::DeviceMemory::null() {
+            rrdevice
+                .device
+                .free_memory(self.readback_staging_memory, None);
+            self.readback_staging_memory = vk::DeviceMemory::null();
         }
 
-        log::info!("Destroyed G-Buffer");
+        log!("Destroyed G-Buffer");
     }
 
     pub unsafe fn transition_layouts(
@@ -300,5 +319,33 @@ impl RRGBuffer {
         )?;
 
         Ok(())
+    }
+}
+
+unsafe fn destroy_image_set(
+    device: &vulkanalia::Device,
+    view: &mut vk::ImageView,
+    image: &mut vk::Image,
+    memory: &mut vk::DeviceMemory,
+) {
+    if *view != vk::ImageView::null() {
+        device.destroy_image_view(*view, None);
+        *view = vk::ImageView::null();
+    }
+    if *image != vk::Image::null() {
+        device.destroy_image(*image, None);
+        *image = vk::Image::null();
+    }
+    if *memory != vk::DeviceMemory::null() {
+        device.free_memory(*memory, None);
+        *memory = vk::DeviceMemory::null();
+    }
+}
+
+impl Drop for RRGBuffer {
+    fn drop(&mut self) {
+        if self.position_image != vk::Image::null() {
+            log_warn!("RRGBuffer dropped without calling destroy()");
+        }
     }
 }

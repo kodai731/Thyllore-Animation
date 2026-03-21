@@ -1,21 +1,26 @@
 use crate::app::init::MAX_FRAMES_IN_FLIGHT;
-use crate::app::{App, GUIData};
+use crate::app::App;
+use crate::ecs::resource::billboard::BillboardData;
+use crate::ecs::resource::gizmo::{GridGizmoData, LightGizmoData};
+use crate::ecs::resource::{Camera, GridMeshData};
 use crate::ecs::systems::render_data_systems::{
     gizmo_mesh_render_data, gizmo_selectable_render_data, grid_mesh_render_data,
 };
-use crate::renderer::deferred::create_gbuffer_framebuffer;
-use crate::renderer::scene_renderer::render_scene_objects;
-use crate::vulkanr::context::{RenderTargets, SwapchainState};
+use crate::vulkanr::context::{
+    CommandState, FrameSync, PipelineState, RenderTargets, SwapchainState,
+};
+use crate::vulkanr::renderer::deferred::create_gbuffer_framebuffer;
+use crate::vulkanr::renderer::scene_renderer::render_scene_objects;
 use crate::vulkanr::vulkan::*;
 
 use anyhow::{anyhow, Result};
 
 impl App {
-    pub unsafe fn begin_frame(&mut self, gui_data: &mut GUIData) -> Result<usize> {
-        self.handle_viewport_resize(gui_data)?;
-        self.handle_model_loading(gui_data)?;
+    pub unsafe fn begin_frame(&mut self) -> Result<usize> {
+        self.handle_viewport_resize()?;
+        self.handle_model_loading()?;
 
-        let current_fence = self.frame_sync().current_fence();
+        let current_fence = self.resource::<FrameSync>().current_fence();
         self.rrdevice
             .device
             .wait_for_fences(&[current_fence], true, u64::MAX)?;
@@ -23,8 +28,8 @@ impl App {
         self.update_auto_exposure();
         self.read_object_id_readback();
 
-        let swapchain = self.swapchain_state().swapchain.swapchain;
-        let image_available = self.frame_sync().current_image_available();
+        let swapchain = self.resource::<SwapchainState>().swapchain.swapchain;
+        let image_available = self.resource::<FrameSync>().current_image_available();
         let result = self.rrdevice.device.acquire_next_image_khr(
             swapchain,
             u64::MAX,
@@ -45,19 +50,25 @@ impl App {
                 .wait_for_fences(&[image_in_flight], true, u64::MAX)?;
         }
 
-        let current_fence = self.frame_sync().current_fence();
+        let current_fence = self.resource::<FrameSync>().current_fence();
         self.resource_mut::<SwapchainState>().images_in_flight[image_index] = current_fence;
 
         Ok(image_index)
     }
 
-    unsafe fn handle_viewport_resize(&mut self, gui_data: &mut GUIData) -> Result<()> {
-        let Some((width, height)) = gui_data.viewport_resize_pending.take() else {
+    unsafe fn handle_viewport_resize(&mut self) -> Result<()> {
+        let pending = self
+            .data
+            .ecs_world
+            .resource_mut::<crate::ecs::resource::ViewportInput>()
+            .resize_pending
+            .take();
+        let Some((width, height)) = pending else {
             return Ok(());
         };
 
         self.rrdevice.device.device_wait_idle()?;
-        let command_pool = self.command_state().pool.command_pool;
+        let command_pool = self.resource::<CommandState>().pool.command_pool;
         self.data
             .viewport
             .resize(&self.instance, &self.rrdevice, command_pool, width, height)?;
@@ -187,23 +198,19 @@ impl App {
         Ok(())
     }
 
-    unsafe fn handle_model_loading(&mut self, gui_data: &mut GUIData) -> Result<()> {
-        if !gui_data.file_changed {
-            return Ok(());
-        }
-
-        log!("Loading new model from: {}", gui_data.selected_model_path);
+    pub unsafe fn load_model(&mut self, path: &str) -> Result<()> {
+        log!("Loading new model from: {}", path);
         self.rrdevice.device.device_wait_idle()?;
 
-        let command_pool = self.command_state().pool.clone();
-        let swapchain = self.swapchain_state().swapchain.clone();
+        let command_pool = self.resource::<CommandState>().pool.clone();
+        let swapchain = self.resource::<SwapchainState>().swapchain.clone();
         match Self::load_model_from_path_with_resources(
             &self.instance,
             &self.rrdevice,
             &mut self.data,
             &command_pool,
             &swapchain,
-            &gui_data.selected_model_path,
+            path,
             false,
         ) {
             Ok(_) => {
@@ -212,7 +219,8 @@ impl App {
                         .data
                         .ecs_world
                         .resource_mut::<crate::ecs::resource::ModelState>();
-                    model_state.model_path = gui_data.selected_model_path.clone();
+                    model_state.model_path = path.to_string();
+                    model_state.load_status = format!("Loaded: {}", path);
                 }
                 {
                     let mut timeline = self
@@ -227,16 +235,22 @@ impl App {
                     scene_state.clear();
                 }
 
-                gui_data.load_status = format!("Loaded: {}", gui_data.selected_model_path);
-                msg_info!("Model loaded: {}", gui_data.selected_model_path);
+                msg_info!("Model loaded: {}", path);
             }
             Err(e) => {
-                gui_data.load_status = format!("Error: {}", e);
+                let mut model_state = self
+                    .data
+                    .ecs_world
+                    .resource_mut::<crate::ecs::resource::ModelState>();
+                model_state.load_status = format!("Error: {}", e);
                 msg_error!("Failed to load model: {:?}", e);
             }
         }
 
-        gui_data.file_changed = false;
+        Ok(())
+    }
+
+    unsafe fn handle_model_loading(&mut self) -> Result<()> {
         Ok(())
     }
 
@@ -289,7 +303,7 @@ impl App {
             return Ok(());
         }
 
-        let command_pool = self.command_state().pool.command_pool;
+        let command_pool = self.resource::<CommandState>().pool.command_pool;
 
         if let Some(ref mut gbuffer) = self.data.raytracing.gbuffer {
             gbuffer.resize(&self.instance, &self.rrdevice, new_width, new_height)?;
@@ -397,8 +411,8 @@ impl App {
         }
 
         {
-            let swapchain = self.swapchain_state().swapchain.clone();
-            let mut billboard = self.billboard_mut();
+            let swapchain = self.resource::<SwapchainState>().swapchain.clone();
+            let mut billboard = self.resource_mut::<BillboardData>();
             billboard
                 .render_state
                 .descriptor_set
@@ -561,23 +575,19 @@ impl App {
         }
     }
 
-    pub unsafe fn render(
-        &mut self,
-        image_index: usize,
-        gui_data: &mut GUIData,
-        draw_data: &imgui::DrawData,
-    ) -> Result<()> {
+    pub unsafe fn render(&mut self, image_index: usize, draw_data: &imgui::DrawData) -> Result<()> {
         Self::update_imgui_buffers(&self.instance, &self.rrdevice, &mut self.data, draw_data)?;
 
-        self.record_command_buffer(image_index, gui_data, draw_data)?;
+        self.record_command_buffer(image_index, draw_data)?;
 
-        let image_available = self.frame_sync().current_image_available();
-        let render_finished = self.frame_sync().current_render_finished();
-        let current_fence = self.frame_sync().current_fence();
+        let image_available = self.resource::<FrameSync>().current_image_available();
+        let render_finished = self.resource::<FrameSync>().current_render_finished();
+        let current_fence = self.resource::<FrameSync>().current_fence();
 
         let wait_semaphores = &[image_available];
         let wait_stages = &[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-        let command_buffers = &[self.command_state().buffers.command_buffers[image_index]];
+        let command_buffers =
+            &[self.resource::<CommandState>().buffers.command_buffers[image_index]];
         let signal_semaphores = &[render_finished];
         let submit_info = vk::SubmitInfo::builder()
             .wait_semaphores(wait_semaphores)
@@ -592,7 +602,7 @@ impl App {
             current_fence,
         )?;
 
-        let swapchain = self.swapchain_state().swapchain.swapchain;
+        let swapchain = self.resource::<SwapchainState>().swapchain.swapchain;
         let swapchains = &[swapchain];
         let image_indices = &[image_index as u32];
         let present_info = vk::PresentInfoKHR::builder()
@@ -613,28 +623,22 @@ impl App {
             return Err(anyhow!(e));
         }
 
-        if gui_data.take_screenshot {
-            log!("Taking screenshot...");
-            let path = self.save_screenshot(image_index)?;
-            gui_data.take_screenshot = false;
-            msg_info!("Screenshot saved: {}", path);
-        }
-
-        self.frame_sync_mut().advance(MAX_FRAMES_IN_FLIGHT);
-        let current_frame = self.frame_sync().current_frame;
+        self.resource_mut::<FrameSync>()
+            .advance(MAX_FRAMES_IN_FLIGHT);
+        let current_frame = self.resource::<FrameSync>().current_frame;
         self.frame = current_frame;
 
         Ok(())
     }
-    unsafe fn save_screenshot(&self, image_index: usize) -> Result<String> {
+    pub unsafe fn save_screenshot(&self, image_index: usize) -> Result<String> {
         let device = &self.rrdevice.device;
-        let swapchain = &self.swapchain_state().swapchain;
+        let swapchain = &self.resource::<SwapchainState>().swapchain;
         let swapchain_image = swapchain.swapchain_images[image_index];
         let extent = swapchain.swapchain_extent;
         let width = extent.width;
         let height = extent.height;
         let image_size = (width * height * 4) as vk::DeviceSize;
-        let command_pool = self.command_state().pool.command_pool;
+        let command_pool = self.resource::<CommandState>().pool.command_pool;
 
         let (buffer, buffer_memory, command_buffer) =
             self.copy_swapchain_image_to_buffer(swapchain_image, extent, image_size, command_pool)?;
@@ -824,20 +828,24 @@ impl App {
         let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
         let camera_pos = {
             use crate::ecs::systems::camera_systems::compute_camera_position;
-            compute_camera_position(&self.camera())
+            compute_camera_position(&self.resource::<Camera>())
         };
 
         let render_data_vec = vec![
-            crate::ecs::systems::render_data_systems::grid_mesh_render_data(&self.grid_mesh()),
-            crate::ecs::systems::render_data_systems::gizmo_mesh_render_data(&self.grid_gizmo()),
+            crate::ecs::systems::render_data_systems::grid_mesh_render_data(
+                &self.resource::<GridMeshData>(),
+            ),
+            crate::ecs::systems::render_data_systems::gizmo_mesh_render_data(
+                &self.resource::<GridGizmoData>(),
+            ),
             crate::ecs::systems::render_data_systems::gizmo_selectable_render_data(
-                &self.light_gizmo(),
+                &self.resource::<LightGizmoData>(),
                 camera_pos,
             ),
         ];
         let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
-        crate::renderer::scene_renderer::render_scene_objects(
+        crate::vulkanr::renderer::scene_renderer::render_scene_objects(
             &render_data_refs,
             command_buffer,
             image_index,
@@ -861,7 +869,7 @@ impl App {
     ) {
         let render_area = vk::Rect2D::builder()
             .offset(vk::Offset2D::default())
-            .extent(self.swapchain_state().swapchain.swapchain_extent);
+            .extent(self.resource::<SwapchainState>().swapchain.swapchain_extent);
 
         let color_clear_value = vk::ClearValue {
             color: vk::ClearColorValue {
@@ -876,7 +884,7 @@ impl App {
         };
         let clear_values = [color_clear_value, depth_clear_value];
 
-        let render_targets = self.render_targets();
+        let render_targets = self.resource::<RenderTargets>();
         let render_pass_info = vk::RenderPassBeginInfo::builder()
             .render_pass(render_targets.render.render_pass)
             .framebuffer(render_targets.render.framebuffers[image_index])
@@ -896,7 +904,7 @@ impl App {
         for i in 0..mesh_count {
             let mesh = &self.data.graphics_resources.meshes[i];
 
-            let pipeline = &self.pipeline_state().model_pipeline;
+            let pipeline = &self.resource::<PipelineState>().model_pipeline;
             self.rrdevice.device.cmd_bind_pipeline(
                 command_buffer,
                 vk::PipelineBindPoint::GRAPHICS,
@@ -973,7 +981,7 @@ impl App {
         command_buffer: vk::CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
-        let extent = self.swapchain_state().swapchain.swapchain_extent;
+        let extent = self.resource::<SwapchainState>().swapchain.swapchain_extent;
 
         let viewport = vk::Viewport::builder()
             .x(0.0)
@@ -996,13 +1004,13 @@ impl App {
         let frame_set = self.data.graphics_resources.frame_set.sets[image_index];
         let camera_pos = {
             use crate::ecs::systems::camera_systems::compute_camera_position;
-            compute_camera_position(&self.camera())
+            compute_camera_position(&self.resource::<Camera>())
         };
 
         let render_data_vec = vec![
-            grid_mesh_render_data(&self.grid_mesh()),
-            gizmo_mesh_render_data(&self.grid_gizmo()),
-            gizmo_selectable_render_data(&self.light_gizmo(), camera_pos),
+            grid_mesh_render_data(&self.resource::<GridMeshData>()),
+            gizmo_mesh_render_data(&self.resource::<GridGizmoData>()),
+            gizmo_selectable_render_data(&self.resource::<LightGizmoData>(), camera_pos),
         ];
         let render_data_refs: Vec<_> = render_data_vec.iter().collect();
 
@@ -1025,7 +1033,7 @@ impl App {
     }
 
     unsafe fn render_billboard(&self, command_buffer: vk::CommandBuffer, image_index: usize) {
-        let billboard = self.billboard();
+        let billboard = self.resource::<BillboardData>();
         let pipeline_storage = self.pipeline_storage();
 
         let vertex_buffer = match self

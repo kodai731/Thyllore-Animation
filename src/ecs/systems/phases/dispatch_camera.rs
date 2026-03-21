@@ -86,10 +86,12 @@ pub fn dispatch_camera_light_debug_events(
                 deferred.push(DeferredAction::TakeScreenshot);
             }
 
+            #[cfg(debug_assertions)]
             UIEvent::DebugShadowInfo => {
                 deferred.push(DeferredAction::DebugShadowInfo);
             }
 
+            #[cfg(debug_assertions)]
             UIEvent::DebugBillboardDepth => {
                 deferred.push(DeferredAction::DebugBillboardDepth);
             }

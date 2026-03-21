@@ -1,9 +1,9 @@
-use crate::app::billboard::BillboardData;
 use crate::app::{App, AppData};
-use crate::renderer::deferred::create_gbuffer_framebuffer;
+use crate::ecs::resource::billboard::BillboardData;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::render::{create_gbuffer_render_pass, RRRender};
+use crate::vulkanr::renderer::deferred::create_gbuffer_framebuffer;
 use crate::vulkanr::swapchain::RRSwapchain;
 
 use anyhow::Result;

@@ -1,9 +1,11 @@
-use cgmath::{Quaternion, Rotation3, Vector3, Vector4};
+use cgmath::{Quaternion, Vector3, Vector4};
 
-use crate::app::graphics_resource::GraphicsResources;
+use crate::math::{euler_degrees_to_quaternion, quaternion_to_euler_degrees};
+
 use crate::asset::AssetStorage;
 use crate::ecs::component::EditorDisplay;
 use crate::ecs::world::{Entity, MeshRef, Name, Parent, Transform, Visibility, Visible, World};
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 #[derive(Clone, Debug)]
 pub struct MeshInspectorData {
@@ -48,7 +50,7 @@ pub fn collect_inspector_data(
     let transform_entity = resolve_transform_entity(world, entity);
     let transform = world.get_component::<Transform>(transform_entity);
     let translation = transform.map(|t| t.translation);
-    let rotation_euler = transform.map(|t| quaternion_to_euler(&t.rotation));
+    let rotation_euler = transform.map(|t| quaternion_to_euler_degrees(&t.rotation));
     let scale = transform.map(|t| t.scale);
 
     let visible = world
@@ -140,7 +142,7 @@ pub fn update_entity_rotation(world: &mut World, entity: Entity, rotation: Quate
 }
 
 pub fn update_entity_rotation_euler(world: &mut World, entity: Entity, euler: Vector3<f32>) {
-    let rotation = euler_to_quaternion(&euler);
+    let rotation = euler_degrees_to_quaternion(&euler);
     update_entity_rotation(world, entity, rotation);
 }
 
@@ -161,35 +163,4 @@ pub fn rename_entity(world: &mut World, entity: Entity, new_name: String) {
     if let Some(name) = world.get_component_mut::<Name>(entity) {
         name.0 = new_name;
     }
-}
-
-fn quaternion_to_euler(q: &Quaternion<f32>) -> Vector3<f32> {
-    let sinr_cosp = 2.0 * (q.s * q.v.x + q.v.y * q.v.z);
-    let cosr_cosp = 1.0 - 2.0 * (q.v.x * q.v.x + q.v.y * q.v.y);
-    let roll = sinr_cosp.atan2(cosr_cosp);
-
-    let sinp = 2.0 * (q.s * q.v.y - q.v.z * q.v.x);
-    let pitch = if sinp.abs() >= 1.0 {
-        std::f32::consts::FRAC_PI_2.copysign(sinp)
-    } else {
-        sinp.asin()
-    };
-
-    let siny_cosp = 2.0 * (q.s * q.v.z + q.v.x * q.v.y);
-    let cosy_cosp = 1.0 - 2.0 * (q.v.y * q.v.y + q.v.z * q.v.z);
-    let yaw = siny_cosp.atan2(cosy_cosp);
-
-    Vector3::new(roll.to_degrees(), pitch.to_degrees(), yaw.to_degrees())
-}
-
-fn euler_to_quaternion(euler: &Vector3<f32>) -> Quaternion<f32> {
-    let roll = euler.x.to_radians();
-    let pitch = euler.y.to_radians();
-    let yaw = euler.z.to_radians();
-
-    let qx = Quaternion::from_angle_x(cgmath::Rad(roll));
-    let qy = Quaternion::from_angle_y(cgmath::Rad(pitch));
-    let qz = Quaternion::from_angle_z(cgmath::Rad(yaw));
-
-    qz * qy * qx
 }

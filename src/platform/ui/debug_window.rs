@@ -1,7 +1,6 @@
-use crate::app::GUIData;
-use crate::debugview::DebugViewMode;
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::GridMeshData;
+use crate::ecs::resource::{DebugViewMode, DebugViewState};
+use crate::ecs::resource::{GridMeshData, MouseInput};
 use crate::ecs::World;
 
 pub struct DebugWindowState {
@@ -12,7 +11,6 @@ pub fn build_debug_panel_content(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     state: &mut DebugWindowState,
-    gui_data: &mut GUIData,
     ecs_world: &World,
 ) {
     build_camera_debug_panel(ui, ui_events);
@@ -21,7 +19,7 @@ pub fn build_debug_panel_content(
     build_debug_view_mode_panel(ui, state);
     ui.separator();
 
-    build_debug_panel(ui, ui_events, gui_data, ecs_world);
+    build_debug_panel(ui, ui_events, ecs_world);
     ui.separator();
 
     build_grid_debug_panel(ui, ui_events, ecs_world);
@@ -30,7 +28,7 @@ pub fn build_debug_panel_content(
     build_fbx_debug_panel(ui);
     ui.separator();
 
-    build_mouse_info(ui, gui_data);
+    build_mouse_info(ui, ecs_world);
 }
 
 fn build_camera_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {
@@ -84,19 +82,12 @@ fn build_debug_view_mode_panel(ui: &imgui::Ui, state: &mut DebugWindowState) {
     }
 }
 
-fn build_debug_panel(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    gui_data: &mut GUIData,
-    ecs_world: &World,
-) {
+fn build_debug_panel(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
     ui.text("Debug Info:");
 
-    ui.checkbox("Show Click Debug", &mut gui_data.show_click_debug);
-    ui.checkbox(
-        "Show Light Ray to Model",
-        &mut gui_data.show_light_ray_to_model,
-    );
+    if let Some(mut debug_view) = ecs_world.get_resource_mut::<DebugViewState>() {
+        ui.checkbox("Show Click Debug", &mut debug_view.show_click_debug);
+    }
 
     if ui.button("Debug Shadow Info") {
         ui_events.send(crate::ecs::events::UIEvent::DebugShadowInfo);
@@ -224,26 +215,22 @@ fn build_fbx_debug_panel(ui: &imgui::Ui) {
     }
 }
 
-fn build_mouse_info(ui: &imgui::Ui, gui_data: &mut GUIData) {
+fn build_mouse_info(ui: &imgui::Ui, ecs_world: &World) {
+    let mouse = ecs_world.resource::<MouseInput>();
     ui.text(format!(
         "Mouse Position: ({:.1},{:.1})",
-        gui_data.mouse_pos[0], gui_data.mouse_pos[1]
+        mouse.position[0], mouse.position[1]
     ));
-    ui.text(format!(
-        "is left clicked: ({:.1})",
-        gui_data.is_left_clicked
-    ));
-    ui.text(format!(
-        "is wheel clicked: ({:.1})",
-        gui_data.is_wheel_clicked
-    ));
-    ui.input_text("file path", &mut gui_data.file_path)
-        .read_only(true)
-        .build();
+    ui.text(format!("is left clicked: ({:.1})", mouse.left_pressed));
+    ui.text(format!("is wheel clicked: ({:.1})", mouse.middle_pressed));
 }
 
-pub fn build_click_debug_overlay(ui: &imgui::Ui, gui_data: &GUIData) {
-    if !gui_data.show_click_debug {
+pub fn build_click_debug_overlay(ui: &imgui::Ui, ecs_world: &World) {
+    let show = ecs_world
+        .get_resource::<DebugViewState>()
+        .map(|s| s.show_click_debug)
+        .unwrap_or(false);
+    if !show {
         return;
     }
 
@@ -259,7 +246,10 @@ pub fn build_click_debug_overlay(ui: &imgui::Ui, gui_data: &GUIData) {
         IMGUI_SIZE_LOGGED.store(true, Ordering::Relaxed);
     }
 
-    if let Some(rect) = gui_data.billboard_click_rect {
+    let rect = ecs_world
+        .get_resource::<DebugViewState>()
+        .and_then(|s| s.billboard_click_rect);
+    if let Some(rect) = rect {
         let draw_list = ui.get_foreground_draw_list();
         draw_list
             .add_rect([rect[0], rect[1]], [rect[2], rect[3]], [1.0, 0.0, 0.0, 0.8])

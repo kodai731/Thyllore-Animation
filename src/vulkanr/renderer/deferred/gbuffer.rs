@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::graphics_resource::{GraphicsResources, MeshBuffer};
 use crate::app::App;
 use crate::asset::AssetStorage;
 use crate::ecs::world::MeshRef;
@@ -10,6 +9,7 @@ use crate::vulkanr::core::{Device, RRDevice};
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::render::pass::get_depth_format;
 use crate::vulkanr::render::RRRender;
+use crate::vulkanr::resource::graphics_resource::{GraphicsResources, MeshBuffer};
 use crate::vulkanr::resource::{create_image, create_image_view, RRGBuffer};
 
 #[repr(C)]

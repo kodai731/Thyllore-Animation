@@ -1,16 +1,19 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::App;
+use super::App;
+use crate::vulkanr::renderer::deferred;
 
 impl App {
     pub unsafe fn record_command_buffer(
         &mut self,
         image_index: usize,
-        gui_data: &mut crate::app::GUIData,
         draw_data: &imgui::DrawData,
     ) -> Result<()> {
-        let command_buffer = self.command_state().buffers.command_buffers[image_index];
+        let command_buffer = self
+            .resource::<crate::vulkanr::context::CommandState>()
+            .buffers
+            .command_buffers[image_index];
 
         self.rrdevice
             .device
@@ -27,12 +30,12 @@ impl App {
             self.data.raytracing.is_available() && self.data.viewport.offscreen.is_some();
 
         if use_gbuffer {
-            super::deferred::record_gbuffer_pass(self, command_buffer, image_index)?;
+            deferred::record_gbuffer_pass(self, command_buffer, image_index)?;
 
             self.record_object_id_copy(command_buffer);
 
             if self.data.raytracing.has_valid_tlas() {
-                super::deferred::record_ray_query_pass(self, command_buffer)?;
+                deferred::record_ray_query_pass(self, command_buffer)?;
             } else {
                 self.prepare_empty_shadow_mask(command_buffer);
             }
@@ -41,15 +44,15 @@ impl App {
                 && self.data.raytracing.tonemap_pipeline.is_some();
 
             if has_hdr_pipeline {
-                super::deferred::record_composite_to_hdr(self, command_buffer)?;
-                super::deferred::record_onion_skin_pass(self, command_buffer, image_index)?;
-                super::deferred::record_bloom(self, command_buffer)?;
-                super::deferred::record_dof(self, command_buffer)?;
-                super::deferred::record_auto_exposure(self, command_buffer)?;
-                super::deferred::record_tonemap_to_offscreen(self, command_buffer, image_index)?;
-                super::deferred::record_onion_skin_composite(self, command_buffer)?;
+                deferred::record_composite_to_hdr(self, command_buffer)?;
+                deferred::record_onion_skin_pass(self, command_buffer, image_index)?;
+                deferred::record_bloom(self, command_buffer)?;
+                deferred::record_dof(self, command_buffer)?;
+                deferred::record_auto_exposure(self, command_buffer)?;
+                deferred::record_tonemap_to_offscreen(self, command_buffer, image_index)?;
+                deferred::record_onion_skin_composite(self, command_buffer)?;
             } else {
-                super::deferred::record_composite_to_offscreen(self, command_buffer, image_index)?;
+                deferred::record_composite_to_offscreen(self, command_buffer, image_index)?;
             }
 
             self.begin_main_render_pass(command_buffer, image_index);

@@ -98,7 +98,7 @@ fn dispatch_bone_set_key_events(events: &[UIEvent], world: &mut World, assets: &
     }
 
     let skeleton_id = world
-        .get_resource::<crate::debugview::gizmo::BoneGizmoData>()
+        .get_resource::<crate::ecs::resource::gizmo::BoneGizmoData>()
         .and_then(|bg| bg.cached_skeleton_id);
     let Some(skel_id) = skeleton_id else { return };
     let Some(skeleton) = assets.get_skeleton_by_skeleton_id(skel_id) else {

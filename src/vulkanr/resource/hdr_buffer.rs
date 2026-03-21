@@ -171,12 +171,30 @@ impl HdrBuffer {
     }
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        device.destroy_sampler(self.sampler, None);
-        device.destroy_framebuffer(self.framebuffer, None);
-        device.destroy_render_pass(self.render_pass, None);
-        device.destroy_image_view(self.color_image_view, None);
-        device.destroy_image(self.color_image, None);
-        device.free_memory(self.color_image_memory, None);
+        if self.sampler != vk::Sampler::null() {
+            device.destroy_sampler(self.sampler, None);
+            self.sampler = vk::Sampler::null();
+        }
+        if self.framebuffer != vk::Framebuffer::null() {
+            device.destroy_framebuffer(self.framebuffer, None);
+            self.framebuffer = vk::Framebuffer::null();
+        }
+        if self.render_pass != vk::RenderPass::null() {
+            device.destroy_render_pass(self.render_pass, None);
+            self.render_pass = vk::RenderPass::null();
+        }
+        if self.color_image_view != vk::ImageView::null() {
+            device.destroy_image_view(self.color_image_view, None);
+            self.color_image_view = vk::ImageView::null();
+        }
+        if self.color_image != vk::Image::null() {
+            device.destroy_image(self.color_image, None);
+            self.color_image = vk::Image::null();
+        }
+        if self.color_image_memory != vk::DeviceMemory::null() {
+            device.free_memory(self.color_image_memory, None);
+            self.color_image_memory = vk::DeviceMemory::null();
+        }
 
         log!("Destroyed HDR buffer");
     }
@@ -185,6 +203,14 @@ impl HdrBuffer {
         vk::Extent2D {
             width: self.width,
             height: self.height,
+        }
+    }
+}
+
+impl Drop for HdrBuffer {
+    fn drop(&mut self) {
+        if self.color_image != vk::Image::null() {
+            log_warn!("HdrBuffer dropped without calling destroy()");
         }
     }
 }

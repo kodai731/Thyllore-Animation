@@ -1,12 +1,12 @@
 use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, Vector3, Vector4};
 
-use crate::app::billboard::{
-    BillboardData, BillboardMesh, BillboardRenderState, BillboardTransform, BillboardVertex,
-};
 use crate::ecs::component::mesh::presets::{POSITION, TEX_COORD_0};
 use crate::ecs::component::mesh::{MeshData, PrimitiveTopology};
 use crate::ecs::component::{CameraState, RenderInfo};
+use crate::ecs::resource::billboard::{
+    BillboardData, BillboardMesh, BillboardRenderState, BillboardTransform, BillboardVertex,
+};
 use crate::ecs::world::{BillboardBehavior, Transform, World};
 use crate::render::RenderBackend;
 

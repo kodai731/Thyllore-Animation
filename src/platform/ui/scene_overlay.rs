@@ -1,8 +1,7 @@
 use imgui::Condition;
 
-use crate::app::GUIData;
-use crate::debugview::gizmo::BoneGizmoData;
 use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{CoordinateSpace, TransformGizmoMode, TransformGizmoState};
 use crate::ecs::World;
 
@@ -20,7 +19,6 @@ pub fn build_scene_overlay(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
     overlay_state: &mut SceneOverlayState,
-    gui_data: &mut GUIData,
     ecs_world: &World,
     viewport_info: &ViewportInfo,
 ) {
@@ -36,7 +34,7 @@ pub fn build_scene_overlay(
         .focus_on_appearing(false)
         .save_settings(false)
         .build(|| {
-            build_model_section(ui, ui_events, overlay_state, gui_data);
+            build_model_section(ui, ui_events, overlay_state);
             ui.separator();
 
             build_screenshot_section(ui, ui_events);
@@ -54,12 +52,7 @@ pub fn build_scene_overlay(
         });
 }
 
-fn build_model_section(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    state: &SceneOverlayState,
-    _gui_data: &mut GUIData,
-) {
+fn build_model_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, state: &SceneOverlayState) {
     if ui.button("Open FBX") {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("FBX Files", &["fbx"])
@@ -146,7 +139,6 @@ fn build_transform_gizmo_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, e
             state_copy.mode = TransformGizmoMode::Scale;
         }
 
-        // Keyboard shortcuts (W/E/R)
         if ui.is_key_pressed(imgui::Key::W) && !ui.io().key_ctrl {
             state_copy.mode = TransformGizmoMode::Translate;
         }

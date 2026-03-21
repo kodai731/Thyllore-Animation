@@ -1,13 +1,13 @@
 use anyhow::Result;
 use cgmath::{vec3, Deg, InnerSpace, Matrix3, Vector2, Vector3};
 
-use crate::debugview::gizmo::grid::GridGizmoData;
-use crate::debugview::gizmo::light::LightGizmoData;
 use crate::ecs::component::mesh::presets::{COLOR, POSITION};
 use crate::ecs::component::mesh::{MeshData, PrimitiveTopology};
 use crate::ecs::component::{
     ColorVertex, GizmoAxis, GizmoDraggable, GizmoPosition, GizmoSelectable, LineMesh, RenderInfo,
 };
+use crate::ecs::resource::gizmo::grid_gizmo::GridGizmoData;
+use crate::ecs::resource::gizmo::light_gizmo::LightGizmoData;
 use crate::math::{
     coordinate_system::perspective_infinite_reverse, is_point_in_rect,
     ray_to_line_segment_distance, ray_to_point_distance, screen_to_world_ray, view,
@@ -385,6 +385,34 @@ pub unsafe fn gizmo_update_or_create_ray_buffers(
 
 pub unsafe fn gizmo_destroy_ray_buffers(ray: &mut LineMesh, backend: &mut dyn RenderBackend) {
     backend.destroy_line_buffers(ray);
+}
+
+pub unsafe fn run_vertical_lines_update(ctx: &mut crate::app::FrameContext) -> Result<()> {
+    let model_tops: Vec<cgmath::Vector3<f32>> = Vec::new();
+
+    {
+        let mut gizmo = ctx.light_gizmo_mut();
+        let position = gizmo.position.clone();
+        gizmo_update_vertical_lines(&mut gizmo.vertical_lines, &position, &model_tops);
+    }
+
+    let mut mesh_clone = {
+        let gizmo = ctx.light_gizmo();
+        gizmo.vertical_lines.clone()
+    };
+
+    {
+        let mut backend = ctx.create_backend();
+        backend.update_or_create_line_buffers(&mut mesh_clone)?;
+    }
+
+    {
+        let mut gizmo = ctx.light_gizmo_mut();
+        gizmo.vertical_lines.vertex_buffer_handle = mesh_clone.vertex_buffer_handle;
+        gizmo.vertical_lines.index_buffer_handle = mesh_clone.index_buffer_handle;
+    }
+
+    Ok(())
 }
 
 pub fn gizmo_update_vertical_lines(

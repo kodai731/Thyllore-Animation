@@ -1,10 +1,10 @@
 use std::rc::Rc;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::graphics_resource::GraphicsResources;
 use crate::vulkanr::command::{RRCommandBuffer, RRCommandPool};
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::render::RRRender;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::RRGBuffer;
 use crate::vulkanr::swapchain::RRSwapchain;
 
@@ -132,14 +132,14 @@ impl GpuAssets {
     }
 }
 
-use crate::app::raytracing::RayTracingData;
-use crate::debugview::DebugViewState;
 use crate::ecs::resource::Camera;
+use crate::ecs::resource::DebugViewState;
 use crate::ecs::resource::LightState;
 use crate::ecs::systems::camera_systems::{
     compute_camera_direction, compute_camera_position, compute_camera_up,
 };
 use crate::platform::ImguiData;
+use crate::vulkanr::resource::raytracing_data::RayTracingData;
 
 pub struct CameraState {
     pub camera: Camera,

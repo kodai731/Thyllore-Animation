@@ -2,12 +2,12 @@ use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
 use crate::app::FrameContext;
-use crate::debugview::gizmo::BoneSelectionState;
-use crate::debugview::gizmo::TransformGizmoData;
-use crate::debugview::gizmo::{
+use crate::ecs::component::{ConstraintSet, LineMesh};
+use crate::ecs::resource::gizmo::BoneSelectionState;
+use crate::ecs::resource::gizmo::TransformGizmoData;
+use crate::ecs::resource::gizmo::{
     BoneDisplayStyle, BoneGizmoData, ConstraintGizmoData, SpringBoneGizmoData,
 };
-use crate::ecs::component::{ConstraintSet, LineMesh};
 use crate::ecs::resource::ProjectionData;
 use crate::ecs::resource::{Camera, Exposure, TransformGizmoState};
 use crate::ecs::systems::render_data_systems::{
@@ -21,7 +21,7 @@ use crate::ecs::{
     build_spring_bone_gizmo_mesh, gizmo_update_vertex_buffer,
 };
 use crate::render::RenderBackend;
-use crate::renderer::scene_renderer::update_object_ubo;
+use crate::vulkanr::renderer::scene_renderer::update_object_ubo;
 
 pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     let (view, proj, screen_size, aspect) = {
@@ -60,6 +60,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     update_bone_gizmo_mesh(ctx)?;
     update_constraint_gizmo_mesh(ctx)?;
     update_spring_bone_gizmo_mesh(ctx)?;
+    crate::ecs::systems::gizmo_systems::run_vertical_lines_update(ctx)?;
 
     Ok(())
 }

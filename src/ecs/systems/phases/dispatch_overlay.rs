@@ -1,5 +1,5 @@
-use crate::debugview::gizmo::BoneGizmoData;
 use crate::ecs::events::UIEvent;
+use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{
     AutoExposure, DepthOfField, GridMeshData, HierarchyState, MessageLog, OnionSkinningConfig,
     PhysicalCameraParameters, TransformGizmoState,

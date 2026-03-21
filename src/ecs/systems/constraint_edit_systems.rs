@@ -2,8 +2,8 @@ use crate::animation::{
     AimConstraintData, ConstraintId, ConstraintType, IkConstraintData, ParentConstraintData,
     PositionConstraintData, RotationConstraintData, ScaleConstraintData,
 };
-use crate::debugview::gizmo::ConstraintGizmoData;
 use crate::ecs::component::{Constrained, ConstraintSet};
+use crate::ecs::resource::gizmo::ConstraintGizmoData;
 use crate::ecs::world::{Entity, World};
 
 pub fn handle_constraint_add(world: &mut World, entity: Entity, type_index: u8) {

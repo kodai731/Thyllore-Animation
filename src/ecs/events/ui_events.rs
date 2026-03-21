@@ -7,11 +7,11 @@ use crate::animation::editable::{
 use crate::animation::BoneId;
 use crate::animation::{ConstraintId, ConstraintType};
 use crate::app::data::LightMoveTarget;
-use crate::debugview::gizmo::BoneDisplayStyle;
 use crate::ecs::component::{
     ColliderShape, SpringChain, SpringChainId, SpringColliderDef, SpringColliderGroup,
     SpringColliderGroupId, SpringColliderId, SpringJointParam,
 };
+use crate::ecs::resource::gizmo::BoneDisplayStyle;
 use crate::ecs::resource::{
     AutoExposure, CoordinateSpace, DepthOfField, HierarchyDisplayMode, OnionSkinningConfig,
     PhysicalCameraParameters, SelectedKeyframe, SelectionModifier, TransformGizmoMode,
@@ -36,7 +36,9 @@ pub enum UIEvent {
 
     TakeScreenshot,
 
+    #[cfg(debug_assertions)]
     DebugShadowInfo,
+    #[cfg(debug_assertions)]
     DebugBillboardDepth,
     DumpDebugInfo,
     DumpAnimationDebug,

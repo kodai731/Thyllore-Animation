@@ -1,9 +1,9 @@
-use super::super::components::clip::EditableAnimationClip;
-use super::super::components::curve::{PropertyCurve, PropertyType};
-use super::super::components::keyframe::{
+use crate::animation::editable::components::clip::EditableAnimationClip;
+use crate::animation::editable::components::curve::{PropertyCurve, PropertyType};
+use crate::animation::editable::components::keyframe::{
     BezierHandle, EditableKeyframe, InterpolationType, KeyframeId,
 };
-use super::tangent::{apply_auto_tangent, sample_bezier};
+use crate::animation::editable::systems::tangent::{apply_auto_tangent, sample_bezier};
 use crate::animation::BoneId;
 
 pub fn curve_add_keyframe(curve: &mut PropertyCurve, time: f32, value: f32) -> KeyframeId {

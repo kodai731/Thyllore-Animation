@@ -61,9 +61,23 @@ impl RRUniformBuffer {
         Ok(())
     }
 
-    pub unsafe fn delete(&self, rrdevice: &RRDevice) {
-        rrdevice.device.destroy_buffer(self.buffer, None);
-        rrdevice.device.free_memory(self.buffer_memory, None);
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        if self.buffer != vk::Buffer::null() {
+            rrdevice.device.destroy_buffer(self.buffer, None);
+            self.buffer = vk::Buffer::null();
+        }
+        if self.buffer_memory != vk::DeviceMemory::null() {
+            rrdevice.device.free_memory(self.buffer_memory, None);
+            self.buffer_memory = vk::DeviceMemory::null();
+        }
+    }
+}
+
+impl Drop for RRUniformBuffer {
+    fn drop(&mut self) {
+        if self.buffer != vk::Buffer::null() {
+            log_warn!("RRUniformBuffer dropped without calling destroy()");
+        }
     }
 }
 
@@ -130,10 +144,24 @@ impl RRIndexBuffer {
         Ok(rrindex_buffer)
     }
 
-    pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
-        rrdevice.device.destroy_buffer(self.buffer, None);
-        rrdevice.device.free_memory(self.buffer_memory, None);
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        if self.buffer != vk::Buffer::null() {
+            rrdevice.device.destroy_buffer(self.buffer, None);
+            self.buffer = vk::Buffer::null();
+        }
+        if self.buffer_memory != vk::DeviceMemory::null() {
+            rrdevice.device.free_memory(self.buffer_memory, None);
+            self.buffer_memory = vk::DeviceMemory::null();
+        }
         self.indices = 0;
+    }
+}
+
+impl Drop for RRIndexBuffer {
+    fn drop(&mut self) {
+        if self.buffer != vk::Buffer::null() {
+            log_warn!("RRIndexBuffer dropped without calling destroy()");
+        }
     }
 }
 
@@ -200,12 +228,28 @@ impl RRVertexBuffer {
         Ok(rrvertex_buffer)
     }
 
-    pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
-        rrdevice.device.destroy_buffer(self.buffer, None);
-        rrdevice.device.free_memory(self.buffer_memory, None);
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        if self.buffer != vk::Buffer::null() {
+            rrdevice.device.destroy_buffer(self.buffer, None);
+            self.buffer = vk::Buffer::null();
+        }
+        if self.buffer_memory != vk::DeviceMemory::null() {
+            rrdevice.device.free_memory(self.buffer_memory, None);
+            self.buffer_memory = vk::DeviceMemory::null();
+        }
         self.vertices = 0;
     }
+}
 
+impl Drop for RRVertexBuffer {
+    fn drop(&mut self) {
+        if self.buffer != vk::Buffer::null() {
+            log_warn!("RRVertexBuffer dropped without calling destroy()");
+        }
+    }
+}
+
+impl RRVertexBuffer {
     pub unsafe fn update(
         &mut self,
         instance: &Instance,
@@ -263,10 +307,24 @@ impl RRBuffer {
         Ok(rrbuffer)
     }
 
-    pub unsafe fn delete(&mut self, rrdevice: &RRDevice) {
-        rrdevice.device.destroy_buffer(self.buffer, None);
-        rrdevice.device.free_memory(self.buffer_memory, None);
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
+        if self.buffer != vk::Buffer::null() {
+            rrdevice.device.destroy_buffer(self.buffer, None);
+            self.buffer = vk::Buffer::null();
+        }
+        if self.buffer_memory != vk::DeviceMemory::null() {
+            rrdevice.device.free_memory(self.buffer_memory, None);
+            self.buffer_memory = vk::DeviceMemory::null();
+        }
         self.indices = 0;
+    }
+}
+
+impl Drop for RRBuffer {
+    fn drop(&mut self) {
+        if self.buffer != vk::Buffer::null() {
+            log_warn!("RRBuffer dropped without calling destroy()");
+        }
     }
 }
 

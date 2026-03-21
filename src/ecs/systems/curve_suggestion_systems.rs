@@ -14,7 +14,7 @@ use super::inference_actor_systems::{inference_actor_submit, inference_actor_tak
 const MAX_CONTEXT_KEYFRAMES: usize = 8;
 const FEATURES_PER_KEYFRAME: usize = 6;
 const CONTEXT_SIZE: usize = MAX_CONTEXT_KEYFRAMES * FEATURES_PER_KEYFRAME;
-const MAX_STEPS: usize = 8;
+const MAX_STEPS: usize = 4;
 const PAE_WINDOW_SIZE: usize = 64;
 const MIN_CURVE_STD: f32 = 0.01;
 

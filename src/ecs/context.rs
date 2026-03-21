@@ -1,12 +1,11 @@
 use cgmath::Vector3;
 
-use crate::app::billboard::BillboardData;
-use crate::app::GUIData;
 use crate::asset::AssetStorage;
-use crate::debugview::gizmo::{
+use crate::ecs::component::{LineMesh, MeshScale};
+use crate::ecs::resource::billboard::BillboardData;
+use crate::ecs::resource::gizmo::{
     BoneSelectionState, GridGizmoData, LightGizmoData, TransformGizmoData,
 };
-use crate::ecs::component::{LineMesh, MeshScale};
 use crate::ecs::resource::Camera;
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::resource::LightState;
@@ -24,7 +23,6 @@ pub struct EcsContext<'a> {
     pub swapchain_extent: (u32, u32),
     pub world: &'a mut World,
     pub assets: &'a mut AssetStorage,
-    pub gui_data: &'a mut GUIData,
     pub mesh_positions: Vec<Vector3<f32>>,
 }
 

@@ -5,12 +5,14 @@ pub mod buffer_registry;
 pub mod dof_buffer;
 pub mod dynamic_buffer;
 pub mod gbuffer;
+pub mod graphics_resource;
 pub mod hdr_buffer;
 pub mod image;
 pub mod mesh_buffer;
 pub mod offscreen;
 pub mod onion_skin_pass;
 pub mod pipeline_storage;
+pub mod raytracing_data;
 
 pub use auto_exposure_buffers::AutoExposureBuffers;
 pub use bloom_chain::BloomChain;

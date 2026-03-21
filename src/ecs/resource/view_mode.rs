@@ -61,4 +61,6 @@ impl DebugViewMode {
 #[derive(Clone, Debug, Default)]
 pub struct DebugViewState {
     pub debug_view_mode: DebugViewMode,
+    pub billboard_click_rect: Option<[f32; 4]>,
+    pub show_click_debug: bool,
 }

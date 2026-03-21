@@ -11,6 +11,7 @@ pub mod logger;
 pub mod animation;
 pub mod app;
 pub mod asset;
+#[cfg(debug_assertions)]
 pub mod debugview;
 pub mod ecs;
 pub mod exporter;
@@ -23,6 +24,5 @@ pub mod ml;
 pub mod paths;
 pub mod platform;
 pub mod render;
-pub mod renderer;
 pub mod scene;
 pub mod vulkanr;

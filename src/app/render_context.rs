@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
-use crate::app::graphics_resource::GraphicsResources;
-use crate::app::raytracing::RayTracingData;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::device::RRDevice;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
+use crate::vulkanr::resource::raytracing_data::RayTracingData;
 use crate::vulkanr::resource::GpuBufferRegistry;
 use crate::vulkanr::vulkan::Instance;
 use crate::vulkanr::VulkanBackend;

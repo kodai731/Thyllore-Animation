@@ -105,20 +105,28 @@ impl<T: Copy> DynamicUniformBuffer<T> {
         Ok(())
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.mapped_ptr != std::ptr::null_mut() {
-            device.unmap_memory(self.memory);
+            rrdevice.device.unmap_memory(self.memory);
             self.mapped_ptr = std::ptr::null_mut();
         }
 
         if self.buffer != vk::Buffer::null() {
-            device.destroy_buffer(self.buffer, None);
+            rrdevice.device.destroy_buffer(self.buffer, None);
             self.buffer = vk::Buffer::null();
         }
 
         if self.memory != vk::DeviceMemory::null() {
-            device.free_memory(self.memory, None);
+            rrdevice.device.free_memory(self.memory, None);
             self.memory = vk::DeviceMemory::null();
+        }
+    }
+}
+
+impl<T: Copy> Drop for DynamicUniformBuffer<T> {
+    fn drop(&mut self) {
+        if self.buffer != vk::Buffer::null() {
+            log_warn!("DynamicUniformBuffer dropped without calling destroy()");
         }
     }
 }
@@ -204,14 +212,24 @@ impl DynamicDescriptorSet {
             .update_descriptor_sets(&[write], &[] as &[vk::CopyDescriptorSet]);
     }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+    pub unsafe fn destroy(&mut self, rrdevice: &RRDevice) {
         if self.pool != vk::DescriptorPool::null() {
-            device.destroy_descriptor_pool(self.pool, None);
+            rrdevice.device.destroy_descriptor_pool(self.pool, None);
             self.pool = vk::DescriptorPool::null();
         }
         if self.layout != vk::DescriptorSetLayout::null() {
-            device.destroy_descriptor_set_layout(self.layout, None);
+            rrdevice
+                .device
+                .destroy_descriptor_set_layout(self.layout, None);
             self.layout = vk::DescriptorSetLayout::null();
+        }
+    }
+}
+
+impl Drop for DynamicDescriptorSet {
+    fn drop(&mut self) {
+        if self.pool != vk::DescriptorPool::null() {
+            log_warn!("DynamicDescriptorSet dropped without calling destroy()");
         }
     }
 }

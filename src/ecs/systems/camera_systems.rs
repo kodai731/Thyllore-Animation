@@ -1,6 +1,5 @@
 use cgmath::{Deg, InnerSpace, Rad, Vector2, Vector3};
 
-use crate::app::GUIData;
 use crate::ecs::resource::Camera;
 
 pub fn create_camera(position: Vector3<f32>, target: Vector3<f32>) -> Camera {
@@ -49,22 +48,6 @@ pub fn compute_camera_up(camera: &Camera) -> Vector3<f32> {
     let right = compute_camera_right(camera);
     let backward = compute_camera_backward(camera);
     right.cross(-backward).normalize()
-}
-
-pub fn camera_input_system(camera: &mut Camera, gui_data: &GUIData, screen_size: [f32; 2]) {
-    let mouse_pos = [
-        gui_data.mouse_pos[0] - gui_data.viewport_position[0],
-        gui_data.mouse_pos[1] - gui_data.viewport_position[1],
-    ];
-    camera_input_system_inner(
-        camera,
-        gui_data.is_right_clicked,
-        gui_data.is_wheel_clicked,
-        gui_data.mouse_wheel,
-        gui_data.mouse_diff,
-        mouse_pos,
-        screen_size,
-    );
 }
 
 pub fn camera_input_system_inner(

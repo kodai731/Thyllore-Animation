@@ -567,7 +567,7 @@ fn build_add_collider_group_row(ui: &imgui::Ui, ui_events: &mut UIEventQueue, en
 
 fn build_gizmo_toggle(ui: &imgui::Ui, ui_events: &mut UIEventQueue, world: &World) {
     let current = world
-        .get_resource::<crate::debugview::gizmo::SpringBoneGizmoData>()
+        .get_resource::<crate::ecs::resource::gizmo::SpringBoneGizmoData>()
         .map(|g| g.visible)
         .unwrap_or(false);
 

@@ -3,7 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use super::OverlayRenderer;
 use crate::app::App;
-use crate::debugview::DebugViewMode;
+use crate::ecs::resource::DebugViewMode;
 use crate::vulkanr::core::Device;
 use crate::vulkanr::descriptor::RRCompositeDescriptorSet;
 use crate::vulkanr::pipeline::RRPipeline;
@@ -37,8 +37,13 @@ impl<'a> CompositePass<'a> {
             composite_pipeline,
             composite_descriptor,
             device: &app.rrdevice.device,
-            swapchain_extent: app.swapchain_state().swapchain.swapchain_extent,
-            debug_view_mode: app.debug_view_state().debug_view_mode,
+            swapchain_extent: app
+                .resource::<crate::vulkanr::context::SwapchainState>()
+                .swapchain
+                .swapchain_extent,
+            debug_view_mode: app
+                .resource::<crate::ecs::resource::DebugViewState>()
+                .debug_view_mode,
         })
     }
 
@@ -62,7 +67,9 @@ impl<'a> CompositePass<'a> {
             composite_descriptor,
             device: &app.rrdevice.device,
             swapchain_extent: offscreen_extent,
-            debug_view_mode: app.debug_view_state().debug_view_mode,
+            debug_view_mode: app
+                .resource::<crate::ecs::resource::DebugViewState>()
+                .debug_view_mode,
         })
     }
 

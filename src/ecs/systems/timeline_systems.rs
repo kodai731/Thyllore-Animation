@@ -683,7 +683,7 @@ pub fn process_bone_set_key(
             clip.add_track(bone_id, bone_name.clone());
         }
 
-        let euler = crate::animation::editable::quaternion_to_euler_degrees(&local_pose.rotation);
+        let euler = crate::math::quaternion_to_euler_degrees(&local_pose.rotation);
 
         let t = &local_pose.translation;
         let s = &local_pose.scale;

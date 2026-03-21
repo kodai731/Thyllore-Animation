@@ -16,7 +16,7 @@ pub unsafe fn record_gbuffer_pass(
     image_index: usize,
 ) -> Result<()> {
     let pass = GBufferPass::new(app)?;
-    let render_targets = app.render_targets();
+    let render_targets = app.resource::<crate::vulkanr::context::RenderTargets>();
     pass.record(
         command_buffer,
         render_targets.render.gbuffer_render_pass,
@@ -27,7 +27,9 @@ pub unsafe fn record_gbuffer_pass(
 
 pub unsafe fn record_ray_query_pass(app: &App, command_buffer: vk::CommandBuffer) -> Result<()> {
     let pass = RayQueryPass::new(app)?;
-    let normal_offset = app.light_state().shadow_normal_offset;
+    let normal_offset = app
+        .resource::<crate::ecs::resource::LightState>()
+        .shadow_normal_offset;
     pass.record(command_buffer, normal_offset)
 }
 
@@ -61,7 +63,7 @@ pub unsafe fn record_composite_pass(
         composite_descriptor.update_selection(&app.rrdevice, &selected_mesh_ids)?;
     }
 
-    let render_targets = app.render_targets();
+    let render_targets = app.resource::<crate::vulkanr::context::RenderTargets>();
     let render_pass = render_targets.render.render_pass;
     let framebuffer = render_targets.render.framebuffers[image_index];
 

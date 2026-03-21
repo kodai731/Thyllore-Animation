@@ -1,11 +1,12 @@
 use imgui::Condition;
 
-use crate::app::graphics_resource::GraphicsResources;
 use crate::asset::AssetStorage;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{ConstraintEditorState, HierarchyState};
 use crate::ecs::systems::collect_inspector_data;
 use crate::ecs::world::{Visibility, World};
+use crate::math::euler_degrees_to_quaternion;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 use super::constraint_inspector::build_constraint_section;
 use super::layout_snapshot::LayoutSnapshot;
@@ -99,7 +100,7 @@ fn build_transform_section(
             ui.text("Rotation");
             if ui.input_float3("##rotation", &mut rot).build() {
                 let euler = cgmath::Vector3::new(rot[0], rot[1], rot[2]);
-                let quat = euler_to_quaternion(&euler);
+                let quat = euler_degrees_to_quaternion(&euler);
                 ui_events.send(UIEvent::SetEntityRotation(data.entity, quat));
             }
         }
@@ -184,18 +185,4 @@ fn build_visible_section(
             }
         }
     }
-}
-
-fn euler_to_quaternion(euler: &cgmath::Vector3<f32>) -> cgmath::Quaternion<f32> {
-    use cgmath::Rotation3;
-
-    let roll = euler.x.to_radians();
-    let pitch = euler.y.to_radians();
-    let yaw = euler.z.to_radians();
-
-    let qx = cgmath::Quaternion::from_angle_x(cgmath::Rad(roll));
-    let qy = cgmath::Quaternion::from_angle_y(cgmath::Rad(pitch));
-    let qz = cgmath::Quaternion::from_angle_z(cgmath::Rad(yaw));
-
-    qz * qy * qx
 }

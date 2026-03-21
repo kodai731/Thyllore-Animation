@@ -102,27 +102,40 @@ impl AutoExposureBuffers {
             return Ok(());
         }
 
-        self.destroy_resources(&rrdevice.device);
+        self.destroy(&rrdevice.device);
         let new_buf = Self::new(instance, rrdevice, new_width, new_height)?;
         *self = new_buf;
 
         Ok(())
     }
 
-    unsafe fn destroy_resources(&self, device: &vulkanalia::Device) {
+    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         if self.histogram_buffer != vk::Buffer::null() {
             device.destroy_buffer(self.histogram_buffer, None);
+            self.histogram_buffer = vk::Buffer::null();
+        }
+        if self.histogram_buffer_memory != vk::DeviceMemory::null() {
             device.free_memory(self.histogram_buffer_memory, None);
+            self.histogram_buffer_memory = vk::DeviceMemory::null();
         }
 
         if self.luminance_buffer != vk::Buffer::null() {
             device.destroy_buffer(self.luminance_buffer, None);
-            device.free_memory(self.luminance_buffer_memory, None);
+            self.luminance_buffer = vk::Buffer::null();
         }
-    }
+        if self.luminance_buffer_memory != vk::DeviceMemory::null() {
+            device.free_memory(self.luminance_buffer_memory, None);
+            self.luminance_buffer_memory = vk::DeviceMemory::null();
+        }
 
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.destroy_resources(device);
         log!("Destroyed AutoExposure buffers");
+    }
+}
+
+impl Drop for AutoExposureBuffers {
+    fn drop(&mut self) {
+        if self.histogram_buffer != vk::Buffer::null() {
+            log_warn!("AutoExposureBuffers dropped without calling destroy()");
+        }
     }
 }

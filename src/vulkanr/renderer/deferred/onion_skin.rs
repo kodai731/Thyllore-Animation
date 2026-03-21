@@ -1,11 +1,11 @@
 use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::graphics_resource::GraphicsResources;
+use super::gbuffer::OnionSkinPushConstants;
 use crate::app::App;
-use crate::renderer::deferred::gbuffer::OnionSkinPushConstants;
-use crate::renderer::onion_skin_buffers::OnionSkinGpuState;
 use crate::vulkanr::core::Device;
+use crate::vulkanr::renderer::onion_skin_buffers::OnionSkinGpuState;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::OnionSkinPassResources;
 
 pub struct OnionSkinRenderPass<'a> {

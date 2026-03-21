@@ -1,15 +1,12 @@
-use crate::app::{App, AppData, FrameContext, GUIData};
-use crate::ecs::{
-    gizmo_update_or_create_vertical_line_buffers, gizmo_update_vertical_lines, run_frame,
-};
+use crate::app::{App, AppData, FrameContext};
+use crate::ecs::run_frame;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::vulkan::*;
-use crate::vulkanr::VulkanBackend;
 
 use anyhow::Result;
 
 impl App {
-    pub unsafe fn update(&mut self, image_index: usize, gui_data: &mut GUIData) -> Result<()> {
+    pub unsafe fn update(&mut self, image_index: usize) -> Result<()> {
         let time = self.start.elapsed().as_secs_f32();
         let delta_time = time - self.last_update_time;
         self.last_update_time = time;
@@ -39,101 +36,11 @@ impl App {
                 buffer_registry: &mut self.data.buffer_registry,
                 world: &mut self.data.ecs_world,
                 assets: &mut self.data.ecs_assets,
-                gui_data,
                 onion_skin_gpu: &mut self.data.onion_skin_gpu,
             };
 
             run_frame(&mut ctx)?;
         }
-
-        self.process_debug_commands(gui_data)?;
-        self.update_vertical_lines()?;
-
-        Ok(())
-    }
-
-    unsafe fn process_debug_commands(&self, gui_data: &mut GUIData) -> Result<()> {
-        if gui_data.debug_billboard_depth {
-            self.log_billboard_debug_info();
-            gui_data.debug_billboard_depth = false;
-        }
-
-        Ok(())
-    }
-
-    fn log_billboard_debug_info(&self) {
-        use crate::debugview::{log_billboard_debug_info, BillboardDebugInfo, GBufferDebugInfo};
-        use crate::ecs::systems::camera_systems::{
-            compute_camera_direction, compute_camera_position, compute_camera_up,
-        };
-
-        let camera = self.camera();
-        let light = self.light_state();
-        let info = BillboardDebugInfo {
-            light_position: light.light_position,
-            camera_position: compute_camera_position(&camera),
-            camera_direction: compute_camera_direction(&camera),
-            camera_up: compute_camera_up(&camera),
-            near_plane: camera.near_plane,
-            fov_y: camera.fov_y,
-        };
-
-        let gbuffer_debug_info = self
-            .data
-            .raytracing
-            .gbuffer
-            .as_ref()
-            .map(|gb| GBufferDebugInfo {
-                position_image_view: gb.position_image_view,
-                extent_width: gb.width,
-                extent_height: gb.height,
-            });
-
-        let swapchain = &self
-            .data
-            .ecs_world
-            .resource::<crate::vulkanr::context::SwapchainState>()
-            .swapchain;
-
-        log_billboard_debug_info(
-            &info,
-            swapchain,
-            &self.billboard().render_state.descriptor_set,
-            gbuffer_debug_info.as_ref(),
-            self.data.raytracing.gbuffer_sampler,
-        );
-    }
-
-    unsafe fn update_vertical_lines(&mut self) -> Result<()> {
-        let model_tops: Vec<cgmath::Vector3<f32>> = Vec::new();
-
-        {
-            let mut gizmo = self.light_gizmo_mut();
-            let position = gizmo.position.clone();
-            gizmo_update_vertical_lines(&mut gizmo.vertical_lines, &position, &model_tops);
-        }
-
-        let command_pool = self
-            .data
-            .ecs_world
-            .resource::<crate::vulkanr::context::CommandState>()
-            .pool
-            .clone();
-
-        let mut backend = VulkanBackend::new(
-            &self.instance,
-            &self.rrdevice,
-            command_pool,
-            &mut self.data.graphics_resources,
-            &mut self.data.raytracing,
-            &mut self.data.buffer_registry,
-        );
-
-        let mut gizmo = self
-            .data
-            .ecs_world
-            .resource_mut::<crate::debugview::gizmo::LightGizmoData>();
-        gizmo_update_or_create_vertical_line_buffers(&mut gizmo.vertical_lines, &mut backend)?;
 
         Ok(())
     }
@@ -176,92 +83,6 @@ impl App {
         upload_imgui_index_data(rrdevice, data, draw_data, idx_buffer_size)?;
 
         Ok(())
-    }
-
-    pub(crate) fn log_shadow_debug_info(&self) {
-        use crate::ecs::systems::camera_systems::compute_camera_position;
-
-        let light = self.light_state();
-        let camera = self.camera();
-        let cam_pos = compute_camera_position(&camera);
-
-        log!("=== Shadow Debug Info ===");
-        log!(
-            "Light position: ({:.2}, {:.2}, {:.2})",
-            light.light_position.x,
-            light.light_position.y,
-            light.light_position.z
-        );
-        log!(
-            "Light gizmo position: ({:.2}, {:.2}, {:.2})",
-            self.light_gizmo().position.position.x,
-            self.light_gizmo().position.position.y,
-            self.light_gizmo().position.position.z
-        );
-        log!(
-            "Camera position: ({:.2}, {:.2}, {:.2})",
-            cam_pos.x,
-            cam_pos.y,
-            cam_pos.z
-        );
-
-        log!("Shadow settings:");
-        log!("  strength: {:.2}", light.shadow_strength);
-        log!("  normal_offset: {:.2}", light.shadow_normal_offset);
-        log!(
-            "  debug_view_mode: {:?}",
-            self.debug_view_state().debug_view_mode
-        );
-        log!(
-            "  distance_attenuation: {}",
-            light.distance_attenuation.is_enabled()
-        );
-
-        if let Some(ref accel_struct) = self.data.raytracing.acceleration_structure {
-            log!("Acceleration Structure:");
-            log!("  BLAS count: {}", accel_struct.blas_list.len());
-            for (i, blas) in accel_struct.blas_list.iter().enumerate() {
-                log!(
-                    "    BLAS[{}]: AS={:?}, device_addr={:#x}",
-                    i,
-                    blas.acceleration_structure.is_some(),
-                    blas.device_address
-                );
-            }
-            log!(
-                "  TLAS: AS={:?}",
-                accel_struct.tlas.acceleration_structure.is_some()
-            );
-        } else {
-            log_warn!("No acceleration structure!");
-        }
-
-        log!("Vertex buffers (GPU):");
-        for (i, mesh) in self.data.graphics_resources.meshes.iter().enumerate() {
-            log!(
-                "  Mesh[{}]: {} vertices, {} indices",
-                i,
-                mesh.vertex_data.vertices.len(),
-                mesh.vertex_data.indices.len()
-            );
-            if !mesh.vertex_data.vertices.is_empty() {
-                let v = &mesh.vertex_data.vertices[0];
-                log!(
-                    "    vertex[0].pos: ({:.2}, {:.2}, {:.2})",
-                    v.pos.x,
-                    v.pos.y,
-                    v.pos.z
-                );
-                log!(
-                    "    vertex[0].normal: ({:.3}, {:.3}, {:.3})",
-                    v.normal.x,
-                    v.normal.y,
-                    v.normal.z
-                );
-            }
-        }
-
-        log!("=========================");
     }
 }
 

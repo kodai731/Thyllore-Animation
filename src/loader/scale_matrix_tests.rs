@@ -1,9 +1,9 @@
 use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
 
 use crate::animation::{Skeleton, SkeletonPose, SkinData};
-use crate::app::graphics_resource::{GraphicsResources, NodeData};
 use crate::ecs::{apply_skinning, compute_pose_global_transforms, create_pose_from_rest};
 use crate::loader::LoadedNode;
+use crate::vulkanr::resource::graphics_resource::NodeData;
 
 const TOLERANCE: f32 = 0.001;
 const EXPECTED_POSITION: Vector3<f32> = Vector3::new(0.5, 1.0, 0.0);
@@ -116,7 +116,11 @@ fn run_node_animation(
 ) -> Vector3<f32> {
     let pose = rest_pose(skeleton);
     let mut node_data = to_node_data(loaded_nodes);
-    GraphicsResources::compute_node_global_transforms(&mut node_data, skeleton, &pose);
+    crate::ecs::systems::animation::apply::compute_node_global_transforms(
+        &mut node_data,
+        skeleton,
+        &pose,
+    );
 
     let global_transform = node_data[mesh_node_index].global_transform;
     let v4 = global_transform * Vector4::new(vertex_local.x, vertex_local.y, vertex_local.z, 1.0);

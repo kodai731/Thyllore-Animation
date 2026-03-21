@@ -69,7 +69,7 @@ ML モデル解決順序 (`resolve_curve_copilot_model_path`): [solved]
 #### 対応事項
 
 - [x] `paths.rs` の ML モデル解決パスに `ml/model/curve_copilot.onnx` を追加
-- [ ] ORT DLL の同梱: `vendor/onnxruntime/.../lib/` から exe と同階層にコピー
+- [x] ORT DLL の同梱: `vendor/onnxruntime/.../lib/` から exe と同階層にコピー
   - Windows は exe と同ディレクトリの DLL を自動ロードする
 - [x] `scripts/package.ps1` を作成
   - `cargo build --release` → 必要ファイル収集 → zip 作成

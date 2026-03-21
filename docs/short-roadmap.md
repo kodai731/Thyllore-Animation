@@ -73,8 +73,8 @@ ML モデル解決順序 (`resolve_curve_copilot_model_path`): [solved]
   - Windows は exe と同ディレクトリの DLL を自動ロードする
 - [ ] `scripts/package.ps1` を作成
   - `cargo build --release` → 必要ファイル収集 → zip 作成
-- [ ] ml 機能なしビルドの手順を README に記載 (`--no-default-features`)
-- [ ] サンプルモデルのライセンス確認
+- [x] ml 機能なしビルドの手順を README に記載 (`--no-default-features`)
+- [x] サンプルモデルのライセンス確認
   - stickman: 自作 or ライセンス確認済みか要確認
   - サードパーティモデル (fuse-woman, phoenix-bird 等) は配布に含めない
 

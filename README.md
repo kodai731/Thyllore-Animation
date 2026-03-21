@@ -108,12 +108,24 @@ cargo build --release
 | `text-to-motion` | No | Text-to-motion generation via gRPC |
 
 ```bash
-# Build without ML feature
-cargo build --no-default-features
+# Build without ML feature (no ONNX Runtime dependency)
+cargo build --release --no-default-features
 
 # Build with text-to-motion
 cargo build --features text-to-motion
 ```
+
+#### Building without ML
+
+The `ml` feature requires ONNX Runtime (`onnxruntime.dll` on Windows). If you do not need
+the ML curve copilot, build without it:
+
+```bash
+cargo build --release --no-default-features
+```
+
+This removes the ONNX Runtime dependency entirely. The resulting binary does not require
+`onnxruntime.dll` or any `.onnx` model files at runtime.
 
 ## Run
 

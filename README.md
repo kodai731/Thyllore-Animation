@@ -1,28 +1,21 @@
 # Thyllore Animation
 
-A real-time animation and rendering engine powered by ECS architecture, built in Rust with Vulkan.
+A real-time animation editing tool powered by ECS architecture, built in Rust with Vulkan.
 
-Thyllore Animation supports glTF/FBX model loading, skeletal animation, node animation, morph targets, and ML-assisted animation editing via an integrated curve copilot.
+Import animation model files (glTF / FBX), edit animation curves on a timeline with Bezier interpolation, and export the
+result back to glTF / FBX. An ML-powered curve copilot suggests keyframe values as you work.
 
 ![ScreenShot](docs/images/ProjectView.png)
 
 ## Features
 
-- **Vulkan Rendering** - Deferred rendering pipeline with tone mapping and depth compositing
-- **3D Model Loading** - glTF and FBX format support via `gltf` and `ufbx` crates
-- **Skeletal Animation** - Bone-driven animation with hierarchical transforms
-- **Node Animation** - Transform-level animation for scene objects
-- **Morph Targets** - Blend shape animation support
-- **ML Curve Copilot** - ONNX-based machine learning model for animation curve suggestions
-- **Timeline Editor** - Keyframe editing with Bezier curve interpolation
-- **Ray Tracing** - Hardware-accelerated ray tracing via Vulkan RT extensions
-- **Onion Skinning** - Ghost overlay of previous/next frames for animation reference
-- **ImGui Integration** - Debug UI with docking support
-- **ECS Architecture** - Data-driven Entity-Component-System design inspired by Bevy
+- **Import / Export** — Load glTF and FBX models, edit animations, and export back to both formats
+- **Timeline & Curve Editor** — Keyframe editing with Bezier interpolation and onion skinning
+- **ML Curve Copilot** — ONNX-based model that suggests animation curves as you edit
+- **Vulkan Rendering** — Deferred pipeline with ray tracing, bloom, tone mapping, and depth of field
+- **ECS Architecture** — Data-driven design inspired by Bevy Engine
 
-## Roadmap
-
-See [docs/roadmap.md](docs/roadmap.md) for planned features including rig propagation, text-to-motion, and more.
+See [docs/features.md](docs/features.md) for a full list of features.
 
 ## Prerequisites
 
@@ -102,10 +95,10 @@ cargo build --release
 
 ### Feature Flags
 
-| Feature | Default | Description |
-|---------|---------|-------------|
-| `ml` | Yes | ML-based curve copilot (requires ONNX Runtime) |
-| `text-to-motion` | No | Text-to-motion generation via gRPC |
+| Feature          | Default | Description                                    |
+|------------------|---------|------------------------------------------------|
+| `ml`             | Yes     | ML-based curve copilot (requires ONNX Runtime) |
+| `text-to-motion` | No      | Text-to-motion generation via gRPC             |
 
 ```bash
 # Build without ML feature (no ONNX Runtime dependency)
@@ -150,35 +143,42 @@ cargo test --test ecs_tests --no-default-features
 cargo test --no-default-features
 ```
 
-> **Note**: Do NOT run `cargo test --test ecs_tests` without `--no-default-features`. The ONNX Runtime dependency causes integration test crashes. See [CLAUDE.md](CLAUDE.md) for details.
+> **Note**: Do NOT run `cargo test --test ecs_tests` without `--no-default-features`. The ONNX Runtime dependency causes
+> integration test crashes. See [CLAUDE.md](CLAUDE.md) for details.
 
 ## Keyboard Shortcuts
+
 See [docs/keyboard_shortcuts.md](docs/keyboard_shortcuts.md)
 
 ## Project Structure
+
 See [docs/structure.md](docs/structure.md)
 
 ## Dependencies
 
 Key dependencies used in this project:
 
-| Crate | Purpose |
-|-------|---------|
-| [vulkanalia](https://crates.io/crates/vulkanalia) | Vulkan API bindings |
-| [winit](https://crates.io/crates/winit) | Cross-platform windowing |
-| [gltf](https://crates.io/crates/gltf) | glTF model loading |
-| [ufbx](https://crates.io/crates/ufbx) | FBX model loading |
-| [imgui](https://github.com/imgui-rs/imgui-rs) | Immediate mode GUI |
-| [cgmath](https://crates.io/crates/cgmath) | Linear algebra |
-| [ort](https://crates.io/crates/ort) | ONNX Runtime (ML inference) |
+| Crate                                             | Purpose                     |
+|---------------------------------------------------|-----------------------------|
+| [vulkanalia](https://crates.io/crates/vulkanalia) | Vulkan API bindings         |
+| [winit](https://crates.io/crates/winit)           | Cross-platform windowing    |
+| [gltf](https://crates.io/crates/gltf)             | glTF model loading          |
+| [ufbx](https://crates.io/crates/ufbx)             | FBX model loading           |
+| [imgui](https://github.com/imgui-rs/imgui-rs)     | Immediate mode GUI          |
+| [cgmath](https://crates.io/crates/cgmath)         | Linear algebra              |
+| [ort](https://crates.io/crates/ort)               | ONNX Runtime (ML inference) |
 
 ## Supported Platforms
 
-| Platform | Status |
-|----------|--------|
-| Windows 10/11 | Primary target |
-| Linux (X11) | Supported |
-| macOS (MoltenVK) | Untested |
+| Platform         | Status         |
+|------------------|----------------|
+| Windows 10/11    | Primary target |
+| Linux (X11)      | Supported      |
+| macOS (MoltenVK) | Untested       |
+
+## Roadmap
+
+See [docs/roadmap.md](docs/roadmap.md) for planned features including rig propagation, text-to-motion, and more.
 
 ## License
 

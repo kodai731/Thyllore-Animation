@@ -1,9 +1,18 @@
+use std::time::Instant;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TextToMeshStatus {
     Idle,
+    WaitingForServer,
     Generating,
     Generated,
     Error,
+}
+
+pub struct PendingMeshRequest {
+    pub prompt: String,
+    pub target_faces: u32,
+    pub seed: u32,
 }
 
 pub struct TextToMeshState {
@@ -15,6 +24,8 @@ pub struct TextToMeshState {
     pub vertex_count: Option<u32>,
     pub face_count: Option<u32>,
     pub intermediate_image_png: Option<Vec<u8>>,
+    pub pending_request: Option<PendingMeshRequest>,
+    pub last_status_check: Option<Instant>,
 }
 
 impl Default for TextToMeshState {
@@ -28,6 +39,8 @@ impl Default for TextToMeshState {
             vertex_count: None,
             face_count: None,
             intermediate_image_png: None,
+            pending_request: None,
+            last_status_check: None,
         }
     }
 }

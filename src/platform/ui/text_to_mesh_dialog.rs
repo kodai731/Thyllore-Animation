@@ -73,7 +73,8 @@ fn build_input_section(
     status: &TextToMeshStatus,
     should_close: &mut bool,
 ) {
-    let is_generating = *status == TextToMeshStatus::Generating;
+    let is_busy =
+        *status == TextToMeshStatus::Generating || *status == TextToMeshStatus::WaitingForServer;
 
     ui.text("Prompt:");
     ui.input_text("##mesh_prompt", &mut dialog.prompt_buf)
@@ -98,11 +99,14 @@ fn build_input_section(
     ui.same_line();
     ui.text_disabled("(0 = random)");
 
-    let can_generate = !is_generating && !dialog.prompt_buf.trim().is_empty();
+    let can_generate = !is_busy && !dialog.prompt_buf.trim().is_empty();
 
     ui.spacing();
-    if is_generating {
-        ui.text("Generating...");
+    if is_busy {
+        match status {
+            TextToMeshStatus::WaitingForServer => ui.text("Waiting for server..."),
+            _ => ui.text("Generating..."),
+        }
     } else {
         let _disabled = ui.begin_disabled(!can_generate);
         if ui.button("Generate") {
@@ -117,7 +121,7 @@ fn build_input_section(
 
     ui.same_line();
     if ui.button("Cancel") {
-        if is_generating {
+        if is_busy {
             ui_events.send(crate::ecs::events::UIEvent::TextToMeshCancel);
             dialog.generate_start_time = None;
         } else {
@@ -135,6 +139,14 @@ fn build_status_section(
 ) {
     let status_text = match status {
         TextToMeshStatus::Idle => "Idle".to_string(),
+        TextToMeshStatus::WaitingForServer => {
+            if let Some(start) = dialog.generate_start_time {
+                let elapsed = start.elapsed().as_secs();
+                format!("Waiting for server... ({}s)", elapsed)
+            } else {
+                "Waiting for server...".to_string()
+            }
+        }
         TextToMeshStatus::Generating => {
             if let Some(start) = dialog.generate_start_time {
                 let elapsed = start.elapsed().as_secs();

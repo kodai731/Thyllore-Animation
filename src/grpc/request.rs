@@ -16,6 +16,8 @@ pub enum GrpcRequest {
     #[cfg(feature = "text-to-mesh")]
     GenerateMesh(TextToMeshRequest),
     CheckStatus,
+    #[cfg(feature = "text-to-mesh")]
+    CheckMeshStatus,
     Shutdown,
 }
 
@@ -37,6 +39,10 @@ pub enum GrpcResponse {
         ready: bool,
         active_model: String,
         gpu_memory_mb: i32,
+    },
+    #[cfg(feature = "text-to-mesh")]
+    MeshServerStatus {
+        ready: bool,
     },
     Error {
         message: String,

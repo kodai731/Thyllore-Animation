@@ -218,6 +218,11 @@ pub fn drain_grpc_responses(
                 }
             }
 
+            #[cfg(feature = "text-to-mesh")]
+            GrpcResponse::MeshServerStatus { ready } => {
+                handle_mesh_server_status(world, ready);
+            }
+
             GrpcResponse::Error { message } => {
                 route_grpc_error(world, &message);
             }
@@ -298,6 +303,57 @@ fn apply_mesh_response(
     state.intermediate_image_png = intermediate_image_png;
 }
 
+#[cfg(feature = "text-to-mesh")]
+fn handle_mesh_server_status(world: &mut crate::ecs::world::World, ready: bool) {
+    use crate::ecs::resource::{TextToMeshState, TextToMeshStatus};
+    use crate::grpc::GrpcThreadHandle;
+
+    let mut state = world.resource_mut::<TextToMeshState>();
+    if state.status != TextToMeshStatus::WaitingForServer {
+        return;
+    }
+
+    if ready {
+        log!("TextToMesh: server ready, submitting pending request");
+        drop(state);
+
+        let handle = world.get_resource::<GrpcThreadHandle>();
+        let mut state = world.resource_mut::<TextToMeshState>();
+        if let Some(handle) = handle {
+            crate::ecs::systems::text_to_mesh_send_generate(&mut state, &*handle);
+        }
+    } else {
+        state.last_status_check = Some(std::time::Instant::now());
+    }
+}
+
+#[cfg(feature = "text-to-mesh")]
+pub fn poll_mesh_server_status(world: &mut crate::ecs::world::World) {
+    use crate::ecs::resource::{TextToMeshState, TextToMeshStatus};
+    use crate::grpc::{GrpcRequest, GrpcThreadHandle};
+
+    const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
+
+    let state = world.resource::<TextToMeshState>();
+    if state.status != TextToMeshStatus::WaitingForServer {
+        return;
+    }
+
+    let should_poll = match state.last_status_check {
+        Some(last) => last.elapsed() >= POLL_INTERVAL,
+        None => false,
+    };
+    drop(state);
+
+    if !should_poll {
+        return;
+    }
+
+    if let Some(handle) = world.get_resource::<GrpcThreadHandle>() {
+        handle.send(GrpcRequest::CheckMeshStatus);
+    }
+}
+
 #[cfg(feature = "text-to-motion")]
 fn route_grpc_error(world: &mut crate::ecs::world::World, message: &str) {
     use crate::ecs::resource::{TextToMotionState, TextToMotionStatus};
@@ -315,10 +371,13 @@ fn route_grpc_error(world: &mut crate::ecs::world::World, message: &str) {
     {
         use crate::ecs::resource::{TextToMeshState, TextToMeshStatus};
         if let Some(mut state) = world.get_resource_mut::<TextToMeshState>() {
-            if state.status == TextToMeshStatus::Generating {
+            if state.status == TextToMeshStatus::Generating
+                || state.status == TextToMeshStatus::WaitingForServer
+            {
                 log_error!("TextToMesh: error - {}", message);
                 state.status = TextToMeshStatus::Error;
                 state.error_message = Some(message.to_string());
+                state.pending_request = None;
                 return;
             }
         }

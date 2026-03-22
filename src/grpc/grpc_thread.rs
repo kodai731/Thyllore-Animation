@@ -86,6 +86,11 @@ async fn run_grpc_loop(
             }
 
             #[cfg(feature = "text-to-mesh")]
+            GrpcRequest::CheckMeshStatus => {
+                handle_check_mesh_status(endpoint, &mut mesh_client, &res_tx).await;
+            }
+
+            #[cfg(feature = "text-to-mesh")]
             GrpcRequest::GenerateMesh(req) => {
                 handle_generate_mesh(endpoint, &mut mesh_client, &res_tx, req).await;
             }
@@ -243,6 +248,37 @@ async fn handle_generate_motion(
 }
 
 #[cfg(feature = "text-to-mesh")]
+async fn handle_check_mesh_status(
+    endpoint: &str,
+    client: &mut Option<MeshGrpcClient>,
+    res_tx: &mpsc::Sender<GrpcResponse>,
+) {
+    if !ensure_mesh_connected(endpoint, client, res_tx).await {
+        return;
+    }
+
+    let c = client
+        .as_mut()
+        .expect("ensure_mesh_connected returned true so client is Some");
+    let request = tonic::Request::new(proto::MeshStatusRequest {});
+
+    match c.get_mesh_service_status(request).await {
+        Ok(response) => {
+            let status = response.into_inner();
+            let _ = res_tx.send(GrpcResponse::MeshServerStatus {
+                ready: status.ready,
+            });
+        }
+        Err(e) => {
+            *client = None;
+            let _ = res_tx.send(GrpcResponse::Error {
+                message: format!("GetMeshServiceStatus failed: {}", e),
+            });
+        }
+    }
+}
+
+#[cfg(feature = "text-to-mesh")]
 async fn handle_generate_mesh(
     endpoint: &str,
     client: &mut Option<MeshGrpcClient>,
@@ -261,8 +297,8 @@ async fn handle_generate_mesh(
         params: Some(proto::MeshGenerationParams {
             target_faces: req.target_faces as i32,
             seed: req.seed as i32,
-            image_size: 1024,
-            image_inference_steps: 50,
+            image_size: 512,
+            image_inference_steps: 25,
         }),
     };
 

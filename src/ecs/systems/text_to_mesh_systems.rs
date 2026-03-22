@@ -1,4 +1,4 @@
-use crate::ecs::resource::{TextToMeshState, TextToMeshStatus};
+use crate::ecs::resource::{PendingMeshRequest, TextToMeshState, TextToMeshStatus};
 use crate::grpc::{GrpcRequest, GrpcThreadHandle, TextToMeshRequest};
 
 pub fn text_to_mesh_submit(
@@ -8,7 +8,7 @@ pub fn text_to_mesh_submit(
     target_faces: u32,
     seed: u32,
 ) {
-    state.status = TextToMeshStatus::Generating;
+    state.status = TextToMeshStatus::WaitingForServer;
     state.last_prompt = prompt.clone();
     state.glb_data = None;
     state.error_message = None;
@@ -16,18 +16,37 @@ pub fn text_to_mesh_submit(
     state.vertex_count = None;
     state.face_count = None;
     state.intermediate_image_png = None;
+    state.last_status_check = None;
 
-    handle.send(GrpcRequest::GenerateMesh(TextToMeshRequest {
+    state.pending_request = Some(PendingMeshRequest {
         prompt,
         target_faces,
         seed,
+    });
+
+    handle.send(GrpcRequest::CheckMeshStatus);
+    log!("TextToMesh: waiting for server readiness...");
+}
+
+pub fn text_to_mesh_send_generate(state: &mut TextToMeshState, handle: &GrpcThreadHandle) {
+    let pending = match state.pending_request.take() {
+        Some(p) => p,
+        None => return,
+    };
+
+    state.status = TextToMeshStatus::Generating;
+
+    handle.send(GrpcRequest::GenerateMesh(TextToMeshRequest {
+        prompt: pending.prompt.clone(),
+        target_faces: pending.target_faces,
+        seed: pending.seed,
     }));
 
     log!(
         "TextToMesh: submitted '{}' (faces={}, seed={})",
-        state.last_prompt,
-        target_faces,
-        seed
+        pending.prompt,
+        pending.target_faces,
+        pending.seed
     );
 }
 
@@ -39,6 +58,8 @@ pub fn text_to_mesh_cancel(state: &mut TextToMeshState) {
     state.vertex_count = None;
     state.face_count = None;
     state.intermediate_image_png = None;
+    state.pending_request = None;
+    state.last_status_check = None;
 }
 
 #[cfg(test)]
@@ -56,5 +77,6 @@ mod tests {
         assert_eq!(state.status, TextToMeshStatus::Idle);
         assert!(state.glb_data.is_none());
         assert!(state.error_message.is_none());
+        assert!(state.pending_request.is_none());
     }
 }

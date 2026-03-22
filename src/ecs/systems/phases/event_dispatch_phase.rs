@@ -33,6 +33,9 @@ pub fn run_event_dispatch_phase(
     #[cfg(feature = "text-to-motion")]
     super::dispatch_ml::drain_grpc_responses(world, assets);
 
+    #[cfg(feature = "text-to-mesh")]
+    super::dispatch_ml::poll_mesh_server_status(world);
+
     let events: Vec<UIEvent> = {
         if let Some(mut ui_events) = world.get_resource_mut::<UIEventQueue>() {
             ui_events.drain().collect()

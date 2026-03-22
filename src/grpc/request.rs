@@ -4,8 +4,17 @@ pub struct TextToMotionRequest {
     pub target_fps: i32,
 }
 
+#[cfg(feature = "text-to-mesh")]
+pub struct TextToMeshRequest {
+    pub prompt: String,
+    pub target_faces: u32,
+    pub seed: u32,
+}
+
 pub enum GrpcRequest {
     GenerateMotion(TextToMotionRequest),
+    #[cfg(feature = "text-to-mesh")]
+    GenerateMesh(TextToMeshRequest),
     CheckStatus,
     Shutdown,
 }
@@ -15,6 +24,14 @@ pub enum GrpcResponse {
         curves: Vec<RawAnimationCurve>,
         generation_time_ms: f32,
         model_used: String,
+    },
+    #[cfg(feature = "text-to-mesh")]
+    MeshGenerated {
+        glb_data: Vec<u8>,
+        vertex_count: u32,
+        face_count: u32,
+        generation_time_ms: f32,
+        intermediate_image_png: Option<Vec<u8>>,
     },
     ServerStatus {
         ready: bool,

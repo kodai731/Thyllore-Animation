@@ -49,6 +49,8 @@ impl System {
         let mut last_frame = Instant::now();
         let bindings = default_bindings();
         let mut status_bar_state = StatusBarState::default();
+        #[cfg(feature = "text-to-mesh")]
+        let mut text_to_mesh_dialog_state = crate::platform::ui::TextToMeshDialogState::default();
 
         event_loop
             .run(move |event, window_target| match event {
@@ -79,6 +81,8 @@ impl System {
                         &window,
                         &bindings,
                         &mut status_bar_state,
+                        #[cfg(feature = "text-to-mesh")]
+                        &mut text_to_mesh_dialog_state,
                     );
                 }
 
@@ -101,6 +105,8 @@ fn dispatch_window_event(
     window: &winit::window::Window,
     bindings: &[super::key_bindings::KeyBinding],
     status_bar_state: &mut StatusBarState,
+    #[cfg(feature = "text-to-mesh")]
+    text_to_mesh_dialog: &mut crate::platform::ui::TextToMeshDialogState,
 ) {
     match event {
         WindowEvent::CloseRequested => window_target.exit(),
@@ -136,7 +142,15 @@ fn dispatch_window_event(
         }
 
         WindowEvent::RedrawRequested => {
-            handle_redraw_requested(imgui, platform, window, app, status_bar_state);
+            handle_redraw_requested(
+                imgui,
+                platform,
+                window,
+                app,
+                status_bar_state,
+                #[cfg(feature = "text-to-mesh")]
+                text_to_mesh_dialog,
+            );
         }
 
         _ => {}
@@ -173,6 +187,8 @@ fn handle_redraw_requested(
     window: &winit::window::Window,
     app: &mut App,
     status_bar_state: &mut StatusBarState,
+    #[cfg(feature = "text-to-mesh")]
+    text_to_mesh_dialog: &mut crate::platform::ui::TextToMeshDialogState,
 ) {
     let ui = imgui.frame();
 
@@ -195,6 +211,8 @@ fn handle_redraw_requested(
     let mut overlay_state = SceneOverlayState {
         model_path: model_state.model_path.clone(),
         load_status: model_state.load_status.clone(),
+        #[cfg(feature = "text-to-mesh")]
+        open_text_to_mesh_dialog: false,
     };
     drop(model_state);
 
@@ -205,6 +223,8 @@ fn handle_redraw_requested(
         &mut debug_state,
         &mut overlay_state,
         status_bar_state,
+        #[cfg(feature = "text-to-mesh")]
+        text_to_mesh_dialog,
     );
 
     #[cfg(debug_assertions)]
@@ -232,6 +252,8 @@ fn build_ui_windows(
     #[cfg(debug_assertions)] debug_state: &mut DebugWindowState,
     overlay_state: &mut SceneOverlayState,
     status_bar_state: &mut StatusBarState,
+    #[cfg(feature = "text-to-mesh")]
+    text_to_mesh_dialog: &mut crate::platform::ui::TextToMeshDialogState,
 ) {
     let display_size = ui.io().display_size;
 
@@ -263,6 +285,22 @@ fn build_ui_windows(
 
     build_timeline_and_fixed_overlays(ui, app, status_bar_state, &viewport_info, &layout_snapshot);
     build_curve_editor(ui, app);
+
+    #[cfg(feature = "text-to-mesh")]
+    {
+        if overlay_state.open_text_to_mesh_dialog {
+            text_to_mesh_dialog.open = true;
+            overlay_state.open_text_to_mesh_dialog = false;
+        }
+
+        let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();
+        crate::platform::ui::build_text_to_mesh_dialog(
+            ui,
+            &mut *ui_events,
+            text_to_mesh_dialog,
+            &app.data.ecs_world,
+        );
+    }
 
     consume_needs_focus(app);
 }
@@ -596,6 +634,22 @@ unsafe fn execute_deferred_action(app: &mut App, action: DeferredAction) {
             match clip_library_save_to_file(&clip_library, baked_id, &path) {
                 Ok(()) => msg_info!("Saved spring bone bake to {:?}", path),
                 Err(e) => msg_error!("Failed to save spring bone bake: {:?}", e),
+            }
+        }
+
+        #[cfg(feature = "text-to-mesh")]
+        DeferredAction::LoadModelFromMemory { glb_data } => {
+            match app.load_model_from_glb(&glb_data) {
+                Ok(()) => {}
+                Err(e) => {
+                    log_error!("Failed to load generated mesh: {}", e);
+                    let mut state = app
+                        .data
+                        .ecs_world
+                        .resource_mut::<crate::ecs::resource::TextToMeshState>();
+                    state.status = crate::ecs::resource::TextToMeshStatus::Error;
+                    state.error_message = Some(format!("Failed to load GLB: {}", e));
+                }
             }
         }
     }

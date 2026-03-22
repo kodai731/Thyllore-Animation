@@ -30,6 +30,9 @@ pub fn run_event_dispatch_phase(
     assets: &mut AssetStorage,
     model_bounds: Option<(Vector3<f32>, Vector3<f32>, Vector3<f32>)>,
 ) -> (Vec<UIEvent>, Vec<DeferredAction>) {
+    #[cfg(feature = "text-to-motion")]
+    super::dispatch_ml::drain_grpc_responses(world, assets);
+
     let events: Vec<UIEvent> = {
         if let Some(mut ui_events) = world.get_resource_mut::<UIEventQueue>() {
             ui_events.drain().collect()
@@ -62,7 +65,11 @@ pub fn run_event_dispatch_phase(
     #[cfg(feature = "text-to-motion")]
     super::dispatch_ml::dispatch_text_to_motion_events(&events, world, assets);
 
-    let deferred = dispatch_camera_light_debug_events(&events, world, model_bounds);
+    let mut deferred = dispatch_camera_light_debug_events(&events, world, model_bounds);
+
+    #[cfg(feature = "text-to-mesh")]
+    super::dispatch_ml::dispatch_text_to_mesh_events(&events, world, &mut deferred);
+
     let platform_events = filter_platform_events(&events);
 
     (platform_events, deferred)

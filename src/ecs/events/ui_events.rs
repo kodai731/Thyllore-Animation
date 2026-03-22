@@ -342,6 +342,17 @@ pub enum UIEvent {
     #[cfg(feature = "text-to-motion")]
     TextToMotionCancel,
 
+    #[cfg(feature = "text-to-mesh")]
+    TextToMeshGenerate {
+        prompt: String,
+        target_faces: u32,
+        seed: u32,
+    },
+    #[cfg(feature = "text-to-mesh")]
+    TextToMeshApply,
+    #[cfg(feature = "text-to-mesh")]
+    TextToMeshCancel,
+
     TimelineZoomIn {
         max_zoom: f32,
     },

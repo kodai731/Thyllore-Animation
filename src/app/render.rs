@@ -250,6 +250,67 @@ impl App {
         Ok(())
     }
 
+    #[cfg(feature = "text-to-mesh")]
+    pub unsafe fn load_model_from_glb(&mut self, glb_data: &[u8]) -> Result<()> {
+        log!("Loading generated mesh from GLB ({} bytes)", glb_data.len());
+        self.rrdevice.device.device_wait_idle()?;
+
+        let gltf_result = crate::loader::gltf::load_gltf_from_slice(glb_data)?;
+        let load_result = crate::loader::ModelLoadResult::from_gltf(gltf_result);
+
+        let command_pool = self.resource::<CommandState>().pool.clone();
+        let swapchain = self.resource::<SwapchainState>().swapchain.clone();
+        match crate::app::model_loader::load_model_from_file_system_with_result(
+            &load_result,
+            "Generated Mesh",
+            &self.instance,
+            &self.rrdevice,
+            &command_pool,
+            &swapchain,
+            &mut self.data.graphics_resources,
+            &mut self.data.raytracing,
+            &mut self.data.ecs_world,
+            &mut self.data.ecs_assets,
+            false,
+            None,
+        ) {
+            Ok(_) => {
+                {
+                    let mut model_state = self
+                        .data
+                        .ecs_world
+                        .resource_mut::<crate::ecs::resource::ModelState>();
+                    model_state.model_path = "Generated Mesh".to_string();
+                    model_state.load_status = "Loaded: Generated Mesh".to_string();
+                }
+                {
+                    let mut timeline = self
+                        .data
+                        .ecs_world
+                        .resource_mut::<crate::ecs::resource::TimelineState>();
+                    timeline.current_time = 0.0;
+                }
+                {
+                    let mut scene_state =
+                        self.data.ecs_world.resource_mut::<crate::ecs::SceneState>();
+                    scene_state.clear();
+                }
+
+                msg_info!("Generated mesh loaded successfully");
+            }
+            Err(e) => {
+                let mut model_state = self
+                    .data
+                    .ecs_world
+                    .resource_mut::<crate::ecs::resource::ModelState>();
+                model_state.load_status = format!("Error: {}", e);
+                return Err(e);
+            }
+        }
+
+        Ok(())
+    }
+
     unsafe fn handle_model_loading(&mut self) -> Result<()> {
         Ok(())
     }

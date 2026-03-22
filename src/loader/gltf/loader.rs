@@ -215,15 +215,28 @@ impl Default for GltfParseContext {
 }
 
 pub unsafe fn load_gltf_file(path: &str) -> Result<GltfLoadResult> {
+    log!("Loading glTF file: {}", path);
+    let (gltf, buffers, images) = gltf::import(format!("{}", path))?;
     let mut ctx = GltfParseContext::default();
-    parse_gltf(&mut ctx, path)?;
+    parse_gltf_imported(&mut ctx, &gltf, &buffers, &images)?;
     Ok(build_result(ctx))
 }
 
-unsafe fn parse_gltf(ctx: &mut GltfParseContext, path: &str) -> Result<()> {
-    log!("Loading glTF file: {}", path);
-    let (gltf, buffers, images) = gltf::import(format!("{}", path))?;
+#[cfg(feature = "text-to-mesh")]
+pub unsafe fn load_gltf_from_slice(data: &[u8]) -> Result<GltfLoadResult> {
+    log!("Loading glTF from memory ({} bytes)", data.len());
+    let (gltf, buffers, images) = gltf::import_slice(data)?;
+    let mut ctx = GltfParseContext::default();
+    parse_gltf_imported(&mut ctx, &gltf, &buffers, &images)?;
+    Ok(build_result(ctx))
+}
 
+unsafe fn parse_gltf_imported(
+    ctx: &mut GltfParseContext,
+    gltf: &Document,
+    buffers: &Vec<gltf::buffer::Data>,
+    images: &Vec<gltf::image::Data>,
+) -> Result<()> {
     log!(
         "glTF: {} skins, {} nodes, {} meshes, {} animations",
         gltf.skins().count(),
@@ -232,7 +245,7 @@ unsafe fn parse_gltf(ctx: &mut GltfParseContext, path: &str) -> Result<()> {
         gltf.animations().count()
     );
 
-    let node_parent_map = build_node_parent_map(&gltf);
+    let node_parent_map = build_node_parent_map(gltf);
     ctx.has_armature = gltf.skins().count() > 0;
 
     for (i, skin) in gltf.skins().enumerate() {
@@ -243,17 +256,17 @@ unsafe fn parse_gltf(ctx: &mut GltfParseContext, path: &str) -> Result<()> {
             skin.joints().count()
         );
         ctx.node_joint_map.make_from_skin(&skin);
-        set_joints(ctx, &skin, &buffers);
+        set_joints(ctx, &skin, buffers);
         ctx.skeleton_root_transform =
-            determine_skeleton_root_transform(&gltf, &skin, &node_parent_map);
+            determine_skeleton_root_transform(gltf, &skin, &node_parent_map);
     }
 
     for scene in gltf.scenes() {
         for node in scene.nodes() {
             process_node(
-                &gltf,
-                &buffers,
-                &images,
+                gltf,
+                buffers,
+                images,
                 &node,
                 ctx,
                 &Matrix4::identity(),
@@ -271,10 +284,10 @@ unsafe fn parse_gltf(ctx: &mut GltfParseContext, path: &str) -> Result<()> {
         .map(|m| m.morph_targets.len())
         .unwrap_or(0);
     for animation in gltf.animations() {
-        process_animation(&buffers, animation, ctx, morph_target_count)?;
+        process_animation(buffers, animation, ctx, morph_target_count)?;
     }
 
-    ctx.spring_bone_setup = extract_spring_bone_extension(&gltf, &ctx.node_joint_map);
+    ctx.spring_bone_setup = extract_spring_bone_extension(gltf, &ctx.node_joint_map);
 
     log!(
         "Loaded: has_skinned_meshes={}, {} node_animations, {} joint_animations",

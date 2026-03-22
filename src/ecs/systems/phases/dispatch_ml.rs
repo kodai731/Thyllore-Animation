@@ -159,3 +159,237 @@ pub fn dispatch_text_to_motion_events(
         }
     }
 }
+
+#[cfg(feature = "text-to-motion")]
+pub fn drain_grpc_responses(
+    world: &mut crate::ecs::world::World,
+    assets: &crate::asset::AssetStorage,
+) {
+    use crate::grpc::{GrpcResponse, GrpcThreadHandle};
+
+    let handle = match world.get_resource::<GrpcThreadHandle>() {
+        Some(h) => h,
+        None => return,
+    };
+
+    let mut responses = Vec::new();
+    while let Some(response) = handle.try_recv() {
+        responses.push(response);
+    }
+    drop(handle);
+
+    for response in responses {
+        match response {
+            GrpcResponse::MotionGenerated {
+                curves,
+                generation_time_ms,
+                model_used,
+            } => {
+                apply_motion_response(world, assets, curves, generation_time_ms, model_used);
+            }
+
+            #[cfg(feature = "text-to-mesh")]
+            GrpcResponse::MeshGenerated {
+                glb_data,
+                vertex_count,
+                face_count,
+                generation_time_ms,
+                intermediate_image_png,
+            } => {
+                apply_mesh_response(
+                    world,
+                    glb_data,
+                    vertex_count,
+                    face_count,
+                    generation_time_ms,
+                    intermediate_image_png,
+                );
+            }
+
+            GrpcResponse::ServerStatus {
+                ready,
+                active_model,
+                ..
+            } => {
+                use crate::ecs::resource::TextToMotionState;
+                if let Some(mut state) = world.get_resource_mut::<TextToMotionState>() {
+                    state.server_ready = ready;
+                    state.model_used = Some(active_model);
+                }
+            }
+
+            GrpcResponse::Error { message } => {
+                route_grpc_error(world, &message);
+            }
+        }
+    }
+}
+
+#[cfg(feature = "text-to-motion")]
+fn apply_motion_response(
+    world: &mut crate::ecs::world::World,
+    assets: &crate::asset::AssetStorage,
+    curves: Vec<crate::grpc::RawAnimationCurve>,
+    generation_time_ms: f32,
+    model_used: String,
+) {
+    use crate::ecs::resource::{TextToMotionState, TextToMotionStatus};
+    use crate::grpc::convert_motion_response_to_clip;
+
+    let mut state = world.resource_mut::<TextToMotionState>();
+    if state.status != TextToMotionStatus::Generating {
+        return;
+    }
+
+    let bone_name_to_id = assets
+        .skeletons
+        .values()
+        .next()
+        .map(|sa| sa.skeleton.bone_name_to_id.clone())
+        .unwrap_or_default();
+
+    let clip_name = format!("T2M: {}", truncate_prompt(&state.last_prompt, 30));
+    let clip =
+        convert_motion_response_to_clip(&curves, &clip_name, state.last_duration, &bone_name_to_id);
+
+    log!(
+        "TextToMotion: generated clip '{}' with {} tracks in {:.0}ms (model: {})",
+        clip_name,
+        clip.tracks.len(),
+        generation_time_ms,
+        model_used
+    );
+
+    state.status = TextToMotionStatus::Generated;
+    state.generated_clip = Some(clip);
+    state.generation_time_ms = Some(generation_time_ms);
+    state.model_used = Some(model_used);
+}
+
+#[cfg(feature = "text-to-mesh")]
+fn apply_mesh_response(
+    world: &mut crate::ecs::world::World,
+    glb_data: Vec<u8>,
+    vertex_count: u32,
+    face_count: u32,
+    generation_time_ms: f32,
+    intermediate_image_png: Option<Vec<u8>>,
+) {
+    use crate::ecs::resource::{TextToMeshState, TextToMeshStatus};
+
+    let mut state = world.resource_mut::<TextToMeshState>();
+    if state.status != TextToMeshStatus::Generating {
+        return;
+    }
+
+    log!(
+        "TextToMesh: received GLB ({} bytes, {} vertices, {} faces) in {:.0}ms",
+        glb_data.len(),
+        vertex_count,
+        face_count,
+        generation_time_ms
+    );
+
+    state.status = TextToMeshStatus::Generated;
+    state.glb_data = Some(glb_data);
+    state.vertex_count = Some(vertex_count);
+    state.face_count = Some(face_count);
+    state.generation_time_ms = Some(generation_time_ms);
+    state.intermediate_image_png = intermediate_image_png;
+}
+
+#[cfg(feature = "text-to-motion")]
+fn route_grpc_error(world: &mut crate::ecs::world::World, message: &str) {
+    use crate::ecs::resource::{TextToMotionState, TextToMotionStatus};
+
+    if let Some(mut state) = world.get_resource_mut::<TextToMotionState>() {
+        if state.status == TextToMotionStatus::Generating {
+            log_error!("TextToMotion: error - {}", message);
+            state.status = TextToMotionStatus::Error;
+            state.error_message = Some(message.to_string());
+            return;
+        }
+    }
+
+    #[cfg(feature = "text-to-mesh")]
+    {
+        use crate::ecs::resource::{TextToMeshState, TextToMeshStatus};
+        if let Some(mut state) = world.get_resource_mut::<TextToMeshState>() {
+            if state.status == TextToMeshStatus::Generating {
+                log_error!("TextToMesh: error - {}", message);
+                state.status = TextToMeshStatus::Error;
+                state.error_message = Some(message.to_string());
+                return;
+            }
+        }
+    }
+
+    log_warn!("gRPC error with no active request: {}", message);
+}
+
+#[cfg(feature = "text-to-motion")]
+fn truncate_prompt(prompt: &str, max_len: usize) -> String {
+    if prompt.len() <= max_len {
+        prompt.to_string()
+    } else {
+        format!("{}...", &prompt[..max_len])
+    }
+}
+
+#[cfg(feature = "text-to-mesh")]
+pub fn dispatch_text_to_mesh_events(
+    events: &[crate::ecs::events::UIEvent],
+    world: &mut crate::ecs::world::World,
+    deferred: &mut Vec<super::super::ui_event_systems::DeferredAction>,
+) {
+    use crate::ecs::events::UIEvent;
+    use crate::ecs::resource::{TextToMeshState, TextToMeshStatus};
+    use crate::ecs::systems::{text_to_mesh_cancel, text_to_mesh_submit};
+    use crate::grpc::GrpcThreadHandle;
+
+    const DEFAULT_ENDPOINT: &str = "http://localhost:50051";
+
+    for event in events {
+        match event {
+            UIEvent::TextToMeshGenerate {
+                prompt,
+                target_faces,
+                seed,
+            } => {
+                if !world.contains_resource::<GrpcThreadHandle>() {
+                    let handle = GrpcThreadHandle::spawn(DEFAULT_ENDPOINT);
+                    world.insert_resource(handle);
+                    log!("TextToMesh: spawned gRPC thread ({})", DEFAULT_ENDPOINT);
+                }
+
+                let handle = world.get_resource::<GrpcThreadHandle>();
+                let mut state = world.resource_mut::<TextToMeshState>();
+
+                if let Some(handle) = handle {
+                    text_to_mesh_submit(&mut state, &*handle, prompt.clone(), *target_faces, *seed);
+                }
+            }
+
+            UIEvent::TextToMeshApply => {
+                let mut state = world.resource_mut::<TextToMeshState>();
+                if let Some(glb_data) = state.glb_data.take() {
+                    state.status = TextToMeshStatus::Idle;
+                    deferred.push(
+                        super::super::ui_event_systems::DeferredAction::LoadModelFromMemory {
+                            glb_data,
+                        },
+                    );
+                    log!("TextToMesh: applying generated mesh to scene");
+                }
+            }
+
+            UIEvent::TextToMeshCancel => {
+                let mut state = world.resource_mut::<TextToMeshState>();
+                text_to_mesh_cancel(&mut state);
+                log!("TextToMesh: cancelled");
+            }
+
+            _ => {}
+        }
+    }
+}

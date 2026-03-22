@@ -73,6 +73,40 @@ pub unsafe fn load_model_from_file_system(
     Ok(())
 }
 
+#[cfg(feature = "text-to-mesh")]
+pub unsafe fn load_model_from_file_system_with_result(
+    load_result: &ModelLoadResult,
+    model_name: &str,
+    instance: &Instance,
+    device: &RRDevice,
+    command_pool: &Rc<RRCommandPool>,
+    swapchain: &RRSwapchain,
+    graphics: &mut GraphicsResources,
+    raytracing: &mut RayTracingData,
+    world: &mut World,
+    assets: &mut AssetStorage,
+    scene_will_provide_clips: bool,
+    fbx_model: Option<FbxModel>,
+) -> Result<()> {
+    apply_model_to_resources(
+        load_result,
+        model_name,
+        instance,
+        device,
+        command_pool,
+        swapchain,
+        graphics,
+        raytracing,
+        world,
+        assets,
+        scene_will_provide_clips,
+        fbx_model,
+    )?;
+
+    log!("=== Model loaded successfully ===");
+    Ok(())
+}
+
 unsafe fn load_model_data(path: &str) -> Result<(ModelLoadResult, Option<FbxModel>)> {
     let path_lower = path.to_lowercase();
 

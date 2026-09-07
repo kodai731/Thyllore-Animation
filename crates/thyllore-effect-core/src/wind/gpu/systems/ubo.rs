@@ -48,6 +48,18 @@ pub fn build_wind_ubo(effect: &WindTornadoEffect) -> WindUBO {
             params.streak_amplitude,
         ],
         streak2: [params.streak_phase, params.streak_rise_time, 0.0, 0.0],
+        eddy: [
+            params.eddy_amplitude,
+            params.eddy_cell_theta,
+            params.eddy_cell_height,
+            params.eddy_cell_radial,
+        ],
+        eddy2: [
+            params.eddy_shear,
+            params.eddy_rise_speed,
+            params.eddy_reseed_period,
+            0.0,
+        ],
         inv_view_proj: Matrix4::identity(),
     }
 }

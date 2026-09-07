@@ -33,6 +33,13 @@ float windStreakRiseSpeed() { return wind.streak.z; }
 float windStreakAmplitude() { return wind.streak.w; }
 float windStreakPhase() { return wind.streak2.x; }
 float windStreakRiseTime() { return wind.streak2.y; }
+float windEddyAmplitude() { return wind.eddy.x; }
+float windEddyCellTheta() { return wind.eddy.y; }
+float windEddyCellHeight() { return wind.eddy.z; }
+float windEddyCellRadial() { return wind.eddy.w; }
+float windEddyShear() { return wind.eddy2.x; }
+float windEddyRiseSpeed() { return wind.eddy2.y; }
+float windEddyReseedPeriod() { return wind.eddy2.z; }
 
 bool windCoreActive() {
     return windCoreRadiusSq() > 1e-8 && windCoreStrength() > 0.0;

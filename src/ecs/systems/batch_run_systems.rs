@@ -9,7 +9,7 @@ use thyllore_anim_core::editable::PropertyType;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{
     scalar_channel_domains, scalar_channel_for_cli_name, scalar_channel_for_property,
-    scalar_cli_names_joined, ClipSchedule, FlameEffect,
+    scalar_cli_names_joined, ClipSchedule, FlameEffect, WindTornadoEffect,
 };
 use crate::ecs::events::{DebugPrimitiveKind, UIEvent, UIEventQueue};
 use crate::ecs::resource::{
@@ -44,6 +44,7 @@ const BATCH_FLAME_PRESET_FLAG: &str = "--batch-flame-preset";
 const BATCH_FLAME_MOTION_FLAG: &str = "--batch-flame-motion";
 const BATCH_FLAME_SDF_FLAG: &str = "--batch-flame-sdf";
 const BATCH_FLAME_SET_FLAG: &str = "--batch-flame-set";
+const BATCH_WIND_SET_FLAG: &str = "--batch-wind-set";
 const BATCH_FLAME_STYLE_FLAG: &str = "--batch-flame-style";
 const BATCH_FLAME_STYLE_DUMP_FLAG: &str = "--batch-flame-style-dump";
 const BATCH_FLAME_TEXTURE_FLAG: &str = "--batch-flame-texture";
@@ -77,6 +78,7 @@ pub struct EngineCliOverrides {
     pub wind_fixed_time: Option<f32>,
     pub wind_mode: Option<thyllore_effect_core::WindShadingMode>,
     pub wind_debug_view: Option<thyllore_effect_core::WindDebugView>,
+    pub wind_set: Vec<(String, f32)>,
     pub flame_steps: Option<u32>,
     pub camera_pose: Option<BatchCameraPose>,
     pub flame_dump_path: Option<String>,
@@ -165,6 +167,7 @@ pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverride
         wind_fixed_time: wind_fixed_time_resolve_from_args(args)?,
         wind_mode: wind_mode_resolve_from_args(args)?,
         wind_debug_view: wind_debug_view_resolve_from_args(args)?,
+        wind_set: wind_set_resolve_from_args(args)?,
         flame_steps: flame_steps_resolve_from_args(args)?,
         camera_pose: camera_pose_resolve_from_args(args)?,
         flame_dump_path: flame_dump_path_resolve_from_args(args)?,
@@ -597,17 +600,21 @@ pub(crate) fn flame_set_valid_keys() -> Vec<&'static str> {
         .collect()
 }
 
-fn flame_set_resolve_from_args(args: &[String]) -> Result<Vec<(String, f32)>> {
-    let valid_keys = flame_set_valid_keys();
+fn scalar_set_resolve_from_args(
+    args: &[String],
+    flag: &str,
+    valid_keys: &[&'static str],
+) -> Result<Vec<(String, f32)>> {
+    let flag_name = flag.trim_start_matches('-');
 
     let mut pairs: Vec<(String, f32)> = Vec::new();
     for i in 0..args.len() {
-        let payload = if args[i] == BATCH_FLAME_SET_FLAG {
+        let payload = if args[i] == flag {
             if i + 1 >= args.len() {
-                anyhow::bail!("{} requires a value after it", BATCH_FLAME_SET_FLAG);
+                anyhow::bail!("{} requires a value after it", flag);
             }
             args[i + 1].clone()
-        } else if let Some(rest) = args[i].strip_prefix(BATCH_FLAME_SET_FLAG) {
+        } else if let Some(rest) = args[i].strip_prefix(flag) {
             rest.trim_start_matches('=').trim().to_string()
         } else {
             continue;
@@ -616,20 +623,22 @@ fn flame_set_resolve_from_args(args: &[String]) -> Result<Vec<(String, f32)>> {
         let parts: Vec<&str> = payload.splitn(2, '=').collect();
         if parts.len() != 2 {
             anyhow::bail!(
-                "batch-flame-set value must be KEY=VALUE format, got '{}'",
+                "{} value must be KEY=VALUE format, got '{}'",
+                flag_name,
                 payload
             );
         }
         let key = parts[0].trim().to_string();
         let value_str = parts[1].trim();
         let value: f32 = value_str.parse().context(format!(
-            "batch-flame-set value must be a number, got '{}'",
-            value_str
+            "{} value must be a number, got '{}'",
+            flag_name, value_str
         ))?;
 
         if !valid_keys.contains(&key.as_str()) {
             anyhow::bail!(
-                "unknown batch-flame-set key '{}'. Valid keys: {}",
+                "unknown {} key '{}'. Valid keys: {}",
+                flag_name,
                 key,
                 valid_keys.join(", ")
             );
@@ -638,6 +647,21 @@ fn flame_set_resolve_from_args(args: &[String]) -> Result<Vec<(String, f32)>> {
         pairs.push((key, value));
     }
     Ok(pairs)
+}
+
+fn flame_set_resolve_from_args(args: &[String]) -> Result<Vec<(String, f32)>> {
+    scalar_set_resolve_from_args(args, BATCH_FLAME_SET_FLAG, &flame_set_valid_keys())
+}
+
+pub(crate) fn wind_set_valid_keys() -> Vec<&'static str> {
+    thyllore_effect_core::WIND_SCALAR_PARAMS
+        .iter()
+        .map(|param| param.name)
+        .collect()
+}
+
+fn wind_set_resolve_from_args(args: &[String]) -> Result<Vec<(String, f32)>> {
+    scalar_set_resolve_from_args(args, BATCH_WIND_SET_FLAG, &wind_set_valid_keys())
 }
 
 fn flame_preset_resolve_from_args(args: &[String]) -> Result<Option<String>> {
@@ -1020,6 +1044,15 @@ pub fn apply_flame_overrides(effect: &mut FlameEffect, overrides: &[(String, f32
 
         let param =
             thyllore_effect_core::find_scalar_param(thyllore_effect_core::FLAME_SCALAR_PARAMS, key)
+                .unwrap_or_else(|| unreachable!("unknown key (parser should have rejected)"));
+        (param.set)(effect, *value);
+    }
+}
+
+pub fn apply_wind_overrides(effect: &mut WindTornadoEffect, overrides: &[(String, f32)]) {
+    for (key, value) in overrides {
+        let param =
+            thyllore_effect_core::find_scalar_param(thyllore_effect_core::WIND_SCALAR_PARAMS, key)
                 .unwrap_or_else(|| unreachable!("unknown key (parser should have rejected)"));
         (param.set)(effect, *value);
     }
@@ -2695,6 +2728,38 @@ mod tests {
             let mut effect = FlameEffect::default();
             let overrides: Vec<(String, f32)> = vec![(key.to_string(), 1.0)];
             apply_flame_overrides(&mut effect, &overrides);
+        }
+    }
+
+    #[test]
+    fn wind_set_parses_both_forms_and_rejects_unknown_key() {
+        let combined: Vec<String> = vec!["--batch-wind-set=core_strength=0.5".into()];
+        let pairs = wind_set_resolve_from_args(&combined).unwrap();
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].0, "core_strength");
+        assert!((pairs[0].1 - 0.5).abs() < 1e-6);
+
+        let separate: Vec<String> = vec!["--batch-wind-set".into(), "core_strength=0.5".into()];
+        assert_eq!(wind_set_resolve_from_args(&separate).unwrap(), pairs);
+
+        let unknown: Vec<String> = vec!["--batch-wind-set".into(), "invalid_key=1.0".into()];
+        let err = wind_set_resolve_from_args(&unknown).unwrap_err();
+        assert!(err.to_string().contains("invalid_key"));
+    }
+
+    #[test]
+    fn apply_wind_overrides_no_panic_for_all_keys() {
+        for key in wind_set_valid_keys() {
+            let mut effect = WindTornadoEffect::default();
+            let overrides: Vec<(String, f32)> = vec![(key.to_string(), 1.0)];
+            apply_wind_overrides(&mut effect, &overrides);
+
+            let param = thyllore_effect_core::find_scalar_param(
+                thyllore_effect_core::WIND_SCALAR_PARAMS,
+                key,
+            )
+            .expect("valid key is registered");
+            assert_eq!((param.get)(&effect), 1.0, "{key}");
         }
     }
 

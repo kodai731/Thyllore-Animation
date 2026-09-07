@@ -79,6 +79,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--arm", nargs="+", choices=list(REFERENCE_CONFIGS),
                         default=list(REFERENCE_CONFIGS),
                         help="arms to capture (default: all)")
+    parser.add_argument("--wind-set", action="append", default=[],
+                        help="wind set values for candidate arm capture (can be repeated)")
+    parser.add_argument("--candidate", default="candidate",
+                        help="name of the candidate arm (default: candidate)")
     return parser.parse_args()
 
 
@@ -102,7 +106,8 @@ def background_path(out_dir: Path, arm: str) -> Path:
     return out_dir / f"{arm}_background.png"
 
 
-def capture_background(out_dir: Path, arm: str, config: dict, dood: bool) -> None:
+def capture_background(out_dir: Path, arm: str, config: dict, dood: bool,
+                       wind_set: list[str]) -> None:
     """Capture the arm's camera with wind density set to 0."""
     command = [
         str(engine_path()),
@@ -115,7 +120,8 @@ def capture_background(out_dir: Path, arm: str, config: dict, dood: bool) -> Non
     run_engine(command, f"background {arm}", dood)
 
 
-def capture_sequence(out_dir: Path, arm: str, config: dict, dood: bool) -> None:
+def capture_sequence(out_dir: Path, arm: str, config: dict, dood: bool,
+                     wind_set: list[str]) -> None:
     """Capture the arm's frame sequence starting at its wind time."""
     start_frame = round(config["wind_time_start"] * BATCH_FRAMES_PER_SECOND)
     sequence = f"{out_dir / arm},{config['frames']},{config['stride']}"
@@ -126,15 +132,22 @@ def capture_sequence(out_dir: Path, arm: str, config: dict, dood: bool) -> None:
         "--batch-camera", config["camera"],
         "--batch-frames", str(start_frame),
     ]
+    for value in wind_set:
+        command.extend(["--batch-wind-set", value])
     run_engine(command, f"sequence {arm}", dood)
 
 
-def capture_all(out_dir: Path, arms: list[str], dood: bool) -> None:
+def capture_all(out_dir: Path, arms: list[str], dood: bool, candidate: str,
+                wind_set: list[str]) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     for arm in arms:
         config = REFERENCE_CONFIGS[arm]
-        capture_background(out_dir, arm, config, dood)
-        capture_sequence(out_dir, arm, config, dood)
+        capture_background(out_dir, arm, config, dood, [])
+        capture_sequence(out_dir, arm, config, dood, [])
+        if wind_set:
+            candidate_arm = f"{arm}_{candidate}"
+            capture_background(out_dir, candidate_arm, config, dood, wind_set)
+            capture_sequence(out_dir, candidate_arm, config, dood, wind_set)
 
 
 def detect_viewport_from_background(background_png: Path) -> tuple[int, int, int, int]:
@@ -154,44 +167,53 @@ def detect_viewport_from_background(background_png: Path) -> tuple[int, int, int
     return int(cols.min()), int(rows.min()), int(cols.max()) + 1, int(rows.max()) + 1
 
 
-def preprocess_sequences(out_dir: Path, arms: list[str]) -> None:
+def preprocess_sequences(out_dir: Path, arms: list[str], candidate: str) -> None:
     """Crop frames by the detected viewport and subtract the background (clamp 0)."""
     for arm in arms:
-        src_dir = out_dir / arm
-        prep_dir = out_dir / f"{arm}_prep"
-        prep_dir.mkdir(parents=True, exist_ok=True)
+        preprocess_capture(out_dir, arm, arm)
+        candidate_arm = f"{arm}_{candidate}"
+        if (out_dir / candidate_arm).is_dir():
+            preprocess_capture(out_dir, candidate_arm, arm)
 
-        background_png = background_path(out_dir, arm)
-        if not background_png.is_file():
-            raise SystemExit(f"background not found for {arm}: {background_png}")
 
-        x0, y0, x1, y1 = detect_viewport_from_background(background_png)
-        print(f"[wind_refmatch] {arm} viewport: {x0},{y0},{x1},{y1}", file=sys.stderr)
+def preprocess_capture(out_dir: Path, capture: str, arm: str) -> None:
+    src_dir = out_dir / capture
+    prep_dir = out_dir / f"{capture}_prep"
+    prep_dir.mkdir(parents=True, exist_ok=True)
 
-        with Image.open(background_png) as image:
-            background = np.asarray(image.convert("RGB"), dtype=np.int16)[y0:y1, x0:x1]
+    background_png = background_path(out_dir, capture)
+    if not background_png.is_file():
+        raise SystemExit(f"background not found for {capture}: {background_png}")
 
-        frames = sorted(src_dir.glob("frame_*.png"))
-        if not frames:
-            raise SystemExit(f"no frames captured for {arm}: {src_dir}")
-        for frame_path in frames:
-            with Image.open(frame_path) as image:
-                frame = np.asarray(image.convert("RGB"), dtype=np.int16)[y0:y1, x0:x1]
-            subtracted = np.clip(frame - background, 0, 255).astype(np.uint8)
-            Image.fromarray(subtracted).save(prep_dir / frame_path.name)
+    x0, y0, x1, y1 = detect_viewport_from_background(background_png)
+    print(f"[wind_refmatch] {capture} viewport: {x0},{y0},{x1},{y1}", file=sys.stderr)
 
-        meta_src = src_dir / "meta.json"
-        if meta_src.is_file():
-            shutil.copy2(meta_src, prep_dir / "meta.json")
-        else:
-            fps = BATCH_FRAMES_PER_SECOND / REFERENCE_CONFIGS[arm]["stride"]
-            (prep_dir / "meta.json").write_text(json.dumps({"fps": fps}))
+    with Image.open(background_png) as image:
+        background = np.asarray(image.convert("RGB"), dtype=np.int16)[y0:y1, x0:x1]
 
-        print(f"[wind_refmatch] {arm}: preprocessed {len(frames)} frames into {prep_dir}",
-              file=sys.stderr)
+    frames = sorted(src_dir.glob("frame_*.png"))
+    if not frames:
+        raise SystemExit(f"no frames captured for {capture}: {src_dir}")
+    for frame_path in frames:
+        with Image.open(frame_path) as image:
+            frame = np.asarray(image.convert("RGB"), dtype=np.int16)[y0:y1, x0:x1]
+        subtracted = np.clip(frame - background, 0, 255).astype(np.uint8)
+        Image.fromarray(subtracted).save(prep_dir / frame_path.name)
+
+    meta_src = src_dir / "meta.json"
+    if meta_src.is_file():
+        shutil.copy2(meta_src, prep_dir / "meta.json")
+    else:
+        fps = BATCH_FRAMES_PER_SECOND / REFERENCE_CONFIGS[arm]["stride"]
+        (prep_dir / "meta.json").write_text(json.dumps({"fps": fps}))
+
+    print(f"[wind_refmatch] {capture}: preprocessed {len(frames)} frames into {prep_dir}",
+          file=sys.stderr)
 
 
 GATED_SEPARATION = 0.5
+GAP_CLOSED_PASS = 0.5
+MATCH_PASS = 0.6
 
 
 def contrast_distance(left: dict, right: dict) -> float:
@@ -232,7 +254,24 @@ def reference_frames(config: dict) -> tuple[list[Path], float]:
     return [p for i, p in enumerate(paths[first:end], first) if i not in caption_frames], ref_fps
 
 
-def analyze_arm(out_dir: Path, arm: str) -> dict:
+def score_candidate(candidate_measured: dict, ref_measured: dict,
+                    ceilings: dict, floors: dict, gated: list[str]) -> dict:
+    """Closed fraction of the floor-to-ceiling gap and the ceiling relative score per family."""
+    distances, gap_closed, scores = {}, {}, {}
+    for family, distance_of in FAMILY_DISTANCES.items():
+        d_arm = distance_of(candidate_measured, ref_measured)
+        ceiling = ceilings[family]
+        distances[family] = d_arm
+        gap_closed[family] = (floors[family] - d_arm) / max(floors[family] - ceiling, 1e-6)
+        scores[family] = 1.0 / (1.0 + max(0.0, d_arm / max(ceiling, 1e-6) - 1.0))
+
+    match = float(np.mean([scores[family] for family in gated])) if gated else 0.0
+    passed = all(gap_closed[family] >= GAP_CLOSED_PASS for family in gated) and match >= MATCH_PASS
+    return {"d": distances, "gap_closed": gap_closed, "score": scores,
+            "match": match, "pass": bool(gated) and passed}
+
+
+def analyze_arm(out_dir: Path, arm: str, candidate: str, wind_set: list[str]) -> dict:
     """Distance of the arm's prep sequence to the reference against the reference's own spread."""
     config = REFERENCE_CONFIGS[arm]
 
@@ -266,7 +305,19 @@ def analyze_arm(out_dir: Path, arm: str) -> dict:
         if separation > GATED_SEPARATION:
             gated.append(family)
 
-    return {"ceiling": ceilings, "floor": floors, "separation": separations, "gated": gated}
+    result = {"ceiling": ceilings, "floor": floors, "separation": separations, "gated": gated}
+
+    candidate_prep = out_dir / f"{arm}_{candidate}_prep"
+    if candidate_prep.is_dir():
+        candidate_measured = measure_wind(flame.collect_frames(candidate_prep), column_width,
+                                          floor_fps, resample=True)
+        result["candidate"] = {
+            "name": candidate,
+            "wind_set": wind_set,
+            **score_candidate(candidate_measured, ref_measured, ceilings, floors, gated),
+        }
+
+    return result
 
 
 def main() -> None:
@@ -276,12 +327,12 @@ def main() -> None:
         out_dir = repo_root() / out_dir
 
     if not args.skip_capture:
-        capture_all(out_dir, args.arm, args.dood)
-    preprocess_sequences(out_dir, args.arm)
+        capture_all(out_dir, args.arm, args.dood, args.candidate, args.wind_set)
+    preprocess_sequences(out_dir, args.arm, args.candidate)
 
     arms = {}
     for arm in args.arm:
-        arms[arm] = analyze_arm(out_dir, arm)
+        arms[arm] = analyze_arm(out_dir, arm, args.candidate, args.wind_set)
         arm_json = out_dir / f"{arm}_n0.json"
         arm_json.write_text(json.dumps({"ok": True, "arms": {arm: arms[arm]}}))
         print(f"[wind_refmatch] {arm}: wrote {arm_json}", file=sys.stderr)

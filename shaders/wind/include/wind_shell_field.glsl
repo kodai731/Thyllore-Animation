@@ -42,6 +42,9 @@ float windEddyCellRadial() { return wind.eddy.w; }
 float windEddyShear() { return wind.eddy2.x; }
 float windEddyRiseSpeed() { return wind.eddy2.y; }
 float windEddyReseedPeriod() { return wind.eddy2.z; }
+int windLayerCount() { return int(wind.layers.x + 0.5); }
+float windLayerSpacingQ() { return wind.layers.y; }
+float windLayerDecay() { return wind.layers.z; }
 float windTime() { return wind.optics.z; }
 
 bool windCoreActive() {

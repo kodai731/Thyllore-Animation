@@ -43,6 +43,9 @@ pub struct WindTornadoEffect {
     pub eddy_shear: f32,
     pub eddy_rise_speed: f32,
     pub eddy_reseed_period: f32,
+    pub layer_count: f32,
+    pub layer_spacing_q: f32,
+    pub layer_decay: f32,
 }
 
 impl Default for WindTornadoEffect {
@@ -89,6 +92,9 @@ impl Default for WindTornadoEffect {
             eddy_shear: 0.0,
             eddy_rise_speed: 0.0,
             eddy_reseed_period: 1.0,
+            layer_count: 1.0,
+            layer_spacing_q: 0.1,
+            layer_decay: 0.6,
         }
     }
 }

@@ -60,6 +60,12 @@ pub fn build_wind_ubo(effect: &WindTornadoEffect) -> WindUBO {
             params.eddy_reseed_period,
             0.0,
         ],
+        layers: [
+            params.layer_count as f32,
+            params.layer_spacing_q,
+            params.layer_decay,
+            0.0,
+        ],
         inv_view_proj: Matrix4::identity(),
     }
 }

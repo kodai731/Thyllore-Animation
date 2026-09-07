@@ -22,6 +22,7 @@ layout(set = WIND_UBO_SET, binding = WIND_UBO_BINDING) uniform WindUBO {
     vec4 streak2;
     vec4 eddy;
     vec4 eddy2;
+    vec4 layers;
     mat4 invViewProj;
 } wind;
 

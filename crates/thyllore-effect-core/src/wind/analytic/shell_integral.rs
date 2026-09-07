@@ -52,6 +52,9 @@ pub struct WindShellParams {
     pub eddy_shear: f32,
     pub eddy_rise_speed: f32,
     pub eddy_reseed_period: f32,
+    pub layer_count: usize,
+    pub layer_spacing_q: f32,
+    pub layer_decay: f32,
     pub time: f32,
 }
 
@@ -110,6 +113,9 @@ impl WindShellParams {
             eddy_shear: effect.eddy_shear.clamp(0.0, 1.0),
             eddy_rise_speed: effect.eddy_rise_speed,
             eddy_reseed_period: effect.eddy_reseed_period.max(1e-3),
+            layer_count: (effect.layer_count.round() as i32).clamp(1, 3) as usize,
+            layer_spacing_q: effect.layer_spacing_q.max(0.0),
+            layer_decay: effect.layer_decay.max(0.0).min(1.0),
             time: t,
         }
     }

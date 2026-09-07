@@ -40,10 +40,13 @@ pub enum WindParam {
     EddyShear,
     EddyRiseSpeed,
     EddyReseedPeriod,
+    LayerCount,
+    LayerSpacingQ,
+    LayerDecay,
 }
 
 impl WindParam {
-    pub const ALL: [WindParam; 33] = [
+    pub const ALL: [WindParam; 36] = [
         WindParam::ColumnHeight,
         WindParam::CoreRadius,
         WindParam::CoreStrength,
@@ -77,6 +80,9 @@ impl WindParam {
         WindParam::EddyShear,
         WindParam::EddyRiseSpeed,
         WindParam::EddyReseedPeriod,
+        WindParam::LayerCount,
+        WindParam::LayerSpacingQ,
+        WindParam::LayerDecay,
     ];
 
     pub const fn code(self) -> u16 {
@@ -114,6 +120,9 @@ impl WindParam {
             WindParam::EddyShear => 542,
             WindParam::EddyRiseSpeed => 543,
             WindParam::EddyReseedPeriod => 544,
+            WindParam::LayerCount => 545,
+            WindParam::LayerSpacingQ => 546,
+            WindParam::LayerDecay => 547,
         }
     }
 
@@ -167,6 +176,9 @@ impl WindParam {
             WindParam::EddyShear => "Eddy Shear",
             WindParam::EddyRiseSpeed => "Eddy Rise Speed",
             WindParam::EddyReseedPeriod => "Eddy Reseed Period",
+            WindParam::LayerCount => "Layer Count",
+            WindParam::LayerSpacingQ => "Layer Spacing Q",
+            WindParam::LayerDecay => "Layer Decay",
         }
     }
 
@@ -205,6 +217,9 @@ impl WindParam {
             WindParam::EddyShear => "eddy_shear",
             WindParam::EddyRiseSpeed => "eddy_rise_speed",
             WindParam::EddyReseedPeriod => "eddy_reseed_period",
+            WindParam::LayerCount => "layer_count",
+            WindParam::LayerSpacingQ => "layer_spacing_q",
+            WindParam::LayerDecay => "layer_decay",
         }
     }
 
@@ -250,6 +265,9 @@ impl WindParam {
             WindParam::EddyShear => "EddyShear",
             WindParam::EddyRiseSpeed => "EddyRiseSpeed",
             WindParam::EddyReseedPeriod => "EddyReseedPeriod",
+            WindParam::LayerCount => "LayerCount",
+            WindParam::LayerSpacingQ => "LayerSpacingQ",
+            WindParam::LayerDecay => "LayerDecay",
         }
     }
 
@@ -288,6 +306,9 @@ impl WindParam {
             WindParam::EddyShear => (0.0, 1.0),
             WindParam::EddyRiseSpeed => (0.0, 10.0),
             WindParam::EddyReseedPeriod => (0.1, 10.0),
+            WindParam::LayerCount => (1.0, 3.0),
+            WindParam::LayerSpacingQ => (0.01, 1.0),
+            WindParam::LayerDecay => (0.0, 1.0),
         }
     }
 

@@ -378,6 +378,36 @@ declare_scene_format! {
                 tooltip: "Period of the eddy reseed (time between resamples)",
             },
         },
+        layer_count: f32 = Frame {
+            get: |e| e.layer_count,
+            set: |e, v| e.layer_count = v,
+            ui {
+                min: 1.0,
+                max: 3.0,
+                format: "%.0f",
+                tooltip: "Number of concentric wall shells; 1 keeps the single wall (identity)",
+            },
+        },
+        layer_spacing_q: f32 = Frame {
+            get: |e| e.layer_spacing_q,
+            set: |e, v| e.layer_spacing_q = v,
+            ui {
+                min: 0.01,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Outward offset between consecutive wall shells in q = x^2 + z^2",
+            },
+        },
+        layer_decay: f32 = Frame {
+            get: |e| e.layer_decay,
+            set: |e, v| e.layer_decay = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Strength ratio of each wall shell to the one inside it",
+            },
+        },
     },
     runtime {
         time: f32 {

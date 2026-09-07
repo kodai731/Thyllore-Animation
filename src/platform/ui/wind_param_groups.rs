@@ -38,6 +38,9 @@ pub const WIND_EDDY_PARAMS: &[&str] = &[
     "eddy_shear",
     "eddy_rise_speed",
     "eddy_reseed_period",
+    "layer_count",
+    "layer_spacing_q",
+    "layer_decay",
 ];
 
 pub const WIND_PARAM_GROUPS: &[&[&str]] = &[

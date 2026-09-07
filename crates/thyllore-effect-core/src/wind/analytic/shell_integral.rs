@@ -43,6 +43,13 @@ pub struct WindShellParams {
     pub streak_amplitude: f32,
     pub streak_phase: f32,
     pub streak_rise_time: f32,
+    pub eddy_amplitude: f32,
+    pub eddy_cell_theta: f32,
+    pub eddy_cell_height: f32,
+    pub eddy_cell_radial: f32,
+    pub eddy_shear: f32,
+    pub eddy_rise_speed: f32,
+    pub eddy_reseed_period: f32,
 }
 
 impl WindShellParams {
@@ -93,6 +100,13 @@ impl WindShellParams {
             streak_amplitude: effect.streak_amplitude.max(0.0),
             streak_phase: streak_phase_value,
             streak_rise_time: effect.streak_rise_speed * t,
+            eddy_amplitude: effect.eddy_amplitude.max(0.0),
+            eddy_cell_theta: effect.eddy_cell_theta.max(1e-3),
+            eddy_cell_height: effect.eddy_cell_height.max(1e-3),
+            eddy_cell_radial: effect.eddy_cell_radial.max(1e-3),
+            eddy_shear: effect.eddy_shear.clamp(0.0, 1.0),
+            eddy_rise_speed: effect.eddy_rise_speed,
+            eddy_reseed_period: effect.eddy_reseed_period.max(1e-3),
         }
     }
 

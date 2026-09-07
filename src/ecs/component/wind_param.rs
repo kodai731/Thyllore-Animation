@@ -33,10 +33,17 @@ pub enum WindParam {
     StreakTwist,
     StreakRiseSpeed,
     StreakAmplitude,
+    EddyAmplitude,
+    EddyCellTheta,
+    EddyCellHeight,
+    EddyCellRadial,
+    EddyShear,
+    EddyRiseSpeed,
+    EddyReseedPeriod,
 }
 
 impl WindParam {
-    pub const ALL: [WindParam; 26] = [
+    pub const ALL: [WindParam; 33] = [
         WindParam::ColumnHeight,
         WindParam::CoreRadius,
         WindParam::CoreStrength,
@@ -63,6 +70,13 @@ impl WindParam {
         WindParam::StreakTwist,
         WindParam::StreakRiseSpeed,
         WindParam::StreakAmplitude,
+        WindParam::EddyAmplitude,
+        WindParam::EddyCellTheta,
+        WindParam::EddyCellHeight,
+        WindParam::EddyCellRadial,
+        WindParam::EddyShear,
+        WindParam::EddyRiseSpeed,
+        WindParam::EddyReseedPeriod,
     ];
 
     pub const fn code(self) -> u16 {
@@ -93,6 +107,13 @@ impl WindParam {
             WindParam::StreakTwist => 535,
             WindParam::StreakRiseSpeed => 536,
             WindParam::StreakAmplitude => 537,
+            WindParam::EddyAmplitude => 538,
+            WindParam::EddyCellTheta => 539,
+            WindParam::EddyCellHeight => 540,
+            WindParam::EddyCellRadial => 541,
+            WindParam::EddyShear => 542,
+            WindParam::EddyRiseSpeed => 543,
+            WindParam::EddyReseedPeriod => 544,
         }
     }
 
@@ -139,6 +160,13 @@ impl WindParam {
             WindParam::StreakTwist => "Streak Twist",
             WindParam::StreakRiseSpeed => "Streak Rise Speed",
             WindParam::StreakAmplitude => "Streak Amplitude",
+            WindParam::EddyAmplitude => "Eddy Amplitude",
+            WindParam::EddyCellTheta => "Eddy Cell Theta",
+            WindParam::EddyCellHeight => "Eddy Cell Height",
+            WindParam::EddyCellRadial => "Eddy Cell Radial",
+            WindParam::EddyShear => "Eddy Shear",
+            WindParam::EddyRiseSpeed => "Eddy Rise Speed",
+            WindParam::EddyReseedPeriod => "Eddy Reseed Period",
         }
     }
 
@@ -170,6 +198,13 @@ impl WindParam {
             WindParam::StreakTwist => "streak_twist",
             WindParam::StreakRiseSpeed => "streak_rise_speed",
             WindParam::StreakAmplitude => "streak_amplitude",
+            WindParam::EddyAmplitude => "eddy_amplitude",
+            WindParam::EddyCellTheta => "eddy_cell_theta",
+            WindParam::EddyCellHeight => "eddy_cell_height",
+            WindParam::EddyCellRadial => "eddy_cell_radial",
+            WindParam::EddyShear => "eddy_shear",
+            WindParam::EddyRiseSpeed => "eddy_rise_speed",
+            WindParam::EddyReseedPeriod => "eddy_reseed_period",
         }
     }
 
@@ -208,6 +243,13 @@ impl WindParam {
             WindParam::StreakTwist => "StreakTwist",
             WindParam::StreakRiseSpeed => "StreakRiseSpeed",
             WindParam::StreakAmplitude => "StreakAmplitude",
+            WindParam::EddyAmplitude => "EddyAmplitude",
+            WindParam::EddyCellTheta => "EddyCellTheta",
+            WindParam::EddyCellHeight => "EddyCellHeight",
+            WindParam::EddyCellRadial => "EddyCellRadial",
+            WindParam::EddyShear => "EddyShear",
+            WindParam::EddyRiseSpeed => "EddyRiseSpeed",
+            WindParam::EddyReseedPeriod => "EddyReseedPeriod",
         }
     }
 
@@ -239,6 +281,13 @@ impl WindParam {
             WindParam::StreakTwist => (0.0, 20.0),
             WindParam::StreakRiseSpeed => (0.0, 10.0),
             WindParam::StreakAmplitude => (0.0, 1.0),
+            WindParam::EddyAmplitude => (0.0, 1.0),
+            WindParam::EddyCellTheta => (0.01, 2.0),
+            WindParam::EddyCellHeight => (0.01, 2.0),
+            WindParam::EddyCellRadial => (0.01, 1.0),
+            WindParam::EddyShear => (0.0, 1.0),
+            WindParam::EddyRiseSpeed => (0.0, 10.0),
+            WindParam::EddyReseedPeriod => (0.1, 10.0),
         }
     }
 

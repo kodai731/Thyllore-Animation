@@ -36,6 +36,13 @@ pub struct WindTornadoEffect {
     pub streak_twist: f32,
     pub streak_rise_speed: f32,
     pub streak_amplitude: f32,
+    pub eddy_amplitude: f32,
+    pub eddy_cell_theta: f32,
+    pub eddy_cell_height: f32,
+    pub eddy_cell_radial: f32,
+    pub eddy_shear: f32,
+    pub eddy_rise_speed: f32,
+    pub eddy_reseed_period: f32,
 }
 
 impl Default for WindTornadoEffect {
@@ -75,6 +82,13 @@ impl Default for WindTornadoEffect {
             streak_twist: 4.0,
             streak_rise_speed: 1.0,
             streak_amplitude: 0.0,
+            eddy_amplitude: 0.0,
+            eddy_cell_theta: 0.4,
+            eddy_cell_height: 0.3,
+            eddy_cell_radial: 0.1,
+            eddy_shear: 0.0,
+            eddy_rise_speed: 0.0,
+            eddy_reseed_period: 1.0,
         }
     }
 }

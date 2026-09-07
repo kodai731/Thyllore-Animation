@@ -308,6 +308,76 @@ declare_scene_format! {
                 tooltip: "Amplitude of the streak modulation; 0 disables streaks (identity)",
             },
         },
+        eddy_amplitude: f32 = Frame {
+            get: |e| e.eddy_amplitude,
+            set: |e, v| e.eddy_amplitude = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Amplitude of the volumetric eddy; 0 disables eddies (identity)",
+            },
+        },
+        eddy_cell_theta: f32 = Frame {
+            get: |e| e.eddy_cell_theta,
+            set: |e, v| e.eddy_cell_theta = v,
+            ui {
+                min: 0.01,
+                max: 2.0,
+                format: "%.2f",
+                tooltip: "Eddy cell size in theta (angular) direction",
+            },
+        },
+        eddy_cell_height: f32 = Frame {
+            get: |e| e.eddy_cell_height,
+            set: |e, v| e.eddy_cell_height = v,
+            ui {
+                min: 0.01,
+                max: 2.0,
+                format: "%.2f",
+                tooltip: "Eddy cell size in height (vertical) direction",
+            },
+        },
+        eddy_cell_radial: f32 = Frame {
+            get: |e| e.eddy_cell_radial,
+            set: |e, v| e.eddy_cell_radial = v,
+            ui {
+                min: 0.01,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Eddy cell size in radial direction",
+            },
+        },
+        eddy_shear: f32 = Frame {
+            get: |e| e.eddy_shear,
+            set: |e, v| e.eddy_shear = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Shear of the eddy field; 0 is no shear (pure translation)",
+            },
+        },
+        eddy_rise_speed: f32 = Frame {
+            get: |e| e.eddy_rise_speed,
+            set: |e, v| e.eddy_rise_speed = v,
+            ui {
+                min: 0.0,
+                max: 10.0,
+                format: "%.1f",
+                tooltip: "Rise speed of the eddy field (omega_z in the phase)",
+            },
+        },
+        eddy_reseed_period: f32 = Frame {
+            get: |e| e.eddy_reseed_period,
+            set: |e, v| e.eddy_reseed_period = v,
+            ui {
+                min: 0.1,
+                max: 10.0,
+                format: "%.1f",
+                tooltip: "Period of the eddy reseed (time between resamples)",
+            },
+        },
     },
     runtime {
         time: f32 {

@@ -30,10 +30,21 @@ pub const WIND_MOTION_PARAMS: &[&str] = &[
     "streak_amplitude",
 ];
 
+pub const WIND_EDDY_PARAMS: &[&str] = &[
+    "eddy_amplitude",
+    "eddy_cell_theta",
+    "eddy_cell_height",
+    "eddy_cell_radial",
+    "eddy_shear",
+    "eddy_rise_speed",
+    "eddy_reseed_period",
+];
+
 pub const WIND_PARAM_GROUPS: &[&[&str]] = &[
     WIND_SHAPE_PARAMS,
     WIND_DENSITY_PARAMS,
     WIND_MOTION_PARAMS,
+    WIND_EDDY_PARAMS,
     WIND_LOOK_PARAMS,
 ];
 

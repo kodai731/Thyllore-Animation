@@ -5,7 +5,7 @@ warmup frames and reports median / p95 for the wind pass plus cpu_dt_ms. The sam
 cameras also capture a flame scene so the G4 "within +-50% of the flame" target is
 recorded next to the wind numbers. Nothing is judged, the values are only reported.
 
-    uv run --with numpy python3 tools/wind_cost.py [--dood] [--frames 120]
+    uv run --with numpy python3 tools/wind_cost.py [--dood] [--frames 120] [--wind-set eddy_amplitude=0.8]
                                                    [--engine target/debug/thyllore-animation]
 
 Exit code 0 = every camera measured (the JSON line on stdout holds the numbers).
@@ -51,7 +51,8 @@ def resolve_scene(scene: str) -> str:
     return str(scene_path.relative_to(repo_root()))
 
 
-def capture_timings(name: str, camera: str, scene: str, frames: int, out_dir: Path, dood: bool) -> Path:
+def capture_timings(name: str, camera: str, scene: str, frames: int, out_dir: Path,
+                    dood: bool, wind_set: list[str]) -> Path:
     timings_path = out_dir / f"{name}.jsonl"
     command = [
         str(engine_path()),
@@ -60,8 +61,10 @@ def capture_timings(name: str, camera: str, scene: str, frames: int, out_dir: Pa
         "--batch-frames", str(frames),
         "--batch-camera", camera,
         "--batch-wind-time", str(WIND_TIME),
-        "--gpu-timings", str(timings_path),
     ]
+    for value in wind_set:
+        command.extend(["--batch-wind-set", value])
+    command.extend(["--gpu-timings", str(timings_path)])
     if dood:
         command = dood_wrap(command)
 
@@ -138,6 +141,7 @@ def main() -> None:
     parser.add_argument("--cameras", nargs="+", default=DEFAULT_DISTANCES,
                         help="camera specs as name=distance")
     parser.add_argument("--engine", help="engine binary to run (defaults to THYLLORE_ENGINE, then release, then debug)")
+    parser.add_argument("--wind-set", action="append", default=[], metavar="KEY=VALUE")
     args = parser.parse_args()
 
     if args.engine:
@@ -155,8 +159,10 @@ def main() -> None:
     rows = []
     for name, camera in cameras:
         print(f"[wind_cost] capture {name} ({camera})", file=sys.stderr)
-        wind_timings = capture_timings(f"{name}_wind", camera, wind_scene, args.frames, out_dir, args.dood)
-        flame_timings = capture_timings(f"{name}_flame", camera, flame_scene, args.frames, out_dir, args.dood)
+        wind_timings = capture_timings(f"{name}_wind", camera, wind_scene, args.frames,
+                                       out_dir, args.dood, args.wind_set)
+        flame_timings = capture_timings(f"{name}_flame", camera, flame_scene, args.frames,
+                                        out_dir, args.dood, args.wind_set)
         distance = camera.split(",")[2]
         rows.append(summarize(
             name, distance,

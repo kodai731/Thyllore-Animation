@@ -8,7 +8,7 @@ Captures the wind probe scene at fixed wind times and checks:
 The imgui overlay (x < 300, 600 <= y <= 690 at 2560x1440) jitters between runs, so it is
 excluded from every comparison.
 
-    uv run --with numpy --with pillow python3 tools/wind_idempotency_gate.py [--dood]
+    uv run --with numpy --with pillow python3 tools/wind_idempotency_gate.py [--dood] [--wind-set eddy_amplitude=0.8]
 
 Exit code 0 = ran to completion (the JSON line on stdout holds pass/fail).
 """
@@ -35,7 +35,7 @@ TIME_EVOLUTION_MIN_DIFF_PIXELS = 1000
 
 
 def capture(scene: str, camera: str, frames: int, wind_time: float,
-            out_path: Path, dood: bool) -> Path:
+            out_path: Path, dood: bool, wind_set: list[str]) -> Path:
     """Run the engine once to take a batch screenshot at a fixed wind time."""
     command = [
         str(engine_path()),
@@ -45,6 +45,8 @@ def capture(scene: str, camera: str, frames: int, wind_time: float,
         "--batch-camera", camera,
         "--batch-wind-time", str(wind_time),
     ]
+    for value in wind_set:
+        command.extend(["--batch-wind-set", value])
     if dood:
         command = dood_wrap(command)
 
@@ -93,6 +95,7 @@ def main() -> None:
                         help="run the engine through the docker harness")
     parser.add_argument("--engine",
                         help="engine binary to run (defaults to THYLLORE_ENGINE, then release, then debug)")
+    parser.add_argument("--wind-set", action="append", default=[], metavar="KEY=VALUE")
     args = parser.parse_args()
 
     if args.engine:
@@ -112,13 +115,13 @@ def main() -> None:
     scene = str(scene_path.relative_to(repo_root()))
 
     run_a = capture(scene, args.camera, args.frames, 0.6,
-                    out_dir / f"t0.6_frames{args.frames}_run1.png", args.dood)
+                    out_dir / f"t0.6_frames{args.frames}_run1.png", args.dood, args.wind_set)
     rerun_a = capture(scene, args.camera, args.frames, 0.6,
-                      out_dir / f"t0.6_frames{args.frames}_run2.png", args.dood)
+                      out_dir / f"t0.6_frames{args.frames}_run2.png", args.dood, args.wind_set)
     alt_frames = capture(scene, args.camera, args.alt_frames, 0.6,
-                         out_dir / f"t0.6_frames{args.alt_frames}.png", args.dood)
+                         out_dir / f"t0.6_frames{args.alt_frames}.png", args.dood, args.wind_set)
     later_time = capture(scene, args.camera, args.frames, 1.6,
-                         out_dir / f"t1.6_frames{args.frames}.png", args.dood)
+                         out_dir / f"t1.6_frames{args.frames}.png", args.dood, args.wind_set)
 
     baseline = load_rgb(run_a)
     hud_mask = build_hud_mask(baseline.shape)

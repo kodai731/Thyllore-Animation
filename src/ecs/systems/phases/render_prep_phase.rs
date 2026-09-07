@@ -214,6 +214,7 @@ fn gpu_timings_write(world: &mut crate::ecs::World) {
         None => return,
     };
     let frame = timings.frame;
+    let frame_total_ms = timings.frame_total_ms;
     let passes: Vec<(String, f32)> = timings.passes.clone();
     if passes.is_empty() {
         return;
@@ -233,6 +234,9 @@ fn gpu_timings_write(world: &mut crate::ecs::World) {
     let mut obj: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
     obj.insert("frame".to_string(), serde_json::json!(frame));
     obj.insert("passes".to_string(), serde_json::Value::Object(passes_map));
+    if let Some(ms) = frame_total_ms {
+        obj.insert("frame_total_ms".to_string(), serde_json::json!(ms));
+    }
 
     if let Some(cpu) = world.get_resource::<crate::ecs::resource::CpuFrameTimings>() {
         obj.insert("cpu_dt_ms".to_string(), serde_json::json!(cpu.dt_ms));

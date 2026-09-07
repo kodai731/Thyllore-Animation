@@ -810,10 +810,18 @@ fn build_timeline_and_fixed_overlays(
             let lib = app.data.ecs_world.resource::<ClipLibrary>();
             crate::ecs::systems::timeline_effective_duration(&timeline_state, &lib)
         };
+        let cpu_ms = app.last_frame_interval * 1000.0;
+        let gpu_ms = app
+            .data
+            .ecs_world
+            .get_resource::<crate::ecs::resource::GpuPassTimings>()
+            .and_then(|t| t.frame_total_ms);
         draw_status_bar(
             ui,
             status_bar_state,
             delta_time,
+            cpu_ms,
+            gpu_ms,
             viewport_info,
             &*timeline_state,
             clip_duration,

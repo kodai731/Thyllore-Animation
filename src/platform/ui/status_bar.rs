@@ -14,6 +14,7 @@ pub struct StatusBarState {
     sample_count: usize,
     memory_mb: f32,
     memory_update_counter: u32,
+    last_gpu_ms: f32,
 }
 
 impl Default for StatusBarState {
@@ -24,6 +25,7 @@ impl Default for StatusBarState {
             sample_count: 0,
             memory_mb: 0.0,
             memory_update_counter: 0,
+            last_gpu_ms: 0.0,
         }
     }
 }
@@ -63,12 +65,22 @@ pub fn draw_status_bar(
     ui: &imgui::Ui,
     state: &mut StatusBarState,
     delta_time: f32,
+    cpu_ms: f32,
+    gpu_ms: Option<f32>,
     viewport_info: &ViewportInfo,
     timeline_state: &TimelineState,
     clip_duration: f32,
 ) {
     state.update_fps(delta_time);
     state.update_memory();
+
+    let gpu_ms = match gpu_ms {
+        Some(ms) => {
+            state.last_gpu_ms = ms;
+            ms
+        }
+        None => state.last_gpu_ms,
+    };
 
     let fps = state.average_fps();
     let frame_rate = timeline_state.snap_settings.frame_rate;
@@ -78,8 +90,15 @@ pub fn draw_status_bar(
     let playback_icon = if timeline_state.playing { ">" } else { "||" };
 
     let text = format!(
-        "FPS:{:.0}  F:{}/{}  {:.3}s  {}  {:.0}MB",
-        fps, current_frame, total_frames, current_time, playback_icon, state.memory_mb,
+        "FPS:{:.0}  CPU {:.1}ms  GPU {:.1}ms  F:{}/{}  {:.3}s  {}  {:.0}MB",
+        fps,
+        cpu_ms,
+        gpu_ms,
+        current_frame,
+        total_frames,
+        current_time,
+        playback_icon,
+        state.memory_mb,
     );
 
     let text_size = ui.calc_text_size(&text);

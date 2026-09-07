@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub struct GpuPassTimings {
     pub frame: u64,
     pub passes: Vec<(String, f32)>,
+    pub frame_total_ms: Option<f32>,
 }
 
 impl Default for GpuPassTimings {
@@ -11,6 +12,7 @@ impl Default for GpuPassTimings {
         Self {
             frame: 0,
             passes: Vec::new(),
+            frame_total_ms: None,
         }
     }
 }

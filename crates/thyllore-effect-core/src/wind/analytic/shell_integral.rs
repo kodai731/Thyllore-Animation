@@ -14,7 +14,7 @@ use cgmath::Vector3;
 // term is a polynomial and the optical depth of a piece between two knots is
 // an exact power-rule integral in the piece-local variable sigma in [0, 1].
 
-pub const WIND_MAX_KNOTS: usize = 16;
+pub const WIND_MAX_KNOTS: usize = 24;
 const POLY_TERMS: usize = 16;
 const EDDY_MAX_SPLIT: usize = 4;
 const LINEAR_COEFFICIENT_EPSILON: f32 = 1e-7;
@@ -196,8 +196,14 @@ pub fn wind_density_at(params: &WindShellParams, local: Vector3<f32>) -> f32 {
     }
     let q = local.x * local.x + local.z * local.z;
 
-    let wall =
+    let mut wall =
         params.wall_strength * biweight((q - params.wall_radius_sq(h)) / params.wall_width_q);
+    for k in 1..params.layer_count {
+        let offset = k as f32 * params.layer_spacing_q;
+        let u = (q - params.wall_radius_sq(h) - offset) / params.wall_width_q;
+        wall += params.wall_strength * params.layer_decay.powi(k as i32) * biweight(u);
+    }
+
     let core = if params.core_active() {
         params.core_strength * biweight(q / params.core_radius_sq)
     } else {
@@ -399,6 +405,21 @@ pub fn wind_ray_knots(
         );
     }
 
+    for k in 1..params.layer_count {
+        let offset = k as f32 * params.layer_spacing_q;
+        for boundary in [params.wall_width_q, -params.wall_width_q] {
+            push_quadratic_roots(
+                delta_a,
+                delta_b,
+                delta_c - offset - boundary,
+                t_near,
+                t_far,
+                &mut knots,
+                &mut count,
+            );
+        }
+    }
+
     if params.core_active() {
         push_quadratic_roots(
             q_a,
@@ -563,6 +584,18 @@ pub fn wind_piece_optical_depth(
         let wall = biweight_poly(&u);
         for (target, value) in shell.iter_mut().zip(wall) {
             *target += params.wall_strength * value;
+        }
+    }
+    for k in 1..params.layer_count {
+        let mut uk = u;
+        uk[0] -= k as f32 * params.layer_spacing_q * inv_width;
+        let uk_mid = uk[0] + 0.5 * uk[1] + 0.25 * uk[2];
+        if uk_mid.abs() < 1.0 {
+            let wall = biweight_poly(&uk);
+            let layer_weight = params.wall_strength * params.layer_decay.powi(k as i32);
+            for (target, value) in shell.iter_mut().zip(wall) {
+                *target += layer_weight * value;
+            }
         }
     }
     if params.core_active() {

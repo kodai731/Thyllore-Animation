@@ -299,8 +299,9 @@ fn total_mass(params: &WindShellParams, q_max: f32) -> f64 {
 
 fn envelope_q_max(params: &WindShellParams) -> f32 {
     let wall_top_r = params.wall_radius_base + params.wall_radius_slope;
-    let wall_max_r =
-        (wall_top_r * wall_top_r + params.spread_offset).sqrt() + params.wall_width_q.sqrt();
+    let outer_layer_offset = (params.layer_count - 1) as f32 * params.layer_spacing_q;
+    let wall_max_r = (wall_top_r * wall_top_r + params.spread_offset + outer_layer_offset).sqrt()
+        + params.wall_width_q.sqrt();
     let ring_max_r = params.ring_bounds_radius();
     let core_max_r = params.core_radius_sq.sqrt();
     let max_r = wall_max_r.max(ring_max_r).max(core_max_r);
@@ -518,4 +519,88 @@ fn zero_eddy_amplitude_keeps_the_streak_only_path() {
         relative < 5e-2,
         "closed {closed} vs reference {reference} (rel {relative})"
     );
+}
+
+const LAYER_SPACING_Q: f32 = 0.1;
+const LAYER_DECAY: f32 = 0.6;
+
+fn layered_effect(layer_count: f32) -> WindTornadoEffect {
+    WindTornadoEffect {
+        layer_count,
+        layer_spacing_q: LAYER_SPACING_Q,
+        layer_decay: LAYER_DECAY,
+        eddy_amplitude: 0.0,
+        ..WindTornadoEffect::default()
+    }
+}
+
+fn wall_only_layered_params(layer_count: f32, time: f32) -> WindShellParams {
+    let effect = WindTornadoEffect {
+        time,
+        core_strength: 0.0,
+        spread_start: 0.5,
+        spread_rate: 0.1,
+        ..layered_effect(layer_count)
+    };
+    WindShellParams::from_effect(&effect)
+}
+
+#[test]
+fn layered_wall_matches_the_midpoint_reference() {
+    let params = WindShellParams::from_effect(&layered_effect(3.0));
+    let origin = Vector3::new(-5.0, 0.5, 0.25);
+    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let mut t_near = 0.0;
+    let mut t_far = 1e4;
+    assert!(
+        clamp_ray_to_wind_cone(&params, origin, direction, &mut t_near, &mut t_far),
+        "ray must hit the envelope"
+    );
+    let closed = wind_optical_depth(&params, origin, direction, t_near, t_far) as f64;
+    let reference = midpoint_optical_depth(&params, origin, direction, t_near, t_far);
+    assert!(
+        reference > 1e-3,
+        "reference {reference} too small to compare"
+    );
+    let relative = (closed - reference).abs() / reference;
+    assert!(
+        relative < 1e-4,
+        "closed {closed} vs reference {reference} (rel {relative})"
+    );
+}
+
+#[test]
+fn layer_mass_scales_with_the_decay_sum() {
+    let single = wall_only_layered_params(1.0, 0.0);
+    let layered = wall_only_layered_params(3.0, 0.0);
+    let q_max = envelope_q_max(&layered);
+    let ratio = total_mass(&layered, q_max) / total_mass(&single, q_max);
+    let expected = 1.0 + LAYER_DECAY as f64 + (LAYER_DECAY * LAYER_DECAY) as f64;
+    let rel_err = (ratio - expected).abs() / expected;
+    assert!(
+        rel_err < 1e-3,
+        "layered mass ratio {ratio:.6} vs expected {expected:.6} (rel {rel_err})"
+    );
+}
+
+#[test]
+fn layer_mass_is_conserved_under_wall_spread() {
+    let times = [0.3, 1.5, 5.0];
+    let q_max = envelope_q_max(&wall_only_layered_params(3.0, *times.last().unwrap()));
+
+    let masses: Vec<f64> = times
+        .iter()
+        .map(|&t| total_mass(&wall_only_layered_params(3.0, t), q_max))
+        .collect();
+
+    assert!(masses[0] > 1e-3, "reference mass too small: {:?}", masses);
+
+    for i in 1..times.len() {
+        let rel_err = (masses[i] - masses[0]).abs() / masses[0];
+        assert!(
+            rel_err < 1e-3,
+            "layered wall spread mass not conserved: t[0]={} mass={:.6}, t[{}]={} mass={:.6}, rel_err={:.6}",
+            times[0], masses[0], i, times[i], masses[i], rel_err
+        );
+    }
 }

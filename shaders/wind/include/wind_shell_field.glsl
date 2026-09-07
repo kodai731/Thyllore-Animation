@@ -215,6 +215,11 @@ float windDensityAt(vec3 p) {
     float q = p.x * p.x + p.z * p.z;
 
     float wall = windWallStrength() * windBiweight((q - windWallRadiusSq(h)) / windWallWidthQ());
+    for (int k = 1; k < windLayerCount(); ++k) {
+        float offset = float(k) * windLayerSpacingQ();
+        float layerWeight = windWallStrength() * pow(windLayerDecay(), float(k));
+        wall += layerWeight * windBiweight((q - windWallRadiusSq(h) - offset) / windWallWidthQ());
+    }
     float core = windCoreActive() ? windCoreStrength() * windBiweight(q / windCoreRadiusSq()) : 0.0;
     float ring = windRingActive()
         ? windRingStrength() * windRingFade(h / windRingHeight())

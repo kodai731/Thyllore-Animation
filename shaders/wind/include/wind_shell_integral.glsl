@@ -8,7 +8,7 @@
 // Mirrored in thyllore-effect-core/src/wind/analytic/shell_integral.rs.
 // Must be included after wind_shell_field.glsl.
 
-const int WIND_MAX_KNOTS = 16;
+const int WIND_MAX_KNOTS = 24;
 const int WIND_POLY_TERMS = 12;
 const int WIND_EDDY_MAX_SPLIT = 4;
 const float WIND_EMPTY_INTERVAL_EPSILON = 1e-6;
@@ -68,6 +68,12 @@ int windRayKnots(vec3 o, vec3 d, float tNear, float tFar, out float knots[WIND_M
     float deltaC = qC - radius0 * radius0 - windSpreadOffset();
     windPushQuadraticRoots(deltaA, deltaB, deltaC - windWallWidthQ(), tNear, tFar, knots, count);
     windPushQuadraticRoots(deltaA, deltaB, deltaC + windWallWidthQ(), tNear, tFar, knots, count);
+
+    for (int k = 1; k < windLayerCount(); ++k) {
+        float offset = float(k) * windLayerSpacingQ();
+        windPushQuadraticRoots(deltaA, deltaB, deltaC - offset - windWallWidthQ(), tNear, tFar, knots, count);
+        windPushQuadraticRoots(deltaA, deltaB, deltaC - offset + windWallWidthQ(), tNear, tFar, knots, count);
+    }
 
     if (windCoreActive()) {
         windPushQuadraticRoots(qA, qB, qC - windCoreRadiusSq(), tNear, tFar, knots, count);
@@ -191,6 +197,22 @@ float windPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1) {
         windBiweightPoly(u, wall);
         for (int k = 0; k < WIND_POLY_TERMS; ++k) {
             shell[k] += windWallStrength() * wall[k];
+        }
+    }
+    for (int k = 1; k < windLayerCount(); ++k) {
+        float uk[WIND_POLY_TERMS];
+        for (int j = 0; j < WIND_POLY_TERMS; ++j) {
+            uk[j] = u[j];
+        }
+        uk[0] -= float(k) * windLayerSpacingQ() * invWidth;
+        float ukMid = uk[0] + 0.5 * uk[1] + 0.25 * uk[2];
+        if (abs(ukMid) < 1.0) {
+            float wall[WIND_POLY_TERMS];
+            windBiweightPoly(uk, wall);
+            float layerWeight = windWallStrength() * pow(windLayerDecay(), float(k));
+            for (int j = 0; j < WIND_POLY_TERMS; ++j) {
+                shell[j] += layerWeight * wall[j];
+            }
         }
     }
     if (windCoreActive()) {

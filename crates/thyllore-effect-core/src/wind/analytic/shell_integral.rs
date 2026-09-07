@@ -1,3 +1,4 @@
+use crate::wind::analytic::eddy::eddy_sigma;
 use crate::wind::analytic::motion::{h_top, spread_offset, streak_phase, wall_amp};
 use crate::wind::WindTornadoEffect;
 use cgmath::Vector3;
@@ -15,6 +16,7 @@ use cgmath::Vector3;
 
 pub const WIND_MAX_KNOTS: usize = 16;
 const POLY_TERMS: usize = 16;
+const EDDY_MAX_SPLIT: usize = 4;
 const LINEAR_COEFFICIENT_EPSILON: f32 = 1e-7;
 const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
 
@@ -50,6 +52,7 @@ pub struct WindShellParams {
     pub eddy_shear: f32,
     pub eddy_rise_speed: f32,
     pub eddy_reseed_period: f32,
+    pub time: f32,
 }
 
 impl WindShellParams {
@@ -107,14 +110,15 @@ impl WindShellParams {
             eddy_shear: effect.eddy_shear.clamp(0.0, 1.0),
             eddy_rise_speed: effect.eddy_rise_speed,
             eddy_reseed_period: effect.eddy_reseed_period.max(1e-3),
+            time: t,
         }
     }
 
-    fn wall_radius(&self, h: f32) -> f32 {
+    pub(crate) fn wall_radius(&self, h: f32) -> f32 {
         self.wall_radius_base + self.wall_radius_slope * h
     }
 
-    fn wall_radius_sq(&self, h: f32) -> f32 {
+    pub(crate) fn wall_radius_sq(&self, h: f32) -> f32 {
         let radius = self.wall_radius(h);
         radius * radius + self.spread_offset
     }
@@ -508,6 +512,11 @@ pub fn wind_streak_sigma(params: &WindShellParams, local: Vector3<f32>) -> f32 {
     1.0 + params.streak_amplitude * angle.cos()
 }
 
+fn sample_point(start: Vector3<f32>, direction: Vector3<f32>, distance: f32) -> [f32; 3] {
+    let point = start + direction * distance;
+    [point.x, point.y, point.z]
+}
+
 /// Exact optical depth of the ray piece [s0, s1], which must not cross a knot.
 pub fn wind_piece_optical_depth(
     params: &WindShellParams,
@@ -591,6 +600,33 @@ pub fn wind_piece_optical_depth(
         streak_poly[1] = sigma_1 - sigma_0;
 
         density = poly_mul(&density, &streak_poly);
+    }
+
+    if params.eddy_amplitude > 0.0 {
+        let cell_min = params
+            .eddy_cell_theta
+            .min(params.eddy_cell_height)
+            .min(params.eddy_cell_radial);
+        let splits = ((2.0 * length / cell_min).ceil() as i32).clamp(1, EDDY_MAX_SPLIT as i32);
+        let mut total = 0.0f32;
+        for j in 0..splits {
+            let a = j as f32 / splits as f32;
+            let b = (j + 1) as f32 / splits as f32;
+            let sigma_a = eddy_sigma(params, sample_point(start, direction, a * length));
+            let sigma_b = eddy_sigma(params, sample_point(start, direction, b * length));
+            let slope = (sigma_b - sigma_a) / (b - a);
+            let intercept = sigma_a - slope * a;
+            let mut pow_a = 1.0f32;
+            let mut pow_b = 1.0f32;
+            for n in 0..POLY_TERMS {
+                let m1 = (pow_b * b * b - pow_a * a * a) / (n + 2) as f32;
+                let m0 = (pow_b * b - pow_a * a) / (n + 1) as f32;
+                total += density[n] * (intercept * m0 + slope * m1);
+                pow_a *= a;
+                pow_b *= b;
+            }
+        }
+        return (length * params.sigma_t * total).max(0.0);
     }
 
     let mut moment_sum = 0.0f32;

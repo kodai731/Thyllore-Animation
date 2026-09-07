@@ -1,7 +1,9 @@
+pub mod eddy;
 pub mod motion;
 pub mod pick;
 pub mod shell_integral;
 
+pub use eddy::*;
 pub use pick::*;
 pub use shell_integral::*;
 

@@ -399,3 +399,123 @@ fn mass_is_conserved_under_ring_spread() {
         );
     }
 }
+
+#[test]
+fn periodic_noise_is_periodic_in_x() {
+    let period = 4.0;
+    for x in [0.0, 0.25, 1.5, 2.75, -1.25, 9.5] {
+        for y in [0.0, 1.0, 3.0] {
+            for z in [0.0, 2.0] {
+                assert_eq!(
+                    periodic_noise([x, y, z], period),
+                    periodic_noise([x + period, y, z], period),
+                    "periodic_noise is not periodic at ({x}, {y}, {z})"
+                );
+            }
+        }
+    }
+}
+
+fn eddy_params_with_amplitude(amplitude: f32) -> WindShellParams {
+    let effect = WindTornadoEffect {
+        time: 1.0,
+        circulation: 2.0,
+        streak_order: 3.0,
+        streak_twist: 4.0,
+        streak_amplitude: 0.25,
+        eddy_amplitude: amplitude,
+        eddy_shear: 1.0,
+        ..WindTornadoEffect::default()
+    };
+    WindShellParams::from_effect(&effect)
+}
+
+#[test]
+fn eddy_sigma_averages_to_one_over_the_wall() {
+    let params = eddy_params_with_amplitude(0.5);
+    let theta_samples = 64;
+    let height_samples = 64;
+    let mut total = 0.0f64;
+    for i in 0..theta_samples {
+        for j in 0..height_samples {
+            let theta = 2.0 * 3.14159265 * i as f32 / theta_samples as f32;
+            let h = params.h_top * j as f32 / (height_samples - 1) as f32;
+            let radius = params.wall_radius(h);
+            total += eddy_sigma(&params, [radius * theta.cos(), h, radius * theta.sin()]) as f64;
+        }
+    }
+    let mean = total / (theta_samples * height_samples) as f64;
+    assert!(
+        (mean - 1.0).abs() < 0.03,
+        "eddy sigma mean {mean} must stay near 1 so the eddies do not add mass"
+    );
+}
+
+fn eddy_midpoint_optical_depth(
+    params: &WindShellParams,
+    origin: Vector3<f32>,
+    direction: Vector3<f32>,
+    t_near: f32,
+    t_far: f32,
+) -> f64 {
+    const EDDY_REFERENCE_STEPS: usize = 2048;
+    let step = (t_far - t_near) as f64 / EDDY_REFERENCE_STEPS as f64;
+    let mut total = 0.0f64;
+    for i in 0..EDDY_REFERENCE_STEPS {
+        let t = t_near as f64 + (i as f64 + 0.5) * step;
+        let point = origin + direction * t as f32;
+        let sigma = wind_density_at(params, point)
+            * wind_streak_sigma(params, point)
+            * eddy_sigma(params, [point.x, point.y, point.z]);
+        total += sigma as f64 * step;
+    }
+    total
+}
+
+#[test]
+fn eddy_modulated_wall_matches_the_midpoint_reference() {
+    let params = eddy_params_with_amplitude(0.5);
+    let origin = Vector3::new(-5.0, 0.5, 0.25);
+    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let mut t_near = 0.0;
+    let mut t_far = 1e4;
+    assert!(
+        clamp_ray_to_wind_cone(&params, origin, direction, &mut t_near, &mut t_far),
+        "ray must hit the envelope"
+    );
+    let closed = wind_optical_depth(&params, origin, direction, t_near, t_far) as f64;
+    let reference = eddy_midpoint_optical_depth(&params, origin, direction, t_near, t_far);
+    assert!(
+        reference > 1e-3,
+        "reference {reference} too small to compare"
+    );
+    let relative = (closed - reference).abs() / reference;
+    assert!(
+        relative < 1e-1,
+        "closed {closed} vs reference {reference} (rel {relative})"
+    );
+}
+
+#[test]
+fn zero_eddy_amplitude_keeps_the_streak_only_path() {
+    let params = eddy_params_with_amplitude(0.0);
+    let origin = Vector3::new(-5.0, 0.5, 0.25);
+    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let mut t_near = 0.0;
+    let mut t_far = 1e4;
+    assert!(
+        clamp_ray_to_wind_cone(&params, origin, direction, &mut t_near, &mut t_far),
+        "ray must hit the envelope"
+    );
+    let closed = wind_optical_depth(&params, origin, direction, t_near, t_far) as f64;
+    let reference = streaked_midpoint_optical_depth(&params, origin, direction, t_near, t_far);
+    assert!(
+        reference > 1e-3,
+        "reference {reference} too small to compare"
+    );
+    let relative = (closed - reference).abs() / reference;
+    assert!(
+        relative < 5e-2,
+        "closed {closed} vs reference {reference} (rel {relative})"
+    );
+}

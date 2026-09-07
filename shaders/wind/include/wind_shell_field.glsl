@@ -7,6 +7,8 @@
 // Mirrored in thyllore-effect-core/src/wind/analytic/shell_integral.rs.
 // Must be included after wind_component.glsl.
 
+#include "include/noise.glsl"
+
 const float WIND_LINEAR_COEFFICIENT_EPSILON = 1e-7;
 
 float windHeight() { return wind.shape.x; }
@@ -40,6 +42,7 @@ float windEddyCellRadial() { return wind.eddy.w; }
 float windEddyShear() { return wind.eddy2.x; }
 float windEddyRiseSpeed() { return wind.eddy2.y; }
 float windEddyReseedPeriod() { return wind.eddy2.z; }
+float windTime() { return wind.optics.z; }
 
 bool windCoreActive() {
     return windCoreRadiusSq() > 1e-8 && windCoreStrength() > 0.0;
@@ -74,6 +77,82 @@ float windStreakSigma(vec3 local) {
 float windWallRadiusSq(float h) {
     float radius = windWallRadius(h);
     return radius * radius + windSpreadOffset();
+}
+
+float windEddyPeriodicNoise(vec3 u, float periodTheta) {
+    vec3 cell = floor(u);
+    vec3 f = u - cell;
+    vec3 w = f * f * (3.0 - 2.0 * f);
+
+    int p = int(periodTheta);
+    int cx = int(mod(cell.x, float(p)));
+    int cx1 = int(mod(cell.x + 1.0, float(p)));
+
+    float n000 = hash13(vec3(float(cx), cell.y, cell.z));
+    float n100 = hash13(vec3(float(cx1), cell.y, cell.z));
+    float n010 = hash13(vec3(float(cx), cell.y + 1.0, cell.z));
+    float n110 = hash13(vec3(float(cx1), cell.y + 1.0, cell.z));
+    float n001 = hash13(vec3(float(cx), cell.y, cell.z + 1.0));
+    float n101 = hash13(vec3(float(cx1), cell.y, cell.z + 1.0));
+    float n011 = hash13(vec3(float(cx), cell.y + 1.0, cell.z + 1.0));
+    float n111 = hash13(vec3(float(cx1), cell.y + 1.0, cell.z + 1.0));
+
+    float nx00 = mix(n000, n100, w.x);
+    float nx10 = mix(n010, n110, w.x);
+    float nx01 = mix(n001, n101, w.x);
+    float nx11 = mix(n011, n111, w.x);
+    float nxy0 = mix(nx00, nx10, w.y);
+    float nxy1 = mix(nx01, nx11, w.y);
+    return mix(nxy0, nxy1, w.z);
+}
+
+float windEddyPeriodicNoiseOctave(vec3 u, float periodTheta, float freq) {
+    return windEddyPeriodicNoise(freq * u, periodTheta * freq);
+}
+
+float windEddyPeriodicNoiseFBM(vec3 u, float periodTheta) {
+    float sum = 0.5 * windEddyPeriodicNoiseOctave(u, periodTheta, 1.0);
+    sum += 0.25 * windEddyPeriodicNoiseOctave(u, periodTheta, 2.0);
+    sum += 0.125 * windEddyPeriodicNoiseOctave(u, periodTheta, 4.0);
+    return sum * (1.0 / 0.875);
+}
+
+vec3 windEddyCoords(vec3 local, float age, float seed, out float periodTheta) {
+    float r = length(local.xz);
+    float theta = atan(local.z, local.x);
+    float h = local.y;
+
+    float omega = (windStreakPhase() / max(windTime(), 1e-3))
+        * (windWallRadiusSq(h) / max(r * r, windCoreRadiusSq()));
+    float phi = mix(windStreakPhase(), omega * age, windEddyShear());
+
+    float nTheta = max(round(2.0 * 3.14159265 * windWallRadius(h) / windEddyCellTheta()), 1.0);
+    float uTheta = nTheta * (theta - phi) / (2.0 * 3.14159265);
+    float uH = (h - windEddyRiseSpeed() * age) / windEddyCellHeight();
+    float uR = (r - windWallRadius(h)) / windEddyCellRadial();
+
+    periodTheta = nTheta;
+    return vec3(uTheta + seed, uH + seed * 0.37, uR + seed * 0.61);
+}
+
+float windEddySigma(vec3 local) {
+    float T = windEddyReseedPeriod();
+    float t = windTime();
+
+    float kA = floor(t / T);
+    float ageA = t - kA * T;
+    float wA = 1.0 - abs(2.0 * ageA / T - 1.0);
+
+    float kB = floor(t / T + 0.5);
+    float ageB = t + 0.5 * T - kB * T;
+    float wB = 1.0 - wA;
+
+    float period;
+    float NA = windEddyPeriodicNoiseFBM(windEddyCoords(local, ageA, 17.0 * kA + 3.0, period), period);
+    float NB = windEddyPeriodicNoiseFBM(windEddyCoords(local, ageB, 17.0 * kB + 3.0, period), period);
+
+    float N = wA * NA + wB * NB;
+    return 1.0 + windEddyAmplitude() * (2.0 * N - 1.0);
 }
 
 float windEnvelopeRadius(float h) {

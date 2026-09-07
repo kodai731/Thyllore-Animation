@@ -619,7 +619,7 @@ mod tests {
     }
 
     #[test]
-    fn default_scene_asset_holds_wind_reference_only() {
+    fn default_scene_asset_holds_wind_storm_only() {
         let content = fs::read_to_string(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/scenes/default.scene.ron"),
         )
@@ -630,13 +630,10 @@ mod tests {
         assert!(scene.water.is_none());
 
         let wind = scene.wind.expect("wind section present");
-        let mut reference = thyllore_effect_core::WindTornadoEffect::default();
-        assert!(thyllore_effect_core::apply_wind_preset(
-            &mut reference,
-            "reference"
-        ));
-        assert_eq!(wind.effect, reference);
-        assert_eq!(wind.preset.as_deref(), Some("reference"));
+        let mut storm = thyllore_effect_core::WindTornadoEffect::default();
+        assert!(thyllore_effect_core::apply_wind_preset(&mut storm, "storm"));
+        assert_eq!(wind.effect, storm);
+        assert_eq!(wind.preset.as_deref(), Some("storm"));
     }
 
     #[test]

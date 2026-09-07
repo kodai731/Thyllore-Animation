@@ -91,7 +91,7 @@ impl Default for WindRenderSettings {
             reference_step_count: 256,
             debug_view: WindDebugView::Off,
             batch_fixed_time: None,
-            free_run_when_paused: true,
+            free_run_when_paused: false,
         }
     }
 }

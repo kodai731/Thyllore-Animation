@@ -1,6 +1,6 @@
 use super::*;
 use crate::ecs::component::{EditorDisplay, EntityIcon, WindTornadoEffect};
-use crate::ecs::resource::{HierarchyState, PickRay};
+use crate::ecs::resource::{HierarchyState, PickRay, WindRenderSettings};
 use crate::ecs::systems::effect_time::{resolve_effect_time, EffectTimeSources, TimelineSample};
 use crate::ecs::world::{GlobalTransform, Name, Transform, World};
 use cgmath::Vector3;
@@ -79,4 +79,23 @@ fn despawn_removes_every_wind() {
     spawn_wind(&mut world, "Wind 2", WindTornadoEffect::default());
     despawn_winds(&mut world);
     assert!(world.query_winds().is_empty());
+}
+
+#[test]
+fn wind_follows_the_timeline_while_paused_by_default() {
+    let settings = WindRenderSettings::default();
+    let sources = EffectTimeSources {
+        batch_fixed_time: None,
+        batch_frames_rendered: None,
+        timeline: Some(TimelineSample {
+            current_time: 2.0,
+            playing: false,
+        }),
+        delta_time: 1.0 / 60.0,
+        free_run_when_paused: settings.free_run_when_paused,
+    };
+
+    let mut wind_time = 3.0;
+    resolve_effect_time(&mut wind_time, 1.0, 0.0, sources);
+    assert_eq!(wind_time, 2.0);
 }

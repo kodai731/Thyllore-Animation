@@ -117,22 +117,40 @@ float windEddyPeriodicNoiseFBM(vec3 u, float periodTheta) {
     return sum * (1.0 / 0.875);
 }
 
-vec3 windEddyCoords(vec3 local, float age, float seed, out float periodTheta) {
+struct WindEddyGeometry {
+    float theta;
+    float height;
+    float shearRate;
+    float radialCoord;
+    float periodTheta;
+};
+
+WindEddyGeometry windEddyGeometry(vec3 local) {
     float r = length(local.xz);
     float theta = atan(local.z, local.x);
     float h = local.y;
+    float wallRadius = windWallRadius(h);
 
     float omega = (windStreakPhase() / max(windTime(), 1e-3))
         * (windWallRadiusSq(h) / max(r * r, windCoreRadiusSq()));
-    float phi = mix(windStreakPhase(), omega * age, windEddyShear());
+    float nTheta = max(round(2.0 * 3.14159265 * wallRadius / windEddyCellTheta()), 1.0);
 
-    float nTheta = max(round(2.0 * 3.14159265 * windWallRadius(h) / windEddyCellTheta()), 1.0);
-    float uTheta = nTheta * (theta - phi) / (2.0 * 3.14159265);
-    float uH = (h - windEddyRiseSpeed() * age) / windEddyCellHeight();
-    float uR = (r - windWallRadius(h)) / windEddyCellRadial();
+    WindEddyGeometry geometry;
+    geometry.theta = theta;
+    geometry.height = h;
+    geometry.shearRate = omega;
+    geometry.radialCoord = (r - wallRadius) / windEddyCellRadial();
+    geometry.periodTheta = nTheta;
+    return geometry;
+}
 
-    periodTheta = nTheta;
-    return vec3(uTheta + seed, uH + seed * 0.37, uR + seed * 0.61);
+vec3 windEddyLayerCoords(WindEddyGeometry geometry, float age, float seed) {
+    float phi = mix(windStreakPhase(), geometry.shearRate * age, windEddyShear());
+
+    float uTheta = geometry.periodTheta * (geometry.theta - phi) / (2.0 * 3.14159265);
+    float uH = (geometry.height - windEddyRiseSpeed() * age) / windEddyCellHeight();
+
+    return vec3(uTheta + seed, uH + seed * 0.37, geometry.radialCoord + seed * 0.61);
 }
 
 float windEddySigma(vec3 local) {
@@ -147,9 +165,10 @@ float windEddySigma(vec3 local) {
     float ageB = t + 0.5 * T - kB * T;
     float wB = 1.0 - wA;
 
-    float period;
-    float NA = windEddyPeriodicNoiseFBM(windEddyCoords(local, ageA, 17.0 * kA + 3.0, period), period);
-    float NB = windEddyPeriodicNoiseFBM(windEddyCoords(local, ageB, 17.0 * kB + 3.0, period), period);
+    WindEddyGeometry geometry = windEddyGeometry(local);
+
+    float NA = windEddyPeriodicNoiseFBM(windEddyLayerCoords(geometry, ageA, 17.0 * kA + 3.0), geometry.periodTheta);
+    float NB = windEddyPeriodicNoiseFBM(windEddyLayerCoords(geometry, ageB, 17.0 * kB + 3.0), geometry.periodTheta);
 
     float N = wA * NA + wB * NB;
     return 1.0 + windEddyAmplitude() * (2.0 * N - 1.0);

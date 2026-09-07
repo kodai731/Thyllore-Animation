@@ -609,10 +609,10 @@ pub fn wind_piece_optical_depth(
             .min(params.eddy_cell_radial);
         let splits = ((2.0 * length / cell_min).ceil() as i32).clamp(1, EDDY_MAX_SPLIT as i32);
         let mut total = 0.0f32;
+        let mut sigma_a = eddy_sigma(params, [start.x, start.y, start.z]);
         for j in 0..splits {
             let a = j as f32 / splits as f32;
             let b = (j + 1) as f32 / splits as f32;
-            let sigma_a = eddy_sigma(params, sample_point(start, direction, a * length));
             let sigma_b = eddy_sigma(params, sample_point(start, direction, b * length));
             let slope = (sigma_b - sigma_a) / (b - a);
             let intercept = sigma_a - slope * a;
@@ -625,6 +625,7 @@ pub fn wind_piece_optical_depth(
                 pow_a *= a;
                 pow_b *= b;
             }
+            sigma_a = sigma_b;
         }
         return (length * params.sigma_t * total).max(0.0);
     }

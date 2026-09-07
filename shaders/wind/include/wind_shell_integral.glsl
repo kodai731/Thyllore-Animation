@@ -257,11 +257,11 @@ float windPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1) {
         float cellMin = min(windEddyCellTheta(), min(windEddyCellHeight(), windEddyCellRadial()));
         int splits = clamp(int(ceil(2.0 * pieceLength / cellMin)), 1, WIND_EDDY_MAX_SPLIT);
         float total = 0.0;
+        float sigmaA = windEddySigma(start);
         for (int j = 0; j < WIND_EDDY_MAX_SPLIT; ++j) {
             if (j >= splits) break;
             float a = float(j) / float(splits);
             float b = float(j + 1) / float(splits);
-            float sigmaA = windEddySigma(start + a * pieceLength * d);
             float sigmaB = windEddySigma(start + b * pieceLength * d);
             float slope = (sigmaB - sigmaA) / (b - a);
             float intercept = sigmaA - slope * a;
@@ -274,6 +274,7 @@ float windPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1) {
                 powA *= a;
                 powB *= b;
             }
+            sigmaA = sigmaB;
         }
         return max(pieceLength * windSigmaT() * total, 0.0);
     }

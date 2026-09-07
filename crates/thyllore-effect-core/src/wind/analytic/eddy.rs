@@ -65,31 +65,55 @@ pub fn periodic_noise_fbm(u: [f32; 3], period_theta: f32) -> f32 {
     sum * (1.0 / 0.875)
 }
 
-pub fn eddy_coords(
-    params: &WindShellParams,
-    local: [f32; 3],
-    age: f32,
-    seed: f32,
-) -> ([f32; 3], f32) {
+pub struct EddyGeometry {
+    pub theta: f32,
+    pub height: f32,
+    pub shear_rate: f32,
+    pub radial_coord: f32,
+    pub period_theta: f32,
+}
+
+pub fn eddy_geometry(params: &WindShellParams, local: [f32; 3]) -> EddyGeometry {
     let r = (local[0] * local[0] + local[2] * local[2]).sqrt();
     let theta = local[2].atan2(local[0]);
     let h = local[1];
+    let wall_radius = params.wall_radius(h);
 
     let omega = (params.streak_phase / params.time.max(1e-3))
         * (params.wall_radius_sq(h) / (r * r).max(params.core_radius_sq));
-    let phi = mix(params.streak_phase, omega * age, params.eddy_shear);
-
-    let n_theta = (2.0 * PI * params.wall_radius(h) / params.eddy_cell_theta)
+    let n_theta = (2.0 * PI * wall_radius / params.eddy_cell_theta)
         .round()
         .max(1.0);
-    let u_theta = n_theta * (theta - phi) / (2.0 * PI);
-    let u_h = (h - params.eddy_rise_speed * age) / params.eddy_cell_height;
-    let u_r = (r - params.wall_radius(h)) / params.eddy_cell_radial;
 
-    (
-        [u_theta + seed, u_h + seed * 0.37, u_r + seed * 0.61],
-        n_theta,
-    )
+    EddyGeometry {
+        theta,
+        height: h,
+        shear_rate: omega,
+        radial_coord: (r - wall_radius) / params.eddy_cell_radial,
+        period_theta: n_theta,
+    }
+}
+
+pub fn eddy_layer_coords(
+    params: &WindShellParams,
+    geometry: &EddyGeometry,
+    age: f32,
+    seed: f32,
+) -> [f32; 3] {
+    let phi = mix(
+        params.streak_phase,
+        geometry.shear_rate * age,
+        params.eddy_shear,
+    );
+
+    let u_theta = geometry.period_theta * (geometry.theta - phi) / (2.0 * PI);
+    let u_h = (geometry.height - params.eddy_rise_speed * age) / params.eddy_cell_height;
+
+    [
+        u_theta + seed,
+        u_h + seed * 0.37,
+        geometry.radial_coord + seed * 0.61,
+    ]
 }
 
 pub fn eddy_sigma(params: &WindShellParams, local: [f32; 3]) -> f32 {
@@ -104,10 +128,12 @@ pub fn eddy_sigma(params: &WindShellParams, local: [f32; 3]) -> f32 {
     let age_b = t + 0.5 * reseed_period - k_b * reseed_period;
     let w_b = 1.0 - w_a;
 
-    let (coords_a, period) = eddy_coords(params, local, age_a, 17.0 * k_a + 3.0);
-    let noise_a = periodic_noise_fbm(coords_a, period);
-    let (coords_b, period) = eddy_coords(params, local, age_b, 17.0 * k_b + 3.0);
-    let noise_b = periodic_noise_fbm(coords_b, period);
+    let geometry = eddy_geometry(params, local);
+
+    let coords_a = eddy_layer_coords(params, &geometry, age_a, 17.0 * k_a + 3.0);
+    let noise_a = periodic_noise_fbm(coords_a, geometry.period_theta);
+    let coords_b = eddy_layer_coords(params, &geometry, age_b, 17.0 * k_b + 3.0);
+    let noise_b = periodic_noise_fbm(coords_b, geometry.period_theta);
 
     let noise = w_a * noise_a + w_b * noise_b;
     1.0 + params.eddy_amplitude * (2.0 * noise - 1.0)

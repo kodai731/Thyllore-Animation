@@ -10,6 +10,7 @@
 
 const int WIND_MAX_KNOTS = 16;
 const int WIND_POLY_TERMS = 12;
+const int WIND_EDDY_MAX_SPLIT = 4;
 const float WIND_EMPTY_INTERVAL_EPSILON = 1e-6;
 
 void windPushKnot(inout float knots[WIND_MAX_KNOTS], inout int count, float t, float lo, float hi) {
@@ -250,6 +251,31 @@ float windPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1) {
         for (int k = 0; k < WIND_POLY_TERMS; ++k) {
             density[k] = modulated[k];
         }
+    }
+
+    if (windEddyAmplitude() > 0.0) {
+        float cellMin = min(windEddyCellTheta(), min(windEddyCellHeight(), windEddyCellRadial()));
+        int splits = clamp(int(ceil(2.0 * pieceLength / cellMin)), 1, WIND_EDDY_MAX_SPLIT);
+        float total = 0.0;
+        for (int j = 0; j < WIND_EDDY_MAX_SPLIT; ++j) {
+            if (j >= splits) break;
+            float a = float(j) / float(splits);
+            float b = float(j + 1) / float(splits);
+            float sigmaA = windEddySigma(start + a * pieceLength * d);
+            float sigmaB = windEddySigma(start + b * pieceLength * d);
+            float slope = (sigmaB - sigmaA) / (b - a);
+            float intercept = sigmaA - slope * a;
+            float powA = 1.0;
+            float powB = 1.0;
+            for (int n = 0; n < WIND_POLY_TERMS; ++n) {
+                float m1 = (powB * b * b - powA * a * a) / float(n + 2);
+                float m0 = (powB * b - powA * a) / float(n + 1);
+                total += density[n] * (intercept * m0 + slope * m1);
+                powA *= a;
+                powB *= b;
+            }
+        }
+        return max(pieceLength * windSigmaT() * total, 0.0);
     }
 
     float momentSum = 0.0;

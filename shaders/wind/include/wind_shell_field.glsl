@@ -198,7 +198,7 @@ float windDensityAt(vec3 p) {
         ? windRingStrength() * windRingFade(h / windRingHeight())
               * windBiweight((q - windRingRadiusSq()) / windRingWidthQ())
         : 0.0;
-    return windSigmaT() * envelope * (wall + core + ring);
+    return windSigmaT() * envelope * (wall + core + ring) * windStreakSigma(p) * windEddySigma(p);
 }
 
 bool clampToConeFrustum(

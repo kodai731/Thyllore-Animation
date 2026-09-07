@@ -1,8 +1,5 @@
 use crate::wind::analytic::shell_integral::WindShellParams;
 
-// Mirror of the eddy field in shaders/wind/include/wind_shell_field.glsl and of pcg3d / hash13
-// in shaders/include/noise.glsl; expressions, constants and operation order are kept identical.
-
 const PI: f32 = 3.14159265;
 
 fn mix(a: f32, b: f32, t: f32) -> f32 {
@@ -26,7 +23,6 @@ pub fn hash13(p: [f32; 3]) -> f32 {
     h[0] as f32 * (1.0 / 4294967296.0)
 }
 
-/// Value noise whose x lattice wraps every `period_theta` cells, closing around the column.
 pub fn periodic_noise(u: [f32; 3], period_theta: f32) -> f32 {
     let cell = [u[0].floor(), u[1].floor(), u[2].floor()];
     let f = [u[0] - cell[0], u[1] - cell[1], u[2] - cell[2]];
@@ -69,7 +65,6 @@ pub fn periodic_noise_fbm(u: [f32; 3], period_theta: f32) -> f32 {
     sum * (1.0 / 0.875)
 }
 
-/// Noise coordinates of `local` and the angular cell count used as their x period.
 pub fn eddy_coords(
     params: &WindShellParams,
     local: [f32; 3],
@@ -97,7 +92,6 @@ pub fn eddy_coords(
     )
 }
 
-/// Density multiplier of the eddy field: two noise layers crossfaded so neither pops on reseed.
 pub fn eddy_sigma(params: &WindShellParams, local: [f32; 3]) -> f32 {
     let reseed_period = params.eddy_reseed_period;
     let t = params.time;

@@ -48,6 +48,7 @@ REFERENCE_CONFIGS = {
         "wind_time_start": 1.25,
         "frames": 40,
         "stride": 2,
+        "resample": True,
     },
     "inside_tunnel": {
         "reference_dir": "assets/textures/wind/storm_ref_seq/shot_18_41.78s",
@@ -56,6 +57,7 @@ REFERENCE_CONFIGS = {
         "wind_time_start": 1.25,
         "frames": 40,
         "stride": 2,
+        "resample": False,
     },
     "far": {
         "reference_dir": "assets/textures/wind/castle_ref_seq",
@@ -64,6 +66,7 @@ REFERENCE_CONFIGS = {
         "wind_time_start": 1.25,
         "frames": 40,
         "stride": 1,
+        "resample": True,
     },
 }
 
@@ -286,7 +289,7 @@ def analyze_arm(out_dir: Path, arm: str, candidate: str, wind_set: list[str]) ->
 
     column_width = flame.reference_column_width(ref_paths)
     floor_fps = BATCH_FRAMES_PER_SECOND / config["stride"]
-    floor_measured = measure_wind(floor_paths, column_width, floor_fps, resample=True)
+    floor_measured = measure_wind(floor_paths, column_width, floor_fps, resample=config["resample"])
     ref_measured = measure_wind(ref_paths, column_width, ref_fps, resample=False)
     quarters = [measure_wind(paths, column_width, ref_fps, resample=False)
                 for paths in split_quarters(ref_paths)]
@@ -310,7 +313,7 @@ def analyze_arm(out_dir: Path, arm: str, candidate: str, wind_set: list[str]) ->
     candidate_prep = out_dir / f"{arm}_{candidate}_prep"
     if candidate_prep.is_dir():
         candidate_measured = measure_wind(flame.collect_frames(candidate_prep), column_width,
-                                          floor_fps, resample=True)
+                                          floor_fps, resample=config["resample"])
         result["candidate"] = {
             "name": candidate,
             "wind_set": wind_set,

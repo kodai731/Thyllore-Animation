@@ -85,7 +85,7 @@ fn oblique_ray_crossing_the_top_fade_matches_the_midpoint_reference() {
 }
 
 #[test]
-fn ray_through_the_core_matches_the_midpoint_reference() {
+fn ray_through_the_axis_matches_the_midpoint_reference() {
     assert_closed_form_matches_reference(
         Vector3::new(-4.0, 1.0, 0.0),
         Vector3::new(1.0, 0.02, 0.0),
@@ -211,7 +211,7 @@ fn density_vanishes_outside_the_height_slab_and_the_shell_supports() {
     assert_eq!(wind_density_at(&params, Vector3::new(0.35, 2.1, 0.0)), 0.0);
     assert_eq!(wind_density_at(&params, Vector3::new(3.0, 1.0, 0.0)), 0.0);
     assert!(wind_density_at(&params, Vector3::new(0.35, 0.5, 0.0)) > 0.0);
-    assert!(wind_density_at(&params, Vector3::new(0.0, 0.5, 0.0)) > 0.0);
+    assert_eq!(wind_density_at(&params, Vector3::new(0.0, 0.5, 0.0)), 0.0);
 }
 
 #[test]
@@ -229,53 +229,6 @@ fn knots_are_sorted_and_bracketed() {
     for i in 1..count {
         assert!(knots[i - 1] <= knots[i], "knots {:?}", &knots[..count]);
     }
-}
-
-fn ring_params() -> WindShellParams {
-    let effect = WindTornadoEffect {
-        ring_strength: 1.2,
-        ring_radius: 0.9,
-        ring_width_q: 0.1,
-        ring_height: 0.25,
-        ..WindTornadoEffect::default()
-    };
-    WindShellParams::from_effect(&effect)
-}
-
-#[test]
-fn horizontal_ray_through_the_ring_matches_the_midpoint_reference() {
-    assert_closed_form_matches_reference_for(
-        ring_params(),
-        Vector3::new(-5.0, 0.15, 0.0),
-        Vector3::new(1.0, 0.0, 0.0),
-    );
-}
-
-#[test]
-fn oblique_ray_crossing_the_ring_top_matches_the_midpoint_reference() {
-    assert_closed_form_matches_reference_for(
-        ring_params(),
-        Vector3::new(-3.0, 0.05, 0.2),
-        Vector3::new(1.0, 0.12, -0.05),
-    );
-}
-
-#[test]
-fn ring_adds_density_only_while_its_strength_is_positive() {
-    let ring = ring_params();
-    let inside_ring = Vector3::new(0.9, 0.1, 0.0);
-    assert!(wind_density_at(&ring, inside_ring) > wind_density_at(&params(), inside_ring));
-    assert_eq!(params().ring_strength, 0.0);
-}
-
-#[test]
-fn ring_density_vanishes_above_the_ring_height() {
-    let ring = ring_params();
-    let ring_top_y = ring.ring_height * ring.height;
-    let below = Vector3::new(0.9, 0.5 * ring_top_y, 0.0);
-    let above = Vector3::new(0.9, ring_top_y + 0.01, 0.0);
-    assert!(wind_density_at(&ring, below) > 0.0);
-    assert_eq!(wind_density_at(&ring, above), 0.0);
 }
 
 fn total_mass(params: &WindShellParams, q_max: f32) -> f64 {
@@ -299,13 +252,9 @@ fn total_mass(params: &WindShellParams, q_max: f32) -> f64 {
 
 fn envelope_q_max(params: &WindShellParams) -> f32 {
     let wall_top_r = params.wall_radius_base + params.wall_radius_slope;
-    let outer_layer_offset = (params.layer_count - 1) as f32 * params.layer_spacing_q;
-    let wall_max_r = (wall_top_r * wall_top_r + params.spread_offset + outer_layer_offset).sqrt()
-        + params.wall_width_q.sqrt();
-    let ring_max_r = params.ring_bounds_radius();
-    let core_max_r = params.core_radius_sq.sqrt();
-    let max_r = wall_max_r.max(ring_max_r).max(core_max_r);
-    (max_r + 0.1) * (max_r + 0.1)
+    let wall_max_r =
+        (wall_top_r * wall_top_r + params.spread_offset).sqrt() + params.wall_width_q.sqrt();
+    (wall_max_r + 0.1) * (wall_max_r + 0.1)
 }
 
 #[test]
@@ -347,55 +296,6 @@ fn mass_is_conserved_under_wall_spread() {
         assert!(
             rel_err < 1e-3,
             "wall spread mass not conserved: t[0]={} mass={:.6}, t[{}]={} mass={:.6}, rel_err={:.6}",
-            times[0], masses[0], i, times[i], masses[i], rel_err
-        );
-    }
-}
-
-#[test]
-fn mass_is_conserved_under_ring_spread() {
-    let effect = WindTornadoEffect {
-        time: 0.0,
-        rise_initial_height: 1.0,
-        rise_duration: 0.0,
-        spread_start: 0.5,
-        spread_rate: 0.0,
-        ring_strength: 1.2,
-        ring_radius: 0.9,
-        ring_width_q: 0.1,
-        ring_height: 0.25,
-        ring_spread_rate: 0.08,
-        dissipate_start: 0.0,
-        dissipate_time: 0.0,
-        ..WindTornadoEffect::default()
-    };
-
-    let times = [0.3, 1.5, 5.0];
-
-    let q_max = {
-        let mut e = effect.clone();
-        e.time = *times.last().unwrap();
-        let p = WindShellParams::from_effect(&e);
-        envelope_q_max(&p)
-    };
-
-    let masses: Vec<f64> = times
-        .iter()
-        .map(|&t| {
-            let mut e = effect.clone();
-            e.time = t;
-            let p = WindShellParams::from_effect(&e);
-            total_mass(&p, q_max)
-        })
-        .collect();
-
-    assert!(masses[0] > 1e-3, "reference mass too small: {:?}", masses);
-
-    for i in 1..times.len() {
-        let rel_err = (masses[i] - masses[0]).abs() / masses[0];
-        assert!(
-            rel_err < 1e-3,
-            "ring spread mass not conserved: t[0]={} mass={:.6}, t[{}]={} mass={:.6}, rel_err={:.6}",
             times[0], masses[0], i, times[i], masses[i], rel_err
         );
     }
@@ -521,33 +421,52 @@ fn zero_eddy_amplitude_keeps_the_streak_only_path() {
     );
 }
 
-const LAYER_SPACING_Q: f32 = 0.1;
-const LAYER_DECAY: f32 = 0.6;
-
-fn layered_effect(layer_count: f32) -> WindTornadoEffect {
-    WindTornadoEffect {
-        layer_count,
-        layer_spacing_q: LAYER_SPACING_Q,
-        layer_decay: LAYER_DECAY,
-        eddy_amplitude: 0.0,
-        ..WindTornadoEffect::default()
-    }
-}
-
-fn wall_only_layered_params(layer_count: f32, time: f32) -> WindShellParams {
+fn eroded_eddy_params(erosion: f32) -> WindShellParams {
     let effect = WindTornadoEffect {
-        time,
-        core_strength: 0.0,
-        spread_start: 0.5,
-        spread_rate: 0.1,
-        ..layered_effect(layer_count)
+        time: 1.0,
+        circulation: 2.0,
+        streak_amplitude: 0.25,
+        eddy_amplitude: 1.0,
+        eddy_shear: 1.0,
+        eddy_erosion: erosion,
+        ..WindTornadoEffect::default()
     };
     WindShellParams::from_effect(&effect)
 }
 
 #[test]
-fn layered_wall_matches_the_midpoint_reference() {
-    let params = WindShellParams::from_effect(&layered_effect(3.0));
+fn eroded_eddy_reaches_zero_density_below_the_noise_floor() {
+    let smooth = eroded_eddy_params(0.0);
+    let eroded = eroded_eddy_params(0.6);
+    let theta_samples = 64;
+    let height_samples = 32;
+    let mut smooth_min = f32::MAX;
+    let mut eroded_zero_count = 0usize;
+    for i in 0..theta_samples {
+        for j in 0..height_samples {
+            let theta = 2.0 * 3.14159265 * i as f32 / theta_samples as f32;
+            let h = eroded.h_top * j as f32 / (height_samples - 1) as f32;
+            let radius = eroded.wall_radius(h);
+            let local = [radius * theta.cos(), h, radius * theta.sin()];
+            smooth_min = smooth_min.min(eddy_sigma(&smooth, local));
+            if eddy_sigma(&eroded, local) <= 1e-6 {
+                eroded_zero_count += 1;
+            }
+        }
+    }
+    assert!(
+        smooth_min > 0.0,
+        "without erosion the eddy sigma must stay positive (min {smooth_min})"
+    );
+    assert!(
+        eroded_zero_count > 0,
+        "erosion must carve holes (sigma 0) somewhere on the wall"
+    );
+}
+
+#[test]
+fn eroded_eddy_wall_matches_the_midpoint_reference() {
+    let params = eroded_eddy_params(0.4);
     let origin = Vector3::new(-5.0, 0.5, 0.25);
     let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
     let mut t_near = 0.0;
@@ -557,52 +476,16 @@ fn layered_wall_matches_the_midpoint_reference() {
         "ray must hit the envelope"
     );
     let closed = wind_optical_depth(&params, origin, direction, t_near, t_far) as f64;
-    let reference = midpoint_optical_depth(&params, origin, direction, t_near, t_far);
+    let reference = eddy_midpoint_optical_depth(&params, origin, direction, t_near, t_far);
     assert!(
         reference > 1e-3,
         "reference {reference} too small to compare"
     );
     let relative = (closed - reference).abs() / reference;
     assert!(
-        relative < 1e-4,
+        relative < 1e-1,
         "closed {closed} vs reference {reference} (rel {relative})"
     );
-}
-
-#[test]
-fn layer_mass_scales_with_the_decay_sum() {
-    let single = wall_only_layered_params(1.0, 0.0);
-    let layered = wall_only_layered_params(3.0, 0.0);
-    let q_max = envelope_q_max(&layered);
-    let ratio = total_mass(&layered, q_max) / total_mass(&single, q_max);
-    let expected = 1.0 + LAYER_DECAY as f64 + (LAYER_DECAY * LAYER_DECAY) as f64;
-    let rel_err = (ratio - expected).abs() / expected;
-    assert!(
-        rel_err < 1e-3,
-        "layered mass ratio {ratio:.6} vs expected {expected:.6} (rel {rel_err})"
-    );
-}
-
-#[test]
-fn layer_mass_is_conserved_under_wall_spread() {
-    let times = [0.3, 1.5, 5.0];
-    let q_max = envelope_q_max(&wall_only_layered_params(3.0, *times.last().unwrap()));
-
-    let masses: Vec<f64> = times
-        .iter()
-        .map(|&t| total_mass(&wall_only_layered_params(3.0, t), q_max))
-        .collect();
-
-    assert!(masses[0] > 1e-3, "reference mass too small: {:?}", masses);
-
-    for i in 1..times.len() {
-        let rel_err = (masses[i] - masses[0]).abs() / masses[0];
-        assert!(
-            rel_err < 1e-3,
-            "layered wall spread mass not conserved: t[0]={} mass={:.6}, t[{}]={} mass={:.6}, rel_err={:.6}",
-            times[0], masses[0], i, times[i], masses[i], rel_err
-        );
-    }
 }
 
 fn puff_effect() -> WindTornadoEffect {

@@ -9,18 +9,15 @@ pub fn apply_wind_preset(effect: &mut WindTornadoEffect, name: &str) -> bool {
         "reference" => apply_reference_values(&mut preset),
         "storm" => {
             apply_reference_values(&mut preset);
-            preset.eddy_amplitude = 0.8;
+            preset.eddy_amplitude = 1.0;
             preset.eddy_shear = 1.0;
-            preset.layer_count = 3.0;
-            preset.layer_spacing_q = 0.3;
-            preset.layer_decay = 0.5;
+            preset.eddy_erosion = 0.45;
         }
         "funnel" => {
             preset.column_height = 3.0;
             preset.wall_radius_base = 0.25;
             preset.wall_radius_top = 1.2;
             preset.wall_width_q = 0.05;
-            preset.core_strength = 0.2;
             preset.top_fade = 0.4;
             preset.rise_initial_height = 0.2;
             preset.rise_duration = 1.5;
@@ -44,8 +41,6 @@ fn apply_reference_values(preset: &mut WindTornadoEffect) {
     preset.wall_radius_top = 0.6;
     preset.wall_width_q = 0.08;
     preset.wall_strength = 1.0;
-    preset.core_radius = 0.15;
-    preset.core_strength = 0.5;
     preset.top_fade = 0.3;
     preset.density = 4.0;
     preset.albedo = [0.9, 0.93, 1.0];
@@ -56,11 +51,6 @@ fn apply_reference_values(preset: &mut WindTornadoEffect) {
     preset.spread_rate = 0.15;
     preset.dissipate_start = 2.0;
     preset.dissipate_time = 1.5;
-    preset.ring_height = 0.15;
-    preset.ring_radius = 0.7;
-    preset.ring_width_q = 0.1;
-    preset.ring_strength = 0.8;
-    preset.ring_spread_rate = 0.2;
     preset.phase_g = 0.6;
     preset.sun_intensity = 1.0;
     preset.circulation = 2.0;
@@ -116,31 +106,24 @@ mod tests {
         assert_eq!(effect.spread_rate, 0.15);
         assert_eq!(effect.dissipate_start, 2.0);
         assert_eq!(effect.dissipate_time, 1.5);
-        assert_eq!(effect.ring_radius, 0.7);
-        assert_eq!(effect.ring_strength, 0.8);
-        assert_eq!(effect.ring_spread_rate, 0.2);
         assert_eq!(effect.circulation, 2.0);
         assert_eq!(effect.streak_amplitude, 0.25);
     }
 
     #[test]
-    fn test_storm_preset_adds_eddies_and_layers_to_reference() {
+    fn test_storm_preset_adds_eroded_eddies_to_reference() {
         let mut reference = WindTornadoEffect::default();
         apply_wind_preset(&mut reference, "reference");
         let mut storm = WindTornadoEffect::default();
         assert!(apply_wind_preset(&mut storm, "storm"));
 
-        assert_eq!(storm.eddy_amplitude, 0.8);
+        assert_eq!(storm.eddy_amplitude, 1.0);
         assert_eq!(storm.eddy_shear, 1.0);
-        assert_eq!(storm.layer_count, 3.0);
-        assert_eq!(storm.layer_spacing_q, 0.3);
-        assert_eq!(storm.layer_decay, 0.5);
+        assert_eq!(storm.eddy_erosion, 0.45);
 
         storm.eddy_amplitude = reference.eddy_amplitude;
         storm.eddy_shear = reference.eddy_shear;
-        storm.layer_count = reference.layer_count;
-        storm.layer_spacing_q = reference.layer_spacing_q;
-        storm.layer_decay = reference.layer_decay;
+        storm.eddy_erosion = reference.eddy_erosion;
         assert_eq!(storm, reference);
     }
 

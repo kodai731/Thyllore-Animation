@@ -16,12 +16,7 @@ pub fn build_wind_ubo(effect: &WindTornadoEffect) -> WindUBO {
             params.wall_radius_slope,
             params.wall_width_q,
         ],
-        core: [
-            params.core_radius_sq,
-            params.core_strength,
-            params.wall_strength,
-            params.top_fade,
-        ],
+        wall: [params.wall_strength, params.top_fade, 0.0, 0.0],
         optics: [
             params.sigma_t,
             effect.ambient_brightness,
@@ -33,12 +28,6 @@ pub fn build_wind_ubo(effect: &WindTornadoEffect) -> WindUBO {
             effect.albedo[1],
             effect.albedo[2],
             params.spread_offset,
-        ],
-        ring: [
-            params.ring_height,
-            params.ring_radius_sq,
-            params.ring_width_q,
-            params.ring_strength,
         ],
         lighting: [effect.phase_g, effect.sun_intensity, 0.0, 0.0],
         streak: [
@@ -58,13 +47,7 @@ pub fn build_wind_ubo(effect: &WindTornadoEffect) -> WindUBO {
             params.eddy_shear,
             params.eddy_rise_speed,
             params.eddy_reseed_period,
-            0.0,
-        ],
-        layers: [
-            params.layer_count as f32,
-            params.layer_spacing_q,
-            params.layer_decay,
-            0.0,
+            params.eddy_erosion,
         ],
         puff_params: [params.puff_count as f32, effect.puff_strength, 0.0, 0.0],
         puffs: params.puffs,

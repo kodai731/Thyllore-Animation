@@ -3,11 +3,10 @@ pub const WIND_SHAPE_PARAMS: &[&str] = &[
     "wall_radius_base",
     "wall_radius_top",
     "wall_width_q",
-    "core_radius",
     "top_fade",
 ];
 
-pub const WIND_DENSITY_PARAMS: &[&str] = &["density", "wall_strength", "core_strength"];
+pub const WIND_DENSITY_PARAMS: &[&str] = &["density", "wall_strength"];
 
 pub const WIND_LOOK_PARAMS: &[&str] = &["albedo", "ambient_brightness", "phase_g", "sun_intensity"];
 
@@ -18,11 +17,6 @@ pub const WIND_MOTION_PARAMS: &[&str] = &[
     "spread_rate",
     "dissipate_start",
     "dissipate_time",
-    "ring_height",
-    "ring_radius",
-    "ring_width_q",
-    "ring_strength",
-    "ring_spread_rate",
     "circulation",
     "streak_order",
     "streak_twist",
@@ -38,9 +32,7 @@ pub const WIND_EDDY_PARAMS: &[&str] = &[
     "eddy_shear",
     "eddy_rise_speed",
     "eddy_reseed_period",
-    "layer_count",
-    "layer_spacing_q",
-    "layer_decay",
+    "eddy_erosion",
     "puff_count_theta",
     "puff_count_height",
     "puff_radius",

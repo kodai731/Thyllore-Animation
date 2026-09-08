@@ -13,16 +13,14 @@ layout(set = WIND_UBO_SET, binding = WIND_UBO_BINDING) uniform WindUBO {
     mat4 model;
     mat4 inverseModel;
     vec4 shape;
-    vec4 core;
+    vec4 wall;
     vec4 optics;
     vec4 albedo;
-    vec4 ring;
     vec4 lighting;
     vec4 streak;
     vec4 streak2;
     vec4 eddy;
     vec4 eddy2;
-    vec4 layers;
     vec4 puffParams;
     vec4 puffs[96];
     mat4 invViewProj;

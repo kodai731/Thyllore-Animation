@@ -2791,13 +2791,13 @@ mod tests {
 
     #[test]
     fn wind_set_parses_both_forms_and_rejects_unknown_key() {
-        let combined: Vec<String> = vec!["--batch-wind-set=core_strength=0.5".into()];
+        let combined: Vec<String> = vec!["--batch-wind-set=wall_strength=0.5".into()];
         let pairs = wind_set_resolve_from_args(&combined).unwrap();
         assert_eq!(pairs.len(), 1);
-        assert_eq!(pairs[0].0, "core_strength");
+        assert_eq!(pairs[0].0, "wall_strength");
         assert!((pairs[0].1 - 0.5).abs() < 1e-6);
 
-        let separate: Vec<String> = vec!["--batch-wind-set".into(), "core_strength=0.5".into()];
+        let separate: Vec<String> = vec!["--batch-wind-set".into(), "wall_strength=0.5".into()];
         assert_eq!(wind_set_resolve_from_args(&separate).unwrap(), pairs);
 
         let unknown: Vec<String> = vec!["--batch-wind-set".into(), "invalid_key=1.0".into()];

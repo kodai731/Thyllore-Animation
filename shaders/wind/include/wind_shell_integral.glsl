@@ -10,7 +10,8 @@
 
 const int WIND_MAX_KNOTS = 56;
 const int WIND_POLY_TERMS = 12;
-const int WIND_EDDY_MAX_SPLIT = 4;
+const int WIND_EDDY_MAX_SPLIT = 8;
+const float WIND_EDDY_FINEST_OCTAVE_SPLITS_PER_CELL = 8.0;
 const int WIND_PUFFS_PER_RAY = 20;
 const float WIND_EMPTY_INTERVAL_EPSILON = 1e-6;
 
@@ -70,27 +71,9 @@ int windRayKnots(vec3 o, vec3 d, float tNear, float tFar, bool includePuffs, out
     windPushQuadraticRoots(deltaA, deltaB, deltaC - windWallWidthQ(), tNear, tFar, knots, count);
     windPushQuadraticRoots(deltaA, deltaB, deltaC + windWallWidthQ(), tNear, tFar, knots, count);
 
-    for (int k = 1; k < windLayerCount(); ++k) {
-        float offset = float(k) * windLayerSpacingQ();
-        windPushQuadraticRoots(deltaA, deltaB, deltaC - offset - windWallWidthQ(), tNear, tFar, knots, count);
-        windPushQuadraticRoots(deltaA, deltaB, deltaC - offset + windWallWidthQ(), tNear, tFar, knots, count);
-    }
-
-    if (windCoreActive()) {
-        windPushQuadraticRoots(qA, qB, qC - windCoreRadiusSq(), tNear, tFar, knots, count);
-    }
-
-    if (windRingActive()) {
-        windPushQuadraticRoots(qA, qB, qC - windRingRadiusSq() - windRingWidthQ(), tNear, tFar, knots, count);
-        windPushQuadraticRoots(qA, qB, qC - windRingRadiusSq() + windRingWidthQ(), tNear, tFar, knots, count);
-    }
-
     if (abs(d.y) >= WIND_LINEAR_COEFFICIENT_EPSILON) {
         float fadeY = windFadeStart() * windHTop() * windHeight();
         windPushKnot(knots, count, (fadeY - o.y) / d.y, tNear, tFar);
-        if (windRingActive()) {
-            windPushKnot(knots, count, (windRingTopY() - o.y) / d.y, tNear, tFar);
-        }
     }
 
     if (includePuffs) {
@@ -169,19 +152,6 @@ void windEnvelopePoly(float h0, float h1, float hMid, out float envelope[WIND_PO
     envelope[3] = 2.0 * v1 * v1 * v1;
 }
 
-void windRingFadePoly(float h0, float h1, out float poly[WIND_POLY_TERMS]) {
-    for (int k = 0; k < WIND_POLY_TERMS; ++k) {
-        poly[k] = 0.0;
-    }
-    float invRingHeight = 1.0 / windRingHeight();
-    float v0 = h0 * invRingHeight;
-    float v1 = h1 * invRingHeight;
-    poly[0] = 1.0 - 3.0 * v0 * v0 + 2.0 * v0 * v0 * v0;
-    poly[1] = -6.0 * v0 * v1 + 6.0 * v0 * v0 * v1;
-    poly[2] = -3.0 * v1 * v1 + 6.0 * v0 * v1 * v1;
-    poly[3] = 2.0 * v1 * v1 * v1;
-}
-
 float windPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1, bool includePuffs) {
     float pieceLength = s1 - s0;
     if (pieceLength <= WIND_EMPTY_INTERVAL_EPSILON) {
@@ -222,58 +192,6 @@ float windPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1, bool includePuff
             shell[k] += windWallStrength() * wall[k];
         }
     }
-    for (int k = 1; k < windLayerCount(); ++k) {
-        float uk[WIND_POLY_TERMS];
-        for (int j = 0; j < WIND_POLY_TERMS; ++j) {
-            uk[j] = u[j];
-        }
-        uk[0] -= float(k) * windLayerSpacingQ() * invWidth;
-        float ukMid = uk[0] + 0.5 * uk[1] + 0.25 * uk[2];
-        if (abs(ukMid) < 1.0) {
-            float wall[WIND_POLY_TERMS];
-            windBiweightPoly(uk, wall);
-            float layerWeight = windWallStrength() * pow(windLayerDecay(), float(k));
-            for (int j = 0; j < WIND_POLY_TERMS; ++j) {
-                shell[j] += layerWeight * wall[j];
-            }
-        }
-    }
-    if (windCoreActive()) {
-        float invCore = 1.0 / windCoreRadiusSq();
-        float uc[WIND_POLY_TERMS];
-        windPolyFromQuadratic(q0 * invCore, q1 * invCore, q2 * invCore, uc);
-        float ucMid = uc[0] + 0.5 * uc[1] + 0.25 * uc[2];
-        if (ucMid < 1.0) {
-            float core[WIND_POLY_TERMS];
-            windBiweightPoly(uc, core);
-            for (int k = 0; k < WIND_POLY_TERMS; ++k) {
-                shell[k] += windCoreStrength() * core[k];
-            }
-        }
-    }
-
-    if (windRingActive() && hMid < windRingHeight()) {
-        float invRingWidth = 1.0 / windRingWidthQ();
-        float ur[WIND_POLY_TERMS];
-        windPolyFromQuadratic(
-            (q0 - windRingRadiusSq()) * invRingWidth,
-            q1 * invRingWidth,
-            q2 * invRingWidth,
-            ur);
-        float urMid = ur[0] + 0.5 * ur[1] + 0.25 * ur[2];
-        if (abs(urMid) < 1.0) {
-            float ringFade[WIND_POLY_TERMS];
-            windRingFadePoly(h0, h1, ringFade);
-            float ringBiweight[WIND_POLY_TERMS];
-            windBiweightPoly(ur, ringBiweight);
-            float ring[WIND_POLY_TERMS];
-            windPolyMul(ringFade, ringBiweight, ring);
-            for (int k = 0; k < WIND_POLY_TERMS; ++k) {
-                shell[k] += windRingStrength() * ring[k];
-            }
-        }
-    }
-
     float puffPoly[WIND_POLY_TERMS];
     for (int k = 0; k < WIND_POLY_TERMS; ++k) {
         puffPoly[k] = 0.0;
@@ -333,7 +251,7 @@ float windPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1, bool includePuff
 
     if (windEddyAmplitude() > 0.0) {
         float cellMin = min(windEddyCellTheta(), min(windEddyCellHeight(), windEddyCellRadial()));
-        int splits = clamp(int(ceil(2.0 * pieceLength / cellMin)), 1, WIND_EDDY_MAX_SPLIT);
+        int splits = clamp(int(ceil(WIND_EDDY_FINEST_OCTAVE_SPLITS_PER_CELL * pieceLength / cellMin)), 1, WIND_EDDY_MAX_SPLIT);
         float total = 0.0;
         float sigmaA = windEddySigma(start);
         for (int j = 0; j < WIND_EDDY_MAX_SPLIT; ++j) {

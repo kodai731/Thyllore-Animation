@@ -8,8 +8,6 @@ use crate::ecs::world::{Entity, World};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum WindParam {
     ColumnHeight,
-    CoreRadius,
-    CoreStrength,
     WallRadiusBase,
     WallRadiusTop,
     WallWidthQ,
@@ -40,9 +38,7 @@ pub enum WindParam {
     EddyShear,
     EddyRiseSpeed,
     EddyReseedPeriod,
-    LayerCount,
-    LayerSpacingQ,
-    LayerDecay,
+    EddyErosion,
     PuffCountTheta,
     PuffCountHeight,
     PuffRadius,
@@ -53,10 +49,8 @@ pub enum WindParam {
 }
 
 impl WindParam {
-    pub const ALL: [WindParam; 43] = [
+    pub const ALL: [WindParam; 39] = [
         WindParam::ColumnHeight,
-        WindParam::CoreRadius,
-        WindParam::CoreStrength,
         WindParam::WallRadiusBase,
         WindParam::WallRadiusTop,
         WindParam::WallWidthQ,
@@ -87,9 +81,7 @@ impl WindParam {
         WindParam::EddyShear,
         WindParam::EddyRiseSpeed,
         WindParam::EddyReseedPeriod,
-        WindParam::LayerCount,
-        WindParam::LayerSpacingQ,
-        WindParam::LayerDecay,
+        WindParam::EddyErosion,
         WindParam::PuffCountTheta,
         WindParam::PuffCountHeight,
         WindParam::PuffRadius,
@@ -102,8 +94,6 @@ impl WindParam {
     pub const fn code(self) -> u16 {
         match self {
             WindParam::ColumnHeight => 512,
-            WindParam::CoreRadius => 513,
-            WindParam::CoreStrength => 514,
             WindParam::WallRadiusBase => 515,
             WindParam::WallRadiusTop => 516,
             WindParam::WallWidthQ => 517,
@@ -134,9 +124,7 @@ impl WindParam {
             WindParam::EddyShear => 542,
             WindParam::EddyRiseSpeed => 543,
             WindParam::EddyReseedPeriod => 544,
-            WindParam::LayerCount => 545,
-            WindParam::LayerSpacingQ => 546,
-            WindParam::LayerDecay => 547,
+            WindParam::EddyErosion => 555,
             WindParam::PuffCountTheta => 548,
             WindParam::PuffCountHeight => 549,
             WindParam::PuffRadius => 550,
@@ -165,8 +153,6 @@ impl WindParam {
     pub const fn display_name(self) -> &'static str {
         match self {
             WindParam::ColumnHeight => "Column Height",
-            WindParam::CoreRadius => "Core Radius",
-            WindParam::CoreStrength => "Core Strength",
             WindParam::WallRadiusBase => "Wall Radius Base",
             WindParam::WallRadiusTop => "Wall Radius Top",
             WindParam::WallWidthQ => "Wall Width Q",
@@ -197,9 +183,7 @@ impl WindParam {
             WindParam::EddyShear => "Eddy Shear",
             WindParam::EddyRiseSpeed => "Eddy Rise Speed",
             WindParam::EddyReseedPeriod => "Eddy Reseed Period",
-            WindParam::LayerCount => "Layer Count",
-            WindParam::LayerSpacingQ => "Layer Spacing Q",
-            WindParam::LayerDecay => "Layer Decay",
+            WindParam::EddyErosion => "Eddy Erosion",
             WindParam::PuffCountTheta => "Puff Count Theta",
             WindParam::PuffCountHeight => "Puff Count Height",
             WindParam::PuffRadius => "Puff Radius",
@@ -213,8 +197,6 @@ impl WindParam {
     pub const fn cli_name(self) -> &'static str {
         match self {
             WindParam::ColumnHeight => "column_height",
-            WindParam::CoreRadius => "core_radius",
-            WindParam::CoreStrength => "core_strength",
             WindParam::WallRadiusBase => "wall_radius_base",
             WindParam::WallRadiusTop => "wall_radius_top",
             WindParam::WallWidthQ => "wall_width_q",
@@ -245,9 +227,7 @@ impl WindParam {
             WindParam::EddyShear => "eddy_shear",
             WindParam::EddyRiseSpeed => "eddy_rise_speed",
             WindParam::EddyReseedPeriod => "eddy_reseed_period",
-            WindParam::LayerCount => "layer_count",
-            WindParam::LayerSpacingQ => "layer_spacing_q",
-            WindParam::LayerDecay => "layer_decay",
+            WindParam::EddyErosion => "eddy_erosion",
             WindParam::PuffCountTheta => "puff_count_theta",
             WindParam::PuffCountHeight => "puff_count_height",
             WindParam::PuffRadius => "puff_radius",
@@ -268,8 +248,6 @@ impl WindParam {
     pub const fn scene_name(self) -> &'static str {
         match self {
             WindParam::ColumnHeight => "ColumnHeight",
-            WindParam::CoreRadius => "CoreRadius",
-            WindParam::CoreStrength => "CoreStrength",
             WindParam::WallRadiusBase => "WallRadiusBase",
             WindParam::WallRadiusTop => "WallRadiusTop",
             WindParam::WallWidthQ => "WallWidthQ",
@@ -300,9 +278,7 @@ impl WindParam {
             WindParam::EddyShear => "EddyShear",
             WindParam::EddyRiseSpeed => "EddyRiseSpeed",
             WindParam::EddyReseedPeriod => "EddyReseedPeriod",
-            WindParam::LayerCount => "LayerCount",
-            WindParam::LayerSpacingQ => "LayerSpacingQ",
-            WindParam::LayerDecay => "LayerDecay",
+            WindParam::EddyErosion => "EddyErosion",
             WindParam::PuffCountTheta => "PuffCountTheta",
             WindParam::PuffCountHeight => "PuffCountHeight",
             WindParam::PuffRadius => "PuffRadius",
@@ -316,8 +292,6 @@ impl WindParam {
     pub const fn debug_value_range(self) -> (f32, f32) {
         match self {
             WindParam::ColumnHeight => (0.5, 10.0),
-            WindParam::CoreRadius => (0.0, 2.0),
-            WindParam::CoreStrength => (0.0, 4.0),
             WindParam::WallRadiusBase => (0.05, 5.0),
             WindParam::WallRadiusTop => (0.05, 5.0),
             WindParam::WallWidthQ => (0.01, 2.0),
@@ -348,9 +322,7 @@ impl WindParam {
             WindParam::EddyShear => (0.0, 1.0),
             WindParam::EddyRiseSpeed => (0.0, 10.0),
             WindParam::EddyReseedPeriod => (0.1, 10.0),
-            WindParam::LayerCount => (1.0, 3.0),
-            WindParam::LayerSpacingQ => (0.01, 1.0),
-            WindParam::LayerDecay => (0.0, 1.0),
+            WindParam::EddyErosion => (0.0, 0.95),
             WindParam::PuffCountTheta => (0.0, 16.0),
             WindParam::PuffCountHeight => (0.0, 16.0),
             WindParam::PuffRadius => (0.01, 1.0),

@@ -32,24 +32,6 @@ declare_scene_format! {
                 format: "%.2f",
             },
         },
-        core_radius: f32 = Frame {
-            get: |e| e.core_radius,
-            set: |e, v| e.core_radius = v,
-            ui {
-                min: 0.0,
-                max: 5.0,
-                format: "%.3f",
-            },
-        },
-        core_strength: f32 = Frame {
-            get: |e| e.core_strength,
-            set: |e, v| e.core_strength = v,
-            ui {
-                min: 0.0,
-                max: 4.0,
-                format: "%.2f",
-            },
-        },
         wall_radius_base: f32 = Frame {
             get: |e| e.wall_radius_base,
             set: |e, v| e.wall_radius_base = v,
@@ -208,56 +190,6 @@ declare_scene_format! {
                 tooltip: "Time constant of the wall strength decay; 0 keeps the wall at full strength",
             },
         },
-        ring_height: f32 = Frame {
-            get: |e| e.ring_height,
-            set: |e, v| e.ring_height = v,
-            ui {
-                min: 0.01,
-                max: 5.0,
-                format: "%.2f",
-                tooltip: "Height of the ground ring; density fades to zero above this height",
-            },
-        },
-        ring_radius: f32 = Frame {
-            get: |e| e.ring_radius,
-            set: |e, v| e.ring_radius = v,
-            ui {
-                min: 0.01,
-                max: 10.0,
-                format: "%.3f",
-                tooltip: "Radius of the ground ring at t = 0",
-            },
-        },
-        ring_width_q: f32 = Frame {
-            get: |e| e.ring_width_q,
-            set: |e, v| e.ring_width_q = v,
-            ui {
-                min: 0.001,
-                max: 5.0,
-                format: "%.3f",
-                tooltip: "Half width of the ring shell in squared-radius units",
-            },
-        },
-        ring_strength: f32 = Frame {
-            get: |e| e.ring_strength,
-            set: |e, v| e.ring_strength = v,
-            ui {
-                min: 0.0,
-                max: 4.0,
-                format: "%.2f",
-                tooltip: "Strength of the ground ring; 0 disables the ring",
-            },
-        },
-        ring_spread_rate: f32 = Frame {
-            get: |e| e.ring_spread_rate,
-            set: |e, v| e.ring_spread_rate = v,
-            ui {
-                min: 0.0,
-                max: 5.0,
-                format: "%.2f",
-                tooltip: "Outward drift of the ring in squared-radius units: 2 * ring_spread_rate * (t - spread_start)",
-            },
-        },
         circulation: f32 = Frame {
             get: |e| e.circulation,
             set: |e, v| e.circulation = v,
@@ -378,34 +310,14 @@ declare_scene_format! {
                 tooltip: "Period of the eddy reseed (time between resamples)",
             },
         },
-        layer_count: f32 = Frame {
-            get: |e| e.layer_count,
-            set: |e, v| e.layer_count = v,
-            ui {
-                min: 1.0,
-                max: 3.0,
-                format: "%.0f",
-                tooltip: "Number of concentric wall shells; 1 keeps the single wall (identity)",
-            },
-        },
-        layer_spacing_q: f32 = Frame {
-            get: |e| e.layer_spacing_q,
-            set: |e, v| e.layer_spacing_q = v,
-            ui {
-                min: 0.01,
-                max: 1.0,
-                format: "%.2f",
-                tooltip: "Outward offset between consecutive wall shells in q = x^2 + z^2",
-            },
-        },
-        layer_decay: f32 = Frame {
-            get: |e| e.layer_decay,
-            set: |e, v| e.layer_decay = v,
+        eddy_erosion: f32 = Frame {
+            get: |e| e.eddy_erosion,
+            set: |e, v| e.eddy_erosion = v,
             ui {
                 min: 0.0,
-                max: 1.0,
+                max: 0.95,
                 format: "%.2f",
-                tooltip: "Strength ratio of each wall shell to the one inside it",
+                tooltip: "Noise floor carved out of the eddy field; density reaches 0 where noise falls below it, 0 keeps the smooth modulation (identity)",
             },
         },
         puff_count_theta: u32 = Frame {

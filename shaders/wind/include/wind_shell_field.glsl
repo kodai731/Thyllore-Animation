@@ -10,23 +10,18 @@
 #include "include/noise.glsl"
 
 const float WIND_LINEAR_COEFFICIENT_EPSILON = 1e-7;
+const float WIND_EDDY_MIN_RADIUS_SQ = 1e-4;
 
 float windHeight() { return wind.shape.x; }
 float windWallRadiusBase() { return wind.shape.y; }
 float windWallRadiusSlope() { return wind.shape.z; }
 float windWallWidthQ() { return wind.shape.w; }
-float windCoreRadiusSq() { return wind.core.x; }
-float windCoreStrength() { return wind.core.y; }
-float windWallStrength() { return wind.core.z; }
-float windTopFade() { return wind.core.w; }
+float windWallStrength() { return wind.wall.x; }
+float windTopFade() { return wind.wall.y; }
 float windSigmaT() { return wind.optics.x; }
 float windSkyBrightness() { return wind.optics.y; }
 float windHTop() { return wind.optics.w; }
 float windSpreadOffset() { return wind.albedo.w; }
-float windRingHeight() { return wind.ring.x; }
-float windRingRadiusSq() { return wind.ring.y; }
-float windRingWidthQ() { return wind.ring.z; }
-float windRingStrength() { return wind.ring.w; }
 float windPhaseG() { return wind.lighting.x; }
 float windSunIntensity() { return wind.lighting.y; }
 float windStreakOrder() { return wind.streak.x; }
@@ -42,26 +37,8 @@ float windEddyCellRadial() { return wind.eddy.w; }
 float windEddyShear() { return wind.eddy2.x; }
 float windEddyRiseSpeed() { return wind.eddy2.y; }
 float windEddyReseedPeriod() { return wind.eddy2.z; }
-int windLayerCount() { return int(wind.layers.x + 0.5); }
-float windLayerSpacingQ() { return wind.layers.y; }
-float windLayerDecay() { return wind.layers.z; }
+float windEddyErosion() { return wind.eddy2.w; }
 float windTime() { return wind.optics.z; }
-
-bool windCoreActive() {
-    return windCoreRadiusSq() > 1e-8 && windCoreStrength() > 0.0;
-}
-
-bool windRingActive() {
-    return windRingStrength() > 0.0;
-}
-
-float windRingBoundsRadius() {
-    return windRingActive() ? sqrt(max(windRingRadiusSq() + windRingWidthQ(), 0.0)) : 0.0;
-}
-
-float windRingTopY() {
-    return windRingHeight() * windHeight();
-}
 
 float windFadeStart() {
     return 1.0 - windTopFade();
@@ -135,7 +112,7 @@ WindEddyGeometry windEddyGeometry(vec3 local) {
     float wallRadius = windWallRadius(h);
 
     float omega = (windStreakPhase() / max(windTime(), 1e-3))
-        * (windWallRadiusSq(h) / max(r * r, windCoreRadiusSq()));
+        * (windWallRadiusSq(h) / max(r * r, WIND_EDDY_MIN_RADIUS_SQ));
     float nTheta = max(round(2.0 * 3.14159265 * wallRadius / windEddyCellTheta()), 1.0);
 
     WindEddyGeometry geometry;
@@ -174,11 +151,12 @@ float windEddySigma(vec3 local) {
     float NB = windEddyPeriodicNoiseFBM(windEddyLayerCoords(geometry, ageB, 17.0 * kB + 3.0), geometry.periodTheta);
 
     float N = wA * NA + wB * NB;
-    return 1.0 + windEddyAmplitude() * (2.0 * N - 1.0);
+    float eroded = clamp((N - windEddyErosion()) / (1.0 - windEddyErosion()), 0.0, 1.0);
+    return 1.0 + windEddyAmplitude() * (2.0 * eroded - 1.0);
 }
 
 float windEnvelopeRadius(float h) {
-    return sqrt(max(max(windWallRadiusSq(h), windCoreRadiusSq()), 0.0)) + sqrt(windWallWidthQ());
+    return sqrt(max(windWallRadiusSq(h), 0.0)) + sqrt(windWallWidthQ());
 }
 
 float windEnvelopeHeight(float h) {
@@ -199,13 +177,6 @@ float windBiweight(float u) {
     return inside * inside;
 }
 
-float windRingFade(float v) {
-    if (v >= 1.0) {
-        return 0.0;
-    }
-    return 1.0 - v * v * (3.0 - 2.0 * v);
-}
-
 float windDensityAt(vec3 p) {
     float h = p.y / windHeight();
     float envelope = windEnvelopeHeight(h);
@@ -215,17 +186,7 @@ float windDensityAt(vec3 p) {
     float q = p.x * p.x + p.z * p.z;
 
     float wall = windWallStrength() * windBiweight((q - windWallRadiusSq(h)) / windWallWidthQ());
-    for (int k = 1; k < windLayerCount(); ++k) {
-        float offset = float(k) * windLayerSpacingQ();
-        float layerWeight = windWallStrength() * pow(windLayerDecay(), float(k));
-        wall += layerWeight * windBiweight((q - windWallRadiusSq(h) - offset) / windWallWidthQ());
-    }
-    float core = windCoreActive() ? windCoreStrength() * windBiweight(q / windCoreRadiusSq()) : 0.0;
-    float ring = windRingActive()
-        ? windRingStrength() * windRingFade(h / windRingHeight())
-              * windBiweight((q - windRingRadiusSq()) / windRingWidthQ())
-        : 0.0;
-    return windSigmaT() * envelope * (wall + core + ring) * windStreakSigma(p) * windEddySigma(p);
+    return windSigmaT() * envelope * wall * windStreakSigma(p) * windEddySigma(p);
 }
 
 bool clampToConeFrustum(
@@ -274,44 +235,11 @@ bool clampToConeFrustum(
     return tNear <= tFar;
 }
 
-// Cone frustum (radius linear in height between the envelope radii) x height slab.
-// When ring is active, the cone is the union of the wall frustum and the ring frustum.
 bool clampToWindCone(vec3 o, vec3 d, inout float tNear, inout float tFar) {
     float topY = windHTop() * windHeight();
     float radiusBase = windEnvelopeRadius(0.0);
     float radiusTop = windEnvelopeRadius(windHTop());
-
-    float savedNear = tNear;
-    float savedFar = tFar;
-    bool wallHit = clampToConeFrustum(radiusBase, radiusTop, topY, o, d, tNear, tFar);
-
-    if (!windRingActive()) {
-        return wallHit;
-    }
-
-    float ringRadius = windRingBoundsRadius();
-    float ringTopY = windRingTopY();
-    tNear = savedNear;
-    tFar = savedFar;
-    bool ringHit = clampToConeFrustum(ringRadius, ringRadius, ringTopY, o, d, tNear, tFar);
-
-    if (!wallHit) {
-        return ringHit;
-    }
-    float wallNear = tNear;
-    float wallFar = tFar;
-    tNear = savedNear;
-    tFar = savedFar;
-    clampToConeFrustum(radiusBase, radiusTop, topY, o, d, tNear, tFar);
-    float finalWallNear = tNear;
-    float finalWallFar = tFar;
-    tNear = savedNear;
-    tFar = savedFar;
-    clampToConeFrustum(ringRadius, ringRadius, ringTopY, o, d, tNear, tFar);
-
-    tNear = min(finalWallNear, tNear);
-    tFar = max(finalWallFar, tFar);
-    return true;
+    return clampToConeFrustum(radiusBase, radiusTop, topY, o, d, tNear, tFar);
 }
 
 #endif

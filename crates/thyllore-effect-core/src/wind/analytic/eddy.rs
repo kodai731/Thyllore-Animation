@@ -73,6 +73,8 @@ pub struct EddyGeometry {
     pub period_theta: f32,
 }
 
+const EDDY_MIN_RADIUS_SQ: f32 = 1e-4;
+
 pub fn eddy_geometry(params: &WindShellParams, local: [f32; 3]) -> EddyGeometry {
     let r = (local[0] * local[0] + local[2] * local[2]).sqrt();
     let theta = local[2].atan2(local[0]);
@@ -80,7 +82,7 @@ pub fn eddy_geometry(params: &WindShellParams, local: [f32; 3]) -> EddyGeometry 
     let wall_radius = params.wall_radius(h);
 
     let omega = (params.streak_phase / params.time.max(1e-3))
-        * (params.wall_radius_sq(h) / (r * r).max(params.core_radius_sq));
+        * (params.wall_radius_sq(h) / (r * r).max(EDDY_MIN_RADIUS_SQ));
     let n_theta = (2.0 * PI * wall_radius / params.eddy_cell_theta)
         .round()
         .max(1.0);
@@ -136,5 +138,6 @@ pub fn eddy_sigma(params: &WindShellParams, local: [f32; 3]) -> f32 {
     let noise_b = periodic_noise_fbm(coords_b, geometry.period_theta);
 
     let noise = w_a * noise_a + w_b * noise_b;
-    1.0 + params.eddy_amplitude * (2.0 * noise - 1.0)
+    let eroded = ((noise - params.eddy_erosion) / (1.0 - params.eddy_erosion)).clamp(0.0, 1.0);
+    1.0 + params.eddy_amplitude * (2.0 * eroded - 1.0)
 }

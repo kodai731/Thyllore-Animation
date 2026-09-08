@@ -6,10 +6,8 @@ use cgmath::Vector3;
 
 // Mirror of shaders/wind/include/wind_shell_field.glsl and wind_shell_integral.glsl.
 //
-// The density is a sum of compact-support polynomial shells in q = x^2 + z^2:
+// The density is a compact-support polynomial shell in q = x^2 + z^2 plus puffs:
 //   wall: B((q - P(h)) / W),  P(h) = (base + slope * h)^2
-//   core: B(q / Pc)
-//   ring: E_r(h / Hr) * B((q - Pr) / Wr)
 // with B(u) = (1 - u^2)^2 on |u| < 1, scaled by the height envelope E(h).
 // Along a ray q and h are quadratic and linear in the ray parameter, so every
 // term is a polynomial and the optical depth of a piece between two knots is
@@ -19,7 +17,8 @@ pub const WIND_MAX_KNOTS: usize = 56;
 pub const WIND_MAX_PUFFS: usize = 96;
 pub const WIND_PUFFS_PER_RAY: usize = 20;
 const POLY_TERMS: usize = 16;
-const EDDY_MAX_SPLIT: usize = 4;
+const EDDY_MAX_SPLIT: usize = 8;
+const EDDY_FINEST_OCTAVE_SPLITS_PER_CELL: f32 = 8.0;
 const LINEAR_COEFFICIENT_EPSILON: f32 = 1e-7;
 const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
 
@@ -32,16 +31,10 @@ pub struct WindShellParams {
     pub wall_radius_slope: f32,
     pub wall_width_q: f32,
     pub wall_strength: f32,
-    pub core_radius_sq: f32,
-    pub core_strength: f32,
     pub top_fade: f32,
     pub sigma_t: f32,
     pub h_top: f32,
     pub spread_offset: f32,
-    pub ring_height: f32,
-    pub ring_radius_sq: f32,
-    pub ring_width_q: f32,
-    pub ring_strength: f32,
     pub streak_order: f32,
     pub streak_twist: f32,
     pub streak_rise_speed: f32,
@@ -55,9 +48,7 @@ pub struct WindShellParams {
     pub eddy_shear: f32,
     pub eddy_rise_speed: f32,
     pub eddy_reseed_period: f32,
-    pub layer_count: usize,
-    pub layer_spacing_q: f32,
-    pub layer_decay: f32,
+    pub eddy_erosion: f32,
     pub time: f32,
     pub puff_strength: f32,
     pub puff_count: usize,
@@ -75,14 +66,6 @@ impl WindShellParams {
             effect.dissipate_start,
             effect.dissipate_time,
         );
-        let ring_strength = wall_amp(
-            t,
-            effect.ring_strength,
-            effect.dissipate_start,
-            effect.dissipate_time,
-        );
-        let ring_radius_sq = effect.ring_radius * effect.ring_radius
-            + spread_offset(t, effect.spread_start, effect.ring_spread_rate);
         let streak_phase_value = streak_phase(
             t,
             effect.circulation,
@@ -96,16 +79,10 @@ impl WindShellParams {
             wall_radius_slope: effect.wall_radius_top - effect.wall_radius_base,
             wall_width_q: effect.wall_width_q.max(1e-4),
             wall_strength,
-            core_radius_sq: effect.core_radius * effect.core_radius,
-            core_strength: effect.core_strength,
             top_fade: effect.top_fade.clamp(1e-3, 1.0),
             sigma_t: effect.density,
             h_top: h_top_value.max(1e-3),
             spread_offset: spread_offset_value,
-            ring_height: effect.ring_height.max(1e-3),
-            ring_radius_sq,
-            ring_width_q: effect.ring_width_q.max(1e-4),
-            ring_strength,
             streak_order: effect.streak_order,
             streak_twist: effect.streak_twist,
             streak_rise_speed: effect.streak_rise_speed,
@@ -119,9 +96,7 @@ impl WindShellParams {
             eddy_shear: effect.eddy_shear.clamp(0.0, 1.0),
             eddy_rise_speed: effect.eddy_rise_speed,
             eddy_reseed_period: effect.eddy_reseed_period.max(1e-3),
-            layer_count: (effect.layer_count.round() as i32).clamp(1, 3) as usize,
-            layer_spacing_q: effect.layer_spacing_q.max(0.0),
-            layer_decay: effect.layer_decay.max(0.0).min(1.0),
+            eddy_erosion: effect.eddy_erosion.clamp(0.0, 0.95),
             time: t,
             puff_strength: effect.puff_strength,
             puff_count: 0,
@@ -143,38 +118,13 @@ impl WindShellParams {
         radius * radius + self.spread_offset
     }
 
-    fn core_active(&self) -> bool {
-        self.core_radius_sq > 1e-8 && self.core_strength > 0.0
-    }
-
-    fn ring_active(&self) -> bool {
-        self.ring_strength > 0.0
-    }
-
-    pub fn ring_bounds_radius(&self) -> f32 {
-        if self.ring_active() {
-            (self.ring_radius_sq + self.ring_width_q).max(0.0).sqrt()
-        } else {
-            0.0
-        }
-    }
-
-    fn ring_top_y(&self) -> f32 {
-        self.ring_height * self.height
-    }
-
     fn fade_start(&self) -> f32 {
         1.0 - self.top_fade
     }
 }
 
 pub fn wind_envelope_radius(params: &WindShellParams, h: f32) -> f32 {
-    params
-        .wall_radius_sq(h)
-        .max(params.core_radius_sq)
-        .max(0.0)
-        .sqrt()
-        + params.wall_width_q.sqrt()
+    params.wall_radius_sq(h).max(0.0).sqrt() + params.wall_width_q.sqrt()
 }
 
 pub fn wind_envelope_height(params: &WindShellParams, h: f32) -> f32 {
@@ -195,13 +145,6 @@ fn biweight(u: f32) -> f32 {
     inside * inside
 }
 
-fn ring_fade(v: f32) -> f32 {
-    if v >= 1.0 {
-        return 0.0;
-    }
-    1.0 - v * v * (3.0 - 2.0 * v)
-}
-
 pub fn wind_density_at(params: &WindShellParams, local: Vector3<f32>) -> f32 {
     let h = local.y / params.height;
     let envelope = wind_envelope_height(params, h);
@@ -210,26 +153,8 @@ pub fn wind_density_at(params: &WindShellParams, local: Vector3<f32>) -> f32 {
     }
     let q = local.x * local.x + local.z * local.z;
 
-    let mut wall =
+    let wall =
         params.wall_strength * biweight((q - params.wall_radius_sq(h)) / params.wall_width_q);
-    for k in 1..params.layer_count {
-        let offset = k as f32 * params.layer_spacing_q;
-        let u = (q - params.wall_radius_sq(h) - offset) / params.wall_width_q;
-        wall += params.wall_strength * params.layer_decay.powi(k as i32) * biweight(u);
-    }
-
-    let core = if params.core_active() {
-        params.core_strength * biweight(q / params.core_radius_sq)
-    } else {
-        0.0
-    };
-    let ring = if params.ring_active() {
-        params.ring_strength
-            * ring_fade(h / params.ring_height)
-            * biweight((q - params.ring_radius_sq) / params.ring_width_q)
-    } else {
-        0.0
-    };
 
     let mut puff_term = 0.0f32;
     for i in 0..params.puff_count {
@@ -250,7 +175,7 @@ pub fn wind_density_at(params: &WindShellParams, local: Vector3<f32>) -> f32 {
         }
     }
 
-    params.sigma_t * (envelope * (wall + core + ring) + puff_term)
+    params.sigma_t * (envelope * wall + puff_term)
 }
 
 fn clamp_ray_to_cone_frustum(
@@ -311,8 +236,8 @@ fn clamp_ray_to_cone_frustum(
     (t_near <= t_far).then_some((t_near, t_far))
 }
 
-/// Clamps the ray parameter interval to the hull of the wall cone frustum and the
-/// ring frustum, both intersected with their height slab. False when both are missed.
+/// Clamps the ray parameter interval to the wall cone frustum intersected with its
+/// height slab. False when the ray misses it.
 pub fn clamp_ray_to_wind_cone(
     params: &WindShellParams,
     origin: Vector3<f32>,
@@ -320,42 +245,19 @@ pub fn clamp_ray_to_wind_cone(
     t_near: &mut f32,
     t_far: &mut f32,
 ) -> bool {
-    let bounds = (*t_near, *t_far);
-    let wall = clamp_ray_to_cone_frustum(
+    let Some(interval) = clamp_ray_to_cone_frustum(
         wind_envelope_radius(params, 0.0),
         wind_envelope_radius(params, params.h_top),
         params.h_top * params.height,
         origin,
         direction,
-        bounds,
-    );
-    let ring = if params.ring_active() {
-        let radius = params.ring_bounds_radius();
-        clamp_ray_to_cone_frustum(
-            radius,
-            radius,
-            params.ring_top_y(),
-            origin,
-            direction,
-            bounds,
-        )
-    } else {
-        None
+        (*t_near, *t_far),
+    ) else {
+        return false;
     };
-
-    match (wall, ring) {
-        (None, None) => false,
-        (Some(interval), None) | (None, Some(interval)) => {
-            *t_near = interval.0;
-            *t_far = interval.1;
-            true
-        }
-        (Some(wall_interval), Some(ring_interval)) => {
-            *t_near = wall_interval.0.min(ring_interval.0);
-            *t_far = wall_interval.1.max(ring_interval.1);
-            true
-        }
-    }
+    *t_near = interval.0;
+    *t_far = interval.1;
+    true
 }
 
 fn push_knot(knots: &mut [f32; WIND_MAX_KNOTS], count: &mut usize, t: f32, lo: f32, hi: f32) {
@@ -439,47 +341,6 @@ pub fn wind_ray_knots(
         );
     }
 
-    for k in 1..params.layer_count {
-        let offset = k as f32 * params.layer_spacing_q;
-        for boundary in [params.wall_width_q, -params.wall_width_q] {
-            push_quadratic_roots(
-                delta_a,
-                delta_b,
-                delta_c - offset - boundary,
-                t_near,
-                t_far,
-                &mut knots,
-                &mut count,
-            );
-        }
-    }
-
-    if params.core_active() {
-        push_quadratic_roots(
-            q_a,
-            q_b,
-            q_c - params.core_radius_sq,
-            t_near,
-            t_far,
-            &mut knots,
-            &mut count,
-        );
-    }
-
-    if params.ring_active() {
-        for boundary in [params.ring_width_q, -params.ring_width_q] {
-            push_quadratic_roots(
-                q_a,
-                q_b,
-                q_c - params.ring_radius_sq - boundary,
-                t_near,
-                t_far,
-                &mut knots,
-                &mut count,
-            );
-        }
-    }
-
     if direction.y.abs() >= LINEAR_COEFFICIENT_EPSILON {
         let fade_y = params.fade_start() * params.h_top * params.height;
         push_knot(
@@ -489,15 +350,6 @@ pub fn wind_ray_knots(
             t_near,
             t_far,
         );
-        if params.ring_active() {
-            push_knot(
-                &mut knots,
-                &mut count,
-                (params.ring_top_y() - origin.y) / direction.y,
-                t_near,
-                t_far,
-            );
-        }
     }
 
     let mut adopted = 0;
@@ -566,18 +418,6 @@ fn biweight_poly(u: &Poly) -> Poly {
     }
     inside[0] += 1.0;
     poly_mul(&inside, &inside)
-}
-
-fn ring_fade_poly(params: &WindShellParams, h0: f32, h1: f32) -> Poly {
-    let mut poly = [0.0f32; POLY_TERMS];
-    let inv_ring_height = 1.0 / params.ring_height;
-    let v0 = h0 * inv_ring_height;
-    let v1 = h1 * inv_ring_height;
-    poly[0] = 1.0 - 3.0 * v0 * v0 + 2.0 * v0 * v0 * v0;
-    poly[1] = -6.0 * v0 * v1 + 6.0 * v0 * v0 * v1;
-    poly[2] = -3.0 * v1 * v1 + 6.0 * v0 * v1 * v1;
-    poly[3] = 2.0 * v1 * v1 * v1;
-    poly
 }
 
 fn envelope_poly(params: &WindShellParams, h0: f32, h1: f32, h_mid: f32) -> Poly {
@@ -651,46 +491,6 @@ pub fn wind_piece_optical_depth(
             *target += params.wall_strength * value;
         }
     }
-    for k in 1..params.layer_count {
-        let mut uk = u;
-        uk[0] -= k as f32 * params.layer_spacing_q * inv_width;
-        let uk_mid = uk[0] + 0.5 * uk[1] + 0.25 * uk[2];
-        if uk_mid.abs() < 1.0 {
-            let wall = biweight_poly(&uk);
-            let layer_weight = params.wall_strength * params.layer_decay.powi(k as i32);
-            for (target, value) in shell.iter_mut().zip(wall) {
-                *target += layer_weight * value;
-            }
-        }
-    }
-    if params.core_active() {
-        let inv_core = 1.0 / params.core_radius_sq;
-        let uc = poly_from_quadratic(q0 * inv_core, q1 * inv_core, q2 * inv_core);
-        let uc_mid = uc[0] + 0.5 * uc[1] + 0.25 * uc[2];
-        if uc_mid < 1.0 {
-            let core = biweight_poly(&uc);
-            for (target, value) in shell.iter_mut().zip(core) {
-                *target += params.core_strength * value;
-            }
-        }
-    }
-
-    if params.ring_active() && h_mid < params.ring_height {
-        let inv_ring_width = 1.0 / params.ring_width_q;
-        let ur = poly_from_quadratic(
-            (q0 - params.ring_radius_sq) * inv_ring_width,
-            q1 * inv_ring_width,
-            q2 * inv_ring_width,
-        );
-        let ur_mid = ur[0] + 0.5 * ur[1] + 0.25 * ur[2];
-        if ur_mid.abs() < 1.0 {
-            let ring = poly_mul(&ring_fade_poly(params, h0, h1), &biweight_poly(&ur));
-            for (target, value) in shell.iter_mut().zip(ring) {
-                *target += params.ring_strength * value;
-            }
-        }
-    }
-
     let mut puff_poly = [0.0f32; POLY_TERMS];
     let mut adopted = 0;
     for i in 0..params.puff_count {
@@ -751,7 +551,8 @@ pub fn wind_piece_optical_depth(
             .eddy_cell_theta
             .min(params.eddy_cell_height)
             .min(params.eddy_cell_radial);
-        let splits = ((2.0 * length / cell_min).ceil() as i32).clamp(1, EDDY_MAX_SPLIT as i32);
+        let splits = ((EDDY_FINEST_OCTAVE_SPLITS_PER_CELL * length / cell_min).ceil() as i32)
+            .clamp(1, EDDY_MAX_SPLIT as i32);
         let mut total = 0.0f32;
         let mut sigma_a = eddy_sigma(params, [start.x, start.y, start.z]);
         for j in 0..splits {

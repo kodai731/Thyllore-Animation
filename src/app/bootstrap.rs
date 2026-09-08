@@ -370,10 +370,16 @@ pub unsafe fn init_flame_sdf_texture(app: &mut App, overrides: &EngineCliOverrid
     app.data.raytracing.flame_sdf_image_view = image_view;
     app.data.raytracing.flame_sdf_sampler = sampler;
 
-    if let (Some(ref flame_buffer), Some(ref flame_descriptor)) = (
-        &app.data.viewport.flame_buffer,
-        &app.data.raytracing.flame_descriptor,
-    ) {
+    let Some(flame_targets) = app
+        .data
+        .ecs_world
+        .get_resource::<crate::ecs::resource::FlameRenderTargets>()
+    else {
+        return Ok(());
+    };
+    let flame_buffer = &flame_targets.buffer;
+
+    if let Some(ref flame_descriptor) = app.data.raytracing.flame_descriptor {
         flame_descriptor.update_image_views(
             &app.rrdevice,
             FlameImageBindings {

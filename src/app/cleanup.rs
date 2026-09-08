@@ -16,6 +16,10 @@ impl App {
 
         let _ = self.rrdevice.device.device_wait_idle();
 
+        if let Err(error) = self.run_effect_destroy() {
+            log_warn!("Effect destroy hook failed: {:?}", error);
+        }
+
         let mut resources: [&mut dyn GpuResource; 5] = [
             &mut self.data.graphics_resources,
             &mut self.gpu_timestamp_profiler,

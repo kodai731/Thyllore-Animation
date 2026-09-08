@@ -135,6 +135,9 @@ impl App {
         let loader = LibloadingLoader::new(LIBRARY)?;
         let entry = Entry::new(loader).map_err(|b| anyhow!("{}", b))?;
         let mut data = AppData::default();
+        crate::effect::subscription::subscribe_effects(&mut data.effect_hooks);
+        crate::vulkanr::renderer::deferred::register_core_passes(&mut data.pass_graph);
+        data.effect_hooks.register_passes(&mut data.pass_graph);
 
         Self::initialize_core_ecs_resources(&mut data);
 
@@ -227,9 +230,10 @@ impl App {
         //     loaded_scene.is_some(),
         //     );
 
-        // The scene restores timeline, panel and curve editor state, so those resources must
-        // exist before it is applied. Registration is idempotent and runs again below.
+        // The scene restores timeline, panel, curve editor and post-processing state, so those
+        // resources must exist before it is applied. Registration is idempotent and runs again below.
         Self::register_editor_resources(&mut data);
+        Self::register_post_processing_resources(&mut data);
         Self::apply_loaded_scene(&mut data, loaded_scene);
         if let Err(e) = Self::build_acceleration_structures_with_resources(
             &instance,
@@ -380,23 +384,6 @@ impl App {
             rrswapchain.swapchain_format,
         )
         .context("Failed to create viewport state")?;
-
-        let hdr_image_view = data
-            .viewport
-            .hdr_buffer
-            .as_ref()
-            .context("Viewport HDR buffer is missing")?
-            .color_image_view;
-        data.effect_targets = crate::app::effect_render_targets::EffectRenderTargets::new(
-            instance,
-            rrdevice,
-            &mut data.viewport.render_targets,
-            rrcommand_pool.command_pool,
-            viewport_width,
-            viewport_height,
-            hdr_image_view,
-        )
-        .context("Failed to create effect render targets")?;
 
         log!(
             "Created viewport state: {}x{} with MSAA {:?}, format {:?}",

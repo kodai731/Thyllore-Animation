@@ -1,4 +1,4 @@
-use crate::app::{debug_dump_actions, export_actions, App};
+use crate::app::{features::export_actions, App};
 #[cfg(feature = "auto-rig")]
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::ClipLibrary;
@@ -44,8 +44,8 @@ pub(crate) unsafe fn execute_deferred_action(app: &mut App, action: DeferredActi
                 &app.data.ecs_world,
                 save_result.map_err(|e| format!("{e:?}")),
             );
-            debug_dump_actions::save_flame_history_npy_if_requested(app);
-            debug_dump_actions::save_water_probe_if_requested(app);
+            crate::debugview::debug_dump_actions::save_flame_history_npy_if_requested(app);
+            crate::debugview::debug_dump_actions::save_water_probe_if_requested(app);
         }
 
         #[cfg(debug_assertions)]

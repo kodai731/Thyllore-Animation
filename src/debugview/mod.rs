@@ -1,5 +1,9 @@
 pub mod billboard_debug;
+pub(crate) mod debug_dump_actions;
+pub mod debug_primitive;
+pub mod exposure_dump;
 pub mod fbx_debug;
+pub mod flame_history_dump;
 pub mod shadow_debug;
 pub mod water_debug_dump;
 

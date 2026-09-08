@@ -1,7 +1,6 @@
 use cgmath::{SquareMatrix, Vector3};
 
 use crate::app::App;
-use crate::vulkanr::context::CommandState;
 use crate::vulkanr::vulkan::*;
 
 pub(crate) fn save_flame_history_npy_if_requested(app: &mut App) {
@@ -84,15 +83,13 @@ pub(crate) fn save_water_probe_if_requested(app: &mut App) {
         let h = hdr.height;
         let image = hdr.color_image;
         let image_size = (w * h * 8) as vk::DeviceSize;
-        let command_pool = app.resource::<CommandState>().pool.command_pool;
 
-        let (buffer, buffer_memory, command_buffer) = unsafe {
+        let (buffer, buffer_memory) = unsafe {
             app.copy_image_to_buffer(
                 image,
                 w,
                 h,
                 image_size,
-                command_pool,
                 vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             )
         }
@@ -121,7 +118,6 @@ pub(crate) fn save_water_probe_if_requested(app: &mut App) {
 
         unsafe {
             device.unmap_memory(buffer_memory);
-            device.free_command_buffers(command_pool, &[command_buffer]);
             device.free_memory(buffer_memory, None);
             device.destroy_buffer(buffer, None);
         }

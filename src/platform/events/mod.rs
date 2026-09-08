@@ -457,8 +457,8 @@ unsafe fn render_frame(
                         [1680.0, 840.0],
                     );
                 }
-                crate::app::debug_dump_actions::save_flame_history_npy_if_requested(app);
-                crate::app::debug_dump_actions::save_water_probe_if_requested(app);
+                crate::debugview::debug_dump_actions::save_flame_history_npy_if_requested(app);
+                crate::debugview::debug_dump_actions::save_water_probe_if_requested(app);
             }
         }
         app.data

@@ -23,46 +23,75 @@ pub fn hash13(p: [f32; 3]) -> f32 {
     h[0] as f32 * (1.0 / 4294967296.0)
 }
 
-pub fn periodic_noise(u: [f32; 3], period_theta: f32) -> f32 {
-    let cell = [u[0].floor(), u[1].floor(), u[2].floor()];
-    let f = [u[0] - cell[0], u[1] - cell[1], u[2] - cell[2]];
-    let w = [
-        f[0] * f[0] * (3.0 - 2.0 * f[0]),
-        f[1] * f[1] * (3.0 - 2.0 * f[1]),
-        f[2] * f[2] * (3.0 - 2.0 * f[2]),
+fn quintic_fade(t: f32) -> f32 {
+    t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
+}
+
+fn lattice_gradient(cell: [f32; 3]) -> [f32; 3] {
+    let g = [
+        2.0 * hash13(cell) - 1.0,
+        2.0 * hash13([cell[0] + 17.1, cell[1] + 9.3, cell[2] + 4.7]) - 1.0,
+        2.0 * hash13([cell[0] + 31.7, cell[1] + 2.9, cell[2] + 12.3]) - 1.0,
     ];
+    let inv_len = 1.0 / (g[0] * g[0] + g[1] * g[1] + g[2] * g[2]).sqrt().max(1e-4);
+    [g[0] * inv_len, g[1] * inv_len, g[2] * inv_len]
+}
 
-    let period = period_theta as i32;
-    let cx = (cell[0] as i32).rem_euclid(period) as f32;
-    let cx1 = (cell[0] as i32 + 1).rem_euclid(period) as f32;
+fn corner_dot(cell: [f32; 3], f: [f32; 3], dx: f32, dy: f32, dz: f32) -> f32 {
+    let g = lattice_gradient([cell[0] + dx, cell[1] + dy, cell[2] + dz]);
+    g[0] * (f[0] - dx) + g[1] * (f[1] - dy) + g[2] * (f[2] - dz)
+}
 
-    let n000 = hash13([cx, cell[1], cell[2]]);
-    let n100 = hash13([cx1, cell[1], cell[2]]);
-    let n010 = hash13([cx, cell[1] + 1.0, cell[2]]);
-    let n110 = hash13([cx1, cell[1] + 1.0, cell[2]]);
-    let n001 = hash13([cx, cell[1], cell[2] + 1.0]);
-    let n101 = hash13([cx1, cell[1], cell[2] + 1.0]);
-    let n011 = hash13([cx, cell[1] + 1.0, cell[2] + 1.0]);
-    let n111 = hash13([cx1, cell[1] + 1.0, cell[2] + 1.0]);
+pub fn gradient_noise(p: [f32; 3]) -> f32 {
+    let cell = [p[0].floor(), p[1].floor(), p[2].floor()];
+    let f = [p[0] - cell[0], p[1] - cell[1], p[2] - cell[2]];
+    let w = [quintic_fade(f[0]), quintic_fade(f[1]), quintic_fade(f[2])];
 
-    let nx00 = mix(n000, n100, w[0]);
-    let nx10 = mix(n010, n110, w[0]);
-    let nx01 = mix(n001, n101, w[0]);
-    let nx11 = mix(n011, n111, w[0]);
+    let nx00 = mix(
+        corner_dot(cell, f, 0.0, 0.0, 0.0),
+        corner_dot(cell, f, 1.0, 0.0, 0.0),
+        w[0],
+    );
+    let nx10 = mix(
+        corner_dot(cell, f, 0.0, 1.0, 0.0),
+        corner_dot(cell, f, 1.0, 1.0, 0.0),
+        w[0],
+    );
+    let nx01 = mix(
+        corner_dot(cell, f, 0.0, 0.0, 1.0),
+        corner_dot(cell, f, 1.0, 0.0, 1.0),
+        w[0],
+    );
+    let nx11 = mix(
+        corner_dot(cell, f, 0.0, 1.0, 1.0),
+        corner_dot(cell, f, 1.0, 1.0, 1.0),
+        w[0],
+    );
     let nxy0 = mix(nx00, nx10, w[1]);
     let nxy1 = mix(nx01, nx11, w[1]);
     mix(nxy0, nxy1, w[2])
 }
 
-fn periodic_noise_octave(u: [f32; 3], period_theta: f32, freq: f32) -> f32 {
-    periodic_noise([freq * u[0], freq * u[1], freq * u[2]], period_theta * freq)
+const OCTAVE_ROTATION: [[f32; 3]; 3] = [
+    [0.784750, -0.045714, 0.618124],
+    [0.509329, 0.615862, -0.601081],
+    [-0.353201, 0.786527, 0.506581],
+];
+
+fn rotate_and_double(p: [f32; 3]) -> [f32; 3] {
+    let r = &OCTAVE_ROTATION;
+    [
+        2.0 * (r[0][0] * p[0] + r[0][1] * p[1] + r[0][2] * p[2]),
+        2.0 * (r[1][0] * p[0] + r[1][1] * p[1] + r[1][2] * p[2]),
+        2.0 * (r[2][0] * p[0] + r[2][1] * p[1] + r[2][2] * p[2]),
+    ]
 }
 
-pub fn periodic_noise_fbm(u: [f32; 3], period_theta: f32) -> f32 {
-    let mut sum = 0.5 * periodic_noise_octave(u, period_theta, 1.0);
-    sum += 0.25 * periodic_noise_octave(u, period_theta, 2.0);
-    sum += 0.125 * periodic_noise_octave(u, period_theta, 4.0);
-    sum * (1.0 / 0.875)
+pub fn eddy_noise_fbm(p: [f32; 3]) -> f32 {
+    let p1 = rotate_and_double(p);
+    let p2 = rotate_and_double(p1);
+    let sum = 0.5 * gradient_noise(p) + 0.25 * gradient_noise(p1) + 0.125 * gradient_noise(p2);
+    (0.5 + sum * (1.0 / 0.875)).clamp(0.0, 1.0)
 }
 
 pub struct EddyGeometry {
@@ -108,13 +137,14 @@ pub fn eddy_layer_coords(
         params.eddy_shear,
     );
 
-    let u_theta = geometry.period_theta * (geometry.theta - phi) / (2.0 * PI);
+    let sheared_theta = geometry.theta - phi;
+    let rho = geometry.period_theta / (2.0 * PI) + geometry.radial_coord;
     let u_h = (geometry.height - params.eddy_rise_speed * age) / params.eddy_cell_height;
 
     [
-        u_theta + seed,
-        u_h + seed * 0.37,
-        geometry.radial_coord + seed * 0.61,
+        rho * sheared_theta.cos() + seed,
+        rho * sheared_theta.sin() + seed * 0.37,
+        u_h + seed * 0.61,
     ]
 }
 
@@ -132,10 +162,18 @@ pub fn eddy_sigma(params: &WindShellParams, local: [f32; 3]) -> f32 {
 
     let geometry = eddy_geometry(params, local);
 
-    let coords_a = eddy_layer_coords(params, &geometry, age_a, 17.0 * k_a + 3.0);
-    let noise_a = periodic_noise_fbm(coords_a, geometry.period_theta);
-    let coords_b = eddy_layer_coords(params, &geometry, age_b, 17.0 * k_b + 3.0);
-    let noise_b = periodic_noise_fbm(coords_b, geometry.period_theta);
+    let noise_a = eddy_noise_fbm(eddy_layer_coords(
+        params,
+        &geometry,
+        age_a,
+        17.0 * k_a + 3.0,
+    ));
+    let noise_b = eddy_noise_fbm(eddy_layer_coords(
+        params,
+        &geometry,
+        age_b,
+        17.0 * k_b + 3.0,
+    ));
 
     let noise = w_a * noise_a + w_b * noise_b;
     let eroded = ((noise - params.eddy_erosion) / (1.0 - params.eddy_erosion)).clamp(0.0, 1.0);

@@ -59,42 +59,50 @@ float windWallRadiusSq(float h) {
     return radius * radius + windSpreadOffset();
 }
 
-float windEddyPeriodicNoise(vec3 u, float periodTheta) {
-    vec3 cell = floor(u);
-    vec3 f = u - cell;
-    vec3 w = f * f * (3.0 - 2.0 * f);
+float windQuinticFade(float t) {
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+}
 
-    int p = int(periodTheta);
-    int cx = int(mod(cell.x, float(p)));
-    int cx1 = int(mod(cell.x + 1.0, float(p)));
+vec3 windLatticeGradient(vec3 cell) {
+    vec3 g = vec3(
+        2.0 * hash13(cell) - 1.0,
+        2.0 * hash13(cell + vec3(17.1, 9.3, 4.7)) - 1.0,
+        2.0 * hash13(cell + vec3(31.7, 2.9, 12.3)) - 1.0);
+    return g / max(length(g), 1e-4);
+}
 
-    float n000 = hash13(vec3(float(cx), cell.y, cell.z));
-    float n100 = hash13(vec3(float(cx1), cell.y, cell.z));
-    float n010 = hash13(vec3(float(cx), cell.y + 1.0, cell.z));
-    float n110 = hash13(vec3(float(cx1), cell.y + 1.0, cell.z));
-    float n001 = hash13(vec3(float(cx), cell.y, cell.z + 1.0));
-    float n101 = hash13(vec3(float(cx1), cell.y, cell.z + 1.0));
-    float n011 = hash13(vec3(float(cx), cell.y + 1.0, cell.z + 1.0));
-    float n111 = hash13(vec3(float(cx1), cell.y + 1.0, cell.z + 1.0));
+float windCornerDot(vec3 cell, vec3 f, vec3 corner) {
+    return dot(windLatticeGradient(cell + corner), f - corner);
+}
 
-    float nx00 = mix(n000, n100, w.x);
-    float nx10 = mix(n010, n110, w.x);
-    float nx01 = mix(n001, n101, w.x);
-    float nx11 = mix(n011, n111, w.x);
+float windGradientNoise(vec3 p) {
+    vec3 cell = floor(p);
+    vec3 f = p - cell;
+    vec3 w = vec3(windQuinticFade(f.x), windQuinticFade(f.y), windQuinticFade(f.z));
+
+    float nx00 = mix(windCornerDot(cell, f, vec3(0.0, 0.0, 0.0)), windCornerDot(cell, f, vec3(1.0, 0.0, 0.0)), w.x);
+    float nx10 = mix(windCornerDot(cell, f, vec3(0.0, 1.0, 0.0)), windCornerDot(cell, f, vec3(1.0, 1.0, 0.0)), w.x);
+    float nx01 = mix(windCornerDot(cell, f, vec3(0.0, 0.0, 1.0)), windCornerDot(cell, f, vec3(1.0, 0.0, 1.0)), w.x);
+    float nx11 = mix(windCornerDot(cell, f, vec3(0.0, 1.0, 1.0)), windCornerDot(cell, f, vec3(1.0, 1.0, 1.0)), w.x);
     float nxy0 = mix(nx00, nx10, w.y);
     float nxy1 = mix(nx01, nx11, w.y);
     return mix(nxy0, nxy1, w.z);
 }
 
-float windEddyPeriodicNoiseOctave(vec3 u, float periodTheta, float freq) {
-    return windEddyPeriodicNoise(freq * u, periodTheta * freq);
+const mat3 WIND_OCTAVE_ROTATION = mat3(
+    0.784750, 0.509329, -0.353201,
+    -0.045714, 0.615862, 0.786527,
+    0.618124, -0.601081, 0.506581);
+
+vec3 windRotateAndDouble(vec3 p) {
+    return 2.0 * (WIND_OCTAVE_ROTATION * p);
 }
 
-float windEddyPeriodicNoiseFBM(vec3 u, float periodTheta) {
-    float sum = 0.5 * windEddyPeriodicNoiseOctave(u, periodTheta, 1.0);
-    sum += 0.25 * windEddyPeriodicNoiseOctave(u, periodTheta, 2.0);
-    sum += 0.125 * windEddyPeriodicNoiseOctave(u, periodTheta, 4.0);
-    return sum * (1.0 / 0.875);
+float windEddyNoiseFBM(vec3 p) {
+    vec3 p1 = windRotateAndDouble(p);
+    vec3 p2 = windRotateAndDouble(p1);
+    float sum = 0.5 * windGradientNoise(p) + 0.25 * windGradientNoise(p1) + 0.125 * windGradientNoise(p2);
+    return clamp(0.5 + sum * (1.0 / 0.875), 0.0, 1.0);
 }
 
 struct WindEddyGeometry {
@@ -127,10 +135,11 @@ WindEddyGeometry windEddyGeometry(vec3 local) {
 vec3 windEddyLayerCoords(WindEddyGeometry geometry, float age, float seed) {
     float phi = mix(windStreakPhase(), geometry.shearRate * age, windEddyShear());
 
-    float uTheta = geometry.periodTheta * (geometry.theta - phi) / (2.0 * 3.14159265);
+    float shearedTheta = geometry.theta - phi;
+    float rho = geometry.periodTheta / (2.0 * 3.14159265) + geometry.radialCoord;
     float uH = (geometry.height - windEddyRiseSpeed() * age) / windEddyCellHeight();
 
-    return vec3(uTheta + seed, uH + seed * 0.37, geometry.radialCoord + seed * 0.61);
+    return vec3(rho * cos(shearedTheta) + seed, rho * sin(shearedTheta) + seed * 0.37, uH + seed * 0.61);
 }
 
 float windEddySigma(vec3 local) {
@@ -147,8 +156,8 @@ float windEddySigma(vec3 local) {
 
     WindEddyGeometry geometry = windEddyGeometry(local);
 
-    float NA = windEddyPeriodicNoiseFBM(windEddyLayerCoords(geometry, ageA, 17.0 * kA + 3.0), geometry.periodTheta);
-    float NB = windEddyPeriodicNoiseFBM(windEddyLayerCoords(geometry, ageB, 17.0 * kB + 3.0), geometry.periodTheta);
+    float NA = windEddyNoiseFBM(windEddyLayerCoords(geometry, ageA, 17.0 * kA + 3.0));
+    float NB = windEddyNoiseFBM(windEddyLayerCoords(geometry, ageB, 17.0 * kB + 3.0));
 
     float N = wA * NA + wB * NB;
     float eroded = clamp((N - windEddyErosion()) / (1.0 - windEddyErosion()), 0.0, 1.0);

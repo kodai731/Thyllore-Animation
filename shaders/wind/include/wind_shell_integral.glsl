@@ -10,8 +10,8 @@
 
 const int WIND_MAX_KNOTS = 56;
 const int WIND_POLY_TERMS = 12;
-const int WIND_EDDY_MAX_SPLIT = 8;
-const float WIND_EDDY_FINEST_OCTAVE_SPLITS_PER_CELL = 8.0;
+// Fixed so the node set is a continuous function of the ray (no seams where a count would change).
+const int WIND_EDDY_SPLITS = 8;
 const int WIND_PUFFS_PER_RAY = 20;
 const float WIND_EMPTY_INTERVAL_EPSILON = 1e-6;
 
@@ -250,14 +250,11 @@ float windPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1, bool includePuff
     }
 
     if (windEddyAmplitude() > 0.0) {
-        float cellMin = min(windEddyCellTheta(), min(windEddyCellHeight(), windEddyCellRadial()));
-        int splits = clamp(int(ceil(WIND_EDDY_FINEST_OCTAVE_SPLITS_PER_CELL * pieceLength / cellMin)), 1, WIND_EDDY_MAX_SPLIT);
         float total = 0.0;
         float sigmaA = windEddySigma(start);
-        for (int j = 0; j < WIND_EDDY_MAX_SPLIT; ++j) {
-            if (j >= splits) break;
-            float a = float(j) / float(splits);
-            float b = float(j + 1) / float(splits);
+        for (int j = 0; j < WIND_EDDY_SPLITS; ++j) {
+            float a = float(j) / float(WIND_EDDY_SPLITS);
+            float b = float(j + 1) / float(WIND_EDDY_SPLITS);
             float sigmaB = windEddySigma(start + b * pieceLength * d);
             float slope = (sigmaB - sigmaA) / (b - a);
             float intercept = sigmaA - slope * a;

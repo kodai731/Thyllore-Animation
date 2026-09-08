@@ -17,8 +17,8 @@ pub const WIND_MAX_KNOTS: usize = 56;
 pub const WIND_MAX_PUFFS: usize = 96;
 pub const WIND_PUFFS_PER_RAY: usize = 20;
 const POLY_TERMS: usize = 16;
-const EDDY_MAX_SPLIT: usize = 8;
-const EDDY_FINEST_OCTAVE_SPLITS_PER_CELL: f32 = 8.0;
+// Fixed so the node set is a continuous function of the ray (no seams where a count would change).
+const EDDY_SPLITS: usize = 8;
 const LINEAR_COEFFICIENT_EPSILON: f32 = 1e-7;
 const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
 
@@ -547,17 +547,11 @@ pub fn wind_piece_optical_depth(
     }
 
     if params.eddy_amplitude > 0.0 {
-        let cell_min = params
-            .eddy_cell_theta
-            .min(params.eddy_cell_height)
-            .min(params.eddy_cell_radial);
-        let splits = ((EDDY_FINEST_OCTAVE_SPLITS_PER_CELL * length / cell_min).ceil() as i32)
-            .clamp(1, EDDY_MAX_SPLIT as i32);
         let mut total = 0.0f32;
         let mut sigma_a = eddy_sigma(params, [start.x, start.y, start.z]);
-        for j in 0..splits {
-            let a = j as f32 / splits as f32;
-            let b = (j + 1) as f32 / splits as f32;
+        for j in 0..EDDY_SPLITS {
+            let a = j as f32 / EDDY_SPLITS as f32;
+            let b = (j + 1) as f32 / EDDY_SPLITS as f32;
             let sigma_b = eddy_sigma(params, sample_point(start, direction, b * length));
             let slope = (sigma_b - sigma_a) / (b - a);
             let intercept = sigma_a - slope * a;

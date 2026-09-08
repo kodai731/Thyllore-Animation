@@ -1,6 +1,7 @@
 use super::*;
 use crate::wind::WindTornadoEffect;
 use cgmath::{InnerSpace, Vector3};
+use std::f32::consts::PI;
 
 const REFERENCE_STEPS: usize = 20000;
 
@@ -302,19 +303,54 @@ fn mass_is_conserved_under_wall_spread() {
 }
 
 #[test]
-fn periodic_noise_is_periodic_in_x() {
-    let period = 4.0;
-    for x in [0.0, 0.25, 1.5, 2.75, -1.25, 9.5] {
-        for y in [0.0, 1.0, 3.0] {
-            for z in [0.0, 2.0] {
-                assert_eq!(
-                    periodic_noise([x, y, z], period),
-                    periodic_noise([x + period, y, z], period),
-                    "periodic_noise is not periodic at ({x}, {y}, {z})"
-                );
-            }
-        }
+fn eddy_sigma_is_continuous_across_the_theta_seam() {
+    let params = eddy_params_with_amplitude(1.0);
+    let epsilon = 1e-4f32;
+    for j in 0..16 {
+        let h = params.h_top * (j as f32 + 0.5) / 16.0;
+        let radius = params.wall_radius(h);
+        let before = [
+            radius * (PI - epsilon).cos(),
+            h,
+            radius * (PI - epsilon).sin(),
+        ];
+        let after = [
+            radius * (-PI + epsilon).cos(),
+            h,
+            radius * (-PI + epsilon).sin(),
+        ];
+        let gap = (eddy_sigma(&params, before) - eddy_sigma(&params, after)).abs();
+        assert!(
+            gap < 1e-2,
+            "eddy sigma jumps by {gap} across theta = pi at h = {h}"
+        );
     }
+}
+
+#[test]
+fn eddy_noise_stays_in_the_unit_interval_and_is_not_height_banded() {
+    let params = eddy_params_with_amplitude(1.0);
+    let theta_samples = 48;
+    let height_samples = 48;
+    let mut row_means = Vec::with_capacity(height_samples);
+    for j in 0..height_samples {
+        let h = params.h_top * j as f32 / (height_samples - 1) as f32;
+        let radius = params.wall_radius(h);
+        let mut row = 0.0f32;
+        for i in 0..theta_samples {
+            let theta = 2.0 * PI * i as f32 / theta_samples as f32;
+            let sigma = eddy_sigma(&params, [radius * theta.cos(), h, radius * theta.sin()]);
+            assert!((0.0..=2.0).contains(&sigma), "sigma {sigma} outside [0, 2]");
+            row += sigma;
+        }
+        row_means.push(row / theta_samples as f32);
+    }
+    let spread = row_means.iter().cloned().fold(f32::MIN, f32::max)
+        - row_means.iter().cloned().fold(f32::MAX, f32::min);
+    assert!(
+        spread < 0.5,
+        "per-height mean sigma varies by {spread}: the noise is banded along height"
+    );
 }
 
 fn eddy_params_with_amplitude(amplitude: f32) -> WindShellParams {

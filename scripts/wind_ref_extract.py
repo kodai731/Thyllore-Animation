@@ -5,6 +5,7 @@ usage:
       [--out assets/textures/wind/castle_ref_seq]
   python scripts/wind_ref_extract.py storm [--video /tmp/thyllore_wind_ref/storm_src.mp4]
       [--out assets/textures/wind/storm_ref_seq] [--start 15] [--end 55]
+  python scripts/wind_ref_extract.py masks
 
 Downloads the clip named in <out>/link.txt with yt-dlp when --video is absent and writes
 frame_NNN.png (dust on a black background, source colours kept, storm frames at half size) plus meta.json.
@@ -16,6 +17,8 @@ castle  MH4G Kushala Daora intro, 32.45-34.30 s, one shot. The dust haze cannot 
 storm   MH Wilds Kushala Daora storm, 15-55 s, many shots. Ground, hunters and sky are dark or
         saturated, so the mask is the colour alone: high HSV value and low saturation. Shots are split
         at HSV histogram cuts and written as one sub-directory each.
+masks   Re-thresholds the frame_NNN.png of the look-match sequences into 0/255 mask_NNN.png beside
+        them without touching the frames themselves.
 
 Re-running overwrites the same files.
 """
@@ -59,6 +62,19 @@ STORM_BLUR = 15
 STORM_OPEN = 9
 CUT_THRESHOLD = 0.22
 MIN_SHOT_FRAMES = 6
+
+MASK_VALUE_LOW, MASK_VALUE_HIGH = 150.0, 235.0
+MASK_SATURATION_FULL, MASK_SATURATION_ZERO = 20.0, 60.0
+MASK_SOFT_THRESHOLD = 0.5
+MASK_VALUE_FLOOR = 80.0
+MASK_GROUND_ROW_FRACTION = 0.75
+MASK_CASTLE_FLOOR = 10
+MASK_OPEN = 9
+MASK_SEQUENCES = [
+    ("storm", Path("assets/textures/wind/storm_ref_seq/shot_22_46.18s")),
+    ("storm", Path("assets/textures/wind/storm_ref_seq/shot_18_41.78s")),
+    ("castle", Path("assets/textures/wind/castle_ref_seq")),
+]
 
 
 def read_link(out_dir):
@@ -109,7 +125,7 @@ def apply_mask(bgr, mask):
 
 def write_sequence(out_dir, frames, masks, crop, output_scale, meta):
     out_dir.mkdir(parents=True, exist_ok=True)
-    for old in out_dir.glob("frame_*.png"):
+    for old in list(out_dir.glob("frame_*.png")) + list(out_dir.glob("mask_*.png")):
         old.unlink()
     x0, y0, x1, y1 = crop
     for index, (bgr, mask) in enumerate(zip(frames, masks)):
@@ -265,14 +281,54 @@ def extract_storm(video_path, out_dir, start_seconds, end_seconds):
     (out_dir / "shots.txt").write_text("\n".join(index_lines) + "\n")
 
 
+def storm_binary_mask(bgr):
+    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV).astype(np.float32)
+    saturation, value = hsv[..., 1], hsv[..., 2]
+    soft = ramp(value, MASK_VALUE_LOW, MASK_VALUE_HIGH) * (
+        1.0 - ramp(saturation, MASK_SATURATION_FULL, MASK_SATURATION_ZERO)
+    )
+    binary = (soft > MASK_SOFT_THRESHOLD).astype(np.uint8)
+    binary[int(binary.shape[0] * MASK_GROUND_ROW_FRACTION):] = 0
+    binary[value < MASK_VALUE_FLOOR] = 0
+    return open_mask(binary, MASK_OPEN)
+
+
+def castle_binary_mask(bgr):
+    return open_mask((bgr.min(axis=2) > MASK_CASTLE_FLOOR).astype(np.uint8), MASK_OPEN)
+
+
+def write_masks(seq_dir, binary_mask_of):
+    """mask_NNN.png beside each frame_NNN.png; returns the count and the mean mask pixel ratio."""
+    for old in seq_dir.glob("mask_*.png"):
+        old.unlink()
+    ratios = []
+    for frame_path in sorted(seq_dir.glob("frame_*.png")):
+        binary = binary_mask_of(cv2.imread(str(frame_path)))
+        cv2.imwrite(str(seq_dir / frame_path.name.replace("frame_", "mask_")), binary * 255)
+        ratios.append(float(binary.mean()))
+    return len(ratios), float(np.mean(ratios)) if ratios else 0.0
+
+
+def extract_masks():
+    for kind, seq_dir in MASK_SEQUENCES:
+        if not seq_dir.is_dir():
+            raise SystemExit(f"{seq_dir} does not exist")
+        count, mean_ratio = write_masks(seq_dir, storm_binary_mask if kind == "storm" else castle_binary_mask)
+        print(f"{seq_dir}: {count} masks, mean mask ratio {mean_ratio:.4f}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("clip", choices=["castle", "storm"])
+    parser.add_argument("clip", choices=["castle", "storm", "masks"])
     parser.add_argument("--video", type=Path)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--start", type=float, default=STORM["start"])
     parser.add_argument("--end", type=float, default=STORM["end"])
     args = parser.parse_args()
+
+    if args.clip == "masks":
+        extract_masks()
+        return
 
     config = CASTLE if args.clip == "castle" else STORM
     video_path = args.video or Path(f"/tmp/thyllore_wind_ref/{args.clip}_src.mp4")

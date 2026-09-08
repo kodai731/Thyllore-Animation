@@ -13,6 +13,10 @@ descriptor families are added on top:
       (l1 - l2) / (l1 + l2), averaged over the sequence. Distance = histogram L1 + |anisotropy diff|.
   W5 transport: phase correlation of adjacent frames (silhouette-masked luminance), the median
       horizontal/vertical shift as a width fraction per second. Distance = L2 of the shifts.
+  W6 shape: mask driven descriptors averaged over the sequence. S1 is the contour isoperimetric ratio
+      plus the RMS of three curvature spectrum bands, S2 is the scale normalized LoG blob radius
+      histogram plus the blob count density, S3 reuses the W4 structure tensor direction.
+      Distance = S1 log ratios + S2 histogram L1 and log density ratio + W4 direction distance.
 """
 
 import argparse
@@ -28,6 +32,12 @@ import flame_ref_match as flame
 DIRECTION_BINS = 16
 STRUCTURE_SIGMA = 3.0
 MIN_MASK_PIXELS = 100
+CONTOUR_SAMPLES = 256
+CURVATURE_BANDS = ((12, 23), (24, 47), (48, 96))
+BLOB_SCALES = 6
+BLOB_SCALE_RANGE = (1.0 / 128.0, 1.0 / 8.0)
+BLOB_AMPLITUDE_FRACTION = 0.1
+MIN_COUNT_DENSITY = 1e-3
 EPS = 1e-9
 
 
@@ -99,20 +109,130 @@ def transport_distance(ref, render):
     return float(np.linalg.norm(np.array(ref["displacement"]) - np.array(render["displacement"])))
 
 
+def resample_contour(points, sample_count):
+    closed = np.vstack([points, points[:1]])
+    arc_lengths = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(closed, axis=0), axis=1))])
+    if arc_lengths[-1] <= 0.0:
+        return None, 0.0
+    sample_positions = np.linspace(0.0, arc_lengths[-1], sample_count, endpoint=False)
+    resampled = np.stack([np.interp(sample_positions, arc_lengths, closed[:, axis]) for axis in (0, 1)], axis=1)
+    return resampled, arc_lengths[-1] / sample_count
+
+
+def measure_contour(mask):
+    contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    if not contours:
+        return None
+    largest = max(contours, key=cv2.contourArea)
+    area = float(cv2.contourArea(largest))
+    perimeter = float(cv2.arcLength(largest, True))
+    if area <= 0.0 or perimeter <= 0.0:
+        return None
+    isoperimetric = (perimeter ** 2) / (4.0 * np.pi * area)
+
+    resampled, arc_step = resample_contour(largest.reshape(-1, 2).astype(np.float64), CONTOUR_SAMPLES)
+    if resampled is None:
+        return None
+    tangents = np.roll(resampled, -1, axis=0) - np.roll(resampled, 1, axis=0)
+    angles = np.arctan2(tangents[:, 1], tangents[:, 0])
+    angle_steps = np.mod(np.roll(angles, -1) - angles + np.pi, 2.0 * np.pi) - np.pi
+    curvature = np.abs(angle_steps) / arc_step
+
+    amplitudes = np.abs(np.fft.rfft(curvature))
+    curvature_bands = [float(np.sqrt(np.mean(amplitudes[low:high + 1] ** 2))) for low, high in CURVATURE_BANDS]
+    return {"isoperimetric": isoperimetric, "curvature_bands": curvature_bands}
+
+
+def measure_blobs(lum, mask):
+    mask_pixels = int(mask.sum())
+    equiv_diameter = np.sqrt(mask_pixels / np.pi) * 2.0
+    sigmas = equiv_diameter * np.geomspace(BLOB_SCALE_RANGE[0], BLOB_SCALE_RANGE[1], BLOB_SCALES)
+
+    bright_amplitudes = []
+    for sigma in sigmas:
+        amplitude = -(ndimage.gaussian_laplace(lum, sigma) * (sigma ** 2))
+        local_peaks = mask & (ndimage.maximum_filter(amplitude, size=3) == amplitude) & (amplitude > 0.0)
+        bright_amplitudes.append(np.where(local_peaks, amplitude, 0.0))
+
+    peak_threshold = BLOB_AMPLITUDE_FRACTION * max(float(amplitude.max()) for amplitude in bright_amplitudes)
+    counts = np.array([float((amplitude > peak_threshold).sum()) for amplitude in bright_amplitudes])
+
+    total = counts.sum()
+    radius_histogram = (counts / total).tolist() if total > 0.0 else [0.0] * BLOB_SCALES
+    count_density = float(total / (mask_pixels / 1000.0))
+    return {"radius_histogram": radius_histogram, "count_density": count_density}
+
+
+def measure_shape(fields):
+    contour_results, blob_results, direction_results = [], [], []
+    for lum, mask in fields:
+        if mask.sum() < MIN_MASK_PIXELS:
+            continue
+        contour = measure_contour(mask)
+        if contour is None:
+            continue
+        contour_results.append(contour)
+        blob_results.append(measure_blobs(lum, mask))
+        measured = structure_tensor_direction(lum, mask)
+        if measured is not None:
+            direction_results.append(measured)
+
+    if direction_results:
+        histograms, anisotropies = zip(*direction_results)
+        s3 = {"direction_histogram": np.mean(histograms, axis=0).tolist(),
+              "anisotropy": float(np.mean(anisotropies))}
+    else:
+        s3 = {"direction_histogram": [float("nan")] * DIRECTION_BINS, "anisotropy": float("nan")}
+    if not contour_results:
+        return {"s1": {"isoperimetric": float("nan"), "curvature_bands": [float("nan")] * len(CURVATURE_BANDS)},
+                "s2": {"radius_histogram": [float("nan")] * BLOB_SCALES, "count_density": float("nan")},
+                "s3": s3,
+                "frames": 0}
+
+    return {
+        "s1": {"isoperimetric": float(np.mean([c["isoperimetric"] for c in contour_results])),
+               "curvature_bands": np.mean([c["curvature_bands"] for c in contour_results], axis=0).tolist()},
+        "s2": {"radius_histogram": np.mean([b["radius_histogram"] for b in blob_results], axis=0).tolist(),
+               "count_density": float(np.mean([b["count_density"] for b in blob_results]))},
+        "s3": s3,
+        "frames": len(contour_results),
+    }
+
+
+def s1_distance(a, b):
+    isoperimetric_diff = abs(float(np.log((a["isoperimetric"] + EPS) / (b["isoperimetric"] + EPS))))
+    band_ratio = (np.array(a["curvature_bands"]) + EPS) / (np.array(b["curvature_bands"]) + EPS)
+    band_diff = float(np.sqrt(np.mean(np.log(band_ratio) ** 2)))
+    return isoperimetric_diff + band_diff
+
+
+def s2_distance(a, b):
+    histogram_diff = float(np.sum(np.abs(np.array(a["radius_histogram"]) - np.array(b["radius_histogram"]))))
+    density_a = max(a["count_density"], MIN_COUNT_DENSITY)
+    density_b = max(b["count_density"], MIN_COUNT_DENSITY)
+    return histogram_diff + abs(float(np.log(density_a / density_b)))
+
+
+def s3_distance(a, b):
+    return direction_distance(a, b)
+
+
 def measure_wind(paths, column_width, fps, resample):
     measured = flame.measure(paths, column_width, resample=resample)
     fields = [frame_fields(path) for path in paths]
     measured["w4"] = measure_direction(fields)
     measured["w5"] = measure_transport(fields, fps)
+    measured["w6"] = measure_shape(fields)
     return measured
 
 
 def print_wind(label, measured):
-    w4, w5 = measured["w4"], measured["w5"]
+    w4, w5, w6 = measured["w4"], measured["w5"], measured["w6"]
     peak = int(np.argmax(w4["direction_histogram"])) if w4["frames"] else -1
     print(f"{label}: w4 anisotropy {w4['anisotropy']:.3f}, peak direction bin {peak}/{DIRECTION_BINS}; "
           f"w5 displacement {w5['displacement'][0]:+.5f},{w5['displacement'][1]:+.5f} width fraction per second "
-          f"over {w5['pairs']} pairs")
+          f"over {w5['pairs']} pairs; w6 isoperimetric {w6['s1']['isoperimetric']:.3f}, "
+          f"count density {w6['s2']['count_density']:.3f}, anisotropy {w6['s3']['anisotropy']:.3f}")
 
 
 def main():
@@ -147,8 +267,12 @@ def main():
     flame.print_summary(rows)
 
     distances = {"w4": direction_distance(ref["w4"], render["w4"]),
-                 "w5": transport_distance(ref["w5"], render["w5"])}
-    print(f"\nw4 direction distance {distances['w4']:.3f}, w5 transport distance {distances['w5']:.5f}")
+                 "w5": transport_distance(ref["w5"], render["w5"]),
+                 "w6": s1_distance(ref["w6"]["s1"], render["w6"]["s1"])
+                 + s2_distance(ref["w6"]["s2"], render["w6"]["s2"])
+                 + s3_distance(ref["w6"]["s3"], render["w6"]["s3"])}
+    print(f"\nw4 direction distance {distances['w4']:.3f}, w5 transport distance {distances['w5']:.5f}, "
+          f"w6 shape distance {distances['w6']:.3f}")
 
     if args.json:
         Path(args.json).write_text(json.dumps({"reference": ref, "render": render, "distances": distances,

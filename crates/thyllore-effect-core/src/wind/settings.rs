@@ -40,13 +40,15 @@ pub enum WindDebugView {
     Off,
     OpticalDepth,
     KnotCount,
+    Coverage,
 }
 
 impl WindDebugView {
-    pub const ALL: [WindDebugView; 3] = [
+    pub const ALL: [WindDebugView; 4] = [
         WindDebugView::Off,
         WindDebugView::OpticalDepth,
         WindDebugView::KnotCount,
+        WindDebugView::Coverage,
     ];
 
     pub fn label(self) -> &'static str {
@@ -54,6 +56,7 @@ impl WindDebugView {
             WindDebugView::Off => "Off",
             WindDebugView::OpticalDepth => "Optical Depth",
             WindDebugView::KnotCount => "Knot Count",
+            WindDebugView::Coverage => "coverage",
         }
     }
 
@@ -62,6 +65,7 @@ impl WindDebugView {
             WindDebugView::Off => 0,
             WindDebugView::OpticalDepth => 1,
             WindDebugView::KnotCount => 2,
+            WindDebugView::Coverage => 3,
         }
     }
 
@@ -70,6 +74,7 @@ impl WindDebugView {
             "off" => Some(WindDebugView::Off),
             "depth" | "optical-depth" => Some(WindDebugView::OpticalDepth),
             "knots" | "knot-count" => Some(WindDebugView::KnotCount),
+            "coverage" => Some(WindDebugView::Coverage),
             _ => None,
         }
     }

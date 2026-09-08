@@ -34,6 +34,7 @@ const int WIND_MODE_REFERENCE_QUADRATURE = 1;
 const int WIND_DEBUG_OFF = 0;
 const int WIND_DEBUG_OPTICAL_DEPTH = 1;
 const int WIND_DEBUG_KNOT_COUNT = 2;
+const int WIND_DEBUG_COVERAGE = 3;
 const float SEGMENT_T_MAX = 1e4;
 
 // Scene depth projected onto the view ray cuts the interval where an opaque surface occludes.
@@ -60,11 +61,21 @@ void main() {
     float tNear = 0.0;
     float tFar = SEGMENT_T_MAX;
     if (!clampToWindCone(localOrigin, localDir, tNear, tFar)) {
-        discard;
+        if (push.debugView != WIND_DEBUG_COVERAGE) {
+            discard;
+        } else {
+            outColor = vec4(0.0, 0.0, 0.0, 1.0);
+            return;
+        }
     }
     tNear = max(tNear, 0.0);
     if (!clampToSceneDepth(rayDir, tFar, tNear) || tFar <= tNear) {
-        discard;
+        if (push.debugView != WIND_DEBUG_COVERAGE) {
+            discard;
+        } else {
+            outColor = vec4(0.0, 0.0, 0.0, 1.0);
+            return;
+        }
     }
 
     vec3 lightPositionLocal = (wind.inverseModel * vec4(frame.light_pos.xyz, 1.0)).xyz;
@@ -86,6 +97,10 @@ void main() {
     }
     if (push.debugView == WIND_DEBUG_KNOT_COUNT) {
         outColor = vec4(float(knotCount) / float(WIND_MAX_KNOTS), 0.0, 0.0, 1.0);
+        return;
+    }
+    if (push.debugView == WIND_DEBUG_COVERAGE) {
+        outColor = vec4(vec3(coverage), 1.0);
         return;
     }
 

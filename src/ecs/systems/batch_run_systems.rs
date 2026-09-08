@@ -473,10 +473,10 @@ pub fn wind_debug_view_resolve_from_args(
         return Ok(None);
     };
     let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_WIND_DEBUG_VIEW_FLAG} requires a value: off|depth|knots");
+        bail!("{BATCH_WIND_DEBUG_VIEW_FLAG} requires a value: off|depth|knots|coverage");
     };
     let view = thyllore_effect_core::WindDebugView::parse(value).ok_or_else(|| {
-        anyhow::anyhow!("invalid wind debug view '{value}': expected off|depth|knots")
+        anyhow::anyhow!("invalid wind debug view '{value}': expected off|depth|knots|coverage")
     })?;
     Ok(Some(view))
 }
@@ -2502,6 +2502,14 @@ mod tests {
             Some(thyllore_effect_core::WindDebugView::OpticalDepth)
         );
         assert!(wind_mode_resolve_from_args(&args(&["bin", "--batch-wind-mode", "x"])).is_err());
+
+        let coverage =
+            resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-debug-view", "coverage"]))
+                .unwrap();
+        assert_eq!(
+            coverage.wind_debug_view,
+            Some(thyllore_effect_core::WindDebugView::Coverage)
+        );
     }
 
     #[test]

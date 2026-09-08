@@ -7,9 +7,10 @@ use crate::ecs::resource::{ProjectionData, WindRenderSettings, WindRenderTargets
 use crate::hooks::pass::{
     CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef, TargetUse,
 };
-use crate::vulkanr::renderer::deferred::compute_bounds_scissor;
+use crate::vulkanr::renderer::deferred::{compute_bounds_scissor, full_extent_scissor};
 use thyllore_effect_core::{
-    build_wind_ubo, inverse_view_proj_f64, wind_local_bounds_corners, WindShellParams, WindUBO,
+    build_wind_ubo, inverse_view_proj_f64, wind_local_bounds_corners, WindDebugView,
+    WindShellParams, WindUBO,
 };
 
 pub struct WindPassNode;
@@ -24,6 +25,14 @@ impl WindFrame {
     fn has_visible_instance(&self) -> bool {
         self.scissors.iter().any(Option::is_some)
     }
+}
+
+fn wind_render_settings(app: &App) -> WindRenderSettings {
+    app.data
+        .ecs_world
+        .get_resource::<WindRenderSettings>()
+        .map(|settings| *settings)
+        .unwrap_or_default()
 }
 
 fn wind_frame(app: &App) -> Option<WindFrame> {
@@ -48,6 +57,7 @@ fn wind_frame(app: &App) -> Option<WindFrame> {
         .ecs_world
         .get_resource::<ProjectionData>()
         .map(|projection| inverse_view_proj_f64(projection.proj, projection.view));
+    let settings = wind_render_settings(app);
     let mut ubos = Vec::with_capacity(winds.len());
     let mut scissors = Vec::with_capacity(winds.len());
     for wind in winds {
@@ -60,12 +70,12 @@ fn wind_frame(app: &App) -> Option<WindFrame> {
             ubo.inv_view_proj = inv_view_proj;
         }
         let params = WindShellParams::from_effect(&effect);
-        scissors.push(compute_bounds_scissor(
-            app,
-            extent,
-            &ubo.model,
-            wind_local_bounds_corners(&params),
-        ));
+        let scissor = if settings.debug_view == WindDebugView::Coverage {
+            Some(full_extent_scissor(extent))
+        } else {
+            compute_bounds_scissor(app, extent, &ubo.model, wind_local_bounds_corners(&params))
+        };
+        scissors.push(scissor);
         ubos.push(ubo);
     }
 
@@ -126,12 +136,7 @@ unsafe fn record_wind_passes(
     let wind_buffer = &wind_targets.buffer;
     let ctx = crate::ecs::systems::phases::build_frame_render_context(app, image_index);
 
-    let settings = app
-        .data
-        .ecs_world
-        .get_resource::<WindRenderSettings>()
-        .map(|settings| *settings)
-        .unwrap_or_default();
+    let settings = wind_render_settings(app);
     let push_constants = thyllore_vulkan_core::renderer::WindPushConstants::new(
         settings.shading_mode.as_shader_value(),
         settings.reference_step_count as i32,

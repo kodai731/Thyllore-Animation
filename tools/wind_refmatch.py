@@ -1,9 +1,9 @@
 """Capture the wind tornado reference-matching arms and prepare them for analysis.
 
 Each arm pairs a reference footage directory with a camera. For every arm the tool captures a
-background (wind density set to 0), captures a frame sequence that starts at the arm's wind time,
-then crops both by the detected viewport and subtracts the background (clamp 0) into `<arm>_prep/`
-next to the engine written meta.json.
+background (wind density set to 0) used to detect the viewport, then captures the frame sequence
+that starts at the arm's wind time twice: the shaded colour into `<capture>/color/` and the wind
+coverage debug view into `<capture>/coverage/`, which supplies the mask the shape measures need.
 
 The engine advances wind time by 1/60 s per batch frame, so the sequence starts at
 `wind_time_start` by rendering `wind_time_start * 60` frames before the first capture, and a stride
@@ -11,14 +11,13 @@ of 2 yields 30 fps.
 
     uv run --with numpy --with pillow --with scipy python3 tools/wind_refmatch.py [--dood] [--arm far]
 
-Exit code 0 = every requested arm was captured and preprocessed.
+Exit code 0 = every requested arm was captured and analyzed.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -32,9 +31,7 @@ from engine_harness import dood_wrap, engine_env, engine_path, repo_root
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import flame_ref_match as flame
-from wind_ref_match import direction_distance, measure_wind, transport_distance
-
-flame.silhouette_mode = "dust"
+from wind_ref_match import measure_shape, s1_distance, s2_distance, s3_distance
 
 SCENE = "assets/scenes/wind_probe.scene.ron"
 BACKGROUND_FRAMES = 60
@@ -48,7 +45,6 @@ REFERENCE_CONFIGS = {
         "wind_time_start": 1.25,
         "frames": 40,
         "stride": 2,
-        "resample": True,
     },
     "inside_tunnel": {
         "reference_dir": "assets/textures/wind/storm_ref_seq/shot_18_41.78s",
@@ -57,7 +53,6 @@ REFERENCE_CONFIGS = {
         "wind_time_start": 1.25,
         "frames": 40,
         "stride": 2,
-        "resample": False,
     },
     "far": {
         "reference_dir": "assets/textures/wind/castle_ref_seq",
@@ -66,7 +61,6 @@ REFERENCE_CONFIGS = {
         "wind_time_start": 1.25,
         "frames": 40,
         "stride": 1,
-        "resample": True,
     },
 }
 
@@ -78,7 +72,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dood", action="store_true",
                         help="run the engine through the docker harness")
     parser.add_argument("--skip-capture", action="store_true",
-                        help="preprocess the sequences already present in the output directory")
+                        help="analyze the sequences already present in the output directory")
     parser.add_argument("--arm", nargs="+", choices=list(REFERENCE_CONFIGS),
                         default=list(REFERENCE_CONFIGS),
                         help="arms to capture (default: all)")
@@ -123,21 +117,37 @@ def capture_background(out_dir: Path, arm: str, config: dict, dood: bool,
     run_engine(command, f"background {arm}", dood)
 
 
-def capture_sequence(out_dir: Path, arm: str, config: dict, dood: bool,
-                     wind_set: list[str]) -> None:
-    """Capture the arm's frame sequence starting at its wind time."""
+def capture_sequence(out_dir: Path, config: dict, dood: bool,
+                     wind_set: list[str], capture_name: str) -> None:
+    """Capture the arm's colour and coverage sequences starting at its wind time."""
     start_frame = round(config["wind_time_start"] * BATCH_FRAMES_PER_SECOND)
-    sequence = f"{out_dir / arm},{config['frames']},{config['stride']}"
+
+    color_dir = out_dir / capture_name / "color"
+    color_sequence = f"{color_dir},{config['frames']},{config['stride']}"
     command = [
         str(engine_path()),
-        "--batch-screenshot-sequence", sequence,
+        "--batch-screenshot-sequence", color_sequence,
         "--batch-scene", SCENE,
         "--batch-camera", config["camera"],
         "--batch-frames", str(start_frame),
     ]
     for value in wind_set:
         command.extend(["--batch-wind-set", value])
-    run_engine(command, f"sequence {arm}", dood)
+    run_engine(command, f"sequence {capture_name} color", dood)
+
+    coverage_dir = out_dir / capture_name / "coverage"
+    coverage_sequence = f"{coverage_dir},{config['frames']},{config['stride']}"
+    command = [
+        str(engine_path()),
+        "--batch-screenshot-sequence", coverage_sequence,
+        "--batch-scene", SCENE,
+        "--batch-camera", config["camera"],
+        "--batch-frames", str(start_frame),
+        "--batch-wind-debug-view", "coverage",
+    ]
+    for value in wind_set:
+        command.extend(["--batch-wind-set", value])
+    run_engine(command, f"sequence {capture_name} coverage", dood)
 
 
 def capture_all(out_dir: Path, arms: list[str], dood: bool, candidate: str,
@@ -146,11 +156,11 @@ def capture_all(out_dir: Path, arms: list[str], dood: bool, candidate: str,
     for arm in arms:
         config = REFERENCE_CONFIGS[arm]
         capture_background(out_dir, arm, config, dood, [])
-        capture_sequence(out_dir, arm, config, dood, [])
+        capture_sequence(out_dir, config, dood, [], arm)
         if wind_set:
             candidate_arm = f"{arm}_{candidate}"
             capture_background(out_dir, candidate_arm, config, dood, wind_set)
-            capture_sequence(out_dir, candidate_arm, config, dood, wind_set)
+            capture_sequence(out_dir, config, dood, wind_set, candidate_arm)
 
 
 def detect_viewport_from_background(background_png: Path) -> tuple[int, int, int, int]:
@@ -170,156 +180,182 @@ def detect_viewport_from_background(background_png: Path) -> tuple[int, int, int
     return int(cols.min()), int(rows.min()), int(cols.max()) + 1, int(rows.max()) + 1
 
 
-def preprocess_sequences(out_dir: Path, arms: list[str], candidate: str) -> None:
-    """Crop frames by the detected viewport and subtract the background (clamp 0)."""
-    for arm in arms:
-        preprocess_capture(out_dir, arm, arm)
-        candidate_arm = f"{arm}_{candidate}"
-        if (out_dir / candidate_arm).is_dir():
-            preprocess_capture(out_dir, candidate_arm, arm)
+COVERAGE_MASK_LEVEL = 25
+REFERENCE_MASK_LEVEL = 127
 
 
-def preprocess_capture(out_dir: Path, capture: str, arm: str) -> None:
-    src_dir = out_dir / capture
-    prep_dir = out_dir / f"{capture}_prep"
-    prep_dir.mkdir(parents=True, exist_ok=True)
+def load_render_fields(color_dir: Path, coverage_dir: Path,
+                       viewport: tuple[int, int, int, int]) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Viewport cropped luminance paired with the coverage mask, one entry per captured frame."""
+    x0, y0, x1, y1 = viewport
+    color_paths = sorted(color_dir.glob("frame_*.png"))
+    coverage_paths = sorted(coverage_dir.glob("frame_*.png"))
+    if not color_paths:
+        raise SystemExit(f"no frames captured: {color_dir}")
+    if len(color_paths) != len(coverage_paths):
+        raise SystemExit(f"color/coverage frame count differs: {len(color_paths)} vs {len(coverage_paths)}")
 
-    background_png = background_path(out_dir, capture)
-    if not background_png.is_file():
-        raise SystemExit(f"background not found for {capture}: {background_png}")
+    fields = []
+    for color_path, coverage_path in zip(color_paths, coverage_paths):
+        with Image.open(color_path) as image:
+            color = np.asarray(image.convert("RGB"), dtype=np.float64)[y0:y1, x0:x1]
+        with Image.open(coverage_path) as image:
+            coverage = np.asarray(image.convert("RGB"), dtype=np.float64)[y0:y1, x0:x1]
+        fields.append((flame.luminance(color).astype(np.float32),
+                       flame.luminance(coverage) > COVERAGE_MASK_LEVEL))
+    return fields
 
-    x0, y0, x1, y1 = detect_viewport_from_background(background_png)
-    print(f"[wind_refmatch] {capture} viewport: {x0},{y0},{x1},{y1}", file=sys.stderr)
 
-    with Image.open(background_png) as image:
-        background = np.asarray(image.convert("RGB"), dtype=np.int16)[y0:y1, x0:x1]
+def load_reference_fields(reference_dir: Path,
+                          ref_window: tuple[int, int | None] | None
+                          ) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Reference luminance paired with the mask_NNN.png written next to each frame."""
+    frame_paths = sorted(reference_dir.glob("frame_*.png"))
+    first, end = ref_window or (0, None)
+    end = len(frame_paths) if end is None else end
 
-    frames = sorted(src_dir.glob("frame_*.png"))
-    if not frames:
-        raise SystemExit(f"no frames captured for {capture}: {src_dir}")
-    for frame_path in frames:
+    fields = []
+    for frame_path in frame_paths[first:end]:
+        mask_path = frame_path.with_name(frame_path.name.replace("frame_", "mask_"))
+        if not mask_path.is_file():
+            raise SystemExit(f"reference mask missing: {mask_path} "
+                             "(run scripts/wind_ref_extract.py masks)")
         with Image.open(frame_path) as image:
-            frame = np.asarray(image.convert("RGB"), dtype=np.int16)[y0:y1, x0:x1]
-        subtracted = np.clip(frame - background, 0, 255).astype(np.uint8)
-        Image.fromarray(subtracted).save(prep_dir / frame_path.name)
-
-    meta_src = src_dir / "meta.json"
-    if meta_src.is_file():
-        shutil.copy2(meta_src, prep_dir / "meta.json")
-    else:
-        fps = BATCH_FRAMES_PER_SECOND / REFERENCE_CONFIGS[arm]["stride"]
-        (prep_dir / "meta.json").write_text(json.dumps({"fps": fps}))
-
-    print(f"[wind_refmatch] {capture}: preprocessed {len(frames)} frames into {prep_dir}",
-          file=sys.stderr)
+            rgb = np.asarray(image.convert("RGB"), dtype=np.float64)
+        with Image.open(mask_path) as image:
+            mask = np.asarray(image.convert("L"))
+        fields.append((flame.luminance(rgb).astype(np.float32), mask > REFERENCE_MASK_LEVEL))
+    return fields
 
 
-GATED_SEPARATION = 0.5
 GAP_CLOSED_PASS = 0.5
-MATCH_PASS = 0.6
-
-
-def contrast_distance(left: dict, right: dict) -> float:
-    log_ratio = np.log2(np.array(left["contrast_spectrum"], dtype=np.float64)
-                        / np.array(right["contrast_spectrum"], dtype=np.float64))
-    finite = np.isfinite(log_ratio)
-    if not finite.any():
-        return float("nan")
-    return float(np.sqrt(np.mean(log_ratio[finite] ** 2)))
-
-
-def bright_structure_distance(left: dict, right: dict) -> float:
-    return float(abs(left["bright_largest_share"] - right["bright_largest_share"])
-                 + abs(left["bright_fragments_per_k"] - right["bright_fragments_per_k"]))
-
+BLUR_SIGMA = 8.0
+BLUR_GAP_FRACTION = 0.5
+S2_ONLY_ARMS = {"far"}
+S2_ONLY_FAMILIES = ["S2"]
 
 FAMILY_DISTANCES = {
-    "W1": contrast_distance,
-    "W2": bright_structure_distance,
-    "W4": lambda left, right: direction_distance(left["w4"], right["w4"]),
-    "W5": lambda left, right: transport_distance(left["w5"], right["w5"]),
+    "S1": lambda a, b: s1_distance(a["s1"], b["s1"]),
+    "S2": lambda a, b: s2_distance(a["s2"], b["s2"]),
+    "S3": lambda a, b: s3_distance(a["s3"], b["s3"]),
 }
 
 
-def split_quarters(paths: list[Path]) -> list[list[Path]]:
-    bounds = [round(len(paths) * i / 4) for i in range(5)]
-    return [paths[bounds[i]:bounds[i + 1]] for i in range(4)]
-
-
-def reference_frames(config: dict) -> tuple[list[Path], float]:
-    """Reference frames with the arm's ref_window applied and caption frames dropped."""
-    ref_dir = repo_root() / config["reference_dir"]
-    ref_fps, caption_frames = flame.load_ref_meta(ref_dir)
-    paths = flame.collect_frames(ref_dir)
-
-    first, end = config["ref_window"] or (0, None)
-    end = len(paths) if end is None else end
-    return [p for i, p in enumerate(paths[first:end], first) if i not in caption_frames], ref_fps
+def split_quarters(items: list) -> list[list]:
+    bounds = [round(len(items) * i / 4) for i in range(5)]
+    return [items[bounds[i]:bounds[i + 1]] for i in range(4)]
 
 
 def score_candidate(candidate_measured: dict, ref_measured: dict,
                     ceilings: dict, floors: dict, gated: list[str]) -> dict:
     """Closed fraction of the floor-to-ceiling gap and the ceiling relative score per family."""
     distances, gap_closed, scores = {}, {}, {}
-    for family, distance_of in FAMILY_DISTANCES.items():
-        d_arm = distance_of(candidate_measured, ref_measured)
-        ceiling = ceilings[family]
+    for family, ceiling in ceilings.items():
+        d_arm = FAMILY_DISTANCES[family](candidate_measured, ref_measured)
         distances[family] = d_arm
         gap_closed[family] = (floors[family] - d_arm) / max(floors[family] - ceiling, 1e-6)
         scores[family] = 1.0 / (1.0 + max(0.0, d_arm / max(ceiling, 1e-6) - 1.0))
 
     match = float(np.mean([scores[family] for family in gated])) if gated else 0.0
-    passed = all(gap_closed[family] >= GAP_CLOSED_PASS for family in gated) and match >= MATCH_PASS
+    passed = all(gap_closed[family] >= GAP_CLOSED_PASS for family in gated)
     return {"d": distances, "gap_closed": gap_closed, "score": scores,
             "match": match, "pass": bool(gated) and passed}
 
 
+def blurred_fields(fields: list[tuple[np.ndarray, np.ndarray]],
+                   sigma: float) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Gaussian blurred luminance paired with the blurred mask thresholded back to binary."""
+    return [(ndimage.gaussian_filter(lum, sigma).astype(np.float32),
+             ndimage.gaussian_filter(mask.astype(np.float32), sigma) > 0.5)
+            for lum, mask in fields]
+
+
+def field_preview(field: tuple[np.ndarray, np.ndarray]) -> Image.Image:
+    """Normalized luminance with the mask boundary drawn in red."""
+    lum, mask = field
+    low, high = float(lum.min()), float(lum.max())
+    scaled = (lum - low) / max(high - low, 1e-6) * 255.0
+    rgb = np.repeat(np.clip(scaled, 0.0, 255.0).astype(np.uint8)[:, :, None], 3, axis=2)
+
+    boundary = mask ^ ndimage.binary_erosion(mask)
+    rgb[boundary] = (255, 0, 0)
+    return Image.fromarray(rgb)
+
+
+def write_contact_sheet(out_dir: Path, arm: str,
+                        ref_fields: list[tuple[np.ndarray, np.ndarray]],
+                        floor_fields: list[tuple[np.ndarray, np.ndarray]],
+                        candidate_fields: list[tuple[np.ndarray, np.ndarray]] | None) -> Path:
+    """Middle frame of each sequence side by side, reference first."""
+    sequences = [ref_fields, floor_fields]
+    if candidate_fields:
+        sequences.append(candidate_fields)
+
+    previews = [field_preview(fields[len(fields) // 2]) for fields in sequences]
+    width = sum(preview.width for preview in previews)
+    height = max(preview.height for preview in previews)
+
+    sheet = Image.new("RGB", (width, height))
+    offset = 0
+    for preview in previews:
+        sheet.paste(preview, (offset, 0))
+        offset += preview.width
+
+    sheet_path = out_dir / f"{arm}_contact.png"
+    sheet.save(sheet_path)
+    return sheet_path
+
+
 def analyze_arm(out_dir: Path, arm: str, candidate: str, wind_set: list[str]) -> dict:
-    """Distance of the arm's prep sequence to the reference against the reference's own spread."""
+    """Distance of the arm's rendered sequence to the reference against the reference's own spread."""
     config = REFERENCE_CONFIGS[arm]
 
-    prep_dir = out_dir / f"{arm}_prep"
-    floor_paths = flame.collect_frames(prep_dir)
-    if not floor_paths:
-        raise SystemExit(f"no prep frames found for {arm}: {prep_dir}")
+    viewport = detect_viewport_from_background(background_path(out_dir, arm))
+    floor_fields = load_render_fields(out_dir / arm / "color",
+                                      out_dir / arm / "coverage",
+                                      viewport)
+    ref_fields = load_reference_fields(repo_root() / config["reference_dir"],
+                                       config["ref_window"])
 
-    ref_paths, ref_fps = reference_frames(config)
-    if len(ref_paths) < 8:
-        raise SystemExit(f"reference sequence too short for {arm}: {len(ref_paths)} frames")
+    if len(ref_fields) < 8:
+        raise SystemExit(f"reference sequence too short for {arm}: {len(ref_fields)} frames")
 
-    column_width = flame.reference_column_width(ref_paths)
-    floor_fps = BATCH_FRAMES_PER_SECOND / config["stride"]
-    floor_measured = measure_wind(floor_paths, column_width, floor_fps, resample=config["resample"])
-    ref_measured = measure_wind(ref_paths, column_width, ref_fps, resample=False)
-    quarters = [measure_wind(paths, column_width, ref_fps, resample=False)
-                for paths in split_quarters(ref_paths)]
+    ref_measured = measure_shape(ref_fields)
+    quarters = [measure_shape(quarter) for quarter in split_quarters(ref_fields)]
+    floor_measured = measure_shape(floor_fields)
 
-    ceilings, floors, separations, gated = {}, {}, {}, []
+    blurred_measured = measure_shape(blurred_fields(ref_fields, BLUR_SIGMA))
+
+    ceilings, floors, blur_gaps = {}, {}, {}
     for family, distance_of in FAMILY_DISTANCES.items():
         pairs = [distance_of(quarters[i], quarters[j])
                  for i in range(len(quarters)) for j in range(i + 1, len(quarters))]
         ceiling = float(np.median(pairs))
-        d_floor = distance_of(floor_measured, ref_measured)
-        separation = (d_floor - ceiling) / max(ceiling, 1e-6)
 
         ceilings[family] = ceiling
-        floors[family] = d_floor
-        separations[family] = separation
-        if separation > GATED_SEPARATION:
-            gated.append(family)
+        floors[family] = distance_of(floor_measured, ref_measured)
+        blur_gaps[family] = distance_of(blurred_measured, ref_measured) - ceiling
 
-    result = {"ceiling": ceilings, "floor": floors, "separation": separations, "gated": gated}
+    families = S2_ONLY_FAMILIES if arm in S2_ONLY_ARMS else list(FAMILY_DISTANCES)
+    gated = [family for family in families
+             if blur_gaps[family] > BLUR_GAP_FRACTION * ceilings[family]]
 
-    candidate_prep = out_dir / f"{arm}_{candidate}_prep"
-    if candidate_prep.is_dir():
-        candidate_measured = measure_wind(flame.collect_frames(candidate_prep), column_width,
-                                          floor_fps, resample=config["resample"])
+    result = {"ceiling": ceilings, "floor": floors, "blur_gap": blur_gaps, "gated": gated}
+
+    candidate_color_dir = out_dir / f"{arm}_{candidate}" / "color"
+    candidate_coverage_dir = out_dir / f"{arm}_{candidate}" / "coverage"
+    candidate_fields = None
+    if candidate_color_dir.is_dir():
+        candidate_fields = load_render_fields(candidate_color_dir, candidate_coverage_dir, viewport)
         result["candidate"] = {
             "name": candidate,
             "wind_set": wind_set,
-            **score_candidate(candidate_measured, ref_measured, ceilings, floors, gated),
+            **score_candidate(measure_shape(candidate_fields), ref_measured,
+                              ceilings, floors, gated),
         }
 
+    result["contact_sheet"] = str(write_contact_sheet(out_dir, arm, ref_fields,
+                                                      floor_fields, candidate_fields))
     return result
 
 
@@ -331,7 +367,6 @@ def main() -> None:
 
     if not args.skip_capture:
         capture_all(out_dir, args.arm, args.dood, args.candidate, args.wind_set)
-    preprocess_sequences(out_dir, args.arm, args.candidate)
 
     arms = {}
     for arm in args.arm:

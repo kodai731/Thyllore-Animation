@@ -7,7 +7,7 @@ use anyhow::Result;
 use cgmath::Vector4;
 use vulkanalia::prelude::v1_0::*;
 
-use super::scene_model::restore_batch_playback;
+use super::scene_registration::restore_batch_playback;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{NodeAssets, TimelineState};
 use crate::ecs::world::World;

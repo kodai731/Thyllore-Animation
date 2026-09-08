@@ -3,7 +3,7 @@ use std::rc::Rc;
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use super::{gpu_upload, scene_model};
+use super::{gpu_upload, scene_registration};
 use crate::asset::AssetStorage;
 use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::{
@@ -34,11 +34,11 @@ pub(super) unsafe fn apply_model_to_resources(
     fbx_model: Option<FbxModel>,
 ) -> Result<crate::ecs::world::Entity> {
     cleanup_resources(device, graphics, raytracing, world, assets)?;
-    scene_model::insert_model_caches(world, model_name, fbx_model);
+    scene_registration::insert_model_caches(world, model_name, fbx_model);
     gpu_upload::ensure_graphics_capacity(load_result, instance, device, swapchain, graphics)?;
 
-    scene_model::setup_animation_system(world, load_result, assets);
-    scene_model::setup_nodes(world, load_result);
+    scene_registration::setup_animation_system(world, load_result, assets);
+    scene_registration::setup_nodes(world, load_result);
 
     for (i, loaded_mesh) in load_result.meshes.iter().enumerate() {
         let mesh_buffer = gpu_upload::create_mesh_buffer(
@@ -72,9 +72,8 @@ pub(super) unsafe fn apply_model_to_resources(
         assets,
         load_result,
     )?;
-    let waters = crate::app::raytracing::scene_build::collect_water_instances(world);
-    let mesh_transforms =
-        crate::app::raytracing::scene_build::collect_mesh_transforms(world, assets);
+    let waters = crate::ecs::systems::collect_water_instances(world);
+    let mesh_transforms = crate::ecs::systems::collect_mesh_transforms(world, assets);
     crate::app::raytracing::scene_build::rebuild_acceleration_structures(
         instance,
         device,
@@ -95,11 +94,15 @@ pub(super) unsafe fn apply_model_to_resources(
         )?;
     }
 
-    let animation_type = scene_model::determine_animation_type(load_result);
+    let animation_type = scene_registration::determine_animation_type(load_result);
     let node_animation_scale = load_result.node_animation_scale;
-    scene_model::log_model_load_info(load_result, animation_type.clone(), node_animation_scale);
+    scene_registration::log_model_load_info(
+        load_result,
+        animation_type.clone(),
+        node_animation_scale,
+    );
 
-    let parent_entity = scene_model::create_ecs_entities(
+    let parent_entity = scene_registration::create_ecs_entities(
         model_name,
         graphics,
         world,
@@ -119,16 +122,16 @@ pub(super) unsafe fn apply_model_to_resources(
         );
     }
 
-    scene_model::apply_loaded_constraints(load_result, world);
-    scene_model::apply_loaded_spring_bones(load_result, world);
-    scene_model::initialize_bone_gizmo_visibility(
+    scene_registration::apply_loaded_constraints(load_result, world);
+    scene_registration::apply_loaded_spring_bones(load_result, world);
+    scene_registration::initialize_bone_gizmo_visibility(
         world,
         assets,
         graphics,
         node_animation_scale,
         load_result.has_skinned_meshes,
     );
-    scene_model::initialize_constraint_gizmo_visibility(world);
+    scene_registration::initialize_constraint_gizmo_visibility(world);
 
     Ok(parent_entity)
 }
@@ -166,7 +169,7 @@ pub(super) unsafe fn cleanup_resources(
         timeline_state.selected_keyframes.clear();
         timeline_state.expanded_tracks.clear();
     }
-    scene_model::restore_batch_playback(world);
+    scene_registration::restore_batch_playback(world);
 
     if world.contains_resource::<FbxModelCache>() {
         let mut cache = world.resource_mut::<FbxModelCache>();

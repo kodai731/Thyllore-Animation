@@ -7,7 +7,8 @@ use vulkanalia::prelude::v1_0::*;
 use crate::app::AppData;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::billboard::BillboardData;
-use crate::ecs::world::{GlobalTransform, MeshRef, World};
+use crate::ecs::systems::{collect_mesh_transforms, collect_water_instances};
+use crate::ecs::world::World;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::device::RRDevice;
@@ -17,45 +18,6 @@ use crate::vulkanr::vulkan::Instance;
 use thyllore_math_core::AffineRows3x4;
 use thyllore_vulkan_core::raytracing::RRAccelerationStructure;
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
-
-pub fn collect_water_instances(world: &World) -> Vec<(cgmath::Matrix4<f32>, f32, f32)> {
-    world
-        .query_waters()
-        .iter()
-        .filter_map(|&entity| {
-            let effect = world.get_component::<crate::ecs::component::WaterTorusEffect>(entity)?;
-            let ubo = thyllore_effect_core::build_water_ubo(effect, 0);
-            Some((ubo.model, effect.major_radius, effect.minor_radius))
-        })
-        .collect()
-}
-
-pub fn collect_mesh_transforms(world: &World, assets: &AssetStorage) -> Vec<cgmath::Matrix4<f32>> {
-    let indexed_transforms: Vec<(usize, cgmath::Matrix4<f32>)> = world
-        .iter_components::<MeshRef>()
-        .filter_map(|(entity, mesh_ref)| {
-            let mesh_asset = assets.get_mesh(mesh_ref.mesh_asset_id)?;
-            let model_matrix = world
-                .get_component::<GlobalTransform>(entity)
-                .map(|global_transform| global_transform.0)
-                .unwrap_or_else(cgmath::Matrix4::identity);
-            Some((mesh_asset.graphics_mesh_index, model_matrix))
-        })
-        .collect();
-
-    let transform_count = indexed_transforms
-        .iter()
-        .map(|(index, _)| index + 1)
-        .max()
-        .unwrap_or(0);
-
-    let mut transforms = vec![cgmath::Matrix4::identity(); transform_count];
-    for (index, model_matrix) in indexed_transforms {
-        transforms[index] = model_matrix;
-    }
-
-    transforms
-}
 
 pub unsafe fn rebuild_acceleration_structures(
     instance: &Instance,

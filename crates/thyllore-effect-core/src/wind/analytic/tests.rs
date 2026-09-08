@@ -604,3 +604,248 @@ fn layer_mass_is_conserved_under_wall_spread() {
         );
     }
 }
+
+fn puff_effect() -> WindTornadoEffect {
+    WindTornadoEffect {
+        time: 1.0,
+        puff_strength: 1.0,
+        puff_count_theta: 4,
+        puff_count_height: 2,
+        puff_radius: 0.3,
+        puff_offset_q: 0.0,
+        ..WindTornadoEffect::default()
+    }
+}
+
+fn puff_params() -> WindShellParams {
+    WindShellParams::from_effect(&puff_effect())
+}
+
+#[test]
+fn puff_ray_crossing_multiple_puffs_matches_midpoint_reference() {
+    let params = puff_params();
+    assert!(params.puff_count > 0, "puff_count should be > 0");
+
+    let origin = Vector3::new(-5.0, 0.5, 0.25);
+    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let mut t_near = 0.0;
+    let mut t_far = 1e4;
+    assert!(
+        clamp_ray_to_wind_cone(&params, origin, direction, &mut t_near, &mut t_far),
+        "ray must hit the envelope"
+    );
+
+    let step = (t_far - t_near) as f64 / 2048.0;
+    let mut reference = 0.0f64;
+    for i in 0..2048 {
+        let t = t_near as f64 + (i as f64 + 0.5) * step;
+        let point = origin + direction * t as f32;
+        reference += wind_density_at(&params, point) as f64 * step;
+    }
+
+    let closed = wind_optical_depth(&params, origin, direction, t_near, t_far) as f64;
+    assert!(
+        reference > 1e-3,
+        "reference {reference} too small to compare"
+    );
+    let relative = (closed - reference).abs() / reference;
+    assert!(
+        relative <= 1e-3,
+        "puff closed {closed} vs reference {reference} (rel {relative})"
+    );
+}
+
+#[test]
+fn puff_count_zero_yields_same_results_as_default() {
+    let default_params = params();
+    let zero_puff_effect = WindTornadoEffect {
+        puff_strength: 0.0,
+        puff_count_theta: 0,
+        puff_count_height: 0,
+        puff_radius: 0.0,
+        ..WindTornadoEffect::default()
+    };
+    let zero_puff_params = WindShellParams::from_effect(&zero_puff_effect);
+    assert_eq!(zero_puff_params.puff_count, 0);
+
+    let origin = Vector3::new(-5.0, 0.8, 0.05);
+    let direction = Vector3::new(1.0, 0.0, 0.0);
+    let mut t_near = 0.0;
+    let mut t_far = 1e4;
+    clamp_ray_to_wind_cone(&default_params, origin, direction, &mut t_near, &mut t_far);
+
+    let default_depth = wind_optical_depth(&default_params, origin, direction, t_near, t_far);
+    let zero_puff_depth = wind_optical_depth(&zero_puff_params, origin, direction, t_near, t_far);
+    assert!(
+        (default_depth - zero_puff_depth).abs() < 1e-6,
+        "puff_count=0 should match default: default={default_depth}, zero={zero_puff_depth}"
+    );
+}
+
+#[test]
+fn puff_knot_count_does_not_exceed_wind_max_knots() {
+    let params = puff_params();
+    let origin = Vector3::new(-5.0, 0.5, 0.25);
+    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let mut t_near = 0.0;
+    let mut t_far = 1e4;
+    clamp_ray_to_wind_cone(&params, origin, direction, &mut t_near, &mut t_far);
+
+    let (_knots, count) = wind_ray_knots(&params, origin, direction, t_near, t_far);
+    assert!(
+        count <= WIND_MAX_KNOTS,
+        "knot count {count} exceeds WIND_MAX_KNOTS={}",
+        WIND_MAX_KNOTS
+    );
+}
+
+#[test]
+fn large_puff_count_72_matches_midpoint_reference() {
+    let effect = WindTornadoEffect {
+        time: 1.0,
+        puff_strength: 1.0,
+        puff_count_theta: 12,
+        puff_count_height: 6,
+        puff_radius: 0.12,
+        puff_offset_q: 0.0,
+        ..WindTornadoEffect::default()
+    };
+    let params = WindShellParams::from_effect(&effect);
+    assert_eq!(params.puff_count, 72, "should have 12*6=72 puffs");
+
+    let origin = Vector3::new(-5.0, 0.5, 0.25);
+    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let mut t_near = 0.0;
+    let mut t_far = 1e4;
+    assert!(
+        clamp_ray_to_wind_cone(&params, origin, direction, &mut t_near, &mut t_far),
+        "ray must hit the envelope"
+    );
+
+    let mut intersecting_count = 0usize;
+    for i in 0..params.puff_count {
+        let puff = &params.puffs[i];
+        let cx = puff[0];
+        let cy = puff[1];
+        let cz = puff[2];
+        let r = puff[3];
+        if r <= 0.0 {
+            continue;
+        }
+        let dx = origin.x - cx;
+        let dy = origin.y - cy;
+        let dz = origin.z - cz;
+        let a = direction.x * direction.x + direction.y * direction.y + direction.z * direction.z;
+        let b = 2.0 * (dx * direction.x + dy * direction.y + dz * direction.z);
+        let c = dx * dx + dy * dy + dz * dz - r * r;
+        let discriminant = b * b - 4.0 * a * c;
+        if discriminant <= 0.0 {
+            continue;
+        }
+        let sqrt_discriminant = discriminant.sqrt();
+        let t0 = (-b - sqrt_discriminant) / (2.0 * a);
+        let t1 = (-b + sqrt_discriminant) / (2.0 * a);
+        let overlap = t0 <= t_far && t1 >= t_near;
+        if overlap {
+            intersecting_count += 1;
+        }
+    }
+    assert!(
+        (1..=8).contains(&intersecting_count),
+        "precondition: expected 1-8 intersecting puffs, got {intersecting_count}"
+    );
+
+    let step = (t_far - t_near) as f64 / 2048.0;
+    let mut reference = 0.0f64;
+    for i in 0..2048 {
+        let t = t_near as f64 + (i as f64 + 0.5) * step;
+        let point = origin + direction * t as f32;
+        reference += wind_density_at(&params, point) as f64 * step;
+    }
+
+    let closed = wind_optical_depth(&params, origin, direction, t_near, t_far) as f64;
+    assert!(
+        reference > 1e-3,
+        "reference {reference} too small to compare"
+    );
+    let relative = (closed - reference).abs() / reference;
+    assert!(
+        relative <= 1e-3,
+        "large puff count closed {closed} vs reference {reference} (rel {relative})"
+    );
+}
+
+#[test]
+fn truncated_ray_9_plus_puffs_analytical_leq_midpoint() {
+    let effect = WindTornadoEffect {
+        time: 1.0,
+        puff_strength: 1.0,
+        puff_count_theta: 12,
+        puff_count_height: 6,
+        puff_radius: 0.3,
+        puff_offset_q: 0.0,
+        ..WindTornadoEffect::default()
+    };
+    let params = WindShellParams::from_effect(&effect);
+    assert_eq!(params.puff_count, 72, "should have 12*6=72 puffs");
+
+    let origin = Vector3::new(-5.0, 0.5, 0.25);
+    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let mut t_near = 0.0;
+    let mut t_far = 1e4;
+    assert!(
+        clamp_ray_to_wind_cone(&params, origin, direction, &mut t_near, &mut t_far),
+        "ray must hit the envelope"
+    );
+
+    let mut intersecting_count = 0usize;
+    for i in 0..params.puff_count {
+        let puff = &params.puffs[i];
+        let cx = puff[0];
+        let cy = puff[1];
+        let cz = puff[2];
+        let r = puff[3];
+        if r <= 0.0 {
+            continue;
+        }
+        let dx = origin.x - cx;
+        let dy = origin.y - cy;
+        let dz = origin.z - cz;
+        let a = direction.x * direction.x + direction.y * direction.y + direction.z * direction.z;
+        let b = 2.0 * (dx * direction.x + dy * direction.y + dz * direction.z);
+        let c = dx * dx + dy * dy + dz * dz - r * r;
+        let discriminant = b * b - 4.0 * a * c;
+        if discriminant <= 0.0 {
+            continue;
+        }
+        let sqrt_discriminant = discriminant.sqrt();
+        let t0 = (-b - sqrt_discriminant) / (2.0 * a);
+        let t1 = (-b + sqrt_discriminant) / (2.0 * a);
+        let overlap = t0 <= t_far && t1 >= t_near;
+        if overlap {
+            intersecting_count += 1;
+        }
+    }
+    assert!(
+        intersecting_count >= 9,
+        "precondition: expected >= 9 intersecting puffs for truncation test, got {intersecting_count}"
+    );
+
+    let step = (t_far - t_near) as f64 / 2048.0;
+    let mut reference = 0.0f64;
+    for i in 0..2048 {
+        let t = t_near as f64 + (i as f64 + 0.5) * step;
+        let point = origin + direction * t as f32;
+        reference += wind_density_at(&params, point) as f64 * step;
+    }
+
+    let closed = wind_optical_depth(&params, origin, direction, t_near, t_far) as f64;
+    assert!(
+        reference > 1e-3,
+        "reference {reference} too small to compare"
+    );
+    assert!(
+        closed <= reference * (1.0 + 1e-6),
+        "truncated analytical {closed} should be <= midpoint reference {reference}"
+    );
+}

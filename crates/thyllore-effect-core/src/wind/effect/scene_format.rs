@@ -408,6 +408,76 @@ declare_scene_format! {
                 tooltip: "Strength ratio of each wall shell to the one inside it",
             },
         },
+        puff_count_theta: u32 = Frame {
+            get: |e| e.puff_count_theta,
+            set: |e, v| e.puff_count_theta = v,
+            ui {
+                min: 0.0,
+                max: 16.0,
+                format: "%.0f",
+                tooltip: "Number of puff clumps around the theta (angular) direction; 0 means no puffs (identity)",
+            },
+        },
+        puff_count_height: u32 = Frame {
+            get: |e| e.puff_count_height,
+            set: |e, v| e.puff_count_height = v,
+            ui {
+                min: 0.0,
+                max: 16.0,
+                format: "%.0f",
+                tooltip: "Number of puff clumps along the height (vertical) direction; 0 means no puffs (identity)",
+            },
+        },
+        puff_radius: f32 = Frame {
+            get: |e| e.puff_radius,
+            set: |e, v| e.puff_radius = v,
+            ui {
+                min: 0.01,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Radius of each puff clump in world units",
+            },
+        },
+        puff_radius_jitter: f32 = Frame {
+            get: |e| e.puff_radius_jitter,
+            set: |e, v| e.puff_radius_jitter = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Fractional jitter of puff radius for organic variation",
+            },
+        },
+        puff_offset_q: f32 = Frame {
+            get: |e| e.puff_offset_q,
+            set: |e, v| e.puff_offset_q = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Radial offset of puff clumps from the wall in q space",
+            },
+        },
+        puff_strength: f32 = Frame {
+            get: |e| e.puff_strength,
+            set: |e, v| e.puff_strength = v,
+            ui {
+                min: 0.0,
+                max: 4.0,
+                format: "%.2f",
+                tooltip: "Strength of the puff density contribution relative to the wall",
+            },
+        },
+        puff_rise_speed: f32 = Frame {
+            get: |e| e.puff_rise_speed,
+            set: |e, v| e.puff_rise_speed = v,
+            ui {
+                min: 0.0,
+                max: 10.0,
+                format: "%.1f",
+                tooltip: "Rise speed of puff clumps along the tornado height",
+            },
+        },
     },
     runtime {
         time: f32 {

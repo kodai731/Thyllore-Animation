@@ -18,6 +18,8 @@ declare_gpu_block! {
         pub eddy: [f32; 4],
         pub eddy2: [f32; 4],
         pub layers: [f32; 4],
+        pub puff_params: [f32; 4],
+        pub puffs: [[f32; 4]; 96],
         pub inv_view_proj: Matrix4<f32>,
     }
 }

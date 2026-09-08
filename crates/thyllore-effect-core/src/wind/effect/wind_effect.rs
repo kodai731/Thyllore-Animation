@@ -46,6 +46,13 @@ pub struct WindTornadoEffect {
     pub layer_count: f32,
     pub layer_spacing_q: f32,
     pub layer_decay: f32,
+    pub puff_count_theta: u32,
+    pub puff_count_height: u32,
+    pub puff_radius: f32,
+    pub puff_radius_jitter: f32,
+    pub puff_offset_q: f32,
+    pub puff_strength: f32,
+    pub puff_rise_speed: f32,
 }
 
 impl Default for WindTornadoEffect {
@@ -95,6 +102,13 @@ impl Default for WindTornadoEffect {
             layer_count: 1.0,
             layer_spacing_q: 0.1,
             layer_decay: 0.6,
+            puff_count_theta: 0,
+            puff_count_height: 0,
+            puff_radius: 0.15,
+            puff_radius_jitter: 0.4,
+            puff_offset_q: 0.5,
+            puff_strength: 1.0,
+            puff_rise_speed: 0.3,
         }
     }
 }

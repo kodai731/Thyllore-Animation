@@ -41,6 +41,13 @@ pub const WIND_EDDY_PARAMS: &[&str] = &[
     "layer_count",
     "layer_spacing_q",
     "layer_decay",
+    "puff_count_theta",
+    "puff_count_height",
+    "puff_radius",
+    "puff_radius_jitter",
+    "puff_offset_q",
+    "puff_strength",
+    "puff_rise_speed",
 ];
 
 pub const WIND_PARAM_GROUPS: &[&[&str]] = &[

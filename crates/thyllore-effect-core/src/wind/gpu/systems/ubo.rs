@@ -66,6 +66,8 @@ pub fn build_wind_ubo(effect: &WindTornadoEffect) -> WindUBO {
             params.layer_decay,
             0.0,
         ],
+        puff_params: [params.puff_count as f32, effect.puff_strength, 0.0, 0.0],
+        puffs: params.puffs,
         inv_view_proj: Matrix4::identity(),
     }
 }

@@ -1,5 +1,6 @@
 use crate::wind::analytic::eddy::eddy_sigma;
 use crate::wind::analytic::motion::{h_top, spread_offset, streak_phase, wall_amp};
+use crate::wind::analytic::puffs::build_wind_puffs;
 use crate::wind::WindTornadoEffect;
 use cgmath::Vector3;
 
@@ -14,7 +15,9 @@ use cgmath::Vector3;
 // term is a polynomial and the optical depth of a piece between two knots is
 // an exact power-rule integral in the piece-local variable sigma in [0, 1].
 
-pub const WIND_MAX_KNOTS: usize = 24;
+pub const WIND_MAX_KNOTS: usize = 56;
+pub const WIND_MAX_PUFFS: usize = 96;
+pub const WIND_PUFFS_PER_RAY: usize = 20;
 const POLY_TERMS: usize = 16;
 const EDDY_MAX_SPLIT: usize = 4;
 const LINEAR_COEFFICIENT_EPSILON: f32 = 1e-7;
@@ -56,6 +59,9 @@ pub struct WindShellParams {
     pub layer_spacing_q: f32,
     pub layer_decay: f32,
     pub time: f32,
+    pub puff_strength: f32,
+    pub puff_count: usize,
+    pub puffs: [[f32; 4]; WIND_MAX_PUFFS],
 }
 
 impl WindShellParams {
@@ -84,7 +90,7 @@ impl WindShellParams {
             effect.spread_start,
             effect.spread_rate,
         );
-        Self {
+        let mut params = Self {
             height: effect.column_height.max(1e-3),
             wall_radius_base: effect.wall_radius_base,
             wall_radius_slope: effect.wall_radius_top - effect.wall_radius_base,
@@ -117,7 +123,15 @@ impl WindShellParams {
             layer_spacing_q: effect.layer_spacing_q.max(0.0),
             layer_decay: effect.layer_decay.max(0.0).min(1.0),
             time: t,
-        }
+            puff_strength: effect.puff_strength,
+            puff_count: 0,
+            puffs: [[0.0; 4]; WIND_MAX_PUFFS],
+        };
+
+        let (puffs, puff_count) = build_wind_puffs(effect, &params);
+        params.puffs = puffs;
+        params.puff_count = puff_count;
+        params
     }
 
     pub(crate) fn wall_radius(&self, h: f32) -> f32 {
@@ -216,7 +230,27 @@ pub fn wind_density_at(params: &WindShellParams, local: Vector3<f32>) -> f32 {
     } else {
         0.0
     };
-    params.sigma_t * envelope * (wall + core + ring)
+
+    let mut puff_term = 0.0f32;
+    for i in 0..params.puff_count {
+        let puff = &params.puffs[i];
+        let cx = puff[0];
+        let cy = puff[1];
+        let cz = puff[2];
+        let r = puff[3];
+        if r <= 0.0 {
+            continue;
+        }
+        let dx = local.x - cx;
+        let dy = local.y - cy;
+        let dz = local.z - cz;
+        let u = (dx * dx + dy * dy + dz * dz) / (r * r);
+        if u < 1.0 {
+            puff_term += params.puff_strength * params.wall_strength * biweight(u);
+        }
+    }
+
+    params.sigma_t * (envelope * (wall + core + ring) + puff_term)
 }
 
 fn clamp_ray_to_cone_frustum(
@@ -466,6 +500,37 @@ pub fn wind_ray_knots(
         }
     }
 
+    let mut adopted = 0;
+    for i in 0..params.puff_count {
+        if adopted >= WIND_PUFFS_PER_RAY {
+            break;
+        }
+        let puff = &params.puffs[i];
+        let cx = puff[0];
+        let cy = puff[1];
+        let cz = puff[2];
+        let r = puff[3];
+        if r <= 0.0 {
+            continue;
+        }
+        let dx = origin.x - cx;
+        let dy = origin.y - cy;
+        let dz = origin.z - cz;
+        let a = direction.x * direction.x + direction.y * direction.y + direction.z * direction.z;
+        let b = 2.0 * (dx * direction.x + dy * direction.y + dz * direction.z);
+        let c = dx * dx + dy * dy + dz * dz - r * r;
+        let discriminant = b * b - 4.0 * a * c;
+        if discriminant <= 0.0 {
+            continue;
+        }
+        let sqrt_discriminant = discriminant.sqrt();
+        let t0 = (-b - sqrt_discriminant) / (2.0 * a);
+        let t1 = (-b + sqrt_discriminant) / (2.0 * a);
+        push_knot(&mut knots, &mut count, t0, t_near, t_far);
+        push_knot(&mut knots, &mut count, t1, t_near, t_far);
+        adopted += 1;
+    }
+
     sort_knots(&mut knots, count);
     (knots, count)
 }
@@ -626,6 +691,46 @@ pub fn wind_piece_optical_depth(
         }
     }
 
+    let mut puff_poly = [0.0f32; POLY_TERMS];
+    let mut adopted = 0;
+    for i in 0..params.puff_count {
+        if adopted >= WIND_PUFFS_PER_RAY {
+            break;
+        }
+        let puff = &params.puffs[i];
+        let cx = puff[0];
+        let cy = puff[1];
+        let cz = puff[2];
+        let r = puff[3];
+        if r <= 0.0 {
+            continue;
+        }
+        let dx = start.x - cx;
+        let dy = start.y - cy;
+        let dz = start.z - cz;
+        let r_sq = r * r;
+        let u0 = (dx * dx + dy * dy + dz * dz) / r_sq;
+        let u1 = 2.0 * length * (dx * direction.x + dy * direction.y + dz * direction.z) / r_sq;
+        let u2 = length
+            * length
+            * (direction.x * direction.x + direction.y * direction.y + direction.z * direction.z)
+            / r_sq;
+        let disc_u = u1 * u1 - 4.0 * u2 * (u0 - 1.0);
+        if disc_u <= 0.0 {
+            continue;
+        }
+        let u_mid = u0 + 0.5 * u1 + 0.25 * u2;
+        if u_mid < 1.0 {
+            let u = poly_from_quadratic(u0, u1, u2);
+            let bw = biweight_poly(&u);
+            let weight = params.puff_strength * params.wall_strength;
+            for (target, value) in puff_poly.iter_mut().zip(bw) {
+                *target += weight * value;
+            }
+        }
+        adopted += 1;
+    }
+
     let inv_h_top = 1.0 / params.h_top;
     let envelope = envelope_poly(params, h0 * inv_h_top, h1 * inv_h_top, h_mid * inv_h_top);
     let mut density = poly_mul(&envelope, &shell);
@@ -666,14 +771,22 @@ pub fn wind_piece_optical_depth(
             }
             sigma_a = sigma_b;
         }
-        return (length * params.sigma_t * total).max(0.0);
+        let mut puff_total = 0.0f32;
+        for n in 0..POLY_TERMS {
+            puff_total += puff_poly[n] / (n as f32 + 1.0);
+        }
+        return (length * params.sigma_t * (total + puff_total)).max(0.0);
     }
 
     let mut moment_sum = 0.0f32;
     for (n, coefficient) in density.iter().enumerate() {
         moment_sum += coefficient / (n as f32 + 1.0);
     }
-    (length * params.sigma_t * moment_sum).max(0.0)
+    let mut puff_total = 0.0f32;
+    for n in 0..POLY_TERMS {
+        puff_total += puff_poly[n] / (n as f32 + 1.0);
+    }
+    (length * params.sigma_t * (moment_sum + puff_total)).max(0.0)
 }
 
 pub fn wind_optical_depth(

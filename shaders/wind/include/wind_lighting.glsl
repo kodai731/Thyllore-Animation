@@ -23,7 +23,7 @@ float windOpticalDepthToward(vec3 origin, vec3 direction) {
         return 0.0;
     }
     int knotCount = 0;
-    return windOpticalDepth(origin, direction, tNear, tFar, knotCount);
+    return windOpticalDepth(origin, direction, tNear, tFar, false, knotCount);
 }
 
 float windInScatterSource(vec3 position, vec3 lightPosition, vec3 viewDir) {
@@ -56,12 +56,12 @@ vec3 windSingleScatterRadiance(
     }
 
     float knots[WIND_MAX_KNOTS];
-    knotCount = windRayKnots(o, d, tNear, tFar, knots);
+    knotCount = windRayKnots(o, d, tNear, tFar, true, knots);
     vec3 viewDir = normalize(d);
 
     float radiance = 0.0;
     for (int i = 1; i < knotCount; ++i) {
-        float pieceDepth = windPieceOpticalDepth(o, d, knots[i - 1], knots[i]);
+        float pieceDepth = windPieceOpticalDepth(o, d, knots[i - 1], knots[i], true);
         float frontTransmittance = rteTransmittanceFromOpticalDepth(opticalDepth);
         float source = windPieceInScatter(o, d, knots[i - 1], knots[i], lightPosition, viewDir);
         radiance += frontTransmittance * source * (1.0 - rteTransmittanceFromOpticalDepth(pieceDepth));

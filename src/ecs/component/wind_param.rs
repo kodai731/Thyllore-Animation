@@ -43,10 +43,17 @@ pub enum WindParam {
     LayerCount,
     LayerSpacingQ,
     LayerDecay,
+    PuffCountTheta,
+    PuffCountHeight,
+    PuffRadius,
+    PuffRadiusJitter,
+    PuffOffsetQ,
+    PuffStrength,
+    PuffRiseSpeed,
 }
 
 impl WindParam {
-    pub const ALL: [WindParam; 36] = [
+    pub const ALL: [WindParam; 43] = [
         WindParam::ColumnHeight,
         WindParam::CoreRadius,
         WindParam::CoreStrength,
@@ -83,6 +90,13 @@ impl WindParam {
         WindParam::LayerCount,
         WindParam::LayerSpacingQ,
         WindParam::LayerDecay,
+        WindParam::PuffCountTheta,
+        WindParam::PuffCountHeight,
+        WindParam::PuffRadius,
+        WindParam::PuffRadiusJitter,
+        WindParam::PuffOffsetQ,
+        WindParam::PuffStrength,
+        WindParam::PuffRiseSpeed,
     ];
 
     pub const fn code(self) -> u16 {
@@ -123,6 +137,13 @@ impl WindParam {
             WindParam::LayerCount => 545,
             WindParam::LayerSpacingQ => 546,
             WindParam::LayerDecay => 547,
+            WindParam::PuffCountTheta => 548,
+            WindParam::PuffCountHeight => 549,
+            WindParam::PuffRadius => 550,
+            WindParam::PuffRadiusJitter => 551,
+            WindParam::PuffOffsetQ => 552,
+            WindParam::PuffStrength => 553,
+            WindParam::PuffRiseSpeed => 554,
         }
     }
 
@@ -179,6 +200,13 @@ impl WindParam {
             WindParam::LayerCount => "Layer Count",
             WindParam::LayerSpacingQ => "Layer Spacing Q",
             WindParam::LayerDecay => "Layer Decay",
+            WindParam::PuffCountTheta => "Puff Count Theta",
+            WindParam::PuffCountHeight => "Puff Count Height",
+            WindParam::PuffRadius => "Puff Radius",
+            WindParam::PuffRadiusJitter => "Puff Radius Jitter",
+            WindParam::PuffOffsetQ => "Puff Offset Q",
+            WindParam::PuffStrength => "Puff Strength",
+            WindParam::PuffRiseSpeed => "Puff Rise Speed",
         }
     }
 
@@ -220,6 +248,13 @@ impl WindParam {
             WindParam::LayerCount => "layer_count",
             WindParam::LayerSpacingQ => "layer_spacing_q",
             WindParam::LayerDecay => "layer_decay",
+            WindParam::PuffCountTheta => "puff_count_theta",
+            WindParam::PuffCountHeight => "puff_count_height",
+            WindParam::PuffRadius => "puff_radius",
+            WindParam::PuffRadiusJitter => "puff_radius_jitter",
+            WindParam::PuffOffsetQ => "puff_offset_q",
+            WindParam::PuffStrength => "puff_strength",
+            WindParam::PuffRiseSpeed => "puff_rise_speed",
         }
     }
 
@@ -268,6 +303,13 @@ impl WindParam {
             WindParam::LayerCount => "LayerCount",
             WindParam::LayerSpacingQ => "LayerSpacingQ",
             WindParam::LayerDecay => "LayerDecay",
+            WindParam::PuffCountTheta => "PuffCountTheta",
+            WindParam::PuffCountHeight => "PuffCountHeight",
+            WindParam::PuffRadius => "PuffRadius",
+            WindParam::PuffRadiusJitter => "PuffRadiusJitter",
+            WindParam::PuffOffsetQ => "PuffOffsetQ",
+            WindParam::PuffStrength => "PuffStrength",
+            WindParam::PuffRiseSpeed => "PuffRiseSpeed",
         }
     }
 
@@ -309,6 +351,13 @@ impl WindParam {
             WindParam::LayerCount => (1.0, 3.0),
             WindParam::LayerSpacingQ => (0.01, 1.0),
             WindParam::LayerDecay => (0.0, 1.0),
+            WindParam::PuffCountTheta => (0.0, 16.0),
+            WindParam::PuffCountHeight => (0.0, 16.0),
+            WindParam::PuffRadius => (0.01, 1.0),
+            WindParam::PuffRadiusJitter => (0.0, 1.0),
+            WindParam::PuffOffsetQ => (0.0, 1.0),
+            WindParam::PuffStrength => (0.0, 4.0),
+            WindParam::PuffRiseSpeed => (0.0, 10.0),
         }
     }
 

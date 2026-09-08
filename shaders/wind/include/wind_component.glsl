@@ -23,7 +23,17 @@ layout(set = WIND_UBO_SET, binding = WIND_UBO_BINDING) uniform WindUBO {
     vec4 eddy;
     vec4 eddy2;
     vec4 layers;
+    vec4 puffParams;
+    vec4 puffs[96];
     mat4 invViewProj;
 } wind;
+
+int windPuffCount() {
+    return int(wind.puffParams.x);
+}
+
+float windPuffStrength() {
+    return wind.puffParams.y;
+}
 
 #endif

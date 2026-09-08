@@ -1,4 +1,5 @@
 use imgui::Condition;
+use thyllore_anim_core::editable::PropertyType;
 
 use crate::ecs::component::{FlameParam, WaterParam};
 use crate::ecs::events::{UIEvent, UIEventQueue};
@@ -9,7 +10,7 @@ use crate::ecs::resource::{
 use crate::ecs::World;
 
 use super::flame_param_groups::flame_group_param_names;
-use super::param_widgets::draw_scalar_params;
+use super::param_widgets::{draw_params, EditedScalars};
 use super::viewport_window::ViewportInfo;
 
 const OVERLAY_MARGIN: f32 = 8.0;
@@ -243,29 +244,43 @@ fn build_screenshot_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue) {
     }
 }
 
-fn flame_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, name: &'static str, value: f32) {
-    let Some(param) = FlameParam::from_cli_name(name) else {
-        return;
-    };
-    ui.same_line();
-    if ui.small_button(format!("K##{name}")) {
-        ui_events.send(UIEvent::InsertScalarKey {
-            property_type: param.property_type(),
-            value,
-        });
-    }
+fn flame_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedScalars) {
+    let keys: Vec<(PropertyType, f32)> = edited
+        .iter()
+        .filter_map(|(name, value)| {
+            FlameParam::from_cli_name(name).map(|param| (param.property_type(), *value))
+        })
+        .collect();
+    send_key_button(ui, ui_events, edited, keys);
 }
 
-fn water_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, name: &'static str, value: f32) {
-    let Some(param) = WaterParam::from_cli_name(name) else {
+fn water_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: EditedScalars) {
+    let keys: Vec<(PropertyType, f32)> = edited
+        .iter()
+        .filter_map(|(name, value)| {
+            WaterParam::from_cli_name(name).map(|param| (param.property_type(), *value))
+        })
+        .collect();
+    send_key_button(ui, ui_events, edited, keys);
+}
+
+fn send_key_button(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    edited: EditedScalars,
+    keys: Vec<(PropertyType, f32)>,
+) {
+    let (Some((first_name, _)), false) = (edited.first(), keys.is_empty()) else {
         return;
     };
     ui.same_line();
-    if ui.small_button(format!("K##{name}")) {
-        ui_events.send(UIEvent::InsertScalarKey {
-            property_type: param.property_type(),
-            value,
-        });
+    if ui.small_button(format!("K##{first_name}")) {
+        for (property_type, value) in keys {
+            ui_events.send(UIEvent::InsertScalarKey {
+                property_type,
+                value,
+            });
+        }
     }
 }
 
@@ -609,13 +624,13 @@ fn build_water_section(
                             .filter(|param| param.group == group)
                             .map(|param| param.name)
                             .collect();
-                        draw_scalar_params(
+                        draw_params(
                             ui,
                             &names,
                             thyllore_effect_core::WATER_UI_PARAMS,
                             thyllore_effect_core::WATER_SCALAR_PARAMS,
                             &mut effect_copy,
-                            |ui, name, value| water_key_button(ui, ui_events, name, value),
+                            |ui, edited| water_key_button(ui, ui_events, edited),
                         );
                     }
 
@@ -1015,29 +1030,35 @@ fn build_flame_section(
                         effect_copy.emitter.ring_angular_speed = ring_speed;
                     }
 
-                    draw_scalar_params(
+                    draw_params(
                         ui,
                         &*flame_group_param_names("body"),
                         thyllore_effect_core::FLAME_UI_PARAMS,
                         thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
-                        |ui, name, value| flame_key_button(ui, ui_events, name, value),
+                        |ui, edited| flame_key_button(ui, ui_events, edited),
                     );
 
-                    let mut color_changed = false;
-                    color_changed |= ui.color_edit3("Base Color", &mut effect_copy.color.base);
-                    color_changed |= ui.color_edit3("Tip Color", &mut effect_copy.color.tip);
-                    if color_changed {
+                    let colors_before = (effect_copy.color.base, effect_copy.color.tip);
+                    draw_params(
+                        ui,
+                        &*flame_group_param_names("color"),
+                        thyllore_effect_core::FLAME_UI_PARAMS,
+                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
+                        &mut effect_copy,
+                        |ui, edited| flame_key_button(ui, ui_events, edited),
+                    );
+                    if (effect_copy.color.base, effect_copy.color.tip) != colors_before {
                         effect_copy.color.use_blackbody = false;
                     }
 
-                    draw_scalar_params(
+                    draw_params(
                         ui,
                         &*flame_group_param_names("noise"),
                         thyllore_effect_core::FLAME_UI_PARAMS,
                         thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
-                        |ui, name, value| flame_key_button(ui, ui_events, name, value),
+                        |ui, edited| flame_key_button(ui, ui_events, edited),
                     );
 
                     let mut noise_sharpness =
@@ -1062,13 +1083,13 @@ fn build_flame_section(
                         );
                     }
 
-                    draw_scalar_params(
+                    draw_params(
                         ui,
                         &*flame_group_param_names("mix"),
                         thyllore_effect_core::FLAME_UI_PARAMS,
                         thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
-                        |ui, name, value| flame_key_button(ui, ui_events, name, value),
+                        |ui, edited| flame_key_button(ui, ui_events, edited),
                     );
 
                     let mut wave_segments = effect_copy.wave_segments as i32;
@@ -1110,24 +1131,24 @@ fn build_flame_section(
                         );
                     }
 
-                    draw_scalar_params(
+                    draw_params(
                         ui,
                         &*flame_group_param_names("motion"),
                         thyllore_effect_core::FLAME_UI_PARAMS,
                         thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
-                        |ui, name, value| flame_key_button(ui, ui_events, name, value),
+                        |ui, edited| flame_key_button(ui, ui_events, edited),
                     );
 
                     ui.separator();
                     ui.text("Branches");
-                    draw_scalar_params(
+                    draw_params(
                         ui,
                         &*flame_group_param_names("branch"),
                         thyllore_effect_core::FLAME_UI_PARAMS,
                         thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
-                        |ui, name, value| flame_key_button(ui, ui_events, name, value),
+                        |ui, edited| flame_key_button(ui, ui_events, edited),
                     );
 
                     let mut branch_seed = effect_copy.branch.seed as i32;
@@ -1136,13 +1157,13 @@ fn build_flame_section(
                     }
 
                     ui.separator();
-                    draw_scalar_params(
+                    draw_params(
                         ui,
                         &*flame_group_param_names("footer"),
                         thyllore_effect_core::FLAME_UI_PARAMS,
                         thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
-                        |ui, name, value| flame_key_button(ui, ui_events, name, value),
+                        |ui, edited| flame_key_button(ui, ui_events, edited),
                     );
 
                     if ui.button("Clear Flame Keys") {

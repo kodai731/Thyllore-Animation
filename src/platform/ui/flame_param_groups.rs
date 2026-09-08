@@ -12,7 +12,9 @@ mod tests {
     use thyllore_effect_core::{FLAME_SCALAR_PARAMS, FLAME_UI_PARAMS};
     use thyllore_scene_core::{find_scalar_param, find_ui_param};
 
-    const GROUPS: [&str; 6] = ["body", "noise", "mix", "motion", "branch", "footer"];
+    const GROUPS: [&str; 7] = [
+        "body", "noise", "mix", "motion", "branch", "footer", "color",
+    ];
 
     #[test]
     fn test_every_group_is_non_empty_and_resolves_to_ui_and_scalar_param() {
@@ -21,11 +23,13 @@ mod tests {
             assert!(!names.is_empty(), "{group}");
 
             for name in names {
-                assert!(find_ui_param(FLAME_UI_PARAMS, name).is_some(), "{name}");
-                assert!(
-                    find_scalar_param(FLAME_SCALAR_PARAMS, name).is_some(),
-                    "{name}"
-                );
+                let meta = find_ui_param(FLAME_UI_PARAMS, name).unwrap_or_else(|| panic!("{name}"));
+                for accessor_name in meta.scalar_accessor_names() {
+                    assert!(
+                        find_scalar_param(FLAME_SCALAR_PARAMS, &accessor_name).is_some(),
+                        "{accessor_name}"
+                    );
+                }
             }
         }
     }
@@ -42,6 +46,6 @@ mod tests {
         names.dedup();
 
         assert_eq!(names.len(), collected);
-        assert_eq!(names.len(), 35);
+        assert_eq!(names.len(), 37);
     }
 }

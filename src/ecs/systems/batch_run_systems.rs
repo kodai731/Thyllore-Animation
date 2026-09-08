@@ -31,6 +31,7 @@ const BATCH_WATER_TIME_FLAG: &str = "--batch-water-time";
 const BATCH_WIND_TIME_FLAG: &str = "--batch-wind-time";
 const BATCH_WIND_MODE_FLAG: &str = "--batch-wind-mode";
 const BATCH_WIND_DEBUG_VIEW_FLAG: &str = "--batch-wind-debug-view";
+const BATCH_WIND_RESOLVE_SCALE_FLAG: &str = "--batch-wind-resolve-scale";
 const BATCH_FLAME_STEPS_FLAG: &str = "--batch-flame-steps";
 const BATCH_CAMERA_FLAG: &str = "--batch-camera";
 const FLAME_DUMP_FLAG: &str = "--flame-dump";
@@ -77,6 +78,7 @@ pub struct EngineCliOverrides {
     pub water_fixed_time: Option<f32>,
     pub wind_fixed_time: Option<f32>,
     pub wind_mode: Option<thyllore_effect_core::WindShadingMode>,
+    pub wind_resolve_scale: Option<thyllore_effect_core::WindResolveScale>,
     pub wind_debug_view: Option<thyllore_effect_core::WindDebugView>,
     pub wind_set: Vec<(String, f32)>,
     pub flame_steps: Option<u32>,
@@ -167,6 +169,7 @@ pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverride
         wind_fixed_time: wind_fixed_time_resolve_from_args(args)?,
         wind_mode: wind_mode_resolve_from_args(args)?,
         wind_debug_view: wind_debug_view_resolve_from_args(args)?,
+        wind_resolve_scale: wind_resolve_scale_resolve_from_args(args)?,
         wind_set: wind_set_resolve_from_args(args)?,
         flame_steps: flame_steps_resolve_from_args(args)?,
         camera_pose: camera_pose_resolve_from_args(args)?,
@@ -479,6 +482,24 @@ pub fn wind_debug_view_resolve_from_args(
         anyhow::anyhow!("invalid wind debug view '{value}': expected off|depth|knots|coverage")
     })?;
     Ok(Some(view))
+}
+
+pub fn wind_resolve_scale_resolve_from_args(
+    args: &[String],
+) -> Result<Option<thyllore_effect_core::WindResolveScale>> {
+    let Some(position) = args
+        .iter()
+        .position(|arg| arg == BATCH_WIND_RESOLVE_SCALE_FLAG)
+    else {
+        return Ok(None);
+    };
+    let Some(value) = args.get(position + 1) else {
+        bail!("{BATCH_WIND_RESOLVE_SCALE_FLAG} requires a value: full|half");
+    };
+    let scale = thyllore_effect_core::WindResolveScale::parse(value).ok_or_else(|| {
+        anyhow::anyhow!("invalid wind resolve scale '{value}': expected full|half")
+    })?;
+    Ok(Some(scale))
 }
 
 pub fn water_fixed_time_resolve_from_args(args: &[String]) -> Result<Option<f32>> {
@@ -2510,6 +2531,35 @@ mod tests {
             coverage.wind_debug_view,
             Some(thyllore_effect_core::WindDebugView::Coverage)
         );
+    }
+
+    #[test]
+    fn resolve_wind_resolve_scale() {
+        let default_overrides = resolve_engine_cli_overrides(&args(&["bin"])).unwrap();
+        assert_eq!(default_overrides.wind_resolve_scale, None);
+
+        let half =
+            resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-resolve-scale", "half"]))
+                .unwrap();
+        assert_eq!(
+            half.wind_resolve_scale,
+            Some(thyllore_effect_core::WindResolveScale::Half)
+        );
+
+        let full =
+            resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-resolve-scale", "full"]))
+                .unwrap();
+        assert_eq!(
+            full.wind_resolve_scale,
+            Some(thyllore_effect_core::WindResolveScale::Full)
+        );
+
+        assert!(wind_resolve_scale_resolve_from_args(&args(&[
+            "bin",
+            "--batch-wind-resolve-scale",
+            "x"
+        ]))
+        .is_err());
     }
 
     #[test]

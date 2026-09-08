@@ -14,10 +14,11 @@ use crate::descriptor::{
     RRAutoExposureHistogramDescriptorSet, RRBillboardDescriptorSet, RRBloomDescriptorSets,
     RRCompositeDescriptorSet, RRDofDescriptorSet, RRFlameDescriptorSet, RRRayQueryDescriptorSet,
     RRToneMapDescriptorSet, RRWaterCausticDescriptorSet, RRWaterDescriptorSet,
-    RRWaterTraceDescriptorSet, RRWindDescriptorSet, AUTO_EXPOSURE_AVERAGE, AUTO_EXPOSURE_HISTOGRAM,
-    BLOOM_DOWNSAMPLE, BLOOM_UPSAMPLE, COMPOSITE, DOF, FLAME_RESOLVE, GBUFFER, ONION_SKIN_COMPOSITE,
-    ONION_SKIN_GHOST, RAY_QUERY_SHADOW, TONEMAP, WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT,
-    WATER_RESOLVE, WATER_TRACE, WIND_RESOLVE,
+    RRWaterTraceDescriptorSet, RRWindDescriptorSet, RRWindUpsampleDescriptorSet,
+    AUTO_EXPOSURE_AVERAGE, AUTO_EXPOSURE_HISTOGRAM, BLOOM_DOWNSAMPLE, BLOOM_UPSAMPLE, COMPOSITE,
+    DOF, FLAME_RESOLVE, GBUFFER, ONION_SKIN_COMPOSITE, ONION_SKIN_GHOST, RAY_QUERY_SHADOW, TONEMAP,
+    WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE, WATER_TRACE, WIND_RESOLVE,
+    WIND_UPSAMPLE,
 };
 use crate::pipeline::{
     BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline,
@@ -92,6 +93,9 @@ pub struct RayTracingData {
     pub wind_shading_pipeline: Option<RRPipeline>,
     pub wind_descriptor: Option<RRWindDescriptorSet>,
     pub wind_ubo: Option<UniformBuffer<WindUBO>>,
+
+    pub wind_upsample_pipeline: Option<RRPipeline>,
+    pub wind_upsample_descriptor: Option<RRWindUpsampleDescriptorSet>,
 
     pub flame_sdf_image: vk::Image,
     pub flame_sdf_image_memory: vk::DeviceMemory,
@@ -625,9 +629,40 @@ impl RayTracingData {
             ])
             .build(rrdevice, rrrender, Some(wind_buffer.extent()))?;
 
+        let wind_upsample_descriptor = RRWindUpsampleDescriptorSet::new(rrdevice)?;
+        wind_upsample_descriptor.update_image_views(
+            rrdevice,
+            wind_buffer.half_color_image_view,
+            scene_depth_view,
+        )?;
+
+        let wind_upsample_pipeline = PipelineBuilder::from_pass(&WIND_UPSAMPLE)
+            .vertex_input(VertexInputConfig::Custom {
+                bindings: vec![],
+                attributes: vec![],
+            })
+            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+            .no_depth_test()
+            .custom_render_pass(wind_buffer.render_pass)
+            .msaa_samples(vk::SampleCountFlags::_1)
+            .blend(BlendConfig {
+                enable: true,
+                src_color_factor: vk::BlendFactor::ONE,
+                dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+                color_op: vk::BlendOp::ADD,
+                src_alpha_factor: vk::BlendFactor::ONE,
+                dst_alpha_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+                alpha_op: vk::BlendOp::ADD,
+            })
+            .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
+            .descriptor_layouts(&[&wind_upsample_descriptor.layout])
+            .build(rrdevice, rrrender, Some(wind_buffer.extent()))?;
+
         self.wind_shading_pipeline = Some(wind_shading_pipeline);
         self.wind_descriptor = Some(wind_descriptor);
         self.wind_ubo = Some(wind_ubo);
+        self.wind_upsample_pipeline = Some(wind_upsample_pipeline);
+        self.wind_upsample_descriptor = Some(wind_upsample_descriptor);
 
         log!("Created wind pipeline");
         Ok(())

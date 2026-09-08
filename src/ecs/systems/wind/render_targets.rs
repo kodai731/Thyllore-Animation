@@ -17,7 +17,11 @@ pub const WIND_EFFECT_HOOK: EffectHook = EffectHook {
     passes: &[&super::passes::WindPassNode],
 };
 
-unsafe fn create_wind_render_targets(rrdevice: &RRDevice, data: &mut AppData) -> Result<bool> {
+unsafe fn create_wind_render_targets(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+    data: &mut AppData,
+) -> Result<bool> {
     let Some(hdr_view) = data
         .viewport
         .hdr_buffer
@@ -28,6 +32,7 @@ unsafe fn create_wind_render_targets(rrdevice: &RRDevice, data: &mut AppData) ->
     };
 
     let buffer = WindBuffer::new(
+        instance,
         rrdevice,
         data.viewport.width,
         data.viewport.height,
@@ -43,7 +48,7 @@ unsafe fn setup_wind(
     data: &mut AppData,
     rrrender: &RRRender,
 ) -> Result<()> {
-    if !create_wind_render_targets(rrdevice, data)? {
+    if !create_wind_render_targets(instance, rrdevice, data)? {
         log!("HDR buffer not available, skipping wind pipeline");
         return Ok(());
     }
@@ -83,11 +88,23 @@ unsafe fn resize_wind_render_targets(app: &mut App) -> Result<()> {
     if let Some(mut targets) = app.data.ecs_world.get_resource_mut::<WindRenderTargets>() {
         targets
             .buffer
-            .resize(&app.rrdevice, width, height, hdr_view)?;
+            .resize(&app.instance, &app.rrdevice, width, height, hdr_view)?;
     }
 
     if let Some(descriptor) = app.data.raytracing.wind_descriptor.as_ref() {
         descriptor.update_scene_depth(&app.rrdevice, scene_depth_view)?;
+    }
+
+    let half_color_view = app
+        .data
+        .ecs_world
+        .get_resource::<WindRenderTargets>()
+        .map(|targets| targets.buffer.half_color_image_view);
+    if let (Some(descriptor), Some(half_color_view)) = (
+        app.data.raytracing.wind_upsample_descriptor.as_ref(),
+        half_color_view,
+    ) {
+        descriptor.update_image_views(&app.rrdevice, half_color_view, scene_depth_view)?;
     }
     Ok(())
 }

@@ -1,4 +1,21 @@
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WindResolveScale {
+    #[default]
+    Full,
+    Half,
+}
+
+impl WindResolveScale {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "full" => Some(WindResolveScale::Full),
+            "half" => Some(WindResolveScale::Half),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WindShadingMode {
     #[default]
     ClosedForm,
@@ -87,6 +104,7 @@ pub struct WindRenderSettings {
     pub debug_view: WindDebugView,
     pub batch_fixed_time: Option<f32>,
     pub free_run_when_paused: bool,
+    pub resolve_scale: WindResolveScale,
 }
 
 impl Default for WindRenderSettings {
@@ -97,6 +115,7 @@ impl Default for WindRenderSettings {
             debug_view: WindDebugView::Off,
             batch_fixed_time: None,
             free_run_when_paused: false,
+            resolve_scale: WindResolveScale::Half,
         }
     }
 }

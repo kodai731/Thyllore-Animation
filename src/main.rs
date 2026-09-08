@@ -142,6 +142,12 @@ fn main() -> Result<()> {
             .resource_mut::<thyllore_animation::ecs::resource::WindRenderSettings>()
             .shading_mode = mode;
     }
+    if let Some(resolve_scale) = overrides.wind_resolve_scale {
+        app.data
+            .ecs_world
+            .resource_mut::<thyllore_animation::ecs::resource::WindRenderSettings>()
+            .resolve_scale = resolve_scale;
+    }
     if let Some(debug_view) = overrides.wind_debug_view {
         app.data
             .ecs_world

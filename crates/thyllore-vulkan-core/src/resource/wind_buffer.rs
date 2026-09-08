@@ -87,6 +87,37 @@ impl WindBuffer {
         })
     }
 
+    /// Shared by the full and half resolution passes so pipelines built against one
+    /// stay render-pass compatible with the other (dependencies must match exactly).
+    /// The incoming edge covers both prior uses of the target: an HDR colour write
+    /// (full pass, LOAD) and the previous frame's upsample read (half pass, CLEAR).
+    fn subpass_dependencies() -> [vk::SubpassDependency; 2] {
+        let dependency_in = vk::SubpassDependency::builder()
+            .src_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
+            .src_stage_mask(
+                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                    | vk::PipelineStageFlags::FRAGMENT_SHADER,
+            )
+            .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE | vk::AccessFlags::SHADER_READ)
+            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .dst_access_mask(
+                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            )
+            .build();
+
+        let dependency_out = vk::SubpassDependency::builder()
+            .src_subpass(0)
+            .dst_subpass(vk::SUBPASS_EXTERNAL)
+            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+            .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
+            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+            .build();
+
+        [dependency_in, dependency_out]
+    }
+
     unsafe fn create_render_pass(rrdevice: &RRDevice) -> Result<vk::RenderPass> {
         let color_attachment = vk::AttachmentDescription::builder()
             .format(HDR_FORMAT)
@@ -109,29 +140,9 @@ impl WindBuffer {
             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
             .color_attachments(&color_attachments);
 
-        let dependency_in = vk::SubpassDependency::builder()
-            .src_subpass(vk::SUBPASS_EXTERNAL)
-            .dst_subpass(0)
-            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
-            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .dst_access_mask(
-                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-            )
-            .build();
-
-        let dependency_out = vk::SubpassDependency::builder()
-            .src_subpass(0)
-            .dst_subpass(vk::SUBPASS_EXTERNAL)
-            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
-            .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
-            .dst_access_mask(vk::AccessFlags::SHADER_READ)
-            .build();
-
         let attachments = [color_attachment];
         let subpasses = [subpass];
-        let dependencies = [dependency_in, dependency_out];
+        let dependencies = Self::subpass_dependencies();
         let info = vk::RenderPassCreateInfo::builder()
             .attachments(&attachments)
             .subpasses(&subpasses)
@@ -162,27 +173,9 @@ impl WindBuffer {
             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
             .color_attachments(&color_attachments);
 
-        let dependency_in = vk::SubpassDependency::builder()
-            .src_subpass(vk::SUBPASS_EXTERNAL)
-            .dst_subpass(0)
-            .src_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
-            .src_access_mask(vk::AccessFlags::SHADER_READ)
-            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
-            .build();
-
-        let dependency_out = vk::SubpassDependency::builder()
-            .src_subpass(0)
-            .dst_subpass(vk::SUBPASS_EXTERNAL)
-            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
-            .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
-            .dst_access_mask(vk::AccessFlags::SHADER_READ)
-            .build();
-
         let attachments = [color_attachment];
         let subpasses = [subpass];
-        let dependencies = [dependency_in, dependency_out];
+        let dependencies = Self::subpass_dependencies();
         let info = vk::RenderPassCreateInfo::builder()
             .attachments(&attachments)
             .subpasses(&subpasses)

@@ -391,7 +391,7 @@ pub unsafe fn gizmo_destroy_ray_buffers(ray: &mut LineMesh, backend: &mut dyn Re
     backend.destroy_line_buffers(ray);
 }
 
-pub unsafe fn run_vertical_lines_update(ctx: &mut crate::app::FrameContext) -> Result<()> {
+pub unsafe fn run_vertical_lines_update(ctx: &mut crate::ecs::FrameContext) -> Result<()> {
     let model_tops: Vec<cgmath::Vector3<f32>> = Vec::new();
 
     {

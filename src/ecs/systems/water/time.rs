@@ -1,7 +1,7 @@
-use crate::app::FrameContext;
 use crate::ecs::component::{apply_water_param_value, WaterParam, WaterTorusEffect};
 use crate::ecs::resource::{BatchRun, TimelineState, WaterRenderSettings};
 use crate::ecs::world::Entity;
+use crate::ecs::FrameContext;
 use thyllore_effect_core::advance_water_time;
 
 #[derive(Clone, Copy)]

@@ -1,3 +1,4 @@
+mod debug_dump;
 pub mod passes;
 mod pick;
 mod preset;
@@ -7,6 +8,7 @@ mod spawn;
 mod tests;
 mod time;
 
+pub use debug_dump::*;
 pub use pick::*;
 pub use preset::*;
 pub use render_targets::*;

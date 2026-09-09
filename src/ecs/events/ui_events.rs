@@ -68,6 +68,7 @@ pub enum UIEvent {
         viewport_size: [f32; 2],
     },
     DumpWaterDebug,
+    DumpWindDebug,
 
     SelectEntity(Entity),
     DeselectAll,

@@ -348,7 +348,7 @@ fn eddy_noise_stays_in_the_unit_interval_and_is_not_height_banded() {
     let spread = row_means.iter().cloned().fold(f32::MIN, f32::max)
         - row_means.iter().cloned().fold(f32::MAX, f32::min);
     assert!(
-        spread < 0.5,
+        spread < 0.25,
         "per-height mean sigma varies by {spread}: the noise is banded along height"
     );
 }

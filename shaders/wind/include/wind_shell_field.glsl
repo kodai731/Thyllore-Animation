@@ -1,9 +1,8 @@
 #ifndef WIND_SHELL_FIELD_GLSL
 #define WIND_SHELL_FIELD_GLSL
 
-// Density field of the tornado: compact-support polynomial shells in q = x^2 + z^2
-// (wall around P(h) = (base + slope * h)^2, core around the axis, ground ring around
-// Pr faded over its own height) times a height envelope.
+// Density field of the tornado: a compact-support polynomial shell in q = x^2 + z^2
+// (wall around P(h) = (base + slope * h)^2) times a height envelope, streak and eddy modulation.
 // Mirrored in thyllore-effect-core/src/wind/analytic/shell_integral.rs.
 // Must be included after wind_component.glsl.
 
@@ -98,10 +97,22 @@ vec3 windRotateAndDouble(vec3 p) {
     return 2.0 * (WIND_OCTAVE_ROTATION * p);
 }
 
-float windEddyNoiseFBM(vec3 p) {
-    vec3 p1 = windRotateAndDouble(p);
+// Difference against the antipode (theta + pi) has an exact zero mean around every ring,
+// so no height can become a uniformly dense or empty band.
+float windAntipodalOctave(vec3 p, vec3 antipode) {
+    return (windGradientNoise(p) - windGradientNoise(antipode)) * 0.70710678;
+}
+
+float windEddyNoiseFBM(vec3 p, vec3 antipode) {
+    vec3 p0 = WIND_OCTAVE_ROTATION * p;
+    vec3 q0 = WIND_OCTAVE_ROTATION * antipode;
+    vec3 p1 = windRotateAndDouble(p0);
+    vec3 q1 = windRotateAndDouble(q0);
     vec3 p2 = windRotateAndDouble(p1);
-    float sum = 0.5 * windGradientNoise(p) + 0.25 * windGradientNoise(p1) + 0.125 * windGradientNoise(p2);
+    vec3 q2 = windRotateAndDouble(q1);
+    float sum = 0.5 * windAntipodalOctave(p0, q0)
+        + 0.25 * windAntipodalOctave(p1, q1)
+        + 0.125 * windAntipodalOctave(p2, q2);
     return clamp(0.5 + sum * (1.0 / 0.875), 0.0, 1.0);
 }
 
@@ -110,7 +121,7 @@ struct WindEddyGeometry {
     float height;
     float shearRate;
     float radialCoord;
-    float periodTheta;
+    float ringRadius;
 };
 
 WindEddyGeometry windEddyGeometry(vec3 local) {
@@ -121,25 +132,35 @@ WindEddyGeometry windEddyGeometry(vec3 local) {
 
     float omega = (windStreakPhase() / max(windTime(), 1e-3))
         * (windWallRadiusSq(h) / max(r * r, WIND_EDDY_MIN_RADIUS_SQ));
-    float nTheta = max(round(2.0 * 3.14159265 * wallRadius / windEddyCellTheta()), 1.0);
 
     WindEddyGeometry geometry;
     geometry.theta = theta;
     geometry.height = h;
     geometry.shearRate = omega;
     geometry.radialCoord = (r - wallRadius) / windEddyCellRadial();
-    geometry.periodTheta = nTheta;
+    geometry.ringRadius = wallRadius / windEddyCellTheta();
     return geometry;
 }
 
-vec3 windEddyLayerCoords(WindEddyGeometry geometry, float age, float seed) {
+struct WindEddyRingPoints {
+    vec3 point;
+    vec3 antipode;
+};
+
+WindEddyRingPoints windEddyLayerCoords(WindEddyGeometry geometry, float age, float seed) {
     float phi = mix(windStreakPhase(), geometry.shearRate * age, windEddyShear());
 
     float shearedTheta = geometry.theta - phi;
-    float rho = geometry.periodTheta / (2.0 * 3.14159265) + geometry.radialCoord;
+    float rho = geometry.ringRadius + geometry.radialCoord;
     float uH = (geometry.height - windEddyRiseSpeed() * age) / windEddyCellHeight();
 
-    return vec3(rho * cos(shearedTheta) + seed, rho * sin(shearedTheta) + seed * 0.37, uH + seed * 0.61);
+    vec3 center = vec3(seed, seed * 0.37, uH + seed * 0.61);
+    vec3 ring = vec3(rho * cos(shearedTheta), rho * sin(shearedTheta), 0.0);
+
+    WindEddyRingPoints points;
+    points.point = center + ring;
+    points.antipode = center - ring;
+    return points;
 }
 
 float windEddySigma(vec3 local) {
@@ -156,8 +177,10 @@ float windEddySigma(vec3 local) {
 
     WindEddyGeometry geometry = windEddyGeometry(local);
 
-    float NA = windEddyNoiseFBM(windEddyLayerCoords(geometry, ageA, 17.0 * kA + 3.0));
-    float NB = windEddyNoiseFBM(windEddyLayerCoords(geometry, ageB, 17.0 * kB + 3.0));
+    WindEddyRingPoints pointsA = windEddyLayerCoords(geometry, ageA, 17.0 * kA + 3.0);
+    WindEddyRingPoints pointsB = windEddyLayerCoords(geometry, ageB, 17.0 * kB + 3.0);
+    float NA = windEddyNoiseFBM(pointsA.point, pointsA.antipode);
+    float NB = windEddyNoiseFBM(pointsB.point, pointsB.antipode);
 
     float N = wA * NA + wB * NB;
     float eroded = clamp((N - windEddyErosion()) / (1.0 - windEddyErosion()), 0.0, 1.0);

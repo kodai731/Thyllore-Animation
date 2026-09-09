@@ -989,6 +989,10 @@ unsafe fn execute_deferred_action(app: &mut App, action: DeferredAction) {
             app.dump_water_debug();
         }
 
+        DeferredAction::DumpWindDebug => {
+            app.dump_wind_debug();
+        }
+
         DeferredAction::DumpAnimationDebug => {
             let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
             if let Err(e) = crate::ecs::systems::animation_debug_dump::dump_animation_debug(
@@ -1108,12 +1112,12 @@ unsafe fn render_frame(
                 .ecs_world
                 .get_resource::<crate::ecs::resource::BatchRun>()
                 .map(|b| b.state.clone());
-            let (dump_wall_probe, dump_water_debug) = app
+            let (dump_wall_probe, dump_water_debug, dump_wind_debug) = app
                 .data
                 .ecs_world
                 .get_resource::<crate::ecs::resource::BatchRun>()
-                .map(|b| (b.dump_wall_probe, b.dump_water_debug))
-                .unwrap_or((false, false));
+                .map(|b| (b.dump_wall_probe, b.dump_water_debug, b.dump_wind_debug))
+                .unwrap_or((false, false, false));
             if matches!(
                 state,
                 Some(crate::ecs::resource::BatchRunState::ScreenshotRequested)
@@ -1121,6 +1125,9 @@ unsafe fn render_frame(
                 app.rrdevice.device.device_wait_idle()?;
                 if dump_water_debug {
                     app.dump_water_debug_at(image_index);
+                }
+                if dump_wind_debug {
+                    app.dump_wind_debug_at(image_index);
                 }
                 let save_result = app.save_screenshot(image_index);
                 crate::ecs::systems::batch_run_record_screenshot(

@@ -141,6 +141,7 @@ pub enum BatchDebugAction {
     TimelineSelectFlameClip,
     WallProbeDump,
     WaterDebugDump,
+    WindDebugDump,
     ApplyTextureFit {
         path: String,
         blend: f32,
@@ -287,12 +288,14 @@ pub fn batch_run_resolve_from_args(args: &[String]) -> Result<Option<BatchRun>> 
         };
 
         let flame_set = flame_set_resolve_from_args(args)?;
-        let dump_wall_probe = debug_actions_has_wall_probe_dump(args);
-        let dump_water_debug = debug_actions_has_water_debug_dump(args);
+        let dump_wall_probe = debug_actions_contain(args, "dump_wall_probe");
+        let dump_water_debug = debug_actions_contain(args, "dump_water_debug");
+        let dump_wind_debug = debug_actions_contain(args, "dump_wind_debug");
 
         let mut batch = BatchRun::new(PathBuf::from(dir), screenshot_frame, flame_set);
         batch.dump_wall_probe = dump_wall_probe;
         batch.dump_water_debug = dump_water_debug;
+        batch.dump_wind_debug = dump_wind_debug;
         batch.captures_remaining = count;
         batch.stride = stride;
         batch.sequence_dir = Some(PathBuf::from(dir));
@@ -336,12 +339,14 @@ pub fn batch_run_resolve_from_args(args: &[String]) -> Result<Option<BatchRun>> 
 
         let flame_set = flame_set_resolve_from_args(args)?;
 
-        let dump_wall_probe = debug_actions_has_wall_probe_dump(args);
-        let dump_water_debug = debug_actions_has_water_debug_dump(args);
+        let dump_wall_probe = debug_actions_contain(args, "dump_wall_probe");
+        let dump_water_debug = debug_actions_contain(args, "dump_water_debug");
+        let dump_wind_debug = debug_actions_contain(args, "dump_wind_debug");
 
         let mut batch = BatchRun::new(output, screenshot_frame, flame_set);
         batch.dump_wall_probe = dump_wall_probe;
         batch.dump_water_debug = dump_water_debug;
+        batch.dump_wind_debug = dump_wind_debug;
         batch.flame_trace_path =
             flag_value_resolve_from_args(args, BATCH_FLAME_TRACE_FLAG)?.map(PathBuf::from);
         batch.wall_probe_path =
@@ -1691,6 +1696,7 @@ pub const DEBUG_ACTION_NAMES: &[&str] = &[
     "timeline_select_flame_clip (enqueue TimelineSelectClip for the flame clip — the double-click path — to check it leaves the flame schedule's trim intact)",
     "dump_wall_probe (write camera pose + wall-regime ray diagnostics to log/flame/)",
     "dump_water_debug (write water parameters, UBO, camera and a screenshot to log/water/)",
+    "dump_wind_debug (write wind parameters, UBO, render settings, camera and a screenshot to log/wind/)",
     "apply_texture_fit:<path>,<blend>,<profile|statistics> (clone FlameEffect, apply texture fit from path, send UpdateFlameEffect)",
     "apply_texture_fit_roundtrip:<path>,<blend>,<profile|statistics> (same as apply_texture_fit, then restore original FlameEffect)",
     "spawn_cube (spawn the debug cube primitive, same as the debug window Spawn Cube button)",
@@ -1774,6 +1780,7 @@ fn debug_action_parse(name: &str) -> Result<BatchDebugAction> {
         "open_flame_curves" => Ok(BatchDebugAction::OpenFlameCurves),
         "dump_wall_probe" => Ok(BatchDebugAction::WallProbeDump),
         "dump_water_debug" => Ok(BatchDebugAction::WaterDebugDump),
+        "dump_wind_debug" => Ok(BatchDebugAction::WindDebugDump),
         "spawn_cube" => Ok(BatchDebugAction::SpawnDebugPrimitive {
             kind: DebugPrimitiveKind::Cube,
         }),
@@ -1791,31 +1798,13 @@ fn debug_action_parse(name: &str) -> Result<BatchDebugAction> {
 }
 
 /// Check if `--batch-debug-action dump_wall_probe` is present in the args.
-fn debug_actions_has_wall_probe_dump(args: &[String]) -> bool {
-    for i in 0..args.len() {
-        if args[i] == BATCH_DEBUG_ACTION_FLAG {
-            if let Some(name) = args.get(i + 1).filter(|v| !v.starts_with("--")) {
-                if name == "dump_wall_probe" {
-                    return true;
-                }
-            }
-        }
-    }
-    false
-}
-
-/// Check if `--batch-debug-action dump_water_debug` is present in the args.
-fn debug_actions_has_water_debug_dump(args: &[String]) -> bool {
-    for i in 0..args.len() {
-        if args[i] == BATCH_DEBUG_ACTION_FLAG {
-            if let Some(name) = args.get(i + 1).filter(|v| !v.starts_with("--")) {
-                if name == "dump_water_debug" {
-                    return true;
-                }
-            }
-        }
-    }
-    false
+fn debug_actions_contain(args: &[String], action_name: &str) -> bool {
+    args.iter().enumerate().any(|(i, arg)| {
+        arg == BATCH_DEBUG_ACTION_FLAG
+            && args
+                .get(i + 1)
+                .is_some_and(|name| !name.starts_with("--") && name == action_name)
+    })
 }
 
 fn parse_texture_fit_args(rest: &str) -> Result<(String, f32, bool)> {
@@ -1895,6 +1884,11 @@ pub fn batch_apply_debug_actions(world: &World, actions: &[BatchDebugAction]) {
                 world
                     .resource_mut::<UIEventQueue>()
                     .send(UIEvent::DumpWaterDebug);
+            }
+            BatchDebugAction::WindDebugDump => {
+                world
+                    .resource_mut::<UIEventQueue>()
+                    .send(UIEvent::DumpWindDebug);
             }
             BatchDebugAction::TimelineSelectFlameClip => {
                 let clip_id = world.query_flames().first().and_then(|&flame| {
@@ -3356,6 +3350,27 @@ mod tests {
             .unwrap()
             .expect("batch without debug action");
         assert!(!without.dump_water_debug);
+    }
+
+    #[test]
+    fn wind_debug_dump_action_marks_the_batch_run_and_queues_its_event() {
+        let batch = batch_run_resolve_from_args(&args(&[
+            "bin",
+            "--batch-screenshot",
+            "out.png",
+            "--batch-debug-action",
+            "dump_wind_debug",
+        ]))
+        .unwrap()
+        .expect("single-shot batch");
+        assert!(batch.dump_wind_debug);
+        assert!(!batch.dump_water_debug);
+
+        let mut world = World::new();
+        world.insert_resource(UIEventQueue::new());
+        batch_apply_debug_actions(&world, &[BatchDebugAction::WindDebugDump]);
+        let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
+        assert!(matches!(events[0], UIEvent::DumpWindDebug));
     }
 
     #[test]

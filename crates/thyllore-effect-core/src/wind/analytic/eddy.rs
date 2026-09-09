@@ -87,10 +87,31 @@ fn rotate_and_double(p: [f32; 3]) -> [f32; 3] {
     ]
 }
 
-pub fn eddy_noise_fbm(p: [f32; 3]) -> f32 {
-    let p1 = rotate_and_double(p);
+fn rotate(p: [f32; 3]) -> [f32; 3] {
+    let r = &OCTAVE_ROTATION;
+    [
+        r[0][0] * p[0] + r[0][1] * p[1] + r[0][2] * p[2],
+        r[1][0] * p[0] + r[1][1] * p[1] + r[1][2] * p[2],
+        r[2][0] * p[0] + r[2][1] * p[1] + r[2][2] * p[2],
+    ]
+}
+
+// Difference against the antipode (theta + pi) has an exact zero mean around every ring,
+// so no height can become a uniformly dense or empty band.
+fn antipodal_octave(p: [f32; 3], antipode: [f32; 3]) -> f32 {
+    (gradient_noise(p) - gradient_noise(antipode)) * std::f32::consts::FRAC_1_SQRT_2
+}
+
+pub fn eddy_noise_fbm(p: [f32; 3], antipode: [f32; 3]) -> f32 {
+    let p0 = rotate(p);
+    let q0 = rotate(antipode);
+    let p1 = rotate_and_double(p0);
+    let q1 = rotate_and_double(q0);
     let p2 = rotate_and_double(p1);
-    let sum = 0.5 * gradient_noise(p) + 0.25 * gradient_noise(p1) + 0.125 * gradient_noise(p2);
+    let q2 = rotate_and_double(q1);
+    let sum = 0.5 * antipodal_octave(p0, q0)
+        + 0.25 * antipodal_octave(p1, q1)
+        + 0.125 * antipodal_octave(p2, q2);
     (0.5 + sum * (1.0 / 0.875)).clamp(0.0, 1.0)
 }
 
@@ -99,7 +120,7 @@ pub struct EddyGeometry {
     pub height: f32,
     pub shear_rate: f32,
     pub radial_coord: f32,
-    pub period_theta: f32,
+    pub ring_radius: f32,
 }
 
 const EDDY_MIN_RADIUS_SQ: f32 = 1e-4;
@@ -112,16 +133,13 @@ pub fn eddy_geometry(params: &WindShellParams, local: [f32; 3]) -> EddyGeometry 
 
     let omega = (params.streak_phase / params.time.max(1e-3))
         * (params.wall_radius_sq(h) / (r * r).max(EDDY_MIN_RADIUS_SQ));
-    let n_theta = (2.0 * PI * wall_radius / params.eddy_cell_theta)
-        .round()
-        .max(1.0);
 
     EddyGeometry {
         theta,
         height: h,
         shear_rate: omega,
         radial_coord: (r - wall_radius) / params.eddy_cell_radial,
-        period_theta: n_theta,
+        ring_radius: wall_radius / params.eddy_cell_theta,
     }
 }
 
@@ -130,7 +148,7 @@ pub fn eddy_layer_coords(
     geometry: &EddyGeometry,
     age: f32,
     seed: f32,
-) -> [f32; 3] {
+) -> [[f32; 3]; 2] {
     let phi = mix(
         params.streak_phase,
         geometry.shear_rate * age,
@@ -138,13 +156,20 @@ pub fn eddy_layer_coords(
     );
 
     let sheared_theta = geometry.theta - phi;
-    let rho = geometry.period_theta / (2.0 * PI) + geometry.radial_coord;
+    let rho = geometry.ring_radius + geometry.radial_coord;
     let u_h = (geometry.height - params.eddy_rise_speed * age) / params.eddy_cell_height;
 
     [
-        rho * sheared_theta.cos() + seed,
-        rho * sheared_theta.sin() + seed * 0.37,
-        u_h + seed * 0.61,
+        [
+            rho * sheared_theta.cos() + seed,
+            rho * sheared_theta.sin() + seed * 0.37,
+            u_h + seed * 0.61,
+        ],
+        [
+            -rho * sheared_theta.cos() + seed,
+            -rho * sheared_theta.sin() + seed * 0.37,
+            u_h + seed * 0.61,
+        ],
     ]
 }
 
@@ -162,18 +187,10 @@ pub fn eddy_sigma(params: &WindShellParams, local: [f32; 3]) -> f32 {
 
     let geometry = eddy_geometry(params, local);
 
-    let noise_a = eddy_noise_fbm(eddy_layer_coords(
-        params,
-        &geometry,
-        age_a,
-        17.0 * k_a + 3.0,
-    ));
-    let noise_b = eddy_noise_fbm(eddy_layer_coords(
-        params,
-        &geometry,
-        age_b,
-        17.0 * k_b + 3.0,
-    ));
+    let [pa, qa] = eddy_layer_coords(params, &geometry, age_a, 17.0 * k_a + 3.0);
+    let [pb, qb] = eddy_layer_coords(params, &geometry, age_b, 17.0 * k_b + 3.0);
+    let noise_a = eddy_noise_fbm(pa, qa);
+    let noise_b = eddy_noise_fbm(pb, qb);
 
     let noise = w_a * noise_a + w_b * noise_b;
     let eroded = ((noise - params.eddy_erosion) / (1.0 - params.eddy_erosion)).clamp(0.0, 1.0);

@@ -2,8 +2,8 @@
 #define WIND_LIGHTING_GLSL
 
 // Single scattering along the view ray: per closed-form piece the in-scatter source is
-// averaged over fixed midpoint nodes, each node shadowed by the same shell field toward
-// the sun and toward the zenith.
+// averaged over fixed midpoint nodes weighted by the local density, each node shadowed by
+// the same shell field toward the sun and toward the zenith.
 // Must be included after wind_shell_integral.glsl.
 
 #include "include/radiative_transfer.glsl"
@@ -36,14 +36,24 @@ float windInScatterSource(vec3 position, vec3 lightPosition, vec3 viewDir) {
         + windSkyBrightness() * skyTransmittance;
 }
 
+// Density weights keep the piece average independent of where knots split the piece.
 float windPieceInScatter(vec3 o, vec3 d, float s0, float s1, vec3 lightPosition, vec3 viewDir) {
     float pieceLength = s1 - s0;
-    float sum = 0.0;
+    float weightedSum = 0.0;
+    float weightSum = 0.0;
+    float plainSum = 0.0;
     for (int i = 0; i < WIND_SCATTER_NODES; ++i) {
         vec3 node = o + d * (s0 + rteMidpointDistance(i, WIND_SCATTER_NODES, pieceLength));
-        sum += windInScatterSource(node, lightPosition, viewDir);
+        float source = windInScatterSource(node, lightPosition, viewDir);
+        float weight = windDensityAt(node);
+        weightedSum += weight * source;
+        weightSum += weight;
+        plainSum += source;
     }
-    return sum / float(WIND_SCATTER_NODES);
+    if (weightSum <= 0.0) {
+        return plainSum / float(WIND_SCATTER_NODES);
+    }
+    return weightedSum / weightSum;
 }
 
 vec3 windSingleScatterRadiance(

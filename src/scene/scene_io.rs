@@ -5,11 +5,11 @@ use super::clip_io::{load_animation_clip, save_animation_clip};
 use super::components::{scene_component_registry, SceneEntity};
 use super::error::{SceneError, SceneResult};
 use super::format::{
-    apply_flame_state_to_world, apply_water_state_to_world, build_debug_primitives_scene_data,
-    debug_primitive_kind_from_str, AnimationClipRef, AutoExposureState, BloomState, CameraState,
-    DebugPrimitiveSceneData, DepthOfFieldState, EditorState, ExposureState, LensEffectsState,
-    ModelReference, PanelLayoutState, PhysicalCameraState, SceneFile, SceneMetadata,
-    TimelineConfig, ToneMappingState, SCENE_FORMAT_VERSION,
+    build_debug_primitives_scene_data, debug_primitive_kind_from_str, AnimationClipRef,
+    AutoExposureState, BloomState, CameraState, DebugPrimitiveSceneData, DepthOfFieldState,
+    EditorState, ExposureState, LensEffectsState, ModelReference, PanelLayoutState,
+    PhysicalCameraState, SceneFile, SceneMetadata, TimelineConfig, ToneMappingState,
+    SCENE_FORMAT_VERSION,
 };
 use crate::animation::editable::SourceClipId;
 use crate::ecs::resource::CurveEditorState;
@@ -405,7 +405,7 @@ pub fn apply_loaded_scene_to_world(
     if loaded.scene.version >= SCENE_COMPONENT_FORMAT_VERSION {
         apply_scene_component_entities(&loaded.scene.entities, world, assets);
     } else {
-        apply_legacy_effect_state(&loaded.scene, world, assets);
+        log_warn!("pre-v6 scene: effects are not restored (re-save to upgrade)");
     }
 
     request_debug_primitives(&loaded.scene.debug_primitives, world);
@@ -442,21 +442,6 @@ fn apply_scene_component_entities(
     }
     if !applied_keys.contains("water_torus") {
         crate::ecs::systems::despawn_waters(world);
-    }
-}
-
-fn apply_legacy_effect_state(
-    scene: &SceneFile,
-    world: &mut World,
-    assets: &mut crate::asset::AssetStorage,
-) {
-    match scene.flame {
-        Some(ref flame) => apply_flame_state_to_world(world, assets, flame),
-        None => crate::ecs::systems::despawn_flames(world),
-    }
-    match scene.water {
-        Some(ref water) => apply_water_state_to_world(world, assets, water),
-        None => crate::ecs::systems::despawn_waters(world),
     }
 }
 
@@ -678,18 +663,69 @@ mod tests {
     }
 
     #[test]
-    fn default_scene_asset_holds_water_torus_and_no_flame() {
-        let content = fs::read_to_string(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/scenes/default.scene.ron"),
-        )
-        .expect("default scene asset readable");
-        let scene: SceneFile = ron::from_str(&content).expect("default scene asset parses");
+    fn saved_scene_holds_water_torus_component_and_no_flame() {
+        let dir = temp_dir("water_torus_component");
+        let scenes_dir = dir.join("scenes");
+        fs::create_dir_all(&scenes_dir).unwrap();
+        let scene_path = scenes_dir.join("test.scene.ron");
 
-        assert!(scene.flame.is_none());
-        let water = scene.water.expect("water section present");
+        let mut world = World::new();
+        world.insert_resource(crate::ecs::resource::ClipLibrary::new());
+        let mut assets = crate::asset::AssetStorage::new();
+        let entity = crate::ecs::systems::spawn_water_with_clip(
+            &mut world,
+            &mut assets,
+            "Water",
+            crate::ecs::component::WaterTorusEffect::default(),
+        );
+        let (major_radius, minor_radius) = {
+            let water = world
+                .get_component::<crate::ecs::component::WaterTorusEffect>(entity)
+                .expect("water effect on spawned entity");
+            (water.major_radius, water.minor_radius)
+        };
+
+        save_scene(&scene_path, &world).unwrap();
+        let loaded = load_scene(&scene_path).unwrap();
+
+        let components = &loaded
+            .scene
+            .entities
+            .first()
+            .expect("effects entity saved")
+            .components;
+        assert!(!components.contains_key("flame"));
+        let water: crate::scene::components::WaterSceneData =
+            serde_json::from_value(components["water_torus"].clone())
+                .expect("water component decodes");
+        assert_eq!(water.effect.major_radius, major_radius);
+        assert_eq!(water.effect.minor_radius, minor_radius);
         assert!(water.effect.major_radius > 0.0);
         assert!(water.effect.minor_radius > 0.0);
-        assert!(water.preset.is_none());
+    }
+
+    #[test]
+    fn pre_v6_scene_loads_without_effects() {
+        let dir = temp_dir("pre_v6");
+        let scenes_dir = dir.join("scenes");
+        fs::create_dir_all(&scenes_dir).unwrap();
+        let scene_path = scenes_dir.join("legacy.scene.ron");
+        fs::write(
+            &scene_path,
+            r#"(
+    version: 5,
+    metadata: (name: "legacy", created_at: "", modified_at: ""),
+    model: (path: "Generated Mesh", transform: (translation: (0.0, 0.0, 0.0), rotation: (0.0, 0.0, 0.0, 1.0), scale: (1.0, 1.0, 1.0))),
+    flame: Some((effect: (), channels: [])),
+    water: Some((effect: (), channels: [])),
+)"#,
+        )
+        .unwrap();
+
+        let loaded = load_scene(&scene_path).expect("pre-v6 scene still loads");
+
+        assert_eq!(loaded.scene.version, 5);
+        assert!(loaded.scene.entities.is_empty());
     }
 
     #[test]
@@ -875,11 +911,7 @@ mod tests {
         .expect("water probe scene asset readable");
         let scene: SceneFile = ron::from_str(&content).expect("water probe scene asset parses");
 
-        let water = scene.water.expect("water section present");
-        assert!(
-            (water.effect.major_radius - 1.2).abs() < f32::EPSILON,
-            "expected major_radius == 1.2, got {}",
-            water.effect.major_radius
-        );
+        assert!(scene.version < SCENE_COMPONENT_FORMAT_VERSION);
+        assert!(scene.entities.is_empty());
     }
 }

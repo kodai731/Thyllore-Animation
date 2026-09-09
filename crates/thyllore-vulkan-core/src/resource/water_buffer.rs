@@ -4,7 +4,8 @@ use vulkanalia::prelude::v1_0::*;
 use crate::command::{begin_single_time_commands, end_single_time_commands};
 use crate::core::RRDevice;
 use crate::resource::hdr_buffer::HDR_FORMAT;
-use crate::resource::render_target_registry::{RenderTargetKey, RenderTargetRegistry};
+use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
+use crate::resource::render_target_transient::TransientDesc;
 
 const WATER_HISTORY_KEY: RenderTargetKey = RenderTargetKey::EffectHistory(2);
 const WATER_HISTORY_PREVIOUS_KEY: RenderTargetKey = RenderTargetKey::EffectHistory(3);
@@ -12,18 +13,12 @@ const WATER_HISTORY_PREVIOUS_KEY: RenderTargetKey = RenderTargetKey::EffectHisto
 #[derive(Clone, Debug, Default)]
 pub struct WaterBuffer {
     pub render_pass: vk::RenderPass,
-    pub framebuffer: vk::Framebuffer,
     pub framebuffers: [vk::Framebuffer; 2],
     pub width: u32,
     pub height: u32,
-    pub scene_color_image: vk::Image,
-    pub scene_color_image_view: vk::ImageView,
-    pub scene_color_sampler: vk::Sampler,
     pub history_images: [vk::Image; 2],
     pub history_image_views: [vk::ImageView; 2],
     pub history_sampler: vk::Sampler,
-    pub trace_image: vk::Image,
-    pub trace_image_view: vk::ImageView,
     pub caustic_accum_image: vk::Image,
     pub caustic_accum_view: vk::ImageView,
 }
@@ -32,14 +27,14 @@ impl WaterBuffer {
     pub unsafe fn new(
         instance: &Instance,
         rrdevice: &RRDevice,
-        registry: &mut RenderTargetRegistry,
+        storage: &mut RenderTargetStorage,
         command_pool: vk::CommandPool,
         width: u32,
         height: u32,
         hdr_image_view: vk::ImageView,
         depth_image_view: vk::ImageView,
     ) -> Result<Self> {
-        registry.ensure_extent(&rrdevice.device, width, height);
+        storage.ensure_extent(&rrdevice.device, width, height);
 
         let render_pass = Self::create_shading_render_pass(rrdevice)?;
 
@@ -47,7 +42,7 @@ impl WaterBuffer {
             | vk::ImageUsageFlags::SAMPLED
             | vk::ImageUsageFlags::TRANSFER_DST;
 
-        let history = *registry.ensure(
+        let history = *storage.ensure(
             instance,
             rrdevice,
             WATER_HISTORY_KEY,
@@ -55,7 +50,7 @@ impl WaterBuffer {
             history_usage,
             Some(Self::linear_clamp_sampler_info()),
         )?;
-        let previous_history = *registry.ensure(
+        let previous_history = *storage.ensure(
             instance,
             rrdevice,
             WATER_HISTORY_PREVIOUS_KEY,
@@ -83,28 +78,7 @@ impl WaterBuffer {
                 .create_framebuffer(&framebuffer_info, None)?;
         }
 
-        // Keep framebuffer field for compatibility (same as framebuffers[0])
-        let framebuffer = framebuffers[0];
-
-        let scene_color = *registry.ensure(
-            instance,
-            rrdevice,
-            RenderTargetKey::SceneColorCopy,
-            HDR_FORMAT,
-            vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
-            Some(Self::linear_clamp_sampler_info()),
-        )?;
-
-        let trace = *registry.ensure(
-            instance,
-            rrdevice,
-            RenderTargetKey::TraceImage,
-            vk::Format::R16G16B16A16_SFLOAT,
-            vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED,
-            None,
-        )?;
-
-        let caustic_accum = *registry.ensure(
+        let caustic_accum = *storage.ensure(
             instance,
             rrdevice,
             RenderTargetKey::CausticAccum,
@@ -177,33 +151,6 @@ impl WaterBuffer {
             );
         }
 
-        // Transition trace image to GENERAL layout
-        let barrier = vk::ImageMemoryBarrier::builder()
-            .image(trace.image)
-            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .src_access_mask(vk::AccessFlags::empty())
-            .dst_access_mask(vk::AccessFlags::SHADER_WRITE | vk::AccessFlags::SHADER_READ)
-            .old_layout(vk::ImageLayout::UNDEFINED)
-            .new_layout(vk::ImageLayout::GENERAL)
-            .subresource_range(vk::ImageSubresourceRange {
-                aspect_mask: vk::ImageAspectFlags::COLOR,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: 0,
-                layer_count: 1,
-            })
-            .build();
-        rrdevice.device.cmd_pipeline_barrier(
-            cmd,
-            vk::PipelineStageFlags::TOP_OF_PIPE,
-            vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
-            vk::DependencyFlags::empty(),
-            &[] as &[vk::MemoryBarrier],
-            &[] as &[vk::BufferMemoryBarrier],
-            &[barrier],
-        );
-
         // Transition caustic accum image to GENERAL layout
         let barrier = vk::ImageMemoryBarrier::builder()
             .image(caustic_accum.image)
@@ -236,21 +183,33 @@ impl WaterBuffer {
 
         Ok(Self {
             render_pass,
-            framebuffer,
             framebuffers,
             width,
             height,
-            scene_color_image: scene_color.image,
-            scene_color_image_view: scene_color.view,
-            scene_color_sampler: scene_color.sampler,
             history_images,
             history_image_views,
             history_sampler,
-            trace_image: trace.image,
-            trace_image_view: trace.view,
             caustic_accum_image: caustic_accum.image,
             caustic_accum_view: caustic_accum.view,
         })
+    }
+
+    pub fn scene_color_desc(&self) -> TransientDesc {
+        TransientDesc {
+            width: self.width,
+            height: self.height,
+            format: HDR_FORMAT,
+            usage: vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
+        }
+    }
+
+    pub fn trace_desc(&self) -> TransientDesc {
+        TransientDesc {
+            width: self.width,
+            height: self.height,
+            format: vk::Format::R16G16B16A16_SFLOAT,
+            usage: vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED,
+        }
     }
 
     unsafe fn create_shading_render_pass(rrdevice: &RRDevice) -> Result<vk::RenderPass> {
@@ -383,7 +342,7 @@ impl WaterBuffer {
         &mut self,
         instance: &Instance,
         rrdevice: &RRDevice,
-        registry: &mut RenderTargetRegistry,
+        storage: &mut RenderTargetStorage,
         command_pool: vk::CommandPool,
         new_width: u32,
         new_height: u32,
@@ -395,7 +354,7 @@ impl WaterBuffer {
         *self = Self::new(
             instance,
             rrdevice,
-            registry,
+            storage,
             command_pool,
             new_width,
             new_height,
@@ -408,34 +367,27 @@ impl WaterBuffer {
     }
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        // Destroy both framebuffers (framebuffer field is same as framebuffers[0])
         for i in 0..2 {
             if self.framebuffers[i] != vk::Framebuffer::null() {
                 device.destroy_framebuffer(self.framebuffers[i], None);
                 self.framebuffers[i] = vk::Framebuffer::null();
             }
         }
-        self.framebuffer = vk::Framebuffer::null();
 
         if self.render_pass != vk::RenderPass::null() {
             device.destroy_render_pass(self.render_pass, None);
             self.render_pass = vk::RenderPass::null();
         }
 
-        self.forget_registry_handles();
+        self.forget_storage_handles();
 
         log!("Destroyed water buffer");
     }
 
-    fn forget_registry_handles(&mut self) {
-        self.scene_color_image = vk::Image::null();
-        self.scene_color_image_view = vk::ImageView::null();
-        self.scene_color_sampler = vk::Sampler::null();
+    fn forget_storage_handles(&mut self) {
         self.history_images = [vk::Image::null(); 2];
         self.history_image_views = [vk::ImageView::null(); 2];
         self.history_sampler = vk::Sampler::null();
-        self.trace_image = vk::Image::null();
-        self.trace_image_view = vk::ImageView::null();
         self.caustic_accum_image = vk::Image::null();
         self.caustic_accum_view = vk::ImageView::null();
     }
@@ -446,18 +398,11 @@ impl WaterBuffer {
             height: self.height,
         }
     }
-
-    pub fn scene_color_binding(&self) -> (vk::ImageView, vk::Sampler) {
-        (self.scene_color_image_view, self.scene_color_sampler)
-    }
 }
 
 impl Drop for WaterBuffer {
     fn drop(&mut self) {
         let mut has_resources = false;
-        if self.framebuffer != vk::Framebuffer::null() {
-            has_resources = true;
-        }
         for i in 0..2 {
             if self.framebuffers[i] != vk::Framebuffer::null() {
                 has_resources = true;

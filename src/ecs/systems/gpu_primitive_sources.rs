@@ -47,6 +47,13 @@ where
         .collect()
 }
 
+pub fn collect_all(world: &World) -> Vec<GpuPrimitive<'static>> {
+    primitive_collectors()
+        .into_iter()
+        .flat_map(|collect| collect(world))
+        .collect()
+}
+
 macro_rules! declare_gpu_primitive_collectors {
     ($($source_type:ty),* $(,)?) => {
         pub fn primitive_collectors() -> Vec<fn(&World) -> Vec<GpuPrimitive<'static>>> {

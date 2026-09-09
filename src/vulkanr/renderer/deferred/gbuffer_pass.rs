@@ -29,7 +29,7 @@ pub unsafe fn record_gbuffer_pass(
     let draw_mesh_indices = collect_gbuffer_mesh_indices(app);
     let heatmap_mode = resolve_heatmap_mode(app);
 
-    let ctx = crate::ecs::systems::phases::build_frame_render_context(app, image_index);
+    let ctx = crate::app::build_frame_render_context(app, image_index);
 
     thyllore_vulkan_core::renderer::record_gbuffer_pass(
         &ctx,

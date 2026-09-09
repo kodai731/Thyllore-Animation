@@ -1,6 +1,6 @@
 use crate::app::{App, AppData};
 use crate::ecs::run_frame;
-use crate::ecs::FrameContext;
+use crate::ecs::{EffectContext, FrameContext};
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::vulkan::*;
 
@@ -96,6 +96,49 @@ impl App {
         upload_imgui_index_data(rrdevice, data, draw_data, idx_buffer_size, frame_slot)?;
 
         Ok(())
+    }
+
+    pub unsafe fn run_effect_viewport_resize(&mut self) -> Result<()> {
+        let hooks = self.data.effect_hooks.snapshot();
+        let mut ctx = self.build_effect_context();
+        for hook in hooks {
+            if let Some(on_viewport_resize) = hook.on_viewport_resize {
+                on_viewport_resize(&mut ctx)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub unsafe fn run_effect_destroy(&mut self) -> Result<()> {
+        let hooks = self.data.effect_hooks.snapshot();
+        let mut ctx = self.build_effect_context();
+        for hook in hooks.into_iter().rev() {
+            if let Some(destroy) = hook.destroy {
+                destroy(&mut ctx)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn build_effect_context(&mut self) -> EffectContext<'_> {
+        EffectContext {
+            instance: &self.instance,
+            rrdevice: &self.rrdevice,
+            viewport_width: self.data.viewport.width,
+            viewport_height: self.data.viewport.height,
+            hdr_color_view: self
+                .data
+                .viewport
+                .hdr_buffer
+                .as_ref()
+                .map(|hdr| hdr.color_image_view),
+            storage: &mut self.data.viewport.storage,
+            transient: &mut self.data.viewport.transient,
+            raytracing: &mut self.data.raytracing,
+            pass_image_states: &mut self.data.pass_image_states,
+            world: &mut self.data.ecs_world,
+            frames_in_flight: crate::app::init::MAX_FRAMES_IN_FLIGHT,
+        }
     }
 }
 

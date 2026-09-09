@@ -59,7 +59,7 @@ pub unsafe fn record_tonemap_to_offscreen(
     let lens_ref = lens.as_deref().unwrap_or(&lens_default);
     let bloom_ref = bloom.as_deref().unwrap_or(&bloom_default);
 
-    let ctx = crate::ecs::systems::phases::build_frame_render_context(app, image_index);
+    let ctx = crate::app::build_frame_render_context(app, image_index);
 
     // Query for first entity with both FlameEffect and HeatPlume to build plume push constants
     let plume_data: Option<([f32; 4], [f32; 4], [f32; 4], [f32; 4])> = {

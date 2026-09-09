@@ -30,7 +30,7 @@ impl<'a> OverlayRenderer<'a> {
         image_index: usize,
         include_grid: bool,
     ) -> Result<()> {
-        let ctx = crate::ecs::systems::phases::build_frame_render_context(self.app, image_index);
+        let ctx = crate::app::build_frame_render_context(self.app, image_index);
 
         if include_grid {
             self.draw_grid(&ctx, command_buffer, None)?;
@@ -61,7 +61,7 @@ impl<'a> OverlayRenderer<'a> {
         image_index: usize,
         pipeline_override: Option<usize>,
     ) -> Result<()> {
-        let ctx = crate::ecs::systems::phases::build_frame_render_context(self.app, image_index);
+        let ctx = crate::app::build_frame_render_context(self.app, image_index);
         self.draw_grid(&ctx, command_buffer, pipeline_override)?;
         Ok(())
     }

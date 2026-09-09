@@ -6,9 +6,13 @@ pub fn is_shader_source(file_name: &str) -> bool {
     file_extension(file_name).is_some_and(|extension| SHADER_EXTENSIONS.contains(&extension))
 }
 
-pub fn spirv_output_name(source_file_name: &str) -> Option<String> {
-    let extension = file_extension(source_file_name)?;
-    let stem = &source_file_name[..source_file_name.len() - extension.len() - 1];
+pub fn spirv_output_name(source_path: &str) -> Option<String> {
+    let (directory, file_name) = match source_path.rsplit_once('/') {
+        Some((directory, file_name)) => (format!("{directory}/"), file_name),
+        None => (String::new(), source_path),
+    };
+    let extension = file_extension(file_name)?;
+    let stem = &file_name[..file_name.len() - extension.len() - 1];
 
     let base_name = stem
         .trim_end_matches("Vertex")
@@ -44,9 +48,12 @@ pub fn spirv_output_name(source_file_name: &str) -> Option<String> {
     };
 
     if base_name.is_empty() {
-        Some(format!("{}.spv", stage_suffix.to_ascii_lowercase()))
+        Some(format!(
+            "{directory}{}.spv",
+            stage_suffix.to_ascii_lowercase()
+        ))
     } else {
-        Some(format!("{base_name}{stage_suffix}.spv"))
+        Some(format!("{directory}{base_name}{stage_suffix}.spv"))
     }
 }
 
@@ -84,6 +91,22 @@ mod tests {
         assert_eq!(
             spirv_output_name("histogramCompute.comp").as_deref(),
             Some("histogramComp.spv")
+        );
+    }
+
+    #[test]
+    fn keeps_source_subdirectory_in_output_path() {
+        assert_eq!(
+            spirv_output_name("water/causticSplat.comp").as_deref(),
+            Some("water/causticSplatComp.spv")
+        );
+        assert_eq!(
+            spirv_output_name("flame/resolveFragment.frag").as_deref(),
+            Some("flame/resolveFrag.spv")
+        );
+        assert_eq!(
+            spirv_output_name("gbuffer/vertex.vert").as_deref(),
+            Some("gbuffer/vert.spv")
         );
     }
 

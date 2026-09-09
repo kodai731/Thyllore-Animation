@@ -20,10 +20,10 @@ fn test_shader_output_directory_exists() {
 #[test]
 fn test_all_shader_sources_exist() {
     let shader_sources = [
+        "shaders/model/vertex.vert",
+        "shaders/model/fragment.frag",
         "shaders/gbuffer/vertex.vert",
         "shaders/gbuffer/fragment.frag",
-        "shaders/gbuffer/gbufferVertex.vert",
-        "shaders/gbuffer/gbufferFragment.frag",
         "shaders/postprocess/compositeVertex.vert",
         "shaders/postprocess/compositeFragment.frag",
         "shaders/editor/gridVertex.vert",
@@ -47,19 +47,19 @@ fn test_all_shader_sources_exist() {
 #[test]
 fn test_all_compiled_shaders_exist() {
     let compiled_shaders = [
-        "assets/shaders/vert.spv",
-        "assets/shaders/frag.spv",
-        "assets/shaders/gbufferVert.spv",
-        "assets/shaders/gbufferFrag.spv",
-        "assets/shaders/compositeVert.spv",
-        "assets/shaders/compositeFrag.spv",
-        "assets/shaders/gridVert.spv",
-        "assets/shaders/gridFrag.spv",
-        "assets/shaders/gizmoVert.spv",
-        "assets/shaders/gizmoFrag.spv",
-        "assets/shaders/imguiVert.spv",
-        "assets/shaders/imguiFrag.spv",
-        "assets/shaders/rayQueryShadowComp.spv",
+        "assets/shaders/model/vert.spv",
+        "assets/shaders/model/frag.spv",
+        "assets/shaders/gbuffer/vert.spv",
+        "assets/shaders/gbuffer/frag.spv",
+        "assets/shaders/postprocess/compositeVert.spv",
+        "assets/shaders/postprocess/compositeFrag.spv",
+        "assets/shaders/editor/gridVert.spv",
+        "assets/shaders/editor/gridFrag.spv",
+        "assets/shaders/editor/gizmoVert.spv",
+        "assets/shaders/editor/gizmoFrag.spv",
+        "assets/shaders/editor/imguiVert.spv",
+        "assets/shaders/editor/imguiFrag.spv",
+        "assets/shaders/raytracing/rayQueryShadowComp.spv",
     ];
 
     for shader in &compiled_shaders {
@@ -74,10 +74,10 @@ fn test_all_compiled_shaders_exist() {
 #[test]
 fn test_compiled_shaders_not_empty() {
     let compiled_shaders = [
-        "assets/shaders/vert.spv",
-        "assets/shaders/frag.spv",
-        "assets/shaders/gbufferVert.spv",
-        "assets/shaders/gbufferFrag.spv",
+        "assets/shaders/model/vert.spv",
+        "assets/shaders/model/frag.spv",
+        "assets/shaders/gbuffer/vert.spv",
+        "assets/shaders/gbuffer/frag.spv",
     ];
 
     for shader in &compiled_shaders {
@@ -94,7 +94,7 @@ fn test_compiled_shaders_not_empty() {
 
 #[test]
 fn test_shader_spv_header() {
-    let shader = "assets/shaders/vert.spv";
+    let shader = "assets/shaders/gbuffer/vert.spv";
     let data = fs::read(shader).expect("Failed to read shader file");
 
     assert!(data.len() >= 4, "Shader file should have at least 4 bytes");
@@ -109,12 +109,12 @@ fn test_shader_spv_header() {
 #[test]
 fn test_vertex_shader_extension() {
     let vertex_shaders = [
-        "shaders/vertex.vert",
-        "shaders/gbufferVertex.vert",
-        "shaders/compositeVertex.vert",
-        "shaders/gridVertex.vert",
-        "shaders/gizmoVertex.vert",
-        "shaders/imguiVertex.vert",
+        "shaders/model/vertex.vert",
+        "shaders/gbuffer/vertex.vert",
+        "shaders/postprocess/compositeVertex.vert",
+        "shaders/editor/gridVertex.vert",
+        "shaders/editor/gizmoVertex.vert",
+        "shaders/editor/imguiVertex.vert",
     ];
 
     for shader in &vertex_shaders {
@@ -129,12 +129,12 @@ fn test_vertex_shader_extension() {
 #[test]
 fn test_fragment_shader_extension() {
     let fragment_shaders = [
-        "shaders/fragment.frag",
-        "shaders/gbufferFragment.frag",
-        "shaders/compositeFragment.frag",
-        "shaders/gridFragment.frag",
-        "shaders/gizmoFragment.frag",
-        "shaders/imguiFragment.frag",
+        "shaders/model/fragment.frag",
+        "shaders/gbuffer/fragment.frag",
+        "shaders/postprocess/compositeFragment.frag",
+        "shaders/editor/gridFragment.frag",
+        "shaders/editor/gizmoFragment.frag",
+        "shaders/editor/imguiFragment.frag",
     ];
 
     for shader in &fragment_shaders {
@@ -148,7 +148,7 @@ fn test_fragment_shader_extension() {
 
 #[test]
 fn test_compute_shader_extension() {
-    let compute_shaders = ["shaders/rayQueryShadow.comp"];
+    let compute_shaders = ["shaders/raytracing/rayQueryShadow.comp"];
 
     for shader in &compute_shaders {
         assert!(
@@ -162,6 +162,24 @@ fn test_compute_shader_extension() {
 const SHADER_SOURCE_EXTENSIONS: [&str; 8] = [
     "vert", "frag", "comp", "geom", "rchit", "rmiss", "rgen", "rint",
 ];
+
+fn count_compiled_shaders(directory: &Path) -> usize {
+    let entries = fs::read_dir(directory)
+        .unwrap_or_else(|_| panic!("Failed to read directory: {}", directory.display()));
+
+    entries
+        .filter_map(|entry| entry.ok())
+        .map(|entry| {
+            let path = entry.path();
+
+            if path.is_dir() {
+                return count_compiled_shaders(&path);
+            }
+
+            usize::from(path.extension() == Some("spv".as_ref()))
+        })
+        .sum()
+}
 
 fn count_shader_sources(directory: &Path) -> usize {
     let entries = fs::read_dir(directory)
@@ -193,14 +211,7 @@ fn count_shader_sources(directory: &Path) -> usize {
 fn test_shader_count_matches() {
     let shader_sources_count = count_shader_sources(Path::new("shaders"));
 
-    let compiled_shaders_count = fs::read_dir("assets/shaders")
-        .expect("Failed to read assets/shaders directory")
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            let path = entry.path();
-            path.is_file() && path.extension() == Some("spv".as_ref())
-        })
-        .count();
+    let compiled_shaders_count = count_compiled_shaders(Path::new("assets/shaders"));
 
     assert_eq!(
         shader_sources_count, compiled_shaders_count,

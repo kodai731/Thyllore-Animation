@@ -12,7 +12,7 @@ from blender_addon.common import glsl_export  # noqa: E402
 from blender_addon.common.glsl_export import strip_include_guards  # noqa: E402
 
 
-ENTRY_SHADER = "water/waterResolveFragment.frag"
+ENTRY_SHADER = "water/resolveFragment.frag"
 RAY_QUERY_ONLY_INCLUDE = "water/include/secondary.glsl"
 
 

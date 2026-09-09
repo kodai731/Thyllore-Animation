@@ -90,20 +90,20 @@ mod tests {
     #[test]
     fn rt_strips_stage_word_and_appends_stage_suffix() {
         assert_eq!(
-            spirv_output_name("waterTraceRayGen.rgen").as_deref(),
-            Some("waterTraceRgen.spv")
+            spirv_output_name("traceRayGen.rgen").as_deref(),
+            Some("traceRgen.spv")
         );
         assert_eq!(
-            spirv_output_name("waterTorusIntersection.rint").as_deref(),
-            Some("waterTorusRint.spv")
+            spirv_output_name("torusIntersection.rint").as_deref(),
+            Some("torusRint.spv")
         );
         assert_eq!(
-            spirv_output_name("waterTorusClosestHit.rchit").as_deref(),
-            Some("waterTorusRchit.spv")
+            spirv_output_name("torusClosestHit.rchit").as_deref(),
+            Some("torusRchit.spv")
         );
         assert_eq!(
-            spirv_output_name("waterTraceMiss.rmiss").as_deref(),
-            Some("waterTraceRmiss.spv")
+            spirv_output_name("traceMiss.rmiss").as_deref(),
+            Some("traceRmiss.spv")
         );
     }
 

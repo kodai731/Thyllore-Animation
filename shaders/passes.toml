@@ -67,11 +67,11 @@ stages = ["rayQueryShadow.comp"]
 sets = { 0 = "local" }
 
 [pass.water_caustic_splat]
-stages = ["waterCausticSplat.comp"]
+stages = ["causticSplat.comp"]
 sets = { 0 = "local" }
 
 [pass.water_caustic_apply]
-stages = ["waterCausticApply.comp"]
+stages = ["causticApply.comp"]
 sets = { 0 = "local" }
 
 [pass.composite]
@@ -87,5 +87,5 @@ stages = ["imguiVertex.vert", "imguiFragment.frag"]
 sets = { 0 = "local" }
 
 [pass.water_trace]
-stages = ["waterTraceRayGen.rgen", "waterTraceMiss.rmiss", "waterTorusIntersection.rint", "waterTorusClosestHit.rchit", "waterSceneClosestHit.rchit"]
+stages = ["traceRayGen.rgen", "traceMiss.rmiss", "torusIntersection.rint", "torusClosestHit.rchit", "sceneClosestHit.rchit"]
 sets = { 0 = "local" }

@@ -13,11 +13,11 @@ from blender_addon.common.glsl_export import strip_include_guards  # noqa: E402
 
 
 ENTRY_SHADER = "water/waterResolveFragment.frag"
-RAY_QUERY_ONLY_INCLUDE = "water/include/water_secondary.glsl"
+RAY_QUERY_ONLY_INCLUDE = "water/include/secondary.glsl"
 
 
 def expand_includes(source_path: str, repo_root: str) -> list[str]:
-    """water_secondary.glsl holds ray-query only code (traceScene, VertexBuffer), unusable in Blender."""
+    """secondary.glsl holds ray-query only code (traceScene, VertexBuffer), unusable in Blender."""
     return glsl_export.expand_includes(source_path, repo_root, skip_includes={RAY_QUERY_ONLY_INCLUDE})
 
 

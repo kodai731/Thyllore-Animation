@@ -570,6 +570,48 @@ impl RayTracingData {
         Ok(())
     }
 
+    pub unsafe fn ensure_effect_trace_pipeline(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        frames_in_flight: usize,
+    ) -> Result<()> {
+        if self.effect_trace_pipeline.is_some() {
+            return Ok(());
+        }
+
+        let effect_trace_descriptor = RREffectTraceDescriptorSet::new(rrdevice, frames_in_flight)?;
+
+        let intersection_range = vk::PushConstantRange::builder()
+            .stage_flags(vk::ShaderStageFlags::INTERSECTION_KHR)
+            .offset(0)
+            .size(8)
+            .build();
+        let raygen_range = vk::PushConstantRange::builder()
+            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+            .offset(16)
+            .size(112)
+            .build();
+        let closest_hit_range = vk::PushConstantRange::builder()
+            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+            .offset(96)
+            .size(32)
+            .build();
+        let effect_trace_pipeline = RRRayTracingPipeline::new(
+            instance,
+            rrdevice,
+            &EFFECT_TRACE,
+            &[effect_trace_descriptor.layout.handle],
+            &[intersection_range, raygen_range, closest_hit_range],
+        )?;
+
+        self.effect_trace_descriptor = Some(effect_trace_descriptor);
+        self.effect_trace_pipeline = Some(effect_trace_pipeline);
+
+        log!("Created effect trace pipeline");
+        Ok(())
+    }
+
     pub unsafe fn create_water_pipeline(
         &mut self,
         instance: &Instance,
@@ -628,38 +670,11 @@ impl RayTracingData {
         self.water_shading_pipeline = Some(water_shading_pipeline);
         self.water_descriptor = Some(water_descriptor);
 
-        let effect_trace_descriptor = RREffectTraceDescriptorSet::new(rrdevice, frames_in_flight)?;
-
         self.water_ubo = Some(water_ubo);
-        let intersection_range = vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::INTERSECTION_KHR)
-            .offset(0)
-            .size(8)
-            .build();
-        let raygen_range = vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-            .offset(16)
-            .size(112)
-            .build();
-        let closest_hit_range = vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-            .offset(96)
-            .size(32)
-            .build();
-        let effect_trace_pipeline = RRRayTracingPipeline::new(
-            instance,
-            rrdevice,
-            &EFFECT_TRACE,
-            &[effect_trace_descriptor.layout.handle],
-            &[intersection_range, raygen_range, closest_hit_range],
-        )?;
 
-        self.effect_trace_descriptor = Some(effect_trace_descriptor);
-        self.effect_trace_pipeline = Some(effect_trace_pipeline);
-
+        self.ensure_effect_trace_pipeline(instance, rrdevice, frames_in_flight)?;
         self.create_water_caustic_pipelines(rrdevice, water_buffer, hdr_buffer)?;
 
-        log!("Created effect trace pipeline");
         Ok(())
     }
     /// Caustic splat/apply need the water UBO and the water buffer, so they are built

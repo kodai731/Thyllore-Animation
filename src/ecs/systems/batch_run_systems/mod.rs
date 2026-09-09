@@ -1,9 +1,9 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use serde_json::json;
 
-use crate::ecs::resource::{BatchRun, BatchRunState, FlameShadingMode};
+use crate::ecs::resource::{BatchDumpPlan, BatchRun, BatchRunState, FlameShadingMode};
 use crate::ecs::world::World;
 
 #[cfg(test)]
@@ -17,6 +17,7 @@ use crate::ecs::resource::{ClipLibrary, DebugViewState, TimelineState};
 
 mod anim_edits;
 mod batch_action;
+mod cli_resolve;
 mod debug_actions;
 mod flame_args;
 mod sequence_analyze;
@@ -24,6 +25,7 @@ mod water_args;
 
 pub use anim_edits::*;
 pub use batch_action::*;
+pub use cli_resolve::*;
 pub use debug_actions::*;
 #[cfg(test)]
 use flame_args::flame_set_valid_keys;
@@ -78,16 +80,11 @@ const BATCH_WATER_PROBE_FLAG: &str = "--batch-water-probe";
 const BATCH_DEBUG_ACTION_FLAG: &str = "--batch-debug-action";
 pub const BATCH_LIST_DEBUG_ACTIONS_FLAG: &str = "--batch-list-debug-actions";
 const DEFAULT_SCREENSHOT_FRAME: u64 = 120;
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct BatchCameraPose {
-    pub yaw_degrees: f32,
-    pub pitch_degrees: f32,
-    pub distance: f32,
-    pub pivot: Option<[f32; 3]>,
-}
+const ROT_Z_DEG_KEY: &str = "rot_z_deg";
 
 pub struct EngineCliOverrides {
     pub batch_run: Option<BatchRun>,
+    pub batch_dump_plan: Option<BatchDumpPlan>,
     pub flame_mode: Option<FlameShadingMode>,
     pub flame_debug_view: Option<thyllore_effect_core::FlameDebugView>,
     pub water_debug_view: Option<i32>,
@@ -122,8 +119,13 @@ pub struct EngineCliOverrides {
     pub water_probe_path: Option<String>,
 }
 pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverrides> {
+    let (batch_run, batch_dump_plan) = match batch_run_resolve_from_args(args)? {
+        Some((batch, dump_plan)) => (Some(batch), Some(dump_plan)),
+        None => (None, None),
+    };
     Ok(EngineCliOverrides {
-        batch_run: batch_run_resolve_from_args(args)?,
+        batch_run,
+        batch_dump_plan,
         flame_mode: flame_mode_resolve_from_args(args)?,
         flame_debug_view: flame_debug_view_resolve_from_args(args)?,
         water_debug_view: water_debug_view_resolve_from_args(args)?,
@@ -157,215 +159,6 @@ pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverride
         wall_probe_path: flag_value_resolve_from_args(args, BATCH_WALL_PROBE_FLAG)?,
         water_probe_path: flag_value_resolve_from_args(args, BATCH_WATER_PROBE_FLAG)?,
     })
-}
-
-pub(super) fn flag_value_resolve_from_args(args: &[String], flag: &str) -> Result<Option<String>> {
-    let Some(position) = args.iter().position(|arg| arg == flag) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1).filter(|v| !v.starts_with("--")) else {
-        bail!("{flag} requires a value");
-    };
-    Ok(Some(value.clone()))
-}
-
-pub fn camera_pose_resolve_from_args(args: &[String]) -> Result<Option<BatchCameraPose>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_CAMERA_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_CAMERA_FLAG} requires <yaw_deg>,<pitch_deg>,<distance>");
-    };
-
-    let parts: Vec<&str> = value.split(',').collect();
-    if parts.len() != 3 && parts.len() != 6 {
-        bail!(
-            "{BATCH_CAMERA_FLAG} expects <yaw>,<pitch>,<distance>[,<pivot_x>,<pivot_y>,<pivot_z>], got '{value}'"
-        );
-    }
-    let numbers: Vec<f32> = parts
-        .iter()
-        .map(|part| part.trim().parse::<f32>())
-        .collect::<Result<_, _>>()
-        .map_err(|_| anyhow::anyhow!("invalid {BATCH_CAMERA_FLAG} value '{value}'"))?;
-    if !numbers.iter().all(|n| n.is_finite()) || numbers[2] <= 0.0 {
-        bail!("{BATCH_CAMERA_FLAG} distance must be > 0 and all values finite: '{value}'");
-    }
-
-    Ok(Some(BatchCameraPose {
-        yaw_degrees: numbers[0],
-        pitch_degrees: numbers[1],
-        distance: numbers[2],
-        pivot: (numbers.len() == 6).then(|| [numbers[3], numbers[4], numbers[5]]),
-    }))
-}
-
-pub fn batch_run_resolve_from_args(args: &[String]) -> Result<Option<BatchRun>> {
-    // Check for sequence mode first
-    if let Some(sequence_position) = args
-        .iter()
-        .position(|arg| arg == BATCH_SCREENSHOT_SEQUENCE_FLAG)
-    {
-        let Some(value) = args
-            .get(sequence_position + 1)
-            .filter(|v| !v.starts_with("--"))
-        else {
-            bail!("{BATCH_SCREENSHOT_SEQUENCE_FLAG} requires <dir>,<count>,<stride>");
-        };
-        let parts: Vec<&str> = value.split(',').collect();
-        if parts.len() != 3 {
-            bail!("{BATCH_SCREENSHOT_SEQUENCE_FLAG} expects <dir>,<count>,<stride>, got '{value}'");
-        }
-        let dir = parts[0].trim();
-        let count: u32 = parts[1].trim().parse().map_err(|_| {
-            anyhow::anyhow!("invalid count '{}': expected positive integer", parts[1])
-        })?;
-        let stride: u32 = parts[2].trim().parse().map_err(|_| {
-            anyhow::anyhow!("invalid stride '{}': expected positive integer", parts[2])
-        })?;
-        if count == 0 {
-            bail!("{BATCH_SCREENSHOT_SEQUENCE_FLAG} count must be >= 1");
-        }
-        if stride == 0 {
-            bail!("{BATCH_SCREENSHOT_SEQUENCE_FLAG} stride must be >= 1");
-        }
-
-        let screenshot_frame = match args.iter().position(|arg| arg == BATCH_FRAMES_FLAG) {
-            Some(frames_position) => {
-                let Some(value) = args.get(frames_position + 1) else {
-                    bail!("{BATCH_FRAMES_FLAG} requires a frame count");
-                };
-                let frames: u64 = value.parse().map_err(|_| {
-                    anyhow::anyhow!("invalid frame count '{value}': expected integer")
-                })?;
-                if frames == 0 {
-                    bail!("{BATCH_FRAMES_FLAG} must be >= 1");
-                }
-                frames
-            }
-            None => DEFAULT_SCREENSHOT_FRAME,
-        };
-
-        let flame_set = flame_set_resolve_from_args(args)?;
-        let dump_wall_probe = debug_actions_has_wall_probe_dump(args);
-        let dump_water_debug = debug_actions_has_water_debug_dump(args);
-
-        let mut batch = BatchRun::new(PathBuf::from(dir), screenshot_frame, flame_set);
-        batch.dump_wall_probe = dump_wall_probe;
-        batch.dump_water_debug = dump_water_debug;
-        batch.captures_remaining = count;
-        batch.stride = stride;
-        batch.sequence_dir = Some(PathBuf::from(dir));
-        batch.total_count = count;
-        batch.flame_trace_path =
-            flag_value_resolve_from_args(args, BATCH_FLAME_TRACE_FLAG)?.map(PathBuf::from);
-        batch.wall_probe_path =
-            flag_value_resolve_from_args(args, BATCH_WALL_PROBE_FLAG)?.map(PathBuf::from);
-        batch.water_probe_path =
-            flag_value_resolve_from_args(args, BATCH_WATER_PROBE_FLAG)?.map(PathBuf::from);
-        Ok(Some(batch))
-    } else {
-        // Single-shot mode (existing behavior)
-        let Some(position) = args.iter().position(|arg| arg == BATCH_SCREENSHOT_FLAG) else {
-            if args.iter().any(|arg| arg == BATCH_FRAMES_FLAG) {
-                bail!("{BATCH_FRAMES_FLAG} requires {BATCH_SCREENSHOT_FLAG} <output.png>");
-            }
-            return Ok(None);
-        };
-
-        let Some(output) = args.get(position + 1).filter(|v| !v.starts_with("--")) else {
-            bail!("{BATCH_SCREENSHOT_FLAG} requires an output path");
-        };
-        let output = resolve_absolute_output(Path::new(output))?;
-
-        let screenshot_frame = match args.iter().position(|arg| arg == BATCH_FRAMES_FLAG) {
-            Some(frames_position) => {
-                let Some(value) = args.get(frames_position + 1) else {
-                    bail!("{BATCH_FRAMES_FLAG} requires a frame count");
-                };
-                let frames: u64 = value.parse().map_err(|_| {
-                    anyhow::anyhow!("invalid frame count '{value}': expected integer")
-                })?;
-                if frames == 0 {
-                    bail!("{BATCH_FRAMES_FLAG} must be >= 1");
-                }
-                frames
-            }
-            None => DEFAULT_SCREENSHOT_FRAME,
-        };
-
-        let flame_set = flame_set_resolve_from_args(args)?;
-
-        let dump_wall_probe = debug_actions_has_wall_probe_dump(args);
-        let dump_water_debug = debug_actions_has_water_debug_dump(args);
-
-        let mut batch = BatchRun::new(output, screenshot_frame, flame_set);
-        batch.dump_wall_probe = dump_wall_probe;
-        batch.dump_water_debug = dump_water_debug;
-        batch.flame_trace_path =
-            flag_value_resolve_from_args(args, BATCH_FLAME_TRACE_FLAG)?.map(PathBuf::from);
-        batch.wall_probe_path =
-            flag_value_resolve_from_args(args, BATCH_WALL_PROBE_FLAG)?.map(PathBuf::from);
-        batch.water_probe_path =
-            flag_value_resolve_from_args(args, BATCH_WATER_PROBE_FLAG)?.map(PathBuf::from);
-        Ok(Some(batch))
-    }
-}
-
-pub fn gpu_timings_path_resolve_from_args(args: &[String]) -> Result<Option<String>> {
-    let Some(position) = args.iter().position(|arg| arg == GPU_TIMINGS_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{GPU_TIMINGS_FLAG} requires a path");
-    };
-    Ok(Some(value.clone()))
-}
-
-pub fn exposure_dump_path_resolve_from_args(args: &[String]) -> Result<Option<String>> {
-    let Some(position) = args.iter().position(|arg| arg == EXPOSURE_DUMP_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{EXPOSURE_DUMP_FLAG} requires a path");
-    };
-    Ok(Some(value.clone()))
-}
-
-const ROT_Z_DEG_KEY: &str = "rot_z_deg";
-
-fn scene_path_resolve_from_args(args: &[String]) -> Result<Option<String>> {
-    let Some(position) = args.iter().position(|arg| arg == "--batch-scene") else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("--batch-scene requires <path>");
-    };
-    Ok(Some(value.clone()))
-}
-
-/// Drives one viewport click from the command line so the picking readback path can be exercised
-/// headlessly, where there is no mouse to press.
-fn pick_pixel_resolve_from_args(args: &[String]) -> Result<Option<(u32, u32)>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_PICK_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_PICK_FLAG} requires <x>,<y>");
-    };
-    let parts: Vec<&str> = value.split(',').collect();
-    if parts.len() != 2 {
-        bail!("{BATCH_PICK_FLAG} expects 2 comma-separated values, got '{value}'");
-    }
-    let x: u32 = parts[0]
-        .trim()
-        .parse()
-        .map_err(|_| anyhow::anyhow!("invalid {BATCH_PICK_FLAG} x in '{value}'"))?;
-    let y: u32 = parts[1]
-        .trim()
-        .parse()
-        .map_err(|_| anyhow::anyhow!("invalid {BATCH_PICK_FLAG} y in '{value}'"))?;
-    Ok(Some((x, y)))
 }
 
 /// Compute the XZ circular orbit offset at time t for a given radius and period.
@@ -426,19 +219,6 @@ pub fn batch_run_update_orbit(world: &mut World) {
         };
         world.insert_component(e, path);
     }
-}
-
-fn resolve_absolute_output(output: &Path) -> Result<PathBuf> {
-    if output.extension().and_then(|e| e.to_str()) != Some("png") {
-        bail!(
-            "batch screenshot output must end with .png: {}",
-            output.display()
-        );
-    }
-    if output.is_absolute() {
-        return Ok(output.to_path_buf());
-    }
-    Ok(std::env::current_dir()?.join(output))
 }
 
 pub fn batch_run_tick(world: &World) {
@@ -516,12 +296,16 @@ pub fn batch_run_record_screenshot(world: &World, save_result: Result<String, St
         } else {
             // Last capture: write meta.json and complete
             let camera_str = format_camera_string(world);
+            let flame_set = world
+                .get_resource::<BatchDumpPlan>()
+                .map(|plan| plan.flame_set.clone())
+                .unwrap_or_default();
             let meta = json!({
                 "fps": 60.0 / batch.stride as f64,
                 "count": batch.stride,
                 "stride": batch.stride,
                 "camera": camera_str,
-                "flame_set": batch.flame_set.iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
+                "flame_set": flame_set.iter().map(|(k, v)| json!({"key": k, "value": v})).collect::<Vec<_>>(),
                 "engine_args": std::env::args().collect::<Vec<_>>(),
             });
 
@@ -555,8 +339,10 @@ pub fn batch_run_record_screenshot(world: &World, save_result: Result<String, St
 
     // Flame trace / wall probe dumps: if paths are set, dump synchronously
     // at the same frame/time as the screenshot.
-    let flame_trace_path = batch.flame_trace_path.clone();
-    let wall_probe_path = batch.wall_probe_path.clone();
+    let (flame_trace_path, wall_probe_path) = world
+        .get_resource::<BatchDumpPlan>()
+        .map(|plan| (plan.flame_trace_path.clone(), plan.wall_probe_path.clone()))
+        .unwrap_or((None, None));
     if flame_trace_path.is_some() || wall_probe_path.is_some() {
         crate::ecs::systems::batch_run_flame_dump(
             world,

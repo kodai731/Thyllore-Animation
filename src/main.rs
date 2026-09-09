@@ -11,8 +11,8 @@ use thyllore_animation::app::App;
 use thyllore_animation::ecs::component::{FlameEffect, FlameTrail, HeatPlume};
 use thyllore_animation::ecs::events::{UIEvent, UIEventQueue};
 use thyllore_animation::ecs::resource::{
-    BatchFlameOrbit, BatchRun, Camera, ExposureDumpSink, FlameDumpSink, FlameRenderSettings,
-    GpuTimingsSink,
+    BatchDumpPlan, BatchFlameOrbit, BatchRun, Camera, ExposureDumpSink, FlameDumpSink,
+    FlameRenderSettings, GpuTimingsSink,
 };
 use thyllore_animation::ecs::systems::{
     apply_flame_overrides, apply_flame_style_from_path, apply_texture_fit_from_path,
@@ -67,6 +67,9 @@ fn main() -> Result<()> {
 
     if let Some(batch_run) = overrides.batch_run {
         app.data.ecs_world.insert_resource(batch_run);
+    }
+    if let Some(batch_dump_plan) = overrides.batch_dump_plan {
+        app.data.ecs_world.insert_resource(batch_dump_plan);
     }
     if let Some(shading_mode) = overrides.flame_mode {
         app.data

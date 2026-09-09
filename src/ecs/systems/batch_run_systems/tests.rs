@@ -1,4 +1,6 @@
 use super::*;
+use std::path::PathBuf;
+
 fn args(list: &[&str]) -> Vec<String> {
     list.iter().map(|s| s.to_string()).collect()
 }
@@ -30,7 +32,7 @@ fn resolve_returns_none_without_flag() {
 
 #[test]
 fn resolve_parses_output_and_default_frames() {
-    let resolved =
+    let (resolved, _dump_plan) =
         batch_run_resolve_from_args(&args(&["bin", "--batch-screenshot", "/tmp/out.png"]))
             .unwrap()
             .unwrap();
@@ -41,7 +43,7 @@ fn resolve_parses_output_and_default_frames() {
 
 #[test]
 fn resolve_parses_explicit_frames() {
-    let resolved = batch_run_resolve_from_args(&args(&[
+    let (resolved, _dump_plan) = batch_run_resolve_from_args(&args(&[
         "bin",
         "--batch-screenshot",
         "/tmp/out.png",
@@ -156,7 +158,7 @@ fn resolve_rejects_invalid_camera_pose() {
 fn tick_requests_screenshot_at_target_frame() {
     let mut world = World::new();
     world.insert_resource(UIEventQueue::default());
-    world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 2, Vec::new()));
+    world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 2));
 
     batch_run_tick(&world);
     assert!(matches!(
@@ -175,11 +177,7 @@ fn tick_requests_screenshot_at_target_frame() {
 fn record_ignores_keyboard_screenshot_while_waiting() {
     let world = {
         let mut world = World::new();
-        world.insert_resource(BatchRun::new(
-            PathBuf::from("/tmp/out.png"),
-            100,
-            Vec::new(),
-        ));
+        world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 100));
         world
     };
 
@@ -193,7 +191,7 @@ fn record_ignores_keyboard_screenshot_while_waiting() {
 #[test]
 fn record_stores_error_result() {
     let mut world = World::new();
-    world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 1, Vec::new()));
+    world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 1));
     world.resource_mut::<BatchRun>().state = BatchRunState::ScreenshotRequested;
 
     batch_run_record_screenshot(&world, Err("save failed".to_string()));
@@ -207,7 +205,7 @@ fn record_stores_error_result() {
 
 #[test]
 fn report_incomplete_state_is_error() {
-    let batch = BatchRun::new(PathBuf::from("/tmp/out.png"), 1, Vec::new());
+    let batch = BatchRun::new(PathBuf::from("/tmp/out.png"), 1);
     let (ok, line) = batch_run_report(&batch);
     assert!(!ok);
     assert!(line.contains("before screenshot completed"));
@@ -421,7 +419,7 @@ fn batch_run_update_orbit_inserts_missing_transform() {
     world.insert_component(e, FlameEffect::default());
 
     // Insert BatchRun and BatchFlameOrbit resources
-    world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 1, Vec::new()));
+    world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 1));
     world.resource_mut::<BatchRun>().frames_rendered = 1;
     world.insert_resource(crate::ecs::resource::BatchFlameOrbit {
         radius: 2.0,
@@ -822,7 +820,7 @@ fn debug_actions_apply_sets_view_mode_and_queues_events() {
 
 #[test]
 fn water_debug_dump_action_marks_the_batch_run_in_every_capture_mode() {
-    let single = batch_run_resolve_from_args(&args(&[
+    let (_single, single_dump_plan) = batch_run_resolve_from_args(&args(&[
         "bin",
         "--batch-screenshot",
         "out.png",
@@ -831,9 +829,9 @@ fn water_debug_dump_action_marks_the_batch_run_in_every_capture_mode() {
     ]))
     .unwrap()
     .expect("single-shot batch");
-    assert!(single.dump_water_debug);
+    assert!(single_dump_plan.dump_water_debug);
 
-    let sequence = batch_run_resolve_from_args(&args(&[
+    let (_sequence, sequence_dump_plan) = batch_run_resolve_from_args(&args(&[
         "bin",
         "--batch-screenshot-sequence",
         "out,3,2",
@@ -842,12 +840,13 @@ fn water_debug_dump_action_marks_the_batch_run_in_every_capture_mode() {
     ]))
     .unwrap()
     .expect("sequence batch");
-    assert!(sequence.dump_water_debug);
+    assert!(sequence_dump_plan.dump_water_debug);
 
-    let without = batch_run_resolve_from_args(&args(&["bin", "--batch-screenshot", "out.png"]))
-        .unwrap()
-        .expect("batch without debug action");
-    assert!(!without.dump_water_debug);
+    let (_without, without_dump_plan) =
+        batch_run_resolve_from_args(&args(&["bin", "--batch-screenshot", "out.png"]))
+            .unwrap()
+            .expect("batch without debug action");
+    assert!(!without_dump_plan.dump_water_debug);
 }
 
 #[test]

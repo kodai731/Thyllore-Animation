@@ -8,6 +8,27 @@ pub fn spread_offset(t: f32, spread_start: f32, spread_rate: f32) -> f32 {
     2.0 * spread_rate * (t - spread_start).max(0.0)
 }
 
+pub fn rotation_phase(
+    t: f32,
+    circulation: f32,
+    radius_sq: f32,
+    spread_start: f32,
+    spread_rate: f32,
+) -> f32 {
+    let a = spread_rate;
+    let gamma_over_2pi = circulation / (2.0 * std::f32::consts::PI);
+    if a > 0.0 {
+        let ts = spread_start;
+        let t_clamped = t.min(ts);
+        let t_plus = (t - ts).max(0.0);
+        gamma_over_2pi
+            * (t_clamped / radius_sq
+                + (1.0 / (2.0 * a)) * ((radius_sq + 2.0 * a * t_plus) / radius_sq).ln())
+    } else {
+        gamma_over_2pi * t / radius_sq
+    }
+}
+
 pub fn streak_phase(
     t: f32,
     circulation: f32,
@@ -15,17 +36,13 @@ pub fn streak_phase(
     spread_start: f32,
     spread_rate: f32,
 ) -> f32 {
-    let p0 = wall_radius_base * wall_radius_base;
-    let a = spread_rate;
-    let gamma_over_2pi = circulation / (2.0 * std::f32::consts::PI);
-    if a > 0.0 {
-        let ts = spread_start;
-        let t_clamped = t.min(ts);
-        let t_plus = (t - ts).max(0.0);
-        gamma_over_2pi * (t_clamped / p0 + (1.0 / (2.0 * a)) * ((p0 + 2.0 * a * t_plus) / p0).ln())
-    } else {
-        gamma_over_2pi * t / p0
-    }
+    rotation_phase(
+        t,
+        circulation,
+        wall_radius_base * wall_radius_base,
+        spread_start,
+        spread_rate,
+    )
 }
 
 pub fn wall_amp(t: f32, wall_strength: f32, dissipate_start: f32, dissipate_time: f32) -> f32 {
@@ -59,5 +76,50 @@ mod tests {
         assert_eq!(wall_amp(3.0, 2.0, 1.0, 0.0), 2.0);
         assert_eq!(wall_amp(0.5, 2.0, 1.0, 1.0), 2.0);
         assert!((wall_amp(2.0, 2.0, 1.0, 1.0) - 2.0 * (-1.0f32).exp()).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_rotation_phase_decreases_with_radius_sq() {
+        let t = 1.0;
+        let circulation = 1.0;
+        let spread_start = 0.5;
+        let spread_rate = 0.1;
+        let values: Vec<f32> = (1..=10)
+            .map(|i| {
+                let radius_sq = i as f32;
+                rotation_phase(t, circulation, radius_sq, spread_start, spread_rate)
+            })
+            .collect();
+        for i in 0..values.len() - 1 {
+            assert!(
+                values[i] > values[i + 1],
+                "rotation_phase should decrease as radius_sq increases: value[{}] = {} >= value[{}] = {}",
+                i,
+                values[i],
+                i + 1,
+                values[i + 1]
+            );
+        }
+    }
+
+    #[test]
+    fn test_streak_phase_matches_rotation_phase() {
+        let t = 2.0;
+        let circulation = 1.0;
+        let wall_radius_base = 3.0;
+        let spread_start = 0.5;
+        let spread_rate = 0.1;
+        let radius_sq = wall_radius_base * wall_radius_base;
+        let streak = streak_phase(t, circulation, wall_radius_base, spread_start, spread_rate);
+        let rotation = rotation_phase(t, circulation, radius_sq, spread_start, spread_rate);
+        assert!(
+            (streak - rotation).abs() < 1e-6,
+            "streak_phase({}) = {} != rotation_phase({}, {}) = {}",
+            wall_radius_base,
+            streak,
+            radius_sq,
+            spread_rate,
+            rotation
+        );
     }
 }

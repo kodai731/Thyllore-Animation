@@ -1,4 +1,4 @@
-// flame_ray.glsl - ray reconstruction and emission segment integration for flame passes
+// ray.glsl - ray reconstruction and emission segment integration for flame passes
 
 #ifndef FLAME_RAY_GLSL
 #define FLAME_RAY_GLSL

@@ -82,7 +82,7 @@ const float PLUME_AMBIENT_TEMPERATURE_K = 293.0;
 const int PLUME_BAND_COUNT = 6;
 const float PLUME_FLAT_EXPONENT = 2e-2;
 
-// Abramowitz-Stegun 7.1.26 (same as flameErf in flame_radial_integral.glsl).
+// Abramowitz-Stegun 7.1.26 (same as flameErf in radial_integral.glsl).
 float plumeErf(float x) {
     float magnitude = abs(x);
     float t = 1.0 / (1.0 + 0.3275911 * magnitude);
@@ -92,7 +92,7 @@ float plumeErf(float x) {
 }
 
 // int_{-halfWidth}^{halfWidth} s^m exp(-(a s^2 + b s + c)) ds for m = 0, 1, 2.
-// Same formula as flameGaussianMoments in flame_radial_integral.glsl.
+// Same formula as flameGaussianMoments in radial_integral.glsl.
 vec3 plumeGaussianMoments(float a, float b, float c, float halfWidth) {
     if (a * halfWidth * halfWidth < PLUME_FLAT_EXPONENT
         && abs(b) * halfWidth < PLUME_FLAT_EXPONENT) {

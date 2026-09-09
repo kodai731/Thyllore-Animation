@@ -138,7 +138,7 @@ def main() -> None:
     repo_root = os.path.abspath(args.repo_root)
     out_dir = os.path.abspath(args.out)
 
-    expanded_lines = expand_includes("flame/flameResolveFragment.frag", repo_root)
+    expanded_lines = expand_includes("flame/resolveFragment.frag", repo_root)
 
     stripped_lines = strip_include_guards(expanded_lines)
 

@@ -8,7 +8,7 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #endif
 
-#include "flame/include/flame_ray.glsl"
+#include "flame/include/ray.glsl"
 layout(set = 0, binding = 0) uniform FrameUBO {
     mat4 view;
     mat4 proj;

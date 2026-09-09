@@ -35,7 +35,7 @@ stages = ["tonemapVertex.vert", "waterResolveFragment.frag"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.flame_resolve]
-stages = ["tonemapVertex.vert", "flameResolveFragment.frag"]
+stages = ["tonemapVertex.vert", "resolveFragment.frag"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.tonemap]

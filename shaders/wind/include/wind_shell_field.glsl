@@ -29,6 +29,8 @@ float windStreakRiseSpeed() { return wind.streak.z; }
 float windStreakAmplitude() { return wind.streak.w; }
 float windStreakPhase() { return wind.streak2.x; }
 float windStreakRiseTime() { return wind.streak2.y; }
+float windEddySpeedSpread() { return wind.streak2.z; }
+float windSpreadStart() { return wind.streak2.w; }
 float windEddyAmplitude() { return wind.eddy.x; }
 float windEddyCellTheta() { return wind.eddy.y; }
 float windEddyCellHeight() { return wind.eddy.z; }

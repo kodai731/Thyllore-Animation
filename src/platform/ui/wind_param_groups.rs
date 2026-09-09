@@ -30,6 +30,7 @@ pub const WIND_EDDY_PARAMS: &[&str] = &[
     "eddy_cell_height",
     "eddy_cell_radial",
     "eddy_shear",
+    "eddy_speed_spread",
     "eddy_rise_speed",
     "eddy_reseed_period",
     "eddy_erosion",

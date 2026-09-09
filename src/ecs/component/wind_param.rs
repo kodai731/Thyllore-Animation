@@ -36,6 +36,7 @@ pub enum WindParam {
     EddyCellHeight,
     EddyCellRadial,
     EddyShear,
+    EddySpeedSpread,
     EddyRiseSpeed,
     EddyReseedPeriod,
     EddyErosion,
@@ -49,7 +50,7 @@ pub enum WindParam {
 }
 
 impl WindParam {
-    pub const ALL: [WindParam; 39] = [
+    pub const ALL: [WindParam; 40] = [
         WindParam::ColumnHeight,
         WindParam::WallRadiusBase,
         WindParam::WallRadiusTop,
@@ -79,6 +80,7 @@ impl WindParam {
         WindParam::EddyCellHeight,
         WindParam::EddyCellRadial,
         WindParam::EddyShear,
+        WindParam::EddySpeedSpread,
         WindParam::EddyRiseSpeed,
         WindParam::EddyReseedPeriod,
         WindParam::EddyErosion,
@@ -122,6 +124,7 @@ impl WindParam {
             WindParam::EddyCellHeight => 540,
             WindParam::EddyCellRadial => 541,
             WindParam::EddyShear => 542,
+            WindParam::EddySpeedSpread => 556,
             WindParam::EddyRiseSpeed => 543,
             WindParam::EddyReseedPeriod => 544,
             WindParam::EddyErosion => 555,
@@ -181,6 +184,7 @@ impl WindParam {
             WindParam::EddyCellHeight => "Eddy Cell Height",
             WindParam::EddyCellRadial => "Eddy Cell Radial",
             WindParam::EddyShear => "Eddy Shear",
+            WindParam::EddySpeedSpread => "Eddy Speed Spread",
             WindParam::EddyRiseSpeed => "Eddy Rise Speed",
             WindParam::EddyReseedPeriod => "Eddy Reseed Period",
             WindParam::EddyErosion => "Eddy Erosion",
@@ -225,6 +229,7 @@ impl WindParam {
             WindParam::EddyCellHeight => "eddy_cell_height",
             WindParam::EddyCellRadial => "eddy_cell_radial",
             WindParam::EddyShear => "eddy_shear",
+            WindParam::EddySpeedSpread => "eddy_speed_spread",
             WindParam::EddyRiseSpeed => "eddy_rise_speed",
             WindParam::EddyReseedPeriod => "eddy_reseed_period",
             WindParam::EddyErosion => "eddy_erosion",
@@ -276,6 +281,7 @@ impl WindParam {
             WindParam::EddyCellHeight => "EddyCellHeight",
             WindParam::EddyCellRadial => "EddyCellRadial",
             WindParam::EddyShear => "EddyShear",
+            WindParam::EddySpeedSpread => "EddySpeedSpread",
             WindParam::EddyRiseSpeed => "EddyRiseSpeed",
             WindParam::EddyReseedPeriod => "EddyReseedPeriod",
             WindParam::EddyErosion => "EddyErosion",
@@ -320,6 +326,7 @@ impl WindParam {
             WindParam::EddyCellHeight => (0.01, 2.0),
             WindParam::EddyCellRadial => (0.01, 1.0),
             WindParam::EddyShear => (0.0, 1.0),
+            WindParam::EddySpeedSpread => (0.0, 1.0),
             WindParam::EddyRiseSpeed => (0.0, 10.0),
             WindParam::EddyReseedPeriod => (0.1, 10.0),
             WindParam::EddyErosion => (0.0, 0.95),

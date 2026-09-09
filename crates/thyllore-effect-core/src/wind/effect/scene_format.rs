@@ -290,6 +290,16 @@ declare_scene_format! {
                 tooltip: "Shear of the eddy field; 0 is no shear (pure translation)",
             },
         },
+        eddy_speed_spread: f32 = Frame {
+            get: |e| e.eddy_speed_spread,
+            set: |e, v| e.eddy_speed_spread = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Width of rotation speed applied to octave and reseed layers. 0 means all octaves have the same speed.",
+            },
+        },
         eddy_rise_speed: f32 = Frame {
             get: |e| e.eddy_rise_speed,
             set: |e, v| e.eddy_rise_speed = v,

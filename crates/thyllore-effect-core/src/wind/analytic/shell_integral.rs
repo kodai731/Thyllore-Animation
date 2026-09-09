@@ -16,9 +16,9 @@ use cgmath::Vector3;
 pub const WIND_MAX_KNOTS: usize = 56;
 pub const WIND_MAX_PUFFS: usize = 96;
 pub const WIND_PUFFS_PER_RAY: usize = 20;
-const POLY_TERMS: usize = 16;
+pub(crate) const POLY_TERMS: usize = 16;
 // Fixed so the node set is a continuous function of the ray (no seams where a count would change).
-const EDDY_SPLITS: usize = 8;
+pub(crate) const EDDY_SPLITS: usize = 8;
 const LINEAR_COEFFICIENT_EPSILON: f32 = 1e-7;
 const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
 

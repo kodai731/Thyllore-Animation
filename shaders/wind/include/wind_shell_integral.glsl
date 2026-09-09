@@ -9,7 +9,7 @@
 // Must be included after wind_shell_field.glsl.
 
 const int WIND_MAX_KNOTS = 56;
-const int WIND_POLY_TERMS = 12;
+const int WIND_POLY_TERMS = 16;
 // Fixed so the node set is a continuous function of the ray (no seams where a count would change).
 const int WIND_EDDY_SPLITS = 8;
 const int WIND_PUFFS_PER_RAY = 20;

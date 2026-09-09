@@ -1,4 +1,5 @@
 use super::*;
+use crate::wind::analytic::shell_integral::{EDDY_SPLITS, POLY_TERMS};
 use crate::wind::WindTornadoEffect;
 use cgmath::{InnerSpace, Vector3};
 use std::f32::consts::PI;
@@ -766,5 +767,46 @@ fn truncated_ray_9_plus_puffs_analytical_leq_midpoint() {
     assert!(
         closed <= reference * (1.0 + 1e-6),
         "truncated analytical {closed} should be <= midpoint reference {reference}"
+    );
+}
+
+fn glsl_int_constant(source: &str, name: &str) -> i64 {
+    let prefix = format!("const int {name} = ");
+    source
+        .lines()
+        .find_map(|line| line.trim().strip_prefix(&prefix))
+        .and_then(|rest| rest.trim_end_matches(';').parse().ok())
+        .unwrap_or_else(|| panic!("{name} not declared in wind_shell_integral.glsl"))
+}
+
+#[test]
+fn glsl_polynomial_terms_match_the_rust_mirror_and_cover_the_piece_degree() {
+    let source = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../shaders/wind/include/wind_shell_integral.glsl"),
+    )
+    .expect("wind_shell_integral.glsl readable");
+
+    assert_eq!(
+        glsl_int_constant(&source, "WIND_POLY_TERMS"),
+        POLY_TERMS as i64
+    );
+    assert_eq!(
+        glsl_int_constant(&source, "WIND_EDDY_SPLITS"),
+        EDDY_SPLITS as i64
+    );
+    assert_eq!(
+        glsl_int_constant(&source, "WIND_MAX_KNOTS"),
+        WIND_MAX_KNOTS as i64
+    );
+
+    let biweight_of_quadratic_degree = 8;
+    let envelope_degree = 3;
+    let streak_degree = 1;
+    let piece_degree = biweight_of_quadratic_degree + envelope_degree + streak_degree;
+    assert!(
+        piece_degree < POLY_TERMS,
+        "a piece polynomial of degree {piece_degree} needs {} terms",
+        piece_degree + 1
     );
 }

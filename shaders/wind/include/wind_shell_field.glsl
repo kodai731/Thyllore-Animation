@@ -10,6 +10,9 @@
 
 const float WIND_LINEAR_COEFFICIENT_EPSILON = 1e-7;
 const float WIND_EDDY_MIN_RADIUS_SQ = 1e-4;
+const int WIND_EDDY_OCTAVE_COUNT = 3;
+const float WIND_EDDY_LAYER_A_SPEED_OFFSET = 0.25;
+const float WIND_EDDY_LAYER_B_SPEED_OFFSET = -0.25;
 
 float windHeight() { return wind.shape.x; }
 float windWallRadiusBase() { return wind.shape.y; }
@@ -121,23 +124,31 @@ float windAntipodalOctave(vec3 p, vec3 antipode) {
     return (windGradientNoise(p) - windGradientNoise(antipode)) * 0.70710678;
 }
 
-float windEddyNoiseFBM(vec3 p, vec3 antipode) {
-    vec3 p0 = WIND_OCTAVE_ROTATION * p;
-    vec3 q0 = WIND_OCTAVE_ROTATION * antipode;
-    vec3 p1 = windRotateAndDouble(p0);
-    vec3 q1 = windRotateAndDouble(q0);
-    vec3 p2 = windRotateAndDouble(p1);
-    vec3 q2 = windRotateAndDouble(q1);
-    float sum = 0.5 * windAntipodalOctave(p0, q0)
-        + 0.25 * windAntipodalOctave(p1, q1)
-        + 0.125 * windAntipodalOctave(p2, q2);
+struct WindEddyOctaveRings {
+    vec3 point[WIND_EDDY_OCTAVE_COUNT];
+    vec3 antipode[WIND_EDDY_OCTAVE_COUNT];
+};
+
+float windEddyNoiseFBM(WindEddyOctaveRings rings) {
+    float sum = 0.0;
+    float amplitude = 0.5;
+    for (int octave = 0; octave < WIND_EDDY_OCTAVE_COUNT; ++octave) {
+        vec3 p = WIND_OCTAVE_ROTATION * rings.point[octave];
+        vec3 antipode = WIND_OCTAVE_ROTATION * rings.antipode[octave];
+        for (int doubling = 0; doubling < octave; ++doubling) {
+            p = windRotateAndDouble(p);
+            antipode = windRotateAndDouble(antipode);
+        }
+        sum += amplitude * windAntipodalOctave(p, antipode);
+        amplitude *= 0.5;
+    }
     return clamp(0.5 + sum * (1.0 / 0.875), 0.0, 1.0);
 }
 
 struct WindEddyGeometry {
     float theta;
     float height;
-    float shearRate;
+    float radius;
     float radialCoord;
     float ringRadius;
 };
@@ -148,37 +159,36 @@ WindEddyGeometry windEddyGeometry(vec3 local) {
     float h = local.y;
     float wallRadius = windWallRadius(h);
 
-    float omega = (windStreakPhase() / max(windTime(), 1e-3))
-        * (windWallRadiusSq(h) / max(r * r, WIND_EDDY_MIN_RADIUS_SQ));
-
     WindEddyGeometry geometry;
     geometry.theta = theta;
     geometry.height = h;
-    geometry.shearRate = omega;
+    geometry.radius = r;
     geometry.radialCoord = (r - wallRadius) / windEddyCellRadial();
     geometry.ringRadius = wallRadius / windEddyCellTheta();
     return geometry;
 }
 
-struct WindEddyRingPoints {
-    vec3 point;
-    vec3 antipode;
-};
+WindEddyOctaveRings windEddyLayerCoords(WindEddyGeometry geometry, float age, float seed, float layerSpeedOffset) {
+    float phase = windRotationPhase(geometry.height);
+    float shear = pow(
+        windWallRadiusSq(geometry.height) / max(geometry.radius * geometry.radius, WIND_EDDY_MIN_RADIUS_SQ),
+        windEddyShear());
 
-WindEddyRingPoints windEddyLayerCoords(WindEddyGeometry geometry, float age, float seed) {
-    float phi = mix(windStreakPhase(), geometry.shearRate * age, windEddyShear());
-
-    float shearedTheta = geometry.theta - phi;
     float rho = geometry.ringRadius + geometry.radialCoord;
     float uH = (geometry.height - windEddyRiseSpeed() * age) / windEddyCellHeight();
 
-    vec3 center = vec3(seed, seed * 0.37, uH + seed * 0.61);
-    vec3 ring = vec3(rho * cos(shearedTheta), rho * sin(shearedTheta), 0.0);
+    WindEddyOctaveRings rings;
+    for (int octave = 0; octave < WIND_EDDY_OCTAVE_COUNT; ++octave) {
+        float spreadCoefficient = (float(octave) - 1.0) * 0.5 + layerSpeedOffset;
+        float speedFactor = 1.0 + windEddySpeedSpread() * spreadCoefficient;
+        float shearedTheta = geometry.theta - phase * shear * speedFactor;
+        float ringX = rho * cos(shearedTheta);
+        float ringY = rho * sin(shearedTheta);
 
-    WindEddyRingPoints points;
-    points.point = center + ring;
-    points.antipode = center - ring;
-    return points;
+        rings.point[octave] = vec3(ringX + seed, ringY + seed * 0.37, uH + seed * 0.61);
+        rings.antipode[octave] = vec3(-ringX + seed, -ringY + seed * 0.37, uH + seed * 0.61);
+    }
+    return rings;
 }
 
 float windEddySigma(vec3 local) {
@@ -195,10 +205,10 @@ float windEddySigma(vec3 local) {
 
     WindEddyGeometry geometry = windEddyGeometry(local);
 
-    WindEddyRingPoints pointsA = windEddyLayerCoords(geometry, ageA, 17.0 * kA + 3.0);
-    WindEddyRingPoints pointsB = windEddyLayerCoords(geometry, ageB, 17.0 * kB + 3.0);
-    float NA = windEddyNoiseFBM(pointsA.point, pointsA.antipode);
-    float NB = windEddyNoiseFBM(pointsB.point, pointsB.antipode);
+    WindEddyOctaveRings ringsA = windEddyLayerCoords(geometry, ageA, 17.0 * kA + 3.0, WIND_EDDY_LAYER_A_SPEED_OFFSET);
+    WindEddyOctaveRings ringsB = windEddyLayerCoords(geometry, ageB, 17.0 * kB + 3.0, WIND_EDDY_LAYER_B_SPEED_OFFSET);
+    float NA = windEddyNoiseFBM(ringsA);
+    float NB = windEddyNoiseFBM(ringsB);
 
     float N = wA * NA + wB * NB;
     float eroded = clamp((N - windEddyErosion()) / (1.0 - windEddyErosion()), 0.0, 1.0);

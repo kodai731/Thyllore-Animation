@@ -1,4 +1,5 @@
 use super::*;
+use crate::wind::analytic::motion::rotation_phase;
 use crate::wind::analytic::shell_integral::{EDDY_SPLITS, POLY_TERMS};
 use crate::wind::WindTornadoEffect;
 use cgmath::{InnerSpace, Vector3};
@@ -67,6 +68,122 @@ fn assert_closed_form_matches_reference_for(
     assert!(
         relative < 2e-3,
         "closed {closed} vs reference {reference} (rel {relative}) for o={origin:?} d={direction:?}"
+    );
+}
+
+const EDDY_RING_SAMPLES: usize = 256;
+
+fn storm_effect_at(time: f32) -> WindTornadoEffect {
+    WindTornadoEffect {
+        time,
+        circulation: 2.0,
+        wall_radius_base: 0.35,
+        wall_radius_top: 0.6,
+        eddy_amplitude: 1.0,
+        eddy_shear: 1.0,
+        eddy_speed_spread: 0.0,
+        spread_start: 0.0,
+        spread_rate: 0.0,
+        ..WindTornadoEffect::default()
+    }
+}
+
+fn sample_eddy_ring(params: &WindShellParams, height: f32) -> Vec<f32> {
+    let radius = params.wall_radius(height);
+    (0..EDDY_RING_SAMPLES)
+        .map(|index| {
+            let theta = 2.0 * PI * index as f32 / EDDY_RING_SAMPLES as f32;
+            eddy_sigma(params, [radius * theta.cos(), height, radius * theta.sin()])
+        })
+        .collect()
+}
+
+fn correlate_cyclic_shift(before: &[f32], after: &[f32], shift: usize) -> f32 {
+    let count = before.len();
+    let before_mean = before.iter().sum::<f32>() / count as f32;
+    let after_mean = after.iter().sum::<f32>() / count as f32;
+    (0..count)
+        .map(|index| (before[index] - before_mean) * (after[(index + shift) % count] - after_mean))
+        .sum()
+}
+
+fn estimate_rotation_angle(before: &[f32], after: &[f32]) -> f32 {
+    let count = before.len();
+    let correlations: Vec<f32> = (0..count)
+        .map(|shift| correlate_cyclic_shift(before, after, shift))
+        .collect();
+
+    let (best_shift, _) = correlations.iter().enumerate().fold(
+        (0usize, f32::NEG_INFINITY),
+        |(best_index, best_value), (index, &value)| {
+            if value > best_value {
+                (index, value)
+            } else {
+                (best_index, best_value)
+            }
+        },
+    );
+
+    let previous = correlations[(best_shift + count - 1) % count];
+    let next = correlations[(best_shift + 1) % count];
+    let curvature = previous - 2.0 * correlations[best_shift] + next;
+    let sub_sample = if curvature < 0.0 {
+        0.5 * (previous - next) / curvature
+    } else {
+        0.0
+    };
+
+    (best_shift as f32 + sub_sample) * 2.0 * PI / count as f32
+}
+
+#[test]
+fn eddy_rotation_matches_rankine_angular_velocity() {
+    let time = 0.3;
+    let delta_time = 0.05;
+    let heights = [0.1f32, 0.9];
+
+    let before = storm_effect_at(time);
+    let after = storm_effect_at(time + delta_time);
+    let params_before = WindShellParams::from_effect(&before);
+    let params_after = WindShellParams::from_effect(&after);
+
+    let sample_step = 2.0 * PI / EDDY_RING_SAMPLES as f32;
+    let mut measured_angles = Vec::new();
+
+    for &height in &heights {
+        let measured = estimate_rotation_angle(
+            &sample_eddy_ring(&params_before, height),
+            &sample_eddy_ring(&params_after, height),
+        );
+
+        let radius_sq = params_before.wall_radius(height).powi(2);
+        let expected = rotation_phase(
+            time + delta_time,
+            before.circulation,
+            radius_sq,
+            before.spread_start,
+            before.spread_rate,
+        ) - rotation_phase(
+            time,
+            before.circulation,
+            radius_sq,
+            before.spread_start,
+            before.spread_rate,
+        );
+
+        assert!(
+            (measured - expected).abs() <= 2.0 * sample_step,
+            "height {height}: measured {measured} vs expected {expected} (step {sample_step})"
+        );
+        measured_angles.push(measured);
+    }
+
+    let expected_ratio = params_before.wall_radius(heights[1]).powi(2)
+        / params_before.wall_radius(heights[0]).powi(2);
+    let measured_ratio = measured_angles[0] / measured_angles[1];
+    assert!(
+        (measured_ratio - expected_ratio).abs() <= 0.1 * expected_ratio,
+        "rotation ratio {measured_ratio} vs expected {expected_ratio}"
     );
 }
 

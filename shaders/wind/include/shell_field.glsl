@@ -229,7 +229,7 @@ float windEnvelopeHeight(float h) {
         return 1.0;
     }
     float v = (normalizedHeight - fadeStart) / windTopFade();
-    return 1.0 - v * v * (3.0 - 2.0 * v);
+    return 1.0 - v * v * v * (10.0 - v * (15.0 - 6.0 * v));
 }
 
 float windBiweight(float u) {

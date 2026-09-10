@@ -175,10 +175,12 @@ void windEnvelopePoly(float h0, float h1, float hMid, out float envelope[WIND_PO
     }
     float v0 = (h0 - fadeStart) / windTopFade();
     float v1 = h1 / windTopFade();
-    envelope[0] = 1.0 - 3.0 * v0 * v0 + 2.0 * v0 * v0 * v0;
-    envelope[1] = -6.0 * v0 * v1 + 6.0 * v0 * v0 * v1;
-    envelope[2] = -3.0 * v1 * v1 + 6.0 * v0 * v1 * v1;
-    envelope[3] = 2.0 * v1 * v1 * v1;
+    envelope[0] = 1.0 - 10.0 * v0 * v0 * v0 + 15.0 * v0 * v0 * v0 * v0 - 6.0 * v0 * v0 * v0 * v0 * v0;
+    envelope[1] = v1 * (-30.0 * v0 * v0 + 60.0 * v0 * v0 * v0 - 30.0 * v0 * v0 * v0 * v0);
+    envelope[2] = v1 * v1 * (-30.0 * v0 + 90.0 * v0 * v0 - 60.0 * v0 * v0 * v0);
+    envelope[3] = v1 * v1 * v1 * (-10.0 + 60.0 * v0 - 60.0 * v0 * v0);
+    envelope[4] = v1 * v1 * v1 * v1 * (15.0 - 30.0 * v0);
+    envelope[5] = -6.0 * v1 * v1 * v1 * v1 * v1;
 }
 
 float windPolyMoments(float poly[WIND_POLY_TERMS]) {

@@ -192,7 +192,7 @@ pub fn wind_envelope_height(params: &WindShellParams, h: f32) -> f32 {
         return 1.0;
     }
     let v = (normalized_height - fade_start) / params.top_fade;
-    1.0 - v * v * (3.0 - 2.0 * v)
+    1.0 - v * v * v * (10.0 - v * (15.0 - 6.0 * v))
 }
 
 fn biweight(u: f32) -> f32 {
@@ -508,10 +508,13 @@ fn envelope_poly(params: &WindShellParams, h0: f32, h1: f32, h_mid: f32) -> Poly
     }
     let v0 = (h0 - fade_start) / params.top_fade;
     let v1 = h1 / params.top_fade;
-    envelope[0] = 1.0 - 3.0 * v0 * v0 + 2.0 * v0 * v0 * v0;
-    envelope[1] = -6.0 * v0 * v1 + 6.0 * v0 * v0 * v1;
-    envelope[2] = -3.0 * v1 * v1 + 6.0 * v0 * v1 * v1;
-    envelope[3] = 2.0 * v1 * v1 * v1;
+    envelope[0] =
+        1.0 - 10.0 * v0 * v0 * v0 + 15.0 * v0 * v0 * v0 * v0 - 6.0 * v0 * v0 * v0 * v0 * v0;
+    envelope[1] = v1 * (-30.0 * v0 * v0 + 60.0 * v0 * v0 * v0 - 30.0 * v0 * v0 * v0 * v0);
+    envelope[2] = v1 * v1 * (-30.0 * v0 + 90.0 * v0 * v0 - 60.0 * v0 * v0 * v0);
+    envelope[3] = v1 * v1 * v1 * (-10.0 + 60.0 * v0 - 60.0 * v0 * v0);
+    envelope[4] = v1 * v1 * v1 * v1 * (15.0 - 30.0 * v0);
+    envelope[5] = -6.0 * v1 * v1 * v1 * v1 * v1;
     envelope
 }
 

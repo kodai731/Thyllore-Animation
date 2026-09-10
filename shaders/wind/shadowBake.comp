@@ -28,9 +28,9 @@ void main() {
     vec3 position = windShadowTexelPosition(texel);
     vec3 lightPositionLocal = (wind.inverseModel * vec4(frame.light_pos.xyz, 1.0)).xyz;
     vec3 lightDir = normalize(lightPositionLocal - position);
-    float sunDepth = windOpticalDepthToward(position, lightDir);
-    float zenithDepth = windOpticalDepthToward(position, WIND_ZENITH_DIRECTION);
+    float sunTransmittance = windSunTransmittance(position, lightDir);
+    float skyTransmittance = windSkyTransmittance(position);
 
     ivec3 slotTexel = texel + ivec3(windShadowSlot() * WIND_SHADOW_RADIAL, 0, 0);
-    imageStore(shadowVolumeImage, slotTexel, vec4(sunDepth, zenithDepth, 0.0, 0.0));
+    imageStore(shadowVolumeImage, slotTexel, vec4(sunTransmittance, skyTransmittance, 0.0, 0.0));
 }

@@ -3,34 +3,30 @@
 
 // Single scattering along the view ray: per closed-form piece the in-scatter source is
 // averaged over fixed midpoint nodes weighted by the local density, each node shadowed by
-// the wall + envelope field toward the sun and toward the zenith. With WIND_SHADOW_VOLUME
-// the shadow depths come from the baked volume (shadowBake.comp), otherwise they are
-// integrated inline.
+// the wall + envelope field toward the sun and over the sky hemisphere. With
+// WIND_SHADOW_VOLUME the transmittances come from the baked volume (shadowBake.comp),
+// otherwise they are integrated inline.
 // Must be included after shell_integral.glsl (and shadow_volume.glsl under WIND_SHADOW_VOLUME).
 
 #include "include/radiative_transfer.glsl"
 
 const int WIND_SCATTER_NODES = 4;
 
-// x: optical depth toward the sun, y: toward the zenith.
-vec2 windShadowDepths(vec3 position, vec3 lightDir) {
+// x: transmittance toward the sun, y: cosine-weighted transmittance over the sky.
+vec2 windShadowTransmittances(vec3 position, vec3 lightDir) {
 #ifdef WIND_SHADOW_VOLUME
     return texture(shadowVolumeSampler, windShadowVolumeUvw(position, windShadowSlot())).xy;
 #else
-    return vec2(
-        windOpticalDepthToward(position, lightDir),
-        windOpticalDepthToward(position, WIND_ZENITH_DIRECTION));
+    return vec2(windSunTransmittance(position, lightDir), windSkyTransmittance(position));
 #endif
 }
 
 float windInScatterSource(vec3 position, vec3 lightPosition, vec3 viewDir) {
     vec3 lightDir = normalize(lightPosition - position);
-    vec2 shadowDepths = windShadowDepths(position, lightDir);
-    float sunTransmittance = rteTransmittanceFromOpticalDepth(shadowDepths.x);
-    float skyTransmittance = rteTransmittanceFromOpticalDepth(shadowDepths.y);
-    return windSunIntensity() * sunTransmittance
+    vec2 transmittances = windShadowTransmittances(position, lightDir);
+    return windSunIntensity() * transmittances.x
             * rteHenyeyGreenstein(dot(viewDir, lightDir), windPhaseG())
-        + windSkyBrightness() * skyTransmittance;
+        + windSkyBrightness() * transmittances.y;
 }
 
 // Density weights keep the piece average independent of where knots split the piece.

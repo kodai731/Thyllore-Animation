@@ -38,4 +38,8 @@ int windShadowSlot() {
     return int(wind.puffParams.z);
 }
 
+float windShadowRadialExtent() {
+    return wind.puffParams.w;
+}
+
 #endif

@@ -9,6 +9,9 @@
 // Mirrored in thyllore-effect-core/src/wind/analytic/shell_integral.rs.
 // Must be included after shell_field.glsl.
 
+#include "include/common.glsl"
+#include "include/radiative_transfer.glsl"
+
 const int WIND_MAX_KNOTS = 56;
 const int WIND_POLY_TERMS = 16;
 // Fixed so the node set is a continuous function of the ray (no seams where a count would change).
@@ -16,7 +19,8 @@ const int WIND_EDDY_SPLITS = 8;
 const int WIND_PUFFS_PER_RAY = 20;
 const float WIND_EMPTY_INTERVAL_EPSILON = 1e-6;
 const float WIND_SHADOW_RAY_T_MAX = 1e4;
-const vec3 WIND_ZENITH_DIRECTION = vec3(0.0, 1.0, 0.0);
+const int WIND_SKY_TILTED_DIRECTIONS = 6;
+const float WIND_SKY_TILT_COSINE = 0.70710678;
 
 struct WindRayPuffs {
     int count;
@@ -358,6 +362,27 @@ float windOpticalDepthToward(vec3 origin, vec3 direction) {
     }
     tNear = max(tNear, 0.0);
     return windShadowOpticalDepth(origin, direction, tNear, tFar);
+}
+
+float windSunTransmittance(vec3 position, vec3 lightDir) {
+    return rteTransmittanceFromOpticalDepth(windOpticalDepthToward(position, lightDir));
+}
+
+// Cosine-weighted average over the zenith and six directions tilted 45 degrees, so a uniform
+// sky lights the shell from every side instead of through one vertical shadow ray.
+float windSkyTransmittance(vec3 position) {
+    float weightedSum = rteTransmittanceFromOpticalDepth(
+        windOpticalDepthToward(position, vec3(0.0, 1.0, 0.0)));
+    float weightSum = 1.0;
+    for (int i = 0; i < WIND_SKY_TILTED_DIRECTIONS; ++i) {
+        float azimuth = TWO_PI * float(i) / float(WIND_SKY_TILTED_DIRECTIONS);
+        vec3 direction = vec3(
+            cos(azimuth) * WIND_SKY_TILT_COSINE, WIND_SKY_TILT_COSINE, sin(azimuth) * WIND_SKY_TILT_COSINE);
+        weightedSum += WIND_SKY_TILT_COSINE
+            * rteTransmittanceFromOpticalDepth(windOpticalDepthToward(position, direction));
+        weightSum += WIND_SKY_TILT_COSINE;
+    }
+    return weightedSum / weightSum;
 }
 
 #endif

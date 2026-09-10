@@ -967,6 +967,28 @@ fn shadow_optical_depth_keeps_only_the_wall_and_envelope() {
 }
 
 #[test]
+fn shadow_radial_extent_covers_the_shell_and_every_puff() {
+    let params = puff_params();
+    let extent = wind_shadow_radial_extent(&params);
+
+    let base_radius = params.wall_radius_sq(0.0).sqrt();
+    let shell_half_width = (params.wall_radius_sq(0.0) + params.wall_width_q).sqrt() - base_radius;
+    assert!(
+        extent > shell_half_width,
+        "extent {extent} must cover the shell {shell_half_width}"
+    );
+
+    for puff in &params.puffs[..params.puff_count] {
+        let wall_radius = params.wall_radius_sq(puff[1] / params.height).sqrt();
+        let outer_reach = (puff[0] * puff[0] + puff[2] * puff[2]).sqrt() + puff[3] - wall_radius;
+        assert!(
+            extent >= outer_reach,
+            "extent {extent} must reach puff edge {outer_reach}"
+        );
+    }
+}
+
+#[test]
 fn glsl_shadow_volume_extents_match_the_rust_constants() {
     let source = wind_glsl_source("shadow_volume.glsl");
     assert_eq!(

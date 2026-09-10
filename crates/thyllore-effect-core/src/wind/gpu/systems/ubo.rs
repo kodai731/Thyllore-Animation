@@ -1,4 +1,4 @@
-use crate::wind::analytic::WindShellParams;
+use crate::wind::analytic::{wind_shadow_radial_extent, WindShellParams};
 use crate::wind::{build_wind_model_matrix, WindTornadoEffect, WindUBO};
 use cgmath::{Matrix4, SquareMatrix};
 
@@ -67,7 +67,7 @@ pub fn build_wind_ubo(effect: &WindTornadoEffect, shadow_slot: WindShadowSlot) -
             params.puff_count as f32,
             effect.puff_strength,
             shadow_slot.0 as f32,
-            0.0,
+            wind_shadow_radial_extent(&params),
         ],
         puffs: params.puffs,
         inv_view_proj: Matrix4::identity(),

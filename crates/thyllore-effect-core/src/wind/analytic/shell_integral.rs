@@ -24,7 +24,7 @@ pub(crate) const EDDY_SPLITS: usize = 8;
 const LINEAR_COEFFICIENT_EPSILON: f32 = 1e-7;
 const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
 const SHADOW_RAY_T_MAX: f32 = 1e4;
-pub const WIND_ZENITH_DIRECTION: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
+const SHADOW_RADIAL_EXTENT_MARGIN: f32 = 1.25;
 
 type Poly = [f32; POLY_TERMS];
 
@@ -153,6 +153,29 @@ impl WindShellParams {
     fn fade_start(&self) -> f32 {
         1.0 - self.top_fade
     }
+}
+
+/// Half width of the shadow volume's radius axis around the wall: covers the shell at its
+/// thickest (smallest radius) and every puff, with a margin for linear filtering.
+pub fn wind_shadow_radial_extent(params: &WindShellParams) -> f32 {
+    let thinnest_radius_sq = params
+        .wall_radius_sq(0.0)
+        .min(params.wall_radius_sq(params.h_top))
+        .max(0.0);
+    let shell_half_width =
+        (thinnest_radius_sq + params.wall_width_q).sqrt() - thinnest_radius_sq.sqrt();
+
+    let mut extent = shell_half_width;
+    for puff in &params.puffs[..params.puff_count] {
+        let wall_radius = params
+            .wall_radius_sq(puff[1] / params.height)
+            .max(0.0)
+            .sqrt();
+        let puff_reach =
+            ((puff[0] * puff[0] + puff[2] * puff[2]).sqrt() - wall_radius).abs() + puff[3];
+        extent = extent.max(puff_reach);
+    }
+    (extent * SHADOW_RADIAL_EXTENT_MARGIN).max(1e-3)
 }
 
 pub fn wind_envelope_radius(params: &WindShellParams, h: f32) -> f32 {

@@ -14,7 +14,7 @@
 // and leave the support interval with zero contribution — continuous per ray,
 // no per-ray integer switches.
 //
-// Must be included after FlameUBO, evaluateHeightFalloff, and flame_noise_field.glsl
+// Must be included after FlameUBO, evaluateHeightFalloff, and noise_field.glsl
 // (flameBiweight / flameRadialSupportRadius live there).
 // Mirrored in thyllore-render-core/src/flame_radial.rs; the accuracy tests live there.
 

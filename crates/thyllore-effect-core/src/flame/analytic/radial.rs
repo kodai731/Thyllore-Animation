@@ -1,7 +1,7 @@
 use crate::flame_shell::FLAME_SHELL_BASE_RADIUS;
 use thyllore_math_core::{approximate_erf, biweight_profile, evaluate_chebyshev, ChebyshevSeries};
 
-// Mirror of shaders/include/flame_radial_integral.glsl; the accuracy tests below cover both.
+// Mirror of shaders/flame/include/radial_integral.glsl; the accuracy tests below cover both.
 //
 // The radial density is the compact-support biweight kernel
 //   rho(p) = F(h) * (1 - u^2)^2,  u = |p.xz| / (S * R(h)),  zero for u >= 1.
@@ -133,7 +133,7 @@ pub fn eroded_argument(d_smooth: f32, erosion: f32, flood_fade_scale: f32) -> f3
 }
 
 /// Remap scale: inverse of the remaining range after erosion, floored at 0.15.
-/// Mirrors `flameErosionRemapScale` in flame_noise_field.glsl.
+/// Mirrors `flameErosionRemapScale` in noise_field.glsl.
 pub const EROSION_REMAP_STRENGTH: f32 = 0.0; // 0 = off (default look), 1 = full Nubis-style remap
 pub fn erosion_remap_scale(erosion: f32) -> f32 {
     let remapped = 1.0 / (1.0 - erosion.max(0.0)).max(0.15);

@@ -1,5 +1,5 @@
 use crate::wind::analytic::eddy::eddy_sigma;
-use crate::wind::analytic::motion::{h_top, spread_offset, streak_phase, wall_amp};
+use crate::wind::analytic::motion::{h_top, rotation_phase, spread_offset, streak_phase, wall_amp};
 use crate::wind::analytic::puffs::build_wind_puffs;
 use crate::wind::WindTornadoEffect;
 use cgmath::Vector3;
@@ -50,6 +50,9 @@ pub struct WindShellParams {
     pub eddy_reseed_period: f32,
     pub eddy_erosion: f32,
     pub time: f32,
+    pub circulation: f32,
+    pub spread_start: f32,
+    pub spread_rate: f32,
     pub puff_strength: f32,
     pub puff_count: usize,
     pub puffs: [[f32; 4]; WIND_MAX_PUFFS],
@@ -98,6 +101,9 @@ impl WindShellParams {
             eddy_reseed_period: effect.eddy_reseed_period.max(1e-3),
             eddy_erosion: effect.eddy_erosion.clamp(0.0, 0.95),
             time: t,
+            circulation: effect.circulation,
+            spread_start: effect.spread_start,
+            spread_rate: effect.spread_rate,
             puff_strength: effect.puff_strength,
             puff_count: 0,
             puffs: [[0.0; 4]; WIND_MAX_PUFFS],
@@ -437,9 +443,16 @@ fn envelope_poly(params: &WindShellParams, h0: f32, h1: f32, h_mid: f32) -> Poly
 }
 
 pub fn wind_streak_sigma(params: &WindShellParams, local: Vector3<f32>) -> f32 {
-    let angle = params.streak_order * local.z.atan2(local.x)
+    let radius_sq = params.wall_radius(local.y) * params.wall_radius(local.y);
+    let rotation_phase_value = rotation_phase(
+        params.time,
+        params.circulation,
+        radius_sq,
+        params.spread_start,
+        params.spread_rate,
+    );
+    let angle = params.streak_order * (local.z.atan2(local.x) - rotation_phase_value)
         - params.streak_twist * local.y
-        - params.streak_phase
         + params.streak_rise_time * local.y;
     1.0 + params.streak_amplitude * angle.cos()
 }

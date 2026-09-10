@@ -23,6 +23,8 @@ float windHTop() { return wind.optics.w; }
 float windSpreadOffset() { return wind.albedo.w; }
 float windPhaseG() { return wind.lighting.x; }
 float windSunIntensity() { return wind.lighting.y; }
+float windCirculation() { return wind.lighting.z; }
+float windSpreadRate() { return wind.lighting.w; }
 float windStreakOrder() { return wind.streak.x; }
 float windStreakTwist() { return wind.streak.y; }
 float windStreakRiseSpeed() { return wind.streak.z; }
@@ -49,9 +51,23 @@ float windWallRadius(float h) {
     return windWallRadiusBase() + windWallRadiusSlope() * h;
 }
 
+float windRotationPhase(float h) {
+    float radius_sq = windWallRadius(h) * windWallRadius(h);
+    float gamma_over_2pi = windCirculation() / (2.0 * 3.14159265359);
+    float a = windSpreadRate();
+    if (a > 0.0) {
+        float ts = windSpreadStart();
+        float t_clamped = min(windTime(), ts);
+        float t_plus = max(windTime() - ts, 0.0);
+        return gamma_over_2pi * (t_clamped / radius_sq + (1.0 / (2.0 * a)) * log((radius_sq + 2.0 * a * t_plus) / radius_sq));
+    } else {
+        return gamma_over_2pi * windTime() / radius_sq;
+    }
+}
+
 float windStreakSigma(vec3 local) {
-    float angle = windStreakOrder() * atan(local.z, local.x) - windStreakTwist() * local.y
-        - windStreakPhase() + windStreakRiseTime() * local.y;
+    float angle = windStreakOrder() * (atan(local.z, local.x) - windRotationPhase(local.y))
+        - windStreakTwist() * local.y + windStreakRiseTime() * local.y;
     return 1.0 + windStreakAmplitude() * cos(angle);
 }
 

@@ -29,7 +29,12 @@ pub fn build_wind_ubo(effect: &WindTornadoEffect) -> WindUBO {
             effect.albedo[2],
             params.spread_offset,
         ],
-        lighting: [effect.phase_g, effect.sun_intensity, 0.0, 0.0],
+        lighting: [
+            effect.phase_g,
+            effect.sun_intensity,
+            effect.circulation,
+            effect.spread_rate,
+        ],
         streak: [
             params.streak_order,
             params.streak_twist,

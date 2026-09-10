@@ -39,11 +39,15 @@ stages = ["postprocess/tonemapVertex.vert", "flame/resolveFragment.frag"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.wind_resolve]
-stages = ["tonemapVertex.vert", "windResolveFragment.frag"]
+stages = ["postprocess/tonemapVertex.vert", "wind/resolveFragment.frag"]
+sets = { 0 = "frame", 1 = "local" }
+
+[pass.wind_shadow_bake]
+stages = ["wind/shadowBake.comp"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.wind_upsample]
-stages = ["tonemapVertex.vert", "windUpsampleFragment.frag"]
+stages = ["postprocess/tonemapVertex.vert", "wind/upsampleFragment.frag"]
 sets = { 0 = "local" }
 
 [pass.tonemap]

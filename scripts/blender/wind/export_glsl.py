@@ -11,7 +11,7 @@ def resolve_layout_macros(line: str, defines: dict[str, str]) -> str:
     return re.sub(r'\b[A-Za-z_]\w*\b', lambda m: defines.get(m.group(0), m.group(0)), line)
 
 
-ENTRY_SHADER = "wind/windResolveFragment.frag"
+ENTRY_SHADER = "wind/resolveFragment.frag"
 
 
 def resolve_include(including_path: str, included: str, repo_root: str) -> str:
@@ -147,6 +147,13 @@ def convert_to_blender_dialect(lines: list[str]) -> tuple[list[str], dict]:
                 binding = int(sampler_match.group(1))
                 name = sampler_match.group(2)
                 bindings["samplers"].append({"name": name, "binding": binding})
+                i += 1
+                continue
+
+            vulkan_only_sampler_match = re.match(
+                r'^\s*layout\s*\([^)]*\)\s+uniform\s+sampler3D\s+\w+\s*;', line
+            )
+            if vulkan_only_sampler_match:
                 i += 1
                 continue
 

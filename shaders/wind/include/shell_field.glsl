@@ -4,7 +4,7 @@
 // Density field of the tornado: a compact-support polynomial shell in q = x^2 + z^2
 // (wall around P(h) = (base + slope * h)^2) times a height envelope, streak and eddy modulation.
 // Mirrored in thyllore-effect-core/src/wind/analytic/shell_integral.rs.
-// Must be included after wind_component.glsl.
+// Must be included after component.glsl.
 
 #include "include/noise.glsl"
 

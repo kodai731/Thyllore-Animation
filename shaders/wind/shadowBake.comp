@@ -1,0 +1,36 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : require
+
+layout(set = 0, binding = 0) uniform FrameUBO {
+    mat4 view;
+    mat4 proj;
+    vec4 camera_pos;
+    vec4 light_pos;
+    vec4 light_color;
+} frame;
+
+#include "wind/include/component.glsl"
+#include "wind/include/shell_field.glsl"
+#include "wind/include/shell_integral.glsl"
+#include "wind/include/shadow_volume.glsl"
+
+layout(set = 1, binding = 1, rg16f) uniform writeonly image3D shadowVolumeImage;
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+void main() {
+    ivec3 texel = ivec3(gl_GlobalInvocationID);
+    if (texel.x >= WIND_SHADOW_RADIAL || texel.y >= WIND_SHADOW_HEIGHT || texel.z >= WIND_SHADOW_THETA) {
+        return;
+    }
+
+    vec3 position = windShadowTexelPosition(texel);
+    vec3 lightPositionLocal = (wind.inverseModel * vec4(frame.light_pos.xyz, 1.0)).xyz;
+    vec3 lightDir = normalize(lightPositionLocal - position);
+    float sunDepth = windOpticalDepthToward(position, lightDir);
+    float zenithDepth = windOpticalDepthToward(position, WIND_ZENITH_DIRECTION);
+
+    ivec3 slotTexel = texel + ivec3(windShadowSlot() * WIND_SHADOW_RADIAL, 0, 0);
+    imageStore(shadowVolumeImage, slotTexel, vec4(sunDepth, zenithDepth, 0.0, 0.0));
+}

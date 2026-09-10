@@ -3,34 +3,31 @@
 
 // Single scattering along the view ray: per closed-form piece the in-scatter source is
 // averaged over fixed midpoint nodes weighted by the local density, each node shadowed by
-// the same shell field toward the sun and toward the zenith.
-// Must be included after wind_shell_integral.glsl.
+// the wall + envelope field toward the sun and toward the zenith. With WIND_SHADOW_VOLUME
+// the shadow depths come from the baked volume (shadowBake.comp), otherwise they are
+// integrated inline.
+// Must be included after shell_integral.glsl (and shadow_volume.glsl under WIND_SHADOW_VOLUME).
 
 #include "include/radiative_transfer.glsl"
 
 const int WIND_SCATTER_NODES = 4;
-const float WIND_SHADOW_RAY_T_MAX = 1e4;
-const vec3 WIND_ZENITH_DIRECTION = vec3(0.0, 1.0, 0.0);
 
-float windOpticalDepthToward(vec3 origin, vec3 direction) {
-    float tNear = 0.0;
-    float tFar = WIND_SHADOW_RAY_T_MAX;
-    if (!clampToWindCone(origin, direction, tNear, tFar)) {
-        return 0.0;
-    }
-    tNear = max(tNear, 0.0);
-    if (tFar <= tNear) {
-        return 0.0;
-    }
-    int knotCount = 0;
-    return windOpticalDepth(origin, direction, tNear, tFar, false, knotCount);
+// x: optical depth toward the sun, y: toward the zenith.
+vec2 windShadowDepths(vec3 position, vec3 lightDir) {
+#ifdef WIND_SHADOW_VOLUME
+    return texture(shadowVolumeSampler, windShadowVolumeUvw(position, windShadowSlot())).xy;
+#else
+    return vec2(
+        windOpticalDepthToward(position, lightDir),
+        windOpticalDepthToward(position, WIND_ZENITH_DIRECTION));
+#endif
 }
 
 float windInScatterSource(vec3 position, vec3 lightPosition, vec3 viewDir) {
     vec3 lightDir = normalize(lightPosition - position);
-    float sunTransmittance = rteTransmittanceFromOpticalDepth(windOpticalDepthToward(position, lightDir));
-    float skyTransmittance =
-        rteTransmittanceFromOpticalDepth(windOpticalDepthToward(position, WIND_ZENITH_DIRECTION));
+    vec2 shadowDepths = windShadowDepths(position, lightDir);
+    float sunTransmittance = rteTransmittanceFromOpticalDepth(shadowDepths.x);
+    float skyTransmittance = rteTransmittanceFromOpticalDepth(shadowDepths.y);
     return windSunIntensity() * sunTransmittance
             * rteHenyeyGreenstein(dot(viewDir, lightDir), windPhaseG())
         + windSkyBrightness() * skyTransmittance;
@@ -66,12 +63,14 @@ vec3 windSingleScatterRadiance(
     }
 
     float knots[WIND_MAX_KNOTS];
-    knotCount = windRayKnots(o, d, tNear, tFar, true, knots);
+    WindRayPuffs puffs;
+    knotCount = windRayKnots(o, d, tNear, tFar, knots, puffs);
     vec3 viewDir = normalize(d);
 
     float radiance = 0.0;
     for (int i = 1; i < knotCount; ++i) {
-        float pieceDepth = windPieceOpticalDepth(o, d, knots[i - 1], knots[i], true);
+        float pieceDepth = windPieceOpticalDepth(o, d, knots[i - 1], knots[i])
+            + windPuffPieceOpticalDepth(puffs, o, d, knots[i - 1], knots[i]);
         float frontTransmittance = rteTransmittanceFromOpticalDepth(opticalDepth);
         float source = windPieceInScatter(o, d, knots[i - 1], knots[i], lightPosition, viewDir);
         radiance += frontTransmittance * source * (1.0 - rteTransmittanceFromOpticalDepth(pieceDepth));

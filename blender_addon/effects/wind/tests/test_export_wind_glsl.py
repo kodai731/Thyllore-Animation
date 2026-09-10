@@ -164,7 +164,7 @@ class TestByteIdentical:
                     i += 1
                     continue
                 if re.match(r'^\s*layout\s*\(\s*set\s*=\s*\w+\s*,\s*binding\s*=', line):
-                    if "uniform sampler2D" in line:
+                    if "uniform sampler2D" in line or "uniform sampler3D" in line:
                         i += 1
                         continue
                     ubo_match = re.match(

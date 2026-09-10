@@ -34,4 +34,8 @@ float windPuffStrength() {
     return wind.puffParams.y;
 }
 
+int windShadowSlot() {
+    return int(wind.puffParams.z);
+}
+
 #endif

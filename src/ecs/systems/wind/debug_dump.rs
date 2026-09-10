@@ -8,7 +8,7 @@ use crate::ecs::systems::effect_debug_dump::{
     build_camera_json, build_light_json, build_projection_json, build_scene_json, matrix_json,
 };
 use crate::ecs::world::{Entity, Name, World};
-use thyllore_effect_core::{build_wind_ubo, wind_parameter_snapshot, WindUBO};
+use thyllore_effect_core::{build_wind_ubo, wind_parameter_snapshot, WindShadowSlot, WindUBO};
 
 pub const WIND_DEBUG_DUMP_DIRECTORY: &str = "log/wind";
 
@@ -74,7 +74,7 @@ fn build_wind_instance_json(world: &World, entity: Entity, index: usize) -> Valu
     let preset = world
         .get_component::<AppliedWindPreset>(entity)
         .map(|p| p.name.clone());
-    let ubo = build_wind_ubo(&effect);
+    let ubo = build_wind_ubo(&effect, WindShadowSlot(index as u32));
 
     json!({
         "instance_index": index,

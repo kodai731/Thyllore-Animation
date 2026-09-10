@@ -43,6 +43,6 @@ pub use rayquery::record_ray_query_pass;
 pub use tonemap::{begin_tonemap_render_pass, end_tonemap_render_pass, record_tonemap_draw};
 pub use water::{record_water_scene_color_copy, record_water_shading_pass};
 pub use wind::{
-    record_wind_half_resolve_pass, record_wind_shading_pass, record_wind_upsample_pass,
-    WindInstanceDraw,
+    record_wind_half_resolve_pass, record_wind_shading_pass, record_wind_shadow_bake_pass,
+    record_wind_upsample_pass, WindInstanceDraw,
 };

@@ -10,7 +10,7 @@ use crate::hooks::pass::{
 use crate::vulkanr::renderer::deferred::{compute_bounds_scissor, full_extent_scissor};
 use thyllore_effect_core::{
     build_wind_ubo, inverse_view_proj_f64, wind_local_bounds_corners, WindDebugView,
-    WindResolveScale, WindShellParams, WindUBO,
+    WindResolveScale, WindShadowSlot, WindShellParams, WindUBO,
 };
 use thyllore_vulkan_core::renderer::WindInstanceDraw;
 
@@ -61,12 +61,12 @@ fn wind_frame(app: &App) -> Option<WindFrame> {
     let settings = wind_render_settings(app);
     let mut ubos = Vec::with_capacity(winds.len());
     let mut scissors = Vec::with_capacity(winds.len());
-    for wind in winds {
+    for (slot, wind) in winds.into_iter().enumerate() {
         let effect = app
             .data
             .ecs_world
             .get_component::<WindTornadoEffect>(wind)?;
-        let mut ubo = build_wind_ubo(&effect);
+        let mut ubo = build_wind_ubo(&effect, WindShadowSlot(slot as u32));
         if let Some(inv_view_proj) = inv_view_proj {
             ubo.inv_view_proj = inv_view_proj;
         }
@@ -154,7 +154,7 @@ unsafe fn record_wind_passes(
             command_buffer,
             slot,
             ubo,
-            vk::PipelineStageFlags::FRAGMENT_SHADER,
+            vk::PipelineStageFlags::COMPUTE_SHADER | vk::PipelineStageFlags::FRAGMENT_SHADER,
         )?;
         draws.push(WindInstanceDraw {
             ubo_dynamic_offset: wind_ubo.slot_offset(slot)? as u32,
@@ -163,6 +163,21 @@ unsafe fn record_wind_passes(
     }
     if draws.is_empty() {
         return Ok(());
+    }
+
+    if let (Some(bake_pipeline), Some(bake_descriptor)) = (
+        app.data.raytracing.wind_shadow_bake_pipeline.as_ref(),
+        app.data.raytracing.wind_shadow_bake_descriptor.as_ref(),
+    ) {
+        thyllore_vulkan_core::renderer::record_wind_shadow_bake_pass(
+            &ctx,
+            wind_buffer,
+            bake_pipeline,
+            bake_descriptor,
+            &draws,
+            image_index,
+            command_buffer,
+        )?;
     }
 
     match settings.resolve_scale {

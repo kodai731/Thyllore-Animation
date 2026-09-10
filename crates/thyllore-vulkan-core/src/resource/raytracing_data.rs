@@ -14,11 +14,11 @@ use crate::descriptor::{
     RRAutoExposureHistogramDescriptorSet, RRBillboardDescriptorSet, RRBloomDescriptorSets,
     RRCompositeDescriptorSet, RRDofDescriptorSet, RRFlameDescriptorSet, RRRayQueryDescriptorSet,
     RRToneMapDescriptorSet, RRWaterCausticDescriptorSet, RRWaterDescriptorSet,
-    RRWaterTraceDescriptorSet, RRWindDescriptorSet, RRWindUpsampleDescriptorSet,
-    AUTO_EXPOSURE_AVERAGE, AUTO_EXPOSURE_HISTOGRAM, BLOOM_DOWNSAMPLE, BLOOM_UPSAMPLE, COMPOSITE,
-    DOF, FLAME_RESOLVE, GBUFFER, ONION_SKIN_COMPOSITE, ONION_SKIN_GHOST, RAY_QUERY_SHADOW, TONEMAP,
-    WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE, WATER_TRACE, WIND_RESOLVE,
-    WIND_UPSAMPLE,
+    RRWaterTraceDescriptorSet, RRWindDescriptorSet, RRWindShadowBakeDescriptorSet,
+    RRWindUpsampleDescriptorSet, AUTO_EXPOSURE_AVERAGE, AUTO_EXPOSURE_HISTOGRAM, BLOOM_DOWNSAMPLE,
+    BLOOM_UPSAMPLE, COMPOSITE, DOF, FLAME_RESOLVE, GBUFFER, ONION_SKIN_COMPOSITE, ONION_SKIN_GHOST,
+    RAY_QUERY_SHADOW, TONEMAP, WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE,
+    WATER_TRACE, WIND_RESOLVE, WIND_SHADOW_BAKE, WIND_UPSAMPLE,
 };
 use crate::pipeline::{
     BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline,
@@ -96,6 +96,8 @@ pub struct RayTracingData {
 
     pub wind_upsample_pipeline: Option<RRPipeline>,
     pub wind_upsample_descriptor: Option<RRWindUpsampleDescriptorSet>,
+    pub wind_shadow_bake_pipeline: Option<RRPipeline>,
+    pub wind_shadow_bake_descriptor: Option<RRWindShadowBakeDescriptorSet>,
 
     pub flame_sdf_image: vk::Image,
     pub flame_sdf_image_memory: vk::DeviceMemory,
@@ -597,7 +599,18 @@ impl RayTracingData {
         wind_ubo.write_slot(rrdevice, 0, &WindUBO::default())?;
 
         let wind_descriptor = RRWindDescriptorSet::new(rrdevice)?;
-        wind_descriptor.write_all(rrdevice, &wind_ubo, scene_depth_view)?;
+        wind_descriptor.write_all(rrdevice, &wind_ubo, wind_buffer, scene_depth_view)?;
+
+        let wind_shadow_bake_descriptor = RRWindShadowBakeDescriptorSet::new(rrdevice)?;
+        wind_shadow_bake_descriptor.write_all(rrdevice, &wind_ubo, wind_buffer)?;
+        let wind_shadow_bake_pipeline = RRPipeline::new_compute(
+            rrdevice,
+            &WIND_SHADOW_BAKE,
+            &[
+                &graphics_resources.frame_set.layout,
+                &wind_shadow_bake_descriptor.layout,
+            ],
+        )?;
 
         let wind_shading_pipeline = PipelineBuilder::from_pass(&WIND_RESOLVE)
             .vertex_input(VertexInputConfig::Custom {
@@ -663,6 +676,8 @@ impl RayTracingData {
         self.wind_ubo = Some(wind_ubo);
         self.wind_upsample_pipeline = Some(wind_upsample_pipeline);
         self.wind_upsample_descriptor = Some(wind_upsample_descriptor);
+        self.wind_shadow_bake_pipeline = Some(wind_shadow_bake_pipeline);
+        self.wind_shadow_bake_descriptor = Some(wind_shadow_bake_descriptor);
 
         log!("Created wind pipeline");
         Ok(())

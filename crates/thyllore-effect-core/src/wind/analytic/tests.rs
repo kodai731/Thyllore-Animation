@@ -2,6 +2,10 @@ use super::*;
 use crate::wind::analytic::motion::rotation_phase;
 use crate::wind::analytic::shell_integral::{EDDY_SPLITS, POLY_TERMS};
 use crate::wind::WindTornadoEffect;
+use crate::wind::{
+    WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,
+    WIND_SHADOW_VOLUME_THETA,
+};
 use cgmath::{InnerSpace, Vector3};
 use std::f32::consts::PI;
 
@@ -341,7 +345,7 @@ fn knots_are_sorted_and_bracketed() {
     let mut t_near = 0.0;
     let mut t_far = 1e4;
     clamp_ray_to_wind_cone(&params, origin, direction, &mut t_near, &mut t_far);
-    let (knots, count) = wind_ray_knots(&params, origin, direction, t_near, t_far);
+    let (knots, count, _puffs) = wind_ray_knots(&params, origin, direction, t_near, t_far);
     assert!(count >= 2);
     assert_eq!(knots[0], t_near);
     assert_eq!(knots[count - 1], t_far);
@@ -728,7 +732,7 @@ fn puff_knot_count_does_not_exceed_wind_max_knots() {
     let mut t_far = 1e4;
     clamp_ray_to_wind_cone(&params, origin, direction, &mut t_near, &mut t_far);
 
-    let (_knots, count) = wind_ray_knots(&params, origin, direction, t_near, t_far);
+    let (_knots, count, _puffs) = wind_ray_knots(&params, origin, direction, t_near, t_far);
     assert!(
         count <= WIND_MAX_KNOTS,
         "knot count {count} exceeds WIND_MAX_KNOTS={}",
@@ -893,16 +897,99 @@ fn glsl_int_constant(source: &str, name: &str) -> i64 {
         .lines()
         .find_map(|line| line.trim().strip_prefix(&prefix))
         .and_then(|rest| rest.trim_end_matches(';').parse().ok())
-        .unwrap_or_else(|| panic!("{name} not declared in wind_shell_integral.glsl"))
+        .unwrap_or_else(|| panic!("{name} not declared in the wind GLSL"))
+}
+
+fn wind_glsl_source(relative_path: &str) -> String {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../shaders/wind/include")
+        .join(relative_path);
+    std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("{} readable", path.display()))
+}
+
+fn shell_only_params() -> WindShellParams {
+    let effect = WindTornadoEffect {
+        time: 1.0,
+        streak_amplitude: 0.4,
+        eddy_amplitude: 1.0,
+        puff_strength: 1.0,
+        puff_count_theta: 4,
+        puff_count_height: 2,
+        puff_radius: 0.3,
+        puff_offset_q: 0.0,
+        ..WindTornadoEffect::default()
+    };
+    WindShellParams::from_effect(&effect)
+}
+
+fn wall_envelope_density(params: &WindShellParams, local: Vector3<f32>) -> f32 {
+    let h = local.y / params.height;
+    let q = local.x * local.x + local.z * local.z;
+    let u = (q - params.wall_radius_sq(h)) / params.wall_width_q;
+    let inside = (1.0 - u * u).max(0.0);
+    params.sigma_t * wind_envelope_height(params, h) * params.wall_strength * inside * inside
+}
+
+#[test]
+fn shadow_optical_depth_keeps_only_the_wall_and_envelope() {
+    let params = shell_only_params();
+    let origin = Vector3::new(-5.0, 0.5, 0.25);
+    let direction = Vector3::new(1.0, 0.1, 0.0).normalize();
+    let mut t_near = 0.0;
+    let mut t_far = 1e4;
+    assert!(clamp_ray_to_wind_cone(
+        &params,
+        origin,
+        direction,
+        &mut t_near,
+        &mut t_far
+    ));
+
+    let step = (t_far - t_near) as f64 / 4096.0;
+    let mut reference = 0.0f64;
+    for i in 0..4096 {
+        let t = t_near as f64 + (i as f64 + 0.5) * step;
+        reference += wall_envelope_density(&params, origin + direction * t as f32) as f64 * step;
+    }
+
+    let closed = wind_shadow_optical_depth(&params, origin, direction, t_near, t_far) as f64;
+    assert!(reference > 1e-3, "reference {reference} too small");
+    let relative = (closed - reference).abs() / reference;
+    assert!(
+        relative <= 1e-3,
+        "shadow closed {closed} vs wall+envelope reference {reference} (rel {relative})"
+    );
+    let modulated = wind_optical_depth(&params, origin, direction, t_near, t_far) as f64;
+    assert!(
+        (modulated - closed).abs() > 1e-3,
+        "the modulated depth {modulated} should differ from the shadow depth {closed}"
+    );
+}
+
+#[test]
+fn glsl_shadow_volume_extents_match_the_rust_constants() {
+    let source = wind_glsl_source("shadow_volume.glsl");
+    assert_eq!(
+        glsl_int_constant(&source, "WIND_SHADOW_RADIAL"),
+        WIND_SHADOW_VOLUME_RADIAL as i64
+    );
+    assert_eq!(
+        glsl_int_constant(&source, "WIND_SHADOW_HEIGHT"),
+        WIND_SHADOW_VOLUME_HEIGHT as i64
+    );
+    assert_eq!(
+        glsl_int_constant(&source, "WIND_SHADOW_THETA"),
+        WIND_SHADOW_VOLUME_THETA as i64
+    );
+    assert_eq!(
+        glsl_int_constant(&source, "WIND_SHADOW_SLOTS"),
+        WIND_SHADOW_VOLUME_SLOTS as i64
+    );
 }
 
 #[test]
 fn glsl_polynomial_terms_match_the_rust_mirror_and_cover_the_piece_degree() {
-    let source = std::fs::read_to_string(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../shaders/wind/include/wind_shell_integral.glsl"),
-    )
-    .expect("wind_shell_integral.glsl readable");
+    let source = wind_glsl_source("shell_integral.glsl");
 
     assert_eq!(
         glsl_int_constant(&source, "WIND_POLY_TERMS"),
@@ -915,6 +1002,10 @@ fn glsl_polynomial_terms_match_the_rust_mirror_and_cover_the_piece_degree() {
     assert_eq!(
         glsl_int_constant(&source, "WIND_MAX_KNOTS"),
         WIND_MAX_KNOTS as i64
+    );
+    assert_eq!(
+        glsl_int_constant(&source, "WIND_PUFFS_PER_RAY"),
+        WIND_PUFFS_PER_RAY as i64
     );
 
     let biweight_of_quadratic_degree = 8;

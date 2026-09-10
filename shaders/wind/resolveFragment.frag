@@ -2,7 +2,7 @@
 
 #extension GL_GOOGLE_include_directive : require
 
-#include "include/flame_ray.glsl"
+#include "flame/include/ray.glsl"
 
 layout(set = 0, binding = 0) uniform FrameUBO {
     mat4 view;
@@ -12,13 +12,18 @@ layout(set = 0, binding = 0) uniform FrameUBO {
     vec4 light_color;
 } frame;
 
-#include "wind/include/wind_component.glsl"
-#include "wind/include/wind_shell_field.glsl"
-#include "wind/include/wind_shell_integral.glsl"
-#include "wind/include/wind_reference_quadrature.glsl"
-#include "wind/include/wind_lighting.glsl"
+#include "wind/include/component.glsl"
+#include "wind/include/shell_field.glsl"
+#include "wind/include/shell_integral.glsl"
+#include "wind/include/reference_quadrature.glsl"
+#include "wind/include/shadow_volume.glsl"
 
 layout(set = 1, binding = 1) uniform sampler2D sceneDepthSampler;
+#ifdef WIND_SHADOW_VOLUME
+layout(set = 1, binding = 2) uniform sampler3D shadowVolumeSampler;
+#endif
+
+#include "wind/include/lighting.glsl"
 
 layout(location = 0) in vec2 fragTexCoord;
 layout(location = 0) out vec4 outColor;

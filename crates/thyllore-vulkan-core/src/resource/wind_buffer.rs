@@ -3,10 +3,19 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
 use crate::resource::hdr_buffer::HDR_FORMAT;
-use crate::resource::image::{create_image, create_image_view};
+use crate::resource::image::{
+    create_image, create_image_3d, create_image_view, create_image_view_3d,
+};
+use thyllore_effect_core::{
+    WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,
+    WIND_SHADOW_VOLUME_THETA,
+};
+
+pub const WIND_SHADOW_VOLUME_FORMAT: vk::Format = vk::Format::R16G16_SFLOAT;
 
 /// Render pass and framebuffer that blend the wind resolve pass onto the HDR color image,
-/// plus the half resolution intermediate target used by the upsampled resolve path.
+/// the half resolution intermediate target used by the upsampled resolve path, and the
+/// shadow volume baked once per frame for every instance slot.
 #[derive(Clone, Debug, Default)]
 pub struct WindBuffer {
     pub render_pass: vk::RenderPass,
@@ -16,8 +25,41 @@ pub struct WindBuffer {
     pub half_color_image: vk::Image,
     pub half_color_image_memory: vk::DeviceMemory,
     pub half_color_image_view: vk::ImageView,
+    pub shadow_volume_image: vk::Image,
+    pub shadow_volume_memory: vk::DeviceMemory,
+    pub shadow_volume_view: vk::ImageView,
+    pub shadow_volume_sampler: vk::Sampler,
     pub width: u32,
     pub height: u32,
+}
+
+pub fn wind_shadow_volume_extent() -> vk::Extent3D {
+    vk::Extent3D {
+        width: WIND_SHADOW_VOLUME_RADIAL * WIND_SHADOW_VOLUME_SLOTS,
+        height: WIND_SHADOW_VOLUME_HEIGHT,
+        depth: WIND_SHADOW_VOLUME_THETA,
+    }
+}
+
+/// Radius and height clamp, the angle wraps around the seam at theta = -pi.
+unsafe fn create_shadow_volume_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
+    let info = vk::SamplerCreateInfo::builder()
+        .mag_filter(vk::Filter::LINEAR)
+        .min_filter(vk::Filter::LINEAR)
+        .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_w(vk::SamplerAddressMode::REPEAT)
+        .anisotropy_enable(false)
+        .max_anisotropy(1.0)
+        .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+        .unnormalized_coordinates(false)
+        .compare_enable(false)
+        .compare_op(vk::CompareOp::ALWAYS)
+        .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
+        .mip_lod_bias(0.0)
+        .min_lod(0.0)
+        .max_lod(0.0);
+    Ok(rrdevice.device.create_sampler(&info, None)?)
 }
 
 impl WindBuffer {
@@ -73,6 +115,17 @@ impl WindBuffer {
             .device
             .create_framebuffer(&half_framebuffer_info, None)?;
 
+        let (shadow_volume_image, shadow_volume_memory) = create_image_3d(
+            instance,
+            rrdevice,
+            wind_shadow_volume_extent(),
+            WIND_SHADOW_VOLUME_FORMAT,
+            vk::ImageUsageFlags::STORAGE | vk::ImageUsageFlags::SAMPLED,
+        )?;
+        let shadow_volume_view =
+            create_image_view_3d(rrdevice, shadow_volume_image, WIND_SHADOW_VOLUME_FORMAT)?;
+        let shadow_volume_sampler = create_shadow_volume_sampler(rrdevice)?;
+
         log!("Created wind buffer: {}x{}", width, height);
         Ok(Self {
             render_pass,
@@ -82,6 +135,10 @@ impl WindBuffer {
             half_color_image,
             half_color_image_memory,
             half_color_image_view,
+            shadow_volume_image,
+            shadow_volume_memory,
+            shadow_volume_view,
+            shadow_volume_sampler,
             width,
             height,
         })
@@ -198,6 +255,22 @@ impl WindBuffer {
     }
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
+        if self.shadow_volume_sampler != vk::Sampler::null() {
+            device.destroy_sampler(self.shadow_volume_sampler, None);
+            self.shadow_volume_sampler = vk::Sampler::null();
+        }
+        if self.shadow_volume_view != vk::ImageView::null() {
+            device.destroy_image_view(self.shadow_volume_view, None);
+            self.shadow_volume_view = vk::ImageView::null();
+        }
+        if self.shadow_volume_image != vk::Image::null() {
+            device.destroy_image(self.shadow_volume_image, None);
+            self.shadow_volume_image = vk::Image::null();
+        }
+        if self.shadow_volume_memory != vk::DeviceMemory::null() {
+            device.free_memory(self.shadow_volume_memory, None);
+            self.shadow_volume_memory = vk::DeviceMemory::null();
+        }
         if self.half_framebuffer != vk::Framebuffer::null() {
             device.destroy_framebuffer(self.half_framebuffer, None);
             self.half_framebuffer = vk::Framebuffer::null();

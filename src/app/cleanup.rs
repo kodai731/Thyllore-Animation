@@ -126,6 +126,16 @@ impl App {
         if let Some(wind_upsample_pipeline) = self.data.raytracing.wind_upsample_pipeline.take() {
             wind_upsample_pipeline.destroy(&self.rrdevice.device);
         }
+        if let Some(mut wind_shadow_bake_descriptor) =
+            self.data.raytracing.wind_shadow_bake_descriptor.take()
+        {
+            wind_shadow_bake_descriptor.destroy(&self.rrdevice.device);
+        }
+        if let Some(wind_shadow_bake_pipeline) =
+            self.data.raytracing.wind_shadow_bake_pipeline.take()
+        {
+            wind_shadow_bake_pipeline.destroy(&self.rrdevice.device);
+        }
 
         if let Some(mut water_descriptor) = self.data.raytracing.water_descriptor.take() {
             water_descriptor.destroy(&self.rrdevice.device);

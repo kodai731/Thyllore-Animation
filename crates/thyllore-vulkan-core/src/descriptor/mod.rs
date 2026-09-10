@@ -39,4 +39,4 @@ pub use tonemap::*;
 pub use water::RRWaterDescriptorSet;
 pub use water_caustic::*;
 pub use water_trace::*;
-pub use wind::{RRWindDescriptorSet, RRWindUpsampleDescriptorSet};
+pub use wind::{RRWindDescriptorSet, RRWindShadowBakeDescriptorSet, RRWindUpsampleDescriptorSet};

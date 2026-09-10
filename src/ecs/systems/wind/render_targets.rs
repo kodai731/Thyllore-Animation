@@ -91,8 +91,18 @@ unsafe fn resize_wind_render_targets(app: &mut App) -> Result<()> {
             .resize(&app.instance, &app.rrdevice, width, height, hdr_view)?;
     }
 
-    if let Some(descriptor) = app.data.raytracing.wind_descriptor.as_ref() {
+    if let (Some(descriptor), Some(targets)) = (
+        app.data.raytracing.wind_descriptor.as_ref(),
+        app.data.ecs_world.get_resource::<WindRenderTargets>(),
+    ) {
         descriptor.update_scene_depth(&app.rrdevice, scene_depth_view)?;
+        descriptor.update_shadow_volume(&app.rrdevice, &targets.buffer)?;
+    }
+    if let (Some(descriptor), Some(targets)) = (
+        app.data.raytracing.wind_shadow_bake_descriptor.as_ref(),
+        app.data.ecs_world.get_resource::<WindRenderTargets>(),
+    ) {
+        descriptor.update_shadow_volume(&app.rrdevice, &targets.buffer)?;
     }
 
     let half_color_view = app

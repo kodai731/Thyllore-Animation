@@ -12,8 +12,8 @@ use crate::water::{
 };
 use crate::wind::{
     apply_wind_preset, build_wind_model_matrix, build_wind_ubo, overwrite_wind_persisted_fields,
-    wind_local_bounds_corners, WindShellParams, WindTornadoEffect, WindUBO, WIND_PRESET_NAMES,
-    WIND_UI_PARAMS,
+    wind_local_bounds_corners, WindShadowSlot, WindShellParams, WindTornadoEffect, WindUBO,
+    WIND_PRESET_NAMES, WIND_UI_PARAMS,
 };
 use cgmath::{Matrix4, Quaternion, Vector3, Vector4};
 use pyo3::prelude::*;
@@ -481,7 +481,9 @@ fn pack_wind_ubo(
     rotation: [f32; 4],
 ) -> PyResult<Vec<u8>> {
     let effect = build_wind_effect_from_params(py, params, time, position, rotation)?;
-    Ok(build_wind_ubo(&effect).as_bytes().to_vec())
+    Ok(build_wind_ubo(&effect, WindShadowSlot(0))
+        .as_bytes()
+        .to_vec())
 }
 
 /// World-space corners of the envelope box the engine picks and scissors the wind pass against.

@@ -2,9 +2,9 @@ use crate::wind::analytic::eddy::eddy_sigma;
 use crate::wind::analytic::motion::{h_top, rotation_phase, spread_offset, streak_phase, wall_amp};
 use crate::wind::analytic::puffs::build_wind_puffs;
 use crate::wind::WindTornadoEffect;
-use cgmath::Vector3;
+use cgmath::{InnerSpace, Vector3};
 
-// Mirror of shaders/wind/include/wind_shell_field.glsl and wind_shell_integral.glsl.
+// Mirror of shaders/wind/include/shell_field.glsl and shell_integral.glsl.
 //
 // The density is a compact-support polynomial shell in q = x^2 + z^2 plus puffs:
 //   wall: B((q - P(h)) / W),  P(h) = (base + slope * h)^2
@@ -12,6 +12,8 @@ use cgmath::Vector3;
 // Along a ray q and h are quadratic and linear in the ray parameter, so every
 // term is a polynomial and the optical depth of a piece between two knots is
 // an exact power-rule integral in the piece-local variable sigma in [0, 1].
+// Puffs add their own entry/exit knots and are integrated only on the pieces
+// between them; shadow rays keep the wall and envelope alone.
 
 pub const WIND_MAX_KNOTS: usize = 56;
 pub const WIND_MAX_PUFFS: usize = 96;
@@ -21,8 +23,30 @@ pub(crate) const POLY_TERMS: usize = 16;
 pub(crate) const EDDY_SPLITS: usize = 8;
 const LINEAR_COEFFICIENT_EPSILON: f32 = 1e-7;
 const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
+const SHADOW_RAY_T_MAX: f32 = 1e4;
+pub const WIND_ZENITH_DIRECTION: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
 
 type Poly = [f32; POLY_TERMS];
+
+/// Puffs a ray enters, with their entry and exit ray parameters.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WindRayPuffs {
+    pub count: usize,
+    pub index: [usize; WIND_PUFFS_PER_RAY],
+    pub enter: [f32; WIND_PUFFS_PER_RAY],
+    pub exit: [f32; WIND_PUFFS_PER_RAY],
+}
+
+impl Default for WindRayPuffs {
+    fn default() -> Self {
+        Self {
+            count: 0,
+            index: [0; WIND_PUFFS_PER_RAY],
+            enter: [0.0; WIND_PUFFS_PER_RAY],
+            exit: [0.0; WIND_PUFFS_PER_RAY],
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WindShellParams {
@@ -312,9 +336,7 @@ fn sort_knots(knots: &mut [f32; WIND_MAX_KNOTS], count: usize) {
     }
 }
 
-/// Ray parameters where a shell support boundary or an envelope break is crossed,
-/// sorted ascending and bracketed by `t_near` / `t_far`.
-pub fn wind_ray_knots(
+fn collect_shell_knots(
     params: &WindShellParams,
     origin: Vector3<f32>,
     direction: Vector3<f32>,
@@ -322,10 +344,9 @@ pub fn wind_ray_knots(
     t_far: f32,
 ) -> ([f32; WIND_MAX_KNOTS], usize) {
     let mut knots = [0.0f32; WIND_MAX_KNOTS];
-    let mut count = 0usize;
+    let mut count = 2usize;
     knots[0] = t_near;
     knots[1] = t_far;
-    count += 2;
 
     let q_a = direction.x * direction.x + direction.z * direction.z;
     let q_b = 2.0 * (origin.x * direction.x + origin.z * direction.z);
@@ -359,26 +380,47 @@ pub fn wind_ray_knots(
             t_far,
         );
     }
+    (knots, count)
+}
 
-    let mut adopted = 0;
+/// Ray parameters where a shell support boundary or the envelope break is crossed,
+/// sorted ascending and bracketed by `t_near` / `t_far`.
+pub fn wind_shell_knots(
+    params: &WindShellParams,
+    origin: Vector3<f32>,
+    direction: Vector3<f32>,
+    t_near: f32,
+    t_far: f32,
+) -> ([f32; WIND_MAX_KNOTS], usize) {
+    let (mut knots, count) = collect_shell_knots(params, origin, direction, t_near, t_far);
+    sort_knots(&mut knots, count);
+    (knots, count)
+}
+
+/// Shell knots plus the entry and exit of every puff the ray crosses, with the crossed puffs.
+pub fn wind_ray_knots(
+    params: &WindShellParams,
+    origin: Vector3<f32>,
+    direction: Vector3<f32>,
+    t_near: f32,
+    t_far: f32,
+) -> ([f32; WIND_MAX_KNOTS], usize, WindRayPuffs) {
+    let (mut knots, mut count) = collect_shell_knots(params, origin, direction, t_near, t_far);
+
+    let mut puffs = WindRayPuffs::default();
+    let a = direction.dot(direction);
     for i in 0..params.puff_count {
-        if adopted >= WIND_PUFFS_PER_RAY {
+        if puffs.count >= WIND_PUFFS_PER_RAY {
             break;
         }
         let puff = &params.puffs[i];
-        let cx = puff[0];
-        let cy = puff[1];
-        let cz = puff[2];
         let r = puff[3];
         if r <= 0.0 {
             continue;
         }
-        let dx = origin.x - cx;
-        let dy = origin.y - cy;
-        let dz = origin.z - cz;
-        let a = direction.x * direction.x + direction.y * direction.y + direction.z * direction.z;
-        let b = 2.0 * (dx * direction.x + dy * direction.y + dz * direction.z);
-        let c = dx * dx + dy * dy + dz * dz - r * r;
+        let dx = origin - Vector3::new(puff[0], puff[1], puff[2]);
+        let b = 2.0 * dx.dot(direction);
+        let c = dx.dot(dx) - r * r;
         let discriminant = b * b - 4.0 * a * c;
         if discriminant <= 0.0 {
             continue;
@@ -386,13 +428,19 @@ pub fn wind_ray_knots(
         let sqrt_discriminant = discriminant.sqrt();
         let t0 = (-b - sqrt_discriminant) / (2.0 * a);
         let t1 = (-b + sqrt_discriminant) / (2.0 * a);
+        if t1 <= t_near || t0 >= t_far {
+            continue;
+        }
         push_knot(&mut knots, &mut count, t0, t_near, t_far);
         push_knot(&mut knots, &mut count, t1, t_near, t_far);
-        adopted += 1;
+        puffs.index[puffs.count] = i;
+        puffs.enter[puffs.count] = t0;
+        puffs.exit[puffs.count] = t1;
+        puffs.count += 1;
     }
 
     sort_knots(&mut knots, count);
-    (knots, count)
+    (knots, count, puffs)
 }
 
 fn poly_mul(a: &Poly, b: &Poly) -> Poly {
@@ -444,6 +492,13 @@ fn envelope_poly(params: &WindShellParams, h0: f32, h1: f32, h_mid: f32) -> Poly
     envelope
 }
 
+fn poly_moments(poly: &Poly) -> f32 {
+    poly.iter()
+        .enumerate()
+        .map(|(n, coefficient)| coefficient / (n as f32 + 1.0))
+        .sum()
+}
+
 pub fn wind_streak_sigma(params: &WindShellParams, local: Vector3<f32>) -> f32 {
     let radius_sq = params.wall_radius(local.y) * params.wall_radius(local.y);
     let rotation_phase_value = rotation_phase(
@@ -464,17 +519,17 @@ fn sample_point(start: Vector3<f32>, direction: Vector3<f32>, distance: f32) -> 
     [point.x, point.y, point.z]
 }
 
-/// Exact optical depth of the ray piece [s0, s1], which must not cross a knot.
-pub fn wind_piece_optical_depth(
+/// Envelope times wall on the piece as a polynomial in sigma; `None` when the piece holds no shell.
+fn shell_piece_poly(
     params: &WindShellParams,
     origin: Vector3<f32>,
     direction: Vector3<f32>,
     s0: f32,
     s1: f32,
-) -> f32 {
+) -> Option<Poly> {
     let length = s1 - s0;
     if length <= EMPTY_INTERVAL_EPSILON {
-        return 0.0;
+        return None;
     }
     let start = origin + direction * s0;
     let inv_height = 1.0 / params.height;
@@ -482,7 +537,7 @@ pub fn wind_piece_optical_depth(
     let h1 = length * direction.y * inv_height;
     let h_mid = h0 + 0.5 * h1;
     if !(0.0..=params.h_top).contains(&h_mid) {
-        return 0.0;
+        return None;
     }
 
     let q0 = start.x * start.x + start.z * start.z;
@@ -498,57 +553,48 @@ pub fn wind_piece_optical_depth(
         (q2 - radius_1 * radius_1) * inv_width,
     );
     let u_mid = u[0] + 0.5 * u[1] + 0.25 * u[2];
-
-    let mut shell = [0.0f32; POLY_TERMS];
-    if u_mid.abs() < 1.0 {
-        let wall = biweight_poly(&u);
-        for (target, value) in shell.iter_mut().zip(wall) {
-            *target += params.wall_strength * value;
-        }
-    }
-    let mut puff_poly = [0.0f32; POLY_TERMS];
-    let mut adopted = 0;
-    for i in 0..params.puff_count {
-        if adopted >= WIND_PUFFS_PER_RAY {
-            break;
-        }
-        let puff = &params.puffs[i];
-        let cx = puff[0];
-        let cy = puff[1];
-        let cz = puff[2];
-        let r = puff[3];
-        if r <= 0.0 {
-            continue;
-        }
-        let dx = start.x - cx;
-        let dy = start.y - cy;
-        let dz = start.z - cz;
-        let r_sq = r * r;
-        let u0 = (dx * dx + dy * dy + dz * dz) / r_sq;
-        let u1 = 2.0 * length * (dx * direction.x + dy * direction.y + dz * direction.z) / r_sq;
-        let u2 = length
-            * length
-            * (direction.x * direction.x + direction.y * direction.y + direction.z * direction.z)
-            / r_sq;
-        let disc_u = u1 * u1 - 4.0 * u2 * (u0 - 1.0);
-        if disc_u <= 0.0 {
-            continue;
-        }
-        let u_mid = u0 + 0.5 * u1 + 0.25 * u2;
-        if u_mid < 1.0 {
-            let u = poly_from_quadratic(u0, u1, u2);
-            let bw = biweight_poly(&u);
-            let weight = params.puff_strength * params.wall_strength;
-            for (target, value) in puff_poly.iter_mut().zip(bw) {
-                *target += weight * value;
-            }
-        }
-        adopted += 1;
+    if u_mid.abs() >= 1.0 {
+        return None;
     }
 
+    let wall = biweight_poly(&u);
     let inv_h_top = 1.0 / params.h_top;
     let envelope = envelope_poly(params, h0 * inv_h_top, h1 * inv_h_top, h_mid * inv_h_top);
-    let mut density = poly_mul(&envelope, &shell);
+    let mut density = poly_mul(&envelope, &wall);
+    for coefficient in density.iter_mut() {
+        *coefficient *= params.wall_strength;
+    }
+    Some(density)
+}
+
+/// Optical depth of the wall and envelope alone on the piece [s0, s1] (shadow rays).
+pub fn wind_shadow_piece_optical_depth(
+    params: &WindShellParams,
+    origin: Vector3<f32>,
+    direction: Vector3<f32>,
+    s0: f32,
+    s1: f32,
+) -> f32 {
+    let Some(density) = shell_piece_poly(params, origin, direction, s0, s1) else {
+        return 0.0;
+    };
+    ((s1 - s0) * params.sigma_t * poly_moments(&density)).max(0.0)
+}
+
+/// Exact optical depth of the streaked and eddy-modulated shell on the ray piece [s0, s1],
+/// which must not cross a knot. Puffs are added by `wind_puff_piece_optical_depth`.
+pub fn wind_piece_optical_depth(
+    params: &WindShellParams,
+    origin: Vector3<f32>,
+    direction: Vector3<f32>,
+    s0: f32,
+    s1: f32,
+) -> f32 {
+    let Some(mut density) = shell_piece_poly(params, origin, direction, s0, s1) else {
+        return 0.0;
+    };
+    let length = s1 - s0;
+    let start = origin + direction * s0;
 
     if params.streak_amplitude > 0.0 {
         let sigma_0 = wind_streak_sigma(params, start);
@@ -581,22 +627,63 @@ pub fn wind_piece_optical_depth(
             }
             sigma_a = sigma_b;
         }
-        let mut puff_total = 0.0f32;
-        for n in 0..POLY_TERMS {
-            puff_total += puff_poly[n] / (n as f32 + 1.0);
-        }
-        return (length * params.sigma_t * (total + puff_total)).max(0.0);
+        return (length * params.sigma_t * total).max(0.0);
     }
 
-    let mut moment_sum = 0.0f32;
-    for (n, coefficient) in density.iter().enumerate() {
-        moment_sum += coefficient / (n as f32 + 1.0);
+    (length * params.sigma_t * poly_moments(&density)).max(0.0)
+}
+
+// Integral of (1 - u^2)^2 over sigma in [0, 1] for u = u0 + u1 sigma + u2 sigma^2.
+fn biweight_quadratic_integral(u0: f32, u1: f32, u2: f32) -> f32 {
+    let u_squared = [
+        u0 * u0,
+        2.0 * u0 * u1,
+        u1 * u1 + 2.0 * u0 * u2,
+        2.0 * u1 * u2,
+        u2 * u2,
+    ];
+    let mut second_moment = 0.0f32;
+    let mut fourth_moment = 0.0f32;
+    for (i, &ci) in u_squared.iter().enumerate() {
+        second_moment += ci / (i as f32 + 1.0);
+        for (j, &cj) in u_squared.iter().enumerate() {
+            fourth_moment += ci * cj / ((i + j) as f32 + 1.0);
+        }
     }
-    let mut puff_total = 0.0f32;
-    for n in 0..POLY_TERMS {
-        puff_total += puff_poly[n] / (n as f32 + 1.0);
+    1.0 - 2.0 * second_moment + fourth_moment
+}
+
+/// Optical depth of the puffs whose entry/exit knots enclose the piece [s0, s1].
+pub fn wind_puff_piece_optical_depth(
+    params: &WindShellParams,
+    puffs: &WindRayPuffs,
+    origin: Vector3<f32>,
+    direction: Vector3<f32>,
+    s0: f32,
+    s1: f32,
+) -> f32 {
+    let length = s1 - s0;
+    if length <= EMPTY_INTERVAL_EPSILON || puffs.count == 0 {
+        return 0.0;
     }
-    (length * params.sigma_t * (moment_sum + puff_total)).max(0.0)
+    let s_mid = 0.5 * (s0 + s1);
+    let start = origin + direction * s0;
+    let dd = direction.dot(direction);
+
+    let mut total = 0.0f32;
+    for k in 0..puffs.count {
+        if s_mid <= puffs.enter[k] || s_mid >= puffs.exit[k] {
+            continue;
+        }
+        let puff = &params.puffs[puffs.index[k]];
+        let dx = start - Vector3::new(puff[0], puff[1], puff[2]);
+        let inv_r_sq = 1.0 / (puff[3] * puff[3]);
+        let u0 = dx.dot(dx) * inv_r_sq;
+        let u1 = 2.0 * length * dx.dot(direction) * inv_r_sq;
+        let u2 = length * length * dd * inv_r_sq;
+        total += biweight_quadratic_integral(u0, u1, u2);
+    }
+    (length * params.sigma_t * params.puff_strength * params.wall_strength * total).max(0.0)
 }
 
 pub fn wind_optical_depth(
@@ -609,10 +696,51 @@ pub fn wind_optical_depth(
     if t_far <= t_near {
         return 0.0;
     }
-    let (knots, count) = wind_ray_knots(params, origin, direction, t_near, t_far);
+    let (knots, count, puffs) = wind_ray_knots(params, origin, direction, t_near, t_far);
     let mut total = 0.0f32;
     for i in 1..count {
-        total += wind_piece_optical_depth(params, origin, direction, knots[i - 1], knots[i]);
+        total += wind_piece_optical_depth(params, origin, direction, knots[i - 1], knots[i])
+            + wind_puff_piece_optical_depth(
+                params,
+                &puffs,
+                origin,
+                direction,
+                knots[i - 1],
+                knots[i],
+            );
     }
     total
+}
+
+/// Wall + envelope optical depth along the ray (shadow rays drop streak, eddy and puffs).
+pub fn wind_shadow_optical_depth(
+    params: &WindShellParams,
+    origin: Vector3<f32>,
+    direction: Vector3<f32>,
+    t_near: f32,
+    t_far: f32,
+) -> f32 {
+    if t_far <= t_near {
+        return 0.0;
+    }
+    let (knots, count) = wind_shell_knots(params, origin, direction, t_near, t_far);
+    let mut total = 0.0f32;
+    for i in 1..count {
+        total += wind_shadow_piece_optical_depth(params, origin, direction, knots[i - 1], knots[i]);
+    }
+    total
+}
+
+/// Shadow optical depth from `origin` toward `direction` up to the cone boundary.
+pub fn wind_optical_depth_toward(
+    params: &WindShellParams,
+    origin: Vector3<f32>,
+    direction: Vector3<f32>,
+) -> f32 {
+    let mut t_near = 0.0f32;
+    let mut t_far = SHADOW_RAY_T_MAX;
+    if !clamp_ray_to_wind_cone(params, origin, direction, &mut t_near, &mut t_far) {
+        return 0.0;
+    }
+    wind_shadow_optical_depth(params, origin, direction, t_near.max(0.0), t_far)
 }

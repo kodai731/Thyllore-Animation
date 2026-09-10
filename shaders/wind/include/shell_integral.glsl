@@ -4,9 +4,10 @@
 // Closed-form optical depth of the shell field along a ray: the ray is cut at the
 // shell support boundaries and the envelope break (knots), and inside each piece
 // the density is one polynomial in the piece-local variable sigma in [0, 1] whose
-// integral is a sum of power-rule moments.
+// integral is a sum of power-rule moments. Puffs add their own entry/exit knots and
+// contribute a quartic that is integrated only on the pieces inside the puff.
 // Mirrored in thyllore-effect-core/src/wind/analytic/shell_integral.rs.
-// Must be included after wind_shell_field.glsl.
+// Must be included after shell_field.glsl.
 
 const int WIND_MAX_KNOTS = 56;
 const int WIND_POLY_TERMS = 16;
@@ -14,6 +15,15 @@ const int WIND_POLY_TERMS = 16;
 const int WIND_EDDY_SPLITS = 8;
 const int WIND_PUFFS_PER_RAY = 20;
 const float WIND_EMPTY_INTERVAL_EPSILON = 1e-6;
+const float WIND_SHADOW_RAY_T_MAX = 1e4;
+const vec3 WIND_ZENITH_DIRECTION = vec3(0.0, 1.0, 0.0);
+
+struct WindRayPuffs {
+    int count;
+    int index[WIND_PUFFS_PER_RAY];
+    float enter[WIND_PUFFS_PER_RAY];
+    float exit[WIND_PUFFS_PER_RAY];
+};
 
 void windPushKnot(inout float knots[WIND_MAX_KNOTS], inout int count, float t, float lo, float hi) {
     if (t <= lo || t >= hi || count >= WIND_MAX_KNOTS) {
@@ -53,7 +63,7 @@ void windSortKnots(inout float knots[WIND_MAX_KNOTS], int count) {
     }
 }
 
-int windRayKnots(vec3 o, vec3 d, float tNear, float tFar, bool includePuffs, out float knots[WIND_MAX_KNOTS]) {
+int windCollectShellKnots(vec3 o, vec3 d, float tNear, float tFar, out float knots[WIND_MAX_KNOTS]) {
     int count = 2;
     knots[0] = tNear;
     knots[1] = tFar;
@@ -75,27 +85,42 @@ int windRayKnots(vec3 o, vec3 d, float tNear, float tFar, bool includePuffs, out
         float fadeY = windFadeStart() * windHTop() * windHeight();
         windPushKnot(knots, count, (fadeY - o.y) / d.y, tNear, tFar);
     }
+    return count;
+}
 
-    if (includePuffs) {
-        int adopted = 0;
-        for (int i = 0; i < windPuffCount(); ++i) {
-            if (adopted >= WIND_PUFFS_PER_RAY) break;
-            vec3 c = wind.puffs[i].xyz;
-            float r = wind.puffs[i].w;
-            if (r <= 0.0) continue;
-            vec3 dx = o - c;
-            float a = dot(d, d);
-            float b = 2.0 * dot(dx, d);
-            float cVal = dot(dx, dx) - r * r;
-            float discriminant = b * b - 4.0 * a * cVal;
-            if (discriminant <= 0.0) continue;
-            float sqrtDiscriminant = sqrt(discriminant);
-            float t0 = (-b - sqrtDiscriminant) / (2.0 * a);
-            float t1 = (-b + sqrtDiscriminant) / (2.0 * a);
-            windPushKnot(knots, count, t0, tNear, tFar);
-            windPushKnot(knots, count, t1, tNear, tFar);
-            adopted += 1;
-        }
+int windShellKnots(vec3 o, vec3 d, float tNear, float tFar, out float knots[WIND_MAX_KNOTS]) {
+    int count = windCollectShellKnots(o, d, tNear, tFar, knots);
+    windSortKnots(knots, count);
+    return count;
+}
+
+int windRayKnots(
+    vec3 o, vec3 d, float tNear, float tFar,
+    out float knots[WIND_MAX_KNOTS], out WindRayPuffs puffs) {
+    int count = windCollectShellKnots(o, d, tNear, tFar, knots);
+
+    puffs.count = 0;
+    float a = dot(d, d);
+    for (int i = 0; i < windPuffCount(); ++i) {
+        if (puffs.count >= WIND_PUFFS_PER_RAY) break;
+        vec3 c = wind.puffs[i].xyz;
+        float r = wind.puffs[i].w;
+        if (r <= 0.0) continue;
+        vec3 dx = o - c;
+        float b = 2.0 * dot(dx, d);
+        float cVal = dot(dx, dx) - r * r;
+        float discriminant = b * b - 4.0 * a * cVal;
+        if (discriminant <= 0.0) continue;
+        float sqrtDiscriminant = sqrt(discriminant);
+        float t0 = (-b - sqrtDiscriminant) / (2.0 * a);
+        float t1 = (-b + sqrtDiscriminant) / (2.0 * a);
+        if (t1 <= tNear || t0 >= tFar) continue;
+        windPushKnot(knots, count, t0, tNear, tFar);
+        windPushKnot(knots, count, t1, tNear, tFar);
+        puffs.index[puffs.count] = i;
+        puffs.enter[puffs.count] = t0;
+        puffs.exit[puffs.count] = t1;
+        puffs.count += 1;
     }
 
     windSortKnots(knots, count);
@@ -152,18 +177,30 @@ void windEnvelopePoly(float h0, float h1, float hMid, out float envelope[WIND_PO
     envelope[3] = 2.0 * v1 * v1 * v1;
 }
 
-float windPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1, bool includePuffs) {
+float windPolyMoments(float poly[WIND_POLY_TERMS]) {
+    float sum = 0.0;
+    for (int n = 0; n < WIND_POLY_TERMS; ++n) {
+        sum += poly[n] / float(n + 1);
+    }
+    return sum;
+}
+
+// Envelope times wall on the piece as a polynomial in sigma. False when the piece holds no shell.
+bool windShellPiecePoly(vec3 o, vec3 d, float s0, float s1, out float density[WIND_POLY_TERMS]) {
+    for (int k = 0; k < WIND_POLY_TERMS; ++k) {
+        density[k] = 0.0;
+    }
     float pieceLength = s1 - s0;
     if (pieceLength <= WIND_EMPTY_INTERVAL_EPSILON) {
-        return 0.0;
+        return false;
     }
     vec3 start = o + d * s0;
     float invHeight = 1.0 / windHeight();
     float h0 = start.y * invHeight;
     float h1 = pieceLength * d.y * invHeight;
     float hMid = h0 + 0.5 * h1;
-    if (hMid < 0.0) {
-        return 0.0;
+    if (hMid < 0.0 || hMid > windHTop()) {
+        return false;
     }
 
     float q0 = dot(start.xz, start.xz);
@@ -180,56 +217,38 @@ float windPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1, bool includePuff
         (q2 - radius1 * radius1) * invWidth,
         u);
     float uMid = u[0] + 0.5 * u[1] + 0.25 * u[2];
-
-    float shell[WIND_POLY_TERMS];
-    for (int k = 0; k < WIND_POLY_TERMS; ++k) {
-        shell[k] = 0.0;
-    }
-    if (abs(uMid) < 1.0) {
-        float wall[WIND_POLY_TERMS];
-        windBiweightPoly(u, wall);
-        for (int k = 0; k < WIND_POLY_TERMS; ++k) {
-            shell[k] += windWallStrength() * wall[k];
-        }
-    }
-    float puffPoly[WIND_POLY_TERMS];
-    for (int k = 0; k < WIND_POLY_TERMS; ++k) {
-        puffPoly[k] = 0.0;
-    }
-    if (includePuffs) {
-        int adopted = 0;
-        for (int i = 0; i < windPuffCount(); ++i) {
-            if (adopted >= WIND_PUFFS_PER_RAY) break;
-            vec3 c = wind.puffs[i].xyz;
-            float r = wind.puffs[i].w;
-            if (r <= 0.0) continue;
-            vec3 dx = start - c;
-            float rSq = r * r;
-            float u0 = dot(dx, dx) / rSq;
-            float u1 = 2.0 * pieceLength * dot(dx, d) / rSq;
-            float u2 = pieceLength * pieceLength * dot(d, d) / rSq;
-            float discU = u1 * u1 - 4.0 * u2 * (u0 - 1.0);
-            if (discU <= 0.0) continue;
-            float uMid = u0 + 0.5 * u1 + 0.25 * u2;
-            if (uMid < 1.0) {
-                float u[WIND_POLY_TERMS];
-                windPolyFromQuadratic(u0, u1, u2, u);
-                float bw[WIND_POLY_TERMS];
-                windBiweightPoly(u, bw);
-                float weight = windPuffStrength() * windWallStrength();
-                for (int k = 0; k < WIND_POLY_TERMS; ++k) {
-                    puffPoly[k] += weight * bw[k];
-                }
-            }
-            adopted += 1;
-        }
+    if (abs(uMid) >= 1.0) {
+        return false;
     }
 
+    float wall[WIND_POLY_TERMS];
+    windBiweightPoly(u, wall);
     float envelope[WIND_POLY_TERMS];
     float invHTop = 1.0 / windHTop();
     windEnvelopePoly(h0 * invHTop, h1 * invHTop, hMid * invHTop, envelope);
+    windPolyMul(envelope, wall, density);
+    for (int k = 0; k < WIND_POLY_TERMS; ++k) {
+        density[k] *= windWallStrength();
+    }
+    return true;
+}
+
+// Wall and envelope only: the streak and eddy modulation is dropped for shadow rays.
+float windShadowPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1) {
     float density[WIND_POLY_TERMS];
-    windPolyMul(envelope, shell, density);
+    if (!windShellPiecePoly(o, d, s0, s1, density)) {
+        return 0.0;
+    }
+    return max((s1 - s0) * windSigmaT() * windPolyMoments(density), 0.0);
+}
+
+float windPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1) {
+    float density[WIND_POLY_TERMS];
+    if (!windShellPiecePoly(o, d, s0, s1, density)) {
+        return 0.0;
+    }
+    float pieceLength = s1 - s0;
+    vec3 start = o + d * s0;
 
     if (windStreakAmplitude() > 0.0) {
         float sigma0 = windStreakSigma(start);
@@ -269,36 +288,76 @@ float windPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1, bool includePuff
             }
             sigmaA = sigmaB;
         }
-        float puffTotal = 0.0;
-        for (int n = 0; n < WIND_POLY_TERMS; ++n) {
-            puffTotal += puffPoly[n] / float(n + 1);
-        }
-        return max(pieceLength * windSigmaT() * (total + puffTotal), 0.0);
+        return max(pieceLength * windSigmaT() * total, 0.0);
     }
 
-    float momentSum = 0.0;
-    for (int n = 0; n < WIND_POLY_TERMS; ++n) {
-        momentSum += density[n] / float(n + 1);
-    }
-    float puffTotal = 0.0;
-    for (int n = 0; n < WIND_POLY_TERMS; ++n) {
-        puffTotal += puffPoly[n] / float(n + 1);
-    }
-    return max(pieceLength * windSigmaT() * (momentSum + puffTotal), 0.0);
+    return max(pieceLength * windSigmaT() * windPolyMoments(density), 0.0);
 }
 
-float windOpticalDepth(vec3 o, vec3 d, float tNear, float tFar, bool includePuffs, out int knotCount) {
-    knotCount = 0;
+// Integral of (1 - u^2)^2 over sigma in [0, 1] for u = u0 + u1 sigma + u2 sigma^2.
+float windBiweightQuadraticIntegral(float u0, float u1, float u2) {
+    float uSquared[5] = float[5](
+        u0 * u0,
+        2.0 * u0 * u1,
+        u1 * u1 + 2.0 * u0 * u2,
+        2.0 * u1 * u2,
+        u2 * u2);
+    float secondMoment = 0.0;
+    float fourthMoment = 0.0;
+    for (int i = 0; i < 5; ++i) {
+        secondMoment += uSquared[i] / float(i + 1);
+        for (int j = 0; j < 5; ++j) {
+            fourthMoment += uSquared[i] * uSquared[j] / float(i + j + 1);
+        }
+    }
+    return 1.0 - 2.0 * secondMoment + fourthMoment;
+}
+
+// Puffs are integrated only on the pieces between their own entry and exit knots.
+float windPuffPieceOpticalDepth(WindRayPuffs puffs, vec3 o, vec3 d, float s0, float s1) {
+    float pieceLength = s1 - s0;
+    if (pieceLength <= WIND_EMPTY_INTERVAL_EPSILON || puffs.count == 0) {
+        return 0.0;
+    }
+    float sMid = 0.5 * (s0 + s1);
+    vec3 start = o + d * s0;
+    float dd = dot(d, d);
+
+    float total = 0.0;
+    for (int k = 0; k < puffs.count; ++k) {
+        if (sMid <= puffs.enter[k] || sMid >= puffs.exit[k]) continue;
+        vec4 puff = wind.puffs[puffs.index[k]];
+        vec3 dx = start - puff.xyz;
+        float invRSq = 1.0 / (puff.w * puff.w);
+        float u0 = dot(dx, dx) * invRSq;
+        float u1 = 2.0 * pieceLength * dot(dx, d) * invRSq;
+        float u2 = pieceLength * pieceLength * dd * invRSq;
+        total += windBiweightQuadraticIntegral(u0, u1, u2);
+    }
+    return max(pieceLength * windSigmaT() * windPuffStrength() * windWallStrength() * total, 0.0);
+}
+
+float windShadowOpticalDepth(vec3 o, vec3 d, float tNear, float tFar) {
     if (tFar <= tNear) {
         return 0.0;
     }
     float knots[WIND_MAX_KNOTS];
-    knotCount = windRayKnots(o, d, tNear, tFar, includePuffs, knots);
+    int knotCount = windShellKnots(o, d, tNear, tFar, knots);
     float total = 0.0;
     for (int i = 1; i < knotCount; ++i) {
-        total += windPieceOpticalDepth(o, d, knots[i - 1], knots[i], includePuffs);
+        total += windShadowPieceOpticalDepth(o, d, knots[i - 1], knots[i]);
     }
     return total;
+}
+
+float windOpticalDepthToward(vec3 origin, vec3 direction) {
+    float tNear = 0.0;
+    float tFar = WIND_SHADOW_RAY_T_MAX;
+    if (!clampToWindCone(origin, direction, tNear, tFar)) {
+        return 0.0;
+    }
+    tNear = max(tNear, 0.0);
+    return windShadowOpticalDepth(origin, direction, tNear, tFar);
 }
 
 #endif

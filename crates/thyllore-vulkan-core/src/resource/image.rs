@@ -398,6 +398,61 @@ pub unsafe fn create_image(
     Ok((image, image_memory))
 }
 
+pub unsafe fn create_image_3d(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+    extent: vk::Extent3D,
+    format: vk::Format,
+    usage: vk::ImageUsageFlags,
+) -> Result<(vk::Image, vk::DeviceMemory)> {
+    let info = vk::ImageCreateInfo::builder()
+        .image_type(vk::ImageType::_3D)
+        .extent(extent)
+        .mip_levels(1)
+        .array_layers(1)
+        .format(format)
+        .tiling(vk::ImageTiling::OPTIMAL)
+        .initial_layout(vk::ImageLayout::UNDEFINED)
+        .usage(usage)
+        .sharing_mode(vk::SharingMode::EXCLUSIVE)
+        .samples(vk::SampleCountFlags::_1);
+
+    let image = rrdevice.device.create_image(&info, None)?;
+    let requirements = rrdevice.device.get_image_memory_requirements(image);
+    let allocate_info = vk::MemoryAllocateInfo::builder()
+        .allocation_size(requirements.size)
+        .memory_type_index(get_memory_type_index(
+            instance,
+            rrdevice.physical_device,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            requirements,
+        )?);
+    let image_memory = rrdevice.device.allocate_memory(&allocate_info, None)?;
+    rrdevice.device.bind_image_memory(image, image_memory, 0)?;
+
+    Ok((image, image_memory))
+}
+
+pub unsafe fn create_image_view_3d(
+    rrdevice: &RRDevice,
+    image: vk::Image,
+    format: vk::Format,
+) -> Result<vk::ImageView> {
+    let subresource_range = vk::ImageSubresourceRange::builder()
+        .aspect_mask(vk::ImageAspectFlags::COLOR)
+        .base_mip_level(0)
+        .level_count(1)
+        .base_array_layer(0)
+        .layer_count(1);
+    let info = vk::ImageViewCreateInfo::builder()
+        .image(image)
+        .view_type(vk::ImageViewType::_3D)
+        .format(format)
+        .subresource_range(subresource_range);
+
+    Ok(rrdevice.device.create_image_view(&info, None)?)
+}
+
 pub unsafe fn transition_image_layout(
     rrdevice: &RRDevice,
     queue: vk::Queue,

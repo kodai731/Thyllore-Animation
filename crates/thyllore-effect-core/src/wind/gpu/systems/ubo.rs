@@ -2,7 +2,11 @@ use crate::wind::analytic::WindShellParams;
 use crate::wind::{build_wind_model_matrix, WindTornadoEffect, WindUBO};
 use cgmath::{Matrix4, SquareMatrix};
 
-pub fn build_wind_ubo(effect: &WindTornadoEffect) -> WindUBO {
+/// Instance slot of the baked shadow volume, packed along its radius axis.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WindShadowSlot(pub u32);
+
+pub fn build_wind_ubo(effect: &WindTornadoEffect, shadow_slot: WindShadowSlot) -> WindUBO {
     let model = build_wind_model_matrix(effect);
     let inverse_model = model.invert().unwrap_or(Matrix4::identity());
     let params = WindShellParams::from_effect(effect);
@@ -59,7 +63,12 @@ pub fn build_wind_ubo(effect: &WindTornadoEffect) -> WindUBO {
             params.eddy_reseed_period,
             params.eddy_erosion,
         ],
-        puff_params: [params.puff_count as f32, effect.puff_strength, 0.0, 0.0],
+        puff_params: [
+            params.puff_count as f32,
+            effect.puff_strength,
+            shadow_slot.0 as f32,
+            0.0,
+        ],
         puffs: params.puffs,
         inv_view_proj: Matrix4::identity(),
     }
@@ -67,6 +76,6 @@ pub fn build_wind_ubo(effect: &WindTornadoEffect) -> WindUBO {
 
 impl Default for WindUBO {
     fn default() -> Self {
-        build_wind_ubo(&WindTornadoEffect::default())
+        build_wind_ubo(&WindTornadoEffect::default(), WindShadowSlot(0))
     }
 }

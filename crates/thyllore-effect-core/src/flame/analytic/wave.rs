@@ -14,8 +14,8 @@
 //! plus a per-mode eddy-turnover rate ~ |k|^(2/3) scaled by noise_scroll_speed.
 //! This module holds only what the product needs: the deterministic mode
 //! tables and the UBO-side parameters. The CPU evaluation mirrors of the GLSL
-//! (flameWaveNoiseSum / flameWaveOccupancySegments in flame_noise_field.glsl /
-//! flame_radial_integral.glsl) live in thyllore-render-debug (test-only crate).
+//! (flameWaveNoiseSum / flameWaveOccupancySegments in noise_field.glsl /
+//! radial_integral.glsl) live in thyllore-render-debug (test-only crate).
 
 use std::sync::OnceLock;
 
@@ -130,7 +130,7 @@ pub const WAVE_JITTER_DEPTH: f32 = 1.85;
 /// dPsi_m/dt for rate = dw/dt (zero rate is fine for point evaluation).
 /// The field wavevectors are WAVE_JITTER_K scaled by the runtime kappa scale
 /// (read_env_wave_jitter_freq / waveJitter[0].w on the GPU).
-/// Mirror of flameWaveJitterState in flame_noise_field.glsl.
+/// Mirror of flameWaveJitterState in noise_field.glsl.
 pub fn wave_jitter_state(
     w: [f32; 3],
     rate: [f32; 3],

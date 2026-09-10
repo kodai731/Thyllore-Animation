@@ -7,6 +7,7 @@ use thyllore_spirv_reflect::{reflect_shader_bytes, ReflectError, ReflectedBlock}
 use crate::gpu_block_codegen::{
     generate_gpu_blocks_rust, GpuBlockCodegenConfig, GpuBlockCodegenError,
 };
+use crate::spirv_files::collect_spirv_files;
 
 pub struct GpuBlockTarget {
     pub block_name: &'static str,
@@ -96,13 +97,7 @@ fn find_uniform_block(
         path: path.display().to_string(),
         source,
     };
-    let mut paths: Vec<_> = std::fs::read_dir(spirv_dir)
-        .map_err(|source| io_error(spirv_dir, source))?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "spv"))
-        .collect();
-    paths.sort();
+    let paths = collect_spirv_files(spirv_dir).map_err(|source| io_error(spirv_dir, source))?;
 
     let mut found: Option<(ReflectedBlock, &Path)> = None;
     for path in &paths {

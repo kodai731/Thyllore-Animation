@@ -141,12 +141,12 @@ mod tests {
     #[test]
     fn generates_one_module_per_pass_with_merged_constants() {
         let manifest = PassManifest::parse(
-            "[pass.flame_resolve]\nstages = [\"tonemapVertex.vert\", \"flameResolveFragment.frag\"]\nsets = { 0 = \"local\" }\n",
+            "[pass.flame_resolve]\nstages = [\"tonemapVertex.vert\", \"resolveFragment.frag\"]\nsets = { 0 = \"local\" }\n",
         )
         .unwrap();
         let code = generate_shader_bindings_rust(&manifest, |file| match file {
             "tonemapVertex.vert" => Some(reflection(vec![])),
-            "flameResolveFragment.frag" => Some(reflection(vec![
+            "resolveFragment.frag" => Some(reflection(vec![
                 binding(0, 0, "flame", DescriptorKind::UniformBuffer),
                 binding(0, 4, "historySampler", DescriptorKind::CombinedImageSampler),
             ])),

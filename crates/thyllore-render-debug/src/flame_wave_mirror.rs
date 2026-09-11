@@ -1,5 +1,5 @@
 //! Debug-only CPU mirrors of the wave-basis flame field (GLSL
-//! flame_noise_field.glsl / flame_radial_integral.glsl). Nothing here is used
+//! noise_field.glsl / radial_integral.glsl). Nothing here is used
 //! by the product renderer — the GPU evaluates the field; these mirrors exist
 //! so the shader math can be tested and diagnosed on the CPU.
 

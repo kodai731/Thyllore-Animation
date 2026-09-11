@@ -151,8 +151,8 @@ fn first_water_accum(
 impl WaterFrame {
     fn is_trace_enabled(&self, app: &App) -> bool {
         self.settings.secondary_rays == thyllore_effect_core::WaterSecondaryRays::RayTracingPipeline
-            && app.data.raytracing.water_trace_pipeline.is_some()
-            && app.data.raytracing.water_trace_descriptor.is_some()
+            && app.data.raytracing.effect_trace_pipeline.is_some()
+            && app.data.raytracing.effect_trace_descriptor.is_some()
             && app
                 .data
                 .ecs_world
@@ -240,8 +240,8 @@ impl RenderPassNode for WaterTraceNode {
             return Ok(());
         };
         let (Some(trace_pipeline), Some(trace_descriptor), Some(effect)) = (
-            app.data.raytracing.water_trace_pipeline.as_ref(),
-            app.data.raytracing.water_trace_descriptor.as_ref(),
+            app.data.raytracing.effect_trace_pipeline.as_ref(),
+            app.data.raytracing.effect_trace_descriptor.as_ref(),
             app.data
                 .ecs_world
                 .get_component::<crate::ecs::component::WaterTorusEffect>(frame.waters[0]),
@@ -419,7 +419,7 @@ impl RenderPassNode for WaterFrameNode {
                 hit_table,
             )?;
         }
-        if let Some(trace_descriptor) = app.data.raytracing.water_trace_descriptor.as_ref() {
+        if let Some(trace_descriptor) = app.data.raytracing.effect_trace_descriptor.as_ref() {
             trace_descriptor.write_all_at(
                 &app.rrdevice,
                 frame_slot,

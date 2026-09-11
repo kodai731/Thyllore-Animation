@@ -9,9 +9,9 @@
 #include "water/include/surface.glsl"
 #include "water/include/lb.glsl"
 #include "include/torus_intersect.glsl"
-#include "water/include/trace_payload.glsl"
+#include "include/trace_payload.glsl"
 
-layout(location = 0) rayPayloadInEXT WaterTracePayload payload;
+layout(location = 0) rayPayloadInEXT TracePayload payload;
 
 void main() {
     float rHat = water.radii.y / water.radii.x;

@@ -12,12 +12,12 @@ use crate::descriptor::ReflectedSetLayout;
 use crate::descriptor::{
     CompositeGBufferViews, FlameImageBindings, RRAutoExposureAverageDescriptorSet,
     RRAutoExposureHistogramDescriptorSet, RRBillboardDescriptorSet, RRBloomDescriptorSets,
-    RRCompositeDescriptorSet, RRDofDescriptorSet, RRFlameDescriptorSet, RRRayQueryDescriptorSet,
-    RRToneMapDescriptorSet, RRWaterCausticDescriptorSet, RRWaterDescriptorSet,
-    RRWaterTraceDescriptorSet, AUTO_EXPOSURE_AVERAGE, AUTO_EXPOSURE_HISTOGRAM, BLOOM_DOWNSAMPLE,
-    BLOOM_UPSAMPLE, COMPOSITE, DOF, FLAME_RESOLVE, GBUFFER, ONION_SKIN_COMPOSITE, ONION_SKIN_GHOST,
-    RAY_QUERY_SHADOW, TONEMAP, WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE,
-    WATER_TRACE,
+    RRCompositeDescriptorSet, RRDofDescriptorSet, RREffectTraceDescriptorSet, RRFlameDescriptorSet,
+    RRRayQueryDescriptorSet, RRToneMapDescriptorSet, RRWaterCausticDescriptorSet,
+    RRWaterDescriptorSet, AUTO_EXPOSURE_AVERAGE, AUTO_EXPOSURE_HISTOGRAM, BLOOM_DOWNSAMPLE,
+    BLOOM_UPSAMPLE, COMPOSITE, DOF, EFFECT_TRACE, FLAME_RESOLVE, GBUFFER, ONION_SKIN_COMPOSITE,
+    ONION_SKIN_GHOST, RAY_QUERY_SHADOW, TONEMAP, WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT,
+    WATER_RESOLVE,
 };
 use crate::pipeline::{
     BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline,
@@ -81,8 +81,8 @@ pub struct RayTracingData {
     pub water_descriptor: Option<RRWaterDescriptorSet>,
     pub water_ubo: Option<UniformBuffer<WaterUBO>>,
 
-    pub water_trace_pipeline: Option<RRRayTracingPipeline>,
-    pub water_trace_descriptor: Option<RRWaterTraceDescriptorSet>,
+    pub effect_trace_pipeline: Option<RRRayTracingPipeline>,
+    pub effect_trace_descriptor: Option<RREffectTraceDescriptorSet>,
 
     pub water_caustic_splat_pipeline: Option<RRPipeline>,
     pub water_caustic_apply_pipeline: Option<RRPipeline>,
@@ -570,6 +570,48 @@ impl RayTracingData {
         Ok(())
     }
 
+    pub unsafe fn ensure_effect_trace_pipeline(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        frames_in_flight: usize,
+    ) -> Result<()> {
+        if self.effect_trace_pipeline.is_some() {
+            return Ok(());
+        }
+
+        let effect_trace_descriptor = RREffectTraceDescriptorSet::new(rrdevice, frames_in_flight)?;
+
+        let intersection_range = vk::PushConstantRange::builder()
+            .stage_flags(vk::ShaderStageFlags::INTERSECTION_KHR)
+            .offset(0)
+            .size(8)
+            .build();
+        let raygen_range = vk::PushConstantRange::builder()
+            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+            .offset(16)
+            .size(112)
+            .build();
+        let closest_hit_range = vk::PushConstantRange::builder()
+            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+            .offset(96)
+            .size(32)
+            .build();
+        let effect_trace_pipeline = RRRayTracingPipeline::new(
+            instance,
+            rrdevice,
+            &EFFECT_TRACE,
+            &[effect_trace_descriptor.layout.handle],
+            &[intersection_range, raygen_range, closest_hit_range],
+        )?;
+
+        self.effect_trace_descriptor = Some(effect_trace_descriptor);
+        self.effect_trace_pipeline = Some(effect_trace_pipeline);
+
+        log!("Created effect trace pipeline");
+        Ok(())
+    }
+
     pub unsafe fn create_water_pipeline(
         &mut self,
         instance: &Instance,
@@ -628,38 +670,11 @@ impl RayTracingData {
         self.water_shading_pipeline = Some(water_shading_pipeline);
         self.water_descriptor = Some(water_descriptor);
 
-        let water_trace_descriptor = RRWaterTraceDescriptorSet::new(rrdevice, frames_in_flight)?;
-
         self.water_ubo = Some(water_ubo);
-        let intersection_range = vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::INTERSECTION_KHR)
-            .offset(0)
-            .size(8)
-            .build();
-        let raygen_range = vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-            .offset(16)
-            .size(112)
-            .build();
-        let closest_hit_range = vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-            .offset(96)
-            .size(32)
-            .build();
-        let water_trace_pipeline = RRRayTracingPipeline::new(
-            instance,
-            rrdevice,
-            &WATER_TRACE,
-            &[water_trace_descriptor.layout.handle],
-            &[intersection_range, raygen_range, closest_hit_range],
-        )?;
 
-        self.water_trace_descriptor = Some(water_trace_descriptor);
-        self.water_trace_pipeline = Some(water_trace_pipeline);
-
+        self.ensure_effect_trace_pipeline(instance, rrdevice, frames_in_flight)?;
         self.create_water_caustic_pipelines(rrdevice, water_buffer, hdr_buffer)?;
 
-        log!("Created water trace pipeline");
         Ok(())
     }
     /// Caustic splat/apply need the water UBO and the water buffer, so they are built

@@ -65,7 +65,6 @@ mod tests {
         world.insert_resource(BatchRun::new(
             std::path::PathBuf::from("test_output.png"),
             60,
-            Vec::new(),
         ));
 
         // Spawn entity with MotionPath but NO Transform

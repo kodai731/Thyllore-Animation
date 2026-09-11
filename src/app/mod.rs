@@ -1,6 +1,8 @@
+pub mod bootstrap;
 pub mod cleanup;
 pub mod color_test_quad;
 mod command_recording;
+pub mod config;
 pub mod data;
 pub(crate) mod features;
 pub mod frame_context;

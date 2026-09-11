@@ -1,6 +1,8 @@
 use crate::wind::{overwrite_wind_persisted_fields, WindTornadoEffect};
 
 pub const WIND_PRESET_NAMES: &[&str] = &["column", "funnel", "reference", "storm"];
+/// The preset the shipped default scene starts from; hosts adding a wind start here too.
+pub const WIND_DEFAULT_PRESET: &str = "storm";
 
 pub fn apply_wind_preset(effect: &mut WindTornadoEffect, name: &str) -> bool {
     let mut preset = WindTornadoEffect::default();

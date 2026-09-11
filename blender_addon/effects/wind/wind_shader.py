@@ -47,7 +47,7 @@ def build_wind_shader(glsl_path: str, bindings_path: str, specialization: dict):
     info.uniform_buf(0, "FrameUBO", "frame")
     info.uniform_buf(1, "WindUBO", "wind")
     for i, sampler in enumerate(bindings["samplers"]):
-        info.sampler(i, "FLOAT_2D", sampler["name"])
+        info.sampler(i, sampler["type"], sampler["name"])
     iface = gpu.types.GPUStageInterfaceInfo("wind_iface")
     iface.smooth("VEC2", "fragTexCoord")
     info.vertex_in(0, "VEC2", "pos")
@@ -61,6 +61,55 @@ def build_wind_shader(glsl_path: str, bindings_path: str, specialization: dict):
     wanted = {"push.mode": specialization.get("mode", 0), "push.debugView": specialization.get("debugView", 0)}
     info.fragment_source(shader_info.push_prelude(pc["type"], pc["members"]) + shader_info.specialize_body(body, {k: v for k, v in wanted.items() if k in body}))
     return gpu.shader.create_from_info(info)
+
+
+def build_shadow_bake_shader(glsl_path: str, bindings_path: str):
+    import gpu
+
+    with open(glsl_path) as f:
+        glsl_text = f.read()
+    with open(bindings_path) as f:
+        bindings = json.load(f)
+
+    typedef, body = shader_info.split_typedef_and_body(glsl_text)
+
+    info = gpu.types.GPUShaderCreateInfo()
+    info.typedef_source(typedef)
+    info.uniform_buf(0, "FrameUBO", "frame")
+    info.uniform_buf(1, "WindUBO", "wind")
+    for i, image in enumerate(bindings["images"]):
+        info.image(i, image["format"], "FLOAT_3D", image["name"], qualifiers={"WRITE"})
+    info.local_group_size(*bindings["local_size"])
+    info.compute_source(body)
+    return gpu.shader.create_from_info(info)
+
+
+def build_upsample_shader(glsl_path: str, bindings_path: str):
+    import gpu
+
+    with open(glsl_path) as f:
+        glsl_text = f.read()
+    with open(bindings_path) as f:
+        bindings = json.load(f)
+
+    info = gpu.types.GPUShaderCreateInfo()
+    for i, sampler in enumerate(bindings["samplers"]):
+        info.sampler(i, sampler["type"], sampler["name"])
+    iface = gpu.types.GPUStageInterfaceInfo("wind_upsample_iface")
+    iface.smooth("VEC2", "fragTexCoord")
+    info.vertex_in(0, "VEC2", "pos")
+    info.vertex_out(iface)
+    info.fragment_out(0, "VEC4", "outColor")
+    info.vertex_source("void main(){ fragTexCoord = pos*0.5+0.5; gl_Position = vec4(pos,0.0,1.0); }")
+    info.fragment_source(glsl_text)
+    return gpu.shader.create_from_info(info)
+
+
+def shadow_bake_layout(bindings_path: str) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
+    """Volume texture size and compute local size, both read from the exported bindings."""
+    with open(bindings_path) as f:
+        bindings = json.load(f)
+    return tuple(bindings["shadow_volume_size"]), tuple(bindings["local_size"])
 
 
 def depth_convert_fragment_source() -> str:

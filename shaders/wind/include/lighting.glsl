@@ -15,7 +15,7 @@ const int WIND_SCATTER_NODES = 4;
 // x: transmittance toward the sun, y: cosine-weighted transmittance over the sky.
 vec2 windShadowTransmittances(vec3 position, vec3 lightDir) {
 #ifdef WIND_SHADOW_VOLUME
-    return texture(shadowVolumeSampler, windShadowVolumeUvw(position, windShadowSlot())).xy;
+    return windShadowVolumeTransmittances(shadowVolumeSampler, position, windShadowSlot());
 #else
     return vec2(windSunTransmittance(position, lightDir), windSkyTransmittance(position));
 #endif

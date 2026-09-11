@@ -123,7 +123,7 @@ stage_sources() {
 }
 stage_sources
 
-for required in shaders/wind_resolve.glsl shaders/wind_resolve.bindings.json common/coordinates.py common/effect_properties.py blender_manifest.toml; do
+for required in shaders/wind_resolve.glsl shaders/wind_resolve.bindings.json shaders/wind_shadow_bake.glsl shaders/wind_shadow_bake.bindings.json shaders/wind_upsample.glsl shaders/wind_upsample.bindings.json common/coordinates.py common/effect_properties.py blender_manifest.toml; do
     if [[ ! -f "$STAGE_DIR/$required" ]]; then
         echo "$required missing from stage" >&2
         exit 1

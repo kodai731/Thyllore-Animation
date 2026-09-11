@@ -12,8 +12,8 @@ use crate::water::{
 };
 use crate::wind::{
     apply_wind_preset, build_wind_model_matrix, build_wind_ubo, overwrite_wind_persisted_fields,
-    wind_local_bounds_corners, WindShadowSlot, WindShellParams, WindTornadoEffect, WindUBO,
-    WIND_PRESET_NAMES, WIND_UI_PARAMS,
+    wind_local_bounds_corners, WindRenderSettings, WindShadowSlot, WindShellParams,
+    WindTornadoEffect, WindUBO, WIND_DEFAULT_PRESET, WIND_PRESET_NAMES, WIND_UI_PARAMS,
 };
 use cgmath::{Matrix4, Quaternion, Vector3, Vector4};
 use pyo3::prelude::*;
@@ -400,6 +400,11 @@ fn water_ubo_size() -> usize {
 }
 
 #[pyfunction]
+fn wind_default_preset() -> &'static str {
+    WIND_DEFAULT_PRESET
+}
+
+#[pyfunction]
 fn wind_preset_names() -> Vec<&'static str> {
     WIND_PRESET_NAMES.to_vec()
 }
@@ -522,6 +527,12 @@ fn wind_ubo_size() -> usize {
     std::mem::size_of::<WindUBO>()
 }
 
+/// Resolution divisor of the engine's default wind resolve scale (1 = full, 2 = half).
+#[pyfunction]
+fn wind_resolve_divisor() -> u32 {
+    WindRenderSettings::default().resolve_scale.divisor()
+}
+
 #[pymodule]
 fn thyllore_effect_core(_py: Python<'_>, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(flame_preset_names, m)?)?;
@@ -540,12 +551,14 @@ fn thyllore_effect_core(_py: Python<'_>, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(water_bounds_corners, m)?)?;
     m.add_function(wrap_pyfunction!(water_ubo_size, m)?)?;
 
+    m.add_function(wrap_pyfunction!(wind_default_preset, m)?)?;
     m.add_function(wrap_pyfunction!(wind_preset_names, m)?)?;
     m.add_function(wrap_pyfunction!(wind_ui_params, m)?)?;
     m.add_function(wrap_pyfunction!(wind_preset_params, m)?)?;
     m.add_function(wrap_pyfunction!(pack_wind_ubo, m)?)?;
     m.add_function(wrap_pyfunction!(wind_bounds_corners, m)?)?;
     m.add_function(wrap_pyfunction!(wind_ubo_size, m)?)?;
+    m.add_function(wrap_pyfunction!(wind_resolve_divisor, m)?)?;
 
     Ok(())
 }

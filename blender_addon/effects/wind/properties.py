@@ -23,7 +23,7 @@ def build_wind_property_group():
         preset_params=fx.wind_preset_params,
         preset_names=fx.wind_preset_names,
         flag_name="is_wind",
-        default_preset="funnel",
+        default_preset=fx.wind_default_preset(),
         class_name="ThylloreWindProperties",
         module_name=__name__,
     )

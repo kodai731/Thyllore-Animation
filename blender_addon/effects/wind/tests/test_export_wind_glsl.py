@@ -43,6 +43,18 @@ def exported():
         yield glsl_text, bindings
 
 
+@pytest.fixture(scope="module")
+def exported_bake():
+    with tempfile.TemporaryDirectory() as tmp:
+        _run_exporter(tmp)
+        out_dir = os.path.join(tmp, "shaders")
+        with open(os.path.join(out_dir, "wind_shadow_bake.glsl")) as f:
+            glsl_text = f.read()
+        with open(os.path.join(out_dir, "wind_shadow_bake.bindings.json")) as f:
+            bindings = json.load(f)
+        yield glsl_text, bindings
+
+
 class TestNoTransformedArtifacts:
 
     def test_no_include(self, exported):
@@ -86,13 +98,22 @@ class TestNoTransformedArtifacts:
     def test_sampler_count(self, exported):
         _, bindings = exported
         samplers = bindings["samplers"]
-        assert len(samplers) == 1, f"expected 1 sampler, got {len(samplers)}: {samplers}"
+        assert len(samplers) == 2, f"expected 2 samplers, got {len(samplers)}: {samplers}"
 
     def test_sampler_names(self, exported):
         _, bindings = exported
         names = {s["name"] for s in bindings["samplers"]}
-        expected = {"sceneDepthSampler"}
+        expected = {"sceneDepthSampler", "shadowVolumeSampler"}
         assert names == expected, f"expected {expected}, got {names}"
+
+    def test_sampler_types(self, exported):
+        _, bindings = exported
+        types = {s["name"]: s["type"] for s in bindings["samplers"]}
+        assert types == {"sceneDepthSampler": "FLOAT_2D", "shadowVolumeSampler": "FLOAT_3D"}
+
+    def test_shadow_volume_define(self, exported):
+        glsl_text, _ = exported
+        assert glsl_text.splitlines()[0] == "#define WIND_SHADOW_VOLUME"
 
     def test_output_count(self, exported):
         _, bindings = exported
@@ -104,6 +125,22 @@ class TestNoTransformedArtifacts:
         outputs = bindings["outputs"]
         expected = {"outColor"}
         assert set(outputs) == expected, f"expected {expected}, got {set(outputs)}"
+
+
+class TestShadowBakeExport:
+
+    def test_bake_bindings(self, exported_bake):
+        _, bindings = exported_bake
+        assert bindings["images"] == [{"name": "shadowVolumeImage", "binding": 1, "format": "RG16F"}]
+        assert bindings["local_size"] == [8, 8, 1]
+        assert bindings["shadow_volume_size"] == [48 * 4, 48, 64]
+        assert [u["name"] for u in bindings["ubos"]] == ["frame", "wind"]
+
+    def test_bake_has_no_vulkan_layout(self, exported_bake):
+        glsl_text, _ = exported_bake
+        assert "layout(" not in glsl_text
+        assert "#include" not in glsl_text
+        assert "void main()" in glsl_text
 
 
 class TestByteIdentical:
@@ -151,7 +188,7 @@ class TestByteIdentical:
             stripped.append(line)
             i += 1
 
-        expected_lines = []
+        expected_lines = [f"#define {name}" for name in _wind_module.RESOLVE_DEFINES]
         i = 0
         while i < len(stripped):
             line = stripped[i]

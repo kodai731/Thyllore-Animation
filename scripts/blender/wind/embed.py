@@ -50,6 +50,7 @@ def take_screenshot():
         window, area, region = found
         with bpy.context.temp_override(window=window, area=area, region=region):
             bpy.ops.screen.screenshot_area(filepath=path)
+            bpy.ops.thyllore.wind_dump_debug(out_dir=SCREENSHOT_DIR)
         print(f"[wind/embed] screenshot -> {path}", flush=True)
     if QUIT_AFTER_SCREENSHOT:
         bpy.ops.wm.quit_blender()

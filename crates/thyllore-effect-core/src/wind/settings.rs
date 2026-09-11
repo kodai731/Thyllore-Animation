@@ -13,6 +13,13 @@ impl WindResolveScale {
             _ => None,
         }
     }
+
+    pub fn divisor(self) -> u32 {
+        match self {
+            WindResolveScale::Full => 1,
+            WindResolveScale::Half => 2,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

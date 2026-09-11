@@ -48,7 +48,7 @@ unsafe fn create_shadow_volume_sampler(rrdevice: &RRDevice) -> Result<vk::Sample
         .min_filter(vk::Filter::LINEAR)
         .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
         .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .address_mode_w(vk::SamplerAddressMode::REPEAT)
+        .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
         .anisotropy_enable(false)
         .max_anisotropy(1.0)
         .border_color(vk::BorderColor::INT_OPAQUE_BLACK)

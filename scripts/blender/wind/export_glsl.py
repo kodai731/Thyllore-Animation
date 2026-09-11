@@ -12,6 +12,10 @@ def resolve_layout_macros(line: str, defines: dict[str, str]) -> str:
 
 
 ENTRY_SHADER = "wind/resolveFragment.frag"
+BAKE_SHADER = "wind/shadowBake.comp"
+UPSAMPLE_SHADER = "wind/upsampleFragment.frag"
+RESOLVE_DEFINES = ["WIND_SHADOW_VOLUME"]
+IMAGE_FORMATS = {"rg16f": "RG16F"}
 
 
 def resolve_include(including_path: str, included: str, repo_root: str) -> str:
@@ -105,6 +109,7 @@ def convert_to_blender_dialect(lines: list[str]) -> tuple[list[str], dict]:
     output: list[str] = []
     bindings: dict = {
         "samplers": [],
+        "images": [],
         "ubos": [],
         "push_constants": [],
         "inputs": [],
@@ -140,20 +145,35 @@ def convert_to_blender_dialect(lines: list[str]) -> tuple[list[str], dict]:
                 continue
 
             sampler_match = re.match(
-                r'^\s*layout\s*\(\s*set\s*=\s*\d+\s*,\s*binding\s*=\s*(\d+)\s*\)\s+uniform\s+sampler2D\s+(\w+)\s*;',
+                r'^\s*layout\s*\(\s*set\s*=\s*\d+\s*,\s*binding\s*=\s*(\d+)\s*\)\s+uniform\s+sampler([23])D\s+(\w+)\s*;',
                 line,
             )
             if sampler_match:
                 binding = int(sampler_match.group(1))
-                name = sampler_match.group(2)
-                bindings["samplers"].append({"name": name, "binding": binding})
+                name = sampler_match.group(3)
+                bindings["samplers"].append({"name": name, "binding": binding, "type": f"FLOAT_{sampler_match.group(2)}D"})
                 i += 1
                 continue
 
-            vulkan_only_sampler_match = re.match(
-                r'^\s*layout\s*\([^)]*\)\s+uniform\s+sampler3D\s+\w+\s*;', line
+            image_match = re.match(
+                r'^\s*layout\s*\(\s*set\s*=\s*\d+\s*,\s*binding\s*=\s*(\d+)\s*,\s*(\w+)\s*\)\s+uniform\s+writeonly\s+image3D\s+(\w+)\s*;',
+                line,
             )
-            if vulkan_only_sampler_match:
+            if image_match:
+                bindings["images"].append({
+                    "name": image_match.group(3),
+                    "binding": int(image_match.group(1)),
+                    "format": IMAGE_FORMATS[image_match.group(2)],
+                })
+                i += 1
+                continue
+
+            local_size_match = re.match(
+                r'^\s*layout\s*\(\s*local_size_x\s*=\s*(\d+)\s*,\s*local_size_y\s*=\s*(\d+)\s*,\s*local_size_z\s*=\s*(\d+)\s*\)\s+in\s*;',
+                line,
+            )
+            if local_size_match:
+                bindings["local_size"] = [int(local_size_match.group(k)) for k in (1, 2, 3)]
                 i += 1
                 continue
 
@@ -226,6 +246,51 @@ def convert_to_blender_dialect(lines: list[str]) -> tuple[list[str], dict]:
     return output, bindings
 
 
+SHADOW_VOLUME_AXES = ("WIND_SHADOW_RADIAL", "WIND_SHADOW_HEIGHT", "WIND_SHADOW_THETA", "WIND_SHADOW_SLOTS")
+
+
+def shadow_volume_size(lines: list[str]) -> list[int] | None:
+    """Texture size [radial * slots, height, theta] read from the shared GLSL constants."""
+    values: dict[str, int] = {}
+    for line in lines:
+        m = re.match(r'^\s*const\s+int\s+(WIND_SHADOW_\w+)\s*=\s*(\d+)\s*;', line)
+        if m and m.group(1) in SHADOW_VOLUME_AXES:
+            values[m.group(1)] = int(m.group(2))
+    if set(values) != set(SHADOW_VOLUME_AXES):
+        return None
+    return [
+        values["WIND_SHADOW_RADIAL"] * values["WIND_SHADOW_SLOTS"],
+        values["WIND_SHADOW_HEIGHT"],
+        values["WIND_SHADOW_THETA"],
+    ]
+
+
+def export_shader(entry: str, defines: list[str], repo_root: str) -> tuple[list[str], dict]:
+    expanded_lines = expand_includes(entry, repo_root)
+    stripped_lines = strip_include_guards(expanded_lines)
+    output_lines, bindings = convert_to_blender_dialect(stripped_lines)
+    size = shadow_volume_size(output_lines)
+    if size is not None:
+        bindings["shadow_volume_size"] = size
+    define_lines = [f"#define {name}" for name in defines]
+    return define_lines + output_lines, bindings
+
+
+def write_shader(out_dir: str, stem: str, lines: list[str], bindings: dict) -> None:
+    glsl_path = os.path.join(out_dir, f"{stem}.glsl")
+    with open(glsl_path, "w") as f:
+        for line in lines:
+            f.write(line + "\n")
+
+    json_path = os.path.join(out_dir, f"{stem}.bindings.json")
+    with open(json_path, "w") as f:
+        json.dump(bindings, f, indent=2)
+        f.write("\n")
+
+    print(f"Written {len(lines)} lines to {glsl_path}")
+    print(f"Bindings written to {json_path}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Export GLSL shaders for Blender addon")
     parser.add_argument("--repo-root", default=".", help="Repository root directory")
@@ -234,26 +299,16 @@ def main() -> None:
 
     repo_root = os.path.abspath(args.repo_root)
     out_dir = os.path.abspath(args.out)
-
-    expanded_lines = expand_includes(ENTRY_SHADER, repo_root)
-
-    stripped_lines = strip_include_guards(expanded_lines)
-
-    output_lines, bindings = convert_to_blender_dialect(stripped_lines)
-
     os.makedirs(out_dir, exist_ok=True)
-    glsl_path = os.path.join(out_dir, "wind_resolve.glsl")
-    with open(glsl_path, "w") as f:
-        for line in output_lines:
-            f.write(line + "\n")
 
-    json_path = os.path.join(out_dir, "wind_resolve.bindings.json")
-    with open(json_path, "w") as f:
-        json.dump(bindings, f, indent=2)
-        f.write("\n")
+    resolve_lines, resolve_bindings = export_shader(ENTRY_SHADER, RESOLVE_DEFINES, repo_root)
+    write_shader(out_dir, "wind_resolve", resolve_lines, resolve_bindings)
 
-    print(f"Written {len(output_lines)} lines to {glsl_path}")
-    print(f"Bindings written to {json_path}")
+    bake_lines, bake_bindings = export_shader(BAKE_SHADER, [], repo_root)
+    write_shader(out_dir, "wind_shadow_bake", bake_lines, bake_bindings)
+
+    upsample_lines, upsample_bindings = export_shader(UPSAMPLE_SHADER, [], repo_root)
+    write_shader(out_dir, "wind_upsample", upsample_lines, upsample_bindings)
 
 
 if __name__ == "__main__":

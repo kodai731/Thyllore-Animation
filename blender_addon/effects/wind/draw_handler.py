@@ -3,7 +3,16 @@ import time
 import traceback
 
 from ._common import coordinates
-from .wind_shader import build_tonemap_composite_shader, build_wind_shader, matrix_column_major, pack_frame_ubo, specialization_key
+from .wind_shader import (
+    build_shadow_bake_shader,
+    build_tonemap_composite_shader,
+    build_upsample_shader,
+    build_wind_shader,
+    matrix_column_major,
+    pack_frame_ubo,
+    shadow_bake_layout,
+    specialization_key,
+)
 from .viewport_depth import ViewportDepthCapture
 
 VIEWPORT_NEAR = 0.1
@@ -21,6 +30,8 @@ def flip_projection_y(proj) -> list:
 _depth_handle = None
 _draw_handle = None
 _cached_shaders: dict[tuple, object] = {}
+_bake_shader = None
+_upsample_shader = None
 _renderers: dict[str, "WindViewportRenderer"] = {}
 _viewport_depth = ViewportDepthCapture()
 _scene_depth = None
@@ -43,6 +54,32 @@ def _load_shader(specialization):
     print(f"[Thyllore Wind] shader built in {time.perf_counter() - started:.2f}s for {key}", flush=True)
     _cached_shaders[key] = shader
     return shader
+
+
+def _shader_dir():
+    from pathlib import Path
+
+    return Path(__file__).resolve().parent / "shaders"
+
+
+def _load_bake_shader():
+    global _bake_shader
+    if _bake_shader is None:
+        root = _shader_dir()
+        _bake_shader = build_shadow_bake_shader(str(root / "wind_shadow_bake.glsl"), str(root / "wind_shadow_bake.bindings.json"))
+    return _bake_shader
+
+
+def _load_upsample_shader():
+    global _upsample_shader
+    if _upsample_shader is None:
+        root = _shader_dir()
+        _upsample_shader = build_upsample_shader(str(root / "wind_upsample.glsl"), str(root / "wind_upsample.bindings.json"))
+    return _upsample_shader
+
+
+def _shadow_bake_layout():
+    return shadow_bake_layout(str(_shader_dir() / "wind_shadow_bake.bindings.json"))
 
 
 def blender_window_to_engine_projection(window_matrix, near):
@@ -80,6 +117,10 @@ class WindViewportRenderer:
         self.wind_ubo = None
         self.color = None
         self.fb_color = None
+        self.resolved = None
+        self.fb_resolved = None
+        self.upsample_batch = None
+        self.shadow_volume = None
         self._w = 0
         self._h = 0
 
@@ -99,12 +140,47 @@ class WindViewportRenderer:
         self._w = w
         self._h = h
         import gpu
-        self.color = gpu.types.GPUTexture((w, h), format="RGBA32F")
+        import thyllore_effect_core as fx
+
+        divisor = fx.wind_resolve_divisor()
+        self.color = gpu.types.GPUTexture((max(w // divisor, 1), max(h // divisor, 1)), format="RGBA32F")
         self.fb_color = gpu.types.GPUFrameBuffer(color_slots=(self.color,))
+        self.resolved = gpu.types.GPUTexture((w, h), format="RGBA32F")
+        self.fb_resolved = gpu.types.GPUFrameBuffer(color_slots=(self.resolved,))
+
+    def bake_shadow_volume(self):
+        import gpu
+
+        size, local_size = _shadow_bake_layout()
+        if self.shadow_volume is None:
+            self.shadow_volume = gpu.types.GPUTexture(size, format="RG16F")
+        shader = _load_bake_shader()
+        shader.bind()
+        shader.uniform_block("frame", self.frame_ubo)
+        shader.uniform_block("wind", self.wind_ubo)
+        shader.image("shadowVolumeImage", self.shadow_volume)
+        groups = [-(-extent // local) for extent, local in zip(size, local_size)]
+        gpu.compute.dispatch(shader, *groups)
 
     def clear_color_for_discarded_fragments(self):
         with self.fb_color.bind():
             self.fb_color.clear(color=(0.0, 0.0, 0.0, 0.0))
+        with self.fb_resolved.bind():
+            self.fb_resolved.clear(color=(0.0, 0.0, 0.0, 0.0))
+
+    def upsample_to_viewport(self, depth_tex):
+        import gpu
+        from gpu_extras.batch import batch_for_shader
+
+        shader = _load_upsample_shader()
+        if self.upsample_batch is None:
+            self.upsample_batch = batch_for_shader(shader, "TRIS", {"pos": [(-1.0, -1.0), (3.0, -1.0), (-1.0, 3.0)]})
+        with self.fb_resolved.bind():
+            shader.bind()
+            shader.uniform_sampler("windColorSampler", self.color)
+            shader.uniform_sampler("sceneDepthSampler", depth_tex)
+            self.upsample_batch.draw(shader)
+        return self.resolved
 
     def render(self, view, proj, camera_pos, light_pos, params, time, position, rotation, w, h, depth_tex=None, flip_y=True):
         import gpu
@@ -125,11 +201,14 @@ class WindViewportRenderer:
         else:
             self.wind_ubo.update(wind_bytes)
         if depth_tex is None:
-            return self.color
+            return self.resolved
+        self.bake_shadow_volume()
         self.clear_color_for_discarded_fragments()
-        scissor = coordinates.project_bounds_to_pixel_rect(fx.wind_bounds_corners(params, time, position, rotation), view, proj, w, h)
+        scissor = coordinates.project_bounds_to_pixel_rect(
+            fx.wind_bounds_corners(params, time, position, rotation), view, proj, self.color.width, self.color.height
+        )
         if scissor is None:
-            return self.color
+            return self.resolved
         with self.fb_color.bind():
             gpu.state.scissor_test_set(True)
             gpu.state.scissor_set(*scissor)
@@ -138,13 +217,14 @@ class WindViewportRenderer:
                 self.shader.uniform_block("frame", self.frame_ubo)
                 self.shader.uniform_block("wind", self.wind_ubo)
                 self.shader.uniform_sampler("sceneDepthSampler", depth_tex)
+                self.shader.uniform_sampler("shadowVolumeSampler", self.shadow_volume)
                 self.batch.draw(self.shader)
             finally:
                 gpu.state.scissor_test_set(False)
-        return self.color
+        return self.upsample_to_viewport(depth_tex)
 
     def release(self):
-        for attr in ("frame_ubo", "wind_ubo", "color", "fb_color"):
+        for attr in ("frame_ubo", "wind_ubo", "color", "fb_color", "resolved", "fb_resolved", "upsample_batch", "shadow_volume"):
             setattr(self, attr, None)
 
 
@@ -167,11 +247,18 @@ def draw_viewport():
             print("[Thyllore Wind] viewport draw failed:\n" + traceback.format_exc(), flush=True)
 
 
+ENGINE_DEFAULT_LIGHT_POSITION = (1.0, 1.0, 2.0)
+
+
 def find_light_position(scene):
     for obj in scene.objects:
         if obj.type == "LIGHT":
             return coordinates.blender_to_engine_point(obj.matrix_world.translation)
-    return (0.0, 2.0, 2.0)
+    return ENGINE_DEFAULT_LIGHT_POSITION
+
+
+def scene_time_seconds(scene):
+    return (scene.frame_current - scene.frame_start) / scene.render.fps
 
 
 def find_wind_objects(scene):
@@ -194,7 +281,7 @@ def draw_wind():
     h = region.height
 
     scene = context.scene
-    scene_time = (scene.frame_current - scene.frame_start) / scene.render.fps
+    scene_time = scene_time_seconds(scene)
     light_pos = find_light_position(scene)
     wind_objects = find_wind_objects(scene)
 
@@ -263,7 +350,7 @@ def register_draw_handler():
 
 
 def unregister_draw_handler():
-    global _depth_handle, _draw_handle, _scene_depth, _composite_shader
+    global _depth_handle, _draw_handle, _scene_depth, _composite_shader, _bake_shader, _upsample_shader
     import bpy
 
     for handle in (_draw_handle, _depth_handle):
@@ -274,6 +361,8 @@ def unregister_draw_handler():
         renderer.release()
     _renderers.clear()
     _cached_shaders.clear()
+    _bake_shader = None
+    _upsample_shader = None
     _viewport_depth.release()
     _scene_depth = None
     _composite_shader = None

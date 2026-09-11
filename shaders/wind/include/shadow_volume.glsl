@@ -46,4 +46,22 @@ vec3 windShadowVolumeUvw(vec3 local, int slot) {
     return vec3(u, v, w);
 }
 
+// The height axis clamps to texel centres and the angle axis wraps by blending the two seam
+// texels explicitly, so the result does not depend on the sampler's address modes.
+vec2 windShadowVolumeTransmittances(sampler3D volume, vec3 local, int slot) {
+    vec3 uvw = windShadowVolumeUvw(local, slot);
+    float halfTexelV = 0.5 / float(WIND_SHADOW_HEIGHT);
+    uvw.y = clamp(uvw.y, halfTexelV, 1.0 - halfTexelV);
+
+    float halfTexelW = 0.5 / float(WIND_SHADOW_THETA);
+    float seamSpan = 2.0 * halfTexelW;
+    if (uvw.z >= halfTexelW && uvw.z <= 1.0 - halfTexelW) {
+        return texture(volume, uvw).xy;
+    }
+    float seamOffset = uvw.z < halfTexelW ? uvw.z + halfTexelW : uvw.z - (1.0 - halfTexelW);
+    vec2 lastSlice = texture(volume, vec3(uvw.xy, 1.0 - halfTexelW)).xy;
+    vec2 firstSlice = texture(volume, vec3(uvw.xy, halfTexelW)).xy;
+    return mix(lastSlice, firstSlice, seamOffset / seamSpan);
+}
+
 #endif

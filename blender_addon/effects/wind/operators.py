@@ -25,7 +25,7 @@ class THYLLORE_OT_wind_add(bpy.types.Operator):
         context.collection.objects.link(obj)
 
         obj.thyllore_wind.is_wind = True
-        obj.thyllore_wind.preset = fx.wind_preset_names()[0]
+        obj.thyllore_wind.preset = fx.wind_default_preset()
 
         context.view_layer.objects.active = obj
         obj.select_set(True)

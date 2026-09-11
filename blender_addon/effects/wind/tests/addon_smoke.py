@@ -35,7 +35,8 @@ obj = bpy.context.active_object
 
 from blender_addon.effects.wind.properties import wind_render_params
 
-preset_params = fx.wind_preset_params(fx.wind_preset_names()[0])
+assert obj.thyllore_wind.preset == fx.wind_default_preset(), "Add Wind must start from the engine's default preset"
+preset_params = fx.wind_preset_params(obj.thyllore_wind.preset)
 collected = wind_render_params(obj.thyllore_wind)
 assert set(collected.keys()) == set(preset_params.keys()), "render params must cover every preset key"
 

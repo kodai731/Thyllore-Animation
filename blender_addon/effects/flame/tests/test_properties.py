@@ -56,7 +56,7 @@ class TestPropertyKind:
         assert property_kind(1.5) == "float"
 
     def test_int_value(self):
-        assert property_kind(42) == "float"
+        assert property_kind(42) == "int"
 
 
 class TestCollectParams:

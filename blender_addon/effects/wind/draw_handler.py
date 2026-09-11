@@ -3,12 +3,15 @@ import time
 import traceback
 
 from ._common import coordinates
-from .wind_shader import build_tonemap_composite_shader, build_wind_shader, pack_frame_ubo, specialization_key
+from .wind_shader import build_tonemap_composite_shader, build_wind_shader, matrix_column_major, pack_frame_ubo, specialization_key
 from .viewport_depth import ViewportDepthCapture
 
 VIEWPORT_NEAR = 0.1
 ENGINE_EXPOSURE = 1.0
 DISPLAY_ENCODE_SRGB = 1.0
+WIND_MODE_CLOSED_FORM = 0
+WIND_DEBUG_OFF = 0
+CLOSED_FORM_SPECIALIZATION = {"mode": WIND_MODE_CLOSED_FORM, "debugView": WIND_DEBUG_OFF}
 
 
 def flip_projection_y(proj) -> list:
@@ -80,15 +83,13 @@ class WindViewportRenderer:
         self._w = 0
         self._h = 0
 
-    def ensure_shader(self, params):
-        import thyllore_effect_core as fx
+    def ensure_shader(self):
         from gpu_extras.batch import batch_for_shader
 
-        specialization = fx.wind_shader_specialization(params)
-        key = specialization_key(specialization)
+        key = specialization_key(CLOSED_FORM_SPECIALIZATION)
         if key == self.shader_key:
             return
-        self.shader = _load_shader(specialization)
+        self.shader = _load_shader(CLOSED_FORM_SPECIALIZATION)
         self.batch = batch_for_shader(self.shader, "TRIS", {"pos": [(-1.0, -1.0), (3.0, -1.0), (-1.0, 3.0)]})
         self.shader_key = key
 
@@ -110,7 +111,7 @@ class WindViewportRenderer:
         import thyllore_effect_core as fx
 
         self.ensure_size(w, h)
-        self.ensure_shader(params)
+        self.ensure_shader()
         if flip_y:
             proj = flip_projection_y(proj)
         frame_bytes = pack_frame_ubo(view, proj, camera_pos + (1.0,), light_pos + (1.0,), (1.0, 1.0, 1.0, 1.0))
@@ -118,7 +119,7 @@ class WindViewportRenderer:
             self.frame_ubo = gpu.types.GPUUniformBuf(frame_bytes)
         else:
             self.frame_ubo.update(frame_bytes)
-        wind_bytes = fx.pack_wind_ubo(params, time, position, rotation)
+        wind_bytes = fx.pack_wind_ubo(params, time, position, rotation, matrix_column_major(view), matrix_column_major(proj))
         if self.wind_ubo is None:
             self.wind_ubo = gpu.types.GPUUniformBuf(wind_bytes)
         else:
@@ -126,7 +127,7 @@ class WindViewportRenderer:
         if depth_tex is None:
             return self.color
         self.clear_color_for_discarded_fragments()
-        scissor = coordinates.project_bounds_to_pixel_rect(fx.wind_bounds_corners(params, position, rotation), view, proj, w, h)
+        scissor = coordinates.project_bounds_to_pixel_rect(fx.wind_bounds_corners(params, time, position, rotation), view, proj, w, h)
         if scissor is None:
             return self.color
         with self.fb_color.bind():

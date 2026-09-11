@@ -25,6 +25,8 @@ def property_kind(default) -> str:
         return "bool"
     if isinstance(default, (list, tuple)):
         return "vector"
+    if isinstance(default, int):
+        return "int"
     return "float"
 
 
@@ -179,6 +181,16 @@ def build_param_properties(param: dict) -> dict[str, object]:
                 description=tooltip,
                 default=default,
                 size=len(default),
+            )
+        }
+
+    if kind == "int":
+        return {
+            name: bpy.props.IntProperty(
+                name=label,
+                description=tooltip,
+                default=default,
+                **{k: int(v) for k, v in _range_kwargs(param).items()},
             )
         }
 

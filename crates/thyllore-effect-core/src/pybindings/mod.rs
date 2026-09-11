@@ -332,6 +332,21 @@ fn build_water_effect_from_params(
     Ok(effect)
 }
 
+fn matrix_from_column_major(values: [f32; 16]) -> Matrix4<f32> {
+    Matrix4::new(
+        values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7],
+        values[8], values[9], values[10], values[11], values[12], values[13], values[14],
+        values[15],
+    )
+}
+
+fn inverse_view_proj_from_column_major(view: [f32; 16], proj: [f32; 16]) -> Matrix4<f32> {
+    inverse_view_proj_f64(
+        matrix_from_column_major(proj),
+        matrix_from_column_major(view),
+    )
+}
+
 #[pyfunction]
 #[pyo3(signature = (params, time, position, rotation, view, proj, frame_index=0))]
 fn pack_water_ubo(
@@ -346,17 +361,7 @@ fn pack_water_ubo(
 ) -> PyResult<Vec<u8>> {
     let effect = build_water_effect_from_params(py, params, time, position, rotation)?;
     let mut ubo = build_water_ubo(&effect, frame_index);
-
-    // Compute inv_view_proj from view and proj matrices (column-major, same as pack_frame_ubo)
-    let view_mat: Matrix4<f32> = Matrix4::new(
-        view[0], view[1], view[2], view[3], view[4], view[5], view[6], view[7], view[8], view[9],
-        view[10], view[11], view[12], view[13], view[14], view[15],
-    );
-    let proj_mat: Matrix4<f32> = Matrix4::new(
-        proj[0], proj[1], proj[2], proj[3], proj[4], proj[5], proj[6], proj[7], proj[8], proj[9],
-        proj[10], proj[11], proj[12], proj[13], proj[14], proj[15],
-    );
-    ubo.inv_view_proj = inverse_view_proj_f64(proj_mat, view_mat);
+    ubo.inv_view_proj = inverse_view_proj_from_column_major(view, proj);
 
     let bytes = unsafe {
         std::slice::from_raw_parts(
@@ -472,18 +477,20 @@ fn build_wind_effect_from_params(
 }
 
 #[pyfunction]
-#[pyo3(signature = (params, time, position, rotation))]
+#[pyo3(signature = (params, time, position, rotation, view, proj))]
 fn pack_wind_ubo(
     py: Python<'_>,
     params: &Bound<'_, PyDict>,
     time: f32,
     position: [f32; 3],
     rotation: [f32; 4],
+    view: [f32; 16],
+    proj: [f32; 16],
 ) -> PyResult<Vec<u8>> {
     let effect = build_wind_effect_from_params(py, params, time, position, rotation)?;
-    Ok(build_wind_ubo(&effect, WindShadowSlot(0))
-        .as_bytes()
-        .to_vec())
+    let mut ubo = build_wind_ubo(&effect, WindShadowSlot(0));
+    ubo.inv_view_proj = inverse_view_proj_from_column_major(view, proj);
+    Ok(ubo.as_bytes().to_vec())
 }
 
 /// World-space corners of the envelope box the engine picks and scissors the wind pass against.

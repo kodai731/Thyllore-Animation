@@ -8,7 +8,7 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #endif
 
-#include "include/flame_ray.glsl"
+#include "flame/include/ray.glsl"
 layout(set = 0, binding = 0) uniform FrameUBO {
     mat4 view;
     mat4 proj;
@@ -17,12 +17,12 @@ layout(set = 0, binding = 0) uniform FrameUBO {
     vec4 light_color;
 } frame;
 
-#include "water/include/water_component.glsl"
-#include "water/include/water_torus_intersect.glsl"
-#include "water/include/water_flow.glsl"
-#include "water/include/water_surface.glsl"
-#include "water/include/water_lb.glsl"
-#include "water/include/water_lighting.glsl"
+#include "water/include/component.glsl"
+#include "include/torus_intersect.glsl"
+#include "water/include/flow.glsl"
+#include "water/include/surface.glsl"
+#include "water/include/lb.glsl"
+#include "water/include/lighting.glsl"
 
 layout(set = 1, binding = 1) uniform sampler2D sceneColorSampler;
 
@@ -47,7 +47,7 @@ layout(push_constant) uniform WaterPush {
     int debugView;
 } push;
 #ifdef WATER_RAY_QUERY
-#include "water/include/water_secondary.glsl"
+#include "water/include/secondary.glsl"
 
 // Second-bounce misses read the scene color through a wide box filter so thin screen
 // features (grid lines) cannot alias into combs after two refractions.

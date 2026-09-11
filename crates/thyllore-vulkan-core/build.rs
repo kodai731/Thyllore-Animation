@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use thyllore_shader_manifest::{
-    collect_shader_sources, generate_pass_manifest_rust, generate_shader_bindings_rust,
-    spirv_output_name, PassManifest,
+    collect_shader_sources, collect_spirv_files, generate_pass_manifest_rust,
+    generate_shader_bindings_rust, spirv_output_name, PassManifest,
 };
 use thyllore_spirv_reflect::{reflect_shader_bytes, verify_spirv_against_glsl, ShaderReflection};
 
@@ -95,7 +95,8 @@ fn compile_shaders(shader_dir: &Path, spirv_dir: &Path) -> BTreeMap<String, Shad
             continue;
         };
         let out_path = spirv_dir.join(&out_name);
-        expected_outputs.push(out_name);
+        create_output_directory(&out_path);
+        expected_outputs.push(out_path.clone());
 
         compile_shader(shader_dir, &path, &out_path);
         let reflection = verify_descriptor_declarations(shader_dir, &path, &out_path);
@@ -104,6 +105,16 @@ fn compile_shaders(shader_dir: &Path, spirv_dir: &Path) -> BTreeMap<String, Shad
 
     remove_stale_spirv(spirv_dir, &expected_outputs);
     reflections
+}
+
+fn create_output_directory(out_path: &Path) {
+    let Some(parent) = out_path.parent() else {
+        return;
+    };
+    if let Err(error) = std::fs::create_dir_all(parent) {
+        eprintln!("failed to create {}: {error}", parent.display());
+        std::process::exit(1);
+    }
 }
 
 fn compile_shader(shader_dir: &Path, source_path: &Path, out_path: &Path) {
@@ -187,25 +198,20 @@ fn verify_descriptor_declarations(
     reflect_shader_bytes(&spirv).expect("verified above")
 }
 
-fn remove_stale_spirv(spirv_dir: &Path, expected_outputs: &[String]) {
-    let Ok(entries) = std::fs::read_dir(spirv_dir) else {
+fn remove_stale_spirv(spirv_dir: &Path, expected_outputs: &[PathBuf]) {
+    let Ok(compiled) = collect_spirv_files(spirv_dir) else {
         return;
     };
-    for entry in entries.filter_map(Result::ok) {
-        let path = entry.path();
-        let is_spirv = path.extension().is_some_and(|extension| extension == "spv");
-        let is_expected = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| expected_outputs.iter().any(|expected| expected == name));
-        if is_spirv && !is_expected {
-            if let Err(error) = std::fs::remove_file(&path) {
-                eprintln!(
-                    "古い SPIR-V の削除に失敗しました ({}): {}",
-                    path.display(),
-                    error
-                );
-            }
+    for path in compiled {
+        if expected_outputs.contains(&path) {
+            continue;
+        }
+        if let Err(error) = std::fs::remove_file(&path) {
+            eprintln!(
+                "古い SPIR-V の削除に失敗しました ({}): {}",
+                path.display(),
+                error
+            );
         }
     }
 }

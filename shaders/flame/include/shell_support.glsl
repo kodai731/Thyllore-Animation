@@ -1,7 +1,7 @@
 #ifndef FLAME_SHELL_SUPPORT_GLSL
 #define FLAME_SHELL_SUPPORT_GLSL
 
-// Must be included after the FlameUBO declaration and flame_shell_profile.glsl.
+// Must be included after the FlameUBO declaration and shell_profile.glsl.
 // Emitter-dependent widening of the shell proxy: a ring's tube (centerline at
 // normalized major radius rm, minor support 1.5 * (1 - rm)) reaches past the
 // cylinder support 0.75, and a proxy that stops there slices the torus flat.

@@ -3,89 +3,89 @@
 # Set roles: frame = set 0, material = set 1, object = set 2, local = pass-owned set.
 
 [pass.model]
-stages = ["vertex.vert", "fragment.frag"]
+stages = ["model/vertex.vert", "model/fragment.frag"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.gbuffer]
-stages = ["gbufferVertex.vert", "gbufferFragment.frag"]
+stages = ["gbuffer/vertex.vert", "gbuffer/fragment.frag"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.grid]
-stages = ["gridVertex.vert", "gridFragment.frag"]
+stages = ["editor/gridVertex.vert", "editor/gridFragment.frag"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.gizmo]
-stages = ["gizmoVertex.vert", "gizmoFragment.frag"]
+stages = ["editor/gizmoVertex.vert", "editor/gizmoFragment.frag"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.bone]
-stages = ["boneVertex.vert", "boneFragment.frag"]
+stages = ["editor/boneVertex.vert", "editor/boneFragment.frag"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.onion_skin_ghost]
-stages = ["gbufferVertex.vert", "onionSkinFragment.frag"]
+stages = ["gbuffer/vertex.vert", "editor/onionSkinFragment.frag"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.onion_skin_composite]
-stages = ["tonemapVertex.vert", "onionSkinCompositeFragment.frag"]
+stages = ["postprocess/tonemapVertex.vert", "editor/onionSkinCompositeFragment.frag"]
 sets = { 0 = "local" }
 
 [pass.water_resolve]
-stages = ["tonemapVertex.vert", "waterResolveFragment.frag"]
+stages = ["postprocess/tonemapVertex.vert", "water/resolveFragment.frag"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.flame_resolve]
-stages = ["tonemapVertex.vert", "flameResolveFragment.frag"]
+stages = ["postprocess/tonemapVertex.vert", "flame/resolveFragment.frag"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.tonemap]
-stages = ["tonemapVertex.vert", "tonemapFragment.frag"]
+stages = ["postprocess/tonemapVertex.vert", "postprocess/tonemapFragment.frag"]
 sets = { 0 = "local" }
 
 [pass.bloom_downsample]
-stages = ["tonemapVertex.vert", "bloomDownsampleFragment.frag"]
+stages = ["postprocess/tonemapVertex.vert", "postprocess/bloomDownsampleFragment.frag"]
 sets = { 0 = "local" }
 
 [pass.bloom_upsample]
-stages = ["tonemapVertex.vert", "bloomUpsampleFragment.frag"]
+stages = ["postprocess/tonemapVertex.vert", "postprocess/bloomUpsampleFragment.frag"]
 sets = { 0 = "local" }
 
 [pass.dof]
-stages = ["tonemapVertex.vert", "dofFragment.frag"]
+stages = ["postprocess/tonemapVertex.vert", "postprocess/dofFragment.frag"]
 sets = { 0 = "local" }
 
 [pass.auto_exposure_histogram]
-stages = ["autoExposureHistogram.comp"]
+stages = ["postprocess/autoExposureHistogram.comp"]
 sets = { 0 = "local" }
 
 [pass.auto_exposure_average]
-stages = ["autoExposureAverage.comp"]
+stages = ["postprocess/autoExposureAverage.comp"]
 sets = { 0 = "local" }
 
 [pass.ray_query_shadow]
-stages = ["rayQueryShadow.comp"]
+stages = ["raytracing/rayQueryShadow.comp"]
 sets = { 0 = "local" }
 
 [pass.water_caustic_splat]
-stages = ["waterCausticSplat.comp"]
+stages = ["water/causticSplat.comp"]
 sets = { 0 = "local" }
 
 [pass.water_caustic_apply]
-stages = ["waterCausticApply.comp"]
+stages = ["water/causticApply.comp"]
 sets = { 0 = "local" }
 
 [pass.composite]
-stages = ["compositeVertex.vert", "compositeFragment.frag"]
+stages = ["postprocess/compositeVertex.vert", "postprocess/compositeFragment.frag"]
 sets = { 0 = "local" }
 
 [pass.billboard]
-stages = ["billboardVertex.vert", "billboardFragment.frag"]
+stages = ["editor/billboardVertex.vert", "editor/billboardFragment.frag"]
 sets = { 0 = "local" }
 
 [pass.imgui]
-stages = ["imguiVertex.vert", "imguiFragment.frag"]
+stages = ["editor/imguiVertex.vert", "editor/imguiFragment.frag"]
 sets = { 0 = "local" }
 
 [pass.effect_trace]
-stages = ["traceRayGen.rgen", "traceMiss.rmiss", "torusIntersection.rint", "waterTorusClosestHit.rchit", "sceneClosestHit.rchit"]
+stages = ["raytracing/traceRayGen.rgen", "raytracing/traceMiss.rmiss", "raytracing/torusIntersection.rint", "water/torusClosestHit.rchit", "raytracing/sceneClosestHit.rchit"]
 sets = { 0 = "local" }

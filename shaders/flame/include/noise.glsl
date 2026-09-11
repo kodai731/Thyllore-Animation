@@ -1,4 +1,4 @@
-// flame_noise.glsl - procedural noise for the styled flame raymarch (mode 3).
+// noise.glsl - procedural noise for the styled flame raymarch (mode 3).
 // IGN (Jimenez 2014, "Next Generation Post Processing in Call of Duty") jitters
 // the per-pixel ray start so 8-step marching dithers instead of banding.
 

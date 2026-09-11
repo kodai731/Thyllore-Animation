@@ -44,10 +44,8 @@ impl RRRayTracingPipeline {
         let procedural_closest_hit = pass
             .stages
             .iter()
-            .find(|s| s.path.contains("waterTorusRchit"))
-            .ok_or_else(|| {
-                anyhow::anyhow!("pass `{}` has no waterTorusRchit stage", pass.name())
-            })?;
+            .find(|s| s.path.contains("torusRchit"))
+            .ok_or_else(|| anyhow::anyhow!("pass `{}` has no torusRchit stage", pass.name()))?;
         let triangle_closest_hit = pass
             .stages
             .iter()

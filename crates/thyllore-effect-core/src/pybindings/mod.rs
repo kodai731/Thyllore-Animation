@@ -219,7 +219,7 @@ fn pack_flame_ubo(
     Ok(bytes.to_vec())
 }
 
-/// Uniform members that only select a code path in `flameResolveFragment.frag`.
+/// Uniform members that only select a code path in `resolveFragment.frag`.
 /// The Blender addon bakes them into the GLSL as constants so the dead paths are
 /// not compiled; the values come from the same UBO the shader would read.
 #[pyfunction]

@@ -244,7 +244,7 @@ unsafe fn record_flame_passes(
         return Ok(());
     };
     let flame_buffer = &flame_targets.buffer;
-    let ctx = crate::ecs::systems::phases::build_frame_render_context(app, image_index);
+    let ctx = crate::app::build_frame_render_context(app, image_index);
 
     let settings = app
         .data

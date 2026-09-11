@@ -6,11 +6,11 @@ use crate::animation::editable::{
 };
 use crate::animation::BoneId;
 use crate::animation::{ConstraintId, ConstraintType};
-use crate::app::data::LightMoveTarget;
 use crate::ecs::component::{
     ColliderShape, FlameEffect, SpringChain, SpringChainId, SpringColliderDef, SpringColliderGroup,
     SpringColliderGroupId, SpringColliderId, SpringJointParam, WaterTorusEffect,
 };
+use crate::ecs::events::light_move_target::LightMoveTarget;
 use crate::ecs::resource::gizmo::BoneDisplayStyle;
 use crate::ecs::resource::{
     AutoExposure, CoordinateSpace, CurveTrackRef, DepthOfField, FlameRenderSettings,

@@ -1,7 +1,7 @@
-use crate::app::FrameContext;
 use crate::ecs::component::{apply_flame_param_value, FlameEffect, FlameParam};
 use crate::ecs::resource::{BatchRun, LightState, TimelineState};
 use crate::ecs::world::Entity;
+use crate::ecs::FrameContext;
 use thyllore_effect_core::advance_flame_time;
 
 pub fn flame_time_advance(ctx: &mut FrameContext) {

@@ -1,5 +1,3 @@
-use serde::Serialize;
-
 use crate::app::post_process::PostProcessFrameTargets;
 use crate::app::viewport::ViewportState;
 use crate::asset::AssetStorage;
@@ -12,17 +10,6 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::{GpuBufferRegistry, PipelineStorage};
 use thyllore_vulkan_core::renderer::{FrameTransients, ImageStateTracker};
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
-
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
-pub enum LightMoveTarget {
-    None,
-    XMin,
-    XMax,
-    YMin,
-    YMax,
-    ZMin,
-    ZMax,
-}
 
 #[derive(Debug, Default)]
 pub struct AppData {

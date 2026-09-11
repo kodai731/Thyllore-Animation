@@ -13,7 +13,6 @@ use super::phases::{
 };
 use super::raytracing_systems::refresh_tlas_mesh_transforms;
 use super::timeline_systems::timeline_update;
-use crate::app::FrameContext;
 #[cfg(feature = "ml")]
 use crate::ecs::component::InferenceActorSetup;
 use crate::ecs::context::EcsContext;
@@ -21,6 +20,7 @@ use crate::ecs::resource::{ClipLibrary, HierarchyState, TimelineState};
 #[cfg(feature = "ml")]
 use crate::ecs::resource::{CurveSuggestionState, InferenceActorState};
 use crate::ecs::world::Animator;
+use crate::ecs::FrameContext;
 #[cfg(feature = "ml")]
 use crate::ml::FeedbackSenderHandle;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;

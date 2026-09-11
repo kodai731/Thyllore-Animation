@@ -1,14 +1,15 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::{App, AppData};
 use crate::ecs::resource::{FlameHistorySnapshotState, FlameRenderTargets};
+use crate::ecs::EffectContext;
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::FlameImageBindings;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::FlameBuffer;
+use crate::AppData;
 
 pub const FLAME_EFFECT_HOOK: EffectHook = EffectHook {
     name: "flame",
@@ -97,69 +98,60 @@ unsafe fn setup_flame(
     Ok(())
 }
 
-unsafe fn resize_flame_render_targets(app: &mut App) -> Result<()> {
-    let Some(hdr_view) = app
-        .data
-        .viewport
-        .hdr_buffer
-        .as_ref()
-        .map(|hdr| hdr.color_image_view)
-    else {
+unsafe fn resize_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
+    let Some(hdr_view) = ctx.hdr_color_view else {
         return Ok(());
     };
-    let (width, height) = (app.data.viewport.width, app.data.viewport.height);
-    let command_pool = app.data.raytracing.command_pool;
-    let scene_depth_view = app
+    let (width, height) = (ctx.viewport_width, ctx.viewport_height);
+    let command_pool = ctx.raytracing.command_pool;
+    let scene_depth_view = ctx
+        .world
         .resource::<RenderTargets>()
         .render
         .gbuffer_depth_image_view;
 
-    let Some(mut targets) = app.data.ecs_world.get_resource_mut::<FlameRenderTargets>() else {
+    let Some(mut targets) = ctx.world.get_resource_mut::<FlameRenderTargets>() else {
         return Ok(());
     };
     targets.buffer.resize(
-        &app.instance,
-        &app.rrdevice,
-        &mut app.data.viewport.storage,
+        ctx.instance,
+        ctx.rrdevice,
+        ctx.storage,
         command_pool,
         width,
         height,
         hdr_view,
     )?;
     for image in targets.buffer.history_images {
-        app.data.pass_image_states.mark_shader_read_only(image);
+        ctx.pass_image_states.mark_shader_read_only(image);
     }
 
-    if let Some(descriptor) = app.data.raytracing.flame_descriptor.as_ref() {
+    if let Some(descriptor) = ctx.raytracing.flame_descriptor.as_ref() {
         descriptor.update_image_views(
-            &app.rrdevice,
+            ctx.rrdevice,
             FlameImageBindings {
                 history_image_views: targets.buffer.history_image_views,
                 flame_sampler: targets.buffer.sampler,
-                sdf_image_view: app.data.raytracing.flame_sdf_image_view,
-                sdf_sampler: app.data.raytracing.flame_sdf_sampler,
+                sdf_image_view: ctx.raytracing.flame_sdf_image_view,
+                sdf_sampler: ctx.raytracing.flame_sdf_sampler,
                 scene_depth_view,
             },
         )?;
     }
     drop(targets);
 
-    if let Some(mut state) = app
-        .data
-        .ecs_world
-        .get_resource_mut::<FlameHistorySnapshotState>()
-    {
+    if let Some(mut state) = ctx.world.get_resource_mut::<FlameHistorySnapshotState>() {
         state.previous = None;
     }
     Ok(())
 }
 
-unsafe fn destroy_flame_render_targets(app: &mut App) -> Result<()> {
-    if let Some(mut targets) = app.data.ecs_world.get_resource_mut::<FlameRenderTargets>() {
+unsafe fn destroy_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
+    if let Some(mut targets) = ctx.world.get_resource_mut::<FlameRenderTargets>() {
         for image in targets.buffer.history_images {
-            app.data.pass_image_states.forget(image);
+            ctx.pass_image_states.forget(image);
         }
-        targets.buffer.destroy(&app.rrdevice.device);
+        targets.buffer.destroy(&ctx.rrdevice.device);
     }
     Ok(())
 }

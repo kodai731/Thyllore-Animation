@@ -21,7 +21,7 @@ pub unsafe fn record_onion_skin_pass(
         return Ok(());
     }
 
-    let ctx = crate::ecs::systems::phases::build_frame_render_context(app, image_index);
+    let ctx = crate::app::build_frame_render_context(app, image_index);
 
     thyllore_vulkan_core::renderer::record_onion_skin_ghost_pass(
         &ctx,
@@ -50,7 +50,7 @@ pub unsafe fn record_onion_skin_composite(
         return Ok(());
     }
 
-    let ctx = crate::ecs::systems::phases::build_frame_render_context(app, 0);
+    let ctx = crate::app::build_frame_render_context(app, 0);
 
     thyllore_vulkan_core::renderer::record_onion_skin_composite_pass(
         &ctx,

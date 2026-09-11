@@ -4,12 +4,12 @@
 
 #define WATER_UBO_SET 0
 #define WATER_UBO_BINDING 2
-#include "water/include/water_component.glsl"
-#include "water/include/water_flow.glsl"
-#include "water/include/water_surface.glsl"
-#include "water/include/water_lb.glsl"
-#include "water/include/water_torus_intersect.glsl"
-#include "water/include/water_trace_payload.glsl"
+#include "water/include/component.glsl"
+#include "water/include/flow.glsl"
+#include "water/include/surface.glsl"
+#include "water/include/lb.glsl"
+#include "include/torus_intersect.glsl"
+#include "water/include/trace_payload.glsl"
 
 layout(location = 0) rayPayloadInEXT WaterTracePayload payload;
 

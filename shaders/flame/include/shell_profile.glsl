@@ -19,7 +19,7 @@ const float FLAME_SHELL_CIRCUMSCRIBE = 1.0195911;
 const float FLAME_SHELL_SUPPORT_HEADROOM = 1.5; // density support r̂max until envelope doesn't cut
 
 // Multiplier on the base half-extent.
-// supportScale is the emitter-dependent widening (flame_shell_support.glsl).
+// supportScale is the emitter-dependent widening (shell_support.glsl).
 float flameShellRadiusScale(float height01, float supportScale) {
    return supportScale * FLAME_SHELL_SUPPORT_HEADROOM * flame.supportMotion.supportMargin * FLAME_SHELL_CIRCUMSCRIBE
         * mix(1.0, FLAME_SHELL_TAPER_TIP_SCALE, height01);

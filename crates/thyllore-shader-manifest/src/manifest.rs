@@ -123,12 +123,6 @@ pub enum ManifestError {
     StageComposition { pass: String, reason: String },
     #[error("pass `{pass}`: shader source `{file}` does not exist in shaders/")]
     MissingSource { pass: String, file: String },
-    #[error("shader `{file}` exists twice under shaders/ ({first} and {second}); file names must be unique")]
-    DuplicateSource {
-        file: String,
-        first: PathBuf,
-        second: PathBuf,
-    },
     #[error("shader `{0}` exists in shaders/ but no pass in passes.toml references it")]
     OrphanShader(String),
     #[error("pass `{pass}`: unknown set role `{role}` (frame / material / object / local)")]
@@ -194,8 +188,8 @@ impl PassManifest {
     }
 }
 
-/// Shader sources found anywhere under `shader_dir`, keyed by bare file name.
-/// Subdirectories group shaders by feature (`water/`); include files are not sources.
+/// Shader sources found anywhere under `shader_dir`, keyed by their path relative to it
+/// (`water/causticSplat.comp`). Include files are not sources.
 pub fn collect_shader_sources(
     shader_dir: &Path,
 ) -> Result<BTreeMap<String, PathBuf>, ManifestError> {
@@ -216,16 +210,25 @@ pub fn collect_shader_sources(
             if !is_shader_source(file_name) {
                 continue;
             }
-            if let Some(previous) = sources.insert(file_name.to_string(), path.clone()) {
-                return Err(ManifestError::DuplicateSource {
-                    file: file_name.to_string(),
-                    first: previous,
-                    second: path,
-                });
-            }
+            let Some(source_key) = relative_source_key(shader_dir, &path) else {
+                continue;
+            };
+            sources.insert(source_key, path);
         }
     }
     Ok(sources)
+}
+
+fn relative_source_key(shader_dir: &Path, path: &Path) -> Option<String> {
+    let relative = path.strip_prefix(shader_dir).ok()?;
+    let mut key = String::new();
+    for component in relative.components() {
+        if !key.is_empty() {
+            key.push('/');
+        }
+        key.push_str(component.as_os_str().to_str()?);
+    }
+    Some(key)
 }
 
 fn parse_pass(name: &str, definition: &Value) -> Result<PassDefinition, ManifestError> {
@@ -465,15 +468,15 @@ sets = { 0 = "local" }
         std::fs::write(dir.join("nested/orphan.frag"), "").unwrap();
         assert_eq!(
             manifest.validate_against_sources(&dir),
-            Err(ManifestError::OrphanShader("orphan.frag".into()))
+            Err(ManifestError::OrphanShader("nested/orphan.frag".into()))
         );
         std::fs::remove_file(dir.join("nested/orphan.frag")).unwrap();
 
         std::fs::write(dir.join("nested/blur.comp"), "").unwrap();
-        assert!(matches!(
+        assert_eq!(
             manifest.validate_against_sources(&dir),
-            Err(ManifestError::DuplicateSource { .. })
-        ));
+            Err(ManifestError::OrphanShader("nested/blur.comp".into()))
+        );
         std::fs::remove_file(dir.join("nested/blur.comp")).unwrap();
 
         std::fs::remove_file(dir.join("blur.comp")).unwrap();
@@ -481,6 +484,26 @@ sets = { 0 = "local" }
             manifest.validate_against_sources(&dir),
             Err(ManifestError::MissingSource { .. })
         ));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn accepts_the_same_file_name_in_two_directories() {
+        let dir = std::env::temp_dir().join(format!(
+            "thyllore_shader_manifest_dirs_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(dir.join("flame")).unwrap();
+        std::fs::create_dir_all(dir.join("water")).unwrap();
+        std::fs::write(dir.join("flame/blur.comp"), "").unwrap();
+        std::fs::write(dir.join("water/blur.comp"), "").unwrap();
+
+        let manifest = PassManifest::parse(
+            "[pass.flame_blur]\nstages = [\"flame/blur.comp\"]\nsets = { 0 = \"local\" }\n\n[pass.water_blur]\nstages = [\"water/blur.comp\"]\nsets = { 0 = \"local\" }\n",
+        )
+        .unwrap();
+        assert_eq!(manifest.validate_against_sources(&dir), Ok(()));
+
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

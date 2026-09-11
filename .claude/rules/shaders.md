@@ -15,28 +15,28 @@ Stale `.spv` files with no matching source are removed automatically.
 
 ## Shader Source Files
 
-Shader source files are located in `shaders/` and its subdirectories; `build.rs` walks the tree and compiles every
-source to a flat `assets/shaders/`, so file names must be unique across the tree:
+Shader source files are located in `shaders/` and its subdirectories; `build.rs` walks the tree and mirrors each
+source directory under `assets/shaders/`, so file names only have to be unique inside their directory:
 
-- `vertex.vert` -> `assets/shaders/vert.spv`
-- `fragment.frag` -> `assets/shaders/frag.spv`
-- `gbufferVertex.vert` -> `assets/shaders/gbufferVert.spv`
-- `gbufferFragment.frag` -> `assets/shaders/gbufferFrag.spv`
-- `rayQueryShadow.comp` -> `assets/shaders/rayQueryShadowComp.spv`
-- `water/waterCausticSplat.comp` -> `assets/shaders/waterCausticSplatComp.spv`
+- `model/vertex.vert` -> `assets/shaders/model/vert.spv`
+- `model/fragment.frag` -> `assets/shaders/model/frag.spv`
+- `gbuffer/vertex.vert` -> `assets/shaders/gbuffer/vert.spv`
+- `gbuffer/fragment.frag` -> `assets/shaders/gbuffer/frag.spv`
+- `raytracing/rayQueryShadow.comp` -> `assets/shaders/raytracing/rayQueryShadowComp.spv`
+- `water/causticSplat.comp` -> `assets/shaders/water/causticSplatComp.spv`
 - etc.
 
 Feature-specific shaders live in a subdirectory with their own `include/` (`shaders/water/`, `shaders/water/include/`);
 shared includes live in `shaders/include/` (`common.glsl` holds `PI` / `TWO_PI` / `HALF_PI`; never re-declare them).
 glslc runs with `-I shaders`, so every `#include` is written as a path from the `shaders/` root
-(`#include "include/common.glsl"`, `#include "water/include/water_lb.glsl"`). `passes.toml` references stages by bare
-file name regardless of subdirectory.
+(`#include "include/common.glsl"`, `#include "water/include/lb.glsl"`). `passes.toml` references stages by their
+path relative to `shaders/` (`water/resolveFragment.frag`).
 
 ## Pass Manifest (`shaders/passes.toml`)
 
 `shaders/passes.toml` is the only hand-written pass definition. Each `[pass.<name>]` lists its `stages`
-(source file names; the stage is derived from the extension) and `sets` (set index -> role: `frame` = 0,
-`material` = 1, `object` = 2, `local` = pass-owned). `crates/thyllore-vulkan-core/build.rs` validates the file
+(source paths relative to `shaders/`; the stage is derived from the extension) and `sets` (set index -> role:
+`frame` = 0, `material` = 1, `object` = 2, `local` = pass-owned). `crates/thyllore-vulkan-core/build.rs` validates the file
 (missing source, orphan shader not referenced by any pass, bad stage composition, role/set convention) and
 generates `PassId`, `PassShaders` constants and `ALL_PASSES` into `$OUT_DIR/pass_manifest.rs`.
 

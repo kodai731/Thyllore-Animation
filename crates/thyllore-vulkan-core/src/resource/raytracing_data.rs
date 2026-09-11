@@ -10,30 +10,25 @@ use crate::core::swapchain::RRSwapchain;
 use crate::data::{self as vulkan_data, SceneUniformData};
 use crate::descriptor::ReflectedSetLayout;
 use crate::descriptor::{
-    CompositeGBufferViews, FlameImageBindings, RRAutoExposureAverageDescriptorSet,
+    CompositeGBufferViews, RRAutoExposureAverageDescriptorSet,
     RRAutoExposureHistogramDescriptorSet, RRBillboardDescriptorSet, RRBloomDescriptorSets,
     RRCompositeDescriptorSet, RRDofDescriptorSet, RRFlameDescriptorSet, RRRayQueryDescriptorSet,
     RRToneMapDescriptorSet, RRWaterCausticDescriptorSet, RRWaterDescriptorSet,
-    RRWaterTraceDescriptorSet, AUTO_EXPOSURE_AVERAGE, AUTO_EXPOSURE_HISTOGRAM, BLOOM_DOWNSAMPLE,
-    BLOOM_UPSAMPLE, COMPOSITE, DOF, FLAME_RESOLVE, GBUFFER, ONION_SKIN_COMPOSITE, ONION_SKIN_GHOST,
-    RAY_QUERY_SHADOW, TONEMAP, WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE,
-    WATER_TRACE,
+    RRWaterTraceDescriptorSet, COMPOSITE, GBUFFER, RAY_QUERY_SHADOW,
 };
 use crate::pipeline::{
-    BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline,
-    RRRayTracingPipeline, VertexInputConfig,
+    DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline, RRRayTracingPipeline,
+    VertexInputConfig,
 };
 use crate::raytracing::RRAccelerationStructure;
+use crate::raytracing::{BlasGeometry, GpuPrimitive};
 use crate::render::RRRender;
-use crate::renderer::push_constants::{GBufferPushConstants, OnionSkinPushConstants};
-use crate::renderer::tonemap::ToneMapPushConstants;
+use crate::renderer::push_constants::GBufferPushConstants;
 use crate::resource::buffer::create_buffer;
 use crate::resource::graphics_resource::{GraphicsResources, MeshBuffer};
 use crate::resource::image::{create_nearest_sampler, create_texture_sampler};
-use crate::resource::uniform_buffer::{Placement, UniformBuffer};
-use crate::resource::{
-    BloomChain, FlameBuffer, HdrBuffer, OnionSkinPassResources, RRGBuffer, WaterBuffer,
-};
+use crate::resource::uniform_buffer::UniformBuffer;
+use crate::resource::{GpuResource, OnionSkinPassResources, RRGBuffer};
 use thyllore_effect_core::{FlameUBO, WaterUBO};
 
 pub const MAX_FLAME_INSTANCES: usize = 4;
@@ -112,6 +107,151 @@ impl RayTracingData {
             && self.composite_pipeline.is_some()
     }
 
+    pub unsafe fn destroy_all(&mut self, rrdevice: &RRDevice) {
+        let device = &rrdevice.device;
+
+        if let Some(sampler) = self.gbuffer_sampler.take() {
+            device.destroy_sampler(sampler, None);
+            log!("Destroyed G-Buffer sampler");
+        }
+
+        if let Some(onion_skin_pass) = self.onion_skin_pass.take() {
+            onion_skin_pass.destroy(device);
+        }
+
+        if let Some(gbuffer_pipeline) = self.gbuffer_pipeline.take() {
+            gbuffer_pipeline.destroy(device);
+            log!("Destroyed G-Buffer pipeline");
+        }
+
+        if let Some(mut dof_descriptor) = self.dof_descriptor.take() {
+            dof_descriptor.destroy(device);
+        }
+
+        if let Some(dof_pipeline) = self.dof_pipeline.take() {
+            dof_pipeline.destroy(device);
+        }
+
+        if let Some(mut descriptor) = self.auto_exposure_histogram_descriptor.take() {
+            descriptor.destroy(device);
+        }
+
+        if let Some(mut descriptor) = self.auto_exposure_average_descriptor.take() {
+            descriptor.destroy(device);
+        }
+
+        if let Some(pipeline) = self.auto_exposure_histogram_pipeline.take() {
+            pipeline.destroy(device);
+        }
+
+        if let Some(pipeline) = self.auto_exposure_average_pipeline.take() {
+            pipeline.destroy(device);
+        }
+
+        if let Some(mut bloom_descriptors) = self.bloom_descriptors.take() {
+            bloom_descriptors.destroy(device);
+        }
+
+        if let Some(bloom_downsample_pipeline) = self.bloom_downsample_pipeline.take() {
+            bloom_downsample_pipeline.destroy(device);
+        }
+
+        if let Some(bloom_upsample_pipeline) = self.bloom_upsample_pipeline.take() {
+            bloom_upsample_pipeline.destroy(device);
+        }
+
+        if let Some(mut tonemap_descriptor) = self.tonemap_descriptor.take() {
+            tonemap_descriptor.destroy(device);
+        }
+
+        if let Some(tonemap_pipeline) = self.tonemap_pipeline.take() {
+            tonemap_pipeline.destroy(device);
+        }
+
+        if let Some(mut composite_descriptor) = self.composite_descriptor.take() {
+            composite_descriptor.destroy(device);
+        }
+
+        if let Some(composite_pipeline) = self.composite_pipeline.take() {
+            composite_pipeline.destroy(device);
+        }
+
+        if let Some(mut flame_descriptor) = self.flame_descriptor.take() {
+            flame_descriptor.destroy(device);
+        }
+
+        if let Some(flame_shading_pipeline) = self.flame_shading_pipeline.take() {
+            flame_shading_pipeline.destroy(device);
+        }
+
+        if let Some(mut flame_ubo) = self.flame_ubo.take() {
+            flame_ubo.destroy(device);
+            log!("Destroyed flame uniform buffer");
+        }
+
+        if let Some(mut water_descriptor) = self.water_descriptor.take() {
+            water_descriptor.destroy(device);
+        }
+
+        if let Some(water_shading_pipeline) = self.water_shading_pipeline.take() {
+            water_shading_pipeline.destroy(device);
+        }
+
+        if let Some(mut water_ubo) = self.water_ubo.take() {
+            water_ubo.destroy(device);
+            log!("Destroyed water uniform buffer");
+        }
+
+        if let Some(mut water_trace_descriptor) = self.water_trace_descriptor.take() {
+            water_trace_descriptor.destroy(device);
+        }
+
+        if let Some(water_trace_pipeline) = self.water_trace_pipeline.take() {
+            water_trace_pipeline.destroy(device);
+        }
+
+        if let Some(mut water_caustic_descriptor) = self.water_caustic_descriptor.take() {
+            water_caustic_descriptor.destroy(device);
+        }
+
+        if let Some(pipeline) = self.water_caustic_splat_pipeline.take() {
+            pipeline.destroy(device);
+        }
+
+        if let Some(pipeline) = self.water_caustic_apply_pipeline.take() {
+            pipeline.destroy(device);
+        }
+
+        if let (Some(buffer), Some(memory)) = (
+            self.scene_uniform_buffer.take(),
+            self.scene_uniform_buffer_memory.take(),
+        ) {
+            device.destroy_buffer(buffer, None);
+            device.free_memory(memory, None);
+            log!("Destroyed scene uniform buffer");
+        }
+
+        if let Some(mut ray_query_descriptor) = self.ray_query_descriptor.take() {
+            ray_query_descriptor.destroy(device);
+            log!("Destroyed ray query descriptor set");
+        }
+
+        if let Some(ray_query_pipeline) = self.ray_query_pipeline.take() {
+            ray_query_pipeline.destroy(device);
+            log!("Destroyed ray query pipeline");
+        }
+
+        if let Some(mut acceleration_structure) = self.acceleration_structure.take() {
+            acceleration_structure.destroy(device);
+            log!("Destroyed acceleration structure");
+        }
+
+        if let Some(mut gbuffer) = self.gbuffer.take() {
+            gbuffer.destroy(rrdevice);
+            log!("Destroyed G-Buffer");
+        }
+    }
+
     pub unsafe fn init_gbuffer(
         &mut self,
         instance: &Instance,
@@ -155,7 +295,7 @@ impl RayTracingData {
         rrcommand_pool: &Rc<RRCommandPool>,
         meshes: &[MeshBuffer],
         mesh_transforms: &[cgmath::Matrix4<f32>],
-        waters: &[(cgmath::Matrix4<f32>, f32, f32)],
+        procedurals: &[GpuPrimitive],
     ) -> Result<()> {
         log!("Building acceleration structures...");
 
@@ -204,16 +344,20 @@ impl RayTracingData {
             log!("Created BLAS for mesh");
         }
 
-        for (model, major, minor) in waters {
-            let blas = RRAccelerationStructure::create_water_blas(
-                instance,
-                rrdevice,
-                rrcommand_pool,
-                model,
-                *major,
-                *minor,
-            )?;
-            acceleration_structure.water_blas.push(blas);
+        let mut hit_table_entries: Vec<(cgmath::Matrix4<f32>, [f32; 4])> = Vec::new();
+
+        for primitive in procedurals {
+            if let BlasGeometry::ProceduralAabb { aabb } = &primitive.geometry {
+                let blas = RRAccelerationStructure::create_procedural_blas(
+                    instance,
+                    rrdevice,
+                    rrcommand_pool,
+                    &primitive.model,
+                    *aabb,
+                )?;
+                acceleration_structure.procedural_blas.push(blas);
+            }
+            hit_table_entries.push((primitive.model, primitive.params));
         }
 
         let tlas = RRAccelerationStructure::create_tlas(
@@ -221,20 +365,20 @@ impl RayTracingData {
             rrdevice,
             rrcommand_pool,
             &acceleration_structure.blas_list,
-            &acceleration_structure.water_blas,
+            &acceleration_structure.procedural_blas,
         )?;
         acceleration_structure.tlas = tlas;
         log!(
-            "Created TLAS with {} mesh + {} water instances",
+            "Created TLAS with {} mesh + {} procedural instances",
             acceleration_structure.blas_list.len(),
-            acceleration_structure.water_blas.len()
+            acceleration_structure.procedural_blas.len()
         );
 
         acceleration_structure.fill_hit_shading_table(
             instance,
             rrdevice,
             &vertex_buffers,
-            waters,
+            &hit_table_entries,
         )?;
 
         self.acceleration_structure = Some(acceleration_structure);
@@ -365,568 +509,15 @@ impl RayTracingData {
         self.scene_uniform_buffer_memory = Some(scene_memory);
         Ok(scene_buffer)
     }
+}
 
-    pub unsafe fn create_onion_skin_pipeline(
-        &mut self,
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        rrrender: &RRRender,
-        graphics_resources: &GraphicsResources,
-        offscreen_resolve_image_view: vk::ImageView,
-        offscreen_format: vk::Format,
-        width: u32,
-        height: u32,
-    ) -> Result<()> {
-        let (ghost_image, ghost_image_memory, ghost_image_view, ghost_sampler) =
-            OnionSkinPassResources::create_ghost_buffer(instance, rrdevice, width, height)?;
-
-        let ghost_render_pass = OnionSkinPassResources::create_ghost_render_pass(rrdevice)?;
-
-        let render_layouts = [
-            &graphics_resources.frame_set.layout,
-            &graphics_resources.materials.layout,
-            &graphics_resources.objects.layout,
-        ];
-
-        let ghost_pipeline = PipelineBuilder::from_pass(&ONION_SKIN_GHOST)
-            .vertex_input(VertexInputConfig::Standard)
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .polygon_mode(vk::PolygonMode::FILL)
-            .cull_mode(vk::CullModeFlags::BACK)
-            .custom_render_pass(ghost_render_pass)
-            .mrt_attachments(1)
-            .msaa_samples(vk::SampleCountFlags::_1)
-            .depth_test(DepthTestConfig {
-                test_enable: false,
-                write_enable: false,
-                compare_op: vk::CompareOp::ALWAYS,
-            })
-            .blend(BlendConfig {
-                enable: true,
-                src_color_factor: vk::BlendFactor::SRC_ALPHA,
-                dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-                color_op: vk::BlendOp::ADD,
-                src_alpha_factor: vk::BlendFactor::SRC_ALPHA,
-                dst_alpha_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-                alpha_op: vk::BlendOp::ADD,
-            })
-            .descriptor_layouts(&render_layouts)
-            .push_constants(PushConstantConfig {
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                offset: 0,
-                size: std::mem::size_of::<OnionSkinPushConstants>() as u32,
-            })
-            .build(rrdevice, rrrender, Some(vk::Extent2D { width, height }))?;
-
-        let ghost_framebuffer = OnionSkinPassResources::create_single_framebuffer(
-            rrdevice,
-            ghost_render_pass,
-            ghost_image_view,
-            width,
-            height,
-        )?;
-
-        let composite_render_pass =
-            OnionSkinPassResources::create_composite_render_pass(rrdevice, offscreen_format)?;
-
-        let (composite_descriptor_layout, composite_descriptor_set) =
-            OnionSkinPassResources::create_composite_descriptor(
-                rrdevice,
-                ghost_image_view,
-                ghost_sampler,
-            )?;
-
-        let composite_pipeline = PipelineBuilder::from_pass(&ONION_SKIN_COMPOSITE)
-            .vertex_input(VertexInputConfig::Custom {
-                bindings: vec![],
-                attributes: vec![],
-            })
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .polygon_mode(vk::PolygonMode::FILL)
-            .no_depth_test()
-            .custom_render_pass(composite_render_pass)
-            .msaa_samples(vk::SampleCountFlags::_1)
-            .blend(BlendConfig {
-                enable: true,
-                src_color_factor: vk::BlendFactor::ONE,
-                dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-                color_op: vk::BlendOp::ADD,
-                src_alpha_factor: vk::BlendFactor::ONE,
-                dst_alpha_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-                alpha_op: vk::BlendOp::ADD,
-            })
-            .descriptor_layouts(&[&composite_descriptor_layout])
-            .build(rrdevice, rrrender, Some(vk::Extent2D { width, height }))?;
-
-        let composite_framebuffer = OnionSkinPassResources::create_single_framebuffer(
-            rrdevice,
-            composite_render_pass,
-            offscreen_resolve_image_view,
-            width,
-            height,
-        )?;
-
-        self.onion_skin_pass = Some(OnionSkinPassResources {
-            ghost_image,
-            ghost_image_memory,
-            ghost_image_view,
-            ghost_sampler,
-            ghost_render_pass,
-            ghost_framebuffer,
-            ghost_pipeline,
-            composite_render_pass,
-            composite_framebuffer,
-            composite_pipeline,
-            composite_descriptor_layout,
-            composite_descriptor_set,
-            width,
-            height,
-        });
-
-        log!("Created onion skin pass: {}x{}", width, height);
-        Ok(())
+impl GpuResource for RayTracingData {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy_all(rrdevice);
     }
 
-    pub unsafe fn create_flame_pipeline(
-        &mut self,
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        rrrender: &RRRender,
-        graphics_resources: &GraphicsResources,
-        flame_buffer: &FlameBuffer,
-        position_image_view: vk::ImageView,
-        position_sampler: vk::Sampler,
-        scene_depth_view: vk::ImageView,
-    ) -> Result<()> {
-        let flame_ubo = UniformBuffer::new(
-            instance,
-            rrdevice,
-            MAX_FLAME_INSTANCES,
-            Placement::DeviceUpdated,
-        )?;
-        flame_ubo.write_slot(rrdevice, 0, &FlameUBO::default())?;
-
-        let flame_descriptor = RRFlameDescriptorSet::new(rrdevice)?;
-        flame_descriptor.write_all(
-            rrdevice,
-            &flame_ubo,
-            FlameImageBindings {
-                history_image_views: flame_buffer.history_image_views,
-                flame_sampler: flame_buffer.sampler,
-                sdf_image_view: position_image_view,
-                sdf_sampler: position_sampler,
-                scene_depth_view,
-            },
-        )?;
-
-        let flame_shading_pipeline = PipelineBuilder::from_pass(&FLAME_RESOLVE)
-            .vertex_input(VertexInputConfig::Custom {
-                bindings: vec![],
-                attributes: vec![],
-            })
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .no_depth_test()
-            .custom_render_pass(flame_buffer.shading_render_pass)
-            .msaa_samples(vk::SampleCountFlags::_1)
-            .mrt_attachments(2)
-            .blend(BlendConfig {
-                enable: true,
-                src_color_factor: vk::BlendFactor::ONE,
-                dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-                color_op: vk::BlendOp::ADD,
-                src_alpha_factor: vk::BlendFactor::ONE,
-                dst_alpha_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-                alpha_op: vk::BlendOp::ADD,
-            })
-            .attachment_blend(
-                1,
-                BlendConfig {
-                    enable: false,
-                    src_color_factor: vk::BlendFactor::ONE,
-                    dst_color_factor: vk::BlendFactor::ZERO,
-                    color_op: vk::BlendOp::ADD,
-                    src_alpha_factor: vk::BlendFactor::ONE,
-                    dst_alpha_factor: vk::BlendFactor::ZERO,
-                    alpha_op: vk::BlendOp::ADD,
-                },
-            )
-            .push_constants(PushConstantConfig {
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                offset: 0,
-                size: std::mem::size_of::<crate::renderer::FlamePushConstants>() as u32,
-            })
-            .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
-            .descriptor_layouts(&[
-                &graphics_resources.frame_set.layout,
-                &flame_descriptor.layout,
-            ])
-            .build(rrdevice, rrrender, Some(flame_buffer.extent()))?;
-
-        self.flame_shading_pipeline = Some(flame_shading_pipeline);
-        self.flame_descriptor = Some(flame_descriptor);
-        self.flame_ubo = Some(flame_ubo);
-
-        log!("Created flame pipelines");
-        Ok(())
-    }
-
-    pub unsafe fn create_water_pipeline(
-        &mut self,
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        rrrender: &RRRender,
-        graphics_resources: &GraphicsResources,
-        water_buffer: &WaterBuffer,
-        hdr_buffer: &HdrBuffer,
-        frames_in_flight: usize,
-    ) -> Result<()> {
-        let water_ubo = UniformBuffer::new(
-            instance,
-            rrdevice,
-            MAX_WATER_INSTANCES,
-            Placement::DeviceUpdated,
-        )?;
-        water_ubo.write_slot(rrdevice, 0, &WaterUBO::default())?;
-
-        let water_descriptor = RRWaterDescriptorSet::new(rrdevice, frames_in_flight)?;
-
-        let water_shading_pipeline = PipelineBuilder::from_pass(&WATER_RESOLVE)
-            .vertex_input(VertexInputConfig::Custom {
-                bindings: vec![],
-                attributes: vec![],
-            })
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .depth_test(DepthTestConfig {
-                test_enable: true,
-                write_enable: true,
-                compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-            })
-            .custom_render_pass(water_buffer.render_pass)
-            .msaa_samples(vk::SampleCountFlags::_1)
-            .mrt_attachments(2)
-            .blend(BlendConfig {
-                enable: false,
-                src_color_factor: vk::BlendFactor::ONE,
-                dst_color_factor: vk::BlendFactor::ZERO,
-                color_op: vk::BlendOp::ADD,
-                src_alpha_factor: vk::BlendFactor::ONE,
-                dst_alpha_factor: vk::BlendFactor::ZERO,
-                alpha_op: vk::BlendOp::ADD,
-            })
-            .push_constants(PushConstantConfig {
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                offset: 0,
-                size: std::mem::size_of::<crate::renderer::WaterPushConstants>() as u32,
-            })
-            .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
-            .descriptor_layouts(&[
-                &graphics_resources.frame_set.layout,
-                &water_descriptor.layout,
-            ])
-            .build(rrdevice, rrrender, Some(water_buffer.extent()))?;
-
-        self.water_shading_pipeline = Some(water_shading_pipeline);
-        self.water_descriptor = Some(water_descriptor);
-
-        let water_trace_descriptor = RRWaterTraceDescriptorSet::new(rrdevice, frames_in_flight)?;
-
-        self.water_ubo = Some(water_ubo);
-        let intersection_range = vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::INTERSECTION_KHR)
-            .offset(0)
-            .size(8)
-            .build();
-        let raygen_range = vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-            .offset(16)
-            .size(112)
-            .build();
-        let closest_hit_range = vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-            .offset(96)
-            .size(32)
-            .build();
-        let water_trace_pipeline = RRRayTracingPipeline::new(
-            instance,
-            rrdevice,
-            &WATER_TRACE,
-            &[water_trace_descriptor.layout.handle],
-            &[intersection_range, raygen_range, closest_hit_range],
-        )?;
-
-        self.water_trace_descriptor = Some(water_trace_descriptor);
-        self.water_trace_pipeline = Some(water_trace_pipeline);
-
-        self.create_water_caustic_pipelines(rrdevice, water_buffer, hdr_buffer)?;
-
-        log!("Created water trace pipeline");
-        Ok(())
-    }
-    /// Caustic splat/apply need the water UBO and the water buffer, so they are built
-    /// once the water pipeline has produced them; the TLAS is bound later if missing.
-    unsafe fn create_water_caustic_pipelines(
-        &mut self,
-        rrdevice: &RRDevice,
-        water_buffer: &WaterBuffer,
-        hdr_buffer: &HdrBuffer,
-    ) -> Result<()> {
-        let (Some(gbuffer), Some(scene_buffer), Some(water_ubo)) = (
-            self.gbuffer.as_ref(),
-            self.scene_uniform_buffer,
-            self.water_ubo.as_ref(),
-        ) else {
-            log!("Water caustic inputs are not ready, skipping caustic pipelines");
-            return Ok(());
-        };
-        let tlas = self
-            .acceleration_structure
-            .as_ref()
-            .and_then(|accel| accel.tlas.acceleration_structure);
-
-        let mut descriptor = RRWaterCausticDescriptorSet::new(rrdevice)?;
-
-        descriptor.allocate_and_update(
-            rrdevice,
-            water_buffer.caustic_accum_view,
-            gbuffer.position_image_view,
-            tlas,
-            scene_buffer,
-            water_ubo.handle(),
-            hdr_buffer.color_image_view,
-        )?;
-
-        let splat_pipeline =
-            RRPipeline::new_compute(rrdevice, &WATER_CAUSTIC_SPLAT, &[&descriptor.splat_layout])?;
-        let apply_pipeline =
-            RRPipeline::new_compute(rrdevice, &WATER_CAUSTIC_APPLY, &[&descriptor.apply_layout])?;
-
-        self.water_caustic_splat_pipeline = Some(splat_pipeline);
-        self.water_caustic_apply_pipeline = Some(apply_pipeline);
-        self.water_caustic_descriptor = Some(descriptor);
-
-        log!("Created water caustic pipelines");
-        Ok(())
-    }
-
-    pub unsafe fn create_tonemap_pipeline(
-        &mut self,
-        rrdevice: &RRDevice,
-        rrrender: &RRRender,
-        hdr_image_view: vk::ImageView,
-        hdr_sampler: vk::Sampler,
-        position_image_view: vk::ImageView,
-        position_sampler: vk::Sampler,
-        scene_buffer: vk::Buffer,
-        scene_buffer_size: vk::DeviceSize,
-        offscreen_render_pass: vk::RenderPass,
-        offscreen_extent: vk::Extent2D,
-        frames_in_flight: usize,
-    ) -> Result<()> {
-        let tonemap_descriptor = RRToneMapDescriptorSet::new(rrdevice, frames_in_flight)?;
-        tonemap_descriptor.write_all(
-            rrdevice,
-            hdr_image_view,
-            hdr_sampler,
-            position_image_view,
-            position_sampler,
-            scene_buffer,
-            scene_buffer_size,
-        )?;
-
-        let tonemap_pipeline = PipelineBuilder::from_pass(&TONEMAP)
-            .vertex_input(VertexInputConfig::Custom {
-                bindings: vec![],
-                attributes: vec![],
-            })
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .polygon_mode(vk::PolygonMode::FILL)
-            .depth_test(DepthTestConfig {
-                test_enable: true,
-                write_enable: true,
-                compare_op: vk::CompareOp::ALWAYS,
-            })
-            .custom_render_pass(offscreen_render_pass)
-            .descriptor_layouts(&[&tonemap_descriptor.layout])
-            .push_constants(PushConstantConfig {
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                offset: 0,
-                size: std::mem::size_of::<ToneMapPushConstants>() as u32,
-            })
-            .build(rrdevice, rrrender, Some(offscreen_extent))?;
-
-        self.tonemap_pipeline = Some(tonemap_pipeline);
-        self.tonemap_descriptor = Some(tonemap_descriptor);
-
-        Ok(())
-    }
-
-    pub unsafe fn create_bloom_pipelines(
-        &mut self,
-        rrdevice: &RRDevice,
-        rrrender: &RRRender,
-        bloom_chain: &BloomChain,
-        frames_in_flight: usize,
-    ) -> Result<()> {
-        let bloom_descriptors =
-            RRBloomDescriptorSets::new(rrdevice, bloom_chain.mip_count(), frames_in_flight)?;
-
-        let downsample_pipeline = PipelineBuilder::from_pass(&BLOOM_DOWNSAMPLE)
-            .vertex_input(VertexInputConfig::Custom {
-                bindings: vec![],
-                attributes: vec![],
-            })
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .polygon_mode(vk::PolygonMode::FILL)
-            .no_depth_test()
-            .custom_render_pass(bloom_chain.downsample_render_pass)
-            .msaa_samples(vk::SampleCountFlags::_1)
-            .descriptor_layouts(&[&bloom_descriptors.layout])
-            .push_constants(PushConstantConfig {
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                offset: 0,
-                size: 12,
-            })
-            .build(rrdevice, rrrender, None)?;
-
-        let upsample_pipeline = PipelineBuilder::from_pass(&BLOOM_UPSAMPLE)
-            .vertex_input(VertexInputConfig::Custom {
-                bindings: vec![],
-                attributes: vec![],
-            })
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .polygon_mode(vk::PolygonMode::FILL)
-            .no_depth_test()
-            .custom_render_pass(bloom_chain.upsample_render_pass)
-            .msaa_samples(vk::SampleCountFlags::_1)
-            .blend(BlendConfig {
-                enable: true,
-                src_color_factor: vk::BlendFactor::ONE,
-                dst_color_factor: vk::BlendFactor::ONE,
-                color_op: vk::BlendOp::ADD,
-                src_alpha_factor: vk::BlendFactor::ONE,
-                dst_alpha_factor: vk::BlendFactor::ONE,
-                alpha_op: vk::BlendOp::ADD,
-            })
-            .descriptor_layouts(&[&bloom_descriptors.layout])
-            .build(rrdevice, rrrender, None)?;
-
-        self.bloom_downsample_pipeline = Some(downsample_pipeline);
-        self.bloom_upsample_pipeline = Some(upsample_pipeline);
-        self.bloom_descriptors = Some(bloom_descriptors);
-        log!(
-            "Created bloom pipelines with {} mip levels",
-            bloom_chain.mip_count()
-        );
-
-        Ok(())
-    }
-
-    pub unsafe fn create_dof_pipeline(
-        &mut self,
-        rrdevice: &RRDevice,
-        rrrender: &RRRender,
-        hdr_image_view: vk::ImageView,
-        hdr_sampler: vk::Sampler,
-        depth_image_view: vk::ImageView,
-        depth_sampler: vk::Sampler,
-        dof_render_pass: vk::RenderPass,
-    ) -> Result<()> {
-        let dof_descriptor = RRDofDescriptorSet::new(rrdevice)?;
-        dof_descriptor.update_image_views(
-            rrdevice,
-            hdr_image_view,
-            hdr_sampler,
-            depth_image_view,
-            depth_sampler,
-        )?;
-
-        let dof_pipeline = PipelineBuilder::from_pass(&DOF)
-            .vertex_input(VertexInputConfig::Custom {
-                bindings: vec![],
-                attributes: vec![],
-            })
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .polygon_mode(vk::PolygonMode::FILL)
-            .no_depth_test()
-            .custom_render_pass(dof_render_pass)
-            .msaa_samples(vk::SampleCountFlags::_1)
-            .descriptor_layouts(&[&dof_descriptor.layout])
-            .push_constants(PushConstantConfig {
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                offset: 0,
-                size: 32,
-            })
-            .build(rrdevice, rrrender, None)?;
-
-        self.dof_pipeline = Some(dof_pipeline);
-        self.dof_descriptor = Some(dof_descriptor);
-        log!("Created DOF pipeline and descriptor set");
-
-        Ok(())
-    }
-
-    pub unsafe fn create_auto_exposure_pipelines(
-        &mut self,
-        rrdevice: &RRDevice,
-        hdr_image_view: vk::ImageView,
-        hdr_sampler: vk::Sampler,
-        histogram_buffer: vk::Buffer,
-        histogram_buffer_size: u64,
-        luminance_buffer: vk::Buffer,
-        luminance_buffer_size: u64,
-        frames_in_flight: usize,
-    ) -> Result<()> {
-        let histogram_descriptor =
-            RRAutoExposureHistogramDescriptorSet::new(rrdevice, frames_in_flight)?;
-        histogram_descriptor.update_bindings(
-            rrdevice,
-            hdr_image_view,
-            hdr_sampler,
-            histogram_buffer,
-            histogram_buffer_size,
-        )?;
-
-        let histogram_push_range = vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::COMPUTE)
-            .offset(0)
-            .size(12)
-            .build();
-
-        let histogram_pipeline = RRPipeline::new_compute_with_push_constants(
-            rrdevice,
-            &AUTO_EXPOSURE_HISTOGRAM,
-            &[&histogram_descriptor.layout],
-            &[histogram_push_range],
-        )?;
-
-        let average_descriptor = RRAutoExposureAverageDescriptorSet::new(rrdevice)?;
-        average_descriptor.update_bindings(
-            rrdevice,
-            histogram_buffer,
-            histogram_buffer_size,
-            luminance_buffer,
-            luminance_buffer_size,
-        )?;
-
-        let average_push_range = vk::PushConstantRange::builder()
-            .stage_flags(vk::ShaderStageFlags::COMPUTE)
-            .offset(0)
-            .size(40)
-            .build();
-
-        let average_pipeline = RRPipeline::new_compute_with_push_constants(
-            rrdevice,
-            &AUTO_EXPOSURE_AVERAGE,
-            &[&average_descriptor.layout],
-            &[average_push_range],
-        )?;
-
-        self.auto_exposure_histogram_pipeline = Some(histogram_pipeline);
-        self.auto_exposure_average_pipeline = Some(average_pipeline);
-        self.auto_exposure_histogram_descriptor = Some(histogram_descriptor);
-        self.auto_exposure_average_descriptor = Some(average_descriptor);
-
-        Ok(())
+    fn resource_name(&self) -> &'static str {
+        "RayTracingData"
     }
 }
 

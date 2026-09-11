@@ -98,7 +98,10 @@ impl App {
                 }
                 if water_state.is_some() {
                     let command_pool = self.resource::<CommandState>().pool.clone();
-                    let waters = crate::ecs::systems::collect_water_instances(&self.data.ecs_world);
+                    let procedural_primitives =
+                        crate::app::model_loader::collect_procedural_primitives(
+                            &self.data.ecs_world,
+                        );
                     let mesh_transforms = crate::ecs::systems::collect_mesh_transforms(
                         &self.data.ecs_world,
                         &self.data.ecs_assets,
@@ -109,7 +112,7 @@ impl App {
                         &command_pool,
                         &self.data.graphics_resources,
                         &mut self.data.raytracing,
-                        &waters,
+                        &procedural_primitives,
                         &mesh_transforms,
                     )?;
                 }
@@ -205,18 +208,20 @@ impl App {
         self.rrdevice.device.device_wait_idle()?;
 
         let command_pool = self.resource::<CommandState>().pool.clone();
-        let swapchain = self.resource::<SwapchainState>().swapchain.clone();
-
-        crate::app::model_loader::load_model_additive(
-            path,
+        let procedural_primitives =
+            crate::app::model_loader::collect_procedural_primitives(&self.data.ecs_world);
+        let mesh_transforms = crate::ecs::systems::collect_mesh_transforms(
+            &self.data.ecs_world,
+            &self.data.ecs_assets,
+        );
+        crate::app::model_loader::rebuild_acceleration_structures(
             &self.instance,
             &self.rrdevice,
             &command_pool,
-            &swapchain,
-            &mut self.data.graphics_resources,
+            &self.data.graphics_resources,
             &mut self.data.raytracing,
-            &mut self.data.ecs_world,
-            &mut self.data.ecs_assets,
+            &procedural_primitives,
+            &mesh_transforms,
         )?;
 
         msg_info!("Model added: {}", path);

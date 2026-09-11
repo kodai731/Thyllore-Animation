@@ -4,20 +4,7 @@ use thyllore_vulkan_core::raytracing::{RRAccelerationStructure, RRBLAS};
 
 use crate::app::FrameContext;
 use crate::asset::AssetStorage;
-use crate::ecs::component::WaterTorusEffect;
 use crate::ecs::world::{GlobalTransform, MeshRef, World};
-
-pub fn collect_water_instances(world: &World) -> Vec<(Matrix4<f32>, f32, f32)> {
-    world
-        .query_waters()
-        .iter()
-        .filter_map(|&entity| {
-            let effect = world.get_component::<WaterTorusEffect>(entity)?;
-            let ubo = thyllore_effect_core::build_water_ubo(effect, 0);
-            Some((ubo.model, effect.major_radius, effect.minor_radius))
-        })
-        .collect()
-}
 
 pub fn collect_mesh_transforms(world: &World, assets: &AssetStorage) -> Vec<Matrix4<f32>> {
     let indexed_transforms: Vec<(usize, Matrix4<f32>)> = world
@@ -52,7 +39,7 @@ pub unsafe fn refresh_tlas_mesh_transforms(ctx: &mut FrameContext) -> Result<()>
     }
 
     let mesh_transforms = collect_mesh_transforms(ctx.world, ctx.assets);
-    let water_instances = collect_water_instances(ctx.world);
+    let procedural_primitives = crate::ecs::systems::gpu_primitive_sources::collect_all(ctx.world);
     let gbuffer_mesh_indices: Vec<usize> = ctx
         .graphics
         .meshes
@@ -67,7 +54,7 @@ pub unsafe fn refresh_tlas_mesh_transforms(ctx: &mut FrameContext) -> Result<()>
     };
 
     if acceleration_structure.blas_list.len() != gbuffer_mesh_indices.len()
-        || acceleration_structure.water_blas.len() != water_instances.len()
+        || acceleration_structure.procedural_blas.len() != procedural_primitives.len()
     {
         return Ok(());
     }
@@ -84,12 +71,12 @@ pub unsafe fn refresh_tlas_mesh_transforms(ctx: &mut FrameContext) -> Result<()>
             .unwrap_or_else(Matrix4::identity);
         needs_update |= apply_instance_transform(blas, &model);
     }
-    for (blas, (model, _, _)) in acceleration_structure
-        .water_blas
+    for (blas, primitive) in acceleration_structure
+        .procedural_blas
         .iter_mut()
-        .zip(water_instances.iter())
+        .zip(procedural_primitives.iter())
     {
-        needs_update |= apply_instance_transform(blas, model);
+        needs_update |= apply_instance_transform(blas, &primitive.model);
     }
 
     if !needs_update {
@@ -102,7 +89,7 @@ pub unsafe fn refresh_tlas_mesh_transforms(ctx: &mut FrameContext) -> Result<()>
         ctx.command_pool.as_ref(),
         &mut acceleration_structure.tlas,
         &acceleration_structure.blas_list,
-        &acceleration_structure.water_blas,
+        &acceleration_structure.procedural_blas,
     )
 }
 

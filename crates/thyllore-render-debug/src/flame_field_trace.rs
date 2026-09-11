@@ -74,7 +74,7 @@ fn glsl_fract(x: f32) -> f32 {
     x - x.floor()
 }
 
-/// Mirrors GLSL `interleavedGradientNoise` from flame_noise.glsl.
+/// Mirrors GLSL `interleavedGradientNoise` from noise.glsl.
 fn interleaved_gradient_noise(coord: [f32; 2]) -> f32 {
     let dot = coord[0] * 0.06711056 + coord[1] * 0.00583715;
     glsl_fract(52.9829189 * glsl_fract(dot))
@@ -92,7 +92,7 @@ fn transform_vector(matrix: &Matrix4<f32>, vector: [f32; 3]) -> [f32; 3] {
 
 const EROSION_MEAN_SHRINK: f32 = 0.0875;
 const PLATEAU_CARVE_BOOST: f32 = 1.0;
-/// Mirror of FLAME_SUPPORT_BISECTION_STEPS in flame_radial_integral.glsl.
+/// Mirror of FLAME_SUPPORT_BISECTION_STEPS in radial_integral.glsl.
 const SUPPORT_BISECTION_STEPS: usize = 8;
 const EROSION_SHELL_REF: f32 = 0.30;
 /// Fixed scan grid for mean-line shell crossings, independent of the segment
@@ -572,7 +572,7 @@ impl<'a> UboCtx<'a> {
             * (-self.envelope_remaining_mu(h) * self.u.tip_carve_params.inv_reach).exp()
     }
 
-    /// Mirror of flameCarveResidualOuterGate in flame_noise_field.glsl:
+    /// Mirror of flameCarveResidualOuterGate in noise_field.glsl:
     /// Hermite smoothstep from inner (pre-expanded support edge in u^2 units) to 1.0.
     /// margin <= 1.0 returns 0.0 (no boost).
     fn flame_carve_residual_outer_gate(&self, u_squared: f32) -> f32 {

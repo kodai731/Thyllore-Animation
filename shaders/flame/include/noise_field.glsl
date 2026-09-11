@@ -1,7 +1,7 @@
 #ifndef FLAME_NOISE_FIELD_GLSL
 #define FLAME_NOISE_FIELD_GLSL
 
-#include "flame_branch_transport.glsl"
+#include "branch_transport.glsl"
 
 // Octagonal shell inscribed radius: 0.5 * cos(pi/8), derived from RING_SEGMENTS=8
 
@@ -24,8 +24,8 @@ vec3 flameNoiseLatticeRotate(vec3 v) {
     return v * c + cross(axis, v) * s + axis * dot(axis, v) * (1.0 - c);
 }
 
-// Must be included after FlameUBO, chebyshev.glsl, flame_noise.glsl, and
-// flame_shell_profile.glsl (FLAME_SHELL_SUPPORT_HEADROOM).
+// Must be included after FlameUBO, chebyshev.glsl, noise.glsl, and
+// shell_profile.glsl (FLAME_SHELL_SUPPORT_HEADROOM).
 
 // Compact-support biweight radial profile: (1 - u^2)^2, exactly zero outside u >= 1.
 float flameBiweight(float uSquared) {
@@ -781,7 +781,7 @@ FlameWaveModeSumResult flameWaveModeSum(
         float spatialAngle = dot(waveVector.xyz, w) + dot(flame.waveJitter[min(n, 95)].xyz, jitterPsi);
         float angle = spatialAngle + wavePhase.x + wavePhase.y * eddyTime;
         float betaPhase = dot(waveVector.xyz, rate) + dot(flame.waveJitter[min(n, 95)].xyz, jitterPsiRate);
-        float betaMix = mixScale * betaPhase * dt / 3.14159265;
+        float betaMix = mixScale * betaPhase * dt / PI;
         float bm2 = betaMix * betaMix;
         result.zMix += exp(-bm2 * bm2) * waveVector.w
             * sin(mixScale * spatialAngle + wavePhase.x + wavePhase.y * eddyTime);
@@ -795,7 +795,7 @@ FlameWaveModeSumResult flameWaveModeSum(
         } else {
             carrier = sin(angle);
         }
-        float beta = betaPhase * dt / 3.14159265;
+        float beta = betaPhase * dt / PI;
         float b2 = beta * beta;
         float weight = exp(-b2 * b2);
         result.zLow += weight * waveVector.w * carrier;
@@ -821,7 +821,7 @@ FlameWaveModeSumResult flameWaveModeSum(
         } else {
             carrier = sin(angle);
         }
-        float beta = betaPhase * dt / 3.14159265;
+        float beta = betaPhase * dt / PI;
         float b2 = beta * beta;
         float weight = exp(-b2 * b2);
         float envelope = 1.0 + wavePhase.z * result.zLow;

@@ -11,7 +11,7 @@
 // the corrections shrink by r^2 — sigma -> 0 restores the fitted sharpness,
 // large sigma flattens the response.
 // Mirrored in thyllore-math-core/src/erf_response.rs (accuracy tests live there).
-// Must be included after FlameUBO and flame_erf_moments.glsl.
+// Must be included after FlameUBO and erf_moments.glsl.
 
 struct FlameSmoothedResponse {
     float center;

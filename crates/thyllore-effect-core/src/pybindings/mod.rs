@@ -27,6 +27,7 @@ fn ui_kind_name(kind: UiKind) -> &'static str {
 fn fill_ui_param_dict(dict: &Bound<'_, PyDict>, param: &UiParam) -> PyResult<()> {
     dict.set_item("name", param.name)?;
     dict.set_item("label", param.display_label())?;
+    dict.set_item("group", param.group)?;
     dict.set_item("kind", ui_kind_name(param.kind))?;
     dict.set_item("min", param.min)?;
     dict.set_item("max", param.max)?;

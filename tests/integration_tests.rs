@@ -62,7 +62,10 @@ fn test_vendor_directory_structure() {
 #[test]
 fn test_cargo_files_exist() {
     assert!(Path::new("Cargo.toml").exists(), "Cargo.toml should exist");
-    assert!(Path::new("build.rs").exists(), "build.rs should exist");
+    assert!(
+        Path::new("crates/thyllore-vulkan-core/build.rs").exists(),
+        "crates/thyllore-vulkan-core/build.rs should exist"
+    );
 }
 
 #[test]

@@ -90,8 +90,17 @@ log "Platform: $PLATFORM -> Blender: $BLENDER_NAME, mode: $BUILD_MODE, version: 
 log "Exporting wind GLSL shaders..."
 python3 "$REPO_ROOT/scripts/blender/wind/export_glsl.py" --repo-root "$REPO_ROOT" --out "$SOURCE_DIR/shaders"
 
-if ! ls "$SOURCE_DIR/wheels/thyllore_effect_core-"*.whl >/dev/null 2>&1; then
-    log "Collecting wheels..."
+wheel_is_stale() {
+    local wheel
+    wheel="$(ls -t "$SOURCE_DIR/wheels/thyllore_effect_core-"*.whl 2>/dev/null | head -1)"
+    if [[ -z "$wheel" ]]; then
+        return 0
+    fi
+    [[ -n "$(find "$REPO_ROOT/crates" -name '*.rs' -newer "$wheel" -print -quit)" ]]
+}
+
+if wheel_is_stale; then
+    log "Collecting wheels (missing or older than crates/)..."
     bash "$REPO_ROOT/scripts/collect_wheels.sh" --crate thyllore-effect-core --wheels-dir blender_addon/effects/wind/wheels
 fi
 

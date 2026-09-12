@@ -1,4 +1,4 @@
-use crate::wind::analytic::shell_integral::{WindShellParams, WIND_MAX_PUFFS};
+use crate::wind::analytic::integral::{WindShellParams, WIND_MAX_PUFFS};
 use crate::wind::WindTornadoEffect;
 use std::f32::consts::TAU;
 use thyllore_math_core::hash13;

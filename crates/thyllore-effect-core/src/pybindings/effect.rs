@@ -123,6 +123,12 @@ pub fn gpu_block_bytes<T: GpuBlock>(block: &T) -> Vec<u8> {
     block.as_bytes().to_vec()
 }
 
+/// Row-major Blender-to-engine axis conversion, the single source the addon's `coordinates.C` mirrors.
+#[pyfunction]
+pub fn blender_to_engine_matrix() -> [[f32; 4]; 4] {
+    thyllore_math_core::blender_to_engine_rows()
+}
+
 pub fn matrix_from_column_major(values: [f32; 16]) -> Matrix4<f32> {
     Matrix4::new(
         values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7],

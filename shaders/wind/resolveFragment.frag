@@ -13,8 +13,8 @@ layout(set = 0, binding = 0) uniform FrameUBO {
 } frame;
 
 #include "wind/include/component.glsl"
-#include "wind/include/shell_field.glsl"
-#include "wind/include/shell_integral.glsl"
+#include "wind/include/field.glsl"
+#include "wind/include/integral.glsl"
 #include "wind/include/reference_quadrature.glsl"
 #include "wind/include/shadow_volume.glsl"
 
@@ -101,7 +101,7 @@ void main() {
         return;
     }
     if (push.debugView == WIND_DEBUG_KNOT_COUNT) {
-        outColor = vec4(float(knotCount) / float(WIND_MAX_KNOTS), 0.0, 0.0, 1.0);
+        outColor = vec4(float(knotCount) / float(RAY_MAX_KNOTS), 0.0, 0.0, 1.0);
         return;
     }
     if (push.debugView == WIND_DEBUG_COVERAGE) {

@@ -51,6 +51,9 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   through the abstract types of `thyllore-render-core`.
 - Effects (`thyllore-effect-core`) keep one directory per effect with the same split: `effect/` data,
   `analytic/` pure math mirrored by the shaders, `gpu/` UBO structs, `presets`, `settings`.
+  Analytic pieces that more than one effect can use (`volume/`: ray knots, the wall shell, puffs) live
+  beside the effect directories and mirror `shaders/include/`; an effect's `analytic/` only builds the
+  shared structs from its own parameters and adds what is specific to it (wind: streak / eddy modulation).
 - `thyllore-vulkan-core` never names an effect: no `Wind*` / `Flame*` / `Water*` types, no per-effect
   fields in `RayTracingData`, no per-effect descriptor set, record helper, buffer or push constants. It
   offers generic primitives only (images and `VolumeImage`, samplers, `create_color_overlay_render_pass`,

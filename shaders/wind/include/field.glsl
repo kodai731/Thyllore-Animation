@@ -1,16 +1,15 @@
-#ifndef WIND_SHELL_FIELD_GLSL
-#define WIND_SHELL_FIELD_GLSL
+#ifndef WIND_FIELD_GLSL
+#define WIND_FIELD_GLSL
 
-// Density field of the tornado: a compact-support polynomial shell in q = x^2 + z^2
-// (wall around P(h) = (base + slope * h)^2) times a height envelope, streak and eddy modulation.
-// Mirrored in thyllore-effect-core/src/wind/analytic/shell_integral.rs.
+// Density field of the tornado: the wall shell of include/volume_shell.glsl built from the wind
+// UBO, modulated by rotating streaks and eddies.
+// Mirrored in thyllore-effect-core/src/wind/analytic/integral.rs.
 // Must be included after component.glsl.
 
 #include "include/common.glsl"
-#include "include/compact_support.glsl"
 #include "include/noise.glsl"
+#include "include/volume_shell.glsl"
 
-const float WIND_LINEAR_COEFFICIENT_EPSILON = 1e-7;
 const float WIND_EDDY_MIN_RADIUS_SQ = 1e-4;
 const int WIND_EDDY_OCTAVE_COUNT = 3;
 // Lattice distance between consecutive cell nodes at which an octave starts to fade and is gone (Nyquist = 0.5).
@@ -51,12 +50,22 @@ float windEddyReseedPeriod() { return wind.eddy2.z; }
 float windEddyErosion() { return wind.eddy2.w; }
 float windTime() { return wind.optics.z; }
 
-float windFadeStart() {
-    return 1.0 - windTopFade();
+VolumeShell windShell() {
+    VolumeShell shell;
+    shell.height = windHeight();
+    shell.radiusBase = windWallRadiusBase();
+    shell.radiusSlope = windWallRadiusSlope();
+    shell.radiusOffsetQ = windSpreadOffset();
+    shell.widthQ = windWallWidthQ();
+    shell.strength = windWallStrength();
+    shell.hTop = windHTop();
+    shell.topFade = windTopFade();
+    shell.sigmaT = windSigmaT();
+    return shell;
 }
 
 float windWallRadius(float h) {
-    return windWallRadiusBase() + windWallRadiusSlope() * h;
+    return shellWallRadius(windShell(), h);
 }
 
 float windRotationPhase(float h) {
@@ -80,8 +89,7 @@ float windStreakSigma(vec3 local) {
 }
 
 float windWallRadiusSq(float h) {
-    float radius = windWallRadius(h);
-    return radius * radius + windSpreadOffset();
+    return shellWallRadiusSq(windShell(), h);
 }
 
 const mat3 WIND_OCTAVE_ROTATION = mat3(
@@ -213,86 +221,12 @@ float windEddySigma(vec3 local, vec3 stepAhead) {
     return 1.0 + windEddyAmplitude() * (2.0 * eroded - 1.0);
 }
 
-float windEnvelopeRadius(float h) {
-    return sqrt(max(windWallRadiusSq(h), 0.0)) + sqrt(windWallWidthQ());
-}
-
-float windEnvelopeHeight(float h) {
-    if (h < 0.0 || h > windHTop()) {
-        return 0.0;
-    }
-    float normalizedHeight = h / windHTop();
-    float fadeStart = windFadeStart();
-    if (normalizedHeight <= fadeStart) {
-        return 1.0;
-    }
-    float v = (normalizedHeight - fadeStart) / windTopFade();
-    return 1.0 - v * v * v * (10.0 - v * (15.0 - 6.0 * v));
-}
-
 float windDensityAt(vec3 p) {
-    float h = p.y / windHeight();
-    float envelope = windEnvelopeHeight(h);
-    if (envelope <= 0.0) {
-        return 0.0;
-    }
-    float q = p.x * p.x + p.z * p.z;
-
-    float wall = windWallStrength() * biweight((q - windWallRadiusSq(h)) / windWallWidthQ());
-    return windSigmaT() * envelope * wall * windStreakSigma(p) * windEddySigma(p, vec3(0.0));
-}
-
-bool clampToConeFrustum(
-    float radiusBase, float radiusTop, float topY,
-    vec3 o, vec3 d, inout float tNear, inout float tFar) {
-    float slopePerUnitY = (radiusTop - radiusBase) / topY;
-    float m = radiusBase + slopePerUnitY * o.y;
-    float n = slopePerUnitY * d.y;
-    float a = dot(d.xz, d.xz) - n * n;
-    float b = 2.0 * (dot(o.xz, d.xz) - m * n);
-    float c = dot(o.xz, o.xz) - m * m;
-
-    if (abs(a) < WIND_LINEAR_COEFFICIENT_EPSILON) {
-        if (abs(b) < WIND_LINEAR_COEFFICIENT_EPSILON) {
-            if (c > 0.0) return false;
-        } else {
-            float tRoot = -c / b;
-            if (b > 0.0) {
-                tFar = min(tFar, tRoot);
-            } else {
-                tNear = max(tNear, tRoot);
-            }
-        }
-    } else {
-        float discriminant = b * b - 4.0 * a * c;
-        if (discriminant < 0.0) {
-            if (a > 0.0) return false;
-        } else if (a > 0.0) {
-            float sqrtDiscriminant = sqrt(discriminant);
-            float t0 = (-b - sqrtDiscriminant) / (2.0 * a);
-            float t1 = (-b + sqrtDiscriminant) / (2.0 * a);
-            tNear = max(tNear, min(t0, t1));
-            tFar = min(tFar, max(t0, t1));
-        }
-    }
-
-    if (abs(d.y) < WIND_LINEAR_COEFFICIENT_EPSILON) {
-        if (o.y < 0.0 || o.y > topY) return false;
-    } else {
-        float tY0 = -o.y / d.y;
-        float tY1 = (topY - o.y) / d.y;
-        tNear = max(tNear, min(tY0, tY1));
-        tFar = min(tFar, max(tY0, tY1));
-    }
-
-    return tNear <= tFar;
+    return shellDensityAt(windShell(), p) * windStreakSigma(p) * windEddySigma(p, vec3(0.0));
 }
 
 bool clampToWindCone(vec3 o, vec3 d, inout float tNear, inout float tFar) {
-    float topY = windHTop() * windHeight();
-    float radiusBase = windEnvelopeRadius(0.0);
-    float radiusTop = windEnvelopeRadius(windHTop());
-    return clampToConeFrustum(radiusBase, radiusTop, topY, o, d, tNear, tFar);
+    return clampToShellCone(windShell(), o, d, tNear, tFar);
 }
 
 #endif

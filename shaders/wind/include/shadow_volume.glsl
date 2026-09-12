@@ -3,7 +3,7 @@
 
 // Wall + envelope transmittance cache of the wind cone; the grid is include/shadow_volume.glsl.
 // Extents are mirrored in thyllore-effect-core/src/wind/gpu/components/shadow_volume.rs.
-// Must be included after shell_field.glsl.
+// Must be included after field.glsl.
 
 const int SHADOW_VOLUME_RADIAL = 48;
 const int SHADOW_VOLUME_HEIGHT = 48;

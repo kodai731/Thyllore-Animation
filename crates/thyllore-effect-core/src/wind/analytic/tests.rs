@@ -1,7 +1,8 @@
 use super::*;
+use crate::volume::{PUFFS_PER_RAY, RAY_MAX_KNOTS};
 use crate::wind::analytic::eddy::{EDDY_FADE_END, EDDY_FADE_START, EDDY_OCTAVE_COUNT};
+use crate::wind::analytic::integral::{ACTIVE_CELLS_MIN, MODULATION_CELLS};
 use crate::wind::analytic::motion::rotation_phase;
-use crate::wind::analytic::shell_integral::{ACTIVE_CELLS_MIN, MODULATION_CELLS};
 use crate::wind::WindTornadoEffect;
 use crate::wind::{
     WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,
@@ -351,12 +352,13 @@ fn knots_are_sorted_and_bracketed() {
     let mut t_near = 0.0;
     let mut t_far = 1e4;
     clamp_ray_to_wind_cone(&params, origin, direction, &mut t_near, &mut t_far);
-    let (knots, count, _puffs) = wind_ray_knots(&params, origin, direction, t_near, t_far);
-    assert!(count >= 2);
-    assert_eq!(knots[0], t_near);
-    assert_eq!(knots[count - 1], t_far);
-    for i in 1..count {
-        assert!(knots[i - 1] <= knots[i], "knots {:?}", &knots[..count]);
+    let (knots, _puffs) = wind_ray_knots(&params, origin, direction, t_near, t_far);
+    let values = knots.values();
+    assert!(values.len() >= 2);
+    assert_eq!(values[0], t_near);
+    assert_eq!(values[values.len() - 1], t_far);
+    for pair in values.windows(2) {
+        assert!(pair[0] <= pair[1], "knots {values:?}");
     }
 }
 
@@ -747,11 +749,11 @@ fn puff_knot_count_does_not_exceed_wind_max_knots() {
     let mut t_far = 1e4;
     clamp_ray_to_wind_cone(&params, origin, direction, &mut t_near, &mut t_far);
 
-    let (_knots, count, _puffs) = wind_ray_knots(&params, origin, direction, t_near, t_far);
+    let (knots, _puffs) = wind_ray_knots(&params, origin, direction, t_near, t_far);
+    let count = knots.count();
     assert!(
-        count <= WIND_MAX_KNOTS,
-        "knot count {count} exceeds WIND_MAX_KNOTS={}",
-        WIND_MAX_KNOTS
+        count <= RAY_MAX_KNOTS,
+        "knot count {count} exceeds RAY_MAX_KNOTS={RAY_MAX_KNOTS}"
     );
 }
 
@@ -960,7 +962,7 @@ fn wall_envelope_density(params: &WindShellParams, local: Vector3<f32>) -> f32 {
     let q = local.x * local.x + local.z * local.z;
     let u = (q - params.wall_radius_sq(h)) / params.wall_width_q;
     let inside = (1.0 - u * u).max(0.0);
-    params.sigma_t * wind_envelope_height(params, h) * params.wall_strength * inside * inside
+    params.sigma_t * params.shell().envelope_height(h) * params.wall_strength * inside * inside
 }
 
 #[test]
@@ -1044,7 +1046,7 @@ fn glsl_shadow_volume_extents_match_the_rust_constants() {
 
 #[test]
 fn glsl_polynomial_terms_match_the_rust_mirror_and_cover_the_piece_degree() {
-    let source = wind_glsl_source("shell_integral.glsl");
+    let source = wind_glsl_source("integral.glsl");
 
     assert_eq!(
         glsl_int_constant(&shared_glsl_source("polynomial.glsl"), "POLY_TERMS"),
@@ -1058,7 +1060,7 @@ fn glsl_polynomial_terms_match_the_rust_mirror_and_cover_the_piece_degree() {
         glsl_int_constant(&source, "WIND_ACTIVE_CELLS_MIN"),
         ACTIVE_CELLS_MIN as i64
     );
-    let field_source = wind_glsl_source("shell_field.glsl");
+    let field_source = wind_glsl_source("field.glsl");
     assert_eq!(
         glsl_int_constant(&field_source, "WIND_EDDY_OCTAVE_COUNT"),
         EDDY_OCTAVE_COUNT as i64
@@ -1072,12 +1074,12 @@ fn glsl_polynomial_terms_match_the_rust_mirror_and_cover_the_piece_degree() {
         EDDY_FADE_END
     );
     assert_eq!(
-        glsl_int_constant(&source, "WIND_MAX_KNOTS"),
-        WIND_MAX_KNOTS as i64
+        glsl_int_constant(&shared_glsl_source("ray_knots.glsl"), "RAY_MAX_KNOTS"),
+        RAY_MAX_KNOTS as i64
     );
     assert_eq!(
-        glsl_int_constant(&source, "WIND_PUFFS_PER_RAY"),
-        WIND_PUFFS_PER_RAY as i64
+        glsl_int_constant(&shared_glsl_source("volume_puffs.glsl"), "PUFFS_PER_RAY"),
+        PUFFS_PER_RAY as i64
     );
 
     let biweight_of_quadratic_degree = 8;

@@ -1,8 +1,52 @@
 use crate::animation::editable::EditableAnimationClip;
+use crate::app::FrameContext;
 use crate::ecs::resource::{BatchRun, ClipLibrary, TimelineState};
+use crate::ecs::storage::Component;
 use crate::ecs::systems::scalar_clip_systems::{find_entity_clip_id, sampled_scalar_values};
 use crate::ecs::world::{Entity, Transform, World};
 use thyllore_anim_core::editable::PropertyType;
+
+/// An effect component whose local time, placement and animated scalars are refreshed once per
+/// frame by `advance_effect_time`.
+pub trait TimedEffect: Component {
+    /// Per-frame values read from `World` resources before the components are borrowed mutably.
+    type WorldInputs: Copy;
+
+    fn entities(world: &World) -> Vec<Entity>;
+    fn time_sources(world: &World, delta_time: f32) -> EffectTimeSources;
+    fn collect_world_inputs(world: &World) -> Self::WorldInputs;
+
+    fn time(&self) -> f32;
+    fn time_mut(&mut self) -> &mut f32;
+    fn time_scale(&self) -> f32;
+    fn time_offset(&self) -> f32;
+    fn apply_world_inputs(&mut self, inputs: Self::WorldInputs);
+    fn place(&mut self, transform: &Transform);
+    fn apply_scalar(&mut self, property_type: PropertyType, value: f32);
+}
+
+pub fn advance_effect_time<E: TimedEffect>(ctx: &mut FrameContext) {
+    let entities = E::entities(ctx.world);
+    let inputs = EffectEntityInputs::collect(ctx.world, &entities);
+    let time_sources = E::time_sources(ctx.world, ctx.delta_time);
+    let world_inputs = E::collect_world_inputs(ctx.world);
+
+    for &entity in &entities {
+        let Some(effect) = ctx.world.get_component_mut::<E>(entity) else {
+            continue;
+        };
+        let (time_scale, time_offset) = (effect.time_scale(), effect.time_offset());
+        resolve_effect_time(effect.time_mut(), time_scale, time_offset, time_sources);
+        effect.apply_world_inputs(world_inputs);
+        if let Some(transform) = inputs.transform_of(entity) {
+            effect.place(transform);
+        }
+
+        for (property_type, value) in inputs.sampled_scalars_of(entity, effect.time()) {
+            effect.apply_scalar(property_type, value);
+        }
+    }
+}
 
 const BATCH_FRAME_DURATION: f32 = 1.0 / 60.0;
 

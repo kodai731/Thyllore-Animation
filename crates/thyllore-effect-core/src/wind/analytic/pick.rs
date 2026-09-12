@@ -1,6 +1,4 @@
-use crate::wind::analytic::shell_integral::{
-    clamp_ray_to_wind_cone, wind_envelope_radius, WindShellParams,
-};
+use crate::wind::analytic::integral::{clamp_ray_to_wind_cone, WindShellParams};
 use cgmath::{InnerSpace, Matrix4, Vector3};
 
 const PICK_T_MAX: f32 = 1e4;
@@ -33,7 +31,8 @@ pub fn pick_wind(
 
 /// Corners of the local axis-aligned box enclosing the envelope cone frustum.
 pub fn wind_local_bounds_corners(params: &WindShellParams) -> [Vector3<f32>; 8] {
-    let radius = wind_envelope_radius(params, 0.0).max(wind_envelope_radius(params, 1.0));
+    let shell = params.shell();
+    let radius = shell.envelope_radius(0.0).max(shell.envelope_radius(1.0));
     let mut corners = [Vector3::new(0.0, 0.0, 0.0); 8];
     for (index, corner) in corners.iter_mut().enumerate() {
         corner.x = if index & 1 == 0 { -radius } else { radius };

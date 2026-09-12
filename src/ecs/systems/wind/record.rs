@@ -8,10 +8,15 @@ use crate::ecs::systems::wind::descriptors::{
 use crate::ecs::systems::wind::render_targets::wind_shadow_volume_extent;
 use crate::vulkanr::pipeline::RRPipeline;
 use thyllore_effect_core::WIND_SHADOW_VOLUME_SLOTS;
-use thyllore_vulkan_core::FrameRenderContext;
+use thyllore_vulkan_core::{
+    begin_overlay_render_pass, draw_fullscreen_triangle, insert_storage_image_read_barrier,
+    insert_storage_image_write_barrier, set_full_viewport, FrameRenderContext,
+    OverlayAttachmentLoad,
+};
 
 /// Must match local_size in shadowBake.comp.
 const SHADOW_BAKE_WORKGROUP_SIZE: u32 = 8;
+const TRANSPARENT_BLACK: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -45,51 +50,11 @@ pub struct WindInstanceDraw {
     pub scissor: vk::Rect2D,
 }
 
-/// The volume is rewritten in full every frame, so the previous contents are discarded.
-unsafe fn insert_pre_bake_barrier(
-    device: &Device,
-    targets: &WindRenderTargets,
-    cmd: vk::CommandBuffer,
-) {
-    let barrier = vk::ImageMemoryBarrier::builder()
-        .src_access_mask(vk::AccessFlags::SHADER_READ)
-        .dst_access_mask(vk::AccessFlags::SHADER_WRITE)
-        .old_layout(vk::ImageLayout::UNDEFINED)
-        .new_layout(vk::ImageLayout::GENERAL)
-        .image(targets.shadow_volume.image)
-        .subresource_range(targets.shadow_volume.subresource_range());
-    device.cmd_pipeline_barrier(
-        cmd,
-        vk::PipelineStageFlags::FRAGMENT_SHADER,
-        vk::PipelineStageFlags::COMPUTE_SHADER,
-        vk::DependencyFlags::empty(),
-        &[] as &[vk::MemoryBarrier],
-        &[] as &[vk::BufferMemoryBarrier],
-        &[barrier],
-    );
-}
-
-unsafe fn insert_post_bake_barrier(
-    device: &Device,
-    targets: &WindRenderTargets,
-    cmd: vk::CommandBuffer,
-) {
-    let barrier = vk::ImageMemoryBarrier::builder()
-        .src_access_mask(vk::AccessFlags::SHADER_WRITE)
-        .dst_access_mask(vk::AccessFlags::SHADER_READ)
-        .old_layout(vk::ImageLayout::GENERAL)
-        .new_layout(vk::ImageLayout::GENERAL)
-        .image(targets.shadow_volume.image)
-        .subresource_range(targets.shadow_volume.subresource_range());
-    device.cmd_pipeline_barrier(
-        cmd,
-        vk::PipelineStageFlags::COMPUTE_SHADER,
-        vk::PipelineStageFlags::FRAGMENT_SHADER,
-        vk::DependencyFlags::empty(),
-        &[] as &[vk::MemoryBarrier],
-        &[] as &[vk::BufferMemoryBarrier],
-        &[barrier],
-    );
+fn full_area(extent: vk::Extent2D) -> vk::Rect2D {
+    vk::Rect2D {
+        offset: vk::Offset2D { x: 0, y: 0 },
+        extent,
+    }
 }
 
 /// Bakes the wall + envelope shadow depths of every drawn instance into its slot of the volume.
@@ -103,7 +68,14 @@ pub unsafe fn record_wind_shadow_bake_pass(
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
     let device = &ctx.device.device;
-    insert_pre_bake_barrier(device, targets, cmd);
+    let volume = &targets.shadow_volume;
+    insert_storage_image_write_barrier(
+        device,
+        cmd,
+        volume.image,
+        volume.subresource_range(),
+        vk::PipelineStageFlags::FRAGMENT_SHADER,
+    );
 
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::COMPUTE, pipeline.pipeline);
     let extent = wind_shadow_volume_extent();
@@ -123,19 +95,14 @@ pub unsafe fn record_wind_shadow_bake_pass(
         device.cmd_dispatch(cmd, group_count_x, group_count_y, extent.depth);
     }
 
-    insert_post_bake_barrier(device, targets, cmd);
+    insert_storage_image_read_barrier(
+        device,
+        cmd,
+        volume.image,
+        volume.subresource_range(),
+        vk::PipelineStageFlags::FRAGMENT_SHADER,
+    );
     Ok(())
-}
-
-unsafe fn set_full_viewport(device: &Device, cmd: vk::CommandBuffer, extent: vk::Extent2D) {
-    let viewport = vk::Viewport::builder()
-        .x(0.0)
-        .y(0.0)
-        .width(extent.width as f32)
-        .height(extent.height as f32)
-        .min_depth(0.0)
-        .max_depth(1.0);
-    device.cmd_set_viewport(cmd, 0, &[viewport]);
 }
 
 pub unsafe fn record_wind_half_resolve_pass(
@@ -150,21 +117,14 @@ pub unsafe fn record_wind_half_resolve_pass(
 ) -> Result<()> {
     let device = &ctx.device.device;
     let half_extent = targets.half_extent();
-
-    let clear_values = [vk::ClearValue {
-        color: vk::ClearColorValue {
-            float32: [0.0, 0.0, 0.0, 0.0],
-        },
-    }];
-    let render_pass_info = vk::RenderPassBeginInfo::builder()
-        .render_pass(targets.half_render_pass)
-        .framebuffer(targets.half_framebuffer)
-        .render_area(vk::Rect2D {
-            offset: vk::Offset2D { x: 0, y: 0 },
-            extent: half_extent,
-        })
-        .clear_values(&clear_values);
-    device.cmd_begin_render_pass(cmd, &render_pass_info, vk::SubpassContents::INLINE);
+    begin_overlay_render_pass(
+        device,
+        cmd,
+        targets.half_render_pass,
+        targets.half_framebuffer,
+        full_area(half_extent),
+        OverlayAttachmentLoad::Clear(TRANSPARENT_BLACK),
+    );
 
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
     set_full_viewport(device, cmd, half_extent);
@@ -187,7 +147,7 @@ pub unsafe fn record_wind_half_resolve_pass(
             &[frame_set, descriptor.descriptor_set],
             &[draw.ubo_dynamic_offset],
         );
-        device.cmd_draw(cmd, 3, 1, 0, 0);
+        draw_fullscreen_triangle(device, cmd);
     }
 
     device.cmd_end_render_pass(cmd);
@@ -203,17 +163,18 @@ pub unsafe fn record_wind_upsample_pass(
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
     let device = &ctx.device.device;
-
-    let render_pass_info = vk::RenderPassBeginInfo::builder()
-        .render_pass(targets.render_pass)
-        .framebuffer(targets.framebuffer)
-        .render_area(scissor);
-    device.cmd_begin_render_pass(cmd, &render_pass_info, vk::SubpassContents::INLINE);
+    begin_overlay_render_pass(
+        device,
+        cmd,
+        targets.render_pass,
+        targets.framebuffer,
+        scissor,
+        OverlayAttachmentLoad::Keep,
+    );
 
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
     set_full_viewport(device, cmd, targets.extent());
     device.cmd_set_scissor(cmd, 0, &[scissor]);
-
     device.cmd_bind_descriptor_sets(
         cmd,
         vk::PipelineBindPoint::GRAPHICS,
@@ -222,7 +183,7 @@ pub unsafe fn record_wind_upsample_pass(
         &[descriptor.descriptor_set],
         &[],
     );
-    device.cmd_draw(cmd, 3, 1, 0, 0);
+    draw_fullscreen_triangle(device, cmd);
 
     device.cmd_end_render_pass(cmd);
     Ok(())
@@ -239,12 +200,14 @@ pub unsafe fn record_wind_shading_pass(
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
     let device = &ctx.device.device;
-
-    let render_pass_info = vk::RenderPassBeginInfo::builder()
-        .render_pass(targets.render_pass)
-        .framebuffer(targets.framebuffer)
-        .render_area(draw.scissor);
-    device.cmd_begin_render_pass(cmd, &render_pass_info, vk::SubpassContents::INLINE);
+    begin_overlay_render_pass(
+        device,
+        cmd,
+        targets.render_pass,
+        targets.framebuffer,
+        draw.scissor,
+        OverlayAttachmentLoad::Keep,
+    );
 
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
     set_full_viewport(device, cmd, targets.extent());
@@ -266,7 +229,7 @@ pub unsafe fn record_wind_shading_pass(
         0,
         push_constants.as_bytes(),
     );
-    device.cmd_draw(cmd, 3, 1, 0, 0);
+    draw_fullscreen_triangle(device, cmd);
 
     device.cmd_end_render_pass(cmd);
     Ok(())

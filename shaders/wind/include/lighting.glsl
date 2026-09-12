@@ -6,7 +6,7 @@
 // evaluated once at the cell midpoint, shadowed toward the sun and over the sky hemisphere.
 // With WIND_SHADOW_VOLUME the transmittances come from the baked volume (shadowBake.comp),
 // otherwise they are integrated inline.
-// Must be included after shell_integral.glsl (and shadow_volume.glsl under WIND_SHADOW_VOLUME).
+// Must be included after integral.glsl (and shadow_volume.glsl under WIND_SHADOW_VOLUME).
 
 #include "include/radiative_transfer.glsl"
 
@@ -61,10 +61,11 @@ vec3 windSingleScatterRadiance(
         return vec3(0.0);
     }
 
-    float knots[WIND_MAX_KNOTS];
-    WindRayPuffs puffs;
-    knotCount = windRayKnots(o, d, tNear, tFar, knots, puffs);
-    float activeLength = windActiveLength(o, d, knots, knotCount, puffs);
+    VolumeShell shell = windShell();
+    float knots[RAY_MAX_KNOTS];
+    RayPuffs puffs;
+    knotCount = windRayKnots(shell, o, d, tNear, tFar, knots, puffs);
+    float activeLength = windActiveLength(shell, o, d, knots, knotCount, puffs);
     if (activeLength <= WIND_EMPTY_INTERVAL_EPSILON) {
         return vec3(0.0);
     }
@@ -80,7 +81,7 @@ vec3 windSingleScatterRadiance(
     for (int i = 1; i < knotCount; ++i) {
         float pieceStart = knots[i - 1];
         float pieceEnd = knots[i];
-        if (!windPieceIsActive(o, d, puffs, pieceStart, pieceEnd)) {
+        if (!windPieceIsActive(shell, o, d, puffs, pieceStart, pieceEnd)) {
             continue;
         }
         int cellFirst = int(floor((pieceStart - tNear) / step));
@@ -95,8 +96,8 @@ vec3 windSingleScatterRadiance(
             modulation = windCellModulation(modulation, o, d, tNear, step, c);
             float modulation0 = mix(modulation.a, modulation.b, (s0 - cellStart) / step);
             float modulation1 = mix(modulation.a, modulation.b, (s1 - cellStart) / step);
-            float depth = windPieceOpticalDepth(o, d, s0, s1, modulation0, modulation1)
-                + windPuffPieceOpticalDepth(puffs, o, d, s0, s1);
+            float depth = shellPieceOpticalDepthModulated(shell, o, d, s0, s1, modulation0, modulation1)
+                + windPuffPieceOpticalDepth(shell, puffs, o, d, s0, s1);
             if (depth <= 0.0) {
                 continue;
             }

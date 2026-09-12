@@ -1,6 +1,47 @@
+use serde::Deserialize;
 use thyllore_anim_core::editable::PropertyType;
 
 use crate::ecs::world::{Entity, World};
+
+const SCALAR_CODE_BLOCKS_RON: &str = include_str!("scalar_channel_domains.ron");
+
+/// The `PropertyType::Custom` code block a domain may allocate its channels from.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct ScalarCodeBlock {
+    pub name: String,
+    pub first_code: u16,
+    pub code_count: u16,
+}
+
+impl ScalarCodeBlock {
+    pub fn contains(&self, code: u16) -> bool {
+        (self.first_code..self.first_code + self.code_count).contains(&code)
+    }
+
+    pub fn end_code(&self) -> u16 {
+        self.first_code + self.code_count
+    }
+}
+
+pub fn scalar_code_blocks() -> Vec<ScalarCodeBlock> {
+    ron::from_str(SCALAR_CODE_BLOCKS_RON)
+        .expect("scalar_channel_domains.ron is a list of code blocks")
+}
+
+pub fn scalar_code_block_for_domain(domain_name: &str) -> Option<ScalarCodeBlock> {
+    scalar_code_blocks()
+        .into_iter()
+        .find(|block| block.name == domain_name)
+}
+
+/// First code after every allocated block, where the next domain's block starts.
+pub fn next_free_scalar_code() -> u16 {
+    scalar_code_blocks()
+        .iter()
+        .map(ScalarCodeBlock::end_code)
+        .max()
+        .unwrap_or(0)
+}
 
 /// One animatable scalar channel exposed by a component domain. `code` is the
 /// stable `PropertyType::Custom` payload persisted in clip files — never
@@ -30,8 +71,7 @@ impl ScalarChannel {
 /// flame is one such registration. Applying sampled curve values back to the
 /// component stays inside the domain's own system.
 ///
-/// Each domain owns a disjoint block of `Custom` codes: flame uses 0..=15,
-/// water 256..=277, wind 512..=530; the next domain should start at 768.
+/// Each domain's `Custom` codes lie inside the block `scalar_channel_domains.ron` assigns to it.
 pub struct ScalarChannelDomain {
     /// Display name of the domain (also the name of the clip it creates).
     pub name: &'static str,
@@ -139,6 +179,46 @@ mod tests {
             }
         }
         assert!(!codes.is_empty());
+    }
+
+    #[test]
+    fn test_every_domain_stays_inside_its_configured_code_block() {
+        for domain in scalar_channel_domains() {
+            let block = scalar_code_block_for_domain(domain.name)
+                .unwrap_or_else(|| panic!("no code block configured for domain {}", domain.name));
+            for channel in domain.channels {
+                assert!(
+                    block.contains(channel.code),
+                    "{} channel {} code {} is outside block {}..{}",
+                    domain.name,
+                    channel.cli_name,
+                    channel.code,
+                    block.first_code,
+                    block.end_code()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_configured_code_blocks_are_disjoint() {
+        let blocks = scalar_code_blocks();
+        for (index, block) in blocks.iter().enumerate() {
+            assert!(block.code_count > 0, "empty block {}", block.name);
+            for other in &blocks[index + 1..] {
+                let overlaps =
+                    block.first_code < other.end_code() && other.first_code < block.end_code();
+                assert!(
+                    !overlaps,
+                    "blocks {} and {} overlap",
+                    block.name, other.name
+                );
+            }
+        }
+        assert_eq!(
+            next_free_scalar_code(),
+            blocks.iter().map(ScalarCodeBlock::end_code).max().unwrap()
+        );
     }
 
     #[test]

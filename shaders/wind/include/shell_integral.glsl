@@ -264,13 +264,13 @@ float windShadowPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1) {
     return max((s1 - s0) * windSigmaT() * windPolyMoments(density), 0.0);
 }
 
-float windModulationAt(vec3 p) {
+float windModulationAt(vec3 p, vec3 stepAhead) {
     float modulation = 1.0;
     if (windStreakAmplitude() > 0.0) {
         modulation *= windStreakSigma(p);
     }
     if (windEddyAmplitude() > 0.0) {
-        modulation *= windEddySigma(p);
+        modulation *= windEddySigma(p, stepAhead);
     }
     return modulation;
 }

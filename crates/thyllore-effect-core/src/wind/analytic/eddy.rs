@@ -104,21 +104,50 @@ fn antipodal_octave(p: [f32; 3], antipode: [f32; 3]) -> f32 {
 }
 
 pub const EDDY_OCTAVE_COUNT: usize = 3;
+// Lattice distance between consecutive cell nodes at which an octave starts to fade and is gone (Nyquist = 0.5).
+pub(crate) const EDDY_FADE_START: f32 = 0.25;
+pub(crate) const EDDY_FADE_END: f32 = 0.5;
 
 pub type EddyOctaveRings = [[[f32; 3]; 2]; EDDY_OCTAVE_COUNT];
 
-pub fn eddy_noise_fbm(rings: &EddyOctaveRings) -> f32 {
+fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
+    let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+fn eddy_octave_weight(point: [f32; 3], point_ahead: [f32; 3], octave: usize) -> f32 {
+    let distance = ((point[0] - point_ahead[0]).powi(2)
+        + (point[1] - point_ahead[1]).powi(2)
+        + (point[2] - point_ahead[2]).powi(2))
+    .sqrt();
+    let lattice_step = 2f32.powi(octave as i32) * distance;
+    1.0 - smoothstep(EDDY_FADE_START, EDDY_FADE_END, lattice_step)
+}
+
+/// Octaves whose lattice step over one cell exceeds the fade band are dropped; the rest are rescaled
+/// to keep the variance, so the eroded mean does not drift with the cell length.
+pub fn eddy_noise_fbm(rings: &EddyOctaveRings, rings_ahead: &EddyOctaveRings) -> f32 {
     let mut sum = 0.0;
-    let mut amplitude = 0.5;
-    for (octave, ring) in rings.iter().enumerate() {
-        let mut p = rotate(ring[0]);
-        let mut antipode = rotate(ring[1]);
-        for _ in 0..octave {
-            p = rotate_and_double(p);
-            antipode = rotate_and_double(antipode);
+    let mut amplitude = 0.5f32;
+    let mut full_variance = 0.0f32;
+    let mut kept_variance = 0.0f32;
+    for (octave, (ring, ring_ahead)) in rings.iter().zip(rings_ahead).enumerate() {
+        full_variance += amplitude * amplitude;
+        let weight = eddy_octave_weight(ring[0], ring_ahead[0], octave);
+        if weight > 0.0 {
+            let mut p = rotate(ring[0]);
+            let mut antipode = rotate(ring[1]);
+            for _ in 0..octave {
+                p = rotate_and_double(p);
+                antipode = rotate_and_double(antipode);
+            }
+            sum += weight * amplitude * antipodal_octave(p, antipode);
+            kept_variance += (weight * amplitude).powi(2);
         }
-        sum += amplitude * antipodal_octave(p, antipode);
         amplitude *= 0.5;
+    }
+    if kept_variance > 0.0 {
+        sum *= (full_variance / kept_variance).sqrt();
     }
     (0.5 + sum * (1.0 / 0.875)).clamp(0.0, 1.0)
 }
@@ -199,7 +228,8 @@ pub fn eddy_layer_coords(
     })
 }
 
-pub fn eddy_sigma(params: &WindShellParams, local: [f32; 3]) -> f32 {
+/// `step_ahead` is the ray step to the next cell node; zero gives the pointwise field with every octave kept.
+pub fn eddy_sigma(params: &WindShellParams, local: [f32; 3], step_ahead: [f32; 3]) -> f32 {
     let reseed_period = params.eddy_reseed_period;
     let t = params.time;
 
@@ -212,23 +242,25 @@ pub fn eddy_sigma(params: &WindShellParams, local: [f32; 3]) -> f32 {
     let w_b = 1.0 - w_a;
 
     let geometry = eddy_geometry(params, local);
+    let geometry_ahead = eddy_geometry(
+        params,
+        [
+            local[0] + step_ahead[0],
+            local[1] + step_ahead[1],
+            local[2] + step_ahead[2],
+        ],
+    );
+    let seed_a = 17.0 * k_a + 3.0;
+    let seed_b = 17.0 * k_b + 3.0;
 
-    let rings_a = eddy_layer_coords(
-        params,
-        &geometry,
-        age_a,
-        17.0 * k_a + 3.0,
-        EddyReseedLayer::A,
-    );
-    let rings_b = eddy_layer_coords(
-        params,
-        &geometry,
-        age_b,
-        17.0 * k_b + 3.0,
-        EddyReseedLayer::B,
-    );
-    let noise_a = eddy_noise_fbm(&rings_a);
-    let noise_b = eddy_noise_fbm(&rings_b);
+    let rings_a = eddy_layer_coords(params, &geometry, age_a, seed_a, EddyReseedLayer::A);
+    let rings_b = eddy_layer_coords(params, &geometry, age_b, seed_b, EddyReseedLayer::B);
+    let rings_a_ahead =
+        eddy_layer_coords(params, &geometry_ahead, age_a, seed_a, EddyReseedLayer::A);
+    let rings_b_ahead =
+        eddy_layer_coords(params, &geometry_ahead, age_b, seed_b, EddyReseedLayer::B);
+    let noise_a = eddy_noise_fbm(&rings_a, &rings_a_ahead);
+    let noise_b = eddy_noise_fbm(&rings_b, &rings_b_ahead);
 
     let noise = w_a * noise_a + w_b * noise_b;
     let eroded = ((noise - params.eddy_erosion) / (1.0 - params.eddy_erosion)).clamp(0.0, 1.0);
@@ -294,7 +326,7 @@ mod tests {
         );
 
         assert_eq!(
-            eddy_noise_fbm(&rings),
+            eddy_noise_fbm(&rings, &rings),
             shared_embedding_fbm(rings[0][0], rings[0][1])
         );
     }

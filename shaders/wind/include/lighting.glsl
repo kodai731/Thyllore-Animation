@@ -45,8 +45,8 @@ WindCellModulation windCellModulation(WindCellModulation previous, vec3 o, vec3 
     current.cell = cell;
     current.a = previous.sampled && cell == previous.cell + 1
         ? previous.b
-        : windModulationAt(o + d * cellStart);
-    current.b = windModulationAt(o + d * (cellStart + step));
+        : windModulationAt(o + d * cellStart, d * step);
+    current.b = windModulationAt(o + d * (cellStart + step), d * step);
     return current;
 }
 

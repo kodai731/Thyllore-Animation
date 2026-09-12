@@ -11,6 +11,9 @@
 const float WIND_LINEAR_COEFFICIENT_EPSILON = 1e-7;
 const float WIND_EDDY_MIN_RADIUS_SQ = 1e-4;
 const int WIND_EDDY_OCTAVE_COUNT = 3;
+// Lattice distance between consecutive cell nodes at which an octave starts to fade and is gone (Nyquist = 0.5).
+const float WIND_EDDY_FADE_START = 0.25;
+const float WIND_EDDY_FADE_END = 0.5;
 const float WIND_EDDY_LAYER_A_SPEED_OFFSET = 0.25;
 const float WIND_EDDY_LAYER_B_SPEED_OFFSET = -0.25;
 
@@ -129,18 +132,35 @@ struct WindEddyOctaveRings {
     vec3 antipode[WIND_EDDY_OCTAVE_COUNT];
 };
 
-float windEddyNoiseFBM(WindEddyOctaveRings rings) {
+// Octaves whose lattice step over one cell exceeds the fade band are dropped; the rest are rescaled
+// to keep the variance, so the eroded mean does not drift with the cell length.
+float windEddyOctaveWeight(vec3 point, vec3 pointAhead, int octave) {
+    float latticeStep = exp2(float(octave)) * distance(point, pointAhead);
+    return 1.0 - smoothstep(WIND_EDDY_FADE_START, WIND_EDDY_FADE_END, latticeStep);
+}
+
+float windEddyNoiseFBM(WindEddyOctaveRings rings, WindEddyOctaveRings ringsAhead) {
     float sum = 0.0;
     float amplitude = 0.5;
+    float fullVariance = 0.0;
+    float keptVariance = 0.0;
     for (int octave = 0; octave < WIND_EDDY_OCTAVE_COUNT; ++octave) {
-        vec3 p = WIND_OCTAVE_ROTATION * rings.point[octave];
-        vec3 antipode = WIND_OCTAVE_ROTATION * rings.antipode[octave];
-        for (int doubling = 0; doubling < octave; ++doubling) {
-            p = windRotateAndDouble(p);
-            antipode = windRotateAndDouble(antipode);
+        fullVariance += amplitude * amplitude;
+        float weight = windEddyOctaveWeight(rings.point[octave], ringsAhead.point[octave], octave);
+        if (weight > 0.0) {
+            vec3 p = WIND_OCTAVE_ROTATION * rings.point[octave];
+            vec3 antipode = WIND_OCTAVE_ROTATION * rings.antipode[octave];
+            for (int doubling = 0; doubling < octave; ++doubling) {
+                p = windRotateAndDouble(p);
+                antipode = windRotateAndDouble(antipode);
+            }
+            sum += weight * amplitude * windAntipodalOctave(p, antipode);
+            keptVariance += weight * amplitude * weight * amplitude;
         }
-        sum += amplitude * windAntipodalOctave(p, antipode);
         amplitude *= 0.5;
+    }
+    if (keptVariance > 0.0) {
+        sum *= sqrt(fullVariance / keptVariance);
     }
     return clamp(0.5 + sum * (1.0 / 0.875), 0.0, 1.0);
 }
@@ -191,7 +211,8 @@ WindEddyOctaveRings windEddyLayerCoords(WindEddyGeometry geometry, float age, fl
     return rings;
 }
 
-float windEddySigma(vec3 local) {
+// stepAhead is the ray step to the next cell node; zero means the pointwise field with every octave kept.
+float windEddySigma(vec3 local, vec3 stepAhead) {
     float T = windEddyReseedPeriod();
     float t = windTime();
 
@@ -204,11 +225,16 @@ float windEddySigma(vec3 local) {
     float wB = 1.0 - wA;
 
     WindEddyGeometry geometry = windEddyGeometry(local);
+    WindEddyGeometry geometryAhead = windEddyGeometry(local + stepAhead);
+    float seedA = 17.0 * kA + 3.0;
+    float seedB = 17.0 * kB + 3.0;
 
-    WindEddyOctaveRings ringsA = windEddyLayerCoords(geometry, ageA, 17.0 * kA + 3.0, WIND_EDDY_LAYER_A_SPEED_OFFSET);
-    WindEddyOctaveRings ringsB = windEddyLayerCoords(geometry, ageB, 17.0 * kB + 3.0, WIND_EDDY_LAYER_B_SPEED_OFFSET);
-    float NA = windEddyNoiseFBM(ringsA);
-    float NB = windEddyNoiseFBM(ringsB);
+    WindEddyOctaveRings ringsA = windEddyLayerCoords(geometry, ageA, seedA, WIND_EDDY_LAYER_A_SPEED_OFFSET);
+    WindEddyOctaveRings ringsB = windEddyLayerCoords(geometry, ageB, seedB, WIND_EDDY_LAYER_B_SPEED_OFFSET);
+    WindEddyOctaveRings ringsAAhead = windEddyLayerCoords(geometryAhead, ageA, seedA, WIND_EDDY_LAYER_A_SPEED_OFFSET);
+    WindEddyOctaveRings ringsBAhead = windEddyLayerCoords(geometryAhead, ageB, seedB, WIND_EDDY_LAYER_B_SPEED_OFFSET);
+    float NA = windEddyNoiseFBM(ringsA, ringsAAhead);
+    float NB = windEddyNoiseFBM(ringsB, ringsBAhead);
 
     float N = wA * NA + wB * NB;
     float eroded = clamp((N - windEddyErosion()) / (1.0 - windEddyErosion()), 0.0, 1.0);
@@ -246,7 +272,7 @@ float windDensityAt(vec3 p) {
     float q = p.x * p.x + p.z * p.z;
 
     float wall = windWallStrength() * windBiweight((q - windWallRadiusSq(h)) / windWallWidthQ());
-    return windSigmaT() * envelope * wall * windStreakSigma(p) * windEddySigma(p);
+    return windSigmaT() * envelope * wall * windStreakSigma(p) * windEddySigma(p, vec3(0.0));
 }
 
 bool clampToConeFrustum(

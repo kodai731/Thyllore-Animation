@@ -1,5 +1,5 @@
 use super::*;
-use crate::wind::analytic::eddy::EDDY_OCTAVE_COUNT;
+use crate::wind::analytic::eddy::{EDDY_FADE_END, EDDY_FADE_START, EDDY_OCTAVE_COUNT};
 use crate::wind::analytic::motion::rotation_phase;
 use crate::wind::analytic::shell_integral::{ACTIVE_CELLS_MIN, MODULATION_CELLS, POLY_TERMS};
 use crate::wind::WindTornadoEffect;
@@ -98,7 +98,11 @@ fn sample_eddy_ring(params: &WindShellParams, height: f32) -> Vec<f32> {
     (0..EDDY_RING_SAMPLES)
         .map(|index| {
             let theta = 2.0 * PI * index as f32 / EDDY_RING_SAMPLES as f32;
-            eddy_sigma(params, [radius * theta.cos(), height, radius * theta.sin()])
+            eddy_sigma(
+                params,
+                [radius * theta.cos(), height, radius * theta.sin()],
+                [0.0; 3],
+            )
         })
         .collect()
 }
@@ -442,7 +446,8 @@ fn eddy_sigma_is_continuous_across_the_theta_seam() {
             h,
             radius * (-PI + epsilon).sin(),
         ];
-        let gap = (eddy_sigma(&params, before) - eddy_sigma(&params, after)).abs();
+        let gap =
+            (eddy_sigma(&params, before, [0.0; 3]) - eddy_sigma(&params, after, [0.0; 3])).abs();
         assert!(
             gap < 1e-2,
             "eddy sigma jumps by {gap} across theta = pi at h = {h}"
@@ -462,7 +467,11 @@ fn eddy_noise_stays_in_the_unit_interval_and_is_not_height_banded() {
         let mut row = 0.0f32;
         for i in 0..theta_samples {
             let theta = 2.0 * PI * i as f32 / theta_samples as f32;
-            let sigma = eddy_sigma(&params, [radius * theta.cos(), h, radius * theta.sin()]);
+            let sigma = eddy_sigma(
+                &params,
+                [radius * theta.cos(), h, radius * theta.sin()],
+                [0.0; 3],
+            );
             assert!((0.0..=2.0).contains(&sigma), "sigma {sigma} outside [0, 2]");
             row += sigma;
         }
@@ -501,7 +510,11 @@ fn eddy_sigma_averages_to_one_over_the_wall() {
             let theta = 2.0 * 3.14159265 * i as f32 / theta_samples as f32;
             let h = params.h_top * j as f32 / (height_samples - 1) as f32;
             let radius = params.wall_radius(h);
-            total += eddy_sigma(&params, [radius * theta.cos(), h, radius * theta.sin()]) as f64;
+            total += eddy_sigma(
+                &params,
+                [radius * theta.cos(), h, radius * theta.sin()],
+                [0.0; 3],
+            ) as f64;
         }
     }
     let mean = total / (theta_samples * height_samples) as f64;
@@ -526,7 +539,7 @@ fn eddy_midpoint_optical_depth(
         let point = origin + direction * t as f32;
         let sigma = wind_density_at(params, point)
             * wind_streak_sigma(params, point)
-            * eddy_sigma(params, [point.x, point.y, point.z]);
+            * eddy_sigma(params, [point.x, point.y, point.z], [0.0; 3]);
         total += sigma as f64 * step;
     }
     total
@@ -607,8 +620,8 @@ fn eroded_eddy_reaches_zero_density_below_the_noise_floor() {
             let h = eroded.h_top * j as f32 / (height_samples - 1) as f32;
             let radius = eroded.wall_radius(h);
             let local = [radius * theta.cos(), h, radius * theta.sin()];
-            smooth_min = smooth_min.min(eddy_sigma(&smooth, local));
-            if eddy_sigma(&eroded, local) <= 1e-6 {
+            smooth_min = smooth_min.min(eddy_sigma(&smooth, local, [0.0; 3]));
+            if eddy_sigma(&eroded, local, [0.0; 3]) <= 1e-6 {
                 eroded_zero_count += 1;
             }
         }
@@ -892,6 +905,15 @@ fn truncated_ray_9_plus_puffs_analytical_leq_midpoint() {
     );
 }
 
+fn glsl_float_constant(source: &str, name: &str) -> f32 {
+    let prefix = format!("const float {name} = ");
+    source
+        .lines()
+        .find_map(|line| line.trim().strip_prefix(&prefix))
+        .and_then(|rest| rest.trim_end_matches(';').parse().ok())
+        .unwrap_or_else(|| panic!("{name} declared as a float constant"))
+}
+
 fn glsl_int_constant(source: &str, name: &str) -> i64 {
     let prefix = format!("const int {name} = ");
     source
@@ -1026,12 +1048,18 @@ fn glsl_polynomial_terms_match_the_rust_mirror_and_cover_the_piece_degree() {
         glsl_int_constant(&source, "WIND_ACTIVE_CELLS_MIN"),
         ACTIVE_CELLS_MIN as i64
     );
+    let field_source = wind_glsl_source("shell_field.glsl");
     assert_eq!(
-        glsl_int_constant(
-            &wind_glsl_source("shell_field.glsl"),
-            "WIND_EDDY_OCTAVE_COUNT"
-        ),
+        glsl_int_constant(&field_source, "WIND_EDDY_OCTAVE_COUNT"),
         EDDY_OCTAVE_COUNT as i64
+    );
+    assert_eq!(
+        glsl_float_constant(&field_source, "WIND_EDDY_FADE_START"),
+        EDDY_FADE_START
+    );
+    assert_eq!(
+        glsl_float_constant(&field_source, "WIND_EDDY_FADE_END"),
+        EDDY_FADE_END
     );
     assert_eq!(
         glsl_int_constant(&source, "WIND_MAX_KNOTS"),

@@ -631,13 +631,21 @@ pub fn wind_shadow_piece_optical_depth(
     ((s1 - s0) * params.sigma_t * poly_moments(&density)).max(0.0)
 }
 
-pub fn wind_modulation_at(params: &WindShellParams, local: Vector3<f32>) -> f32 {
+pub fn wind_modulation_at(
+    params: &WindShellParams,
+    local: Vector3<f32>,
+    step_ahead: Vector3<f32>,
+) -> f32 {
     let mut modulation = 1.0;
     if params.streak_amplitude > 0.0 {
         modulation *= wind_streak_sigma(params, local);
     }
     if params.eddy_amplitude > 0.0 {
-        modulation *= eddy_sigma(params, [local.x, local.y, local.z]);
+        modulation *= eddy_sigma(
+            params,
+            [local.x, local.y, local.z],
+            [step_ahead.x, step_ahead.y, step_ahead.z],
+        );
     }
     modulation
 }
@@ -817,9 +825,13 @@ impl CellModulation {
         let a = if self.cell == Some(cell - 1) {
             self.b
         } else {
-            wind_modulation_at(params, origin + direction * cell_start)
+            wind_modulation_at(params, origin + direction * cell_start, direction * step)
         };
-        let b = wind_modulation_at(params, origin + direction * (cell_start + step));
+        let b = wind_modulation_at(
+            params,
+            origin + direction * (cell_start + step),
+            direction * step,
+        );
         Self {
             cell: Some(cell),
             a,

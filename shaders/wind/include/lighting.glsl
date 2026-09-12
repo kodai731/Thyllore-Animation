@@ -1,16 +1,14 @@
 #ifndef WIND_LIGHTING_GLSL
 #define WIND_LIGHTING_GLSL
 
-// Single scattering along the view ray: per closed-form piece the in-scatter source is
-// averaged over fixed midpoint nodes weighted by the local density, each node shadowed by
-// the wall + envelope field toward the sun and over the sky hemisphere. With
-// WIND_SHADOW_VOLUME the transmittances come from the baked volume (shadowBake.comp),
+// Single scattering along the view ray: the ray is cut into equal cells, each cell's optical
+// depth is the closed-form sum over the knot pieces inside it, and the in-scatter source is
+// evaluated once at the cell midpoint, shadowed toward the sun and over the sky hemisphere.
+// With WIND_SHADOW_VOLUME the transmittances come from the baked volume (shadowBake.comp),
 // otherwise they are integrated inline.
 // Must be included after shell_integral.glsl (and shadow_volume.glsl under WIND_SHADOW_VOLUME).
 
 #include "include/radiative_transfer.glsl"
-
-const int WIND_SCATTER_NODES = 4;
 
 // x: transmittance toward the sun, y: cosine-weighted transmittance over the sky.
 vec2 windShadowTransmittances(vec3 position, vec3 lightDir) {
@@ -29,24 +27,31 @@ float windInScatterSource(vec3 position, vec3 lightPosition, vec3 viewDir) {
         + windSkyBrightness() * transmittances.y;
 }
 
-// Density weights keep the piece average independent of where knots split the piece.
-float windPieceInScatter(vec3 o, vec3 d, float s0, float s1, vec3 lightPosition, vec3 viewDir) {
-    float pieceLength = s1 - s0;
-    float weightedSum = 0.0;
-    float weightSum = 0.0;
-    float plainSum = 0.0;
-    for (int i = 0; i < WIND_SCATTER_NODES; ++i) {
-        vec3 node = o + d * (s0 + rteMidpointDistance(i, WIND_SCATTER_NODES, pieceLength));
-        float source = windInScatterSource(node, lightPosition, viewDir);
-        float weight = windDensityAt(node);
-        weightedSum += weight * source;
-        weightSum += weight;
-        plainSum += source;
+bool windCellHoldsShell(vec3 o, vec3 d, float knots[WIND_MAX_KNOTS], int knotCount, float cellStart, float cellEnd) {
+    for (int i = 1; i < knotCount; ++i) {
+        if (windPieceHoldsShell(o, d, max(knots[i - 1], cellStart), min(knots[i], cellEnd))) {
+            return true;
+        }
     }
-    if (weightSum <= 0.0) {
-        return plainSum / float(WIND_SCATTER_NODES);
+    return false;
+}
+
+float windCellOpticalDepth(
+    vec3 o, vec3 d, float knots[WIND_MAX_KNOTS], int knotCount, WindRayPuffs puffs,
+    float cellStart, float cellEnd, float step, float modulationA, float modulationB) {
+    float total = 0.0;
+    for (int i = 1; i < knotCount; ++i) {
+        float a = max(knots[i - 1], cellStart);
+        float b = min(knots[i], cellEnd);
+        if (b <= a) {
+            continue;
+        }
+        float modulation0 = mix(modulationA, modulationB, (a - cellStart) / step);
+        float modulation1 = mix(modulationA, modulationB, (b - cellStart) / step);
+        total += windPieceOpticalDepth(o, d, a, b, modulation0, modulation1)
+            + windPuffPieceOpticalDepth(puffs, o, d, a, b);
     }
-    return weightedSum / weightSum;
+    return total;
 }
 
 vec3 windSingleScatterRadiance(
@@ -61,16 +66,36 @@ vec3 windSingleScatterRadiance(
     float knots[WIND_MAX_KNOTS];
     WindRayPuffs puffs;
     knotCount = windRayKnots(o, d, tNear, tFar, knots, puffs);
+    float step = windModulationStep(d, tNear, tFar);
+    int cellCount = clamp(int(ceil((tFar - tNear) / step)), 1, WIND_MODULATION_CELLS);
     vec3 viewDir = normalize(d);
 
     float radiance = 0.0;
-    for (int i = 1; i < knotCount; ++i) {
-        float pieceDepth = windPieceOpticalDepth(o, d, knots[i - 1], knots[i])
-            + windPuffPieceOpticalDepth(puffs, o, d, knots[i - 1], knots[i]);
-        float frontTransmittance = rteTransmittanceFromOpticalDepth(opticalDepth);
-        float source = windPieceInScatter(o, d, knots[i - 1], knots[i], lightPosition, viewDir);
-        radiance += frontTransmittance * source * (1.0 - rteTransmittanceFromOpticalDepth(pieceDepth));
-        opticalDepth += pieceDepth;
+    float modulationB = 1.0;
+    bool modulationBSampled = false;
+    for (int c = 0; c < cellCount; ++c) {
+        float cellStart = tNear + float(c) * step;
+        float cellEnd = min(cellStart + step, tFar);
+        bool holdsShell = windCellHoldsShell(o, d, knots, knotCount, cellStart, cellEnd);
+        float modulationA = modulationB;
+        if (holdsShell && !modulationBSampled) {
+            modulationA = windModulationAt(o + d * cellStart);
+        }
+        modulationBSampled = holdsShell;
+        if (holdsShell) {
+            modulationB = windModulationAt(o + d * (cellStart + step));
+        }
+        float cellDepth = windCellOpticalDepth(
+            o, d, knots, knotCount, puffs, cellStart, cellEnd, step, modulationA, modulationB);
+        if (cellDepth <= 0.0) {
+            continue;
+        }
+
+        vec3 node = o + d * (0.5 * (cellStart + cellEnd));
+        float source = windInScatterSource(node, lightPosition, viewDir);
+        radiance += rteTransmittanceFromOpticalDepth(opticalDepth) * source
+            * (1.0 - rteTransmittanceFromOpticalDepth(cellDepth));
+        opticalDepth += cellDepth;
     }
     return radiance * wind.albedo.rgb;
 }

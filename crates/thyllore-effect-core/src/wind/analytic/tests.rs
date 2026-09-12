@@ -1,6 +1,6 @@
 use super::*;
 use crate::wind::analytic::motion::rotation_phase;
-use crate::wind::analytic::shell_integral::{EDDY_SPLITS, POLY_TERMS};
+use crate::wind::analytic::shell_integral::{MODULATION_CELLS, POLY_TERMS};
 use crate::wind::WindTornadoEffect;
 use crate::wind::{
     WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,
@@ -1018,8 +1018,8 @@ fn glsl_polynomial_terms_match_the_rust_mirror_and_cover_the_piece_degree() {
         POLY_TERMS as i64
     );
     assert_eq!(
-        glsl_int_constant(&source, "WIND_EDDY_SPLITS"),
-        EDDY_SPLITS as i64
+        glsl_int_constant(&source, "WIND_MODULATION_CELLS"),
+        MODULATION_CELLS as i64
     );
     assert_eq!(
         glsl_int_constant(&source, "WIND_MAX_KNOTS"),

@@ -14,8 +14,9 @@
 
 const int WIND_MAX_KNOTS = 56;
 const int WIND_POLY_TERMS = 16;
-// Fixed so the node set is a continuous function of the ray (no seams where a count would change).
-const int WIND_EDDY_SPLITS = 8;
+// One cell grid spans the whole ray so a knot splitting a piece never moves a sample.
+const int WIND_MODULATION_CELLS = 64;
+const float WIND_MODULATION_SAMPLE_FRACTION = 0.125;
 const int WIND_PUFFS_PER_RAY = 20;
 const float WIND_EMPTY_INTERVAL_EPSILON = 1e-6;
 const float WIND_SHADOW_RAY_T_MAX = 1e4;
@@ -191,23 +192,40 @@ float windPolyMoments(float poly[WIND_POLY_TERMS]) {
     return sum;
 }
 
-// Envelope times wall on the piece as a polynomial in sigma. False when the piece holds no shell.
-bool windShellPiecePoly(vec3 o, vec3 d, float s0, float s1, out float density[WIND_POLY_TERMS]) {
-    for (int k = 0; k < WIND_POLY_TERMS; ++k) {
-        density[k] = 0.0;
-    }
+float windPieceShellDistanceAtMid(vec3 start, vec3 d, float pieceLength, float hMid) {
+    vec3 mid = start + 0.5 * pieceLength * d;
+    float radiusMid = windWallRadius(hMid);
+    return (dot(mid.xz, mid.xz) - radiusMid * radiusMid - windSpreadOffset()) / windWallWidthQ();
+}
+
+// True when the piece [s0, s1], which must not cross a knot, lies inside the shell support.
+bool windPieceHoldsShell(vec3 o, vec3 d, float s0, float s1) {
     float pieceLength = s1 - s0;
     if (pieceLength <= WIND_EMPTY_INTERVAL_EPSILON) {
         return false;
     }
     vec3 start = o + d * s0;
+    float hMid = (start.y + 0.5 * pieceLength * d.y) / windHeight();
+    if (hMid < 0.0 || hMid > windHTop()) {
+        return false;
+    }
+    return abs(windPieceShellDistanceAtMid(start, d, pieceLength, hMid)) < 1.0;
+}
+
+// Envelope times wall on the piece as a polynomial in sigma. False when the piece holds no shell.
+bool windShellPiecePoly(vec3 o, vec3 d, float s0, float s1, out float density[WIND_POLY_TERMS]) {
+    for (int k = 0; k < WIND_POLY_TERMS; ++k) {
+        density[k] = 0.0;
+    }
+    if (!windPieceHoldsShell(o, d, s0, s1)) {
+        return false;
+    }
+    float pieceLength = s1 - s0;
+    vec3 start = o + d * s0;
     float invHeight = 1.0 / windHeight();
     float h0 = start.y * invHeight;
     float h1 = pieceLength * d.y * invHeight;
     float hMid = h0 + 0.5 * h1;
-    if (hMid < 0.0 || hMid > windHTop()) {
-        return false;
-    }
 
     float q0 = dot(start.xz, start.xz);
     float q1 = 2.0 * pieceLength * dot(start.xz, d.xz);
@@ -222,10 +240,6 @@ bool windShellPiecePoly(vec3 o, vec3 d, float s0, float s1, out float density[WI
         (q1 - 2.0 * radius0 * radius1) * invWidth,
         (q2 - radius1 * radius1) * invWidth,
         u);
-    float uMid = u[0] + 0.5 * u[1] + 0.25 * u[2];
-    if (abs(uMid) >= 1.0) {
-        return false;
-    }
 
     float wall[WIND_POLY_TERMS];
     windBiweightPoly(u, wall);
@@ -248,56 +262,48 @@ float windShadowPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1) {
     return max((s1 - s0) * windSigmaT() * windPolyMoments(density), 0.0);
 }
 
-float windPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1) {
+float windModulationAt(vec3 p) {
+    float modulation = 1.0;
+    if (windStreakAmplitude() > 0.0) {
+        modulation *= windStreakSigma(p);
+    }
+    if (windEddyAmplitude() > 0.0) {
+        modulation *= windEddySigma(p);
+    }
+    return modulation;
+}
+
+// Shortest length along any ray over which the streak pattern completes one period.
+float windStreakWavelength() {
+    float angular = windStreakOrder() / max(windWallRadiusBase(), 1e-3);
+    float vertical = windStreakRiseTime() - windStreakTwist();
+    return TWO_PI / max(sqrt(angular * angular + vertical * vertical), 1e-3);
+}
+
+// Cell length along the ray: a fraction of the finest active modulation feature, capped by the cell count.
+float windModulationStep(vec3 d, float tNear, float tFar) {
+    float span = max(tFar - tNear, WIND_EMPTY_INTERVAL_EPSILON);
+    float finestFeature = span * length(d);
+    if (windStreakAmplitude() > 0.0) {
+        finestFeature = min(finestFeature, 0.5 * windStreakWavelength());
+    }
+    if (windEddyAmplitude() > 0.0) {
+        finestFeature = min(finestFeature, min(windEddyCellHeight(), min(windEddyCellTheta(), windEddyCellRadial())));
+    }
+    return max(WIND_MODULATION_SAMPLE_FRACTION * finestFeature / length(d), span / float(WIND_MODULATION_CELLS));
+}
+
+// [s0, s1] must not cross a knot; the modulation is linear on it with the given end values.
+float windPieceOpticalDepth(vec3 o, vec3 d, float s0, float s1, float modulation0, float modulation1) {
     float density[WIND_POLY_TERMS];
     if (!windShellPiecePoly(o, d, s0, s1, density)) {
         return 0.0;
     }
-    float pieceLength = s1 - s0;
-    vec3 start = o + d * s0;
-
-    if (windStreakAmplitude() > 0.0) {
-        float sigma0 = windStreakSigma(start);
-        float sigma1 = windStreakSigma(start + pieceLength * d);
-
-        float streakPoly[WIND_POLY_TERMS];
-        for (int k = 0; k < WIND_POLY_TERMS; ++k) {
-            streakPoly[k] = 0.0;
-        }
-        streakPoly[0] = sigma0;
-        streakPoly[1] = sigma1 - sigma0;
-
-        float modulated[WIND_POLY_TERMS];
-        windPolyMul(density, streakPoly, modulated);
-        for (int k = 0; k < WIND_POLY_TERMS; ++k) {
-            density[k] = modulated[k];
-        }
+    float total = 0.0;
+    for (int n = 0; n < WIND_POLY_TERMS; ++n) {
+        total += density[n] * (modulation0 / float(n + 1) + (modulation1 - modulation0) / float(n + 2));
     }
-
-    if (windEddyAmplitude() > 0.0) {
-        float total = 0.0;
-        float sigmaA = windEddySigma(start);
-        for (int j = 0; j < WIND_EDDY_SPLITS; ++j) {
-            float a = float(j) / float(WIND_EDDY_SPLITS);
-            float b = float(j + 1) / float(WIND_EDDY_SPLITS);
-            float sigmaB = windEddySigma(start + b * pieceLength * d);
-            float slope = (sigmaB - sigmaA) / (b - a);
-            float intercept = sigmaA - slope * a;
-            float powA = 1.0;
-            float powB = 1.0;
-            for (int n = 0; n < WIND_POLY_TERMS; ++n) {
-                float m1 = (powB * b * b - powA * a * a) / float(n + 2);
-                float m0 = (powB * b - powA * a) / float(n + 1);
-                total += density[n] * (intercept * m0 + slope * m1);
-                powA *= a;
-                powB *= b;
-            }
-            sigmaA = sigmaB;
-        }
-        return max(pieceLength * windSigmaT() * total, 0.0);
-    }
-
-    return max(pieceLength * windSigmaT() * windPolyMoments(density), 0.0);
+    return max((s1 - s0) * windSigmaT() * total, 0.0);
 }
 
 // Integral of (1 - u^2)^2 over sigma in [0, 1] for u = u0 + u1 sigma + u2 sigma^2.

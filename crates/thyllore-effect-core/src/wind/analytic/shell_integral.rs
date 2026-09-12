@@ -19,8 +19,9 @@ pub const WIND_MAX_KNOTS: usize = 56;
 pub const WIND_MAX_PUFFS: usize = 96;
 pub const WIND_PUFFS_PER_RAY: usize = 20;
 pub(crate) const POLY_TERMS: usize = 16;
-// Fixed so the node set is a continuous function of the ray (no seams where a count would change).
-pub(crate) const EDDY_SPLITS: usize = 8;
+// One cell grid spans the whole ray so a knot splitting a piece never moves a sample.
+pub(crate) const MODULATION_CELLS: usize = 64;
+const MODULATION_SAMPLE_FRACTION: f32 = 0.125;
 const LINEAR_COEFFICIENT_EPSILON: f32 = 1e-7;
 const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
 const SHADOW_RAY_T_MAX: f32 = 1e4;
@@ -540,9 +541,37 @@ pub fn wind_streak_sigma(params: &WindShellParams, local: Vector3<f32>) -> f32 {
     1.0 + params.streak_amplitude * angle.cos()
 }
 
-fn sample_point(start: Vector3<f32>, direction: Vector3<f32>, distance: f32) -> [f32; 3] {
-    let point = start + direction * distance;
-    [point.x, point.y, point.z]
+fn piece_shell_distance_at_mid(
+    params: &WindShellParams,
+    start: Vector3<f32>,
+    direction: Vector3<f32>,
+    length: f32,
+    h_mid: f32,
+) -> f32 {
+    let mid = start + direction * (0.5 * length);
+    let radius_mid = params.wall_radius(h_mid);
+    (mid.x * mid.x + mid.z * mid.z - radius_mid * radius_mid - params.spread_offset)
+        / params.wall_width_q
+}
+
+/// True when the piece [s0, s1], which must not cross a knot, lies inside the shell support.
+fn piece_holds_shell(
+    params: &WindShellParams,
+    origin: Vector3<f32>,
+    direction: Vector3<f32>,
+    s0: f32,
+    s1: f32,
+) -> bool {
+    let length = s1 - s0;
+    if length <= EMPTY_INTERVAL_EPSILON {
+        return false;
+    }
+    let start = origin + direction * s0;
+    let h_mid = (start.y + 0.5 * length * direction.y) / params.height;
+    if !(0.0..=params.h_top).contains(&h_mid) {
+        return false;
+    }
+    piece_shell_distance_at_mid(params, start, direction, length, h_mid).abs() < 1.0
 }
 
 /// Envelope times wall on the piece as a polynomial in sigma; `None` when the piece holds no shell.
@@ -553,18 +582,15 @@ fn shell_piece_poly(
     s0: f32,
     s1: f32,
 ) -> Option<Poly> {
-    let length = s1 - s0;
-    if length <= EMPTY_INTERVAL_EPSILON {
+    if !piece_holds_shell(params, origin, direction, s0, s1) {
         return None;
     }
+    let length = s1 - s0;
     let start = origin + direction * s0;
     let inv_height = 1.0 / params.height;
     let h0 = start.y * inv_height;
     let h1 = length * direction.y * inv_height;
     let h_mid = h0 + 0.5 * h1;
-    if !(0.0..=params.h_top).contains(&h_mid) {
-        return None;
-    }
 
     let q0 = start.x * start.x + start.z * start.z;
     let q1 = 2.0 * length * (start.x * direction.x + start.z * direction.z);
@@ -578,10 +604,6 @@ fn shell_piece_poly(
         (q1 - 2.0 * radius_0 * radius_1) * inv_width,
         (q2 - radius_1 * radius_1) * inv_width,
     );
-    let u_mid = u[0] + 0.5 * u[1] + 0.25 * u[2];
-    if u_mid.abs() >= 1.0 {
-        return None;
-    }
 
     let wall = biweight_poly(&u);
     let inv_h_top = 1.0 / params.h_top;
@@ -607,56 +629,70 @@ pub fn wind_shadow_piece_optical_depth(
     ((s1 - s0) * params.sigma_t * poly_moments(&density)).max(0.0)
 }
 
-/// Exact optical depth of the streaked and eddy-modulated shell on the ray piece [s0, s1],
-/// which must not cross a knot. Puffs are added by `wind_puff_piece_optical_depth`.
+pub fn wind_modulation_at(params: &WindShellParams, local: Vector3<f32>) -> f32 {
+    let mut modulation = 1.0;
+    if params.streak_amplitude > 0.0 {
+        modulation *= wind_streak_sigma(params, local);
+    }
+    if params.eddy_amplitude > 0.0 {
+        modulation *= eddy_sigma(params, [local.x, local.y, local.z]);
+    }
+    modulation
+}
+
+/// Shortest length along any ray over which the streak pattern completes one period.
+fn streak_wavelength(params: &WindShellParams) -> f32 {
+    let angular = params.streak_order / params.wall_radius_base.max(1e-3);
+    let vertical = params.streak_rise_time - params.streak_twist;
+    std::f32::consts::TAU / (angular * angular + vertical * vertical).sqrt().max(1e-3)
+}
+
+/// Cell length along the ray: a fraction of the finest active modulation feature, capped by the cell count.
+pub fn wind_modulation_step(
+    params: &WindShellParams,
+    direction: Vector3<f32>,
+    t_near: f32,
+    t_far: f32,
+) -> f32 {
+    let span = (t_far - t_near).max(EMPTY_INTERVAL_EPSILON);
+    let mut finest_feature = span * direction.magnitude();
+    if params.streak_amplitude > 0.0 {
+        finest_feature = finest_feature.min(0.5 * streak_wavelength(params));
+    }
+    if params.eddy_amplitude > 0.0 {
+        finest_feature = finest_feature.min(
+            params
+                .eddy_cell_height
+                .min(params.eddy_cell_theta.min(params.eddy_cell_radial)),
+        );
+    }
+    (MODULATION_SAMPLE_FRACTION * finest_feature / direction.magnitude())
+        .max(span / MODULATION_CELLS as f32)
+}
+
+/// Optical depth of the shell on [s0, s1], which must not cross a knot, with the streak and
+/// eddy modulation linear on it between the given end values. Puffs are added separately.
 pub fn wind_piece_optical_depth(
     params: &WindShellParams,
     origin: Vector3<f32>,
     direction: Vector3<f32>,
     s0: f32,
     s1: f32,
+    modulation: (f32, f32),
 ) -> f32 {
-    let Some(mut density) = shell_piece_poly(params, origin, direction, s0, s1) else {
+    let Some(density) = shell_piece_poly(params, origin, direction, s0, s1) else {
         return 0.0;
     };
-    let length = s1 - s0;
-    let start = origin + direction * s0;
-
-    if params.streak_amplitude > 0.0 {
-        let sigma_0 = wind_streak_sigma(params, start);
-        let sigma_1 = wind_streak_sigma(params, start + direction * length);
-
-        let mut streak_poly = [0.0f32; POLY_TERMS];
-        streak_poly[0] = sigma_0;
-        streak_poly[1] = sigma_1 - sigma_0;
-
-        density = poly_mul(&density, &streak_poly);
-    }
-
-    if params.eddy_amplitude > 0.0 {
-        let mut total = 0.0f32;
-        let mut sigma_a = eddy_sigma(params, [start.x, start.y, start.z]);
-        for j in 0..EDDY_SPLITS {
-            let a = j as f32 / EDDY_SPLITS as f32;
-            let b = (j + 1) as f32 / EDDY_SPLITS as f32;
-            let sigma_b = eddy_sigma(params, sample_point(start, direction, b * length));
-            let slope = (sigma_b - sigma_a) / (b - a);
-            let intercept = sigma_a - slope * a;
-            let mut pow_a = 1.0f32;
-            let mut pow_b = 1.0f32;
-            for n in 0..POLY_TERMS {
-                let m1 = (pow_b * b * b - pow_a * a * a) / (n + 2) as f32;
-                let m0 = (pow_b * b - pow_a * a) / (n + 1) as f32;
-                total += density[n] * (intercept * m0 + slope * m1);
-                pow_a *= a;
-                pow_b *= b;
-            }
-            sigma_a = sigma_b;
-        }
-        return (length * params.sigma_t * total).max(0.0);
-    }
-
-    (length * params.sigma_t * poly_moments(&density)).max(0.0)
+    let (modulation_0, modulation_1) = modulation;
+    let total: f32 = density
+        .iter()
+        .enumerate()
+        .map(|(n, coefficient)| {
+            coefficient
+                * (modulation_0 / (n + 1) as f32 + (modulation_1 - modulation_0) / (n + 2) as f32)
+        })
+        .sum();
+    ((s1 - s0) * params.sigma_t * total).max(0.0)
 }
 
 // Integral of (1 - u^2)^2 over sigma in [0, 1] for u = u0 + u1 sigma + u2 sigma^2.
@@ -712,6 +748,55 @@ pub fn wind_puff_piece_optical_depth(
     (length * params.sigma_t * params.puff_strength * params.wall_strength * total).max(0.0)
 }
 
+struct RayCell {
+    start: f32,
+    end: f32,
+    step: f32,
+    modulation_a: f32,
+    modulation_b: f32,
+}
+
+fn cell_optical_depth(
+    params: &WindShellParams,
+    origin: Vector3<f32>,
+    direction: Vector3<f32>,
+    knots: &[f32],
+    puffs: &WindRayPuffs,
+    cell: &RayCell,
+) -> f32 {
+    let mut total = 0.0f32;
+    for pair in knots.windows(2) {
+        let a = pair[0].max(cell.start);
+        let b = pair[1].min(cell.end);
+        if b <= a {
+            continue;
+        }
+        let modulation_0 = lerp(
+            cell.modulation_a,
+            cell.modulation_b,
+            (a - cell.start) / cell.step,
+        );
+        let modulation_1 = lerp(
+            cell.modulation_a,
+            cell.modulation_b,
+            (b - cell.start) / cell.step,
+        );
+        total += wind_piece_optical_depth(
+            params,
+            origin,
+            direction,
+            a,
+            b,
+            (modulation_0, modulation_1),
+        ) + wind_puff_piece_optical_depth(params, puffs, origin, direction, a, b);
+    }
+    total
+}
+
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
+}
+
 pub fn wind_optical_depth(
     params: &WindShellParams,
     origin: Vector3<f32>,
@@ -723,17 +808,23 @@ pub fn wind_optical_depth(
         return 0.0;
     }
     let (knots, count, puffs) = wind_ray_knots(params, origin, direction, t_near, t_far);
+    let step = wind_modulation_step(params, direction, t_near, t_far);
+    let cell_count = (((t_far - t_near) / step).ceil() as usize).clamp(1, MODULATION_CELLS);
+
     let mut total = 0.0f32;
-    for i in 1..count {
-        total += wind_piece_optical_depth(params, origin, direction, knots[i - 1], knots[i])
-            + wind_puff_piece_optical_depth(
-                params,
-                &puffs,
-                origin,
-                direction,
-                knots[i - 1],
-                knots[i],
-            );
+    let mut modulation_b = wind_modulation_at(params, origin + direction * t_near);
+    for c in 0..cell_count {
+        let start = t_near + c as f32 * step;
+        let modulation_a = modulation_b;
+        modulation_b = wind_modulation_at(params, origin + direction * (start + step));
+        let cell = RayCell {
+            start,
+            end: (start + step).min(t_far),
+            step,
+            modulation_a,
+            modulation_b,
+        };
+        total += cell_optical_depth(params, origin, direction, &knots[..count], &puffs, &cell);
     }
     total
 }

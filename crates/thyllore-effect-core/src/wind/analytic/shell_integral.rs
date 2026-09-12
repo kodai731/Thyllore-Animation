@@ -1,4 +1,4 @@
-use crate::wind::analytic::eddy::eddy_sigma;
+use crate::wind::analytic::eddy::{eddy_sigma, EDDY_OCTAVE_COUNT};
 use crate::wind::analytic::motion::{h_top, rotation_phase, spread_offset, streak_phase, wall_amp};
 use crate::wind::analytic::puffs::build_wind_puffs;
 use crate::wind::WindTornadoEffect;
@@ -19,8 +19,10 @@ pub const WIND_MAX_KNOTS: usize = 56;
 pub const WIND_MAX_PUFFS: usize = 96;
 pub const WIND_PUFFS_PER_RAY: usize = 20;
 pub(crate) const POLY_TERMS: usize = 16;
-// One cell grid spans the whole ray so a knot splitting a piece never moves a sample.
+// One cell grid spans the whole ray so a knot splitting a piece never moves a sample; the cell
+// length comes from the active length (shell or puff pieces) so the budget is spent on density.
 pub(crate) const MODULATION_CELLS: usize = 64;
+pub(crate) const ACTIVE_CELLS_MIN: usize = 16;
 const MODULATION_SAMPLE_FRACTION: f32 = 0.125;
 const LINEAR_COEFFICIENT_EPSILON: f32 = 1e-7;
 const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
@@ -647,27 +649,61 @@ fn streak_wavelength(params: &WindShellParams) -> f32 {
     std::f32::consts::TAU / (angular * angular + vertical * vertical).sqrt().max(1e-3)
 }
 
-/// Cell length along the ray: a fraction of the finest active modulation feature, capped by the cell count.
+fn piece_holds_puff(puffs: &WindRayPuffs, s0: f32, s1: f32) -> bool {
+    let s_mid = 0.5 * (s0 + s1);
+    (0..puffs.count).any(|k| s_mid > puffs.enter[k] && s_mid < puffs.exit[k])
+}
+
+fn piece_is_active(
+    params: &WindShellParams,
+    origin: Vector3<f32>,
+    direction: Vector3<f32>,
+    puffs: &WindRayPuffs,
+    s0: f32,
+    s1: f32,
+) -> bool {
+    piece_holds_shell(params, origin, direction, s0, s1) || piece_holds_puff(puffs, s0, s1)
+}
+
+/// Length of the ray inside the shell support or a puff: continuous in the ray, so the cell
+/// length derived from it never jumps when a knot appears.
+pub fn wind_active_length(
+    params: &WindShellParams,
+    origin: Vector3<f32>,
+    direction: Vector3<f32>,
+    knots: &[f32],
+    puffs: &WindRayPuffs,
+) -> f32 {
+    knots
+        .windows(2)
+        .filter(|pair| piece_is_active(params, origin, direction, puffs, pair[0], pair[1]))
+        .map(|pair| pair[1] - pair[0])
+        .sum()
+}
+
+/// Cell length along the ray: a fraction of the finest active modulation feature, bounded so the
+/// active length holds between ACTIVE_CELLS_MIN and MODULATION_CELLS cells.
 pub fn wind_modulation_step(
     params: &WindShellParams,
     direction: Vector3<f32>,
-    t_near: f32,
-    t_far: f32,
+    active_length: f32,
 ) -> f32 {
-    let span = (t_far - t_near).max(EMPTY_INTERVAL_EPSILON);
+    let span = active_length.max(EMPTY_INTERVAL_EPSILON);
     let mut finest_feature = span * direction.magnitude();
     if params.streak_amplitude > 0.0 {
         finest_feature = finest_feature.min(0.5 * streak_wavelength(params));
     }
     if params.eddy_amplitude > 0.0 {
-        finest_feature = finest_feature.min(
-            params
-                .eddy_cell_height
-                .min(params.eddy_cell_theta.min(params.eddy_cell_radial)),
-        );
+        let finest_octave_scale = 2f32.powi(EDDY_OCTAVE_COUNT as i32 - 1);
+        let finest_cell = params
+            .eddy_cell_height
+            .min(params.eddy_cell_theta.min(params.eddy_cell_radial));
+        finest_feature = finest_feature.min(finest_cell / finest_octave_scale);
     }
-    (MODULATION_SAMPLE_FRACTION * finest_feature / direction.magnitude())
-        .max(span / MODULATION_CELLS as f32)
+    (MODULATION_SAMPLE_FRACTION * finest_feature / direction.magnitude()).clamp(
+        span / MODULATION_CELLS as f32,
+        span / ACTIVE_CELLS_MIN as f32,
+    )
 }
 
 /// Optical depth of the shell on [s0, s1], which must not cross a knot, with the streak and
@@ -748,55 +784,55 @@ pub fn wind_puff_piece_optical_depth(
     (length * params.sigma_t * params.puff_strength * params.wall_strength * total).max(0.0)
 }
 
-struct RayCell {
-    start: f32,
-    end: f32,
-    step: f32,
-    modulation_a: f32,
-    modulation_b: f32,
+/// Modulation at both nodes of a cell; a node shared with the previous cell is not re-evaluated.
+#[derive(Clone, Copy)]
+struct CellModulation {
+    cell: Option<i64>,
+    a: f32,
+    b: f32,
 }
 
-fn cell_optical_depth(
-    params: &WindShellParams,
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
-    knots: &[f32],
-    puffs: &WindRayPuffs,
-    cell: &RayCell,
-) -> f32 {
-    let mut total = 0.0f32;
-    for pair in knots.windows(2) {
-        let a = pair[0].max(cell.start);
-        let b = pair[1].min(cell.end);
-        if b <= a {
-            continue;
+impl CellModulation {
+    fn none() -> Self {
+        Self {
+            cell: None,
+            a: 1.0,
+            b: 1.0,
         }
-        let modulation_0 = lerp(
-            cell.modulation_a,
-            cell.modulation_b,
-            (a - cell.start) / cell.step,
-        );
-        let modulation_1 = lerp(
-            cell.modulation_a,
-            cell.modulation_b,
-            (b - cell.start) / cell.step,
-        );
-        total += wind_piece_optical_depth(
-            params,
-            origin,
-            direction,
+    }
+
+    fn advance(
+        self,
+        params: &WindShellParams,
+        origin: Vector3<f32>,
+        direction: Vector3<f32>,
+        t_near: f32,
+        step: f32,
+        cell: i64,
+    ) -> Self {
+        if self.cell == Some(cell) {
+            return self;
+        }
+        let cell_start = t_near + cell as f32 * step;
+        let a = if self.cell == Some(cell - 1) {
+            self.b
+        } else {
+            wind_modulation_at(params, origin + direction * cell_start)
+        };
+        let b = wind_modulation_at(params, origin + direction * (cell_start + step));
+        Self {
+            cell: Some(cell),
             a,
             b,
-            (modulation_0, modulation_1),
-        ) + wind_puff_piece_optical_depth(params, puffs, origin, direction, a, b);
+        }
     }
-    total
 }
 
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 
+/// Pieces are walked in ray order and each is cut by the cells of the ray-wide grid it overlaps.
 pub fn wind_optical_depth(
     params: &WindShellParams,
     origin: Vector3<f32>,
@@ -808,23 +844,42 @@ pub fn wind_optical_depth(
         return 0.0;
     }
     let (knots, count, puffs) = wind_ray_knots(params, origin, direction, t_near, t_far);
-    let step = wind_modulation_step(params, direction, t_near, t_far);
-    let cell_count = (((t_far - t_near) / step).ceil() as usize).clamp(1, MODULATION_CELLS);
+    let knots = &knots[..count];
+    let active_length = wind_active_length(params, origin, direction, knots, &puffs);
+    if active_length <= EMPTY_INTERVAL_EPSILON {
+        return 0.0;
+    }
+    let step = wind_modulation_step(params, direction, active_length);
 
     let mut total = 0.0f32;
-    let mut modulation_b = wind_modulation_at(params, origin + direction * t_near);
-    for c in 0..cell_count {
-        let start = t_near + c as f32 * step;
-        let modulation_a = modulation_b;
-        modulation_b = wind_modulation_at(params, origin + direction * (start + step));
-        let cell = RayCell {
-            start,
-            end: (start + step).min(t_far),
-            step,
-            modulation_a,
-            modulation_b,
-        };
-        total += cell_optical_depth(params, origin, direction, &knots[..count], &puffs, &cell);
+    let mut modulation = CellModulation::none();
+    for pair in knots.windows(2) {
+        let (piece_start, piece_end) = (pair[0], pair[1]);
+        if !piece_is_active(params, origin, direction, &puffs, piece_start, piece_end) {
+            continue;
+        }
+        let cell_first = ((piece_start - t_near) / step).floor() as i64;
+        let cell_last = (((piece_end - t_near) / step).floor() as i64)
+            .min(cell_first + MODULATION_CELLS as i64);
+        for cell in cell_first..=cell_last {
+            let cell_start = t_near + cell as f32 * step;
+            let s0 = piece_start.max(cell_start);
+            let s1 = piece_end.min(cell_start + step);
+            if s1 <= s0 {
+                continue;
+            }
+            modulation = modulation.advance(params, origin, direction, t_near, step, cell);
+            let modulation_0 = lerp(modulation.a, modulation.b, (s0 - cell_start) / step);
+            let modulation_1 = lerp(modulation.a, modulation.b, (s1 - cell_start) / step);
+            total += wind_piece_optical_depth(
+                params,
+                origin,
+                direction,
+                s0,
+                s1,
+                (modulation_0, modulation_1),
+            ) + wind_puff_piece_optical_depth(params, &puffs, origin, direction, s0, s1);
+        }
     }
     total
 }

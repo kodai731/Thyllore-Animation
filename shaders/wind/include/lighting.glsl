@@ -27,33 +27,31 @@ float windInScatterSource(vec3 position, vec3 lightPosition, vec3 viewDir) {
         + windSkyBrightness() * transmittances.y;
 }
 
-bool windCellHoldsShell(vec3 o, vec3 d, float knots[WIND_MAX_KNOTS], int knotCount, float cellStart, float cellEnd) {
-    for (int i = 1; i < knotCount; ++i) {
-        if (windPieceHoldsShell(o, d, max(knots[i - 1], cellStart), min(knots[i], cellEnd))) {
-            return true;
-        }
+// Modulation at both nodes of a cell; a node shared with the previous cell is not re-evaluated.
+struct WindCellModulation {
+    bool sampled;
+    int cell;
+    float a;
+    float b;
+};
+
+WindCellModulation windCellModulation(WindCellModulation previous, vec3 o, vec3 d, float tNear, float step, int cell) {
+    if (previous.sampled && cell == previous.cell) {
+        return previous;
     }
-    return false;
+    float cellStart = tNear + float(cell) * step;
+    WindCellModulation current;
+    current.sampled = true;
+    current.cell = cell;
+    current.a = previous.sampled && cell == previous.cell + 1
+        ? previous.b
+        : windModulationAt(o + d * cellStart);
+    current.b = windModulationAt(o + d * (cellStart + step));
+    return current;
 }
 
-float windCellOpticalDepth(
-    vec3 o, vec3 d, float knots[WIND_MAX_KNOTS], int knotCount, WindRayPuffs puffs,
-    float cellStart, float cellEnd, float step, float modulationA, float modulationB) {
-    float total = 0.0;
-    for (int i = 1; i < knotCount; ++i) {
-        float a = max(knots[i - 1], cellStart);
-        float b = min(knots[i], cellEnd);
-        if (b <= a) {
-            continue;
-        }
-        float modulation0 = mix(modulationA, modulationB, (a - cellStart) / step);
-        float modulation1 = mix(modulationA, modulationB, (b - cellStart) / step);
-        total += windPieceOpticalDepth(o, d, a, b, modulation0, modulation1)
-            + windPuffPieceOpticalDepth(puffs, o, d, a, b);
-    }
-    return total;
-}
-
+// Pieces are walked in ray order and each is cut by the cells it overlaps; a cell shared by two
+// pieces composes exactly because the transmittance accumulates between the two parts.
 vec3 windSingleScatterRadiance(
     vec3 o, vec3 d, float tNear, float tFar, vec3 lightPosition,
     out float opticalDepth, out int knotCount) {
@@ -66,36 +64,49 @@ vec3 windSingleScatterRadiance(
     float knots[WIND_MAX_KNOTS];
     WindRayPuffs puffs;
     knotCount = windRayKnots(o, d, tNear, tFar, knots, puffs);
-    float step = windModulationStep(d, tNear, tFar);
-    int cellCount = clamp(int(ceil((tFar - tNear) / step)), 1, WIND_MODULATION_CELLS);
+    float activeLength = windActiveLength(o, d, knots, knotCount, puffs);
+    if (activeLength <= WIND_EMPTY_INTERVAL_EPSILON) {
+        return vec3(0.0);
+    }
+    float step = windModulationStep(d, activeLength);
     vec3 viewDir = normalize(d);
 
     float radiance = 0.0;
-    float modulationB = 1.0;
-    bool modulationBSampled = false;
-    for (int c = 0; c < cellCount; ++c) {
-        float cellStart = tNear + float(c) * step;
-        float cellEnd = min(cellStart + step, tFar);
-        bool holdsShell = windCellHoldsShell(o, d, knots, knotCount, cellStart, cellEnd);
-        float modulationA = modulationB;
-        if (holdsShell && !modulationBSampled) {
-            modulationA = windModulationAt(o + d * cellStart);
-        }
-        modulationBSampled = holdsShell;
-        if (holdsShell) {
-            modulationB = windModulationAt(o + d * (cellStart + step));
-        }
-        float cellDepth = windCellOpticalDepth(
-            o, d, knots, knotCount, puffs, cellStart, cellEnd, step, modulationA, modulationB);
-        if (cellDepth <= 0.0) {
+    WindCellModulation modulation;
+    modulation.sampled = false;
+    modulation.cell = 0;
+    modulation.a = 1.0;
+    modulation.b = 1.0;
+    for (int i = 1; i < knotCount; ++i) {
+        float pieceStart = knots[i - 1];
+        float pieceEnd = knots[i];
+        if (!windPieceIsActive(o, d, puffs, pieceStart, pieceEnd)) {
             continue;
         }
+        int cellFirst = int(floor((pieceStart - tNear) / step));
+        int cellLast = min(int(floor((pieceEnd - tNear) / step)), cellFirst + WIND_MODULATION_CELLS);
+        for (int c = cellFirst; c <= cellLast; ++c) {
+            float cellStart = tNear + float(c) * step;
+            float s0 = max(pieceStart, cellStart);
+            float s1 = min(pieceEnd, cellStart + step);
+            if (s1 <= s0) {
+                continue;
+            }
+            modulation = windCellModulation(modulation, o, d, tNear, step, c);
+            float modulation0 = mix(modulation.a, modulation.b, (s0 - cellStart) / step);
+            float modulation1 = mix(modulation.a, modulation.b, (s1 - cellStart) / step);
+            float depth = windPieceOpticalDepth(o, d, s0, s1, modulation0, modulation1)
+                + windPuffPieceOpticalDepth(puffs, o, d, s0, s1);
+            if (depth <= 0.0) {
+                continue;
+            }
 
-        vec3 node = o + d * (0.5 * (cellStart + cellEnd));
-        float source = windInScatterSource(node, lightPosition, viewDir);
-        radiance += rteTransmittanceFromOpticalDepth(opticalDepth) * source
-            * (1.0 - rteTransmittanceFromOpticalDepth(cellDepth));
-        opticalDepth += cellDepth;
+            vec3 node = o + d * (0.5 * (cellStart + min(cellStart + step, tFar)));
+            float source = windInScatterSource(node, lightPosition, viewDir);
+            radiance += rteTransmittanceFromOpticalDepth(opticalDepth) * source
+                * (1.0 - rteTransmittanceFromOpticalDepth(depth));
+            opticalDepth += depth;
+        }
     }
     return radiance * wind.albedo.rgb;
 }

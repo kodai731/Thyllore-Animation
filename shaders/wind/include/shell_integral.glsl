@@ -14,8 +14,10 @@
 
 const int WIND_MAX_KNOTS = 56;
 const int WIND_POLY_TERMS = 16;
-// One cell grid spans the whole ray so a knot splitting a piece never moves a sample.
+// One cell grid spans the whole ray so a knot splitting a piece never moves a sample; the cell
+// length comes from the active length (shell or puff pieces) so the budget is spent on density.
 const int WIND_MODULATION_CELLS = 64;
+const int WIND_ACTIVE_CELLS_MIN = 16;
 const float WIND_MODULATION_SAMPLE_FRACTION = 0.125;
 const int WIND_PUFFS_PER_RAY = 20;
 const float WIND_EMPTY_INTERVAL_EPSILON = 1e-6;
@@ -280,17 +282,49 @@ float windStreakWavelength() {
     return TWO_PI / max(sqrt(angular * angular + vertical * vertical), 1e-3);
 }
 
-// Cell length along the ray: a fraction of the finest active modulation feature, capped by the cell count.
-float windModulationStep(vec3 d, float tNear, float tFar) {
-    float span = max(tFar - tNear, WIND_EMPTY_INTERVAL_EPSILON);
+bool windPieceHoldsPuff(WindRayPuffs puffs, float s0, float s1) {
+    float sMid = 0.5 * (s0 + s1);
+    for (int k = 0; k < puffs.count; ++k) {
+        if (sMid > puffs.enter[k] && sMid < puffs.exit[k]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool windPieceIsActive(vec3 o, vec3 d, WindRayPuffs puffs, float s0, float s1) {
+    return windPieceHoldsShell(o, d, s0, s1) || windPieceHoldsPuff(puffs, s0, s1);
+}
+
+// Length of the ray inside the shell support or a puff: continuous in the ray, so the cell
+// length derived from it never jumps when a knot appears.
+float windActiveLength(vec3 o, vec3 d, float knots[WIND_MAX_KNOTS], int knotCount, WindRayPuffs puffs) {
+    float total = 0.0;
+    for (int i = 1; i < knotCount; ++i) {
+        if (windPieceIsActive(o, d, puffs, knots[i - 1], knots[i])) {
+            total += knots[i] - knots[i - 1];
+        }
+    }
+    return total;
+}
+
+// Cell length along the ray: a fraction of the finest active modulation feature, bounded so the
+// active length holds between WIND_ACTIVE_CELLS_MIN and WIND_MODULATION_CELLS cells.
+float windModulationStep(vec3 d, float activeLength) {
+    float span = max(activeLength, WIND_EMPTY_INTERVAL_EPSILON);
     float finestFeature = span * length(d);
     if (windStreakAmplitude() > 0.0) {
         finestFeature = min(finestFeature, 0.5 * windStreakWavelength());
     }
     if (windEddyAmplitude() > 0.0) {
-        finestFeature = min(finestFeature, min(windEddyCellHeight(), min(windEddyCellTheta(), windEddyCellRadial())));
+        float finestOctaveScale = exp2(float(WIND_EDDY_OCTAVE_COUNT - 1));
+        float finestCell = min(windEddyCellHeight(), min(windEddyCellTheta(), windEddyCellRadial()));
+        finestFeature = min(finestFeature, finestCell / finestOctaveScale);
     }
-    return max(WIND_MODULATION_SAMPLE_FRACTION * finestFeature / length(d), span / float(WIND_MODULATION_CELLS));
+    return clamp(
+        WIND_MODULATION_SAMPLE_FRACTION * finestFeature / length(d),
+        span / float(WIND_MODULATION_CELLS),
+        span / float(WIND_ACTIVE_CELLS_MIN));
 }
 
 // [s0, s1] must not cross a knot; the modulation is linear on it with the given end values.

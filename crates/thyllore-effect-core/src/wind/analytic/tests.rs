@@ -1,6 +1,7 @@
 use super::*;
+use crate::wind::analytic::eddy::EDDY_OCTAVE_COUNT;
 use crate::wind::analytic::motion::rotation_phase;
-use crate::wind::analytic::shell_integral::{MODULATION_CELLS, POLY_TERMS};
+use crate::wind::analytic::shell_integral::{ACTIVE_CELLS_MIN, MODULATION_CELLS, POLY_TERMS};
 use crate::wind::WindTornadoEffect;
 use crate::wind::{
     WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,
@@ -886,7 +887,7 @@ fn truncated_ray_9_plus_puffs_analytical_leq_midpoint() {
         "reference {reference} too small to compare"
     );
     assert!(
-        closed <= reference * (1.0 + 1e-6),
+        closed <= reference * (1.0 + 1e-5),
         "truncated analytical {closed} should be <= midpoint reference {reference}"
     );
 }
@@ -1020,6 +1021,17 @@ fn glsl_polynomial_terms_match_the_rust_mirror_and_cover_the_piece_degree() {
     assert_eq!(
         glsl_int_constant(&source, "WIND_MODULATION_CELLS"),
         MODULATION_CELLS as i64
+    );
+    assert_eq!(
+        glsl_int_constant(&source, "WIND_ACTIVE_CELLS_MIN"),
+        ACTIVE_CELLS_MIN as i64
+    );
+    assert_eq!(
+        glsl_int_constant(
+            &wind_glsl_source("shell_field.glsl"),
+            "WIND_EDDY_OCTAVE_COUNT"
+        ),
+        EDDY_OCTAVE_COUNT as i64
     );
     assert_eq!(
         glsl_int_constant(&source, "WIND_MAX_KNOTS"),

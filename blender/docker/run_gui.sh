@@ -97,7 +97,7 @@ if [[ "$SOFTWARE_GL" -eq 1 ]]; then
 fi
 
 SCREENSHOT_DIR_HOST="/tmp/thyllore_screenshots"
-mkdir -p "$SCREENSHOT_DIR_HOST"
+mkdir -p "$SCREENSHOT_DIR_HOST" "$REPO_ROOT/log"
 
 GPU_CACHE_DIR="$REPO_ROOT/build/docker_gui_cache"
 mkdir -p "$GPU_CACHE_DIR"
@@ -136,6 +136,7 @@ docker run --rm \
     -e DISPLAY="$DISPLAY" \
     -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
     -v "$REPO_ROOT:/workspace:ro" \
+    -v "$REPO_ROOT/log:/workspace/log" \
     ${ZIP_MOUNT[@]+"${ZIP_MOUNT[@]}"} \
     -v "$WORK_DIR:/scenes" \
     -v "$SCREENSHOT_DIR_HOST:/screenshots" \

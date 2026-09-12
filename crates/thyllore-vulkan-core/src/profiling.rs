@@ -71,6 +71,37 @@ impl GpuTimestampProfiler {
         device.cmd_reset_query_pool(cmd, self.pools[slot], 0, TIMESTAMP_QUERY_COUNT);
         self.labels[slot].clear();
         self.next_query[slot] = 0;
+
+        device.cmd_write_timestamp(
+            cmd,
+            vk::PipelineStageFlags::TOP_OF_PIPE,
+            self.pools[slot],
+            0,
+        );
+        self.labels[slot].push(("frame".to_string(), 0, 0));
+        self.next_query[slot] = 1;
+    }
+
+    pub unsafe fn end_frame(
+        &mut self,
+        device: &vulkanalia::Device,
+        cmd: vk::CommandBuffer,
+        slot: usize,
+    ) {
+        let q = self.next_query[slot];
+        if q >= TIMESTAMP_QUERY_COUNT {
+            return;
+        }
+        device.cmd_write_timestamp(
+            cmd,
+            vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+            self.pools[slot],
+            q,
+        );
+        if let Some(entry) = self.labels[slot].first_mut() {
+            entry.2 = q;
+        }
+        self.next_query[slot] += 1;
     }
 
     pub unsafe fn begin_scope(

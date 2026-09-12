@@ -2,6 +2,7 @@ use crate::core::device::*;
 use crate::descriptor::pass_manifest::FLAME_RESOLVE;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::flame_resolve;
+use crate::resource::image::create_scene_depth_sampler;
 use crate::resource::uniform_buffer::UniformBuffer;
 use crate::vulkan::*;
 use thyllore_effect_core::FlameUBO;
@@ -95,17 +96,4 @@ impl RRFlameDescriptorSet {
         self.layout.destroy(device);
         device.destroy_sampler(self.scene_depth_sampler, None);
     }
-}
-
-// Depth formats must not be sampled with LINEAR filtering.
-unsafe fn create_scene_depth_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
-    let info = vk::SamplerCreateInfo::builder()
-        .mag_filter(vk::Filter::NEAREST)
-        .min_filter(vk::Filter::NEAREST)
-        .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
-        .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
-        .build();
-    Ok(rrdevice.device.create_sampler(&info, None)?)
 }

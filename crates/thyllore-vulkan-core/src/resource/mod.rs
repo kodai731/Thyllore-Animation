@@ -19,6 +19,7 @@ pub mod raytracing_data;
 pub mod render_target_storage;
 pub mod render_target_transient;
 pub mod uniform_buffer;
+pub mod volume_image;
 pub mod water_buffer;
 
 pub use auto_exposure_buffers::{AutoExposureBuffers, LUMINANCE_BUFFER_SIZE};
@@ -44,4 +45,5 @@ pub use render_target_transient::{
     RenderTargetTransient, TransientDesc, TransientHandle, TransientImage,
 };
 pub use uniform_buffer::{Placement, UniformBuffer};
+pub use volume_image::VolumeImage;
 pub use water_buffer::WaterBuffer;

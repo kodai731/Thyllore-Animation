@@ -51,6 +51,20 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   through the abstract types of `thyllore-render-core`.
 - Effects (`thyllore-effect-core`) keep one directory per effect with the same split: `effect/` data,
   `analytic/` pure math mirrored by the shaders, `gpu/` UBO structs, `presets`, `settings`.
+  Analytic pieces that more than one effect can use (`volume/`: ray knots, the wall shell, puffs) live
+  beside the effect directories and mirror `shaders/include/`; an effect's `analytic/` only builds the
+  shared structs from its own parameters and adds what is specific to it (wind: streak / eddy modulation).
+- `thyllore-vulkan-core` never names an effect: no `Wind*` / `Flame*` / `Water*` types, no per-effect
+  fields in `RayTracingData`, no per-effect descriptor set, record helper, buffer or push constants. It
+  offers generic primitives only (images and `VolumeImage`, samplers, `create_color_overlay_render_pass`,
+  `ReflectedSetLayout`, `UniformBuffer<T>`, `PipelineBuilder`); an effect's GPU state is an ECS resource
+  (`src/ecs/resource/<effect>_render_targets.rs`) assembled from those primitives in
+  `src/ecs/systems/<effect>/` (descriptors, pipeline, record, render targets). Wind follows this layout.
+  Known exceptions tracked by the vulkan-core effect-neutral issue (#179), not to be extended:
+  `descriptor/flame.rs`, `descriptor/water.rs`, `descriptor/water_caustic.rs`, `descriptor/water_trace.rs`,
+  `renderer/flame.rs`, `renderer/water.rs`, `resource/flame_buffer.rs`, `resource/water_buffer.rs`, the
+  flame / water fields and `create_*_pipeline` methods of `RayTracingData`, `MAX_FLAME_INSTANCES` /
+  `MAX_WATER_INSTANCES`, and `FlamePushConstants` / `WaterPushConstants` in `renderer/push_constants.rs`.
 - Domain crates use the `components/` (data) and `systems/` (pure functions) split, see
   `ecs-architecture.md`.
 

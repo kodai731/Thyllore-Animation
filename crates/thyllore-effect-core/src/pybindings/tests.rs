@@ -2,7 +2,7 @@ use crate::flame::{
     apply_flame_preset, build_flame_ubo, refresh_flame_coefficients, FlameBaked, FlameEffect,
     FlameTemporalAccum,
 };
-use cgmath::{Quaternion, Vector3};
+use cgmath::{Quaternion, SquareMatrix, Vector3};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
@@ -286,6 +286,49 @@ fn test_effective_optical_depth_falls_back_to_sigma_t_times_radius() {
 }
 
 #[test]
+fn test_wind_spread_offset_grows_after_spread_start() {
+    Python::attach(|py| {
+        let preset_dict: Bound<'_, PyDict> = super::wind_preset_params(py, "funnel").unwrap();
+        let spread_start: f32 = preset_dict
+            .get_item("spread_start")
+            .unwrap()
+            .unwrap()
+            .extract()
+            .unwrap();
+
+        let identity_column_major: [f32; 16] = *cgmath::Matrix4::<f32>::identity().as_ref();
+        let read_spread_offset = |time: f32| -> f32 {
+            let bytes = super::pack_wind_ubo(
+                py,
+                &preset_dict,
+                time,
+                [0.0f32, 0.0f32, 0.0f32],
+                [1.0f32, 0.0f32, 0.0f32, 0.0f32],
+                identity_column_major,
+                identity_column_major,
+            )
+            .unwrap();
+            let offset = std::mem::offset_of!(crate::wind::WindUBO, albedo) + 12;
+            f32::from_le_bytes([
+                bytes[offset],
+                bytes[offset + 1],
+                bytes[offset + 2],
+                bytes[offset + 3],
+            ])
+        };
+
+        let at_start = read_spread_offset(0.0);
+        let after_start = read_spread_offset(spread_start + 1.0);
+
+        assert_eq!(at_start, 0.0, "no spread before spread_start");
+        assert!(
+            after_start > 0.0,
+            "spread_offset should grow after spread_start, got {after_start}"
+        );
+    });
+}
+
+#[test]
 fn test_water_ui_params_expose_kind_and_reference_distance() {
     Python::attach(|py| {
         let ui_list = super::water_ui_params(py).unwrap();
@@ -312,4 +355,12 @@ fn test_water_ui_params_expose_kind_and_reference_distance() {
             ))
         );
     });
+}
+
+#[test]
+fn blender_to_engine_matrix_matches_the_math_core_constant() {
+    let rows = super::effect::blender_to_engine_matrix();
+    let engine_up = [rows[1][0], rows[1][1], rows[1][2]];
+    assert_eq!(engine_up, [0.0, 0.0, 1.0], "engine y comes from Blender z");
+    assert_eq!(rows[2][1], -1.0, "engine z is minus Blender y");
 }

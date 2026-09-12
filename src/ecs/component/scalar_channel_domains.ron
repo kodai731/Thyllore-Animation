@@ -1,0 +1,7 @@
+// Disjoint blocks of PropertyType::Custom codes owned by each scalar channel domain.
+// Codes are persisted in clip files: never move a block, and give a new domain the next free one.
+[
+    (name: "Flame", first_code: 0, code_count: 256),
+    (name: "Water", first_code: 256, code_count: 256),
+    (name: "Wind", first_code: 512, code_count: 256),
+]

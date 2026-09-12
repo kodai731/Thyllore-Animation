@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from . import _bootstrap
 from . import properties
+from ._common import viewport_recording
 
 
 def register():
@@ -22,6 +23,7 @@ def register():
     bpy.utils.register_class(operators.THYLLORE_OT_wind_add)
     debug_tools.register()
     bpy.utils.register_class(panels.VIEW3D_PT_thyllore_wind)
+    viewport_recording.register()
 
     draw_handler.register_draw_handler()
 
@@ -35,6 +37,7 @@ def unregister():
     from . import panels
 
     draw_handler.unregister_draw_handler()
+    viewport_recording.unregister()
     bpy.utils.unregister_class(panels.VIEW3D_PT_thyllore_wind)
     debug_tools.unregister()
     bpy.utils.unregister_class(operators.THYLLORE_OT_wind_add)

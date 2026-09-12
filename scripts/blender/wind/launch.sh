@@ -22,6 +22,9 @@ than the ZIP) and embeds a wind tornado if the scene has none, so the viewport
 draw handler can be checked at once. Blender's console output is mirrored to
 <repo>/log/log_blender_wind.log.
 
+The repo is mounted read-only at /workspace inside the container except /workspace/log
+(host log/, gitignored): save files written from Blender (Record Viewport) there.
+
 Options:
   --skip-build         Reuse the newest dist/thyllore_wind*-$PLATFORM.zip
   --release            Build/launch the release ZIP (no debug panel) instead of debug

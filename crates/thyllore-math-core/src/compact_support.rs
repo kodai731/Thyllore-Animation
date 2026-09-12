@@ -5,10 +5,68 @@
 //! quadratic `g(s) = a s^2 + b s + c`, so the support is the interval where
 //! `g(s) <= 1` and every band integral reduces to power-rule moments.
 
+use crate::polynomial::{poly_mul, Poly};
+use cgmath::{InnerSpace, Vector3};
+
 /// Biweight kernel `(1 - u^2)^2` for `u^2 <= 1`, exactly zero outside.
 pub fn biweight_profile(u_squared: f32) -> f32 {
     let inside = (1.0 - u_squared).max(0.0);
     inside * inside
+}
+
+/// Biweight kernel of the signed normalized offset `u`.
+pub fn biweight(u: f32) -> f32 {
+    biweight_profile(u * u)
+}
+
+/// `(1 - u(sigma)^2)^2` for a polynomial `u`, without the support clamp: valid on pieces
+/// that lie inside the support.
+pub fn biweight_poly(u: &Poly) -> Poly {
+    let mut inside = poly_mul(u, u);
+    for coefficient in inside.iter_mut() {
+        *coefficient = -*coefficient;
+    }
+    inside[0] += 1.0;
+    poly_mul(&inside, &inside)
+}
+
+/// Integral of `(1 - u^2)^2` over sigma in [0, 1] for `u = u0 + u1 sigma + u2 sigma^2`,
+/// without the support clamp.
+pub fn biweight_quadratic_integral(u0: f32, u1: f32, u2: f32) -> f32 {
+    let u_squared = [
+        u0 * u0,
+        2.0 * u0 * u1,
+        u1 * u1 + 2.0 * u0 * u2,
+        2.0 * u1 * u2,
+        u2 * u2,
+    ];
+    let mut second_moment = 0.0f32;
+    let mut fourth_moment = 0.0f32;
+    for (i, &ci) in u_squared.iter().enumerate() {
+        second_moment += ci / (i as f32 + 1.0);
+        for (j, &cj) in u_squared.iter().enumerate() {
+            fourth_moment += ci * cj / ((i + j) as f32 + 1.0);
+        }
+    }
+    1.0 - 2.0 * second_moment + fourth_moment
+}
+
+/// Integral over sigma in [0, 1] of the biweight sphere `(1 - |p - center|^2 / radius^2)^2`
+/// along the piece `p = start + direction * piece_length * sigma`, which must lie inside
+/// the sphere.
+pub fn biweight_sphere_piece_integral(
+    center: Vector3<f32>,
+    radius: f32,
+    start: Vector3<f32>,
+    direction: Vector3<f32>,
+    piece_length: f32,
+) -> f32 {
+    let offset = start - center;
+    let inv_radius_sq = 1.0 / (radius * radius);
+    let u0 = offset.dot(offset) * inv_radius_sq;
+    let u1 = 2.0 * piece_length * offset.dot(direction) * inv_radius_sq;
+    let u2 = piece_length * piece_length * direction.dot(direction) * inv_radius_sq;
+    biweight_quadratic_integral(u0, u1, u2)
 }
 
 const LINEAR_COEFFICIENT_EPSILON: f32 = 1e-12;
@@ -86,6 +144,42 @@ mod tests {
         assert_eq!(biweight_profile(4.0), 0.0);
         let mid = biweight_profile(0.5);
         assert!((mid - 0.25).abs() < 1e-7);
+    }
+
+    #[test]
+    fn test_biweight_quadratic_integral_matches_quadrature() {
+        let (u0, u1, u2) = (0.1f32, 0.45, -0.2);
+        let steps = 20000;
+        let ds = 1.0 / steps as f64;
+        let reference: f64 = (0..steps)
+            .map(|i| {
+                let sigma = (i as f64 + 0.5) * ds;
+                let u = u0 as f64 + u1 as f64 * sigma + u2 as f64 * sigma * sigma;
+                (1.0 - u * u).powi(2) * ds
+            })
+            .sum();
+        let closed = biweight_quadratic_integral(u0, u1, u2) as f64;
+        assert!((closed - reference).abs() < 1e-5, "{closed} vs {reference}");
+    }
+
+    #[test]
+    fn test_biweight_sphere_piece_matches_quadratic_form() {
+        let center = Vector3::new(0.5, -0.25, 1.0);
+        let start = Vector3::new(0.3, -0.1, 0.9);
+        let direction = Vector3::new(0.6, 0.2, -0.3);
+        let radius = 0.8;
+        let piece_length = 0.4;
+        let through_sphere =
+            biweight_sphere_piece_integral(center, radius, start, direction, piece_length);
+
+        let offset = start - center;
+        let inv_r_sq = 1.0 / (radius * radius);
+        let expected = biweight_quadratic_integral(
+            offset.dot(offset) * inv_r_sq,
+            2.0 * piece_length * offset.dot(direction) * inv_r_sq,
+            piece_length * piece_length * direction.dot(direction) * inv_r_sq,
+        );
+        assert_eq!(through_sphere, expected);
     }
 
     #[test]

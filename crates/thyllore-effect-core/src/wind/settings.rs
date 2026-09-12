@@ -126,3 +126,6 @@ impl Default for WindRenderSettings {
         }
     }
 }
+
+/// Instance slots of the wind UBO and of the baked shadow volume.
+pub const WIND_MAX_INSTANCES: usize = 4;

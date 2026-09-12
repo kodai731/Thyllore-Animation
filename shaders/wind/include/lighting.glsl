@@ -13,9 +13,9 @@
 // x: transmittance toward the sun, y: cosine-weighted transmittance over the sky.
 vec2 windShadowTransmittances(vec3 position, vec3 lightDir) {
 #ifdef WIND_SHADOW_VOLUME
-    return windShadowVolumeTransmittances(shadowVolumeSampler, position, windShadowSlot());
+    return shadowVolumeTransmittances(shadowVolumeSampler, position, windShadowSlot());
 #else
-    return vec2(windSunTransmittance(position, lightDir), windSkyTransmittance(position));
+    return vec2(sunTransmittance(position, lightDir), skyTransmittance(position));
 #endif
 }
 

@@ -1,7 +1,7 @@
 use super::*;
 use crate::wind::analytic::eddy::{EDDY_FADE_END, EDDY_FADE_START, EDDY_OCTAVE_COUNT};
 use crate::wind::analytic::motion::rotation_phase;
-use crate::wind::analytic::shell_integral::{ACTIVE_CELLS_MIN, MODULATION_CELLS, POLY_TERMS};
+use crate::wind::analytic::shell_integral::{ACTIVE_CELLS_MIN, MODULATION_CELLS};
 use crate::wind::WindTornadoEffect;
 use crate::wind::{
     WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,
@@ -9,6 +9,7 @@ use crate::wind::{
 };
 use cgmath::{InnerSpace, Vector3};
 use std::f32::consts::PI;
+use thyllore_math_core::POLY_TERMS;
 
 const REFERENCE_STEPS: usize = 20000;
 
@@ -507,7 +508,7 @@ fn eddy_sigma_averages_to_one_over_the_wall() {
     let mut total = 0.0f64;
     for i in 0..theta_samples {
         for j in 0..height_samples {
-            let theta = 2.0 * 3.14159265 * i as f32 / theta_samples as f32;
+            let theta = 2.0 * PI * i as f32 / theta_samples as f32;
             let h = params.h_top * j as f32 / (height_samples - 1) as f32;
             let radius = params.wall_radius(h);
             total += eddy_sigma(
@@ -616,7 +617,7 @@ fn eroded_eddy_reaches_zero_density_below_the_noise_floor() {
     let mut eroded_zero_count = 0usize;
     for i in 0..theta_samples {
         for j in 0..height_samples {
-            let theta = 2.0 * 3.14159265 * i as f32 / theta_samples as f32;
+            let theta = 2.0 * PI * i as f32 / theta_samples as f32;
             let h = eroded.h_top * j as f32 / (height_samples - 1) as f32;
             let radius = eroded.wall_radius(h);
             let local = [radius * theta.cos(), h, radius * theta.sin()];
@@ -923,11 +924,20 @@ fn glsl_int_constant(source: &str, name: &str) -> i64 {
         .unwrap_or_else(|| panic!("{name} not declared in the wind GLSL"))
 }
 
-fn wind_glsl_source(relative_path: &str) -> String {
+fn glsl_source(include_dir: &str, relative_path: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../shaders/wind/include")
+        .join("../../shaders")
+        .join(include_dir)
         .join(relative_path);
     std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("{} readable", path.display()))
+}
+
+fn wind_glsl_source(relative_path: &str) -> String {
+    glsl_source("wind/include", relative_path)
+}
+
+fn shared_glsl_source(relative_path: &str) -> String {
+    glsl_source("include", relative_path)
 }
 
 fn shell_only_params() -> WindShellParams {
@@ -1015,19 +1025,19 @@ fn shadow_radial_extent_covers_the_shell_and_every_puff() {
 fn glsl_shadow_volume_extents_match_the_rust_constants() {
     let source = wind_glsl_source("shadow_volume.glsl");
     assert_eq!(
-        glsl_int_constant(&source, "WIND_SHADOW_RADIAL"),
+        glsl_int_constant(&source, "SHADOW_VOLUME_RADIAL"),
         WIND_SHADOW_VOLUME_RADIAL as i64
     );
     assert_eq!(
-        glsl_int_constant(&source, "WIND_SHADOW_HEIGHT"),
+        glsl_int_constant(&source, "SHADOW_VOLUME_HEIGHT"),
         WIND_SHADOW_VOLUME_HEIGHT as i64
     );
     assert_eq!(
-        glsl_int_constant(&source, "WIND_SHADOW_THETA"),
+        glsl_int_constant(&source, "SHADOW_VOLUME_THETA"),
         WIND_SHADOW_VOLUME_THETA as i64
     );
     assert_eq!(
-        glsl_int_constant(&source, "WIND_SHADOW_SLOTS"),
+        glsl_int_constant(&source, "SHADOW_VOLUME_SLOTS"),
         WIND_SHADOW_VOLUME_SLOTS as i64
     );
 }
@@ -1037,7 +1047,7 @@ fn glsl_polynomial_terms_match_the_rust_mirror_and_cover_the_piece_degree() {
     let source = wind_glsl_source("shell_integral.glsl");
 
     assert_eq!(
-        glsl_int_constant(&source, "WIND_POLY_TERMS"),
+        glsl_int_constant(&shared_glsl_source("polynomial.glsl"), "POLY_TERMS"),
         POLY_TERMS as i64
     );
     assert_eq!(

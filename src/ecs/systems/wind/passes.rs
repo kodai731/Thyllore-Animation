@@ -3,16 +3,22 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::App;
 use crate::ecs::component::WindTornadoEffect;
-use crate::ecs::resource::{ProjectionData, WindRenderSettings, WindRenderTargets};
+use crate::ecs::resource::{ProjectionData, WindGpuState, WindRenderSettings, WindRenderTargets};
+use crate::ecs::systems::wind::descriptors::WindResolveDescriptorSet;
+use crate::ecs::systems::wind::record::{
+    record_wind_half_resolve_pass, record_wind_shading_pass, record_wind_shadow_bake_pass,
+    record_wind_upsample_pass, WindInstanceDraw, WindPushConstants,
+};
 use crate::hooks::pass::{
     CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef, TargetUse,
 };
+use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::renderer::deferred::{compute_bounds_scissor, full_extent_scissor};
 use thyllore_effect_core::{
     build_wind_ubo, inverse_view_proj_f64, wind_local_bounds_corners, WindDebugView,
-    WindResolveScale, WindShadowSlot, WindShellParams, WindUBO,
+    WindResolveScale, WindShadowSlot, WindShellParams, WindUBO, WIND_MAX_INSTANCES,
 };
-use thyllore_vulkan_core::renderer::WindInstanceDraw;
+use thyllore_vulkan_core::FrameRenderContext;
 
 pub struct WindPassNode;
 
@@ -41,14 +47,14 @@ fn wind_frame(app: &App) -> Option<WindFrame> {
         .data
         .ecs_world
         .get_resource::<WindRenderTargets>()?
-        .buffer
         .extent();
-    app.data.raytracing.wind_shading_pipeline.as_ref()?;
-    app.data.raytracing.wind_descriptor.as_ref()?;
-    app.data.raytracing.wind_ubo.as_ref()?;
+    let gpu_state = app.data.ecs_world.get_resource::<WindGpuState>()?;
+    gpu_state.resolve_pipeline.as_ref()?;
+    gpu_state.resolve_descriptor.as_ref()?;
+    gpu_state.ubo.as_ref()?;
 
     let mut winds = app.data.ecs_world.query_winds();
-    winds.truncate(thyllore_vulkan_core::resource::MAX_WIND_INSTANCES);
+    winds.truncate(WIND_MAX_INSTANCES);
     if winds.is_empty() {
         return None;
     }
@@ -126,19 +132,24 @@ unsafe fn record_wind_passes(
     let Some(frame) = wind_frame(app) else {
         return Ok(());
     };
-    let (Some(wind_targets), Some(shading_pipeline), Some(descriptor), Some(wind_ubo)) = (
+    let (Some(wind_targets), Some(gpu_state)) = (
         app.data.ecs_world.get_resource::<WindRenderTargets>(),
-        app.data.raytracing.wind_shading_pipeline.as_ref(),
-        app.data.raytracing.wind_descriptor.as_ref(),
-        app.data.raytracing.wind_ubo.as_ref(),
+        app.data.ecs_world.get_resource::<WindGpuState>(),
     ) else {
         return Ok(());
     };
-    let wind_buffer = &wind_targets.buffer;
+    let (Some(shading_pipeline), Some(descriptor), Some(wind_ubo)) = (
+        gpu_state.resolve_pipeline.as_ref(),
+        gpu_state.resolve_descriptor.as_ref(),
+        gpu_state.ubo.as_ref(),
+    ) else {
+        return Ok(());
+    };
+    let wind_buffer = &*wind_targets;
     let ctx = crate::ecs::systems::phases::build_frame_render_context(app, image_index);
 
     let settings = wind_render_settings(app);
-    let push_constants = thyllore_vulkan_core::renderer::WindPushConstants::new(
+    let push_constants = WindPushConstants::new(
         settings.shading_mode.as_shader_value(),
         settings.reference_step_count as i32,
         settings.debug_view.as_shader_value(),
@@ -166,10 +177,10 @@ unsafe fn record_wind_passes(
     }
 
     if let (Some(bake_pipeline), Some(bake_descriptor)) = (
-        app.data.raytracing.wind_shadow_bake_pipeline.as_ref(),
-        app.data.raytracing.wind_shadow_bake_descriptor.as_ref(),
+        gpu_state.shadow_bake_pipeline.as_ref(),
+        gpu_state.shadow_bake_descriptor.as_ref(),
     ) {
-        thyllore_vulkan_core::renderer::record_wind_shadow_bake_pass(
+        record_wind_shadow_bake_pass(
             &ctx,
             wind_buffer,
             bake_pipeline,
@@ -183,13 +194,12 @@ unsafe fn record_wind_passes(
     match settings.resolve_scale {
         WindResolveScale::Full => {
             for draw in &draws {
-                thyllore_vulkan_core::renderer::record_wind_shading_pass(
+                record_wind_shading_pass(
                     &ctx,
                     wind_buffer,
                     shading_pipeline,
                     descriptor,
-                    draw.ubo_dynamic_offset,
-                    draw.scissor,
+                    draw,
                     push_constants,
                     image_index,
                     command_buffer,
@@ -197,7 +207,7 @@ unsafe fn record_wind_passes(
             }
         }
         WindResolveScale::Half => record_half_scale_wind_passes(
-            app,
+            &gpu_state,
             &ctx,
             wind_buffer,
             shading_pipeline,
@@ -214,19 +224,19 @@ unsafe fn record_wind_passes(
 
 #[allow(clippy::too_many_arguments)]
 unsafe fn record_half_scale_wind_passes(
-    app: &App,
-    ctx: &thyllore_vulkan_core::FrameRenderContext,
-    wind_buffer: &thyllore_vulkan_core::resource::WindBuffer,
-    shading_pipeline: &thyllore_vulkan_core::pipeline::RRPipeline,
-    descriptor: &thyllore_vulkan_core::descriptor::RRWindDescriptorSet,
+    gpu_state: &WindGpuState,
+    ctx: &FrameRenderContext,
+    wind_buffer: &WindRenderTargets,
+    shading_pipeline: &RRPipeline,
+    descriptor: &WindResolveDescriptorSet,
     draws: &[WindInstanceDraw],
-    push_constants: thyllore_vulkan_core::renderer::WindPushConstants,
+    push_constants: WindPushConstants,
     image_index: usize,
     command_buffer: vk::CommandBuffer,
 ) -> Result<()> {
     let (Some(upsample_pipeline), Some(upsample_descriptor)) = (
-        app.data.raytracing.wind_upsample_pipeline.as_ref(),
-        app.data.raytracing.wind_upsample_descriptor.as_ref(),
+        gpu_state.upsample_pipeline.as_ref(),
+        gpu_state.upsample_descriptor.as_ref(),
     ) else {
         return Ok(());
     };
@@ -240,7 +250,7 @@ unsafe fn record_half_scale_wind_passes(
         })
         .collect();
 
-    thyllore_vulkan_core::renderer::record_wind_half_resolve_pass(
+    record_wind_half_resolve_pass(
         ctx,
         wind_buffer,
         shading_pipeline,
@@ -250,7 +260,7 @@ unsafe fn record_half_scale_wind_passes(
         image_index,
         command_buffer,
     )?;
-    thyllore_vulkan_core::renderer::record_wind_upsample_pass(
+    record_wind_upsample_pass(
         ctx,
         wind_buffer,
         upsample_pipeline,

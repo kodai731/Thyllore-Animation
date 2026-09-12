@@ -3,6 +3,11 @@ use crate::wind::analytic::motion::{h_top, rotation_phase, spread_offset, streak
 use crate::wind::analytic::puffs::build_wind_puffs;
 use crate::wind::WindTornadoEffect;
 use cgmath::{InnerSpace, Vector3};
+use thyllore_math_core::{
+    biweight, biweight_poly, biweight_sphere_piece_integral, mix, one_minus_smootherstep_poly,
+    poly_from_quadratic, poly_linear_weighted_moments, poly_moments, poly_mul, poly_scale,
+    poly_zero, Poly,
+};
 
 // Mirror of shaders/wind/include/shell_field.glsl and shell_integral.glsl.
 //
@@ -18,7 +23,6 @@ use cgmath::{InnerSpace, Vector3};
 pub const WIND_MAX_KNOTS: usize = 56;
 pub const WIND_MAX_PUFFS: usize = 96;
 pub const WIND_PUFFS_PER_RAY: usize = 20;
-pub(crate) const POLY_TERMS: usize = 16;
 // One cell grid spans the whole ray so a knot splitting a piece never moves a sample; the cell
 // length comes from the active length (shell or puff pieces) so the budget is spent on density.
 pub(crate) const MODULATION_CELLS: usize = 64;
@@ -28,8 +32,6 @@ const LINEAR_COEFFICIENT_EPSILON: f32 = 1e-7;
 const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
 const SHADOW_RAY_T_MAX: f32 = 1e4;
 const SHADOW_RADIAL_EXTENT_MARGIN: f32 = 1.25;
-
-type Poly = [f32; POLY_TERMS];
 
 /// Puffs a ray enters, with their entry and exit ray parameters.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -196,11 +198,6 @@ pub fn wind_envelope_height(params: &WindShellParams, h: f32) -> f32 {
     }
     let v = (normalized_height - fade_start) / params.top_fade;
     1.0 - v * v * v * (10.0 - v * (15.0 - 6.0 * v))
-}
-
-fn biweight(u: f32) -> f32 {
-    let inside = (1.0 - u * u).max(0.0);
-    inside * inside
 }
 
 pub fn wind_density_at(params: &WindShellParams, local: Vector3<f32>) -> f32 {
@@ -469,63 +466,14 @@ pub fn wind_ray_knots(
     (knots, count, puffs)
 }
 
-fn poly_mul(a: &Poly, b: &Poly) -> Poly {
-    let mut product = [0.0f32; POLY_TERMS];
-    for (i, &ai) in a.iter().enumerate() {
-        if ai == 0.0 {
-            continue;
-        }
-        for (j, &bj) in b.iter().enumerate() {
-            if i + j >= POLY_TERMS {
-                break;
-            }
-            product[i + j] += ai * bj;
-        }
-    }
-    product
-}
-
-fn poly_from_quadratic(c0: f32, c1: f32, c2: f32) -> Poly {
-    let mut poly = [0.0f32; POLY_TERMS];
-    poly[0] = c0;
-    poly[1] = c1;
-    poly[2] = c2;
-    poly
-}
-
-fn biweight_poly(u: &Poly) -> Poly {
-    let mut inside = poly_mul(u, u);
-    for coefficient in inside.iter_mut() {
-        *coefficient = -*coefficient;
-    }
-    inside[0] += 1.0;
-    poly_mul(&inside, &inside)
-}
-
 fn envelope_poly(params: &WindShellParams, h0: f32, h1: f32, h_mid: f32) -> Poly {
-    let mut envelope = [0.0f32; POLY_TERMS];
     let fade_start = params.fade_start();
     if h_mid <= fade_start {
+        let mut envelope = poly_zero();
         envelope[0] = 1.0;
         return envelope;
     }
-    let v0 = (h0 - fade_start) / params.top_fade;
-    let v1 = h1 / params.top_fade;
-    envelope[0] =
-        1.0 - 10.0 * v0 * v0 * v0 + 15.0 * v0 * v0 * v0 * v0 - 6.0 * v0 * v0 * v0 * v0 * v0;
-    envelope[1] = v1 * (-30.0 * v0 * v0 + 60.0 * v0 * v0 * v0 - 30.0 * v0 * v0 * v0 * v0);
-    envelope[2] = v1 * v1 * (-30.0 * v0 + 90.0 * v0 * v0 - 60.0 * v0 * v0 * v0);
-    envelope[3] = v1 * v1 * v1 * (-10.0 + 60.0 * v0 - 60.0 * v0 * v0);
-    envelope[4] = v1 * v1 * v1 * v1 * (15.0 - 30.0 * v0);
-    envelope[5] = -6.0 * v1 * v1 * v1 * v1 * v1;
-    envelope
-}
-
-fn poly_moments(poly: &Poly) -> f32 {
-    poly.iter()
-        .enumerate()
-        .map(|(n, coefficient)| coefficient / (n as f32 + 1.0))
-        .sum()
+    one_minus_smootherstep_poly((h0 - fade_start) / params.top_fade, h1 / params.top_fade)
 }
 
 pub fn wind_streak_sigma(params: &WindShellParams, local: Vector3<f32>) -> f32 {
@@ -611,9 +559,7 @@ fn shell_piece_poly(
     let inv_h_top = 1.0 / params.h_top;
     let envelope = envelope_poly(params, h0 * inv_h_top, h1 * inv_h_top, h_mid * inv_h_top);
     let mut density = poly_mul(&envelope, &wall);
-    for coefficient in density.iter_mut() {
-        *coefficient *= params.wall_strength;
-    }
+    poly_scale(&mut density, params.wall_strength);
     Some(density)
 }
 
@@ -728,35 +674,8 @@ pub fn wind_piece_optical_depth(
         return 0.0;
     };
     let (modulation_0, modulation_1) = modulation;
-    let total: f32 = density
-        .iter()
-        .enumerate()
-        .map(|(n, coefficient)| {
-            coefficient
-                * (modulation_0 / (n + 1) as f32 + (modulation_1 - modulation_0) / (n + 2) as f32)
-        })
-        .sum();
+    let total = poly_linear_weighted_moments(&density, modulation_0, modulation_1);
     ((s1 - s0) * params.sigma_t * total).max(0.0)
-}
-
-// Integral of (1 - u^2)^2 over sigma in [0, 1] for u = u0 + u1 sigma + u2 sigma^2.
-fn biweight_quadratic_integral(u0: f32, u1: f32, u2: f32) -> f32 {
-    let u_squared = [
-        u0 * u0,
-        2.0 * u0 * u1,
-        u1 * u1 + 2.0 * u0 * u2,
-        2.0 * u1 * u2,
-        u2 * u2,
-    ];
-    let mut second_moment = 0.0f32;
-    let mut fourth_moment = 0.0f32;
-    for (i, &ci) in u_squared.iter().enumerate() {
-        second_moment += ci / (i as f32 + 1.0);
-        for (j, &cj) in u_squared.iter().enumerate() {
-            fourth_moment += ci * cj / ((i + j) as f32 + 1.0);
-        }
-    }
-    1.0 - 2.0 * second_moment + fourth_moment
 }
 
 /// Optical depth of the puffs whose entry/exit knots enclose the piece [s0, s1].
@@ -774,7 +693,6 @@ pub fn wind_puff_piece_optical_depth(
     }
     let s_mid = 0.5 * (s0 + s1);
     let start = origin + direction * s0;
-    let dd = direction.dot(direction);
 
     let mut total = 0.0f32;
     for k in 0..puffs.count {
@@ -782,12 +700,8 @@ pub fn wind_puff_piece_optical_depth(
             continue;
         }
         let puff = &params.puffs[puffs.index[k]];
-        let dx = start - Vector3::new(puff[0], puff[1], puff[2]);
-        let inv_r_sq = 1.0 / (puff[3] * puff[3]);
-        let u0 = dx.dot(dx) * inv_r_sq;
-        let u1 = 2.0 * length * dx.dot(direction) * inv_r_sq;
-        let u2 = length * length * dd * inv_r_sq;
-        total += biweight_quadratic_integral(u0, u1, u2);
+        let center = Vector3::new(puff[0], puff[1], puff[2]);
+        total += biweight_sphere_piece_integral(center, puff[3], start, direction, length);
     }
     (length * params.sigma_t * params.puff_strength * params.wall_strength * total).max(0.0)
 }
@@ -840,10 +754,6 @@ impl CellModulation {
     }
 }
 
-fn lerp(a: f32, b: f32, t: f32) -> f32 {
-    a + (b - a) * t
-}
-
 /// Pieces are walked in ray order and each is cut by the cells of the ray-wide grid it overlaps.
 pub fn wind_optical_depth(
     params: &WindShellParams,
@@ -881,8 +791,8 @@ pub fn wind_optical_depth(
                 continue;
             }
             modulation = modulation.advance(params, origin, direction, t_near, step, cell);
-            let modulation_0 = lerp(modulation.a, modulation.b, (s0 - cell_start) / step);
-            let modulation_1 = lerp(modulation.a, modulation.b, (s1 - cell_start) / step);
+            let modulation_0 = mix(modulation.a, modulation.b, (s0 - cell_start) / step);
+            let modulation_1 = mix(modulation.a, modulation.b, (s1 - cell_start) / step);
             total += wind_piece_optical_depth(
                 params,
                 origin,

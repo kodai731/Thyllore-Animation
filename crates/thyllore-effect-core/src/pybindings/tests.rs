@@ -285,6 +285,10 @@ fn test_effective_optical_depth_falls_back_to_sigma_t_times_radius() {
     });
 }
 
+const IDENTITY_COLUMN_MAJOR: [f32; 16] = [
+    1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+];
+
 #[test]
 fn test_wind_spread_offset_grows_after_spread_start() {
     Python::attach(|py| {
@@ -303,6 +307,8 @@ fn test_wind_spread_offset_grows_after_spread_start() {
                 time,
                 [0.0f32, 0.0f32, 0.0f32],
                 [1.0f32, 0.0f32, 0.0f32, 0.0f32],
+                IDENTITY_COLUMN_MAJOR,
+                IDENTITY_COLUMN_MAJOR,
             )
             .unwrap();
             let offset = std::mem::offset_of!(crate::wind::WindUBO, albedo) + 12;

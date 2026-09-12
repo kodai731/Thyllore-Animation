@@ -6,6 +6,8 @@
 // Mirrored in thyllore-effect-core/src/wind/analytic/shell_integral.rs.
 // Must be included after component.glsl.
 
+#include "include/common.glsl"
+#include "include/compact_support.glsl"
 #include "include/noise.glsl"
 
 const float WIND_LINEAR_COEFFICIENT_EPSILON = 1e-7;
@@ -59,7 +61,7 @@ float windWallRadius(float h) {
 
 float windRotationPhase(float h) {
     float radius_sq = windWallRadius(h) * windWallRadius(h);
-    float gamma_over_2pi = windCirculation() / (2.0 * 3.14159265359);
+    float gamma_over_2pi = windCirculation() / TWO_PI;
     float a = windSpreadRate();
     if (a > 0.0) {
         float ts = windSpreadStart();
@@ -82,36 +84,6 @@ float windWallRadiusSq(float h) {
     return radius * radius + windSpreadOffset();
 }
 
-float windQuinticFade(float t) {
-    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
-}
-
-vec3 windLatticeGradient(vec3 cell) {
-    vec3 g = vec3(
-        2.0 * hash13(cell) - 1.0,
-        2.0 * hash13(cell + vec3(17.1, 9.3, 4.7)) - 1.0,
-        2.0 * hash13(cell + vec3(31.7, 2.9, 12.3)) - 1.0);
-    return g / max(length(g), 1e-4);
-}
-
-float windCornerDot(vec3 cell, vec3 f, vec3 corner) {
-    return dot(windLatticeGradient(cell + corner), f - corner);
-}
-
-float windGradientNoise(vec3 p) {
-    vec3 cell = floor(p);
-    vec3 f = p - cell;
-    vec3 w = vec3(windQuinticFade(f.x), windQuinticFade(f.y), windQuinticFade(f.z));
-
-    float nx00 = mix(windCornerDot(cell, f, vec3(0.0, 0.0, 0.0)), windCornerDot(cell, f, vec3(1.0, 0.0, 0.0)), w.x);
-    float nx10 = mix(windCornerDot(cell, f, vec3(0.0, 1.0, 0.0)), windCornerDot(cell, f, vec3(1.0, 1.0, 0.0)), w.x);
-    float nx01 = mix(windCornerDot(cell, f, vec3(0.0, 0.0, 1.0)), windCornerDot(cell, f, vec3(1.0, 0.0, 1.0)), w.x);
-    float nx11 = mix(windCornerDot(cell, f, vec3(0.0, 1.0, 1.0)), windCornerDot(cell, f, vec3(1.0, 1.0, 1.0)), w.x);
-    float nxy0 = mix(nx00, nx10, w.y);
-    float nxy1 = mix(nx01, nx11, w.y);
-    return mix(nxy0, nxy1, w.z);
-}
-
 const mat3 WIND_OCTAVE_ROTATION = mat3(
     0.784750, 0.509329, -0.353201,
     -0.045714, 0.615862, 0.786527,
@@ -124,7 +96,7 @@ vec3 windRotateAndDouble(vec3 p) {
 // Difference against the antipode (theta + pi) has an exact zero mean around every ring,
 // so no height can become a uniformly dense or empty band.
 float windAntipodalOctave(vec3 p, vec3 antipode) {
-    return (windGradientNoise(p) - windGradientNoise(antipode)) * 0.70710678;
+    return (gradientNoise3(p) - gradientNoise3(antipode)) * 0.70710678;
 }
 
 struct WindEddyOctaveRings {
@@ -258,11 +230,6 @@ float windEnvelopeHeight(float h) {
     return 1.0 - v * v * v * (10.0 - v * (15.0 - 6.0 * v));
 }
 
-float windBiweight(float u) {
-    float inside = max(1.0 - u * u, 0.0);
-    return inside * inside;
-}
-
 float windDensityAt(vec3 p) {
     float h = p.y / windHeight();
     float envelope = windEnvelopeHeight(h);
@@ -271,7 +238,7 @@ float windDensityAt(vec3 p) {
     }
     float q = p.x * p.x + p.z * p.z;
 
-    float wall = windWallStrength() * windBiweight((q - windWallRadiusSq(h)) / windWallWidthQ());
+    float wall = windWallStrength() * biweight((q - windWallRadiusSq(h)) / windWallWidthQ());
     return windSigmaT() * envelope * wall * windStreakSigma(p) * windEddySigma(p, vec3(0.0));
 }
 

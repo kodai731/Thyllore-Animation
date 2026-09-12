@@ -14,11 +14,10 @@ use crate::descriptor::{
     RRAutoExposureHistogramDescriptorSet, RRBillboardDescriptorSet, RRBloomDescriptorSets,
     RRCompositeDescriptorSet, RRDofDescriptorSet, RRFlameDescriptorSet, RRRayQueryDescriptorSet,
     RRToneMapDescriptorSet, RRWaterCausticDescriptorSet, RRWaterDescriptorSet,
-    RRWaterTraceDescriptorSet, RRWindDescriptorSet, RRWindShadowBakeDescriptorSet,
-    RRWindUpsampleDescriptorSet, AUTO_EXPOSURE_AVERAGE, AUTO_EXPOSURE_HISTOGRAM, BLOOM_DOWNSAMPLE,
+    RRWaterTraceDescriptorSet, AUTO_EXPOSURE_AVERAGE, AUTO_EXPOSURE_HISTOGRAM, BLOOM_DOWNSAMPLE,
     BLOOM_UPSAMPLE, COMPOSITE, DOF, FLAME_RESOLVE, GBUFFER, ONION_SKIN_COMPOSITE, ONION_SKIN_GHOST,
     RAY_QUERY_SHADOW, TONEMAP, WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE,
-    WATER_TRACE, WIND_RESOLVE, WIND_SHADOW_BAKE, WIND_UPSAMPLE,
+    WATER_TRACE,
 };
 use crate::pipeline::{
     BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline,
@@ -33,13 +32,12 @@ use crate::resource::graphics_resource::{GraphicsResources, MeshBuffer};
 use crate::resource::image::{create_nearest_sampler, create_texture_sampler};
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::resource::{
-    BloomChain, FlameBuffer, HdrBuffer, OnionSkinPassResources, RRGBuffer, WaterBuffer, WindBuffer,
+    BloomChain, FlameBuffer, HdrBuffer, OnionSkinPassResources, RRGBuffer, WaterBuffer,
 };
-use thyllore_effect_core::{FlameUBO, WaterUBO, WindUBO};
+use thyllore_effect_core::{FlameUBO, WaterUBO};
 
 pub const MAX_FLAME_INSTANCES: usize = 4;
 pub const MAX_WATER_INSTANCES: usize = 4;
-pub const MAX_WIND_INSTANCES: usize = 4;
 
 #[derive(Clone, Debug, Default)]
 pub struct RayTracingData {
@@ -89,15 +87,6 @@ pub struct RayTracingData {
     pub water_caustic_splat_pipeline: Option<RRPipeline>,
     pub water_caustic_apply_pipeline: Option<RRPipeline>,
     pub water_caustic_descriptor: Option<RRWaterCausticDescriptorSet>,
-
-    pub wind_shading_pipeline: Option<RRPipeline>,
-    pub wind_descriptor: Option<RRWindDescriptorSet>,
-    pub wind_ubo: Option<UniformBuffer<WindUBO>>,
-
-    pub wind_upsample_pipeline: Option<RRPipeline>,
-    pub wind_upsample_descriptor: Option<RRWindUpsampleDescriptorSet>,
-    pub wind_shadow_bake_pipeline: Option<RRPipeline>,
-    pub wind_shadow_bake_descriptor: Option<RRWindShadowBakeDescriptorSet>,
 
     pub flame_sdf_image: vk::Image,
     pub flame_sdf_image_memory: vk::DeviceMemory,
@@ -578,108 +567,6 @@ impl RayTracingData {
         self.flame_ubo = Some(flame_ubo);
 
         log!("Created flame pipelines");
-        Ok(())
-    }
-
-    pub unsafe fn create_wind_pipeline(
-        &mut self,
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        rrrender: &RRRender,
-        graphics_resources: &GraphicsResources,
-        wind_buffer: &WindBuffer,
-        scene_depth_view: vk::ImageView,
-    ) -> Result<()> {
-        let wind_ubo = UniformBuffer::new(
-            instance,
-            rrdevice,
-            MAX_WIND_INSTANCES,
-            Placement::DeviceUpdated,
-        )?;
-        wind_ubo.write_slot(rrdevice, 0, &WindUBO::default())?;
-
-        let wind_descriptor = RRWindDescriptorSet::new(rrdevice)?;
-        wind_descriptor.write_all(rrdevice, &wind_ubo, wind_buffer, scene_depth_view)?;
-
-        let wind_shadow_bake_descriptor = RRWindShadowBakeDescriptorSet::new(rrdevice)?;
-        wind_shadow_bake_descriptor.write_all(rrdevice, &wind_ubo, wind_buffer)?;
-        let wind_shadow_bake_pipeline = RRPipeline::new_compute(
-            rrdevice,
-            &WIND_SHADOW_BAKE,
-            &[
-                &graphics_resources.frame_set.layout,
-                &wind_shadow_bake_descriptor.layout,
-            ],
-        )?;
-
-        let wind_shading_pipeline = PipelineBuilder::from_pass(&WIND_RESOLVE)
-            .vertex_input(VertexInputConfig::Custom {
-                bindings: vec![],
-                attributes: vec![],
-            })
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .no_depth_test()
-            .custom_render_pass(wind_buffer.render_pass)
-            .msaa_samples(vk::SampleCountFlags::_1)
-            .blend(BlendConfig {
-                enable: true,
-                src_color_factor: vk::BlendFactor::ONE,
-                dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-                color_op: vk::BlendOp::ADD,
-                src_alpha_factor: vk::BlendFactor::ONE,
-                dst_alpha_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-                alpha_op: vk::BlendOp::ADD,
-            })
-            .push_constants(PushConstantConfig {
-                stage_flags: vk::ShaderStageFlags::FRAGMENT,
-                offset: 0,
-                size: std::mem::size_of::<crate::renderer::WindPushConstants>() as u32,
-            })
-            .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
-            .descriptor_layouts(&[
-                &graphics_resources.frame_set.layout,
-                &wind_descriptor.layout,
-            ])
-            .build(rrdevice, rrrender, Some(wind_buffer.extent()))?;
-
-        let wind_upsample_descriptor = RRWindUpsampleDescriptorSet::new(rrdevice)?;
-        wind_upsample_descriptor.update_image_views(
-            rrdevice,
-            wind_buffer.half_color_image_view,
-            scene_depth_view,
-        )?;
-
-        let wind_upsample_pipeline = PipelineBuilder::from_pass(&WIND_UPSAMPLE)
-            .vertex_input(VertexInputConfig::Custom {
-                bindings: vec![],
-                attributes: vec![],
-            })
-            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-            .no_depth_test()
-            .custom_render_pass(wind_buffer.render_pass)
-            .msaa_samples(vk::SampleCountFlags::_1)
-            .blend(BlendConfig {
-                enable: true,
-                src_color_factor: vk::BlendFactor::ONE,
-                dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-                color_op: vk::BlendOp::ADD,
-                src_alpha_factor: vk::BlendFactor::ONE,
-                dst_alpha_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-                alpha_op: vk::BlendOp::ADD,
-            })
-            .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
-            .descriptor_layouts(&[&wind_upsample_descriptor.layout])
-            .build(rrdevice, rrrender, Some(wind_buffer.extent()))?;
-
-        self.wind_shading_pipeline = Some(wind_shading_pipeline);
-        self.wind_descriptor = Some(wind_descriptor);
-        self.wind_ubo = Some(wind_ubo);
-        self.wind_upsample_pipeline = Some(wind_upsample_pipeline);
-        self.wind_upsample_descriptor = Some(wind_upsample_descriptor);
-        self.wind_shadow_bake_pipeline = Some(wind_shadow_bake_pipeline);
-        self.wind_shadow_bake_descriptor = Some(wind_shadow_bake_descriptor);
-
-        log!("Created wind pipeline");
         Ok(())
     }
 

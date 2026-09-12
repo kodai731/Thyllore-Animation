@@ -878,3 +878,16 @@ pub unsafe fn create_texture_image_pixel_with_format(
 
     Ok((texture_image, texture_image_memory, mip_levels))
 }
+
+// Depth formats must not be sampled with LINEAR filtering.
+pub unsafe fn create_scene_depth_sampler(rrdevice: &RRDevice) -> Result<vk::Sampler> {
+    let info = vk::SamplerCreateInfo::builder()
+        .mag_filter(vk::Filter::NEAREST)
+        .min_filter(vk::Filter::NEAREST)
+        .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
+        .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+        .build();
+    Ok(rrdevice.device.create_sampler(&info, None)?)
+}

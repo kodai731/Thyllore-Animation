@@ -1,7 +1,7 @@
-use crate::wind::analytic::eddy::hash13;
 use crate::wind::analytic::shell_integral::{WindShellParams, WIND_MAX_PUFFS};
 use crate::wind::WindTornadoEffect;
 use std::f32::consts::TAU;
+use thyllore_math_core::hash13;
 
 const GOLDEN_ANGLE: f32 = 2.39996;
 

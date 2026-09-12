@@ -42,7 +42,7 @@ pub fn dispatch_scalar_clip_events(
             }
             UIEvent::AddWind => {
                 let wind_count = world.query_winds().len();
-                if wind_count < thyllore_vulkan_core::resource::MAX_WIND_INSTANCES {
+                if wind_count < thyllore_effect_core::WIND_MAX_INSTANCES {
                     let effect = crate::ecs::component::WindTornadoEffect {
                         position: cgmath::Vector3::new(-2.5 * wind_count as f32, 0.0, 0.0),
                         ..crate::ecs::component::WindTornadoEffect::default()

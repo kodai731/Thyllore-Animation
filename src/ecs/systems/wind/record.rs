@@ -1,37 +1,54 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::descriptor::{
-    RRWindDescriptorSet, RRWindShadowBakeDescriptorSet, RRWindUpsampleDescriptorSet,
+use crate::ecs::resource::WindRenderTargets;
+use crate::ecs::systems::wind::descriptors::{
+    WindResolveDescriptorSet, WindShadowBakeDescriptorSet, WindUpsampleDescriptorSet,
 };
-use crate::frame_context::FrameRenderContext;
-use crate::pipeline::RRPipeline;
-use crate::renderer::push_constants::WindPushConstants;
-use crate::resource::wind_buffer::{wind_shadow_volume_extent, WindBuffer};
+use crate::ecs::systems::wind::render_targets::wind_shadow_volume_extent;
+use crate::vulkanr::pipeline::RRPipeline;
 use thyllore_effect_core::WIND_SHADOW_VOLUME_SLOTS;
+use thyllore_vulkan_core::FrameRenderContext;
 
 /// Must match local_size in shadowBake.comp.
 const SHADOW_BAKE_WORKGROUP_SIZE: u32 = 8;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct WindPushConstants {
+    pub mode: i32,
+    pub step_count: i32,
+    pub debug_view: i32,
+}
+
+impl WindPushConstants {
+    pub fn new(mode: i32, step_count: i32, debug_view: i32) -> Self {
+        Self {
+            mode,
+            step_count,
+            debug_view,
+        }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                (self as *const Self) as *const u8,
+                std::mem::size_of::<Self>(),
+            )
+        }
+    }
+}
 
 pub struct WindInstanceDraw {
     pub ubo_dynamic_offset: u32,
     pub scissor: vk::Rect2D,
 }
 
-fn shadow_volume_subresource() -> vk::ImageSubresourceRange {
-    vk::ImageSubresourceRange {
-        aspect_mask: vk::ImageAspectFlags::COLOR,
-        base_mip_level: 0,
-        level_count: 1,
-        base_array_layer: 0,
-        layer_count: 1,
-    }
-}
-
 /// The volume is rewritten in full every frame, so the previous contents are discarded.
 unsafe fn insert_pre_bake_barrier(
     device: &Device,
-    wind_buffer: &WindBuffer,
+    targets: &WindRenderTargets,
     cmd: vk::CommandBuffer,
 ) {
     let barrier = vk::ImageMemoryBarrier::builder()
@@ -39,8 +56,8 @@ unsafe fn insert_pre_bake_barrier(
         .dst_access_mask(vk::AccessFlags::SHADER_WRITE)
         .old_layout(vk::ImageLayout::UNDEFINED)
         .new_layout(vk::ImageLayout::GENERAL)
-        .image(wind_buffer.shadow_volume_image)
-        .subresource_range(shadow_volume_subresource());
+        .image(targets.shadow_volume.image)
+        .subresource_range(targets.shadow_volume.subresource_range());
     device.cmd_pipeline_barrier(
         cmd,
         vk::PipelineStageFlags::FRAGMENT_SHADER,
@@ -54,7 +71,7 @@ unsafe fn insert_pre_bake_barrier(
 
 unsafe fn insert_post_bake_barrier(
     device: &Device,
-    wind_buffer: &WindBuffer,
+    targets: &WindRenderTargets,
     cmd: vk::CommandBuffer,
 ) {
     let barrier = vk::ImageMemoryBarrier::builder()
@@ -62,8 +79,8 @@ unsafe fn insert_post_bake_barrier(
         .dst_access_mask(vk::AccessFlags::SHADER_READ)
         .old_layout(vk::ImageLayout::GENERAL)
         .new_layout(vk::ImageLayout::GENERAL)
-        .image(wind_buffer.shadow_volume_image)
-        .subresource_range(shadow_volume_subresource());
+        .image(targets.shadow_volume.image)
+        .subresource_range(targets.shadow_volume.subresource_range());
     device.cmd_pipeline_barrier(
         cmd,
         vk::PipelineStageFlags::COMPUTE_SHADER,
@@ -78,15 +95,15 @@ unsafe fn insert_post_bake_barrier(
 /// Bakes the wall + envelope shadow depths of every drawn instance into its slot of the volume.
 pub unsafe fn record_wind_shadow_bake_pass(
     ctx: &FrameRenderContext,
-    wind_buffer: &WindBuffer,
+    targets: &WindRenderTargets,
     pipeline: &RRPipeline,
-    descriptor: &RRWindShadowBakeDescriptorSet,
+    descriptor: &WindShadowBakeDescriptorSet,
     draws: &[WindInstanceDraw],
     image_index: usize,
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
     let device = &ctx.device.device;
-    insert_pre_bake_barrier(device, wind_buffer, cmd);
+    insert_pre_bake_barrier(device, targets, cmd);
 
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::COMPUTE, pipeline.pipeline);
     let extent = wind_shadow_volume_extent();
@@ -106,22 +123,33 @@ pub unsafe fn record_wind_shadow_bake_pass(
         device.cmd_dispatch(cmd, group_count_x, group_count_y, extent.depth);
     }
 
-    insert_post_bake_barrier(device, wind_buffer, cmd);
+    insert_post_bake_barrier(device, targets, cmd);
     Ok(())
+}
+
+unsafe fn set_full_viewport(device: &Device, cmd: vk::CommandBuffer, extent: vk::Extent2D) {
+    let viewport = vk::Viewport::builder()
+        .x(0.0)
+        .y(0.0)
+        .width(extent.width as f32)
+        .height(extent.height as f32)
+        .min_depth(0.0)
+        .max_depth(1.0);
+    device.cmd_set_viewport(cmd, 0, &[viewport]);
 }
 
 pub unsafe fn record_wind_half_resolve_pass(
     ctx: &FrameRenderContext,
-    wind_buffer: &WindBuffer,
+    targets: &WindRenderTargets,
     pipeline: &RRPipeline,
-    descriptor: &RRWindDescriptorSet,
+    descriptor: &WindResolveDescriptorSet,
     draws: &[WindInstanceDraw],
     push_constants: WindPushConstants,
     image_index: usize,
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
     let device = &ctx.device.device;
-    let half_extent = wind_buffer.half_extent();
+    let half_extent = targets.half_extent();
 
     let clear_values = [vk::ClearValue {
         color: vk::ClearColorValue {
@@ -129,8 +157,8 @@ pub unsafe fn record_wind_half_resolve_pass(
         },
     }];
     let render_pass_info = vk::RenderPassBeginInfo::builder()
-        .render_pass(wind_buffer.half_render_pass)
-        .framebuffer(wind_buffer.half_framebuffer)
+        .render_pass(targets.half_render_pass)
+        .framebuffer(targets.half_framebuffer)
         .render_area(vk::Rect2D {
             offset: vk::Offset2D { x: 0, y: 0 },
             extent: half_extent,
@@ -139,14 +167,7 @@ pub unsafe fn record_wind_half_resolve_pass(
     device.cmd_begin_render_pass(cmd, &render_pass_info, vk::SubpassContents::INLINE);
 
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
-    let viewport = vk::Viewport::builder()
-        .x(0.0)
-        .y(0.0)
-        .width(half_extent.width as f32)
-        .height(half_extent.height as f32)
-        .min_depth(0.0)
-        .max_depth(1.0);
-    device.cmd_set_viewport(cmd, 0, &[viewport]);
+    set_full_viewport(device, cmd, half_extent);
     device.cmd_push_constants(
         cmd,
         pipeline.pipeline_layout,
@@ -175,29 +196,22 @@ pub unsafe fn record_wind_half_resolve_pass(
 
 pub unsafe fn record_wind_upsample_pass(
     ctx: &FrameRenderContext,
-    wind_buffer: &WindBuffer,
+    targets: &WindRenderTargets,
     pipeline: &RRPipeline,
-    descriptor: &RRWindUpsampleDescriptorSet,
+    descriptor: &WindUpsampleDescriptorSet,
     scissor: vk::Rect2D,
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
     let device = &ctx.device.device;
 
     let render_pass_info = vk::RenderPassBeginInfo::builder()
-        .render_pass(wind_buffer.render_pass)
-        .framebuffer(wind_buffer.framebuffer)
+        .render_pass(targets.render_pass)
+        .framebuffer(targets.framebuffer)
         .render_area(scissor);
     device.cmd_begin_render_pass(cmd, &render_pass_info, vk::SubpassContents::INLINE);
 
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
-    let viewport = vk::Viewport::builder()
-        .x(0.0)
-        .y(0.0)
-        .width(wind_buffer.width as f32)
-        .height(wind_buffer.height as f32)
-        .min_depth(0.0)
-        .max_depth(1.0);
-    device.cmd_set_viewport(cmd, 0, &[viewport]);
+    set_full_viewport(device, cmd, targets.extent());
     device.cmd_set_scissor(cmd, 0, &[scissor]);
 
     device.cmd_bind_descriptor_sets(
@@ -216,11 +230,10 @@ pub unsafe fn record_wind_upsample_pass(
 
 pub unsafe fn record_wind_shading_pass(
     ctx: &FrameRenderContext,
-    wind_buffer: &WindBuffer,
+    targets: &WindRenderTargets,
     pipeline: &RRPipeline,
-    descriptor: &RRWindDescriptorSet,
-    ubo_dynamic_offset: u32,
-    scissor: vk::Rect2D,
+    descriptor: &WindResolveDescriptorSet,
+    draw: &WindInstanceDraw,
     push_constants: WindPushConstants,
     image_index: usize,
     cmd: vk::CommandBuffer,
@@ -228,21 +241,14 @@ pub unsafe fn record_wind_shading_pass(
     let device = &ctx.device.device;
 
     let render_pass_info = vk::RenderPassBeginInfo::builder()
-        .render_pass(wind_buffer.render_pass)
-        .framebuffer(wind_buffer.framebuffer)
-        .render_area(scissor);
+        .render_pass(targets.render_pass)
+        .framebuffer(targets.framebuffer)
+        .render_area(draw.scissor);
     device.cmd_begin_render_pass(cmd, &render_pass_info, vk::SubpassContents::INLINE);
 
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
-    let viewport = vk::Viewport::builder()
-        .x(0.0)
-        .y(0.0)
-        .width(wind_buffer.width as f32)
-        .height(wind_buffer.height as f32)
-        .min_depth(0.0)
-        .max_depth(1.0);
-    device.cmd_set_viewport(cmd, 0, &[viewport]);
-    device.cmd_set_scissor(cmd, 0, &[scissor]);
+    set_full_viewport(device, cmd, targets.extent());
+    device.cmd_set_scissor(cmd, 0, &[draw.scissor]);
 
     let frame_set = ctx.graphics.frame_set.sets[image_index];
     device.cmd_bind_descriptor_sets(
@@ -251,7 +257,7 @@ pub unsafe fn record_wind_shading_pass(
         pipeline.pipeline_layout,
         0,
         &[frame_set, descriptor.descriptor_set],
-        &[ubo_dynamic_offset],
+        &[draw.ubo_dynamic_offset],
     );
     device.cmd_push_constants(
         cmd,

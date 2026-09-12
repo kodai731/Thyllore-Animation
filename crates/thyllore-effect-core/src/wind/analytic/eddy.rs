@@ -1,106 +1,25 @@
 use crate::wind::analytic::motion::rotation_phase;
 use crate::wind::analytic::shell_integral::WindShellParams;
+use cgmath::{Matrix3, Vector3};
+use thyllore_math_core::{gradient_noise3, smoothstep, Mat3};
 
-const PI: f32 = 3.14159265;
-
-fn mix(a: f32, b: f32, t: f32) -> f32 {
-    a * (1.0 - t) + b * t
-}
-
-fn pcg3d(v: [u32; 3]) -> [u32; 3] {
-    let mut v = v.map(|component| component.wrapping_mul(1664525).wrapping_add(1013904223));
-    v[0] = v[0].wrapping_add(v[1].wrapping_mul(v[2]));
-    v[1] = v[1].wrapping_add(v[2].wrapping_mul(v[0]));
-    v[2] = v[2].wrapping_add(v[0].wrapping_mul(v[1]));
-    v = v.map(|component| component ^ (component >> 16));
-    v[0] = v[0].wrapping_add(v[1].wrapping_mul(v[2]));
-    v[1] = v[1].wrapping_add(v[2].wrapping_mul(v[0]));
-    v[2] = v[2].wrapping_add(v[0].wrapping_mul(v[1]));
-    v
-}
-
-pub fn hash13(p: [f32; 3]) -> f32 {
-    let h = pcg3d([p[0].to_bits(), p[1].to_bits(), p[2].to_bits()]);
-    h[0] as f32 * (1.0 / 4294967296.0)
-}
-
-fn quintic_fade(t: f32) -> f32 {
-    t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
-}
-
-fn lattice_gradient(cell: [f32; 3]) -> [f32; 3] {
-    let g = [
-        2.0 * hash13(cell) - 1.0,
-        2.0 * hash13([cell[0] + 17.1, cell[1] + 9.3, cell[2] + 4.7]) - 1.0,
-        2.0 * hash13([cell[0] + 31.7, cell[1] + 2.9, cell[2] + 12.3]) - 1.0,
-    ];
-    let inv_len = 1.0 / (g[0] * g[0] + g[1] * g[1] + g[2] * g[2]).sqrt().max(1e-4);
-    [g[0] * inv_len, g[1] * inv_len, g[2] * inv_len]
-}
-
-fn corner_dot(cell: [f32; 3], f: [f32; 3], dx: f32, dy: f32, dz: f32) -> f32 {
-    let g = lattice_gradient([cell[0] + dx, cell[1] + dy, cell[2] + dz]);
-    g[0] * (f[0] - dx) + g[1] * (f[1] - dy) + g[2] * (f[2] - dz)
-}
-
-pub fn gradient_noise(p: [f32; 3]) -> f32 {
-    let cell = [p[0].floor(), p[1].floor(), p[2].floor()];
-    let f = [p[0] - cell[0], p[1] - cell[1], p[2] - cell[2]];
-    let w = [quintic_fade(f[0]), quintic_fade(f[1]), quintic_fade(f[2])];
-
-    let nx00 = mix(
-        corner_dot(cell, f, 0.0, 0.0, 0.0),
-        corner_dot(cell, f, 1.0, 0.0, 0.0),
-        w[0],
-    );
-    let nx10 = mix(
-        corner_dot(cell, f, 0.0, 1.0, 0.0),
-        corner_dot(cell, f, 1.0, 1.0, 0.0),
-        w[0],
-    );
-    let nx01 = mix(
-        corner_dot(cell, f, 0.0, 0.0, 1.0),
-        corner_dot(cell, f, 1.0, 0.0, 1.0),
-        w[0],
-    );
-    let nx11 = mix(
-        corner_dot(cell, f, 0.0, 1.0, 1.0),
-        corner_dot(cell, f, 1.0, 1.0, 1.0),
-        w[0],
-    );
-    let nxy0 = mix(nx00, nx10, w[1]);
-    let nxy1 = mix(nx01, nx11, w[1]);
-    mix(nxy0, nxy1, w[2])
-}
-
-const OCTAVE_ROTATION: [[f32; 3]; 3] = [
-    [0.784750, -0.045714, 0.618124],
-    [0.509329, 0.615862, -0.601081],
-    [-0.353201, 0.786527, 0.506581],
-];
-
-fn rotate_and_double(p: [f32; 3]) -> [f32; 3] {
-    let r = &OCTAVE_ROTATION;
-    [
-        2.0 * (r[0][0] * p[0] + r[0][1] * p[1] + r[0][2] * p[2]),
-        2.0 * (r[1][0] * p[0] + r[1][1] * p[1] + r[1][2] * p[2]),
-        2.0 * (r[2][0] * p[0] + r[2][1] * p[1] + r[2][2] * p[2]),
-    ]
-}
+const OCTAVE_ROTATION: Mat3 = Matrix3::new(
+    0.784750, 0.509329, -0.353201, -0.045714, 0.615862, 0.786527, 0.618124, -0.601081, 0.506581,
+);
 
 fn rotate(p: [f32; 3]) -> [f32; 3] {
-    let r = &OCTAVE_ROTATION;
-    [
-        r[0][0] * p[0] + r[0][1] * p[1] + r[0][2] * p[2],
-        r[1][0] * p[0] + r[1][1] * p[1] + r[1][2] * p[2],
-        r[2][0] * p[0] + r[2][1] * p[1] + r[2][2] * p[2],
-    ]
+    let rotated = OCTAVE_ROTATION * Vector3::new(p[0], p[1], p[2]);
+    [rotated.x, rotated.y, rotated.z]
+}
+
+fn rotate_and_double(p: [f32; 3]) -> [f32; 3] {
+    rotate(p).map(|component| 2.0 * component)
 }
 
 // Difference against the antipode (theta + pi) has an exact zero mean around every ring,
 // so no height can become a uniformly dense or empty band.
 fn antipodal_octave(p: [f32; 3], antipode: [f32; 3]) -> f32 {
-    (gradient_noise(p) - gradient_noise(antipode)) * std::f32::consts::FRAC_1_SQRT_2
+    (gradient_noise3(p) - gradient_noise3(antipode)) * std::f32::consts::FRAC_1_SQRT_2
 }
 
 pub const EDDY_OCTAVE_COUNT: usize = 3;
@@ -109,11 +28,6 @@ pub(crate) const EDDY_FADE_START: f32 = 0.25;
 pub(crate) const EDDY_FADE_END: f32 = 0.5;
 
 pub type EddyOctaveRings = [[[f32; 3]; 2]; EDDY_OCTAVE_COUNT];
-
-fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
-    let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
-}
 
 fn eddy_octave_weight(point: [f32; 3], point_ahead: [f32; 3], octave: usize) -> f32 {
     let distance = ((point[0] - point_ahead[0]).powi(2)

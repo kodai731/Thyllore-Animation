@@ -4,105 +4,15 @@ import os
 import re
 import sys
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
-def resolve_layout_macros(line: str, defines: dict[str, str]) -> str:
-    if not re.match(r'^\s*layout\s*\(', line):
-        return line
-    return re.sub(r'\b[A-Za-z_]\w*\b', lambda m: defines.get(m.group(0), m.group(0)), line)
-
+from blender_addon.common.glsl_export import expand_includes, strip_include_guards  # noqa: E402
 
 ENTRY_SHADER = "wind/resolveFragment.frag"
 BAKE_SHADER = "wind/shadowBake.comp"
 UPSAMPLE_SHADER = "wind/upsampleFragment.frag"
 RESOLVE_DEFINES = ["WIND_SHADOW_VOLUME"]
 IMAGE_FORMATS = {"rg16f": "RG16F"}
-
-
-def resolve_include(including_path: str, included: str, repo_root: str) -> str:
-    """Mirror glslc lookup: relative to the including file first, then the shaders/ root (-I)."""
-    relative = os.path.normpath(os.path.join(os.path.dirname(including_path), included))
-    for candidate in (relative, os.path.normpath(included)):
-        if os.path.isfile(os.path.join(repo_root, "shaders", candidate)):
-            return candidate
-    raise FileNotFoundError(f"{included} (included from {including_path}) not found under shaders/")
-
-
-def expand_includes(source_path: str, repo_root: str) -> list[str]:
-    seen: set[str] = set()
-    result: list[str] = []
-    defines: dict[str, str] = {}
-
-    def _expand(path: str, text: str) -> None:
-        if path in seen:
-            return
-        seen.add(path)
-        for line in text.split("\n"):
-            m_define = re.match(r'^\s*#\s*define\s+(\w+)\s+(\d+)\s*$', line)
-            if m_define:
-                defines[m_define.group(1)] = m_define.group(2)
-
-            m = re.match(r'^\s*#\s*include\s+"([^"]+)"', line)
-            if m:
-                included = m.group(1)
-                inc_path = resolve_include(path, included, repo_root)
-                with open(os.path.join(repo_root, "shaders", inc_path), "r") as f:
-                    _expand(inc_path, f.read())
-            else:
-                result.append(resolve_layout_macros(line, defines))
-
-    entry = source_path
-    full = os.path.join(repo_root, "shaders", entry)
-    with open(full, "r") as f:
-        _expand(entry, f.read())
-    return result
-
-
-def strip_include_guards(lines: list[str]) -> list[str]:
-    result: list[str] = []
-    stack: list[bool] = []
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        stripped = line.strip()
-
-        m_ifndef = re.match(r'^#\s*ifndef\s+(\S+)', stripped)
-        if m_ifndef:
-            macro = m_ifndef.group(1)
-            is_guard = macro.endswith("_GLSL")
-            stack.append(is_guard)
-            i += 1
-            if not is_guard:
-                result.append(line)
-            if is_guard and i < len(lines):
-                next_stripped = lines[i].strip()
-                m_define = re.match(r'^#\s*define\s+' + re.escape(macro), next_stripped)
-                if m_define:
-                    i += 1
-            continue
-
-        m_ifdef = re.match(r'^#\s*ifdef\s+\S+', stripped)
-        m_if = re.match(r'^#\s*if\b', stripped)
-        if m_ifdef or m_if:
-            stack.append(False)
-            result.append(line)
-            i += 1
-            continue
-
-        m_endif = re.match(r'^#\s*endif\b', stripped)
-        if m_endif:
-            if stack and stack[-1]:
-                stack.pop()
-                i += 1
-                continue
-            elif stack:
-                stack.pop()
-            result.append(line)
-            i += 1
-            continue
-
-        result.append(line)
-        i += 1
-    return result
 
 
 def convert_to_blender_dialect(lines: list[str]) -> tuple[list[str], dict]:
@@ -246,22 +156,22 @@ def convert_to_blender_dialect(lines: list[str]) -> tuple[list[str], dict]:
     return output, bindings
 
 
-SHADOW_VOLUME_AXES = ("WIND_SHADOW_RADIAL", "WIND_SHADOW_HEIGHT", "WIND_SHADOW_THETA", "WIND_SHADOW_SLOTS")
+SHADOW_VOLUME_AXES = ("SHADOW_VOLUME_RADIAL", "SHADOW_VOLUME_HEIGHT", "SHADOW_VOLUME_THETA", "SHADOW_VOLUME_SLOTS")
 
 
 def shadow_volume_size(lines: list[str]) -> list[int] | None:
     """Texture size [radial * slots, height, theta] read from the shared GLSL constants."""
     values: dict[str, int] = {}
     for line in lines:
-        m = re.match(r'^\s*const\s+int\s+(WIND_SHADOW_\w+)\s*=\s*(\d+)\s*;', line)
+        m = re.match(r'^\s*const\s+int\s+(SHADOW_VOLUME_\w+)\s*=\s*(\d+)\s*;', line)
         if m and m.group(1) in SHADOW_VOLUME_AXES:
             values[m.group(1)] = int(m.group(2))
     if set(values) != set(SHADOW_VOLUME_AXES):
         return None
     return [
-        values["WIND_SHADOW_RADIAL"] * values["WIND_SHADOW_SLOTS"],
-        values["WIND_SHADOW_HEIGHT"],
-        values["WIND_SHADOW_THETA"],
+        values["SHADOW_VOLUME_RADIAL"] * values["SHADOW_VOLUME_SLOTS"],
+        values["SHADOW_VOLUME_HEIGHT"],
+        values["SHADOW_VOLUME_THETA"],
     ]
 
 

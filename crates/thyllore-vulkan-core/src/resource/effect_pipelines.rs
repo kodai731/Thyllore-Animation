@@ -204,7 +204,7 @@ impl RayTracingData {
     ) -> Result<()> {
         let (Some(gbuffer), Some(scene_buffer), Some(water_ubo)) = (
             self.gbuffer.as_ref(),
-            self.scene_uniform_buffer,
+            self.scene_uniform_buffer_handle(),
             self.water_ubo.as_ref(),
         ) else {
             log!("Water caustic inputs are not ready, skipping caustic pipelines");

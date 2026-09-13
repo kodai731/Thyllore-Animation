@@ -1,6 +1,11 @@
 use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix};
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::descriptor::{RREffectTraceDescriptorSet, EFFECT_TRACE};
+use thyllore_vulkan_core::pipeline::RRRayTracingPipeline;
 use thyllore_vulkan_core::raytracing::{RRAccelerationStructure, RRBLAS};
+use thyllore_vulkan_core::resource::RayTracingData;
+use vulkanalia::prelude::v1_0::*;
 
 use crate::app::FrameContext;
 use crate::asset::AssetStorage;
@@ -104,4 +109,49 @@ fn apply_instance_transform(blas: &mut RRBLAS, model: &Matrix4<f32>) -> bool {
     }
     blas.transform.matrix = matrix;
     true
+}
+
+pub unsafe fn ensure_effect_trace_pipeline(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+    raytracing: &mut RayTracingData,
+    frames_in_flight: usize,
+) -> Result<()> {
+    if raytracing.effect_trace_pipeline.is_some() {
+        return Ok(());
+    }
+
+    let effect_trace_descriptor = RREffectTraceDescriptorSet::new(rrdevice, frames_in_flight)?;
+    let effect_trace_pipeline = RRRayTracingPipeline::new(
+        instance,
+        rrdevice,
+        &EFFECT_TRACE,
+        &[effect_trace_descriptor.layout.handle],
+        &trace_push_constant_ranges(),
+    )?;
+
+    raytracing.effect_trace_descriptor = Some(effect_trace_descriptor);
+    raytracing.effect_trace_pipeline = Some(effect_trace_pipeline);
+
+    log!("Created effect trace pipeline");
+    Ok(())
+}
+
+fn trace_push_constant_ranges() -> [vk::PushConstantRange; 3] {
+    let intersection_range = vk::PushConstantRange::builder()
+        .stage_flags(vk::ShaderStageFlags::INTERSECTION_KHR)
+        .offset(0)
+        .size(8)
+        .build();
+    let raygen_range = vk::PushConstantRange::builder()
+        .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+        .offset(16)
+        .size(112)
+        .build();
+    let closest_hit_range = vk::PushConstantRange::builder()
+        .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+        .offset(96)
+        .size(32)
+        .build();
+    [intersection_range, raygen_range, closest_hit_range]
 }

@@ -12,9 +12,9 @@ use crate::descriptor::ReflectedSetLayout;
 use crate::descriptor::{
     CompositeGBufferViews, RRAutoExposureAverageDescriptorSet,
     RRAutoExposureHistogramDescriptorSet, RRBillboardDescriptorSet, RRBloomDescriptorSets,
-    RRCompositeDescriptorSet, RRDofDescriptorSet, RRFlameDescriptorSet, RRRayQueryDescriptorSet,
-    RRToneMapDescriptorSet, RRWaterCausticDescriptorSet, RRWaterDescriptorSet,
-    RRWaterTraceDescriptorSet, COMPOSITE, GBUFFER, RAY_QUERY_SHADOW,
+    RRCompositeDescriptorSet, RRDofDescriptorSet, RREffectTraceDescriptorSet, RRFlameDescriptorSet,
+    RRRayQueryDescriptorSet, RRToneMapDescriptorSet, RRWaterCausticDescriptorSet,
+    RRWaterDescriptorSet, COMPOSITE, GBUFFER, RAY_QUERY_SHADOW,
 };
 use crate::pipeline::{
     DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline, RRRayTracingPipeline,

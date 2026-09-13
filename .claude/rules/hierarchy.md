@@ -62,7 +62,7 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   (`src/ecs/resource/<effect>_render_targets.rs`) assembled from those primitives in
   `src/ecs/systems/<effect>/` (descriptors, pipeline, record, render targets). Wind follows this layout.
   Known exceptions tracked by the vulkan-core effect-neutral issue (#179), not to be extended:
-  `descriptor/flame.rs`, `descriptor/water.rs`, `descriptor/water_caustic.rs`, `descriptor/water_trace.rs`,
+  `descriptor/flame.rs`, `descriptor/water.rs`, `descriptor/water_caustic.rs`, `descriptor/effect_trace.rs`,
   `renderer/flame.rs`, `renderer/water.rs`, `resource/flame_buffer.rs`, `resource/water_buffer.rs`, the
   flame / water fields of `RayTracingData` (filled by `src/ecs/systems/<effect>/pipeline.rs`), and
   `FlamePushConstants` / `WaterPushConstants` in `renderer/push_constants.rs`. Pipeline creation never

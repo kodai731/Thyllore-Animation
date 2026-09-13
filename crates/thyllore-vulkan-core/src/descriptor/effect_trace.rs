@@ -1,7 +1,7 @@
 use crate::core::device::*;
 use crate::descriptor::pass_manifest::EFFECT_TRACE;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
-use crate::descriptor::shader_bindings::water_trace;
+use crate::descriptor::shader_bindings::effect_trace;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::uniform_buffer::UniformBuffer;
 use crate::vulkan::*;
@@ -34,7 +34,7 @@ impl RREffectTraceDescriptorSet {
             .copied()
             .ok_or_else(|| {
                 anyhow!(
-                    "water trace descriptor slot {frame_slot} exceeds {} sets",
+                    "effect trace descriptor slot {frame_slot} exceeds {} sets",
                     self.descriptor_sets.len()
                 )
             })
@@ -69,7 +69,7 @@ impl RREffectTraceDescriptorSet {
     }
 }
 
-impl GpuResource for RRWaterTraceDescriptorSet {
+impl GpuResource for RREffectTraceDescriptorSet {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(&rrdevice.device);
     }

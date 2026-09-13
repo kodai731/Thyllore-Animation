@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::ecs::resource::billboard::BillboardData;
 use crate::vulkanr::command::RRCommandBuffer;
 use crate::vulkanr::context::{CommandState, RenderTargets, SwapchainState};
 use crate::vulkanr::render::framebuffer::{create_color_objects, create_framebuffers};
@@ -20,7 +21,8 @@ impl App {
             log_warn!("Effect destroy hook failed: {:?}", error);
         }
 
-        let mut resources: [&mut dyn GpuResource; 6] = [
+        let mut billboard = self.data.ecs_world.get_resource_mut::<BillboardData>();
+        let mut resources: Vec<&mut dyn GpuResource> = vec![
             &mut self.data.graphics_resources,
             &mut self.gpu_timestamp_profiler,
             &mut self.data.buffer_registry,
@@ -28,6 +30,9 @@ impl App {
             &mut self.data.raytracing,
             &mut self.data.viewport,
         ];
+        if let Some(billboard) = billboard.as_deref_mut() {
+            resources.push(billboard);
+        }
         destroy_all_in_reverse(&mut resources, &self.rrdevice);
 
         self.rrdevice.destroy_descriptor_pools();

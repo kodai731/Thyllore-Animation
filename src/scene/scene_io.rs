@@ -1,211 +1,89 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::clip_io::{load_animation_clip, save_animation_clip};
 use super::entities::{apply_scene_entities, capture_scene_entities};
 use super::error::{SceneError, SceneResult};
-use super::format::{
-    build_debug_primitives_scene_data, debug_primitive_kind_from_str, AnimationClipRef,
-    AutoExposureState, BloomState, CameraState, DebugPrimitiveSceneData, DepthOfFieldState,
-    EditorState, ExposureState, LensEffectsState, ModelReference, PanelLayoutState,
-    PhysicalCameraState, SceneFile, SceneMetadata, TimelineConfig, ToneMappingState,
-    SCENE_FORMAT_VERSION,
-};
-use crate::animation::editable::SourceClipId;
-use crate::ecs::resource::CurveEditorState;
-use crate::ecs::resource::{
-    AutoExposure, BloomSettings, Camera, ClipLibrary, DepthOfField, Exposure, LensEffects,
-    ModelState, PanelLayout, PendingDebugPrimitive, PendingDebugPrimitives,
-    PhysicalCameraParameters, SceneState, TimelineState, ToneMapOperator, ToneMapping,
-};
+use super::file::{AnimationClipRef, ModelReference, SceneFile, SCENE_FORMAT_VERSION};
+use crate::ecs::resource::{ClipLibrary, ModelState, SceneState};
 use crate::ecs::world::World;
-
-/// First scene version that stores effect state as entity components instead of dedicated fields.
-const SCENE_COMPONENT_FORMAT_VERSION: u32 = 6;
+use crate::hooks::scene::SceneValue;
+use crate::hooks::scene_resource::SceneResourceHooks;
 
 pub fn save_scene(scene_path: &Path, world: &World) -> SceneResult<()> {
-    let collected = CollectedSceneState::from_world(world);
-    let previous_metadata = collect_previous_metadata(world);
-
     let animations_dir = scene_path
         .parent()
         .unwrap_or(Path::new("."))
         .parent()
         .unwrap_or(Path::new("."))
         .join("animations");
-
     fs::create_dir_all(&animations_dir)?;
-
     let animation_clips = save_animation_clips(world, &animations_dir)?;
 
-    let scene = build_scene_file(collected, previous_metadata, animation_clips, world);
-
+    let scene = build_scene_file(animation_clips, world);
     write_scene_file(scene_path, &scene)?;
 
     log!("Saved scene to: {}", scene_path.display());
     Ok(())
 }
 
-struct CollectedSceneState {
-    model_path: String,
-    camera: CameraState,
-    timeline: TimelineConfig,
-    editor: EditorState,
-    current_clip_name: Option<String>,
-    panel_layout: Option<PanelLayoutState>,
-}
-
-impl CollectedSceneState {
-    fn from_world(world: &World) -> Self {
-        let model_path = world
-            .get_resource::<ModelState>()
-            .map(|s| s.model_path.clone())
-            .unwrap_or_default();
-
-        let camera = collect_camera_state(world);
-        let (timeline, current_clip_name) = collect_timeline_and_clip(world);
-
-        let editor = world
-            .get_resource::<CurveEditorState>()
-            .map(|e| EditorState {
-                selected_bone_id: e.selected_bone_id(),
-                curve_editor_open: e.is_open,
-            })
-            .unwrap_or_default();
-        let panel_layout = world
-            .get_resource::<PanelLayout>()
-            .map(|l| PanelLayoutState {
-                hierarchy_width: l.hierarchy_width,
-                inspector_width: l.inspector_width,
-                timeline_height: l.timeline_height,
-                debug_height: l.debug_height,
-            });
-
-        Self {
-            model_path,
-            camera,
-            timeline,
-            editor,
-            current_clip_name,
-            panel_layout,
-        }
-    }
-}
-
-fn collect_camera_state(world: &World) -> CameraState {
-    let physical_camera =
-        world
-            .get_resource::<PhysicalCameraParameters>()
-            .map(|p| PhysicalCameraState {
-                focal_length_mm: p.focal_length_mm,
-                sensor_height_mm: p.sensor_height_mm,
-                aperture_f_stops: p.aperture_f_stops,
-                shutter_speed_s: p.shutter_speed_s,
-                sensitivity_iso: p.sensitivity_iso,
-            });
-
-    let exposure = world.get_resource::<Exposure>().map(|e| ExposureState {
-        ev100: e.ev100,
-        exposure_value: e.exposure_value,
-    });
-
-    let depth_of_field = world
-        .get_resource::<DepthOfField>()
-        .map(|d| DepthOfFieldState {
-            enabled: d.enabled,
-            focus_distance: d.focus_distance,
-            max_blur_radius: d.max_blur_radius,
-        });
-
-    let tone_mapping = world.get_resource::<ToneMapping>().map(|tm| {
-        let operator_str = match tm.operator {
-            ToneMapOperator::None => "None",
-            ToneMapOperator::AcesFilmic => "AcesFilmic",
-            ToneMapOperator::Reinhard => "Reinhard",
-        };
-        ToneMappingState {
-            enabled: tm.enabled,
-            operator: operator_str.to_string(),
-            gamma: tm.gamma,
-        }
-    });
-
-    let lens_effects = world
-        .get_resource::<LensEffects>()
-        .map(|le| LensEffectsState {
-            vignette_enabled: le.vignette_enabled,
-            vignette_intensity: le.vignette_intensity,
-            chromatic_aberration_enabled: le.chromatic_aberration_enabled,
-            chromatic_aberration_intensity: le.chromatic_aberration_intensity,
-        });
-
-    let bloom = world.get_resource::<BloomSettings>().map(|bs| BloomState {
-        enabled: bs.enabled,
-        intensity: bs.intensity,
-        threshold: bs.threshold,
-        knee: bs.knee,
-        mip_count: bs.mip_count,
-    });
-
-    let auto_exposure = world
-        .get_resource::<AutoExposure>()
-        .map(|ae| AutoExposureState {
-            enabled: ae.enabled,
-            min_ev: ae.min_ev,
-            max_ev: ae.max_ev,
-            adaptation_speed_up: ae.adaptation_speed_up,
-            adaptation_speed_down: ae.adaptation_speed_down,
-            low_percent: ae.low_percent,
-            high_percent: ae.high_percent,
-        });
-
-    world
-        .get_resource::<Camera>()
-        .map(|c| CameraState {
-            pivot: [c.pivot.x, c.pivot.y, c.pivot.z],
-            yaw: c.yaw,
-            pitch: c.pitch,
-            distance: c.distance,
-            fov_y: c.fov_y.0,
-            position: None,
-            direction: None,
-            up: None,
-            physical_camera: physical_camera.clone(),
-            exposure: exposure.clone(),
-            depth_of_field: depth_of_field.clone(),
-            tone_mapping,
-            lens_effects,
-            bloom,
-            auto_exposure,
-        })
-        .unwrap_or_default()
-}
-
-fn collect_timeline_and_clip(world: &World) -> (TimelineConfig, Option<String>) {
-    let timeline_state = world.get_resource::<TimelineState>();
-    let clip_library = world.get_resource::<ClipLibrary>();
-
-    let timeline = timeline_state
+fn build_scene_file(animation_clips: Vec<AnimationClipRef>, world: &World) -> SceneFile {
+    let previous_metadata = world
+        .get_resource::<SceneState>()
+        .and_then(|s| s.previous_metadata.clone());
+    let scene_name = previous_metadata
         .as_ref()
-        .map(|t| TimelineConfig {
-            current_time: t.current_time,
-            playing: t.playing,
-            looping: t.looping,
-            speed: t.speed,
-        })
+        .map(|m| m.name.clone())
+        .unwrap_or_else(|| "Untitled Scene".to_string());
+    let model_path = world
+        .get_resource::<ModelState>()
+        .map(|s| s.model_path.clone())
         .unwrap_or_default();
 
-    let current_clip_id = timeline_state.as_ref().and_then(|t| t.current_clip_id);
-    let current_clip_name = current_clip_id
-        .and_then(|id| clip_library.and_then(|cm| cm.get(id).map(|c| c.name.clone())));
+    let mut scene = SceneFile::new(&scene_name, &model_path);
+    scene.animation_clips = animation_clips;
+    scene.resources = capture_scene_resources(world);
+    scene.entities = capture_scene_entities(world);
 
-    (timeline, current_clip_name)
+    if let Some(prev) = previous_metadata {
+        scene.metadata.created_at = prev.created_at;
+    }
+    scene.metadata.update_modified();
+    scene
 }
 
-fn collect_previous_metadata(world: &World) -> Option<SceneMetadata> {
-    world
-        .get_resource::<SceneState>()
-        .and_then(|s| s.previous_metadata.clone())
+/// Every registered resource present in the world, keyed by type key.
+pub fn capture_scene_resources(world: &World) -> BTreeMap<String, SceneValue> {
+    let Some(hooks) = world.get_resource::<SceneResourceHooks>() else {
+        log_warn!("SceneResourceHooks resource missing: no scene resources captured");
+        return BTreeMap::new();
+    };
+    hooks
+        .iter()
+        .filter_map(|hook| (hook.capture)(world).map(|value| (hook.type_key.to_string(), value)))
+        .collect()
+}
+
+pub fn apply_scene_resources(world: &mut World, resources: &BTreeMap<String, SceneValue>) {
+    let hooks: Vec<_> = match world.get_resource::<SceneResourceHooks>() {
+        Some(hooks) => hooks.iter().copied().collect(),
+        None => {
+            log_warn!("SceneResourceHooks resource missing: scene resources not applied");
+            return;
+        }
+    };
+
+    for (type_key, value) in resources {
+        match hooks.iter().find(|hook| hook.type_key == type_key) {
+            Some(hook) => {
+                if let Err(error) = (hook.apply)(world, value) {
+                    log_warn!("Failed to apply scene resource {}: {:#}", type_key, error);
+                }
+            }
+            None => log_warn!("Unknown scene resource type key: {}", type_key),
+        }
+    }
 }
 
 fn save_animation_clips(
@@ -239,35 +117,6 @@ fn save_animation_clips(
     Ok(animation_clips)
 }
 
-fn build_scene_file(
-    collected: CollectedSceneState,
-    previous_metadata: Option<SceneMetadata>,
-    animation_clips: Vec<AnimationClipRef>,
-    world: &World,
-) -> SceneFile {
-    let scene_name = previous_metadata
-        .as_ref()
-        .map(|m| m.name.clone())
-        .unwrap_or_else(|| "Untitled Scene".to_string());
-
-    let mut scene = SceneFile::new(&scene_name, &collected.model_path);
-    scene.animation_clips = animation_clips;
-    scene.current_clip = collected.current_clip_name;
-    scene.camera = collected.camera;
-    scene.timeline = collected.timeline;
-    scene.editor = collected.editor;
-    scene.panel_layout = collected.panel_layout;
-    scene.debug_primitives = build_debug_primitives_scene_data(world);
-    scene.entities = capture_scene_entities(world);
-
-    if let Some(prev) = previous_metadata {
-        scene.metadata.created_at = prev.created_at;
-    }
-    scene.metadata.update_modified();
-
-    scene
-}
-
 fn write_scene_file(scene_path: &Path, scene: &SceneFile) -> SceneResult<()> {
     let config = ron::ser::PrettyConfig::new()
         .depth_limit(8)
@@ -294,14 +143,7 @@ pub fn load_scene(scene_path: &Path) -> SceneResult<LoadedScene> {
 
     let content = fs::read_to_string(scene_path)?;
     let scene: SceneFile = ron::from_str(&content)?;
-
-    if scene.version != SCENE_FORMAT_VERSION
-        && scene.version != 1
-        && scene.version != 2
-        && scene.version != 3
-        && scene.version != 4
-        && scene.version != 5
-    {
+    if scene.version != SCENE_FORMAT_VERSION {
         return Err(SceneError::VersionMismatch {
             expected: SCENE_FORMAT_VERSION,
             found: scene.version,
@@ -377,206 +219,28 @@ fn sanitize_filename(name: &str) -> String {
         .collect()
 }
 
+/// Clips referenced by the scene must already be registered in the `ClipLibrary`.
 pub fn apply_loaded_scene_to_world(
     loaded: &LoadedScene,
     world: &mut World,
     assets: &mut crate::asset::AssetStorage,
-    clips_with_ids: &[(SourceClipId, String)],
 ) {
-    apply_camera_state(&loaded.scene.camera, world);
-    apply_timeline_state(&loaded.scene, world, clips_with_ids);
-    apply_editor_state(&loaded.scene.editor, world);
-    apply_rendering_params(&loaded.scene.camera, world);
-    apply_panel_layout(loaded.scene.panel_layout.as_ref(), world);
-
-    if loaded.scene.version >= SCENE_COMPONENT_FORMAT_VERSION {
-        apply_scene_entities(world, assets, &loaded.scene.entities);
-    } else {
-        log_warn!("pre-v6 scene: effects are not restored (re-save to upgrade)");
-    }
-
-    request_debug_primitives(&loaded.scene.debug_primitives, world);
-}
-
-/// Spawning is deferred to the app because a non-additive model load clears every entity.
-fn request_debug_primitives(primitives: &[DebugPrimitiveSceneData], world: &mut World) {
-    let requests = primitives
-        .iter()
-        .filter_map(|primitive| {
-            let Some(kind) = debug_primitive_kind_from_str(&primitive.kind) else {
-                log_warn!("Unknown debug primitive kind in scene: {}", primitive.kind);
-                return None;
-            };
-            Some(PendingDebugPrimitive {
-                kind,
-                position: cgmath::Vector3::new(
-                    primitive.position[0],
-                    primitive.position[1],
-                    primitive.position[2],
-                ),
-            })
-        })
-        .collect();
-
-    world.insert_resource(PendingDebugPrimitives { requests });
-}
-
-fn apply_camera_state(camera_state: &CameraState, world: &mut World) {
-    if let Some(mut camera) = world.get_resource_mut::<Camera>() {
-        if let Some(pos) = camera_state.position {
-            use crate::ecs::systems::camera_systems::create_camera;
-            let position = cgmath::Vector3::new(pos[0], pos[1], pos[2]);
-            let target = cgmath::Vector3::new(0.0, 0.0, 0.0);
-            *camera = create_camera(position, target);
-        } else {
-            camera.pivot = cgmath::Vector3::new(
-                camera_state.pivot[0],
-                camera_state.pivot[1],
-                camera_state.pivot[2],
-            );
-            camera.yaw = camera_state.yaw;
-            camera.pitch = camera_state.pitch;
-            camera.distance = camera_state.distance;
-            camera.fov_y = cgmath::Deg(camera_state.fov_y);
-
-            camera.initial_pivot = camera.pivot;
-            camera.initial_yaw = camera.yaw;
-            camera.initial_pitch = camera.pitch;
-            camera.initial_distance = camera.distance;
-        }
-    }
-}
-
-fn apply_timeline_state(
-    scene: &SceneFile,
-    world: &mut World,
-    clips_with_ids: &[(SourceClipId, String)],
-) {
-    if let Some(mut timeline) = world.get_resource_mut::<TimelineState>() {
-        timeline.current_time = scene.timeline.current_time;
-        timeline.playing = scene.timeline.playing;
-        timeline.looping = scene.timeline.looping;
-        timeline.speed = scene.timeline.speed;
-
-        if let Some(ref clip_name) = scene.current_clip {
-            for (id, name) in clips_with_ids {
-                if name == clip_name {
-                    timeline.current_clip_id = Some(*id);
-                    break;
-                }
-            }
-        }
-    }
-}
-
-fn apply_editor_state(editor: &EditorState, world: &mut World) {
-    if let Some(mut curve_editor) = world.get_resource_mut::<CurveEditorState>() {
-        if let Some(id) = editor.selected_bone_id {
-            curve_editor.select_bone(id);
-        }
-        curve_editor.is_open = editor.curve_editor_open;
-    }
-}
-
-fn apply_rendering_params(camera_state: &CameraState, world: &mut World) {
-    if let Some(ref phys) = camera_state.physical_camera {
-        if let Some(mut params) = world.get_resource_mut::<PhysicalCameraParameters>() {
-            params.focal_length_mm = phys.focal_length_mm;
-            params.sensor_height_mm = phys.sensor_height_mm;
-            params.aperture_f_stops = phys.aperture_f_stops;
-            params.shutter_speed_s = phys.shutter_speed_s;
-            params.sensitivity_iso = phys.sensitivity_iso;
-        }
-    }
-
-    if let Some(ref exp) = camera_state.exposure {
-        if let Some(mut exposure) = world.get_resource_mut::<Exposure>() {
-            exposure.ev100 = exp.ev100;
-            exposure.exposure_value = exp.exposure_value;
-        }
-    }
-
-    if let Some(ref dof) = camera_state.depth_of_field {
-        if let Some(mut depth_of_field) = world.get_resource_mut::<DepthOfField>() {
-            depth_of_field.enabled = dof.enabled;
-            depth_of_field.focus_distance = dof.focus_distance;
-            depth_of_field.max_blur_radius = dof.max_blur_radius;
-        }
-    }
-
-    if let Some(ref tm) = camera_state.tone_mapping {
-        if let Some(mut tone_mapping) = world.get_resource_mut::<ToneMapping>() {
-            tone_mapping.enabled = tm.enabled;
-            tone_mapping.operator = match tm.operator.as_str() {
-                "AcesFilmic" => ToneMapOperator::AcesFilmic,
-                "Reinhard" => ToneMapOperator::Reinhard,
-                "None" => ToneMapOperator::None,
-                unknown => {
-                    log!(
-                        "Scene load: unknown tone map operator '{}', defaulting to None",
-                        unknown
-                    );
-                    ToneMapOperator::None
-                }
-            };
-            tone_mapping.gamma = tm.gamma;
-        }
-    }
-
-    if let Some(ref le) = camera_state.lens_effects {
-        if let Some(mut lens_effects) = world.get_resource_mut::<LensEffects>() {
-            lens_effects.vignette_enabled = le.vignette_enabled;
-            lens_effects.vignette_intensity = le.vignette_intensity;
-            lens_effects.chromatic_aberration_enabled = le.chromatic_aberration_enabled;
-            lens_effects.chromatic_aberration_intensity = le.chromatic_aberration_intensity;
-        }
-    }
-
-    if let Some(ref bs) = camera_state.bloom {
-        if let Some(mut bloom_settings) = world.get_resource_mut::<BloomSettings>() {
-            bloom_settings.enabled = bs.enabled;
-            bloom_settings.intensity = bs.intensity;
-            bloom_settings.threshold = bs.threshold;
-            bloom_settings.knee = bs.knee;
-            bloom_settings.mip_count = bs.mip_count;
-        }
-    }
-
-    if let Some(ref ae) = camera_state.auto_exposure {
-        if let Some(mut auto_exposure) = world.get_resource_mut::<AutoExposure>() {
-            auto_exposure.enabled = ae.enabled;
-            auto_exposure.min_ev = ae.min_ev;
-            auto_exposure.max_ev = ae.max_ev;
-            auto_exposure.adaptation_speed_up = ae.adaptation_speed_up;
-            auto_exposure.adaptation_speed_down = ae.adaptation_speed_down;
-            auto_exposure.low_percent = ae.low_percent;
-            auto_exposure.high_percent = ae.high_percent;
-        }
-    }
-}
-
-fn apply_panel_layout(panel_layout: Option<&PanelLayoutState>, world: &mut World) {
-    if let Some(pl) = panel_layout {
-        if let Some(mut layout) = world.get_resource_mut::<PanelLayout>() {
-            layout.hierarchy_width = pl.hierarchy_width;
-            layout.inspector_width = pl.inspector_width;
-            layout.timeline_height = pl.timeline_height;
-            layout.debug_height = pl.debug_height;
-            log!(
-                "Restored panel layout: hierarchy={:.0}, inspector={:.0}, timeline={:.0}, debug={:.0}",
-                pl.hierarchy_width,
-                pl.inspector_width,
-                pl.timeline_height,
-                pl.debug_height,
-            );
-        }
-    }
+    apply_scene_resources(world, &loaded.scene.resources);
+    apply_scene_entities(world, assets, &loaded.scene.entities);
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::entities::test_support::ProbeOwner;
     use super::super::entities::world_with_scene_hooks;
     use super::*;
+    use crate::ecs::component::MotionPath;
+    use crate::ecs::events::DebugPrimitiveKind;
+    use crate::ecs::resource::{Camera, PanelLayout, TimelineState};
+    use crate::ecs::world::{Name, Transform};
+    use crate::hooks::scene::{decode_scene_value, SceneOwner};
+    use cgmath::Vector3;
+    use thyllore_scene_core::SceneComponent;
 
     fn write_scene(dir: &Path, model_path: &str) -> PathBuf {
         let scenes_dir = dir.join("scenes");
@@ -592,6 +256,20 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    fn scene_path_in(name: &str) -> PathBuf {
+        let scenes_dir = temp_dir(name).join("scenes");
+        fs::create_dir_all(&scenes_dir).unwrap();
+        scenes_dir.join("test.scene.ron")
+    }
+
+    fn world_with_resources() -> World {
+        let mut world = world_with_scene_hooks();
+        world.insert_resource(Camera::default());
+        world.insert_resource(PanelLayout::default());
+        world.insert_resource(TimelineState::default());
+        world
     }
 
     #[test]
@@ -617,83 +295,21 @@ mod tests {
     }
 
     #[test]
-    fn saved_scene_holds_water_torus_component_and_no_flame() {
-        let dir = temp_dir("water_torus_component");
-        let scenes_dir = dir.join("scenes");
-        fs::create_dir_all(&scenes_dir).unwrap();
-        let scene_path = scenes_dir.join("test.scene.ron");
-
-        let mut world = world_with_scene_hooks();
-        let mut assets = crate::asset::AssetStorage::new();
-        let entity = crate::ecs::systems::spawn_water_with_clip(
-            &mut world,
-            &mut assets,
-            "Water",
-            crate::ecs::component::WaterTorusEffect::default(),
-        );
-        let (major_radius, minor_radius) = {
-            let water = world
-                .get_component::<crate::ecs::component::WaterTorusEffect>(entity)
-                .expect("water effect on spawned entity");
-            (water.major_radius, water.minor_radius)
-        };
-
-        save_scene(&scene_path, &world).unwrap();
-        let loaded = load_scene(&scene_path).unwrap();
-
-        assert_eq!(loaded.scene.entities.len(), 1);
-        let components = &loaded.scene.entities[0].components;
-        assert_eq!(loaded.scene.entities[0].name, "Water");
-        assert!(!components.contains_key("flame"));
-        let water: crate::ecs::component::WaterTorusEffect =
-            crate::hooks::scene::decode_scene_value(&components["water_torus"])
-                .expect("water component decodes");
-        assert_eq!(water.major_radius, major_radius);
-        assert_eq!(water.minor_radius, minor_radius);
-        assert!(water.major_radius > 0.0);
-        assert!(water.minor_radius > 0.0);
-        let clip: crate::scene::scheduled_clip::ScheduledClip =
-            crate::hooks::scene::decode_scene_value(&components["clip"]).expect("clip decodes");
-        assert_eq!(clip.clip, "Water");
-        assert_eq!(loaded.scene.animation_clips.len(), 1);
-        assert_eq!(loaded.clips[0].name, "Water");
-    }
-
-    #[test]
-    fn pre_v6_scene_loads_without_effects() {
-        let dir = temp_dir("pre_v6");
-        let scenes_dir = dir.join("scenes");
-        fs::create_dir_all(&scenes_dir).unwrap();
-        let scene_path = scenes_dir.join("legacy.scene.ron");
+    fn older_format_versions_are_rejected() {
+        let scene_path = scene_path_in("old_version");
         fs::write(
             &scene_path,
-            r#"(
-    version: 5,
-    metadata: (name: "legacy", created_at: "", modified_at: ""),
-    model: (path: "Generated Mesh", transform: (translation: (0.0, 0.0, 0.0), rotation: (0.0, 0.0, 0.0, 1.0), scale: (1.0, 1.0, 1.0))),
-    flame: Some((effect: (), channels: [])),
-    water: Some((effect: (), channels: [])),
-)"#,
+            r#"(version: 6, model: (path: "Generated Mesh"))"#,
         )
         .unwrap();
 
-        let loaded = load_scene(&scene_path).expect("pre-v6 scene still loads");
-
-        assert_eq!(loaded.scene.version, 5);
-        assert!(loaded.scene.entities.is_empty());
-    }
-
-    #[test]
-    fn default_scene_asset_parses() {
-        let content = fs::read_to_string(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/scenes/default.scene.ron"),
-        )
-        .expect("default scene asset readable");
-        let scene: SceneFile = ron::from_str(&content).expect("default scene asset parses");
-
-        assert_eq!(scene.version, SCENE_FORMAT_VERSION);
-        assert_eq!(scene.entities.len(), 1);
-        assert!(scene.entities[0].components.contains_key("wind_tornado"));
+        assert!(matches!(
+            load_scene(&scene_path),
+            Err(SceneError::VersionMismatch {
+                expected: SCENE_FORMAT_VERSION,
+                found: 6
+            })
+        ));
     }
 
     #[test]
@@ -709,236 +325,164 @@ mod tests {
     }
 
     #[test]
-    fn water_roundtrip() {
-        let dir = temp_dir("water_roundtrip");
-        let scenes_dir = dir.join("scenes");
-        fs::create_dir_all(&scenes_dir).unwrap();
-        let scene_path = scenes_dir.join("test.scene.ron");
-
-        // Build a world with a water entity
-        let mut world = world_with_scene_hooks();
-        let mut assets = crate::asset::AssetStorage::new();
-        let effect = crate::ecs::component::WaterTorusEffect::default();
-        let entity =
-            crate::ecs::systems::spawn_water_with_clip(&mut world, &mut assets, "Water", effect);
-
-        // Set major_radius = 2.5 and AppliedWaterPreset { name: "sea" }
-        if let Some(mut water) =
-            world.get_component_mut::<crate::ecs::component::WaterTorusEffect>(entity)
+    fn registered_resources_roundtrip_through_the_file() {
+        let scene_path = scene_path_in("resources");
+        let mut world = world_with_resources();
         {
-            water.major_radius = 2.5;
+            let mut camera = world.resource_mut::<Camera>();
+            camera.distance = 12.5;
+            camera.pivot = Vector3::new(1.0, 2.0, 3.0);
         }
-        world.insert_component(
-            entity,
-            crate::ecs::component::AppliedWaterPreset {
-                name: "sea".to_string(),
-            },
-        );
+        world.resource_mut::<PanelLayout>().debug_height = 123.0;
+        world.resource_mut::<TimelineState>().looping = false;
 
-        // Save the scene
         save_scene(&scene_path, &world).unwrap();
-
-        // Load into a new world
         let loaded = load_scene(&scene_path).unwrap();
-        let mut world2 = world_with_scene_hooks();
-        let mut assets2 = crate::asset::AssetStorage::new();
-        apply_loaded_scene_to_world(&loaded, &mut world2, &mut assets2, &[]);
+        let keys: Vec<&String> = loaded.scene.resources.keys().collect();
+        assert!(keys.contains(&&"camera".to_string()), "{keys:?}");
+        assert!(keys.contains(&&"timeline".to_string()), "{keys:?}");
 
-        // Assert: exactly 1 water entity, major_radius == 2.5, preset name == "sea"
-        let waters: Vec<_> = world2.query_waters();
-        assert_eq!(waters.len(), 1, "expected exactly 1 water entity");
-        let water_entity = waters[0];
-        let water = world2
-            .get_component::<crate::ecs::component::WaterTorusEffect>(water_entity)
-            .unwrap();
-        assert!(
-            (water.major_radius - 2.5).abs() < f32::EPSILON,
-            "expected major_radius == 2.5, got {}",
-            water.major_radius
-        );
-        let preset = world2
-            .get_component::<crate::ecs::component::AppliedWaterPreset>(water_entity)
-            .unwrap();
-        assert_eq!(
-            preset.name, "sea",
-            "expected preset name == \"sea\", got \"{}\"",
-            preset.name
-        );
+        let mut restored = world_with_resources();
+        let mut assets = crate::asset::AssetStorage::new();
+        apply_loaded_scene_to_world(&loaded, &mut restored, &mut assets);
+
+        let camera = restored.resource::<Camera>();
+        assert_eq!(camera.distance, 12.5);
+        assert_eq!(camera.initial_distance, 12.5);
+        assert_eq!(camera.pivot, Vector3::new(1.0, 2.0, 3.0));
+        assert_eq!(restored.resource::<PanelLayout>().debug_height, 123.0);
+        assert!(!restored.resource::<TimelineState>().looping);
     }
 
     #[test]
-    fn wind_roundtrip() {
-        let dir = temp_dir("wind_roundtrip");
-        let scenes_dir = dir.join("scenes");
-        fs::create_dir_all(&scenes_dir).unwrap();
-        let scene_path = scenes_dir.join("test.scene.ron");
-
-        let mut world = world_with_scene_hooks();
-        let mut assets = crate::asset::AssetStorage::new();
-        let entity = crate::ecs::systems::spawn_wind_with_clip(
+    fn owner_entities_with_attachments_roundtrip_through_the_file() {
+        let scene_path = scene_path_in("entities");
+        let mut world = world_with_resources();
+        let entity = crate::hooks::scene::spawn_scene_owner(
             &mut world,
-            &mut assets,
-            crate::ecs::systems::DEFAULT_WIND_NAME,
-            crate::ecs::component::WindTornadoEffect::default(),
+            "probe",
+            ProbeOwner {
+                position: [4.0, 5.0, 6.0],
+                level: 0.75,
+            },
         );
-
-        if let Some(mut wind) =
-            world.get_component_mut::<crate::ecs::component::WindTornadoEffect>(entity)
-        {
-            wind.column_height = 3.5;
-        }
         world.insert_component(
             entity,
-            crate::ecs::component::AppliedWindPreset {
-                name: "storm".to_string(),
+            MotionPath {
+                radius: 2.0,
+                ..MotionPath::default()
             },
         );
 
         save_scene(&scene_path, &world).unwrap();
-
         let loaded = load_scene(&scene_path).unwrap();
-        let mut restored_world = world_with_scene_hooks();
-        let mut restored_assets = crate::asset::AssetStorage::new();
-        apply_loaded_scene_to_world(&loaded, &mut restored_world, &mut restored_assets, &[]);
+        assert_eq!(loaded.scene.entities.len(), 1);
+        let components = &loaded.scene.entities[0].components;
+        assert!(components.contains_key(ProbeOwner::TYPE_KEY));
+        let probe: ProbeOwner = decode_scene_value(&components[ProbeOwner::TYPE_KEY]).unwrap();
+        assert_eq!(probe.level, 0.75);
 
-        let winds: Vec<_> = restored_world.query_winds();
-        assert_eq!(winds.len(), 1, "expected exactly 1 wind entity");
-        let wind = restored_world
-            .get_component::<crate::ecs::component::WindTornadoEffect>(winds[0])
-            .unwrap();
-        assert!(
-            (wind.column_height - 3.5).abs() < f32::EPSILON,
-            "expected column_height == 3.5, got {}",
-            wind.column_height
+        let mut restored = world_with_resources();
+        let mut assets = crate::asset::AssetStorage::new();
+        apply_loaded_scene_to_world(&loaded, &mut restored, &mut assets);
+
+        let probes: Vec<_> = restored.iter_components::<ProbeOwner>().collect();
+        assert_eq!(probes.len(), 1);
+        let (restored_entity, probe) = probes[0];
+        assert_eq!(probe.level, 0.75);
+        assert_eq!(
+            restored
+                .get_component::<Name>(restored_entity)
+                .map(|n| n.0.as_str()),
+            Some("probe")
         );
-        let preset = restored_world
-            .get_component::<crate::ecs::component::AppliedWindPreset>(winds[0])
-            .unwrap();
-        assert_eq!(preset.name, "storm");
+        assert_eq!(
+            restored
+                .get_component::<Transform>(restored_entity)
+                .map(|t| t.translation),
+            Some(Vector3::new(4.0, 5.0, 6.0))
+        );
+        assert_eq!(
+            restored
+                .get_component::<MotionPath>(restored_entity)
+                .map(|m| m.radius),
+            Some(2.0)
+        );
+        assert_eq!(ProbeOwner::ICON, crate::ecs::component::EntityIcon::Empty);
     }
 
     fn spawn_tagged_debug_primitive(
         world: &mut World,
-        kind: crate::ecs::events::DebugPrimitiveKind,
+        kind: DebugPrimitiveKind,
         position: [f32; 3],
-    ) {
+    ) -> crate::ecs::world::Entity {
         let entity = world
             .entity()
-            .with_name(super::super::format::debug_primitive_kind_to_str(kind))
-            .with_transform(crate::ecs::world::Transform::default())
+            .with_name("primitive")
+            .with_transform(Transform {
+                translation: position.into(),
+                ..Default::default()
+            })
             .build();
         world.insert_component(entity, crate::ecs::component::DebugPrimitiveTag { kind });
-        if let Some(transform) = world.get_component_mut::<crate::ecs::world::Transform>(entity) {
-            transform.translation = cgmath::Vector3::new(position[0], position[1], position[2]);
-        }
+        entity
     }
 
     #[test]
-    fn debug_primitives_roundtrip() {
-        use crate::ecs::events::DebugPrimitiveKind;
-
-        let dir = temp_dir("debug_primitives");
-        let scenes_dir = dir.join("scenes");
-        fs::create_dir_all(&scenes_dir).unwrap();
-        let scene_path = scenes_dir.join("test.scene.ron");
-
-        let mut world = world_with_scene_hooks();
+    fn debug_primitives_roundtrip_and_wait_for_their_mesh() {
+        let scene_path = scene_path_in("debug_primitives");
+        let mut world = world_with_resources();
         spawn_tagged_debug_primitive(&mut world, DebugPrimitiveKind::Cube, [1.0, 2.0, 3.0]);
         spawn_tagged_debug_primitive(&mut world, DebugPrimitiveKind::Floor, [0.0, -1.6, 0.0]);
 
         save_scene(&scene_path, &world).unwrap();
-
         let loaded = load_scene(&scene_path).unwrap();
-        assert_eq!(loaded.scene.debug_primitives.len(), 2);
-        assert_eq!(loaded.scene.debug_primitives[0].kind, "cube");
-        assert_eq!(loaded.scene.debug_primitives[0].position, [1.0, 2.0, 3.0]);
-        assert_eq!(loaded.scene.debug_primitives[1].kind, "floor");
-        assert_eq!(loaded.scene.debug_primitives[1].position, [0.0, -1.6, 0.0]);
+        assert_eq!(loaded.scene.entities.len(), 2);
 
-        let mut respawned = world_with_scene_hooks();
+        let mut respawned = world_with_resources();
         let mut assets = crate::asset::AssetStorage::new();
-        apply_loaded_scene_to_world(&loaded, &mut respawned, &mut assets, &[]);
+        apply_loaded_scene_to_world(&loaded, &mut respawned, &mut assets);
 
-        let requests = respawned
-            .resource_mut::<PendingDebugPrimitives>()
-            .take_requests();
-        assert_eq!(
-            requests.len(),
-            2,
-            "every scene primitive must be requested for spawning"
-        );
-        assert_eq!(requests[0].kind, DebugPrimitiveKind::Cube);
-        assert_eq!(requests[0].position, cgmath::Vector3::new(1.0, 2.0, 3.0));
-        assert_eq!(requests[1].kind, DebugPrimitiveKind::Floor);
-        assert_eq!(requests[1].position, cgmath::Vector3::new(0.0, -1.6, 0.0));
-
-        for request in &requests {
-            spawn_tagged_debug_primitive(
-                &mut respawned,
-                request.kind,
-                [request.position.x, request.position.y, request.position.z],
-            );
-        }
-
-        let resaved_path = scenes_dir.join("resaved.scene.ron");
-        save_scene(&resaved_path, &respawned).unwrap();
-        let reloaded = load_scene(&resaved_path).unwrap();
-
-        assert_eq!(
-            reloaded.scene.debug_primitives.len(),
-            loaded.scene.debug_primitives.len(),
-            "load -> save must keep the debug primitive count"
-        );
-        for (resaved, original) in reloaded
-            .scene
-            .debug_primitives
-            .iter()
-            .zip(loaded.scene.debug_primitives.iter())
-        {
-            assert_eq!(resaved.kind, original.kind);
-            assert_eq!(resaved.position, original.position);
-        }
+        let awaiting = crate::ecs::systems::take_debug_primitives_awaiting_mesh(&mut respawned);
+        assert_eq!(awaiting.len(), 2);
+        assert_eq!(awaiting[0].kind, "cube");
+        assert_eq!(awaiting[0].position, [1.0, 2.0, 3.0]);
+        assert_eq!(awaiting[1].kind, "floor");
+        assert_eq!(awaiting[1].position, [0.0, -1.6, 0.0]);
+        assert!(respawned
+            .iter_components::<crate::ecs::component::DebugPrimitiveTag>()
+            .next()
+            .is_none());
     }
 
     #[test]
-    fn scene_without_debug_primitives_field_loads() {
-        let dir = temp_dir("debug_primitives_absent");
-        let scene_path = write_scene(&dir, ModelReference::GENERATED_MESH);
-
-        let written = fs::read_to_string(&scene_path).unwrap();
-        let legacy: Vec<&str> = written
-            .lines()
-            .filter(|line| !line.trim_start().starts_with("debug_primitives:"))
-            .collect();
-        assert_eq!(legacy.len(), written.lines().count() - 1);
-        fs::write(&scene_path, legacy.join("\n")).unwrap();
-
-        let loaded = load_scene(&scene_path).expect("scene without the field loads");
-
-        assert!(loaded.scene.debug_primitives.is_empty());
-    }
-
-    #[test]
-    fn water_probe_scene_asset_loads() {
+    fn default_scene_asset_parses() {
         let content = fs::read_to_string(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/scenes/water_probe.scene.ron"),
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/scenes/default.scene.ron"),
         )
-        .expect("water probe scene asset readable");
-        let scene: SceneFile = ron::from_str(&content).expect("water probe scene asset parses");
+        .expect("default scene asset readable");
+        let scene: SceneFile = ron::from_str(&content).expect("default scene asset parses");
 
         assert_eq!(scene.version, SCENE_FORMAT_VERSION);
-        let water = scene
-            .entities
-            .iter()
-            .find(|entity| entity.components.contains_key("water_torus"))
-            .expect("water entity present");
-        let effect: crate::ecs::component::WaterTorusEffect =
-            crate::hooks::scene::decode_scene_value(&water.components["water_torus"])
-                .expect("water component decodes");
-        assert!(
-            (effect.major_radius - 1.2).abs() < f32::EPSILON,
-            "expected major_radius == 1.2, got {}",
-            effect.major_radius
-        );
+        assert!(!scene.resources.is_empty());
+        assert!(!scene.entities.is_empty());
+    }
+
+    #[test]
+    fn every_scene_asset_parses_at_the_current_version() {
+        let scenes_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/scenes");
+        let mut checked = 0;
+        for entry in fs::read_dir(&scenes_dir).expect("scene assets readable") {
+            let path = entry.unwrap().path();
+            if path.extension().and_then(|e| e.to_str()) != Some("ron") {
+                continue;
+            }
+            let content = fs::read_to_string(&path).unwrap();
+            let scene: SceneFile = ron::from_str(&content)
+                .unwrap_or_else(|e| panic!("{} does not parse: {e}", path.display()));
+            assert_eq!(scene.version, SCENE_FORMAT_VERSION, "{}", path.display());
+            checked += 1;
+        }
+        assert!(checked > 0);
     }
 }

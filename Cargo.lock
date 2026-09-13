@@ -3878,8 +3878,11 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "cgmath",
+ "ron",
+ "serde",
  "thyllore-anim-core",
  "thyllore-model-core",
+ "thyllore-scene-core",
  "thyllore-spirv-reflect",
 ]
 

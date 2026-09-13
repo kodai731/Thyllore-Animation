@@ -121,6 +121,10 @@ Data-only structs attached to entities. Located in `ecs/component/`.
 
 Global state that changes per frame. Located in `ecs/resource/`. **Only use for dynamic data.**
 
+A resource that belongs in the scene file declares its persisted fields with `declare_scene_format!`
+(runtime-only fields stay out of the table) and registers with `scene_resource!(Type)` in its own file;
+`src/scene/` never mirrors it (see `hierarchy.md`, "Feature isolation").
+
 Resources correspond to **singleton components** in other ECS frameworks:
 - Flecs: singletons (component added to its own entity)
 - Unity DOTS: singleton components (`GetSingleton<T>()`)

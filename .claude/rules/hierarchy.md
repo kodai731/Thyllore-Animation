@@ -124,7 +124,8 @@ images into descriptors and framebuffers), record (`ImageStateTracker` in `thyll
 handle. `scene.rs` holds the `SceneComponentHook` contract (type key, owner / attachment role,
 entities, capture, apply), the `scene_owner!` / `scene_attachment!` macros that submit a hook to the
 link-time registry (`inventory`), and `SceneComponentHooks::collect()` that `src/app/` stores as a
-`World` resource for `src/scene/`; owners are applied before attachments. A hook file describes a contract only; it never names a
+`World` resource for `src/scene/`; owners are applied before attachments. `scene_resource.rs` is the
+same contract for world resources (`SceneResourceHook`, `scene_resource!`, `SceneResourceHooks`). A hook file describes a contract only; it never names a
 concrete effect.
 
 ## src/effect/
@@ -152,7 +153,7 @@ outside those directories reaches a feature through a contract (`src/hooks/`), a
 | `src/ecs/component/<effect>*.rs`, `src/ecs/systems/<effect>/`, `src/ecs/resource/<effect>_*.rs` | its own effect only |
 | `src/effect/subscription.rs` | every effect (the single `EffectHook` list; scene hooks self-register instead) |
 | `src/platform/ui/` per-effect windows, `src/debugview/` per-effect dumps | the effect the file is for |
-| `src/scene/`, `src/hooks/`, `src/ecs/systems/*.rs` (shared systems), shared crates | none (tests may spawn concrete effects) |
+| `src/scene/`, `src/hooks/`, `src/ecs/systems/*.rs` (shared systems), shared crates | none, tests included (`src/scene/` tests use `entities.rs::test_support`; effect round trips live in `src/ecs/systems/<effect>/tests.rs`) |
 | `src/app/`, `src/ecs/world.rs` | none in new code; the existing spots (default flame spawn in `init/instance.rs`, water acceleration structures in `scene_model.rs` / `init/raytracing.rs` / `cleanup.rs` / `model_loader.rs`, `query_flames` / `query_waters` / `query_winds`) are exceptions tracked with #179 and must not grow |
 
 Concretely:
@@ -197,8 +198,16 @@ for hook in world.resource::<SceneComponentHooks>().ordered() {
 }
 ```
 
-Test for it before finishing: `grep -rni "flame\|water\|wind" src/scene src/hooks` must only hit
-`#[cfg(test)]` code, never a type, key literal or field name in the shipped code.
+Test for it before finishing: `grep -rni "flame\|water\|wind" src/scene src/hooks` must hit nothing but
+the stub pass names of `src/hooks/pass.rs` tests.
+
+Resources follow the same rule. A resource is persisted by declaring its fields once
+(`declare_scene_format!` in the resource's own file, or in its crate for `thyllore-render-core` settings)
+and writing `scene_resource!(Type)` next to it; `SceneResourceHooks::collect()` gathers every registration
+at link time and `src/scene/` writes them under `resources`. A resource whose persisted form needs `World`
+context (the timeline names its active clip) submits a hand-written `SceneResourceHook` from its system
+file. Enum fields are persisted by name through a `String` field (`ToneMapOperator::name` /
+`from_name`), because a `ron::Value` cannot carry a unit variant.
 
 ## src/platform/
 
@@ -270,10 +279,15 @@ per-feature `AddPass`).
 
 ## Other src/ directories
 
-- `src/scene/` — scene file format, load / save, clip io (serde + world apply, no rendering). Entities
-  are saved as component maps through `SceneComponentHooks`; `entities.rs` (capture / apply),
-  `scheduled_clip.rs` (the `clip` component naming the entity's clip file) and `motion_path_format.rs`
-  are the only component hooks that live here because they belong to no effect
+- `src/scene/` — the scene file schema (`file.rs`: version, metadata, model path, clip files,
+  `resources{type_key → value}`, `entities[(name, components{type_key → value})]`), load / save
+  (`scene_io.rs`), the generic entity capture / apply (`entities.rs`) and clip io. It holds no mirror
+  struct of any resource or component: every persisted type registers itself (`scene_resource!`,
+  `scene_owner!`, `scene_attachment!`) from its own file, and the capture / apply of a hook that needs
+  `World` logic is an ECS system (`src/ecs/systems/scheduled_clip_systems.rs`,
+  `debug_primitive_systems.rs`, `timeline_systems.rs`), never a file under `src/scene/`. Tests in
+  `src/scene/` use the test-only `ProbeOwner` / `ProbeLabel` of `entities.rs::test_support`; a test that
+  needs a concrete effect belongs to that effect's `tests.rs`
 - `src/asset/` — CPU-side model asset storage
 - `src/debugview/` — `impl App` blocks that exist only for a debugging session: GPU image and buffer dumps
   (`flame_history_dump.rs`, `water_debug_dump.rs`, `exposure_dump.rs`, `shadow_debug.rs`) and debug scene

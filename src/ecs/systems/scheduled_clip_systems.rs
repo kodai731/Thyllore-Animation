@@ -3,11 +3,11 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 use thyllore_scene_core::SceneComponent;
 
+use super::scalar_clip_systems::{find_entity_clip_id, schedule_entity_clip};
 use crate::animation::editable::SourceClipId;
 use crate::asset::AssetStorage;
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::ClipLibrary;
-use crate::ecs::systems::scalar_clip_systems::{find_entity_clip_id, schedule_entity_clip};
 use crate::ecs::world::{Entity, World};
 use crate::hooks::scene::{
     decode_component, encode_scene_value, entities_with, SceneComponentHook, SceneComponentRole,

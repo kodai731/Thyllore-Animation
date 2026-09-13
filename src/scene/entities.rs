@@ -146,38 +146,72 @@ fn entity_name(world: &World, entity: Entity) -> String {
 }
 
 #[cfg(test)]
-pub(super) fn world_with_scene_hooks() -> World {
+pub(crate) fn world_with_scene_hooks() -> World {
     let mut world = World::new();
     world.insert_resource(ClipLibrary::new());
     world.insert_resource(SceneComponentHooks::collect().expect("unique scene keys"));
+    world.insert_resource(
+        crate::hooks::scene_resource::SceneResourceHooks::collect().expect("unique resource keys"),
+    );
     world
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ecs::component::{
-        AppliedFlameStyle, AppliedWaterPreset, FlameEffect, FlameParam, MotionPath,
-        WaterTorusEffect, FLAME_DOMAIN,
-    };
-    use crate::ecs::systems::{spawn_flame_with_clip, spawn_water_with_clip, DEFAULT_FLAME_NAME};
-    use crate::hooks::scene::{decode_scene_value, encode_scene_value};
-    use crate::scene::scheduled_clip::ScheduledClip;
-    use thyllore_anim_core::editable::{curve_add_keyframe, InterpolationType};
+pub(crate) mod test_support {
+    use cgmath::Quaternion;
+    use serde::{Deserialize, Serialize};
+    use thyllore_scene_core::SceneComponent;
 
-    fn flame_with_keyed_clip(world: &mut World, assets: &mut AssetStorage) -> Entity {
-        let entity =
-            spawn_flame_with_clip(world, assets, DEFAULT_FLAME_NAME, FlameEffect::default());
-        let clip_id = find_entity_clip_id(world, entity).expect("flame has a clip");
-        let mut library = world.resource_mut::<ClipLibrary>();
-        let clip = library.get_mut(clip_id).expect("clip registered");
-        let curve = clip.get_or_add_scalar_curve(FlameParam::Height.property_type());
-        let key = curve_add_keyframe(curve, 1.0, 2.0);
-        curve
-            .get_keyframe_mut(key)
-            .expect("key inserted")
-            .interpolation = InterpolationType::Bezier;
-        entity
+    /// Test-only owner so scene tests never depend on a concrete effect.
+    #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+    pub struct ProbeOwner {
+        pub position: [f32; 3],
+        pub level: f32,
+    }
+
+    impl SceneComponent for ProbeOwner {
+        const TYPE_KEY: &'static str = "test_probe_owner";
+        const PERSISTED_FIELDS: &'static [&'static str] = &["position", "level"];
+    }
+
+    crate::scene_owner!(ProbeOwner {
+        icon: Empty,
+        placement: |p| (p.position.into(), Quaternion::new(1.0, 0.0, 0.0, 0.0)),
+    });
+
+    /// Test-only attachment restored by insertion.
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    pub struct ProbeLabel {
+        pub label: String,
+    }
+
+    impl SceneComponent for ProbeLabel {
+        const TYPE_KEY: &'static str = "test_probe_label";
+        const PERSISTED_FIELDS: &'static [&'static str] = &["label"];
+    }
+
+    crate::scene_attachment!(ProbeLabel);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::test_support::{ProbeLabel, ProbeOwner};
+    use super::*;
+    use crate::ecs::world::Transform;
+    use crate::hooks::scene::{
+        decode_scene_value, encode_scene_value, entities_with, spawn_scene_owner,
+    };
+    use thyllore_scene_core::SceneComponent;
+
+    fn spawn_probe(world: &mut World, name: &str, level: f32) -> Entity {
+        spawn_scene_owner(
+            world,
+            name,
+            ProbeOwner {
+                position: [1.0, 2.0, 3.0],
+                level,
+            },
+        )
     }
 
     #[test]
@@ -186,153 +220,96 @@ mod tests {
         let keys = hooks.type_keys();
 
         let owner_count = hooks.owners().count();
-        assert!(owner_count >= 3, "{keys:?}");
+        assert!(
+            keys[..owner_count].contains(&ProbeOwner::TYPE_KEY),
+            "{keys:?}"
+        );
         assert!(keys[owner_count..].contains(&"clip"), "{keys:?}");
         assert!(keys[owner_count..].contains(&"motion_path"), "{keys:?}");
+        assert!(
+            keys[owner_count..].contains(&ProbeLabel::TYPE_KEY),
+            "{keys:?}"
+        );
     }
 
     #[test]
     fn capture_writes_one_entity_per_owner_with_its_attachments() {
         let mut world = world_with_scene_hooks();
-        let mut assets = AssetStorage::new();
-        let flame = flame_with_keyed_clip(&mut world, &mut assets);
+        let first = spawn_probe(&mut world, "first", 0.25);
         world.insert_component(
-            flame,
-            AppliedFlameStyle {
-                name: "pillar".to_string(),
-                version: 3,
+            first,
+            ProbeLabel {
+                label: "tagged".to_string(),
             },
         );
-        world.insert_component(
-            flame,
-            MotionPath {
-                radius: 2.0,
-                enabled: true,
-                ..MotionPath::default()
-            },
-        );
-        spawn_water_with_clip(
-            &mut world,
-            &mut assets,
-            "Water",
-            WaterTorusEffect::default(),
-        );
+        spawn_probe(&mut world, "second", 0.5);
 
         let entities = capture_scene_entities(&world);
 
         assert_eq!(entities.len(), 2);
-        let flame_entity = &entities[0];
-        assert_eq!(flame_entity.name, DEFAULT_FLAME_NAME);
-        let keys: Vec<&String> = flame_entity.components.keys().collect();
-        assert_eq!(keys, ["clip", "flame", "flame_style", "motion_path"]);
-        let clip: ScheduledClip =
-            decode_scene_value(&flame_entity.components["clip"]).expect("clip decodes");
-        assert_eq!(clip.clip, FLAME_DOMAIN.name);
-        let style: AppliedFlameStyle =
-            decode_scene_value(&flame_entity.components["flame_style"]).expect("style decodes");
-        assert_eq!(style.version, 3);
-        assert_eq!(entities[1].name, "Water");
-        assert!(entities[1].components.contains_key("water_torus"));
-        assert!(!entities[1].components.contains_key("flame"));
+        assert_eq!(entities[0].name, "first");
+        let keys: Vec<&String> = entities[0].components.keys().collect();
+        assert_eq!(keys, [ProbeLabel::TYPE_KEY, ProbeOwner::TYPE_KEY]);
+        let label: ProbeLabel =
+            decode_scene_value(&entities[0].components[ProbeLabel::TYPE_KEY]).expect("decodes");
+        assert_eq!(label.label, "tagged");
+        assert_eq!(entities[1].name, "second");
+        assert!(!entities[1].components.contains_key(ProbeLabel::TYPE_KEY));
     }
 
     #[test]
-    fn apply_restores_entities_attachments_and_scheduled_clips() {
+    fn apply_restores_owner_placement_name_and_attachments() {
         let mut source = world_with_scene_hooks();
-        let mut source_assets = AssetStorage::new();
-        let flame = flame_with_keyed_clip(&mut source, &mut source_assets);
-        source
-            .get_component_mut::<FlameEffect>(flame)
-            .expect("flame effect")
-            .height = 7.5;
+        let probe = spawn_probe(&mut source, "probe", 7.5);
         source.insert_component(
-            flame,
-            AppliedFlameStyle {
-                name: "pillar".to_string(),
-                version: 3,
+            probe,
+            ProbeLabel {
+                label: "tagged".to_string(),
             },
         );
         let entities = capture_scene_entities(&source);
-        let clips = capture_scheduled_clips(&source);
-        assert_eq!(clips.len(), 1);
 
         let mut world = world_with_scene_hooks();
         let mut assets = AssetStorage::new();
-        crate::ecs::systems::clip_library_systems::clip_library_register_loaded(
-            &mut world,
-            &mut assets,
-            clips,
-        );
         apply_scene_entities(&mut world, &mut assets, &entities);
 
-        let flames = world.query_flames();
-        assert_eq!(flames.len(), 1);
-        let effect = world
-            .get_component::<FlameEffect>(flames[0])
-            .expect("flame");
-        assert_eq!(effect.height, 7.5);
+        let probes: Vec<_> = world.iter_components::<ProbeOwner>().collect();
+        assert_eq!(probes.len(), 1);
+        let (entity, owner) = probes[0];
+        assert_eq!(owner.level, 7.5);
         assert_eq!(
-            world.get_component::<Name>(flames[0]).map(|n| n.0.as_str()),
-            Some(DEFAULT_FLAME_NAME)
+            world.get_component::<Name>(entity).map(|n| n.0.as_str()),
+            Some("probe")
         );
-        let style = world
-            .get_component::<AppliedFlameStyle>(flames[0])
-            .expect("style restored");
-        assert_eq!((style.name.as_str(), style.version), ("pillar", 3));
-
-        let clip_id = find_entity_clip_id(&world, flames[0]).expect("clip scheduled");
-        let library = world.resource::<ClipLibrary>();
-        let curve = library
-            .get(clip_id)
-            .expect("scheduled clip is in the library")
-            .get_scalar_curve(FlameParam::Height.property_type())
-            .expect("keyed curve restored");
-        assert_eq!(curve.keyframes.len(), 1);
-        assert_eq!(curve.keyframes[0].interpolation, InterpolationType::Bezier);
-        assert_eq!(library.source_clips.len(), 1, "no orphan clip");
+        assert_eq!(
+            world
+                .get_component::<Transform>(entity)
+                .map(|t| t.translation),
+            Some(cgmath::Vector3::new(1.0, 2.0, 3.0))
+        );
+        assert_eq!(
+            world
+                .get_component::<ProbeLabel>(entity)
+                .map(|l| l.label.as_str()),
+            Some("tagged")
+        );
     }
 
     #[test]
-    fn apply_twice_replaces_previous_entities_and_their_clips() {
+    fn apply_twice_replaces_previous_owner_entities() {
         let mut source = world_with_scene_hooks();
-        let mut source_assets = AssetStorage::new();
-        spawn_flame_with_clip(
-            &mut source,
-            &mut source_assets,
-            DEFAULT_FLAME_NAME,
-            FlameEffect::default(),
-        );
+        spawn_probe(&mut source, "probe", 1.0);
         let entities = capture_scene_entities(&source);
 
         let mut world = world_with_scene_hooks();
         let mut assets = AssetStorage::new();
         apply_scene_entities(&mut world, &mut assets, &entities);
-        let first = world.query_flames()[0];
+        let first = entities_with::<ProbeOwner>(&world)[0];
         apply_scene_entities(&mut world, &mut assets, &entities);
 
-        let flames = world.query_flames();
-        assert_eq!(flames.len(), 1);
-        assert_ne!(flames[0], first);
-        assert_eq!(world.resource::<ClipLibrary>().source_clips.len(), 1);
-    }
-
-    #[test]
-    fn owner_without_scheduled_clip_still_gets_an_empty_clip_lane() {
-        let entities = vec![SceneEntity {
-            name: "Water".to_string(),
-            components: BTreeMap::from([(
-                "water_torus".to_string(),
-                encode_scene_value(&WaterTorusEffect::default()).expect("encode"),
-            )]),
-        }];
-
-        let mut world = world_with_scene_hooks();
-        let mut assets = AssetStorage::new();
-        apply_scene_entities(&mut world, &mut assets, &entities);
-
-        let water = world.query_waters()[0];
-        assert!(find_entity_clip_id(&world, water).is_some());
-        assert!(world.get_component::<AppliedWaterPreset>(water).is_none());
+        let probes = entities_with::<ProbeOwner>(&world);
+        assert_eq!(probes.len(), 1);
+        assert_ne!(probes[0], first);
     }
 
     #[test]
@@ -341,8 +318,11 @@ mod tests {
             name: "orphan".to_string(),
             components: BTreeMap::from([
                 (
-                    "motion_path".to_string(),
-                    encode_scene_value(&MotionPath::default()).expect("encode"),
+                    ProbeLabel::TYPE_KEY.to_string(),
+                    encode_scene_value(&ProbeLabel {
+                        label: "x".to_string(),
+                    })
+                    .expect("encode"),
                 ),
                 ("unknown_key".to_string(), SceneValue::Unit),
             ]),
@@ -358,8 +338,7 @@ mod tests {
     #[test]
     fn scene_entities_survive_a_ron_round_trip() {
         let mut world = world_with_scene_hooks();
-        let mut assets = AssetStorage::new();
-        spawn_flame_with_clip(&mut world, &mut assets, "Flame", FlameEffect::default());
+        spawn_probe(&mut world, "probe", 0.125);
         let entities = capture_scene_entities(&world);
 
         let serialized = ron::ser::to_string_pretty(&entities, ron::ser::PrettyConfig::new())

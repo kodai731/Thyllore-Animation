@@ -325,6 +325,8 @@ impl App {
             .insert_resource(crate::ecs::resource::DebugViewState::default());
         data.ecs_world
             .insert_resource(crate::hooks::scene::SceneComponentHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::scene_resource::SceneResourceHooks::collect()?);
         Ok(())
     }
     unsafe fn initialize_graphics_and_ecs(
@@ -899,17 +901,15 @@ impl App {
     ) {
         let mut scene_state = SceneState::new();
         if let Some((scene_path, scene, clips)) = loaded_scene {
-            let clips_with_ids =
-                crate::ecs::systems::clip_library_systems::clip_library_register_loaded(
-                    &mut data.ecs_world,
-                    &mut data.ecs_assets,
-                    clips,
-                );
+            crate::ecs::systems::clip_library_systems::clip_library_register_loaded(
+                &mut data.ecs_world,
+                &mut data.ecs_assets,
+                clips,
+            );
             crate::scene::apply_loaded_scene_to_world(
                 &scene,
                 &mut data.ecs_world,
                 &mut data.ecs_assets,
-                &clips_with_ids,
             );
 
             let active_clip_id = {

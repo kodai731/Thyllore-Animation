@@ -113,6 +113,18 @@ impl<const N: usize> SnapshotValues for [f32; N] {
     }
 }
 
+impl SnapshotValues for String {
+    fn snapshot_values(&self) -> Vec<f32> {
+        Vec::new()
+    }
+}
+
+impl<T: SnapshotValues> SnapshotValues for Option<T> {
+    fn snapshot_values(&self) -> Vec<f32> {
+        self.as_ref().map(T::snapshot_values).unwrap_or_default()
+    }
+}
+
 /// Generates a component's scene serde impls, tag table, snapshot, scalar/UI registries and
 /// overwrite fn from one declaration table (RON rejects serde(flatten); invoke in the component's crate).
 #[macro_export]
@@ -325,6 +337,10 @@ macro_rules! declare_scene_format {
         impl $crate::SceneComponent for $component {
             const TYPE_KEY: &'static str = $key;
             const PERSISTED_FIELDS: &'static [&'static str] = &[ $( stringify!($name) ),+ ];
+
+            fn overwrite_persisted_fields(&mut self, loaded: &Self) {
+                $record::capture(loaded).apply(self);
+            }
         }
 
         /// Bit-exact snapshot of every persisted parameter; diffing two yields what a writer touched.

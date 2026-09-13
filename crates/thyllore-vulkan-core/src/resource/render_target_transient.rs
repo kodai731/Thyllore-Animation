@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::core::device::RRDevice;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view};
 use crate::vulkan::*;
 
@@ -413,6 +414,12 @@ unsafe fn destroy_pooled(device: &Device, pooled: &PooledImage) {
     }
     if pooled.memory != vk::DeviceMemory::null() {
         device.free_memory(pooled.memory, None);
+    }
+}
+
+impl GpuResource for RenderTargetTransient {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy_all(&rrdevice.device);
     }
 }
 

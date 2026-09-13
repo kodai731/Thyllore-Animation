@@ -11,7 +11,7 @@ use crate::animation::editable::SourceClipId;
 use crate::app::AppData;
 use crate::asset::{AssetStorage, MeshAsset, NodeAsset, SkeletonAsset};
 use crate::ecs::component::{AnimationMeta, ClipSchedule, EntityIcon};
-use crate::ecs::resource::billboard::BillboardData;
+use crate::ecs::resource::billboard::{BillboardData, BillboardRenderState};
 use crate::ecs::resource::gizmo::{BoneGizmoData, ConstraintGizmoData};
 use crate::ecs::resource::{
     AnimationType, BatchRun, ClipLibrary, FbxModelCache, GltfModelCache, MeshAssets, ModelState,
@@ -897,12 +897,12 @@ unsafe fn update_billboard_descriptor(
     swapchain: &RRSwapchain,
     billboard: &mut BillboardData,
 ) -> Result<()> {
-    let texture_clone = billboard.render_state.texture.clone();
-    if let Some(ref billboard_texture) = texture_clone {
-        billboard
-            .render_state
-            .descriptor_set
-            .update_descriptor_sets(device, swapchain, billboard_texture)?;
+    let BillboardRenderState {
+        descriptor_set,
+        texture,
+    } = &mut billboard.render_state;
+    if let Some(billboard_texture) = texture.as_ref() {
+        descriptor_set.update_descriptor_sets(device, swapchain, billboard_texture)?;
         log!("Re-updated billboard.render_state.descriptor_set after model reload");
     }
     Ok(())

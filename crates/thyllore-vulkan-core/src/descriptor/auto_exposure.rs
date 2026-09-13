@@ -2,6 +2,7 @@ use crate::core::device::*;
 use crate::descriptor::pass_manifest::{AUTO_EXPOSURE_AVERAGE, AUTO_EXPOSURE_HISTOGRAM};
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::{auto_exposure_average, auto_exposure_histogram};
+use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 
 #[derive(Clone, Debug, Default)]
@@ -138,5 +139,17 @@ impl RRAutoExposureAverageDescriptorSet {
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         self.layout.destroy(device);
+    }
+}
+
+impl GpuResource for RRAutoExposureHistogramDescriptorSet {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
+    }
+}
+
+impl GpuResource for RRAutoExposureAverageDescriptorSet {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

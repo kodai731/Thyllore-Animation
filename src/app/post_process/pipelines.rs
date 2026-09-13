@@ -44,7 +44,7 @@ impl App {
             }
         };
 
-        let scene_buffer = match data.raytracing.scene_uniform_buffer {
+        let scene_buffer = match data.raytracing.scene_uniform_buffer_handle() {
             Some(b) => b,
             None => {
                 log!("Scene buffer not available, skipping tonemap pipeline");

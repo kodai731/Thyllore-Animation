@@ -1,12 +1,18 @@
 use crate::app::App;
+use crate::ecs::Resource;
+use crate::hooks::gpu_resource::GpuResourceHooks;
 use crate::vulkanr::command::RRCommandBuffer;
-use crate::vulkanr::context::{CommandState, RenderTargets, SwapchainState};
+use crate::vulkanr::context::{
+    CommandState, FrameSync, RenderTargets, SurfaceState, SwapchainState,
+};
 use crate::vulkanr::render::framebuffer::{create_color_objects, create_framebuffers};
 use crate::vulkanr::render::pass::create_depth_objects;
+use crate::vulkanr::resource::{destroy_all_in_reverse, GpuResource};
 use crate::vulkanr::swapchain::RRSwapchain;
 
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
+use vulkanalia::vk::{ExtDebugUtilsExtension, KhrSurfaceExtension};
 use winit::window::Window;
 
 impl App {
@@ -15,191 +21,58 @@ impl App {
 
         let _ = self.rrdevice.device.device_wait_idle();
 
-        if let Err(error) = self.run_effect_destroy() {
-            log_warn!("Effect destroy hook failed: {:?}", error);
+        match GpuResourceHooks::collect() {
+            Ok(hooks) => hooks.destroy_all(&self.data.ecs_world, &self.rrdevice),
+            Err(error) => log_warn!("GPU resource hooks not collected: {:?}", error),
         }
 
-        if let Some(sampler) = self.data.raytracing.gbuffer_sampler {
-            self.rrdevice.device.destroy_sampler(sampler, None);
-            log!("Destroyed G-Buffer sampler");
-        }
+        let mut resources: [&mut dyn GpuResource; 2] =
+            [&mut self.gpu_timestamp_profiler, &mut self.data];
+        destroy_all_in_reverse(&mut resources, &self.rrdevice);
 
-        if let Some(onion_skin_pass) = self.data.raytracing.onion_skin_pass.take() {
-            onion_skin_pass.destroy(&self.rrdevice.device);
-        }
+        self.destroy_world_resource::<RenderTargets>();
+        self.destroy_world_resource::<CommandState>();
+        self.destroy_world_resource::<FrameSync>();
+        self.destroy_world_resource::<SwapchainState>();
 
-        if let Some(gbuffer_pipeline) = self.data.raytracing.gbuffer_pipeline.take() {
-            gbuffer_pipeline.destroy(&self.rrdevice.device);
-            log!("Destroyed G-Buffer pipeline");
-        }
+        self.rrdevice.destroy();
+        log!("Destroyed device");
 
-        if let Some(mut dof_descriptor) = self.data.raytracing.dof_descriptor.take() {
-            dof_descriptor.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(dof_pipeline) = self.data.raytracing.dof_pipeline.take() {
-            dof_pipeline.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(mut desc) = self
-            .data
-            .raytracing
-            .auto_exposure_histogram_descriptor
-            .take()
-        {
-            desc.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(mut desc) = self.data.raytracing.auto_exposure_average_descriptor.take() {
-            desc.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(pipeline) = self.data.raytracing.auto_exposure_histogram_pipeline.take() {
-            pipeline.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(pipeline) = self.data.raytracing.auto_exposure_average_pipeline.take() {
-            pipeline.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(mut bloom_descriptors) = self.data.raytracing.bloom_descriptors.take() {
-            bloom_descriptors.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(bloom_downsample_pipeline) =
-            self.data.raytracing.bloom_downsample_pipeline.take()
-        {
-            bloom_downsample_pipeline.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(bloom_upsample_pipeline) = self.data.raytracing.bloom_upsample_pipeline.take() {
-            bloom_upsample_pipeline.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(mut tonemap_descriptor) = self.data.raytracing.tonemap_descriptor.take() {
-            tonemap_descriptor.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(tonemap_pipeline) = self.data.raytracing.tonemap_pipeline.take() {
-            tonemap_pipeline.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(mut composite_descriptor) = self.data.raytracing.composite_descriptor.take() {
-            composite_descriptor.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(composite_pipeline) = self.data.raytracing.composite_pipeline.take() {
-            composite_pipeline.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(mut flame_descriptor) = self.data.raytracing.flame_descriptor.take() {
-            flame_descriptor.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(flame_shading_pipeline) = self.data.raytracing.flame_shading_pipeline.take() {
-            flame_shading_pipeline.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(mut flame_ubo) = self.data.raytracing.flame_ubo.take() {
-            flame_ubo.destroy(&self.rrdevice.device);
-            log!("Destroyed flame uniform buffer");
-        }
-
-        if let Some(mut water_descriptor) = self.data.raytracing.water_descriptor.take() {
-            water_descriptor.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(water_shading_pipeline) = self.data.raytracing.water_shading_pipeline.take() {
-            water_shading_pipeline.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(mut water_ubo) = self.data.raytracing.water_ubo.take() {
-            water_ubo.destroy(&self.rrdevice.device);
-            log!("Destroyed water uniform buffer");
-        }
-
-        if let Some(mut water_trace_descriptor) = self.data.raytracing.water_trace_descriptor.take()
-        {
-            water_trace_descriptor.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(water_trace_pipeline) = self.data.raytracing.water_trace_pipeline.take() {
-            water_trace_pipeline.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(mut water_caustic_descriptor) =
-            self.data.raytracing.water_caustic_descriptor.take()
-        {
-            water_caustic_descriptor.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(pipeline) = self.data.raytracing.water_caustic_splat_pipeline.take() {
-            pipeline.destroy(&self.rrdevice.device);
-        }
-
-        if let Some(pipeline) = self.data.raytracing.water_caustic_apply_pipeline.take() {
-            pipeline.destroy(&self.rrdevice.device);
-        }
-
-        if let (Some(buffer), Some(memory)) = (
-            self.data.raytracing.scene_uniform_buffer,
-            self.data.raytracing.scene_uniform_buffer_memory,
-        ) {
-            self.rrdevice.device.destroy_buffer(buffer, None);
-            self.rrdevice.device.free_memory(memory, None);
-            log!("Destroyed scene uniform buffer");
-        }
-
-        if let Some(mut ray_query_descriptor) = self.data.raytracing.ray_query_descriptor.take() {
-            ray_query_descriptor.destroy(&self.rrdevice.device);
-            log!("Destroyed ray query descriptor set");
-        }
-
-        if let Some(ray_query_pipeline) = self.data.raytracing.ray_query_pipeline.take() {
-            ray_query_pipeline.destroy(&self.rrdevice.device);
-            log!("Destroyed ray query pipeline");
-        }
-
-        if let Some(mut acceleration_structure) = self.data.raytracing.acceleration_structure.take()
-        {
-            acceleration_structure.destroy(&self.rrdevice.device);
-            log!("Destroyed acceleration structure");
-        }
-
-        if let Some(mut gbuffer) = self.data.raytracing.gbuffer.take() {
-            gbuffer.destroy(&self.rrdevice);
-            log!("Destroyed G-Buffer");
-        }
-
-        self.data.buffer_registry.destroy_all(&self.rrdevice);
-
-        thyllore_vulkan_core::GpuTimestampProfiler::destroy(
-            &mut self.gpu_timestamp_profiler,
-            &self.rrdevice.device,
-        );
-        log!("Destroyed GPU timestamp profiler");
-
-        self.data.graphics_resources.destroy(&self.rrdevice);
-        log!("Destroyed render resources");
-
-        self.rrdevice.destroy_descriptor_pools();
-        log!("Destroyed descriptor pools");
-
+        self.destroy_surface_and_instance();
         log!("All application resources destroyed");
+    }
+
+    unsafe fn destroy_world_resource<R: Resource + GpuResource>(&mut self) {
+        if let Some(mut resource) = self.data.ecs_world.remove_resource::<R>() {
+            log!("Destroying {}", resource.resource_name());
+            resource.destroy_gpu(&self.rrdevice);
+        }
+    }
+
+    unsafe fn destroy_surface_and_instance(&mut self) {
+        if let Some(surface_state) = self.data.ecs_world.remove_resource::<SurfaceState>() {
+            self.instance
+                .destroy_surface_khr(surface_state.surface, None);
+            if surface_state.messenger != vk::DebugUtilsMessengerEXT::null() {
+                self.instance
+                    .destroy_debug_utils_messenger_ext(surface_state.messenger, None);
+            }
+        }
+        self.instance.destroy_instance(None);
     }
 
     pub unsafe fn recreate_swapchain(&mut self, window: &Window) -> Result<()> {
         self.rrdevice.device.device_wait_idle()?;
 
         {
-            let render_targets = self.resource::<RenderTargets>();
+            let mut render_targets = self.resource_mut::<RenderTargets>();
             render_targets
                 .render
                 .destroy_size_dependent(&self.rrdevice.device);
         }
 
         {
-            let swapchain_state = self.resource::<SwapchainState>();
+            let mut swapchain_state = self.resource_mut::<SwapchainState>();
             swapchain_state.swapchain.destroy(&self.rrdevice.device);
         }
 

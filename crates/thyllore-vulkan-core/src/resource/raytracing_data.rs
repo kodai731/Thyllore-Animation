@@ -27,20 +27,20 @@ use crate::raytracing::RRAccelerationStructure;
 use crate::render::RRRender;
 use crate::renderer::push_constants::{GBufferPushConstants, OnionSkinPushConstants};
 use crate::renderer::tonemap::ToneMapPushConstants;
-use crate::resource::buffer::create_buffer;
 use crate::resource::graphics_resource::{GraphicsResources, MeshBuffer};
-use crate::resource::image::{create_nearest_sampler, create_texture_sampler};
+use crate::resource::image::{create_nearest_sampler, create_texture_sampler, RRImage};
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::resource::{
-    BloomChain, FlameBuffer, HdrBuffer, OnionSkinPassResources, RRGBuffer, WaterBuffer,
+    BloomChain, FlameBuffer, GpuResource, HdrBuffer, OnionSkinPassResources, RRGBuffer, WaterBuffer,
 };
 use thyllore_effect_core::{FlameUBO, WaterUBO};
 
 pub const MAX_FLAME_INSTANCES: usize = 4;
 pub const MAX_WATER_INSTANCES: usize = 4;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, GpuResource)]
 pub struct RayTracingData {
+    #[gpu_resource(skip)]
     pub command_pool: vk::CommandPool,
 
     pub gbuffer: Option<RRGBuffer>,
@@ -88,13 +88,9 @@ pub struct RayTracingData {
     pub water_caustic_apply_pipeline: Option<RRPipeline>,
     pub water_caustic_descriptor: Option<RRWaterCausticDescriptorSet>,
 
-    pub flame_sdf_image: vk::Image,
-    pub flame_sdf_image_memory: vk::DeviceMemory,
-    pub flame_sdf_image_view: vk::ImageView,
-    pub flame_sdf_sampler: vk::Sampler,
+    pub flame_sdf: RRImage,
 
-    pub scene_uniform_buffer: Option<vk::Buffer>,
-    pub scene_uniform_buffer_memory: Option<vk::DeviceMemory>,
+    pub scene_uniform_buffer: Option<UniformBuffer<SceneUniformData>>,
 }
 
 impl RayTracingData {
@@ -314,10 +310,11 @@ impl RayTracingData {
         else {
             return Ok(());
         };
+        let scene_buffer_handle = self.scene_uniform_buffer_handle();
         let (Some(descriptor), Some(gbuffer), Some(scene_buffer)) = (
             self.ray_query_descriptor.as_mut(),
             self.gbuffer.as_ref(),
-            self.scene_uniform_buffer,
+            scene_buffer_handle,
         ) else {
             return Ok(());
         };
@@ -354,16 +351,17 @@ impl RayTracingData {
         instance: &Instance,
         rrdevice: &RRDevice,
     ) -> Result<vk::Buffer> {
-        let (scene_buffer, scene_memory) = create_buffer(
-            instance,
-            rrdevice,
-            std::mem::size_of::<SceneUniformData>() as u64,
-            vk::BufferUsageFlags::UNIFORM_BUFFER,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )?;
-        self.scene_uniform_buffer = Some(scene_buffer);
-        self.scene_uniform_buffer_memory = Some(scene_memory);
-        Ok(scene_buffer)
+        let scene_uniform_buffer =
+            UniformBuffer::new(instance, rrdevice, 1, Placement::HostMapped)?;
+        let handle = scene_uniform_buffer.handle();
+        self.scene_uniform_buffer = Some(scene_uniform_buffer);
+        Ok(handle)
+    }
+
+    pub fn scene_uniform_buffer_handle(&self) -> Option<vk::Buffer> {
+        self.scene_uniform_buffer
+            .as_ref()
+            .map(UniformBuffer::handle)
     }
 
     pub unsafe fn create_onion_skin_pipeline(
@@ -672,7 +670,7 @@ impl RayTracingData {
     ) -> Result<()> {
         let (Some(gbuffer), Some(scene_buffer), Some(water_ubo)) = (
             self.gbuffer.as_ref(),
-            self.scene_uniform_buffer,
+            self.scene_uniform_buffer_handle(),
             self.water_ubo.as_ref(),
         ) else {
             log!("Water caustic inputs are not ready, skipping caustic pipelines");

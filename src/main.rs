@@ -433,7 +433,7 @@ fn main() -> Result<()> {
         unsafe {
             use thyllore_animation::vulkanr::context::CommandState;
             let command_pool = app.resource::<CommandState>().pool.clone();
-            let (image, memory, mips) =
+            let (image, image_memory, mips) =
                 thyllore_vulkan_core::resource::create_texture_image_pixel_with_format(
                     &app.instance,
                     &app.rrdevice,
@@ -453,10 +453,12 @@ fn main() -> Result<()> {
             let sampler =
                 thyllore_vulkan_core::resource::create_texture_sampler(&app.rrdevice, mips)?;
 
-            app.data.raytracing.flame_sdf_image = image;
-            app.data.raytracing.flame_sdf_image_memory = memory;
-            app.data.raytracing.flame_sdf_image_view = image_view;
-            app.data.raytracing.flame_sdf_sampler = sampler;
+            app.data.raytracing.flame_sdf = thyllore_vulkan_core::resource::RRImage {
+                image,
+                image_memory,
+                image_view,
+                sampler,
+            };
 
             if let (Some(flame_targets), Some(ref flame_descriptor)) = (
                 app.data

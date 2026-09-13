@@ -8,7 +8,7 @@
 use thyllore_animation::app::init::instance::cleanup_old_screenshots;
 use thyllore_animation::app::model_loader::find_best_clip;
 use thyllore_animation::app::App;
-use thyllore_animation::ecs::component::{FlameEffect, FlameTrail, HeatPlume};
+use thyllore_animation::ecs::component::{FlameEffect, FlameTrail, HeatPlume, WindTornadoEffect};
 use thyllore_animation::ecs::events::{UIEvent, UIEventQueue};
 use thyllore_animation::ecs::resource::{
     BatchFlameOrbit, BatchRun, Camera, ExposureDumpSink, FlameDumpSink, FlameRenderSettings,
@@ -16,8 +16,8 @@ use thyllore_animation::ecs::resource::{
 };
 use thyllore_animation::ecs::systems::{
     apply_flame_overrides, apply_flame_style_from_path, apply_texture_fit_from_path,
-    batch_anim_dump_write, batch_apply_anim_edits, batch_apply_debug_actions, batch_run_report,
-    debug_actions_json, dump_flame_style_to_path, resolve_engine_cli_overrides,
+    apply_wind_overrides, batch_anim_dump_write, batch_apply_anim_edits, batch_apply_debug_actions,
+    batch_run_report, debug_actions_json, dump_flame_style_to_path, resolve_engine_cli_overrides,
     run_sequence_analyze_from_args, BatchDebugAction, BATCH_LIST_DEBUG_ACTIONS_FLAG,
 };
 use thyllore_animation::platform;
@@ -114,6 +114,45 @@ fn main() -> Result<()> {
             .ecs_world
             .resource_mut::<thyllore_animation::ecs::resource::WaterRenderSettings>()
             .batch_fixed_time = Some(seconds);
+    }
+    if let Some(seconds) = overrides.wind_fixed_time {
+        app.data
+            .ecs_world
+            .resource_mut::<thyllore_animation::ecs::resource::WindRenderSettings>()
+            .batch_fixed_time = Some(seconds);
+    }
+    if !overrides.wind_set.is_empty() {
+        let entities: Vec<_> = app.data.ecs_world.query_winds();
+        for e in entities {
+            let Some(mut effect) = app
+                .data
+                .ecs_world
+                .get_component::<WindTornadoEffect>(e)
+                .map(|c| c.clone())
+            else {
+                continue;
+            };
+            apply_wind_overrides(&mut effect, &overrides.wind_set);
+            app.data.ecs_world.insert_component(e, effect);
+        }
+    }
+    if let Some(mode) = overrides.wind_mode {
+        app.data
+            .ecs_world
+            .resource_mut::<thyllore_animation::ecs::resource::WindRenderSettings>()
+            .shading_mode = mode;
+    }
+    if let Some(resolve_scale) = overrides.wind_resolve_scale {
+        app.data
+            .ecs_world
+            .resource_mut::<thyllore_animation::ecs::resource::WindRenderSettings>()
+            .resolve_scale = resolve_scale;
+    }
+    if let Some(debug_view) = overrides.wind_debug_view {
+        app.data
+            .ecs_world
+            .resource_mut::<thyllore_animation::ecs::resource::WindRenderSettings>()
+            .debug_view = debug_view;
     }
     if overrides.water_probe_path.is_some() {
         let debug_view = overrides.water_debug_view.unwrap_or(3);

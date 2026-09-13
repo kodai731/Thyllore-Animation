@@ -39,13 +39,18 @@ impl App {
             .map(|t| t.frame + 1)
             .unwrap_or(1);
 
-        if let Some(passes) = self
+        if let Some(mut passes) = self
             .gpu_timestamp_profiler
             .collect(&self.rrdevice.device, image_index)
         {
+            let frame_total_ms = passes
+                .iter()
+                .position(|(label, _)| label == "frame")
+                .map(|i| passes.remove(i).1);
             self.data.ecs_world.insert_resource(GpuPassTimings {
                 frame: next_frame,
                 passes,
+                frame_total_ms,
             });
         }
 
@@ -166,6 +171,9 @@ impl App {
                 image_index,
             );
         }
+
+        self.gpu_timestamp_profiler
+            .end_frame(&self.rrdevice.device, command_buffer, image_index);
 
         self.rrdevice.device.end_command_buffer(command_buffer)?;
 

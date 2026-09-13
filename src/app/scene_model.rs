@@ -54,6 +54,7 @@ impl App {
 
         let water_state = crate::scene::build_water_scene_data(&self.data.ecs_world);
         let flame_state = crate::scene::build_flame_scene_data(&self.data.ecs_world);
+        let wind_state = crate::scene::build_wind_scene_data(&self.data.ecs_world);
 
         let (command_pool, swapchain) = self.prepare_model_reload()?;
         match Self::load_model_from_path_with_resources(
@@ -99,6 +100,13 @@ impl App {
                         &mut self.data.ecs_world,
                         &mut self.data.ecs_assets,
                         flame,
+                    );
+                }
+                if let Some(ref wind) = wind_state {
+                    crate::scene::apply_wind_state_to_world(
+                        &mut self.data.ecs_world,
+                        &mut self.data.ecs_assets,
+                        wind,
                     );
                 }
                 if water_state.is_some() {

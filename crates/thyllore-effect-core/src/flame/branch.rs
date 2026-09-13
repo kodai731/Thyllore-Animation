@@ -3,7 +3,7 @@ use crate::flame_radial::{
     flame_radial_radius_scale, flame_radial_support_radius, FlameRadialTaper,
 };
 use std::f32::consts::TAU;
-use thyllore_math_core::dot3;
+use thyllore_math_core::{dot3, smoothstep};
 
 /// Proxy widening (radial and above the top) that keeps transported density inside
 /// the shell cone, in flame-local units.
@@ -62,11 +62,6 @@ fn hash01(seed: u32, index: i64, lane: u32) -> f32 {
     let mixed =
         hash_u32(seed ^ hash_u32((index as u32) ^ hash_u32(lane.wrapping_add(0x9e37_79b9))));
     (mixed >> 8) as f32 / (1u32 << 24) as f32
-}
-
-fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
-    let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
 }
 
 /// Spawn period raised so at most `BRANCH_MAX_ELEMENTS` elements are ever alive:

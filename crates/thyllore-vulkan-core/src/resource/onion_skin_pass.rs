@@ -5,6 +5,7 @@ use crate::core::RRDevice;
 use crate::descriptor::shader_bindings::onion_skin_composite;
 use crate::descriptor::{onion_skin_composite_layout_spec, ReflectedSetLayout};
 use crate::pipeline::RRPipeline;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view};
 
 pub const GHOST_BUFFER_FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
@@ -331,5 +332,11 @@ impl OnionSkinPassResources {
 
         log!("Recreated onion skin resources: {}x{}", width, height);
         Ok(())
+    }
+}
+
+impl GpuResource for OnionSkinPassResources {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

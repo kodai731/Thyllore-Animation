@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::core::device::RRDevice;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view};
 use crate::vulkan::*;
 
@@ -190,6 +191,12 @@ unsafe fn destroy_entry(device: &vulkanalia::Device, entry: &RenderTargetEntry) 
     }
     if entry.memory != vk::DeviceMemory::null() {
         device.free_memory(entry.memory, None);
+    }
+}
+
+impl GpuResource for RenderTargetStorage {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy_all(&rrdevice.device);
     }
 }
 

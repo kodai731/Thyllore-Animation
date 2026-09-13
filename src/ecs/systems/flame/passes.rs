@@ -55,7 +55,7 @@ fn flame_frame(app: &App) -> Option<FlameFrame> {
 
     let mut flames = app.data.ecs_world.query_flames();
     sort_flames_back_to_front(app, &mut flames);
-    flames.truncate(thyllore_vulkan_core::resource::MAX_FLAME_INSTANCES);
+    flames.truncate(thyllore_effect_core::FLAME_MAX_INSTANCES);
     if flames.is_empty() {
         return None;
     }

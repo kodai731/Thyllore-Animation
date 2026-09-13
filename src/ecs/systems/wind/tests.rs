@@ -73,15 +73,6 @@ fn batch_fixed_time_wins_over_the_timeline_for_wind() {
 }
 
 #[test]
-fn despawn_removes_every_wind() {
-    let mut world = World::new();
-    spawn_wind(&mut world, "Wind 1", WindTornadoEffect::default());
-    spawn_wind(&mut world, "Wind 2", WindTornadoEffect::default());
-    despawn_winds(&mut world);
-    assert!(world.query_winds().is_empty());
-}
-
-#[test]
 fn wind_follows_the_timeline_while_paused_by_default() {
     let settings = WindRenderSettings::default();
     let sources = EffectTimeSources {
@@ -98,4 +89,49 @@ fn wind_follows_the_timeline_while_paused_by_default() {
     let mut wind_time = 3.0;
     resolve_effect_time(&mut wind_time, 1.0, 0.0, sources);
     assert_eq!(wind_time, 2.0);
+}
+
+#[test]
+fn wind_scene_roundtrip_keeps_parameters_and_preset() {
+    let dir = std::env::temp_dir().join("thyllore_scene_wind_roundtrip");
+    let _ = std::fs::remove_dir_all(&dir);
+    let scenes_dir = dir.join("scenes");
+    std::fs::create_dir_all(&scenes_dir).unwrap();
+    let scene_path = scenes_dir.join("test.scene.ron");
+
+    let mut world = crate::scene::world_with_scene_hooks();
+    let mut assets = crate::asset::AssetStorage::new();
+    let entity = spawn_wind_with_clip(
+        &mut world,
+        &mut assets,
+        DEFAULT_WIND_NAME,
+        WindTornadoEffect::default(),
+    );
+    world
+        .get_component_mut::<WindTornadoEffect>(entity)
+        .expect("wind effect")
+        .column_height = 3.5;
+    world.insert_component(
+        entity,
+        crate::ecs::component::AppliedWindPreset {
+            name: "storm".to_string(),
+        },
+    );
+
+    crate::scene::save_scene(&scene_path, &world).unwrap();
+    let loaded = crate::scene::load_scene(&scene_path).unwrap();
+    let mut restored = crate::scene::world_with_scene_hooks();
+    let mut restored_assets = crate::asset::AssetStorage::new();
+    crate::scene::apply_loaded_scene_to_world(&loaded, &mut restored, &mut restored_assets);
+
+    let winds = restored.query_winds();
+    assert_eq!(winds.len(), 1);
+    let wind = restored
+        .get_component::<WindTornadoEffect>(winds[0])
+        .unwrap();
+    assert_eq!(wind.column_height, 3.5);
+    let preset = restored
+        .get_component::<crate::ecs::component::AppliedWindPreset>(winds[0])
+        .unwrap();
+    assert_eq!(preset.name, "storm");
 }

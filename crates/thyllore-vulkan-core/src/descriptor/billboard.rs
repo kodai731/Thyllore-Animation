@@ -4,11 +4,13 @@ use crate::data::*;
 use crate::descriptor::pass_manifest::BILLBOARD;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::billboard;
+use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, GpuResource)]
 pub struct RRBillboardDescriptorSet {
     pub layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     pub descriptor_sets: Vec<vk::DescriptorSet>,
     pub rrdata: Vec<RRData>,
 }
@@ -93,10 +95,5 @@ impl RRBillboardDescriptorSet {
         }
 
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.descriptor_sets.clear();
-        self.layout.destroy(device);
     }
 }

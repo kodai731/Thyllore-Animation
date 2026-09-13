@@ -4,11 +4,11 @@ use vulkanalia::prelude::v1_0::*;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{imgui_layout_spec, shader_bindings, ReflectedSetLayout};
 use crate::vulkanr::resource::{
-    AutoExposureBuffers, BloomChain, DofBuffer, HdrBuffer, OffscreenFramebuffer,
+    AutoExposureBuffers, BloomChain, DofBuffer, GpuResource, HdrBuffer, OffscreenFramebuffer,
     RenderTargetStorage, RenderTargetTransient,
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, GpuResource)]
 pub struct ViewportState {
     pub storage: RenderTargetStorage,
     pub transient: RenderTargetTransient,
@@ -18,11 +18,17 @@ pub struct ViewportState {
     pub dof_buffer: Option<DofBuffer>,
     pub auto_exposure_buffers: Option<AutoExposureBuffers>,
     pub descriptor_set_layout: ReflectedSetLayout,
+    #[gpu_resource(skip)]
     pub descriptor_set: vk::DescriptorSet,
+    #[gpu_resource(skip)]
     pub width: u32,
+    #[gpu_resource(skip)]
     pub height: u32,
+    #[gpu_resource(skip)]
     pub focused: bool,
+    #[gpu_resource(skip)]
     pub hovered: bool,
+    #[gpu_resource(skip)]
     pub hdr_grid_pipeline_id: Option<usize>,
 }
 
@@ -158,35 +164,6 @@ impl ViewportState {
 
         log!("Viewport resized to: {}x{}", new_width, new_height);
         Ok(())
-    }
-
-    pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
-        self.descriptor_set_layout.destroy(device);
-
-        if let Some(ref mut offscreen) = self.offscreen {
-            offscreen.destroy(device);
-        }
-
-        if let Some(ref mut hdr_buffer) = self.hdr_buffer {
-            hdr_buffer.destroy(device);
-        }
-
-        if let Some(ref mut bloom_chain) = self.bloom_chain {
-            bloom_chain.destroy(device);
-        }
-
-        if let Some(ref mut dof_buffer) = self.dof_buffer {
-            dof_buffer.destroy(device);
-        }
-
-        if let Some(ref mut ae_buffers) = self.auto_exposure_buffers {
-            ae_buffers.destroy(device);
-        }
-
-        self.storage.destroy_all(device);
-        self.transient.destroy_all(device);
-
-        log!("Destroyed viewport state");
     }
 
     pub fn texture_id(&self) -> usize {

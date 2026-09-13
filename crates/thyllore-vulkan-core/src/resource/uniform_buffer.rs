@@ -5,6 +5,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::device::RRDevice;
 use crate::resource::buffer::create_buffer;
+use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::Instance;
 use thyllore_spirv_reflect::GpuBlock;
 
@@ -177,5 +178,11 @@ impl<T: GpuBlock> UniformBuffer<T> {
             device.free_memory(self.memory, None);
             self.memory = vk::DeviceMemory::null();
         }
+    }
+}
+
+impl<T: GpuBlock> GpuResource for UniformBuffer<T> {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

@@ -1,18 +1,20 @@
 mod clip_io;
+mod entities;
 mod error;
-mod format;
+mod file;
 mod motion_path_format;
 mod scene_io;
 mod transform_format;
 
 pub use clip_io::{load_animation_clip, save_animation_clip};
+#[cfg(test)]
+pub(crate) use entities::world_with_scene_hooks;
+pub use entities::{
+    apply_scene_entities, capture_scene_entities, capture_scheduled_clips, SceneEntity,
+};
 pub use error::{SceneError, SceneResult};
-pub use format::{
-    apply_flame_state_to_world, apply_water_state_to_world, apply_wind_state_to_world,
-    build_debug_primitives_scene_data, build_flame_scene_data, build_water_scene_data,
-    build_wind_scene_data, debug_primitive_kind_from_str, debug_primitive_kind_to_str,
-    AnimationClipFile, AnimationClipRef, CameraState as SavedCameraState, DebugPrimitiveSceneData,
-    EditorState, ModelReference, SceneFile, SceneMetadata, TimelineConfig,
+pub use file::{
+    AnimationClipFile, AnimationClipRef, ModelReference, SceneFile, SceneMetadata,
     ANIMATION_FORMAT_VERSION, SCENE_FORMAT_VERSION,
 };
 pub use motion_path_format::{
@@ -20,7 +22,8 @@ pub use motion_path_format::{
     MOTION_PATH_SCALAR_PARAMS,
 };
 pub use scene_io::{
-    apply_loaded_scene_to_world, find_default_scene, load_scene, save_scene, LoadedScene,
+    apply_loaded_scene_to_world, apply_scene_resources, capture_scene_resources,
+    find_default_scene, load_scene, save_scene, LoadedScene,
 };
 pub use transform_format::{
     overwrite_transform_persisted_fields, transform_parameter_snapshot, TRANSFORM_SCALAR_PARAMS,

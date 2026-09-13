@@ -2,6 +2,7 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view};
 
 pub const HDR_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
@@ -278,5 +279,11 @@ impl Drop for HdrBuffer {
         if self.color_image != vk::Image::null() {
             log_warn!("HdrBuffer dropped without calling destroy()");
         }
+    }
+}
+
+impl GpuResource for HdrBuffer {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

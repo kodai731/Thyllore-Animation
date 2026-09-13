@@ -1,7 +1,9 @@
 mod debug_dump;
+mod gpu_primitive;
 mod history_accumulate;
 pub mod passes;
 mod pick;
+mod pipeline;
 mod preset;
 pub mod probe;
 mod render_targets;

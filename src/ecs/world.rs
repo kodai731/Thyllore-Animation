@@ -696,27 +696,6 @@ impl<'a> EntityBuilder<'a> {
         self
     }
 
-    pub fn with_flame(self, effect: crate::ecs::component::FlameEffect) -> Self {
-        self.world.insert_component(self.entity, effect);
-        self.world
-            .insert_component(self.entity, crate::ecs::component::FlameBaked::default());
-        self.world.insert_component(
-            self.entity,
-            crate::ecs::component::FlameTemporalAccum::default(),
-        );
-        self
-    }
-
-    pub fn with_water(self, effect: crate::ecs::component::WaterTorusEffect) -> Self {
-        self.world.insert_component(self.entity, effect);
-        self
-    }
-
-    pub fn with_wind(self, effect: crate::ecs::component::WindTornadoEffect) -> Self {
-        self.world.insert_component(self.entity, effect);
-        self
-    }
-
     pub fn with_editor_display(self, icon: EntityIcon, expanded: bool) -> Self {
         self.world.insert_component(
             self.entity,

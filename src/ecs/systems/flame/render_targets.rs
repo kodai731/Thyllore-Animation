@@ -14,7 +14,6 @@ pub const FLAME_EFFECT_HOOK: EffectHook = EffectHook {
     name: "flame",
     setup: Some(setup_flame),
     on_viewport_resize: Some(resize_flame_render_targets),
-    destroy: Some(destroy_flame_render_targets),
     passes: &[&super::passes::FlamePassNode],
 };
 
@@ -82,11 +81,12 @@ unsafe fn setup_flame(
         }
     };
 
-    data.raytracing.create_flame_pipeline(
+    super::pipeline::create_flame_pipeline(
         instance,
         rrdevice,
         rrrender,
         &data.graphics_resources,
+        &mut data.raytracing,
         flame_buffer,
         position_image_view,
         position_sampler,
@@ -136,8 +136,8 @@ unsafe fn resize_flame_render_targets(app: &mut App) -> Result<()> {
             FlameImageBindings {
                 history_image_views: targets.buffer.history_image_views,
                 flame_sampler: targets.buffer.sampler,
-                sdf_image_view: app.data.raytracing.flame_sdf_image_view,
-                sdf_sampler: app.data.raytracing.flame_sdf_sampler,
+                sdf_image_view: app.data.raytracing.flame_sdf.image_view,
+                sdf_sampler: app.data.raytracing.flame_sdf.sampler,
                 scene_depth_view,
             },
         )?;
@@ -150,16 +150,6 @@ unsafe fn resize_flame_render_targets(app: &mut App) -> Result<()> {
         .get_resource_mut::<FlameHistorySnapshotState>()
     {
         state.previous = None;
-    }
-    Ok(())
-}
-
-unsafe fn destroy_flame_render_targets(app: &mut App) -> Result<()> {
-    if let Some(mut targets) = app.data.ecs_world.get_resource_mut::<FlameRenderTargets>() {
-        for image in targets.buffer.history_images {
-            app.data.pass_image_states.forget(image);
-        }
-        targets.buffer.destroy(&app.rrdevice.device);
     }
     Ok(())
 }

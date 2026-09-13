@@ -1,4 +1,8 @@
+mod scene_component;
+
 use std::borrow::Cow;
+
+pub use scene_component::SceneComponent;
 
 /// Flat-name f32 accessor for one scalar parameter; one static table per component type.
 pub struct ScalarParam<C: 'static> {
@@ -29,6 +33,7 @@ pub use thyllore_color_core::{get_rgb_channel, set_rgb_channel, RgbField, RGB_CH
 /// UI-toolkit-free display metadata of one parameter, joined to the accessor table by `name`.
 pub struct UiParam {
     pub name: &'static str,
+    pub group: &'static str,
     pub label: Option<&'static str>,
     pub kind: UiKind,
     pub min: f32,
@@ -108,6 +113,18 @@ impl<const N: usize> SnapshotValues for [f32; N] {
     }
 }
 
+impl SnapshotValues for String {
+    fn snapshot_values(&self) -> Vec<f32> {
+        Vec::new()
+    }
+}
+
+impl<T: SnapshotValues> SnapshotValues for Option<T> {
+    fn snapshot_values(&self) -> Vec<f32> {
+        self.as_ref().map(T::snapshot_values).unwrap_or_default()
+    }
+}
+
 /// Generates a component's scene serde impls, tag table, snapshot, scalar/UI registries and
 /// overwrite fn from one declaration table (RON rejects serde(flatten); invoke in the component's crate).
 #[macro_export]
@@ -117,6 +134,7 @@ macro_rules! declare_scene_format {
         record: $record:ident,
         tag: $tag_ty:ty,
         items {
+            key: $key:literal,
             tags: $tags_name:ident,
             snapshot: $snapshot_name:ident,
             scalars: $scalars_name:ident,
@@ -139,7 +157,8 @@ macro_rules! declare_scene_format {
                     min: $ui_min:expr,
                     max: $ui_max:expr
                     $(, format: $ui_format:expr)?
-                    $(, tooltip: $ui_tooltip:expr)? $(,)?
+                    $(, tooltip: $ui_tooltip:expr)?
+                    $(, group: $ui_group:expr)? $(,)?
                 })?
                 $(,)?
             } ),+ $(,)?
@@ -153,7 +172,8 @@ macro_rules! declare_scene_format {
                     min: $rt_ui_min:expr,
                     max: $rt_ui_max:expr
                     $(, format: $rt_ui_format:expr)?
-                    $(, tooltip: $rt_ui_tooltip:expr)? $(,)?
+                    $(, tooltip: $rt_ui_tooltip:expr)?
+                    $(, group: $rt_ui_group:expr)? $(,)?
                 })?
                 $(,)?
             } ),* $(,)?
@@ -168,6 +188,7 @@ macro_rules! declare_scene_format {
             component: $component,
             record: $record,
             items {
+                key: $key,
                 snapshot: $snapshot_name,
                 scalars: $scalars_name,
                 ui: $ui_name,
@@ -190,6 +211,7 @@ macro_rules! declare_scene_format {
                         max: $ui_max
                         $(, format: $ui_format)?
                         $(, tooltip: $ui_tooltip)?
+                        $(, group: $ui_group)?
                     })?
                 } ),+
             },
@@ -203,6 +225,7 @@ macro_rules! declare_scene_format {
                         max: $rt_ui_max
                         $(, format: $rt_ui_format)?
                         $(, tooltip: $rt_ui_tooltip)?
+                        $(, group: $rt_ui_group)?
                     })?
                 } ),*
             },
@@ -212,6 +235,7 @@ macro_rules! declare_scene_format {
         component: $component:ty,
         record: $record:ident,
         items {
+            key: $key:literal,
             snapshot: $snapshot_name:ident,
             scalars: $scalars_name:ident,
             ui: $ui_name:ident,
@@ -233,7 +257,8 @@ macro_rules! declare_scene_format {
                     min: $ui_min:expr,
                     max: $ui_max:expr
                     $(, format: $ui_format:expr)?
-                    $(, tooltip: $ui_tooltip:expr)? $(,)?
+                    $(, tooltip: $ui_tooltip:expr)?
+                    $(, group: $ui_group:expr)? $(,)?
                 })?
                 $(,)?
             } ),+ $(,)?
@@ -247,7 +272,8 @@ macro_rules! declare_scene_format {
                     min: $rt_ui_min:expr,
                     max: $rt_ui_max:expr
                     $(, format: $rt_ui_format:expr)?
-                    $(, tooltip: $rt_ui_tooltip:expr)? $(,)?
+                    $(, tooltip: $rt_ui_tooltip:expr)?
+                    $(, group: $rt_ui_group:expr)? $(,)?
                 })?
                 $(,)?
             } ),* $(,)?
@@ -308,6 +334,15 @@ macro_rules! declare_scene_format {
             }
         }
 
+        impl $crate::SceneComponent for $component {
+            const TYPE_KEY: &'static str = $key;
+            const PERSISTED_FIELDS: &'static [&'static str] = &[ $( stringify!($name) ),+ ];
+
+            fn overwrite_persisted_fields(&mut self, loaded: &Self) {
+                $record::capture(loaded).apply(self);
+            }
+        }
+
         /// Bit-exact snapshot of every persisted parameter; diffing two yields what a writer touched.
         pub fn $snapshot_name(component: &$component) -> Vec<(&'static str, Vec<f32>)> {
             vec![ $( (stringify!($name), {
@@ -332,6 +367,7 @@ macro_rules! declare_scene_format {
             $( $(
                 $crate::UiParam {
                     name: stringify!($name),
+                    group: $crate::declare_scene_format!(@ui_or_default "" $(, $ui_group)?),
                     label: $crate::declare_scene_format!(@ui_label $(, $ui_label)?),
                     kind: $crate::declare_scene_format!(@ui_kind $(, $ui_kind)?),
                     min: $ui_min,
@@ -344,6 +380,7 @@ macro_rules! declare_scene_format {
             $( $(
                 $crate::UiParam {
                     name: stringify!($runtime_name),
+                    group: $crate::declare_scene_format!(@ui_or_default "" $(, $rt_ui_group)?),
                     label: $crate::declare_scene_format!(@ui_label $(, $rt_ui_label)?),
                     kind: $crate::UiKind::Scalar,
                     min: $rt_ui_min,
@@ -507,6 +544,7 @@ mod tests {
     fn test_display_label_prefers_explicit_label() {
         let explicit = UiParam {
             name: "swirl_gain",
+            group: "",
             label: Some("Swirl"),
             kind: UiKind::Scalar,
             min: 0.0,
@@ -527,6 +565,7 @@ mod tests {
     fn test_color_component_names_follow_rgb_suffixes() {
         let tint = UiParam {
             name: "tint",
+            group: "",
             label: None,
             kind: UiKind::Color,
             min: 0.0,

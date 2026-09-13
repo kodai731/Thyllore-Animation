@@ -654,8 +654,7 @@ pub unsafe fn destroy_headless_instance(instance: &Instance) {
 
 pub unsafe fn destroy_headless_device(device: &RRDevice, instance: &Instance) {
     device.device.device_wait_idle().ok();
-    device.destroy_descriptor_pools();
-    device.device.destroy_device(None);
+    device.destroy();
     destroy_headless_instance(instance);
 }
 
@@ -681,6 +680,11 @@ impl RRDevice {
 
     pub unsafe fn destroy_descriptor_pools(&self) {
         self.descriptor_allocator.borrow_mut().destroy(&self.device);
+    }
+
+    pub unsafe fn destroy(&self) {
+        self.destroy_descriptor_pools();
+        self.device.destroy_device(None);
     }
 
     pub unsafe fn wait_graphics_queue_idle(&self) -> Result<()> {

@@ -3,6 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
 use crate::resource::buffer::create_buffer;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view, transition_image_layout};
 
 /// Object id at offset 0, world position at `READBACK_POSITION_OFFSET`. Picking reads both from
@@ -353,5 +354,11 @@ impl Drop for RRGBuffer {
         if self.position_image != vk::Image::null() {
             log_warn!("RRGBuffer dropped without calling destroy()");
         }
+    }
+}
+
+impl GpuResource for RRGBuffer {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(rrdevice);
     }
 }

@@ -16,6 +16,7 @@ pub struct RRPipeline {
     pub pipeline: vk::Pipeline,
 }
 
+use crate::resource::gpu_resource::GpuResource;
 use thyllore_model_core::mesh::{VertexFormat, VertexLayout};
 
 /// Vertex input configuration for pipeline
@@ -737,4 +738,12 @@ fn resolve_layout_vertex_input(layout: &VertexLayout) -> VertexInputDescriptions
         offset += attr.format.size();
     }
     (bindings, attributes)
+}
+
+impl GpuResource for RRPipeline {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
+        self.pipeline = vk::Pipeline::null();
+        self.pipeline_layout = vk::PipelineLayout::null();
+    }
 }

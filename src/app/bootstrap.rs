@@ -1,14 +1,14 @@
 use crate::app::App;
-use crate::ecs::component::{FlameEffect, FlameTrail, HeatPlume};
+use crate::ecs::component::{FlameEffect, FlameTrail, HeatPlume, WindTornadoEffect};
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
     BatchFlameOrbit, BatchRun, Camera, ExposureDumpSink, FlameDumpSink, FlameRenderSettings,
-    GpuTimingsSink,
+    GpuTimingsSink, WindRenderSettings,
 };
 use crate::ecs::systems::{
     apply_flame_overrides, apply_flame_style_from_path, apply_texture_fit_from_path,
-    batch_anim_dump_write, batch_apply_anim_edits, batch_apply_debug_actions, batch_run_report,
-    dump_flame_style_to_path, BatchDebugAction, EngineCliOverrides,
+    apply_wind_overrides, batch_anim_dump_write, batch_apply_anim_edits, batch_apply_debug_actions,
+    batch_run_report, dump_flame_style_to_path, BatchDebugAction, EngineCliOverrides,
 };
 
 use thyllore_vulkan_core::FlameImageBindings;
@@ -317,7 +317,6 @@ pub fn apply_engine_overrides(app: &mut App, overrides: &EngineCliOverrides) {
         }
     }
 
-    // Apply flame_bone override: attach flame entities to a skeleton bone (resolved per frame)
     if let Some(ref bone) = overrides.flame_bone {
         let entities: Vec<_> = app.data.ecs_world.query_flames();
         for e in entities {
@@ -326,6 +325,50 @@ pub fn apply_engine_overrides(app: &mut App, overrides: &EngineCliOverrides) {
                 crate::ecs::component::FlameBoneAttachment { bone: bone.clone() },
             );
         }
+    }
+
+    if let Some(seconds) = overrides.wind_fixed_time {
+        app.data
+            .ecs_world
+            .resource_mut::<WindRenderSettings>()
+            .batch_fixed_time = Some(seconds);
+    }
+
+    if !overrides.wind_set.is_empty() {
+        let entities: Vec<_> = app.data.ecs_world.query_winds();
+        for e in entities {
+            let Some(mut effect) = app
+                .data
+                .ecs_world
+                .get_component::<WindTornadoEffect>(e)
+                .map(|c| c.clone())
+            else {
+                continue;
+            };
+            apply_wind_overrides(&mut effect, &overrides.wind_set);
+            app.data.ecs_world.insert_component(e, effect);
+        }
+    }
+
+    if let Some(mode) = overrides.wind_mode {
+        app.data
+            .ecs_world
+            .resource_mut::<WindRenderSettings>()
+            .shading_mode = mode;
+    }
+
+    if let Some(resolve_scale) = overrides.wind_resolve_scale {
+        app.data
+            .ecs_world
+            .resource_mut::<WindRenderSettings>()
+            .resolve_scale = resolve_scale;
+    }
+
+    if let Some(debug_view) = overrides.wind_debug_view {
+        app.data
+            .ecs_world
+            .resource_mut::<WindRenderSettings>()
+            .debug_view = debug_view;
     }
 }
 

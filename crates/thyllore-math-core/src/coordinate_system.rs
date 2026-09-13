@@ -89,17 +89,34 @@ pub fn perspective_infinite_reverse(fovy: Deg<f32>, aspect: f32, near: f32) -> M
     )
 }
 
+/// Blender / FBX Z-up to engine Y-up: engine y = source z, engine z = -source y.
+pub const BLENDER_TO_ENGINE: Matrix4<f32> = Matrix4::new(
+    1.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+);
+
+pub const ENGINE_TO_BLENDER: Matrix4<f32> = Matrix4::new(
+    1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+);
+
+/// Row-major rows of `BLENDER_TO_ENGINE`, the layout Python-side matrices use.
+pub fn blender_to_engine_rows() -> [[f32; 4]; 4] {
+    let columns: [[f32; 4]; 4] = BLENDER_TO_ENGINE.into();
+    let mut rows = [[0.0f32; 4]; 4];
+    for (column_index, column) in columns.iter().enumerate() {
+        for (row_index, value) in column.iter().enumerate() {
+            rows[row_index][column_index] = *value;
+        }
+    }
+    rows
+}
+
 /// FBX Z-up → ワールド Y-up 変換（X軸周りに-90度回転）
 pub fn fbx_to_world() -> Matrix4<f32> {
-    Matrix4::new(
-        1.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-    )
+    BLENDER_TO_ENGINE
 }
 
 pub fn world_to_fbx() -> Matrix4<f32> {
-    Matrix4::new(
-        1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-    )
+    ENGINE_TO_BLENDER
 }
 
 /// glTF Y-up → ワールド Y-up 変換（恒等変換）
@@ -109,7 +126,7 @@ pub fn gltf_to_world() -> Matrix4<f32> {
 
 /// Blender Z-up → ワールド Y-up 変換（FBXと同じ）
 pub fn blender_to_world() -> Matrix4<f32> {
-    fbx_to_world()
+    BLENDER_TO_ENGINE
 }
 
 /// ワールド座標系のY軸（上向き）

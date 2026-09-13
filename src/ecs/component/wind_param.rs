@@ -1,0 +1,467 @@
+use thyllore_anim_core::editable::PropertyType;
+use thyllore_effect_core::{find_scalar_param, ScalarParam, WIND_SCALAR_PARAMS};
+
+use super::scalar_channel::{ScalarChannel, ScalarChannelDomain};
+use super::wind::WindTornadoEffect;
+use crate::ecs::world::{Entity, World};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum WindParam {
+    ColumnHeight,
+    WallRadiusBase,
+    WallRadiusTop,
+    WallWidthQ,
+    WallStrength,
+    TopFade,
+    Density,
+    AlbedoR,
+    AlbedoG,
+    AlbedoB,
+    AmbientBrightness,
+    PhaseG,
+    SunIntensity,
+    RiseInitialHeight,
+    RiseDuration,
+    SpreadStart,
+    SpreadRate,
+    DissipateStart,
+    DissipateTime,
+    Circulation,
+    StreakOrder,
+    StreakTwist,
+    StreakRiseSpeed,
+    StreakAmplitude,
+    EddyAmplitude,
+    EddyCellTheta,
+    EddyCellHeight,
+    EddyCellRadial,
+    EddyShear,
+    EddySpeedSpread,
+    EddyRiseSpeed,
+    EddyReseedPeriod,
+    EddyErosion,
+    PuffCountTheta,
+    PuffCountHeight,
+    PuffRadius,
+    PuffRadiusJitter,
+    PuffOffsetQ,
+    PuffStrength,
+    PuffRiseSpeed,
+}
+
+impl WindParam {
+    pub const ALL: [WindParam; 40] = [
+        WindParam::ColumnHeight,
+        WindParam::WallRadiusBase,
+        WindParam::WallRadiusTop,
+        WindParam::WallWidthQ,
+        WindParam::WallStrength,
+        WindParam::TopFade,
+        WindParam::Density,
+        WindParam::AlbedoR,
+        WindParam::AlbedoG,
+        WindParam::AlbedoB,
+        WindParam::AmbientBrightness,
+        WindParam::PhaseG,
+        WindParam::SunIntensity,
+        WindParam::RiseInitialHeight,
+        WindParam::RiseDuration,
+        WindParam::SpreadStart,
+        WindParam::SpreadRate,
+        WindParam::DissipateStart,
+        WindParam::DissipateTime,
+        WindParam::Circulation,
+        WindParam::StreakOrder,
+        WindParam::StreakTwist,
+        WindParam::StreakRiseSpeed,
+        WindParam::StreakAmplitude,
+        WindParam::EddyAmplitude,
+        WindParam::EddyCellTheta,
+        WindParam::EddyCellHeight,
+        WindParam::EddyCellRadial,
+        WindParam::EddyShear,
+        WindParam::EddySpeedSpread,
+        WindParam::EddyRiseSpeed,
+        WindParam::EddyReseedPeriod,
+        WindParam::EddyErosion,
+        WindParam::PuffCountTheta,
+        WindParam::PuffCountHeight,
+        WindParam::PuffRadius,
+        WindParam::PuffRadiusJitter,
+        WindParam::PuffOffsetQ,
+        WindParam::PuffStrength,
+        WindParam::PuffRiseSpeed,
+    ];
+
+    pub const fn code(self) -> u16 {
+        match self {
+            WindParam::ColumnHeight => 512,
+            WindParam::WallRadiusBase => 515,
+            WindParam::WallRadiusTop => 516,
+            WindParam::WallWidthQ => 517,
+            WindParam::WallStrength => 518,
+            WindParam::TopFade => 519,
+            WindParam::Density => 520,
+            WindParam::AlbedoR => 521,
+            WindParam::AlbedoG => 522,
+            WindParam::AlbedoB => 523,
+            WindParam::AmbientBrightness => 524,
+            WindParam::PhaseG => 531,
+            WindParam::SunIntensity => 532,
+            WindParam::RiseInitialHeight => 525,
+            WindParam::RiseDuration => 526,
+            WindParam::SpreadStart => 527,
+            WindParam::SpreadRate => 528,
+            WindParam::DissipateStart => 529,
+            WindParam::DissipateTime => 530,
+            WindParam::Circulation => 533,
+            WindParam::StreakOrder => 534,
+            WindParam::StreakTwist => 535,
+            WindParam::StreakRiseSpeed => 536,
+            WindParam::StreakAmplitude => 537,
+            WindParam::EddyAmplitude => 538,
+            WindParam::EddyCellTheta => 539,
+            WindParam::EddyCellHeight => 540,
+            WindParam::EddyCellRadial => 541,
+            WindParam::EddyShear => 542,
+            WindParam::EddySpeedSpread => 556,
+            WindParam::EddyRiseSpeed => 543,
+            WindParam::EddyReseedPeriod => 544,
+            WindParam::EddyErosion => 555,
+            WindParam::PuffCountTheta => 548,
+            WindParam::PuffCountHeight => 549,
+            WindParam::PuffRadius => 550,
+            WindParam::PuffRadiusJitter => 551,
+            WindParam::PuffOffsetQ => 552,
+            WindParam::PuffStrength => 553,
+            WindParam::PuffRiseSpeed => 554,
+        }
+    }
+
+    pub fn from_code(code: u16) -> Option<WindParam> {
+        WindParam::ALL.iter().copied().find(|p| p.code() == code)
+    }
+
+    pub const fn property_type(self) -> PropertyType {
+        PropertyType::Custom(self.code())
+    }
+
+    pub fn from_property_type(property_type: PropertyType) -> Option<WindParam> {
+        match property_type {
+            PropertyType::Custom(code) => WindParam::from_code(code),
+            _ => None,
+        }
+    }
+
+    pub const fn display_name(self) -> &'static str {
+        match self {
+            WindParam::ColumnHeight => "Column Height",
+            WindParam::WallRadiusBase => "Wall Radius Base",
+            WindParam::WallRadiusTop => "Wall Radius Top",
+            WindParam::WallWidthQ => "Wall Width Q",
+            WindParam::WallStrength => "Wall Strength",
+            WindParam::TopFade => "Top Fade",
+            WindParam::Density => "Density",
+            WindParam::AlbedoR => "Albedo R",
+            WindParam::AlbedoG => "Albedo G",
+            WindParam::AlbedoB => "Albedo B",
+            WindParam::AmbientBrightness => "Ambient Brightness",
+            WindParam::PhaseG => "Phase G",
+            WindParam::SunIntensity => "Sun Intensity",
+            WindParam::RiseInitialHeight => "Rise Initial Height",
+            WindParam::RiseDuration => "Rise Duration",
+            WindParam::SpreadStart => "Spread Start",
+            WindParam::SpreadRate => "Spread Rate",
+            WindParam::DissipateStart => "Dissipate Start",
+            WindParam::DissipateTime => "Dissipate Time",
+            WindParam::Circulation => "Circulation",
+            WindParam::StreakOrder => "Streak Order",
+            WindParam::StreakTwist => "Streak Twist",
+            WindParam::StreakRiseSpeed => "Streak Rise Speed",
+            WindParam::StreakAmplitude => "Streak Amplitude",
+            WindParam::EddyAmplitude => "Eddy Amplitude",
+            WindParam::EddyCellTheta => "Eddy Cell Theta",
+            WindParam::EddyCellHeight => "Eddy Cell Height",
+            WindParam::EddyCellRadial => "Eddy Cell Radial",
+            WindParam::EddyShear => "Eddy Shear",
+            WindParam::EddySpeedSpread => "Eddy Speed Spread",
+            WindParam::EddyRiseSpeed => "Eddy Rise Speed",
+            WindParam::EddyReseedPeriod => "Eddy Reseed Period",
+            WindParam::EddyErosion => "Eddy Erosion",
+            WindParam::PuffCountTheta => "Puff Count Theta",
+            WindParam::PuffCountHeight => "Puff Count Height",
+            WindParam::PuffRadius => "Puff Radius",
+            WindParam::PuffRadiusJitter => "Puff Radius Jitter",
+            WindParam::PuffOffsetQ => "Puff Offset Q",
+            WindParam::PuffStrength => "Puff Strength",
+            WindParam::PuffRiseSpeed => "Puff Rise Speed",
+        }
+    }
+
+    pub const fn cli_name(self) -> &'static str {
+        match self {
+            WindParam::ColumnHeight => "column_height",
+            WindParam::WallRadiusBase => "wall_radius_base",
+            WindParam::WallRadiusTop => "wall_radius_top",
+            WindParam::WallWidthQ => "wall_width_q",
+            WindParam::WallStrength => "wall_strength",
+            WindParam::TopFade => "top_fade",
+            WindParam::Density => "density",
+            WindParam::AlbedoR => "albedo_r",
+            WindParam::AlbedoG => "albedo_g",
+            WindParam::AlbedoB => "albedo_b",
+            WindParam::AmbientBrightness => "ambient_brightness",
+            WindParam::PhaseG => "phase_g",
+            WindParam::SunIntensity => "sun_intensity",
+            WindParam::RiseInitialHeight => "rise_initial_height",
+            WindParam::RiseDuration => "rise_duration",
+            WindParam::SpreadStart => "spread_start",
+            WindParam::SpreadRate => "spread_rate",
+            WindParam::DissipateStart => "dissipate_start",
+            WindParam::DissipateTime => "dissipate_time",
+            WindParam::Circulation => "circulation",
+            WindParam::StreakOrder => "streak_order",
+            WindParam::StreakTwist => "streak_twist",
+            WindParam::StreakRiseSpeed => "streak_rise_speed",
+            WindParam::StreakAmplitude => "streak_amplitude",
+            WindParam::EddyAmplitude => "eddy_amplitude",
+            WindParam::EddyCellTheta => "eddy_cell_theta",
+            WindParam::EddyCellHeight => "eddy_cell_height",
+            WindParam::EddyCellRadial => "eddy_cell_radial",
+            WindParam::EddyShear => "eddy_shear",
+            WindParam::EddySpeedSpread => "eddy_speed_spread",
+            WindParam::EddyRiseSpeed => "eddy_rise_speed",
+            WindParam::EddyReseedPeriod => "eddy_reseed_period",
+            WindParam::EddyErosion => "eddy_erosion",
+            WindParam::PuffCountTheta => "puff_count_theta",
+            WindParam::PuffCountHeight => "puff_count_height",
+            WindParam::PuffRadius => "puff_radius",
+            WindParam::PuffRadiusJitter => "puff_radius_jitter",
+            WindParam::PuffOffsetQ => "puff_offset_q",
+            WindParam::PuffStrength => "puff_strength",
+            WindParam::PuffRiseSpeed => "puff_rise_speed",
+        }
+    }
+
+    pub fn from_cli_name(name: &str) -> Option<WindParam> {
+        WindParam::ALL
+            .iter()
+            .copied()
+            .find(|p| p.cli_name() == name)
+    }
+
+    pub const fn scene_name(self) -> &'static str {
+        match self {
+            WindParam::ColumnHeight => "ColumnHeight",
+            WindParam::WallRadiusBase => "WallRadiusBase",
+            WindParam::WallRadiusTop => "WallRadiusTop",
+            WindParam::WallWidthQ => "WallWidthQ",
+            WindParam::WallStrength => "WallStrength",
+            WindParam::TopFade => "TopFade",
+            WindParam::Density => "Density",
+            WindParam::AlbedoR => "AlbedoR",
+            WindParam::AlbedoG => "AlbedoG",
+            WindParam::AlbedoB => "AlbedoB",
+            WindParam::AmbientBrightness => "AmbientBrightness",
+            WindParam::PhaseG => "PhaseG",
+            WindParam::SunIntensity => "SunIntensity",
+            WindParam::RiseInitialHeight => "RiseInitialHeight",
+            WindParam::RiseDuration => "RiseDuration",
+            WindParam::SpreadStart => "SpreadStart",
+            WindParam::SpreadRate => "SpreadRate",
+            WindParam::DissipateStart => "DissipateStart",
+            WindParam::DissipateTime => "DissipateTime",
+            WindParam::Circulation => "Circulation",
+            WindParam::StreakOrder => "StreakOrder",
+            WindParam::StreakTwist => "StreakTwist",
+            WindParam::StreakRiseSpeed => "StreakRiseSpeed",
+            WindParam::StreakAmplitude => "StreakAmplitude",
+            WindParam::EddyAmplitude => "EddyAmplitude",
+            WindParam::EddyCellTheta => "EddyCellTheta",
+            WindParam::EddyCellHeight => "EddyCellHeight",
+            WindParam::EddyCellRadial => "EddyCellRadial",
+            WindParam::EddyShear => "EddyShear",
+            WindParam::EddySpeedSpread => "EddySpeedSpread",
+            WindParam::EddyRiseSpeed => "EddyRiseSpeed",
+            WindParam::EddyReseedPeriod => "EddyReseedPeriod",
+            WindParam::EddyErosion => "EddyErosion",
+            WindParam::PuffCountTheta => "PuffCountTheta",
+            WindParam::PuffCountHeight => "PuffCountHeight",
+            WindParam::PuffRadius => "PuffRadius",
+            WindParam::PuffRadiusJitter => "PuffRadiusJitter",
+            WindParam::PuffOffsetQ => "PuffOffsetQ",
+            WindParam::PuffStrength => "PuffStrength",
+            WindParam::PuffRiseSpeed => "PuffRiseSpeed",
+        }
+    }
+
+    pub const fn debug_value_range(self) -> (f32, f32) {
+        match self {
+            WindParam::ColumnHeight => (0.5, 10.0),
+            WindParam::WallRadiusBase => (0.05, 5.0),
+            WindParam::WallRadiusTop => (0.05, 5.0),
+            WindParam::WallWidthQ => (0.01, 2.0),
+            WindParam::WallStrength => (0.0, 4.0),
+            WindParam::TopFade => (0.05, 1.0),
+            WindParam::Density => (0.0, 20.0),
+            WindParam::AlbedoR => (0.0, 1.0),
+            WindParam::AlbedoG => (0.0, 1.0),
+            WindParam::AlbedoB => (0.0, 1.0),
+            WindParam::AmbientBrightness => (0.0, 5.0),
+            WindParam::PhaseG => (-0.95, 0.95),
+            WindParam::SunIntensity => (0.0, 10.0),
+            WindParam::RiseInitialHeight => (0.0, 1.0),
+            WindParam::RiseDuration => (0.1, 10.0),
+            WindParam::SpreadStart => (0.0, 10.0),
+            WindParam::SpreadRate => (0.0, 5.0),
+            WindParam::DissipateStart => (0.0, 10.0),
+            WindParam::DissipateTime => (0.0, 10.0),
+            WindParam::Circulation => (0.0, 100.0),
+            WindParam::StreakOrder => (1.0, 16.0),
+            WindParam::StreakTwist => (0.0, 20.0),
+            WindParam::StreakRiseSpeed => (0.0, 10.0),
+            WindParam::StreakAmplitude => (0.0, 1.0),
+            WindParam::EddyAmplitude => (0.0, 1.0),
+            WindParam::EddyCellTheta => (0.01, 2.0),
+            WindParam::EddyCellHeight => (0.01, 2.0),
+            WindParam::EddyCellRadial => (0.01, 1.0),
+            WindParam::EddyShear => (0.0, 1.0),
+            WindParam::EddySpeedSpread => (0.0, 1.0),
+            WindParam::EddyRiseSpeed => (0.0, 10.0),
+            WindParam::EddyReseedPeriod => (0.1, 10.0),
+            WindParam::EddyErosion => (0.0, 0.95),
+            WindParam::PuffCountTheta => (0.0, 16.0),
+            WindParam::PuffCountHeight => (0.0, 16.0),
+            WindParam::PuffRadius => (0.01, 1.0),
+            WindParam::PuffRadiusJitter => (0.0, 1.0),
+            WindParam::PuffOffsetQ => (0.0, 1.0),
+            WindParam::PuffStrength => (0.0, 4.0),
+            WindParam::PuffRiseSpeed => (0.0, 10.0),
+        }
+    }
+
+    const fn channel(self) -> ScalarChannel {
+        ScalarChannel {
+            code: self.code(),
+            display_name: self.display_name(),
+            cli_name: self.cli_name(),
+            scene_name: self.scene_name(),
+            debug_value_range: self.debug_value_range(),
+        }
+    }
+}
+
+pub static WIND_CHANNELS: [ScalarChannel; WindParam::ALL.len()] = {
+    let mut channels = [WindParam::ColumnHeight.channel(); WindParam::ALL.len()];
+    let mut i = 0;
+    while i < WindParam::ALL.len() {
+        channels[i] = WindParam::ALL[i].channel();
+        i += 1;
+    }
+    channels
+};
+
+pub static WIND_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
+    name: "Wind",
+    channels: &WIND_CHANNELS,
+    has_component: wind_has_component,
+    entities: wind_entities,
+    read: wind_channel_read,
+    local_time: wind_local_time,
+};
+
+fn wind_has_component(world: &World, entity: Entity) -> bool {
+    world.get_component::<WindTornadoEffect>(entity).is_some()
+}
+
+fn wind_entities(world: &World) -> Vec<Entity> {
+    world.query_winds()
+}
+
+fn wind_channel_read(world: &World, entity: Entity, property_type: PropertyType) -> Option<f32> {
+    let param = WindParam::from_property_type(property_type)?;
+    world
+        .get_component::<WindTornadoEffect>(entity)
+        .map(|effect| wind_param_value(effect, param))
+}
+
+fn wind_local_time(world: &World, entity: Entity) -> Option<f32> {
+    world
+        .get_component::<WindTornadoEffect>(entity)
+        .map(|effect| effect.time)
+}
+
+fn scalar_param(param: WindParam) -> &'static ScalarParam<WindTornadoEffect> {
+    find_scalar_param(WIND_SCALAR_PARAMS, param.cli_name())
+        .expect("every WindParam cli_name is registered in WIND_SCALAR_PARAMS")
+}
+
+pub fn apply_wind_param_value(effect: &mut WindTornadoEffect, param: WindParam, value: f32) {
+    (scalar_param(param).set)(effect, value)
+}
+
+pub fn wind_param_value(effect: &WindTornadoEffect, param: WindParam) -> f32 {
+    (scalar_param(param).get)(effect)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_code_and_cli_name_roundtrip_all_params() {
+        for param in WindParam::ALL {
+            assert_eq!(WindParam::from_code(param.code()), Some(param));
+            assert_eq!(
+                WindParam::from_property_type(param.property_type()),
+                Some(param)
+            );
+            assert_eq!(WindParam::from_cli_name(param.cli_name()), Some(param));
+        }
+        assert_eq!(WindParam::from_code(999), None);
+        assert_eq!(WindParam::from_cli_name("no_such_param"), None);
+    }
+
+    #[test]
+    fn test_every_cli_name_is_in_the_scalar_registry() {
+        for param in WindParam::ALL {
+            assert!(
+                find_scalar_param(WIND_SCALAR_PARAMS, param.cli_name()).is_some(),
+                "{:?}",
+                param
+            );
+        }
+    }
+
+    #[test]
+    fn test_codes_are_unique_and_start_at_512() {
+        let mut codes: Vec<u16> = WindParam::ALL.iter().map(|p| p.code()).collect();
+        codes.sort_unstable();
+        codes.dedup();
+        assert_eq!(codes.len(), WindParam::ALL.len());
+        assert!(codes.iter().all(|code| *code >= 512));
+    }
+
+    #[test]
+    fn test_channel_table_mirrors_enum() {
+        assert_eq!(WIND_CHANNELS.len(), WindParam::ALL.len());
+        for (channel, param) in WIND_CHANNELS.iter().zip(WindParam::ALL) {
+            assert_eq!(channel.code, param.code());
+            assert_eq!(channel.cli_name, param.cli_name());
+            assert_eq!(channel.property_type(), param.property_type());
+        }
+    }
+
+    #[test]
+    fn test_param_value_mirrors_apply_for_all_params() {
+        let mut effect = WindTornadoEffect::default();
+        for (i, param) in WindParam::ALL.into_iter().enumerate() {
+            let value = 10.0 + i as f32;
+            apply_wind_param_value(&mut effect, param, value);
+            assert!(
+                (wind_param_value(&effect, param) - value).abs() < 1e-6,
+                "{param:?}"
+            );
+        }
+    }
+}

@@ -64,16 +64,6 @@ declare_scene_format! {
                 group: "shape",
             },
         },
-        wall_strength: f32 = Frame {
-            get: |e| e.wall_strength,
-            set: |e, v| e.wall_strength = v,
-            ui {
-                min: 0.0,
-                max: 4.0,
-                format: "%.2f",
-                group: "density",
-            },
-        },
         top_fade: f32 = Frame {
             get: |e| e.top_fade,
             set: |e, v| e.top_fade = v,
@@ -96,49 +86,14 @@ declare_scene_format! {
                 group: "density",
             },
         },
-        albedo: [f32; 3] = Frame {
-            get: |e| e.albedo,
-            set: |e, v| e.albedo = v,
-            scalars: rgb,
-            ui {
-                kind: Color,
-                min: 0.0,
-                max: 1.0,
-                format: "%.2f",
-                tooltip: "Single-scattering albedo of the dust",
-                group: "look",
-            },
-        },
-        ambient_brightness: f32 = Frame {
-            get: |e| e.ambient_brightness,
-            set: |e, v| e.ambient_brightness = v,
+        wall_strength: f32 = Frame {
+            get: |e| e.wall_strength,
+            set: |e, v| e.wall_strength = v,
             ui {
                 min: 0.0,
-                max: 5.0,
+                max: 4.0,
                 format: "%.2f",
-                group: "look",
-            },
-        },
-        phase_g: f32 = Frame {
-            get: |e| e.phase_g,
-            set: |e, v| e.phase_g = v,
-            ui {
-                min: -0.95,
-                max: 0.95,
-                format: "%.2f",
-                tooltip: "Henyey-Greenstein anisotropy of the dust; positive scatters forward",
-                group: "look",
-            },
-        },
-        sun_intensity: f32 = Frame {
-            get: |e| e.sun_intensity,
-            set: |e, v| e.sun_intensity = v,
-            ui {
-                min: 0.0,
-                max: 10.0,
-                format: "%.2f",
-                tooltip: "Radiance of the sun used by the single-scattering source term",
-                group: "look",
+                group: "density",
             },
         },
         rise_initial_height: f32 = Frame {
@@ -438,6 +393,51 @@ declare_scene_format! {
                 group: "eddy",
             },
         },
+        albedo: [f32; 3] = Frame {
+            get: |e| e.albedo,
+            set: |e, v| e.albedo = v,
+            scalars: rgb,
+            ui {
+                kind: Color,
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Single-scattering albedo of the dust",
+                group: "look",
+            },
+        },
+        ambient_brightness: f32 = Frame {
+            get: |e| e.ambient_brightness,
+            set: |e, v| e.ambient_brightness = v,
+            ui {
+                min: 0.0,
+                max: 5.0,
+                format: "%.2f",
+                group: "look",
+            },
+        },
+        phase_g: f32 = Frame {
+            get: |e| e.phase_g,
+            set: |e, v| e.phase_g = v,
+            ui {
+                min: -0.95,
+                max: 0.95,
+                format: "%.2f",
+                tooltip: "Henyey-Greenstein anisotropy of the dust; positive scatters forward",
+                group: "look",
+            },
+        },
+        sun_intensity: f32 = Frame {
+            get: |e| e.sun_intensity,
+            set: |e, v| e.sun_intensity = v,
+            ui {
+                min: 0.0,
+                max: 10.0,
+                format: "%.2f",
+                tooltip: "Radiance of the sun used by the single-scattering source term",
+                group: "look",
+            },
+        },
     },
     runtime {
         time: f32 {
@@ -512,6 +512,91 @@ mod tests {
                 );
             }
             assert!(param.min < param.max, "{}", param.name);
+        }
+    }
+
+    #[test]
+    fn test_ui_param_groups_cover_every_wind_group_in_display_order() {
+        let mut groups: Vec<&str> = Vec::new();
+        for param in WIND_UI_PARAMS {
+            if !param.group.is_empty() && !groups.contains(&param.group) {
+                groups.push(param.group);
+            }
+        }
+        assert_eq!(groups, ["shape", "density", "motion", "eddy", "look"]);
+    }
+
+    #[test]
+    fn test_ui_param_group_members_match_their_group() {
+        let expected: &[(&str, &[&str])] = &[
+            (
+                "shape",
+                &[
+                    "column_height",
+                    "wall_radius_base",
+                    "wall_radius_top",
+                    "wall_width_q",
+                    "top_fade",
+                ],
+            ),
+            ("density", &["density", "wall_strength"]),
+            (
+                "motion",
+                &[
+                    "rise_initial_height",
+                    "rise_duration",
+                    "spread_start",
+                    "spread_rate",
+                    "dissipate_start",
+                    "dissipate_time",
+                    "circulation",
+                    "streak_order",
+                    "streak_twist",
+                    "streak_rise_speed",
+                    "streak_amplitude",
+                ],
+            ),
+            (
+                "eddy",
+                &[
+                    "eddy_amplitude",
+                    "eddy_cell_theta",
+                    "eddy_cell_height",
+                    "eddy_cell_radial",
+                    "eddy_shear",
+                    "eddy_speed_spread",
+                    "eddy_rise_speed",
+                    "eddy_reseed_period",
+                    "eddy_erosion",
+                    "puff_count_theta",
+                    "puff_count_height",
+                    "puff_radius",
+                    "puff_radius_jitter",
+                    "puff_offset_q",
+                    "puff_strength",
+                    "puff_rise_speed",
+                ],
+            ),
+            (
+                "look",
+                &["albedo", "ambient_brightness", "phase_g", "sun_intensity"],
+            ),
+        ];
+
+        let grouped: usize = expected.iter().map(|(_, members)| members.len()).sum();
+        let persisted = WIND_UI_PARAMS
+            .iter()
+            .filter(|param| param.persisted)
+            .count();
+        assert_eq!(grouped, persisted);
+
+        for (group, members) in expected {
+            let declared: Vec<&str> = WIND_UI_PARAMS
+                .iter()
+                .filter(|param| param.group == *group)
+                .map(|param| param.name)
+                .collect();
+            assert_eq!(declared, *members, "{group}");
         }
     }
 

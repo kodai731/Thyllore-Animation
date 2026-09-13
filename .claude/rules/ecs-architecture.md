@@ -22,7 +22,10 @@ This project uses an Entity-Component-System (ECS) architecture. The design foll
    should be in separate components (Flecs design principle: reduces cache misses and unnecessary data loading)
 6. **Module Independence**: Feature modules depend on shared component types, not on each other's system
    functions. Inter-module communication happens through components, resources, and events — never through
-   direct system-to-system calls across module boundaries (Flecs module design)
+   direct system-to-system calls across module boundaries (Flecs module design). Shared infrastructure
+   (`src/scene/`, `src/hooks/`, `src/app/`, `world.rs`) never names a feature: it consumes registries the
+   features subscribe to and reflection the feature's declaration generates (`SceneComponent::TYPE_KEY`,
+   `ScalarChannelDomain`, `UiParam`), see `hierarchy.md` "Feature isolation"
 
 ## Directory Structure
 
@@ -46,8 +49,11 @@ src/ecs/
 └── mod.rs
 ```
 
-Component and resource types that an effect exposes as parameters (flame, water) are declared once in
-`crates/thyllore-effect-core` with `declare_scene_format!`; `src/ecs/component/` only wraps them.
+Component and resource types that an effect exposes as parameters (flame, water, wind) are declared once in
+`crates/thyllore-effect-core` with `declare_scene_format!`; `src/ecs/component/` only wraps them. The
+declaration's `key:` item makes the component a `thyllore_scene_core::SceneComponent` (type key + persisted
+field list), which is all the scene format needs: it never names the effect (see `hierarchy.md`, "Feature
+isolation").
 
 ### Domain ECS Modules
 
@@ -114,6 +120,10 @@ Data-only structs attached to entities. Located in `ecs/component/`.
 ### Resources
 
 Global state that changes per frame. Located in `ecs/resource/`. **Only use for dynamic data.**
+
+A resource that belongs in the scene file declares its persisted fields with `declare_scene_format!`
+(runtime-only fields stay out of the table) and registers with `scene_resource!(Type)` in its own file;
+`src/scene/` never mirrors it (see `hierarchy.md`, "Feature isolation").
 
 Resources correspond to **singleton components** in other ECS frameworks:
 - Flecs: singletons (component added to its own entity)
@@ -200,8 +210,13 @@ let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
 1. Define components in `ecs/component/` (effect parameters: declare them in `thyllore-effect-core`)
 2. Add a marker component for queries
 3. Implement system functions in `ecs/systems/<domain>/`
-4. Add a `spawn_*` system that inserts the component set, and call it from the event dispatcher or
-   initialization
+4. Add a `spawn_*` system (a thin wrapper over `hooks::scene::spawn_scene_owner`) and call it from the
+   event dispatcher or initialization; runtime-only companions (baked data, accumulators) are inserted by
+   the domain's per-frame system when missing, so a loaded entity and a spawned one converge
+5. Persist it: give the parameter component a `key:` in `declare_scene_format!` and write
+   `scene_owner!(C { icon, placement, prepare_loaded? })` in its `ecs/component/` file; provenance
+   components (applied preset / style) implement `SceneComponent` and write `scene_attachment!(P)`.
+   Registration happens at link time; neither `src/scene/` nor `subscription.rs` is edited
 
 ## Adding New Domain Features
 

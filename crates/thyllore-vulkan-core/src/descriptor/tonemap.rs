@@ -2,6 +2,7 @@ use crate::core::device::*;
 use crate::descriptor::pass_manifest::TONEMAP;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::tonemap;
+use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 
 #[derive(Clone, Debug, Default)]
@@ -152,5 +153,11 @@ impl RRToneMapDescriptorSet {
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         self.layout.destroy(device);
+    }
+}
+
+impl GpuResource for RRToneMapDescriptorSet {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

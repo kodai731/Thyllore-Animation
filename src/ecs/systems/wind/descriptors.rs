@@ -7,6 +7,7 @@ use crate::vulkanr::descriptor::{
     ReflectedLayoutSpec, ReflectedSetLayout, WIND_RESOLVE, WIND_SHADOW_BAKE, WIND_UPSAMPLE,
 };
 use crate::vulkanr::image::{create_nearest_sampler, create_scene_depth_sampler};
+use crate::vulkanr::resource::GpuResource;
 use crate::vulkanr::resource::{UniformBuffer, VolumeImage};
 use thyllore_effect_core::WindUBO;
 
@@ -206,5 +207,23 @@ impl WindUpsampleDescriptorSet {
         self.layout.destroy(device);
         device.destroy_sampler(self.wind_color_sampler, None);
         device.destroy_sampler(self.scene_depth_sampler, None);
+    }
+}
+
+impl GpuResource for WindResolveDescriptorSet {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
+    }
+}
+
+impl GpuResource for WindShadowBakeDescriptorSet {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
+    }
+}
+
+impl GpuResource for WindUpsampleDescriptorSet {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

@@ -2,6 +2,7 @@ use crate::core::device::*;
 use crate::descriptor::pass_manifest::{SetRole, BLOOM_DOWNSAMPLE, BLOOM_UPSAMPLE};
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::bloom_downsample;
+use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 
 #[derive(Clone, Debug, Default)]
@@ -118,5 +119,11 @@ impl RRBloomDescriptorSets {
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         self.layout.destroy(device);
         self.frames.clear();
+    }
+}
+
+impl GpuResource for RRBloomDescriptorSets {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

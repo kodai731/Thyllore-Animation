@@ -65,7 +65,7 @@ fn water_frame(app: &App) -> Option<WaterFrame> {
     water_scene_bindings(app)?;
 
     let mut waters: Vec<Entity> = app.data.ecs_world.query_waters();
-    waters.truncate(thyllore_vulkan_core::resource::MAX_WATER_INSTANCES);
+    waters.truncate(thyllore_effect_core::WATER_MAX_INSTANCES);
     if waters.is_empty() {
         return None;
     }

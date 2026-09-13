@@ -1,7 +1,8 @@
 use crate::pipeline::RRPipeline;
+use crate::resource::GpuResource;
 use thyllore_render_core::PipelineId;
 
-#[derive(Default)]
+#[derive(Default, GpuResource)]
 pub struct PipelineStorage {
     pipelines: Vec<RRPipeline>,
 }

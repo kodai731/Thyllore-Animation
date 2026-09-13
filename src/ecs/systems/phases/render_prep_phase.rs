@@ -64,6 +64,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     let t = Instant::now();
     crate::ecs::systems::water_time_advance(ctx);
     crate::ecs::systems::flame_time_advance(ctx);
+    crate::ecs::systems::wind_time_advance(ctx);
     crate::ecs::systems::field_manifest_sync(ctx);
     sub.insert("flame_time".to_string(), t.elapsed().as_secs_f32() * 1000.0);
 
@@ -213,6 +214,7 @@ fn gpu_timings_write(world: &mut crate::ecs::World) {
         None => return,
     };
     let frame = timings.frame;
+    let frame_total_ms = timings.frame_total_ms;
     let passes: Vec<(String, f32)> = timings.passes.clone();
     if passes.is_empty() {
         return;
@@ -232,6 +234,9 @@ fn gpu_timings_write(world: &mut crate::ecs::World) {
     let mut obj: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
     obj.insert("frame".to_string(), serde_json::json!(frame));
     obj.insert("passes".to_string(), serde_json::Value::Object(passes_map));
+    if let Some(ms) = frame_total_ms {
+        obj.insert("frame_total_ms".to_string(), serde_json::json!(ms));
+    }
 
     if let Some(cpu) = world.get_resource::<crate::ecs::resource::CpuFrameTimings>() {
         obj.insert("cpu_dt_ms".to_string(), serde_json::json!(cpu.dt_ms));

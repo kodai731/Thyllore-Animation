@@ -7,9 +7,11 @@ pub mod gbuffer;
 pub mod line_mesh_draw;
 pub mod onion_skin;
 pub mod onion_skin_buffers;
+pub mod overlay;
 pub mod pass_target;
 pub mod push_constants;
 pub mod rayquery;
+pub mod storage_image;
 pub mod tonemap;
 pub mod water;
 
@@ -30,6 +32,9 @@ pub use line_mesh_draw::{
 };
 pub use onion_skin::{record_onion_skin_composite_pass, record_onion_skin_ghost_pass};
 pub use onion_skin_buffers::{OnionSkinGhostBuffer, OnionSkinGpuState};
+pub use overlay::{
+    begin_overlay_render_pass, draw_fullscreen_triangle, set_full_viewport, OverlayAttachmentLoad,
+};
 pub use pass_target::{
     CoreTarget, FrameTransients, ImageStateTracker, PendingBarrier, ShaderStage, TargetAccess,
     TargetRef, TargetUse, TransientLifetimes, TransientRequest, TransientSlot,
@@ -38,5 +43,6 @@ pub use push_constants::{
     FlamePushConstants, GBufferPushConstants, OnionSkinPushConstants, WaterPushConstants,
 };
 pub use rayquery::record_ray_query_pass;
+pub use storage_image::{insert_storage_image_read_barrier, insert_storage_image_write_barrier};
 pub use tonemap::{begin_tonemap_render_pass, end_tonemap_render_pass, record_tonemap_draw};
 pub use water::{record_water_scene_color_copy, record_water_shading_pass};

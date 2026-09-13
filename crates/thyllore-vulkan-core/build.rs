@@ -72,6 +72,7 @@ fn glslc_command(shader_dir: &Path, source_path: &Path) -> Command {
     cmd.arg(source_path.to_str().unwrap());
     cmd.arg("-I").arg(shader_dir.to_str().unwrap());
     cmd.arg("-DWATER_RAY_QUERY");
+    cmd.arg("-DWIND_SHADOW_VOLUME");
     if let Ok(rotation) = std::env::var("THYLLORE_FLAME_NOISE_ROT_DEG") {
         cmd.arg(format!("-DFLAME_NOISE_ROT_DEG_OVERRIDE={}", rotation));
     }

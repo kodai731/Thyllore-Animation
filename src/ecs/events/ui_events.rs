@@ -8,7 +8,7 @@ use crate::animation::BoneId;
 use crate::animation::{ConstraintId, ConstraintType};
 use crate::ecs::component::{
     ColliderShape, FlameEffect, SpringChain, SpringChainId, SpringColliderDef, SpringColliderGroup,
-    SpringColliderGroupId, SpringColliderId, SpringJointParam, WaterTorusEffect,
+    SpringColliderGroupId, SpringColliderId, SpringJointParam, WaterTorusEffect, WindTornadoEffect,
 };
 use crate::ecs::events::light_move_target::LightMoveTarget;
 use crate::ecs::resource::gizmo::BoneDisplayStyle;
@@ -16,6 +16,7 @@ use crate::ecs::resource::{
     AutoExposure, CoordinateSpace, CurveTrackRef, DepthOfField, FlameRenderSettings,
     HierarchyDisplayMode, OnionSkinningConfig, PhysicalCameraParameters, SelectedKeyframe,
     SelectionModifier, TransformGizmoMode, TransformGizmoState, WaterRenderSettings,
+    WindRenderSettings,
 };
 use crate::ecs::world::Entity;
 use crate::ecs::world::Visibility;
@@ -67,6 +68,7 @@ pub enum UIEvent {
         viewport_size: [f32; 2],
     },
     DumpWaterDebug,
+    DumpWindDebug,
 
     SelectEntity(Entity),
     DeselectAll,
@@ -460,6 +462,11 @@ pub enum UIEvent {
     ApplyWaterPreset(String),
     UpdateWaterRenderSettings(WaterRenderSettings),
     SelectWaterInstance(usize),
+    AddWind,
+    UpdateWindEffect(Box<WindTornadoEffect>),
+    ApplyWindPreset(String),
+    UpdateWindRenderSettings(WindRenderSettings),
+    SelectWindInstance(usize),
     OpenScalarCurveEditor,
 }
 

@@ -21,6 +21,7 @@ impl App {
             (time, delta_time)
         };
         self.last_update_time = time;
+        self.last_frame_interval = delta_time;
 
         let viewport_extent = (
             self.data.viewport.width.max(1),

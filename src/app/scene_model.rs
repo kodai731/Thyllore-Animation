@@ -203,6 +203,7 @@ impl App {
 
     pub unsafe fn load_model_additive(&mut self, path: &str) -> Result<()> {
         log!("Additively loading model from: {}", path);
+        self.rrdevice.device.device_wait_idle()?;
 
         let command_pool = self.resource::<CommandState>().pool.clone();
         let procedural_primitives =

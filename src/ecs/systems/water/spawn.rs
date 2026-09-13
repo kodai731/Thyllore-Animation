@@ -1,26 +1,32 @@
 use crate::asset::AssetStorage;
-use crate::ecs::component::{EntityIcon, WaterTorusEffect, WATER_DOMAIN};
+use crate::ecs::component::{EditorDisplay, EntityIcon, WaterTorusEffect, WATER_DOMAIN};
 use crate::ecs::resource::HierarchyState;
-use crate::ecs::world::{Entity, Transform, World};
+use crate::ecs::world::{Entity, GlobalTransform, Transform, World};
 
 pub const DEFAULT_WATER_NAME: &str = "Water";
 
 /// Spawns a water as a regular scene entity so the hierarchy, inspector and transform gizmo
 /// can all reach it through the same components they use for every other object.
 pub fn spawn_water(world: &mut World, name: &str, effect: WaterTorusEffect) -> Entity {
-    let transform = Transform {
-        translation: effect.position,
-        rotation: effect.rotation,
-        ..Default::default()
-    };
+    let entity = world.entity().with_name(name).build();
+    attach_water(world, entity, effect);
+    entity
+}
 
-    world
-        .entity()
-        .with_name(name)
-        .with_transform(transform)
-        .with_editor_display(EntityIcon::Water, false)
-        .with_water(effect)
-        .build()
+/// Turns a named entity into a water: transform, hierarchy icon and the effect component.
+pub fn attach_water(world: &mut World, entity: Entity, effect: WaterTorusEffect) {
+    world.insert_component(
+        entity,
+        Transform {
+            translation: effect.position,
+            rotation: effect.rotation,
+            ..Default::default()
+        },
+    );
+    world.insert_component(entity, GlobalTransform::new());
+    world.insert_component(entity, EditorDisplay::new(EntityIcon::Water));
+
+    world.insert_component(entity, effect);
 }
 
 /// Spawn a water entity together with its (empty) animation clip and schedule
@@ -40,13 +46,6 @@ pub fn spawn_water_with_clip(
         &WATER_DOMAIN,
     );
     entity
-}
-
-/// Removes every water entity so a scene without a water section loads into a water-free world.
-pub fn despawn_waters(world: &mut World) {
-    for entity in world.query_waters() {
-        world.despawn(entity);
-    }
 }
 
 /// The water the UI and the water events act on: the selected entity when it is a water,

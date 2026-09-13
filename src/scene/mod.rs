@@ -1,15 +1,16 @@
 mod clip_io;
-mod components;
+mod entities;
 mod error;
 mod format;
 mod motion_path_format;
 mod scene_io;
+mod scheduled_clip;
 mod transform_format;
 
 pub use clip_io::{load_animation_clip, save_animation_clip};
-pub use components::{
-    apply_flame_state_to_world, apply_water_state_to_world, apply_wind_state_to_world,
-    build_flame_scene_data, build_water_scene_data, build_wind_scene_data, SceneEntity,
+pub use entities::{
+    apply_scene_entities, capture_scene_entities, capture_scheduled_clips,
+    subscribe_scene_components, SceneEntity,
 };
 pub use error::{SceneError, SceneResult};
 pub use format::{

@@ -22,7 +22,10 @@ This project uses an Entity-Component-System (ECS) architecture. The design foll
    should be in separate components (Flecs design principle: reduces cache misses and unnecessary data loading)
 6. **Module Independence**: Feature modules depend on shared component types, not on each other's system
    functions. Inter-module communication happens through components, resources, and events — never through
-   direct system-to-system calls across module boundaries (Flecs module design)
+   direct system-to-system calls across module boundaries (Flecs module design). Shared infrastructure
+   (`src/scene/`, `src/hooks/`, `src/app/`, `world.rs`) never names a feature: it consumes registries the
+   features subscribe to and reflection the feature's declaration generates (`SceneComponent::TYPE_KEY`,
+   `ScalarChannelDomain`, `UiParam`), see `hierarchy.md` "Feature isolation"
 
 ## Directory Structure
 
@@ -46,8 +49,11 @@ src/ecs/
 └── mod.rs
 ```
 
-Component and resource types that an effect exposes as parameters (flame, water) are declared once in
-`crates/thyllore-effect-core` with `declare_scene_format!`; `src/ecs/component/` only wraps them.
+Component and resource types that an effect exposes as parameters (flame, water, wind) are declared once in
+`crates/thyllore-effect-core` with `declare_scene_format!`; `src/ecs/component/` only wraps them. The
+declaration's `key:` item makes the component a `thyllore_scene_core::SceneComponent` (type key + persisted
+field list), which is all the scene format needs: it never names the effect (see `hierarchy.md`, "Feature
+isolation").
 
 ### Domain ECS Modules
 
@@ -201,7 +207,13 @@ let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
 2. Add a marker component for queries
 3. Implement system functions in `ecs/systems/<domain>/`
 4. Add a `spawn_*` system that inserts the component set, and call it from the event dispatcher or
-   initialization
+   initialization; split it as `spawn_*` (named entity) + `attach_*` (component set) so the scene loader
+   can attach onto an entity it created
+5. Persist it: give the parameter component a `key:` in `declare_scene_format!`, add
+   `ecs/systems/<domain>/scene.rs` with a `SceneComponentHook` list (the parameter component as
+   `Owner`, provenance components such as an applied preset as `SceneComponentHook::attachment::<C>()`),
+   and register that list in `src/effect/subscription.rs::subscribe_scene_components`. `src/scene/` is
+   not edited
 
 ## Adding New Domain Features
 

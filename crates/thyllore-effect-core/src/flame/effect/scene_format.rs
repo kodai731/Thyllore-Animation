@@ -8,6 +8,7 @@ declare_scene_format! {
     record: FlameSceneRecord,
     tag: ParameterOwner,
     items {
+        key: "flame",
         tags: PARAMETER_OWNERSHIP,
         snapshot: flame_parameter_snapshot,
         scalars: FLAME_SCALAR_PARAMS,
@@ -593,6 +594,22 @@ declare_scene_format! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use thyllore_scene_core::SceneComponent;
+
+    #[test]
+    fn test_scene_component_reflection_matches_serialized_keys() {
+        let value = serde_json::to_value(FlameEffect::default()).expect("serialize");
+        let keys: Vec<&str> = value
+            .as_object()
+            .expect("flat object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        let mut declared = FlameEffect::PERSISTED_FIELDS.to_vec();
+        declared.sort_unstable();
+        assert_eq!(keys, declared);
+        assert_eq!(FlameEffect::TYPE_KEY, "flame");
+    }
     use thyllore_scene_core::find_scalar_param;
 
     #[test]

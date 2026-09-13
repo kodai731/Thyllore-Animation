@@ -8,6 +8,7 @@ declare_scene_format! {
     record: WindSceneRecord,
     tag: WindParameterOwner,
     items {
+        key: "wind_tornado",
         tags: WIND_PARAMETER_OWNERSHIP,
         snapshot: wind_parameter_snapshot,
         scalars: WIND_SCALAR_PARAMS,
@@ -473,6 +474,22 @@ declare_scene_format! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use thyllore_scene_core::SceneComponent;
+
+    #[test]
+    fn test_scene_component_reflection_matches_serialized_keys() {
+        let value = serde_json::to_value(WindTornadoEffect::default()).expect("serialize");
+        let keys: Vec<&str> = value
+            .as_object()
+            .expect("flat object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        let mut declared = WindTornadoEffect::PERSISTED_FIELDS.to_vec();
+        declared.sort_unstable();
+        assert_eq!(keys, declared);
+        assert_eq!(WindTornadoEffect::TYPE_KEY, "wind_tornado");
+    }
     use thyllore_scene_core::{find_scalar_param, find_ui_param, UiKind};
 
     #[test]

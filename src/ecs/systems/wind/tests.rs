@@ -73,15 +73,6 @@ fn batch_fixed_time_wins_over_the_timeline_for_wind() {
 }
 
 #[test]
-fn despawn_removes_every_wind() {
-    let mut world = World::new();
-    spawn_wind(&mut world, "Wind 1", WindTornadoEffect::default());
-    spawn_wind(&mut world, "Wind 2", WindTornadoEffect::default());
-    despawn_winds(&mut world);
-    assert!(world.query_winds().is_empty());
-}
-
-#[test]
 fn wind_follows_the_timeline_while_paused_by_default() {
     let settings = WindRenderSettings::default();
     let sources = EffectTimeSources {

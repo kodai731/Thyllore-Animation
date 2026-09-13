@@ -1,4 +1,8 @@
+mod scene_component;
+
 use std::borrow::Cow;
+
+pub use scene_component::SceneComponent;
 
 /// Flat-name f32 accessor for one scalar parameter; one static table per component type.
 pub struct ScalarParam<C: 'static> {
@@ -118,6 +122,7 @@ macro_rules! declare_scene_format {
         record: $record:ident,
         tag: $tag_ty:ty,
         items {
+            key: $key:literal,
             tags: $tags_name:ident,
             snapshot: $snapshot_name:ident,
             scalars: $scalars_name:ident,
@@ -171,6 +176,7 @@ macro_rules! declare_scene_format {
             component: $component,
             record: $record,
             items {
+                key: $key,
                 snapshot: $snapshot_name,
                 scalars: $scalars_name,
                 ui: $ui_name,
@@ -217,6 +223,7 @@ macro_rules! declare_scene_format {
         component: $component:ty,
         record: $record:ident,
         items {
+            key: $key:literal,
             snapshot: $snapshot_name:ident,
             scalars: $scalars_name:ident,
             ui: $ui_name:ident,
@@ -313,6 +320,11 @@ macro_rules! declare_scene_format {
                 record.apply(&mut component);
                 Ok(component)
             }
+        }
+
+        impl $crate::SceneComponent for $component {
+            const TYPE_KEY: &'static str = $key;
+            const PERSISTED_FIELDS: &'static [&'static str] = &[ $( stringify!($name) ),+ ];
         }
 
         /// Bit-exact snapshot of every persisted parameter; diffing two yields what a writer touched.

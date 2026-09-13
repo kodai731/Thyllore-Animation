@@ -323,6 +323,11 @@ impl App {
         data.ecs_world.insert_resource(LightState::default());
         data.ecs_world
             .insert_resource(crate::ecs::resource::DebugViewState::default());
+
+        let mut scene_hooks = crate::hooks::scene::SceneComponentHooks::default();
+        crate::scene::subscribe_scene_components(&mut scene_hooks);
+        crate::effect::subscription::subscribe_scene_components(&mut scene_hooks);
+        data.ecs_world.insert_resource(scene_hooks);
     }
     unsafe fn initialize_graphics_and_ecs(
         instance: &Instance,
@@ -897,7 +902,11 @@ impl App {
         let mut scene_state = SceneState::new();
         if let Some((scene_path, scene, clips)) = loaded_scene {
             let clips_with_ids =
-                Self::register_loaded_clips(&mut data.ecs_world, &mut data.ecs_assets, clips);
+                crate::ecs::systems::clip_library_systems::clip_library_register_loaded(
+                    &mut data.ecs_world,
+                    &mut data.ecs_assets,
+                    clips,
+                );
             crate::scene::apply_loaded_scene_to_world(
                 &scene,
                 &mut data.ecs_world,
@@ -1374,27 +1383,6 @@ impl App {
 
         // (default_model_path, None)
         ("".to_string(), None)
-    }
-
-    fn register_loaded_clips(
-        world: &mut crate::ecs::world::World,
-        assets: &mut crate::asset::AssetStorage,
-        clips: Vec<crate::animation::editable::EditableAnimationClip>,
-    ) -> Vec<(crate::animation::editable::SourceClipId, String)> {
-        let mut clip_library = world.resource_mut::<ClipLibrary>();
-        let mut result = Vec::new();
-
-        for clip in clips {
-            let name = clip.name.clone();
-            let id = crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
-                &mut clip_library,
-                assets,
-                clip,
-            );
-            result.push((id, name));
-        }
-
-        result
     }
 
     unsafe fn create_font_image(

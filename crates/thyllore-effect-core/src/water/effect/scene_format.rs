@@ -8,6 +8,7 @@ declare_scene_format! {
     record: WaterSceneRecord,
     tag: WaterParameterOwner,
     items {
+        key: "water_torus",
         tags: WATER_PARAMETER_OWNERSHIP,
         snapshot: water_parameter_snapshot,
         scalars: WATER_SCALAR_PARAMS,
@@ -264,6 +265,22 @@ declare_scene_format! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use thyllore_scene_core::SceneComponent;
+
+    #[test]
+    fn test_scene_component_reflection_matches_serialized_keys() {
+        let value = serde_json::to_value(WaterTorusEffect::default()).expect("serialize");
+        let keys: Vec<&str> = value
+            .as_object()
+            .expect("flat object")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        let mut declared = WaterTorusEffect::PERSISTED_FIELDS.to_vec();
+        declared.sort_unstable();
+        assert_eq!(keys, declared);
+        assert_eq!(WaterTorusEffect::TYPE_KEY, "water_torus");
+    }
     use thyllore_scene_core::{find_scalar_param, find_ui_param, UiKind};
 
     #[test]

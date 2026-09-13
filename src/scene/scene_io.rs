@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use super::clip_io::{load_animation_clip, save_animation_clip};
-use super::components::{scene_component_registry, SceneEntity};
+use super::entities::{apply_scene_entities, capture_scene_entities};
 use super::error::{SceneError, SceneResult};
 use super::format::{
     build_debug_primitives_scene_data, debug_primitive_kind_from_str, AnimationClipRef,
@@ -22,7 +22,6 @@ use crate::ecs::world::World;
 
 /// First scene version that stores effect state as entity components instead of dedicated fields.
 const SCENE_COMPONENT_FORMAT_VERSION: u32 = 6;
-const EFFECTS_ENTITY_NAME: &str = "effects";
 
 pub fn save_scene(scene_path: &Path, world: &World) -> SceneResult<()> {
     let collected = CollectedSceneState::from_world(world);
@@ -259,7 +258,7 @@ fn build_scene_file(
     scene.editor = collected.editor;
     scene.panel_layout = collected.panel_layout;
     scene.debug_primitives = build_debug_primitives_scene_data(world);
-    scene.entities = vec![capture_effects_entity(world)];
+    scene.entities = capture_scene_entities(world);
 
     if let Some(prev) = previous_metadata {
         scene.metadata.created_at = prev.created_at;
@@ -267,18 +266,6 @@ fn build_scene_file(
     scene.metadata.update_modified();
 
     scene
-}
-
-fn capture_effects_entity(world: &World) -> SceneEntity {
-    let components = scene_component_registry()
-        .iter()
-        .filter_map(|entry| (entry.capture)(world).map(|value| (entry.type_key.to_string(), value)))
-        .collect();
-
-    SceneEntity {
-        name: EFFECTS_ENTITY_NAME.to_string(),
-        components,
-    }
 }
 
 fn write_scene_file(scene_path: &Path, scene: &SceneFile) -> SceneResult<()> {
@@ -403,49 +390,12 @@ pub fn apply_loaded_scene_to_world(
     apply_panel_layout(loaded.scene.panel_layout.as_ref(), world);
 
     if loaded.scene.version >= SCENE_COMPONENT_FORMAT_VERSION {
-        apply_scene_component_entities(&loaded.scene.entities, world, assets);
+        apply_scene_entities(world, assets, &loaded.scene.entities);
     } else {
         log_warn!("pre-v6 scene: effects are not restored (re-save to upgrade)");
     }
 
     request_debug_primitives(&loaded.scene.debug_primitives, world);
-}
-
-fn apply_scene_component_entities(
-    entities: &[SceneEntity],
-    world: &mut World,
-    assets: &mut crate::asset::AssetStorage,
-) {
-    let mut applied_keys = std::collections::BTreeSet::new();
-
-    for entity in entities {
-        for (type_key, value) in &entity.components {
-            let entry = scene_component_registry()
-                .iter()
-                .find(|entry| entry.type_key == type_key);
-            match entry {
-                Some(entry) => match (entry.apply)(world, assets, value) {
-                    Ok(()) => {
-                        applied_keys.insert(entry.type_key);
-                    }
-                    Err(error) => {
-                        log_warn!("Failed to apply scene component {}: {}", type_key, error)
-                    }
-                },
-                None => log_warn!("Unknown scene component type key: {}", type_key),
-            }
-        }
-    }
-
-    if !applied_keys.contains("flame") {
-        crate::ecs::systems::despawn_flames(world);
-    }
-    if !applied_keys.contains("water_torus") {
-        crate::ecs::systems::despawn_waters(world);
-    }
-    if !applied_keys.contains("wind_tornado") {
-        crate::ecs::systems::despawn_winds(world);
-    }
 }
 
 /// Spawning is deferred to the app because a non-additive model load clears every entity.
@@ -625,6 +575,7 @@ fn apply_panel_layout(panel_layout: Option<&PanelLayoutState>, world: &mut World
 
 #[cfg(test)]
 mod tests {
+    use super::super::entities::world_with_scene_hooks;
     use super::*;
 
     fn write_scene(dir: &Path, model_path: &str) -> PathBuf {
@@ -672,8 +623,7 @@ mod tests {
         fs::create_dir_all(&scenes_dir).unwrap();
         let scene_path = scenes_dir.join("test.scene.ron");
 
-        let mut world = World::new();
-        world.insert_resource(crate::ecs::resource::ClipLibrary::new());
+        let mut world = world_with_scene_hooks();
         let mut assets = crate::asset::AssetStorage::new();
         let entity = crate::ecs::systems::spawn_water_with_clip(
             &mut world,
@@ -691,20 +641,22 @@ mod tests {
         save_scene(&scene_path, &world).unwrap();
         let loaded = load_scene(&scene_path).unwrap();
 
-        let components = &loaded
-            .scene
-            .entities
-            .first()
-            .expect("effects entity saved")
-            .components;
+        assert_eq!(loaded.scene.entities.len(), 1);
+        let components = &loaded.scene.entities[0].components;
+        assert_eq!(loaded.scene.entities[0].name, "Water");
         assert!(!components.contains_key("flame"));
-        let water: crate::scene::components::WaterSceneData =
-            serde_json::from_value(components["water_torus"].clone())
+        let water: crate::ecs::component::WaterTorusEffect =
+            crate::hooks::scene::decode_scene_value(&components["water_torus"])
                 .expect("water component decodes");
-        assert_eq!(water.effect.major_radius, major_radius);
-        assert_eq!(water.effect.minor_radius, minor_radius);
-        assert!(water.effect.major_radius > 0.0);
-        assert!(water.effect.minor_radius > 0.0);
+        assert_eq!(water.major_radius, major_radius);
+        assert_eq!(water.minor_radius, minor_radius);
+        assert!(water.major_radius > 0.0);
+        assert!(water.minor_radius > 0.0);
+        let clip: crate::scene::scheduled_clip::ScheduledClip =
+            crate::hooks::scene::decode_scene_value(&components["clip"]).expect("clip decodes");
+        assert_eq!(clip.clip, "Water");
+        assert_eq!(loaded.scene.animation_clips.len(), 1);
+        assert_eq!(loaded.clips[0].name, "Water");
     }
 
     #[test]
@@ -739,8 +691,9 @@ mod tests {
         .expect("default scene asset readable");
         let scene: SceneFile = ron::from_str(&content).expect("default scene asset parses");
 
-        assert!(scene.version < SCENE_COMPONENT_FORMAT_VERSION);
-        assert!(scene.entities.is_empty());
+        assert_eq!(scene.version, SCENE_FORMAT_VERSION);
+        assert_eq!(scene.entities.len(), 1);
+        assert!(scene.entities[0].components.contains_key("wind_tornado"));
     }
 
     #[test]
@@ -763,8 +716,7 @@ mod tests {
         let scene_path = scenes_dir.join("test.scene.ron");
 
         // Build a world with a water entity
-        let mut world = World::new();
-        world.insert_resource(crate::ecs::resource::ClipLibrary::new());
+        let mut world = world_with_scene_hooks();
         let mut assets = crate::asset::AssetStorage::new();
         let effect = crate::ecs::component::WaterTorusEffect::default();
         let entity =
@@ -788,8 +740,7 @@ mod tests {
 
         // Load into a new world
         let loaded = load_scene(&scene_path).unwrap();
-        let mut world2 = World::new();
-        world2.insert_resource(crate::ecs::resource::ClipLibrary::new());
+        let mut world2 = world_with_scene_hooks();
         let mut assets2 = crate::asset::AssetStorage::new();
         apply_loaded_scene_to_world(&loaded, &mut world2, &mut assets2, &[]);
 
@@ -822,8 +773,7 @@ mod tests {
         fs::create_dir_all(&scenes_dir).unwrap();
         let scene_path = scenes_dir.join("test.scene.ron");
 
-        let mut world = World::new();
-        world.insert_resource(crate::ecs::resource::ClipLibrary::new());
+        let mut world = world_with_scene_hooks();
         let mut assets = crate::asset::AssetStorage::new();
         let entity = crate::ecs::systems::spawn_wind_with_clip(
             &mut world,
@@ -847,8 +797,7 @@ mod tests {
         save_scene(&scene_path, &world).unwrap();
 
         let loaded = load_scene(&scene_path).unwrap();
-        let mut restored_world = World::new();
-        restored_world.insert_resource(crate::ecs::resource::ClipLibrary::new());
+        let mut restored_world = world_with_scene_hooks();
         let mut restored_assets = crate::asset::AssetStorage::new();
         apply_loaded_scene_to_world(&loaded, &mut restored_world, &mut restored_assets, &[]);
 
@@ -893,8 +842,7 @@ mod tests {
         fs::create_dir_all(&scenes_dir).unwrap();
         let scene_path = scenes_dir.join("test.scene.ron");
 
-        let mut world = World::new();
-        world.insert_resource(crate::ecs::resource::ClipLibrary::new());
+        let mut world = world_with_scene_hooks();
         spawn_tagged_debug_primitive(&mut world, DebugPrimitiveKind::Cube, [1.0, 2.0, 3.0]);
         spawn_tagged_debug_primitive(&mut world, DebugPrimitiveKind::Floor, [0.0, -1.6, 0.0]);
 
@@ -907,8 +855,7 @@ mod tests {
         assert_eq!(loaded.scene.debug_primitives[1].kind, "floor");
         assert_eq!(loaded.scene.debug_primitives[1].position, [0.0, -1.6, 0.0]);
 
-        let mut respawned = World::new();
-        respawned.insert_resource(crate::ecs::resource::ClipLibrary::new());
+        let mut respawned = world_with_scene_hooks();
         let mut assets = crate::asset::AssetStorage::new();
         apply_loaded_scene_to_world(&loaded, &mut respawned, &mut assets, &[]);
 
@@ -979,7 +926,19 @@ mod tests {
         .expect("water probe scene asset readable");
         let scene: SceneFile = ron::from_str(&content).expect("water probe scene asset parses");
 
-        assert!(scene.version < SCENE_COMPONENT_FORMAT_VERSION);
-        assert!(scene.entities.is_empty());
+        assert_eq!(scene.version, SCENE_FORMAT_VERSION);
+        let water = scene
+            .entities
+            .iter()
+            .find(|entity| entity.components.contains_key("water_torus"))
+            .expect("water entity present");
+        let effect: crate::ecs::component::WaterTorusEffect =
+            crate::hooks::scene::decode_scene_value(&water.components["water_torus"])
+                .expect("water component decodes");
+        assert!(
+            (effect.major_radius - 1.2).abs() < f32::EPSILON,
+            "expected major_radius == 1.2, got {}",
+            effect.major_radius
+        );
     }
 }

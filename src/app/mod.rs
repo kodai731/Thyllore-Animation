@@ -2,6 +2,7 @@ pub mod cleanup;
 pub mod color_test_quad;
 mod command_recording;
 pub mod data;
+pub(crate) mod deferred_actions;
 pub(crate) mod features;
 pub mod frame_context;
 pub mod init;

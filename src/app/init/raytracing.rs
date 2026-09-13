@@ -44,7 +44,8 @@ impl App {
         rrcommand_pool: &Rc<RRCommandPool>,
     ) -> Result<()> {
         data.raytracing.command_pool = rrcommand_pool.command_pool;
-        let water_transforms = crate::ecs::systems::collect_water_instances(&data.ecs_world);
+        let procedural_primitives =
+            crate::app::model_loader::collect_procedural_primitives(&data.ecs_world);
         let mesh_transforms =
             crate::ecs::systems::collect_mesh_transforms(&data.ecs_world, &data.ecs_assets);
         data.raytracing.build_acceleration_structures(
@@ -53,7 +54,7 @@ impl App {
             rrcommand_pool,
             &data.graphics_resources.meshes,
             &mesh_transforms,
-            &water_transforms,
+            &procedural_primitives,
         )
     }
 
@@ -95,48 +96,6 @@ impl App {
         Self::create_onion_skin_pipeline_with_resources(instance, rrdevice, data, rrrender)?;
         crate::hooks::effect::EffectHooks::run_setup(instance, rrdevice, data, rrrender)?;
 
-        Ok(())
-    }
-
-    pub(crate) unsafe fn create_onion_skin_pipeline_with_resources(
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        data: &mut AppData,
-        rrrender: &RRRender,
-    ) -> Result<()> {
-        let hdr_buffer = match data.viewport.hdr_buffer {
-            Some(ref hdr) => hdr,
-            None => {
-                log!("HDR buffer not available, skipping onion skin pipeline");
-                return Ok(());
-            }
-        };
-
-        let offscreen = match data.viewport.offscreen {
-            Some(ref o) => o,
-            None => {
-                log!("Offscreen not available, skipping onion skin pipeline");
-                return Ok(());
-            }
-        };
-
-        let resolve_image_view = offscreen.resolve_color_image_view;
-        let offscreen_format = offscreen.format;
-        let width = hdr_buffer.width;
-        let height = hdr_buffer.height;
-
-        data.raytracing.create_onion_skin_pipeline(
-            instance,
-            rrdevice,
-            rrrender,
-            &data.graphics_resources,
-            resolve_image_view,
-            offscreen_format,
-            width,
-            height,
-        )?;
-
-        log!("Onion skin pipeline created successfully");
         Ok(())
     }
 }

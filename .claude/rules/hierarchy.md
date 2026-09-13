@@ -64,8 +64,10 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   Known exceptions tracked by the vulkan-core effect-neutral issue (#179), not to be extended:
   `descriptor/flame.rs`, `descriptor/water.rs`, `descriptor/water_caustic.rs`, `descriptor/water_trace.rs`,
   `renderer/flame.rs`, `renderer/water.rs`, `resource/flame_buffer.rs`, `resource/water_buffer.rs`, the
-  flame / water fields and `create_*_pipeline` methods of `RayTracingData`, `MAX_FLAME_INSTANCES` /
-  `MAX_WATER_INSTANCES`, and `FlamePushConstants` / `WaterPushConstants` in `renderer/push_constants.rs`.
+  flame / water fields of `RayTracingData` (filled by `src/ecs/systems/<effect>/pipeline.rs`), and
+  `FlamePushConstants` / `WaterPushConstants` in `renderer/push_constants.rs`. Pipeline creation never
+  lives in vulkan-core: effects build theirs in `src/ecs/systems/<effect>/pipeline.rs`, the core
+  post-process passes in `src/app/post_process/pipelines.rs`, onion skin in `src/app/init/onion_skin.rs`.
 - Domain crates use the `components/` (data) and `systems/` (pure functions) split, see
   `ecs-architecture.md`.
 - GPU object lifetime: a type that owns Vulkan handles implements `GpuResource` (`resource/gpu_resource.rs`)
@@ -138,7 +140,11 @@ handle. `scene.rs` holds the `SceneComponentHook` contract (type key, owner / at
 entities, capture, apply), the `scene_owner!` / `scene_attachment!` macros that submit a hook to the
 link-time registry (`inventory`), and `SceneComponentHooks::collect()` that `src/app/` stores as a
 `World` resource for `src/scene/`; owners are applied before attachments. `scene_resource.rs` is the
-same contract for world resources (`SceneResourceHook`, `scene_resource!`, `SceneResourceHooks`). A hook file describes a contract only; it never names a
+same contract for world resources (`SceneResourceHook`, `scene_resource!`, `SceneResourceHooks`).
+`gpu_primitive.rs` holds the `GpuPrimitiveSource` contract (a component that describes its ray-tracing
+instance as a `GpuPrimitive`), the `gpu_primitive_source!` registration and `collect_all(world)`, which the
+acceleration structure build and the per-frame TLAS refresh both call so the instance order is one list
+(hooks sorted by type name, entities sorted by id). A hook file describes a contract only; it never names a
 concrete effect.
 
 ## src/effect/
@@ -167,7 +173,7 @@ outside those directories reaches a feature through a contract (`src/hooks/`), a
 | `src/effect/subscription.rs` | every effect (the single `EffectHook` list; scene hooks self-register instead) |
 | `src/platform/ui/` per-effect windows, `src/debugview/` per-effect dumps | the effect the file is for |
 | `src/scene/`, `src/hooks/`, `src/ecs/systems/*.rs` (shared systems), shared crates | none, tests included (`src/scene/` tests use `entities.rs::test_support`; effect round trips live in `src/ecs/systems/<effect>/tests.rs`) |
-| `src/app/`, `src/ecs/world.rs` | none in new code; the existing spots (default flame spawn in `init/instance.rs`, water acceleration structures in `scene_model.rs` / `init/raytracing.rs` / `cleanup.rs` / `model_loader.rs`, `query_flames` / `query_waters` / `query_winds`) are exceptions tracked with #179 and must not grow |
+| `src/app/`, `src/ecs/world.rs` | none in new code; the existing spots (default flame spawn in `init/instance.rs`, `query_flames` / `query_waters` / `query_winds`) are exceptions tracked with #179 and must not grow |
 
 Concretely:
 

@@ -71,11 +71,12 @@ unsafe fn setup_water(
         return Ok(());
     };
 
-    data.raytracing.create_water_pipeline(
+    super::pipeline::create_water_pipeline(
         instance,
         rrdevice,
         rrrender,
         &data.graphics_resources,
+        &mut data.raytracing,
         &water_targets.buffer,
         hdr_buffer,
         crate::app::init::MAX_FRAMES_IN_FLIGHT,

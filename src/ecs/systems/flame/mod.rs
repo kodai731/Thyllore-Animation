@@ -2,6 +2,7 @@ mod attach;
 mod history_accumulate;
 mod passes;
 mod pick;
+mod pipeline;
 mod preset;
 mod render_targets;
 mod spawn;

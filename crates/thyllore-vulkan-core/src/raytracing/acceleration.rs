@@ -45,7 +45,7 @@ impl DeviceBuffer {
 #[derive(Clone, Debug)]
 pub struct RRAccelerationStructure {
     pub blas_list: Vec<RRBLAS>,
-    pub water_blas: Vec<RRBLAS>,
+    pub procedural_blas: Vec<RRBLAS>,
     pub tlas: RRTLAS,
     pub hit_shading_table: Option<HitShadingTable>,
 }
@@ -185,7 +185,7 @@ unsafe fn fill_instances_buffer(
     buf: &DeviceBuffer,
     instances_size: vk::DeviceSize,
     blas_list: &[RRBLAS],
-    water_blas: &[RRBLAS],
+    procedural_blas: &[RRBLAS],
 ) -> Result<()> {
     let ptr =
         rrdevice
@@ -194,7 +194,7 @@ unsafe fn fill_instances_buffer(
             as *mut vk::AccelerationStructureInstanceKHR;
 
     let mesh_count = blas_list.len();
-    let total = mesh_count + water_blas.len();
+    let total = mesh_count + procedural_blas.len();
     let mut instances: Vec<vk::AccelerationStructureInstanceKHR> = Vec::with_capacity(total);
 
     for (i, blas) in blas_list.iter().enumerate() {
@@ -206,7 +206,7 @@ unsafe fn fill_instances_buffer(
         });
     }
 
-    for (j, blas) in water_blas.iter().enumerate() {
+    for (j, blas) in procedural_blas.iter().enumerate() {
         instances.push(vk::AccelerationStructureInstanceKHR {
             transform: blas.transform,
             instance_custom_index_and_mask: vk::Bitfield24_8::new((mesh_count + j) as u32, 0xFF),
@@ -225,9 +225,9 @@ unsafe fn upload_instances_buffer(
     instance: &Instance,
     rrdevice: &RRDevice,
     blas_list: &[RRBLAS],
-    water_blas: &[RRBLAS],
+    procedural_blas: &[RRBLAS],
 ) -> Result<DeviceBuffer> {
-    let total = blas_list.len() + water_blas.len();
+    let total = blas_list.len() + procedural_blas.len();
     let instances_size =
         (std::mem::size_of::<vk::AccelerationStructureInstanceKHR>() * total) as vk::DeviceSize;
 
@@ -240,7 +240,7 @@ unsafe fn upload_instances_buffer(
         vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
     )?;
 
-    fill_instances_buffer(rrdevice, &buf, instances_size, blas_list, water_blas)?;
+    fill_instances_buffer(rrdevice, &buf, instances_size, blas_list, procedural_blas)?;
 
     Ok(buf)
 }
@@ -255,7 +255,7 @@ impl RRAccelerationStructure {
     pub fn new() -> Self {
         Self {
             blas_list: Vec::new(),
-            water_blas: Vec::new(),
+            procedural_blas: Vec::new(),
             tlas: RRTLAS::default(),
             hit_shading_table: None,
         }
@@ -437,23 +437,13 @@ impl RRAccelerationStructure {
         })
     }
 
-    pub unsafe fn create_water_blas(
+    pub unsafe fn create_procedural_blas(
         instance: &Instance,
         rrdevice: &RRDevice,
         rrcommand_pool: &RRCommandPool,
         model: &Matrix4<f32>,
-        major_radius: f32,
-        minor_radius: f32,
+        aabb: vk::AabbPositionsKHR,
     ) -> Result<RRBLAS> {
-        let extent = major_radius + minor_radius;
-        let aabb = vk::AabbPositionsKHR {
-            min_x: -extent,
-            min_y: -minor_radius,
-            min_z: -extent,
-            max_x: extent,
-            max_y: minor_radius,
-            max_z: extent,
-        };
         let size = std::mem::size_of::<vk::AabbPositionsKHR>() as vk::DeviceSize;
         let buf = allocate_device_buffer(
             instance,
@@ -482,11 +472,11 @@ impl RRAccelerationStructure {
         rrdevice: &RRDevice,
         rrcommand_pool: &RRCommandPool,
         blas_list: &[RRBLAS],
-        water_blas: &[RRBLAS],
+        procedural_blas: &[RRBLAS],
     ) -> Result<RRTLAS> {
         let device = &rrdevice.device;
 
-        let instances_buf = if blas_list.is_empty() && water_blas.is_empty() {
+        let instances_buf = if blas_list.is_empty() && procedural_blas.is_empty() {
             // Empty case: allocate buffer with 1 zero-initialized instance (mask=0, accelerationStructureReference=0)
             // This is an "inactive instance" per spec — the TLAS has 1 primitive but no hits.
             let instances_size =
@@ -513,7 +503,7 @@ impl RRAccelerationStructure {
 
             buf
         } else {
-            upload_instances_buffer(instance, rrdevice, blas_list, water_blas)?
+            upload_instances_buffer(instance, rrdevice, blas_list, procedural_blas)?
         };
 
         let instances_data = vk::AccelerationStructureGeometryInstancesDataKHR::builder()
@@ -529,10 +519,10 @@ impl RRAccelerationStructure {
             })
             .flags(vk::GeometryFlagsKHR::OPAQUE);
 
-        let primitive_count = if blas_list.is_empty() && water_blas.is_empty() {
+        let primitive_count = if blas_list.is_empty() && procedural_blas.is_empty() {
             1
         } else {
-            (blas_list.len() + water_blas.len()) as u32
+            (blas_list.len() + procedural_blas.len()) as u32
         };
 
         let build_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
@@ -687,31 +677,31 @@ impl RRAccelerationStructure {
         rrcommand_pool: &RRCommandPool,
         tlas: &mut RRTLAS,
         blas_list: &[RRBLAS],
-        water_blas: &[RRBLAS],
+        procedural_blas: &[RRBLAS],
     ) -> Result<()> {
         let device = &rrdevice.device;
 
-        if blas_list.is_empty() && water_blas.is_empty() {
+        if blas_list.is_empty() && procedural_blas.is_empty() {
             return Ok(());
         }
 
-        let total = blas_list.len() + water_blas.len();
+        let total = blas_list.len() + procedural_blas.len();
         let instances_size =
             (std::mem::size_of::<vk::AccelerationStructureInstanceKHR>() * total) as vk::DeviceSize;
 
         let instances_buf = if let Some(ref existing) = tlas.instances_buf {
             if instances_size > existing.buffer_size() {
                 destroy_device_buffer(device, &existing);
-                let new = upload_instances_buffer(instance, rrdevice, blas_list, water_blas)?;
+                let new = upload_instances_buffer(instance, rrdevice, blas_list, procedural_blas)?;
                 tlas.instances_buf = Some(new.clone());
                 new
             } else {
                 let buf = tlas.instances_buf.clone().unwrap();
-                fill_instances_buffer(rrdevice, &buf, instances_size, blas_list, water_blas)?;
+                fill_instances_buffer(rrdevice, &buf, instances_size, blas_list, procedural_blas)?;
                 buf
             }
         } else {
-            let buf = upload_instances_buffer(instance, rrdevice, blas_list, water_blas)?;
+            let buf = upload_instances_buffer(instance, rrdevice, blas_list, procedural_blas)?;
             tlas.instances_buf = Some(buf.clone());
             buf
         };
@@ -825,7 +815,7 @@ impl RRAccelerationStructure {
             }
         }
 
-        for blas in &mut self.water_blas {
+        for blas in &mut self.procedural_blas {
             if let Some(blas_as) = blas.acceleration_structure {
                 device.destroy_acceleration_structure_khr(blas_as, None);
             }
@@ -845,7 +835,7 @@ impl RRAccelerationStructure {
             device.free_memory(table.memory, None);
         }
         self.blas_list.clear();
-        self.water_blas.clear();
+        self.procedural_blas.clear();
     }
 
     pub unsafe fn update_all(
@@ -879,7 +869,7 @@ impl RRAccelerationStructure {
             rrcommand_pool,
             &mut self.tlas,
             &self.blas_list,
-            &self.water_blas,
+            &self.procedural_blas,
         )?;
 
         self.fill_hit_shading_table(instance, rrdevice, vertex_buffers, &[])?;
@@ -892,10 +882,10 @@ impl RRAccelerationStructure {
         instance: &Instance,
         rrdevice: &RRDevice,
         vertex_buffers: &[(&vk::Buffer, u32, u32, &vk::Buffer, u32)],
-        waters: &[(Matrix4<f32>, f32, f32)],
+        procedurals: &[(Matrix4<f32>, [f32; 4])],
     ) -> Result<()> {
         let mut records: Vec<HitShadingRecord> =
-            Vec::with_capacity(vertex_buffers.len() + waters.len());
+            Vec::with_capacity(vertex_buffers.len() + procedurals.len());
 
         for (vertex_buffer, _, _, index_buffer, _) in vertex_buffers.iter() {
             let vertex_address = rrdevice.device.get_buffer_device_address(
@@ -915,14 +905,14 @@ impl RRAccelerationStructure {
             });
         }
 
-        for (model, major_radius, minor_radius) in waters.iter() {
+        for (model, params) in procedurals.iter() {
             records.push(HitShadingRecord {
                 vertex_address: 0,
                 index_address: 0,
                 model: GpuMat4::from_mat4(*model),
                 normal_matrix: GpuMat4::normal_matrix_of(*model),
                 base_color: [1.0, 1.0, 1.0, 1.0],
-                params: [1.0, *major_radius, *minor_radius, 0.0],
+                params: *params,
             });
         }
 

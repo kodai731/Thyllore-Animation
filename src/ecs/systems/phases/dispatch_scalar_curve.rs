@@ -20,7 +20,7 @@ pub fn dispatch_scalar_clip_events(
         match event {
             UIEvent::AddFlame => {
                 let flame_count = world.query_flames().len();
-                if flame_count < thyllore_vulkan_core::resource::MAX_FLAME_INSTANCES {
+                if flame_count < thyllore_effect_core::FLAME_MAX_INSTANCES {
                     let effect = crate::ecs::component::FlameEffect {
                         position: cgmath::Vector3::new(1.5 * flame_count as f32, 0.0, 0.0),
                         ..crate::ecs::component::FlameEffect::default()
@@ -31,7 +31,7 @@ pub fn dispatch_scalar_clip_events(
             }
             UIEvent::AddWater => {
                 let water_count = world.query_waters().len();
-                if water_count < thyllore_vulkan_core::resource::MAX_WATER_INSTANCES {
+                if water_count < thyllore_effect_core::WATER_MAX_INSTANCES {
                     let effect = crate::ecs::component::WaterTorusEffect {
                         position: cgmath::Vector3::new(0.0, -0.5, 2.5 * water_count as f32),
                         ..crate::ecs::component::WaterTorusEffect::default()

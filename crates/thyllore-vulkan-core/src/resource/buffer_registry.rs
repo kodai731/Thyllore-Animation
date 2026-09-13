@@ -509,10 +509,6 @@ impl GpuResource for GpuBufferRegistry {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy_all(rrdevice);
     }
-
-    fn resource_name(&self) -> &'static str {
-        "GpuBufferRegistry"
-    }
 }
 
 impl Drop for GpuBufferRegistry {

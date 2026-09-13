@@ -1,9 +1,8 @@
-use crate::core::device::RRDevice;
 use crate::pipeline::RRPipeline;
 use crate::resource::GpuResource;
 use thyllore_render_core::PipelineId;
 
-#[derive(Default)]
+#[derive(Default, GpuResource)]
 pub struct PipelineStorage {
     pipelines: Vec<RRPipeline>,
 }
@@ -35,22 +34,6 @@ impl PipelineStorage {
 
     pub fn iter(&self) -> impl Iterator<Item = (PipelineId, &RRPipeline)> {
         self.pipelines.iter().enumerate()
-    }
-
-    pub unsafe fn destroy_all(&mut self, rrdevice: &RRDevice) {
-        for pipeline in self.pipelines.drain(..) {
-            pipeline.destroy(&rrdevice.device);
-        }
-    }
-}
-
-impl GpuResource for PipelineStorage {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy_all(rrdevice);
-    }
-
-    fn resource_name(&self) -> &'static str {
-        "PipelineStorage"
     }
 }
 

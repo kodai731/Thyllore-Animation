@@ -1,6 +1,7 @@
 use crate::core::device::*;
 use crate::descriptor::{PassShaders, ShaderStage};
 use crate::resource::buffer::create_buffer;
+use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 use std::fs::File;
 use std::io::Read;
@@ -294,6 +295,19 @@ unsafe fn create_shader_module(rrdevice: &RRDevice, bytecode: &[u8]) -> Result<v
 
 pub fn align_up(v: u64, a: u64) -> u64 {
     (v + a - 1) & !(a - 1)
+}
+
+impl GpuResource for RRRayTracingPipeline {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        if self.pipeline == vk::Pipeline::null() {
+            return;
+        }
+        self.destroy(&rrdevice.device);
+        self.pipeline = vk::Pipeline::null();
+        self.pipeline_layout = vk::PipelineLayout::null();
+        self.sbt_buffer = vk::Buffer::null();
+        self.sbt_memory = vk::DeviceMemory::null();
+    }
 }
 
 #[cfg(test)]

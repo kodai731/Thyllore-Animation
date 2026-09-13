@@ -2,6 +2,7 @@ use crate::command::*;
 use crate::core::device::*;
 use crate::core::swapchain::*;
 use crate::render::framebuffer::{create_color_objects, create_framebuffers};
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::*;
 use crate::vulkan::*;
 #[derive(Clone, Debug, Default)]
@@ -25,18 +26,50 @@ pub struct RRRender {
 }
 
 impl RRRender {
-    pub unsafe fn destroy_size_dependent(&self, device: &crate::core::device::Device) {
-        for &fb in &self.framebuffers {
+    pub unsafe fn destroy_size_dependent(&mut self, device: &crate::core::device::Device) {
+        for fb in self.framebuffers.drain(..) {
             device.destroy_framebuffer(fb, None);
         }
 
-        device.destroy_image_view(self.depth_image_view, None);
-        device.free_memory(self.depth_image_memory, None);
-        device.destroy_image(self.depth_image, None);
+        destroy_image_objects(
+            device,
+            &mut self.depth_image_view,
+            &mut self.depth_image,
+            &mut self.depth_image_memory,
+        );
+        destroy_image_objects(
+            device,
+            &mut self.color_image_view,
+            &mut self.color_image,
+            &mut self.color_image_memory,
+        );
+    }
 
-        device.destroy_image_view(self.color_image_view, None);
-        device.free_memory(self.color_image_memory, None);
-        device.destroy_image(self.color_image, None);
+    pub unsafe fn destroy_gbuffer_attachments(&mut self, device: &crate::core::device::Device) {
+        if self.gbuffer_framebuffer != vk::Framebuffer::null() {
+            device.destroy_framebuffer(self.gbuffer_framebuffer, None);
+            self.gbuffer_framebuffer = vk::Framebuffer::null();
+        }
+        destroy_image_objects(
+            device,
+            &mut self.gbuffer_depth_image_view,
+            &mut self.gbuffer_depth_image,
+            &mut self.gbuffer_depth_image_memory,
+        );
+    }
+
+    pub unsafe fn destroy(&mut self, device: &crate::core::device::Device) {
+        self.destroy_size_dependent(device);
+        self.destroy_gbuffer_attachments(device);
+
+        if self.render_pass != vk::RenderPass::null() {
+            device.destroy_render_pass(self.render_pass, None);
+            self.render_pass = vk::RenderPass::null();
+        }
+        if self.gbuffer_render_pass != vk::RenderPass::null() {
+            device.destroy_render_pass(self.gbuffer_render_pass, None);
+            self.gbuffer_render_pass = vk::RenderPass::null();
+        }
     }
 
     pub unsafe fn new(
@@ -70,6 +103,32 @@ impl RRRender {
         }
         println!("created render pass {:?}", rrrender);
         rrrender
+    }
+}
+
+unsafe fn destroy_image_objects(
+    device: &crate::core::device::Device,
+    view: &mut vk::ImageView,
+    image: &mut vk::Image,
+    memory: &mut vk::DeviceMemory,
+) {
+    if *view != vk::ImageView::null() {
+        device.destroy_image_view(*view, None);
+        *view = vk::ImageView::null();
+    }
+    if *image != vk::Image::null() {
+        device.destroy_image(*image, None);
+        *image = vk::Image::null();
+    }
+    if *memory != vk::DeviceMemory::null() {
+        device.free_memory(*memory, None);
+        *memory = vk::DeviceMemory::null();
+    }
+}
+
+impl GpuResource for RRRender {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }
 

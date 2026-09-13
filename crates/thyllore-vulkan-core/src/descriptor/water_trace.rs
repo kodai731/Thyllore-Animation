@@ -2,6 +2,7 @@ use crate::core::device::*;
 use crate::descriptor::pass_manifest::WATER_TRACE;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::water_trace;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::uniform_buffer::UniformBuffer;
 use crate::vulkan::*;
 use thyllore_effect_core::WaterUBO;
@@ -65,5 +66,11 @@ impl RRWaterTraceDescriptorSet {
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         self.layout.destroy(device);
+    }
+}
+
+impl GpuResource for RRWaterTraceDescriptorSet {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

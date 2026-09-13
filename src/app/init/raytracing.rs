@@ -2,7 +2,7 @@ use crate::app::{App, AppData};
 use crate::ecs::resource::billboard::BillboardData;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::render::{create_gbuffer_render_pass, RRRender};
+use crate::vulkanr::render::RRRender;
 use crate::vulkanr::renderer::deferred::create_gbuffer_framebuffer;
 use crate::vulkanr::swapchain::RRSwapchain;
 
@@ -23,8 +23,6 @@ impl App {
 
         data.raytracing
             .init_gbuffer(instance, rrdevice, rrswapchain, rrcommand_pool)?;
-
-        create_gbuffer_render_pass(instance, rrdevice, rrrender)?;
 
         if let Some(ref gbuffer) = data.raytracing.gbuffer {
             create_gbuffer_framebuffer(instance, rrdevice, rrrender, gbuffer)?;

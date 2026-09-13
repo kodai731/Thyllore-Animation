@@ -36,6 +36,23 @@ pub fn clip_library_register_and_activate(
     source_id
 }
 
+/// Registers clips read from disk, returning each new id with the clip's name.
+pub fn clip_library_register_loaded(
+    world: &mut crate::ecs::world::World,
+    assets: &mut AssetStorage,
+    clips: Vec<EditableAnimationClip>,
+) -> Vec<(SourceClipId, String)> {
+    let mut clip_library = world.resource_mut::<ClipLibrary>();
+    clips
+        .into_iter()
+        .map(|clip| {
+            let name = clip.name.clone();
+            let id = clip_library_register_and_activate(&mut clip_library, assets, clip);
+            (id, name)
+        })
+        .collect()
+}
+
 pub fn clip_library_create_from_imported(
     lib: &mut ClipLibrary,
     assets: &mut AssetStorage,

@@ -46,9 +46,8 @@ impl App {
         log!("Loading new model from: {}", path);
         self.rrdevice.device.device_wait_idle()?;
 
-        let water_state = crate::scene::build_water_scene_data(&self.data.ecs_world);
-        let flame_state = crate::scene::build_flame_scene_data(&self.data.ecs_world);
-        let wind_state = crate::scene::build_wind_scene_data(&self.data.ecs_world);
+        let scene_entities = crate::scene::capture_scene_entities(&self.data.ecs_world);
+        let scheduled_clips = crate::scene::capture_scheduled_clips(&self.data.ecs_world);
 
         let command_pool = self.resource::<CommandState>().pool.clone();
         let swapchain = self.resource::<SwapchainState>().swapchain.clone();
@@ -83,33 +82,20 @@ impl App {
                     scene_state.clear();
                 }
 
-                if let Some(ref water) = water_state {
-                    crate::scene::apply_water_state_to_world(
-                        &mut self.data.ecs_world,
-                        &mut self.data.ecs_assets,
-                        water,
-                    );
-                }
-                if let Some(ref flame) = flame_state {
-                    crate::scene::apply_flame_state_to_world(
-                        &mut self.data.ecs_world,
-                        &mut self.data.ecs_assets,
-                        flame,
-                    );
-                }
-                if let Some(ref wind) = wind_state {
-                    crate::scene::apply_wind_state_to_world(
-                        &mut self.data.ecs_world,
-                        &mut self.data.ecs_assets,
-                        wind,
-                    );
-                }
-                if water_state.is_some() {
+                crate::ecs::systems::clip_library_systems::clip_library_register_loaded(
+                    &mut self.data.ecs_world,
+                    &mut self.data.ecs_assets,
+                    scheduled_clips,
+                );
+                crate::scene::apply_scene_entities(
+                    &mut self.data.ecs_world,
+                    &mut self.data.ecs_assets,
+                    &scene_entities,
+                );
+
+                let waters = crate::ecs::systems::collect_water_instances(&self.data.ecs_world);
+                if !waters.is_empty() {
                     let command_pool = self.resource::<CommandState>().pool.clone();
-                    let procedural_primitives =
-                        crate::app::model_loader::collect_procedural_primitives(
-                            &self.data.ecs_world,
-                        );
                     let mesh_transforms = crate::ecs::systems::collect_mesh_transforms(
                         &self.data.ecs_world,
                         &self.data.ecs_assets,

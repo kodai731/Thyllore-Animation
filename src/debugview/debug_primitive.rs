@@ -75,21 +75,19 @@ impl App {
         Ok(())
     }
 
+    /// Debug primitives restored from a scene carry only tag and placement until the GPU mesh
+    /// is built here.
     pub unsafe fn spawn_pending_debug_primitives(&mut self) {
-        let requests = match self
-            .data
-            .ecs_world
-            .get_resource_mut::<crate::ecs::resource::PendingDebugPrimitives>()
-        {
-            Some(mut pending) => pending.take_requests(),
-            None => return,
-        };
-
-        for request in requests {
-            if let Err(e) = self.spawn_debug_primitive_at(request.kind, request.position) {
+        let awaiting =
+            crate::ecs::systems::take_debug_primitives_awaiting_mesh(&mut self.data.ecs_world);
+        for record in awaiting {
+            let spawned = record
+                .kind()
+                .and_then(|kind| self.spawn_debug_primitive_at(kind, record.position.into()));
+            if let Err(e) = spawned {
                 log_error!(
-                    "Failed to spawn scene debug primitive {:?}: {:?}",
-                    request.kind,
+                    "Failed to spawn scene debug primitive {}: {:?}",
+                    record.kind,
                     e
                 );
             }

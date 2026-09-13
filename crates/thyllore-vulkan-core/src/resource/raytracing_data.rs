@@ -30,9 +30,6 @@ use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::resource::{GpuResource, OnionSkinPassResources, RRGBuffer};
 use thyllore_effect_core::{FlameUBO, WaterUBO};
 
-pub const MAX_FLAME_INSTANCES: usize = 4;
-pub const MAX_WATER_INSTANCES: usize = 4;
-
 #[derive(Clone, Debug, Default, GpuResource)]
 pub struct RayTracingData {
     #[gpu_resource(skip)]

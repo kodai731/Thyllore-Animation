@@ -773,7 +773,7 @@ unsafe fn upload_mesh_vertices(
 }
 
 pub fn collect_procedural_primitives(world: &World) -> Vec<GpuPrimitive<'static>> {
-    crate::ecs::systems::gpu_primitive_sources::collect_all(world)
+    crate::hooks::gpu_primitive::collect_all(world)
 }
 
 pub unsafe fn rebuild_acceleration_structures(

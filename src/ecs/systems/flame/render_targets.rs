@@ -81,11 +81,12 @@ unsafe fn setup_flame(
         }
     };
 
-    data.raytracing.create_flame_pipeline(
+    super::pipeline::create_flame_pipeline(
         instance,
         rrdevice,
         rrrender,
         &data.graphics_resources,
+        &mut data.raytracing,
         flame_buffer,
         position_image_view,
         position_sampler,

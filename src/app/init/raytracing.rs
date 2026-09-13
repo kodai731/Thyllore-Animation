@@ -98,46 +98,4 @@ impl App {
 
         Ok(())
     }
-
-    pub(crate) unsafe fn create_onion_skin_pipeline_with_resources(
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        data: &mut AppData,
-        rrrender: &RRRender,
-    ) -> Result<()> {
-        let hdr_buffer = match data.viewport.hdr_buffer {
-            Some(ref hdr) => hdr,
-            None => {
-                log!("HDR buffer not available, skipping onion skin pipeline");
-                return Ok(());
-            }
-        };
-
-        let offscreen = match data.viewport.offscreen {
-            Some(ref o) => o,
-            None => {
-                log!("Offscreen not available, skipping onion skin pipeline");
-                return Ok(());
-            }
-        };
-
-        let resolve_image_view = offscreen.resolve_color_image_view;
-        let offscreen_format = offscreen.format;
-        let width = hdr_buffer.width;
-        let height = hdr_buffer.height;
-
-        data.raytracing.create_onion_skin_pipeline(
-            instance,
-            rrdevice,
-            rrrender,
-            &data.graphics_resources,
-            resolve_image_view,
-            offscreen_format,
-            width,
-            height,
-        )?;
-
-        log!("Onion skin pipeline created successfully");
-        Ok(())
-    }
 }

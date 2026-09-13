@@ -39,7 +39,7 @@ pub unsafe fn refresh_tlas_mesh_transforms(ctx: &mut FrameContext) -> Result<()>
     }
 
     let mesh_transforms = collect_mesh_transforms(ctx.world, ctx.assets);
-    let procedural_primitives = crate::ecs::systems::gpu_primitive_sources::collect_all(ctx.world);
+    let procedural_primitives = crate::hooks::gpu_primitive::collect_all(ctx.world);
     let gbuffer_mesh_indices: Vec<usize> = ctx
         .graphics
         .meshes

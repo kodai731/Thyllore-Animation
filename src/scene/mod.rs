@@ -8,8 +8,8 @@ mod transform_format;
 
 pub use clip_io::{load_animation_clip, save_animation_clip};
 pub use components::{
-    apply_flame_state_to_world, apply_water_state_to_world, build_flame_scene_data,
-    build_water_scene_data, SceneEntity,
+    apply_flame_state_to_world, apply_water_state_to_world, apply_wind_state_to_world,
+    build_flame_scene_data, build_water_scene_data, build_wind_scene_data, SceneEntity,
 };
 pub use error::{SceneError, SceneResult};
 pub use format::{

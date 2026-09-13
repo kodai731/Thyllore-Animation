@@ -416,3 +416,69 @@ pub unsafe fn create_gbuffer_render_pass(
     log::info!("Created G-Buffer render pass with ObjectID attachment");
     Ok(())
 }
+
+/// Load or clear of a single color attachment that a fragment pass draws into and a later
+/// fragment pass samples; the incoming edge covers a previous color write and a previous read.
+pub struct ColorOverlayPassDesc {
+    pub format: vk::Format,
+    pub load_op: vk::AttachmentLoadOp,
+    pub initial_layout: vk::ImageLayout,
+    pub final_layout: vk::ImageLayout,
+}
+
+pub unsafe fn create_color_overlay_render_pass(
+    rrdevice: &RRDevice,
+    desc: ColorOverlayPassDesc,
+) -> Result<vk::RenderPass> {
+    let color_attachment = vk::AttachmentDescription::builder()
+        .format(desc.format)
+        .samples(vk::SampleCountFlags::_1)
+        .load_op(desc.load_op)
+        .store_op(vk::AttachmentStoreOp::STORE)
+        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+        .initial_layout(desc.initial_layout)
+        .final_layout(desc.final_layout)
+        .build();
+
+    let color_attachment_ref = vk::AttachmentReference::builder()
+        .attachment(0)
+        .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+        .build();
+    let color_attachments = [color_attachment_ref];
+    let subpass = vk::SubpassDescription::builder()
+        .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+        .color_attachments(&color_attachments);
+
+    let dependency_in = vk::SubpassDependency::builder()
+        .src_subpass(vk::SUBPASS_EXTERNAL)
+        .dst_subpass(0)
+        .src_stage_mask(
+            vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT
+                | vk::PipelineStageFlags::FRAGMENT_SHADER,
+        )
+        .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE | vk::AccessFlags::SHADER_READ)
+        .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+        .dst_access_mask(
+            vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+        )
+        .build();
+    let dependency_out = vk::SubpassDependency::builder()
+        .src_subpass(0)
+        .dst_subpass(vk::SUBPASS_EXTERNAL)
+        .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+        .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+        .dst_stage_mask(vk::PipelineStageFlags::FRAGMENT_SHADER)
+        .dst_access_mask(vk::AccessFlags::SHADER_READ)
+        .build();
+
+    let attachments = [color_attachment];
+    let subpasses = [subpass];
+    let dependencies = [dependency_in, dependency_out];
+    let info = vk::RenderPassCreateInfo::builder()
+        .attachments(&attachments)
+        .subpasses(&subpasses)
+        .dependencies(&dependencies);
+
+    Ok(rrdevice.device.create_render_pass(&info, None)?)
+}

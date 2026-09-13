@@ -443,6 +443,9 @@ fn apply_scene_component_entities(
     if !applied_keys.contains("water_torus") {
         crate::ecs::systems::despawn_waters(world);
     }
+    if !applied_keys.contains("wind_tornado") {
+        crate::ecs::systems::despawn_winds(world);
+    }
 }
 
 /// Spawning is deferred to the app because a non-additive model load clears every entity.
@@ -729,6 +732,18 @@ mod tests {
     }
 
     #[test]
+    fn default_scene_asset_parses() {
+        let content = fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/scenes/default.scene.ron"),
+        )
+        .expect("default scene asset readable");
+        let scene: SceneFile = ron::from_str(&content).expect("default scene asset parses");
+
+        assert!(scene.version < SCENE_COMPONENT_FORMAT_VERSION);
+        assert!(scene.entities.is_empty());
+    }
+
+    #[test]
     fn scene_resolves_an_existing_model_file() {
         let dir = temp_dir("present");
         fs::create_dir_all(dir.join("models")).unwrap();
@@ -798,6 +813,59 @@ mod tests {
             "expected preset name == \"sea\", got \"{}\"",
             preset.name
         );
+    }
+
+    #[test]
+    fn wind_roundtrip() {
+        let dir = temp_dir("wind_roundtrip");
+        let scenes_dir = dir.join("scenes");
+        fs::create_dir_all(&scenes_dir).unwrap();
+        let scene_path = scenes_dir.join("test.scene.ron");
+
+        let mut world = World::new();
+        world.insert_resource(crate::ecs::resource::ClipLibrary::new());
+        let mut assets = crate::asset::AssetStorage::new();
+        let entity = crate::ecs::systems::spawn_wind_with_clip(
+            &mut world,
+            &mut assets,
+            crate::ecs::systems::DEFAULT_WIND_NAME,
+            crate::ecs::component::WindTornadoEffect::default(),
+        );
+
+        if let Some(mut wind) =
+            world.get_component_mut::<crate::ecs::component::WindTornadoEffect>(entity)
+        {
+            wind.column_height = 3.5;
+        }
+        world.insert_component(
+            entity,
+            crate::ecs::component::AppliedWindPreset {
+                name: "storm".to_string(),
+            },
+        );
+
+        save_scene(&scene_path, &world).unwrap();
+
+        let loaded = load_scene(&scene_path).unwrap();
+        let mut restored_world = World::new();
+        restored_world.insert_resource(crate::ecs::resource::ClipLibrary::new());
+        let mut restored_assets = crate::asset::AssetStorage::new();
+        apply_loaded_scene_to_world(&loaded, &mut restored_world, &mut restored_assets, &[]);
+
+        let winds: Vec<_> = restored_world.query_winds();
+        assert_eq!(winds.len(), 1, "expected exactly 1 wind entity");
+        let wind = restored_world
+            .get_component::<crate::ecs::component::WindTornadoEffect>(winds[0])
+            .unwrap();
+        assert!(
+            (wind.column_height - 3.5).abs() < f32::EPSILON,
+            "expected column_height == 3.5, got {}",
+            wind.column_height
+        );
+        let preset = restored_world
+            .get_component::<crate::ecs::component::AppliedWindPreset>(winds[0])
+            .unwrap();
+        assert_eq!(preset.name, "storm");
     }
 
     fn spawn_tagged_debug_primitive(

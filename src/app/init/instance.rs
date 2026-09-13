@@ -312,6 +312,7 @@ impl App {
             resized: false,
             start: Instant::now(),
             last_update_time: 0.0,
+            last_frame_interval: 0.0,
             gpu_timestamp_profiler,
             last_frame_instant: None,
         })
@@ -1197,6 +1198,7 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::OnionSkinningConfig>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::FlameRenderSettings>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::WaterRenderSettings>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::WindRenderSettings>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::FlameHistorySnapshotState>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::WaterHistorySnapshotState>(data);
     }

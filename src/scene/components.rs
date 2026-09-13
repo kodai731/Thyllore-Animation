@@ -43,6 +43,18 @@ pub struct WaterSceneData {
     pub preset: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WindSceneData {
+    pub effect: thyllore_effect_core::WindTornadoEffect,
+    #[serde(default)]
+    pub channels: Vec<EffectChannelData>,
+    /// Authored clip length floor in seconds (0 = keyframes decide).
+    #[serde(default)]
+    pub clip_min_duration: f32,
+    #[serde(default)]
+    pub preset: Option<String>,
+}
+
 /// A named entity whose effect state is stored as component values keyed by type key.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SceneEntity {
@@ -80,6 +92,7 @@ macro_rules! declare_scene_components {
 declare_scene_components! {
     "flame" => (capture_flame_component, apply_flame_component),
     "water_torus" => (capture_water_component, apply_water_component),
+    "wind_tornado" => (capture_wind_component, apply_wind_component),
 }
 
 fn encode_component<T: Serialize>(type_key: &str, data: T) -> Option<serde_json::Value> {
@@ -249,6 +262,74 @@ pub fn apply_water_state_to_world(
     );
 }
 
+/// Build WindSceneData from the first wind entity's WindTornadoEffect.
+pub fn build_wind_scene_data(world: &World) -> Option<WindSceneData> {
+    let entities: Vec<_> = world.query_winds();
+    let entity = entities.first()?;
+
+    let effect = world.get_component::<crate::ecs::component::WindTornadoEffect>(*entity)?;
+
+    let preset = world
+        .get_component::<crate::ecs::component::AppliedWindPreset>(*entity)
+        .map(|applied| applied.name.clone());
+
+    Some(WindSceneData {
+        effect: effect.clone(),
+        channels: build_effect_channels_from_clip(world, *entity),
+        clip_min_duration: effect_clip_min_duration(world, *entity),
+        preset,
+    })
+}
+
+/// Apply loaded wind state to the first wind entity in the world.
+pub fn apply_wind_state_to_world(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    wind: &WindSceneData,
+) {
+    let entities: Vec<_> = world.query_winds();
+    let entity = match entities.first() {
+        Some(e) => *e,
+        None => crate::ecs::systems::spawn_wind_with_clip(
+            world,
+            assets,
+            crate::ecs::systems::DEFAULT_WIND_NAME,
+            crate::ecs::component::WindTornadoEffect::default(),
+        ),
+    };
+
+    if let Some(mut effect) =
+        world.get_component_mut::<crate::ecs::component::WindTornadoEffect>(entity)
+    {
+        thyllore_effect_core::overwrite_wind_persisted_fields(&mut effect, &wind.effect);
+    }
+
+    if let Some(ref preset_name) = wind.preset {
+        world.insert_component(
+            entity,
+            crate::ecs::component::AppliedWindPreset {
+                name: preset_name.clone(),
+            },
+        );
+    }
+
+    crate::ecs::systems::write_wind_transform(
+        world,
+        entity,
+        wind.effect.position,
+        wind.effect.rotation,
+    );
+
+    rebuild_effect_clip(
+        world,
+        assets,
+        entity,
+        crate::ecs::component::WIND_DOMAIN.name,
+        &wind.channels,
+        wind.clip_min_duration,
+    );
+}
+
 fn capture_flame_component(world: &World) -> Option<serde_json::Value> {
     encode_component("flame", build_flame_scene_data(world)?)
 }
@@ -274,6 +355,20 @@ fn apply_water_component(
 ) -> anyhow::Result<()> {
     let water: WaterSceneData = serde_json::from_value(value.clone())?;
     apply_water_state_to_world(world, assets, &water);
+    Ok(())
+}
+
+fn capture_wind_component(world: &World) -> Option<serde_json::Value> {
+    encode_component("wind_tornado", build_wind_scene_data(world)?)
+}
+
+fn apply_wind_component(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    value: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let wind: WindSceneData = serde_json::from_value(value.clone())?;
+    apply_wind_state_to_world(world, assets, &wind);
     Ok(())
 }
 

@@ -36,6 +36,7 @@ pub struct App {
     pub resized: bool,
     pub start: Instant,
     pub last_update_time: f32,
+    pub last_frame_interval: f32,
     pub gpu_timestamp_profiler: thyllore_vulkan_core::GpuTimestampProfiler,
     pub last_frame_instant: Option<Instant>,
 }

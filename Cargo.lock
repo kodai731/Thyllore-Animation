@@ -1744,6 +1744,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a257582fdcde896fd96463bf2d40eefea0580021c0712a0e2b028b60b47a837a"
 
 [[package]]
+name = "inventory"
+version = "0.3.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4f0c30c76f2f4ccee3fe55a2435f691ca00c0e4bd87abe4f4a851b1d4dac39b"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3696,6 +3705,7 @@ dependencies = [
  "gltf",
  "imgui",
  "imgui-winit-support",
+ "inventory",
  "log",
  "once_cell",
  "ort",
@@ -3868,8 +3878,11 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "cgmath",
+ "ron",
+ "serde",
  "thyllore-anim-core",
  "thyllore-model-core",
+ "thyllore-scene-core",
  "thyllore-spirv-reflect",
 ]
 

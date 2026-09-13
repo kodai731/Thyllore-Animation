@@ -37,6 +37,11 @@ Commands:
       the NVIDIA GPU and open blender/water.blend with a water torus already
       added (scripts/blender/water/launch.sh):
         ./run.sh blender --water
+  blender --wind [--skip-build] [--release] [--software-gl] [scene.blend]
+      Build the wind addon ZIP, install it into a pristine Docker Blender on
+      the NVIDIA GPU and open blender/wind.blend with a wind tornado already
+      added (scripts/blender/wind/launch.sh):
+        ./run.sh blender --wind
   blend [--scene PATH.blend] [--software-gl] [args...]
       Open a pristine Docker Blender on the NVIDIA GPU with a new empty scene,
       no addon installed (blender/docker/run_gui.sh --no-install).
@@ -72,6 +77,10 @@ case "$command" in
         if [[ "${1:-}" == "--water" ]]; then
             shift
             exec bash "$REPO_ROOT/scripts/blender/water/launch.sh" "$@"
+        fi
+        if [[ "${1:-}" == "--wind" ]]; then
+            shift
+            exec bash "$REPO_ROOT/scripts/blender/wind/launch.sh" "$@"
         fi
         exec bash "$REPO_ROOT/scripts/run_blender_debug.sh" "$@"
         ;;

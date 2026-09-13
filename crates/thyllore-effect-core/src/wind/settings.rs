@@ -1,0 +1,131 @@
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WindResolveScale {
+    #[default]
+    Full,
+    Half,
+}
+
+impl WindResolveScale {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "full" => Some(WindResolveScale::Full),
+            "half" => Some(WindResolveScale::Half),
+            _ => None,
+        }
+    }
+
+    pub fn divisor(self) -> u32 {
+        match self {
+            WindResolveScale::Full => 1,
+            WindResolveScale::Half => 2,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WindShadingMode {
+    #[default]
+    ClosedForm,
+    ReferenceQuadrature,
+}
+
+impl WindShadingMode {
+    pub const ALL: [WindShadingMode; 2] = [
+        WindShadingMode::ClosedForm,
+        WindShadingMode::ReferenceQuadrature,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            WindShadingMode::ClosedForm => "Closed Form",
+            WindShadingMode::ReferenceQuadrature => "Reference Quadrature",
+        }
+    }
+
+    pub fn as_shader_value(self) -> i32 {
+        match self {
+            WindShadingMode::ClosedForm => 0,
+            WindShadingMode::ReferenceQuadrature => 1,
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "closed" | "closed-form" => Some(WindShadingMode::ClosedForm),
+            "reference" | "quadrature" => Some(WindShadingMode::ReferenceQuadrature),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WindDebugView {
+    #[default]
+    Off,
+    OpticalDepth,
+    KnotCount,
+    Coverage,
+}
+
+impl WindDebugView {
+    pub const ALL: [WindDebugView; 4] = [
+        WindDebugView::Off,
+        WindDebugView::OpticalDepth,
+        WindDebugView::KnotCount,
+        WindDebugView::Coverage,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            WindDebugView::Off => "Off",
+            WindDebugView::OpticalDepth => "Optical Depth",
+            WindDebugView::KnotCount => "Knot Count",
+            WindDebugView::Coverage => "coverage",
+        }
+    }
+
+    pub fn as_shader_value(self) -> i32 {
+        match self {
+            WindDebugView::Off => 0,
+            WindDebugView::OpticalDepth => 1,
+            WindDebugView::KnotCount => 2,
+            WindDebugView::Coverage => 3,
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "off" => Some(WindDebugView::Off),
+            "depth" | "optical-depth" => Some(WindDebugView::OpticalDepth),
+            "knots" | "knot-count" => Some(WindDebugView::KnotCount),
+            "coverage" => Some(WindDebugView::Coverage),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WindRenderSettings {
+    pub shading_mode: WindShadingMode,
+    pub reference_step_count: u32,
+    pub debug_view: WindDebugView,
+    pub batch_fixed_time: Option<f32>,
+    pub free_run_when_paused: bool,
+    pub resolve_scale: WindResolveScale,
+}
+
+impl Default for WindRenderSettings {
+    fn default() -> Self {
+        Self {
+            shading_mode: WindShadingMode::ClosedForm,
+            reference_step_count: 256,
+            debug_view: WindDebugView::Off,
+            batch_fixed_time: None,
+            free_run_when_paused: false,
+            resolve_scale: WindResolveScale::Half,
+        }
+    }
+}
+
+/// Instance slots of the wind UBO and of the baked shadow volume.
+pub const WIND_MAX_INSTANCES: usize = 4;

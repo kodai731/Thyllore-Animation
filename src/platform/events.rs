@@ -487,6 +487,7 @@ fn handle_redraw_requested(
         load_status: model_state.load_status.clone(),
         flame_preset_index: model_state.flame_preset_index,
         water_preset_index: 0,
+        wind_preset_index: 0,
         texture_fit_path: model_state.texture_fit_path.clone(),
         texture_fit_blend: model_state.texture_fit_blend,
         texture_fit_groups: model_state.texture_fit_groups,
@@ -809,10 +810,18 @@ fn build_timeline_and_fixed_overlays(
             let lib = app.data.ecs_world.resource::<ClipLibrary>();
             crate::ecs::systems::timeline_effective_duration(&timeline_state, &lib)
         };
+        let cpu_ms = app.last_frame_interval * 1000.0;
+        let gpu_ms = app
+            .data
+            .ecs_world
+            .get_resource::<crate::ecs::resource::GpuPassTimings>()
+            .and_then(|t| t.frame_total_ms);
         draw_status_bar(
             ui,
             status_bar_state,
             delta_time,
+            cpu_ms,
+            gpu_ms,
             viewport_info,
             &*timeline_state,
             clip_duration,
@@ -980,6 +989,10 @@ unsafe fn execute_deferred_action(app: &mut App, action: DeferredAction) {
             app.dump_water_debug();
         }
 
+        DeferredAction::DumpWindDebug => {
+            app.dump_wind_debug();
+        }
+
         DeferredAction::DumpAnimationDebug => {
             let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
             if let Err(e) = crate::ecs::systems::animation_debug_dump::dump_animation_debug(
@@ -1099,12 +1112,12 @@ unsafe fn render_frame(
                 .ecs_world
                 .get_resource::<crate::ecs::resource::BatchRun>()
                 .map(|b| b.state.clone());
-            let (dump_wall_probe, dump_water_debug) = app
+            let (dump_wall_probe, dump_water_debug, dump_wind_debug) = app
                 .data
                 .ecs_world
                 .get_resource::<crate::ecs::resource::BatchRun>()
-                .map(|b| (b.dump_wall_probe, b.dump_water_debug))
-                .unwrap_or((false, false));
+                .map(|b| (b.dump_wall_probe, b.dump_water_debug, b.dump_wind_debug))
+                .unwrap_or((false, false, false));
             if matches!(
                 state,
                 Some(crate::ecs::resource::BatchRunState::ScreenshotRequested)
@@ -1112,6 +1125,9 @@ unsafe fn render_frame(
                 app.rrdevice.device.device_wait_idle()?;
                 if dump_water_debug {
                     app.dump_water_debug_at(image_index);
+                }
+                if dump_wind_debug {
+                    app.dump_wind_debug_at(image_index);
                 }
                 let save_result = app.save_screenshot(image_index);
                 crate::ecs::systems::batch_run_record_screenshot(

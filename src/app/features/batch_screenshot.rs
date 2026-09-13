@@ -11,12 +11,12 @@ impl App {
             .ecs_world
             .get_resource::<BatchRun>()
             .map(|b| b.state.clone());
-        let (dump_wall_probe, dump_water_debug) = self
+        let (dump_wall_probe, dump_water_debug, dump_wind_debug) = self
             .data
             .ecs_world
             .get_resource::<BatchRun>()
-            .map(|b| (b.dump_wall_probe, b.dump_water_debug))
-            .unwrap_or((false, false));
+            .map(|b| (b.dump_wall_probe, b.dump_water_debug, b.dump_wind_debug))
+            .unwrap_or((false, false, false));
 
         if !matches!(state, Some(BatchRunState::ScreenshotRequested)) {
             return Ok(());
@@ -28,6 +28,9 @@ impl App {
 
         if dump_water_debug {
             self.dump_water_debug_at(image_index);
+        }
+        if dump_wind_debug {
+            self.dump_wind_debug_at(image_index);
         }
 
         let save_result = unsafe { self.save_screenshot(image_index) };

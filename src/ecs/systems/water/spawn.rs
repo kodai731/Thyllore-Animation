@@ -1,32 +1,15 @@
 use crate::asset::AssetStorage;
-use crate::ecs::component::{EditorDisplay, EntityIcon, WaterTorusEffect, WATER_DOMAIN};
+use crate::ecs::component::{WaterTorusEffect, WATER_DOMAIN};
 use crate::ecs::resource::HierarchyState;
-use crate::ecs::world::{Entity, GlobalTransform, Transform, World};
+use crate::ecs::world::{Entity, Transform, World};
+use crate::hooks::scene::spawn_scene_owner;
 
 pub const DEFAULT_WATER_NAME: &str = "Water";
 
 /// Spawns a water as a regular scene entity so the hierarchy, inspector and transform gizmo
 /// can all reach it through the same components they use for every other object.
 pub fn spawn_water(world: &mut World, name: &str, effect: WaterTorusEffect) -> Entity {
-    let entity = world.entity().with_name(name).build();
-    attach_water(world, entity, effect);
-    entity
-}
-
-/// Turns a named entity into a water: transform, hierarchy icon and the effect component.
-pub fn attach_water(world: &mut World, entity: Entity, effect: WaterTorusEffect) {
-    world.insert_component(
-        entity,
-        Transform {
-            translation: effect.position,
-            rotation: effect.rotation,
-            ..Default::default()
-        },
-    );
-    world.insert_component(entity, GlobalTransform::new());
-    world.insert_component(entity, EditorDisplay::new(EntityIcon::Water));
-
-    world.insert_component(entity, effect);
+    spawn_scene_owner(world, name, effect)
 }
 
 /// Spawn a water entity together with its (empty) animation clip and schedule

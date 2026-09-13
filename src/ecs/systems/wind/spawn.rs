@@ -1,30 +1,13 @@
 use crate::asset::AssetStorage;
-use crate::ecs::component::{EditorDisplay, EntityIcon, WindTornadoEffect, WIND_DOMAIN};
+use crate::ecs::component::{WindTornadoEffect, WIND_DOMAIN};
 use crate::ecs::resource::HierarchyState;
-use crate::ecs::world::{Entity, GlobalTransform, Transform, World};
+use crate::ecs::world::{Entity, Transform, World};
+use crate::hooks::scene::spawn_scene_owner;
 
 pub const DEFAULT_WIND_NAME: &str = "Wind";
 
 pub fn spawn_wind(world: &mut World, name: &str, effect: WindTornadoEffect) -> Entity {
-    let entity = world.entity().with_name(name).build();
-    attach_wind(world, entity, effect);
-    entity
-}
-
-/// Turns a named entity into a wind: transform, hierarchy icon and the effect component.
-pub fn attach_wind(world: &mut World, entity: Entity, effect: WindTornadoEffect) {
-    world.insert_component(
-        entity,
-        Transform {
-            translation: effect.position,
-            rotation: effect.rotation,
-            ..Default::default()
-        },
-    );
-    world.insert_component(entity, GlobalTransform::new());
-    world.insert_component(entity, EditorDisplay::new(EntityIcon::Wind));
-
-    world.insert_component(entity, effect);
+    spawn_scene_owner(world, name, effect)
 }
 
 pub fn spawn_wind_with_clip(

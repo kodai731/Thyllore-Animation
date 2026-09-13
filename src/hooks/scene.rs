@@ -1,10 +1,12 @@
 use anyhow::Context;
+use cgmath::{Quaternion, Vector3};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use thyllore_scene_core::SceneComponent;
 
 use crate::asset::AssetStorage;
-use crate::ecs::world::{Entity, World};
+use crate::ecs::component::{EditorDisplay, EntityIcon};
+use crate::ecs::world::{Entity, GlobalTransform, Transform, World};
 
 /// Persisted form of one component inside a scene entity; RON keeps the numbers as written.
 pub type SceneValue = ron::Value;
@@ -31,7 +33,26 @@ pub struct SceneComponentHook {
     pub apply: SceneApplyFn,
 }
 
+/// A component that defines the entity it sits on: the entity is spawned from its name and
+/// placement, gets the hierarchy icon and then the component itself.
+pub trait SceneOwner: SceneComponent {
+    const ICON: EntityIcon;
+    fn placement(&self) -> (Vector3<f32>, Quaternion<f32>);
+    /// Runs on a component decoded from a scene before it is attached.
+    fn prepare_loaded(&mut self) {}
+}
+
 impl SceneComponentHook {
+    pub const fn owner<C: SceneOwner>() -> Self {
+        Self {
+            type_key: C::TYPE_KEY,
+            role: SceneComponentRole::Owner,
+            entities: entities_with::<C>,
+            capture: capture_component::<C>,
+            apply: attach_loaded_owner::<C>,
+        }
+    }
+
     /// A component stored as its serde form and restored by insertion onto the owner's entity.
     pub const fn attachment<C: SceneComponent>() -> Self {
         Self {
@@ -42,6 +63,39 @@ impl SceneComponentHook {
             apply: insert_component::<C>,
         }
     }
+}
+
+pub fn spawn_scene_owner<C: SceneOwner>(world: &mut World, name: &str, component: C) -> Entity {
+    let entity = world.entity().with_name(name).build();
+    attach_scene_owner(world, entity, component);
+    entity
+}
+
+pub fn attach_scene_owner<C: SceneOwner>(world: &mut World, entity: Entity, component: C) {
+    let (translation, rotation) = component.placement();
+    world.insert_component(
+        entity,
+        Transform {
+            translation,
+            rotation,
+            ..Default::default()
+        },
+    );
+    world.insert_component(entity, GlobalTransform::new());
+    world.insert_component(entity, EditorDisplay::new(C::ICON));
+    world.insert_component(entity, component);
+}
+
+fn attach_loaded_owner<C: SceneOwner>(
+    world: &mut World,
+    _assets: &mut AssetStorage,
+    entity: Entity,
+    value: &SceneValue,
+) -> anyhow::Result<()> {
+    let mut component: C = decode_component(value)?;
+    component.prepare_loaded();
+    attach_scene_owner(world, entity, component);
+    Ok(())
 }
 
 pub fn entities_with<C: 'static>(world: &World) -> Vec<Entity> {

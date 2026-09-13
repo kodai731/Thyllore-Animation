@@ -159,11 +159,16 @@ Concretely:
   `FlameSceneData`, `"water_torus"`, `apply_wind_state_to_world` or an effect field name (`column_height`,
   `sigma_t`). What it may do: iterate the `SceneComponentHooks` resource (`src/hooks/scene.rs`) that
   `src/effect/subscription.rs::subscribe_scene_components` filled, and decode through the
-  `thyllore_scene_core::SceneComponent` trait. An effect's hook constant
-  (`src/ecs/systems/<effect>/scene.rs::<EFFECT>_SCENE_COMPONENTS`) takes its type key from
+  `thyllore_scene_core::SceneComponent` trait. The hooks are generic:
+  `SceneComponentHook::owner::<C>()` for a component that defines its entity (`C: SceneOwner`, the
+  engine-side trait giving icon and placement, implemented in `src/ecs/component/<effect>.rs`) and
+  `SceneComponentHook::attachment::<C>()` for anything restored by insertion; the type key comes from
   `<Effect>::TYPE_KEY`, which `declare_scene_format!` generated from the `key:` item.
 - Adding a persisted parameter = one entry in the effect's `declare_scene_format!` table. Nothing in
-  `src/scene/` changes. Adding an effect = its `scene.rs` hook list + one line in `subscription.rs`.
+  `src/scene/` changes. Adding an effect = `impl SceneOwner` in its component file + one
+  `hooks.register(SceneComponentHook::owner::<Effect>())` line in `subscription.rs`. Runtime-only
+  companions (baked data, accumulators) are inserted by the effect's own per-frame system when missing,
+  never by the loader.
 - `src/hooks/` files describe contracts (`EffectHook`, `RenderPassNode`, `SceneComponentHook`); they take
   fn pointers and `&'static str` keys, never an effect type.
 - `src/ecs/world.rs` offers generic component access (`iter_components::<C>`, `insert_component`); it does

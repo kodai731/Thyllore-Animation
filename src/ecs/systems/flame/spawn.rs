@@ -1,36 +1,15 @@
 use crate::asset::AssetStorage;
-use crate::ecs::component::{
-    EditorDisplay, EntityIcon, FlameBaked, FlameEffect, FlameTemporalAccum, FLAME_DOMAIN,
-};
+use crate::ecs::component::{FlameEffect, FLAME_DOMAIN};
 use crate::ecs::resource::HierarchyState;
-use crate::ecs::world::{Entity, GlobalTransform, Transform, World};
+use crate::ecs::world::{Entity, Transform, World};
+use crate::hooks::scene::spawn_scene_owner;
 
 pub const DEFAULT_FLAME_NAME: &str = "Flame";
 
 /// Spawns a flame as a regular scene entity so the hierarchy, inspector and transform gizmo
 /// can all reach it through the same components they use for every other object.
 pub fn spawn_flame(world: &mut World, name: &str, effect: FlameEffect) -> Entity {
-    let entity = world.entity().with_name(name).build();
-    attach_flame(world, entity, effect);
-    entity
-}
-
-/// Turns a named entity into a flame: transform, hierarchy icon and the flame component set.
-pub fn attach_flame(world: &mut World, entity: Entity, effect: FlameEffect) {
-    world.insert_component(
-        entity,
-        Transform {
-            translation: effect.position,
-            rotation: effect.rotation,
-            ..Default::default()
-        },
-    );
-    world.insert_component(entity, GlobalTransform::new());
-    world.insert_component(entity, EditorDisplay::new(EntityIcon::Flame));
-
-    world.insert_component(entity, effect);
-    world.insert_component(entity, FlameBaked::default());
-    world.insert_component(entity, FlameTemporalAccum::default());
+    spawn_scene_owner(world, name, effect)
 }
 
 /// Spawn a flame entity together with its (empty) animation clip and schedule

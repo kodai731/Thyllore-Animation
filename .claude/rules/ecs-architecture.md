@@ -206,14 +206,14 @@ let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
 1. Define components in `ecs/component/` (effect parameters: declare them in `thyllore-effect-core`)
 2. Add a marker component for queries
 3. Implement system functions in `ecs/systems/<domain>/`
-4. Add a `spawn_*` system that inserts the component set, and call it from the event dispatcher or
-   initialization; split it as `spawn_*` (named entity) + `attach_*` (component set) so the scene loader
-   can attach onto an entity it created
-5. Persist it: give the parameter component a `key:` in `declare_scene_format!`, add
-   `ecs/systems/<domain>/scene.rs` with a `SceneComponentHook` list (the parameter component as
-   `Owner`, provenance components such as an applied preset as `SceneComponentHook::attachment::<C>()`),
-   and register that list in `src/effect/subscription.rs::subscribe_scene_components`. `src/scene/` is
-   not edited
+4. Add a `spawn_*` system (a thin wrapper over `hooks::scene::spawn_scene_owner`) and call it from the
+   event dispatcher or initialization; runtime-only companions (baked data, accumulators) are inserted by
+   the domain's per-frame system when missing, so a loaded entity and a spawned one converge
+5. Persist it: give the parameter component a `key:` in `declare_scene_format!`, `impl SceneOwner`
+   (icon, placement, optional `prepare_loaded`) in its `ecs/component/` file, and register
+   `SceneComponentHook::owner::<C>()` plus `SceneComponentHook::attachment::<P>()` for provenance
+   components (applied preset / style) in `src/effect/subscription.rs::subscribe_scene_components`.
+   `src/scene/` is not edited
 
 ## Adding New Domain Features
 

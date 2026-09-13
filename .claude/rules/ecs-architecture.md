@@ -209,11 +209,10 @@ let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
 4. Add a `spawn_*` system (a thin wrapper over `hooks::scene::spawn_scene_owner`) and call it from the
    event dispatcher or initialization; runtime-only companions (baked data, accumulators) are inserted by
    the domain's per-frame system when missing, so a loaded entity and a spawned one converge
-5. Persist it: give the parameter component a `key:` in `declare_scene_format!`, `impl SceneOwner`
-   (icon, placement, optional `prepare_loaded`) in its `ecs/component/` file, and register
-   `SceneComponentHook::owner::<C>()` plus `SceneComponentHook::attachment::<P>()` for provenance
-   components (applied preset / style) in `src/effect/subscription.rs::subscribe_scene_components`.
-   `src/scene/` is not edited
+5. Persist it: give the parameter component a `key:` in `declare_scene_format!` and write
+   `scene_owner!(C { icon, placement, prepare_loaded? })` in its `ecs/component/` file; provenance
+   components (applied preset / style) implement `SceneComponent` and write `scene_attachment!(P)`.
+   Registration happens at link time; neither `src/scene/` nor `subscription.rs` is edited
 
 ## Adding New Domain Features
 

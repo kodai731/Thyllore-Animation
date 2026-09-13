@@ -25,7 +25,9 @@ impl SceneComponent for ScheduledClip {
     const PERSISTED_FIELDS: &'static [&'static str] = &["clip"];
 }
 
-pub const SCHEDULED_CLIP_SCENE_COMPONENT: SceneComponentHook = SceneComponentHook {
+inventory::submit! { SCHEDULED_CLIP_SCENE_COMPONENT }
+
+const SCHEDULED_CLIP_SCENE_COMPONENT: SceneComponentHook = SceneComponentHook {
     type_key: ScheduledClip::TYPE_KEY,
     role: SceneComponentRole::Attachment,
     entities: entities_with::<ClipSchedule>,

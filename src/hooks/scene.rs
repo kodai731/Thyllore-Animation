@@ -141,6 +141,43 @@ fn insert_component<C: SceneComponent>(
     Ok(())
 }
 
+inventory::collect!(SceneComponentHook);
+
+/// Declares a component that owns its entity and registers it for scene persistence at link time.
+#[macro_export]
+macro_rules! scene_owner {
+    ($component:ty {
+        icon: $icon:ident,
+        placement: $placement:expr
+        $(, prepare_loaded: $prepare_loaded:expr)? $(,)?
+    }) => {
+        impl $crate::hooks::scene::SceneOwner for $component {
+            const ICON: $crate::ecs::component::EntityIcon = $crate::ecs::component::EntityIcon::$icon;
+
+            fn placement(&self) -> (cgmath::Vector3<f32>, cgmath::Quaternion<f32>) {
+                let placement: fn(&Self) -> (cgmath::Vector3<f32>, cgmath::Quaternion<f32>) =
+                    $placement;
+                placement(self)
+            }
+
+            $( fn prepare_loaded(&mut self) {
+                let prepare_loaded: fn(&mut Self) = $prepare_loaded;
+                prepare_loaded(self);
+            } )?
+        }
+
+        inventory::submit! { $crate::hooks::scene::SceneComponentHook::owner::<$component>() }
+    };
+}
+
+/// Registers a component restored by insertion onto its owner's entity.
+#[macro_export]
+macro_rules! scene_attachment {
+    ($component:ty) => {
+        inventory::submit! { $crate::hooks::scene::SceneComponentHook::attachment::<$component>() }
+    };
+}
+
 /// Registry the scene loader and saver consult; owners are listed before attachments.
 #[derive(Default)]
 pub struct SceneComponentHooks {
@@ -156,6 +193,23 @@ impl std::fmt::Debug for SceneComponentHooks {
 }
 
 impl SceneComponentHooks {
+    /// Every hook submitted at link time, sorted by type key; a duplicate key is a wiring error.
+    pub fn collect() -> anyhow::Result<Self> {
+        let mut hooks = Self::default();
+        let mut submitted: Vec<&SceneComponentHook> =
+            inventory::iter::<SceneComponentHook>.into_iter().collect();
+        submitted.sort_by_key(|hook| hook.type_key);
+        for hook in submitted {
+            anyhow::ensure!(
+                hooks.find(hook.type_key).is_none(),
+                "scene component type key {} registered twice",
+                hook.type_key
+            );
+            hooks.register(*hook);
+        }
+        Ok(hooks)
+    }
+
     pub fn register(&mut self, hook: SceneComponentHook) {
         match self
             .entries
@@ -236,6 +290,17 @@ mod tests {
         hooks.register(hook("style", SceneComponentRole::Attachment));
 
         assert_eq!(hooks.type_keys(), ["b_owner", "a_owner", "clip", "style"]);
+    }
+
+    #[test]
+    fn collect_gathers_link_time_registrations_with_unique_keys() {
+        let hooks = SceneComponentHooks::collect().expect("unique keys");
+        let mut keys = hooks.type_keys();
+        assert!(hooks.owners().count() >= 1, "{keys:?}");
+        assert!(keys.iter().any(|key| *key == "clip"), "{keys:?}");
+        keys.sort_unstable();
+        keys.dedup();
+        assert_eq!(keys.len(), hooks.type_keys().len());
     }
 
     #[test]

@@ -9,8 +9,7 @@ mod transform_format;
 
 pub use clip_io::{load_animation_clip, save_animation_clip};
 pub use entities::{
-    apply_scene_entities, capture_scene_entities, capture_scheduled_clips,
-    subscribe_scene_components, SceneEntity,
+    apply_scene_entities, capture_scene_entities, capture_scheduled_clips, SceneEntity,
 };
 pub use error::{SceneError, SceneResult};
 pub use format::{

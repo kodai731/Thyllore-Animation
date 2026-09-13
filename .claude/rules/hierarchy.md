@@ -122,19 +122,21 @@ images into descriptors and framebuffers), record (`ImageStateTracker` in `thyll
 `renderer/pass_target.rs` emits the layout barriers). Pass code never acquires a transient or writes an
 `ImageMemoryBarrier` for a declared target; `AppData.frame_transients` is the single map from slot to
 handle. `scene.rs` holds the `SceneComponentHook` contract (type key, owner / attachment role,
-entities, capture, apply) and the `SceneComponentHooks` registry that `src/scene/` reads as a `World`
-resource; owners are applied before attachments. A hook file describes a contract only; it never names a
+entities, capture, apply), the `scene_owner!` / `scene_attachment!` macros that submit a hook to the
+link-time registry (`inventory`), and `SceneComponentHooks::collect()` that `src/app/` stores as a
+`World` resource for `src/scene/`; owners are applied before attachments. A hook file describes a contract only; it never names a
 concrete effect.
 
 ## src/effect/
 
 The one place that subscribes the effects (`subscription.rs`): it lists the hook constants of flame, water
-and any future effect, once per contract (`subscribe_effects` for `EffectHook`,
-`subscribe_scene_components` for `SceneComponentHook`). `src/app/` runs the hooks generically and never
-names an effect; an effect's own systems (`src/ecs/systems/<effect>/`) implement the hook and own the
-effect's GPU state as an ECS resource. Adding an effect means adding its hook constants to
-`subscription.rs`, nothing in `src/app/` or `src/scene/`. Subscription order is also the record order of
-the effects' pass nodes inside the effect stage and the save order of their scene components.
+and any future effect for the `EffectHook` contract (GPU lifecycle and pass nodes). Scene components
+are not listed here: they register at link time from their own files (`scene_owner!` /
+`scene_attachment!`). `src/app/` runs the hooks generically and never names an effect; an effect's own
+systems (`src/ecs/systems/<effect>/`) implement the hook and own the effect's GPU state as an ECS
+resource. Adding an effect means adding its `EffectHook` constant to `subscription.rs`, nothing in
+`src/app/` or `src/scene/`. Subscription order is also the record order of the effects' pass nodes
+inside the effect stage.
 
 ## Feature isolation: no effect names outside the effect's own directories
 
@@ -148,7 +150,7 @@ outside those directories reaches a feature through a contract (`src/hooks/`), a
 |---|---|
 | `crates/thyllore-effect-core/src/<effect>/`, `shaders/<effect>/` | its own effect only |
 | `src/ecs/component/<effect>*.rs`, `src/ecs/systems/<effect>/`, `src/ecs/resource/<effect>_*.rs` | its own effect only |
-| `src/effect/subscription.rs` | every effect (the single subscription list) |
+| `src/effect/subscription.rs` | every effect (the single `EffectHook` list; scene hooks self-register instead) |
 | `src/platform/ui/` per-effect windows, `src/debugview/` per-effect dumps | the effect the file is for |
 | `src/scene/`, `src/hooks/`, `src/ecs/systems/*.rs` (shared systems), shared crates | none (tests may spawn concrete effects) |
 | `src/app/`, `src/ecs/world.rs` | none in new code; the existing spots (default flame spawn in `init/instance.rs`, water acceleration structures in `scene_model.rs` / `init/raytracing.rs` / `cleanup.rs` / `model_loader.rs`, `query_flames` / `query_waters` / `query_winds`) are exceptions tracked with #179 and must not grow |
@@ -163,12 +165,15 @@ Concretely:
   `SceneComponentHook::owner::<C>()` for a component that defines its entity (`C: SceneOwner`, the
   engine-side trait giving icon and placement, implemented in `src/ecs/component/<effect>.rs`) and
   `SceneComponentHook::attachment::<C>()` for anything restored by insertion; the type key comes from
-  `<Effect>::TYPE_KEY`, which `declare_scene_format!` generated from the `key:` item.
+  `<Effect>::TYPE_KEY`, which `declare_scene_format!` generated from the `key:` item. Hooks are
+  registered at link time (`inventory`): `scene_owner!(Effect { icon, placement, prepare_loaded? })`
+  and `scene_attachment!(C)` in the component's own file both submit the hook, and
+  `SceneComponentHooks::collect()` gathers every submission at app start (duplicate keys fail there).
+  There is no list of scene components anywhere.
 - Adding a persisted parameter = one entry in the effect's `declare_scene_format!` table. Nothing in
-  `src/scene/` changes. Adding an effect = `impl SceneOwner` in its component file + one
-  `hooks.register(SceneComponentHook::owner::<Effect>())` line in `subscription.rs`. Runtime-only
-  companions (baked data, accumulators) are inserted by the effect's own per-frame system when missing,
-  never by the loader.
+  `src/scene/` changes. Adding an effect = `scene_owner!` in its component file; a provenance component
+  = `scene_attachment!`. Runtime-only companions (baked data, accumulators) are inserted by the effect's
+  own per-frame system when missing, never by the loader.
 - `src/hooks/` files describe contracts (`EffectHook`, `RenderPassNode`, `SceneComponentHook`); they take
   fn pointers and `&'static str` keys, never an effect type.
 - `src/ecs/world.rs` offers generic component access (`iter_components::<C>`, `insert_component`); it does

@@ -139,7 +139,7 @@ impl App {
         crate::vulkanr::renderer::deferred::register_core_passes(&mut data.pass_graph);
         data.effect_hooks.register_passes(&mut data.pass_graph);
 
-        Self::initialize_core_ecs_resources(&mut data);
+        Self::initialize_core_ecs_resources(&mut data)?;
 
         #[cfg(feature = "ml")]
         data.ecs_world.insert_resource(curve_copilot_mode);
@@ -318,16 +318,14 @@ impl App {
         })
     }
 
-    fn initialize_core_ecs_resources(data: &mut AppData) {
+    fn initialize_core_ecs_resources(data: &mut AppData) -> Result<()> {
         data.ecs_world.insert_resource(Camera::default());
         data.ecs_world.insert_resource(LightState::default());
         data.ecs_world
             .insert_resource(crate::ecs::resource::DebugViewState::default());
-
-        let mut scene_hooks = crate::hooks::scene::SceneComponentHooks::default();
-        crate::scene::subscribe_scene_components(&mut scene_hooks);
-        crate::effect::subscription::subscribe_scene_components(&mut scene_hooks);
-        data.ecs_world.insert_resource(scene_hooks);
+        data.ecs_world
+            .insert_resource(crate::hooks::scene::SceneComponentHooks::collect()?);
+        Ok(())
     }
     unsafe fn initialize_graphics_and_ecs(
         instance: &Instance,

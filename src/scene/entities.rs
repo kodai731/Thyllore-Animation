@@ -2,8 +2,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use super::motion_path_format::MOTION_PATH_SCENE_COMPONENT;
-use super::scheduled_clip::SCHEDULED_CLIP_SCENE_COMPONENT;
 use crate::animation::editable::EditableAnimationClip;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::ClipLibrary;
@@ -21,12 +19,6 @@ pub struct SceneEntity {
     pub name: String,
     #[serde(default)]
     pub components: BTreeMap<String, SceneValue>,
-}
-
-/// Scene components that belong to no effect: the clip an entity schedules and its motion path.
-pub fn subscribe_scene_components(hooks: &mut SceneComponentHooks) {
-    hooks.register(SCHEDULED_CLIP_SCENE_COMPONENT);
-    hooks.register(MOTION_PATH_SCENE_COMPONENT);
 }
 
 /// Every entity an owner hook reports, with what each registered hook captures from it.
@@ -157,16 +149,8 @@ fn entity_name(world: &World, entity: Entity) -> String {
 pub(super) fn world_with_scene_hooks() -> World {
     let mut world = World::new();
     world.insert_resource(ClipLibrary::new());
-    world.insert_resource(all_scene_component_hooks());
+    world.insert_resource(SceneComponentHooks::collect().expect("unique scene keys"));
     world
-}
-
-#[cfg(test)]
-pub(super) fn all_scene_component_hooks() -> SceneComponentHooks {
-    let mut hooks = SceneComponentHooks::default();
-    subscribe_scene_components(&mut hooks);
-    crate::effect::subscription::subscribe_scene_components(&mut hooks);
-    hooks
 }
 
 #[cfg(test)]
@@ -198,7 +182,7 @@ mod tests {
 
     #[test]
     fn hooks_are_registered_owners_first_and_include_every_core_component() {
-        let hooks = all_scene_component_hooks();
+        let hooks = SceneComponentHooks::collect().expect("unique scene keys");
         let keys = hooks.type_keys();
 
         let owner_count = hooks.owners().count();

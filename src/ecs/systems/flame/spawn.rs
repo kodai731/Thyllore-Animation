@@ -1,26 +1,15 @@
 use crate::asset::AssetStorage;
-use crate::ecs::component::{EntityIcon, FlameEffect, FLAME_DOMAIN};
+use crate::ecs::component::{FlameEffect, FLAME_DOMAIN};
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Entity, Transform, World};
+use crate::hooks::scene::spawn_scene_owner;
 
 pub const DEFAULT_FLAME_NAME: &str = "Flame";
 
 /// Spawns a flame as a regular scene entity so the hierarchy, inspector and transform gizmo
 /// can all reach it through the same components they use for every other object.
 pub fn spawn_flame(world: &mut World, name: &str, effect: FlameEffect) -> Entity {
-    let transform = Transform {
-        translation: effect.position,
-        rotation: effect.rotation,
-        ..Default::default()
-    };
-
-    world
-        .entity()
-        .with_name(name)
-        .with_transform(transform)
-        .with_editor_display(EntityIcon::Flame, false)
-        .with_flame(effect)
-        .build()
+    spawn_scene_owner(world, name, effect)
 }
 
 /// Spawn a flame entity together with its (empty) animation clip and schedule
@@ -40,13 +29,6 @@ pub fn spawn_flame_with_clip(
         &FLAME_DOMAIN,
     );
     entity
-}
-
-/// Removes every flame entity so a scene without a flame section loads into a flame-free world.
-pub fn despawn_flames(world: &mut World) {
-    for entity in world.query_flames() {
-        world.despawn(entity);
-    }
 }
 
 /// The flame the UI and the flame events act on: the selected entity when it is a flame,

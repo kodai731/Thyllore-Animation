@@ -121,16 +121,93 @@ at its first use and release it after its last, `src/app/pass_targets.rs`), prep
 images into descriptors and framebuffers), record (`ImageStateTracker` in `thyllore-vulkan-core`
 `renderer/pass_target.rs` emits the layout barriers). Pass code never acquires a transient or writes an
 `ImageMemoryBarrier` for a declared target; `AppData.frame_transients` is the single map from slot to
-handle. A hook file describes a contract only; it
-never names a concrete effect.
+handle. `scene.rs` holds the `SceneComponentHook` contract (type key, owner / attachment role,
+entities, capture, apply), the `scene_owner!` / `scene_attachment!` macros that submit a hook to the
+link-time registry (`inventory`), and `SceneComponentHooks::collect()` that `src/app/` stores as a
+`World` resource for `src/scene/`; owners are applied before attachments. `scene_resource.rs` is the
+same contract for world resources (`SceneResourceHook`, `scene_resource!`, `SceneResourceHooks`). A hook file describes a contract only; it never names a
+concrete effect.
 
 ## src/effect/
 
 The one place that subscribes the effects (`subscription.rs`): it lists the hook constants of flame, water
-and any future effect. `src/app/` runs the hooks generically and never names an effect; an effect's own
-systems (`src/ecs/systems/<effect>/`) implement the hook and own the effect's GPU state as an ECS resource.
-Adding an effect means adding its hook constant to `subscription.rs`, nothing in `src/app/`. Subscription
-order is also the record order of the effects' pass nodes inside the effect stage.
+and any future effect for the `EffectHook` contract (GPU lifecycle and pass nodes). Scene components
+are not listed here: they register at link time from their own files (`scene_owner!` /
+`scene_attachment!`). `src/app/` runs the hooks generically and never names an effect; an effect's own
+systems (`src/ecs/systems/<effect>/`) implement the hook and own the effect's GPU state as an ECS
+resource. Adding an effect means adding its `EffectHook` constant to `subscription.rs`, nothing in
+`src/app/` or `src/scene/`. Subscription order is also the record order of the effects' pass nodes
+inside the effect stage.
+
+## Feature isolation: no effect names outside the effect's own directories
+
+Every feature (today the effects flame, water, wind) is a set of directories that only it may name. Code
+outside those directories reaches a feature through a contract (`src/hooks/`), a registry it subscribes to
+(`src/effect/subscription.rs`), or reflection metadata the feature's own declaration generates
+(`declare_scene_format!` → `SceneComponent::TYPE_KEY` / `PERSISTED_FIELDS`, `ScalarChannelDomain`,
+`UiParam` tables). Directory position decides what a file may see:
+
+| Directory | May name flame / water / wind |
+|---|---|
+| `crates/thyllore-effect-core/src/<effect>/`, `shaders/<effect>/` | its own effect only |
+| `src/ecs/component/<effect>*.rs`, `src/ecs/systems/<effect>/`, `src/ecs/resource/<effect>_*.rs` | its own effect only |
+| `src/effect/subscription.rs` | every effect (the single `EffectHook` list; scene hooks self-register instead) |
+| `src/platform/ui/` per-effect windows, `src/debugview/` per-effect dumps | the effect the file is for |
+| `src/scene/`, `src/hooks/`, `src/ecs/systems/*.rs` (shared systems), shared crates | none, tests included (`src/scene/` tests use `entities.rs::test_support`; effect round trips live in `src/ecs/systems/<effect>/tests.rs`) |
+| `src/app/`, `src/ecs/world.rs` | none in new code; the existing spots (default flame spawn in `init/instance.rs`, water acceleration structures in `scene_model.rs` / `init/raytracing.rs` / `cleanup.rs` / `model_loader.rs`, `query_flames` / `query_waters` / `query_winds`) are exceptions tracked with #179 and must not grow |
+
+Concretely:
+
+- `src/scene/` persists entities as `(name, components{type_key → value})`. It never writes
+  `FlameSceneData`, `"water_torus"`, `apply_wind_state_to_world` or an effect field name (`column_height`,
+  `sigma_t`). What it may do: iterate the `SceneComponentHooks` resource (`src/hooks/scene.rs`) that
+  `src/effect/subscription.rs::subscribe_scene_components` filled, and decode through the
+  `thyllore_scene_core::SceneComponent` trait. The hooks are generic:
+  `SceneComponentHook::owner::<C>()` for a component that defines its entity (`C: SceneOwner`, the
+  engine-side trait giving icon and placement, implemented in `src/ecs/component/<effect>.rs`) and
+  `SceneComponentHook::attachment::<C>()` for anything restored by insertion; the type key comes from
+  `<Effect>::TYPE_KEY`, which `declare_scene_format!` generated from the `key:` item. Hooks are
+  registered at link time (`inventory`): `scene_owner!(Effect { icon, placement, prepare_loaded? })`
+  and `scene_attachment!(C)` in the component's own file both submit the hook, and
+  `SceneComponentHooks::collect()` gathers every submission at app start (duplicate keys fail there).
+  There is no list of scene components anywhere.
+- Adding a persisted parameter = one entry in the effect's `declare_scene_format!` table. Nothing in
+  `src/scene/` changes. Adding an effect = `scene_owner!` in its component file; a provenance component
+  = `scene_attachment!`. Runtime-only companions (baked data, accumulators) are inserted by the effect's
+  own per-frame system when missing, never by the loader.
+- `src/hooks/` files describe contracts (`EffectHook`, `RenderPassNode`, `SceneComponentHook`); they take
+  fn pointers and `&'static str` keys, never an effect type.
+- `src/ecs/world.rs` offers generic component access (`iter_components::<C>`, `insert_component`); it does
+  not grow `with_<effect>()` builders or `query_<effect>s()` helpers. The existing `query_flames` /
+  `query_waters` / `query_winds` are tracked as exceptions and must not be extended.
+- Crates depend downward only: `thyllore-effect-core` depends on `thyllore-scene-core` / `-math-core` /
+  `-color-core`, never on a sibling feature crate or on `src/`. Two features never depend on each other's
+  crate or module; anything two features share moves down into the shared parent
+  (`crates/thyllore-effect-core/src/volume/`, `thyllore-scene-core`, `src/hooks/`).
+
+```rust
+// Bad: src/scene/ names an effect and one of its fields
+pub struct WindSceneData { pub effect: WindTornadoEffect, pub preset: Option<String> }
+fn apply_wind(world: &mut World, wind: &WindSceneData) { effect.column_height = wind.effect.column_height; }
+
+// Good: src/scene/ iterates the registry; the effect registered its own hook
+for hook in world.resource::<SceneComponentHooks>().ordered() {
+    if let Some(value) = scene_entity.components.get(hook.type_key) {
+        (hook.apply)(world, assets, entity, value)?;
+    }
+}
+```
+
+Test for it before finishing: `grep -rni "flame\|water\|wind" src/scene src/hooks` must hit nothing but
+the stub pass names of `src/hooks/pass.rs` tests.
+
+Resources follow the same rule. A resource is persisted by declaring its fields once
+(`declare_scene_format!` in the resource's own file, or in its crate for `thyllore-render-core` settings)
+and writing `scene_resource!(Type)` next to it; `SceneResourceHooks::collect()` gathers every registration
+at link time and `src/scene/` writes them under `resources`. A resource whose persisted form needs `World`
+context (the timeline names its active clip) submits a hand-written `SceneResourceHook` from its system
+file. Enum fields are persisted by name through a `String` field (`ToneMapOperator::name` /
+`from_name`), because a `ron::Value` cannot carry a unit variant.
 
 ## src/platform/
 
@@ -202,7 +279,15 @@ per-feature `AddPass`).
 
 ## Other src/ directories
 
-- `src/scene/` — scene file format, load / save, clip io (serde + world apply, no rendering)
+- `src/scene/` — the scene file schema (`file.rs`: version, metadata, model path, clip files,
+  `resources{type_key → value}`, `entities[(name, components{type_key → value})]`), load / save
+  (`scene_io.rs`), the generic entity capture / apply (`entities.rs`) and clip io. It holds no mirror
+  struct of any resource or component: every persisted type registers itself (`scene_resource!`,
+  `scene_owner!`, `scene_attachment!`) from its own file, and the capture / apply of a hook that needs
+  `World` logic is an ECS system (`src/ecs/systems/scheduled_clip_systems.rs`,
+  `debug_primitive_systems.rs`, `timeline_systems.rs`), never a file under `src/scene/`. Tests in
+  `src/scene/` use the test-only `ProbeOwner` / `ProbeLabel` of `entities.rs::test_support`; a test that
+  needs a concrete effect belongs to that effect's `tests.rs`
 - `src/asset/` — CPU-side model asset storage
 - `src/debugview/` — `impl App` blocks that exist only for a debugging session: GPU image and buffer dumps
   (`flame_history_dump.rs`, `water_debug_dump.rs`, `exposure_dump.rs`, `shadow_debug.rs`) and debug scene

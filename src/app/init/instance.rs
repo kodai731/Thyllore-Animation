@@ -139,7 +139,7 @@ impl App {
         crate::vulkanr::renderer::deferred::register_core_passes(&mut data.pass_graph);
         data.effect_hooks.register_passes(&mut data.pass_graph);
 
-        Self::initialize_core_ecs_resources(&mut data);
+        Self::initialize_core_ecs_resources(&mut data)?;
 
         #[cfg(feature = "ml")]
         data.ecs_world.insert_resource(curve_copilot_mode);
@@ -318,11 +318,16 @@ impl App {
         })
     }
 
-    fn initialize_core_ecs_resources(data: &mut AppData) {
+    fn initialize_core_ecs_resources(data: &mut AppData) -> Result<()> {
         data.ecs_world.insert_resource(Camera::default());
         data.ecs_world.insert_resource(LightState::default());
         data.ecs_world
             .insert_resource(crate::ecs::resource::DebugViewState::default());
+        data.ecs_world
+            .insert_resource(crate::hooks::scene::SceneComponentHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::scene_resource::SceneResourceHooks::collect()?);
+        Ok(())
     }
     unsafe fn initialize_graphics_and_ecs(
         instance: &Instance,
@@ -896,13 +901,15 @@ impl App {
     ) {
         let mut scene_state = SceneState::new();
         if let Some((scene_path, scene, clips)) = loaded_scene {
-            let clips_with_ids =
-                Self::register_loaded_clips(&mut data.ecs_world, &mut data.ecs_assets, clips);
+            crate::ecs::systems::clip_library_systems::clip_library_register_loaded(
+                &mut data.ecs_world,
+                &mut data.ecs_assets,
+                clips,
+            );
             crate::scene::apply_loaded_scene_to_world(
                 &scene,
                 &mut data.ecs_world,
                 &mut data.ecs_assets,
-                &clips_with_ids,
             );
 
             let active_clip_id = {
@@ -1374,27 +1381,6 @@ impl App {
 
         // (default_model_path, None)
         ("".to_string(), None)
-    }
-
-    fn register_loaded_clips(
-        world: &mut crate::ecs::world::World,
-        assets: &mut crate::asset::AssetStorage,
-        clips: Vec<crate::animation::editable::EditableAnimationClip>,
-    ) -> Vec<(crate::animation::editable::SourceClipId, String)> {
-        let mut clip_library = world.resource_mut::<ClipLibrary>();
-        let mut result = Vec::new();
-
-        for clip in clips {
-            let name = clip.name.clone();
-            let id = crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
-                &mut clip_library,
-                assets,
-                clip,
-            );
-            result.push((id, name));
-        }
-
-        result
     }
 
     unsafe fn create_font_image(

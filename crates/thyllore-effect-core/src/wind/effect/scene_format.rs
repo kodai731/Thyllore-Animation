@@ -30,6 +30,7 @@ declare_scene_format! {
                 min: 0.1,
                 max: 20.0,
                 format: "%.2f",
+                group: "shape",
             },
         },
         wall_radius_base: f32 = Frame {
@@ -39,6 +40,7 @@ declare_scene_format! {
                 min: 0.01,
                 max: 10.0,
                 format: "%.3f",
+                group: "shape",
             },
         },
         wall_radius_top: f32 = Frame {
@@ -48,6 +50,7 @@ declare_scene_format! {
                 min: 0.01,
                 max: 10.0,
                 format: "%.3f",
+                group: "shape",
             },
         },
         wall_width_q: f32 = Frame {
@@ -58,15 +61,7 @@ declare_scene_format! {
                 max: 5.0,
                 format: "%.3f",
                 tooltip: "Half width of the wall shell in squared-radius units; the radial thickness is about wall_width_q / (2 R)",
-            },
-        },
-        wall_strength: f32 = Frame {
-            get: |e| e.wall_strength,
-            set: |e, v| e.wall_strength = v,
-            ui {
-                min: 0.0,
-                max: 4.0,
-                format: "%.2f",
+                group: "shape",
             },
         },
         top_fade: f32 = Frame {
@@ -77,6 +72,7 @@ declare_scene_format! {
                 max: 1.0,
                 format: "%.2f",
                 tooltip: "Fraction of the height over which the density fades to zero at the top",
+                group: "shape",
             },
         },
         density: f32 = Frame {
@@ -87,6 +83,314 @@ declare_scene_format! {
                 max: 50.0,
                 format: "%.2f",
                 tooltip: "Extinction coefficient per meter at unit shell density",
+                group: "density",
+            },
+        },
+        wall_strength: f32 = Frame {
+            get: |e| e.wall_strength,
+            set: |e, v| e.wall_strength = v,
+            ui {
+                min: 0.0,
+                max: 4.0,
+                format: "%.2f",
+                group: "density",
+            },
+        },
+        rise_initial_height: f32 = Frame {
+            get: |e| e.rise_initial_height,
+            set: |e, v| e.rise_initial_height = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Height fraction of the column at t = 0; the top rises to 1 over rise_duration",
+                group: "motion",
+            },
+        },
+        rise_duration: f32 = Frame {
+            get: |e| e.rise_duration,
+            set: |e, v| e.rise_duration = v,
+            ui {
+                min: 0.1,
+                max: 10.0,
+                format: "%.2f",
+                tooltip: "Seconds of the smoothstep rise from rise_initial_height to the full height",
+                group: "motion",
+            },
+        },
+        spread_start: f32 = Frame {
+            get: |e| e.spread_start,
+            set: |e, v| e.spread_start = v,
+            ui {
+                min: 0.0,
+                max: 10.0,
+                format: "%.2f",
+                tooltip: "Time in seconds when wall spreading begins",
+                group: "motion",
+            },
+        },
+        spread_rate: f32 = Frame {
+            get: |e| e.spread_rate,
+            set: |e, v| e.spread_rate = v,
+            ui {
+                min: 0.0,
+                max: 5.0,
+                format: "%.2f",
+                tooltip: "Outward drift of the wall in squared-radius units: 2 * spread_rate * (t - spread_start)",
+                group: "motion",
+            },
+        },
+        dissipate_start: f32 = Frame {
+            get: |e| e.dissipate_start,
+            set: |e, v| e.dissipate_start = v,
+            ui {
+                min: 0.0,
+                max: 10.0,
+                format: "%.2f",
+                tooltip: "Time in seconds when wall dissipation begins",
+                group: "motion",
+            },
+        },
+        dissipate_time: f32 = Frame {
+            get: |e| e.dissipate_time,
+            set: |e, v| e.dissipate_time = v,
+            ui {
+                min: 0.0,
+                max: 10.0,
+                format: "%.2f",
+                tooltip: "Time constant of the wall strength decay; 0 keeps the wall at full strength",
+                group: "motion",
+            },
+        },
+        circulation: f32 = Frame {
+            get: |e| e.circulation,
+            set: |e, v| e.circulation = v,
+            ui {
+                min: 0.0,
+                max: 100.0,
+                format: "%.2f",
+                tooltip: "Circulation of the Rankine vortex; used for streak phase computation",
+                group: "motion",
+            },
+        },
+        streak_order: f32 = Frame {
+            get: |e| e.streak_order,
+            set: |e, v| e.streak_order = v,
+            ui {
+                min: 1.0,
+                max: 16.0,
+                format: "%.1f",
+                tooltip: "Number of spiral streaks (m in the phase)",
+                group: "motion",
+            },
+        },
+        streak_twist: f32 = Frame {
+            get: |e| e.streak_twist,
+            set: |e, v| e.streak_twist = v,
+            ui {
+                min: 0.0,
+                max: 20.0,
+                format: "%.1f",
+                tooltip: "Twist of the spiral streaks (kappa in the phase)",
+                group: "motion",
+            },
+        },
+        streak_rise_speed: f32 = Frame {
+            get: |e| e.streak_rise_speed,
+            set: |e, v| e.streak_rise_speed = v,
+            ui {
+                min: 0.0,
+                max: 10.0,
+                format: "%.1f",
+                tooltip: "Rise speed of the spiral streaks (omega_z in the phase)",
+                group: "motion",
+            },
+        },
+        streak_amplitude: f32 = Frame {
+            get: |e| e.streak_amplitude,
+            set: |e, v| e.streak_amplitude = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Amplitude of the streak modulation; 0 disables streaks (identity)",
+                group: "motion",
+            },
+        },
+        eddy_amplitude: f32 = Frame {
+            get: |e| e.eddy_amplitude,
+            set: |e, v| e.eddy_amplitude = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Amplitude of the volumetric eddy; 0 disables eddies (identity)",
+                group: "eddy",
+            },
+        },
+        eddy_cell_theta: f32 = Frame {
+            get: |e| e.eddy_cell_theta,
+            set: |e, v| e.eddy_cell_theta = v,
+            ui {
+                min: 0.01,
+                max: 2.0,
+                format: "%.2f",
+                tooltip: "Eddy cell size in theta (angular) direction",
+                group: "eddy",
+            },
+        },
+        eddy_cell_height: f32 = Frame {
+            get: |e| e.eddy_cell_height,
+            set: |e, v| e.eddy_cell_height = v,
+            ui {
+                min: 0.01,
+                max: 2.0,
+                format: "%.2f",
+                tooltip: "Eddy cell size in height (vertical) direction",
+                group: "eddy",
+            },
+        },
+        eddy_cell_radial: f32 = Frame {
+            get: |e| e.eddy_cell_radial,
+            set: |e, v| e.eddy_cell_radial = v,
+            ui {
+                min: 0.01,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Eddy cell size in radial direction",
+                group: "eddy",
+            },
+        },
+        eddy_shear: f32 = Frame {
+            get: |e| e.eddy_shear,
+            set: |e, v| e.eddy_shear = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Shear of the eddy field; 0 is no shear (pure translation)",
+                group: "eddy",
+            },
+        },
+        eddy_speed_spread: f32 = Frame {
+            get: |e| e.eddy_speed_spread,
+            set: |e, v| e.eddy_speed_spread = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Width of rotation speed applied to octave and reseed layers. 0 means all octaves have the same speed.",
+                group: "eddy",
+            },
+        },
+        eddy_rise_speed: f32 = Frame {
+            get: |e| e.eddy_rise_speed,
+            set: |e, v| e.eddy_rise_speed = v,
+            ui {
+                min: 0.0,
+                max: 10.0,
+                format: "%.1f",
+                tooltip: "Rise speed of the eddy field (omega_z in the phase)",
+                group: "eddy",
+            },
+        },
+        eddy_reseed_period: f32 = Frame {
+            get: |e| e.eddy_reseed_period,
+            set: |e, v| e.eddy_reseed_period = v,
+            ui {
+                min: 0.1,
+                max: 10.0,
+                format: "%.1f",
+                tooltip: "Period of the eddy reseed (time between resamples)",
+                group: "eddy",
+            },
+        },
+        eddy_erosion: f32 = Frame {
+            get: |e| e.eddy_erosion,
+            set: |e, v| e.eddy_erosion = v,
+            ui {
+                min: 0.0,
+                max: 0.95,
+                format: "%.2f",
+                tooltip: "Noise floor carved out of the eddy field; density reaches 0 where noise falls below it, 0 keeps the smooth modulation (identity)",
+                group: "eddy",
+            },
+        },
+        puff_count_theta: u32 = Frame {
+            get: |e| e.puff_count_theta,
+            set: |e, v| e.puff_count_theta = v,
+            ui {
+                min: 0.0,
+                max: 16.0,
+                format: "%.0f",
+                tooltip: "Number of puff clumps around the theta (angular) direction; 0 means no puffs (identity)",
+                group: "eddy",
+            },
+        },
+        puff_count_height: u32 = Frame {
+            get: |e| e.puff_count_height,
+            set: |e, v| e.puff_count_height = v,
+            ui {
+                min: 0.0,
+                max: 16.0,
+                format: "%.0f",
+                tooltip: "Number of puff clumps along the height (vertical) direction; 0 means no puffs (identity)",
+                group: "eddy",
+            },
+        },
+        puff_radius: f32 = Frame {
+            get: |e| e.puff_radius,
+            set: |e, v| e.puff_radius = v,
+            ui {
+                min: 0.01,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Radius of each puff clump in world units",
+                group: "eddy",
+            },
+        },
+        puff_radius_jitter: f32 = Frame {
+            get: |e| e.puff_radius_jitter,
+            set: |e, v| e.puff_radius_jitter = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Fractional jitter of puff radius for organic variation",
+                group: "eddy",
+            },
+        },
+        puff_offset_q: f32 = Frame {
+            get: |e| e.puff_offset_q,
+            set: |e, v| e.puff_offset_q = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Radial offset of puff clumps from the wall in q space",
+                group: "eddy",
+            },
+        },
+        puff_strength: f32 = Frame {
+            get: |e| e.puff_strength,
+            set: |e, v| e.puff_strength = v,
+            ui {
+                min: 0.0,
+                max: 4.0,
+                format: "%.2f",
+                tooltip: "Strength of the puff density contribution relative to the wall",
+                group: "eddy",
+            },
+        },
+        puff_rise_speed: f32 = Frame {
+            get: |e| e.puff_rise_speed,
+            set: |e, v| e.puff_rise_speed = v,
+            ui {
+                min: 0.0,
+                max: 10.0,
+                format: "%.1f",
+                tooltip: "Rise speed of puff clumps along the tornado height",
+                group: "eddy",
             },
         },
         albedo: [f32; 3] = Frame {
@@ -99,6 +403,7 @@ declare_scene_format! {
                 max: 1.0,
                 format: "%.2f",
                 tooltip: "Single-scattering albedo of the dust",
+                group: "look",
             },
         },
         ambient_brightness: f32 = Frame {
@@ -108,6 +413,7 @@ declare_scene_format! {
                 min: 0.0,
                 max: 5.0,
                 format: "%.2f",
+                group: "look",
             },
         },
         phase_g: f32 = Frame {
@@ -118,6 +424,7 @@ declare_scene_format! {
                 max: 0.95,
                 format: "%.2f",
                 tooltip: "Henyey-Greenstein anisotropy of the dust; positive scatters forward",
+                group: "look",
             },
         },
         sun_intensity: f32 = Frame {
@@ -128,276 +435,7 @@ declare_scene_format! {
                 max: 10.0,
                 format: "%.2f",
                 tooltip: "Radiance of the sun used by the single-scattering source term",
-            },
-        },
-        rise_initial_height: f32 = Frame {
-            get: |e| e.rise_initial_height,
-            set: |e, v| e.rise_initial_height = v,
-            ui {
-                min: 0.0,
-                max: 1.0,
-                format: "%.2f",
-                tooltip: "Height fraction of the column at t = 0; the top rises to 1 over rise_duration",
-            },
-        },
-        rise_duration: f32 = Frame {
-            get: |e| e.rise_duration,
-            set: |e, v| e.rise_duration = v,
-            ui {
-                min: 0.1,
-                max: 10.0,
-                format: "%.2f",
-                tooltip: "Seconds of the smoothstep rise from rise_initial_height to the full height",
-            },
-        },
-        spread_start: f32 = Frame {
-            get: |e| e.spread_start,
-            set: |e, v| e.spread_start = v,
-            ui {
-                min: 0.0,
-                max: 10.0,
-                format: "%.2f",
-                tooltip: "Time in seconds when wall spreading begins",
-            },
-        },
-        spread_rate: f32 = Frame {
-            get: |e| e.spread_rate,
-            set: |e, v| e.spread_rate = v,
-            ui {
-                min: 0.0,
-                max: 5.0,
-                format: "%.2f",
-                tooltip: "Outward drift of the wall in squared-radius units: 2 * spread_rate * (t - spread_start)",
-            },
-        },
-        dissipate_start: f32 = Frame {
-            get: |e| e.dissipate_start,
-            set: |e, v| e.dissipate_start = v,
-            ui {
-                min: 0.0,
-                max: 10.0,
-                format: "%.2f",
-                tooltip: "Time in seconds when wall dissipation begins",
-            },
-        },
-        dissipate_time: f32 = Frame {
-            get: |e| e.dissipate_time,
-            set: |e, v| e.dissipate_time = v,
-            ui {
-                min: 0.0,
-                max: 10.0,
-                format: "%.2f",
-                tooltip: "Time constant of the wall strength decay; 0 keeps the wall at full strength",
-            },
-        },
-        circulation: f32 = Frame {
-            get: |e| e.circulation,
-            set: |e, v| e.circulation = v,
-            ui {
-                min: 0.0,
-                max: 100.0,
-                format: "%.2f",
-                tooltip: "Circulation of the Rankine vortex; used for streak phase computation",
-            },
-        },
-        streak_order: f32 = Frame {
-            get: |e| e.streak_order,
-            set: |e, v| e.streak_order = v,
-            ui {
-                min: 1.0,
-                max: 16.0,
-                format: "%.1f",
-                tooltip: "Number of spiral streaks (m in the phase)",
-            },
-        },
-        streak_twist: f32 = Frame {
-            get: |e| e.streak_twist,
-            set: |e, v| e.streak_twist = v,
-            ui {
-                min: 0.0,
-                max: 20.0,
-                format: "%.1f",
-                tooltip: "Twist of the spiral streaks (kappa in the phase)",
-            },
-        },
-        streak_rise_speed: f32 = Frame {
-            get: |e| e.streak_rise_speed,
-            set: |e, v| e.streak_rise_speed = v,
-            ui {
-                min: 0.0,
-                max: 10.0,
-                format: "%.1f",
-                tooltip: "Rise speed of the spiral streaks (omega_z in the phase)",
-            },
-        },
-        streak_amplitude: f32 = Frame {
-            get: |e| e.streak_amplitude,
-            set: |e, v| e.streak_amplitude = v,
-            ui {
-                min: 0.0,
-                max: 1.0,
-                format: "%.2f",
-                tooltip: "Amplitude of the streak modulation; 0 disables streaks (identity)",
-            },
-        },
-        eddy_amplitude: f32 = Frame {
-            get: |e| e.eddy_amplitude,
-            set: |e, v| e.eddy_amplitude = v,
-            ui {
-                min: 0.0,
-                max: 1.0,
-                format: "%.2f",
-                tooltip: "Amplitude of the volumetric eddy; 0 disables eddies (identity)",
-            },
-        },
-        eddy_cell_theta: f32 = Frame {
-            get: |e| e.eddy_cell_theta,
-            set: |e, v| e.eddy_cell_theta = v,
-            ui {
-                min: 0.01,
-                max: 2.0,
-                format: "%.2f",
-                tooltip: "Eddy cell size in theta (angular) direction",
-            },
-        },
-        eddy_cell_height: f32 = Frame {
-            get: |e| e.eddy_cell_height,
-            set: |e, v| e.eddy_cell_height = v,
-            ui {
-                min: 0.01,
-                max: 2.0,
-                format: "%.2f",
-                tooltip: "Eddy cell size in height (vertical) direction",
-            },
-        },
-        eddy_cell_radial: f32 = Frame {
-            get: |e| e.eddy_cell_radial,
-            set: |e, v| e.eddy_cell_radial = v,
-            ui {
-                min: 0.01,
-                max: 1.0,
-                format: "%.2f",
-                tooltip: "Eddy cell size in radial direction",
-            },
-        },
-        eddy_shear: f32 = Frame {
-            get: |e| e.eddy_shear,
-            set: |e, v| e.eddy_shear = v,
-            ui {
-                min: 0.0,
-                max: 1.0,
-                format: "%.2f",
-                tooltip: "Shear of the eddy field; 0 is no shear (pure translation)",
-            },
-        },
-        eddy_speed_spread: f32 = Frame {
-            get: |e| e.eddy_speed_spread,
-            set: |e, v| e.eddy_speed_spread = v,
-            ui {
-                min: 0.0,
-                max: 1.0,
-                format: "%.2f",
-                tooltip: "Width of rotation speed applied to octave and reseed layers. 0 means all octaves have the same speed.",
-            },
-        },
-        eddy_rise_speed: f32 = Frame {
-            get: |e| e.eddy_rise_speed,
-            set: |e, v| e.eddy_rise_speed = v,
-            ui {
-                min: 0.0,
-                max: 10.0,
-                format: "%.1f",
-                tooltip: "Rise speed of the eddy field (omega_z in the phase)",
-            },
-        },
-        eddy_reseed_period: f32 = Frame {
-            get: |e| e.eddy_reseed_period,
-            set: |e, v| e.eddy_reseed_period = v,
-            ui {
-                min: 0.1,
-                max: 10.0,
-                format: "%.1f",
-                tooltip: "Period of the eddy reseed (time between resamples)",
-            },
-        },
-        eddy_erosion: f32 = Frame {
-            get: |e| e.eddy_erosion,
-            set: |e, v| e.eddy_erosion = v,
-            ui {
-                min: 0.0,
-                max: 0.95,
-                format: "%.2f",
-                tooltip: "Noise floor carved out of the eddy field; density reaches 0 where noise falls below it, 0 keeps the smooth modulation (identity)",
-            },
-        },
-        puff_count_theta: u32 = Frame {
-            get: |e| e.puff_count_theta,
-            set: |e, v| e.puff_count_theta = v,
-            ui {
-                min: 0.0,
-                max: 16.0,
-                format: "%.0f",
-                tooltip: "Number of puff clumps around the theta (angular) direction; 0 means no puffs (identity)",
-            },
-        },
-        puff_count_height: u32 = Frame {
-            get: |e| e.puff_count_height,
-            set: |e, v| e.puff_count_height = v,
-            ui {
-                min: 0.0,
-                max: 16.0,
-                format: "%.0f",
-                tooltip: "Number of puff clumps along the height (vertical) direction; 0 means no puffs (identity)",
-            },
-        },
-        puff_radius: f32 = Frame {
-            get: |e| e.puff_radius,
-            set: |e, v| e.puff_radius = v,
-            ui {
-                min: 0.01,
-                max: 1.0,
-                format: "%.2f",
-                tooltip: "Radius of each puff clump in world units",
-            },
-        },
-        puff_radius_jitter: f32 = Frame {
-            get: |e| e.puff_radius_jitter,
-            set: |e, v| e.puff_radius_jitter = v,
-            ui {
-                min: 0.0,
-                max: 1.0,
-                format: "%.2f",
-                tooltip: "Fractional jitter of puff radius for organic variation",
-            },
-        },
-        puff_offset_q: f32 = Frame {
-            get: |e| e.puff_offset_q,
-            set: |e, v| e.puff_offset_q = v,
-            ui {
-                min: 0.0,
-                max: 1.0,
-                format: "%.2f",
-                tooltip: "Radial offset of puff clumps from the wall in q space",
-            },
-        },
-        puff_strength: f32 = Frame {
-            get: |e| e.puff_strength,
-            set: |e, v| e.puff_strength = v,
-            ui {
-                min: 0.0,
-                max: 4.0,
-                format: "%.2f",
-                tooltip: "Strength of the puff density contribution relative to the wall",
-            },
-        },
-        puff_rise_speed: f32 = Frame {
-            get: |e| e.puff_rise_speed,
-            set: |e, v| e.puff_rise_speed = v,
-            ui {
-                min: 0.0,
-                max: 10.0,
-                format: "%.1f",
-                tooltip: "Rise speed of puff clumps along the tornado height",
+                group: "look",
             },
         },
     },
@@ -474,6 +512,91 @@ mod tests {
                 );
             }
             assert!(param.min < param.max, "{}", param.name);
+        }
+    }
+
+    #[test]
+    fn test_ui_param_groups_cover_every_wind_group_in_display_order() {
+        let mut groups: Vec<&str> = Vec::new();
+        for param in WIND_UI_PARAMS {
+            if !param.group.is_empty() && !groups.contains(&param.group) {
+                groups.push(param.group);
+            }
+        }
+        assert_eq!(groups, ["shape", "density", "motion", "eddy", "look"]);
+    }
+
+    #[test]
+    fn test_ui_param_group_members_match_their_group() {
+        let expected: &[(&str, &[&str])] = &[
+            (
+                "shape",
+                &[
+                    "column_height",
+                    "wall_radius_base",
+                    "wall_radius_top",
+                    "wall_width_q",
+                    "top_fade",
+                ],
+            ),
+            ("density", &["density", "wall_strength"]),
+            (
+                "motion",
+                &[
+                    "rise_initial_height",
+                    "rise_duration",
+                    "spread_start",
+                    "spread_rate",
+                    "dissipate_start",
+                    "dissipate_time",
+                    "circulation",
+                    "streak_order",
+                    "streak_twist",
+                    "streak_rise_speed",
+                    "streak_amplitude",
+                ],
+            ),
+            (
+                "eddy",
+                &[
+                    "eddy_amplitude",
+                    "eddy_cell_theta",
+                    "eddy_cell_height",
+                    "eddy_cell_radial",
+                    "eddy_shear",
+                    "eddy_speed_spread",
+                    "eddy_rise_speed",
+                    "eddy_reseed_period",
+                    "eddy_erosion",
+                    "puff_count_theta",
+                    "puff_count_height",
+                    "puff_radius",
+                    "puff_radius_jitter",
+                    "puff_offset_q",
+                    "puff_strength",
+                    "puff_rise_speed",
+                ],
+            ),
+            (
+                "look",
+                &["albedo", "ambient_brightness", "phase_g", "sun_intensity"],
+            ),
+        ];
+
+        let grouped: usize = expected.iter().map(|(_, members)| members.len()).sum();
+        let persisted = WIND_UI_PARAMS
+            .iter()
+            .filter(|param| param.persisted)
+            .count();
+        assert_eq!(grouped, persisted);
+
+        for (group, members) in expected {
+            let declared: Vec<&str> = WIND_UI_PARAMS
+                .iter()
+                .filter(|param| param.group == *group)
+                .map(|param| param.name)
+                .collect();
+            assert_eq!(declared, *members, "{group}");
         }
     }
 

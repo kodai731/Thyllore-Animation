@@ -29,6 +29,7 @@ pub use thyllore_color_core::{get_rgb_channel, set_rgb_channel, RgbField, RGB_CH
 /// UI-toolkit-free display metadata of one parameter, joined to the accessor table by `name`.
 pub struct UiParam {
     pub name: &'static str,
+    pub group: &'static str,
     pub label: Option<&'static str>,
     pub kind: UiKind,
     pub min: f32,
@@ -139,7 +140,8 @@ macro_rules! declare_scene_format {
                     min: $ui_min:expr,
                     max: $ui_max:expr
                     $(, format: $ui_format:expr)?
-                    $(, tooltip: $ui_tooltip:expr)? $(,)?
+                    $(, tooltip: $ui_tooltip:expr)?
+                    $(, group: $ui_group:expr)? $(,)?
                 })?
                 $(,)?
             } ),+ $(,)?
@@ -153,7 +155,8 @@ macro_rules! declare_scene_format {
                     min: $rt_ui_min:expr,
                     max: $rt_ui_max:expr
                     $(, format: $rt_ui_format:expr)?
-                    $(, tooltip: $rt_ui_tooltip:expr)? $(,)?
+                    $(, tooltip: $rt_ui_tooltip:expr)?
+                    $(, group: $rt_ui_group:expr)? $(,)?
                 })?
                 $(,)?
             } ),* $(,)?
@@ -190,6 +193,7 @@ macro_rules! declare_scene_format {
                         max: $ui_max
                         $(, format: $ui_format)?
                         $(, tooltip: $ui_tooltip)?
+                        $(, group: $ui_group)?
                     })?
                 } ),+
             },
@@ -203,6 +207,7 @@ macro_rules! declare_scene_format {
                         max: $rt_ui_max
                         $(, format: $rt_ui_format)?
                         $(, tooltip: $rt_ui_tooltip)?
+                        $(, group: $rt_ui_group)?
                     })?
                 } ),*
             },
@@ -233,7 +238,8 @@ macro_rules! declare_scene_format {
                     min: $ui_min:expr,
                     max: $ui_max:expr
                     $(, format: $ui_format:expr)?
-                    $(, tooltip: $ui_tooltip:expr)? $(,)?
+                    $(, tooltip: $ui_tooltip:expr)?
+                    $(, group: $ui_group:expr)? $(,)?
                 })?
                 $(,)?
             } ),+ $(,)?
@@ -247,7 +253,8 @@ macro_rules! declare_scene_format {
                     min: $rt_ui_min:expr,
                     max: $rt_ui_max:expr
                     $(, format: $rt_ui_format:expr)?
-                    $(, tooltip: $rt_ui_tooltip:expr)? $(,)?
+                    $(, tooltip: $rt_ui_tooltip:expr)?
+                    $(, group: $rt_ui_group:expr)? $(,)?
                 })?
                 $(,)?
             } ),* $(,)?
@@ -332,6 +339,7 @@ macro_rules! declare_scene_format {
             $( $(
                 $crate::UiParam {
                     name: stringify!($name),
+                    group: $crate::declare_scene_format!(@ui_or_default "" $(, $ui_group)?),
                     label: $crate::declare_scene_format!(@ui_label $(, $ui_label)?),
                     kind: $crate::declare_scene_format!(@ui_kind $(, $ui_kind)?),
                     min: $ui_min,
@@ -344,6 +352,7 @@ macro_rules! declare_scene_format {
             $( $(
                 $crate::UiParam {
                     name: stringify!($runtime_name),
+                    group: $crate::declare_scene_format!(@ui_or_default "" $(, $rt_ui_group)?),
                     label: $crate::declare_scene_format!(@ui_label $(, $rt_ui_label)?),
                     kind: $crate::UiKind::Scalar,
                     min: $rt_ui_min,
@@ -507,6 +516,7 @@ mod tests {
     fn test_display_label_prefers_explicit_label() {
         let explicit = UiParam {
             name: "swirl_gain",
+            group: "",
             label: Some("Swirl"),
             kind: UiKind::Scalar,
             min: 0.0,
@@ -527,6 +537,7 @@ mod tests {
     fn test_color_component_names_follow_rgb_suffixes() {
         let tint = UiParam {
             name: "tint",
+            group: "",
             label: None,
             kind: UiKind::Color,
             min: 0.0,

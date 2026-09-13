@@ -1,11 +1,11 @@
 use anyhow::Result;
 
-use crate::app::FrameContext;
 use crate::ecs::resource::{ClipLibrary, HierarchyState, OnionSkinningConfig, TimelineState};
 use crate::ecs::systems::onion_skinning_systems::{
     compute_onion_skin_ghosts, OnionSkinMeshContext,
 };
 use crate::ecs::world::MeshRef;
+use crate::ecs::FrameContext;
 
 pub unsafe fn run_onion_skin_phase(ctx: &mut FrameContext, updated_meshes: &[usize]) -> Result<()> {
     let Some(config) = resolve_onion_config(ctx) else {

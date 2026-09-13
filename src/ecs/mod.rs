@@ -1,6 +1,8 @@
 pub mod component;
 pub mod context;
+pub mod effect_context;
 pub mod events;
+pub mod frame_context;
 pub mod query;
 pub mod registry;
 pub mod resource;
@@ -10,7 +12,9 @@ pub mod world;
 
 pub use component::*;
 pub use context::*;
+pub use effect_context::EffectContext;
 pub use events::*;
+pub use frame_context::FrameContext;
 pub use query::*;
 pub use registry::*;
 pub use resource::*;

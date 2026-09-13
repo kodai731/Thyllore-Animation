@@ -1,6 +1,6 @@
-use crate::app::FrameContext;
 use crate::ecs::component::FlameBoneAttachment;
 use crate::ecs::world::Entity;
+use crate::ecs::FrameContext;
 
 pub fn flame_bone_attach_sync(ctx: &mut FrameContext) {
     use crate::ecs::component::resolve_bone_index;

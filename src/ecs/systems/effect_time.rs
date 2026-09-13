@@ -1,9 +1,9 @@
 use crate::animation::editable::EditableAnimationClip;
-use crate::app::FrameContext;
 use crate::ecs::resource::{BatchRun, ClipLibrary, TimelineState};
 use crate::ecs::storage::Component;
 use crate::ecs::systems::scalar_clip_systems::{find_entity_clip_id, sampled_scalar_values};
 use crate::ecs::world::{Entity, Transform, World};
+use crate::ecs::FrameContext;
 use thyllore_anim_core::editable::PropertyType;
 
 /// An effect component whose local time, placement and animated scalars are refreshed once per

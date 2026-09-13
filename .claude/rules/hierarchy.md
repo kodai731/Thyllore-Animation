@@ -27,17 +27,13 @@ slot), never `App` or `AppData`. If a system seems to need `App`, it is either a
 
 ### Known exceptions (tracked in #163, do not add to this list)
 
-The following places still import `crate::app` from `src/ecs/`. They are violations kept only until #163
-lands; new code must not copy them, and no new entry may be added here.
+The following place still imports `crate::app` from `src/ecs/`. It is a violation kept only until the
+`RenderPassNode` follow-up of #163 lands; new code must not copy it, and no new entry may be added here.
 
-- `FrameContext` and `LightMoveTarget` are defined under `src/app/` although they contain no `App`; the
-  fix is to move them into `src/ecs/`.
-- `src/hooks/effect.rs` declares `on_viewport_resize` and `destroy` as `fn(&mut App)` and `src/hooks/pass.rs`
-  declares `RenderPassNode::prepare` as `fn(&mut App)` and `record` / declarations as `fn(&App)`, so
-  `src/ecs/systems/{flame,water}/render_targets.rs` take `&mut App`; the fix is an `EffectContext` that
-  borrows instance, device, viewport pools and extent, raytracing data and `World` (the `setup` hook
-  already takes decomposed arguments).
-- `src/ecs/systems/phases/render_phase.rs::build_frame_render_context` takes `&App` to read four fields.
+- `src/hooks/pass.rs` declares `RenderPassNode::prepare` as `fn(&mut App)` and `record` / declarations as
+  `fn(&App)`, so `src/ecs/systems/{flame,water}/passes.rs` take `App`; the fix is to migrate the
+  `RenderPassNode` API onto `FrameContext` / `EffectContext` the way the `on_viewport_resize` and
+  `destroy` hooks already were.
 
 ## crates/
 

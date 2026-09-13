@@ -1,8 +1,9 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::{App, AppData};
+use crate::app::AppData;
 use crate::ecs::resource::{half_extent, WindGpuState, WindRenderTargets};
+use crate::ecs::EffectContext;
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::core::RRDevice;
@@ -221,41 +222,36 @@ unsafe fn setup_wind(
     Ok(())
 }
 
-unsafe fn resize_wind_render_targets(app: &mut App) -> Result<()> {
-    let Some(hdr_view) = app
-        .data
-        .viewport
-        .hdr_buffer
-        .as_ref()
-        .map(|hdr| hdr.color_image_view)
-    else {
+unsafe fn resize_wind_render_targets(ctx: &mut EffectContext) -> Result<()> {
+    let Some(hdr_view) = ctx.hdr_color_view else {
         return Ok(());
     };
-    let (width, height) = (app.data.viewport.width, app.data.viewport.height);
-    let scene_depth_view = app
+    let (width, height) = (ctx.viewport_width, ctx.viewport_height);
+    let scene_depth_view = ctx
+        .world
         .resource::<RenderTargets>()
         .render
         .gbuffer_depth_image_view;
 
-    let Some(mut targets) = app.data.ecs_world.get_resource_mut::<WindRenderTargets>() else {
+    let Some(mut targets) = ctx.world.get_resource_mut::<WindRenderTargets>() else {
         return Ok(());
     };
-    destroy_render_targets(&mut targets, &app.rrdevice.device);
-    *targets = create_wind_render_targets(&app.instance, &app.rrdevice, width, height, hdr_view)?;
+    destroy_render_targets(&mut targets, &ctx.rrdevice.device);
+    *targets = create_wind_render_targets(ctx.instance, ctx.rrdevice, width, height, hdr_view)?;
 
-    let Some(gpu_state) = app.data.ecs_world.get_resource::<WindGpuState>() else {
+    let Some(gpu_state) = ctx.world.get_resource::<WindGpuState>() else {
         return Ok(());
     };
     if let Some(descriptor) = gpu_state.resolve_descriptor.as_ref() {
-        descriptor.update_scene_depth(&app.rrdevice, scene_depth_view)?;
-        descriptor.update_shadow_volume(&app.rrdevice, &targets.shadow_volume)?;
+        descriptor.update_scene_depth(ctx.rrdevice, scene_depth_view)?;
+        descriptor.update_shadow_volume(ctx.rrdevice, &targets.shadow_volume)?;
     }
     if let Some(descriptor) = gpu_state.shadow_bake_descriptor.as_ref() {
-        descriptor.update_shadow_volume(&app.rrdevice, &targets.shadow_volume)?;
+        descriptor.update_shadow_volume(ctx.rrdevice, &targets.shadow_volume)?;
     }
     if let Some(descriptor) = gpu_state.upsample_descriptor.as_ref() {
         descriptor.update_image_views(
-            &app.rrdevice,
+            ctx.rrdevice,
             targets.half_color_image_view,
             scene_depth_view,
         )?;
@@ -263,12 +259,12 @@ unsafe fn resize_wind_render_targets(app: &mut App) -> Result<()> {
     Ok(())
 }
 
-unsafe fn destroy_wind_render_targets(app: &mut App) -> Result<()> {
-    if let Some(mut gpu_state) = app.data.ecs_world.get_resource_mut::<WindGpuState>() {
-        destroy_gpu_state(&mut gpu_state, &app.rrdevice.device);
+unsafe fn destroy_wind_render_targets(ctx: &mut EffectContext) -> Result<()> {
+    if let Some(mut gpu_state) = ctx.world.get_resource_mut::<WindGpuState>() {
+        destroy_gpu_state(&mut gpu_state, &ctx.rrdevice.device);
     }
-    if let Some(mut targets) = app.data.ecs_world.get_resource_mut::<WindRenderTargets>() {
-        destroy_render_targets(&mut targets, &app.rrdevice.device);
+    if let Some(mut targets) = ctx.world.get_resource_mut::<WindRenderTargets>() {
+        destroy_render_targets(&mut targets, &ctx.rrdevice.device);
     }
     Ok(())
 }

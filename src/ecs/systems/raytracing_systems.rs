@@ -2,10 +2,10 @@ use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix};
 use thyllore_vulkan_core::raytracing::{RRAccelerationStructure, RRBLAS};
 
-use crate::app::FrameContext;
 use crate::asset::AssetStorage;
 use crate::ecs::component::WaterTorusEffect;
 use crate::ecs::world::{GlobalTransform, MeshRef, World};
+use crate::ecs::FrameContext;
 
 pub fn collect_water_instances(world: &World) -> Vec<(Matrix4<f32>, f32, f32)> {
     world

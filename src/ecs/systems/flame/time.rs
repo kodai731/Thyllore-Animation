@@ -1,8 +1,8 @@
-use crate::app::FrameContext;
 use crate::ecs::component::{apply_flame_param_value, FlameEffect, FlameParam};
 use crate::ecs::resource::LightState;
 use crate::ecs::systems::effect_time::{advance_effect_time, EffectTimeSources, TimedEffect};
 use crate::ecs::world::{Entity, Transform, World};
+use crate::ecs::FrameContext;
 use cgmath::Vector3;
 use thyllore_anim_core::editable::PropertyType;
 

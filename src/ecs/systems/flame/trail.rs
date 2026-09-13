@@ -1,6 +1,6 @@
-use crate::app::FrameContext;
 use crate::ecs::component::{FlameEffect, FlameTrail};
 use crate::ecs::resource::{BatchRun, TimelineState};
+use crate::ecs::FrameContext;
 use thyllore_effect_core::advance_flame_trail;
 
 pub fn flame_trail_advance(ctx: &mut FrameContext) {

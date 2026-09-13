@@ -146,7 +146,7 @@ unsafe fn record_wind_passes(
         return Ok(());
     };
     let wind_buffer = &*wind_targets;
-    let ctx = crate::ecs::systems::phases::build_frame_render_context(app, image_index);
+    let ctx = crate::app::build_frame_render_context(app, image_index);
 
     let settings = wind_render_settings(app);
     let push_constants = WindPushConstants::new(

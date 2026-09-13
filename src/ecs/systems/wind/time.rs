@@ -1,8 +1,8 @@
-use crate::app::FrameContext;
 use crate::ecs::component::{apply_wind_param_value, WindParam, WindTornadoEffect};
 use crate::ecs::resource::WindRenderSettings;
 use crate::ecs::systems::effect_time::{advance_effect_time, EffectTimeSources, TimedEffect};
 use crate::ecs::world::{Entity, Transform, World};
+use crate::ecs::FrameContext;
 use thyllore_anim_core::editable::PropertyType;
 
 impl TimedEffect for WindTornadoEffect {

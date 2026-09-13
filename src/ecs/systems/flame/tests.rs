@@ -1,4 +1,3 @@
-use crate::app::FrameContext;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{
     apply_flame_param_value, EntityIcon, FlameBaked, FlameBoneAttachment, FlameEffect, FlameParam,
@@ -9,6 +8,7 @@ use crate::ecs::resource::{
     LightState, ProjectionData, TimelineState,
 };
 use crate::ecs::world::{Entity, Transform, World};
+use crate::ecs::FrameContext;
 use thyllore_effect_core::{advance_flame_time, advance_flame_trail};
 
 use super::*;

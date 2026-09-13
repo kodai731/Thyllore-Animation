@@ -252,7 +252,7 @@ impl RenderPassNode for WaterTraceNode {
             return Ok(());
         };
         let water_buffer = &targets.buffer;
-        let ctx = crate::ecs::systems::phases::build_frame_render_context(app, image_index);
+        let ctx = crate::app::build_frame_render_context(app, image_index);
 
         let device = &ctx.device.device;
         device.cmd_bind_pipeline(
@@ -446,7 +446,7 @@ impl RenderPassNode for WaterFrameNode {
         let Some(water_ubo) = app.data.raytracing.water_ubo.as_ref() else {
             return Ok(());
         };
-        let ctx = crate::ecs::systems::phases::build_frame_render_context(app, image_index);
+        let ctx = crate::app::build_frame_render_context(app, image_index);
         let instance_ubos =
             record_water_ubo_updates(app, &ctx, water_ubo, &frame.waters, command_buffer)?;
 
@@ -686,7 +686,7 @@ impl RenderPassNode for WaterSceneColorCopyNode {
             .viewport
             .transient
             .get(app.data.frame_transients.handle(SCENE_COLOR_SLOT)?)?;
-        let ctx = crate::ecs::systems::phases::build_frame_render_context(app, image_index);
+        let ctx = crate::app::build_frame_render_context(app, image_index);
 
         thyllore_vulkan_core::renderer::record_water_scene_color_copy(
             &ctx,
@@ -818,7 +818,7 @@ impl RenderPassNode for WaterShadingNode {
             return Ok(());
         };
         let water_buffer = &targets.buffer;
-        let ctx = crate::ecs::systems::phases::build_frame_render_context(app, image_index);
+        let ctx = crate::app::build_frame_render_context(app, image_index);
 
         for (i, (_, ubo_dynamic_offset)) in targets.frame_instances.iter().enumerate() {
             let Some(scissor) = frame.scissors.get(i).copied().flatten() else {

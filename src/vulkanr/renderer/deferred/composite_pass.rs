@@ -67,7 +67,7 @@ pub unsafe fn record_composite_pass(
 
     let (pipeline, descriptor, view_mode_value) = prepare_composite_resources(app)?;
 
-    let ctx = crate::ecs::systems::phases::build_frame_render_context(app, image_index);
+    let ctx = crate::app::build_frame_render_context(app, image_index);
 
     thyllore_vulkan_core::renderer::begin_composite_render_pass(
         &ctx,
@@ -117,7 +117,7 @@ pub unsafe fn record_composite_to_offscreen(
 
     let (pipeline, descriptor, view_mode_value) = prepare_composite_resources(app)?;
 
-    let ctx = crate::ecs::systems::phases::build_frame_render_context(app, image_index);
+    let ctx = crate::app::build_frame_render_context(app, image_index);
 
     thyllore_vulkan_core::renderer::begin_composite_render_pass(
         &ctx,
@@ -159,7 +159,7 @@ pub unsafe fn record_composite_to_hdr(app: &App, command_buffer: vk::CommandBuff
     let framebuffer = hdr_buffer.framebuffer;
     let extent = hdr_buffer.extent();
     let (pipeline, descriptor, view_mode_value) = prepare_composite_resources(app)?;
-    let ctx = crate::ecs::systems::phases::build_frame_render_context(app, 0);
+    let ctx = crate::app::build_frame_render_context(app, 0);
     let black_background = app
         .resource::<crate::ecs::resource::DebugViewState>()
         .black_background;

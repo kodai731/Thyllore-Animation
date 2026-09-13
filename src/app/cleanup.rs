@@ -1,7 +1,10 @@
 use crate::app::App;
-use crate::ecs::resource::billboard::BillboardData;
+use crate::ecs::Resource;
+use crate::hooks::gpu_resource::GpuResourceHooks;
 use crate::vulkanr::command::RRCommandBuffer;
-use crate::vulkanr::context::{CommandState, RenderTargets, SwapchainState};
+use crate::vulkanr::context::{
+    CommandState, FrameSync, RenderTargets, SurfaceState, SwapchainState,
+};
 use crate::vulkanr::render::framebuffer::{create_color_objects, create_framebuffers};
 use crate::vulkanr::render::pass::create_depth_objects;
 use crate::vulkanr::resource::{destroy_all_in_reverse, GpuResource};
@@ -9,6 +12,7 @@ use crate::vulkanr::swapchain::RRSwapchain;
 
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
+use vulkanalia::vk::{ExtDebugUtilsExtension, KhrSurfaceExtension};
 use winit::window::Window;
 
 impl App {
@@ -17,42 +21,58 @@ impl App {
 
         let _ = self.rrdevice.device.device_wait_idle();
 
-        if let Err(error) = self.run_effect_destroy() {
-            log_warn!("Effect destroy hook failed: {:?}", error);
+        match GpuResourceHooks::collect() {
+            Ok(hooks) => hooks.destroy_all(&self.data.ecs_world, &self.rrdevice),
+            Err(error) => log_warn!("GPU resource hooks not collected: {:?}", error),
         }
 
-        let mut billboard = self.data.ecs_world.get_resource_mut::<BillboardData>();
-        let mut resources: Vec<&mut dyn GpuResource> = vec![
-            &mut self.data.graphics_resources,
-            &mut self.gpu_timestamp_profiler,
-            &mut self.data.buffer_registry,
-            &mut self.data.pipeline_storage,
-            &mut self.data.raytracing,
-            &mut self.data.viewport,
-        ];
-        if let Some(billboard) = billboard.as_deref_mut() {
-            resources.push(billboard);
-        }
+        let mut resources: [&mut dyn GpuResource; 2] =
+            [&mut self.gpu_timestamp_profiler, &mut self.data];
         destroy_all_in_reverse(&mut resources, &self.rrdevice);
 
-        self.rrdevice.destroy_descriptor_pools();
-        log!("Destroyed descriptor pools");
+        self.destroy_world_resource::<RenderTargets>();
+        self.destroy_world_resource::<CommandState>();
+        self.destroy_world_resource::<FrameSync>();
+        self.destroy_world_resource::<SwapchainState>();
 
+        self.rrdevice.destroy();
+        log!("Destroyed device");
+
+        self.destroy_surface_and_instance();
         log!("All application resources destroyed");
+    }
+
+    unsafe fn destroy_world_resource<R: Resource + GpuResource>(&mut self) {
+        if let Some(mut resource) = self.data.ecs_world.remove_resource::<R>() {
+            log!("Destroying {}", resource.resource_name());
+            resource.destroy_gpu(&self.rrdevice);
+        }
+    }
+
+    unsafe fn destroy_surface_and_instance(&mut self) {
+        if let Some(surface_state) = self.data.ecs_world.remove_resource::<SurfaceState>() {
+            self.instance
+                .destroy_surface_khr(surface_state.surface, None);
+            if surface_state.messenger != vk::DebugUtilsMessengerEXT::null() {
+                self.instance
+                    .destroy_debug_utils_messenger_ext(surface_state.messenger, None);
+            }
+        }
+        self.instance.destroy_instance(None);
     }
 
     pub unsafe fn recreate_swapchain(&mut self, window: &Window) -> Result<()> {
         self.rrdevice.device.device_wait_idle()?;
 
         {
-            let render_targets = self.resource::<RenderTargets>();
+            let mut render_targets = self.resource_mut::<RenderTargets>();
             render_targets
                 .render
                 .destroy_size_dependent(&self.rrdevice.device);
         }
 
         {
-            let swapchain_state = self.resource::<SwapchainState>();
+            let mut swapchain_state = self.resource_mut::<SwapchainState>();
             swapchain_state.swapchain.destroy(&self.rrdevice.device);
         }
 

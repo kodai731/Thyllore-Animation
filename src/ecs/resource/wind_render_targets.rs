@@ -1,11 +1,12 @@
 use thyllore_effect_core::WindUBO;
 use thyllore_vulkan_core::pipeline::RRPipeline;
-use thyllore_vulkan_core::resource::{UniformBuffer, VolumeImage};
+use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer, VolumeImage};
 use thyllore_vulkan_core::vulkan::vk;
 
 use crate::ecs::systems::wind::{
     WindResolveDescriptorSet, WindShadowBakeDescriptorSet, WindUpsampleDescriptorSet,
 };
+use crate::gpu_resource;
 
 /// Render pass and framebuffer that blend the wind resolve pass onto the HDR color image,
 /// the half resolution intermediate target used by the upsampled resolve path, and the
@@ -45,7 +46,7 @@ pub fn half_extent(width: u32, height: u32) -> vk::Extent2D {
 }
 
 /// Pipelines, descriptor sets and the per-instance UBO of the wind passes.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, GpuResource)]
 pub struct WindGpuState {
     pub ubo: Option<UniformBuffer<WindUBO>>,
     pub resolve_pipeline: Option<RRPipeline>,
@@ -55,3 +56,6 @@ pub struct WindGpuState {
     pub upsample_pipeline: Option<RRPipeline>,
     pub upsample_descriptor: Option<WindUpsampleDescriptorSet>,
 }
+
+gpu_resource!(WindRenderTargets);
+gpu_resource!(WindGpuState);

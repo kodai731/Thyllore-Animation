@@ -14,7 +14,6 @@ pub const FLAME_EFFECT_HOOK: EffectHook = EffectHook {
     name: "flame",
     setup: Some(setup_flame),
     on_viewport_resize: Some(resize_flame_render_targets),
-    destroy: Some(destroy_flame_render_targets),
     passes: &[&super::passes::FlamePassNode],
 };
 
@@ -150,16 +149,6 @@ unsafe fn resize_flame_render_targets(app: &mut App) -> Result<()> {
         .get_resource_mut::<FlameHistorySnapshotState>()
     {
         state.previous = None;
-    }
-    Ok(())
-}
-
-unsafe fn destroy_flame_render_targets(app: &mut App) -> Result<()> {
-    if let Some(mut targets) = app.data.ecs_world.get_resource_mut::<FlameRenderTargets>() {
-        for image in targets.buffer.history_images {
-            app.data.pass_image_states.forget(image);
-        }
-        targets.buffer.destroy(&app.rrdevice.device);
     }
     Ok(())
 }

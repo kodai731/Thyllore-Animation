@@ -32,7 +32,7 @@ lands; new code must not copy them, and no new entry may be added here.
 
 - `FrameContext` and `LightMoveTarget` are defined under `src/app/` although they contain no `App`; the
   fix is to move them into `src/ecs/`.
-- `src/hooks/effect.rs` declares `on_viewport_resize` and `destroy` as `fn(&mut App)` and `src/hooks/pass.rs`
+- `src/hooks/effect.rs` declares `on_viewport_resize` as `fn(&mut App)` and `src/hooks/pass.rs`
   declares `RenderPassNode::prepare` as `fn(&mut App)` and `record` / declarations as `fn(&App)`, so
   `src/ecs/systems/{flame,water}/render_targets.rs` take `&mut App`; the fix is an `EffectContext` that
   borrows instance, device, viewport pools and extent, raytracing data and `World` (the `setup` hook
@@ -72,7 +72,13 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   next to its own `destroy`; a type that only aggregates such fields writes `#[derive(GpuResource)]`
   (`thyllore-vulkan-derive`) and never enumerates them, `#[gpu_resource(skip)]` marks a borrowed handle.
   Destroy order is the reverse of field declaration order, and `resource_name` is the type name, never a
-  hand-written string. `App::destroy` lists the top-level owners once and calls `destroy_all_in_reverse`.
+  hand-written string. `AppData` is itself derived, so a new GPU field on it fails to compile until its type
+  implements `GpuResource`. A `World` resource that owns GPU objects derives the trait and writes
+  `gpu_resource!(Type)` next to its definition (`src/hooks/gpu_resource.rs`, link-time `inventory`);
+  `App::destroy` runs every registration, then `AppData`, then the swapchain-level resources in fixed
+  order, then the device, surface, messenger and instance, so the validation layer's leak check at
+  `vkDestroyDevice` is the final proof. A test in `src/hooks/gpu_resource.rs` fails when a file in
+  `src/ecs/resource/` declares a GPU-owning field without `gpu_resource!`.
 
 Rule of thumb: if the code needs neither `World` nor `vk::*`, it belongs in a crate. If it needs `vk::*`
 but not `World`, it belongs in `thyllore-vulkan-core`.
@@ -117,8 +123,9 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 ## src/hooks/
 
 Generic hook infrastructure that lets a subsystem plug into the app lifecycle without being named by
-`src/app/`. `effect.rs` holds the effect hook (setup, viewport resize, destroy, pass nodes) and the list that runs
-them in subscription order. `pass.rs` holds the `RenderPassNode` contract (name,
+`src/app/`. `effect.rs` holds the effect hook (setup, viewport resize, pass nodes) and the list that runs
+them in subscription order; GPU teardown is not a hook, it is the `gpu_resource!` registration of the
+effect's resource (`gpu_resource.rs`: `GpuResourceHook`, `GpuResourceHooks::collect()`). `pass.rs` holds the `RenderPassNode` contract (name,
 stage, `transients` requested by slot and desc, reads / writes declared as `TargetUse`, `prepare`, record),
 the `PassStage` order (lighting → effect → post-process → final) and the `PassGraph` that keeps registered
 nodes sorted by stage then registration order. The graph runner in `src/app/command_recording.rs` runs
@@ -258,8 +265,8 @@ Belongs here:
   `features/screenshot.rs::copy_image_to_buffer`
 - context structs that bundle `App` fields for callees
 - wiring that must touch several subsystems at once (a resize fan-out, rebinding after a resize)
-- calls into the hook infrastructure of `src/hooks/` (setup, viewport resize, destroy) and the pass
-  graph without naming an effect
+- calls into the hook infrastructure of `src/hooks/` (setup, viewport resize, GPU resource teardown) and
+  the pass graph without naming an effect
 - core post-processing passes (tonemap, auto exposure, dof, bloom) as one concept under
   `src/app/post_process/`: pipeline creation, resize rebinding and the per-frame descriptor binding that
   the core pass nodes call from `prepare` live together there. These are engine passes, not effects, so
@@ -277,8 +284,8 @@ A function that takes `&mut App` only to read a few fields is misplaced: pass th
 where the checklist says.
 
 Effects own their GPU state: the buffers of an effect are an ECS resource
-(`src/ecs/resource/<effect>_render_targets.rs`), creation, resize and destroy are systems in
-`src/ecs/systems/<effect>/render_targets.rs` exposed as an effect hook subscribed in
+(`src/ecs/resource/<effect>_render_targets.rs`, derived `GpuResource` + `gpu_resource!`), creation and
+resize are systems in `src/ecs/systems/<effect>/render_targets.rs` exposed as an effect hook subscribed in
 `src/effect/subscription.rs`, and per-frame images are requested by the effect's pass nodes in
 `src/ecs/systems/<effect>/passes.rs` (the graph acquires them). `src/app/` never enumerates effects (this mirrors bevy's `TextureCache` + per-effect `prepare_*` systems and Unreal's RDG +
 per-feature `AddPass`).

@@ -7,13 +7,12 @@ use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::render::RRRender;
-use crate::vulkanr::resource::WaterBuffer;
+use crate::vulkanr::resource::{GpuResource, WaterBuffer};
 
 pub const WATER_EFFECT_HOOK: EffectHook = EffectHook {
     name: "water",
     setup: Some(setup_water),
     on_viewport_resize: Some(resize_water_render_targets),
-    destroy: Some(destroy_water_render_targets),
     passes: super::passes::WATER_PASS_NODES,
 };
 
@@ -103,7 +102,7 @@ unsafe fn resize_water_render_targets(app: &mut App) -> Result<()> {
         return Ok(());
     }
 
-    destroy_water_render_targets(app)?;
+    release_water_render_targets(app);
     if !create_water_render_targets(&app.instance, &app.rrdevice, &mut app.data, depth_view)? {
         return Ok(());
     }
@@ -111,18 +110,18 @@ unsafe fn resize_water_render_targets(app: &mut App) -> Result<()> {
     update_water_caustic_descriptor(app)
 }
 
-unsafe fn destroy_water_render_targets(app: &mut App) -> Result<()> {
-    if let Some(mut targets) = app.data.ecs_world.get_resource_mut::<WaterRenderTargets>() {
-        for image in targets.buffer.history_images {
-            app.data.pass_image_states.forget(image);
-        }
-        app.data
-            .pass_image_states
-            .forget(targets.buffer.caustic_accum_image);
-        targets.buffer.destroy(&app.rrdevice.device);
-        targets.forget_bindings();
+unsafe fn release_water_render_targets(app: &mut App) {
+    let Some(mut targets) = app.data.ecs_world.get_resource_mut::<WaterRenderTargets>() else {
+        return;
+    };
+    for image in targets.buffer.history_images {
+        app.data.pass_image_states.forget(image);
     }
-    Ok(())
+    app.data
+        .pass_image_states
+        .forget(targets.buffer.caustic_accum_image);
+    targets.destroy_gpu(&app.rrdevice);
+    targets.forget_bindings();
 }
 
 unsafe fn update_water_caustic_descriptor(app: &mut App) -> Result<()> {

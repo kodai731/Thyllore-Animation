@@ -1,4 +1,5 @@
 use crate::ecs::component::RenderInfo;
+use crate::gpu_resource;
 use crate::vulkanr::descriptor::RRBillboardDescriptorSet;
 use crate::vulkanr::image::RRImage;
 use crate::vulkanr::resource::GpuResource;
@@ -21,6 +22,8 @@ pub struct BillboardData {
     pub render_info: RenderInfo,
     pub render_state: BillboardRenderState,
 }
+
+gpu_resource!(BillboardData);
 
 impl BillboardData {
     pub fn transform(&self) -> Option<&BillboardTransform> {

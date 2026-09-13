@@ -1082,3 +1082,147 @@ fn write_test_png(path: &Path, width: u32, height: u32, value: u8) {
     writer.write_image_data(&pixels).unwrap();
     writer.finish().unwrap();
 }
+
+#[test]
+fn resolve_wind_mode_and_debug_view() {
+    let overrides = resolve_engine_cli_overrides(&args(&[
+        "bin",
+        "--batch-wind-mode",
+        "reference",
+        "--batch-wind-debug-view",
+        "depth",
+    ]))
+    .unwrap();
+    assert_eq!(
+        overrides.wind_mode,
+        Some(thyllore_effect_core::WindShadingMode::ReferenceQuadrature)
+    );
+    assert_eq!(
+        overrides.wind_debug_view,
+        Some(thyllore_effect_core::WindDebugView::OpticalDepth)
+    );
+    assert!(wind_mode_resolve_from_args(&args(&["bin", "--batch-wind-mode", "x"])).is_err());
+
+    let coverage =
+        resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-debug-view", "coverage"]))
+            .unwrap();
+    assert_eq!(
+        coverage.wind_debug_view,
+        Some(thyllore_effect_core::WindDebugView::Coverage)
+    );
+}
+
+#[test]
+fn resolve_wind_resolve_scale() {
+    let default_overrides = resolve_engine_cli_overrides(&args(&["bin"])).unwrap();
+    assert_eq!(default_overrides.wind_resolve_scale, None);
+
+    let half = resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-resolve-scale", "half"]))
+        .unwrap();
+    assert_eq!(
+        half.wind_resolve_scale,
+        Some(thyllore_effect_core::WindResolveScale::Half)
+    );
+
+    let full = resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-resolve-scale", "full"]))
+        .unwrap();
+    assert_eq!(
+        full.wind_resolve_scale,
+        Some(thyllore_effect_core::WindResolveScale::Full)
+    );
+
+    assert!(wind_resolve_scale_resolve_from_args(&args(&[
+        "bin",
+        "--batch-wind-resolve-scale",
+        "x"
+    ]))
+    .is_err());
+}
+
+#[test]
+fn resolve_wind_fixed_time() {
+    let overrides =
+        resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-time", "10.5"])).unwrap();
+    assert_eq!(overrides.wind_fixed_time, Some(10.5));
+
+    let without = resolve_engine_cli_overrides(&args(&["bin"])).unwrap();
+    assert_eq!(without.wind_fixed_time, None);
+
+    assert!(wind_fixed_time_resolve_from_args(&args(&["bin", "--batch-wind-time"])).is_err());
+    assert!(
+        wind_fixed_time_resolve_from_args(&args(&["bin", "--batch-wind-time", "abc"])).is_err()
+    );
+}
+
+#[test]
+fn wind_set_parses_both_forms_and_rejects_unknown_key() {
+    let combined: Vec<String> = vec!["--batch-wind-set=wall_strength=0.5".into()];
+    let pairs = wind_set_resolve_from_args(&combined).unwrap();
+    assert_eq!(pairs.len(), 1);
+    assert_eq!(pairs[0].0, "wall_strength");
+    assert!((pairs[0].1 - 0.5).abs() < 1e-6);
+
+    let separate: Vec<String> = vec!["--batch-wind-set".into(), "wall_strength=0.5".into()];
+    assert_eq!(wind_set_resolve_from_args(&separate).unwrap(), pairs);
+
+    let unknown: Vec<String> = vec!["--batch-wind-set".into(), "invalid_key=1.0".into()];
+    let err = wind_set_resolve_from_args(&unknown).unwrap_err();
+    assert!(err.to_string().contains("invalid_key"));
+}
+
+#[test]
+fn apply_wind_overrides_no_panic_for_all_keys() {
+    for key in wind_set_valid_keys() {
+        let mut effect = WindTornadoEffect::default();
+        let overrides: Vec<(String, f32)> = vec![(key.to_string(), 1.0)];
+        apply_wind_overrides(&mut effect, &overrides);
+
+        let param =
+            thyllore_effect_core::find_scalar_param(thyllore_effect_core::WIND_SCALAR_PARAMS, key)
+                .expect("valid key is registered");
+        assert_eq!((param.get)(&effect), 1.0, "{key}");
+    }
+}
+
+#[test]
+fn wind_debug_dump_action_marks_the_batch_run_in_every_capture_mode() {
+    let (_single, single_dump_plan) = batch_run_resolve_from_args(&args(&[
+        "bin",
+        "--batch-screenshot",
+        "out.png",
+        "--batch-debug-action",
+        "dump_wind_debug",
+    ]))
+    .unwrap()
+    .expect("single-shot batch");
+    assert!(single_dump_plan.dump_wind_debug);
+    assert!(!single_dump_plan.dump_water_debug);
+
+    let (_sequence, sequence_dump_plan) = batch_run_resolve_from_args(&args(&[
+        "bin",
+        "--batch-screenshot-sequence",
+        "out,3,2",
+        "--batch-debug-action",
+        "dump_wind_debug",
+    ]))
+    .unwrap()
+    .expect("sequence batch");
+    assert!(sequence_dump_plan.dump_wind_debug);
+
+    let (_without, without_dump_plan) =
+        batch_run_resolve_from_args(&args(&["bin", "--batch-screenshot", "out.png"]))
+            .unwrap()
+            .expect("batch without debug action");
+    assert!(!without_dump_plan.dump_wind_debug);
+}
+
+#[test]
+fn wind_debug_dump_action_still_queues_its_event_outside_a_batch_run() {
+    let mut world = World::new();
+    world.insert_resource(UIEventQueue::new());
+
+    batch_apply_debug_actions(&world, &[&WindDebugDump as &dyn BatchAction]);
+
+    let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
+    assert!(matches!(events[0], UIEvent::DumpWindDebug));
+}

@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 
 use crate::ecs::resource::{BatchDumpPlan, BatchRun};
 
-use super::debug_actions::{debug_actions_has_wall_probe_dump, debug_actions_has_water_debug_dump};
+use super::debug_actions::debug_actions_contain;
 use super::flame_args::flame_set_resolve_from_args;
 use super::{
     BATCH_CAMERA_FLAG, BATCH_FLAME_TRACE_FLAG, BATCH_FRAMES_FLAG, BATCH_PICK_FLAG,
@@ -121,8 +121,9 @@ pub fn batch_run_resolve_from_args(args: &[String]) -> Result<Option<(BatchRun, 
         };
 
         let flame_set = flame_set_resolve_from_args(args)?;
-        let dump_wall_probe = debug_actions_has_wall_probe_dump(args);
-        let dump_water_debug = debug_actions_has_water_debug_dump(args);
+        let dump_wall_probe = debug_actions_contain(args, "dump_wall_probe");
+        let dump_water_debug = debug_actions_contain(args, "dump_water_debug");
+        let dump_wind_debug = debug_actions_contain(args, "dump_wind_debug");
 
         let mut batch = BatchRun::new(PathBuf::from(dir), screenshot_frame);
         batch.captures_remaining = count;
@@ -134,6 +135,7 @@ pub fn batch_run_resolve_from_args(args: &[String]) -> Result<Option<(BatchRun, 
             flame_set,
             dump_wall_probe,
             dump_water_debug,
+            dump_wind_debug,
             flame_trace_path: flag_value_resolve_from_args(args, BATCH_FLAME_TRACE_FLAG)?
                 .map(PathBuf::from),
             wall_probe_path: flag_value_resolve_from_args(args, BATCH_WALL_PROBE_FLAG)?
@@ -175,8 +177,9 @@ pub fn batch_run_resolve_from_args(args: &[String]) -> Result<Option<(BatchRun, 
 
         let flame_set = flame_set_resolve_from_args(args)?;
 
-        let dump_wall_probe = debug_actions_has_wall_probe_dump(args);
-        let dump_water_debug = debug_actions_has_water_debug_dump(args);
+        let dump_wall_probe = debug_actions_contain(args, "dump_wall_probe");
+        let dump_water_debug = debug_actions_contain(args, "dump_water_debug");
+        let dump_wind_debug = debug_actions_contain(args, "dump_wind_debug");
 
         let batch = BatchRun::new(output, screenshot_frame);
 
@@ -184,6 +187,7 @@ pub fn batch_run_resolve_from_args(args: &[String]) -> Result<Option<(BatchRun, 
             flame_set,
             dump_wall_probe,
             dump_water_debug,
+            dump_wind_debug,
             flame_trace_path: flag_value_resolve_from_args(args, BATCH_FLAME_TRACE_FLAG)?
                 .map(PathBuf::from),
             wall_probe_path: flag_value_resolve_from_args(args, BATCH_WALL_PROBE_FLAG)?

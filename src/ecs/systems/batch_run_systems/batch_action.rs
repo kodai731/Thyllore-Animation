@@ -90,6 +90,9 @@ pub struct WallProbeDump;
 #[derive(Debug)]
 pub struct WaterDebugDump;
 
+#[derive(Debug)]
+pub struct WindDebugDump;
+
 impl BatchAction for SpawnDebugPrimitive {
     fn name(&self) -> &'static str {
         match self.0 {
@@ -126,6 +129,20 @@ impl BatchAction for WaterDebugDump {
         world
             .resource_mut::<UIEventQueue>()
             .send(UIEvent::DumpWaterDebug);
+    }
+    fn owns_dump(&self) -> bool {
+        true
+    }
+}
+
+impl BatchAction for WindDebugDump {
+    fn name(&self) -> &'static str {
+        "dump_wind_debug"
+    }
+    fn apply(&self, world: &World) {
+        world
+            .resource_mut::<UIEventQueue>()
+            .send(UIEvent::DumpWindDebug);
     }
     fn owns_dump(&self) -> bool {
         true
@@ -238,6 +255,13 @@ pub fn generic_descriptors() -> Vec<BatchActionDescriptor> {
             parse: |s| {
                 (s == "dump_water_debug")
                     .then(|| Ok(Box::new(WaterDebugDump) as Box<dyn BatchAction>))
+            },
+        },
+        BatchActionDescriptor {
+            name: "dump_wind_debug",
+            parse: |s| {
+                (s == "dump_wind_debug")
+                    .then(|| Ok(Box::new(WindDebugDump) as Box<dyn BatchAction>))
             },
         },
     ]

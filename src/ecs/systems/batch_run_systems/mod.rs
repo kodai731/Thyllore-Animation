@@ -9,7 +9,7 @@ use crate::ecs::world::World;
 #[cfg(test)]
 use crate::asset::AssetStorage;
 #[cfg(test)]
-use crate::ecs::component::{ClipSchedule, FlameEffect};
+use crate::ecs::component::{ClipSchedule, FlameEffect, WindTornadoEffect};
 #[cfg(test)]
 use crate::ecs::events::{UIEvent, UIEventQueue};
 #[cfg(test)]
@@ -22,6 +22,7 @@ mod debug_actions;
 mod flame_args;
 mod sequence_analyze;
 mod water_args;
+mod wind_args;
 
 pub use anim_edits::*;
 pub use batch_action::*;
@@ -43,6 +44,13 @@ use flame_args::{
 };
 pub use sequence_analyze::*;
 pub use water_args::*;
+use wind_args::wind_set_resolve_from_args;
+#[cfg(test)]
+use wind_args::wind_set_valid_keys;
+pub use wind_args::{
+    apply_wind_overrides, wind_debug_view_resolve_from_args, wind_fixed_time_resolve_from_args,
+    wind_mode_resolve_from_args, wind_resolve_scale_resolve_from_args,
+};
 
 const BATCH_SCREENSHOT_FLAG: &str = "--batch-screenshot";
 const BATCH_SCREENSHOT_SEQUENCE_FLAG: &str = "--batch-screenshot-sequence";
@@ -54,6 +62,10 @@ const BATCH_WATER_SECONDARY_FLAG: &str = "--batch-water-secondary";
 const BATCH_WATER_CAUSTIC_DEBUG_FLAG: &str = "--batch-water-caustic-debug";
 const BATCH_WATER_HISTORY_FLAG: &str = "--batch-water-history";
 const BATCH_WATER_TIME_FLAG: &str = "--batch-water-time";
+const BATCH_WIND_TIME_FLAG: &str = "--batch-wind-time";
+const BATCH_WIND_MODE_FLAG: &str = "--batch-wind-mode";
+const BATCH_WIND_DEBUG_VIEW_FLAG: &str = "--batch-wind-debug-view";
+const BATCH_WIND_RESOLVE_SCALE_FLAG: &str = "--batch-wind-resolve-scale";
 const BATCH_FLAME_STEPS_FLAG: &str = "--batch-flame-steps";
 const BATCH_CAMERA_FLAG: &str = "--batch-camera";
 const FLAME_DUMP_FLAG: &str = "--flame-dump";
@@ -67,6 +79,7 @@ const BATCH_FLAME_PRESET_FLAG: &str = "--batch-flame-preset";
 const BATCH_FLAME_MOTION_FLAG: &str = "--batch-flame-motion";
 const BATCH_FLAME_SDF_FLAG: &str = "--batch-flame-sdf";
 const BATCH_FLAME_SET_FLAG: &str = "--batch-flame-set";
+const BATCH_WIND_SET_FLAG: &str = "--batch-wind-set";
 const BATCH_FLAME_STYLE_FLAG: &str = "--batch-flame-style";
 const BATCH_FLAME_STYLE_DUMP_FLAG: &str = "--batch-flame-style-dump";
 const BATCH_FLAME_TEXTURE_FLAG: &str = "--batch-flame-texture";
@@ -92,6 +105,11 @@ pub struct EngineCliOverrides {
     pub water_caustic_debug: Option<i32>,
     pub water_history_weight: Option<f32>,
     pub water_fixed_time: Option<f32>,
+    pub wind_fixed_time: Option<f32>,
+    pub wind_mode: Option<thyllore_effect_core::WindShadingMode>,
+    pub wind_resolve_scale: Option<thyllore_effect_core::WindResolveScale>,
+    pub wind_debug_view: Option<thyllore_effect_core::WindDebugView>,
+    pub wind_set: Vec<(String, f32)>,
     pub flame_steps: Option<u32>,
     pub camera_pose: Option<BatchCameraPose>,
     pub flame_dump_path: Option<String>,
@@ -133,6 +151,11 @@ pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverride
         water_caustic_debug: water_caustic_debug_resolve_from_args(args)?,
         water_history_weight: water_history_weight_resolve_from_args(args)?,
         water_fixed_time: water_fixed_time_resolve_from_args(args)?,
+        wind_fixed_time: wind_fixed_time_resolve_from_args(args)?,
+        wind_mode: wind_mode_resolve_from_args(args)?,
+        wind_debug_view: wind_debug_view_resolve_from_args(args)?,
+        wind_resolve_scale: wind_resolve_scale_resolve_from_args(args)?,
+        wind_set: wind_set_resolve_from_args(args)?,
         flame_steps: flame_steps_resolve_from_args(args)?,
         camera_pose: camera_pose_resolve_from_args(args)?,
         flame_dump_path: flame_dump_path_resolve_from_args(args)?,

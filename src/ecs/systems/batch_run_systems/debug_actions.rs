@@ -46,32 +46,13 @@ pub(super) fn debug_action_parse(name: &str) -> Result<Box<dyn BatchAction>> {
     )
 }
 
-/// Check if `--batch-debug-action dump_wall_probe` is present in the args.
-pub(super) fn debug_actions_has_wall_probe_dump(args: &[String]) -> bool {
-    for i in 0..args.len() {
-        if args[i] == BATCH_DEBUG_ACTION_FLAG {
-            if let Some(name) = args.get(i + 1).filter(|v| !v.starts_with("--")) {
-                if name == "dump_wall_probe" {
-                    return true;
-                }
-            }
-        }
-    }
-    false
-}
-
-/// Check if `--batch-debug-action dump_water_debug` is present in the args.
-pub(super) fn debug_actions_has_water_debug_dump(args: &[String]) -> bool {
-    for i in 0..args.len() {
-        if args[i] == BATCH_DEBUG_ACTION_FLAG {
-            if let Some(name) = args.get(i + 1).filter(|v| !v.starts_with("--")) {
-                if name == "dump_water_debug" {
-                    return true;
-                }
-            }
-        }
-    }
-    false
+pub(super) fn debug_actions_contain(args: &[String], action_name: &str) -> bool {
+    args.iter().enumerate().any(|(i, arg)| {
+        arg == BATCH_DEBUG_ACTION_FLAG
+            && args
+                .get(i + 1)
+                .is_some_and(|name| !name.starts_with("--") && name == action_name)
+    })
 }
 
 /// Execute debug-window actions headlessly: view-mode radios write the same

@@ -1,5 +1,6 @@
 use crate::command::*;
 use crate::core::device::*;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::{HitShadingRecord, HitShadingTable};
 use crate::vulkan::*;
 use anyhow::Result;
@@ -944,5 +945,11 @@ impl RRAccelerationStructure {
         }
 
         Ok(())
+    }
+}
+
+impl GpuResource for RRAccelerationStructure {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

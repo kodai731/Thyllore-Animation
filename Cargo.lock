@@ -3947,8 +3947,18 @@ dependencies = [
  "thyllore-render-core",
  "thyllore-shader-manifest",
  "thyllore-spirv-reflect",
+ "thyllore-vulkan-derive",
  "vulkanalia",
  "winit",
+]
+
+[[package]]
+name = "thyllore-vulkan-derive"
+version = "0.0.1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

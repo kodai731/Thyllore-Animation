@@ -210,10 +210,6 @@ impl GpuResource for GpuTimestampProfiler {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         Self::destroy(self, &rrdevice.device);
     }
-
-    fn resource_name(&self) -> &'static str {
-        "GpuTimestampProfiler"
-    }
 }
 
 #[cfg(test)]

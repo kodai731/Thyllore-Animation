@@ -183,8 +183,4 @@ impl GpuResource for GraphicsResources {
     unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
         self.destroy(rrdevice);
     }
-
-    fn resource_name(&self) -> &'static str {
-        "GraphicsResources"
-    }
 }

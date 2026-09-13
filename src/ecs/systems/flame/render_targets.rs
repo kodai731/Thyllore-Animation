@@ -136,8 +136,8 @@ unsafe fn resize_flame_render_targets(app: &mut App) -> Result<()> {
             FlameImageBindings {
                 history_image_views: targets.buffer.history_image_views,
                 flame_sampler: targets.buffer.sampler,
-                sdf_image_view: app.data.raytracing.flame_sdf_image_view,
-                sdf_sampler: app.data.raytracing.flame_sdf_sampler,
+                sdf_image_view: app.data.raytracing.flame_sdf.image_view,
+                sdf_sampler: app.data.raytracing.flame_sdf.sampler,
                 scene_depth_view,
             },
         )?;

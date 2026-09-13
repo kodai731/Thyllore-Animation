@@ -14,6 +14,7 @@ thyllore-effect-core = { path = "../thyllore-effect-core" }
 thyllore-render-core = { path = "../thyllore-render-core" }
 thyllore-log-core = { path = "../thyllore-log-core" }
 thyllore-spirv-reflect = { path = "../thyllore-spirv-reflect" }
+thyllore-vulkan-derive = { path = "../thyllore-vulkan-derive" }
 anyhow = "1"
 cgmath = "0.18"
 log = "0.4"

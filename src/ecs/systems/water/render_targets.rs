@@ -155,7 +155,7 @@ unsafe fn update_water_caustic_descriptor(app: &mut App) -> Result<()> {
             .gbuffer
             .as_ref()
             .map(|gbuffer| gbuffer.position_image_view),
-        raytracing.scene_uniform_buffer,
+        raytracing.scene_uniform_buffer_handle(),
         raytracing.water_ubo.as_ref().map(|ubo| ubo.handle()),
     ) else {
         return Ok(());

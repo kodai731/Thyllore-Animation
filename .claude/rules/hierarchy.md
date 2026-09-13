@@ -44,8 +44,9 @@ lands; new code must not copy them, and no new entry may be added here.
 A crate holds code that is meaningful without the engine: pure math, domain types and their pure
 operations, GPU primitives, importers and exporters, codegen used by build scripts.
 
-- Every crate is named `thyllore-<topic>-core` (or `-api`, `-debug`, `-client`) and states its layer and
-  what it must not depend on in `Cargo.toml` `description`.
+- Every crate is named `thyllore-<topic>-core` (or `-api`, `-debug`, `-client`, and `-derive` for the
+  proc-macro companion of a `-core` crate) and states its layer and what it must not depend on in
+  `Cargo.toml` `description`.
 - A crate never depends on `World`, `Entity`, `AssetStorage` or `App`.
 - Only `thyllore-vulkan-core` (and the debug crate) may name `vk::*`. Everything else describes GPU work
   through the abstract types of `thyllore-render-core`.
@@ -67,6 +68,11 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   `MAX_WATER_INSTANCES`, and `FlamePushConstants` / `WaterPushConstants` in `renderer/push_constants.rs`.
 - Domain crates use the `components/` (data) and `systems/` (pure functions) split, see
   `ecs-architecture.md`.
+- GPU object lifetime: a type that owns Vulkan handles implements `GpuResource` (`resource/gpu_resource.rs`)
+  next to its own `destroy`; a type that only aggregates such fields writes `#[derive(GpuResource)]`
+  (`thyllore-vulkan-derive`) and never enumerates them, `#[gpu_resource(skip)]` marks a borrowed handle.
+  Destroy order is the reverse of field declaration order, and `resource_name` is the type name, never a
+  hand-written string. `App::destroy` lists the top-level owners once and calls `destroy_all_in_reverse`.
 
 Rule of thumb: if the code needs neither `World` nor `vk::*`, it belongs in a crate. If it needs `vk::*`
 but not `World`, it belongs in `thyllore-vulkan-core`.

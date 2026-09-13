@@ -20,12 +20,13 @@ impl App {
             log_warn!("Effect destroy hook failed: {:?}", error);
         }
 
-        let mut resources: [&mut dyn GpuResource; 5] = [
+        let mut resources: [&mut dyn GpuResource; 6] = [
             &mut self.data.graphics_resources,
             &mut self.gpu_timestamp_profiler,
             &mut self.data.buffer_registry,
             &mut self.data.pipeline_storage,
             &mut self.data.raytracing,
+            &mut self.data.viewport,
         ];
         destroy_all_in_reverse(&mut resources, &self.rrdevice);
 

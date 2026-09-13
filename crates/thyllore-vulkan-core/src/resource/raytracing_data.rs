@@ -27,9 +27,8 @@ use crate::raytracing::RRAccelerationStructure;
 use crate::render::RRRender;
 use crate::renderer::push_constants::{GBufferPushConstants, OnionSkinPushConstants};
 use crate::renderer::tonemap::ToneMapPushConstants;
-use crate::resource::buffer::create_buffer;
 use crate::resource::graphics_resource::{GraphicsResources, MeshBuffer};
-use crate::resource::image::{create_nearest_sampler, create_texture_sampler};
+use crate::resource::image::{create_nearest_sampler, create_texture_sampler, RRImage};
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::resource::{
     BloomChain, FlameBuffer, GpuResource, HdrBuffer, OnionSkinPassResources, RRGBuffer, WaterBuffer,
@@ -39,8 +38,9 @@ use thyllore_effect_core::{FlameUBO, WaterUBO};
 pub const MAX_FLAME_INSTANCES: usize = 4;
 pub const MAX_WATER_INSTANCES: usize = 4;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, GpuResource)]
 pub struct RayTracingData {
+    #[gpu_resource(skip)]
     pub command_pool: vk::CommandPool,
 
     pub gbuffer: Option<RRGBuffer>,
@@ -88,13 +88,9 @@ pub struct RayTracingData {
     pub water_caustic_apply_pipeline: Option<RRPipeline>,
     pub water_caustic_descriptor: Option<RRWaterCausticDescriptorSet>,
 
-    pub flame_sdf_image: vk::Image,
-    pub flame_sdf_image_memory: vk::DeviceMemory,
-    pub flame_sdf_image_view: vk::ImageView,
-    pub flame_sdf_sampler: vk::Sampler,
+    pub flame_sdf: RRImage,
 
-    pub scene_uniform_buffer: Option<vk::Buffer>,
-    pub scene_uniform_buffer_memory: Option<vk::DeviceMemory>,
+    pub scene_uniform_buffer: Option<UniformBuffer<SceneUniformData>>,
 }
 
 impl RayTracingData {
@@ -110,151 +106,6 @@ impl RayTracingData {
             && self.gbuffer_pipeline.is_some()
             && self.ray_query_pipeline.is_some()
             && self.composite_pipeline.is_some()
-    }
-
-    pub unsafe fn destroy_all(&mut self, rrdevice: &RRDevice) {
-        let device = &rrdevice.device;
-
-        if let Some(sampler) = self.gbuffer_sampler.take() {
-            device.destroy_sampler(sampler, None);
-            log!("Destroyed G-Buffer sampler");
-        }
-
-        if let Some(onion_skin_pass) = self.onion_skin_pass.take() {
-            onion_skin_pass.destroy(device);
-        }
-
-        if let Some(gbuffer_pipeline) = self.gbuffer_pipeline.take() {
-            gbuffer_pipeline.destroy(device);
-            log!("Destroyed G-Buffer pipeline");
-        }
-
-        if let Some(mut dof_descriptor) = self.dof_descriptor.take() {
-            dof_descriptor.destroy(device);
-        }
-
-        if let Some(dof_pipeline) = self.dof_pipeline.take() {
-            dof_pipeline.destroy(device);
-        }
-
-        if let Some(mut descriptor) = self.auto_exposure_histogram_descriptor.take() {
-            descriptor.destroy(device);
-        }
-
-        if let Some(mut descriptor) = self.auto_exposure_average_descriptor.take() {
-            descriptor.destroy(device);
-        }
-
-        if let Some(pipeline) = self.auto_exposure_histogram_pipeline.take() {
-            pipeline.destroy(device);
-        }
-
-        if let Some(pipeline) = self.auto_exposure_average_pipeline.take() {
-            pipeline.destroy(device);
-        }
-
-        if let Some(mut bloom_descriptors) = self.bloom_descriptors.take() {
-            bloom_descriptors.destroy(device);
-        }
-
-        if let Some(bloom_downsample_pipeline) = self.bloom_downsample_pipeline.take() {
-            bloom_downsample_pipeline.destroy(device);
-        }
-
-        if let Some(bloom_upsample_pipeline) = self.bloom_upsample_pipeline.take() {
-            bloom_upsample_pipeline.destroy(device);
-        }
-
-        if let Some(mut tonemap_descriptor) = self.tonemap_descriptor.take() {
-            tonemap_descriptor.destroy(device);
-        }
-
-        if let Some(tonemap_pipeline) = self.tonemap_pipeline.take() {
-            tonemap_pipeline.destroy(device);
-        }
-
-        if let Some(mut composite_descriptor) = self.composite_descriptor.take() {
-            composite_descriptor.destroy(device);
-        }
-
-        if let Some(composite_pipeline) = self.composite_pipeline.take() {
-            composite_pipeline.destroy(device);
-        }
-
-        if let Some(mut flame_descriptor) = self.flame_descriptor.take() {
-            flame_descriptor.destroy(device);
-        }
-
-        if let Some(flame_shading_pipeline) = self.flame_shading_pipeline.take() {
-            flame_shading_pipeline.destroy(device);
-        }
-
-        if let Some(mut flame_ubo) = self.flame_ubo.take() {
-            flame_ubo.destroy(device);
-            log!("Destroyed flame uniform buffer");
-        }
-
-        if let Some(mut water_descriptor) = self.water_descriptor.take() {
-            water_descriptor.destroy(device);
-        }
-
-        if let Some(water_shading_pipeline) = self.water_shading_pipeline.take() {
-            water_shading_pipeline.destroy(device);
-        }
-
-        if let Some(mut water_ubo) = self.water_ubo.take() {
-            water_ubo.destroy(device);
-            log!("Destroyed water uniform buffer");
-        }
-
-        if let Some(mut water_trace_descriptor) = self.water_trace_descriptor.take() {
-            water_trace_descriptor.destroy(device);
-        }
-
-        if let Some(water_trace_pipeline) = self.water_trace_pipeline.take() {
-            water_trace_pipeline.destroy(device);
-        }
-
-        if let Some(mut water_caustic_descriptor) = self.water_caustic_descriptor.take() {
-            water_caustic_descriptor.destroy(device);
-        }
-
-        if let Some(pipeline) = self.water_caustic_splat_pipeline.take() {
-            pipeline.destroy(device);
-        }
-
-        if let Some(pipeline) = self.water_caustic_apply_pipeline.take() {
-            pipeline.destroy(device);
-        }
-
-        if let (Some(buffer), Some(memory)) = (
-            self.scene_uniform_buffer.take(),
-            self.scene_uniform_buffer_memory.take(),
-        ) {
-            device.destroy_buffer(buffer, None);
-            device.free_memory(memory, None);
-            log!("Destroyed scene uniform buffer");
-        }
-
-        if let Some(mut ray_query_descriptor) = self.ray_query_descriptor.take() {
-            ray_query_descriptor.destroy(device);
-            log!("Destroyed ray query descriptor set");
-        }
-
-        if let Some(ray_query_pipeline) = self.ray_query_pipeline.take() {
-            ray_query_pipeline.destroy(device);
-            log!("Destroyed ray query pipeline");
-        }
-
-        if let Some(mut acceleration_structure) = self.acceleration_structure.take() {
-            acceleration_structure.destroy(device);
-            log!("Destroyed acceleration structure");
-        }
-
-        if let Some(mut gbuffer) = self.gbuffer.take() {
-            gbuffer.destroy(rrdevice);
-            log!("Destroyed G-Buffer");
-        }
     }
 
     pub unsafe fn init_gbuffer(
@@ -459,10 +310,11 @@ impl RayTracingData {
         else {
             return Ok(());
         };
+        let scene_buffer_handle = self.scene_uniform_buffer_handle();
         let (Some(descriptor), Some(gbuffer), Some(scene_buffer)) = (
             self.ray_query_descriptor.as_mut(),
             self.gbuffer.as_ref(),
-            self.scene_uniform_buffer,
+            scene_buffer_handle,
         ) else {
             return Ok(());
         };
@@ -499,16 +351,17 @@ impl RayTracingData {
         instance: &Instance,
         rrdevice: &RRDevice,
     ) -> Result<vk::Buffer> {
-        let (scene_buffer, scene_memory) = create_buffer(
-            instance,
-            rrdevice,
-            std::mem::size_of::<SceneUniformData>() as u64,
-            vk::BufferUsageFlags::UNIFORM_BUFFER,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-        )?;
-        self.scene_uniform_buffer = Some(scene_buffer);
-        self.scene_uniform_buffer_memory = Some(scene_memory);
-        Ok(scene_buffer)
+        let scene_uniform_buffer =
+            UniformBuffer::new(instance, rrdevice, 1, Placement::HostMapped)?;
+        let handle = scene_uniform_buffer.handle();
+        self.scene_uniform_buffer = Some(scene_uniform_buffer);
+        Ok(handle)
+    }
+
+    pub fn scene_uniform_buffer_handle(&self) -> Option<vk::Buffer> {
+        self.scene_uniform_buffer
+            .as_ref()
+            .map(UniformBuffer::handle)
     }
 
     pub unsafe fn create_onion_skin_pipeline(
@@ -817,7 +670,7 @@ impl RayTracingData {
     ) -> Result<()> {
         let (Some(gbuffer), Some(scene_buffer), Some(water_ubo)) = (
             self.gbuffer.as_ref(),
-            self.scene_uniform_buffer,
+            self.scene_uniform_buffer_handle(),
             self.water_ubo.as_ref(),
         ) else {
             log!("Water caustic inputs are not ready, skipping caustic pipelines");
@@ -1072,16 +925,6 @@ impl RayTracingData {
         self.auto_exposure_average_descriptor = Some(average_descriptor);
 
         Ok(())
-    }
-}
-
-impl GpuResource for RayTracingData {
-    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
-        self.destroy_all(rrdevice);
-    }
-
-    fn resource_name(&self) -> &'static str {
-        "RayTracingData"
     }
 }
 

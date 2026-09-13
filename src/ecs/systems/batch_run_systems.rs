@@ -9,7 +9,7 @@ use thyllore_anim_core::editable::PropertyType;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{
     scalar_channel_domains, scalar_channel_for_cli_name, scalar_channel_for_property,
-    scalar_cli_names_joined, ClipSchedule, FlameEffect,
+    scalar_cli_names_joined, ClipSchedule, FlameEffect, WindTornadoEffect,
 };
 use crate::ecs::events::{DebugPrimitiveKind, UIEvent, UIEventQueue};
 use crate::ecs::resource::{
@@ -28,6 +28,10 @@ const BATCH_WATER_SECONDARY_FLAG: &str = "--batch-water-secondary";
 const BATCH_WATER_CAUSTIC_DEBUG_FLAG: &str = "--batch-water-caustic-debug";
 const BATCH_WATER_HISTORY_FLAG: &str = "--batch-water-history";
 const BATCH_WATER_TIME_FLAG: &str = "--batch-water-time";
+const BATCH_WIND_TIME_FLAG: &str = "--batch-wind-time";
+const BATCH_WIND_MODE_FLAG: &str = "--batch-wind-mode";
+const BATCH_WIND_DEBUG_VIEW_FLAG: &str = "--batch-wind-debug-view";
+const BATCH_WIND_RESOLVE_SCALE_FLAG: &str = "--batch-wind-resolve-scale";
 const BATCH_FLAME_STEPS_FLAG: &str = "--batch-flame-steps";
 const BATCH_CAMERA_FLAG: &str = "--batch-camera";
 const FLAME_DUMP_FLAG: &str = "--flame-dump";
@@ -41,6 +45,7 @@ const BATCH_FLAME_PRESET_FLAG: &str = "--batch-flame-preset";
 const BATCH_FLAME_MOTION_FLAG: &str = "--batch-flame-motion";
 const BATCH_FLAME_SDF_FLAG: &str = "--batch-flame-sdf";
 const BATCH_FLAME_SET_FLAG: &str = "--batch-flame-set";
+const BATCH_WIND_SET_FLAG: &str = "--batch-wind-set";
 const BATCH_FLAME_STYLE_FLAG: &str = "--batch-flame-style";
 const BATCH_FLAME_STYLE_DUMP_FLAG: &str = "--batch-flame-style-dump";
 const BATCH_FLAME_TEXTURE_FLAG: &str = "--batch-flame-texture";
@@ -71,6 +76,11 @@ pub struct EngineCliOverrides {
     pub water_caustic_debug: Option<i32>,
     pub water_history_weight: Option<f32>,
     pub water_fixed_time: Option<f32>,
+    pub wind_fixed_time: Option<f32>,
+    pub wind_mode: Option<thyllore_effect_core::WindShadingMode>,
+    pub wind_resolve_scale: Option<thyllore_effect_core::WindResolveScale>,
+    pub wind_debug_view: Option<thyllore_effect_core::WindDebugView>,
+    pub wind_set: Vec<(String, f32)>,
     pub flame_steps: Option<u32>,
     pub camera_pose: Option<BatchCameraPose>,
     pub flame_dump_path: Option<String>,
@@ -131,6 +141,7 @@ pub enum BatchDebugAction {
     TimelineSelectFlameClip,
     WallProbeDump,
     WaterDebugDump,
+    WindDebugDump,
     ApplyTextureFit {
         path: String,
         blend: f32,
@@ -156,6 +167,11 @@ pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverride
         water_caustic_debug: water_caustic_debug_resolve_from_args(args)?,
         water_history_weight: water_history_weight_resolve_from_args(args)?,
         water_fixed_time: water_fixed_time_resolve_from_args(args)?,
+        wind_fixed_time: wind_fixed_time_resolve_from_args(args)?,
+        wind_mode: wind_mode_resolve_from_args(args)?,
+        wind_debug_view: wind_debug_view_resolve_from_args(args)?,
+        wind_resolve_scale: wind_resolve_scale_resolve_from_args(args)?,
+        wind_set: wind_set_resolve_from_args(args)?,
         flame_steps: flame_steps_resolve_from_args(args)?,
         camera_pose: camera_pose_resolve_from_args(args)?,
         flame_dump_path: flame_dump_path_resolve_from_args(args)?,
@@ -272,12 +288,14 @@ pub fn batch_run_resolve_from_args(args: &[String]) -> Result<Option<BatchRun>> 
         };
 
         let flame_set = flame_set_resolve_from_args(args)?;
-        let dump_wall_probe = debug_actions_has_wall_probe_dump(args);
-        let dump_water_debug = debug_actions_has_water_debug_dump(args);
+        let dump_wall_probe = debug_actions_contain(args, "dump_wall_probe");
+        let dump_water_debug = debug_actions_contain(args, "dump_water_debug");
+        let dump_wind_debug = debug_actions_contain(args, "dump_wind_debug");
 
         let mut batch = BatchRun::new(PathBuf::from(dir), screenshot_frame, flame_set);
         batch.dump_wall_probe = dump_wall_probe;
         batch.dump_water_debug = dump_water_debug;
+        batch.dump_wind_debug = dump_wind_debug;
         batch.captures_remaining = count;
         batch.stride = stride;
         batch.sequence_dir = Some(PathBuf::from(dir));
@@ -321,12 +339,14 @@ pub fn batch_run_resolve_from_args(args: &[String]) -> Result<Option<BatchRun>> 
 
         let flame_set = flame_set_resolve_from_args(args)?;
 
-        let dump_wall_probe = debug_actions_has_wall_probe_dump(args);
-        let dump_water_debug = debug_actions_has_water_debug_dump(args);
+        let dump_wall_probe = debug_actions_contain(args, "dump_wall_probe");
+        let dump_water_debug = debug_actions_contain(args, "dump_water_debug");
+        let dump_wind_debug = debug_actions_contain(args, "dump_wind_debug");
 
         let mut batch = BatchRun::new(output, screenshot_frame, flame_set);
         batch.dump_wall_probe = dump_wall_probe;
         batch.dump_water_debug = dump_water_debug;
+        batch.dump_wind_debug = dump_wind_debug;
         batch.flame_trace_path =
             flag_value_resolve_from_args(args, BATCH_FLAME_TRACE_FLAG)?.map(PathBuf::from);
         batch.wall_probe_path =
@@ -437,6 +457,56 @@ pub fn water_history_weight_resolve_from_args(args: &[String]) -> Result<Option<
     Ok(Some(weight))
 }
 
+pub fn wind_mode_resolve_from_args(
+    args: &[String],
+) -> Result<Option<thyllore_effect_core::WindShadingMode>> {
+    let Some(position) = args.iter().position(|arg| arg == BATCH_WIND_MODE_FLAG) else {
+        return Ok(None);
+    };
+    let Some(value) = args.get(position + 1) else {
+        bail!("{BATCH_WIND_MODE_FLAG} requires a value: closed|reference");
+    };
+    let mode = thyllore_effect_core::WindShadingMode::parse(value)
+        .ok_or_else(|| anyhow::anyhow!("invalid wind mode '{value}': expected closed|reference"))?;
+    Ok(Some(mode))
+}
+
+pub fn wind_debug_view_resolve_from_args(
+    args: &[String],
+) -> Result<Option<thyllore_effect_core::WindDebugView>> {
+    let Some(position) = args
+        .iter()
+        .position(|arg| arg == BATCH_WIND_DEBUG_VIEW_FLAG)
+    else {
+        return Ok(None);
+    };
+    let Some(value) = args.get(position + 1) else {
+        bail!("{BATCH_WIND_DEBUG_VIEW_FLAG} requires a value: off|depth|knots|coverage");
+    };
+    let view = thyllore_effect_core::WindDebugView::parse(value).ok_or_else(|| {
+        anyhow::anyhow!("invalid wind debug view '{value}': expected off|depth|knots|coverage")
+    })?;
+    Ok(Some(view))
+}
+
+pub fn wind_resolve_scale_resolve_from_args(
+    args: &[String],
+) -> Result<Option<thyllore_effect_core::WindResolveScale>> {
+    let Some(position) = args
+        .iter()
+        .position(|arg| arg == BATCH_WIND_RESOLVE_SCALE_FLAG)
+    else {
+        return Ok(None);
+    };
+    let Some(value) = args.get(position + 1) else {
+        bail!("{BATCH_WIND_RESOLVE_SCALE_FLAG} requires a value: full|half");
+    };
+    let scale = thyllore_effect_core::WindResolveScale::parse(value).ok_or_else(|| {
+        anyhow::anyhow!("invalid wind resolve scale '{value}': expected full|half")
+    })?;
+    Ok(Some(scale))
+}
+
 pub fn water_fixed_time_resolve_from_args(args: &[String]) -> Result<Option<f32>> {
     let Some(position) = args.iter().position(|arg| arg == BATCH_WATER_TIME_FLAG) else {
         return Ok(None);
@@ -447,6 +517,19 @@ pub fn water_fixed_time_resolve_from_args(args: &[String]) -> Result<Option<f32>
     let seconds: f32 = value
         .parse()
         .map_err(|_| anyhow::anyhow!("invalid water time '{value}': expected float seconds"))?;
+    Ok(Some(seconds))
+}
+
+pub fn wind_fixed_time_resolve_from_args(args: &[String]) -> Result<Option<f32>> {
+    let Some(position) = args.iter().position(|arg| arg == BATCH_WIND_TIME_FLAG) else {
+        return Ok(None);
+    };
+    let Some(value) = args.get(position + 1) else {
+        bail!("{BATCH_WIND_TIME_FLAG} requires a value (seconds)");
+    };
+    let seconds: f32 = value
+        .parse()
+        .map_err(|_| anyhow::anyhow!("invalid wind time '{value}': expected float seconds"))?;
     Ok(Some(seconds))
 }
 
@@ -543,17 +626,21 @@ pub(crate) fn flame_set_valid_keys() -> Vec<&'static str> {
         .collect()
 }
 
-fn flame_set_resolve_from_args(args: &[String]) -> Result<Vec<(String, f32)>> {
-    let valid_keys = flame_set_valid_keys();
+fn scalar_set_resolve_from_args(
+    args: &[String],
+    flag: &str,
+    valid_keys: &[&'static str],
+) -> Result<Vec<(String, f32)>> {
+    let flag_name = flag.trim_start_matches('-');
 
     let mut pairs: Vec<(String, f32)> = Vec::new();
     for i in 0..args.len() {
-        let payload = if args[i] == BATCH_FLAME_SET_FLAG {
+        let payload = if args[i] == flag {
             if i + 1 >= args.len() {
-                anyhow::bail!("{} requires a value after it", BATCH_FLAME_SET_FLAG);
+                anyhow::bail!("{} requires a value after it", flag);
             }
             args[i + 1].clone()
-        } else if let Some(rest) = args[i].strip_prefix(BATCH_FLAME_SET_FLAG) {
+        } else if let Some(rest) = args[i].strip_prefix(flag) {
             rest.trim_start_matches('=').trim().to_string()
         } else {
             continue;
@@ -562,20 +649,22 @@ fn flame_set_resolve_from_args(args: &[String]) -> Result<Vec<(String, f32)>> {
         let parts: Vec<&str> = payload.splitn(2, '=').collect();
         if parts.len() != 2 {
             anyhow::bail!(
-                "batch-flame-set value must be KEY=VALUE format, got '{}'",
+                "{} value must be KEY=VALUE format, got '{}'",
+                flag_name,
                 payload
             );
         }
         let key = parts[0].trim().to_string();
         let value_str = parts[1].trim();
         let value: f32 = value_str.parse().context(format!(
-            "batch-flame-set value must be a number, got '{}'",
-            value_str
+            "{} value must be a number, got '{}'",
+            flag_name, value_str
         ))?;
 
         if !valid_keys.contains(&key.as_str()) {
             anyhow::bail!(
-                "unknown batch-flame-set key '{}'. Valid keys: {}",
+                "unknown {} key '{}'. Valid keys: {}",
+                flag_name,
                 key,
                 valid_keys.join(", ")
             );
@@ -584,6 +673,21 @@ fn flame_set_resolve_from_args(args: &[String]) -> Result<Vec<(String, f32)>> {
         pairs.push((key, value));
     }
     Ok(pairs)
+}
+
+fn flame_set_resolve_from_args(args: &[String]) -> Result<Vec<(String, f32)>> {
+    scalar_set_resolve_from_args(args, BATCH_FLAME_SET_FLAG, &flame_set_valid_keys())
+}
+
+pub(crate) fn wind_set_valid_keys() -> Vec<&'static str> {
+    thyllore_effect_core::WIND_SCALAR_PARAMS
+        .iter()
+        .map(|param| param.name)
+        .collect()
+}
+
+fn wind_set_resolve_from_args(args: &[String]) -> Result<Vec<(String, f32)>> {
+    scalar_set_resolve_from_args(args, BATCH_WIND_SET_FLAG, &wind_set_valid_keys())
 }
 
 fn flame_preset_resolve_from_args(args: &[String]) -> Result<Option<String>> {
@@ -966,6 +1070,15 @@ pub fn apply_flame_overrides(effect: &mut FlameEffect, overrides: &[(String, f32
 
         let param =
             thyllore_effect_core::find_scalar_param(thyllore_effect_core::FLAME_SCALAR_PARAMS, key)
+                .unwrap_or_else(|| unreachable!("unknown key (parser should have rejected)"));
+        (param.set)(effect, *value);
+    }
+}
+
+pub fn apply_wind_overrides(effect: &mut WindTornadoEffect, overrides: &[(String, f32)]) {
+    for (key, value) in overrides {
+        let param =
+            thyllore_effect_core::find_scalar_param(thyllore_effect_core::WIND_SCALAR_PARAMS, key)
                 .unwrap_or_else(|| unreachable!("unknown key (parser should have rejected)"));
         (param.set)(effect, *value);
     }
@@ -1583,6 +1696,7 @@ pub const DEBUG_ACTION_NAMES: &[&str] = &[
     "timeline_select_flame_clip (enqueue TimelineSelectClip for the flame clip — the double-click path — to check it leaves the flame schedule's trim intact)",
     "dump_wall_probe (write camera pose + wall-regime ray diagnostics to log/flame/)",
     "dump_water_debug (write water parameters, UBO, camera and a screenshot to log/water/)",
+    "dump_wind_debug (write wind parameters, UBO, render settings, camera and a screenshot to log/wind/)",
     "apply_texture_fit:<path>,<blend>,<profile|statistics> (clone FlameEffect, apply texture fit from path, send UpdateFlameEffect)",
     "apply_texture_fit_roundtrip:<path>,<blend>,<profile|statistics> (same as apply_texture_fit, then restore original FlameEffect)",
     "spawn_cube (spawn the debug cube primitive, same as the debug window Spawn Cube button)",
@@ -1666,6 +1780,7 @@ fn debug_action_parse(name: &str) -> Result<BatchDebugAction> {
         "open_flame_curves" => Ok(BatchDebugAction::OpenFlameCurves),
         "dump_wall_probe" => Ok(BatchDebugAction::WallProbeDump),
         "dump_water_debug" => Ok(BatchDebugAction::WaterDebugDump),
+        "dump_wind_debug" => Ok(BatchDebugAction::WindDebugDump),
         "spawn_cube" => Ok(BatchDebugAction::SpawnDebugPrimitive {
             kind: DebugPrimitiveKind::Cube,
         }),
@@ -1683,31 +1798,13 @@ fn debug_action_parse(name: &str) -> Result<BatchDebugAction> {
 }
 
 /// Check if `--batch-debug-action dump_wall_probe` is present in the args.
-fn debug_actions_has_wall_probe_dump(args: &[String]) -> bool {
-    for i in 0..args.len() {
-        if args[i] == BATCH_DEBUG_ACTION_FLAG {
-            if let Some(name) = args.get(i + 1).filter(|v| !v.starts_with("--")) {
-                if name == "dump_wall_probe" {
-                    return true;
-                }
-            }
-        }
-    }
-    false
-}
-
-/// Check if `--batch-debug-action dump_water_debug` is present in the args.
-fn debug_actions_has_water_debug_dump(args: &[String]) -> bool {
-    for i in 0..args.len() {
-        if args[i] == BATCH_DEBUG_ACTION_FLAG {
-            if let Some(name) = args.get(i + 1).filter(|v| !v.starts_with("--")) {
-                if name == "dump_water_debug" {
-                    return true;
-                }
-            }
-        }
-    }
-    false
+fn debug_actions_contain(args: &[String], action_name: &str) -> bool {
+    args.iter().enumerate().any(|(i, arg)| {
+        arg == BATCH_DEBUG_ACTION_FLAG
+            && args
+                .get(i + 1)
+                .is_some_and(|name| !name.starts_with("--") && name == action_name)
+    })
 }
 
 fn parse_texture_fit_args(rest: &str) -> Result<(String, f32, bool)> {
@@ -1787,6 +1884,11 @@ pub fn batch_apply_debug_actions(world: &World, actions: &[BatchDebugAction]) {
                 world
                     .resource_mut::<UIEventQueue>()
                     .send(UIEvent::DumpWaterDebug);
+            }
+            BatchDebugAction::WindDebugDump => {
+                world
+                    .resource_mut::<UIEventQueue>()
+                    .send(UIEvent::DumpWindDebug);
             }
             BatchDebugAction::TimelineSelectFlameClip => {
                 let clip_id = world.query_flames().first().and_then(|&flame| {
@@ -2397,6 +2499,79 @@ mod tests {
     }
 
     #[test]
+    fn resolve_wind_mode_and_debug_view() {
+        let overrides = resolve_engine_cli_overrides(&args(&[
+            "bin",
+            "--batch-wind-mode",
+            "reference",
+            "--batch-wind-debug-view",
+            "depth",
+        ]))
+        .unwrap();
+        assert_eq!(
+            overrides.wind_mode,
+            Some(thyllore_effect_core::WindShadingMode::ReferenceQuadrature)
+        );
+        assert_eq!(
+            overrides.wind_debug_view,
+            Some(thyllore_effect_core::WindDebugView::OpticalDepth)
+        );
+        assert!(wind_mode_resolve_from_args(&args(&["bin", "--batch-wind-mode", "x"])).is_err());
+
+        let coverage =
+            resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-debug-view", "coverage"]))
+                .unwrap();
+        assert_eq!(
+            coverage.wind_debug_view,
+            Some(thyllore_effect_core::WindDebugView::Coverage)
+        );
+    }
+
+    #[test]
+    fn resolve_wind_resolve_scale() {
+        let default_overrides = resolve_engine_cli_overrides(&args(&["bin"])).unwrap();
+        assert_eq!(default_overrides.wind_resolve_scale, None);
+
+        let half =
+            resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-resolve-scale", "half"]))
+                .unwrap();
+        assert_eq!(
+            half.wind_resolve_scale,
+            Some(thyllore_effect_core::WindResolveScale::Half)
+        );
+
+        let full =
+            resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-resolve-scale", "full"]))
+                .unwrap();
+        assert_eq!(
+            full.wind_resolve_scale,
+            Some(thyllore_effect_core::WindResolveScale::Full)
+        );
+
+        assert!(wind_resolve_scale_resolve_from_args(&args(&[
+            "bin",
+            "--batch-wind-resolve-scale",
+            "x"
+        ]))
+        .is_err());
+    }
+
+    #[test]
+    fn resolve_wind_fixed_time() {
+        let overrides =
+            resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-time", "10.5"])).unwrap();
+        assert_eq!(overrides.wind_fixed_time, Some(10.5));
+
+        let without = resolve_engine_cli_overrides(&args(&["bin"])).unwrap();
+        assert_eq!(without.wind_fixed_time, None);
+
+        assert!(wind_fixed_time_resolve_from_args(&args(&["bin", "--batch-wind-time"])).is_err());
+        assert!(
+            wind_fixed_time_resolve_from_args(&args(&["bin", "--batch-wind-time", "abc"])).is_err()
+        );
+    }
+
+    #[test]
     fn resolve_rejects_invalid_flame_overrides() {
         assert!(flame_mode_resolve_from_args(&args(&["bin", "--batch-flame-mode", "x"])).is_err());
         assert!(
@@ -2605,6 +2780,38 @@ mod tests {
             let mut effect = FlameEffect::default();
             let overrides: Vec<(String, f32)> = vec![(key.to_string(), 1.0)];
             apply_flame_overrides(&mut effect, &overrides);
+        }
+    }
+
+    #[test]
+    fn wind_set_parses_both_forms_and_rejects_unknown_key() {
+        let combined: Vec<String> = vec!["--batch-wind-set=wall_strength=0.5".into()];
+        let pairs = wind_set_resolve_from_args(&combined).unwrap();
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].0, "wall_strength");
+        assert!((pairs[0].1 - 0.5).abs() < 1e-6);
+
+        let separate: Vec<String> = vec!["--batch-wind-set".into(), "wall_strength=0.5".into()];
+        assert_eq!(wind_set_resolve_from_args(&separate).unwrap(), pairs);
+
+        let unknown: Vec<String> = vec!["--batch-wind-set".into(), "invalid_key=1.0".into()];
+        let err = wind_set_resolve_from_args(&unknown).unwrap_err();
+        assert!(err.to_string().contains("invalid_key"));
+    }
+
+    #[test]
+    fn apply_wind_overrides_no_panic_for_all_keys() {
+        for key in wind_set_valid_keys() {
+            let mut effect = WindTornadoEffect::default();
+            let overrides: Vec<(String, f32)> = vec![(key.to_string(), 1.0)];
+            apply_wind_overrides(&mut effect, &overrides);
+
+            let param = thyllore_effect_core::find_scalar_param(
+                thyllore_effect_core::WIND_SCALAR_PARAMS,
+                key,
+            )
+            .expect("valid key is registered");
+            assert_eq!((param.get)(&effect), 1.0, "{key}");
         }
     }
 
@@ -3143,6 +3350,27 @@ mod tests {
             .unwrap()
             .expect("batch without debug action");
         assert!(!without.dump_water_debug);
+    }
+
+    #[test]
+    fn wind_debug_dump_action_marks_the_batch_run_and_queues_its_event() {
+        let batch = batch_run_resolve_from_args(&args(&[
+            "bin",
+            "--batch-screenshot",
+            "out.png",
+            "--batch-debug-action",
+            "dump_wind_debug",
+        ]))
+        .unwrap()
+        .expect("single-shot batch");
+        assert!(batch.dump_wind_debug);
+        assert!(!batch.dump_water_debug);
+
+        let mut world = World::new();
+        world.insert_resource(UIEventQueue::new());
+        batch_apply_debug_actions(&world, &[BatchDebugAction::WindDebugDump]);
+        let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
+        assert!(matches!(events[0], UIEvent::DumpWindDebug));
     }
 
     #[test]

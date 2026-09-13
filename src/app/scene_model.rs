@@ -12,6 +12,13 @@ use crate::vulkanr::swapchain::RRSwapchain;
 use crate::vulkanr::vulkan::Instance;
 
 impl App {
+    unsafe fn prepare_model_reload(&mut self) -> Result<(Rc<RRCommandPool>, RRSwapchain)> {
+        self.rrdevice.device.device_wait_idle()?;
+        let command_pool = self.resource::<CommandState>().pool.clone();
+        let swapchain = self.resource::<SwapchainState>().swapchain.clone();
+        Ok((command_pool, swapchain))
+    }
+
     pub(crate) unsafe fn load_model_from_path_with_resources(
         instance: &Instance,
         rrdevice: &RRDevice,
@@ -44,13 +51,11 @@ impl App {
 
     pub unsafe fn load_model(&mut self, path: &str) -> Result<()> {
         log!("Loading new model from: {}", path);
-        self.rrdevice.device.device_wait_idle()?;
 
         let scene_entities = crate::scene::capture_scene_entities(&self.data.ecs_world);
         let scheduled_clips = crate::scene::capture_scheduled_clips(&self.data.ecs_world);
 
-        let command_pool = self.resource::<CommandState>().pool.clone();
-        let swapchain = self.resource::<SwapchainState>().swapchain.clone();
+        let (command_pool, swapchain) = self.prepare_model_reload()?;
         match Self::load_model_from_path_with_resources(
             &self.instance,
             &self.rrdevice,
@@ -130,13 +135,11 @@ impl App {
     #[cfg(feature = "auto-rig")]
     pub unsafe fn load_model_from_glb(&mut self, glb_data: &[u8]) -> Result<()> {
         log!("Loading generated mesh from GLB ({} bytes)", glb_data.len());
-        self.rrdevice.device.device_wait_idle()?;
 
         let gltf_result = crate::loader::gltf::load_gltf_from_slice(glb_data)?;
         let load_result = crate::loader::ModelLoadResult::from_gltf(gltf_result);
 
-        let command_pool = self.resource::<CommandState>().pool.clone();
-        let swapchain = self.resource::<SwapchainState>().swapchain.clone();
+        let (command_pool, swapchain) = self.prepare_model_reload()?;
         match crate::app::model_loader::load_model_from_file_system_with_result(
             &load_result,
             crate::scene::ModelReference::GENERATED_MESH,

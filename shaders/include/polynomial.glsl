@@ -67,4 +67,24 @@ void oneMinusSmootherstepPoly(float v0, float v1, out float poly[POLY_TERMS]) {
     poly[5] = -6.0 * v1 * v1 * v1 * v1 * v1;
 }
 
+// Coefficients of 1 - S(c0 + c1 sigma + c2 sigma^2) for the quintic smootherstep, expanded in sigma.
+void oneMinusSmootherstepQuadraticPoly(float c0, float c1, float c2, out float poly[POLY_TERMS]) {
+    float x[POLY_TERMS];
+    polyFromQuadratic(c0, c1, c2, x);
+    float x2[POLY_TERMS];
+    polyMul(x, x, x2);
+    float x3[POLY_TERMS];
+    polyMul(x2, x, x3);
+    float x4[POLY_TERMS];
+    polyMul(x2, x2, x4);
+    float x5[POLY_TERMS];
+    polyMul(x4, x, x5);
+
+    polyZero(poly);
+    poly[0] = 1.0;
+    for (int term = 0; term < POLY_TERMS; ++term) {
+        poly[term] -= 10.0 * x3[term] - 15.0 * x4[term] + 6.0 * x5[term];
+    }
+}
+
 #endif

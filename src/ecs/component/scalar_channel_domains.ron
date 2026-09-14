@@ -4,4 +4,5 @@
     (name: "Flame", first_code: 0, code_count: 256),
     (name: "Water", first_code: 256, code_count: 256),
     (name: "Wind", first_code: 512, code_count: 256),
+    (name: "Lightning", first_code: 768, code_count: 256),
 ]

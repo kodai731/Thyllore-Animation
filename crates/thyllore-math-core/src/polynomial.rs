@@ -70,6 +70,23 @@ pub fn one_minus_smootherstep_poly(v0: f32, v1: f32) -> Poly {
     poly
 }
 
+/// Coefficients of `1 - S(c0 + c1 sigma + c2 sigma^2)` for the quintic smootherstep
+/// `S(x) = 10 x^3 - 15 x^4 + 6 x^5`, expanded in sigma.
+pub fn one_minus_smootherstep_quadratic_poly(c0: f32, c1: f32, c2: f32) -> Poly {
+    let x = poly_from_quadratic(c0, c1, c2);
+    let x2 = poly_mul(&x, &x);
+    let x3 = poly_mul(&x2, &x);
+    let x4 = poly_mul(&x2, &x2);
+    let x5 = poly_mul(&x4, &x);
+
+    let mut poly = poly_zero();
+    poly[0] = 1.0;
+    for term in 0..POLY_TERMS {
+        poly[term] -= 10.0 * x3[term] - 15.0 * x4[term] + 6.0 * x5[term];
+    }
+    poly
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,6 +140,18 @@ mod tests {
         for i in 0..=10 {
             let sigma = i as f32 / 10.0;
             let expected = 1.0 - smootherstep(v0 + v1 * sigma);
+            assert!((evaluate(&poly, sigma) - expected).abs() < 1e-5);
+        }
+    }
+
+    #[test]
+    fn quadratic_smootherstep_expansion_matches_direct_evaluation() {
+        let (c0, c1, c2) = (0.1, 0.5, -0.3);
+        let poly = one_minus_smootherstep_quadratic_poly(c0, c1, c2);
+        for i in 0..=10 {
+            let sigma = i as f32 / 10.0;
+            let x = c0 + c1 * sigma + c2 * sigma * sigma;
+            let expected = 1.0 - smootherstep(x);
             assert!((evaluate(&poly, sigma) - expected).abs() < 1e-5);
         }
     }

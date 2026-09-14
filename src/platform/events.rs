@@ -86,12 +86,12 @@ fn save_flame_history_npy_if_requested(app: &mut App) {
 }
 
 fn save_water_probe_if_requested(app: &mut App) {
-    let batch = app
+    let dump_plan = app
         .data
         .ecs_world
-        .get_resource::<crate::ecs::resource::BatchRun>();
-    if let Some(batch) = batch {
-        let water_probe_path = match &batch.water_probe_path {
+        .get_resource::<crate::ecs::resource::BatchDumpPlan>();
+    if let Some(dump_plan) = dump_plan {
+        let water_probe_path = match &dump_plan.water_probe_path {
             Some(p) => p.clone(),
             None => return,
         };
@@ -1051,8 +1051,14 @@ unsafe fn render_frame(
             let (dump_wall_probe, dump_water_debug, dump_wind_debug) = app
                 .data
                 .ecs_world
-                .get_resource::<crate::ecs::resource::BatchRun>()
-                .map(|b| (b.dump_wall_probe, b.dump_water_debug, b.dump_wind_debug))
+                .get_resource::<crate::ecs::resource::BatchDumpPlan>()
+                .map(|plan| {
+                    (
+                        plan.dump_wall_probe,
+                        plan.dump_water_debug,
+                        plan.dump_wind_debug,
+                    )
+                })
                 .unwrap_or((false, false, false));
             if matches!(
                 state,

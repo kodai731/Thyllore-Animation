@@ -8,7 +8,7 @@ use crate::ecs::resource::{
 use crate::ecs::systems::{
     apply_flame_overrides, apply_flame_style_from_path, apply_texture_fit_from_path,
     apply_wind_overrides, batch_anim_dump_write, batch_apply_anim_edits, batch_apply_debug_actions,
-    batch_run_report, dump_flame_style_to_path, BatchDebugAction, EngineCliOverrides,
+    batch_run_report, dump_flame_style_to_path, BatchAction, EngineCliOverrides,
 };
 
 use thyllore_vulkan_core::FlameImageBindings;
@@ -19,6 +19,9 @@ use anyhow::Result;
 pub fn apply_engine_overrides(app: &mut App, overrides: &EngineCliOverrides) {
     if let Some(ref batch_run) = overrides.batch_run {
         app.data.ecs_world.insert_resource(batch_run.clone());
+    }
+    if let Some(ref batch_dump_plan) = overrides.batch_dump_plan {
+        app.data.ecs_world.insert_resource(batch_dump_plan.clone());
     }
     if let Some(shading_mode) = overrides.flame_mode {
         app.data
@@ -279,17 +282,11 @@ pub fn apply_engine_overrides(app: &mut App, overrides: &EngineCliOverrides) {
     }
     if !overrides.debug_actions.is_empty() {
         let batch_run_owns_dumps = app.data.ecs_world.contains_resource::<BatchRun>();
-        let filtered: Vec<_> = overrides
+        let filtered: Vec<&dyn BatchAction> = overrides
             .debug_actions
             .iter()
-            .filter(|a| {
-                !batch_run_owns_dumps
-                    || !matches!(
-                        a,
-                        BatchDebugAction::WallProbeDump | BatchDebugAction::WaterDebugDump
-                    )
-            })
-            .cloned()
+            .filter(|a| !batch_run_owns_dumps || !a.owns_dump())
+            .map(|a| a.as_ref())
             .collect();
         batch_apply_debug_actions(&app.data.ecs_world, &filtered);
     }

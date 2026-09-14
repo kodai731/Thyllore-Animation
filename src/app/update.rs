@@ -141,6 +141,19 @@ impl App {
             frames_in_flight: crate::app::init::MAX_FRAMES_IN_FLIGHT,
         }
     }
+
+    pub unsafe fn process_platform_events(&mut self) {
+        let actions = std::mem::take(
+            &mut self
+                .data
+                .ecs_world
+                .resource_mut::<crate::ecs::events::PlatformEventQueue>()
+                .actions,
+        );
+        for action in actions {
+            crate::app::deferred_actions::execute_deferred_action(self, action);
+        }
+    }
 }
 
 unsafe fn resize_imgui_vertex_buffer(

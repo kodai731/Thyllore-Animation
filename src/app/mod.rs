@@ -4,6 +4,7 @@ pub mod color_test_quad;
 mod command_recording;
 pub mod config;
 pub mod data;
+pub(crate) mod deferred_actions;
 pub(crate) mod features;
 pub mod init;
 pub mod model_loader;

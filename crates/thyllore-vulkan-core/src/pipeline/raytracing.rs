@@ -115,8 +115,10 @@ impl TraceStages {
     }
 }
 
-/// Levels of traceRayEXT nesting: the ray generation stage plus one secondary trace from a hit shader.
-const RAY_RECURSION_DEPTH: u32 = 2;
+/// Deepest traceRayEXT nesting the device allows in one pipeline.
+pub unsafe fn max_ray_recursion_depth(instance: &Instance, rrdevice: &RRDevice) -> u32 {
+    ray_tracing_properties(instance, rrdevice).max_ray_recursion_depth
+}
 
 impl RRRayTracingPipeline {
     pub unsafe fn new(
@@ -125,6 +127,7 @@ impl RRRayTracingPipeline {
         pass: &PassShaders,
         descriptor_set_layouts: &[vk::DescriptorSetLayout],
         push_constant_ranges: &[vk::PushConstantRange],
+        recursion_depth: u32,
     ) -> Result<Self> {
         let device = &rrdevice.device;
         let trace_stages = TraceStages::from_pass(pass)?;
@@ -156,15 +159,16 @@ impl RRRayTracingPipeline {
 
         let rt_props = ray_tracing_properties(instance, rrdevice);
         anyhow::ensure!(
-            rt_props.max_ray_recursion_depth >= RAY_RECURSION_DEPTH,
-            "device supports ray recursion depth {} but the effect trace pipeline needs {}",
-            rt_props.max_ray_recursion_depth,
-            RAY_RECURSION_DEPTH
+            rt_props.max_ray_recursion_depth >= recursion_depth,
+            "pass `{}` needs ray recursion depth {} but the device supports {}",
+            pass.name(),
+            recursion_depth,
+            rt_props.max_ray_recursion_depth
         );
         let rt_pipeline_info = vk::RayTracingPipelineCreateInfoKHR::builder()
             .stages(&stages)
             .groups(&groups)
-            .max_pipeline_ray_recursion_depth(RAY_RECURSION_DEPTH)
+            .max_pipeline_ray_recursion_depth(recursion_depth)
             .layout(pipeline_layout)
             .build();
         let pipelines = device.create_ray_tracing_pipelines_khr(

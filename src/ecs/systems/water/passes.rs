@@ -153,10 +153,20 @@ fn first_water_accum(
 }
 
 impl WaterFrame {
+    /// The requested secondary ray mode, or ray query when the shared trace pipeline is unavailable.
+    fn secondary_rays(&self, app: &App) -> thyllore_effect_core::WaterSecondaryRays {
+        let trace_available = app.data.raytracing.effect_trace_pipeline.is_some()
+            && app.data.raytracing.effect_trace_descriptor.is_some();
+        match self.settings.secondary_rays {
+            thyllore_effect_core::WaterSecondaryRays::RayTracingPipeline if !trace_available => {
+                thyllore_effect_core::WaterSecondaryRays::RayQuery
+            }
+            requested => requested,
+        }
+    }
+
     fn is_trace_enabled(&self, app: &App) -> bool {
-        self.settings.secondary_rays == thyllore_effect_core::WaterSecondaryRays::RayTracingPipeline
-            && app.data.raytracing.effect_trace_pipeline.is_some()
-            && app.data.raytracing.effect_trace_descriptor.is_some()
+        self.secondary_rays(app) == thyllore_effect_core::WaterSecondaryRays::RayTracingPipeline
             && app
                 .data
                 .ecs_world
@@ -824,7 +834,7 @@ impl RenderPassNode for WaterShadingNode {
             };
 
             let push_constants = thyllore_vulkan_core::renderer::WaterPushConstants::new(
-                frame.settings.secondary_rays.as_shader_value(),
+                frame.secondary_rays(app).as_shader_value(),
                 frame.settings.debug_view,
             );
 

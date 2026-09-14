@@ -1,6 +1,6 @@
-use crate::app::FrameContext;
 use crate::ecs::component::{FieldAffected, FlameEffect};
 use crate::ecs::world::World;
+use crate::ecs::FrameContext;
 use thyllore_effect_core::{flame_field_manifest, FieldManifest};
 
 /// Single pass for all field compositions: derive, attach, log changes, warn on pending sources.

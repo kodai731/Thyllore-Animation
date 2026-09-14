@@ -1,7 +1,7 @@
-use crate::app::FrameContext;
 use crate::ecs::component::{motion_path_position, MotionPath};
 use crate::ecs::resource::{BatchRun, TimelineState};
 use crate::ecs::world::{Entity, Transform, World};
+use crate::ecs::FrameContext;
 
 /// Sync `Transform.translation` for all entities with an enabled `MotionPath`.
 ///

@@ -29,7 +29,7 @@ pub unsafe fn record_ray_query_pass(app: &App, command_buffer: vk::CommandBuffer
         .resource::<crate::ecs::resource::LightState>()
         .shadow_normal_offset;
 
-    let ctx = crate::ecs::systems::phases::build_frame_render_context(app, 0);
+    let ctx = crate::app::build_frame_render_context(app, 0);
 
     thyllore_vulkan_core::renderer::record_ray_query_pass(
         &ctx,

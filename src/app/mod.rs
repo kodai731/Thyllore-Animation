@@ -5,7 +5,6 @@ mod command_recording;
 pub mod config;
 pub mod data;
 pub(crate) mod features;
-pub mod frame_context;
 pub mod init;
 pub mod model_loader;
 mod pass_targets;
@@ -18,8 +17,7 @@ pub mod update;
 pub mod util;
 pub mod viewport;
 
-pub use frame_context::FrameContext;
-pub use render_context::RenderContext;
+pub use render_context::{build_frame_render_context, RenderContext};
 
 pub use data::AppData;
 pub use init::*;

@@ -235,15 +235,7 @@ impl App {
         Self::register_editor_resources(&mut data);
         Self::register_post_processing_resources(&mut data);
         Self::apply_loaded_scene(&mut data, loaded_scene);
-        if let Err(e) = Self::build_acceleration_structures_with_resources(
-            &instance,
-            &rrdevice,
-            &mut data,
-            &rrcommand_pool,
-        ) {
-            log_warn!("Failed to build acceleration structures: {:?}", e);
-        }
-
+        data.raytracing.command_pool = rrcommand_pool.command_pool;
         if let Err(e) = Self::create_ray_tracing_pipelines_with_resources(
             &instance,
             &rrdevice,
@@ -252,6 +244,15 @@ impl App {
             &rrrender,
         ) {
             log_warn!("Failed to create ray tracing pipelines: {:?}", e);
+        }
+
+        if let Err(e) = Self::build_acceleration_structures_with_resources(
+            &instance,
+            &rrdevice,
+            &mut data,
+            &rrcommand_pool,
+        ) {
+            log_warn!("Failed to build acceleration structures: {:?}", e);
         }
 
         let grid_mesh_data = Self::build_grid_mesh(

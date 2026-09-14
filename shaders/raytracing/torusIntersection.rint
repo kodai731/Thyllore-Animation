@@ -1,24 +1,27 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
 #include "include/torus_intersect.glsl"
+#include "include/hit_shading_record.glsl"
 
-layout(push_constant) uniform WaterTracePush {
-    float majorRadius;
-    float minorRadius;
-} push;
+layout(set = 0, binding = 3, std430) readonly buffer HitShadingTable { HitShadingRecord records[]; } hitTable;
 
 void main() {
+    HitShadingRecord rec = hitTable.records[gl_InstanceCustomIndexEXT];
+    float majorRadius = rec.params.y;
+    float minorRadius = rec.params.z;
+
     vec3 dObj = gl_ObjectRayDirectionEXT;
     float len = length(dObj);
-    vec3 o = gl_ObjectRayOriginEXT / push.majorRadius;
+    vec3 o = gl_ObjectRayOriginEXT / majorRadius;
     vec3 d = dObj / len;
     float roots[4];
     bool fb;
-    int n = intersectTorus(o, d, push.minorRadius / push.majorRadius, roots, fb);
+    int n = intersectTorus(o, d, minorRadius / majorRadius, roots, fb);
     if (n > 0) {
-        float t = roots[0] * push.majorRadius / len;
+        float t = roots[0] * majorRadius / len;
         if (t >= gl_RayTminEXT && t <= gl_RayTmaxEXT) {
             reportIntersectionEXT(t, 0u);
         }

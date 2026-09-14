@@ -99,5 +99,5 @@ stages = ["editor/imguiVertex.vert", "editor/imguiFragment.frag"]
 sets = { 0 = "local" }
 
 [pass.effect_trace]
-stages = ["raytracing/traceRayGen.rgen", "raytracing/traceMiss.rmiss", "raytracing/torusIntersection.rint", "water/torusClosestHit.rchit", "raytracing/sceneClosestHit.rchit"]
+stages = ["raytracing/traceRayGen.rgen", "raytracing/traceMiss.rmiss", "raytracing/sceneClosestHit.rchit", "raytracing/torusIntersection.rint", "water/torusClosestHit.rchit"]
 sets = { 0 = "local" }

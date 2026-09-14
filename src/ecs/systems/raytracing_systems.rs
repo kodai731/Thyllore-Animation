@@ -111,6 +111,13 @@ fn apply_instance_transform(blas: &mut RRBLAS, model: &Matrix4<f32>) -> bool {
     true
 }
 
+/// Push constant layout of `shaders/include/trace_push.glsl`: camera block for the ray generation
+/// stage, light block for the closest hit stages.
+pub const TRACE_CAMERA_PUSH_OFFSET: u32 = 0;
+pub const TRACE_CAMERA_PUSH_SIZE: u32 = 80;
+pub const TRACE_LIGHT_PUSH_OFFSET: u32 = 80;
+pub const TRACE_LIGHT_PUSH_SIZE: u32 = 32;
+
 pub unsafe fn ensure_effect_trace_pipeline(
     instance: &Instance,
     rrdevice: &RRDevice,
@@ -137,21 +144,16 @@ pub unsafe fn ensure_effect_trace_pipeline(
     Ok(())
 }
 
-fn trace_push_constant_ranges() -> [vk::PushConstantRange; 3] {
-    let intersection_range = vk::PushConstantRange::builder()
-        .stage_flags(vk::ShaderStageFlags::INTERSECTION_KHR)
-        .offset(0)
-        .size(8)
-        .build();
-    let raygen_range = vk::PushConstantRange::builder()
+fn trace_push_constant_ranges() -> [vk::PushConstantRange; 2] {
+    let camera_range = vk::PushConstantRange::builder()
         .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-        .offset(16)
-        .size(112)
+        .offset(TRACE_CAMERA_PUSH_OFFSET)
+        .size(TRACE_CAMERA_PUSH_SIZE)
         .build();
-    let closest_hit_range = vk::PushConstantRange::builder()
+    let light_range = vk::PushConstantRange::builder()
         .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-        .offset(96)
-        .size(32)
+        .offset(TRACE_LIGHT_PUSH_OFFSET)
+        .size(TRACE_LIGHT_PUSH_SIZE)
         .build();
-    [intersection_range, raygen_range, closest_hit_range]
+    [camera_range, light_range]
 }

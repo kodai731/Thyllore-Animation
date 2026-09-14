@@ -81,6 +81,9 @@ unsafe fn setup_water(
         hdr_buffer,
         crate::app::init::MAX_FRAMES_IN_FLIGHT,
     )?;
+    drop(water_targets);
+    let trace_blocks = super::pipeline::water_trace_blocks(rrdevice, &data.raytracing)?;
+    data.ecs_world.insert_resource(trace_blocks);
 
     log!("Water pipeline created successfully");
     Ok(())

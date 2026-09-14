@@ -3,9 +3,7 @@ use crate::descriptor::pass_manifest::EFFECT_TRACE;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::effect_trace;
 use crate::resource::gpu_resource::GpuResource;
-use crate::resource::uniform_buffer::UniformBuffer;
 use crate::vulkan::*;
-use thyllore_effect_core::WaterUBO;
 
 #[derive(Clone, Debug, Default)]
 pub struct RREffectTraceDescriptorSet {
@@ -46,7 +44,6 @@ impl RREffectTraceDescriptorSet {
         frame_slot: usize,
         tlas: vk::AccelerationStructureKHR,
         trace_image_view: vk::ImageView,
-        water_ubo: &UniformBuffer<WaterUBO>,
         hit_table: vk::Buffer,
     ) -> Result<()> {
         self.layout
@@ -58,7 +55,6 @@ impl RREffectTraceDescriptorSet {
                 vk::Sampler::null(),
                 vk::ImageLayout::GENERAL,
             )?
-            .uniform(effect_trace::WATER, water_ubo, 0)?
             .buffer(effect_trace::HIT_TABLE, hit_table, 0, vk::WHOLE_SIZE as u64)?
             .apply(rrdevice);
         Ok(())

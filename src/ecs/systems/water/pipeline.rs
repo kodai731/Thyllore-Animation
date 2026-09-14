@@ -87,6 +87,19 @@ pub unsafe fn create_water_pipeline(
     Ok(())
 }
 
+pub unsafe fn water_trace_blocks(
+    rrdevice: &RRDevice,
+    raytracing: &RayTracingData,
+) -> Result<crate::ecs::resource::WaterTraceBlocks> {
+    let Some(water_ubo) = raytracing.water_ubo.as_ref() else {
+        return Ok(crate::ecs::resource::WaterTraceBlocks::default());
+    };
+    let slot_addresses = (0..WATER_MAX_INSTANCES)
+        .map(|slot| water_ubo.slot_address(&rrdevice.device, slot))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(crate::ecs::resource::WaterTraceBlocks::new(slot_addresses))
+}
+
 /// Caustic splat/apply need the water UBO and the water buffer, so they are built
 /// once the water pipeline has produced them; the TLAS is bound later if missing.
 unsafe fn create_water_caustic_pipelines(

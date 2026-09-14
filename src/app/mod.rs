@@ -8,6 +8,7 @@ pub mod init;
 pub mod model_loader;
 mod pass_targets;
 pub mod post_process;
+pub mod raytracing;
 pub mod render;
 pub mod render_context;
 pub mod scene_model;

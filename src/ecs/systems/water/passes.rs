@@ -5,6 +5,10 @@ use vulkanalia::vk::KhrRayTracingPipelineExtension;
 
 use crate::app::App;
 use crate::ecs::resource::{WaterBindingKey, WaterRenderTargets};
+use crate::ecs::systems::raytracing_systems::{
+    TRACE_CAMERA_PUSH_OFFSET, TRACE_CAMERA_PUSH_SIZE, TRACE_LIGHT_PUSH_OFFSET,
+    TRACE_LIGHT_PUSH_SIZE,
+};
 use crate::ecs::world::Entity;
 use crate::hooks::pass::{
     CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef, TargetUse,
@@ -149,10 +153,20 @@ fn first_water_accum(
 }
 
 impl WaterFrame {
+    /// The requested secondary ray mode, or ray query when the shared trace pipeline is unavailable.
+    fn secondary_rays(&self, app: &App) -> thyllore_effect_core::WaterSecondaryRays {
+        let trace_available = app.data.raytracing.effect_trace_pipeline.is_some()
+            && app.data.raytracing.effect_trace_descriptor.is_some();
+        match self.settings.secondary_rays {
+            thyllore_effect_core::WaterSecondaryRays::RayTracingPipeline if !trace_available => {
+                thyllore_effect_core::WaterSecondaryRays::RayQuery
+            }
+            requested => requested,
+        }
+    }
+
     fn is_trace_enabled(&self, app: &App) -> bool {
-        self.settings.secondary_rays == thyllore_effect_core::WaterSecondaryRays::RayTracingPipeline
-            && app.data.raytracing.water_trace_pipeline.is_some()
-            && app.data.raytracing.water_trace_descriptor.is_some()
+        self.secondary_rays(app) == thyllore_effect_core::WaterSecondaryRays::RayTracingPipeline
             && app
                 .data
                 .ecs_world
@@ -239,12 +253,9 @@ impl RenderPassNode for WaterTraceNode {
         let Some(frame) = water_frame(app).filter(|frame| frame.is_trace_enabled(app)) else {
             return Ok(());
         };
-        let (Some(trace_pipeline), Some(trace_descriptor), Some(effect)) = (
-            app.data.raytracing.water_trace_pipeline.as_ref(),
-            app.data.raytracing.water_trace_descriptor.as_ref(),
-            app.data
-                .ecs_world
-                .get_component::<crate::ecs::component::WaterTorusEffect>(frame.waters[0]),
+        let (Some(trace_pipeline), Some(trace_descriptor)) = (
+            app.data.raytracing.effect_trace_pipeline.as_ref(),
+            app.data.raytracing.effect_trace_descriptor.as_ref(),
         ) else {
             return Ok(());
         };
@@ -268,15 +279,6 @@ impl RenderPassNode for WaterTraceNode {
             &[trace_descriptor.descriptor_set(frame_slot)?],
             &[],
         );
-        let radii = [effect.major_radius, effect.minor_radius];
-        let radii_bytes = std::slice::from_raw_parts(radii.as_ptr() as *const u8, 8);
-        device.cmd_push_constants(
-            command_buffer,
-            trace_pipeline.pipeline_layout,
-            vk::ShaderStageFlags::INTERSECTION_KHR,
-            0,
-            radii_bytes,
-        );
         let projection = app
             .data
             .ecs_world
@@ -290,40 +292,47 @@ impl RenderPassNode for WaterTraceNode {
             .invert()
             .unwrap_or_else(cgmath::Matrix4::identity);
         let m: &[f32; 16] = inv_view_proj.as_ref();
-        let mut frame_data = [0.0f32; 20];
-        frame_data[..16].copy_from_slice(m);
-        frame_data[16] = view_inverse[3][0];
-        frame_data[17] = view_inverse[3][1];
-        frame_data[18] = view_inverse[3][2];
-        frame_data[19] = 1.0;
-        let frame_bytes = std::slice::from_raw_parts(frame_data.as_ptr() as *const u8, 80);
+        let mut camera_data = [0.0f32; 20];
+        camera_data[..16].copy_from_slice(m);
+        camera_data[16] = view_inverse[3][0];
+        camera_data[17] = view_inverse[3][1];
+        camera_data[18] = view_inverse[3][2];
+        camera_data[19] = 1.0;
+        let camera_bytes = std::slice::from_raw_parts(
+            camera_data.as_ptr() as *const u8,
+            TRACE_CAMERA_PUSH_SIZE as usize,
+        );
         device.cmd_push_constants(
             command_buffer,
             trace_pipeline.pipeline_layout,
             vk::ShaderStageFlags::RAYGEN_KHR,
-            16,
-            frame_bytes,
+            TRACE_CAMERA_PUSH_OFFSET,
+            camera_bytes,
         );
         let light_position = app
             .data
             .ecs_world
             .resource::<crate::ecs::resource::LightState>()
             .light_position;
-        let mut light_data = [0.0f32; 8];
-        light_data[0] = light_position.x;
-        light_data[1] = light_position.y;
-        light_data[2] = light_position.z;
-        light_data[3] = 1.0;
-        light_data[4] = 1.0;
-        light_data[5] = 1.0;
-        light_data[6] = 1.0;
-        light_data[7] = 1.0;
-        let light_bytes = std::slice::from_raw_parts(light_data.as_ptr() as *const u8, 32);
+        let light_data = [
+            light_position.x,
+            light_position.y,
+            light_position.z,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+        ];
+        let light_bytes = std::slice::from_raw_parts(
+            light_data.as_ptr() as *const u8,
+            TRACE_LIGHT_PUSH_SIZE as usize,
+        );
         device.cmd_push_constants(
             command_buffer,
             trace_pipeline.pipeline_layout,
-            vk::ShaderStageFlags::RAYGEN_KHR | vk::ShaderStageFlags::CLOSEST_HIT_KHR,
-            96,
+            vk::ShaderStageFlags::CLOSEST_HIT_KHR,
+            TRACE_LIGHT_PUSH_OFFSET,
             light_bytes,
         );
         let extent = water_buffer.extent();
@@ -419,13 +428,12 @@ impl RenderPassNode for WaterFrameNode {
                 hit_table,
             )?;
         }
-        if let Some(trace_descriptor) = app.data.raytracing.water_trace_descriptor.as_ref() {
+        if let Some(trace_descriptor) = app.data.raytracing.effect_trace_descriptor.as_ref() {
             trace_descriptor.write_all_at(
                 &app.rrdevice,
                 frame_slot,
                 tlas,
                 trace_image.view,
-                water_ubo,
                 hit_table,
             )?;
         }
@@ -826,7 +834,7 @@ impl RenderPassNode for WaterShadingNode {
             };
 
             let push_constants = thyllore_vulkan_core::renderer::WaterPushConstants::new(
-                frame.settings.secondary_rays.as_shader_value(),
+                frame.secondary_rays(app).as_shader_value(),
                 frame.settings.debug_view,
             );
 

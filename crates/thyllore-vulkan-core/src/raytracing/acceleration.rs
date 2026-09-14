@@ -1,5 +1,6 @@
 use crate::command::*;
 use crate::core::device::*;
+use crate::raytracing::GpuPrimitive;
 use crate::resource::gpu_resource::GpuResource;
 use crate::resource::{HitShadingRecord, HitShadingTable};
 use crate::vulkan::*;
@@ -882,7 +883,7 @@ impl RRAccelerationStructure {
         instance: &Instance,
         rrdevice: &RRDevice,
         vertex_buffers: &[(&vk::Buffer, u32, u32, &vk::Buffer, u32)],
-        procedurals: &[(Matrix4<f32>, [f32; 4])],
+        procedurals: &[GpuPrimitive],
     ) -> Result<()> {
         let mut records: Vec<HitShadingRecord> =
             Vec::with_capacity(vertex_buffers.len() + procedurals.len());
@@ -898,6 +899,8 @@ impl RRAccelerationStructure {
             records.push(HitShadingRecord {
                 vertex_address,
                 index_address,
+                effect_data_address: 0,
+                reserved: 0,
                 model: GpuMat4::IDENTITY,
                 normal_matrix: GpuMat4::IDENTITY,
                 base_color: [1.0, 1.0, 1.0, 1.0],
@@ -905,14 +908,16 @@ impl RRAccelerationStructure {
             });
         }
 
-        for (model, params) in procedurals.iter() {
+        for primitive in procedurals {
             records.push(HitShadingRecord {
                 vertex_address: 0,
                 index_address: 0,
-                model: GpuMat4::from_mat4(*model),
-                normal_matrix: GpuMat4::normal_matrix_of(*model),
-                base_color: [1.0, 1.0, 1.0, 1.0],
-                params: *params,
+                effect_data_address: primitive.effect_data_address,
+                reserved: 0,
+                model: GpuMat4::from_mat4(primitive.model),
+                normal_matrix: GpuMat4::normal_matrix_of(primitive.model),
+                base_color: primitive.base_color,
+                params: primitive.params,
             });
         }
 

@@ -1,14 +1,15 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
+use crate::ecs::systems::raytracing_systems::ensure_effect_trace_pipeline;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{
-    RRWaterCausticDescriptorSet, RRWaterDescriptorSet, RRWaterTraceDescriptorSet,
-    WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE, WATER_TRACE,
+    RRWaterCausticDescriptorSet, RRWaterDescriptorSet, WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT,
+    WATER_RESOLVE,
 };
 use crate::vulkanr::pipeline::{
     BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline,
-    RRRayTracingPipeline, VertexInputConfig,
+    VertexInputConfig,
 };
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{
@@ -75,44 +76,28 @@ pub unsafe fn create_water_pipeline(
         ])
         .build(rrdevice, rrrender, Some(water_buffer.extent()))?;
 
-    let water_trace_descriptor = RRWaterTraceDescriptorSet::new(rrdevice, frames_in_flight)?;
-    let water_trace_pipeline = RRRayTracingPipeline::new(
-        instance,
-        rrdevice,
-        &WATER_TRACE,
-        &[water_trace_descriptor.layout.handle],
-        &trace_push_constant_ranges(),
-    )?;
-
     raytracing.water_shading_pipeline = Some(water_shading_pipeline);
     raytracing.water_descriptor = Some(water_descriptor);
     raytracing.water_ubo = Some(water_ubo);
-    raytracing.water_trace_descriptor = Some(water_trace_descriptor);
-    raytracing.water_trace_pipeline = Some(water_trace_pipeline);
 
+    ensure_effect_trace_pipeline(instance, rrdevice, raytracing, frames_in_flight)?;
     create_water_caustic_pipelines(rrdevice, raytracing, water_buffer, hdr_buffer)?;
 
-    log!("Created water trace pipeline");
+    log!("Created water pipelines");
     Ok(())
 }
 
-fn trace_push_constant_ranges() -> [vk::PushConstantRange; 3] {
-    let intersection_range = vk::PushConstantRange::builder()
-        .stage_flags(vk::ShaderStageFlags::INTERSECTION_KHR)
-        .offset(0)
-        .size(8)
-        .build();
-    let raygen_range = vk::PushConstantRange::builder()
-        .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-        .offset(16)
-        .size(112)
-        .build();
-    let closest_hit_range = vk::PushConstantRange::builder()
-        .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-        .offset(96)
-        .size(32)
-        .build();
-    [intersection_range, raygen_range, closest_hit_range]
+pub unsafe fn water_trace_blocks(
+    rrdevice: &RRDevice,
+    raytracing: &RayTracingData,
+) -> Result<crate::ecs::resource::WaterTraceBlocks> {
+    let Some(water_ubo) = raytracing.water_ubo.as_ref() else {
+        return Ok(crate::ecs::resource::WaterTraceBlocks::default());
+    };
+    let slot_addresses = (0..WATER_MAX_INSTANCES)
+        .map(|slot| water_ubo.slot_address(&rrdevice.device, slot))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(crate::ecs::resource::WaterTraceBlocks::new(slot_addresses))
 }
 
 /// Caustic splat/apply need the water UBO and the water buffer, so they are built

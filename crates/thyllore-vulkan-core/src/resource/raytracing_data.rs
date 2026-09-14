@@ -12,9 +12,9 @@ use crate::descriptor::ReflectedSetLayout;
 use crate::descriptor::{
     CompositeGBufferViews, RRAutoExposureAverageDescriptorSet,
     RRAutoExposureHistogramDescriptorSet, RRBillboardDescriptorSet, RRBloomDescriptorSets,
-    RRCompositeDescriptorSet, RRDofDescriptorSet, RRFlameDescriptorSet, RRRayQueryDescriptorSet,
-    RRToneMapDescriptorSet, RRWaterCausticDescriptorSet, RRWaterDescriptorSet,
-    RRWaterTraceDescriptorSet, COMPOSITE, GBUFFER, RAY_QUERY_SHADOW,
+    RRCompositeDescriptorSet, RRDofDescriptorSet, RREffectTraceDescriptorSet, RRFlameDescriptorSet,
+    RRRayQueryDescriptorSet, RRToneMapDescriptorSet, RRWaterCausticDescriptorSet,
+    RRWaterDescriptorSet, COMPOSITE, GBUFFER, RAY_QUERY_SHADOW,
 };
 use crate::pipeline::{
     DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline, RRRayTracingPipeline,
@@ -73,8 +73,8 @@ pub struct RayTracingData {
     pub water_descriptor: Option<RRWaterDescriptorSet>,
     pub water_ubo: Option<UniformBuffer<WaterUBO>>,
 
-    pub water_trace_pipeline: Option<RRRayTracingPipeline>,
-    pub water_trace_descriptor: Option<RRWaterTraceDescriptorSet>,
+    pub effect_trace_pipeline: Option<RRRayTracingPipeline>,
+    pub effect_trace_descriptor: Option<RREffectTraceDescriptorSet>,
 
     pub water_caustic_splat_pipeline: Option<RRPipeline>,
     pub water_caustic_apply_pipeline: Option<RRPipeline>,
@@ -192,8 +192,6 @@ impl RayTracingData {
             log!("Created BLAS for mesh");
         }
 
-        let mut hit_table_entries: Vec<(cgmath::Matrix4<f32>, [f32; 4])> = Vec::new();
-
         for primitive in procedurals {
             if let BlasGeometry::ProceduralAabb { aabb } = &primitive.geometry {
                 let blas = RRAccelerationStructure::create_procedural_blas(
@@ -205,7 +203,6 @@ impl RayTracingData {
                 )?;
                 acceleration_structure.procedural_blas.push(blas);
             }
-            hit_table_entries.push((primitive.model, primitive.params));
         }
 
         let tlas = RRAccelerationStructure::create_tlas(
@@ -226,7 +223,7 @@ impl RayTracingData {
             instance,
             rrdevice,
             &vertex_buffers,
-            &hit_table_entries,
+            procedurals,
         )?;
 
         self.acceleration_structure = Some(acceleration_structure);

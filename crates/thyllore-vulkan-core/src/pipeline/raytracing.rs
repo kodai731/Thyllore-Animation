@@ -6,7 +6,7 @@ use crate::vulkan::*;
 use std::fs::File;
 use std::io::Read;
 use vulkanalia::bytecode::Bytecode;
-use vulkanalia::vk::{KhrGetPhysicalDeviceProperties2Extension, KhrRayTracingPipelineExtension};
+use vulkanalia::vk::KhrRayTracingPipelineExtension;
 
 #[derive(Clone, Debug)]
 pub struct RRRayTracingPipeline {
@@ -20,6 +20,106 @@ pub struct RRRayTracingPipeline {
     pub callable_region: vk::StridedDeviceAddressRegionKHR,
 }
 
+/// One SBT hit record: a triangle group (closest hit only) or a procedural group
+/// (intersection + closest hit). Records follow the closest hit order of the pass manifest, and an
+/// intersection stage pairs with the closest hit stage listed right after it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HitGroup {
+    Triangles {
+        closest_hit: usize,
+    },
+    Procedural {
+        intersection: usize,
+        closest_hit: usize,
+    },
+}
+
+impl HitGroup {
+    fn closest_hit(self) -> usize {
+        match self {
+            HitGroup::Triangles { closest_hit } => closest_hit,
+            HitGroup::Procedural { closest_hit, .. } => closest_hit,
+        }
+    }
+}
+
+/// Stage indices of a pass in manifest order, so the SBT can be laid out without naming a shader.
+pub struct TraceStages {
+    pub raygen: usize,
+    pub miss: usize,
+    pub hit_groups: Vec<HitGroup>,
+}
+
+impl TraceStages {
+    pub fn from_pass(pass: &PassShaders) -> Result<Self> {
+        let mut raygen = None;
+        let mut miss = None;
+        let mut pending_intersection = None;
+        let mut hit_groups = Vec::new();
+
+        for (index, file) in pass.stages.iter().enumerate() {
+            match file.stage {
+                ShaderStage::RayGeneration => raygen = Some(index),
+                ShaderStage::Miss => miss = Some(index),
+                ShaderStage::Intersection => {
+                    anyhow::ensure!(
+                        pending_intersection.is_none(),
+                        "pass `{}`: intersection stage `{}` is not followed by a closest hit stage",
+                        pass.name(),
+                        file.path
+                    );
+                    pending_intersection = Some(index);
+                }
+                ShaderStage::ClosestHit => hit_groups.push(match pending_intersection.take() {
+                    Some(intersection) => HitGroup::Procedural {
+                        intersection,
+                        closest_hit: index,
+                    },
+                    None => HitGroup::Triangles { closest_hit: index },
+                }),
+                ShaderStage::AnyHit
+                | ShaderStage::Callable
+                | ShaderStage::Vertex
+                | ShaderStage::TessellationControl
+                | ShaderStage::TessellationEvaluation
+                | ShaderStage::Fragment
+                | ShaderStage::Geometry
+                | ShaderStage::Task
+                | ShaderStage::Mesh
+                | ShaderStage::Compute => anyhow::bail!(
+                    "pass `{}`: stage `{}` is not supported by the ray tracing pipeline",
+                    pass.name(),
+                    file.path
+                ),
+            }
+        }
+
+        anyhow::ensure!(
+            pending_intersection.is_none(),
+            "pass `{}`: trailing intersection stage has no closest hit stage",
+            pass.name()
+        );
+        anyhow::ensure!(
+            matches!(hit_groups.first(), Some(HitGroup::Triangles { .. })),
+            "pass `{}`: hit record 0 must be the triangle closest hit stage",
+            pass.name()
+        );
+        Ok(Self {
+            raygen: raygen.ok_or_else(|| {
+                anyhow::anyhow!("pass `{}` has no RayGeneration stage", pass.name())
+            })?,
+            miss: miss
+                .ok_or_else(|| anyhow::anyhow!("pass `{}` has no Miss stage", pass.name()))?,
+            hit_groups,
+        })
+    }
+}
+
+/// Deepest traceRayEXT nesting the device allows in one pipeline.
+pub unsafe fn max_ray_recursion_depth(instance: &Instance, rrdevice: &RRDevice) -> u32 {
+    ray_tracing_properties(instance, rrdevice).max_ray_recursion_depth
+}
+
 impl RRRayTracingPipeline {
     pub unsafe fn new(
         instance: &Instance,
@@ -27,110 +127,29 @@ impl RRRayTracingPipeline {
         pass: &PassShaders,
         descriptor_set_layouts: &[vk::DescriptorSetLayout],
         push_constant_ranges: &[vk::PushConstantRange],
+        recursion_depth: u32,
     ) -> Result<Self> {
         let device = &rrdevice.device;
+        let trace_stages = TraceStages::from_pass(pass)?;
 
-        // Load shader modules for all 5 stages
-        let raygen_shader = pass
-            .stage(ShaderStage::RayGeneration)
-            .ok_or_else(|| anyhow::anyhow!("pass `{}` has no RayGeneration stage", pass.name()))?;
-        let miss_shader = pass
-            .stage(ShaderStage::Miss)
-            .ok_or_else(|| anyhow::anyhow!("pass `{}` has no Miss stage", pass.name()))?;
-        let intersection_shader = pass
-            .stage(ShaderStage::Intersection)
-            .ok_or_else(|| anyhow::anyhow!("pass `{}` has no Intersection stage", pass.name()))?;
-
-        // Find both closest-hit stages by file name
-        let procedural_closest_hit = pass
+        let mut modules = Vec::with_capacity(pass.stages.len());
+        for file in pass.stages {
+            modules.push(load_shader_module(rrdevice, file.path)?);
+        }
+        let stages: Vec<vk::PipelineShaderStageCreateInfo> = pass
             .stages
             .iter()
-            .find(|s| s.path.contains("torusRchit"))
-            .ok_or_else(|| anyhow::anyhow!("pass `{}` has no torusRchit stage", pass.name()))?;
-        let triangle_closest_hit = pass
-            .stages
-            .iter()
-            .find(|s| s.path.contains("sceneRchit"))
-            .ok_or_else(|| anyhow::anyhow!("pass `{}` has no sceneRchit stage", pass.name()))?;
+            .zip(modules.iter())
+            .map(|(file, module)| {
+                vk::PipelineShaderStageCreateInfo::builder()
+                    .stage(shader_stage_flags(file.stage))
+                    .module(*module)
+                    .name(b"main\0")
+                    .build()
+            })
+            .collect();
+        let groups = shader_groups(&trace_stages);
 
-        let raygen_module = load_shader_module(rrdevice, raygen_shader.path)?;
-        let miss_module = load_shader_module(rrdevice, miss_shader.path)?;
-        let intersection_module = load_shader_module(rrdevice, intersection_shader.path)?;
-        let procedural_closest_hit_module =
-            load_shader_module(rrdevice, procedural_closest_hit.path)?;
-        let triangle_closest_hit_module = load_shader_module(rrdevice, triangle_closest_hit.path)?;
-
-        // Create shader stages
-        let raygen_stage = vk::PipelineShaderStageCreateInfo::builder()
-            .stage(vk::ShaderStageFlags::RAYGEN_KHR)
-            .module(raygen_module)
-            .name(b"main\0")
-            .build();
-
-        let miss_stage = vk::PipelineShaderStageCreateInfo::builder()
-            .stage(vk::ShaderStageFlags::MISS_KHR)
-            .module(miss_module)
-            .name(b"main\0")
-            .build();
-
-        let intersection_stage = vk::PipelineShaderStageCreateInfo::builder()
-            .stage(vk::ShaderStageFlags::INTERSECTION_KHR)
-            .module(intersection_module)
-            .name(b"main\0")
-            .build();
-
-        let procedural_closest_hit_stage = vk::PipelineShaderStageCreateInfo::builder()
-            .stage(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-            .module(procedural_closest_hit_module)
-            .name(b"main\0")
-            .build();
-
-        let triangle_closest_hit_stage = vk::PipelineShaderStageCreateInfo::builder()
-            .stage(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-            .module(triangle_closest_hit_module)
-            .name(b"main\0")
-            .build();
-
-        let stages: [vk::PipelineShaderStageCreateInfo; 5] = [
-            raygen_stage,
-            miss_stage,
-            intersection_stage,
-            procedural_closest_hit_stage,
-            triangle_closest_hit_stage,
-        ];
-        // Create ray tracing shader groups
-        let groups: [vk::RayTracingShaderGroupCreateInfoKHR; 4] = [
-            vk::RayTracingShaderGroupCreateInfoKHR::builder()
-                .type_(vk::RayTracingShaderGroupTypeKHR::GENERAL)
-                .general_shader(0)
-                .closest_hit_shader(vk::SHADER_UNUSED_KHR)
-                .any_hit_shader(vk::SHADER_UNUSED_KHR)
-                .intersection_shader(vk::SHADER_UNUSED_KHR)
-                .build(),
-            vk::RayTracingShaderGroupCreateInfoKHR::builder()
-                .type_(vk::RayTracingShaderGroupTypeKHR::GENERAL)
-                .general_shader(1)
-                .closest_hit_shader(vk::SHADER_UNUSED_KHR)
-                .any_hit_shader(vk::SHADER_UNUSED_KHR)
-                .intersection_shader(vk::SHADER_UNUSED_KHR)
-                .build(),
-            vk::RayTracingShaderGroupCreateInfoKHR::builder()
-                .type_(vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP)
-                .general_shader(vk::SHADER_UNUSED_KHR)
-                .intersection_shader(2)
-                .closest_hit_shader(3)
-                .any_hit_shader(vk::SHADER_UNUSED_KHR)
-                .build(),
-            vk::RayTracingShaderGroupCreateInfoKHR::builder()
-                .type_(vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP)
-                .general_shader(vk::SHADER_UNUSED_KHR)
-                .closest_hit_shader(4)
-                .any_hit_shader(vk::SHADER_UNUSED_KHR)
-                .intersection_shader(vk::SHADER_UNUSED_KHR)
-                .build(),
-        ];
-
-        // Create pipeline layout
         let mut layout_info =
             vk::PipelineLayoutCreateInfo::builder().set_layouts(descriptor_set_layouts);
         if !push_constant_ranges.is_empty() {
@@ -138,14 +157,20 @@ impl RRRayTracingPipeline {
         }
         let pipeline_layout = device.create_pipeline_layout(&layout_info.build(), None)?;
 
-        // Create ray tracing pipeline
+        let rt_props = ray_tracing_properties(instance, rrdevice);
+        anyhow::ensure!(
+            rt_props.max_ray_recursion_depth >= recursion_depth,
+            "pass `{}` needs ray recursion depth {} but the device supports {}",
+            pass.name(),
+            recursion_depth,
+            rt_props.max_ray_recursion_depth
+        );
         let rt_pipeline_info = vk::RayTracingPipelineCreateInfoKHR::builder()
             .stages(&stages)
             .groups(&groups)
-            .max_pipeline_ray_recursion_depth(1)
+            .max_pipeline_ray_recursion_depth(recursion_depth)
             .layout(pipeline_layout)
             .build();
-
         let pipelines = device.create_ray_tracing_pipelines_khr(
             vk::DeferredOperationKHR::null(),
             vk::PipelineCache::null(),
@@ -153,119 +178,26 @@ impl RRRayTracingPipeline {
             None,
         )?;
         let pipeline = pipelines.0[0];
+        for module in modules {
+            device.destroy_shader_module(module, None);
+        }
 
-        // Destroy shader modules
-        device.destroy_shader_module(raygen_module, None);
-        device.destroy_shader_module(miss_module, None);
-        device.destroy_shader_module(intersection_module, None);
-        device.destroy_shader_module(procedural_closest_hit_module, None);
-        device.destroy_shader_module(triangle_closest_hit_module, None);
-
-        // Fetch physical device ray tracing properties
-        let mut rt_props = vk::PhysicalDeviceRayTracingPipelinePropertiesKHR::default();
-        let mut props2 = vk::PhysicalDeviceProperties2::builder().push_next(&mut rt_props);
-        instance.get_physical_device_properties2(rrdevice.physical_device, &mut props2);
-
-        let handle_size: u64 = rt_props.shader_group_handle_size as u64;
-        let handle_alignment: u64 = rt_props.shader_group_handle_alignment as u64;
-        let base_alignment: u64 = rt_props.shader_group_base_alignment as u64;
-
-        anyhow::ensure!(
-            handle_size > 0 && handle_alignment > 0 && base_alignment > 0,
-            "ray tracing pipeline properties not available"
-        );
-
-        let handle_stride = align_up(handle_size, handle_alignment);
-        let region_size = align_up(handle_stride, base_alignment);
-        let hit_region_size = align_up(2 * handle_stride, base_alignment);
-        let sbt_size = 2 * region_size + hit_region_size;
-
-        // Allocate SBT buffer
-        let (sbt_buffer, sbt_memory) = create_buffer(
+        let sbt = ShaderBindingTable::new(
             instance,
             rrdevice,
-            sbt_size,
-            vk::BufferUsageFlags::SHADER_BINDING_TABLE_KHR
-                | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
-                | vk::BufferUsageFlags::TRANSFER_DST,
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            pipeline,
+            &rt_props,
+            trace_stages.hit_groups.len(),
         )?;
-
-        // Get shader group handles (4 groups)
-        let handle_count = 4 * handle_size as usize;
-        let mut handles = vec![0u8; handle_count];
-        device.get_ray_tracing_shader_group_handles_khr(pipeline, 0, 4, &mut handles);
-
-        // Map buffer and copy handles to each region
-        // Layout: [raygen (group 0)] [miss (group 1)] [hit record 0 = triangle group (group 3)] [hit record 1 = procedural group (group 2)]
-        let mapped_ptr = device.map_memory(sbt_memory, 0, sbt_size, vk::MemoryMapFlags::empty())?;
-        let slice = std::slice::from_raw_parts_mut(mapped_ptr as *mut u8, sbt_size as usize);
-
-        // Raygen handle (group 0) at offset 0
-        {
-            let dst = &mut slice[0..handle_size as usize];
-            let src = &handles[0..handle_size as usize];
-            dst.copy_from_slice(src);
-        }
-        // Miss handle (group 1) at offset region_size
-        {
-            let dst = &mut slice[region_size as usize..region_size as usize + handle_size as usize];
-            let src = &handles[handle_size as usize..2 * handle_size as usize];
-            dst.copy_from_slice(src);
-        }
-        // Triangle group handle (group 3) at offset 2*region_size (hit record 0)
-        {
-            let dst =
-                &mut slice[(2 * region_size) as usize..(2 * region_size + handle_size) as usize];
-            let src = &handles[3 * handle_size as usize..4 * handle_size as usize];
-            dst.copy_from_slice(src);
-        }
-        // Procedural group handle (group 2) at offset 2*region_size + handle_stride (hit record 1)
-        {
-            let dst = &mut slice[(2 * region_size + handle_stride) as usize
-                ..(2 * region_size + handle_stride + handle_size) as usize];
-            let src = &handles[2 * handle_size as usize..3 * handle_size as usize];
-            dst.copy_from_slice(src);
-        }
-        device.unmap_memory(sbt_memory);
-
-        // Get buffer device address
-        let base_address = device
-            .get_buffer_device_address(&vk::BufferDeviceAddressInfo::builder().buffer(sbt_buffer));
-
-        // Set up SBT regions
-        let raygen_region = vk::StridedDeviceAddressRegionKHR::builder()
-            .device_address(base_address + 0 * region_size)
-            .size(region_size)
-            .stride(region_size)
-            .build();
-
-        let miss_region = vk::StridedDeviceAddressRegionKHR::builder()
-            .device_address(base_address + 1 * region_size)
-            .size(region_size)
-            .stride(handle_stride)
-            .build();
-
-        let hit_region = vk::StridedDeviceAddressRegionKHR::builder()
-            .device_address(base_address + 2 * region_size)
-            .size(hit_region_size)
-            .stride(handle_stride)
-            .build();
-
-        let callable_region = vk::StridedDeviceAddressRegionKHR::builder()
-            .device_address(base_address + 2 * region_size + hit_region_size)
-            .size(0)
-            .stride(handle_stride)
-            .build();
         Ok(Self {
             pipeline_layout,
             pipeline,
-            sbt_buffer,
-            sbt_memory,
-            raygen_region,
-            miss_region,
-            hit_region,
-            callable_region,
+            sbt_buffer: sbt.buffer,
+            sbt_memory: sbt.memory,
+            raygen_region: sbt.raygen_region,
+            miss_region: sbt.miss_region,
+            hit_region: sbt.hit_region,
+            callable_region: sbt.callable_region,
         })
     }
 
@@ -276,6 +208,160 @@ impl RRRayTracingPipeline {
         device.free_memory(self.sbt_memory, None);
     }
 }
+
+fn shader_stage_flags(stage: ShaderStage) -> vk::ShaderStageFlags {
+    match stage {
+        ShaderStage::RayGeneration => vk::ShaderStageFlags::RAYGEN_KHR,
+        ShaderStage::Miss => vk::ShaderStageFlags::MISS_KHR,
+        ShaderStage::Intersection => vk::ShaderStageFlags::INTERSECTION_KHR,
+        ShaderStage::ClosestHit => vk::ShaderStageFlags::CLOSEST_HIT_KHR,
+        ShaderStage::AnyHit => vk::ShaderStageFlags::ANY_HIT_KHR,
+        ShaderStage::Callable => vk::ShaderStageFlags::CALLABLE_KHR,
+        ShaderStage::Vertex => vk::ShaderStageFlags::VERTEX,
+        ShaderStage::TessellationControl => vk::ShaderStageFlags::TESSELLATION_CONTROL,
+        ShaderStage::TessellationEvaluation => vk::ShaderStageFlags::TESSELLATION_EVALUATION,
+        ShaderStage::Fragment => vk::ShaderStageFlags::FRAGMENT,
+        ShaderStage::Geometry => vk::ShaderStageFlags::GEOMETRY,
+        ShaderStage::Task => vk::ShaderStageFlags::TASK_EXT,
+        ShaderStage::Mesh => vk::ShaderStageFlags::MESH_EXT,
+        ShaderStage::Compute => vk::ShaderStageFlags::COMPUTE,
+    }
+}
+
+/// Group order is the SBT order: raygen, miss, then one hit group per hit record.
+fn shader_groups(stages: &TraceStages) -> Vec<vk::RayTracingShaderGroupCreateInfoKHR> {
+    let general = |index: usize| {
+        vk::RayTracingShaderGroupCreateInfoKHR::builder()
+            .type_(vk::RayTracingShaderGroupTypeKHR::GENERAL)
+            .general_shader(index as u32)
+            .closest_hit_shader(vk::SHADER_UNUSED_KHR)
+            .any_hit_shader(vk::SHADER_UNUSED_KHR)
+            .intersection_shader(vk::SHADER_UNUSED_KHR)
+            .build()
+    };
+    let hit = |group: HitGroup| {
+        let (group_type, intersection) = match group {
+            HitGroup::Triangles { .. } => (
+                vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP,
+                vk::SHADER_UNUSED_KHR,
+            ),
+            HitGroup::Procedural { intersection, .. } => (
+                vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP,
+                intersection as u32,
+            ),
+        };
+        vk::RayTracingShaderGroupCreateInfoKHR::builder()
+            .type_(group_type)
+            .general_shader(vk::SHADER_UNUSED_KHR)
+            .closest_hit_shader(group.closest_hit() as u32)
+            .any_hit_shader(vk::SHADER_UNUSED_KHR)
+            .intersection_shader(intersection)
+            .build()
+    };
+
+    let mut groups = vec![general(stages.raygen), general(stages.miss)];
+    groups.extend(stages.hit_groups.iter().copied().map(hit));
+    groups
+}
+
+unsafe fn ray_tracing_properties(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+) -> vk::PhysicalDeviceRayTracingPipelinePropertiesKHR {
+    let mut rt_props = vk::PhysicalDeviceRayTracingPipelinePropertiesKHR::default();
+    let mut props2 = vk::PhysicalDeviceProperties2::builder().push_next(&mut rt_props);
+    instance.get_physical_device_properties2(rrdevice.physical_device, &mut props2);
+    rt_props
+}
+
+struct ShaderBindingTable {
+    buffer: vk::Buffer,
+    memory: vk::DeviceMemory,
+    raygen_region: vk::StridedDeviceAddressRegionKHR,
+    miss_region: vk::StridedDeviceAddressRegionKHR,
+    hit_region: vk::StridedDeviceAddressRegionKHR,
+    callable_region: vk::StridedDeviceAddressRegionKHR,
+}
+
+impl ShaderBindingTable {
+    /// Layout: [raygen][miss][hit record 0 .. hit record n-1], each region base aligned.
+    unsafe fn new(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        pipeline: vk::Pipeline,
+        rt_props: &vk::PhysicalDeviceRayTracingPipelinePropertiesKHR,
+        hit_group_count: usize,
+    ) -> Result<Self> {
+        let device = &rrdevice.device;
+        let handle_size = rt_props.shader_group_handle_size as u64;
+        let handle_alignment = rt_props.shader_group_handle_alignment as u64;
+        let base_alignment = rt_props.shader_group_base_alignment as u64;
+        anyhow::ensure!(
+            handle_size > 0 && handle_alignment > 0 && base_alignment > 0,
+            "ray tracing pipeline properties not available"
+        );
+        let handle_stride = align_up(handle_size, handle_alignment);
+        let region_size = align_up(handle_stride, base_alignment);
+        let hit_region_size = align_up(hit_group_count as u64 * handle_stride, base_alignment);
+        let sbt_size = 2 * region_size + hit_region_size;
+
+        let group_count = 2 + hit_group_count;
+        let mut handles = vec![0u8; group_count * handle_size as usize];
+        device.get_ray_tracing_shader_group_handles_khr(
+            pipeline,
+            0,
+            group_count as u32,
+            &mut handles,
+        )?;
+        let handle = |group: usize| {
+            &handles[group * handle_size as usize..(group + 1) * handle_size as usize]
+        };
+
+        let (buffer, memory) = create_buffer(
+            instance,
+            rrdevice,
+            sbt_size,
+            vk::BufferUsageFlags::SHADER_BINDING_TABLE_KHR
+                | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+                | vk::BufferUsageFlags::TRANSFER_DST,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+        )?;
+        let mapped_ptr = device.map_memory(memory, 0, sbt_size, vk::MemoryMapFlags::empty())?;
+        let slice = std::slice::from_raw_parts_mut(mapped_ptr as *mut u8, sbt_size as usize);
+        let mut write = |offset: u64, group: usize| {
+            slice[offset as usize..offset as usize + handle_size as usize]
+                .copy_from_slice(handle(group));
+        };
+        write(0, 0);
+        write(region_size, 1);
+        for hit_record in 0..hit_group_count {
+            write(
+                2 * region_size + hit_record as u64 * handle_stride,
+                2 + hit_record,
+            );
+        }
+        device.unmap_memory(memory);
+
+        let base_address = device
+            .get_buffer_device_address(&vk::BufferDeviceAddressInfo::builder().buffer(buffer));
+        let region = |offset: u64, size: u64, stride: u64| {
+            vk::StridedDeviceAddressRegionKHR::builder()
+                .device_address(base_address + offset)
+                .size(size)
+                .stride(stride)
+                .build()
+        };
+        Ok(Self {
+            buffer,
+            memory,
+            raygen_region: region(0, region_size, region_size),
+            miss_region: region(region_size, region_size, handle_stride),
+            hit_region: region(2 * region_size, hit_region_size, handle_stride),
+            callable_region: region(2 * region_size + hit_region_size, 0, handle_stride),
+        })
+    }
+}
+
 unsafe fn load_shader_module(rrdevice: &RRDevice, path: &str) -> Result<vk::ShaderModule> {
     let mut file = File::open(path)?;
     let mut bytecode = Vec::new();

@@ -6,12 +6,14 @@ use crate::resource::buffer::create_buffer;
 use crate::vulkan::*;
 use thyllore_math_core::GpuMat4;
 
-/// Per-instance hit shading record; repr(C) matches the GLSL std430 `HitShadingRecord` (176 bytes).
+/// Per-instance hit shading record; repr(C) matches `shaders/include/hit_shading_record.glsl` (192 bytes).
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct HitShadingRecord {
     pub vertex_address: u64,
     pub index_address: u64,
+    pub effect_data_address: u64,
+    pub reserved: u64,
     pub model: GpuMat4,
     pub normal_matrix: GpuMat4,
     pub base_color: [f32; 4],
@@ -23,6 +25,8 @@ impl HitShadingRecord {
         Self {
             vertex_address: 0,
             index_address: 0,
+            effect_data_address: 0,
+            reserved: 0,
             model: GpuMat4::ZERO,
             normal_matrix: GpuMat4::ZERO,
             base_color: [1.0, 1.0, 1.0, 1.0],

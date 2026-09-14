@@ -833,8 +833,6 @@ pub unsafe fn rebuild_acceleration_structures(
         log!("Created BLAS for mesh");
     }
 
-    let mut hit_table_entries: Vec<(cgmath::Matrix4<f32>, [f32; 4])> = Vec::new();
-
     for primitive in procedural_primitives {
         if let BlasGeometry::ProceduralAabb { aabb } = &primitive.geometry {
             let blas = RRAccelerationStructure::create_procedural_blas(
@@ -846,7 +844,6 @@ pub unsafe fn rebuild_acceleration_structures(
             )?;
             acceleration_structure.procedural_blas.push(blas);
         }
-        hit_table_entries.push((primitive.model, primitive.params));
     }
 
     let tlas = RRAccelerationStructure::create_tlas(
@@ -867,7 +864,7 @@ pub unsafe fn rebuild_acceleration_structures(
         instance,
         device,
         &vertex_buffers,
-        &hit_table_entries,
+        procedural_primitives,
     )?;
 
     raytracing.acceleration_structure = Some(acceleration_structure);

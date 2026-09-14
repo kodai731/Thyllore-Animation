@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use anyhow::{anyhow, Result};
 use vulkanalia::prelude::v1_0::*;
+use vulkanalia::vk::DeviceV1_2;
 
 use crate::core::device::RRDevice;
 use crate::resource::buffer::create_buffer;
@@ -43,9 +44,13 @@ impl<T: GpuBlock> UniformBuffer<T> {
         let slot_stride = (T::SIZE as vk::DeviceSize).div_ceil(alignment) * alignment;
 
         let usage = match placement {
-            Placement::HostMapped => vk::BufferUsageFlags::UNIFORM_BUFFER,
+            Placement::HostMapped => {
+                vk::BufferUsageFlags::UNIFORM_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+            }
             Placement::DeviceUpdated => {
-                vk::BufferUsageFlags::UNIFORM_BUFFER | vk::BufferUsageFlags::TRANSFER_DST
+                vk::BufferUsageFlags::UNIFORM_BUFFER
+                    | vk::BufferUsageFlags::TRANSFER_DST
+                    | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
             }
         };
         let (buffer, memory) = create_buffer(
@@ -83,6 +88,17 @@ impl<T: GpuBlock> UniformBuffer<T> {
             ));
         }
         Ok(self.slot_stride * slot as vk::DeviceSize)
+    }
+
+    /// Device address of one slot, for shaders that reach the block through a buffer reference.
+    pub unsafe fn slot_address(
+        &self,
+        device: &vulkanalia::Device,
+        slot: usize,
+    ) -> Result<vk::DeviceAddress> {
+        let base = device
+            .get_buffer_device_address(&vk::BufferDeviceAddressInfo::builder().buffer(self.buffer));
+        Ok(base + self.slot_offset(slot)?)
     }
 
     pub unsafe fn write_slot(&self, rrdevice: &RRDevice, slot: usize, value: &T) -> Result<()> {

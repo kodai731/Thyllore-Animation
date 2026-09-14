@@ -20,4 +20,6 @@ pub struct GpuPrimitive<'a> {
     pub model: cgmath::Matrix4<f32>,
     pub base_color: [f32; 4],
     pub params: [f32; 4],
+    /// Device address of the effect's own instance block, read by its closest hit shader; 0 when none.
+    pub effect_data_address: vk::DeviceAddress,
 }

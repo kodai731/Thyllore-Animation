@@ -13,6 +13,8 @@ mod gizmo;
 mod glb_source;
 #[cfg(feature = "ml")]
 mod inference_actor;
+mod lightning;
+mod lightning_param;
 mod marker;
 pub mod mesh;
 mod motion_path;
@@ -39,6 +41,8 @@ pub use gizmo::*;
 pub use glb_source::*;
 #[cfg(feature = "ml")]
 pub use inference_actor::*;
+pub use lightning::*;
+pub use lightning_param::*;
 pub use marker::*;
 pub use mesh::*;
 pub use motion_path::*;

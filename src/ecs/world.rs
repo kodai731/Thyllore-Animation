@@ -481,6 +481,15 @@ impl World {
         entities
     }
 
+    pub fn query_lightnings(&self) -> Vec<Entity> {
+        let mut entities: Vec<Entity> = self
+            .iter_components::<crate::ecs::component::LightningEffect>()
+            .map(|(e, _)| e)
+            .collect();
+        entities.sort();
+        entities
+    }
+
     pub fn query_waters(&self) -> Vec<Entity> {
         let mut entities: Vec<Entity> = self
             .iter_components::<crate::ecs::component::WaterTorusEffect>()

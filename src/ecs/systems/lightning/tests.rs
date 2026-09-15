@@ -1,6 +1,6 @@
 use super::*;
 use crate::ecs::component::{EditorDisplay, EntityIcon, LightningEffect};
-use crate::ecs::resource::{HierarchyState, PickRay};
+use crate::ecs::resource::{HierarchyState, LightningRenderSettings, PickRay};
 use crate::ecs::world::{GlobalTransform, Name, Transform, World};
 use cgmath::Vector3;
 
@@ -81,5 +81,32 @@ fn only_a_known_preset_name_replaces_the_selected_effect() {
             .get_component::<LightningEffect>(entity)
             .map(|e| e.core_radius),
         Some(LightningEffect::default().core_radius)
+    );
+}
+
+#[test]
+fn default_render_settings_select_closed_form_shading_without_debug_view() {
+    let settings = LightningRenderSettings::default();
+    let push = LightningPushConstants::new(
+        settings.shading_mode.as_shader_value(),
+        settings.reference_step_count as i32,
+        settings.debug_view.as_shader_value(),
+    );
+
+    assert_eq!((push.mode, push.step_count, push.debug_view), (0, 256, 0));
+    assert_eq!(push.as_bytes().len(), 12);
+}
+
+#[test]
+fn lightning_effect_hook_is_subscribed_after_wind() {
+    let mut hooks = crate::hooks::effect::EffectHooks::default();
+    crate::effect::subscription::subscribe_effects(&mut hooks);
+    let names = hooks.names();
+
+    let wind = names.iter().position(|name| *name == "wind");
+    let lightning = names.iter().position(|name| *name == "lightning");
+    assert!(
+        matches!((wind, lightning), (Some(wind), Some(lightning)) if lightning > wind),
+        "hook order {names:?}"
     );
 }

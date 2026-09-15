@@ -1,4 +1,5 @@
 use crate::lightning::analytic::hash::{hash_f32, HashChannel};
+use crate::lightning::analytic::timing;
 use crate::lightning::effect::LightningSource;
 use crate::LightningEffect;
 use cgmath::{InnerSpace, Quaternion, Rad, Rotation, Rotation3, Vector3};
@@ -12,6 +13,35 @@ pub struct Segment {
     pub r0: f32,
     pub r1: f32,
     pub intensity: f32,
+}
+
+pub fn build_lightning_segments(effect: &LightningEffect, t: f32) -> Vec<Segment> {
+    let (k, tau) = match timing::active_burst(effect, t) {
+        Some(v) => v,
+        None => return Vec::new(),
+    };
+
+    let intensity =
+        timing::stroke_intensity(effect, tau) * timing::flicker_factor(effect, effect.seed, k, tau);
+    if intensity <= 0.0 {
+        return Vec::new();
+    }
+
+    let burst_seed = crate::lightning::hash_u32(&[effect.seed, k]);
+    let reseed = timing::reseed_index(effect, tau);
+
+    let mut charged = effect.clone();
+    if let LightningSource::Shell { .. } = effect.source {
+        charged.strikes_per_burst = timing::charge_alive_strikes(effect, tau);
+    }
+
+    let mut segments = build_strike_segments(&charged, burst_seed, reseed);
+
+    for seg in &mut segments {
+        seg.intensity *= intensity;
+    }
+
+    segments
 }
 
 fn perpendicular_basis(dir: [f32; 3]) -> ([f32; 3], [f32; 3]) {
@@ -611,6 +641,34 @@ mod tests {
                 length(offset_from_end)
             );
         }
+    }
+
+    #[test]
+    fn test_shell_charge_ramp_limits_alive_strikes() {
+        let mut effect = LightningEffect::default();
+        effect.source = LightningSource::Shell { radius: 2.0 };
+        effect.strikes_per_burst = 8;
+        effect.detail_levels = 0;
+        effect.branch_probability = 0.0;
+        effect.charge_ramp = effect.sustain_time;
+
+        let tau = effect.attack_time + effect.sustain_time * 0.5;
+        effect.time = timing::burst_start_time(&effect, 0) + tau;
+
+        let alive = timing::charge_alive_strikes(&effect, tau);
+        assert!(alive > 0 && alive < effect.strikes_per_burst, "{alive}");
+        assert_eq!(
+            build_lightning_segments(&effect, effect.time).len(),
+            alive as usize,
+            "one straight segment per alive strike"
+        );
+    }
+
+    #[test]
+    fn test_no_segments_outside_a_burst() {
+        let effect = LightningEffect::default();
+        let before_burst = timing::burst_start_time(&effect, 0) - 1.0;
+        assert!(build_lightning_segments(&effect, before_burst).is_empty());
     }
 
     #[test]

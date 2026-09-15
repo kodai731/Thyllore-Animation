@@ -72,7 +72,8 @@ pub(super) unsafe fn apply_model_to_resources(
         assets,
         load_result,
     )?;
-    let waters = crate::ecs::systems::collect_water_instances(world);
+    let procedural_primitives =
+        crate::app::raytracing::scene_build::collect_procedural_primitives(world);
     let mesh_transforms = crate::ecs::systems::collect_mesh_transforms(world, assets);
     crate::app::raytracing::scene_build::rebuild_acceleration_structures(
         instance,
@@ -80,7 +81,7 @@ pub(super) unsafe fn apply_model_to_resources(
         command_pool,
         graphics,
         raytracing,
-        &waters,
+        &procedural_primitives,
         &mesh_transforms,
     )?;
     crate::app::raytracing::scene_build::update_ray_query_descriptor(device, raytracing)?;

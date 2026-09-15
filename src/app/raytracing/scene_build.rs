@@ -6,8 +6,8 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::app::AppData;
 use crate::asset::AssetStorage;
-use crate::ecs::resource::billboard::BillboardData;
-use crate::ecs::systems::{collect_mesh_transforms, collect_water_instances};
+use crate::ecs::resource::billboard::{BillboardData, BillboardRenderState};
+use crate::ecs::systems::collect_mesh_transforms;
 use crate::ecs::world::World;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::data as vulkan_data;
@@ -16,8 +16,12 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::swapchain::RRSwapchain;
 use crate::vulkanr::vulkan::Instance;
 use thyllore_math_core::AffineRows3x4;
-use thyllore_vulkan_core::raytracing::RRAccelerationStructure;
+use thyllore_vulkan_core::raytracing::{BlasGeometry, GpuPrimitive, RRAccelerationStructure};
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
+
+pub fn collect_procedural_primitives(world: &World) -> Vec<GpuPrimitive<'static>> {
+    crate::hooks::gpu_primitive::collect_all(world)
+}
 
 pub unsafe fn rebuild_acceleration_structures(
     instance: &Instance,
@@ -25,7 +29,7 @@ pub unsafe fn rebuild_acceleration_structures(
     command_pool: &Rc<RRCommandPool>,
     graphics: &GraphicsResources,
     raytracing: &mut RayTracingData,
-    waters: &[(cgmath::Matrix4<f32>, f32, f32)],
+    procedural_primitives: &[GpuPrimitive<'static>],
     mesh_transforms: &[cgmath::Matrix4<f32>],
 ) -> Result<()> {
     log!("Rebuilding acceleration structures...");
@@ -76,16 +80,17 @@ pub unsafe fn rebuild_acceleration_structures(
         log!("Created BLAS for mesh");
     }
 
-    for (model, major, minor) in waters {
-        let blas = RRAccelerationStructure::create_water_blas(
-            instance,
-            device,
-            command_pool.as_ref(),
-            model,
-            *major,
-            *minor,
-        )?;
-        acceleration_structure.water_blas.push(blas);
+    for primitive in procedural_primitives {
+        if let BlasGeometry::ProceduralAabb { aabb } = &primitive.geometry {
+            let blas = RRAccelerationStructure::create_procedural_blas(
+                instance,
+                device,
+                command_pool.as_ref(),
+                &primitive.model,
+                *aabb,
+            )?;
+            acceleration_structure.procedural_blas.push(blas);
+        }
     }
 
     let tlas = RRAccelerationStructure::create_tlas(
@@ -93,16 +98,21 @@ pub unsafe fn rebuild_acceleration_structures(
         device,
         command_pool.as_ref(),
         &acceleration_structure.blas_list,
-        &acceleration_structure.water_blas,
+        &acceleration_structure.procedural_blas,
     )?;
     acceleration_structure.tlas = tlas;
     log!(
-        "Created TLAS with {} mesh + {} water instances",
+        "Created TLAS with {} mesh + {} procedural instances",
         acceleration_structure.blas_list.len(),
-        acceleration_structure.water_blas.len()
+        acceleration_structure.procedural_blas.len()
     );
 
-    acceleration_structure.fill_hit_shading_table(instance, device, &vertex_buffers, waters)?;
+    acceleration_structure.fill_hit_shading_table(
+        instance,
+        device,
+        &vertex_buffers,
+        procedural_primitives,
+    )?;
 
     raytracing.acceleration_structure = Some(acceleration_structure);
     log!("Acceleration structures rebuilt successfully");
@@ -115,7 +125,7 @@ pub unsafe fn rebuild_acceleration_structures_from_data(
     data: &mut AppData,
     rrcommand_pool: &Rc<RRCommandPool>,
 ) -> Result<()> {
-    let waters = collect_water_instances(&data.ecs_world);
+    let procedural_primitives = collect_procedural_primitives(&data.ecs_world);
     let mesh_transforms = collect_mesh_transforms(&data.ecs_world, &data.ecs_assets);
     rebuild_acceleration_structures(
         instance,
@@ -123,7 +133,7 @@ pub unsafe fn rebuild_acceleration_structures_from_data(
         rrcommand_pool,
         &data.graphics_resources,
         &mut data.raytracing,
-        &waters,
+        &procedural_primitives,
         &mesh_transforms,
     )
 }
@@ -144,12 +154,12 @@ pub unsafe fn update_billboard_descriptor(
     swapchain: &RRSwapchain,
     billboard: &mut BillboardData,
 ) -> Result<()> {
-    let texture_clone = billboard.render_state.texture.clone();
-    if let Some(ref billboard_texture) = texture_clone {
-        billboard
-            .render_state
-            .descriptor_set
-            .update_descriptor_sets(device, swapchain, billboard_texture)?;
+    let BillboardRenderState {
+        descriptor_set,
+        texture,
+    } = &mut billboard.render_state;
+    if let Some(billboard_texture) = texture.as_ref() {
+        descriptor_set.update_descriptor_sets(device, swapchain, billboard_texture)?;
         log!("Re-updated billboard.render_state.descriptor_set after model reload");
     }
     Ok(())

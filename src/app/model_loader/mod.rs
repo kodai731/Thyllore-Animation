@@ -3,7 +3,8 @@ mod gpu_upload;
 mod scene_registration;
 
 pub use crate::app::raytracing::scene_build::{
-    rebuild_acceleration_structures, rebuild_acceleration_structures_from_data,
+    collect_procedural_primitives, rebuild_acceleration_structures,
+    rebuild_acceleration_structures_from_data,
 };
 pub use scene_registration::{build_initial_clip_schedule, find_best_clip};
 
@@ -189,7 +190,8 @@ pub(crate) unsafe fn append_model_to_scene(
         graphics.mesh_material_ids.push(material_id);
     }
 
-    let waters = crate::ecs::systems::collect_water_instances(world);
+    let procedural_primitives =
+        crate::app::raytracing::scene_build::collect_procedural_primitives(world);
     let mesh_transforms = crate::ecs::systems::collect_mesh_transforms(world, assets);
     crate::app::raytracing::scene_build::rebuild_acceleration_structures(
         instance,
@@ -197,7 +199,7 @@ pub(crate) unsafe fn append_model_to_scene(
         command_pool,
         graphics,
         raytracing,
-        &waters,
+        &procedural_primitives,
         &mesh_transforms,
     )?;
     crate::app::raytracing::scene_build::update_ray_query_descriptor(device, raytracing)?;

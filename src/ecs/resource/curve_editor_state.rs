@@ -51,6 +51,7 @@ impl Default for CurveInteractionMode {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct CurveEditorState {
     pub is_open: bool,
     pub selected_target: Option<CurveEditorTarget>,
@@ -131,3 +132,31 @@ impl Default for CurveEditorState {
         }
     }
 }
+
+type SelectedBone = Option<u32>;
+
+thyllore_scene_core::declare_scene_format! {
+    component: CurveEditorState,
+    record: CurveEditorSceneRecord,
+    items {
+        key: "curve_editor",
+        snapshot: curve_editor_parameter_snapshot,
+        scalars: CURVE_EDITOR_SCALAR_PARAMS,
+        ui: CURVE_EDITOR_UI_PARAMS,
+        overwrite: overwrite_curve_editor_persisted_fields,
+    },
+    persisted {
+        is_open: bool { get: |e| e.is_open, set: |e, v| e.is_open = v },
+        selected_bone: SelectedBone {
+            get: |e| e.selected_bone_id(),
+            set: |e, v| {
+                if let Some(bone_id) = v {
+                    e.select_bone(bone_id);
+                }
+            },
+        },
+    },
+    runtime {},
+}
+
+crate::scene_resource!(CurveEditorState);

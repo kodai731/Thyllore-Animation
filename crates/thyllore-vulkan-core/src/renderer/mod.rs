@@ -13,6 +13,7 @@ pub mod push_constants;
 pub mod rayquery;
 pub mod storage_image;
 pub mod tonemap;
+pub mod trace_push;
 pub mod water;
 
 pub use auto_exposure::record_auto_exposure_pass;
@@ -45,4 +46,5 @@ pub use push_constants::{
 pub use rayquery::record_ray_query_pass;
 pub use storage_image::{insert_storage_image_read_barrier, insert_storage_image_write_barrier};
 pub use tonemap::{begin_tonemap_render_pass, end_tonemap_render_pass, record_tonemap_draw};
+pub use trace_push::TracePush;
 pub use water::{record_water_scene_color_copy, record_water_shading_pass};

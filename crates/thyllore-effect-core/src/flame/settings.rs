@@ -177,3 +177,6 @@ impl FlameRenderSettings {
         }
     }
 }
+
+/// Instance slots of the flame UBO.
+pub const FLAME_MAX_INSTANCES: usize = 4;

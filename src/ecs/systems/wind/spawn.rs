@@ -1,24 +1,13 @@
 use crate::asset::AssetStorage;
-use crate::ecs::component::{EntityIcon, WindTornadoEffect, WIND_DOMAIN};
+use crate::ecs::component::{WindTornadoEffect, WIND_DOMAIN};
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Entity, Transform, World};
+use crate::hooks::scene::spawn_scene_owner;
 
 pub const DEFAULT_WIND_NAME: &str = "Wind";
 
 pub fn spawn_wind(world: &mut World, name: &str, effect: WindTornadoEffect) -> Entity {
-    let transform = Transform {
-        translation: effect.position,
-        rotation: effect.rotation,
-        ..Default::default()
-    };
-
-    world
-        .entity()
-        .with_name(name)
-        .with_transform(transform)
-        .with_editor_display(EntityIcon::Wind, false)
-        .with_wind(effect)
-        .build()
+    spawn_scene_owner(world, name, effect)
 }
 
 pub fn spawn_wind_with_clip(
@@ -35,12 +24,6 @@ pub fn spawn_wind_with_clip(
         &WIND_DOMAIN,
     );
     entity
-}
-
-pub fn despawn_winds(world: &mut World) {
-    for entity in world.query_winds() {
-        world.despawn(entity);
-    }
 }
 
 /// The wind the UI and the wind events act on: the selected entity when it is a wind,

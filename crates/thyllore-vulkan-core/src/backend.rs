@@ -141,7 +141,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             self.command_pool.as_ref(),
             tlas,
             &accel_struct.blas_list,
-            &accel_struct.water_blas,
+            &accel_struct.procedural_blas,
         )?;
 
         Ok(())
@@ -329,12 +329,8 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         distance_attenuation: DistanceAttenuation,
         exposure_value: f32,
     ) -> Result<()> {
-        let scene_memory = match (
-            self.raytracing.scene_uniform_buffer,
-            self.raytracing.scene_uniform_buffer_memory,
-        ) {
-            (Some(_), Some(m)) => m,
-            _ => return Ok(()),
+        let Some(scene_uniform_buffer) = self.raytracing.scene_uniform_buffer.as_ref() else {
+            return Ok(());
         };
 
         let scene_data = SceneUniformData {
@@ -358,21 +354,6 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             exposure_value,
         };
 
-        let data_ptr = self.device.device.map_memory(
-            scene_memory,
-            0,
-            std::mem::size_of::<SceneUniformData>() as u64,
-            vk::MemoryMapFlags::empty(),
-        )?;
-
-        std::ptr::copy_nonoverlapping(
-            &scene_data as *const SceneUniformData,
-            data_ptr as *mut SceneUniformData,
-            1,
-        );
-
-        self.device.device.unmap_memory(scene_memory);
-
-        Ok(())
+        scene_uniform_buffer.write_slot(&self.device, 0, &scene_data)
     }
 }

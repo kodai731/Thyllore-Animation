@@ -5,6 +5,7 @@ use vulkanalia::prelude::v1_0::*;
 use crate::core::RRDevice;
 use crate::data::Vertex;
 use crate::resource::create_buffer;
+use crate::resource::gpu_resource::GpuResource;
 
 #[derive(Debug)]
 pub struct OnionSkinGhostBuffer {
@@ -127,6 +128,12 @@ impl OnionSkinGpuState {
             .iter()
             .filter(|b| b.vertex_count > 0)
             .count()
+    }
+}
+
+impl GpuResource for OnionSkinGpuState {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(rrdevice);
     }
 }
 

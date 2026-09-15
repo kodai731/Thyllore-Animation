@@ -93,7 +93,7 @@ fn default_render_settings_select_closed_form_shading_without_debug_view() {
         settings.debug_view.as_shader_value(),
     );
 
-    assert_eq!((push.mode, push.step_count, push.debug_view), (0, 256, 0));
+    assert_eq!((push.mode, push.step_count, push.debug_view), (0, 1024, 0));
     assert_eq!(push.as_bytes().len(), 12);
 }
 

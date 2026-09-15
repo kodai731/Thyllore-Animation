@@ -1,6 +1,6 @@
 use crate::volume::knots::{RayKnots, RAY_LINEAR_COEFFICIENT_EPSILON};
 use cgmath::{InnerSpace, Vector3, Zero};
-use thyllore_math_core::{one_minus_smootherstep_quadratic_poly, poly_moments};
+use thyllore_math_core::{one_minus_smootherstep_quadratic_poly, poly_symmetric_moments};
 
 // Tapered capsule as a compact-support shell in the squared distance to the segment [a, b]:
 //   density = 1 inside, faded by a smootherstep over the last `edge_width_q` of
@@ -182,7 +182,8 @@ impl VolumeCapsule {
             return 0.0;
         };
 
-        let mid = origin + direction * (s0 + 0.5 * length);
+        let s_mid = s0 + 0.5 * length;
+        let mid = origin + direction * s_mid;
         let delta_mid = self.delta_at_point(mid, axis);
         if delta_mid >= 0.0 {
             return 0.0;
@@ -195,11 +196,11 @@ impl VolumeCapsule {
         let (delta_2, delta_1, delta_0) = self.delta_quadratic(origin, direction, region, axis);
         let inv_width = 1.0 / self.edge_width_q;
         let edge = one_minus_smootherstep_quadratic_poly(
-            (delta_2 * s0 * s0 + delta_1 * s0 + delta_0 + self.edge_width_q) * inv_width,
-            (2.0 * delta_2 * s0 + delta_1) * length * inv_width,
+            (delta_2 * s_mid * s_mid + delta_1 * s_mid + delta_0 + self.edge_width_q) * inv_width,
+            (2.0 * delta_2 * s_mid + delta_1) * length * inv_width,
             delta_2 * length * length * inv_width,
         );
-        (length * poly_moments(&edge)).max(0.0)
+        (length * poly_symmetric_moments(&edge)).max(0.0)
     }
 
     pub fn ray_emission(
@@ -212,9 +213,14 @@ impl VolumeCapsule {
         if t_far <= t_near {
             return 0.0;
         }
-        self.knots(origin, direction, t_near, t_far)
+
+        let center_offset = ((self.a + self.b) * 0.5 - origin).dot(direction);
+        let centered_origin = origin + direction * center_offset;
+        let (centered_near, centered_far) = (t_near - center_offset, t_far - center_offset);
+
+        self.knots(centered_origin, direction, centered_near, centered_far)
             .pieces()
-            .map(|(s0, s1)| self.piece_integral(origin, direction, s0, s1))
+            .map(|(s0, s1)| self.piece_integral(centered_origin, direction, s0, s1))
             .sum()
     }
 }
@@ -223,14 +229,14 @@ impl VolumeCapsule {
 mod tests {
     use super::*;
 
-    fn midpoint_reference(
+    fn midpoint_reference_steps(
         capsule: &VolumeCapsule,
         origin: Vector3<f32>,
         direction: Vector3<f32>,
         t_near: f32,
         t_far: f32,
+        steps: usize,
     ) -> f64 {
-        let steps = 4096;
         let ds = (t_far - t_near) as f64 / steps as f64;
         (0..steps)
             .map(|i| {
@@ -249,12 +255,14 @@ mod tests {
     ) {
         let (t_near, t_far) = bounds;
         let direction = direction.normalize();
-        let expected = midpoint_reference(capsule, origin, direction, t_near, t_far);
+        let expected = midpoint_reference_steps(capsule, origin, direction, t_near, t_far, 1 << 17);
         let actual = capsule.ray_emission(origin, direction, t_near, t_far) as f64;
         let tolerance = 1e-3 * expected.max(1e-3);
         assert!(
             (actual - expected).abs() <= tolerance,
-            "actual {actual}, expected {expected}"
+            "origin {:?} dir {:?} actual {actual}, expected {expected}",
+            origin,
+            direction
         );
     }
 
@@ -303,5 +311,61 @@ mod tests {
         let origin = Vector3::new(-3.0, 4.0, 0.0);
         let direction = Vector3::new(1.0, 0.0, 0.0).normalize();
         assert_eq!(capsule.ray_emission(origin, direction, 0.0, 8.0), 0.0);
+    }
+
+    fn thin_tapered_capsule() -> VolumeCapsule {
+        VolumeCapsule {
+            a: Vector3::new(0.0, 0.0, 0.0),
+            b: Vector3::new(0.0, -1.0, 0.0),
+            radius_start: 0.1,
+            radius_end: 0.05,
+            edge_width_q: 0.005,
+        }
+    }
+
+    fn start_cap_diagonal_rays() -> [(Vector3<f32>, Vector3<f32>); 11] {
+        [
+            (Vector3::new(0.30, -0.24, 0.0), Vector3::new(-1.0, 1.0, 0.0)),
+            (Vector3::new(0.30, 0.24, 0.0), Vector3::new(-1.0, -1.0, 0.0)),
+            (Vector3::new(0.30, 0.30, 0.0), Vector3::new(-1.0, -1.0, 0.0)),
+            (Vector3::new(0.30, 0.02, 0.0), Vector3::new(-1.0, 0.6, 0.0)),
+            (Vector3::new(0.30, -0.02, 0.0), Vector3::new(-1.0, 0.6, 0.0)),
+            (
+                Vector3::new(0.25, -0.25, 0.04),
+                Vector3::new(-1.0, 1.0, -0.1),
+            ),
+            (
+                Vector3::new(0.25, 0.25, -0.04),
+                Vector3::new(-1.0, -1.0, 0.1),
+            ),
+            (
+                Vector3::new(0.30, -0.15, 0.0),
+                Vector3::new(-1.0, 0.577, 0.0),
+            ),
+            (
+                Vector3::new(0.30, 0.15, 0.0),
+                Vector3::new(-1.0, -0.577, 0.0),
+            ),
+            (Vector3::new(-0.30, 0.20, 0.0), Vector3::new(1.0, -1.0, 0.0)),
+            (Vector3::new(-0.30, -0.20, 0.0), Vector3::new(1.0, 1.0, 0.0)),
+        ]
+    }
+
+    #[test]
+    fn diagonal_rays_across_start_cap_match_midpoint_quadrature() {
+        let capsule = thin_tapered_capsule();
+        for (origin, direction) in start_cap_diagonal_rays() {
+            assert_matches_reference(&capsule, origin, direction, (0.0, 1.5));
+        }
+    }
+
+    #[test]
+    fn far_origin_diagonal_rays_match_midpoint_quadrature() {
+        let capsule = thin_tapered_capsule();
+        for (origin, direction) in start_cap_diagonal_rays() {
+            let dir = direction.normalize();
+            let shifted_origin = origin - dir * 14.0;
+            assert_matches_reference(&capsule, shifted_origin, dir, (0.0, 17.0));
+        }
     }
 }

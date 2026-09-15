@@ -154,7 +154,8 @@ float capsulePieceIntegral(VolumeCapsule capsule, vec3 origin, vec3 direction, f
         return 0.0;
     }
 
-    vec3 mid = origin + direction * (s0 + 0.5 * pieceLength);
+    float sMid = s0 + 0.5 * pieceLength;
+    vec3 mid = origin + direction * sMid;
     float deltaMid = capsuleDeltaAtPoint(capsule, mid, axisDirection, axisLength);
     if (deltaMid >= 0.0) {
         return 0.0;
@@ -171,22 +172,27 @@ float capsulePieceIntegral(VolumeCapsule capsule, vec3 origin, vec3 direction, f
     float invWidth = 1.0 / capsule.edgeWidthQ;
     float edge[POLY_TERMS];
     oneMinusSmootherstepQuadraticPoly(
-        (delta2 * s0 * s0 + delta1 * s0 + delta0 + capsule.edgeWidthQ) * invWidth,
-        (2.0 * delta2 * s0 + delta1) * pieceLength * invWidth,
+        (delta2 * sMid * sMid + delta1 * sMid + delta0 + capsule.edgeWidthQ) * invWidth,
+        (2.0 * delta2 * sMid + delta1) * pieceLength * invWidth,
         delta2 * pieceLength * pieceLength * invWidth,
         edge);
-    return max(pieceLength * polyMoments(edge), 0.0);
+    return max(pieceLength * polySymmetricMoments(edge), 0.0);
 }
 
 float capsuleRayEmission(VolumeCapsule capsule, vec3 origin, vec3 direction, float tNear, float tFar) {
     if (tFar <= tNear) {
         return 0.0;
     }
+    float centerOffset = dot((capsule.a + capsule.b) * 0.5 - origin, direction);
+    vec3 centeredOrigin = origin + direction * centerOffset;
+    float centeredNear = tNear - centerOffset;
+    float centeredFar = tFar - centerOffset;
+
     float knots[RAY_MAX_KNOTS];
-    int knotCount = capsuleKnots(capsule, origin, direction, tNear, tFar, knots);
+    int knotCount = capsuleKnots(capsule, centeredOrigin, direction, centeredNear, centeredFar, knots);
     float total = 0.0;
     for (int i = 1; i < knotCount; ++i) {
-        total += capsulePieceIntegral(capsule, origin, direction, knots[i - 1], knots[i]);
+        total += capsulePieceIntegral(capsule, centeredOrigin, direction, knots[i - 1], knots[i]);
     }
     return total;
 }

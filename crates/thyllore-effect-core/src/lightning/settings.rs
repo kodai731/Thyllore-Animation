@@ -92,7 +92,7 @@ impl Default for LightningRenderSettings {
     fn default() -> Self {
         Self {
             shading_mode: LightningShadingMode::ClosedForm,
-            reference_step_count: 256,
+            reference_step_count: 1024,
             debug_view: LightningDebugView::Off,
             batch_fixed_time: None,
         }

@@ -48,6 +48,20 @@ pub fn poly_moments(poly: &Poly) -> f32 {
         .sum()
 }
 
+/// Integral of the polynomial over sigma in [-1/2, 1/2].
+pub fn poly_symmetric_moments(poly: &Poly) -> f32 {
+    poly.iter()
+        .enumerate()
+        .map(|(n, coefficient)| {
+            if n % 2 == 1 {
+                0.0
+            } else {
+                coefficient / ((n as f32 + 1.0) * (1u32 << n) as f32)
+            }
+        })
+        .sum()
+}
+
 /// Integral over sigma in [0, 1] of the polynomial times the linear weight
 /// `w0 + (w1 - w0) sigma`.
 pub fn poly_linear_weighted_moments(poly: &Poly, w0: f32, w1: f32) -> f32 {
@@ -131,6 +145,23 @@ mod tests {
         }
         assert!((poly_moments(&poly) as f64 - plain).abs() < 1e-5);
         assert!((poly_linear_weighted_moments(&poly, 0.3, 1.7) as f64 - weighted).abs() < 1e-5);
+    }
+
+    #[test]
+    fn symmetric_moments_match_midpoint_quadrature() {
+        let poly = poly_mul(
+            &poly_from_quadratic(1.0, -2.0, 0.5),
+            &poly_from_quadratic(0.25, 1.0, -0.5),
+        );
+        let steps = 20000;
+        let ds = 1.0 / steps as f64;
+        let integral: f64 = (0..steps)
+            .map(|i| {
+                let sigma = -0.5 + (i as f64 + 0.5) * ds;
+                evaluate(&poly, sigma as f32) as f64 * ds
+            })
+            .sum();
+        assert!((poly_symmetric_moments(&poly) as f64 - integral).abs() < 1e-5);
     }
 
     #[test]

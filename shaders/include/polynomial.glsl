@@ -47,6 +47,17 @@ float polyMoments(float poly[POLY_TERMS]) {
     return sum;
 }
 
+// Integral of the polynomial over sigma in [-1/2, 1/2].
+float polySymmetricMoments(float poly[POLY_TERMS]) {
+    float sum = 0.0;
+    float halfPower = 1.0;
+    for (int n = 0; n < POLY_TERMS; n += 2) {
+        sum += poly[n] * halfPower / float(n + 1);
+        halfPower *= 0.25;
+    }
+    return sum;
+}
+
 // Integral over sigma in [0, 1] of the polynomial times the linear weight w0 + (w1 - w0) sigma.
 float polyLinearWeightedMoments(float poly[POLY_TERMS], float w0, float w1) {
     float sum = 0.0;

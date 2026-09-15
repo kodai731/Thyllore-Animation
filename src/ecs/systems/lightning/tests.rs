@@ -75,7 +75,7 @@ fn only_a_known_preset_name_replaces_the_selected_effect() {
         Some(0.9)
     );
 
-    apply_lightning_preset_to_selected(&mut world, LIGHTNING_PRESET_NAMES[0]);
+    apply_lightning_preset_to_selected(&mut world, thyllore_effect_core::LIGHTNING_PRESET_NAMES[0]);
     assert_eq!(
         world
             .get_component::<LightningEffect>(entity)

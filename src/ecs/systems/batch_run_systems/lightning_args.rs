@@ -4,8 +4,8 @@ use crate::ecs::component::LightningEffect;
 
 use super::flame_args::scalar_set_resolve_from_args;
 use super::{
-    BATCH_LIGHTNING_DEBUG_VIEW_FLAG, BATCH_LIGHTNING_MODE_FLAG, BATCH_LIGHTNING_SET_FLAG,
-    BATCH_LIGHTNING_TIME_FLAG,
+    BATCH_LIGHTNING_DEBUG_VIEW_FLAG, BATCH_LIGHTNING_MODE_FLAG, BATCH_LIGHTNING_PRESET_FLAG,
+    BATCH_LIGHTNING_SET_FLAG, BATCH_LIGHTNING_TIME_FLAG,
 };
 
 pub fn lightning_mode_resolve_from_args(
@@ -52,6 +52,26 @@ pub fn lightning_fixed_time_resolve_from_args(args: &[String]) -> Result<Option<
         .parse()
         .map_err(|_| anyhow::anyhow!("invalid lightning time '{value}': expected float seconds"))?;
     Ok(Some(seconds))
+}
+
+pub(super) fn lightning_preset_resolve_from_args(args: &[String]) -> Result<Option<String>> {
+    let Some(position) = args
+        .iter()
+        .position(|arg| arg == BATCH_LIGHTNING_PRESET_FLAG)
+    else {
+        return Ok(None);
+    };
+    let Some(value) = args.get(position + 1) else {
+        bail!("{BATCH_LIGHTNING_PRESET_FLAG} requires <name>");
+    };
+    if !thyllore_effect_core::LIGHTNING_PRESET_NAMES.contains(&value.as_str()) {
+        bail!(
+            "unknown lightning preset '{}'. Valid presets: {}",
+            value,
+            thyllore_effect_core::LIGHTNING_PRESET_NAMES.join(", ")
+        );
+    }
+    Ok(Some(value.clone()))
 }
 
 pub(super) fn lightning_set_valid_keys() -> Vec<&'static str> {

@@ -392,7 +392,7 @@ pub fn apply_engine_overrides(app: &mut App, overrides: &EngineCliOverrides) {
             .debug_view = debug_view;
     }
 
-    if !overrides.lightning_set.is_empty() {
+    if overrides.lightning_preset.is_some() || !overrides.lightning_set.is_empty() {
         let entities: Vec<_> = app.data.ecs_world.query_lightnings();
         for e in entities {
             let Some(mut effect) = app
@@ -403,6 +403,9 @@ pub fn apply_engine_overrides(app: &mut App, overrides: &EngineCliOverrides) {
             else {
                 continue;
             };
+            if let Some(name) = overrides.lightning_preset.as_deref() {
+                thyllore_effect_core::apply_lightning_preset(&mut effect, name);
+            }
             apply_lightning_overrides(&mut effect, &overrides.lightning_set);
             app.data.ecs_world.insert_component(e, effect);
         }

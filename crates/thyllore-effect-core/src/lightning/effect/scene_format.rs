@@ -48,7 +48,7 @@ declare_scene_format! {
             set: |e, v| e.strikes_per_burst = v,
             ui {
                 min: 1.0,
-                max: 8.0,
+                max: 32.0,
                 format: "%.0f",
                 group: "shape",
             },

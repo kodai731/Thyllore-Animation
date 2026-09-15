@@ -43,13 +43,13 @@ use flame_args::{
     flame_style_resolve_from_args, flame_texture_fit_resolve_from_args,
     flame_trail_resolve_from_args, heat_plume_resolve_from_args,
 };
-use lightning_args::lightning_set_resolve_from_args;
 #[cfg(test)]
 use lightning_args::lightning_set_valid_keys;
 pub use lightning_args::{
     apply_lightning_overrides, lightning_debug_view_resolve_from_args,
     lightning_fixed_time_resolve_from_args, lightning_mode_resolve_from_args,
 };
+use lightning_args::{lightning_preset_resolve_from_args, lightning_set_resolve_from_args};
 pub use sequence_analyze::*;
 pub use water_args::*;
 use wind_args::wind_set_resolve_from_args;
@@ -92,6 +92,7 @@ const BATCH_FLAME_SDF_FLAG: &str = "--batch-flame-sdf";
 const BATCH_FLAME_SET_FLAG: &str = "--batch-flame-set";
 const BATCH_WIND_SET_FLAG: &str = "--batch-wind-set";
 const BATCH_LIGHTNING_SET_FLAG: &str = "--batch-lightning-set";
+const BATCH_LIGHTNING_PRESET_FLAG: &str = "--batch-lightning-preset";
 const BATCH_FLAME_STYLE_FLAG: &str = "--batch-flame-style";
 const BATCH_FLAME_STYLE_DUMP_FLAG: &str = "--batch-flame-style-dump";
 const BATCH_FLAME_TEXTURE_FLAG: &str = "--batch-flame-texture";
@@ -125,6 +126,7 @@ pub struct EngineCliOverrides {
     pub lightning_fixed_time: Option<f32>,
     pub lightning_mode: Option<thyllore_effect_core::LightningShadingMode>,
     pub lightning_debug_view: Option<thyllore_effect_core::LightningDebugView>,
+    pub lightning_preset: Option<String>,
     pub lightning_set: Vec<(String, f32)>,
     pub flame_steps: Option<u32>,
     pub camera_pose: Option<BatchCameraPose>,
@@ -175,6 +177,7 @@ pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverride
         lightning_fixed_time: lightning_fixed_time_resolve_from_args(args)?,
         lightning_mode: lightning_mode_resolve_from_args(args)?,
         lightning_debug_view: lightning_debug_view_resolve_from_args(args)?,
+        lightning_preset: lightning_preset_resolve_from_args(args)?,
         lightning_set: lightning_set_resolve_from_args(args)?,
         flame_steps: flame_steps_resolve_from_args(args)?,
         camera_pose: camera_pose_resolve_from_args(args)?,

@@ -1303,6 +1303,24 @@ fn lightning_set_parses_both_forms_and_rejects_unknown_key() {
 }
 
 #[test]
+fn lightning_preset_parses_a_known_name_and_rejects_an_unknown_one() {
+    assert_eq!(
+        lightning_preset_resolve_from_args(&args(&["bin"])).unwrap(),
+        None
+    );
+    assert_eq!(
+        lightning_preset_resolve_from_args(&args(&["bin", "--batch-lightning-preset", "charge"]))
+            .unwrap(),
+        Some("charge".to_string())
+    );
+
+    let err =
+        lightning_preset_resolve_from_args(&args(&["bin", "--batch-lightning-preset", "fog"]))
+            .unwrap_err();
+    assert!(err.to_string().contains("fog"));
+}
+
+#[test]
 fn apply_lightning_overrides_no_panic_for_all_keys() {
     for key in lightning_set_valid_keys() {
         let mut effect = LightningEffect::default();

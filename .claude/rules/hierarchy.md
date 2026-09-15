@@ -62,7 +62,7 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   (`src/ecs/resource/<effect>_render_targets.rs`) assembled from those primitives in
   `src/ecs/systems/<effect>/` (descriptors, pipeline, record, render targets). Wind follows this layout.
   Known exceptions tracked by the vulkan-core effect-neutral issue (#179), not to be extended:
-  `descriptor/flame.rs`, `descriptor/water.rs`, `descriptor/water_caustic.rs`, `descriptor/water_trace.rs`,
+  `descriptor/flame.rs`, `descriptor/water.rs`, `descriptor/water_caustic.rs`, `descriptor/effect_trace.rs`,
   `renderer/flame.rs`, `renderer/water.rs`, `resource/flame_buffer.rs`, `resource/water_buffer.rs`, the
   flame / water fields of `RayTracingData` (filled by `src/ecs/systems/<effect>/pipeline.rs`), and
   `FlamePushConstants` / `WaterPushConstants` in `renderer/push_constants.rs`. Pipeline creation never
@@ -142,10 +142,14 @@ link-time registry (`inventory`), and `SceneComponentHooks::collect()` that `src
 `World` resource for `src/scene/`; owners are applied before attachments. `scene_resource.rs` is the
 same contract for world resources (`SceneResourceHook`, `scene_resource!`, `SceneResourceHooks`).
 `gpu_primitive.rs` holds the `GpuPrimitiveSource` contract (a component that describes its ray-tracing
-instance as a `GpuPrimitive`), the `gpu_primitive_source!` registration and `collect_all(world)`, which the
-acceleration structure build and the per-frame TLAS refresh both call so the instance order is one list
-(hooks sorted by type name, entities sorted by id). A hook file describes a contract only; it never names a
-concrete effect.
+instance as a `GpuPrimitive`, plus `effect_data_address(world, ordinal)` for the device address of the
+instance block its closest hit shader reads through the hit record), the `gpu_primitive_source!`
+registration and `collect_all(world)`, which the acceleration structure build and the per-frame TLAS
+refresh both call so the instance order is one list (hooks sorted by type name, entities sorted by id).
+The effect trace pass (`shaders/raytracing/`, `raytracing_systems.rs::ensure_effect_trace_pipeline`) is
+shared by every effect: its descriptor set is effect independent and an effect's own data reaches its hit
+shader only through that address, never through an extra descriptor set or push constant. A hook file
+describes a contract only; it never names a concrete effect.
 
 ## src/effect/
 

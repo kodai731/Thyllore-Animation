@@ -43,7 +43,6 @@ impl App {
         data: &mut AppData,
         rrcommand_pool: &Rc<RRCommandPool>,
     ) -> Result<()> {
-        data.raytracing.command_pool = rrcommand_pool.command_pool;
         let procedural_primitives =
             crate::app::model_loader::collect_procedural_primitives(&data.ecs_world);
         let mesh_transforms =
@@ -55,7 +54,8 @@ impl App {
             &data.graphics_resources.meshes,
             &mesh_transforms,
             &procedural_primitives,
-        )
+        )?;
+        data.raytracing.bind_ray_query_tlas(rrdevice)
     }
 
     pub(crate) unsafe fn create_ray_tracing_pipelines_with_resources(

@@ -18,7 +18,7 @@ pub struct RRWaterDescriptorSet {
 impl RRWaterDescriptorSet {
     pub fn layout_spec() -> ReflectedLayoutSpec {
         ReflectedLayoutSpec::local(&WATER_RESOLVE).with_override(
-            water_resolve::WATER,
+            water_resolve::WATER_BLOCK,
             vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
         )
     }
@@ -70,7 +70,7 @@ impl RRWaterDescriptorSet {
             let previous_history_view = history_image_views[1 - i];
             self.layout
                 .writer(descriptor_set)
-                .uniform_dynamic(water_resolve::WATER, water_ubo)?
+                .uniform_dynamic(water_resolve::WATER_BLOCK, water_ubo)?
                 .image(
                     water_resolve::SCENE_COLOR_SAMPLER,
                     scene_color_view,

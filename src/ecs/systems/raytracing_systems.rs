@@ -1,6 +1,14 @@
 use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix};
+use thyllore_vulkan_core::core::RRDevice;
+use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
+use thyllore_vulkan_core::descriptor::{
+    push_constant_range, RREffectTraceDescriptorSet, EFFECT_TRACE,
+};
+use thyllore_vulkan_core::pipeline::{max_ray_recursion_depth, RRRayTracingPipeline};
 use thyllore_vulkan_core::raytracing::{RRAccelerationStructure, RRBLAS};
+use thyllore_vulkan_core::resource::RayTracingData;
+use vulkanalia::prelude::v1_0::*;
 
 use crate::app::FrameContext;
 use crate::asset::AssetStorage;
@@ -104,4 +112,47 @@ fn apply_instance_transform(blas: &mut RRBLAS, model: &Matrix4<f32>) -> bool {
     }
     blas.transform.matrix = matrix;
     true
+}
+
+/// traceRayEXT nesting the effect trace shaders use: the ray generation stage plus one secondary
+/// trace from an effect's closest hit shader.
+pub const EFFECT_TRACE_RECURSION_DEPTH: u32 = 2;
+
+/// Creates the shared trace pipeline once. A device whose ray recursion limit is below what the
+/// shaders need gets no pipeline, and every effect then renders without the trace pass.
+pub unsafe fn ensure_effect_trace_pipeline(
+    instance: &Instance,
+    rrdevice: &RRDevice,
+    raytracing: &mut RayTracingData,
+    frames_in_flight: usize,
+) -> Result<()> {
+    if raytracing.effect_trace_pipeline.is_some() {
+        return Ok(());
+    }
+
+    let supported_depth = max_ray_recursion_depth(instance, rrdevice);
+    if supported_depth < EFFECT_TRACE_RECURSION_DEPTH {
+        log_warn!(
+            "Effect trace pipeline skipped: device ray recursion depth {} < {}",
+            supported_depth,
+            EFFECT_TRACE_RECURSION_DEPTH
+        );
+        return Ok(());
+    }
+
+    let effect_trace_descriptor = RREffectTraceDescriptorSet::new(rrdevice, frames_in_flight)?;
+    let effect_trace_pipeline = RRRayTracingPipeline::new(
+        instance,
+        rrdevice,
+        &EFFECT_TRACE,
+        &[effect_trace_descriptor.layout.handle],
+        &[push_constant_range(&effect_trace::PUSH_CONSTANT)],
+        EFFECT_TRACE_RECURSION_DEPTH,
+    )?;
+
+    raytracing.effect_trace_descriptor = Some(effect_trace_descriptor);
+    raytracing.effect_trace_pipeline = Some(effect_trace_pipeline);
+
+    log!("Created effect trace pipeline");
+    Ok(())
 }

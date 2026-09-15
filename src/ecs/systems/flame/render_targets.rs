@@ -93,6 +93,13 @@ unsafe fn setup_flame(
         rrrender.gbuffer_depth_image_view,
     )?;
 
+    crate::ecs::systems::raytracing_systems::ensure_effect_trace_pipeline(
+        instance,
+        rrdevice,
+        &mut data.raytracing,
+        crate::app::init::MAX_FRAMES_IN_FLIGHT,
+    )?;
+
     log!("Flame pipeline created successfully");
     Ok(())
 }

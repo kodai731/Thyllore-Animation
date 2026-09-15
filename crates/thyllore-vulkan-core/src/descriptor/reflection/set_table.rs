@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use vulkanalia::prelude::v1_0::*;
 
 use thyllore_spirv_reflect::{
-    DescriptorCount, DescriptorKind, ReflectError, ReflectedBinding, ReflectedBlock,
-    ShaderReflection, ShaderStage,
+    DescriptorCount, DescriptorKind, PushConstantLayout, ReflectError, ReflectedBinding,
+    ReflectedBlock, ShaderReflection, ShaderStage,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -244,6 +244,20 @@ pub fn default_descriptor_type(kind: DescriptorKind) -> vk::DescriptorType {
     }
 }
 
+pub fn push_constant_range(layout: &PushConstantLayout) -> vk::PushConstantRange {
+    let stage_flags = layout
+        .stages
+        .iter()
+        .fold(vk::ShaderStageFlags::empty(), |flags, stage| {
+            flags | shader_stage_flags(*stage)
+        });
+    vk::PushConstantRange::builder()
+        .stage_flags(stage_flags)
+        .offset(0)
+        .size(layout.size)
+        .build()
+}
+
 pub fn shader_stage_flags(stage: ShaderStage) -> vk::ShaderStageFlags {
     match stage {
         ShaderStage::Vertex => vk::ShaderStageFlags::VERTEX,
@@ -295,6 +309,7 @@ mod tests {
         let vertex = ShaderReflection {
             stages: vec![ShaderStage::Vertex],
             bindings: vec![binding(0, 0, DescriptorKind::UniformBuffer)],
+            push_constant: None,
         };
         let fragment = ShaderReflection {
             stages: vec![ShaderStage::Fragment],
@@ -302,6 +317,7 @@ mod tests {
                 binding(0, 0, DescriptorKind::UniformBuffer),
                 binding(0, 1, DescriptorKind::CombinedImageSampler),
             ],
+            push_constant: None,
         };
         DescriptorSetTable::from_reflections(&[vertex, fragment]).unwrap()
     }
@@ -324,10 +340,12 @@ mod tests {
         let vertex = ShaderReflection {
             stages: vec![ShaderStage::Vertex],
             bindings: vec![binding(0, 0, DescriptorKind::UniformBuffer)],
+            push_constant: None,
         };
         let fragment = ShaderReflection {
             stages: vec![ShaderStage::Fragment],
             bindings: vec![binding(0, 0, DescriptorKind::StorageBuffer)],
+            push_constant: None,
         };
         assert_eq!(
             DescriptorSetTable::from_reflections(&[vertex, fragment]),

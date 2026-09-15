@@ -78,7 +78,7 @@ impl RRWaterCausticDescriptorSet {
                 std::mem::size_of::<crate::data::SceneUniformData>() as u64,
             )?
             .buffer(
-                water_caustic_splat::WATER,
+                water_caustic_splat::WATER_BLOCK,
                 water_ubo,
                 0,
                 vk::WHOLE_SIZE as u64,
@@ -106,7 +106,7 @@ impl RRWaterCausticDescriptorSet {
                 std::mem::size_of::<crate::data::SceneUniformData>() as u64,
             )?
             .buffer(
-                water_caustic_apply::WATER,
+                water_caustic_apply::WATER_BLOCK,
                 water_ubo,
                 0,
                 vk::WHOLE_SIZE as u64,

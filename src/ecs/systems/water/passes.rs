@@ -5,16 +5,15 @@ use vulkanalia::vk::KhrRayTracingPipelineExtension;
 
 use crate::app::App;
 use crate::ecs::resource::{WaterBindingKey, WaterRenderTargets};
-use crate::ecs::systems::raytracing_systems::{
-    TRACE_CAMERA_PUSH_OFFSET, TRACE_CAMERA_PUSH_SIZE, TRACE_LIGHT_PUSH_OFFSET,
-    TRACE_LIGHT_PUSH_SIZE,
-};
 use crate::ecs::world::Entity;
 use crate::hooks::pass::{
     CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef, TargetUse,
     TransientRequest, TransientSlot,
 };
 use crate::vulkanr::renderer::deferred::full_extent_scissor;
+use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
+use thyllore_vulkan_core::descriptor::{push_constant_range, GpuBlock};
+use thyllore_vulkan_core::renderer::TracePush;
 use thyllore_vulkan_core::resource::RenderTargetKey;
 
 /// Pass nodes in record order. Subscription order inside the effect stage is this order.
@@ -291,49 +290,29 @@ impl RenderPassNode for WaterTraceNode {
             .view
             .invert()
             .unwrap_or_else(cgmath::Matrix4::identity);
-        let m: &[f32; 16] = inv_view_proj.as_ref();
-        let mut camera_data = [0.0f32; 20];
-        camera_data[..16].copy_from_slice(m);
-        camera_data[16] = view_inverse[3][0];
-        camera_data[17] = view_inverse[3][1];
-        camera_data[18] = view_inverse[3][2];
-        camera_data[19] = 1.0;
-        let camera_bytes = std::slice::from_raw_parts(
-            camera_data.as_ptr() as *const u8,
-            TRACE_CAMERA_PUSH_SIZE as usize,
-        );
-        device.cmd_push_constants(
-            command_buffer,
-            trace_pipeline.pipeline_layout,
-            vk::ShaderStageFlags::RAYGEN_KHR,
-            TRACE_CAMERA_PUSH_OFFSET,
-            camera_bytes,
-        );
         let light_position = app
             .data
             .ecs_world
             .resource::<crate::ecs::resource::LightState>()
             .light_position;
-        let light_data = [
-            light_position.x,
-            light_position.y,
-            light_position.z,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-        ];
-        let light_bytes = std::slice::from_raw_parts(
-            light_data.as_ptr() as *const u8,
-            TRACE_LIGHT_PUSH_SIZE as usize,
-        );
+        let trace_push = TracePush {
+            inv_view_proj,
+            camera_pos: [
+                view_inverse[3][0],
+                view_inverse[3][1],
+                view_inverse[3][2],
+                1.0,
+            ],
+            light_pos: [light_position.x, light_position.y, light_position.z, 1.0],
+            light_color: [1.0; 4],
+        };
+        let push_range = push_constant_range(&effect_trace::PUSH_CONSTANT);
         device.cmd_push_constants(
             command_buffer,
             trace_pipeline.pipeline_layout,
-            vk::ShaderStageFlags::CLOSEST_HIT_KHR,
-            TRACE_LIGHT_PUSH_OFFSET,
-            light_bytes,
+            push_range.stage_flags,
+            push_range.offset,
+            trace_push.as_bytes(),
         );
         let extent = water_buffer.extent();
         device.cmd_trace_rays_khr(

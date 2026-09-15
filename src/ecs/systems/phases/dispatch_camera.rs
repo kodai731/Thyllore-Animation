@@ -120,6 +120,10 @@ pub fn dispatch_camera_light_debug_events(
                 deferred.push(DeferredAction::DumpWindDebug);
             }
 
+            UIEvent::DumpLightningDebug => {
+                deferred.push(DeferredAction::DumpLightningDebug);
+            }
+
             _ => {}
         }
     }

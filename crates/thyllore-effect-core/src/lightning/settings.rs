@@ -80,11 +80,12 @@ impl LightningShadingMode {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LightningRenderSettings {
     pub shading_mode: LightningShadingMode,
     pub reference_step_count: u32,
     pub debug_view: LightningDebugView,
+    pub batch_fixed_time: Option<f32>,
 }
 
 impl Default for LightningRenderSettings {
@@ -93,6 +94,7 @@ impl Default for LightningRenderSettings {
             shading_mode: LightningShadingMode::ClosedForm,
             reference_step_count: 256,
             debug_view: LightningDebugView::Off,
+            batch_fixed_time: None,
         }
     }
 }

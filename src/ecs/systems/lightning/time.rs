@@ -1,4 +1,5 @@
 use crate::ecs::component::{apply_lightning_param_value, LightningEffect, LightningParam};
+use crate::ecs::resource::LightningRenderSettings;
 use crate::ecs::systems::effect_time::{advance_effect_time, EffectTimeSources, TimedEffect};
 use crate::ecs::world::{Entity, Transform, World};
 use crate::ecs::FrameContext;
@@ -12,7 +13,10 @@ impl TimedEffect for LightningEffect {
     }
 
     fn time_sources(world: &World, delta_time: f32) -> EffectTimeSources {
-        EffectTimeSources::collect(world, delta_time, None, false)
+        let batch_fixed_time = world
+            .get_resource::<LightningRenderSettings>()
+            .and_then(|settings| settings.batch_fixed_time);
+        EffectTimeSources::collect(world, delta_time, batch_fixed_time, false)
     }
 
     fn collect_world_inputs(_world: &World) {}

@@ -1226,3 +1226,137 @@ fn wind_debug_dump_action_still_queues_its_event_outside_a_batch_run() {
     let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
     assert!(matches!(events[0], UIEvent::DumpWindDebug));
 }
+
+#[test]
+fn resolve_lightning_mode_and_debug_view() {
+    let overrides = resolve_engine_cli_overrides(&args(&[
+        "bin",
+        "--batch-lightning-mode",
+        "reference",
+        "--batch-lightning-debug-view",
+        "hits",
+    ]))
+    .unwrap();
+    assert_eq!(
+        overrides.lightning_mode,
+        Some(thyllore_effect_core::LightningShadingMode::ReferenceQuadrature)
+    );
+    assert_eq!(
+        overrides.lightning_debug_view,
+        Some(thyllore_effect_core::LightningDebugView::SegmentHits)
+    );
+    assert!(
+        lightning_mode_resolve_from_args(&args(&["bin", "--batch-lightning-mode", "x"])).is_err()
+    );
+
+    let coverage =
+        resolve_engine_cli_overrides(&args(&["bin", "--batch-lightning-debug-view", "coverage"]))
+            .unwrap();
+    assert_eq!(
+        coverage.lightning_debug_view,
+        Some(thyllore_effect_core::LightningDebugView::Coverage)
+    );
+
+    let core =
+        resolve_engine_cli_overrides(&args(&["bin", "--batch-lightning-debug-view", "core"]))
+            .unwrap();
+    assert_eq!(
+        core.lightning_debug_view,
+        Some(thyllore_effect_core::LightningDebugView::CoreCoverage)
+    );
+}
+
+#[test]
+fn resolve_lightning_fixed_time() {
+    let overrides =
+        resolve_engine_cli_overrides(&args(&["bin", "--batch-lightning-time", "0.25"])).unwrap();
+    assert_eq!(overrides.lightning_fixed_time, Some(0.25));
+
+    let without = resolve_engine_cli_overrides(&args(&["bin"])).unwrap();
+    assert_eq!(without.lightning_fixed_time, None);
+
+    assert!(
+        lightning_fixed_time_resolve_from_args(&args(&["bin", "--batch-lightning-time"])).is_err()
+    );
+    assert!(lightning_fixed_time_resolve_from_args(&args(&[
+        "bin",
+        "--batch-lightning-time",
+        "abc"
+    ]))
+    .is_err());
+}
+
+#[test]
+fn lightning_set_parses_both_forms_and_rejects_unknown_key() {
+    let combined: Vec<String> = vec!["--batch-lightning-set=core_intensity=12.0".into()];
+    let pairs = lightning_set_resolve_from_args(&combined).unwrap();
+    assert_eq!(pairs.len(), 1);
+    assert_eq!(pairs[0].0, "core_intensity");
+    assert!((pairs[0].1 - 12.0).abs() < 1e-6);
+
+    let separate: Vec<String> = vec!["--batch-lightning-set".into(), "core_intensity=12.0".into()];
+    assert_eq!(lightning_set_resolve_from_args(&separate).unwrap(), pairs);
+
+    let unknown: Vec<String> = vec!["--batch-lightning-set".into(), "invalid_key=1.0".into()];
+    let err = lightning_set_resolve_from_args(&unknown).unwrap_err();
+    assert!(err.to_string().contains("invalid_key"));
+}
+
+#[test]
+fn apply_lightning_overrides_no_panic_for_all_keys() {
+    for key in lightning_set_valid_keys() {
+        let mut effect = LightningEffect::default();
+        let overrides: Vec<(String, f32)> = vec![(key.to_string(), 1.0)];
+        apply_lightning_overrides(&mut effect, &overrides);
+
+        let param = thyllore_effect_core::find_scalar_param(
+            thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
+            key,
+        )
+        .expect("valid key is registered");
+        assert_eq!((param.get)(&effect), 1.0, "{key}");
+    }
+}
+
+#[test]
+fn lightning_debug_dump_action_marks_the_batch_run_in_every_capture_mode() {
+    let (_single, single_dump_plan) = batch_run_resolve_from_args(&args(&[
+        "bin",
+        "--batch-screenshot",
+        "out.png",
+        "--batch-debug-action",
+        "dump_lightning_debug",
+    ]))
+    .unwrap()
+    .expect("single-shot batch");
+    assert!(single_dump_plan.dump_lightning_debug);
+    assert!(!single_dump_plan.dump_wind_debug);
+
+    let (_sequence, sequence_dump_plan) = batch_run_resolve_from_args(&args(&[
+        "bin",
+        "--batch-screenshot-sequence",
+        "out,3,2",
+        "--batch-debug-action",
+        "dump_lightning_debug",
+    ]))
+    .unwrap()
+    .expect("sequence batch");
+    assert!(sequence_dump_plan.dump_lightning_debug);
+
+    let (_without, without_dump_plan) =
+        batch_run_resolve_from_args(&args(&["bin", "--batch-screenshot", "out.png"]))
+            .unwrap()
+            .expect("batch without debug action");
+    assert!(!without_dump_plan.dump_lightning_debug);
+}
+
+#[test]
+fn lightning_debug_dump_action_still_queues_its_event_outside_a_batch_run() {
+    let mut world = World::new();
+    world.insert_resource(UIEventQueue::new());
+
+    batch_apply_debug_actions(&world, &[&LightningDebugDump as &dyn BatchAction]);
+
+    let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
+    assert!(matches!(events[0], UIEvent::DumpLightningDebug));
+}

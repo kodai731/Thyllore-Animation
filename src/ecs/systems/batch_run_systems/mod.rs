@@ -9,7 +9,7 @@ use crate::ecs::world::World;
 #[cfg(test)]
 use crate::asset::AssetStorage;
 #[cfg(test)]
-use crate::ecs::component::{ClipSchedule, FlameEffect, WindTornadoEffect};
+use crate::ecs::component::{ClipSchedule, FlameEffect, LightningEffect, WindTornadoEffect};
 #[cfg(test)]
 use crate::ecs::events::{UIEvent, UIEventQueue};
 #[cfg(test)]
@@ -20,6 +20,7 @@ mod batch_action;
 mod cli_resolve;
 mod debug_actions;
 mod flame_args;
+mod lightning_args;
 mod sequence_analyze;
 mod water_args;
 mod wind_args;
@@ -41,6 +42,13 @@ use flame_args::{
     flame_preset_resolve_from_args, flame_sdf_resolve_from_args, flame_set_resolve_from_args,
     flame_style_resolve_from_args, flame_texture_fit_resolve_from_args,
     flame_trail_resolve_from_args, heat_plume_resolve_from_args,
+};
+use lightning_args::lightning_set_resolve_from_args;
+#[cfg(test)]
+use lightning_args::lightning_set_valid_keys;
+pub use lightning_args::{
+    apply_lightning_overrides, lightning_debug_view_resolve_from_args,
+    lightning_fixed_time_resolve_from_args, lightning_mode_resolve_from_args,
 };
 pub use sequence_analyze::*;
 pub use water_args::*;
@@ -66,6 +74,9 @@ const BATCH_WIND_TIME_FLAG: &str = "--batch-wind-time";
 const BATCH_WIND_MODE_FLAG: &str = "--batch-wind-mode";
 const BATCH_WIND_DEBUG_VIEW_FLAG: &str = "--batch-wind-debug-view";
 const BATCH_WIND_RESOLVE_SCALE_FLAG: &str = "--batch-wind-resolve-scale";
+const BATCH_LIGHTNING_TIME_FLAG: &str = "--batch-lightning-time";
+const BATCH_LIGHTNING_MODE_FLAG: &str = "--batch-lightning-mode";
+const BATCH_LIGHTNING_DEBUG_VIEW_FLAG: &str = "--batch-lightning-debug-view";
 const BATCH_FLAME_STEPS_FLAG: &str = "--batch-flame-steps";
 const BATCH_CAMERA_FLAG: &str = "--batch-camera";
 const FLAME_DUMP_FLAG: &str = "--flame-dump";
@@ -80,6 +91,7 @@ const BATCH_FLAME_MOTION_FLAG: &str = "--batch-flame-motion";
 const BATCH_FLAME_SDF_FLAG: &str = "--batch-flame-sdf";
 const BATCH_FLAME_SET_FLAG: &str = "--batch-flame-set";
 const BATCH_WIND_SET_FLAG: &str = "--batch-wind-set";
+const BATCH_LIGHTNING_SET_FLAG: &str = "--batch-lightning-set";
 const BATCH_FLAME_STYLE_FLAG: &str = "--batch-flame-style";
 const BATCH_FLAME_STYLE_DUMP_FLAG: &str = "--batch-flame-style-dump";
 const BATCH_FLAME_TEXTURE_FLAG: &str = "--batch-flame-texture";
@@ -110,6 +122,10 @@ pub struct EngineCliOverrides {
     pub wind_resolve_scale: Option<thyllore_effect_core::WindResolveScale>,
     pub wind_debug_view: Option<thyllore_effect_core::WindDebugView>,
     pub wind_set: Vec<(String, f32)>,
+    pub lightning_fixed_time: Option<f32>,
+    pub lightning_mode: Option<thyllore_effect_core::LightningShadingMode>,
+    pub lightning_debug_view: Option<thyllore_effect_core::LightningDebugView>,
+    pub lightning_set: Vec<(String, f32)>,
     pub flame_steps: Option<u32>,
     pub camera_pose: Option<BatchCameraPose>,
     pub flame_dump_path: Option<String>,
@@ -156,6 +172,10 @@ pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverride
         wind_debug_view: wind_debug_view_resolve_from_args(args)?,
         wind_resolve_scale: wind_resolve_scale_resolve_from_args(args)?,
         wind_set: wind_set_resolve_from_args(args)?,
+        lightning_fixed_time: lightning_fixed_time_resolve_from_args(args)?,
+        lightning_mode: lightning_mode_resolve_from_args(args)?,
+        lightning_debug_view: lightning_debug_view_resolve_from_args(args)?,
+        lightning_set: lightning_set_resolve_from_args(args)?,
         flame_steps: flame_steps_resolve_from_args(args)?,
         camera_pose: camera_pose_resolve_from_args(args)?,
         flame_dump_path: flame_dump_path_resolve_from_args(args)?,

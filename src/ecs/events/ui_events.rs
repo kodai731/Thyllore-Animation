@@ -90,6 +90,7 @@ pub enum UIEvent {
     },
     DumpWaterDebug,
     DumpWindDebug,
+    DumpLightningDebug,
 
     SelectEntity(Entity),
     DeselectAll,

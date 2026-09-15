@@ -1,3 +1,4 @@
+mod debug_dump;
 mod descriptors;
 mod passes;
 mod pick;
@@ -10,6 +11,7 @@ mod spawn;
 mod tests;
 mod time;
 
+pub use debug_dump::*;
 pub use descriptors::*;
 pub use pick::*;
 pub use preset::*;

@@ -1,14 +1,17 @@
 use crate::app::App;
-use crate::ecs::component::{FlameEffect, FlameTrail, HeatPlume, WindTornadoEffect};
+use crate::ecs::component::{
+    FlameEffect, FlameTrail, HeatPlume, LightningEffect, WindTornadoEffect,
+};
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
     BatchFlameOrbit, BatchRun, Camera, ExposureDumpSink, FlameDumpSink, FlameRenderSettings,
-    GpuTimingsSink, WindRenderSettings,
+    GpuTimingsSink, LightningRenderSettings, WindRenderSettings,
 };
 use crate::ecs::systems::{
-    apply_flame_overrides, apply_flame_style_from_path, apply_texture_fit_from_path,
-    apply_wind_overrides, batch_anim_dump_write, batch_apply_anim_edits, batch_apply_debug_actions,
-    batch_run_report, dump_flame_style_to_path, BatchAction, EngineCliOverrides,
+    apply_flame_overrides, apply_flame_style_from_path, apply_lightning_overrides,
+    apply_texture_fit_from_path, apply_wind_overrides, batch_anim_dump_write,
+    batch_apply_anim_edits, batch_apply_debug_actions, batch_run_report, dump_flame_style_to_path,
+    BatchAction, EngineCliOverrides,
 };
 
 use thyllore_vulkan_core::FlameImageBindings;
@@ -366,6 +369,43 @@ pub fn apply_engine_overrides(app: &mut App, overrides: &EngineCliOverrides) {
             .ecs_world
             .resource_mut::<WindRenderSettings>()
             .debug_view = debug_view;
+    }
+
+    if let Some(seconds) = overrides.lightning_fixed_time {
+        app.data
+            .ecs_world
+            .resource_mut::<LightningRenderSettings>()
+            .batch_fixed_time = Some(seconds);
+    }
+
+    if let Some(mode) = overrides.lightning_mode {
+        app.data
+            .ecs_world
+            .resource_mut::<LightningRenderSettings>()
+            .shading_mode = mode;
+    }
+
+    if let Some(debug_view) = overrides.lightning_debug_view {
+        app.data
+            .ecs_world
+            .resource_mut::<LightningRenderSettings>()
+            .debug_view = debug_view;
+    }
+
+    if !overrides.lightning_set.is_empty() {
+        let entities: Vec<_> = app.data.ecs_world.query_lightnings();
+        for e in entities {
+            let Some(mut effect) = app
+                .data
+                .ecs_world
+                .get_component::<LightningEffect>(e)
+                .map(|c| c.clone())
+            else {
+                continue;
+            };
+            apply_lightning_overrides(&mut effect, &overrides.lightning_set);
+            app.data.ecs_world.insert_component(e, effect);
+        }
     }
 }
 

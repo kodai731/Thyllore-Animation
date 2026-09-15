@@ -11,7 +11,7 @@ impl App {
             .ecs_world
             .get_resource::<BatchRun>()
             .map(|b| b.state.clone());
-        let (dump_wall_probe, dump_water_debug, dump_wind_debug) = self
+        let (dump_wall_probe, dump_water_debug, dump_wind_debug, dump_lightning_debug) = self
             .data
             .ecs_world
             .get_resource::<crate::ecs::resource::BatchDumpPlan>()
@@ -20,9 +20,10 @@ impl App {
                     plan.dump_wall_probe,
                     plan.dump_water_debug,
                     plan.dump_wind_debug,
+                    plan.dump_lightning_debug,
                 )
             })
-            .unwrap_or((false, false, false));
+            .unwrap_or((false, false, false, false));
 
         if !matches!(state, Some(BatchRunState::ScreenshotRequested)) {
             return Ok(());
@@ -37,6 +38,9 @@ impl App {
         }
         if dump_wind_debug {
             self.dump_wind_debug_at(image_index);
+        }
+        if dump_lightning_debug {
+            self.dump_lightning_debug_at(image_index);
         }
 
         let save_result = unsafe { self.save_screenshot(image_index) };

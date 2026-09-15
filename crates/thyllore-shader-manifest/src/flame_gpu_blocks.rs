@@ -31,6 +31,17 @@ pub const GPU_BLOCK_TARGETS: &[GpuBlockTarget] = &[
         output_path: "crates/thyllore-effect-core/src/wind/gpu/components/generated.rs",
         codegen_config: plain_codegen_config,
     },
+    GpuBlockTarget {
+        block_name: "LightningUBO",
+        output_path: "crates/thyllore-effect-core/src/lightning/gpu/components/generated.rs",
+        codegen_config: plain_codegen_config,
+    },
+    GpuBlockTarget {
+        block_name: "LightningSegmentsUBO",
+        output_path:
+            "crates/thyllore-effect-core/src/lightning/gpu/components/generated_segments.rs",
+        codegen_config: plain_codegen_config,
+    },
 ];
 
 pub const REGENERATE_GPU_BLOCKS_COMMAND: &str =

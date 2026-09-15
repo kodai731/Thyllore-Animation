@@ -1,7 +1,10 @@
 use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix};
 use thyllore_vulkan_core::core::RRDevice;
-use thyllore_vulkan_core::descriptor::{RREffectTraceDescriptorSet, EFFECT_TRACE};
+use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
+use thyllore_vulkan_core::descriptor::{
+    push_constant_range, RREffectTraceDescriptorSet, EFFECT_TRACE,
+};
 use thyllore_vulkan_core::pipeline::{max_ray_recursion_depth, RRRayTracingPipeline};
 use thyllore_vulkan_core::raytracing::{RRAccelerationStructure, RRBLAS};
 use thyllore_vulkan_core::resource::RayTracingData;
@@ -111,13 +114,6 @@ fn apply_instance_transform(blas: &mut RRBLAS, model: &Matrix4<f32>) -> bool {
     true
 }
 
-/// Push constant layout of `shaders/include/trace_push.glsl`: camera block for the ray generation
-/// stage, light block for the closest hit stages.
-pub const TRACE_CAMERA_PUSH_OFFSET: u32 = 0;
-pub const TRACE_CAMERA_PUSH_SIZE: u32 = 80;
-pub const TRACE_LIGHT_PUSH_OFFSET: u32 = 80;
-pub const TRACE_LIGHT_PUSH_SIZE: u32 = 32;
-
 /// traceRayEXT nesting the effect trace shaders use: the ray generation stage plus one secondary
 /// trace from an effect's closest hit shader.
 pub const EFFECT_TRACE_RECURSION_DEPTH: u32 = 2;
@@ -150,7 +146,7 @@ pub unsafe fn ensure_effect_trace_pipeline(
         rrdevice,
         &EFFECT_TRACE,
         &[effect_trace_descriptor.layout.handle],
-        &trace_push_constant_ranges(),
+        &[push_constant_range(&effect_trace::PUSH_CONSTANT)],
         EFFECT_TRACE_RECURSION_DEPTH,
     )?;
 
@@ -159,18 +155,4 @@ pub unsafe fn ensure_effect_trace_pipeline(
 
     log!("Created effect trace pipeline");
     Ok(())
-}
-
-fn trace_push_constant_ranges() -> [vk::PushConstantRange; 2] {
-    let camera_range = vk::PushConstantRange::builder()
-        .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-        .offset(TRACE_CAMERA_PUSH_OFFSET)
-        .size(TRACE_CAMERA_PUSH_SIZE)
-        .build();
-    let light_range = vk::PushConstantRange::builder()
-        .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-        .offset(TRACE_LIGHT_PUSH_OFFSET)
-        .size(TRACE_LIGHT_PUSH_SIZE)
-        .build();
-    [camera_range, light_range]
 }

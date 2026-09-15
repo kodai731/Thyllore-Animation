@@ -59,6 +59,16 @@ renaming a descriptor in GLSL breaks the Rust build at the referencing site.
 - `ReflectedLayoutSpec::with_override(shader_bindings::.., vk::DescriptorType::..)` overrides a descriptor type.
 - `PipelineBuilder::descriptor_layouts(&[&ReflectedSetLayout])` / `RRPipeline::new_compute*` verify at pipeline
   creation that every (set, binding) used by the pass shaders exists in the given layouts with a matching type.
+- A pass whose stages declare a `push_constant` block also gets `pub const PUSH_CONSTANT: PushConstantLayout`
+  (block name, declaring stages, size); every stage must declare the identical block, so no `layout(offset = ..)`
+  and no hand-written offset or size constants exist. `push_constant_range(&<pass>::PUSH_CONSTANT)` builds the
+  `vk::PushConstantRange` (`effect_trace` uses it), and the Rust struct that is pushed is generated from the same
+  SPIR-V by `cargo run -p thyllore-shader-manifest --bin generate_gpu_blocks` (`GPU_BLOCK_TARGETS`, e.g.
+  `renderer/trace_push.rs`), which the `block_definition` golden test keeps fresh.
+- An unnamed block instance (`uniform WaterBlock { WaterUBO water; };`) is reflected under the block name
+  (`WATER_BLOCK`). Fields shared by a uniform block and a `buffer_reference` are declared once as a GLSL `struct`
+  in the effect's `include/ubo.glsl` and wrapped by both; `generate_gpu_blocks` finds such a struct through the
+  wrapping block, so the Rust struct keeps the struct's name.
 
 ## Shader Modifications
 

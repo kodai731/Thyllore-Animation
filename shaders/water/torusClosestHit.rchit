@@ -30,7 +30,7 @@ void main() {
         payload.hit = vec4(hitPoint, TRACE_HIT_EFFECT);
         return;
     }
-    water = WaterUBORef(rec.effectData);
+    water = WaterUBORef(rec.effectData).water;
 
     vec3 oLocal = gl_ObjectRayOriginEXT / water.radii.x;
     vec3 dLocal = normalize(gl_ObjectRayDirectionEXT);

@@ -434,6 +434,17 @@ declare_scene_format! {
                 group: "timing",
             },
         },
+        seed: u32 {
+            get: |e| e.seed,
+            set: |e, v| e.seed = v,
+            ui {
+                min: 0.0,
+                max: 9999.0,
+                format: "%.0f",
+                tooltip: "Seed of the deterministic hash that shapes the channel and the burst jitter",
+                group: "timing",
+            },
+        },
     },
     runtime {
         time: f32 {

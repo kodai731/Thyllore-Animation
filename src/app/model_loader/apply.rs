@@ -5,7 +5,6 @@ use vulkanalia::prelude::v1_0::*;
 
 use super::{gpu_upload, scene_registration};
 use crate::asset::AssetStorage;
-use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::resource::{
     ClipLibrary, FbxModelCache, GltfModelCache, MeshAssets, NodeAssets, TimelineState,
 };
@@ -84,17 +83,6 @@ pub(super) unsafe fn apply_model_to_resources(
         &procedural_primitives,
         &mesh_transforms,
     )?;
-    crate::app::raytracing::scene_build::update_ray_query_descriptor(device, raytracing)?;
-
-    {
-        let mut billboard = world.resource_mut::<BillboardData>();
-        crate::app::raytracing::scene_build::update_billboard_descriptor(
-            device,
-            swapchain,
-            &mut *billboard,
-        )?;
-    }
-
     let animation_type = scene_registration::determine_animation_type(load_result);
     let node_animation_scale = load_result.node_animation_scale;
     scene_registration::log_model_load_info(

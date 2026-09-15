@@ -14,7 +14,6 @@ use anyhow::{anyhow, Result};
 
 use crate::asset::AssetStorage;
 use crate::ecs::component::EntityIcon;
-use crate::ecs::resource::billboard::BillboardData;
 use crate::ecs::world::{Transform, World};
 use crate::loader::fbx::FbxModel;
 use crate::loader::ModelLoadResult;
@@ -202,17 +201,6 @@ pub(crate) unsafe fn append_model_to_scene(
         &procedural_primitives,
         &mesh_transforms,
     )?;
-    crate::app::raytracing::scene_build::update_ray_query_descriptor(device, raytracing)?;
-
-    {
-        let mut billboard = world.resource_mut::<BillboardData>();
-        crate::app::raytracing::scene_build::update_billboard_descriptor(
-            device,
-            swapchain,
-            &mut *billboard,
-        )?;
-    }
-
     scene_registration::ensure_ecs_resources(world);
 
     let parent_entity = world

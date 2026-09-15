@@ -6,6 +6,14 @@ use cgmath::{InnerSpace, Quaternion, Rad, Rotation, Rotation3, Vector3};
 
 pub const LIGHTNING_MAX_SEGMENTS: usize = 256;
 
+fn push_segment(segments: &mut Vec<Segment>, seg: Segment) -> bool {
+    if segments.len() >= LIGHTNING_MAX_SEGMENTS {
+        return false;
+    }
+    segments.push(seg);
+    true
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Segment {
     pub a: [f32; 3],
@@ -158,20 +166,21 @@ fn emit_path(
 
     let n = points.len() - 1;
     for i in 0..n {
-        if segments.len() >= LIGHTNING_MAX_SEGMENTS {
-            break;
-        }
-
         let t = i as f32 / n as f32;
         let radius = r_start * (1.0 - t) + r_end * t;
 
-        segments.push(Segment {
-            a: points[i],
-            b: points[i + 1],
-            r0: radius,
-            r1: radius,
-            intensity,
-        });
+        if !push_segment(
+            segments,
+            Segment {
+                a: points[i],
+                b: points[i + 1],
+                r0: radius,
+                r1: radius,
+                intensity,
+            },
+        ) {
+            break;
+        }
     }
 }
 
@@ -181,12 +190,16 @@ fn spawn_branches(
     seed: u32,
     reseed: u32,
     depth: u32,
-) -> Vec<Vec<Segment>> {
-    let mut child_paths: Vec<Vec<Segment>> = Vec::new();
-    let mut total_segments: usize = 0;
+) {
+    let main_count = segments.len();
 
-    for (i, seg) in segments.iter().enumerate() {
-        let progress = i as f32 / segments.len() as f32;
+    for i in 0..main_count {
+        if segments.len() >= LIGHTNING_MAX_SEGMENTS {
+            break;
+        }
+
+        let seg = &segments[i];
+        let progress = i as f32 / main_count as f32;
         let is_end_zone = progress >= 0.9;
 
         let mid_pos: [f32; 3] = [
@@ -213,10 +226,6 @@ fn spawn_branches(
         };
 
         if hash_value < effective_probability {
-            if total_segments >= LIGHTNING_MAX_SEGMENTS {
-                break;
-            }
-
             let parent_tangent: [f32; 3] = [
                 seg.b[0] - seg.a[0],
                 seg.b[1] - seg.a[1],
@@ -276,29 +285,17 @@ fn spawn_branches(
                 child_intensity,
             );
 
-            if total_segments + child_segments.len() > LIGHTNING_MAX_SEGMENTS {
-                break;
+            if depth < effect.branch_depth {
+                spawn_branches(&mut child_segments, effect, seed, reseed, depth + 1);
             }
 
-            total_segments += child_segments.len();
-
-            if depth < effect.branch_depth {
-                let mut grandchild_paths =
-                    spawn_branches(&mut child_segments, effect, seed, reseed, depth + 1);
-
-                let gc_total: usize = grandchild_paths.iter().map(|p| p.len()).sum();
-                if total_segments + gc_total > LIGHTNING_MAX_SEGMENTS {
+            for seg in child_segments {
+                if !push_segment(segments, seg) {
                     break;
                 }
-                total_segments += gc_total;
-                child_paths.append(&mut grandchild_paths);
             }
-
-            child_paths.push(child_segments);
         }
     }
-
-    child_paths
 }
 
 pub fn build_strike_segments(effect: &LightningEffect, seed: u32, reseed: u32) -> Vec<Segment> {
@@ -310,20 +307,20 @@ pub fn build_strike_segments(effect: &LightningEffect, seed: u32, reseed: u32) -
         let tip_radius_ratio = effect.tip_radius_ratio;
         let arc_count = effect.beam_arc_count as usize;
 
-        segments.push(Segment {
-            a: [0.0, 0.0, 0.0],
-            b: end_offset,
-            r0: beam_radius,
-            r1: beam_radius * tip_radius_ratio,
-            intensity: effect.core_intensity,
-        });
+        if !push_segment(
+            &mut segments,
+            Segment {
+                a: [0.0, 0.0, 0.0],
+                b: end_offset,
+                r0: beam_radius,
+                r1: beam_radius * tip_radius_ratio,
+                intensity: effect.core_intensity,
+            },
+        ) {
+            return segments;
+        }
 
-        let branch_count = arc_count.min(LIGHTNING_MAX_SEGMENTS - segments.len());
-        for i in 0..branch_count {
-            if segments.len() >= LIGHTNING_MAX_SEGMENTS {
-                break;
-            }
-
+        for i in 0..arc_count {
             let t = (i as f32 + 0.5) / arc_count as f32;
             let node_pos: [f32; 3] = [end_offset[0] * t, end_offset[1] * t, end_offset[2] * t];
 
@@ -435,10 +432,7 @@ pub fn build_strike_segments(effect: &LightningEffect, seed: u32, reseed: u32) -
                 break;
             }
 
-            let child_paths = spawn_branches(&mut segments, effect, seed, reseed, 0);
-            for mut child_path in child_paths {
-                segments.append(&mut child_path);
-            }
+            spawn_branches(&mut segments, effect, seed, reseed, 0);
 
             if segments.len() >= LIGHTNING_MAX_SEGMENTS {
                 break;
@@ -687,5 +681,34 @@ mod tests {
             segments[0].b, effect.end_offset,
             "first segment b must be end_offset"
         );
+    }
+
+    #[test]
+    fn test_default_effect_never_exceeds_max_segments() {
+        let effect = LightningEffect::default();
+        for reseed in 0..50u32 {
+            let segments =
+                build_strike_segments(&effect, crate::lightning::hash_u32(&[0, 0]), reseed);
+            assert!(
+                segments.len() <= LIGHTNING_MAX_SEGMENTS,
+                "reseed {} produced {} segments",
+                reseed,
+                segments.len()
+            );
+        }
+    }
+
+    #[test]
+    fn test_build_lightning_segments_never_exceeds_max() {
+        let effect = LightningEffect::default();
+        for t in [0.02f32, 0.045] {
+            let segments = build_lightning_segments(&effect, t);
+            assert!(
+                segments.len() <= LIGHTNING_MAX_SEGMENTS,
+                "t={} produced {} segments",
+                t,
+                segments.len()
+            );
+        }
     }
 }

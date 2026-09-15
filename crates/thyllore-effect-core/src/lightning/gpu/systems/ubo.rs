@@ -18,7 +18,7 @@ pub fn build_lightning_ubo(
     let mut seg_b_r1: [[f32; 4]; 256] = [[0.0; 4]; 256];
     let mut seg_misc: [[f32; 4]; 256] = [[0.0; 4]; 256];
 
-    for (i, seg) in segments.iter().enumerate() {
+    for (i, seg) in segments.iter().take(256).enumerate() {
         seg_a_r0[i] = [seg.a[0], seg.a[1], seg.a[2], seg.r0];
         seg_b_r1[i] = [seg.b[0], seg.b[1], seg.b[2], seg.r1];
         let edge_width_q = effect.edge_fraction * seg.r0 * seg.r0;

@@ -38,4 +38,27 @@ float linearizeDepth(float rawDepth, float nearPlane, float farPlane) {
     return nearPlane * farPlane / (farPlane - rawDepth * (farPlane - nearPlane));
 }
 
+// Scene depth projected onto the view ray cuts the interval where an opaque surface occludes.
+bool clampToSceneDepth(
+    sampler2D sceneDepthSampler,
+    vec2 screenTexCoord,
+    mat4 invViewProj,
+    vec3 cameraPos,
+    vec3 rayDir,
+    inout float tFar,
+    float tNear) {
+    float sceneDepth = texture(sceneDepthSampler, screenTexCoord).r;
+    if (sceneDepth == DEPTH_FAR) {
+        return true;
+    }
+    vec4 surfaceClip = invViewProj * vec4(screenTexCoord * 2.0 - 1.0, sceneDepth, 1.0);
+    vec3 surfaceWorld = surfaceClip.xyz / surfaceClip.w;
+    float tDepth = dot(surfaceWorld - cameraPos, rayDir);
+    if (tNear >= tDepth) {
+        return false;
+    }
+    tFar = min(tFar, tDepth);
+    return true;
+}
+
 #endif

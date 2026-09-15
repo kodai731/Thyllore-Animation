@@ -42,6 +42,10 @@ sets = { 0 = "frame", 1 = "local" }
 stages = ["postprocess/tonemapVertex.vert", "wind/resolveFragment.frag"]
 sets = { 0 = "frame", 1 = "local" }
 
+[pass.lightning_resolve]
+stages = ["postprocess/tonemapVertex.vert", "lightning/resolveFragment.frag"]
+sets = { 0 = "frame", 1 = "local" }
+
 [pass.wind_shadow_bake]
 stages = ["wind/shadowBake.comp"]
 sets = { 0 = "frame", 1 = "local" }

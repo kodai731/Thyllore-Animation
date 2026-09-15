@@ -42,22 +42,6 @@ const int WIND_DEBUG_KNOT_COUNT = 2;
 const int WIND_DEBUG_COVERAGE = 3;
 const float SEGMENT_T_MAX = 1e4;
 
-// Scene depth projected onto the view ray cuts the interval where an opaque surface occludes.
-bool clampToSceneDepth(vec3 rayDir, inout float tFar, float tNear) {
-    float sceneDepth = texture(sceneDepthSampler, fragTexCoord).r;
-    if (sceneDepth == DEPTH_FAR) {
-        return true;
-    }
-    vec4 surfaceClip = wind.invViewProj * vec4(fragTexCoord * 2.0 - 1.0, sceneDepth, 1.0);
-    vec3 surfaceWorld = surfaceClip.xyz / surfaceClip.w;
-    float tDepth = dot(surfaceWorld - frame.camera_pos.xyz, rayDir);
-    if (tNear >= tDepth) {
-        return false;
-    }
-    tFar = min(tFar, tDepth);
-    return true;
-}
-
 void main() {
     vec3 rayDir = reconstructRayDirection(fragTexCoord, wind.invViewProj, frame.camera_pos.xyz);
     vec3 localOrigin = (wind.inverseModel * vec4(frame.camera_pos.xyz, 1.0)).xyz;
@@ -74,7 +58,9 @@ void main() {
         }
     }
     tNear = max(tNear, 0.0);
-    if (!clampToSceneDepth(rayDir, tFar, tNear) || tFar <= tNear) {
+    if (!clampToSceneDepth(
+            sceneDepthSampler, fragTexCoord, wind.invViewProj, frame.camera_pos.xyz, rayDir, tFar, tNear)
+        || tFar <= tNear) {
         if (push.debugView != WIND_DEBUG_COVERAGE) {
             discard;
         } else {

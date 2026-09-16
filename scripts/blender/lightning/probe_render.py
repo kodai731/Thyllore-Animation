@@ -15,19 +15,15 @@ sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "log" / "blender_lightning_probe" / "site"))
 
 import gpu
-import mathutils
 import numpy as np
 import thyllore_effect_core as fx
 
 from blender_addon.effects.lightning._common import coordinates
-from blender_addon.effects.lightning.draw_handler import VIEWPORT_NEAR, LightningViewportRenderer, composite_tonemapped
+from blender_addon.effects.lightning.draw_handler import VIEWPORT_NEAR, LightningViewportRenderer
 
 SIZE = 512
 CAMERA_POS = (0.0, 4.0, 14.0)
 CAMERA_TARGET = (0.0, 4.0, 0.0)
-PIXEL_PROJECTION = mathutils.Matrix(
-    ((2.0 / SIZE, 0.0, 0.0, -1.0), (0.0, 2.0 / SIZE, 0.0, -1.0), (0.0, 0.0, -1.0, 0.0), (0.0, 0.0, 0.0, 1.0))
-)
 
 
 def build_view_matrix(eye, target):
@@ -46,24 +42,16 @@ def main():
     view = build_view_matrix(CAMERA_POS, CAMERA_TARGET)
     proj = coordinates.engine_projection(math.radians(60.0), 1.0, VIEWPORT_NEAR)
 
-    offscreen = gpu.types.GPUOffScreen(SIZE, SIZE, format="RGBA32F")
     far_depth = gpu.types.GPUTexture((1, 1), format="R32F", data=gpu.types.Buffer("FLOAT", 1, [0.0]))
     renderer = LightningViewportRenderer()
     color_tex = renderer.render(view, proj, CAMERA_POS, params, time, position, rotation, SIZE, SIZE, depth_tex=far_depth)
-    with offscreen.bind():
-        gpu.state.active_framebuffer_get().clear(color=(0.0, 0.0, 0.0, 0.0))
-        with gpu.matrix.push_pop():
-            gpu.matrix.load_identity()
-            gpu.matrix.load_projection_matrix(PIXEL_PROJECTION)
-            composite_tonemapped(color_tex, SIZE, SIZE)
-    arr = np.array(offscreen.texture_color.read().to_list(), dtype=np.float32)[::-1]
+    arr = np.array(color_tex.read().to_list(), dtype=np.float32)[::-1]
     renderer.release()
-    offscreen.free()
 
     out_path = OUT_DIR / "lightning_probe.npy"
     np.save(out_path, arr)
-    nonzero = int((arr[..., 3] > 0).sum())
-    print(f"[probe] saved {out_path} shape={arr.shape} nonzero_alpha={nonzero}", flush=True)
+    nonzero = int((arr[..., :3].max(axis=-1) > 0.001).sum())
+    print(f"[probe] saved {out_path} shape={arr.shape} nonzero={nonzero}", flush=True)
 
 
 main()

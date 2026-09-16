@@ -116,7 +116,7 @@ class LightningViewportRenderer:
         with self.fb_resolved.bind():
             self.fb_resolved.clear(color=(0.0, 0.0, 0.0, 0.0))
 
-    def render(self, view, proj, camera_pos, params, time, position, rotation, w, h, depth_tex=None, flip_y=True):
+    def render(self, view, proj, camera_pos, params, time, position, rotation, w, h, depth_tex=None, flip_y=True, debug_view: int = 0):
         import gpu
         import thyllore_effect_core as fx
 
@@ -146,6 +146,9 @@ class LightningViewportRenderer:
                 self.shader.uniform_block("frame", self.frame_ubo)
                 self.shader.uniform_block("lightning", self.lightning_ubo)
                 self.shader.uniform_block("segments", self.segments_ubo)
+                self.shader.uniform_int("debugView", [debug_view])
+                self.shader.uniform_int("shadingMode", [0])
+                self.shader.uniform_int("stepCount", [0])
                 self.shader.uniform_sampler("sceneDepthSampler", depth_tex)
                 self.batch.draw(self.shader)
             finally:

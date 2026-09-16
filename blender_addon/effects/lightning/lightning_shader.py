@@ -54,8 +54,7 @@ def build_lightning_shader(glsl_path: str, bindings_path: str):
     info.push_constant("INT", "debugView")
     info.vertex_source("void main(){ fragTexCoord = pos*0.5+0.5; gl_Position = vec4(pos,0.0,1.0); }")
     pc = bindings["push_constants"][0]
-    wanted = {"push.shadingMode": 0, "push.debugView": 0}
-    info.fragment_source(shader_info.push_prelude(pc["type"], pc["members"]) + shader_info.specialize_body(body, {k: v for k, v in wanted.items() if k in body}))
+    info.fragment_source(body.replace(f"{pc['name']}.", ""))
     return gpu.shader.create_from_info(info)
 
 

@@ -68,10 +68,10 @@ def tonemap_composite_fragment_source() -> str:
         " }"
         "void main(){"
         " vec4 hdr = texture(image, fragTexCoord);"
-        " if (hdr.a <= 0.0) discard;"
+        " if (max(hdr.r, max(hdr.g, hdr.b)) <= 0.0) discard;"
         " vec3 display = acesFilmic(hdr.rgb * tonemapParams.x);"
         " if (tonemapParams.y > 0.5) { display = encodeSrgb(display); }"
-        " outColor = vec4(display, hdr.a);"
+        " outColor = vec4(display, 1.0);"
         " }"
     )
 

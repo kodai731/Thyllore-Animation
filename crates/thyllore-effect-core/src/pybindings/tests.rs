@@ -364,3 +364,41 @@ fn blender_to_engine_matrix_matches_the_math_core_constant() {
     assert_eq!(engine_up, [0.0, 0.0, 1.0], "engine y comes from Blender z");
     assert_eq!(rows[2][1], -1.0, "engine z is minus Blender y");
 }
+
+#[test]
+fn test_lightning_preset_names_and_pack() {
+    Python::attach(|py| {
+        let names = super::lightning_preset_names();
+        assert!(!names.is_empty(), "preset names should not be empty");
+        assert!(names.contains(&"bolt"), "should contain bolt");
+
+        let preset_dict: Bound<'_, PyDict> = super::lightning_preset_params(py, "bolt").unwrap();
+
+        let identity_column_major: [f32; 16] = *cgmath::Matrix4::<f32>::identity().as_ref();
+        let (ubo_bytes, segments_bytes, segment_count) = super::pack_lightning_ubo(
+            py,
+            &preset_dict,
+            0.4f32,
+            [0.0f32, 0.0f32, 0.0f32],
+            [1.0f32, 0.0f32, 0.0f32, 0.0f32],
+            identity_column_major,
+            identity_column_major,
+        )
+        .unwrap();
+
+        assert_eq!(
+            ubo_bytes.len(),
+            std::mem::size_of::<crate::lightning::LightningUBO>(),
+            "ubo bytes length should match LightningUBO size"
+        );
+        assert_eq!(
+            segments_bytes.len(),
+            std::mem::size_of::<crate::lightning::LightningSegmentsUBO>(),
+            "segments bytes length should match LightningSegmentsUBO size"
+        );
+        assert!(
+            segment_count >= 1,
+            "segment count should be >= 1 during sustain"
+        );
+    });
+}

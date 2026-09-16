@@ -75,12 +75,19 @@ fn only_a_known_preset_name_replaces_the_selected_effect() {
         Some(0.9)
     );
 
-    apply_lightning_preset_to_selected(&mut world, thyllore_effect_core::LIGHTNING_PRESET_NAMES[0]);
+    let preset_name = thyllore_effect_core::LIGHTNING_PRESET_NAMES[0];
+    let mut expected = LightningEffect::default();
+    assert!(thyllore_effect_core::apply_lightning_preset(
+        &mut expected,
+        preset_name
+    ));
+
+    apply_lightning_preset_to_selected(&mut world, preset_name);
     assert_eq!(
         world
             .get_component::<LightningEffect>(entity)
             .map(|e| e.core_radius),
-        Some(LightningEffect::default().core_radius)
+        Some(expected.core_radius)
     );
 }
 

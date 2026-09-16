@@ -184,6 +184,15 @@ fn emit_path(
     }
 }
 
+fn segment_length(seg: &Segment) -> f32 {
+    let d = [
+        seg.b[0] - seg.a[0],
+        seg.b[1] - seg.a[1],
+        seg.b[2] - seg.a[2],
+    ];
+    (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
+}
+
 fn spawn_branches(
     segments: &mut Vec<Segment>,
     effect: &LightningEffect,
@@ -192,6 +201,11 @@ fn spawn_branches(
     depth: u32,
 ) {
     let main_count = segments.len();
+
+    let mut remaining_len_after = vec![0.0f32; main_count + 1];
+    for i in (0..main_count).rev() {
+        remaining_len_after[i] = remaining_len_after[i + 1] + segment_length(&segments[i]);
+    }
 
     for i in 0..main_count {
         if segments.len() >= LIGHTNING_MAX_SEGMENTS {
@@ -208,15 +222,7 @@ fn spawn_branches(
             (seg.a[2] + seg.b[2]) * 0.5,
         ];
 
-        let chord_remaining_len = [
-            seg.b[0] - mid_pos[0],
-            seg.b[1] - mid_pos[1],
-            seg.b[2] - mid_pos[2],
-        ];
-        let chord_remaining_len = (chord_remaining_len[0] * chord_remaining_len[0]
-            + chord_remaining_len[1] * chord_remaining_len[1]
-            + chord_remaining_len[2] * chord_remaining_len[2])
-            .sqrt();
+        let chord_remaining_len = segment_length(seg) * 0.5 + remaining_len_after[i + 1];
 
         let hash_value = hash_f32(&[seed, reseed, i as u32, depth]);
         let effective_probability = if is_end_zone {
@@ -710,5 +716,61 @@ mod tests {
                 segments.len()
             );
         }
+    }
+
+    fn difference(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+        [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+    }
+
+    fn branch_chord_lengths(branch_segments: &[Segment]) -> Vec<f32> {
+        let mut chords = Vec::new();
+        let mut path_start = match branch_segments.first() {
+            Some(seg) => seg.a,
+            None => return chords,
+        };
+
+        for (i, seg) in branch_segments.iter().enumerate() {
+            let previous_end = branch_segments[i.saturating_sub(1)].b;
+            if i > 0 && length(difference(seg.a, previous_end)) > 1e-6 {
+                chords.push(length(difference(previous_end, path_start)));
+                path_start = seg.a;
+            }
+        }
+        let last_end = branch_segments[branch_segments.len() - 1].b;
+        chords.push(length(difference(last_end, path_start)));
+
+        chords
+    }
+
+    #[test]
+    fn test_branch_length_follows_parent_remaining_length() {
+        let mut effect = LightningEffect::default();
+        effect.detail_levels = 4;
+        effect.branch_length_ratio = 0.5;
+        effect.branch_depth = 0;
+        effect.branch_probability = 0.0;
+
+        let seed = crate::lightning::hash_u32(&[0, 0]);
+        let main_path = build_strike_segments(&effect, seed, 0);
+
+        effect.branch_probability = 1.0;
+        let with_branches = build_strike_segments(&effect, seed, 0);
+
+        assert!(
+            with_branches.len() > main_path.len(),
+            "branch_probability=1.0 must add branch segments, got {} vs {}",
+            with_branches.len(),
+            main_path.len()
+        );
+
+        let main_path_len: f32 = main_path.iter().map(segment_length).sum();
+        let longest_branch_chord = branch_chord_lengths(&with_branches[main_path.len()..])
+            .into_iter()
+            .fold(0.0f32, f32::max);
+
+        assert!(
+            longest_branch_chord > main_path_len * 0.05,
+            "longest branch chord {longest_branch_chord} must exceed 5% of parent path length {main_path_len}"
+        );
     }
 }

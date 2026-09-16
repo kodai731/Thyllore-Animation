@@ -1,6 +1,6 @@
 ---
 paths:
-  - "src/app/model_loader.rs"
+  - "src/app/model/**"
   - "src/loader/**"
 ---
 

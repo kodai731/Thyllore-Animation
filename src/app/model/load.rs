@@ -1,21 +1,12 @@
-mod apply;
-mod initial_pose;
-mod mesh_upload;
-mod scene_registration;
-
-pub use crate::app::raytracing::scene_build::{
-    collect_procedural_primitives, rebuild_acceleration_structures,
-    rebuild_acceleration_structures_from_data,
-};
-pub use scene_registration::{build_initial_clip_schedule, find_best_clip};
-
 use std::rc::Rc;
 
 use anyhow::{anyhow, Result};
 
+use super::{caches, cleanup, clips, entities, gpu, initial_pose, nodes};
 use crate::asset::AssetStorage;
-use crate::ecs::component::EntityIcon;
-use crate::ecs::world::{Transform, World};
+use crate::ecs::component::GlbSource;
+use crate::ecs::world::{Entity, World};
+use crate::hooks::model_load::{run_model_load_hooks, LoadedModel};
 use crate::loader::fbx::FbxModel;
 use crate::loader::ModelLoadResult;
 use crate::vulkanr::command::RRCommandPool;
@@ -39,9 +30,8 @@ pub unsafe fn load_model_from_file_system(
 ) -> Result<()> {
     log!("=== Loading model from path: {} ===", path);
 
-    let (load_result, fbx_model) = load_model_data(path)?;
-
-    let _parent_entity = apply::apply_model_to_resources(
+    let (load_result, fbx_model) = read_model_file(path)?;
+    replace_scene_model(
         &load_result,
         path,
         instance,
@@ -74,8 +64,8 @@ pub unsafe fn load_model_from_file_system_with_result(
     assets: &mut AssetStorage,
     scene_will_provide_clips: bool,
     fbx_model: Option<FbxModel>,
-) -> Result<crate::ecs::world::Entity> {
-    let parent_entity = apply::apply_model_to_resources(
+) -> Result<Entity> {
+    let parent_entity = replace_scene_model(
         load_result,
         model_name,
         instance,
@@ -94,22 +84,6 @@ pub unsafe fn load_model_from_file_system_with_result(
     Ok(parent_entity)
 }
 
-unsafe fn load_model_data(path: &str) -> Result<(ModelLoadResult, Option<FbxModel>)> {
-    let path_lower = path.to_lowercase();
-
-    if path_lower.ends_with(".fbx") {
-        let (result, fbx_model) = crate::loader::fbx::load_fbx_to_graphics_resources(path)?;
-        Ok((ModelLoadResult::from_fbx(result), Some(fbx_model)))
-    } else if path_lower.ends_with(".gltf") || path_lower.ends_with(".glb") {
-        let result = crate::loader::gltf::load_gltf_file(path)?;
-        Ok((ModelLoadResult::from_gltf(result), None))
-    } else {
-        Err(anyhow!(
-            "Unsupported file format. Only FBX and glTF/GLB are supported."
-        ))
-    }
-}
-
 pub unsafe fn load_model_additive(
     path: &str,
     instance: &Instance,
@@ -121,13 +95,8 @@ pub unsafe fn load_model_additive(
     world: &mut World,
     assets: &mut AssetStorage,
 ) -> Result<()> {
-    let (load_result, _fbx_model) = load_model_data(path)?;
-
-    let part_name = std::path::Path::new(path)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("part")
-        .to_string();
+    let (load_result, _fbx_model) = read_model_file(path)?;
+    let part_name = entities::model_display_name(path, "part");
 
     let parent_entity = append_model_to_scene(
         &load_result,
@@ -141,11 +110,7 @@ pub unsafe fn load_model_additive(
         world,
         assets,
     )?;
-
-    world.insert_component(
-        parent_entity,
-        crate::ecs::component::GlbSource::FilePath(path.to_string()),
-    );
+    world.insert_component(parent_entity, GlbSource::FilePath(path.to_string()));
 
     Ok(())
 }
@@ -161,9 +126,9 @@ pub(crate) unsafe fn append_model_to_scene(
     raytracing: &mut RayTracingData,
     world: &mut World,
     assets: &mut AssetStorage,
-) -> Result<crate::ecs::world::Entity> {
+) -> Result<Entity> {
     let mesh_index_offset = graphics.meshes.len();
-    mesh_upload::upload_model_meshes(
+    gpu::upload_model_meshes(
         load_result,
         part_name,
         instance,
@@ -172,36 +137,18 @@ pub(crate) unsafe fn append_model_to_scene(
         swapchain,
         graphics,
     )?;
-
-    let procedural_primitives =
-        crate::app::raytracing::scene_build::collect_procedural_primitives(world);
-    let mesh_transforms = crate::ecs::systems::collect_mesh_transforms(world, assets);
-    crate::app::raytracing::scene_build::rebuild_acceleration_structures(
+    gpu::rebuild_scene_acceleration(
         instance,
         device,
         command_pool,
         graphics,
         raytracing,
-        &procedural_primitives,
-        &mesh_transforms,
+        world,
+        assets,
     )?;
-    scene_registration::ensure_ecs_resources(world);
 
-    let parent_entity = world
-        .entity()
-        .with_name(part_name)
-        .with_transform(Transform::default())
-        .with_visible(true)
-        .with_editor_display(EntityIcon::Model, true)
-        .build();
-
-    log!(
-        "Created additive parent entity '{}': entity_id={}",
-        part_name,
-        parent_entity
-    );
-
-    scene_registration::build_mesh_entities_range(
+    let parent_entity = entities::spawn_model_part_entity(part_name, world);
+    entities::spawn_mesh_entities(
         part_name,
         graphics,
         world,
@@ -218,4 +165,87 @@ pub(crate) unsafe fn append_model_to_scene(
     );
 
     Ok(parent_entity)
+}
+
+unsafe fn read_model_file(path: &str) -> Result<(ModelLoadResult, Option<FbxModel>)> {
+    let path_lower = path.to_lowercase();
+
+    if path_lower.ends_with(".fbx") {
+        let (result, fbx_model) = crate::loader::fbx::load_fbx_to_graphics_resources(path)?;
+        Ok((ModelLoadResult::from_fbx(result), Some(fbx_model)))
+    } else if caches::is_gltf_path(path) {
+        let result = crate::loader::gltf::load_gltf_file(path)?;
+        Ok((ModelLoadResult::from_gltf(result), None))
+    } else {
+        Err(anyhow!(
+            "Unsupported file format. Only FBX and glTF/GLB are supported."
+        ))
+    }
+}
+
+unsafe fn replace_scene_model(
+    load_result: &ModelLoadResult,
+    model_name: &str,
+    instance: &Instance,
+    device: &RRDevice,
+    command_pool: &Rc<RRCommandPool>,
+    swapchain: &RRSwapchain,
+    graphics: &mut GraphicsResources,
+    raytracing: &mut RayTracingData,
+    world: &mut World,
+    assets: &mut AssetStorage,
+    scene_will_provide_clips: bool,
+    fbx_model: Option<FbxModel>,
+) -> Result<Entity> {
+    cleanup::reset_scene_model(device, graphics, raytracing, world, assets)?;
+    caches::insert_model_caches(world, model_name, fbx_model);
+    clips::register_imported_animation(world, load_result, assets);
+    nodes::replace_node_assets(world, assets, load_result);
+
+    gpu::upload_model_meshes(
+        load_result,
+        model_name,
+        instance,
+        device,
+        command_pool,
+        swapchain,
+        graphics,
+    )?;
+    let posed_meshes = initial_pose::apply_initial_pose(world, assets, graphics, load_result);
+    gpu::upload_posed_meshes(instance, device, command_pool, graphics, &posed_meshes);
+    gpu::rebuild_scene_acceleration(
+        instance,
+        device,
+        command_pool,
+        graphics,
+        raytracing,
+        world,
+        assets,
+    )?;
+
+    let parent_entity = entities::spawn_model_entities(
+        model_name,
+        graphics,
+        world,
+        assets,
+        load_result,
+        scene_will_provide_clips,
+    );
+    if is_model_file_path(model_name) {
+        world.insert_component(parent_entity, GlbSource::FilePath(model_name.to_string()));
+    }
+    run_model_load_hooks(
+        world,
+        assets,
+        &LoadedModel {
+            entity: parent_entity,
+            load_result,
+        },
+    );
+
+    Ok(parent_entity)
+}
+
+fn is_model_file_path(model_name: &str) -> bool {
+    caches::is_gltf_path(model_name) || model_name.to_lowercase().ends_with(".fbx")
 }

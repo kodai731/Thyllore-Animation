@@ -94,7 +94,7 @@ stages / descriptor set roles are declared once in `shaders/passes.toml` and gen
 ## Model loading
 
 Importers live in `crates/thyllore-importer-core` (glTF / FBX / PNG) and return model-core + anim-core
-types; `src/loader/` only re-exports them. `src/app/model_loader.rs` turns the result into `AssetStorage`
+types; `src/loader/` only re-exports them. `src/app/model/` turns the result into `AssetStorage`
 entries, GPU meshes (`GraphicsResources`) and acceleration structures. Sample models live under
 `assets/models/<name>/`.
 

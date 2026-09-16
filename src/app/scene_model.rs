@@ -3,7 +3,7 @@ use std::rc::Rc;
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::model_loader::load_model_from_file_system;
+use crate::app::model::load_model_from_file_system;
 use crate::app::{App, AppData};
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::context::{CommandState, SwapchainState};
@@ -99,14 +99,16 @@ impl App {
                 );
 
                 let procedural_primitives =
-                    crate::app::model_loader::collect_procedural_primitives(&self.data.ecs_world);
+                    crate::app::raytracing::scene_build::collect_procedural_primitives(
+                        &self.data.ecs_world,
+                    );
                 if !procedural_primitives.is_empty() {
                     let command_pool = self.resource::<CommandState>().pool.clone();
                     let mesh_transforms = crate::ecs::systems::collect_mesh_transforms(
                         &self.data.ecs_world,
                         &self.data.ecs_assets,
                     );
-                    crate::app::model_loader::rebuild_acceleration_structures(
+                    crate::app::raytracing::scene_build::rebuild_acceleration_structures(
                         &self.instance,
                         &self.rrdevice,
                         &command_pool,
@@ -140,7 +142,7 @@ impl App {
         let load_result = crate::loader::ModelLoadResult::from_gltf(gltf_result);
 
         let (command_pool, swapchain) = self.prepare_model_reload()?;
-        match crate::app::model_loader::load_model_from_file_system_with_result(
+        match crate::app::model::load_model_from_file_system_with_result(
             &load_result,
             crate::scene::ModelReference::GENERATED_MESH,
             &self.instance,
@@ -207,12 +209,14 @@ impl App {
 
         let command_pool = self.resource::<CommandState>().pool.clone();
         let procedural_primitives =
-            crate::app::model_loader::collect_procedural_primitives(&self.data.ecs_world);
+            crate::app::raytracing::scene_build::collect_procedural_primitives(
+                &self.data.ecs_world,
+            );
         let mesh_transforms = crate::ecs::systems::collect_mesh_transforms(
             &self.data.ecs_world,
             &self.data.ecs_assets,
         );
-        crate::app::model_loader::rebuild_acceleration_structures(
+        crate::app::raytracing::scene_build::rebuild_acceleration_structures(
             &self.instance,
             &self.rrdevice,
             &command_pool,

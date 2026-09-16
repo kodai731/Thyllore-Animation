@@ -6,7 +6,7 @@
 )]
 
 use thyllore_animation::app::init::instance::cleanup_old_screenshots;
-use thyllore_animation::app::model_loader::find_best_clip;
+use thyllore_animation::app::model::find_best_clip;
 use thyllore_animation::app::App;
 use thyllore_animation::ecs::component::{FlameEffect, FlameTrail, HeatPlume, WindTornadoEffect};
 use thyllore_animation::ecs::events::{UIEvent, UIEventQueue};
@@ -397,7 +397,6 @@ fn main() -> Result<()> {
             ts.current_clip_id = first;
         }
 
-        // Store play request on BatchRun so model_loader.rs resets can restore it
         if let Some(mut batch_run) = app.data.ecs_world.get_resource_mut::<BatchRun>() {
             batch_run.play_requested = true;
             batch_run.play_clip_id = first;

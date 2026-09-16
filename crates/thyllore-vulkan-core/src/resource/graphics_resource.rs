@@ -109,9 +109,7 @@ impl GraphicsResources {
         swapchain_image_count: usize,
         additional_meshes: usize,
     ) -> anyhow::Result<()> {
-        let reserved_scene_objects = 4;
-        let required_objects =
-            self.objects.get_next_slot() + additional_meshes + reserved_scene_objects;
+        let required_objects = self.objects.get_next_slot() + additional_meshes;
 
         self.objects
             .ensure_capacity(instance, rrdevice, swapchain_image_count, required_objects)

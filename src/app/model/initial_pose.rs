@@ -1,4 +1,4 @@
-use super::scene_registration::restore_batch_playback;
+use super::clips::restore_batch_playback;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{NodeAssets, TimelineState};
 use crate::ecs::systems::animation::apply::{
@@ -39,7 +39,7 @@ pub(super) fn apply_initial_pose(
 }
 
 fn reset_timeline_to_start(world: &mut World) {
-    if world.contains_resource::<TimelineState>() {
+    {
         let mut timeline = world.resource_mut::<TimelineState>();
         timeline.playing = false;
         timeline.current_time = 0.0;
@@ -55,11 +55,9 @@ fn apply_initial_skinning(
     let Some(skeleton_id) = graphics.meshes.first().and_then(|m| m.skeleton_id) else {
         return Vec::new();
     };
-    let (current_time, looping) = if world.contains_resource::<TimelineState>() {
+    let (current_time, looping) = {
         let timeline = world.resource::<TimelineState>();
         (timeline.current_time, timeline.looping)
-    } else {
-        (0.0, true)
     };
 
     let skeleton = assets.get_skeleton_by_skeleton_id(skeleton_id);

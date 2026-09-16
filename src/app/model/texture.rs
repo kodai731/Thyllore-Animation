@@ -1,54 +1,8 @@
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 
-use anyhow::Result;
+use crate::loader::{load_png_image, LoadedMesh, TextureData, TextureSource};
 
-use crate::loader::{load_png_image, LoadedMesh, ModelLoadResult, TextureData, TextureSource};
-use crate::vulkanr::command::RRCommandPool;
-use crate::vulkanr::device::RRDevice;
-use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use crate::vulkanr::resource::{MeshSource, TexturePixels};
-use crate::vulkanr::swapchain::RRSwapchain;
-use crate::vulkanr::vulkan::Instance;
-
-pub(super) unsafe fn upload_model_meshes(
-    load_result: &ModelLoadResult,
-    model_path: &str,
-    instance: &Instance,
-    device: &RRDevice,
-    command_pool: &Rc<RRCommandPool>,
-    swapchain: &RRSwapchain,
-    graphics: &mut GraphicsResources,
-) -> Result<()> {
-    graphics.ensure_object_capacity(
-        instance,
-        device,
-        swapchain.swapchain_images.len(),
-        load_result.meshes.len(),
-    )?;
-
-    for loaded_mesh in &load_result.meshes {
-        let texture = resolve_texture_pixels(loaded_mesh, model_path);
-        let source = MeshSource {
-            vertex_data: &loaded_mesh.vertex_data,
-            base_vertices: &loaded_mesh.local_vertices,
-            skin_data: loaded_mesh.skin_data.as_ref(),
-            skeleton_id: loaded_mesh.skeleton_id,
-            node_index: loaded_mesh.node_index,
-            texture: TexturePixels {
-                rgba: &texture.data,
-                width: texture.width,
-                height: texture.height,
-            },
-            base_color_factor: loaded_mesh.base_color_factor,
-        };
-        graphics.push_mesh(instance, device, command_pool, &source)?;
-    }
-
-    Ok(())
-}
-
-fn resolve_texture_pixels(loaded_mesh: &LoadedMesh, model_path: &str) -> TextureData {
+pub(super) fn resolve_texture_pixels(loaded_mesh: &LoadedMesh, model_path: &str) -> TextureData {
     match &loaded_mesh.texture {
         Some(TextureSource::Embedded(texture)) => texture.clone(),
         Some(TextureSource::File(texture_path)) => {

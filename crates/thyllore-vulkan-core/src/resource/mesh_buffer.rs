@@ -80,30 +80,8 @@ impl MeshBuffer {
             rrdevice.device.destroy_sampler(self.sampler, None);
             self.sampler = vk::Sampler::null();
         }
-        if self.vertex_buffer.buffer != vk::Buffer::null() {
-            rrdevice
-                .device
-                .destroy_buffer(self.vertex_buffer.buffer, None);
-            self.vertex_buffer.buffer = vk::Buffer::null();
-        }
-        if self.vertex_buffer.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice
-                .device
-                .free_memory(self.vertex_buffer.buffer_memory, None);
-            self.vertex_buffer.buffer_memory = vk::DeviceMemory::null();
-        }
-        if self.index_buffer.buffer != vk::Buffer::null() {
-            rrdevice
-                .device
-                .destroy_buffer(self.index_buffer.buffer, None);
-            self.index_buffer.buffer = vk::Buffer::null();
-        }
-        if self.index_buffer.buffer_memory != vk::DeviceMemory::null() {
-            rrdevice
-                .device
-                .free_memory(self.index_buffer.buffer_memory, None);
-            self.index_buffer.buffer_memory = vk::DeviceMemory::null();
-        }
+        self.vertex_buffer.destroy(rrdevice);
+        self.index_buffer.destroy(rrdevice);
         if self.image != vk::Image::null() {
             rrdevice.device.destroy_image(self.image, None);
             self.image = vk::Image::null();

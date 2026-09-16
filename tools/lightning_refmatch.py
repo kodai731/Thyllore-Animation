@@ -30,13 +30,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from engine_harness import dood_wrap, engine_env, engine_path, repo_root
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+from lightning_ref_extract import compute_masks
 from lightning_ref_match import (
     compute_ceiling,
     describe_sequence,
     family_distances,
     FAMILIES,
     load_reference,
-    load_render,
+    read_color,
     VERDICT_FAMILIES,
 )
 
@@ -235,19 +236,31 @@ def load_background_gray(background_png: Path,
 
 def load_render_fields(capture_dir: Path, config: dict, viewport: tuple[int, int, int, int],
                        background_gray: np.ndarray) -> dict:
-    """Viewport-cropped render frames as {"glow", "core", "color", "fps"} for lightning_ref_match."""
+    """Viewport-cropped render frames masked like the reference, for lightning_ref_match."""
     if not capture_dir.is_dir():
         raise SystemExit(f"no frames captured: {capture_dir}")
 
+    color_paths = sorted((capture_dir / "color").glob("frame_*.png"))
+    if not color_paths:
+        raise SystemExit(f"no colour frames captured: {capture_dir / 'color'}")
+
     x0, y0, x1, y1 = viewport
-    sequence = load_render(capture_dir, BATCH_FRAMES_PER_SECOND / config["stride"])
     static_mask = background_gray > OVERLAY_LUMINANCE_THRESHOLD
 
+    glow_frames, core_frames, color_frames = [], [], []
+    for path in color_paths:
+        bgr = read_color(path)[y0:y1, x0:x1]
+        glow, core = compute_masks(bgr, background_gray, strict=False)
+
+        glow_frames.append(glow & ~static_mask)
+        core_frames.append(core & ~static_mask)
+        color_frames.append(bgr)
+
     return {
-        "glow": [frame[y0:y1, x0:x1] & ~static_mask for frame in sequence["glow"]],
-        "core": [frame[y0:y1, x0:x1] & ~static_mask for frame in sequence["core"]],
-        "color": [frame[y0:y1, x0:x1] for frame in sequence["color"]],
-        "fps": sequence["fps"],
+        "glow": glow_frames,
+        "core": core_frames,
+        "color": color_frames,
+        "fps": BATCH_FRAMES_PER_SECOND / config["stride"],
     }
 
 

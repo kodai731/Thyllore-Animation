@@ -40,9 +40,10 @@ def parse_args():
 
 
 REFERENCE_MASK_THRESHOLD = 127
-RENDER_MASK_THRESHOLD = 25
+RENDER_MASK_THRESHOLD = 200
 ON_AREA_RATIO = 0.002
 PROFILE_BINS = 16
+PROFILE_REFERENCE_WIDTH = 480
 EPS = 1e-9
 
 
@@ -219,7 +220,8 @@ def measure_timing(seq: dict, fps: float) -> dict:
 def measure_distance_profile(glow, core, color):
     gray = cv2.cvtColor(color, cv2.COLOR_BGR2GRAY)
     distance = ndimage.distance_transform_edt(~core)
-    bins = np.clip(distance[glow].astype(int), 0, PROFILE_BINS - 1)
+    width_scale = PROFILE_REFERENCE_WIDTH / glow.shape[1]
+    bins = np.clip((distance[glow] * width_scale).astype(int), 0, PROFILE_BINS - 1)
     luminance = gray[glow].astype(np.float32)
 
     profile = np.zeros(PROFILE_BINS)

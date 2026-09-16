@@ -25,7 +25,6 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
-from scipy import ndimage
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from engine_harness import dood_wrap, engine_env, engine_path, repo_root
@@ -163,21 +162,63 @@ def capture_all(out_dir: Path, arms: list[str], dood: bool, candidate: str,
             capture_sequence(out_dir, config, dood, lightning_set, f"{arm}_{candidate}")
 
 
+CHROME_COVERAGE_RATIO = 0.95
+
+
 def detect_viewport_from_background(background_png: Path) -> tuple[int, int, int, int]:
-    """Bounding box of the 3D viewport from the largest connected component in the background."""
+    """Bounding box of the 3D viewport from the chrome gaps containing the image center."""
     gray = np.asarray(Image.open(background_png).convert("RGB"), dtype=np.float32).mean(axis=2)
     clear_value = np.bincount(gray.astype(np.uint8).ravel()).argmax()
     mask = np.abs(gray - float(clear_value)) > 2.0
-    mask = ndimage.binary_opening(mask, iterations=3)
+    height, width = mask.shape
 
-    labeled, num_features = ndimage.label(mask)
-    if num_features == 0:
+    row_runs = _collect_chrome_runs(mask.sum(axis=1), CHROME_COVERAGE_RATIO * width)
+    y0, y1 = _find_widest_interior(row_runs, height, height // 2)
+
+    band_height = y1 - y0
+    col_runs = _collect_chrome_runs(mask[y0:y1].sum(axis=0), CHROME_COVERAGE_RATIO * band_height)
+    x0, x1 = _find_widest_interior(col_runs, width, width // 2)
+
+    if band_height <= 0 or x1 - x0 <= 0:
         raise SystemExit(f"viewport detection failed: {background_png}")
+    return x0, y0, x1, y1
 
-    component_sizes = np.bincount(labeled.ravel())
-    largest = int(np.argmax(component_sizes[1:]) + 1)
-    rows, cols = np.where(labeled == largest)
-    return int(cols.min()), int(rows.min()), int(cols.max()) + 1, int(rows.max()) + 1
+
+def _collect_chrome_runs(counts: np.ndarray, threshold: float) -> list[tuple[int, int]]:
+    """Runs of indices where counts >= threshold, as (start, end) pairs."""
+    indices = np.where(counts >= threshold)[0]
+    if len(indices) == 0:
+        return []
+    runs: list[tuple[int, int]] = []
+    start = int(indices[0])
+    prev = start
+    for i in indices[1:]:
+        i = int(i)
+        if i == prev + 1:
+            prev = i
+        else:
+            runs.append((start, prev + 1))
+            start = i
+            prev = i
+    runs.append((start, prev + 1))
+    return runs
+
+
+def _find_widest_interior(runs: list[tuple[int, int]], length: int, center: int) -> tuple[int, int]:
+    """Widest chrome-free span, preferring the one that contains center."""
+    gaps: list[tuple[int, int]] = []
+    cursor = 0
+    for start, end in runs:
+        if start > cursor:
+            gaps.append((cursor, start))
+        cursor = max(cursor, end)
+    if cursor < length:
+        gaps.append((cursor, length))
+    if not gaps:
+        return 0, length
+
+    centered = [gap for gap in gaps if gap[0] <= center < gap[1]]
+    return max(centered or gaps, key=lambda gap: gap[1] - gap[0])
 
 
 OVERLAY_LUMINANCE_THRESHOLD = 200.0

@@ -38,10 +38,17 @@ def column_major(columns):
 
 def params_from_effect(effect):
     defaults = fx.lightning_preset_params("bolt")
-    return {
+    params = {
         k: (int(v) if isinstance(defaults[k], int) and not isinstance(defaults[k], bool) else v)
         for k, v in effect.items() if k in defaults
     }
+    source = params.get("source")
+    if isinstance(source, (int, float)):
+        if source == 0:
+            params["source"] = "Point"
+        else:
+            del params["source"]
+    return params
 
 
 def compare_ubo(ubo_bytes, engine_ubo):

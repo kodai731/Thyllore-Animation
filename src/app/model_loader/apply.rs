@@ -3,7 +3,7 @@ use std::rc::Rc;
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use super::{gpu_upload, scene_registration};
+use super::{initial_pose, mesh_upload, scene_registration};
 use crate::asset::AssetStorage;
 use crate::ecs::resource::{
     ClipLibrary, FbxModelCache, GltfModelCache, MeshAssets, NodeAssets, TimelineState,
@@ -34,43 +34,20 @@ pub(super) unsafe fn apply_model_to_resources(
 ) -> Result<crate::ecs::world::Entity> {
     cleanup_resources(device, graphics, raytracing, world, assets)?;
     scene_registration::insert_model_caches(world, model_name, fbx_model);
-    gpu_upload::ensure_graphics_capacity(load_result, instance, device, swapchain, graphics)?;
-
     scene_registration::setup_animation_system(world, load_result, assets);
     scene_registration::setup_nodes(world, load_result);
-
-    for (i, loaded_mesh) in load_result.meshes.iter().enumerate() {
-        let mesh_buffer = gpu_upload::create_mesh_buffer(
-            instance,
-            device,
-            command_pool,
-            graphics,
-            loaded_mesh,
-            i,
-            model_name,
-        )?;
-        let material_id = gpu_upload::create_material_for_mesh(
-            instance,
-            device,
-            graphics,
-            &mesh_buffer,
-            i,
-            loaded_mesh.base_color_factor,
-        )?;
-
-        graphics.meshes.push(mesh_buffer);
-        graphics.mesh_material_ids.push(material_id);
-    }
-
-    gpu_upload::apply_initial_pose(
+    mesh_upload::upload_model_meshes(
+        load_result,
+        model_name,
         instance,
         device,
         command_pool,
+        swapchain,
         graphics,
-        world,
-        assets,
-        load_result,
     )?;
+
+    let posed_meshes = initial_pose::apply_initial_pose(world, assets, graphics, load_result);
+    upload_posed_meshes(instance, device, command_pool, graphics, &posed_meshes);
     let procedural_primitives =
         crate::app::raytracing::scene_build::collect_procedural_primitives(world);
     let mesh_transforms = crate::ecs::systems::collect_mesh_transforms(world, assets);
@@ -123,6 +100,24 @@ pub(super) unsafe fn apply_model_to_resources(
     scene_registration::initialize_constraint_gizmo_visibility(world);
 
     Ok(parent_entity)
+}
+
+unsafe fn upload_posed_meshes(
+    instance: &Instance,
+    device: &RRDevice,
+    command_pool: &Rc<RRCommandPool>,
+    graphics: &mut GraphicsResources,
+    mesh_indices: &[usize],
+) {
+    for &mesh_index in mesh_indices {
+        if let Err(e) = graphics.upload_mesh_vertices(instance, device, command_pool, mesh_index) {
+            log!(
+                "Failed to upload initial pose for mesh {}: {}",
+                mesh_index,
+                e
+            );
+        }
+    }
 }
 
 pub(super) unsafe fn cleanup_resources(

@@ -1,5 +1,6 @@
 mod apply;
-mod gpu_upload;
+mod initial_pose;
+mod mesh_upload;
 mod scene_registration;
 
 pub use crate::app::raytracing::scene_build::{
@@ -161,33 +162,16 @@ pub(crate) unsafe fn append_model_to_scene(
     world: &mut World,
     assets: &mut AssetStorage,
 ) -> Result<crate::ecs::world::Entity> {
-    gpu_upload::ensure_graphics_capacity(load_result, instance, device, swapchain, graphics)?;
-
     let mesh_index_offset = graphics.meshes.len();
-
-    for (i, loaded_mesh) in load_result.meshes.iter().enumerate() {
-        let global_index = mesh_index_offset + i;
-        let mesh_buffer = gpu_upload::create_mesh_buffer(
-            instance,
-            device,
-            command_pool,
-            graphics,
-            loaded_mesh,
-            global_index,
-            part_name,
-        )?;
-        let material_id = gpu_upload::create_material_for_mesh(
-            instance,
-            device,
-            graphics,
-            &mesh_buffer,
-            global_index,
-            loaded_mesh.base_color_factor,
-        )?;
-
-        graphics.meshes.push(mesh_buffer);
-        graphics.mesh_material_ids.push(material_id);
-    }
+    mesh_upload::upload_model_meshes(
+        load_result,
+        part_name,
+        instance,
+        device,
+        command_pool,
+        swapchain,
+        graphics,
+    )?;
 
     let procedural_primitives =
         crate::app::raytracing::scene_build::collect_procedural_primitives(world);

@@ -180,18 +180,31 @@ def detect_viewport_from_background(background_png: Path) -> tuple[int, int, int
     return int(cols.min()), int(rows.min()), int(cols.max()) + 1, int(rows.max()) + 1
 
 
-def load_render_fields(capture_dir: Path, config: dict,
-                       viewport: tuple[int, int, int, int]) -> dict:
+OVERLAY_LUMINANCE_THRESHOLD = 200.0
+
+
+def load_background_gray(background_png: Path,
+                         viewport: tuple[int, int, int, int]) -> np.ndarray:
+    """Viewport-cropped grayscale of the arm's background capture."""
+    x0, y0, x1, y1 = viewport
+    gray = np.asarray(Image.open(background_png).convert("L"), dtype=np.float32)
+
+    return gray[y0:y1, x0:x1]
+
+
+def load_render_fields(capture_dir: Path, config: dict, viewport: tuple[int, int, int, int],
+                       background_gray: np.ndarray) -> dict:
     """Viewport-cropped render frames as {"glow", "core", "color", "fps"} for lightning_ref_match."""
     if not capture_dir.is_dir():
         raise SystemExit(f"no frames captured: {capture_dir}")
 
     x0, y0, x1, y1 = viewport
     sequence = load_render(capture_dir, BATCH_FRAMES_PER_SECOND / config["stride"])
+    static_mask = background_gray > OVERLAY_LUMINANCE_THRESHOLD
 
     return {
-        "glow": [frame[y0:y1, x0:x1] for frame in sequence["glow"]],
-        "core": [frame[y0:y1, x0:x1] for frame in sequence["core"]],
+        "glow": [frame[y0:y1, x0:x1] & ~static_mask for frame in sequence["glow"]],
+        "core": [frame[y0:y1, x0:x1] & ~static_mask for frame in sequence["core"]],
         "color": [frame[y0:y1, x0:x1] for frame in sequence["color"]],
         "fps": sequence["fps"],
     }
@@ -201,8 +214,10 @@ def analyze_arm(out_dir: Path, arm: str, candidate: str, lightning_set: list[str
     """Distance of the arm's rendered sequence to the reference against the reference's own spread."""
     config = REFERENCE_CONFIGS[arm]
 
-    viewport = detect_viewport_from_background(background_path(out_dir, arm))
-    floor_fields = load_render_fields(out_dir / arm, config, viewport)
+    background_png = background_path(out_dir, arm)
+    viewport = detect_viewport_from_background(background_png)
+    background_gray = load_background_gray(background_png, viewport)
+    floor_fields = load_render_fields(out_dir / arm, config, viewport, background_gray)
     ref = load_reference(repo_root() / config["reference_dir"])
 
     ref_desc = describe_sequence(ref, ref["fps"])
@@ -216,7 +231,7 @@ def analyze_arm(out_dir: Path, arm: str, candidate: str, lightning_set: list[str
 
     candidate_dir = out_dir / f"{arm}_{candidate}"
     if candidate_dir.is_dir():
-        candidate_fields = load_render_fields(candidate_dir, config, viewport)
+        candidate_fields = load_render_fields(candidate_dir, config, viewport, background_gray)
         candidate_distances = family_distances(
             ref_desc, describe_sequence(candidate_fields, candidate_fields["fps"]))
         candidate_scores = {family: float(candidate_distances[family] / ceiling[family])

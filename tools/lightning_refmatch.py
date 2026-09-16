@@ -131,7 +131,7 @@ def capture_background(out_dir: Path, arm: str, dood: bool) -> None:
 def capture_sequence(out_dir: Path, config: dict, dood: bool,
                      lightning_set: list[str], capture_name: str) -> None:
     """Capture the arm's color, coverage, and core sequences starting at its time."""
-    start_frame = round(config["time_start"] * BATCH_FRAMES_PER_SECOND)
+    start_frame = max(1, round(config["time_start"] * BATCH_FRAMES_PER_SECOND))
 
     for subdir, debug_view in (("color", None), ("coverage", "coverage"), ("core", "core")):
         output_dir = out_dir / capture_name / subdir

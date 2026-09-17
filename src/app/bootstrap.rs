@@ -298,7 +298,7 @@ pub fn apply_engine_overrides(app: &mut App, overrides: &EngineCliOverrides) {
     // Prefer a clip with bone tracks so the (empty) default flame clip never
     // shadows the model animation the batch run wants to play.
     if overrides.batch_play {
-        let first = crate::app::model_loader::find_best_clip(&app.data.ecs_world);
+        let first = crate::app::model::find_best_clip(&app.data.ecs_world);
         let mut ts = app
             .data
             .ecs_world
@@ -310,7 +310,6 @@ pub fn apply_engine_overrides(app: &mut App, overrides: &EngineCliOverrides) {
             ts.current_clip_id = first;
         }
 
-        // Store play request on BatchRun so model_loader.rs resets can restore it
         if let Some(mut batch_run) = app.data.ecs_world.get_resource_mut::<BatchRun>() {
             batch_run.play_requested = true;
             batch_run.play_clip_id = first;
@@ -389,7 +388,7 @@ pub unsafe fn init_flame_sdf_texture(app: &mut App, overrides: &EngineCliOverrid
 
     use crate::vulkanr::context::CommandState;
     let command_pool = app.resource::<CommandState>().pool.clone();
-    let (image, memory, mips) =
+    let (image, image_memory, mips) =
         thyllore_vulkan_core::resource::create_texture_image_pixel_with_format(
             &app.instance,
             &app.rrdevice,
@@ -408,10 +407,12 @@ pub unsafe fn init_flame_sdf_texture(app: &mut App, overrides: &EngineCliOverrid
     )?;
     let sampler = thyllore_vulkan_core::resource::create_texture_sampler(&app.rrdevice, mips)?;
 
-    app.data.raytracing.flame_sdf_image = image;
-    app.data.raytracing.flame_sdf_image_memory = memory;
-    app.data.raytracing.flame_sdf_image_view = image_view;
-    app.data.raytracing.flame_sdf_sampler = sampler;
+    app.data.raytracing.flame_sdf = thyllore_vulkan_core::resource::RRImage {
+        image,
+        image_memory,
+        image_view,
+        sampler,
+    };
 
     let Some(flame_targets) = app
         .data

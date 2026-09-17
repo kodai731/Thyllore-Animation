@@ -19,7 +19,7 @@ fn additive_blend() -> BlendConfig {
         src_color_factor: vk::BlendFactor::ONE,
         dst_color_factor: vk::BlendFactor::ONE,
         color_op: vk::BlendOp::ADD,
-        src_alpha_factor: vk::BlendFactor::ONE,
+        src_alpha_factor: vk::BlendFactor::ZERO,
         dst_alpha_factor: vk::BlendFactor::ONE,
         alpha_op: vk::BlendOp::ADD,
     }

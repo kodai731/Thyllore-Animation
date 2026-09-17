@@ -423,8 +423,15 @@ pub fn build_strike_segments(effect: &LightningEffect, seed: u32, reseed: u32) -
                 }
             };
 
-            let detail_levels = effect.detail_levels.min(3);
-            let points = displace_path(effect, seed, reseed, s, start, end_offset, detail_levels);
+            let points = displace_path(
+                effect,
+                seed,
+                reseed,
+                s,
+                start,
+                end_offset,
+                effect.detail_levels,
+            );
 
             emit_path(
                 &mut segments,

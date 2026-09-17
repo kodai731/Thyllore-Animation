@@ -368,4 +368,18 @@ mod tests {
             assert_matches_reference(&capsule, shifted_origin, dir, (0.0, 17.0));
         }
     }
+
+    #[test]
+    fn long_thin_capsule_missing_ray_over_wide_bounds_is_exactly_zero() {
+        let capsule = VolumeCapsule {
+            a: Vector3::new(0.0, 0.0, 0.0),
+            b: Vector3::new(0.0, 4.6, 0.0),
+            radius_start: 0.015,
+            radius_end: 0.015,
+            edge_width_q: 0.0001,
+        };
+        let origin = Vector3::new(0.5, 2.3, -5000.0);
+        let direction = Vector3::new(0.0, 0.0, 1.0);
+        assert_eq!(capsule.ray_emission(origin, direction, 0.0, 1e4), 0.0);
+    }
 }

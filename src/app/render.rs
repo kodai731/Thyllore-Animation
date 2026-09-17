@@ -163,24 +163,9 @@ impl App {
 
     unsafe fn recreate_gbuffer_framebuffer(&mut self) -> Result<()> {
         let mut render_targets = self.resource_mut::<RenderTargets>();
-        let device = &self.rrdevice.device;
-
-        if render_targets.render.gbuffer_framebuffer != vk::Framebuffer::null() {
-            device.destroy_framebuffer(render_targets.render.gbuffer_framebuffer, None);
-            render_targets.render.gbuffer_framebuffer = vk::Framebuffer::null();
-        }
-        if render_targets.render.gbuffer_depth_image_view != vk::ImageView::null() {
-            device.destroy_image_view(render_targets.render.gbuffer_depth_image_view, None);
-            render_targets.render.gbuffer_depth_image_view = vk::ImageView::null();
-        }
-        if render_targets.render.gbuffer_depth_image != vk::Image::null() {
-            device.destroy_image(render_targets.render.gbuffer_depth_image, None);
-            render_targets.render.gbuffer_depth_image = vk::Image::null();
-        }
-        if render_targets.render.gbuffer_depth_image_memory != vk::DeviceMemory::null() {
-            device.free_memory(render_targets.render.gbuffer_depth_image_memory, None);
-            render_targets.render.gbuffer_depth_image_memory = vk::DeviceMemory::null();
-        }
+        render_targets
+            .render
+            .destroy_gbuffer_attachments(&self.rrdevice.device);
 
         if let Some(ref gbuffer) = self.data.raytracing.gbuffer {
             create_gbuffer_framebuffer(

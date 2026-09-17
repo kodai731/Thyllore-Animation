@@ -2,7 +2,8 @@ use std::fmt::Write;
 
 use thiserror::Error;
 use thyllore_spirv_reflect::{
-    binding_const_name, DescriptorCount, ReflectedBinding, ShaderReflection,
+    binding_const_name, DescriptorCount, ReflectedBinding, ReflectedBlock, ShaderReflection,
+    ShaderStage,
 };
 
 use crate::manifest::{PassDefinition, PassManifest};
@@ -26,6 +27,17 @@ pub enum BindingCodegenError {
         second: String,
         constant: String,
     },
+    #[error("pass `{pass}`: push constant block differs between `{first}` and `{second}`; every stage must include the same block declaration")]
+    PushConstantDiffers {
+        pass: String,
+        first: String,
+        second: String,
+    },
+}
+
+struct PassPushConstant {
+    block: ReflectedBlock,
+    stages: Vec<ShaderStage>,
 }
 
 pub fn generate_shader_bindings_rust(
@@ -45,7 +57,9 @@ fn write_pass_module(
     pass: &PassDefinition,
     reflection_of: &impl Fn(&str) -> Option<ShaderReflection>,
 ) -> Result<(), BindingCodegenError> {
-    let bindings = merge_pass_bindings(pass, reflection_of)?;
+    let reflections = load_pass_reflections(pass, reflection_of)?;
+    let bindings = merge_pass_bindings(pass, &reflections)?;
+    let push_constant = merge_pass_push_constant(pass, &reflections)?;
 
     let _ = writeln!(out, "\npub mod {} {{\n    use super::*;\n", pass.name);
     let mut emitted: Vec<(String, String)> = Vec::new();
@@ -69,23 +83,90 @@ fn write_pass_module(
             count_expression(binding.count),
         );
     }
+    if let Some(push_constant) = push_constant {
+        write_push_constant(out, &push_constant);
+    }
     out.push_str("}\n");
     Ok(())
 }
 
-fn merge_pass_bindings(
+fn write_push_constant(out: &mut String, push_constant: &PassPushConstant) {
+    let stages: Vec<String> = push_constant
+        .stages
+        .iter()
+        .map(|stage| format!("thyllore_spirv_reflect::ShaderStage::{stage:?}"))
+        .collect();
+    let _ = writeln!(
+        out,
+        "    pub const PUSH_CONSTANT: thyllore_spirv_reflect::PushConstantLayout = thyllore_spirv_reflect::PushConstantLayout {{ block: \"{}\", stages: &[{}], size: {} }};",
+        push_constant.block.type_name,
+        stages.join(", "),
+        push_constant.block.size,
+    );
+}
+
+fn load_pass_reflections(
     pass: &PassDefinition,
     reflection_of: &impl Fn(&str) -> Option<ShaderReflection>,
+) -> Result<Vec<(String, ShaderReflection)>, BindingCodegenError> {
+    pass.stages
+        .iter()
+        .map(|stage| {
+            let reflection = reflection_of(&stage.source_file).ok_or_else(|| {
+                BindingCodegenError::MissingReflection {
+                    pass: pass.name.clone(),
+                    file: stage.source_file.clone(),
+                }
+            })?;
+            Ok((stage.source_file.clone(), reflection))
+        })
+        .collect()
+}
+
+fn merge_pass_push_constant(
+    pass: &PassDefinition,
+    reflections: &[(String, ShaderReflection)],
+) -> Result<Option<PassPushConstant>, BindingCodegenError> {
+    let mut merged: Option<PassPushConstant> = None;
+    let mut first_file = "";
+    for (file, reflection) in reflections {
+        let Some(block) = &reflection.push_constant else {
+            continue;
+        };
+        match &mut merged {
+            None => {
+                merged = Some(PassPushConstant {
+                    block: block.clone(),
+                    stages: reflection.stages.clone(),
+                });
+                first_file = file;
+            }
+            Some(known) if known.block == *block => {
+                for stage in &reflection.stages {
+                    if !known.stages.contains(stage) {
+                        known.stages.push(*stage);
+                    }
+                }
+            }
+            Some(_) => {
+                return Err(BindingCodegenError::PushConstantDiffers {
+                    pass: pass.name.clone(),
+                    first: first_file.to_string(),
+                    second: file.clone(),
+                });
+            }
+        }
+    }
+    Ok(merged)
+}
+
+fn merge_pass_bindings(
+    pass: &PassDefinition,
+    reflections: &[(String, ShaderReflection)],
 ) -> Result<Vec<ReflectedBinding>, BindingCodegenError> {
     let mut merged: Vec<ReflectedBinding> = Vec::new();
-    for stage in &pass.stages {
-        let reflection = reflection_of(&stage.source_file).ok_or_else(|| {
-            BindingCodegenError::MissingReflection {
-                pass: pass.name.clone(),
-                file: stage.source_file.clone(),
-            }
-        })?;
-        for binding in reflection.bindings {
+    for (_, reflection) in reflections {
+        for binding in reflection.bindings.iter().cloned() {
             match merged
                 .iter()
                 .find(|known| known.set == binding.set && known.binding == binding.binding)
@@ -124,6 +205,7 @@ mod tests {
         ShaderReflection {
             stages: vec![ShaderStage::Fragment],
             bindings,
+            push_constant: None,
         }
     }
 
@@ -201,6 +283,65 @@ mod tests {
         assert!(matches!(
             error,
             BindingCodegenError::ConstantCollision { .. }
+        ));
+    }
+
+    fn block(type_name: &str, size: u32) -> ReflectedBlock {
+        ReflectedBlock {
+            type_name: type_name.to_string(),
+            size,
+            members: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn emits_push_constant_layout_merged_over_the_stages_declaring_it() {
+        let manifest = PassManifest::parse(
+            "[pass.effect_trace]\nstages = [\"traceRayGen.rgen\", \"traceMiss.rmiss\", \"sceneClosestHit.rchit\"]\nsets = { 0 = \"local\" }\n",
+        )
+        .unwrap();
+        let with_push = |stage: ShaderStage| ShaderReflection {
+            stages: vec![stage],
+            bindings: vec![],
+            push_constant: Some(block("TracePush", 112)),
+        };
+        let code = generate_shader_bindings_rust(&manifest, |file| match file {
+            "traceRayGen.rgen" => Some(with_push(ShaderStage::RayGeneration)),
+            "traceMiss.rmiss" => Some(ShaderReflection {
+                stages: vec![ShaderStage::Miss],
+                bindings: vec![],
+                push_constant: None,
+            }),
+            "sceneClosestHit.rchit" => Some(with_push(ShaderStage::ClosestHit)),
+            _ => None,
+        })
+        .unwrap();
+        assert!(code.contains("pub const PUSH_CONSTANT: thyllore_spirv_reflect::PushConstantLayout = thyllore_spirv_reflect::PushConstantLayout { block: \"TracePush\", stages: &[thyllore_spirv_reflect::ShaderStage::RayGeneration, thyllore_spirv_reflect::ShaderStage::ClosestHit], size: 112 };"));
+    }
+
+    #[test]
+    fn rejects_stages_declaring_different_push_constant_blocks() {
+        let manifest = PassManifest::parse(
+            "[pass.effect_trace]\nstages = [\"traceRayGen.rgen\", \"sceneClosestHit.rchit\"]\nsets = { 0 = \"local\" }\n",
+        )
+        .unwrap();
+        let error = generate_shader_bindings_rust(&manifest, |file| match file {
+            "traceRayGen.rgen" => Some(ShaderReflection {
+                stages: vec![ShaderStage::RayGeneration],
+                bindings: vec![],
+                push_constant: Some(block("TraceCamera", 80)),
+            }),
+            "sceneClosestHit.rchit" => Some(ShaderReflection {
+                stages: vec![ShaderStage::ClosestHit],
+                bindings: vec![],
+                push_constant: Some(block("TraceLight", 32)),
+            }),
+            _ => None,
+        })
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            BindingCodegenError::PushConstantDiffers { .. }
         ));
     }
 }

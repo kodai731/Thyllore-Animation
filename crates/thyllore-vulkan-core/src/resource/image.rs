@@ -1,6 +1,7 @@
 use crate::command::*;
 use crate::core::device::*;
 use crate::resource::buffer::*;
+use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 use std::fs::File;
 use std::ptr::copy_nonoverlapping as memcpy;
@@ -890,4 +891,10 @@ pub unsafe fn create_scene_depth_sampler(rrdevice: &RRDevice) -> Result<vk::Samp
         .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
         .build();
     Ok(rrdevice.device.create_sampler(&info, None)?)
+}
+
+impl GpuResource for RRImage {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(rrdevice);
+    }
 }

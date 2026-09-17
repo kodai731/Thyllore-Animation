@@ -27,14 +27,7 @@ layout(binding = 4) uniform SceneData {
 } sceneData;
 
 // Hit shading table for water torus instances
-struct HitShadingRecord {
-    uint64_t vertexAddress;
-    uint64_t indexAddress;
-    mat4 model;
-    mat4 normalMatrix;
-    vec4 baseColor;
-    vec4 params;
-};
+#include "include/hit_shading_record.glsl"
 layout(binding = 5, std430) readonly buffer HitShadingTable {
     HitShadingRecord records[];
 } hitTable;

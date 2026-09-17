@@ -1,10 +1,8 @@
-use std::ffi::c_void;
 use std::mem::size_of;
 use std::rc::Rc;
 
 use anyhow::Result;
 use cgmath::{Matrix4, Vector3, Vector4};
-use vulkanalia::prelude::v1_0::*;
 
 use thyllore_render_core::{
     BufferMemoryType, DistanceAttenuation, FrameUBO, IndexBufferHandle, LineMesh, MeshId,
@@ -74,25 +72,12 @@ fn collect_blas_index_of_mesh(graphics: &GraphicsResources) -> Vec<Option<usize>
 
 impl<'a> RenderBackend for VulkanBackend<'a> {
     unsafe fn upload_mesh_vertices(&mut self, mesh_id: MeshId) -> Result<()> {
-        if mesh_id >= self.graphics.meshes.len() {
-            return Ok(());
-        }
-
-        let mesh = &mut self.graphics.meshes[mesh_id];
-        let vertices = &mesh.vertex_data.vertices;
-        let vertex_count = vertices.len();
-        let vertex_stride = size_of::<Vertex>();
-
-        mesh.vertex_buffer.update(
+        self.graphics.upload_mesh_vertices(
             self.instance,
             self.device,
             self.command_pool.as_ref(),
-            (vertex_stride * vertex_count) as vk::DeviceSize,
-            vertices.as_ptr() as *const c_void,
-            vertex_count,
-        )?;
-
-        Ok(())
+            mesh_id,
+        )
     }
 
     unsafe fn update_acceleration_structure(&mut self, mesh_ids: &[MeshId]) -> Result<()> {
@@ -141,7 +126,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             self.command_pool.as_ref(),
             tlas,
             &accel_struct.blas_list,
-            &accel_struct.water_blas,
+            &accel_struct.procedural_blas,
         )?;
 
         Ok(())
@@ -329,12 +314,8 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         distance_attenuation: DistanceAttenuation,
         exposure_value: f32,
     ) -> Result<()> {
-        let scene_memory = match (
-            self.raytracing.scene_uniform_buffer,
-            self.raytracing.scene_uniform_buffer_memory,
-        ) {
-            (Some(_), Some(m)) => m,
-            _ => return Ok(()),
+        let Some(scene_uniform_buffer) = self.raytracing.scene_uniform_buffer.as_ref() else {
+            return Ok(());
         };
 
         let scene_data = SceneUniformData {
@@ -358,21 +339,6 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             exposure_value,
         };
 
-        let data_ptr = self.device.device.map_memory(
-            scene_memory,
-            0,
-            std::mem::size_of::<SceneUniformData>() as u64,
-            vk::MemoryMapFlags::empty(),
-        )?;
-
-        std::ptr::copy_nonoverlapping(
-            &scene_data as *const SceneUniformData,
-            data_ptr as *mut SceneUniformData,
-            1,
-        );
-
-        self.device.device.unmap_memory(scene_memory);
-
-        Ok(())
+        scene_uniform_buffer.write_slot(&self.device, 0, &scene_data)
     }
 }

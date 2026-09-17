@@ -6,6 +6,7 @@ pub mod dof_buffer;
 pub mod dynamic_buffer;
 pub mod flame_buffer;
 pub mod gbuffer;
+pub mod gpu_resource;
 pub mod graphics_resource;
 pub mod hdr_buffer;
 pub mod hit_shading_table;
@@ -30,7 +31,8 @@ pub use dof_buffer::DofBuffer;
 pub use dynamic_buffer::*;
 pub use flame_buffer::FlameBuffer;
 pub use gbuffer::{RRGBuffer, READBACK_POSITION_OFFSET, READBACK_STAGING_SIZE};
-pub use graphics_resource::GraphicsResources;
+pub use gpu_resource::{destroy_all_in_reverse, GpuResource};
+pub use graphics_resource::{GraphicsResources, MeshSource, TexturePixels};
 pub use hdr_buffer::HdrBuffer;
 pub use hit_shading_table::{HitShadingRecord, HitShadingTable};
 pub use image::*;
@@ -39,7 +41,7 @@ pub use mesh_buffer::*;
 pub use offscreen::OffscreenFramebuffer;
 pub use onion_skin_pass::OnionSkinPassResources;
 pub use pipeline_storage::PipelineStorage;
-pub use raytracing_data::{RayTracingData, MAX_FLAME_INSTANCES, MAX_WATER_INSTANCES};
+pub use raytracing_data::RayTracingData;
 pub use render_target_storage::{RenderTargetEntry, RenderTargetKey, RenderTargetStorage};
 pub use render_target_transient::{
     RenderTargetTransient, TransientDesc, TransientHandle, TransientImage,

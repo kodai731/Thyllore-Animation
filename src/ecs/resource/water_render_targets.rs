@@ -1,4 +1,6 @@
-use thyllore_vulkan_core::resource::WaterBuffer;
+use thyllore_vulkan_core::resource::{GpuResource, WaterBuffer};
+
+use crate::gpu_resource;
 use vulkanalia::prelude::v1_0::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -10,12 +12,16 @@ pub struct WaterBindingKey {
     pub trace_generation: u64,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, GpuResource)]
 pub struct WaterRenderTargets {
     pub buffer: WaterBuffer,
+    #[gpu_resource(skip)]
     pub frame_instances: Vec<(thyllore_effect_core::WaterUBO, u32)>,
+    #[gpu_resource(skip)]
     bound: Vec<Option<WaterBindingKey>>,
 }
+
+gpu_resource!(WaterRenderTargets);
 
 impl WaterRenderTargets {
     pub fn new(buffer: WaterBuffer) -> Self {

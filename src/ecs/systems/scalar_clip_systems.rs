@@ -57,6 +57,45 @@ pub fn ensure_entity_clip(
     source_id
 }
 
+/// Gives a scalar-domain entity its clip when nothing scheduled one for it.
+pub fn ensure_scalar_entity_clip(world: &mut World, assets: &mut AssetStorage, entity: Entity) {
+    if find_entity_clip_id(world, entity).is_some() {
+        return;
+    }
+    if let Some(domain) = scalar_domain_for_entity(world, entity) {
+        ensure_entity_clip(world, assets, entity, domain);
+    }
+}
+
+/// Replaces the entity's schedule with one instance of `clip_id` from time 0 and drops the
+/// clip it scheduled before, so a reload never leaves an orphan clip in the library.
+pub fn schedule_entity_clip(world: &mut World, entity: Entity, clip_id: SourceClipId) {
+    if let Some(previous) = find_entity_clip_id(world, entity) {
+        if previous != clip_id {
+            world.resource_mut::<ClipLibrary>().remove(previous);
+        }
+    }
+
+    let duration = world
+        .resource::<ClipLibrary>()
+        .get(clip_id)
+        .map(|clip| clip.duration)
+        .unwrap_or(0.0);
+    let mut schedule = ClipSchedule::new();
+    super::clip_schedule_systems::clip_schedule_add_instance(&mut schedule, clip_id, duration);
+    world.insert_component(entity, schedule);
+}
+
+/// Despawns an entity together with the clip its schedule references.
+pub fn despawn_entity_with_clip(world: &mut World, entity: Entity) {
+    if let Some(clip_id) = find_entity_clip_id(world, entity) {
+        if let Some(mut library) = world.get_resource_mut::<ClipLibrary>() {
+            library.remove(clip_id);
+        }
+    }
+    world.despawn(entity);
+}
+
 /// The entity the scalar-curve events act on: the selected entity when it
 /// belongs to a scalar channel domain, otherwise the first domain entity.
 /// Keeping this in one place is what lets the hierarchy selection stay the

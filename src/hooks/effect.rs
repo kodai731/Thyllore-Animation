@@ -14,7 +14,6 @@ pub struct EffectHook {
     pub name: &'static str,
     pub setup: Option<EffectSetupHook>,
     pub on_viewport_resize: Option<EffectHookFn>,
-    pub destroy: Option<EffectHookFn>,
     pub passes: &'static [&'static dyn RenderPassNode],
 }
 
@@ -77,15 +76,6 @@ impl App {
         for hook in self.data.effect_hooks.snapshot() {
             if let Some(on_viewport_resize) = hook.on_viewport_resize {
                 on_viewport_resize(self)?;
-            }
-        }
-        Ok(())
-    }
-
-    pub unsafe fn run_effect_destroy(&mut self) -> Result<()> {
-        for hook in self.data.effect_hooks.snapshot().into_iter().rev() {
-            if let Some(destroy) = hook.destroy {
-                destroy(self)?;
             }
         }
         Ok(())

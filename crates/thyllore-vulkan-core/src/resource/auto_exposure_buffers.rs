@@ -3,6 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
 use crate::resource::buffer::create_buffer;
+use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 
 const HISTOGRAM_BIN_COUNT: u32 = 256;
@@ -185,5 +186,11 @@ impl Drop for AutoExposureBuffers {
         if self.histogram_buffer != vk::Buffer::null() {
             log_warn!("AutoExposureBuffers dropped without calling destroy()");
         }
+    }
+}
+
+impl GpuResource for AutoExposureBuffers {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

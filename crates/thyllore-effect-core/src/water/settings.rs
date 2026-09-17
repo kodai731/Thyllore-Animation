@@ -62,3 +62,6 @@ impl Default for WaterRenderSettings {
         }
     }
 }
+
+/// Instance slots of the water UBO.
+pub const WATER_MAX_INSTANCES: usize = 4;

@@ -44,7 +44,7 @@ impl App {
         rrcommand_pool: &Rc<RRCommandPool>,
     ) -> Result<()> {
         let procedural_primitives =
-            crate::app::model_loader::collect_procedural_primitives(&data.ecs_world);
+            crate::app::raytracing::scene_build::collect_procedural_primitives(&data.ecs_world);
         let mesh_transforms =
             crate::ecs::systems::collect_mesh_transforms(&data.ecs_world, &data.ecs_assets);
         data.raytracing.build_acceleration_structures(

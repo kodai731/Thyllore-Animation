@@ -328,6 +328,8 @@ impl App {
             .insert_resource(crate::hooks::scene::SceneComponentHooks::collect()?);
         data.ecs_world
             .insert_resource(crate::hooks::scene_resource::SceneResourceHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::model_load::ModelLoadHooks::collect()?);
         Ok(())
     }
     unsafe fn initialize_graphics_and_ecs(
@@ -919,10 +921,8 @@ impl App {
             };
 
             if let Some(clip_id) = active_clip_id {
-                let schedule = crate::app::model_loader::build_initial_clip_schedule(
-                    Some(clip_id),
-                    &data.ecs_world,
-                );
+                let schedule =
+                    crate::app::model::build_initial_clip_schedule(Some(clip_id), &data.ecs_world);
                 for (_, existing) in data
                     .ecs_world
                     .iter_components_mut::<crate::ecs::component::ClipSchedule>()
@@ -1179,6 +1179,8 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::ClipBrowserState>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::PoseLibrary>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::ConstraintEditorState>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::BonePoseOverride>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::SpringBoneState>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::PanelLayout>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::MessageLog>(data);
 

@@ -13,6 +13,7 @@ use crate::vulkanr::resource::FlameBuffer;
 pub const FLAME_EFFECT_HOOK: EffectHook = EffectHook {
     name: "flame",
     setup: Some(setup_flame),
+    after_overrides: Some(super::sdf::init_sdf_texture),
     on_viewport_resize: Some(resize_flame_render_targets),
     passes: &[&super::passes::FlamePassNode],
 };

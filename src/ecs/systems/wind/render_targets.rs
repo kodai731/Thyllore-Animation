@@ -20,6 +20,7 @@ pub const WIND_SHADOW_VOLUME_FORMAT: vk::Format = vk::Format::R16G16_SFLOAT;
 pub const WIND_EFFECT_HOOK: EffectHook = EffectHook {
     name: "wind",
     setup: Some(setup_wind),
+    after_overrides: None,
     on_viewport_resize: Some(resize_wind_render_targets),
     passes: &[&super::passes::WindPassNode],
 };

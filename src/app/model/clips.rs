@@ -4,7 +4,7 @@ use crate::asset::{AssetStorage, SkeletonAsset};
 use crate::ecs::component::ClipSchedule;
 use crate::ecs::resource::{BatchRun, ClipLibrary, ModelState, TimelineState};
 use crate::ecs::systems::clip_library_systems::{
-    clip_library_create_from_imported, clip_library_register_and_activate,
+    clip_library_create_from_imported, clip_library_register_and_activate, find_best_clip,
 };
 use crate::ecs::systems::clip_schedule_systems::clip_schedule_add_instance;
 use crate::ecs::systems::timeline_apply_fit_zoom;
@@ -112,22 +112,6 @@ fn register_empty_editable_clip(world: &mut World, assets: &mut AssetStorage) ->
     );
 
     source_id
-}
-
-pub fn find_best_clip(world: &World) -> Option<SourceClipId> {
-    let clip_library = world.get_resource::<ClipLibrary>()?;
-    let mut clip_ids: Vec<_> = clip_library.all_clip_ids().copied().collect();
-    clip_ids.sort_unstable();
-
-    clip_ids
-        .iter()
-        .copied()
-        .find(|&id| {
-            clip_library
-                .get(id)
-                .is_some_and(|clip| !clip.tracks.is_empty())
-        })
-        .or_else(|| clip_ids.first().copied())
 }
 
 pub(super) fn restore_batch_playback(world: &World) {

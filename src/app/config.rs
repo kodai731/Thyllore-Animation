@@ -2,9 +2,11 @@ use crate::ecs::systems::{
     debug_actions_json, resolve_engine_cli_overrides, run_sequence_analyze_from_args,
     EngineCliOverrides, BATCH_LIST_DEBUG_ACTIONS_FLAG,
 };
+use crate::hooks::bootstrap::ResolvedBootstrap;
 
 pub struct AppConfig {
     pub overrides: EngineCliOverrides,
+    pub bootstrap: ResolvedBootstrap,
     pub is_batch_mode: bool,
 }
 
@@ -19,8 +21,10 @@ pub fn from_args(args: Vec<String>) -> anyhow::Result<Option<AppConfig>> {
         return Ok(None);
     }
 
-    let overrides = match resolve_engine_cli_overrides(&args) {
-        Ok(overrides) => overrides,
+    let resolved = resolve_engine_cli_overrides(&args)
+        .and_then(|overrides| Ok((overrides, ResolvedBootstrap::resolve(&args)?)));
+    let (overrides, bootstrap) = match resolved {
+        Ok(resolved) => resolved,
         Err(e) => {
             println!(
                 "{}",
@@ -34,6 +38,7 @@ pub fn from_args(args: Vec<String>) -> anyhow::Result<Option<AppConfig>> {
 
     Ok(Some(AppConfig {
         overrides,
+        bootstrap,
         is_batch_mode,
     }))
 }

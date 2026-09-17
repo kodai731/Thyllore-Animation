@@ -125,9 +125,16 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 ## src/hooks/
 
 Generic hook infrastructure that lets a subsystem plug into the app lifecycle without being named by
-`src/app/`. `effect.rs` holds the effect hook (setup, viewport resize, pass nodes) and the list that runs
-them in subscription order; GPU teardown is not a hook, it is the `gpu_resource!` registration of the
-effect's resource (`gpu_resource.rs`: `GpuResourceHook`, `GpuResourceHooks::collect()`). `pass.rs` holds the `RenderPassNode` contract (name,
+`src/app/`. `effect.rs` holds the effect hook (setup, after_overrides, viewport resize, pass nodes) and the
+list that runs them in subscription order; GPU teardown is not a hook, it is the `gpu_resource!` registration
+of the effect's resource (`gpu_resource.rs`: `GpuResourceHook`, `GpuResourceHooks::collect()`).
+`bootstrap.rs` holds the `BootstrapOverrides` contract (a subsystem's command-line configuration: `NAME`,
+`resolve(args)`, `apply(world, assets)`) and the `bootstrap_hook!` registration (`inventory`);
+`ResolvedBootstrap::resolve(args)` runs every `resolve` before the window exists so a bad flag fails fast,
+and `src/app/bootstrap.rs` applies the engine's own `EngineCliOverrides` and then every resolved hook
+without naming one. An effect keeps its flags, parsing and world writes in `src/ecs/systems/<effect>/cli.rs`;
+GPU work that depends on those overrides (the flame SDF texture) is the effect's `after_overrides` hook,
+run by `src/app/bootstrap.rs::finish_setup` after the overrides are applied. `pass.rs` holds the `RenderPassNode` contract (name,
 stage, `transients` requested by slot and desc, reads / writes declared as `TargetUse`, `prepare`, record),
 the `PassStage` order (lighting → effect → post-process → final) and the `PassGraph` that keeps registered
 nodes sorted by stage then registration order. The graph runner in `src/app/command_recording.rs` runs
@@ -202,7 +209,8 @@ Concretely:
   `src/scene/` changes. Adding an effect = `scene_owner!` in its component file; a provenance component
   = `scene_attachment!`. Runtime-only companions (baked data, accumulators) are inserted by the effect's
   own per-frame system when missing, never by the loader.
-- `src/hooks/` files describe contracts (`EffectHook`, `RenderPassNode`, `SceneComponentHook`); they take
+- `src/hooks/` files describe contracts (`EffectHook`, `RenderPassNode`, `SceneComponentHook`,
+  `BootstrapOverrides`); they take
   fn pointers and `&'static str` keys, never an effect type.
 - `src/ecs/world.rs` offers generic component access (`iter_components::<C>`, `insert_component`); it does
   not grow `with_<effect>()` builders or `query_<effect>s()` helpers. The existing `query_flames` /

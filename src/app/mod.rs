@@ -7,7 +7,7 @@ pub mod data;
 pub(crate) mod deferred_actions;
 pub(crate) mod features;
 pub mod init;
-pub mod model_loader;
+pub mod model;
 mod pass_targets;
 pub mod post_process;
 pub mod raytracing;

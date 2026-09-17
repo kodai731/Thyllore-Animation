@@ -101,7 +101,7 @@ file per domain, one directory per effect), phases (execution order and event di
 No file here declares `impl App` or takes `&mut App` (see the known exceptions above). A system that needs
 GPU resources as well as `World` takes `FrameContext` or a smaller context struct (`raytracing_systems.rs`:
 per-frame TLAS refresh from `GlobalTransform`). If the work is mostly GPU upload and rebuild with a few
-`World` writes, it is app wiring and lives in `src/app/` (`model_loader.rs`, `scene_model.rs`); if it exists
+`World` writes, it is app wiring and lives in `src/app/` (`model/`, `scene_model.rs`); if it exists
 only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`.
 
 ## src/hooks/
@@ -117,8 +117,24 @@ at its first use and release it after its last, `src/app/pass_targets.rs`), prep
 images into descriptors and framebuffers), record (`ImageStateTracker` in `thyllore-vulkan-core`
 `renderer/pass_target.rs` emits the layout barriers). Pass code never acquires a transient or writes an
 `ImageMemoryBarrier` for a declared target; `AppData.frame_transients` is the single map from slot to
-handle. A hook file describes a contract only; it
-never names a concrete effect.
+handle. `scene.rs` holds the `SceneComponentHook` contract (type key, owner / attachment role,
+entities, capture, apply), the `scene_owner!` / `scene_attachment!` macros that submit a hook to the
+link-time registry (`inventory`), and `SceneComponentHooks::collect()` that `src/app/` stores as a
+`World` resource for `src/scene/`; owners are applied before attachments. `scene_resource.rs` is the
+same contract for world resources (`SceneResourceHook`, `scene_resource!`, `SceneResourceHooks`).
+`gpu_primitive.rs` holds the `GpuPrimitiveSource` contract (a component that describes its ray-tracing
+instance as a `GpuPrimitive`, plus `effect_data_address(world, ordinal)` for the device address of the
+instance block its closest hit shader reads through the hit record), the `gpu_primitive_source!`
+registration and `collect_all(world)`, which the acceleration structure build and the per-frame TLAS
+refresh both call so the instance order is one list (hooks sorted by type name, entities sorted by id).
+The effect trace pass (`shaders/raytracing/`, `raytracing_systems.rs::ensure_effect_trace_pipeline`) is
+shared by every effect: its descriptor set is effect independent and an effect's own data reaches its hit
+shader only through that address, never through an extra descriptor set or push constant.
+`model_load.rs` holds the `ModelLoadHook` contract (name, stage, apply) and the `model_load_hook!` macro:
+a domain that needs to react once a model replaced the scene model (attach loaded constraints or spring
+bones, reset a gizmo) registers its handler from its own system file at link time (`inventory`), rig
+handlers run before display handlers, and `src/app/model/` runs `ModelLoadHooks` generically without
+naming any domain. A hook file describes a contract only; it never names a concrete effect.
 
 ## src/effect/
 
@@ -153,8 +169,13 @@ and drives one frame. It is the only place that sees `App` as a whole.
 
 Files: `init/` and `cleanup.rs` (construction, teardown), `data.rs` (`AppData`), `viewport.rs` (core
 attachments, storage and transient pools), `render.rs` (frame driver), `update.rs` (per-frame update and
-imgui buffers), `command_recording.rs`, `model_loader.rs` and `scene_model.rs` (model load entry points,
-upload wiring, acceleration structure rebuild), `frame_context.rs` and `render_context.rs`, `post_process/`,
+imgui buffers), `command_recording.rs`, `model/` (`load.rs` entry points and load order, `texture.rs`
+texture file resolution, `gpu.rs` mesh upload and acceleration rebuild, `cleanup.rs` scene model reset,
+`caches.rs` / `nodes.rs` / `clips.rs` / `entities.rs` `World` and `AssetStorage` registration,
+`initial_pose.rs`; GPU mesh creation and vertex upload are `GraphicsResources::push_mesh` /
+`upload_mesh_vertices` in `thyllore-vulkan-core`; every `World` resource the load touches is inserted
+once in `init/instance.rs`, never lazily during a load) and `scene_model.rs`, `raytracing/`
+(acceleration structure rebuild), `frame_context.rs` and `render_context.rs`, `post_process/`,
 `features/` (see below), `util.rs`, `color_test_quad.rs`.
 
 `src/app/*.rs` is the core loop only. Optional capabilities that extend `App` but are not needed to drive a

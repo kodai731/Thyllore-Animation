@@ -294,11 +294,8 @@ pub fn apply_engine_overrides(app: &mut App, overrides: &EngineCliOverrides) {
         batch_apply_debug_actions(&app.data.ecs_world, &filtered);
     }
 
-    // Apply batch_play override: start timeline playback for deterministic batch clip runs.
-    // Prefer a clip with bone tracks so the (empty) default flame clip never
-    // shadows the model animation the batch run wants to play.
     if overrides.batch_play {
-        let first = crate::app::model_loader::find_best_clip(&app.data.ecs_world);
+        let first = crate::app::model::find_best_clip(&app.data.ecs_world);
         let mut ts = app
             .data
             .ecs_world
@@ -310,7 +307,6 @@ pub fn apply_engine_overrides(app: &mut App, overrides: &EngineCliOverrides) {
             ts.current_clip_id = first;
         }
 
-        // Store play request on BatchRun so model_loader.rs resets can restore it
         if let Some(mut batch_run) = app.data.ecs_world.get_resource_mut::<BatchRun>() {
             batch_run.play_requested = true;
             batch_run.play_clip_id = first;

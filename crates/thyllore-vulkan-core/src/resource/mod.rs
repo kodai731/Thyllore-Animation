@@ -32,7 +32,7 @@ pub use dynamic_buffer::*;
 pub use flame_buffer::FlameBuffer;
 pub use gbuffer::{RRGBuffer, READBACK_POSITION_OFFSET, READBACK_STAGING_SIZE};
 pub use gpu_resource::{destroy_all_in_reverse, GpuResource};
-pub use graphics_resource::GraphicsResources;
+pub use graphics_resource::{GraphicsResources, MeshSource, TexturePixels};
 pub use hdr_buffer::HdrBuffer;
 pub use hit_shading_table::{HitShadingRecord, HitShadingTable};
 pub use image::*;

@@ -5,14 +5,12 @@ use cgmath::SquareMatrix;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::app::AppData;
-use crate::ecs::resource::billboard::{BillboardData, BillboardRenderState};
 use crate::ecs::systems::collect_mesh_transforms;
 use crate::ecs::world::World;
 use crate::vulkanr::command::RRCommandPool;
 use crate::vulkanr::data as vulkan_data;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::resource::graphics_resource::GraphicsResources;
-use crate::vulkanr::swapchain::RRSwapchain;
 use crate::vulkanr::vulkan::Instance;
 use thyllore_math_core::AffineRows3x4;
 use thyllore_vulkan_core::raytracing::{BlasGeometry, GpuPrimitive, RRAccelerationStructure};
@@ -114,6 +112,7 @@ pub unsafe fn rebuild_acceleration_structures(
     )?;
 
     raytracing.acceleration_structure = Some(acceleration_structure);
+    raytracing.bind_ray_query_tlas(device)?;
     log!("Acceleration structures rebuilt successfully");
     Ok(())
 }
@@ -135,31 +134,4 @@ pub unsafe fn rebuild_acceleration_structures_from_data(
         &procedural_primitives,
         &mesh_transforms,
     )
-}
-
-pub unsafe fn update_ray_query_descriptor(
-    device: &RRDevice,
-    raytracing: &mut RayTracingData,
-) -> Result<()> {
-    raytracing.bind_ray_query_tlas(device)?;
-    if raytracing.has_valid_tlas() {
-        log!("Updated ray_query_descriptor with new TLAS");
-    }
-    Ok(())
-}
-
-pub unsafe fn update_billboard_descriptor(
-    device: &RRDevice,
-    swapchain: &RRSwapchain,
-    billboard: &mut BillboardData,
-) -> Result<()> {
-    let BillboardRenderState {
-        descriptor_set,
-        texture,
-    } = &mut billboard.render_state;
-    if let Some(billboard_texture) = texture.as_ref() {
-        descriptor_set.update_descriptor_sets(device, swapchain, billboard_texture)?;
-        log!("Re-updated billboard.render_state.descriptor_set after model reload");
-    }
-    Ok(())
 }

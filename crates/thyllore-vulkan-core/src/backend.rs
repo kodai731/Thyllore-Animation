@@ -1,10 +1,8 @@
-use std::ffi::c_void;
 use std::mem::size_of;
 use std::rc::Rc;
 
 use anyhow::Result;
 use cgmath::{Matrix4, Vector3, Vector4};
-use vulkanalia::prelude::v1_0::*;
 
 use thyllore_render_core::{
     BufferMemoryType, DistanceAttenuation, FrameUBO, IndexBufferHandle, LineMesh, MeshId,
@@ -74,25 +72,12 @@ fn collect_blas_index_of_mesh(graphics: &GraphicsResources) -> Vec<Option<usize>
 
 impl<'a> RenderBackend for VulkanBackend<'a> {
     unsafe fn upload_mesh_vertices(&mut self, mesh_id: MeshId) -> Result<()> {
-        if mesh_id >= self.graphics.meshes.len() {
-            return Ok(());
-        }
-
-        let mesh = &mut self.graphics.meshes[mesh_id];
-        let vertices = &mesh.vertex_data.vertices;
-        let vertex_count = vertices.len();
-        let vertex_stride = size_of::<Vertex>();
-
-        mesh.vertex_buffer.update(
+        self.graphics.upload_mesh_vertices(
             self.instance,
             self.device,
             self.command_pool.as_ref(),
-            (vertex_stride * vertex_count) as vk::DeviceSize,
-            vertices.as_ptr() as *const c_void,
-            vertex_count,
-        )?;
-
-        Ok(())
+            mesh_id,
+        )
     }
 
     unsafe fn update_acceleration_structure(&mut self, mesh_ids: &[MeshId]) -> Result<()> {

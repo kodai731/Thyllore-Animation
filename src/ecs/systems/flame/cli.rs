@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
 use clap::builder::{PossibleValuesParser, RangedU64ValueParser};
 use clap::Args;
@@ -10,7 +12,8 @@ use thyllore_effect_core::{
 use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameBoneAttachment, FlameEffect, FlameTrail, HeatPlume, MotionPath};
 use crate::ecs::resource::{
-    BatchFlameOrbit, BatchRun, FlameDumpSink, FlameRenderSettings, FlameSdfSource, FlameShadingMode,
+    BatchDumpPlan, BatchFlameOrbit, FlameDumpSink, FlameRenderSettings, FlameSdfSource,
+    FlameShadingMode,
 };
 use crate::ecs::systems::cli_args::{
     finite_float_parse, float_pair_parse, scalar_assignment_parse,
@@ -52,6 +55,10 @@ pub struct FlameOverrides {
     pub style: Option<(String, StyleGroups)>,
     #[arg(long = "batch-flame-style-dump")]
     pub style_dump: Option<String>,
+    #[arg(long = "batch-flame-trace")]
+    pub trace_path: Option<PathBuf>,
+    #[arg(long = "batch-wall-probe")]
+    pub wall_probe_path: Option<PathBuf>,
     #[arg(
         long = "batch-heat-plume",
         num_args = 0..=1,
@@ -72,8 +79,10 @@ impl BootstrapOverrides for FlameOverrides {
         if let Some(path) = &self.sdf {
             world.insert_resource(FlameSdfSource { path: path.clone() });
         }
-        if let Some(mut batch_run) = world.get_resource_mut::<BatchRun>() {
-            batch_run.flame_set = self.set.clone();
+        if let Some(mut plan) = world.get_resource_mut::<BatchDumpPlan>() {
+            plan.flame_set = self.set.clone();
+            plan.flame_trace_path = self.trace_path.clone();
+            plan.wall_probe_path = self.wall_probe_path.clone();
         }
 
         self.spawn_extra_flames(world, assets);
@@ -140,7 +149,7 @@ impl FlameOverrides {
             apply_flame_preset(&mut effect, name);
         }
         if let Some((path, blend, profile)) = &self.texture_fit {
-            crate::ecs::systems::apply_texture_fit_from_path(
+            super::apply_texture_fit_from_path(
                 &mut effect,
                 &mut baked,
                 path,
@@ -638,6 +647,33 @@ mod tests {
         assert!(FlameOverrides::resolve(&args(&["bin", "--batch-flame-orbit", "2"])).is_err());
         assert!(FlameOverrides::resolve(&args(&["bin", "--batch-flame-motion", "-1,2"])).is_err());
         assert!(FlameOverrides::resolve(&args(&["bin", "--batch-flame-trail", "0"])).is_err());
+    }
+
+    #[test]
+    fn batch_dump_flags_fill_the_dump_plan() {
+        let overrides = FlameOverrides::resolve(&args(&[
+            "bin",
+            "--batch-flame-set",
+            "height=1.5",
+            "--batch-flame-trace",
+            "/tmp/trace.json",
+            "--batch-wall-probe",
+            "/tmp/wall.json",
+        ]))
+        .unwrap();
+        let mut world = World::new();
+        world.insert_resource(BatchDumpPlan::default());
+        overrides
+            .apply(&mut world, &mut AssetStorage::new())
+            .unwrap();
+
+        let plan = world.resource::<BatchDumpPlan>();
+        assert_eq!(plan.flame_set, vec![(String::from("height"), 1.5)]);
+        assert_eq!(
+            plan.flame_trace_path,
+            Some(PathBuf::from("/tmp/trace.json"))
+        );
+        assert_eq!(plan.wall_probe_path, Some(PathBuf::from("/tmp/wall.json")));
     }
 
     #[test]

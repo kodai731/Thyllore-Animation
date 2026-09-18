@@ -139,7 +139,7 @@ from its own directory. An effect keeps that struct and its world writes in
 itself (`FromStr` on the setting enum in `thyllore-effect-core`, a clap range, or a `value_parser` fn for a
 composite value); there is no per-flag lookup code. `BootstrapOverrides::resolve` parses the hook in
 isolation by keeping only the tokens its struct declares, which is what lets it coexist with the engine's
-hand-parsed flags in `batch_run_systems.rs`; two hooks declaring the same flag fail at startup. GPU work
+hand-parsed flags in `src/ecs/systems/batch_run_systems/`; two hooks declaring the same flag fail at startup. GPU work
 that depends on those overrides (the flame SDF texture) is the effect's `after_overrides` hook, run by
 `src/app/bootstrap.rs::finish_setup` after the overrides are applied. `pass.rs` holds the `RenderPassNode` contract (name,
 stage, `transients` requested by slot and desc, reads / writes declared as `TargetUse`, `prepare`, record),
@@ -219,6 +219,11 @@ Concretely:
 - `src/hooks/` files describe contracts (`EffectHook`, `RenderPassNode`, `SceneComponentHook`,
   `BootstrapOverrides`); they take
   fn pointers and `&'static str` keys, never an effect type.
+- `--batch-debug-action` names are a link-time registry too: a `BatchAction` implementation lives in
+  `src/ecs/systems/<effect>/batch_actions.rs` (generic ones in `batch_run_systems/batch_action.rs`) and
+  registers with `batch_action!`; `batch_run_systems/` parses and lists actions from that registry and
+  never names one. What a batch run must dump at its screenshot frame is the shared `BatchDumpPlan`
+  resource, filled by the dump actions and the effect `cli.rs` hooks, never by the batch parser.
 - `src/ecs/world.rs` offers generic component access (`iter_components::<C>`, `insert_component`); it does
   not grow `with_<effect>()` builders or `query_<effect>s()` helpers. The existing `query_flames` /
   `query_waters` / `query_winds` are tracked as exceptions and must not be extended.

@@ -1,3 +1,4 @@
+mod batch_actions;
 mod cli;
 mod debug_dump;
 mod gpu_primitive;

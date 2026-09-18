@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use serde_json::json;
 
-use super::flag_value_resolve_from_args;
+use crate::ecs::systems::cli_args::flag_value_resolve_from_args;
 
 const BATCH_SEQUENCE_ANALYZE_FLAG: &str = "--batch-sequence-analyze";
 const BATCH_SEQUENCE_DUMP_FLAG: &str = "--batch-sequence-dump";

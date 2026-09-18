@@ -1,5 +1,14 @@
+use std::path::{Path, PathBuf};
+
 use super::*;
-use std::path::PathBuf;
+use crate::asset::AssetStorage;
+use crate::ecs::component::{FlameEffect, MotionPath};
+use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::resource::{
+    BatchDumpPlan, BatchFlameOrbit, BatchRun, BatchRunState, ClipLibrary, DebugViewMode,
+    DebugViewState, TimelineState,
+};
+use crate::ecs::world::{Transform, World};
 
 fn args(list: &[&str]) -> Vec<String> {
     list.iter().map(|s| s.to_string()).collect()
@@ -32,7 +41,7 @@ fn resolve_returns_none_without_flag() {
 
 #[test]
 fn resolve_parses_output_and_default_frames() {
-    let (resolved, _dump_plan) =
+    let resolved =
         batch_run_resolve_from_args(&args(&["bin", "--batch-screenshot", "/tmp/out.png"]))
             .unwrap()
             .unwrap();
@@ -43,7 +52,7 @@ fn resolve_parses_output_and_default_frames() {
 
 #[test]
 fn resolve_parses_explicit_frames() {
-    let (resolved, _dump_plan) = batch_run_resolve_from_args(&args(&[
+    let resolved = batch_run_resolve_from_args(&args(&[
         "bin",
         "--batch-screenshot",
         "/tmp/out.png",
@@ -53,6 +62,31 @@ fn resolve_parses_explicit_frames() {
     .unwrap()
     .unwrap();
     assert_eq!(resolved.screenshot_frame, 30);
+}
+
+#[test]
+fn resolve_parses_sequence_mode() {
+    let resolved = batch_run_resolve_from_args(&args(&[
+        "bin",
+        "--batch-screenshot-sequence",
+        "out,3,2",
+        "--batch-frames",
+        "10",
+    ]))
+    .unwrap()
+    .unwrap();
+    assert_eq!(resolved.sequence_dir, Some(PathBuf::from("out")));
+    assert_eq!(resolved.total_count, 3);
+    assert_eq!(resolved.captures_remaining, 3);
+    assert_eq!(resolved.stride, 2);
+    assert_eq!(resolved.screenshot_frame, 10);
+    for bad in ["out,0,2", "out,3,0", "out,3", "out,x,2"] {
+        assert!(
+            batch_run_resolve_from_args(&args(&["bin", "--batch-screenshot-sequence", bad]))
+                .is_err(),
+            "expected error for '{bad}'"
+        );
+    }
 }
 
 #[test]
@@ -73,52 +107,21 @@ fn resolve_rejects_non_png_output() {
 
 #[test]
 fn resolve_rejects_invalid_frames() {
-    assert!(batch_run_resolve_from_args(&args(&[
-        "bin",
-        "--batch-screenshot",
-        "/tmp/out.png",
-        "--batch-frames",
-        "0"
-    ]))
-    .is_err());
-    assert!(batch_run_resolve_from_args(&args(&[
-        "bin",
-        "--batch-screenshot",
-        "/tmp/out.png",
-        "--batch-frames",
-        "abc"
-    ]))
-    .is_err());
+    for frames in ["0", "abc"] {
+        assert!(batch_run_resolve_from_args(&args(&[
+            "bin",
+            "--batch-screenshot",
+            "/tmp/out.png",
+            "--batch-frames",
+            frames
+        ]))
+        .is_err());
+    }
 }
 
 #[test]
 fn resolve_rejects_frames_without_screenshot() {
     assert!(batch_run_resolve_from_args(&args(&["bin", "--batch-frames", "30"])).is_err());
-}
-
-#[test]
-fn resolve_flame_mode_and_steps() {
-    let overrides = resolve_engine_cli_overrides(&args(&[
-        "bin",
-        "--batch-flame-mode",
-        "raymarch",
-        "--batch-flame-steps",
-        "512",
-    ]))
-    .unwrap();
-    assert!(overrides.batch_run.is_none());
-    assert_eq!(
-        overrides.flame_mode,
-        Some(FlameShadingMode::ReferenceRaymarch)
-    );
-    assert_eq!(overrides.flame_steps, Some(512));
-}
-
-#[test]
-fn resolve_rejects_invalid_flame_overrides() {
-    assert!(flame_mode_resolve_from_args(&args(&["bin", "--batch-flame-mode", "x"])).is_err());
-    assert!(flame_steps_resolve_from_args(&args(&["bin", "--batch-flame-steps", "0"])).is_err());
-    assert!(flame_steps_resolve_from_args(&args(&["bin", "--batch-flame-steps", "abc"])).is_err());
 }
 
 #[test]
@@ -152,6 +155,53 @@ fn resolve_rejects_invalid_camera_pose() {
             "expected error for '{value}'"
         );
     }
+}
+
+#[test]
+fn engine_overrides_carry_no_subsystem_flags() {
+    let overrides = resolve_engine_cli_overrides(&args(&[
+        "bin",
+        "--batch-screenshot",
+        "/tmp/out.png",
+        "--batch-flame-mode",
+        "raymarch",
+        "--batch-water-probe",
+        "/tmp/probe.json",
+        "--batch-play",
+    ]))
+    .unwrap();
+    assert!(overrides.batch_run.is_some());
+    assert!(overrides.batch_play);
+    assert!(overrides.debug_actions.is_empty());
+}
+
+#[test]
+fn apply_engine_overrides_inserts_the_batch_run_and_an_empty_dump_plan() {
+    let overrides = resolve_engine_cli_overrides(&args(&[
+        "bin",
+        "--batch-screenshot",
+        "/tmp/out.png",
+        "--batch-frames",
+        "7",
+    ]))
+    .unwrap();
+    let mut world = World::new();
+    apply_engine_overrides(&mut world, &mut AssetStorage::new(), &overrides);
+
+    assert_eq!(world.resource::<BatchRun>().screenshot_frame, 7);
+    let plan = world.resource::<BatchDumpPlan>();
+    assert!(plan.flame_set.is_empty());
+    assert!(!plan.dump_wall_probe && !plan.dump_water_debug && !plan.dump_wind_debug);
+    assert!(plan.water_probe_path.is_none());
+}
+
+#[test]
+fn apply_engine_overrides_without_a_batch_run_inserts_no_dump_plan() {
+    let overrides = resolve_engine_cli_overrides(&args(&["bin"])).unwrap();
+    let mut world = World::new();
+    apply_engine_overrides(&mut world, &mut AssetStorage::new(), &overrides);
+    assert!(world.get_resource::<BatchRun>().is_none());
+    assert!(world.get_resource::<BatchDumpPlan>().is_none());
 }
 
 #[test]
@@ -212,303 +262,41 @@ fn report_incomplete_state_is_error() {
 }
 
 #[test]
-fn flame_style_path_only_defaults_to_all_groups() {
-    let args: Vec<String> = vec![
-        "--batch-flame-style".into(),
-        "assets/flames/styles/pillar.style.ron".into(),
-    ];
-    let (path, groups) = flame_style_resolve_from_args(&args).unwrap().unwrap();
-    assert_eq!(path, "assets/flames/styles/pillar.style.ron");
-    assert_eq!(groups, thyllore_effect_core::StyleGroups::default());
-}
-
-#[test]
-fn flame_style_group_subset() {
-    let args: Vec<String> = vec!["--batch-flame-style".into(), "s.ron,motion,optics".into()];
-    let (_, groups) = flame_style_resolve_from_args(&args).unwrap().unwrap();
-    assert!(groups.motion && groups.optics && !groups.texture);
-}
-
-#[test]
-fn flame_style_unknown_group_error() {
-    let args: Vec<String> = vec!["--batch-flame-style".into(), "s.ron,shape".into()];
-    assert!(flame_style_resolve_from_args(&args).is_err());
-}
-
-#[test]
-fn flame_style_ron_roundtrip_applies() {
-    let ron_text = r#"FlameStyle(
-            version: 1,
-            name: "pillar-ref",
-            motion: (twist_gain: Some(6.0), meander_amp_over_r0: Some(0.5)),
-            optics: (tau0: Some(4.0)),
-        )"#;
-    let style: thyllore_effect_core::FlameStyle = ron::from_str(ron_text).unwrap();
-    let mut effect = FlameEffect::default();
-    effect.radius = 2.0;
-    let applied = thyllore_effect_core::apply_flame_style(
-        &mut effect,
-        &style,
-        thyllore_effect_core::StyleGroups::default(),
-    );
-    assert_eq!(effect.twist.gain, 6.0);
-    assert_eq!(effect.meander.amp, 1.0);
-    assert_eq!(effect.optical_depth, 4.0);
-    assert_eq!(applied.len(), 3);
-}
-
-#[test]
-fn flame_style_dump_load_roundtrip() {
-    let effect = FlameEffect::default();
-    let path = std::env::temp_dir().join("thyllore_style_test.style.ron");
-    let path_str = path.to_str().unwrap();
-    dump_flame_style_to_path(&effect, path_str);
-    let style = load_flame_style_from_path(path_str).unwrap();
-    let _ = std::fs::remove_file(&path);
-    assert_eq!(
-        style,
-        thyllore_effect_core::flame_style_from_effect(&effect, "thyllore_style_test")
-    );
-}
-
-#[test]
-fn shipped_style_assets_parse() {
-    for entry in std::fs::read_dir(crate::paths::FLAMES_STYLE_DIR).unwrap() {
-        let path = entry.unwrap().path();
-        if path.to_string_lossy().ends_with(".style.ron") {
-            let content = std::fs::read_to_string(&path).unwrap();
-            ron::from_str::<thyllore_effect_core::FlameStyle>(&content)
-                .unwrap_or_else(|e| panic!("{}: {}", path.display(), e));
-        }
-    }
-}
-
-#[test]
-fn flame_set_combined_form() {
-    let args: Vec<String> = vec!["--batch-flame-set=noise_amplitude=0.35".into()];
-    let pairs = flame_set_resolve_from_args(&args).unwrap();
-    assert_eq!(pairs.len(), 1);
-    assert_eq!(pairs[0].0, "noise_amplitude");
-    assert!((pairs[0].1 - 0.35).abs() < 1e-6);
-}
-
-#[test]
-fn flame_set_separate_form() {
-    let args: Vec<String> = vec!["--batch-flame-set".into(), "noise_amplitude=0.35".into()];
-    let pairs = flame_set_resolve_from_args(&args).unwrap();
-    assert_eq!(pairs.len(), 1);
-    assert_eq!(pairs[0].0, "noise_amplitude");
-    assert!((pairs[0].1 - 0.35).abs() < 1e-6);
-}
-
-#[test]
-fn flame_set_unknown_key_error() {
-    let args: Vec<String> = vec!["--batch-flame-set".into(), "invalid_key=1.0".into()];
-    let err = flame_set_resolve_from_args(&args).unwrap_err();
-    assert!(err.to_string().contains("invalid_key"),);
-}
-
-#[test]
-fn apply_flame_overrides_no_panic_for_all_keys() {
-    for key in flame_set_valid_keys() {
-        let mut effect = FlameEffect::default();
-        let overrides: Vec<(String, f32)> = vec![(key.to_string(), 1.0)];
-        apply_flame_overrides(&mut effect, &overrides);
-    }
-}
-
-/// Every key the pre-registry FLAME_SET_KEYS table accepted must keep working.
-#[test]
-fn flame_set_legacy_keys_stay_accepted() {
-    let legacy_keys = [
-        "warp_amp",
-        "warp_freq",
-        "rise_speed",
-        "taper_power",
-        "radius_tip_ratio",
-        "edge_low",
-        "edge_high",
-        "white_boost",
-        "bend_amount",
-        "bend_power",
-        "wind_x",
-        "wind_z",
-        "noise_amplitude",
-        "noise_contrast",
-        "noise_frequency",
-        "noise_scroll_speed",
-        "sigma_t",
-        "intensity",
-        "height",
-        "radius",
-        "time",
-        "time_scale",
-        "time_offset",
-        "rot_z_deg",
-        "temperature_base_k",
-        "temperature_tip_k",
-        "envelope_peak",
-        "envelope_base",
-        "envelope_tail",
-        "radial_sharpness",
-        "emitter_kind",
-        "ring_major_radius",
-        "ring_angular_speed",
-        "noise_aniso_y",
-        "warp_y_scale",
-        "occlusion_lum_ref",
-        "contour_wiggle_amp",
-        "aniso_axis_advect",
-        "rte_bands",
-        "sigma_dispersion",
-        "boundary_amp",
-        "near_fade_radius",
-        "carve_residual",
-        "tip_carve_depth",
-        "tip_carve_reach",
-        "warp_reach",
-        "swirl_gain",
-        "swirl_speed",
-        "spread_gain",
-        "support_margin",
-        "meander_amp",
-        "meander_frequency",
-        "mix_lo",
-        "mix_hi",
-        "mix_height_gain",
-        "mix_scale",
-        "mix_radial_gain",
-        "density_exp",
-        "temp_exp",
-        "wien_c_k",
-        "wave_segments",
-        "boundary_freq",
-        "boundary_speed",
-        "boundary_radius_ratio",
-        "edge_outer_sharpen",
-        "noise_scale_mode",
-        "erosion_noise_gain",
-        "twist_gain",
-        "twist_speed",
-        "burnout_gain",
-        "noise_shaping_scale",
-        "optical_depth",
-        "branch_period",
-        "branch_life",
-        "branch_gain",
-        "branch_core_radius",
-        "branch_core_offset",
-        "branch_reach",
-        "branch_spread",
-        "branch_spawn_height",
-        "branch_spawn_range",
-        "branch_seed",
-    ];
-    let valid = flame_set_valid_keys();
-    for key in legacy_keys {
-        assert!(valid.contains(&key), "legacy key {key} no longer accepted");
-    }
-}
-
-#[test]
 fn batch_run_update_orbit_inserts_missing_transform() {
     let mut world = World::new();
-
-    // Spawn an entity with only FlameEffect (no Transform)
     let e = world.spawn();
     world.insert_component(e, FlameEffect::default());
-
-    // Insert BatchRun and BatchFlameOrbit resources
     world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 1));
     world.resource_mut::<BatchRun>().frames_rendered = 1;
-    world.insert_resource(crate::ecs::resource::BatchFlameOrbit {
+    world.insert_resource(BatchFlameOrbit {
         radius: 2.0,
         period_seconds: 4.0,
         initial: None,
     });
 
-    // Call once: initializes `initial` from the (missing) Transform to (0,0,0)
-    // and inserts MotionPath component for the flame entity
     batch_run_update_orbit(&mut world);
 
-    // Assert that the entity now has a MotionPath component
-    let motion_path = world.get_component::<crate::ecs::component::MotionPath>(e);
-    assert!(
-        motion_path.is_some(),
-        "MotionPath should have been inserted"
-    );
-
-    let motion_path = motion_path.unwrap();
+    let motion_path = world
+        .get_component::<MotionPath>(e)
+        .expect("MotionPath should have been inserted");
     assert_eq!(motion_path.center, cgmath::Vector3::new(0.0, 0.0, 0.0));
     assert!((motion_path.radius - 2.0).abs() < 1e-5);
-    assert!(
-        (motion_path.angular_speed - 2.0 * std::f32::consts::PI / 4.0).abs() < 1e-5,
-        "angular_speed: got {}, expected {}",
-        motion_path.angular_speed,
-        2.0 * std::f32::consts::PI / 4.0
-    );
+    assert!((motion_path.angular_speed - 2.0 * std::f32::consts::PI / 4.0).abs() < 1e-5);
+    drop(motion_path);
 
-    // Call sync_motion_paths to update Transform from MotionPath
     crate::ecs::systems::sync_motion_paths(&mut world);
 
-    // Assert that the entity now has a Transform component (inserted by sync_motion_paths)
-    let transform = world.get_component::<crate::ecs::world::Transform>(e);
-    assert!(
-        transform.is_some(),
-        "Transform should have been inserted by sync_motion_paths"
-    );
-
-    let transform = transform.unwrap();
+    let transform = world
+        .get_component::<Transform>(e)
+        .expect("Transform should have been inserted by sync_motion_paths");
     let offset = compute_orbit_offset(2.0, 4.0, 1.0 / 60.0);
-
-    assert!(
-        (transform.translation.x - offset[0]).abs() < 1e-5,
-        "translation.x: got {}, expected {}",
-        transform.translation.x,
-        offset[0]
-    );
-    assert!(
-        (transform.translation.z - offset[2]).abs() < 1e-5,
-        "translation.z: got {}, expected {}",
-        transform.translation.z,
-        offset[2]
-    );
+    assert!((transform.translation.x - offset[0]).abs() < 1e-5);
+    assert!((transform.translation.z - offset[2]).abs() < 1e-5);
 }
 
 #[test]
-fn test_flame_preset_resolve_valid() {
-    let args = vec![String::from("--batch-flame-preset"), String::from("candle")];
-    let result = flame_preset_resolve_from_args(&args).unwrap();
-    assert_eq!(result, Some(String::from("candle")));
-}
-
-#[test]
-fn test_flame_preset_then_override_order() {
-    // "candle" preset sets height=0.28, radius=0.07, intensity=2.0, etc.
-    let mut effect = FlameEffect::default();
-    thyllore_effect_core::apply_flame_preset(&mut effect, "candle");
-
-    // Now apply an individual override for height via flame_set
-    let overrides: Vec<(String, f32)> = vec![(String::from("height"), 1.5)];
-    apply_flame_overrides(&mut effect, &overrides);
-
-    // The override should be final (1.5), not the preset value (0.28)
-    assert!(
-        (effect.height - 1.5).abs() < 1e-5,
-        "height should be overridden to 1.5, got {}",
-        effect.height
-    );
-    // Other candle preset values should remain
-    assert!(
-        (effect.radius - 0.07).abs() < 1e-5,
-        "radius should still be candle's 0.07, got {}",
-        effect.radius
-    );
-}
-
-#[test]
-fn test_orbit_motion_path_equivalence() {
-    use crate::ecs::component::{motion_path_position, MotionPath};
+fn orbit_offset_matches_motion_path_position() {
+    use crate::ecs::component::motion_path_position;
     use std::f32::consts::PI;
 
     let center = cgmath::Vector3::new(1.0, 2.0, 3.0);
@@ -530,81 +318,10 @@ fn test_orbit_motion_path_equivalence() {
             center.y + offset[1],
             center.z + offset[2],
         );
-
-        assert!(
-            (mp_pos.x - orbit_pos.x).abs() < 1e-5,
-            "t={}: x diff {} (mp={}, orbit={})",
-            t,
-            (mp_pos.x - orbit_pos.x).abs(),
-            mp_pos.x,
-            orbit_pos.x
-        );
-        assert!(
-            (mp_pos.y - orbit_pos.y).abs() < 1e-5,
-            "t={}: y diff {} (mp={}, orbit={})",
-            t,
-            (mp_pos.y - orbit_pos.y).abs(),
-            mp_pos.y,
-            orbit_pos.y
-        );
-        assert!(
-            (mp_pos.z - orbit_pos.z).abs() < 1e-5,
-            "t={}: z diff {} (mp={}, orbit={})",
-            t,
-            (mp_pos.z - orbit_pos.z).abs(),
-            mp_pos.z,
-            orbit_pos.z
-        );
+        assert!((mp_pos.x - orbit_pos.x).abs() < 1e-5, "t={t}: x");
+        assert!((mp_pos.y - orbit_pos.y).abs() < 1e-5, "t={t}: y");
+        assert!((mp_pos.z - orbit_pos.z).abs() < 1e-5, "t={t}: z");
     }
-}
-
-#[test]
-fn flame_texture_fit_path_only_defaults_blend_to_one() {
-    let resolved =
-        flame_texture_fit_resolve_from_args(&args(&["bin", "--batch-flame-texture", "image.png"]))
-            .unwrap()
-            .unwrap();
-    assert_eq!(resolved.0, "image.png");
-    assert!((resolved.1 - 1.0).abs() < 1e-6);
-    assert!(!resolved.2);
-}
-
-#[test]
-fn flame_texture_fit_path_with_blend() {
-    let resolved = flame_texture_fit_resolve_from_args(&args(&[
-        "bin",
-        "--batch-flame-texture",
-        "image.png,0.4",
-    ]))
-    .unwrap()
-    .unwrap();
-    assert_eq!(resolved.0, "image.png");
-    assert!((resolved.1 - 0.4).abs() < 1e-6);
-    assert!(!resolved.2);
-}
-
-#[test]
-fn flame_texture_fit_invalid_blend_is_err() {
-    assert!(flame_texture_fit_resolve_from_args(&args(&[
-        "bin",
-        "--batch-flame-texture",
-        "image.png,abc"
-    ]))
-    .is_err());
-}
-
-#[test]
-fn flame_texture_fit_profile() {
-    let resolved = flame_texture_fit_resolve_from_args(&args(&[
-        "bin",
-        "--batch-flame-texture",
-        "image.png,0.5,profile",
-    ]))
-    .unwrap()
-    .unwrap();
-    assert_eq!(resolved.0, "image.png");
-    assert!((resolved.1 - 0.5).abs() < 1e-6);
-    assert!(resolved.2);
 }
 
 #[test]
@@ -663,6 +380,36 @@ fn debug_actions_parse_names_and_view_mode() {
     assert!(
         debug_actions_resolve_from_args(&args(&["bin", "--batch-debug-action", "bogus"])).is_err()
     );
+    assert!(debug_actions_resolve_from_args(&args(&["bin", "--batch-debug-action"])).is_err());
+}
+
+#[test]
+fn registry_names_are_unique_and_sorted() {
+    let names: Vec<&str> = batch_action_registry()
+        .iter()
+        .map(|descriptor| descriptor.name)
+        .collect();
+    let mut sorted = names.clone();
+    sorted.sort_unstable();
+    sorted.dedup();
+    assert_eq!(names, sorted);
+    for expected in ["reset_camera", "view_mode", "spawn_cube"] {
+        assert!(names.contains(&expected), "{expected} not registered");
+    }
+}
+
+#[test]
+fn every_registered_name_parses_or_needs_a_value() {
+    for descriptor in batch_action_registry() {
+        let parsed = (descriptor.parse)(descriptor.name);
+        let with_value = (descriptor.parse)(&format!("{}=", descriptor.name))
+            .or_else(|| (descriptor.parse)(&format!("{}:", descriptor.name)));
+        assert!(
+            parsed.is_some() || with_value.is_some(),
+            "{} accepts neither its bare name nor a value form",
+            descriptor.name
+        );
+    }
 }
 
 #[test]
@@ -729,76 +476,6 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
 }
 
 #[test]
-fn flame_clip_preview_parses_and_rejects_invalid() {
-    let actions = debug_actions_resolve_from_args(&args(&[
-        "bin",
-        "--batch-debug-action",
-        "flame_clip_preview=3.5",
-    ]))
-    .unwrap();
-    assert_eq!(actions[0].name(), "flame_clip_preview");
-    assert_eq!(
-        format!("{:?}", actions[0]),
-        "FlameClipPreview { end_seconds: 3.5 }"
-    );
-    for bad in ["flame_clip_preview=abc", "flame_clip_preview=-1"] {
-        assert!(
-            debug_actions_resolve_from_args(&args(&["bin", "--batch-debug-action", bad])).is_err(),
-            "{bad} should be rejected"
-        );
-    }
-}
-
-#[test]
-fn flame_clip_preview_sets_drag_preview_without_touching_instance() {
-    let mut world = World::new();
-    world.insert_resource(ClipLibrary::new());
-    world.insert_resource(TimelineState::new());
-    world.insert_resource(crate::ecs::resource::TimelineInteractionState::default());
-    let mut assets = AssetStorage::new();
-    let flame = crate::ecs::systems::spawn_flame_with_clip(
-        &mut world,
-        &mut assets,
-        "Flame",
-        FlameEffect::default(),
-    );
-
-    batch_apply_debug_actions(
-        &world,
-        &[&flame_args::FlameClipPreview { end_seconds: 3.0 } as &dyn BatchAction],
-    );
-
-    let preview = world
-        .resource::<crate::ecs::resource::TimelineInteractionState>()
-        .drag_preview
-        .expect("preview set");
-    assert_eq!(preview.entity, flame);
-    assert!((preview.start_time - 0.0).abs() < 1e-6);
-    assert!((preview.end_time - 3.0).abs() < 1e-6);
-
-    let instance = world
-        .get_component::<ClipSchedule>(flame)
-        .unwrap()
-        .first_instance()
-        .cloned()
-        .unwrap();
-    assert!(
-        (instance.clip_out - 0.0).abs() < 1e-6,
-        "preview must not commit the trim"
-    );
-
-    let dump = batch_anim_dump_json(&world);
-    assert!(
-        (dump["timeline"]["drag_preview"]["end_time"]
-            .as_f64()
-            .unwrap()
-            - 3.0)
-            .abs()
-            < 1e-6
-    );
-}
-
-#[test]
 fn debug_actions_apply_sets_view_mode_and_queues_events() {
     let mut world = World::new();
     world.insert_resource(DebugViewState::default());
@@ -806,58 +483,16 @@ fn debug_actions_apply_sets_view_mode_and_queues_events() {
     batch_apply_debug_actions(
         &world,
         &[
-            &ViewMode(crate::ecs::resource::DebugViewMode::Normal) as &dyn BatchAction,
+            &ViewMode(DebugViewMode::Normal) as &dyn BatchAction,
             &ResetCamera,
         ],
     );
     assert_eq!(
         world.resource::<DebugViewState>().debug_view_mode,
-        crate::ecs::resource::DebugViewMode::Normal
+        DebugViewMode::Normal
     );
     let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
     assert!(matches!(events[0], UIEvent::ResetCamera));
-}
-
-#[test]
-fn water_debug_dump_action_marks_the_batch_run_in_every_capture_mode() {
-    let (_single, single_dump_plan) = batch_run_resolve_from_args(&args(&[
-        "bin",
-        "--batch-screenshot",
-        "out.png",
-        "--batch-debug-action",
-        "dump_water_debug",
-    ]))
-    .unwrap()
-    .expect("single-shot batch");
-    assert!(single_dump_plan.dump_water_debug);
-
-    let (_sequence, sequence_dump_plan) = batch_run_resolve_from_args(&args(&[
-        "bin",
-        "--batch-screenshot-sequence",
-        "out,3,2",
-        "--batch-debug-action",
-        "dump_water_debug",
-    ]))
-    .unwrap()
-    .expect("sequence batch");
-    assert!(sequence_dump_plan.dump_water_debug);
-
-    let (_without, without_dump_plan) =
-        batch_run_resolve_from_args(&args(&["bin", "--batch-screenshot", "out.png"]))
-            .unwrap()
-            .expect("batch without debug action");
-    assert!(!without_dump_plan.dump_water_debug);
-}
-
-#[test]
-fn water_debug_dump_action_still_queues_its_event_outside_a_batch_run() {
-    let mut world = World::new();
-    world.insert_resource(UIEventQueue::new());
-
-    batch_apply_debug_actions(&world, &[&WaterDebugDump as &dyn BatchAction]);
-
-    let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
-    assert!(matches!(events[0], UIEvent::DumpWaterDebug));
 }
 
 #[test]
@@ -865,7 +500,7 @@ fn sequence_analyze_resolve_dir_only() {
     let args = args(&[
         "bin",
         "--batch-sequence-analyze",
-        "data/flames",
+        "data/frames",
         "--batch-sequence-dump",
         "out.json",
     ]);
@@ -873,7 +508,7 @@ fn sequence_analyze_resolve_dir_only() {
         .unwrap()
         .unwrap();
     assert_eq!(result.directories.len(), 1);
-    assert_eq!(result.directories[0].0, "data/flames");
+    assert_eq!(result.directories[0].0, "data/frames");
     assert_eq!(result.directories[0].1, None);
     assert_eq!(result.directories[0].2, None);
     assert_eq!(result.dump_path, "out.json");
@@ -884,7 +519,7 @@ fn sequence_analyze_resolve_dir_with_range() {
     let args = args(&[
         "bin",
         "--batch-sequence-analyze",
-        "data/flames,5,10",
+        "data/frames,5,10",
         "--batch-sequence-dump",
         "out.json",
     ]);
@@ -892,7 +527,7 @@ fn sequence_analyze_resolve_dir_with_range() {
         .unwrap()
         .unwrap();
     assert_eq!(result.directories.len(), 1);
-    assert_eq!(result.directories[0].0, "data/flames");
+    assert_eq!(result.directories[0].0, "data/frames");
     assert_eq!(result.directories[0].1, Some(5));
     assert_eq!(result.directories[0].2, Some(10));
 }
@@ -920,9 +555,8 @@ fn sequence_analyze_resolve_multiple_dirs() {
 
 #[test]
 fn sequence_analyze_resolve_missing_dump() {
-    let args = args(&["bin", "--batch-sequence-analyze", "data/flames"]);
-    let result = batch_sequence_analyze_resolve_from_args(&args);
-    assert!(result.is_err());
+    let args = args(&["bin", "--batch-sequence-analyze", "data/frames"]);
+    assert!(batch_sequence_analyze_resolve_from_args(&args).is_err());
 }
 
 #[test]
@@ -930,29 +564,24 @@ fn sequence_analyze_resolve_invalid_range() {
     let args = args(&[
         "bin",
         "--batch-sequence-analyze",
-        "data/flames,abc,10",
+        "data/frames,abc,10",
         "--batch-sequence-dump",
         "out.json",
     ]);
-    let result = batch_sequence_analyze_resolve_from_args(&args);
-    assert!(result.is_err());
+    assert!(batch_sequence_analyze_resolve_from_args(&args).is_err());
 }
 
 #[test]
 fn sequence_analyze_resolve_none_without_flag() {
-    let args = args(&["bin", "--batch-screenshot", "data/flames"]);
+    let args = args(&["bin", "--batch-screenshot", "data/frames"]);
     let result = batch_sequence_analyze_resolve_from_args(&args).unwrap();
     assert!(result.is_none());
 }
 
 #[test]
 fn sequence_analyze_run_returns_none_without_flag() {
-    let args: Vec<String> = vec![
-        "bin".to_string(),
-        "--batch-screenshot".to_string(),
-        "data/flames".to_string(),
-    ];
-    let result = run_sequence_analyze_from_args(args);
+    let result =
+        run_sequence_analyze_from_args(args(&["bin", "--batch-screenshot", "data/frames"]));
     assert!(result.is_none());
 }
 
@@ -960,87 +589,59 @@ fn sequence_analyze_run_returns_none_without_flag() {
 fn sequence_analyze_end_to_end() {
     let temp_dir = tempfile::tempdir().unwrap();
     let dir_path = temp_dir.path();
-
-    // Write meta.json with custom fps
-    let meta_path = dir_path.join("meta.json");
-    std::fs::write(&meta_path, r#"{"fps": 30.0}"#).unwrap();
-
-    // Write 3 dummy 2x2 RGB PNGs with distinct colors
+    std::fs::write(dir_path.join("meta.json"), r#"{"fps": 30.0}"#).unwrap();
     for i in 0..3 {
-        let value = (i + 1) as u8 * 50; // 50, 100, 150
-        let png_path = dir_path.join(format!("frame_{:04}.png", i));
-        write_test_png(&png_path, 2, 2, value);
+        let value = (i + 1) as u8 * 50;
+        write_test_png(&dir_path.join(format!("frame_{:04}.png", i)), 2, 2, value);
     }
 
     let dump_path = temp_dir.path().join("output.json");
-    let args = vec![
-        "bin".to_string(),
-        "--batch-sequence-analyze".to_string(),
-        dir_path.to_string_lossy().to_string(),
-        "--batch-sequence-dump".to_string(),
-        dump_path.to_string_lossy().to_string(),
-    ];
-
-    let result = run_sequence_analyze_from_args(args);
-    assert!(result.is_some());
-    let result = result.unwrap();
+    let result = run_sequence_analyze_from_args(args(&[
+        "bin",
+        "--batch-sequence-analyze",
+        &dir_path.to_string_lossy(),
+        "--batch-sequence-dump",
+        &dump_path.to_string_lossy(),
+    ]))
+    .expect("flag present");
     assert!(result.is_ok(), "sequence analysis failed: {:?}", result);
 
-    // Verify output JSON
     let content = std::fs::read_to_string(&dump_path).unwrap();
     let json: serde_json::Value = serde_json::from_str(&content).unwrap();
-    assert!(json.get("sequences").is_some());
     let sequences = json["sequences"].as_array().unwrap();
     assert_eq!(sequences.len(), 1);
-
-    let entry = &sequences[0];
-    assert!(entry.get("dir").is_some());
-    assert!(entry.get("descriptors").is_some());
-    let descriptors = &entry["descriptors"];
+    let descriptors = &sequences[0]["descriptors"];
+    assert!(sequences[0].get("dir").is_some());
     assert!(descriptors.get("f1_width").is_some());
     assert!(descriptors.get("f2_rough").is_some());
-    assert!(descriptors.get("meta").is_some());
-
-    // Verify fps from meta.json is used
-    let meta = &descriptors["meta"];
-    assert!((meta["fps"].as_f64().unwrap() - 30.0).abs() < 1e-6);
+    assert!((descriptors["meta"]["fps"].as_f64().unwrap() - 30.0).abs() < 1e-6);
 }
 
 #[test]
 fn sequence_analyze_range_filter() {
     let temp_dir = tempfile::tempdir().unwrap();
     let dir_path = temp_dir.path();
-
-    // Write meta.json
     std::fs::write(dir_path.join("meta.json"), r#"{"fps": 10.0}"#).unwrap();
-
-    // Write 5 dummy 2x2 RGB PNGs
     for i in 0..5 {
         let value = (i + 1) as u8 * 30;
-        let png_path = dir_path.join(format!("frame_{:04}.png", i));
-        write_test_png(&png_path, 2, 2, value);
+        write_test_png(&dir_path.join(format!("frame_{:04}.png", i)), 2, 2, value);
     }
 
     let dump_path = temp_dir.path().join("output.json");
-    let args = vec![
-        "bin".to_string(),
-        "--batch-sequence-analyze".to_string(),
-        format!("{},1,3", dir_path.to_string_lossy()),
-        "--batch-sequence-dump".to_string(),
-        dump_path.to_string_lossy().to_string(),
-    ];
-
-    let result = run_sequence_analyze_from_args(args);
-    assert!(result.is_some());
-    let result = result.unwrap();
+    let result = run_sequence_analyze_from_args(args(&[
+        "bin",
+        "--batch-sequence-analyze",
+        &format!("{},1,3", dir_path.to_string_lossy()),
+        "--batch-sequence-dump",
+        &dump_path.to_string_lossy(),
+    ]))
+    .expect("flag present");
     assert!(result.is_ok(), "sequence analysis failed: {:?}", result);
 
     let content = std::fs::read_to_string(&dump_path).unwrap();
     let json: serde_json::Value = serde_json::from_str(&content).unwrap();
     let sequences = json["sequences"].as_array().unwrap();
     assert_eq!(sequences.len(), 1);
-
-    // Verify frame count in meta (should be 3 frames: 1, 2, 3)
     let meta = &sequences[0]["descriptors"]["meta"];
     assert_eq!(meta["frame_count"].as_u64().unwrap(), 3);
 }
@@ -1049,28 +650,21 @@ fn sequence_analyze_range_filter() {
 fn sequence_analyze_jpg_error() {
     let temp_dir = tempfile::tempdir().unwrap();
     let dir_path = temp_dir.path();
-
-    // Write a fake JPG file
     std::fs::write(dir_path.join("frame_0001.jpg"), b"fake jpg").unwrap();
 
     let dump_path = temp_dir.path().join("output.json");
-    let args = vec![
-        "bin".to_string(),
-        "--batch-sequence-analyze".to_string(),
-        dir_path.to_string_lossy().to_string(),
-        "--batch-sequence-dump".to_string(),
-        dump_path.to_string_lossy().to_string(),
-    ];
-
-    let result = run_sequence_analyze_from_args(args);
-    assert!(result.is_some());
-    let result = result.unwrap();
-    assert!(result.is_err());
+    let result = run_sequence_analyze_from_args(args(&[
+        "bin",
+        "--batch-sequence-analyze",
+        &dir_path.to_string_lossy(),
+        "--batch-sequence-dump",
+        &dump_path.to_string_lossy(),
+    ]))
+    .expect("flag present");
     let err_msg = result.unwrap_err().to_string();
     assert!(err_msg.contains("JPG") || err_msg.contains("jpg"));
 }
 
-/// Write a simple 2x2 RGB PNG with all pixels having the same color value.
 fn write_test_png(path: &Path, width: u32, height: u32, value: u8) {
     let file = std::fs::File::create(path).unwrap();
     let writer = std::io::BufWriter::new(file);
@@ -1078,151 +672,7 @@ fn write_test_png(path: &Path, width: u32, height: u32, value: u8) {
     encoder.set_color(png::ColorType::Rgb);
     encoder.set_depth(png::BitDepth::Eight);
     let mut writer = encoder.write_header().unwrap();
-    let mut pixels = vec![value; (width * height * 3) as usize];
+    let pixels = vec![value; (width * height * 3) as usize];
     writer.write_image_data(&pixels).unwrap();
     writer.finish().unwrap();
-}
-
-#[test]
-fn resolve_wind_mode_and_debug_view() {
-    let overrides = resolve_engine_cli_overrides(&args(&[
-        "bin",
-        "--batch-wind-mode",
-        "reference",
-        "--batch-wind-debug-view",
-        "depth",
-    ]))
-    .unwrap();
-    assert_eq!(
-        overrides.wind_mode,
-        Some(thyllore_effect_core::WindShadingMode::ReferenceQuadrature)
-    );
-    assert_eq!(
-        overrides.wind_debug_view,
-        Some(thyllore_effect_core::WindDebugView::OpticalDepth)
-    );
-    assert!(wind_mode_resolve_from_args(&args(&["bin", "--batch-wind-mode", "x"])).is_err());
-
-    let coverage =
-        resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-debug-view", "coverage"]))
-            .unwrap();
-    assert_eq!(
-        coverage.wind_debug_view,
-        Some(thyllore_effect_core::WindDebugView::Coverage)
-    );
-}
-
-#[test]
-fn resolve_wind_resolve_scale() {
-    let default_overrides = resolve_engine_cli_overrides(&args(&["bin"])).unwrap();
-    assert_eq!(default_overrides.wind_resolve_scale, None);
-
-    let half = resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-resolve-scale", "half"]))
-        .unwrap();
-    assert_eq!(
-        half.wind_resolve_scale,
-        Some(thyllore_effect_core::WindResolveScale::Half)
-    );
-
-    let full = resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-resolve-scale", "full"]))
-        .unwrap();
-    assert_eq!(
-        full.wind_resolve_scale,
-        Some(thyllore_effect_core::WindResolveScale::Full)
-    );
-
-    assert!(wind_resolve_scale_resolve_from_args(&args(&[
-        "bin",
-        "--batch-wind-resolve-scale",
-        "x"
-    ]))
-    .is_err());
-}
-
-#[test]
-fn resolve_wind_fixed_time() {
-    let overrides =
-        resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-time", "10.5"])).unwrap();
-    assert_eq!(overrides.wind_fixed_time, Some(10.5));
-
-    let without = resolve_engine_cli_overrides(&args(&["bin"])).unwrap();
-    assert_eq!(without.wind_fixed_time, None);
-
-    assert!(wind_fixed_time_resolve_from_args(&args(&["bin", "--batch-wind-time"])).is_err());
-    assert!(
-        wind_fixed_time_resolve_from_args(&args(&["bin", "--batch-wind-time", "abc"])).is_err()
-    );
-}
-
-#[test]
-fn wind_set_parses_both_forms_and_rejects_unknown_key() {
-    let combined: Vec<String> = vec!["--batch-wind-set=wall_strength=0.5".into()];
-    let pairs = wind_set_resolve_from_args(&combined).unwrap();
-    assert_eq!(pairs.len(), 1);
-    assert_eq!(pairs[0].0, "wall_strength");
-    assert!((pairs[0].1 - 0.5).abs() < 1e-6);
-
-    let separate: Vec<String> = vec!["--batch-wind-set".into(), "wall_strength=0.5".into()];
-    assert_eq!(wind_set_resolve_from_args(&separate).unwrap(), pairs);
-
-    let unknown: Vec<String> = vec!["--batch-wind-set".into(), "invalid_key=1.0".into()];
-    let err = wind_set_resolve_from_args(&unknown).unwrap_err();
-    assert!(err.to_string().contains("invalid_key"));
-}
-
-#[test]
-fn apply_wind_overrides_no_panic_for_all_keys() {
-    for key in wind_set_valid_keys() {
-        let mut effect = WindTornadoEffect::default();
-        let overrides: Vec<(String, f32)> = vec![(key.to_string(), 1.0)];
-        apply_wind_overrides(&mut effect, &overrides);
-
-        let param =
-            thyllore_effect_core::find_scalar_param(thyllore_effect_core::WIND_SCALAR_PARAMS, key)
-                .expect("valid key is registered");
-        assert_eq!((param.get)(&effect), 1.0, "{key}");
-    }
-}
-
-#[test]
-fn wind_debug_dump_action_marks_the_batch_run_in_every_capture_mode() {
-    let (_single, single_dump_plan) = batch_run_resolve_from_args(&args(&[
-        "bin",
-        "--batch-screenshot",
-        "out.png",
-        "--batch-debug-action",
-        "dump_wind_debug",
-    ]))
-    .unwrap()
-    .expect("single-shot batch");
-    assert!(single_dump_plan.dump_wind_debug);
-    assert!(!single_dump_plan.dump_water_debug);
-
-    let (_sequence, sequence_dump_plan) = batch_run_resolve_from_args(&args(&[
-        "bin",
-        "--batch-screenshot-sequence",
-        "out,3,2",
-        "--batch-debug-action",
-        "dump_wind_debug",
-    ]))
-    .unwrap()
-    .expect("sequence batch");
-    assert!(sequence_dump_plan.dump_wind_debug);
-
-    let (_without, without_dump_plan) =
-        batch_run_resolve_from_args(&args(&["bin", "--batch-screenshot", "out.png"]))
-            .unwrap()
-            .expect("batch without debug action");
-    assert!(!without_dump_plan.dump_wind_debug);
-}
-
-#[test]
-fn wind_debug_dump_action_still_queues_its_event_outside_a_batch_run() {
-    let mut world = World::new();
-    world.insert_resource(UIEventQueue::new());
-
-    batch_apply_debug_actions(&world, &[&WindDebugDump as &dyn BatchAction]);
-
-    let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
-    assert!(matches!(events[0], UIEvent::DumpWindDebug));
 }

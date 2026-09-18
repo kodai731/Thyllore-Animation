@@ -184,7 +184,7 @@ fn emit_path(
     }
 }
 
-fn segment_length(seg: &Segment) -> f32 {
+pub(crate) fn segment_length(seg: &Segment) -> f32 {
     let d = [
         seg.b[0] - seg.a[0],
         seg.b[1] - seg.a[1],

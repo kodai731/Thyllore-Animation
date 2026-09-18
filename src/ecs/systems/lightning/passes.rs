@@ -51,6 +51,9 @@ pub(super) fn compute_lightning_scissor(
         return Some(full_extent_scissor(extent));
     }
     let corners = compute_lightning_segment_aabb(effect, effect.time)?;
+    if debug_view == LightningDebugView::Off && ubo.flash[0] > 0.0 {
+        return Some(full_extent_scissor(extent));
+    }
     compute_projected_bounds_scissor(projection, extent, &ubo.model, corners)
 }
 

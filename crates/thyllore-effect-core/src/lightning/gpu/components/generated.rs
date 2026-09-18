@@ -12,5 +12,6 @@ declare_gpu_block! {
         pub shape: [f32; 4],
         pub debug_: [f32; 4],
         pub inv_view_proj: Matrix4<f32>,
+        pub flash: [f32; 4],
     }
 }

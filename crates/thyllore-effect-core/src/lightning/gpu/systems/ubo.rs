@@ -1,4 +1,4 @@
-use crate::lightning::analytic::build_lightning_segments;
+use crate::lightning::analytic::{build_lightning_segments, compute_lightning_flash};
 use crate::lightning::gpu::generated::LightningUBO;
 use crate::lightning::gpu::generated_segments::LightningSegmentsUBO;
 use crate::lightning::{build_lightning_model_matrix, LightningEffect};
@@ -25,6 +25,8 @@ pub fn build_lightning_ubo(
         seg_misc[i] = [edge_width_q, seg.intensity, 0.0, 0.0];
     }
 
+    let flash = compute_lightning_flash(effect, &segments, &model, inv_view_proj);
+
     let ubo = LightningUBO {
         model,
         inverse_model,
@@ -43,6 +45,12 @@ pub fn build_lightning_ubo(
         shape: [effect.glow_ratio, effect.edge_fraction, count as f32, 0.0],
         debug_: [0.0, 0.0, 0.0, 0.0],
         inv_view_proj,
+        flash: [
+            flash.intensity,
+            flash.center_uv[0],
+            flash.center_uv[1],
+            flash.radius_uv,
+        ],
     };
 
     let segments_ubo = LightningSegmentsUBO {

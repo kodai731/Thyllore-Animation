@@ -9,6 +9,7 @@ layout(set = 1, binding = 0) uniform LightningUBO {
     vec4 shape;
     vec4 debug_;
     mat4 invViewProj;
+    vec4 flash;
 } lightning;
 
 layout(set = 1, binding = 1) uniform LightningSegmentsUBO {

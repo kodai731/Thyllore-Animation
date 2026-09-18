@@ -34,6 +34,23 @@ const int LIGHTNING_DEBUG_COVERAGE = 1;
 const int LIGHTNING_DEBUG_SEGMENT_HITS = 2;
 const int LIGHTNING_DEBUG_CORE_COVERAGE = 3;
 const float SEGMENT_T_MAX = 1e4;
+const float FLASH_RADIUS_MIN = 1e-6;
+
+vec3 lightningFlash(vec2 uv) {
+    vec2 offset = (uv - lightning.flash.yz) / max(lightning.flash.w, FLASH_RADIUS_MIN);
+    return lightning.flash.x * lightning.core.rgb * exp(-dot(offset, offset));
+}
+
+void writeOutsideSegments() {
+    if (push.debugView == LIGHTNING_DEBUG_COVERAGE) {
+        outColor = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+    if (push.debugView != LIGHTNING_DEBUG_OFF || lightning.flash.x <= 0.0) {
+        discard;
+    }
+    outColor = vec4(lightningFlash(fragTexCoord), 1.0);
+}
 
 void main() {
     vec3 rayDir = reconstructRayDirection(fragTexCoord, lightning.invViewProj, frame.camera_pos.xyz);
@@ -43,23 +60,15 @@ void main() {
     float tNear = 0.0;
     float tFar = SEGMENT_T_MAX;
     if (!clampToLightningSegments(localOrigin, localDir, tNear, tFar)) {
-        if (push.debugView != LIGHTNING_DEBUG_COVERAGE) {
-            discard;
-        } else {
-            outColor = vec4(0.0, 0.0, 0.0, 1.0);
-            return;
-        }
+        writeOutsideSegments();
+        return;
     }
     tNear = max(tNear, 0.0);
     if (!clampToSceneDepth(
             sceneDepthSampler, fragTexCoord, lightning.invViewProj, frame.camera_pos.xyz, rayDir, tFar, tNear)
         || tFar <= tNear) {
-        if (push.debugView != LIGHTNING_DEBUG_COVERAGE) {
-            discard;
-        } else {
-            outColor = vec4(0.0, 0.0, 0.0, 1.0);
-            return;
-        }
+        writeOutsideSegments();
+        return;
     }
 
     float coverage;
@@ -86,5 +95,5 @@ void main() {
         return;
     }
 
-    outColor = vec4(scattered, 1.0);
+    outColor = vec4(scattered + lightningFlash(fragTexCoord), 1.0);
 }

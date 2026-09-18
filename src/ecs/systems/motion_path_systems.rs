@@ -63,8 +63,10 @@ mod tests {
 
         // Insert BatchRun with frames_rendered = 0 (time = 0.0)
         world.insert_resource(BatchRun::new(
-            std::path::PathBuf::from("test_output.png"),
-            60,
+            crate::ecs::resource::CaptureSchedule::single(
+                std::path::PathBuf::from("test_output.png"),
+                60,
+            ),
         ));
 
         // Spawn entity with MotionPath but NO Transform

@@ -12,7 +12,7 @@ use crate::ecs::World;
 use thyllore_effect_core::{probe_flame_wall, WallProbeReport, WallProbeView};
 use thyllore_log_core::{log, log_warn};
 
-const BATCH_VIEWPORT_SIZE: [f32; 2] = [1680.0, 840.0];
+pub const BATCH_VIEWPORT_SIZE: [f32; 2] = [1680.0, 840.0];
 
 type ProbedFlame = (FlameEffect, FlameBaked, FlameTemporalAccum, WallProbeReport);
 

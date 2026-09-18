@@ -5,7 +5,7 @@ use clap::Args;
 use thyllore_effect_core::WaterSecondaryRays;
 
 use crate::asset::AssetStorage;
-use crate::ecs::resource::{BatchDumpPlan, WaterRenderSettings};
+use crate::ecs::resource::{BatchRun, WaterBatchCapture, WaterRenderSettings};
 use crate::ecs::world::World;
 use crate::hooks::bootstrap::BootstrapOverrides;
 
@@ -31,8 +31,8 @@ impl BootstrapOverrides for WaterOverrides {
     const NAME: &'static str = "water";
 
     fn apply(&self, world: &mut World, _assets: &mut AssetStorage) -> Result<()> {
-        if let Some(mut plan) = world.get_resource_mut::<BatchDumpPlan>() {
-            plan.water_probe_path = self.probe_path.clone();
+        if world.contains_resource::<BatchRun>() && self.probe_path.is_some() {
+            super::water_batch_capture_mut(world).probe_path = self.probe_path.clone();
         }
 
         let debug_view = match (self.debug_view, self.probe_path.is_some()) {
@@ -104,10 +104,12 @@ mod tests {
     }
 
     #[test]
-    fn probe_flag_fills_the_plan_and_defaults_the_debug_view() {
+    fn probe_flag_fills_the_capture_request_and_defaults_the_debug_view() {
         let mut world = World::new();
         world.insert_resource(WaterRenderSettings::default());
-        world.insert_resource(BatchDumpPlan::default());
+        world.insert_resource(BatchRun::new(
+            crate::ecs::resource::CaptureSchedule::single(PathBuf::from("/tmp/out.png"), 1),
+        ));
 
         let overrides =
             WaterOverrides::resolve(&args(&["bin", "--batch-water-probe", "/tmp/probe.json"]))
@@ -121,7 +123,7 @@ mod tests {
             PROBE_DEBUG_VIEW
         );
         assert_eq!(
-            world.resource::<BatchDumpPlan>().water_probe_path,
+            world.resource::<WaterBatchCapture>().probe_path,
             Some(PathBuf::from("/tmp/probe.json"))
         );
     }

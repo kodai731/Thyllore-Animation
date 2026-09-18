@@ -128,7 +128,8 @@ Generic hook infrastructure that lets a subsystem plug into the app lifecycle wi
 `src/app/`. `effect.rs` holds the effect hook (setup, after_overrides, viewport resize, pass nodes) and the
 list that runs them in subscription order; GPU teardown is not a hook, it is the `gpu_resource!` registration
 of the effect's resource (`gpu_resource.rs`: `GpuResourceHook`, `GpuResourceHooks::collect()`).
-`bootstrap.rs` holds the `BootstrapOverrides` contract (a subsystem's command-line configuration: a
+`batch_capture.rs` holds the `CaptureContext` and the `batch_capture!` registration of a readback that
+runs at every batch capture frame (see "Feature isolation" below). `bootstrap.rs` holds the `BootstrapOverrides` contract (a subsystem's command-line configuration: a
 `#[derive(clap::Args)]` struct with `NAME` and `apply(world, assets)`) and the `bootstrap_hook!`
 registration (`inventory`); `ResolvedBootstrap::resolve(args)` parses every hook before the window exists so
 a bad flag fails fast, and `src/app/bootstrap.rs` (called from `src/main.rs`) applies the engine's own
@@ -222,8 +223,15 @@ Concretely:
 - `--batch-debug-action` names are a link-time registry too: a `BatchAction` implementation lives in
   `src/ecs/systems/<effect>/batch_actions.rs` (generic ones in `batch_run_systems/batch_action.rs`) and
   registers with `batch_action!`; `batch_run_systems/` parses and lists actions from that registry and
-  never names one. What a batch run must dump at its screenshot frame is the shared `BatchDumpPlan`
-  resource, filled by the dump actions and the effect `cli.rs` hooks, never by the batch parser.
+  never names one. A batch run (`BatchRun`) is only a capture schedule and its completion state. What an
+  effect writes at a capture frame is its own request resource (`src/ecs/resource/<effect>_batch_capture.rs`,
+  filled by its dump action and its `cli.rs` hook) read by a `batch_capture!` hook
+  (`src/hooks/batch_capture.rs`: `CaptureContext` with device, command pool, `World`, HDR buffer, image
+  index and capture slot) registered from `src/debugview/<effect>_*.rs`. The post-render
+  `run_batch_capture_phase` (`src/ecs/systems/phases/batch_capture_phase.rs`, entered through
+  `App::run_batch_capture_phase` in `src/app/features/batch_capture.rs`) waits for the GPU, runs every hook
+  by name and takes the schedule's screenshot; `src/platform/` and `src/app/render.rs` never branch on the
+  batch state.
 - `src/ecs/world.rs` offers generic component access (`iter_components::<C>`, `insert_component`); it does
   not grow `with_<effect>()` builders or `query_<effect>s()` helpers. The existing `query_flames` /
   `query_waters` / `query_winds` are tracked as exceptions and must not be extended.

@@ -115,9 +115,12 @@ fn register_empty_editable_clip(world: &mut World, assets: &mut AssetStorage) ->
 }
 
 pub(super) fn restore_batch_playback(world: &World) {
-    let requested_clip_id = match world.get_resource::<BatchRun>() {
-        Some(batch_run) if batch_run.play_requested => batch_run.play_clip_id,
-        _ => return,
+    let requested_clip_id = match world
+        .get_resource::<BatchRun>()
+        .and_then(|batch_run| batch_run.playback.clone())
+    {
+        Some(playback) => playback.clip_id,
+        None => return,
     };
 
     let clip_still_loaded = requested_clip_id.is_some_and(|id| {

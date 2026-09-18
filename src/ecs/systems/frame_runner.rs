@@ -1,7 +1,7 @@
 use anyhow::Result;
 use cgmath::Vector3;
 
-use super::batch_run_systems::batch_run_tick;
+use super::batch_run_systems::run_batch_schedule_phase;
 #[cfg(feature = "ml")]
 use super::curve_copilot::curve_suggestion_poll_results;
 #[cfg(feature = "ml")]
@@ -28,9 +28,9 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
     let mut stages: Vec<(String, f32)> = Vec::new();
     let t = std::time::Instant::now();
-    batch_run_tick(ctx.world);
+    run_batch_schedule_phase(ctx.world);
     stages.push((
-        "batch_run_tick".to_string(),
+        "batch_schedule".to_string(),
         t.elapsed().as_secs_f32() * 1000.0,
     ));
 

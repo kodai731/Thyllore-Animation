@@ -12,8 +12,8 @@ use thyllore_effect_core::{
 use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameBoneAttachment, FlameEffect, FlameTrail, HeatPlume, MotionPath};
 use crate::ecs::resource::{
-    BatchDumpPlan, BatchFlameOrbit, FlameDumpSink, FlameRenderSettings, FlameSdfSource,
-    FlameShadingMode,
+    BatchFlameOrbit, BatchRun, FlameBatchCapture, FlameDumpSink, FlameRenderSettings,
+    FlameSdfSource, FlameShadingMode,
 };
 use crate::ecs::systems::cli_args::{
     finite_float_parse, float_pair_parse, scalar_assignment_parse,
@@ -79,10 +79,10 @@ impl BootstrapOverrides for FlameOverrides {
         if let Some(path) = &self.sdf {
             world.insert_resource(FlameSdfSource { path: path.clone() });
         }
-        if let Some(mut plan) = world.get_resource_mut::<BatchDumpPlan>() {
-            plan.flame_set = self.set.clone();
-            plan.flame_trace_path = self.trace_path.clone();
-            plan.wall_probe_path = self.wall_probe_path.clone();
+        if world.contains_resource::<BatchRun>() {
+            let mut request = super::flame_batch_capture_mut(world);
+            request.trace_path = self.trace_path.clone();
+            request.wall_probe_path = self.wall_probe_path.clone();
         }
 
         self.spawn_extra_flames(world, assets);
@@ -650,11 +650,9 @@ mod tests {
     }
 
     #[test]
-    fn batch_dump_flags_fill_the_dump_plan() {
+    fn batch_dump_flags_fill_the_capture_request() {
         let overrides = FlameOverrides::resolve(&args(&[
             "bin",
-            "--batch-flame-set",
-            "height=1.5",
             "--batch-flame-trace",
             "/tmp/trace.json",
             "--batch-wall-probe",
@@ -662,18 +660,20 @@ mod tests {
         ]))
         .unwrap();
         let mut world = World::new();
-        world.insert_resource(BatchDumpPlan::default());
+        world.insert_resource(BatchRun::new(
+            crate::ecs::resource::CaptureSchedule::single(PathBuf::from("/tmp/out.png"), 1),
+        ));
         overrides
             .apply(&mut world, &mut AssetStorage::new())
             .unwrap();
 
-        let plan = world.resource::<BatchDumpPlan>();
-        assert_eq!(plan.flame_set, vec![(String::from("height"), 1.5)]);
+        let request = world.resource::<FlameBatchCapture>();
+        assert_eq!(request.trace_path, Some(PathBuf::from("/tmp/trace.json")));
         assert_eq!(
-            plan.flame_trace_path,
-            Some(PathBuf::from("/tmp/trace.json"))
+            request.wall_probe_path,
+            Some(PathBuf::from("/tmp/wall.json"))
         );
-        assert_eq!(plan.wall_probe_path, Some(PathBuf::from("/tmp/wall.json")));
+        assert!(!request.wall_probe);
     }
 
     #[test]

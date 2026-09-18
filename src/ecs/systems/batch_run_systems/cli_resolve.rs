@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Result};
 
-use crate::ecs::resource::BatchRun;
+use crate::ecs::resource::{BatchRun, CaptureOutput, CaptureSchedule};
 use crate::ecs::systems::cli_args::flag_value_resolve_from_args;
 
 use super::anim_edits::{anim_edits_resolve_from_args, BatchAnimEdit};
@@ -122,7 +122,7 @@ fn screenshot_frame_resolve_from_args(args: &[String]) -> Result<u64> {
     Ok(frames)
 }
 
-fn sequence_batch_resolve(value: &str, screenshot_frame: u64) -> Result<BatchRun> {
+fn sequence_batch_resolve(value: &str, first_frame: u64) -> Result<BatchRun> {
     let parts: Vec<&str> = value.split(',').collect();
     if parts.len() != 3 {
         bail!("{BATCH_SCREENSHOT_SEQUENCE_FLAG} expects <dir>,<count>,<stride>, got '{value}'");
@@ -143,12 +143,12 @@ fn sequence_batch_resolve(value: &str, screenshot_frame: u64) -> Result<BatchRun
         bail!("{BATCH_SCREENSHOT_SEQUENCE_FLAG} stride must be >= 1");
     }
 
-    let mut batch = BatchRun::new(PathBuf::from(dir), screenshot_frame);
-    batch.captures_remaining = count;
-    batch.stride = stride;
-    batch.sequence_dir = Some(PathBuf::from(dir));
-    batch.total_count = count;
-    Ok(batch)
+    Ok(BatchRun::new(CaptureSchedule {
+        first_frame,
+        stride,
+        count,
+        output: CaptureOutput::Sequence(PathBuf::from(dir)),
+    }))
 }
 
 pub fn batch_run_resolve_from_args(args: &[String]) -> Result<Option<BatchRun>> {
@@ -177,7 +177,10 @@ pub fn batch_run_resolve_from_args(args: &[String]) -> Result<Option<BatchRun>> 
     };
     let output = resolve_absolute_output(Path::new(output))?;
     let screenshot_frame = screenshot_frame_resolve_from_args(args)?;
-    Ok(Some(BatchRun::new(output, screenshot_frame)))
+    Ok(Some(BatchRun::new(CaptureSchedule::single(
+        output,
+        screenshot_frame,
+    ))))
 }
 
 pub fn gpu_timings_path_resolve_from_args(args: &[String]) -> Result<Option<String>> {

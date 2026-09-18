@@ -151,7 +151,7 @@ function that calls the appropriate systems in sequence.
 
 ```
 run_frame()  (src/ecs/systems/frame_runner.rs, called from App::update)
-├── batch_run_tick()               # Batch mode state machine
+├── run_batch_schedule_phase()     # Batch capture schedule: frame count → capture request
 ├── run_input_phase()              # Input handling, gizmo interaction (EcsContext)
 ├── run_transform_phase_ecs()      # Transform propagation (EcsContext)
 ├── run_timeline_phase()           # Timeline / clip schedule advance
@@ -164,6 +164,8 @@ run_frame()  (src/ecs/systems/frame_runner.rs, called from App::update)
 
 run_event_dispatch_phase()         # UI event processing, deferred actions;
                                    # called from src/platform/events.rs after the UI is built
+run_batch_capture_phase()          # After present: batch readback hooks + scheduled screenshot;
+                                   # entered through App::run_batch_capture_phase (src/app/features/)
 ```
 
 ### Phase Design Principles (from Flecs, Unity DOTS, Bevy)

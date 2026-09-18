@@ -1,7 +1,7 @@
 use crate::asset::AssetStorage;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
-    BatchDumpPlan, BatchPickRequest, BatchRun, Camera, ExposureDumpSink, GpuTimingsSink,
+    BatchPickRequest, BatchPlayback, BatchRun, Camera, ExposureDumpSink, GpuTimingsSink,
     ModelState, TimelineState,
 };
 use crate::ecs::systems::clip_library_systems::find_best_clip;
@@ -12,7 +12,6 @@ use super::batch_action::BatchAction;
 use super::cli_resolve::{BatchCameraPose, EngineCliOverrides};
 use super::debug_actions::batch_apply_debug_actions;
 
-/// A batch run also gets an empty `BatchDumpPlan` that the dump actions and the hooks fill in.
 pub fn apply_engine_overrides(
     world: &mut World,
     assets: &mut AssetStorage,
@@ -20,7 +19,6 @@ pub fn apply_engine_overrides(
 ) {
     if let Some(batch_run) = &overrides.batch_run {
         world.insert_resource(batch_run.clone());
-        world.insert_resource(BatchDumpPlan::default());
     }
     if let Some(pose) = overrides.camera_pose {
         apply_camera_pose(world, pose);
@@ -83,7 +81,6 @@ fn start_batch_playback(world: &mut World) {
     drop(timeline);
 
     if let Some(mut batch_run) = world.get_resource_mut::<BatchRun>() {
-        batch_run.play_requested = true;
-        batch_run.play_clip_id = first;
+        batch_run.playback = Some(BatchPlayback { clip_id: first });
     }
 }

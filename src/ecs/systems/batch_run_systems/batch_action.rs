@@ -7,7 +7,7 @@ use crate::ecs::world::World;
 /// A headless `--batch-debug-action`; implementations register with `batch_action!` from their domain.
 pub trait BatchAction: std::fmt::Debug {
     fn name(&self) -> &'static str;
-    fn apply(&self, world: &World);
+    fn apply(&self, world: &mut World);
 }
 
 pub type BatchActionParseFn = fn(&str) -> Option<Result<Box<dyn BatchAction>>>;
@@ -62,7 +62,7 @@ impl BatchAction for ResetCamera {
     fn name(&self) -> &'static str {
         "reset_camera"
     }
-    fn apply(&self, world: &World) {
+    fn apply(&self, world: &mut World) {
         world
             .resource_mut::<UIEventQueue>()
             .send(UIEvent::ResetCamera);
@@ -73,7 +73,7 @@ impl BatchAction for ResetCameraUp {
     fn name(&self) -> &'static str {
         "reset_camera_up"
     }
-    fn apply(&self, world: &World) {
+    fn apply(&self, world: &mut World) {
         world
             .resource_mut::<UIEventQueue>()
             .send(UIEvent::ResetCameraUp);
@@ -84,7 +84,7 @@ impl BatchAction for CameraToModel {
     fn name(&self) -> &'static str {
         "camera_to_model"
     }
-    fn apply(&self, world: &World) {
+    fn apply(&self, world: &mut World) {
         world
             .resource_mut::<UIEventQueue>()
             .send(UIEvent::MoveCameraToModel);
@@ -105,7 +105,7 @@ impl BatchAction for ViewMode {
     fn name(&self) -> &'static str {
         "view_mode"
     }
-    fn apply(&self, world: &World) {
+    fn apply(&self, world: &mut World) {
         world.resource_mut::<DebugViewState>().debug_view_mode = self.0;
     }
 }
@@ -114,7 +114,7 @@ impl BatchAction for BlackBackground {
     fn name(&self) -> &'static str {
         "black_background"
     }
-    fn apply(&self, world: &World) {
+    fn apply(&self, world: &mut World) {
         world.resource_mut::<DebugViewState>().black_background = true;
     }
 }
@@ -158,7 +158,7 @@ impl BatchAction for SpawnDebugPrimitive {
             DebugPrimitiveKind::Floor => "spawn_floor",
         }
     }
-    fn apply(&self, world: &World) {
+    fn apply(&self, world: &mut World) {
         world
             .resource_mut::<UIEventQueue>()
             .send(UIEvent::SpawnDebugPrimitive { kind: self.0 });

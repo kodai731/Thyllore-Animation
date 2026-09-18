@@ -1,4 +1,5 @@
 pub mod animation_phase;
+pub mod batch_capture_phase;
 mod dispatch_camera;
 mod dispatch_clip_browser;
 mod dispatch_clip_instance;
@@ -20,6 +21,7 @@ pub mod render_prep_phase;
 pub mod transform_phase;
 
 pub use animation_phase::*;
+pub use batch_capture_phase::*;
 pub use event_dispatch_phase::*;
 pub use input_phase::*;
 pub use onion_skin_phase::*;

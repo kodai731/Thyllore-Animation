@@ -5,10 +5,18 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameEffect, MotionPath};
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
-    BatchDumpPlan, BatchFlameOrbit, BatchRun, BatchRunState, ClipLibrary, DebugViewMode,
-    DebugViewState, TimelineState,
+    BatchFlameOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule, ClipLibrary,
+    DebugViewMode, DebugViewState, FlameBatchCapture, TimelineState,
 };
 use crate::ecs::world::{Transform, World};
+use crate::hooks::batch_capture::CaptureSlot;
+
+fn single_run(first_frame: u64) -> BatchRun {
+    BatchRun::new(CaptureSchedule::single(
+        PathBuf::from("/tmp/out.png"),
+        first_frame,
+    ))
+}
 
 fn args(list: &[&str]) -> Vec<String> {
     list.iter().map(|s| s.to_string()).collect()
@@ -45,9 +53,17 @@ fn resolve_parses_output_and_default_frames() {
         batch_run_resolve_from_args(&args(&["bin", "--batch-screenshot", "/tmp/out.png"]))
             .unwrap()
             .unwrap();
-    assert_eq!(resolved.output, PathBuf::from("/tmp/out.png"));
-    assert_eq!(resolved.screenshot_frame, DEFAULT_SCREENSHOT_FRAME);
-    assert!(matches!(resolved.state, BatchRunState::WaitingForFrame));
+    assert_eq!(
+        resolved.capture,
+        CaptureSchedule::single(PathBuf::from("/tmp/out.png"), DEFAULT_SCREENSHOT_FRAME)
+    );
+    assert_eq!(
+        resolved.state,
+        BatchRunState::WaitingForFrame {
+            next_frame: DEFAULT_SCREENSHOT_FRAME,
+            captured: 0
+        }
+    );
 }
 
 #[test]
@@ -61,7 +77,7 @@ fn resolve_parses_explicit_frames() {
     ]))
     .unwrap()
     .unwrap();
-    assert_eq!(resolved.screenshot_frame, 30);
+    assert_eq!(resolved.capture.first_frame, 30);
 }
 
 #[test]
@@ -75,11 +91,15 @@ fn resolve_parses_sequence_mode() {
     ]))
     .unwrap()
     .unwrap();
-    assert_eq!(resolved.sequence_dir, Some(PathBuf::from("out")));
-    assert_eq!(resolved.total_count, 3);
-    assert_eq!(resolved.captures_remaining, 3);
-    assert_eq!(resolved.stride, 2);
-    assert_eq!(resolved.screenshot_frame, 10);
+    assert_eq!(
+        resolved.capture,
+        CaptureSchedule {
+            first_frame: 10,
+            stride: 2,
+            count: 3,
+            output: CaptureOutput::Sequence(PathBuf::from("out")),
+        }
+    );
     for bad in ["out,0,2", "out,3,0", "out,3", "out,x,2"] {
         assert!(
             batch_run_resolve_from_args(&args(&["bin", "--batch-screenshot-sequence", bad]))
@@ -176,75 +196,103 @@ fn engine_overrides_carry_no_subsystem_flags() {
 }
 
 #[test]
-fn apply_engine_overrides_inserts_the_batch_run_and_an_empty_dump_plan() {
+fn apply_engine_overrides_inserts_the_batch_run_and_leaves_capture_requests_to_actions() {
     let overrides = resolve_engine_cli_overrides(&args(&[
         "bin",
         "--batch-screenshot",
         "/tmp/out.png",
         "--batch-frames",
         "7",
+        "--batch-debug-action",
+        "dump_wall_probe",
     ]))
     .unwrap();
     let mut world = World::new();
     apply_engine_overrides(&mut world, &mut AssetStorage::new(), &overrides);
 
-    assert_eq!(world.resource::<BatchRun>().screenshot_frame, 7);
-    let plan = world.resource::<BatchDumpPlan>();
-    assert!(plan.flame_set.is_empty());
-    assert!(!plan.dump_wall_probe && !plan.dump_water_debug && !plan.dump_wind_debug);
-    assert!(plan.water_probe_path.is_none());
+    assert_eq!(world.resource::<BatchRun>().capture.first_frame, 7);
+    assert!(world.resource::<FlameBatchCapture>().wall_probe);
 }
 
 #[test]
-fn apply_engine_overrides_without_a_batch_run_inserts_no_dump_plan() {
-    let overrides = resolve_engine_cli_overrides(&args(&["bin"])).unwrap();
+fn apply_engine_overrides_without_a_batch_run_inserts_no_capture_request() {
+    let overrides =
+        resolve_engine_cli_overrides(&args(&["bin", "--batch-debug-action", "dump_wall_probe"]))
+            .unwrap();
     let mut world = World::new();
     apply_engine_overrides(&mut world, &mut AssetStorage::new(), &overrides);
     assert!(world.get_resource::<BatchRun>().is_none());
-    assert!(world.get_resource::<BatchDumpPlan>().is_none());
+    assert!(world.get_resource::<FlameBatchCapture>().is_none());
 }
 
 #[test]
-fn tick_requests_screenshot_at_target_frame() {
+fn schedule_requests_the_capture_at_its_frame() {
     let mut world = World::new();
-    world.insert_resource(UIEventQueue::default());
-    world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 2));
+    world.insert_resource(single_run(2));
 
-    batch_run_tick(&world);
-    assert!(matches!(
-        world.resource::<BatchRun>().state,
-        BatchRunState::WaitingForFrame
-    ));
+    run_batch_schedule_phase(&world);
+    assert!(requested_capture(&world).is_none());
 
-    batch_run_tick(&world);
-    assert!(matches!(
-        world.resource::<BatchRun>().state,
-        BatchRunState::ScreenshotRequested
-    ));
+    run_batch_schedule_phase(&world);
+    assert_eq!(
+        requested_capture(&world),
+        Some(CaptureSlot {
+            index: 0,
+            count: 1,
+            sequence_dir: None
+        })
+    );
 }
 
 #[test]
-fn record_ignores_keyboard_screenshot_while_waiting() {
-    let world = {
-        let mut world = World::new();
-        world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 100));
-        world
-    };
+fn schedule_without_a_batch_run_requests_nothing() {
+    let world = World::new();
+    run_batch_schedule_phase(&world);
+    assert!(requested_capture(&world).is_none());
+}
 
-    batch_run_record_screenshot(&world, Ok("log/screenshot_1.png".to_string()));
-    assert!(matches!(
+#[test]
+fn record_completes_a_single_capture_with_its_path() {
+    let mut world = World::new();
+    world.insert_resource(single_run(1));
+    run_batch_schedule_phase(&world);
+
+    batch_run_record_capture(&world, Ok("/tmp/out.png".to_string()));
+
+    let batch = world.resource::<BatchRun>();
+    assert_eq!(
+        batch.state,
+        BatchRunState::Completed {
+            result: Ok("/tmp/out.png".to_string())
+        }
+    );
+    let (ok, line) = batch_run_report(&batch);
+    assert!(ok);
+    assert!(line.contains("/tmp/out.png"));
+}
+
+#[test]
+fn record_ignores_a_result_when_no_capture_was_requested() {
+    let mut world = World::new();
+    world.insert_resource(single_run(100));
+
+    batch_run_record_capture(&world, Ok("/tmp/out.png".to_string()));
+    assert_eq!(
         world.resource::<BatchRun>().state,
-        BatchRunState::WaitingForFrame
-    ));
+        BatchRunState::WaitingForFrame {
+            next_frame: 100,
+            captured: 0
+        }
+    );
 }
 
 #[test]
 fn record_stores_error_result() {
     let mut world = World::new();
-    world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 1));
-    world.resource_mut::<BatchRun>().state = BatchRunState::ScreenshotRequested;
+    world.insert_resource(single_run(1));
+    run_batch_schedule_phase(&world);
 
-    batch_run_record_screenshot(&world, Err("save failed".to_string()));
+    batch_run_record_capture(&world, Err("save failed".to_string()));
 
     let batch = world.resource::<BatchRun>();
     assert!(batch.is_completed());
@@ -254,8 +302,54 @@ fn record_stores_error_result() {
 }
 
 #[test]
+fn sequence_waits_stride_frames_between_captures_and_writes_meta_at_the_end() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let dir = temp_dir.path().to_path_buf();
+    let mut world = World::new();
+    world.insert_resource(BatchRun::new(CaptureSchedule {
+        first_frame: 2,
+        stride: 3,
+        count: 2,
+        output: CaptureOutput::Sequence(dir.clone()),
+    }));
+
+    for _ in 0..2 {
+        run_batch_schedule_phase(&world);
+    }
+    let first = requested_capture(&world).expect("first capture at frame 2");
+    assert_eq!(first.index, 0);
+    assert_eq!(first.sequence_dir.as_deref(), Some(dir.as_path()));
+    assert_eq!(
+        capture_output_path(&world.resource::<BatchRun>().capture, first.index),
+        dir.join("frame_00.png")
+    );
+    batch_run_record_capture(&world, Ok(dir.join("frame_00.png").display().to_string()));
+    assert_eq!(
+        world.resource::<BatchRun>().state,
+        BatchRunState::WaitingForFrame {
+            next_frame: 5,
+            captured: 1
+        }
+    );
+
+    for _ in 0..3 {
+        run_batch_schedule_phase(&world);
+    }
+    let second = requested_capture(&world).expect("second capture at frame 5");
+    assert_eq!(second.index, 1);
+    batch_run_record_capture(&world, Ok(dir.join("frame_01.png").display().to_string()));
+
+    assert!(world.resource::<BatchRun>().is_completed());
+    let meta: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("meta.json")).unwrap()).unwrap();
+    assert_eq!(meta["count"], 2);
+    assert_eq!(meta["stride"], 3);
+    assert!((meta["fps"].as_f64().unwrap() - 20.0).abs() < 1e-9);
+}
+
+#[test]
 fn report_incomplete_state_is_error() {
-    let batch = BatchRun::new(PathBuf::from("/tmp/out.png"), 1);
+    let batch = single_run(1);
     let (ok, line) = batch_run_report(&batch);
     assert!(!ok);
     assert!(line.contains("before screenshot completed"));
@@ -266,7 +360,7 @@ fn batch_run_update_orbit_inserts_missing_transform() {
     let mut world = World::new();
     let e = world.spawn();
     world.insert_component(e, FlameEffect::default());
-    world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 1));
+    world.insert_resource(single_run(1));
     world.resource_mut::<BatchRun>().frames_rendered = 1;
     world.insert_resource(BatchFlameOrbit {
         radius: 2.0,
@@ -481,7 +575,7 @@ fn debug_actions_apply_sets_view_mode_and_queues_events() {
     world.insert_resource(DebugViewState::default());
     world.insert_resource(UIEventQueue::new());
     batch_apply_debug_actions(
-        &world,
+        &mut world,
         &[
             &ViewMode(DebugViewMode::Normal) as &dyn BatchAction,
             &ResetCamera,

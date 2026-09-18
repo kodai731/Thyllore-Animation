@@ -14,6 +14,7 @@ mod spawn;
 mod tests;
 mod time;
 
+use batch_actions::water_batch_capture_mut;
 pub use cli::*;
 pub use debug_dump::*;
 pub use history_accumulate::*;

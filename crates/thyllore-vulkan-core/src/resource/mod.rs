@@ -36,7 +36,7 @@ pub use graphics_resource::{GraphicsResources, MeshSource, TexturePixels};
 pub use hdr_buffer::HdrBuffer;
 pub use hit_shading_table::{HitShadingRecord, HitShadingTable};
 pub use image::*;
-pub use image_readback::copy_image_to_host_buffer;
+pub use image_readback::{copy_image_to_host_buffer, write_host_buffer_bgra_png};
 pub use mesh_buffer::*;
 pub use offscreen::OffscreenFramebuffer;
 pub use onion_skin_pass::OnionSkinPassResources;

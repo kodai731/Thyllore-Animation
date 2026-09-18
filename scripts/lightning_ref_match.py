@@ -344,6 +344,7 @@ def aggregate_shape(seq: dict, screen_width: int) -> dict:
 
 
 L2_SHAPE_SCALARS = ("tort", "ends", "junctions", "blobs", "glow_width", "width_ratio")
+L2_SHAPE_WEIGHTS = {"blobs": 0.25, "ends": 0.5}
 HUE_PERIOD = 180.0
 FAMILIES = ("L1", "L2", "L3", "L4")
 CEILING_FLOOR = {"L1": 1e-3, "L2": 1e-3, "L3": 0.08, "L4": 1e-3}
@@ -367,12 +368,15 @@ def timing_distance(ref: dict, ren: dict) -> float:
 
 def shape_distance(ref: dict, ren: dict) -> float:
     parts = [log_ratio(ref[key], ren[key]) for key in L2_SHAPE_SCALARS]
+    weights = [L2_SHAPE_WEIGHTS.get(key, 1.0) for key in L2_SHAPE_SCALARS]
     parts.append(float(np.sum(np.abs(
         np.asarray(ref["direction_histogram"]) - np.asarray(ren["direction_histogram"])
     ))))
+    weights.append(1.0)
     parts.append(abs(ref["anisotropy"] - ren["anisotropy"]))
+    weights.append(1.0)
 
-    return float(np.mean(parts))
+    return float(sum(p * w for p, w in zip(parts, weights)) / sum(weights))
 
 
 def profile_distance(ref: dict, ren: dict) -> float:
@@ -439,10 +443,39 @@ def split_distances(ref: dict, fps: float) -> dict:
     return {family: float(np.mean([pair[family] for pair in pairs])) for family in FAMILIES}
 
 
+def compute_random_split_p90_ceiling(ref: dict, fps: float) -> float:
+    """L2 distance between random halves of the reference frames, p90 over 40 fixed-seed draws."""
+    count = len(ref["glow"])
+    if count < 2:
+        return 0.0
+
+    screen_width = ref["glow"][0].shape[1]
+    rng = np.random.default_rng(0)
+    distances = []
+    for _ in range(40):
+        order = rng.permutation(count)
+        halves = [order[: count // 2], order[count // 2 :]]
+        shapes = [
+            aggregate_shape(
+                {"glow": [ref["glow"][i] for i in half], "core": [ref["core"][i] for i in half]},
+                screen_width,
+            )
+            for half in halves
+        ]
+        distances.append(shape_distance(shapes[0], shapes[1]))
+
+    return float(np.percentile(distances, 90))
+
+
 def compute_ceiling(ref: dict, fps: float) -> dict:
     distances = split_distances(ref, fps)
 
-    return {family: max(distances[family], CEILING_FLOOR[family]) for family in FAMILIES}
+    return {
+        "L1": max(distances["L1"], CEILING_FLOOR["L1"]),
+        "L2": max(distances["L2"], compute_random_split_p90_ceiling(ref, fps), CEILING_FLOOR["L2"]),
+        "L3": max(distances["L3"], CEILING_FLOOR["L3"]),
+        "L4": max(distances["L4"], CEILING_FLOOR["L4"]),
+    }
 
 
 VERDICT_FAMILIES = ("L1", "L2", "L3")

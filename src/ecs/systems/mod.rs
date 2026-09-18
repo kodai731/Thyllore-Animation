@@ -7,6 +7,7 @@ mod billboard_systems;
 mod bone_gizmo_systems;
 mod bone_pose_override_systems;
 pub mod camera_systems;
+pub mod cli_args;
 pub mod clip_library_systems;
 pub mod clip_schedule_systems;
 pub mod clip_track_systems;

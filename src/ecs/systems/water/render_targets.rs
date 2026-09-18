@@ -12,6 +12,7 @@ use crate::vulkanr::resource::{GpuResource, WaterBuffer};
 pub const WATER_EFFECT_HOOK: EffectHook = EffectHook {
     name: "water",
     setup: Some(setup_water),
+    after_overrides: None,
     on_viewport_resize: Some(resize_water_render_targets),
     passes: super::passes::WATER_PASS_NODES,
 };

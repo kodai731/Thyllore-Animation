@@ -9,47 +9,23 @@ use thyllore_anim_core::editable::PropertyType;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{
     scalar_channel_domains, scalar_channel_for_cli_name, scalar_channel_for_property,
-    scalar_cli_names_joined, ClipSchedule, FlameEffect, WindTornadoEffect,
+    scalar_cli_names_joined, ClipSchedule, FlameEffect,
 };
 use crate::ecs::events::{DebugPrimitiveKind, UIEvent, UIEventQueue};
 use crate::ecs::resource::{
-    BatchRun, BatchRunState, ClipLibrary, DebugViewMode, DebugViewState, FlameShadingMode,
-    TimelineState,
+    BatchPickRequest, BatchRun, BatchRunState, Camera, ClipLibrary, DebugViewMode, DebugViewState,
+    ExposureDumpSink, GpuTimingsSink, ModelState, TimelineState,
 };
+use crate::ecs::systems::cli_args::flag_value_resolve_from_args;
+use crate::ecs::systems::clip_library_systems::find_best_clip;
 use crate::ecs::world::World;
 
 const BATCH_SCREENSHOT_FLAG: &str = "--batch-screenshot";
 const BATCH_SCREENSHOT_SEQUENCE_FLAG: &str = "--batch-screenshot-sequence";
 const BATCH_FRAMES_FLAG: &str = "--batch-frames";
-const BATCH_FLAME_MODE_FLAG: &str = "--batch-flame-mode";
-const BATCH_FLAME_DEBUG_VIEW_FLAG: &str = "--batch-flame-debug-view";
-const BATCH_WATER_DEBUG_VIEW_FLAG: &str = "--batch-water-debug-view";
-const BATCH_WATER_SECONDARY_FLAG: &str = "--batch-water-secondary";
-const BATCH_WATER_CAUSTIC_DEBUG_FLAG: &str = "--batch-water-caustic-debug";
-const BATCH_WATER_HISTORY_FLAG: &str = "--batch-water-history";
-const BATCH_WATER_TIME_FLAG: &str = "--batch-water-time";
-const BATCH_WIND_TIME_FLAG: &str = "--batch-wind-time";
-const BATCH_WIND_MODE_FLAG: &str = "--batch-wind-mode";
-const BATCH_WIND_DEBUG_VIEW_FLAG: &str = "--batch-wind-debug-view";
-const BATCH_WIND_RESOLVE_SCALE_FLAG: &str = "--batch-wind-resolve-scale";
-const BATCH_FLAME_STEPS_FLAG: &str = "--batch-flame-steps";
 const BATCH_CAMERA_FLAG: &str = "--batch-camera";
-const FLAME_DUMP_FLAG: &str = "--flame-dump";
 const GPU_TIMINGS_FLAG: &str = "--gpu-timings";
 const EXPOSURE_DUMP_FLAG: &str = "--exposure-dump";
-const BATCH_FLAME_COUNT_FLAG: &str = "--batch-flame-count";
-const BATCH_FLAME_TRAIL_FLAG: &str = "--batch-flame-trail";
-const BATCH_FLAME_ORBIT_FLAG: &str = "--batch-flame-orbit";
-const BATCH_FLAME_BONE_FLAG: &str = "--batch-flame-bone";
-const BATCH_FLAME_PRESET_FLAG: &str = "--batch-flame-preset";
-const BATCH_FLAME_MOTION_FLAG: &str = "--batch-flame-motion";
-const BATCH_FLAME_SDF_FLAG: &str = "--batch-flame-sdf";
-const BATCH_FLAME_SET_FLAG: &str = "--batch-flame-set";
-const BATCH_WIND_SET_FLAG: &str = "--batch-wind-set";
-const BATCH_FLAME_STYLE_FLAG: &str = "--batch-flame-style";
-const BATCH_FLAME_STYLE_DUMP_FLAG: &str = "--batch-flame-style-dump";
-const BATCH_FLAME_TEXTURE_FLAG: &str = "--batch-flame-texture";
-const BATCH_HEAT_PLUME_FLAG: &str = "--batch-heat-plume";
 const BATCH_PICK_FLAG: &str = "--batch-pick";
 const BATCH_ANIM_EDIT_FLAG: &str = "--batch-anim-edit";
 const BATCH_ANIM_DUMP_FLAG: &str = "--batch-anim-dump";
@@ -69,43 +45,15 @@ pub struct BatchCameraPose {
 
 pub struct EngineCliOverrides {
     pub batch_run: Option<BatchRun>,
-    pub flame_mode: Option<FlameShadingMode>,
-    pub flame_debug_view: Option<thyllore_effect_core::FlameDebugView>,
-    pub water_debug_view: Option<i32>,
-    pub water_secondary: Option<thyllore_effect_core::WaterSecondaryRays>,
-    pub water_caustic_debug: Option<i32>,
-    pub water_history_weight: Option<f32>,
-    pub water_fixed_time: Option<f32>,
-    pub wind_fixed_time: Option<f32>,
-    pub wind_mode: Option<thyllore_effect_core::WindShadingMode>,
-    pub wind_resolve_scale: Option<thyllore_effect_core::WindResolveScale>,
-    pub wind_debug_view: Option<thyllore_effect_core::WindDebugView>,
-    pub wind_set: Vec<(String, f32)>,
-    pub flame_steps: Option<u32>,
     pub camera_pose: Option<BatchCameraPose>,
-    pub flame_dump_path: Option<String>,
     pub gpu_timings_path: Option<String>,
     pub exposure_dump_path: Option<String>,
-    pub flame_count: Option<usize>,
-    pub flame_preset: Option<String>,
-    pub flame_set: Vec<(String, f32)>,
-    pub flame_trail: Option<f32>,
-    pub flame_orbit: Option<(f32, f32)>,
-    pub flame_motion: Option<(f32, f32)>,
-    pub flame_sdf: Option<String>,
     pub pick_pixel: Option<(u32, u32)>,
-    pub flame_bone: Option<String>,
-    pub flame_texture_fit: Option<(String, f32, bool)>,
-    pub flame_style: Option<(String, thyllore_effect_core::StyleGroups)>,
-    pub flame_style_dump: Option<String>,
-    pub heat_plume: Option<(f32, f32)>,
     pub batch_play: bool,
     pub scene_path: Option<String>,
     pub anim_edits: Vec<BatchAnimEdit>,
     pub anim_dump_path: Option<String>,
     pub debug_actions: Vec<BatchDebugAction>,
-    pub wall_probe_path: Option<String>,
-    pub water_probe_path: Option<String>,
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum BatchAnimEdit {
@@ -160,54 +108,16 @@ pub enum BatchDebugAction {
 pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverrides> {
     Ok(EngineCliOverrides {
         batch_run: batch_run_resolve_from_args(args)?,
-        flame_mode: flame_mode_resolve_from_args(args)?,
-        flame_debug_view: flame_debug_view_resolve_from_args(args)?,
-        water_debug_view: water_debug_view_resolve_from_args(args)?,
-        water_secondary: water_secondary_resolve_from_args(args)?,
-        water_caustic_debug: water_caustic_debug_resolve_from_args(args)?,
-        water_history_weight: water_history_weight_resolve_from_args(args)?,
-        water_fixed_time: water_fixed_time_resolve_from_args(args)?,
-        wind_fixed_time: wind_fixed_time_resolve_from_args(args)?,
-        wind_mode: wind_mode_resolve_from_args(args)?,
-        wind_debug_view: wind_debug_view_resolve_from_args(args)?,
-        wind_resolve_scale: wind_resolve_scale_resolve_from_args(args)?,
-        wind_set: wind_set_resolve_from_args(args)?,
-        flame_steps: flame_steps_resolve_from_args(args)?,
         camera_pose: camera_pose_resolve_from_args(args)?,
-        flame_dump_path: flame_dump_path_resolve_from_args(args)?,
         gpu_timings_path: gpu_timings_path_resolve_from_args(args)?,
         exposure_dump_path: exposure_dump_path_resolve_from_args(args)?,
-        flame_count: flame_count_resolve_from_args(args)?,
-        flame_preset: flame_preset_resolve_from_args(args)?,
-        flame_set: flame_set_resolve_from_args(args)?,
-        flame_trail: flame_trail_resolve_from_args(args)?,
-        flame_orbit: flame_orbit_resolve_from_args(args)?,
-        flame_motion: flame_motion_resolve_from_args(args)?,
-        flame_bone: flame_bone_resolve_from_args(args)?,
         pick_pixel: pick_pixel_resolve_from_args(args)?,
-        flame_sdf: flame_sdf_resolve_from_args(args)?,
-        flame_texture_fit: flame_texture_fit_resolve_from_args(args)?,
-        flame_style: flame_style_resolve_from_args(args)?,
-        flame_style_dump: flag_value_resolve_from_args(args, BATCH_FLAME_STYLE_DUMP_FLAG)?,
-        heat_plume: heat_plume_resolve_from_args(args)?,
         batch_play: args.iter().any(|a| a == "--batch-play"),
         scene_path: scene_path_resolve_from_args(args)?,
         anim_edits: anim_edits_resolve_from_args(args)?,
         anim_dump_path: flag_value_resolve_from_args(args, BATCH_ANIM_DUMP_FLAG)?,
         debug_actions: debug_actions_resolve_from_args(args)?,
-        wall_probe_path: flag_value_resolve_from_args(args, BATCH_WALL_PROBE_FLAG)?,
-        water_probe_path: flag_value_resolve_from_args(args, BATCH_WATER_PROBE_FLAG)?,
     })
-}
-
-fn flag_value_resolve_from_args(args: &[String], flag: &str) -> Result<Option<String>> {
-    let Some(position) = args.iter().position(|arg| arg == flag) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1).filter(|v| !v.starts_with("--")) else {
-        bail!("{flag} requires a value");
-    };
-    Ok(Some(value.clone()))
 }
 
 pub fn camera_pose_resolve_from_args(args: &[String]) -> Result<Option<BatchCameraPose>> {
@@ -287,12 +197,11 @@ pub fn batch_run_resolve_from_args(args: &[String]) -> Result<Option<BatchRun>> 
             None => DEFAULT_SCREENSHOT_FRAME,
         };
 
-        let flame_set = flame_set_resolve_from_args(args)?;
         let dump_wall_probe = debug_actions_contain(args, "dump_wall_probe");
         let dump_water_debug = debug_actions_contain(args, "dump_water_debug");
         let dump_wind_debug = debug_actions_contain(args, "dump_wind_debug");
 
-        let mut batch = BatchRun::new(PathBuf::from(dir), screenshot_frame, flame_set);
+        let mut batch = BatchRun::new(PathBuf::from(dir), screenshot_frame);
         batch.dump_wall_probe = dump_wall_probe;
         batch.dump_water_debug = dump_water_debug;
         batch.dump_wind_debug = dump_wind_debug;
@@ -337,13 +246,11 @@ pub fn batch_run_resolve_from_args(args: &[String]) -> Result<Option<BatchRun>> 
             None => DEFAULT_SCREENSHOT_FRAME,
         };
 
-        let flame_set = flame_set_resolve_from_args(args)?;
-
         let dump_wall_probe = debug_actions_contain(args, "dump_wall_probe");
         let dump_water_debug = debug_actions_contain(args, "dump_water_debug");
         let dump_wind_debug = debug_actions_contain(args, "dump_wind_debug");
 
-        let mut batch = BatchRun::new(output, screenshot_frame, flame_set);
+        let mut batch = BatchRun::new(output, screenshot_frame);
         batch.dump_wall_probe = dump_wall_probe;
         batch.dump_water_debug = dump_water_debug;
         batch.dump_wind_debug = dump_wind_debug;
@@ -355,208 +262,6 @@ pub fn batch_run_resolve_from_args(args: &[String]) -> Result<Option<BatchRun>> 
             flag_value_resolve_from_args(args, BATCH_WATER_PROBE_FLAG)?.map(PathBuf::from);
         Ok(Some(batch))
     }
-}
-
-pub fn flame_mode_resolve_from_args(args: &[String]) -> Result<Option<FlameShadingMode>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_FLAME_MODE_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_FLAME_MODE_FLAG} requires a value: analytic|raymarch|thickness|noise|depthclamp");
-    };
-    let mode = FlameShadingMode::parse(value).ok_or_else(|| {
-        anyhow::anyhow!(
-            "invalid flame mode '{value}': expected analytic|raymarch|thickness|noise|depthclamp"
-        )
-    })?;
-    Ok(Some(mode))
-}
-
-pub fn flame_debug_view_resolve_from_args(
-    args: &[String],
-) -> Result<Option<thyllore_effect_core::FlameDebugView>> {
-    let Some(position) = args
-        .iter()
-        .position(|arg| arg == BATCH_FLAME_DEBUG_VIEW_FLAG)
-    else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_FLAME_DEBUG_VIEW_FLAG} requires a value: off|shaped|erosion|argument|density|sigma|emission|jitter|wcoord");
-    };
-    let view = thyllore_effect_core::FlameDebugView::parse(value).ok_or_else(|| {
-        anyhow::anyhow!(
-            "invalid flame debug view '{value}': expected off|shaped|erosion|argument|density|sigma|emission|jitter|wcoord|grid|strain|stretch"
-        )
-    })?;
-    Ok(Some(view))
-}
-
-pub fn water_debug_view_resolve_from_args(args: &[String]) -> Result<Option<i32>> {
-    let Some(position) = args
-        .iter()
-        .position(|arg| arg == BATCH_WATER_DEBUG_VIEW_FLAG)
-    else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_WATER_DEBUG_VIEW_FLAG} requires a value (integer debug view index)");
-    };
-    let view: i32 = value
-        .parse()
-        .map_err(|_| anyhow::anyhow!("invalid water debug view '{value}': expected integer"))?;
-    Ok(Some(view))
-}
-
-pub fn water_caustic_debug_resolve_from_args(args: &[String]) -> Result<Option<i32>> {
-    let Some(position) = args
-        .iter()
-        .position(|arg| arg == BATCH_WATER_CAUSTIC_DEBUG_FLAG)
-    else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_WATER_CAUSTIC_DEBUG_FLAG} requires a value (integer caustic debug mode)");
-    };
-    let mode: i32 = value
-        .parse()
-        .map_err(|_| anyhow::anyhow!("invalid water caustic debug '{value}': expected integer"))?;
-    Ok(Some(mode))
-}
-
-pub fn water_secondary_resolve_from_args(
-    args: &[String],
-) -> Result<Option<thyllore_effect_core::WaterSecondaryRays>> {
-    let Some(position) = args
-        .iter()
-        .position(|arg| arg == BATCH_WATER_SECONDARY_FLAG)
-    else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_WATER_SECONDARY_FLAG} requires a value (rayquery|screenspace|raytracing)");
-    };
-    let secondary = thyllore_effect_core::WaterSecondaryRays::parse(value).ok_or_else(|| {
-        anyhow::anyhow!(
-            "{BATCH_WATER_SECONDARY_FLAG} requires a value (rayquery|screenspace|raytracing)"
-        )
-    })?;
-    Ok(Some(secondary))
-}
-
-pub fn water_history_weight_resolve_from_args(args: &[String]) -> Result<Option<f32>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_WATER_HISTORY_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_WATER_HISTORY_FLAG} requires a value (history blend weight)");
-    };
-    let weight: f32 = value
-        .parse()
-        .map_err(|_| anyhow::anyhow!("invalid water history weight '{value}': expected float"))?;
-    Ok(Some(weight))
-}
-
-pub fn wind_mode_resolve_from_args(
-    args: &[String],
-) -> Result<Option<thyllore_effect_core::WindShadingMode>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_WIND_MODE_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_WIND_MODE_FLAG} requires a value: closed|reference");
-    };
-    let mode = thyllore_effect_core::WindShadingMode::parse(value)
-        .ok_or_else(|| anyhow::anyhow!("invalid wind mode '{value}': expected closed|reference"))?;
-    Ok(Some(mode))
-}
-
-pub fn wind_debug_view_resolve_from_args(
-    args: &[String],
-) -> Result<Option<thyllore_effect_core::WindDebugView>> {
-    let Some(position) = args
-        .iter()
-        .position(|arg| arg == BATCH_WIND_DEBUG_VIEW_FLAG)
-    else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_WIND_DEBUG_VIEW_FLAG} requires a value: off|depth|knots|coverage");
-    };
-    let view = thyllore_effect_core::WindDebugView::parse(value).ok_or_else(|| {
-        anyhow::anyhow!("invalid wind debug view '{value}': expected off|depth|knots|coverage")
-    })?;
-    Ok(Some(view))
-}
-
-pub fn wind_resolve_scale_resolve_from_args(
-    args: &[String],
-) -> Result<Option<thyllore_effect_core::WindResolveScale>> {
-    let Some(position) = args
-        .iter()
-        .position(|arg| arg == BATCH_WIND_RESOLVE_SCALE_FLAG)
-    else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_WIND_RESOLVE_SCALE_FLAG} requires a value: full|half");
-    };
-    let scale = thyllore_effect_core::WindResolveScale::parse(value).ok_or_else(|| {
-        anyhow::anyhow!("invalid wind resolve scale '{value}': expected full|half")
-    })?;
-    Ok(Some(scale))
-}
-
-pub fn water_fixed_time_resolve_from_args(args: &[String]) -> Result<Option<f32>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_WATER_TIME_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_WATER_TIME_FLAG} requires a value (seconds)");
-    };
-    let seconds: f32 = value
-        .parse()
-        .map_err(|_| anyhow::anyhow!("invalid water time '{value}': expected float seconds"))?;
-    Ok(Some(seconds))
-}
-
-pub fn wind_fixed_time_resolve_from_args(args: &[String]) -> Result<Option<f32>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_WIND_TIME_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_WIND_TIME_FLAG} requires a value (seconds)");
-    };
-    let seconds: f32 = value
-        .parse()
-        .map_err(|_| anyhow::anyhow!("invalid wind time '{value}': expected float seconds"))?;
-    Ok(Some(seconds))
-}
-
-pub fn flame_steps_resolve_from_args(args: &[String]) -> Result<Option<u32>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_FLAME_STEPS_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_FLAME_STEPS_FLAG} requires a step count");
-    };
-    let steps: u32 = value
-        .parse()
-        .map_err(|_| anyhow::anyhow!("invalid step count '{value}': expected integer"))?;
-    if steps == 0 {
-        bail!("{BATCH_FLAME_STEPS_FLAG} must be >= 1");
-    }
-    Ok(Some(steps))
-}
-
-pub fn flame_dump_path_resolve_from_args(args: &[String]) -> Result<Option<String>> {
-    let Some(position) = args.iter().position(|arg| arg == FLAME_DUMP_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{FLAME_DUMP_FLAG} requires a path");
-    };
-    Ok(Some(value.clone()))
 }
 
 pub fn flame_dump_npy_path(json_path: &Path) -> PathBuf {
@@ -598,281 +303,6 @@ pub fn exposure_dump_path_resolve_from_args(args: &[String]) -> Result<Option<St
     Ok(Some(value.clone()))
 }
 
-pub fn flame_count_resolve_from_args(args: &[String]) -> Result<Option<usize>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_FLAME_COUNT_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_FLAME_COUNT_FLAG} requires a count");
-    };
-    let count: usize = value
-        .parse()
-        .map_err(|_| anyhow::anyhow!("invalid flame count '{value}': expected integer"))?;
-    if !(1..=4).contains(&count) {
-        bail!(
-            "{BATCH_FLAME_COUNT_FLAG} must be in range 1..=4, got {}",
-            count
-        );
-    }
-    Ok(Some(count))
-}
-const ROT_Z_DEG_KEY: &str = "rot_z_deg";
-
-pub(crate) fn flame_set_valid_keys() -> Vec<&'static str> {
-    thyllore_effect_core::FLAME_SCALAR_PARAMS
-        .iter()
-        .map(|param| param.name)
-        .chain([ROT_Z_DEG_KEY])
-        .collect()
-}
-
-fn scalar_set_resolve_from_args(
-    args: &[String],
-    flag: &str,
-    valid_keys: &[&'static str],
-) -> Result<Vec<(String, f32)>> {
-    let flag_name = flag.trim_start_matches('-');
-
-    let mut pairs: Vec<(String, f32)> = Vec::new();
-    for i in 0..args.len() {
-        let payload = if args[i] == flag {
-            if i + 1 >= args.len() {
-                anyhow::bail!("{} requires a value after it", flag);
-            }
-            args[i + 1].clone()
-        } else if let Some(rest) = args[i].strip_prefix(flag) {
-            rest.trim_start_matches('=').trim().to_string()
-        } else {
-            continue;
-        };
-
-        let parts: Vec<&str> = payload.splitn(2, '=').collect();
-        if parts.len() != 2 {
-            anyhow::bail!(
-                "{} value must be KEY=VALUE format, got '{}'",
-                flag_name,
-                payload
-            );
-        }
-        let key = parts[0].trim().to_string();
-        let value_str = parts[1].trim();
-        let value: f32 = value_str.parse().context(format!(
-            "{} value must be a number, got '{}'",
-            flag_name, value_str
-        ))?;
-
-        if !valid_keys.contains(&key.as_str()) {
-            anyhow::bail!(
-                "unknown {} key '{}'. Valid keys: {}",
-                flag_name,
-                key,
-                valid_keys.join(", ")
-            );
-        }
-
-        pairs.push((key, value));
-    }
-    Ok(pairs)
-}
-
-fn flame_set_resolve_from_args(args: &[String]) -> Result<Vec<(String, f32)>> {
-    scalar_set_resolve_from_args(args, BATCH_FLAME_SET_FLAG, &flame_set_valid_keys())
-}
-
-pub(crate) fn wind_set_valid_keys() -> Vec<&'static str> {
-    thyllore_effect_core::WIND_SCALAR_PARAMS
-        .iter()
-        .map(|param| param.name)
-        .collect()
-}
-
-fn wind_set_resolve_from_args(args: &[String]) -> Result<Vec<(String, f32)>> {
-    scalar_set_resolve_from_args(args, BATCH_WIND_SET_FLAG, &wind_set_valid_keys())
-}
-
-fn flame_preset_resolve_from_args(args: &[String]) -> Result<Option<String>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_FLAME_PRESET_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_FLAME_PRESET_FLAG} requires <name>");
-    };
-    if !thyllore_effect_core::FLAME_PRESET_NAMES.contains(&value.as_str()) {
-        bail!(
-            "unknown flame preset '{}'. Valid presets: {}",
-            value,
-            thyllore_effect_core::FLAME_PRESET_NAMES.join(", ")
-        );
-    }
-    Ok(Some(value.clone()))
-}
-
-fn flame_style_resolve_from_args(
-    args: &[String],
-) -> Result<Option<(String, thyllore_effect_core::StyleGroups)>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_FLAME_STYLE_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1).filter(|v| !v.starts_with("--")) else {
-        bail!("{BATCH_FLAME_STYLE_FLAG} requires <path>[,motion][,texture][,optics]");
-    };
-
-    let mut parts = value.split(',');
-    let path = parts.next().unwrap_or_default().trim().to_string();
-    if path.is_empty() {
-        bail!("{BATCH_FLAME_STYLE_FLAG} requires a non-empty path");
-    }
-
-    let group_names: Vec<&str> = parts.map(str::trim).collect();
-    if group_names.is_empty() {
-        return Ok(Some((path, thyllore_effect_core::StyleGroups::default())));
-    }
-    let mut groups = thyllore_effect_core::StyleGroups {
-        motion: false,
-        texture: false,
-        optics: false,
-    };
-    for name in group_names {
-        match name {
-            "motion" => groups.motion = true,
-            "texture" => groups.texture = true,
-            "optics" => groups.optics = true,
-            other => bail!(
-                "unknown {BATCH_FLAME_STYLE_FLAG} group '{}'. Valid groups: motion, texture, optics",
-                other
-            ),
-        }
-    }
-    Ok(Some((path, groups)))
-}
-
-pub fn load_flame_style_from_path(path: &str) -> Option<thyllore_effect_core::FlameStyle> {
-    let content = match std::fs::read_to_string(path) {
-        Ok(content) => content,
-        Err(e) => {
-            eprintln!("warning: failed to read flame style '{}': {}", path, e);
-            return None;
-        }
-    };
-    match ron::from_str(&content) {
-        Ok(style) => Some(style),
-        Err(e) => {
-            eprintln!("warning: failed to parse flame style '{}': {}", path, e);
-            None
-        }
-    }
-}
-
-pub fn apply_flame_style_from_path(
-    effect: &mut FlameEffect,
-    path: &str,
-    groups: thyllore_effect_core::StyleGroups,
-) -> Option<thyllore_effect_core::FlameStyle> {
-    let style = load_flame_style_from_path(path)?;
-    thyllore_effect_core::apply_flame_style(effect, &style, groups);
-    Some(style)
-}
-
-pub fn dump_flame_style_to_path(effect: &FlameEffect, path: &str) {
-    let name = std::path::Path::new(path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("style")
-        .trim_end_matches(".style.ron")
-        .trim_end_matches(".ron")
-        .to_string();
-    let style = thyllore_effect_core::flame_style_from_effect(effect, &name);
-    let content = match ron::ser::to_string_pretty(&style, ron::ser::PrettyConfig::default()) {
-        Ok(content) => content,
-        Err(e) => {
-            eprintln!("warning: failed to serialize flame style: {}", e);
-            return;
-        }
-    };
-    if let Some(parent) = std::path::Path::new(path).parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Err(e) = std::fs::write(path, content) {
-        eprintln!("warning: failed to write flame style '{}': {}", path, e);
-    }
-}
-
-fn flame_texture_fit_resolve_from_args(args: &[String]) -> Result<Option<(String, f32, bool)>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_FLAME_TEXTURE_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_FLAME_TEXTURE_FLAG} requires <path>[,<blend>[,<profile>]]");
-    };
-    let parts: Vec<&str> = value.split(',').collect();
-    let path = parts[0].trim().to_string();
-    let blend = if parts.len() > 1 {
-        parts[1].trim().parse::<f32>().map_err(|_| {
-            anyhow::anyhow!(
-                "invalid {BATCH_FLAME_TEXTURE_FLAG} blend value '{}'",
-                parts[1]
-            )
-        })?
-    } else {
-        1.0
-    };
-    if !blend.is_finite() || blend < 0.0 || blend > 1.0 {
-        bail!("{BATCH_FLAME_TEXTURE_FLAG} blend must be in [0, 1] and finite: '{value}'");
-    }
-    let profile = match parts.get(2).map(|s| s.trim()) {
-        None | Some("statistics") => false,
-        Some("profile") => true,
-        Some(other) => {
-            bail!(
-                "invalid {BATCH_FLAME_TEXTURE_FLAG} profile value '{}'; must be 'profile' or 'statistics'",
-                other
-            );
-        }
-    };
-    Ok(Some((path, blend, profile)))
-}
-
-fn heat_plume_resolve_from_args(args: &[String]) -> Result<Option<(f32, f32)>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_HEAT_PLUME_FLAG) else {
-        return Ok(None);
-    };
-    let next = args.get(position + 1);
-    let value = match next {
-        None => "10.0,0.5",
-        Some(value) if value.starts_with("--") => "10.0,0.5",
-        Some(value) => value.as_str(),
-    };
-    let parts: Vec<&str> = value.split(',').collect();
-    let (gain, amp) = match parts.len() {
-        1 => {
-            let gain: f32 = parts[0]
-                .parse()
-                .map_err(|_| anyhow::anyhow!("invalid {BATCH_HEAT_PLUME_FLAG} value '{value}'"))?;
-            if !gain.is_finite() || gain < 0.0 {
-                bail!("{BATCH_HEAT_PLUME_FLAG} gain must be >= 0 and finite: '{value}'");
-            }
-            (gain, 0.5)
-        }
-        2 => {
-            let gain: f32 = parts[0]
-                .parse()
-                .map_err(|_| anyhow::anyhow!("invalid {BATCH_HEAT_PLUME_FLAG} value '{value}'"))?;
-            let amp: f32 = parts[1]
-                .parse()
-                .map_err(|_| anyhow::anyhow!("invalid {BATCH_HEAT_PLUME_FLAG} value '{value}'"))?;
-            if !gain.is_finite() || gain < 0.0 {
-                bail!("{BATCH_HEAT_PLUME_FLAG} gain must be >= 0 and finite: '{value}'");
-            }
-            if !amp.is_finite() || amp < 0.0 {
-                bail!("{BATCH_HEAT_PLUME_FLAG} amp must be >= 0 and finite: '{value}'");
-            }
-            (gain, amp)
-        }
-        _ => bail!("{BATCH_HEAT_PLUME_FLAG} expects <gain>[,<amp>] but got '{value}'"),
-    };
-    Ok(Some((gain, amp)))
-}
-
 fn scene_path_resolve_from_args(args: &[String]) -> Result<Option<String>> {
     let Some(position) = args.iter().position(|arg| arg == "--batch-scene") else {
         return Ok(None);
@@ -881,47 +311,6 @@ fn scene_path_resolve_from_args(args: &[String]) -> Result<Option<String>> {
         bail!("--batch-scene requires <path>");
     };
     Ok(Some(value.clone()))
-}
-
-fn flame_trail_resolve_from_args(args: &[String]) -> Result<Option<f32>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_FLAME_TRAIL_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_FLAME_TRAIL_FLAG} requires <fade_seconds>");
-    };
-    let fade: f32 = value
-        .parse()
-        .map_err(|_| anyhow::anyhow!("invalid {BATCH_FLAME_TRAIL_FLAG} value '{value}'"))?;
-    if !fade.is_finite() || fade <= 0.0 {
-        bail!("{BATCH_FLAME_TRAIL_FLAG} fade_seconds must be > 0 and finite: '{value}'");
-    }
-    Ok(Some(fade))
-}
-
-fn flame_orbit_resolve_from_args(args: &[String]) -> Result<Option<(f32, f32)>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_FLAME_ORBIT_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_FLAME_ORBIT_FLAG} requires <radius>,<period_seconds>");
-    };
-    let parts: Vec<&str> = value.split(',').collect();
-    if parts.len() != 2 {
-        bail!("{BATCH_FLAME_ORBIT_FLAG} expects 2 comma-separated values, got '{value}'");
-    }
-    let radius: f32 = parts[0]
-        .trim()
-        .parse::<f32>()
-        .map_err(|_| anyhow::anyhow!("invalid {BATCH_FLAME_ORBIT_FLAG} radius in '{value}'"))?;
-    let period: f32 = parts[1]
-        .trim()
-        .parse::<f32>()
-        .map_err(|_| anyhow::anyhow!("invalid {BATCH_FLAME_ORBIT_FLAG} period in '{value}'"))?;
-    if !radius.is_finite() || radius < 0.0 || !period.is_finite() || period <= 0.0 {
-        bail!("{BATCH_FLAME_ORBIT_FLAG} radius must be >= 0 and period > 0, all finite: '{value}'");
-    }
-    Ok(Some((radius, period)))
 }
 
 /// Drives one viewport click from the command line so the picking readback path can be exercised
@@ -948,58 +337,101 @@ fn pick_pixel_resolve_from_args(args: &[String]) -> Result<Option<(u32, u32)>> {
     Ok(Some((x, y)))
 }
 
-fn flame_motion_resolve_from_args(args: &[String]) -> Result<Option<(f32, f32)>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_FLAME_MOTION_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_FLAME_MOTION_FLAG} requires <radius>,<angular_speed>");
-    };
-    let parts: Vec<&str> = value.split(',').collect();
-    if parts.len() != 2 {
-        bail!("{BATCH_FLAME_MOTION_FLAG} expects 2 comma-separated values, got '{value}'");
-    }
-    let radius: f32 = parts[0]
-        .trim()
-        .parse::<f32>()
-        .map_err(|_| anyhow::anyhow!("invalid {BATCH_FLAME_MOTION_FLAG} radius in '{value}'"))?;
-    let angular_speed: f32 = parts[1].trim().parse::<f32>().map_err(|_| {
-        anyhow::anyhow!("invalid {BATCH_FLAME_MOTION_FLAG} angular_speed in '{value}'")
-    })?;
-    if !radius.is_finite() || radius < 0.0 || !angular_speed.is_finite() {
-        bail!("{BATCH_FLAME_MOTION_FLAG} radius must be >= 0 and angular_speed finite: '{value}'");
-    }
-    Ok(Some((radius, angular_speed)))
-}
-
-fn flame_bone_resolve_from_args(args: &[String]) -> Result<Option<String>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_FLAME_BONE_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_FLAME_BONE_FLAG} requires <name-or-index>");
-    };
-    if value.starts_with("--") {
-        bail!("{BATCH_FLAME_BONE_FLAG} requires <name-or-index>");
-    }
-    Ok(Some(value.clone()))
-}
-
-fn flame_sdf_resolve_from_args(args: &[String]) -> Result<Option<String>> {
-    let Some(position) = args.iter().position(|arg| arg == BATCH_FLAME_SDF_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{BATCH_FLAME_SDF_FLAG} requires <path>");
-    };
-    if value.starts_with("--") {
-        bail!("{BATCH_FLAME_SDF_FLAG} requires <path>");
-    }
-    Ok(Some(value.clone()))
-}
 /// Compute the XZ circular orbit offset at time t for a given radius and period.
 /// position = (R * cos(2*pi*t/T), 0, R * sin(2*pi*t/T))
 /// If period <= 0, returns [0, 0, 0].
+pub fn apply_engine_overrides(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    overrides: &EngineCliOverrides,
+) {
+    if let Some(ref batch_run) = overrides.batch_run {
+        world.insert_resource(batch_run.clone());
+    }
+    if let Some(pose) = overrides.camera_pose {
+        apply_camera_pose(world, pose);
+    }
+    if let Some(path) = overrides.gpu_timings_path.clone() {
+        world.insert_resource(GpuTimingsSink::new(path));
+    }
+    if let Some(path) = overrides.exposure_dump_path.clone() {
+        world.insert_resource(ExposureDumpSink::new(path));
+    }
+    if overrides.scene_path.is_some() {
+        request_scene_model_load(world);
+    }
+    if let Some(pixel) = overrides.pick_pixel {
+        world.insert_resource(BatchPickRequest::new(pixel));
+    }
+    if !overrides.anim_edits.is_empty() {
+        batch_apply_anim_edits(world, assets, &overrides.anim_edits);
+    }
+    if !overrides.debug_actions.is_empty() {
+        apply_debug_actions_outside_batch_dumps(world, &overrides.debug_actions);
+    }
+    if overrides.batch_play {
+        start_batch_playback(world);
+    }
+}
+
+fn apply_camera_pose(world: &mut World, pose: BatchCameraPose) {
+    let mut camera = world.resource_mut::<Camera>();
+    camera.yaw = pose.yaw_degrees.to_radians();
+    camera.pitch = pose.pitch_degrees.to_radians();
+    camera.distance = pose.distance;
+    if let Some(pivot) = pose.pivot {
+        camera.pivot = cgmath::Vector3::new(pivot[0], pivot[1], pivot[2]);
+    }
+}
+
+/// A scene file restores its model path into `ModelState`; loading it goes through the same
+/// event the UI sends.
+fn request_scene_model_load(world: &mut World) {
+    let model_path = world.resource::<ModelState>().model_path.clone();
+    if model_path.is_empty() || model_path == "Generated Mesh" {
+        return;
+    }
+    world
+        .resource_mut::<UIEventQueue>()
+        .send(UIEvent::LoadModel { path: model_path });
+}
+
+/// A batch run writes its own probe dumps, so the dump actions are dropped when one is present.
+fn apply_debug_actions_outside_batch_dumps(world: &World, actions: &[BatchDebugAction]) {
+    let batch_run_owns_dumps = world.contains_resource::<BatchRun>();
+    let filtered: Vec<_> = actions
+        .iter()
+        .filter(|a| {
+            !batch_run_owns_dumps
+                || !matches!(
+                    a,
+                    BatchDebugAction::WallProbeDump | BatchDebugAction::WaterDebugDump
+                )
+        })
+        .cloned()
+        .collect();
+    batch_apply_debug_actions(world, &filtered);
+}
+
+/// Starts looping playback on a clip with bone tracks when there is one, so an empty default
+/// clip never shadows the model animation the batch run wants to play.
+fn start_batch_playback(world: &mut World) {
+    let first = find_best_clip(world);
+    let mut timeline = world.resource_mut::<TimelineState>();
+    timeline.playing = true;
+    timeline.looping = true;
+    timeline.current_time = 0.0;
+    if timeline.current_clip_id.is_none() {
+        timeline.current_clip_id = first;
+    }
+    drop(timeline);
+
+    if let Some(mut batch_run) = world.get_resource_mut::<BatchRun>() {
+        batch_run.play_requested = true;
+        batch_run.play_clip_id = first;
+    }
+}
+
 pub fn compute_orbit_offset(radius: f32, period_seconds: f32, t_seconds: f32) -> [f32; 3] {
     if period_seconds <= 0.0 {
         return [0.0, 0.0, 0.0];
@@ -1054,33 +486,6 @@ pub fn batch_run_update_orbit(world: &mut World) {
             enabled: true,
         };
         world.insert_component(e, path);
-    }
-}
-
-pub fn apply_flame_overrides(effect: &mut FlameEffect, overrides: &[(String, f32)]) {
-    for (key, value) in overrides {
-        if key == ROT_Z_DEG_KEY {
-            effect.rotation = cgmath::Quaternion::from(cgmath::Euler::new(
-                cgmath::Deg(0.0),
-                cgmath::Deg(0.0),
-                cgmath::Deg(*value),
-            ));
-            continue;
-        }
-
-        let param =
-            thyllore_effect_core::find_scalar_param(thyllore_effect_core::FLAME_SCALAR_PARAMS, key)
-                .unwrap_or_else(|| unreachable!("unknown key (parser should have rejected)"));
-        (param.set)(effect, *value);
-    }
-}
-
-pub fn apply_wind_overrides(effect: &mut WindTornadoEffect, overrides: &[(String, f32)]) {
-    for (key, value) in overrides {
-        let param =
-            thyllore_effect_core::find_scalar_param(thyllore_effect_core::WIND_SCALAR_PARAMS, key)
-                .unwrap_or_else(|| unreachable!("unknown key (parser should have rejected)"));
-        (param.set)(effect, *value);
     }
 }
 
@@ -2481,108 +1886,6 @@ mod tests {
     }
 
     #[test]
-    fn resolve_flame_mode_and_steps() {
-        let overrides = resolve_engine_cli_overrides(&args(&[
-            "bin",
-            "--batch-flame-mode",
-            "raymarch",
-            "--batch-flame-steps",
-            "512",
-        ]))
-        .unwrap();
-        assert!(overrides.batch_run.is_none());
-        assert_eq!(
-            overrides.flame_mode,
-            Some(FlameShadingMode::ReferenceRaymarch)
-        );
-        assert_eq!(overrides.flame_steps, Some(512));
-    }
-
-    #[test]
-    fn resolve_wind_mode_and_debug_view() {
-        let overrides = resolve_engine_cli_overrides(&args(&[
-            "bin",
-            "--batch-wind-mode",
-            "reference",
-            "--batch-wind-debug-view",
-            "depth",
-        ]))
-        .unwrap();
-        assert_eq!(
-            overrides.wind_mode,
-            Some(thyllore_effect_core::WindShadingMode::ReferenceQuadrature)
-        );
-        assert_eq!(
-            overrides.wind_debug_view,
-            Some(thyllore_effect_core::WindDebugView::OpticalDepth)
-        );
-        assert!(wind_mode_resolve_from_args(&args(&["bin", "--batch-wind-mode", "x"])).is_err());
-
-        let coverage =
-            resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-debug-view", "coverage"]))
-                .unwrap();
-        assert_eq!(
-            coverage.wind_debug_view,
-            Some(thyllore_effect_core::WindDebugView::Coverage)
-        );
-    }
-
-    #[test]
-    fn resolve_wind_resolve_scale() {
-        let default_overrides = resolve_engine_cli_overrides(&args(&["bin"])).unwrap();
-        assert_eq!(default_overrides.wind_resolve_scale, None);
-
-        let half =
-            resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-resolve-scale", "half"]))
-                .unwrap();
-        assert_eq!(
-            half.wind_resolve_scale,
-            Some(thyllore_effect_core::WindResolveScale::Half)
-        );
-
-        let full =
-            resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-resolve-scale", "full"]))
-                .unwrap();
-        assert_eq!(
-            full.wind_resolve_scale,
-            Some(thyllore_effect_core::WindResolveScale::Full)
-        );
-
-        assert!(wind_resolve_scale_resolve_from_args(&args(&[
-            "bin",
-            "--batch-wind-resolve-scale",
-            "x"
-        ]))
-        .is_err());
-    }
-
-    #[test]
-    fn resolve_wind_fixed_time() {
-        let overrides =
-            resolve_engine_cli_overrides(&args(&["bin", "--batch-wind-time", "10.5"])).unwrap();
-        assert_eq!(overrides.wind_fixed_time, Some(10.5));
-
-        let without = resolve_engine_cli_overrides(&args(&["bin"])).unwrap();
-        assert_eq!(without.wind_fixed_time, None);
-
-        assert!(wind_fixed_time_resolve_from_args(&args(&["bin", "--batch-wind-time"])).is_err());
-        assert!(
-            wind_fixed_time_resolve_from_args(&args(&["bin", "--batch-wind-time", "abc"])).is_err()
-        );
-    }
-
-    #[test]
-    fn resolve_rejects_invalid_flame_overrides() {
-        assert!(flame_mode_resolve_from_args(&args(&["bin", "--batch-flame-mode", "x"])).is_err());
-        assert!(
-            flame_steps_resolve_from_args(&args(&["bin", "--batch-flame-steps", "0"])).is_err()
-        );
-        assert!(
-            flame_steps_resolve_from_args(&args(&["bin", "--batch-flame-steps", "abc"])).is_err()
-        );
-    }
-
-    #[test]
     fn resolve_camera_pose() {
         let pose = camera_pose_resolve_from_args(&args(&["bin", "--batch-camera", "30,5,4"]))
             .unwrap()
@@ -2620,7 +1923,7 @@ mod tests {
     fn tick_requests_screenshot_at_target_frame() {
         let mut world = World::new();
         world.insert_resource(UIEventQueue::default());
-        world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 2, Vec::new()));
+        world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 2));
 
         batch_run_tick(&world);
         assert!(matches!(
@@ -2639,11 +1942,7 @@ mod tests {
     fn record_ignores_keyboard_screenshot_while_waiting() {
         let world = {
             let mut world = World::new();
-            world.insert_resource(BatchRun::new(
-                PathBuf::from("/tmp/out.png"),
-                100,
-                Vec::new(),
-            ));
+            world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 100));
             world
         };
 
@@ -2657,7 +1956,7 @@ mod tests {
     #[test]
     fn record_stores_error_result() {
         let mut world = World::new();
-        world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 1, Vec::new()));
+        world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 1));
         world.resource_mut::<BatchRun>().state = BatchRunState::ScreenshotRequested;
 
         batch_run_record_screenshot(&world, Err("save failed".to_string()));
@@ -2671,241 +1970,10 @@ mod tests {
 
     #[test]
     fn report_incomplete_state_is_error() {
-        let batch = BatchRun::new(PathBuf::from("/tmp/out.png"), 1, Vec::new());
+        let batch = BatchRun::new(PathBuf::from("/tmp/out.png"), 1);
         let (ok, line) = batch_run_report(&batch);
         assert!(!ok);
         assert!(line.contains("before screenshot completed"));
-    }
-
-    #[test]
-    fn flame_style_path_only_defaults_to_all_groups() {
-        let args: Vec<String> = vec![
-            "--batch-flame-style".into(),
-            "assets/flames/styles/pillar.style.ron".into(),
-        ];
-        let (path, groups) = flame_style_resolve_from_args(&args).unwrap().unwrap();
-        assert_eq!(path, "assets/flames/styles/pillar.style.ron");
-        assert_eq!(groups, thyllore_effect_core::StyleGroups::default());
-    }
-
-    #[test]
-    fn flame_style_group_subset() {
-        let args: Vec<String> = vec!["--batch-flame-style".into(), "s.ron,motion,optics".into()];
-        let (_, groups) = flame_style_resolve_from_args(&args).unwrap().unwrap();
-        assert!(groups.motion && groups.optics && !groups.texture);
-    }
-
-    #[test]
-    fn flame_style_unknown_group_error() {
-        let args: Vec<String> = vec!["--batch-flame-style".into(), "s.ron,shape".into()];
-        assert!(flame_style_resolve_from_args(&args).is_err());
-    }
-
-    #[test]
-    fn flame_style_ron_roundtrip_applies() {
-        let ron_text = r#"FlameStyle(
-            version: 1,
-            name: "pillar-ref",
-            motion: (twist_gain: Some(6.0), meander_amp_over_r0: Some(0.5)),
-            optics: (tau0: Some(4.0)),
-        )"#;
-        let style: thyllore_effect_core::FlameStyle = ron::from_str(ron_text).unwrap();
-        let mut effect = FlameEffect::default();
-        effect.radius = 2.0;
-        let applied = thyllore_effect_core::apply_flame_style(
-            &mut effect,
-            &style,
-            thyllore_effect_core::StyleGroups::default(),
-        );
-        assert_eq!(effect.twist.gain, 6.0);
-        assert_eq!(effect.meander.amp, 1.0);
-        assert_eq!(effect.optical_depth, 4.0);
-        assert_eq!(applied.len(), 3);
-    }
-
-    #[test]
-    fn flame_style_dump_load_roundtrip() {
-        let effect = FlameEffect::default();
-        let path = std::env::temp_dir().join("thyllore_style_test.style.ron");
-        let path_str = path.to_str().unwrap();
-        dump_flame_style_to_path(&effect, path_str);
-        let style = load_flame_style_from_path(path_str).unwrap();
-        let _ = std::fs::remove_file(&path);
-        assert_eq!(
-            style,
-            thyllore_effect_core::flame_style_from_effect(&effect, "thyllore_style_test")
-        );
-    }
-
-    #[test]
-    fn shipped_style_assets_parse() {
-        for entry in std::fs::read_dir(crate::paths::FLAMES_STYLE_DIR).unwrap() {
-            let path = entry.unwrap().path();
-            if path.to_string_lossy().ends_with(".style.ron") {
-                let content = std::fs::read_to_string(&path).unwrap();
-                ron::from_str::<thyllore_effect_core::FlameStyle>(&content)
-                    .unwrap_or_else(|e| panic!("{}: {}", path.display(), e));
-            }
-        }
-    }
-
-    #[test]
-    fn flame_set_combined_form() {
-        let args: Vec<String> = vec!["--batch-flame-set=noise_amplitude=0.35".into()];
-        let pairs = flame_set_resolve_from_args(&args).unwrap();
-        assert_eq!(pairs.len(), 1);
-        assert_eq!(pairs[0].0, "noise_amplitude");
-        assert!((pairs[0].1 - 0.35).abs() < 1e-6);
-    }
-
-    #[test]
-    fn flame_set_separate_form() {
-        let args: Vec<String> = vec!["--batch-flame-set".into(), "noise_amplitude=0.35".into()];
-        let pairs = flame_set_resolve_from_args(&args).unwrap();
-        assert_eq!(pairs.len(), 1);
-        assert_eq!(pairs[0].0, "noise_amplitude");
-        assert!((pairs[0].1 - 0.35).abs() < 1e-6);
-    }
-
-    #[test]
-    fn flame_set_unknown_key_error() {
-        let args: Vec<String> = vec!["--batch-flame-set".into(), "invalid_key=1.0".into()];
-        let err = flame_set_resolve_from_args(&args).unwrap_err();
-        assert!(err.to_string().contains("invalid_key"),);
-    }
-
-    #[test]
-    fn apply_flame_overrides_no_panic_for_all_keys() {
-        for key in flame_set_valid_keys() {
-            let mut effect = FlameEffect::default();
-            let overrides: Vec<(String, f32)> = vec![(key.to_string(), 1.0)];
-            apply_flame_overrides(&mut effect, &overrides);
-        }
-    }
-
-    #[test]
-    fn wind_set_parses_both_forms_and_rejects_unknown_key() {
-        let combined: Vec<String> = vec!["--batch-wind-set=wall_strength=0.5".into()];
-        let pairs = wind_set_resolve_from_args(&combined).unwrap();
-        assert_eq!(pairs.len(), 1);
-        assert_eq!(pairs[0].0, "wall_strength");
-        assert!((pairs[0].1 - 0.5).abs() < 1e-6);
-
-        let separate: Vec<String> = vec!["--batch-wind-set".into(), "wall_strength=0.5".into()];
-        assert_eq!(wind_set_resolve_from_args(&separate).unwrap(), pairs);
-
-        let unknown: Vec<String> = vec!["--batch-wind-set".into(), "invalid_key=1.0".into()];
-        let err = wind_set_resolve_from_args(&unknown).unwrap_err();
-        assert!(err.to_string().contains("invalid_key"));
-    }
-
-    #[test]
-    fn apply_wind_overrides_no_panic_for_all_keys() {
-        for key in wind_set_valid_keys() {
-            let mut effect = WindTornadoEffect::default();
-            let overrides: Vec<(String, f32)> = vec![(key.to_string(), 1.0)];
-            apply_wind_overrides(&mut effect, &overrides);
-
-            let param = thyllore_effect_core::find_scalar_param(
-                thyllore_effect_core::WIND_SCALAR_PARAMS,
-                key,
-            )
-            .expect("valid key is registered");
-            assert_eq!((param.get)(&effect), 1.0, "{key}");
-        }
-    }
-
-    /// Every key the pre-registry FLAME_SET_KEYS table accepted must keep working.
-    #[test]
-    fn flame_set_legacy_keys_stay_accepted() {
-        let legacy_keys = [
-            "warp_amp",
-            "warp_freq",
-            "rise_speed",
-            "taper_power",
-            "radius_tip_ratio",
-            "edge_low",
-            "edge_high",
-            "white_boost",
-            "bend_amount",
-            "bend_power",
-            "wind_x",
-            "wind_z",
-            "noise_amplitude",
-            "noise_contrast",
-            "noise_frequency",
-            "noise_scroll_speed",
-            "sigma_t",
-            "intensity",
-            "height",
-            "radius",
-            "time",
-            "time_scale",
-            "time_offset",
-            "rot_z_deg",
-            "temperature_base_k",
-            "temperature_tip_k",
-            "envelope_peak",
-            "envelope_base",
-            "envelope_tail",
-            "radial_sharpness",
-            "emitter_kind",
-            "ring_major_radius",
-            "ring_angular_speed",
-            "noise_aniso_y",
-            "warp_y_scale",
-            "occlusion_lum_ref",
-            "contour_wiggle_amp",
-            "aniso_axis_advect",
-            "rte_bands",
-            "sigma_dispersion",
-            "boundary_amp",
-            "near_fade_radius",
-            "carve_residual",
-            "tip_carve_depth",
-            "tip_carve_reach",
-            "warp_reach",
-            "swirl_gain",
-            "swirl_speed",
-            "spread_gain",
-            "support_margin",
-            "meander_amp",
-            "meander_frequency",
-            "mix_lo",
-            "mix_hi",
-            "mix_height_gain",
-            "mix_scale",
-            "mix_radial_gain",
-            "density_exp",
-            "temp_exp",
-            "wien_c_k",
-            "wave_segments",
-            "boundary_freq",
-            "boundary_speed",
-            "boundary_radius_ratio",
-            "edge_outer_sharpen",
-            "noise_scale_mode",
-            "erosion_noise_gain",
-            "twist_gain",
-            "twist_speed",
-            "burnout_gain",
-            "noise_shaping_scale",
-            "optical_depth",
-            "branch_period",
-            "branch_life",
-            "branch_gain",
-            "branch_core_radius",
-            "branch_core_offset",
-            "branch_reach",
-            "branch_spread",
-            "branch_spawn_height",
-            "branch_spawn_range",
-            "branch_seed",
-        ];
-        let valid = flame_set_valid_keys();
-        for key in legacy_keys {
-            assert!(valid.contains(&key), "legacy key {key} no longer accepted");
-        }
     }
 
     #[test]
@@ -2917,7 +1985,7 @@ mod tests {
         world.insert_component(e, FlameEffect::default());
 
         // Insert BatchRun and BatchFlameOrbit resources
-        world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 1, Vec::new()));
+        world.insert_resource(BatchRun::new(PathBuf::from("/tmp/out.png"), 1));
         world.resource_mut::<BatchRun>().frames_rendered = 1;
         world.insert_resource(crate::ecs::resource::BatchFlameOrbit {
             radius: 2.0,
@@ -2974,37 +2042,6 @@ mod tests {
     }
 
     #[test]
-    fn test_flame_preset_resolve_valid() {
-        let args = vec![String::from("--batch-flame-preset"), String::from("candle")];
-        let result = flame_preset_resolve_from_args(&args).unwrap();
-        assert_eq!(result, Some(String::from("candle")));
-    }
-
-    #[test]
-    fn test_flame_preset_then_override_order() {
-        // "candle" preset sets height=0.28, radius=0.07, intensity=2.0, etc.
-        let mut effect = FlameEffect::default();
-        thyllore_effect_core::apply_flame_preset(&mut effect, "candle");
-
-        // Now apply an individual override for height via flame_set
-        let overrides: Vec<(String, f32)> = vec![(String::from("height"), 1.5)];
-        apply_flame_overrides(&mut effect, &overrides);
-
-        // The override should be final (1.5), not the preset value (0.28)
-        assert!(
-            (effect.height - 1.5).abs() < 1e-5,
-            "height should be overridden to 1.5, got {}",
-            effect.height
-        );
-        // Other candle preset values should remain
-        assert!(
-            (effect.radius - 0.07).abs() < 1e-5,
-            "radius should still be candle's 0.07, got {}",
-            effect.radius
-        );
-    }
-
-    #[test]
     fn test_orbit_motion_path_equivalence() {
         use crate::ecs::component::{motion_path_position, MotionPath};
         use std::f32::consts::PI;
@@ -3054,58 +2091,6 @@ mod tests {
                 orbit_pos.z
             );
         }
-    }
-
-    #[test]
-    fn flame_texture_fit_path_only_defaults_blend_to_one() {
-        let resolved = flame_texture_fit_resolve_from_args(&args(&[
-            "bin",
-            "--batch-flame-texture",
-            "image.png",
-        ]))
-        .unwrap()
-        .unwrap();
-        assert_eq!(resolved.0, "image.png");
-        assert!((resolved.1 - 1.0).abs() < 1e-6);
-        assert!(!resolved.2);
-    }
-
-    #[test]
-    fn flame_texture_fit_path_with_blend() {
-        let resolved = flame_texture_fit_resolve_from_args(&args(&[
-            "bin",
-            "--batch-flame-texture",
-            "image.png,0.4",
-        ]))
-        .unwrap()
-        .unwrap();
-        assert_eq!(resolved.0, "image.png");
-        assert!((resolved.1 - 0.4).abs() < 1e-6);
-        assert!(!resolved.2);
-    }
-
-    #[test]
-    fn flame_texture_fit_invalid_blend_is_err() {
-        assert!(flame_texture_fit_resolve_from_args(&args(&[
-            "bin",
-            "--batch-flame-texture",
-            "image.png,abc"
-        ]))
-        .is_err());
-    }
-
-    #[test]
-    fn flame_texture_fit_profile() {
-        let resolved = flame_texture_fit_resolve_from_args(&args(&[
-            "bin",
-            "--batch-flame-texture",
-            "image.png,0.5,profile",
-        ]))
-        .unwrap()
-        .unwrap();
-        assert_eq!(resolved.0, "image.png");
-        assert!((resolved.1 - 0.5).abs() < 1e-6);
-        assert!(resolved.2);
     }
 
     #[test]

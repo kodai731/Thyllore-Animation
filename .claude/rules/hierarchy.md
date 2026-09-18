@@ -125,9 +125,23 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 ## src/hooks/
 
 Generic hook infrastructure that lets a subsystem plug into the app lifecycle without being named by
-`src/app/`. `effect.rs` holds the effect hook (setup, viewport resize, pass nodes) and the list that runs
-them in subscription order; GPU teardown is not a hook, it is the `gpu_resource!` registration of the
-effect's resource (`gpu_resource.rs`: `GpuResourceHook`, `GpuResourceHooks::collect()`). `pass.rs` holds the `RenderPassNode` contract (name,
+`src/app/`. `effect.rs` holds the effect hook (setup, after_overrides, viewport resize, pass nodes) and the
+list that runs them in subscription order; GPU teardown is not a hook, it is the `gpu_resource!` registration
+of the effect's resource (`gpu_resource.rs`: `GpuResourceHook`, `GpuResourceHooks::collect()`).
+`bootstrap.rs` holds the `BootstrapOverrides` contract (a subsystem's command-line configuration: a
+`#[derive(clap::Args)]` struct with `NAME` and `apply(world, assets)`) and the `bootstrap_hook!`
+registration (`inventory`); `ResolvedBootstrap::resolve(args)` parses every hook before the window exists so
+a bad flag fails fast, and `src/app/bootstrap.rs` (called from `src/main.rs`) applies the engine's own
+`EngineCliOverrides` and then every resolved hook without naming one. `src/main.rs` and `src/app/` never
+mention a subsystem's flags: a subsystem that needs startup flags declares its struct and registers it
+from its own directory. An effect keeps that struct and its world writes in
+`src/ecs/systems/<effect>/cli.rs`: a flag is one field with `#[arg(long = "...")]`, its value type parses
+itself (`FromStr` on the setting enum in `thyllore-effect-core`, a clap range, or a `value_parser` fn for a
+composite value); there is no per-flag lookup code. `BootstrapOverrides::resolve` parses the hook in
+isolation by keeping only the tokens its struct declares, which is what lets it coexist with the engine's
+hand-parsed flags in `batch_run_systems.rs`; two hooks declaring the same flag fail at startup. GPU work
+that depends on those overrides (the flame SDF texture) is the effect's `after_overrides` hook, run by
+`src/app/bootstrap.rs::finish_setup` after the overrides are applied. `pass.rs` holds the `RenderPassNode` contract (name,
 stage, `transients` requested by slot and desc, reads / writes declared as `TargetUse`, `prepare`, record),
 the `PassStage` order (lighting → effect → post-process → final) and the `PassGraph` that keeps registered
 nodes sorted by stage then registration order. The graph runner in `src/app/command_recording.rs` runs
@@ -202,7 +216,8 @@ Concretely:
   `src/scene/` changes. Adding an effect = `scene_owner!` in its component file; a provenance component
   = `scene_attachment!`. Runtime-only companions (baked data, accumulators) are inserted by the effect's
   own per-frame system when missing, never by the loader.
-- `src/hooks/` files describe contracts (`EffectHook`, `RenderPassNode`, `SceneComponentHook`); they take
+- `src/hooks/` files describe contracts (`EffectHook`, `RenderPassNode`, `SceneComponentHook`,
+  `BootstrapOverrides`); they take
   fn pointers and `&'static str` keys, never an effect type.
 - `src/ecs/world.rs` offers generic component access (`iter_components::<C>`, `insert_component`); it does
   not grow `with_<effect>()` builders or `query_<effect>s()` helpers. The existing `query_flames` /

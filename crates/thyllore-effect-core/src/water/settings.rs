@@ -39,6 +39,18 @@ impl WaterSecondaryRays {
     }
 }
 
+impl std::str::FromStr for WaterSecondaryRays {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value).ok_or_else(|| {
+            format!(
+                "invalid water secondary rays '{value}': expected rayquery|screenspace|raytracing"
+            )
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WaterRenderSettings {
     pub secondary_rays: WaterSecondaryRays,

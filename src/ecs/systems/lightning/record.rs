@@ -39,6 +39,7 @@ impl LightningPushConstants {
 pub struct LightningInstanceDraw {
     pub ubo_dynamic_offset: u32,
     pub segments_dynamic_offset: u32,
+    pub scissor: vk::Rect2D,
 }
 
 pub unsafe fn record_lightning_resolve_pass(
@@ -53,22 +54,20 @@ pub unsafe fn record_lightning_resolve_pass(
 ) -> Result<()> {
     let device = &ctx.device.device;
     let extent = targets.extent();
-    let scissor = vk::Rect2D {
-        offset: vk::Offset2D { x: 0, y: 0 },
-        extent,
-    };
     begin_overlay_render_pass(
         device,
         cmd,
         targets.render_pass,
         targets.framebuffer,
-        scissor,
+        vk::Rect2D {
+            offset: vk::Offset2D { x: 0, y: 0 },
+            extent,
+        },
         OverlayAttachmentLoad::Keep,
     );
 
     device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
     set_full_viewport(device, cmd, extent);
-    device.cmd_set_scissor(cmd, 0, &[scissor]);
     device.cmd_push_constants(
         cmd,
         pipeline.pipeline_layout,
@@ -79,6 +78,7 @@ pub unsafe fn record_lightning_resolve_pass(
 
     let frame_set = ctx.graphics.frame_set.sets[image_index];
     for draw in draws {
+        device.cmd_set_scissor(cmd, 0, &[draw.scissor]);
         device.cmd_bind_descriptor_sets(
             cmd,
             vk::PipelineBindPoint::GRAPHICS,

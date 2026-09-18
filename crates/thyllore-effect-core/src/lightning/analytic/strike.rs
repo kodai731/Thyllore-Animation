@@ -456,6 +456,38 @@ pub fn build_strike_segments(effect: &LightningEffect, seed: u32, reseed: u32) -
     segments
 }
 
+/// Corners of the local axis-aligned box enclosing every glow capsule alive at `t`.
+pub fn compute_lightning_segment_aabb(
+    effect: &LightningEffect,
+    t: f32,
+) -> Option<[Vector3<f32>; 8]> {
+    let mut bounds: Option<(Vector3<f32>, Vector3<f32>)> = None;
+    for seg in build_lightning_segments(effect, t) {
+        let glow_radius = seg.r0.max(seg.r1) * effect.glow_ratio;
+        let glow_extent = Vector3::new(glow_radius, glow_radius, glow_radius);
+        for endpoint in [Vector3::from(seg.a), Vector3::from(seg.b)] {
+            let low = endpoint - glow_extent;
+            let high = endpoint + glow_extent;
+            bounds = Some(match bounds {
+                Some((min, max)) => (
+                    Vector3::new(min.x.min(low.x), min.y.min(low.y), min.z.min(low.z)),
+                    Vector3::new(max.x.max(high.x), max.y.max(high.y), max.z.max(high.z)),
+                ),
+                None => (low, high),
+            });
+        }
+    }
+
+    let (min, max) = bounds?;
+    let mut corners = [min; 8];
+    for (index, corner) in corners.iter_mut().enumerate() {
+        corner.x = if index & 1 == 0 { min.x } else { max.x };
+        corner.y = if index & 2 == 0 { min.y } else { max.y };
+        corner.z = if index & 4 == 0 { min.z } else { max.z };
+    }
+    Some(corners)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -779,5 +811,103 @@ mod tests {
             longest_branch_chord > main_path_len * 0.05,
             "longest branch chord {longest_branch_chord} must exceed 5% of parent path length {main_path_len}"
         );
+    }
+
+    fn time_inside_first_burst(effect: &LightningEffect) -> f32 {
+        timing::burst_start_time(effect, 0) + effect.attack_time + effect.sustain_time * 0.5
+    }
+
+    fn corner_bounds(corners: &[Vector3<f32>; 8]) -> ([f32; 3], [f32; 3]) {
+        let mut min = [corners[0].x, corners[0].y, corners[0].z];
+        let mut max = min;
+        for corner in corners {
+            for axis in 0..3 {
+                min[axis] = min[axis].min(corner[axis]);
+                max[axis] = max[axis].max(corner[axis]);
+            }
+        }
+        (min, max)
+    }
+
+    fn expanded_segment_bounds(
+        effect: &LightningEffect,
+        segments: &[Segment],
+    ) -> ([f32; 3], [f32; 3]) {
+        let glow_radius = |seg: &Segment| seg.r0.max(seg.r1) * effect.glow_ratio;
+        let mut min = [0.0; 3];
+        let mut max = [0.0; 3];
+        for axis in 0..3 {
+            min[axis] = segments
+                .iter()
+                .map(|seg| seg.a[axis].min(seg.b[axis]) - glow_radius(seg))
+                .fold(f32::INFINITY, f32::min);
+            max[axis] = segments
+                .iter()
+                .map(|seg| seg.a[axis].max(seg.b[axis]) + glow_radius(seg))
+                .fold(f32::NEG_INFINITY, f32::max);
+        }
+        (min, max)
+    }
+
+    fn assert_bounds_match(actual: ([f32; 3], [f32; 3]), expected: ([f32; 3], [f32; 3])) {
+        for axis in 0..3 {
+            assert!(
+                (actual.0[axis] - expected.0[axis]).abs() < 1e-5,
+                "{actual:?} vs {expected:?}"
+            );
+            assert!(
+                (actual.1[axis] - expected.1[axis]).abs() < 1e-5,
+                "{actual:?} vs {expected:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_compute_lightning_segment_aabb_single_segment() {
+        let mut effect = LightningEffect::default();
+        effect.detail_levels = 0;
+        effect.branch_probability = 0.0;
+        effect.end_offset = [3.0, -8.0, 1.0];
+        let t = time_inside_first_burst(&effect);
+
+        let segments = build_lightning_segments(&effect, t);
+        assert_eq!(
+            segments.len(),
+            1,
+            "one straight segment without detail or branches"
+        );
+
+        let corners = compute_lightning_segment_aabb(&effect, t).expect("one alive segment");
+        assert_bounds_match(
+            corner_bounds(&corners),
+            expanded_segment_bounds(&effect, &segments),
+        );
+    }
+
+    #[test]
+    fn test_compute_lightning_segment_aabb_multiple_segments_with_branches() {
+        let mut effect = LightningEffect::default();
+        effect.branch_probability = 1.0;
+        effect.branch_depth = 2;
+        let t = time_inside_first_burst(&effect);
+
+        let mut unbranched = effect.clone();
+        unbranched.branch_probability = 0.0;
+        let main_path_len = build_lightning_segments(&unbranched, t).len();
+        let segments = build_lightning_segments(&effect, t);
+        assert!(segments.len() > main_path_len, "branches must add segments");
+
+        let corners = compute_lightning_segment_aabb(&effect, t).expect("alive segments");
+        assert_bounds_match(
+            corner_bounds(&corners),
+            expanded_segment_bounds(&effect, &segments),
+        );
+    }
+
+    #[test]
+    fn test_compute_lightning_segment_aabb_zero_segments() {
+        let effect = LightningEffect::default();
+        let before_burst = timing::burst_start_time(&effect, 0) - 1.0;
+        assert!(compute_lightning_segment_aabb(&effect, before_burst).is_none());
     }
 }

@@ -30,7 +30,17 @@ pub(crate) fn compute_bounds_scissor(
     model: &Matrix4<f32>,
     corners: impl IntoIterator<Item = Vector3<f32>>,
 ) -> Option<vk::Rect2D> {
-    let Some(projection) = app.data.ecs_world.get_resource::<ProjectionData>() else {
+    let projection = app.data.ecs_world.get_resource::<ProjectionData>();
+    compute_projected_bounds_scissor(projection.as_deref(), extent, model, corners)
+}
+
+pub(crate) fn compute_projected_bounds_scissor(
+    projection: Option<&ProjectionData>,
+    extent: vk::Extent2D,
+    model: &Matrix4<f32>,
+    corners: impl IntoIterator<Item = Vector3<f32>>,
+) -> Option<vk::Rect2D> {
+    let Some(projection) = projection else {
         return Some(full_extent_scissor(extent));
     };
     let model_view_proj = projection.proj * projection.view * model;

@@ -1,26 +1,48 @@
 use std::any::Any;
+use std::collections::HashMap;
 
 use anyhow::{anyhow, ensure, Result};
+use clap::{Args, Command};
 
 use crate::asset::AssetStorage;
 use crate::ecs::world::World;
 
-/// A subsystem's startup configuration: resolved from the command line before the window exists
-/// and applied to the world once the app is constructed. The app never learns what it contains.
-pub trait BootstrapOverrides: Sized + 'static {
+/// A subsystem's startup configuration: a `clap::Args` struct whose every field is one flag,
+/// resolved from the command line before the window exists and applied to the world once the
+/// app is constructed. The app never learns what it contains.
+pub trait BootstrapOverrides: Args + Sized + 'static {
     const NAME: &'static str;
 
-    fn resolve(args: &[String]) -> Result<Self>;
-
     fn apply(&self, world: &mut World, assets: &mut AssetStorage) -> Result<()>;
+
+    fn command() -> Command {
+        Self::augment_args(
+            Command::new(Self::NAME)
+                .no_binary_name(true)
+                .disable_help_flag(true)
+                .disable_version_flag(true),
+        )
+    }
+
+    /// Parses only this subsystem's flags out of `args`; tokens of other subsystems and of the
+    /// engine's own hand-parsed flags are skipped.
+    fn resolve(args: &[String]) -> Result<Self> {
+        let mut command = Self::command();
+        command.build();
+        let own_tokens = select_tokens_of(&command, args);
+        let matches = command.try_get_matches_from(own_tokens)?;
+        Ok(Self::from_arg_matches(&matches)?)
+    }
 }
 
 pub type BootstrapResolveFn = fn(&[String]) -> Result<Box<dyn Any>>;
 pub type BootstrapApplyFn = fn(&mut World, &mut AssetStorage, &dyn Any) -> Result<()>;
+pub type BootstrapCommandFn = fn() -> Command;
 
 #[derive(Clone, Copy)]
 pub struct BootstrapHook {
     pub name: &'static str,
+    pub command: BootstrapCommandFn,
     pub resolve: BootstrapResolveFn,
     pub apply: BootstrapApplyFn,
 }
@@ -53,6 +75,7 @@ macro_rules! bootstrap_hook {
         inventory::submit! {
             $crate::hooks::bootstrap::BootstrapHook {
                 name: <$overrides as $crate::hooks::bootstrap::BootstrapOverrides>::NAME,
+                command: <$overrides as $crate::hooks::bootstrap::BootstrapOverrides>::command,
                 resolve: $crate::hooks::bootstrap::resolve_erased::<$overrides>,
                 apply: $crate::hooks::bootstrap::apply_erased::<$overrides>,
             }
@@ -102,7 +125,69 @@ fn collect_hooks() -> Result<Vec<BootstrapHook>> {
             pair[0].name
         );
     }
+
+    ensure_flags_are_unique(&hooks)?;
     Ok(hooks)
+}
+
+fn ensure_flags_are_unique(hooks: &[BootstrapHook]) -> Result<()> {
+    let mut owner_by_flag: HashMap<String, &'static str> = HashMap::new();
+    for hook in hooks {
+        for flag in long_flags_of(&(hook.command)()) {
+            if let Some(other) = owner_by_flag.insert(flag.clone(), hook.name) {
+                return Err(anyhow!(
+                    "flag --{flag} is declared by both bootstrap hooks {other} and {}",
+                    hook.name
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn long_flags_of(command: &Command) -> Vec<String> {
+    command
+        .get_arguments()
+        .filter_map(|arg| arg.get_long())
+        .map(str::to_string)
+        .collect()
+}
+
+/// Keeps the tokens `command` declares (`--flag`, `--flag=value`, and the values that follow a
+/// `--flag`), dropping everything else so a hook can be parsed in isolation.
+fn select_tokens_of(command: &Command, args: &[String]) -> Vec<String> {
+    let mut selected = Vec::new();
+    let mut remaining = args.iter();
+    while let Some(token) = remaining.next() {
+        let Some(flag) = token.strip_prefix("--") else {
+            continue;
+        };
+        let (name, inline_value) = match flag.split_once('=') {
+            Some((name, value)) => (name, Some(value)),
+            None => (flag, None),
+        };
+        let Some(arg) = command
+            .get_arguments()
+            .find(|arg| arg.get_long() == Some(name))
+        else {
+            continue;
+        };
+
+        selected.push(token.clone());
+        if inline_value.is_some() {
+            continue;
+        }
+        let value_count = arg.get_num_args().map_or(0, |range| range.max_values());
+        let values = remaining
+            .clone()
+            .take(value_count)
+            .take_while(|value| !value.starts_with("--"));
+        for value in values {
+            selected.push(value.clone());
+            remaining.next();
+        }
+    }
+    selected
 }
 
 impl std::fmt::Debug for ResolvedBootstrap {
@@ -117,22 +202,20 @@ impl std::fmt::Debug for ResolvedBootstrap {
 mod tests {
     use super::*;
 
+    #[derive(Args)]
     struct ProbeOverrides {
+        #[arg(long = "probe")]
         label: Option<String>,
+        #[arg(long = "probe-count", value_parser = clap::value_parser!(u32).range(1..))]
+        count: Option<u32>,
+        #[arg(long = "probe-tag")]
+        tags: Vec<String>,
     }
 
     struct ProbeApplied(String);
 
     impl BootstrapOverrides for ProbeOverrides {
         const NAME: &'static str = "probe";
-
-        fn resolve(args: &[String]) -> Result<Self> {
-            let label = args
-                .iter()
-                .position(|arg| arg == "--probe")
-                .and_then(|position| args.get(position + 1).cloned());
-            Ok(Self { label })
-        }
 
         fn apply(&self, world: &mut World, _assets: &mut AssetStorage) -> Result<()> {
             if let Some(label) = &self.label {
@@ -167,5 +250,30 @@ mod tests {
         let mut assets = AssetStorage::new();
         resolved.apply(&mut world, &mut assets).unwrap();
         assert!(world.get_resource::<ProbeApplied>().is_none());
+    }
+
+    #[test]
+    fn foreign_flags_are_skipped_and_own_flags_take_both_forms() {
+        let resolved = ProbeOverrides::resolve(&args(&[
+            "bin",
+            "--batch-screenshot",
+            "/tmp/out.png",
+            "--probe=hello",
+            "--probe-tag",
+            "a",
+            "--probe-tag=b",
+            "--other",
+        ]))
+        .unwrap();
+        assert_eq!(resolved.label.as_deref(), Some("hello"));
+        assert_eq!(resolved.tags, ["a", "b"]);
+    }
+
+    #[test]
+    fn own_flag_errors_still_fail() {
+        assert!(ProbeOverrides::resolve(&args(&["bin", "--probe"])).is_err());
+        assert!(ProbeOverrides::resolve(&args(&["bin", "--probe", "--other"])).is_err());
+        assert!(ProbeOverrides::resolve(&args(&["bin", "--probe-count", "0"])).is_err());
+        assert!(ProbeOverrides::resolve(&args(&["bin", "--probe-count", "x"])).is_err());
     }
 }

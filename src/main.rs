@@ -22,6 +22,7 @@ fn main() -> anyhow::Result<()> {
     #[cfg(not(feature = "ml"))]
     let mut app = unsafe { thyllore_animation::app::App::create(&system.window)? };
 
+    // Subsystem flags arrive through `bootstrap_hook!` registrations; never name one here.
     thyllore_animation::app::bootstrap::apply_startup_overrides(&mut app, &config)?;
     unsafe {
         thyllore_animation::app::bootstrap::finish_setup(&mut app, &mut system)?;

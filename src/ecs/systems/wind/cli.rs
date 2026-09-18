@@ -1,4 +1,5 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
+use clap::Args;
 use thyllore_effect_core::{
     find_scalar_param, WindDebugView, WindResolveScale, WindShadingMode, WIND_SCALAR_PARAMS,
 };
@@ -6,37 +7,26 @@ use thyllore_effect_core::{
 use crate::asset::AssetStorage;
 use crate::ecs::component::WindTornadoEffect;
 use crate::ecs::resource::WindRenderSettings;
-use crate::ecs::systems::cli_args::scalar_set_resolve_from_args;
+use crate::ecs::systems::cli_args::scalar_assignment_parse;
 use crate::ecs::world::World;
 use crate::hooks::bootstrap::BootstrapOverrides;
 
-const TIME_FLAG: &str = "--batch-wind-time";
-const MODE_FLAG: &str = "--batch-wind-mode";
-const DEBUG_VIEW_FLAG: &str = "--batch-wind-debug-view";
-const RESOLVE_SCALE_FLAG: &str = "--batch-wind-resolve-scale";
-const SET_FLAG: &str = "--batch-wind-set";
-
-#[derive(Debug)]
+#[derive(Args, Debug)]
 pub struct WindOverrides {
+    #[arg(long = "batch-wind-time")]
     pub fixed_time: Option<f32>,
+    #[arg(long = "batch-wind-mode")]
     pub mode: Option<WindShadingMode>,
+    #[arg(long = "batch-wind-resolve-scale")]
     pub resolve_scale: Option<WindResolveScale>,
+    #[arg(long = "batch-wind-debug-view")]
     pub debug_view: Option<WindDebugView>,
+    #[arg(long = "batch-wind-set", value_parser = wind_set_entry_parse)]
     pub set: Vec<(String, f32)>,
 }
 
 impl BootstrapOverrides for WindOverrides {
     const NAME: &'static str = "wind";
-
-    fn resolve(args: &[String]) -> Result<Self> {
-        Ok(Self {
-            fixed_time: fixed_time_resolve_from_args(args)?,
-            mode: mode_resolve_from_args(args)?,
-            resolve_scale: resolve_scale_resolve_from_args(args)?,
-            debug_view: debug_view_resolve_from_args(args)?,
-            set: scalar_set_resolve_from_args(args, SET_FLAG, &wind_set_valid_keys())?,
-        })
-    }
 
     fn apply(&self, world: &mut World, _assets: &mut AssetStorage) -> Result<()> {
         self.apply_render_settings(world);
@@ -86,63 +76,16 @@ pub(crate) fn wind_set_valid_keys() -> Vec<&'static str> {
     WIND_SCALAR_PARAMS.iter().map(|param| param.name).collect()
 }
 
+fn wind_set_entry_parse(text: &str) -> Result<(String, f32), String> {
+    scalar_assignment_parse(text, &wind_set_valid_keys())
+}
+
 pub fn apply_wind_overrides(effect: &mut WindTornadoEffect, overrides: &[(String, f32)]) {
     for (key, value) in overrides {
         let param = find_scalar_param(WIND_SCALAR_PARAMS, key)
             .unwrap_or_else(|| unreachable!("unknown key (parser should have rejected)"));
         (param.set)(effect, *value);
     }
-}
-
-fn mode_resolve_from_args(args: &[String]) -> Result<Option<WindShadingMode>> {
-    let Some(position) = args.iter().position(|arg| arg == MODE_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{MODE_FLAG} requires a value: closed|reference");
-    };
-    let mode = WindShadingMode::parse(value)
-        .ok_or_else(|| anyhow::anyhow!("invalid wind mode '{value}': expected closed|reference"))?;
-    Ok(Some(mode))
-}
-
-fn debug_view_resolve_from_args(args: &[String]) -> Result<Option<WindDebugView>> {
-    let Some(position) = args.iter().position(|arg| arg == DEBUG_VIEW_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{DEBUG_VIEW_FLAG} requires a value: off|depth|knots|coverage");
-    };
-    let view = WindDebugView::parse(value).ok_or_else(|| {
-        anyhow::anyhow!("invalid wind debug view '{value}': expected off|depth|knots|coverage")
-    })?;
-    Ok(Some(view))
-}
-
-fn resolve_scale_resolve_from_args(args: &[String]) -> Result<Option<WindResolveScale>> {
-    let Some(position) = args.iter().position(|arg| arg == RESOLVE_SCALE_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{RESOLVE_SCALE_FLAG} requires a value: full|half");
-    };
-    let scale = WindResolveScale::parse(value).ok_or_else(|| {
-        anyhow::anyhow!("invalid wind resolve scale '{value}': expected full|half")
-    })?;
-    Ok(Some(scale))
-}
-
-fn fixed_time_resolve_from_args(args: &[String]) -> Result<Option<f32>> {
-    let Some(position) = args.iter().position(|arg| arg == TIME_FLAG) else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(position + 1) else {
-        bail!("{TIME_FLAG} requires a value (seconds)");
-    };
-    let seconds: f32 = value
-        .parse()
-        .map_err(|_| anyhow::anyhow!("invalid wind time '{value}': expected float seconds"))?;
-    Ok(Some(seconds))
 }
 
 #[cfg(test)]
@@ -165,7 +108,7 @@ mod tests {
         .unwrap();
         assert_eq!(overrides.mode, Some(WindShadingMode::ReferenceQuadrature));
         assert_eq!(overrides.debug_view, Some(WindDebugView::OpticalDepth));
-        assert!(mode_resolve_from_args(&args(&["bin", "--batch-wind-mode", "x"])).is_err());
+        assert!(WindOverrides::resolve(&args(&["bin", "--batch-wind-mode", "x"])).is_err());
 
         let coverage =
             WindOverrides::resolve(&args(&["bin", "--batch-wind-debug-view", "coverage"])).unwrap();
@@ -189,12 +132,9 @@ mod tests {
             WindOverrides::resolve(&args(&["bin", "--batch-wind-resolve-scale", "full"])).unwrap();
         assert_eq!(full.resolve_scale, Some(WindResolveScale::Full));
 
-        assert!(resolve_scale_resolve_from_args(&args(&[
-            "bin",
-            "--batch-wind-resolve-scale",
-            "x"
-        ]))
-        .is_err());
+        assert!(
+            WindOverrides::resolve(&args(&["bin", "--batch-wind-resolve-scale", "x"])).is_err()
+        );
     }
 
     #[test]
@@ -207,8 +147,8 @@ mod tests {
             None
         );
 
-        assert!(fixed_time_resolve_from_args(&args(&["bin", "--batch-wind-time"])).is_err());
-        assert!(fixed_time_resolve_from_args(&args(&["bin", "--batch-wind-time", "abc"])).is_err());
+        assert!(WindOverrides::resolve(&args(&["bin", "--batch-wind-time"])).is_err());
+        assert!(WindOverrides::resolve(&args(&["bin", "--batch-wind-time", "abc"])).is_err());
     }
 
     #[test]

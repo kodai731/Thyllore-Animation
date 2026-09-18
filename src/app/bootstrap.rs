@@ -10,7 +10,7 @@ use crate::hooks::effect::EffectHooks;
 use crate::vulkanr::context::{CommandState, RenderTargets};
 
 /// Applies the startup configuration: the engine's own overrides first, then every subsystem
-/// that registered a `bootstrap_hook!`, without naming any of them.
+/// that registered a `bootstrap_hook!`, without naming any of them (see `.claude/rules/hierarchy.md`).
 pub fn apply_startup_overrides(app: &mut App, config: &AppConfig) -> Result<()> {
     apply_engine_overrides(
         &mut app.data.ecs_world,

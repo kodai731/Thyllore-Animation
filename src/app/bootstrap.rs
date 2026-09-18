@@ -388,6 +388,13 @@ pub fn apply_engine_overrides(app: &mut App, overrides: &EngineCliOverrides) {
             .debug_view = debug_view;
     }
 
+    if let Some(step_count) = overrides.lightning_steps {
+        app.data
+            .ecs_world
+            .resource_mut::<LightningRenderSettings>()
+            .reference_step_count = step_count;
+    }
+
     if overrides.lightning_preset.is_some() || !overrides.lightning_set.is_empty() {
         let entities: Vec<_> = app.data.ecs_world.query_lightnings();
         for e in entities {

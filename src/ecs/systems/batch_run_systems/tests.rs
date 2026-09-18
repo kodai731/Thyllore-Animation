@@ -1287,6 +1287,25 @@ fn resolve_lightning_fixed_time() {
 }
 
 #[test]
+fn resolve_lightning_steps() {
+    let overrides =
+        resolve_engine_cli_overrides(&args(&["bin", "--batch-lightning-steps", "4"])).unwrap();
+    assert_eq!(overrides.lightning_steps, Some(4));
+
+    let without = resolve_engine_cli_overrides(&args(&["bin"])).unwrap();
+    assert_eq!(without.lightning_steps, None);
+
+    assert!(lightning_steps_resolve_from_args(&args(&["bin", "--batch-lightning-steps"])).is_err());
+    assert!(
+        lightning_steps_resolve_from_args(&args(&["bin", "--batch-lightning-steps", "abc"]))
+            .is_err()
+    );
+    assert!(
+        lightning_steps_resolve_from_args(&args(&["bin", "--batch-lightning-steps", "0"])).is_err()
+    );
+}
+
+#[test]
 fn lightning_set_parses_both_forms_and_rejects_unknown_key() {
     let combined: Vec<String> = vec!["--batch-lightning-set=core_intensity=12.0".into()];
     let pairs = lightning_set_resolve_from_args(&combined).unwrap();

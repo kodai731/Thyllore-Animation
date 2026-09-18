@@ -5,7 +5,7 @@ use crate::ecs::component::LightningEffect;
 use super::flame_args::scalar_set_resolve_from_args;
 use super::{
     BATCH_LIGHTNING_DEBUG_VIEW_FLAG, BATCH_LIGHTNING_MODE_FLAG, BATCH_LIGHTNING_PRESET_FLAG,
-    BATCH_LIGHTNING_SET_FLAG, BATCH_LIGHTNING_TIME_FLAG,
+    BATCH_LIGHTNING_SET_FLAG, BATCH_LIGHTNING_STEPS_FLAG, BATCH_LIGHTNING_TIME_FLAG,
 };
 
 pub fn lightning_mode_resolve_from_args(
@@ -52,6 +52,25 @@ pub fn lightning_fixed_time_resolve_from_args(args: &[String]) -> Result<Option<
         .parse()
         .map_err(|_| anyhow::anyhow!("invalid lightning time '{value}': expected float seconds"))?;
     Ok(Some(seconds))
+}
+
+pub fn lightning_steps_resolve_from_args(args: &[String]) -> Result<Option<u32>> {
+    let Some(position) = args
+        .iter()
+        .position(|arg| arg == BATCH_LIGHTNING_STEPS_FLAG)
+    else {
+        return Ok(None);
+    };
+    let Some(value) = args.get(position + 1) else {
+        bail!("{BATCH_LIGHTNING_STEPS_FLAG} requires a step count");
+    };
+    let steps: u32 = value
+        .parse()
+        .map_err(|_| anyhow::anyhow!("invalid step count '{value}': expected integer"))?;
+    if steps == 0 {
+        bail!("{BATCH_LIGHTNING_STEPS_FLAG} must be >= 1");
+    }
+    Ok(Some(steps))
 }
 
 pub(super) fn lightning_preset_resolve_from_args(args: &[String]) -> Result<Option<String>> {

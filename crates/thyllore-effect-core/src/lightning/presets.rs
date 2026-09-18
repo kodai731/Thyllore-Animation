@@ -31,6 +31,7 @@ pub fn apply_lightning_preset(effect: &mut LightningEffect, name: &str) -> bool 
             preset.flicker_amplitude = 0.6;
             preset.reseed_period = 0.07;
             preset.reseed_level = 4;
+            preset.flash_gain = 0.00014;
         }
         "arc" => {
             preset.end_offset = [6.0, 0.0, 0.0];
@@ -38,18 +39,21 @@ pub fn apply_lightning_preset(effect: &mut LightningEffect, name: &str) -> bool 
             preset.branch_probability = 0.1;
             preset.attack_time = 0.17;
             preset.release_time = 0.04;
+            preset.flash_gain = 0.0002;
         }
         "charge" => {
             preset.source = LightningSource::Shell { radius: 4.0 };
             preset.strikes_per_burst = 30;
             preset.detail_levels = 2;
             preset.charge_ramp = 1.2;
+            preset.flash_gain = 0.00012;
         }
         "beam" => {
             preset.beam_radius = 0.25;
             preset.beam_arc_count = 6;
             preset.attack_time = 0.03;
             preset.release_time = 0.2;
+            preset.flash_gain = 0.00003;
         }
         _ => return false,
     }
@@ -122,6 +126,7 @@ mod tests {
         assert!((effect.flicker_amplitude - 0.6).abs() < 1e-6);
         assert!((effect.reseed_period - 0.07).abs() < 1e-6);
         assert_eq!(effect.reseed_level, 4);
+        assert!((effect.flash_gain - 0.00014).abs() < 1e-9);
     }
 
     #[test]
@@ -134,6 +139,7 @@ mod tests {
         assert!((effect.branch_probability - 0.1).abs() < 1e-6);
         assert!((effect.attack_time - 0.17).abs() < 1e-6);
         assert!((effect.release_time - 0.04).abs() < 1e-6);
+        assert!((effect.flash_gain - 0.0002).abs() < 1e-9);
     }
 
     #[test]
@@ -150,6 +156,7 @@ mod tests {
         assert_eq!(effect.strikes_per_burst, 30);
         assert_eq!(effect.detail_levels, 2);
         assert!((effect.charge_ramp - 1.2).abs() < 1e-6);
+        assert!((effect.flash_gain - 0.00012).abs() < 1e-9);
     }
 
     #[test]
@@ -161,6 +168,7 @@ mod tests {
         assert_eq!(effect.beam_arc_count, 6);
         assert!((effect.attack_time - 0.03).abs() < 1e-6);
         assert!((effect.release_time - 0.2).abs() < 1e-6);
+        assert!((effect.flash_gain - 0.00003).abs() < 1e-9);
     }
 
     #[test]

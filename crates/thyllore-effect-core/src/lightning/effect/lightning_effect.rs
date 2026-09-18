@@ -116,7 +116,7 @@ impl Default for LightningEffect {
             beam_radius: 0.0,
             beam_arc_count: 8,
             flash_gain: 0.0,
-            flash_radius: 4.0,
+            flash_radius: 2.0,
         }
     }
 }

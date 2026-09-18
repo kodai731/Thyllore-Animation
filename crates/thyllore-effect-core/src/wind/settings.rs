@@ -22,6 +22,15 @@ impl WindResolveScale {
     }
 }
 
+impl std::str::FromStr for WindResolveScale {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value)
+            .ok_or_else(|| format!("invalid wind resolve scale '{value}': expected full|half"))
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WindShadingMode {
     #[default]
@@ -55,6 +64,15 @@ impl WindShadingMode {
             "reference" | "quadrature" => Some(WindShadingMode::ReferenceQuadrature),
             _ => None,
         }
+    }
+}
+
+impl std::str::FromStr for WindShadingMode {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value)
+            .ok_or_else(|| format!("invalid wind mode '{value}': expected closed|reference"))
     }
 }
 
@@ -101,6 +119,16 @@ impl WindDebugView {
             "coverage" => Some(WindDebugView::Coverage),
             _ => None,
         }
+    }
+}
+
+impl std::str::FromStr for WindDebugView {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value).ok_or_else(|| {
+            format!("invalid wind debug view '{value}': expected off|depth|knots|coverage")
+        })
     }
 }
 

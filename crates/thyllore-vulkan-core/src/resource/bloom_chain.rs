@@ -2,6 +2,7 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::hdr_buffer::HDR_FORMAT;
 use crate::resource::render_target_transient::TransientDesc;
 
@@ -168,6 +169,12 @@ fn compute_mip_extents(base_width: u32, base_height: u32, mip_count: u32) -> Vec
     }
 
     extents
+}
+
+impl GpuResource for BloomChain {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
+    }
 }
 
 #[cfg(test)]

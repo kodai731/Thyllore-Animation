@@ -13,8 +13,8 @@ pub type EffectHookFn = unsafe fn(&mut App) -> Result<()>;
 pub struct EffectHook {
     pub name: &'static str,
     pub setup: Option<EffectSetupHook>,
+    pub after_overrides: Option<EffectSetupHook>,
     pub on_viewport_resize: Option<EffectHookFn>,
-    pub destroy: Option<EffectHookFn>,
     pub passes: &'static [&'static dyn RenderPassNode],
 }
 
@@ -70,6 +70,21 @@ impl EffectHooks {
         }
         Ok(())
     }
+
+    /// Runs the GPU work that depends on the startup overrides, once they are applied.
+    pub unsafe fn run_after_overrides(
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        data: &mut AppData,
+        rrrender: &RRRender,
+    ) -> Result<()> {
+        for hook in data.effect_hooks.snapshot() {
+            if let Some(after_overrides) = hook.after_overrides {
+                after_overrides(instance, rrdevice, data, rrrender)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 impl App {
@@ -77,15 +92,6 @@ impl App {
         for hook in self.data.effect_hooks.snapshot() {
             if let Some(on_viewport_resize) = hook.on_viewport_resize {
                 on_viewport_resize(self)?;
-            }
-        }
-        Ok(())
-    }
-
-    pub unsafe fn run_effect_destroy(&mut self) -> Result<()> {
-        for hook in self.data.effect_hooks.snapshot().into_iter().rev() {
-            if let Some(destroy) = hook.destroy {
-                destroy(self)?;
             }
         }
         Ok(())

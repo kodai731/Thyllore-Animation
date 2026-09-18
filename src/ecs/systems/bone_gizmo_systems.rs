@@ -2,9 +2,14 @@ use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3, Vector4};
 
 use crate::animation::Skeleton;
+use crate::asset::AssetStorage;
 use crate::ecs::component::{ColorVertex, LineMesh};
 use crate::ecs::resource::gizmo::{BoneGizmoData, BoneSelectionState};
 use crate::ecs::resource::MeshAssets;
+use crate::ecs::world::World;
+use crate::ecs::{compute_pose_global_transforms, create_pose_from_rest};
+use crate::hooks::model_load::LoadedModel;
+use crate::loader::ModelLoadResult;
 use crate::math::{ray_to_triangle_barycentric, ray_to_triangle_intersection};
 use crate::render::RenderBackend;
 
@@ -1839,3 +1844,43 @@ mod tests {
         }
     }
 }
+
+pub fn bone_gizmo_reset_for_loaded_model(
+    world: &mut World,
+    assets: &AssetStorage,
+    loaded: &LoadedModel,
+) {
+    let mut bone_gizmo = world.resource_mut::<BoneGizmoData>();
+    bone_gizmo.stick_mesh.vertices.clear();
+    bone_gizmo.stick_mesh.indices.clear();
+    bone_gizmo.solid_mesh.vertices.clear();
+    bone_gizmo.solid_mesh.indices.clear();
+    bone_gizmo.wire_mesh.vertices.clear();
+    bone_gizmo.wire_mesh.indices.clear();
+
+    let Some(skeleton_asset) = assets.skeletons.values().next() else {
+        bone_gizmo.visible = false;
+        bone_gizmo.cached_skeleton_id = None;
+        bone_gizmo.cached_global_transforms.clear();
+        bone_gizmo.bone_local_offsets.clear();
+        return;
+    };
+
+    let skeleton = &skeleton_asset.skeleton;
+    let rest_globals = compute_pose_global_transforms(skeleton, &create_pose_from_rest(skeleton));
+    bone_gizmo.visible = true;
+    bone_gizmo.cached_skeleton_id = Some(skeleton_asset.skeleton_id);
+    bone_gizmo.mesh_scale = bone_gizmo_mesh_scale(loaded.load_result);
+    bone_gizmo.bone_local_offsets = compute_bone_local_offsets(skeleton, &rest_globals);
+    bone_gizmo.cached_global_transforms = rest_globals;
+}
+
+fn bone_gizmo_mesh_scale(load_result: &ModelLoadResult) -> f32 {
+    if load_result.has_skinned_meshes {
+        1.0
+    } else {
+        load_result.node_animation_scale
+    }
+}
+
+crate::model_load_hook!("bone_gizmo", Display, bone_gizmo_reset_for_loaded_model);

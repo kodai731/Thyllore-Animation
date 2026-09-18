@@ -3,24 +3,26 @@
 #extension GL_EXT_buffer_reference : require
 #extension GL_EXT_scalar_block_layout : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_GOOGLE_include_directive : require
 
-#include "water/include/trace_payload.glsl"
+#include "include/trace_payload.glsl"
+#include "include/trace_push.glsl"
+#include "include/hit_shading_record.glsl"
 
-struct HitShadingRecord { uint64_t vertexAddress; uint64_t indexAddress; mat4 model; mat4 normalMatrix; vec4 baseColor; vec4 params; };
 layout(set = 0, binding = 3, std430) readonly buffer HitShadingTable { HitShadingRecord records[]; } hitTable;
 layout(buffer_reference, scalar) buffer VertexBuffer { vec4 v[]; };
 layout(buffer_reference, scalar) buffer IndexBuffer { uint i[]; };
-layout(push_constant) uniform WaterTraceLight {
-    layout(offset = 96) vec4 lightPos;
-    layout(offset = 112) vec4 lightColor;
-} light;
-layout(location = 0) rayPayloadInEXT WaterTracePayload payload;
+layout(location = 0) rayPayloadInEXT TracePayload payload;
 hitAttributeEXT vec2 attribs;
 
 void main() {
     HitShadingRecord rec = hitTable.records[gl_InstanceCustomIndexEXT];
-    if (rec.vertexAddress == 0) { payload.color = vec4(0.0); payload.exitOrigin = vec4(0.0); return; }
-   VertexBuffer vb = VertexBuffer(rec.vertexAddress);
+    if (rec.vertexAddress == 0) {
+        payload.color = vec4(0.0);
+        payload.hit = vec4(0.0, 0.0, 0.0, TRACE_HIT_NONE);
+        return;
+    }
+    VertexBuffer vb = VertexBuffer(rec.vertexAddress);
     uint primIdx = gl_PrimitiveID;
     int vi0, vi1, vi2;
     if (rec.indexAddress != 0u) {
@@ -46,12 +48,12 @@ void main() {
     vec3 vertexColor = c0 * w + c1 * u + c2 * v;
     vec3 N = n0 * w + n1 * u + n2 * v;
     vec3 norm = normalize((N * gl_WorldToObjectEXT).xyz);
-    vec3 L = light.lightPos.xyz - P;
+    vec3 L = trace.lightPos.xyz - P;
     float dist = length(L);
     L /= dist;
     float ndotl = max(dot(norm, L), 0.0);
     float atten = 1.0 / (1.0 + 0.05 * dist * dist);
-    vec3 shaded = rec.baseColor.rgb * vertexColor * (0.15 + 0.85 * ndotl) * light.lightColor.rgb * atten;
+    vec3 shaded = rec.baseColor.rgb * vertexColor * (0.15 + 0.85 * ndotl) * trace.lightColor.rgb * atten;
     payload.color = vec4(shaded, 1.0);
-    payload.exitOrigin = vec4(0.0);
+    payload.hit = vec4(P, TRACE_HIT_MESH);
 }

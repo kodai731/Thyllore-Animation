@@ -42,6 +42,7 @@ const DECORATION_OFFSET: u32 = 35;
 
 const STORAGE_CLASS_UNIFORM_CONSTANT: u32 = 0;
 const STORAGE_CLASS_UNIFORM: u32 = 2;
+const STORAGE_CLASS_PUSH_CONSTANT: u32 = 9;
 const STORAGE_CLASS_STORAGE_BUFFER: u32 = 12;
 
 const DIM_BUFFER: u32 = 5;
@@ -71,9 +72,13 @@ pub fn reflect_shader_words(words: &[u32]) -> Result<ShaderReflection, ReflectEr
 
     let module = SpirvModule::decode(&words[HEADER_WORD_COUNT..])?;
     let mut bindings = Vec::new();
+    let mut push_constant = None;
     for variable in &module.variables {
         if let Some(binding) = module.resolve_binding(variable)? {
             bindings.push(binding);
+        }
+        if variable.storage_class == STORAGE_CLASS_PUSH_CONSTANT {
+            push_constant = Some(module.resolve_push_constant(variable)?);
         }
     }
     bindings.sort_by_key(|binding| (binding.set, binding.binding));
@@ -81,6 +86,7 @@ pub fn reflect_shader_words(words: &[u32]) -> Result<ShaderReflection, ReflectEr
     Ok(ShaderReflection {
         stages: module.stages,
         bindings,
+        push_constant,
     })
 }
 
@@ -269,11 +275,13 @@ impl SpirvModule {
             return Ok(None);
         }
 
-        let name = self.name_of(variable.id);
         let TypeDef::Pointer { pointee } = self.type_def(variable.pointer_type)? else {
-            return Err(ReflectError::UnsupportedVariableType(name));
+            return Err(ReflectError::UnsupportedVariableType(
+                self.name_of(variable.id),
+            ));
         };
         let (resource_type, count) = self.strip_arrays(*pointee)?;
+        let name = self.variable_name(variable.id, resource_type);
         let (kind, block) = self.classify_resource(variable.storage_class, resource_type, &name)?;
 
         let decorations = self
@@ -293,6 +301,32 @@ impl SpirvModule {
             count,
             block,
         }))
+    }
+
+    fn resolve_push_constant(&self, variable: &Variable) -> Result<ReflectedBlock, ReflectError> {
+        let name = self.name_of(variable.id);
+        let TypeDef::Pointer { pointee } = self.type_def(variable.pointer_type)? else {
+            return Err(ReflectError::PushConstantNotBlock(name));
+        };
+        let TypeDef::Struct { .. } = self.type_def(*pointee)? else {
+            return Err(ReflectError::PushConstantNotBlock(name));
+        };
+        Ok(ReflectedBlock {
+            type_name: self.name_of(*pointee),
+            size: self.struct_size(*pointee)?,
+            members: self.struct_members(*pointee, 0)?,
+        })
+    }
+
+    /// An unnamed block instance (`uniform Block { .. };`) carries an empty name in SPIR-V; the
+    /// block name then identifies the binding, as the GLSL declaration scan does.
+    fn variable_name(&self, variable_id: u32, type_id: u32) -> String {
+        let name = self.name_of(variable_id);
+        if name.is_empty() {
+            self.name_of(type_id)
+        } else {
+            name
+        }
     }
 
     fn strip_arrays(&self, mut type_id: u32) -> Result<(u32, DescriptorCount), ReflectError> {
@@ -802,5 +836,59 @@ pub(crate) mod tests {
             reflect_shader_words(&module),
             Err(ReflectError::MissingBinding("orphan".into()))
         );
+    }
+
+    fn raygen_module_with_push_block_and_unnamed_block() -> Vec<u32> {
+        let mut entry_operands = vec![5313, 4];
+        entry_operands.extend(literal_string("main"));
+
+        let module = [
+            header(),
+            instruction(OP_ENTRY_POINT, &entry_operands),
+            with_name(10, "TracePush"),
+            with_member_name(10, 0, "cameraPos"),
+            with_member_name(10, 1, "lightPos"),
+            with_name(20, "trace"),
+            with_name(12, "WaterBlock"),
+            with_member_name(12, 0, "water"),
+            with_name(21, ""),
+            instruction(OP_DECORATE, &[10, DECORATION_BLOCK]),
+            instruction(OP_MEMBER_DECORATE, &[10, 0, DECORATION_OFFSET, 0]),
+            instruction(OP_MEMBER_DECORATE, &[10, 1, DECORATION_OFFSET, 16]),
+            instruction(OP_DECORATE, &[12, DECORATION_BLOCK]),
+            instruction(OP_MEMBER_DECORATE, &[12, 0, DECORATION_OFFSET, 0]),
+            instruction(OP_DECORATE, &[21, DECORATION_DESCRIPTOR_SET, 1]),
+            instruction(OP_DECORATE, &[21, DECORATION_BINDING, 0]),
+            instruction(OP_TYPE_FLOAT, &[1, 32]),
+            instruction(OP_TYPE_VECTOR, &[3, 1, 4]),
+            instruction(OP_TYPE_STRUCT, &[10, 3, 3]),
+            instruction(OP_TYPE_POINTER, &[11, STORAGE_CLASS_PUSH_CONSTANT, 10]),
+            instruction(OP_TYPE_STRUCT, &[12, 3]),
+            instruction(OP_TYPE_POINTER, &[13, STORAGE_CLASS_UNIFORM, 12]),
+            instruction(OP_VARIABLE, &[11, 20, STORAGE_CLASS_PUSH_CONSTANT]),
+            instruction(OP_VARIABLE, &[13, 21, STORAGE_CLASS_UNIFORM]),
+        ];
+        module.concat()
+    }
+
+    #[test]
+    fn reflects_push_constant_block_and_names_unnamed_block_by_its_type() {
+        let reflection =
+            reflect_shader_words(&raygen_module_with_push_block_and_unnamed_block()).unwrap();
+
+        assert_eq!(reflection.stages, vec![ShaderStage::RayGeneration]);
+        assert_eq!(
+            reflection.push_constant,
+            Some(ReflectedBlock {
+                type_name: "TracePush".into(),
+                size: 32,
+                members: vec![
+                    member("cameraPos", 0, 16, "float32x4"),
+                    member("lightPos", 16, 16, "float32x4"),
+                ],
+            })
+        );
+        assert_eq!(reflection.bindings.len(), 1);
+        assert_eq!(reflection.bindings[0].name, "WaterBlock");
     }
 }

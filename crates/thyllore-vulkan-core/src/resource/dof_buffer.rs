@@ -2,6 +2,7 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::core::RRDevice;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::hdr_buffer::HDR_FORMAT;
 use crate::resource::render_target_transient::TransientDesc;
 
@@ -148,5 +149,11 @@ impl Drop for DofBuffer {
         if self.sampler != vk::Sampler::null() || self.render_pass != vk::RenderPass::null() {
             log_warn!("DofBuffer dropped without calling destroy()");
         }
+    }
+}
+
+impl GpuResource for DofBuffer {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

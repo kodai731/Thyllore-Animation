@@ -9,7 +9,7 @@ use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::image::{create_image, create_image_view};
 use crate::vulkanr::render::{create_color_overlay_render_pass, ColorOverlayPassDesc, RRRender};
 use crate::vulkanr::resource::hdr_buffer::HDR_FORMAT;
-use crate::vulkanr::resource::VolumeImage;
+use crate::vulkanr::resource::{GpuResource, VolumeImage};
 use thyllore_effect_core::{
     WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,
     WIND_SHADOW_VOLUME_THETA,
@@ -20,8 +20,8 @@ pub const WIND_SHADOW_VOLUME_FORMAT: vk::Format = vk::Format::R16G16_SFLOAT;
 pub const WIND_EFFECT_HOOK: EffectHook = EffectHook {
     name: "wind",
     setup: Some(setup_wind),
+    after_overrides: None,
     on_viewport_resize: Some(resize_wind_render_targets),
-    destroy: Some(destroy_wind_render_targets),
     passes: &[&super::passes::WindPassNode],
 };
 
@@ -127,6 +127,12 @@ pub unsafe fn create_wind_render_targets(
     })
 }
 
+impl GpuResource for WindRenderTargets {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        destroy_render_targets(self, &rrdevice.device);
+    }
+}
+
 pub unsafe fn destroy_render_targets(targets: &mut WindRenderTargets, device: &vulkanalia::Device) {
     targets.shadow_volume.destroy(device);
     if targets.half_framebuffer != vk::Framebuffer::null() {
@@ -156,30 +162,6 @@ pub unsafe fn destroy_render_targets(targets: &mut WindRenderTargets, device: &v
     if targets.render_pass != vk::RenderPass::null() {
         device.destroy_render_pass(targets.render_pass, None);
         targets.render_pass = vk::RenderPass::null();
-    }
-}
-
-unsafe fn destroy_gpu_state(state: &mut WindGpuState, device: &vulkanalia::Device) {
-    if let Some(mut descriptor) = state.resolve_descriptor.take() {
-        descriptor.destroy(device);
-    }
-    if let Some(pipeline) = state.resolve_pipeline.take() {
-        pipeline.destroy(device);
-    }
-    if let Some(mut ubo) = state.ubo.take() {
-        ubo.destroy(device);
-    }
-    if let Some(mut descriptor) = state.upsample_descriptor.take() {
-        descriptor.destroy(device);
-    }
-    if let Some(pipeline) = state.upsample_pipeline.take() {
-        pipeline.destroy(device);
-    }
-    if let Some(mut descriptor) = state.shadow_bake_descriptor.take() {
-        descriptor.destroy(device);
-    }
-    if let Some(pipeline) = state.shadow_bake_pipeline.take() {
-        pipeline.destroy(device);
     }
 }
 
@@ -259,16 +241,6 @@ unsafe fn resize_wind_render_targets(app: &mut App) -> Result<()> {
             targets.half_color_image_view,
             scene_depth_view,
         )?;
-    }
-    Ok(())
-}
-
-unsafe fn destroy_wind_render_targets(app: &mut App) -> Result<()> {
-    if let Some(mut gpu_state) = app.data.ecs_world.get_resource_mut::<WindGpuState>() {
-        destroy_gpu_state(&mut gpu_state, &app.rrdevice.device);
-    }
-    if let Some(mut targets) = app.data.ecs_world.get_resource_mut::<WindRenderTargets>() {
-        destroy_render_targets(&mut targets, &app.rrdevice.device);
     }
     Ok(())
 }

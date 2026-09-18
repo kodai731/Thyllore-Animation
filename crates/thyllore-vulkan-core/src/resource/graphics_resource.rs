@@ -1,8 +1,20 @@
+use std::ffi::c_void;
+use std::mem::size_of;
+use std::rc::Rc;
+
+use crate::command::RRCommandPool;
 use crate::core::device::RRDevice;
+use crate::data::{Vertex, VertexData};
 use crate::descriptor::ReflectedSetLayout;
+use crate::resource::buffer::{RRIndexBuffer, RRVertexBuffer};
+use crate::resource::image::{
+    create_image_view, create_texture_image_pixel, create_texture_sampler,
+};
+use crate::resource::GpuResource;
 use crate::vulkan::*;
-use cgmath::{Matrix4, SquareMatrix, Vector3};
-use thyllore_render_core::ObjectUBO;
+use cgmath::{Matrix4, SquareMatrix, Vector3, Vector4};
+use thyllore_model_core::{SkeletonId, SkinData};
+use thyllore_render_core::{MaterialUBO, ObjectUBO};
 
 pub use crate::descriptor::{
     FrameDescriptorSet, Material, MaterialId, MaterialManager, ObjectDescriptorSet, ObjectId,
@@ -28,6 +40,22 @@ impl Default for NodeData {
             global_transform: Matrix4::identity(),
         }
     }
+}
+
+pub struct TexturePixels<'a> {
+    pub rgba: &'a [u8],
+    pub width: u32,
+    pub height: u32,
+}
+
+pub struct MeshSource<'a> {
+    pub vertex_data: &'a VertexData,
+    pub base_vertices: &'a [Vertex],
+    pub skin_data: Option<&'a SkinData>,
+    pub skeleton_id: Option<SkeletonId>,
+    pub node_index: Option<usize>,
+    pub texture: TexturePixels<'a>,
+    pub base_color_factor: [f32; 4],
 }
 
 #[derive(Clone, Debug, Default)]
@@ -72,6 +100,143 @@ impl GraphicsResources {
                 .update(rrdevice, image_index, mesh.object_index, &object_ubo)?;
         }
         Ok(())
+    }
+
+    pub unsafe fn ensure_object_capacity(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        swapchain_image_count: usize,
+        additional_meshes: usize,
+    ) -> anyhow::Result<()> {
+        let required_objects = self.objects.get_next_slot() + additional_meshes;
+
+        self.objects
+            .ensure_capacity(instance, rrdevice, swapchain_image_count, required_objects)
+    }
+
+    pub unsafe fn push_mesh(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        command_pool: &Rc<RRCommandPool>,
+        source: &MeshSource,
+    ) -> anyhow::Result<usize> {
+        let mesh_index = self.meshes.len();
+        let mesh = self.create_mesh_buffer(instance, rrdevice, command_pool, source, mesh_index)?;
+        let material_id = self.create_material(instance, rrdevice, &mesh, mesh_index, source)?;
+
+        self.meshes.push(mesh);
+        self.mesh_material_ids.push(material_id);
+        Ok(mesh_index)
+    }
+
+    unsafe fn create_mesh_buffer(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        command_pool: &Rc<RRCommandPool>,
+        source: &MeshSource,
+        mesh_index: usize,
+    ) -> anyhow::Result<MeshBuffer> {
+        let mut mesh = MeshBuffer::default();
+
+        let pixels = source.texture.rgba.to_vec();
+        (mesh.image, mesh.image_memory, mesh.mip_level) = create_texture_image_pixel(
+            instance,
+            rrdevice,
+            command_pool,
+            &pixels,
+            source.texture.width,
+            source.texture.height,
+        )?;
+        mesh.image_view = create_image_view(
+            rrdevice,
+            mesh.image,
+            vk::Format::R8G8B8A8_SRGB,
+            vk::ImageAspectFlags::COLOR,
+            mesh.mip_level,
+        )?;
+        mesh.sampler = create_texture_sampler(rrdevice, mesh.mip_level)?;
+
+        mesh.vertex_data = source.vertex_data.clone();
+        mesh.skin_data = source.skin_data.cloned();
+        mesh.skeleton_id = source.skeleton_id;
+        mesh.node_index = source.node_index;
+        mesh.base_vertices = source.base_vertices.to_vec();
+        mesh.base_colors = Some(
+            mesh.vertex_data
+                .vertices
+                .iter()
+                .map(|v| Vector4::new(v.color.x, v.color.y, v.color.z, v.color.w))
+                .collect(),
+        );
+
+        mesh.vertex_buffer = RRVertexBuffer::new(
+            instance,
+            rrdevice,
+            command_pool,
+            (size_of::<Vertex>() * mesh.vertex_data.vertices.len()) as vk::DeviceSize,
+            mesh.vertex_data.vertices.as_ptr() as *const c_void,
+            mesh.vertex_data.vertices.len(),
+        )?;
+        mesh.index_buffer = RRIndexBuffer::new(
+            instance,
+            rrdevice,
+            command_pool,
+            (size_of::<u32>() * mesh.vertex_data.indices.len()) as u64,
+            mesh.vertex_data.indices.as_ptr() as *const c_void,
+            mesh.vertex_data.indices.len(),
+        )?;
+
+        mesh.object_index = self.objects.allocate_slot();
+        log!(
+            "Allocated object_index {} for mesh {}",
+            mesh.object_index,
+            mesh_index
+        );
+
+        Ok(mesh)
+    }
+
+    unsafe fn create_material(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        mesh: &MeshBuffer,
+        mesh_index: usize,
+        source: &MeshSource,
+    ) -> anyhow::Result<MaterialId> {
+        let [r, g, b, a] = source.base_color_factor;
+        let properties = MaterialUBO {
+            base_color: Vector4::new(r, g, b, a),
+            ..MaterialUBO::default()
+        };
+
+        let material_id = self.materials.create_material_with_texture(
+            instance,
+            rrdevice,
+            &format!("material_{}", mesh_index),
+            mesh.image_view,
+            mesh.sampler,
+            properties,
+        )?;
+
+        log!("Created material {} for mesh {}", material_id, mesh_index);
+        Ok(material_id)
+    }
+
+    pub unsafe fn upload_mesh_vertices(
+        &mut self,
+        instance: &Instance,
+        rrdevice: &RRDevice,
+        command_pool: &RRCommandPool,
+        mesh_index: usize,
+    ) -> anyhow::Result<()> {
+        match self.meshes.get_mut(mesh_index) {
+            Some(mesh) => mesh.upload_vertices(instance, rrdevice, command_pool),
+            None => Ok(()),
+        }
     }
 
     pub fn get_material_id(&self, mesh_index: usize) -> Option<MaterialId> {
@@ -175,5 +340,11 @@ impl GraphicsResources {
             1,
             render_pass,
         )
+    }
+}
+
+impl GpuResource for GraphicsResources {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(rrdevice);
     }
 }

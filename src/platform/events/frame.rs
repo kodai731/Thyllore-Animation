@@ -46,37 +46,15 @@ pub(crate) fn handle_redraw_requested(
             .debug_view_mode,
     };
 
-    let model_state = app.resource::<crate::ecs::ModelState>();
     let mut overlay_state = SceneOverlayState {
-        model_path: model_state.model_path.clone(),
-        load_status: model_state.load_status.clone(),
-        flame_preset_index: model_state.flame_preset_index,
+        model: app.resource::<crate::ecs::ModelState>().clone(),
         water_preset_index: 0,
         wind_preset_index: 0,
-        texture_fit_path: model_state.texture_fit_path.clone(),
-        texture_fit_blend: model_state.texture_fit_blend,
-        texture_fit_groups: model_state.texture_fit_groups,
-        texture_fit_profile: model_state.texture_fit_profile,
-        texture_fit_scan: model_state.texture_fit_scan.clone(),
-        texture_fit_scan_done: model_state.texture_fit_scan_done,
-        texture_fit_browser_open: model_state.texture_fit_browser_open,
-        texture_fit_browser_dir: model_state.texture_fit_browser_dir.clone(),
-        texture_fit_browser_selected: model_state.texture_fit_browser_selected.clone(),
-        texture_fit_browser_show_all: model_state.texture_fit_browser_show_all,
-        texture_fit_browser_show_hidden: model_state.texture_fit_browser_show_hidden,
-        texture_fit_path_validated: model_state.texture_fit_path_validated.clone(),
-        texture_fit_path_info: model_state.texture_fit_path_info.clone(),
-        flame_style_index: model_state.flame_style_index,
-        flame_style_scan: model_state.flame_style_scan.clone(),
-        flame_style_scan_done: model_state.flame_style_scan_done,
-        flame_style_groups: model_state.flame_style_groups,
-        flame_style_save_name: model_state.flame_style_save_name.clone(),
         #[cfg(feature = "auto-rig")]
         open_text_to_mesh_dialog: false,
         #[cfg(feature = "auto-rig")]
         open_text_to_animation_dialog: false,
     };
-    drop(model_state);
 
     super::ui_windows::build_ui_windows(
         ui,
@@ -91,44 +69,7 @@ pub(crate) fn handle_redraw_requested(
         text_to_animation_dialog,
     );
 
-    app.resource_mut::<crate::ecs::ModelState>()
-        .flame_preset_index = overlay_state.flame_preset_index;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .texture_fit_path = overlay_state.texture_fit_path;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .texture_fit_blend = overlay_state.texture_fit_blend;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .texture_fit_groups = overlay_state.texture_fit_groups;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .texture_fit_profile = overlay_state.texture_fit_profile;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .texture_fit_browser_open = overlay_state.texture_fit_browser_open;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .texture_fit_browser_dir = overlay_state.texture_fit_browser_dir;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .texture_fit_browser_selected = overlay_state.texture_fit_browser_selected;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .texture_fit_browser_show_all = overlay_state.texture_fit_browser_show_all;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .texture_fit_browser_show_hidden = overlay_state.texture_fit_browser_show_hidden;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .texture_fit_path_validated = overlay_state.texture_fit_path_validated;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .texture_fit_path_info = overlay_state.texture_fit_path_info;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .texture_fit_scan = overlay_state.texture_fit_scan;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .texture_fit_scan_done = overlay_state.texture_fit_scan_done;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .flame_style_index = overlay_state.flame_style_index;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .flame_style_scan = overlay_state.flame_style_scan;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .flame_style_scan_done = overlay_state.flame_style_scan_done;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .flame_style_groups = overlay_state.flame_style_groups;
-    app.resource_mut::<crate::ecs::ModelState>()
-        .flame_style_save_name = overlay_state.flame_style_save_name;
+    *app.resource_mut::<crate::ecs::ModelState>() = overlay_state.model;
 
     #[cfg(debug_assertions)]
     {

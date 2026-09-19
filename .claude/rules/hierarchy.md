@@ -106,7 +106,7 @@ Consequences for placement:
 Everything that decides what the engine does: components and resources (data only), systems (logic, one
 file per domain, one directory per effect), phases (execution order and event dispatch), `systems/world/`
 (systems that drive the engine's own lifecycle rather than a domain: the batch run's schedule, capture
-record and report), and the ECS core (world, storage, query, registry, events). Rules are in
+record and report, frame schedule (`world/frame.rs`)), and the ECS core (world, storage, query, registry, events). Rules are in
 `ecs-architecture.md`.
 
 No file here declares `impl App`, takes `&mut App` or imports `crate::app`. A system that needs
@@ -230,7 +230,7 @@ Concretely:
   with device, command pool, `World`, HDR buffer, image index and capture slot) in the
   `src/debugview/<effect>_*.rs` file that owns the dump, next to `batch_capture!(T)` and its
   `capture_action!`. Adding a dump to an effect is therefore one request type and one debugview file;
- no per-effect action or hook file. The post-present `run_last_phase`
+  no per-effect action or hook file. The post-present `run_last_phase`
   (`src/ecs/systems/phases/last_phase.rs`, entered through `App::after_present` in
   `src/app/lifecycle/after_present.rs`) waits for the GPU, runs every registered request that is present
   and takes the schedule's screenshot. `src/platform/`, `src/app/` and the render passes never name

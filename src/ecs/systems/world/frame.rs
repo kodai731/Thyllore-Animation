@@ -51,13 +51,13 @@ pub const FRAME_SCHEDULE: [FramePhase; 9] = [
 ];
 
 struct Carry {
-    animation_updates: Option<crate::ecs::systems::phases::AnimationUpdates>,
+    updated_meshes: Vec<usize>,
 }
 
 impl Carry {
     fn new() -> Self {
         Self {
-            animation_updates: None,
+            updated_meshes: Vec::new(),
         }
     }
 }
@@ -66,7 +66,10 @@ pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
     let mut stages: Vec<(String, f32)> = Vec::new();
     let mut carry = Carry::new();
 
-    for &phase in &FRAME_SCHEDULE[..7] {
+    for &phase in FRAME_SCHEDULE
+        .iter()
+        .take_while(|phase| **phase != FramePhase::EventDispatch)
+    {
         let t = std::time::Instant::now();
         run_update_phase(&phase, ctx, &mut carry)?;
         stages.push((phase.name().to_string(), t.elapsed().as_secs_f32() * 1000.0));
@@ -115,12 +118,11 @@ unsafe fn run_update_phase(
         }
         FramePhase::Animation => {
             let animation_updates = run_animation_phase_ecs(ctx);
-            carry.animation_updates = Some(animation_updates);
-            run_animation_phase_gpu(ctx, &carry.animation_updates.as_ref().unwrap())?;
+            run_animation_phase_gpu(ctx, &animation_updates)?;
+            carry.updated_meshes = animation_updates.updated_meshes;
         }
         FramePhase::OnionSkin => {
-            let updated_meshes = &carry.animation_updates.as_ref().unwrap().updated_meshes;
-            run_onion_skin_phase(ctx, updated_meshes)?;
+            run_onion_skin_phase(ctx, &carry.updated_meshes)?;
         }
         FramePhase::RenderPrep => {
             run_transform_phase_gpu(ctx)?;
@@ -138,17 +140,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_frame_schedule_order() {
-        assert_eq!(FRAME_SCHEDULE[0], FramePhase::First);
-        assert_eq!(FRAME_SCHEDULE[1], FramePhase::Input);
-        assert_eq!(FRAME_SCHEDULE[2], FramePhase::Transform);
-        assert_eq!(FRAME_SCHEDULE[3], FramePhase::Timeline);
-        assert_eq!(FRAME_SCHEDULE[4], FramePhase::Animation);
-        assert_eq!(FRAME_SCHEDULE[5], FramePhase::OnionSkin);
-        assert_eq!(FRAME_SCHEDULE[6], FramePhase::RenderPrep);
-        assert_eq!(FRAME_SCHEDULE[7], FramePhase::EventDispatch);
-        assert_eq!(FRAME_SCHEDULE[8], FramePhase::Last);
-
-        assert_eq!(FRAME_SCHEDULE.len(), 9);
+    fn the_update_phases_run_before_event_dispatch_and_last() {
+        assert_eq!(
+            FRAME_SCHEDULE,
+            [
+                FramePhase::First,
+                FramePhase::Input,
+                FramePhase::Transform,
+                FramePhase::Timeline,
+                FramePhase::Animation,
+                FramePhase::OnionSkin,
+                FramePhase::RenderPrep,
+                FramePhase::EventDispatch,
+                FramePhase::Last,
+            ]
+        );
     }
 }

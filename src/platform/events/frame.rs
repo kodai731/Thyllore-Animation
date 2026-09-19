@@ -204,7 +204,8 @@ unsafe fn render_frame(
         app.render(image_index, draw_data)?;
         let render_cpu_ms = render_cpu_start.elapsed().as_secs_f32() * 1000.0;
 
-        app.process_batch_screenshot(image_index)?;
+        app.after_present(image_index)?;
+
         app.data
             .ecs_world
             .insert_resource(crate::ecs::resource::CpuFrameTimings {
@@ -234,14 +235,9 @@ unsafe fn render_frame(
             if let Some(sink) = app
                 .data
                 .ecs_world
-                .get_resource_mut::<crate::ecs::resource::ExposureDumpSink>()
+                .get_resource::<crate::ecs::resource::ExposureDumpSink>()
             {
-                let frame = app
-                    .data
-                    .ecs_world
-                    .get_resource::<crate::ecs::resource::BatchRun>()
-                    .map(|b| b.frames_rendered)
-                    .unwrap_or(sink.last_frame);
+                let frame = app.resource::<crate::ecs::resource::FrameClock>().frame;
                 use std::fs::OpenOptions;
                 use std::io::Write;
                 if let Ok(mut file) = OpenOptions::new()

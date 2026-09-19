@@ -35,17 +35,10 @@ pub(crate) unsafe fn execute_deferred_action(app: &mut App, action: DeferredActi
         DeferredAction::TakeScreenshot => {
             log!("Taking screenshot...");
             let image_index = app.frame % crate::app::init::MAX_FRAMES_IN_FLIGHT;
-            let save_result = app.save_screenshot(image_index);
-            match &save_result {
+            match app.save_screenshot(image_index) {
                 Ok(path) => msg_info!("Screenshot saved: {}", path),
                 Err(e) => log_error!("Screenshot failed: {:?}", e),
             }
-            crate::ecs::systems::batch_run_record_screenshot(
-                &app.data.ecs_world,
-                save_result.map_err(|e| format!("{e:?}")),
-            );
-            crate::debugview::debug_dump_actions::save_flame_history_npy_if_requested(app);
-            crate::debugview::debug_dump_actions::save_water_probe_if_requested(app);
         }
 
         #[cfg(debug_assertions)]
@@ -69,12 +62,8 @@ pub(crate) unsafe fn execute_deferred_action(app: &mut App, action: DeferredActi
             app.dump_debug_info();
         }
 
-        DeferredAction::DumpWaterDebug => {
-            app.dump_water_debug();
-        }
-
-        DeferredAction::DumpWindDebug => {
-            app.dump_wind_debug();
+        DeferredAction::CaptureNow(capture) => {
+            app.capture_now(capture.as_ref());
         }
 
         DeferredAction::DumpAnimationDebug => {

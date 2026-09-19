@@ -3,10 +3,8 @@ mod frame;
 mod input;
 mod ui_windows;
 
-use winit::event::{ElementState, Event, WindowEvent};
+use winit::event::{ElementState, WindowEvent};
 
-use super::key_bindings::default_bindings;
-use super::platform::System;
 use super::ui::StatusBarState;
 use crate::app::App;
 
@@ -15,70 +13,7 @@ use crate::ecs::resource::MouseInput;
 
 pub(crate) use frame::handle_redraw_requested;
 
-impl System {
-    pub fn main_loop(self, app: &mut App) {
-        let System {
-            event_loop,
-            window,
-            mut imgui,
-            mut platform,
-        } = self;
-        let mut last_frame = std::time::Instant::now();
-        let bindings = default_bindings();
-        let mut status_bar_state = StatusBarState::default();
-        #[cfg(feature = "auto-rig")]
-        let mut text_to_mesh_dialog_state = crate::platform::ui::TextToMeshDialogState::default();
-        #[cfg(feature = "auto-rig")]
-        let mut text_to_animation_dialog_state =
-            crate::platform::ui::TextToAnimationDialogState::default();
-
-        event_loop
-            .run(move |event, window_target| match event {
-                Event::NewEvents(_) => {
-                    let now = std::time::Instant::now();
-                    imgui.io_mut().update_delta_time(now - last_frame);
-                    last_frame = now;
-                }
-
-                Event::AboutToWait => {
-                    platform
-                        .prepare_frame(imgui.io_mut(), &window)
-                        .expect("Failed to prepare frame");
-                    window.request_redraw();
-                }
-
-                Event::WindowEvent {
-                    event: ref window_event,
-                    ..
-                } => {
-                    platform.handle_event(imgui.io_mut(), &window, &event);
-                    dispatch_window_event(
-                        window_event,
-                        window_target,
-                        app,
-                        &mut imgui,
-                        &mut platform,
-                        &window,
-                        &bindings,
-                        &mut status_bar_state,
-                        #[cfg(feature = "auto-rig")]
-                        &mut text_to_mesh_dialog_state,
-                        #[cfg(feature = "auto-rig")]
-                        &mut text_to_animation_dialog_state,
-                    );
-                }
-
-                Event::LoopExiting => {
-                    unsafe { app.destroy() };
-                }
-
-                _ => {}
-            })
-            .expect("EventLoop error");
-    }
-}
-
-fn dispatch_window_event(
+pub(crate) fn dispatch_window_event(
     event: &WindowEvent,
     window_target: &winit::event_loop::EventLoopWindowTarget<()>,
     app: &mut App,
@@ -150,7 +85,10 @@ fn dispatch_window_event(
                 text_to_animation_dialog,
             );
 
-            if crate::ecs::systems::batch_run_is_completed(&app.data.ecs_world) {
+            if app
+                .resource::<crate::ecs::resource::AppExit>()
+                .is_requested()
+            {
                 window_target.exit();
             }
         }

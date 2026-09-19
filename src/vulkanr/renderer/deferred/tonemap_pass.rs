@@ -1,32 +1,27 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::App;
+use crate::ecs::PassContext;
 
 pub unsafe fn record_tonemap_to_offscreen(
-    app: &App,
+    ctx: &PassContext,
     command_buffer: vk::CommandBuffer,
     image_index: usize,
 ) -> Result<()> {
-    let offscreen = app
-        .data
-        .viewport
+    let offscreen = ctx
         .offscreen
-        .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Offscreen framebuffer not initialized"))?;
 
     let render_pass = offscreen.render_pass;
     let framebuffer = offscreen.framebuffer;
     let extent = offscreen.extent();
 
-    let pipeline = app
-        .data
+    let pipeline = ctx
         .raytracing
         .tonemap_pipeline
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("ToneMap pipeline not initialized"))?;
-    let descriptor = app
-        .data
+    let descriptor = ctx
         .raytracing
         .tonemap_descriptor
         .as_ref()
@@ -37,21 +32,15 @@ pub unsafe fn record_tonemap_to_offscreen(
     let lens_default = crate::ecs::resource::LensEffects::default();
     let bloom_default = crate::ecs::resource::BloomSettings::default();
 
-    let tonemap = app
-        .data
-        .ecs_world
+    let tonemap = ctx
+        .world
         .get_resource::<crate::ecs::resource::ToneMapping>();
-    let exposure = app
-        .data
-        .ecs_world
-        .get_resource::<crate::ecs::resource::Exposure>();
-    let lens = app
-        .data
-        .ecs_world
+    let exposure = ctx.world.get_resource::<crate::ecs::resource::Exposure>();
+    let lens = ctx
+        .world
         .get_resource::<crate::ecs::resource::LensEffects>();
-    let bloom = app
-        .data
-        .ecs_world
+    let bloom = ctx
+        .world
         .get_resource::<crate::ecs::resource::BloomSettings>();
 
     let tonemap_ref = tonemap.as_deref().unwrap_or(&tonemap_default);
@@ -59,19 +48,17 @@ pub unsafe fn record_tonemap_to_offscreen(
     let lens_ref = lens.as_deref().unwrap_or(&lens_default);
     let bloom_ref = bloom.as_deref().unwrap_or(&bloom_default);
 
-    let ctx = crate::app::build_frame_render_context(app, image_index);
+    let render = ctx.frame_render_context(image_index);
 
     // Query for first entity with both FlameEffect and HeatPlume to build plume push constants
     let plume_data: Option<([f32; 4], [f32; 4], [f32; 4], [f32; 4])> = {
-        let flame_entities: Vec<_> = app.data.ecs_world.query_flames();
+        let flame_entities: Vec<_> = ctx.world.query_flames();
         flame_entities.into_iter().find_map(|e| {
-            let effect = app
-                .data
-                .ecs_world
+            let effect = ctx
+                .world
                 .get_component::<crate::ecs::component::FlameEffect>(e)?;
-            let plume = app
-                .data
-                .ecs_world
+            let plume = ctx
+                .world
                 .get_component::<crate::ecs::component::HeatPlume>(e)?;
             Some((
                 [effect.position.x, effect.position.y, effect.position.z, 1.0],
@@ -92,17 +79,18 @@ pub unsafe fn record_tonemap_to_offscreen(
         })
     };
     thyllore_vulkan_core::renderer::begin_tonemap_render_pass(
-        &ctx,
+        &render,
         render_pass,
         framebuffer,
         extent,
         command_buffer,
     );
-    let frame_slot = app
+    let frame_slot = ctx
+        .world
         .resource::<crate::vulkanr::context::FrameSync>()
         .current_frame;
     thyllore_vulkan_core::renderer::record_tonemap_draw(
-        &ctx,
+        &render,
         pipeline,
         descriptor,
         frame_slot,
@@ -116,8 +104,8 @@ pub unsafe fn record_tonemap_to_offscreen(
     )?;
     // Grid is already drawn inside record_composite_to_hdr, before the flame composite.
     // Drawing it again here would put it on top of the flame.
-    super::OverlayRenderer::new(app).draw_all_overlays(command_buffer, image_index, false)?;
-    thyllore_vulkan_core::renderer::end_tonemap_render_pass(&ctx, command_buffer);
+    super::OverlayRenderer::new(&render, ctx.world).draw_all_overlays(command_buffer, false)?;
+    thyllore_vulkan_core::renderer::end_tonemap_render_pass(&render, command_buffer);
 
     Ok(())
 }

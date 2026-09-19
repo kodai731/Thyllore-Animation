@@ -3,9 +3,9 @@ use cgmath::SquareMatrix;
 use vulkanalia::prelude::v1_0::*;
 use vulkanalia::vk::KhrRayTracingPipelineExtension;
 
-use crate::app::App;
 use crate::ecs::resource::{WaterBindingKey, WaterRenderTargets};
 use crate::ecs::world::Entity;
+use crate::ecs::PassContext;
 use crate::hooks::pass::{
     CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef, TargetUse,
     TransientRequest, TransientSlot,
@@ -59,31 +59,30 @@ struct WaterFrame {
     settings: crate::ecs::resource::WaterRenderSettings,
 }
 
-fn water_frame(app: &App) -> Option<WaterFrame> {
-    app.data.ecs_world.get_resource::<WaterRenderTargets>()?;
-    app.data.raytracing.water_shading_pipeline.as_ref()?;
-    app.data.raytracing.water_descriptor.as_ref()?;
-    app.data.raytracing.water_ubo.as_ref()?;
-    app.data.viewport.hdr_buffer.as_ref()?;
-    water_scene_bindings(app)?;
+fn water_frame(ctx: &PassContext) -> Option<WaterFrame> {
+    ctx.world.get_resource::<WaterRenderTargets>()?;
+    ctx.raytracing.water_shading_pipeline.as_ref()?;
+    ctx.raytracing.water_descriptor.as_ref()?;
+    ctx.raytracing.water_ubo.as_ref()?;
+    ctx.hdr_buffer?;
+    water_scene_bindings(ctx)?;
 
-    let mut waters: Vec<Entity> = app.data.ecs_world.query_waters();
+    let mut waters: Vec<Entity> = ctx.world.query_waters();
     waters.truncate(thyllore_effect_core::WATER_MAX_INSTANCES);
     if waters.is_empty() {
         return None;
     }
 
-    let history_index = first_water_accum(app, &waters)
+    let history_index = first_water_accum(ctx, &waters)
         .map(|accum| (accum.frame_index & 1) as usize)
         .unwrap_or(0);
-    let settings = app
-        .data
-        .ecs_world
+    let settings = ctx
+        .world
         .get_resource::<crate::ecs::resource::WaterRenderSettings>()
         .map(|settings| *settings)
         .unwrap_or_default();
 
-    let scissors = instance_scissors(app, &waters);
+    let scissors = instance_scissors(ctx, &waters);
 
     Some(WaterFrame {
         waters,
@@ -95,10 +94,9 @@ fn water_frame(app: &App) -> Option<WaterFrame> {
 
 /// Screen rectangle of every instance, `None` when the instance is off-screen. Declarations and
 /// recording share this so the graph only expects the shading render pass when it really records.
-fn instance_scissors(app: &App, waters: &[Entity]) -> Vec<Option<vk::Rect2D>> {
-    let Some(extent) = app
-        .data
-        .ecs_world
+fn instance_scissors(ctx: &PassContext, waters: &[Entity]) -> Vec<Option<vk::Rect2D>> {
+    let Some(extent) = ctx
+        .world
         .get_resource::<WaterRenderTargets>()
         .map(|targets| targets.buffer.extent())
     else {
@@ -107,19 +105,17 @@ fn instance_scissors(app: &App, waters: &[Entity]) -> Vec<Option<vk::Rect2D>> {
     waters
         .iter()
         .map(|water| {
-            let effect = app
-                .data
-                .ecs_world
+            let effect = ctx
+                .world
                 .get_component::<crate::ecs::component::WaterTorusEffect>(*water)?;
-            let frame_index = app
-                .data
-                .ecs_world
+            let frame_index = ctx
+                .world
                 .get_component::<crate::ecs::component::WaterTemporalAccum>(*water)
                 .map(|accum| accum.frame_index as u32)
                 .unwrap_or(0);
             let model = thyllore_effect_core::build_water_ubo(&effect, frame_index).model;
             compute_water_scissor(
-                app,
+                ctx,
                 extent,
                 &model,
                 effect.major_radius,
@@ -129,23 +125,22 @@ fn instance_scissors(app: &App, waters: &[Entity]) -> Vec<Option<vk::Rect2D>> {
         .collect()
 }
 
-fn water_scene_bindings(app: &App) -> Option<(vk::AccelerationStructureKHR, vk::Buffer)> {
-    if !app.data.raytracing.has_valid_tlas() {
+fn water_scene_bindings(ctx: &PassContext) -> Option<(vk::AccelerationStructureKHR, vk::Buffer)> {
+    if !ctx.raytracing.has_valid_tlas() {
         return None;
     }
-    let accel = app.data.raytracing.acceleration_structure.as_ref()?;
+    let accel = ctx.raytracing.acceleration_structure.as_ref()?;
     let tlas = accel.tlas.acceleration_structure?;
     let hit_table = accel.hit_shading_table.as_ref()?.buffer;
     Some((tlas, hit_table))
 }
 
 fn first_water_accum(
-    app: &App,
+    ctx: &PassContext,
     waters: &[Entity],
 ) -> Option<crate::ecs::component::WaterTemporalAccum> {
     waters.first().and_then(|water| {
-        app.data
-            .ecs_world
+        ctx.world
             .get_component::<crate::ecs::component::WaterTemporalAccum>(*water)
             .cloned()
     })
@@ -153,9 +148,9 @@ fn first_water_accum(
 
 impl WaterFrame {
     /// The requested secondary ray mode, or ray query when the shared trace pipeline is unavailable.
-    fn secondary_rays(&self, app: &App) -> thyllore_effect_core::WaterSecondaryRays {
-        let trace_available = app.data.raytracing.effect_trace_pipeline.is_some()
-            && app.data.raytracing.effect_trace_descriptor.is_some();
+    fn secondary_rays(&self, ctx: &PassContext) -> thyllore_effect_core::WaterSecondaryRays {
+        let trace_available = ctx.raytracing.effect_trace_pipeline.is_some()
+            && ctx.raytracing.effect_trace_descriptor.is_some();
         match self.settings.secondary_rays {
             thyllore_effect_core::WaterSecondaryRays::RayTracingPipeline if !trace_available => {
                 thyllore_effect_core::WaterSecondaryRays::RayQuery
@@ -164,27 +159,24 @@ impl WaterFrame {
         }
     }
 
-    fn is_trace_enabled(&self, app: &App) -> bool {
-        self.secondary_rays(app) == thyllore_effect_core::WaterSecondaryRays::RayTracingPipeline
-            && app
-                .data
-                .ecs_world
+    fn is_trace_enabled(&self, ctx: &PassContext) -> bool {
+        self.secondary_rays(ctx) == thyllore_effect_core::WaterSecondaryRays::RayTracingPipeline
+            && ctx
+                .world
                 .get_component::<crate::ecs::component::WaterTorusEffect>(self.waters[0])
                 .is_some()
     }
 
-    fn is_caustic_enabled(&self, app: &App) -> bool {
-        let caustic_strength = app
-            .data
-            .ecs_world
+    fn is_caustic_enabled(&self, ctx: &PassContext) -> bool {
+        let caustic_strength = ctx
+            .world
             .get_component::<crate::ecs::component::WaterTorusEffect>(self.waters[0])
             .map(|effect| effect.caustic_strength)
             .unwrap_or(0.0);
         caustic_strength > 0.0
-            && app.data.raytracing.water_caustic_splat_pipeline.is_some()
-            && app.data.raytracing.water_caustic_apply_pipeline.is_some()
-            && app
-                .data
+            && ctx.raytracing.water_caustic_splat_pipeline.is_some()
+            && ctx.raytracing.water_caustic_apply_pipeline.is_some()
+            && ctx
                 .raytracing
                 .water_caustic_descriptor
                 .as_ref()
@@ -197,8 +189,8 @@ impl WaterFrame {
         self.scissors.iter().any(Option::is_some)
     }
 
-    fn is_history_invalidated(&self, app: &App) -> bool {
-        first_water_accum(app, &self.waters).is_some_and(|accum| accum.history_invalidated)
+    fn is_history_invalidated(&self, ctx: &PassContext) -> bool {
+        first_water_accum(ctx, &self.waters).is_some_and(|accum| accum.history_invalidated)
     }
 
     fn written_history(&self) -> TargetRef {
@@ -211,11 +203,11 @@ impl WaterFrame {
 }
 
 fn frame_uses(
-    app: &App,
-    select: impl FnOnce(&WaterFrame, &App) -> Vec<TargetUse>,
+    ctx: &PassContext,
+    select: impl FnOnce(&WaterFrame, &PassContext) -> Vec<TargetUse>,
 ) -> Vec<TargetUse> {
-    water_frame(app)
-        .map(|frame| select(&frame, app))
+    water_frame(ctx)
+        .map(|frame| select(&frame, ctx))
         .unwrap_or_default()
 }
 
@@ -230,9 +222,9 @@ impl RenderPassNode for WaterTraceNode {
         PassStage::Effect
     }
 
-    fn writes(&self, app: &App) -> Vec<TargetUse> {
-        frame_uses(app, |frame, app| {
-            if !frame.is_trace_enabled(app) {
+    fn writes(&self, ctx: &PassContext) -> Vec<TargetUse> {
+        frame_uses(ctx, |frame, ctx| {
+            if !frame.is_trace_enabled(ctx) {
                 return Vec::new();
             }
             vec![TargetUse::new(
@@ -244,27 +236,27 @@ impl RenderPassNode for WaterTraceNode {
 
     unsafe fn record(
         &self,
-        app: &App,
+        ctx: &PassContext,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
         frame_slot: usize,
     ) -> Result<()> {
-        let Some(frame) = water_frame(app).filter(|frame| frame.is_trace_enabled(app)) else {
+        let Some(frame) = water_frame(ctx).filter(|frame| frame.is_trace_enabled(ctx)) else {
             return Ok(());
         };
         let (Some(trace_pipeline), Some(trace_descriptor)) = (
-            app.data.raytracing.effect_trace_pipeline.as_ref(),
-            app.data.raytracing.effect_trace_descriptor.as_ref(),
+            ctx.raytracing.effect_trace_pipeline.as_ref(),
+            ctx.raytracing.effect_trace_descriptor.as_ref(),
         ) else {
             return Ok(());
         };
-        let Some(targets) = app.data.ecs_world.get_resource::<WaterRenderTargets>() else {
+        let Some(targets) = ctx.world.get_resource::<WaterRenderTargets>() else {
             return Ok(());
         };
         let water_buffer = &targets.buffer;
-        let ctx = crate::app::build_frame_render_context(app, image_index);
+        let render = ctx.frame_render_context(image_index);
 
-        let device = &ctx.device.device;
+        let device = &render.device.device;
         device.cmd_bind_pipeline(
             command_buffer,
             vk::PipelineBindPoint::RAY_TRACING_KHR,
@@ -278,10 +270,7 @@ impl RenderPassNode for WaterTraceNode {
             &[trace_descriptor.descriptor_set(frame_slot)?],
             &[],
         );
-        let projection = app
-            .data
-            .ecs_world
-            .resource::<crate::ecs::resource::ProjectionData>();
+        let projection = ctx.world.resource::<crate::ecs::resource::ProjectionData>();
         let inv_view_proj = crate::ecs::systems::water::probe::inverse_view_proj_f64(
             projection.proj,
             projection.view,
@@ -290,9 +279,8 @@ impl RenderPassNode for WaterTraceNode {
             .view
             .invert()
             .unwrap_or_else(cgmath::Matrix4::identity);
-        let light_position = app
-            .data
-            .ecs_world
+        let light_position = ctx
+            .world
             .resource::<crate::ecs::resource::LightState>()
             .light_position;
         let trace_push = TracePush {
@@ -342,11 +330,11 @@ impl RenderPassNode for WaterFrameNode {
         PassStage::Effect
     }
 
-    fn transients(&self, app: &App) -> Vec<TransientRequest> {
-        if water_frame(app).is_none() {
+    fn transients(&self, ctx: &PassContext) -> Vec<TransientRequest> {
+        if water_frame(ctx).is_none() {
             return Vec::new();
         }
-        let Some(targets) = app.data.ecs_world.get_resource::<WaterRenderTargets>() else {
+        let Some(targets) = ctx.world.get_resource::<WaterRenderTargets>() else {
             return Vec::new();
         };
         vec![
@@ -355,24 +343,16 @@ impl RenderPassNode for WaterFrameNode {
         ]
     }
 
-    unsafe fn prepare(&self, app: &mut App, frame_slot: usize) -> Result<()> {
-        if water_frame(app).is_none() {
+    unsafe fn prepare(&self, ctx: &mut PassContext, frame_slot: usize) -> Result<()> {
+        if water_frame(ctx).is_none() {
             return Ok(());
         }
-        let Some((tlas, hit_table)) = water_scene_bindings(app) else {
+        let Some((tlas, hit_table)) = water_scene_bindings(ctx) else {
             return Ok(());
         };
-        let scene_color_image = app
-            .data
-            .viewport
-            .transient
-            .get(app.data.frame_transients.handle(SCENE_COLOR_SLOT)?)?;
-        let trace_image = app
-            .data
-            .viewport
-            .transient
-            .get(app.data.frame_transients.handle(TRACE_SLOT)?)?;
-        let Some(mut targets) = app.data.ecs_world.get_resource_mut::<WaterRenderTargets>() else {
+        let scene_color_image = ctx.transient_image(SCENE_COLOR_SLOT)?;
+        let trace_image = ctx.transient_image(TRACE_SLOT)?;
+        let Some(mut targets) = ctx.world.get_resource_mut::<WaterRenderTargets>() else {
             return Ok(());
         };
 
@@ -389,12 +369,12 @@ impl RenderPassNode for WaterFrameNode {
             return Ok(());
         }
 
-        let Some(water_ubo) = app.data.raytracing.water_ubo.as_ref() else {
+        let Some(water_ubo) = ctx.raytracing.water_ubo.as_ref() else {
             return Ok(());
         };
-        if let Some(descriptor) = app.data.raytracing.water_descriptor.as_ref() {
+        if let Some(descriptor) = ctx.raytracing.water_descriptor.as_ref() {
             descriptor.write_all_at(
-                &app.rrdevice,
+                ctx.rrdevice,
                 frame_slot,
                 water_ubo,
                 scene_color_image.view,
@@ -407,9 +387,9 @@ impl RenderPassNode for WaterFrameNode {
                 hit_table,
             )?;
         }
-        if let Some(trace_descriptor) = app.data.raytracing.effect_trace_descriptor.as_ref() {
+        if let Some(trace_descriptor) = ctx.raytracing.effect_trace_descriptor.as_ref() {
             trace_descriptor.write_all_at(
-                &app.rrdevice,
+                ctx.rrdevice,
                 frame_slot,
                 tlas,
                 trace_image.view,
@@ -422,22 +402,22 @@ impl RenderPassNode for WaterFrameNode {
 
     unsafe fn record(
         &self,
-        app: &App,
+        ctx: &PassContext,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
         _frame_slot: usize,
     ) -> Result<()> {
-        let Some(frame) = water_frame(app) else {
+        let Some(frame) = water_frame(ctx) else {
             return Ok(());
         };
-        let Some(water_ubo) = app.data.raytracing.water_ubo.as_ref() else {
+        let Some(water_ubo) = ctx.raytracing.water_ubo.as_ref() else {
             return Ok(());
         };
-        let ctx = crate::app::build_frame_render_context(app, image_index);
+        let render = ctx.frame_render_context(image_index);
         let instance_ubos =
-            record_water_ubo_updates(app, &ctx, water_ubo, &frame.waters, command_buffer)?;
+            record_water_ubo_updates(ctx, &render, water_ubo, &frame.waters, command_buffer)?;
 
-        if let Some(mut targets) = app.data.ecs_world.get_resource_mut::<WaterRenderTargets>() {
+        if let Some(mut targets) = ctx.world.get_resource_mut::<WaterRenderTargets>() {
             targets.frame_instances = instance_ubos;
         }
         Ok(())
@@ -455,9 +435,9 @@ impl RenderPassNode for WaterCausticClearNode {
         PassStage::Effect
     }
 
-    fn writes(&self, app: &App) -> Vec<TargetUse> {
-        frame_uses(app, |frame, app| {
-            if !frame.is_caustic_enabled(app) {
+    fn writes(&self, ctx: &PassContext) -> Vec<TargetUse> {
+        frame_uses(ctx, |frame, ctx| {
+            if !frame.is_caustic_enabled(ctx) {
                 return Vec::new();
             }
             vec![TargetUse::new(CAUSTIC_ACCUM, TargetAccess::TransferDst)]
@@ -466,19 +446,19 @@ impl RenderPassNode for WaterCausticClearNode {
 
     unsafe fn record(
         &self,
-        app: &App,
+        ctx: &PassContext,
         command_buffer: vk::CommandBuffer,
         _: usize,
         _: usize,
     ) -> Result<()> {
-        if water_frame(app).is_none_or(|frame| !frame.is_caustic_enabled(app)) {
+        if water_frame(ctx).is_none_or(|frame| !frame.is_caustic_enabled(ctx)) {
             return Ok(());
         }
-        let Some(targets) = app.data.ecs_world.get_resource::<WaterRenderTargets>() else {
+        let Some(targets) = ctx.world.get_resource::<WaterRenderTargets>() else {
             return Ok(());
         };
 
-        app.rrdevice.device.cmd_clear_color_image(
+        ctx.rrdevice.device.cmd_clear_color_image(
             command_buffer,
             targets.buffer.caustic_accum_image,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -502,9 +482,9 @@ impl RenderPassNode for WaterCausticSplatNode {
         PassStage::Effect
     }
 
-    fn writes(&self, app: &App) -> Vec<TargetUse> {
-        frame_uses(app, |frame, app| {
-            if !frame.is_caustic_enabled(app) {
+    fn writes(&self, ctx: &PassContext) -> Vec<TargetUse> {
+        frame_uses(ctx, |frame, ctx| {
+            if !frame.is_caustic_enabled(ctx) {
                 return Vec::new();
             }
             vec![TargetUse::new(
@@ -516,22 +496,22 @@ impl RenderPassNode for WaterCausticSplatNode {
 
     unsafe fn record(
         &self,
-        app: &App,
+        ctx: &PassContext,
         command_buffer: vk::CommandBuffer,
         _: usize,
         _: usize,
     ) -> Result<()> {
-        if water_frame(app).is_none_or(|frame| !frame.is_caustic_enabled(app)) {
+        if water_frame(ctx).is_none_or(|frame| !frame.is_caustic_enabled(ctx)) {
             return Ok(());
         }
         let (Some(splat_pipeline), Some(descriptor)) = (
-            app.data.raytracing.water_caustic_splat_pipeline.as_ref(),
-            app.data.raytracing.water_caustic_descriptor.as_ref(),
+            ctx.raytracing.water_caustic_splat_pipeline.as_ref(),
+            ctx.raytracing.water_caustic_descriptor.as_ref(),
         ) else {
             return Ok(());
         };
 
-        let device = &app.rrdevice.device;
+        let device = &ctx.rrdevice.device;
         device.cmd_bind_pipeline(
             command_buffer,
             vk::PipelineBindPoint::COMPUTE,
@@ -563,9 +543,9 @@ impl RenderPassNode for WaterCausticApplyNode {
         PassStage::Effect
     }
 
-    fn reads(&self, app: &App) -> Vec<TargetUse> {
-        frame_uses(app, |frame, app| {
-            if !frame.is_caustic_enabled(app) {
+    fn reads(&self, ctx: &PassContext) -> Vec<TargetUse> {
+        frame_uses(ctx, |frame, ctx| {
+            if !frame.is_caustic_enabled(ctx) {
                 return Vec::new();
             }
             vec![TargetUse::new(
@@ -575,9 +555,9 @@ impl RenderPassNode for WaterCausticApplyNode {
         })
     }
 
-    fn writes(&self, app: &App) -> Vec<TargetUse> {
-        frame_uses(app, |frame, app| {
-            if !frame.is_caustic_enabled(app) {
+    fn writes(&self, ctx: &PassContext) -> Vec<TargetUse> {
+        frame_uses(ctx, |frame, ctx| {
+            if !frame.is_caustic_enabled(ctx) {
                 return Vec::new();
             }
             vec![TargetUse::new(
@@ -589,23 +569,23 @@ impl RenderPassNode for WaterCausticApplyNode {
 
     unsafe fn record(
         &self,
-        app: &App,
+        ctx: &PassContext,
         command_buffer: vk::CommandBuffer,
         _: usize,
         _: usize,
     ) -> Result<()> {
-        if water_frame(app).is_none_or(|frame| !frame.is_caustic_enabled(app)) {
+        if water_frame(ctx).is_none_or(|frame| !frame.is_caustic_enabled(ctx)) {
             return Ok(());
         }
         let (Some(apply_pipeline), Some(descriptor), Some(hdr_buffer)) = (
-            app.data.raytracing.water_caustic_apply_pipeline.as_ref(),
-            app.data.raytracing.water_caustic_descriptor.as_ref(),
-            app.data.viewport.hdr_buffer.as_ref(),
+            ctx.raytracing.water_caustic_apply_pipeline.as_ref(),
+            ctx.raytracing.water_caustic_descriptor.as_ref(),
+            ctx.hdr_buffer,
         ) else {
             return Ok(());
         };
 
-        let device = &app.rrdevice.device;
+        let device = &ctx.rrdevice.device;
         device.cmd_bind_pipeline(
             command_buffer,
             vk::PipelineBindPoint::COMPUTE,
@@ -640,43 +620,39 @@ impl RenderPassNode for WaterSceneColorCopyNode {
         PassStage::Effect
     }
 
-    fn reads(&self, app: &App) -> Vec<TargetUse> {
-        frame_uses(app, |_, _| {
+    fn reads(&self, ctx: &PassContext) -> Vec<TargetUse> {
+        frame_uses(ctx, |_, _| {
             vec![TargetUse::new(HDR_COLOR, TargetAccess::TransferSrc)]
         })
     }
 
-    fn writes(&self, app: &App) -> Vec<TargetUse> {
-        frame_uses(app, |frame, _| {
+    fn writes(&self, ctx: &PassContext) -> Vec<TargetUse> {
+        frame_uses(ctx, |frame, _| {
             vec![TargetUse::new(SCENE_COLOR, TargetAccess::TransferDst)]
         })
     }
 
     unsafe fn record(
         &self,
-        app: &App,
+        ctx: &PassContext,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
         _: usize,
     ) -> Result<()> {
-        if water_frame(app).is_none() {
+        if water_frame(ctx).is_none() {
             return Ok(());
         }
         let (Some(targets), Some(hdr_buffer)) = (
-            app.data.ecs_world.get_resource::<WaterRenderTargets>(),
-            app.data.viewport.hdr_buffer.as_ref(),
+            ctx.world.get_resource::<WaterRenderTargets>(),
+            ctx.hdr_buffer,
         ) else {
             return Ok(());
         };
-        let scene_color_image = app
-            .data
-            .viewport
-            .transient
-            .get(app.data.frame_transients.handle(SCENE_COLOR_SLOT)?)?;
-        let ctx = crate::app::build_frame_render_context(app, image_index);
+        let scene_color_image = ctx.transient_image(SCENE_COLOR_SLOT)?;
+        let render = ctx.frame_render_context(image_index);
 
         thyllore_vulkan_core::renderer::record_water_scene_color_copy(
-            &ctx,
+            &render,
             hdr_buffer.color_image,
             scene_color_image.image,
             targets.buffer.extent(),
@@ -697,9 +673,9 @@ impl RenderPassNode for WaterHistoryClearNode {
         PassStage::Effect
     }
 
-    fn writes(&self, app: &App) -> Vec<TargetUse> {
-        frame_uses(app, |frame, app| {
-            if !frame.is_history_invalidated(app) {
+    fn writes(&self, ctx: &PassContext) -> Vec<TargetUse> {
+        frame_uses(ctx, |frame, ctx| {
+            if !frame.is_history_invalidated(ctx) {
                 return Vec::new();
             }
             HISTORY_KEYS
@@ -711,15 +687,15 @@ impl RenderPassNode for WaterHistoryClearNode {
 
     unsafe fn record(
         &self,
-        app: &App,
+        ctx: &PassContext,
         command_buffer: vk::CommandBuffer,
         _: usize,
         _: usize,
     ) -> Result<()> {
-        if water_frame(app).is_none_or(|frame| !frame.is_history_invalidated(app)) {
+        if water_frame(ctx).is_none_or(|frame| !frame.is_history_invalidated(ctx)) {
             return Ok(());
         }
-        let Some(targets) = app.data.ecs_world.get_resource::<WaterRenderTargets>() else {
+        let Some(targets) = ctx.world.get_resource::<WaterRenderTargets>() else {
             return Ok(());
         };
 
@@ -727,7 +703,7 @@ impl RenderPassNode for WaterHistoryClearNode {
             float32: [0.0, 0.0, 0.0, 1.0],
         };
         for &image in &targets.buffer.history_images {
-            app.rrdevice.device.cmd_clear_color_image(
+            ctx.rrdevice.device.cmd_clear_color_image(
                 command_buffer,
                 image,
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -750,8 +726,8 @@ impl RenderPassNode for WaterShadingNode {
         PassStage::Effect
     }
 
-    fn reads(&self, app: &App) -> Vec<TargetUse> {
-        frame_uses(app, |frame, _| {
+    fn reads(&self, ctx: &PassContext) -> Vec<TargetUse> {
+        frame_uses(ctx, |frame, _| {
             vec![
                 TargetUse::new(SCENE_COLOR, TargetAccess::Sampled(ShaderStage::Fragment)),
                 TargetUse::new(TRACE, TargetAccess::StorageRead(ShaderStage::Fragment)),
@@ -763,8 +739,8 @@ impl RenderPassNode for WaterShadingNode {
         })
     }
 
-    fn writes(&self, app: &App) -> Vec<TargetUse> {
-        frame_uses(app, |frame, _| {
+    fn writes(&self, ctx: &PassContext) -> Vec<TargetUse> {
+        frame_uses(ctx, |frame, _| {
             if !frame.has_visible_instance() {
                 return Vec::new();
             }
@@ -789,23 +765,23 @@ impl RenderPassNode for WaterShadingNode {
 
     unsafe fn record(
         &self,
-        app: &App,
+        ctx: &PassContext,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
         frame_slot: usize,
     ) -> Result<()> {
-        let Some(frame) = water_frame(app) else {
+        let Some(frame) = water_frame(ctx) else {
             return Ok(());
         };
         let (Some(targets), Some(shading_pipeline), Some(descriptor)) = (
-            app.data.ecs_world.get_resource::<WaterRenderTargets>(),
-            app.data.raytracing.water_shading_pipeline.as_ref(),
-            app.data.raytracing.water_descriptor.as_ref(),
+            ctx.world.get_resource::<WaterRenderTargets>(),
+            ctx.raytracing.water_shading_pipeline.as_ref(),
+            ctx.raytracing.water_descriptor.as_ref(),
         ) else {
             return Ok(());
         };
         let water_buffer = &targets.buffer;
-        let ctx = crate::app::build_frame_render_context(app, image_index);
+        let render = ctx.frame_render_context(image_index);
 
         for (i, (_, ubo_dynamic_offset)) in targets.frame_instances.iter().enumerate() {
             let Some(scissor) = frame.scissors.get(i).copied().flatten() else {
@@ -813,12 +789,12 @@ impl RenderPassNode for WaterShadingNode {
             };
 
             let push_constants = thyllore_vulkan_core::renderer::WaterPushConstants::new(
-                frame.secondary_rays(app).as_shader_value(),
+                frame.secondary_rays(ctx).as_shader_value(),
                 frame.settings.debug_view,
             );
 
             thyllore_vulkan_core::renderer::record_water_shading_pass(
-                &ctx,
+                &render,
                 water_buffer,
                 shading_pipeline,
                 descriptor,
@@ -836,35 +812,29 @@ impl RenderPassNode for WaterShadingNode {
 }
 
 unsafe fn record_water_ubo_updates(
-    app: &App,
-    ctx: &thyllore_vulkan_core::FrameRenderContext,
+    ctx: &PassContext,
+    render: &thyllore_vulkan_core::FrameRenderContext,
     water_ubo: &thyllore_vulkan_core::resource::UniformBuffer<thyllore_effect_core::WaterUBO>,
     waters: &[crate::ecs::world::Entity],
     command_buffer: vk::CommandBuffer,
 ) -> Result<Vec<(thyllore_effect_core::WaterUBO, u32)>> {
-    let projection = app
-        .data
-        .ecs_world
-        .resource::<crate::ecs::resource::ProjectionData>();
+    let projection = ctx.world.resource::<crate::ecs::resource::ProjectionData>();
     let inv_view_proj =
         crate::ecs::systems::water::probe::inverse_view_proj_f64(projection.proj, projection.view);
-    let settings = app
-        .data
-        .ecs_world
+    let settings = ctx
+        .world
         .get_resource::<crate::ecs::resource::WaterRenderSettings>()
         .map(|settings| *settings)
         .unwrap_or_default();
 
     let mut instance_ubos = Vec::with_capacity(waters.len());
     for (i, water) in waters.iter().enumerate() {
-        let effect = app
-            .data
-            .ecs_world
+        let effect = ctx
+            .world
             .get_component::<crate::ecs::component::WaterTorusEffect>(*water)
             .ok_or_else(|| anyhow::anyhow!("Missing WaterTorusEffect for instance {}", i))?;
-        let accum = app
-            .data
-            .ecs_world
+        let accum = ctx
+            .world
             .get_component::<crate::ecs::component::WaterTemporalAccum>(*water)
             .cloned()
             .unwrap_or_default();
@@ -875,7 +845,7 @@ unsafe fn record_water_ubo_updates(
         ubo.composite[3] = settings.caustic_debug as f32;
 
         water_ubo.record_update(
-            &ctx.device.device,
+            &render.device.device,
             command_buffer,
             i,
             &ubo,
@@ -887,7 +857,7 @@ unsafe fn record_water_ubo_updates(
 }
 
 fn compute_water_scissor(
-    app: &App,
+    ctx: &PassContext,
     extent: vk::Extent2D,
     model: &cgmath::Matrix4<f32>,
     major_radius: f32,
@@ -896,7 +866,7 @@ fn compute_water_scissor(
     use crate::ecs::resource::ProjectionData;
     const SCISSOR_MARGIN_PX: f32 = 2.0;
 
-    let Some(projection) = app.data.ecs_world.get_resource::<ProjectionData>() else {
+    let Some(projection) = ctx.world.get_resource::<ProjectionData>() else {
         return Some(full_extent_scissor(extent));
     };
     let view_proj = projection.proj * projection.view;

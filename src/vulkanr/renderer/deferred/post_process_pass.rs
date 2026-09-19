@@ -1,41 +1,41 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::App;
+use crate::ecs::PassContext;
 
 struct BloomFrame<'a> {
     bloom_chain: &'a thyllore_vulkan_core::resource::BloomChain,
     downsample_pipeline: &'a thyllore_vulkan_core::pipeline::RRPipeline,
     upsample_pipeline: &'a thyllore_vulkan_core::pipeline::RRPipeline,
     descriptors: &'a thyllore_vulkan_core::descriptor::RRBloomDescriptorSets,
-    mips: &'a [thyllore_vulkan_core::resource::BloomMipTarget],
+    targets: crate::ecs::ResRef<'a, crate::ecs::resource::PostProcessFrameTargets>,
     settings: crate::ecs::resource::BloomSettings,
 }
 
-fn bloom_frame(app: &App) -> Result<Option<BloomFrame<'_>>> {
-    let Some(settings) = app
-        .data
-        .ecs_world
+fn bloom_frame<'a, 'b>(ctx: &'a PassContext<'b>) -> Result<Option<BloomFrame<'a>>> {
+    let Some(settings) = ctx
+        .world
         .get_resource::<crate::ecs::resource::BloomSettings>()
         .filter(|settings| settings.enabled)
         .map(|settings| settings.clone())
     else {
         return Ok(None);
     };
-    let mips = &app.data.post_process.bloom_mips;
-    if mips.is_empty() {
+    let targets = ctx
+        .world
+        .resource::<crate::ecs::resource::PostProcessFrameTargets>();
+    if targets.bloom_mips.is_empty() {
         return Ok(None);
     }
 
     let (Some(bloom_chain), Some(downsample_pipeline), Some(upsample_pipeline)) = (
-        app.data.viewport.bloom_chain.as_ref(),
-        app.data.raytracing.bloom_downsample_pipeline.as_ref(),
-        app.data.raytracing.bloom_upsample_pipeline.as_ref(),
+        ctx.bloom_chain,
+        ctx.raytracing.bloom_downsample_pipeline.as_ref(),
+        ctx.raytracing.bloom_upsample_pipeline.as_ref(),
     ) else {
         return Ok(None);
     };
-    let descriptors = app
-        .data
+    let descriptors = ctx
         .raytracing
         .bloom_descriptors
         .as_ref()
@@ -46,27 +46,27 @@ fn bloom_frame(app: &App) -> Result<Option<BloomFrame<'_>>> {
         downsample_pipeline,
         upsample_pipeline,
         descriptors,
-        mips,
+        targets,
         settings,
     }))
 }
 
 pub unsafe fn record_bloom_downsample(
-    app: &App,
+    ctx: &PassContext,
     command_buffer: vk::CommandBuffer,
     mip_index: usize,
     frame_slot: usize,
 ) -> Result<()> {
-    let Some(bloom) = bloom_frame(app)? else {
+    let Some(bloom) = bloom_frame(ctx)? else {
         return Ok(());
     };
-    let ctx = crate::app::build_frame_render_context(app, 0);
+    let render = ctx.frame_render_context(0);
     thyllore_vulkan_core::renderer::record_bloom_downsample_mip(
-        &ctx,
+        &render,
         bloom.downsample_pipeline,
         bloom.descriptors,
         bloom.bloom_chain,
-        bloom.mips,
+        &bloom.targets.bloom_mips,
         mip_index,
         frame_slot,
         &bloom.settings,
@@ -75,49 +75,50 @@ pub unsafe fn record_bloom_downsample(
 }
 
 pub unsafe fn record_bloom_upsample(
-    app: &App,
+    ctx: &PassContext,
     command_buffer: vk::CommandBuffer,
     pass_index: usize,
     frame_slot: usize,
 ) -> Result<()> {
-    let Some(bloom) = bloom_frame(app)? else {
+    let Some(bloom) = bloom_frame(ctx)? else {
         return Ok(());
     };
-    let ctx = crate::app::build_frame_render_context(app, 0);
+    let render = ctx.frame_render_context(0);
     thyllore_vulkan_core::renderer::record_bloom_upsample_pass(
-        &ctx,
+        &render,
         bloom.upsample_pipeline,
         bloom.descriptors,
         bloom.bloom_chain,
-        bloom.mips,
+        &bloom.targets.bloom_mips,
         pass_index,
         frame_slot,
         command_buffer,
     )
 }
 
-pub unsafe fn record_dof(app: &App, command_buffer: vk::CommandBuffer) -> Result<()> {
+pub unsafe fn record_dof(ctx: &PassContext, command_buffer: vk::CommandBuffer) -> Result<()> {
     let (Some(pipeline), Some(dof_descriptor), Some(dof_buffer)) = (
-        app.data.raytracing.dof_pipeline.as_ref(),
-        app.data.raytracing.dof_descriptor.as_ref(),
-        app.data.viewport.dof_buffer.as_ref(),
+        ctx.raytracing.dof_pipeline.as_ref(),
+        ctx.raytracing.dof_descriptor.as_ref(),
+        ctx.dof_buffer,
     ) else {
         return Ok(());
     };
-    let dof_framebuffer = app.data.post_process.dof_framebuffer;
-    if dof_framebuffer == vk::Framebuffer::null() {
+    let output = ctx.transient_image(crate::app::post_process::DOF_OUTPUT)?;
+    let Some(dof_framebuffer) = ctx
+        .transient
+        .cached_framebuffer(dof_buffer.render_pass, &[output.view])
+    else {
         return Ok(());
-    }
+    };
 
-    let dof_settings = app
-        .data
-        .ecs_world
+    let dof_settings = ctx
+        .world
         .get_resource::<crate::ecs::resource::DepthOfField>();
-    let camera_params = app
-        .data
-        .ecs_world
+    let camera_params = ctx
+        .world
         .get_resource::<crate::ecs::resource::PhysicalCameraParameters>();
-    let camera = app.resource::<crate::ecs::resource::Camera>();
+    let camera = ctx.world.resource::<crate::ecs::resource::Camera>();
 
     let dof_default = crate::ecs::resource::DepthOfField::default();
     let camera_default = crate::ecs::resource::PhysicalCameraParameters::default();
@@ -127,10 +128,10 @@ pub unsafe fn record_dof(app: &App, command_buffer: vk::CommandBuffer) -> Result
     let camera_ref: &crate::ecs::resource::PhysicalCameraParameters =
         camera_params.as_deref().unwrap_or(&camera_default);
 
-    let ctx = crate::app::build_frame_render_context(app, 0);
+    let render = ctx.frame_render_context(0);
 
     thyllore_vulkan_core::renderer::record_dof_pass(
-        &ctx,
+        &render,
         pipeline,
         dof_descriptor,
         dof_buffer,
@@ -145,13 +146,12 @@ pub unsafe fn record_dof(app: &App, command_buffer: vk::CommandBuffer) -> Result
 }
 
 pub unsafe fn record_auto_exposure(
-    app: &App,
+    ctx: &PassContext,
     command_buffer: vk::CommandBuffer,
     frame_slot: usize,
 ) -> Result<()> {
-    let ae_settings = app
-        .data
-        .ecs_world
+    let ae_settings = ctx
+        .world
         .get_resource::<crate::ecs::resource::AutoExposure>();
     let Some(ae_settings) = ae_settings else {
         return Ok(());
@@ -167,39 +167,30 @@ pub unsafe fn record_auto_exposure(
         Some(average_descriptor),
         Some(buffers),
     ) = (
-        app.data
-            .raytracing
-            .auto_exposure_histogram_pipeline
-            .as_ref(),
-        app.data.raytracing.auto_exposure_average_pipeline.as_ref(),
-        app.data
-            .raytracing
-            .auto_exposure_histogram_descriptor
-            .as_ref(),
-        app.data
-            .raytracing
-            .auto_exposure_average_descriptor
-            .as_ref(),
-        app.data.viewport.auto_exposure_buffers.as_ref(),
+        ctx.raytracing.auto_exposure_histogram_pipeline.as_ref(),
+        ctx.raytracing.auto_exposure_average_pipeline.as_ref(),
+        ctx.raytracing.auto_exposure_histogram_descriptor.as_ref(),
+        ctx.raytracing.auto_exposure_average_descriptor.as_ref(),
+        ctx.auto_exposure_buffers,
     )
     else {
         return Ok(());
     };
 
-    let fixed_delta = app
+    let fixed_delta = ctx
+        .world
         .resource::<crate::ecs::resource::FrameClock>()
         .fixed_delta_seconds();
     let delta_time = fixed_delta.unwrap_or_else(|| {
-        app.data
-            .ecs_world
+        ctx.world
             .get_resource::<crate::ecs::resource::TimelineState>()
             .map(|t| 1.0 / 60.0 * t.speed.max(0.01))
             .unwrap_or(1.0 / 60.0)
     });
-    let ctx = crate::app::build_frame_render_context(app, 0);
+    let render = ctx.frame_render_context(0);
 
     thyllore_vulkan_core::renderer::record_auto_exposure_pass(
-        &ctx,
+        &render,
         histogram_pipeline,
         average_pipeline,
         histogram_descriptor,
@@ -222,7 +213,7 @@ pub unsafe fn record_auto_exposure(
         .size(8u64)
         .build();
 
-    app.rrdevice.device.cmd_pipeline_barrier(
+    render.device.device.cmd_pipeline_barrier(
         command_buffer,
         vk::PipelineStageFlags::COMPUTE_SHADER,
         vk::PipelineStageFlags::TRANSFER,
@@ -233,7 +224,7 @@ pub unsafe fn record_auto_exposure(
     );
 
     // Copy luminance_buffer → readback_buffers[frame_slot] (8 bytes)
-    app.rrdevice.device.cmd_copy_buffer(
+    render.device.device.cmd_copy_buffer(
         command_buffer,
         buffers.luminance_buffer,
         buffers.readback_buffers[frame_slot],

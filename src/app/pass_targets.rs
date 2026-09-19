@@ -4,7 +4,9 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use super::App;
-use crate::hooks::pass::{CoreTarget, RenderPassNode, TargetRef, TargetUse, TransientSlot};
+use crate::hooks::pass::{
+    CoreTarget, RenderPassNode, TargetRef, TargetUse, TransientRequest, TransientSlot,
+};
 use thyllore_vulkan_core::renderer::{PendingBarrier, TransientLifetimes};
 use thyllore_vulkan_core::resource::TransientDesc;
 
@@ -67,14 +69,13 @@ impl App {
     pub(super) unsafe fn assign_frame_transients(
         &mut self,
         nodes: &[&'static dyn RenderPassNode],
+        transient_requests: &[TransientRequest],
         node_uses: &[Vec<TargetUse>],
     ) -> Result<TransientLifetimes> {
-        let mut descs: HashMap<TransientSlot, TransientDesc> = HashMap::new();
-        for node in nodes {
-            for request in node.transients(self) {
-                descs.insert(request.slot, request.desc);
-            }
-        }
+        let descs: HashMap<TransientSlot, TransientDesc> = transient_requests
+            .iter()
+            .map(|request| (request.slot, request.desc))
+            .collect();
         let lifetimes = TransientLifetimes::from_node_uses(node_uses);
         self.data.frame_transients.clear();
 

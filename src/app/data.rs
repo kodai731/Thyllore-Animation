@@ -1,6 +1,3 @@
-use serde::Serialize;
-
-use crate::app::post_process::PostProcessFrameTargets;
 use crate::app::viewport::ViewportState;
 use crate::asset::AssetStorage;
 use crate::ecs::World;
@@ -12,17 +9,6 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 use crate::vulkanr::resource::{GpuBufferRegistry, GpuResource, PipelineStorage};
 use thyllore_vulkan_core::renderer::{FrameTransients, ImageStateTracker};
 use thyllore_vulkan_core::resource::raytracing_data::RayTracingData;
-
-#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
-pub enum LightMoveTarget {
-    None,
-    XMin,
-    XMax,
-    YMin,
-    YMax,
-    ZMin,
-    ZMax,
-}
 
 #[derive(Debug, Default, GpuResource)]
 pub struct AppData {
@@ -44,7 +30,5 @@ pub struct AppData {
     pub pass_image_states: ImageStateTracker,
     #[gpu_resource(skip)]
     pub frame_transients: FrameTransients,
-    #[gpu_resource(skip)]
-    pub post_process: PostProcessFrameTargets,
     pub onion_skin_gpu: Option<OnionSkinGpuState>,
 }

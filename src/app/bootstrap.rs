@@ -6,7 +6,6 @@ use crate::ecs::resource::BatchRun;
 use crate::ecs::systems::{
     apply_engine_overrides, batch_anim_dump_write, batch_run_report, EngineCliOverrides,
 };
-use crate::hooks::effect::EffectHooks;
 use crate::vulkanr::context::{CommandState, RenderTargets};
 
 /// Applies the startup configuration: the engine's own overrides first, then every subsystem
@@ -27,7 +26,12 @@ pub unsafe fn finish_setup(app: &mut App, system: &mut crate::platform::System) 
     let command_pool = app.resource::<CommandState>().pool.clone();
     let rrrender = app.resource::<RenderTargets>().render.clone();
 
-    EffectHooks::run_after_overrides(&app.instance, &app.rrdevice, &mut app.data, &rrrender)?;
+    crate::app::effect_hooks::run_effect_after_overrides(
+        &app.instance,
+        &app.rrdevice,
+        &mut app.data,
+        &rrrender,
+    )?;
     App::init_imgui_rendering(
         &app.instance,
         &app.rrdevice,

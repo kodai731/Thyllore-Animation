@@ -1,13 +1,10 @@
 use anyhow::Result;
-use vulkanalia::prelude::v1_0::*;
 
-use crate::app::AppData;
 use crate::ecs::EffectContext;
 use crate::hooks::pass::{PassGraph, RenderPassNode};
-use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::render::RRRender;
 
-pub type EffectSetupHook = unsafe fn(&Instance, &RRDevice, &mut AppData, &RRRender) -> Result<()>;
+pub type EffectSetupHook = unsafe fn(&mut EffectContext, &RRRender) -> Result<()>;
 pub type EffectHookFn = unsafe fn(&mut EffectContext) -> Result<()>;
 
 #[derive(Clone, Copy)]
@@ -54,36 +51,7 @@ impl EffectHooks {
         }
     }
 
-    pub(crate) fn snapshot(&self) -> Vec<EffectHook> {
+    pub fn snapshot(&self) -> Vec<EffectHook> {
         self.entries.clone()
-    }
-
-    pub unsafe fn run_setup(
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        data: &mut AppData,
-        rrrender: &RRRender,
-    ) -> Result<()> {
-        for hook in data.effect_hooks.snapshot() {
-            if let Some(setup) = hook.setup {
-                setup(instance, rrdevice, data, rrrender)?;
-            }
-        }
-        Ok(())
-    }
-
-    /// Runs the GPU work that depends on the startup overrides, once they are applied.
-    pub unsafe fn run_after_overrides(
-        instance: &Instance,
-        rrdevice: &RRDevice,
-        data: &mut AppData,
-        rrrender: &RRRender,
-    ) -> Result<()> {
-        for hook in data.effect_hooks.snapshot() {
-            if let Some(after_overrides) = hook.after_overrides {
-                after_overrides(instance, rrdevice, data, rrrender)?;
-            }
-        }
-        Ok(())
     }
 }

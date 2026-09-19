@@ -2,11 +2,10 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::{FlameRenderTargets, FlameSdfSource};
+use crate::ecs::EffectContext;
 use crate::vulkanr::context::CommandState;
-use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::FlameImageBindings;
 use crate::vulkanr::render::RRRender;
-use crate::AppData;
 
 fn load_sdf_pixels(source: Option<&FlameSdfSource>) -> (Vec<u8>, u32, u32) {
     let white_pixel = (vec![255u8; 4], 1, 1);
@@ -27,16 +26,12 @@ fn load_sdf_pixels(source: Option<&FlameSdfSource>) -> (Vec<u8>, u32, u32) {
 
 /// Builds the SDF texture from the file requested at startup (a white pixel without one) and
 /// binds it into the flame descriptor.
-pub(super) unsafe fn init_sdf_texture(
-    instance: &Instance,
-    rrdevice: &RRDevice,
-    data: &mut AppData,
-    rrrender: &RRRender,
-) -> Result<()> {
+pub(super) unsafe fn init_sdf_texture(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()> {
     let (pixels, width, height) =
-        load_sdf_pixels(data.ecs_world.get_resource::<FlameSdfSource>().as_deref());
+        load_sdf_pixels(ctx.world.get_resource::<FlameSdfSource>().as_deref());
 
-    let command_pool = data.ecs_world.resource::<CommandState>().pool.clone();
+    let (instance, rrdevice) = (ctx.instance, ctx.rrdevice);
+    let command_pool = ctx.world.resource::<CommandState>().pool.clone();
     let (image, image_memory, mips) =
         thyllore_vulkan_core::resource::create_texture_image_pixel_with_format(
             instance,
@@ -55,17 +50,17 @@ pub(super) unsafe fn init_sdf_texture(
         mips,
     )?;
     let sampler = thyllore_vulkan_core::resource::create_texture_sampler(rrdevice, mips)?;
-    data.raytracing.flame_sdf = thyllore_vulkan_core::resource::RRImage {
+    ctx.raytracing.flame_sdf = thyllore_vulkan_core::resource::RRImage {
         image,
         image_memory,
         image_view,
         sampler,
     };
 
-    let Some(flame_targets) = data.ecs_world.get_resource::<FlameRenderTargets>() else {
+    let Some(flame_targets) = ctx.world.get_resource::<FlameRenderTargets>() else {
         return Ok(());
     };
-    if let Some(ref flame_descriptor) = data.raytracing.flame_descriptor {
+    if let Some(ref flame_descriptor) = ctx.raytracing.flame_descriptor {
         flame_descriptor.update_image_views(
             rrdevice,
             FlameImageBindings {

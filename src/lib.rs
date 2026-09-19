@@ -12,7 +12,6 @@ pub mod logger;
 
 pub mod animation;
 pub mod app;
-pub use app::data::AppData;
 pub mod asset;
 #[cfg(debug_assertions)]
 pub mod debugview;

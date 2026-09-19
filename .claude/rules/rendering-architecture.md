@@ -81,8 +81,9 @@ stages / descriptor set roles are declared once in `shaders/passes.toml` and gen
 - `src/app/render_context.rs::RenderContext`: mutable GPU resources, builds `VulkanBackend`.
 - `src/ecs/frame_context.rs::FrameContext`: `RenderContext` plus `World`, `AssetStorage`, time, frame slot,
   swapchain extent. What the ECS phase pipeline takes.
-- `src/ecs/effect_context.rs::EffectContext`: instance, device, viewport extent and storage pool, HDR view,
-  raytracing data, pass image states, `World`. What the effect `on_viewport_resize` hook takes.
+- `src/ecs/effect_context.rs::EffectContext`: instance, device, graphics resources, viewport extent and
+  storage pool, HDR view, raytracing data, pass image states, `World`. What the effect `setup`,
+  `after_overrides` (with `&RRRender`) and `on_viewport_resize` hooks take; `src/app/effect_hooks.rs` builds it.
 - `src/ecs/pass_context.rs::PassContext`: device, graphics resources, buffer registry, pipelines, raytracing
   data, the viewport's core buffers, the transient pool and this frame's slot map, onion skin state, `World`,
   assets. What every `RenderPassNode` method takes (`prepare` mutably); `src/app/render_context.rs::build_pass_context`

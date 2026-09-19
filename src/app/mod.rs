@@ -5,6 +5,7 @@ pub mod color_test_quad;
 mod command_recording;
 pub mod config;
 pub mod data;
+pub mod effect_hooks;
 pub(crate) mod features;
 pub mod init;
 pub mod lifecycle;

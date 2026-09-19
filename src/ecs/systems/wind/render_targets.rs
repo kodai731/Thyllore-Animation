@@ -10,7 +10,6 @@ use crate::vulkanr::image::{create_image, create_image_view};
 use crate::vulkanr::render::{create_color_overlay_render_pass, ColorOverlayPassDesc, RRRender};
 use crate::vulkanr::resource::hdr_buffer::HDR_FORMAT;
 use crate::vulkanr::resource::{GpuResource, VolumeImage};
-use crate::AppData;
 use thyllore_effect_core::{
     WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,
     WIND_SHADOW_VOLUME_THETA,
@@ -166,39 +165,29 @@ pub unsafe fn destroy_render_targets(targets: &mut WindRenderTargets, device: &v
     }
 }
 
-unsafe fn setup_wind(
-    instance: &Instance,
-    rrdevice: &RRDevice,
-    data: &mut AppData,
-    rrrender: &RRRender,
-) -> Result<()> {
-    let Some(hdr_view) = data
-        .viewport
-        .hdr_buffer
-        .as_ref()
-        .map(|hdr| hdr.color_image_view)
-    else {
+unsafe fn setup_wind(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()> {
+    let Some(hdr_view) = ctx.hdr_color_view else {
         log!("HDR buffer not available, skipping wind pipeline");
         return Ok(());
     };
 
     let targets = create_wind_render_targets(
-        instance,
-        rrdevice,
-        data.viewport.width,
-        data.viewport.height,
+        ctx.instance,
+        ctx.rrdevice,
+        ctx.viewport_width,
+        ctx.viewport_height,
         hdr_view,
     )?;
     let gpu_state = super::pipeline::create_wind_gpu_state(
-        instance,
-        rrdevice,
+        ctx.instance,
+        ctx.rrdevice,
         rrrender,
-        &data.graphics_resources,
+        ctx.graphics,
         &targets,
         rrrender.gbuffer_depth_image_view,
     )?;
-    data.ecs_world.insert_resource(targets);
-    data.ecs_world.insert_resource(gpu_state);
+    ctx.world.insert_resource(targets);
+    ctx.world.insert_resource(gpu_state);
 
     log!("Wind pipeline created successfully");
     Ok(())

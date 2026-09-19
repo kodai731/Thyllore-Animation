@@ -22,8 +22,8 @@ src/app/ , src/platform/ App lifecycle, Vulkan object ownership, frame driver, w
 Lower layers never import upper ones: a crate never depends on `src/`, and `src/ecs/` never imports
 `src/app/`. A system that needs GPU objects receives a context struct that borrows exactly what it uses
 (`FrameContext`: device, instance, command pool, `World`, assets, graphics resources, raytracing data, frame
-slot; `EffectContext`: instance, device, viewport extent and storage pool, HDR view, raytracing data, pass
-image states, `World`; `PassContext`: device, graphics resources, buffer registry, pipelines, raytracing
+slot; `EffectContext`: instance, device, graphics resources, viewport extent and storage pool, HDR view,
+raytracing data, pass image states, `World`; `PassContext`: device, graphics resources, buffer registry, pipelines, raytracing
 data, the viewport's core buffers, the transient pool and this frame's slot map, onion skin state, `World`,
 assets), never `App` or `AppData`. All three live in `src/ecs/` and `src/app/` builds them. If a system
 seems to need `App`, it is either app wiring (move it to `src/app/`) or the context is missing a field (add
@@ -117,9 +117,9 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 ## src/hooks/
 
 Generic hook infrastructure that lets a subsystem plug into the app lifecycle without being named by
-`src/app/`. `effect.rs` holds the effect hook (setup and after_overrides take `(&Instance, &RRDevice, &mut AppData,
-&RRRender)`, viewport resize takes `&mut EffectContext`, pass nodes) and the list that runs them in
-subscription order; GPU teardown is not a hook, it is the `gpu_resource!` registration
+`src/app/`. `effect.rs` holds the effect hook (setup and after_overrides take `(&mut EffectContext, &RRRender)`,
+viewport resize takes `&mut EffectContext`, pass nodes) and the subscription list; `src/app/effect_hooks.rs`
+builds the context and runs them in subscription order; GPU teardown is not a hook, it is the `gpu_resource!` registration
 of the effect's resource (`gpu_resource.rs`: `GpuResourceHook`, `GpuResourceHooks::collect()`).
 `batch_capture.rs` holds the `CaptureContext` and the `BatchCapture` contract: a request resource whose
 presence in `World` asks for one readback at the batch capture frame, registered with
@@ -299,7 +299,8 @@ Files: `init/` and `cleanup.rs` (construction, teardown), `data.rs` (`AppData`),
 attachments, storage and transient pools), `render.rs` (frame driver), `update.rs` (per-frame update and
 imgui buffers), `lifecycle/` (`after_present.rs`: what runs once the frame is presented, today the batch
 capture; a step that needs the finished image goes here, never into `render.rs` or `src/platform/`),
-`capture_context.rs` (the `CaptureContext` builders and `capture_now`), `command_recording.rs`, `model/` (`load.rs` entry points and load order, `texture.rs`
+`capture_context.rs` (the `CaptureContext` builders and `capture_now`), `effect_hooks.rs` (builds
+`EffectContext` and runs the effect hooks), `command_recording.rs`, `model/` (`load.rs` entry points and load order, `texture.rs`
 texture file resolution, `gpu.rs` mesh upload and acceleration rebuild, `cleanup.rs` scene model reset,
 `caches.rs` / `nodes.rs` / `clips.rs` / `entities.rs` `World` and `AssetStorage` registration,
 `initial_pose.rs`; GPU mesh creation and vertex upload are `GraphicsResources::push_mesh` /

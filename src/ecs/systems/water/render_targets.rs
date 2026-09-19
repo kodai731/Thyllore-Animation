@@ -5,10 +5,8 @@ use crate::ecs::resource::WaterRenderTargets;
 use crate::ecs::{EffectContext, MAX_FRAMES_IN_FLIGHT};
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
-use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GpuResource, WaterBuffer};
-use crate::AppData;
 
 pub const WATER_EFFECT_HOOK: EffectHook = EffectHook {
     name: "water",
@@ -17,28 +15,6 @@ pub const WATER_EFFECT_HOOK: EffectHook = EffectHook {
     on_viewport_resize: Some(resize_water_render_targets),
     passes: super::passes::WATER_PASS_NODES,
 };
-
-fn setup_effect_context<'a>(
-    instance: &'a Instance,
-    rrdevice: &'a RRDevice,
-    data: &'a mut AppData,
-) -> EffectContext<'a> {
-    EffectContext {
-        instance,
-        rrdevice,
-        viewport_width: data.viewport.width,
-        viewport_height: data.viewport.height,
-        hdr_color_view: data
-            .viewport
-            .hdr_buffer
-            .as_ref()
-            .map(|hdr| hdr.color_image_view),
-        storage: &mut data.viewport.storage,
-        raytracing: &mut data.raytracing,
-        pass_image_states: &mut data.pass_image_states,
-        world: &mut data.ecs_world,
-    }
-}
 
 unsafe fn create_water_render_targets(
     ctx: &mut EffectContext,
@@ -67,39 +43,33 @@ unsafe fn create_water_render_targets(
     Ok(true)
 }
 
-unsafe fn setup_water(
-    instance: &Instance,
-    rrdevice: &RRDevice,
-    data: &mut AppData,
-    rrrender: &RRRender,
-) -> Result<()> {
-    let mut setup_ctx = setup_effect_context(instance, rrdevice, data);
-    if !create_water_render_targets(&mut setup_ctx, rrrender.gbuffer_depth_image_view)? {
+unsafe fn setup_water(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()> {
+    if !create_water_render_targets(ctx, rrrender.gbuffer_depth_image_view)? {
         log!("HDR buffer not available, skipping water pipeline");
         return Ok(());
     }
 
-    let (Some(water_targets), Some(hdr_buffer)) = (
-        data.ecs_world.get_resource::<WaterRenderTargets>(),
-        data.viewport.hdr_buffer.as_ref(),
+    let (Some(water_targets), Some(hdr_color_view)) = (
+        ctx.world.get_resource::<WaterRenderTargets>(),
+        ctx.hdr_color_view,
     ) else {
         log!("Water buffer not available, skipping water pipeline");
         return Ok(());
     };
 
     super::pipeline::create_water_pipeline(
-        instance,
-        rrdevice,
+        ctx.instance,
+        ctx.rrdevice,
         rrrender,
-        &data.graphics_resources,
-        &mut data.raytracing,
+        ctx.graphics,
+        ctx.raytracing,
         &water_targets.buffer,
-        hdr_buffer,
+        hdr_color_view,
         MAX_FRAMES_IN_FLIGHT,
     )?;
     drop(water_targets);
-    let trace_blocks = super::pipeline::water_trace_blocks(rrdevice, &data.raytracing)?;
-    data.ecs_world.insert_resource(trace_blocks);
+    let trace_blocks = super::pipeline::water_trace_blocks(ctx.rrdevice, ctx.raytracing)?;
+    ctx.world.insert_resource(trace_blocks);
 
     log!("Water pipeline created successfully");
     Ok(())

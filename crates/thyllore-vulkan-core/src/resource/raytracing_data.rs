@@ -12,7 +12,7 @@ use crate::descriptor::ReflectedSetLayout;
 use crate::descriptor::{
     CompositeGBufferViews, RRAutoExposureAverageDescriptorSet,
     RRAutoExposureHistogramDescriptorSet, RRBillboardDescriptorSet, RRBloomDescriptorSets,
-    RRCompositeDescriptorSet, RRDofDescriptorSet, RREffectTraceDescriptorSet, RRFlameDescriptorSet,
+    RRCompositeDescriptorSet, RRDofDescriptorSet, RREffectTraceDescriptorSet,
     RRRayQueryDescriptorSet, RRToneMapDescriptorSet, RRWaterCausticDescriptorSet,
     RRWaterDescriptorSet, COMPOSITE, GBUFFER, RAY_QUERY_SHADOW,
 };
@@ -25,10 +25,10 @@ use crate::raytracing::{BlasGeometry, GpuPrimitive};
 use crate::render::RRRender;
 use crate::renderer::push_constants::GBufferPushConstants;
 use crate::resource::graphics_resource::{GraphicsResources, MeshBuffer};
-use crate::resource::image::{create_nearest_sampler, create_texture_sampler, RRImage};
+use crate::resource::image::{create_nearest_sampler, create_texture_sampler};
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::resource::{GpuResource, OnionSkinPassResources, RRGBuffer};
-use thyllore_effect_core::{FlameUBO, WaterUBO};
+use thyllore_effect_core::WaterUBO;
 
 #[derive(Clone, Debug, Default, GpuResource)]
 pub struct RayTracingData {
@@ -65,10 +65,6 @@ pub struct RayTracingData {
 
     pub onion_skin_pass: Option<OnionSkinPassResources>,
 
-    pub flame_shading_pipeline: Option<RRPipeline>,
-    pub flame_descriptor: Option<RRFlameDescriptorSet>,
-    pub flame_ubo: Option<UniformBuffer<FlameUBO>>,
-
     pub water_shading_pipeline: Option<RRPipeline>,
     pub water_descriptor: Option<RRWaterDescriptorSet>,
     pub water_ubo: Option<UniformBuffer<WaterUBO>>,
@@ -79,8 +75,6 @@ pub struct RayTracingData {
     pub water_caustic_splat_pipeline: Option<RRPipeline>,
     pub water_caustic_apply_pipeline: Option<RRPipeline>,
     pub water_caustic_descriptor: Option<RRWaterCausticDescriptorSet>,
-
-    pub flame_sdf: RRImage,
 
     pub scene_uniform_buffer: Option<UniformBuffer<SceneUniformData>>,
 }

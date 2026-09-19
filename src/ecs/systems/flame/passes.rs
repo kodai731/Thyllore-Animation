@@ -47,9 +47,12 @@ fn flame_frame(ctx: &PassContext) -> Option<FlameFrame> {
         .get_resource::<crate::ecs::resource::FlameRenderTargets>()?
         .buffer
         .extent();
-    ctx.raytracing.flame_shading_pipeline.as_ref()?;
-    ctx.raytracing.flame_descriptor.as_ref()?;
-    ctx.raytracing.flame_ubo.as_ref()?;
+    let gpu_state = ctx
+        .world
+        .get_resource::<crate::ecs::resource::FlameGpuState>()?;
+    gpu_state.shading_pipeline.as_ref()?;
+    gpu_state.descriptor.as_ref()?;
+    gpu_state.ubo.as_ref()?;
 
     let mut flames = ctx.world.query_flames();
     sort_flames_back_to_front(ctx, &mut flames);
@@ -229,12 +232,18 @@ unsafe fn record_flame_passes(
     let Some(frame) = flame_frame(ctx) else {
         return Ok(());
     };
-    let (Some(flame_targets), Some(shading_pipeline), Some(descriptor), Some(flame_ubo)) = (
+    let (Some(flame_targets), Some(gpu_state)) = (
         ctx.world
             .get_resource::<crate::ecs::resource::FlameRenderTargets>(),
-        ctx.raytracing.flame_shading_pipeline.as_ref(),
-        ctx.raytracing.flame_descriptor.as_ref(),
-        ctx.raytracing.flame_ubo.as_ref(),
+        ctx.world
+            .get_resource::<crate::ecs::resource::FlameGpuState>(),
+    ) else {
+        return Ok(());
+    };
+    let (Some(shading_pipeline), Some(descriptor), Some(flame_ubo)) = (
+        gpu_state.shading_pipeline.as_ref(),
+        gpu_state.descriptor.as_ref(),
+        gpu_state.ubo.as_ref(),
     ) else {
         return Ok(());
     };

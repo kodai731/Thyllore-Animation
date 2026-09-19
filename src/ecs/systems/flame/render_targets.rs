@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::ecs::resource::{FlameHistorySnapshotState, FlameRenderTargets};
+use crate::ecs::resource::{FlameGpuState, FlameHistorySnapshotState, FlameRenderTargets};
 use crate::ecs::{EffectContext, MAX_FRAMES_IN_FLIGHT};
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
@@ -62,17 +62,18 @@ unsafe fn setup_flame(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()
         }
     };
 
-    super::pipeline::create_flame_pipeline(
+    let gpu_state = super::pipeline::create_flame_pipeline(
         ctx.instance,
         ctx.rrdevice,
         rrrender,
         ctx.graphics,
-        ctx.raytracing,
         flame_buffer,
         position_image_view,
         position_sampler,
         rrrender.gbuffer_depth_image_view,
     )?;
+    drop(flame_targets);
+    ctx.world.insert_resource(gpu_state);
 
     crate::ecs::systems::raytracing_systems::ensure_effect_trace_pipeline(
         ctx.instance,
@@ -113,17 +114,19 @@ unsafe fn resize_flame_render_targets(ctx: &mut EffectContext) -> Result<()> {
         ctx.pass_image_states.mark_shader_read_only(image);
     }
 
-    if let Some(descriptor) = ctx.raytracing.flame_descriptor.as_ref() {
-        descriptor.update_image_views(
-            ctx.rrdevice,
-            FlameImageBindings {
-                history_image_views: targets.buffer.history_image_views,
-                flame_sampler: targets.buffer.sampler,
-                sdf_image_view: ctx.raytracing.flame_sdf.image_view,
-                sdf_sampler: ctx.raytracing.flame_sdf.sampler,
-                scene_depth_view,
-            },
-        )?;
+    if let Some(gpu_state) = ctx.world.get_resource::<FlameGpuState>() {
+        if let Some(descriptor) = gpu_state.descriptor.as_ref() {
+            descriptor.update_image_views(
+                ctx.rrdevice,
+                FlameImageBindings {
+                    history_image_views: targets.buffer.history_image_views,
+                    flame_sampler: targets.buffer.sampler,
+                    sdf_image_view: gpu_state.sdf.image_view,
+                    sdf_sampler: gpu_state.sdf.sampler,
+                    scene_depth_view,
+                },
+            )?;
+        }
     }
     drop(targets);
 

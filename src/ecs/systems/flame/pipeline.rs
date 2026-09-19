@@ -1,15 +1,14 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
+use crate::ecs::resource::FlameGpuState;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{FlameImageBindings, RRFlameDescriptorSet, FLAME_RESOLVE};
 use crate::vulkanr::pipeline::{
     BlendConfig, PipelineBuilder, PushConstantConfig, VertexInputConfig,
 };
 use crate::vulkanr::render::RRRender;
-use crate::vulkanr::resource::{
-    FlameBuffer, GraphicsResources, Placement, RayTracingData, UniformBuffer,
-};
+use crate::vulkanr::resource::{FlameBuffer, GraphicsResources, Placement, UniformBuffer};
 use thyllore_effect_core::{FlameUBO, FLAME_MAX_INSTANCES};
 use thyllore_vulkan_core::renderer::FlamePushConstants;
 
@@ -42,12 +41,11 @@ pub unsafe fn create_flame_pipeline(
     rrdevice: &RRDevice,
     rrrender: &RRRender,
     graphics_resources: &GraphicsResources,
-    raytracing: &mut RayTracingData,
     flame_buffer: &FlameBuffer,
     position_image_view: vk::ImageView,
     position_sampler: vk::Sampler,
     scene_depth_view: vk::ImageView,
-) -> Result<()> {
+) -> Result<FlameGpuState> {
     let flame_ubo = UniformBuffer::new(
         instance,
         rrdevice,
@@ -93,10 +91,11 @@ pub unsafe fn create_flame_pipeline(
         ])
         .build(rrdevice, rrrender, Some(flame_buffer.extent()))?;
 
-    raytracing.flame_shading_pipeline = Some(flame_shading_pipeline);
-    raytracing.flame_descriptor = Some(flame_descriptor);
-    raytracing.flame_ubo = Some(flame_ubo);
-
     log!("Created flame pipelines");
-    Ok(())
+    Ok(FlameGpuState {
+        shading_pipeline: Some(flame_shading_pipeline),
+        descriptor: Some(flame_descriptor),
+        ubo: Some(flame_ubo),
+        ..Default::default()
+    })
 }

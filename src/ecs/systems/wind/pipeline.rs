@@ -8,41 +8,11 @@ use crate::ecs::systems::wind::descriptors::{
 use crate::ecs::systems::wind::record::WindPushConstants;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{WIND_RESOLVE, WIND_SHADOW_BAKE, WIND_UPSAMPLE};
-use crate::vulkanr::pipeline::{
-    BlendConfig, PipelineBuilder, PushConstantConfig, RRPipeline, VertexInputConfig,
-};
+use crate::vulkanr::pipeline::{PushConstantConfig, RRPipeline};
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, UniformBuffer};
 use thyllore_effect_core::{WindUBO, WIND_MAX_INSTANCES};
-
-fn premultiplied_blend() -> BlendConfig {
-    BlendConfig {
-        enable: true,
-        src_color_factor: vk::BlendFactor::ONE,
-        dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-        color_op: vk::BlendOp::ADD,
-        src_alpha_factor: vk::BlendFactor::ONE,
-        dst_alpha_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
-        alpha_op: vk::BlendOp::ADD,
-    }
-}
-
-fn fullscreen_overlay_pipeline(
-    pass: &'static crate::vulkanr::descriptor::PassShaders,
-    targets: &WindRenderTargets,
-) -> PipelineBuilder {
-    PipelineBuilder::from_pass(pass)
-        .vertex_input(VertexInputConfig::Custom {
-            bindings: vec![],
-            attributes: vec![],
-        })
-        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-        .no_depth_test()
-        .custom_render_pass(targets.render_pass)
-        .msaa_samples(vk::SampleCountFlags::_1)
-        .blend(premultiplied_blend())
-        .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
-}
+use thyllore_vulkan_core::renderer::overlay_pipeline;
 
 pub unsafe fn create_wind_gpu_state(
     instance: &Instance,
@@ -74,7 +44,7 @@ pub unsafe fn create_wind_gpu_state(
         ],
     )?;
 
-    let resolve_pipeline = fullscreen_overlay_pipeline(&WIND_RESOLVE, targets)
+    let resolve_pipeline = overlay_pipeline(&WIND_RESOLVE, targets.render_pass)
         .push_constants(PushConstantConfig {
             stage_flags: vk::ShaderStageFlags::FRAGMENT,
             offset: 0,
@@ -92,7 +62,7 @@ pub unsafe fn create_wind_gpu_state(
         targets.half_color_image_view,
         scene_depth_view,
     )?;
-    let upsample_pipeline = fullscreen_overlay_pipeline(&WIND_UPSAMPLE, targets)
+    let upsample_pipeline = overlay_pipeline(&WIND_UPSAMPLE, targets.render_pass)
         .descriptor_layouts(&[&upsample_descriptor.layout])
         .build(rrdevice, rrrender, Some(targets.extent()))?;
 

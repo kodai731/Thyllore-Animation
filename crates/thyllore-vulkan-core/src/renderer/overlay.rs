@@ -1,4 +1,35 @@
+use crate::descriptor::PassShaders;
+use crate::pipeline::{BlendConfig, PipelineBuilder, VertexInputConfig};
 use vulkanalia::prelude::v1_0::*;
+
+fn premultiplied_blend() -> BlendConfig {
+    BlendConfig {
+        enable: true,
+        src_color_factor: vk::BlendFactor::ONE,
+        dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+        color_op: vk::BlendOp::ADD,
+        src_alpha_factor: vk::BlendFactor::ONE,
+        dst_alpha_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+        alpha_op: vk::BlendOp::ADD,
+    }
+}
+
+pub fn overlay_pipeline(
+    pass: &'static PassShaders,
+    render_pass: vk::RenderPass,
+) -> PipelineBuilder {
+    PipelineBuilder::from_pass(pass)
+        .vertex_input(VertexInputConfig::Custom {
+            bindings: vec![],
+            attributes: vec![],
+        })
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .no_depth_test()
+        .custom_render_pass(render_pass)
+        .msaa_samples(vk::SampleCountFlags::_1)
+        .blend(premultiplied_blend())
+        .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
+}
 
 /// What a fullscreen overlay pass finds in its color attachment when it begins.
 #[derive(Clone, Copy, Debug)]

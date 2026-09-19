@@ -34,7 +34,8 @@ pub use line_mesh_draw::{
 pub use onion_skin::{record_onion_skin_composite_pass, record_onion_skin_ghost_pass};
 pub use onion_skin_buffers::{OnionSkinGhostBuffer, OnionSkinGpuState};
 pub use overlay::{
-    begin_overlay_render_pass, draw_fullscreen_triangle, set_full_viewport, OverlayAttachmentLoad,
+    begin_overlay_render_pass, draw_fullscreen_triangle, record_overlay_draws, set_full_viewport,
+    OverlayAttachmentLoad, OverlayDraw, OverlayPass,
 };
 pub use pass_target::{
     CoreTarget, FrameTransients, ImageStateTracker, PendingBarrier, ShaderStage, TargetAccess,

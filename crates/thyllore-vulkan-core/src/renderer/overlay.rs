@@ -43,3 +43,65 @@ pub unsafe fn set_full_viewport(device: &Device, cmd: vk::CommandBuffer, extent:
 pub unsafe fn draw_fullscreen_triangle(device: &Device, cmd: vk::CommandBuffer) {
     device.cmd_draw(cmd, 3, 1, 0, 0);
 }
+
+#[derive(Clone, Copy, Debug)]
+pub struct OverlayPass {
+    pub render_pass: vk::RenderPass,
+    pub framebuffer: vk::Framebuffer,
+    pub extent: vk::Extent2D,
+}
+
+pub struct OverlayDraw<'a> {
+    pub descriptor_sets: &'a [vk::DescriptorSet],
+    pub dynamic_offsets: &'a [u32],
+    pub scissor: vk::Rect2D,
+}
+
+pub unsafe fn record_overlay_draws(
+    device: &Device,
+    cmd: vk::CommandBuffer,
+    pass: &OverlayPass,
+    render_area: vk::Rect2D,
+    load: OverlayAttachmentLoad,
+    pipeline: &crate::pipeline::RRPipeline,
+    push_constants: Option<&[u8]>,
+    draws: &[OverlayDraw],
+) -> anyhow::Result<()> {
+    begin_overlay_render_pass(
+        device,
+        cmd,
+        pass.render_pass,
+        pass.framebuffer,
+        render_area,
+        load,
+    );
+
+    device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
+    set_full_viewport(device, cmd, pass.extent);
+
+    if let Some(pc) = push_constants {
+        device.cmd_push_constants(
+            cmd,
+            pipeline.pipeline_layout,
+            vk::ShaderStageFlags::FRAGMENT,
+            0,
+            pc,
+        );
+    }
+
+    for draw in draws {
+        device.cmd_set_scissor(cmd, 0, &[draw.scissor]);
+        device.cmd_bind_descriptor_sets(
+            cmd,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline_layout,
+            0,
+            draw.descriptor_sets,
+            draw.dynamic_offsets,
+        );
+        draw_fullscreen_triangle(device, cmd);
+    }
+
+    device.cmd_end_render_pass(cmd);
+    Ok(())
+}

@@ -4,7 +4,7 @@ use std::rc::Rc;
 use crate::hooks::batch_capture::BatchCapture;
 
 #[derive(Clone, Debug)]
-pub enum DeferredAction {
+pub enum AppCommand {
     LoadModel {
         path: String,
     },
@@ -27,6 +27,21 @@ pub enum DeferredAction {
         baked_id: u64,
         path: PathBuf,
     },
+    ExportClipFbx {
+        source_id: u64,
+        path: PathBuf,
+    },
+    ExportClipGltf {
+        source_id: u64,
+        path: PathBuf,
+    },
+    ExportClipGltfAnimationOnly {
+        source_id: u64,
+        path: PathBuf,
+    },
+    ExportModelGltf {
+        path: PathBuf,
+    },
     #[cfg(feature = "auto-rig")]
     LoadModelFromMemory {
         glb_data: Vec<u8>,
@@ -41,4 +56,9 @@ pub enum DeferredAction {
     DeleteEntities {
         entities: Vec<u64>,
     },
+}
+
+#[derive(Default)]
+pub struct AppCommandQueue {
+    pub commands: Vec<AppCommand>,
 }

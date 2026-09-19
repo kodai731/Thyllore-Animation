@@ -5,6 +5,7 @@ mod keyboard_modifiers;
 mod mouse_input;
 mod viewport_input;
 
+mod app_command;
 mod app_exit;
 mod auto_exposure;
 #[cfg(feature = "auto-rig")]
@@ -88,6 +89,7 @@ pub use keyboard_modifiers::*;
 pub use mouse_input::*;
 pub use viewport_input::*;
 
+pub use app_command::*;
 pub use app_exit::*;
 pub use auto_exposure::*;
 #[cfg(feature = "auto-rig")]

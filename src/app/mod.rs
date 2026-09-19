@@ -2,6 +2,7 @@ pub mod bootstrap;
 pub mod capture_context;
 pub mod cleanup;
 pub mod color_test_quad;
+pub(crate) mod command;
 mod command_recording;
 pub mod config;
 pub mod data;

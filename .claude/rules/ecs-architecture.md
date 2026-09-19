@@ -170,7 +170,7 @@ run_frame()  (src/ecs/systems/frame_runner.rs, called from App::update)
 
 run_event_dispatch_phase()         # UI event processing, AppCommand collection;
                                    # called from src/platform/events/frame.rs after the UI is built
-run_batch_capture_phase()          # After present: requested BatchCapture readbacks + scheduled screenshot;
+run_last_phase()                   # After present: requested BatchCapture readbacks + scheduled screenshot;
                                    # entered through App::after_present (src/app/lifecycle/)
 ```
 

@@ -230,8 +230,8 @@ Concretely:
   with device, command pool, `World`, HDR buffer, image index and capture slot) in the
   `src/debugview/<effect>_*.rs` file that owns the dump, next to `batch_capture!(T)` and its
   `capture_action!`. Adding a dump to an effect is therefore one request type and one debugview file;
-  no per-effect action or hook file. The post-present `run_batch_capture_phase`
-  (`src/ecs/systems/phases/batch_capture_phase.rs`, entered through `App::after_present` in
+ no per-effect action or hook file. The post-present `run_last_phase`
+  (`src/ecs/systems/phases/last_phase.rs`, entered through `App::after_present` in
   `src/app/lifecycle/after_present.rs`) waits for the GPU, runs every registered request that is present
   and takes the schedule's screenshot. `src/platform/`, `src/app/` and the render passes never name
   `BatchRun`: what a reproducible run changes about a frame is expressed by `FrameClock`

@@ -39,7 +39,7 @@ reads and writes, and a declaration must hold whenever `record()` would emit the
 3. `render` (`src/app/render.rs`): TLAS refresh, `prepare_post_process_targets` and
    `prepare_water_frame_targets` (acquire transient images, update the descriptor sets of this frame slot),
    `record_command_buffer`, submit, present, `FrameSync::advance`.
-4. `App::after_present` (`src/app/lifecycle/after_present.rs`) → `run_batch_capture_phase`: only when the
+4. `App::after_present` (`src/app/lifecycle/after_present.rs`) → `run_last_phase`: only when the
    batch schedule asked for a capture this frame; waits idle, runs every requested `BatchCapture` and saves
    the screenshot.
 

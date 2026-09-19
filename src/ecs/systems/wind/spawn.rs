@@ -39,7 +39,7 @@ pub fn resolve_selected_wind(world: &World) -> Option<Entity> {
         }
     }
 
-    world.query_winds().first().copied()
+    world.entities_with::<WindTornadoEffect>().first().copied()
 }
 
 pub fn write_wind_transform(

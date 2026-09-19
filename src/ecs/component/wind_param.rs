@@ -375,7 +375,7 @@ fn wind_has_component(world: &World, entity: Entity) -> bool {
 }
 
 fn wind_entities(world: &World) -> Vec<Entity> {
-    world.query_winds()
+    world.entities_with::<WindTornadoEffect>()
 }
 
 fn wind_channel_read(world: &World, entity: Entity, property_type: PropertyType) -> Option<f32> {

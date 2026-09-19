@@ -9,7 +9,7 @@ impl TimedEffect for WindTornadoEffect {
     type WorldInputs = ();
 
     fn entities(world: &World) -> Vec<Entity> {
-        world.query_winds()
+        world.entities_with::<WindTornadoEffect>()
     }
 
     fn time_sources(world: &World, delta_time: f32) -> EffectTimeSources {

@@ -164,7 +164,7 @@ pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
                 }
             }
             UIEvent::SelectFlameInstance(index) => {
-                let flames = world.query_flames();
+                let flames = world.entities_with::<FlameEffect>();
                 if flames.is_empty() {
                     continue;
                 }
@@ -191,7 +191,7 @@ pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
                 }
             }
             UIEvent::SelectWaterInstance(index) => {
-                let waters = world.query_waters();
+                let waters = world.entities_with::<WaterTorusEffect>();
                 if waters.is_empty() {
                     continue;
                 }
@@ -218,7 +218,7 @@ pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
                 }
             }
             UIEvent::SelectWindInstance(index) => {
-                let winds = world.query_winds();
+                let winds = world.entities_with::<WindTornadoEffect>();
                 if winds.is_empty() {
                     continue;
                 }

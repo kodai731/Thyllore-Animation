@@ -4,7 +4,7 @@ use std::time::Instant;
 use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
-use crate::ecs::component::LineMesh;
+use crate::ecs::component::{FlameEffect, LineMesh};
 use crate::ecs::resource::gizmo::BoneSelectionState;
 use crate::ecs::resource::gizmo::TransformGizmoData;
 use crate::ecs::resource::gizmo::{
@@ -89,18 +89,15 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
             .get_resource::<crate::ecs::resource::FlameHistorySnapshotState>(),
     ) {
         let t = Instant::now();
-        let flame_entities: Vec<_> = ctx.world.query_flames();
+        let flame_entities: Vec<_> = ctx.world.entities_with::<FlameEffect>();
         let effects: Vec<(
-            crate::ecs::component::FlameEffect,
+            FlameEffect,
             crate::ecs::component::FlameBaked,
             crate::ecs::component::FlameTemporalAccum,
         )> = flame_entities
             .iter()
             .filter_map(|e| {
-                let effect = ctx
-                    .world
-                    .get_component::<crate::ecs::component::FlameEffect>(*e)
-                    .cloned()?;
+                let effect = ctx.world.get_component::<FlameEffect>(*e).cloned()?;
                 let baked = ctx
                     .world
                     .get_component::<crate::ecs::component::FlameBaked>(*e)

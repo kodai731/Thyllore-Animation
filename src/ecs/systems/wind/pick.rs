@@ -7,7 +7,7 @@ use thyllore_effect_core::{build_wind_model_matrix, pick_wind, WindShellParams};
 /// Nearest wind whose envelope the ray enters, with the distance at which it enters.
 pub fn find_wind_by_pick_ray(world: &World, ray: &PickRay) -> Option<(Entity, f32)> {
     world
-        .query_winds()
+        .entities_with::<WindTornadoEffect>()
         .into_iter()
         .filter_map(|entity| {
             let effect = world.get_component::<WindTornadoEffect>(entity)?;

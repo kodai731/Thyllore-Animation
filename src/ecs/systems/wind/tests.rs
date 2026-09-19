@@ -124,7 +124,7 @@ fn wind_scene_roundtrip_keeps_parameters_and_preset() {
     let mut restored_assets = crate::asset::AssetStorage::new();
     crate::scene::apply_loaded_scene_to_world(&loaded, &mut restored, &mut restored_assets);
 
-    let winds = restored.query_winds();
+    let winds = restored.entities_with::<WindTornadoEffect>();
     assert_eq!(winds.len(), 1);
     let wind = restored
         .get_component::<WindTornadoEffect>(winds[0])

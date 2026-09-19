@@ -1,6 +1,7 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
+use crate::ecs::component::FlameEffect;
 use crate::ecs::PassContext;
 
 pub unsafe fn record_tonemap_to_offscreen(
@@ -52,11 +53,9 @@ pub unsafe fn record_tonemap_to_offscreen(
 
     // Query for first entity with both FlameEffect and HeatPlume to build plume push constants
     let plume_data: Option<([f32; 4], [f32; 4], [f32; 4], [f32; 4])> = {
-        let flame_entities: Vec<_> = ctx.world.query_flames();
+        let flame_entities: Vec<_> = ctx.world.entities_with::<FlameEffect>();
         flame_entities.into_iter().find_map(|e| {
-            let effect = ctx
-                .world
-                .get_component::<crate::ecs::component::FlameEffect>(e)?;
+            let effect = ctx.world.get_component::<FlameEffect>(e)?;
             let plume = ctx
                 .world
                 .get_component::<crate::ecs::component::HeatPlume>(e)?;

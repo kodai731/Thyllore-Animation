@@ -1,4 +1,5 @@
 use crate::asset::AssetStorage;
+use crate::ecs::component::{FlameEffect, WaterTorusEffect, WindTornadoEffect};
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{ClipLibrary, CurveEditorState, EditHistory, TimelineState};
 use crate::ecs::systems::scalar_clip_systems::{
@@ -19,7 +20,7 @@ pub fn dispatch_scalar_clip_events(
     for event in events {
         match event {
             UIEvent::AddFlame => {
-                let flame_count = world.query_flames().len();
+                let flame_count = world.entities_with::<FlameEffect>().len();
                 if flame_count < thyllore_effect_core::FLAME_MAX_INSTANCES {
                     let effect = crate::ecs::component::FlameEffect {
                         position: cgmath::Vector3::new(1.5 * flame_count as f32, 0.0, 0.0),
@@ -30,7 +31,7 @@ pub fn dispatch_scalar_clip_events(
                 }
             }
             UIEvent::AddWater => {
-                let water_count = world.query_waters().len();
+                let water_count = world.entities_with::<WaterTorusEffect>().len();
                 if water_count < thyllore_effect_core::WATER_MAX_INSTANCES {
                     let effect = crate::ecs::component::WaterTorusEffect {
                         position: cgmath::Vector3::new(0.0, -0.5, 2.5 * water_count as f32),
@@ -41,7 +42,7 @@ pub fn dispatch_scalar_clip_events(
                 }
             }
             UIEvent::AddWind => {
-                let wind_count = world.query_winds().len();
+                let wind_count = world.entities_with::<WindTornadoEffect>().len();
                 if wind_count < thyllore_effect_core::WIND_MAX_INSTANCES {
                     let effect = crate::ecs::component::WindTornadoEffect {
                         position: cgmath::Vector3::new(-2.5 * wind_count as f32, 0.0, 0.0),
@@ -267,7 +268,7 @@ mod tests {
     #[test]
     fn test_insert_key_creates_clip_and_schedule() {
         let (mut world, mut assets) = make_world_with_flame();
-        let entity = world.query_flames()[0];
+        let entity = world.entities_with::<FlameEffect>()[0];
 
         dispatch_scalar_clip_events(
             &[UIEvent::InsertScalarKey {
@@ -291,7 +292,7 @@ mod tests {
     #[test]
     fn test_insert_then_undo_restores_empty_clip() {
         let (mut world, mut assets) = make_world_with_flame();
-        let entity = world.query_flames()[0];
+        let entity = world.entities_with::<FlameEffect>()[0];
 
         dispatch_scalar_clip_events(
             &[UIEvent::InsertScalarKey {
@@ -318,7 +319,7 @@ mod tests {
     #[test]
     fn test_insert_key_at_playhead_uses_current_component_value_and_time() {
         let (mut world, mut assets) = make_world_with_flame();
-        let entity = world.query_flames()[0];
+        let entity = world.entities_with::<FlameEffect>()[0];
 
         world.resource_mut::<TimelineState>().current_time = 2.0;
         world
@@ -352,7 +353,7 @@ mod tests {
 
         dispatch_scalar_clip_events(&[UIEvent::AddFlame], &mut world, &mut assets);
 
-        let flames = world.query_flames();
+        let flames = world.entities_with::<FlameEffect>();
         assert_eq!(flames.len(), 2);
         let new_flame = flames[1];
         let clip_id =
@@ -367,7 +368,7 @@ mod tests {
     fn test_set_min_duration_lengthens_unkeyed_clip_and_its_instance() {
         let (mut world, mut assets) = make_world_with_flame();
         dispatch_scalar_clip_events(&[UIEvent::AddFlame], &mut world, &mut assets);
-        let flame = world.query_flames()[1];
+        let flame = world.entities_with::<FlameEffect>()[1];
         let clip_id = find_entity_clip_id(&world, flame).expect("clip scheduled");
 
         dispatch_scalar_clip_events(

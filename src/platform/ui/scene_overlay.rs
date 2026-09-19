@@ -556,7 +556,7 @@ fn build_wind_section(
         ui_events.send(UIEvent::AddWind);
     }
 
-    let winds = ecs_world.query_winds();
+    let winds = ecs_world.entities_with::<WindTornadoEffect>();
     let selected_wind_entity = crate::ecs::systems::resolve_selected_wind(ecs_world);
     if winds.len() > 1 {
         let mut current = selected_wind_entity
@@ -701,7 +701,7 @@ fn build_water_section(
         }
 
         // Instance selector
-        let waters = ecs_world.query_waters();
+        let waters = ecs_world.entities_with::<WaterTorusEffect>();
         let selected_water_entity = crate::ecs::systems::resolve_selected_water(ecs_world);
         let clamped_index = selected_water_entity
             .and_then(|entity| waters.iter().position(|&e| e == entity))
@@ -874,7 +874,7 @@ fn build_flame_section(
             ui_events.send(UIEvent::UpdateFlameRenderSettings(settings_copy));
         }
 
-        let flames = ecs_world.query_flames();
+        let flames = ecs_world.entities_with::<FlameEffect>();
         let selected_flame_entity = crate::ecs::systems::resolve_selected_flame(ecs_world);
         let clamped_index = selected_flame_entity
             .and_then(|entity| flames.iter().position(|&e| e == entity))

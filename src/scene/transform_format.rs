@@ -18,7 +18,7 @@ declare_scene_format! {
             get: |t| [t.translation.x, t.translation.y, t.translation.z],
             set: |t, v| t.translation = Vector3::new(v[0], v[1], v[2]),
         },
-        // On-disk rotation order is [x, y, z, w] (identity = [0, 0, 0, 1]), unlike flame's [s, x, y, z].
+        // On-disk rotation order is [x, y, z, w] (identity = [0, 0, 0, 1]), not cgmath's [s, x, y, z].
         rotation: [f32; 4] {
             get: |t| [t.rotation.v.x, t.rotation.v.y, t.rotation.v.z, t.rotation.s],
             set: |t, v| t.rotation = Quaternion::new(v[3], v[0], v[1], v[2]),

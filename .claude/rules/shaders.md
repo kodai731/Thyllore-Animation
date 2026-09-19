@@ -2,7 +2,9 @@
 paths:
   - "shaders/**"
   - "assets/shaders/**"
-  - "build.rs"
+  - "crates/thyllore-vulkan-core/build.rs"
+  - "crates/thyllore-shader-manifest/**"
+  - "crates/thyllore-spirv-reflect/**"
 ---
 
 # Shader System
@@ -93,12 +95,3 @@ running the command once.
 
 After editing shaders in `shaders/`, the build system automatically compiles them to `assets/shaders/` directory during
 `cargo build`. The application loads compiled shaders from `assets/shaders/` directory.
-
-## Reference Documentation
-
-The `memo.txt` file contains useful reference links for:
-
-- Vulkan coordinate systems and layout qualifiers
-- glTF mesh loading examples
-- FBX property access patterns
-- Animation and skinning techniques

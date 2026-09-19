@@ -169,7 +169,7 @@ impl RRGBuffer {
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
 
-        log::info!(
+        log!(
             "Created G-Buffer: {}x{} (position, normal, albedo, object_id, shadow mask)",
             width,
             height

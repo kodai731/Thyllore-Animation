@@ -36,7 +36,8 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
 
 - Every crate is named `thyllore-<topic>-core` (or `-api`, `-debug`, `-client`, and `-derive` for the
   proc-macro companion of a `-core` crate) and states its layer and what it must not depend on in
-  `Cargo.toml` `description`.
+  `Cargo.toml` `description`. The two build-script helpers (`thyllore-shader-manifest`,
+  `thyllore-spirv-reflect`) are named for the artefact they produce instead; no further exception.
 - A crate never depends on `World`, `Entity`, `AssetStorage` or `App`.
 - Only `thyllore-vulkan-core` (and the debug crate) may name `vk::*`. Everything else describes GPU work
   through the abstract types of `thyllore-render-core`.
@@ -261,7 +262,9 @@ for hook in world.resource::<SceneComponentHooks>().ordered() {
 ```
 
 Test for it before finishing: `grep -rni "flame\|water\|wind" src/scene src/hooks` must hit nothing but
-the stub pass names of `src/hooks/pass.rs` tests.
+the stub pass names of `src/hooks/pass.rs` tests, the `window` / `windows(2)` matches, and the GPU-owning type
+names (`FlameBuffer`, `WaterBuffer`) that the `src/hooks/gpu_resource.rs` test lists for the vulkan-core
+exceptions of #179; that list shrinks with the exceptions.
 
 Resources follow the same rule. A resource is persisted by declaring its fields once
 (`declare_scene_format!` in the resource's own file, or in its crate for `thyllore-render-core` settings)
@@ -295,9 +298,11 @@ resource, plus re-exports of `thyllore-render-core` handle types. It is not a re
 The application shell. It owns the Vulkan instance and device, the `AppData` aggregate and the viewport,
 and drives one frame. It is the only place that sees `App` as a whole.
 
-Files: `init/` and `cleanup.rs` (construction, teardown), `data.rs` (`AppData`), `viewport.rs` (core
+Files: `init/` and `cleanup.rs` (construction, teardown), `config.rs` (`AppConfig`: parsed engine flags and
+resolved bootstrap hooks) and `bootstrap.rs` (applies them), `data.rs` (`AppData`), `viewport.rs` (core
 attachments, storage and transient pools), `render.rs` (frame driver), `update.rs` (per-frame update and
-imgui buffers), `lifecycle/` (`after_present.rs`: what runs once the frame is presented, today the batch
+imgui buffers), `command.rs` (`apply_app_command`: the one place that executes an `AppCommand` recorded by
+the platform layer), `pass_targets.rs` (transient lifetimes of the pass graph), `lifecycle/` (`after_present.rs`: what runs once the frame is presented, today the batch
 capture; a step that needs the finished image goes here, never into `render.rs` or `src/platform/`),
 `capture_context.rs` (the `CaptureContext` builders and `capture_now`), `effect_hooks.rs` (builds
 `EffectContext` and runs the effect hooks), `command_recording.rs`, `model/` (`load.rs` entry points and load order, `texture.rs`
@@ -311,7 +316,8 @@ once in `init/instance.rs`, never lazily during a load) and `scene_model.rs`, `r
 
 `src/app/*.rs` is the core loop only. Optional capabilities that extend `App` but are not needed to drive a
 frame live in `src/app/features/<feature>.rs` (Unreal's modular features, bevy's optional plugins):
-`screenshot.rs` (swapchain and image readback to a host buffer, PNG encoding). A feature may be removed
+`screenshot.rs` (swapchain and image readback to a host buffer, PNG encoding), `export_actions.rs` (clip and
+model export entry points run from `AppCommand`). A feature may be removed
 without touching the frame loop; if removing it would break `begin_frame` / `render`, it is not a feature.
 
 Belongs here:
@@ -361,7 +367,8 @@ per-feature `AddPass`).
   needs a concrete effect belongs to that effect's `tests.rs`
 - `src/asset/` — CPU-side model asset storage
 - `src/debugview/` — `impl App` blocks that exist only for a debugging session: GPU image and buffer dumps
-  (`flame_history_dump.rs`, `water_debug_dump.rs`, `exposure_dump.rs`, `shadow_debug.rs`) and debug scene
+  (`flame_history_dump.rs`, `flame_wall_probe_dump.rs`, `water_debug_dump.rs`, `water_probe_dump.rs`,
+  `wind_debug_dump.rs`, `exposure_dump.rs`, `shadow_debug.rs`, `billboard_debug.rs`, `fbx_debug.rs`) and debug scene
   manipulation (`debug_primitive.rs`: cube / sphere / floor spawn and entity delete), one file per subject.
   This is the only directory outside `src/app/` that may extend `App`; it reuses the readback helpers of
   `src/app/features/screenshot.rs`. A dump a batch run can request implements `BatchCapture` for its

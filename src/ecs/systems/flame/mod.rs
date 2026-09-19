@@ -1,6 +1,7 @@
 mod attach;
 mod batch_actions;
 mod cli;
+mod dump;
 mod history_accumulate;
 mod passes;
 mod pick;
@@ -17,6 +18,7 @@ mod trail;
 
 pub use attach::*;
 pub use cli::*;
+pub use dump::*;
 pub use history_accumulate::*;
 pub use passes::*;
 pub use pick::*;

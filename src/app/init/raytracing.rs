@@ -19,7 +19,7 @@ impl App {
         rrcommand_pool: &RRCommandPool,
         rrrender: &mut RRRender,
     ) -> Result<()> {
-        log::info!("Initializing Ray Tracing resources...");
+        log!("Initializing Ray Tracing resources...");
 
         data.raytracing
             .init_gbuffer(instance, rrdevice, rrswapchain, rrcommand_pool)?;
@@ -27,13 +27,13 @@ impl App {
         if let Some(ref gbuffer) = data.raytracing.gbuffer {
             create_gbuffer_framebuffer(instance, rrdevice, rrrender, gbuffer)?;
         }
-        log::info!("Created G-Buffer render pass and framebuffer");
+        log!("Created G-Buffer render pass and framebuffer");
 
         if let Some(hdr_buffer) = &mut data.viewport.hdr_buffer {
             hdr_buffer.attach_depth(rrdevice, rrrender.gbuffer_depth_image_view)?;
         }
 
-        log::info!("Ray Tracing initialization complete");
+        log!("Ray Tracing initialization complete");
         Ok(())
     }
 

@@ -1034,7 +1034,7 @@ impl App {
         }
 
         let flags = if cfg!(target_os = "macos") && entry.version()? >= PORTABILITY_MACOS_VERSION {
-            log::info!("Enabling extensions for macOS portability.");
+            log!("Enabling extensions for macOS portability.");
             extensions.push(
                 vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_EXTENSION
                     .name

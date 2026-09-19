@@ -18,7 +18,7 @@ naming rules are in `shaders.md`, ECS phases in `ecs-architecture.md`.
 |---|---|---|
 | Abstract render types | `crates/thyllore-render-core` | `RenderBackend` trait, `MeshId`, buffer handles, `FrameUBO` / `ObjectUBO` / `MaterialUBO`, post-process settings. No Vulkan, no ECS |
 | Vulkan primitives | `crates/thyllore-vulkan-core` | `core/` (`RRDevice`, `RRSwapchain`, descriptor allocator), `command/`, `descriptor/` (reflected set layouts, one file per pass), `pipeline/` (builder from the pass manifest, cache, ray tracing), `raytracing/` (BLAS / TLAS), `render/` (`RRRender` render pass + framebuffers, depth), `resource/` (buffers, images, HDR / gbuffer / offscreen / effect buffers, `RenderTargetStorage`, `RenderTargetTransient`), `renderer/` (per-pass command helpers), `backend.rs` (`VulkanBackend: RenderBackend`). No ECS |
-| App-side Vulkan glue | `src/vulkanr/` | ECS resources wrapping swapchain / sync / gbuffer (`context/resources.rs`), `renderer/deferred/` (one `*_pass.rs` per core pass that reads `PassContext` and calls crate helpers, `nodes.rs` with the core `RenderPassNode`s, `scissor.rs`), `scene_renderer.rs`, `backend.rs` (`BillboardBackend` impl) |
+| App-side Vulkan glue | `src/vulkanr/` | ECS resources wrapping swapchain / sync / gbuffer (`context/resources.rs`), `renderer/deferred/` (one `*_pass.rs` per core pass that reads `PassContext` and calls crate helpers, `nodes.rs` with the core `RenderPassNode`s, `scissor.rs`), `backend.rs` (`BillboardBackend` impl) |
 | Frame driver | `src/app/` | `App` lifecycle, `AppData`, `ViewportState`, `begin_frame` / `update` / `render` / present |
 
 Effect-specific pass recording, resize and descriptor updates live in `src/ecs/systems/<effect>/` (#151) as
@@ -28,7 +28,7 @@ reads and writes, and a declaration must hold whenever `record()` would emit the
 
 ## Frame flow
 
-`src/platform/events.rs::render_frame` calls three `App` methods in order:
+`src/platform/events/frame.rs::render_frame` calls three `App` methods in order, then `after_present`:
 
 1. `begin_frame` (`src/app/render.rs`): apply pending viewport resize (`device_wait_idle`, viewport and
    effect buffers rebuilt, descriptors rebound), wait the frame fence, `RenderTargetTransient::begin_frame`
@@ -51,13 +51,15 @@ bind; either keep one set per frame slot or wait idle first (resize path).
 
 ```
 gbuffer → object id copy → ray query shadow → composite to HDR → onion skin
-→ water (trace → caustic → scene color copy → resolve) → flame (shading + temporal)
+→ effect stage in subscription order (`src/effect/subscription.rs`: water, flame, wind)
+   water: trace → caustic → scene color copy → resolve
+   flame: shading + temporal
+   wind:  shadow bake → resolve (full scale, or half scale + upsample)
 → bloom (downsample / upsample mips) → dof → auto exposure (histogram + average)
 → tonemap to offscreen → onion skin composite → imgui
 ```
 
-Water and flame write into the HDR buffer and read it (water copies HDR to a transient scene-color image
-first). Post-process passes read the previous stage through per-slot descriptors. Passes and their shader
+Effects write into the HDR buffer and read it (water copies HDR to a transient scene-color image first). Post-process passes read the previous stage through per-slot descriptors. Passes and their shader
 stages / descriptor set roles are declared once in `shaders/passes.toml` and generated into
 `thyllore-vulkan-core` by its `build.rs`; a new pass starts there.
 

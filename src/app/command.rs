@@ -1,38 +1,37 @@
 use crate::app::{features::export_actions, App};
 #[cfg(feature = "auto-rig")]
 use crate::ecs::events::UIEvent;
-use crate::ecs::resource::ClipLibrary;
-use crate::ecs::DeferredAction;
+use crate::ecs::resource::{AppCommand, ClipLibrary};
 #[cfg(feature = "auto-rig")]
 use crate::ecs::UIEventQueue;
 
-pub(crate) unsafe fn execute_deferred_action(app: &mut App, action: DeferredAction) {
-    match action {
-        DeferredAction::LoadModel { path } => {
+pub(crate) unsafe fn apply_app_command(app: &mut App, command: AppCommand) {
+    match command {
+        AppCommand::LoadModel { path } => {
             if let Err(e) = app.load_model(&path) {
                 log_error!("Failed to load model: {:?}", e);
             }
         }
 
-        DeferredAction::LoadModelAdditive { path } => {
+        AppCommand::LoadModelAdditive { path } => {
             if let Err(e) = app.load_model_additive(&path) {
                 log_error!("Failed to add model: {:?}", e);
             }
         }
 
-        DeferredAction::SpawnDebugPrimitive { kind } => {
+        AppCommand::SpawnDebugPrimitive { kind } => {
             if let Err(e) = app.spawn_debug_primitive(kind) {
                 log_error!("Failed to spawn debug primitive: {:?}", e);
             }
         }
 
-        DeferredAction::DeleteEntities { entities } => {
+        AppCommand::DeleteEntities { entities } => {
             if let Err(e) = app.delete_entities(&entities) {
                 log_error!("Failed to delete entities: {:?}", e);
             }
         }
 
-        DeferredAction::TakeScreenshot => {
+        AppCommand::TakeScreenshot => {
             log!("Taking screenshot...");
             let image_index = app.frame % crate::app::init::MAX_FRAMES_IN_FLIGHT;
             match app.save_screenshot(image_index) {
@@ -42,7 +41,7 @@ pub(crate) unsafe fn execute_deferred_action(app: &mut App, action: DeferredActi
         }
 
         #[cfg(debug_assertions)]
-        DeferredAction::DebugShadowInfo => {
+        AppCommand::DebugShadowInfo => {
             crate::debugview::log_shadow_debug_info(
                 &app.data.ecs_world,
                 &app.data.raytracing,
@@ -51,22 +50,22 @@ pub(crate) unsafe fn execute_deferred_action(app: &mut App, action: DeferredActi
         }
 
         #[cfg(debug_assertions)]
-        DeferredAction::DebugBillboardDepth => {
+        AppCommand::DebugBillboardDepth => {
             crate::debugview::collect_and_log_billboard_debug(
                 &app.data.ecs_world,
                 &app.data.raytracing,
             );
         }
 
-        DeferredAction::DumpDebugInfo => {
+        AppCommand::DumpDebugInfo => {
             app.dump_debug_info();
         }
 
-        DeferredAction::CaptureNow(capture) => {
+        AppCommand::CaptureNow(capture) => {
             app.capture_now(capture.as_ref());
         }
 
-        DeferredAction::DumpAnimationDebug => {
+        AppCommand::DumpAnimationDebug => {
             let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
             if let Err(e) = crate::ecs::systems::animation_debug_dump::dump_animation_debug(
                 &app.data.ecs_world,
@@ -77,7 +76,7 @@ pub(crate) unsafe fn execute_deferred_action(app: &mut App, action: DeferredActi
             }
         }
 
-        DeferredAction::LoadClipFromFile { path } => {
+        AppCommand::LoadClipFromFile { path } => {
             let bone_name_to_id = app
                 .data
                 .ecs_assets
@@ -98,7 +97,7 @@ pub(crate) unsafe fn execute_deferred_action(app: &mut App, action: DeferredActi
             }
         }
 
-        DeferredAction::SaveClipToFile { source_id, path } => {
+        AppCommand::SaveClipToFile { source_id, path } => {
             use crate::ecs::systems::clip_library_systems::{
                 clip_library_save_to_file, clip_library_update_save_metadata,
             };
@@ -118,7 +117,7 @@ pub(crate) unsafe fn execute_deferred_action(app: &mut App, action: DeferredActi
             }
         }
 
-        DeferredAction::SaveSpringBoneBake { baked_id, path } => {
+        AppCommand::SaveSpringBoneBake { baked_id, path } => {
             use crate::ecs::systems::clip_library_systems::clip_library_save_to_file;
 
             let clip_library = app.data.ecs_world.resource::<ClipLibrary>();
@@ -128,26 +127,26 @@ pub(crate) unsafe fn execute_deferred_action(app: &mut App, action: DeferredActi
             }
         }
 
-        DeferredAction::ExportClipFbx { source_id, path } => {
+        AppCommand::ExportClipFbx { source_id, path } => {
             export_actions::export_clip_fbx(app, source_id, &path)
         }
 
-        DeferredAction::ExportClipGltf { source_id, path } => {
+        AppCommand::ExportClipGltf { source_id, path } => {
             export_actions::export_clip_gltf(app, source_id, &path)
         }
 
-        DeferredAction::ExportClipGltfAnimationOnly { source_id, path } => {
+        AppCommand::ExportClipGltfAnimationOnly { source_id, path } => {
             export_actions::export_clip_gltf_animation_only(app, source_id, &path)
         }
 
-        DeferredAction::ExportModelGltf { path } => export_actions::export_model_gltf(app, &path),
+        AppCommand::ExportModelGltf { path } => export_actions::export_model_gltf(app, &path),
 
         #[cfg(feature = "auto-rig")]
-        DeferredAction::LoadModelFromMemory { glb_data, source } => {
+        AppCommand::LoadModelFromMemory { glb_data, source } => {
             match app.load_model_from_glb(&glb_data) {
                 Ok(()) => {
                     log!(
-                        "DeferredAction::LoadModelFromMemory: load OK, sending ModelLoadedFromMemory({:?})",
+                        "AppCommand::LoadModelFromMemory: load OK, sending ModelLoadedFromMemory({:?})",
                         source
                     );
                     let mut ui_events = app.data.ecs_world.resource_mut::<UIEventQueue>();

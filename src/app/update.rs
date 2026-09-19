@@ -97,16 +97,16 @@ impl App {
         Ok(())
     }
 
-    pub unsafe fn process_platform_events(&mut self) {
-        let actions = std::mem::take(
+    pub unsafe fn apply_app_commands(&mut self) {
+        let commands = std::mem::take(
             &mut self
                 .data
                 .ecs_world
-                .resource_mut::<crate::ecs::events::PlatformEventQueue>()
-                .actions,
+                .resource_mut::<crate::ecs::resource::AppCommandQueue>()
+                .commands,
         );
-        for action in actions {
-            crate::app::deferred_actions::execute_deferred_action(self, action);
+        for command in commands {
+            crate::app::command::apply_app_command(self, command);
         }
 
         self.spawn_pending_debug_primitives();

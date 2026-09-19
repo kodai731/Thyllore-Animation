@@ -2,13 +2,9 @@ use std::path::PathBuf;
 
 use crate::app::App;
 use crate::ecs::events::UIEvent;
-use crate::ecs::resource::{ClipLibrary, ModelState, SpringBoneState};
-use crate::ecs::DeferredAction;
+use crate::ecs::resource::{AppCommand, ClipLibrary, ModelState, SpringBoneState};
 
-pub(super) fn process_platform_file_events(
-    events: &[UIEvent],
-    app: &mut App,
-) -> Vec<DeferredAction> {
+pub(super) fn open_file_dialogs(events: &[UIEvent], app: &App) -> Vec<AppCommand> {
     events
         .iter()
         .filter_map(|event| match event {
@@ -30,15 +26,15 @@ pub(super) fn process_platform_file_events(
         .collect()
 }
 
-fn open_clip_load_dialog() -> Option<DeferredAction> {
+fn open_clip_load_dialog() -> Option<AppCommand> {
     let path = rfd::FileDialog::new()
         .add_filter("Animation RON", &["anim.ron", "ron"])
         .pick_file()?;
 
-    Some(DeferredAction::LoadClipFromFile { path })
+    Some(AppCommand::LoadClipFromFile { path })
 }
 
-fn open_clip_save_dialog(app: &App, source_id: u64) -> Option<DeferredAction> {
+fn open_clip_save_dialog(app: &App, source_id: u64) -> Option<AppCommand> {
     let current_name = clip_name(app, source_id).unwrap_or_else(|| "clip".to_string());
 
     let path = rfd::FileDialog::new()
@@ -46,7 +42,7 @@ fn open_clip_save_dialog(app: &App, source_id: u64) -> Option<DeferredAction> {
         .set_file_name(format!("{}.anim.ron", current_name))
         .save_file()?;
 
-    Some(DeferredAction::SaveClipToFile { source_id, path })
+    Some(AppCommand::SaveClipToFile { source_id, path })
 }
 
 #[derive(Clone, Copy)]
@@ -60,7 +56,7 @@ fn open_clip_export_dialog(
     app: &App,
     source_id: u64,
     format: ClipExportFormat,
-) -> Option<DeferredAction> {
+) -> Option<AppCommand> {
     let clip_name = clip_name(app, source_id)?;
     let (filter_name, extension, default_filename) = match format {
         ClipExportFormat::Fbx => ("FBX Binary", "fbx", format!("{}.fbx", clip_name)),
@@ -73,15 +69,15 @@ fn open_clip_export_dialog(
     let path = save_file_dialog(filter_name, extension, &default_filename)?;
 
     Some(match format {
-        ClipExportFormat::Fbx => DeferredAction::ExportClipFbx { source_id, path },
-        ClipExportFormat::Gltf => DeferredAction::ExportClipGltf { source_id, path },
+        ClipExportFormat::Fbx => AppCommand::ExportClipFbx { source_id, path },
+        ClipExportFormat::Gltf => AppCommand::ExportClipGltf { source_id, path },
         ClipExportFormat::GltfAnimationOnly => {
-            DeferredAction::ExportClipGltfAnimationOnly { source_id, path }
+            AppCommand::ExportClipGltfAnimationOnly { source_id, path }
         }
     })
 }
 
-fn open_model_export_dialog(app: &App) -> Option<DeferredAction> {
+fn open_model_export_dialog(app: &App) -> Option<AppCommand> {
     let model_path = app
         .data
         .ecs_world
@@ -95,10 +91,10 @@ fn open_model_export_dialog(app: &App) -> Option<DeferredAction> {
 
     let path = save_file_dialog("glTF Binary", "glb", &format!("{}.glb", model_stem))?;
 
-    Some(DeferredAction::ExportModelGltf { path })
+    Some(AppCommand::ExportModelGltf { path })
 }
 
-fn open_spring_bone_save_dialog(app: &App) -> Option<DeferredAction> {
+fn open_spring_bone_save_dialog(app: &App) -> Option<AppCommand> {
     let baked_id = app
         .data
         .ecs_world
@@ -110,7 +106,7 @@ fn open_spring_bone_save_dialog(app: &App) -> Option<DeferredAction> {
         .set_file_name("spring_baked.anim.ron")
         .save_file()?;
 
-    Some(DeferredAction::SaveSpringBoneBake { baked_id, path })
+    Some(AppCommand::SaveSpringBoneBake { baked_id, path })
 }
 
 fn clip_name(app: &App, source_id: u64) -> Option<String> {

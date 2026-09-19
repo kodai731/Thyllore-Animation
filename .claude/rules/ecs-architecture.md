@@ -164,8 +164,8 @@ run_frame()  (src/ecs/systems/frame_runner.rs, called from App::update)
 ├── run_transform_phase_gpu()      # Object UBO upload
 └── run_render_prep_phase()        # Gizmo mesh building, render data collection
 
-run_event_dispatch_phase()         # UI event processing, deferred actions;
-                                   # called from src/platform/events.rs after the UI is built
+run_event_dispatch_phase()         # UI event processing, AppCommand collection;
+                                   # called from src/platform/events/frame.rs after the UI is built
 run_batch_capture_phase()          # After present: requested BatchCapture readbacks + scheduled screenshot;
                                    # entered through App::after_present (src/app/lifecycle/)
 ```
@@ -260,7 +260,7 @@ Core Types (src/ecs/component/, src/ecs/resource/)
 - Sending events to `UIEventQueue`
 - Calling a single ECS dispatch entry point (e.g., `run_event_dispatch_phase`)
 - Platform-specific I/O (file dialogs, window management, imgui orchestration)
-- Handling `DeferredAction` that requires `App`/`GUIData`
+- Converting file dialog results into `AppCommand` (applied by `App`, never by the platform layer)
 
 **NOT allowed in platform layer**:
 - Directly calling multiple ECS system functions to process events
@@ -366,7 +366,7 @@ small structural hierarchies can use optimized storage rather than full entity r
 | Phase System | Coordinator fns | DependsOn pipeline | SystemGroup hierarchy | User-defined | Schedule + SystemSet |
 | Global State | Resource | Singleton | Singleton Component | Context Variable | Resource |
 | Events | UIEventQueue | Observer + emit | ECB + SystemGroup | Signal (sigh/sink) | Event\<T\> + EventReader |
-| Deferred Changes | DeferredAction | Sync point flush | EntityCommandBuffer | - | Commands |
+| Deferred Changes | AppCommand + AppCommandQueue | Sync point flush | EntityCommandBuffer | - | Commands |
 
 ### Key Patterns Adopted from Each
 

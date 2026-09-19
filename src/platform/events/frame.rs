@@ -160,24 +160,19 @@ unsafe fn process_ui_events_and_render_frame(
     imgui_build_ms: f32,
 ) {
     let model_bounds = app.data.graphics_resources.calculate_model_bounds();
-    let (platform_events, deferred_actions) = run_event_dispatch_phase(
+    let (file_events, mut commands) = run_event_dispatch_phase(
         &mut app.data.ecs_world,
         &mut app.data.ecs_assets,
         model_bounds,
     );
-
-    let mut platform_deferred =
-        super::deferred::process_platform_file_events(&platform_events, app);
-
-    let mut all_deferred = deferred_actions;
-    all_deferred.append(&mut platform_deferred);
+    commands.extend(super::file_dialog::open_file_dialogs(&file_events, app));
 
     app.data
         .ecs_world
-        .resource_mut::<crate::ecs::events::PlatformEventQueue>()
-        .actions
-        .append(&mut all_deferred);
-    app.process_platform_events();
+        .resource_mut::<crate::ecs::resource::AppCommandQueue>()
+        .commands
+        .append(&mut commands);
+    app.apply_app_commands();
 
     render_frame(app, window, draw_data, dt_ms, imgui_build_ms);
 }

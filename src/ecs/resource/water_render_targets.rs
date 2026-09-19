@@ -1,7 +1,11 @@
-use thyllore_vulkan_core::resource::{GpuResource, WaterBuffer};
+use thyllore_effect_core::WaterUBO;
+use thyllore_vulkan_core::pipeline::RRPipeline;
+use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer, WaterBuffer};
+use thyllore_vulkan_core::RRWaterCausticDescriptorSet;
+use thyllore_vulkan_core::RRWaterDescriptorSet;
+use vulkanalia::prelude::v1_0::*;
 
 use crate::gpu_resource;
-use vulkanalia::prelude::v1_0::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct WaterBindingKey {
@@ -22,6 +26,20 @@ pub struct WaterRenderTargets {
 }
 
 gpu_resource!(WaterRenderTargets);
+
+#[derive(Debug, Default, GpuResource)]
+pub struct WaterGpuState {
+    pub shading_pipeline: Option<RRPipeline>,
+    pub descriptor: Option<RRWaterDescriptorSet>,
+    pub ubo: Option<UniformBuffer<WaterUBO>>,
+    pub caustic_splat_pipeline: Option<RRPipeline>,
+    pub caustic_apply_pipeline: Option<RRPipeline>,
+    pub caustic_descriptor: Option<RRWaterCausticDescriptorSet>,
+    #[gpu_resource(skip)]
+    pub caustic_bound_tlas: vk::AccelerationStructureKHR,
+}
+
+gpu_resource!(WaterGpuState);
 
 impl WaterRenderTargets {
     pub fn new(buffer: WaterBuffer) -> Self {

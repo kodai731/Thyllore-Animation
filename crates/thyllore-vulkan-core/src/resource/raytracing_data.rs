@@ -13,8 +13,7 @@ use crate::descriptor::{
     CompositeGBufferViews, RRAutoExposureAverageDescriptorSet,
     RRAutoExposureHistogramDescriptorSet, RRBillboardDescriptorSet, RRBloomDescriptorSets,
     RRCompositeDescriptorSet, RRDofDescriptorSet, RREffectTraceDescriptorSet,
-    RRRayQueryDescriptorSet, RRToneMapDescriptorSet, RRWaterCausticDescriptorSet,
-    RRWaterDescriptorSet, COMPOSITE, GBUFFER, RAY_QUERY_SHADOW,
+    RRRayQueryDescriptorSet, RRToneMapDescriptorSet, COMPOSITE, GBUFFER, RAY_QUERY_SHADOW,
 };
 use crate::pipeline::{
     DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline, RRRayTracingPipeline,
@@ -28,7 +27,6 @@ use crate::resource::graphics_resource::{GraphicsResources, MeshBuffer};
 use crate::resource::image::{create_nearest_sampler, create_texture_sampler};
 use crate::resource::uniform_buffer::{Placement, UniformBuffer};
 use crate::resource::{GpuResource, OnionSkinPassResources, RRGBuffer};
-use thyllore_effect_core::WaterUBO;
 
 #[derive(Clone, Debug, Default, GpuResource)]
 pub struct RayTracingData {
@@ -65,16 +63,8 @@ pub struct RayTracingData {
 
     pub onion_skin_pass: Option<OnionSkinPassResources>,
 
-    pub water_shading_pipeline: Option<RRPipeline>,
-    pub water_descriptor: Option<RRWaterDescriptorSet>,
-    pub water_ubo: Option<UniformBuffer<WaterUBO>>,
-
     pub effect_trace_pipeline: Option<RRRayTracingPipeline>,
     pub effect_trace_descriptor: Option<RREffectTraceDescriptorSet>,
-
-    pub water_caustic_splat_pipeline: Option<RRPipeline>,
-    pub water_caustic_apply_pipeline: Option<RRPipeline>,
-    pub water_caustic_descriptor: Option<RRWaterCausticDescriptorSet>,
 
     pub scene_uniform_buffer: Option<UniformBuffer<SceneUniformData>>,
 }
@@ -324,10 +314,6 @@ impl RayTracingData {
             )?;
         } else {
             descriptor.update_tlas(rrdevice, tlas, hit_shading_table_buffer)?;
-        }
-
-        if let Some(caustic_descriptor) = self.water_caustic_descriptor.as_mut() {
-            caustic_descriptor.update_tlas(rrdevice, tlas)?;
         }
 
         Ok(())

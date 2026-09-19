@@ -3,7 +3,7 @@ use cgmath::SquareMatrix;
 use vulkanalia::prelude::v1_0::*;
 use vulkanalia::vk::KhrRayTracingPipelineExtension;
 
-use crate::ecs::resource::{WaterBindingKey, WaterRenderTargets};
+use crate::ecs::resource::{WaterBindingKey, WaterGpuState, WaterRenderTargets};
 use crate::ecs::world::Entity;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
@@ -61,9 +61,10 @@ struct WaterFrame {
 
 fn water_frame(ctx: &PassContext) -> Option<WaterFrame> {
     ctx.world.get_resource::<WaterRenderTargets>()?;
-    ctx.raytracing.water_shading_pipeline.as_ref()?;
-    ctx.raytracing.water_descriptor.as_ref()?;
-    ctx.raytracing.water_ubo.as_ref()?;
+    let gpu_state = ctx.world.get_resource::<WaterGpuState>()?;
+    gpu_state.shading_pipeline.as_ref()?;
+    gpu_state.descriptor.as_ref()?;
+    gpu_state.ubo.as_ref()?;
     ctx.hdr_buffer?;
     water_scene_bindings(ctx)?;
 
@@ -173,12 +174,14 @@ impl WaterFrame {
             .get_component::<crate::ecs::component::WaterTorusEffect>(self.waters[0])
             .map(|effect| effect.caustic_strength)
             .unwrap_or(0.0);
+        let Some(gpu_state) = ctx.world.get_resource::<WaterGpuState>() else {
+            return false;
+        };
         caustic_strength > 0.0
-            && ctx.raytracing.water_caustic_splat_pipeline.is_some()
-            && ctx.raytracing.water_caustic_apply_pipeline.is_some()
-            && ctx
-                .raytracing
-                .water_caustic_descriptor
+            && gpu_state.caustic_splat_pipeline.is_some()
+            && gpu_state.caustic_apply_pipeline.is_some()
+            && gpu_state
+                .caustic_descriptor
                 .as_ref()
                 .is_some_and(|descriptor| {
                     descriptor.splat_descriptor_set != vk::DescriptorSet::null()
@@ -369,10 +372,13 @@ impl RenderPassNode for WaterFrameNode {
             return Ok(());
         }
 
-        let Some(water_ubo) = ctx.raytracing.water_ubo.as_ref() else {
+        let Some(gpu_state) = ctx.world.get_resource::<WaterGpuState>() else {
             return Ok(());
         };
-        if let Some(descriptor) = ctx.raytracing.water_descriptor.as_ref() {
+        let Some(water_ubo) = gpu_state.ubo.as_ref() else {
+            return Ok(());
+        };
+        if let Some(descriptor) = gpu_state.descriptor.as_ref() {
             descriptor.write_all_at(
                 ctx.rrdevice,
                 frame_slot,
@@ -410,7 +416,10 @@ impl RenderPassNode for WaterFrameNode {
         let Some(frame) = water_frame(ctx) else {
             return Ok(());
         };
-        let Some(water_ubo) = ctx.raytracing.water_ubo.as_ref() else {
+        let Some(gpu_state) = ctx.world.get_resource::<WaterGpuState>() else {
+            return Ok(());
+        };
+        let Some(water_ubo) = gpu_state.ubo.as_ref() else {
             return Ok(());
         };
         let render = ctx.frame_render_context(image_index);
@@ -494,6 +503,25 @@ impl RenderPassNode for WaterCausticSplatNode {
         })
     }
 
+    unsafe fn prepare(&self, ctx: &mut PassContext, _: usize) -> Result<()> {
+        let Some((tlas, _)) = water_scene_bindings(ctx) else {
+            return Ok(());
+        };
+        let Some(mut gpu_state) = ctx.world.get_resource_mut::<WaterGpuState>() else {
+            return Ok(());
+        };
+        if gpu_state.caustic_bound_tlas == tlas {
+            return Ok(());
+        }
+        let Some(caustic_descriptor) = gpu_state.caustic_descriptor.as_mut() else {
+            return Ok(());
+        };
+
+        caustic_descriptor.update_tlas(ctx.rrdevice, tlas)?;
+        gpu_state.caustic_bound_tlas = tlas;
+        Ok(())
+    }
+
     unsafe fn record(
         &self,
         ctx: &PassContext,
@@ -504,9 +532,12 @@ impl RenderPassNode for WaterCausticSplatNode {
         if water_frame(ctx).is_none_or(|frame| !frame.is_caustic_enabled(ctx)) {
             return Ok(());
         }
+        let Some(gpu_state) = ctx.world.get_resource::<WaterGpuState>() else {
+            return Ok(());
+        };
         let (Some(splat_pipeline), Some(descriptor)) = (
-            ctx.raytracing.water_caustic_splat_pipeline.as_ref(),
-            ctx.raytracing.water_caustic_descriptor.as_ref(),
+            gpu_state.caustic_splat_pipeline.as_ref(),
+            gpu_state.caustic_descriptor.as_ref(),
         ) else {
             return Ok(());
         };
@@ -577,9 +608,12 @@ impl RenderPassNode for WaterCausticApplyNode {
         if water_frame(ctx).is_none_or(|frame| !frame.is_caustic_enabled(ctx)) {
             return Ok(());
         }
+        let Some(gpu_state) = ctx.world.get_resource::<WaterGpuState>() else {
+            return Ok(());
+        };
         let (Some(apply_pipeline), Some(descriptor), Some(hdr_buffer)) = (
-            ctx.raytracing.water_caustic_apply_pipeline.as_ref(),
-            ctx.raytracing.water_caustic_descriptor.as_ref(),
+            gpu_state.caustic_apply_pipeline.as_ref(),
+            gpu_state.caustic_descriptor.as_ref(),
             ctx.hdr_buffer,
         ) else {
             return Ok(());
@@ -773,10 +807,15 @@ impl RenderPassNode for WaterShadingNode {
         let Some(frame) = water_frame(ctx) else {
             return Ok(());
         };
-        let (Some(targets), Some(shading_pipeline), Some(descriptor)) = (
+        let (Some(targets), Some(gpu_state)) = (
             ctx.world.get_resource::<WaterRenderTargets>(),
-            ctx.raytracing.water_shading_pipeline.as_ref(),
-            ctx.raytracing.water_descriptor.as_ref(),
+            ctx.world.get_resource::<WaterGpuState>(),
+        ) else {
+            return Ok(());
+        };
+        let (Some(shading_pipeline), Some(descriptor)) = (
+            gpu_state.shading_pipeline.as_ref(),
+            gpu_state.descriptor.as_ref(),
         ) else {
             return Ok(());
         };

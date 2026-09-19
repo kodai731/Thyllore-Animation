@@ -1,7 +1,7 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::resource::WaterRenderTargets;
+use crate::ecs::resource::{WaterGpuState, WaterRenderTargets};
 use crate::ecs::{EffectContext, MAX_FRAMES_IN_FLIGHT};
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
@@ -57,7 +57,7 @@ unsafe fn setup_water(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()
         return Ok(());
     };
 
-    super::pipeline::create_water_pipeline(
+    let gpu_state = super::pipeline::create_water_pipeline(
         ctx.instance,
         ctx.rrdevice,
         rrrender,
@@ -68,8 +68,9 @@ unsafe fn setup_water(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()
         MAX_FRAMES_IN_FLIGHT,
     )?;
     drop(water_targets);
-    let trace_blocks = super::pipeline::water_trace_blocks(ctx.rrdevice, ctx.raytracing)?;
+    let trace_blocks = super::pipeline::water_trace_blocks(ctx.rrdevice, &gpu_state)?;
     ctx.world.insert_resource(trace_blocks);
+    ctx.world.insert_resource(gpu_state);
 
     log!("Water pipeline created successfully");
     Ok(())
@@ -121,8 +122,10 @@ unsafe fn update_water_caustic_descriptor(ctx: &mut EffectContext) -> Result<()>
         return Ok(());
     };
 
-    let rrdevice = ctx.rrdevice;
-    let raytracing = &mut *ctx.raytracing;
+    let raytracing = &*ctx.raytracing;
+    let Some(mut gpu_state) = ctx.world.get_resource_mut::<WaterGpuState>() else {
+        return Ok(());
+    };
     let tlas = raytracing
         .acceleration_structure
         .as_ref()
@@ -133,21 +136,23 @@ unsafe fn update_water_caustic_descriptor(ctx: &mut EffectContext) -> Result<()>
             .as_ref()
             .map(|gbuffer| gbuffer.position_image_view),
         raytracing.scene_uniform_buffer_handle(),
-        raytracing.water_ubo.as_ref().map(|ubo| ubo.handle()),
+        gpu_state.ubo.as_ref().map(|ubo| ubo.handle()),
     ) else {
         return Ok(());
     };
-    let Some(descriptor) = raytracing.water_caustic_descriptor.as_mut() else {
+    let Some(descriptor) = gpu_state.caustic_descriptor.as_mut() else {
         return Ok(());
     };
 
     descriptor.allocate_and_update(
-        rrdevice,
+        ctx.rrdevice,
         caustic_accum_view,
         position_image_view,
         tlas,
         scene_buffer,
         water_ubo,
         hdr_color_view,
-    )
+    )?;
+    gpu_state.caustic_bound_tlas = tlas.unwrap_or_default();
+    Ok(())
 }

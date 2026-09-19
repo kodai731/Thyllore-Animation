@@ -1,6 +1,7 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
+use crate::ecs::resource::WaterGpuState;
 use crate::ecs::systems::raytracing_systems::ensure_effect_trace_pipeline;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{
@@ -39,7 +40,7 @@ pub unsafe fn create_water_pipeline(
     water_buffer: &WaterBuffer,
     hdr_color_view: vk::ImageView,
     frames_in_flight: usize,
-) -> Result<()> {
+) -> Result<WaterGpuState> {
     let water_ubo = UniformBuffer::new(
         instance,
         rrdevice,
@@ -76,22 +77,31 @@ pub unsafe fn create_water_pipeline(
         ])
         .build(rrdevice, rrrender, Some(water_buffer.extent()))?;
 
-    raytracing.water_shading_pipeline = Some(water_shading_pipeline);
-    raytracing.water_descriptor = Some(water_descriptor);
-    raytracing.water_ubo = Some(water_ubo);
+    let mut gpu_state = WaterGpuState {
+        shading_pipeline: Some(water_shading_pipeline),
+        descriptor: Some(water_descriptor),
+        ubo: Some(water_ubo),
+        ..Default::default()
+    };
 
     ensure_effect_trace_pipeline(instance, rrdevice, raytracing, frames_in_flight)?;
-    create_water_caustic_pipelines(rrdevice, raytracing, water_buffer, hdr_color_view)?;
+    create_water_caustic_pipelines(
+        rrdevice,
+        raytracing,
+        &mut gpu_state,
+        water_buffer,
+        hdr_color_view,
+    )?;
 
     log!("Created water pipelines");
-    Ok(())
+    Ok(gpu_state)
 }
 
 pub unsafe fn water_trace_blocks(
     rrdevice: &RRDevice,
-    raytracing: &RayTracingData,
+    gpu_state: &WaterGpuState,
 ) -> Result<crate::ecs::resource::WaterTraceBlocks> {
-    let Some(water_ubo) = raytracing.water_ubo.as_ref() else {
+    let Some(water_ubo) = gpu_state.ubo.as_ref() else {
         return Ok(crate::ecs::resource::WaterTraceBlocks::default());
     };
     let slot_addresses = (0..WATER_MAX_INSTANCES)
@@ -104,14 +114,15 @@ pub unsafe fn water_trace_blocks(
 /// once the water pipeline has produced them; the TLAS is bound later if missing.
 unsafe fn create_water_caustic_pipelines(
     rrdevice: &RRDevice,
-    raytracing: &mut RayTracingData,
+    raytracing: &RayTracingData,
+    gpu_state: &mut WaterGpuState,
     water_buffer: &WaterBuffer,
     hdr_color_view: vk::ImageView,
 ) -> Result<()> {
     let (Some(gbuffer), Some(scene_buffer), Some(water_ubo)) = (
         raytracing.gbuffer.as_ref(),
         raytracing.scene_uniform_buffer_handle(),
-        raytracing.water_ubo.as_ref(),
+        gpu_state.ubo.as_ref(),
     ) else {
         log!("Water caustic inputs are not ready, skipping caustic pipelines");
         return Ok(());
@@ -137,9 +148,10 @@ unsafe fn create_water_caustic_pipelines(
     let apply_pipeline =
         RRPipeline::new_compute(rrdevice, &WATER_CAUSTIC_APPLY, &[&descriptor.apply_layout])?;
 
-    raytracing.water_caustic_splat_pipeline = Some(splat_pipeline);
-    raytracing.water_caustic_apply_pipeline = Some(apply_pipeline);
-    raytracing.water_caustic_descriptor = Some(descriptor);
+    gpu_state.caustic_splat_pipeline = Some(splat_pipeline);
+    gpu_state.caustic_apply_pipeline = Some(apply_pipeline);
+    gpu_state.caustic_descriptor = Some(descriptor);
+    gpu_state.caustic_bound_tlas = tlas.unwrap_or_default();
 
     log!("Created water caustic pipelines");
     Ok(())

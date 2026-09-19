@@ -41,7 +41,7 @@ src/ecs/
 │   ├── flame/, water/, wind/  # One directory per effect (spawn, time, preset, pick, passes, ...)
 │   ├── animation/       # Animation pipeline (collect, evaluate, apply, post_process)
 │   ├── curve_copilot/   # ML curve suggestion systems
-│   └── frame_runner.rs  # run_frame: the phase sequence
+│   └── world/frame.rs   # run_frame: the phase sequence (FRAME_SCHEDULE)
 ├── events/              # UIEvent definitions and UIEventQueue
 ├── query/               # Query builder, filters, tuple fetch
 ├── storage/             # Sparse set component storage
@@ -155,7 +155,7 @@ Systems execute in a fixed phase order, defined in `src/ecs/systems/phases/`. Ea
 function that calls the appropriate systems in sequence.
 
 ```
-run_frame()  (src/ecs/systems/frame_runner.rs, called from App::update)
+run_frame()  (src/ecs/systems/world/frame.rs, called from App::update)
 ├── run_frame_clock_phase()        # FrameClock.frame += 1 (systems/world/)
 ├── run_batch_schedule_phase()     # Batch capture schedule: FrameClock.frame → capture request (systems/world/)
 ├── run_input_phase()              # Input handling, gizmo interaction (EcsContext)

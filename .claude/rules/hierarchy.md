@@ -113,8 +113,10 @@ Consequences for placement:
 ## src/ecs/
 
 Everything that decides what the engine does: components and resources (data only), systems (logic, one
-file per domain, one directory per effect), phases (execution order and event dispatch), and the ECS core
-(world, storage, query, registry, events). Rules are in `ecs-architecture.md`.
+file per domain, one directory per effect), phases (execution order and event dispatch), `systems/world/`
+(systems that drive the engine's own lifecycle rather than a domain: the batch run's schedule, capture
+record and report), and the ECS core (world, storage, query, registry, events). Rules are in
+`ecs-architecture.md`.
 
 No file here declares `impl App` or takes `&mut App` (see the known exceptions above). A system that needs
 GPU resources as well as `World` takes `FrameContext` or a smaller context struct (`raytracing_systems.rs`:
@@ -128,7 +130,9 @@ Generic hook infrastructure that lets a subsystem plug into the app lifecycle wi
 `src/app/`. `effect.rs` holds the effect hook (setup, after_overrides, viewport resize, pass nodes) and the
 list that runs them in subscription order; GPU teardown is not a hook, it is the `gpu_resource!` registration
 of the effect's resource (`gpu_resource.rs`: `GpuResourceHook`, `GpuResourceHooks::collect()`).
-`bootstrap.rs` holds the `BootstrapOverrides` contract (a subsystem's command-line configuration: a
+`batch_capture.rs` holds the `CaptureContext` and the `BatchCapture` contract: a request resource whose
+presence in `World` asks for one readback at the batch capture frame, registered with
+`batch_capture!(Type)` and named by its type (see "Feature isolation" below). `bootstrap.rs` holds the `BootstrapOverrides` contract (a subsystem's command-line configuration: a
 `#[derive(clap::Args)]` struct with `NAME` and `apply(world, assets)`) and the `bootstrap_hook!`
 registration (`inventory`); `ResolvedBootstrap::resolve(args)` parses every hook before the window exists so
 a bad flag fails fast, and `src/app/bootstrap.rs` (called from `src/main.rs`) applies the engine's own
@@ -139,7 +143,7 @@ from its own directory. An effect keeps that struct and its world writes in
 itself (`FromStr` on the setting enum in `thyllore-effect-core`, a clap range, or a `value_parser` fn for a
 composite value); there is no per-flag lookup code. `BootstrapOverrides::resolve` parses the hook in
 isolation by keeping only the tokens its struct declares, which is what lets it coexist with the engine's
-hand-parsed flags in `batch_run_systems.rs`; two hooks declaring the same flag fail at startup. GPU work
+hand-parsed flags in `src/ecs/systems/batch_run_systems/`; two hooks declaring the same flag fail at startup. GPU work
 that depends on those overrides (the flame SDF texture) is the effect's `after_overrides` hook, run by
 `src/app/bootstrap.rs::finish_setup` after the overrides are applied. `pass.rs` holds the `RenderPassNode` contract (name,
 stage, `transients` requested by slot and desc, reads / writes declared as `TargetUse`, `prepare`, record),
@@ -191,7 +195,7 @@ outside those directories reaches a feature through a contract (`src/hooks/`), a
 | Directory | May name flame / water / wind |
 |---|---|
 | `crates/thyllore-effect-core/src/<effect>/`, `shaders/<effect>/` | its own effect only |
-| `src/ecs/component/<effect>*.rs`, `src/ecs/systems/<effect>/`, `src/ecs/resource/<effect>_*.rs` | its own effect only |
+| `src/ecs/component/<effect>*.rs`, `src/ecs/systems/<effect>/`, `src/ecs/resource/<effect>_*.rs`, `src/ecs/resource/batch/<effect>*.rs` | its own effect only |
 | `src/effect/subscription.rs` | every effect (the single `EffectHook` list; scene hooks self-register instead) |
 | `src/platform/ui/` per-effect windows, `src/debugview/` per-effect dumps | the effect the file is for |
 | `src/scene/`, `src/hooks/`, `src/ecs/systems/*.rs` (shared systems), shared crates | none, tests included (`src/scene/` tests use `entities.rs::test_support`; effect round trips live in `src/ecs/systems/<effect>/tests.rs`) |
@@ -219,6 +223,30 @@ Concretely:
 - `src/hooks/` files describe contracts (`EffectHook`, `RenderPassNode`, `SceneComponentHook`,
   `BootstrapOverrides`); they take
   fn pointers and `&'static str` keys, never an effect type.
+- `--batch-debug-action` names are a link-time registry too: a `BatchAction` implementation lives in
+  `src/ecs/systems/<effect>/batch_actions.rs` (generic ones in `batch_run_systems/batch_action.rs`) and
+  registers with `batch_action!`; `batch_run_systems/` parses and lists actions from that registry and
+  never names one. A batch run (`BatchRun`, `src/ecs/resource/batch/run.rs`, driven by
+  `src/ecs/systems/world/batch_run.rs`) is only a capture schedule and its completion state.
+- A readback at the capture frame is a **request resource** under `src/ecs/resource/batch/<effect>.rs`
+  (`WaterProbeCapture { path }`, `WindDebugCapture`, ...): inserting it is the request, there is no flag to
+  check. The effect's `cli.rs` hook inserts it for a startup flag; a `dump_*` action is the generic
+  `CaptureRequest<T>` registered with `capture_action!("dump_x", T)`, which inserts `T` inside a batch run
+  and sends `UIEvent::CaptureNow(T)` otherwise (the same event a debug window button sends). The
+  request type implements `BatchCapture` (`src/hooks/batch_capture.rs`: `capture(&self, CaptureContext)`
+  with device, command pool, `World`, HDR buffer, image index and capture slot) in the
+  `src/debugview/<effect>_*.rs` file that owns the dump, next to `batch_capture!(T)` and its
+  `capture_action!`. Adding a dump to an effect is therefore one request type and one debugview file;
+  no per-effect action or hook file. The post-present `run_batch_capture_phase`
+  (`src/ecs/systems/phases/batch_capture_phase.rs`, entered through `App::after_present` in
+  `src/app/lifecycle/after_present.rs`) waits for the GPU, runs every registered request that is present
+  and takes the schedule's screenshot. `src/platform/`, `src/app/` and the render passes never name
+  `BatchRun`: what a reproducible run changes about a frame is expressed by `FrameClock`
+  (`src/ecs/resource/frame_clock.rs`: the frame counter and a wall-clock or fixed step; a fixed step means
+  fixed delta, GPU readbacks synced to the previous frame, wall-clock UI skipped) and by `AppExit`
+  (`src/ecs/resource/app_exit.rs`: the event loop stops when a system requested it). The batch run inserts
+  a fixed `FrameClock` and requests `AppExit` when it completes; effect systems read `FrameClock` for their
+  fixed-step time and never look for `BatchRun` either.
 - `src/ecs/world.rs` offers generic component access (`iter_components::<C>`, `insert_component`); it does
   not grow `with_<effect>()` builders or `query_<effect>s()` helpers. The existing `query_flames` /
   `query_waters` / `query_winds` are tracked as exceptions and must not be extended.
@@ -276,7 +304,9 @@ and drives one frame. It is the only place that sees `App` as a whole.
 
 Files: `init/` and `cleanup.rs` (construction, teardown), `data.rs` (`AppData`), `viewport.rs` (core
 attachments, storage and transient pools), `render.rs` (frame driver), `update.rs` (per-frame update and
-imgui buffers), `command_recording.rs`, `model/` (`load.rs` entry points and load order, `texture.rs`
+imgui buffers), `lifecycle/` (`after_present.rs`: what runs once the frame is presented, today the batch
+capture; a step that needs the finished image goes here, never into `render.rs` or `src/platform/`),
+`capture_context.rs` (the `CaptureContext` builders and `capture_now`), `command_recording.rs`, `model/` (`load.rs` entry points and load order, `texture.rs`
 texture file resolution, `gpu.rs` mesh upload and acceleration rebuild, `cleanup.rs` scene model reset,
 `caches.rs` / `nodes.rs` / `clips.rs` / `entities.rs` `World` and `AssetStorage` registration,
 `initial_pose.rs`; GPU mesh creation and vertex upload are `GraphicsResources::push_mesh` /
@@ -340,7 +370,9 @@ per-feature `AddPass`).
   (`flame_history_dump.rs`, `water_debug_dump.rs`, `exposure_dump.rs`, `shadow_debug.rs`) and debug scene
   manipulation (`debug_primitive.rs`: cube / sphere / floor spawn and entity delete), one file per subject.
   This is the only directory outside `src/app/` that may extend `App`; it reuses the readback helpers of
-  `src/app/features/screenshot.rs`. CPU mirrors of shader math go to `thyllore-render-debug` instead
+  `src/app/features/screenshot.rs`. A dump a batch run can request implements `BatchCapture` for its
+  request resource here (`batch_capture!`, `capture_action!`, see "Feature isolation"). CPU mirrors of
+  shader math go to `thyllore-render-debug` instead
 - `src/ml/` — inference thread, feedback, licensing worker
 - `src/logger/` — logger and message buffer
 - `src/loader/`, `src/exporter/`, `src/grpc/`, `src/math/`, `src/animation.rs` — thin `pub use` shims over

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
 use clap::builder::{PossibleValuesParser, RangedU64ValueParser};
 use clap::Args;
@@ -10,7 +12,8 @@ use thyllore_effect_core::{
 use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameBoneAttachment, FlameEffect, FlameTrail, HeatPlume, MotionPath};
 use crate::ecs::resource::{
-    BatchFlameOrbit, BatchRun, FlameDumpSink, FlameRenderSettings, FlameSdfSource, FlameShadingMode,
+    BatchFlameOrbit, FlameDumpSink, FlameFieldTraceCapture, FlameRenderSettings, FlameSdfSource,
+    FlameShadingMode,
 };
 use crate::ecs::systems::cli_args::{
     finite_float_parse, float_pair_parse, scalar_assignment_parse,
@@ -52,6 +55,10 @@ pub struct FlameOverrides {
     pub style: Option<(String, StyleGroups)>,
     #[arg(long = "batch-flame-style-dump")]
     pub style_dump: Option<String>,
+    #[arg(long = "batch-flame-trace")]
+    pub trace_path: Option<PathBuf>,
+    #[arg(long = "batch-wall-probe")]
+    pub wall_probe_path: Option<PathBuf>,
     #[arg(
         long = "batch-heat-plume",
         num_args = 0..=1,
@@ -72,8 +79,11 @@ impl BootstrapOverrides for FlameOverrides {
         if let Some(path) = &self.sdf {
             world.insert_resource(FlameSdfSource { path: path.clone() });
         }
-        if let Some(mut batch_run) = world.get_resource_mut::<BatchRun>() {
-            batch_run.flame_set = self.set.clone();
+        if self.trace_path.is_some() || self.wall_probe_path.is_some() {
+            world.insert_resource(FlameFieldTraceCapture {
+                trace_path: self.trace_path.clone(),
+                wall_probe_path: self.wall_probe_path.clone(),
+            });
         }
 
         self.spawn_extra_flames(world, assets);
@@ -140,7 +150,7 @@ impl FlameOverrides {
             apply_flame_preset(&mut effect, name);
         }
         if let Some((path, blend, profile)) = &self.texture_fit {
-            crate::ecs::systems::apply_texture_fit_from_path(
+            super::apply_texture_fit_from_path(
                 &mut effect,
                 &mut baked,
                 path,
@@ -641,6 +651,29 @@ mod tests {
     }
 
     #[test]
+    fn batch_dump_flags_fill_the_capture_request() {
+        let overrides = FlameOverrides::resolve(&args(&[
+            "bin",
+            "--batch-flame-trace",
+            "/tmp/trace.json",
+            "--batch-wall-probe",
+            "/tmp/wall.json",
+        ]))
+        .unwrap();
+        let mut world = World::new();
+        overrides
+            .apply(&mut world, &mut AssetStorage::new())
+            .unwrap();
+
+        let request = world.resource::<FlameFieldTraceCapture>();
+        assert_eq!(request.trace_path, Some(PathBuf::from("/tmp/trace.json")));
+        assert_eq!(
+            request.wall_probe_path,
+            Some(PathBuf::from("/tmp/wall.json"))
+        );
+    }
+
+    #[test]
     fn apply_without_flags_leaves_an_empty_world_untouched() {
         let overrides = FlameOverrides::resolve(&args(&["bin"])).unwrap();
         let mut world = World::new();
@@ -648,5 +681,6 @@ mod tests {
         overrides.apply(&mut world, &mut assets).unwrap();
         assert!(world.get_resource::<FlameSdfSource>().is_none());
         assert!(world.get_resource::<BatchFlameOrbit>().is_none());
+        assert!(world.get_resource::<FlameFieldTraceCapture>().is_none());
     }
 }

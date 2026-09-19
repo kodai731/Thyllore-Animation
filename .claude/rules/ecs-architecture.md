@@ -37,6 +37,7 @@ src/ecs/
 ├── resource/            # Global dynamic state (changes per frame), one file per resource
 ├── systems/             # System functions (behavior/logic), one file per domain
 │   ├── phases/          # Phase coordinators (execution order) and event dispatchers
+│   ├── world/           # Engine lifecycle systems (batch run schedule / capture record / report)
 │   ├── flame/, water/   # One directory per effect (spawn, time, preset, pick, history, ...)
 │   ├── animation/       # Animation pipeline (collect, evaluate, apply, post_process)
 │   └── frame_runner.rs  # run_frame: the phase sequence
@@ -151,7 +152,8 @@ function that calls the appropriate systems in sequence.
 
 ```
 run_frame()  (src/ecs/systems/frame_runner.rs, called from App::update)
-├── batch_run_tick()               # Batch mode state machine
+├── run_frame_clock_phase()        # FrameClock.frame += 1 (systems/world/)
+├── run_batch_schedule_phase()     # Batch capture schedule: FrameClock.frame → capture request (systems/world/)
 ├── run_input_phase()              # Input handling, gizmo interaction (EcsContext)
 ├── run_transform_phase_ecs()      # Transform propagation (EcsContext)
 ├── run_timeline_phase()           # Timeline / clip schedule advance
@@ -164,6 +166,8 @@ run_frame()  (src/ecs/systems/frame_runner.rs, called from App::update)
 
 run_event_dispatch_phase()         # UI event processing, deferred actions;
                                    # called from src/platform/events.rs after the UI is built
+run_batch_capture_phase()          # After present: requested BatchCapture readbacks + scheduled screenshot;
+                                   # entered through App::after_present (src/app/lifecycle/)
 ```
 
 ### Phase Design Principles (from Flecs, Unity DOTS, Bevy)

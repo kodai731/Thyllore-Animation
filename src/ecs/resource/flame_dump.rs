@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::path::PathBuf;
 
+#[derive(Debug)]
 pub struct FlameDumpSink {
     pub path: PathBuf,
     pub writer: BufWriter<File>,

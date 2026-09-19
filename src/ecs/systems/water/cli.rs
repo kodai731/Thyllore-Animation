@@ -1,9 +1,11 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
 use clap::Args;
 use thyllore_effect_core::WaterSecondaryRays;
 
 use crate::asset::AssetStorage;
-use crate::ecs::resource::{BatchRun, WaterRenderSettings};
+use crate::ecs::resource::{WaterProbeCapture, WaterRenderSettings};
 use crate::ecs::world::World;
 use crate::hooks::bootstrap::BootstrapOverrides;
 
@@ -21,16 +23,19 @@ pub struct WaterOverrides {
     pub history_weight: Option<f32>,
     #[arg(long = "batch-water-time")]
     pub fixed_time: Option<f32>,
+    #[arg(long = "batch-water-probe")]
+    pub probe_path: Option<PathBuf>,
 }
 
 impl BootstrapOverrides for WaterOverrides {
     const NAME: &'static str = "water";
 
     fn apply(&self, world: &mut World, _assets: &mut AssetStorage) -> Result<()> {
-        let probe_requested = world
-            .get_resource::<BatchRun>()
-            .is_some_and(|batch| batch.water_probe_path.is_some());
-        let debug_view = match (self.debug_view, probe_requested) {
+        if let Some(path) = &self.probe_path {
+            world.insert_resource(WaterProbeCapture { path: path.clone() });
+        }
+
+        let debug_view = match (self.debug_view, self.probe_path.is_some()) {
             (Some(view), _) => Some(view),
             (None, true) => Some(PROBE_DEBUG_VIEW),
             (None, false) => None,
@@ -69,7 +74,6 @@ crate::bootstrap_hook!(WaterOverrides);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     fn args(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()
@@ -100,20 +104,24 @@ mod tests {
     }
 
     #[test]
-    fn probe_run_defaults_the_debug_view() {
+    fn probe_flag_fills_the_capture_request_and_defaults_the_debug_view() {
         let mut world = World::new();
         world.insert_resource(WaterRenderSettings::default());
-        let mut batch = BatchRun::new(PathBuf::from("/tmp/out.png"), 1);
-        batch.water_probe_path = Some(PathBuf::from("/tmp/probe.json"));
-        world.insert_resource(batch);
 
-        let overrides = WaterOverrides::resolve(&args(&["bin"])).unwrap();
+        let overrides =
+            WaterOverrides::resolve(&args(&["bin", "--batch-water-probe", "/tmp/probe.json"]))
+                .unwrap();
         overrides
             .apply(&mut world, &mut AssetStorage::new())
             .unwrap();
+
         assert_eq!(
             world.resource::<WaterRenderSettings>().debug_view,
             PROBE_DEBUG_VIEW
+        );
+        assert_eq!(
+            world.resource::<WaterProbeCapture>().path,
+            PathBuf::from("/tmp/probe.json")
         );
     }
 
@@ -125,5 +133,6 @@ mod tests {
             .apply(&mut world, &mut AssetStorage::new())
             .unwrap();
         assert!(world.get_resource::<WaterRenderSettings>().is_none());
+        assert!(world.get_resource::<WaterProbeCapture>().is_none());
     }
 }

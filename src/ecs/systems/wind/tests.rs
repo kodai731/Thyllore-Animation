@@ -58,7 +58,7 @@ fn pick_ray_hits_the_wind_envelope_and_misses_beside_it() {
 fn batch_fixed_time_wins_over_the_timeline_for_wind() {
     let sources = EffectTimeSources {
         batch_fixed_time: Some(10.5),
-        batch_frames_rendered: Some(120.0),
+        fixed_step_time: Some(2.0),
         timeline: Some(TimelineSample {
             current_time: 2.0,
             playing: true,
@@ -77,7 +77,7 @@ fn wind_follows_the_timeline_while_paused_by_default() {
     let settings = WindRenderSettings::default();
     let sources = EffectTimeSources {
         batch_fixed_time: None,
-        batch_frames_rendered: None,
+        fixed_step_time: None,
         timeline: Some(TimelineSample {
             current_time: 2.0,
             playing: false,

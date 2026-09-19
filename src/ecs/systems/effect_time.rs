@@ -1,6 +1,6 @@
 use crate::animation::editable::EditableAnimationClip;
 use crate::app::FrameContext;
-use crate::ecs::resource::{BatchRun, ClipLibrary, TimelineState};
+use crate::ecs::resource::{ClipLibrary, FrameClock, TimelineState};
 use crate::ecs::storage::Component;
 use crate::ecs::systems::scalar_clip_systems::{find_entity_clip_id, sampled_scalar_values};
 use crate::ecs::world::{Entity, Transform, World};
@@ -48,8 +48,6 @@ pub fn advance_effect_time<E: TimedEffect>(ctx: &mut FrameContext) {
     }
 }
 
-const BATCH_FRAME_DURATION: f32 = 1.0 / 60.0;
-
 #[derive(Clone, Copy)]
 pub struct TimelineSample {
     pub current_time: f32,
@@ -59,7 +57,7 @@ pub struct TimelineSample {
 #[derive(Clone, Copy)]
 pub struct EffectTimeSources {
     pub batch_fixed_time: Option<f32>,
-    pub batch_frames_rendered: Option<f32>,
+    pub fixed_step_time: Option<f32>,
     pub timeline: Option<TimelineSample>,
     pub delta_time: f32,
     pub free_run_when_paused: bool,
@@ -72,10 +70,10 @@ impl EffectTimeSources {
         batch_fixed_time: Option<f32>,
         free_run_when_paused: bool,
     ) -> Self {
-        let batch_frames_rendered = world
-            .get_resource::<BatchRun>()
-            .map(|batch| batch.frames_rendered as f32);
-        let timeline = if batch_frames_rendered.is_some() {
+        let fixed_step_time = world
+            .get_resource::<FrameClock>()
+            .and_then(|clock| clock.fixed_time_seconds());
+        let timeline = if fixed_step_time.is_some() {
             None
         } else {
             world
@@ -87,7 +85,7 @@ impl EffectTimeSources {
         };
         Self {
             batch_fixed_time,
-            batch_frames_rendered,
+            fixed_step_time,
             timeline,
             delta_time,
             free_run_when_paused,
@@ -105,8 +103,8 @@ pub fn resolve_effect_time(
         *time = fixed_time;
         return;
     }
-    if let Some(frames_rendered) = sources.batch_frames_rendered {
-        *time = frames_rendered * BATCH_FRAME_DURATION;
+    if let Some(fixed_step_time) = sources.fixed_step_time {
+        *time = fixed_step_time;
         return;
     }
 

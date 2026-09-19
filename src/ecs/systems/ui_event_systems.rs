@@ -1,4 +1,7 @@
 use std::path::PathBuf;
+use std::rc::Rc;
+
+use crate::hooks::batch_capture::BatchCapture;
 
 #[derive(Clone, Debug)]
 pub enum DeferredAction {
@@ -12,8 +15,7 @@ pub enum DeferredAction {
     DebugBillboardDepth,
     DumpDebugInfo,
     DumpAnimationDebug,
-    DumpWaterDebug,
-    DumpWindDebug,
+    CaptureNow(Rc<dyn BatchCapture>),
     LoadClipFromFile {
         path: PathBuf,
     },

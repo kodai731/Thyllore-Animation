@@ -52,7 +52,7 @@ fn timeline_state_drives_water_time() {
         ..TimelineState::new()
     });
 
-    // water_time_advance reads TimelineState.current_time when BatchRun is absent.
+    // water_time_advance reads TimelineState.current_time on the wall clock.
     // Replicate the branch logic here (the function takes FrameContext which needs Vulkan).
     let entity = world.query_waters()[0];
     let timeline_time: f32 = world.get_resource::<TimelineState>().unwrap().current_time;
@@ -67,7 +67,7 @@ fn timeline_state_drives_water_time() {
 fn timeline_time_sources(current_time: f32, playing: bool, delta_time: f32) -> EffectTimeSources {
     EffectTimeSources {
         batch_fixed_time: None,
-        batch_frames_rendered: None,
+        fixed_step_time: None,
         timeline: Some(TimelineSample {
             current_time,
             playing,

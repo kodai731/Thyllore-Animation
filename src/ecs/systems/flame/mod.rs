@@ -1,4 +1,5 @@
 mod attach;
+mod batch_actions;
 mod cli;
 mod history_accumulate;
 mod passes;

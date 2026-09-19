@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use cgmath::{Quaternion, Vector3};
 
 use crate::animation::editable::{
@@ -20,6 +22,7 @@ use crate::ecs::resource::{
 };
 use crate::ecs::world::Entity;
 use crate::ecs::world::Visibility;
+use crate::hooks::batch_capture::BatchCapture;
 
 #[cfg(feature = "auto-rig")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,8 +91,8 @@ pub enum UIEvent {
     DumpFlameWallProbe {
         viewport_size: [f32; 2],
     },
-    DumpWaterDebug,
-    DumpWindDebug,
+    /// Runs one readback right away, outside the batch schedule (a debug window button).
+    CaptureNow(Rc<dyn BatchCapture>),
 
     SelectEntity(Entity),
     DeselectAll,

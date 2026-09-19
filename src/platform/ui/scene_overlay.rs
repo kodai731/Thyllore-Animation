@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use imgui::Condition;
 use thyllore_anim_core::editable::PropertyType;
 
@@ -5,7 +7,8 @@ use crate::ecs::component::{FlameParam, WaterParam, WindParam};
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{
-    CoordinateSpace, TransformGizmoMode, TransformGizmoState, WeightHeatmapState,
+    CoordinateSpace, TransformGizmoMode, TransformGizmoState, WaterDebugCapture,
+    WeightHeatmapState, WindDebugCapture,
 };
 use crate::ecs::World;
 
@@ -648,7 +651,7 @@ fn build_wind_section(
     }
     ui.same_line();
     if ui.button("Dump Debug") {
-        ui_events.send(UIEvent::DumpWindDebug);
+        ui_events.send(UIEvent::CaptureNow(Rc::new(WindDebugCapture)));
     }
     if ui.is_item_hovered() {
         ui.tooltip_text(
@@ -709,7 +712,7 @@ fn build_water_section(
         }
         ui.same_line();
         if ui.button("Dump Debug") {
-            ui_events.send(UIEvent::DumpWaterDebug);
+            ui_events.send(UIEvent::CaptureNow(Rc::new(WaterDebugCapture)));
         }
         if ui.is_item_hovered() {
             ui.tooltip_text(

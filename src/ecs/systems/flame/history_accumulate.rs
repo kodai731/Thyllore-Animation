@@ -1,13 +1,14 @@
 use crate::ecs::component::{FlameBaked, FlameEffect, FlameTemporalAccum};
 use crate::ecs::resource::{
-    BatchRun, FlameHistorySnapshot, FlameHistorySnapshotState, FlameRenderSettings, ProjectionData,
+    FlameHistorySnapshot, FlameHistorySnapshotState, FlameRenderSettings, FrameClock,
+    ProjectionData,
 };
 use crate::ecs::world::World;
 
 const STABLE_FRAME_HISTORY_WEIGHT: f32 = 0.85;
 
 /// Reusing the previous frame's shading is only valid while the camera and the flame
-/// parameters hold still. Batch runs never reuse history so a single-frame screenshot
+/// parameters hold still. A fixed-step run never reuses history so a single-frame screenshot
 /// stays deterministic.
 pub fn accumulate_flame_history(world: &mut World) {
     let flame_entities = world.query_flames();
@@ -40,7 +41,7 @@ pub fn accumulate_flame_history(world: &mut World) {
     // Collect data first to avoid borrow conflicts
     let view = world.resource::<ProjectionData>().view;
     let settings = *world.resource::<FlameRenderSettings>();
-    let has_batch_run = world.contains_resource::<BatchRun>();
+    let fixed_step_frame = fixed_step_frame(world);
     let old_effect = world.get_component::<FlameEffect>(entity).cloned();
     let Some(old_effect) = old_effect else {
         return;
@@ -71,21 +72,11 @@ pub fn accumulate_flame_history(world: &mut World) {
     state.previous = Some(snapshot);
     drop(state);
 
-    let batch_frames_rendered = if has_batch_run {
-        Some(world.resource::<BatchRun>().frames_rendered)
-    } else {
-        None
-    };
-
     world.insert_component(
         entity,
         FlameTemporalAccum {
-            frame_index: if let Some(fr) = batch_frames_rendered {
-                fr
-            } else {
-                old_temporal.frame_index.wrapping_add(1)
-            },
-            weight: if matches_previous_frame && !has_batch_run {
+            frame_index: fixed_step_frame.unwrap_or(old_temporal.frame_index.wrapping_add(1)),
+            weight: if matches_previous_frame && fixed_step_frame.is_none() {
                 STABLE_FRAME_HISTORY_WEIGHT
             } else {
                 0.0
@@ -101,4 +92,9 @@ fn strip_per_frame_state(effect: &FlameEffect) -> FlameEffect {
     let mut appearance = effect.clone();
     appearance.time = 0.0;
     appearance
+}
+
+fn fixed_step_frame(world: &World) -> Option<u64> {
+    let clock = world.get_resource::<FrameClock>()?;
+    clock.is_fixed().then_some(clock.frame)
 }

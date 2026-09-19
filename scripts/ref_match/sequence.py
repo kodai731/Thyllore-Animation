@@ -1,4 +1,4 @@
-"""Sequence gates xiii-xvi for flame_ref_match.py (frame sequences at a fixed frame interval).
+"""Sequence gates xiii-xvi (frame sequences at a fixed frame interval).
 
 Time is playback time: the reference video is slow motion, so the gates compare what a viewer sees when
 the frames play at 10 fps against the render advancing at its own frame rate.

@@ -5,8 +5,8 @@ Usage:
       [--ref-window first,end] [--json out.json]
 
 The W1-W3 descriptors (luminance statistics, height-band profile, contrast/structure gates) are the
-flame_ref_match ones, measured with the dust silhouette (luminance on a black background). Two
-descriptor families are added on top:
+common descriptors from ref_match.stats, measured with the dust silhouette (luminance on a black
+background). Two descriptor families are added on top:
 
   W4 flow direction: structure tensor of the Sobel gradients (gaussian sigma 3 px), principal
       direction histogram over 0..pi in 16 bins inside the silhouette plus the median anisotropy

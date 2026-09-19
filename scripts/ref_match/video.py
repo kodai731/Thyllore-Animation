@@ -1,4 +1,4 @@
-"""Video gate xviii for flame_ref_match.py: does the flame stream as a whole, the way the reference does?
+"""Video gate xviii: does the silhouette stream as a whole, the way the reference does?
 
 The sequence gates xiii-xvi are per-band statistics of one field each; this gate asks the whole-clip
 question a viewer asks, "is the motion carried upward or does it happen in place?", on both silhouette

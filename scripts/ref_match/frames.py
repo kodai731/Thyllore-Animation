@@ -8,20 +8,19 @@ import numpy as np
 from PIL import Image
 
 SILHOUETTE_MODES = ("flame", "dust")
-silhouette_mode = "flame"
 DUST_SILHOUETTE_LUM = 60.0
 DUST_HALO_LUM = 20.0
 
 
-def silhouette_mask(rgb):
-    if silhouette_mode == "dust":
+def silhouette_mask(rgb, mode="flame"):
+    if mode == "dust":
         return luminance(rgb) > DUST_SILHOUETTE_LUM
     r, b = rgb[:, :, 0], rgb[:, :, 2]
     return (r > 90) & (r - b > 40)
 
 
-def halo_mask(rgb):
-    if silhouette_mode == "dust":
+def halo_mask(rgb, mode="flame"):
+    if mode == "dust":
         return luminance(rgb) > DUST_HALO_LUM
     r, b = rgb[:, :, 0], rgb[:, :, 2]
     return (r > 35) & (r - b > 15)
@@ -46,13 +45,13 @@ def to_rgb(image):
     return np.asarray(image).astype(np.float64)
 
 
-def median_column_width(rgb):
-    widths = silhouette_mask(rgb).sum(axis=1)
+def median_column_width(rgb, mode="flame"):
+    widths = silhouette_mask(rgb, mode=mode).sum(axis=1)
     return float(np.median(widths[widths > 0])) if (widths > 0).any() else 0.0
 
 
-def resample_to_column_width(image, target_width):
-    width = median_column_width(to_rgb(image))
+def resample_to_column_width(image, target_width, mode="flame"):
+    width = median_column_width(to_rgb(image), mode=mode)
     if width <= 0.0:
         return image
     scale = target_width / width
@@ -75,6 +74,6 @@ def collect_frames(target):
     return [target]
 
 
-def reference_column_width(paths):
-    widths = [median_column_width(to_rgb(load_image(p))) for p in paths]
+def reference_column_width(paths, mode="flame"):
+    widths = [median_column_width(to_rgb(load_image(p)), mode=mode) for p in paths]
     return float(np.median([w for w in widths if w > 0]))

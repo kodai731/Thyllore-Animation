@@ -44,6 +44,7 @@ Metrics (silhouette = R>90 && R-B>40, lum = 0.299R+0.587G+0.114B):
 import argparse
 import json
 import sys
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -51,12 +52,10 @@ from scipy import ndimage
 
 import flame_ref_match_sequence as sequence
 import flame_ref_match_video as video
-from ref_match import frames
 from ref_match.frames import (SILHOUETTE_MODES, collect_frames, halo_mask, load_image, load_ref_meta, luminance,
                               median_column_width, reference_column_width, resample_to_column_width, silhouette_mask,
                               to_rgb)
-from ref_match.gates import (ROOT_BAND, compare, compare_structure, gate_score, nan_corr, nan_rms, print_summary,
-                             ratio_row, score_rows)
+from ref_match.gates import (ROOT_BAND, compare, print_summary, ratio_row, score_rows)
 
 REF_DIR = Path(__file__).resolve().parents[1] / "assets/textures/flames/pillar_ref_seq_stable"
 LUM_BINS = [(40, 80), (80, 120), (120, 160), (160, 200), (200, 256)]
@@ -74,10 +73,10 @@ def row_edges(mask):
     return first.astype(float), last.astype(float)
 
 
-def halo_spread(rgb, mask, column_width):
+def halo_spread(rgb, mask, column_width, mode):
     """(extra width / column width, tongue count) of the dim halo above the base pool."""
     core = ndimage.binary_fill_holes(mask)
-    halo = ndimage.binary_fill_holes(halo_mask(rgb) | mask)
+    halo = ndimage.binary_fill_holes(halo_mask(rgb, mode=mode) | mask)
     ys = np.where(core.any(axis=1))[0]
     y0, y1 = ys.min(), ys.max() + 1
     cut = y0 + int((y1 - y0) * (1.0 - HALO_BASE_POOL_FRACTION))
@@ -260,8 +259,8 @@ def top_fragments(lum, mask, column_width):
     return float(len(widths)), median_width
 
 
-def frame_stats(rgb, column_width):
-    mask = silhouette_mask(rgb)
+def frame_stats(rgb, column_width, mode="flame"):
+    mask = silhouette_mask(rgb, mode=mode)
     if mask.sum() < 100:
         return None
     lum = luminance(rgb)
@@ -302,7 +301,7 @@ def frame_stats(rgb, column_width):
         "bright_fragments_per_k": fragments_per_k,
         "interior_hole_ratio": interior_hole_ratio(lum, mask, column_width),
         "puff_isotropy_scale": list(puff_isotropy(lum, mask, column_width)),
-        "halo_spread": list(halo_spread(rgb, mask, column_width)),
+        "halo_spread": list(halo_spread(rgb, mask, column_width, mode)),
         "centerline_amplitude": centerline_amplitude(mask, column_width),
         "centerline_straightness": centerline_straightness(mask, column_width),
         "width_spread_base": width_profile(mask, column_width),
@@ -324,13 +323,13 @@ def aggregate(stat_list):
     return out
 
 
-def measure(paths, column_width, crop=None, resample=True):
+def measure(paths, column_width, crop=None, resample=True, mode="flame"):
     stats = []
     for path in paths:
         image = load_image(path, crop)
         if resample:
-            image = resample_to_column_width(image, column_width)
-        stat = frame_stats(to_rgb(image), column_width)
+            image = resample_to_column_width(image, column_width, mode=mode)
+        stat = frame_stats(to_rgb(image), column_width, mode=mode)
         if stat is not None:
             stats.append(stat)
     if not stats:
@@ -360,11 +359,13 @@ def print_profiles(ref, render):
         print(f"  lum {lo:3d}-{hi:3d}: G/R ref {rg:.2f} render {cg:.2f} | B/R ref {rb:.2f} render {cb:.2f}")
 
 
-def measure_sequence(paths, column_width, dt, crop=None, resample=True, with_video=False):
-    rgbs = sequence.load_sequence(paths, column_width, crop, resample, load_image, to_rgb, median_column_width)
-    temporal = sequence.measure_temporal(rgbs, column_width, dt, silhouette_mask, row_centers)
+def measure_sequence(paths, column_width, dt, crop=None, resample=True, with_video=False, mode="flame"):
+    rgbs = sequence.load_sequence(paths, column_width, crop, resample, load_image, to_rgb,
+                                   partial(median_column_width, mode=mode))
+    mode_silhouette_mask = partial(silhouette_mask, mode=mode)
+    temporal = sequence.measure_temporal(rgbs, column_width, dt, mode_silhouette_mask, row_centers)
     if with_video:
-        temporal["video"] = video.measure_video(rgbs, column_width, dt, silhouette_mask, row_centers)
+        temporal["video"] = video.measure_video(rgbs, column_width, dt, mode_silhouette_mask, row_centers)
     return temporal
 
 
@@ -384,13 +385,13 @@ def main():
                         help="first,end reference frame for the sequence gates (default: every frame)")
     args = parser.parse_args()
     args.temporal = args.temporal or args.video
-    frames.silhouette_mode = args.silhouette
+    mode = args.silhouette
 
     ref_fps, caption_frames = load_ref_meta(args.ref_dir)
     ref_paths = collect_frames(args.ref_dir)
     static_paths = [p for i, p in enumerate(ref_paths) if i not in caption_frames]
-    column_width = reference_column_width(static_paths)
-    ref = measure(static_paths, column_width, resample=False)
+    column_width = reference_column_width(static_paths, mode=mode)
+    ref = measure(static_paths, column_width, resample=False, mode=mode)
     print(f"reference: {ref['frames']} frames, column width {column_width:.0f} px, lum p10/50/90 = "
           f"{ref['lum_p10_50_90'][0]:.0f}/{ref['lum_p10_50_90'][1]:.0f}/{ref['lum_p10_50_90'][2]:.0f}, "
           f"dark {ref['dark_fraction'] * 100:.0f}%, bright {ref['bright_fraction'] * 100:.0f}%")
@@ -398,7 +399,7 @@ def main():
     if args.temporal:
         first, end = (int(v) for v in args.ref_window.split(",")) if args.ref_window else (0, len(ref_paths))
         ref_temporal = measure_sequence(ref_paths[first:end], column_width, 1.0 / ref_fps, resample=False,
-                                        with_video=args.video)
+                                        with_video=args.video, mode=mode)
     if args.ref_only or not args.render:
         if ref_temporal is not None:
             sequence.print_temporal(ref_temporal, ref_temporal)
@@ -409,7 +410,7 @@ def main():
         return
 
     crop = tuple(int(v) for v in args.crop.split(",")) if args.crop else None
-    render = measure(collect_frames(args.render), column_width, crop)
+    render = measure(collect_frames(args.render), column_width, crop, mode=mode)
     print(f"render:    {render['frames']} frames, lum p10/50/90 = "
           f"{render['lum_p10_50_90'][0]:.0f}/{render['lum_p10_50_90'][1]:.0f}/{render['lum_p10_50_90'][2]:.0f}, "
           f"dark {render['dark_fraction'] * 100:.0f}%, bright {render['bright_fraction'] * 100:.0f}%")
@@ -418,7 +419,7 @@ def main():
     render_temporal = None
     if args.temporal:
         render_temporal = measure_sequence(collect_frames(args.render), column_width, 1.0 / args.fps, crop,
-                                           with_video=args.video)
+                                           with_video=args.video, mode=mode)
         rows.extend(sequence.compare_temporal(ref_temporal, render_temporal, ratio_row))
         if args.video:
             rows.extend(video.compare_video(ref_temporal["video"], render_temporal["video"]))

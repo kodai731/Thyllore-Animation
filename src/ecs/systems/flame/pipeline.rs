@@ -1,14 +1,14 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::resource::FlameGpuState;
+use crate::ecs::resource::{FlameBuffer, FlameGpuState};
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::FLAME_RESOLVE;
 use crate::vulkanr::pipeline::{
     BlendConfig, PipelineBuilder, PushConstantConfig, VertexInputConfig,
 };
 use crate::vulkanr::render::RRRender;
-use crate::vulkanr::resource::{FlameBuffer, GraphicsResources, Placement, UniformBuffer};
+use crate::vulkanr::resource::{GraphicsResources, Placement, UniformBuffer};
 use thyllore_effect_core::{FlameUBO, FLAME_MAX_INSTANCES};
 
 use super::descriptors::{FlameImageBindings, RRFlameDescriptorSet};

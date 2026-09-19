@@ -2,8 +2,8 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use super::descriptors::RRFlameDescriptorSet;
+use crate::ecs::resource::FlameBuffer;
 use crate::vulkanr::pipeline::RRPipeline;
-use crate::vulkanr::resource::FlameBuffer;
 use thyllore_vulkan_core::FrameRenderContext;
 
 #[repr(C)]

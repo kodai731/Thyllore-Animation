@@ -78,7 +78,7 @@ mod tests {
 
     use super::*;
 
-    const GPU_OWNER_TYPES: [&str; 13] = [
+    const GPU_OWNER_TYPES: [&str; 12] = [
         "vk::Image",
         "vk::Buffer",
         "vk::RenderPass",
@@ -89,7 +89,6 @@ mod tests {
         "RRUniformBuffer",
         "RRPipeline",
         "UniformBuffer",
-        "FlameBuffer",
         "WaterBuffer",
         "VolumeImage",
     ];

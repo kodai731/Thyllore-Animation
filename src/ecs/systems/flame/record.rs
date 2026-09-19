@@ -1,11 +1,37 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::descriptor::RRFlameDescriptorSet;
-use crate::frame_context::FrameRenderContext;
-use crate::pipeline::RRPipeline;
-use crate::renderer::push_constants::FlamePushConstants;
-use crate::resource::flame_buffer::FlameBuffer;
+use super::descriptors::RRFlameDescriptorSet;
+use crate::vulkanr::pipeline::RRPipeline;
+use crate::vulkanr::resource::FlameBuffer;
+use thyllore_vulkan_core::FrameRenderContext;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct FlamePushConstants {
+    pub mode: i32,
+    pub step_count: i32,
+    pub debug_view: i32,
+}
+
+impl FlamePushConstants {
+    pub fn new(mode: i32, step_count: i32, debug_view: i32) -> Self {
+        Self {
+            mode,
+            step_count,
+            debug_view,
+        }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        unsafe {
+            std::slice::from_raw_parts(
+                (self as *const Self) as *const u8,
+                std::mem::size_of::<Self>(),
+            )
+        }
+    }
+}
 
 pub unsafe fn record_flame_shading_pass(
     ctx: &FrameRenderContext,

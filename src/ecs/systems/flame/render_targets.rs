@@ -1,10 +1,10 @@
 use anyhow::Result;
 
+use super::FlameImageBindings;
 use crate::ecs::resource::{FlameGpuState, FlameHistorySnapshotState, FlameRenderTargets};
 use crate::ecs::{EffectContext, MAX_FRAMES_IN_FLIGHT};
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
-use crate::vulkanr::descriptor::FlameImageBindings;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::FlameBuffer;
 

@@ -255,7 +255,7 @@ unsafe fn record_flame_passes(
         .get_resource::<crate::ecs::resource::FlameRenderSettings>()
         .map(|settings| *settings)
         .unwrap_or_default();
-    let push_constants = thyllore_vulkan_core::renderer::FlamePushConstants::new(
+    let push_constants = crate::ecs::systems::flame::FlamePushConstants::new(
         settings.shading_mode.as_shader_value(),
         settings.resolved_step_count() as i32,
         settings.debug_view.as_shader_value(),
@@ -274,7 +274,7 @@ unsafe fn record_flame_passes(
             vk::PipelineStageFlags::FRAGMENT_SHADER,
         )?;
 
-        thyllore_vulkan_core::renderer::record_flame_shading_pass(
+        crate::ecs::systems::flame::record_flame_shading_pass(
             &render,
             flame_buffer,
             shading_pipeline,

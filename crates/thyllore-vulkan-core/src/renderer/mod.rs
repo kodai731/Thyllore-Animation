@@ -2,7 +2,6 @@ pub mod auto_exposure;
 pub mod bloom;
 pub mod composite;
 pub mod dof;
-pub mod flame;
 pub mod gbuffer;
 pub mod line_mesh_draw;
 pub mod onion_skin;
@@ -26,7 +25,6 @@ pub use composite::{
     record_composite_draw, record_composite_to_hdr_pass, BACKGROUND_RADIANCE,
 };
 pub use dof::record_dof_pass;
-pub use flame::record_flame_shading_pass;
 pub use gbuffer::record_gbuffer_pass;
 pub use line_mesh_draw::{
     push_fragment_alpha_constant, record_line_mesh_draw, LineMeshDrawOptions,
@@ -40,9 +38,7 @@ pub use pass_target::{
     CoreTarget, FrameTransients, ImageStateTracker, PendingBarrier, ShaderStage, TargetAccess,
     TargetRef, TargetUse, TransientLifetimes, TransientRequest, TransientSlot,
 };
-pub use push_constants::{
-    FlamePushConstants, GBufferPushConstants, OnionSkinPushConstants, WaterPushConstants,
-};
+pub use push_constants::{GBufferPushConstants, OnionSkinPushConstants, WaterPushConstants};
 pub use rayquery::record_ray_query_pass;
 pub use storage_image::{insert_storage_image_read_barrier, insert_storage_image_write_barrier};
 pub use tonemap::{begin_tonemap_render_pass, end_tonemap_render_pass, record_tonemap_draw};

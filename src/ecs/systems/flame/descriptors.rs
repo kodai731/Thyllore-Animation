@@ -1,12 +1,11 @@
-use crate::core::device::*;
-use crate::descriptor::pass_manifest::FLAME_RESOLVE;
-use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
-use crate::descriptor::shader_bindings::flame_resolve;
-use crate::resource::gpu_resource::GpuResource;
-use crate::resource::image::create_scene_depth_sampler;
-use crate::resource::uniform_buffer::UniformBuffer;
-use crate::vulkan::*;
+use crate::vulkanr::core::*;
+use crate::vulkanr::descriptor::pass_manifest::FLAME_RESOLVE;
+use crate::vulkanr::descriptor::shader_bindings::flame_resolve;
+use crate::vulkanr::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::vulkanr::image::create_scene_depth_sampler;
+use crate::vulkanr::resource::{GpuResource, UniformBuffer};
 use thyllore_effect_core::FlameUBO;
+use thyllore_vulkan_core::vulkan::*;
 
 const FLAME_HISTORY_SET_COUNT: usize = 2;
 

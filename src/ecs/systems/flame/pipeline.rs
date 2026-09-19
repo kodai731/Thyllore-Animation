@@ -3,14 +3,16 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::FlameGpuState;
 use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::descriptor::{FlameImageBindings, RRFlameDescriptorSet, FLAME_RESOLVE};
+use crate::vulkanr::descriptor::FLAME_RESOLVE;
 use crate::vulkanr::pipeline::{
     BlendConfig, PipelineBuilder, PushConstantConfig, VertexInputConfig,
 };
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{FlameBuffer, GraphicsResources, Placement, UniformBuffer};
 use thyllore_effect_core::{FlameUBO, FLAME_MAX_INSTANCES};
-use thyllore_vulkan_core::renderer::FlamePushConstants;
+
+use super::descriptors::{FlameImageBindings, RRFlameDescriptorSet};
+use super::record::FlamePushConstants;
 
 fn premultiplied_blend() -> BlendConfig {
     BlendConfig {

@@ -27,7 +27,7 @@ mod edit_history_systems;
 pub mod effect_debug_dump;
 pub mod effect_time;
 mod field_systems;
-mod flame;
+pub mod flame;
 mod frame_runner;
 mod frame_systems;
 mod gizmo_systems;

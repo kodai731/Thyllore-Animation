@@ -1,5 +1,5 @@
+use crate::ecs::systems::flame::RRFlameDescriptorSet;
 use thyllore_effect_core::FlameUBO;
-use thyllore_vulkan_core::descriptor::RRFlameDescriptorSet;
 use thyllore_vulkan_core::pipeline::RRPipeline;
 use thyllore_vulkan_core::resource::{FlameBuffer, GpuResource, RRImage, UniformBuffer};
 

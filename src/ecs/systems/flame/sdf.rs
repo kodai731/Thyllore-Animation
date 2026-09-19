@@ -1,10 +1,10 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
+use super::FlameImageBindings;
 use crate::ecs::resource::{FlameGpuState, FlameRenderTargets, FlameSdfSource};
 use crate::ecs::EffectContext;
 use crate::vulkanr::context::CommandState;
-use crate::vulkanr::descriptor::FlameImageBindings;
 use crate::vulkanr::render::RRRender;
 
 fn load_sdf_pixels(source: Option<&FlameSdfSource>) -> (Vec<u8>, u32, u32) {

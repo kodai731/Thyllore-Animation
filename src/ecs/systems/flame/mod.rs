@@ -1,12 +1,14 @@
 mod attach;
 mod batch_actions;
 mod cli;
+mod descriptors;
 mod dump;
 mod history_accumulate;
 mod passes;
 mod pick;
 mod pipeline;
 mod preset;
+mod record;
 mod render_targets;
 mod sdf;
 mod spawn;
@@ -18,11 +20,13 @@ mod trail;
 
 pub use attach::*;
 pub use cli::*;
+pub use descriptors::*;
 pub use dump::*;
 pub use history_accumulate::*;
 pub use passes::*;
 pub use pick::*;
 pub use preset::*;
+pub use record::*;
 pub use render_targets::*;
 pub use spawn::*;
 pub use style::*;

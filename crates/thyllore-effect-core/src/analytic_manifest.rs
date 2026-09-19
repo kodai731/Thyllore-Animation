@@ -18,7 +18,7 @@ pub fn glsl_int_constant(source: &str, name: &str) -> i64 {
         .lines()
         .find_map(|line| line.trim().strip_prefix(&prefix))
         .and_then(|rest| rest.trim_end_matches(';').parse().ok())
-        .unwrap_or_else(|| panic!("{name} not declared in the wind GLSL"))
+        .unwrap_or_else(|| panic!("{name} declared as an int constant"))
 }
 
 pub fn glsl_float_constant(source: &str, name: &str) -> f32 {

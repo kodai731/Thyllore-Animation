@@ -1,7 +1,7 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::App;
+use crate::ecs::PassContext;
 pub use thyllore_vulkan_core::renderer::{
     CoreTarget, ShaderStage, TargetAccess, TargetRef, TargetUse, TransientRequest, TransientSlot,
 };
@@ -20,27 +20,27 @@ pub trait RenderPassNode: Sync {
 
     /// Frame-lifetime images this node needs. The graph acquires each slot at its first use and
     /// releases it after its last, so the node never calls the transient pool itself.
-    fn transients(&self, _app: &App) -> Vec<TransientRequest> {
+    fn transients(&self, _ctx: &PassContext) -> Vec<TransientRequest> {
         Vec::new()
     }
 
-    fn reads(&self, _app: &App) -> Vec<TargetUse> {
+    fn reads(&self, _ctx: &PassContext) -> Vec<TargetUse> {
         Vec::new()
     }
 
-    fn writes(&self, _app: &App) -> Vec<TargetUse> {
+    fn writes(&self, _ctx: &PassContext) -> Vec<TargetUse> {
         Vec::new()
     }
 
     /// Build stage, after every transient of the frame is assigned and before anything is recorded:
     /// bind the frame's images into this node's descriptors and framebuffers.
-    unsafe fn prepare(&self, _app: &mut App, _frame_slot: usize) -> Result<()> {
+    unsafe fn prepare(&self, _ctx: &mut PassContext, _frame_slot: usize) -> Result<()> {
         Ok(())
     }
 
     unsafe fn record(
         &self,
-        app: &App,
+        ctx: &PassContext,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
         frame_slot: usize,
@@ -100,7 +100,13 @@ mod tests {
             self.stage
         }
 
-        unsafe fn record(&self, _: &App, _: vk::CommandBuffer, _: usize, _: usize) -> Result<()> {
+        unsafe fn record(
+            &self,
+            _: &PassContext,
+            _: vk::CommandBuffer,
+            _: usize,
+            _: usize,
+        ) -> Result<()> {
             Ok(())
         }
     }

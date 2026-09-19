@@ -22,22 +22,12 @@ src/app/ , src/platform/ App lifecycle, Vulkan object ownership, frame driver, w
 Lower layers never import upper ones: a crate never depends on `src/`, and `src/ecs/` never imports
 `src/app/`. A system that needs GPU objects receives a context struct that borrows exactly what it uses
 (`FrameContext`: device, instance, command pool, `World`, assets, graphics resources, raytracing data, frame
-slot), never `App` or `AppData`. If a system seems to need `App`, it is either app wiring (move it to
-`src/app/`) or the context is missing a field (add the field).
-
-### Known exceptions (tracked in #163, do not add to this list)
-
-The following places still import `crate::app` from `src/ecs/`. They are violations kept only until #163
-lands; new code must not copy them, and no new entry may be added here.
-
-- `FrameContext` and `LightMoveTarget` are defined under `src/app/` although they contain no `App`; the
-  fix is to move them into `src/ecs/`.
-- `src/hooks/effect.rs` declares `on_viewport_resize` as `fn(&mut App)` and `src/hooks/pass.rs`
-  declares `RenderPassNode::prepare` as `fn(&mut App)` and `record` / declarations as `fn(&App)`, so
-  `src/ecs/systems/{flame,water}/render_targets.rs` take `&mut App`; the fix is an `EffectContext` that
-  borrows instance, device, viewport pools and extent, raytracing data and `World` (the `setup` hook
-  already takes decomposed arguments).
-- `src/ecs/systems/phases/render_phase.rs::build_frame_render_context` takes `&App` to read four fields.
+slot; `EffectContext`: instance, device, graphics resources, viewport extent and storage pool, HDR view,
+raytracing data, pass image states, `World`; `PassContext`: device, graphics resources, buffer registry, pipelines, raytracing
+data, the viewport's core buffers, the transient pool and this frame's slot map, onion skin state, `World`,
+assets), never `App` or `AppData`. All three live in `src/ecs/` and `src/app/` builds them. If a system
+seems to need `App`, it is either app wiring (move it to `src/app/`) or the context is missing a field (add
+the field).
 
 ## crates/
 
@@ -118,7 +108,7 @@ file per domain, one directory per effect), phases (execution order and event di
 record and report), and the ECS core (world, storage, query, registry, events). Rules are in
 `ecs-architecture.md`.
 
-No file here declares `impl App` or takes `&mut App` (see the known exceptions above). A system that needs
+No file here declares `impl App`, takes `&mut App` or imports `crate::app`. A system that needs
 GPU resources as well as `World` takes `FrameContext` or a smaller context struct (`raytracing_systems.rs`:
 per-frame TLAS refresh from `GlobalTransform`). If the work is mostly GPU upload and rebuild with a few
 `World` writes, it is app wiring and lives in `src/app/` (`model/`, `scene_model.rs`); if it exists
@@ -127,8 +117,9 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 ## src/hooks/
 
 Generic hook infrastructure that lets a subsystem plug into the app lifecycle without being named by
-`src/app/`. `effect.rs` holds the effect hook (setup, after_overrides, viewport resize, pass nodes) and the
-list that runs them in subscription order; GPU teardown is not a hook, it is the `gpu_resource!` registration
+`src/app/`. `effect.rs` holds the effect hook (setup and after_overrides take `(&mut EffectContext, &RRRender)`,
+viewport resize takes `&mut EffectContext`, pass nodes) and the subscription list; `src/app/effect_hooks.rs`
+builds the context and runs them in subscription order; GPU teardown is not a hook, it is the `gpu_resource!` registration
 of the effect's resource (`gpu_resource.rs`: `GpuResourceHook`, `GpuResourceHooks::collect()`).
 `batch_capture.rs` holds the `CaptureContext` and the `BatchCapture` contract: a request resource whose
 presence in `World` asks for one readback at the batch capture frame, registered with
@@ -146,7 +137,8 @@ isolation by keeping only the tokens its struct declares, which is what lets it 
 hand-parsed flags in `src/ecs/systems/batch_run_systems/`; two hooks declaring the same flag fail at startup. GPU work
 that depends on those overrides (the flame SDF texture) is the effect's `after_overrides` hook, run by
 `src/app/bootstrap.rs::finish_setup` after the overrides are applied. `pass.rs` holds the `RenderPassNode` contract (name,
-stage, `transients` requested by slot and desc, reads / writes declared as `TargetUse`, `prepare`, record),
+stage, `transients` requested by slot and desc, reads / writes declared as `TargetUse`, `prepare`, record;
+every method takes `PassContext`, `prepare` mutably),
 the `PassStage` order (lighting → effect → post-process → final) and the `PassGraph` that keeps registered
 nodes sorted by stage then registration order. The graph runner in `src/app/command_recording.rs` runs
 three phases per frame: build (collect requests and uses, compute `TransientLifetimes`, acquire each slot
@@ -287,10 +279,11 @@ dispatch entry point. Contains no business logic and no Vulkan commands beyond i
 ## src/vulkanr/
 
 App-side Vulkan glue: ECS resources that wrap swapchain, sync objects and core attachments, per-frame pass
-recording that has to read `App`, the core pass nodes (`renderer/deferred/nodes.rs`: composite, onion skin,
-bloom, dof, auto exposure, tonemap registered into the `PassGraph`), and implementations of app-side backend
-traits. Anything here that turns
-out to need only device and handles moves down into `thyllore-vulkan-core`.
+recording (`PassContext` for graph nodes, `App` only for the gbuffer / ray query / offscreen fallback that
+run outside the graph), the core pass nodes (`renderer/deferred/nodes.rs`: composite, onion skin, bloom,
+dof, auto exposure, tonemap registered into the `PassGraph`), and implementations of app-side backend
+traits. Anything here that turns out to need only device and handles moves down into
+`thyllore-vulkan-core`.
 
 ## src/render/
 
@@ -306,13 +299,14 @@ Files: `init/` and `cleanup.rs` (construction, teardown), `data.rs` (`AppData`),
 attachments, storage and transient pools), `render.rs` (frame driver), `update.rs` (per-frame update and
 imgui buffers), `lifecycle/` (`after_present.rs`: what runs once the frame is presented, today the batch
 capture; a step that needs the finished image goes here, never into `render.rs` or `src/platform/`),
-`capture_context.rs` (the `CaptureContext` builders and `capture_now`), `command_recording.rs`, `model/` (`load.rs` entry points and load order, `texture.rs`
+`capture_context.rs` (the `CaptureContext` builders and `capture_now`), `effect_hooks.rs` (builds
+`EffectContext` and runs the effect hooks), `command_recording.rs`, `model/` (`load.rs` entry points and load order, `texture.rs`
 texture file resolution, `gpu.rs` mesh upload and acceleration rebuild, `cleanup.rs` scene model reset,
 `caches.rs` / `nodes.rs` / `clips.rs` / `entities.rs` `World` and `AssetStorage` registration,
 `initial_pose.rs`; GPU mesh creation and vertex upload are `GraphicsResources::push_mesh` /
 `upload_mesh_vertices` in `thyllore-vulkan-core`; every `World` resource the load touches is inserted
 once in `init/instance.rs`, never lazily during a load) and `scene_model.rs`, `raytracing/`
-(acceleration structure rebuild), `frame_context.rs` and `render_context.rs`, `post_process/`,
+(acceleration structure rebuild), `render_context.rs`, `post_process/`,
 `features/` (see below), `util.rs`, `color_test_quad.rs`.
 
 `src/app/*.rs` is the core loop only. Optional capabilities that extend `App` but are not needed to drive a
@@ -386,7 +380,7 @@ per-feature `AddPass`).
 - `crates/thyllore-vulkan-core` (`backend.rs`, `renderer/`) — the Vulkan implementation of that trait and the
   per-pass command helpers that take an immutable frame render context.
 - `src/render/` and `src/vulkanr/` — the app-side extension of the trait (needs ECS resource types) and its
-  Vulkan implementation, plus pass recording that reads `App`.
+  Vulkan implementation, plus pass recording over `PassContext`.
 - `src/app/render.rs` — the frame driver: begin and end of a frame, swapchain-level concerns, the resize
   fan-out, auto exposure readback and the gbuffer / billboard / imgui recording it does directly. It names no
   effect and no model format; per-frame TLAS refresh is `src/ecs/systems/raytracing_systems.rs`, model
@@ -403,7 +397,7 @@ context (adds `World`, assets, time, frame slot) used by the ECS phases.
   frame (described by extent / format / usage, handed out as frame-stamped handles, recycled per
   frame-in-flight bucket).
 - Borrower (the pass or effect): asks the lender each frame, keeps what it borrowed in its own state
-  (post-process targets under `src/app/post_process/`, effect resources under `src/ecs/resource/`), and keeps
+  (`PostProcessFrameTargets` and effect resources under `src/ecs/resource/`), and keeps
   one descriptor set per frame slot for anything transient.
 - Core attachments (HDR, depth, gbuffer, offscreen) are owned by the viewport and never pooled.
 

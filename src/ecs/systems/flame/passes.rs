@@ -2,8 +2,8 @@ use anyhow::Result;
 use cgmath::{InnerSpace, SquareMatrix, Vector3};
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::App;
 use crate::ecs::world::Entity;
+use crate::ecs::PassContext;
 use crate::hooks::pass::{
     CoreTarget, PassStage, RenderPassNode, ShaderStage, TargetAccess, TargetRef, TargetUse,
 };
@@ -17,12 +17,11 @@ const HISTORY_KEYS: [RenderTargetKey; 2] = [
 
 pub struct FlamePassNode;
 
-fn flame_history_index(app: &App, flames: &[Entity]) -> usize {
+fn flame_history_index(ctx: &PassContext, flames: &[Entity]) -> usize {
     flames
         .first()
         .and_then(|first| {
-            app.data
-                .ecs_world
+            ctx.world
                 .get_component::<crate::ecs::component::FlameTemporalAccum>(*first)
         })
         .map(|temporal| (temporal.frame_index as usize) & 1)
@@ -42,19 +41,18 @@ impl FlameFrame {
     }
 }
 
-fn flame_frame(app: &App) -> Option<FlameFrame> {
-    let extent = app
-        .data
-        .ecs_world
+fn flame_frame(ctx: &PassContext) -> Option<FlameFrame> {
+    let extent = ctx
+        .world
         .get_resource::<crate::ecs::resource::FlameRenderTargets>()?
         .buffer
         .extent();
-    app.data.raytracing.flame_shading_pipeline.as_ref()?;
-    app.data.raytracing.flame_descriptor.as_ref()?;
-    app.data.raytracing.flame_ubo.as_ref()?;
+    ctx.raytracing.flame_shading_pipeline.as_ref()?;
+    ctx.raytracing.flame_descriptor.as_ref()?;
+    ctx.raytracing.flame_ubo.as_ref()?;
 
-    let mut flames = app.data.ecs_world.query_flames();
-    sort_flames_back_to_front(app, &mut flames);
+    let mut flames = ctx.world.query_flames();
+    sort_flames_back_to_front(ctx, &mut flames);
     flames.truncate(thyllore_effect_core::FLAME_MAX_INSTANCES);
     if flames.is_empty() {
         return None;
@@ -62,13 +60,13 @@ fn flame_frame(app: &App) -> Option<FlameFrame> {
 
     let ubos: Vec<_> = flames
         .iter()
-        .map(|flame| build_instance_ubo(app, *flame))
+        .map(|flame| build_instance_ubo(ctx, *flame))
         .collect::<Option<_>>()?;
     let scissors = ubos
         .iter()
-        .map(|ubo| instance_scissor(app, extent, ubo))
+        .map(|ubo| instance_scissor(ctx, extent, ubo))
         .collect();
-    let history_index = flame_history_index(app, &flames);
+    let history_index = flame_history_index(ctx, &flames);
 
     Some(FlameFrame {
         ubos,
@@ -77,10 +75,9 @@ fn flame_frame(app: &App) -> Option<FlameFrame> {
     })
 }
 
-fn sort_flames_back_to_front(app: &App, flames: &mut [Entity]) {
-    let Some(projection) = app
-        .data
-        .ecs_world
+fn sort_flames_back_to_front(ctx: &PassContext, flames: &mut [Entity]) {
+    let Some(projection) = ctx
+        .world
         .get_resource::<crate::ecs::resource::ProjectionData>()
     else {
         return;
@@ -92,8 +89,7 @@ fn sort_flames_back_to_front(app: &App, flames: &mut [Entity]) {
     let camera_pos = Vector3::new(view_inverse[3][0], view_inverse[3][1], view_inverse[3][2]);
 
     let camera_distance = |flame: &Entity| {
-        app.data
-            .ecs_world
+        ctx.world
             .get_component::<crate::ecs::component::FlameEffect>(*flame)
             .map(|effect| {
                 let position =
@@ -109,8 +105,8 @@ fn sort_flames_back_to_front(app: &App, flames: &mut [Entity]) {
     });
 }
 
-fn build_instance_ubo(app: &App, flame: Entity) -> Option<thyllore_effect_core::FlameUBO> {
-    let world = &app.data.ecs_world;
+fn build_instance_ubo(ctx: &PassContext, flame: Entity) -> Option<thyllore_effect_core::FlameUBO> {
+    let world = &ctx.world;
     let effect = world.get_component::<crate::ecs::component::FlameEffect>(flame)?;
     let trail = world.get_component::<crate::ecs::component::FlameTrail>(flame);
     let is_noise_mode = world
@@ -136,7 +132,7 @@ fn build_instance_ubo(app: &App, flame: Entity) -> Option<thyllore_effect_core::
 }
 
 fn instance_scissor(
-    app: &App,
+    ctx: &PassContext,
     extent: vk::Extent2D,
     ubo: &thyllore_effect_core::FlameUBO,
 ) -> Option<vk::Rect2D> {
@@ -150,7 +146,7 @@ fn instance_scissor(
         ubo.support_motion.support_margin,
     );
     compute_flame_scissor(
-        app,
+        ctx,
         extent,
         &ubo.model,
         bend_offset,
@@ -175,8 +171,8 @@ impl RenderPassNode for FlamePassNode {
         PassStage::Effect
     }
 
-    fn reads(&self, app: &App) -> Vec<TargetUse> {
-        flame_frame(app)
+    fn reads(&self, ctx: &PassContext) -> Vec<TargetUse> {
+        flame_frame(ctx)
             .filter(FlameFrame::has_visible_instance)
             .map(|frame| frame.history_index)
             .map(|history_index| {
@@ -189,8 +185,8 @@ impl RenderPassNode for FlamePassNode {
             .collect()
     }
 
-    fn writes(&self, app: &App) -> Vec<TargetUse> {
-        flame_frame(app)
+    fn writes(&self, ctx: &PassContext) -> Vec<TargetUse> {
+        flame_frame(ctx)
             .filter(FlameFrame::has_visible_instance)
             .map(|frame| frame.history_index)
             .map(|history_index| {
@@ -216,39 +212,37 @@ impl RenderPassNode for FlamePassNode {
 
     unsafe fn record(
         &self,
-        app: &App,
+        ctx: &PassContext,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
         _frame_slot: usize,
     ) -> Result<()> {
-        record_flame_passes(app, command_buffer, image_index)
+        record_flame_passes(ctx, command_buffer, image_index)
     }
 }
 
 unsafe fn record_flame_passes(
-    app: &App,
+    ctx: &PassContext,
     command_buffer: vk::CommandBuffer,
     image_index: usize,
 ) -> Result<()> {
-    let Some(frame) = flame_frame(app) else {
+    let Some(frame) = flame_frame(ctx) else {
         return Ok(());
     };
     let (Some(flame_targets), Some(shading_pipeline), Some(descriptor), Some(flame_ubo)) = (
-        app.data
-            .ecs_world
+        ctx.world
             .get_resource::<crate::ecs::resource::FlameRenderTargets>(),
-        app.data.raytracing.flame_shading_pipeline.as_ref(),
-        app.data.raytracing.flame_descriptor.as_ref(),
-        app.data.raytracing.flame_ubo.as_ref(),
+        ctx.raytracing.flame_shading_pipeline.as_ref(),
+        ctx.raytracing.flame_descriptor.as_ref(),
+        ctx.raytracing.flame_ubo.as_ref(),
     ) else {
         return Ok(());
     };
     let flame_buffer = &flame_targets.buffer;
-    let ctx = crate::ecs::systems::phases::build_frame_render_context(app, image_index);
+    let render = ctx.frame_render_context(image_index);
 
-    let settings = app
-        .data
-        .ecs_world
+    let settings = ctx
+        .world
         .get_resource::<crate::ecs::resource::FlameRenderSettings>()
         .map(|settings| *settings)
         .unwrap_or_default();
@@ -264,7 +258,7 @@ unsafe fn record_flame_passes(
         };
         let ubo_dynamic_offset = flame_ubo.slot_offset(i)? as u32;
         flame_ubo.record_update(
-            &ctx.device.device,
+            &render.device.device,
             command_buffer,
             i,
             ubo,
@@ -272,7 +266,7 @@ unsafe fn record_flame_passes(
         )?;
 
         thyllore_vulkan_core::renderer::record_flame_shading_pass(
-            &ctx,
+            &render,
             flame_buffer,
             shading_pipeline,
             descriptor,
@@ -289,7 +283,7 @@ unsafe fn record_flame_passes(
 }
 
 fn compute_flame_scissor(
-    app: &App,
+    ctx: &PassContext,
     extent: vk::Extent2D,
     model: &cgmath::Matrix4<f32>,
     bend_offset: [f32; 2],
@@ -300,7 +294,7 @@ fn compute_flame_scissor(
     use crate::ecs::resource::ProjectionData;
     const SCISSOR_MARGIN_PX: f32 = 2.0;
 
-    let Some(projection) = app.data.ecs_world.get_resource::<ProjectionData>() else {
+    let Some(projection) = ctx.world.get_resource::<ProjectionData>() else {
         return Some(full_extent_scissor(extent));
     };
     let view_proj = projection.proj * projection.view;

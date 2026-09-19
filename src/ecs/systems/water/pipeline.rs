@@ -13,7 +13,7 @@ use crate::vulkanr::pipeline::{
 };
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{
-    GraphicsResources, HdrBuffer, Placement, RayTracingData, UniformBuffer, WaterBuffer,
+    GraphicsResources, Placement, RayTracingData, UniformBuffer, WaterBuffer,
 };
 use thyllore_effect_core::{WaterUBO, WATER_MAX_INSTANCES};
 use thyllore_vulkan_core::renderer::WaterPushConstants;
@@ -37,7 +37,7 @@ pub unsafe fn create_water_pipeline(
     graphics_resources: &GraphicsResources,
     raytracing: &mut RayTracingData,
     water_buffer: &WaterBuffer,
-    hdr_buffer: &HdrBuffer,
+    hdr_color_view: vk::ImageView,
     frames_in_flight: usize,
 ) -> Result<()> {
     let water_ubo = UniformBuffer::new(
@@ -81,7 +81,7 @@ pub unsafe fn create_water_pipeline(
     raytracing.water_ubo = Some(water_ubo);
 
     ensure_effect_trace_pipeline(instance, rrdevice, raytracing, frames_in_flight)?;
-    create_water_caustic_pipelines(rrdevice, raytracing, water_buffer, hdr_buffer)?;
+    create_water_caustic_pipelines(rrdevice, raytracing, water_buffer, hdr_color_view)?;
 
     log!("Created water pipelines");
     Ok(())
@@ -106,7 +106,7 @@ unsafe fn create_water_caustic_pipelines(
     rrdevice: &RRDevice,
     raytracing: &mut RayTracingData,
     water_buffer: &WaterBuffer,
-    hdr_buffer: &HdrBuffer,
+    hdr_color_view: vk::ImageView,
 ) -> Result<()> {
     let (Some(gbuffer), Some(scene_buffer), Some(water_ubo)) = (
         raytracing.gbuffer.as_ref(),
@@ -129,7 +129,7 @@ unsafe fn create_water_caustic_pipelines(
         tlas,
         scene_buffer,
         water_ubo.handle(),
-        hdr_buffer.color_image_view,
+        hdr_color_view,
     )?;
 
     let splat_pipeline =

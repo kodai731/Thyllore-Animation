@@ -1,8 +1,8 @@
-use crate::app::FrameContext;
 use crate::ecs::component::{apply_water_param_value, WaterParam, WaterTorusEffect};
 use crate::ecs::resource::WaterRenderSettings;
 use crate::ecs::systems::effect_time::{advance_effect_time, EffectTimeSources, TimedEffect};
 use crate::ecs::world::{Entity, Transform, World};
+use crate::ecs::FrameContext;
 use thyllore_anim_core::editable::PropertyType;
 
 impl TimedEffect for WaterTorusEffect {

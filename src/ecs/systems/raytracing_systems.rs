@@ -10,9 +10,9 @@ use thyllore_vulkan_core::raytracing::{RRAccelerationStructure, RRBLAS};
 use thyllore_vulkan_core::resource::RayTracingData;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::FrameContext;
 use crate::asset::AssetStorage;
 use crate::ecs::world::{GlobalTransform, MeshRef, World};
+use crate::ecs::FrameContext;
 
 pub fn collect_mesh_transforms(world: &World, assets: &AssetStorage) -> Vec<Matrix4<f32>> {
     let indexed_transforms: Vec<(usize, Matrix4<f32>)> = world

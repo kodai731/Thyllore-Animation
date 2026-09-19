@@ -2,8 +2,9 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use super::App;
+use crate::app::build_pass_context;
 use crate::ecs::resource::GpuPassTimings;
-use crate::hooks::pass::TargetUse;
+use crate::hooks::pass::{TargetUse, TransientRequest};
 use crate::vulkanr::renderer::deferred;
 
 impl App {
@@ -187,19 +188,30 @@ impl App {
         frame_slot: usize,
     ) -> Result<()> {
         let nodes = self.data.pass_graph.nodes();
-        let node_uses: Vec<Vec<TargetUse>> = nodes
-            .iter()
-            .map(|node| {
-                node.reads(self)
-                    .into_iter()
-                    .chain(node.writes(self))
-                    .collect()
-            })
-            .collect();
-        self.assign_frame_transients(&nodes, &node_uses)?;
+        let (node_uses, transient_requests) = {
+            let ctx = build_pass_context(&self.rrdevice, &mut self.data);
+            let node_uses: Vec<Vec<TargetUse>> = nodes
+                .iter()
+                .map(|node| {
+                    node.reads(&ctx)
+                        .into_iter()
+                        .chain(node.writes(&ctx))
+                        .collect()
+                })
+                .collect();
+            let transient_requests: Vec<TransientRequest> = nodes
+                .iter()
+                .flat_map(|node| node.transients(&ctx))
+                .collect();
+            (node_uses, transient_requests)
+        };
+        self.assign_frame_transients(&nodes, &transient_requests, &node_uses)?;
 
-        for node in &nodes {
-            node.prepare(self, frame_slot)?;
+        {
+            let mut ctx = build_pass_context(&self.rrdevice, &mut self.data);
+            for node in &nodes {
+                node.prepare(&mut ctx, frame_slot)?;
+            }
         }
 
         let mut transients_seen = std::collections::HashSet::new();
@@ -212,7 +224,8 @@ impl App {
                 image_index,
                 node.name().to_string(),
             );
-            node.record(self, command_buffer, image_index, frame_slot)?;
+            let ctx = build_pass_context(&self.rrdevice, &mut self.data);
+            node.record(&ctx, command_buffer, image_index, frame_slot)?;
             self.gpu_timestamp_profiler.end_scope(
                 &self.rrdevice.device,
                 command_buffer,

@@ -1,8 +1,8 @@
 use cgmath::{Matrix4, Vector3};
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::App;
 use crate::ecs::resource::ProjectionData;
+use crate::ecs::World;
 
 const SCISSOR_MARGIN_PX: f32 = 2.0;
 
@@ -25,12 +25,12 @@ pub(crate) fn full_extent_scissor(extent: vk::Extent2D) -> vk::Rect2D {
 /// extent when the projection is unavailable or a corner is behind the camera,
 /// and `None` when the projected bounds are empty.
 pub(crate) fn compute_bounds_scissor(
-    app: &App,
+    world: &World,
     extent: vk::Extent2D,
     model: &Matrix4<f32>,
     corners: impl IntoIterator<Item = Vector3<f32>>,
 ) -> Option<vk::Rect2D> {
-    let Some(projection) = app.data.ecs_world.get_resource::<ProjectionData>() else {
+    let Some(projection) = world.get_resource::<ProjectionData>() else {
         return Some(full_extent_scissor(extent));
     };
     let model_view_proj = projection.proj * projection.view * model;

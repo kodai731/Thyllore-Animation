@@ -52,13 +52,9 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
   `ReflectedSetLayout`, `UniformBuffer<T>`, `PipelineBuilder`); an effect's GPU state is an ECS resource
   (`src/ecs/resource/<effect>_render_targets.rs`) assembled from those primitives in
   `src/ecs/systems/<effect>/` (descriptors, pipeline, record, render targets). Wind follows this layout.
-  Known exceptions tracked by the vulkan-core effect-neutral issue (#179), not to be extended:
-  `descriptor/flame.rs`, `descriptor/water.rs`, `descriptor/water_caustic.rs`, `descriptor/effect_trace.rs`,
-  `renderer/flame.rs`, `renderer/water.rs`, the
-  flame / water fields of `RayTracingData` (filled by `src/ecs/systems/<effect>/pipeline.rs`), and
-  `FlamePushConstants` / `WaterPushConstants` in `renderer/push_constants.rs`. Pipeline creation never
-  lives in vulkan-core: effects build theirs in `src/ecs/systems/<effect>/pipeline.rs`, the core
-  post-process passes in `src/app/post_process/pipelines.rs`, onion skin in `src/app/init/onion_skin.rs`.
+  Pipeline creation never lives in vulkan-core: effects build theirs in
+  `src/ecs/systems/<effect>/pipeline.rs`, the core post-process passes in
+  `src/app/post_process/pipelines.rs`, onion skin in `src/app/init/onion_skin.rs`.
 - Domain crates use the `components/` (data) and `systems/` (pure functions) split, see
   `ecs-architecture.md`.
 - GPU object lifetime: a type that owns Vulkan handles implements `GpuResource` (`resource/gpu_resource.rs`)
@@ -164,7 +160,10 @@ shader only through that address, never through an extra descriptor set or push 
 a domain that needs to react once a model replaced the scene model (attach loaded constraints or spring
 bones, reset a gizmo) registers its handler from its own system file at link time (`inventory`), rig
 handlers run before display handlers, and `src/app/model/` runs `ModelLoadHooks` generically without
-naming any domain. A hook file describes a contract only; it never names a concrete effect.
+naming any domain. `empty_scene.rs` holds the `EmptySceneHook` contract (name, apply) and the
+`empty_scene_hook!` macro: a feature that places a default entity when the app starts without a scene
+registers it from its own system file (`inventory`), and `src/app/init/` runs `EmptySceneHooks` without
+naming a feature. A hook file describes a contract only; it never names a concrete effect.
 
 ## src/effect/
 
@@ -192,7 +191,7 @@ outside those directories reaches a feature through a contract (`src/hooks/`), a
 | `src/effect/subscription.rs` | every effect (the single `EffectHook` list; scene hooks self-register instead) |
 | `src/platform/ui/` per-effect windows, `src/debugview/` per-effect dumps | the effect the file is for |
 | `src/scene/`, `src/hooks/`, `src/ecs/systems/*.rs` (shared systems), shared crates | none, tests included (`src/scene/` tests use `entities.rs::test_support`; effect round trips live in `src/ecs/systems/<effect>/tests.rs`) |
-| `src/app/`, `src/ecs/world.rs` | none in new code; the existing spots (default flame spawn in `init/instance.rs`, `query_flames` / `query_waters` / `query_winds`) are exceptions tracked with #179 and must not grow |
+| `src/app/`, `src/ecs/world.rs` | none |
 
 Concretely:
 
@@ -240,9 +239,8 @@ Concretely:
   (`src/ecs/resource/app_exit.rs`: the event loop stops when a system requested it). The batch run inserts
   a fixed `FrameClock` and requests `AppExit` when it completes; effect systems read `FrameClock` for their
   fixed-step time and never look for `BatchRun` either.
-- `src/ecs/world.rs` offers generic component access (`iter_components::<C>`, `insert_component`); it does
-  not grow `with_<effect>()` builders or `query_<effect>s()` helpers. The existing `query_flames` /
-  `query_waters` / `query_winds` are tracked as exceptions and must not be extended.
+- `src/ecs/world.rs` offers generic component access (`iter_components::<C>`, `entities_with::<C>`,
+  `insert_component`); it does not grow `with_<effect>()` builders or `query_<effect>s()` helpers.
 - Crates depend downward only: `thyllore-effect-core` depends on `thyllore-scene-core` / `-math-core` /
   `-color-core`, never on a sibling feature crate or on `src/`. Two features never depend on each other's
   crate or module; anything two features share moves down into the shared parent
@@ -262,9 +260,7 @@ for hook in world.resource::<SceneComponentHooks>().ordered() {
 ```
 
 Test for it before finishing: `grep -rni "flame\|water\|wind" src/scene src/hooks` must hit nothing but
-the stub pass names of `src/hooks/pass.rs` tests, the `window` / `windows(2)` matches, and the GPU-owning type
-names (`FlameBuffer`, `WaterBuffer`) that the `src/hooks/gpu_resource.rs` test lists for the vulkan-core
-exceptions of #179; that list shrinks with the exceptions.
+the stub pass names of `src/hooks/pass.rs` tests and the `window` / `windows(2)` matches.
 
 Resources follow the same rule. A resource is persisted by declaring its fields once
 (`declare_scene_format!` in the resource's own file, or in its crate for `thyllore-render-core` settings)

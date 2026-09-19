@@ -205,6 +205,8 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     ctx.world
         .insert_resource(crate::ecs::resource::RenderPrepSubTimings { timings: sub });
 
+    crate::ecs::systems::raytracing_systems::refresh_tlas_mesh_transforms(ctx)?;
+
     Ok(())
 }
 

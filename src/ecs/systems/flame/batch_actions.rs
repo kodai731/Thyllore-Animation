@@ -3,9 +3,7 @@ use thyllore_effect_core::TextureFitGroups;
 
 use crate::ecs::component::{ClipSchedule, FlameBaked, FlameEffect};
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::resource::{
-    BatchRun, ClipDragPreview, ClipDragType, FlameBatchCapture, TimelineInteractionState,
-};
+use crate::ecs::resource::{ClipDragPreview, ClipDragType, TimelineInteractionState};
 use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
 use crate::ecs::systems::timeline_systems::clip_drag_preview_times;
 use crate::ecs::systems::{unit_action_parse, BatchAction};
@@ -40,10 +38,6 @@ pub struct ApplyTextureFitRoundtrip {
     pub blend: f32,
     pub profile: bool,
 }
-
-/// Asks the batch capture to write the wall probe at the screenshot frame.
-#[derive(Debug, Default)]
-pub struct WallProbeDump;
 
 impl BatchAction for AddFlame {
     fn name(&self) -> &'static str {
@@ -115,18 +109,6 @@ impl BatchAction for ApplyTextureFitRoundtrip {
         world
             .resource_mut::<UIEventQueue>()
             .send(UIEvent::UpdateFlameBaked(Box::new(original_baked)));
-    }
-}
-
-impl BatchAction for WallProbeDump {
-    fn name(&self) -> &'static str {
-        "dump_wall_probe"
-    }
-    fn apply(&self, world: &mut World) {
-        if !world.contains_resource::<BatchRun>() {
-            return;
-        }
-        flame_batch_capture_mut(world).wall_probe = true;
     }
 }
 
@@ -278,25 +260,12 @@ crate::batch_action!(
     "apply_texture_fit_roundtrip",
     apply_texture_fit_roundtrip_parse
 );
-crate::batch_action!("dump_wall_probe", unit_action_parse::<WallProbeDump>);
-
-/// The flame's capture request for the current batch run, created on first use.
-pub(super) fn flame_batch_capture_mut(
-    world: &mut World,
-) -> crate::ecs::world::ResMut<'_, FlameBatchCapture> {
-    if !world.contains_resource::<FlameBatchCapture>() {
-        world.insert_resource(FlameBatchCapture::default());
-    }
-    world.resource_mut::<FlameBatchCapture>()
-}
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use super::*;
     use crate::asset::AssetStorage;
-    use crate::ecs::resource::{CaptureSchedule, ClipLibrary, TimelineState};
+    use crate::ecs::resource::{ClipLibrary, TimelineState};
     use crate::ecs::systems::{
         batch_anim_dump_json, batch_apply_debug_actions, resolve_engine_cli_overrides,
     };
@@ -385,20 +354,5 @@ mod tests {
                 .abs()
                 < 1e-6
         );
-    }
-
-    #[test]
-    fn wall_probe_dump_requests_the_capture_only_inside_a_batch_run() {
-        let mut world = World::new();
-        world.insert_resource(BatchRun::new(CaptureSchedule::single(
-            PathBuf::from("/tmp/out.png"),
-            1,
-        )));
-        batch_apply_debug_actions(&mut world, &[&WallProbeDump as &dyn BatchAction]);
-        assert!(world.resource::<FlameBatchCapture>().wall_probe);
-
-        let mut world = World::new();
-        batch_apply_debug_actions(&mut world, &[&WallProbeDump as &dyn BatchAction]);
-        assert!(world.get_resource::<FlameBatchCapture>().is_none());
     }
 }

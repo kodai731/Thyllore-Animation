@@ -702,12 +702,8 @@ unsafe fn execute_deferred_action(app: &mut App, action: DeferredAction) {
             app.dump_debug_info();
         }
 
-        DeferredAction::DumpWaterDebug => {
-            app.dump_water_debug();
-        }
-
-        DeferredAction::DumpWindDebug => {
-            app.dump_wind_debug();
+        DeferredAction::CaptureNow(capture) => {
+            app.capture_now(capture.as_ref());
         }
 
         DeferredAction::DumpAnimationDebug => {
@@ -817,7 +813,7 @@ unsafe fn render_frame(
         app.render(image_index, draw_data)?;
         let render_cpu_ms = render_cpu_start.elapsed().as_secs_f32() * 1000.0;
 
-        app.run_batch_capture_phase(image_index)?;
+        app.after_present(image_index)?;
 
         app.data
             .ecs_world

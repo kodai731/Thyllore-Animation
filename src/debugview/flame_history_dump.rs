@@ -3,35 +3,30 @@ use anyhow::Result;
 use crate::ecs::component::{FlameBaked, FlameEffect, FlameTemporalAccum};
 use crate::ecs::resource::{FlameDumpSink, FlameRenderTargets};
 use crate::ecs::systems::flame_dump_npy_path;
-use crate::hooks::batch_capture::CaptureContext;
+use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
 use crate::vulkanr::vulkan::*;
 use thyllore_effect_core::{build_flame_ubo, FlameUBO};
 use thyllore_math_core::{f16_to_f32, write_npy_f32};
 
 /// With `--flame-dump`, writes the current flame history image and the first flame's UBO next to
 /// the dump file (`flame_XX.npy` in sequence mode).
-unsafe fn flame_history_capture(ctx: &CaptureContext) -> Result<()> {
-    let Some(sink_path) = ctx
-        .world
-        .get_resource::<FlameDumpSink>()
-        .map(|sink| sink.path.clone())
-    else {
-        return Ok(());
-    };
-    let npy_path = match &ctx.slot.sequence_dir {
-        Some(dir) => dir.join(format!("flame_{:02}.npy", ctx.slot.index)),
-        None => flame_dump_npy_path(&sink_path),
-    };
-    save_flame_history_npy(ctx, &npy_path)?;
+impl BatchCapture for FlameDumpSink {
+    unsafe fn capture(&self, ctx: &CaptureContext) -> Result<()> {
+        let npy_path = match &ctx.slot.sequence_dir {
+            Some(dir) => dir.join(format!("flame_{:02}.npy", ctx.slot.index)),
+            None => flame_dump_npy_path(&self.path),
+        };
+        save_flame_history_npy(ctx, &npy_path)?;
 
-    let ubo_path = npy_path.with_file_name(format!(
-        "{}.ubo.bin",
-        npy_path.file_stem().unwrap_or_default().to_string_lossy()
-    ));
-    write_first_flame_ubo(ctx, &ubo_path)
+        let ubo_path = npy_path.with_file_name(format!(
+            "{}.ubo.bin",
+            npy_path.file_stem().unwrap_or_default().to_string_lossy()
+        ));
+        write_first_flame_ubo(ctx, &ubo_path)
+    }
 }
 
-crate::batch_capture!("flame_history", flame_history_capture);
+crate::batch_capture!(FlameDumpSink);
 
 fn write_first_flame_ubo(ctx: &CaptureContext, path: &std::path::Path) -> Result<()> {
     let Some(&first) = ctx.world.query_flames().first() else {

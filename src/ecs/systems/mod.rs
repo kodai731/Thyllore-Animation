@@ -68,6 +68,7 @@ mod ui_event_systems;
 pub mod water;
 mod weight_heatmap_systems;
 pub mod wind;
+mod world;
 
 pub use animation::*;
 #[cfg(feature = "auto-rig")]
@@ -128,3 +129,4 @@ pub use ui_event_systems::*;
 pub use water::*;
 pub use weight_heatmap_systems::*;
 pub use wind::*;
+pub use world::*;

@@ -1,4 +1,3 @@
-mod batch_actions;
 mod cli;
 mod debug_dump;
 mod descriptors;

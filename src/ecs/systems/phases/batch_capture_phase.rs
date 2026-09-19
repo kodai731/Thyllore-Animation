@@ -2,7 +2,7 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::BatchRun;
-use crate::ecs::systems::batch_run_systems::{batch_run_record_capture, capture_output_path};
+use crate::ecs::systems::world::{batch_run_record_capture, capture_output_path};
 use crate::hooks::batch_capture::{BatchCaptureHooks, CaptureContext};
 
 /// Post-render: with the GPU idle, runs every registered readback, then takes the schedule's

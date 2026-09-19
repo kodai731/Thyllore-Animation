@@ -1,7 +1,6 @@
 use anyhow::Result;
 use cgmath::Vector3;
 
-use super::batch_run_systems::run_batch_schedule_phase;
 #[cfg(feature = "ml")]
 use super::curve_copilot::curve_suggestion_poll_results;
 #[cfg(feature = "ml")]
@@ -13,6 +12,7 @@ use super::phases::{
 };
 use super::raytracing_systems::refresh_tlas_mesh_transforms;
 use super::timeline_systems::timeline_update;
+use super::world::run_batch_schedule_phase;
 use crate::app::FrameContext;
 #[cfg(feature = "ml")]
 use crate::ecs::component::InferenceActorSetup;

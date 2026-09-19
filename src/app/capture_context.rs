@@ -1,23 +1,8 @@
-use anyhow::Result;
-
 use crate::app::App;
-use crate::ecs::systems::phases::run_batch_capture_phase;
-use crate::ecs::systems::requested_capture;
-use crate::hooks::batch_capture::{BatchCaptureHooks, CaptureContext, CaptureSlot};
+use crate::hooks::batch_capture::{BatchCapture, CaptureContext, CaptureSlot};
 use crate::vulkanr::context::CommandState;
 
 impl App {
-    /// Called once per frame after present; does nothing unless the batch schedule asked for
-    /// a capture this frame.
-    pub unsafe fn run_batch_capture_phase(&self, image_index: usize) -> Result<()> {
-        let Some(slot) = requested_capture(&self.data.ecs_world) else {
-            return Ok(());
-        };
-        let hooks = BatchCaptureHooks::collect()?;
-        let ctx = self.capture_context(image_index, slot);
-        run_batch_capture_phase(&ctx, &hooks)
-    }
-
     pub fn capture_context(&self, image_index: usize, slot: CaptureSlot) -> CaptureContext<'_> {
         CaptureContext {
             instance: &self.instance,
@@ -37,5 +22,12 @@ impl App {
             self.frame % crate::app::init::MAX_FRAMES_IN_FLIGHT,
             CaptureSlot::interactive(),
         )
+    }
+
+    /// Runs one readback right away, outside the batch schedule (a debug window button).
+    pub fn capture_now(&self, capture: &dyn BatchCapture) {
+        if let Err(error) = unsafe { capture.capture(&self.interactive_capture_context()) } {
+            log_warn!("capture failed: {:?}", error);
+        }
     }
 }

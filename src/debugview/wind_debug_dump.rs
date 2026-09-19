@@ -1,24 +1,20 @@
 use anyhow::Result;
 
-use crate::app::App;
-use crate::ecs::resource::WindBatchCapture;
+use crate::ecs::resource::WindDebugCapture;
 use crate::ecs::systems::{
     build_wind_debug_record, current_unix_time, wind_debug_screenshot_path, write_wind_debug_dump,
 };
-use crate::hooks::batch_capture::CaptureContext;
+use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
 
-unsafe fn wind_debug_capture(ctx: &CaptureContext) -> Result<()> {
-    let requested = ctx
-        .world
-        .get_resource::<WindBatchCapture>()
-        .is_some_and(|request| request.debug_dump);
-    if requested {
+impl BatchCapture for WindDebugCapture {
+    unsafe fn capture(&self, ctx: &CaptureContext) -> Result<()> {
         dump_wind_debug(ctx);
+        Ok(())
     }
-    Ok(())
 }
 
-crate::batch_capture!("wind_debug", wind_debug_capture);
+crate::batch_capture!(WindDebugCapture);
+crate::capture_action!("dump_wind_debug", WindDebugCapture);
 
 pub fn dump_wind_debug(ctx: &CaptureContext) {
     let unix_time = current_unix_time();
@@ -36,11 +32,5 @@ pub fn dump_wind_debug(ctx: &CaptureContext) {
     match write_wind_debug_dump(&record, unix_time) {
         Ok(path) => msg_info!("Wind debug dumped: {}", path.display()),
         Err(error) => log_error!("wind debug dump failed: {}", error),
-    }
-}
-
-impl App {
-    pub fn dump_wind_debug(&self) {
-        dump_wind_debug(&self.interactive_capture_context());
     }
 }

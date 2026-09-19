@@ -1,8 +1,12 @@
+use std::marker::PhantomData;
+use std::rc::Rc;
+
 use anyhow::Result;
 
 use crate::ecs::events::{DebugPrimitiveKind, UIEvent, UIEventQueue};
-use crate::ecs::resource::{DebugViewMode, DebugViewState};
+use crate::ecs::resource::{BatchRun, DebugViewMode, DebugViewState};
 use crate::ecs::world::World;
+use crate::hooks::batch_capture::BatchCapture;
 
 /// A headless `--batch-debug-action`; implementations register with `batch_action!` from their domain.
 pub trait BatchAction: std::fmt::Debug {
@@ -38,6 +42,53 @@ pub fn unit_action_parse<A: BatchAction + Default + 'static>(
 ) -> Option<Result<Box<dyn BatchAction>>> {
     let action = A::default();
     (text == action.name()).then(|| Ok(Box::new(action) as Box<dyn BatchAction>))
+}
+
+/// A `dump_*` action: inside a batch run it inserts the request `T` so the readback waits for the
+/// capture frame; interactively the readback runs at once through `UIEvent::CaptureNow`.
+#[derive(Debug)]
+pub struct CaptureRequest<T: BatchCapture + Default> {
+    name: &'static str,
+    request: PhantomData<T>,
+}
+
+impl<T: BatchCapture + Default> BatchAction for CaptureRequest<T> {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn apply(&self, world: &mut World) {
+        if world.contains_resource::<BatchRun>() {
+            world.insert_resource(T::default());
+            return;
+        }
+        world
+            .resource_mut::<UIEventQueue>()
+            .send(UIEvent::CaptureNow(Rc::new(T::default())));
+    }
+}
+
+pub fn capture_request_parse<T: BatchCapture + Default>(
+    text: &str,
+    name: &'static str,
+) -> Option<Result<Box<dyn BatchAction>>> {
+    (text == name)
+        .then(|| {
+            Box::new(CaptureRequest::<T> {
+                name,
+                request: PhantomData,
+            }) as Box<dyn BatchAction>
+        })
+        .map(Ok)
+}
+
+/// Registers the `dump_*` action that requests the capture `$request` at link time.
+#[macro_export]
+macro_rules! capture_action {
+    ($name:literal, $request:ty) => {
+        $crate::batch_action!($name, |text| {
+            $crate::ecs::systems::capture_request_parse::<$request>(text, $name)
+        });
+    };
 }
 
 /// Every registered action, sorted by name.

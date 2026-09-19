@@ -5,77 +5,76 @@ use cgmath::{Matrix4, SquareMatrix, Vector3};
 
 use crate::debugview::flame_history_dump::decode_rgba16f;
 use crate::ecs::component::WaterTorusEffect;
-use crate::ecs::resource::{ProjectionData, WaterBatchCapture};
+use crate::ecs::resource::{ProjectionData, WaterProbeCapture};
 use crate::ecs::systems::water::probe::{
     compute_water_probe_report, inverse_view_proj_f64, ProbeRoot,
 };
-use crate::hooks::batch_capture::CaptureContext;
+use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
 use crate::vulkanr::vulkan::*;
 
 /// With `--batch-water-probe <path>`, compares the HDR image against the analytic torus and
 /// writes `<path>.json` / `<path>.npy`.
-unsafe fn water_probe_capture(ctx: &CaptureContext) -> Result<()> {
-    let Some(probe_path) = ctx
-        .world
-        .get_resource::<WaterBatchCapture>()
-        .and_then(|request| request.probe_path.clone())
-    else {
-        return Ok(());
-    };
-    let hdr = ctx
-        .hdr
-        .ok_or_else(|| anyhow!("hdr buffer not initialized"))?;
-    let Some(&water) = ctx.world.query_waters().first() else {
-        log_warn!("water probe skipped: no water torus effect entity");
-        return Ok(());
-    };
-    let effect = ctx
-        .world
-        .get_component::<WaterTorusEffect>(water)
-        .ok_or_else(|| anyhow!("water entity has no effect component"))?
-        .clone();
+impl BatchCapture for WaterProbeCapture {
+    unsafe fn capture(&self, ctx: &CaptureContext) -> Result<()> {
+        let hdr = ctx
+            .hdr
+            .ok_or_else(|| anyhow!("hdr buffer not initialized"))?;
+        let Some(&water) = ctx.world.query_waters().first() else {
+            log_warn!("water probe skipped: no water torus effect entity");
+            return Ok(());
+        };
+        let effect = ctx
+            .world
+            .get_component::<WaterTorusEffect>(water)
+            .ok_or_else(|| anyhow!("water entity has no effect component"))?
+            .clone();
 
-    let (width, height) = (hdr.width, hdr.height);
-    let f32_data = read_hdr_rgba16f(ctx, hdr.color_image, width, height)?;
+        let (width, height) = (hdr.width, hdr.height);
+        let f32_data = read_hdr_rgba16f(ctx, hdr.color_image, width, height)?;
 
-    let proj_data = ctx.world.resource::<ProjectionData>();
-    let inv_view_proj = inverse_view_proj_f64(proj_data.proj, proj_data.view);
-    let inv_view = proj_data.view.invert().unwrap_or_else(Matrix4::identity);
-    let camera_pos = Vector3::new(inv_view[3][0], inv_view[3][1], inv_view[3][2]);
-    drop(proj_data);
+        let proj_data = ctx.world.resource::<ProjectionData>();
+        let inv_view_proj = inverse_view_proj_f64(proj_data.proj, proj_data.view);
+        let inv_view = proj_data.view.invert().unwrap_or_else(Matrix4::identity);
+        let camera_pos = Vector3::new(inv_view[3][0], inv_view[3][1], inv_view[3][2]);
+        drop(proj_data);
 
-    let inverse_model = thyllore_effect_core::build_water_model_matrix(&effect)
-        .invert()
-        .unwrap_or_else(Matrix4::identity);
-    let root = probe_root_of(ctx);
-    let report = compute_water_probe_report(
-        &f32_data,
-        width,
-        height,
-        inv_view_proj,
-        inverse_model,
-        effect.major_radius,
-        camera_pos,
-        effect.minor_radius / effect.major_radius,
-        root,
-    );
+        let inverse_model = thyllore_effect_core::build_water_model_matrix(&effect)
+            .invert()
+            .unwrap_or_else(Matrix4::identity);
+        let root = probe_root_of(ctx);
+        let report = compute_water_probe_report(
+            &f32_data,
+            width,
+            height,
+            inv_view_proj,
+            inverse_model,
+            effect.major_radius,
+            camera_pos,
+            effect.minor_radius / effect.major_radius,
+            root,
+        );
 
-    let json_path = sibling_with_extension(&probe_path, "json");
-    std::fs::write(&json_path, serde_json::to_string_pretty(&report)?)?;
-    let npy_path = sibling_with_extension(&probe_path, "npy");
-    thyllore_math_core::write_npy_f32(&npy_path, &[height as usize, width as usize, 4], &f32_data)?;
+        let json_path = sibling_with_extension(&self.path, "json");
+        std::fs::write(&json_path, serde_json::to_string_pretty(&report)?)?;
+        let npy_path = sibling_with_extension(&self.path, "npy");
+        thyllore_math_core::write_npy_f32(
+            &npy_path,
+            &[height as usize, width as usize, 4],
+            &f32_data,
+        )?;
 
-    println!(
-        "water probe dumped to {} ({} pixels, {} mismatch, root={})",
-        json_path.display(),
-        report.pixels,
-        report.count_mismatch,
-        report.root
-    );
-    Ok(())
+        println!(
+            "water probe dumped to {} ({} pixels, {} mismatch, root={})",
+            json_path.display(),
+            report.pixels,
+            report.count_mismatch,
+            report.root
+        );
+        Ok(())
+    }
 }
 
-crate::batch_capture!("water_probe", water_probe_capture);
+crate::batch_capture!(WaterProbeCapture);
 
 fn probe_root_of(ctx: &CaptureContext) -> ProbeRoot {
     let debug_view = ctx

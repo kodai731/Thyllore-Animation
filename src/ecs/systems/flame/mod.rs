@@ -16,7 +16,6 @@ mod trace;
 mod trail;
 
 pub use attach::*;
-use batch_actions::flame_batch_capture_mut;
 pub use cli::*;
 pub use history_accumulate::*;
 pub use passes::*;

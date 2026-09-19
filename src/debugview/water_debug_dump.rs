@@ -1,12 +1,11 @@
 use std::ffi::CStr;
 
-use crate::app::App;
-use crate::ecs::resource::{WaterBatchCapture, WaterRenderTargets};
+use crate::ecs::resource::{WaterDebugCapture, WaterRenderTargets};
 use crate::ecs::systems::{
     build_water_debug_record, current_unix_time, water_debug_caustic_accum_path,
     water_debug_screenshot_path, write_water_debug_dump, WaterDebugRenderInfo,
 };
-use crate::hooks::batch_capture::CaptureContext;
+use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
 use crate::vulkanr::context::SwapchainState;
 use crate::vulkanr::data::Vertex;
 use crate::vulkanr::vulkan::*;
@@ -74,24 +73,15 @@ unsafe fn save_water_caustic_accum_npy(
     Ok(stats)
 }
 
-unsafe fn water_debug_capture(ctx: &CaptureContext) -> Result<()> {
-    let requested = ctx
-        .world
-        .get_resource::<WaterBatchCapture>()
-        .is_some_and(|request| request.debug_dump);
-    if requested {
+impl BatchCapture for WaterDebugCapture {
+    unsafe fn capture(&self, ctx: &CaptureContext) -> Result<()> {
         dump_water_debug(ctx);
-    }
-    Ok(())
-}
-
-crate::batch_capture!("water_debug", water_debug_capture);
-
-impl App {
-    pub fn dump_water_debug(&self) {
-        dump_water_debug(&self.interactive_capture_context());
+        Ok(())
     }
 }
+
+crate::batch_capture!(WaterDebugCapture);
+crate::capture_action!("dump_water_debug", WaterDebugCapture);
 
 pub fn dump_water_debug(ctx: &CaptureContext) {
     let unix_time = current_unix_time();

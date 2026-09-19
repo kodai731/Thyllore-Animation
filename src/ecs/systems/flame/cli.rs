@@ -12,8 +12,8 @@ use thyllore_effect_core::{
 use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameBoneAttachment, FlameEffect, FlameTrail, HeatPlume, MotionPath};
 use crate::ecs::resource::{
-    BatchFlameOrbit, BatchRun, FlameBatchCapture, FlameDumpSink, FlameRenderSettings,
-    FlameSdfSource, FlameShadingMode,
+    BatchFlameOrbit, FlameDumpSink, FlameFieldTraceCapture, FlameRenderSettings, FlameSdfSource,
+    FlameShadingMode,
 };
 use crate::ecs::systems::cli_args::{
     finite_float_parse, float_pair_parse, scalar_assignment_parse,
@@ -79,10 +79,11 @@ impl BootstrapOverrides for FlameOverrides {
         if let Some(path) = &self.sdf {
             world.insert_resource(FlameSdfSource { path: path.clone() });
         }
-        if world.contains_resource::<BatchRun>() {
-            let mut request = super::flame_batch_capture_mut(world);
-            request.trace_path = self.trace_path.clone();
-            request.wall_probe_path = self.wall_probe_path.clone();
+        if self.trace_path.is_some() || self.wall_probe_path.is_some() {
+            world.insert_resource(FlameFieldTraceCapture {
+                trace_path: self.trace_path.clone(),
+                wall_probe_path: self.wall_probe_path.clone(),
+            });
         }
 
         self.spawn_extra_flames(world, assets);
@@ -660,20 +661,16 @@ mod tests {
         ]))
         .unwrap();
         let mut world = World::new();
-        world.insert_resource(BatchRun::new(
-            crate::ecs::resource::CaptureSchedule::single(PathBuf::from("/tmp/out.png"), 1),
-        ));
         overrides
             .apply(&mut world, &mut AssetStorage::new())
             .unwrap();
 
-        let request = world.resource::<FlameBatchCapture>();
+        let request = world.resource::<FlameFieldTraceCapture>();
         assert_eq!(request.trace_path, Some(PathBuf::from("/tmp/trace.json")));
         assert_eq!(
             request.wall_probe_path,
             Some(PathBuf::from("/tmp/wall.json"))
         );
-        assert!(!request.wall_probe);
     }
 
     #[test]
@@ -684,5 +681,6 @@ mod tests {
         overrides.apply(&mut world, &mut assets).unwrap();
         assert!(world.get_resource::<FlameSdfSource>().is_none());
         assert!(world.get_resource::<BatchFlameOrbit>().is_none());
+        assert!(world.get_resource::<FlameFieldTraceCapture>().is_none());
     }
 }

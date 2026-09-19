@@ -1,8 +1,10 @@
-use crate::ecs::component::{apply_flame_param_value, FlameEffect, FlameParam};
+use crate::app::FrameContext;
+use crate::ecs::component::{
+    apply_flame_param_value, FlameBaked, FlameEffect, FlameParam, FlameTemporalAccum,
+};
 use crate::ecs::resource::LightState;
 use crate::ecs::systems::effect_time::{advance_effect_time, EffectTimeSources, TimedEffect};
 use crate::ecs::world::{Entity, Transform, World};
-use crate::ecs::FrameContext;
 use cgmath::Vector3;
 use thyllore_anim_core::editable::PropertyType;
 
@@ -58,5 +60,19 @@ impl TimedEffect for FlameEffect {
 }
 
 pub fn flame_time_advance(ctx: &mut FrameContext) {
+    ensure_flame_runtime_components(ctx.world);
     advance_effect_time::<FlameEffect>(ctx);
+}
+
+/// Baked data and the temporal accumulator are runtime state every flame carries, whichever
+/// path spawned it.
+pub fn ensure_flame_runtime_components(world: &mut World) {
+    for entity in world.query_flames() {
+        if !world.has_component::<FlameBaked>(entity) {
+            world.insert_component(entity, FlameBaked::default());
+        }
+        if !world.has_component::<FlameTemporalAccum>(entity) {
+            world.insert_component(entity, FlameTemporalAccum::default());
+        }
+    }
 }

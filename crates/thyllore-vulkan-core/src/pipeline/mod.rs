@@ -4,4 +4,4 @@ pub mod raytracing;
 
 pub use builder::*;
 pub use cache::*;
-pub use raytracing::RRRayTracingPipeline;
+pub use raytracing::{max_ray_recursion_depth, RRRayTracingPipeline};

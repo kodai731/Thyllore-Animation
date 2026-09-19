@@ -1,7 +1,11 @@
 use crate::animation::{BoneId, ConstraintType, Skeleton};
+use crate::asset::AssetStorage;
 use crate::ecs::component::ConstraintSet;
 use crate::ecs::component::{ColorVertex, LineMesh};
+use crate::ecs::resource::gizmo::ConstraintGizmoData;
 use crate::ecs::systems::bone_gizmo_systems::compute_display_transforms;
+use crate::ecs::world::World;
+use crate::hooks::model_load::LoadedModel;
 
 use cgmath::Matrix4;
 
@@ -392,3 +396,20 @@ fn normalize_vec(v: [f32; 3]) -> [f32; 3] {
     let inv = 1.0 / len;
     [v[0] * inv, v[1] * inv, v[2] * inv]
 }
+
+pub fn constraint_gizmo_reset_for_loaded_model(
+    world: &mut World,
+    assets: &AssetStorage,
+    _loaded: &LoadedModel,
+) {
+    let has_skeleton = !assets.skeletons.is_empty();
+    let has_constraints = world.iter_constrained_entities().next().is_some();
+
+    world.resource_mut::<ConstraintGizmoData>().visible = has_skeleton && has_constraints;
+}
+
+crate::model_load_hook!(
+    "constraint_gizmo",
+    Display,
+    constraint_gizmo_reset_for_loaded_model
+);

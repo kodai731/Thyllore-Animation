@@ -1,12 +1,17 @@
+pub mod bootstrap;
+pub mod capture_context;
 pub mod cleanup;
 pub mod color_test_quad;
 mod command_recording;
+pub mod config;
 pub mod data;
 pub(crate) mod features;
 pub mod init;
-pub mod model_loader;
+pub mod lifecycle;
+pub mod model;
 mod pass_targets;
 pub mod post_process;
+pub mod raytracing;
 pub mod render;
 pub mod render_context;
 pub mod scene_model;

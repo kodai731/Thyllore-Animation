@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::command::*;
 use crate::core::device::*;
 use crate::resource::buffer::create_buffer;
@@ -115,4 +117,35 @@ unsafe fn record_image_to_buffer_copy(
         &[] as &[vk::BufferMemoryBarrier],
         &[barrier_back.build()],
     );
+}
+
+/// Writes a host-visible BGRA8 readback buffer as an RGBA PNG.
+pub unsafe fn write_host_buffer_bgra_png(
+    device: &crate::core::device::Device,
+    buffer_memory: vk::DeviceMemory,
+    image_size: vk::DeviceSize,
+    width: u32,
+    height: u32,
+    path: &Path,
+) -> Result<()> {
+    let data = device.map_memory(buffer_memory, 0, image_size, vk::MemoryMapFlags::empty())?;
+    let bgra = std::slice::from_raw_parts(data as *const u8, image_size as usize);
+    let mut rgba = vec![0u8; (width * height * 4) as usize];
+    for (pixel_out, pixel_in) in rgba.chunks_exact_mut(4).zip(bgra.chunks_exact(4)) {
+        pixel_out[0] = pixel_in[2];
+        pixel_out[1] = pixel_in[1];
+        pixel_out[2] = pixel_in[0];
+        pixel_out[3] = pixel_in[3];
+    }
+    device.unmap_memory(buffer_memory);
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let writer = std::io::BufWriter::new(std::fs::File::create(path)?);
+    let mut encoder = png::Encoder::new(writer, width, height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder.write_header()?.write_image_data(&rgba)?;
+    Ok(())
 }

@@ -52,7 +52,7 @@ fn timeline_state_drives_water_time() {
         ..TimelineState::new()
     });
 
-    // water_time_advance reads TimelineState.current_time when BatchRun is absent.
+    // water_time_advance reads TimelineState.current_time on the wall clock.
     // Replicate the branch logic here (the function takes FrameContext which needs Vulkan).
     let entity = world.query_waters()[0];
     let timeline_time: f32 = world.get_resource::<TimelineState>().unwrap().current_time;
@@ -67,7 +67,7 @@ fn timeline_state_drives_water_time() {
 fn timeline_time_sources(current_time: f32, playing: bool, delta_time: f32) -> EffectTimeSources {
     EffectTimeSources {
         batch_fixed_time: None,
-        batch_frames_rendered: None,
+        fixed_step_time: None,
         timeline: Some(TimelineSample {
             current_time,
             playing,
@@ -537,4 +537,63 @@ fn water_debug_record_leaves_caustic_accum_null_without_a_water_buffer() {
     assert!(record["render"]["caustic_accum_path"].is_null());
     assert!(record["render"]["caustic_accum_nonzero"].is_null());
     assert!(record["render"]["caustic_accum_max"].is_null());
+}
+
+#[test]
+fn water_scene_roundtrip_keeps_parameters_and_preset() {
+    let dir = std::env::temp_dir().join("thyllore_scene_water_roundtrip");
+    let _ = std::fs::remove_dir_all(&dir);
+    let scenes_dir = dir.join("scenes");
+    std::fs::create_dir_all(&scenes_dir).unwrap();
+    let scene_path = scenes_dir.join("test.scene.ron");
+
+    let mut world = crate::scene::world_with_scene_hooks();
+    let mut assets = crate::asset::AssetStorage::new();
+    let entity = spawn_water_with_clip(
+        &mut world,
+        &mut assets,
+        "Water",
+        WaterTorusEffect::default(),
+    );
+    world
+        .get_component_mut::<WaterTorusEffect>(entity)
+        .expect("water effect")
+        .major_radius = 2.5;
+    world.insert_component(
+        entity,
+        crate::ecs::component::AppliedWaterPreset {
+            name: "sea".to_string(),
+        },
+    );
+
+    crate::scene::save_scene(&scene_path, &world).unwrap();
+    let loaded = crate::scene::load_scene(&scene_path).unwrap();
+    assert_eq!(loaded.scene.entities.len(), 1);
+    assert_eq!(loaded.scene.entities[0].name, "Water");
+    let components = &loaded.scene.entities[0].components;
+    assert!(components.contains_key("water_torus"));
+    assert!(components.contains_key("water_preset"));
+    assert!(components.contains_key("clip"));
+    assert_eq!(loaded.clips[0].name, "Water");
+
+    let mut restored = crate::scene::world_with_scene_hooks();
+    let mut restored_assets = crate::asset::AssetStorage::new();
+    crate::ecs::systems::clip_library_systems::clip_library_register_loaded(
+        &mut restored,
+        &mut restored_assets,
+        loaded.clips.clone(),
+    );
+    crate::scene::apply_loaded_scene_to_world(&loaded, &mut restored, &mut restored_assets);
+
+    let waters = restored.query_waters();
+    assert_eq!(waters.len(), 1);
+    let water = restored
+        .get_component::<WaterTorusEffect>(waters[0])
+        .unwrap();
+    assert_eq!(water.major_radius, 2.5);
+    let preset = restored
+        .get_component::<crate::ecs::component::AppliedWaterPreset>(waters[0])
+        .unwrap();
+    assert_eq!(preset.name, "sea");
+    assert!(crate::ecs::systems::find_entity_clip_id(&restored, waters[0]).is_some());
 }

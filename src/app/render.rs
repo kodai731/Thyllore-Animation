@@ -163,24 +163,9 @@ impl App {
 
     unsafe fn recreate_gbuffer_framebuffer(&mut self) -> Result<()> {
         let mut render_targets = self.resource_mut::<RenderTargets>();
-        let device = &self.rrdevice.device;
-
-        if render_targets.render.gbuffer_framebuffer != vk::Framebuffer::null() {
-            device.destroy_framebuffer(render_targets.render.gbuffer_framebuffer, None);
-            render_targets.render.gbuffer_framebuffer = vk::Framebuffer::null();
-        }
-        if render_targets.render.gbuffer_depth_image_view != vk::ImageView::null() {
-            device.destroy_image_view(render_targets.render.gbuffer_depth_image_view, None);
-            render_targets.render.gbuffer_depth_image_view = vk::ImageView::null();
-        }
-        if render_targets.render.gbuffer_depth_image != vk::Image::null() {
-            device.destroy_image(render_targets.render.gbuffer_depth_image, None);
-            render_targets.render.gbuffer_depth_image = vk::Image::null();
-        }
-        if render_targets.render.gbuffer_depth_image_memory != vk::DeviceMemory::null() {
-            device.free_memory(render_targets.render.gbuffer_depth_image_memory, None);
-            render_targets.render.gbuffer_depth_image_memory = vk::DeviceMemory::null();
-        }
+        render_targets
+            .render
+            .destroy_gbuffer_attachments(&self.rrdevice.device);
 
         if let Some(ref gbuffer) = self.data.raytracing.gbuffer {
             create_gbuffer_framebuffer(
@@ -330,25 +315,10 @@ impl App {
             .map(|ae| ae.enabled)
             .unwrap_or(false);
 
-        // Get frame number from BatchRun if available, otherwise use internal counter
-        let frame = match self
-            .data
-            .ecs_world
-            .get_resource::<crate::ecs::resource::BatchRun>()
-        {
-            Some(batch_run) => batch_run.frames_rendered,
-            None => match self
-                .data
-                .ecs_world
-                .get_resource_mut::<crate::ecs::resource::ExposureDumpSink>()
-            {
-                Some(mut sink) => {
-                    sink.last_frame += 1;
-                    sink.last_frame
-                }
-                None => 0,
-            },
-        };
+        let clock = self.resource::<crate::ecs::resource::FrameClock>();
+        let frame = clock.frame;
+        let is_fixed_step = clock.is_fixed();
+        drop(clock);
 
         if !ae_enabled {
             self.record_exposure_dump(frame, None);
@@ -357,12 +327,7 @@ impl App {
         }
 
         self.save_manual_exposure_if_needed();
-        // batch 決定性: AE 読み戻しを直前フレーム完了後に固定する
-        if self
-            .data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::BatchRun>()
-        {
+        if is_fixed_step {
             let _ = self.rrdevice.device.device_wait_idle();
         }
 

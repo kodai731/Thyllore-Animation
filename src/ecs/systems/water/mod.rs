@@ -1,7 +1,10 @@
+mod cli;
 mod debug_dump;
+mod gpu_primitive;
 mod history_accumulate;
 pub mod passes;
 mod pick;
+mod pipeline;
 mod preset;
 pub mod probe;
 mod render_targets;
@@ -10,6 +13,7 @@ mod spawn;
 mod tests;
 mod time;
 
+pub use cli::*;
 pub use debug_dump::*;
 pub use history_accumulate::*;
 pub use pick::*;

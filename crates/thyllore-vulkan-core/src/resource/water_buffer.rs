@@ -3,6 +3,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use crate::command::{begin_single_time_commands, end_single_time_commands};
 use crate::core::RRDevice;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::hdr_buffer::HDR_FORMAT;
 use crate::resource::render_target_storage::{RenderTargetKey, RenderTargetStorage};
 use crate::resource::render_target_transient::TransientDesc;
@@ -412,5 +413,11 @@ impl Drop for WaterBuffer {
         if has_resources {
             log_warn!("WaterBuffer dropped without calling destroy()");
         }
+    }
+}
+
+impl GpuResource for WaterBuffer {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

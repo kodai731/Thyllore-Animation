@@ -112,12 +112,8 @@ pub fn dispatch_camera_light_debug_events(
                 deferred.push(DeferredAction::DumpAnimationDebug);
             }
 
-            UIEvent::DumpWaterDebug => {
-                deferred.push(DeferredAction::DumpWaterDebug);
-            }
-
-            UIEvent::DumpWindDebug => {
-                deferred.push(DeferredAction::DumpWindDebug);
+            UIEvent::CaptureNow(capture) => {
+                deferred.push(DeferredAction::CaptureNow(capture.clone()));
             }
 
             _ => {}

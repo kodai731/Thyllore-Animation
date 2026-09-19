@@ -1,9 +1,13 @@
 mod attach;
+mod batch_actions;
+mod cli;
 mod history_accumulate;
 mod passes;
 mod pick;
+mod pipeline;
 mod preset;
 mod render_targets;
+mod sdf;
 mod spawn;
 mod style;
 mod texture_fit;
@@ -12,6 +16,7 @@ mod trace;
 mod trail;
 
 pub use attach::*;
+pub use cli::*;
 pub use history_accumulate::*;
 pub use passes::*;
 pub use pick::*;

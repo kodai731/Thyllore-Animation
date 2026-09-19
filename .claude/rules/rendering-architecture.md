@@ -39,6 +39,9 @@ reads and writes, and a declaration must hold whenever `record()` would emit the
 3. `render` (`src/app/render.rs`): TLAS refresh, `prepare_post_process_targets` and
    `prepare_water_frame_targets` (acquire transient images, update the descriptor sets of this frame slot),
    `record_command_buffer`, submit, present, `FrameSync::advance`.
+4. `App::after_present` (`src/app/lifecycle/after_present.rs`) → `run_batch_capture_phase`: only when the
+   batch schedule asked for a capture this frame; waits idle, runs every requested `BatchCapture` and saves
+   the screenshot.
 
 Descriptor sets that read a transient image exist once per frame slot (`MAX_FRAMES_IN_FLIGHT = 2`, in
 `src/app/init/instance.rs`). Never update a single descriptor set that a pending command buffer may still
@@ -94,7 +97,7 @@ stages / descriptor set roles are declared once in `shaders/passes.toml` and gen
 ## Model loading
 
 Importers live in `crates/thyllore-importer-core` (glTF / FBX / PNG) and return model-core + anim-core
-types; `src/loader/` only re-exports them. `src/app/model_loader.rs` turns the result into `AssetStorage`
+types; `src/loader/` only re-exports them. `src/app/model/` turns the result into `AssetStorage`
 entries, GPU meshes (`GraphicsResources`) and acceleration structures. Sample models live under
 `assets/models/<name>/`.
 

@@ -152,7 +152,8 @@ function that calls the appropriate systems in sequence.
 
 ```
 run_frame()  (src/ecs/systems/frame_runner.rs, called from App::update)
-├── run_batch_schedule_phase()     # Batch capture schedule: frame count → capture request (systems/world/)
+├── run_frame_clock_phase()        # FrameClock.frame += 1 (systems/world/)
+├── run_batch_schedule_phase()     # Batch capture schedule: FrameClock.frame → capture request (systems/world/)
 ├── run_input_phase()              # Input handling, gizmo interaction (EcsContext)
 ├── run_transform_phase_ecs()      # Transform propagation (EcsContext)
 ├── run_timeline_phase()           # Timeline / clip schedule advance

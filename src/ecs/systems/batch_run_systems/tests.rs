@@ -6,16 +6,9 @@ use crate::ecs::component::{FlameEffect, MotionPath};
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
     BatchFlameOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule, ClipLibrary,
-    DebugViewMode, DebugViewState, FlameWallProbeCapture, TimelineState,
+    DebugViewMode, DebugViewState, FlameWallProbeCapture, FrameClock, TimelineState,
 };
 use crate::ecs::world::{Transform, World};
-
-fn single_run(first_frame: u64) -> BatchRun {
-    BatchRun::new(CaptureSchedule::single(
-        PathBuf::from("/tmp/out.png"),
-        first_frame,
-    ))
-}
 
 fn args(list: &[&str]) -> Vec<String> {
     list.iter().map(|s| s.to_string()).collect()
@@ -233,8 +226,10 @@ fn batch_run_update_orbit_inserts_missing_transform() {
     let mut world = World::new();
     let e = world.spawn();
     world.insert_component(e, FlameEffect::default());
-    world.insert_resource(single_run(1));
-    world.resource_mut::<BatchRun>().frames_rendered = 1;
+    world.insert_resource(FrameClock {
+        frame: 1,
+        ..FrameClock::fixed(FrameClock::BATCH_DELTA_SECONDS)
+    });
     world.insert_resource(BatchFlameOrbit {
         radius: 2.0,
         period_seconds: 4.0,

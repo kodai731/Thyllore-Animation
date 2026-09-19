@@ -315,25 +315,10 @@ impl App {
             .map(|ae| ae.enabled)
             .unwrap_or(false);
 
-        // Get frame number from BatchRun if available, otherwise use internal counter
-        let frame = match self
-            .data
-            .ecs_world
-            .get_resource::<crate::ecs::resource::BatchRun>()
-        {
-            Some(batch_run) => batch_run.frames_rendered,
-            None => match self
-                .data
-                .ecs_world
-                .get_resource_mut::<crate::ecs::resource::ExposureDumpSink>()
-            {
-                Some(mut sink) => {
-                    sink.last_frame += 1;
-                    sink.last_frame
-                }
-                None => 0,
-            },
-        };
+        let clock = self.resource::<crate::ecs::resource::FrameClock>();
+        let frame = clock.frame;
+        let is_fixed_step = clock.is_fixed();
+        drop(clock);
 
         if !ae_enabled {
             self.record_exposure_dump(frame, None);
@@ -342,12 +327,7 @@ impl App {
         }
 
         self.save_manual_exposure_if_needed();
-        // batch 決定性: AE 読み戻しを直前フレーム完了後に固定する
-        if self
-            .data
-            .ecs_world
-            .contains_resource::<crate::ecs::resource::BatchRun>()
-        {
+        if is_fixed_step {
             let _ = self.rrdevice.device.device_wait_idle();
         }
 

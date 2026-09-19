@@ -1,8 +1,8 @@
 use crate::asset::AssetStorage;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
-    BatchPickRequest, BatchPlayback, BatchRun, Camera, ExposureDumpSink, GpuTimingsSink,
-    ModelState, TimelineState,
+    BatchPickRequest, BatchPlayback, BatchRun, Camera, ExposureDumpSink, FrameClock,
+    GpuTimingsSink, ModelState, TimelineState,
 };
 use crate::ecs::systems::clip_library_systems::find_best_clip;
 use crate::ecs::world::World;
@@ -19,6 +19,7 @@ pub fn apply_engine_overrides(
 ) {
     if let Some(batch_run) = &overrides.batch_run {
         world.insert_resource(batch_run.clone());
+        world.insert_resource(FrameClock::fixed(FrameClock::BATCH_DELTA_SECONDS));
     }
     if let Some(pose) = overrides.camera_pose {
         apply_camera_pose(world, pose);

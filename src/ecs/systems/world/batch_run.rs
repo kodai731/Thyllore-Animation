@@ -2,16 +2,23 @@ use std::path::{Path, PathBuf};
 
 use serde_json::json;
 
-use crate::ecs::resource::{BatchRun, BatchRunState, Camera, CaptureOutput, CaptureSchedule};
+use crate::ecs::resource::{
+    AppExit, BatchRun, BatchRunState, Camera, CaptureOutput, CaptureSchedule, FrameClock,
+};
 use crate::ecs::world::World;
 use crate::hooks::batch_capture::CaptureSlot;
 
-/// Pre-render: counts the frame and asks for a capture once the schedule's next frame is reached.
+/// Pre-render: advances the frame clock.
+pub fn run_frame_clock_phase(world: &World) {
+    world.resource_mut::<FrameClock>().advance();
+}
+
+/// Pre-render: asks for a capture once the clock reaches the schedule's next frame.
 pub fn run_batch_schedule_phase(world: &World) {
     let Some(mut batch) = world.get_resource_mut::<BatchRun>() else {
         return;
     };
-    batch.frames_rendered += 1;
+    let frame = world.resource::<FrameClock>().frame;
 
     let BatchRunState::WaitingForFrame {
         next_frame,
@@ -20,7 +27,7 @@ pub fn run_batch_schedule_phase(world: &World) {
     else {
         return;
     };
-    if batch.frames_rendered >= next_frame {
+    if frame >= next_frame {
         batch.state = BatchRunState::CaptureRequested { index: captured };
     }
 }
@@ -58,6 +65,7 @@ pub fn batch_run_record_capture(world: &World, saved: Result<String, String>) {
         Ok(path) => path,
         Err(error) => {
             batch.state = BatchRunState::Completed { result: Err(error) };
+            request_exit(world);
             return;
         }
     };
@@ -78,6 +86,13 @@ pub fn batch_run_record_capture(world: &World, saved: Result<String, String>) {
         }
     };
     batch.state = BatchRunState::Completed { result };
+    request_exit(world);
+}
+
+fn request_exit(world: &World) {
+    if let Some(mut exit) = world.get_resource_mut::<AppExit>() {
+        exit.request();
+    }
 }
 
 fn write_sequence_meta(
@@ -112,13 +127,6 @@ fn format_camera_string(world: &World) -> String {
     }
 }
 
-pub fn batch_run_is_completed(world: &World) -> bool {
-    world
-        .get_resource::<BatchRun>()
-        .map(|batch| batch.is_completed())
-        .unwrap_or(false)
-}
-
 pub fn batch_run_report(batch: &BatchRun) -> (bool, String) {
     match &batch.state {
         BatchRunState::Completed { result: Ok(path) } => {
@@ -147,15 +155,27 @@ mod tests {
         ))
     }
 
+    fn batch_world(batch: BatchRun) -> World {
+        let mut world = World::new();
+        world.insert_resource(FrameClock::fixed(FrameClock::BATCH_DELTA_SECONDS));
+        world.insert_resource(AppExit::default());
+        world.insert_resource(batch);
+        world
+    }
+
+    fn run_frame(world: &World) {
+        run_frame_clock_phase(world);
+        run_batch_schedule_phase(world);
+    }
+
     #[test]
     fn schedule_requests_the_capture_at_its_frame() {
-        let mut world = World::new();
-        world.insert_resource(single_run(2));
+        let world = batch_world(single_run(2));
 
-        run_batch_schedule_phase(&world);
+        run_frame(&world);
         assert!(requested_capture(&world).is_none());
 
-        run_batch_schedule_phase(&world);
+        run_frame(&world);
         assert_eq!(
             requested_capture(&world),
             Some(CaptureSlot {
@@ -168,16 +188,17 @@ mod tests {
 
     #[test]
     fn schedule_without_a_batch_run_requests_nothing() {
-        let world = World::new();
-        run_batch_schedule_phase(&world);
+        let mut world = World::new();
+        world.insert_resource(FrameClock::wall_clock());
+        run_frame(&world);
         assert!(requested_capture(&world).is_none());
+        assert_eq!(world.resource::<FrameClock>().frame, 1);
     }
 
     #[test]
     fn record_completes_a_single_capture_with_its_path() {
-        let mut world = World::new();
-        world.insert_resource(single_run(1));
-        run_batch_schedule_phase(&world);
+        let world = batch_world(single_run(1));
+        run_frame(&world);
 
         batch_run_record_capture(&world, Ok("/tmp/out.png".to_string()));
 
@@ -188,6 +209,7 @@ mod tests {
                 result: Ok("/tmp/out.png".to_string())
             }
         );
+        assert!(world.resource::<AppExit>().is_requested());
         let (ok, line) = batch_run_report(&batch);
         assert!(ok);
         assert!(line.contains("/tmp/out.png"));
@@ -195,10 +217,10 @@ mod tests {
 
     #[test]
     fn record_ignores_a_result_when_no_capture_was_requested() {
-        let mut world = World::new();
-        world.insert_resource(single_run(100));
+        let world = batch_world(single_run(100));
 
         batch_run_record_capture(&world, Ok("/tmp/out.png".to_string()));
+        assert!(!world.resource::<AppExit>().is_requested());
         assert_eq!(
             world.resource::<BatchRun>().state,
             BatchRunState::WaitingForFrame {
@@ -210,14 +232,14 @@ mod tests {
 
     #[test]
     fn record_stores_error_result() {
-        let mut world = World::new();
-        world.insert_resource(single_run(1));
-        run_batch_schedule_phase(&world);
+        let world = batch_world(single_run(1));
+        run_frame(&world);
 
         batch_run_record_capture(&world, Err("save failed".to_string()));
 
         let batch = world.resource::<BatchRun>();
         assert!(batch.is_completed());
+        assert!(world.resource::<AppExit>().is_requested());
         let (ok, line) = batch_run_report(&batch);
         assert!(!ok);
         assert!(line.contains("save failed"));
@@ -227,8 +249,7 @@ mod tests {
     fn sequence_waits_stride_frames_between_captures_and_writes_meta_at_the_end() {
         let temp_dir = tempfile::tempdir().unwrap();
         let dir = temp_dir.path().to_path_buf();
-        let mut world = World::new();
-        world.insert_resource(BatchRun::new(CaptureSchedule {
+        let world = batch_world(BatchRun::new(CaptureSchedule {
             first_frame: 2,
             stride: 3,
             count: 2,
@@ -236,7 +257,7 @@ mod tests {
         }));
 
         for _ in 0..2 {
-            run_batch_schedule_phase(&world);
+            run_frame(&world);
         }
         let first = requested_capture(&world).expect("first capture at frame 2");
         assert_eq!(first.index, 0);
@@ -255,7 +276,7 @@ mod tests {
         );
 
         for _ in 0..3 {
-            run_batch_schedule_phase(&world);
+            run_frame(&world);
         }
         let second = requested_capture(&world).expect("second capture at frame 5");
         assert_eq!(second.index, 1);

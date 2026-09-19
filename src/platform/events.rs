@@ -133,7 +133,10 @@ pub(crate) fn dispatch_window_event(
                 text_to_animation_dialog,
             );
 
-            if crate::ecs::systems::batch_run_is_completed(&app.data.ecs_world) {
+            if app
+                .resource::<crate::ecs::resource::AppExit>()
+                .is_requested()
+            {
                 window_target.exit();
             }
         }
@@ -521,13 +524,11 @@ fn build_timeline_and_fixed_overlays(
             layout_snapshot,
         );
     }
-    // Batch captures are diffed pixel-by-pixel; the status bar shows wall-clock
-    // values (FPS, memory) that would break determinism, so skip it there.
-    let is_batch_capture = app
-        .data
-        .ecs_world
-        .contains_resource::<crate::ecs::resource::BatchRun>();
-    if !is_batch_capture {
+    // The status bar shows wall-clock values (FPS, memory) that would break a reproducible frame.
+    let is_fixed_step = app
+        .resource::<crate::ecs::resource::FrameClock>()
+        .is_fixed();
+    if !is_fixed_step {
         let delta_time = (app.start.elapsed().as_secs_f32() - app.last_update_time).max(0.001);
         let timeline_state = app.data.ecs_world.resource::<TimelineState>();
         let clip_duration = {
@@ -841,17 +842,12 @@ unsafe fn render_frame(
                 return;
             }
             // Write swapchain_recreate marker event to exposure dump sink if it exists
-            if let Some(mut sink) = app
+            if let Some(sink) = app
                 .data
                 .ecs_world
-                .get_resource_mut::<crate::ecs::resource::ExposureDumpSink>()
+                .get_resource::<crate::ecs::resource::ExposureDumpSink>()
             {
-                let frame = app
-                    .data
-                    .ecs_world
-                    .get_resource::<crate::ecs::resource::BatchRun>()
-                    .map(|b| b.frames_rendered)
-                    .unwrap_or(sink.last_frame);
+                let frame = app.resource::<crate::ecs::resource::FrameClock>().frame;
                 use std::fs::OpenOptions;
                 use std::io::Write;
                 if let Ok(mut file) = OpenOptions::new()

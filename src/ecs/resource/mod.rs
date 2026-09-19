@@ -5,6 +5,7 @@ mod keyboard_modifiers;
 mod mouse_input;
 mod viewport_input;
 
+mod app_exit;
 mod auto_exposure;
 #[cfg(feature = "auto-rig")]
 mod auto_rig_state;
@@ -31,6 +32,7 @@ mod flame_history_snapshot;
 mod flame_render;
 mod flame_render_targets;
 mod flame_sdf_source;
+mod frame_clock;
 mod gltf_model_cache;
 mod gpu_pass_timings;
 mod gpu_timings;
@@ -85,6 +87,7 @@ pub use keyboard_modifiers::*;
 pub use mouse_input::*;
 pub use viewport_input::*;
 
+pub use app_exit::*;
 pub use auto_exposure::*;
 #[cfg(feature = "auto-rig")]
 pub use auto_rig_state::*;
@@ -111,6 +114,7 @@ pub use flame_history_snapshot::*;
 pub use flame_render::*;
 pub use flame_render_targets::*;
 pub use flame_sdf_source::*;
+pub use frame_clock::*;
 pub use gltf_model_cache::*;
 pub use gpu_pass_timings::*;
 pub use gpu_timings::*;

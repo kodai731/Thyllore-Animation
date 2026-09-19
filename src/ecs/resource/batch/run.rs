@@ -54,10 +54,10 @@ pub struct BatchPlayback {
 }
 
 /// A headless run: what to capture, how far it got, and whether playback was requested.
+/// The frame it is measured against is `FrameClock`.
 #[derive(Clone, Debug)]
 pub struct BatchRun {
     pub capture: CaptureSchedule,
-    pub frames_rendered: u64,
     pub state: BatchRunState,
     pub playback: Option<BatchPlayback>,
 }
@@ -70,7 +70,6 @@ impl BatchRun {
                 captured: 0,
             },
             capture,
-            frames_rendered: 0,
             playback: None,
         }
     }

@@ -240,8 +240,13 @@ Concretely:
   no per-effect action or hook file. The post-present `run_batch_capture_phase`
   (`src/ecs/systems/phases/batch_capture_phase.rs`, entered through `App::after_present` in
   `src/app/lifecycle/after_present.rs`) waits for the GPU, runs every registered request that is present
-  and takes the schedule's screenshot; `src/platform/` and `src/app/render.rs` never branch on the batch
-  state.
+  and takes the schedule's screenshot. `src/platform/`, `src/app/` and the render passes never name
+  `BatchRun`: what a reproducible run changes about a frame is expressed by `FrameClock`
+  (`src/ecs/resource/frame_clock.rs`: the frame counter and a wall-clock or fixed step; a fixed step means
+  fixed delta, GPU readbacks synced to the previous frame, wall-clock UI skipped) and by `AppExit`
+  (`src/ecs/resource/app_exit.rs`: the event loop stops when a system requested it). The batch run inserts
+  a fixed `FrameClock` and requests `AppExit` when it completes; effect systems read `FrameClock` for their
+  fixed-step time and never look for `BatchRun` either.
 - `src/ecs/world.rs` offers generic component access (`iter_components::<C>`, `insert_component`); it does
   not grow `with_<effect>()` builders or `query_<effect>s()` helpers. The existing `query_flames` /
   `query_waters` / `query_winds` are tracked as exceptions and must not be extended.

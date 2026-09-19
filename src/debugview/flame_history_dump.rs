@@ -29,7 +29,7 @@ impl BatchCapture for FlameDumpSink {
 crate::batch_capture!(FlameDumpSink);
 
 fn write_first_flame_ubo(ctx: &CaptureContext, path: &std::path::Path) -> Result<()> {
-    let Some(&first) = ctx.world.query_flames().first() else {
+    let Some(&first) = ctx.world.entities_with::<FlameEffect>().first() else {
         return Ok(());
     };
     let (Some(effect), Some(baked), Some(temporal)) = (
@@ -60,7 +60,7 @@ unsafe fn save_flame_history_npy(ctx: &CaptureContext, path: &std::path::Path) -
 
     let history_index = ctx
         .world
-        .query_flames()
+        .entities_with::<FlameEffect>()
         .first()
         .and_then(|&first| ctx.world.get_component::<FlameTemporalAccum>(first))
         .map(|temporal| (temporal.frame_index as usize) & 1)

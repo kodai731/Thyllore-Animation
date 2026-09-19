@@ -3,6 +3,7 @@ use cgmath::SquareMatrix;
 use vulkanalia::prelude::v1_0::*;
 use vulkanalia::vk::KhrRayTracingPipelineExtension;
 
+use crate::ecs::component::WaterTorusEffect;
 use crate::ecs::resource::{
     EffectTraceGpuState, WaterBindingKey, WaterGpuState, WaterRenderTargets,
 };
@@ -70,7 +71,7 @@ fn water_frame(ctx: &PassContext) -> Option<WaterFrame> {
     ctx.hdr_buffer?;
     water_scene_bindings(ctx)?;
 
-    let mut waters: Vec<Entity> = ctx.world.query_waters();
+    let mut waters: Vec<Entity> = ctx.world.entities_with::<WaterTorusEffect>();
     waters.truncate(thyllore_effect_core::WATER_MAX_INSTANCES);
     if waters.is_empty() {
         return None;

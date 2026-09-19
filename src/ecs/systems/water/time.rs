@@ -9,7 +9,7 @@ impl TimedEffect for WaterTorusEffect {
     type WorldInputs = ();
 
     fn entities(world: &World) -> Vec<Entity> {
-        world.query_waters()
+        world.entities_with::<WaterTorusEffect>()
     }
 
     fn time_sources(world: &World, delta_time: f32) -> EffectTimeSources {

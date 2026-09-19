@@ -45,7 +45,7 @@ pub fn resolve_selected_water(world: &World) -> Option<Entity> {
         }
     }
 
-    world.query_waters().first().copied()
+    world.entities_with::<WaterTorusEffect>().first().copied()
 }
 
 /// Position and rotation live on the Transform; the effect only mirrors them for the UBO.

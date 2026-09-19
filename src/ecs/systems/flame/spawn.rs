@@ -45,7 +45,7 @@ pub fn resolve_selected_flame(world: &World) -> Option<Entity> {
         }
     }
 
-    world.query_flames().first().copied()
+    world.entities_with::<FlameEffect>().first().copied()
 }
 
 /// Position and rotation live on the Transform; the effect only mirrors them for the UBO.

@@ -248,7 +248,7 @@ fn water_has_component(world: &World, entity: Entity) -> bool {
 }
 
 fn water_entities(world: &World) -> Vec<Entity> {
-    world.query_waters()
+    world.entities_with::<WaterTorusEffect>()
 }
 
 fn water_channel_read(world: &World, entity: Entity, property_type: PropertyType) -> Option<f32> {

@@ -2,6 +2,7 @@ use anyhow::Result;
 use cgmath::{InnerSpace, SquareMatrix, Vector3};
 use vulkanalia::prelude::v1_0::*;
 
+use crate::ecs::component::FlameEffect;
 use crate::ecs::world::Entity;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
@@ -54,7 +55,7 @@ fn flame_frame(ctx: &PassContext) -> Option<FlameFrame> {
     gpu_state.descriptor.as_ref()?;
     gpu_state.ubo.as_ref()?;
 
-    let mut flames = ctx.world.query_flames();
+    let mut flames = ctx.world.entities_with::<FlameEffect>();
     sort_flames_back_to_front(ctx, &mut flames);
     flames.truncate(thyllore_effect_core::FLAME_MAX_INSTANCES);
     if flames.is_empty() {

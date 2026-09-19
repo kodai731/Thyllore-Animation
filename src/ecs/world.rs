@@ -490,6 +490,12 @@ impl World {
         entities
     }
 
+    pub fn entities_with<C: crate::ecs::storage::Component + 'static>(&self) -> Vec<Entity> {
+        let mut entities: Vec<Entity> = self.iter_components::<C>().map(|(e, _)| e).collect();
+        entities.sort();
+        entities
+    }
+
     pub fn query_with_parent(&self) -> Vec<Entity> {
         self.iter_components::<Parent>().map(|(e, _)| e).collect()
     }

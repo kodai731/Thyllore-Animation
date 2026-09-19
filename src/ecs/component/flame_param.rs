@@ -216,7 +216,7 @@ fn flame_has_component(world: &World, entity: Entity) -> bool {
 }
 
 fn flame_entities(world: &World) -> Vec<Entity> {
-    world.query_flames()
+    world.entities_with::<FlameEffect>()
 }
 
 fn flame_channel_read(world: &World, entity: Entity, property_type: PropertyType) -> Option<f32> {

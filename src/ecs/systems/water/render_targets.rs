@@ -2,6 +2,7 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::{WaterBuffer, WaterGpuState, WaterRenderTargets};
+use crate::ecs::systems::raytracing_systems::ensure_effect_trace_pipeline;
 use crate::ecs::{EffectContext, MAX_FRAMES_IN_FLIGHT};
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
@@ -75,6 +76,7 @@ unsafe fn setup_water(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()
         MAX_FRAMES_IN_FLIGHT,
     )?;
     drop(water_targets);
+    ensure_effect_trace_pipeline(ctx.instance, ctx.rrdevice, ctx.world, MAX_FRAMES_IN_FLIGHT)?;
     let trace_blocks = super::pipeline::water_trace_blocks(ctx.rrdevice, &gpu_state)?;
     ctx.world.insert_resource(trace_blocks);
     ctx.world.insert_resource(gpu_state);

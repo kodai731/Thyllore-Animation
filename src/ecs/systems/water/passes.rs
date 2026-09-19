@@ -3,7 +3,9 @@ use cgmath::SquareMatrix;
 use vulkanalia::prelude::v1_0::*;
 use vulkanalia::vk::KhrRayTracingPipelineExtension;
 
-use crate::ecs::resource::{WaterBindingKey, WaterGpuState, WaterRenderTargets};
+use crate::ecs::resource::{
+    EffectTraceGpuState, WaterBindingKey, WaterGpuState, WaterRenderTargets,
+};
 use crate::ecs::world::Entity;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
@@ -150,8 +152,10 @@ fn first_water_accum(
 impl WaterFrame {
     /// The requested secondary ray mode, or ray query when the shared trace pipeline is unavailable.
     fn secondary_rays(&self, ctx: &PassContext) -> thyllore_effect_core::WaterSecondaryRays {
-        let trace_available = ctx.raytracing.effect_trace_pipeline.is_some()
-            && ctx.raytracing.effect_trace_descriptor.is_some();
+        let trace_available = ctx
+            .world
+            .get_resource::<EffectTraceGpuState>()
+            .is_some_and(|state| state.pipeline.is_some() && state.descriptor.is_some());
         match self.settings.secondary_rays {
             thyllore_effect_core::WaterSecondaryRays::RayTracingPipeline if !trace_available => {
                 thyllore_effect_core::WaterSecondaryRays::RayQuery
@@ -247,9 +251,12 @@ impl RenderPassNode for WaterTraceNode {
         let Some(frame) = water_frame(ctx).filter(|frame| frame.is_trace_enabled(ctx)) else {
             return Ok(());
         };
+        let Some(trace_state) = ctx.world.get_resource::<EffectTraceGpuState>() else {
+            return Ok(());
+        };
         let (Some(trace_pipeline), Some(trace_descriptor)) = (
-            ctx.raytracing.effect_trace_pipeline.as_ref(),
-            ctx.raytracing.effect_trace_descriptor.as_ref(),
+            trace_state.pipeline.as_ref(),
+            trace_state.descriptor.as_ref(),
         ) else {
             return Ok(());
         };
@@ -393,7 +400,11 @@ impl RenderPassNode for WaterFrameNode {
                 hit_table,
             )?;
         }
-        if let Some(trace_descriptor) = ctx.raytracing.effect_trace_descriptor.as_ref() {
+        let trace_state = ctx.world.get_resource::<EffectTraceGpuState>();
+        if let Some(trace_descriptor) = trace_state
+            .as_ref()
+            .and_then(|state| state.descriptor.as_ref())
+        {
             trace_descriptor.write_all_at(
                 ctx.rrdevice,
                 frame_slot,

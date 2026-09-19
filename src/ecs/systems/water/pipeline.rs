@@ -3,7 +3,6 @@ use vulkanalia::prelude::v1_0::*;
 
 use super::{RRWaterCausticDescriptorSet, RRWaterDescriptorSet, WaterPushConstants};
 use crate::ecs::resource::{WaterBuffer, WaterGpuState};
-use crate::ecs::systems::raytracing_systems::ensure_effect_trace_pipeline;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE};
 use crate::vulkanr::pipeline::{
@@ -31,7 +30,7 @@ pub unsafe fn create_water_pipeline(
     rrdevice: &RRDevice,
     rrrender: &RRRender,
     graphics_resources: &GraphicsResources,
-    raytracing: &mut RayTracingData,
+    raytracing: &RayTracingData,
     water_buffer: &WaterBuffer,
     hdr_color_view: vk::ImageView,
     frames_in_flight: usize,
@@ -79,7 +78,6 @@ pub unsafe fn create_water_pipeline(
         ..Default::default()
     };
 
-    ensure_effect_trace_pipeline(instance, rrdevice, raytracing, frames_in_flight)?;
     create_water_caustic_pipelines(
         rrdevice,
         raytracing,

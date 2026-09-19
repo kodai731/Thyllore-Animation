@@ -85,7 +85,7 @@ unsafe fn setup_flame(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()
     crate::ecs::systems::raytracing_systems::ensure_effect_trace_pipeline(
         ctx.instance,
         ctx.rrdevice,
-        ctx.raytracing,
+        ctx.world,
         MAX_FRAMES_IN_FLIGHT,
     )?;
 

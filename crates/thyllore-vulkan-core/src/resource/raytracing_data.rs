@@ -12,12 +12,11 @@ use crate::descriptor::ReflectedSetLayout;
 use crate::descriptor::{
     CompositeGBufferViews, RRAutoExposureAverageDescriptorSet,
     RRAutoExposureHistogramDescriptorSet, RRBillboardDescriptorSet, RRBloomDescriptorSets,
-    RRCompositeDescriptorSet, RRDofDescriptorSet, RREffectTraceDescriptorSet,
-    RRRayQueryDescriptorSet, RRToneMapDescriptorSet, COMPOSITE, GBUFFER, RAY_QUERY_SHADOW,
+    RRCompositeDescriptorSet, RRDofDescriptorSet, RRRayQueryDescriptorSet, RRToneMapDescriptorSet,
+    COMPOSITE, GBUFFER, RAY_QUERY_SHADOW,
 };
 use crate::pipeline::{
-    DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline, RRRayTracingPipeline,
-    VertexInputConfig,
+    DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline, VertexInputConfig,
 };
 use crate::raytracing::RRAccelerationStructure;
 use crate::raytracing::{BlasGeometry, GpuPrimitive};
@@ -62,9 +61,6 @@ pub struct RayTracingData {
     pub auto_exposure_average_descriptor: Option<RRAutoExposureAverageDescriptorSet>,
 
     pub onion_skin_pass: Option<OnionSkinPassResources>,
-
-    pub effect_trace_pipeline: Option<RRRayTracingPipeline>,
-    pub effect_trace_descriptor: Option<RREffectTraceDescriptorSet>,
 
     pub scene_uniform_buffer: Option<UniformBuffer<SceneUniformData>>,
 }

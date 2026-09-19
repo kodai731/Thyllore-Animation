@@ -5,9 +5,7 @@ use crate::ecs::resource::{Camera, FlameRenderSettings};
 use crate::ecs::systems::camera_systems::{
     compute_camera_direction, compute_camera_position, compute_camera_right, compute_camera_up,
 };
-use crate::ecs::systems::flame_dump_systems::{
-    write_flame_field_traces, write_flame_wall_probe_dump,
-};
+use crate::ecs::systems::flame::{write_flame_field_traces, write_flame_wall_probe_dump};
 use crate::ecs::World;
 use thyllore_effect_core::{probe_flame_wall, WallProbeReport, WallProbeView};
 use thyllore_log_core::{log, log_warn};

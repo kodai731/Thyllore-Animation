@@ -317,7 +317,7 @@ pub fn flame_dump_system(
 }
 
 pub fn build_wall_probe_camera_json(camera: &crate::ecs::resource::Camera) -> Value {
-    use super::camera_systems::{
+    use crate::ecs::systems::camera_systems::{
         compute_camera_direction, compute_camera_position, compute_camera_right, compute_camera_up,
     };
     let position = compute_camera_position(camera);

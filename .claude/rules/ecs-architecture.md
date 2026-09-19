@@ -38,14 +38,18 @@ src/ecs/
 ├── systems/             # System functions (behavior/logic), one file per domain
 │   ├── phases/          # Phase coordinators (execution order) and event dispatchers
 │   ├── world/           # Engine lifecycle systems (batch run schedule / capture record / report)
-│   ├── flame/, water/   # One directory per effect (spawn, time, preset, pick, history, ...)
+│   ├── flame/, water/, wind/  # One directory per effect (spawn, time, preset, pick, passes, ...)
 │   ├── animation/       # Animation pipeline (collect, evaluate, apply, post_process)
+│   ├── curve_copilot/   # ML curve suggestion systems
 │   └── frame_runner.rs  # run_frame: the phase sequence
 ├── events/              # UIEvent definitions and UIEventQueue
 ├── query/               # Query builder, filters, tuple fetch
 ├── storage/             # Sparse set component storage
 ├── registry/            # Component registry (type info)
 ├── context.rs           # EcsContext: World + assets + per-frame inputs for phases
+├── frame_context.rs     # FrameContext: EcsContext + GPU resources (what run_frame takes)
+├── effect_context.rs    # EffectContext: what the effect hooks take
+├── pass_context.rs      # PassContext: what every RenderPassNode method takes
 ├── world.rs             # World container for entities and resources
 └── mod.rs
 ```
@@ -93,7 +97,7 @@ crates/thyllore-anim-core/src/editable/
 └── mod.rs
 ```
 
-The same split is used by `crates/thyllore-effect-core` (`flame/`, `water/`: `effect/` data,
+The same split is used by `crates/thyllore-effect-core` (`flame/`, `water/`, `wind/`: `effect/` data,
 `analytic/` pure math, `gpu/` UBO structs, `presets.rs`, `settings.rs`).
 
 ### What Goes in `components/`

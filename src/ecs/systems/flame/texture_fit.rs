@@ -5,7 +5,7 @@ use thyllore_effect_core::TextureFitGroups;
 
 use super::{resolve_selected_flame, write_flame_transform};
 use crate::ecs::component::{FlameBaked, FlameEffect};
-use crate::ecs::systems::flame_dump_systems::write_texture_fit_provenance;
+use crate::ecs::systems::flame::write_texture_fit_provenance;
 use crate::ecs::world::World;
 
 /// Run a texture fit against the selected flame and write the results into

@@ -685,7 +685,7 @@ impl RenderPassNode for WaterSceneColorCopyNode {
         let scene_color_image = ctx.transient_image(SCENE_COLOR_SLOT)?;
         let render = ctx.frame_render_context(image_index);
 
-        thyllore_vulkan_core::renderer::record_water_scene_color_copy(
+        super::record_water_scene_color_copy(
             &render,
             hdr_buffer.color_image,
             scene_color_image.image,
@@ -827,12 +827,12 @@ impl RenderPassNode for WaterShadingNode {
                 continue;
             };
 
-            let push_constants = thyllore_vulkan_core::renderer::WaterPushConstants::new(
+            let push_constants = super::WaterPushConstants::new(
                 frame.secondary_rays(ctx).as_shader_value(),
                 frame.settings.debug_view,
             );
 
-            thyllore_vulkan_core::renderer::record_water_shading_pass(
+            super::record_water_shading_pass(
                 &render,
                 water_buffer,
                 shading_pipeline,

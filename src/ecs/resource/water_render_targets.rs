@@ -1,10 +1,9 @@
 use thyllore_effect_core::WaterUBO;
 use thyllore_vulkan_core::pipeline::RRPipeline;
 use thyllore_vulkan_core::resource::{GpuResource, UniformBuffer, WaterBuffer};
-use thyllore_vulkan_core::RRWaterCausticDescriptorSet;
-use thyllore_vulkan_core::RRWaterDescriptorSet;
 use vulkanalia::prelude::v1_0::*;
 
+use crate::ecs::systems::water::{RRWaterCausticDescriptorSet, RRWaterDescriptorSet};
 use crate::gpu_resource;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

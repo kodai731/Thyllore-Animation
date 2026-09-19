@@ -1,9 +1,11 @@
 use cgmath::{Matrix4, Quaternion, Vector3};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thyllore_effect_derive::UboPack)]
+#[ubo(target = crate::WindUBO)]
 pub struct WindTornadoEffect {
     pub position: Vector3<f32>,
     pub rotation: Quaternion<f32>,
+    #[ubo("optics.z")]
     pub time: f32,
     pub time_scale: f32,
     pub time_offset: f32,
@@ -14,16 +16,23 @@ pub struct WindTornadoEffect {
     pub wall_strength: f32,
     pub top_fade: f32,
     pub density: f32,
+    #[ubo("albedo.xyz")]
     pub albedo: [f32; 3],
+    #[ubo("optics.y")]
     pub ambient_brightness: f32,
+    #[ubo("lighting.x")]
     pub phase_g: f32,
+    #[ubo("lighting.y")]
     pub sun_intensity: f32,
     pub rise_initial_height: f32,
     pub rise_duration: f32,
+    #[ubo("streak2.w")]
     pub spread_start: f32,
+    #[ubo("lighting.w")]
     pub spread_rate: f32,
     pub dissipate_start: f32,
     pub dissipate_time: f32,
+    #[ubo("lighting.z")]
     pub circulation: f32,
     pub streak_order: f32,
     pub streak_twist: f32,
@@ -34,6 +43,7 @@ pub struct WindTornadoEffect {
     pub eddy_cell_height: f32,
     pub eddy_cell_radial: f32,
     pub eddy_shear: f32,
+    #[ubo("streak2.z")]
     pub eddy_speed_spread: f32,
     pub eddy_rise_speed: f32,
     pub eddy_reseed_period: f32,
@@ -43,6 +53,7 @@ pub struct WindTornadoEffect {
     pub puff_radius: f32,
     pub puff_radius_jitter: f32,
     pub puff_offset_q: f32,
+    #[ubo("puff_params.y")]
     pub puff_strength: f32,
     pub puff_rise_speed: f32,
 }

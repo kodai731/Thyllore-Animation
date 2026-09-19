@@ -3802,10 +3802,20 @@ dependencies = [
  "serde",
  "serde_json",
  "thyllore-color-core",
+ "thyllore-effect-derive",
  "thyllore-math-core",
  "thyllore-scene-core",
  "thyllore-spirv-reflect",
  "thyllore-texture-fit-core",
+]
+
+[[package]]
+name = "thyllore-effect-derive"
+version = "0.0.1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

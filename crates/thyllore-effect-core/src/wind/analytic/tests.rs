@@ -1,7 +1,7 @@
 use super::*;
-use crate::volume::{PUFFS_PER_RAY, RAY_MAX_KNOTS};
+use crate::volume::{MODULATION_CELLS, PUFFS_PER_RAY, RAY_MAX_KNOTS};
 use crate::wind::analytic::eddy::{EDDY_FADE_END, EDDY_FADE_START, EDDY_OCTAVE_COUNT};
-use crate::wind::analytic::integral::{ACTIVE_CELLS_MIN, MODULATION_CELLS};
+use crate::wind::analytic::integral::ACTIVE_CELLS_MIN;
 use crate::wind::analytic::motion::rotation_phase;
 use crate::wind::WindTornadoEffect;
 use crate::wind::{

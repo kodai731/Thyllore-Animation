@@ -248,7 +248,7 @@ fn edit_clip(
 mod tests {
     use super::*;
     use crate::ecs::component::{FlameEffect, FlameParam};
-    use crate::ecs::systems::phases::dispatch_edit_history::dispatch_edit_history_events;
+    use crate::ecs::systems::phases::event_dispatch::edit_history::dispatch_edit_history_events;
     use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
 
     fn make_world_with_flame() -> (World, AssetStorage) {

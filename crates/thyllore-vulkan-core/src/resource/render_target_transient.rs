@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::core::device::RRDevice;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::{create_image, create_image_view};
 use crate::vulkan::*;
 
@@ -287,6 +288,16 @@ impl RenderTargetTransient {
         })
     }
 
+    /// The framebuffer `framebuffer()` cached for this render pass and attachment set, if any.
+    pub fn cached_framebuffer(
+        &self,
+        render_pass: vk::RenderPass,
+        views: &[vk::ImageView],
+    ) -> Option<vk::Framebuffer> {
+        let key = FramebufferKey::new(render_pass, views).ok()?;
+        self.framebuffers.get(&key).copied()
+    }
+
     pub unsafe fn framebuffer(
         &mut self,
         device: &Device,
@@ -413,6 +424,12 @@ unsafe fn destroy_pooled(device: &Device, pooled: &PooledImage) {
     }
     if pooled.memory != vk::DeviceMemory::null() {
         device.free_memory(pooled.memory, None);
+    }
+}
+
+impl GpuResource for RenderTargetTransient {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy_all(&rrdevice.device);
     }
 }
 

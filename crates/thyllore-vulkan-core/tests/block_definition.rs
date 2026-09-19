@@ -13,6 +13,7 @@ use thyllore_vulkan_core::descriptor::{
     reflect_shader_bytes, DescriptorSetTable, LayoutMismatch, PassId, PassShaders,
     ReflectedLayoutSpec, SelectionUBO, ShaderFile, ShaderReflection, ALL_PASSES,
 };
+use thyllore_vulkan_core::renderer::TracePush;
 
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -70,7 +71,33 @@ fn rust_blocks() -> Vec<RustBlock> {
         rust_block::<SceneUniformData>("SceneData"),
         rust_block::<SelectionUBO>("SelectionData"),
         rust_block::<UniformBufferObject>("UniformBufferObject"),
+        rust_block::<TracePush>("TracePush"),
     ]
+}
+
+fn compare_registered_block(
+    rust_blocks: &[RustBlock],
+    location: &str,
+    block: &ReflectedBlock,
+    coverage: BlockCoverage,
+    failures: &mut Vec<String>,
+) {
+    let payload = block
+        .single_struct_payload()
+        .unwrap_or_else(|| block.clone());
+    let Some(rust) = rust_blocks
+        .iter()
+        .find(|rust| rust.glsl_name == payload.type_name)
+    else {
+        failures.push(format!("{location}: no Rust GpuBlock registered"));
+        return;
+    };
+
+    let differences = (rust.compare)(&payload, coverage);
+    if !differences.is_empty() {
+        let listed: Vec<String> = differences.iter().map(|d| format!("  {d}")).collect();
+        failures.push(format!("{location}:\n{}", listed.join("\n")));
+    }
 }
 
 fn block_coverage(pass: &PassShaders, set: u32, binding: u32) -> BlockCoverage {
@@ -184,21 +211,8 @@ fn rust_uniform_structs_match_every_shader_block_member() {
                     pass.name(),
                     block.type_name
                 );
-                let Some(rust) = rust_blocks
-                    .iter()
-                    .find(|rust| rust.glsl_name == block.type_name)
-                else {
-                    failures.push(format!("{location}: no Rust GpuBlock registered"));
-                    continue;
-                };
-
                 let coverage = block_coverage(pass, set, *binding_index);
-                let differences = (rust.compare)(block, coverage);
-                if !differences.is_empty() {
-                    let listed: Vec<String> =
-                        differences.iter().map(|d| format!("  {d}")).collect();
-                    failures.push(format!("{location}:\n{}", listed.join("\n")));
-                }
+                compare_registered_block(&rust_blocks, &location, block, coverage, &mut failures);
             }
         }
     }
@@ -206,6 +220,41 @@ fn rust_uniform_structs_match_every_shader_block_member() {
     assert!(
         failures.is_empty(),
         "uniform block layout drift against SPIR-V:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn rust_push_constant_structs_match_every_generated_push_block() {
+    enter_workspace_root();
+    let rust_blocks = rust_blocks();
+    let mut failures = Vec::new();
+
+    for pass in ALL_PASSES {
+        for shader in pass.stages {
+            let Some(block) = load_reflection(shader).push_constant else {
+                continue;
+            };
+            if !GPU_BLOCK_TARGETS
+                .iter()
+                .any(|target| target.block_name == block.type_name)
+            {
+                continue;
+            }
+            let location = format!("{} `{}`", shader.path, block.type_name);
+            compare_registered_block(
+                &rust_blocks,
+                &location,
+                &block,
+                BlockCoverage::Exact,
+                &mut failures,
+            );
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "push constant layout drift against SPIR-V:\n{}",
         failures.join("\n")
     );
 }

@@ -2,6 +2,7 @@ use crate::core::device::*;
 use crate::descriptor::pass_manifest::FLAME_RESOLVE;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::flame_resolve;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::image::create_scene_depth_sampler;
 use crate::resource::uniform_buffer::UniformBuffer;
 use crate::vulkan::*;
@@ -95,5 +96,11 @@ impl RRFlameDescriptorSet {
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         self.layout.destroy(device);
         device.destroy_sampler(self.scene_depth_sampler, None);
+    }
+}
+
+impl GpuResource for RRFlameDescriptorSet {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

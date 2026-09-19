@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use cgmath::{Quaternion, Vector3};
 
 use crate::animation::editable::{
@@ -6,11 +8,11 @@ use crate::animation::editable::{
 };
 use crate::animation::BoneId;
 use crate::animation::{ConstraintId, ConstraintType};
-use crate::app::data::LightMoveTarget;
 use crate::ecs::component::{
     ColliderShape, FlameEffect, SpringChain, SpringChainId, SpringColliderDef, SpringColliderGroup,
     SpringColliderGroupId, SpringColliderId, SpringJointParam, WaterTorusEffect, WindTornadoEffect,
 };
+use crate::ecs::events::light_move_target::LightMoveTarget;
 use crate::ecs::resource::gizmo::BoneDisplayStyle;
 use crate::ecs::resource::{
     AutoExposure, CoordinateSpace, CurveTrackRef, DepthOfField, FlameRenderSettings,
@@ -20,6 +22,7 @@ use crate::ecs::resource::{
 };
 use crate::ecs::world::Entity;
 use crate::ecs::world::Visibility;
+use crate::hooks::batch_capture::BatchCapture;
 
 #[cfg(feature = "auto-rig")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -34,6 +37,27 @@ pub enum DebugPrimitiveKind {
     Cube,
     Sphere,
     Floor,
+}
+
+impl DebugPrimitiveKind {
+    pub const ALL: [DebugPrimitiveKind; 3] = [
+        DebugPrimitiveKind::Cube,
+        DebugPrimitiveKind::Sphere,
+        DebugPrimitiveKind::Floor,
+    ];
+
+    /// Stable name persisted in scene files.
+    pub fn name(self) -> &'static str {
+        match self {
+            DebugPrimitiveKind::Cube => "cube",
+            DebugPrimitiveKind::Sphere => "sphere",
+            DebugPrimitiveKind::Floor => "floor",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|kind| kind.name() == name)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -67,8 +91,8 @@ pub enum UIEvent {
     DumpFlameWallProbe {
         viewport_size: [f32; 2],
     },
-    DumpWaterDebug,
-    DumpWindDebug,
+    /// Runs one readback right away, outside the batch schedule (a debug window button).
+    CaptureNow(Rc<dyn BatchCapture>),
 
     SelectEntity(Entity),
     DeselectAll,

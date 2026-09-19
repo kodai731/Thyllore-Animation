@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use imgui::Condition;
 use thyllore_anim_core::editable::PropertyType;
 
@@ -5,21 +7,14 @@ use crate::ecs::component::{FlameParam, WaterParam, WindParam};
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{
-    CoordinateSpace, TransformGizmoMode, TransformGizmoState, WeightHeatmapState,
+    CoordinateSpace, TransformGizmoMode, TransformGizmoState, WaterDebugCapture,
+    WeightHeatmapState, WindDebugCapture,
 };
 use crate::ecs::World;
 
-use super::flame_param_groups::{
-    FLAME_BODY_PARAMS, FLAME_BRANCH_PARAMS, FLAME_COLOR_PARAMS, FLAME_FOOTER_PARAMS,
-    FLAME_MIX_PARAMS, FLAME_MOTION_PARAMS, FLAME_NOISE_PARAMS,
-};
+use super::flame_param_groups::flame_group_param_names;
 use super::param_widgets::{draw_params, EditedScalars};
 use super::viewport_window::ViewportInfo;
-use super::water_param_groups::{
-    WATER_FLOW_PARAMS, WATER_LOOK_PARAMS, WATER_OPTICS_PARAMS, WATER_PARAM_GROUPS,
-    WATER_SHAPE_PARAMS, WATER_WAVE_PARAMS,
-};
-use super::wind_param_groups::WIND_PARAM_GROUPS;
 
 const OVERLAY_MARGIN: f32 = 8.0;
 const OVERLAY_WIDTH: f32 = 420.0;
@@ -623,10 +618,25 @@ fn build_wind_section(
         return;
     };
     let mut effect_copy = effect.clone();
-    for group in WIND_PARAM_GROUPS {
+    let mut drawn_groups: Vec<&str> = Vec::new();
+    for group in thyllore_effect_core::WIND_UI_PARAMS
+        .iter()
+        .map(|param| param.group)
+        .filter(|group| !group.is_empty())
+    {
+        if drawn_groups.contains(&group) {
+            continue;
+        }
+        drawn_groups.push(group);
+
+        let names: Vec<&str> = thyllore_effect_core::WIND_UI_PARAMS
+            .iter()
+            .filter(|param| param.group == group)
+            .map(|param| param.name)
+            .collect();
         draw_params(
             ui,
-            group,
+            &names,
             thyllore_effect_core::WIND_UI_PARAMS,
             thyllore_effect_core::WIND_SCALAR_PARAMS,
             &mut effect_copy,
@@ -641,7 +651,7 @@ fn build_wind_section(
     }
     ui.same_line();
     if ui.button("Dump Debug") {
-        ui_events.send(UIEvent::DumpWindDebug);
+        ui_events.send(UIEvent::CaptureNow(Rc::new(WindDebugCapture)));
     }
     if ui.is_item_hovered() {
         ui.tooltip_text(
@@ -702,7 +712,7 @@ fn build_water_section(
         }
         ui.same_line();
         if ui.button("Dump Debug") {
-            ui_events.send(UIEvent::DumpWaterDebug);
+            ui_events.send(UIEvent::CaptureNow(Rc::new(WaterDebugCapture)));
         }
         if ui.is_item_hovered() {
             ui.tooltip_text(
@@ -758,10 +768,25 @@ fn build_water_section(
                 if let Some(effect) = ecs_world.get_component::<WaterTorusEffect>(selected_water) {
                     let mut effect_copy = effect.clone();
 
-                    for group in WATER_PARAM_GROUPS {
+                    let mut drawn_groups: Vec<&str> = Vec::new();
+                    for group in thyllore_effect_core::WATER_UI_PARAMS
+                        .iter()
+                        .map(|param| param.group)
+                        .filter(|group| !group.is_empty())
+                    {
+                        if drawn_groups.contains(&group) {
+                            continue;
+                        }
+                        drawn_groups.push(group);
+
+                        let names: Vec<&str> = thyllore_effect_core::WATER_UI_PARAMS
+                            .iter()
+                            .filter(|param| param.group == group)
+                            .map(|param| param.name)
+                            .collect();
                         draw_params(
                             ui,
-                            group,
+                            &names,
                             thyllore_effect_core::WATER_UI_PARAMS,
                             thyllore_effect_core::WATER_SCALAR_PARAMS,
                             &mut effect_copy,
@@ -1167,7 +1192,7 @@ fn build_flame_section(
 
                     draw_params(
                         ui,
-                        FLAME_BODY_PARAMS,
+                        &*flame_group_param_names("body"),
                         thyllore_effect_core::FLAME_UI_PARAMS,
                         thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
@@ -1177,7 +1202,7 @@ fn build_flame_section(
                     let colors_before = (effect_copy.color.base, effect_copy.color.tip);
                     draw_params(
                         ui,
-                        FLAME_COLOR_PARAMS,
+                        &*flame_group_param_names("color"),
                         thyllore_effect_core::FLAME_UI_PARAMS,
                         thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
@@ -1189,7 +1214,7 @@ fn build_flame_section(
 
                     draw_params(
                         ui,
-                        FLAME_NOISE_PARAMS,
+                        &*flame_group_param_names("noise"),
                         thyllore_effect_core::FLAME_UI_PARAMS,
                         thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
@@ -1220,7 +1245,7 @@ fn build_flame_section(
 
                     draw_params(
                         ui,
-                        FLAME_MIX_PARAMS,
+                        &*flame_group_param_names("mix"),
                         thyllore_effect_core::FLAME_UI_PARAMS,
                         thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
@@ -1268,7 +1293,7 @@ fn build_flame_section(
 
                     draw_params(
                         ui,
-                        FLAME_MOTION_PARAMS,
+                        &*flame_group_param_names("motion"),
                         thyllore_effect_core::FLAME_UI_PARAMS,
                         thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
@@ -1279,7 +1304,7 @@ fn build_flame_section(
                     ui.text("Branches");
                     draw_params(
                         ui,
-                        FLAME_BRANCH_PARAMS,
+                        &*flame_group_param_names("branch"),
                         thyllore_effect_core::FLAME_UI_PARAMS,
                         thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
@@ -1294,7 +1319,7 @@ fn build_flame_section(
                     ui.separator();
                     draw_params(
                         ui,
-                        FLAME_FOOTER_PARAMS,
+                        &*flame_group_param_names("footer"),
                         thyllore_effect_core::FLAME_UI_PARAMS,
                         thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,

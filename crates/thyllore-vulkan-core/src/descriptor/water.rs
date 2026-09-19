@@ -2,6 +2,7 @@ use crate::core::device::*;
 use crate::descriptor::pass_manifest::WATER_RESOLVE;
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::water_resolve;
+use crate::resource::gpu_resource::GpuResource;
 use crate::resource::uniform_buffer::UniformBuffer;
 use crate::vulkan::*;
 use thyllore_effect_core::WaterUBO;
@@ -17,7 +18,7 @@ pub struct RRWaterDescriptorSet {
 impl RRWaterDescriptorSet {
     pub fn layout_spec() -> ReflectedLayoutSpec {
         ReflectedLayoutSpec::local(&WATER_RESOLVE).with_override(
-            water_resolve::WATER,
+            water_resolve::WATER_BLOCK,
             vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
         )
     }
@@ -69,7 +70,7 @@ impl RRWaterDescriptorSet {
             let previous_history_view = history_image_views[1 - i];
             self.layout
                 .writer(descriptor_set)
-                .uniform_dynamic(water_resolve::WATER, water_ubo)?
+                .uniform_dynamic(water_resolve::WATER_BLOCK, water_ubo)?
                 .image(
                     water_resolve::SCENE_COLOR_SAMPLER,
                     scene_color_view,
@@ -102,5 +103,11 @@ impl RRWaterDescriptorSet {
 
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         self.layout.destroy(device);
+    }
+}
+
+impl GpuResource for RRWaterDescriptorSet {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

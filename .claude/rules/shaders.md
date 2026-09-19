@@ -59,6 +59,35 @@ renaming a descriptor in GLSL breaks the Rust build at the referencing site.
 - `ReflectedLayoutSpec::with_override(shader_bindings::.., vk::DescriptorType::..)` overrides a descriptor type.
 - `PipelineBuilder::descriptor_layouts(&[&ReflectedSetLayout])` / `RRPipeline::new_compute*` verify at pipeline
   creation that every (set, binding) used by the pass shaders exists in the given layouts with a matching type.
+- A pass whose stages declare a `push_constant` block also gets `pub const PUSH_CONSTANT: PushConstantLayout`
+  (block name, declaring stages, size); every stage must declare the identical block, so no `layout(offset = ..)`
+  and no hand-written offset or size constants exist. `push_constant_range(&<pass>::PUSH_CONSTANT)` builds the
+  `vk::PushConstantRange` (`effect_trace` uses it).
+- An unnamed block instance (`uniform WaterBlock { WaterUBO water; };`) is reflected under the block name
+  (`WATER_BLOCK`).
+
+## Generated GPU Block Structs (`generate_gpu_blocks`)
+
+The Rust struct that mirrors a GLSL uniform or push constant block is never written by hand. It is generated from
+the compiled SPIR-V into a checked-in file (`FlameUBO`, `WaterUBO`, `WindUBO` under
+`crates/thyllore-effect-core/src/<effect>/gpu/components/generated.rs`, `TracePush` under
+`crates/thyllore-vulkan-core/src/renderer/trace_push.rs`; the list is `GPU_BLOCK_TARGETS` in
+`thyllore-shader-manifest`).
+
+After changing such a block in GLSL:
+
+```bash
+cargo build                                                    # compiles the SPIR-V the generator reads
+cargo run -p thyllore-shader-manifest --bin generate_gpu_blocks
+```
+
+Then fix the Rust call sites that construct the struct. The `block_definition` golden test fails with this command
+in its message whenever a checked-in file is stale, so forgetting the step cannot pass the tests.
+
+Fields shared by a uniform block and a `buffer_reference` are declared once as a GLSL `struct` in the effect's
+`include/ubo.glsl` and wrapped by both; the generator finds such a struct through the wrapping block, so the Rust
+struct keeps the struct's name. Adding a block = a `GpuBlockTarget` entry, a `pub mod` for the output file, and
+running the command once.
 
 ## Shader Modifications
 

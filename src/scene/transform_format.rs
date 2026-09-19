@@ -7,6 +7,7 @@ declare_scene_format! {
     component: Transform,
     record: TransformSceneRecord,
     items {
+        key: "transform",
         snapshot: transform_parameter_snapshot,
         scalars: TRANSFORM_SCALAR_PARAMS,
         ui: TRANSFORM_UI_PARAMS,

@@ -1,5 +1,6 @@
-use crate::app::{App, AppData, FrameContext};
+use crate::app::{App, AppData};
 use crate::ecs::run_frame;
+use crate::ecs::FrameContext;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::vulkan::*;
 
@@ -7,17 +8,15 @@ use anyhow::Result;
 
 impl App {
     pub unsafe fn update(&mut self, image_index: usize) -> Result<()> {
-        let (time, delta_time) = if self
-            .get_resource::<crate::ecs::resource::BatchRun>()
-            .is_some()
-        {
-            let time = self.last_update_time + 1.0 / 60.0;
-            let delta_time = 1.0 / 60.0;
-            (time, delta_time)
-        } else {
-            let time = self.start.elapsed().as_secs_f32();
-            let delta_time = time - self.last_update_time;
-            (time, delta_time)
+        let fixed_delta = self
+            .resource::<crate::ecs::resource::FrameClock>()
+            .fixed_delta_seconds();
+        let (time, delta_time) = match fixed_delta {
+            Some(delta_time) => (self.last_update_time + delta_time, delta_time),
+            None => {
+                let time = self.start.elapsed().as_secs_f32();
+                (time, time - self.last_update_time)
+            }
         };
         self.last_update_time = time;
         self.last_frame_interval = delta_time;

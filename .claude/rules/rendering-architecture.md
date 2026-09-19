@@ -18,7 +18,7 @@ naming rules are in `shaders.md`, ECS phases in `ecs-architecture.md`.
 |---|---|---|
 | Abstract render types | `crates/thyllore-render-core` | `RenderBackend` trait, `MeshId`, buffer handles, `FrameUBO` / `ObjectUBO` / `MaterialUBO`, post-process settings. No Vulkan, no ECS |
 | Vulkan primitives | `crates/thyllore-vulkan-core` | `core/` (`RRDevice`, `RRSwapchain`, descriptor allocator), `command/`, `descriptor/` (reflected set layouts, one file per pass), `pipeline/` (builder from the pass manifest, cache, ray tracing), `raytracing/` (BLAS / TLAS), `render/` (`RRRender` render pass + framebuffers, depth), `resource/` (buffers, images, HDR / gbuffer / offscreen / effect buffers, `RenderTargetStorage`, `RenderTargetTransient`), `renderer/` (per-pass command helpers), `backend.rs` (`VulkanBackend: RenderBackend`). No ECS |
-| App-side Vulkan glue | `src/vulkanr/` | ECS resources wrapping swapchain / sync / gbuffer (`context/resources.rs`), `renderer/deferred/` (one `*_pass.rs` per core pass that reads `App` and calls crate helpers, `nodes.rs` with the core `RenderPassNode`s, `scissor.rs`), `scene_renderer.rs`, `backend.rs` (`BillboardBackend` impl) |
+| App-side Vulkan glue | `src/vulkanr/` | ECS resources wrapping swapchain / sync / gbuffer (`context/resources.rs`), `renderer/deferred/` (one `*_pass.rs` per core pass that reads `PassContext` and calls crate helpers, `nodes.rs` with the core `RenderPassNode`s, `scissor.rs`), `scene_renderer.rs`, `backend.rs` (`BillboardBackend` impl) |
 | Frame driver | `src/app/` | `App` lifecycle, `AppData`, `ViewportState`, `begin_frame` / `update` / `render` / present |
 
 Effect-specific pass recording, resize and descriptor updates live in `src/ecs/systems/<effect>/` (#151) as
@@ -39,6 +39,9 @@ reads and writes, and a declaration must hold whenever `record()` would emit the
 3. `render` (`src/app/render.rs`): TLAS refresh, `prepare_post_process_targets` and
    `prepare_water_frame_targets` (acquire transient images, update the descriptor sets of this frame slot),
    `record_command_buffer`, submit, present, `FrameSync::advance`.
+4. `App::after_present` (`src/app/lifecycle/after_present.rs`) → `run_batch_capture_phase`: only when the
+   batch schedule asked for a capture this frame; waits idle, runs every requested `BatchCapture` and saves
+   the screenshot.
 
 Descriptor sets that read a transient image exist once per frame slot (`MAX_FRAMES_IN_FLIGHT = 2`, in
 `src/app/init/instance.rs`). Never update a single descriptor set that a pending command buffer may still
@@ -76,8 +79,15 @@ stages / descriptor set roles are declared once in `shaders/passes.toml` and gen
 - `thyllore_vulkan_core::FrameRenderContext`: device, graphics resources, buffer registry, pipeline storage,
   image index. Immutable; what crate-level `record_*_pass` helpers take.
 - `src/app/render_context.rs::RenderContext`: mutable GPU resources, builds `VulkanBackend`.
-- `src/app/frame_context.rs::FrameContext`: `RenderContext` plus `World`, `AssetStorage`, time, frame slot,
+- `src/ecs/frame_context.rs::FrameContext`: `RenderContext` plus `World`, `AssetStorage`, time, frame slot,
   swapchain extent. What the ECS phase pipeline takes.
+- `src/ecs/effect_context.rs::EffectContext`: instance, device, graphics resources, viewport extent and
+  storage pool, HDR view, raytracing data, pass image states, `World`. What the effect `setup`,
+  `after_overrides` (with `&RRRender`) and `on_viewport_resize` hooks take; `src/app/effect_hooks.rs` builds it.
+- `src/ecs/pass_context.rs::PassContext`: device, graphics resources, buffer registry, pipelines, raytracing
+  data, the viewport's core buffers, the transient pool and this frame's slot map, onion skin state, `World`,
+  assets. What every `RenderPassNode` method takes (`prepare` mutably); `src/app/render_context.rs::build_pass_context`
+  builds it per graph phase.
 
 ## Camera controls (`src/ecs/systems/camera_systems.rs`)
 
@@ -94,7 +104,7 @@ stages / descriptor set roles are declared once in `shaders/passes.toml` and gen
 ## Model loading
 
 Importers live in `crates/thyllore-importer-core` (glTF / FBX / PNG) and return model-core + anim-core
-types; `src/loader/` only re-exports them. `src/app/model_loader.rs` turns the result into `AssetStorage`
+types; `src/loader/` only re-exports them. `src/app/model/` turns the result into `AssetStorage`
 entries, GPU meshes (`GraphicsResources`) and acceleration structures. Sample models live under
 `assets/models/<name>/`.
 

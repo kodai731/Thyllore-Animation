@@ -1,7 +1,6 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::App;
 use crate::ecs::component::WindTornadoEffect;
 use crate::ecs::resource::{ProjectionData, WindGpuState, WindRenderSettings, WindRenderTargets};
 use crate::ecs::systems::wind::descriptors::WindResolveDescriptorSet;
@@ -9,6 +8,7 @@ use crate::ecs::systems::wind::record::{
     record_wind_half_resolve_pass, record_wind_shading_pass, record_wind_shadow_bake_pass,
     record_wind_upsample_pass, WindInstanceDraw, WindPushConstants,
 };
+use crate::ecs::PassContext;
 use crate::hooks::pass::{
     CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef, TargetUse,
 };
@@ -34,44 +34,35 @@ impl WindFrame {
     }
 }
 
-fn wind_render_settings(app: &App) -> WindRenderSettings {
-    app.data
-        .ecs_world
+fn wind_render_settings(ctx: &PassContext) -> WindRenderSettings {
+    ctx.world
         .get_resource::<WindRenderSettings>()
         .map(|settings| *settings)
         .unwrap_or_default()
 }
 
-fn wind_frame(app: &App) -> Option<WindFrame> {
-    let extent = app
-        .data
-        .ecs_world
-        .get_resource::<WindRenderTargets>()?
-        .extent();
-    let gpu_state = app.data.ecs_world.get_resource::<WindGpuState>()?;
+fn wind_frame(ctx: &PassContext) -> Option<WindFrame> {
+    let extent = ctx.world.get_resource::<WindRenderTargets>()?.extent();
+    let gpu_state = ctx.world.get_resource::<WindGpuState>()?;
     gpu_state.resolve_pipeline.as_ref()?;
     gpu_state.resolve_descriptor.as_ref()?;
     gpu_state.ubo.as_ref()?;
 
-    let mut winds = app.data.ecs_world.query_winds();
+    let mut winds = ctx.world.query_winds();
     winds.truncate(WIND_MAX_INSTANCES);
     if winds.is_empty() {
         return None;
     }
 
-    let inv_view_proj = app
-        .data
-        .ecs_world
+    let inv_view_proj = ctx
+        .world
         .get_resource::<ProjectionData>()
         .map(|projection| inverse_view_proj_f64(projection.proj, projection.view));
-    let settings = wind_render_settings(app);
+    let settings = wind_render_settings(ctx);
     let mut ubos = Vec::with_capacity(winds.len());
     let mut scissors = Vec::with_capacity(winds.len());
     for (slot, wind) in winds.into_iter().enumerate() {
-        let effect = app
-            .data
-            .ecs_world
-            .get_component::<WindTornadoEffect>(wind)?;
+        let effect = ctx.world.get_component::<WindTornadoEffect>(wind)?;
         let mut ubo = build_wind_ubo(&effect, WindShadowSlot(slot as u32));
         if let Some(inv_view_proj) = inv_view_proj {
             ubo.inv_view_proj = inv_view_proj;
@@ -80,7 +71,12 @@ fn wind_frame(app: &App) -> Option<WindFrame> {
         let scissor = if settings.debug_view == WindDebugView::Coverage {
             Some(full_extent_scissor(extent))
         } else {
-            compute_bounds_scissor(app, extent, &ubo.model, wind_local_bounds_corners(&params))
+            compute_bounds_scissor(
+                ctx.world,
+                extent,
+                &ubo.model,
+                wind_local_bounds_corners(&params),
+            )
         };
         scissors.push(scissor);
         ubos.push(ubo);
@@ -98,8 +94,8 @@ impl RenderPassNode for WindPassNode {
         PassStage::Effect
     }
 
-    fn writes(&self, app: &App) -> Vec<TargetUse> {
-        wind_frame(app)
+    fn writes(&self, ctx: &PassContext) -> Vec<TargetUse> {
+        wind_frame(ctx)
             .filter(WindFrame::has_visible_instance)
             .map(|_| {
                 vec![TargetUse::new(
@@ -115,26 +111,26 @@ impl RenderPassNode for WindPassNode {
 
     unsafe fn record(
         &self,
-        app: &App,
+        ctx: &PassContext,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
         _frame_slot: usize,
     ) -> Result<()> {
-        record_wind_passes(app, command_buffer, image_index)
+        record_wind_passes(ctx, command_buffer, image_index)
     }
 }
 
 unsafe fn record_wind_passes(
-    app: &App,
+    ctx: &PassContext,
     command_buffer: vk::CommandBuffer,
     image_index: usize,
 ) -> Result<()> {
-    let Some(frame) = wind_frame(app) else {
+    let Some(frame) = wind_frame(ctx) else {
         return Ok(());
     };
     let (Some(wind_targets), Some(gpu_state)) = (
-        app.data.ecs_world.get_resource::<WindRenderTargets>(),
-        app.data.ecs_world.get_resource::<WindGpuState>(),
+        ctx.world.get_resource::<WindRenderTargets>(),
+        ctx.world.get_resource::<WindGpuState>(),
     ) else {
         return Ok(());
     };
@@ -146,9 +142,9 @@ unsafe fn record_wind_passes(
         return Ok(());
     };
     let wind_buffer = &*wind_targets;
-    let ctx = crate::ecs::systems::phases::build_frame_render_context(app, image_index);
+    let render = ctx.frame_render_context(image_index);
 
-    let settings = wind_render_settings(app);
+    let settings = wind_render_settings(ctx);
     let push_constants = WindPushConstants::new(
         settings.shading_mode.as_shader_value(),
         settings.reference_step_count as i32,
@@ -161,7 +157,7 @@ unsafe fn record_wind_passes(
             continue;
         };
         wind_ubo.record_update(
-            &ctx.device.device,
+            &render.device.device,
             command_buffer,
             slot,
             ubo,
@@ -181,7 +177,7 @@ unsafe fn record_wind_passes(
         gpu_state.shadow_bake_descriptor.as_ref(),
     ) {
         record_wind_shadow_bake_pass(
-            &ctx,
+            &render,
             wind_buffer,
             bake_pipeline,
             bake_descriptor,
@@ -195,7 +191,7 @@ unsafe fn record_wind_passes(
         WindResolveScale::Full => {
             for draw in &draws {
                 record_wind_shading_pass(
-                    &ctx,
+                    &render,
                     wind_buffer,
                     shading_pipeline,
                     descriptor,
@@ -208,7 +204,7 @@ unsafe fn record_wind_passes(
         }
         WindResolveScale::Half => record_half_scale_wind_passes(
             &gpu_state,
-            &ctx,
+            &render,
             wind_buffer,
             shading_pipeline,
             descriptor,

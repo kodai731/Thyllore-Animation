@@ -1,14 +1,18 @@
+pub mod bootstrap;
+pub mod capture_context;
 pub mod cleanup;
 pub mod color_test_quad;
 mod command_recording;
+pub mod config;
 pub mod data;
-pub(crate) mod deferred_actions;
+pub mod effect_hooks;
 pub(crate) mod features;
-pub mod frame_context;
 pub mod init;
-pub mod model_loader;
+pub mod lifecycle;
+pub mod model;
 mod pass_targets;
 pub mod post_process;
+pub mod raytracing;
 pub mod render;
 pub mod render_context;
 pub mod scene_model;
@@ -16,8 +20,7 @@ pub mod update;
 pub mod util;
 pub mod viewport;
 
-pub use frame_context::FrameContext;
-pub use render_context::RenderContext;
+pub use render_context::{build_frame_render_context, build_pass_context, RenderContext};
 
 pub use data::AppData;
 pub use init::*;

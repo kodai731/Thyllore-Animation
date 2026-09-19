@@ -52,7 +52,7 @@ pub fn dispatch_camera_light_debug_events(
             }
 
             UIEvent::MoveLightToBounds(target) => {
-                use crate::app::data::LightMoveTarget;
+                use crate::ecs::events::light_move_target::LightMoveTarget;
 
                 if let Some((min, max, _)) = model_bounds {
                     let offset = 2.0;
@@ -112,12 +112,8 @@ pub fn dispatch_camera_light_debug_events(
                 deferred.push(DeferredAction::DumpAnimationDebug);
             }
 
-            UIEvent::DumpWaterDebug => {
-                deferred.push(DeferredAction::DumpWaterDebug);
-            }
-
-            UIEvent::DumpWindDebug => {
-                deferred.push(DeferredAction::DumpWindDebug);
+            UIEvent::CaptureNow(capture) => {
+                deferred.push(DeferredAction::CaptureNow(capture.clone()));
             }
 
             _ => {}

@@ -49,6 +49,15 @@ impl FlameShadingMode {
     }
 }
 
+impl std::str::FromStr for FlameShadingMode {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value)
+            .ok_or_else(|| format!("invalid flame mode '{value}': expected analytic|raymarch|thickness|noise|depthclamp"))
+    }
+}
+
 /// Numeric debug visualization of the wave-path intermediates: the shader
 /// replaces the flame color with a colormap of the selected quantity, sampled
 /// at the max-density node along each ray (Emission Total integrates instead).
@@ -148,6 +157,15 @@ impl FlameDebugView {
     }
 }
 
+impl std::str::FromStr for FlameDebugView {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value)
+            .ok_or_else(|| format!("invalid flame debug view '{value}': expected off|shaped|erosion|argument|density|sigma|emission|jitter|wcoord|grid|strain|stretch|branch|emission-linear"))
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FlameRenderSettings {
     pub shading_mode: FlameShadingMode,
@@ -177,3 +195,6 @@ impl FlameRenderSettings {
         }
     }
 }
+
+/// Instance slots of the flame UBO.
+pub const FLAME_MAX_INSTANCES: usize = 4;

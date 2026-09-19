@@ -2,6 +2,7 @@ use crate::core::device::*;
 use crate::descriptor::pass_manifest::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT};
 use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
 use crate::descriptor::shader_bindings::{water_caustic_apply, water_caustic_splat};
+use crate::resource::gpu_resource::GpuResource;
 use crate::vulkan::*;
 
 #[derive(Clone, Debug, Default)]
@@ -77,7 +78,7 @@ impl RRWaterCausticDescriptorSet {
                 std::mem::size_of::<crate::data::SceneUniformData>() as u64,
             )?
             .buffer(
-                water_caustic_splat::WATER,
+                water_caustic_splat::WATER_BLOCK,
                 water_ubo,
                 0,
                 vk::WHOLE_SIZE as u64,
@@ -105,7 +106,7 @@ impl RRWaterCausticDescriptorSet {
                 std::mem::size_of::<crate::data::SceneUniformData>() as u64,
             )?
             .buffer(
-                water_caustic_apply::WATER,
+                water_caustic_apply::WATER_BLOCK,
                 water_ubo,
                 0,
                 vk::WHOLE_SIZE as u64,
@@ -133,5 +134,11 @@ impl RRWaterCausticDescriptorSet {
     pub unsafe fn destroy(&mut self, device: &vulkanalia::Device) {
         self.splat_layout.destroy(device);
         self.apply_layout.destroy(device);
+    }
+}
+
+impl GpuResource for RRWaterCausticDescriptorSet {
+    unsafe fn destroy_gpu(&mut self, rrdevice: &RRDevice) {
+        self.destroy(&rrdevice.device);
     }
 }

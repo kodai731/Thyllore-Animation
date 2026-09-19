@@ -1,26 +1,15 @@
 use crate::asset::AssetStorage;
-use crate::ecs::component::{EntityIcon, WaterTorusEffect, WATER_DOMAIN};
+use crate::ecs::component::{WaterTorusEffect, WATER_DOMAIN};
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Entity, Transform, World};
+use crate::hooks::scene::spawn_scene_owner;
 
 pub const DEFAULT_WATER_NAME: &str = "Water";
 
 /// Spawns a water as a regular scene entity so the hierarchy, inspector and transform gizmo
 /// can all reach it through the same components they use for every other object.
 pub fn spawn_water(world: &mut World, name: &str, effect: WaterTorusEffect) -> Entity {
-    let transform = Transform {
-        translation: effect.position,
-        rotation: effect.rotation,
-        ..Default::default()
-    };
-
-    world
-        .entity()
-        .with_name(name)
-        .with_transform(transform)
-        .with_editor_display(EntityIcon::Water, false)
-        .with_water(effect)
-        .build()
+    spawn_scene_owner(world, name, effect)
 }
 
 /// Spawn a water entity together with its (empty) animation clip and schedule
@@ -40,13 +29,6 @@ pub fn spawn_water_with_clip(
         &WATER_DOMAIN,
     );
     entity
-}
-
-/// Removes every water entity so a scene without a water section loads into a water-free world.
-pub fn despawn_waters(world: &mut World) {
-    for entity in world.query_waters() {
-        world.despawn(entity);
-    }
 }
 
 /// The water the UI and the water events act on: the selected entity when it is a water,

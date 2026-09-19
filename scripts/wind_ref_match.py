@@ -28,6 +28,7 @@ import numpy as np
 from scipy import ndimage
 
 import flame_ref_match as flame
+from ref_match import frames
 
 DIRECTION_BINS = 16
 STRUCTURE_SIGMA = 3.0
@@ -244,7 +245,7 @@ def main():
                         help="first,end reference frame for the sequence descriptors (default: every frame)")
     parser.add_argument("--json", help="write reference/render/distance results to this path")
     args = parser.parse_args()
-    flame.silhouette_mode = "dust"
+    frames.silhouette_mode = "dust"
 
     ref_fps, caption_frames = flame.load_ref_meta(args.ref_dir)
     ref_paths = flame.collect_frames(args.ref_dir)

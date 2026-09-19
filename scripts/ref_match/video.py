@@ -21,8 +21,8 @@ fields, the row width w(y, t) and the row centre c(y, t), in column widths after
 
 import numpy as np
 
-from flame_ref_match_sequence import (TEMPORAL_BAND_COUNT, band_centre_series, fill_nan_rows, pair_shifts,
-                                      silhouette_profiles, temporal_bands, width_detail)
+from ref_match.sequence import (TEMPORAL_BAND_COUNT, band_centre_series, fill_nan_rows, pair_shifts,
+                                silhouette_profiles, temporal_bands, width_detail)
 
 TRANSPORT_LAG_SECONDS = 0.1
 TRANSPORT_MAX_SHIFT_WIDTHS = 1.5

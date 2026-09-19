@@ -31,10 +31,10 @@ Metrics (silhouette = R>90 && R-B>40, lum = 0.299R+0.587G+0.114B):
       extra width (halo width - silhouette width) / column width ratio within [0.7, 1.4]; tongues = halo
       runs at least width/4 tall protruding > 0.25 width beyond the silhouette on one side, count ratio
       within [0.5, 2]
-  xviii video gate: see flame_ref_match_video.py (--video, implies --temporal); whole-clip streaming: moving
+  xviii video gate: see ref_match/video.py (--video, implies --temporal); whole-clip streaming: moving
       pair fraction, upward transport of the width and centre fields, centre phase lag between bands,
       centre return. The summary line reports the video score (mean of the xviii scores) separately.
-  xiii-xvi sequence gates: see flame_ref_match_sequence.py (--temporal; the render must be a sequence at
+  xiii-xvi sequence gates: see ref_match/sequence.py (--temporal; the render must be a sequence at
       --fps). The reference frame rate is read from the reference meta.json; --ref-window narrows the
       reference span (default: every frame). Frames listed as caption_frames in meta.json carry burned-in
       text and are excluded from the static reference (the silhouette fields the sequence gates use are
@@ -50,8 +50,7 @@ from pathlib import Path
 import numpy as np
 from scipy import ndimage
 
-import flame_ref_match_sequence as sequence
-import flame_ref_match_video as video
+from ref_match import sequence, video
 from ref_match.frames import (SILHOUETTE_MODES, collect_frames, halo_mask, load_image, load_ref_meta, luminance,
                               median_column_width, reference_column_width, resample_to_column_width, silhouette_mask,
                               to_rgb)

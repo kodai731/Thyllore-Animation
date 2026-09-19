@@ -234,7 +234,7 @@ impl App {
         // resources must exist before it is applied. Registration is idempotent and runs again below.
         Self::register_editor_resources(&mut data);
         Self::register_post_processing_resources(&mut data);
-        Self::apply_loaded_scene(&mut data, loaded_scene);
+        Self::apply_loaded_scene(&mut data, loaded_scene)?;
         data.raytracing.command_pool = rrcommand_pool.command_pool;
         if let Err(e) = Self::create_ray_tracing_pipelines_with_resources(
             &instance,
@@ -903,7 +903,7 @@ impl App {
             crate::scene::LoadedScene,
             Vec<crate::animation::editable::EditableAnimationClip>,
         )>,
-    ) {
+    ) -> anyhow::Result<()> {
         let mut scene_state = SceneState::new();
         if let Some((scene_path, scene, clips)) = loaded_scene {
             crate::ecs::systems::clip_library_systems::clip_library_register_loaded(
@@ -935,14 +935,13 @@ impl App {
 
             scene_state.set_from_loaded(scene_path, scene.scene.metadata.clone());
         } else {
-            crate::ecs::systems::spawn_flame_with_clip(
-                &mut data.ecs_world,
-                &mut data.ecs_assets,
-                crate::ecs::systems::DEFAULT_FLAME_NAME,
-                crate::ecs::component::FlameEffect::default(),
-            );
+            let hooks = crate::hooks::empty_scene::EmptySceneHooks::collect()?;
+            for hook in hooks.ordered() {
+                (hook.apply)(&mut data.ecs_world, &mut data.ecs_assets);
+            }
         }
         data.ecs_world.insert_resource(scene_state);
+        Ok(())
     }
 
     unsafe fn build_grid_mesh(

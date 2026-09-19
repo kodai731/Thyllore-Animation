@@ -6,6 +6,12 @@ use crate::hooks::scene::spawn_scene_owner;
 
 pub const DEFAULT_FLAME_NAME: &str = "Flame";
 
+fn spawn_default_flame_into_empty_scene(world: &mut World, assets: &mut AssetStorage) {
+    spawn_flame_with_clip(world, assets, DEFAULT_FLAME_NAME, FlameEffect::default());
+}
+
+crate::empty_scene_hook!("flame", spawn_default_flame_into_empty_scene);
+
 /// Spawns a flame as a regular scene entity so the hierarchy, inspector and transform gizmo
 /// can all reach it through the same components they use for every other object.
 pub fn spawn_flame(world: &mut World, name: &str, effect: FlameEffect) -> Entity {

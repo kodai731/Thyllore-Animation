@@ -1,6 +1,6 @@
 use crate::app::{App, AppData};
 use crate::ecs::run_frame;
-use crate::ecs::{EffectContext, FrameContext};
+use crate::ecs::FrameContext;
 use crate::vulkanr::device::RRDevice;
 use crate::vulkanr::vulkan::*;
 
@@ -8,17 +8,15 @@ use anyhow::Result;
 
 impl App {
     pub unsafe fn update(&mut self, image_index: usize) -> Result<()> {
-        let (time, delta_time) = if self
-            .get_resource::<crate::ecs::resource::BatchRun>()
-            .is_some()
-        {
-            let time = self.last_update_time + 1.0 / 60.0;
-            let delta_time = 1.0 / 60.0;
-            (time, delta_time)
-        } else {
-            let time = self.start.elapsed().as_secs_f32();
-            let delta_time = time - self.last_update_time;
-            (time, delta_time)
+        let fixed_delta = self
+            .resource::<crate::ecs::resource::FrameClock>()
+            .fixed_delta_seconds();
+        let (time, delta_time) = match fixed_delta {
+            Some(delta_time) => (self.last_update_time + delta_time, delta_time),
+            None => {
+                let time = self.start.elapsed().as_secs_f32();
+                (time, time - self.last_update_time)
+            }
         };
         self.last_update_time = time;
         self.last_frame_interval = delta_time;
@@ -99,60 +97,19 @@ impl App {
         Ok(())
     }
 
-    pub unsafe fn run_effect_viewport_resize(&mut self) -> Result<()> {
-        let hooks = self.data.effect_hooks.snapshot();
-        let mut ctx = self.build_effect_context();
-        for hook in hooks {
-            if let Some(on_viewport_resize) = hook.on_viewport_resize {
-                on_viewport_resize(&mut ctx)?;
-            }
-        }
-        Ok(())
-    }
-
-    pub unsafe fn run_effect_destroy(&mut self) -> Result<()> {
-        let hooks = self.data.effect_hooks.snapshot();
-        let mut ctx = self.build_effect_context();
-        for hook in hooks.into_iter().rev() {
-            if let Some(destroy) = hook.destroy {
-                destroy(&mut ctx)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn build_effect_context(&mut self) -> EffectContext<'_> {
-        EffectContext {
-            instance: &self.instance,
-            rrdevice: &self.rrdevice,
-            viewport_width: self.data.viewport.width,
-            viewport_height: self.data.viewport.height,
-            hdr_color_view: self
-                .data
-                .viewport
-                .hdr_buffer
-                .as_ref()
-                .map(|hdr| hdr.color_image_view),
-            storage: &mut self.data.viewport.storage,
-            transient: &mut self.data.viewport.transient,
-            raytracing: &mut self.data.raytracing,
-            pass_image_states: &mut self.data.pass_image_states,
-            world: &mut self.data.ecs_world,
-            frames_in_flight: crate::app::init::MAX_FRAMES_IN_FLIGHT,
-        }
-    }
-
-    pub unsafe fn process_platform_events(&mut self) {
-        let actions = std::mem::take(
+    pub unsafe fn apply_app_commands(&mut self) {
+        let commands = std::mem::take(
             &mut self
                 .data
                 .ecs_world
-                .resource_mut::<crate::ecs::events::PlatformEventQueue>()
-                .actions,
+                .resource_mut::<crate::ecs::resource::AppCommandQueue>()
+                .commands,
         );
-        for action in actions {
-            crate::app::deferred_actions::execute_deferred_action(self, action);
+        for command in commands {
+            crate::app::command::apply_app_command(self, command);
         }
+
+        self.spawn_pending_debug_primitives();
     }
 }
 

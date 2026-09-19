@@ -1,17 +1,17 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::App;
+use crate::ecs::PassContext;
 
 pub unsafe fn record_onion_skin_pass(
-    app: &App,
+    ctx: &PassContext,
     command_buffer: vk::CommandBuffer,
     image_index: usize,
 ) -> Result<()> {
-    let Some(resources) = app.data.raytracing.onion_skin_pass.as_ref() else {
+    let Some(resources) = ctx.raytracing.onion_skin_pass.as_ref() else {
         return Ok(());
     };
-    let Some(onion_skin_gpu) = app.data.onion_skin_gpu.as_ref() else {
+    let Some(onion_skin_gpu) = ctx.onion_skin_gpu else {
         return Ok(());
     };
     if onion_skin_gpu.source_mesh_index.is_none() {
@@ -21,10 +21,10 @@ pub unsafe fn record_onion_skin_pass(
         return Ok(());
     }
 
-    let ctx = crate::app::build_frame_render_context(app, image_index);
+    let render = ctx.frame_render_context(image_index);
 
     thyllore_vulkan_core::renderer::record_onion_skin_ghost_pass(
-        &ctx,
+        &render,
         resources,
         onion_skin_gpu,
         image_index,
@@ -34,13 +34,13 @@ pub unsafe fn record_onion_skin_pass(
 }
 
 pub unsafe fn record_onion_skin_composite(
-    app: &App,
+    ctx: &PassContext,
     command_buffer: vk::CommandBuffer,
 ) -> Result<()> {
-    let Some(resources) = app.data.raytracing.onion_skin_pass.as_ref() else {
+    let Some(resources) = ctx.raytracing.onion_skin_pass.as_ref() else {
         return Ok(());
     };
-    let Some(onion_skin_gpu) = app.data.onion_skin_gpu.as_ref() else {
+    let Some(onion_skin_gpu) = ctx.onion_skin_gpu else {
         return Ok(());
     };
     if onion_skin_gpu.source_mesh_index.is_none() {
@@ -50,10 +50,10 @@ pub unsafe fn record_onion_skin_composite(
         return Ok(());
     }
 
-    let ctx = crate::app::build_frame_render_context(app, 0);
+    let render = ctx.frame_render_context(0);
 
     thyllore_vulkan_core::renderer::record_onion_skin_composite_pass(
-        &ctx,
+        &render,
         resources,
         command_buffer,
     );

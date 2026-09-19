@@ -5,7 +5,10 @@ use crate::app::App;
 impl App {
     pub unsafe fn resize_post_process_bindings(&mut self) -> Result<()> {
         self.update_postprocessing_descriptors_on_resize()?;
-        self.data.post_process.forget_bindings();
+        self.data
+            .ecs_world
+            .resource_mut::<crate::ecs::resource::PostProcessFrameTargets>()
+            .forget_bindings();
         Ok(())
     }
 

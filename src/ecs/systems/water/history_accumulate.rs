@@ -1,13 +1,14 @@
 use crate::ecs::component::{WaterTemporalAccum, WaterTorusEffect};
 use crate::ecs::resource::{
-    BatchRun, ProjectionData, WaterHistorySnapshot, WaterHistorySnapshotState, WaterRenderSettings,
+    FrameClock, ProjectionData, WaterHistorySnapshot, WaterHistorySnapshotState,
+    WaterRenderSettings,
 };
 use crate::ecs::world::World;
 
 const STABLE_FRAME_HISTORY_WEIGHT: f32 = 0.85;
 
 /// Reusing the previous frame's shading is only valid while the camera and the water
-/// parameters hold still. Batch runs never reuse history so a single-frame screenshot
+/// parameters hold still. A fixed-step run never reuses history so a single-frame screenshot
 /// stays deterministic.
 pub fn accumulate_water_history(world: &mut World) {
     let water_entities = world.query_waters();
@@ -41,7 +42,7 @@ pub fn accumulate_water_history(world: &mut World) {
     // Collect data first to avoid borrow conflicts
     let view = world.resource::<ProjectionData>().view;
     let settings = *world.resource::<WaterRenderSettings>();
-    let has_batch_run = world.contains_resource::<BatchRun>();
+    let fixed_step_frame = fixed_step_frame(world);
     let old_effect = world.get_component::<WaterTorusEffect>(entity).cloned();
     let Some(old_effect) = old_effect else {
         return;
@@ -67,20 +68,10 @@ pub fn accumulate_water_history(world: &mut World) {
     state.previous = Some(snapshot);
     drop(state);
 
-    let batch_frames_rendered = if has_batch_run {
-        Some(world.resource::<BatchRun>().frames_rendered)
-    } else {
-        None
-    };
-
     world.insert_component(
         entity,
         WaterTemporalAccum {
-            frame_index: if let Some(fr) = batch_frames_rendered {
-                fr
-            } else {
-                old_temporal.frame_index.wrapping_add(1)
-            },
+            frame_index: fixed_step_frame.unwrap_or(old_temporal.frame_index.wrapping_add(1)),
             weight: if matches_previous_frame {
                 settings
                     .batch_history_weight
@@ -100,4 +91,9 @@ fn strip_per_frame_state(effect: &WaterTorusEffect) -> WaterTorusEffect {
     let mut appearance = effect.clone();
     appearance.time = 0.0;
     appearance
+}
+
+fn fixed_step_frame(world: &World) -> Option<u64> {
+    let clock = world.get_resource::<FrameClock>()?;
+    clock.is_fixed().then_some(clock.frame)
 }

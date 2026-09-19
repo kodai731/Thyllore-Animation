@@ -1,21 +1,18 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::effect_context::MAX_FRAMES_IN_FLIGHT;
 use crate::ecs::resource::WaterRenderTargets;
-use crate::ecs::EffectContext;
+use crate::ecs::{EffectContext, MAX_FRAMES_IN_FLIGHT};
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
-use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GpuResource, WaterBuffer};
-use crate::AppData;
 
 pub const WATER_EFFECT_HOOK: EffectHook = EffectHook {
     name: "water",
     setup: Some(setup_water),
+    after_overrides: None,
     on_viewport_resize: Some(resize_water_render_targets),
-    destroy: Some(destroy_water_render_targets),
     passes: super::passes::WATER_PASS_NODES,
 };
 
@@ -46,57 +43,33 @@ unsafe fn create_water_render_targets(
     Ok(true)
 }
 
-unsafe fn setup_water(
-    instance: &Instance,
-    rrdevice: &RRDevice,
-    data: &mut AppData,
-    rrrender: &RRRender,
-) -> Result<()> {
-    let mut setup_ctx = EffectContext {
-        instance,
-        rrdevice,
-        viewport_width: data.viewport.width,
-        viewport_height: data.viewport.height,
-        hdr_color_view: data
-            .viewport
-            .hdr_buffer
-            .as_ref()
-            .map(|hdr| hdr.color_image_view),
-        storage: &mut data.viewport.storage,
-        transient: &mut data.viewport.transient,
-        raytracing: &mut data.raytracing,
-        pass_image_states: &mut data.pass_image_states,
-        world: &mut data.ecs_world,
-        frames_in_flight: MAX_FRAMES_IN_FLIGHT,
-    };
-    let created = create_water_render_targets(&mut setup_ctx, rrrender.gbuffer_depth_image_view)?;
-    if !created {
+unsafe fn setup_water(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()> {
+    if !create_water_render_targets(ctx, rrrender.gbuffer_depth_image_view)? {
         log!("HDR buffer not available, skipping water pipeline");
         return Ok(());
     }
 
-    let (Some(water_targets), Some(hdr_buffer)) = (
-        data.ecs_world
-            .get_resource::<crate::ecs::resource::WaterRenderTargets>(),
-        data.viewport.hdr_buffer.as_ref(),
+    let (Some(water_targets), Some(hdr_color_view)) = (
+        ctx.world.get_resource::<WaterRenderTargets>(),
+        ctx.hdr_color_view,
     ) else {
         log!("Water buffer not available, skipping water pipeline");
         return Ok(());
     };
 
     super::pipeline::create_water_pipeline(
-        instance,
-        rrdevice,
+        ctx.instance,
+        ctx.rrdevice,
         rrrender,
-        &data.graphics_resources,
-        &mut data.raytracing,
+        ctx.graphics,
+        ctx.raytracing,
         &water_targets.buffer,
-        hdr_buffer,
+        hdr_color_view,
         MAX_FRAMES_IN_FLIGHT,
     )?;
     drop(water_targets);
-    let trace_blocks = super::pipeline::water_trace_blocks(rrdevice, &data.raytracing)?;
-    data.ecs_world.insert_resource(trace_blocks);
+    let trace_blocks = super::pipeline::water_trace_blocks(ctx.rrdevice, ctx.raytracing)?;
+    ctx.world.insert_resource(trace_blocks);
 
     log!("Water pipeline created successfully");
     Ok(())
@@ -115,7 +88,7 @@ unsafe fn resize_water_render_targets(ctx: &mut EffectContext) -> Result<()> {
         return Ok(());
     }
 
-    destroy_water_render_targets(ctx)?;
+    release_water_render_targets(ctx);
     if !create_water_render_targets(ctx, depth_view)? {
         return Ok(());
     }
@@ -123,17 +96,17 @@ unsafe fn resize_water_render_targets(ctx: &mut EffectContext) -> Result<()> {
     update_water_caustic_descriptor(ctx)
 }
 
-unsafe fn destroy_water_render_targets(ctx: &mut EffectContext) -> Result<()> {
-    if let Some(mut targets) = ctx.world.get_resource_mut::<WaterRenderTargets>() {
-        for image in targets.buffer.history_images {
-            ctx.pass_image_states.forget(image);
-        }
-        ctx.pass_image_states
-            .forget(targets.buffer.caustic_accum_image);
-        targets.destroy_gpu(ctx.rrdevice);
-        targets.forget_bindings();
+unsafe fn release_water_render_targets(ctx: &mut EffectContext) {
+    let Some(mut targets) = ctx.world.get_resource_mut::<WaterRenderTargets>() else {
+        return;
+    };
+    for image in targets.buffer.history_images {
+        ctx.pass_image_states.forget(image);
     }
-    Ok(())
+    ctx.pass_image_states
+        .forget(targets.buffer.caustic_accum_image);
+    targets.destroy_gpu(ctx.rrdevice);
+    targets.forget_bindings();
 }
 
 unsafe fn update_water_caustic_descriptor(ctx: &mut EffectContext) -> Result<()> {

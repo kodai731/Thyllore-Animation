@@ -1,10 +1,9 @@
 use anyhow::{bail, Result};
 
-use crate::ecs::component::ClipSchedule;
 use crate::ecs::world::World;
 
 use super::batch_action::{batch_action_registry, BatchAction};
-use super::BATCH_DEBUG_ACTION_FLAG;
+use super::cli_resolve::BATCH_DEBUG_ACTION_FLAG;
 
 pub(super) fn debug_actions_resolve_from_args(
     args: &[String],
@@ -17,11 +16,7 @@ pub(super) fn debug_actions_resolve_from_args(
         let Some(name) = args.get(i + 1).filter(|v| !v.starts_with("--")) else {
             bail!(
                 "{BATCH_DEBUG_ACTION_FLAG} requires an action. Valid actions: {}",
-                batch_action_registry()
-                    .iter()
-                    .map(|d| d.name)
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                registered_action_names()
             );
         };
         actions.push(debug_action_parse(name)?);
@@ -38,66 +33,31 @@ pub(super) fn debug_action_parse(name: &str) -> Result<Box<dyn BatchAction>> {
     }
     bail!(
         "unknown debug action '{name}'. Valid actions: {}",
-        batch_action_registry()
-            .iter()
-            .map(|d| d.name)
-            .collect::<Vec<_>>()
-            .join(", ")
+        registered_action_names()
     )
 }
 
-pub(super) fn debug_actions_contain(args: &[String], action_name: &str) -> bool {
-    args.iter().enumerate().any(|(i, arg)| {
-        arg == BATCH_DEBUG_ACTION_FLAG
-            && args
-                .get(i + 1)
-                .is_some_and(|name| !name.starts_with("--") && name == action_name)
-    })
+fn registered_action_names() -> String {
+    batch_action_registry()
+        .iter()
+        .map(|descriptor| descriptor.name)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// Execute debug-window actions headlessly: view-mode radios write the same
 /// `DebugViewState` resource the imgui panel edits, buttons enqueue the same
 /// `UIEvent`s so they run through the normal dispatch on the first frame.
-pub fn batch_apply_debug_actions(world: &World, actions: &[&dyn BatchAction]) {
-    for a in actions {
-        a.apply(world);
+pub fn batch_apply_debug_actions(world: &mut World, actions: &[&dyn BatchAction]) {
+    for action in actions {
+        action.apply(world);
     }
 }
 
-/// Make the timeline draw the first flame's clip block as if a TrimEnd drag to
-/// `end_seconds` were in progress: same preview math as the live drag, but no
-/// commit event, so the underlying instance stays untouched.
-pub(super) fn apply_flame_clip_preview(world: &World, end_seconds: f32) {
-    let Some(&flame) = world.query_flames().first() else {
-        return;
-    };
-    let Some(instance) = world
-        .get_component::<ClipSchedule>(flame)
-        .and_then(|schedule| schedule.first_instance().cloned())
-    else {
-        return;
-    };
-
-    let (start_time, end_time) = crate::ecs::systems::timeline_systems::clip_drag_preview_times(
-        &crate::ecs::resource::ClipDragType::TrimEnd,
-        instance.clip_out,
-        end_seconds - instance.clip_out,
-        instance.start_time,
-        instance.end_time(),
-        instance.clip_in,
-        instance.clip_out,
-    );
-    world
-        .resource_mut::<crate::ecs::resource::TimelineInteractionState>()
-        .drag_preview = Some(crate::ecs::resource::ClipDragPreview {
-        entity: flame,
-        instance_id: instance.instance_id,
-        start_time,
-        end_time,
-    });
-}
-
 pub fn debug_actions_json() -> String {
-    let names: Vec<&str> = batch_action_registry().iter().map(|d| d.name).collect();
+    let names: Vec<&str> = batch_action_registry()
+        .iter()
+        .map(|descriptor| descriptor.name)
+        .collect();
     serde_json::json!({"ok": true, "actions": names}).to_string()
 }

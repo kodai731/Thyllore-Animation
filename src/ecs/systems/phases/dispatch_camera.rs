@@ -7,16 +7,16 @@ use crate::ecs::resource::LightState;
 use crate::ecs::systems::{camera_move_to_look_at, camera_reset};
 use crate::ecs::world::World;
 
-use super::super::ui_event_systems::DeferredAction;
+use crate::ecs::resource::AppCommand;
 
 pub fn dispatch_camera_light_debug_events(
     events: &[UIEvent],
     world: &mut World,
     model_bounds: Option<(Vector3<f32>, Vector3<f32>, Vector3<f32>)>,
-) -> Vec<DeferredAction> {
+) -> Vec<AppCommand> {
     let mut camera = world.resource_mut::<Camera>();
     let mut rt_debug = world.resource_mut::<LightState>();
-    let mut deferred = Vec::new();
+    let mut commands = Vec::new();
 
     for event in events {
         match event {
@@ -79,45 +79,41 @@ pub fn dispatch_camera_light_debug_events(
             }
 
             UIEvent::LoadModel { path } => {
-                deferred.push(DeferredAction::LoadModel { path: path.clone() });
+                commands.push(AppCommand::LoadModel { path: path.clone() });
             }
 
             UIEvent::LoadModelAdditive { path } => {
-                deferred.push(DeferredAction::LoadModelAdditive { path: path.clone() });
+                commands.push(AppCommand::LoadModelAdditive { path: path.clone() });
             }
 
             UIEvent::SpawnDebugPrimitive { kind } => {
-                deferred.push(DeferredAction::SpawnDebugPrimitive { kind: *kind });
+                commands.push(AppCommand::SpawnDebugPrimitive { kind: *kind });
             }
 
             UIEvent::TakeScreenshot => {
-                deferred.push(DeferredAction::TakeScreenshot);
+                commands.push(AppCommand::TakeScreenshot);
             }
 
             #[cfg(debug_assertions)]
             UIEvent::DebugShadowInfo => {
-                deferred.push(DeferredAction::DebugShadowInfo);
+                commands.push(AppCommand::DebugShadowInfo);
             }
 
             #[cfg(debug_assertions)]
             UIEvent::DebugBillboardDepth => {
-                deferred.push(DeferredAction::DebugBillboardDepth);
+                commands.push(AppCommand::DebugBillboardDepth);
             }
 
             UIEvent::DumpDebugInfo => {
-                deferred.push(DeferredAction::DumpDebugInfo);
+                commands.push(AppCommand::DumpDebugInfo);
             }
 
             UIEvent::DumpAnimationDebug => {
-                deferred.push(DeferredAction::DumpAnimationDebug);
+                commands.push(AppCommand::DumpAnimationDebug);
             }
 
-            UIEvent::DumpWaterDebug => {
-                deferred.push(DeferredAction::DumpWaterDebug);
-            }
-
-            UIEvent::DumpWindDebug => {
-                deferred.push(DeferredAction::DumpWindDebug);
+            UIEvent::CaptureNow(capture) => {
+                commands.push(AppCommand::CaptureNow(capture.clone()));
             }
 
             UIEvent::DumpLightningDebug => {
@@ -128,5 +124,5 @@ pub fn dispatch_camera_light_debug_events(
         }
     }
 
-    deferred
+    commands
 }

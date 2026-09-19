@@ -1,3 +1,5 @@
+pub mod batch_capture;
+pub mod bootstrap;
 pub mod effect;
 pub mod gpu_primitive;
 pub mod gpu_resource;

@@ -1,5 +1,5 @@
 use crate::ecs::component::{motion_path_position, MotionPath};
-use crate::ecs::resource::{BatchRun, TimelineState};
+use crate::ecs::resource::{FrameClock, TimelineState};
 use crate::ecs::world::{Entity, Transform, World};
 use crate::ecs::FrameContext;
 
@@ -9,16 +9,17 @@ use crate::ecs::FrameContext;
 /// `motion_path_position` at the current timeline time and writes it into `Transform.translation`.
 /// If the entity does not have a `Transform`, one is inserted.
 ///
-/// Time is retrieved using the same logic as `batch_run_update_orbit`: if `BatchRun` is present,
-/// time is derived from `frames_rendered / 60.0`; otherwise it comes from `TimelineState.current_time`.
+/// Under a fixed-step `FrameClock` the time is the clock's; otherwise `TimelineState.current_time`.
 pub fn sync_motion_paths(world: &mut World) {
-    let current_time = match world.get_resource::<BatchRun>() {
-        Some(b) => b.frames_rendered as f32 * (1.0 / 60.0),
-        None => world
+    let fixed_step_time = world
+        .get_resource::<FrameClock>()
+        .and_then(|clock| clock.fixed_time_seconds());
+    let current_time = fixed_step_time.unwrap_or_else(|| {
+        world
             .get_resource::<TimelineState>()
             .map(|ts| ts.current_time)
-            .unwrap_or(0.0),
-    };
+            .unwrap_or(0.0)
+    });
 
     // Collect entities with MotionPath first to avoid borrow conflicts
     let entities: Vec<Entity> = world
@@ -61,11 +62,7 @@ mod tests {
     fn test_batch_run_inserts_transform_and_moves_along_orbit() {
         let mut world = World::new();
 
-        // Insert BatchRun with frames_rendered = 0 (time = 0.0)
-        world.insert_resource(BatchRun::new(
-            std::path::PathBuf::from("test_output.png"),
-            60,
-        ));
+        world.insert_resource(FrameClock::fixed(FrameClock::BATCH_DELTA_SECONDS));
 
         // Spawn entity with MotionPath but NO Transform
         let entity = world.spawn();
@@ -80,7 +77,6 @@ mod tests {
             },
         );
 
-        // First call: frames_rendered = 0 -> time = 0.0
         sync_motion_paths(&mut world);
 
         let transform = world.get_component::<Transform>(entity).unwrap();
@@ -101,13 +97,7 @@ mod tests {
             transform.translation.z
         );
 
-        // Advance frames_rendered to 15 -> time = 15/60 = 0.25
-        {
-            let mut batch_run = world.resource_mut::<BatchRun>();
-            batch_run.frames_rendered = 15;
-        }
-
-        // Second call: frames_rendered = 15 -> time = 0.25
+        world.resource_mut::<FrameClock>().frame = 15;
         sync_motion_paths(&mut world);
 
         let transform = world.get_component::<Transform>(entity).unwrap();
@@ -133,13 +123,7 @@ mod tests {
             transform.translation.z
         );
 
-        // Advance frames_rendered to 30 -> time = 30/60 = 0.5
-        {
-            let mut batch_run = world.resource_mut::<BatchRun>();
-            batch_run.frames_rendered = 30;
-        }
-
-        // Third call: frames_rendered = 30 -> time = 0.5
+        world.resource_mut::<FrameClock>().frame = 30;
         sync_motion_paths(&mut world);
 
         let transform = world.get_component::<Transform>(entity).unwrap();

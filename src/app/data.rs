@@ -1,4 +1,3 @@
-use crate::app::post_process::PostProcessFrameTargets;
 use crate::app::viewport::ViewportState;
 use crate::asset::AssetStorage;
 use crate::ecs::World;
@@ -31,7 +30,5 @@ pub struct AppData {
     pub pass_image_states: ImageStateTracker,
     #[gpu_resource(skip)]
     pub frame_transients: FrameTransients,
-    #[gpu_resource(skip)]
-    pub post_process: PostProcessFrameTargets,
     pub onion_skin_gpu: Option<OnionSkinGpuState>,
 }

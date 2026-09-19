@@ -22,11 +22,10 @@ fn main() -> anyhow::Result<()> {
     #[cfg(not(feature = "ml"))]
     let mut app = unsafe { thyllore_animation::app::App::create(&system.window)? };
 
-    thyllore_animation::app::bootstrap::apply_engine_overrides(&mut app, &config.overrides);
-
+    // Subsystem flags arrive through `bootstrap_hook!` registrations; never name one here.
+    thyllore_animation::app::bootstrap::apply_startup_overrides(&mut app, &config)?;
     unsafe {
-        thyllore_animation::app::bootstrap::init_flame_sdf_texture(&mut app, &config.overrides)?;
-        thyllore_animation::app::bootstrap::init_imgui_rendering(&mut app, &mut system)?;
+        thyllore_animation::app::bootstrap::finish_setup(&mut app, &mut system)?;
     }
 
     system.main_loop(&mut app);

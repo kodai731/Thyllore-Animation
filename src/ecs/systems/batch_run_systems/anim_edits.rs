@@ -13,7 +13,7 @@ use crate::ecs::events::UIEvent;
 use crate::ecs::resource::{ClipLibrary, TimelineState};
 use crate::ecs::world::World;
 
-use super::BATCH_ANIM_EDIT_FLAG;
+use super::cli_resolve::BATCH_ANIM_EDIT_FLAG;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BatchAnimEdit {

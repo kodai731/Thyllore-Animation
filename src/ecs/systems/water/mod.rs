@@ -1,3 +1,4 @@
+mod cli;
 mod debug_dump;
 mod gpu_primitive;
 mod history_accumulate;
@@ -12,6 +13,7 @@ mod spawn;
 mod tests;
 mod time;
 
+pub use cli::*;
 pub use debug_dump::*;
 pub use history_accumulate::*;
 pub use pick::*;

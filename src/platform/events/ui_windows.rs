@@ -228,13 +228,11 @@ pub(super) fn build_timeline_and_fixed_overlays(
             layout_snapshot,
         );
     }
-    // Batch captures are diffed pixel-by-pixel; the status bar shows wall-clock
-    // values (FPS, memory) that would break determinism, so skip it there.
-    let is_batch_capture = app
-        .data
-        .ecs_world
-        .contains_resource::<crate::ecs::resource::BatchRun>();
-    if !is_batch_capture {
+    // The status bar shows wall-clock values (FPS, memory) that would break a reproducible frame.
+    let is_fixed_step = app
+        .resource::<crate::ecs::resource::FrameClock>()
+        .is_fixed();
+    if !is_fixed_step {
         let delta_time = (app.start.elapsed().as_secs_f32() - app.last_update_time).max(0.001);
         let timeline_state = app.data.ecs_world.resource::<TimelineState>();
         let clip_duration = {

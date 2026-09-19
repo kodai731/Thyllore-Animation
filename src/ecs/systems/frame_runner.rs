@@ -1,7 +1,6 @@
 use anyhow::Result;
 use cgmath::Vector3;
 
-use super::batch_run_systems::batch_run_tick;
 #[cfg(feature = "ml")]
 use super::curve_copilot::curve_suggestion_poll_results;
 #[cfg(feature = "ml")]
@@ -13,10 +12,11 @@ use super::phases::{
 };
 use super::raytracing_systems::refresh_tlas_mesh_transforms;
 use super::timeline_systems::timeline_update;
+use super::world::{run_batch_schedule_phase, run_frame_clock_phase};
 #[cfg(feature = "ml")]
 use crate::ecs::component::InferenceActorSetup;
 use crate::ecs::context::EcsContext;
-use crate::ecs::resource::{ClipLibrary, HierarchyState, TimelineState};
+use crate::ecs::resource::{ClipLibrary, FrameClock, HierarchyState, TimelineState};
 #[cfg(feature = "ml")]
 use crate::ecs::resource::{CurveSuggestionState, InferenceActorState};
 use crate::ecs::world::Animator;
@@ -28,9 +28,10 @@ use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
     let mut stages: Vec<(String, f32)> = Vec::new();
     let t = std::time::Instant::now();
-    batch_run_tick(ctx.world);
+    run_frame_clock_phase(ctx.world);
+    run_batch_schedule_phase(ctx.world);
     stages.push((
-        "batch_run_tick".to_string(),
+        "batch_schedule".to_string(),
         t.elapsed().as_secs_f32() * 1000.0,
     ));
 
@@ -164,15 +165,11 @@ fn run_timeline_phase(ctx: &mut FrameContext) {
     let mut timeline_state = ctx.world.resource_mut::<TimelineState>();
     timeline_state.schedule_extent_seconds = schedule_extent;
     let clip_library = ctx.world.resource::<ClipLibrary>();
-    // Use fixed delta for deterministic batch playback (same reason as auto exposure)
-    let timeline_delta = if ctx
+    let timeline_delta = ctx
         .world
-        .contains_resource::<crate::ecs::resource::BatchRun>()
-    {
-        1.0 / 60.0
-    } else {
-        ctx.delta_time
-    };
+        .resource::<FrameClock>()
+        .fixed_delta_seconds()
+        .unwrap_or(ctx.delta_time);
     timeline_update(&mut timeline_state, &*clip_library, timeline_delta);
     drop(clip_library);
     drop(timeline_state);

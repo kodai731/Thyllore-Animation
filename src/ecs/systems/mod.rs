@@ -7,6 +7,7 @@ mod billboard_systems;
 mod bone_gizmo_systems;
 mod bone_pose_override_systems;
 pub mod camera_systems;
+pub mod cli_args;
 pub mod clip_library_systems;
 pub mod clip_schedule_systems;
 pub mod clip_track_systems;
@@ -64,10 +65,10 @@ mod text_to_animation_systems;
 mod text_to_mesh_systems;
 mod timeline_systems;
 pub mod transform_gizmo_systems;
-mod ui_event_systems;
 pub mod water;
 mod weight_heatmap_systems;
 pub mod wind;
+mod world;
 
 pub use animation::*;
 #[cfg(feature = "auto-rig")]
@@ -125,7 +126,7 @@ pub use text_to_animation_systems::*;
 pub use text_to_mesh_systems::*;
 pub use timeline_systems::*;
 pub use transform_gizmo_systems::*;
-pub use ui_event_systems::*;
 pub use water::*;
 pub use weight_heatmap_systems::*;
 pub use wind::*;
+pub use world::*;

@@ -288,6 +288,16 @@ impl RenderTargetTransient {
         })
     }
 
+    /// The framebuffer `framebuffer()` cached for this render pass and attachment set, if any.
+    pub fn cached_framebuffer(
+        &self,
+        render_pass: vk::RenderPass,
+        views: &[vk::ImageView],
+    ) -> Option<vk::Framebuffer> {
+        let key = FramebufferKey::new(render_pass, views).ok()?;
+        self.framebuffers.get(&key).copied()
+    }
+
     pub unsafe fn framebuffer(
         &mut self,
         device: &Device,

@@ -1,32 +1,60 @@
-use crate::app::App;
+use anyhow::Result;
+
+use crate::ecs::resource::LightningDebugCapture;
 use crate::ecs::systems::{
     build_lightning_debug_record, current_unix_time, lightning_debug_screenshot_path,
     write_lightning_debug_dump,
 };
+use crate::hooks::batch_capture::{BatchCapture, CaptureContext};
 
-impl App {
-    pub fn dump_lightning_debug(&self) {
-        self.dump_lightning_debug_at(self.frame % crate::app::init::MAX_FRAMES_IN_FLIGHT);
+impl BatchCapture for LightningDebugCapture {
+    unsafe fn capture(&self, ctx: &CaptureContext) -> Result<()> {
+        dump_lightning_debug(ctx);
+        Ok(())
     }
+}
 
-    pub fn dump_lightning_debug_at(&self, image_index: usize) {
-        let unix_time = current_unix_time();
+crate::batch_capture!(LightningDebugCapture);
+crate::capture_action!("dump_lightning_debug", LightningDebugCapture);
 
-        let screenshot_path = lightning_debug_screenshot_path(unix_time);
-        let saved_screenshot =
-            match unsafe { self.save_screenshot_to(image_index, &screenshot_path) } {
-                Ok(_) => Some(screenshot_path.as_path()),
-                Err(error) => {
-                    log_warn!("lightning debug screenshot failed: {:?}", error);
-                    None
-                }
-            };
+pub fn dump_lightning_debug(ctx: &CaptureContext) {
+    let unix_time = current_unix_time();
 
-        let record =
-            build_lightning_debug_record(&self.data.ecs_world, saved_screenshot, unix_time);
-        match write_lightning_debug_dump(&record, unix_time) {
-            Ok(path) => msg_info!("Lightning debug dumped: {}", path.display()),
-            Err(error) => log_error!("lightning debug dump failed: {}", error),
+    let screenshot_path = lightning_debug_screenshot_path(unix_time);
+    let saved_screenshot = match unsafe { ctx.save_screenshot_to(&screenshot_path) } {
+        Ok(_) => Some(screenshot_path.as_path()),
+        Err(error) => {
+            log_warn!("lightning debug screenshot failed: {:?}", error);
+            None
         }
+    };
+
+    let record = build_lightning_debug_record(ctx.world, saved_screenshot, unix_time);
+    match write_lightning_debug_dump(&record, unix_time) {
+        Ok(path) => msg_info!("Lightning debug dumped: {}", path.display()),
+        Err(error) => log_error!("lightning debug dump failed: {}", error),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ecs::resource::{BatchRun, CaptureSchedule};
+    use crate::ecs::systems::{batch_apply_debug_actions, resolve_engine_cli_overrides};
+    use crate::ecs::world::World;
+
+    #[test]
+    fn dump_action_requests_the_capture_inside_a_batch_run() {
+        let args: Vec<String> = ["bin", "--batch-debug-action", "dump_lightning_debug"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let actions = resolve_engine_cli_overrides(&args).unwrap().debug_actions;
+        assert_eq!(actions[0].name(), "dump_lightning_debug");
+
+        let mut world = World::new();
+        world.insert_resource(BatchRun::new(CaptureSchedule::single("out".into(), 0)));
+        batch_apply_debug_actions(&mut world, &[actions[0].as_ref()]);
+        assert!(world.contains_resource::<LightningDebugCapture>());
     }
 }

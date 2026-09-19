@@ -44,6 +44,16 @@ impl LightningDebugView {
     }
 }
 
+impl std::str::FromStr for LightningDebugView {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value).ok_or_else(|| {
+            format!("invalid lightning debug view '{value}': expected off|coverage|hits|core")
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum LightningShadingMode {
     #[default]
@@ -77,6 +87,15 @@ impl LightningShadingMode {
             "reference" | "quadrature" => Some(LightningShadingMode::ReferenceQuadrature),
             _ => None,
         }
+    }
+}
+
+impl std::str::FromStr for LightningShadingMode {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::parse(value)
+            .ok_or_else(|| format!("invalid lightning mode '{value}': expected closed|reference"))
     }
 }
 

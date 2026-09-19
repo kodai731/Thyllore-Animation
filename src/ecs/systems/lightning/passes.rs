@@ -1,7 +1,6 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::App;
 use crate::ecs::component::LightningEffect;
 use crate::ecs::resource::{
     LightningGpuState, LightningRenderSettings, LightningRenderTargets, ProjectionData,
@@ -9,6 +8,7 @@ use crate::ecs::resource::{
 use crate::ecs::systems::lightning::record::{
     record_lightning_resolve_pass, LightningInstanceDraw, LightningPushConstants,
 };
+use crate::ecs::PassContext;
 use crate::hooks::pass::{
     CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef, TargetUse,
 };
@@ -32,9 +32,8 @@ impl LightningFrame {
     }
 }
 
-fn lightning_render_settings(app: &App) -> LightningRenderSettings {
-    app.data
-        .ecs_world
+fn lightning_render_settings(ctx: &PassContext) -> LightningRenderSettings {
+    ctx.world
         .get_resource::<LightningRenderSettings>()
         .map(|settings| *settings)
         .unwrap_or_default()
@@ -57,35 +56,31 @@ pub(super) fn compute_lightning_scissor(
     compute_projected_bounds_scissor(projection, extent, &ubo.model, corners)
 }
 
-fn lightning_frame(app: &App) -> Option<LightningFrame> {
-    let extent = app
-        .data
-        .ecs_world
-        .get_resource::<LightningRenderTargets>()?
-        .extent();
-    let gpu_state = app.data.ecs_world.get_resource::<LightningGpuState>()?;
+fn lightning_frame(ctx: &PassContext) -> Option<LightningFrame> {
+    let extent = ctx.world.get_resource::<LightningRenderTargets>()?.extent();
+    let gpu_state = ctx.world.get_resource::<LightningGpuState>()?;
     gpu_state.resolve_pipeline.as_ref()?;
     gpu_state.resolve_descriptor.as_ref()?;
     gpu_state.ubo.as_ref()?;
     gpu_state.segments_ubo.as_ref()?;
 
-    let mut lightnings = app.data.ecs_world.query_lightnings();
+    let mut lightnings = ctx.world.query_lightnings();
     lightnings.truncate(LIGHTNING_MAX_INSTANCES);
     if lightnings.is_empty() {
         return None;
     }
 
-    let projection = app.data.ecs_world.get_resource::<ProjectionData>();
+    let projection = ctx.world.get_resource::<ProjectionData>();
     let inv_view_proj = projection
         .as_deref()
         .map(|projection| inverse_view_proj_f64(projection.proj, projection.view))
         .unwrap_or_else(cgmath::SquareMatrix::identity);
-    let debug_view = lightning_render_settings(app).debug_view;
+    let debug_view = lightning_render_settings(ctx).debug_view;
 
     let mut instances = Vec::with_capacity(lightnings.len());
     let mut scissors = Vec::with_capacity(lightnings.len());
     for entity in lightnings {
-        let Some(effect) = app.data.ecs_world.get_component::<LightningEffect>(entity) else {
+        let Some(effect) = ctx.world.get_component::<LightningEffect>(entity) else {
             continue;
         };
         let instance = build_lightning_ubo(&effect, inv_view_proj);
@@ -117,8 +112,8 @@ impl RenderPassNode for LightningPassNode {
         PassStage::Effect
     }
 
-    fn writes(&self, app: &App) -> Vec<TargetUse> {
-        lightning_frame(app)
+    fn writes(&self, ctx: &PassContext) -> Vec<TargetUse> {
+        lightning_frame(ctx)
             .filter(LightningFrame::has_visible_instance)
             .map(|_| {
                 vec![TargetUse::new(
@@ -134,26 +129,26 @@ impl RenderPassNode for LightningPassNode {
 
     unsafe fn record(
         &self,
-        app: &App,
+        ctx: &PassContext,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
         _frame_slot: usize,
     ) -> Result<()> {
-        record_lightning_passes(app, command_buffer, image_index)
+        record_lightning_passes(ctx, command_buffer, image_index)
     }
 }
 
 unsafe fn record_lightning_passes(
-    app: &App,
+    ctx: &PassContext,
     command_buffer: vk::CommandBuffer,
     image_index: usize,
 ) -> Result<()> {
-    let Some(frame) = lightning_frame(app) else {
+    let Some(frame) = lightning_frame(ctx) else {
         return Ok(());
     };
     let (Some(targets), Some(gpu_state)) = (
-        app.data.ecs_world.get_resource::<LightningRenderTargets>(),
-        app.data.ecs_world.get_resource::<LightningGpuState>(),
+        ctx.world.get_resource::<LightningRenderTargets>(),
+        ctx.world.get_resource::<LightningGpuState>(),
     ) else {
         return Ok(());
     };
@@ -165,7 +160,7 @@ unsafe fn record_lightning_passes(
     ) else {
         return Ok(());
     };
-    let ctx = crate::app::build_frame_render_context(app, image_index);
+    let render = ctx.frame_render_context(image_index);
 
     let mut draws = Vec::with_capacity(frame.instances.len());
     for (slot, ((instance_ubo, instance_segments), scissor)) in
@@ -175,14 +170,14 @@ unsafe fn record_lightning_passes(
             continue;
         };
         ubo.record_update(
-            &ctx.device.device,
+            &render.device.device,
             command_buffer,
             slot,
             instance_ubo,
             vk::PipelineStageFlags::FRAGMENT_SHADER,
         )?;
         segments_ubo.record_update(
-            &ctx.device.device,
+            &render.device.device,
             command_buffer,
             slot,
             instance_segments,
@@ -198,7 +193,7 @@ unsafe fn record_lightning_passes(
         return Ok(());
     }
 
-    let settings = lightning_render_settings(app);
+    let settings = lightning_render_settings(ctx);
     let push_constants = LightningPushConstants::new(
         settings.shading_mode.as_shader_value(),
         settings.reference_step_count as i32,
@@ -206,7 +201,7 @@ unsafe fn record_lightning_passes(
     );
 
     record_lightning_resolve_pass(
-        &ctx,
+        &render,
         &targets,
         pipeline,
         descriptor,

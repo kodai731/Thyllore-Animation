@@ -13,7 +13,6 @@ pub struct EffectHook {
     pub setup: Option<EffectSetupHook>,
     pub after_overrides: Option<EffectSetupHook>,
     pub on_viewport_resize: Option<EffectHookFn>,
-    pub destroy: Option<EffectHookFn>,
     pub passes: &'static [&'static dyn RenderPassNode],
 }
 

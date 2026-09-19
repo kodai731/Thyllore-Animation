@@ -1,7 +1,6 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::AppData;
 use crate::ecs::resource::{LightningGpuState, LightningRenderTargets};
 use crate::ecs::EffectContext;
 use crate::hooks::effect::EffectHook;
@@ -14,8 +13,8 @@ use crate::vulkanr::resource::GpuResource;
 pub const LIGHTNING_EFFECT_HOOK: EffectHook = EffectHook {
     name: "lightning",
     setup: Some(setup_lightning),
+    after_overrides: None,
     on_viewport_resize: Some(resize_lightning_render_targets),
-    destroy: Some(destroy_lightning_render_targets),
     passes: &[&super::passes::LightningPassNode],
 };
 
@@ -75,38 +74,28 @@ unsafe fn destroy_render_targets(
     }
 }
 
-unsafe fn setup_lightning(
-    instance: &Instance,
-    rrdevice: &RRDevice,
-    data: &mut AppData,
-    rrrender: &RRRender,
-) -> Result<()> {
-    let Some(hdr_view) = data
-        .viewport
-        .hdr_buffer
-        .as_ref()
-        .map(|hdr| hdr.color_image_view)
-    else {
+unsafe fn setup_lightning(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()> {
+    let Some(hdr_view) = ctx.hdr_color_view else {
         log!("HDR buffer not available, skipping lightning pipeline");
         return Ok(());
     };
 
     let targets = create_lightning_render_targets(
-        rrdevice,
-        data.viewport.width,
-        data.viewport.height,
+        ctx.rrdevice,
+        ctx.viewport_width,
+        ctx.viewport_height,
         hdr_view,
     )?;
     let gpu_state = super::pipeline::create_lightning_gpu_state(
-        instance,
-        rrdevice,
+        ctx.instance,
+        ctx.rrdevice,
         rrrender,
-        &data.graphics_resources,
+        ctx.graphics,
         &targets,
         rrrender.gbuffer_depth_image_view,
     )?;
-    data.ecs_world.insert_resource(targets);
-    data.ecs_world.insert_resource(gpu_state);
+    ctx.world.insert_resource(targets);
+    ctx.world.insert_resource(gpu_state);
 
     log!("Lightning pipeline created successfully");
     Ok(())
@@ -134,16 +123,6 @@ unsafe fn resize_lightning_render_targets(ctx: &mut EffectContext) -> Result<()>
     };
     if let Some(descriptor) = gpu_state.resolve_descriptor.as_ref() {
         descriptor.update_scene_depth(ctx.rrdevice, scene_depth_view)?;
-    }
-    Ok(())
-}
-
-unsafe fn destroy_lightning_render_targets(ctx: &mut EffectContext) -> Result<()> {
-    if let Some(mut gpu_state) = ctx.world.get_resource_mut::<LightningGpuState>() {
-        gpu_state.destroy_gpu(ctx.rrdevice);
-    }
-    if let Some(mut targets) = ctx.world.get_resource_mut::<LightningRenderTargets>() {
-        destroy_render_targets(&mut targets, &ctx.rrdevice.device);
     }
     Ok(())
 }

@@ -116,10 +116,6 @@ pub fn dispatch_camera_light_debug_events(
                 commands.push(AppCommand::CaptureNow(capture.clone()));
             }
 
-            UIEvent::DumpLightningDebug => {
-                deferred.push(DeferredAction::DumpLightningDebug);
-            }
-
             _ => {}
         }
     }

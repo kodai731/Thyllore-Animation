@@ -1,3 +1,4 @@
+mod cli;
 mod debug_dump;
 mod descriptors;
 mod passes;
@@ -11,6 +12,7 @@ mod spawn;
 mod tests;
 mod time;
 
+pub use cli::*;
 pub use debug_dump::*;
 pub use descriptors::*;
 pub use pick::*;

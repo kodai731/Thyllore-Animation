@@ -2,7 +2,7 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use super::{RRWaterCausticDescriptorSet, RRWaterDescriptorSet, WaterPushConstants};
-use crate::ecs::resource::WaterGpuState;
+use crate::ecs::resource::{WaterBuffer, WaterGpuState};
 use crate::ecs::systems::raytracing_systems::ensure_effect_trace_pipeline;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE};
@@ -11,9 +11,7 @@ use crate::vulkanr::pipeline::{
     VertexInputConfig,
 };
 use crate::vulkanr::render::RRRender;
-use crate::vulkanr::resource::{
-    GraphicsResources, Placement, RayTracingData, UniformBuffer, WaterBuffer,
-};
+use crate::vulkanr::resource::{GraphicsResources, Placement, RayTracingData, UniformBuffer};
 use thyllore_effect_core::{WaterUBO, WATER_MAX_INSTANCES};
 
 fn opaque_blend() -> BlendConfig {

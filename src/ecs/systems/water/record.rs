@@ -2,8 +2,8 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use super::descriptors::RRWaterDescriptorSet;
+use crate::ecs::resource::WaterBuffer;
 use crate::vulkanr::pipeline::RRPipeline;
-use crate::vulkanr::resource::water_buffer::WaterBuffer;
 use thyllore_vulkan_core::frame_context::FrameRenderContext;
 
 #[repr(C)]

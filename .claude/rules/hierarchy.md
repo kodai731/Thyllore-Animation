@@ -22,22 +22,19 @@ src/app/ , src/platform/ App lifecycle, Vulkan object ownership, frame driver, w
 Lower layers never import upper ones: a crate never depends on `src/`, and `src/ecs/` never imports
 `src/app/`. A system that needs GPU objects receives a context struct that borrows exactly what it uses
 (`FrameContext`: device, instance, command pool, `World`, assets, graphics resources, raytracing data, frame
-slot), never `App` or `AppData`. If a system seems to need `App`, it is either app wiring (move it to
+slot; `EffectContext`: instance, device, viewport extent and storage pool, HDR view, raytracing data, pass
+image states, `World`), never `App` or `AppData`. Both live in `src/ecs/` and `src/app/` builds them. If a system seems to need `App`, it is either app wiring (move it to
 `src/app/`) or the context is missing a field (add the field).
 
 ### Known exceptions (tracked in #163, do not add to this list)
 
-The following places still import `crate::app` from `src/ecs/`. They are violations kept only until #163
-lands; new code must not copy them, and no new entry may be added here.
+The following place still imports `crate::app` from `src/ecs/`. It is a violation kept only until the
+`RenderPassNode` follow-up of #163 lands; new code must not copy it, and no new entry may be added here.
 
-- `FrameContext` and `LightMoveTarget` are defined under `src/app/` although they contain no `App`; the
-  fix is to move them into `src/ecs/`.
-- `src/hooks/effect.rs` declares `on_viewport_resize` as `fn(&mut App)` and `src/hooks/pass.rs`
-  declares `RenderPassNode::prepare` as `fn(&mut App)` and `record` / declarations as `fn(&App)`, so
-  `src/ecs/systems/{flame,water}/render_targets.rs` take `&mut App`; the fix is an `EffectContext` that
-  borrows instance, device, viewport pools and extent, raytracing data and `World` (the `setup` hook
-  already takes decomposed arguments).
-- `src/ecs/systems/phases/render_phase.rs::build_frame_render_context` takes `&App` to read four fields.
+- `src/hooks/pass.rs` declares `RenderPassNode::prepare` as `fn(&mut App)` and `record` / declarations as
+  `fn(&App)`, so `src/ecs/systems/{flame,water,wind}/passes.rs` take `App` and call
+  `crate::app::build_frame_render_context`; the fix is to migrate the `RenderPassNode` API onto
+  `FrameContext` / `EffectContext` the way the `on_viewport_resize` hook already was.
 
 ## crates/
 
@@ -127,8 +124,9 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 ## src/hooks/
 
 Generic hook infrastructure that lets a subsystem plug into the app lifecycle without being named by
-`src/app/`. `effect.rs` holds the effect hook (setup, after_overrides, viewport resize, pass nodes) and the
-list that runs them in subscription order; GPU teardown is not a hook, it is the `gpu_resource!` registration
+`src/app/`. `effect.rs` holds the effect hook (setup and after_overrides take `(&Instance, &RRDevice, &mut AppData,
+&RRRender)`, viewport resize takes `&mut EffectContext`, pass nodes) and the list that runs them in
+subscription order; GPU teardown is not a hook, it is the `gpu_resource!` registration
 of the effect's resource (`gpu_resource.rs`: `GpuResourceHook`, `GpuResourceHooks::collect()`).
 `batch_capture.rs` holds the `CaptureContext` and the `BatchCapture` contract: a request resource whose
 presence in `World` asks for one readback at the batch capture frame, registered with
@@ -312,7 +310,7 @@ texture file resolution, `gpu.rs` mesh upload and acceleration rebuild, `cleanup
 `initial_pose.rs`; GPU mesh creation and vertex upload are `GraphicsResources::push_mesh` /
 `upload_mesh_vertices` in `thyllore-vulkan-core`; every `World` resource the load touches is inserted
 once in `init/instance.rs`, never lazily during a load) and `scene_model.rs`, `raytracing/`
-(acceleration structure rebuild), `frame_context.rs` and `render_context.rs`, `post_process/`,
+(acceleration structure rebuild), `render_context.rs`, `post_process/`,
 `features/` (see below), `util.rs`, `color_test_quad.rs`.
 
 `src/app/*.rs` is the core loop only. Optional capabilities that extend `App` but are not needed to drive a

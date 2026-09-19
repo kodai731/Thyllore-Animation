@@ -60,7 +60,7 @@ pub unsafe fn record_bloom_downsample(
     let Some(bloom) = bloom_frame(app)? else {
         return Ok(());
     };
-    let ctx = crate::ecs::systems::phases::build_frame_render_context(app, 0);
+    let ctx = crate::app::build_frame_render_context(app, 0);
     thyllore_vulkan_core::renderer::record_bloom_downsample_mip(
         &ctx,
         bloom.downsample_pipeline,
@@ -83,7 +83,7 @@ pub unsafe fn record_bloom_upsample(
     let Some(bloom) = bloom_frame(app)? else {
         return Ok(());
     };
-    let ctx = crate::ecs::systems::phases::build_frame_render_context(app, 0);
+    let ctx = crate::app::build_frame_render_context(app, 0);
     thyllore_vulkan_core::renderer::record_bloom_upsample_pass(
         &ctx,
         bloom.upsample_pipeline,
@@ -127,7 +127,7 @@ pub unsafe fn record_dof(app: &App, command_buffer: vk::CommandBuffer) -> Result
     let camera_ref: &crate::ecs::resource::PhysicalCameraParameters =
         camera_params.as_deref().unwrap_or(&camera_default);
 
-    let ctx = crate::ecs::systems::phases::build_frame_render_context(app, 0);
+    let ctx = crate::app::build_frame_render_context(app, 0);
 
     thyllore_vulkan_core::renderer::record_dof_pass(
         &ctx,
@@ -196,7 +196,7 @@ pub unsafe fn record_auto_exposure(
             .map(|t| 1.0 / 60.0 * t.speed.max(0.01))
             .unwrap_or(1.0 / 60.0)
     });
-    let ctx = crate::ecs::systems::phases::build_frame_render_context(app, 0);
+    let ctx = crate::app::build_frame_render_context(app, 0);
 
     thyllore_vulkan_core::renderer::record_auto_exposure_pass(
         &ctx,

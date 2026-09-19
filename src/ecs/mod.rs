@@ -14,7 +14,7 @@ pub use component::*;
 pub use context::*;
 pub use effect_context::EffectContext;
 pub use events::*;
-pub use frame_context::FrameContext;
+pub use frame_context::{FrameContext, MAX_FRAMES_IN_FLIGHT};
 pub use query::*;
 pub use registry::*;
 pub use resource::*;

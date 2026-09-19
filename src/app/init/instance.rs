@@ -42,6 +42,7 @@ use std::ptr::copy_nonoverlapping as memcpy;
 use std::rc::Rc;
 use std::time::Instant;
 
+pub use crate::ecs::MAX_FRAMES_IN_FLIGHT;
 use vulkanalia::loader::{LibloadingLoader, LIBRARY};
 use winit::window::Window;
 
@@ -63,7 +64,6 @@ pub const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
     vk::KHR_RAY_TRACING_PIPELINE_EXTENSION.name,
     vk::KHR_DEFERRED_HOST_OPERATIONS_EXTENSION.name,
 ];
-pub const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
 /// Clean up old screenshot files from the log directory
 pub fn cleanup_old_screenshots() -> Result<()> {

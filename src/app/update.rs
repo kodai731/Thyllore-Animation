@@ -108,17 +108,6 @@ impl App {
         Ok(())
     }
 
-    pub unsafe fn run_effect_destroy(&mut self) -> Result<()> {
-        let hooks = self.data.effect_hooks.snapshot();
-        let mut ctx = self.build_effect_context();
-        for hook in hooks.into_iter().rev() {
-            if let Some(destroy) = hook.destroy {
-                destroy(&mut ctx)?;
-            }
-        }
-        Ok(())
-    }
-
     fn build_effect_context(&mut self) -> EffectContext<'_> {
         EffectContext {
             instance: &self.instance,
@@ -132,11 +121,9 @@ impl App {
                 .as_ref()
                 .map(|hdr| hdr.color_image_view),
             storage: &mut self.data.viewport.storage,
-            transient: &mut self.data.viewport.transient,
             raytracing: &mut self.data.raytracing,
             pass_image_states: &mut self.data.pass_image_states,
             world: &mut self.data.ecs_world,
-            frames_in_flight: crate::app::init::MAX_FRAMES_IN_FLIGHT,
         }
     }
 }

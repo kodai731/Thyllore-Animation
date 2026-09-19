@@ -79,8 +79,10 @@ stages / descriptor set roles are declared once in `shaders/passes.toml` and gen
 - `thyllore_vulkan_core::FrameRenderContext`: device, graphics resources, buffer registry, pipeline storage,
   image index. Immutable; what crate-level `record_*_pass` helpers take.
 - `src/app/render_context.rs::RenderContext`: mutable GPU resources, builds `VulkanBackend`.
-- `src/app/frame_context.rs::FrameContext`: `RenderContext` plus `World`, `AssetStorage`, time, frame slot,
+- `src/ecs/frame_context.rs::FrameContext`: `RenderContext` plus `World`, `AssetStorage`, time, frame slot,
   swapchain extent. What the ECS phase pipeline takes.
+- `src/ecs/effect_context.rs::EffectContext`: instance, device, viewport extent and storage pool, HDR view,
+  raytracing data, pass image states, `World`. What the effect `on_viewport_resize` hook takes.
 
 ## Camera controls (`src/ecs/systems/camera_systems.rs`)
 

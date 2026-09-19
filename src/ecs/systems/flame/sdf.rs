@@ -1,12 +1,12 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::app::AppData;
 use crate::ecs::resource::{FlameRenderTargets, FlameSdfSource};
 use crate::vulkanr::context::CommandState;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::FlameImageBindings;
 use crate::vulkanr::render::RRRender;
+use crate::AppData;
 
 fn load_sdf_pixels(source: Option<&FlameSdfSource>) -> (Vec<u8>, u32, u32) {
     let white_pixel = (vec![255u8; 4], 1, 1);

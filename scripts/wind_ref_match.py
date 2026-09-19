@@ -27,10 +27,10 @@ import cv2
 import numpy as np
 from scipy import ndimage
 
-import flame_ref_match as flame
 from ref_match.frames import (collect_frames, load_image, load_ref_meta, luminance, reference_column_width,
                               silhouette_mask, to_rgb)
 from ref_match.gates import compare, print_summary, score_rows
+from ref_match.stats import measure
 
 DIRECTION_BINS = 16
 STRUCTURE_SIGMA = 3.0
@@ -221,7 +221,7 @@ def s3_distance(a, b):
 
 
 def measure_wind(paths, column_width, fps, resample):
-    measured = flame.measure(paths, column_width, resample=resample, mode="dust")
+    measured = measure(paths, column_width, resample=resample, mode="dust")
     fields = [frame_fields(path) for path in paths]
     measured["w4"] = measure_direction(fields)
     measured["w5"] = measure_transport(fields, fps)

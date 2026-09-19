@@ -179,8 +179,6 @@ unsafe fn process_ui_events_and_render_frame(
         .append(&mut all_deferred);
     app.process_platform_events();
 
-    app.spawn_pending_debug_primitives();
-
     render_frame(app, window, draw_data, dt_ms, imgui_build_ms);
 }
 

@@ -108,6 +108,8 @@ impl App {
         for action in actions {
             crate::app::deferred_actions::execute_deferred_action(self, action);
         }
+
+        self.spawn_pending_debug_primitives();
     }
 }
 

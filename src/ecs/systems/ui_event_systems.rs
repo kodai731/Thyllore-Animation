@@ -27,6 +27,21 @@ pub enum DeferredAction {
         baked_id: u64,
         path: PathBuf,
     },
+    ExportClipFbx {
+        source_id: u64,
+        path: PathBuf,
+    },
+    ExportClipGltf {
+        source_id: u64,
+        path: PathBuf,
+    },
+    ExportClipGltfAnimationOnly {
+        source_id: u64,
+        path: PathBuf,
+    },
+    ExportModelGltf {
+        path: PathBuf,
+    },
     #[cfg(feature = "auto-rig")]
     LoadModelFromMemory {
         glb_data: Vec<u8>,

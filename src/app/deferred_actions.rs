@@ -128,6 +128,20 @@ pub(crate) unsafe fn execute_deferred_action(app: &mut App, action: DeferredActi
             }
         }
 
+        DeferredAction::ExportClipFbx { source_id, path } => {
+            export_actions::export_clip_fbx(app, source_id, &path)
+        }
+
+        DeferredAction::ExportClipGltf { source_id, path } => {
+            export_actions::export_clip_gltf(app, source_id, &path)
+        }
+
+        DeferredAction::ExportClipGltfAnimationOnly { source_id, path } => {
+            export_actions::export_clip_gltf_animation_only(app, source_id, &path)
+        }
+
+        DeferredAction::ExportModelGltf { path } => export_actions::export_model_gltf(app, &path),
+
         #[cfg(feature = "auto-rig")]
         DeferredAction::LoadModelFromMemory { glb_data, source } => {
             match app.load_model_from_glb(&glb_data) {

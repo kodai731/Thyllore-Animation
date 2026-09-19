@@ -196,6 +196,9 @@ pub fn flame_field_manifest_with(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analytic_manifest::{
+        assert_anchors_exist, glsl_include_dir, parse_functions, strip_line_comments,
+    };
 
     fn effect() -> FlameEffect {
         FlameEffect::default()
@@ -247,69 +250,6 @@ mod tests {
     // Shader audit: every GLSL noise-primitive site must sit inside a declared anchor function.
 
     use std::collections::BTreeMap;
-    use std::path::PathBuf;
-
-    fn shader_dir() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../shaders/flame/include")
-    }
-
-    fn strip_line_comments(source: &str) -> String {
-        source
-            .lines()
-            .map(|l| l.split("//").next().unwrap_or(""))
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
-    /// (name, body) per top-level GLSL function; handles multi-line signatures and struct returns.
-    fn parse_functions(source: &str) -> Vec<(String, String)> {
-        const NON_TYPES: [&str; 9] = [
-            "if", "for", "while", "return", "else", "switch", "const", "struct", "layout",
-        ];
-        let mut functions = Vec::new();
-        let mut depth: i32 = 0;
-        let mut current: Option<(String, String, bool)> = None;
-        for line in source.lines() {
-            if depth == 0 && current.is_none() {
-                let trimmed = line.trim_start();
-                let mut words = trimmed.split_whitespace();
-                if let (Some(ty), Some(rest)) = (words.next(), words.next()) {
-                    let is_type = ty.chars().all(|c| c.is_alphanumeric() || c == '_')
-                        && !NON_TYPES.contains(&ty);
-                    if is_type {
-                        if let Some(paren) = rest.find('(') {
-                            let name = &rest[..paren];
-                            if paren > 0 && name.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                                current = Some((name.to_string(), String::new(), false));
-                            }
-                        }
-                    }
-                }
-            }
-            if let Some((_, body, opened)) = current.as_mut() {
-                body.push_str(line);
-                body.push('\n');
-                if line.contains('{') {
-                    *opened = true;
-                }
-                if !*opened && line.contains(';') {
-                    current = None;
-                }
-            }
-            depth += line.matches('{').count() as i32;
-            depth -= line.matches('}').count() as i32;
-            if depth == 0 {
-                if let Some((name, body, opened)) = current.take() {
-                    if opened {
-                        functions.push((name, body));
-                    } else {
-                        current = Some((name, body, opened));
-                    }
-                }
-            }
-        }
-        functions
-    }
 
     #[test]
     fn every_stochastic_evaluation_site_belongs_to_a_declared_source() {
@@ -334,7 +274,7 @@ mod tests {
             vec!["flameWaveJitterKappaScale", "flameWaveModeSum"],
         );
 
-        let dir = shader_dir();
+        let dir = glsl_include_dir("flame/include");
         let mut audited_files = 0;
         let mut violations: Vec<String> = Vec::new();
         let mut found: BTreeMap<&str, Vec<String>> = BTreeMap::new();
@@ -385,26 +325,15 @@ mod tests {
     #[test]
     fn declared_anchor_functions_still_exist_in_the_shaders() {
         // Inverse direction: a removed anchor must shrink the declaration too.
-        let dir = shader_dir();
-        let mut all_source = String::new();
-        for entry in std::fs::read_dir(&dir).expect("shader include dir") {
-            let path = entry.expect("dir entry").path();
-            let name = path.file_name().unwrap().to_string_lossy().to_string();
-            if name.ends_with(".glsl") {
-                all_source.push_str(&std::fs::read_to_string(&path).unwrap());
-            }
-        }
-        for anchor in [
-            "flameWaveModeSum",
-            "flameBoundaryDisplacement",
-            "flameDetailNoise",
-            "flameWarpMapZ",
-            "flameWaveJitterKappaScale",
-        ] {
-            assert!(
-                all_source.contains(anchor),
-                "declared anchor {anchor} no longer exists — update flame_field_manifest.rs"
-            );
-        }
+        assert_anchors_exist(
+            "flame/include",
+            &[
+                "flameWaveModeSum",
+                "flameBoundaryDisplacement",
+                "flameDetailNoise",
+                "flameWarpMapZ",
+                "flameWaveJitterKappaScale",
+            ],
+        );
     }
 }

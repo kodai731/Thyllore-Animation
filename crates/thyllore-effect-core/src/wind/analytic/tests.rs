@@ -1,4 +1,5 @@
 use super::*;
+use crate::analytic_manifest::{glsl_float_constant, glsl_int_constant, glsl_source};
 use crate::volume::{MODULATION_CELLS, PUFFS_PER_RAY, RAY_MAX_KNOTS};
 use crate::wind::analytic::eddy::{EDDY_FADE_END, EDDY_FADE_START, EDDY_OCTAVE_COUNT};
 use crate::wind::analytic::integral::ACTIVE_CELLS_MIN;
@@ -906,32 +907,6 @@ fn truncated_ray_9_plus_puffs_analytical_leq_midpoint() {
         closed <= reference * (1.0 + 1e-5),
         "truncated analytical {closed} should be <= midpoint reference {reference}"
     );
-}
-
-fn glsl_float_constant(source: &str, name: &str) -> f32 {
-    let prefix = format!("const float {name} = ");
-    source
-        .lines()
-        .find_map(|line| line.trim().strip_prefix(&prefix))
-        .and_then(|rest| rest.trim_end_matches(';').parse().ok())
-        .unwrap_or_else(|| panic!("{name} declared as a float constant"))
-}
-
-fn glsl_int_constant(source: &str, name: &str) -> i64 {
-    let prefix = format!("const int {name} = ");
-    source
-        .lines()
-        .find_map(|line| line.trim().strip_prefix(&prefix))
-        .and_then(|rest| rest.trim_end_matches(';').parse().ok())
-        .unwrap_or_else(|| panic!("{name} not declared in the wind GLSL"))
-}
-
-fn glsl_source(include_dir: &str, relative_path: &str) -> String {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../shaders")
-        .join(include_dir)
-        .join(relative_path);
-    std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("{} readable", path.display()))
 }
 
 fn wind_glsl_source(relative_path: &str) -> String {

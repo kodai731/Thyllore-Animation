@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::resource::{RenderTargetKey, TransientDesc, TransientHandle};
 use crate::vulkan::*;
 
-/// Symbolic name of a frame-lifetime image a pass asks the graph for (`"water.scene_color"`).
+/// Symbolic name of a frame-lifetime image a pass asks the graph for (`"effect.scene_color"`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct TransientSlot(pub &'static str);
 

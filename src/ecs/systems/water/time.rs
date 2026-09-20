@@ -9,7 +9,7 @@ impl TimedEffect for WaterTorusEffect {
     type WorldInputs = ();
 
     fn entities(world: &World) -> Vec<Entity> {
-        world.query_waters()
+        world.entities_with::<WaterTorusEffect>()
     }
 
     fn time_sources(world: &World, delta_time: f32) -> EffectTimeSources {
@@ -55,3 +55,5 @@ impl TimedEffect for WaterTorusEffect {
 pub fn water_time_advance(ctx: &mut FrameContext) {
     advance_effect_time::<WaterTorusEffect>(ctx);
 }
+
+crate::frame_prep_hook!("water", Advance, water_time_advance);

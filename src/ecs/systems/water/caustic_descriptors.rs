@@ -1,9 +1,10 @@
-use crate::core::device::*;
-use crate::descriptor::pass_manifest::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT};
-use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
-use crate::descriptor::shader_bindings::{water_caustic_apply, water_caustic_splat};
-use crate::resource::gpu_resource::GpuResource;
-use crate::vulkan::*;
+use crate::vulkanr::core::device::*;
+use crate::vulkanr::data::SceneUniformData;
+use crate::vulkanr::descriptor::pass_manifest::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT};
+use crate::vulkanr::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::vulkanr::descriptor::shader_bindings::{water_caustic_apply, water_caustic_splat};
+use crate::vulkanr::resource::gpu_resource::GpuResource;
+use crate::vulkanr::vulkan::*;
 
 #[derive(Clone, Debug, Default)]
 pub struct RRWaterCausticDescriptorSet {
@@ -75,7 +76,7 @@ impl RRWaterCausticDescriptorSet {
                 water_caustic_splat::SCENE_DATA,
                 scene_uniform_buffer,
                 0,
-                std::mem::size_of::<crate::data::SceneUniformData>() as u64,
+                std::mem::size_of::<SceneUniformData>() as u64,
             )?
             .buffer(
                 water_caustic_splat::WATER_BLOCK,
@@ -103,7 +104,7 @@ impl RRWaterCausticDescriptorSet {
                 water_caustic_apply::SCENE_DATA,
                 scene_uniform_buffer,
                 0,
-                std::mem::size_of::<crate::data::SceneUniformData>() as u64,
+                std::mem::size_of::<SceneUniformData>() as u64,
             )?
             .buffer(
                 water_caustic_apply::WATER_BLOCK,

@@ -37,7 +37,7 @@ fn probe_wall_scene(world: &World, viewport_size: [f32; 2]) -> Option<WallProbeS
     };
 
     let flames: Vec<ProbedFlame> = world
-        .query_flames()
+        .entities_with::<FlameEffect>()
         .into_iter()
         .filter_map(|entity| {
             let effect = world.get_component::<FlameEffect>(entity)?;

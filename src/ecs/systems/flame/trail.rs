@@ -4,7 +4,7 @@ use crate::ecs::FrameContext;
 use thyllore_effect_core::advance_flame_trail;
 
 pub fn flame_trail_advance(ctx: &mut FrameContext) {
-    let flame_entities = ctx.world.query_flames();
+    let flame_entities = ctx.world.entities_with::<FlameEffect>();
     let fixed_step_frame = ctx
         .world
         .get_resource::<FrameClock>()

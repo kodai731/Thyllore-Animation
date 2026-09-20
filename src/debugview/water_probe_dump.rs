@@ -19,7 +19,7 @@ impl BatchCapture for WaterProbeCapture {
         let hdr = ctx
             .hdr
             .ok_or_else(|| anyhow!("hdr buffer not initialized"))?;
-        let Some(&water) = ctx.world.query_waters().first() else {
+        let Some(&water) = ctx.world.entities_with::<WaterTorusEffect>().first() else {
             log_warn!("water probe skipped: no water torus effect entity");
             return Ok(());
         };

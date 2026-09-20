@@ -1,8 +1,8 @@
 use thyllore_anim_core::editable::PropertyType;
 use thyllore_effect_core::{find_scalar_param, ScalarParam, FLAME_SCALAR_PARAMS};
 
-use super::flame::FlameEffect;
-use super::scalar_channel::{ScalarChannel, ScalarChannelDomain};
+use super::effect::FlameEffect;
+use crate::ecs::component::{ScalarChannel, ScalarChannelDomain};
 use crate::ecs::world::{Entity, World};
 
 /// Flame's animatable channels. Everything outside the flame domain (curve
@@ -211,12 +211,14 @@ pub static FLAME_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
     local_time: flame_local_time,
 };
 
+crate::scalar_channel_domain!(FLAME_DOMAIN);
+
 fn flame_has_component(world: &World, entity: Entity) -> bool {
     world.get_component::<FlameEffect>(entity).is_some()
 }
 
 fn flame_entities(world: &World) -> Vec<Entity> {
-    world.query_flames()
+    world.entities_with::<FlameEffect>()
 }
 
 fn flame_channel_read(world: &World, entity: Entity, property_type: PropertyType) -> Option<f32> {

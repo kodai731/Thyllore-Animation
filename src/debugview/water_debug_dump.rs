@@ -32,11 +32,9 @@ unsafe fn save_water_caustic_accum_npy(
         .world
         .get_resource::<WaterRenderTargets>()
         .ok_or_else(|| anyhow::anyhow!("water buffer not initialized"))?;
-    let water_buffer = &water_targets.buffer;
-
-    let caustic_image = water_buffer.caustic_accum_image;
-    let width = water_buffer.width;
-    let height = water_buffer.height;
+    let caustic_image = water_targets.caustic_accum.image;
+    let width = water_targets.history.width;
+    let height = water_targets.history.height;
     let image_size = (width * height * 4) as vk::DeviceSize;
 
     let (buffer, buffer_memory) = ctx.copy_image_to_buffer(
@@ -127,7 +125,7 @@ fn collect_water_debug_render_info(ctx: &CaptureContext) -> WaterDebugRenderInfo
     let water_buffer_size = ctx
         .world
         .get_resource::<WaterRenderTargets>()
-        .map(|targets| [targets.buffer.width, targets.buffer.height]);
+        .map(|targets| [targets.history.width, targets.history.height]);
     let acceleration = ctx.raytracing.acceleration_structure.as_ref();
 
     WaterDebugRenderInfo {

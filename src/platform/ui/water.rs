@@ -5,6 +5,7 @@ use thyllore_anim_core::editable::PropertyType;
 use crate::ecs::component::{WaterParam, WaterTorusEffect};
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{WaterDebugCapture, WaterRenderSettings};
+use crate::ecs::systems::water::WaterUiCommand;
 use crate::ecs::systems::WATER_SPAWN_HOOK;
 use crate::ecs::World;
 
@@ -84,7 +85,10 @@ pub(super) fn build_water_section(
                 &mut settings_copy.free_run_when_paused,
             );
 
-            ui_events.send(UIEvent::UpdateWaterRenderSettings(settings_copy));
+            ui_events.send(UIEvent::Effect {
+                key: WATER_SPAWN_HOOK.key,
+                command: Rc::new(WaterUiCommand::UpdateRenderSettings(settings_copy)),
+            });
         }
 
         if ui.button("Add Water") {
@@ -139,7 +143,12 @@ pub(super) fn build_water_section(
             if preset_changed {
                 if selected_water_entity.is_some() {
                     ui_events.send(UIEvent::ClearScalarKeys);
-                    ui_events.send(UIEvent::ApplyWaterPreset(presets[preset_index].clone()));
+                    ui_events.send(UIEvent::Effect {
+                        key: WATER_SPAWN_HOOK.key,
+                        command: Rc::new(WaterUiCommand::ApplyPreset(
+                            presets[preset_index].clone(),
+                        )),
+                    });
                     effect_applied_this_frame = true;
                 }
             }
@@ -175,7 +184,10 @@ pub(super) fn build_water_section(
                     }
 
                     if !effect_applied_this_frame {
-                        ui_events.send(UIEvent::UpdateWaterEffect(Box::new(effect_copy)));
+                        ui_events.send(UIEvent::Effect {
+                            key: WATER_SPAWN_HOOK.key,
+                            command: Rc::new(WaterUiCommand::UpdateEffect(Box::new(effect_copy))),
+                        });
                     }
 
                     if ui.button("Curves") {

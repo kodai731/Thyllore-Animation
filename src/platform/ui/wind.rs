@@ -5,6 +5,7 @@ use thyllore_anim_core::editable::PropertyType;
 use crate::ecs::component::{WindParam, WindTornadoEffect};
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{WindDebugCapture, WindDebugView, WindRenderSettings, WindShadingMode};
+use crate::ecs::systems::wind::WindUiCommand;
 use crate::ecs::systems::WIND_SPAWN_HOOK;
 use crate::ecs::World;
 
@@ -91,7 +92,10 @@ pub(super) fn build_wind_section(
             "Animate when paused",
             &mut settings_copy.free_run_when_paused,
         );
-        ui_events.send(UIEvent::UpdateWindRenderSettings(settings_copy));
+        ui_events.send(UIEvent::Effect {
+            key: WIND_SPAWN_HOOK.key,
+            command: Rc::new(WindUiCommand::UpdateRenderSettings(settings_copy)),
+        });
     }
 
     if ui.button("Add Wind") {
@@ -132,7 +136,10 @@ pub(super) fn build_wind_section(
     let mut effect_applied_this_frame = false;
     if preset_changed && selected_wind_entity.is_some() {
         ui_events.send(UIEvent::ClearScalarKeys);
-        ui_events.send(UIEvent::ApplyWindPreset(presets[preset_index].clone()));
+        ui_events.send(UIEvent::Effect {
+            key: WIND_SPAWN_HOOK.key,
+            command: Rc::new(WindUiCommand::ApplyPreset(presets[preset_index].clone())),
+        });
         effect_applied_this_frame = true;
     }
 
@@ -169,7 +176,10 @@ pub(super) fn build_wind_section(
         );
     }
     if !effect_applied_this_frame {
-        ui_events.send(UIEvent::UpdateWindEffect(Box::new(effect_copy)));
+        ui_events.send(UIEvent::Effect {
+            key: WIND_SPAWN_HOOK.key,
+            command: Rc::new(WindUiCommand::UpdateEffect(Box::new(effect_copy))),
+        });
     }
     if ui.button("Curves") {
         ui_events.send(UIEvent::OpenScalarCurveEditor);

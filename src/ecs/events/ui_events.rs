@@ -10,14 +10,14 @@ use crate::animation::BoneId;
 use crate::animation::{ConstraintId, ConstraintType};
 use crate::ecs::component::{
     ColliderShape, SpringChain, SpringChainId, SpringColliderDef, SpringColliderGroup,
-    SpringColliderGroupId, SpringColliderId, SpringJointParam, WaterTorusEffect, WindTornadoEffect,
+    SpringColliderGroupId, SpringColliderId, SpringJointParam,
 };
 use crate::ecs::events::light_move_target::LightMoveTarget;
 use crate::ecs::resource::gizmo::BoneDisplayStyle;
 use crate::ecs::resource::{
     AutoExposure, CoordinateSpace, CurveTrackRef, DepthOfField, HierarchyDisplayMode,
     OnionSkinningConfig, PhysicalCameraParameters, SelectedKeyframe, SelectionModifier,
-    TransformGizmoMode, TransformGizmoState, WaterRenderSettings, WindRenderSettings,
+    TransformGizmoMode, TransformGizmoState,
 };
 use crate::ecs::world::Entity;
 use crate::ecs::world::Visibility;
@@ -461,12 +461,6 @@ pub enum UIEvent {
         source_id: SourceClipId,
         seconds: f32,
     },
-    UpdateWaterEffect(Box<WaterTorusEffect>),
-    ApplyWaterPreset(String),
-    UpdateWaterRenderSettings(WaterRenderSettings),
-    UpdateWindEffect(Box<WindTornadoEffect>),
-    ApplyWindPreset(String),
-    UpdateWindRenderSettings(WindRenderSettings),
     OpenScalarCurveEditor,
     Effect {
         key: &'static str,

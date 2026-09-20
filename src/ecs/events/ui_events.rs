@@ -459,7 +459,11 @@ pub enum UIEvent {
     SaveFlameStyle {
         name: String,
     },
-    AddFlame,
+    AddEffect(&'static str),
+    SelectEffectInstance {
+        key: &'static str,
+        index: usize,
+    },
     UpdateFlameRenderSettings(FlameRenderSettings),
     UpdateFlameTrailEnabled(bool),
     UpdateFlameTrailFade(f32),
@@ -480,17 +484,12 @@ pub enum UIEvent {
         source_id: SourceClipId,
         seconds: f32,
     },
-    SelectFlameInstance(usize),
-    AddWater,
     UpdateWaterEffect(Box<WaterTorusEffect>),
     ApplyWaterPreset(String),
     UpdateWaterRenderSettings(WaterRenderSettings),
-    SelectWaterInstance(usize),
-    AddWind,
     UpdateWindEffect(Box<WindTornadoEffect>),
     ApplyWindPreset(String),
     UpdateWindRenderSettings(WindRenderSettings),
-    SelectWindInstance(usize),
     OpenScalarCurveEditor,
 }
 

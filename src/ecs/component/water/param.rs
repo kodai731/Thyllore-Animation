@@ -1,8 +1,8 @@
 use thyllore_anim_core::editable::PropertyType;
 use thyllore_effect_core::{find_scalar_param, ScalarParam, WATER_SCALAR_PARAMS};
 
-use super::scalar_channel::{ScalarChannel, ScalarChannelDomain};
-use super::water::{AppliedWaterPreset, WaterTorusEffect};
+use super::effect::WaterTorusEffect;
+use crate::ecs::component::{ScalarChannel, ScalarChannelDomain};
 use crate::ecs::world::{Entity, World};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -243,12 +243,14 @@ pub static WATER_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
     local_time: water_local_time,
 };
 
+crate::scalar_channel_domain!(WATER_DOMAIN);
+
 fn water_has_component(world: &World, entity: Entity) -> bool {
     world.get_component::<WaterTorusEffect>(entity).is_some()
 }
 
 fn water_entities(world: &World) -> Vec<Entity> {
-    world.query_waters()
+    world.entities_with::<WaterTorusEffect>()
 }
 
 fn water_channel_read(world: &World, entity: Entity, property_type: PropertyType) -> Option<f32> {

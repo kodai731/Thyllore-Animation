@@ -44,7 +44,9 @@ impl BatchAction for AddFlame {
         "add_flame"
     }
     fn apply(&self, world: &mut World) {
-        world.resource_mut::<UIEventQueue>().send(UIEvent::AddFlame);
+        world
+            .resource_mut::<UIEventQueue>()
+            .send(UIEvent::AddEffect(super::FLAME_SPAWN_HOOK.key));
     }
 }
 
@@ -65,7 +67,7 @@ impl BatchAction for TimelineSelectFlameClip {
     }
     fn apply(&self, world: &mut World) {
         let clip_id = world
-            .query_flames()
+            .entities_with::<FlameEffect>()
             .first()
             .and_then(|&flame| find_entity_clip_id(world, flame));
         if let Some(clip_id) = clip_id {
@@ -114,7 +116,7 @@ impl BatchAction for ApplyTextureFitRoundtrip {
 
 /// Same preview math as a live TrimEnd drag, but no commit event: the instance stays untouched.
 fn apply_flame_clip_preview(world: &World, end_seconds: f32) {
-    let Some(&flame) = world.query_flames().first() else {
+    let Some(&flame) = world.entities_with::<FlameEffect>().first() else {
         return;
     };
     let Some(instance) = world
@@ -144,7 +146,7 @@ fn apply_flame_clip_preview(world: &World, end_seconds: f32) {
 }
 
 fn first_flame_effect_and_baked(world: &World) -> Option<(FlameEffect, FlameBaked)> {
-    let &flame = world.query_flames().first()?;
+    let &flame = world.entities_with::<FlameEffect>().first()?;
     let effect = world.get_component::<FlameEffect>(flame)?.clone();
     let baked = world
         .get_component::<FlameBaked>(flame)

@@ -1,10 +1,10 @@
-use crate::core::device::*;
-use crate::descriptor::pass_manifest::WATER_RESOLVE;
-use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
-use crate::descriptor::shader_bindings::water_resolve;
-use crate::resource::gpu_resource::GpuResource;
-use crate::resource::uniform_buffer::UniformBuffer;
-use crate::vulkan::*;
+use crate::vulkanr::core::device::*;
+use crate::vulkanr::descriptor::pass_manifest::WATER_RESOLVE;
+use crate::vulkanr::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::vulkanr::descriptor::shader_bindings::water_resolve;
+use crate::vulkanr::resource::gpu_resource::GpuResource;
+use crate::vulkanr::resource::uniform_buffer::UniformBuffer;
+use crate::vulkanr::vulkan::*;
 use thyllore_effect_core::WaterUBO;
 
 const WATER_HISTORY_SET_COUNT: usize = 2;

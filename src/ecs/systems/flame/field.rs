@@ -9,7 +9,7 @@ pub fn field_manifest_sync(ctx: &mut FrameContext) {
 }
 
 pub(crate) fn sync_world(world: &mut World) {
-    for entity in world.query_flames() {
+    for entity in world.entities_with::<FlameEffect>() {
         let Some(effect) = world.get_component::<FlameEffect>(entity) else {
             continue;
         };

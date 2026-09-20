@@ -6,9 +6,6 @@ mod core;
 mod editor;
 mod field;
 mod flame;
-pub mod flame_bone_attachment;
-mod flame_param;
-pub mod flame_trail;
 mod gizmo;
 mod glb_source;
 #[cfg(feature = "ml")]
@@ -20,9 +17,7 @@ mod render;
 mod scalar_channel;
 mod spring_bone;
 mod water;
-mod water_param;
 mod wind;
-mod wind_param;
 
 pub use animation_meta::*;
 pub use clip_schedule::*;
@@ -32,9 +27,6 @@ pub use core::*;
 pub use editor::*;
 pub use field::*;
 pub use flame::*;
-pub use flame_bone_attachment::*;
-pub use flame_param::*;
-pub use flame_trail::*;
 pub use gizmo::*;
 pub use glb_source::*;
 #[cfg(feature = "ml")]
@@ -46,6 +38,4 @@ pub use render::*;
 pub use scalar_channel::*;
 pub use spring_bone::*;
 pub use water::*;
-pub use water_param::*;
 pub use wind::*;
-pub use wind_param::*;

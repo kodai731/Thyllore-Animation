@@ -46,7 +46,7 @@ pub(crate) fn dispatch_window_event(
                     // only — applying stays on the explicit Apply button).
                     app.data
                         .ecs_world
-                        .resource_mut::<crate::ecs::ModelState>()
+                        .resource_mut::<crate::ecs::FlameUIState>()
                         .texture_fit_path = path.to_string();
                 } else {
                     let mut ui_events = app

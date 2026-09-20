@@ -306,7 +306,7 @@ shrink it):
 
 - UI event plumbing: `src/ecs/events/ui_events.rs` (`UIEvent::UpdateFlameEffect`, `ApplyWaterPreset`, ...),
   `src/ecs/systems/phases/dispatch_overlay.rs`, `src/platform/ui/scene_overlay.rs`,
-  `src/ecs/resource/graphics.rs` (`flame_preset_index`, `flame_style_*`), `src/platform/events/frame.rs`.
+  `src/platform/events/frame.rs`.
 - Picking: `src/ecs/systems/object_picking_systems.rs` calls `find_<effect>_by_pick_ray` in a fixed list.
 - Startup defaults: `src/app/init/instance.rs::insert_default_if_missing::<FlameRenderSettings>` and the
   other effect resources; `src/paths.rs` flame asset directories.

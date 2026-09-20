@@ -48,6 +48,7 @@ pub(crate) fn handle_redraw_requested(
 
     let mut overlay_state = SceneOverlayState {
         model: app.resource::<crate::ecs::ModelState>().clone(),
+        flame_ui: app.resource::<crate::ecs::FlameUIState>().clone(),
         water_preset_index: 0,
         wind_preset_index: 0,
         #[cfg(feature = "auto-rig")]
@@ -70,6 +71,7 @@ pub(crate) fn handle_redraw_requested(
     );
 
     *app.resource_mut::<crate::ecs::ModelState>() = overlay_state.model;
+    *app.resource_mut::<crate::ecs::FlameUIState>() = overlay_state.flame_ui;
 
     #[cfg(debug_assertions)]
     {

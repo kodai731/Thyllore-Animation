@@ -31,11 +31,11 @@ pub fn overlay_pipeline(
         .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
 }
 
-/// What a fullscreen overlay pass finds in its color attachment when it begins.
+/// What a fullscreen overlay pass finds in its attachments, one clear color per attachment.
 #[derive(Clone, Copy, Debug)]
-pub enum OverlayAttachmentLoad {
+pub enum OverlayAttachmentLoad<'a> {
     Keep,
-    Clear([f32; 4]),
+    Clear(&'a [[f32; 4]]),
 }
 
 pub unsafe fn begin_overlay_render_pass(
@@ -48,9 +48,12 @@ pub unsafe fn begin_overlay_render_pass(
 ) {
     let clear_values = match load {
         OverlayAttachmentLoad::Keep => vec![],
-        OverlayAttachmentLoad::Clear(color) => vec![vk::ClearValue {
-            color: vk::ClearColorValue { float32: color },
-        }],
+        OverlayAttachmentLoad::Clear(colors) => colors
+            .iter()
+            .map(|&color| vk::ClearValue {
+                color: vk::ClearColorValue { float32: color },
+            })
+            .collect::<Vec<_>>(),
     };
     let render_pass_info = vk::RenderPassBeginInfo::builder()
         .render_pass(render_pass)

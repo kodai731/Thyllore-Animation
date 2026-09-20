@@ -138,7 +138,7 @@ pub unsafe fn record_wind_half_resolve_pass(
         cmd,
         &pass,
         full_area(half_extent),
-        OverlayAttachmentLoad::Clear(TRANSPARENT_BLACK),
+        OverlayAttachmentLoad::Clear(&[TRANSPARENT_BLACK]),
         pipeline,
         Some(push_constants.as_bytes()),
         &overlay_draws,

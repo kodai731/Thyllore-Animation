@@ -147,12 +147,12 @@ inventory::collect!(SceneComponentHook);
 #[macro_export]
 macro_rules! scene_owner {
     ($component:ty {
-        icon: $icon:ident,
+        icon: $icon:expr,
         placement: $placement:expr
         $(, prepare_loaded: $prepare_loaded:expr)? $(,)?
     }) => {
         impl $crate::hooks::scene::SceneOwner for $component {
-            const ICON: $crate::ecs::component::EntityIcon = $crate::ecs::component::EntityIcon::$icon;
+            const ICON: $crate::ecs::component::EntityIcon = $icon;
 
             fn placement(&self) -> (cgmath::Vector3<f32>, cgmath::Quaternion<f32>) {
                 let placement: fn(&Self) -> (cgmath::Vector3<f32>, cgmath::Quaternion<f32>) =

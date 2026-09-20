@@ -1,7 +1,6 @@
 use cgmath::Matrix4;
 use serde_json::{json, Value};
 
-use crate::ecs::component::FlameEffect;
 use crate::ecs::resource::{
     Camera, DebugViewState, LightState, ModelState, ProjectionData, SceneState, TimelineState,
 };
@@ -9,6 +8,7 @@ use crate::ecs::systems::camera_systems::{
     compute_camera_direction, compute_camera_position, compute_camera_right, compute_camera_up,
 };
 use crate::ecs::world::World;
+use crate::hooks::effect_spawn::{EffectSpawnHook, EffectSpawnHooks};
 use thyllore_effect_core::inverse_view_proj_f64;
 
 pub fn build_scene_json(world: &World) -> Value {
@@ -39,13 +39,23 @@ pub fn build_scene_json(world: &World) -> Value {
         })
     });
 
-    json!({
+    let effect_hooks: Vec<EffectSpawnHook> = match world.get_resource::<EffectSpawnHooks>() {
+        Some(hooks) => hooks.ordered().copied().collect(),
+        None => Vec::new(),
+    };
+
+    let mut scene = json!({
         "scene_path": scene_path,
         "model": model,
-        "flame_count": world.entities_with::<FlameEffect>().len(),
+        "flame_count": 0,
         "timeline": timeline,
         "debug_view": debug_view,
-    })
+    });
+    for hook in effect_hooks {
+        scene[format!("{}_count", hook.key)] = json!((hook.entities)(world).len());
+    }
+
+    scene
 }
 
 pub fn build_camera_json(world: &World) -> Value {

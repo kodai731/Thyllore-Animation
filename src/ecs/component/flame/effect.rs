@@ -5,7 +5,7 @@ pub use thyllore_effect_core::flame_plume::HeatPlume;
 pub use thyllore_effect_core::{FlameBaked, FlameEffect, FlameTemporalAccum};
 
 crate::scene_owner!(FlameEffect {
-    icon: Flame,
+    icon: crate::ecs::component::EntityIcon::Effect('F'),
     placement: |e| (e.position, e.rotation),
     prepare_loaded: |e| thyllore_effect_core::refresh_flame_coefficients(e, &FlameBaked::default()),
 });

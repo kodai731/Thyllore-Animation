@@ -26,7 +26,7 @@ fn spawned_water_carries_the_components_the_editor_queries() {
     assert!(world.get_component::<WaterTorusEffect>(entity).is_some());
 
     let display = world.get_component::<EditorDisplay>(entity).unwrap();
-    assert_eq!(display.icon, EntityIcon::Water);
+    assert_eq!(display.icon, EntityIcon::Effect('W'));
 }
 
 #[test]

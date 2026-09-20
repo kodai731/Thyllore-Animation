@@ -4,6 +4,7 @@ mod constraint_inspector;
 mod curve_editor_window;
 #[cfg(debug_assertions)]
 mod debug_window;
+mod effect_sections;
 mod flame_param_groups;
 mod hierarchy_window;
 mod inspector_window;
@@ -20,6 +21,8 @@ mod text_to_animation_dialog;
 mod text_to_mesh_dialog;
 pub(crate) mod timeline_window;
 mod viewport_window;
+mod water;
+mod wind;
 pub use bottom_panel::*;
 pub use clip_browser_window::*;
 pub use constraint_inspector::*;

@@ -1,5 +1,7 @@
+use crate::asset::AssetStorage;
 use crate::ecs::component::{EntityIcon, WaterTorusEffect};
 use crate::ecs::resource::{HierarchyState, TimelineState};
+use crate::ecs::systems::{resolve_engine_cli_overrides, EngineCliOverrides};
 use crate::ecs::world::{Transform, World};
 
 use super::*;
@@ -596,4 +598,20 @@ fn water_scene_roundtrip_keeps_parameters_and_preset() {
         .unwrap();
     assert_eq!(preset.name, "sea");
     assert!(crate::ecs::systems::find_entity_clip_id(&restored, waters[0]).is_some());
+}
+
+#[test]
+fn engine_overrides_carry_no_water_subsystem_flags() {
+    let overrides = resolve_engine_cli_overrides(&[
+        "bin".to_string(),
+        "--batch-screenshot".to_string(),
+        "/tmp/out.png".to_string(),
+        "--batch-water-probe".to_string(),
+        "/tmp/probe.json".to_string(),
+        "--batch-play".to_string(),
+    ])
+    .unwrap();
+    assert!(overrides.batch_run.is_some());
+    assert!(overrides.batch_play);
+    assert!(overrides.debug_actions.is_empty());
 }

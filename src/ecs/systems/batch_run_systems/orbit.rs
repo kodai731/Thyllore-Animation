@@ -1,6 +1,7 @@
-use crate::ecs::component::{FlameEffect, MotionPath};
+use crate::ecs::component::MotionPath;
 use crate::ecs::resource::BatchFlameOrbit;
-use crate::ecs::world::{Transform, World};
+use crate::ecs::world::{Entity, Transform, World};
+use crate::hooks::effect_spawn::EffectSpawnHooks;
 
 /// XZ circular orbit offset at `t_seconds`: (R cos(2πt/T), 0, R sin(2πt/T)), zero for T <= 0.
 pub fn compute_orbit_offset(radius: f32, period_seconds: f32, t_seconds: f32) -> [f32; 3] {
@@ -11,9 +12,20 @@ pub fn compute_orbit_offset(radius: f32, period_seconds: f32, t_seconds: f32) ->
     [radius * angle.cos(), 0.0, radius * angle.sin()]
 }
 
-/// On its first call records the orbit center and gives every flame a `MotionPath`; afterwards
+fn collect_effect_entities(world: &World) -> Vec<Entity> {
+    let mut entities = Vec::new();
+    if let Some(hooks) = world.get_resource::<EffectSpawnHooks>() {
+        for hook in hooks.ordered() {
+            entities.extend((hook.entities)(world));
+        }
+    }
+    entities
+}
+
+/// On its first call records the orbit center and gives every effect a `MotionPath`; afterwards
 /// `sync_motion_paths` moves them.
 pub fn batch_run_update_orbit(world: &mut World) {
+    let effect_entities = collect_effect_entities(world);
     let (radius, period_seconds, center) = {
         let Some(mut orbit) = world.get_resource_mut::<BatchFlameOrbit>() else {
             return;
@@ -21,8 +33,7 @@ pub fn batch_run_update_orbit(world: &mut World) {
         if orbit.initial.is_some() {
             return;
         }
-        let center = world
-            .entities_with::<FlameEffect>()
+        let center = effect_entities
             .first()
             .and_then(|&first| world.get_component::<Transform>(first))
             .map(|transform| transform.translation)
@@ -35,7 +46,7 @@ pub fn batch_run_update_orbit(world: &mut World) {
         return;
     }
 
-    for entity in world.entities_with::<FlameEffect>() {
+    for entity in effect_entities {
         world.insert_component(
             entity,
             MotionPath {

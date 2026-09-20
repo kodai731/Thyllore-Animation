@@ -3,10 +3,12 @@ use crate::ecs::component::{
     apply_flame_param_value, AppliedFlameStyle, EntityIcon, FlameBaked, FlameBoneAttachment,
     FlameEffect, FlameParam, FlameTemporalAccum, FlameTrail, FLAME_DOMAIN,
 };
+use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
     BatchRun, ClipLibrary, FlameHistorySnapshot, FlameHistorySnapshotState, FlameRenderSettings,
-    HierarchyState, LightState, ProjectionData, TimelineState,
+    FlameWallProbeCapture, HierarchyState, LightState, ProjectionData, TimelineState,
 };
+use crate::ecs::systems::{resolve_engine_cli_overrides, EngineCliOverrides};
 use crate::ecs::world::{Entity, Transform, World};
 use crate::ecs::FrameContext;
 use thyllore_effect_core::{advance_flame_time, advance_flame_trail};
@@ -213,4 +215,52 @@ fn reloading_scene_entities_replaces_the_flame_and_its_clip() {
     assert_eq!(flames.len(), 1);
     assert_ne!(flames[0], first);
     assert_eq!(world.resource::<ClipLibrary>().source_clips.len(), 1);
+}
+
+fn wall_probe_overrides(extra: &[&str]) -> EngineCliOverrides {
+    let mut args: Vec<String> = vec!["bin".to_string()];
+    args.extend(extra.iter().map(|s| s.to_string()));
+    args.push("--batch-debug-action".to_string());
+    args.push("dump_wall_probe".to_string());
+    resolve_engine_cli_overrides(&args).expect("engine overrides parse")
+}
+
+#[test]
+fn a_batch_run_defers_the_wall_probe_dump_to_the_capture_frame() {
+    let overrides = wall_probe_overrides(&["--batch-screenshot", "/tmp/out.png"]);
+    let mut world = World::new();
+    crate::ecs::systems::apply_engine_overrides(&mut world, &mut AssetStorage::new(), &overrides);
+
+    assert!(world.contains_resource::<BatchRun>());
+    assert!(world.contains_resource::<FlameWallProbeCapture>());
+}
+
+#[test]
+fn without_a_batch_run_the_wall_probe_dump_goes_through_the_event_queue() {
+    let overrides = wall_probe_overrides(&[]);
+    let mut world = World::new();
+    world.insert_resource(UIEventQueue::new());
+    crate::ecs::systems::apply_engine_overrides(&mut world, &mut AssetStorage::new(), &overrides);
+
+    assert!(world.get_resource::<BatchRun>().is_none());
+    assert!(world.get_resource::<FlameWallProbeCapture>().is_none());
+
+    let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
+    assert!(matches!(events[0], UIEvent::CaptureNow(_)));
+}
+
+#[test]
+fn engine_overrides_carry_no_flame_subsystem_flags() {
+    let overrides = resolve_engine_cli_overrides(&[
+        "bin".to_string(),
+        "--batch-screenshot".to_string(),
+        "/tmp/out.png".to_string(),
+        "--batch-flame-mode".to_string(),
+        "raymarch".to_string(),
+        "--batch-play".to_string(),
+    ])
+    .unwrap();
+    assert!(overrides.batch_run.is_some());
+    assert!(overrides.batch_play);
+    assert!(overrides.debug_actions.is_empty());
 }

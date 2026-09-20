@@ -90,4 +90,4 @@ fn insert_wind_default_resources(world: &mut World) {
 
 crate::effect_default_resource!("wind", insert_wind_default_resources);
 
-crate::effect_ui_event_hook!("wind", super::ui_apply::apply_wind_ui_command);
+crate::effect_ui_event_hook!(WIND_SPAWN_HOOK.key, super::ui_apply::apply_wind_ui_command);

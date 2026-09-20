@@ -100,4 +100,7 @@ fn insert_water_default_resources(world: &mut World) {
 
 crate::effect_default_resource!("water", insert_water_default_resources);
 
-crate::effect_ui_event_hook!("water", super::ui_apply::apply_water_ui_command);
+crate::effect_ui_event_hook!(
+    WATER_SPAWN_HOOK.key,
+    super::ui_apply::apply_water_ui_command
+);

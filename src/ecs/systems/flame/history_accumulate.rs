@@ -11,7 +11,7 @@ const STABLE_FRAME_HISTORY_WEIGHT: f32 = 0.85;
 /// parameters hold still. A fixed-step run never reuses history so a single-frame screenshot
 /// stays deterministic.
 pub fn accumulate_flame_history(world: &mut World) {
-    let flame_entities = world.query_flames();
+    let flame_entities = world.entities_with::<FlameEffect>();
     let count = flame_entities.len();
 
     if count == 0 {

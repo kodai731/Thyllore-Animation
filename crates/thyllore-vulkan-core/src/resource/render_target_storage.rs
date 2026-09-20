@@ -8,7 +8,7 @@ use crate::vulkan::*;
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum RenderTargetKey {
     EffectHistory(u8),
-    CausticAccum,
+    EffectAccumulation(u8),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -225,7 +225,9 @@ mod tests {
         assert_eq!(storage.extent(), (0, 0));
         assert!(!storage.has_valid_extent());
         assert!(!storage.has_leaked_targets());
-        assert!(storage.get(RenderTargetKey::CausticAccum).is_none());
+        assert!(storage
+            .get(RenderTargetKey::EffectAccumulation(0))
+            .is_none());
     }
 
     #[test]
@@ -245,8 +247,8 @@ mod tests {
     #[test]
     fn test_inserting_same_key_twice_keeps_single_entry() {
         let mut storage = RenderTargetStorage::default();
-        insert_dummy(&mut storage, RenderTargetKey::CausticAccum);
-        insert_dummy(&mut storage, RenderTargetKey::CausticAccum);
+        insert_dummy(&mut storage, RenderTargetKey::EffectAccumulation(0));
+        insert_dummy(&mut storage, RenderTargetKey::EffectAccumulation(0));
 
         assert_eq!(storage.active_target_count(), 1);
 
@@ -257,7 +259,7 @@ mod tests {
     fn test_clear_tracking_prevents_leak_report() {
         let mut storage = RenderTargetStorage::default();
         insert_dummy(&mut storage, RenderTargetKey::EffectHistory(0));
-        insert_dummy(&mut storage, RenderTargetKey::CausticAccum);
+        insert_dummy(&mut storage, RenderTargetKey::EffectAccumulation(0));
 
         assert!(storage.has_leaked_targets());
 

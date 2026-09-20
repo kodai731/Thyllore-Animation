@@ -8,6 +8,9 @@ use crate::ecs::resource::{
     BatchFlameOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule, ClipLibrary,
     DebugViewMode, DebugViewState, FlameWallProbeCapture, FrameClock, TimelineState,
 };
+use crate::ecs::systems::scalar_clip_systems::test_support::{
+    spawn_probe, PROBE_DOMAIN, PROBE_LEVEL,
+};
 use crate::ecs::world::{Transform, World};
 
 fn args(list: &[&str]) -> Vec<String> {
@@ -293,7 +296,7 @@ fn anim_edit_specs_parse_all_forms() {
         "--batch-anim-edit",
         "debug_keys=42",
         "--batch-anim-edit",
-        "key=height@1.5=2.25",
+        "key=probe_level@1.5=2.25",
         "--batch-anim-edit",
         "clear",
     ]))
@@ -302,7 +305,7 @@ fn anim_edit_specs_parse_all_forms() {
     assert_eq!(
         edits[1],
         BatchAnimEdit::Key {
-            property_type: crate::ecs::component::FlameParam::Height.property_type(),
+            property_type: PROBE_LEVEL.property_type(),
             time: 1.5,
             value: 2.25
         }
@@ -377,11 +380,7 @@ fn every_registered_name_parses_or_needs_a_value() {
 #[test]
 fn anim_edits_apply_and_dump_reflect_clip_state() {
     let mut world = World::new();
-    crate::ecs::systems::spawn_flame(
-        &mut world,
-        crate::ecs::systems::DEFAULT_FLAME_NAME,
-        FlameEffect::default(),
-    );
+    spawn_probe(&mut world, "Probe");
     world.insert_resource(ClipLibrary::new());
     world.insert_resource(TimelineState::new());
     world.insert_resource(crate::ecs::resource::EditHistory::new(10));
@@ -393,7 +392,7 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
         &[
             BatchAnimEdit::DebugKeys { seed: 7 },
             BatchAnimEdit::Key {
-                property_type: crate::ecs::component::FlameParam::Height.property_type(),
+                property_type: PROBE_LEVEL.property_type(),
                 time: 9.0,
                 value: 3.5,
             },
@@ -407,25 +406,22 @@ fn anim_edits_apply_and_dump_reflect_clip_state() {
     let dump = batch_anim_dump_json(&world);
     let entities = dump["entities"].as_array().unwrap();
     assert_eq!(entities.len(), 1);
-    assert_eq!(entities[0]["domain"], "Flame");
+    assert_eq!(entities[0]["domain"], PROBE_DOMAIN.name);
     let clip_id = entities[0]["clip_id"]
         .as_u64()
-        .expect("flame clip scheduled");
+        .expect("probe clip scheduled");
     let clips = dump["clips"].as_array().unwrap();
     let clip = clips
         .iter()
         .find(|c| c["id"].as_u64() == Some(clip_id))
         .expect("clip in dump");
     let curves = clip["scalar_curves"].as_array().unwrap();
-    assert_eq!(
-        curves.len(),
-        crate::ecs::component::FLAME_DOMAIN.channels.len()
-    );
-    let height = curves
+    assert_eq!(curves.len(), PROBE_DOMAIN.channels.len());
+    let level = curves
         .iter()
-        .find(|c| c["property"] == "height")
-        .expect("height curve");
-    let keyframes = height["keyframes"].as_array().unwrap();
+        .find(|c| c["property"] == PROBE_LEVEL.cli_name)
+        .expect("level curve");
+    let keyframes = level["keyframes"].as_array().unwrap();
     assert_eq!(
         keyframes.len(),
         crate::ecs::systems::scalar_clip_systems::DEBUG_KEYS_PER_CURVE + 1

@@ -41,7 +41,7 @@ pub fn build_water_debug_record(
     unix_time: u64,
 ) -> Value {
     let waters: Vec<Value> = world
-        .query_waters()
+        .entities_with::<WaterTorusEffect>()
         .into_iter()
         .enumerate()
         .map(|(index, entity)| build_water_instance_json(world, entity, index))

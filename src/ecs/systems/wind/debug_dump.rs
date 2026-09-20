@@ -18,7 +18,7 @@ pub fn build_wind_debug_record(
     unix_time: u64,
 ) -> Value {
     let winds: Vec<Value> = world
-        .query_winds()
+        .entities_with::<WindTornadoEffect>()
         .into_iter()
         .enumerate()
         .map(|(index, entity)| build_wind_instance_json(world, entity, index))

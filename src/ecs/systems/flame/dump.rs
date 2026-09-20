@@ -281,7 +281,7 @@ pub fn flame_dump_system(
     sink: &mut FlameDumpSink,
     temporal: &FlameHistorySnapshotState,
     flames: &[(FlameEffect, FlameBaked, FlameTemporalAccum)],
-    trails: &[Option<crate::ecs::component::flame_trail::FlameTrail>],
+    trails: &[Option<crate::ecs::component::FlameTrail>],
 ) {
     for (i, (effect, baked, temporal_accum)) in flames.iter().enumerate() {
         let trail = &trails[i];

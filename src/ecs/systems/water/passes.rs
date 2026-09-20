@@ -3,7 +3,10 @@ use cgmath::SquareMatrix;
 use vulkanalia::prelude::v1_0::*;
 use vulkanalia::vk::KhrRayTracingPipelineExtension;
 
-use crate::ecs::resource::{WaterBindingKey, WaterRenderTargets};
+use crate::ecs::component::WaterTorusEffect;
+use crate::ecs::resource::{
+    EffectTraceGpuState, WaterBindingKey, WaterGpuState, WaterRenderTargets,
+};
 use crate::ecs::world::Entity;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
@@ -33,7 +36,7 @@ const SCENE_COLOR_SLOT: TransientSlot = TransientSlot("water.scene_color");
 const TRACE_SLOT: TransientSlot = TransientSlot("water.trace");
 const SCENE_COLOR: TargetRef = TargetRef::Transient(SCENE_COLOR_SLOT);
 const TRACE: TargetRef = TargetRef::Transient(TRACE_SLOT);
-const CAUSTIC_ACCUM: TargetRef = TargetRef::Storage(RenderTargetKey::CausticAccum);
+const CAUSTIC_ACCUM: TargetRef = TargetRef::Storage(RenderTargetKey::EffectAccumulation(0));
 const HISTORY_KEYS: [RenderTargetKey; 2] = [
     RenderTargetKey::EffectHistory(2),
     RenderTargetKey::EffectHistory(3),
@@ -61,13 +64,14 @@ struct WaterFrame {
 
 fn water_frame(ctx: &PassContext) -> Option<WaterFrame> {
     ctx.world.get_resource::<WaterRenderTargets>()?;
-    ctx.raytracing.water_shading_pipeline.as_ref()?;
-    ctx.raytracing.water_descriptor.as_ref()?;
-    ctx.raytracing.water_ubo.as_ref()?;
+    let gpu_state = ctx.world.get_resource::<WaterGpuState>()?;
+    gpu_state.shading_pipeline.as_ref()?;
+    gpu_state.descriptor.as_ref()?;
+    gpu_state.ubo.as_ref()?;
     ctx.hdr_buffer?;
     water_scene_bindings(ctx)?;
 
-    let mut waters: Vec<Entity> = ctx.world.query_waters();
+    let mut waters: Vec<Entity> = ctx.world.entities_with::<WaterTorusEffect>();
     waters.truncate(thyllore_effect_core::WATER_MAX_INSTANCES);
     if waters.is_empty() {
         return None;
@@ -98,7 +102,7 @@ fn instance_scissors(ctx: &PassContext, waters: &[Entity]) -> Vec<Option<vk::Rec
     let Some(extent) = ctx
         .world
         .get_resource::<WaterRenderTargets>()
-        .map(|targets| targets.buffer.extent())
+        .map(|targets| targets.extent())
     else {
         return vec![None; waters.len()];
     };
@@ -149,8 +153,10 @@ fn first_water_accum(
 impl WaterFrame {
     /// The requested secondary ray mode, or ray query when the shared trace pipeline is unavailable.
     fn secondary_rays(&self, ctx: &PassContext) -> thyllore_effect_core::WaterSecondaryRays {
-        let trace_available = ctx.raytracing.effect_trace_pipeline.is_some()
-            && ctx.raytracing.effect_trace_descriptor.is_some();
+        let trace_available = ctx
+            .world
+            .get_resource::<EffectTraceGpuState>()
+            .is_some_and(|state| state.pipeline.is_some() && state.descriptor.is_some());
         match self.settings.secondary_rays {
             thyllore_effect_core::WaterSecondaryRays::RayTracingPipeline if !trace_available => {
                 thyllore_effect_core::WaterSecondaryRays::RayQuery
@@ -173,12 +179,14 @@ impl WaterFrame {
             .get_component::<crate::ecs::component::WaterTorusEffect>(self.waters[0])
             .map(|effect| effect.caustic_strength)
             .unwrap_or(0.0);
+        let Some(gpu_state) = ctx.world.get_resource::<WaterGpuState>() else {
+            return false;
+        };
         caustic_strength > 0.0
-            && ctx.raytracing.water_caustic_splat_pipeline.is_some()
-            && ctx.raytracing.water_caustic_apply_pipeline.is_some()
-            && ctx
-                .raytracing
-                .water_caustic_descriptor
+            && gpu_state.caustic_splat_pipeline.is_some()
+            && gpu_state.caustic_apply_pipeline.is_some()
+            && gpu_state
+                .caustic_descriptor
                 .as_ref()
                 .is_some_and(|descriptor| {
                     descriptor.splat_descriptor_set != vk::DescriptorSet::null()
@@ -244,16 +252,19 @@ impl RenderPassNode for WaterTraceNode {
         let Some(frame) = water_frame(ctx).filter(|frame| frame.is_trace_enabled(ctx)) else {
             return Ok(());
         };
+        let Some(trace_state) = ctx.world.get_resource::<EffectTraceGpuState>() else {
+            return Ok(());
+        };
         let (Some(trace_pipeline), Some(trace_descriptor)) = (
-            ctx.raytracing.effect_trace_pipeline.as_ref(),
-            ctx.raytracing.effect_trace_descriptor.as_ref(),
+            trace_state.pipeline.as_ref(),
+            trace_state.descriptor.as_ref(),
         ) else {
             return Ok(());
         };
         let Some(targets) = ctx.world.get_resource::<WaterRenderTargets>() else {
             return Ok(());
         };
-        let water_buffer = &targets.buffer;
+        let water_history = &targets.history;
         let render = ctx.frame_render_context(image_index);
 
         let device = &render.device.device;
@@ -302,7 +313,7 @@ impl RenderPassNode for WaterTraceNode {
             push_range.offset,
             trace_push.as_bytes(),
         );
-        let extent = water_buffer.extent();
+        let extent = water_history.extent();
         device.cmd_trace_rays_khr(
             command_buffer,
             &trace_pipeline.raygen_region,
@@ -338,8 +349,8 @@ impl RenderPassNode for WaterFrameNode {
             return Vec::new();
         };
         vec![
-            TransientRequest::new(SCENE_COLOR_SLOT, targets.buffer.scene_color_desc()),
-            TransientRequest::new(TRACE_SLOT, targets.buffer.trace_desc()),
+            TransientRequest::new(SCENE_COLOR_SLOT, targets.scene_color_desc()),
+            TransientRequest::new(TRACE_SLOT, targets.trace_desc()),
         ]
     }
 
@@ -356,8 +367,8 @@ impl RenderPassNode for WaterFrameNode {
             return Ok(());
         };
 
-        let history_views = targets.buffer.history_image_views;
-        let history_sampler = targets.buffer.history_sampler;
+        let history_views = targets.history.views;
+        let history_sampler = targets.history.sampler;
         let key = WaterBindingKey {
             tlas,
             hit_table,
@@ -369,10 +380,13 @@ impl RenderPassNode for WaterFrameNode {
             return Ok(());
         }
 
-        let Some(water_ubo) = ctx.raytracing.water_ubo.as_ref() else {
+        let Some(gpu_state) = ctx.world.get_resource::<WaterGpuState>() else {
             return Ok(());
         };
-        if let Some(descriptor) = ctx.raytracing.water_descriptor.as_ref() {
+        let Some(water_ubo) = gpu_state.ubo.as_ref() else {
+            return Ok(());
+        };
+        if let Some(descriptor) = gpu_state.descriptor.as_ref() {
             descriptor.write_all_at(
                 ctx.rrdevice,
                 frame_slot,
@@ -387,7 +401,11 @@ impl RenderPassNode for WaterFrameNode {
                 hit_table,
             )?;
         }
-        if let Some(trace_descriptor) = ctx.raytracing.effect_trace_descriptor.as_ref() {
+        let trace_state = ctx.world.get_resource::<EffectTraceGpuState>();
+        if let Some(trace_descriptor) = trace_state
+            .as_ref()
+            .and_then(|state| state.descriptor.as_ref())
+        {
             trace_descriptor.write_all_at(
                 ctx.rrdevice,
                 frame_slot,
@@ -410,7 +428,10 @@ impl RenderPassNode for WaterFrameNode {
         let Some(frame) = water_frame(ctx) else {
             return Ok(());
         };
-        let Some(water_ubo) = ctx.raytracing.water_ubo.as_ref() else {
+        let Some(gpu_state) = ctx.world.get_resource::<WaterGpuState>() else {
+            return Ok(());
+        };
+        let Some(water_ubo) = gpu_state.ubo.as_ref() else {
             return Ok(());
         };
         let render = ctx.frame_render_context(image_index);
@@ -460,7 +481,7 @@ impl RenderPassNode for WaterCausticClearNode {
 
         ctx.rrdevice.device.cmd_clear_color_image(
             command_buffer,
-            targets.buffer.caustic_accum_image,
+            targets.caustic_accum.image,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             &vk::ClearColorValue { uint32: [0; 4] },
             &[COLOR_SUBRESOURCE_RANGE],
@@ -494,6 +515,25 @@ impl RenderPassNode for WaterCausticSplatNode {
         })
     }
 
+    unsafe fn prepare(&self, ctx: &mut PassContext, _: usize) -> Result<()> {
+        let Some((tlas, _)) = water_scene_bindings(ctx) else {
+            return Ok(());
+        };
+        let Some(mut gpu_state) = ctx.world.get_resource_mut::<WaterGpuState>() else {
+            return Ok(());
+        };
+        if gpu_state.caustic_bound_tlas == tlas {
+            return Ok(());
+        }
+        let Some(caustic_descriptor) = gpu_state.caustic_descriptor.as_mut() else {
+            return Ok(());
+        };
+
+        caustic_descriptor.update_tlas(ctx.rrdevice, tlas)?;
+        gpu_state.caustic_bound_tlas = tlas;
+        Ok(())
+    }
+
     unsafe fn record(
         &self,
         ctx: &PassContext,
@@ -504,9 +544,12 @@ impl RenderPassNode for WaterCausticSplatNode {
         if water_frame(ctx).is_none_or(|frame| !frame.is_caustic_enabled(ctx)) {
             return Ok(());
         }
+        let Some(gpu_state) = ctx.world.get_resource::<WaterGpuState>() else {
+            return Ok(());
+        };
         let (Some(splat_pipeline), Some(descriptor)) = (
-            ctx.raytracing.water_caustic_splat_pipeline.as_ref(),
-            ctx.raytracing.water_caustic_descriptor.as_ref(),
+            gpu_state.caustic_splat_pipeline.as_ref(),
+            gpu_state.caustic_descriptor.as_ref(),
         ) else {
             return Ok(());
         };
@@ -577,9 +620,12 @@ impl RenderPassNode for WaterCausticApplyNode {
         if water_frame(ctx).is_none_or(|frame| !frame.is_caustic_enabled(ctx)) {
             return Ok(());
         }
+        let Some(gpu_state) = ctx.world.get_resource::<WaterGpuState>() else {
+            return Ok(());
+        };
         let (Some(apply_pipeline), Some(descriptor), Some(hdr_buffer)) = (
-            ctx.raytracing.water_caustic_apply_pipeline.as_ref(),
-            ctx.raytracing.water_caustic_descriptor.as_ref(),
+            gpu_state.caustic_apply_pipeline.as_ref(),
+            gpu_state.caustic_descriptor.as_ref(),
             ctx.hdr_buffer,
         ) else {
             return Ok(());
@@ -651,11 +697,11 @@ impl RenderPassNode for WaterSceneColorCopyNode {
         let scene_color_image = ctx.transient_image(SCENE_COLOR_SLOT)?;
         let render = ctx.frame_render_context(image_index);
 
-        thyllore_vulkan_core::renderer::record_water_scene_color_copy(
+        super::record_water_scene_color_copy(
             &render,
             hdr_buffer.color_image,
             scene_color_image.image,
-            targets.buffer.extent(),
+            targets.extent(),
             command_buffer,
         );
         Ok(())
@@ -702,7 +748,7 @@ impl RenderPassNode for WaterHistoryClearNode {
         let black = vk::ClearColorValue {
             float32: [0.0, 0.0, 0.0, 1.0],
         };
-        for &image in &targets.buffer.history_images {
+        for &image in &targets.history.images {
             ctx.rrdevice.device.cmd_clear_color_image(
                 command_buffer,
                 image,
@@ -773,14 +819,19 @@ impl RenderPassNode for WaterShadingNode {
         let Some(frame) = water_frame(ctx) else {
             return Ok(());
         };
-        let (Some(targets), Some(shading_pipeline), Some(descriptor)) = (
+        let (Some(targets), Some(gpu_state)) = (
             ctx.world.get_resource::<WaterRenderTargets>(),
-            ctx.raytracing.water_shading_pipeline.as_ref(),
-            ctx.raytracing.water_descriptor.as_ref(),
+            ctx.world.get_resource::<WaterGpuState>(),
         ) else {
             return Ok(());
         };
-        let water_buffer = &targets.buffer;
+        let (Some(shading_pipeline), Some(descriptor)) = (
+            gpu_state.shading_pipeline.as_ref(),
+            gpu_state.descriptor.as_ref(),
+        ) else {
+            return Ok(());
+        };
+        let water_history = &targets.history;
         let render = ctx.frame_render_context(image_index);
 
         for (i, (_, ubo_dynamic_offset)) in targets.frame_instances.iter().enumerate() {
@@ -788,14 +839,14 @@ impl RenderPassNode for WaterShadingNode {
                 continue;
             };
 
-            let push_constants = thyllore_vulkan_core::renderer::WaterPushConstants::new(
+            let push_constants = super::WaterPushConstants::new(
                 frame.secondary_rays(ctx).as_shader_value(),
                 frame.settings.debug_view,
             );
 
-            thyllore_vulkan_core::renderer::record_water_shading_pass(
+            super::record_water_shading_pass(
                 &render,
-                water_buffer,
+                water_history,
                 shading_pipeline,
                 descriptor,
                 *ubo_dynamic_offset,

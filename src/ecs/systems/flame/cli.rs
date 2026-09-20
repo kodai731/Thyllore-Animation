@@ -87,7 +87,7 @@ impl BootstrapOverrides for FlameOverrides {
         }
 
         self.spawn_extra_flames(world, assets);
-        for entity in world.query_flames() {
+        for entity in world.entities_with::<FlameEffect>() {
             self.apply_to_flame(world, entity);
         }
         self.attach_flame_companions(world);
@@ -174,7 +174,7 @@ impl FlameOverrides {
     }
 
     fn attach_flame_companions(&self, world: &mut World) {
-        let entities = world.query_flames();
+        let entities = world.entities_with::<FlameEffect>();
 
         if let Some(fade) = self.trail {
             for &entity in &entities {

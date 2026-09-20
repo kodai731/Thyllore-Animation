@@ -6,7 +6,7 @@ use thyllore_effect_core::{build_water_model_matrix, pick_torus};
 /// Nearest water whose torus the ray enters, with the distance at which it enters.
 pub fn find_water_by_pick_ray(world: &World, ray: &PickRay) -> Option<(Entity, f32)> {
     world
-        .query_waters()
+        .entities_with::<WaterTorusEffect>()
         .into_iter()
         .filter_map(|entity| {
             let effect = world.get_component::<WaterTorusEffect>(entity)?;

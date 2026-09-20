@@ -264,6 +264,13 @@ Concretely:
   of a stage in name order, timing each under `<name>_<stage>`. A shared system that only touches one
   feature's components (the field manifest sync read `FlameEffect` alone) is that feature's system and
   lives in its directory, not in `src/ecs/systems/*.rs`.
+- Animatable scalar fields reach the curve editor, timeline, batch CLI and scene files through
+  `ScalarChannelDomain` (`src/ecs/component/scalar_channel.rs`): the effect writes
+  `scalar_channel_domain!(MY_DOMAIN)` next to its static and takes a code block in
+  `scalar_channel_domains.ron`; `scalar_channel_domains()` gathers the registrations at link time and
+  never lists them. Tests of the shared clip, timeline, dispatch and batch code use the test-only
+  `Probe` domain and `"probe"` spawn hook of `scalar_clip_systems.rs::test_support` (built on the
+  `ProbeOwner` of `src/scene/entities.rs`), never a concrete effect.
 - A generic pass that needs one number an effect knows reads a generic resource the effect publishes,
   never the effect's component: the tonemap heat haze reads `HeatDistortionSource`
   (`src/ecs/resource/heat_distortion.rs`), which the flame `Advance` hook fills from its `HeatPlume`.
@@ -303,10 +310,10 @@ shrink it):
 - Picking: `src/ecs/systems/object_picking_systems.rs` calls `find_<effect>_by_pick_ray` in a fixed list.
 - Startup defaults: `src/app/init/instance.rs::insert_default_if_missing::<FlameRenderSettings>` and the
   other effect resources; `src/paths.rs` flame asset directories.
-- Registries written by hand: `src/ecs/component/scalar_channel.rs` domain list, `EntityIcon::{Flame, Water, Wind}`
-  in `src/ecs/component/editor.rs`, `src/ecs/systems/effect_debug_dump.rs`, `src/ecs/systems/batch_run_systems/orbit.rs`.
-- Tests of shared code spawning an effect: `dispatch_timeline.rs`, `dispatch_scalar_curve.rs`, `input_phase.rs`,
-  `scalar_clip_systems.rs`, `batch_run_systems/tests.rs`.
+- Registries written by hand: `EntityIcon::{Flame, Water, Wind}` in `src/ecs/component/editor.rs`,
+  `src/ecs/systems/effect_debug_dump.rs`, `src/ecs/systems/batch_run_systems/orbit.rs`.
+- Tests of shared code naming an effect: the flame batch flag / wall probe / orbit tests in
+  `batch_run_systems/tests.rs` (they follow `orbit.rs` and the flame `cli.rs` hook when those move).
 
 Resources follow the same rule. A resource is persisted by declaring its fields once
 (`declare_scene_format!` in the resource's own file, or in its crate for `thyllore-render-core` settings)

@@ -218,18 +218,17 @@ fn edit_clip(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ecs::component::{FlameEffect, FlameParam};
     use crate::ecs::systems::phases::dispatch_edit_history::dispatch_edit_history_events;
     use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
+    use crate::ecs::systems::scalar_clip_systems::test_support::{
+        spawn_probe, spawn_probe_with_clip, PROBE_DOMAIN, PROBE_HEIGHT, PROBE_LEVEL,
+    };
     use crate::hooks::effect_spawn::EffectSpawnHooks;
+    use crate::scene::test_support::ProbeOwner;
 
-    fn make_world_with_flame() -> (World, AssetStorage) {
+    fn make_world_with_probe() -> (World, AssetStorage) {
         let mut world = World::new();
-        crate::ecs::systems::spawn_flame(
-            &mut world,
-            crate::ecs::systems::DEFAULT_FLAME_NAME,
-            FlameEffect::default(),
-        );
+        spawn_probe(&mut world, "Probe");
         world.insert_resource(ClipLibrary::new());
         world.insert_resource(TimelineState::new());
         world.insert_resource(EditHistory::new(10));
@@ -239,23 +238,23 @@ mod tests {
 
     #[test]
     fn test_insert_key_creates_clip_and_schedule() {
-        let (mut world, mut assets) = make_world_with_flame();
-        let entity = world.entities_with::<FlameEffect>()[0];
+        let (mut world, mut assets) = make_world_with_probe();
+        let entity = world.entities_with::<ProbeOwner>()[0];
 
         dispatch_scalar_clip_events(
             &[UIEvent::InsertScalarKey {
-                property_type: FlameParam::Height.property_type(),
+                property_type: PROBE_LEVEL.property_type(),
                 value: 2.5,
             }],
             &mut world,
             &mut assets,
         );
 
-        let clip_id = find_entity_clip_id(&world, entity).expect("flame clip scheduled");
+        let clip_id = find_entity_clip_id(&world, entity).expect("probe clip scheduled");
         let lib = world.get_resource::<ClipLibrary>().unwrap();
         let clip = lib.get(clip_id).expect("clip registered");
         let curve = clip
-            .get_scalar_curve(FlameParam::Height.property_type())
+            .get_scalar_curve(PROBE_LEVEL.property_type())
             .expect("scalar curve");
         assert_eq!(curve.keyframes.len(), 1);
         assert!((curve.keyframes[0].value - 2.5).abs() < 1e-6);
@@ -263,12 +262,12 @@ mod tests {
 
     #[test]
     fn test_insert_then_undo_restores_empty_clip() {
-        let (mut world, mut assets) = make_world_with_flame();
-        let entity = world.entities_with::<FlameEffect>()[0];
+        let (mut world, mut assets) = make_world_with_probe();
+        let entity = world.entities_with::<ProbeOwner>()[0];
 
         dispatch_scalar_clip_events(
             &[UIEvent::InsertScalarKey {
-                property_type: FlameParam::Height.property_type(),
+                property_type: PROBE_LEVEL.property_type(),
                 value: 2.5,
             }],
             &mut world,
@@ -290,29 +289,29 @@ mod tests {
 
     #[test]
     fn test_insert_key_at_playhead_uses_current_component_value_and_time() {
-        let (mut world, mut assets) = make_world_with_flame();
-        let entity = world.entities_with::<FlameEffect>()[0];
+        let (mut world, mut assets) = make_world_with_probe();
+        let entity = world.entities_with::<ProbeOwner>()[0];
 
         world.resource_mut::<TimelineState>().current_time = 2.0;
         world
-            .get_component_mut::<crate::ecs::component::FlameEffect>(entity)
+            .get_component_mut::<ProbeOwner>(entity)
             .unwrap()
-            .intensity = 4.25;
+            .position[1] = 4.25;
 
         dispatch_scalar_clip_events(
             &[UIEvent::InsertScalarKeyAtPlayhead {
-                property_type: FlameParam::Intensity.property_type(),
+                property_type: PROBE_HEIGHT.property_type(),
             }],
             &mut world,
             &mut assets,
         );
 
-        let clip_id = find_entity_clip_id(&world, entity).expect("flame clip scheduled");
+        let clip_id = find_entity_clip_id(&world, entity).expect("probe clip scheduled");
         let lib = world.get_resource::<ClipLibrary>().unwrap();
         let curve = lib
             .get(clip_id)
             .unwrap()
-            .get_scalar_curve(FlameParam::Intensity.property_type())
+            .get_scalar_curve(PROBE_HEIGHT.property_type())
             .expect("curve created from empty clip");
         assert_eq!(curve.keyframes.len(), 1);
         assert!((curve.keyframes[0].time - 2.0).abs() < 1e-6);
@@ -320,28 +319,28 @@ mod tests {
     }
 
     #[test]
-    fn test_add_flame_creates_clip_and_schedule_by_default() {
-        let (mut world, mut assets) = make_world_with_flame();
+    fn test_add_effect_creates_clip_and_schedule_by_default() {
+        let (mut world, mut assets) = make_world_with_probe();
 
-        dispatch_scalar_clip_events(&[UIEvent::AddEffect("flame")], &mut world, &mut assets);
+        dispatch_scalar_clip_events(&[UIEvent::AddEffect("probe")], &mut world, &mut assets);
 
-        let flames = world.entities_with::<FlameEffect>();
-        assert_eq!(flames.len(), 2);
-        let new_flame = flames[1];
+        let probes = world.entities_with::<ProbeOwner>();
+        assert_eq!(probes.len(), 2);
+        let new_probe = probes[1];
         let clip_id =
-            find_entity_clip_id(&world, new_flame).expect("new flame has a scheduled clip");
+            find_entity_clip_id(&world, new_probe).expect("new probe has a scheduled clip");
         let lib = world.get_resource::<ClipLibrary>().unwrap();
         let clip = lib.get(clip_id).expect("clip registered");
-        assert_eq!(clip.name, crate::ecs::component::FLAME_DOMAIN.name);
+        assert_eq!(clip.name, PROBE_DOMAIN.name);
         assert!(clip.scalar_curves.is_empty());
     }
 
     #[test]
     fn test_set_min_duration_lengthens_unkeyed_clip_and_its_instance() {
-        let (mut world, mut assets) = make_world_with_flame();
-        dispatch_scalar_clip_events(&[UIEvent::AddEffect("flame")], &mut world, &mut assets);
-        let flame = world.entities_with::<FlameEffect>()[1];
-        let clip_id = find_entity_clip_id(&world, flame).expect("clip scheduled");
+        let (mut world, mut assets) = make_world_with_probe();
+        dispatch_scalar_clip_events(&[UIEvent::AddEffect("probe")], &mut world, &mut assets);
+        let probe = world.entities_with::<ProbeOwner>()[1];
+        let clip_id = find_entity_clip_id(&world, probe).expect("clip scheduled");
 
         dispatch_scalar_clip_events(
             &[UIEvent::ClipSetMinDuration {
@@ -357,33 +356,23 @@ mod tests {
         assert!(clip.scalar_curves.is_empty());
         assert!((clip.duration - 12.0).abs() < 1e-6);
         let schedule = world
-            .get_component::<crate::ecs::component::ClipSchedule>(flame)
+            .get_component::<crate::ecs::component::ClipSchedule>(probe)
             .expect("schedule");
         assert!((schedule.instances[0].clip_out - 12.0).abs() < 1e-6);
         assert!((schedule.instances[0].end_time() - 12.0).abs() < 1e-6);
     }
 
     #[test]
-    fn test_spawn_flame_with_clip_schedules_each_flame_separately() {
+    fn test_spawn_with_clip_schedules_each_entity_separately() {
         let mut world = World::new();
         world.insert_resource(ClipLibrary::new());
         let mut assets = AssetStorage::new();
 
-        let a = crate::ecs::systems::spawn_flame_with_clip(
-            &mut world,
-            &mut assets,
-            "Flame",
-            FlameEffect::default(),
-        );
-        let b = crate::ecs::systems::spawn_flame_with_clip(
-            &mut world,
-            &mut assets,
-            "Flame 2",
-            FlameEffect::default(),
-        );
+        let a = spawn_probe_with_clip(&mut world, &mut assets, "Probe");
+        let b = spawn_probe_with_clip(&mut world, &mut assets, "Probe 2");
 
         let clip_a = find_entity_clip_id(&world, a).unwrap();
         let clip_b = find_entity_clip_id(&world, b).unwrap();
-        assert_ne!(clip_a, clip_b, "each flame owns its own clip");
+        assert_ne!(clip_a, clip_b, "each entity owns its own clip");
     }
 }

@@ -211,6 +211,8 @@ pub static FLAME_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
     local_time: flame_local_time,
 };
 
+crate::scalar_channel_domain!(FLAME_DOMAIN);
+
 fn flame_has_component(world: &World, entity: Entity) -> bool {
     world.get_component::<FlameEffect>(entity).is_some()
 }

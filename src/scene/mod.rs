@@ -1,5 +1,7 @@
 mod clip_io;
 mod entities;
+#[cfg(test)]
+pub(crate) use entities::test_support;
 mod error;
 mod file;
 mod motion_path_format;

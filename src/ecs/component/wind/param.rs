@@ -370,6 +370,8 @@ pub static WIND_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
     local_time: wind_local_time,
 };
 
+crate::scalar_channel_domain!(WIND_DOMAIN);
+
 fn wind_has_component(world: &World, entity: Entity) -> bool {
     world.get_component::<WindTornadoEffect>(entity).is_some()
 }

@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use serde::Deserialize;
 use thyllore_anim_core::editable::PropertyType;
 
@@ -66,10 +68,10 @@ impl ScalarChannel {
 }
 
 /// A component domain whose scalar fields animate through clip scalar curves.
-/// Registering a domain in `scalar_channel_domains` is all the curve editor,
-/// timeline, batch CLI and scene serialization need to animate its channels;
-/// flame is one such registration. Applying sampled curve values back to the
-/// component stays inside the domain's own system.
+/// Registering a domain with `scalar_channel_domain!` is all the curve editor,
+/// timeline, batch CLI and scene serialization need to animate its channels.
+/// Applying sampled curve values back to the component stays inside the
+/// domain's own system.
 ///
 /// Each domain's `Custom` codes lie inside the block `scalar_channel_domains.ron` assigns to it.
 pub struct ScalarChannelDomain {
@@ -85,14 +87,29 @@ pub struct ScalarChannelDomain {
     pub local_time: fn(&World, Entity) -> Option<f32>,
 }
 
-static SCALAR_CHANNEL_DOMAINS: [&ScalarChannelDomain; 3] = [
-    &super::FLAME_DOMAIN,
-    &super::WATER_DOMAIN,
-    &super::WIND_DOMAIN,
-];
+/// Link-time registration of a domain: `scalar_channel_domain!(MY_DOMAIN)` next to the static.
+pub struct ScalarChannelDomainRegistration(pub &'static ScalarChannelDomain);
 
+inventory::collect!(ScalarChannelDomainRegistration);
+
+#[macro_export]
+macro_rules! scalar_channel_domain {
+    ($domain:expr) => {
+        inventory::submit! { $crate::ecs::component::ScalarChannelDomainRegistration(&$domain) }
+    };
+}
+
+/// Every registered domain in name order; the shared code never lists them itself.
 pub fn scalar_channel_domains() -> &'static [&'static ScalarChannelDomain] {
-    &SCALAR_CHANNEL_DOMAINS
+    static DOMAINS: OnceLock<Vec<&'static ScalarChannelDomain>> = OnceLock::new();
+    DOMAINS.get_or_init(|| {
+        let mut domains: Vec<_> = inventory::iter::<ScalarChannelDomainRegistration>
+            .into_iter()
+            .map(|registration| registration.0)
+            .collect();
+        domains.sort_by_key(|domain| domain.name);
+        domains
+    })
 }
 
 pub fn scalar_domain_for_entity(
@@ -156,10 +173,16 @@ mod tests {
 
     #[test]
     fn test_codes_and_names_are_unique_across_domains() {
+        let mut domain_names = HashSet::new();
         let mut codes = HashSet::new();
         let mut cli_names = HashSet::new();
         let mut scene_names = HashSet::new();
         for domain in scalar_channel_domains() {
+            assert!(
+                domain_names.insert(domain.name),
+                "domain {} registered twice",
+                domain.name
+            );
             for channel in domain.channels {
                 assert!(
                     codes.insert(channel.code),

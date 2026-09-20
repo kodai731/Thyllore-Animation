@@ -243,6 +243,8 @@ pub static WATER_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
     local_time: water_local_time,
 };
 
+crate::scalar_channel_domain!(WATER_DOMAIN);
+
 fn water_has_component(world: &World, entity: Entity) -> bool {
     world.get_component::<WaterTorusEffect>(entity).is_some()
 }

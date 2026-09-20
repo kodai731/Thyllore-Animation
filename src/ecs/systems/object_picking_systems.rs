@@ -10,7 +10,7 @@ use crate::ecs::systems::hierarchy_systems::{
     hierarchy_deselect_all, hierarchy_select, hierarchy_toggle_selection,
 };
 use crate::ecs::world::{Entity, MeshRef, World};
-use crate::hooks::pick::{PickHook, PickHooks};
+use crate::hooks::pick::PickHooks;
 
 pub fn find_entity_by_object_id(
     world: &World,

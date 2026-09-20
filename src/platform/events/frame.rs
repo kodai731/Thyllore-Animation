@@ -49,6 +49,7 @@ pub(crate) fn handle_redraw_requested(
     let mut overlay_state = SceneOverlayState {
         model: app.resource::<crate::ecs::ModelState>().clone(),
         flame_ui: app.resource::<crate::ecs::FlameUIState>().clone(),
+        viewport: Default::default(),
         water_preset_index: 0,
         wind_preset_index: 0,
         #[cfg(feature = "auto-rig")]

@@ -5,6 +5,7 @@ mod curve_editor_window;
 #[cfg(debug_assertions)]
 mod debug_window;
 mod effect_sections;
+mod flame;
 mod flame_param_groups;
 mod hierarchy_window;
 mod inspector_window;

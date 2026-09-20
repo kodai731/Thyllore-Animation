@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use crate::ecs::events::UIEventQueue;
 use crate::ecs::World;
 
@@ -5,7 +7,6 @@ use super::SceneOverlayState;
 
 pub type EffectSectionDrawFn = fn(&imgui::Ui, &mut UIEventQueue, &mut SceneOverlayState, &World);
 
-#[derive(Clone)]
 pub struct EffectSectionHook {
     pub key: &'static str,
     pub order: u32,
@@ -21,19 +22,19 @@ macro_rules! effect_section_hook {
     };
 }
 
-pub fn collect_effect_sections() -> Vec<EffectSectionHook> {
-    let mut sections: Vec<&EffectSectionHook> = inventory::iter::<EffectSectionHook>().collect();
-    sections.sort_by_key(|h| (h.order, h.key));
-    let mut last_key: Option<&str> = None;
-    for hook in &sections {
-        if let Some(prev) = last_key {
+pub fn collect_effect_sections() -> &'static [&'static EffectSectionHook] {
+    static SECTIONS: OnceLock<Vec<&'static EffectSectionHook>> = OnceLock::new();
+    SECTIONS.get_or_init(|| {
+        let mut sections: Vec<&'static EffectSectionHook> =
+            inventory::iter::<EffectSectionHook>().collect();
+        sections.sort_by_key(|hook| (hook.order, hook.key));
+        for pair in sections.windows(2) {
             assert!(
-                prev != hook.key,
-                "duplicate effect section key: {}",
-                hook.key
+                pair[0].key != pair[1].key,
+                "effect section hook {} registered twice",
+                pair[0].key
             );
         }
-        last_key = Some(hook.key);
-    }
-    sections.into_iter().map(|h| (*h).clone()).collect()
+        sections
+    })
 }

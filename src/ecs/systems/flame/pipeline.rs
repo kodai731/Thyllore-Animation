@@ -1,7 +1,7 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::resource::{FlameBuffer, FlameGpuState};
+use crate::ecs::resource::FlameGpuState;
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::FLAME_RESOLVE;
 use crate::vulkanr::pipeline::{
@@ -10,6 +10,7 @@ use crate::vulkanr::pipeline::{
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, UniformBuffer};
 use thyllore_effect_core::{FlameUBO, FLAME_MAX_INSTANCES};
+use thyllore_vulkan_core::resource::HistoryTargets;
 
 use super::descriptors::{FlameImageBindings, RRFlameDescriptorSet};
 use super::record::FlamePushConstants;
@@ -43,7 +44,7 @@ pub unsafe fn create_flame_pipeline(
     rrdevice: &RRDevice,
     rrrender: &RRRender,
     graphics_resources: &GraphicsResources,
-    flame_buffer: &FlameBuffer,
+    flame_history: &HistoryTargets,
     position_image_view: vk::ImageView,
     position_sampler: vk::Sampler,
     scene_depth_view: vk::ImageView,
@@ -61,8 +62,8 @@ pub unsafe fn create_flame_pipeline(
         rrdevice,
         &flame_ubo,
         FlameImageBindings {
-            history_image_views: flame_buffer.history_image_views,
-            flame_sampler: flame_buffer.sampler,
+            history_image_views: flame_history.views,
+            flame_sampler: flame_history.sampler,
             sdf_image_view: position_image_view,
             sdf_sampler: position_sampler,
             scene_depth_view,
@@ -76,7 +77,7 @@ pub unsafe fn create_flame_pipeline(
         })
         .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
         .no_depth_test()
-        .custom_render_pass(flame_buffer.shading_render_pass)
+        .custom_render_pass(flame_history.render_pass)
         .msaa_samples(vk::SampleCountFlags::_1)
         .mrt_attachments(2)
         .blend(premultiplied_blend())
@@ -91,7 +92,7 @@ pub unsafe fn create_flame_pipeline(
             &graphics_resources.frame_set.layout,
             &flame_descriptor.layout,
         ])
-        .build(rrdevice, rrrender, Some(flame_buffer.extent()))?;
+        .build(rrdevice, rrrender, Some(flame_history.extent()))?;
 
     log!("Created flame pipelines");
     Ok(FlameGpuState {

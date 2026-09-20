@@ -49,9 +49,14 @@ operations, GPU primitives, importers and exporters, codegen used by build scrip
 - `thyllore-vulkan-core` never names an effect: no `Wind*` / `Flame*` / `Water*` types, no per-effect
   fields in `RayTracingData`, no per-effect descriptor set, record helper, buffer or push constants. It
   offers generic primitives only (images and `VolumeImage`, samplers, `create_color_overlay_render_pass`,
-  `ReflectedSetLayout`, `UniformBuffer<T>`, `PipelineBuilder`); an effect's GPU state is an ECS resource
-  (`src/ecs/resource/<effect>_render_targets.rs`) assembled from those primitives in
-  `src/ecs/systems/<effect>/` (descriptors, pipeline, record, render targets). Wind follows this layout.
+  `HistoryTargets` (an HDR + history ping-pong render pass with its framebuffers, clear and destroy,
+  parameterised by `HistoryTargetsDesc`: storage keys, format, sampler, history load op, optional scene
+  depth), `AccumulationTarget` (a storage image kept in GENERAL), `ReflectedSetLayout`, `UniformBuffer<T>`,
+  `PipelineBuilder`); an effect's GPU state is an ECS resource (`src/ecs/resource/<effect>/render_targets.rs`)
+  that composes those primitives (`FlameRenderTargets { history }`, `WaterRenderTargets { history,
+  caustic_accum, .. }`) and derives `GpuResource`, so creation and destruction are the primitives' and the
+  effect only writes its `*_desc()`; the assembly lives in `src/ecs/systems/<effect>/` (descriptors,
+  pipeline, record, render targets). Wind follows this layout.
   Pipeline creation never lives in vulkan-core: effects build theirs in
   `src/ecs/systems/<effect>/pipeline.rs`, the core post-process passes in
   `src/app/post_process/pipelines.rs`, onion skin in `src/app/init/onion_skin.rs`.
@@ -160,10 +165,13 @@ shader only through that address, never through an extra descriptor set or push 
 a domain that needs to react once a model replaced the scene model (attach loaded constraints or spring
 bones, reset a gizmo) registers its handler from its own system file at link time (`inventory`), rig
 handlers run before display handlers, and `src/app/model/` runs `ModelLoadHooks` generically without
-naming any domain. `empty_scene.rs` holds the `EmptySceneHook` contract (name, apply) and the
-`empty_scene_hook!` macro: a feature that places a default entity when the app starts without a scene
-registers it from its own system file (`inventory`), and `src/app/init/` runs `EmptySceneHooks` without
-naming a feature. `frame_prep.rs` holds the `FramePrepHook` contract (name, `FramePrepStage`, run taking
+naming any domain. `effect_spawn.rs` holds the `EffectSpawnHook` contract (key, max instances, spawn
+by ordinal, entities, `default_in_empty_scene`) and the `effect_spawn_hook!` macro: an effect registers
+one hook constant from its `spawn.rs`, and every generic creator goes through the registry: the UI sends
+`UIEvent::AddEffect(key)` / `SelectEffectInstance { key, index }`, the batch `add_<key>` action sends the
+same event, `dispatch_scalar_curve.rs` calls `spawn_effect_instance`, and `src/app/init/` calls
+`spawn_empty_scene_defaults` when no scene is loaded. Nothing outside the effect knows its component,
+its instance limit or its placement. `frame_prep.rs` holds the `FramePrepHook` contract (name, `FramePrepStage`, run taking
 `&mut FrameContext`) and the `frame_prep_hook!` macro: the per-frame work an effect does before the passes
 record (time advance, bone attachment, trails at `Advance`; history accumulation and dump sinks at
 `Accumulate`, which runs after the previous frame's GPU timings are written) is registered from
@@ -198,7 +206,7 @@ what a file may see:
 | Directory | May name flame / water / wind |
 |---|---|
 | `crates/thyllore-effect-core/src/<effect>/`, `shaders/<effect>/` | its own effect only |
-| `src/ecs/component/<effect>*.rs`, `src/ecs/systems/<effect>/`, `src/ecs/resource/<effect>_*.rs`, `src/ecs/resource/batch/<effect>*.rs` | its own effect only |
+| `src/ecs/component/<effect>/`, `src/ecs/systems/<effect>/`, `src/ecs/resource/<effect>/` | its own effect only |
 | `src/effect/subscription.rs` | every effect (the single `EffectHook` list; scene hooks self-register instead) |
 | `src/platform/ui/` per-effect windows, `src/debugview/` per-effect dumps | the effect the file is for |
 | `src/scene/`, `src/hooks/`, `src/ecs/systems/*.rs` (shared systems), `src/ecs/systems/phases/`, `src/ecs/systems/world/`, `src/ecs/systems/batch_run_systems/`, shared `src/ecs/component/*.rs` and `src/ecs/resource/*.rs`, `src/vulkanr/`, `src/render/`, `src/platform/events/`, shared crates | none, tests included (`src/scene/` tests use `entities.rs::test_support`; effect round trips live in `src/ecs/systems/<effect>/tests.rs`) |
@@ -231,7 +239,7 @@ Concretely:
   registers with `batch_action!`; `batch_run_systems/` parses and lists actions from that registry and
   never names one. A batch run (`BatchRun`, `src/ecs/resource/batch/run.rs`, driven by
   `src/ecs/systems/world/batch_run.rs`) is only a capture schedule and its completion state.
-- A readback at the capture frame is a **request resource** under `src/ecs/resource/batch/<effect>.rs`
+- A readback at the capture frame is a **request resource** under `src/ecs/resource/<effect>/batch.rs`
   (`WaterProbeCapture { path }`, `WindDebugCapture`, ...): inserting it is the request, there is no flag to
   check. The effect's `cli.rs` hook inserts it for a startup flag; a `dump_*` action is the generic
   `CaptureRequest<T>` registered with `capture_action!("dump_x", T)`, which inserts `T` inside a batch run
@@ -256,6 +264,12 @@ Concretely:
   of a stage in name order, timing each under `<name>_<stage>`. A shared system that only touches one
   feature's components (the field manifest sync read `FlameEffect` alone) is that feature's system and
   lives in its directory, not in `src/ecs/systems/*.rs`.
+- A generic pass that needs one number an effect knows reads a generic resource the effect publishes,
+  never the effect's component: the tonemap heat haze reads `HeatDistortionSource`
+  (`src/ecs/resource/heat_distortion.rs`), which the flame `Advance` hook fills from its `HeatPlume`.
+- Components and resources of an effect live in `src/ecs/component/<effect>/` and
+  `src/ecs/resource/<effect>/` (`mod.rs` re-exports; `effect.rs`, `param.rs`, `render_targets.rs`,
+  `batch.rs`, ...), never as `<effect>_*.rs` files in the shared directory.
 - `src/ecs/world.rs` offers generic component access (`iter_components::<C>`, `entities_with::<C>`,
   `insert_component`); it does not grow `with_<effect>()` builders or `query_<effect>s()` helpers.
 - Crates depend downward only: `thyllore-effect-core` depends on `thyllore-scene-core` / `-math-core` /
@@ -283,11 +297,10 @@ matches.
 Known violations still to remove (each needs a registry the feature subscribes to; do not add to the list,
 shrink it):
 
-- UI event plumbing: `src/ecs/events/ui_events.rs` (`UIEvent::UpdateFlameEffect`, `AddWater`, ...),
-  `src/ecs/systems/phases/dispatch_overlay.rs` / `dispatch_scalar_curve.rs`, `src/platform/ui/scene_overlay.rs`,
+- UI event plumbing: `src/ecs/events/ui_events.rs` (`UIEvent::UpdateFlameEffect`, `ApplyWaterPreset`, ...),
+  `src/ecs/systems/phases/dispatch_overlay.rs`, `src/platform/ui/scene_overlay.rs`,
   `src/ecs/resource/graphics.rs` (`flame_preset_index`, `flame_style_*`), `src/platform/events/frame.rs`.
 - Picking: `src/ecs/systems/object_picking_systems.rs` calls `find_<effect>_by_pick_ray` in a fixed list.
-- Post-process: `src/vulkanr/renderer/deferred/tonemap_pass.rs` reads `FlameEffect` for the heat plume.
 - Startup defaults: `src/app/init/instance.rs::insert_default_if_missing::<FlameRenderSettings>` and the
   other effect resources; `src/paths.rs` flame asset directories.
 - Registries written by hand: `src/ecs/component/scalar_channel.rs` domain list, `EntityIcon::{Flame, Water, Wind}`
@@ -377,7 +390,7 @@ A function that takes `&mut App` only to read a few fields is misplaced: pass th
 where the checklist says.
 
 Effects own their GPU state: the buffers of an effect are an ECS resource
-(`src/ecs/resource/<effect>_render_targets.rs`, derived `GpuResource` + `gpu_resource!`), creation and
+(`src/ecs/resource/<effect>/render_targets.rs`, derived `GpuResource` + `gpu_resource!`), creation and
 resize are systems in `src/ecs/systems/<effect>/render_targets.rs` exposed as an effect hook subscribed in
 `src/effect/subscription.rs`, and per-frame images are requested by the effect's pass nodes in
 `src/ecs/systems/<effect>/passes.rs` (the graph acquires them). `src/app/` never enumerates effects (this mirrors bevy's `TextureCache` + per-effect `prepare_*` systems and Unreal's RDG +

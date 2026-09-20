@@ -68,8 +68,8 @@ pub(super) unsafe fn init_sdf_texture(ctx: &mut EffectContext, rrrender: &RRRend
         flame_descriptor.update_image_views(
             rrdevice,
             FlameImageBindings {
-                history_image_views: flame_targets.buffer.history_image_views,
-                flame_sampler: flame_targets.buffer.sampler,
+                history_image_views: flame_targets.history.views,
+                flame_sampler: flame_targets.history.sampler,
                 sdf_image_view: image_view,
                 sdf_sampler: sampler,
                 scene_depth_view: rrrender.gbuffer_depth_image_view,

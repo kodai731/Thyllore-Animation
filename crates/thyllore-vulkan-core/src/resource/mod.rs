@@ -1,3 +1,4 @@
+pub mod accumulation_target;
 pub mod auto_exposure_buffers;
 pub mod bloom_chain;
 pub mod buffer;
@@ -8,6 +9,7 @@ pub mod gbuffer;
 pub mod gpu_resource;
 pub mod graphics_resource;
 pub mod hdr_buffer;
+pub mod history_targets;
 pub mod hit_shading_table;
 pub mod image;
 pub mod image_readback;
@@ -21,6 +23,7 @@ pub mod render_target_transient;
 pub mod uniform_buffer;
 pub mod volume_image;
 
+pub use accumulation_target::AccumulationTarget;
 pub use auto_exposure_buffers::{AutoExposureBuffers, LUMINANCE_BUFFER_SIZE};
 pub use bloom_chain::{BloomChain, BloomMipTarget};
 pub use buffer::*;
@@ -31,6 +34,7 @@ pub use gbuffer::{RRGBuffer, READBACK_POSITION_OFFSET, READBACK_STAGING_SIZE};
 pub use gpu_resource::{destroy_all_in_reverse, GpuResource};
 pub use graphics_resource::{GraphicsResources, MeshSource, TexturePixels};
 pub use hdr_buffer::HdrBuffer;
+pub use history_targets::{HistoryTargets, HistoryTargetsDesc};
 pub use hit_shading_table::{HitShadingRecord, HitShadingTable};
 pub use image::*;
 pub use image_readback::{copy_image_to_host_buffer, write_host_buffer_bgra_png};

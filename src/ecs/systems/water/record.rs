@@ -2,9 +2,9 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use super::descriptors::RRWaterDescriptorSet;
-use crate::ecs::resource::WaterBuffer;
 use crate::vulkanr::pipeline::RRPipeline;
 use thyllore_vulkan_core::frame_context::FrameRenderContext;
+use thyllore_vulkan_core::resource::HistoryTargets;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -71,7 +71,7 @@ pub unsafe fn record_water_scene_color_copy(
 
 pub unsafe fn record_water_shading_pass(
     ctx: &FrameRenderContext,
-    water_buffer: &WaterBuffer,
+    water_history: &HistoryTargets,
     pipeline: &RRPipeline,
     descriptor: &RRWaterDescriptorSet,
     ubo_dynamic_offset: u32,
@@ -89,8 +89,8 @@ pub unsafe fn record_water_shading_pass(
     let clear_values: [vk::ClearValue; 0] = [];
 
     let render_pass_info = vk::RenderPassBeginInfo::builder()
-        .render_pass(water_buffer.render_pass)
-        .framebuffer(water_buffer.framebuffers[history_index])
+        .render_pass(water_history.render_pass)
+        .framebuffer(water_history.framebuffers[history_index])
         .render_area(render_area)
         .clear_values(&clear_values);
 
@@ -101,8 +101,8 @@ pub unsafe fn record_water_shading_pass(
     let viewport = vk::Viewport::builder()
         .x(0.0)
         .y(0.0)
-        .width(water_buffer.width as f32)
-        .height(water_buffer.height as f32)
+        .width(water_history.width as f32)
+        .height(water_history.height as f32)
         .min_depth(0.0)
         .max_depth(1.0);
     device.cmd_set_viewport(cmd, 0, &[viewport]);

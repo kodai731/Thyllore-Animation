@@ -2,9 +2,37 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{WaterTorusEffect, WATER_DOMAIN};
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Entity, Transform, World};
+use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
 
 pub const DEFAULT_WATER_NAME: &str = "Water";
+
+pub const WATER_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
+    key: "water",
+    max_instances: thyllore_effect_core::WATER_MAX_INSTANCES,
+    spawn: spawn_water_instance,
+    entities: water_entities,
+    default_in_empty_scene: false,
+};
+
+crate::effect_spawn_hook!(WATER_SPAWN_HOOK);
+
+fn water_entities(world: &World) -> Vec<Entity> {
+    world.entities_with::<WaterTorusEffect>()
+}
+
+fn spawn_water_instance(world: &mut World, assets: &mut AssetStorage, ordinal: usize) -> Entity {
+    let effect = WaterTorusEffect {
+        position: cgmath::Vector3::new(0.0, -0.5, 2.5 * ordinal as f32),
+        ..WaterTorusEffect::default()
+    };
+    spawn_water_with_clip(
+        world,
+        assets,
+        &format!("{DEFAULT_WATER_NAME} {}", ordinal + 1),
+        effect,
+    )
+}
 
 /// Spawns a water as a regular scene entity so the hierarchy, inspector and transform gizmo
 /// can all reach it through the same components they use for every other object.

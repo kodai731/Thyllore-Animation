@@ -334,6 +334,8 @@ impl App {
             .insert_resource(crate::hooks::model_load::ModelLoadHooks::collect()?);
         data.ecs_world
             .insert_resource(crate::hooks::frame_prep::FramePrepHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::effect_spawn::EffectSpawnHooks::collect()?);
         Ok(())
     }
     unsafe fn initialize_graphics_and_ecs(
@@ -937,10 +939,10 @@ impl App {
 
             scene_state.set_from_loaded(scene_path, scene.scene.metadata.clone());
         } else {
-            let hooks = crate::hooks::empty_scene::EmptySceneHooks::collect()?;
-            for hook in hooks.ordered() {
-                (hook.apply)(&mut data.ecs_world, &mut data.ecs_assets);
-            }
+            crate::hooks::effect_spawn::spawn_empty_scene_defaults(
+                &mut data.ecs_world,
+                &mut data.ecs_assets,
+            );
         }
         data.ecs_world.insert_resource(scene_state);
         Ok(())

@@ -44,7 +44,9 @@ impl BatchAction for AddFlame {
         "add_flame"
     }
     fn apply(&self, world: &mut World) {
-        world.resource_mut::<UIEventQueue>().send(UIEvent::AddFlame);
+        world
+            .resource_mut::<UIEventQueue>()
+            .send(UIEvent::AddEffect(super::FLAME_SPAWN_HOOK.key));
     }
 }
 

@@ -4,7 +4,7 @@ use crate::ecs::FrameContext;
 
 use super::{
     accumulate_flame_history, field_manifest_sync, flame_bone_attach_sync, flame_dump_system,
-    flame_time_advance, flame_trail_advance,
+    flame_time_advance, flame_trail_advance, publish_heat_distortion,
 };
 
 crate::frame_prep_hook!("flame", Advance, flame_advance);
@@ -15,6 +15,7 @@ fn flame_advance(ctx: &mut FrameContext) {
     flame_time_advance(ctx);
     field_manifest_sync(ctx);
     flame_trail_advance(ctx);
+    publish_heat_distortion(&mut ctx.world);
 }
 
 fn flame_accumulate(ctx: &mut FrameContext) {

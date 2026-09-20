@@ -2,8 +2,8 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use super::descriptors::RRFlameDescriptorSet;
-use crate::ecs::resource::FlameBuffer;
 use crate::vulkanr::pipeline::RRPipeline;
+use thyllore_vulkan_core::resource::HistoryTargets;
 use thyllore_vulkan_core::FrameRenderContext;
 
 #[repr(C)]
@@ -35,7 +35,7 @@ impl FlamePushConstants {
 
 pub unsafe fn record_flame_shading_pass(
     ctx: &FrameRenderContext,
-    flame_buffer: &FlameBuffer,
+    flame_history: &HistoryTargets,
     pipeline: &RRPipeline,
     descriptor: &RRFlameDescriptorSet,
     history_index: usize,
@@ -49,7 +49,7 @@ pub unsafe fn record_flame_shading_pass(
 
     let render_area = vk::Rect2D::builder()
         .offset(vk::Offset2D::default())
-        .extent(flame_buffer.extent());
+        .extent(flame_history.extent());
 
     let clear_values = [
         vk::ClearValue {
@@ -65,8 +65,8 @@ pub unsafe fn record_flame_shading_pass(
     ];
 
     let render_pass_info = vk::RenderPassBeginInfo::builder()
-        .render_pass(flame_buffer.shading_render_pass)
-        .framebuffer(flame_buffer.shading_framebuffers[history_index])
+        .render_pass(flame_history.render_pass)
+        .framebuffer(flame_history.framebuffers[history_index])
         .render_area(render_area)
         .clear_values(&clear_values);
 
@@ -77,8 +77,8 @@ pub unsafe fn record_flame_shading_pass(
     let viewport = vk::Viewport::builder()
         .x(0.0)
         .y(0.0)
-        .width(flame_buffer.width as f32)
-        .height(flame_buffer.height as f32)
+        .width(flame_history.width as f32)
+        .height(flame_history.height as f32)
         .min_depth(0.0)
         .max_depth(1.0);
     device.cmd_set_viewport(cmd, 0, &[viewport]);

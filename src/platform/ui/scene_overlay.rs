@@ -10,6 +10,7 @@ use crate::ecs::resource::{
     CoordinateSpace, ModelState, TransformGizmoMode, TransformGizmoState, WaterDebugCapture,
     WeightHeatmapState, WindDebugCapture,
 };
+use crate::ecs::systems::{FLAME_SPAWN_HOOK, WATER_SPAWN_HOOK, WIND_SPAWN_HOOK};
 use crate::ecs::World;
 
 use super::flame_param_groups::flame_group_param_names;
@@ -553,7 +554,7 @@ fn build_wind_section(
     }
 
     if ui.button("Add Wind") {
-        ui_events.send(UIEvent::AddWind);
+        ui_events.send(UIEvent::AddEffect(WIND_SPAWN_HOOK.key));
     }
 
     let winds = ecs_world.entities_with::<WindTornadoEffect>();
@@ -573,7 +574,10 @@ fn build_wind_section(
             })
             .collect();
         if ui.combo_simple_string("Instance", &mut current, &items) {
-            ui_events.send(UIEvent::SelectWindInstance(current));
+            ui_events.send(UIEvent::SelectEffectInstance {
+                key: WIND_SPAWN_HOOK.key,
+                index: current,
+            });
         }
     }
 
@@ -688,7 +692,7 @@ fn build_water_section(
 
         // Add Water button (before instance selector, accessible even when no water exists)
         if ui.button("Add Water") {
-            ui_events.send(UIEvent::AddWater);
+            ui_events.send(UIEvent::AddEffect(WATER_SPAWN_HOOK.key));
         }
         ui.same_line();
         if ui.button("Dump Debug") {
@@ -720,7 +724,10 @@ fn build_water_section(
                 })
                 .collect();
             if ui.combo_simple_string("Instance", &mut current, &items) {
-                ui_events.send(UIEvent::SelectWaterInstance(current));
+                ui_events.send(UIEvent::SelectEffectInstance {
+                    key: WATER_SPAWN_HOOK.key,
+                    index: current,
+                });
             }
         }
 
@@ -894,7 +901,10 @@ fn build_flame_section(
                 })
                 .collect();
             if ui.combo_simple_string("Instance", &mut current, &items) {
-                ui_events.send(UIEvent::SelectFlameInstance(current));
+                ui_events.send(UIEvent::SelectEffectInstance {
+                    key: FLAME_SPAWN_HOOK.key,
+                    index: current,
+                });
             }
         }
 
@@ -1349,7 +1359,7 @@ fn build_flame_section(
                         ui_events.send(UIEvent::OpenScalarCurveEditor);
                     }
                     if ui.button("Add Flame") {
-                        ui_events.send(UIEvent::AddFlame);
+                        ui_events.send(UIEvent::AddEffect(FLAME_SPAWN_HOOK.key));
                     }
                     ui.same_line();
                     if ui.button("Dump Probe") {
@@ -1365,9 +1375,7 @@ fn build_flame_section(
 
                     // Trail checkbox and slider
                     let trail_state = ecs_world
-                        .get_component::<crate::ecs::component::flame_trail::FlameTrail>(
-                            selected_flame,
-                        )
+                        .get_component::<crate::ecs::component::FlameTrail>(selected_flame)
                         .map(|t| (t.state.enabled, t.state.fade_seconds))
                         .unwrap_or((false, 0.8));
                     let mut trail_enabled = trail_state.0;

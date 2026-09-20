@@ -2,7 +2,7 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use super::{RRWaterCausticDescriptorSet, RRWaterDescriptorSet, WaterPushConstants};
-use crate::ecs::resource::{WaterBuffer, WaterGpuState};
+use crate::ecs::resource::{WaterGpuState, WaterRenderTargets};
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE};
 use crate::vulkanr::pipeline::{
@@ -31,7 +31,7 @@ pub unsafe fn create_water_pipeline(
     rrrender: &RRRender,
     graphics_resources: &GraphicsResources,
     raytracing: &RayTracingData,
-    water_buffer: &WaterBuffer,
+    water_targets: &WaterRenderTargets,
     hdr_color_view: vk::ImageView,
     frames_in_flight: usize,
 ) -> Result<WaterGpuState> {
@@ -55,7 +55,7 @@ pub unsafe fn create_water_pipeline(
             write_enable: true,
             compare_op: vk::CompareOp::GREATER_OR_EQUAL,
         })
-        .custom_render_pass(water_buffer.render_pass)
+        .custom_render_pass(water_targets.history.render_pass)
         .msaa_samples(vk::SampleCountFlags::_1)
         .mrt_attachments(2)
         .blend(opaque_blend())
@@ -69,7 +69,7 @@ pub unsafe fn create_water_pipeline(
             &graphics_resources.frame_set.layout,
             &water_descriptor.layout,
         ])
-        .build(rrdevice, rrrender, Some(water_buffer.extent()))?;
+        .build(rrdevice, rrrender, Some(water_targets.extent()))?;
 
     let mut gpu_state = WaterGpuState {
         shading_pipeline: Some(water_shading_pipeline),
@@ -82,7 +82,7 @@ pub unsafe fn create_water_pipeline(
         rrdevice,
         raytracing,
         &mut gpu_state,
-        water_buffer,
+        water_targets,
         hdr_color_view,
     )?;
 
@@ -109,7 +109,7 @@ unsafe fn create_water_caustic_pipelines(
     rrdevice: &RRDevice,
     raytracing: &RayTracingData,
     gpu_state: &mut WaterGpuState,
-    water_buffer: &WaterBuffer,
+    water_targets: &WaterRenderTargets,
     hdr_color_view: vk::ImageView,
 ) -> Result<()> {
     let (Some(gbuffer), Some(scene_buffer), Some(water_ubo)) = (
@@ -128,7 +128,7 @@ unsafe fn create_water_caustic_pipelines(
     let mut descriptor = RRWaterCausticDescriptorSet::new(rrdevice)?;
     descriptor.allocate_and_update(
         rrdevice,
-        water_buffer.caustic_accum_view,
+        water_targets.caustic_accum.view,
         gbuffer.position_image_view,
         tlas,
         scene_buffer,

@@ -46,7 +46,7 @@ fn flame_frame(ctx: &PassContext) -> Option<FlameFrame> {
     let extent = ctx
         .world
         .get_resource::<crate::ecs::resource::FlameRenderTargets>()?
-        .buffer
+        .history
         .extent();
     let gpu_state = ctx
         .world
@@ -248,7 +248,7 @@ unsafe fn record_flame_passes(
     ) else {
         return Ok(());
     };
-    let flame_buffer = &flame_targets.buffer;
+    let flame_history = &flame_targets.history;
     let render = ctx.frame_render_context(image_index);
 
     let settings = ctx
@@ -277,7 +277,7 @@ unsafe fn record_flame_passes(
 
         crate::ecs::systems::flame::record_flame_shading_pass(
             &render,
-            flame_buffer,
+            flame_history,
             shading_pipeline,
             descriptor,
             frame.history_index,

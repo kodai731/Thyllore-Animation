@@ -1,7 +1,6 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::component::FlameEffect;
 use crate::ecs::PassContext;
 
 pub unsafe fn record_tonemap_to_offscreen(
@@ -51,32 +50,11 @@ pub unsafe fn record_tonemap_to_offscreen(
 
     let render = ctx.frame_render_context(image_index);
 
-    // Query for first entity with both FlameEffect and HeatPlume to build plume push constants
-    let plume_data: Option<([f32; 4], [f32; 4], [f32; 4], [f32; 4])> = {
-        let flame_entities: Vec<_> = ctx.world.entities_with::<FlameEffect>();
-        flame_entities.into_iter().find_map(|e| {
-            let effect = ctx.world.get_component::<FlameEffect>(e)?;
-            let plume = ctx
-                .world
-                .get_component::<crate::ecs::component::HeatPlume>(e)?;
-            Some((
-                [effect.position.x, effect.position.y, effect.position.z, 1.0],
-                [
-                    plume.plume_temperature,
-                    plume.width_base,
-                    plume.width_slope,
-                    plume.distortion_gain,
-                ],
-                [plume.plume_height, effect.time, plume.turbulence_amp, 0.0],
-                [
-                    effect.wind.direction.x,
-                    effect.warp.rise_speed,
-                    effect.wind.direction.y,
-                    0.0,
-                ],
-            ))
-        })
-    };
+    let plume_data = ctx
+        .world
+        .get_resource::<crate::ecs::resource::HeatDistortionSource>()
+        .and_then(|source| source.active)
+        .map(|distortion| distortion.push_data());
     thyllore_vulkan_core::renderer::begin_tonemap_render_pass(
         &render,
         render_pass,
@@ -101,8 +79,7 @@ pub unsafe fn record_tonemap_to_offscreen(
         command_buffer,
         plume_data,
     )?;
-    // Grid is already drawn inside record_composite_to_hdr, before the flame composite.
-    // Drawing it again here would put it on top of the flame.
+    // The grid was drawn inside record_composite_to_hdr, below the effect stage.
     super::OverlayRenderer::new(&render, ctx.world).draw_all_overlays(command_buffer, false)?;
     thyllore_vulkan_core::renderer::end_tonemap_render_pass(&render, command_buffer);
 

@@ -102,7 +102,7 @@ fn instance_scissors(ctx: &PassContext, waters: &[Entity]) -> Vec<Option<vk::Rec
     let Some(extent) = ctx
         .world
         .get_resource::<WaterRenderTargets>()
-        .map(|targets| targets.buffer.extent())
+        .map(|targets| targets.extent())
     else {
         return vec![None; waters.len()];
     };
@@ -264,7 +264,7 @@ impl RenderPassNode for WaterTraceNode {
         let Some(targets) = ctx.world.get_resource::<WaterRenderTargets>() else {
             return Ok(());
         };
-        let water_buffer = &targets.buffer;
+        let water_history = &targets.history;
         let render = ctx.frame_render_context(image_index);
 
         let device = &render.device.device;
@@ -313,7 +313,7 @@ impl RenderPassNode for WaterTraceNode {
             push_range.offset,
             trace_push.as_bytes(),
         );
-        let extent = water_buffer.extent();
+        let extent = water_history.extent();
         device.cmd_trace_rays_khr(
             command_buffer,
             &trace_pipeline.raygen_region,
@@ -349,8 +349,8 @@ impl RenderPassNode for WaterFrameNode {
             return Vec::new();
         };
         vec![
-            TransientRequest::new(SCENE_COLOR_SLOT, targets.buffer.scene_color_desc()),
-            TransientRequest::new(TRACE_SLOT, targets.buffer.trace_desc()),
+            TransientRequest::new(SCENE_COLOR_SLOT, targets.scene_color_desc()),
+            TransientRequest::new(TRACE_SLOT, targets.trace_desc()),
         ]
     }
 
@@ -367,8 +367,8 @@ impl RenderPassNode for WaterFrameNode {
             return Ok(());
         };
 
-        let history_views = targets.buffer.history_image_views;
-        let history_sampler = targets.buffer.history_sampler;
+        let history_views = targets.history.views;
+        let history_sampler = targets.history.sampler;
         let key = WaterBindingKey {
             tlas,
             hit_table,
@@ -481,7 +481,7 @@ impl RenderPassNode for WaterCausticClearNode {
 
         ctx.rrdevice.device.cmd_clear_color_image(
             command_buffer,
-            targets.buffer.caustic_accum_image,
+            targets.caustic_accum.image,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             &vk::ClearColorValue { uint32: [0; 4] },
             &[COLOR_SUBRESOURCE_RANGE],
@@ -701,7 +701,7 @@ impl RenderPassNode for WaterSceneColorCopyNode {
             &render,
             hdr_buffer.color_image,
             scene_color_image.image,
-            targets.buffer.extent(),
+            targets.extent(),
             command_buffer,
         );
         Ok(())
@@ -748,7 +748,7 @@ impl RenderPassNode for WaterHistoryClearNode {
         let black = vk::ClearColorValue {
             float32: [0.0, 0.0, 0.0, 1.0],
         };
-        for &image in &targets.buffer.history_images {
+        for &image in &targets.history.images {
             ctx.rrdevice.device.cmd_clear_color_image(
                 command_buffer,
                 image,
@@ -831,7 +831,7 @@ impl RenderPassNode for WaterShadingNode {
         ) else {
             return Ok(());
         };
-        let water_buffer = &targets.buffer;
+        let water_history = &targets.history;
         let render = ctx.frame_render_context(image_index);
 
         for (i, (_, ubo_dynamic_offset)) in targets.frame_instances.iter().enumerate() {
@@ -846,7 +846,7 @@ impl RenderPassNode for WaterShadingNode {
 
             super::record_water_shading_pass(
                 &render,
-                water_buffer,
+                water_history,
                 shading_pipeline,
                 descriptor,
                 *ubo_dynamic_offset,

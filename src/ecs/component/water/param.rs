@@ -1,8 +1,8 @@
 use thyllore_anim_core::editable::PropertyType;
 use thyllore_effect_core::{find_scalar_param, ScalarParam, WATER_SCALAR_PARAMS};
 
-use super::scalar_channel::{ScalarChannel, ScalarChannelDomain};
-use super::water::{AppliedWaterPreset, WaterTorusEffect};
+use super::effect::WaterTorusEffect;
+use crate::ecs::component::{ScalarChannel, ScalarChannelDomain};
 use crate::ecs::world::{Entity, World};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

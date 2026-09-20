@@ -86,9 +86,9 @@ pub struct ScalarChannelDomain {
 }
 
 static SCALAR_CHANNEL_DOMAINS: [&ScalarChannelDomain; 3] = [
-    &super::flame_param::FLAME_DOMAIN,
-    &super::water_param::WATER_DOMAIN,
-    &super::wind_param::WIND_DOMAIN,
+    &super::FLAME_DOMAIN,
+    &super::WATER_DOMAIN,
+    &super::WIND_DOMAIN,
 ];
 
 pub fn scalar_channel_domains() -> &'static [&'static ScalarChannelDomain] {

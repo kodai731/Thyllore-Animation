@@ -2,15 +2,40 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameEffect, FLAME_DOMAIN};
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Entity, Transform, World};
+use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
 
 pub const DEFAULT_FLAME_NAME: &str = "Flame";
 
-fn spawn_default_flame_into_empty_scene(world: &mut World, assets: &mut AssetStorage) {
-    spawn_flame_with_clip(world, assets, DEFAULT_FLAME_NAME, FlameEffect::default());
+pub const FLAME_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
+    key: "flame",
+    max_instances: thyllore_effect_core::FLAME_MAX_INSTANCES,
+    spawn: spawn_flame_instance,
+    entities: flame_entities,
+    default_in_empty_scene: true,
+};
+
+crate::effect_spawn_hook!(FLAME_SPAWN_HOOK);
+
+fn flame_entities(world: &World) -> Vec<Entity> {
+    world.entities_with::<FlameEffect>()
 }
 
-crate::empty_scene_hook!("flame", spawn_default_flame_into_empty_scene);
+fn spawn_flame_instance(world: &mut World, assets: &mut AssetStorage, ordinal: usize) -> Entity {
+    if ordinal == 0 {
+        return spawn_flame_with_clip(world, assets, DEFAULT_FLAME_NAME, FlameEffect::default());
+    }
+    let effect = FlameEffect {
+        position: cgmath::Vector3::new(1.5 * ordinal as f32, 0.0, 0.0),
+        ..FlameEffect::default()
+    };
+    spawn_flame_with_clip(
+        world,
+        assets,
+        &format!("{DEFAULT_FLAME_NAME} {}", ordinal + 1),
+        effect,
+    )
+}
 
 /// Spawns a flame as a regular scene entity so the hierarchy, inspector and transform gizmo
 /// can all reach it through the same components they use for every other object.

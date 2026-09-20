@@ -21,6 +21,8 @@ mod texture_fit;
 mod time;
 mod trace;
 mod trail;
+mod ui_apply;
+mod ui_command;
 
 pub use attach::*;
 pub use cli::*;
@@ -41,6 +43,7 @@ pub use texture_fit::*;
 pub use time::*;
 pub use trace::*;
 pub use trail::*;
+pub use ui_command::*;
 
 #[cfg(test)]
 mod tests;

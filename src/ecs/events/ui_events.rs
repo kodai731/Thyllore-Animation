@@ -491,6 +491,10 @@ pub enum UIEvent {
     ApplyWindPreset(String),
     UpdateWindRenderSettings(WindRenderSettings),
     OpenScalarCurveEditor,
+    Effect {
+        key: &'static str,
+        command: std::rc::Rc<dyn std::any::Any>,
+    },
 }
 
 #[derive(Default)]

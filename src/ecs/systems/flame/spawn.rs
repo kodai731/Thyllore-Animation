@@ -107,3 +107,5 @@ fn insert_flame_default_resources(world: &mut World) {
 }
 
 crate::effect_default_resource!("flame", insert_flame_default_resources);
+
+crate::effect_ui_event_hook!("flame", super::ui_apply::apply_flame_ui_command);

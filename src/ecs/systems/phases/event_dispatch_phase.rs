@@ -62,7 +62,7 @@ pub fn run_event_dispatch_phase(
     dispatch_scalar_clip_events(&events, world, assets);
     dispatch_scene_events(&events, world);
     dispatch_scene_events(&events, world);
-    dispatch_overlay_events(&events, world);
+    dispatch_overlay_events(&events, world, assets);
     dispatch_debug_constraint_events(&events, world, assets);
     dispatch_constraint_edit_events(&events, world);
     dispatch_constraint_bake_events(&events, world, assets);

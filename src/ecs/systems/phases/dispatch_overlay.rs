@@ -1,3 +1,4 @@
+use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameEffect, FlameTrail, WaterTorusEffect, WindTornadoEffect};
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::gizmo::BoneGizmoData;
@@ -12,8 +13,9 @@ use crate::ecs::systems::{
 };
 use crate::ecs::world::{Animator, World};
 use crate::hooks::effect_spawn::EffectSpawnHooks;
+use crate::hooks::effect_ui_event::EffectUiEventHooks;
 
-pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
+pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World, assets: &mut AssetStorage) {
     for event in events {
         match event {
             UIEvent::SetBoneGizmoVisible(visible) => {
@@ -217,6 +219,12 @@ pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
             UIEvent::ClearMessageLog => {
                 if let Some(mut log) = world.get_resource_mut::<MessageLog>() {
                     crate::ecs::systems::message_log_clear_buffer(&mut log);
+                }
+            }
+            UIEvent::Effect { key, command } => {
+                let hooks = EffectUiEventHooks::collect();
+                if let Some(hook) = hooks.iter().find(|hook| hook.key == *key) {
+                    (hook.apply)(world, assets, command.as_ref());
                 }
             }
             _ => {}

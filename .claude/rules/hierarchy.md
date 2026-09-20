@@ -116,6 +116,24 @@ per-frame TLAS refresh from `GlobalTransform`). If the work is mostly GPU upload
 `World` writes, it is app wiring and lives in `src/app/` (`model/`, `scene_model.rs`); if it exists
 only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`.
 
+`src/ecs/resource/` groups its files by domain:
+
+| Path | Contents |
+|---|---|
+| `input/` | Mouse, keyboard modifiers, pointer and its capture, viewport, camera fly |
+| `editor/` | Timeline, curves, clips, hierarchy, layout, history, keyframes, poses, constraints |
+| `render/` | Camera, exposure, bloom, DOF, tone mapping, lens, onion skin, grid, light, billboard |
+| `timing/` | Frame clock, CPU and GPU frame timing, update phase, render prep |
+| `gpu/` | Graphics assets, pipelines, post-process targets, picking readback, imgui and trace |
+| `batch/` | Batch run schedule and pick capture |
+| `gizmo/` | Bone, constraint, grid, light, spring bone and transform gizmo state |
+| `flame/` | Flame effect data, render targets, history snapshot, SDF source, batch capture |
+| `water/` | Water effect data, render targets, history snapshot, trace blocks, batch capture |
+| `wind/` | Wind effect data, render targets, batch capture |
+| `*.rs` | Scene, model caches, pose and spring bone state, app command and exit, message log, ML |
+
+`mod.rs` re-exports every subdirectory, so `crate::ecs::resource::X` paths stay unchanged.
+
 ## src/hooks/
 
 Generic hook infrastructure that lets a subsystem plug into the app lifecycle without being named by

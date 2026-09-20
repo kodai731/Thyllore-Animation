@@ -3,6 +3,7 @@ use crate::ecs::resource::PickRay;
 use crate::ecs::world::{Entity, World};
 use cgmath::SquareMatrix;
 use thyllore_effect_core::{build_water_model_matrix, pick_torus};
+
 /// Nearest water whose torus the ray enters, with the distance at which it enters.
 pub fn find_water_by_pick_ray(world: &World, ray: &PickRay) -> Option<(Entity, f32)> {
     world
@@ -24,3 +25,5 @@ pub fn find_water_by_pick_ray(world: &World, ray: &PickRay) -> Option<(Entity, f
         })
         .min_by(|(_, a), (_, b)| a.total_cmp(b))
 }
+
+crate::pick_hook!("water", find_water_by_pick_ray);

@@ -1,6 +1,5 @@
+#[cfg(test)]
 use super::flame::find_flame_by_pick_ray;
-use super::water::find_water_by_pick_ray;
-use super::wind::find_wind_by_pick_ray;
 use crate::asset::AssetStorage;
 use crate::ecs::resource::CurveEditorState;
 use crate::ecs::resource::{
@@ -11,6 +10,7 @@ use crate::ecs::systems::hierarchy_systems::{
     hierarchy_deselect_all, hierarchy_select, hierarchy_toggle_selection,
 };
 use crate::ecs::world::{Entity, MeshRef, World};
+use crate::hooks::pick::{PickHook, PickHooks};
 
 pub fn find_entity_by_object_id(
     world: &World,
@@ -80,7 +80,7 @@ pub fn apply_mesh_selection(
 }
 
 /// Whichever of the two candidates the click actually landed on: the surface reported by the
-/// object-id buffer, or a flame/water in front of it.
+/// object-id buffer, or an effect in front of it.
 fn resolve_closest_pick(
     world: &World,
     surface_entity: Option<Entity>,
@@ -91,14 +91,15 @@ fn resolve_closest_pick(
         return surface_entity;
     };
 
-    let effect_candidate: Option<(Entity, f32)> = [
-        find_flame_by_pick_ray(world, ray),
-        find_water_by_pick_ray(world, ray),
-        find_wind_by_pick_ray(world, ray),
-    ]
-    .into_iter()
-    .flatten()
-    .min_by(|(_, a), (_, b)| a.total_cmp(b));
+    let hooks = match world.get_resource::<PickHooks>() {
+        Some(h) => h,
+        None => return surface_entity,
+    };
+
+    let effect_candidate: Option<(Entity, f32)> = hooks
+        .iter()
+        .filter_map(|hook| (hook.find)(world, ray))
+        .min_by(|(_, a), (_, b)| a.total_cmp(b));
 
     let Some((effect_entity, effect_distance)) = effect_candidate else {
         return surface_entity;
@@ -151,6 +152,7 @@ mod tests {
 
     fn world_with_flame_at(x: f32) -> (World, Entity) {
         let mut world = World::new();
+        world.insert_resource(PickHooks::collect().expect("pick hooks"));
         let effect = FlameEffect {
             position: Vector3::new(x, 0.0, 0.0),
             ..FlameEffect::default()

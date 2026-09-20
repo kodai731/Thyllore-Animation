@@ -2,7 +2,7 @@ use thyllore_anim_core::editable::PropertyType;
 
 use crate::ecs::component::FlameParam;
 use crate::ecs::events::{UIEvent, UIEventQueue};
-use crate::ecs::systems::flame::{FLAMES_STYLE_DIR, FLAMES_TEXTURE_DIR};
+use crate::ecs::systems::flame::{FlameUiCommand, FLAMES_STYLE_DIR, FLAMES_TEXTURE_DIR};
 use crate::ecs::systems::FLAME_SPAWN_HOOK;
 use crate::ecs::World;
 
@@ -104,7 +104,10 @@ pub(super) fn build_flame_section(
                 | FlameShadingMode::DebugDepthClamp => {}
             }
 
-            ui_events.send(UIEvent::UpdateFlameRenderSettings(settings_copy));
+            ui_events.send(UIEvent::Effect {
+                key: FLAME_SPAWN_HOOK.key,
+                command: std::rc::Rc::new(FlameUiCommand::UpdateRenderSettings(settings_copy)),
+            });
         }
 
         let flames = ecs_world.entities_with::<FlameEffect>();
@@ -154,7 +157,12 @@ pub(super) fn build_flame_section(
                     // frame and would silently pin the old look, so a
                     // preset stamp also clears them (undo restores).
                     ui_events.send(UIEvent::ClearScalarKeys);
-                    ui_events.send(UIEvent::ApplyFlamePreset(presets[preset_index].clone()));
+                    ui_events.send(UIEvent::Effect {
+                        key: FLAME_SPAWN_HOOK.key,
+                        command: std::rc::Rc::new(FlameUiCommand::ApplyPreset(
+                            presets[preset_index].clone(),
+                        )),
+                    });
                     effect_applied_this_frame = true;
                 }
             }
@@ -297,16 +305,19 @@ pub(super) fn build_flame_section(
                     tilt: overlay_state.flame_ui.texture_fit_groups[3],
                 };
                 if selected_flame_entity.is_some() {
-                    ui_events.send(UIEvent::ApplyFlameTextureFit {
-                        path: path.clone(),
-                        blend,
-                        groups: [
-                            groups.silhouette,
-                            groups.color,
-                            groups.turbulence,
-                            groups.tilt,
-                        ],
-                        profile: overlay_state.flame_ui.texture_fit_profile,
+                    ui_events.send(UIEvent::Effect {
+                        key: FLAME_SPAWN_HOOK.key,
+                        command: std::rc::Rc::new(FlameUiCommand::ApplyTextureFit {
+                            path: path.clone(),
+                            blend,
+                            groups: [
+                                groups.silhouette,
+                                groups.color,
+                                groups.turbulence,
+                                groups.tilt,
+                            ],
+                            profile: overlay_state.flame_ui.texture_fit_profile,
+                        }),
                     });
                     effect_applied_this_frame = true;
                 }
@@ -366,9 +377,12 @@ pub(super) fn build_flame_section(
                     .get(overlay_state.flame_ui.style_index)
                 {
                     if selected_flame_entity.is_some() {
-                        ui_events.send(UIEvent::ApplyFlameStyle {
-                            path: format!("{}/{}", FLAMES_STYLE_DIR, name),
-                            groups: overlay_state.flame_ui.style_groups,
+                        ui_events.send(UIEvent::Effect {
+                            key: FLAME_SPAWN_HOOK.key,
+                            command: std::rc::Rc::new(FlameUiCommand::ApplyStyle {
+                                path: format!("{}/{}", FLAMES_STYLE_DIR, name),
+                                groups: overlay_state.flame_ui.style_groups,
+                            }),
                         });
                         effect_applied_this_frame = true;
                     }
@@ -400,7 +414,10 @@ pub(super) fn build_flame_section(
             if ui.small_button("Save Style") {
                 let name = overlay_state.flame_ui.style_save_name.trim().to_string();
                 if !name.is_empty() && selected_flame_entity.is_some() {
-                    ui_events.send(UIEvent::SaveFlameStyle { name });
+                    ui_events.send(UIEvent::Effect {
+                        key: FLAME_SPAWN_HOOK.key,
+                        command: std::rc::Rc::new(FlameUiCommand::SaveStyle { name }),
+                    });
                 }
             }
             if ui.is_item_hovered() {
@@ -598,8 +615,11 @@ pub(super) fn build_flame_section(
                     }
                     ui.same_line();
                     if ui.button("Dump Probe") {
-                        ui_events.send(UIEvent::DumpFlameWallProbe {
-                            viewport_size: overlay_state.viewport.size,
+                        ui_events.send(UIEvent::Effect {
+                            key: FLAME_SPAWN_HOOK.key,
+                            command: std::rc::Rc::new(FlameUiCommand::DumpWallProbe {
+                                viewport_size: overlay_state.viewport.size,
+                            }),
                         });
                     }
                     if ui.is_item_hovered() {
@@ -616,12 +636,20 @@ pub(super) fn build_flame_section(
                     let mut trail_enabled = trail_state.0;
                     let mut trail_fade = trail_state.1;
                     if ui.checkbox("Trail", &mut trail_enabled) {
-                        ui_events.send(UIEvent::UpdateFlameTrailEnabled(trail_enabled));
+                        ui_events.send(UIEvent::Effect {
+                            key: FLAME_SPAWN_HOOK.key,
+                            command: std::rc::Rc::new(FlameUiCommand::UpdateTrailEnabled(
+                                trail_enabled,
+                            )),
+                        });
                     }
                     ui.slider_config("Trail Fade", 0.1, 5.0)
                         .build(&mut trail_fade);
                     if (trail_fade - trail_state.1).abs() > 0.01 {
-                        ui_events.send(UIEvent::UpdateFlameTrailFade(trail_fade));
+                        ui_events.send(UIEvent::Effect {
+                            key: FLAME_SPAWN_HOOK.key,
+                            command: std::rc::Rc::new(FlameUiCommand::UpdateTrailFade(trail_fade)),
+                        });
                     }
 
                     // GPU Timings section (read-only)
@@ -637,7 +665,12 @@ pub(super) fn build_flame_section(
                     }
 
                     if !effect_applied_this_frame {
-                        ui_events.send(UIEvent::UpdateFlameEffect(Box::new(effect_copy)));
+                        ui_events.send(UIEvent::Effect {
+                            key: FLAME_SPAWN_HOOK.key,
+                            command: std::rc::Rc::new(FlameUiCommand::UpdateEffect(Box::new(
+                                effect_copy,
+                            ))),
+                        });
                     }
                 }
             }

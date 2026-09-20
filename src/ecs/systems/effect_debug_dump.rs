@@ -1,6 +1,7 @@
 use cgmath::Matrix4;
 use serde_json::{json, Value};
 
+use crate::ecs::component::FlameEffect;
 use crate::ecs::resource::{
     Camera, DebugViewState, LightState, ModelState, ProjectionData, SceneState, TimelineState,
 };
@@ -41,7 +42,7 @@ pub fn build_scene_json(world: &World) -> Value {
     json!({
         "scene_path": scene_path,
         "model": model,
-        "flame_count": world.query_flames().len(),
+        "flame_count": world.entities_with::<FlameEffect>().len(),
         "timeline": timeline,
         "debug_view": debug_view,
     })

@@ -2,15 +2,14 @@ use anyhow::Result;
 use cgmath::{Matrix4, SquareMatrix};
 use thyllore_vulkan_core::core::RRDevice;
 use thyllore_vulkan_core::descriptor::shader_bindings::effect_trace;
-use thyllore_vulkan_core::descriptor::{
-    push_constant_range, RREffectTraceDescriptorSet, EFFECT_TRACE,
-};
+use thyllore_vulkan_core::descriptor::{push_constant_range, EFFECT_TRACE};
 use thyllore_vulkan_core::pipeline::{max_ray_recursion_depth, RRRayTracingPipeline};
 use thyllore_vulkan_core::raytracing::{RRAccelerationStructure, RRBLAS};
-use thyllore_vulkan_core::resource::RayTracingData;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::asset::AssetStorage;
+use crate::ecs::resource::EffectTraceGpuState;
+use crate::ecs::systems::RREffectTraceDescriptorSet;
 use crate::ecs::world::{GlobalTransform, MeshRef, World};
 use crate::ecs::FrameContext;
 
@@ -123,10 +122,13 @@ pub const EFFECT_TRACE_RECURSION_DEPTH: u32 = 2;
 pub unsafe fn ensure_effect_trace_pipeline(
     instance: &Instance,
     rrdevice: &RRDevice,
-    raytracing: &mut RayTracingData,
+    world: &mut World,
     frames_in_flight: usize,
 ) -> Result<()> {
-    if raytracing.effect_trace_pipeline.is_some() {
+    if world
+        .get_resource::<EffectTraceGpuState>()
+        .is_some_and(|state| state.pipeline.is_some())
+    {
         return Ok(());
     }
 
@@ -150,8 +152,10 @@ pub unsafe fn ensure_effect_trace_pipeline(
         EFFECT_TRACE_RECURSION_DEPTH,
     )?;
 
-    raytracing.effect_trace_descriptor = Some(effect_trace_descriptor);
-    raytracing.effect_trace_pipeline = Some(effect_trace_pipeline);
+    world.insert_resource(EffectTraceGpuState {
+        pipeline: Some(effect_trace_pipeline),
+        descriptor: Some(effect_trace_descriptor),
+    });
 
     log!("Created effect trace pipeline");
     Ok(())

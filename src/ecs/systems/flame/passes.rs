@@ -2,6 +2,7 @@ use anyhow::Result;
 use cgmath::{InnerSpace, SquareMatrix, Vector3};
 use vulkanalia::prelude::v1_0::*;
 
+use crate::ecs::component::FlameEffect;
 use crate::ecs::world::Entity;
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
@@ -45,13 +46,16 @@ fn flame_frame(ctx: &PassContext) -> Option<FlameFrame> {
     let extent = ctx
         .world
         .get_resource::<crate::ecs::resource::FlameRenderTargets>()?
-        .buffer
+        .history
         .extent();
-    ctx.raytracing.flame_shading_pipeline.as_ref()?;
-    ctx.raytracing.flame_descriptor.as_ref()?;
-    ctx.raytracing.flame_ubo.as_ref()?;
+    let gpu_state = ctx
+        .world
+        .get_resource::<crate::ecs::resource::FlameGpuState>()?;
+    gpu_state.shading_pipeline.as_ref()?;
+    gpu_state.descriptor.as_ref()?;
+    gpu_state.ubo.as_ref()?;
 
-    let mut flames = ctx.world.query_flames();
+    let mut flames = ctx.world.entities_with::<FlameEffect>();
     sort_flames_back_to_front(ctx, &mut flames);
     flames.truncate(thyllore_effect_core::FLAME_MAX_INSTANCES);
     if flames.is_empty() {
@@ -229,16 +233,22 @@ unsafe fn record_flame_passes(
     let Some(frame) = flame_frame(ctx) else {
         return Ok(());
     };
-    let (Some(flame_targets), Some(shading_pipeline), Some(descriptor), Some(flame_ubo)) = (
+    let (Some(flame_targets), Some(gpu_state)) = (
         ctx.world
             .get_resource::<crate::ecs::resource::FlameRenderTargets>(),
-        ctx.raytracing.flame_shading_pipeline.as_ref(),
-        ctx.raytracing.flame_descriptor.as_ref(),
-        ctx.raytracing.flame_ubo.as_ref(),
+        ctx.world
+            .get_resource::<crate::ecs::resource::FlameGpuState>(),
     ) else {
         return Ok(());
     };
-    let flame_buffer = &flame_targets.buffer;
+    let (Some(shading_pipeline), Some(descriptor), Some(flame_ubo)) = (
+        gpu_state.shading_pipeline.as_ref(),
+        gpu_state.descriptor.as_ref(),
+        gpu_state.ubo.as_ref(),
+    ) else {
+        return Ok(());
+    };
+    let flame_history = &flame_targets.history;
     let render = ctx.frame_render_context(image_index);
 
     let settings = ctx
@@ -246,7 +256,7 @@ unsafe fn record_flame_passes(
         .get_resource::<crate::ecs::resource::FlameRenderSettings>()
         .map(|settings| *settings)
         .unwrap_or_default();
-    let push_constants = thyllore_vulkan_core::renderer::FlamePushConstants::new(
+    let push_constants = crate::ecs::systems::flame::FlamePushConstants::new(
         settings.shading_mode.as_shader_value(),
         settings.resolved_step_count() as i32,
         settings.debug_view.as_shader_value(),
@@ -265,9 +275,9 @@ unsafe fn record_flame_passes(
             vk::PipelineStageFlags::FRAGMENT_SHADER,
         )?;
 
-        thyllore_vulkan_core::renderer::record_flame_shading_pass(
+        crate::ecs::systems::flame::record_flame_shading_pass(
             &render,
-            flame_buffer,
+            flame_history,
             shading_pipeline,
             descriptor,
             frame.history_index,

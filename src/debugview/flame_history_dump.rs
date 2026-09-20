@@ -29,7 +29,7 @@ impl BatchCapture for FlameDumpSink {
 crate::batch_capture!(FlameDumpSink);
 
 fn write_first_flame_ubo(ctx: &CaptureContext, path: &std::path::Path) -> Result<()> {
-    let Some(&first) = ctx.world.query_flames().first() else {
+    let Some(&first) = ctx.world.entities_with::<FlameEffect>().first() else {
         return Ok(());
     };
     let (Some(effect), Some(baked), Some(temporal)) = (
@@ -56,18 +56,18 @@ unsafe fn save_flame_history_npy(ctx: &CaptureContext, path: &std::path::Path) -
         .world
         .get_resource::<FlameRenderTargets>()
         .ok_or_else(|| anyhow::anyhow!("flame buffer not initialized"))?;
-    let flame_buffer = &flame_targets.buffer;
+    let flame_history = &flame_targets.history;
 
     let history_index = ctx
         .world
-        .query_flames()
+        .entities_with::<FlameEffect>()
         .first()
         .and_then(|&first| ctx.world.get_component::<FlameTemporalAccum>(first))
         .map(|temporal| (temporal.frame_index as usize) & 1)
         .unwrap_or(0);
-    let history_image = flame_buffer.history_images[history_index];
-    let width = flame_buffer.width;
-    let height = flame_buffer.height;
+    let history_image = flame_history.images[history_index];
+    let width = flame_history.width;
+    let height = flame_history.height;
     let image_size = (width * height * 8) as vk::DeviceSize;
 
     let (buffer, buffer_memory) = ctx.copy_image_to_buffer(

@@ -34,7 +34,7 @@ impl BootstrapOverrides for WindOverrides {
         if self.set.is_empty() {
             return Ok(());
         }
-        for entity in world.query_winds() {
+        for entity in world.entities_with::<WindTornadoEffect>() {
             let Some(mut effect) = world.get_component::<WindTornadoEffect>(entity).cloned() else {
                 continue;
             };

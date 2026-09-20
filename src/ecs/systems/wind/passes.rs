@@ -48,7 +48,7 @@ fn wind_frame(ctx: &PassContext) -> Option<WindFrame> {
     gpu_state.resolve_descriptor.as_ref()?;
     gpu_state.ubo.as_ref()?;
 
-    let mut winds = ctx.world.query_winds();
+    let mut winds = ctx.world.entities_with::<WindTornadoEffect>();
     winds.truncate(WIND_MAX_INSTANCES);
     if winds.is_empty() {
         return None;

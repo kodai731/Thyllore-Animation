@@ -165,7 +165,7 @@ fn scene_entities_restore_the_flame_style_and_its_keyed_clip() {
     );
     crate::scene::apply_scene_entities(&mut world, &mut assets, &entities);
 
-    let flames = world.query_flames();
+    let flames = world.entities_with::<FlameEffect>();
     assert_eq!(flames.len(), 1);
     assert_eq!(
         world
@@ -205,11 +205,11 @@ fn reloading_scene_entities_replaces_the_flame_and_its_clip() {
     let mut world = crate::scene::world_with_scene_hooks();
     let mut assets = AssetStorage::new();
     crate::scene::apply_scene_entities(&mut world, &mut assets, &entities);
-    let first = world.query_flames()[0];
+    let first = world.entities_with::<FlameEffect>()[0];
     assert!(crate::ecs::systems::find_entity_clip_id(&world, first).is_some());
     crate::scene::apply_scene_entities(&mut world, &mut assets, &entities);
 
-    let flames = world.query_flames();
+    let flames = world.entities_with::<FlameEffect>();
     assert_eq!(flames.len(), 1);
     assert_ne!(flames[0], first);
     assert_eq!(world.resource::<ClipLibrary>().source_clips.len(), 1);

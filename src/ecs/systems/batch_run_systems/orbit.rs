@@ -1,4 +1,4 @@
-use crate::ecs::component::MotionPath;
+use crate::ecs::component::{FlameEffect, MotionPath};
 use crate::ecs::resource::BatchFlameOrbit;
 use crate::ecs::world::{Transform, World};
 
@@ -22,7 +22,7 @@ pub fn batch_run_update_orbit(world: &mut World) {
             return;
         }
         let center = world
-            .query_flames()
+            .entities_with::<FlameEffect>()
             .first()
             .and_then(|&first| world.get_component::<Transform>(first))
             .map(|transform| transform.translation)
@@ -35,7 +35,7 @@ pub fn batch_run_update_orbit(world: &mut World) {
         return;
     }
 
-    for entity in world.query_flames() {
+    for entity in world.entities_with::<FlameEffect>() {
         world.insert_component(
             entity,
             MotionPath {

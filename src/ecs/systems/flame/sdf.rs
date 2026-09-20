@@ -1,10 +1,10 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::resource::{FlameRenderTargets, FlameSdfSource};
+use super::FlameImageBindings;
+use crate::ecs::resource::{FlameGpuState, FlameRenderTargets, FlameSdfSource};
 use crate::ecs::EffectContext;
 use crate::vulkanr::context::CommandState;
-use crate::vulkanr::descriptor::FlameImageBindings;
 use crate::vulkanr::render::RRRender;
 
 fn load_sdf_pixels(source: Option<&FlameSdfSource>) -> (Vec<u8>, u32, u32) {
@@ -50,7 +50,11 @@ pub(super) unsafe fn init_sdf_texture(ctx: &mut EffectContext, rrrender: &RRRend
         mips,
     )?;
     let sampler = thyllore_vulkan_core::resource::create_texture_sampler(rrdevice, mips)?;
-    ctx.raytracing.flame_sdf = thyllore_vulkan_core::resource::RRImage {
+    if ctx.world.get_resource::<FlameGpuState>().is_none() {
+        ctx.world.insert_resource(FlameGpuState::default());
+    }
+    let mut gpu_state = ctx.world.resource_mut::<FlameGpuState>();
+    gpu_state.sdf = thyllore_vulkan_core::resource::RRImage {
         image,
         image_memory,
         image_view,
@@ -60,12 +64,12 @@ pub(super) unsafe fn init_sdf_texture(ctx: &mut EffectContext, rrrender: &RRRend
     let Some(flame_targets) = ctx.world.get_resource::<FlameRenderTargets>() else {
         return Ok(());
     };
-    if let Some(ref flame_descriptor) = ctx.raytracing.flame_descriptor {
+    if let Some(ref flame_descriptor) = gpu_state.descriptor {
         flame_descriptor.update_image_views(
             rrdevice,
             FlameImageBindings {
-                history_image_views: flame_targets.buffer.history_image_views,
-                flame_sampler: flame_targets.buffer.sampler,
+                history_image_views: flame_targets.history.views,
+                flame_sampler: flame_targets.history.sampler,
                 sdf_image_view: image_view,
                 sdf_sampler: sampler,
                 scene_depth_view: rrrender.gbuffer_depth_image_view,

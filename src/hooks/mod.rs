@@ -1,6 +1,8 @@
 pub mod batch_capture;
 pub mod bootstrap;
 pub mod effect;
+pub mod effect_spawn;
+pub mod frame_prep;
 pub mod gpu_primitive;
 pub mod gpu_resource;
 pub mod model_load;

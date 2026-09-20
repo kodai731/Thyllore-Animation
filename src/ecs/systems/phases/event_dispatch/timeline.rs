@@ -61,9 +61,8 @@ pub fn dispatch_timeline_events(events: &[UIEvent], world: &mut World, assets: &
                 );
                 drop(lib);
 
-                // Scalar-domain entities (flame, ...) play their own per-entity
-                // clip: timeline clip selection must never repoint them (or
-                // reset their trim).
+                // Scalar-domain entities play their own per-entity clip: timeline
+                // clip selection must never repoint them (or reset their trim).
                 let schedule_entities = world.component_entities::<ClipSchedule>();
                 for entity in &schedule_entities {
                     if crate::ecs::component::scalar_domain_for_entity(world, *entity).is_some() {
@@ -245,20 +244,19 @@ pub fn dispatch_buffer_events(events: &[UIEvent], world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ecs::component::FlameEffect;
-    use crate::ecs::systems::spawn_flame_with_clip;
+    use crate::ecs::systems::scalar_clip_systems::test_support::spawn_probe_with_clip;
 
     #[test]
-    fn timeline_select_clip_leaves_flame_schedule_untouched() {
+    fn timeline_select_clip_leaves_scalar_schedule_untouched() {
         let mut world = World::new();
         world.insert_resource(crate::ecs::resource::ClipLibrary::new());
         world.insert_resource(TimelineState::new());
         let mut assets = AssetStorage::new();
 
-        let flame = spawn_flame_with_clip(&mut world, &mut assets, "Flame", FlameEffect::default());
-        let flame_clip =
-            crate::ecs::systems::scalar_clip_systems::find_entity_clip_id(&world, flame)
-                .expect("flame clip");
+        let probe = spawn_probe_with_clip(&mut world, &mut assets, "Probe");
+        let probe_clip =
+            crate::ecs::systems::scalar_clip_systems::find_entity_clip_id(&world, probe)
+                .expect("probe clip");
 
         let model = world.spawn();
         let model_clip = {
@@ -279,43 +277,43 @@ mod tests {
             ));
         world.insert_component(model, model_schedule);
 
-        // Drag-extended flame clip: clip_out = 3.0 while the clip itself is empty
+        // Drag-extended scalar clip: clip_out = 3.0 while the clip itself is empty
         world
-            .get_component_mut::<ClipSchedule>(flame)
+            .get_component_mut::<ClipSchedule>(probe)
             .unwrap()
             .instances[0]
             .clip_out = 3.0;
 
-        // Double-click path: TimelineSelectClip on the flame clip
+        // Double-click path: TimelineSelectClip on the scalar clip
         dispatch_timeline_events(
-            &[UIEvent::TimelineSelectClip(flame_clip)],
+            &[UIEvent::TimelineSelectClip(probe_clip)],
             &mut world,
             &assets,
         );
         let inst = world
-            .get_component::<ClipSchedule>(flame)
+            .get_component::<ClipSchedule>(probe)
             .unwrap()
             .first_instance()
             .cloned()
             .unwrap();
         assert!(
             (inst.clip_out - 3.0).abs() < 1e-6,
-            "flame trim must survive double-click select"
+            "scalar clip trim must survive double-click select"
         );
 
-        // Selecting a model clip must not repoint the flame schedule either
+        // Selecting a model clip must not repoint the scalar schedule either
         dispatch_timeline_events(
             &[UIEvent::TimelineSelectClip(model_clip)],
             &mut world,
             &assets,
         );
         let inst = world
-            .get_component::<ClipSchedule>(flame)
+            .get_component::<ClipSchedule>(probe)
             .unwrap()
             .first_instance()
             .cloned()
             .unwrap();
-        assert_eq!(inst.source_id, flame_clip);
+        assert_eq!(inst.source_id, probe_clip);
         assert!((inst.clip_out - 3.0).abs() < 1e-6);
     }
 }

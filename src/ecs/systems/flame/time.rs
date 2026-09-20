@@ -12,7 +12,7 @@ impl TimedEffect for FlameEffect {
     type WorldInputs = Option<Vector3<f32>>;
 
     fn entities(world: &World) -> Vec<Entity> {
-        world.query_flames()
+        world.entities_with::<FlameEffect>()
     }
 
     fn time_sources(world: &World, delta_time: f32) -> EffectTimeSources {
@@ -67,7 +67,7 @@ pub fn flame_time_advance(ctx: &mut FrameContext) {
 /// Baked data and the temporal accumulator are runtime state every flame carries, whichever
 /// path spawned it.
 pub fn ensure_flame_runtime_components(world: &mut World) {
-    for entity in world.query_flames() {
+    for entity in world.entities_with::<FlameEffect>() {
         if !world.has_component::<FlameBaked>(entity) {
             world.insert_component(entity, FlameBaked::default());
         }

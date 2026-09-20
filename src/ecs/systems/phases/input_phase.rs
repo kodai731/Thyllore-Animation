@@ -1148,28 +1148,26 @@ mod tests {
     use crate::ecs::resource::gizmo::BoneSelectionState;
     use crate::ecs::resource::HierarchyState;
     use crate::ecs::systems::hierarchy_select;
-    use crate::ecs::systems::water::spawn_water;
+    use crate::ecs::systems::scalar_clip_systems::test_support::spawn_probe;
     use crate::ecs::World;
 
-    fn world_with_selected_water_and_hidden_bone_gizmo() -> (World, Entity) {
+    fn world_with_selected_probe_and_hidden_bone_gizmo() -> (World, Entity) {
         let mut world = World::new();
-        let mut effect = crate::ecs::component::WaterTorusEffect::default();
-        effect.position = Vector3::new(1.0, 2.0, 3.0);
-        let water = spawn_water(&mut world, "Water", effect);
+        let probe = spawn_probe(&mut world, "Probe");
         crate::ecs::systems::transform_propagation_system(&mut world);
 
         world.insert_resource(TransformGizmoData::default());
         world.insert_resource(BoneGizmoData::default());
         world.insert_resource(BoneSelectionState::default());
         let mut hierarchy = HierarchyState::default();
-        hierarchy_select(&mut hierarchy, water);
+        hierarchy_select(&mut hierarchy, probe);
         world.insert_resource(hierarchy);
-        (world, water)
+        (world, probe)
     }
 
     #[test]
-    fn a_selected_water_owns_the_transform_gizmo_without_a_skeleton() {
-        let (mut world, water) = world_with_selected_water_and_hidden_bone_gizmo();
+    fn a_selected_scene_owner_owns_the_transform_gizmo_without_a_skeleton() {
+        let (mut world, probe) = world_with_selected_probe_and_hidden_bone_gizmo();
         let mut assets = AssetStorage::new();
         let mut ctx = EcsContext {
             time: 0.0,
@@ -1185,7 +1183,7 @@ mod tests {
 
         let gizmo = ctx.transform_gizmo();
         assert!(gizmo.visible);
-        assert_eq!(gizmo.target_entity, Some(water));
+        assert_eq!(gizmo.target_entity, Some(probe));
         assert_eq!(gizmo.position.position, Vector3::new(1.0, 2.0, 3.0));
     }
 }

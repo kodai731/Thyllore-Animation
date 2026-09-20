@@ -1,8 +1,8 @@
 use thyllore_anim_core::editable::PropertyType;
 use thyllore_effect_core::{find_scalar_param, ScalarParam, WIND_SCALAR_PARAMS};
 
-use super::scalar_channel::{ScalarChannel, ScalarChannelDomain};
-use super::wind::WindTornadoEffect;
+use super::effect::WindTornadoEffect;
+use crate::ecs::component::{ScalarChannel, ScalarChannelDomain};
 use crate::ecs::world::{Entity, World};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -370,12 +370,14 @@ pub static WIND_DOMAIN: ScalarChannelDomain = ScalarChannelDomain {
     local_time: wind_local_time,
 };
 
+crate::scalar_channel_domain!(WIND_DOMAIN);
+
 fn wind_has_component(world: &World, entity: Entity) -> bool {
     world.get_component::<WindTornadoEffect>(entity).is_some()
 }
 
 fn wind_entities(world: &World) -> Vec<Entity> {
-    world.query_winds()
+    world.entities_with::<WindTornadoEffect>()
 }
 
 fn wind_channel_read(world: &World, entity: Entity, property_type: PropertyType) -> Option<f32> {

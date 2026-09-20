@@ -34,7 +34,7 @@ fn water_count_after_spawn_is_one() {
     let mut world = World::new();
     spawn_default_water(&mut world, DEFAULT_WATER_NAME);
 
-    assert_eq!(world.query_waters().len(), 1);
+    assert_eq!(world.entities_with::<WaterTorusEffect>().len(), 1);
 }
 
 #[test]
@@ -54,7 +54,7 @@ fn timeline_state_drives_water_time() {
 
     // water_time_advance reads TimelineState.current_time on the wall clock.
     // Replicate the branch logic here (the function takes FrameContext which needs Vulkan).
-    let entity = world.query_waters()[0];
+    let entity = world.entities_with::<WaterTorusEffect>()[0];
     let timeline_time: f32 = world.get_resource::<TimelineState>().unwrap().current_time;
     let mut effect = world.get_component_mut::<WaterTorusEffect>(entity).unwrap();
     effect.time = timeline_time * effect.time_scale + effect.time_offset;
@@ -585,7 +585,7 @@ fn water_scene_roundtrip_keeps_parameters_and_preset() {
     );
     crate::scene::apply_loaded_scene_to_world(&loaded, &mut restored, &mut restored_assets);
 
-    let waters = restored.query_waters();
+    let waters = restored.entities_with::<WaterTorusEffect>();
     assert_eq!(waters.len(), 1);
     let water = restored
         .get_component::<WaterTorusEffect>(waters[0])

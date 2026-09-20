@@ -1,9 +1,9 @@
-use crate::core::device::*;
-use crate::descriptor::pass_manifest::EFFECT_TRACE;
-use crate::descriptor::reflected_layout::{ReflectedLayoutSpec, ReflectedSetLayout};
-use crate::descriptor::shader_bindings::effect_trace;
-use crate::resource::gpu_resource::GpuResource;
-use crate::vulkan::*;
+use crate::vulkanr::core::*;
+use crate::vulkanr::descriptor::pass_manifest::EFFECT_TRACE;
+use crate::vulkanr::descriptor::shader_bindings::effect_trace;
+use crate::vulkanr::descriptor::{ReflectedLayoutSpec, ReflectedSetLayout};
+use crate::vulkanr::resource::GpuResource;
+use thyllore_vulkan_core::vulkan::*;
 
 #[derive(Clone, Debug, Default)]
 pub struct RREffectTraceDescriptorSet {

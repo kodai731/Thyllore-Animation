@@ -9,7 +9,7 @@ use thyllore_effect_core::{build_flame_inverse_model_matrix, intersect_flame_pro
 /// test them separately and then order the two candidates by distance.
 pub fn find_flame_by_pick_ray(world: &World, ray: &PickRay) -> Option<(Entity, f32)> {
     world
-        .query_flames()
+        .entities_with::<FlameEffect>()
         .into_iter()
         .filter_map(|entity| {
             let effect = world.get_component::<FlameEffect>(entity)?;

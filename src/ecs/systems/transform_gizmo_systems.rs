@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 use cgmath::{vec3, Deg, InnerSpace, Quaternion, Rotation3, Vector2, Vector3};
 
 use crate::ecs::component::{ColorVertex, LineMesh};
-use crate::ecs::resource::gizmo::transform_gizmo::{TransformGizmoData, TransformGizmoHandle};
+use crate::ecs::resource::gizmo::transform::{TransformGizmoData, TransformGizmoHandle};
 use crate::ecs::resource::TransformGizmoMode;
 use crate::math::{
     coordinate_system::perspective_infinite_reverse, ray_plane_intersection,

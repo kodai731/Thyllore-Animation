@@ -10,6 +10,7 @@ use crate::ecs::resource::{
     CoordinateSpace, ModelState, TransformGizmoMode, TransformGizmoState, WaterDebugCapture,
     WeightHeatmapState, WindDebugCapture,
 };
+use crate::ecs::systems::flame::{FLAMES_STYLE_DIR, FLAMES_TEXTURE_DIR};
 use crate::ecs::systems::{FLAME_SPAWN_HOOK, WATER_SPAWN_HOOK, WIND_SPAWN_HOOK};
 use crate::ecs::World;
 
@@ -938,7 +939,7 @@ fn build_flame_section(
 
             // Scan textures on first frame
             if !overlay_state.model.texture_fit_scan_done {
-                let scan_dir = std::path::Path::new(crate::paths::FLAMES_TEXTURE_DIR);
+                let scan_dir = std::path::Path::new(FLAMES_TEXTURE_DIR);
                 if let Ok(entries) = std::fs::read_dir(scan_dir) {
                     for entry in entries.flatten() {
                         if let Some(ext) = entry.path().extension() {
@@ -961,7 +962,7 @@ fn build_flame_section(
                 if scan_selected > 0 {
                     let name = &overlay_state.model.texture_fit_scan[scan_selected - 1];
                     overlay_state.model.texture_fit_path =
-                        format!("{}/{}", crate::paths::FLAMES_TEXTURE_DIR, name);
+                        format!("{}/{}", FLAMES_TEXTURE_DIR, name);
                 } else {
                     overlay_state.model.texture_fit_path.clear();
                 }
@@ -977,8 +978,7 @@ fn build_flame_section(
             if ui.small_button("Browse...") {
                 overlay_state.model.texture_fit_browser_open = true;
                 if overlay_state.model.texture_fit_browser_dir.is_empty() {
-                    overlay_state.model.texture_fit_browser_dir =
-                        crate::paths::FLAMES_TEXTURE_DIR.to_string();
+                    overlay_state.model.texture_fit_browser_dir = FLAMES_TEXTURE_DIR.to_string();
                 }
                 overlay_state.model.texture_fit_browser_dir =
                     canonical_dir_or(&overlay_state.model.texture_fit_browser_dir);
@@ -1075,7 +1075,7 @@ fn build_flame_section(
             ui.text("Style");
 
             if !overlay_state.model.flame_style_scan_done {
-                let scan_dir = std::path::Path::new(crate::paths::FLAMES_STYLE_DIR);
+                let scan_dir = std::path::Path::new(FLAMES_STYLE_DIR);
                 if let Ok(entries) = std::fs::read_dir(scan_dir) {
                     for entry in entries.flatten() {
                         if let Some(name) = entry.file_name().to_str() {
@@ -1090,7 +1090,7 @@ fn build_flame_section(
             }
 
             if overlay_state.model.flame_style_scan.is_empty() {
-                ui.text_disabled(format!("no styles in {}", crate::paths::FLAMES_STYLE_DIR));
+                ui.text_disabled(format!("no styles in {}", FLAMES_STYLE_DIR));
             } else {
                 let mut style_index = overlay_state
                     .model
@@ -1132,7 +1132,7 @@ fn build_flame_section(
                 {
                     if selected_flame_entity.is_some() {
                         ui_events.send(UIEvent::ApplyFlameStyle {
-                            path: format!("{}/{}", crate::paths::FLAMES_STYLE_DIR, name),
+                            path: format!("{}/{}", FLAMES_STYLE_DIR, name),
                             groups: overlay_state.model.flame_style_groups,
                         });
                         effect_applied_this_frame = true;

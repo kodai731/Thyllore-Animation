@@ -91,12 +91,11 @@ fn resolve_closest_pick(
         return surface_entity;
     };
 
-    let hooks = match world.get_resource::<PickHooks>() {
-        Some(h) => h,
-        None => return surface_entity,
+    let Some(pick_hooks) = world.get_resource::<PickHooks>() else {
+        return surface_entity;
     };
 
-    let effect_candidate: Option<(Entity, f32)> = hooks
+    let effect_candidate: Option<(Entity, f32)> = pick_hooks
         .iter()
         .filter_map(|hook| (hook.find)(world, ray))
         .min_by(|(_, a), (_, b)| a.total_cmp(b));

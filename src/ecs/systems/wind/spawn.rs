@@ -1,6 +1,6 @@
 use crate::asset::AssetStorage;
 use crate::ecs::component::{WindTornadoEffect, WIND_DOMAIN};
-use crate::ecs::resource::HierarchyState;
+use crate::ecs::resource::{HierarchyState, WindRenderSettings};
 use crate::ecs::world::{Entity, Transform, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
@@ -81,3 +81,11 @@ pub fn write_wind_transform(
         transform.rotation = rotation;
     }
 }
+
+fn insert_wind_default_resources(world: &mut World) {
+    if !world.contains_resource::<WindRenderSettings>() {
+        world.insert_resource(WindRenderSettings::default());
+    }
+}
+
+crate::effect_default_resource!("wind", insert_wind_default_resources);

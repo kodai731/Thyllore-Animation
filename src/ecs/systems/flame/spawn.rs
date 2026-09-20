@@ -1,6 +1,6 @@
 use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameEffect, FLAME_DOMAIN};
-use crate::ecs::resource::HierarchyState;
+use crate::ecs::resource::{FlameHistorySnapshotState, FlameRenderSettings, HierarchyState};
 use crate::ecs::world::{Entity, Transform, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
@@ -91,3 +91,14 @@ pub fn write_flame_transform(
         transform.rotation = rotation;
     }
 }
+
+fn insert_flame_default_resources(world: &mut World) {
+    if !world.contains_resource::<FlameRenderSettings>() {
+        world.insert_resource(FlameRenderSettings::default());
+    }
+    if !world.contains_resource::<FlameHistorySnapshotState>() {
+        world.insert_resource(FlameHistorySnapshotState::default());
+    }
+}
+
+crate::effect_default_resource!("flame", insert_flame_default_resources);

@@ -10,7 +10,11 @@ fn main() -> anyhow::Result<()> {
     };
 
     let window_title = format!("Thyllore Animation v{}", env!("CARGO_PKG_VERSION"));
-    let mut system = thyllore_animation::platform::init(&window_title, !config.is_batch_mode);
+    let mut system = thyllore_animation::platform::init(
+        &window_title,
+        !config.is_batch_mode,
+        config.window_size,
+    );
 
     #[cfg(feature = "ml")]
     let curve_copilot_mode =

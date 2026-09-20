@@ -16,6 +16,7 @@ const BATCH_CAMERA_FLAG: &str = "--batch-camera";
 const GPU_TIMINGS_FLAG: &str = "--gpu-timings";
 const EXPOSURE_DUMP_FLAG: &str = "--exposure-dump";
 const BATCH_PICK_FLAG: &str = "--batch-pick";
+const BATCH_WINDOW_FLAG: &str = "--batch-window";
 const BATCH_SCENE_FLAG: &str = "--batch-scene";
 const BATCH_PLAY_FLAG: &str = "--batch-play";
 const BATCH_ANIM_DUMP_FLAG: &str = "--batch-anim-dump";
@@ -32,6 +33,7 @@ pub struct EngineCliOverrides {
     pub gpu_timings_path: Option<String>,
     pub exposure_dump_path: Option<String>,
     pub pick_pixel: Option<(u32, u32)>,
+    pub window_size: Option<(u32, u32)>,
     pub batch_play: bool,
     pub scene_path: Option<String>,
     pub anim_edits: Vec<BatchAnimEdit>,
@@ -46,6 +48,7 @@ pub fn resolve_engine_cli_overrides(args: &[String]) -> Result<EngineCliOverride
         gpu_timings_path: gpu_timings_path_resolve_from_args(args)?,
         exposure_dump_path: exposure_dump_path_resolve_from_args(args)?,
         pick_pixel: pick_pixel_resolve_from_args(args)?,
+        window_size: window_size_resolve_from_args(args)?,
         batch_play: args.iter().any(|a| a == BATCH_PLAY_FLAG),
         scene_path: scene_path_resolve_from_args(args)?,
         anim_edits: anim_edits_resolve_from_args(args)?,
@@ -235,4 +238,31 @@ pub fn pick_pixel_resolve_from_args(args: &[String]) -> Result<Option<(u32, u32)
         .parse()
         .map_err(|_| anyhow::anyhow!("invalid {BATCH_PICK_FLAG} y in '{value}'"))?;
     Ok(Some((x, y)))
+}
+
+/// Sizes the startup window from the command line so a headless run renders at the resolution the
+/// reference frames were captured at.
+pub fn window_size_resolve_from_args(args: &[String]) -> Result<Option<(u32, u32)>> {
+    let Some(position) = args.iter().position(|arg| arg == BATCH_WINDOW_FLAG) else {
+        return Ok(None);
+    };
+    let Some(value) = args.get(position + 1) else {
+        bail!("{BATCH_WINDOW_FLAG} requires <width>,<height>");
+    };
+    let parts: Vec<&str> = value.split(',').collect();
+    if parts.len() != 2 {
+        bail!("{BATCH_WINDOW_FLAG} expects 2 comma-separated values, got '{value}'");
+    }
+    let width: u32 = parts[0]
+        .trim()
+        .parse()
+        .map_err(|_| anyhow::anyhow!("invalid {BATCH_WINDOW_FLAG} width in '{value}'"))?;
+    let height: u32 = parts[1]
+        .trim()
+        .parse()
+        .map_err(|_| anyhow::anyhow!("invalid {BATCH_WINDOW_FLAG} height in '{value}'"))?;
+    if width == 0 || height == 0 {
+        bail!("{BATCH_WINDOW_FLAG} expects non-zero extents, got '{value}'");
+    }
+    Ok(Some((width, height)))
 }

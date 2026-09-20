@@ -104,7 +104,7 @@ pub fn resolve_effect_time(
         return;
     }
     if let Some(fixed_step_time) = sources.fixed_step_time {
-        *time = fixed_step_time;
+        *time = fixed_step_time * time_scale + time_offset;
         return;
     }
 

@@ -12,8 +12,8 @@ mod tests {
     use thyllore_effect_core::{FLAME_SCALAR_PARAMS, FLAME_UI_PARAMS};
     use thyllore_scene_core::{find_scalar_param, find_ui_param};
 
-    const GROUPS: [&str; 7] = [
-        "body", "noise", "mix", "motion", "branch", "footer", "color",
+    const GROUPS: [&str; 10] = [
+        "body", "noise", "mix", "motion", "branch", "puff", "flow", "lobe", "footer", "color",
     ];
 
     #[test]
@@ -46,6 +46,6 @@ mod tests {
         names.dedup();
 
         assert_eq!(names.len(), collected);
-        assert_eq!(names.len(), 37);
+        assert_eq!(names.len(), 71);
     }
 }

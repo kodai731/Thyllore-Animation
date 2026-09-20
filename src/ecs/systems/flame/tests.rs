@@ -7,6 +7,7 @@ use crate::ecs::resource::{
     BatchRun, ClipLibrary, FlameHistorySnapshot, FlameHistorySnapshotState, FlameRenderSettings,
     HierarchyState, LightState, ProjectionData, TimelineState,
 };
+use crate::ecs::systems::effect_time::{resolve_effect_time, EffectTimeSources};
 use crate::ecs::world::{Entity, Transform, World};
 use crate::ecs::FrameContext;
 use thyllore_effect_core::{advance_flame_time, advance_flame_trail};
@@ -213,4 +214,19 @@ fn reloading_scene_entities_replaces_the_flame_and_its_clip() {
     assert_eq!(flames.len(), 1);
     assert_ne!(flames[0], first);
     assert_eq!(world.resource::<ClipLibrary>().source_clips.len(), 1);
+}
+
+#[test]
+fn fixed_step_flame_time_follows_the_time_scale_and_offset() {
+    let sources = EffectTimeSources {
+        batch_fixed_time: None,
+        fixed_step_time: Some(2.0),
+        timeline: None,
+        delta_time: 1.0 / 60.0,
+        free_run_when_paused: false,
+    };
+
+    let mut flame_time = 0.0;
+    resolve_effect_time(&mut flame_time, 2.0, 1.5, sources);
+    assert!((flame_time - 5.5).abs() < 1e-6, "got {flame_time}");
 }

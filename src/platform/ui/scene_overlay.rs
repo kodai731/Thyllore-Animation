@@ -1335,6 +1335,39 @@ fn build_flame_section(
                     }
 
                     ui.separator();
+                    ui.text("Puffs");
+                    draw_params(
+                        ui,
+                        &*flame_group_param_names("puff"),
+                        thyllore_effect_core::FLAME_UI_PARAMS,
+                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
+                        &mut effect_copy,
+                        |ui, edited| flame_key_button(ui, ui_events, edited),
+                    );
+
+                    ui.separator();
+                    ui.text("Flow");
+                    draw_params(
+                        ui,
+                        &*flame_group_param_names("flow"),
+                        thyllore_effect_core::FLAME_UI_PARAMS,
+                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
+                        &mut effect_copy,
+                        |ui, edited| flame_key_button(ui, ui_events, edited),
+                    );
+
+                    ui.separator();
+                    ui.text("Lobe");
+                    draw_params(
+                        ui,
+                        &*flame_group_param_names("lobe"),
+                        thyllore_effect_core::FLAME_UI_PARAMS,
+                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
+                        &mut effect_copy,
+                        |ui, edited| flame_key_button(ui, ui_events, edited),
+                    );
+
+                    ui.separator();
                     draw_params(
                         ui,
                         &*flame_group_param_names("footer"),

@@ -37,6 +37,37 @@ fn pick_pixel_rejects_a_malformed_pair() {
 }
 
 #[test]
+fn window_size_parses_an_extent_pair() {
+    assert_eq!(
+        window_size_resolve_from_args(&args(&["bin", "--batch-window", "1280,720"])).unwrap(),
+        Some((1280, 720))
+    );
+}
+
+#[test]
+fn window_size_is_absent_without_the_flag() {
+    assert_eq!(
+        window_size_resolve_from_args(&args(&["bin"])).unwrap(),
+        None
+    );
+}
+
+#[test]
+fn window_size_rejects_a_malformed_pair() {
+    assert!(window_size_resolve_from_args(&args(&["bin", "--batch-window", "1280"])).is_err());
+    assert!(
+        window_size_resolve_from_args(&args(&["bin", "--batch-window", "1280,720,60"])).is_err()
+    );
+    assert!(window_size_resolve_from_args(&args(&["bin", "--batch-window", "a,b"])).is_err());
+}
+
+#[test]
+fn window_size_rejects_a_zero_extent() {
+    assert!(window_size_resolve_from_args(&args(&["bin", "--batch-window", "0,720"])).is_err());
+    assert!(window_size_resolve_from_args(&args(&["bin", "--batch-window", "1280,0"])).is_err());
+}
+
+#[test]
 fn resolve_returns_none_without_flag() {
     let resolved = batch_run_resolve_from_args(&args(&["thyllore-animation"])).unwrap();
     assert!(resolved.is_none());

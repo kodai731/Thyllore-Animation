@@ -332,6 +332,8 @@ impl App {
             .insert_resource(crate::hooks::scene_resource::SceneResourceHooks::collect()?);
         data.ecs_world
             .insert_resource(crate::hooks::model_load::ModelLoadHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::frame_prep::FramePrepHooks::collect()?);
         Ok(())
     }
     unsafe fn initialize_graphics_and_ecs(

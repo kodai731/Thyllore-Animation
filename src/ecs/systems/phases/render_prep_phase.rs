@@ -4,7 +4,7 @@ use std::time::Instant;
 use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
-use crate::ecs::component::{FlameEffect, LineMesh};
+use crate::ecs::component::LineMesh;
 use crate::ecs::resource::gizmo::BoneSelectionState;
 use crate::ecs::resource::gizmo::TransformGizmoData;
 use crate::ecs::resource::gizmo::{
@@ -23,6 +23,7 @@ use crate::ecs::{
     build_octahedral_bone_meshes_with_selection, build_sphere_bone_meshes_with_selection,
     build_spring_bone_gizmo_mesh, gizmo_update_vertex_buffer,
 };
+use crate::hooks::frame_prep::{FramePrepHooks, FramePrepStage};
 use crate::render::RenderBackend;
 use crate::vulkanr::renderer::scene_renderer::update_object_ubo;
 
@@ -58,22 +59,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         t.elapsed().as_secs_f32() * 1000.0,
     );
 
-    let _t = Instant::now();
-    crate::ecs::systems::flame_bone_attach_sync(ctx);
-
-    let t = Instant::now();
-    crate::ecs::systems::water_time_advance(ctx);
-    crate::ecs::systems::flame_time_advance(ctx);
-    crate::ecs::systems::wind_time_advance(ctx);
-    crate::ecs::systems::field_manifest_sync(ctx);
-    sub.insert("flame_time".to_string(), t.elapsed().as_secs_f32() * 1000.0);
-
-    let t = Instant::now();
-    crate::ecs::systems::flame_trail_advance(ctx);
-    sub.insert(
-        "flame_trail".to_string(),
-        t.elapsed().as_secs_f32() * 1000.0,
-    );
+    run_frame_prep_hooks(ctx, FramePrepStage::Advance, &mut sub);
 
     let timings_write_time = {
         let t = Instant::now();
@@ -82,60 +68,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     };
     sub.insert("timings_write".to_string(), timings_write_time);
 
-    if let (Some(mut sink), Some(temporal)) = (
-        ctx.world
-            .get_resource_mut::<crate::ecs::resource::FlameDumpSink>(),
-        ctx.world
-            .get_resource::<crate::ecs::resource::FlameHistorySnapshotState>(),
-    ) {
-        let t = Instant::now();
-        let flame_entities: Vec<_> = ctx.world.entities_with::<FlameEffect>();
-        let effects: Vec<(
-            FlameEffect,
-            crate::ecs::component::FlameBaked,
-            crate::ecs::component::FlameTemporalAccum,
-        )> = flame_entities
-            .iter()
-            .filter_map(|e| {
-                let effect = ctx.world.get_component::<FlameEffect>(*e).cloned()?;
-                let baked = ctx
-                    .world
-                    .get_component::<crate::ecs::component::FlameBaked>(*e)
-                    .cloned()
-                    .unwrap_or_default();
-                let temporal_accum = ctx
-                    .world
-                    .get_component::<crate::ecs::component::FlameTemporalAccum>(*e)
-                    .cloned()
-                    .unwrap_or_default();
-                Some((effect, baked, temporal_accum))
-            })
-            .collect();
-        let trails: Vec<Option<crate::ecs::component::flame_trail::FlameTrail>> = flame_entities
-            .iter()
-            .map(|e| {
-                ctx.world
-                    .get_component::<crate::ecs::component::flame_trail::FlameTrail>(*e)
-                    .cloned()
-            })
-            .collect();
-        crate::ecs::systems::flame_dump_system(&mut sink, &*temporal, &effects, &trails);
-        sub.insert("flame_dump".to_string(), t.elapsed().as_secs_f32() * 1000.0);
-    }
-
-    let t = Instant::now();
-    crate::ecs::systems::accumulate_flame_history(&mut ctx.world);
-    sub.insert(
-        "flame_temporal".to_string(),
-        t.elapsed().as_secs_f32() * 1000.0,
-    );
-
-    let t = Instant::now();
-    crate::ecs::systems::accumulate_water_history(&mut ctx.world);
-    sub.insert(
-        "water_temporal".to_string(),
-        t.elapsed().as_secs_f32() * 1000.0,
-    );
+    run_frame_prep_hooks(ctx, FramePrepStage::Accumulate, &mut sub);
 
     let t = Instant::now();
     let render_data_vec = collect_gizmo_render_data(ctx, camera_position);
@@ -203,6 +136,23 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         .insert_resource(crate::ecs::resource::RenderPrepSubTimings { timings: sub });
 
     Ok(())
+}
+
+fn run_frame_prep_hooks(
+    ctx: &mut FrameContext,
+    stage: FramePrepStage,
+    sub: &mut HashMap<String, f32>,
+) {
+    let hooks = ctx
+        .world
+        .get_resource::<FramePrepHooks>()
+        .map(|hooks| hooks.at_stage(stage))
+        .unwrap_or_default();
+    for hook in hooks {
+        let t = Instant::now();
+        (hook.run)(ctx);
+        sub.insert(hook.timing_key(), t.elapsed().as_secs_f32() * 1000.0);
+    }
 }
 
 fn gpu_timings_write(world: &mut crate::ecs::World) {

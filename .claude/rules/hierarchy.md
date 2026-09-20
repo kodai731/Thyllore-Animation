@@ -163,7 +163,13 @@ handlers run before display handlers, and `src/app/model/` runs `ModelLoadHooks`
 naming any domain. `empty_scene.rs` holds the `EmptySceneHook` contract (name, apply) and the
 `empty_scene_hook!` macro: a feature that places a default entity when the app starts without a scene
 registers it from its own system file (`inventory`), and `src/app/init/` runs `EmptySceneHooks` without
-naming a feature. A hook file describes a contract only; it never names a concrete effect.
+naming a feature. `frame_prep.rs` holds the `FramePrepHook` contract (name, `FramePrepStage`, run taking
+`&mut FrameContext`) and the `frame_prep_hook!` macro: the per-frame work an effect does before the passes
+record (time advance, bone attachment, trails at `Advance`; history accumulation and dump sinks at
+`Accumulate`, which runs after the previous frame's GPU timings are written) is registered from
+`src/ecs/systems/<effect>/` and `src/ecs/systems/phases/render_prep_phase.rs` runs `FramePrepHooks`
+(a `World` resource collected at app start, sorted by stage then name) without naming an effect. A hook
+file describes a contract only; it never names a concrete effect.
 
 ## src/effect/
 
@@ -182,7 +188,12 @@ Every feature (today the effects flame, water, wind) is a set of directories tha
 outside those directories reaches a feature through a contract (`src/hooks/`), a registry it subscribes to
 (`src/effect/subscription.rs`), or reflection metadata the feature's own declaration generates
 (`declare_scene_format!` → `SceneComponent::TYPE_KEY` / `PERSISTED_FIELDS`, `ScalarChannelDomain`,
-`UiParam` tables). Directory position decides what a file may see:
+`UiParam` tables). The rule is about generic files, not only about effects: a file whose job would not change if
+one feature were deleted (a phase, a shared system, a resource module, a pass, an app init step) must
+compile and behave the same without that feature, so it never names the feature's components, resources,
+systems or constants, and never carries a per-feature match arm or field. What it may do is run a registry
+the feature subscribed to, or iterate a generic component the feature attaches. Directory position decides
+what a file may see:
 
 | Directory | May name flame / water / wind |
 |---|---|
@@ -190,7 +201,7 @@ outside those directories reaches a feature through a contract (`src/hooks/`), a
 | `src/ecs/component/<effect>*.rs`, `src/ecs/systems/<effect>/`, `src/ecs/resource/<effect>_*.rs`, `src/ecs/resource/batch/<effect>*.rs` | its own effect only |
 | `src/effect/subscription.rs` | every effect (the single `EffectHook` list; scene hooks self-register instead) |
 | `src/platform/ui/` per-effect windows, `src/debugview/` per-effect dumps | the effect the file is for |
-| `src/scene/`, `src/hooks/`, `src/ecs/systems/*.rs` (shared systems), shared crates | none, tests included (`src/scene/` tests use `entities.rs::test_support`; effect round trips live in `src/ecs/systems/<effect>/tests.rs`) |
+| `src/scene/`, `src/hooks/`, `src/ecs/systems/*.rs` (shared systems), `src/ecs/systems/phases/`, `src/ecs/systems/world/`, `src/ecs/systems/batch_run_systems/`, shared `src/ecs/component/*.rs` and `src/ecs/resource/*.rs`, `src/vulkanr/`, `src/render/`, `src/platform/events/`, shared crates | none, tests included (`src/scene/` tests use `entities.rs::test_support`; effect round trips live in `src/ecs/systems/<effect>/tests.rs`) |
 | `src/app/`, `src/ecs/world.rs` | none |
 
 Concretely:
@@ -239,6 +250,12 @@ Concretely:
   (`src/ecs/resource/app_exit.rs`: the event loop stops when a system requested it). The batch run inserts
   a fixed `FrameClock` and requests `AppExit` when it completes; effect systems read `FrameClock` for their
   fixed-step time and never look for `BatchRun` either.
+- `src/ecs/systems/phases/` orders work; it never calls an effect's system. Per-frame effect work reaches
+  `render_prep_phase.rs` only through `FramePrepHooks` (`src/hooks/frame_prep.rs`): the effect registers
+  `frame_prep_hook!("flame", Advance, flame_advance)` from its own directory and the phase runs every hook
+  of a stage in name order, timing each under `<name>_<stage>`. A shared system that only touches one
+  feature's components (the field manifest sync read `FlameEffect` alone) is that feature's system and
+  lives in its directory, not in `src/ecs/systems/*.rs`.
 - `src/ecs/world.rs` offers generic component access (`iter_components::<C>`, `entities_with::<C>`,
   `insert_component`); it does not grow `with_<effect>()` builders or `query_<effect>s()` helpers.
 - Crates depend downward only: `thyllore-effect-core` depends on `thyllore-scene-core` / `-math-core` /
@@ -259,8 +276,24 @@ for hook in world.resource::<SceneComponentHooks>().ordered() {
 }
 ```
 
-Test for it before finishing: `grep -rni "flame\|water\|wind" src/scene src/hooks` must hit nothing but
-the stub pass names of `src/hooks/pass.rs` tests and the `window` / `windows(2)` matches.
+Test for it before finishing: `grep -rni "flame\|water\|wind" src/scene src/hooks src/ecs/systems/phases/render_prep_phase.rs`
+must hit nothing but the stub pass names of `src/hooks/pass.rs` tests and the `window` / `windows(2)`
+matches.
+
+Known violations still to remove (each needs a registry the feature subscribes to; do not add to the list,
+shrink it):
+
+- UI event plumbing: `src/ecs/events/ui_events.rs` (`UIEvent::UpdateFlameEffect`, `AddWater`, ...),
+  `src/ecs/systems/phases/dispatch_overlay.rs` / `dispatch_scalar_curve.rs`, `src/platform/ui/scene_overlay.rs`,
+  `src/ecs/resource/graphics.rs` (`flame_preset_index`, `flame_style_*`), `src/platform/events/frame.rs`.
+- Picking: `src/ecs/systems/object_picking_systems.rs` calls `find_<effect>_by_pick_ray` in a fixed list.
+- Post-process: `src/vulkanr/renderer/deferred/tonemap_pass.rs` reads `FlameEffect` for the heat plume.
+- Startup defaults: `src/app/init/instance.rs::insert_default_if_missing::<FlameRenderSettings>` and the
+  other effect resources; `src/paths.rs` flame asset directories.
+- Registries written by hand: `src/ecs/component/scalar_channel.rs` domain list, `EntityIcon::{Flame, Water, Wind}`
+  in `src/ecs/component/editor.rs`, `src/ecs/systems/effect_debug_dump.rs`, `src/ecs/systems/batch_run_systems/orbit.rs`.
+- Tests of shared code spawning an effect: `dispatch_timeline.rs`, `dispatch_scalar_curve.rs`, `input_phase.rs`,
+  `scalar_clip_systems.rs`, `batch_run_systems/tests.rs`.
 
 Resources follow the same rule. A resource is persisted by declaring its fields once
 (`declare_scene_format!` in the resource's own file, or in its crate for `thyllore-render-core` settings)

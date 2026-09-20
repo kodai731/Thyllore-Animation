@@ -55,3 +55,5 @@ impl TimedEffect for WaterTorusEffect {
 pub fn water_time_advance(ctx: &mut FrameContext) {
     advance_effect_time::<WaterTorusEffect>(ctx);
 }
+
+crate::frame_prep_hook!("water", Advance, water_time_advance);

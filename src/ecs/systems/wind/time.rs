@@ -55,3 +55,5 @@ impl TimedEffect for WindTornadoEffect {
 pub fn wind_time_advance(ctx: &mut FrameContext) {
     advance_effect_time::<WindTornadoEffect>(ctx);
 }
+
+crate::frame_prep_hook!("wind", Advance, wind_time_advance);

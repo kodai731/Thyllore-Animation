@@ -224,7 +224,7 @@ impl WaterBuffer {
         let caustic_accum = *storage.ensure(
             instance,
             rrdevice,
-            RenderTargetKey::CausticAccum,
+            RenderTargetKey::EffectAccumulation(0),
             vk::Format::R32_UINT,
             vk::ImageUsageFlags::STORAGE
                 | vk::ImageUsageFlags::TRANSFER_DST

@@ -36,7 +36,7 @@ const SCENE_COLOR_SLOT: TransientSlot = TransientSlot("water.scene_color");
 const TRACE_SLOT: TransientSlot = TransientSlot("water.trace");
 const SCENE_COLOR: TargetRef = TargetRef::Transient(SCENE_COLOR_SLOT);
 const TRACE: TargetRef = TargetRef::Transient(TRACE_SLOT);
-const CAUSTIC_ACCUM: TargetRef = TargetRef::Storage(RenderTargetKey::CausticAccum);
+const CAUSTIC_ACCUM: TargetRef = TargetRef::Storage(RenderTargetKey::EffectAccumulation(0));
 const HISTORY_KEYS: [RenderTargetKey; 2] = [
     RenderTargetKey::EffectHistory(2),
     RenderTargetKey::EffectHistory(3),

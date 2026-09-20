@@ -9,16 +9,15 @@ use crate::animation::editable::{
 use crate::animation::BoneId;
 use crate::animation::{ConstraintId, ConstraintType};
 use crate::ecs::component::{
-    ColliderShape, FlameEffect, SpringChain, SpringChainId, SpringColliderDef, SpringColliderGroup,
+    ColliderShape, SpringChain, SpringChainId, SpringColliderDef, SpringColliderGroup,
     SpringColliderGroupId, SpringColliderId, SpringJointParam, WaterTorusEffect, WindTornadoEffect,
 };
 use crate::ecs::events::light_move_target::LightMoveTarget;
 use crate::ecs::resource::gizmo::BoneDisplayStyle;
 use crate::ecs::resource::{
-    AutoExposure, CoordinateSpace, CurveTrackRef, DepthOfField, FlameRenderSettings,
-    HierarchyDisplayMode, OnionSkinningConfig, PhysicalCameraParameters, SelectedKeyframe,
-    SelectionModifier, TransformGizmoMode, TransformGizmoState, WaterRenderSettings,
-    WindRenderSettings,
+    AutoExposure, CoordinateSpace, CurveTrackRef, DepthOfField, HierarchyDisplayMode,
+    OnionSkinningConfig, PhysicalCameraParameters, SelectedKeyframe, SelectionModifier,
+    TransformGizmoMode, TransformGizmoState, WaterRenderSettings, WindRenderSettings,
 };
 use crate::ecs::world::Entity;
 use crate::ecs::world::Visibility;
@@ -88,9 +87,6 @@ pub enum UIEvent {
     DebugBillboardDepth,
     DumpDebugInfo,
     DumpAnimationDebug,
-    DumpFlameWallProbe {
-        viewport_size: [f32; 2],
-    },
     /// Runs one readback right away, outside the batch schedule (a debug window button).
     CaptureNow(Rc<dyn BatchCapture>),
 
@@ -443,30 +439,11 @@ pub enum UIEvent {
     UpdatePhysicalCamera(PhysicalCameraParameters),
     UpdateAutoExposure(AutoExposure),
     UpdateOnionSkinning(OnionSkinningConfig),
-    UpdateFlameEffect(Box<FlameEffect>),
-    UpdateFlameBaked(Box<thyllore_effect_core::FlameBaked>),
-    ApplyFlamePreset(String),
-    ApplyFlameTextureFit {
-        path: String,
-        blend: f32,
-        groups: [bool; 4],
-        profile: bool,
-    },
-    ApplyFlameStyle {
-        path: String,
-        groups: [bool; 3],
-    },
-    SaveFlameStyle {
-        name: String,
-    },
     AddEffect(&'static str),
     SelectEffectInstance {
         key: &'static str,
         index: usize,
     },
-    UpdateFlameRenderSettings(FlameRenderSettings),
-    UpdateFlameTrailEnabled(bool),
-    UpdateFlameTrailFade(f32),
     SetGridShowYAxis(bool),
     ClearMessageLog,
     InsertScalarKey {

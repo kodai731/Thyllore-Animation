@@ -304,16 +304,9 @@ matches.
 Known violations still to remove (each needs a registry the feature subscribes to; do not add to the list,
 shrink it):
 
-- UI event plumbing: `src/ecs/events/ui_events.rs` (`UIEvent::UpdateFlameEffect`, `ApplyWaterPreset`, ...),
-  `src/ecs/systems/phases/dispatch_overlay.rs`, `src/platform/ui/scene_overlay.rs`,
-  `src/platform/events/frame.rs`.
-- Picking: `src/ecs/systems/object_picking_systems.rs` calls `find_<effect>_by_pick_ray` in a fixed list.
-- Startup defaults: `src/app/init/instance.rs::insert_default_if_missing::<FlameRenderSettings>` and the
-  other effect resources; `src/paths.rs` flame asset directories.
-- Registries written by hand: `EntityIcon::{Flame, Water, Wind}` in `src/ecs/component/editor.rs`,
-  `src/ecs/systems/effect_debug_dump.rs`, `src/ecs/systems/batch_run_systems/orbit.rs`.
-- Tests of shared code naming an effect: the flame batch flag / wall probe / orbit tests in
-  `batch_run_systems/tests.rs` (they follow `orbit.rs` and the flame `cli.rs` hook when those move).
+- Per-effect UI state in the shared overlay: `SceneOverlayState` carries `water_preset_index` and
+  `wind_preset_index` (used by `src/platform/ui/water.rs` / `wind.rs`), and `frame.rs` clones
+  `FlameUIState` to/from the overlay.
 
 Resources follow the same rule. A resource is persisted by declaring its fields once
 (`declare_scene_format!` in the resource's own file, or in its crate for `thyllore-render-core` settings)

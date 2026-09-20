@@ -11,14 +11,14 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const PRODUCT_ENTRY: &str = "shaders/flameResolveFragment.frag";
+const PRODUCT_ENTRY: &str = "shaders/flame/resolveFragment.frag";
 
 /// Files whose whole purpose is sample-based reference integration. They may
 /// contain lattice loops, but nothing outside this list may include them
 /// except the product entry (which dispatches debug modes at runtime).
-const SAMPLING_INCLUDES: &[&str] = &["include/flame_reference_march.glsl"];
+const SAMPLING_INCLUDES: &[&str] = &["flame/include/reference_march.glsl"];
 
-const GLSL_BANNED_TOKENS: &[&str] = &["Raymarch", "raymarch"];
+const GLSL_BANNED_TOKENS: &[&str] = &["Raymarch", "raymarch", "FLAME_WAVE_SEGMENTS"];
 const RUST_BANNED_TOKENS: &[&str] = &["Raymarch", "raymarch", "lut_lerp", "[f32; 33]"];
 
 struct Exception {
@@ -31,7 +31,7 @@ struct Exception {
 /// Entries must still match a real occurrence; a stale entry fails the test.
 const EXCEPTION_LEDGER: &[Exception] = &[
     Exception {
-        file_suffix: "flameResolveFragment.frag",
+        file_suffix: "resolveFragment.frag",
         token: "Raymarch",
         reason: "runtime dispatch of push.mode 1/3 into the quarantined \
                  reference integrators; the entry routes but does not integrate",
@@ -98,7 +98,7 @@ fn resolve_include(shader_dir: &Path, includer: &str, child: &str) -> String {
 
 fn collect_include_graph(root: &Path) -> BTreeSet<String> {
     let entry = root.join(PRODUCT_ENTRY);
-    let shader_dir = entry.parent().unwrap().to_path_buf();
+    let shader_dir = root.join("shaders");
     let mut visited = BTreeSet::new();
     let mut queue: Vec<String> = parse_includes(&read(&entry))
         .into_iter()

@@ -1,5 +1,5 @@
-use std::collections::BTreeSet;
-use std::path::Path;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 use toml::Value;
@@ -12,6 +12,11 @@ pub enum StageKind {
     Fragment,
     Geometry,
     Compute,
+    RayGeneration,
+    Intersection,
+    AnyHit,
+    ClosestHit,
+    Miss,
 }
 
 impl StageKind {
@@ -22,6 +27,11 @@ impl StageKind {
             "frag" => Some(Self::Fragment),
             "geom" => Some(Self::Geometry),
             "comp" => Some(Self::Compute),
+            "rgen" => Some(Self::RayGeneration),
+            "rint" => Some(Self::Intersection),
+            "rahit" => Some(Self::AnyHit),
+            "rchit" => Some(Self::ClosestHit),
+            "rmiss" => Some(Self::Miss),
             _ => None,
         }
     }
@@ -32,6 +42,11 @@ impl StageKind {
             Self::Fragment => "Fragment",
             Self::Geometry => "Geometry",
             Self::Compute => "Compute",
+            Self::RayGeneration => "RayGeneration",
+            Self::Intersection => "Intersection",
+            Self::AnyHit => "AnyHit",
+            Self::ClosestHit => "ClosestHit",
+            Self::Miss => "Miss",
         }
     }
 }
@@ -102,7 +117,7 @@ pub enum ManifestError {
     Shape(String),
     #[error("pass `{0}` is not a valid pass name (use [a-z][a-z0-9_]*)")]
     InvalidPassName(String),
-    #[error("pass `{pass}`: `{file}` has no shader extension (.vert/.frag/.geom/.comp)")]
+    #[error("pass `{pass}`: `{file}` has no shader extension (.vert/.frag/.geom/.comp/.rgen/.rint/.rahit/.rchit/.rmiss)")]
     UnknownStageExtension { pass: String, file: String },
     #[error("pass `{pass}`: {reason}")]
     StageComposition { pass: String, reason: String },
@@ -148,10 +163,12 @@ impl PassManifest {
     }
 
     pub fn validate_against_sources(&self, shader_dir: &Path) -> Result<(), ManifestError> {
+        let sources = collect_shader_sources(shader_dir)?;
+
         let mut referenced = BTreeSet::new();
         for pass in &self.passes {
             for stage in &pass.stages {
-                if !shader_dir.join(&stage.source_file).is_file() {
+                if !sources.contains_key(&stage.source_file) {
                     return Err(ManifestError::MissingSource {
                         pass: pass.name.clone(),
                         file: stage.source_file.clone(),
@@ -161,22 +178,57 @@ impl PassManifest {
             }
         }
 
-        let mut orphans: Vec<String> = std::fs::read_dir(shader_dir)
-            .map_err(|error| {
-                ManifestError::Toml(format!("read {}: {error}", shader_dir.display()))
-            })?
-            .filter_map(Result::ok)
-            .filter(|entry| entry.path().is_file())
-            .filter_map(|entry| entry.file_name().into_string().ok())
-            .filter(|file_name| is_shader_source(file_name))
-            .filter(|file_name| !referenced.contains(file_name))
-            .collect();
-        orphans.sort();
-        match orphans.into_iter().next() {
-            Some(orphan) => Err(ManifestError::OrphanShader(orphan)),
+        match sources
+            .keys()
+            .find(|file_name| !referenced.contains(*file_name))
+        {
+            Some(orphan) => Err(ManifestError::OrphanShader(orphan.clone())),
             None => Ok(()),
         }
     }
+}
+
+/// Shader sources found anywhere under `shader_dir`, keyed by their path relative to it
+/// (`water/causticSplat.comp`). Include files are not sources.
+pub fn collect_shader_sources(
+    shader_dir: &Path,
+) -> Result<BTreeMap<String, PathBuf>, ManifestError> {
+    let mut sources = BTreeMap::new();
+    let mut pending = vec![shader_dir.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        let entries = std::fs::read_dir(&dir)
+            .map_err(|error| ManifestError::Toml(format!("read {}: {error}", dir.display())))?;
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !is_shader_source(file_name) {
+                continue;
+            }
+            let Some(source_key) = relative_source_key(shader_dir, &path) else {
+                continue;
+            };
+            sources.insert(source_key, path);
+        }
+    }
+    Ok(sources)
+}
+
+fn relative_source_key(shader_dir: &Path, path: &Path) -> Option<String> {
+    let relative = path.strip_prefix(shader_dir).ok()?;
+    let mut key = String::new();
+    for component in relative.components() {
+        if !key.is_empty() {
+            key.push('/');
+        }
+        key.push_str(component.as_os_str().to_str()?);
+    }
+    Some(key)
 }
 
 fn parse_pass(name: &str, definition: &Value) -> Result<PassDefinition, ManifestError> {
@@ -263,6 +315,18 @@ fn validate_stage_composition(name: &str, stages: &[StageSource]) -> Result<(), 
     if is_graphics || is_compute {
         return Ok(());
     }
+
+    // RT pipeline: must have at least one RT stage (rgen/rint/rahit/rchit/rmiss) and no graphics/compute stages
+    let rt_count = count(StageKind::RayGeneration)
+        + count(StageKind::Intersection)
+        + count(StageKind::AnyHit)
+        + count(StageKind::ClosestHit)
+        + count(StageKind::Miss);
+    let is_rt = rt_count > 0 && vertex == 0 && fragment == 0 && geometry == 0 && compute == 0;
+    if is_rt {
+        return Ok(());
+    }
+
     Err(ManifestError::StageComposition {
         pass: name.to_string(),
         reason: format!(
@@ -400,17 +464,46 @@ sets = { 0 = "local" }
         let manifest = PassManifest::parse(VALID).unwrap();
         assert_eq!(manifest.validate_against_sources(&dir), Ok(()));
 
-        std::fs::write(dir.join("orphan.frag"), "").unwrap();
+        std::fs::create_dir_all(dir.join("nested")).unwrap();
+        std::fs::write(dir.join("nested/orphan.frag"), "").unwrap();
         assert_eq!(
             manifest.validate_against_sources(&dir),
-            Err(ManifestError::OrphanShader("orphan.frag".into()))
+            Err(ManifestError::OrphanShader("nested/orphan.frag".into()))
         );
+        std::fs::remove_file(dir.join("nested/orphan.frag")).unwrap();
+
+        std::fs::write(dir.join("nested/blur.comp"), "").unwrap();
+        assert_eq!(
+            manifest.validate_against_sources(&dir),
+            Err(ManifestError::OrphanShader("nested/blur.comp".into()))
+        );
+        std::fs::remove_file(dir.join("nested/blur.comp")).unwrap();
 
         std::fs::remove_file(dir.join("blur.comp")).unwrap();
         assert!(matches!(
             manifest.validate_against_sources(&dir),
             Err(ManifestError::MissingSource { .. })
         ));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn accepts_the_same_file_name_in_two_directories() {
+        let dir = std::env::temp_dir().join(format!(
+            "thyllore_shader_manifest_dirs_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(dir.join("flame")).unwrap();
+        std::fs::create_dir_all(dir.join("water")).unwrap();
+        std::fs::write(dir.join("flame/blur.comp"), "").unwrap();
+        std::fs::write(dir.join("water/blur.comp"), "").unwrap();
+
+        let manifest = PassManifest::parse(
+            "[pass.flame_blur]\nstages = [\"flame/blur.comp\"]\nsets = { 0 = \"local\" }\n\n[pass.water_blur]\nstages = [\"water/blur.comp\"]\nsets = { 0 = \"local\" }\n",
+        )
+        .unwrap();
+        assert_eq!(manifest.validate_against_sources(&dir), Ok(()));
+
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

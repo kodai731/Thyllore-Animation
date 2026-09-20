@@ -5,8 +5,11 @@ use crate::animation::spring_bone::{
     integrate_joint, recompute_global_transform, resolve_all_collisions, WorldCollider,
 };
 use crate::animation::{compose_transform, decompose_transform, BoneId, Skeleton, SkeletonPose};
-use crate::ecs::component::{ColliderShape, SpringBoneSetup};
+use crate::asset::AssetStorage;
+use crate::ecs::component::{ColliderShape, SpringBoneSetup, WithSpringBone};
 use crate::ecs::resource::{SpringBoneState, SpringChainState, SpringJointState};
+use crate::ecs::world::{Animator, World};
+use crate::hooks::model_load::LoadedModel;
 
 pub fn collider_shape_radius(shape: &ColliderShape) -> f32 {
     match shape {
@@ -594,3 +597,24 @@ fn log_joint_update(
         move_mag,
     );
 }
+
+pub fn spring_bone_attach_loaded(world: &mut World, _assets: &AssetStorage, loaded: &LoadedModel) {
+    let Some(setup) = loaded.load_result.spring_bone_setup.as_ref() else {
+        return;
+    };
+    if !world.has_component::<Animator>(loaded.entity) {
+        return;
+    }
+
+    world.insert_component(loaded.entity, setup.clone());
+    world.insert_component(loaded.entity, WithSpringBone);
+
+    log!(
+        "Applied VRMC spring bones to entity {}: {} chains, {} colliders",
+        loaded.entity,
+        setup.chains.len(),
+        setup.colliders.len()
+    );
+}
+
+crate::model_load_hook!("spring_bone", Rig, spring_bone_attach_loaded);

@@ -2,16 +2,43 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use thiserror::Error;
-use thyllore_spirv_reflect::{reflect_shader_bytes, ReflectError, ReflectedBlock};
+use thyllore_spirv_reflect::{
+    reflect_shader_bytes, ReflectError, ReflectedBlock, ShaderReflection,
+};
 
 use crate::gpu_block_codegen::{
     generate_gpu_blocks_rust, GpuBlockCodegenConfig, GpuBlockCodegenError,
 };
+use crate::spirv_files::collect_spirv_files;
 
-pub const FLAME_GPU_BLOCK_NAME: &str = "FlameUBO";
+pub struct GpuBlockTarget {
+    pub block_name: &'static str,
+    pub output_path: &'static str,
+    pub codegen_config: fn() -> GpuBlockCodegenConfig,
+}
 
-pub const FLAME_GPU_BLOCKS_PATH: &str =
-    "crates/thyllore-effect-core/src/flame/gpu/components/generated.rs";
+pub const GPU_BLOCK_TARGETS: &[GpuBlockTarget] = &[
+    GpuBlockTarget {
+        block_name: "FlameUBO",
+        output_path: "crates/thyllore-effect-core/src/flame/gpu/components/generated.rs",
+        codegen_config: flame_codegen_config,
+    },
+    GpuBlockTarget {
+        block_name: "WaterUBO",
+        output_path: "crates/thyllore-effect-core/src/water/gpu/components/generated.rs",
+        codegen_config: plain_codegen_config,
+    },
+    GpuBlockTarget {
+        block_name: "WindUBO",
+        output_path: "crates/thyllore-effect-core/src/wind/gpu/components/generated.rs",
+        codegen_config: plain_codegen_config,
+    },
+    GpuBlockTarget {
+        block_name: "TracePush",
+        output_path: "crates/thyllore-vulkan-core/src/renderer/trace_push.rs",
+        codegen_config: plain_codegen_config,
+    },
+];
 
 pub const REGENERATE_GPU_BLOCKS_COMMAND: &str =
     "cargo run -p thyllore-shader-manifest --bin generate_gpu_blocks";
@@ -25,9 +52,9 @@ pub enum FlameGpuBlocksError {
     },
     #[error("reflect {path}: {source}")]
     Reflect { path: String, source: ReflectError },
-    #[error("no SPIR-V under {spirv_dir} declares uniform block `{block}`")]
+    #[error("no SPIR-V under {spirv_dir} declares block `{block}`")]
     BlockNotFound { spirv_dir: String, block: String },
-    #[error("uniform block `{block}` differs between {first} and {second}")]
+    #[error("block `{block}` differs between {first} and {second}")]
     BlockDiffers {
         block: String,
         first: String,
@@ -50,26 +77,31 @@ fn flame_codegen_config() -> GpuBlockCodegenConfig {
     }
 }
 
-pub fn flame_gpu_blocks_source(spirv_dir: &Path) -> Result<String, FlameGpuBlocksError> {
-    let block = find_uniform_block(spirv_dir, FLAME_GPU_BLOCK_NAME)?;
-    Ok(generate_gpu_blocks_rust(&block, &flame_codegen_config())?)
+fn plain_codegen_config() -> GpuBlockCodegenConfig {
+    GpuBlockCodegenConfig {
+        regenerate_command: REGENERATE_GPU_BLOCKS_COMMAND.into(),
+        imports: vec!["cgmath::Matrix4".into()],
+        extra_derives: BTreeMap::new(),
+    }
 }
 
-fn find_uniform_block(
+pub fn gpu_blocks_source(
     spirv_dir: &Path,
-    block_name: &str,
-) -> Result<ReflectedBlock, FlameGpuBlocksError> {
+    target: &GpuBlockTarget,
+) -> Result<String, FlameGpuBlocksError> {
+    let block = find_block(spirv_dir, target.block_name)?;
+    Ok(generate_gpu_blocks_rust(
+        &block,
+        &(target.codegen_config)(),
+    )?)
+}
+
+fn find_block(spirv_dir: &Path, block_name: &str) -> Result<ReflectedBlock, FlameGpuBlocksError> {
     let io_error = |path: &Path, source| FlameGpuBlocksError::Io {
         path: path.display().to_string(),
         source,
     };
-    let mut paths: Vec<_> = std::fs::read_dir(spirv_dir)
-        .map_err(|source| io_error(spirv_dir, source))?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "spv"))
-        .collect();
-    paths.sort();
+    let paths = collect_spirv_files(spirv_dir).map_err(|source| io_error(spirv_dir, source))?;
 
     let mut found: Option<(ReflectedBlock, &Path)> = None;
     for path in &paths {
@@ -79,12 +111,7 @@ fn find_uniform_block(
                 path: path.display().to_string(),
                 source,
             })?;
-        let Some(block) = reflection
-            .bindings
-            .into_iter()
-            .filter_map(|binding| binding.block)
-            .find(|block| block.type_name == block_name)
-        else {
+        let Some(block) = find_declared_block(reflection, block_name) else {
             continue;
         };
 
@@ -106,5 +133,23 @@ fn find_uniform_block(
         .ok_or_else(|| FlameGpuBlocksError::BlockNotFound {
             spirv_dir: spirv_dir.display().to_string(),
             block: block_name.to_string(),
+        })
+}
+
+/// A block is found under its own name or, when it only wraps one struct, under that struct's
+/// name, so a GLSL struct shared by a uniform block and a `buffer_reference` generates once.
+fn find_declared_block(reflection: ShaderReflection, block_name: &str) -> Option<ReflectedBlock> {
+    reflection
+        .bindings
+        .into_iter()
+        .filter_map(|binding| binding.block)
+        .chain(reflection.push_constant)
+        .find_map(|block| {
+            if block.type_name == block_name {
+                return Some(block);
+            }
+            block
+                .single_struct_payload()
+                .filter(|payload| payload.type_name == block_name)
         })
 }

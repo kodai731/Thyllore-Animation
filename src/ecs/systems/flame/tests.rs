@@ -1,14 +1,15 @@
-use crate::app::FrameContext;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{
-    apply_flame_param_value, EntityIcon, FlameBaked, FlameBoneAttachment, FlameEffect, FlameParam,
-    FlameTemporalAccum, FlameTrail, FLAME_DOMAIN,
+    apply_flame_param_value, AppliedFlameStyle, EntityIcon, FlameBaked, FlameBoneAttachment,
+    FlameEffect, FlameParam, FlameTemporalAccum, FlameTrail, FLAME_DOMAIN,
 };
 use crate::ecs::resource::{
-    BatchRun, FlameRenderSettings, FlameTemporalSnapshot, FlameTemporalState, HierarchyState,
-    LightState, ProjectionData, TimelineState,
+    BatchRun, ClipLibrary, FlameHistorySnapshot, FlameHistorySnapshotState, FlameRenderSettings,
+    HierarchyState, LightState, ProjectionData, TimelineState,
 };
+use crate::ecs::systems::effect_time::{resolve_effect_time, EffectTimeSources};
 use crate::ecs::world::{Entity, Transform, World};
+use crate::ecs::FrameContext;
 use thyllore_effect_core::{advance_flame_time, advance_flame_trail};
 
 use super::*;
@@ -114,4 +115,118 @@ fn resolve_returns_none_without_any_flame() {
     world.insert_resource(HierarchyState::default());
 
     assert_eq!(resolve_selected_flame(&world), None);
+}
+
+fn flame_with_keyed_clip(world: &mut World, assets: &mut AssetStorage) -> Entity {
+    use thyllore_anim_core::editable::{curve_add_keyframe, InterpolationType};
+
+    let entity = spawn_flame_with_clip(world, assets, DEFAULT_FLAME_NAME, FlameEffect::default());
+    let clip_id = crate::ecs::systems::find_entity_clip_id(world, entity).expect("flame clip");
+    let mut library = world.resource_mut::<ClipLibrary>();
+    let clip = library.get_mut(clip_id).expect("clip registered");
+    let curve = clip.get_or_add_scalar_curve(FlameParam::Height.property_type());
+    let key = curve_add_keyframe(curve, 1.0, 2.0);
+    curve
+        .get_keyframe_mut(key)
+        .expect("key inserted")
+        .interpolation = InterpolationType::Bezier;
+    entity
+}
+
+#[test]
+fn scene_entities_restore_the_flame_style_and_its_keyed_clip() {
+    use thyllore_anim_core::editable::InterpolationType;
+
+    let mut source = crate::scene::world_with_scene_hooks();
+    let mut source_assets = AssetStorage::new();
+    let flame = flame_with_keyed_clip(&mut source, &mut source_assets);
+    source
+        .get_component_mut::<FlameEffect>(flame)
+        .expect("flame effect")
+        .height = 7.5;
+    source.insert_component(
+        flame,
+        AppliedFlameStyle {
+            name: "pillar".to_string(),
+            version: 3,
+        },
+    );
+    let entities = crate::scene::capture_scene_entities(&source);
+    let clips = crate::scene::capture_scheduled_clips(&source);
+    assert_eq!(clips.len(), 1);
+    assert!(entities[0].components.contains_key("clip"));
+    assert!(entities[0].components.contains_key("flame_style"));
+
+    let mut world = crate::scene::world_with_scene_hooks();
+    let mut assets = AssetStorage::new();
+    crate::ecs::systems::clip_library_systems::clip_library_register_loaded(
+        &mut world,
+        &mut assets,
+        clips,
+    );
+    crate::scene::apply_scene_entities(&mut world, &mut assets, &entities);
+
+    let flames = world.entities_with::<FlameEffect>();
+    assert_eq!(flames.len(), 1);
+    assert_eq!(
+        world
+            .get_component::<FlameEffect>(flames[0])
+            .map(|e| e.height),
+        Some(7.5)
+    );
+    let style = world
+        .get_component::<AppliedFlameStyle>(flames[0])
+        .expect("style restored");
+    assert_eq!((style.name.as_str(), style.version), ("pillar", 3));
+
+    let clip_id = crate::ecs::systems::find_entity_clip_id(&world, flames[0]).expect("clip");
+    let library = world.resource::<ClipLibrary>();
+    let curve = library
+        .get(clip_id)
+        .expect("scheduled clip is in the library")
+        .get_scalar_curve(FlameParam::Height.property_type())
+        .expect("keyed curve restored");
+    assert_eq!(curve.keyframes.len(), 1);
+    assert_eq!(curve.keyframes[0].interpolation, InterpolationType::Bezier);
+    assert_eq!(library.source_clips.len(), 1, "no orphan clip");
+}
+
+#[test]
+fn reloading_scene_entities_replaces_the_flame_and_its_clip() {
+    let mut source = crate::scene::world_with_scene_hooks();
+    let mut source_assets = AssetStorage::new();
+    spawn_flame_with_clip(
+        &mut source,
+        &mut source_assets,
+        DEFAULT_FLAME_NAME,
+        FlameEffect::default(),
+    );
+    let entities = crate::scene::capture_scene_entities(&source);
+
+    let mut world = crate::scene::world_with_scene_hooks();
+    let mut assets = AssetStorage::new();
+    crate::scene::apply_scene_entities(&mut world, &mut assets, &entities);
+    let first = world.entities_with::<FlameEffect>()[0];
+    assert!(crate::ecs::systems::find_entity_clip_id(&world, first).is_some());
+    crate::scene::apply_scene_entities(&mut world, &mut assets, &entities);
+
+    let flames = world.entities_with::<FlameEffect>();
+    assert_eq!(flames.len(), 1);
+    assert_ne!(flames[0], first);
+    assert_eq!(world.resource::<ClipLibrary>().source_clips.len(), 1);
+}
+
+#[test]
+fn fixed_step_flame_time_follows_the_time_scale_and_offset() {
+    let sources = EffectTimeSources {
+        batch_fixed_time: None,
+        fixed_step_time: Some(2.0),
+        timeline: None,
+        delta_time: 1.0 / 60.0,
+        free_run_when_paused: false,
+    };
+
+    let mut flame_time = 0.0;
+    resolve_effect_time(&mut flame_time, 2.0, 1.5, sources);
+    assert!((flame_time - 5.5).abs() < 1e-6, "got {flame_time}");
 }

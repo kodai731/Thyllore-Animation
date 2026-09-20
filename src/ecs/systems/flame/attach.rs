@@ -1,6 +1,6 @@
-use crate::app::FrameContext;
-use crate::ecs::component::FlameBoneAttachment;
+use crate::ecs::component::{FlameBoneAttachment, FlameEffect};
 use crate::ecs::world::Entity;
+use crate::ecs::FrameContext;
 
 pub fn flame_bone_attach_sync(ctx: &mut FrameContext) {
     use crate::ecs::component::resolve_bone_index;
@@ -37,7 +37,7 @@ pub fn flame_bone_attach_sync(ctx: &mut FrameContext) {
             Some(&skeleton),
         );
 
-    let flame_entities: Vec<Entity> = ctx.world.query_flames();
+    let flame_entities: Vec<Entity> = ctx.world.entities_with::<FlameEffect>();
     for &entity in &flame_entities {
         let attachment = match ctx.world.get_component::<FlameBoneAttachment>(entity) {
             Some(a) => a,

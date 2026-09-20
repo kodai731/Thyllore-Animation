@@ -18,18 +18,18 @@ pub fn dispatch_hierarchy_events(
     events: &[UIEvent],
     world: &mut World,
     assets: &AssetStorage,
-) -> Vec<super::super::ui_event_systems::DeferredAction> {
-    let deferred = dispatch_hierarchy_entity_events(events, world);
+) -> Vec<crate::ecs::resource::AppCommand> {
+    let commands = dispatch_hierarchy_entity_events(events, world);
     dispatch_hierarchy_bone_events(events, world, assets);
     sync_curve_editor_on_selection(events, world, assets);
-    deferred
+    commands
 }
 
 fn dispatch_hierarchy_entity_events(
     events: &[UIEvent],
     world: &mut World,
-) -> Vec<super::super::ui_event_systems::DeferredAction> {
-    let mut deferred = Vec::new();
+) -> Vec<crate::ecs::resource::AppCommand> {
+    let mut commands = Vec::new();
 
     for event in events {
         match event {
@@ -112,11 +112,9 @@ fn dispatch_hierarchy_entity_events(
                     hierarchy_state.selected_entity = None;
                     hierarchy_state.multi_selection.clear();
 
-                    deferred.push(
-                        super::super::ui_event_systems::DeferredAction::DeleteEntities {
-                            entities: all_to_delete,
-                        },
-                    );
+                    commands.push(crate::ecs::resource::AppCommand::DeleteEntities {
+                        entities: all_to_delete,
+                    });
                 }
             }
 
@@ -137,7 +135,7 @@ fn dispatch_hierarchy_entity_events(
         }
     }
 
-    deferred
+    commands
 }
 
 fn dispatch_hierarchy_bone_events(events: &[UIEvent], world: &mut World, assets: &AssetStorage) {

@@ -1,0 +1,90 @@
+use crate::asset::AssetStorage;
+use crate::ecs::component::{WaterTorusEffect, WATER_DOMAIN};
+use crate::ecs::resource::HierarchyState;
+use crate::ecs::world::{Entity, Transform, World};
+use crate::hooks::effect_spawn::EffectSpawnHook;
+use crate::hooks::scene::spawn_scene_owner;
+
+pub const DEFAULT_WATER_NAME: &str = "Water";
+
+pub const WATER_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
+    key: "water",
+    max_instances: thyllore_effect_core::WATER_MAX_INSTANCES,
+    spawn: spawn_water_instance,
+    entities: water_entities,
+    default_in_empty_scene: false,
+};
+
+crate::effect_spawn_hook!(WATER_SPAWN_HOOK);
+
+fn water_entities(world: &World) -> Vec<Entity> {
+    world.entities_with::<WaterTorusEffect>()
+}
+
+fn spawn_water_instance(world: &mut World, assets: &mut AssetStorage, ordinal: usize) -> Entity {
+    let effect = WaterTorusEffect {
+        position: cgmath::Vector3::new(0.0, -0.5, 2.5 * ordinal as f32),
+        ..WaterTorusEffect::default()
+    };
+    spawn_water_with_clip(
+        world,
+        assets,
+        &format!("{DEFAULT_WATER_NAME} {}", ordinal + 1),
+        effect,
+    )
+}
+
+/// Spawns a water as a regular scene entity so the hierarchy, inspector and transform gizmo
+/// can all reach it through the same components they use for every other object.
+pub fn spawn_water(world: &mut World, name: &str, effect: WaterTorusEffect) -> Entity {
+    spawn_scene_owner(world, name, effect)
+}
+
+/// Spawn a water entity together with its (empty) animation clip and schedule
+/// instance, so every created water is animatable and shows a Timeline clip
+/// lane immediately instead of waiting for the first inserted key.
+pub fn spawn_water_with_clip(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    name: &str,
+    effect: WaterTorusEffect,
+) -> Entity {
+    let entity = spawn_water(world, name, effect);
+    crate::ecs::systems::scalar_clip_systems::ensure_entity_clip(
+        world,
+        assets,
+        entity,
+        &WATER_DOMAIN,
+    );
+    entity
+}
+
+/// The water the UI and the water events act on: the selected entity when it is a water,
+/// otherwise the first one. Keeping this in one place is what lets the hierarchy selection
+/// stay the single source of truth.
+pub fn resolve_selected_water(world: &World) -> Option<Entity> {
+    let selected = world
+        .get_resource::<HierarchyState>()
+        .and_then(|state| state.selected_entity);
+
+    if let Some(entity) = selected {
+        if world.get_component::<WaterTorusEffect>(entity).is_some() {
+            return Some(entity);
+        }
+    }
+
+    world.entities_with::<WaterTorusEffect>().first().copied()
+}
+
+/// Position and rotation live on the Transform; the effect only mirrors them for the UBO.
+pub fn write_water_transform(
+    world: &mut World,
+    entity: Entity,
+    translation: cgmath::Vector3<f32>,
+    rotation: cgmath::Quaternion<f32>,
+) {
+    if let Some(transform) = world.get_component_mut::<Transform>(entity) {
+        transform.translation = translation;
+        transform.rotation = rotation;
+    }
+}

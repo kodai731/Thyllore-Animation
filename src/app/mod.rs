@@ -1,10 +1,19 @@
+pub mod bootstrap;
+pub mod capture_context;
 pub mod cleanup;
 pub mod color_test_quad;
+pub(crate) mod command;
 mod command_recording;
+pub mod config;
 pub mod data;
-pub mod frame_context;
+pub mod effect_hooks;
+pub(crate) mod features;
 pub mod init;
-pub mod model_loader;
+pub mod lifecycle;
+pub mod model;
+mod pass_targets;
+pub mod post_process;
+pub mod raytracing;
 pub mod render;
 pub mod render_context;
 pub mod scene_model;
@@ -12,8 +21,7 @@ pub mod update;
 pub mod util;
 pub mod viewport;
 
-pub use frame_context::FrameContext;
-pub use render_context::RenderContext;
+pub use render_context::{build_frame_render_context, build_pass_context, RenderContext};
 
 pub use data::AppData;
 pub use init::*;
@@ -33,6 +41,7 @@ pub struct App {
     pub resized: bool,
     pub start: Instant,
     pub last_update_time: f32,
+    pub last_frame_interval: f32,
     pub gpu_timestamp_profiler: thyllore_vulkan_core::GpuTimestampProfiler,
     pub last_frame_instant: Option<Instant>,
 }

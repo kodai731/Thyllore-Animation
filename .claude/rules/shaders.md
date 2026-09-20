@@ -2,7 +2,9 @@
 paths:
   - "shaders/**"
   - "assets/shaders/**"
-  - "build.rs"
+  - "crates/thyllore-vulkan-core/build.rs"
+  - "crates/thyllore-shader-manifest/**"
+  - "crates/thyllore-spirv-reflect/**"
 ---
 
 # Shader System
@@ -15,20 +17,28 @@ Stale `.spv` files with no matching source are removed automatically.
 
 ## Shader Source Files
 
-Shader source files are located in `shaders/`:
+Shader source files are located in `shaders/` and its subdirectories; `build.rs` walks the tree and mirrors each
+source directory under `assets/shaders/`, so file names only have to be unique inside their directory:
 
-- `vertex.vert` -> `assets/shaders/vert.spv`
-- `fragment.frag` -> `assets/shaders/frag.spv`
-- `gbufferVertex.vert` -> `assets/shaders/gbufferVert.spv`
-- `gbufferFragment.frag` -> `assets/shaders/gbufferFrag.spv`
-- `rayQueryShadow.comp` -> `assets/shaders/rayQueryShadowComp.spv`
+- `model/vertex.vert` -> `assets/shaders/model/vert.spv`
+- `model/fragment.frag` -> `assets/shaders/model/frag.spv`
+- `gbuffer/vertex.vert` -> `assets/shaders/gbuffer/vert.spv`
+- `gbuffer/fragment.frag` -> `assets/shaders/gbuffer/frag.spv`
+- `raytracing/rayQueryShadow.comp` -> `assets/shaders/raytracing/rayQueryShadowComp.spv`
+- `water/causticSplat.comp` -> `assets/shaders/water/causticSplatComp.spv`
 - etc.
+
+Feature-specific shaders live in a subdirectory with their own `include/` (`shaders/water/`, `shaders/water/include/`);
+shared includes live in `shaders/include/` (`common.glsl` holds `PI` / `TWO_PI` / `HALF_PI`; never re-declare them).
+glslc runs with `-I shaders`, so every `#include` is written as a path from the `shaders/` root
+(`#include "include/common.glsl"`, `#include "water/include/lb.glsl"`). `passes.toml` references stages by their
+path relative to `shaders/` (`water/resolveFragment.frag`).
 
 ## Pass Manifest (`shaders/passes.toml`)
 
 `shaders/passes.toml` is the only hand-written pass definition. Each `[pass.<name>]` lists its `stages`
-(source file names; the stage is derived from the extension) and `sets` (set index -> role: `frame` = 0,
-`material` = 1, `object` = 2, `local` = pass-owned). `crates/thyllore-vulkan-core/build.rs` validates the file
+(source paths relative to `shaders/`; the stage is derived from the extension) and `sets` (set index -> role:
+`frame` = 0, `material` = 1, `object` = 2, `local` = pass-owned). `crates/thyllore-vulkan-core/build.rs` validates the file
 (missing source, orphan shader not referenced by any pass, bad stage composition, role/set convention) and
 generates `PassId`, `PassShaders` constants and `ALL_PASSES` into `$OUT_DIR/pass_manifest.rs`.
 
@@ -51,17 +61,37 @@ renaming a descriptor in GLSL breaks the Rust build at the referencing site.
 - `ReflectedLayoutSpec::with_override(shader_bindings::.., vk::DescriptorType::..)` overrides a descriptor type.
 - `PipelineBuilder::descriptor_layouts(&[&ReflectedSetLayout])` / `RRPipeline::new_compute*` verify at pipeline
   creation that every (set, binding) used by the pass shaders exists in the given layouts with a matching type.
+- A pass whose stages declare a `push_constant` block also gets `pub const PUSH_CONSTANT: PushConstantLayout`
+  (block name, declaring stages, size); every stage must declare the identical block, so no `layout(offset = ..)`
+  and no hand-written offset or size constants exist. `push_constant_range(&<pass>::PUSH_CONSTANT)` builds the
+  `vk::PushConstantRange` (`effect_trace` uses it).
+- An unnamed block instance (`uniform WaterBlock { WaterUBO water; };`) is reflected under the block name
+  (`WATER_BLOCK`).
+
+## Generated GPU Block Structs (`generate_gpu_blocks`)
+
+The Rust struct that mirrors a GLSL uniform or push constant block is never written by hand. It is generated from
+the compiled SPIR-V into a checked-in file (`FlameUBO`, `WaterUBO`, `WindUBO` under
+`crates/thyllore-effect-core/src/<effect>/gpu/components/generated.rs`, `TracePush` under
+`crates/thyllore-vulkan-core/src/renderer/trace_push.rs`; the list is `GPU_BLOCK_TARGETS` in
+`thyllore-shader-manifest`).
+
+After changing such a block in GLSL:
+
+```bash
+cargo build                                                    # compiles the SPIR-V the generator reads
+cargo run -p thyllore-shader-manifest --bin generate_gpu_blocks
+```
+
+Then fix the Rust call sites that construct the struct. The `block_definition` golden test fails with this command
+in its message whenever a checked-in file is stale, so forgetting the step cannot pass the tests.
+
+Fields shared by a uniform block and a `buffer_reference` are declared once as a GLSL `struct` in the effect's
+`include/ubo.glsl` and wrapped by both; the generator finds such a struct through the wrapping block, so the Rust
+struct keeps the struct's name. Adding a block = a `GpuBlockTarget` entry, a `pub mod` for the output file, and
+running the command once.
 
 ## Shader Modifications
 
 After editing shaders in `shaders/`, the build system automatically compiles them to `assets/shaders/` directory during
 `cargo build`. The application loads compiled shaders from `assets/shaders/` directory.
-
-## Reference Documentation
-
-The `memo.txt` file contains useful reference links for:
-
-- Vulkan coordinate systems and layout qualifiers
-- glTF mesh loading examples
-- FBX property access patterns
-- Animation and skinning techniques

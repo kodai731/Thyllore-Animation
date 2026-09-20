@@ -463,11 +463,8 @@ impl World {
             .collect()
     }
 
-    pub fn query_flames(&self) -> Vec<Entity> {
-        let mut entities: Vec<Entity> = self
-            .iter_components::<crate::ecs::component::FlameEffect>()
-            .map(|(e, _)| e)
-            .collect();
+    pub fn entities_with<C: crate::ecs::storage::Component + 'static>(&self) -> Vec<Entity> {
+        let mut entities: Vec<Entity> = self.iter_components::<C>().map(|(e, _)| e).collect();
         entities.sort();
         entities
     }
@@ -675,17 +672,6 @@ impl<'a> EntityBuilder<'a> {
 
     pub fn with_constrained(self) -> Self {
         self.world.insert_component(self.entity, Constrained);
-        self
-    }
-
-    pub fn with_flame(self, effect: crate::ecs::component::FlameEffect) -> Self {
-        self.world.insert_component(self.entity, effect);
-        self.world
-            .insert_component(self.entity, crate::ecs::component::FlameBaked::default());
-        self.world.insert_component(
-            self.entity,
-            crate::ecs::component::FlameTemporalAccum::default(),
-        );
         self
     }
 

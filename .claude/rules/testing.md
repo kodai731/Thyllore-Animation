@@ -106,7 +106,7 @@ same check locally with `scripts/ci_v2_curve_copilot_inference_smoke.sh`.
 |---|---|
 | `crates/thyllore-ml-core/src/**` (v2 inference / forecast / pybindings) | `cargo test -p thyllore-ml-core --lib` + `scripts/collect_wheels.sh` |
 | Blender addon (`blender_addon/**`) | `scripts/run_blender_debug.sh` — builds the debug wheel + addon, installs, launches the test scene; the operator smoke runs headless via `blender_addon/tests/curve_copilot_operator_smoke.py` |
-| engine ML systems (`src/ecs/systems/curve_suggestion_systems.rs`, `src/ml/`) | `cargo check --lib` + `cargo test --lib curve_suggestion` |
+| engine ML systems (`src/ecs/systems/curve_copilot/`, `src/ml/`) | `cargo check --lib` + `cargo test --lib curve_suggestion` |
 | Animation / ECS / rendering (no ML) | `cargo test --lib` + `cargo test --test ecs_tests --no-default-features` |
 
 ONNX Runtime must be present at `vendor/onnxruntime/onnxruntime-linux-x64-*/lib/`
@@ -119,49 +119,40 @@ and `ORT_DYLIB_PATH` set (see `.cargo/config.toml`) for any test that loads a mo
 
 In all other cases, exhaust the local reproduction first.
 
-The project includes integration tests in the `tests/` directory:
+## Workspace-root `tests/`
 
-## Test Files
+Integration tests that exercise the full main crate. They run only on developer machines (see above) and
+always with `--no-default-features` (the `ml` feature's `ort` dependency can crash a test binary at startup,
+see `CLAUDE.md`):
 
-**`integration_tests.rs`** - Project structure and configuration tests
+- `ecs_tests.rs` — ECS world, systems and scene round trips
+- `gltf_export_tests.rs`, `animation_roundtrip_tests.rs` — export / re-import parity
+- `asset_dependency_tests.rs`, `closed_form_guard.rs` — invariants over assets and the analytic core
+- `integration_tests.rs`, `model_loading_tests.rs`, `shader_tests.rs` — project structure, model files,
+  compiled SPIR-V
+- `compare_fbx_dom.rs`, `compare_fbx_structure.rs`, `inspect_fbx_binary.rs` — FBX inspection helpers
 
-- Verifies required directories exist
-- Checks Cargo files and configuration
-- Validates font and vendor directory structure
-
-**`model_loading_tests.rs`** - Model loader tests
-
-- Tests glTF and FBX model file existence
-- Verifies model files are not empty
-- Checks texture file availability
-- Validates model directory structure
-
-**`shader_tests.rs`** - Shader compilation tests
-
-- Verifies shader source files exist
-- Checks compiled shader files (`.spv`)
-- Validates SPIR-V header format
-- Ensures shader count matches between source and compiled files
-
-## Test Counts
-
-- Unit tests: 58 (math: 35, gltf: 11, fbx: 12)
-- Integration tests: 31 (project structure: 12, model: 9, shader: 10)
+Do not record test counts in documentation; they change with every PR. The current numbers are the output
+of the commands below.
 
 ## Running Tests
 
 ```bash
-cargo test                              # Run all tests
-cargo test --test integration_tests     # Run specific test file
-cargo test --test model_loading_tests
-cargo test --test shader_tests
-cargo test -- --nocapture               # Run tests with output
-cargo test -- --ignored                 # Run ignored tests
+cargo test --lib                                        # lib tests (ml enabled, safe)
+cargo test --test ecs_tests --no-default-features       # one integration test binary
+cargo test --no-default-features                        # every test with ml disabled
+cargo test -p thyllore-grpc-client --no-default-features
+cargo test --lib -- --nocapture                         # with output
+cargo test -p thyllore-ml-core --test v2_curve_copilot_golden_parity -- --ignored
 ```
 
-## Build + Test
+Never run `cargo test` or `cargo test --test <name>` with the default features: the integration binaries
+link `ort` and may crash before the first test.
 
-Use `build-with-tests.ps1` to run build and tests sequentially, saving results to `log/log_test.txt`
+## Build + Test (Windows)
+
+`build-with-tests.ps1` runs the build and the three safe invocations above sequentially and saves the
+results to `log/log_test.txt`:
 
 ```powershell
 .\build-with-tests.ps1            # Build and run tests

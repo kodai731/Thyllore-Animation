@@ -2,16 +2,26 @@
 
 pub mod debug;
 pub mod flame;
+pub mod volume;
+pub mod water;
+pub mod wind;
 
 pub use thyllore_texture_fit_core as flame_fit;
 
-pub use thyllore_scene_core::{find_scalar_param, find_ui_param, ScalarParam, UiParam};
+pub use thyllore_scene_core::{
+    find_scalar_param, find_ui_param, ScalarParam, SceneComponent, UiParam,
+};
 
 pub use debug::flame_wall_probe::{
     probe_flame_wall, WallProbeRay, WallProbeReport, WallProbeView, WALL_PROBE_GRID_COLS,
     WALL_PROBE_GRID_ROWS,
 };
 pub use flame::*;
+pub use volume::{
+    clamp_ray_to_cone_frustum, RayKnots, RayPuffs, VolumeShell, PUFFS_PER_RAY, RAY_MAX_KNOTS,
+};
+pub use water::*;
+pub use wind::*;
 
 pub use flame::analytic::field_manifest as flame_field_manifest;
 pub use flame::analytic::pick as flame_pick;

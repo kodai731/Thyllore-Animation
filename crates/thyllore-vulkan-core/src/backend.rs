@@ -1,10 +1,8 @@
-use std::ffi::c_void;
 use std::mem::size_of;
 use std::rc::Rc;
 
 use anyhow::Result;
 use cgmath::{Matrix4, Vector3, Vector4};
-use vulkanalia::prelude::v1_0::*;
 
 use thyllore_render_core::{
     BufferMemoryType, DistanceAttenuation, FrameUBO, IndexBufferHandle, LineMesh, MeshId,
@@ -53,27 +51,33 @@ impl<'a> VulkanBackend<'a> {
     }
 }
 
+/// BLAS list holds only gbuffer meshes, so mesh index and BLAS index diverge once a mesh is hidden.
+fn collect_blas_index_of_mesh(graphics: &GraphicsResources) -> Vec<Option<usize>> {
+    let mut next_blas_index = 0;
+
+    graphics
+        .meshes
+        .iter()
+        .map(|mesh| {
+            if !mesh.render_to_gbuffer {
+                return None;
+            }
+
+            let blas_index = next_blas_index;
+            next_blas_index += 1;
+            Some(blas_index)
+        })
+        .collect()
+}
+
 impl<'a> RenderBackend for VulkanBackend<'a> {
     unsafe fn upload_mesh_vertices(&mut self, mesh_id: MeshId) -> Result<()> {
-        if mesh_id >= self.graphics.meshes.len() {
-            return Ok(());
-        }
-
-        let mesh = &mut self.graphics.meshes[mesh_id];
-        let vertices = &mesh.vertex_data.vertices;
-        let vertex_count = vertices.len();
-        let vertex_stride = size_of::<Vertex>();
-
-        mesh.vertex_buffer.update(
+        self.graphics.upload_mesh_vertices(
             self.instance,
             self.device,
             self.command_pool.as_ref(),
-            (vertex_stride * vertex_count) as vk::DeviceSize,
-            vertices.as_ptr() as *const c_void,
-            vertex_count,
-        )?;
-
-        Ok(())
+            mesh_id,
+        )
     }
 
     unsafe fn update_acceleration_structure(&mut self, mesh_ids: &[MeshId]) -> Result<()> {
@@ -81,16 +85,18 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             return Ok(());
         };
 
+        let blas_index_of_mesh = collect_blas_index_of_mesh(self.graphics);
+
         for &mesh_id in mesh_ids {
-            if mesh_id >= self.graphics.meshes.len() {
+            let Some(blas_index) = blas_index_of_mesh.get(mesh_id).copied().flatten() else {
                 continue;
-            }
-            if mesh_id >= accel_struct.blas_list.len() {
+            };
+            if blas_index >= accel_struct.blas_list.len() {
                 continue;
             }
 
             let mesh = &self.graphics.meshes[mesh_id];
-            let blas = &mut accel_struct.blas_list[mesh_id];
+            let blas = &mut accel_struct.blas_list[blas_index];
 
             RRAccelerationStructure::update_blas(
                 self.instance,
@@ -120,6 +126,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             self.command_pool.as_ref(),
             tlas,
             &accel_struct.blas_list,
+            &accel_struct.procedural_blas,
         )?;
 
         Ok(())
@@ -307,12 +314,8 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         distance_attenuation: DistanceAttenuation,
         exposure_value: f32,
     ) -> Result<()> {
-        let scene_memory = match (
-            self.raytracing.scene_uniform_buffer,
-            self.raytracing.scene_uniform_buffer_memory,
-        ) {
-            (Some(_), Some(m)) => m,
-            _ => return Ok(()),
+        let Some(scene_uniform_buffer) = self.raytracing.scene_uniform_buffer.as_ref() else {
+            return Ok(());
         };
 
         let scene_data = SceneUniformData {
@@ -336,21 +339,6 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             exposure_value,
         };
 
-        let data_ptr = self.device.device.map_memory(
-            scene_memory,
-            0,
-            std::mem::size_of::<SceneUniformData>() as u64,
-            vk::MemoryMapFlags::empty(),
-        )?;
-
-        std::ptr::copy_nonoverlapping(
-            &scene_data as *const SceneUniformData,
-            data_ptr as *mut SceneUniformData,
-            1,
-        );
-
-        self.device.device.unmap_memory(scene_memory);
-
-        Ok(())
+        scene_uniform_buffer.write_slot(&self.device, 0, &scene_data)
     }
 }

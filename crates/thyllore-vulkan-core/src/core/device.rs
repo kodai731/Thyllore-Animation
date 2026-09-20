@@ -26,6 +26,7 @@ pub const HEADLESS_DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
     vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION.name,
     vk::KHR_ACCELERATION_STRUCTURE_EXTENSION.name,
     vk::KHR_RAY_QUERY_EXTENSION.name,
+    vk::KHR_RAY_TRACING_PIPELINE_EXTENSION.name,
     vk::KHR_DEFERRED_HOST_OPERATIONS_EXTENSION.name,
 ];
 
@@ -279,11 +280,14 @@ unsafe fn create_device_common(
         .sample_rate_shading(true)
         .fill_mode_non_solid(true)
         .independent_blend(true)
-        .geometry_shader(true);
+        .geometry_shader(true)
+        .shader_int64(true);
 
     let mut accel_features =
         vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder().acceleration_structure(true);
     let mut ray_query_features = vk::PhysicalDeviceRayQueryFeaturesKHR::builder().ray_query(true);
+    let mut ray_tracing_pipeline_features =
+        vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder().ray_tracing_pipeline(true);
     let mut vulkan_12_features =
         vk::PhysicalDeviceVulkan12Features::builder().buffer_device_address(true);
 
@@ -294,7 +298,8 @@ unsafe fn create_device_common(
         .enabled_features(&features)
         .push_next(&mut vulkan_12_features)
         .push_next(&mut accel_features)
-        .push_next(&mut ray_query_features);
+        .push_next(&mut ray_query_features)
+        .push_next(&mut ray_tracing_pipeline_features);
 
     let vulkan_device = instance.create_device(*physical_device, &info, None)?;
     Ok(Device::new(vulkan_device))
@@ -649,8 +654,7 @@ pub unsafe fn destroy_headless_instance(instance: &Instance) {
 
 pub unsafe fn destroy_headless_device(device: &RRDevice, instance: &Instance) {
     device.device.device_wait_idle().ok();
-    device.destroy_descriptor_pools();
-    device.device.destroy_device(None);
+    device.destroy();
     destroy_headless_instance(instance);
 }
 
@@ -676,6 +680,11 @@ impl RRDevice {
 
     pub unsafe fn destroy_descriptor_pools(&self) {
         self.descriptor_allocator.borrow_mut().destroy(&self.device);
+    }
+
+    pub unsafe fn destroy(&self) {
+        self.destroy_descriptor_pools();
+        self.device.destroy_device(None);
     }
 
     pub unsafe fn wait_graphics_queue_idle(&self) -> Result<()> {

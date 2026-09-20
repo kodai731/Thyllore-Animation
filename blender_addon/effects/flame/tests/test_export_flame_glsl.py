@@ -8,10 +8,13 @@ import tempfile
 
 import pytest
 
+import importlib.util
+
 SCRIPT = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "scripts", "blender", "flame", "export_glsl.py")
-SCRIPTS_DIR = os.path.dirname(SCRIPT)
-sys.path.insert(0, SCRIPTS_DIR)
-from export_glsl import expand_includes
+_flame_spec = importlib.util.spec_from_file_location("flame_export_glsl", SCRIPT)
+_flame_module = importlib.util.module_from_spec(_flame_spec)
+_flame_spec.loader.exec_module(_flame_module)
+expand_includes = _flame_module.expand_includes
 
 
 def _run_exporter(tmp_path: str) -> tuple[str, dict]:
@@ -31,7 +34,7 @@ def _run_exporter(tmp_path: str) -> tuple[str, dict]:
 
 
 def _expanded_lines(repo_root: str) -> list[str]:
-    return expand_includes("flameResolveFragment.frag", repo_root)
+    return expand_includes("flame/resolveFragment.frag", repo_root)
 
 
 @pytest.fixture(scope="module")

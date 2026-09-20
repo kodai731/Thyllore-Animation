@@ -2,8 +2,9 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use super::App;
+use crate::app::build_pass_context;
 use crate::ecs::resource::GpuPassTimings;
-use crate::vulkanr::context::FrameSync;
+use crate::hooks::pass::{TargetUse, TransientRequest};
 use crate::vulkanr::renderer::deferred;
 
 impl App {
@@ -39,13 +40,18 @@ impl App {
             .map(|t| t.frame + 1)
             .unwrap_or(1);
 
-        if let Some(passes) = self
+        if let Some(mut passes) = self
             .gpu_timestamp_profiler
             .collect(&self.rrdevice.device, image_index)
         {
+            let frame_total_ms = passes
+                .iter()
+                .position(|(label, _)| label == "frame")
+                .map(|i| passes.remove(i).1);
             self.data.ecs_world.insert_resource(GpuPassTimings {
                 frame: next_frame,
                 passes,
+                frame_total_ms,
             });
         }
 
@@ -103,113 +109,7 @@ impl App {
                 && self.data.raytracing.tonemap_pipeline.is_some();
 
             if has_hdr_pipeline {
-                self.gpu_timestamp_profiler.begin_scope(
-                    &self.rrdevice.device,
-                    command_buffer,
-                    image_index,
-                    "composite_hdr".to_string(),
-                );
-                deferred::record_composite_to_hdr(self, command_buffer)?;
-                self.gpu_timestamp_profiler.end_scope(
-                    &self.rrdevice.device,
-                    command_buffer,
-                    image_index,
-                );
-
-                self.gpu_timestamp_profiler.begin_scope(
-                    &self.rrdevice.device,
-                    command_buffer,
-                    image_index,
-                    "onion_skin".to_string(),
-                );
-                deferred::record_onion_skin_pass(self, command_buffer, image_index)?;
-                self.gpu_timestamp_profiler.end_scope(
-                    &self.rrdevice.device,
-                    command_buffer,
-                    image_index,
-                );
-
-                self.gpu_timestamp_profiler.begin_scope(
-                    &self.rrdevice.device,
-                    command_buffer,
-                    image_index,
-                    "flame".to_string(),
-                );
-                deferred::record_flame_passes(self, command_buffer, image_index)?;
-                self.gpu_timestamp_profiler.end_scope(
-                    &self.rrdevice.device,
-                    command_buffer,
-                    image_index,
-                );
-
-                self.gpu_timestamp_profiler.begin_scope(
-                    &self.rrdevice.device,
-                    command_buffer,
-                    image_index,
-                    "bloom".to_string(),
-                );
-                deferred::record_bloom(self, command_buffer)?;
-                self.gpu_timestamp_profiler.end_scope(
-                    &self.rrdevice.device,
-                    command_buffer,
-                    image_index,
-                );
-
-                self.gpu_timestamp_profiler.begin_scope(
-                    &self.rrdevice.device,
-                    command_buffer,
-                    image_index,
-                    "dof".to_string(),
-                );
-                deferred::record_dof(self, command_buffer)?;
-                self.gpu_timestamp_profiler.end_scope(
-                    &self.rrdevice.device,
-                    command_buffer,
-                    image_index,
-                );
-
-                self.gpu_timestamp_profiler.begin_scope(
-                    &self.rrdevice.device,
-                    command_buffer,
-                    image_index,
-                    "auto_exposure".to_string(),
-                );
-                deferred::record_auto_exposure(
-                    self,
-                    command_buffer,
-                    self.resource::<FrameSync>().current_frame,
-                )?;
-                self.gpu_timestamp_profiler.end_scope(
-                    &self.rrdevice.device,
-                    command_buffer,
-                    image_index,
-                );
-
-                self.gpu_timestamp_profiler.begin_scope(
-                    &self.rrdevice.device,
-                    command_buffer,
-                    image_index,
-                    "tonemap".to_string(),
-                );
-                deferred::record_tonemap_to_offscreen(self, command_buffer, image_index)?;
-                self.gpu_timestamp_profiler.end_scope(
-                    &self.rrdevice.device,
-                    command_buffer,
-                    image_index,
-                );
-
-                self.gpu_timestamp_profiler.begin_scope(
-                    &self.rrdevice.device,
-                    command_buffer,
-                    image_index,
-                    "onion_composite".to_string(),
-                );
-                deferred::record_onion_skin_composite(self, command_buffer)?;
-                self.gpu_timestamp_profiler.end_scope(
-                    &self.rrdevice.device,
-                    command_buffer,
-                    image_index,
-                );
+                self.record_pass_graph(command_buffer, image_index, frame_slot)?;
             } else {
                 self.gpu_timestamp_profiler.begin_scope(
                     &self.rrdevice.device,
@@ -273,8 +173,65 @@ impl App {
             );
         }
 
+        self.gpu_timestamp_profiler
+            .end_frame(&self.rrdevice.device, command_buffer, image_index);
+
         self.rrdevice.device.end_command_buffer(command_buffer)?;
 
+        Ok(())
+    }
+
+    unsafe fn record_pass_graph(
+        &mut self,
+        command_buffer: vk::CommandBuffer,
+        image_index: usize,
+        frame_slot: usize,
+    ) -> Result<()> {
+        let nodes = self.data.pass_graph.nodes();
+        let (node_uses, transient_requests) = {
+            let ctx = build_pass_context(&self.rrdevice, &mut self.data);
+            let node_uses: Vec<Vec<TargetUse>> = nodes
+                .iter()
+                .map(|node| {
+                    node.reads(&ctx)
+                        .into_iter()
+                        .chain(node.writes(&ctx))
+                        .collect()
+                })
+                .collect();
+            let transient_requests: Vec<TransientRequest> = nodes
+                .iter()
+                .flat_map(|node| node.transients(&ctx))
+                .collect();
+            (node_uses, transient_requests)
+        };
+        self.assign_frame_transients(&nodes, &transient_requests, &node_uses)?;
+
+        {
+            let mut ctx = build_pass_context(&self.rrdevice, &mut self.data);
+            for node in &nodes {
+                node.prepare(&mut ctx, frame_slot)?;
+            }
+        }
+
+        let mut transients_seen = std::collections::HashSet::new();
+        for (node, uses) in nodes.iter().zip(&node_uses) {
+            let barriers = self.collect_pass_barriers(uses, &mut transients_seen)?;
+            self.record_pass_barriers(command_buffer, &barriers);
+            self.gpu_timestamp_profiler.begin_scope(
+                &self.rrdevice.device,
+                command_buffer,
+                image_index,
+                node.name().to_string(),
+            );
+            let ctx = build_pass_context(&self.rrdevice, &mut self.data);
+            node.record(&ctx, command_buffer, image_index, frame_slot)?;
+            self.gpu_timestamp_profiler.end_scope(
+                &self.rrdevice.device,
+                command_buffer,
+                image_index,
+            );
+        }
         Ok(())
     }
 

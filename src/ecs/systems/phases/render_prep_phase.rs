@@ -4,7 +4,6 @@ use std::time::Instant;
 use anyhow::Result;
 use cgmath::{InnerSpace, Matrix4, SquareMatrix, Vector3};
 
-use crate::app::FrameContext;
 use crate::ecs::component::LineMesh;
 use crate::ecs::resource::gizmo::BoneSelectionState;
 use crate::ecs::resource::gizmo::TransformGizmoData;
@@ -18,11 +17,13 @@ use crate::ecs::systems::render_data_systems::{
     gizmo_selectable_render_data, grid_mesh_render_data, spring_bone_gizmo_render_data,
     transform_gizmo_render_data,
 };
+use crate::ecs::FrameContext;
 use crate::ecs::{
     build_bone_line_mesh, build_box_bone_meshes_with_selection, build_constraint_gizmo_mesh,
     build_octahedral_bone_meshes_with_selection, build_sphere_bone_meshes_with_selection,
     build_spring_bone_gizmo_mesh, gizmo_update_vertex_buffer,
 };
+use crate::hooks::frame_prep::{FramePrepHooks, FramePrepStage};
 use crate::render::RenderBackend;
 use crate::vulkanr::renderer::scene_renderer::update_object_ubo;
 
@@ -58,20 +59,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         t.elapsed().as_secs_f32() * 1000.0,
     );
 
-    let _t = Instant::now();
-    crate::ecs::systems::flame_bone_attach_sync(ctx);
-
-    let t = Instant::now();
-    crate::ecs::systems::flame_time_advance(ctx);
-    crate::ecs::systems::field_manifest_sync(ctx);
-    sub.insert("flame_time".to_string(), t.elapsed().as_secs_f32() * 1000.0);
-
-    let t = Instant::now();
-    crate::ecs::systems::flame_trail_advance(ctx);
-    sub.insert(
-        "flame_trail".to_string(),
-        t.elapsed().as_secs_f32() * 1000.0,
-    );
+    run_frame_prep_hooks(ctx, FramePrepStage::Advance, &mut sub);
 
     let timings_write_time = {
         let t = Instant::now();
@@ -80,56 +68,7 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     };
     sub.insert("timings_write".to_string(), timings_write_time);
 
-    if let (Some(mut sink), Some(temporal)) = (
-        ctx.world
-            .get_resource_mut::<crate::ecs::resource::FlameDumpSink>(),
-        ctx.world
-            .get_resource::<crate::ecs::resource::FlameTemporalState>(),
-    ) {
-        let t = Instant::now();
-        let flame_entities: Vec<_> = ctx.world.query_flames();
-        let effects: Vec<(
-            crate::ecs::component::FlameEffect,
-            crate::ecs::component::FlameBaked,
-            crate::ecs::component::FlameTemporalAccum,
-        )> = flame_entities
-            .iter()
-            .filter_map(|e| {
-                let effect = ctx
-                    .world
-                    .get_component::<crate::ecs::component::FlameEffect>(*e)
-                    .cloned()?;
-                let baked = ctx
-                    .world
-                    .get_component::<crate::ecs::component::FlameBaked>(*e)
-                    .cloned()
-                    .unwrap_or_default();
-                let temporal_accum = ctx
-                    .world
-                    .get_component::<crate::ecs::component::FlameTemporalAccum>(*e)
-                    .cloned()
-                    .unwrap_or_default();
-                Some((effect, baked, temporal_accum))
-            })
-            .collect();
-        let trails: Vec<Option<crate::ecs::component::flame_trail::FlameTrail>> = flame_entities
-            .iter()
-            .map(|e| {
-                ctx.world
-                    .get_component::<crate::ecs::component::flame_trail::FlameTrail>(*e)
-                    .cloned()
-            })
-            .collect();
-        crate::ecs::systems::flame_dump_system(&mut sink, &*temporal, &effects, &trails);
-        sub.insert("flame_dump".to_string(), t.elapsed().as_secs_f32() * 1000.0);
-    }
-
-    let t = Instant::now();
-    crate::ecs::systems::flame_temporal_accumulate(ctx);
-    sub.insert(
-        "flame_temporal".to_string(),
-        t.elapsed().as_secs_f32() * 1000.0,
-    );
+    run_frame_prep_hooks(ctx, FramePrepStage::Accumulate, &mut sub);
 
     let t = Instant::now();
     let render_data_vec = collect_gizmo_render_data(ctx, camera_position);
@@ -199,12 +138,30 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     Ok(())
 }
 
+fn run_frame_prep_hooks(
+    ctx: &mut FrameContext,
+    stage: FramePrepStage,
+    sub: &mut HashMap<String, f32>,
+) {
+    let hooks = ctx
+        .world
+        .get_resource::<FramePrepHooks>()
+        .map(|hooks| hooks.at_stage(stage))
+        .unwrap_or_default();
+    for hook in hooks {
+        let t = Instant::now();
+        (hook.run)(ctx);
+        sub.insert(hook.timing_key(), t.elapsed().as_secs_f32() * 1000.0);
+    }
+}
+
 fn gpu_timings_write(world: &mut crate::ecs::World) {
     let timings = match world.get_resource::<GpuPassTimings>() {
         Some(t) => t,
         None => return,
     };
     let frame = timings.frame;
+    let frame_total_ms = timings.frame_total_ms;
     let passes: Vec<(String, f32)> = timings.passes.clone();
     if passes.is_empty() {
         return;
@@ -224,6 +181,9 @@ fn gpu_timings_write(world: &mut crate::ecs::World) {
     let mut obj: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
     obj.insert("frame".to_string(), serde_json::json!(frame));
     obj.insert("passes".to_string(), serde_json::Value::Object(passes_map));
+    if let Some(ms) = frame_total_ms {
+        obj.insert("frame_total_ms".to_string(), serde_json::json!(ms));
+    }
 
     if let Some(cpu) = world.get_resource::<crate::ecs::resource::CpuFrameTimings>() {
         obj.insert("cpu_dt_ms".to_string(), serde_json::json!(cpu.dt_ms));

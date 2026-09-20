@@ -1,6 +1,6 @@
 //! Pure-function layer of the wave field: sample_wave_field records per-mode
 //! contributions, flow_warp_with_rate is the anisoCompress/Expand warp from
-//! flame_noise_field.glsl.
+//! noise_field.glsl.
 
 use thyllore_effect_core::flame_wave::*;
 
@@ -117,7 +117,7 @@ pub fn warp_strength(p: &WarpParams, h: f32) -> f32 {
 }
 
 /// Anisotropic compression along the advection axis (mirror of
-/// `flameAnisoCompress` in flame_noise_field.glsl).
+/// `flameAnisoCompress` in noise_field.glsl).
 /// Compute the anisotropy axis from advect and aniso_axis_advect.
 fn compute_axis(advect: [f32; 3], aniso_axis_advect: f32) -> [f32; 3] {
     let default_axis = [0.0, 1.0, 0.0];
@@ -216,7 +216,7 @@ pub fn sample_wave_field(
 
 /// Flow warp with rate using anisotropic compression/expansion (mirror of
 /// Flow warp with rate using anisotropic compression/expansion (mirror of
-/// `flameWaveFlowWarpRate` in flame_noise_field.glsl).
+/// `flameWaveFlowWarpRate` in noise_field.glsl).
 pub fn flow_warp_with_rate(
     warp_modes: &[WaveWarpMode],
     p: &WarpParams,

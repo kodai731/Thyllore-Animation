@@ -10,6 +10,7 @@ use crate::animation::editable::{
 use crate::animation::{AnimationClip, BoneId};
 use crate::asset::{AnimationClipAsset, AssetStorage};
 use crate::ecs::resource::ClipLibrary;
+use crate::ecs::world::World;
 use crate::scene::AnimationClipFile;
 
 pub fn clip_library_register_and_activate(
@@ -34,6 +35,23 @@ pub fn clip_library_register_and_activate(
     lib.source_to_asset_id.insert(source_id, asset_id);
 
     source_id
+}
+
+/// Registers clips read from disk, returning each new id with the clip's name.
+pub fn clip_library_register_loaded(
+    world: &mut crate::ecs::world::World,
+    assets: &mut AssetStorage,
+    clips: Vec<EditableAnimationClip>,
+) -> Vec<(SourceClipId, String)> {
+    let mut clip_library = world.resource_mut::<ClipLibrary>();
+    clips
+        .into_iter()
+        .map(|clip| {
+            let name = clip.name.clone();
+            let id = clip_library_register_and_activate(&mut clip_library, assets, clip);
+            (id, name)
+        })
+        .collect()
 }
 
 pub fn clip_library_create_from_imported(
@@ -256,4 +274,22 @@ fn deserialize_clip(content: &str) -> Result<EditableAnimationClip> {
 
     let clip = ron::from_str::<EditableAnimationClip>(content)?;
     Ok(clip)
+}
+
+/// The first clip with bone tracks by id, else the first clip, so a batch run never plays an
+/// empty default clip when a model animation exists.
+pub fn find_best_clip(world: &World) -> Option<SourceClipId> {
+    let clip_library = world.get_resource::<ClipLibrary>()?;
+    let mut clip_ids: Vec<_> = clip_library.all_clip_ids().copied().collect();
+    clip_ids.sort_unstable();
+
+    clip_ids
+        .iter()
+        .copied()
+        .find(|&id| {
+            clip_library
+                .get(id)
+                .is_some_and(|clip| !clip.tracks.is_empty())
+        })
+        .or_else(|| clip_ids.first().copied())
 }

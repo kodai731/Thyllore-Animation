@@ -54,4 +54,37 @@ float interleavedGradientNoise(vec2 fragCoord) {
     return fract(52.9829189 * fract(dot(fragCoord, vec2(0.06711056, 0.00583715))));
 }
 
+// Perlin's improved fade 6t^5 - 15t^4 + 10t^3.
+float quinticFade(float t) {
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+}
+
+vec3 latticeGradient3(vec3 cell) {
+    vec3 g = vec3(
+        2.0 * hash13(cell) - 1.0,
+        2.0 * hash13(cell + vec3(17.1, 9.3, 4.7)) - 1.0,
+        2.0 * hash13(cell + vec3(31.7, 2.9, 12.3)) - 1.0);
+    return g / max(length(g), 1e-4);
+}
+
+float latticeCornerDot3(vec3 cell, vec3 f, vec3 corner) {
+    return dot(latticeGradient3(cell + corner), f - corner);
+}
+
+// Perlin gradient noise on the unit lattice, zero at every lattice point.
+// Mirrored in thyllore-math-core/src/noise.rs (gradient_noise3).
+float gradientNoise3(vec3 p) {
+    vec3 cell = floor(p);
+    vec3 f = p - cell;
+    vec3 w = vec3(quinticFade(f.x), quinticFade(f.y), quinticFade(f.z));
+
+    float nx00 = mix(latticeCornerDot3(cell, f, vec3(0.0, 0.0, 0.0)), latticeCornerDot3(cell, f, vec3(1.0, 0.0, 0.0)), w.x);
+    float nx10 = mix(latticeCornerDot3(cell, f, vec3(0.0, 1.0, 0.0)), latticeCornerDot3(cell, f, vec3(1.0, 1.0, 0.0)), w.x);
+    float nx01 = mix(latticeCornerDot3(cell, f, vec3(0.0, 0.0, 1.0)), latticeCornerDot3(cell, f, vec3(1.0, 0.0, 1.0)), w.x);
+    float nx11 = mix(latticeCornerDot3(cell, f, vec3(0.0, 1.0, 1.0)), latticeCornerDot3(cell, f, vec3(1.0, 1.0, 1.0)), w.x);
+    float nxy0 = mix(nx00, nx10, w.y);
+    float nxy1 = mix(nx01, nx11, w.y);
+    return mix(nxy0, nxy1, w.z);
+}
+
 #endif

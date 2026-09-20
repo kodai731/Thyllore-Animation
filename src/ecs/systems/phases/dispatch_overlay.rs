@@ -1,12 +1,17 @@
-use crate::ecs::component::{FlameEffect, FlameTrail};
+use crate::ecs::component::{FlameEffect, FlameTrail, WaterTorusEffect, WindTornadoEffect};
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{
     AutoExposure, DepthOfField, FlameRenderSettings, GridMeshData, HierarchyState, MessageLog,
-    OnionSkinningConfig, PhysicalCameraParameters, TransformGizmoState, WeightHeatmapState,
+    OnionSkinningConfig, PhysicalCameraParameters, TransformGizmoState, WaterRenderSettings,
+    WeightHeatmapState, WindRenderSettings,
 };
-use crate::ecs::systems::{resolve_selected_flame, write_flame_transform};
+use crate::ecs::systems::{
+    resolve_selected_flame, resolve_selected_water, resolve_selected_wind, write_flame_transform,
+    write_water_transform, write_wind_transform,
+};
 use crate::ecs::world::{Animator, World};
+use crate::hooks::effect_spawn::EffectSpawnHooks;
 
 pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
     for event in events {
@@ -159,14 +164,41 @@ pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
                     );
                 }
             }
-            UIEvent::SelectFlameInstance(index) => {
-                let flames = world.query_flames();
-                if flames.is_empty() {
+            UIEvent::SelectEffectInstance { key, index } => {
+                select_effect_instance(world, key, *index);
+            }
+            UIEvent::UpdateWaterEffect(effect) => {
+                let Some(target) = resolve_selected_water(world) else {
                     continue;
+                };
+                write_water_transform(world, target, effect.position, effect.rotation);
+                if let Some(current) = world.get_component_mut::<WaterTorusEffect>(target) {
+                    *current = effect.as_ref().clone();
                 }
-                let clamped = (*index as usize).min(flames.len() - 1);
-                if let Some(mut hierarchy) = world.get_resource_mut::<HierarchyState>() {
-                    hierarchy.selected_entity = Some(flames[clamped]);
+            }
+            UIEvent::ApplyWaterPreset(name) => {
+                crate::ecs::systems::apply_water_preset_to_selected(world, name);
+            }
+            UIEvent::UpdateWaterRenderSettings(new_settings) => {
+                if let Some(mut settings) = world.get_resource_mut::<WaterRenderSettings>() {
+                    *settings = new_settings.clone();
+                }
+            }
+            UIEvent::UpdateWindEffect(effect) => {
+                let Some(target) = resolve_selected_wind(world) else {
+                    continue;
+                };
+                write_wind_transform(world, target, effect.position, effect.rotation);
+                if let Some(current) = world.get_component_mut::<WindTornadoEffect>(target) {
+                    *current = effect.as_ref().clone();
+                }
+            }
+            UIEvent::ApplyWindPreset(name) => {
+                crate::ecs::systems::apply_wind_preset_to_selected(world, name);
+            }
+            UIEvent::UpdateWindRenderSettings(new_settings) => {
+                if let Some(mut settings) = world.get_resource_mut::<WindRenderSettings>() {
+                    *settings = *new_settings;
                 }
             }
             UIEvent::DumpFlameWallProbe { viewport_size } => {
@@ -205,5 +237,20 @@ fn auto_select_animator_entity(world: &mut World) {
     if let Some(entity) = first_animator {
         let mut hierarchy = world.resource_mut::<HierarchyState>();
         crate::ecs::systems::hierarchy_select(&mut hierarchy, entity);
+    }
+}
+
+fn select_effect_instance(world: &mut World, key: &str, index: usize) {
+    let Some(entities) = world
+        .get_resource::<EffectSpawnHooks>()
+        .and_then(|hooks| hooks.get(key).map(|hook| (hook.entities)(world)))
+    else {
+        return;
+    };
+    let Some(&target) = entities.get(index.min(entities.len().saturating_sub(1))) else {
+        return;
+    };
+    if let Some(mut hierarchy) = world.get_resource_mut::<HierarchyState>() {
+        hierarchy.selected_entity = Some(target);
     }
 }

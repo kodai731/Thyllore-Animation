@@ -42,6 +42,7 @@ use std::ptr::copy_nonoverlapping as memcpy;
 use std::rc::Rc;
 use std::time::Instant;
 
+pub use crate::ecs::MAX_FRAMES_IN_FLIGHT;
 use vulkanalia::loader::{LibloadingLoader, LIBRARY};
 use winit::window::Window;
 
@@ -60,9 +61,9 @@ pub const DEVICE_EXTENSIONS: &[vk::ExtensionName] = &[
     vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION.name,
     vk::KHR_ACCELERATION_STRUCTURE_EXTENSION.name,
     vk::KHR_RAY_QUERY_EXTENSION.name,
+    vk::KHR_RAY_TRACING_PIPELINE_EXTENSION.name,
     vk::KHR_DEFERRED_HOST_OPERATIONS_EXTENSION.name,
 ];
-pub const MAX_FRAMES_IN_FLIGHT: usize = 2;
 
 /// Clean up old screenshot files from the log directory
 pub fn cleanup_old_screenshots() -> Result<()> {
@@ -134,8 +135,11 @@ impl App {
         let loader = LibloadingLoader::new(LIBRARY)?;
         let entry = Entry::new(loader).map_err(|b| anyhow!("{}", b))?;
         let mut data = AppData::default();
+        crate::effect::subscription::subscribe_effects(&mut data.effect_hooks);
+        crate::vulkanr::renderer::deferred::register_core_passes(&mut data.pass_graph);
+        data.effect_hooks.register_passes(&mut data.pass_graph);
 
-        Self::initialize_core_ecs_resources(&mut data);
+        Self::initialize_core_ecs_resources(&mut data)?;
 
         #[cfg(feature = "ml")]
         data.ecs_world.insert_resource(curve_copilot_mode);
@@ -226,11 +230,12 @@ impl App {
         //     loaded_scene.is_some(),
         //     );
 
-        // The scene restores timeline, panel and curve editor state, so those resources must
-        // exist before it is applied. Registration is idempotent and runs again below.
+        // The scene restores timeline, panel, curve editor and post-processing state, so those
+        // resources must exist before it is applied. Registration is idempotent and runs again below.
         Self::register_editor_resources(&mut data);
-        Self::apply_loaded_scene(&mut data, loaded_scene);
-
+        Self::register_post_processing_resources(&mut data);
+        Self::apply_loaded_scene(&mut data, loaded_scene)?;
+        data.raytracing.command_pool = rrcommand_pool.command_pool;
         if let Err(e) = Self::create_ray_tracing_pipelines_with_resources(
             &instance,
             &rrdevice,
@@ -239,6 +244,15 @@ impl App {
             &rrrender,
         ) {
             log_warn!("Failed to create ray tracing pipelines: {:?}", e);
+        }
+
+        if let Err(e) = Self::build_acceleration_structures_with_resources(
+            &instance,
+            &rrdevice,
+            &mut data,
+            &rrcommand_pool,
+        ) {
+            log_warn!("Failed to build acceleration structures: {:?}", e);
         }
 
         let grid_mesh_data = Self::build_grid_mesh(
@@ -299,16 +313,30 @@ impl App {
             resized: false,
             start: Instant::now(),
             last_update_time: 0.0,
+            last_frame_interval: 0.0,
             gpu_timestamp_profiler,
             last_frame_instant: None,
         })
     }
 
-    fn initialize_core_ecs_resources(data: &mut AppData) {
+    fn initialize_core_ecs_resources(data: &mut AppData) -> Result<()> {
         data.ecs_world.insert_resource(Camera::default());
         data.ecs_world.insert_resource(LightState::default());
         data.ecs_world
             .insert_resource(crate::ecs::resource::DebugViewState::default());
+        data.ecs_world
+            .insert_resource(crate::ecs::resource::PostProcessFrameTargets::default());
+        data.ecs_world
+            .insert_resource(crate::hooks::scene::SceneComponentHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::scene_resource::SceneResourceHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::model_load::ModelLoadHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::frame_prep::FramePrepHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::effect_spawn::EffectSpawnHooks::collect()?);
+        Ok(())
     }
     unsafe fn initialize_graphics_and_ecs(
         instance: &Instance,
@@ -371,6 +399,7 @@ impl App {
             rrswapchain.swapchain_format,
         )
         .context("Failed to create viewport state")?;
+
         log!(
             "Created viewport state: {}x{} with MSAA {:?}, format {:?}",
             viewport_width,
@@ -878,16 +907,18 @@ impl App {
             crate::scene::LoadedScene,
             Vec<crate::animation::editable::EditableAnimationClip>,
         )>,
-    ) {
+    ) -> anyhow::Result<()> {
         let mut scene_state = SceneState::new();
         if let Some((scene_path, scene, clips)) = loaded_scene {
-            let clips_with_ids =
-                Self::register_loaded_clips(&mut data.ecs_world, &mut data.ecs_assets, clips);
+            crate::ecs::systems::clip_library_systems::clip_library_register_loaded(
+                &mut data.ecs_world,
+                &mut data.ecs_assets,
+                clips,
+            );
             crate::scene::apply_loaded_scene_to_world(
                 &scene,
                 &mut data.ecs_world,
                 &mut data.ecs_assets,
-                &clips_with_ids,
             );
 
             let active_clip_id = {
@@ -896,10 +927,8 @@ impl App {
             };
 
             if let Some(clip_id) = active_clip_id {
-                let schedule = crate::app::model_loader::build_initial_clip_schedule(
-                    Some(clip_id),
-                    &data.ecs_world,
-                );
+                let schedule =
+                    crate::app::model::build_initial_clip_schedule(Some(clip_id), &data.ecs_world);
                 for (_, existing) in data
                     .ecs_world
                     .iter_components_mut::<crate::ecs::component::ClipSchedule>()
@@ -909,8 +938,14 @@ impl App {
             }
 
             scene_state.set_from_loaded(scene_path, scene.scene.metadata.clone());
+        } else {
+            crate::hooks::effect_spawn::spawn_empty_scene_defaults(
+                &mut data.ecs_world,
+                &mut data.ecs_assets,
+            );
         }
         data.ecs_world.insert_resource(scene_state);
+        Ok(())
     }
 
     unsafe fn build_grid_mesh(
@@ -1002,7 +1037,7 @@ impl App {
         }
 
         let flags = if cfg!(target_os = "macos") && entry.version()? >= PORTABILITY_MACOS_VERSION {
-            log::info!("Enabling extensions for macOS portability.");
+            log!("Enabling extensions for macOS portability.");
             extensions.push(
                 vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_EXTENSION
                     .name
@@ -1135,6 +1170,7 @@ impl App {
 
     fn register_editor_resources(data: &mut AppData) {
         Self::insert_default_if_missing::<crate::ecs::UIEventQueue>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::AppCommandQueue>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::MouseInput>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::KeyboardModifiers>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::CameraFlyInput>(data);
@@ -1149,8 +1185,12 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::ClipBrowserState>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::PoseLibrary>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::ConstraintEditorState>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::BonePoseOverride>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::SpringBoneState>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::PanelLayout>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::MessageLog>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::FrameClock>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::AppExit>(data);
 
         if !data.ecs_world.contains_resource::<TimelineState>() {
             data.ecs_world.insert_resource(TimelineState::new());
@@ -1175,15 +1215,10 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::AutoExposure>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::OnionSkinningConfig>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::FlameRenderSettings>(data);
-        if data.ecs_world.query_flames().is_empty() {
-            crate::ecs::systems::spawn_flame_with_clip(
-                &mut data.ecs_world,
-                &mut data.ecs_assets,
-                crate::ecs::systems::DEFAULT_FLAME_NAME,
-                crate::ecs::component::FlameEffect::default(),
-            );
-        }
-        Self::insert_default_if_missing::<crate::ecs::resource::FlameTemporalState>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::WaterRenderSettings>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::WindRenderSettings>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::FlameHistorySnapshotState>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::WaterHistorySnapshotState>(data);
     }
 
     #[cfg(feature = "ml")]
@@ -1314,7 +1349,11 @@ impl App {
                 if scene_path.exists() {
                     match load_scene(&scene_path) {
                         Ok(loaded) => {
-                            let model_path = loaded.scene.model.path.clone();
+                            let model_path = loaded
+                                .model_path
+                                .as_ref()
+                                .map(|p| p.to_string_lossy().to_string())
+                                .unwrap_or_default();
                             let clips = loaded.clips.clone();
                             log!("Loaded batch scene from: {}", scene_path.display());
                             return (model_path, Some((scene_path, loaded, clips)));
@@ -1334,9 +1373,13 @@ impl App {
         if let Some(scene_path) = find_default_scene() {
             match load_scene(&scene_path) {
                 Ok(loaded) => {
-                    // The scene's own reference, not the resolved file: a generated mesh has no
-                    // file and must round-trip its sentinel back out on the next save.
-                    let model_path = loaded.scene.model.path.clone();
+                    // Loading uses the resolved assets path from LoadedScene.model_path (None for
+                    // a generated mesh with no file). Saving still uses loaded.scene.model.path.
+                    let model_path = loaded
+                        .model_path
+                        .as_ref()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_default();
                     let clips = loaded.clips.clone();
                     log!("Loaded default scene from: {}", scene_path.display());
                     return (model_path, Some((scene_path, loaded, clips)));
@@ -1349,27 +1392,6 @@ impl App {
 
         // (default_model_path, None)
         ("".to_string(), None)
-    }
-
-    fn register_loaded_clips(
-        world: &mut crate::ecs::world::World,
-        assets: &mut crate::asset::AssetStorage,
-        clips: Vec<crate::animation::editable::EditableAnimationClip>,
-    ) -> Vec<(crate::animation::editable::SourceClipId, String)> {
-        let mut clip_library = world.resource_mut::<ClipLibrary>();
-        let mut result = Vec::new();
-
-        for clip in clips {
-            let name = clip.name.clone();
-            let id = crate::ecs::systems::clip_library_systems::clip_library_register_and_activate(
-                &mut clip_library,
-                assets,
-                clip,
-            );
-            result.push((id, name));
-        }
-
-        result
     }
 
     unsafe fn create_font_image(

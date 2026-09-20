@@ -338,7 +338,7 @@ pub fn dispatch_model_loaded_for_animation(
 pub fn drain_grpc_responses(
     world: &mut crate::ecs::world::World,
     assets: &mut crate::asset::AssetStorage,
-    deferred: &mut Vec<super::super::ui_event_systems::DeferredAction>,
+    commands: &mut Vec<crate::ecs::resource::AppCommand>,
 ) {
     use crate::grpc::{GrpcResponse, GrpcThreadHandle};
 
@@ -420,7 +420,7 @@ pub fn drain_grpc_responses(
                     joint_count,
                     bone_count,
                     generation_time_ms,
-                    deferred,
+                    commands,
                 );
             }
 
@@ -731,7 +731,7 @@ fn collapse_repeated_underscores(input: &str) -> String {
 pub fn dispatch_text_to_mesh_events(
     events: &[crate::ecs::events::UIEvent],
     world: &mut crate::ecs::world::World,
-    deferred: &mut Vec<super::super::ui_event_systems::DeferredAction>,
+    commands: &mut Vec<crate::ecs::resource::AppCommand>,
 ) {
     use crate::ecs::events::UIEvent;
     use crate::ecs::resource::{TextToMeshState, TextToMeshStatus};
@@ -780,12 +780,10 @@ pub fn dispatch_text_to_mesh_events(
                 let mut state = world.resource_mut::<TextToMeshState>();
                 if let Some(glb_data) = state.glb_data.take() {
                     state.status = TextToMeshStatus::Idle;
-                    deferred.push(
-                        super::super::ui_event_systems::DeferredAction::LoadModelFromMemory {
-                            glb_data,
-                            source: crate::ecs::events::ModelLoadSource::TextToMeshOutput,
-                        },
-                    );
+                    commands.push(crate::ecs::resource::AppCommand::LoadModelFromMemory {
+                        glb_data,
+                        source: crate::ecs::events::ModelLoadSource::TextToMeshOutput,
+                    });
                     log!("TextToMesh: applying generated mesh to scene");
                 }
             }
@@ -808,7 +806,7 @@ fn apply_rig_response(
     joint_count: u32,
     bone_count: u32,
     generation_time_ms: f32,
-    deferred: &mut Vec<super::super::ui_event_systems::DeferredAction>,
+    commands: &mut Vec<crate::ecs::resource::AppCommand>,
 ) {
     use crate::ecs::events::ModelLoadSource;
     use crate::ecs::resource::{
@@ -847,12 +845,10 @@ fn apply_rig_response(
         text_to_animation_advance_to_apply_rig(&mut state);
         drop(state);
 
-        deferred.push(
-            super::super::ui_event_systems::DeferredAction::LoadModelFromMemory {
-                glb_data: rigged_glb_data,
-                source: ModelLoadSource::AutoRigOutput,
-            },
-        );
+        commands.push(crate::ecs::resource::AppCommand::LoadModelFromMemory {
+            glb_data: rigged_glb_data,
+            source: ModelLoadSource::AutoRigOutput,
+        });
         log!("TextToAnimation: rigged GLB queued for load (orchestrated)");
     } else {
         auto_rig.rigged_glb_data = Some(rigged_glb_data);
@@ -918,7 +914,7 @@ pub fn poll_rigging_server_status(world: &mut crate::ecs::world::World) {
 pub fn dispatch_auto_rig_events(
     events: &[crate::ecs::events::UIEvent],
     world: &mut crate::ecs::world::World,
-    deferred: &mut Vec<super::super::ui_event_systems::DeferredAction>,
+    commands: &mut Vec<crate::ecs::resource::AppCommand>,
 ) {
     use crate::ecs::component::GlbSource;
     use crate::ecs::events::UIEvent;
@@ -987,12 +983,10 @@ pub fn dispatch_auto_rig_events(
                     state.status = AutoRigStatus::Idle;
                     state.original_glb_backup = None;
                     state.target_entity = None;
-                    deferred.push(
-                        super::super::ui_event_systems::DeferredAction::LoadModelFromMemory {
-                            glb_data: rigged_glb,
-                            source: crate::ecs::events::ModelLoadSource::AutoRigOutput,
-                        },
-                    );
+                    commands.push(crate::ecs::resource::AppCommand::LoadModelFromMemory {
+                        glb_data: rigged_glb,
+                        source: crate::ecs::events::ModelLoadSource::AutoRigOutput,
+                    });
                     log!("AutoRig: applying rigged model to scene");
                 }
             }
@@ -1002,12 +996,10 @@ pub fn dispatch_auto_rig_events(
                 if state.status == AutoRigStatus::Previewing {
                     if let Some(original_glb) = state.original_glb_backup.take() {
                         auto_rig_cancel(&mut state);
-                        deferred.push(
-                            super::super::ui_event_systems::DeferredAction::LoadModelFromMemory {
-                                glb_data: original_glb,
-                                source: crate::ecs::events::ModelLoadSource::UserFile,
-                            },
-                        );
+                        commands.push(crate::ecs::resource::AppCommand::LoadModelFromMemory {
+                            glb_data: original_glb,
+                            source: crate::ecs::events::ModelLoadSource::UserFile,
+                        });
                         log!("AutoRig: discarding, reverting to original model");
                         continue;
                     }

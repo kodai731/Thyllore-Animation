@@ -250,7 +250,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn shader_dir() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../shaders/include")
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../shaders/flame/include")
     }
 
     fn strip_line_comments(source: &str) -> String {
@@ -341,7 +341,7 @@ mod tests {
         for entry in std::fs::read_dir(&dir).expect("shader include dir") {
             let path = entry.expect("dir entry").path();
             let name = path.file_name().unwrap().to_string_lossy().to_string();
-            if !name.starts_with("flame") || !name.ends_with(".glsl") {
+            if !name.ends_with(".glsl") {
                 continue;
             }
             audited_files += 1;
@@ -390,7 +390,7 @@ mod tests {
         for entry in std::fs::read_dir(&dir).expect("shader include dir") {
             let path = entry.expect("dir entry").path();
             let name = path.file_name().unwrap().to_string_lossy().to_string();
-            if name.starts_with("flame") && name.ends_with(".glsl") {
+            if name.ends_with(".glsl") {
                 all_source.push_str(&std::fs::read_to_string(&path).unwrap());
             }
         }

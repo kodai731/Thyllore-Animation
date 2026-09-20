@@ -1,26 +1,46 @@
 use crate::asset::AssetStorage;
-use crate::ecs::component::{EntityIcon, FlameEffect, FLAME_DOMAIN};
+use crate::ecs::component::{FlameEffect, FLAME_DOMAIN};
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Entity, Transform, World};
+use crate::hooks::effect_spawn::EffectSpawnHook;
+use crate::hooks::scene::spawn_scene_owner;
 
 pub const DEFAULT_FLAME_NAME: &str = "Flame";
+
+pub const FLAME_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
+    key: "flame",
+    max_instances: thyllore_effect_core::FLAME_MAX_INSTANCES,
+    spawn: spawn_flame_instance,
+    entities: flame_entities,
+    default_in_empty_scene: true,
+};
+
+crate::effect_spawn_hook!(FLAME_SPAWN_HOOK);
+
+fn flame_entities(world: &World) -> Vec<Entity> {
+    world.entities_with::<FlameEffect>()
+}
+
+fn spawn_flame_instance(world: &mut World, assets: &mut AssetStorage, ordinal: usize) -> Entity {
+    if ordinal == 0 {
+        return spawn_flame_with_clip(world, assets, DEFAULT_FLAME_NAME, FlameEffect::default());
+    }
+    let effect = FlameEffect {
+        position: cgmath::Vector3::new(1.5 * ordinal as f32, 0.0, 0.0),
+        ..FlameEffect::default()
+    };
+    spawn_flame_with_clip(
+        world,
+        assets,
+        &format!("{DEFAULT_FLAME_NAME} {}", ordinal + 1),
+        effect,
+    )
+}
 
 /// Spawns a flame as a regular scene entity so the hierarchy, inspector and transform gizmo
 /// can all reach it through the same components they use for every other object.
 pub fn spawn_flame(world: &mut World, name: &str, effect: FlameEffect) -> Entity {
-    let transform = Transform {
-        translation: effect.position,
-        rotation: effect.rotation,
-        ..Default::default()
-    };
-
-    world
-        .entity()
-        .with_name(name)
-        .with_transform(transform)
-        .with_editor_display(EntityIcon::Flame, false)
-        .with_flame(effect)
-        .build()
+    spawn_scene_owner(world, name, effect)
 }
 
 /// Spawn a flame entity together with its (empty) animation clip and schedule
@@ -56,7 +76,7 @@ pub fn resolve_selected_flame(world: &World) -> Option<Entity> {
         }
     }
 
-    world.query_flames().first().copied()
+    world.entities_with::<FlameEffect>().first().copied()
 }
 
 /// Position and rotation live on the Transform; the effect only mirrors them for the UBO.

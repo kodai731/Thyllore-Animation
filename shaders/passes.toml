@@ -23,11 +23,11 @@ stages = ["editor/boneVertex.slang", "editor/boneFragment.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.onion_skin_ghost]
-stages = ["gbuffer/vertex.slang", "editor/onionSkinFragment.frag"]
+stages = ["gbuffer/vertex.slang", "editor/onionSkinFragment.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.onion_skin_composite]
-stages = ["postprocess/tonemapVertex.vert", "editor/onionSkinCompositeFragment.frag"]
+stages = ["postprocess/tonemapVertex.vert", "editor/onionSkinCompositeFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.water_resolve]
@@ -91,7 +91,7 @@ stages = ["postprocess/compositeVertex.vert", "postprocess/compositeFragment.fra
 sets = { 0 = "local" }
 
 [pass.billboard]
-stages = ["editor/billboardVertex.vert", "editor/billboardFragment.frag"]
+stages = ["editor/billboardVertex.slang", "editor/billboardFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.imgui]

@@ -14,9 +14,7 @@ pub struct FrameInput<'a> {
 }
 
 impl App {
-    /// One frame in `FRAME_SCHEDULE` order: EventDispatch, then the update phases, the render,
-    /// and Last once the image is presented. `open_file_dialogs` is the platform's answer to the
-    /// file events the dispatch produced.
+    /// Runs one frame; the phase order is documented in `.claude/rules/ecs-architecture.md` (Phase Pipeline).
     pub unsafe fn drive_frame(
         &mut self,
         input: FrameInput<'_>,

@@ -182,16 +182,10 @@ impl PassManifest {
             }
         }
 
-        let referenced_outputs: BTreeSet<String> = referenced
-            .iter()
-            .filter_map(|file_name| spirv_output_name(file_name))
-            .collect();
-
-        match sources.keys().find(|file_name| {
-            !referenced.contains(*file_name)
-                && !spirv_output_name(file_name)
-                    .is_some_and(|output| referenced_outputs.contains(&output))
-        }) {
+        match sources
+            .keys()
+            .find(|file_name| !referenced.contains(*file_name))
+        {
             Some(orphan) => Err(ManifestError::OrphanShader(orphan.clone())),
             None => Ok(()),
         }

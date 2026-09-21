@@ -328,6 +328,10 @@ public struct FlameUBO {
 
 [[vk::binding(5, 1)]] public Sampler2D flameSdfSampler;
 
+// GLSL exposes gl_FragCoord implicitly to every included function; Slang has no
+// such global, so the fragment entry point writes the pixel centre here once.
+public static float2 flameFragCoord;
+
 public float evaluateHeightFalloff(float height01) {
     return evaluateChebyshev8(flame.heightCoefficients[0], flame.heightCoefficients[1], height01);
 }

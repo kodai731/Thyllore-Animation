@@ -106,7 +106,7 @@ float3 flameMeanderShifted(float3 p, float h) {
 // `burnout` the density mask: the branch burnout at the un-pulled position times
 // the trunk slab (no medium is pulled from above the top or below the base, so a
 // padded y-slab never reads the clamped end profiles).
-float3 flameSupportPositionBurnout(float3 p, inout float h, out float burnout) {
+public float3 flameSupportPositionBurnout(float3 p, inout float h, out float burnout) {
     float3 ps = flameMeanderShifted(p, h);
     burnout = 1.0;
     if (flameBranchActive()) {
@@ -296,7 +296,7 @@ public static const int FLAME_WAVE_DETAIL_MODE_COUNT = 64;
 // Lattice-free replacement for the fbm behind the contour wiggle and the
 // boundary displacement. Normalized to the same distribution as the
 // expression it replaces: fbm3(p) * (2/0.875) - 1, mean 0, std 0.2422.
-float flameDetailNoise(float3 p) {
+public float flameDetailNoise(float3 p) {
     int base = FLAME_WAVE_DETAIL_BASE;
     float z = 0.0;
     for (int n = 0; n < FLAME_WAVE_DETAIL_MODE_COUNT; ++n) {
@@ -307,7 +307,7 @@ float flameDetailNoise(float3 p) {
     return z * (2.0 / 0.875);
 }
 
-float2 flameBoundaryDisplacement(float2 xz) {
+public float2 flameBoundaryDisplacement(float2 xz) {
     float amp = flame.boundaryParams.amp;
     if (amp == 0.0 || flame.unifiedParams.enabled > 0.5) {
         return float2(1.0);
@@ -329,7 +329,7 @@ float2 flameBoundaryDisplacement(float2 xz) {
 // flat. The fade follows the displaced tip (P4): only columns lifted past the
 // cap (bx > 1) fade, over their own overhang [2 - bx, 1] — no fixed world-h
 // band, so nothing aligns across columns.
-float flameCapFade(float h, float bx) {
+public float flameCapFade(float h, float bx) {
     if (flame.boundaryParams.amp == 0.0 || bx <= 1.0) {
         return 1.0;
     }
@@ -362,7 +362,7 @@ public float flameEnvelopeFade(float dSmooth) {
 //     noise-free look is preserved exactly for any beta.
 //   * D > edgeHigh with any erosion: occ >= beta > 0, so a hole is impossible.
 // Mirrored in thyllore-render-core/src/flame_radial.rs (carve_residual_mix).
-float flameCarveResidualOuterGate(float uSquared) {
+public float flameCarveResidualOuterGate(float uSquared) {
     float margin = flame.supportMotion.supportMargin;
     if (margin <= 1.0) { return 0.0; }
     float w = uSquared * margin * margin;
@@ -375,11 +375,11 @@ float flamePlateauCarveReach(float uSquared) {
     return max(w - 1.0, 0.0);
 }
 
-float flameCarveResidualStrength(float uSquared) {
+public float flameCarveResidualStrength(float uSquared) {
     return clamp(flame.nearFadeParams.carveResidual, 0.0, 1.0) * (1.0 - flameCarveResidualOuterGate(uSquared));
 }
 
-float flameApplyCarveResidual(float carvedOccupancy, float dSmooth, float uSquared) {
+public float flameApplyCarveResidual(float carvedOccupancy, float dSmooth, float uSquared) {
     float beta = flameCarveResidualStrength(uSquared);
     if (beta <= 0.0) {
         return carvedOccupancy;
@@ -398,7 +398,7 @@ float flameApplyCarveResidual(float carvedOccupancy, float dSmooth, float uSquar
 // Mirrored in thyllore-render-core/src/flame_radial.rs (eroded_argument).
 public static const float FLAME_EROSION_REMAP_FLOOR = 0.15;
 public static const float FLAME_EROSION_REMAP_STRENGTH = 0.0;   // 0 = off (default look), 1 = full Nubis-style remap
-float flameErosionRemapScale(float erosion) {
+public float flameErosionRemapScale(float erosion) {
     return lerp(1.0, 1.0 / max(1.0 - max(erosion, 0.0), FLAME_EROSION_REMAP_FLOOR),
                FLAME_EROSION_REMAP_STRENGTH);
 }
@@ -600,11 +600,11 @@ float3 flameNoiseBendRemoved(float3 p, float h) {
 // plus the ray rate dw/dt for the node low-pass. Build with d = float3(0.0) for
 // point evaluation (the rate is then exactly zero and unused).
 public struct FlameWarpFrame {
-    float3 pb;    // bend-removed coordinate (cf modulators sample this)
-    float3 q;     // warped physical coordinate (styled density samples this)
-    float3 w;     // noise coordinate
-    float3 rate;  // dw/dt along the ray direction
-    float h;      // height of pb (branch transport moves it off the sample height)
+    public float3 pb;
+    public float3 q;
+    public float3 w;
+    public float3 rate;
+    public float h;
 };
 
 // Medium spread (motion_design L3): age-coordinate volume-preserving opening
@@ -639,7 +639,7 @@ float flameMediumTwistAngle(float rSquared, float h) {
     return flame.spreadParams.twistGain * radial * h * wave;
 }
 
-FlameWarpFrame flameBuildWarpFrame(float3 p, float3 d, float h) {
+public FlameWarpFrame flameBuildWarpFrame(float3 p, float3 d, float h) {
     FlameWarpFrame frame;
     frame.pb = flameNoiseBendRemoved(p, h);
     float3 dt = d;
@@ -706,7 +706,7 @@ public float flameEmitterSmoothDensityAt(float3 c, float h, float wiggle) {
     return flameEmitterSmoothDensityDisplacedAt(c, h, wiggle, flameBoundaryDisplacement(c.xz));
 }
 
-float flameMixingDegree(float carrierZ, float h, float uSquared) {
+public float flameMixingDegree(float carrierZ, float h, float uSquared) {
     float carveSign = flame.noiseAmplitude < 0.0 ? -1.0 : 1.0;
     float mixNoise = smoothstep(flame.mixParams.lo, flame.mixParams.hi,
         carveSign * carrierZ * flame.mixParams.invCarrierStd);
@@ -715,11 +715,11 @@ float flameMixingDegree(float carrierZ, float h, float uSquared) {
     return clamp(mixNoise + mixHeight + mixRadial, 0.0, 1.0);
 }
 
-float flameMixDensityFactor(float mixing) {
+public float flameMixDensityFactor(float mixing) {
     return pow(max(1.0 - mixing, 0.0), flame.thermalParams.densityExp);
 }
 
-float flameMixTemperature(float mixing) {
+public float flameMixTemperature(float mixing) {
     return flame.thermalParams.tempColdK
         + (flame.thermalParams.tempHotK - flame.thermalParams.tempColdK)
             * pow(max(1.0 - mixing, 0.0), flame.thermalParams.tempExp);
@@ -727,7 +727,7 @@ float flameMixTemperature(float mixing) {
 
 // Wien-tail emissivity exp(-c/T) relative to the hot temperature; c is the
 // exposure-compressed Wien constant (24000 K = physical at 0.6 um).
-float flameWienEmissivity(float temperatureK) {
+public float flameWienEmissivity(float temperatureK) {
     return exp(flame.thermalParams.wienCK
         * (1.0 / max(flame.thermalParams.tempHotK, 1.0) - 1.0 / max(temperatureK, 1.0)));
 }
@@ -753,7 +753,7 @@ public struct FlameWaveModeSumResult {
     public float unresolvedPower;
 };
 
-FlameWaveModeSumResult flameWaveModeSum(
+public FlameWaveModeSumResult flameWaveModeSum(
     float3 w, float3 rate, float3 pb, float3 d, float h, float dt, int count, float eddyTime) {
     bool cf = flameWaveCfActive();
     float3 psiVec = float3(0.0);
@@ -847,7 +847,7 @@ float flameWaveNoiseSum(float3 w, float3 pb, float h) {
 // height/envelope — no fixed-h switch exists anywhere in the modulation.
 // tipCarveParams: x = kappa (depth), y = 1/mu0 (reach), z = envelope primitive
 // at h=1, w = 1 / total envelope mass.
-float flameTipCarveLambda(float h) {
+public float flameTipCarveLambda(float h) {
     return 1.0 + flame.tipCarveParams.depth * exp(-flameEnvelopeRemainingMu(h) * flame.tipCarveParams.invReach);
 }
 
@@ -878,7 +878,7 @@ float flameBurnoutBoost(float h) {
         * exp(-flameEnvelopeRemainingMu(h) * flame.tipCarveParams.invReach);
 }
 
-float flameNoiseErosionFromValue(float noise, float h, float density, float uSquared) {
+public float flameNoiseErosionFromValue(float noise, float h, float density, float uSquared) {
     float relative = flame.spreadParams.erosionNoiseGain * flameTipCarveLambda(h) * (density / FLAME_EROSION_SHELL_REF)
         * (noise - 0.4375);
     return flame.noiseAmplitude
@@ -888,7 +888,7 @@ float flameNoiseErosionFromValue(float noise, float h, float density, float uSqu
 
 // Response through the (optionally relative) window: unified keeps the
 // half-width >= the local modulation sigma so the rectifier never binarizes.
-float flameResponseOccupancy(float dSmooth, float erosion, float h, float uSquared) {
+public float flameResponseOccupancy(float dSmooth, float erosion, float h, float uSquared) {
     float lo = flame.nearFadeParams.edgeLow;
     float hi = flame.nearFadeParams.edgeHigh;
     if (flame.unifiedParams.enabled > 0.5) {
@@ -921,14 +921,14 @@ float flameNoiseFieldDensity(float3 p, float h, out float dSmooth) {
 
 // Raw erosion value at a point, sampled at the warped coordinate like every
 // erosion consumer (band freeze, legacy factor, occupancy field).
-float flameNoiseErosionValue(float3 p, float h, float density, float uSquared) {
+public float flameNoiseErosionValue(float3 p, float h, float density, float uSquared) {
     FlameWarpFrame frame = flameBuildWarpFrame(p, float3(0.0), h);
     return flameNoiseErosionAt(frame, density, uSquared);
 }
 
 // Legacy multiplicative factor (trail domain): no local dSmooth exists there,
 // so the relative term is evaluated at the shell reference density.
-float flameNoiseErosionFactor(float3 p, float h) {
+public float flameNoiseErosionFactor(float3 p, float h) {
     if (flame.noiseAmplitude == 0.0) {
         return 1.0;
     }
@@ -979,7 +979,7 @@ float flameEmitterDensity(float3 p, float h, out float dSmooth) {
 // カメラが emitter の support に入るとリムレイが 45/45 -> 0/45 に全滅し、これが
 // 壁ルックへの二値切替になる。カメラ近傍の密度を 0 へ落として光学的にカメラを場の
 // 外に置き、リムのシルエットが常に画面に残るようにする。
-float flameNearCameraFade(float3 pLocal) {
+public float flameNearCameraFade(float3 pLocal) {
     float radius = flame.nearFadeParams.radius;
     if (radius <= 0.0) {
         return 1.0;

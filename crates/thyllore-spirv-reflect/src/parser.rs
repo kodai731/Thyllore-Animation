@@ -256,11 +256,23 @@ impl SpirvModule {
             .ok_or(ReflectError::MissingType(type_id))
     }
 
+    pub(crate) fn strip_layout_suffix(name: String) -> String {
+        if name.ends_with("_std140") {
+            name.strip_suffix("_std140").unwrap().to_string()
+        } else if name.ends_with("_std430") {
+            name.strip_suffix("_std430").unwrap().to_string()
+        } else {
+            name
+        }
+    }
+
     fn name_of(&self, id: u32) -> String {
-        self.names
-            .get(&id)
-            .cloned()
-            .unwrap_or_else(|| format!("%{id}"))
+        Self::strip_layout_suffix(
+            self.names
+                .get(&id)
+                .cloned()
+                .unwrap_or_else(|| format!("%{id}")),
+        )
     }
 
     fn resolve_binding(
@@ -890,5 +902,25 @@ pub(crate) mod tests {
         );
         assert_eq!(reflection.bindings.len(), 1);
         assert_eq!(reflection.bindings[0].name, "WaterBlock");
+    }
+
+    #[test]
+    fn test_strip_layout_suffix() {
+        assert_eq!(
+            SpirvModule::strip_layout_suffix("FrameUBO_std140".to_string()),
+            "FrameUBO"
+        );
+        assert_eq!(
+            SpirvModule::strip_layout_suffix("Buffer_std430".to_string()),
+            "Buffer"
+        );
+        assert_eq!(
+            SpirvModule::strip_layout_suffix("SimpleBuffer".to_string()),
+            "SimpleBuffer"
+        );
+        assert_eq!(
+            SpirvModule::strip_layout_suffix("My_std140_Buffer".to_string()),
+            "My_std140_Buffer"
+        );
     }
 }

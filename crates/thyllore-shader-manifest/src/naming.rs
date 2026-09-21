@@ -1,9 +1,14 @@
-const SHADER_EXTENSIONS: [&str; 9] = [
+const GLSL_EXTENSIONS: [&str; 9] = [
     "vert", "frag", "geom", "comp", "rgen", "rint", "rahit", "rchit", "rmiss",
 ];
+const SLANG_EXTENSION: &str = "slang";
 
 pub fn is_shader_source(file_name: &str) -> bool {
-    file_extension(file_name).is_some_and(|extension| SHADER_EXTENSIONS.contains(&extension))
+    is_glsl_source(file_name) || file_extension(file_name) == Some(SLANG_EXTENSION)
+}
+
+pub fn is_glsl_source(file_name: &str) -> bool {
+    file_extension(file_name).is_some_and(|extension| GLSL_EXTENSIONS.contains(&extension))
 }
 
 pub fn spirv_output_name(source_path: &str) -> Option<String> {
@@ -14,6 +19,14 @@ pub fn spirv_output_name(source_path: &str) -> Option<String> {
     let extension = file_extension(file_name)?;
     let stem = &file_name[..file_name.len() - extension.len() - 1];
 
+    if extension == SLANG_EXTENSION {
+        return slang_spirv_output(&directory, stem);
+    }
+
+    glsl_spirv_output(&directory, stem, extension)
+}
+
+fn glsl_spirv_output(directory: &str, stem: &str, extension: &str) -> Option<String> {
     let base_name = stem
         .trim_end_matches("Vertex")
         .trim_end_matches("vertex")
@@ -47,14 +60,41 @@ pub fn spirv_output_name(source_path: &str) -> Option<String> {
         _ => return None,
     };
 
+    Some(spirv_file_name(directory, base_name, stage_suffix))
+}
+
+fn slang_spirv_output(directory: &str, stem: &str) -> Option<String> {
+    let (base_name, stage_suffix) = slang_stage_from_stem(stem)?;
+    Some(spirv_file_name(directory, base_name, stage_suffix))
+}
+
+fn spirv_file_name(directory: &str, base_name: &str, stage_suffix: &str) -> String {
     if base_name.is_empty() {
-        Some(format!(
-            "{directory}{}.spv",
-            stage_suffix.to_ascii_lowercase()
-        ))
+        format!("{directory}{}.spv", stage_suffix.to_ascii_lowercase())
     } else {
-        Some(format!("{directory}{base_name}{stage_suffix}.spv"))
+        format!("{directory}{base_name}{stage_suffix}.spv")
     }
+}
+
+fn slang_stage_from_stem(stem: &str) -> Option<(&str, &str)> {
+    let suffixes: &[(&str, &str)] = &[
+        ("Vertex", "Vert"),
+        ("Fragment", "Frag"),
+        ("Geometry", "Geom"),
+        ("Compute", "Comp"),
+        ("RayGen", "Rgen"),
+        ("Intersection", "Rint"),
+        ("AnyHit", "Rahit"),
+        ("ClosestHit", "Rchit"),
+        ("Miss", "Rmiss"),
+    ];
+
+    for (suffix, stage) in suffixes {
+        if let Some(base) = stem.strip_suffix(suffix) {
+            return Some((base, stage));
+        }
+    }
+    None
 }
 
 fn file_extension(file_name: &str) -> Option<&str> {
@@ -136,5 +176,30 @@ mod tests {
         assert_eq!(spirv_output_name("common.glsl"), None);
         assert!(!is_shader_source("include"));
         assert!(is_shader_source("dofFragment.frag"));
+    }
+
+    #[test]
+    fn slang_strips_stage_word_and_appends_stage_suffix() {
+        assert_eq!(
+            spirv_output_name("wind/resolveFragment.slang").as_deref(),
+            Some("wind/resolveFrag.spv")
+        );
+        assert_eq!(
+            spirv_output_name("wind/shadowBakeCompute.slang").as_deref(),
+            Some("wind/shadowBakeComp.spv")
+        );
+        assert_eq!(
+            spirv_output_name("raytracing/traceRayGen.slang").as_deref(),
+            Some("raytracing/traceRgen.spv")
+        );
+        assert_eq!(spirv_output_name("foo.slang"), None);
+    }
+
+    #[test]
+    fn is_shader_source_accepts_slang() {
+        assert!(is_shader_source("resolveFragment.slang"));
+        assert!(is_shader_source("shadowBakeCompute.slang"));
+        assert!(!is_glsl_source("resolveFragment.slang"));
+        assert!(is_glsl_source("dofFragment.frag"));
     }
 }

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 use toml::Value;
 
-use crate::naming::is_shader_source;
+use crate::naming::is_glsl_source;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StageKind {
@@ -188,8 +188,8 @@ impl PassManifest {
     }
 }
 
-/// Shader sources found anywhere under `shader_dir`, keyed by their path relative to it
-/// (`water/causticSplat.comp`). Include files are not sources.
+/// GLSL sources found anywhere under `shader_dir`, keyed by their path relative to it
+/// (`water/causticSplat.comp`). Include files and Slang sources are not GLSL sources.
 pub fn collect_shader_sources(
     shader_dir: &Path,
 ) -> Result<BTreeMap<String, PathBuf>, ManifestError> {
@@ -207,7 +207,7 @@ pub fn collect_shader_sources(
             let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
                 continue;
             };
-            if !is_shader_source(file_name) {
+            if !is_glsl_source(file_name) {
                 continue;
             }
             let Some(source_key) = relative_source_key(shader_dir, &path) else {

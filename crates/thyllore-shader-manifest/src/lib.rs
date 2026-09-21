@@ -19,5 +19,5 @@ pub use manifest::{
     collect_shader_sources, ManifestError, PassDefinition, PassManifest, SetRole, StageKind,
     StageSource,
 };
-pub use naming::{is_shader_source, spirv_output_name};
+pub use naming::{is_glsl_source, is_shader_source, spirv_output_name};
 pub use spirv_files::collect_spirv_files;

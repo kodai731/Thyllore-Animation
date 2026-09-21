@@ -24,7 +24,7 @@ fn test_all_shader_sources_exist() {
         "shaders/model/fragment.slang",
         "shaders/gbuffer/vertex.slang",
         "shaders/gbuffer/fragment.slang",
-        "shaders/postprocess/compositeVertex.vert",
+        "shaders/postprocess/compositeVertex.slang",
         "shaders/postprocess/compositeFragment.frag",
         "shaders/editor/gridVertex.slang",
         "shaders/editor/gridFragment.slang",
@@ -113,7 +113,7 @@ fn test_vertex_shader_extension() {
     let vertex_shaders = [
         ("shaders/model/vertex.slang", true),
         ("shaders/gbuffer/vertex.slang", true),
-        ("shaders/postprocess/compositeVertex.vert", false),
+        ("shaders/postprocess/compositeVertex.slang", true),
         ("shaders/editor/gridVertex.slang", true),
         ("shaders/editor/gizmoVertex.slang", true),
         ("shaders/editor/imguiVertex.slang", true),

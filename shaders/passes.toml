@@ -27,19 +27,19 @@ stages = ["gbuffer/vertex.slang", "editor/onionSkinFragment.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.onion_skin_composite]
-stages = ["postprocess/tonemapVertex.vert", "editor/onionSkinCompositeFragment.slang"]
+stages = ["postprocess/tonemapVertex.slang", "editor/onionSkinCompositeFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.water_resolve]
-stages = ["postprocess/tonemapVertex.vert", "water/resolveFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "water/resolveFragment.frag"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.flame_resolve]
-stages = ["postprocess/tonemapVertex.vert", "flame/resolveFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "flame/resolveFragment.frag"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.wind_resolve]
-stages = ["postprocess/tonemapVertex.vert", "wind/resolveFragment.slang"]
+stages = ["postprocess/tonemapVertex.slang", "wind/resolveFragment.slang"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.wind_shadow_bake]
@@ -47,23 +47,23 @@ stages = ["wind/shadowBakeCompute.slang"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.wind_upsample]
-stages = ["postprocess/tonemapVertex.vert", "wind/upsampleFragment.slang"]
+stages = ["postprocess/tonemapVertex.slang", "wind/upsampleFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.tonemap]
-stages = ["postprocess/tonemapVertex.vert", "postprocess/tonemapFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "postprocess/tonemapFragment.frag"]
 sets = { 0 = "local" }
 
 [pass.bloom_downsample]
-stages = ["postprocess/tonemapVertex.vert", "postprocess/bloomDownsampleFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "postprocess/bloomDownsampleFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.bloom_upsample]
-stages = ["postprocess/tonemapVertex.vert", "postprocess/bloomUpsampleFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "postprocess/bloomUpsampleFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.dof]
-stages = ["postprocess/tonemapVertex.vert", "postprocess/dofFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "postprocess/dofFragment.frag"]
 sets = { 0 = "local" }
 
 [pass.auto_exposure_histogram]
@@ -87,7 +87,7 @@ stages = ["water/causticApply.comp"]
 sets = { 0 = "local" }
 
 [pass.composite]
-stages = ["postprocess/compositeVertex.vert", "postprocess/compositeFragment.frag"]
+stages = ["postprocess/compositeVertex.slang", "postprocess/compositeFragment.frag"]
 sets = { 0 = "local" }
 
 [pass.billboard]

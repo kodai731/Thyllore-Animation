@@ -1,0 +1,208 @@
+import "include/ray.slang";
+
+[[vk::binding(0, 0)]] Sampler2D positionSampler;
+[[vk::binding(1, 0)]] Sampler2D normalSampler;
+[[vk::binding(2, 0)]] Sampler2D shadowMaskSampler;
+[[vk::binding(3, 0)]] Sampler2D albedoSampler;
+
+struct SceneData {
+    float4 lightPosition;
+    float4 lightColor;
+    float4x4 view;
+    float4x4 proj;
+    int debugMode;
+    float shadowStrength;
+    int enableDistanceAttenuation;
+    float exposureValue;
+};
+
+[[vk::binding(4, 0)]] ConstantBuffer<SceneData> sceneData;
+
+[[vk::binding(5, 0)]] Sampler2D<uint4> objectIDSampler;
+
+struct SelectionData {
+    uint4 selectedIDs[32];
+    uint selectedCount;
+    uint _pad0;
+    uint _pad1;
+    uint _pad2;
+};
+
+[[vk::binding(6, 0)]] ConstantBuffer<SelectionData> selection;
+
+struct PushConstants {
+    int debugMode;
+};
+
+[[vk::push_constant]] ConstantBuffer<PushConstants> pc;
+
+static const float3 OUTLINE_COLOR = float3(1.0, 0.5, 0.0);
+static const float OUTLINE_WIDTH = 1.5;
+
+bool isSelected(uint id) {
+    if (id == 0u) return false;
+    for (uint i = 0u; i < selection.selectedCount; i++) {
+        if (selection.selectedIDs[i].x == id) return true;
+    }
+    return false;
+}
+
+bool detectOutlineEdge(float2 fragTexCoord) {
+    uint width;
+    uint height;
+    objectIDSampler.GetDimensions(width, height);
+    float2 texelSize = 1.0 / float2(width, height);
+    uint centerID = objectIDSampler.Sample(fragTexCoord).r;
+    bool centerSelected = isSelected(centerID);
+
+    for (int dy = -1; dy <= 1; dy++) {
+        for (int dx = -1; dx <= 1; dx++) {
+            if (dx == 0 && dy == 0) continue;
+
+            float2 offset = float2(float(dx), float(dy)) * texelSize * OUTLINE_WIDTH;
+            uint neighborID = objectIDSampler.Sample(fragTexCoord + offset).r;
+            bool neighborSelected = isSelected(neighborID);
+
+            if (centerSelected != neighborSelected) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+[shader("fragment")]
+float4 main([[vk::location(0)]] float2 fragTexCoord : TEXCOORD0,
+    out float fragDepth : SV_Depth) : SV_Target0 {
+    // Sample G-Buffer
+    float3 worldPosition = positionSampler.Sample(fragTexCoord).xyz;
+    float3 worldNormal = normalSampler.Sample(fragTexCoord).xyz;
+    float shadowMask = shadowMaskSampler.Sample(fragTexCoord).r;
+    float4 albedo = albedoSampler.Sample(fragTexCoord);
+
+    // Check if this is a valid fragment (normal length check)
+    bool isBackground = length(worldNormal) < 0.01;
+
+    // Write scene depth for overlay depth testing
+    if (isBackground) {
+        fragDepth = DEPTH_FAR;
+    } else {
+        fragDepth = worldToClipDepth(worldPosition, sceneData.view, sceneData.proj);
+    }
+
+    // No opaque surface here: leave the target untouched so the pass clear color,
+    // which carries the background radiance, stays as the scene behind volumetrics.
+    if (isBackground) {
+        discard;
+    }
+
+    // Debug view modes
+    if (pc.debugMode == 1) {
+        // Position view (world space) - visualize as color
+        // Map world position to visible range
+        float3 posColor = worldPosition * 0.1 + 0.5;
+        return float4(posColor, 1.0);
+    }
+    else if (pc.debugMode == 2) {
+        // Normal view (world space) - map [-1,1] to [0,1]
+        float3 normalColor = normalize(worldNormal) * 0.5 + 0.5;
+        return float4(normalColor, 1.0);
+    }
+    else if (pc.debugMode == 3) {
+        // Shadow mask view - show shadow as grayscale
+        return float4(float3(shadowMask), 1.0);
+    }
+    else if (pc.debugMode == 4) {
+        // N dot L view - visualize light direction relative to surface
+        float3 n = normalize(worldNormal);
+        float3 lightVector = sceneData.lightPosition.xyz - worldPosition;
+        float3 l = normalize(lightVector);
+        float ndotl = dot(n, l);
+        // Red = facing away from light, Green = facing toward light
+        float3 ndotlColor = ndotl > 0.0 ? float3(0.0, ndotl, 0.0) : float3(-ndotl, 0.0, 0.0);
+        return float4(ndotlColor, 1.0);
+    }
+    else if (pc.debugMode == 5) {
+        // Light direction view - show raw light direction as color
+        float3 lightVector = sceneData.lightPosition.xyz - worldPosition;
+        float3 l = normalize(lightVector);
+        return float4(l * 0.5 + 0.5, 1.0);
+    }
+    else if (pc.debugMode == 6) {
+        // View depth mode - visualize GBuffer depth in view space
+        float4 worldPos4 = positionSampler.Sample(fragTexCoord);
+        bool hasGeometry = worldPos4.w > 0.5;
+
+        if (!hasGeometry) {
+            return float4(0.0, 0.0, 0.2, 1.0);
+        }
+
+        float4 viewPos = mul(sceneData.view, float4(worldPos4.xyz, 1.0));
+        float viewDepth = -viewPos.z;
+
+        float normalizedDepth = viewDepth * 0.005;
+        normalizedDepth = clamp(normalizedDepth, 0.0, 1.0);
+
+        return float4(0.0, normalizedDepth, 0.0, 1.0);
+    }
+    else if (pc.debugMode == 7) {
+        uint objectID = objectIDSampler.Sample(fragTexCoord).r;
+        if (objectID == 0u) {
+            return float4(0.0, 0.0, 0.0, 1.0);
+        } else {
+            float r = float((objectID * 37u) % 256u) / 255.0;
+            float g = float((objectID * 97u) % 256u) / 255.0;
+            float b = float((objectID * 151u) % 256u) / 255.0;
+            return float4(r, g, b, 1.0);
+        }
+    }
+    else if (pc.debugMode == 8) {
+        uint objectID = objectIDSampler.Sample(fragTexCoord).r;
+
+        if (selection.selectedCount > 0u && objectID == selection.selectedIDs[0].x) {
+            return float4(1.0, 0.5, 0.0, 1.0);
+        } else if (objectID > 0u) {
+            return float4(0.3, 0.3, 0.3, 1.0);
+        } else {
+            return float4(0.0, 0.0, 0.0, 1.0);
+        }
+    }
+    else if (pc.debugMode == 9) {
+        float countVis = float(selection.selectedCount) / 5.0;
+        return float4(countVis, countVis, countVis, 1.0);
+    }
+    else if (pc.debugMode == 10) {
+        return float4(albedo.rgb, 1.0);
+    }
+
+    worldNormal = normalize(worldNormal);
+
+    float3 lightVector = sceneData.lightPosition.xyz - worldPosition;
+    float lightDistance = length(lightVector);
+    float3 lightDir = lightVector / lightDistance;
+
+    float diffuse = max(dot(worldNormal, lightDir), 0.0);
+
+    float attenuation = 1.0;
+    if (sceneData.enableDistanceAttenuation != 0) {
+        attenuation = 1.0 / (1.0 + 0.01 * lightDistance + 0.001 * lightDistance * lightDistance);
+    }
+
+    float ambient = 0.3;
+
+    float shadowFactor = lerp(1.0, shadowMask, sceneData.shadowStrength);
+
+    float3 baseColor = albedo.rgb;
+
+    float3 ambientLight = ambient * float3(1.0);
+    float3 diffuseLight = diffuse * attenuation * sceneData.lightColor.rgb;
+
+    float3 lighting = ambientLight + diffuseLight * shadowFactor;
+    float3 finalColor = baseColor * lighting;
+
+    if (selection.selectedCount > 0u && detectOutlineEdge(fragTexCoord)) {
+        return float4(OUTLINE_COLOR, 1.0);
+    } else {
+        return float4(finalColor, 1.0);
+    }
+}

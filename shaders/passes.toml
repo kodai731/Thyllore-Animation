@@ -51,7 +51,7 @@ stages = ["postprocess/tonemapVertex.slang", "wind/upsampleFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.tonemap]
-stages = ["postprocess/tonemapVertex.slang", "postprocess/tonemapFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "postprocess/tonemapFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.bloom_downsample]
@@ -87,7 +87,7 @@ stages = ["water/causticApply.comp"]
 sets = { 0 = "local" }
 
 [pass.composite]
-stages = ["postprocess/compositeVertex.slang", "postprocess/compositeFragment.frag"]
+stages = ["postprocess/compositeVertex.slang", "postprocess/compositeFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.billboard]

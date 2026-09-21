@@ -25,7 +25,7 @@ fn test_all_shader_sources_exist() {
         "shaders/gbuffer/vertex.slang",
         "shaders/gbuffer/fragment.slang",
         "shaders/postprocess/compositeVertex.slang",
-        "shaders/postprocess/compositeFragment.frag",
+        "shaders/postprocess/compositeFragment.slang",
         "shaders/editor/gridVertex.slang",
         "shaders/editor/gridFragment.slang",
         "shaders/editor/gizmoVertex.slang",
@@ -148,7 +148,7 @@ fn test_fragment_shader_extension() {
     let fragment_shaders = [
         ("shaders/model/fragment.slang", true),
         ("shaders/gbuffer/fragment.slang", true),
-        ("shaders/postprocess/compositeFragment.frag", false),
+        ("shaders/postprocess/compositeFragment.slang", true),
         ("shaders/editor/gridFragment.slang", true),
         ("shaders/editor/gizmoFragment.slang", true),
         ("shaders/editor/imguiFragment.slang", true),

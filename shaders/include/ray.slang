@@ -9,3 +9,8 @@ public float3 reconstructRayDirection(float2 uv, float4x4 invViewProj, float3 ca
     float4 world = mul(invViewProj, float4(ndc, DEPTH_NEAR, 1.0));
     return normalize(world.xyz / world.w - cameraPos);
 }
+
+public float worldToClipDepth(float3 worldPos, float4x4 view, float4x4 proj) {
+    float4 clipPos = mul(mul(proj, view), float4(worldPos, 1.0));
+    return clipPos.z / clipPos.w;
+}

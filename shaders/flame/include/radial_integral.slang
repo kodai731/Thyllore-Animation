@@ -111,8 +111,6 @@ public float flamePointEmitterOccupancy(float3 p, float h, float wiggle) {
         dSmooth, uSquared) * flameFieldSupportMask(dSmooth);
 }
 
-float integrateEmitterOccupancy(float3 o, float3 d, float tNear, float tFar);
-float integrateWaveOccupancy(float3 o, float3 d, float tNear, float tFar);
 float4 integrateWaveOccupancyRTE(float3 o, float3 d, float tNear, float tFar);
 
 // Rays with a near-constant height cannot be parameterized by h, so the moment is taken along t.

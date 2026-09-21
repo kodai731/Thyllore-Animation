@@ -6,7 +6,7 @@
 module flame_reference_march;
 
 import "flame/include/component.slang";
-import "flame/include/ray.slang";
+import "flame/include/segment.slang";
 import "flame/include/noise_field.slang";
 import "flame/include/radial_integral.slang";
 

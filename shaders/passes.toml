@@ -35,7 +35,7 @@ stages = ["postprocess/tonemapVertex.slang", "water/resolveFragment.slang"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.flame_resolve]
-stages = ["postprocess/tonemapVertex.slang", "flame/resolveFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "flame/resolveFragment.slang"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.wind_resolve]

@@ -96,7 +96,7 @@ float2 flameMeanderOffsetAt(float h) {
 // This is the position where density/support should be evaluated:
 // the noise sees the bend-removed position (p - bend), but density/support
 // must also account for meander displacement.
-float3 flameMeanderShifted(float3 p, float h) {
+public float3 flameMeanderShifted(float3 p, float h) {
     float2 off = flameMeanderOffsetAt(h);
     return float3(p.x - off.x, p.y, p.z - off.y);
 }
@@ -202,7 +202,7 @@ float flameWaveJitterKappaScale() {
     return scale > 0.0 ? scale : 1.0;
 }
 
-float3 flameWaveJitterFields(float3 w) {
+public float3 flameWaveJitterFields(float3 w) {
     float scale = flameWaveJitterKappaScale();
     return float3(
         sin(scale * dot(FLAME_WAVE_JITTER_K[0], w) + FLAME_WAVE_JITTER_PHASE.x),
@@ -566,7 +566,7 @@ float3 flameWaveFlowWarp(float3 pb, float h) {
 // flameWaveFlowWarp; v starts as the linear part of M^-1 applied to dir and is
 // updated by v += curlDir * (-strength * a * sin(angle)) * dot(k, v) each step.
 // Returns the final v transformed by the linear part of M^-1 (no translation).
-float3 flameWaveFlowWarpRate(float3 pb, float3 dir, float h, out float3 warpedPoint) {
+public float3 flameWaveFlowWarpRate(float3 pb, float3 dir, float h, out float3 warpedPoint) {
     float strength = flameWarpStrength(h);
     bool cf = flameWaveCfActive();
     int warpCount = cf ? int(flame.waveCfParams.shearLayerCount) : FLAME_WAVE_WARP_COUNT;
@@ -590,7 +590,7 @@ float3 flameWaveFlowWarpRate(float3 pb, float3 dir, float h, out float3 warpedPo
 // Internal helper: compute the warped coordinate q from world position p and height h.
 // This is the single source of truth for the domain-warp chain:
 //   bendOffset -> pb -> advect -> aniso -> wp -> w -> q
-float3 flameNoiseBendRemoved(float3 p, float h) {
+public float3 flameNoiseBendRemoved(float3 p, float h) {
     float2 centerlineOffset = flameCenterlineOffsetAt(h);
     return float3(p.x - centerlineOffset.x, p.y, p.z - centerlineOffset.y);
 }
@@ -966,7 +966,7 @@ float flameSdfFieldDensity(float3 p, float h, out float dSmooth) {
         dSmooth, uSquared) * flameFieldSupportMask(dSmooth);
 }
 
-float flameEmitterDensity(float3 p, float h, out float dSmooth) {
+public float flameEmitterDensity(float3 p, float h, out float dSmooth) {
     if (flame.emitterParams.kind >= 1.5) {
         return flameSdfFieldDensity(p, h, dSmooth);
     }

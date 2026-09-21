@@ -1,4 +1,23 @@
-#version 450
+import "include/chebyshev.slang";
+import "include/frame.slang";
+import "include/radiative_transfer.slang";
+import "include/ray.slang";
+import "flame/include/segment.slang";
+import "flame/include/noise.slang";
+import "flame/include/component.slang";
+import "flame/include/branch_transport.slang";
+import "flame/include/shell_profile.slang";
+import "flame/include/shell_support.slang";
+import "flame/include/noise_field.slang";
+import "flame/include/erf_moments.slang";
+import "flame/include/erosion_response.slang";
+import "flame/include/radial_integral.slang";
+import "flame/include/reference_march.slang";
+
+struct Output {
+    float4 color : SV_Target0;
+    float4 history : SV_Target1;
+};
 
 // F2 shading pass. push.mode swaps HOW emission is integrated and nothing else:
 // the ray interval, camera-inside handling, color ramp and alpha live in the
@@ -9,50 +28,28 @@
 // push.mode: 0 = analytic boundary integral, 1 = reference raymarch,
 // 2 = delta-t debug view, 3 = styled raymarch (IGN jitter + noise erosion).
 
-#include "include/chebyshev.glsl"
-#include "flame/include/ray.glsl"
-#include "flame/include/noise.glsl"
+[[vk::binding(4, 1)]] Sampler2D flameHistorySampler;
+[[vk::binding(6, 1)]] Sampler2D sceneDepthSampler;
 
-layout(set = 0, binding = 0) uniform FrameUBO {
-    mat4 view;
-    mat4 proj;
-    vec4 camera_pos;
-    vec4 light_pos;
-    vec4 light_color;
-} frame;
+static float2 fragTexCoord;
 
-#include "flame/include/component.glsl"
-
-#include "flame/include/shell_profile.glsl"
-#include "flame/include/shell_support.glsl"
-
-layout(set = 1, binding = 4) uniform sampler2D flameHistorySampler;
-layout(set = 1, binding = 5) uniform sampler2D flameSdfSampler;
-layout(set = 1, binding = 6) uniform sampler2D sceneDepthSampler;
-
-layout(location = 0) in vec2 fragTexCoord;
-
-layout(location = 0) out vec4 outColor;
-layout(location = 1) out vec4 outHistory;
-
-layout(push_constant) uniform FlamePush {
+struct FlamePush {
     int mode;
     int stepCount;
     int debugView;
-} push;
+};
 
-const float SEGMENT_T_MAX = 1e4;
-const float H_DIR_EPSILON = 1e-4;
-const vec3 LUMA_WEIGHTS = vec3(0.2126, 0.7152, 0.0722);
+[[vk::push_constant]] ConstantBuffer<FlamePush> push;
 
-float evaluateHeightFalloff(float height01) {
-    return evaluateChebyshev8(flame.heightCoefficients[0], flame.heightCoefficients[1], height01);
+static const float SEGMENT_T_MAX = 1e4;
+static const float H_DIR_EPSILON = 1e-4;
+static const float3 LUMA_WEIGHTS = float3(0.2126, 0.7152, 0.0722);
+
+float4x4 glslInverse(float4x4 m) {
+    return spirv_asm {
+        result:$$float4x4 = OpExtInst glsl450 MatrixInverse $m;
+    };
 }
-
-#include "flame/include/noise_field.glsl"
-#include "flame/include/erf_moments.glsl"
-#include "flame/include/erosion_response.glsl"
-#include "flame/include/radial_integral.glsl"
 
 float evaluateHeightPrimitive(float height01) {
     return evaluateChebyshev12(
@@ -63,10 +60,10 @@ float evaluateHeightPrimitive(float height01) {
 }
 
 // Self-shadow optical depth: layered concentric cylinders (3 layers) with Chebyshev density.
-float computeSelfShadowTau(vec3 p, vec3 l) {
+float computeSelfShadowTau(float3 p, float3 l) {
     // Layer radii S = [1/3, 2/3, 1], midpoints m = [1/6, 0.5, 5/6]
-    float s[3] = float[](1.0/3.0, 2.0/3.0, 1.0);
-    float m[3] = float[](1.0/6.0, 0.5, 5.0/6.0);
+    float s[3] = { 1.0/3.0, 2.0/3.0, 1.0 };
+    float m[3] = { 1.0/6.0, 0.5, 5.0/6.0 };
 
     // Evaluate density at each layer midpoint using Chebyshev coefficients
     float dens[4];
@@ -168,26 +165,10 @@ float computeSelfShadowTau(vec3 p, vec3 l) {
     return max(0.0, flame.sigmaT * total);
 }
 
-const int DEPTH_CLAMP_NO_SURFACE = 0;
-const int DEPTH_CLAMP_SURFACE_BEHIND = 1;
-const int DEPTH_CLAMP_TRUNCATES = 2;
-const int DEPTH_CLAMP_OCCLUDES = 3;
-
-struct FlameDepthClamp {
-    float sceneDepth;
-    float tDepth;
-    int state;
-};
-
-struct FlameRaySegment {
-   float tNear;
-    float tFar;
-    vec3 localOrigin;
-    vec3 localDir;
-    float boundaryHeightIntegral;
-    FlameDepthClamp depthClamp;
-    bool cylinderDomain;
-};
+static const int DEPTH_CLAMP_NO_SURFACE = 0;
+static const int DEPTH_CLAMP_SURFACE_BEHIND = 1;
+static const int DEPTH_CLAMP_TRUNCATES = 2;
+static const int DEPTH_CLAMP_OCCLUDES = 3;
 
 // The closed form and the shell clamp both assume the plain cylinder domain.
 // Cylinder emitter without a trail: the radial band integral applies wind
@@ -197,7 +178,7 @@ bool isCylinderDomain() {
     return flame.emitterParams.kind < 0.5 && flame.trailMeta.sampleCount < 1.0;
 }
 
-bool clampToShellCone(vec3 o, vec3 d, float radiusPad, inout float tNear, inout float tFar) {
+bool clampToShellCone(float3 o, float3 d, float radiusPad, inout float tNear, inout float tFar) {
     // Shell cone: |p.xz| <= flameShellOuterRadius(p.y) + radiusPad, which is linear in y:
     // f(t) = m + n*t with m = flameShellOuterRadius(o.y) + radiusPad and n = its slope along the ray.
     // Condition |o.xz + t*d.xz|^2 - f(t)^2 <= 0 -> a = dot(d.xz,d.xz) - n*n, b = 2.0*(dot(o.xz,d.xz) - m*n), c = dot(o.xz,o.xz) - m*m
@@ -266,9 +247,9 @@ bool clampToShellCone(vec3 o, vec3 d, float radiusPad, inout float tNear, inout 
 
 // Scene depth (grid + opaque meshes) projected onto the view ray, so the emission
 // interval can be cut where a surface occludes the flame.
-FlameDepthClamp resolveSceneDepthClamp(mat4 invViewProj, vec3 rayDir, float tNear, float tFar) {
+FlameDepthClamp resolveSceneDepthClamp(float4x4 invViewProj, float3 rayDir, float tNear, float tFar) {
     FlameDepthClamp depthClamp;
-    depthClamp.sceneDepth = texture(sceneDepthSampler, fragTexCoord).r;
+    depthClamp.sceneDepth = sceneDepthSampler.Sample(fragTexCoord).r;
     depthClamp.tDepth = 0.0;
     depthClamp.state = DEPTH_CLAMP_NO_SURFACE;
 
@@ -276,8 +257,8 @@ FlameDepthClamp resolveSceneDepthClamp(mat4 invViewProj, vec3 rayDir, float tNea
         return depthClamp;
     }
 
-    vec4 surfaceClip = invViewProj * vec4(fragTexCoord * 2.0 - 1.0, depthClamp.sceneDepth, 1.0);
-    vec3 surfaceWorld = surfaceClip.xyz / surfaceClip.w;
+    float4 surfaceClip = mul(invViewProj, float4(fragTexCoord * 2.0 - 1.0, depthClamp.sceneDepth, 1.0));
+    float3 surfaceWorld = surfaceClip.xyz / surfaceClip.w;
     depthClamp.tDepth = dot(surfaceWorld - frame.camera_pos.xyz, rayDir);
 
     if (tNear >= depthClamp.tDepth) {
@@ -291,12 +272,12 @@ FlameDepthClamp resolveSceneDepthClamp(mat4 invViewProj, vec3 rayDir, float tNea
 }
 
 FlameRaySegment buildRaySegment() {
-    mat4 invViewProj = inverse(frame.proj * frame.view);
-    vec3 rayDir = reconstructRayDirection(fragTexCoord, invViewProj, frame.camera_pos.xyz);
+    float4x4 invViewProj = glslInverse(mul(frame.proj, frame.view));
+    float3 rayDir = reconstructRayDirection(fragTexCoord, invViewProj, frame.camera_pos.xyz);
 
     FlameRaySegment segment;
-    segment.localOrigin = (flame.inverseModel * vec4(frame.camera_pos.xyz, 1.0)).xyz;
-    segment.localDir = (flame.inverseModel * vec4(rayDir, 0.0)).xyz;
+    segment.localOrigin = mul(flame.inverseModel, float4(frame.camera_pos.xyz, 1.0)).xyz;
+    segment.localDir = mul(flame.inverseModel, float4(rayDir, 0.0)).xyz;
     segment.tNear = 0.0;
     segment.tFar = SEGMENT_T_MAX;
     segment.boundaryHeightIntegral = 0.0;
@@ -338,8 +319,8 @@ FlameRaySegment buildRaySegment() {
         segment.tFar = min(segment.tFar, segment.depthClamp.tDepth);
     }
 
-    vec3 o = segment.localOrigin;
-    vec3 d = segment.localDir;
+    float3 o = segment.localOrigin;
+    float3 d = segment.localDir;
     if (abs(d.y) > H_DIR_EPSILON) {
         segment.boundaryHeightIntegral = (evaluateHeightPrimitive(clamp(o.y + segment.tFar * d.y, 0.0, 1.0))
             - evaluateHeightPrimitive(clamp(o.y + segment.tNear * d.y, 0.0, 1.0))) / d.y;
@@ -367,49 +348,46 @@ float integrateEmissionAnalytic(FlameRaySegment segment) {
     return max(segment.boundaryHeightIntegral, 0.0);
 }
 
-#include "flame/include/reference_march.glsl"
-
-
 // Debug mode 4: hue = clamp decision, 1-unit brightness bands = tDepth magnitude.
 // dark blue: no scene surface / cyan: tDepth is NaN / magenta: tDepth behind camera
 // red: segment fully occluded (flame discarded) / yellow: tFar truncated / green: surface behind segment
-vec3 visualizeDepthClamp(FlameDepthClamp depthClamp) {
+float3 visualizeDepthClamp(FlameDepthClamp depthClamp) {
     if (depthClamp.state == DEPTH_CLAMP_NO_SURFACE) {
-        return vec3(0.0, 0.0, 0.25);
+        return float3(0.0, 0.0, 0.25);
     }
     if (isnan(depthClamp.tDepth)) {
-        return vec3(0.0, 1.0, 1.0);
+        return float3(0.0, 1.0, 1.0);
     }
     if (depthClamp.tDepth < 0.0) {
-        return vec3(1.0, 0.0, 1.0);
+        return float3(1.0, 0.0, 1.0);
     }
 
     float band = 0.35 + 0.65 * fract(depthClamp.tDepth);
     if (depthClamp.state == DEPTH_CLAMP_OCCLUDES) {
-        return vec3(band, 0.0, 0.0);
+        return float3(band, 0.0, 0.0);
     }
     if (depthClamp.state == DEPTH_CLAMP_TRUNCATES) {
-        return vec3(band, band, 0.0);
+        return float3(band, band, 0.0);
     }
-    return vec3(0.0, band, 0.0);
+    return float3(0.0, band, 0.0);
 }
 
-vec4 shadeEmission(FlameRaySegment segment, float emission) {
+float4 shadeEmission(FlameRaySegment segment, float emission) {
     float heightMid = clamp(
         evaluateHeightAlongRay(
             0.5 * (segment.tNear + segment.tFar), segment.localOrigin.y, segment.localDir.y),
         0.0, 1.0);
-    vec3 rampColor;
+    float3 rampColor;
     if (heightMid < 0.5) {
-        rampColor = mix(flame.colorBase.rgb, flame.colorMid.rgb, heightMid * 2.0);
+        rampColor = lerp(flame.colorBase.rgb, flame.colorMid.rgb, heightMid * 2.0);
     } else {
-        rampColor = mix(flame.colorMid.rgb, flame.colorTip.rgb, (heightMid - 0.5) * 2.0);
+        rampColor = lerp(flame.colorMid.rgb, flame.colorTip.rgb, (heightMid - 0.5) * 2.0);
     }
 
     float tempNorm = clamp(emission * 2.0, 0.0, 1.0) * (1.0 - 0.55 * heightMid);
-    vec3 radiance = rampColor * flame.intensity * (1.0 + flame.edgeStyle.whiteBoost * pow(tempNorm, 2.0)) * emission;
+    float3 radiance = rampColor * flame.intensity * (1.0 + flame.edgeStyle.whiteBoost * pow(tempNorm, 2.0)) * emission;
     float alpha = rteOpacity(flame.sigmaT, emission);
-    return vec4(radiance, alpha);
+    return float4(radiance, alpha);
 }
 
 // ---- Numeric debug views (push.debugView > 0) ----
@@ -417,41 +395,41 @@ vec4 shadeEmission(FlameRaySegment segment, float emission) {
 // sampled at the max-density node along the ray (Emission Total integrates).
 // History blending is bypassed so the display is the raw current-frame value.
 
-vec3 flameDebugHeat(float v) {
+float3 flameDebugHeat(float v) {
     v = clamp(v, 0.0, 1.0);
-    return vec3(clamp(v * 3.0, 0.0, 1.0), clamp(v * 3.0 - 1.0, 0.0, 1.0), clamp(v * 3.0 - 2.0, 0.0, 1.0));
+    return float3(clamp(v * 3.0, 0.0, 1.0), clamp(v * 3.0 - 1.0, 0.0, 1.0), clamp(v * 3.0 - 2.0, 0.0, 1.0));
 }
 
-vec3 flameDebugDiverging(float v) {
+float3 flameDebugDiverging(float v) {
     float p = clamp(v, 0.0, 1.0);
     float n = clamp(-v, 0.0, 1.0);
-    return vec3(p, 0.08 + 0.5 * p * p, n);
+    return float3(p, 0.08 + 0.5 * p * p, n);
 }
 
-vec4 flameDebugViewColor(FlameRaySegment segment) {
-    vec3 o = segment.localOrigin;
-    vec3 d = segment.localDir;
+float4 flameDebugViewColor(FlameRaySegment segment) {
+    float3 o = segment.localOrigin;
+    float3 d = segment.localDir;
     float tNear = segment.tNear;
     float tFar = segment.tFar;
     if (!flameWaveSupportSpan(o, d, tNear, tFar)) {
-        return vec4(0.0, 0.0, 0.0, 1.0);
+        return float4(0.0, 0.0, 0.0, 1.0);
     }
     if (push.debugView == 6) {
         float total = integrateWaveOccupancy(o, d, tNear, tFar);
-        return vec4(flameDebugHeat(total * 2.0), 1.0);
+        return float4(flameDebugHeat(total * 2.0), 1.0);
     }
     if (push.debugView == 13) {
         // Linear occupancy integral (total / 4 in every channel): with tone
         // mapping off this decodes to the raw line integral for view-invariance checks.
         float total = integrateWaveOccupancy(o, d, tNear, tFar);
-        return vec4(vec3(total * 0.25), 1.0);
+        return float4(float3(total * 0.25), 1.0);
     }
     if (push.debugView == 9) {
         // Segment grid geometry: R = node-grid phase (level sets are the
         // integrator's t-lattice — compare its arcs against the fringes),
         // G = segment length dt, B = interval entry phase in world t.
         float dt = (tFar - tNear) * flame.segmentParams.invCount;
-        return vec4(fract(tNear / max(dt, 1e-6)), clamp(dt * 8.0, 0.0, 1.0),
+        return float4(fract(tNear / max(dt, 1e-6)), clamp(dt * 8.0, 0.0, 1.0),
             fract(tNear * 8.0), 1.0);
     }
     float dt = (tFar - tNear) * flame.segmentParams.invCount;
@@ -460,7 +438,7 @@ vec4 flameDebugViewColor(FlameRaySegment segment) {
     float bestDensity = 0.0;
     for (int i = 0; i <= segmentCount; ++i) {
         float t = tNear + float(i) * dt;
-        vec3 pNode = o + t * d;
+        float3 pNode = o + t * d;
         float density = flameWaveNodeDensity(pNode, clamp(pNode.y, 0.0, 1.0));
         if (density > bestDensity) {
             bestDensity = density;
@@ -468,22 +446,22 @@ vec4 flameDebugViewColor(FlameRaySegment segment) {
         }
     }
     if (bestDensity <= 0.0) {
-        return vec4(0.0, 0.0, 0.0, 1.0);
+        return float4(0.0, 0.0, 0.0, 1.0);
     }
-    vec3 p = o + bestT * d;
+    float3 p = o + bestT * d;
     float h = clamp(p.y, 0.0, 1.0);
     if (push.debugView == 4) {
-        return vec4(flameDebugHeat(bestDensity), 1.0);
+        return float4(flameDebugHeat(bestDensity), 1.0);
     }
     if (push.debugView == 12) {
-        return vec4(flameBranchDebugColor(flameMeanderShifted(p, h), bestDensity), 1.0);
+        return float4(flameBranchDebugColor(flameMeanderShifted(p, h), bestDensity), 1.0);
     }
     if (push.debugView == 7 || push.debugView == 8) {
-        vec3 w = flameBuildWarpFrame(p, vec3(0.0), h).w;
+        float3 w = flameBuildWarpFrame(p, float3(0.0), h).w;
         if (push.debugView == 7) {
-            return vec4(flameWaveJitterFields(w) * 0.5 + 0.5, 1.0);
+            return float4(flameWaveJitterFields(w) * 0.5 + 0.5, 1.0);
         }
-        return vec4(fract(w * 0.15915494), 1.0);
+        return float4(fract(w * 0.15915494), 1.0);
     }
     if (push.debugView == 10) {
         // Warp Strain: the designed profile strain(h) against the fold-free cap.
@@ -492,34 +470,34 @@ vec4 flameDebugViewColor(FlameRaySegment segment) {
         // flame_wave.rs WARP_STRAIN_CAP.
         float v = flameWarpStrain(h) / 0.9;
         if (v > 1.0) {
-            return vec4(1.0, 0.0, 1.0, 1.0);
+            return float4(1.0, 0.0, 1.0, 1.0);
         }
-        vec3 c = v < 0.5
-            ? mix(vec3(0.0, 0.7, 0.1), vec3(1.0, 0.9, 0.0), v * 2.0)
-            : mix(vec3(1.0, 0.9, 0.0), vec3(0.9, 0.05, 0.0), v * 2.0 - 1.0);
-        return vec4(c, 1.0);
+        float3 c = v < 0.5
+            ? lerp(float3(0.0, 0.7, 0.1), float3(1.0, 0.9, 0.0), v * 2.0)
+            : lerp(float3(1.0, 0.9, 0.0), float3(0.9, 0.05, 0.0), v * 2.0 - 1.0);
+        return float4(c, 1.0);
     }
     if (push.debugView == 11) {
         // Warp Stretch: realized local stretch |J . d| / |d| of the composed
         // shear map along the ray direction, log2-mapped blue (compressed)
         // -> white (1) -> red (stretched), saturating at +-3 octaves. Fringes
         // over strong compression = strain-driven lamination.
-        vec3 pb = flameNoiseBendRemoved(p, h);
-        vec3 q;
-        vec3 rate = flameWaveFlowWarpRate(pb, d, h, q);
+        float3 pb = flameNoiseBendRemoved(p, h);
+        float3 q;
+        float3 rate = flameWaveFlowWarpRate(pb, d, h, q);
         float stretch = length(rate) / max(length(d), 1e-6);
         float oct = clamp(log2(max(stretch, 1e-6)) / 3.0, -1.0, 1.0);
-        vec3 c = oct >= 0.0
-            ? mix(vec3(1.0), vec3(0.85, 0.1, 0.05), oct)
-            : mix(vec3(1.0), vec3(0.1, 0.25, 0.9), -oct);
-        return vec4(c, 1.0);
+        float3 c = oct >= 0.0
+            ? lerp(float3(1.0), float3(0.85, 0.1, 0.05), oct)
+            : lerp(float3(1.0), float3(0.1, 0.25, 0.9), -oct);
+        return float4(c, 1.0);
     }
     float eddyTime = flame.noiseScrollSpeed * flame.time;
     int count = min(int(flame.waveParams.trackedCount), FLAME_WAVE_EROSION_SLOTS);
     FlameNodeSample node = flameWaveNodeSample(p, d, h, bestDensity, dt, count, eddyTime);
     if (push.debugView == 1) {
         float v = (node.shapedNoise - 0.4375) / max(flame.waveParams.amplitude, 1e-4);
-        return vec4(flameDebugDiverging(v), 1.0);
+        return float4(flameDebugDiverging(v), 1.0);
     }
   if (push.debugView == 2) {
         float uSquared;
@@ -527,9 +505,9 @@ vec4 flameDebugViewColor(FlameRaySegment segment) {
             uSquared = 0.0;
         } else {
             float wiggle = flameContourWiggle(p, h);
-            vec2 boundary = flameBoundaryDisplacement(p.xz);
+            float2 boundary = flameBoundaryDisplacement(p.xz);
             float hb = clamp(h / boundary.x, 0.0, 1.0);
-            float taperR = mix(1.0, flame.edgeStyle.radiusTipRatio, pow(hb, flame.warpStyle.taperPower));
+            float taperR = lerp(1.0, flame.edgeStyle.radiusTipRatio, pow(hb, flame.warpStyle.taperPower));
             float rm = flame.emitterParams.kind >= 0.5 ? flame.emitterParams.ringMajorRatio : 0.0;
             float minorScale = flame.emitterParams.kind >= 0.5 ? max(1.0 - rm, 1e-3) : 1.0;
             float rho = (length(p.xz) - rm) / minorScale;
@@ -537,41 +515,48 @@ vec4 flameDebugViewColor(FlameRaySegment segment) {
             float u = rn / flameRadialSupportRadius();
             uSquared = u * u;
         }
-        return vec4(flameDebugDiverging(flameNoiseErosionFromValue(node.shapedNoise, h, node.density, uSquared)), 1.0);
+        return float4(flameDebugDiverging(flameNoiseErosionFromValue(node.shapedNoise, h, node.density, uSquared)), 1.0);
     }
     if (push.debugView == 3) {
-        return vec4(flameDebugDiverging(node.argument * 2.0), 1.0);
+        return float4(flameDebugDiverging(node.argument * 2.0), 1.0);
     }
     if (push.debugView == 5) {
-        return vec4(flameDebugHeat(node.sigmaNoise * 4.0), 1.0);
+        return float4(flameDebugHeat(node.sigmaNoise * 4.0), 1.0);
     }
-    return vec4(flameDebugHeat(bestDensity), 1.0);
+    return float4(flameDebugHeat(bestDensity), 1.0);
 }
 
-void main() {
+Output debugOutput(float4 color) {
+    Output output;
+    output.color = color;
+    output.history = color;
+    return output;
+}
+
+[shader("fragment")]
+Output main(
+    [[vk::location(0)]] float2 texCoord : TEXCOORD0,
+    float4 fragCoord : SV_Position) {
+    flameFragCoord = fragCoord.xy;
+    fragTexCoord = texCoord;
+
     FlameRaySegment segment = buildRaySegment();
 
     if (push.debugView > 0 && flame.trailMeta.sampleCount < 1.0 && segment.tNear <= segment.tFar) {
-        outColor = flameDebugViewColor(segment);
-        outHistory = outColor;
-        return;
+        return debugOutput(flameDebugViewColor(segment));
     }
 
     if (push.mode == 4) {
-        outColor = vec4(visualizeDepthClamp(segment.depthClamp), 1.0);
-        outHistory = outColor;
-        return;
+        return debugOutput(float4(visualizeDepthClamp(segment.depthClamp), 1.0));
     }
 
     if (push.mode == 2) {
         float deltaT = max(segment.tFar - segment.tNear, 0.0);
-        outColor = vec4(
+        return debugOutput(float4(
             max(segment.boundaryHeightIntegral, 0.0),
             deltaT,
             max(-segment.boundaryHeightIntegral, 0.0),
-            1.0);
-        outHistory = outColor;
-        return;
+            1.0));
     }
 
     // Discard if the analytic envelope produced an empty interval (tNear > tFar)
@@ -579,34 +564,34 @@ void main() {
         discard;
     }
 
-    vec3 L;
+    float3 L;
     float trans;
 
     if (push.mode == 3) {
         // Per-step Beer-Lambert integrator with tapered radial density
         float dt = (segment.tFar - segment.tNear) / float(push.stepCount);
-        float jitter = interleavedGradientNoise(gl_FragCoord.xy + vec2(flame.temporalData.frameIndex * 5.588238));
-        L = vec3(0.0);
+        float jitter = interleavedGradientNoise(flameFragCoord + float2(flame.temporalData.frameIndex * 5.588238));
+        L = float3(0.0);
         trans = 1.0;
         for (int i = 0; i < push.stepCount; ++i) {
             float t = segment.tNear + (float(i) + jitter) * dt;
-            vec3 p = segment.localOrigin + t * segment.localDir;
+            float3 p = segment.localOrigin + t * segment.localDir;
             float h = clamp(p.y, 0.0, 1.0);
 
             float dSmooth;
             float density;
             if (flame.trailMeta.sampleCount >= 1.0) {
-                vec3 pWorld = (flame.model * vec4(p, 1.0)).xyz;
-                vec3 baseUnit = (flame.trailUnitInverse * vec4(pWorld, 1.0)).xyz;
+                float3 pWorld = mul(flame.model, float4(p, 1.0)).xyz;
+                float3 baseUnit = mul(flame.trailUnitInverse, float4(pWorld, 1.0)).xyz;
 
-                // Cubic curve coefficients: c0, c1, c2, c3 (each vec4, xyz = coefficient)
-                vec3 c0 = flame.trail_coefficients[0].xyz;
-                vec3 c1 = flame.trail_coefficients[1].xyz;
-                vec3 c2 = flame.trail_coefficients[2].xyz;
-                vec3 c3 = flame.trail_coefficients[3].xyz;
+                // Cubic curve coefficients: c0, c1, c2, c3 (each float4, xyz = coefficient)
+                float3 c0 = flame.trail_coefficients[0].xyz;
+                float3 c1 = flame.trail_coefficients[1].xyz;
+                float3 c2 = flame.trail_coefficients[2].xyz;
+                float3 c3 = flame.trail_coefficients[3].xyz;
 
                 // Chord projection: u_chord = clamp(dot(p - c0, c1 - c0) / dot(c1 - c0, c1 - c0), 0.0, 1.0)
-                vec3 chord = c1 - c0;
+                float3 chord = c1 - c0;
                 float chordLenSq = dot(chord, chord);
                 float u = 0.0;
                 if (chordLenSq > 1e-6) {
@@ -617,9 +602,9 @@ void main() {
                 for (int step = 0; step < 3; ++step) {
                     float u2 = u * u;
                     float u3 = u2 * u;
-                    vec3 curvePos = c0 + c1 * u + c2 * u2 + c3 * u3;
-                    vec3 curveDeriv = c1 + c2 * 2.0 * u + c3 * 3.0 * u2;
-                    vec3 residual = baseUnit - curvePos;
+                    float3 curvePos = c0 + c1 * u + c2 * u2 + c3 * u3;
+                    float3 curveDeriv = c1 + c2 * 2.0 * u + c3 * 3.0 * u2;
+                    float3 residual = baseUnit - curvePos;
                     float fp = 2.0 * dot(residual, -curveDeriv);
                     float fpp = 2.0 * dot(curveDeriv, curveDeriv);
                     if (fpp > 1e-8) {
@@ -631,8 +616,8 @@ void main() {
                 // Evaluate density at u* with weight (1.0 - u)
                 float u2 = u * u;
                 float u3 = u2 * u;
-                vec3 curvePos = c0 + c1 * u + c2 * u2 + c3 * u3;
-                vec3 pu = baseUnit - curvePos;
+                float3 curvePos = c0 + c1 * u + c2 * u2 + c3 * u3;
+                float3 pu = baseUnit - curvePos;
                 float hu = clamp(pu.y, 0.0, 1.0);
                 density = flameEmitterDensity(pu, hu, dSmooth) * (1.0 - u);
                 h = hu;
@@ -646,12 +631,12 @@ void main() {
 
             // Temperature-driven ramp color
             float tempNorm = clamp(dSmooth, 0.0, 1.0) * (1.0 - 0.55 * h);
-            vec3 rampColor;
+            float3 rampColor;
             float u = 1.0 - tempNorm;
             if (u < 0.5) {
-                rampColor = mix(flame.colorBase.rgb, flame.colorMid.rgb, u * 2.0);
+                rampColor = lerp(flame.colorBase.rgb, flame.colorMid.rgb, u * 2.0);
             } else {
-                rampColor = mix(flame.colorMid.rgb, flame.colorTip.rgb, (u - 0.5) * 2.0);
+                rampColor = lerp(flame.colorMid.rgb, flame.colorTip.rgb, (u - 0.5) * 2.0);
             }
 
             L += trans * rampColor * flame.intensity * (1.0 + flame.edgeStyle.whiteBoost * pow(tempNorm, 4.0)) * a;
@@ -659,7 +644,7 @@ void main() {
         }
     } else {
         if (flame.trailMeta.sampleCount < 1.0 && flame.contourParams.rteBands >= 2.0) {
-            vec4 rte;
+            float4 rte;
             if (push.mode == 1) {
                 rte = integrateRTERaymarch(segment, push.stepCount);
             } else if (segment.cylinderDomain) {
@@ -668,8 +653,8 @@ void main() {
                 rte = integrateEmitterOccupancyRTE(segment.localOrigin, segment.localDir, segment.tNear, segment.tFar);
             }
             if (flame.lightData.selfShadowStrength > 0.0) {
-                vec3 pMid = segment.localOrigin + 0.5 * (segment.tNear + segment.tFar) * segment.localDir;
-                rte.rgb *= mix(1.0, rteTransmittanceFromOpticalDepth(computeSelfShadowTau(pMid, normalize(flame.lightData.direction))), flame.lightData.selfShadowStrength);
+                float3 pMid = segment.localOrigin + 0.5 * (segment.tNear + segment.tFar) * segment.localDir;
+                rte.rgb *= lerp(1.0, rteTransmittanceFromOpticalDepth(computeSelfShadowTau(pMid, normalize(flame.lightData.direction))), flame.lightData.selfShadowStrength);
             }
             L = rte.rgb;
             trans = 1.0 - rte.a;
@@ -685,9 +670,9 @@ void main() {
                 // Only for the trail domain — cylinder and emitter occupancy paths own their erosion
                 if (flame.trailMeta.sampleCount >= 1.0) {
                     float tMid = 0.5 * (segment.tNear + segment.tFar);
-                    vec3 pNear = segment.localOrigin + segment.tNear * segment.localDir;
-                    vec3 pMid = segment.localOrigin + tMid * segment.localDir;
-                    vec3 pFar = segment.localOrigin + segment.tFar * segment.localDir;
+                    float3 pNear = segment.localOrigin + segment.tNear * segment.localDir;
+                    float3 pMid = segment.localOrigin + tMid * segment.localDir;
+                    float3 pFar = segment.localOrigin + segment.tFar * segment.localDir;
                     float hNear = clamp(pNear.y, 0.0, 1.0);
                     float hMid = clamp(pMid.y, 0.0, 1.0);
                     float hFar = clamp(pFar.y, 0.0, 1.0);
@@ -697,10 +682,10 @@ void main() {
                 }
             }
             if (flame.lightData.selfShadowStrength > 0.0) {
-                vec3 pMid = segment.localOrigin + 0.5 * (segment.tNear + segment.tFar) * segment.localDir;
-                emission *= mix(1.0, rteTransmittanceFromOpticalDepth(computeSelfShadowTau(pMid, normalize(flame.lightData.direction))), flame.lightData.selfShadowStrength);
+                float3 pMid = segment.localOrigin + 0.5 * (segment.tNear + segment.tFar) * segment.localDir;
+                emission *= lerp(1.0, rteTransmittanceFromOpticalDepth(computeSelfShadowTau(pMid, normalize(flame.lightData.direction))), flame.lightData.selfShadowStrength);
             }
-            vec4 shaded = shadeEmission(segment, emission);
+            float4 shaded = shadeEmission(segment, emission);
             L = shaded.rgb;
             trans = 1.0 - shaded.a;
         }
@@ -708,14 +693,13 @@ void main() {
 
     // Self-shadow midpoint multiply on L (mode 3)
     if (push.mode == 3 && flame.lightData.selfShadowStrength > 0.0) {
-        vec3 pMid = segment.localOrigin + 0.5 * (segment.tNear + segment.tFar) * segment.localDir;
-        L *= mix(1.0, rteTransmittanceFromOpticalDepth(computeSelfShadowTau(pMid, normalize(flame.lightData.direction))), flame.lightData.selfShadowStrength);
+        float3 pMid = segment.localOrigin + 0.5 * (segment.tNear + segment.tFar) * segment.localDir;
+        L *= lerp(1.0, rteTransmittanceFromOpticalDepth(computeSelfShadowTau(pMid, normalize(flame.lightData.direction))), flame.lightData.selfShadowStrength);
     }
 
-    vec4 shaded = vec4(L, 1.0 - trans);
+    float4 shaded = float4(L, 1.0 - trans);
     // Occlusion must track displayed luminance: a dim flame adds little light and must not darken the background.
     shaded.a *= smoothstep(0.0, flame.colorBase.occlusionLumRef, dot(shaded.rgb, LUMA_WEIGHTS));
-    vec4 blended = mix(shaded, texture(flameHistorySampler, fragTexCoord), flame.temporalData.accumWeight);
-    outColor = blended;
-    outHistory = blended;
+    float4 blended = lerp(shaded, flameHistorySampler.Sample(fragTexCoord), flame.temporalData.accumWeight);
+    return debugOutput(blended);
 }

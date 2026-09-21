@@ -435,6 +435,8 @@ impl SpirvModule {
 
         let mut reflected = Vec::with_capacity(members.len());
         for (index, member_type) in members.iter().enumerate() {
+            let member_type = self.unwrap_slang_array_wrapper(*member_type)?;
+            let member_type = &member_type;
             let key = (struct_id, index as u32);
             let decorations = self
                 .member_decorations
@@ -458,6 +460,21 @@ impl SpirvModule {
             });
         }
         Ok(reflected)
+    }
+
+    /// Slang wraps a std140 / std430 array member in a struct `_Array_std140_<T><N> { T data[N]; }`
+    /// so the block reflects like the GLSL array it mirrors.
+    fn unwrap_slang_array_wrapper(&self, type_id: u32) -> Result<u32, ReflectError> {
+        let TypeDef::Struct { members } = self.type_def(type_id)? else {
+            return Ok(type_id);
+        };
+        let is_wrapper = self.names.get(&type_id).is_some_and(|name| {
+            name.starts_with("_Array_std140_") || name.starts_with("_Array_std430_")
+        });
+        match members.as_slice() {
+            [array_type] if is_wrapper => Ok(*array_type),
+            _ => Ok(type_id),
+        }
     }
 
     fn nested_members(
@@ -789,6 +806,49 @@ pub(crate) mod tests {
                     }),
                 },
             ]
+        );
+    }
+
+    fn fragment_module_with_slang_array_wrapper() -> Vec<u32> {
+        let mut entry_operands = vec![4, 1];
+        entry_operands.extend(literal_string("main"));
+
+        let module = [
+            header(),
+            instruction(OP_ENTRY_POINT, &entry_operands),
+            with_name(10, "WeightsBlock_std140"),
+            with_member_name(10, 0, "weights"),
+            with_name(9, "_Array_std140_vector<float,4>3"),
+            with_member_name(9, 0, "data"),
+            with_name(20, "weights"),
+            instruction(OP_DECORATE, &[10, DECORATION_BLOCK]),
+            instruction(OP_MEMBER_DECORATE, &[10, 0, DECORATION_OFFSET, 0]),
+            instruction(OP_MEMBER_DECORATE, &[9, 0, DECORATION_OFFSET, 0]),
+            instruction(OP_DECORATE, &[8, DECORATION_ARRAY_STRIDE, 16]),
+            instruction(OP_DECORATE, &[20, DECORATION_DESCRIPTOR_SET, 0]),
+            instruction(OP_DECORATE, &[20, DECORATION_BINDING, 0]),
+            instruction(OP_TYPE_FLOAT, &[1, 32]),
+            instruction(OP_TYPE_INT, &[2, 32, 0]),
+            instruction(OP_TYPE_VECTOR, &[3, 1, 4]),
+            instruction(OP_CONSTANT, &[2, 5, 3]),
+            instruction(OP_TYPE_ARRAY, &[8, 3, 5]),
+            instruction(OP_TYPE_STRUCT, &[9, 8]),
+            instruction(OP_TYPE_STRUCT, &[10, 9]),
+            instruction(OP_TYPE_POINTER, &[11, STORAGE_CLASS_UNIFORM, 10]),
+            instruction(OP_VARIABLE, &[11, 20, STORAGE_CLASS_UNIFORM]),
+        ];
+        module.concat()
+    }
+
+    #[test]
+    fn unwraps_slang_std140_array_wrapper_struct() {
+        let reflection = reflect_shader_words(&fragment_module_with_slang_array_wrapper()).unwrap();
+        let block = reflection.bindings[0].block.clone().unwrap();
+        assert_eq!(block.type_name, "WeightsBlock");
+        assert_eq!(block.size, 48);
+        assert_eq!(
+            block.members,
+            vec![member("weights", 0, 48, "float32x4[3]")]
         );
     }
 

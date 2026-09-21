@@ -99,5 +99,5 @@ stages = ["editor/imguiVertex.slang", "editor/imguiFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.effect_trace]
-stages = ["raytracing/traceRayGen.rgen", "raytracing/traceMiss.rmiss", "raytracing/sceneClosestHit.rchit", "raytracing/torusIntersection.rint", "water/torusClosestHit.rchit"]
+stages = ["raytracing/traceRayGen.slang", "raytracing/traceMiss.slang", "raytracing/sceneClosestHit.rchit", "raytracing/torusIntersection.rint", "water/torusClosestHit.rchit"]
 sets = { 0 = "local" }

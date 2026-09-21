@@ -30,8 +30,10 @@ fn test_all_shader_sources_exist() {
         "shaders/editor/gridFragment.slang",
         "shaders/editor/gizmoVertex.slang",
         "shaders/editor/gizmoFragment.slang",
-        "shaders/editor/imguiVertex.vert",
-        "shaders/editor/imguiFragment.frag",
+        "shaders/editor/imguiVertex.slang",
+        "shaders/editor/imguiFragment.slang",
+        "shaders/editor/boneVertex.slang",
+        "shaders/editor/boneFragment.slang",
         "shaders/raytracing/rayQueryShadow.comp",
     ];
 
@@ -114,7 +116,8 @@ fn test_vertex_shader_extension() {
         ("shaders/postprocess/compositeVertex.vert", false),
         ("shaders/editor/gridVertex.slang", true),
         ("shaders/editor/gizmoVertex.slang", true),
-        ("shaders/editor/imguiVertex.vert", false),
+        ("shaders/editor/imguiVertex.slang", true),
+        ("shaders/editor/boneVertex.slang", true),
     ];
 
     for (shader, is_slang) in &vertex_shaders {
@@ -148,7 +151,8 @@ fn test_fragment_shader_extension() {
         ("shaders/postprocess/compositeFragment.frag", false),
         ("shaders/editor/gridFragment.slang", true),
         ("shaders/editor/gizmoFragment.slang", true),
-        ("shaders/editor/imguiFragment.frag", false),
+        ("shaders/editor/imguiFragment.slang", true),
+        ("shaders/editor/boneFragment.slang", true),
     ];
 
     for (shader, is_slang) in &fragment_shaders {

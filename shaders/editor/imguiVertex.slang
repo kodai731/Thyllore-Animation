@@ -1,0 +1,25 @@
+struct PushConstants {
+    float2 scale;
+    float2 translate;
+};
+
+[[vk::push_constant]] ConstantBuffer<PushConstants> pushConstants;
+
+struct VSOutput {
+    float4 position : SV_Position;
+    [[vk::location(0)]] float2 fragUV : TEXCOORD0;
+    [[vk::location(1)]] float4 fragColor : TEXCOORD1;
+};
+
+[shader("vertex")]
+VSOutput main(
+    [[vk::location(0)]] float2 inPosition : POSITION,
+    [[vk::location(1)]] float2 inUV : TEXCOORD,
+    [[vk::location(2)]] float4 inColor : COLOR) {
+    VSOutput output;
+
+    output.fragUV = inUV;
+    output.fragColor = inColor;
+    output.position = float4(inPosition * pushConstants.scale + pushConstants.translate, 0.0, 1.0);
+    return output;
+}

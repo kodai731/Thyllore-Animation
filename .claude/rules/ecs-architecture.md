@@ -151,25 +151,29 @@ There is no `bundle/` directory. Entities are spawned by a `spawn_*` system in t
 
 ## Phase Pipeline
 
-`run_frame()` (in `src/ecs/systems/world/frame.rs`, called from `App::update`) iterates over
-`FRAME_SCHEDULE`. The slots are:
+`FRAME_SCHEDULE` (`src/ecs/systems/world/frame.rs`) is the one list of phases. `App::drive_frame`
+(`src/app/frame.rs`, called from `src/platform/events/frame.rs` once the imgui frame is built) runs it:
+EventDispatch first, then `begin_frame`, the update phases through `run_frame()`, the render, and Last
+once the image is presented. The slots are:
 
 ```
-First       → run_first_phase()              # FrameClock.frame += 1, batch schedule
-Input       → run_input_phase()              # Input handling, gizmo interaction
-Transform   → run_transform_phase_ecs()      # Transform propagation
-Timeline    → run_timeline_phase()           # Timeline / clip schedule advance
-Animation   → run_animation_phase_ecs()      # Animation evaluation, blending
-            → run_animation_phase_gpu()      # Skinning / vertex upload
-OnionSkin   → run_onion_skin_phase()         # Ghost frame generation
-RenderPrep  → run_transform_phase_gpu()      # Object UBO upload
-            → run_render_prep_phase()        # Gizmo mesh building, render data collection
+EventDispatch → run_event_dispatch_phase()   # UIEvent → World, AppCommand queue; file dialogs; apply commands
+First         → run_first_phase()            # FrameClock.frame += 1, batch schedule
+Input         → run_input_phase()            # Input handling, gizmo interaction
+Transform     → run_transform_phase_ecs()    # Camera, light gizmo, billboard (entity transforms: #195)
+Timeline      → run_timeline_phase()         # Timeline / clip schedule advance
+Animation     → run_animation_phase_ecs()    # Animation evaluation, blending, transform propagation
+              → run_animation_phase_gpu()    # Skinning / vertex upload
+OnionSkin     → run_onion_skin_phase()       # Ghost frame generation
+RenderPrep    → run_transform_phase_gpu()    # Light gizmo vertex upload (#194)
+              → run_render_prep_phase()      # Uniforms, gizmo meshes, frame prep hooks, TLAS refresh
+                (App::render: record, submit, present)
+Last          → run_last_phase()             # Requested BatchCapture readbacks + scheduled screenshot
 ```
 
-`run_event_dispatch_phase()` is called after the UI phase (platform-side, in
-`src/platform/events/frame.rs`).
-
-`run_last_phase()` is called from `App::after_present` via `src/app/lifecycle/after_present.rs`.
+`run_frame()` runs `update_phases()`, the slots between EventDispatch and Last; `App::drive_frame`
+owns the two ends because they need `App` (file dialogs and `AppCommand`s before, the presented image
+after).
 
 ### Phase Design Principles (from Flecs, Unity DOTS, Bevy)
 
@@ -179,9 +183,13 @@ RenderPrep  → run_transform_phase_gpu()      # Object UBO upload
 - **Animation completes before Transform propagation**: Standard in all major engines
   (Bevy: `.before(TransformSystems::Propagate)`, Unity DOTS: animation in SimulationSystemGroup
   before TransformSystemGroup)
-- **Event dispatch is last**: Deferred structural changes (entity creation/destruction, component
-  add/remove) are processed at the end of the frame, similar to Unity DOTS EntityCommandBuffer
-  pattern and Flecs sync points
+- **UI events are applied before the update, outputs to the platform after it**: the UI is immediate
+  mode, so the events it recorded are dispatched into `World` at the start of the frame and the update
+  sees them the same frame (Bevy: input and `bevy_egui` input in `PreUpdate`, Unreal: the message pump
+  routes Slate input before `UWorld::Tick`). What the engine asks of the platform (file dialogs,
+  `AppCommand`s) is the dispatch's return value, applied by `App` before `begin_frame`; readbacks of the
+  finished image are Last (Bevy `PostUpdate` egui output, Unreal `ProcessLocalPlayerSlateOperations`
+  after the world tick)
 
 ### Adding New Phases
 

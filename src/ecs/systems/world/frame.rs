@@ -11,6 +11,7 @@ use crate::ecs::FrameContext;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FramePhase {
+    EventDispatch,
     First,
     Input,
     Transform,
@@ -18,13 +19,13 @@ pub enum FramePhase {
     Animation,
     OnionSkin,
     RenderPrep,
-    EventDispatch,
     Last,
 }
 
 impl FramePhase {
     pub fn name(self) -> &'static str {
         match self {
+            Self::EventDispatch => "event_dispatch",
             Self::First => "first",
             Self::Input => "input",
             Self::Transform => "transform",
@@ -32,13 +33,17 @@ impl FramePhase {
             Self::Animation => "animation",
             Self::OnionSkin => "onion_skin",
             Self::RenderPrep => "render_prep",
-            Self::EventDispatch => "event_dispatch",
             Self::Last => "last",
         }
+    }
+
+    pub fn runs_in_update(self) -> bool {
+        !matches!(self, Self::EventDispatch | Self::Last)
     }
 }
 
 pub const FRAME_SCHEDULE: [FramePhase; 9] = [
+    FramePhase::EventDispatch,
     FramePhase::First,
     FramePhase::Input,
     FramePhase::Transform,
@@ -46,9 +51,15 @@ pub const FRAME_SCHEDULE: [FramePhase; 9] = [
     FramePhase::Animation,
     FramePhase::OnionSkin,
     FramePhase::RenderPrep,
-    FramePhase::EventDispatch,
     FramePhase::Last,
 ];
+
+pub fn update_phases() -> impl Iterator<Item = FramePhase> {
+    FRAME_SCHEDULE
+        .iter()
+        .copied()
+        .filter(|phase| phase.runs_in_update())
+}
 
 struct Carry {
     updated_meshes: Vec<usize>,
@@ -66,10 +77,7 @@ pub unsafe fn run_frame(ctx: &mut FrameContext) -> Result<()> {
     let mut stages: Vec<(String, f32)> = Vec::new();
     let mut carry = Carry::new();
 
-    for &phase in FRAME_SCHEDULE
-        .iter()
-        .take_while(|phase| **phase != FramePhase::EventDispatch)
-    {
+    for phase in update_phases() {
         let t = std::time::Instant::now();
         run_update_phase(&phase, ctx, &mut carry)?;
         stages.push((phase.name().to_string(), t.elapsed().as_secs_f32() * 1000.0));
@@ -129,7 +137,7 @@ unsafe fn run_update_phase(
             run_render_prep_phase(ctx)?;
         }
         FramePhase::EventDispatch | FramePhase::Last => {
-            unreachable!("platform の UI 後 / App::after_present から入る");
+            unreachable!("App::drive_frame runs these around update");
         }
     }
     Ok(())
@@ -140,20 +148,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_update_phases_run_before_event_dispatch_and_last() {
-        assert_eq!(
-            FRAME_SCHEDULE,
-            [
-                FramePhase::First,
-                FramePhase::Input,
-                FramePhase::Transform,
-                FramePhase::Timeline,
-                FramePhase::Animation,
-                FramePhase::OnionSkin,
-                FramePhase::RenderPrep,
-                FramePhase::EventDispatch,
-                FramePhase::Last,
-            ]
-        );
+    fn event_dispatch_opens_the_frame_and_last_closes_it() {
+        assert_eq!(FRAME_SCHEDULE.first(), Some(&FramePhase::EventDispatch));
+        assert_eq!(FRAME_SCHEDULE.last(), Some(&FramePhase::Last));
+    }
+
+    #[test]
+    fn update_phases_are_the_schedule_between_event_dispatch_and_last() {
+        let update: Vec<FramePhase> = update_phases().collect();
+        assert_eq!(update, FRAME_SCHEDULE[1..FRAME_SCHEDULE.len() - 1]);
+        assert!(update.iter().all(|phase| phase.runs_in_update()));
     }
 }

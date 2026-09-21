@@ -93,6 +93,36 @@ public void biweightPoly(float u[POLY_TERMS], out float result[POLY_TERMS]) {
     polyMul(inside, inside, result);
 }
 
+// Integral of (1 - u^2)^2 over sigma in [0, 1] for u = u0 + u1 sigma + u2 sigma^2, without the support clamp.
+public float biweightQuadraticIntegral(float u0, float u1, float u2) {
+    float uSquared[5] = {
+        u0 * u0,
+        2.0 * u0 * u1,
+        u1 * u1 + 2.0 * u0 * u2,
+        2.0 * u1 * u2,
+        u2 * u2 };
+    float secondMoment = 0.0;
+    float fourthMoment = 0.0;
+    for (int i = 0; i < 5; ++i) {
+        secondMoment += uSquared[i] / float(i + 1);
+        for (int j = 0; j < 5; ++j) {
+            fourthMoment += uSquared[i] * uSquared[j] / float(i + j + 1);
+        }
+    }
+    return 1.0 - 2.0 * secondMoment + fourthMoment;
+}
+
+// Integral over sigma in [0, 1] of the biweight sphere (1 - |p - center|^2 / radius^2)^2 along
+// p = start + d * pieceLength * sigma, which must lie inside the sphere.
+public float biweightSpherePieceIntegral(float3 center, float radius, float3 start, float3 d, float pieceLength) {
+    float3 offset = start - center;
+    float invRadiusSq = 1.0 / (radius * radius);
+    float u0 = dot(offset, offset) * invRadiusSq;
+    float u1 = 2.0 * pieceLength * dot(offset, d) * invRadiusSq;
+    float u2 = pieceLength * pieceLength * dot(d, d) * invRadiusSq;
+    return biweightQuadraticIntegral(u0, u1, u2);
+}
+
 public void rayPushKnot(inout float knots[RAY_MAX_KNOTS], inout int count, float t, float lo, float hi) {
     if (t <= lo || t >= hi || count >= RAY_MAX_KNOTS) {
         return;

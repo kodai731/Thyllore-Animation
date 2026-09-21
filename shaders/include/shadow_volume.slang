@@ -5,7 +5,7 @@
 // The effect implements IShadowVolumeGrid with its extents and wall radius.
 module shadow_volume;
 
-import radiative_transfer;
+import "include/radiative_transfer.slang";
 
 public interface IShadowVolumeGrid {
     static const int RADIAL;

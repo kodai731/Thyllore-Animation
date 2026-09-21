@@ -13,6 +13,7 @@ thyllore-effect-core = { path = "../thyllore-effect-core" }
 
 [build-dependencies]
 cc = "1.2"
+thyllore-shader-manifest = { path = "../thyllore-shader-manifest" }
 
 [dev-dependencies]
 fastrand = "2"

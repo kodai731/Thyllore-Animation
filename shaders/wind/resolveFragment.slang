@@ -1,12 +1,12 @@
-import component;
-import field;
-import frame;
-import integral;
-import lighting;
-import radiative_transfer;
-import ray;
-import reference_quadrature;
-import volume_shell;
+import "wind/include/component.slang";
+import "wind/include/field.slang";
+import "wind/include/integral.slang";
+import "wind/include/lighting.slang";
+import "wind/include/reference_quadrature.slang";
+import "include/frame.slang";
+import "include/radiative_transfer.slang";
+import "include/ray.slang";
+import "include/volume_shell.slang";
 
 [[vk::binding(1, 1)]] Sampler2D sceneDepthSampler;
 
@@ -43,7 +43,7 @@ bool clampToSceneDepth(float2 fragTexCoord, float3 rayDir, inout float tFar, flo
 }
 
 [shader("fragment")]
-float4 fragMain([[vk::location(0)]] float2 fragTexCoord : TEXCOORD0) : SV_Target0 {
+float4 main([[vk::location(0)]] float2 fragTexCoord : TEXCOORD0) : SV_Target0 {
     float3 rayDir = reconstructRayDirection(fragTexCoord, wind.invViewProj, frame.camera_pos.xyz);
     float3 localOrigin = mul(wind.inverseModel, float4(frame.camera_pos.xyz, 1.0)).xyz;
     float3 localDir = mul(wind.inverseModel, float4(rayDir, 0.0)).xyz;

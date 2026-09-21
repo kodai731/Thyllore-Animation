@@ -2,7 +2,7 @@
 // accumulate. The effect implements IShadowMedium for its own medium.
 module shadow_rays;
 
-import radiative_transfer;
+import "include/radiative_transfer.slang";
 
 public static const int SKY_TILTED_DIRECTIONS = 6;
 public static const float SKY_TILT_COSINE = 0.70710678;

@@ -1,27 +1,38 @@
-#ifndef WIND_LIGHTING_GLSL
-#define WIND_LIGHTING_GLSL
-
 // Single scattering along the view ray: the ray is cut into equal cells, each cell's optical
 // depth is the closed-form sum over the knot pieces inside it, and the in-scatter source is
 // evaluated once at the cell midpoint, shadowed toward the sun and over the sky hemisphere.
-// With WIND_SHADOW_VOLUME the transmittances come from the baked volume (shadowBake.comp),
+// With WIND_SHADOW_VOLUME the transmittances come from the baked volume (shadowBakeCompute.slang),
 // otherwise they are integrated inline.
-// Must be included after integral.glsl (and shadow_volume.glsl under WIND_SHADOW_VOLUME).
+module wind_lighting;
 
-#include "include/radiative_transfer.glsl"
+import "wind/include/component.slang";
+import "wind/include/field.slang";
+import "wind/include/integral.slang";
+import "wind/include/shadow_volume.slang";
+import "include/radiative_transfer.slang";
+import "include/shadow_rays.slang";
+import "include/shadow_volume.slang";
+import "include/volume_puffs.slang";
+import "include/volume_shell.slang";
+
+#ifdef WIND_SHADOW_VOLUME
+[[vk::binding(2, 1)]] public Sampler3D shadowVolumeSampler;
+#endif
 
 // x: transmittance toward the sun, y: cosine-weighted transmittance over the sky.
-vec2 windShadowTransmittances(vec3 position, vec3 lightDir) {
+float2 windShadowTransmittances(float3 position, float3 lightDir) {
 #ifdef WIND_SHADOW_VOLUME
-    return shadowVolumeTransmittances(shadowVolumeSampler, position, windShadowSlot());
+    WindShadowGrid grid;
+    return shadowVolumeTransmittances(grid, shadowVolumeSampler, position, windShadowSlot());
 #else
-    return vec2(sunTransmittance(position, lightDir), skyTransmittance(position));
+    WindShadowMedium medium;
+    return float2(sunTransmittance(medium, position, lightDir), skyTransmittance(medium, position));
 #endif
 }
 
-float windInScatterSource(vec3 position, vec3 lightPosition, vec3 viewDir) {
-    vec3 lightDir = normalize(lightPosition - position);
-    vec2 transmittances = windShadowTransmittances(position, lightDir);
+float windInScatterSource(float3 position, float3 lightPosition, float3 viewDir) {
+    float3 lightDir = normalize(lightPosition - position);
+    float2 transmittances = windShadowTransmittances(position, lightDir);
     return windSunIntensity() * transmittances.x
             * rteHenyeyGreenstein(dot(viewDir, lightDir), windPhaseG())
         + windSkyBrightness() * transmittances.y;
@@ -35,7 +46,7 @@ struct WindCellModulation {
     float b;
 };
 
-WindCellModulation windCellModulation(WindCellModulation previous, vec3 o, vec3 d, float tNear, float step, int cell) {
+WindCellModulation windCellModulation(WindCellModulation previous, float3 o, float3 d, float tNear, float step, int cell) {
     if (previous.sampled && cell == previous.cell) {
         return previous;
     }
@@ -52,13 +63,13 @@ WindCellModulation windCellModulation(WindCellModulation previous, vec3 o, vec3 
 
 // Pieces are walked in ray order and each is cut by the cells it overlaps; a cell shared by two
 // pieces composes exactly because the transmittance accumulates between the two parts.
-vec3 windSingleScatterRadiance(
-    vec3 o, vec3 d, float tNear, float tFar, vec3 lightPosition,
+public float3 windSingleScatterRadiance(
+    float3 o, float3 d, float tNear, float tFar, float3 lightPosition,
     out float opticalDepth, out int knotCount) {
     opticalDepth = 0.0;
     knotCount = 0;
     if (tFar <= tNear) {
-        return vec3(0.0);
+        return float3(0.0);
     }
 
     VolumeShell shell = windShell();
@@ -67,10 +78,10 @@ vec3 windSingleScatterRadiance(
     knotCount = windRayKnots(shell, o, d, tNear, tFar, knots, puffs);
     float activeLength = windActiveLength(shell, o, d, knots, knotCount, puffs);
     if (activeLength <= WIND_EMPTY_INTERVAL_EPSILON) {
-        return vec3(0.0);
+        return float3(0.0);
     }
     float step = windModulationStep(d, activeLength);
-    vec3 viewDir = normalize(d);
+    float3 viewDir = normalize(d);
 
     float radiance = 0.0;
     WindCellModulation modulation;
@@ -94,15 +105,15 @@ vec3 windSingleScatterRadiance(
                 continue;
             }
             modulation = windCellModulation(modulation, o, d, tNear, step, c);
-            float modulation0 = mix(modulation.a, modulation.b, (s0 - cellStart) / step);
-            float modulation1 = mix(modulation.a, modulation.b, (s1 - cellStart) / step);
+            float modulation0 = lerp(modulation.a, modulation.b, (s0 - cellStart) / step);
+            float modulation1 = lerp(modulation.a, modulation.b, (s1 - cellStart) / step);
             float depth = shellPieceOpticalDepthModulated(shell, o, d, s0, s1, modulation0, modulation1)
                 + windPuffPieceOpticalDepth(shell, puffs, o, d, s0, s1);
             if (depth <= 0.0) {
                 continue;
             }
 
-            vec3 node = o + d * (0.5 * (cellStart + min(cellStart + step, tFar)));
+            float3 node = o + d * (0.5 * (cellStart + min(cellStart + step, tFar)));
             float source = windInScatterSource(node, lightPosition, viewDir);
             radiance += rteTransmittanceFromOpticalDepth(opticalDepth) * source
                 * (1.0 - rteTransmittanceFromOpticalDepth(depth));
@@ -111,5 +122,3 @@ vec3 windSingleScatterRadiance(
     }
     return radiance * wind.albedo.rgb;
 }
-
-#endif

@@ -1,6 +1,6 @@
 // WindUBO is generated into thyllore-effect-core/src/wind/gpu/components/generated.rs
 // (cargo run -p thyllore-shader-manifest --bin generate_gpu_blocks).
-module component;
+module wind_component;
 
 public struct WindUBO {
     public float4x4 model;

@@ -2,13 +2,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-fn slang_root() -> PathBuf {
-    if let Ok(root) = env::var("SLANG_ROOT") {
-        return PathBuf::from(root);
-    }
-    let home = env::var("HOME").expect("HOME set");
-    Path::new(&home).join(".local/slang")
-}
+use thyllore_shader_manifest::slang_root;
 
 fn generate_cpp(slang_root: &Path, shader_root: &Path, out_dir: &Path) -> PathBuf {
     let generated = out_dir.join("volume_shell.cpp");
@@ -26,7 +20,7 @@ fn generate_cpp(slang_root: &Path, shader_root: &Path, out_dir: &Path) -> PathBu
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("manifest dir"));
-    let shader_root = manifest_dir.join("../../shaders/slang");
+    let shader_root = manifest_dir.join("../../shaders");
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
     let slang_root = slang_root();
 

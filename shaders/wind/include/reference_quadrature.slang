@@ -1,10 +1,10 @@
-#ifndef WIND_REFERENCE_QUADRATURE_GLSL
-#define WIND_REFERENCE_QUADRATURE_GLSL
-
 // Sample-based reference for the closed-form integral (debug mode only): midpoint
 // quadrature of the pointwise density. Never part of the product path.
+module wind_reference_quadrature;
 
-float windReferenceOpticalDepth(vec3 o, vec3 d, float tNear, float tFar, int stepCount) {
+import "wind/include/field.slang";
+
+public float windReferenceOpticalDepth(float3 o, float3 d, float tNear, float tFar, int stepCount) {
     int steps = max(stepCount, 1);
     float step = (tFar - tNear) / float(steps);
     float total = 0.0;
@@ -14,5 +14,3 @@ float windReferenceOpticalDepth(vec3 o, vec3 d, float tNear, float tFar, int ste
     }
     return total * step;
 }
-
-#endif

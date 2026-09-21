@@ -3969,6 +3969,7 @@ dependencies = [
  "cgmath",
  "fastrand",
  "thyllore-effect-core",
+ "thyllore-shader-manifest",
 ]
 
 [[package]]

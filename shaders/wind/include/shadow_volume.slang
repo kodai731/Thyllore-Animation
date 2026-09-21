@@ -1,10 +1,10 @@
 // Wall + envelope transmittance cache of the wind cone on the grid of include/shadow_volume.slang.
 // Extents are mirrored in thyllore-effect-core/src/wind/gpu/components/shadow_volume.rs.
-module shadow_cache;
+module wind_shadow_volume;
 
-import component;
-import field;
-import shadow_volume;
+import "wind/include/component.slang";
+import "wind/include/field.slang";
+import "include/shadow_volume.slang";
 
 public struct WindShadowGrid : IShadowVolumeGrid {
     public static const int RADIAL = 48;

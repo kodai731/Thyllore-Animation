@@ -2,6 +2,17 @@ const GLSL_EXTENSIONS: [&str; 9] = [
     "vert", "frag", "geom", "comp", "rgen", "rint", "rahit", "rchit", "rmiss",
 ];
 const SLANG_EXTENSION: &str = "slang";
+const SLANG_STAGE_WORDS: [(&str, &str); 9] = [
+    ("Vertex", "vert"),
+    ("Fragment", "frag"),
+    ("Geometry", "geom"),
+    ("Compute", "comp"),
+    ("RayGen", "rgen"),
+    ("Intersection", "rint"),
+    ("AnyHit", "rahit"),
+    ("ClosestHit", "rchit"),
+    ("Miss", "rmiss"),
+];
 
 pub fn is_shader_source(file_name: &str) -> bool {
     is_glsl_source(file_name) || file_extension(file_name) == Some(SLANG_EXTENSION)
@@ -47,25 +58,44 @@ fn glsl_spirv_output(directory: &str, stem: &str, extension: &str) -> Option<Str
         .trim_end_matches("Miss")
         .trim_end_matches("miss");
 
-    let stage_suffix = match extension {
-        "vert" => "Vert",
-        "frag" => "Frag",
-        "geom" => "Geom",
-        "comp" => "Comp",
-        "rgen" => "Rgen",
-        "rint" => "Rint",
-        "rahit" => "Rahit",
-        "rchit" => "Rchit",
-        "rmiss" => "Rmiss",
-        _ => return None,
-    };
-
-    Some(spirv_file_name(directory, base_name, stage_suffix))
+    Some(spirv_file_name(
+        directory,
+        base_name,
+        stage_suffix(extension)?,
+    ))
 }
 
 fn slang_spirv_output(directory: &str, stem: &str) -> Option<String> {
-    let (base_name, stage_suffix) = slang_stage_from_stem(stem)?;
-    Some(spirv_file_name(directory, base_name, stage_suffix))
+    let (base_name, extension) = slang_stage_from_stem(stem)?;
+    Some(spirv_file_name(
+        directory,
+        base_name,
+        stage_suffix(extension)?,
+    ))
+}
+
+fn stage_suffix(extension: &str) -> Option<&'static str> {
+    match extension {
+        "vert" => Some("Vert"),
+        "frag" => Some("Frag"),
+        "geom" => Some("Geom"),
+        "comp" => Some("Comp"),
+        "rgen" => Some("Rgen"),
+        "rint" => Some("Rint"),
+        "rahit" => Some("Rahit"),
+        "rchit" => Some("Rchit"),
+        "rmiss" => Some("Rmiss"),
+        _ => None,
+    }
+}
+
+pub fn slang_stage_extension(file_name: &str) -> Option<&'static str> {
+    let extension = file_extension(file_name)?;
+    if extension != SLANG_EXTENSION {
+        return None;
+    }
+    let stem = &file_name[..file_name.len() - extension.len() - 1];
+    slang_stage_from_stem(stem).map(|(_, stage_extension)| stage_extension)
 }
 
 fn spirv_file_name(directory: &str, base_name: &str, stage_suffix: &str) -> String {
@@ -76,25 +106,10 @@ fn spirv_file_name(directory: &str, base_name: &str, stage_suffix: &str) -> Stri
     }
 }
 
-fn slang_stage_from_stem(stem: &str) -> Option<(&str, &str)> {
-    let suffixes: &[(&str, &str)] = &[
-        ("Vertex", "Vert"),
-        ("Fragment", "Frag"),
-        ("Geometry", "Geom"),
-        ("Compute", "Comp"),
-        ("RayGen", "Rgen"),
-        ("Intersection", "Rint"),
-        ("AnyHit", "Rahit"),
-        ("ClosestHit", "Rchit"),
-        ("Miss", "Rmiss"),
-    ];
-
-    for (suffix, stage) in suffixes {
-        if let Some(base) = stem.strip_suffix(suffix) {
-            return Some((base, stage));
-        }
-    }
-    None
+fn slang_stage_from_stem(stem: &str) -> Option<(&str, &'static str)> {
+    SLANG_STAGE_WORDS
+        .iter()
+        .find_map(|(word, extension)| stem.strip_suffix(word).map(|base| (base, *extension)))
 }
 
 fn file_extension(file_name: &str) -> Option<&str> {

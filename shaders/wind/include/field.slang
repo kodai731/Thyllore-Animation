@@ -1,56 +1,53 @@
-#ifndef WIND_FIELD_GLSL
-#define WIND_FIELD_GLSL
-
-// Density field of the tornado: the wall shell of include/volume_shell.glsl built from the wind
+// Density field of the tornado: the wall shell of include/volume_shell.slang built from the wind
 // UBO, modulated by rotating streaks and eddies.
-// Mirrored in thyllore-effect-core/src/wind/analytic/integral.rs.
-// Must be included after component.glsl.
+module wind_field;
 
-#include "include/common.glsl"
-#include "include/noise.glsl"
-#include "include/volume_shell.glsl"
+import "wind/include/component.slang";
+import "include/noise.slang";
+import "include/radiative_transfer.slang";
+import "include/volume_shell.slang";
 
-const float WIND_EDDY_MIN_RADIUS_SQ = 1e-4;
-const int WIND_EDDY_OCTAVE_COUNT = 3;
+public static const float WIND_EDDY_MIN_RADIUS_SQ = 1e-4;
+public static const int WIND_EDDY_OCTAVE_COUNT = 3;
 // Lattice distance between consecutive cell nodes at which an octave starts to fade and is gone (Nyquist = 0.5).
-const float WIND_EDDY_FADE_START = 0.25;
-const float WIND_EDDY_FADE_END = 0.5;
-const float WIND_EDDY_LAYER_A_SPEED_OFFSET = 0.25;
-const float WIND_EDDY_LAYER_B_SPEED_OFFSET = -0.25;
+public static const float WIND_EDDY_FADE_START = 0.25;
+public static const float WIND_EDDY_FADE_END = 0.5;
+public static const float WIND_EDDY_LAYER_A_SPEED_OFFSET = 0.25;
+public static const float WIND_EDDY_LAYER_B_SPEED_OFFSET = -0.25;
 
-float windHeight() { return wind.shape.x; }
-float windWallRadiusBase() { return wind.shape.y; }
-float windWallRadiusSlope() { return wind.shape.z; }
-float windWallWidthQ() { return wind.shape.w; }
-float windWallStrength() { return wind.wall.x; }
-float windTopFade() { return wind.wall.y; }
-float windSigmaT() { return wind.optics.x; }
-float windSkyBrightness() { return wind.optics.y; }
-float windHTop() { return wind.optics.w; }
-float windSpreadOffset() { return wind.albedo.w; }
-float windPhaseG() { return wind.lighting.x; }
-float windSunIntensity() { return wind.lighting.y; }
-float windCirculation() { return wind.lighting.z; }
-float windSpreadRate() { return wind.lighting.w; }
-float windStreakOrder() { return wind.streak.x; }
-float windStreakTwist() { return wind.streak.y; }
-float windStreakRiseSpeed() { return wind.streak.z; }
-float windStreakAmplitude() { return wind.streak.w; }
-float windStreakPhase() { return wind.streak2.x; }
-float windStreakRiseTime() { return wind.streak2.y; }
-float windEddySpeedSpread() { return wind.streak2.z; }
-float windSpreadStart() { return wind.streak2.w; }
-float windEddyAmplitude() { return wind.eddy.x; }
-float windEddyCellTheta() { return wind.eddy.y; }
-float windEddyCellHeight() { return wind.eddy.z; }
-float windEddyCellRadial() { return wind.eddy.w; }
-float windEddyShear() { return wind.eddy2.x; }
-float windEddyRiseSpeed() { return wind.eddy2.y; }
-float windEddyReseedPeriod() { return wind.eddy2.z; }
-float windEddyErosion() { return wind.eddy2.w; }
-float windTime() { return wind.optics.z; }
+public float windHeight() { return wind.shape.x; }
+public float windWallRadiusBase() { return wind.shape.y; }
+public float windWallRadiusSlope() { return wind.shape.z; }
+public float windWallWidthQ() { return wind.shape.w; }
+public float windWallStrength() { return wind.wall.x; }
+public float windTopFade() { return wind.wall.y; }
+public float windSigmaT() { return wind.optics.x; }
+public float windSkyBrightness() { return wind.optics.y; }
+public float windHTop() { return wind.optics.w; }
+public float windSpreadOffset() { return wind.albedo.w; }
+public float windPhaseG() { return wind.lighting.x; }
+public float windSunIntensity() { return wind.lighting.y; }
+public float windCirculation() { return wind.lighting.z; }
+public float windSpreadRate() { return wind.lighting.w; }
+public float windStreakOrder() { return wind.streak.x; }
+public float windStreakTwist() { return wind.streak.y; }
+public float windStreakRiseSpeed() { return wind.streak.z; }
+public float windStreakAmplitude() { return wind.streak.w; }
+public float windStreakPhase() { return wind.streak2.x; }
+public float windStreakRiseTime() { return wind.streak2.y; }
+public float windEddySpeedSpread() { return wind.streak2.z; }
+public float windSpreadStart() { return wind.streak2.w; }
+public float windEddyAmplitude() { return wind.eddy.x; }
+public float windEddyCellTheta() { return wind.eddy.y; }
+public float windEddyCellHeight() { return wind.eddy.z; }
+public float windEddyCellRadial() { return wind.eddy.w; }
+public float windEddyShear() { return wind.eddy2.x; }
+public float windEddyRiseSpeed() { return wind.eddy2.y; }
+public float windEddyReseedPeriod() { return wind.eddy2.z; }
+public float windEddyErosion() { return wind.eddy2.w; }
+public float windTime() { return wind.optics.z; }
 
-VolumeShell windShell() {
+public VolumeShell windShell() {
     VolumeShell shell;
     shell.height = windHeight();
     shell.radiusBase = windWallRadiusBase();
@@ -64,11 +61,11 @@ VolumeShell windShell() {
     return shell;
 }
 
-float windWallRadius(float h) {
+public float windWallRadius(float h) {
     return shellWallRadius(windShell(), h);
 }
 
-float windRotationPhase(float h) {
+public float windRotationPhase(float h) {
     float radius_sq = windWallRadius(h) * windWallRadius(h);
     float gamma_over_2pi = windCirculation() / TWO_PI;
     float a = windSpreadRate();
@@ -82,39 +79,44 @@ float windRotationPhase(float h) {
     }
 }
 
-float windStreakSigma(vec3 local) {
-    float angle = windStreakOrder() * (atan(local.z, local.x) - windRotationPhase(local.y))
+public float windStreakSigma(float3 local) {
+    float angle = windStreakOrder() * (atan2(local.z, local.x) - windRotationPhase(local.y))
         - windStreakTwist() * local.y + windStreakRiseTime() * local.y;
     return 1.0 + windStreakAmplitude() * cos(angle);
 }
 
-float windWallRadiusSq(float h) {
+public float windWallRadiusSq(float h) {
     return shellWallRadiusSq(windShell(), h);
 }
 
-const mat3 WIND_OCTAVE_ROTATION = mat3(
+// Same coefficients as the GLSL mat3 (column-major constructor): applied as a row vector product.
+static const float3x3 WIND_OCTAVE_ROTATION = float3x3(
     0.784750, 0.509329, -0.353201,
     -0.045714, 0.615862, 0.786527,
     0.618124, -0.601081, 0.506581);
 
-vec3 windRotateAndDouble(vec3 p) {
-    return 2.0 * (WIND_OCTAVE_ROTATION * p);
+float3 windRotate(float3 p) {
+    return mul(p, WIND_OCTAVE_ROTATION);
+}
+
+float3 windRotateAndDouble(float3 p) {
+    return 2.0 * windRotate(p);
 }
 
 // Difference against the antipode (theta + pi) has an exact zero mean around every ring,
 // so no height can become a uniformly dense or empty band.
-float windAntipodalOctave(vec3 p, vec3 antipode) {
+float windAntipodalOctave(float3 p, float3 antipode) {
     return (gradientNoise3(p) - gradientNoise3(antipode)) * 0.70710678;
 }
 
 struct WindEddyOctaveRings {
-    vec3 point[WIND_EDDY_OCTAVE_COUNT];
-    vec3 antipode[WIND_EDDY_OCTAVE_COUNT];
+    float3 point[WIND_EDDY_OCTAVE_COUNT];
+    float3 antipode[WIND_EDDY_OCTAVE_COUNT];
 };
 
 // Octaves whose lattice step over one cell exceeds the fade band are dropped; the rest are rescaled
 // to keep the variance, so the eroded mean does not drift with the cell length.
-float windEddyOctaveWeight(vec3 point, vec3 pointAhead, int octave) {
+float windEddyOctaveWeight(float3 point, float3 pointAhead, int octave) {
     float latticeStep = exp2(float(octave)) * distance(point, pointAhead);
     return 1.0 - smoothstep(WIND_EDDY_FADE_START, WIND_EDDY_FADE_END, latticeStep);
 }
@@ -128,8 +130,8 @@ float windEddyNoiseFBM(WindEddyOctaveRings rings, WindEddyOctaveRings ringsAhead
         fullVariance += amplitude * amplitude;
         float weight = windEddyOctaveWeight(rings.point[octave], ringsAhead.point[octave], octave);
         if (weight > 0.0) {
-            vec3 p = WIND_OCTAVE_ROTATION * rings.point[octave];
-            vec3 antipode = WIND_OCTAVE_ROTATION * rings.antipode[octave];
+            float3 p = windRotate(rings.point[octave]);
+            float3 antipode = windRotate(rings.antipode[octave]);
             for (int doubling = 0; doubling < octave; ++doubling) {
                 p = windRotateAndDouble(p);
                 antipode = windRotateAndDouble(antipode);
@@ -153,9 +155,9 @@ struct WindEddyGeometry {
     float ringRadius;
 };
 
-WindEddyGeometry windEddyGeometry(vec3 local) {
+WindEddyGeometry windEddyGeometry(float3 local) {
     float r = length(local.xz);
-    float theta = atan(local.z, local.x);
+    float theta = atan2(local.z, local.x);
     float h = local.y;
     float wallRadius = windWallRadius(h);
 
@@ -185,14 +187,14 @@ WindEddyOctaveRings windEddyLayerCoords(WindEddyGeometry geometry, float age, fl
         float ringX = rho * cos(shearedTheta);
         float ringY = rho * sin(shearedTheta);
 
-        rings.point[octave] = vec3(ringX + seed, ringY + seed * 0.37, uH + seed * 0.61);
-        rings.antipode[octave] = vec3(-ringX + seed, -ringY + seed * 0.37, uH + seed * 0.61);
+        rings.point[octave] = float3(ringX + seed, ringY + seed * 0.37, uH + seed * 0.61);
+        rings.antipode[octave] = float3(-ringX + seed, -ringY + seed * 0.37, uH + seed * 0.61);
     }
     return rings;
 }
 
 // stepAhead is the ray step to the next cell node; zero means the pointwise field with every octave kept.
-float windEddySigma(vec3 local, vec3 stepAhead) {
+public float windEddySigma(float3 local, float3 stepAhead) {
     float T = windEddyReseedPeriod();
     float t = windTime();
 
@@ -221,12 +223,10 @@ float windEddySigma(vec3 local, vec3 stepAhead) {
     return 1.0 + windEddyAmplitude() * (2.0 * eroded - 1.0);
 }
 
-float windDensityAt(vec3 p) {
-    return shellDensityAt(windShell(), p) * windStreakSigma(p) * windEddySigma(p, vec3(0.0));
+public float windDensityAt(float3 p) {
+    return shellDensityAt(windShell(), p) * windStreakSigma(p) * windEddySigma(p, float3(0.0));
 }
 
-bool clampToWindCone(vec3 o, vec3 d, inout float tNear, inout float tFar) {
+public bool clampToWindCone(float3 o, float3 d, inout float tNear, inout float tFar) {
     return clampToShellCone(windShell(), o, d, tNear, tFar);
 }
-
-#endif

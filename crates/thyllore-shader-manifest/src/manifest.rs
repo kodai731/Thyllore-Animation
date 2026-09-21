@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 use toml::Value;
 
-use crate::naming::is_glsl_source;
+use crate::naming::{is_shader_source, slang_stage_extension, spirv_output_name};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StageKind {
@@ -22,6 +22,10 @@ pub enum StageKind {
 impl StageKind {
     pub fn from_source_file(file_name: &str) -> Option<Self> {
         let (_, extension) = file_name.rsplit_once('.')?;
+        let extension = match extension {
+            "slang" => slang_stage_extension(file_name)?,
+            other => other,
+        };
         match extension {
             "vert" => Some(Self::Vertex),
             "frag" => Some(Self::Fragment),
@@ -178,18 +182,25 @@ impl PassManifest {
             }
         }
 
-        match sources
-            .keys()
-            .find(|file_name| !referenced.contains(*file_name))
-        {
+        let referenced_outputs: BTreeSet<String> = referenced
+            .iter()
+            .filter_map(|file_name| spirv_output_name(file_name))
+            .collect();
+
+        match sources.keys().find(|file_name| {
+            !referenced.contains(*file_name)
+                && !spirv_output_name(file_name)
+                    .is_some_and(|output| referenced_outputs.contains(&output))
+        }) {
             Some(orphan) => Err(ManifestError::OrphanShader(orphan.clone())),
             None => Ok(()),
         }
     }
 }
 
-/// GLSL sources found anywhere under `shader_dir`, keyed by their path relative to it
-/// (`water/causticSplat.comp`). Include files and Slang sources are not GLSL sources.
+/// GLSL and Slang entry points found anywhere under `shader_dir`, keyed by their path relative to it
+/// (`water/causticSplat.comp`, `wind/resolveFragment.slang`). Include files, which compile to no
+/// SPIR-V of their own, are not shader sources.
 pub fn collect_shader_sources(
     shader_dir: &Path,
 ) -> Result<BTreeMap<String, PathBuf>, ManifestError> {
@@ -207,12 +218,15 @@ pub fn collect_shader_sources(
             let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
                 continue;
             };
-            if !is_glsl_source(file_name) {
+            if !is_shader_source(file_name) {
                 continue;
             }
             let Some(source_key) = relative_source_key(shader_dir, &path) else {
                 continue;
             };
+            if spirv_output_name(&source_key).is_none() {
+                continue;
+            }
             sources.insert(source_key, path);
         }
     }

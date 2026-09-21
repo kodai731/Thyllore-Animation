@@ -3,7 +3,7 @@
 // (xyz centre, w radius) through IPuffSource.
 module volume_puffs;
 
-import volume_shell;
+import "include/volume_shell.slang";
 
 public static const int PUFFS_PER_RAY = 20;
 public static const float PUFFS_EMPTY_INTERVAL_EPSILON = 1e-6;

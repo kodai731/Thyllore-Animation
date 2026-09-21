@@ -4,6 +4,7 @@ mod flame_gpu_blocks;
 mod gpu_block_codegen;
 mod manifest;
 mod naming;
+mod slang;
 mod spirv_files;
 
 pub use bindings_codegen::{generate_shader_bindings_rust, BindingCodegenError};
@@ -20,4 +21,5 @@ pub use manifest::{
     StageSource,
 };
 pub use naming::{is_glsl_source, is_shader_source, spirv_output_name};
+pub use slang::slang_root;
 pub use spirv_files::collect_spirv_files;

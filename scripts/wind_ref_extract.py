@@ -1,4 +1,4 @@
-"""Extract the wind tornado reference sequences for scripts/flame_ref_match.py style gates.
+"""Extract the wind tornado reference sequences for the scripts/wind_ref_match.py gates.
 
 usage:
   python scripts/wind_ref_extract.py castle [--video /tmp/thyllore_wind_ref/castle_src.mp4]

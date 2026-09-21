@@ -1,4 +1,4 @@
-"""Reference image loading, silhouette mask, and frame statistics for flame/dust ref-match."""
+"""Reference image loading, silhouette masks, and column width helpers shared by the ref-match CLIs."""
 
 import json
 import sys

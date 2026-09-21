@@ -1,4 +1,4 @@
-"""Gate score computation and summary printing for flame/dust ref-match."""
+"""Gate score computation and summary printing shared by the ref-match CLIs."""
 
 import numpy as np
 

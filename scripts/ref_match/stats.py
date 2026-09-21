@@ -1,6 +1,6 @@
-"""Common flame/dust reference match statistics.
+"""Per-frame reference match statistics shared by the ref-match CLIs.
 
-Constants and per-frame metrics shared by flame_ref_match.py and wind_ref_match.py:
+Constants and per-frame metrics, measured with the silhouette mode the caller passes:
 luminance percentiles, height-band profiles, spectral contrast, bright coherence, interior
 hole ratio, puff isotropy, vertical modulation, centerline amplitude/straightness, width
 profile, top fragments, halo spread, and the frame_stats / aggregate / measure entry points.
@@ -288,7 +288,7 @@ def measure(paths, column_width, crop=None, resample=True, mode="flame"):
         if stat is not None:
             stats.append(stat)
     if not stats:
-        sys.exit(f"no flame silhouette found in {paths[0]} ...")
+        sys.exit(f"no {mode} silhouette found in {paths[0]} ...")
     aggregated = aggregate(stats)
     aggregated["column_width_px"] = column_width
     return aggregated

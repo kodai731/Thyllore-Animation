@@ -63,15 +63,15 @@ stages = ["postprocess/tonemapVertex.slang", "postprocess/bloomUpsampleFragment.
 sets = { 0 = "local" }
 
 [pass.dof]
-stages = ["postprocess/tonemapVertex.slang", "postprocess/dofFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "postprocess/dofFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.auto_exposure_histogram]
-stages = ["postprocess/autoExposureHistogram.comp"]
+stages = ["postprocess/autoExposureHistogramCompute.slang"]
 sets = { 0 = "local" }
 
 [pass.auto_exposure_average]
-stages = ["postprocess/autoExposureAverage.comp"]
+stages = ["postprocess/autoExposureAverageCompute.slang"]
 sets = { 0 = "local" }
 
 [pass.ray_query_shadow]

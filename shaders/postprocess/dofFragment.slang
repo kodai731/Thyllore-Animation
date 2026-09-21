@@ -1,15 +1,7 @@
-#version 450
-#extension GL_GOOGLE_include_directive : require
+[[vk::binding(0, 0)]] Sampler2D hdrSampler;
+[[vk::binding(1, 0)]] Sampler2D depthSampler;
 
-#include "include/common.glsl"
-
-layout(location = 0) in vec2 fragTexCoord;
-layout(location = 0) out vec4 outColor;
-
-layout(binding = 0) uniform sampler2D hdrSampler;
-layout(binding = 1) uniform sampler2D depthSampler;
-
-layout(push_constant) uniform PushConstants {
+struct PushConstants {
     float focalLengthMm;
     float apertureFStops;
     float sensorHeightMm;
@@ -18,7 +10,11 @@ layout(push_constant) uniform PushConstants {
     float maxBlurRadius;
     float viewportHeight;
     int enabled;
-} pc;
+};
+
+[[vk::push_constant]] ConstantBuffer<PushConstants> pc;
+
+static const float TWO_PI = 6.28318530717959;
 
 float linearizeDepth(float depth) {
     return pc.nearPlane / max(depth, 0.0001);
@@ -37,28 +33,30 @@ float computeCoC(float depth) {
     return clamp(cocPixels, 0.0, pc.maxBlurRadius);
 }
 
-void main() {
-    vec4 hdrColor = texture(hdrSampler, fragTexCoord);
+[shader("fragment")]
+float4 main([[vk::location(0)]] float2 fragTexCoord : TEXCOORD0) : SV_Target0 {
+    float4 hdrColor = hdrSampler.Sample(fragTexCoord);
 
     if (pc.enabled == 0) {
-        outColor = hdrColor;
-        return;
+        return hdrColor;
     }
 
-    float depthValue = texture(depthSampler, fragTexCoord).r;
+    float depthValue = depthSampler.Sample(fragTexCoord).r;
     float linearDepth = linearizeDepth(depthValue);
     float coc = computeCoC(linearDepth);
 
     if (coc < 0.5) {
-        outColor = hdrColor;
-        return;
+        return hdrColor;
     }
 
-    vec2 texelSize = 1.0 / textureSize(hdrSampler, 0);
+    uint width;
+    uint height;
+    hdrSampler.GetDimensions(width, height);
+    float2 texelSize = 1.0 / float2(width, height);
     float radius = min(coc, pc.maxBlurRadius);
     int sampleCount = int(clamp(radius * 2.0, 4.0, 32.0));
 
-    vec3 accumColor = vec3(0.0);
+    float3 accumColor = float3(0.0);
     float totalWeight = 0.0;
     float angleStep = TWO_PI / float(sampleCount);
 
@@ -66,15 +64,15 @@ void main() {
         float ringRadius = radius * float(ring) / 3.0;
         for (int i = 0; i < sampleCount; i++) {
             float angle = float(i) * angleStep + float(ring) * 0.5;
-            vec2 offset = vec2(cos(angle), sin(angle)) * ringRadius * texelSize;
-            vec2 sampleUV = fragTexCoord + offset;
+            float2 offset = float2(cos(angle), sin(angle)) * ringRadius * texelSize;
+            float2 sampleUV = fragTexCoord + offset;
 
-            float sampleDepth = texture(depthSampler, sampleUV).r;
+            float sampleDepth = depthSampler.Sample(sampleUV).r;
             float sampleLinearDepth = linearizeDepth(sampleDepth);
             float sampleCoC = computeCoC(sampleLinearDepth);
 
             float weight = smoothstep(0.0, 1.0, sampleCoC / max(radius, 0.001));
-            accumColor += texture(hdrSampler, sampleUV).rgb * weight;
+            accumColor += hdrSampler.Sample(sampleUV).rgb * weight;
             totalWeight += weight;
         }
     }
@@ -83,8 +81,8 @@ void main() {
     accumColor += hdrColor.rgb * centerWeight;
     totalWeight += centerWeight;
 
-    vec3 blurredColor = accumColor / max(totalWeight, 0.001);
+    float3 blurredColor = accumColor / max(totalWeight, 0.001);
     float blendFactor = smoothstep(0.0, 2.0, coc);
 
-    outColor = vec4(mix(hdrColor.rgb, blurredColor, blendFactor), hdrColor.a);
+    return float4(lerp(hdrColor.rgb, blurredColor, blendFactor), hdrColor.a);
 }

@@ -1,14 +1,7 @@
-#version 460
+[[vk::binding(0, 0)]] RWStructuredBuffer<uint> histogram;
+[[vk::binding(1, 0)]] RWStructuredBuffer<float> result;
 
-layout(local_size_x = 256) in;
-
-layout(binding = 0) buffer HistogramBuffer { uint bins[256]; } histogram;
-layout(binding = 1) buffer LuminanceResult {
-    float avgLuminance;
-    float adaptedExposure;
-} result;
-
-layout(push_constant) uniform PushConstants {
+struct PushConstants {
     float lowPercent;
     float highPercent;
     float timeDelta;
@@ -19,16 +12,18 @@ layout(push_constant) uniform PushConstants {
     float minLogLuminance;
     float logLuminanceRange;
     uint pixelCount;
-} pc;
+};
 
-shared uint sharedHistogram[256];
+[[vk::push_constant]] ConstantBuffer<PushConstants> pc;
 
-void main() {
-    uint localIndex = gl_LocalInvocationIndex;
+groupshared uint sharedHistogram[256];
 
-    sharedHistogram[localIndex] = histogram.bins[localIndex];
-    histogram.bins[localIndex] = 0;
-    barrier();
+[shader("compute")]
+[numthreads(256, 1, 1)]
+void main(uint3 globalInvocationId : SV_DispatchThreadID, uint localIndex : SV_GroupIndex) {
+    sharedHistogram[localIndex] = histogram[localIndex];
+    histogram[localIndex] = 0;
+    GroupMemoryBarrierWithGroupSync();
 
     if (localIndex != 0) {
         return;
@@ -78,7 +73,7 @@ void main() {
 
     float targetExposure = 1.0 / (1.2 * exp2(targetEv));
 
-    float prevExposure = result.adaptedExposure;
+    float prevExposure = result[1];
     if (prevExposure <= 0.0) {
         prevExposure = targetExposure;
     }
@@ -91,6 +86,6 @@ void main() {
         + (targetExposure - prevExposure)
         * (1.0 - exp(-pc.timeDelta * speed));
 
-    result.avgLuminance = avgLum;
-    result.adaptedExposure = adapted;
+    result[0] = avgLum;
+    result[1] = adapted;
 }

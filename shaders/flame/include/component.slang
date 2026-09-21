@@ -4,6 +4,8 @@
 // is mirrored by hand in flame/branch.rs.
 module flame_component;
 
+import "include/chebyshev.slang";
+
 public struct FlameColorBase {
     public float3 rgb;
     public float occlusionLumRef;
@@ -323,6 +325,12 @@ public struct FlameUBO {
 };
 
 [[vk::binding(0, 1)]] public ConstantBuffer<FlameUBO> flame;
+
+[[vk::binding(5, 1)]] public Sampler2D flameSdfSampler;
+
+public float evaluateHeightFalloff(float height01) {
+    return evaluateChebyshev8(flame.heightCoefficients[0], flame.heightCoefficients[1], height01);
+}
 
 public struct FlameVortexElement {
     public float3 center;

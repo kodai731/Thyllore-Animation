@@ -3,9 +3,17 @@ use crate::ecs::component::InferenceActorSetup;
 #[cfg(feature = "ml")]
 use crate::ecs::resource::{CurveSuggestionState, InferenceActorState};
 #[cfg(feature = "ml")]
+use crate::ecs::systems::curve_copilot::curve_suggestion_poll_results;
+#[cfg(feature = "ml")]
+use crate::ecs::systems::inference_actor_systems::{
+    inference_actor_initialize, inference_actor_poll,
+};
+#[cfg(feature = "ml")]
 use crate::ml::FeedbackSenderHandle;
 
 use crate::ecs::resource::{ClipLibrary, FrameClock, HierarchyState, TimelineState};
+use crate::ecs::systems::clip_library_systems::clip_library_sync_dirty;
+use crate::ecs::systems::timeline_systems::{schedule_extent_seconds, timeline_update};
 use crate::ecs::world::Animator;
 use crate::ecs::FrameContext;
 
@@ -34,7 +42,7 @@ fn update_timeline(ctx: &mut FrameContext) {
         timeline_state.target_entity = selected_entity;
     }
 
-    let schedule_extent = crate::ecs::systems::timeline_systems::schedule_extent_seconds(ctx.world);
+    let schedule_extent = schedule_extent_seconds(ctx.world);
     let mut timeline_state = ctx.world.resource_mut::<TimelineState>();
     timeline_state.schedule_extent_seconds = schedule_extent;
     let clip_library = ctx.world.resource::<ClipLibrary>();
@@ -43,11 +51,7 @@ fn update_timeline(ctx: &mut FrameContext) {
         .resource::<FrameClock>()
         .fixed_delta_seconds()
         .unwrap_or(ctx.delta_time);
-    crate::ecs::systems::timeline_systems::timeline_update(
-        &mut timeline_state,
-        &*clip_library,
-        timeline_delta,
-    );
+    timeline_update(&mut timeline_state, &*clip_library, timeline_delta);
     drop(clip_library);
     drop(timeline_state);
 
@@ -81,10 +85,7 @@ fn sync_timeline_to_all_animators(ctx: &mut FrameContext) {
 
 fn sync_editable_clips_to_registry(ctx: &mut FrameContext) {
     let mut clip_library = ctx.world.resource_mut::<ClipLibrary>();
-    crate::ecs::systems::clip_library_systems::clip_library_sync_dirty(
-        &mut clip_library,
-        ctx.assets,
-    );
+    clip_library_sync_dirty(&mut clip_library, ctx.assets);
 }
 
 #[cfg(feature = "ml")]
@@ -101,14 +102,14 @@ fn run_inference_actor_phase(ctx: &mut FrameContext) {
 
     let mut state = ctx.world.resource_mut::<InferenceActorState>();
     for setup in &setups {
-        crate::ecs::systems::inference_actor_systems::inference_actor_initialize(setup, &mut state);
+        inference_actor_initialize(setup, &mut state);
     }
-    crate::ecs::systems::inference_actor_systems::inference_actor_poll(&mut state);
+    inference_actor_poll(&mut state);
 
     if ctx.world.contains_resource::<CurveSuggestionState>() {
         let feedback_sender = ctx.world.get_resource::<FeedbackSenderHandle>();
         let mut suggestion_state = ctx.world.resource_mut::<CurveSuggestionState>();
-        crate::ecs::systems::curve_copilot::curve_suggestion_poll_results(
+        curve_suggestion_poll_results(
             &mut suggestion_state,
             &mut state,
             feedback_sender.as_ref().map(|sender| &**sender),

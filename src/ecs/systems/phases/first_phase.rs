@@ -1,6 +1,6 @@
-use crate::ecs::systems::world::{run_batch_schedule_phase, run_frame_clock_phase};
+use crate::ecs::systems::world::{advance_frame_clock, batch_run_request_scheduled_capture};
 
 pub fn run_first_phase(world: &crate::ecs::World) {
-    run_frame_clock_phase(world);
-    run_batch_schedule_phase(world);
+    advance_frame_clock(world);
+    batch_run_request_scheduled_capture(world);
 }

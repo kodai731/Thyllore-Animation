@@ -1,12 +1,13 @@
-#ifndef WATER_SURFACE_GLSL
-#define WATER_SURFACE_GLSL
+module water_surface;
+
+import "water/include/component.slang";
 
 float sinc(float x) {
     if (abs(x) < 1e-6) return 1.0;
     return sin(x) / x;
 }
 
-void waterHeightAndGradient(vec2 uv, float time, vec2 flowRate, int modeCount, vec2 footprint, out float h, out float hu, out float hv, out float slopeVariance) {
+public void waterHeightAndGradient(float2 uv, float time, float2 flowRate, int modeCount, float2 footprint, out float h, out float hu, out float hv, out float slopeVariance) {
     h = 0.0;
     hu = 0.0;
     hv = 0.0;
@@ -45,15 +46,15 @@ void waterHeightAndGradient(vec2 uv, float time, vec2 flowRate, int modeCount, v
     }
 }
 
-vec3 waterPerturbedNormal(float u, float v, float h, float hu, float hv, float rHat) {
+public float3 waterPerturbedNormal(float u, float v, float h, float hu, float hv, float rHat) {
     float cosU = cos(u);
     float sinU = sin(u);
     float cosV = cos(v);
     float sinV = sin(v);
 
-    vec3 e_u = vec3(-sinU, 0.0, cosU);
-    vec3 e_v = vec3(-sinV * cosU, cosV, -sinV * sinU);
-    vec3 n = vec3(cosV * cosU, sinV, cosV * sinU);
+    float3 e_u = float3(-sinU, 0.0, cosU);
+    float3 e_v = float3(-sinV * cosU, cosV, -sinV * sinU);
+    float3 n = float3(cosV * cosU, sinV, cosV * sinU);
 
     float kappa1 = 1.0 / rHat;
     float kappa2 = cosV / (1.0 + rHat * cosV);
@@ -62,11 +63,9 @@ vec3 waterPerturbedNormal(float u, float v, float h, float hu, float hv, float r
     float scaledHu = hu / water.radii.x;
     float scaledHv = hv / water.radii.x;
 
-    vec3 nPrime = (1.0 + scaledH * kappa1) * (1.0 + scaledH * kappa2) * n
+    float3 nPrime = (1.0 + scaledH * kappa1) * (1.0 + scaledH * kappa2) * n
         - (1.0 + scaledH * kappa1) * scaledHu / (1.0 + rHat * cosV) * e_u
         - (1.0 + scaledH * kappa2) * scaledHv / rHat * e_v;
 
     return normalize(nPrime);
 }
-
-#endif

@@ -34,7 +34,7 @@ fn test_all_shader_sources_exist() {
         "shaders/editor/imguiFragment.slang",
         "shaders/editor/boneVertex.slang",
         "shaders/editor/boneFragment.slang",
-        "shaders/raytracing/rayQueryShadow.comp",
+        "shaders/raytracing/rayQueryShadowCompute.slang",
     ];
 
     for shader in &shader_sources {
@@ -180,7 +180,7 @@ fn test_fragment_shader_extension() {
 
 #[test]
 fn test_compute_shader_extension() {
-    let compute_shaders = [("shaders/raytracing/rayQueryShadow.comp", false)];
+    let compute_shaders = [("shaders/raytracing/rayQueryShadowCompute.slang", true)];
 
     for (shader, is_slang) in &compute_shaders {
         if *is_slang {

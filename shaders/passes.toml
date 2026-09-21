@@ -31,7 +31,7 @@ stages = ["postprocess/tonemapVertex.slang", "editor/onionSkinCompositeFragment.
 sets = { 0 = "local" }
 
 [pass.water_resolve]
-stages = ["postprocess/tonemapVertex.slang", "water/resolveFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "water/resolveFragment.slang"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.flame_resolve]
@@ -75,15 +75,15 @@ stages = ["postprocess/autoExposureAverageCompute.slang"]
 sets = { 0 = "local" }
 
 [pass.ray_query_shadow]
-stages = ["raytracing/rayQueryShadow.comp"]
+stages = ["raytracing/rayQueryShadowCompute.slang"]
 sets = { 0 = "local" }
 
 [pass.water_caustic_splat]
-stages = ["water/causticSplat.comp"]
+stages = ["water/causticSplatCompute.slang"]
 sets = { 0 = "local" }
 
 [pass.water_caustic_apply]
-stages = ["water/causticApply.comp"]
+stages = ["water/causticApplyCompute.slang"]
 sets = { 0 = "local" }
 
 [pass.composite]
@@ -99,5 +99,5 @@ stages = ["editor/imguiVertex.slang", "editor/imguiFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.effect_trace]
-stages = ["raytracing/traceRayGen.slang", "raytracing/traceMiss.slang", "raytracing/sceneClosestHit.slang", "raytracing/torusIntersection.rint", "water/torusClosestHit.rchit"]
+stages = ["raytracing/traceRayGen.slang", "raytracing/traceMiss.slang", "raytracing/sceneClosestHit.slang", "raytracing/torusIntersection.slang", "water/torusClosestHit.slang"]
 sets = { 0 = "local" }

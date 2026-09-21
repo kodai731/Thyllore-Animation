@@ -30,7 +30,7 @@ pub fn dispatch_debug_constraint_events(
                     .get_resource::<crate::ecs::resource::SpringBoneState>()
                     .map_or(false, |s| s.baked_clip_source_id.is_some());
                 if is_baked {
-                    super::dispatch_spring_bone::handle_spring_bone_discard(world, assets);
+                    super::spring_bone::handle_spring_bone_discard(world, assets);
                 }
                 clear_spring_bones(world);
             }

@@ -12,7 +12,7 @@ use crate::ecs::systems::{
 };
 use crate::ecs::world::World;
 
-use super::dispatch_spring_bone::transition_to_baked_override_if_needed;
+use super::spring_bone::transition_to_baked_override_if_needed;
 
 pub fn dispatch_timeline_events(events: &[UIEvent], world: &mut World, assets: &AssetStorage) {
     let mut timeline_state = world.resource_mut::<TimelineState>();

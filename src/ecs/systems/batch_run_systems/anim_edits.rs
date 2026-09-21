@@ -127,7 +127,7 @@ pub fn batch_apply_anim_edits(
     assets: &mut AssetStorage,
     edits: &[BatchAnimEdit],
 ) {
-    use crate::ecs::systems::phases::dispatch_scalar_curve::dispatch_scalar_clip_events;
+    use crate::ecs::systems::phases::event_dispatch::scalar_curve::dispatch_scalar_clip_events;
     use crate::ecs::systems::scalar_clip_systems::{
         ensure_entity_clip, resolve_selected_scalar_entity,
     };

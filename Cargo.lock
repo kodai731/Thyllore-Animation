@@ -3962,6 +3962,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "thyllore-slang-pilot"
+version = "0.0.1"
+dependencies = [
+ "cc",
+ "cgmath",
+ "fastrand",
+ "thyllore-effect-core",
+]
+
+[[package]]
 name = "thyllore-spirv-reflect"
 version = "0.0.1"
 dependencies = [

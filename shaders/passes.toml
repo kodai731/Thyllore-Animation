@@ -3,19 +3,19 @@
 # Set roles: frame = set 0, material = set 1, object = set 2, local = pass-owned set.
 
 [pass.model]
-stages = ["model/modelVertex.slang", "model/modelFragment.slang"]
+stages = ["model/vertex.slang", "model/fragment.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.gbuffer]
-stages = ["gbuffer/gbufferVertex.slang", "gbuffer/gbufferFragment.slang"]
+stages = ["gbuffer/vertex.slang", "gbuffer/fragment.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.grid]
-stages = ["editor/gridVertex.vert", "editor/gridFragment.frag"]
+stages = ["editor/gridVertex.slang", "editor/gridFragment.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.gizmo]
-stages = ["editor/gizmoVertex.vert", "editor/gizmoFragment.frag"]
+stages = ["editor/gizmoVertex.slang", "editor/gizmoFragment.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.bone]
@@ -23,7 +23,7 @@ stages = ["editor/boneVertex.vert", "editor/boneFragment.frag"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.onion_skin_ghost]
-stages = ["gbuffer/gbufferVertex.slang", "editor/onionSkinFragment.frag"]
+stages = ["gbuffer/vertex.slang", "editor/onionSkinFragment.frag"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.onion_skin_composite]

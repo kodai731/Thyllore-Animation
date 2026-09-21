@@ -8,10 +8,10 @@ struct ObjectUBO {
 
 struct VSOutput {
     float4 position : SV_Position;
-    [[vk::location(0)]] float3 worldPos : TEXCOORD0;
-    [[vk::location(1)]] float3 worldNormal : TEXCOORD1;
-    [[vk::location(2)]] float2 texCoord : TEXCOORD2;
-    [[vk::location(3)]] float4 color : TEXCOORD3;
+    [[vk::location(0)]] float4 color : TEXCOORD0;
+    [[vk::location(1)]] float2 texCoord : TEXCOORD1;
+    [[vk::location(2)]] float3 worldPos : TEXCOORD2;
+    [[vk::location(3)]] float3 normal : TEXCOORD3;
 };
 
 [shader("vertex")]
@@ -23,13 +23,12 @@ VSOutput main(
     VSOutput output;
 
     float4 worldPos = mul(object.model, float4(inPosition, 1.0));
-    output.worldPos = worldPos.xyz;
+    output.position = mul(mul(frame.proj, frame.view), worldPos);
 
-    output.worldNormal = normalize(mul(float3x3(object.model), inNormal));
-
-    output.texCoord = inTexCoord;
     output.color = inColor;
+    output.texCoord = inTexCoord;
+    output.worldPos = worldPos.xyz;
+    output.normal = normalize(mul(float3x3(object.model), inNormal));
 
-    output.position = mul(frame.proj, mul(frame.view, worldPos));
     return output;
 }

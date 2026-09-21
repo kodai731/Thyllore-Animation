@@ -107,9 +107,29 @@ fn spirv_file_name(directory: &str, base_name: &str, stage_suffix: &str) -> Stri
 }
 
 fn slang_stage_from_stem(stem: &str) -> Option<(&str, &'static str)> {
-    SLANG_STAGE_WORDS
+    let candidates: [(&str, &str); 18] = [
+        ("ClosestHit", "rchit"),
+        ("closesthit", "rchit"),
+        ("Intersection", "rint"),
+        ("intersection", "rint"),
+        ("AnyHit", "rahit"),
+        ("anyhit", "rahit"),
+        ("Miss", "rmiss"),
+        ("miss", "rmiss"),
+        ("Vertex", "vert"),
+        ("vertex", "vert"),
+        ("Fragment", "frag"),
+        ("fragment", "frag"),
+        ("Geometry", "geom"),
+        ("geometry", "geom"),
+        ("Compute", "comp"),
+        ("compute", "comp"),
+        ("RayGen", "rgen"),
+        ("raygen", "rgen"),
+    ];
+    candidates
         .iter()
-        .find_map(|(word, extension)| stem.strip_suffix(word).map(|base| (base, *extension)))
+        .find_map(|(word, extension)| stem.strip_suffix(*word).map(|base| (base, *extension)))
 }
 
 fn file_extension(file_name: &str) -> Option<&str> {
@@ -216,5 +236,21 @@ mod tests {
         assert!(is_shader_source("shadowBakeCompute.slang"));
         assert!(!is_glsl_source("resolveFragment.slang"));
         assert!(is_glsl_source("dofFragment.frag"));
+    }
+
+    #[test]
+    fn slang_lowercase_stage_suffixes() {
+        assert_eq!(
+            spirv_output_name("gbuffer/vertex.slang").as_deref(),
+            Some("gbuffer/vert.spv")
+        );
+        assert_eq!(
+            spirv_output_name("model/fragment.slang").as_deref(),
+            Some("model/frag.spv")
+        );
+        assert_eq!(
+            spirv_output_name("raytracing/shadowQuerycompute.slang").as_deref(),
+            Some("raytracing/shadowQueryComp.spv")
+        );
     }
 }

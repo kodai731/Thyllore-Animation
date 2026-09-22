@@ -31,7 +31,7 @@ struct Output {
 [[vk::binding(4, 1)]] Sampler2D flameHistorySampler;
 [[vk::binding(6, 1)]] Sampler2D sceneDepthSampler;
 
-static float2 fragTexCoord;
+static float2 flameFragTexCoord;
 
 struct FlamePush {
     int mode;
@@ -46,9 +46,10 @@ static const float H_DIR_EPSILON = 1e-4;
 static const float3 LUMA_WEIGHTS = float3(0.2126, 0.7152, 0.0722);
 
 float4x4 glslInverse(float4x4 m) {
-    return spirv_asm {
-        result:$$float4x4 = OpExtInst glsl450 MatrixInverse $m;
-    };
+    __target_switch {
+    case glsl: __intrinsic_asm "inverse($0)";
+    case spirv: return spirv_asm { result:$$float4x4 = OpExtInst glsl450 MatrixInverse $m; };
+    }
 }
 
 float evaluateHeightPrimitive(float height01) {
@@ -249,7 +250,7 @@ bool clampToShellCone(float3 o, float3 d, float radiusPad, inout float tNear, in
 // interval can be cut where a surface occludes the flame.
 FlameDepthClamp resolveSceneDepthClamp(float4x4 invViewProj, float3 rayDir, float tNear, float tFar) {
     FlameDepthClamp depthClamp;
-    depthClamp.sceneDepth = sceneDepthSampler.Sample(fragTexCoord).r;
+    depthClamp.sceneDepth = sceneDepthSampler.Sample(flameFragTexCoord).r;
     depthClamp.tDepth = 0.0;
     depthClamp.state = DEPTH_CLAMP_NO_SURFACE;
 
@@ -257,7 +258,7 @@ FlameDepthClamp resolveSceneDepthClamp(float4x4 invViewProj, float3 rayDir, floa
         return depthClamp;
     }
 
-    float4 surfaceClip = mul(invViewProj, float4(fragTexCoord * 2.0 - 1.0, depthClamp.sceneDepth, 1.0));
+    float4 surfaceClip = mul(invViewProj, float4(flameFragTexCoord * 2.0 - 1.0, depthClamp.sceneDepth, 1.0));
     float3 surfaceWorld = surfaceClip.xyz / surfaceClip.w;
     depthClamp.tDepth = dot(surfaceWorld - frame.camera_pos.xyz, rayDir);
 
@@ -273,7 +274,7 @@ FlameDepthClamp resolveSceneDepthClamp(float4x4 invViewProj, float3 rayDir, floa
 
 FlameRaySegment buildRaySegment() {
     float4x4 invViewProj = glslInverse(mul(frame.proj, frame.view));
-    float3 rayDir = reconstructRayDirection(fragTexCoord, invViewProj, frame.camera_pos.xyz);
+    float3 rayDir = reconstructRayDirection(flameFragTexCoord, invViewProj, frame.camera_pos.xyz);
 
     FlameRaySegment segment;
     segment.localOrigin = mul(flame.inverseModel, float4(frame.camera_pos.xyz, 1.0)).xyz;
@@ -535,10 +536,10 @@ Output debugOutput(float4 color) {
 
 [shader("fragment")]
 Output main(
-    [[vk::location(0)]] float2 texCoord : TEXCOORD0,
+    [[vk::location(0)]] float2 fragTexCoord : TEXCOORD0,
     float4 fragCoord : SV_Position) {
     flameFragCoord = fragCoord.xy;
-    fragTexCoord = texCoord;
+    flameFragTexCoord = fragTexCoord;
 
     FlameRaySegment segment = buildRaySegment();
 
@@ -700,6 +701,6 @@ Output main(
     float4 shaded = float4(L, 1.0 - trans);
     // Occlusion must track displayed luminance: a dim flame adds little light and must not darken the background.
     shaded.a *= smoothstep(0.0, flame.colorBase.occlusionLumRef, dot(shaded.rgb, LUMA_WEIGHTS));
-    float4 blended = lerp(shaded, flameHistorySampler.Sample(fragTexCoord), flame.temporalData.accumWeight);
+    float4 blended = lerp(shaded, flameHistorySampler.Sample(flameFragTexCoord), flame.temporalData.accumWeight);
     return debugOutput(blended);
 }

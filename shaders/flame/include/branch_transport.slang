@@ -5,7 +5,7 @@
 module flame_branch_transport;
 
 import "flame/include/component.slang";
-import "include/radiative_transfer.slang";
+import "include/math.slang";
 
 public bool flameBranchActive() {
     return flame.branchField.count > 0.5;

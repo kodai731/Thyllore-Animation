@@ -1,98 +1,83 @@
+use crate::stage::StageKind;
+
 const SLANG_EXTENSION: &str = "slang";
-const SLANG_STAGE_WORDS: [(&str, &str); 9] = [
-    ("Vertex", "vert"),
-    ("Fragment", "frag"),
-    ("Geometry", "geom"),
-    ("Compute", "comp"),
-    ("RayGen", "rgen"),
-    ("Intersection", "rint"),
-    ("AnyHit", "rahit"),
-    ("ClosestHit", "rchit"),
-    ("Miss", "rmiss"),
-];
+
+/// An entry point of a Slang file: the function name and the stage of its `[shader("..")]` attribute.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EntryPoint {
+    pub name: String,
+    pub stage: StageKind,
+}
 
 pub fn is_shader_source(file_name: &str) -> bool {
     file_extension(file_name) == Some(SLANG_EXTENSION)
 }
 
-pub fn spirv_output_name(source_path: &str) -> Option<String> {
+/// `<directory>/<stem without a trailing stage word><stage suffix>.spv`: `wind/resolveFragment.slang`
+/// -> `wind/resolveFrag.spv`, `editor/bone.slang` -> `editor/boneVert.spv` / `editor/boneFrag.spv`.
+pub fn spirv_output_name(source_path: &str, stage: StageKind) -> Option<String> {
     let (directory, file_name) = match source_path.rsplit_once('/') {
         Some((directory, file_name)) => (format!("{directory}/"), file_name),
         None => (String::new(), source_path),
     };
-    let extension = file_extension(file_name)?;
-    if extension != SLANG_EXTENSION {
+    if !is_shader_source(file_name) {
         return None;
     }
-    let stem = &file_name[..file_name.len() - extension.len() - 1];
-    slang_spirv_output(&directory, stem)
-}
-
-fn slang_spirv_output(directory: &str, stem: &str) -> Option<String> {
-    let (base_name, extension) = slang_stage_from_stem(stem)?;
-    Some(spirv_file_name(
-        directory,
-        base_name,
-        stage_suffix(extension)?,
-    ))
-}
-
-fn stage_suffix(extension: &str) -> Option<&'static str> {
-    match extension {
-        "vert" => Some("Vert"),
-        "frag" => Some("Frag"),
-        "geom" => Some("Geom"),
-        "comp" => Some("Comp"),
-        "rgen" => Some("Rgen"),
-        "rint" => Some("Rint"),
-        "rahit" => Some("Rahit"),
-        "rchit" => Some("Rchit"),
-        "rmiss" => Some("Rmiss"),
-        _ => None,
-    }
-}
-
-pub fn slang_stage_extension(file_name: &str) -> Option<&'static str> {
-    let extension = file_extension(file_name)?;
-    if extension != SLANG_EXTENSION {
-        return None;
-    }
-    let stem = &file_name[..file_name.len() - extension.len() - 1];
-    slang_stage_from_stem(stem).map(|(_, stage_extension)| stage_extension)
-}
-
-fn spirv_file_name(directory: &str, base_name: &str, stage_suffix: &str) -> String {
+    let stem = &file_name[..file_name.len() - SLANG_EXTENSION.len() - 1];
+    let base_name = strip_stage_word(stem);
+    let suffix = stage.spirv_suffix();
     if base_name.is_empty() {
-        format!("{directory}{}.spv", stage_suffix.to_ascii_lowercase())
+        Some(format!("{directory}{}.spv", suffix.to_ascii_lowercase()))
     } else {
-        format!("{directory}{base_name}{stage_suffix}.spv")
+        Some(format!("{directory}{base_name}{suffix}.spv"))
     }
 }
 
-fn slang_stage_from_stem(stem: &str) -> Option<(&str, &'static str)> {
-    let candidates: [(&str, &str); 18] = [
-        ("ClosestHit", "rchit"),
-        ("closesthit", "rchit"),
-        ("Intersection", "rint"),
-        ("intersection", "rint"),
-        ("AnyHit", "rahit"),
-        ("anyhit", "rahit"),
-        ("Miss", "rmiss"),
-        ("miss", "rmiss"),
-        ("Vertex", "vert"),
-        ("vertex", "vert"),
-        ("Fragment", "frag"),
-        ("fragment", "frag"),
-        ("Geometry", "geom"),
-        ("geometry", "geom"),
-        ("Compute", "comp"),
-        ("compute", "comp"),
-        ("RayGen", "rgen"),
-        ("raygen", "rgen"),
-    ];
-    candidates
+fn strip_stage_word(stem: &str) -> &str {
+    StageKind::ALL
         .iter()
-        .find_map(|(word, extension)| stem.strip_suffix(*word).map(|base| (base, *extension)))
+        .find_map(|stage| strip_suffix_ignoring_first_case(stem, stage.file_word()))
+        .unwrap_or(stem)
+}
+
+fn strip_suffix_ignoring_first_case<'a>(stem: &'a str, word: &str) -> Option<&'a str> {
+    stem.strip_suffix(word)
+        .or_else(|| stem.strip_suffix(&word.to_ascii_lowercase()))
+}
+
+/// Every `[shader("<stage>")]` entry point declared in `source`, in file order.
+pub fn parse_entry_points(source: &str) -> Vec<EntryPoint> {
+    const ATTRIBUTE: &str = "[shader(\"";
+    let mut entries = Vec::new();
+    let mut rest = source;
+    while let Some(start) = rest.find(ATTRIBUTE) {
+        let after_attribute = &rest[start + ATTRIBUTE.len()..];
+        let Some((stage_name, after_stage)) = after_attribute.split_once("\")]") else {
+            break;
+        };
+        if let Some(stage) = StageKind::from_attribute(stage_name) {
+            if let Some(name) = function_name_after_attributes(after_stage) {
+                entries.push(EntryPoint { name, stage });
+            }
+        }
+        rest = after_stage;
+    }
+    entries
+}
+
+/// The identifier before the parameter list of the next declaration, skipping other `[..]` attributes.
+fn function_name_after_attributes(text: &str) -> Option<String> {
+    let mut rest = text.trim_start();
+    while rest.starts_with('[') {
+        let close = rest.find(']')?;
+        rest = rest[close + 1..].trim_start();
+    }
+    let signature = &rest[..rest.find('(')?];
+    signature
+        .split(|c: char| c.is_whitespace() || c == ':')
+        .filter(|token| !token.is_empty())
+        .last()
+        .map(str::to_string)
 }
 
 fn file_extension(file_name: &str) -> Option<&str> {
@@ -106,49 +91,77 @@ mod tests {
 
     #[test]
     fn rejects_non_shader_files() {
-        assert_eq!(spirv_output_name("passes.toml"), None);
-        assert_eq!(spirv_output_name("dofFragment.frag"), None);
+        assert_eq!(spirv_output_name("passes.toml", StageKind::Vertex), None);
+        assert_eq!(
+            spirv_output_name("dofFragment.frag", StageKind::Fragment),
+            None
+        );
         assert!(!is_shader_source("include"));
         assert!(!is_shader_source("dofFragment.frag"));
     }
 
     #[test]
-    fn slang_strips_stage_word_and_appends_stage_suffix() {
+    fn strips_a_trailing_stage_word_and_appends_the_stage_suffix() {
         assert_eq!(
-            spirv_output_name("wind/resolveFragment.slang").as_deref(),
+            spirv_output_name("wind/resolveFragment.slang", StageKind::Fragment).as_deref(),
             Some("wind/resolveFrag.spv")
         );
         assert_eq!(
-            spirv_output_name("wind/shadowBakeCompute.slang").as_deref(),
+            spirv_output_name("wind/shadowBakeCompute.slang", StageKind::Compute).as_deref(),
             Some("wind/shadowBakeComp.spv")
         );
         assert_eq!(
-            spirv_output_name("raytracing/traceRayGen.slang").as_deref(),
+            spirv_output_name("raytracing/traceRayGen.slang", StageKind::RayGeneration).as_deref(),
             Some("raytracing/traceRgen.spv")
         );
-        assert_eq!(spirv_output_name("foo.slang"), None);
-    }
-
-    #[test]
-    fn is_shader_source_accepts_slang() {
-        assert!(is_shader_source("resolveFragment.slang"));
-        assert!(is_shader_source("shadowBakeCompute.slang"));
-        assert!(!is_shader_source("common.glsl"));
-    }
-
-    #[test]
-    fn slang_lowercase_stage_suffixes() {
         assert_eq!(
-            spirv_output_name("gbuffer/vertex.slang").as_deref(),
+            spirv_output_name("gbuffer/vertex.slang", StageKind::Vertex).as_deref(),
             Some("gbuffer/vert.spv")
         );
+    }
+
+    #[test]
+    fn a_file_without_a_stage_word_names_one_spirv_per_stage() {
         assert_eq!(
-            spirv_output_name("model/fragment.slang").as_deref(),
-            Some("model/frag.spv")
+            spirv_output_name("editor/bone.slang", StageKind::Vertex).as_deref(),
+            Some("editor/boneVert.spv")
         );
         assert_eq!(
-            spirv_output_name("raytracing/shadowQuerycompute.slang").as_deref(),
-            Some("raytracing/shadowQueryComp.spv")
+            spirv_output_name("editor/bone.slang", StageKind::Fragment).as_deref(),
+            Some("editor/boneFrag.spv")
         );
+    }
+
+    #[test]
+    fn parses_entry_points_with_their_stages() {
+        let source = r#"
+[shader("vertex")]
+VSOutput vertexMain([[vk::location(0)]] float3 inPosition : POSITION) { }
+
+[shader("compute")]
+[numthreads(16, 16, 1)]
+void main(uint3 id : SV_DispatchThreadID) { }
+
+[shader("fragment")]
+float4 fragmentMain(VSOutput input) : SV_Target0 { }
+"#;
+        assert_eq!(
+            parse_entry_points(source),
+            vec![
+                EntryPoint {
+                    name: "vertexMain".into(),
+                    stage: StageKind::Vertex
+                },
+                EntryPoint {
+                    name: "main".into(),
+                    stage: StageKind::Compute
+                },
+                EntryPoint {
+                    name: "fragmentMain".into(),
+                    stage: StageKind::Fragment
+                },
+            ]
+        );
+        assert!(parse_entry_points("module noise;\npublic float hash13(float3 p) { }").is_empty());
     }
 }

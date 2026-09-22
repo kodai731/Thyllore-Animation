@@ -2,7 +2,7 @@
 // table, and hits that project on screen reuse the scene color instead.
 module water_secondary;
 
-import "flame/include/noise.slang";
+import "include/noise.slang";
 import "include/frame.slang";
 import "include/hit_shading_record.slang";
 import "water/include/component.slang";

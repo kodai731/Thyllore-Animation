@@ -1,4 +1,4 @@
-import "include/radiative_transfer.slang";
+import "include/math.slang";
 
 struct UniformBufferObject {
     float4x4 model;
@@ -9,13 +9,33 @@ struct UniformBufferObject {
 [[vk::binding(0, 0)]] ConstantBuffer<UniformBufferObject> ubo;
 [[vk::binding(2, 0)]] Sampler2D positionSampler;
 
-struct VSOutput {
+struct Varyings {
     float4 position : SV_Position;
     [[vk::location(0)]] float2 fragTexCoord : TEXCOORD0;
     [[vk::location(1)]] float3 fragBillboardWorldPos : TEXCOORD1;
     [[vk::location(2)]] float fragBillboardViewDepth : TEXCOORD2;
     [[vk::location(3)]] float4 fragClipPos : TEXCOORD3;
 };
+
+[shader("vertex")]
+Varyings vertexMain(
+    [[vk::location(0)]] float3 inPosition : POSITION,
+    [[vk::location(1)]] float2 inTexCoord : TEXCOORD) {
+    Varyings output;
+
+    float4 worldPos = mul(ubo.model, float4(inPosition, 1.0));
+
+    float4 viewPos = mul(ubo.view, worldPos);
+
+    float4 clipPos = mul(ubo.proj, viewPos);
+
+    output.position = clipPos;
+    output.fragTexCoord = inTexCoord;
+    output.fragBillboardWorldPos = worldPos.xyz;
+    output.fragBillboardViewDepth = -viewPos.z;
+    output.fragClipPos = clipPos;
+    return output;
+}
 
 static const float LINE_WIDTH = 0.045;
 static const float BULB_RADIUS = 0.30;
@@ -106,7 +126,7 @@ float generateRays(float2 p) {
 }
 
 [shader("fragment")]
-float4 main(VSOutput input) : SV_Target0 {
+float4 fragmentMain(Varyings input) : SV_Target0 {
     float2 uv = input.fragTexCoord - 0.5;
     uv.y = -uv.y;
     float2 p = uv * 2.0;

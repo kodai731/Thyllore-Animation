@@ -4,7 +4,7 @@ module wind_field;
 
 import "wind/include/component.slang";
 import "include/noise.slang";
-import "include/radiative_transfer.slang";
+import "include/math.slang";
 import "include/volume_shell.slang";
 
 public static const float WIND_EDDY_MIN_RADIUS_SQ = 1e-4;

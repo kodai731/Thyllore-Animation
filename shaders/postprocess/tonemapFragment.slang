@@ -1,4 +1,5 @@
-import "include/radiative_transfer.slang";
+import "include/math.slang";
+import "include/noise.slang";
 import "include/ray.slang";
 
 [[vk::binding(0, 0)]] Sampler2D hdrSampler;
@@ -158,10 +159,6 @@ float2 plumeDeflection(float3 o, float3 d, float tNear, float tFar) {
    return float2(totalDx, totalDz);
 }
 
-float plumeHash(float3 p) { return fract(sin(dot(p, float3(127.1, 311.7, 74.7))) * 43758.5453123); }
-float plumeValueNoise(float3 p) { float3 i = floor(p); float3 f = fract(p); f = f * f * (3.0 - 2.0 * f); float n000 = plumeHash(i); float n100 = plumeHash(i + float3(1,0,0)); float n010 = plumeHash(i + float3(0,1,0)); float n110 = plumeHash(i + float3(1,1,0)); float n001 = plumeHash(i + float3(0,0,1)); float n101 = plumeHash(i + float3(1,0,1)); float n011 = plumeHash(i + float3(0,1,1)); float n111 = plumeHash(i + float3(1,1,1)); return lerp(lerp(lerp(n000,n100,f.x), lerp(n010,n110,f.x), f.y), lerp(lerp(n001,n101,f.x), lerp(n011,n111,f.x), f.y), f.z); }
-float plumeFbm(float3 p) { float v = 0.0; float a = 0.5; for (int i = 0; i < 3; ++i) { v += a * plumeValueNoise(p); p *= 2.03; a *= 0.5; } return v; }
-
 [shader("fragment")]
 float4 main([[vk::location(0)]] float2 fragTexCoord : TEXCOORD0,
     out float fragDepth : SV_Depth) : SV_Target0 {
@@ -245,7 +242,7 @@ float4 main([[vk::location(0)]] float2 fragTexCoord : TEXCOORD0,
                float2 theta = plumeDeflection(originLocal, rayDir, tNear, tFar) * pc.plumeParams0.w;
 
                 float3 pMid = C + rayDir * (tNear + tFar) * 0.5;
-                float turb = 1.0 + pc.plumeParams1.z * (plumeFbm(pMid * 6.0 - float3(pc.plumeParams2.x, max(pc.plumeParams2.y, 1.0), pc.plumeParams2.z) * (2.0 * pc.plumeParams1.y)) * 2.0 - 1.0);
+                float turb = 1.0 + pc.plumeParams1.z * (fbm3(pMid * 6.0 - float3(pc.plumeParams2.x, max(pc.plumeParams2.y, 1.0), pc.plumeParams2.z) * (2.0 * pc.plumeParams1.y)) * 2.0 - 1.0);
                 theta *= turb;
               float deltaD = dBg - tFar;
                 if (deltaD > 0.0) {

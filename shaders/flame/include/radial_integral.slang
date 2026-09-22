@@ -1,7 +1,7 @@
 module flame_radial_integral;
 
 import "flame/include/component.slang";
-import "flame/include/noise.slang";
+import "include/noise.slang";
 import "flame/include/noise_field.slang";
 import "flame/include/shell_profile.slang";
 import "flame/include/erosion_response.slang";

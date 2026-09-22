@@ -20,22 +20,33 @@ matching source are removed automatically. The same sources feed the CPU (`shade
 
 ## Shader Source Files
 
-Entry files end in a stage word that decides the stage and the `.spv` name; `build.rs` walks the tree and mirrors
-each source directory under `assets/shaders/`, so file names only have to be unique inside their directory:
+An entry file is any `.slang` file that declares at least one `[shader("<stage>")]` entry point; a module without one
+(`include/`, `cpu/`) compiles to no SPIR-V. `build.rs` walks the tree, compiles every entry point of every entry file
+with `-entry <name> -stage <stage>`, and mirrors each source directory under `assets/shaders/`, so file names only
+have to be unique inside their directory. The `.spv` name is the stem, minus a trailing stage word if it has one,
+plus the stage suffix:
 
-- `model/vertex.slang` -> `assets/shaders/model/vert.spv`
-- `model/fragment.slang` -> `assets/shaders/model/frag.spv`
-- `raytracing/rayQueryShadowCompute.slang` -> `assets/shaders/raytracing/rayQueryShadowComp.spv`
+- `model/raster.slang` (`vertexMain` + `fragmentMain`) -> `assets/shaders/model/rasterVert.spv` + `rasterFrag.spv`
+- `editor/bone.slang` -> `assets/shaders/editor/boneVert.spv` + `boneFrag.spv`
+- `wind/resolveFragment.slang` (`main`) -> `assets/shaders/wind/resolveFrag.spv`
 - `raytracing/sceneClosestHit.slang` -> `assets/shaders/raytracing/sceneRchit.spv`
-- `water/causticSplatCompute.slang` -> `assets/shaders/water/causticSplatComp.spv`
-- etc. (`Vertex` / `Fragment` / `Compute` / `RayGen` / `Intersection` / `AnyHit` / `ClosestHit` / `Miss`)
+- stage words / suffixes: `Vertex`/`Vert`, `Fragment`/`Frag`, `Geometry`/`Geom`, `Compute`/`Comp`, `RayGen`/`Rgen`,
+  `Intersection`/`Rint`, `AnyHit`/`Rahit`, `ClosestHit`/`Rchit`, `Miss`/`Rmiss` (`crates/thyllore-shader-manifest/src/stage.rs`
+  is the one table)
+
+A vertex + fragment pair that only one pass uses lives in one file with `vertexMain` and `fragmentMain`, so the
+varyings struct, bindings and push constants are declared once (`model/raster.slang`, `editor/bone.slang`,
+`postprocess/composite.slang`). A stage shared by several passes stays its own single-entry file with `main`
+(`postprocess/tonemapVertex.slang`, `gbuffer/vertex.slang`).
 
 Feature-specific modules live in a subdirectory with their own `include/` (`shaders/water/include/`), shared modules in
-`shaders/include/` (`radiative_transfer.slang` holds `PI` / `TWO_PI` / `HALF_PI`; never re-declare them). Every
+`shaders/include/`: `math.slang` (`PI` / `TWO_PI` / `HALF_PI`, `floorMod`; never re-declare them), `noise.slang`
+(hash, gradient and value noise, `fbm3`, `hermiteFade`, `quinticFade`, IGN), `resample.slang` (tent kernels, 13-tap
+downsample), `outline.slang` (id-image edge of an `IPixelClass`), `radiative_transfer.slang`. Every
 non-entry file declares `module <name>;` with a feature prefix (`module water_lb;`) and is imported by its path from
 the `shaders/` root (`import "water/include/lb.slang";`). slangc resolves imports relative to the entry's directory
-first, so a feature `include/` must not reuse a shared include's file name. `passes.toml` references stages by their
-path relative to `shaders/` (`water/resolveFragment.slang`).
+first, so a feature `include/` must not reuse a shared include's file name. `passes.toml` references entry files by
+their path relative to `shaders/` (`water/resolveFragment.slang`); a file contributes every entry point it declares.
 
 Matrices: `mul(M, v)` is the GLSL `M * v`; chained products stay left-associative (`mul(mul(proj, view), p)`).
 `M[3]` is a row, so read a translation column with `mul(M, float4(0, 0, 0, 1))`. Effect uniform blocks that several
@@ -45,7 +56,7 @@ passes bind at different slots are a `public static` in the effect's `component.
 ## Pass Manifest (`shaders/passes.toml`)
 
 `shaders/passes.toml` is the only hand-written pass definition. Each `[pass.<name>]` lists its `stages`
-(source paths relative to `shaders/`; the stage is derived from the extension) and `sets` (set index -> role:
+(entry file paths relative to `shaders/`; the stages are the files' `[shader("..")]` entry points) and `sets` (set index -> role:
 `frame` = 0, `material` = 1, `object` = 2, `local` = pass-owned). `crates/thyllore-vulkan-core/build.rs` validates the file
 (missing source, orphan shader not referenced by any pass, bad stage composition, role/set convention) and
 generates `PassId`, `PassShaders` constants and `ALL_PASSES` into `$OUT_DIR/pass_manifest.rs`.

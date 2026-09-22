@@ -1,8 +1,8 @@
 use super::*;
 use crate::analytic_manifest::{float_constant, int_constant, shader_source};
+use crate::volume::{shell_and_puff_knots, ACTIVE_CELLS_MIN};
 use crate::volume::{MODULATION_CELLS, PUFFS_PER_RAY, RAY_MAX_KNOTS};
 use crate::wind::analytic::eddy::{EDDY_FADE_END, EDDY_FADE_START, EDDY_OCTAVE_COUNT};
-use crate::wind::analytic::integral::ACTIVE_CELLS_MIN;
 use crate::wind::analytic::motion::rotation_phase;
 use crate::wind::WindTornadoEffect;
 use crate::wind::{
@@ -353,7 +353,14 @@ fn knots_are_sorted_and_bracketed() {
     let mut t_near = 0.0;
     let mut t_far = 1e4;
     clamp_ray_to_wind_cone(&params, origin, direction, &mut t_near, &mut t_far);
-    let (knots, _puffs) = wind_ray_knots(&params, origin, direction, t_near, t_far);
+    let (knots, _puffs) = shell_and_puff_knots(
+        &params.shell(),
+        params.active_puffs(),
+        origin,
+        direction,
+        t_near,
+        t_far,
+    );
     let values = knots.values();
     assert!(values.len() >= 2);
     assert_eq!(values[0], t_near);
@@ -750,7 +757,14 @@ fn puff_knot_count_does_not_exceed_wind_max_knots() {
     let mut t_far = 1e4;
     clamp_ray_to_wind_cone(&params, origin, direction, &mut t_near, &mut t_far);
 
-    let (knots, _puffs) = wind_ray_knots(&params, origin, direction, t_near, t_far);
+    let (knots, _puffs) = shell_and_puff_knots(
+        &params.shell(),
+        params.active_puffs(),
+        origin,
+        direction,
+        t_near,
+        t_far,
+    );
     let count = knots.count();
     assert!(
         count <= RAY_MAX_KNOTS,

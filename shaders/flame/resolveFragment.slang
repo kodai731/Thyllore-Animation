@@ -3,7 +3,7 @@ import "include/frame.slang";
 import "include/radiative_transfer.slang";
 import "include/ray.slang";
 import "flame/include/segment.slang";
-import "flame/include/noise.slang";
+import "include/noise.slang";
 import "flame/include/component.slang";
 import "flame/include/branch_transport.slang";
 import "flame/include/shell_profile.slang";

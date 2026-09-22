@@ -1,6 +1,6 @@
 module torus_intersect;
 
-import "include/radiative_transfer.slang";
+import "include/math.slang";
 
 // Signed cube root: pow(x, 1.0/3.0) is undefined for x < 0 (NaN).
 float cbrtSigned(float x) { return sign(x) * pow(abs(x), 1.0 / 3.0); }

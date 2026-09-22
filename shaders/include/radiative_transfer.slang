@@ -2,9 +2,7 @@
 // Each effect supplies its own coefficients; this module holds only the equation.
 module radiative_transfer;
 
-public static const float PI = 3.14159265358979;
-public static const float TWO_PI = 6.28318530717959;
-public static const float HALF_PI = 1.57079632679490;
+import "include/math.slang";
 
 public float rteTransmittance(float sigmaT, float distance) {
     return exp(-sigmaT * distance);

@@ -5,7 +5,7 @@ module wind_integral;
 
 import "wind/include/component.slang";
 import "wind/include/field.slang";
-import "include/radiative_transfer.slang";
+import "include/math.slang";
 import "include/shadow_rays.slang";
 import "include/volume_puffs.slang";
 import "include/volume_shell.slang";

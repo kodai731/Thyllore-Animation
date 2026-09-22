@@ -1,11 +1,11 @@
 module flame_noise_field;
 
 import "flame/include/component.slang";
-import "flame/include/noise.slang";
+import "include/noise.slang";
 import "flame/include/branch_transport.slang";
 import "flame/include/shell_profile.slang";
 import "include/chebyshev.slang";
-import "include/radiative_transfer.slang";
+import "include/math.slang";
 import "include/frame.slang";
 
 // Octagonal shell inscribed radius: 0.5 * cos(pi/8), derived from RING_SEGMENTS=8

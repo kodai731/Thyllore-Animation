@@ -1,3 +1,5 @@
+import "include/resample.slang";
+import "water/include/caustic.slang";
 import "water/include/component.slang";
 
 struct SceneData {
@@ -16,14 +18,13 @@ struct SceneData {
 [[vk::binding(2, 0)]] ConstantBuffer<SceneData> sceneData;
 [[vk::binding(3, 0)]] ConstantBuffer<WaterUBO> waterBlock;
 
-static const uint TENT_WEIGHTS[5] = { 1u, 2u, 3u, 2u, 1u };
-
 uint sampleTentFiltered(int2 pixel, int2 size) {
     uint weightedSum = 0u;
-    for (int dy = -2; dy <= 2; ++dy) {
-        for (int dx = -2; dx <= 2; ++dx) {
+    for (int dy = -CAUSTIC_FILTER_RADIUS; dy <= CAUSTIC_FILTER_RADIUS; ++dy) {
+        for (int dx = -CAUSTIC_FILTER_RADIUS; dx <= CAUSTIC_FILTER_RADIUS; ++dx) {
             int2 tap = clamp(pixel + int2(dx, dy), int2(0), size - int2(1));
-            weightedSum += causticAccumImage[tap] * TENT_WEIGHTS[dy + 2] * TENT_WEIGHTS[dx + 2];
+            weightedSum += causticAccumImage[tap]
+                * tentWeight(dy, CAUSTIC_FILTER_RADIUS) * tentWeight(dx, CAUSTIC_FILTER_RADIUS);
         }
     }
     return weightedSum;
@@ -41,9 +42,11 @@ void main(uint3 globalInvocationId : SV_DispatchThreadID) {
         return;
     }
 
-    float caustic = min(float(sampleTentFiltered(pixel, size)) * 0.25 / (81.0 * 256.0), 1.5);
+    float filteredWeight = float(sampleTentFiltered(pixel, size))
+        / (float(tentWeightSum(CAUSTIC_FILTER_RADIUS)) * CAUSTIC_ACCUM_FIXED_POINT_SCALE);
+    float caustic = min(filteredWeight * CAUSTIC_INTENSITY, CAUSTIC_MAX_IRRADIANCE);
     float3 addition = caustic * clamp(sceneData.lightColor.rgb, float3(0.0), float3(1.0))
-        * clamp(water.radii.z, 0.0, 2.0) * 3.0;
+        * clamp(water.radii.z, 0.0, CAUSTIC_TORUS_RADIUS_GAIN_MAX) * CAUSTIC_LIGHT_GAIN;
 
     float4 current = hdrColorImage[pixel];
     hdrColorImage[pixel] = float4(current.rgb + addition, current.a);

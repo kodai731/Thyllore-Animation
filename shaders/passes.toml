@@ -3,7 +3,7 @@
 # Set roles: frame = set 0, material = set 1, object = set 2, local = pass-owned set.
 
 [pass.model]
-stages = ["model/vertex.slang", "model/fragment.slang"]
+stages = ["model/raster.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.gbuffer]
@@ -11,15 +11,15 @@ stages = ["gbuffer/vertex.slang", "gbuffer/fragment.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.grid]
-stages = ["editor/gridVertex.slang", "editor/gridFragment.slang"]
+stages = ["editor/grid.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.gizmo]
-stages = ["editor/gizmoVertex.slang", "editor/gizmoFragment.slang"]
+stages = ["editor/gizmo.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.bone]
-stages = ["editor/boneVertex.slang", "editor/boneFragment.slang"]
+stages = ["editor/bone.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.onion_skin_ghost]
@@ -87,15 +87,15 @@ stages = ["water/causticApplyCompute.slang"]
 sets = { 0 = "local" }
 
 [pass.composite]
-stages = ["postprocess/compositeVertex.slang", "postprocess/compositeFragment.slang"]
+stages = ["postprocess/composite.slang"]
 sets = { 0 = "local" }
 
 [pass.billboard]
-stages = ["editor/billboardVertex.slang", "editor/billboardFragment.slang"]
+stages = ["editor/billboard.slang"]
 sets = { 0 = "local" }
 
 [pass.imgui]
-stages = ["editor/imguiVertex.slang", "editor/imguiFragment.slang"]
+stages = ["editor/imgui.slang"]
 sets = { 0 = "local" }
 
 [pass.effect_trace]

@@ -1,4 +1,20 @@
+import "include/outline.slang";
 import "include/ray.slang";
+
+struct Varyings {
+    float4 position : SV_Position;
+    [[vk::location(0)]] float2 fragTexCoord : TEXCOORD0;
+};
+
+[shader("vertex")]
+Varyings vertexMain(uint vertexIndex : SV_VertexID) {
+    Varyings output;
+
+    float2 uv = float2((vertexIndex << 1) & 2, vertexIndex & 2);
+    output.fragTexCoord = uv;
+    output.position = float4(uv * 2.0 - 1.0, 0.0, 1.0);
+    return output;
+}
 
 [[vk::binding(0, 0)]] Sampler2D positionSampler;
 [[vk::binding(1, 0)]] Sampler2D normalSampler;
@@ -39,41 +55,28 @@ struct PushConstants {
 static const float3 OUTLINE_COLOR = float3(1.0, 0.5, 0.0);
 static const float OUTLINE_WIDTH = 1.5;
 
-bool isSelected(uint id) {
-    if (id == 0u) return false;
-    for (uint i = 0u; i < selection.selectedCount; i++) {
-        if (selection.selectedIDs[i].x == id) return true;
+struct SelectedEntities : IPixelClass {
+    bool contains(uint id) {
+        if (id == 0u) return false;
+        for (uint i = 0u; i < selection.selectedCount; i++) {
+            if (selection.selectedIDs[i].x == id) return true;
+        }
+        return false;
     }
-    return false;
-}
+};
 
-bool detectOutlineEdge(float2 fragTexCoord) {
+bool onSelectionOutline(float2 fragTexCoord) {
     uint width;
     uint height;
     objectIDSampler.GetDimensions(width, height);
     float2 texelSize = 1.0 / float2(width, height);
-    uint centerID = objectIDSampler.Sample(fragTexCoord).r;
-    bool centerSelected = isSelected(centerID);
-
-    for (int dy = -1; dy <= 1; dy++) {
-        for (int dx = -1; dx <= 1; dx++) {
-            if (dx == 0 && dy == 0) continue;
-
-            float2 offset = float2(float(dx), float(dy)) * texelSize * OUTLINE_WIDTH;
-            uint neighborID = objectIDSampler.Sample(fragTexCoord + offset).r;
-            bool neighborSelected = isSelected(neighborID);
-
-            if (centerSelected != neighborSelected) {
-                return true;
-            }
-        }
-    }
-    return false;
+    SelectedEntities selected;
+    return detectClassEdge(selected, objectIDSampler, fragTexCoord, texelSize, OUTLINE_WIDTH);
 }
 
 [shader("fragment")]
-float4 main([[vk::location(0)]] float2 fragTexCoord : TEXCOORD0,
-    out float fragDepth : SV_Depth) : SV_Target0 {
+float4 fragmentMain(Varyings input, out float fragDepth : SV_Depth) : SV_Target0 {
+    float2 fragTexCoord = input.fragTexCoord;
     // Sample G-Buffer
     float3 worldPosition = positionSampler.Sample(fragTexCoord).xyz;
     float3 worldNormal = normalSampler.Sample(fragTexCoord).xyz;
@@ -200,7 +203,7 @@ float4 main([[vk::location(0)]] float2 fragTexCoord : TEXCOORD0,
     float3 lighting = ambientLight + diffuseLight * shadowFactor;
     float3 finalColor = baseColor * lighting;
 
-    if (selection.selectedCount > 0u && detectOutlineEdge(fragTexCoord)) {
+    if (selection.selectedCount > 0u && onSelectionOutline(fragTexCoord)) {
         return float4(OUTLINE_COLOR, 1.0);
     } else {
         return float4(finalColor, 1.0);

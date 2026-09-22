@@ -1,4 +1,5 @@
 import "include/torus_intersect.slang";
+import "water/include/caustic.slang";
 import "water/include/component.slang";
 import "water/include/flow.slang";
 import "water/include/surface.slang";
@@ -179,8 +180,8 @@ void main(uint3 globalInvocationId : SV_DispatchThreadID) {
     if (isDebugMode(CAUSTIC_DEBUG_DEPTH_PROBE)) {
         float3 gbufferPosition = positionImage[pixel].xyz;
         float mismatch = length(hitPosition - gbufferPosition) / (0.05 * water.radii.x);
-        accumulate(pixel, uint(clamp(mismatch, 0.0, 8.0) * 256.0));
-        accumulateClamped(pixel + int2(60, 0), uint(clamp(length(gbufferPosition), 0.0, 8.0) * 256.0));
+        accumulate(pixel, uint(clamp(mismatch, 0.0, 8.0) * CAUSTIC_ACCUM_FIXED_POINT_SCALE));
+        accumulateClamped(pixel + int2(60, 0), uint(clamp(length(gbufferPosition), 0.0, 8.0) * CAUSTIC_ACCUM_FIXED_POINT_SCALE));
         accumulateClamped(pixel + int2(120, 0), 2048u);
         return;
     }
@@ -206,10 +207,10 @@ void main(uint3 globalInvocationId : SV_DispatchThreadID) {
 
     if (isDebugMode(CAUSTIC_DEBUG_HIT_PROBE)) {
         bool bad = any(isnan(hitPosition)) || any(isinf(hitPosition)) || any(isnan(worldExitDir)) || isnan(hitDistance);
-        accumulateClamped(pixel, uint(clamp(hitPosition.x + 8.0, 0.0, 16.0) * 256.0));
-        accumulateClamped(pixel + int2(60, 0), uint(clamp(hitPosition.y + 8.0, 0.0, 16.0) * 256.0));
-        accumulateClamped(pixel + int2(120, 0), uint(clamp(hitPosition.z + 8.0, 0.0, 16.0) * 256.0));
-        accumulateClamped(pixel + int2(180, 0), uint(clamp(hitDistance, 0.0, 16.0) * 256.0));
+        accumulateClamped(pixel, uint(clamp(hitPosition.x + 8.0, 0.0, 16.0) * CAUSTIC_ACCUM_FIXED_POINT_SCALE));
+        accumulateClamped(pixel + int2(60, 0), uint(clamp(hitPosition.y + 8.0, 0.0, 16.0) * CAUSTIC_ACCUM_FIXED_POINT_SCALE));
+        accumulateClamped(pixel + int2(120, 0), uint(clamp(hitPosition.z + 8.0, 0.0, 16.0) * CAUSTIC_ACCUM_FIXED_POINT_SCALE));
+        accumulateClamped(pixel + int2(180, 0), uint(clamp(hitDistance, 0.0, 16.0) * CAUSTIC_ACCUM_FIXED_POINT_SCALE));
         accumulateClamped(pixel + int2(240, 0), bad ? 4096u : 2048u);
         return;
     }
@@ -254,7 +255,7 @@ void main(uint3 globalInvocationId : SV_DispatchThreadID) {
         if (isnan(fresnelOut) || isinf(fresnelOut)) bits |= 4u;
         if (isnan(focus) || isinf(focus)) bits |= 8u;
         if (isnan(chord) || isinf(chord)) bits |= 16u;
-        if (!(weight * 256.0 >= 1.0)) bits |= 32u;
+        if (!(weight * CAUSTIC_ACCUM_FIXED_POINT_SCALE >= 1.0)) bits |= 32u;
         if (transmittance <= 0.0) bits |= 128u;
         if (focus <= 0.0) bits |= 256u;
         if (fresnelIn >= 1.0) bits |= 512u;
@@ -263,5 +264,5 @@ void main(uint3 globalInvocationId : SV_DispatchThreadID) {
         return;
     }
 
-    accumulate(pixel, uint(clamp(weight, 0.0, 16.0) * 256.0));
+    accumulate(pixel, uint(clamp(weight, 0.0, 16.0) * CAUSTIC_ACCUM_FIXED_POINT_SCALE));
 }

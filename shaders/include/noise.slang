@@ -49,3 +49,65 @@ public float gradientNoise3(float3 p) {
     float nxy1 = lerp(nx01, nx11, w.y);
     return lerp(nxy0, nxy1, w.z);
 }
+
+// Cubic Hermite fade 3t^2 - 2t^3 (the smoothstep curve on [0, 1]).
+public float hermiteFade(float t) {
+    return t * t * (3.0 - 2.0 * t);
+}
+
+// IGN (Jimenez 2014, "Next Generation Post Processing in Call of Duty"): a per-pixel
+// ray start jitter so a short march dithers instead of banding.
+public float interleavedGradientNoise(float2 pixelCoord) {
+    return fract(52.9829189 * fract(dot(pixelCoord, float2(0.06711056, 0.00583715))));
+}
+
+static const float CELL_HASH_FREQUENCY = 0.3183099;
+static const float3 CELL_HASH_OFFSET = float3(0.1, 0.2, 0.3);
+static const float CELL_HASH_SPREAD = 17.0;
+
+float hashCell(float3 cell) {
+    float3 p = fract(cell * CELL_HASH_FREQUENCY + CELL_HASH_OFFSET);
+    p *= CELL_HASH_SPREAD;
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+
+// Value noise on the unit lattice with a Hermite fade, in [0, 1].
+public float valueNoise3(float3 p) {
+    float3 cell = floor(p);
+    float3 f = fract(p);
+    float3 u = float3(hermiteFade(f.x), hermiteFade(f.y), hermiteFade(f.z));
+
+    float n000 = hashCell(cell + float3(0.0, 0.0, 0.0));
+    float n100 = hashCell(cell + float3(1.0, 0.0, 0.0));
+    float n010 = hashCell(cell + float3(0.0, 1.0, 0.0));
+    float n110 = hashCell(cell + float3(1.0, 1.0, 0.0));
+    float n001 = hashCell(cell + float3(0.0, 0.0, 1.0));
+    float n101 = hashCell(cell + float3(1.0, 0.0, 1.0));
+    float n011 = hashCell(cell + float3(0.0, 1.0, 1.0));
+    float n111 = hashCell(cell + float3(1.0, 1.0, 1.0));
+
+    float nx00 = lerp(n000, n100, u.x);
+    float nx10 = lerp(n010, n110, u.x);
+    float nx01 = lerp(n001, n101, u.x);
+    float nx11 = lerp(n011, n111, u.x);
+    float nxy0 = lerp(nx00, nx10, u.y);
+    float nxy1 = lerp(nx01, nx11, u.y);
+    return lerp(nxy0, nxy1, u.z);
+}
+
+public static const int FBM_OCTAVES = 3;
+public static const float FBM_LACUNARITY = 2.02;
+public static const float3 FBM_OCTAVE_SHIFT = float3(13.7);
+public static const float FBM_GAIN = 0.5;
+
+// Sum of FBM_OCTAVES value noise octaves, maximum FBM_GAIN * (1 - FBM_GAIN^N) / (1 - FBM_GAIN) = 0.875.
+public float fbm3(float3 p) {
+    float sum = 0.0;
+    float amplitude = FBM_GAIN;
+    for (int octave = 0; octave < FBM_OCTAVES; ++octave) {
+        sum += amplitude * valueNoise3(p);
+        p = p * FBM_LACUNARITY + FBM_OCTAVE_SHIFT;
+        amplitude *= FBM_GAIN;
+    }
+    return sum;
+}

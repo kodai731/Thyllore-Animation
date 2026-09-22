@@ -20,20 +20,14 @@ fn test_shader_output_directory_exists() {
 #[test]
 fn test_all_shader_sources_exist() {
     let shader_sources = [
-        "shaders/model/vertex.slang",
-        "shaders/model/fragment.slang",
+        "shaders/model/raster.slang",
         "shaders/gbuffer/vertex.slang",
         "shaders/gbuffer/fragment.slang",
-        "shaders/postprocess/compositeVertex.slang",
-        "shaders/postprocess/compositeFragment.slang",
-        "shaders/editor/gridVertex.slang",
-        "shaders/editor/gridFragment.slang",
-        "shaders/editor/gizmoVertex.slang",
-        "shaders/editor/gizmoFragment.slang",
-        "shaders/editor/imguiVertex.slang",
-        "shaders/editor/imguiFragment.slang",
-        "shaders/editor/boneVertex.slang",
-        "shaders/editor/boneFragment.slang",
+        "shaders/postprocess/composite.slang",
+        "shaders/editor/grid.slang",
+        "shaders/editor/gizmo.slang",
+        "shaders/editor/imgui.slang",
+        "shaders/editor/bone.slang",
         "shaders/raytracing/rayQueryShadowCompute.slang",
     ];
 
@@ -49,8 +43,8 @@ fn test_all_shader_sources_exist() {
 #[test]
 fn test_all_compiled_shaders_exist() {
     let compiled_shaders = [
-        "assets/shaders/model/vert.spv",
-        "assets/shaders/model/frag.spv",
+        "assets/shaders/model/rasterVert.spv",
+        "assets/shaders/model/rasterFrag.spv",
         "assets/shaders/gbuffer/vert.spv",
         "assets/shaders/gbuffer/frag.spv",
         "assets/shaders/postprocess/compositeVert.spv",
@@ -76,8 +70,8 @@ fn test_all_compiled_shaders_exist() {
 #[test]
 fn test_compiled_shaders_not_empty() {
     let compiled_shaders = [
-        "assets/shaders/model/vert.spv",
-        "assets/shaders/model/frag.spv",
+        "assets/shaders/model/rasterVert.spv",
+        "assets/shaders/model/rasterFrag.spv",
         "assets/shaders/gbuffer/vert.spv",
         "assets/shaders/gbuffer/frag.spv",
     ];
@@ -199,7 +193,7 @@ fn count_compiled_shaders(directory: &Path) -> usize {
         .sum()
 }
 
-fn count_shader_sources(directory: &Path) -> usize {
+fn count_shader_entry_points(directory: &Path) -> usize {
     let entries = fs::read_dir(directory)
         .unwrap_or_else(|_| panic!("Failed to read directory: {}", directory.display()));
 
@@ -209,26 +203,27 @@ fn count_shader_sources(directory: &Path) -> usize {
             let path = entry.path();
 
             if path.is_dir() {
-                let file_name = path.file_name().and_then(|n| n.to_str());
-                if file_name == Some("include") || file_name == Some("cpu") {
-                    return 0;
-                }
-                return count_shader_sources(&path);
+                return count_shader_entry_points(&path);
+            }
+            if path.extension() != Some("slang".as_ref()) {
+                return 0;
             }
 
-            usize::from(path.extension() == Some("slang".as_ref()))
+            let source = fs::read_to_string(&path)
+                .unwrap_or_else(|_| panic!("Failed to read shader: {}", path.display()));
+            source.matches("[shader(\"").count()
         })
         .sum()
 }
 
 #[test]
 fn test_shader_count_matches() {
-    let shader_sources_count = count_shader_sources(Path::new("shaders"));
+    let entry_point_count = count_shader_entry_points(Path::new("shaders"));
 
     let compiled_shaders_count = count_compiled_shaders(Path::new("assets/shaders"));
 
     assert_eq!(
-        shader_sources_count, compiled_shaders_count,
-        "Number of shader sources should match compiled shaders"
+        entry_point_count, compiled_shaders_count,
+        "Every Slang entry point should have one compiled SPIR-V"
     );
 }

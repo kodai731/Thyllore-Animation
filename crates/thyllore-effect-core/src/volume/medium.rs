@@ -1,11 +1,29 @@
 use crate::volume::RayKnots;
-use cgmath::Vector3;
+use cgmath::{InnerSpace, Vector3};
 use thyllore_math_core::mix;
 
 // One cell grid spans the whole ray so a knot splitting a piece never moves a sample; the cell
 // length comes from the active length (active pieces) so the budget is spent on density.
 pub const MODULATION_CELLS: usize = 64;
+pub const ACTIVE_CELLS_MIN: usize = 16;
+const MODULATION_SAMPLE_FRACTION: f32 = 0.125;
 pub(crate) const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
+
+/// Cell length along the ray: a fraction of the finest modulation feature (world units, the active
+/// span when none), bounded so the active length holds between ACTIVE_CELLS_MIN and MODULATION_CELLS cells.
+pub fn modulation_step(
+    direction: Vector3<f32>,
+    active_length: f32,
+    finest_feature: Option<f32>,
+) -> f32 {
+    let span = active_length.max(EMPTY_INTERVAL_EPSILON);
+    let active_span = span * direction.magnitude();
+    let feature = finest_feature.map_or(active_span, |feature| feature.min(active_span));
+    (MODULATION_SAMPLE_FRACTION * feature / direction.magnitude()).clamp(
+        span / MODULATION_CELLS as f32,
+        span / ACTIVE_CELLS_MIN as f32,
+    )
+}
 
 /// A medium integrated piece by piece in closed form under a cell-sampled linear modulation.
 pub trait RayMedium {

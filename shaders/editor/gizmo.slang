@@ -6,16 +6,16 @@ struct ObjectUBO {
 
 [[vk::binding(0, 2)]] ConstantBuffer<ObjectUBO> object;
 
-struct VSOutput {
+struct Varyings {
     float4 position : SV_Position;
     [[vk::location(0)]] float3 fragColor : TEXCOORD0;
 };
 
 [shader("vertex")]
-VSOutput main(
+Varyings vertexMain(
     [[vk::location(0)]] float3 inPosition : POSITION,
     [[vk::location(1)]] float3 inColor : COLOR) {
-    VSOutput output;
+    Varyings output;
 
     float2 gizmoOffset = float2(0.85, -0.75);
     float gizmoScale = 1.0;
@@ -33,4 +33,9 @@ VSOutput main(
     output.position = position;
     output.fragColor = inColor;
     return output;
+}
+
+[shader("fragment")]
+float4 fragmentMain(Varyings input) : SV_Target0 {
+    return float4(input.fragColor, 1.0);
 }

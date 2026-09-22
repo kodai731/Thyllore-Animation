@@ -1,3 +1,5 @@
+import "include/math.slang";
+
 [[vk::binding(0, 0)]] Sampler2D hdrSampler;
 [[vk::binding(1, 0)]] Sampler2D depthSampler;
 
@@ -13,8 +15,6 @@ struct PushConstants {
 };
 
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;
-
-static const float TWO_PI = 6.28318530717959;
 
 float linearizeDepth(float depth) {
     return pc.nearPlane / max(depth, 0.0001);

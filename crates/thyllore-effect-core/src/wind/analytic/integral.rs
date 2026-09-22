@@ -1,17 +1,22 @@
+#[cfg(test)]
 use crate::volume::{
     cell_modulated_optical_depth, modulation_step, shell_and_puff_density, shell_and_puff_knots,
-    RayKnots, RayMedium, RayPuffs, StreakModulation, VolumeShell,
+    RayKnots, RayMedium, RayPuffs,
 };
+use crate::volume::{StreakModulation, VolumeShell};
+#[cfg(test)]
 use crate::wind::analytic::eddy::{eddy_sigma, EDDY_OCTAVE_COUNT};
 use crate::wind::analytic::motion::{h_top, rotation_phase, spread_offset, streak_phase, wall_amp};
 use crate::wind::analytic::puffs::build_wind_puffs;
 use crate::wind::WindTornadoEffect;
+#[cfg(test)]
 use cgmath::Vector3;
 
 // Mirror of shaders/wind/include/field.slang and integral.slang: the shell, puffs, streak and
 // cell modulation of crate::volume with the tornado's parameters filled in.
 
 pub const WIND_MAX_PUFFS: usize = 96;
+#[cfg(test)]
 const SHADOW_RAY_T_MAX: f32 = 1e4;
 const SHADOW_RADIAL_EXTENT_MARGIN: f32 = 1.25;
 
@@ -143,11 +148,13 @@ impl WindShellParams {
         }
     }
 
+    #[cfg(test)]
     fn puff_sigma(&self) -> f32 {
         self.sigma_t * self.puff_strength * self.wall_strength
     }
 
     /// Phase of the wall rotation at the radius of the wall at height `y`.
+    #[cfg(test)]
     fn wall_rotation_phase(&self, y: f32) -> f32 {
         let radius_sq = self.wall_radius(y) * self.wall_radius(y);
         rotation_phase(
@@ -160,11 +167,12 @@ impl WindShellParams {
     }
 }
 
+#[cfg(test)]
 pub struct WindRay {
     shell: VolumeShell,
     puffs: RayPuffs,
 }
-
+#[cfg(test)]
 impl RayMedium for WindShellParams {
     type Ray = WindRay;
 
@@ -253,7 +261,7 @@ pub fn wind_shadow_radial_extent(params: &WindShellParams) -> f32 {
     }
     (extent * SHADOW_RADIAL_EXTENT_MARGIN).max(1e-3)
 }
-
+#[cfg(test)]
 pub fn wind_density_at(params: &WindShellParams, local: Vector3<f32>) -> f32 {
     shell_and_puff_density(
         &params.shell(),
@@ -265,6 +273,7 @@ pub fn wind_density_at(params: &WindShellParams, local: Vector3<f32>) -> f32 {
 
 /// Clamps the ray parameter interval to the wall cone frustum intersected with its
 /// height slab. False when the ray misses it.
+#[cfg(test)]
 pub fn clamp_ray_to_wind_cone(
     params: &WindShellParams,
     origin: Vector3<f32>,
@@ -283,12 +292,14 @@ pub fn clamp_ray_to_wind_cone(
     true
 }
 
+#[cfg(test)]
 pub fn wind_streak_sigma(params: &WindShellParams, local: Vector3<f32>) -> f32 {
     params
         .streak()
         .sigma(local, params.wall_rotation_phase(local.y))
 }
 
+#[cfg(test)]
 pub fn wind_modulation_at(
     params: &WindShellParams,
     local: Vector3<f32>,
@@ -309,6 +320,7 @@ pub fn wind_modulation_at(
 }
 
 /// Finest active modulation feature in world units: half a streak period or the finest eddy octave cell.
+#[cfg(test)]
 fn wind_finest_feature(params: &WindShellParams) -> Option<f32> {
     let streak = (params.streak_amplitude > 0.0)
         .then(|| 0.5 * params.streak().wavelength(params.wall_radius_base));
@@ -325,6 +337,7 @@ fn wind_finest_feature(params: &WindShellParams) -> Option<f32> {
     }
 }
 
+#[cfg(test)]
 pub fn wind_modulation_step(
     params: &WindShellParams,
     direction: Vector3<f32>,
@@ -333,6 +346,7 @@ pub fn wind_modulation_step(
     modulation_step(direction, active_length, wind_finest_feature(params))
 }
 
+#[cfg(test)]
 pub fn wind_optical_depth(
     params: &WindShellParams,
     origin: Vector3<f32>,
@@ -344,6 +358,7 @@ pub fn wind_optical_depth(
 }
 
 /// Wall + envelope optical depth along the ray (shadow rays drop streak, eddy and puffs).
+#[cfg(test)]
 pub fn wind_shadow_optical_depth(
     params: &WindShellParams,
     origin: Vector3<f32>,
@@ -357,6 +372,7 @@ pub fn wind_shadow_optical_depth(
 }
 
 /// Shadow optical depth from `origin` toward `direction` up to the cone boundary.
+#[cfg(test)]
 pub fn wind_optical_depth_toward(
     params: &WindShellParams,
     origin: Vector3<f32>,

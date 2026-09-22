@@ -5,9 +5,10 @@ use super::laplace_beltrami_basis::{
     LAPLACE_BELTRAMI_SLOTS_PER_MODE,
 };
 use super::pick::{pick_torus, water_total_height_and_gradient};
+use super::slang::water_height_and_gradient_slang;
 use super::wave::{generate_water_wave_modes, water_height_and_gradient, water_perturbed_normal};
 use crate::water::effect::WaterTorusEffect;
-use crate::water::gpu::systems::build_laplace_beltrami_modes;
+use crate::water::gpu::systems::{build_laplace_beltrami_modes, build_water_ubo};
 use thyllore_math_core::torus_surface_normal;
 
 #[test]
@@ -282,4 +283,71 @@ fn test_lb_shader_functions_exist() {
         "water/include",
         &["waterLbCheb", "waterLbHeightAndGradient"],
     );
+}
+
+#[derive(Default)]
+struct BitwiseAgreement {
+    compared: usize,
+    mismatches: usize,
+    max_bit_difference: i64,
+}
+
+impl BitwiseAgreement {
+    fn record(&mut self, rust_value: f32, slang_value: f32) {
+        self.compared += 1;
+        if rust_value.to_bits() != slang_value.to_bits() {
+            let difference = rust_value.to_bits() as i64 - slang_value.to_bits() as i64;
+            self.mismatches += 1;
+            self.max_bit_difference = self.max_bit_difference.max(difference.abs());
+        }
+    }
+
+    fn assert_identical(&self, quantity: &str) {
+        assert_eq!(
+            self.mismatches, 0,
+            "{quantity}: {}/{} mismatches, max bit difference {}",
+            self.mismatches, self.compared, self.max_bit_difference
+        );
+    }
+}
+
+#[test]
+fn test_water_slang_matches_rust() {
+    let effect = WaterTorusEffect {
+        major_radius: 2.5,
+        ..WaterTorusEffect::default()
+    };
+    let ubo = build_water_ubo(&effect, 0);
+    let modes = generate_water_wave_modes(
+        effect.wave_amplitude,
+        effect.wave_frequency,
+        effect.wave_speed,
+        effect.wave_dispersion,
+        0,
+    );
+    let flow = (effect.flow_longitudinal, effect.flow_meridional);
+
+    let mut wave_h = BitwiseAgreement::default();
+    let mut wave_hu = BitwiseAgreement::default();
+    let mut wave_hv = BitwiseAgreement::default();
+
+    for i in 0..10 {
+        for j in 0..10 {
+            let u = i as f32 / 10.0 * std::f32::consts::TAU;
+            let v = j as f32 / 10.0 * std::f32::consts::TAU;
+
+            let (rust_h, rust_hu, rust_hv) =
+                water_height_and_gradient(u, v, effect.time, flow, &modes);
+            let (slang_h, slang_hu, slang_hv, _) =
+                water_height_and_gradient_slang(&ubo, u, v, effect.time, flow, 8, (0.0, 0.0));
+
+            wave_h.record(rust_h, slang_h);
+            wave_hu.record(rust_hu, slang_hu);
+            wave_hv.record(rust_hv, slang_hv);
+        }
+    }
+
+    wave_h.assert_identical("wave h");
+    wave_hu.assert_identical("wave h_u");
+    wave_hv.assert_identical("wave h_v");
 }

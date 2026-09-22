@@ -4,7 +4,9 @@ mod flame_gpu_blocks;
 mod gpu_block_codegen;
 mod manifest;
 mod naming;
+mod slang;
 mod spirv_files;
+mod stage;
 
 pub use bindings_codegen::{generate_shader_bindings_rust, BindingCodegenError};
 pub use codegen::generate_pass_manifest_rust;
@@ -16,8 +18,10 @@ pub use gpu_block_codegen::{
     generate_gpu_blocks_rust, GpuBlockCodegenConfig, GpuBlockCodegenError,
 };
 pub use manifest::{
-    collect_shader_sources, ManifestError, PassDefinition, PassManifest, SetRole, StageKind,
-    StageSource,
+    collect_shader_sources, shader_entries, ManifestError, PassDefinition, PassManifest, SetRole,
+    ShaderEntries, ShaderSource, StageSource,
 };
-pub use naming::{is_shader_source, spirv_output_name};
+pub use naming::{is_shader_source, parse_entry_points, spirv_output_name, EntryPoint};
+pub use slang::slang_root;
 pub use spirv_files::collect_spirv_files;
+pub use stage::StageKind;

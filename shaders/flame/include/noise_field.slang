@@ -8,6 +8,8 @@ import "include/chebyshev.slang";
 import "include/math.slang";
 import "include/frame.slang";
 
+static const FbmParams FLAME_FBM = { 3, 2.02, 0.5, float3(13.7) };
+
 // Octagonal shell inscribed radius: 0.5 * cos(pi/8), derived from RING_SEGMENTS=8
 
 // Fixed rotation of the noise lattice for E2 experiments.
@@ -318,8 +320,8 @@ public float2 flameBoundaryDisplacement(float2 xz) {
         xz.y * flame.boundaryParams.freq);
     // 3.0 ≈ 1/(2·fbm std): amp becomes the typical fractional displacement.
     // Raise capped at +amp so lifted tips stay clear of the y=1 cap; dips stay deep.
-    float heightNoise = min((fbm3(flameNoiseLatticeRotate(q)) * (2.0 / 0.875) - 1.0) * 3.0, 1.0);
-    float radiusNoise = (fbm3(flameNoiseLatticeRotate(q + float3(13.7, 41.3, 7.9))) * (2.0 / 0.875) - 1.0) * 3.0;
+    float heightNoise = min((fbm3(CellHash(), FLAME_FBM, flameNoiseLatticeRotate(q)) * (2.0 / 0.875) - 1.0) * 3.0, 1.0);
+    float radiusNoise = (fbm3(CellHash(), FLAME_FBM, flameNoiseLatticeRotate(q + float3(13.7, 41.3, 7.9))) * (2.0 / 0.875) - 1.0) * 3.0;
     return max(
         float2(1.0 + amp * heightNoise, 1.0 + amp * flame.boundaryParams.radiusRatio * radiusNoise),
         float2(0.2));

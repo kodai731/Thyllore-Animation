@@ -1,5 +1,5 @@
 //! CPU mirror of the fbm value-noise lattice (shaders/include/noise.slang
-//! hashCell / valueNoise3 / fbm3). The product samples fbm only on the GPU
+//! CellHash / valueNoise3 / fbm3). The product samples fbm only on the GPU
 //! (boundary displacement and contour-wiggle fallback); this mirror exists to
 //! pin the statistics the wave basis is calibrated against
 //! (WAVE_NOISE_MEAN = 0.4375, WAVE_NOISE_STD = 0.106).

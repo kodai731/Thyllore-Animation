@@ -78,6 +78,7 @@ static const float PLUME_REFRACTIVITY_AIR = 2.77e-4;
 static const float PLUME_AMBIENT_TEMPERATURE_K = 293.0;
 static const int PLUME_BAND_COUNT = 6;
 static const float PLUME_FLAT_EXPONENT = 2e-2;
+static const FbmParams PLUME_FBM = { 3, 2.03, 0.5, float3(0.0) };
 
 // Abramowitz-Stegun 7.1.26 (same as flameErf in radial_integral.glsl).
 float plumeErf(float x) {
@@ -242,7 +243,7 @@ float4 main([[vk::location(0)]] float2 fragTexCoord : TEXCOORD0,
                float2 theta = plumeDeflection(originLocal, rayDir, tNear, tFar) * pc.plumeParams0.w;
 
                 float3 pMid = C + rayDir * (tNear + tFar) * 0.5;
-                float turb = 1.0 + pc.plumeParams1.z * (fbm3(pMid * 6.0 - float3(pc.plumeParams2.x, max(pc.plumeParams2.y, 1.0), pc.plumeParams2.z) * (2.0 * pc.plumeParams1.y)) * 2.0 - 1.0);
+                float turb = 1.0 + pc.plumeParams1.z * (fbm3(SinHash(), PLUME_FBM, pMid * 6.0 - float3(pc.plumeParams2.x, max(pc.plumeParams2.y, 1.0), pc.plumeParams2.z) * (2.0 * pc.plumeParams1.y)) * 2.0 - 1.0);
                 theta *= turb;
               float deltaD = dBg - tFar;
                 if (deltaD > 0.0) {

@@ -13,16 +13,34 @@ public uint tentWeightSum(int radius) {
     return axisSum * axisSum;
 }
 
-// (2 radius + 1)^2 tap tent filter; radius 1 is the 9-tap bloom upsample.
-public float3 tentFilter(Sampler2D source, float2 uv, float2 texelSize, int radius) {
-    float3 sum = float3(0.0);
-    for (int dy = -radius; dy <= radius; ++dy) {
-        for (int dx = -radius; dx <= radius; ++dx) {
-            float weight = float(tentWeight(dx, radius) * tentWeight(dy, radius));
-            sum += weight * source.Sample(uv + texelSize * float2(float(dx), float(dy))).rgb;
+// (2 R + 1)^2 tap tent filter; taps are summed per weight from the centre outwards, so R = 1 is
+// exactly centre * 4 + edges * 2 + corners, then / 16 (the 9-tap bloom upsample).
+public float3 tentFilter<let R : int>(Sampler2D source, float2 uv, float2 texelSize) {
+    static const int TAPS = (2 * R + 1) * (2 * R + 1);
+    static const int MAX_WEIGHT = (R + 1) * (R + 1);
+    float3 taps[TAPS];
+    for (int dy = -R; dy <= R; ++dy) {
+        for (int dx = -R; dx <= R; ++dx) {
+            taps[(dy + R) * (2 * R + 1) + (dx + R)] = source.Sample(uv + texelSize * float2(float(dx), float(dy))).rgb;
         }
     }
-    return sum / float(tentWeightSum(radius));
+
+    float3 result = float3(0.0);
+    for (int weight = MAX_WEIGHT; weight >= 1; --weight) {
+        float3 weightSum = float3(0.0);
+        bool hasTap = false;
+        for (int dy = -R; dy <= R; ++dy) {
+            for (int dx = -R; dx <= R; ++dx) {
+                if (tentWeight(dx, R) * tentWeight(dy, R) != uint(weight)) continue;
+                weightSum += taps[(dy + R) * (2 * R + 1) + (dx + R)];
+                hasTap = true;
+            }
+        }
+        if (hasTap) {
+            result += weightSum * float(weight);
+        }
+    }
+    return result * (1.0 / float(tentWeightSum(R)));
 }
 
 // Karis average: weight by 1 / (1 + luma) so a single hot pixel cannot flicker the chain.
@@ -74,5 +92,5 @@ public float3 downsample13TapKaris(Sampler2D source, float2 uv, float2 texelSize
     float3 bottomLeft = karisAverage((taps.outerEdge[1] + taps.innerCorner[0] + taps.outerCorner[2] + taps.innerCorner[2]) * 0.25);
     float3 bottomRight = karisAverage((taps.innerCorner[0] + taps.innerCorner[1] + taps.innerCorner[2] + taps.innerCorner[3]) * 0.25);
     float3 center = karisAverage(taps.center);
-    return (topLeft + topRight + bottomLeft + bottomRight) * 0.125 + center * 0.5;
+    return topLeft * 0.125 + topRight * 0.125 + bottomLeft * 0.125 + bottomRight * 0.125 + center * 0.5;
 }

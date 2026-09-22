@@ -42,9 +42,8 @@ void main(uint3 globalInvocationId : SV_DispatchThreadID) {
         return;
     }
 
-    float filteredWeight = float(sampleTentFiltered(pixel, size))
-        / (float(tentWeightSum(CAUSTIC_FILTER_RADIUS)) * CAUSTIC_ACCUM_FIXED_POINT_SCALE);
-    float caustic = min(filteredWeight * CAUSTIC_INTENSITY, CAUSTIC_MAX_IRRADIANCE);
+    float normalization = float(tentWeightSum(CAUSTIC_FILTER_RADIUS)) * CAUSTIC_ACCUM_FIXED_POINT_SCALE;
+    float caustic = min(float(sampleTentFiltered(pixel, size)) * CAUSTIC_INTENSITY / normalization, CAUSTIC_MAX_IRRADIANCE);
     float3 addition = caustic * clamp(sceneData.lightColor.rgb, float3(0.0), float3(1.0))
         * clamp(water.radii.z, 0.0, CAUSTIC_TORUS_RADIUS_GAIN_MAX) * CAUSTIC_LIGHT_GAIN;
 

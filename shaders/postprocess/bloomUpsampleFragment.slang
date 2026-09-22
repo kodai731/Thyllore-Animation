@@ -10,5 +10,5 @@ float4 main([[vk::location(0)]] float2 fragTexCoord : TEXCOORD0) : SV_Target0 {
     uint height;
     inputSampler.GetDimensions(width, height);
     float2 texelSize = 1.0 / float2(width, height);
-    return float4(tentFilter(inputSampler, fragTexCoord, texelSize, UPSAMPLE_TENT_RADIUS), 1.0);
+    return float4(tentFilter<UPSAMPLE_TENT_RADIUS>(inputSampler, fragTexCoord, texelSize), 1.0);
 }

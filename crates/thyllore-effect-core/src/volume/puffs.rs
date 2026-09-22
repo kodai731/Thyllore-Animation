@@ -3,7 +3,7 @@ use crate::volume::shell::VolumeShell;
 use cgmath::{InnerSpace, Vector3};
 use thyllore_math_core::{biweight, biweight_sphere_piece_integral};
 
-// Mirror of shaders/include/volume_puffs.glsl.
+// Mirror of shaders/include/volume_puffs.slang.
 
 pub const PUFFS_PER_RAY: usize = 20;
 const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;

@@ -1,4 +1,4 @@
-//! CPU mirror of the fbm value-noise lattice (GLSL noise.glsl
+//! CPU mirror of the fbm value-noise lattice (shaders/include/noise.slang
 //! hashCell / valueNoise3 / fbm3). The product samples fbm only on the GPU
 //! (boundary displacement and contour-wiggle fallback); this mirror exists to
 //! pin the statistics the wave basis is calibrated against

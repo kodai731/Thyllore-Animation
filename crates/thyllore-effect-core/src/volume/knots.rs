@@ -1,4 +1,4 @@
-// Mirror of shaders/include/ray_knots.glsl.
+// Mirror of the ray knot helpers in shaders/include/volume_shell.slang.
 
 pub const RAY_MAX_KNOTS: usize = 56;
 pub const RAY_LINEAR_COEFFICIENT_EPSILON: f32 = 1e-7;

@@ -4,7 +4,7 @@ use vulkanalia::prelude::v1_0::*;
 
 use thyllore_spirv_reflect::{
     DescriptorCount, DescriptorKind, PushConstantLayout, ReflectError, ReflectedBinding,
-    ReflectedBlock, ReflectedMember, ShaderReflection, ShaderStage,
+    ReflectedBlock, ShaderReflection, ShaderStage,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -284,6 +284,7 @@ pub fn shader_stage_flags(stage: ShaderStage) -> vk::ShaderStageFlags {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use thyllore_spirv_reflect::ReflectedMember;
 
     fn binding(set: u32, index: u32, kind: DescriptorKind) -> ReflectedBinding {
         ReflectedBinding {

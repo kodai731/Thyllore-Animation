@@ -6,7 +6,7 @@ use thyllore_shader_manifest::{
     collect_shader_sources, collect_spirv_files, generate_pass_manifest_rust,
     generate_shader_bindings_rust, slang_root, spirv_output_name, PassManifest,
 };
-use thyllore_spirv_reflect::{reflect_shader_bytes, verify_spirv_against_glsl, ShaderReflection};
+use thyllore_spirv_reflect::{reflect_shader_bytes, ShaderReflection};
 
 const SPIRV_DIR: &str = "assets/shaders";
 
@@ -67,22 +67,6 @@ fn read_manifest(manifest_path: &Path, shader_dir: &Path) -> PassManifest {
     manifest
 }
 
-fn glslc_command(shader_dir: &Path, source_path: &Path) -> Command {
-    let mut cmd = Command::new("glslc");
-    cmd.arg(source_path.to_str().unwrap());
-    cmd.arg("-I").arg(shader_dir.to_str().unwrap());
-    cmd.arg("-DWATER_RAY_QUERY");
-    cmd.arg("-DWIND_SHADOW_VOLUME");
-    if let Ok(rotation) = std::env::var("THYLLORE_FLAME_NOISE_ROT_DEG") {
-        cmd.arg(format!("-DFLAME_NOISE_ROT_DEG_OVERRIDE={}", rotation));
-    }
-    let ext = source_path.extension().and_then(|e| e.to_str());
-    if matches!(ext, Some("rgen" | "rint" | "rahit" | "rchit" | "rmiss")) {
-        cmd.arg("--target-env=vulkan1.2");
-    }
-    cmd
-}
-
 fn compile_shaders(shader_dir: &Path, spirv_dir: &Path) -> BTreeMap<String, ShaderReflection> {
     let sources = collect_shader_sources(shader_dir).unwrap_or_else(|error| {
         eprintln!("{error}");
@@ -100,12 +84,7 @@ fn compile_shaders(shader_dir: &Path, spirv_dir: &Path) -> BTreeMap<String, Shad
         expected_outputs.push(out_path.clone());
 
         compile_shader(shader_dir, &path, &out_path);
-        let reflection = if is_slang_source(&path) {
-            reflect_from_spirv(&out_path)
-        } else {
-            verify_descriptor_declarations(shader_dir, &path, &out_path)
-        };
-        reflections.insert(file_name, reflection);
+        reflections.insert(file_name, reflect_from_spirv(&out_path));
     }
 
     remove_stale_spirv(spirv_dir, &expected_outputs);
@@ -124,11 +103,7 @@ fn create_output_directory(out_path: &Path) {
 
 fn compile_shader(shader_dir: &Path, source_path: &Path, out_path: &Path) {
     let file_name = source_path.file_name().unwrap().to_str().unwrap();
-    let mut cmd = if is_slang_source(source_path) {
-        slangc_command(shader_dir, source_path)
-    } else {
-        glslc_command(shader_dir, source_path)
-    };
+    let mut cmd = slangc_command(shader_dir, source_path);
     cmd.arg("-o").arg(out_path.to_str().unwrap());
     match cmd.output() {
         Ok(output) if output.status.success() => {}
@@ -143,18 +118,11 @@ fn compile_shader(shader_dir: &Path, source_path: &Path, out_path: &Path) {
         Err(error) => {
             eprintln!("シェーダーコンパイラの実行に失敗しました: {}", error);
             eprintln!(
-                "VulkanSDKのglslcがPATHに含まれ、SLANG_ROOT/bin/slangcが存在することを確認してください。"
+                "SLANG_ROOT/bin/slangc (既定 ~/.local/slang) が存在することを確認してください。"
             );
             std::process::exit(1);
         }
     }
-}
-
-fn is_slang_source(source_path: &Path) -> bool {
-    source_path
-        .extension()
-        .and_then(|extension| extension.to_str())
-        == Some("slang")
 }
 
 fn slangc_command(shader_dir: &Path, source_path: &Path) -> Command {
@@ -180,63 +148,6 @@ fn reflect_from_spirv(spirv_path: &Path) -> ShaderReflection {
         eprintln!("SPIR-V reflection failed ({}): {}", file_name, error);
         std::process::exit(1);
     })
-}
-
-fn verify_descriptor_declarations(
-    shader_dir: &Path,
-    source_path: &Path,
-    spirv_path: &Path,
-) -> ShaderReflection {
-    let file_name = source_path.file_name().unwrap().to_str().unwrap();
-    let preprocessed = match glslc_command(shader_dir, source_path).arg("-E").output() {
-        Ok(output) if output.status.success() => {
-            String::from_utf8_lossy(&output.stdout).into_owned()
-        }
-        Ok(output) => {
-            eprintln!(
-                "glslc -E に失敗しました ({}):\n{}",
-                file_name,
-                String::from_utf8_lossy(&output.stderr)
-            );
-            std::process::exit(1);
-        }
-        Err(error) => {
-            eprintln!("glslc -E の実行に失敗しました ({}): {}", file_name, error);
-            std::process::exit(1);
-        }
-    };
-    let spirv = std::fs::read(spirv_path).unwrap_or_else(|error| {
-        eprintln!(
-            "SPIR-V の読み取りに失敗しました ({}): {}",
-            spirv_path.display(),
-            error
-        );
-        std::process::exit(1);
-    });
-
-    let mismatches = match verify_spirv_against_glsl(&preprocessed, &spirv) {
-        Ok(mismatches) => mismatches,
-        Err(error) => {
-            eprintln!(
-                "SPIR-V reflection に失敗しました ({}): {}\nglslc / SPIR-V の版が上がった可能性があります。crates/thyllore-spirv-reflect を更新してください。",
-                file_name, error
-            );
-            std::process::exit(1);
-        }
-    };
-    if !mismatches.is_empty() {
-        eprintln!(
-            "GLSL 宣言と SPIR-V reflection が一致しません ({}):",
-            file_name
-        );
-        for mismatch in &mismatches {
-            eprintln!("  {}", mismatch);
-        }
-        eprintln!("glslc の出力形式が変わったか、reflection parser が新しい構造を扱えていません。");
-        std::process::exit(1);
-    }
-
-    reflect_shader_bytes(&spirv).expect("verified above")
 }
 
 fn remove_stale_spirv(spirv_dir: &Path, expected_outputs: &[PathBuf]) {

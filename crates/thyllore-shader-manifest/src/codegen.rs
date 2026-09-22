@@ -96,7 +96,7 @@ mod tests {
     #[test]
     fn generates_enum_consts_and_registry() {
         let manifest = PassManifest::parse(
-            "[pass.onion_skin_ghost]\nstages = [\"gbufferVertex.vert\", \"onionSkinFragment.frag\"]\nsets = { 0 = \"frame\", 2 = \"object\" }\n",
+            "[pass.onion_skin_ghost]\nstages = [\"gbufferVertex.slang\", \"onionSkinFragment.slang\"]\nsets = { 0 = \"frame\", 2 = \"object\" }\n",
         )
         .unwrap();
         let code = generate_pass_manifest_rust(&manifest, "assets/shaders");

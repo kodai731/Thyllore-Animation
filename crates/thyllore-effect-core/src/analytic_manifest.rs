@@ -1,32 +1,36 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub fn glsl_include_dir(include_dir: &str) -> PathBuf {
+pub fn shader_include_dir(include_dir: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../shaders")
         .join(include_dir)
 }
 
-pub fn glsl_source(include_dir: &str, relative_path: &str) -> String {
-    let path = glsl_include_dir(include_dir).join(relative_path);
+pub fn shader_source(include_dir: &str, relative_path: &str) -> String {
+    let path = shader_include_dir(include_dir).join(relative_path);
     fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {}", path.display(), e))
 }
 
-pub fn glsl_int_constant(source: &str, name: &str) -> i64 {
-    let prefix = format!("const int {name} = ");
+/// Value of `[public] static const <ty> <name> = <value>;` wherever it is declared (module scope or struct).
+fn constant_text<'a>(source: &'a str, ty: &str, name: &str) -> Option<&'a str> {
+    let prefix = format!("static const {ty} {name} = ");
     source
         .lines()
-        .find_map(|line| line.trim().strip_prefix(&prefix))
-        .and_then(|rest| rest.trim_end_matches(';').parse().ok())
+        .map(|line| line.trim().trim_start_matches("public ").trim_start())
+        .find_map(|line| line.strip_prefix(&prefix))
+        .map(|rest| rest.trim_end_matches(';'))
+}
+
+pub fn int_constant(source: &str, name: &str) -> i64 {
+    constant_text(source, "int", name)
+        .and_then(|value| value.parse().ok())
         .unwrap_or_else(|| panic!("{name} declared as an int constant"))
 }
 
-pub fn glsl_float_constant(source: &str, name: &str) -> f32 {
-    let prefix = format!("const float {name} = ");
-    source
-        .lines()
-        .find_map(|line| line.trim().strip_prefix(&prefix))
-        .and_then(|rest| rest.trim_end_matches(';').parse().ok())
+pub fn float_constant(source: &str, name: &str) -> f32 {
+    constant_text(source, "float", name)
+        .and_then(|value| value.parse().ok())
         .unwrap_or_else(|| panic!("{name} declared as a float constant"))
 }
 
@@ -38,17 +42,18 @@ pub fn strip_line_comments(source: &str) -> String {
         .join("\n")
 }
 
-/// (name, body) per top-level GLSL function; handles multi-line signatures and struct returns.
+/// (name, body) per top-level Slang function; handles multi-line signatures and struct returns.
 pub fn parse_functions(source: &str) -> Vec<(String, String)> {
-    const NON_TYPES: [&str; 9] = [
-        "if", "for", "while", "return", "else", "switch", "const", "struct", "layout",
+    const NON_TYPES: [&str; 12] = [
+        "if", "for", "while", "return", "else", "switch", "const", "struct", "layout", "module",
+        "import", "static",
     ];
     let mut functions = Vec::new();
     let mut depth: i32 = 0;
     let mut current: Option<(String, String, bool)> = None;
     for line in source.lines() {
         if depth == 0 && current.is_none() {
-            let trimmed = line.trim_start();
+            let trimmed = line.trim_start().trim_start_matches("public ");
             let mut words = trimmed.split_whitespace();
             if let (Some(ty), Some(rest)) = (words.next(), words.next()) {
                 let is_type =
@@ -89,12 +94,12 @@ pub fn parse_functions(source: &str) -> Vec<(String, String)> {
 }
 
 pub fn assert_anchors_exist(include_dir: &str, expected: &[&str]) {
-    let dir = glsl_include_dir(include_dir);
+    let dir = shader_include_dir(include_dir);
     let mut combined = String::new();
     for entry in fs::read_dir(&dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) == Some("glsl") {
+        if path.extension().and_then(|e| e.to_str()) == Some("slang") {
             let content = fs::read_to_string(&path).unwrap();
             combined.push_str(&content);
             combined.push('\n');
@@ -105,7 +110,7 @@ pub fn assert_anchors_exist(include_dir: &str, expected: &[&str]) {
     for name in expected {
         assert!(
             function_names.contains(name),
-            "function \"{}\" not found in {:?}/*.glsl (found: {:?})",
+            "function \"{}\" not found in {:?}/*.slang (found: {:?})",
             name,
             include_dir,
             function_names
@@ -115,7 +120,7 @@ pub fn assert_anchors_exist(include_dir: &str, expected: &[&str]) {
 
 #[test]
 fn strip_line_comments_keeps_line_boundaries_for_parse_functions() {
-    let source = "float a() { // x\n    return 1.0;\n}\nfloat b() {\n    return 2.0;\n}";
+    let source = "float a() { // x\n    return 1.0;\n}\npublic float b() {\n    return 2.0;\n}";
     let stripped = strip_line_comments(source);
 
     assert_eq!(stripped.lines().count(), source.lines().count());

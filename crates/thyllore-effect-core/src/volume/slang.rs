@@ -1,5 +1,8 @@
+// C ABI generated from shaders/cpu/exports.slang (see build.rs); scalar arguments keep the
+// boundary free of Slang vector types.
 use cgmath::Vector3;
-use thyllore_effect_core::volume::VolumeShell;
+
+use crate::volume::VolumeShell;
 
 extern "C" {
     fn thylloreShellOpticalDepth(
@@ -133,6 +136,3 @@ pub fn shell_density_at(shell: &VolumeShell, point: Vector3<f32>) -> f32 {
         )
     }
 }
-
-#[cfg(test)]
-mod tests;

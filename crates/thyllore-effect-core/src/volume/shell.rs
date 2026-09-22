@@ -1,11 +1,13 @@
 use crate::volume::knots::{RayKnots, RAY_LINEAR_COEFFICIENT_EPSILON};
+use crate::volume::slang;
 use cgmath::Vector3;
 use thyllore_math_core::{
     biweight, biweight_poly, one_minus_smootherstep_poly, poly_from_quadratic,
     poly_linear_weighted_moments, poly_moments, poly_mul, poly_scale, poly_zero, Poly,
 };
 
-// Mirror of shaders/include/volume_shell.glsl.
+// Piecewise-polynomial shell of shaders/include/volume_shell.slang; the whole-ray integrals
+// call the Slang module through the C ABI, the piece functions serve the modulated wind path.
 //
 // Wall of a participating medium as a compact-support shell in q = x^2 + z^2 around a radius
 // linear in the normalised height h = y / height:
@@ -123,6 +125,11 @@ impl VolumeShell {
     }
 
     pub fn density_at(&self, local: Vector3<f32>) -> f32 {
+        slang::shell_density_at(self, local)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn density_at_mirror(&self, local: Vector3<f32>) -> f32 {
         let h = local.y / self.height;
         let envelope = self.envelope_height(h);
         if envelope <= 0.0 {
@@ -313,6 +320,26 @@ impl VolumeShell {
         t_near: f32,
         t_far: f32,
     ) -> f32 {
+        slang::shell_optical_depth(self, origin, direction, t_near, t_far)
+    }
+
+    pub fn optical_depth_toward(
+        &self,
+        origin: Vector3<f32>,
+        direction: Vector3<f32>,
+        t_max: f32,
+    ) -> f32 {
+        slang::shell_optical_depth_toward(self, origin, direction, t_max)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn optical_depth_mirror(
+        &self,
+        origin: Vector3<f32>,
+        direction: Vector3<f32>,
+        t_near: f32,
+        t_far: f32,
+    ) -> f32 {
         if t_far <= t_near {
             return 0.0;
         }
@@ -322,7 +349,8 @@ impl VolumeShell {
             .sum()
     }
 
-    pub fn optical_depth_toward(
+    #[cfg(test)]
+    pub(crate) fn optical_depth_toward_mirror(
         &self,
         origin: Vector3<f32>,
         direction: Vector3<f32>,
@@ -331,6 +359,9 @@ impl VolumeShell {
         let Some((t_near, t_far)) = self.clamp_ray_to_cone(origin, direction, (0.0, t_max)) else {
             return 0.0;
         };
-        self.optical_depth(origin, direction, t_near.max(0.0), t_far)
+        self.optical_depth_mirror(origin, direction, t_near.max(0.0), t_far)
     }
 }
+
+#[cfg(test)]
+mod slang_tests;

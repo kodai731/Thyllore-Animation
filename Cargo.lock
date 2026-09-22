@@ -3793,6 +3793,7 @@ version = "0.0.1"
 name = "thyllore-effect-core"
 version = "0.0.1"
 dependencies = [
+ "cc",
  "cgmath",
  "fastrand",
  "numpy",
@@ -3804,6 +3805,7 @@ dependencies = [
  "thyllore-color-core",
  "thyllore-math-core",
  "thyllore-scene-core",
+ "thyllore-shader-manifest",
  "thyllore-spirv-reflect",
  "thyllore-texture-fit-core",
 ]
@@ -3959,17 +3961,6 @@ dependencies = [
  "thiserror 1.0.69",
  "thyllore-spirv-reflect",
  "toml",
-]
-
-[[package]]
-name = "thyllore-slang-pilot"
-version = "0.0.1"
-dependencies = [
- "cc",
- "cgmath",
- "fastrand",
- "thyllore-effect-core",
- "thyllore-shader-manifest",
 ]
 
 [[package]]

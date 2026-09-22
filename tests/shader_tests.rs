@@ -111,103 +111,75 @@ fn test_shader_spv_header() {
 #[test]
 fn test_vertex_shader_extension() {
     let vertex_shaders = [
-        ("shaders/model/vertex.slang", true),
-        ("shaders/gbuffer/vertex.slang", true),
-        ("shaders/postprocess/compositeVertex.slang", true),
-        ("shaders/editor/gridVertex.slang", true),
-        ("shaders/editor/gizmoVertex.slang", true),
-        ("shaders/editor/imguiVertex.slang", true),
-        ("shaders/editor/boneVertex.slang", true),
+        "shaders/model/vertex.slang",
+        "shaders/gbuffer/vertex.slang",
+        "shaders/postprocess/compositeVertex.slang",
+        "shaders/editor/gridVertex.slang",
+        "shaders/editor/gizmoVertex.slang",
+        "shaders/editor/imguiVertex.slang",
+        "shaders/editor/boneVertex.slang",
     ];
 
-    for (shader, is_slang) in &vertex_shaders {
-        if *is_slang {
-            assert!(
-                shader.ends_with(".slang"),
-                "Slang vertex shader should have .slang extension: {}",
-                shader
-            );
-            let stem = Path::new(shader).file_stem().unwrap().to_str().unwrap();
-            assert!(
-                stem.ends_with("Vertex") || stem.ends_with("vertex"),
-                "Slang vertex shader stem should end with Vertex or vertex: {}",
-                shader
-            );
-        } else {
-            assert!(
-                shader.ends_with(".vert"),
-                "GLSL vertex shader should have .vert extension: {}",
-                shader
-            );
-        }
+    for shader in &vertex_shaders {
+        assert!(
+            shader.ends_with(".slang"),
+            "Slang vertex shader should have .slang extension: {}",
+            shader
+        );
+        let stem = Path::new(shader).file_stem().unwrap().to_str().unwrap();
+        assert!(
+            stem.ends_with("Vertex") || stem.ends_with("vertex"),
+            "Slang vertex shader stem should end with Vertex or vertex: {}",
+            shader
+        );
     }
 }
 
 #[test]
 fn test_fragment_shader_extension() {
     let fragment_shaders = [
-        ("shaders/model/fragment.slang", true),
-        ("shaders/gbuffer/fragment.slang", true),
-        ("shaders/postprocess/compositeFragment.slang", true),
-        ("shaders/editor/gridFragment.slang", true),
-        ("shaders/editor/gizmoFragment.slang", true),
-        ("shaders/editor/imguiFragment.slang", true),
-        ("shaders/editor/boneFragment.slang", true),
+        "shaders/model/fragment.slang",
+        "shaders/gbuffer/fragment.slang",
+        "shaders/postprocess/compositeFragment.slang",
+        "shaders/editor/gridFragment.slang",
+        "shaders/editor/gizmoFragment.slang",
+        "shaders/editor/imguiFragment.slang",
+        "shaders/editor/boneFragment.slang",
     ];
 
-    for (shader, is_slang) in &fragment_shaders {
-        if *is_slang {
-            assert!(
-                shader.ends_with(".slang"),
-                "Slang fragment shader should have .slang extension: {}",
-                shader
-            );
-            let stem = Path::new(shader).file_stem().unwrap().to_str().unwrap();
-            assert!(
-                stem.ends_with("Fragment") || stem.ends_with("fragment"),
-                "Slang fragment shader stem should end with Fragment or fragment: {}",
-                shader
-            );
-        } else {
-            assert!(
-                shader.ends_with(".frag"),
-                "GLSL fragment shader should have .frag extension: {}",
-                shader
-            );
-        }
+    for shader in &fragment_shaders {
+        assert!(
+            shader.ends_with(".slang"),
+            "Slang fragment shader should have .slang extension: {}",
+            shader
+        );
+        let stem = Path::new(shader).file_stem().unwrap().to_str().unwrap();
+        assert!(
+            stem.ends_with("Fragment") || stem.ends_with("fragment"),
+            "Slang fragment shader stem should end with Fragment or fragment: {}",
+            shader
+        );
     }
 }
 
 #[test]
 fn test_compute_shader_extension() {
-    let compute_shaders = [("shaders/raytracing/rayQueryShadowCompute.slang", true)];
+    let compute_shaders = ["shaders/raytracing/rayQueryShadowCompute.slang"];
 
-    for (shader, is_slang) in &compute_shaders {
-        if *is_slang {
-            assert!(
-                shader.ends_with(".slang"),
-                "Slang compute shader should have .slang extension: {}",
-                shader
-            );
-            let stem = Path::new(shader).file_stem().unwrap().to_str().unwrap();
-            assert!(
-                stem.ends_with("Compute") || stem.ends_with("compute"),
-                "Slang compute shader stem should end with Compute or compute: {}",
-                shader
-            );
-        } else {
-            assert!(
-                shader.ends_with(".comp"),
-                "GLSL compute shader should have .comp extension: {}",
-                shader
-            );
-        }
+    for shader in &compute_shaders {
+        assert!(
+            shader.ends_with(".slang"),
+            "Slang compute shader should have .slang extension: {}",
+            shader
+        );
+        let stem = Path::new(shader).file_stem().unwrap().to_str().unwrap();
+        assert!(
+            stem.ends_with("Compute") || stem.ends_with("compute"),
+            "Slang compute shader stem should end with Compute or compute: {}",
+            shader
+        );
     }
 }
-
-const SHADER_SOURCE_EXTENSIONS: [&str; 8] = [
-    "vert", "frag", "comp", "geom", "rchit", "rmiss", "rgen", "rint",
-];
 
 fn count_compiled_shaders(directory: &Path) -> usize {
     let entries = fs::read_dir(directory)
@@ -244,11 +216,7 @@ fn count_shader_sources(directory: &Path) -> usize {
                 return count_shader_sources(&path);
             }
 
-            let extension = path.extension().and_then(|e| e.to_str());
-            let is_glsl = extension.is_some_and(|ext| SHADER_SOURCE_EXTENSIONS.contains(&ext));
-            let is_slang = extension == Some("slang");
-
-            usize::from(is_glsl || is_slang)
+            usize::from(path.extension() == Some("slang".as_ref()))
         })
         .sum()
 }

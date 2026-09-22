@@ -1,5 +1,5 @@
 use super::*;
-use crate::analytic_manifest::{glsl_float_constant, glsl_int_constant, glsl_source};
+use crate::analytic_manifest::{float_constant, int_constant, shader_source};
 use crate::volume::{MODULATION_CELLS, PUFFS_PER_RAY, RAY_MAX_KNOTS};
 use crate::wind::analytic::eddy::{EDDY_FADE_END, EDDY_FADE_START, EDDY_OCTAVE_COUNT};
 use crate::wind::analytic::integral::ACTIVE_CELLS_MIN;
@@ -909,12 +909,12 @@ fn truncated_ray_9_plus_puffs_analytical_leq_midpoint() {
     );
 }
 
-fn wind_glsl_source(relative_path: &str) -> String {
-    glsl_source("wind/include", relative_path)
+fn wind_shader_source(relative_path: &str) -> String {
+    shader_source("wind/include", relative_path)
 }
 
-fn shared_glsl_source(relative_path: &str) -> String {
-    glsl_source("include", relative_path)
+fn shared_shader_source(relative_path: &str) -> String {
+    shader_source("include", relative_path)
 }
 
 fn shell_only_params() -> WindShellParams {
@@ -999,61 +999,59 @@ fn shadow_radial_extent_covers_the_shell_and_every_puff() {
 }
 
 #[test]
-fn glsl_shadow_volume_extents_match_the_rust_constants() {
-    let source = wind_glsl_source("shadow_volume.glsl");
+fn shader_shadow_volume_extents_match_the_rust_constants() {
+    let source = wind_shader_source("shadow_volume.slang");
     assert_eq!(
-        glsl_int_constant(&source, "SHADOW_VOLUME_RADIAL"),
+        int_constant(&source, "RADIAL"),
         WIND_SHADOW_VOLUME_RADIAL as i64
     );
     assert_eq!(
-        glsl_int_constant(&source, "SHADOW_VOLUME_HEIGHT"),
+        int_constant(&source, "HEIGHT"),
         WIND_SHADOW_VOLUME_HEIGHT as i64
     );
     assert_eq!(
-        glsl_int_constant(&source, "SHADOW_VOLUME_THETA"),
+        int_constant(&source, "THETA"),
         WIND_SHADOW_VOLUME_THETA as i64
     );
     assert_eq!(
-        glsl_int_constant(&source, "SHADOW_VOLUME_SLOTS"),
+        int_constant(&source, "SLOTS"),
         WIND_SHADOW_VOLUME_SLOTS as i64
     );
 }
 
 #[test]
-fn glsl_polynomial_terms_match_the_rust_mirror_and_cover_the_piece_degree() {
-    let source = wind_glsl_source("integral.glsl");
+fn shader_polynomial_terms_match_the_rust_mirror_and_cover_the_piece_degree() {
+    let source = wind_shader_source("integral.slang");
+    let shell_source = shared_shader_source("volume_shell.slang");
 
+    assert_eq!(int_constant(&shell_source, "POLY_TERMS"), POLY_TERMS as i64);
     assert_eq!(
-        glsl_int_constant(&shared_glsl_source("polynomial.glsl"), "POLY_TERMS"),
-        POLY_TERMS as i64
-    );
-    assert_eq!(
-        glsl_int_constant(&source, "WIND_MODULATION_CELLS"),
+        int_constant(&source, "WIND_MODULATION_CELLS"),
         MODULATION_CELLS as i64
     );
     assert_eq!(
-        glsl_int_constant(&source, "WIND_ACTIVE_CELLS_MIN"),
+        int_constant(&source, "WIND_ACTIVE_CELLS_MIN"),
         ACTIVE_CELLS_MIN as i64
     );
-    let field_source = wind_glsl_source("field.glsl");
+    let field_source = wind_shader_source("field.slang");
     assert_eq!(
-        glsl_int_constant(&field_source, "WIND_EDDY_OCTAVE_COUNT"),
+        int_constant(&field_source, "WIND_EDDY_OCTAVE_COUNT"),
         EDDY_OCTAVE_COUNT as i64
     );
     assert_eq!(
-        glsl_float_constant(&field_source, "WIND_EDDY_FADE_START"),
+        float_constant(&field_source, "WIND_EDDY_FADE_START"),
         EDDY_FADE_START
     );
     assert_eq!(
-        glsl_float_constant(&field_source, "WIND_EDDY_FADE_END"),
+        float_constant(&field_source, "WIND_EDDY_FADE_END"),
         EDDY_FADE_END
     );
     assert_eq!(
-        glsl_int_constant(&shared_glsl_source("ray_knots.glsl"), "RAY_MAX_KNOTS"),
+        int_constant(&shell_source, "RAY_MAX_KNOTS"),
         RAY_MAX_KNOTS as i64
     );
     assert_eq!(
-        glsl_int_constant(&shared_glsl_source("volume_puffs.glsl"), "PUFFS_PER_RAY"),
+        int_constant(&shared_shader_source("volume_puffs.slang"), "PUFFS_PER_RAY"),
         PUFFS_PER_RAY as i64
     );
 

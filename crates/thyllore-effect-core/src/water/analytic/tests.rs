@@ -258,27 +258,26 @@ fn test_perturbed_normal_identity() {
 }
 
 #[test]
-fn test_lb_glsl_constants_match_rust() {
-    let source = crate::analytic_manifest::glsl_source("water/include", "lb.glsl");
+fn test_lb_shader_constants_match_rust() {
+    let source = crate::analytic_manifest::shader_source("water/include", "lb.slang");
 
-    let lb_mode_count = crate::analytic_manifest::glsl_int_constant(&source, "LB_MODE_COUNT");
+    let lb_mode_count = crate::analytic_manifest::int_constant(&source, "LB_MODE_COUNT");
     assert_eq!(
         lb_mode_count as usize, LAPLACE_BELTRAMI_MODE_COUNT,
-        "LB_MODE_COUNT in lb.glsl ({}) should match LAPLACE_BELTRAMI_MODE_COUNT ({})",
+        "LB_MODE_COUNT in lb.slang ({}) should match LAPLACE_BELTRAMI_MODE_COUNT ({})",
         lb_mode_count, LAPLACE_BELTRAMI_MODE_COUNT
     );
 
-    let lb_slots_per_mode =
-        crate::analytic_manifest::glsl_int_constant(&source, "LB_SLOTS_PER_MODE");
+    let lb_slots_per_mode = crate::analytic_manifest::int_constant(&source, "LB_SLOTS_PER_MODE");
     assert_eq!(
         lb_slots_per_mode as usize, LAPLACE_BELTRAMI_SLOTS_PER_MODE,
-        "LB_SLOTS_PER_MODE in lb.glsl ({}) should match LAPLACE_BELTRAMI_SLOTS_PER_MODE ({})",
+        "LB_SLOTS_PER_MODE in lb.slang ({}) should match LAPLACE_BELTRAMI_SLOTS_PER_MODE ({})",
         lb_slots_per_mode, LAPLACE_BELTRAMI_SLOTS_PER_MODE
     );
 }
 
 #[test]
-fn test_lb_glsl_functions_exist() {
+fn test_lb_shader_functions_exist() {
     crate::analytic_manifest::assert_anchors_exist(
         "water/include",
         &["waterLbCheb", "waterLbHeightAndGradient"],

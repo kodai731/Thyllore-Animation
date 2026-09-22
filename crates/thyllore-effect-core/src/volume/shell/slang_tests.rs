@@ -1,4 +1,6 @@
+// The piece-based Rust evaluation is kept as the test oracle for the Slang C ABI.
 use super::*;
+use crate::volume::slang::{shell_density_at, shell_optical_depth, shell_optical_depth_toward};
 
 const RAY_COUNT: usize = 2000;
 
@@ -118,11 +120,11 @@ where
 }
 
 #[test]
-fn optical_depth_matches_rust_mirror() {
+fn optical_depth_matches_piece_evaluation() {
     let mismatch = compare(
         "shellOpticalDepth",
         random_ray,
-        |shell, o, d| shell.optical_depth(o, d, 0.0, 50.0),
+        |shell, o, d| shell.optical_depth_mirror(o, d, 0.0, 50.0),
         |shell, o, d| shell_optical_depth(shell, o, d, 0.0, 50.0),
     );
     assert!(
@@ -133,11 +135,11 @@ fn optical_depth_matches_rust_mirror() {
 }
 
 #[test]
-fn optical_depth_toward_matches_rust_mirror() {
+fn optical_depth_toward_matches_piece_evaluation() {
     let mismatch = compare(
         "shellOpticalDepthToward",
         random_ray,
-        |shell, o, d| shell.optical_depth_toward(o, d, 1e4),
+        |shell, o, d| shell.optical_depth_toward_mirror(o, d, 1e4),
         |shell, o, d| shell_optical_depth_toward(shell, o, d, 1e4),
     );
     assert!(
@@ -148,11 +150,11 @@ fn optical_depth_toward_matches_rust_mirror() {
 }
 
 #[test]
-fn density_at_matches_rust_mirror() {
+fn density_at_matches_piece_evaluation() {
     let mismatch = compare(
         "shellDensityAt",
         random_wall_point,
-        |shell, o, _| shell.density_at(o),
+        |shell, o, _| shell.density_at_mirror(o),
         |shell, o, _| shell_density_at(shell, o),
     );
     assert!(

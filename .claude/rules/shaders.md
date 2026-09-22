@@ -11,28 +11,36 @@ paths:
 
 ## Compiling Shaders
 
-Shaders are compiled by `crates/thyllore-vulkan-core/build.rs` during `cargo build`: every shader file in `shaders/`
-is compiled to `assets/shaders/` with glslc from VulkanSDK, verified against its GLSL declarations, and reflected.
-Stale `.spv` files with no matching source are removed automatically.
+Shaders are written in Slang and compiled by `crates/thyllore-vulkan-core/build.rs` during `cargo build`: every
+`.slang` entry in `shaders/` is compiled to `assets/shaders/` with `slangc` (`SLANG_ROOT/bin/slangc`, default
+`~/.local/slang`, installed by `scripts/setup_slang.sh`) and reflected from the SPIR-V. Stale `.spv` files with no
+matching source are removed automatically. The same sources feed the CPU (`shaders/cpu/exports.slang`, linked into
+`thyllore-effect-core` by its `build.rs`) and the Blender addons (`slangc -target glsl` through
+`blender_addon/common/slang_export.py`), so the shader math has a single source.
 
 ## Shader Source Files
 
-Shader source files are located in `shaders/` and its subdirectories; `build.rs` walks the tree and mirrors each
-source directory under `assets/shaders/`, so file names only have to be unique inside their directory:
+Entry files end in a stage word that decides the stage and the `.spv` name; `build.rs` walks the tree and mirrors
+each source directory under `assets/shaders/`, so file names only have to be unique inside their directory:
 
-- `model/vertex.vert` -> `assets/shaders/model/vert.spv`
-- `model/fragment.frag` -> `assets/shaders/model/frag.spv`
-- `gbuffer/vertex.vert` -> `assets/shaders/gbuffer/vert.spv`
-- `gbuffer/fragment.frag` -> `assets/shaders/gbuffer/frag.spv`
-- `raytracing/rayQueryShadow.comp` -> `assets/shaders/raytracing/rayQueryShadowComp.spv`
-- `water/causticSplat.comp` -> `assets/shaders/water/causticSplatComp.spv`
-- etc.
+- `model/vertex.slang` -> `assets/shaders/model/vert.spv`
+- `model/fragment.slang` -> `assets/shaders/model/frag.spv`
+- `raytracing/rayQueryShadowCompute.slang` -> `assets/shaders/raytracing/rayQueryShadowComp.spv`
+- `raytracing/sceneClosestHit.slang` -> `assets/shaders/raytracing/sceneRchit.spv`
+- `water/causticSplatCompute.slang` -> `assets/shaders/water/causticSplatComp.spv`
+- etc. (`Vertex` / `Fragment` / `Compute` / `RayGen` / `Intersection` / `AnyHit` / `ClosestHit` / `Miss`)
 
-Feature-specific shaders live in a subdirectory with their own `include/` (`shaders/water/`, `shaders/water/include/`);
-shared includes live in `shaders/include/` (`common.glsl` holds `PI` / `TWO_PI` / `HALF_PI`; never re-declare them).
-glslc runs with `-I shaders`, so every `#include` is written as a path from the `shaders/` root
-(`#include "include/common.glsl"`, `#include "water/include/lb.glsl"`). `passes.toml` references stages by their
-path relative to `shaders/` (`water/resolveFragment.frag`).
+Feature-specific modules live in a subdirectory with their own `include/` (`shaders/water/include/`), shared modules in
+`shaders/include/` (`radiative_transfer.slang` holds `PI` / `TWO_PI` / `HALF_PI`; never re-declare them). Every
+non-entry file declares `module <name>;` with a feature prefix (`module water_lb;`) and is imported by its path from
+the `shaders/` root (`import "water/include/lb.slang";`). slangc resolves imports relative to the entry's directory
+first, so a feature `include/` must not reuse a shared include's file name. `passes.toml` references stages by their
+path relative to `shaders/` (`water/resolveFragment.slang`).
+
+Matrices: `mul(M, v)` is the GLSL `M * v`; chained products stay left-associative (`mul(mul(proj, view), p)`).
+`M[3]` is a row, so read a translation column with `mul(M, float4(0, 0, 0, 1))`. Effect uniform blocks that several
+passes bind at different slots are a `public static` in the effect's `component.slang`, filled once by each entry
+(`water = waterBlock;`).
 
 ## Pass Manifest (`shaders/passes.toml`)
 
@@ -46,15 +54,15 @@ generates `PassId`, `PassShaders` constants and `ALL_PASSES` into `$OUT_DIR/pass
 - Declare layouts with `ReflectedLayoutSpec::shared(SetRole::Frame)` or `ReflectedLayoutSpec::local(&TONEMAP)`.
 - `ReflectedLayoutSpec::for_role(pass, role)` derives the spec of any pass set from the manifest alone; the
   test `block_definition.rs` walks `ALL_PASSES` with it, so no Rust-side pass list exists.
-- Adding a shader = GLSL + `passes.toml` entry + its `*DescriptorSet`.
+- Adding a shader = Slang entry + `passes.toml` entry + its `*DescriptorSet`.
 
 ## Generated Binding Constants (`shader_bindings`)
 
 `thyllore-vulkan-core/build.rs` also generates `$OUT_DIR/shader_bindings.rs` from the SPIR-V reflection: one
 `pub mod <pass_name>` per pass with one `pub const <NAME>: ShaderBinding { set, binding, kind, count }` per
-descriptor, named from the GLSL identifier (`historySampler` -> `HISTORY_SAMPLER`). Two stages of one pass declaring
-the same (set, binding) under different names is a build error. No hand-written `*_BINDING: u32` constants exist;
-renaming a descriptor in GLSL breaks the Rust build at the referencing site.
+descriptor, named from the Slang identifier (`historySampler` -> `HISTORY_SAMPLER`). Two stages of one pass declaring
+the same (set, binding) with different block layouts is a build error (names may differ). No hand-written `*_BINDING: u32` constants exist;
+renaming a descriptor in Slang breaks the Rust build at the referencing site.
 
 - Write descriptors through `layout.writer(set).buffer(flame_resolve::FLAME, ..)` — the writer takes `ShaderBinding`
   and rejects a kind that the layout slot does not accept.
@@ -65,18 +73,18 @@ renaming a descriptor in GLSL breaks the Rust build at the referencing site.
   (block name, declaring stages, size); every stage must declare the identical block, so no `layout(offset = ..)`
   and no hand-written offset or size constants exist. `push_constant_range(&<pass>::PUSH_CONSTANT)` builds the
   `vk::PushConstantRange` (`effect_trace` uses it).
-- An unnamed block instance (`uniform WaterBlock { WaterUBO water; };`) is reflected under the block name
-  (`WATER_BLOCK`).
+- A `ConstantBuffer<WaterUBO> waterBlock` is reflected under its instance name (`WATER_BLOCK`); a
+  `StructuredBuffer<T>` reflects as a block whose layout, not name, must match across stages.
 
 ## Generated GPU Block Structs (`generate_gpu_blocks`)
 
-The Rust struct that mirrors a GLSL uniform or push constant block is never written by hand. It is generated from
+The Rust struct that mirrors a Slang uniform or push constant block is never written by hand. It is generated from
 the compiled SPIR-V into a checked-in file (`FlameUBO`, `WaterUBO`, `WindUBO` under
 `crates/thyllore-effect-core/src/<effect>/gpu/components/generated.rs`, `TracePush` under
 `crates/thyllore-vulkan-core/src/renderer/trace_push.rs`; the list is `GPU_BLOCK_TARGETS` in
 `thyllore-shader-manifest`).
 
-After changing such a block in GLSL:
+After changing such a block in Slang:
 
 ```bash
 cargo build                                                    # compiles the SPIR-V the generator reads
@@ -86,9 +94,9 @@ cargo run -p thyllore-shader-manifest --bin generate_gpu_blocks
 Then fix the Rust call sites that construct the struct. The `block_definition` golden test fails with this command
 in its message whenever a checked-in file is stale, so forgetting the step cannot pass the tests.
 
-Fields shared by a uniform block and a `buffer_reference` are declared once as a GLSL `struct` in the effect's
-`include/ubo.glsl` and wrapped by both; the generator finds such a struct through the wrapping block, so the Rust
-struct keeps the struct's name. Adding a block = a `GpuBlockTarget` entry, a `pub mod` for the output file, and
+The block struct is declared once in the effect's `include/component.slang` and bound as `ConstantBuffer<T>` or read
+through a `T*` device address; the generator finds the struct through the wrapping block, so the Rust struct keeps
+the struct's name. Slang wraps `T[N]` members in `_Array_std140_*` structs, which the reflection unwraps. Adding a block = a `GpuBlockTarget` entry, a `pub mod` for the output file, and
 running the command once.
 
 ## Shader Modifications

@@ -121,7 +121,7 @@ pub enum ManifestError {
     Shape(String),
     #[error("pass `{0}` is not a valid pass name (use [a-z][a-z0-9_]*)")]
     InvalidPassName(String),
-    #[error("pass `{pass}`: `{file}` has no shader extension (.vert/.frag/.geom/.comp/.rgen/.rint/.rahit/.rchit/.rmiss)")]
+    #[error("pass `{pass}`: `{file}` is not a Slang entry (stem must end with Vertex/Fragment/Geometry/Compute/RayGen/Intersection/AnyHit/ClosestHit/Miss and use .slang)")]
     UnknownStageExtension { pass: String, file: String },
     #[error("pass `{pass}`: {reason}")]
     StageComposition { pass: String, reason: String },
@@ -338,7 +338,7 @@ fn validate_stage_composition(name: &str, stages: &[StageSource]) -> Result<(), 
     Err(ManifestError::StageComposition {
         pass: name.to_string(),
         reason: format!(
-            "stages must be one .vert + one .frag (+ optional .geom) or exactly one .comp, got {} vert / {} frag / {} geom / {} comp",
+            "stages must be one vertex + one fragment (+ optional geometry) entry or exactly one compute entry, got {} vertex / {} fragment / {} geometry / {} compute",
             vertex, fragment, geometry, compute
         ),
     })
@@ -380,11 +380,11 @@ mod tests {
 
     const VALID: &str = r#"
 [pass.model]
-stages = ["vertex.vert", "fragment.frag"]
+stages = ["vertex.slang", "fragment.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.blur]
-stages = ["blur.comp"]
+stages = ["blurCompute.slang"]
 sets = { 0 = "local" }
 "#;
 
@@ -410,7 +410,7 @@ sets = { 0 = "local" }
     #[test]
     fn rejects_duplicate_pass_names() {
         let text =
-            format!("{VALID}\n[pass.model]\nstages = [\"a.vert\", \"b.frag\"]\nsets = {{}}\n");
+            format!("{VALID}\n[pass.model]\nstages = [\"aVertex.slang\", \"bFragment.slang\"]\nsets = {{}}\n");
         assert!(matches!(
             PassManifest::parse(&text),
             Err(ManifestError::Toml(_))
@@ -419,12 +419,12 @@ sets = { 0 = "local" }
 
     #[test]
     fn rejects_bad_stage_composition() {
-        let text = "[pass.p]\nstages = [\"a.vert\"]\nsets = {}\n";
+        let text = "[pass.p]\nstages = [\"aVertex.slang\"]\nsets = {}\n";
         assert!(matches!(
             PassManifest::parse(text),
             Err(ManifestError::StageComposition { .. })
         ));
-        let text = "[pass.p]\nstages = [\"a.comp\", \"b.comp\"]\nsets = {}\n";
+        let text = "[pass.p]\nstages = [\"aCompute.slang\", \"bCompute.slang\"]\nsets = {}\n";
         assert!(matches!(
             PassManifest::parse(text),
             Err(ManifestError::StageComposition { .. })
@@ -433,7 +433,7 @@ sets = { 0 = "local" }
 
     #[test]
     fn rejects_roles_at_wrong_set() {
-        let text = "[pass.p]\nstages = [\"a.vert\", \"b.frag\"]\nsets = { 1 = \"frame\" }\n";
+        let text = "[pass.p]\nstages = [\"aVertex.slang\", \"bFragment.slang\"]\nsets = { 1 = \"frame\" }\n";
         assert_eq!(
             PassManifest::parse(text),
             Err(ManifestError::RoleAtWrongSet {
@@ -447,12 +447,12 @@ sets = { 0 = "local" }
 
     #[test]
     fn rejects_unknown_role_and_bad_pass_name() {
-        let text = "[pass.p]\nstages = [\"a.vert\", \"b.frag\"]\nsets = { 0 = \"world\" }\n";
+        let text = "[pass.p]\nstages = [\"aVertex.slang\", \"bFragment.slang\"]\nsets = { 0 = \"world\" }\n";
         assert!(matches!(
             PassManifest::parse(text),
             Err(ManifestError::UnknownSetRole { .. })
         ));
-        let text = "[pass.BadName]\nstages = [\"a.vert\", \"b.frag\"]\nsets = {}\n";
+        let text = "[pass.BadName]\nstages = [\"aVertex.slang\", \"bFragment.slang\"]\nsets = {}\n";
         assert_eq!(
             PassManifest::parse(text),
             Err(ManifestError::InvalidPassName("BadName".into()))
@@ -464,30 +464,34 @@ sets = { 0 = "local" }
         let dir =
             std::env::temp_dir().join(format!("thyllore_shader_manifest_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("vertex.vert"), "").unwrap();
-        std::fs::write(dir.join("fragment.frag"), "").unwrap();
-        std::fs::write(dir.join("blur.comp"), "").unwrap();
-        std::fs::write(dir.join("common.glsl"), "").unwrap();
+        std::fs::write(dir.join("vertex.slang"), "").unwrap();
+        std::fs::write(dir.join("fragment.slang"), "").unwrap();
+        std::fs::write(dir.join("blurCompute.slang"), "").unwrap();
+        std::fs::write(dir.join("common.txt"), "").unwrap();
 
         let manifest = PassManifest::parse(VALID).unwrap();
         assert_eq!(manifest.validate_against_sources(&dir), Ok(()));
 
         std::fs::create_dir_all(dir.join("nested")).unwrap();
-        std::fs::write(dir.join("nested/orphan.frag"), "").unwrap();
+        std::fs::write(dir.join("nested/orphanFragment.slang"), "").unwrap();
         assert_eq!(
             manifest.validate_against_sources(&dir),
-            Err(ManifestError::OrphanShader("nested/orphan.frag".into()))
+            Err(ManifestError::OrphanShader(
+                "nested/orphanFragment.slang".into()
+            ))
         );
-        std::fs::remove_file(dir.join("nested/orphan.frag")).unwrap();
+        std::fs::remove_file(dir.join("nested/orphanFragment.slang")).unwrap();
 
-        std::fs::write(dir.join("nested/blur.comp"), "").unwrap();
+        std::fs::write(dir.join("nested/blurCompute.slang"), "").unwrap();
         assert_eq!(
             manifest.validate_against_sources(&dir),
-            Err(ManifestError::OrphanShader("nested/blur.comp".into()))
+            Err(ManifestError::OrphanShader(
+                "nested/blurCompute.slang".into()
+            ))
         );
-        std::fs::remove_file(dir.join("nested/blur.comp")).unwrap();
+        std::fs::remove_file(dir.join("nested/blurCompute.slang")).unwrap();
 
-        std::fs::remove_file(dir.join("blur.comp")).unwrap();
+        std::fs::remove_file(dir.join("blurCompute.slang")).unwrap();
         assert!(matches!(
             manifest.validate_against_sources(&dir),
             Err(ManifestError::MissingSource { .. })
@@ -503,11 +507,11 @@ sets = { 0 = "local" }
         ));
         std::fs::create_dir_all(dir.join("flame")).unwrap();
         std::fs::create_dir_all(dir.join("water")).unwrap();
-        std::fs::write(dir.join("flame/blur.comp"), "").unwrap();
-        std::fs::write(dir.join("water/blur.comp"), "").unwrap();
+        std::fs::write(dir.join("flame/blurCompute.slang"), "").unwrap();
+        std::fs::write(dir.join("water/blurCompute.slang"), "").unwrap();
 
         let manifest = PassManifest::parse(
-            "[pass.flame_blur]\nstages = [\"flame/blur.comp\"]\nsets = { 0 = \"local\" }\n\n[pass.water_blur]\nstages = [\"water/blur.comp\"]\nsets = { 0 = \"local\" }\n",
+            "[pass.flame_blur]\nstages = [\"flame/blurCompute.slang\"]\nsets = { 0 = \"local\" }\n\n[pass.water_blur]\nstages = [\"water/blurCompute.slang\"]\nsets = { 0 = \"local\" }\n",
         )
         .unwrap();
         assert_eq!(manifest.validate_against_sources(&dir), Ok(()));

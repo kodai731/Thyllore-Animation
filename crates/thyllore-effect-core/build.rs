@@ -4,8 +4,10 @@ use std::process::Command;
 
 use thyllore_shader_manifest::slang_root;
 
+// shaders/cpu/exports.slang is the C ABI of the shader math; slangc emits it as C++ and cc links
+// it so the CPU side (tests, pick, Blender wheel) evaluates the same source as the GPU.
 fn generate_cpp(slang_root: &Path, shader_root: &Path, out_dir: &Path) -> PathBuf {
-    let generated = out_dir.join("volume_shell.cpp");
+    let generated = out_dir.join("shader_exports.cpp");
     let status = Command::new(slang_root.join("bin/slangc"))
         .arg(shader_root.join("cpu/exports.slang"))
         .arg("-I")
@@ -13,7 +15,7 @@ fn generate_cpp(slang_root: &Path, shader_root: &Path, out_dir: &Path) -> PathBu
         .args(["-target", "cpp", "-o"])
         .arg(&generated)
         .status()
-        .expect("slangc runs");
+        .expect("slangc runs (SLANG_ROOT/bin/slangc, default ~/.local/slang)");
     assert!(status.success(), "slangc failed on cpu/exports.slang");
     generated
 }
@@ -27,11 +29,11 @@ fn main() {
     println!("cargo:rerun-if-env-changed=SLANG_ROOT");
     println!(
         "cargo:rerun-if-changed={}",
-        shader_root.join("include/volume_shell.slang").display()
+        shader_root.join("include").display()
     );
     println!(
         "cargo:rerun-if-changed={}",
-        shader_root.join("cpu/exports.slang").display()
+        shader_root.join("cpu").display()
     );
 
     let generated = generate_cpp(&slang_root, &shader_root, &out_dir);
@@ -41,5 +43,5 @@ fn main() {
         .flag("-ffp-contract=off")
         .include(slang_root.join("include"))
         .file(generated)
-        .compile("thyllore_volume_shell_slang");
+        .compile("thyllore_shader_exports");
 }

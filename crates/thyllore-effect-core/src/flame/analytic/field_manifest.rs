@@ -197,7 +197,7 @@ pub fn flame_field_manifest_with(
 mod tests {
     use super::*;
     use crate::analytic_manifest::{
-        assert_anchors_exist, glsl_include_dir, parse_functions, strip_line_comments,
+        assert_anchors_exist, parse_functions, shader_include_dir, strip_line_comments,
     };
 
     fn effect() -> FlameEffect {
@@ -247,7 +247,7 @@ mod tests {
         assert!(s.contains("erosion-wave-table->silhouette-radius"));
     }
 
-    // Shader audit: every GLSL noise-primitive site must sit inside a declared anchor function.
+    // Shader audit: every noise-primitive site must sit inside a declared anchor function.
 
     use std::collections::BTreeMap;
 
@@ -274,14 +274,14 @@ mod tests {
             vec!["flameWaveJitterKappaScale", "flameWaveModeSum"],
         );
 
-        let dir = glsl_include_dir("flame/include");
+        let dir = shader_include_dir("flame/include");
         let mut audited_files = 0;
         let mut violations: Vec<String> = Vec::new();
         let mut found: BTreeMap<&str, Vec<String>> = BTreeMap::new();
         for entry in std::fs::read_dir(&dir).expect("shader include dir") {
             let path = entry.expect("dir entry").path();
             let name = path.file_name().unwrap().to_string_lossy().to_string();
-            if !name.ends_with(".glsl") {
+            if !name.ends_with(".slang") {
                 continue;
             }
             audited_files += 1;

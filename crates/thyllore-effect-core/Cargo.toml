@@ -27,6 +27,10 @@ thyllore-scene-core = { path = "../thyllore-scene-core" }
 thyllore-spirv-reflect = { path = "../thyllore-spirv-reflect" }
 thyllore-texture-fit-core = { path = "../thyllore-texture-fit-core" }
 
+[build-dependencies]
+cc = "1.2"
+thyllore-shader-manifest = { path = "../thyllore-shader-manifest" }
+
 [dev-dependencies]
 fastrand = "2"
 ron = "0.8"

@@ -463,38 +463,8 @@ impl World {
             .collect()
     }
 
-    pub fn query_flames(&self) -> Vec<Entity> {
-        let mut entities: Vec<Entity> = self
-            .iter_components::<crate::ecs::component::FlameEffect>()
-            .map(|(e, _)| e)
-            .collect();
-        entities.sort();
-        entities
-    }
-
-    pub fn query_winds(&self) -> Vec<Entity> {
-        let mut entities: Vec<Entity> = self
-            .iter_components::<crate::ecs::component::WindTornadoEffect>()
-            .map(|(e, _)| e)
-            .collect();
-        entities.sort();
-        entities
-    }
-
-    pub fn query_lightnings(&self) -> Vec<Entity> {
-        let mut entities: Vec<Entity> = self
-            .iter_components::<crate::ecs::component::LightningEffect>()
-            .map(|(e, _)| e)
-            .collect();
-        entities.sort();
-        entities
-    }
-
-    pub fn query_waters(&self) -> Vec<Entity> {
-        let mut entities: Vec<Entity> = self
-            .iter_components::<crate::ecs::component::WaterTorusEffect>()
-            .map(|(e, _)| e)
-            .collect();
+    pub fn entities_with<C: crate::ecs::storage::Component + 'static>(&self) -> Vec<Entity> {
+        let mut entities: Vec<Entity> = self.iter_components::<C>().map(|(e, _)| e).collect();
         entities.sort();
         entities
     }

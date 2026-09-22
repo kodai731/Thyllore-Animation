@@ -2,7 +2,6 @@ pub mod auto_exposure;
 pub mod bloom;
 pub mod composite;
 pub mod dof;
-pub mod flame;
 pub mod gbuffer;
 pub mod line_mesh_draw;
 pub mod onion_skin;
@@ -14,7 +13,6 @@ pub mod rayquery;
 pub mod storage_image;
 pub mod tonemap;
 pub mod trace_push;
-pub mod water;
 
 pub use auto_exposure::record_auto_exposure_pass;
 pub use bloom::{
@@ -26,7 +24,6 @@ pub use composite::{
     record_composite_draw, record_composite_to_hdr_pass, BACKGROUND_RADIANCE,
 };
 pub use dof::record_dof_pass;
-pub use flame::record_flame_shading_pass;
 pub use gbuffer::record_gbuffer_pass;
 pub use line_mesh_draw::{
     push_fragment_alpha_constant, record_line_mesh_draw, LineMeshDrawOptions,
@@ -40,11 +37,8 @@ pub use pass_target::{
     CoreTarget, FrameTransients, ImageStateTracker, PendingBarrier, ShaderStage, TargetAccess,
     TargetRef, TargetUse, TransientLifetimes, TransientRequest, TransientSlot,
 };
-pub use push_constants::{
-    FlamePushConstants, GBufferPushConstants, OnionSkinPushConstants, WaterPushConstants,
-};
+pub use push_constants::{GBufferPushConstants, OnionSkinPushConstants};
 pub use rayquery::record_ray_query_pass;
 pub use storage_image::{insert_storage_image_read_barrier, insert_storage_image_write_barrier};
 pub use tonemap::{begin_tonemap_render_pass, end_tonemap_render_pass, record_tonemap_draw};
 pub use trace_push::TracePush;
-pub use water::{record_water_scene_color_copy, record_water_shading_pass};

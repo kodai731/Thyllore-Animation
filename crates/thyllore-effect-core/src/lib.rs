@@ -33,5 +33,8 @@ pub use flame::bake::texture_fit as flame_texture_fit;
 pub use flame::plume as flame_plume;
 pub use flame::trail as flame_trail;
 
+#[cfg(test)]
+mod analytic_manifest;
+
 #[cfg(any(feature = "python", feature = "python-test"))]
 mod pybindings;

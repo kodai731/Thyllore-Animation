@@ -3,105 +3,105 @@
 # Set roles: frame = set 0, material = set 1, object = set 2, local = pass-owned set.
 
 [pass.model]
-stages = ["model/vertex.vert", "model/fragment.frag"]
+stages = ["model/raster.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.gbuffer]
-stages = ["gbuffer/vertex.vert", "gbuffer/fragment.frag"]
+stages = ["gbuffer/vertex.slang", "gbuffer/fragment.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.grid]
-stages = ["editor/gridVertex.vert", "editor/gridFragment.frag"]
+stages = ["editor/grid.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.gizmo]
-stages = ["editor/gizmoVertex.vert", "editor/gizmoFragment.frag"]
+stages = ["editor/gizmo.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.bone]
-stages = ["editor/boneVertex.vert", "editor/boneFragment.frag"]
+stages = ["editor/bone.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.onion_skin_ghost]
-stages = ["gbuffer/vertex.vert", "editor/onionSkinFragment.frag"]
+stages = ["gbuffer/vertex.slang", "editor/onionSkinFragment.slang"]
 sets = { 0 = "frame", 1 = "material", 2 = "object" }
 
 [pass.onion_skin_composite]
-stages = ["postprocess/tonemapVertex.vert", "editor/onionSkinCompositeFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "editor/onionSkinCompositeFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.water_resolve]
-stages = ["postprocess/tonemapVertex.vert", "water/resolveFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "water/resolveFragment.slang"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.flame_resolve]
-stages = ["postprocess/tonemapVertex.vert", "flame/resolveFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "flame/resolveFragment.slang"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.wind_resolve]
-stages = ["postprocess/tonemapVertex.vert", "wind/resolveFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "wind/resolveFragment.slang"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.lightning_resolve]
-stages = ["postprocess/tonemapVertex.vert", "lightning/resolveFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "lightning/resolveFragment.slang"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.wind_shadow_bake]
-stages = ["wind/shadowBake.comp"]
+stages = ["wind/shadowBakeCompute.slang"]
 sets = { 0 = "frame", 1 = "local" }
 
 [pass.wind_upsample]
-stages = ["postprocess/tonemapVertex.vert", "wind/upsampleFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "wind/upsampleFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.tonemap]
-stages = ["postprocess/tonemapVertex.vert", "postprocess/tonemapFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "postprocess/tonemapFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.bloom_downsample]
-stages = ["postprocess/tonemapVertex.vert", "postprocess/bloomDownsampleFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "postprocess/bloomDownsampleFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.bloom_upsample]
-stages = ["postprocess/tonemapVertex.vert", "postprocess/bloomUpsampleFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "postprocess/bloomUpsampleFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.dof]
-stages = ["postprocess/tonemapVertex.vert", "postprocess/dofFragment.frag"]
+stages = ["postprocess/tonemapVertex.slang", "postprocess/dofFragment.slang"]
 sets = { 0 = "local" }
 
 [pass.auto_exposure_histogram]
-stages = ["postprocess/autoExposureHistogram.comp"]
+stages = ["postprocess/autoExposureHistogramCompute.slang"]
 sets = { 0 = "local" }
 
 [pass.auto_exposure_average]
-stages = ["postprocess/autoExposureAverage.comp"]
+stages = ["postprocess/autoExposureAverageCompute.slang"]
 sets = { 0 = "local" }
 
 [pass.ray_query_shadow]
-stages = ["raytracing/rayQueryShadow.comp"]
+stages = ["raytracing/rayQueryShadowCompute.slang"]
 sets = { 0 = "local" }
 
 [pass.water_caustic_splat]
-stages = ["water/causticSplat.comp"]
+stages = ["water/causticSplatCompute.slang"]
 sets = { 0 = "local" }
 
 [pass.water_caustic_apply]
-stages = ["water/causticApply.comp"]
+stages = ["water/causticApplyCompute.slang"]
 sets = { 0 = "local" }
 
 [pass.composite]
-stages = ["postprocess/compositeVertex.vert", "postprocess/compositeFragment.frag"]
+stages = ["postprocess/composite.slang"]
 sets = { 0 = "local" }
 
 [pass.billboard]
-stages = ["editor/billboardVertex.vert", "editor/billboardFragment.frag"]
+stages = ["editor/billboard.slang"]
 sets = { 0 = "local" }
 
 [pass.imgui]
-stages = ["editor/imguiVertex.vert", "editor/imguiFragment.frag"]
+stages = ["editor/imgui.slang"]
 sets = { 0 = "local" }
 
 [pass.effect_trace]
-stages = ["raytracing/traceRayGen.rgen", "raytracing/traceMiss.rmiss", "raytracing/sceneClosestHit.rchit", "raytracing/torusIntersection.rint", "water/torusClosestHit.rchit"]
+stages = ["raytracing/traceRayGen.slang", "raytracing/traceMiss.slang", "raytracing/sceneClosestHit.slang", "raytracing/torusIntersection.slang", "water/torusClosestHit.slang"]
 sets = { 0 = "local" }

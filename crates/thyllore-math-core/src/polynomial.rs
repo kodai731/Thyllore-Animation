@@ -1,5 +1,5 @@
 //! Fixed-degree polynomials in a piece-local variable sigma in [0, 1] and their
-//! power-rule integrals. Mirrored by `shaders/include/polynomial.glsl`.
+//! power-rule integrals. Mirrored by the poly helpers in `shaders/include/volume_shell.slang`.
 
 pub const POLY_TERMS: usize = 16;
 

@@ -55,7 +55,7 @@ def build_flame_shader(glsl_path: str, bindings_path: str, specialization: dict[
     info.fragment_out(1, "VEC4", "outHistory")
     info.vertex_source("void main(){ fragTexCoord = pos*0.5+0.5; gl_Position = vec4(pos,0.0,1.0); }")
     info.fragment_source(
-        shader_info.push_prelude("FlamePush", ["int mode", "int stepCount", "int debugView"])
+        shader_info.push_prelude(bindings["push_constants"][0])
         + shader_info.specialize_body(body, specialization)
     )
     return gpu.shader.create_from_info(info)

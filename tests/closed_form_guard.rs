@@ -11,12 +11,12 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const PRODUCT_ENTRY: &str = "shaders/flame/resolveFragment.frag";
+const PRODUCT_ENTRY: &str = "shaders/flame/resolveFragment.slang";
 
 /// Files whose whole purpose is sample-based reference integration. They may
 /// contain lattice loops, but nothing outside this list may include them
 /// except the product entry (which dispatches debug modes at runtime).
-const SAMPLING_INCLUDES: &[&str] = &["flame/include/reference_march.glsl"];
+const SAMPLING_INCLUDES: &[&str] = &["flame/include/reference_march.slang"];
 
 const GLSL_BANNED_TOKENS: &[&str] = &["Raymarch", "raymarch", "FLAME_WAVE_SEGMENTS"];
 const RUST_BANNED_TOKENS: &[&str] = &["Raymarch", "raymarch", "lut_lerp", "[f32; 33]"];
@@ -31,7 +31,7 @@ struct Exception {
 /// Entries must still match a real occurrence; a stale entry fails the test.
 const EXCEPTION_LEDGER: &[Exception] = &[
     Exception {
-        file_suffix: "resolveFragment.frag",
+        file_suffix: "resolveFragment.slang",
         token: "Raymarch",
         reason: "runtime dispatch of push.mode 1/3 into the quarantined \
                  reference integrators; the entry routes but does not integrate",
@@ -78,8 +78,9 @@ fn parse_includes(source: &str) -> Vec<String> {
     source
         .lines()
         .filter_map(|line| {
-            let line = line.trim();
+            let line = line.trim().trim_end_matches(';');
             line.strip_prefix("#include \"")
+                .or_else(|| line.strip_prefix("import \""))
                 .and_then(|rest| rest.strip_suffix('"'))
                 .map(str::to_string)
         })

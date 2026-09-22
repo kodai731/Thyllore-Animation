@@ -9,7 +9,7 @@ impl TimedEffect for LightningEffect {
     type WorldInputs = ();
 
     fn entities(world: &World) -> Vec<Entity> {
-        world.query_lightnings()
+        world.entities_with::<LightningEffect>()
     }
 
     fn time_sources(world: &World, delta_time: f32) -> EffectTimeSources {
@@ -54,3 +54,5 @@ impl TimedEffect for LightningEffect {
 pub fn lightning_time_advance(ctx: &mut FrameContext) {
     advance_effect_time::<LightningEffect>(ctx);
 }
+
+crate::frame_prep_hook!("lightning", Advance, lightning_time_advance);

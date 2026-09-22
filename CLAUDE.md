@@ -27,45 +27,42 @@ This is a Rust-based Vulkan rendering engine with support for:
 
 ```bash
 cargo build                                             # Standard build
-cargo test                                              # Run all tests
-$env:RUST_LOG="debug"; cargo run --bin thyllore-animation   # Run with debug logging
+./run.sh engine                                         # Launch the engine (debug build, curve copilot private mode)
+./run.sh engine degrade                                 # Other copilot modes: degrade | full
+RUST_LOG=debug cargo run --bin thyllore-animation       # Direct launch with debug logging
 ```
 
-**Build with tests (recommended)**:
-
-```powershell
-.\build-with-tests.ps1            # Build and run tests, save results to log/log_test.txt
-.\build-with-tests.ps1 -Release   # Release build
-.\build-with-tests.ps1 -SkipTests # Skip tests
-```
+`run.sh` is the single entry point for every launch flavour (engine, Blender addon builds, batch runs); run
+`./run.sh` without arguments for the list. Do not build in release mode unless asked.
 
 ## Testing and Feature Flags
 
-**IMPORTANT**: The `ort` crate (ONNX Runtime) included via the `ml` feature (enabled by default) has CRT initializers
-that crash integration test binaries on Windows with `STATUS_ACCESS_VIOLATION`. This only affects integration tests
-(`tests/*.rs`), not lib tests (`cargo test --lib`).
+**IMPORTANT**: The `ort` crate (ONNX Runtime) included via the `ml` feature (enabled by default) has CRT
+initializers that can crash integration test binaries (`tests/*.rs`) at process start. Lib tests
+(`cargo test --lib`) are not affected. Always run integration tests with `--no-default-features`.
 
-**Before running tests**, check `.cargo/config.toml` for test aliases and environment settings (e.g., `ORT_DYLIB_PATH`).
+**Before running tests**, check `.cargo/config.toml` for the `ORT_DYLIB_PATH` environment setting.
 
 **How to run tests correctly**:
 
 | Command | Description |
 |---------|-------------|
-| `.\build-with-tests.ps1` | Recommended. Runs lib tests (with ml) and integration tests (without ml) correctly |
-| `cargo test --lib` | Lib tests only (144 tests, ml enabled, safe) |
-| `cargo test --test ecs_tests --no-default-features` | Integration tests (59 tests, ml disabled, safe) |
-| `cargo test --no-default-features` | All tests with ml disabled (reduces functionality but avoids crash) |
+| `cargo test --lib` | Lib tests (ml enabled, safe) |
+| `cargo test --test ecs_tests --no-default-features` | ECS integration tests (ml disabled, safe) |
+| `cargo test -p thyllore-grpc-client --no-default-features` | CI-verified integration tests |
+| `cargo test --no-default-features` | All tests with ml disabled (reduces functionality but avoids the crash) |
+| `.\build-with-tests.ps1` | Windows only: build + the three commands above, results in `log/log_test.txt` |
 
-**Do NOT run**: `cargo test --test ecs_tests` (without `--no-default-features`) — this will crash.
+**Do NOT run**: `cargo test --test ecs_tests` (without `--no-default-features`).
 
-**If a test crashes with `STATUS_ACCESS_VIOLATION`**: The cause is the `ort` (ONNX Runtime) dependency linked via the
-`ml` feature. Add `--no-default-features` to exclude it. See `${IssueHistoryPath}/FbxExportReimportIssues.md`
-Issue 4 for details.
+**If a test binary crashes before its first test runs** (`STATUS_ACCESS_VIOLATION` on Windows): the cause is the `ort` dependency linked via the `ml` feature. Add `--no-default-features`.
+See `.claude/rules/testing.md` for where tests live and the per-change local verification table.
 
 ## ECS Architecture
 
 **IMPORTANT:** MUST follow the rules defined in `.claude/rules/ecs-architecture.md` for all ECS-related code.
-This includes core ECS layer (`src/ecs/`), domain ECS modules (`src/animation/editable/`), and layer boundary rules.
+This includes the core ECS layer (`src/ecs/`), the pure domain crates (`crates/thyllore-anim-core/src/editable/`,
+`crates/thyllore-effect-core/`), and the layer boundary rules.
 
 ## Single Source of Truth
 
@@ -132,7 +129,7 @@ repository is separated to ../AnimationModelTraining
 ### Large Model Storage
 
 When downloading large ML models (HuggingFace weights, TripoSG, etc.), MUST save them to
-`${LargeModelStoragePath}`. This path is symlinked to a high-capacity drive.
+`${ModelStoragePath}` (one directory per HuggingFace repo id, see the notes in `.claude/local/paths.md`).
 Do NOT download large models to the project directory or HuggingFace default cache.
 
 ### Trained Data

@@ -472,7 +472,7 @@ pub unsafe fn create_gbuffer_render_pass(
 
     rrrender.gbuffer_render_pass = rrdevice.device.create_render_pass(&info, None)?;
 
-    log::info!("Created G-Buffer render pass with ObjectID attachment");
+    log!("Created G-Buffer render pass with ObjectID attachment");
     Ok(())
 }
 

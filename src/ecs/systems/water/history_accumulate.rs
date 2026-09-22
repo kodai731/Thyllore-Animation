@@ -4,6 +4,7 @@ use crate::ecs::resource::{
     WaterRenderSettings,
 };
 use crate::ecs::world::World;
+use crate::ecs::FrameContext;
 
 const STABLE_FRAME_HISTORY_WEIGHT: f32 = 0.85;
 
@@ -11,7 +12,7 @@ const STABLE_FRAME_HISTORY_WEIGHT: f32 = 0.85;
 /// parameters hold still. A fixed-step run never reuses history so a single-frame screenshot
 /// stays deterministic.
 pub fn accumulate_water_history(world: &mut World) {
-    let water_entities = world.query_waters();
+    let water_entities = world.entities_with::<WaterTorusEffect>();
     let count = water_entities.len();
 
     if count == 0 {
@@ -96,4 +97,10 @@ fn strip_per_frame_state(effect: &WaterTorusEffect) -> WaterTorusEffect {
 fn fixed_step_frame(world: &World) -> Option<u64> {
     let clock = world.get_resource::<FrameClock>()?;
     clock.is_fixed().then_some(clock.frame)
+}
+
+crate::frame_prep_hook!("water", Accumulate, water_accumulate);
+
+fn water_accumulate(ctx: &mut FrameContext) {
+    accumulate_water_history(&mut ctx.world);
 }

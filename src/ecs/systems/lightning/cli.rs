@@ -37,7 +37,7 @@ impl BootstrapOverrides for LightningOverrides {
         if self.preset.is_none() && self.set.is_empty() {
             return Ok(());
         }
-        for entity in world.query_lightnings() {
+        for entity in world.entities_with::<LightningEffect>() {
             let Some(mut effect) = world.get_component::<LightningEffect>(entity).cloned() else {
                 continue;
             };

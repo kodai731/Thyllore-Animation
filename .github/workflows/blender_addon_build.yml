@@ -104,6 +104,10 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup slangc
+        run: bash scripts/setup_slang.sh
+
+
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
@@ -166,6 +170,10 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup slangc
+        run: bash scripts/setup_slang.sh
+
+
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
@@ -188,6 +196,10 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup slangc
+        run: bash scripts/setup_slang.sh
+
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -224,6 +236,10 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup slangc
+        run: bash scripts/setup_slang.sh
+
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2

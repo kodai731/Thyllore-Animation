@@ -64,7 +64,7 @@ fn lightning_frame(ctx: &PassContext) -> Option<LightningFrame> {
     gpu_state.ubo.as_ref()?;
     gpu_state.segments_ubo.as_ref()?;
 
-    let mut lightnings = ctx.world.query_lightnings();
+    let mut lightnings = ctx.world.entities_with::<LightningEffect>();
     lightnings.truncate(LIGHTNING_MAX_INSTANCES);
     if lightnings.is_empty() {
         return None;

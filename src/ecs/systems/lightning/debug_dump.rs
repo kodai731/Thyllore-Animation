@@ -27,7 +27,7 @@ pub fn build_lightning_debug_record(
         .unwrap_or_else(Matrix4::identity);
 
     let lightnings: Vec<Value> = world
-        .query_lightnings()
+        .entities_with::<LightningEffect>()
         .into_iter()
         .enumerate()
         .map(|(index, entity)| build_lightning_instance_json(world, entity, index, inv_view_proj))

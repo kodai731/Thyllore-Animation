@@ -1,12 +1,15 @@
 ---
 paths:
-  - "src/animation/**"
-  - "src/loader/**"
-  - "src/scene/**"
-  - "src/app/scene_model.rs"
+  - "crates/thyllore-anim-core/**"
+  - "crates/thyllore-model-core/**"
+  - "crates/thyllore-importer-core/**"
+  - "src/ecs/systems/animation/**"
   - "src/ecs/systems/animation_*"
   - "src/ecs/systems/skeleton_*"
   - "src/ecs/systems/pose_*"
+  - "src/ecs/systems/phases/animation_phase.rs"
+  - "src/app/model/**"
+  - "src/app/scene_model.rs"
 ---
 
 # Animation System
@@ -31,13 +34,17 @@ This project supports three types of animation:
 
 ## Related Files
 
-| File                           | Role                                                           |
-|--------------------------------|----------------------------------------------------------------|
-| `src/loader/gltf/loader.rs`    | Load glTF files, parse node hierarchy and animation channels   |
-| `src/scene/animation.rs`       | Define `Skeleton`, `Bone`, `AnimationClip`, `AnimationChannel` |
-| `src/scene/render_resource.rs` | Execute animation updates in `RenderResources`                 |
-| `src/app/scene_model.rs`       | Set up resources when loading models                           |
-| `src/app/update.rs`            | Call animation updates per frame                               |
+| File                                              | Role                                                                    |
+|---------------------------------------------------|-------------------------------------------------------------------------|
+| `crates/thyllore-model-core/src/skeleton.rs`      | `Skeleton`, `Bone` (static rig data)                                    |
+| `crates/thyllore-anim-core/src/clip.rs`           | `AnimationClip`, `TransformChannel`, `compose_transform` / `decompose_transform` |
+| `crates/thyllore-anim-core/src/pose.rs`           | `SkeletonPose`, `BoneLocalPose`                                         |
+| `crates/thyllore-importer-core/src/gltf/loader.rs`| Load glTF files, parse node hierarchy and animation channels            |
+| `crates/thyllore-importer-core/src/model_result.rs` | Loader output incl. `node_animation_scale`                            |
+| `src/ecs/systems/skeleton_pose_systems.rs`        | `sample_clip_to_pose`, `compute_pose_global_transforms`, `apply_skinning` |
+| `src/ecs/systems/animation/`                      | Per-frame pipeline: `collect` → `evaluate` → `apply` → `post_process`   |
+| `src/ecs/systems/phases/animation_phase.rs`       | `run_animation_phase_ecs` / `run_animation_phase_gpu` (called from `run_frame`) |
+| `src/app/model/`, `src/app/scene_model.rs`        | Load a model into `AssetStorage` and GPU meshes                         |
 
 ## Transform Calculation Basics
 
@@ -50,13 +57,14 @@ final_vertex_position = global_transform * local_vertex_position * scale_factor
 
 - `local_transform`: Transform matrix relative to parent node
 - `global_transform`: Cumulative transform matrix from root
-- `base_vertices` / `local_vertices`: Original vertex positions in node-local coordinate space
+- `base_vertices`: Original vertex positions in node-local coordinate space (kept on the GPU mesh)
 
 ## Node Animation Processing Flow
 
-1. `AnimationClip::sample()` updates bone local transforms
-2. `compute_node_global_transforms()` copies bone transforms to nodes, computes global transforms
-3. `update_node_animation()` applies global transforms to each mesh's vertices
+1. `sample_clip_to_pose()` fills a `SkeletonPose` from the clip channels
+2. `compute_node_global_transforms()` (`animation/apply.rs`) copies bone poses to nodes and computes global transforms
+3. `prepare_node_animation()` applies each node's global transform to its mesh's `base_vertices`, then multiplies by
+   `node_animation_scale`
 
 ## Checklist When Modifying Animation
 
@@ -64,6 +72,8 @@ final_vertex_position = global_transform * local_vertex_position * scale_factor
     - Is the same scaling applied at load-time and runtime?
     - `(transform * vertex) * scale` produces DIFFERENT results than `transform * (vertex * scale)`
     - Translation component is NOT scaled in the latter case
+    - `node_animation_scale` is decided once by the importer (`model_result.rs`: 0.01 for an armature export,
+      otherwise 1.0) and applied after the transform
 
 2. **Coordinate System**
     - glTF uses Y-up, right-handed coordinate system
@@ -75,66 +85,12 @@ final_vertex_position = global_transform * local_vertex_position * scale_factor
 
 4. **Rest Pose Handling**
     - When animation channels are missing, maintain current bone transform
-    - Use values decomposed from original local_transform, NOT default values (0,0,0)
+    - Use values decomposed from original local_transform (`decompose_transform`), NOT default values (0,0,0)
 
-## Past Issues and Solutions
+## Bones are not entities
 
-### Scale Factor Mismatch Issue (2026-01)
-
-**Symptoms**: Mesh scatters/explodes during node animation
-
-**Root Cause**:
-
-- Model with Armature node having 100x scale (exported from Blender)
-- Loader applied 0.01 scale to `local_vertices`
-- Runtime transform calculation didn't apply the same scale, causing position mismatch
-
-**Solution**:
-
-1. `loader.rs`: Clone `local_vertices` without scaling
-2. `render_resource.rs`: Add `node_animation_scale` field
-3. `update_node_animation()`: Apply scale AFTER transform
-
-### Rest Pose Value Missing Issue
-
-**Symptoms**: Some bones snap to origin during animation playback
-
-**Root Cause**: Default values (0,0,0) used for bones without animation channels
-
-**Solution**: Use `decompose_transform()` to extract TRS values from current local_transform as defaults
-
-## Transform Matrix Decomposition (Extract TRS)
-
-```rust
-fn decompose_transform(m: &Matrix4<f32>) -> (Vector3<f32>, Quaternion<f32>, Vector3<f32>) {
-    let translation = Vector3::new(m[3][0], m[3][1], m[3][2]);
-
-    let sx = (m[0][0] * m[0][0] + m[0][1] * m[0][1] + m[0][2] * m[0][2]).sqrt();
-    let sy = (m[1][0] * m[1][0] + m[1][1] * m[1][1] + m[1][2] * m[1][2]).sqrt();
-    let sz = (m[2][0] * m[2][0] + m[2][1] * m[2][1] + m[2][2] * m[2][2]).sqrt();
-    let scale = Vector3::new(sx, sy, sz);
-
-    let rot_matrix = Matrix3::new(
-        m[0][0] / sx, m[0][1] / sx, m[0][2] / sx,
-        m[1][0] / sy, m[1][1] / sy, m[1][2] / sy,
-        m[2][0] / sz, m[2][1] / sz, m[2][2] / sz,
-    );
-    let rotation = Quaternion::from(rot_matrix);
-
-    (translation, rotation, scale)
-}
-```
-
-## Transform Matrix Composition (TRS -> Matrix4)
-
-```rust
-fn compose_transform(t: Vector3<f32>, r: Quaternion<f32>, s: Vector3<f32>) -> Matrix4<f32> {
-    let rotation_matrix = Matrix4::from(r);
-    let scale_matrix = Matrix4::from_nonuniform_scale(s.x, s.y, s.z);
-    let translation_matrix = Matrix4::from_translation(t);
-    translation_matrix * rotation_matrix * scale_matrix
-}
-```
+Bones are `Skeleton.bones: Vec<Bone>` identified by `BoneId`; see `ecs-architecture.md`. The editable
+(keyframe) domain is `crates/thyllore-anim-core/src/editable/` with the `components/` + `systems/` split.
 
 ## Reference Links
 

@@ -1,6 +1,6 @@
 ---
 name: ecs-architecture-checker
-description: "Use this agent when code changes involve ECS (Entity-Component-System) architecture patterns, including adding or modifying components, resources, systems, bundles, queries, or world interactions. This agent verifies that the code follows the project's ECS design principles inspired by Bevy Engine.\\n\\nExamples:\\n\\n<example>\\nContext: The user has just added a new component file to the ECS module.\\nuser: \"Transform コンポーネントに velocity フィールドを追加して\"\\nassistant: \"Transform に velocity を追加しました。\"\\n<commentary>\\nECS のコンポーネントが変更されたため、Task ツールを使って ecs-architecture-checker エージェントを起動し、ECS アーキテクチャルールへの準拠を確認します。\\n</commentary>\\nassistant: \"ecs-architecture-checker エージェントを使って、ECS アーキテクチャの整合性を確認します。\"\\n</example>\\n\\n<example>\\nContext: The user has created a new system function.\\nuser: \"エンティティの移動を処理する movement system を作って\"\\nassistant: \"movement system を作成しました。\"\\n<commentary>\\n新しいシステム関数が追加されたため、Task ツールを使って ecs-architecture-checker エージェントを起動し、ECS の設計原則に従っているか検証します。\\n</commentary>\\nassistant: \"ecs-architecture-checker エージェントで ECS 設計原則への準拠を確認します。\"\\n</example>\\n\\n<example>\\nContext: The user added a new resource struct.\\nuser: \"選択状態を管理する SelectionState リソースを追加して\"\\nassistant: \"SelectionState リソースを追加しました。\"\\n<commentary>\\n新しいリソースが追加されたため、Task ツールを使って ecs-architecture-checker エージェントを起動し、リソースが動的データのみを保持しているか、静的設定が混入していないかを確認します。\\n</commentary>\\nassistant: \"ecs-architecture-checker エージェントで、リソースの設計が正しいか確認します。\"\\n</example>"
+description: "Use this agent when code changes involve ECS (Entity-Component-System) architecture patterns, including adding or modifying components, resources, systems, spawn functions, queries, or world interactions. This agent verifies that the code follows the project's ECS design principles inspired by Bevy Engine.\\n\\nExamples:\\n\\n<example>\\nContext: The user has just added a new component file to the ECS module.\\nuser: \"Transform コンポーネントに velocity フィールドを追加して\"\\nassistant: \"Transform に velocity を追加しました。\"\\n<commentary>\\nECS のコンポーネントが変更されたため、Task ツールを使って ecs-architecture-checker エージェントを起動し、ECS アーキテクチャルールへの準拠を確認します。\\n</commentary>\\nassistant: \"ecs-architecture-checker エージェントを使って、ECS アーキテクチャの整合性を確認します。\"\\n</example>\\n\\n<example>\\nContext: The user has created a new system function.\\nuser: \"エンティティの移動を処理する movement system を作って\"\\nassistant: \"movement system を作成しました。\"\\n<commentary>\\n新しいシステム関数が追加されたため、Task ツールを使って ecs-architecture-checker エージェントを起動し、ECS の設計原則に従っているか検証します。\\n</commentary>\\nassistant: \"ecs-architecture-checker エージェントで ECS 設計原則への準拠を確認します。\"\\n</example>\\n\\n<example>\\nContext: The user added a new resource struct.\\nuser: \"選択状態を管理する SelectionState リソースを追加して\"\\nassistant: \"SelectionState リソースを追加しました。\"\\n<commentary>\\n新しいリソースが追加されたため、Task ツールを使って ecs-architecture-checker エージェントを起動し、リソースが動的データのみを保持しているか、静的設定が混入していないかを確認します。\\n</commentary>\\nassistant: \"ecs-architecture-checker エージェントで、リソースの設計が正しいか確認します。\"\\n</example>"
 tools: Read, Grep, Glob
 model: sonnet
 ---
@@ -38,11 +38,10 @@ established patterns and rules.
 ### Directory Structure
 
 - Components: `src/ecs/component/` — Data-only structs, no behavior
-- Bundles: `src/ecs/bundle/` — Predefined component combinations
 - Resources: `src/ecs/resource/` — Global dynamic state only (changes per frame)
 - Systems: `src/ecs/systems/` — Pure functions implementing behavior/logic
 - World: `src/ecs/world.rs` — Entity and resource container
-- Queries: `src/ecs/query.rs` — Entity filtering functions
+- Queries: `src/ecs/query/` — Query builder, filters, tuple fetch; `query_*` helper functions live in the owning system file
 - `mod.rs` files must ONLY contain module declarations, NO definitions or implementations
 
 ### Design Principles
@@ -86,18 +85,17 @@ VIOLATION - these MUST be system functions:
 - Must operate on components and resources passed as parameters
 - Must be placed in `src/ecs/systems/`
 
-### Bundle Rules
+### Spawning Rules
 
-- Predefined combinations of components for common entity types
-- Must include appropriate marker components for querying
-- Must be placed in `src/ecs/bundle/`
-- Data-only (same ALLOWED/VIOLATION rules as Components apply to impl blocks)
+- There is no `bundle/` directory: an entity is spawned by a `spawn_*` system in the owning domain
+  (`src/ecs/systems/<effect>/spawn.rs`, `mesh_systems.rs`, ...) that inserts the component set
+- Spawned entities must include the marker components their queries rely on
 
 ### Query Rules
 
 - Use query functions instead of storing entity IDs directly
 - Query by marker components
-- Must be placed in `src/ecs/query.rs` or `src/ecs/query/`
+- Query infrastructure lives in `src/ecs/query/`; `query_*` helpers next to the systems that use them
 
 ### Access Patterns
 
@@ -144,7 +142,7 @@ When reviewing code, check each of the following:
 4. **System Function Naming**: Do system functions follow `<domain>_<action>` naming?
 5. **Resource Appropriateness**: Are resources truly dynamic per-frame state?
 6. **Component Purity**: Are components pure data structs without behavioral methods?
-7. **Bundle Completeness**: Do bundles include marker components for querying?
+7. **Spawn Completeness**: Do `spawn_*` systems insert the marker components their queries rely on?
 8. **Query Usage**: Are queries used instead of hardcoded entity IDs?
 9. **Single Source of Truth**: Is there any data duplication that could cause inconsistency?
 10. **Self-Explanatory Names**: Are variable, function, and type names self-descriptive?

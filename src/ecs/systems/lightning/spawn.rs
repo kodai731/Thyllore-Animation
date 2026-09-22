@@ -2,9 +2,41 @@ use crate::asset::AssetStorage;
 use crate::ecs::component::{LightningEffect, LIGHTNING_DOMAIN};
 use crate::ecs::resource::HierarchyState;
 use crate::ecs::world::{Entity, Transform, World};
+use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
 
 pub const DEFAULT_LIGHTNING_NAME: &str = "Lightning";
+
+pub const LIGHTNING_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
+    key: "lightning",
+    max_instances: thyllore_effect_core::LIGHTNING_MAX_INSTANCES,
+    spawn: spawn_lightning_instance,
+    entities: lightning_entities,
+    default_in_empty_scene: false,
+};
+
+crate::effect_spawn_hook!(LIGHTNING_SPAWN_HOOK);
+
+fn lightning_entities(world: &World) -> Vec<Entity> {
+    world.entities_with::<LightningEffect>()
+}
+
+fn spawn_lightning_instance(
+    world: &mut World,
+    assets: &mut AssetStorage,
+    ordinal: usize,
+) -> Entity {
+    let effect = LightningEffect {
+        position: cgmath::Vector3::new(2.5 * ordinal as f32, 0.0, 0.0),
+        ..LightningEffect::default()
+    };
+    spawn_lightning_with_clip(
+        world,
+        assets,
+        &format!("{DEFAULT_LIGHTNING_NAME} {}", ordinal + 1),
+        effect,
+    )
+}
 
 pub fn spawn_lightning(world: &mut World, name: &str, effect: LightningEffect) -> Entity {
     spawn_scene_owner(world, name, effect)
@@ -39,7 +71,7 @@ pub fn resolve_selected_lightning(world: &World) -> Option<Entity> {
         }
     }
 
-    world.query_lightnings().first().copied()
+    world.entities_with::<LightningEffect>().first().copied()
 }
 
 pub fn write_lightning_transform(

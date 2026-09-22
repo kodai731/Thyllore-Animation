@@ -6,7 +6,7 @@ use cgmath::{InnerSpace, Vector3};
 /// Nearest lightning whose bounding sphere the ray enters, with the distance at which it enters.
 pub fn find_lightning_by_pick_ray(world: &World, ray: &PickRay) -> Option<(Entity, f32)> {
     world
-        .query_lightnings()
+        .entities_with::<LightningEffect>()
         .into_iter()
         .filter_map(|entity| {
             let effect = world.get_component::<LightningEffect>(entity)?;

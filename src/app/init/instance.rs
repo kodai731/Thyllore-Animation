@@ -234,7 +234,7 @@ impl App {
         // resources must exist before it is applied. Registration is idempotent and runs again below.
         Self::register_editor_resources(&mut data);
         Self::register_post_processing_resources(&mut data);
-        Self::apply_loaded_scene(&mut data, loaded_scene);
+        Self::apply_loaded_scene(&mut data, loaded_scene)?;
         data.raytracing.command_pool = rrcommand_pool.command_pool;
         if let Err(e) = Self::create_ray_tracing_pipelines_with_resources(
             &instance,
@@ -332,6 +332,10 @@ impl App {
             .insert_resource(crate::hooks::scene_resource::SceneResourceHooks::collect()?);
         data.ecs_world
             .insert_resource(crate::hooks::model_load::ModelLoadHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::frame_prep::FramePrepHooks::collect()?);
+        data.ecs_world
+            .insert_resource(crate::hooks::effect_spawn::EffectSpawnHooks::collect()?);
         Ok(())
     }
     unsafe fn initialize_graphics_and_ecs(
@@ -822,13 +826,11 @@ impl App {
             .allocate_descriptor_sets(rrdevice, rrswapchain)
             .context("Failed to allocate billboard descriptor sets")?;
 
-        if let Some(ref billboard_texture) = billboard_data.render_state.texture {
-            billboard_data
-                .render_state
-                .descriptor_set
-                .update_descriptor_sets(rrdevice, rrswapchain, billboard_texture)
-                .context("Failed to update billboard descriptor sets")?;
-        }
+        billboard_data
+            .render_state
+            .descriptor_set
+            .update_descriptor_sets(rrdevice, rrswapchain)
+            .context("Failed to update billboard descriptor sets")?;
 
         let billboard_pipeline = RRPipeline::new_billboard(
             rrdevice,
@@ -903,7 +905,7 @@ impl App {
             crate::scene::LoadedScene,
             Vec<crate::animation::editable::EditableAnimationClip>,
         )>,
-    ) {
+    ) -> anyhow::Result<()> {
         let mut scene_state = SceneState::new();
         if let Some((scene_path, scene, clips)) = loaded_scene {
             crate::ecs::systems::clip_library_systems::clip_library_register_loaded(
@@ -935,14 +937,13 @@ impl App {
 
             scene_state.set_from_loaded(scene_path, scene.scene.metadata.clone());
         } else {
-            crate::ecs::systems::spawn_flame_with_clip(
+            crate::hooks::effect_spawn::spawn_empty_scene_defaults(
                 &mut data.ecs_world,
                 &mut data.ecs_assets,
-                crate::ecs::systems::DEFAULT_FLAME_NAME,
-                crate::ecs::component::FlameEffect::default(),
             );
         }
         data.ecs_world.insert_resource(scene_state);
+        Ok(())
     }
 
     unsafe fn build_grid_mesh(
@@ -1034,7 +1035,7 @@ impl App {
         }
 
         let flags = if cfg!(target_os = "macos") && entry.version()? >= PORTABILITY_MACOS_VERSION {
-            log::info!("Enabling extensions for macOS portability.");
+            log!("Enabling extensions for macOS portability.");
             extensions.push(
                 vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_EXTENSION
                     .name

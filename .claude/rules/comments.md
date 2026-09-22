@@ -3,7 +3,6 @@ paths:
   - "src/**"
   - "crates/**"
   - "shaders/**"
-  - "build.rs"
 ---
 
 # Comments

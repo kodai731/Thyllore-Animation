@@ -165,8 +165,17 @@ unsafe fn resize_wind_render_targets(ctx: &mut EffectContext) -> Result<()> {
     let Some(mut targets) = ctx.world.get_resource_mut::<WindRenderTargets>() else {
         return Ok(());
     };
-    destroy_render_targets(&mut targets, &ctx.rrdevice.device);
-    *targets = create_wind_render_targets(ctx.instance, ctx.rrdevice, width, height, hdr_view)?;
+    ctx.rrdevice
+        .device
+        .destroy_framebuffer(targets.framebuffer, None);
+    targets.framebuffer = create_framebuffer(
+        ctx.rrdevice,
+        targets.render_pass,
+        hdr_view,
+        vk::Extent2D { width, height },
+    )?;
+    targets.width = width;
+    targets.height = height;
 
     let Some(mut gpu_state) = ctx.world.get_resource_mut::<WindGpuState>() else {
         return Ok(());
@@ -174,10 +183,6 @@ unsafe fn resize_wind_render_targets(ctx: &mut EffectContext) -> Result<()> {
     gpu_state.upsample_bound.forget();
     if let Some(descriptor) = gpu_state.resolve_descriptor.as_ref() {
         descriptor.update_scene_depth(ctx.rrdevice, scene_depth_view)?;
-        descriptor.update_shadow_volume(ctx.rrdevice, &targets.shadow_volume)?;
-    }
-    if let Some(descriptor) = gpu_state.shadow_bake_descriptor.as_ref() {
-        descriptor.update_shadow_volume(ctx.rrdevice, &targets.shadow_volume)?;
     }
     Ok(())
 }

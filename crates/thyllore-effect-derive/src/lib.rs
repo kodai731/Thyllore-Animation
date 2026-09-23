@@ -172,7 +172,7 @@ fn parse_persist_attribute(attr: &syn::Attribute) -> Result<PersistAttributes> {
         } else if meta.path.is_ident("default") {
             persist.default = Some(meta.value()?.parse()?);
         } else if meta.path.is_ident("scalars") {
-            persist.scalars = Some(meta.value()?.parse()?);
+            persist.scalars = Some(parse_persist_scalars(&meta)?);
         } else if meta.path.is_ident("name") {
             persist.name = Some(meta.value()?.parse()?);
         } else if meta.path.is_ident("path") {
@@ -201,11 +201,44 @@ fn parse_persist_attribute(attr: &syn::Attribute) -> Result<PersistAttributes> {
         }
     }
 
-    if persist.name.is_some() && persist.path.is_none() {
-        return Err(Error::new_spanned(attr, "persist `name` requires `path`"));
+    if persist.name.is_some() && persist.path.is_none() && persist.get.is_none() {
+        return Err(Error::new_spanned(
+            attr,
+            "persist `name` requires `path` or `get` / `set`",
+        ));
     }
 
     Ok(persist)
+}
+
+fn parse_persist_scalars(meta: &syn::meta::ParseNestedMeta) -> Result<PersistScalars> {
+    if meta.input.peek(syn::Token![=]) {
+        return Ok(PersistScalars::Channels(meta.value()?.parse()?));
+    }
+
+    let mut aliases = Vec::new();
+    meta.parse_nested_meta(|alias_meta| {
+        let Some(name) = alias_meta.path.get_ident().cloned() else {
+            return Err(alias_meta.error("scalar alias must be an identifier"));
+        };
+        aliases.push((name, alias_meta.value()?.parse()?));
+        Ok(())
+    })?;
+
+    Ok(PersistScalars::Aliases(aliases))
+}
+
+fn expand_persist_scalars(scalars: PersistScalars) -> proc_macro2::TokenStream {
+    match scalars {
+        PersistScalars::Channels(channels) => quote!(, scalars: #channels),
+        PersistScalars::Aliases(aliases) => {
+            let entries = aliases.iter().map(|(name, path)| {
+                let accessors = expand_path_accessors(path);
+                quote!(#name: { #accessors })
+            });
+            quote!(, scalars { #(#entries),* })
+        }
+    }
 }
 
 fn expand_path_accessors(path: &syn::LitStr) -> proc_macro2::TokenStream {
@@ -262,7 +295,7 @@ fn expand_persisted_entry(
     };
 
     let def = persist.default.map(|def| quote!(, default: #def));
-    let scalars = persist.scalars.map(|channels| quote!(, scalars: #channels));
+    let scalars = persist.scalars.map(expand_persist_scalars);
     let ui = persist
         .ui
         .map(|ui| expand_ui(&entry_ident, ui))
@@ -430,10 +463,15 @@ struct PersistAttributes {
     get: Option<syn::Path>,
     set: Option<syn::Path>,
     default: Option<syn::Expr>,
-    scalars: Option<syn::Ident>,
+    scalars: Option<PersistScalars>,
     name: Option<syn::Ident>,
     path: Option<syn::LitStr>,
     ui: Option<UiAttributes>,
+}
+
+enum PersistScalars {
+    Channels(syn::Ident),
+    Aliases(Vec<(syn::Ident, syn::LitStr)>),
 }
 
 #[derive(Default)]
@@ -943,6 +981,21 @@ mod tests {
         );
         assert!(
             expanded.contains("color : [f32 ; 3] = Frame { get : read_color , set : write_color }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_name_with_get_set_and_scalar_aliases() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Frame, name = wind_direction, as = [f32; 2], get = read_wind, set = write_wind, scalars(wind_x = \"wind.direction.x\", wind_z = \"wind.direction.y\"))]
+                pub wind: Wind,
+            }",
+        );
+        assert!(
+            expanded.contains("wind_direction : [f32 ; 2] = Frame { get : read_wind , set : write_wind , scalars { wind_x : { get : | e | e . wind . direction . x , set : | e , v | e . wind . direction . x = v } , wind_z : { get : | e | e . wind . direction . y , set : | e , v | e . wind . direction . y = v } } }"),
             "{expanded}"
         );
     }

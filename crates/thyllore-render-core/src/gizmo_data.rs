@@ -97,4 +97,5 @@ pub struct LightGizmoData {
     pub draggable: GizmoDraggable,
     pub drag_active: bool,
     pub vertical_lines: LineMesh,
+    pub pending_uploads: usize,
 }

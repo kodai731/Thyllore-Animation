@@ -121,6 +121,13 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
     );
 
     let t = Instant::now();
+    upload_light_gizmo_if_changed(ctx)?;
+    sub.insert(
+        "light_gizmo".to_string(),
+        t.elapsed().as_secs_f32() * 1000.0,
+    );
+
+    let t = Instant::now();
     crate::ecs::systems::gizmo_systems::run_vertical_lines_update(ctx)?;
     sub.insert(
         "vertical_lines".to_string(),
@@ -131,6 +138,25 @@ pub unsafe fn run_render_prep_phase(ctx: &mut FrameContext) -> Result<()> {
         .insert_resource(crate::ecs::resource::RenderPrepSubTimings { timings: sub });
 
     crate::ecs::systems::raytracing_systems::refresh_tlas_mesh_transforms(ctx)?;
+
+    Ok(())
+}
+
+unsafe fn upload_light_gizmo_if_changed(ctx: &mut FrameContext) -> Result<()> {
+    if ctx.light_gizmo().pending_uploads == 0 {
+        return Ok(());
+    }
+
+    let mut mesh = ctx.light_gizmo().mesh.clone();
+    {
+        let frame_slot = ctx.frame_slot;
+        let mut backend = ctx.create_backend();
+        backend.update_or_create_line_buffers(&mut mesh, frame_slot)?;
+    }
+
+    let mut light_gizmo = ctx.light_gizmo_mut();
+    light_gizmo.mesh = mesh;
+    light_gizmo.pending_uploads -= 1;
 
     Ok(())
 }

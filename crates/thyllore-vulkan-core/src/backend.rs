@@ -169,15 +169,6 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         Ok(())
     }
 
-    unsafe fn update_gizmo_vertex_buffer(&self, mesh: &LineMesh) -> Result<()> {
-        self.buffer_registry.update_vertex_buffer(
-            self.device,
-            mesh.current_vertex_buffer_handle(),
-            &mesh.vertices,
-        )?;
-        Ok(())
-    }
-
     unsafe fn destroy_gizmo_buffers(&mut self, mesh: &mut LineMesh) {
         for slot in 0..FRAMES_IN_FLIGHT {
             if mesh.vertex_buffer_handles[slot].is_valid() {

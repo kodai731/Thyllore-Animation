@@ -85,6 +85,7 @@ pub fn create_light_gizmo(position: Vector3<f32>) -> LightGizmoData {
         draggable: GizmoDraggable::default(),
         drag_active: false,
         vertical_lines: LineMesh::default(),
+        pending_uploads: 0,
     }
 }
 
@@ -281,30 +282,34 @@ pub fn gizmo_update_position_with_constraint(
     }
 }
 
-pub fn gizmo_update_selection_color(mesh: &mut LineMesh, selectable: &GizmoSelectable) {
+pub fn gizmo_update_selection_color(mesh: &mut LineMesh, selectable: &GizmoSelectable) -> bool {
     let yellow = [1.0, 1.0, 0.0];
     let highlight = [1.0, 1.0, 0.5];
 
-    mesh.vertices[0].color = yellow;
-    mesh.vertices[1].color = [1.0, 0.0, 0.0];
-    mesh.vertices[2].color = [0.0, 1.0, 0.0];
-    mesh.vertices[3].color = [0.0, 0.0, 1.0];
+    let mut new_colors: [[f32; 3]; 4] = [yellow, [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
 
     match selectable.selected_axis {
         GizmoAxis::None => {}
         GizmoAxis::Center => {
-            mesh.vertices[0].color = highlight;
+            new_colors[0] = highlight;
         }
         GizmoAxis::X => {
-            mesh.vertices[1].color = [1.0, 0.5, 0.0];
+            new_colors[1] = [1.0, 0.5, 0.0];
         }
         GizmoAxis::Y => {
-            mesh.vertices[2].color = [0.5, 1.0, 0.0];
+            new_colors[2] = [0.5, 1.0, 0.0];
         }
         GizmoAxis::Z => {
-            mesh.vertices[3].color = [0.0, 0.5, 1.0];
+            new_colors[3] = [0.0, 0.5, 1.0];
         }
     }
+
+    let mut changed = false;
+    for (vertex, color) in mesh.vertices.iter_mut().zip(new_colors) {
+        changed |= vertex.color != color;
+        vertex.color = color;
+    }
+    changed
 }
 
 pub unsafe fn gizmo_create_buffers(
@@ -314,13 +319,6 @@ pub unsafe fn gizmo_create_buffers(
     memory_type: BufferMemoryType,
 ) -> Result<()> {
     backend.create_gizmo_buffers(mesh, frame_slot, memory_type)
-}
-
-pub unsafe fn gizmo_update_vertex_buffer(
-    mesh: &LineMesh,
-    backend: &dyn RenderBackend,
-) -> Result<()> {
-    backend.update_gizmo_vertex_buffer(mesh)
 }
 
 pub unsafe fn gizmo_destroy_buffers(mesh: &mut LineMesh, backend: &mut dyn RenderBackend) {
@@ -412,4 +410,24 @@ pub unsafe fn gizmo_destroy_vertical_line_buffers(
     backend: &mut dyn RenderBackend,
 ) {
     backend.destroy_line_buffers(lines);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_selection_color_reports_change_only_once_per_axis() {
+        let mut mesh = LineMesh {
+            vertices: vec![ColorVertex::default(); 4],
+            ..Default::default()
+        };
+        let selectable = GizmoSelectable {
+            is_selected: true,
+            selected_axis: GizmoAxis::X,
+        };
+
+        assert!(gizmo_update_selection_color(&mut mesh, &selectable));
+        assert!(!gizmo_update_selection_color(&mut mesh, &selectable));
+    }
 }

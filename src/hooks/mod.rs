@@ -1,5 +1,6 @@
 pub mod batch_capture;
 pub mod bootstrap;
+pub mod dropped_file;
 pub mod effect;
 pub mod effect_defaults;
 pub mod effect_spawn;

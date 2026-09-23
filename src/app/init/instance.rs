@@ -425,8 +425,8 @@ impl App {
                 .msaa_samples(vk::SampleCountFlags::_1)
                 .descriptor_layouts(&render_layouts)
                 // Opaque surface inside the HDR buffer: alpha 1 marks "background fully
-                // covered", which the tonemap needs to keep the grid color. The flame
-                // composites over it afterwards with premultiplied blending.
+                // covered", which the tonemap needs to keep the grid color. Effects
+                // composite over it afterwards with premultiplied blending.
                 .blend(BlendConfig {
                     enable: true,
                     src_color_factor: vk::BlendFactor::SRC_ALPHA,

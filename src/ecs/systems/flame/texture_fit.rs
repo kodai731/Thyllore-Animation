@@ -8,6 +8,14 @@ use crate::ecs::component::{FlameBaked, FlameEffect};
 use crate::ecs::systems::flame::write_texture_fit_provenance;
 use crate::ecs::world::World;
 
+fn handle_dropped_png(world: &mut World, path: &str) {
+    world
+        .resource_mut::<crate::ecs::FlameUIState>()
+        .texture_fit_path = path.to_string();
+}
+
+crate::dropped_file_hook!("png", handle_dropped_png);
+
 /// Run a texture fit against the selected flame and write the results into
 /// its parameter and baked components. The heavy fit itself stays in
 /// render-core / texture-fit-core; this system owns the component I/O.

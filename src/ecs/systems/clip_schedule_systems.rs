@@ -92,7 +92,7 @@ pub fn clip_schedule_find_group(
 
 /// Repoint the schedule's first instance at a newly selected clip. Reselecting
 /// the clip the schedule already plays is a no-op, so user-trimmed `clip_out`
-/// (e.g. a drag-extended flame clip) survives double-click / combo reselection.
+/// (e.g. a drag-extended effect clip) survives double-click / combo reselection.
 pub fn clip_schedule_switch_source(
     schedule: &mut ClipSchedule,
     source_id: SourceClipId,

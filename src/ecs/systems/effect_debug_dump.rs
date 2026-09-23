@@ -47,7 +47,6 @@ pub fn build_scene_json(world: &World) -> Value {
     let mut scene = json!({
         "scene_path": scene_path,
         "model": model,
-        "flame_count": 0,
         "timeline": timeline,
         "debug_view": debug_view,
     });

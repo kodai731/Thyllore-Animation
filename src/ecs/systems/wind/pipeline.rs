@@ -1,7 +1,7 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::resource::{WindGpuState, WindRenderTargets};
+use crate::ecs::resource::{BoundGenerations, WindGpuState, WindRenderTargets};
 use crate::ecs::systems::wind::descriptors::{
     WindResolveDescriptorSet, WindShadowBakeDescriptorSet, WindUpsampleDescriptorSet,
 };
@@ -63,14 +63,6 @@ pub unsafe fn create_wind_gpu_state(
     .build(rrdevice, rrrender, Some(targets.extent()))?;
 
     let upsample_descriptor = WindUpsampleDescriptorSet::new(rrdevice, frames_in_flight)?;
-    for frame_slot in 0..frames_in_flight {
-        upsample_descriptor.update_image_views_at(
-            rrdevice,
-            frame_slot,
-            targets.half_color_image_view,
-            scene_depth_view,
-        )?;
-    }
     let upsample_pipeline = overlay_pipeline(
         &WIND_UPSAMPLE,
         targets.render_pass,
@@ -89,5 +81,6 @@ pub unsafe fn create_wind_gpu_state(
         shadow_bake_descriptor: Some(shadow_bake_descriptor),
         upsample_pipeline: Some(upsample_pipeline),
         upsample_descriptor: Some(upsample_descriptor),
+        upsample_bound: BoundGenerations::default(),
     })
 }

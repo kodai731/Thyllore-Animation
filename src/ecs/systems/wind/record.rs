@@ -107,6 +107,7 @@ pub unsafe fn record_wind_shadow_bake_pass(
 pub unsafe fn record_wind_half_resolve_pass(
     ctx: &FrameRenderContext,
     targets: &WindRenderTargets,
+    half_framebuffer: vk::Framebuffer,
     pipeline: &RRPipeline,
     descriptor: &WindResolveDescriptorSet,
     draws: &[WindInstanceDraw],
@@ -118,7 +119,7 @@ pub unsafe fn record_wind_half_resolve_pass(
     let half_extent = targets.half_extent();
     let pass = OverlayPass {
         render_pass: targets.half_render_pass,
-        framebuffer: targets.half_framebuffer,
+        framebuffer: half_framebuffer,
         extent: half_extent,
     };
     let frame_set = ctx.graphics.frame_set.sets[image_index];

@@ -3793,6 +3793,7 @@ version = "0.0.1"
 name = "thyllore-effect-core"
 version = "0.0.1"
 dependencies = [
+ "cc",
  "cgmath",
  "fastrand",
  "numpy",
@@ -3805,6 +3806,7 @@ dependencies = [
  "thyllore-effect-derive",
  "thyllore-math-core",
  "thyllore-scene-core",
+ "thyllore-shader-manifest",
  "thyllore-spirv-reflect",
  "thyllore-texture-fit-core",
 ]

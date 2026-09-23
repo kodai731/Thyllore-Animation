@@ -826,13 +826,11 @@ impl App {
             .allocate_descriptor_sets(rrdevice, rrswapchain)
             .context("Failed to allocate billboard descriptor sets")?;
 
-        if let Some(ref billboard_texture) = billboard_data.render_state.texture {
-            billboard_data
-                .render_state
-                .descriptor_set
-                .update_descriptor_sets(rrdevice, rrswapchain, billboard_texture)
-                .context("Failed to update billboard descriptor sets")?;
-        }
+        billboard_data
+            .render_state
+            .descriptor_set
+            .update_descriptor_sets(rrdevice, rrswapchain)
+            .context("Failed to update billboard descriptor sets")?;
 
         let billboard_pipeline = RRPipeline::new_billboard(
             rrdevice,

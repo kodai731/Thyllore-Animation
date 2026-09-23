@@ -143,6 +143,7 @@ pub fn eddy_layer_coords(
 }
 
 /// `step_ahead` is the ray step to the next cell node; zero gives the pointwise field with every octave kept.
+#[cfg(test)]
 pub fn eddy_sigma(params: &WindShellParams, local: [f32; 3], step_ahead: [f32; 3]) -> f32 {
     let reseed_period = params.eddy_reseed_period;
     let t = params.time;

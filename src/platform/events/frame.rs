@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use crate::app::frame::FrameInput;
 use crate::app::App;
 #[cfg(debug_assertions)]
 use crate::platform::ui::{build_click_debug_overlay, DebugWindowState};
@@ -7,7 +8,6 @@ use crate::platform::ui::{SceneOverlayState, StatusBarState};
 use crate::vulkanr::vulkan::*;
 
 use crate::ecs::resource::{ImGuiInputCapture, MouseInput};
-use crate::ecs::systems::phases::run_event_dispatch_phase;
 
 pub(crate) fn handle_redraw_requested(
     imgui: &mut imgui::Context,
@@ -87,35 +87,10 @@ pub(crate) fn handle_redraw_requested(
     let imgui_build_ms = imgui_build_start.elapsed().as_secs_f32() * 1000.0;
 
     unsafe {
-        process_ui_events_and_render_frame(app, window, draw_data, dt_ms, imgui_build_ms);
+        render_frame(app, window, draw_data, dt_ms, imgui_build_ms);
     }
 
     app.data.ecs_world.resource_mut::<MouseInput>().end_frame();
-}
-
-unsafe fn process_ui_events_and_render_frame(
-    app: &mut App,
-    window: &winit::window::Window,
-    draw_data: &imgui::DrawData,
-    dt_ms: f32,
-    imgui_build_ms: f32,
-) {
-    let model_bounds = app.data.graphics_resources.calculate_model_bounds();
-    let (file_events, mut commands) = run_event_dispatch_phase(
-        &mut app.data.ecs_world,
-        &mut app.data.ecs_assets,
-        model_bounds,
-    );
-    commands.extend(super::file_dialog::open_file_dialogs(&file_events, app));
-
-    app.data
-        .ecs_world
-        .resource_mut::<crate::ecs::resource::AppCommandQueue>()
-        .commands
-        .append(&mut commands);
-    app.apply_app_commands();
-
-    render_frame(app, window, draw_data, dt_ms, imgui_build_ms);
 }
 
 unsafe fn render_frame(
@@ -125,38 +100,14 @@ unsafe fn render_frame(
     dt_ms: f32,
     imgui_build_ms: f32,
 ) {
-    let frame_result = (|| -> anyhow::Result<()> {
-        let gpu_wait_start = Instant::now();
-        let image_index = app.begin_frame()?;
-        let gpu_wait_ms = gpu_wait_start.elapsed().as_secs_f32() * 1000.0;
-
-        let update_start = Instant::now();
-        app.update(image_index)?;
-        let update_ms = update_start.elapsed().as_secs_f32() * 1000.0;
-
-        let render_cpu_start = Instant::now();
-        app.render(image_index, draw_data)?;
-        let render_cpu_ms = render_cpu_start.elapsed().as_secs_f32() * 1000.0;
-
-        app.after_present(image_index)?;
-
-        app.data
-            .ecs_world
-            .insert_resource(crate::ecs::resource::CpuFrameTimings {
-                frame: app.frame as u64,
-                dt_ms,
-                stages: vec![
-                    ("imgui_build".to_string(), imgui_build_ms),
-                    ("gpu_wait".to_string(), gpu_wait_ms),
-                    ("update".to_string(), update_ms),
-                    ("render_cpu".to_string(), render_cpu_ms),
-                ],
-                imgui_vtx: draw_data.total_vtx_count as u32,
-                imgui_idx: draw_data.total_idx_count as u32,
-            });
-
-        Ok(())
-    })();
+    let frame_result = app.drive_frame(
+        FrameInput {
+            draw_data,
+            dt_ms,
+            imgui_build_ms,
+        },
+        super::file_dialog::open_file_dialogs,
+    );
 
     if let Err(e) = frame_result {
         let msg = e.to_string();

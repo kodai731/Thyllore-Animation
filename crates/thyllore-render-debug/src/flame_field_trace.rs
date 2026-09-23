@@ -14,11 +14,13 @@
 use crate::flame_fbm_mirror::fbm3;
 use cgmath::{InnerSpace, Matrix4, Vector3, Vector4};
 use serde_json::{json, Value};
+use thyllore_effect_core::flame::analytic::slang::{
+    flame_branch_burnout_mask_slang, flame_branch_pull_back_jvp_slang, flame_branch_pull_back_slang,
+};
 use thyllore_effect_core::flame_wave::{WAVE_JITTER_K, WAVE_JITTER_PHASE, WAVE_JITTER_RANK};
 use thyllore_effect_core::WallProbeView;
 use thyllore_effect_core::{
-    branch_burnout_mask, branch_pull_back, branch_pull_back_jvp, build_flame_ubo, FlameBaked,
-    FlameEffect, FlameTemporalAccum, FlameUBO,
+    build_flame_ubo, FlameBaked, FlameEffect, FlameTemporalAccum, FlameUBO,
 };
 use thyllore_math_core::{
     dot3, integrate_erf_response_linear, smooth_erf_response, ErfResponseModel,
@@ -74,7 +76,7 @@ fn glsl_fract(x: f32) -> f32 {
     x - x.floor()
 }
 
-/// Mirrors GLSL `interleavedGradientNoise` from noise.glsl.
+/// Mirrors `interleavedGradientNoise` from shaders/include/noise.slang.
 fn interleaved_gradient_noise(coord: [f32; 2]) -> f32 {
     let dot = coord[0] * 0.06711056 + coord[1] * 0.00583715;
     glsl_fract(52.9829189 * glsl_fract(dot))
@@ -92,7 +94,7 @@ fn transform_vector(matrix: &Matrix4<f32>, vector: [f32; 3]) -> [f32; 3] {
 
 const EROSION_MEAN_SHRINK: f32 = 0.0875;
 const PLATEAU_CARVE_BOOST: f32 = 1.0;
-/// Mirror of FLAME_SUPPORT_BISECTION_STEPS in radial_integral.glsl.
+/// Mirror of FLAME_SUPPORT_BISECTION_STEPS in radial_integral.slang.
 const SUPPORT_BISECTION_STEPS: usize = 8;
 const EROSION_SHELL_REF: f32 = 0.30;
 /// Fixed scan grid for mean-line shell crossings, independent of the segment
@@ -260,7 +262,7 @@ impl<'a> UboCtx<'a> {
     fn support_position(&self, p: [f32; 3], h: f32) -> ([f32; 3], f32) {
         let ps = self.meander_shifted(p, h);
         if self.u.branch_field.count > 0.5 {
-            let pulled = branch_pull_back(&self.u.branch_field, ps, self.u.time);
+            let pulled = flame_branch_pull_back_slang(&self.u, ps);
             return (pulled, pulled[1].clamp(0.0, 1.0));
         }
         (ps, h)
@@ -278,12 +280,8 @@ impl<'a> UboCtx<'a> {
             } else {
                 0.0
             };
-            let mask = inside_slab
-                * branch_burnout_mask(
-                    &self.u.branch_field,
-                    self.meander_shifted(p, h),
-                    self.u.time,
-                );
+            let mask =
+                inside_slab * flame_branch_burnout_mask_slang(&self.u, self.meander_shifted(p, h));
             node.burnout = mask;
             node.density *= mask;
         }
@@ -572,7 +570,7 @@ impl<'a> UboCtx<'a> {
             * (-self.envelope_remaining_mu(h) * self.u.tip_carve_params.inv_reach).exp()
     }
 
-    /// Mirror of flameCarveResidualOuterGate in noise_field.glsl:
+    /// Mirror of flameCarveResidualOuterGate in noise_field.slang:
     /// Hermite smoothstep from inner (pre-expanded support edge in u^2 units) to 1.0.
     /// margin <= 1.0 returns 0.0 (no boost).
     fn flame_carve_residual_outer_gate(&self, u_squared: f32) -> f32 {
@@ -780,8 +778,7 @@ impl<'a> UboCtx<'a> {
         let mut du = d;
         let mut h = h;
         if self.u.branch_field.count > 0.5 {
-            let (pulled, pulled_dir) =
-                branch_pull_back_jvp(&self.u.branch_field, pbu, du, self.u.time);
+            let (pulled, pulled_dir) = flame_branch_pull_back_jvp_slang(&self.u, pbu, du);
             pbu = pulled;
             du = pulled_dir;
             h = pulled[1].clamp(0.0, 1.0);

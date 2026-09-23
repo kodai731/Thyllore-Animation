@@ -154,7 +154,7 @@ fn test_no_hardcoded_asset_paths_outside_constants() {
         "src/vulkanr/resource/image.rs",
         "src/scene/scene_io.rs",
         "src/ecs/systems/inference_actor_systems.rs",
-        "src/ecs/systems/phases/dispatch_scene.rs",
+        "src/ecs/systems/phases/event_dispatch/scene.rs",
     ];
 
     let mut rs_files = Vec::new();

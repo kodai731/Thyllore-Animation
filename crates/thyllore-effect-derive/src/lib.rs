@@ -2,6 +2,210 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Error, Fields, Meta, Result};
 
+#[proc_macro_derive(SceneFormat, attributes(scene, persist, runtime))]
+pub fn derive_scene_format(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    expand_scene_format(&input)
+        .unwrap_or_else(Error::into_compile_error)
+        .into()
+}
+
+fn expand_scene_format(input: &DeriveInput) -> Result<proc_macro2::TokenStream> {
+    let Data::Struct(data) = &input.data else {
+        return Err(Error::new_spanned(
+            &input.ident,
+            "SceneFormat can only be derived for structs",
+        ));
+    };
+
+    let attrs = parse_scene_attributes(input)?;
+    let Some(attrs) = attrs else {
+        return Err(Error::new_spanned(
+            &input.ident,
+            "SceneFormat requires #[scene(record = ..., tag = ..., key = \"...\", tags = ...)] on the struct",
+        ));
+    };
+
+    let name = &input.ident;
+    let (_impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
+
+    let record = &attrs.record;
+    let tag = &attrs.tag;
+    let key: syn::LitStr = attrs.key;
+    let tags = &attrs.tags;
+    let snapshot = &attrs.snapshot;
+    let scalars = &attrs.scalars;
+    let ui = &attrs.ui;
+    let overwrite = &attrs.overwrite;
+
+    let persisted_entries = collect_persisted_entries(&data.fields)?;
+    let runtime_entries = collect_runtime_entries(&data.fields)?;
+
+    Ok(quote! {
+        ::thyllore_scene_core::declare_scene_format!(
+            component: #name #type_generics #where_clause,
+            record: #record,
+            tag: #tag,
+            items {
+                key: #key,
+                tags: #tags,
+                snapshot: #snapshot,
+                scalars: #scalars,
+                ui: #ui,
+                overwrite: #overwrite,
+            },
+            persisted {
+                #(#persisted_entries),*
+            },
+            runtime {
+                #(#runtime_entries),*
+            },
+        );
+    })
+}
+
+fn parse_scene_attributes(input: &DeriveInput) -> Result<Option<SceneAttributes>> {
+    for attr in input.attrs.iter().filter(|a| a.path().is_ident("scene")) {
+        let Meta::List(list) = &attr.meta else {
+            continue;
+        };
+
+        let mut record: Option<syn::Path> = None;
+        let mut tag: Option<syn::Path> = None;
+        let mut key: Option<syn::LitStr> = None;
+        let mut tags: Option<syn::Path> = None;
+        let mut snapshot: Option<syn::Path> = None;
+        let mut scalars: Option<syn::Path> = None;
+        let mut ui: Option<syn::Path> = None;
+        let mut overwrite: Option<syn::Path> = None;
+
+        list.parse_nested_meta(|meta| {
+            if meta.path.is_ident("record") {
+                record = Some(meta.value()?.parse()?);
+            } else if meta.path.is_ident("tag") {
+                tag = Some(meta.value()?.parse()?);
+            } else if meta.path.is_ident("key") {
+                key = Some(meta.value()?.parse()?);
+            } else if meta.path.is_ident("tags") {
+                tags = Some(meta.value()?.parse()?);
+            } else if meta.path.is_ident("snapshot") {
+                snapshot = Some(meta.value()?.parse()?);
+            } else if meta.path.is_ident("scalars") {
+                scalars = Some(meta.value()?.parse()?);
+            } else if meta.path.is_ident("ui") {
+                ui = Some(meta.value()?.parse()?);
+            } else if meta.path.is_ident("overwrite") {
+                overwrite = Some(meta.value()?.parse()?);
+            }
+
+            Ok(())
+        })?;
+
+        return Ok(Some(SceneAttributes {
+            record: record.ok_or_else(|| {
+                Error::new_spanned(&input.ident, "scene attribute requires `record`")
+            })?,
+            tag: tag.ok_or_else(|| {
+                Error::new_spanned(&input.ident, "scene attribute requires `tag`")
+            })?,
+            key: key.ok_or_else(|| {
+                Error::new_spanned(&input.ident, "scene attribute requires `key`")
+            })?,
+            tags: tags.ok_or_else(|| {
+                Error::new_spanned(&input.ident, "scene attribute requires `tags`")
+            })?,
+            snapshot: snapshot.ok_or_else(|| {
+                Error::new_spanned(&input.ident, "scene attribute requires `snapshot`")
+            })?,
+            scalars: scalars.ok_or_else(|| {
+                Error::new_spanned(&input.ident, "scene attribute requires `scalars`")
+            })?,
+            ui: ui
+                .ok_or_else(|| Error::new_spanned(&input.ident, "scene attribute requires `ui`"))?,
+            overwrite: overwrite.ok_or_else(|| {
+                Error::new_spanned(&input.ident, "scene attribute requires `overwrite`")
+            })?,
+        }));
+    }
+
+    Ok(None)
+}
+
+fn collect_persisted_entries(fields: &Fields) -> Result<Vec<proc_macro2::TokenStream>> {
+    let mut entries = Vec::new();
+
+    for field in fields.iter() {
+        let Some(ident) = &field.ident else {
+            continue;
+        };
+
+        for attr in field.attrs.iter().filter(|a| a.path().is_ident("persist")) {
+            let Meta::List(list) = &attr.meta else {
+                continue;
+            };
+
+            let mut owner: Option<syn::Path> = None;
+            list.parse_nested_meta(|meta| {
+                if meta.path.is_ident("owner") {
+                    owner = Some(meta.value()?.parse()?);
+                }
+                Ok(())
+            })?;
+
+            let owner = owner.unwrap_or_else(|| syn::parse_quote!(Frame));
+            let field_name = ident.clone();
+            let ty = &field.ty;
+
+            entries.push(quote! {
+                #field_name: #ty = #owner {
+                    get: |e| e.#field_name,
+                    set: |e, v| e.#field_name = v
+                }
+            });
+        }
+    }
+
+    Ok(entries)
+}
+
+fn collect_runtime_entries(fields: &Fields) -> Result<Vec<proc_macro2::TokenStream>> {
+    let mut entries = Vec::new();
+
+    for field in fields.iter() {
+        let Some(ident) = &field.ident else {
+            continue;
+        };
+
+        if !field.attrs.iter().any(|a| a.path().is_ident("runtime")) {
+            continue;
+        }
+
+        let field_name = ident.clone();
+        let ty = &field.ty;
+
+        entries.push(quote! {
+            #field_name: #ty {
+                get: |e| e.#field_name,
+                set: |e, v| e.#field_name = v
+            }
+        });
+    }
+
+    Ok(entries)
+}
+
+#[derive(Clone)]
+struct SceneAttributes {
+    record: syn::Path,
+    tag: syn::Path,
+    key: syn::LitStr,
+    tags: syn::Path,
+    snapshot: syn::Path,
+    scalars: syn::Path,
+    ui: syn::Path,
+    overwrite: syn::Path,
+}
+
 #[proc_macro_derive(UboPack, attributes(ubo))]
 pub fn derive_ubo_pack(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -231,5 +435,57 @@ mod tests {
     fn rejects_enum() {
         let input: DeriveInput = syn::parse_str("enum E { A }").expect("valid enum");
         assert!(expand_ubo_pack(&input).is_err());
+    }
+
+    fn expand_scene(source: &str) -> String {
+        let input: DeriveInput = syn::parse_str(source).expect("valid struct");
+        expand_scene_format(&input).expect("expands").to_string()
+    }
+
+    #[test]
+    fn scene_persist_field() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Frame)]
+                pub intensity: f32,
+            }",
+        );
+        assert!(
+            expanded.contains("intensity : f32 = Frame { get : | e | e . intensity , set : | e , v | e . intensity = v }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_runtime_field() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[runtime]
+                pub time: f32,
+            }",
+        );
+        assert!(
+            expanded.contains("time : f32 { get : | e | e . time , set : | e , v | e . time = v }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_missing_attribute_error() {
+        let input: DeriveInput = syn::parse_str(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                pub a: f32,
+            }",
+        )
+        .expect("valid struct");
+        let err = expand_scene_format(&input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("scene attribute requires `snapshot`"),
+            "expected snapshot error, got: {msg}"
+        );
     }
 }

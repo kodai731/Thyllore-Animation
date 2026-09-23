@@ -1,5 +1,5 @@
 use anyhow::Result;
-use cgmath::{vec3, Deg, InnerSpace, Matrix3, Vector2, Vector3};
+use cgmath::{vec3, Deg, InnerSpace, Vector2, Vector3};
 
 use crate::ecs::component::mesh::presets::{COLOR, POSITION};
 use crate::ecs::component::mesh::{MeshData, PrimitiveTopology};
@@ -84,7 +84,6 @@ pub fn create_light_gizmo(position: Vector3<f32>) -> LightGizmoData {
         selectable: GizmoSelectable::default(),
         draggable: GizmoDraggable::default(),
         drag_active: false,
-        ray_to_model: LineMesh::default(),
         vertical_lines: LineMesh::default(),
     }
 }
@@ -308,18 +307,6 @@ pub fn gizmo_update_selection_color(mesh: &mut LineMesh, selectable: &GizmoSelec
     }
 }
 
-pub fn gizmo_update_rotation(mesh: &mut LineMesh, rotation_matrix: &Matrix3<f32>) {
-    let axis_length = 0.15;
-
-    let x_axis = rotation_matrix * vec3(axis_length, 0.0, 0.0);
-    let y_axis = rotation_matrix * vec3(0.0, axis_length, 0.0);
-    let z_axis = rotation_matrix * vec3(0.0, 0.0, axis_length);
-
-    mesh.vertices[1].pos = [x_axis.x, x_axis.y, x_axis.z];
-    mesh.vertices[2].pos = [y_axis.x, y_axis.y, y_axis.z];
-    mesh.vertices[3].pos = [z_axis.x, z_axis.y, z_axis.z];
-}
-
 pub unsafe fn gizmo_create_buffers(
     mesh: &mut LineMesh,
     backend: &mut dyn RenderBackend,
@@ -338,53 +325,6 @@ pub unsafe fn gizmo_update_vertex_buffer(
 
 pub unsafe fn gizmo_destroy_buffers(mesh: &mut LineMesh, backend: &mut dyn RenderBackend) {
     backend.destroy_gizmo_buffers(mesh);
-}
-
-pub fn gizmo_update_ray_to_model(
-    ray: &mut LineMesh,
-    position: &GizmoPosition,
-    model_positions: &[Vector3<f32>],
-) {
-    if model_positions.is_empty() {
-        ray.vertices.clear();
-        ray.indices.clear();
-        return;
-    }
-
-    let gizmo_pos = position.position;
-
-    let mut closest_point = model_positions[0];
-    let mut min_distance = (closest_point - gizmo_pos).magnitude();
-
-    for pos in model_positions.iter() {
-        let distance = (*pos - gizmo_pos).magnitude();
-        if distance < min_distance {
-            min_distance = distance;
-            closest_point = *pos;
-        }
-    }
-
-    let bright_yellow = [1.0, 1.0, 0.0];
-
-    let vertex_0 = ColorVertex {
-        pos: [gizmo_pos.x, gizmo_pos.y, gizmo_pos.z],
-        color: bright_yellow,
-    };
-    let vertex_1 = ColorVertex {
-        pos: [closest_point.x, closest_point.y, closest_point.z],
-        color: bright_yellow,
-    };
-
-    ray.vertices = vec![vertex_0, vertex_1];
-    ray.indices = vec![0, 1];
-}
-
-pub unsafe fn gizmo_update_or_create_ray_buffers(
-    ray: &mut LineMesh,
-    backend: &mut dyn RenderBackend,
-    frame_slot: usize,
-) -> Result<()> {
-    backend.update_or_create_line_buffers(ray, frame_slot)
 }
 
 pub unsafe fn gizmo_destroy_ray_buffers(ray: &mut LineMesh, backend: &mut dyn RenderBackend) {

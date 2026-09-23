@@ -1,6 +1,5 @@
 use crate::lightning::analytic::{build_lightning_segments, compute_lightning_flash};
-use crate::lightning::gpu::generated::LightningUBO;
-use crate::lightning::gpu::generated_segments::LightningSegmentsUBO;
+use crate::lightning::gpu::components::{LightningSegmentsUBO, LightningUBO};
 use crate::lightning::{build_lightning_model_matrix, LightningEffect};
 use cgmath::{Matrix4, SquareMatrix};
 

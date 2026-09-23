@@ -126,7 +126,10 @@ public void lightningAccumulateSegment(
     glowCapsule.b = b;
     glowCapsule.radiusStart = r0 * glowRatio;
     glowCapsule.radiusEnd = r1 * glowRatio;
-    glowCapsule.edgeWidthQ = edgeWidthQ * glowRatio * glowRatio;
+    // The glow decays from the axis over the full radius (no interior plateau),
+    // so close-up framings read as a bright core with a fading halo.
+    float glowRadiusMax = max(r0, r1) * glowRatio;
+    glowCapsule.edgeWidthQ = glowRadiusMax * glowRadiusMax;
 
     float eGlow = capsuleRayEmission(glowCapsule, origin, dir, tNear, tFar);
 

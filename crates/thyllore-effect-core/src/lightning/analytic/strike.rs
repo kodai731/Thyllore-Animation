@@ -20,6 +20,8 @@ pub struct Segment {
     pub b: [f32; 3],
     pub r0: f32,
     pub r1: f32,
+    /// Relative envelope (branch dimming x stroke x flicker); the shader applies
+    /// `core_intensity` / `glow_intensity` on top, so this must stay O(1).
     pub intensity: f32,
 }
 
@@ -281,7 +283,7 @@ fn spawn_branches(
             let mut child_segments = Vec::new();
             let child_radius_start = effect.core_radius * effect.branch_radius_ratio;
             let child_radius_end = child_radius_start * effect.tip_radius_ratio;
-            let child_intensity = effect.core_intensity * effect.branch_intensity_ratio;
+            let child_intensity = effect.branch_intensity_ratio;
 
             emit_path(
                 &mut child_segments,
@@ -320,7 +322,7 @@ pub fn build_strike_segments(effect: &LightningEffect, seed: u32, reseed: u32) -
                 b: end_offset,
                 r0: beam_radius,
                 r1: beam_radius * tip_radius_ratio,
-                intensity: effect.core_intensity,
+                intensity: 1.0,
             },
         ) {
             return segments;
@@ -377,7 +379,7 @@ pub fn build_strike_segments(effect: &LightningEffect, seed: u32, reseed: u32) -
 
             let child_radius_start = beam_radius * effect.branch_radius_ratio;
             let child_radius_end = child_radius_start * tip_radius_ratio;
-            let child_intensity = effect.core_intensity * effect.branch_intensity_ratio;
+            let child_intensity = effect.branch_intensity_ratio;
 
             emit_path(
                 &mut segments,
@@ -438,7 +440,7 @@ pub fn build_strike_segments(effect: &LightningEffect, seed: u32, reseed: u32) -
                 &points,
                 effect.core_radius,
                 effect.core_radius * effect.tip_radius_ratio,
-                effect.core_intensity,
+                1.0,
             );
 
             if segments.len() >= LIGHTNING_MAX_SEGMENTS {

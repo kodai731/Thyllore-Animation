@@ -64,7 +64,8 @@ public float3 lightningReferenceEmission(float3 origin, float3 dir, float tNear,
             glowCapsule.b = b;
             glowCapsule.radiusStart = r0 * glowRatio;
             glowCapsule.radiusEnd = r1 * glowRatio;
-            glowCapsule.edgeWidthQ = edgeWidthQ * glowRatio * glowRatio;
+            float glowRadiusMax = max(r0, r1) * glowRatio;
+            glowCapsule.edgeWidthQ = glowRadiusMax * glowRadiusMax;
 
             float glowDensity = capsuleDensityAt(glowCapsule, p);
 

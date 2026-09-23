@@ -15,7 +15,11 @@ use thyllore_effect_core::{advance_flame_time, advance_flame_trail};
 
 use super::*;
 use crate::ecs::component::EditorDisplay;
+use crate::ecs::resource::PickRay;
+use crate::ecs::systems::object_picking_systems::resolve_closest_pick;
 use crate::ecs::world::{GlobalTransform, Name};
+use crate::hooks::pick::PickHooks;
+use cgmath::Vector3;
 
 fn spawn_default_flame(world: &mut World, name: &str) -> Entity {
     spawn_flame(world, name, FlameEffect::default())
@@ -263,4 +267,114 @@ fn engine_overrides_carry_no_flame_subsystem_flags() {
     assert!(overrides.batch_run.is_some());
     assert!(overrides.batch_play);
     assert!(overrides.debug_actions.is_empty());
+}
+
+const RAY_START_Z: f32 = -10.0;
+
+fn world_with_flame_at(x: f32) -> (World, Entity) {
+    let mut world = World::new();
+    world.insert_resource(PickHooks::collect().expect("pick hooks"));
+    let effect = FlameEffect {
+        position: Vector3::new(x, 0.0, 0.0),
+        ..FlameEffect::default()
+    };
+    let entity = spawn_flame(&mut world, "Flame", effect);
+    (world, entity)
+}
+
+fn ray_towards_origin() -> PickRay {
+    PickRay {
+        origin: Vector3::new(0.0, 0.5, RAY_START_Z),
+        direction: Vector3::new(0.0, 0.0, 1.0),
+    }
+}
+
+#[test]
+fn a_ray_through_the_flame_finds_it() {
+    let (world, flame) = world_with_flame_at(0.0);
+
+    let hit = find_flame_by_pick_ray(&world, &ray_towards_origin());
+
+    assert_eq!(hit.map(|(entity, _)| entity), Some(flame));
+}
+
+#[test]
+fn a_ray_beside_the_flame_finds_nothing() {
+    let (world, _) = world_with_flame_at(50.0);
+
+    assert!(find_flame_by_pick_ray(&world, &ray_towards_origin()).is_none());
+}
+
+#[test]
+fn the_nearest_flame_wins_when_two_overlap() {
+    let (mut world, far_flame) = world_with_flame_at(0.0);
+    let near_effect = FlameEffect {
+        position: Vector3::new(0.0, 0.0, -5.0),
+        ..FlameEffect::default()
+    };
+    let near_flame = spawn_flame(&mut world, "Flame 2", near_effect);
+
+    let hit = find_flame_by_pick_ray(&world, &ray_towards_origin());
+
+    assert_eq!(hit.map(|(entity, _)| entity), Some(near_flame));
+    assert_ne!(hit.map(|(entity, _)| entity), Some(far_flame));
+}
+
+#[test]
+fn a_surface_in_front_of_the_flame_wins() {
+    let (mut world, _) = world_with_flame_at(0.0);
+    let ray = ray_towards_origin();
+    let surface = world.entity().with_name("mesh").build();
+    let in_front_of_the_flame = [0.0, 0.5, -5.0];
+
+    let picked = resolve_closest_pick(
+        &world,
+        Some(surface),
+        Some(&ray),
+        Some(in_front_of_the_flame),
+    );
+
+    assert_eq!(picked, Some(surface));
+}
+
+#[test]
+fn a_flame_in_front_of_the_surface_wins() {
+    let (mut world, flame) = world_with_flame_at(0.0);
+    let ray = ray_towards_origin();
+    let surface = world.entity().with_name("mesh").build();
+    let behind_the_flame = [0.0, 0.5, 5.0];
+
+    let picked = resolve_closest_pick(&world, Some(surface), Some(&ray), Some(behind_the_flame));
+
+    assert_eq!(picked, Some(flame));
+}
+
+#[test]
+fn a_flame_over_the_background_is_picked() {
+    let (world, flame) = world_with_flame_at(0.0);
+
+    let picked = resolve_closest_pick(&world, None, Some(&ray_towards_origin()), None);
+
+    assert_eq!(picked, Some(flame));
+}
+
+#[test]
+fn without_a_ray_the_surface_decides() {
+    let (mut world, _) = world_with_flame_at(0.0);
+    let surface = world.entity().with_name("mesh").build();
+
+    assert_eq!(
+        resolve_closest_pick(&world, Some(surface), None, None),
+        Some(surface)
+    );
+}
+
+#[test]
+fn clicking_empty_space_selects_nothing() {
+    let (world, _) = world_with_flame_at(50.0);
+
+    assert_eq!(
+        resolve_closest_pick(&world, None, Some(&ray_towards_origin()), None),
+        None
+    );
 }

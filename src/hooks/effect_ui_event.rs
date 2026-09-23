@@ -44,7 +44,6 @@ impl EffectUiEventHooks {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ecs::systems::{FLAME_SPAWN_HOOK, WATER_SPAWN_HOOK, WIND_SPAWN_HOOK};
     use crate::hooks::effect_spawn::EffectSpawnHooks;
 
     #[test]
@@ -64,19 +63,16 @@ mod tests {
     }
 
     #[test]
-    fn ui_event_hooks_exist_for_flame_water_wind() {
+    fn ui_event_hooks_exist_for_all_spawn_hook_keys() {
+        let spawn_hooks = EffectSpawnHooks::collect().expect("spawn hooks collected");
         let ui_hooks = EffectUiEventHooks::collect();
         let ui_keys: Vec<_> = ui_hooks.iter().map(|h| h.key).collect();
 
-        for expected in &[
-            FLAME_SPAWN_HOOK.key,
-            WATER_SPAWN_HOOK.key,
-            WIND_SPAWN_HOOK.key,
-        ] {
+        for key in spawn_hooks.keys() {
             assert!(
-                ui_keys.contains(expected),
+                ui_keys.contains(&key),
                 "missing EffectUiEventHook for key {:?}",
-                expected
+                key
             );
         }
     }

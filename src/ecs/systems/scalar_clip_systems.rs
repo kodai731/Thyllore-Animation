@@ -248,6 +248,15 @@ pub(crate) mod test_support {
 
     crate::effect_spawn_hook!(PROBE_SPAWN_HOOK);
 
+    crate::effect_ui_event_hook!(PROBE_SPAWN_HOOK.key, ignore_probe_ui_command);
+
+    fn ignore_probe_ui_command(
+        _world: &mut World,
+        _assets: &mut AssetStorage,
+        _command: &dyn std::any::Any,
+    ) {
+    }
+
     fn probe_has_component(world: &World, entity: Entity) -> bool {
         world.get_component::<ProbeOwner>(entity).is_some()
     }

@@ -160,12 +160,13 @@ once the image is presented. The slots are:
 EventDispatch → run_event_dispatch_phase()   # UIEvent → World, AppCommand queue; file dialogs; apply commands
 First         → run_first_phase()            # FrameClock.frame += 1, batch schedule
 Input         → run_input_phase()            # Input handling, gizmo interaction
-Transform     → run_transform_phase_ecs()    # Camera, light gizmo, billboard (entity transforms: #195)
-Timeline      → run_timeline_phase()         # Timeline / clip schedule advance
-Animation     → run_animation_phase_ecs()    # Animation evaluation, blending, transform propagation
+View            → run_view_phase_ecs()           # Camera, light gizmo, billboard
+Timeline      → run_timeline_phase()         # Timeline / clip schedule advance, motion path sync
+Animation     → run_animation_phase_ecs()    # Animation evaluation, blending
               → run_animation_phase_gpu()    # Skinning / vertex upload
+TransformPropagate → run_transform_propagate_phase()  # Transform -> GlobalTransform, bone gizmo from propagated transforms
 OnionSkin     → run_onion_skin_phase()       # Ghost frame generation
-RenderPrep    → run_transform_phase_gpu()    # Light gizmo vertex upload (#194)
+RenderPrep    → run_view_phase_gpu()         # Light gizmo vertex upload (#194)
               → run_render_prep_phase()      # Uniforms, gizmo meshes, frame prep hooks, TLAS refresh
                 (App::render: record, submit, present)
 Last          → run_last_phase()             # Requested BatchCapture readbacks + scheduled screenshot
@@ -182,7 +183,10 @@ after).
   coordinator function
 - **Animation completes before Transform propagation**: Standard in all major engines
   (Bevy: `.before(TransformSystems::Propagate)`, Unity DOTS: animation in SimulationSystemGroup
-  before TransformSystemGroup)
+  before TransformSystemGroup). While current animation does not write to Entity Transforms (skinning
+  is calculated in model space and Entity transforms are applied in shaders via ObjectUBO), this order
+  ensures readiness for future features like node animation entityification or root motion where
+  animation would directly modify Entity Transforms.
 - **UI events are applied before the update, outputs to the platform after it**: the UI is immediate
   mode, so the events it recorded are dispatched into `World` at the start of the frame and the update
   sees them the same frame (Bevy: input and `bevy_egui` input in `PreUpdate`, Unreal: the message pump
@@ -385,4 +389,4 @@ small structural hierarchies can use optimized storage rather than full entity r
 | Module depends on types only, not logic | Flecs | Platform layer reads resources, sends events only |
 | Pure domain layer (no World dependency) | Bevy (per-crate), Flecs (module independence) | `thyllore-anim-core` / `thyllore-effect-core` have no ECS dependency |
 | Contiguous memory for bulk data | Flecs, Bevy, Unreal | `Vec<Bone>`, `Vec<Keyframe>` for animation data |
-| Animation before Transform propagation | Bevy, Unity DOTS | `run_animation_phase` before `run_transform_phase` |
+| Animation before Transform propagation | Bevy, Unity DOTS | `run_animation_phase_ecs` before `run_transform_propagate_phase` |

@@ -594,7 +594,62 @@ declare_scene_format! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use thyllore_scene_core::SceneComponent;
+    use thyllore_scene_core::{SceneComponent, UiKind};
+
+    const DEFAULT_JSON: &str = include_str!("scene_format_default.json");
+    const FLAME_UI_PARAMS_JSON: &str = include_str!("ui_params.json");
+    const FLAME_PARAMETER_OWNERSHIP_JSON: &str = include_str!("parameter_ownership.json");
+
+    #[test]
+    fn test_default_json_matches_fixture() {
+        let json = serde_json::to_string(&FlameEffect::default()).expect("serialize");
+        assert_eq!(json, DEFAULT_JSON.trim());
+    }
+
+    #[test]
+    fn test_flame_ui_params_match_fixture() {
+        let params: Vec<serde_json::Value> = FLAME_UI_PARAMS
+            .iter()
+            .map(|param| {
+                serde_json::json!({
+                    "name": param.name,
+                    "group": param.group,
+                    "label": param.label,
+                    "kind": match param.kind {
+                        UiKind::Scalar => "scalar",
+                        UiKind::Color => "color",
+                        UiKind::Absorption => "absorption",
+                    },
+                    "min": param.min,
+                    "max": param.max,
+                    "format": param.format,
+                    "tooltip": param.tooltip,
+                    "persisted": param.persisted,
+                })
+            })
+            .collect();
+        let current = serde_json::to_string(&params).expect("serialize ui params");
+        assert_eq!(current, FLAME_UI_PARAMS_JSON.trim());
+    }
+
+    #[test]
+    fn test_flame_parameter_ownership_matches_fixture() {
+        let ownership: Vec<serde_json::Value> = PARAMETER_OWNERSHIP
+            .iter()
+            .map(|(name, tag)| {
+                serde_json::json!({
+                    "name": name,
+                    "tag": match tag {
+                        ParameterOwner::Frame => "frame",
+                        ParameterOwner::Shape => "shape",
+                        ParameterOwner::Style => "style",
+                    },
+                })
+            })
+            .collect();
+        let current = serde_json::to_string(&ownership).expect("serialize ownership");
+        assert_eq!(current, FLAME_PARAMETER_OWNERSHIP_JSON.trim());
+    }
 
     #[test]
     fn test_scene_component_reflection_matches_serialized_keys() {

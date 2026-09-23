@@ -1,3 +1,4 @@
+use crate::gpu_pack::UboPack;
 use crate::water::analytic::laplace_beltrami_basis::{
     compute_laplace_beltrami_modes_cached, LAPLACE_BELTRAMI_MODE_COUNT,
     LAPLACE_BELTRAMI_SLOTS_PER_MODE,
@@ -84,46 +85,26 @@ pub fn build_water_ubo(effect: &WaterTorusEffect, frame_index: u32) -> WaterUBO 
         }
     }
 
-    WaterUBO {
+    let mut ubo = WaterUBO {
         model,
         inverse_model,
-        radii: [
-            effect.major_radius,
-            effect.minor_radius,
-            effect.caustic_strength,
-            0.0,
-        ],
-        absorption: [
-            effect.absorption[0],
-            effect.absorption[1],
-            effect.absorption[2],
-            effect.ior,
-        ],
-        flow: [
-            effect.flow_longitudinal,
-            effect.flow_meridional,
-            effect.time,
-            0.0,
-        ],
-        composite: [
-            effect.reflect_strength,
-            effect.refract_strength,
-            WATER_WAVE_MODE_COUNT as f32,
-            0.0,
-        ],
-        tint: [effect.tint[0], effect.tint[1], effect.tint[2], 0.0],
-        lighting: [
-            effect.light_intensity,
-            effect.highlight_sharpness,
-            effect.sky_brightness,
-            effect.scatter_strength,
-        ],
-        scattering: [effect.scatter_anisotropy, 0.0, 0.0, 0.0],
-        temporal: [0.0, 0.0, 0.0, 0.0],
+        radii: [0.0; 4],
+        absorption: [0.0; 4],
+        flow: [0.0; 4],
+        composite: [0.0; 4],
+        tint: [0.0; 4],
+        lighting: [0.0; 4],
+        scattering: [0.0; 4],
+        temporal: [0.0; 4],
         wave_modes,
         inv_view_proj: Matrix4::identity(),
         lb_modes: build_laplace_beltrami_modes(effect),
-    }
+    };
+
+    effect.pack(&mut ubo);
+    ubo.composite[2] = WATER_WAVE_MODE_COUNT as f32;
+
+    ubo
 }
 
 impl Default for WaterUBO {

@@ -4,8 +4,14 @@ use super::scene_format::*;
 use crate::water::ownership::WaterParameterOwner;
 
 #[derive(
-    Clone, Debug, PartialEq, thyllore_effect_derive::SceneFormat, thyllore_effect_derive::PyEffect,
+    Clone,
+    Debug,
+    PartialEq,
+    thyllore_effect_derive::UboPack,
+    thyllore_effect_derive::SceneFormat,
+    thyllore_effect_derive::PyEffect,
 )]
+#[ubo(target = crate::WaterUBO)]
 #[py_effect(presets = crate::WATER_PRESET_NAMES, apply_preset = crate::apply_water_preset)]
 #[scene(record = WaterSceneRecord, tag = WaterParameterOwner, key = "water_torus", tags = WATER_PARAMETER_OWNERSHIP, snapshot = water_parameter_snapshot, scalars = WATER_SCALAR_PARAMS, ui = WATER_UI_PARAMS, overwrite = overwrite_water_persisted_fields)]
 pub struct WaterTorusEffect {
@@ -13,16 +19,22 @@ pub struct WaterTorusEffect {
     pub position: Vector3<f32>,
     #[persist(owner = Frame, as = [f32; 4], get = water_rotation_get, set = water_rotation_set)]
     pub rotation: Quaternion<f32>,
+    #[ubo("radii.x")]
     #[persist(owner = Frame, ui(min = 0.01, max = 10.0, format = "%.2f", group = "shape"))]
     pub major_radius: f32,
+    #[ubo("radii.y")]
     #[persist(owner = Frame, ui(min = 0.01, max = 5.0, format = "%.2f", group = "shape"))]
     pub minor_radius: f32,
+    #[ubo("absorption.w")]
     #[persist(owner = Frame, ui(min = 1.0, max = 2.5, format = "%.3f", group = "optics"))]
     pub ior: f32,
+    #[ubo("absorption.xyz")]
     #[persist(owner = Frame, scalars = rgb, ui(kind = Absorption, min = 0.0, max = 10.0, format = "%.2f", tooltip = "Beer-Lambert absorption per meter; the picker shows the colour transmitted over the reference distance", group = "optics"))]
     pub absorption: [f32; 3],
+    #[ubo("flow.x")]
     #[persist(owner = Frame, ui(min = -5.0, max = 5.0, format = "%.2f", group = "flow"))]
     pub flow_longitudinal: f32,
+    #[ubo("flow.y")]
     #[persist(owner = Frame, ui(min = -5.0, max = 5.0, format = "%.2f", group = "flow"))]
     pub flow_meridional: f32,
     #[persist(owner = Frame, ui(min = 0.0, max = 1.0, format = "%.3f", group = "wave"))]
@@ -35,24 +47,34 @@ pub struct WaterTorusEffect {
     pub wave_dispersion: f32,
     #[persist(owner = Frame, ui(min = 0.0, max = 1.0, format = "%.2f", group = "wave"))]
     pub wave_lb_blend: f32,
+    #[ubo("lighting.x")]
     #[persist(owner = Frame, ui(min = 0.0, max = 20.0, format = "%.2f", group = "lighting"))]
     pub light_intensity: f32,
+    #[ubo("lighting.y")]
     #[persist(owner = Frame, ui(min = 1.0, max = 1024.0, format = "%.0f", group = "lighting"))]
     pub highlight_sharpness: f32,
+    #[ubo("lighting.z")]
     #[persist(owner = Frame, ui(min = 0.0, max = 2.0, format = "%.2f", group = "lighting"))]
     pub sky_brightness: f32,
+    #[ubo("lighting.w")]
     #[persist(owner = Frame, ui(min = 0.0, max = 10.0, format = "%.2f", group = "lighting"))]
     pub scatter_strength: f32,
+    #[ubo("scattering.x")]
     #[persist(owner = Frame, ui(min = -0.9, max = 0.9, format = "%.2f", group = "lighting"))]
     pub scatter_anisotropy: f32,
+    #[ubo("composite.x")]
     #[persist(owner = Frame, ui(min = 0.0, max = 1.0, format = "%.2f", group = "look"))]
     pub reflect_strength: f32,
+    #[ubo("composite.y")]
     #[persist(owner = Frame, ui(min = 0.0, max = 1.0, format = "%.2f", group = "look"))]
     pub refract_strength: f32,
+    #[ubo("radii.z")]
     #[persist(owner = Frame, ui(min = 0.0, max = 2.0, format = "%.2f", group = "look"))]
     pub caustic_strength: f32,
+    #[ubo("tint.xyz")]
     #[persist(owner = Frame, scalars = rgb, ui(kind = Color, min = 0.0, max = 1.0, format = "%.2f", tooltip = "Scattering tint", group = "look"))]
     pub tint: [f32; 3],
+    #[ubo("flow.z")]
     #[runtime(ui(min = 0.0, max = 100.0, format = "%.2f"))]
     pub time: f32,
     #[runtime(ui(min = 0.0, max = 4.0, format = "%.2f"))]

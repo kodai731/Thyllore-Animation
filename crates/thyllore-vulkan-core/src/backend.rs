@@ -271,6 +271,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         camera_pos: Vector3<f32>,
         light_pos: Vector3<f32>,
         light_color: Vector3<f32>,
+        lighting: thyllore_render_core::LightingParams,
         image_index: usize,
     ) -> Result<()> {
         let ubo = FrameUBO {
@@ -279,6 +280,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             camera_pos: Vector4::new(camera_pos.x, camera_pos.y, camera_pos.z, 1.0),
             light_pos: Vector4::new(light_pos.x, light_pos.y, light_pos.z, 1.0),
             light_color: Vector4::new(light_color.x, light_color.y, light_color.z, 1.0),
+            lighting: lighting.to_vec4(),
         };
 
         self.graphics
@@ -313,6 +315,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         shadow_strength: f32,
         distance_attenuation: DistanceAttenuation,
         exposure_value: f32,
+        lighting: thyllore_render_core::LightingParams,
     ) -> Result<()> {
         let Some(scene_uniform_buffer) = self.raytracing.scene_uniform_buffer.as_ref() else {
             return Ok(());
@@ -337,6 +340,10 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
             shadow_strength,
             enable_distance_attenuation: distance_attenuation.as_int(),
             exposure_value,
+            lighting: {
+                let v = lighting.to_vec4();
+                thyllore_math_core::Vec4::new(v.x, v.y, v.z, v.w)
+            },
         };
 
         scene_uniform_buffer.write_slot(&self.device, 0, &scene_data)

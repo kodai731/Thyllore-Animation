@@ -25,7 +25,7 @@ pub use settings::{
     AutoExposure, BloomSettings, DepthOfField, Exposure, LensEffects, PhysicalCameraParameters,
     ToneMapOperator, ToneMapping,
 };
-pub use ubo::{FrameUBO, MaterialUBO, ObjectUBO};
+pub use ubo::{FrameUBO, LightingParams, MaterialUBO, ObjectUBO};
 
 pub type MeshId = usize;
 pub type PipelineId = usize;

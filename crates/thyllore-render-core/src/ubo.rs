@@ -1,6 +1,34 @@
 use cgmath::{Matrix4, SquareMatrix, Vector4};
 use thyllore_spirv_reflect::declare_gpu_block;
 
+#[derive(Clone, Copy, Debug)]
+pub struct LightingParams {
+    pub ambient_intensity: f32,
+    pub attenuation_linear: f32,
+    pub attenuation_quadratic: f32,
+}
+
+impl Default for LightingParams {
+    fn default() -> Self {
+        Self {
+            ambient_intensity: 0.3,
+            attenuation_linear: 0.01,
+            attenuation_quadratic: 0.001,
+        }
+    }
+}
+
+impl LightingParams {
+    pub fn to_vec4(&self) -> Vector4<f32> {
+        Vector4::new(
+            self.ambient_intensity,
+            self.attenuation_linear,
+            self.attenuation_quadratic,
+            0.0,
+        )
+    }
+}
+
 declare_gpu_block! {
     #[derive(Clone, Debug, Copy)]
     pub struct FrameUBO {
@@ -9,6 +37,7 @@ declare_gpu_block! {
         pub camera_pos: Vector4<f32>,
         pub light_pos: Vector4<f32>,
         pub light_color: Vector4<f32>,
+        pub lighting: Vector4<f32>,
     }
 }
 
@@ -20,6 +49,7 @@ impl Default for FrameUBO {
             camera_pos: Vector4::new(0.0, 0.0, 0.0, 1.0),
             light_pos: Vector4::new(0.0, 0.0, 0.0, 1.0),
             light_color: Vector4::new(1.0, 1.0, 1.0, 1.0),
+            lighting: LightingParams::default().to_vec4(),
         }
     }
 }

@@ -50,9 +50,9 @@ float4 fragmentMain(Varyings input) : SV_Target0 {
     float3 lightDir = normalize(frame.light_pos.xyz - input.worldPos);
     float3 normal = normalize(input.normal);
 
-    float ambient = 0.2;
+    float ambient = frame.lighting.x;
     float diffuse = max(dot(normal, lightDir), 0.0);
-    float lighting = ambient + diffuse * 0.8;
+    float lighting = ambient + diffuse * (1.0 - ambient);
 
     float3 finalColor = texColor.rgb * input.color.rgb * material.base_color.rgb * lighting * frame.light_color.rgb;
     return float4(finalColor, 1.0);

@@ -30,6 +30,7 @@ struct SceneData {
     float shadowStrength;
     int enableDistanceAttenuation;
     float exposureValue;
+    float4 lighting;
 };
 
 [[vk::binding(4, 0)]] ConstantBuffer<SceneData> sceneData;
@@ -188,10 +189,10 @@ float4 fragmentMain(Varyings input, out float fragDepth : SV_Depth) : SV_Target0
 
     float attenuation = 1.0;
     if (sceneData.enableDistanceAttenuation != 0) {
-        attenuation = 1.0 / (1.0 + 0.01 * lightDistance + 0.001 * lightDistance * lightDistance);
+        attenuation = 1.0 / (1.0 + sceneData.lighting.y * lightDistance + sceneData.lighting.z * lightDistance * lightDistance);
     }
 
-    float ambient = 0.3;
+    float ambient = sceneData.lighting.x;
 
     float shadowFactor = lerp(1.0, shadowMask, sceneData.shadowStrength);
 

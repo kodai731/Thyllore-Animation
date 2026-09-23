@@ -222,12 +222,12 @@ Concretely:
   `SceneComponentHook::owner::<C>()` for a component that defines its entity (`C: SceneOwner`, the
   engine-side trait giving icon and placement, implemented in `src/ecs/component/<effect>.rs`) and
   `SceneComponentHook::attachment::<C>()` for anything restored by insertion; the type key comes from
-  `<Effect>::TYPE_KEY`, which `declare_scene_format!` generated from the `key:` item. Hooks are
+ `<Effect>::TYPE_KEY`, which comes from the effect struct's `#[scene(key = ...)]` attribute (resource: `declare_scene_format!`). Hooks are
   registered at link time (`inventory`): `scene_owner!(Effect { icon, placement, prepare_loaded? })`
   and `scene_attachment!(C)` in the component's own file both submit the hook, and
   `SceneComponentHooks::collect()` gathers every submission at app start (duplicate keys fail there).
   There is no list of scene components anywhere.
-- Adding a persisted parameter = one entry in the effect's `declare_scene_format!` table. Nothing in
+- Adding a persisted parameter = adding one `#[persist(...)]` field to the effect struct (nested via `name`/`path`/`as`). Nothing in
   `src/scene/` changes. Adding an effect = `scene_owner!` in its component file; a provenance component
   = `scene_attachment!`. Runtime-only companions (baked data, accumulators) are inserted by the effect's
   own per-frame system when missing, never by the loader.

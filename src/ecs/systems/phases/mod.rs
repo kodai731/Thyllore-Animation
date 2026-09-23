@@ -7,7 +7,7 @@ pub mod last_phase;
 pub mod onion_skin_phase;
 pub mod render_prep_phase;
 pub mod timeline_phase;
-pub mod transform_phase;
+pub mod view_phase;
 
 pub use animation_phase::*;
 pub use event_dispatch_phase::*;
@@ -17,4 +17,4 @@ pub use last_phase::*;
 pub use onion_skin_phase::*;
 pub use render_prep_phase::*;
 pub use timeline_phase::*;
-pub use transform_phase::*;
+pub use view_phase::*;

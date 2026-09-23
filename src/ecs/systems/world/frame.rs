@@ -5,7 +5,7 @@ use crate::ecs::resource::UpdatePhaseTimings;
 use crate::ecs::systems::phases::{
     collect_mesh_positions, run_animation_phase_ecs, run_animation_phase_gpu, run_first_phase,
     run_input_phase, run_onion_skin_phase, run_render_prep_phase, run_timeline_phase,
-    run_transform_phase_ecs, run_transform_phase_gpu,
+    run_view_phase_ecs, run_view_phase_gpu,
 };
 use crate::ecs::FrameContext;
 
@@ -14,7 +14,7 @@ pub enum FramePhase {
     EventDispatch,
     First,
     Input,
-    Transform,
+    View,
     Timeline,
     Animation,
     OnionSkin,
@@ -28,7 +28,7 @@ impl FramePhase {
             Self::EventDispatch => "event_dispatch",
             Self::First => "first",
             Self::Input => "input",
-            Self::Transform => "transform",
+            Self::View => "view",
             Self::Timeline => "timeline",
             Self::Animation => "animation",
             Self::OnionSkin => "onion_skin",
@@ -46,7 +46,7 @@ pub const FRAME_SCHEDULE: [FramePhase; 9] = [
     FramePhase::EventDispatch,
     FramePhase::First,
     FramePhase::Input,
-    FramePhase::Transform,
+    FramePhase::View,
     FramePhase::Timeline,
     FramePhase::Animation,
     FramePhase::OnionSkin,
@@ -109,7 +109,7 @@ unsafe fn run_update_phase(
             };
             run_input_phase(&mut ecs_ctx)?;
         }
-        FramePhase::Transform => {
+        FramePhase::View => {
             let mut ecs_ctx = EcsContext {
                 time: ctx.time,
                 delta_time: ctx.delta_time,
@@ -119,7 +119,7 @@ unsafe fn run_update_phase(
                 assets: ctx.assets,
                 mesh_positions: Vec::new(),
             };
-            run_transform_phase_ecs(&mut ecs_ctx);
+            run_view_phase_ecs(&mut ecs_ctx);
         }
         FramePhase::Timeline => {
             run_timeline_phase(ctx);
@@ -133,7 +133,7 @@ unsafe fn run_update_phase(
             run_onion_skin_phase(ctx, &carry.updated_meshes)?;
         }
         FramePhase::RenderPrep => {
-            run_transform_phase_gpu(ctx)?;
+            run_view_phase_gpu(ctx)?;
             run_render_prep_phase(ctx)?;
         }
         FramePhase::EventDispatch | FramePhase::Last => {

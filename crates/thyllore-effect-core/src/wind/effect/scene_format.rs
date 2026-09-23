@@ -476,6 +476,58 @@ mod tests {
     use super::*;
     use thyllore_scene_core::SceneComponent;
 
+    const DEFAULT_JSON: &str = include_str!("scene_format_default.json");
+    const WIND_UI_PARAMS_JSON: &str = include_str!("ui_params.json");
+    const WIND_PARAMETER_OWNERSHIP_JSON: &str = include_str!("parameter_ownership.json");
+
+    #[test]
+    fn test_default_json_matches_fixture() {
+        let json = serde_json::to_string(&WindTornadoEffect::default()).expect("serialize");
+        assert_eq!(json, DEFAULT_JSON.trim());
+    }
+
+    #[test]
+    fn test_wind_ui_params_match_fixture() {
+        let params: Vec<serde_json::Value> = WIND_UI_PARAMS
+            .iter()
+            .map(|param| {
+                serde_json::json!({
+                    "name": param.name,
+                    "group": param.group,
+                    "kind": match param.kind {
+                        thyllore_scene_core::UiKind::Scalar => "scalar",
+                        thyllore_scene_core::UiKind::Color => "color",
+                        thyllore_scene_core::UiKind::Absorption => "absorption",
+                    },
+                    "min": param.min,
+                    "max": param.max,
+                    "format": param.format,
+                    "tooltip": param.tooltip,
+                    "persisted": param.persisted,
+                })
+            })
+            .collect();
+        let current = serde_json::to_string(&params).expect("serialize ui params");
+        assert_eq!(current, WIND_UI_PARAMS_JSON.trim());
+    }
+
+    #[test]
+    fn test_wind_parameter_ownership_matches_fixture() {
+        let ownership: Vec<serde_json::Value> = WIND_PARAMETER_OWNERSHIP
+            .iter()
+            .map(|(name, tag)| {
+                serde_json::json!({
+                    "name": name,
+                    "tag": match tag {
+                        WindParameterOwner::Frame => "frame",
+                    },
+                })
+            })
+            .collect();
+        let current = serde_json::to_string(&ownership).expect("serialize ownership");
+        assert_eq!(current, WIND_PARAMETER_OWNERSHIP_JSON.trim());
+    }
+
     #[test]
     fn test_scene_component_reflection_matches_serialized_keys() {
         let value = serde_json::to_value(WindTornadoEffect::default()).expect("serialize");

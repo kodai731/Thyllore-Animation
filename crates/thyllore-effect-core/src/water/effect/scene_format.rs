@@ -267,6 +267,58 @@ mod tests {
     use super::*;
     use thyllore_scene_core::SceneComponent;
 
+    const DEFAULT_JSON: &str = include_str!("scene_format_default.json");
+    const WATER_UI_PARAMS_JSON: &str = include_str!("ui_params.json");
+    const WATER_PARAMETER_OWNERSHIP_JSON: &str = include_str!("parameter_ownership.json");
+
+    #[test]
+    fn test_default_json_matches_fixture() {
+        let json = serde_json::to_string(&WaterTorusEffect::default()).expect("serialize");
+        assert_eq!(json, DEFAULT_JSON.trim());
+    }
+
+    #[test]
+    fn test_water_ui_params_match_fixture() {
+        let params: Vec<serde_json::Value> = WATER_UI_PARAMS
+            .iter()
+            .map(|param| {
+                serde_json::json!({
+                    "name": param.name,
+                    "group": param.group,
+                    "kind": match param.kind {
+                        UiKind::Scalar => "scalar",
+                        UiKind::Color => "color",
+                        UiKind::Absorption => "absorption",
+                    },
+                    "min": param.min,
+                    "max": param.max,
+                    "format": param.format,
+                    "tooltip": param.tooltip,
+                    "persisted": param.persisted,
+                })
+            })
+            .collect();
+        let current = serde_json::to_string(&params).expect("serialize ui params");
+        assert_eq!(current, WATER_UI_PARAMS_JSON.trim());
+    }
+
+    #[test]
+    fn test_water_parameter_ownership_matches_fixture() {
+        let ownership: Vec<serde_json::Value> = WATER_PARAMETER_OWNERSHIP
+            .iter()
+            .map(|(name, tag)| {
+                serde_json::json!({
+                    "name": name,
+                    "tag": match tag {
+                        WaterParameterOwner::Frame => "frame",
+                    },
+                })
+            })
+            .collect();
+        let current = serde_json::to_string(&ownership).expect("serialize ownership");
+        assert_eq!(current, WATER_PARAMETER_OWNERSHIP_JSON.trim());
+    }
+
     #[test]
     fn test_scene_component_reflection_matches_serialized_keys() {
         let value = serde_json::to_value(WaterTorusEffect::default()).expect("serialize");

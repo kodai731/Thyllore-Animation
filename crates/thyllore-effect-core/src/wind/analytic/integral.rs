@@ -1,22 +1,24 @@
-use crate::volume::{RayKnots, RayPuffs, VolumeShell};
+#[cfg(test)]
+use crate::volume::{
+    cell_modulated_optical_depth, modulation_step, shell_and_puff_density, shell_and_puff_knots,
+    RayKnots, RayMedium, RayPuffs,
+};
+use crate::volume::{StreakModulation, VolumeShell};
+#[cfg(test)]
 use crate::wind::analytic::eddy::{eddy_sigma, EDDY_OCTAVE_COUNT};
-use crate::wind::analytic::motion::{h_top, rotation_phase, spread_offset, streak_phase, wall_amp};
+#[cfg(test)]
+use crate::wind::analytic::motion::rotation_phase;
+use crate::wind::analytic::motion::{h_top, spread_offset, streak_phase, wall_amp};
 use crate::wind::analytic::puffs::build_wind_puffs;
 use crate::wind::WindTornadoEffect;
-use cgmath::{InnerSpace, Vector3};
-use thyllore_math_core::{biweight, mix};
+#[cfg(test)]
+use cgmath::Vector3;
 
-// Mirror of shaders/wind/include/field.glsl and integral.glsl: the wall shell of
-// crate::volume::shell plus puffs, with the streak and eddy modulation sampled on a
-// ray-wide cell grid and applied linearly inside every piece.
+// Mirror of shaders/wind/include/field.slang and integral.slang: the shell, puffs, streak and
+// cell modulation of crate::volume with the tornado's parameters filled in.
 
 pub const WIND_MAX_PUFFS: usize = 96;
-// One cell grid spans the whole ray so a knot splitting a piece never moves a sample; the cell
-// length comes from the active length (shell or puff pieces) so the budget is spent on density.
-pub(crate) const MODULATION_CELLS: usize = 64;
-pub(crate) const ACTIVE_CELLS_MIN: usize = 16;
-const MODULATION_SAMPLE_FRACTION: f32 = 0.125;
-const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
+#[cfg(test)]
 const SHADOW_RAY_T_MAX: f32 = 1e4;
 const SHADOW_RADIAL_EXTENT_MARGIN: f32 = 1.25;
 
@@ -138,6 +140,105 @@ impl WindShellParams {
     pub fn active_puffs(&self) -> &[[f32; 4]] {
         &self.puffs[..self.puff_count]
     }
+
+    pub fn streak(&self) -> StreakModulation {
+        StreakModulation {
+            order: self.streak_order,
+            twist: self.streak_twist,
+            rise_time: self.streak_rise_time,
+            amplitude: self.streak_amplitude,
+        }
+    }
+
+    #[cfg(test)]
+    fn puff_sigma(&self) -> f32 {
+        self.sigma_t * self.puff_strength * self.wall_strength
+    }
+
+    /// Phase of the wall rotation at the radius of the wall at height `y`.
+    #[cfg(test)]
+    fn wall_rotation_phase(&self, y: f32) -> f32 {
+        let radius_sq = self.wall_radius(y) * self.wall_radius(y);
+        rotation_phase(
+            self.time,
+            self.circulation,
+            radius_sq,
+            self.spread_start,
+            self.spread_rate,
+        )
+    }
+}
+
+#[cfg(test)]
+pub struct WindRay {
+    shell: VolumeShell,
+    puffs: RayPuffs,
+}
+#[cfg(test)]
+impl RayMedium for WindShellParams {
+    type Ray = WindRay;
+
+    fn ray_pieces(
+        &self,
+        origin: Vector3<f32>,
+        direction: Vector3<f32>,
+        t_near: f32,
+        t_far: f32,
+    ) -> (RayKnots, WindRay) {
+        let (knots, puffs) = shell_and_puff_knots(
+            &self.shell(),
+            self.active_puffs(),
+            origin,
+            direction,
+            t_near,
+            t_far,
+        );
+        let ray = WindRay {
+            shell: self.shell(),
+            puffs,
+        };
+        (knots, ray)
+    }
+
+    fn piece_is_active(
+        &self,
+        ray: &WindRay,
+        origin: Vector3<f32>,
+        direction: Vector3<f32>,
+        s0: f32,
+        s1: f32,
+    ) -> bool {
+        ray.shell.piece_holds(origin, direction, s0, s1) || ray.puffs.piece_holds(s0, s1)
+    }
+
+    fn modulation_at(&self, point: Vector3<f32>, step_ahead: Vector3<f32>) -> f32 {
+        wind_modulation_at(self, point, step_ahead)
+    }
+
+    fn modulation_step(&self, direction: Vector3<f32>, active_length: f32) -> f32 {
+        wind_modulation_step(self, direction, active_length)
+    }
+
+    fn piece_optical_depth(
+        &self,
+        ray: &WindRay,
+        origin: Vector3<f32>,
+        direction: Vector3<f32>,
+        s0: f32,
+        s1: f32,
+        modulation: (f32, f32),
+    ) -> f32 {
+        ray.shell
+            .piece_optical_depth_modulated(origin, direction, s0, s1, modulation)
+            + ray.puffs.piece_optical_depth(
+                self.active_puffs(),
+                self.puff_sigma(),
+                origin,
+                direction,
+                s0,
+                s1,
+            )
+    }
 }
 
 /// Half width of the shadow volume's radius axis around the wall: covers the shell at its
@@ -162,37 +263,19 @@ pub fn wind_shadow_radial_extent(params: &WindShellParams) -> f32 {
     }
     (extent * SHADOW_RADIAL_EXTENT_MARGIN).max(1e-3)
 }
-
+#[cfg(test)]
 pub fn wind_density_at(params: &WindShellParams, local: Vector3<f32>) -> f32 {
-    let shell = params.shell();
-    let h = local.y / shell.height;
-    let envelope = shell.envelope_height(h);
-    if envelope <= 0.0 {
-        return 0.0;
-    }
-    let q = local.x * local.x + local.z * local.z;
-    let wall = shell.wall_at(q, h);
-
-    let mut puff_term = 0.0f32;
-    for puff in params.active_puffs() {
-        let r = puff[3];
-        if r <= 0.0 {
-            continue;
-        }
-        let dx = local.x - puff[0];
-        let dy = local.y - puff[1];
-        let dz = local.z - puff[2];
-        let u = (dx * dx + dy * dy + dz * dz) / (r * r);
-        if u < 1.0 {
-            puff_term += params.puff_strength * shell.strength * biweight(u);
-        }
-    }
-
-    shell.sigma_t * (envelope * wall + puff_term)
+    shell_and_puff_density(
+        &params.shell(),
+        params.active_puffs(),
+        params.puff_strength,
+        local,
+    )
 }
 
 /// Clamps the ray parameter interval to the wall cone frustum intersected with its
 /// height slab. False when the ray misses it.
+#[cfg(test)]
 pub fn clamp_ray_to_wind_cone(
     params: &WindShellParams,
     origin: Vector3<f32>,
@@ -211,45 +294,14 @@ pub fn clamp_ray_to_wind_cone(
     true
 }
 
-/// Shell knots plus the entry and exit of every puff the ray crosses, with the crossed puffs.
-pub fn wind_ray_knots(
-    params: &WindShellParams,
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
-    t_near: f32,
-    t_far: f32,
-) -> (RayKnots, RayPuffs) {
-    let mut knots = RayKnots::begin(t_near, t_far);
-    params
-        .shell()
-        .collect_knots(origin, direction, t_near, t_far, &mut knots);
-    let puffs = RayPuffs::collect(
-        params.active_puffs(),
-        origin,
-        direction,
-        t_near,
-        t_far,
-        &mut knots,
-    );
-    knots.sort();
-    (knots, puffs)
-}
-
+#[cfg(test)]
 pub fn wind_streak_sigma(params: &WindShellParams, local: Vector3<f32>) -> f32 {
-    let radius_sq = params.wall_radius(local.y) * params.wall_radius(local.y);
-    let rotation_phase_value = rotation_phase(
-        params.time,
-        params.circulation,
-        radius_sq,
-        params.spread_start,
-        params.spread_rate,
-    );
-    let angle = params.streak_order * (local.z.atan2(local.x) - rotation_phase_value)
-        - params.streak_twist * local.y
-        + params.streak_rise_time * local.y;
-    1.0 + params.streak_amplitude * angle.cos()
+    params
+        .streak()
+        .sigma(local, params.wall_rotation_phase(local.y))
 }
 
+#[cfg(test)]
 pub fn wind_modulation_at(
     params: &WindShellParams,
     local: Vector3<f32>,
@@ -269,128 +321,34 @@ pub fn wind_modulation_at(
     modulation
 }
 
-/// Shortest length along any ray over which the streak pattern completes one period.
-fn streak_wavelength(params: &WindShellParams) -> f32 {
-    let angular = params.streak_order / params.wall_radius_base.max(1e-3);
-    let vertical = params.streak_rise_time - params.streak_twist;
-    std::f32::consts::TAU / (angular * angular + vertical * vertical).sqrt().max(1e-3)
+/// Finest active modulation feature in world units: half a streak period or the finest eddy octave cell.
+#[cfg(test)]
+fn wind_finest_feature(params: &WindShellParams) -> Option<f32> {
+    let streak = (params.streak_amplitude > 0.0)
+        .then(|| 0.5 * params.streak().wavelength(params.wall_radius_base));
+    let eddy = (params.eddy_amplitude > 0.0).then(|| {
+        let finest_octave_scale = 2f32.powi(EDDY_OCTAVE_COUNT as i32 - 1);
+        let finest_cell = params
+            .eddy_cell_height
+            .min(params.eddy_cell_theta.min(params.eddy_cell_radial));
+        finest_cell / finest_octave_scale
+    });
+    match (streak, eddy) {
+        (Some(streak), Some(eddy)) => Some(streak.min(eddy)),
+        (feature, None) | (None, feature) => feature,
+    }
 }
 
-fn piece_is_active(
-    shell: &VolumeShell,
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
-    puffs: &RayPuffs,
-    s0: f32,
-    s1: f32,
-) -> bool {
-    shell.piece_holds(origin, direction, s0, s1) || puffs.piece_holds(s0, s1)
-}
-
-/// Length of the ray inside the shell support or a puff: continuous in the ray, so the cell
-/// length derived from it never jumps when a knot appears.
-pub fn wind_active_length(
-    params: &WindShellParams,
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
-    knots: &RayKnots,
-    puffs: &RayPuffs,
-) -> f32 {
-    let shell = params.shell();
-    knots
-        .pieces()
-        .filter(|&(s0, s1)| piece_is_active(&shell, origin, direction, puffs, s0, s1))
-        .map(|(s0, s1)| s1 - s0)
-        .sum()
-}
-
-/// Cell length along the ray: a fraction of the finest active modulation feature, bounded so the
-/// active length holds between ACTIVE_CELLS_MIN and MODULATION_CELLS cells.
+#[cfg(test)]
 pub fn wind_modulation_step(
     params: &WindShellParams,
     direction: Vector3<f32>,
     active_length: f32,
 ) -> f32 {
-    let span = active_length.max(EMPTY_INTERVAL_EPSILON);
-    let mut finest_feature = span * direction.magnitude();
-    if params.streak_amplitude > 0.0 {
-        finest_feature = finest_feature.min(0.5 * streak_wavelength(params));
-    }
-    if params.eddy_amplitude > 0.0 {
-        let finest_octave_scale = 2f32.powi(EDDY_OCTAVE_COUNT as i32 - 1);
-        let finest_cell = params
-            .eddy_cell_height
-            .min(params.eddy_cell_theta.min(params.eddy_cell_radial));
-        finest_feature = finest_feature.min(finest_cell / finest_octave_scale);
-    }
-    (MODULATION_SAMPLE_FRACTION * finest_feature / direction.magnitude()).clamp(
-        span / MODULATION_CELLS as f32,
-        span / ACTIVE_CELLS_MIN as f32,
-    )
+    modulation_step(direction, active_length, wind_finest_feature(params))
 }
 
-/// Optical depth of the puffs whose entry/exit knots enclose the piece [s0, s1].
-pub fn wind_puff_piece_optical_depth(
-    params: &WindShellParams,
-    puffs: &RayPuffs,
-    origin: Vector3<f32>,
-    direction: Vector3<f32>,
-    s0: f32,
-    s1: f32,
-) -> f32 {
-    let integral = puffs.piece_integral(params.active_puffs(), origin, direction, s0, s1);
-    (params.sigma_t * params.puff_strength * params.wall_strength * integral).max(0.0)
-}
-
-/// Modulation at both nodes of a cell; a node shared with the previous cell is not re-evaluated.
-#[derive(Clone, Copy)]
-struct CellModulation {
-    cell: Option<i64>,
-    a: f32,
-    b: f32,
-}
-
-impl CellModulation {
-    fn none() -> Self {
-        Self {
-            cell: None,
-            a: 1.0,
-            b: 1.0,
-        }
-    }
-
-    fn advance(
-        self,
-        params: &WindShellParams,
-        origin: Vector3<f32>,
-        direction: Vector3<f32>,
-        t_near: f32,
-        step: f32,
-        cell: i64,
-    ) -> Self {
-        if self.cell == Some(cell) {
-            return self;
-        }
-        let cell_start = t_near + cell as f32 * step;
-        let a = if self.cell == Some(cell - 1) {
-            self.b
-        } else {
-            wind_modulation_at(params, origin + direction * cell_start, direction * step)
-        };
-        let b = wind_modulation_at(
-            params,
-            origin + direction * (cell_start + step),
-            direction * step,
-        );
-        Self {
-            cell: Some(cell),
-            a,
-            b,
-        }
-    }
-}
-
-/// Pieces are walked in ray order and each is cut by the cells of the ray-wide grid it overlaps.
+#[cfg(test)]
 pub fn wind_optical_depth(
     params: &WindShellParams,
     origin: Vector3<f32>,
@@ -398,49 +356,11 @@ pub fn wind_optical_depth(
     t_near: f32,
     t_far: f32,
 ) -> f32 {
-    if t_far <= t_near {
-        return 0.0;
-    }
-    let shell = params.shell();
-    let (knots, puffs) = wind_ray_knots(params, origin, direction, t_near, t_far);
-    let active_length = wind_active_length(params, origin, direction, &knots, &puffs);
-    if active_length <= EMPTY_INTERVAL_EPSILON {
-        return 0.0;
-    }
-    let step = wind_modulation_step(params, direction, active_length);
-
-    let mut total = 0.0f32;
-    let mut modulation = CellModulation::none();
-    for (piece_start, piece_end) in knots.pieces() {
-        if !piece_is_active(&shell, origin, direction, &puffs, piece_start, piece_end) {
-            continue;
-        }
-        let cell_first = ((piece_start - t_near) / step).floor() as i64;
-        let cell_last = (((piece_end - t_near) / step).floor() as i64)
-            .min(cell_first + MODULATION_CELLS as i64);
-        for cell in cell_first..=cell_last {
-            let cell_start = t_near + cell as f32 * step;
-            let s0 = piece_start.max(cell_start);
-            let s1 = piece_end.min(cell_start + step);
-            if s1 <= s0 {
-                continue;
-            }
-            modulation = modulation.advance(params, origin, direction, t_near, step, cell);
-            let modulation_0 = mix(modulation.a, modulation.b, (s0 - cell_start) / step);
-            let modulation_1 = mix(modulation.a, modulation.b, (s1 - cell_start) / step);
-            total += shell.piece_optical_depth_modulated(
-                origin,
-                direction,
-                s0,
-                s1,
-                (modulation_0, modulation_1),
-            ) + wind_puff_piece_optical_depth(params, &puffs, origin, direction, s0, s1);
-        }
-    }
-    total
+    cell_modulated_optical_depth(params, origin, direction, t_near, t_far)
 }
 
 /// Wall + envelope optical depth along the ray (shadow rays drop streak, eddy and puffs).
+#[cfg(test)]
 pub fn wind_shadow_optical_depth(
     params: &WindShellParams,
     origin: Vector3<f32>,
@@ -454,6 +374,7 @@ pub fn wind_shadow_optical_depth(
 }
 
 /// Shadow optical depth from `origin` toward `direction` up to the cone boundary.
+#[cfg(test)]
 pub fn wind_optical_depth_toward(
     params: &WindShellParams,
     origin: Vector3<f32>,

@@ -15,9 +15,9 @@ use crate::ecs::resource::{
     TransformGizmoState, ViewportInput,
 };
 use crate::ecs::systems::{
-    compute_local_override_from_global_rotation, compute_local_override_from_global_scale,
-    compute_local_override_from_global_translation, select_bone_by_mesh_ray, select_bone_by_ray,
-    transform_gizmo_systems,
+    apply_mesh_selection, compute_local_override_from_global_rotation,
+    compute_local_override_from_global_scale, compute_local_override_from_global_translation,
+    select_bone_by_mesh_ray, select_bone_by_ray, transform_gizmo_systems,
 };
 use crate::ecs::world::{Entity, GlobalTransform, Transform};
 use crate::ecs::{
@@ -25,8 +25,11 @@ use crate::ecs::{
 };
 use crate::ecs::{gizmo_try_select, gizmo_update_position_with_constraint};
 use crate::math::screen_to_world_ray;
+use crate::vulkanr::resource::graphics_resource::GraphicsResources;
 
 pub fn run_input_phase(ctx: &mut EcsContext) -> Result<()> {
+    process_pending_mesh_selection(ctx);
+
     update_pointer_state(ctx);
 
     ctx.pointer_capture_mut().active = false;
@@ -1089,6 +1092,53 @@ fn compute_animation_globals(
     sample_clip_to_pose(&clip_asset.clip, current_time, skeleton, &mut pose, false);
 
     Some(compute_pose_global_transforms(skeleton, &pose))
+}
+
+fn process_pending_mesh_selection(ctx: &mut EcsContext) {
+    if !ctx
+        .world
+        .contains_resource::<crate::ecs::resource::ObjectIdReadback>()
+    {
+        return;
+    }
+
+    let has_result = {
+        let readback = ctx.object_id_readback();
+        readback.last_read_object_id.is_some()
+    };
+
+    if !has_result {
+        return;
+    }
+
+    let mut readback = ctx.object_id_readback_mut();
+    let readback_clone = (*readback).clone();
+    drop(readback);
+
+    let mut readback_state = readback_clone;
+    apply_mesh_selection(ctx.world, ctx.assets, &mut readback_state);
+
+    let mut readback = ctx.object_id_readback_mut();
+    readback.last_read_object_id = readback_state.last_read_object_id;
+    readback.is_shift = readback_state.is_shift;
+    readback.is_ctrl = readback_state.is_ctrl;
+}
+
+pub fn collect_mesh_positions(graphics: &GraphicsResources) -> Vec<Vector3<f32>> {
+    if graphics.meshes.is_empty() {
+        return Vec::new();
+    }
+
+    graphics
+        .meshes
+        .iter()
+        .flat_map(|mesh| {
+            mesh.vertex_data
+                .vertices
+                .iter()
+                .map(|v| Vector3::new(v.pos.x, v.pos.y, v.pos.z))
+        })
+        .collect()
 }
 
 #[cfg(test)]

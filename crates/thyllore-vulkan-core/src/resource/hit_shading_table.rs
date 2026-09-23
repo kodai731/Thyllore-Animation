@@ -6,7 +6,7 @@ use crate::resource::buffer::create_buffer;
 use crate::vulkan::*;
 use thyllore_math_core::GpuMat4;
 
-/// Per-instance hit shading record; repr(C) matches `shaders/include/hit_shading_record.glsl` (192 bytes).
+/// Per-instance hit shading record; repr(C) matches `shaders/include/hit_shading_record.slang` (192 bytes).
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct HitShadingRecord {

@@ -36,12 +36,12 @@ src/ecs/
 ├── component/           # Component definitions (data attached to entities)
 ├── resource/            # Global dynamic state (changes per frame), one file per resource
 ├── systems/             # System functions (behavior/logic), one file per domain
-│   ├── phases/          # Phase coordinators (execution order) and event dispatchers
+│   ├── phases/          # Phase coordinators (execution order); event dispatchers are in phases/event_dispatch/
 │   ├── world/           # Engine lifecycle systems (batch run schedule / capture record / report)
 │   ├── flame/, water/, wind/  # One directory per effect (spawn, time, preset, pick, passes, ...)
 │   ├── animation/       # Animation pipeline (collect, evaluate, apply, post_process)
 │   ├── curve_copilot/   # ML curve suggestion systems
-│   └── frame_runner.rs  # run_frame: the phase sequence
+│   └── world/frame.rs   # run_frame: the phase sequence (FRAME_SCHEDULE)
 ├── events/              # UIEvent definitions and UIEventQueue
 ├── query/               # Query builder, filters, tuple fetch
 ├── storage/             # Sparse set component storage
@@ -151,28 +151,29 @@ There is no `bundle/` directory. Entities are spawned by a `spawn_*` system in t
 
 ## Phase Pipeline
 
-Systems execute in a fixed phase order, defined in `src/ecs/systems/phases/`. Each phase is a coordinator
-function that calls the appropriate systems in sequence.
+`FRAME_SCHEDULE` (`src/ecs/systems/world/frame.rs`) is the one list of phases. `App::drive_frame`
+(`src/app/frame.rs`, called from `src/platform/events/frame.rs` once the imgui frame is built) runs it:
+EventDispatch first, then `begin_frame`, the update phases through `run_frame()`, the render, and Last
+once the image is presented. The slots are:
 
 ```
-run_frame()  (src/ecs/systems/frame_runner.rs, called from App::update)
-├── run_frame_clock_phase()        # FrameClock.frame += 1 (systems/world/)
-├── run_batch_schedule_phase()     # Batch capture schedule: FrameClock.frame → capture request (systems/world/)
-├── run_input_phase()              # Input handling, gizmo interaction (EcsContext)
-├── run_transform_phase_ecs()      # Transform propagation (EcsContext)
-├── run_timeline_phase()           # Timeline / clip schedule advance
-├── run_inference_actor_phase()    # ML inference actors
-├── run_animation_phase_ecs()      # Animation evaluation, blending
-├── run_animation_phase_gpu()      # Skinning / vertex upload
-├── run_onion_skin_phase()         # Ghost frame generation
-├── run_transform_phase_gpu()      # Object UBO upload
-└── run_render_prep_phase()        # Gizmo mesh building, render data collection
-
-run_event_dispatch_phase()         # UI event processing, AppCommand collection;
-                                   # called from src/platform/events/frame.rs after the UI is built
-run_batch_capture_phase()          # After present: requested BatchCapture readbacks + scheduled screenshot;
-                                   # entered through App::after_present (src/app/lifecycle/)
+EventDispatch → run_event_dispatch_phase()   # UIEvent → World, AppCommand queue; file dialogs; apply commands
+First         → run_first_phase()            # FrameClock.frame += 1, batch schedule
+Input         → run_input_phase()            # Input handling, gizmo interaction
+Transform     → run_transform_phase_ecs()    # Camera, light gizmo, billboard (entity transforms: #195)
+Timeline      → run_timeline_phase()         # Timeline / clip schedule advance
+Animation     → run_animation_phase_ecs()    # Animation evaluation, blending, transform propagation
+              → run_animation_phase_gpu()    # Skinning / vertex upload
+OnionSkin     → run_onion_skin_phase()       # Ghost frame generation
+RenderPrep    → run_transform_phase_gpu()    # Light gizmo vertex upload (#194)
+              → run_render_prep_phase()      # Uniforms, gizmo meshes, frame prep hooks, TLAS refresh
+                (App::render: record, submit, present)
+Last          → run_last_phase()             # Requested BatchCapture readbacks + scheduled screenshot
 ```
+
+`run_frame()` runs `update_phases()`, the slots between EventDispatch and Last; `App::drive_frame`
+owns the two ends because they need `App` (file dialogs and `AppCommand`s before, the presented image
+after).
 
 ### Phase Design Principles (from Flecs, Unity DOTS, Bevy)
 
@@ -182,17 +183,18 @@ run_batch_capture_phase()          # After present: requested BatchCapture readb
 - **Animation completes before Transform propagation**: Standard in all major engines
   (Bevy: `.before(TransformSystems::Propagate)`, Unity DOTS: animation in SimulationSystemGroup
   before TransformSystemGroup)
-- **Event dispatch is last**: Deferred structural changes (entity creation/destruction, component
-  add/remove) are processed at the end of the frame, similar to Unity DOTS EntityCommandBuffer
-  pattern and Flecs sync points
+- **UI events are applied before the update, outputs to the platform after it**: the UI is immediate
+  mode, so the events it recorded are dispatched into `World` at the start of the frame and the update
+  sees them the same frame (Bevy: input and `bevy_egui` input in `PreUpdate`, Unreal: the message pump
+  routes Slate input before `UWorld::Tick`). What the engine asks of the platform (file dialogs,
+  `AppCommand`s) is the dispatch's return value, applied by `App` before `begin_frame`; readbacks of the
+  finished image are Last (Bevy `PostUpdate` egui output, Unreal `ProcessLocalPlayerSlateOperations`
+  after the world tick)
 
 ### Adding New Phases
 
-When adding a new phase:
-1. Create a coordinator function in `phases/`
-2. The function receives `FrameContext` and calls system functions in order
-3. Add the call in `run_frame()` at the correct position
-4. Document ordering dependencies (what must complete before this phase)
+Add a new variant to `FramePhase`, place it in `FRAME_SCHEDULE`, and create its coordinator in
+`phases/<name>_phase.rs`.
 
 ## Query Pattern
 

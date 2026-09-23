@@ -230,7 +230,8 @@ def main():
     args = parser.parse_args()
 
     if not args.video.exists():
-        extract.download(extract.read_link(Path("assets/textures/flames/pillar_ref_seq")), args.video)
+        link = extract.read_link(Path("assets/textures/flames/pillar_ref_seq"))
+        extract.download(link, args.video, extract.VIDEO_FORMAT)
     fps, first, frames = read_frames(args.video, args.start, args.seconds)
     camera, inlier_counts = cumulative_transforms(frames)
     transforms, feet = foot_anchored_transforms(frames, camera)

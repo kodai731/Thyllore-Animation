@@ -1,3 +1,4 @@
+#[cfg(test)]
 use cgmath::{InnerSpace, Vector3};
 use thyllore_math_core::LinearCongruentialGenerator;
 

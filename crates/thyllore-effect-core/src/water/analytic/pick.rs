@@ -1,6 +1,7 @@
 use cgmath::{InnerSpace, Matrix4, Vector3, Vector4};
 
 use super::slang::{water_height_and_gradient_slang, water_lb_height_and_gradient_slang};
+use super::wave::WATER_WAVE_MODE_COUNT;
 use crate::water::effect::WaterTorusEffect;
 use crate::water::gpu::systems::build_water_ubo;
 use thyllore_math_core::intersect_torus;
@@ -52,8 +53,15 @@ pub fn water_total_height_and_gradient(
 
     let ubo = build_water_ubo(effect, frame_index);
 
-    let (flat_h, flat_h_u, flat_h_v, _) =
-        water_height_and_gradient_slang(&ubo, u, v, effect.time, flow, 8, (0.0, 0.0));
+    let (flat_h, flat_h_u, flat_h_v, _) = water_height_and_gradient_slang(
+        &ubo,
+        u,
+        v,
+        effect.time,
+        flow,
+        WATER_WAVE_MODE_COUNT as i32,
+        (0.0, 0.0),
+    );
 
     let (laplace_beltrami_h, laplace_beltrami_h_u, laplace_beltrami_h_v) =
         water_lb_height_and_gradient_slang(&ubo, (u, v), effect.time, flow);

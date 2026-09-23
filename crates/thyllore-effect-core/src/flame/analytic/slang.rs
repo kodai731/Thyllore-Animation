@@ -6,7 +6,7 @@ fn with_context<R>(
     ubo: &crate::flame::FlameUBO,
     body: impl FnOnce(*const KernelContext) -> R,
 ) -> R {
-    let global_params = GlobalParams { flame: ubo };
+    let global_params = GlobalParams::new(ubo);
     let ctx = KernelContext {
         global_params: &global_params,
     };

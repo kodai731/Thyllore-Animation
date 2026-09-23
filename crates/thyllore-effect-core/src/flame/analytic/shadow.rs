@@ -1,4 +1,6 @@
+#[cfg(test)]
 use crate::flame::*;
+#[cfg(test)]
 use thyllore_math_core::evaluate_chebyshev;
 
 pub fn integrate_emission_segment(source: f32, sigma_t: f32, dt: f32) -> f32 {
@@ -12,6 +14,7 @@ pub fn integrate_emission_segment(source: f32, sigma_t: f32, dt: f32) -> f32 {
 
 /// Evaluate self-shadow optical depth for a point in flame-local space.
 /// Uses layered concentric cylinders (3 layers) with Chebyshev-evaluated density.
+#[cfg(test)]
 pub fn evaluate_self_shadow_optical_depth(
     p_local: [f32; 3],
     light_dir_local: [f32; 3],

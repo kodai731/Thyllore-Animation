@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
-# Installs the pinned slangc release into SLANG_ROOT (default ~/.local/slang) for CI and fresh machines.
+# Installs the slangc release pinned in crates/thyllore-shader-manifest/Cargo.toml into SLANG_ROOT
+# (default ~/.local/slang) for CI and fresh machines; build.rs refuses any other version.
 set -euo pipefail
 
-SLANG_VERSION="${SLANG_VERSION:-2026.18}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PINNED_VERSION="$(sed -n '/^\[package.metadata.slang\]/,/^\[/{s/^version = "\(.*\)"$/\1/p}' "$REPO_ROOT/crates/thyllore-shader-manifest/Cargo.toml")"
+if [[ -z "$PINNED_VERSION" ]]; then
+    echo "no [package.metadata.slang] version in crates/thyllore-shader-manifest/Cargo.toml" >&2
+    exit 2
+fi
+SLANG_VERSION="${SLANG_VERSION:-$PINNED_VERSION}"
 SLANG_ROOT="${SLANG_ROOT:-$HOME/.local/slang}"
 
 case "$(uname -s)-$(uname -m)" in

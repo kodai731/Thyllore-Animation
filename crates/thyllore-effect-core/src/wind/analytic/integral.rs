@@ -6,7 +6,9 @@ use crate::volume::{
 use crate::volume::{StreakModulation, VolumeShell};
 #[cfg(test)]
 use crate::wind::analytic::eddy::{eddy_sigma, EDDY_OCTAVE_COUNT};
-use crate::wind::analytic::motion::{h_top, rotation_phase, spread_offset, streak_phase, wall_amp};
+#[cfg(test)]
+use crate::wind::analytic::motion::rotation_phase;
+use crate::wind::analytic::motion::{h_top, spread_offset, streak_phase, wall_amp};
 use crate::wind::analytic::puffs::build_wind_puffs;
 use crate::wind::WindTornadoEffect;
 #[cfg(test)]

@@ -6,7 +6,7 @@ fn with_context<R>(
     ubo: &crate::water::WaterUBO,
     body: impl FnOnce(*const KernelContext) -> R,
 ) -> R {
-    let ctx = KernelContext { ubo: *ubo };
+    let ctx = KernelContext { water: *ubo };
     body(&ctx)
 }
 

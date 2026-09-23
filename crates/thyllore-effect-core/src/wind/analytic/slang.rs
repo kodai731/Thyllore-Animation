@@ -5,7 +5,7 @@ use crate::wind::WindUBO;
 include!(concat!(env!("OUT_DIR"), "/wind_exports_bindings.rs"));
 
 fn with_context<R>(ubo: &crate::wind::WindUBO, body: impl FnOnce(*const KernelContext) -> R) -> R {
-    let global_params = GlobalParams { wind: ubo };
+    let global_params = GlobalParams::new(ubo);
     let ctx = KernelContext {
         global_params: &global_params,
     };

@@ -1,37 +1,16 @@
 use super::effect::{
     build_effect_from_params, declare_effect_pyfunctions, gpu_block_bytes,
-    inverse_view_proj_from_column_major, PyEffect,
+    inverse_view_proj_from_column_major, ParameterOwnerName,
 };
-use crate::water::{
-    apply_water_preset, build_water_model_matrix, build_water_ubo,
-    overwrite_water_persisted_fields, WaterTorusEffect, WaterUBO, WATER_PRESET_NAMES,
-    WATER_UI_PARAMS,
-};
-use cgmath::{Quaternion, Vector3, Vector4};
+use crate::water::{build_water_model_matrix, build_water_ubo, WaterTorusEffect, WaterUBO};
+use crate::WaterParameterOwner;
+use cgmath::Vector4;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use thyllore_math_core::torus_local_bounds_corners;
-use thyllore_scene_core::UiParam;
 
-impl PyEffect for WaterTorusEffect {
-    const PRESET_NAMES: &'static [&'static str] = WATER_PRESET_NAMES;
-    const UI_PARAMS: &'static [UiParam] = WATER_UI_PARAMS;
-
-    fn apply_preset(&mut self, name: &str) -> bool {
-        apply_water_preset(self, name)
-    }
-
-    fn overwrite_persisted_fields(&mut self, source: &Self) {
-        overwrite_water_persisted_fields(self, source);
-    }
-
-    fn set_placement(&mut self, time: f32, position: [f32; 3], rotation: [f32; 4]) {
-        self.time = time;
-        self.position = Vector3::new(position[0], position[1], position[2]);
-        self.rotation = Quaternion::new(rotation[0], rotation[1], rotation[2], rotation[3]);
-    }
-
-    fn parameter_owner_name(_name: &str) -> &'static str {
+impl ParameterOwnerName for WaterParameterOwner {
+    fn owner_name(self) -> &'static str {
         "frame"
     }
 }

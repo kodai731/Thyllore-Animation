@@ -1,3 +1,4 @@
+#[cfg(test)]
 use cgmath::{InnerSpace, Vector3};
 use thyllore_math_core::LinearCongruentialGenerator;
 
@@ -138,6 +139,7 @@ pub fn generate_water_wave_modes(
 /// Returns (h, h_u, h_v).
 /// Phase φ' = m(u + a*t) + n(v + b*t) - ω*t + φ.
 /// h = Σ a * cos(φ'), h_u = -Σ a * m * sin(φ'), h_v = -Σ a * n * sin(φ').
+#[cfg(test)]
 pub fn water_height_and_gradient(
     u: f32,
     v: f32,
@@ -171,6 +173,7 @@ pub fn water_height_and_gradient(
 /// e_u = (-sin u, 0, cos u), e_v = (-sin v cos u, cos v, -sin v sin u), n = (cos v cos u, sin v, cos v sin u).
 /// κ1 = 1/r, κ2 = cos v / (R + r cos v).
 /// n' = normalize((1+hκ1)(1+hκ2)n - (1+hκ1)*h_u/(R + r cos v)*e_u - (1+hκ2)*h_v/r*e_v).
+#[cfg(test)]
 pub fn water_perturbed_normal(
     u: f32,
     v: f32,

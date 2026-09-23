@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from engine_harness import dood_wrap, engine_env, engine_path, repo_root
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-import flame_ref_match as flame
+from ref_match.frames import luminance
 from wind_ref_match import measure_shape, s1_distance, s2_distance, s3_distance
 
 SCENE = "assets/scenes/wind_probe.scene.ron"
@@ -201,8 +201,8 @@ def load_render_fields(color_dir: Path, coverage_dir: Path,
             color = np.asarray(image.convert("RGB"), dtype=np.float64)[y0:y1, x0:x1]
         with Image.open(coverage_path) as image:
             coverage = np.asarray(image.convert("RGB"), dtype=np.float64)[y0:y1, x0:x1]
-        fields.append((flame.luminance(color).astype(np.float32),
-                       flame.luminance(coverage) > COVERAGE_MASK_LEVEL))
+        fields.append((luminance(color).astype(np.float32),
+                       luminance(coverage) > COVERAGE_MASK_LEVEL))
     return fields
 
 
@@ -224,7 +224,7 @@ def load_reference_fields(reference_dir: Path,
             rgb = np.asarray(image.convert("RGB"), dtype=np.float64)
         with Image.open(mask_path) as image:
             mask = np.asarray(image.convert("L"))
-        fields.append((flame.luminance(rgb).astype(np.float32), mask > REFERENCE_MASK_LEVEL))
+        fields.append((luminance(rgb).astype(np.float32), mask > REFERENCE_MASK_LEVEL))
     return fields
 
 

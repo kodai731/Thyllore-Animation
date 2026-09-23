@@ -5,8 +5,8 @@ Usage:
       [--ref-window first,end] [--json out.json]
 
 The W1-W3 descriptors (luminance statistics, height-band profile, contrast/structure gates) are the
-flame_ref_match ones, measured with the dust silhouette (luminance on a black background). Two
-descriptor families are added on top:
+common descriptors from ref_match.stats, measured with the dust silhouette (luminance on a black
+background). Two descriptor families are added on top:
 
   W4 flow direction: structure tensor of the Sobel gradients (gaussian sigma 3 px), principal
       direction histogram over 0..pi in 16 bins inside the silhouette plus the median anisotropy
@@ -27,7 +27,10 @@ import cv2
 import numpy as np
 from scipy import ndimage
 
-import flame_ref_match as flame
+from ref_match.frames import (collect_frames, load_image, load_ref_meta, luminance, reference_column_width,
+                              silhouette_mask, to_rgb)
+from ref_match.gates import compare, print_summary, score_rows
+from ref_match.stats import measure
 
 DIRECTION_BINS = 16
 STRUCTURE_SIGMA = 3.0
@@ -42,8 +45,8 @@ EPS = 1e-9
 
 
 def frame_fields(path):
-    rgb = flame.to_rgb(flame.load_image(path))
-    return flame.luminance(rgb).astype(np.float32), flame.silhouette_mask(rgb)
+    rgb = to_rgb(load_image(path))
+    return luminance(rgb).astype(np.float32), silhouette_mask(rgb, mode="dust")
 
 
 def structure_tensor_direction(lum, mask):
@@ -218,7 +221,7 @@ def s3_distance(a, b):
 
 
 def measure_wind(paths, column_width, fps, resample):
-    measured = flame.measure(paths, column_width, resample=resample)
+    measured = measure(paths, column_width, resample=resample, mode="dust")
     fields = [frame_fields(path) for path in paths]
     measured["w4"] = measure_direction(fields)
     measured["w5"] = measure_transport(fields, fps)
@@ -244,27 +247,26 @@ def main():
                         help="first,end reference frame for the sequence descriptors (default: every frame)")
     parser.add_argument("--json", help="write reference/render/distance results to this path")
     args = parser.parse_args()
-    flame.silhouette_mode = "dust"
 
-    ref_fps, caption_frames = flame.load_ref_meta(args.ref_dir)
-    ref_paths = flame.collect_frames(args.ref_dir)
+    ref_fps, caption_frames = load_ref_meta(args.ref_dir)
+    ref_paths = collect_frames(args.ref_dir)
     first, end = (int(v) for v in args.ref_window.split(",")) if args.ref_window else (0, len(ref_paths))
     ref_paths = [p for i, p in enumerate(ref_paths[first:end], first) if i not in caption_frames]
-    column_width = flame.reference_column_width(ref_paths)
+    column_width = reference_column_width(ref_paths, mode="dust")
 
     ref = measure_wind(ref_paths, column_width, ref_fps, resample=False)
-    render = measure_wind(flame.collect_frames(args.render), column_width, args.fps, resample=True)
+    render = measure_wind(collect_frames(args.render), column_width, args.fps, resample=True)
     print(f"reference: {ref['frames']} frames at {ref_fps:.2f} fps, column width {column_width:.0f} px")
     print(f"render:    {render['frames']} frames at {args.fps:.2f} fps")
     print_wind("reference", ref)
     print_wind("render   ", render)
 
-    rows = flame.score_rows(flame.compare(ref, render))
+    rows = score_rows(compare(ref, render))
     print(f"\n{'gate':<26}{'ref':>6}{'render':>8}  {'value':<14}{'status':<6}score")
     for name, rv, cv, value, ok, score in rows:
         status = "-" if ok is None else ("PASS" if ok else "FAIL")
         print(f"{name:<26}{rv:>6}{cv:>8}  {value:<14}{status:<6}{score:.2f}")
-    flame.print_summary(rows)
+    print_summary(rows)
 
     distances = {"w4": direction_distance(ref["w4"], render["w4"]),
                  "w5": transport_distance(ref["w5"], render["w5"]),

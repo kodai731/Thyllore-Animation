@@ -18,7 +18,7 @@ const PRODUCT_ENTRY: &str = "shaders/flame/resolveFragment.slang";
 /// except the product entry (which dispatches debug modes at runtime).
 const SAMPLING_INCLUDES: &[&str] = &["flame/include/reference_march.slang"];
 
-const GLSL_BANNED_TOKENS: &[&str] = &["Raymarch", "raymarch", "FLAME_WAVE_SEGMENTS"];
+const SHADER_BANNED_TOKENS: &[&str] = &["Raymarch", "raymarch", "FLAME_WAVE_SEGMENTS"];
 const RUST_BANNED_TOKENS: &[&str] = &["Raymarch", "raymarch", "lut_lerp", "[f32; 33]"];
 
 struct Exception {
@@ -78,10 +78,9 @@ fn parse_includes(source: &str) -> Vec<String> {
     source
         .lines()
         .filter_map(|line| {
-            let line = line.trim().trim_end_matches(';');
-            line.strip_prefix("#include \"")
-                .or_else(|| line.strip_prefix("import \""))
-                .and_then(|rest| rest.strip_suffix('"'))
+            let line = line.trim();
+            line.strip_prefix("import \"")
+                .and_then(|rest| rest.strip_suffix("\";"))
                 .map(str::to_string)
         })
         .collect()
@@ -153,6 +152,11 @@ fn flame_runtime_stays_closed_form() {
     let shader_dir = root.join("shaders");
 
     let graph = collect_include_graph(&root);
+    assert!(
+        SAMPLING_INCLUDES.iter().all(|inc| graph.contains(*inc)),
+        "product entry no longer imports the sampling includes; \
+         the import graph walk found {graph:?}"
+    );
     for include in &graph {
         if SAMPLING_INCLUDES.contains(&include.as_str()) {
             continue;
@@ -168,7 +172,7 @@ fn flame_runtime_stays_closed_form() {
         }
     }
 
-    let glsl_files: Vec<PathBuf> = std::iter::once(root.join(PRODUCT_ENTRY))
+    let shader_files: Vec<PathBuf> = std::iter::once(root.join(PRODUCT_ENTRY))
         .chain(
             graph
                 .iter()
@@ -201,7 +205,12 @@ fn flame_runtime_stays_closed_form() {
 
     let mut used = BTreeSet::new();
     let mut violations = Vec::new();
-    scan_tokens(&glsl_files, GLSL_BANNED_TOKENS, &mut used, &mut violations);
+    scan_tokens(
+        &shader_files,
+        SHADER_BANNED_TOKENS,
+        &mut used,
+        &mut violations,
+    );
     scan_tokens(&rust_files, RUST_BANNED_TOKENS, &mut used, &mut violations);
 
     assert!(

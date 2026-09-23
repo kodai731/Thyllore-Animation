@@ -7,6 +7,7 @@ use super::laplace_beltrami_basis::{
 use super::pick::{pick_torus, water_total_height_and_gradient};
 use super::slang::water_height_and_gradient_slang;
 use super::wave::{generate_water_wave_modes, water_height_and_gradient, water_perturbed_normal};
+use crate::test_support::BitwiseAgreement;
 use crate::water::effect::WaterTorusEffect;
 use crate::water::gpu::systems::{build_laplace_beltrami_modes, build_water_ubo};
 use thyllore_math_core::torus_surface_normal;
@@ -283,32 +284,6 @@ fn test_lb_shader_functions_exist() {
         "water/include",
         &["waterLbCheb", "waterLbHeightAndGradient"],
     );
-}
-
-#[derive(Default)]
-struct BitwiseAgreement {
-    compared: usize,
-    mismatches: usize,
-    max_bit_difference: i64,
-}
-
-impl BitwiseAgreement {
-    fn record(&mut self, rust_value: f32, slang_value: f32) {
-        self.compared += 1;
-        if rust_value.to_bits() != slang_value.to_bits() {
-            let difference = rust_value.to_bits() as i64 - slang_value.to_bits() as i64;
-            self.mismatches += 1;
-            self.max_bit_difference = self.max_bit_difference.max(difference.abs());
-        }
-    }
-
-    fn assert_identical(&self, quantity: &str) {
-        assert_eq!(
-            self.mismatches, 0,
-            "{quantity}: {}/{} mismatches, max bit difference {}",
-            self.mismatches, self.compared, self.max_bit_difference
-        );
-    }
 }
 
 #[test]

@@ -4,7 +4,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PINNED_VERSION="$(sed -n '/^\[package.metadata.slang\]/,/^\[/{s/^version = "\(.*\)"$/\1/p}' "$REPO_ROOT/crates/thyllore-shader-manifest/Cargo.toml")"
+PINNED_VERSION="$(awk -F'"' '/^\[package.metadata.slang\]/ { in_slang = 1; next } /^\[/ { in_slang = 0 } in_slang && /^version = / { print $2; exit }' "$REPO_ROOT/crates/thyllore-shader-manifest/Cargo.toml")"
 if [[ -z "$PINNED_VERSION" ]]; then
     echo "no [package.metadata.slang] version in crates/thyllore-shader-manifest/Cargo.toml" >&2
     exit 2

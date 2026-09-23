@@ -484,6 +484,7 @@ mod tests {
         flame_branch_burnout_mask_slang, flame_branch_pull_back_jvp_slang,
         flame_branch_pull_back_slang,
     };
+    use crate::test_support::BitwiseAgreement;
 
     fn unit_trunk(_height01: f32) -> f32 {
         1.0
@@ -556,6 +557,22 @@ mod tests {
 
     fn distance(a: [f32; 3], b: [f32; 3]) -> f32 {
         ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+    }
+
+    fn branch_grid_points() -> Vec<[f32; 3]> {
+        let mut points = Vec::new();
+        for i in 0..5 {
+            for j in 0..5 {
+                for k in 0..5 {
+                    points.push([
+                        -1.2 + 0.6 * i as f32,
+                        0.9 + 0.4 * j as f32,
+                        -1.2 + 0.6 * k as f32,
+                    ]);
+                }
+            }
+        }
+        points
     }
 
     #[test]
@@ -846,54 +863,6 @@ mod tests {
         assert!((0.0..=1.0).contains(&mask));
         let after_life = effect.time + field.life + 1.0;
         assert_eq!(branch_burnout_mask(&field, p, after_life), 1.0);
-    }
-
-    #[derive(Default)]
-    struct BitwiseAgreement {
-        compared: usize,
-        mismatches: usize,
-        max_bit_difference: i64,
-    }
-
-    impl BitwiseAgreement {
-        fn record(&mut self, rust_value: f32, slang_value: f32) {
-            self.compared += 1;
-            if rust_value.to_bits() != slang_value.to_bits() {
-                let difference = rust_value.to_bits() as i64 - slang_value.to_bits() as i64;
-                self.mismatches += 1;
-                self.max_bit_difference = self.max_bit_difference.max(difference.abs());
-            }
-        }
-
-        fn record_vector(&mut self, rust_value: [f32; 3], slang_value: [f32; 3]) {
-            for axis in 0..3 {
-                self.record(rust_value[axis], slang_value[axis]);
-            }
-        }
-
-        fn assert_identical(&self, quantity: &str) {
-            assert_eq!(
-                self.mismatches, 0,
-                "{quantity}: {}/{} mismatches, max bit difference {}",
-                self.mismatches, self.compared, self.max_bit_difference
-            );
-        }
-    }
-
-    fn branch_grid_points() -> Vec<[f32; 3]> {
-        let mut points = Vec::new();
-        for i in 0..5 {
-            for j in 0..5 {
-                for k in 0..5 {
-                    points.push([
-                        -1.2 + 0.6 * i as f32,
-                        0.9 + 0.4 * j as f32,
-                        -1.2 + 0.6 * k as f32,
-                    ]);
-                }
-            }
-        }
-        points
     }
 
     #[test]

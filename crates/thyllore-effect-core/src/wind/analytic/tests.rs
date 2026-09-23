@@ -1,5 +1,6 @@
 use super::*;
 use crate::analytic_manifest::{float_constant, int_constant, shader_source};
+use crate::test_support::BitwiseAgreement;
 use crate::volume::{shell_and_puff_knots, ACTIVE_CELLS_MIN};
 use crate::volume::{MODULATION_CELLS, PUFFS_PER_RAY, RAY_MAX_KNOTS};
 use crate::wind::analytic::eddy::{EDDY_FADE_END, EDDY_FADE_START, EDDY_OCTAVE_COUNT};
@@ -1084,32 +1085,6 @@ fn shader_polynomial_terms_match_the_rust_mirror_and_cover_the_piece_degree() {
     );
 }
 
-#[derive(Default)]
-struct BitwiseAgreement {
-    compared: usize,
-    mismatches: usize,
-    max_bit_difference: i64,
-}
-
-impl BitwiseAgreement {
-    fn record(&mut self, rust_value: f32, slang_value: f32) {
-        self.compared += 1;
-        if rust_value.to_bits() != slang_value.to_bits() {
-            let difference = rust_value.to_bits() as i64 - slang_value.to_bits() as i64;
-            self.mismatches += 1;
-            self.max_bit_difference = self.max_bit_difference.max(difference.abs());
-        }
-    }
-
-    fn assert_identical(&self, quantity: &str) {
-        assert_eq!(
-            self.mismatches, 0,
-            "{quantity}: {}/{} mismatches, max bit difference {}",
-            self.mismatches, self.compared, self.max_bit_difference
-        );
-    }
-}
-
 #[test]
 fn slang_c_abi_matches_rust_bitwise_over_a_ray_grid() {
     let effect = WindTornadoEffect::default();
@@ -1170,9 +1145,9 @@ fn slang_c_abi_matches_rust_bitwise_over_a_ray_grid() {
     }
 
     assert!(
-        optical_depth.compared >= 100,
+        optical_depth.compared() >= 100,
         "only {} rays hit the envelope, need at least 100",
-        optical_depth.compared
+        optical_depth.compared()
     );
     optical_depth.assert_identical("optical depth");
     density.assert_identical("density");

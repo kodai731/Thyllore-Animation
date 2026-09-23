@@ -173,6 +173,10 @@ fn parse_persist_attribute(attr: &syn::Attribute) -> Result<PersistAttributes> {
             persist.default = Some(meta.value()?.parse()?);
         } else if meta.path.is_ident("scalars") {
             persist.scalars = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("name") {
+            persist.name = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("path") {
+            persist.path = Some(meta.value()?.parse()?);
         } else if meta.path.is_ident("ui") {
             persist.ui = Some(parse_ui_attributes(&meta)?);
         } else {
@@ -181,6 +185,25 @@ fn parse_persist_attribute(attr: &syn::Attribute) -> Result<PersistAttributes> {
 
         Ok(())
     })?;
+
+    if persist.path.is_some() {
+        if persist.name.is_none() {
+            return Err(Error::new_spanned(attr, "persist `path` requires `name`"));
+        }
+        if persist.as_type.is_none() {
+            return Err(Error::new_spanned(attr, "persist `path` requires `as`"));
+        }
+        if persist.get.is_some() || persist.set.is_some() {
+            return Err(Error::new_spanned(
+                attr,
+                "persist `path` cannot be combined with `get` or `set`",
+            ));
+        }
+    }
+
+    if persist.name.is_some() && persist.path.is_none() {
+        return Err(Error::new_spanned(attr, "persist `name` requires `path`"));
+    }
 
     Ok(persist)
 }
@@ -194,28 +217,55 @@ fn expand_persisted_entry(
         .owner
         .ok_or_else(|| Error::new_spanned(ident, "persist attribute requires `owner`"))?;
 
+    let entry_ident = match &persist.name {
+        Some(name) => name.clone(),
+        None => ident.clone(),
+    };
+
     let ty = match &persist.as_type {
         Some(as_type) => quote!(#as_type),
         None => quote!(#field_ty),
     };
 
-    let accessors = match (&persist.get, &persist.set) {
-        (Some(get), Some(set)) => quote!(get: #get, set: #set),
-        (None, None) if persist.as_type.is_none() => {
-            quote!(get: |e| e.#ident, set: |e, v| e.#ident = v)
+    let accessors = if let Some(ref path) = persist.path {
+        let path_str = path.value();
+        let segments: Vec<&str> = path_str.split('.').collect();
+
+        let mut get_expr: proc_macro2::TokenStream = quote!(e);
+        for seg in &segments {
+            let seg_ident = syn::Ident::new(seg, proc_macro2::Span::call_site());
+            get_expr = quote!(#get_expr.#seg_ident);
         }
-        _ => return Err(Error::new_spanned(
-            ident,
-            "persist `as` requires both `get` and `set`, and `get` / `set` must be given together",
-        )),
+
+        let mut set_lhs: proc_macro2::TokenStream = quote!(e);
+        for seg in &segments {
+            let seg_ident = syn::Ident::new(seg, proc_macro2::Span::call_site());
+            set_lhs = quote!(#set_lhs.#seg_ident);
+        }
+
+        quote!(get: |e| #get_expr, set: |e, v| #set_lhs = v)
+    } else {
+        match (&persist.get, &persist.set) {
+            (Some(get), Some(set)) => quote!(get: #get, set: #set),
+            (None, None) if persist.as_type.is_none() => {
+                quote!(get: |e| e.#ident, set: |e, v| e.#ident = v)
+            }
+            _ => return Err(Error::new_spanned(
+                ident,
+                "persist `as` requires both `get` and `set`, and `get` / `set` must be given together",
+            )),
+        }
     };
 
     let def = persist.default.map(|def| quote!(, default: #def));
     let scalars = persist.scalars.map(|channels| quote!(, scalars: #channels));
-    let ui = persist.ui.map(|ui| expand_ui(ident, ui)).transpose()?;
+    let ui = persist
+        .ui
+        .map(|ui| expand_ui(&entry_ident, ui))
+        .transpose()?;
 
     Ok(quote! {
-        #ident: #ty = #owner {
+        #entry_ident: #ty = #owner {
             #accessors
             #def
             #scalars
@@ -339,6 +389,8 @@ struct PersistAttributes {
     set: Option<syn::Path>,
     default: Option<syn::Expr>,
     scalars: Option<syn::Ident>,
+    name: Option<syn::Ident>,
+    path: Option<syn::LitStr>,
     ui: Option<UiAttributes>,
 }
 
@@ -946,6 +998,95 @@ mod tests {
         assert!(
             msg.contains("PyEffect requires a field named `time`"),
             "expected missing time error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_path_expansion() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Style, name = branch_gain, path = \"branch.gain\", as = f32)]
+                pub branch: Branch,
+            }",
+        );
+        assert!(
+            expanded.contains("branch_gain : f32 = Style { get : | e | e . branch . gain , set : | e , v | e . branch . gain = v }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_two_attributes_on_one_field() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Frame)]
+                #[persist(owner = Style, name = branch_gain, path = \"branch.gain\", as = f32)]
+                pub branch: Branch,
+            }",
+        );
+        assert!(
+            expanded.contains("branch : Branch = Frame { get : | e | e . branch , set : | e , v | e . branch = v }"),
+            "{expanded}"
+        );
+        assert!(
+            expanded.contains("branch_gain : f32 = Style { get : | e | e . branch . gain , set : | e , v | e . branch . gain = v }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_path_without_as_error() {
+        let input: DeriveInput = syn::parse_str(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Style, name = branch_gain, path = \"branch.gain\")]
+                pub branch: Branch,
+            }",
+        )
+        .expect("valid struct");
+        let err = expand_scene_format(&input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("persist `path` requires `as`"),
+            "expected path without as error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_path_with_get_set_error() {
+        let input: DeriveInput = syn::parse_str(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Style, name = branch_gain, path = \"branch.gain\", as = f32, get = my_get)]
+                pub branch: Branch,
+            }",
+        )
+        .expect("valid struct");
+        let err = expand_scene_format(&input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("persist `path` cannot be combined with `get` or `set`"),
+            "expected path with get error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_name_without_path_error() {
+        let input: DeriveInput = syn::parse_str(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Style, name = branch_gain)]
+                pub branch: Branch,
+            }",
+        )
+        .expect("valid struct");
+        let err = expand_scene_format(&input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("persist `name` requires `path`"),
+            "expected name without path error, got: {msg}"
         );
     }
 }

@@ -7,6 +7,10 @@ use serde::Serialize;
 use thyllore_scene_core::{UiKind, UiParam};
 use thyllore_spirv_reflect::GpuBlock;
 
+pub trait ParameterOwnerName {
+    fn owner_name(self) -> &'static str;
+}
+
 /// One effect as seen from Python: presets, UI parameters and the placement every pack call sets.
 pub trait PyEffect: Default + Serialize + DeserializeOwned {
     const PRESET_NAMES: &'static [&'static str];

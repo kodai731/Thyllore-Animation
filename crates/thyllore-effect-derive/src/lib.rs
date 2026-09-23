@@ -2,6 +2,14 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Error, Fields, Meta, Result};
 
+#[proc_macro_derive(PyEffect, attributes(py_effect))]
+pub fn derive_py_effect(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    expand_py_effect(&input)
+        .unwrap_or_else(Error::into_compile_error)
+        .into()
+}
+
 #[proc_macro_derive(SceneFormat, attributes(scene, persist, runtime))]
 pub fn derive_scene_format(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -475,6 +483,144 @@ fn generate_assignment(
     })
 }
 
+fn expand_py_effect(input: &DeriveInput) -> Result<proc_macro2::TokenStream> {
+    let Data::Struct(data) = &input.data else {
+        return Err(Error::new_spanned(
+            &input.ident,
+            "PyEffect can only be derived for structs",
+        ));
+    };
+
+    let name = &input.ident;
+    let (impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
+
+    let py_effect = parse_py_effect_attributes(input)?;
+    let presets = &py_effect.presets;
+    let apply_preset = &py_effect.apply_preset;
+
+    let Some(scene) = parse_scene_attributes(input)? else {
+        return Err(Error::new_spanned(
+            &input.ident,
+            "PyEffect requires #[scene(...)] with ui, overwrite and tags on the struct",
+        ));
+    };
+    let ui = &scene.ui;
+    let overwrite = &scene.overwrite;
+    let tags = &scene.tags;
+
+    let time_field = find_field_by_name(input, &data.fields, "time")?;
+    if !time_field
+        .attrs
+        .iter()
+        .any(|a| a.path().is_ident("runtime"))
+    {
+        return Err(Error::new_spanned(
+            time_field,
+            "PyEffect requires the `time` field to be #[runtime]",
+        ));
+    }
+
+    let position_set = find_persist_setter(find_field_by_name(input, &data.fields, "position")?)?;
+    let rotation_set = find_persist_setter(find_field_by_name(input, &data.fields, "rotation")?)?;
+
+    Ok(quote! {
+        #[cfg(any(feature = "python", feature = "python-test"))]
+        impl #impl_generics crate::pybindings::PyEffect for #name #type_generics #where_clause {
+            const PRESET_NAMES: &'static [&'static str] = #presets;
+            const UI_PARAMS: &'static [crate::UiParam] = #ui;
+
+            fn apply_preset(&mut self, name: &str) -> bool {
+                #apply_preset(self, name)
+            }
+
+            fn overwrite_persisted_fields(&mut self, source: &Self) {
+                #overwrite(self, source);
+            }
+
+            fn set_placement(&mut self, time: f32, position: [f32; 3], rotation: [f32; 4]) {
+                self.time = time;
+                #position_set(self, position);
+                #rotation_set(self, rotation);
+            }
+
+            fn parameter_owner_name(name: &str) -> &'static str {
+                #tags
+                    .iter()
+                    .find(|(param_name, _)| *param_name == name)
+                    .map_or("unknown", |(_, owner)| {
+                        crate::pybindings::ParameterOwnerName::owner_name(*owner)
+                    })
+            }
+        }
+    })
+}
+
+fn parse_py_effect_attributes(input: &DeriveInput) -> Result<PyEffectAttributes> {
+    let Some(attr) = input.attrs.iter().find(|a| a.path().is_ident("py_effect")) else {
+        return Err(Error::new_spanned(
+            &input.ident,
+            "PyEffect requires #[py_effect(presets = ..., apply_preset = ...)] on the struct",
+        ));
+    };
+
+    let mut presets: Option<syn::Path> = None;
+    let mut apply_preset: Option<syn::Path> = None;
+
+    attr.meta.require_list()?.parse_nested_meta(|meta| {
+        if meta.path.is_ident("presets") {
+            presets = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("apply_preset") {
+            apply_preset = Some(meta.value()?.parse()?);
+        } else {
+            return Err(meta.error("unknown py_effect attribute key"));
+        }
+
+        Ok(())
+    })?;
+
+    Ok(PyEffectAttributes {
+        presets: presets
+            .ok_or_else(|| Error::new_spanned(attr, "py_effect attribute requires `presets`"))?,
+        apply_preset: apply_preset.ok_or_else(|| {
+            Error::new_spanned(attr, "py_effect attribute requires `apply_preset`")
+        })?,
+    })
+}
+
+fn find_field_by_name<'a>(
+    input: &DeriveInput,
+    fields: &'a Fields,
+    name: &str,
+) -> Result<&'a syn::Field> {
+    fields
+        .iter()
+        .find(|field| field.ident.as_ref().is_some_and(|ident| ident == name))
+        .ok_or_else(|| {
+            Error::new_spanned(
+                &input.ident,
+                format!("PyEffect requires a field named `{name}`"),
+            )
+        })
+}
+
+fn find_persist_setter(field: &syn::Field) -> Result<syn::Path> {
+    for attr in field.attrs.iter().filter(|a| a.path().is_ident("persist")) {
+        if let Some(set) = parse_persist_attribute(attr)?.set {
+            return Ok(set);
+        }
+    }
+
+    Err(Error::new_spanned(
+        field,
+        "PyEffect requires #[persist(as = ..., get = ..., set = ...)] on this field",
+    ))
+}
+
+struct PyEffectAttributes {
+    presets: syn::Path,
+    apply_preset: syn::Path,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -747,6 +893,59 @@ mod tests {
         assert!(
             msg.contains("persist attribute requires `owner`"),
             "expected owner missing error, got: {msg}"
+        );
+    }
+
+    const PY_EFFECT_SCENE: &str = "#[py_effect(presets = WIND_PRESETS, apply_preset = apply_wind)]
+        #[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]";
+
+    #[test]
+    fn py_effect_expands_impl() {
+        let input: DeriveInput = syn::parse_str(&format!(
+            "{PY_EFFECT_SCENE}
+            struct S {{
+                #[runtime]
+                pub time: f32,
+                #[persist(owner = Frame, as = [f32; 3], get = get_position, set = set_position)]
+                pub position: Vector3<f32>,
+                #[persist(owner = Frame, as = [f32; 4], get = get_rotation, set = set_rotation)]
+                pub rotation: Quaternion<f32>,
+            }}"
+        ))
+        .expect("valid struct");
+        let expanded = expand_py_effect(&input).expect("expands").to_string();
+
+        for expected in [
+            "impl crate :: pybindings :: PyEffect for S",
+            "const PRESET_NAMES : & 'static [& 'static str] = WIND_PRESETS ;",
+            "const UI_PARAMS : & 'static [crate :: UiParam] = WIND_UI ;",
+            "apply_wind (self , name)",
+            "WIND_OVERWRITE (self , source) ;",
+            "self . time = time ; set_position (self , position) ; set_rotation (self , rotation) ;",
+            "WIND_TAGS . iter ()",
+            "map_or (\"unknown\"",
+            "crate :: pybindings :: ParameterOwnerName :: owner_name (* owner)",
+        ] {
+            assert!(expanded.contains(expected), "missing `{expected}` in {expanded}");
+        }
+    }
+
+    #[test]
+    fn py_effect_missing_time_error() {
+        let input: DeriveInput = syn::parse_str(&format!(
+            "{PY_EFFECT_SCENE}
+            struct S {{
+                #[persist(owner = Frame, as = [f32; 3], get = get_position, set = set_position)]
+                pub position: Vector3<f32>,
+                #[persist(owner = Frame, as = [f32; 4], get = get_rotation, set = set_rotation)]
+                pub rotation: Quaternion<f32>,
+            }}"
+        ))
+        .expect("valid struct");
+        let msg = expand_py_effect(&input).unwrap_err().to_string();
+        assert!(
+            msg.contains("PyEffect requires a field named `time`"),
+            "expected missing time error, got: {msg}"
         );
     }
 }

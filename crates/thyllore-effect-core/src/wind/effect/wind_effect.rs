@@ -4,9 +4,15 @@ use super::scene_format::*;
 use crate::wind::ownership::WindParameterOwner;
 
 #[derive(
-    Clone, Debug, PartialEq, thyllore_effect_derive::UboPack, thyllore_effect_derive::SceneFormat,
+    Clone,
+    Debug,
+    PartialEq,
+    thyllore_effect_derive::UboPack,
+    thyllore_effect_derive::SceneFormat,
+    thyllore_effect_derive::PyEffect,
 )]
 #[ubo(target = crate::WindUBO)]
+#[py_effect(presets = crate::WIND_PRESET_NAMES, apply_preset = crate::apply_wind_preset)]
 #[scene(record = WindSceneRecord, tag = WindParameterOwner, key = "wind_tornado", tags = WIND_PARAMETER_OWNERSHIP, snapshot = wind_parameter_snapshot, scalars = WIND_SCALAR_PARAMS, ui = WIND_UI_PARAMS, overwrite = overwrite_wind_persisted_fields)]
 pub struct WindTornadoEffect {
     #[ubo("optics.z")]

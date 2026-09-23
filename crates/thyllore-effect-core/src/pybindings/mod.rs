@@ -3,6 +3,8 @@ mod flame;
 mod water;
 mod wind;
 
+pub(crate) use effect::{ParameterOwnerName, PyEffect};
+
 use pyo3::prelude::*;
 
 #[cfg(test)]

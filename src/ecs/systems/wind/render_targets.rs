@@ -2,7 +2,7 @@ use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
 use crate::ecs::resource::{half_extent, WindGpuState, WindRenderTargets};
-use crate::ecs::EffectContext;
+use crate::ecs::{EffectContext, MAX_FRAMES_IN_FLIGHT};
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::core::RRDevice;
@@ -185,6 +185,7 @@ unsafe fn setup_wind(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()>
         ctx.graphics,
         &targets,
         rrrender.gbuffer_depth_image_view,
+        MAX_FRAMES_IN_FLIGHT,
     )?;
     ctx.world.insert_resource(targets);
     ctx.world.insert_resource(gpu_state);
@@ -221,11 +222,14 @@ unsafe fn resize_wind_render_targets(ctx: &mut EffectContext) -> Result<()> {
         descriptor.update_shadow_volume(ctx.rrdevice, &targets.shadow_volume)?;
     }
     if let Some(descriptor) = gpu_state.upsample_descriptor.as_ref() {
-        descriptor.update_image_views(
-            ctx.rrdevice,
-            targets.half_color_image_view,
-            scene_depth_view,
-        )?;
+        for frame_slot in 0..MAX_FRAMES_IN_FLIGHT {
+            descriptor.update_image_views_at(
+                ctx.rrdevice,
+                frame_slot,
+                targets.half_color_image_view,
+                scene_depth_view,
+            )?;
+        }
     }
     Ok(())
 }

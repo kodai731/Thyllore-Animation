@@ -21,6 +21,7 @@ pub unsafe fn create_wind_gpu_state(
     graphics_resources: &GraphicsResources,
     targets: &WindRenderTargets,
     scene_depth_view: vk::ImageView,
+    frames_in_flight: usize,
 ) -> Result<WindGpuState> {
     let ubo = UniformBuffer::new(
         instance,
@@ -61,12 +62,15 @@ pub unsafe fn create_wind_gpu_state(
     ])
     .build(rrdevice, rrrender, Some(targets.extent()))?;
 
-    let upsample_descriptor = WindUpsampleDescriptorSet::new(rrdevice)?;
-    upsample_descriptor.update_image_views(
-        rrdevice,
-        targets.half_color_image_view,
-        scene_depth_view,
-    )?;
+    let upsample_descriptor = WindUpsampleDescriptorSet::new(rrdevice, frames_in_flight)?;
+    for frame_slot in 0..frames_in_flight {
+        upsample_descriptor.update_image_views_at(
+            rrdevice,
+            frame_slot,
+            targets.half_color_image_view,
+            scene_depth_view,
+        )?;
+    }
     let upsample_pipeline = overlay_pipeline(
         &WIND_UPSAMPLE,
         targets.render_pass,

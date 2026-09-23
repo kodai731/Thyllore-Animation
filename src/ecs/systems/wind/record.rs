@@ -151,6 +151,7 @@ pub unsafe fn record_wind_upsample_pass(
     pipeline: &RRPipeline,
     descriptor: &WindUpsampleDescriptorSet,
     scissor: vk::Rect2D,
+    frame_slot: usize,
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
     let device = &ctx.device.device;
@@ -161,7 +162,7 @@ pub unsafe fn record_wind_upsample_pass(
         extent,
     };
     let overlay_draws = [OverlayDraw {
-        descriptor_sets: &[descriptor.descriptor_set],
+        descriptor_sets: &[descriptor.descriptor_set(frame_slot)],
         dynamic_offsets: &[],
         scissor,
     }];

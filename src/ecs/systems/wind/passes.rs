@@ -113,9 +113,9 @@ impl RenderPassNode for WindPassNode {
         ctx: &PassContext,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
-        _frame_slot: usize,
+        frame_slot: usize,
     ) -> Result<()> {
-        record_wind_passes(ctx, command_buffer, image_index)
+        record_wind_passes(ctx, command_buffer, image_index, frame_slot)
     }
 }
 
@@ -123,6 +123,7 @@ unsafe fn record_wind_passes(
     ctx: &PassContext,
     command_buffer: vk::CommandBuffer,
     image_index: usize,
+    frame_slot: usize,
 ) -> Result<()> {
     let Some(frame) = wind_frame(ctx) else {
         return Ok(());
@@ -210,6 +211,7 @@ unsafe fn record_wind_passes(
             &draws,
             push_constants,
             image_index,
+            frame_slot,
             command_buffer,
         )?,
     }
@@ -227,6 +229,7 @@ unsafe fn record_half_scale_wind_passes(
     draws: &[WindInstanceDraw],
     push_constants: WindPushConstants,
     image_index: usize,
+    frame_slot: usize,
     command_buffer: vk::CommandBuffer,
 ) -> Result<()> {
     let (Some(upsample_pipeline), Some(upsample_descriptor)) = (
@@ -261,6 +264,7 @@ unsafe fn record_half_scale_wind_passes(
         upsample_pipeline,
         upsample_descriptor,
         union_scissor(draws.iter().map(|draw| draw.scissor), wind_buffer.extent()),
+        frame_slot,
         command_buffer,
     )
 }

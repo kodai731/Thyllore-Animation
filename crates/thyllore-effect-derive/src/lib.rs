@@ -208,6 +208,25 @@ fn parse_persist_attribute(attr: &syn::Attribute) -> Result<PersistAttributes> {
     Ok(persist)
 }
 
+fn expand_path_accessors(path: &syn::LitStr) -> proc_macro2::TokenStream {
+    let path_str = path.value();
+    let segments: Vec<&str> = path_str.split('.').collect();
+
+    let mut get_expr: proc_macro2::TokenStream = quote!(e);
+    for seg in &segments {
+        let seg_ident = syn::Ident::new(seg, proc_macro2::Span::call_site());
+        get_expr = quote!(#get_expr.#seg_ident);
+    }
+
+    let mut set_lhs: proc_macro2::TokenStream = quote!(e);
+    for seg in &segments {
+        let seg_ident = syn::Ident::new(seg, proc_macro2::Span::call_site());
+        set_lhs = quote!(#set_lhs.#seg_ident);
+    }
+
+    quote!(get: |e| #get_expr, set: |e, v| #set_lhs = v)
+}
+
 fn expand_persisted_entry(
     ident: &syn::Ident,
     field_ty: &syn::Type,
@@ -228,22 +247,7 @@ fn expand_persisted_entry(
     };
 
     let accessors = if let Some(ref path) = persist.path {
-        let path_str = path.value();
-        let segments: Vec<&str> = path_str.split('.').collect();
-
-        let mut get_expr: proc_macro2::TokenStream = quote!(e);
-        for seg in &segments {
-            let seg_ident = syn::Ident::new(seg, proc_macro2::Span::call_site());
-            get_expr = quote!(#get_expr.#seg_ident);
-        }
-
-        let mut set_lhs: proc_macro2::TokenStream = quote!(e);
-        for seg in &segments {
-            let seg_ident = syn::Ident::new(seg, proc_macro2::Span::call_site());
-            set_lhs = quote!(#set_lhs.#seg_ident);
-        }
-
-        quote!(get: |e| #get_expr, set: |e, v| #set_lhs = v)
+        expand_path_accessors(path)
     } else {
         match (&persist.get, &persist.set) {
             (Some(get), Some(set)) => quote!(get: #get, set: #set),
@@ -283,47 +287,85 @@ fn collect_runtime_entries(fields: &Fields) -> Result<Vec<proc_macro2::TokenStre
         };
 
         for attr in field.attrs.iter().filter(|a| a.path().is_ident("runtime")) {
-            let ty = &field.ty;
-            let ui = parse_runtime_ui(attr)?
-                .map(|ui| expand_ui(ident, ui))
-                .transpose()?;
-
-            entries.push(quote! {
-                #ident: #ty {
-                    get: |e| e.#ident,
-                    set: |e, v| e.#ident = v
-                    #ui
-                }
-            });
+            let runtime = parse_runtime_attribute(attr)?;
+            entries.push(expand_runtime_entry(ident, &field.ty, runtime)?);
         }
     }
 
     Ok(entries)
 }
 
-fn parse_runtime_ui(attr: &syn::Attribute) -> Result<Option<UiAttributes>> {
+fn parse_runtime_attribute(attr: &syn::Attribute) -> Result<RuntimeAttributes> {
+    let mut runtime = RuntimeAttributes::default();
+
     if let Meta::Path(_) = &attr.meta {
-        return Ok(None);
+        return Ok(runtime);
     }
 
-    let mut ui = None;
     attr.meta.require_list()?.parse_nested_meta(|meta| {
-        if meta.path.is_ident("ui") {
-            ui = Some(parse_ui_attributes(&meta)?);
-            Ok(())
+        if meta.path.is_ident("name") {
+            runtime.name = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("path") {
+            runtime.path = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("as") {
+            runtime.as_type = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("ui") {
+            runtime.ui = Some(parse_ui_attributes(&meta)?);
         } else {
-            Err(meta.error("unknown runtime attribute key"))
+            return Err(meta.error("unknown runtime attribute key"));
         }
+
+        Ok(())
     })?;
 
-    if let Some(kind) = ui.as_ref().and_then(|ui: &UiAttributes| ui.kind.as_ref()) {
-        return Err(Error::new_spanned(
-            kind,
-            "runtime ui does not accept `kind`",
-        ));
+    if runtime.path.is_some() {
+        if runtime.name.is_none() {
+            return Err(Error::new_spanned(attr, "runtime `path` requires `name`"));
+        }
+        if runtime.as_type.is_none() {
+            return Err(Error::new_spanned(attr, "runtime `path` requires `as`"));
+        }
     }
 
-    Ok(ui)
+    if runtime.name.is_some() && runtime.path.is_none() {
+        return Err(Error::new_spanned(attr, "runtime `name` requires `path`"));
+    }
+
+    Ok(runtime)
+}
+
+fn expand_runtime_entry(
+    ident: &syn::Ident,
+    field_ty: &syn::Type,
+    runtime: RuntimeAttributes,
+) -> Result<proc_macro2::TokenStream> {
+    let entry_ident = match &runtime.name {
+        Some(name) => name.clone(),
+        None => ident.clone(),
+    };
+
+    let ty = match &runtime.as_type {
+        Some(as_type) => quote!(#as_type),
+        None => quote!(#field_ty),
+    };
+
+    let accessors = if let Some(ref path) = runtime.path {
+        expand_path_accessors(path)
+    } else {
+        quote!(get: |e| e.#ident, set: |e, v| e.#ident = v)
+    };
+
+    let ui = runtime
+        .ui
+        .map(|ui| expand_ui(&entry_ident, ui))
+        .transpose()?;
+
+    Ok(quote! {
+        #entry_ident: #ty {
+            #accessors
+            #ui
+        }
+    })
 }
 
 fn parse_ui_attributes(meta: &syn::meta::ParseNestedMeta) -> Result<UiAttributes> {
@@ -391,6 +433,14 @@ struct PersistAttributes {
     scalars: Option<syn::Ident>,
     name: Option<syn::Ident>,
     path: Option<syn::LitStr>,
+    ui: Option<UiAttributes>,
+}
+
+#[derive(Default)]
+struct RuntimeAttributes {
+    name: Option<syn::Ident>,
+    path: Option<syn::LitStr>,
+    as_type: Option<syn::Type>,
     ui: Option<UiAttributes>,
 }
 
@@ -1087,6 +1137,39 @@ mod tests {
         assert!(
             msg.contains("persist `name` requires `path`"),
             "expected name without path error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn scene_runtime_path_expansion() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[runtime(name = warp_y_scale, path = \"warp.y_scale\", as = f32)]
+                pub warp: Warp,
+            }",
+        );
+        assert!(
+            expanded.contains("warp_y_scale : f32 { get : | e | e . warp . y_scale , set : | e , v | e . warp . y_scale = v }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_runtime_path_without_as_error() {
+        let input: DeriveInput = syn::parse_str(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[runtime(name = warp_y_scale, path = \"warp.y_scale\")]
+                pub warp: Warp,
+            }",
+        )
+        .expect("valid struct");
+        let err = expand_scene_format(&input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("runtime `path` requires `as`"),
+            "expected path without as error, got: {msg}"
         );
     }
 }

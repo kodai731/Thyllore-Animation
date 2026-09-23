@@ -42,7 +42,7 @@ const HISTORY_KEYS: [RenderTargetKey; 2] = [
     RenderTargetKey::EffectHistory(3),
 ];
 
-/// Must match CAUSTIC_GRID_SIZE and local_size in causticSplat.comp
+/// Must match CAUSTIC_GRID_SIZE and numthreads in causticSplatCompute.slang
 const CAUSTIC_GRID_SIZE: u32 = 512;
 const CAUSTIC_WORKGROUP_SIZE: u32 = 16;
 

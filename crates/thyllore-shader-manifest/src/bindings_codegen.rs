@@ -7,10 +7,11 @@ use thyllore_spirv_reflect::{
 };
 
 use crate::manifest::{PassDefinition, PassManifest};
+use crate::naming::spirv_output_name;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum BindingCodegenError {
-    #[error("pass `{pass}`: no reflection provided for shader `{file}`")]
+    #[error("pass `{pass}`: no reflection provided for SPIR-V `{file}`")]
     MissingReflection { pass: String, file: String },
     #[error("pass `{pass}`: set {set} binding {binding} is `{first}` in one stage but `{second}` in another; stages of one pass must agree on descriptor names")]
     NameConflict {
@@ -40,6 +41,7 @@ struct PassPushConstant {
     stages: Vec<ShaderStage>,
 }
 
+/// `reflection_of` is keyed by the SPIR-V path relative to the output directory (`spirv_output_name`).
 pub fn generate_shader_bindings_rust(
     manifest: &PassManifest,
     reflection_of: impl Fn(&str) -> Option<ShaderReflection>,
@@ -112,13 +114,15 @@ fn load_pass_reflections(
     pass.stages
         .iter()
         .map(|stage| {
-            let reflection = reflection_of(&stage.source_file).ok_or_else(|| {
+            let spirv_name = spirv_output_name(&stage.source_file, stage.stage)
+                .expect("manifest validation guarantees a shader extension");
+            let reflection = reflection_of(&spirv_name).ok_or_else(|| {
                 BindingCodegenError::MissingReflection {
                     pass: pass.name.clone(),
-                    file: stage.source_file.clone(),
+                    file: spirv_name.clone(),
                 }
             })?;
-            Ok((stage.source_file.clone(), reflection))
+            Ok((spirv_name, reflection))
         })
         .collect()
 }
@@ -199,6 +203,7 @@ fn count_expression(count: DescriptorCount) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::stage::StageKind;
     use thyllore_spirv_reflect::{DescriptorKind, ShaderStage};
 
     fn reflection(bindings: Vec<ReflectedBinding>) -> ShaderReflection {
@@ -207,6 +212,22 @@ mod tests {
             bindings,
             push_constant: None,
         }
+    }
+
+    fn manifest(text: &str, files: &[(&str, crate::stage::StageKind)]) -> PassManifest {
+        let entries = files
+            .iter()
+            .map(|(file, stage)| {
+                (
+                    file.to_string(),
+                    vec![crate::naming::EntryPoint {
+                        name: "main".into(),
+                        stage: *stage,
+                    }],
+                )
+            })
+            .collect();
+        PassManifest::parse(text, &entries).unwrap()
     }
 
     fn binding(set: u32, index: u32, name: &str, kind: DescriptorKind) -> ReflectedBinding {
@@ -222,13 +243,16 @@ mod tests {
 
     #[test]
     fn generates_one_module_per_pass_with_merged_constants() {
-        let manifest = PassManifest::parse(
-            "[pass.flame_resolve]\nstages = [\"tonemapVertex.vert\", \"resolveFragment.frag\"]\nsets = { 0 = \"local\" }\n",
-        )
-        .unwrap();
+        let manifest = manifest(
+            "[pass.flame_resolve]\nstages = [\"tonemapVertex.slang\", \"resolveFragment.slang\"]\nsets = { 0 = \"local\" }\n",
+            &[
+                ("tonemapVertex.slang", StageKind::Vertex),
+                ("resolveFragment.slang", StageKind::Fragment),
+            ],
+        );
         let code = generate_shader_bindings_rust(&manifest, |file| match file {
-            "tonemapVertex.vert" => Some(reflection(vec![])),
-            "resolveFragment.frag" => Some(reflection(vec![
+            "tonemapVert.spv" => Some(reflection(vec![])),
+            "resolveFrag.spv" => Some(reflection(vec![
                 binding(0, 0, "flame", DescriptorKind::UniformBuffer),
                 binding(0, 4, "historySampler", DescriptorKind::CombinedImageSampler),
             ])),
@@ -242,18 +266,21 @@ mod tests {
 
     #[test]
     fn rejects_same_slot_with_different_names_across_stages() {
-        let manifest = PassManifest::parse(
-            "[pass.model]\nstages = [\"vertex.vert\", \"fragment.frag\"]\nsets = { 0 = \"frame\" }\n",
-        )
-        .unwrap();
+        let manifest = manifest(
+            "[pass.model]\nstages = [\"vertex.slang\", \"fragment.slang\"]\nsets = { 0 = \"frame\" }\n",
+            &[
+                ("vertex.slang", StageKind::Vertex),
+                ("fragment.slang", StageKind::Fragment),
+            ],
+        );
         let error = generate_shader_bindings_rust(&manifest, |file| match file {
-            "vertex.vert" => Some(reflection(vec![binding(
+            "vert.spv" => Some(reflection(vec![binding(
                 0,
                 0,
                 "frameData",
                 DescriptorKind::UniformBuffer,
             )])),
-            "fragment.frag" => Some(reflection(vec![binding(
+            "frag.spv" => Some(reflection(vec![binding(
                 0,
                 0,
                 "frame",
@@ -267,13 +294,16 @@ mod tests {
 
     #[test]
     fn rejects_two_descriptors_mapping_to_one_constant() {
-        let manifest = PassManifest::parse(
-            "[pass.dof]\nstages = [\"tonemapVertex.vert\", \"dofFragment.frag\"]\nsets = { 0 = \"local\" }\n",
-        )
-        .unwrap();
+        let manifest = manifest(
+            "[pass.dof]\nstages = [\"tonemapVertex.slang\", \"dofFragment.slang\"]\nsets = { 0 = \"local\" }\n",
+            &[
+                ("tonemapVertex.slang", StageKind::Vertex),
+                ("dofFragment.slang", StageKind::Fragment),
+            ],
+        );
         let error = generate_shader_bindings_rust(&manifest, |file| match file {
-            "tonemapVertex.vert" => Some(reflection(vec![])),
-            "dofFragment.frag" => Some(reflection(vec![
+            "tonemapVert.spv" => Some(reflection(vec![])),
+            "dofFrag.spv" => Some(reflection(vec![
                 binding(0, 0, "hdrSampler", DescriptorKind::CombinedImageSampler),
                 binding(0, 1, "hdr_sampler", DescriptorKind::CombinedImageSampler),
             ])),
@@ -296,23 +326,27 @@ mod tests {
 
     #[test]
     fn emits_push_constant_layout_merged_over_the_stages_declaring_it() {
-        let manifest = PassManifest::parse(
-            "[pass.effect_trace]\nstages = [\"traceRayGen.rgen\", \"traceMiss.rmiss\", \"sceneClosestHit.rchit\"]\nsets = { 0 = \"local\" }\n",
-        )
-        .unwrap();
+        let manifest = manifest(
+            "[pass.effect_trace]\nstages = [\"traceRayGen.slang\", \"traceMiss.slang\", \"sceneClosestHit.slang\"]\nsets = { 0 = \"local\" }\n",
+            &[
+                ("traceRayGen.slang", StageKind::RayGeneration),
+                ("traceMiss.slang", StageKind::Miss),
+                ("sceneClosestHit.slang", StageKind::ClosestHit),
+            ],
+        );
         let with_push = |stage: ShaderStage| ShaderReflection {
             stages: vec![stage],
             bindings: vec![],
             push_constant: Some(block("TracePush", 112)),
         };
         let code = generate_shader_bindings_rust(&manifest, |file| match file {
-            "traceRayGen.rgen" => Some(with_push(ShaderStage::RayGeneration)),
-            "traceMiss.rmiss" => Some(ShaderReflection {
+            "traceRgen.spv" => Some(with_push(ShaderStage::RayGeneration)),
+            "traceRmiss.spv" => Some(ShaderReflection {
                 stages: vec![ShaderStage::Miss],
                 bindings: vec![],
                 push_constant: None,
             }),
-            "sceneClosestHit.rchit" => Some(with_push(ShaderStage::ClosestHit)),
+            "sceneRchit.spv" => Some(with_push(ShaderStage::ClosestHit)),
             _ => None,
         })
         .unwrap();
@@ -321,17 +355,20 @@ mod tests {
 
     #[test]
     fn rejects_stages_declaring_different_push_constant_blocks() {
-        let manifest = PassManifest::parse(
-            "[pass.effect_trace]\nstages = [\"traceRayGen.rgen\", \"sceneClosestHit.rchit\"]\nsets = { 0 = \"local\" }\n",
-        )
-        .unwrap();
+        let manifest = manifest(
+            "[pass.effect_trace]\nstages = [\"traceRayGen.slang\", \"sceneClosestHit.slang\"]\nsets = { 0 = \"local\" }\n",
+            &[
+                ("traceRayGen.slang", StageKind::RayGeneration),
+                ("sceneClosestHit.slang", StageKind::ClosestHit),
+            ],
+        );
         let error = generate_shader_bindings_rust(&manifest, |file| match file {
-            "traceRayGen.rgen" => Some(ShaderReflection {
+            "traceRgen.spv" => Some(ShaderReflection {
                 stages: vec![ShaderStage::RayGeneration],
                 bindings: vec![],
                 push_constant: Some(block("TraceCamera", 80)),
             }),
-            "sceneClosestHit.rchit" => Some(ShaderReflection {
+            "sceneRchit.spv" => Some(ShaderReflection {
                 stages: vec![ShaderStage::ClosestHit],
                 bindings: vec![],
                 push_constant: Some(block("TraceLight", 32)),

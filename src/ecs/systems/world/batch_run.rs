@@ -8,13 +8,12 @@ use crate::ecs::resource::{
 use crate::ecs::world::World;
 use crate::hooks::batch_capture::CaptureSlot;
 
-/// Pre-render: advances the frame clock.
-pub fn run_frame_clock_phase(world: &World) {
+pub fn advance_frame_clock(world: &World) {
     world.resource_mut::<FrameClock>().advance();
 }
 
-/// Pre-render: asks for a capture once the clock reaches the schedule's next frame.
-pub fn run_batch_schedule_phase(world: &World) {
+/// Asks for a capture once the clock reaches the schedule's next frame.
+pub fn batch_run_request_scheduled_capture(world: &World) {
     let Some(mut batch) = world.get_resource_mut::<BatchRun>() else {
         return;
     };
@@ -164,8 +163,8 @@ mod tests {
     }
 
     fn run_frame(world: &World) {
-        run_frame_clock_phase(world);
-        run_batch_schedule_phase(world);
+        advance_frame_clock(world);
+        batch_run_request_scheduled_capture(world);
     }
 
     #[test]

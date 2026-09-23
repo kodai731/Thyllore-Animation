@@ -16,7 +16,7 @@ use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::renderer::deferred::{compute_bounds_scissor, full_extent_scissor};
 use thyllore_effect_core::{
     build_wind_ubo, inverse_view_proj_f64, wind_local_bounds_corners, WindDebugView,
-    WindResolveScale, WindShadowSlot, WindShellParams, WindUBO, WIND_MAX_INSTANCES,
+    WindResolveScale, WindShadowSlot, WindUBO, WIND_MAX_INSTANCES,
 };
 use thyllore_vulkan_core::FrameRenderContext;
 
@@ -67,7 +67,6 @@ fn wind_frame(ctx: &PassContext) -> Option<WindFrame> {
         if let Some(inv_view_proj) = inv_view_proj {
             ubo.inv_view_proj = inv_view_proj;
         }
-        let params = WindShellParams::from_effect(&effect);
         let scissor = if settings.debug_view == WindDebugView::Coverage {
             Some(full_extent_scissor(extent))
         } else {
@@ -75,7 +74,7 @@ fn wind_frame(ctx: &PassContext) -> Option<WindFrame> {
                 ctx.world,
                 extent,
                 &ubo.model,
-                wind_local_bounds_corners(&params),
+                wind_local_bounds_corners(&ubo),
             )
         };
         scissors.push(scissor);

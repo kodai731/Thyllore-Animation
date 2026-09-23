@@ -40,8 +40,8 @@ def build_water_shader(glsl_path: str, bindings_path: str):
 
     info = gpu.types.GPUShaderCreateInfo()
     info.typedef_source(typedef)
-    info.uniform_buf(0, "FrameUBO", "frame")
-    info.uniform_buf(1, "WaterUBO", "water")
+    for i, ubo in enumerate(bindings["ubos"]):
+        info.uniform_buf(i, ubo["type"], ubo["name"])
     for i, sampler in enumerate(bindings["samplers"]):
         info.sampler(i, "FLOAT_2D", sampler["name"])
     iface = gpu.types.GPUStageInterfaceInfo("water_iface")
@@ -53,7 +53,7 @@ def build_water_shader(glsl_path: str, bindings_path: str):
     info.vertex_source("void main(){ fragTexCoord = pos*0.5+0.5; gl_Position = vec4(pos,0.0,1.0); }")
     pc = bindings["push_constants"][0]
     wanted = {"push.secondaryRays": 1.0, "push.debugView": 0.0}
-    info.fragment_source(shader_info.push_prelude(pc["type"], pc["members"]) + shader_info.specialize_body(body, {k: v for k, v in wanted.items() if k in body}))
+    info.fragment_source(shader_info.push_prelude(pc) + shader_info.specialize_body(body, {k: v for k, v in wanted.items() if k in body}))
     return gpu.shader.create_from_info(info)
 
 

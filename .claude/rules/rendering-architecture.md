@@ -28,7 +28,8 @@ reads and writes, and a declaration must hold whenever `record()` would emit the
 
 ## Frame flow
 
-`src/platform/events/frame.rs::render_frame` calls three `App` methods in order, then `after_present`:
+`App::drive_frame` (`src/app/frame.rs`, called from `src/platform/events/frame.rs`) dispatches the UI
+events and applies the `AppCommand`s, then calls three `App` methods in order and closes with Last:
 
 1. `begin_frame` (`src/app/render.rs`): apply pending viewport resize (`device_wait_idle`, viewport and
    effect buffers rebuilt, descriptors rebound), wait the frame fence, `RenderTargetTransient::begin_frame`
@@ -39,7 +40,7 @@ reads and writes, and a declaration must hold whenever `record()` would emit the
 3. `render` (`src/app/render.rs`): TLAS refresh, `prepare_post_process_targets` and
    `prepare_water_frame_targets` (acquire transient images, update the descriptor sets of this frame slot),
    `record_command_buffer`, submit, present, `FrameSync::advance`.
-4. `App::after_present` (`src/app/lifecycle/after_present.rs`) → `run_batch_capture_phase`: only when the
+4. `run_last_phase` (`src/ecs/systems/phases/last_phase.rs`): only when the
    batch schedule asked for a capture this frame; waits idle, runs every requested `BatchCapture` and saves
    the screenshot.
 

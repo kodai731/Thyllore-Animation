@@ -2,9 +2,6 @@ use std::path::{Path, PathBuf};
 
 use thyllore_effect_core::{FlameUBO, WaterUBO, WindUBO};
 use thyllore_render_core::{FrameUBO, MaterialUBO, ObjectUBO};
-use thyllore_shader_manifest::{
-    gpu_blocks_source, GpuBlockTarget, GPU_BLOCK_TARGETS, REGENERATE_GPU_BLOCKS_COMMAND,
-};
 use thyllore_spirv_reflect::{
     compare_block_layout, BlockCoverage, DescriptorKind, GpuBlock, LayoutDifference, ReflectedBlock,
 };
@@ -14,6 +11,8 @@ use thyllore_vulkan_core::descriptor::{
     ReflectedLayoutSpec, SelectionUBO, ShaderFile, ShaderReflection, ALL_PASSES,
 };
 use thyllore_vulkan_core::renderer::TracePush;
+
+const GENERATED_PUSH_BLOCKS: [&str; 1] = ["TracePush"];
 
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -235,10 +234,7 @@ fn rust_push_constant_structs_match_every_generated_push_block() {
             let Some(block) = load_reflection(shader).push_constant else {
                 continue;
             };
-            if !GPU_BLOCK_TARGETS
-                .iter()
-                .any(|target| target.block_name == block.type_name)
-            {
+            if !GENERATED_PUSH_BLOCKS.contains(&block.type_name.as_str()) {
                 continue;
             }
             let location = format!("{} `{}`", shader.path, block.type_name);
@@ -255,51 +251,6 @@ fn rust_push_constant_structs_match_every_generated_push_block() {
     assert!(
         failures.is_empty(),
         "push constant layout drift against SPIR-V:\n{}",
-        failures.join("\n")
-    );
-}
-
-fn first_line_difference(left: &str, right: &str) -> Option<(usize, String, String)> {
-    let mut left_lines = left.lines();
-    let mut right_lines = right.lines();
-    let mut line_number = 1;
-    loop {
-        match (left_lines.next(), right_lines.next()) {
-            (None, None) => return None,
-            (l, r) if l == r => line_number += 1,
-            (l, r) => {
-                return Some((
-                    line_number,
-                    l.unwrap_or("<end>").to_string(),
-                    r.unwrap_or("<end>").to_string(),
-                ))
-            }
-        }
-    }
-}
-
-#[test]
-fn generated_flame_gpu_blocks_match_spirv() {
-    enter_workspace_root();
-    let mut failures: Vec<String> = Vec::new();
-
-    for target in GPU_BLOCK_TARGETS {
-        let generated = gpu_blocks_source(Path::new("assets/shaders"), target)
-            .unwrap_or_else(|error| panic!("generate {} gpu blocks: {error}", target.block_name));
-        let checked_in = std::fs::read_to_string(target.output_path)
-            .unwrap_or_else(|error| panic!("read {}: {error}", target.output_path));
-
-        if let Some((line, expected, current)) = first_line_difference(&generated, &checked_in) {
-            failures.push(format!(
-                "{} is stale at line {line}; run `{REGENERATE_GPU_BLOCKS_COMMAND}`\n  generated : {expected}\n  checked in: {current}",
-                target.output_path
-            ));
-        }
-    }
-
-    assert!(
-        failures.is_empty(),
-        "generated gpu blocks differ from checked-in files:\n{}",
         failures.join("\n")
     );
 }

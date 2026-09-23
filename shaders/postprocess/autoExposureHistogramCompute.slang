@@ -23,7 +23,7 @@ void main(uint3 globalInvocationId : SV_DispatchThreadID, uint localIndex : SV_G
 
     if (pixelCoord.x < imageSize.x && pixelCoord.y < imageSize.y) {
         float2 uv = (float2(pixelCoord) + 0.5) / float2(imageSize);
-        float3 color = hdrImage.Sample(uv).rgb;
+        float3 color = hdrImage.SampleLevel(uv, 0).rgb;
         float luminance = dot(color, float3(0.2126, 0.7152, 0.0722));
 
         uint binIndex = 0;

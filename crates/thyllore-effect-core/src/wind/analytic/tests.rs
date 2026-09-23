@@ -1,10 +1,15 @@
 use super::*;
 use crate::analytic_manifest::{float_constant, int_constant, shader_source};
+use crate::test_support::BitwiseAgreement;
 use crate::volume::{shell_and_puff_knots, ACTIVE_CELLS_MIN};
 use crate::volume::{MODULATION_CELLS, PUFFS_PER_RAY, RAY_MAX_KNOTS};
 use crate::wind::analytic::eddy::{EDDY_FADE_END, EDDY_FADE_START, EDDY_OCTAVE_COUNT};
 use crate::wind::analytic::motion::rotation_phase;
-use crate::wind::WindTornadoEffect;
+use crate::wind::analytic::slang::{
+    wind_clamp_ray_to_cone_slang, wind_density_at_slang, wind_envelope_radius_slang,
+    wind_optical_depth_slang, wind_optical_depth_toward_slang,
+};
+use crate::wind::{build_wind_ubo, WindShadowSlot, WindTornadoEffect};
 use crate::wind::{
     WIND_SHADOW_VOLUME_HEIGHT, WIND_SHADOW_VOLUME_RADIAL, WIND_SHADOW_VOLUME_SLOTS,
     WIND_SHADOW_VOLUME_THETA,
@@ -1078,4 +1083,84 @@ fn shader_polynomial_terms_match_the_rust_mirror_and_cover_the_piece_degree() {
         "a piece polynomial of degree {piece_degree} needs {} terms",
         piece_degree + 1
     );
+}
+
+#[test]
+fn slang_c_abi_matches_rust_bitwise_over_a_ray_grid() {
+    let effect = WindTornadoEffect::default();
+    let ubo = build_wind_ubo(&effect, WindShadowSlot(0));
+    let params = WindShellParams::from_effect(&effect);
+
+    let mut optical_depth = BitwiseAgreement::default();
+    let mut density = BitwiseAgreement::default();
+    let mut optical_depth_toward = BitwiseAgreement::default();
+    let mut clamp = BitwiseAgreement::default();
+
+    for row in 0..12 {
+        for column in 0..10 {
+            let origin = Vector3::new(
+                -5.0 + row as f32 * 0.4,
+                0.1 + column as f32 * 0.18,
+                -0.5 + (row + column) as f32 * 0.05,
+            );
+            let direction =
+                Vector3::new(1.0, (row as f32 - 5.0) * 0.02, (column as f32 - 5.0) * 0.02)
+                    .normalize();
+
+            let mut t_near = 0.0f32;
+            let mut t_far = 1e4f32;
+            let rust_hit =
+                clamp_ray_to_wind_cone(&params, origin, direction, &mut t_near, &mut t_far);
+            let slang_hit = wind_clamp_ray_to_cone_slang(&ubo, origin, direction, 0.0, 1e4);
+
+            match (rust_hit, slang_hit) {
+                (true, Some((slang_t_near, slang_t_far))) => {
+                    clamp.record(t_near, slang_t_near);
+                    clamp.record(t_far, slang_t_far);
+
+                    optical_depth.record(
+                        wind_optical_depth(&params, origin, direction, t_near, t_far),
+                        wind_optical_depth_slang(&ubo, origin, direction, t_near, t_far),
+                    );
+
+                    let midpoint = origin + direction * ((t_near + t_far) * 0.5);
+                    density.record(
+                        wind_density_at(&params, midpoint),
+                        wind_density_at_slang(&ubo, midpoint),
+                    );
+
+                    optical_depth_toward.record(
+                        wind_optical_depth_toward(&params, origin, direction),
+                        wind_optical_depth_toward_slang(&ubo, origin, direction),
+                    );
+                }
+                (false, None) => {}
+                (rust_hit, slang_hit) => {
+                    panic!(
+                        "ray ({row},{column}): hit mismatch rust={rust_hit} slang={slang_hit:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    assert!(
+        optical_depth.compared() >= 100,
+        "only {} rays hit the envelope, need at least 100",
+        optical_depth.compared()
+    );
+    optical_depth.assert_identical("optical depth");
+    density.assert_identical("density");
+    optical_depth_toward.assert_identical("optical depth toward");
+    clamp.assert_identical("clamp");
+
+    let mut envelope_radius = BitwiseAgreement::default();
+    for i in 0..10 {
+        let h = params.height * (i as f32 / 9.0);
+        envelope_radius.record(
+            params.shell().envelope_radius(h),
+            wind_envelope_radius_slang(&ubo, h),
+        );
+    }
+    envelope_radius.assert_identical("envelope radius");
 }

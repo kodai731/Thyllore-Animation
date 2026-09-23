@@ -18,6 +18,7 @@ use thyllore_math_core::{
 
 const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VolumeShell {
     pub height: f32,

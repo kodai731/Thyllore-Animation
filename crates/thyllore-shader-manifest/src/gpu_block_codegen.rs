@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 
 use thiserror::Error;
-use thyllore_spirv_reflect::{ReflectedBlock, ReflectedMember};
+use thyllore_spirv_reflect::{ReflectedBlock, ReflectedMember, ShaderReflection};
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum GpuBlockCodegenError {
@@ -14,7 +14,7 @@ pub enum GpuBlockCodegenError {
 
 #[derive(Clone, Debug, Default)]
 pub struct GpuBlockCodegenConfig {
-    pub regenerate_command: String,
+    pub header: String,
     pub imports: Vec<String>,
     pub extra_derives: BTreeMap<String, Vec<String>>,
 }
@@ -30,11 +30,7 @@ pub fn generate_gpu_blocks_rust(
     collect_nested_structs(&block.members, &mut nested);
 
     let mut out = String::new();
-    let _ = writeln!(
-        out,
-        "// Generated from SPIR-V by `{}`; do not edit.",
-        config.regenerate_command
-    );
+    let _ = writeln!(out, "// {}", config.header);
     for import in &config.imports {
         let _ = writeln!(out, "use {import};");
     }
@@ -44,6 +40,27 @@ pub fn generate_gpu_blocks_rust(
     }
     write_struct(&mut out, &block.type_name, &block.members, &nested, config)?;
     Ok(out)
+}
+
+/// A block is found under its own name or, when it only wraps one struct, under that struct's
+/// name, so a struct shared by a uniform block and a `buffer_reference` generates once.
+pub fn find_declared_block(
+    reflection: &ShaderReflection,
+    block_name: &str,
+) -> Option<ReflectedBlock> {
+    reflection
+        .bindings
+        .iter()
+        .filter_map(|binding| binding.block.as_ref())
+        .chain(reflection.push_constant.as_ref())
+        .find_map(|block| {
+            if block.type_name == block_name {
+                return Some(block.clone());
+            }
+            block
+                .single_struct_payload()
+                .filter(|payload| payload.type_name == block_name)
+        })
 }
 
 fn collect_nested_structs(
@@ -191,7 +208,7 @@ fn is_padding(name: &str) -> bool {
     name.trim_start_matches('_').starts_with("pad")
 }
 
-fn snake_case(name: &str) -> String {
+pub(crate) fn snake_case(name: &str) -> String {
     let characters: Vec<char> = name.chars().collect();
     let mut out = String::with_capacity(name.len() + 4);
     for (index, &current) in characters.iter().enumerate() {
@@ -260,7 +277,7 @@ mod tests {
     #[test]
     fn generates_nested_structs_before_the_block() {
         let mut config = GpuBlockCodegenConfig {
-            regenerate_command: "cargo run --bin gen".into(),
+            header: "Generated from SPIR-V by `cargo run --bin gen`; do not edit.".into(),
             imports: vec!["cgmath::Matrix4".into()],
             extra_derives: BTreeMap::new(),
         };

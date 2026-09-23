@@ -33,6 +33,8 @@ pub use flame::trail as flame_trail;
 
 #[cfg(test)]
 mod analytic_manifest;
+#[cfg(test)]
+mod test_support;
 
 #[cfg(any(feature = "python", feature = "python-test"))]
 mod pybindings;

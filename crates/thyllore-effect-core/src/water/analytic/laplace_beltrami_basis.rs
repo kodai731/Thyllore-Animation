@@ -1,4 +1,3 @@
-use cgmath::Vector2;
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
 
@@ -27,58 +26,6 @@ pub fn eval_cheb(coeffs: &[f32; CHEB_ORDER], t: f32) -> f32 {
     }
 
     coeffs[0] + t * b1 - b2
-}
-
-/// Mirror of GLSL `evaluateChebyshev8`: `x01` lies in [0,1] and maps to the Clenshaw variable 2*x01-1.
-fn eval_cheb8(lo: [f32; 4], hi: [f32; 4], x01: f32) -> f32 {
-    let mut coeffs = [0.0f32; CHEB_ORDER];
-    coeffs[..4].copy_from_slice(&lo);
-    coeffs[4..].copy_from_slice(&hi);
-
-    eval_cheb(&coeffs, 2.0 * x01 - 1.0)
-}
-
-/// Mirror of GLSL `waterLbHeightAndGradient`, evaluating the packed Laplace-Beltrami modes at (u, v).
-/// Returns (h, h_u, h_v).
-pub fn water_laplace_beltrami_height_and_gradient(
-    uv: Vector2<f32>,
-    time: f32,
-    flow_rate: Vector2<f32>,
-    laplace_beltrami_modes: &[[f32; 4];
-         LAPLACE_BELTRAMI_MODE_COUNT * LAPLACE_BELTRAMI_SLOTS_PER_MODE],
-) -> (f32, f32, f32) {
-    let mut h = 0.0f32;
-    let mut h_u = 0.0f32;
-    let mut h_v = 0.0f32;
-
-    for k in 0..LAPLACE_BELTRAMI_MODE_COUNT {
-        let slot = LAPLACE_BELTRAMI_SLOTS_PER_MODE * k;
-        let [m, omega, amplitude, phase] = laplace_beltrami_modes[slot];
-        if amplitude <= 0.0 {
-            continue;
-        }
-
-        let phase_prime = m * (uv.x + flow_rate.x * time) - omega * time + phase;
-        let v_advected = (uv.y + flow_rate.y * time).rem_euclid(2.0 * std::f32::consts::PI);
-        let t = (v_advected - std::f32::consts::PI) / std::f32::consts::PI;
-
-        let phi = eval_cheb8(
-            laplace_beltrami_modes[slot + 1],
-            laplace_beltrami_modes[slot + 2],
-            0.5 * t + 0.5,
-        );
-        let dphi = eval_cheb8(
-            laplace_beltrami_modes[slot + 3],
-            laplace_beltrami_modes[slot + 4],
-            0.5 * t + 0.5,
-        );
-
-        h += amplitude * phase_prime.cos() * phi;
-        h_u -= amplitude * m * phase_prime.sin() * phi;
-        h_v += amplitude * phase_prime.cos() * dphi;
-    }
-
-    (h, h_u, h_v)
 }
 
 #[derive(Default)]

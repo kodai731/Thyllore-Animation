@@ -1,41 +1,19 @@
-mod animation_meta;
-mod clip_schedule;
-mod clip_track_snapshot;
-mod constraint_set;
-mod core;
+mod animation;
 mod editor;
-mod field;
 mod flame;
-mod gizmo;
-mod glb_source;
-#[cfg(feature = "ml")]
-mod inference_actor;
-mod marker;
 pub mod mesh;
-mod motion_path;
+mod ml;
+mod model;
 mod render;
-mod scalar_channel;
-mod spring_bone;
 mod water;
 mod wind;
 
-pub use animation_meta::*;
-pub use clip_schedule::*;
-pub use clip_track_snapshot::*;
-pub use constraint_set::*;
-pub use core::*;
+pub use animation::*;
 pub use editor::*;
-pub use field::*;
 pub use flame::*;
-pub use gizmo::*;
-pub use glb_source::*;
-#[cfg(feature = "ml")]
-pub use inference_actor::*;
-pub use marker::*;
 pub use mesh::*;
-pub use motion_path::*;
+pub use ml::*;
+pub use model::*;
 pub use render::*;
-pub use scalar_channel::*;
-pub use spring_bone::*;
 pub use water::*;
 pub use wind::*;

@@ -130,9 +130,28 @@ only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`
 | `flame/` | Flame effect data, render targets, history snapshot, SDF source, batch capture |
 | `water/` | Water effect data, render targets, history snapshot, trace blocks, batch capture |
 | `wind/` | Wind effect data, render targets, batch capture |
-| `*.rs` | Scene, model caches, pose and spring bone state, app command and exit, message log, ML |
+| `app/` | App command and exit, message log, scene state |
+| `model/` | FBX and glTF model caches |
+| `animation/` | Bone pose override, pose apply cache, spring bone state |
+| `ml/` | Auto-rig, gRPC server process, inference actor, text-to-animation / text-to-mesh state |
 
 `mod.rs` re-exports every subdirectory, so `crate::ecs::resource::X` paths stay unchanged.
+
+`src/ecs/component/` groups its files by domain:
+
+| Path | Contents |
+|---|---|
+| `animation/` | animation meta, clip schedule and track snapshot, constraint set, motion path, scalar channel and its domain table, spring bone |
+| `editor/` | entity icon and editor display, gizmo re-exports, markers |
+| `render/` | camera state, render handles, field-driven look |
+| `model/` | GLB source |
+| `ml/` | inference actor |
+| `mesh/` | GPU mesh types and vertex attribute presets |
+| `flame/` | Flame effect components |
+| `water/` | Water effect components |
+| `wind/` | Wind effect components |
+
+Subdirectory modules are private and re-exported, so `crate::ecs::component::X` paths stay unchanged.
 
 ## src/hooks/
 

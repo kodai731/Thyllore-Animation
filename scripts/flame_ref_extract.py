@@ -11,34 +11,20 @@ and writes frame_NN.png plus meta.json. Re-running overwrites the same files.
 
 import argparse
 import json
-import subprocess
 from pathlib import Path
 
 import cv2
 import numpy as np
 
+from ref_match.extract import download, read_link
+
 CROP_IN_SOURCE = (120, 0, 960, 1680)
+VIDEO_FORMAT = "bv*[ext=mp4][height<=1920]/bv*[ext=mp4]/best"
 MASK_FLOOR = 0.12
 MASK_LUM_LOW = 70.0
 MASK_LUM_HIGH = 210.0
 MASK_BLUR_SIGMA = 18.0
 CAPTION_FRAMES = list(range(12, 38)) + list(range(56, 60))
-
-
-def read_link(out_dir):
-    for line in (out_dir / "link.txt").read_text().splitlines():
-        if line.startswith("http"):
-            return line.strip()
-    raise SystemExit("link.txt has no http line")
-
-
-def download(url, video_path):
-    video_path.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["yt-dlp", "-q", "-f", "bv*[ext=mp4][height<=1920]/bv*[ext=mp4]/best",
-         "-o", str(video_path), "--force-overwrites", url],
-        check=True,
-    )
 
 
 def attenuate_background(bgr):
@@ -97,7 +83,7 @@ def main():
     args = parser.parse_args()
 
     if not args.video.exists():
-        download(read_link(args.out), args.video)
+        download(read_link(args.out), args.video, VIDEO_FORMAT)
     count, fps = extract(args.video, args.out, args.start, args.seconds)
     print(f"wrote {count} frames at {fps:.3f} fps to {args.out}")
 

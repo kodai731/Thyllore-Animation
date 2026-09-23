@@ -1,5 +1,6 @@
 pub mod laplace_beltrami_basis;
 mod pick;
+pub mod slang;
 #[cfg(test)]
 mod tests;
 mod wave;

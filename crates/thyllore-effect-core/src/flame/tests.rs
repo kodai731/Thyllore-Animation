@@ -501,3 +501,75 @@ fn test_noise_contrast_scales_edge_window() {
     assert!((elo - 0.285).abs() < 1e-6, "elo={}", elo);
     assert!((ehi - 0.315).abs() < 1e-6, "ehi={}", ehi);
 }
+
+#[test]
+fn test_self_shadow_tau_slang_matches_rust() {
+    use crate::flame::analytic::slang::flame_self_shadow_tau_slang;
+
+    let effect = FlameEffect::default();
+    let baked = FlameBaked::default();
+    let ubo = build_flame_ubo(&effect, &baked, &FlameTemporalAccum::default());
+
+    let steps = 5;
+    let mut sample_count = 0usize;
+    let mut tau_positive = false;
+
+    for ix in 0..steps {
+        for iy in 0..steps {
+            for iz in 0..steps {
+                let p = [
+                    (ix as f32) / (steps - 1) as f32,
+                    (iy as f32) / (steps - 1) as f32,
+                    (iz as f32) / (steps - 1) as f32,
+                ];
+
+                for lx in [-1, 0, 1] {
+                    for ly in [-1, 0, 1] {
+                        for lz in [-1, 0, 1] {
+                            let l = [lx as f32, ly as f32, lz as f32];
+                            let len_sq = l[0] * l[0] + l[1] * l[1] + l[2] * l[2];
+                            if len_sq < 1e-6 {
+                                continue;
+                            }
+                            let inv_len = 1.0 / len_sq.sqrt();
+                            let light_dir = [l[0] * inv_len, l[1] * inv_len, l[2] * inv_len];
+
+                            let rust_tau = evaluate_self_shadow_optical_depth(
+                                p,
+                                light_dir,
+                                &effect.coefficients,
+                                effective_sigma_t(&effect),
+                            );
+                            let slang_tau = flame_self_shadow_tau_slang(&ubo, p, light_dir);
+
+                            assert_eq!(
+                                rust_tau.to_bits(),
+                                slang_tau.to_bits(),
+                                "mismatch at p={:?} light_dir={:?}: rust={:.10} slang={:.10}",
+                                p,
+                                light_dir,
+                                rust_tau,
+                                slang_tau
+                            );
+
+                            if rust_tau > 0.0 {
+                                tau_positive = true;
+                            }
+                            sample_count += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    assert!(
+        sample_count >= 100,
+        "only {} samples, need at least 100",
+        sample_count
+    );
+    assert!(
+        tau_positive,
+        "all tau values were 0.0 — the test is meaningless"
+    );
+}

@@ -107,7 +107,7 @@ Consequences for placement:
 Everything that decides what the engine does: components and resources (data only), systems (logic, one
 file per domain, one directory per effect), phases (execution order and event dispatch), `systems/world/`
 (systems that drive the engine's own lifecycle rather than a domain: the batch run's schedule, capture
-record and report), and the ECS core (world, storage, query, registry, events). Rules are in
+record and report, frame schedule (`world/frame.rs`)), and the ECS core (world, storage, query, registry, events). Rules are in
 `ecs-architecture.md`.
 
 No file here declares `impl App`, takes `&mut App` or imports `crate::app`. A system that needs
@@ -169,7 +169,7 @@ naming any domain. `effect_spawn.rs` holds the `EffectSpawnHook` contract (key, 
 by ordinal, entities, `default_in_empty_scene`) and the `effect_spawn_hook!` macro: an effect registers
 one hook constant from its `spawn.rs`, and every generic creator goes through the registry: the UI sends
 `UIEvent::AddEffect(key)` / `SelectEffectInstance { key, index }`, the batch `add_<key>` action sends the
-same event, `dispatch_scalar_curve.rs` calls `spawn_effect_instance`, and `src/app/init/` calls
+same event, `src/ecs/systems/phases/event_dispatch/scalar_curve.rs` calls `spawn_effect_instance`, and `src/app/init/` calls
 `spawn_empty_scene_defaults` when no scene is loaded. Nothing outside the effect knows its component,
 its instance limit or its placement. `frame_prep.rs` holds the `FramePrepHook` contract (name, `FramePrepStage`, run taking
 `&mut FrameContext`) and the `frame_prep_hook!` macro: the per-frame work an effect does before the passes
@@ -248,9 +248,9 @@ Concretely:
   with device, command pool, `World`, HDR buffer, image index and capture slot) in the
   `src/debugview/<effect>_*.rs` file that owns the dump, next to `batch_capture!(T)` and its
   `capture_action!`. Adding a dump to an effect is therefore one request type and one debugview file;
-  no per-effect action or hook file. The post-present `run_batch_capture_phase`
-  (`src/ecs/systems/phases/batch_capture_phase.rs`, entered through `App::after_present` in
-  `src/app/lifecycle/after_present.rs`) waits for the GPU, runs every registered request that is present
+  no per-effect action or hook file. The post-present `run_last_phase`
+  (`src/ecs/systems/phases/last_phase.rs`, the last step of `App::drive_frame` in
+  `src/app/frame.rs`) waits for the GPU, runs every registered request that is present
   and takes the schedule's screenshot. `src/platform/`, `src/app/` and the render passes never name
   `BatchRun`: what a reproducible run changes about a frame is expressed by `FrameClock`
   (`src/ecs/resource/frame_clock.rs`: the frame counter and a wall-clock or fixed step; a fixed step means
@@ -305,7 +305,7 @@ Known violations still to remove (each needs a registry the feature subscribes t
 shrink it):
 
 - UI event plumbing: `src/ecs/events/ui_events.rs` (`UIEvent::UpdateFlameEffect`, `ApplyWaterPreset`, ...),
-  `src/ecs/systems/phases/dispatch_overlay.rs`, `src/platform/ui/scene_overlay.rs`,
+  `src/ecs/systems/phases/event_dispatch/overlay.rs`, `src/platform/ui/scene_overlay.rs`,
   `src/ecs/resource/graphics.rs` (`flame_preset_index`, `flame_style_*`), `src/platform/events/frame.rs`.
 - Picking: `src/ecs/systems/object_picking_systems.rs` calls `find_<effect>_by_pick_ray` in a fixed list.
 - Startup defaults: `src/app/init/instance.rs::insert_default_if_missing::<FlameRenderSettings>` and the
@@ -349,10 +349,12 @@ and drives one frame. It is the only place that sees `App` as a whole.
 
 Files: `init/` and `cleanup.rs` (construction, teardown), `config.rs` (`AppConfig`: parsed engine flags and
 resolved bootstrap hooks) and `bootstrap.rs` (applies them), `data.rs` (`AppData`), `viewport.rs` (core
-attachments, storage and transient pools), `render.rs` (frame driver), `update.rs` (per-frame update and
+attachments, storage and transient pools), `frame.rs` (`App::drive_frame`: the one frame driver, runs
+`FRAME_SCHEDULE` end to end: event dispatch and `AppCommand`s, `begin_frame`, `update`, `render`, Last;
+a step that needs the presented image goes at its end, never into `render.rs` or `src/platform/`),
+`render.rs` (`begin_frame` / `render`), `update.rs` (per-frame update and
 imgui buffers), `command.rs` (`apply_app_command`: the one place that executes an `AppCommand` recorded by
-the platform layer), `pass_targets.rs` (transient lifetimes of the pass graph), `lifecycle/` (`after_present.rs`: what runs once the frame is presented, today the batch
-capture; a step that needs the finished image goes here, never into `render.rs` or `src/platform/`),
+the platform layer), `pass_targets.rs` (transient lifetimes of the pass graph),
 `capture_context.rs` (the `CaptureContext` builders and `capture_now`), `effect_hooks.rs` (builds
 `EffectContext` and runs the effect hooks), `command_recording.rs`, `model/` (`load.rs` entry points and load order, `texture.rs`
 texture file resolution, `gpu.rs` mesh upload and acceleration rebuild, `cleanup.rs` scene model reset,

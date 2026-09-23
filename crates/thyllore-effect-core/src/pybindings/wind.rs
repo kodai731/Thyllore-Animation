@@ -4,8 +4,8 @@ use super::effect::{
 };
 use crate::wind::{
     apply_wind_preset, build_wind_model_matrix, build_wind_ubo, overwrite_wind_persisted_fields,
-    wind_local_bounds_corners, WindRenderSettings, WindShadowSlot, WindShellParams,
-    WindTornadoEffect, WindUBO, WIND_DEFAULT_PRESET, WIND_PRESET_NAMES, WIND_UI_PARAMS,
+    wind_local_bounds_corners, WindRenderSettings, WindShadowSlot, WindTornadoEffect, WindUBO,
+    WIND_DEFAULT_PRESET, WIND_PRESET_NAMES, WIND_UI_PARAMS,
 };
 use cgmath::{Quaternion, Vector3, Vector4};
 use pyo3::prelude::*;
@@ -84,9 +84,9 @@ pub fn wind_bounds_corners(
     let effect: WindTornadoEffect = build_effect_from_params(py, params, time, position, rotation)?;
 
     let model = build_wind_model_matrix(&effect);
-    let shell_params = WindShellParams::from_effect(&effect);
+    let ubo = build_wind_ubo(&effect, WindShadowSlot(0));
 
-    Ok(wind_local_bounds_corners(&shell_params)
+    Ok(wind_local_bounds_corners(&ubo)
         .iter()
         .map(|corner| {
             let world = model * Vector4::new(corner.x, corner.y, corner.z, 1.0);

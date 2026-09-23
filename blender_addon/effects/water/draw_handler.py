@@ -129,7 +129,7 @@ class WaterViewportRenderer:
                 shader = _load_shader()
                 shader.bind()
                 shader.uniform_block("frame", self.frame_ubo)
-                shader.uniform_block("water", self.water_ubo)
+                shader.uniform_block("waterBlock", self.water_ubo)
                 shader.uniform_sampler("sceneColorSampler", scene_color)
                 shader.uniform_float("sceneColorRect", scene_color_rect)
                 gpu.state.depth_test_set("ALWAYS")

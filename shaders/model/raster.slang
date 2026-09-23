@@ -1,4 +1,5 @@
 import "include/frame.slang";
+import "include/lighting.slang";
 
 struct ObjectUBO {
     float4x4 model;
@@ -47,13 +48,20 @@ float4 fragmentMain(Varyings input) : SV_Target0 {
     float4 texColor = texSampler.Sample(input.texCoord);
     if (input.color.a < 0.5) discard;
 
-    float3 lightDir = normalize(frame.light_pos.xyz - input.worldPos);
     float3 normal = normalize(input.normal);
+    float3 lightVector = frame.light_pos.xyz - input.worldPos;
+    float3 lightDir = normalize(lightVector);
+    float3 viewDir = normalize(frame.camera_pos.xyz - input.worldPos);
 
-    float ambient = frame.lighting.x;
-    float diffuse = max(dot(normal, lightDir), 0.0);
-    float lighting = ambient + diffuse * (1.0 - ambient);
+    float3 baseColor = texColor.rgb * input.color.rgb * material.base_color.rgb;
 
-    float3 finalColor = texColor.rgb * input.color.rgb * material.base_color.rgb * lighting * frame.light_color.rgb;
+    SurfaceSample surface;
+    surface.baseColor = baseColor;
+    surface.metallic = material.metallic;
+    surface.roughness = material.roughness;
+    surface.normal = normal;
+
+    float3 finalColor = shadeSurface(surface, lightDir, viewDir, frame.light_color.rgb, frame.lighting.x);
+
     return float4(finalColor, 1.0);
 }

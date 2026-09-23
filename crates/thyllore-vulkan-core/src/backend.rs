@@ -316,6 +316,7 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
         distance_attenuation: DistanceAttenuation,
         exposure_value: f32,
         lighting: thyllore_render_core::LightingParams,
+        camera_position: Vector3<f32>,
     ) -> Result<()> {
         let Some(scene_uniform_buffer) = self.raytracing.scene_uniform_buffer.as_ref() else {
             return Ok(());
@@ -344,6 +345,12 @@ impl<'a> RenderBackend for VulkanBackend<'a> {
                 let v = lighting.to_vec4();
                 thyllore_math_core::Vec4::new(v.x, v.y, v.z, v.w)
             },
+            camera_position: thyllore_math_core::Vec4::new(
+                camera_position.x,
+                camera_position.y,
+                camera_position.z,
+                1.0,
+            ),
         };
 
         scene_uniform_buffer.write_slot(&self.device, 0, &scene_data)

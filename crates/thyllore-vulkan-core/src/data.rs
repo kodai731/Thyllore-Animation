@@ -166,6 +166,7 @@ declare_gpu_block! {
         pub enable_distance_attenuation: i32,
         pub exposure_value: f32,
         pub lighting: Vec4,
+        pub camera_position: Vec4,
     }
 }
 
@@ -183,6 +184,7 @@ impl Default for SceneUniformData {
             enable_distance_attenuation: 0,
             exposure_value: 1.0,
             lighting: Vec4::new(lighting.x, lighting.y, lighting.z, lighting.w),
+            camera_position: Vec4::new(0.0, 0.0, 0.0, 1.0),
         }
     }
 }

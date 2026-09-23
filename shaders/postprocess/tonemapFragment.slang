@@ -1,21 +1,11 @@
 import "include/math.slang";
 import "include/noise.slang";
 import "include/ray.slang";
+import "include/scene.slang";
 
 [[vk::binding(0, 0)]] Sampler2D hdrSampler;
 [[vk::binding(1, 0)]] Sampler2D bloomSampler;
 [[vk::binding(2, 0)]] Sampler2D positionSampler;
-
-struct SceneData {
-    float4 lightPosition;
-    float4 lightColor;
-    float4x4 view;
-    float4x4 proj;
-    int debugMode;
-    float shadowStrength;
-    int enableDistanceAttenuation;
-    float exposureValue;
-};
 
 [[vk::binding(3, 0)]] ConstantBuffer<SceneData> sceneData;
 

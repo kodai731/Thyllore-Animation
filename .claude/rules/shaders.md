@@ -46,7 +46,11 @@ varyings struct, bindings and push constants are declared once (`model/raster.sl
 Feature-specific modules live in a subdirectory with their own `include/` (`shaders/water/include/`), shared modules in
 `shaders/include/`: `math.slang` (`PI` / `TWO_PI` / `HALF_PI`, `floorMod`; never re-declare them), `noise.slang`
 (hash, gradient and value noise, `fbm3`, `hermiteFade`, `quinticFade`, IGN), `resample.slang` (tent kernels, 13-tap
-downsample), `outline.slang` (id-image edge of an `IPixelClass`), `radiative_transfer.slang`. Every
+downsample), `outline.slang` (id-image edge of an `IPixelClass`), `radiative_transfer.slang`, `lighting.slang`
+(Cook-Torrance lighting model shared by model/raster and postprocess/composite), `scene.slang` (SceneData structure
+shared by composite, tonemap, water caustic, and ray query shadow). Lighting defaults (ambient / attenuation) are
+passed from thyllore-render-core's LightingParams via FrameUBO.lighting and SceneData.lighting. GBuffer pipeline has
+blending disabled because metallic is stored in albedo.a and roughness in normal.w. Every
 non-entry file declares `module <name>;` with a feature prefix (`module water_lb;`) and is imported by its path from
 the `shaders/` root (`import "water/include/lb.slang";`). slangc resolves imports relative to the entry's directory
 first, so a feature `include/` must not reuse a shared include's file name. `passes.toml` references entry files by

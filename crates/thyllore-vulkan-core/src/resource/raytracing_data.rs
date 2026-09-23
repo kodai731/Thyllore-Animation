@@ -16,7 +16,8 @@ use crate::descriptor::{
     COMPOSITE, GBUFFER, RAY_QUERY_SHADOW,
 };
 use crate::pipeline::{
-    DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline, VertexInputConfig,
+    BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline,
+    VertexInputConfig,
 };
 use crate::raytracing::RRAccelerationStructure;
 use crate::raytracing::{BlasGeometry, GpuPrimitive};
@@ -346,7 +347,10 @@ unsafe fn build_gbuffer_pipeline(
         .polygon_mode(vk::PolygonMode::FILL)
         .custom_render_pass(rrrender.gbuffer_render_pass)
         .mrt_attachments(4)
-        .no_blend_attachment(3)
+        .blend(BlendConfig {
+            enable: false,
+            ..BlendConfig::default()
+        })
         .msaa_samples(vk::SampleCountFlags::_1)
         .descriptor_layouts(render_layouts)
         .push_constants(PushConstantConfig {

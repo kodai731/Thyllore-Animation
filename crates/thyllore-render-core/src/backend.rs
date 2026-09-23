@@ -59,5 +59,6 @@ pub trait RenderBackend {
         distance_attenuation: DistanceAttenuation,
         exposure_value: f32,
         lighting: LightingParams,
+        camera_position: Vector3<f32>,
     ) -> Result<()>;
 }

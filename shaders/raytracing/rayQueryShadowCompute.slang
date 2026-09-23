@@ -1,12 +1,6 @@
 import "include/hit_shading_record.slang";
+import "include/scene.slang";
 import "include/torus_intersect.slang";
-
-struct SceneData {
-    float4 lightPosition;
-    float4 lightColor;
-    float4x4 view;
-    float4x4 proj;
-};
 
 struct PushConstants {
     float normalOffset;

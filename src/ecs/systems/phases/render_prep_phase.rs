@@ -320,6 +320,7 @@ unsafe fn update_frame_and_scene_uniforms(
         distance_attenuation,
         exposure_value,
         lighting,
+        camera_position,
     )?;
 
     Ok(())

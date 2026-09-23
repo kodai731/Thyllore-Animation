@@ -5,25 +5,11 @@ use super::{RRWaterCausticDescriptorSet, RRWaterDescriptorSet, WaterPushConstant
 use crate::ecs::resource::{WaterGpuState, WaterRenderTargets};
 use crate::vulkanr::core::RRDevice;
 use crate::vulkanr::descriptor::{WATER_CAUSTIC_APPLY, WATER_CAUSTIC_SPLAT, WATER_RESOLVE};
-use crate::vulkanr::pipeline::{
-    BlendConfig, DepthTestConfig, PipelineBuilder, PushConstantConfig, RRPipeline,
-    VertexInputConfig,
-};
+use crate::vulkanr::pipeline::{DepthTestConfig, PushConstantConfig, RRPipeline};
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, RayTracingData, UniformBuffer};
 use thyllore_effect_core::{WaterUBO, WATER_MAX_INSTANCES};
-
-fn opaque_blend() -> BlendConfig {
-    BlendConfig {
-        enable: false,
-        src_color_factor: vk::BlendFactor::ONE,
-        dst_color_factor: vk::BlendFactor::ZERO,
-        color_op: vk::BlendOp::ADD,
-        src_alpha_factor: vk::BlendFactor::ONE,
-        dst_alpha_factor: vk::BlendFactor::ZERO,
-        alpha_op: vk::BlendOp::ADD,
-    }
-}
+use thyllore_vulkan_core::renderer::{overlay_pipeline, OverlayBlend};
 
 pub unsafe fn create_water_pipeline(
     instance: &Instance,
@@ -44,32 +30,26 @@ pub unsafe fn create_water_pipeline(
     water_ubo.write_slot(rrdevice, 0, &WaterUBO::default())?;
 
     let water_descriptor = RRWaterDescriptorSet::new(rrdevice, frames_in_flight)?;
-    let water_shading_pipeline = PipelineBuilder::from_pass(&WATER_RESOLVE)
-        .vertex_input(VertexInputConfig::Custom {
-            bindings: vec![],
-            attributes: vec![],
-        })
-        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-        .depth_test(DepthTestConfig {
+    let water_shading_pipeline = overlay_pipeline(
+        &WATER_RESOLVE,
+        water_targets.history.render_pass,
+        &[OverlayBlend::Opaque, OverlayBlend::Opaque],
+        Some(DepthTestConfig {
             test_enable: true,
             write_enable: true,
             compare_op: vk::CompareOp::GREATER_OR_EQUAL,
-        })
-        .custom_render_pass(water_targets.history.render_pass)
-        .msaa_samples(vk::SampleCountFlags::_1)
-        .mrt_attachments(2)
-        .blend(opaque_blend())
-        .push_constants(PushConstantConfig {
-            stage_flags: vk::ShaderStageFlags::FRAGMENT,
-            offset: 0,
-            size: std::mem::size_of::<WaterPushConstants>() as u32,
-        })
-        .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
-        .descriptor_layouts(&[
-            &graphics_resources.frame_set.layout,
-            &water_descriptor.layout,
-        ])
-        .build(rrdevice, rrrender, Some(water_targets.extent()))?;
+        }),
+    )
+    .push_constants(PushConstantConfig {
+        stage_flags: vk::ShaderStageFlags::FRAGMENT,
+        offset: 0,
+        size: std::mem::size_of::<WaterPushConstants>() as u32,
+    })
+    .descriptor_layouts(&[
+        &graphics_resources.frame_set.layout,
+        &water_descriptor.layout,
+    ])
+    .build(rrdevice, rrrender, Some(water_targets.extent()))?;
 
     let mut gpu_state = WaterGpuState {
         shading_pipeline: Some(water_shading_pipeline),

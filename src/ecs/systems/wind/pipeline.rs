@@ -12,7 +12,7 @@ use crate::vulkanr::pipeline::{PushConstantConfig, RRPipeline};
 use crate::vulkanr::render::RRRender;
 use crate::vulkanr::resource::{GraphicsResources, Placement, UniformBuffer};
 use thyllore_effect_core::{WindUBO, WIND_MAX_INSTANCES};
-use thyllore_vulkan_core::renderer::overlay_pipeline;
+use thyllore_vulkan_core::renderer::{overlay_pipeline, OverlayBlend};
 
 pub unsafe fn create_wind_gpu_state(
     instance: &Instance,
@@ -44,17 +44,22 @@ pub unsafe fn create_wind_gpu_state(
         ],
     )?;
 
-    let resolve_pipeline = overlay_pipeline(&WIND_RESOLVE, targets.render_pass)
-        .push_constants(PushConstantConfig {
-            stage_flags: vk::ShaderStageFlags::FRAGMENT,
-            offset: 0,
-            size: std::mem::size_of::<WindPushConstants>() as u32,
-        })
-        .descriptor_layouts(&[
-            &graphics_resources.frame_set.layout,
-            &resolve_descriptor.layout,
-        ])
-        .build(rrdevice, rrrender, Some(targets.extent()))?;
+    let resolve_pipeline = overlay_pipeline(
+        &WIND_RESOLVE,
+        targets.render_pass,
+        &[OverlayBlend::Premultiplied],
+        None,
+    )
+    .push_constants(PushConstantConfig {
+        stage_flags: vk::ShaderStageFlags::FRAGMENT,
+        offset: 0,
+        size: std::mem::size_of::<WindPushConstants>() as u32,
+    })
+    .descriptor_layouts(&[
+        &graphics_resources.frame_set.layout,
+        &resolve_descriptor.layout,
+    ])
+    .build(rrdevice, rrrender, Some(targets.extent()))?;
 
     let upsample_descriptor = WindUpsampleDescriptorSet::new(rrdevice)?;
     upsample_descriptor.update_image_views(
@@ -62,9 +67,14 @@ pub unsafe fn create_wind_gpu_state(
         targets.half_color_image_view,
         scene_depth_view,
     )?;
-    let upsample_pipeline = overlay_pipeline(&WIND_UPSAMPLE, targets.render_pass)
-        .descriptor_layouts(&[&upsample_descriptor.layout])
-        .build(rrdevice, rrrender, Some(targets.extent()))?;
+    let upsample_pipeline = overlay_pipeline(
+        &WIND_UPSAMPLE,
+        targets.render_pass,
+        &[OverlayBlend::Premultiplied],
+        None,
+    )
+    .descriptor_layouts(&[&upsample_descriptor.layout])
+    .build(rrdevice, rrrender, Some(targets.extent()))?;
 
     log!("Created wind pipeline");
     Ok(WindGpuState {

@@ -32,7 +32,7 @@ pub use onion_skin::{record_onion_skin_composite_pass, record_onion_skin_ghost_p
 pub use onion_skin_buffers::{OnionSkinGhostBuffer, OnionSkinGpuState};
 pub use overlay::{
     begin_overlay_render_pass, draw_fullscreen_triangle, overlay_pipeline, record_overlay_draws,
-    set_full_viewport, OverlayAttachmentLoad, OverlayDraw, OverlayPass,
+    set_full_viewport, OverlayAttachmentLoad, OverlayBlend, OverlayDraw, OverlayPass,
 };
 pub use pass_target::{
     CoreTarget, FrameTransients, ImageStateTracker, PendingBarrier, ShaderStage, TargetAccess,

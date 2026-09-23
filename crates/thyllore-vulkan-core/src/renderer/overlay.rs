@@ -1,6 +1,21 @@
 use crate::descriptor::PassShaders;
-use crate::pipeline::{BlendConfig, PipelineBuilder, VertexInputConfig};
+use crate::pipeline::{BlendConfig, DepthTestConfig, PipelineBuilder, VertexInputConfig};
 use vulkanalia::prelude::v1_0::*;
+
+#[derive(Clone, Copy, Debug)]
+pub enum OverlayBlend {
+    Premultiplied,
+    Opaque,
+}
+
+impl OverlayBlend {
+    pub fn blend_config(self) -> BlendConfig {
+        match self {
+            OverlayBlend::Premultiplied => premultiplied_blend(),
+            OverlayBlend::Opaque => opaque_blend(),
+        }
+    }
+}
 
 fn premultiplied_blend() -> BlendConfig {
     BlendConfig {
@@ -14,21 +29,44 @@ fn premultiplied_blend() -> BlendConfig {
     }
 }
 
+fn opaque_blend() -> BlendConfig {
+    BlendConfig {
+        enable: false,
+        src_color_factor: vk::BlendFactor::ONE,
+        dst_color_factor: vk::BlendFactor::ZERO,
+        color_op: vk::BlendOp::ADD,
+        src_alpha_factor: vk::BlendFactor::ONE,
+        dst_alpha_factor: vk::BlendFactor::ZERO,
+        alpha_op: vk::BlendOp::ADD,
+    }
+}
+
 pub fn overlay_pipeline(
     pass: &'static PassShaders,
     render_pass: vk::RenderPass,
+    attachments: &[OverlayBlend],
+    depth_test: Option<DepthTestConfig>,
 ) -> PipelineBuilder {
-    PipelineBuilder::from_pass(pass)
+    let mut builder = PipelineBuilder::from_pass(pass)
         .vertex_input(VertexInputConfig::Custom {
             bindings: vec![],
             attributes: vec![],
         })
         .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-        .no_depth_test()
         .custom_render_pass(render_pass)
         .msaa_samples(vk::SampleCountFlags::_1)
-        .blend(premultiplied_blend())
-        .dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
+        .mrt_attachments(attachments.len() as u32);
+
+    builder = match depth_test {
+        Some(config) => builder.depth_test(config),
+        None => builder.no_depth_test(),
+    };
+
+    for (attachment_index, blend) in attachments.iter().enumerate() {
+        builder = builder.attachment_blend(attachment_index as u32, blend.blend_config());
+    }
+
+    builder.dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
 }
 
 /// What a fullscreen overlay pass finds in its attachments, one clear color per attachment.

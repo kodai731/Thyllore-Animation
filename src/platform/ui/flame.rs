@@ -2,6 +2,7 @@ use thyllore_anim_core::editable::PropertyType;
 
 use crate::ecs::component::FlameParam;
 use crate::ecs::events::{UIEvent, UIEventQueue};
+use crate::ecs::resource::FlameUIState;
 use crate::ecs::systems::flame::{FlameUiCommand, FLAMES_STYLE_DIR, FLAMES_TEXTURE_DIR};
 use crate::ecs::systems::FLAME_SPAWN_HOOK;
 use crate::ecs::World;
@@ -147,10 +148,11 @@ pub(super) fn build_flame_section(
         // overwrites the applied preset/fit in the same dispatch.
         let mut effect_applied_this_frame = false;
         {
-            let mut preset_index = overlay_state.flame_ui.preset_index;
+            let mut flame_ui = ecs_world.resource_mut::<FlameUIState>();
+            let mut preset_index = flame_ui.preset_index;
             let preset_changed =
                 ui.combo_simple_string("Flame Preset", &mut preset_index, &presets);
-            overlay_state.flame_ui.preset_index = preset_index;
+            flame_ui.preset_index = preset_index;
             if preset_changed {
                 if selected_flame_entity.is_some() {
                     // Keyed scalar curves re-stamp their channels every
@@ -171,138 +173,103 @@ pub(super) fn build_flame_section(
             ui.text("Texture Fit");
 
             // Scan textures on first frame
-            if !overlay_state.flame_ui.texture_fit_scan_done {
+            if !flame_ui.texture_fit_scan_done {
                 let scan_dir = std::path::Path::new(FLAMES_TEXTURE_DIR);
                 if let Ok(entries) = std::fs::read_dir(scan_dir) {
                     for entry in entries.flatten() {
                         if let Some(ext) = entry.path().extension() {
                             if ext == "png" {
                                 if let Some(name) = entry.file_name().to_str() {
-                                    overlay_state
-                                        .flame_ui
-                                        .texture_fit_scan
-                                        .push(name.to_string());
+                                    flame_ui.texture_fit_scan.push(name.to_string());
                                 }
                             }
                         }
                     }
                 }
-                overlay_state.flame_ui.texture_fit_scan_done = true;
+                flame_ui.texture_fit_scan_done = true;
             }
 
             // Combo box for texture selection
             let mut scan_items: Vec<String> = vec!["(custom path)".to_string()];
-            scan_items.extend(overlay_state.flame_ui.texture_fit_scan.iter().cloned());
+            scan_items.extend(flame_ui.texture_fit_scan.iter().cloned());
             let mut scan_selected = 0usize;
             if ui.combo_simple_string("Fit Texture", &mut scan_selected, &scan_items) {
                 if scan_selected > 0 {
-                    let name = &overlay_state.flame_ui.texture_fit_scan[scan_selected - 1];
-                    overlay_state.flame_ui.texture_fit_path =
-                        format!("{}/{}", FLAMES_TEXTURE_DIR, name);
+                    let name = &flame_ui.texture_fit_scan[scan_selected - 1];
+                    flame_ui.texture_fit_path = format!("{}/{}", FLAMES_TEXTURE_DIR, name);
                 } else {
-                    overlay_state.flame_ui.texture_fit_path.clear();
+                    flame_ui.texture_fit_path.clear();
                 }
             }
             ui.same_line();
             if ui.small_button("Rescan") {
-                overlay_state.flame_ui.texture_fit_scan_done = false;
-                overlay_state.flame_ui.texture_fit_scan.clear();
+                flame_ui.texture_fit_scan_done = false;
+                flame_ui.texture_fit_scan.clear();
             }
 
-            ui.input_text(
-                "Fit Image (png)",
-                &mut overlay_state.flame_ui.texture_fit_path,
-            )
-            .build();
+            ui.input_text("Fit Image (png)", &mut flame_ui.texture_fit_path)
+                .build();
             if ui.small_button("Browse...") {
-                overlay_state.flame_ui.texture_fit_browser_open = true;
-                if overlay_state.flame_ui.texture_fit_browser_dir.is_empty() {
-                    overlay_state.flame_ui.texture_fit_browser_dir = FLAMES_TEXTURE_DIR.to_string();
+                flame_ui.texture_fit_browser_open = true;
+                if flame_ui.texture_fit_browser_dir.is_empty() {
+                    flame_ui.texture_fit_browser_dir = FLAMES_TEXTURE_DIR.to_string();
                 }
-                overlay_state.flame_ui.texture_fit_browser_dir =
-                    canonical_dir_or(&overlay_state.flame_ui.texture_fit_browser_dir);
+                flame_ui.texture_fit_browser_dir =
+                    canonical_dir_or(&flame_ui.texture_fit_browser_dir);
             }
             ui.same_line();
 
             // Validation indicator: existence plus a lightweight PNG header read,
             // cached per path so the header is only parsed when the path changes.
-            if overlay_state.flame_ui.texture_fit_path
-                != overlay_state.flame_ui.texture_fit_path_validated
-            {
-                overlay_state.flame_ui.texture_fit_path_info =
-                    validate_texture_fit_path(&overlay_state.flame_ui.texture_fit_path);
-                overlay_state.flame_ui.texture_fit_path_validated =
-                    overlay_state.flame_ui.texture_fit_path.clone();
+            if flame_ui.texture_fit_path != flame_ui.texture_fit_path_validated {
+                flame_ui.texture_fit_path_info =
+                    validate_texture_fit_path(&flame_ui.texture_fit_path);
+                flame_ui.texture_fit_path_validated = flame_ui.texture_fit_path.clone();
             }
-            if overlay_state.flame_ui.texture_fit_path.is_empty() {
+            if flame_ui.texture_fit_path.is_empty() {
                 ui.text_disabled("enter a texture path");
-            } else if overlay_state
-                .flame_ui
-                .texture_fit_path_info
-                .starts_with("ok:")
-            {
-                ui.text_colored(
-                    [0.3, 0.9, 0.3, 1.0],
-                    &overlay_state.flame_ui.texture_fit_path_info,
-                );
+            } else if flame_ui.texture_fit_path_info.starts_with("ok:") {
+                ui.text_colored([0.3, 0.9, 0.3, 1.0], &flame_ui.texture_fit_path_info);
             } else {
-                ui.text_colored(
-                    [0.9, 0.3, 0.3, 1.0],
-                    &overlay_state.flame_ui.texture_fit_path_info,
-                );
+                ui.text_colored([0.9, 0.3, 0.3, 1.0], &flame_ui.texture_fit_path_info);
             }
 
-            build_texture_fit_browser(ui, overlay_state);
+            build_texture_fit_browser(ui, &mut flame_ui);
 
-            ui.slider(
-                "Fit Blend",
-                0.0,
-                1.0,
-                &mut overlay_state.flame_ui.texture_fit_blend,
-            );
-            ui.checkbox(
-                "Silhouette",
-                &mut overlay_state.flame_ui.texture_fit_groups[0],
-            );
-            ui.checkbox("Color", &mut overlay_state.flame_ui.texture_fit_groups[1]);
+            ui.slider("Fit Blend", 0.0, 1.0, &mut flame_ui.texture_fit_blend);
+            ui.checkbox("Silhouette", &mut flame_ui.texture_fit_groups[0]);
+            ui.checkbox("Color", &mut flame_ui.texture_fit_groups[1]);
             {
-                let _disabled = ui.begin_disabled(overlay_state.flame_ui.texture_fit_profile);
-                ui.checkbox(
-                    "Turbulence",
-                    &mut overlay_state.flame_ui.texture_fit_groups[2],
-                );
+                let _disabled = ui.begin_disabled(flame_ui.texture_fit_profile);
+                ui.checkbox("Turbulence", &mut flame_ui.texture_fit_groups[2]);
             }
-            if overlay_state.flame_ui.texture_fit_profile && ui.is_item_hovered() {
+            if flame_ui.texture_fit_profile && ui.is_item_hovered() {
                 ui.tooltip_text(
                     "Ignored in profile (reproduction) mode: the turbulence \
                      estimate is far below the calibrated pattern amplitude \
                      and would crush the noise",
                 );
             }
-            ui.checkbox("Tilt", &mut overlay_state.flame_ui.texture_fit_groups[3]);
+            ui.checkbox("Tilt", &mut flame_ui.texture_fit_groups[3]);
 
             // Fidelity radio button
-            let mut fidelity_mode: i32 = if overlay_state.flame_ui.texture_fit_profile {
-                1
-            } else {
-                0
-            };
+            let mut fidelity_mode: i32 = if flame_ui.texture_fit_profile { 1 } else { 0 };
             if ui.radio_button("statistics (projection)", &mut fidelity_mode, 0) {
-                overlay_state.flame_ui.texture_fit_profile = false;
+                flame_ui.texture_fit_profile = false;
             }
             ui.same_line();
             if ui.radio_button("profile (reproduction)", &mut fidelity_mode, 1) {
-                overlay_state.flame_ui.texture_fit_profile = true;
+                flame_ui.texture_fit_profile = true;
             }
 
             if ui.button("Apply Texture Fit") {
-                let path = overlay_state.flame_ui.texture_fit_path.clone();
-                let blend = overlay_state.flame_ui.texture_fit_blend;
+                let path = flame_ui.texture_fit_path.clone();
+                let blend = flame_ui.texture_fit_blend;
                 let groups = thyllore_effect_core::TextureFitGroups {
-                    silhouette: overlay_state.flame_ui.texture_fit_groups[0],
-                    color: overlay_state.flame_ui.texture_fit_groups[1],
-                    turbulence: overlay_state.flame_ui.texture_fit_groups[2],
-                    tilt: overlay_state.flame_ui.texture_fit_groups[3],
+                    silhouette: flame_ui.texture_fit_groups[0],
+                    color: flame_ui.texture_fit_groups[1],
+                    turbulence: flame_ui.texture_fit_groups[2],
+                    tilt: flame_ui.texture_fit_groups[3],
                 };
                 if selected_flame_entity.is_some() {
                     ui_events.send(UIEvent::Effect {
@@ -316,7 +283,7 @@ pub(super) fn build_flame_section(
                                 groups.turbulence,
                                 groups.tilt,
                             ],
-                            profile: overlay_state.flame_ui.texture_fit_profile,
+                            profile: flame_ui.texture_fit_profile,
                         }),
                     });
                     effect_applied_this_frame = true;
@@ -326,62 +293,48 @@ pub(super) fn build_flame_section(
             ui.separator();
             ui.text("Style");
 
-            if !overlay_state.flame_ui.style_scan_done {
+            if !flame_ui.style_scan_done {
                 let scan_dir = std::path::Path::new(FLAMES_STYLE_DIR);
                 if let Ok(entries) = std::fs::read_dir(scan_dir) {
                     for entry in entries.flatten() {
                         if let Some(name) = entry.file_name().to_str() {
                             if name.ends_with(".style.ron") {
-                                overlay_state.flame_ui.style_scan.push(name.to_string());
+                                flame_ui.style_scan.push(name.to_string());
                             }
                         }
                     }
-                    overlay_state.flame_ui.style_scan.sort();
+                    flame_ui.style_scan.sort();
                 }
-                overlay_state.flame_ui.style_scan_done = true;
+                flame_ui.style_scan_done = true;
             }
 
-            if overlay_state.flame_ui.style_scan.is_empty() {
+            if flame_ui.style_scan.is_empty() {
                 ui.text_disabled(format!("no styles in {}", FLAMES_STYLE_DIR));
             } else {
-                let mut style_index = overlay_state
-                    .flame_ui
-                    .style_index
-                    .min(overlay_state.flame_ui.style_scan.len() - 1);
-                ui.combo_simple_string(
-                    "Style File",
-                    &mut style_index,
-                    &overlay_state.flame_ui.style_scan,
-                );
-                overlay_state.flame_ui.style_index = style_index;
+                let mut style_index = flame_ui.style_index.min(flame_ui.style_scan.len() - 1);
+                ui.combo_simple_string("Style File", &mut style_index, &flame_ui.style_scan);
+                flame_ui.style_index = style_index;
             }
             ui.same_line();
             if ui.small_button("Rescan##style") {
-                overlay_state.flame_ui.style_scan_done = false;
-                overlay_state.flame_ui.style_scan.clear();
+                flame_ui.style_scan_done = false;
+                flame_ui.style_scan.clear();
             }
 
-            ui.checkbox("Motion##style", &mut overlay_state.flame_ui.style_groups[0]);
+            ui.checkbox("Motion##style", &mut flame_ui.style_groups[0]);
             ui.same_line();
-            ui.checkbox(
-                "Texture##style",
-                &mut overlay_state.flame_ui.style_groups[1],
-            );
+            ui.checkbox("Texture##style", &mut flame_ui.style_groups[1]);
             ui.same_line();
-            ui.checkbox("Optics##style", &mut overlay_state.flame_ui.style_groups[2]);
+            ui.checkbox("Optics##style", &mut flame_ui.style_groups[2]);
 
             if ui.button("Apply Style") {
-                if let Some(name) = overlay_state
-                    .flame_ui
-                    .style_scan
-                    .get(overlay_state.flame_ui.style_index)
-                {
+                if let Some(name) = flame_ui.style_scan.get(flame_ui.style_index) {
                     if selected_flame_entity.is_some() {
                         ui_events.send(UIEvent::Effect {
                             key: FLAME_SPAWN_HOOK.key,
                             command: std::rc::Rc::new(FlameUiCommand::ApplyStyle {
                                 path: format!("{}/{}", FLAMES_STYLE_DIR, name),
-                                groups: overlay_state.flame_ui.style_groups,
+                                groups: flame_ui.style_groups,
                             }),
                         });
                         effect_applied_this_frame = true;
@@ -405,14 +358,11 @@ pub(super) fn build_flame_section(
                 }
             }
 
-            ui.input_text(
-                "Save As##style",
-                &mut overlay_state.flame_ui.style_save_name,
-            )
-            .build();
+            ui.input_text("Save As##style", &mut flame_ui.style_save_name)
+                .build();
             ui.same_line();
             if ui.small_button("Save Style") {
-                let name = overlay_state.flame_ui.style_save_name.trim().to_string();
+                let name = flame_ui.style_save_name.trim().to_string();
                 if !name.is_empty() && selected_flame_entity.is_some() {
                     ui_events.send(UIEvent::Effect {
                         key: FLAME_SPAWN_HOOK.key,
@@ -717,8 +667,8 @@ const TEXTURE_FIT_BROWSER_MAX_ENTRIES: usize = 2000;
 /// confirm. Selection only fills the path field — applying stays on the
 /// explicit Apply button. Unreadable entries render disabled instead of
 /// failing the listing.
-fn build_texture_fit_browser(ui: &imgui::Ui, overlay_state: &mut SceneOverlayState) {
-    if !overlay_state.flame_ui.texture_fit_browser_open {
+fn build_texture_fit_browser(ui: &imgui::Ui, flame_ui: &mut FlameUIState) {
+    if !flame_ui.texture_fit_browser_open {
         return;
     }
     let mut open = true;
@@ -727,7 +677,7 @@ fn build_texture_fit_browser(ui: &imgui::Ui, overlay_state: &mut SceneOverlaySta
         .size([560.0, 430.0], imgui::Condition::FirstUseEver)
         .opened(&mut open)
         .build(|| {
-            let dir_now = overlay_state.flame_ui.texture_fit_browser_dir.clone();
+            let dir_now = flame_ui.texture_fit_browser_dir.clone();
             let mut jump: Option<String> = None;
 
             if ui.small_button("/") {
@@ -743,24 +693,15 @@ fn build_texture_fit_browser(ui: &imgui::Ui, overlay_state: &mut SceneOverlaySta
                 }
             }
 
-            ui.input_text(
-                "##fit_browser_dir",
-                &mut overlay_state.flame_ui.texture_fit_browser_dir,
-            )
-            .build();
+            ui.input_text("##fit_browser_dir", &mut flame_ui.texture_fit_browser_dir)
+                .build();
             ui.same_line();
             if ui.small_button("Go") {
-                jump = Some(overlay_state.flame_ui.texture_fit_browser_dir.clone());
+                jump = Some(flame_ui.texture_fit_browser_dir.clone());
             }
-            ui.checkbox(
-                "all files",
-                &mut overlay_state.flame_ui.texture_fit_browser_show_all,
-            );
+            ui.checkbox("all files", &mut flame_ui.texture_fit_browser_show_all);
             ui.same_line();
-            ui.checkbox(
-                "hidden",
-                &mut overlay_state.flame_ui.texture_fit_browser_show_hidden,
-            );
+            ui.checkbox("hidden", &mut flame_ui.texture_fit_browser_show_hidden);
             ui.same_line();
             if ui.small_button("Up") {
                 if let Some(parent) = std::path::Path::new(&dir_now).parent() {
@@ -788,15 +729,13 @@ fn build_texture_fit_browser(ui: &imgui::Ui, overlay_state: &mut SceneOverlaySta
                             Ok(name) => name,
                             Err(_) => continue,
                         };
-                        if !overlay_state.flame_ui.texture_fit_browser_show_hidden
-                            && name.starts_with('.')
-                        {
+                        if !flame_ui.texture_fit_browser_show_hidden && name.starts_with('.') {
                             continue;
                         }
                         let metadata = entry.metadata().ok();
                         let is_dir = metadata.as_ref().is_some_and(|m| m.is_dir());
                         if !is_dir
-                            && !overlay_state.flame_ui.texture_fit_browser_show_all
+                            && !flame_ui.texture_fit_browser_show_all
                             && !name.to_ascii_lowercase().ends_with(".png")
                         {
                             continue;
@@ -820,8 +759,7 @@ fn build_texture_fit_browser(ui: &imgui::Ui, overlay_state: &mut SceneOverlaySta
                             ui.text_disabled(label);
                             continue;
                         }
-                        let selected =
-                            !is_dir && *name == overlay_state.flame_ui.texture_fit_browser_selected;
+                        let selected = !is_dir && *name == flame_ui.texture_fit_browser_selected;
                         let clicked = ui.selectable_config(&label).selected(selected).build();
                         let double_clicked = ui.is_item_hovered()
                             && ui.is_mouse_double_clicked(imgui::MouseButton::Left);
@@ -831,7 +769,7 @@ fn build_texture_fit_browser(ui: &imgui::Ui, overlay_state: &mut SceneOverlaySta
                             }
                         } else {
                             if clicked {
-                                overlay_state.flame_ui.texture_fit_browser_selected = name.clone();
+                                flame_ui.texture_fit_browser_selected = name.clone();
                             }
                             if double_clicked {
                                 confirmed =
@@ -847,35 +785,32 @@ fn build_texture_fit_browser(ui: &imgui::Ui, overlay_state: &mut SceneOverlaySta
                     }
                 });
 
-            let has_selection = !overlay_state
-                .flame_ui
-                .texture_fit_browser_selected
-                .is_empty();
+            let has_selection = !flame_ui.texture_fit_browser_selected.is_empty();
             ui.enabled(has_selection, || {
                 if ui.button("Open") {
                     confirmed = Some(format!(
                         "{}/{}",
                         dir_now.trim_end_matches('/'),
-                        overlay_state.flame_ui.texture_fit_browser_selected
+                        flame_ui.texture_fit_browser_selected
                     ));
                 }
             });
             ui.same_line();
             if ui.button("Cancel") {
-                overlay_state.flame_ui.texture_fit_browser_open = false;
+                flame_ui.texture_fit_browser_open = false;
             }
 
             if let Some(target) = jump {
-                overlay_state.flame_ui.texture_fit_browser_dir = canonical_dir_or(&target);
-                overlay_state.flame_ui.texture_fit_browser_selected.clear();
+                flame_ui.texture_fit_browser_dir = canonical_dir_or(&target);
+                flame_ui.texture_fit_browser_selected.clear();
             }
         });
     if let Some(path) = confirmed {
-        overlay_state.flame_ui.texture_fit_path = path;
-        overlay_state.flame_ui.texture_fit_browser_open = false;
+        flame_ui.texture_fit_path = path;
+        flame_ui.texture_fit_browser_open = false;
     }
     if !open {
-        overlay_state.flame_ui.texture_fit_browser_open = false;
+        flame_ui.texture_fit_browser_open = false;
     }
 }
 

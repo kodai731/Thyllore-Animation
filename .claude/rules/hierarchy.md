@@ -301,13 +301,6 @@ Test for it before finishing: `grep -rni "flame\|water\|wind" src/scene src/hook
 must hit nothing but the stub pass names of `src/hooks/pass.rs` tests and the `window` / `windows(2)`
 matches.
 
-Known violations still to remove (each needs a registry the feature subscribes to; do not add to the list,
-shrink it):
-
-- Per-effect UI state in the shared overlay: `SceneOverlayState` carries `water_preset_index` and
-  `wind_preset_index` (used by `src/platform/ui/water.rs` / `wind.rs`), and `frame.rs` clones
-  `FlameUIState` to/from the overlay.
-
 Resources follow the same rule. A resource is persisted by declaring its fields once
 (`declare_scene_format!` in the resource's own file, or in its crate for `thyllore-render-core` settings)
 and writing `scene_resource!(Type)` next to it; `SceneResourceHooks::collect()` gathers every registration

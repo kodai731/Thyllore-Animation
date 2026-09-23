@@ -45,7 +45,7 @@ fn send_key_button(
 pub(super) fn build_wind_section(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
-    overlay_state: &mut SceneOverlayState,
+    _overlay_state: &mut SceneOverlayState,
     ecs_world: &World,
 ) {
     use crate::ecs::component::WindTornadoEffect;
@@ -130,9 +130,13 @@ pub(super) fn build_wind_section(
         .iter()
         .map(|s| s.to_string())
         .collect();
-    let mut preset_index = overlay_state.wind_preset_index;
+    let mut preset_index = ecs_world
+        .resource_mut::<crate::ecs::WindUIState>()
+        .preset_index;
     let preset_changed = ui.combo_simple_string("Wind Preset", &mut preset_index, &presets);
-    overlay_state.wind_preset_index = preset_index;
+    ecs_world
+        .resource_mut::<crate::ecs::WindUIState>()
+        .preset_index = preset_index;
     let mut effect_applied_this_frame = false;
     if preset_changed && selected_wind_entity.is_some() {
         ui_events.send(UIEvent::ClearScalarKeys);

@@ -45,7 +45,7 @@ fn send_key_button(
 pub(super) fn build_water_section(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
-    overlay_state: &mut SceneOverlayState,
+    _overlay_state: &mut SceneOverlayState,
     ecs_world: &World,
 ) {
     use crate::ecs::component::WaterTorusEffect;
@@ -136,10 +136,14 @@ pub(super) fn build_water_section(
             .collect();
         let mut effect_applied_this_frame = false;
         {
-            let mut preset_index = overlay_state.water_preset_index;
+            let mut preset_index = ecs_world
+                .resource_mut::<crate::ecs::WaterUIState>()
+                .preset_index;
             let preset_changed =
                 ui.combo_simple_string("Water Preset", &mut preset_index, &presets);
-            overlay_state.water_preset_index = preset_index;
+            ecs_world
+                .resource_mut::<crate::ecs::WaterUIState>()
+                .preset_index = preset_index;
             if preset_changed {
                 if selected_water_entity.is_some() {
                     ui_events.send(UIEvent::ClearScalarKeys);

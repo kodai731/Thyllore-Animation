@@ -4,8 +4,7 @@ use thyllore_anim_core::editable::PropertyType;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{
-    CoordinateSpace, FlameUIState, ModelState, TransformGizmoMode, TransformGizmoState,
-    WeightHeatmapState,
+    CoordinateSpace, ModelState, TransformGizmoMode, TransformGizmoState, WeightHeatmapState,
 };
 use crate::ecs::World;
 
@@ -17,10 +16,7 @@ const OVERLAY_WIDTH: f32 = 420.0;
 
 pub struct SceneOverlayState {
     pub model: ModelState,
-    pub flame_ui: FlameUIState,
     pub viewport: ViewportInfo,
-    pub water_preset_index: usize,
-    pub wind_preset_index: usize,
     #[cfg(feature = "auto-rig")]
     pub open_text_to_mesh_dialog: bool,
     #[cfg(feature = "auto-rig")]

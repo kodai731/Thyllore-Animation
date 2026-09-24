@@ -1,14 +1,17 @@
-use crate::ecs::component::{FlameEffect, FlameTrail, WaterTorusEffect, WindTornadoEffect};
+use crate::ecs::component::{
+    FlameEffect, FlameTrail, LightningEffect, WaterTorusEffect, WindTornadoEffect,
+};
 use crate::ecs::events::UIEvent;
 use crate::ecs::resource::gizmo::BoneGizmoData;
 use crate::ecs::resource::{
-    AutoExposure, DepthOfField, FlameRenderSettings, GridMeshData, HierarchyState, MessageLog,
-    OnionSkinningConfig, PhysicalCameraParameters, TransformGizmoState, WaterRenderSettings,
-    WeightHeatmapState, WindRenderSettings,
+    AutoExposure, DepthOfField, FlameRenderSettings, GridMeshData, HierarchyState,
+    LightningRenderSettings, MessageLog, OnionSkinningConfig, PhysicalCameraParameters,
+    TransformGizmoState, WaterRenderSettings, WeightHeatmapState, WindRenderSettings,
 };
 use crate::ecs::systems::{
-    resolve_selected_flame, resolve_selected_water, resolve_selected_wind, write_flame_transform,
-    write_water_transform, write_wind_transform,
+    resolve_selected_flame, resolve_selected_lightning, resolve_selected_water,
+    resolve_selected_wind, write_flame_transform, write_lightning_transform, write_water_transform,
+    write_wind_transform,
 };
 use crate::ecs::world::{Animator, World};
 use crate::hooks::effect_spawn::EffectSpawnHooks;
@@ -198,6 +201,23 @@ pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
             }
             UIEvent::UpdateWindRenderSettings(new_settings) => {
                 if let Some(mut settings) = world.get_resource_mut::<WindRenderSettings>() {
+                    *settings = *new_settings;
+                }
+            }
+            UIEvent::UpdateLightningEffect(effect) => {
+                let Some(target) = resolve_selected_lightning(world) else {
+                    continue;
+                };
+                write_lightning_transform(world, target, effect.position, effect.rotation);
+                if let Some(current) = world.get_component_mut::<LightningEffect>(target) {
+                    *current = effect.as_ref().clone();
+                }
+            }
+            UIEvent::ApplyLightningPreset(name) => {
+                crate::ecs::systems::apply_lightning_preset_to_selected(world, name);
+            }
+            UIEvent::UpdateLightningRenderSettings(new_settings) => {
+                if let Some(mut settings) = world.get_resource_mut::<LightningRenderSettings>() {
                     *settings = *new_settings;
                 }
             }

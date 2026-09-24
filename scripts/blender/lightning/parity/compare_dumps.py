@@ -7,7 +7,7 @@ import sys
 
 import numpy as np
 
-UBO_BLOCKS = ("model", "inverse_model", "core", "glow", "shape", "inv_view_proj")
+UBO_BLOCKS = ("model", "inverse_model", "core", "rim", "shape", "inv_view_proj")
 
 
 def flat(value):

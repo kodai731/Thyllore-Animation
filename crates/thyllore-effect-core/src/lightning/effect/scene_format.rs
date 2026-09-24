@@ -203,20 +203,20 @@ declare_scene_format! {
                 group: "look",
             },
         },
-        glow_ratio: f32 {
-            get: |e| e.glow_ratio,
-            set: |e, v| e.glow_ratio = v,
+        rim_ratio: f32 {
+            get: |e| e.rim_ratio,
+            set: |e, v| e.rim_ratio = v,
             ui {
                 min: 1.0,
                 max: 20.0,
                 format: "%.2f",
-                tooltip: "Radius of the glow sheath as a multiple of the core radius",
+                tooltip: "Radius of the rim sheath as a multiple of the core radius",
                 group: "look",
             },
         },
-        glow_intensity: f32 {
-            get: |e| e.glow_intensity,
-            set: |e, v| e.glow_intensity = v,
+        rim_intensity: f32 {
+            get: |e| e.rim_intensity,
+            set: |e, v| e.rim_intensity = v,
             ui {
                 min: 0.0,
                 max: 100.0,
@@ -224,9 +224,9 @@ declare_scene_format! {
                 group: "look",
             },
         },
-        glow_color: [f32; 3] {
-            get: |e| e.glow_color,
-            set: |e, v| e.glow_color = v,
+        rim_color: [f32; 3] {
+            get: |e| e.rim_color,
+            set: |e, v| e.rim_color = v,
             scalars: rgb,
             ui {
                 kind: Color,
@@ -541,7 +541,7 @@ mod tests {
 
     #[test]
     fn test_colors_are_colors_and_serialize_as_one_vector() {
-        for name in ["core_color", "glow_color"] {
+        for name in ["core_color", "rim_color"] {
             assert_eq!(
                 find_ui_param(LIGHTNING_UI_PARAMS, name).map(|p| p.kind),
                 Some(UiKind::Color),

@@ -35,13 +35,13 @@ pub fn build_lightning_ubo(
             effect.core_color[2],
             effect.core_intensity,
         ],
-        glow: [
-            effect.glow_color[0],
-            effect.glow_color[1],
-            effect.glow_color[2],
-            effect.glow_intensity,
+        rim: [
+            effect.rim_color[0],
+            effect.rim_color[1],
+            effect.rim_color[2],
+            effect.rim_intensity,
         ],
-        shape: [effect.glow_ratio, effect.edge_fraction, count as f32, 0.0],
+        shape: [effect.rim_ratio, effect.edge_fraction, count as f32, 0.0],
         debug_: [0.0, 0.0, 0.0, 0.0],
         inv_view_proj,
         flash: [
@@ -213,10 +213,10 @@ mod tests {
         let (ubo, _) = build_lightning_ubo(&effect, Matrix4::identity());
 
         assert!(
-            (ubo.shape[0] - effect.glow_ratio).abs() < 1e-6,
-            "shape.x should be glow_ratio: {} vs {}",
+            (ubo.shape[0] - effect.rim_ratio).abs() < 1e-6,
+            "shape.x should be rim_ratio: {} vs {}",
             ubo.shape[0],
-            effect.glow_ratio
+            effect.rim_ratio
         );
         assert!(
             (ubo.shape[1] - effect.edge_fraction).abs() < 1e-6,

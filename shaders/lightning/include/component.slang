@@ -6,7 +6,7 @@ public struct LightningUBO {
     public float4x4 model;
     public float4x4 inverseModel;
     public float4 core;
-    public float4 glow;
+    public float4 rim;
     public float4 shape;
     public float4 debug_;
     public float4x4 invViewProj;

@@ -22,7 +22,7 @@ fn strike_bounding_sphere(effect: &LightningEffect) -> (Vector3<f32>, f32) {
     let end = start + Vector3::from(effect.end_offset);
 
     let tip_radius = effect.core_radius * effect.tip_radius_ratio;
-    let sheath_radius = effect.core_radius.max(tip_radius) * effect.glow_ratio;
+    let sheath_radius = effect.core_radius.max(tip_radius) * effect.rim_ratio;
 
     let center = (start + end) * 0.5;
     let radius = (end - start).magnitude() * 0.5 + sheath_radius;

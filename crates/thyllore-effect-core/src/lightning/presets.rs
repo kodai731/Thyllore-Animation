@@ -10,8 +10,6 @@ pub fn apply_lightning_preset(effect: &mut LightningEffect, name: &str) -> bool 
             preset.source = LightningSource::Point;
             preset.core_radius = 0.02;
             preset.tip_radius_ratio = 0.5;
-            preset.glow_ratio = 4.0;
-            preset.glow_intensity = 6.0;
             preset.core_intensity = 100.0;
             preset.detail_levels = 7;
             preset.tortuosity = 0.45;
@@ -105,8 +103,8 @@ mod tests {
         assert_eq!(effect.source, LightningSource::Point);
         assert!((effect.core_radius - 0.02).abs() < 1e-6);
         assert!((effect.tip_radius_ratio - 0.5).abs() < 1e-6);
-        assert!((effect.glow_ratio - 4.0).abs() < 1e-6);
-        assert!((effect.glow_intensity - 6.0).abs() < 1e-6);
+        assert!((effect.rim_ratio - 2.0).abs() < 1e-6);
+        assert!((effect.rim_intensity - 10.0).abs() < 1e-6);
         assert!((effect.core_intensity - 100.0).abs() < 1e-6);
         assert_eq!(effect.detail_levels, 7);
         assert!((effect.tortuosity - 0.45).abs() < 1e-6);

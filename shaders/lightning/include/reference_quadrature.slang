@@ -24,7 +24,7 @@ public float3 lightningReferenceEmission(float3 origin, float3 dir, float tNear,
         float segIntensity = segments.seg_misc[i].y;
 
         float3 center = (a + b) * 0.5;
-        float radius = length(b - a) * 0.5 + max(r0, r1) * lightningGlowRatio();
+        float radius = length(b - a) * 0.5 + max(r0, r1) * lightningRimRatio();
         float3 oc = origin - center;
         float halfB = dot(oc, dir);
         float c = dot(oc, oc) - radius * radius;
@@ -58,21 +58,20 @@ public float3 lightningReferenceEmission(float3 origin, float3 dir, float tNear,
 
             float coreDensity = capsuleDensityAt(capsule, p);
 
-            float glowRatio = lightningGlowRatio();
-            VolumeCapsule glowCapsule;
-            glowCapsule.a = a;
-            glowCapsule.b = b;
-            glowCapsule.radiusStart = r0 * glowRatio;
-            glowCapsule.radiusEnd = r1 * glowRatio;
-            float glowRadiusMax = max(r0, r1) * glowRatio;
-            glowCapsule.edgeWidthQ = glowRadiusMax * glowRadiusMax;
+            float rimRatio = lightningRimRatio();
+            VolumeCapsule rimCapsule;
+            rimCapsule.a = a;
+            rimCapsule.b = b;
+            rimCapsule.radiusStart = r0 * rimRatio;
+            rimCapsule.radiusEnd = r1 * rimRatio;
+            rimCapsule.edgeWidthQ = edgeWidthQ * rimRatio * rimRatio;
 
-            float glowDensity = capsuleDensityAt(glowCapsule, p);
+            float rimDensity = capsuleDensityAt(rimCapsule, p);
 
-            if (glowDensity > 0.0 || coreDensity > 0.0) {
+            if (rimDensity > 0.0 || coreDensity > 0.0) {
                 hitCount++;
             }
-            if (glowDensity > 0.0) {
+            if (rimDensity > 0.0) {
                 coverage = 1.0;
             }
             if (coreDensity > 0.0) {
@@ -80,7 +79,7 @@ public float3 lightningReferenceEmission(float3 origin, float3 dir, float tNear,
             }
 
             sum += segIntensity * stepLen * (lightningCoreIntensity() * lightningCoreColor() * coreDensity
-                                        + lightningGlowIntensity() * lightningGlowColor() * glowDensity);
+                                        + lightningRimIntensity() * lightningRimColor() * rimDensity);
         }
     }
     return sum;

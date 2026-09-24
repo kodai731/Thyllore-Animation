@@ -24,7 +24,7 @@ import thyllore_effect_core as fx
 import blender_addon.effects.lightning as addon
 from blender_addon.effects.lightning.draw_handler import LightningViewportRenderer, _load_shader
 
-UBO_BLOCKS = (("model", 0, 16), ("inverse_model", 16, 16), ("core", 32, 4), ("glow", 36, 4), ("shape", 40, 4), ("inv_view_proj", 48, 16))
+UBO_BLOCKS = (("model", 0, 16), ("inverse_model", 16, 16), ("core", 32, 4), ("rim", 36, 4), ("shape", 40, 4), ("inv_view_proj", 48, 16))
 VIEWS = (("color", 0), ("coverage", 1))
 
 

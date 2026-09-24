@@ -1,7 +1,7 @@
 """Verify no bright pixels appear outside the lightning segment band mask.
 
 For each lightning segment in a dump, project it to screen using model->view->proj and build
-a band mask from the projected segment with thickness max(r0,r1)*glow_ratio. Dilate the mask,
+a band mask from the projected segment with thickness max(r0,r1)*rim_ratio. Dilate the mask,
 then count pixels outside it where the image is brighter than background + margin. Zero
 violations means pass.
 
@@ -45,7 +45,7 @@ DEFAULT_DILATE_PX = 16
 DEFAULT_LUMINANCE_MARGIN = 10.0
 AXIS_SAMPLES = 128
 BURST_TIMING_PINS = ["burst_start=0.0", "burst_jitter=0.0"]
-BACKGROUND_LIGHTNING_OFF = ["core_intensity=0.0", "glow_intensity=0.0"]
+BACKGROUND_LIGHTNING_OFF = ["core_intensity=0.0", "rim_intensity=0.0"]
 
 
 def rows_from_columns(columns: list[list[float]]) -> np.ndarray:
@@ -90,11 +90,11 @@ def project_dump_segments(dump: dict, width: int, height: int,
     points = []
     for instance in dump["lightning_instances"]:
         model_view = view @ rows_from_columns(instance["ubo"]["model"])
-        glow_ratio = float(instance["ubo"]["shape"][0])
+        rim_ratio = float(instance["ubo"]["shape"][0])
         for segment in instance["segments"]:
             a = np.array(segment["a_r0"], dtype=np.float64)
             b = np.array(segment["b_r1"], dtype=np.float64)
-            radius = max(a[3], b[3]) * glow_ratio
+            radius = max(a[3], b[3]) * rim_ratio
             points.extend(project_segment(model_view, proj, a, b, radius, screen_width, screen_height, viewport))
     return points
 

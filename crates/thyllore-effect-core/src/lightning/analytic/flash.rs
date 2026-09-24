@@ -22,7 +22,7 @@ pub fn compute_flash_intensity(effect: &LightningEffect, segments: &[Segment]) -
     compute_total_segment_emission(segments) * effect.flash_gain
 }
 
-/// Flash veil centred on the screen box of the alive glow capsules, `flash_radius` box half-extents wide.
+/// Flash veil centred on the screen box of the alive rim capsules, `flash_radius` box half-extents wide.
 pub fn compute_lightning_flash(
     effect: &LightningEffect,
     segments: &[Segment],

@@ -41,7 +41,8 @@ def parse_args():
 
 REFERENCE_MASK_THRESHOLD = 127
 RENDER_MASK_THRESHOLD = 200
-ON_AREA_RATIO = 0.002
+ON_PEAK_FRACTION = 0.1
+ON_AREA_FLOOR = 1e-4
 PROFILE_BINS = 16
 PROFILE_REFERENCE_WIDTH = 480
 EPS = 1e-9
@@ -204,7 +205,7 @@ def measure_timing(seq: dict, fps: float) -> dict:
         if masks[index].any() or masks[index + 1].any()
     ]
 
-    on_areas = [area for area in areas if area > ON_AREA_RATIO]
+    on_areas = [area for area in areas if area > max(ON_AREA_FLOOR, ON_PEAK_FRACTION * peak)]
     mean_on_area = float(np.mean(on_areas)) if on_areas else 0.0
 
     return {

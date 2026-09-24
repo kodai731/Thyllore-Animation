@@ -21,7 +21,7 @@ pub struct Segment {
     pub r0: f32,
     pub r1: f32,
     /// Relative envelope (branch dimming x stroke x flicker); the shader applies
-    /// `core_intensity` / `glow_intensity` on top, so this must stay O(1).
+    /// `core_intensity` / `rim_intensity` on top, so this must stay O(1).
     pub intensity: f32,
 }
 
@@ -458,18 +458,18 @@ pub fn build_strike_segments(effect: &LightningEffect, seed: u32, reseed: u32) -
     segments
 }
 
-/// Corners of the local axis-aligned box enclosing every glow capsule alive at `t`.
+/// Corners of the local axis-aligned box enclosing every rim capsule alive at `t`.
 pub fn compute_lightning_segment_aabb(
     effect: &LightningEffect,
     t: f32,
 ) -> Option<[Vector3<f32>; 8]> {
     let mut bounds: Option<(Vector3<f32>, Vector3<f32>)> = None;
     for seg in build_lightning_segments(effect, t) {
-        let glow_radius = seg.r0.max(seg.r1) * effect.glow_ratio;
-        let glow_extent = Vector3::new(glow_radius, glow_radius, glow_radius);
+        let rim_radius = seg.r0.max(seg.r1) * effect.rim_ratio;
+        let rim_extent = Vector3::new(rim_radius, rim_radius, rim_radius);
         for endpoint in [Vector3::from(seg.a), Vector3::from(seg.b)] {
-            let low = endpoint - glow_extent;
-            let high = endpoint + glow_extent;
+            let low = endpoint - rim_extent;
+            let high = endpoint + rim_extent;
             bounds = Some(match bounds {
                 Some((min, max)) => (
                     Vector3::new(min.x.min(low.x), min.y.min(low.y), min.z.min(low.z)),
@@ -835,17 +835,17 @@ mod tests {
         effect: &LightningEffect,
         segments: &[Segment],
     ) -> ([f32; 3], [f32; 3]) {
-        let glow_radius = |seg: &Segment| seg.r0.max(seg.r1) * effect.glow_ratio;
+        let rim_radius = |seg: &Segment| seg.r0.max(seg.r1) * effect.rim_ratio;
         let mut min = [0.0; 3];
         let mut max = [0.0; 3];
         for axis in 0..3 {
             min[axis] = segments
                 .iter()
-                .map(|seg| seg.a[axis].min(seg.b[axis]) - glow_radius(seg))
+                .map(|seg| seg.a[axis].min(seg.b[axis]) - rim_radius(seg))
                 .fold(f32::INFINITY, f32::min);
             max[axis] = segments
                 .iter()
-                .map(|seg| seg.a[axis].max(seg.b[axis]) + glow_radius(seg))
+                .map(|seg| seg.a[axis].max(seg.b[axis]) + rim_radius(seg))
                 .fold(f32::NEG_INFINITY, f32::max);
         }
         (min, max)

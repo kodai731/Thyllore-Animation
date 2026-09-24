@@ -1,5 +1,5 @@
 // Closed-form emission of the lightning bolt along a ray: sum over surviving segments of
-// the tapered capsule integral (include/volume_capsule.slang) for core + glow.
+// the tapered capsule integral (include/volume_capsule.slang) for core + rim.
 module lightning_integral;
 
 import "lightning/include/component.slang";
@@ -7,7 +7,7 @@ import "include/volume_capsule.slang";
 
 public static const int LIGHTNING_MAX_SEGMENTS = 256;
 
-public float lightningGlowRatio() {
+public float lightningRimRatio() {
     return lightning.shape.x;
 }
 
@@ -23,18 +23,18 @@ public float lightningCoreIntensity() {
     return lightning.core.a;
 }
 
-public float3 lightningGlowColor() {
-    return lightning.glow.rgb;
+public float3 lightningRimColor() {
+    return lightning.rim.rgb;
 }
 
-public float lightningGlowIntensity() {
-    return lightning.glow.a;
+public float lightningRimIntensity() {
+    return lightning.rim.a;
 }
 
 public bool lightningSegmentReject(float3 origin, float3 dir, float tNear, float tFar,
                                    float3 a, float3 b, float r0, float r1, out float tEntry) {
     float3 center = (a + b) * 0.5;
-    float radius = length(b - a) * 0.5 + max(r0, r1) * lightningGlowRatio();
+    float radius = length(b - a) * 0.5 + max(r0, r1) * lightningRimRatio();
     float3 oc = origin - center;
     float b_coef = dot(oc, dir);
     float c = dot(oc, oc) - radius * radius;
@@ -68,7 +68,7 @@ public bool clampToLightningSegments(float3 origin, float3 dir, inout float tNea
         float3 a = segments.seg_a_r0[i].xyz;
         float3 b = segments.seg_b_r1[i].xyz;
         float radius = length(b - a) * 0.5
-            + max(segments.seg_a_r0[i].w, segments.seg_b_r1[i].w) * lightningGlowRatio();
+            + max(segments.seg_a_r0[i].w, segments.seg_b_r1[i].w) * lightningRimRatio();
 
         float3 oc = origin - (a + b) * 0.5;
         float halfB = dot(oc, dir);
@@ -120,23 +120,20 @@ public void lightningAccumulateSegment(
 
     float eCore = capsuleRayEmission(capsule, origin, dir, tNear, tFar);
 
-    float glowRatio = lightningGlowRatio();
-    VolumeCapsule glowCapsule;
-    glowCapsule.a = a;
-    glowCapsule.b = b;
-    glowCapsule.radiusStart = r0 * glowRatio;
-    glowCapsule.radiusEnd = r1 * glowRatio;
-    // The glow decays from the axis over the full radius (no interior plateau),
-    // so close-up framings read as a bright core with a fading halo.
-    float glowRadiusMax = max(r0, r1) * glowRatio;
-    glowCapsule.edgeWidthQ = glowRadiusMax * glowRadiusMax;
+    float rimRatio = lightningRimRatio();
+    VolumeCapsule rimCapsule;
+    rimCapsule.a = a;
+    rimCapsule.b = b;
+    rimCapsule.radiusStart = r0 * rimRatio;
+    rimCapsule.radiusEnd = r1 * rimRatio;
+    rimCapsule.edgeWidthQ = edgeWidthQ * rimRatio * rimRatio;
 
-    float eGlow = capsuleRayEmission(glowCapsule, origin, dir, tNear, tFar);
+    float eRim = capsuleRayEmission(rimCapsule, origin, dir, tNear, tFar);
 
     sum += segIntensity * (lightningCoreIntensity() * lightningCoreColor() * eCore
-                         + lightningGlowIntensity() * lightningGlowColor() * eGlow);
+                         + lightningRimIntensity() * lightningRimColor() * eRim);
 
-    if (eGlow > 0.0) {
+    if (eRim > 0.0) {
         coverage = 1.0;
     }
     hitCount++;

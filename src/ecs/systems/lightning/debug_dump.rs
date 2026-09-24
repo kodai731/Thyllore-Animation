@@ -115,7 +115,7 @@ fn build_ubo_json(ubo: &LightningUBO) -> Value {
         "model": matrix_json(&ubo.model),
         "inverse_model": matrix_json(&ubo.inverse_model),
         "core": ubo.core,
-        "glow": ubo.glow,
+        "rim": ubo.rim,
         "flash": ubo.flash,
         "shape": ubo.shape,
         "inv_view_proj": matrix_json(&ubo.inv_view_proj),

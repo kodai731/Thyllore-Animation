@@ -37,6 +37,7 @@ mod inference_actor_systems;
 mod inspector_systems;
 mod keyframe_clipboard_systems;
 pub mod lightning;
+mod locator_systems;
 pub mod mesh_systems;
 pub mod message_log_systems;
 pub mod motion_path_systems;

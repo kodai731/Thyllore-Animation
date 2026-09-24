@@ -1,8 +1,9 @@
 use super::passes::compute_lightning_scissor;
 use super::*;
-use crate::ecs::component::{EditorDisplay, EntityIcon, LightningEffect};
+use crate::ecs::component::{EditorDisplay, EntityIcon, LightningEffect, LightningTarget, Locator};
 use crate::ecs::resource::{HierarchyState, LightningRenderSettings, PickRay, ProjectionData};
-use crate::ecs::world::{GlobalTransform, Name, Transform, World};
+use crate::ecs::world::{Children, GlobalTransform, Name, Parent, Transform, World};
+use crate::hooks::scene::spawn_scene_owner;
 use cgmath::{Matrix4, SquareMatrix, Vector2, Vector3};
 use thyllore_effect_core::{
     build_lightning_ubo, burst_start_time, compute_lightning_segment_aabb, LightningDebugView,
@@ -231,4 +232,102 @@ fn coverage_debug_view_scissor_spans_the_full_extent() {
     .expect("coverage always draws");
     assert_eq!((scissor.offset.x, scissor.offset.y), (0, 0));
     assert_eq!(scissor.extent, extent);
+}
+
+#[test]
+fn spawned_target_is_a_child_at_the_end_offset_and_links_by_name() {
+    let mut world = World::new();
+    let effect = LightningEffect {
+        position: Vector3::new(0.0, 8.0, 0.0),
+        end_offset: [0.0, -8.5, 0.0],
+        ..LightningEffect::default()
+    };
+    let lightning = spawn_lightning(&mut world, DEFAULT_LIGHTNING_NAME, effect);
+
+    let target = spawn_lightning_target(&mut world, lightning).expect("target spawned");
+
+    assert_eq!(resolve_lightning_target(&world, lightning), Some(target));
+    assert_eq!(
+        world.get_component::<Parent>(target).map(|p| p.0),
+        Some(lightning)
+    );
+    assert_eq!(
+        world
+            .get_component::<Children>(lightning)
+            .map(|c| c.0.clone()),
+        Some(vec![target])
+    );
+    let placement = world.get_component::<Transform>(target).unwrap();
+    assert_eq!(placement.translation, Vector3::new(0.0, -8.5, 0.0));
+    assert_eq!(
+        world.get_component::<Name>(target).map(|n| n.0.clone()),
+        Some(format!("{DEFAULT_LIGHTNING_NAME} Target"))
+    );
+}
+
+#[test]
+fn linked_bolt_takes_the_target_local_translation_as_end_offset() {
+    let mut world = World::new();
+    let effect = LightningEffect {
+        position: Vector3::new(1.0, 8.0, 0.0),
+        ..LightningEffect::default()
+    };
+    let lightning = spawn_lightning(&mut world, DEFAULT_LIGHTNING_NAME, effect);
+    let target = spawn_lightning_target(&mut world, lightning).expect("target spawned");
+    world
+        .get_component_mut::<Transform>(target)
+        .unwrap()
+        .translation = Vector3::new(4.0, 0.0, 2.0);
+
+    follow_lightning_targets(&mut world);
+
+    let end_offset = world
+        .get_component::<LightningEffect>(lightning)
+        .unwrap()
+        .end_offset;
+    assert_eq!(end_offset, [4.0, 0.0, 2.0]);
+
+    clear_lightning_target(&mut world, lightning);
+    assert_eq!(resolve_lightning_target(&world, lightning), None);
+    assert!(world.get_component::<Transform>(target).is_some());
+}
+
+#[test]
+fn a_scene_loaded_root_target_is_adopted_as_a_child_on_the_first_follow() {
+    let mut world = World::new();
+    let lightning = spawn_lightning(
+        &mut world,
+        DEFAULT_LIGHTNING_NAME,
+        LightningEffect::default(),
+    );
+    let target = spawn_scene_owner(
+        &mut world,
+        "Lightning Target",
+        Locator::at(Vector3::new(1.0, -6.0, 0.0)),
+    );
+    world.insert_component(
+        lightning,
+        LightningTarget {
+            entity_name: "Lightning Target".to_string(),
+        },
+    );
+
+    follow_lightning_targets(&mut world);
+    follow_lightning_targets(&mut world);
+
+    assert_eq!(
+        world.get_component::<Parent>(target).map(|p| p.0),
+        Some(lightning)
+    );
+    assert_eq!(
+        world
+            .get_component::<Children>(lightning)
+            .map(|c| c.0.clone()),
+        Some(vec![target])
+    );
+    let end_offset = world
+        .get_component::<LightningEffect>(lightning)
+        .unwrap()
+        .end_offset;
+    assert_eq!(end_offset, [1.0, -6.0, 0.0]);
 }

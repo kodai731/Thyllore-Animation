@@ -722,6 +722,7 @@ fn build_lightning_section(
         return;
     };
     let mut effect_copy = effect.clone();
+    let target_name = draw_lightning_target_row(ui, ui_events, ecs_world, selected);
     let mut drawn_groups: Vec<&str> = Vec::new();
     for group in thyllore_effect_core::LIGHTNING_UI_PARAMS
         .iter()
@@ -736,6 +737,7 @@ fn build_lightning_section(
         let names: Vec<&str> = thyllore_effect_core::LIGHTNING_UI_PARAMS
             .iter()
             .filter(|param| param.group == group)
+            .filter(|param| target_name.is_none() || param.name != "end_offset")
             .map(|param| param.name)
             .collect();
         draw_params(
@@ -762,6 +764,39 @@ fn build_lightning_section(
             "Write lightning parameters, UBO, render settings, camera and a screenshot to log/lightning/",
         );
     }
+}
+
+/// The bolt's end point row: the linked locator's name, or a button that creates one. While a
+/// target is linked the end offset follows it, so its slider is hidden.
+fn draw_lightning_target_row(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    ecs_world: &World,
+    lightning: crate::ecs::world::Entity,
+) -> Option<String> {
+    use crate::ecs::component::LightningTarget;
+
+    let target_name = ecs_world
+        .get_component::<LightningTarget>(lightning)
+        .map(|target| target.entity_name.clone());
+    match &target_name {
+        Some(name) => {
+            ui.text(format!("Target: {name}"));
+            ui.same_line();
+            if ui.small_button("Clear##lightning_target") {
+                ui_events.send(UIEvent::ClearLightningTarget);
+            }
+        }
+        None => {
+            if ui.button("Add Target") {
+                ui_events.send(UIEvent::AddLightningTarget);
+            }
+            if ui.is_item_hovered() {
+                ui.tooltip_text("Spawn a locator at the end point; move it to aim the bolt");
+            }
+        }
+    }
+    target_name
 }
 
 fn draw_lightning_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {

@@ -216,6 +216,16 @@ pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
             UIEvent::ApplyLightningPreset(name) => {
                 crate::ecs::systems::apply_lightning_preset_to_selected(world, name);
             }
+            UIEvent::AddLightningTarget => {
+                if let Some(lightning) = resolve_selected_lightning(world) {
+                    crate::ecs::systems::spawn_lightning_target(world, lightning);
+                }
+            }
+            UIEvent::ClearLightningTarget => {
+                if let Some(lightning) = resolve_selected_lightning(world) {
+                    crate::ecs::systems::clear_lightning_target(world, lightning);
+                }
+            }
             UIEvent::UpdateLightningRenderSettings(new_settings) => {
                 if let Some(mut settings) = world.get_resource_mut::<LightningRenderSettings>() {
                     *settings = *new_settings;

@@ -493,6 +493,8 @@ pub enum UIEvent {
     UpdateWindRenderSettings(WindRenderSettings),
     UpdateLightningEffect(Box<LightningEffect>),
     ApplyLightningPreset(String),
+    AddLightningTarget,
+    ClearLightningTarget,
     UpdateLightningRenderSettings(LightningRenderSettings),
     OpenScalarCurveEditor,
 }

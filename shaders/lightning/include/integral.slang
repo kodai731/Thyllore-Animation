@@ -1,5 +1,6 @@
-// Closed-form emission of the lightning bolt along a ray: sum over surviving segments of
-// the tapered capsule integral (include/volume_capsule.slang) for core + rim.
+// Closed-form emission of the lightning bolt along a ray: the tapered capsule integral
+// (include/volume_capsule.slang) of core + rim, combined over segments as a union (max) so the
+// overlap of neighbouring capsules at joints and branch roots does not add up.
 module lightning_integral;
 
 import "lightning/include/component.slang";
@@ -96,9 +97,15 @@ public bool clampToLightningSegments(float3 origin, float3 dir, inout float tNea
     return true;
 }
 
+public float3 lightningCombineEmission(float coreEmission, float rimEmission) {
+    return lightningCoreIntensity() * lightningCoreColor() * coreEmission
+         + lightningRimIntensity() * lightningRimColor() * rimEmission;
+}
+
 public void lightningAccumulateSegment(
     int i, float3 origin, float3 dir, float tNear, float tFar,
-    inout float3 sum, inout float coverage, inout int hitCount, inout float coreCoverage) {
+    inout float coreEmission, inout float rimEmission,
+    inout float coverage, inout int hitCount, inout float coreCoverage) {
     float3 a = segments.seg_a_r0[i].xyz;
     float r0 = segments.seg_a_r0[i].w;
     float3 b = segments.seg_b_r1[i].xyz;
@@ -130,8 +137,8 @@ public void lightningAccumulateSegment(
 
     float eRim = capsuleRayEmission(rimCapsule, origin, dir, tNear, tFar);
 
-    sum += segIntensity * (lightningCoreIntensity() * lightningCoreColor() * eCore
-                         + lightningRimIntensity() * lightningRimColor() * eRim);
+    coreEmission = max(coreEmission, segIntensity * eCore);
+    rimEmission = max(rimEmission, segIntensity * eRim);
 
     if (eRim > 0.0) {
         coverage = 1.0;
@@ -144,14 +151,16 @@ public void lightningAccumulateSegment(
 
 public float3 lightningEmission(float3 origin, float3 dir, float tNear, float tFar,
                                 out float coverage, out int hitCount, out float coreCoverage) {
-    float3 sum = float3(0.0);
+    float coreEmission = 0.0;
+    float rimEmission = 0.0;
     coverage = 0.0;
     hitCount = 0;
     coreCoverage = 0.0;
     int count = lightningSegmentCount();
     for (int i = 0; i < LIGHTNING_MAX_SEGMENTS; ++i) {
         if (i >= count) break;
-        lightningAccumulateSegment(i, origin, dir, tNear, tFar, sum, coverage, hitCount, coreCoverage);
+        lightningAccumulateSegment(i, origin, dir, tNear, tFar, coreEmission, rimEmission,
+                                   coverage, hitCount, coreCoverage);
     }
-    return sum;
+    return lightningCombineEmission(coreEmission, rimEmission);
 }

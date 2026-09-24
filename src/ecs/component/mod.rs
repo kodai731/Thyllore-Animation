@@ -11,6 +11,7 @@ mod glb_source;
 #[cfg(feature = "ml")]
 mod inference_actor;
 mod lightning;
+mod locator;
 mod marker;
 pub mod mesh;
 mod motion_path;
@@ -33,6 +34,7 @@ pub use glb_source::*;
 #[cfg(feature = "ml")]
 pub use inference_actor::*;
 pub use lightning::*;
+pub use locator::*;
 pub use marker::*;
 pub use mesh::*;
 pub use motion_path::*;

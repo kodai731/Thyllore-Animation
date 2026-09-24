@@ -9,7 +9,8 @@ import "include/volume_capsule.slang";
 public float3 lightningReferenceEmission(float3 origin, float3 dir, float tNear, float tFar, int stepCount,
                                          out float coverage, out int hitCount, out float coreCoverage) {
     int steps = max(stepCount, 1);
-    float3 sum = float3(0.0);
+    float coreEmission = 0.0;
+    float rimEmission = 0.0;
     coverage = 0.0;
     hitCount = 0;
     coreCoverage = 0.0;
@@ -45,6 +46,8 @@ public float3 lightningReferenceEmission(float3 origin, float3 dir, float tNear,
         }
 
         float stepLen = (segTExit - segTEnter) / float(steps);
+        float segCore = 0.0;
+        float segRim = 0.0;
         for (int s = 0; s < steps; ++s) {
             float t = segTEnter + (float(s) + 0.5) * stepLen;
             float3 p = origin + dir * t;
@@ -78,9 +81,11 @@ public float3 lightningReferenceEmission(float3 origin, float3 dir, float tNear,
                 coreCoverage = 1.0;
             }
 
-            sum += segIntensity * stepLen * (lightningCoreIntensity() * lightningCoreColor() * coreDensity
-                                        + lightningRimIntensity() * lightningRimColor() * rimDensity);
+            segCore += stepLen * coreDensity;
+            segRim += stepLen * rimDensity;
         }
+        coreEmission = max(coreEmission, segIntensity * segCore);
+        rimEmission = max(rimEmission, segIntensity * segRim);
     }
-    return sum;
+    return lightningCombineEmission(coreEmission, rimEmission);
 }

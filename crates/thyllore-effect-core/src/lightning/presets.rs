@@ -15,6 +15,8 @@ pub fn apply_lightning_preset(effect: &mut LightningEffect, name: &str) -> bool 
             preset.tortuosity = 0.45;
             preset.roughness = 0.6;
             preset.branch_depth = 2;
+            preset.branch_zone_start = 0.15;
+            preset.branch_count = 16.0;
             preset.branch_probability = 0.55;
             preset.branch_angle = 0.9;
             preset.branch_length_ratio = 0.45;
@@ -34,6 +36,7 @@ pub fn apply_lightning_preset(effect: &mut LightningEffect, name: &str) -> bool 
         "arc" => {
             preset.end_offset = [6.0, 0.0, 0.0];
             preset.branch_depth = 1;
+            preset.branch_count = 3.0;
             preset.branch_probability = 0.1;
             preset.attack_time = 0.17;
             preset.release_time = 0.04;
@@ -42,6 +45,7 @@ pub fn apply_lightning_preset(effect: &mut LightningEffect, name: &str) -> bool 
         "charge" => {
             preset.source = LightningSource::Shell { radius: 4.0 };
             preset.strikes_per_burst = 30;
+            preset.branch_count = 1.0;
             preset.detail_levels = 2;
             preset.charge_ramp = 1.2;
             preset.flash_gain = 0.00012;
@@ -110,6 +114,8 @@ mod tests {
         assert!((effect.tortuosity - 0.45).abs() < 1e-6);
         assert!((effect.roughness - 0.6).abs() < 1e-6);
         assert_eq!(effect.branch_depth, 2);
+        assert!((effect.branch_zone_start - 0.15).abs() < 1e-6);
+        assert!((effect.branch_count - 16.0).abs() < 1e-6);
         assert!((effect.branch_probability - 0.55).abs() < 1e-6);
         assert!((effect.branch_angle - 0.9).abs() < 1e-6);
         assert!((effect.branch_length_ratio - 0.45).abs() < 1e-6);
@@ -134,6 +140,7 @@ mod tests {
 
         assert_eq!(effect.end_offset, [6.0, 0.0, 0.0]);
         assert_eq!(effect.branch_depth, 1);
+        assert!((effect.branch_count - 3.0).abs() < 1e-6);
         assert!((effect.branch_probability - 0.1).abs() < 1e-6);
         assert!((effect.attack_time - 0.17).abs() < 1e-6);
         assert!((effect.release_time - 0.04).abs() < 1e-6);
@@ -152,6 +159,7 @@ mod tests {
             _ => panic!("expected Shell source"),
         }
         assert_eq!(effect.strikes_per_burst, 30);
+        assert!((effect.branch_count - 1.0).abs() < 1e-6);
         assert_eq!(effect.detail_levels, 2);
         assert!((effect.charge_ramp - 1.2).abs() < 1e-6);
         assert!((effect.flash_gain - 0.00012).abs() < 1e-9);

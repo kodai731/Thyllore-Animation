@@ -147,6 +147,39 @@ declare_scene_format! {
                 group: "branch",
             },
         },
+        branch_count: f32 {
+            get: |e| e.branch_count,
+            set: |e, v| e.branch_count = v,
+            ui {
+                min: 0.0,
+                max: 32.0,
+                format: "%.2f",
+                tooltip: "Number of branches leaving the main channel; the fraction fades the last one",
+                group: "branch",
+            },
+        },
+        branch_zone_start: f32 {
+            get: |e| e.branch_zone_start,
+            set: |e, v| e.branch_zone_start = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Start/End of the main-channel span branches leave from, as a fraction of its arc length",
+                group: "branch",
+            },
+        },
+        branch_zone_end: f32 {
+            get: |e| e.branch_zone_end,
+            set: |e, v| e.branch_zone_end = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.2f",
+                tooltip: "Start/End of the main-channel span branches leave from, as a fraction of its arc length",
+                group: "branch",
+            },
+        },
         branch_angle: f32 {
             get: |e| e.branch_angle,
             set: |e, v| e.branch_angle = v,

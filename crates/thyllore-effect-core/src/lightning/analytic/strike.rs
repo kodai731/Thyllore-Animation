@@ -215,6 +215,90 @@ pub(crate) fn segment_length(seg: &Segment) -> f32 {
     (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
 }
 
+struct BranchSite {
+    segment_index: usize,
+    intensity_scale: f32,
+}
+
+fn compute_midpoint_progress(segments: &[Segment]) -> Vec<f32> {
+    let lengths: Vec<f32> = segments.iter().map(segment_length).collect();
+    let total_length: f32 = lengths.iter().sum();
+    if total_length <= 0.0 {
+        return Vec::new();
+    }
+
+    let mut travelled = 0.0f32;
+    lengths
+        .iter()
+        .map(|length| {
+            let midpoint = travelled + length * 0.5;
+            travelled += length;
+            midpoint / total_length
+        })
+        .collect()
+}
+
+fn pick_counted_branch_sites(
+    segments: &[Segment],
+    effect: &LightningEffect,
+    seed: u32,
+    reseed: u32,
+) -> Vec<BranchSite> {
+    let count = effect.branch_count;
+    let zone_start = effect.branch_zone_start;
+    let zone_end = effect.branch_zone_end;
+    if count <= 0.0 || zone_start >= zone_end {
+        return Vec::new();
+    }
+
+    let midpoint_progress = compute_midpoint_progress(segments);
+    let slot_count = count.ceil() as u32;
+    let partial_slot = count.floor() as u32;
+    let slot_width = (zone_end - zone_start) / slot_count as f32;
+
+    (0..slot_count)
+        .filter_map(|slot| {
+            let slot_start = zone_start + slot_width * slot as f32;
+            let slot_end = zone_start + slot_width * (slot + 1) as f32;
+            let target = slot_start + hash_f32(&[seed, reseed, slot, 0, 7]) * slot_width;
+            let segment_index = midpoint_progress
+                .iter()
+                .enumerate()
+                .filter(|(_, progress)| slot_start <= **progress && **progress < slot_end)
+                .min_by(|(_, a), (_, b)| (**a - target).abs().total_cmp(&(**b - target).abs()))
+                .map(|(index, _)| index)?;
+
+            let intensity_scale = if slot == partial_slot {
+                count.fract()
+            } else {
+                1.0
+            };
+            Some(BranchSite {
+                segment_index,
+                intensity_scale,
+            })
+        })
+        .collect()
+}
+
+fn pick_probable_branch_sites(
+    segment_count: usize,
+    effect: &LightningEffect,
+    seed: u32,
+    reseed: u32,
+    depth: u32,
+) -> Vec<BranchSite> {
+    (0..segment_count)
+        .filter_map(|i| {
+            let hash_value = hash_f32(&[seed, reseed, i as u32, depth]);
+            (hash_value < effect.branch_probability).then(|| BranchSite {
+                segment_index: i,
+                intensity_scale: compute_branch_fade(effect.branch_probability, hash_value),
+            })
+        })
+        .collect()
+}
+
 fn spawn_branches(
     segments: &mut Vec<Segment>,
     effect: &LightningEffect,
@@ -223,17 +307,23 @@ fn spawn_branches(
     depth: u32,
 ) {
     let main_count = segments.len();
+    let branch_sites = if depth == 0 {
+        pick_counted_branch_sites(segments, effect, seed, reseed)
+    } else {
+        pick_probable_branch_sites(main_count, effect, seed, reseed, depth)
+    };
 
     let mut remaining_len_after = vec![0.0f32; main_count + 1];
     for i in (0..main_count).rev() {
         remaining_len_after[i] = remaining_len_after[i + 1] + segment_length(&segments[i]);
     }
 
-    for i in 0..main_count {
+    for site in branch_sites {
         if segments.len() >= LIGHTNING_MAX_SEGMENTS {
             break;
         }
 
+        let i = site.segment_index;
         let seg = &segments[i];
         let progress = i as f32 / main_count as f32;
         let is_end_zone = progress >= 0.9;
@@ -246,81 +336,70 @@ fn spawn_branches(
 
         let chord_remaining_len = segment_length(seg) * 0.5 + remaining_len_after[i + 1];
 
-        let hash_value = hash_f32(&[seed, reseed, i as u32, depth]);
-        let effective_probability = if is_end_zone {
-            effect.branch_probability * 2.0
+        let end_pos = segments[main_count - 1].b;
+        let parent_tangent: [f32; 3] = [
+            end_pos[0] - mid_pos[0],
+            end_pos[1] - mid_pos[1],
+            end_pos[2] - mid_pos[2],
+        ];
+
+        let azimuth_hash = hash_f32(&[seed, reseed, i as u32, depth, 0]);
+        let angle_hash = hash_f32(&[seed, reseed, i as u32, depth, 3]);
+
+        let branch_angle = if is_end_zone {
+            effect.branch_angle * END_ZONE_ANGLE_SCALE
         } else {
-            effect.branch_probability
+            effect.branch_angle
+        };
+        let child_tangent =
+            compute_branch_tangent(parent_tangent, branch_angle, azimuth_hash, angle_hash);
+        let child_length = effect.branch_length_ratio * chord_remaining_len;
+
+        let tangent_mag = (child_tangent[0] * child_tangent[0]
+            + child_tangent[1] * child_tangent[1]
+            + child_tangent[2] * child_tangent[2])
+            .sqrt();
+        let child_end: [f32; 3] = if tangent_mag > 0.0 {
+            let scale = child_length / tangent_mag;
+            [
+                mid_pos[0] + child_tangent[0] * scale,
+                mid_pos[1] + child_tangent[1] * scale,
+                mid_pos[2] + child_tangent[2] * scale,
+            ]
+        } else {
+            mid_pos
         };
 
-        if hash_value < effective_probability {
-            let end_pos = segments[main_count - 1].b;
-            let parent_tangent: [f32; 3] = [
-                end_pos[0] - mid_pos[0],
-                end_pos[1] - mid_pos[1],
-                end_pos[2] - mid_pos[2],
-            ];
+        let child_levels = effect.detail_levels.saturating_sub(1);
+        let child_points = displace_path(
+            effect,
+            seed,
+            reseed,
+            i as u32,
+            mid_pos,
+            child_end,
+            child_levels,
+        );
+        let mut child_segments = Vec::new();
+        let child_radius_start = effect.core_radius * effect.branch_radius_ratio;
+        let child_radius_end = child_radius_start * effect.tip_radius_ratio;
+        let child_intensity = seg.intensity * effect.branch_intensity_ratio * site.intensity_scale;
 
-            let azimuth_hash = hash_f32(&[seed, reseed, i as u32, depth, 0]);
-            let angle_hash = hash_f32(&[seed, reseed, i as u32, depth, 3]);
+        emit_path(
+            &mut child_segments,
+            &child_points,
+            child_radius_start,
+            child_radius_end,
+            child_intensity,
+        );
 
-            let branch_angle = if is_end_zone {
-                effect.branch_angle * END_ZONE_ANGLE_SCALE
-            } else {
-                effect.branch_angle
-            };
-            let child_tangent =
-                compute_branch_tangent(parent_tangent, branch_angle, azimuth_hash, angle_hash);
-            let child_length = effect.branch_length_ratio * chord_remaining_len;
+        if depth < effect.branch_depth {
+            spawn_branches(&mut child_segments, effect, seed, reseed, depth + 1);
+        }
 
-            let tangent_mag = (child_tangent[0] * child_tangent[0]
-                + child_tangent[1] * child_tangent[1]
-                + child_tangent[2] * child_tangent[2])
-                .sqrt();
-            let child_end: [f32; 3] = if tangent_mag > 0.0 {
-                let scale = child_length / tangent_mag;
-                [
-                    mid_pos[0] + child_tangent[0] * scale,
-                    mid_pos[1] + child_tangent[1] * scale,
-                    mid_pos[2] + child_tangent[2] * scale,
-                ]
-            } else {
-                mid_pos
-            };
-
-            let child_levels = effect.detail_levels.saturating_sub(1);
-            let child_points = displace_path(
-                effect,
-                seed,
-                reseed,
-                i as u32,
-                mid_pos,
-                child_end,
-                child_levels,
-            );
-            let mut child_segments = Vec::new();
-            let child_radius_start = effect.core_radius * effect.branch_radius_ratio;
-            let child_radius_end = child_radius_start * effect.tip_radius_ratio;
-            let child_intensity = seg.intensity
-                * effect.branch_intensity_ratio
-                * compute_branch_fade(effective_probability, hash_value);
-
-            emit_path(
-                &mut child_segments,
-                &child_points,
-                child_radius_start,
-                child_radius_end,
-                child_intensity,
-            );
-
-            if depth < effect.branch_depth {
-                spawn_branches(&mut child_segments, effect, seed, reseed, depth + 1);
-            }
-
-            for seg in child_segments {
-                if !push_segment(segments, seg) {
-                    break;
-                }
+        for seg in child_segments {
+            if !push_segment(segments, seg) {
+                break;
             }
         }
     }
@@ -455,19 +534,21 @@ pub fn build_strike_segments(effect: &LightningEffect, seed: u32, reseed: u32) -
                 effect.detail_levels,
             );
 
+            let mut strike_segments = Vec::new();
             emit_path(
-                &mut segments,
+                &mut strike_segments,
                 &points,
                 effect.core_radius,
                 effect.core_radius * effect.tip_radius_ratio,
                 1.0,
             );
+            spawn_branches(&mut strike_segments, effect, seed, reseed, 0);
 
-            if segments.len() >= LIGHTNING_MAX_SEGMENTS {
-                break;
+            for seg in strike_segments {
+                if !push_segment(&mut segments, seg) {
+                    break;
+                }
             }
-
-            spawn_branches(&mut segments, effect, seed, reseed, 0);
 
             if segments.len() >= LIGHTNING_MAX_SEGMENTS {
                 break;
@@ -732,7 +813,7 @@ mod tests {
         effect.source = LightningSource::Shell { radius };
         effect.strikes_per_burst = 5;
         effect.detail_levels = 0;
-        effect.branch_probability = 0.0;
+        effect.branch_count = 0.0;
 
         let segments = build_strike_segments(&effect, 0, 0);
 
@@ -762,7 +843,7 @@ mod tests {
         effect.source = LightningSource::Shell { radius: 2.0 };
         effect.strikes_per_burst = 8;
         effect.detail_levels = 0;
-        effect.branch_probability = 0.0;
+        effect.branch_count = 0.0;
         effect.charge_ramp = effect.sustain_time;
 
         let tau = effect.attack_time + effect.sustain_time * 0.5;
@@ -861,17 +942,17 @@ mod tests {
         effect.detail_levels = 4;
         effect.branch_length_ratio = 0.5;
         effect.branch_depth = 0;
-        effect.branch_probability = 0.0;
+        effect.branch_count = 0.0;
 
         let seed = crate::lightning::hash_u32(&[0, 0]);
         let main_path = build_strike_segments(&effect, seed, 0);
 
-        effect.branch_probability = 1.0;
+        effect.branch_count = 4.0;
         let with_branches = build_strike_segments(&effect, seed, 0);
 
         assert!(
             with_branches.len() > main_path.len(),
-            "branch_probability=1.0 must add branch segments, got {} vs {}",
+            "branch_count=4.0 must add branch segments, got {} vs {}",
             with_branches.len(),
             main_path.len()
         );
@@ -940,7 +1021,7 @@ mod tests {
     fn test_compute_lightning_segment_aabb_single_segment() {
         let mut effect = LightningEffect::default();
         effect.detail_levels = 0;
-        effect.branch_probability = 0.0;
+        effect.branch_count = 0.0;
         effect.end_offset = [3.0, -8.0, 1.0];
         let t = time_inside_first_burst(&effect);
 
@@ -961,12 +1042,12 @@ mod tests {
     #[test]
     fn test_compute_lightning_segment_aabb_multiple_segments_with_branches() {
         let mut effect = LightningEffect::default();
-        effect.branch_probability = 1.0;
+        effect.branch_count = 8.0;
         effect.branch_depth = 2;
         let t = time_inside_first_burst(&effect);
 
         let mut unbranched = effect.clone();
-        unbranched.branch_probability = 0.0;
+        unbranched.branch_count = 0.0;
         let main_path_len = build_lightning_segments(&unbranched, t).len();
         let segments = build_lightning_segments(&effect, t);
         assert!(segments.len() > main_path_len, "branches must add segments");
@@ -1053,6 +1134,77 @@ mod tests {
                 seg.b[1],
                 max_y_above_origin
             );
+        }
+    }
+
+    fn straight_counted_branch_effect(branch_count: f32) -> LightningEffect {
+        let mut effect = LightningEffect::default();
+        effect.detail_levels = 4;
+        effect.tortuosity = 0.0;
+        effect.branch_depth = 0;
+        effect.branch_count = branch_count;
+        effect.end_offset = [3.0, -8.0, 1.0];
+        effect
+    }
+
+    fn build_root_branch_paths(effect: &LightningEffect) -> Vec<Vec<Segment>> {
+        let seed = crate::lightning::hash_u32(&[0, 0]);
+        let segments = build_strike_segments(effect, seed, 0);
+        let branch_segments = &segments[1 << effect.detail_levels..];
+
+        let mut paths: Vec<Vec<Segment>> = Vec::new();
+        for (i, seg) in branch_segments.iter().enumerate() {
+            let continues_previous =
+                i > 0 && length(difference(seg.a, branch_segments[i - 1].b)) <= 1e-6;
+            match paths.last_mut() {
+                Some(path) if continues_previous => path.push(*seg),
+                _ => paths.push(vec![*seg]),
+            }
+        }
+        paths
+    }
+
+    #[test]
+    fn test_integer_branch_count_spawns_exactly_that_many_root_branches() {
+        let effect = straight_counted_branch_effect(4.0);
+        assert_eq!(build_root_branch_paths(&effect).len(), 4);
+    }
+
+    #[test]
+    fn test_root_branches_start_inside_the_branch_zone() {
+        let mut effect = straight_counted_branch_effect(8.0);
+        effect.branch_zone_start = 0.3;
+        effect.branch_zone_end = 0.7;
+
+        let paths = build_root_branch_paths(&effect);
+        assert!(!paths.is_empty(), "the zone must still hold branches");
+
+        let chord = effect.end_offset;
+        for path in &paths {
+            let progress = dot(path[0].a, chord) / dot(chord, chord);
+            assert!(
+                (0.3..0.7).contains(&progress),
+                "branch starts at progress {progress}, outside [0.3, 0.7)"
+            );
+        }
+    }
+
+    #[test]
+    fn test_fractional_branch_count_scales_the_last_root_branch() {
+        let effect = straight_counted_branch_effect(2.5);
+        let paths = build_root_branch_paths(&effect);
+        assert_eq!(paths.len(), 3);
+
+        let full = effect.branch_intensity_ratio;
+        let expected = [full, full, full * 0.5];
+        for (path, expected_intensity) in paths.iter().zip(expected) {
+            for seg in path {
+                assert!(
+                    (seg.intensity - expected_intensity).abs() < 1e-6,
+                    "intensity {} expected {expected_intensity}",
+                    seg.intensity
+                );
+            }
         }
     }
 }

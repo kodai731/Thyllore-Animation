@@ -42,6 +42,14 @@ declare_scene_format! {
                     set: |e, v| e.end_offset[2] = v,
                 },
             },
+            ui {
+                kind: Offset,
+                min: -50.0,
+                max: 50.0,
+                format: "%.2f",
+                tooltip: "End point of the main strike relative to the effect origin",
+                group: "shape",
+            },
         },
         strikes_per_burst: u32 {
             get: |e| e.strikes_per_burst,

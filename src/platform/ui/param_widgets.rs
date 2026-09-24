@@ -38,6 +38,7 @@ pub fn draw_params<C>(
                 ColorMapping::Transmitted,
                 &mut after_item,
             ),
+            UiKind::Offset => draw_offset(ui, meta, scalars, component, &mut after_item),
         }
     }
 }
@@ -150,6 +151,44 @@ fn resolve_channels<'a, C>(
         find_scalar_param(scalars, &names[1])?,
         find_scalar_param(scalars, &names[2])?,
     ])
+}
+
+fn draw_offset<C>(
+    ui: &imgui::Ui,
+    meta: &UiParam,
+    scalars: &[ScalarParam<C>],
+    component: &mut C,
+    after_item: &mut impl FnMut(&imgui::Ui, EditedScalars),
+) {
+    let component_names = meta.offset_component_names();
+    let Some(channels) = resolve_channels(scalars, &component_names) else {
+        return;
+    };
+
+    let stored = channels.map(|channel| (channel.get)(component));
+    let mut dragged = stored;
+    let changed = imgui::Drag::new(meta.display_label())
+        .range(meta.min, meta.max)
+        .display_format(meta.format)
+        .build_array(ui, &mut dragged);
+    show_tooltip(ui, meta.tooltip);
+
+    let written = if changed {
+        let clamped = dragged.map(|value| value.clamp(meta.min, meta.max));
+        for (channel, value) in channels.iter().zip(clamped) {
+            (channel.set)(component, value);
+        }
+        clamped
+    } else {
+        stored
+    };
+
+    let edited: [(&'static str, f32); 3] = [
+        (channels[0].name, written[0]),
+        (channels[1].name, written[1]),
+        (channels[2].name, written[2]),
+    ];
+    after_item(ui, &edited);
 }
 
 fn show_tooltip(ui: &imgui::Ui, tooltip: &str) {

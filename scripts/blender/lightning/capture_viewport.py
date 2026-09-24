@@ -34,7 +34,7 @@ for obj in list(bpy.data.objects):
 bpy.ops.thyllore.lightning_add()
 lightning = bpy.context.active_object
 lightning.location = (0.0, 0.0, 8.0)
-lightning.thyllore_lightning.end_offset = (0.0, -8.5, 0.0)
+lightning.thyllore_lightning.end_offset = (0.0, 0.0, -8.5)
 lightning.thyllore_lightning.preset = "bolt"
 
 window = bpy.context.window

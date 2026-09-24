@@ -5,6 +5,8 @@ use crate::LightningEffect;
 use cgmath::{InnerSpace, Quaternion, Rad, Rotation, Rotation3, Vector3};
 
 pub const LIGHTNING_MAX_SEGMENTS: usize = 256;
+const END_ZONE_ANGLE_SCALE: f32 = 1.5;
+const BRANCH_FADE_WIDTH: f32 = 0.05;
 
 fn push_segment(segments: &mut Vec<Segment>, seg: Segment) -> bool {
     if segments.len() >= LIGHTNING_MAX_SEGMENTS {
@@ -62,13 +64,13 @@ fn perpendicular_basis(dir: [f32; 3]) -> ([f32; 3], [f32; 3]) {
         Vector3::unit_z()
     };
 
-    let reference = if axis.y.abs() < 0.9 {
-        Vector3::unit_y()
-    } else {
+    let canonical_down = -Vector3::unit_y();
+    let u = if axis.dot(canonical_down) < -1.0 + 1e-6 {
         Vector3::unit_x()
+    } else {
+        Quaternion::from_arc(canonical_down, axis, None).rotate_vector(Vector3::unit_x())
     };
 
-    let u = reference.cross(axis).normalize();
     let v = axis.cross(u);
     (u.into(), v.into())
 }
@@ -81,6 +83,20 @@ fn rotate_around_axis(v: [f32; 3], axis: [f32; 3], angle: f32) -> [f32; 3] {
 
     let rotation = Quaternion::from_axis_angle(axis.normalize(), Rad(angle));
     rotation.rotate_vector(Vector3::from(v)).into()
+}
+
+fn compute_branch_tangent(
+    parent_tangent: [f32; 3],
+    branch_angle: f32,
+    azimuth_hash: f32,
+    angle_hash: f32,
+) -> [f32; 3] {
+    let (u, v) = perpendicular_basis(parent_tangent);
+    let azimuth = azimuth_hash * std::f32::consts::TAU;
+    let axis = Vector3::from(u) * azimuth.cos() + Vector3::from(v) * azimuth.sin();
+
+    let angle = branch_angle * (0.5 + angle_hash);
+    rotate_around_axis(parent_tangent, axis.into(), angle)
 }
 
 fn displace_path(
@@ -186,6 +202,10 @@ fn emit_path(
     }
 }
 
+fn compute_branch_fade(effective_probability: f32, hash_value: f32) -> f32 {
+    ((effective_probability - hash_value) / BRANCH_FADE_WIDTH).clamp(0.0, 1.0)
+}
+
 pub(crate) fn segment_length(seg: &Segment) -> f32 {
     let d = [
         seg.b[0] - seg.a[0],
@@ -234,24 +254,23 @@ fn spawn_branches(
         };
 
         if hash_value < effective_probability {
+            let end_pos = segments[main_count - 1].b;
             let parent_tangent: [f32; 3] = [
-                seg.b[0] - seg.a[0],
-                seg.b[1] - seg.a[1],
-                seg.b[2] - seg.a[2],
+                end_pos[0] - mid_pos[0],
+                end_pos[1] - mid_pos[1],
+                end_pos[2] - mid_pos[2],
             ];
 
-            let axis_x = hash_f32(&[seed, reseed, i as u32, depth, 0]);
-            let axis_y = hash_f32(&[seed, reseed, i as u32, depth, 1]);
-            let axis_z = hash_f32(&[seed, reseed, i as u32, depth, 2]);
-            let rotation_axis = [axis_x * 2.0 - 1.0, axis_y * 2.0 - 1.0, axis_z * 2.0 - 1.0];
+            let azimuth_hash = hash_f32(&[seed, reseed, i as u32, depth, 0]);
+            let angle_hash = hash_f32(&[seed, reseed, i as u32, depth, 3]);
 
-            let angle_raw = hash_f32(&[seed, reseed, i as u32, depth, 3]);
-            let mut angle = angle_raw * std::f32::consts::PI;
-            if is_end_zone {
-                angle *= 1.5;
-            }
-
-            let child_tangent = rotate_around_axis(parent_tangent, rotation_axis, angle);
+            let branch_angle = if is_end_zone {
+                effect.branch_angle * END_ZONE_ANGLE_SCALE
+            } else {
+                effect.branch_angle
+            };
+            let child_tangent =
+                compute_branch_tangent(parent_tangent, branch_angle, azimuth_hash, angle_hash);
             let child_length = effect.branch_length_ratio * chord_remaining_len;
 
             let tangent_mag = (child_tangent[0] * child_tangent[0]
@@ -279,11 +298,12 @@ fn spawn_branches(
                 child_end,
                 child_levels,
             );
-
             let mut child_segments = Vec::new();
             let child_radius_start = effect.core_radius * effect.branch_radius_ratio;
             let child_radius_end = child_radius_start * effect.tip_radius_ratio;
-            let child_intensity = effect.branch_intensity_ratio;
+            let child_intensity = seg.intensity
+                * effect.branch_intensity_ratio
+                * compute_branch_fade(effective_probability, hash_value);
 
             emit_path(
                 &mut child_segments,
@@ -530,6 +550,28 @@ mod tests {
     }
 
     #[test]
+    fn test_perpendicular_basis_continuity_xy_tilt() {
+        let mut prev_u: Option<[f32; 3]> = None;
+        for i in 0..=150 {
+            let angle_deg = 20.0 + i as f32 * 0.1;
+            let angle_rad = angle_deg.to_radians();
+            let dir = [angle_rad.sin(), -angle_rad.cos(), 0.0];
+            let (u, _) = perpendicular_basis(dir);
+            if let Some(prev) = prev_u {
+                let diff = difference(u, prev);
+                let diff_norm = length(diff);
+                assert!(
+                    diff_norm < 0.01,
+                    "discontinuity at {}°: |u_i - u_{{i-1}}| = {:.6}",
+                    angle_deg,
+                    diff_norm
+                );
+            }
+            prev_u = Some(u);
+        }
+    }
+
+    #[test]
     fn test_rotate_around_axis_quarter_turn() {
         let rotated = rotate_around_axis(
             [1.0, 0.0, 0.0],
@@ -559,6 +601,36 @@ mod tests {
             rotate_around_axis([1.0, 2.0, 3.0], [0.0; 3], 0.7),
             [1.0, 2.0, 3.0]
         );
+    }
+
+    #[test]
+    fn test_compute_branch_tangent_angle_within_bounds() {
+        let parent = [0.0, 1.0, 0.0];
+        let branch_angle = 0.4;
+
+        let test_cases: &[(f32, f32)] =
+            &[(0.1, 0.2), (0.3, 0.5), (0.5, 0.8), (0.7, 0.1), (0.9, 0.9)];
+
+        for (azimuth_hash, angle_hash) in test_cases {
+            let result = compute_branch_tangent(parent, branch_angle, *azimuth_hash, *angle_hash);
+
+            let result_len = length(result);
+            let parent_len = length(parent);
+            let cos_theta = dot(result, parent) / (result_len * parent_len);
+            let theta = cos_theta.acos();
+
+            let min_angle = 0.5 * branch_angle;
+            let max_angle = 1.5 * branch_angle;
+            assert!(
+                theta >= min_angle - 1e-4 && theta <= max_angle + 1e-4,
+                "azimuth={:.1} angle_hash={:.1}: theta={:.4}, expected [{:.4}, {:.4}]",
+                azimuth_hash,
+                angle_hash,
+                theta,
+                min_angle,
+                max_angle
+            );
+        }
     }
 
     fn segments_match(a: &[Segment], b: &[Segment]) -> bool {
@@ -911,5 +983,76 @@ mod tests {
         let effect = LightningEffect::default();
         let before_burst = timing::burst_start_time(&effect, 0) - 1.0;
         assert!(compute_lightning_segment_aabb(&effect, before_burst).is_none());
+    }
+
+    #[test]
+    fn test_compute_branch_fade_at_threshold() {
+        let fade = compute_branch_fade(0.5, 0.5);
+        assert!(
+            (fade - 0.0).abs() < 1e-6,
+            "expected 0.0 at threshold, got {fade}"
+        );
+    }
+
+    #[test]
+    fn test_compute_branch_fade_far_from_threshold() {
+        let fade = compute_branch_fade(0.5, 0.4);
+        assert!(
+            (fade - 1.0).abs() < 1e-6,
+            "expected 1.0 far from threshold, got {fade}"
+        );
+    }
+
+    #[test]
+    fn test_compute_branch_fade_between() {
+        let fade = compute_branch_fade(0.5, 0.48);
+        assert!(
+            (fade - 0.4).abs() < 1e-6,
+            "expected 0.4 between threshold and full, got {fade}"
+        );
+    }
+
+    #[test]
+    fn test_compute_branch_fade_monotonicity() {
+        let fades: Vec<f32> = (0..=10)
+            .map(|step| compute_branch_fade(0.5, 0.5 - step as f32 * 0.005))
+            .collect();
+
+        for pair in fades.windows(2) {
+            assert!(pair[1] > pair[0], "fade not increasing: {fades:?}");
+        }
+    }
+
+    #[test]
+    fn test_bolt_preset_branches_dont_grow_upwards() {
+        let mut effect = LightningEffect::default();
+        crate::lightning::apply_lightning_preset(&mut effect, "bolt");
+        effect.burst_jitter = 0.0;
+
+        let segments = build_lightning_segments(&effect, 0.3);
+        assert!(
+            !segments.is_empty(),
+            "bolt preset at t=0.3 must produce segments"
+        );
+
+        let max_y_above_origin = 0.15
+            * (effect.end_offset[0] * effect.end_offset[0]
+                + effect.end_offset[1] * effect.end_offset[1]
+                + effect.end_offset[2] * effect.end_offset[2])
+                .sqrt();
+        for seg in &segments {
+            assert!(
+                seg.a[1] <= max_y_above_origin,
+                "segment a y={:.4} exceeds {:.4}",
+                seg.a[1],
+                max_y_above_origin
+            );
+            assert!(
+                seg.b[1] <= max_y_above_origin,
+                "segment b y={:.4} exceeds {:.4}",
+                seg.b[1],
+                max_y_above_origin
+            );
+        }
     }
 }

@@ -19,13 +19,17 @@ pub fn find_scalar_param<'a, C>(
 }
 
 /// Widget family a parameter is edited with; `Color` and `Absorption` are `[f32; 3]` parameters
-/// whose components are reachable through the `<name>_r/_g/_b` scalar aliases.
+/// whose components are reachable through the `<name>_r/_g/_b` scalar aliases. `Offset` is a
+/// `[f32; 3]` spatial offset whose components are reachable through the `<name>_x/_y/_z` scalar
+/// aliases.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiKind {
     Scalar,
     Color,
     /// Beer-Lambert coefficients per meter, edited as the colour transmitted over a reference distance.
     Absorption,
+    /// 3D spatial offset (x, y, z) in local space, edited with a 3-element drag widget.
+    Offset,
 }
 
 pub use thyllore_color_core::{get_rgb_channel, set_rgb_channel, RgbField, RGB_CHANNEL_SUFFIXES};
@@ -58,11 +62,17 @@ impl UiParam {
         RGB_CHANNEL_SUFFIXES.map(|suffix| format!("{}{}", self.name, suffix))
     }
 
+    /// Scalar alias names of an `Offset` parameter, in x, y, z order.
+    pub fn offset_component_names(&self) -> [String; 3] {
+        ["_x", "_y", "_z"].map(|suffix| format!("{}{}", self.name, suffix))
+    }
+
     /// Every `ScalarParam` name this parameter's widget reads and writes.
     pub fn scalar_accessor_names(&self) -> Vec<String> {
         match self.kind {
             UiKind::Scalar => vec![self.name.to_string()],
             UiKind::Color | UiKind::Absorption => self.color_component_names().to_vec(),
+            UiKind::Offset => self.offset_component_names().to_vec(),
         }
     }
 }

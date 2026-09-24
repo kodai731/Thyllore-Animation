@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 from typing import Callable
 
+from .coordinates import blender_to_engine_point, engine_to_blender_point
+
 ABSORPTION_COLOR_FLOOR = 1e-3
 
 
@@ -51,6 +53,31 @@ def display_property_names(exposed_params: list[dict]) -> dict[str, str]:
     }
 
 
+def offset_param_names(exposed_params: list[dict]) -> list[str]:
+    """Names of parameters whose UI kind is 'offset'."""
+    return [p["name"] for p in exposed_params if p.get("kind") == "offset"]
+
+
+def convert_offsets_to_blender(values: dict, names: list[str]) -> dict:
+    """Convert offset values from engine coordinates to Blender coordinates."""
+    result = dict(values)
+    for name in names:
+        if name in result:
+            v = result[name]
+            result[name] = [float(x) for x in engine_to_blender_point(v)]
+    return result
+
+
+def convert_offsets_to_engine(values: dict, names: list[str]) -> dict:
+    """Convert offset values from Blender coordinates to engine coordinates."""
+    result = dict(values)
+    for name in names:
+        if name in result:
+            v = result[name]
+            result[name] = [float(x) for x in blender_to_engine_point(v)]
+    return result
+
+
 def select_exposed_params(ui_params: list[dict]) -> list[dict]:
     """Mirrors the engine's persisted UI parameters; runtime-only ones are driven by scene playback."""
     return [p for p in ui_params if p["persisted"]]
@@ -96,6 +123,7 @@ def merge_preset_params(preset_values: dict, exposed_values: dict) -> dict:
 def render_params(props, preset_params: Callable[[str], dict]) -> dict:
     preset_values = preset_params(props.preset)
     exposed_values = collect_params(props, type(props).PARAM_NAMES)
+    exposed_values = convert_offsets_to_engine(exposed_values, type(props).OFFSET_PARAM_NAMES)
     return merge_preset_params(preset_values, exposed_values)
 
 
@@ -171,6 +199,17 @@ def build_param_properties(param: dict) -> dict[str, object]:
         return {name: _build_color_property(param)}
     if ui_kind == "absorption":
         return _build_absorption_properties(param)
+    if ui_kind == "offset":
+        return {
+            name: bpy.props.FloatVectorProperty(
+                name=label,
+                description=tooltip,
+                default=engine_to_blender_point(default),
+                size=3,
+                subtype="TRANSLATION",
+                **_range_kwargs(param),
+            )
+        }
 
     kind = property_kind(default)
     if kind == "bool":
@@ -222,11 +261,13 @@ def build_effect_property_group(
 
     exposed_params = select_exposed_params(ui_params())
     param_names = [p["name"] for p in exposed_params]
+    offset_names = offset_param_names(exposed_params)
 
     def apply_preset(self, context):
         preset_values = preset_params(self.preset)
         if preset_values_post_process is not None:
             preset_values = preset_values_post_process(preset_values)
+        preset_values = convert_offsets_to_blender(preset_values, offset_names)
         for name in param_names:
             if name in preset_values:
                 setattr(self, name, preset_values[name])
@@ -245,6 +286,7 @@ def build_effect_property_group(
     attrs = {
         "__annotations__": annotations,
         "PARAM_NAMES": param_names,
+        "OFFSET_PARAM_NAMES": offset_names,
         "PARAM_GROUPS": group_params_by_owner(exposed_params),
         "PARAM_DISPLAY_NAMES": display_property_names(exposed_params),
         "__module__": module_name,

@@ -15,7 +15,6 @@ use crate::ecs::systems::{
 };
 use crate::ecs::World;
 
-use super::flame_param_groups::flame_group_param_names;
 use super::param_widgets::{draw_params, draw_tiered_params, EditedScalars};
 use super::viewport_window::ViewportInfo;
 
@@ -988,6 +987,71 @@ fn build_water_section(
     }
 }
 
+fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::FlameEffect) {
+    let mut noise_sharpness =
+        thyllore_effect_core::shaping_scale_to_noise_sharpness(effect.noise.shaping_scale);
+    if ui
+        .slider_config("Noise Sharpness", 0.0, 1.0)
+        .display_format("%.2f")
+        .build(&mut noise_sharpness)
+    {
+        effect.noise.shaping_scale =
+            thyllore_effect_core::noise_sharpness_to_shaping_scale(noise_sharpness);
+    }
+    if ui.is_item_hovered() {
+        ui.tooltip_text(
+            "Crispness of the noise pattern: log remap of the tanh shaping \
+             scale, harder edges to the right (small scale saturates the \
+             tanh into near-binary blobs; ~0.78 = scale 0.25, the measured \
+             perceptual sweet spot). Stateless — noise_shaping_scale stays \
+             the source of truth (0 = built-in 0.6)",
+        );
+    }
+
+    let mut wave_segments = effect.wave_segments as i32;
+    if ui
+        .slider_config(
+            "Noise Segments",
+            thyllore_effect_core::WAVE_SEGMENTS_MIN as i32,
+            thyllore_effect_core::WAVE_SEGMENTS_MAX as i32,
+        )
+        .build(&mut wave_segments)
+    {
+        effect.wave_segments = wave_segments as u32;
+    }
+    if ui.is_item_hovered() {
+        ui.tooltip_text(
+            "Closed-form segments per ray: the noise grid aliases into a \
+             pixel hatch above Noise Frequency ~2 at 64; 128 resolves \
+             frequency ~4 at twice the cost",
+        );
+    }
+
+    let mut vortex =
+        (effect.twist.gain / thyllore_effect_core::VORTEX_MACRO_MAX_GAIN).clamp(0.0, 1.0);
+    if ui
+        .slider_config("Vortex", 0.0, 1.0)
+        .display_format("%.2f")
+        .build(&mut vortex)
+    {
+        let (gain, speed) = thyllore_effect_core::vortex_macro_parameters(vortex);
+        effect.twist.gain = gain;
+        effect.twist.speed = speed;
+    }
+    if ui.is_item_hovered() {
+        ui.tooltip_text(
+            "Vortex macro: one knob writing both twist parameters along a \
+             faster-and-deeper curve (stateless; the fine sliders \
+             stay the source of truth)",
+        );
+    }
+
+    let mut branch_seed = effect.branch.seed as i32;
+    if ui.input_int("Branch Seed", &mut branch_seed).build() {
+        effect.branch.seed = branch_seed.max(0) as u32;
+    }
+}
+
 fn build_flame_section(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
@@ -1402,141 +1466,23 @@ fn build_flame_section(
                         effect_copy.emitter.ring_angular_speed = ring_speed;
                     }
 
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("body"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
                     let colors_before = (effect_copy.color.base, effect_copy.color.tip);
-                    draw_params(
+                    let params_id = ui.push_id("flame_params");
+                    let advanced_open = draw_tiered_params(
                         ui,
-                        &*flame_group_param_names("color"),
                         thyllore_effect_core::FLAME_UI_PARAMS,
                         thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
+                        &[],
                         |ui, edited| flame_key_button(ui, ui_events, edited),
                     );
+                    if advanced_open {
+                        draw_flame_manual_params(ui, &mut effect_copy);
+                    }
+                    params_id.end();
                     if (effect_copy.color.base, effect_copy.color.tip) != colors_before {
                         effect_copy.color.use_blackbody = false;
                     }
-
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("noise"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    let mut noise_sharpness =
-                        thyllore_effect_core::shaping_scale_to_noise_sharpness(
-                            effect_copy.noise.shaping_scale,
-                        );
-                    if ui
-                        .slider_config("Noise Sharpness", 0.0, 1.0)
-                        .display_format("%.2f")
-                        .build(&mut noise_sharpness)
-                    {
-                        effect_copy.noise.shaping_scale =
-                            thyllore_effect_core::noise_sharpness_to_shaping_scale(noise_sharpness);
-                    }
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text(
-                            "Crispness of the noise pattern: log remap of the tanh shaping \
-                             scale, harder edges to the right (small scale saturates the \
-                             tanh into near-binary blobs; ~0.78 = scale 0.25, the measured \
-                             perceptual sweet spot). Stateless — noise_shaping_scale stays \
-                             the source of truth (0 = built-in 0.6)",
-                        );
-                    }
-
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("mix"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    let mut wave_segments = effect_copy.wave_segments as i32;
-                    if ui
-                        .slider_config(
-                            "Noise Segments",
-                            thyllore_effect_core::WAVE_SEGMENTS_MIN as i32,
-                            thyllore_effect_core::WAVE_SEGMENTS_MAX as i32,
-                        )
-                        .build(&mut wave_segments)
-                    {
-                        effect_copy.wave_segments = wave_segments as u32;
-                    }
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text(
-                            "Closed-form segments per ray: the noise grid aliases into a \
-                             pixel hatch above Noise Frequency ~2 at 64; 128 resolves \
-                             frequency ~4 at twice the cost",
-                        );
-                    }
-
-                    let mut vortex = (effect_copy.twist.gain
-                        / thyllore_effect_core::VORTEX_MACRO_MAX_GAIN)
-                        .clamp(0.0, 1.0);
-                    if ui
-                        .slider_config("Vortex", 0.0, 1.0)
-                        .display_format("%.2f")
-                        .build(&mut vortex)
-                    {
-                        let (gain, speed) = thyllore_effect_core::vortex_macro_parameters(vortex);
-                        effect_copy.twist.gain = gain;
-                        effect_copy.twist.speed = speed;
-                    }
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text(
-                            "Vortex macro: one knob writing both twist parameters along a \
-                             faster-and-deeper curve (stateless; the fine sliders below \
-                             stay the source of truth)",
-                        );
-                    }
-
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("motion"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    ui.separator();
-                    ui.text("Branches");
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("branch"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    let mut branch_seed = effect_copy.branch.seed as i32;
-                    if ui.input_int("Branch Seed", &mut branch_seed).build() {
-                        effect_copy.branch.seed = branch_seed.max(0) as u32;
-                    }
-
-                    ui.separator();
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("footer"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
 
                     if ui.button("Clear Flame Keys") {
                         ui_events.send(UIEvent::ClearScalarKeys);

@@ -244,7 +244,7 @@ pub fn draw_tiered_params<C>(
     component: &mut C,
     hidden: &[&str],
     mut after_item: impl FnMut(&imgui::Ui, EditedScalars),
-) {
+) -> bool {
     let primary_names = determine_primary_order(ui_params, hidden);
     draw_params(
         ui,
@@ -259,7 +259,7 @@ pub fn draw_tiered_params<C>(
     if remaining_groups.is_empty()
         || !ui.collapsing_header("Advanced", imgui::TreeNodeFlags::empty())
     {
-        return;
+        return false;
     }
 
     for (heading, names) in &remaining_groups {
@@ -268,6 +268,7 @@ pub fn draw_tiered_params<C>(
         }
         draw_params(ui, names, ui_params, scalars, component, &mut after_item);
     }
+    true
 }
 
 #[cfg(test)]

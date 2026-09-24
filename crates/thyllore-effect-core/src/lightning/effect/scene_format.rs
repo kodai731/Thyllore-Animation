@@ -76,6 +76,7 @@ declare_scene_format! {
             get: |e| e.tortuosity,
             set: |e, v| e.tortuosity = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 2.0,
                 format: "%.2f",
@@ -98,6 +99,7 @@ declare_scene_format! {
             get: |e| e.core_radius,
             set: |e, v| e.core_radius = v,
             ui {
+                primary,
                 min: 0.001,
                 max: 1.0,
                 format: "%.3f",
@@ -151,6 +153,7 @@ declare_scene_format! {
             get: |e| e.branch_count,
             set: |e, v| e.branch_count = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 32.0,
                 format: "%.2f",
@@ -165,7 +168,7 @@ declare_scene_format! {
                 min: 0.0,
                 max: 1.0,
                 format: "%.2f",
-                tooltip: "Start/End of the main-channel span branches leave from, as a fraction of its arc length",
+                tooltip: "Where along the main channel (0 = start, 1 = end) branches begin",
                 group: "branch",
             },
         },
@@ -176,7 +179,7 @@ declare_scene_format! {
                 min: 0.0,
                 max: 1.0,
                 format: "%.2f",
-                tooltip: "Start/End of the main-channel span branches leave from, as a fraction of its arc length",
+                tooltip: "Where along the main channel (0 = start, 1 = end) branches stop",
                 group: "branch",
             },
         },
@@ -184,6 +187,7 @@ declare_scene_format! {
             get: |e| e.branch_angle,
             set: |e, v| e.branch_angle = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 1.57,
                 format: "%.2f",
@@ -225,6 +229,7 @@ declare_scene_format! {
             get: |e| e.core_intensity,
             set: |e, v| e.core_intensity = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 200.0,
                 format: "%.1f",
@@ -270,6 +275,7 @@ declare_scene_format! {
             set: |e, v| e.rim_color = v,
             scalars: rgb,
             ui {
+                primary,
                 kind: Color,
                 min: 0.0,
                 max: 1.0,
@@ -333,6 +339,7 @@ declare_scene_format! {
             get: |e| e.burst_interval,
             set: |e, v| e.burst_interval = v,
             ui {
+                primary,
                 min: 0.01,
                 max: 10.0,
                 format: "%.2f",
@@ -501,6 +508,7 @@ declare_scene_format! {
             get: |e| e.time_scale,
             set: |e, v| e.time_scale = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 4.0,
                 format: "%.2f",
@@ -616,5 +624,23 @@ mod tests {
         overwrite_lightning_persisted_fields(&mut target, &loaded);
         assert_eq!(target.core_radius, 0.2);
         assert_eq!(target.time, 2.5);
+    }
+
+    #[test]
+    fn test_exactly_eight_primary_params() {
+        let primary: Vec<&str> = LIGHTNING_UI_PARAMS
+            .iter()
+            .filter(|p| p.primary)
+            .map(|p| p.name)
+            .collect();
+        assert_eq!(primary.len(), 8);
+        assert!(primary.contains(&"core_radius"));
+        assert!(primary.contains(&"tortuosity"));
+        assert!(primary.contains(&"branch_count"));
+        assert!(primary.contains(&"branch_angle"));
+        assert!(primary.contains(&"core_intensity"));
+        assert!(primary.contains(&"rim_color"));
+        assert!(primary.contains(&"burst_interval"));
+        assert!(primary.contains(&"time_scale"));
     }
 }

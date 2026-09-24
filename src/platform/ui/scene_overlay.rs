@@ -16,7 +16,7 @@ use crate::ecs::systems::{
 use crate::ecs::World;
 
 use super::flame_param_groups::flame_group_param_names;
-use super::param_widgets::{draw_params, EditedScalars};
+use super::param_widgets::{draw_params, draw_tiered_params, EditedScalars};
 use super::viewport_window::ViewportInfo;
 
 const OVERLAY_MARGIN: f32 = 8.0;
@@ -671,8 +671,6 @@ fn build_lightning_section(
         return;
     }
 
-    draw_lightning_render_settings(ui, ui_events, ecs_world);
-
     if ui.button("Add Lightning") {
         ui_events.send(UIEvent::AddEffect(LIGHTNING_SPAWN_HOOK.key));
     }
@@ -723,39 +721,39 @@ fn build_lightning_section(
     };
     let mut effect_copy = effect.clone();
     let target_name = draw_lightning_target_row(ui, ui_events, ecs_world, selected);
-    let mut drawn_groups: Vec<&str> = Vec::new();
-    for group in thyllore_effect_core::LIGHTNING_UI_PARAMS
-        .iter()
-        .map(|param| param.group)
-        .filter(|group| !group.is_empty())
-    {
-        if drawn_groups.contains(&group) {
-            continue;
-        }
-        drawn_groups.push(group);
 
-        let names: Vec<&str> = thyllore_effect_core::LIGHTNING_UI_PARAMS
-            .iter()
-            .filter(|param| param.group == group)
-            .filter(|param| target_name.is_none() || param.name != "end_offset")
-            .map(|param| param.name)
-            .collect();
+    if target_name.is_none() {
         draw_params(
             ui,
-            &names,
+            &["end_offset"],
             thyllore_effect_core::LIGHTNING_UI_PARAMS,
             thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
             &mut effect_copy,
             |ui, edited| lightning_key_button(ui, ui_events, edited),
         );
     }
+
+    let params_id = ui.push_id("lightning_params");
+    draw_tiered_params(
+        ui,
+        thyllore_effect_core::LIGHTNING_UI_PARAMS,
+        thyllore_effect_core::LIGHTNING_SCALAR_PARAMS,
+        &mut effect_copy,
+        &["end_offset"],
+        |ui, edited| lightning_key_button(ui, ui_events, edited),
+    );
+    params_id.end();
+
     if !effect_applied_this_frame {
         ui_events.send(UIEvent::UpdateLightningEffect(Box::new(effect_copy)));
     }
     if ui.button("Curves") {
         ui_events.send(UIEvent::OpenScalarCurveEditor);
     }
-    ui.same_line();
+    if !ui.collapsing_header("Lightning Debug", imgui::TreeNodeFlags::empty()) {
+        return;
+    }
+    draw_lightning_render_settings(ui, ui_events, ecs_world);
     if ui.button("Dump Debug") {
         ui_events.send(UIEvent::CaptureNow(Rc::new(LightningDebugCapture)));
     }

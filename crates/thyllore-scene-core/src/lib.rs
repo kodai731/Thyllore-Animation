@@ -46,6 +46,7 @@ pub struct UiParam {
     pub tooltip: &'static str,
     /// Persisted parameters are saved with the scene; runtime ones are driven by playback.
     pub persisted: bool,
+    pub primary: bool,
 }
 
 impl UiParam {
@@ -162,6 +163,7 @@ macro_rules! declare_scene_format {
                 } ),+ $(,)? })?
                 $(, scalars: $channels:ident)?
                 $(, ui {
+                    $( primary $ui_primary_comma:tt )?
                     $( kind: $ui_kind:ident, )?
                     $( label: $ui_label:expr, )?
                     min: $ui_min:expr,
@@ -178,6 +180,7 @@ macro_rules! declare_scene_format {
                 get: $runtime_get:expr,
                 set: $runtime_set:expr
                 $(, ui {
+                    $( primary $rt_ui_primary_comma:tt )?
                     $( label: $rt_ui_label:expr, )?
                     min: $rt_ui_min:expr,
                     max: $rt_ui_max:expr
@@ -215,6 +218,7 @@ macro_rules! declare_scene_format {
                     } ),+ })?
                     $(, scalars: $channels)?
                     $(, ui {
+                        $( primary $ui_primary_comma )?
                         $( kind: $ui_kind, )?
                         $( label: $ui_label, )?
                         min: $ui_min,
@@ -230,6 +234,7 @@ macro_rules! declare_scene_format {
                     get: $runtime_get,
                     set: $runtime_set
                     $(, ui {
+                        $( primary $rt_ui_primary_comma )?
                         $( label: $rt_ui_label, )?
                         min: $rt_ui_min,
                         max: $rt_ui_max
@@ -262,6 +267,7 @@ macro_rules! declare_scene_format {
                 } ),+ $(,)? })?
                 $(, scalars: $channels:ident)?
                 $(, ui {
+                    $( primary $ui_primary_comma:tt )?
                     $( kind: $ui_kind:ident, )?
                     $( label: $ui_label:expr, )?
                     min: $ui_min:expr,
@@ -278,6 +284,7 @@ macro_rules! declare_scene_format {
                 get: $runtime_get:expr,
                 set: $runtime_set:expr
                 $(, ui {
+                    $( primary $rt_ui_primary_comma:tt )?
                     $( label: $rt_ui_label:expr, )?
                     min: $rt_ui_min:expr,
                     max: $rt_ui_max:expr
@@ -385,6 +392,7 @@ macro_rules! declare_scene_format {
                     format: $crate::declare_scene_format!(@ui_or_default "%.3f" $(, $ui_format)?),
                     tooltip: $crate::declare_scene_format!(@ui_or_default "" $(, $ui_tooltip)?),
                     persisted: true,
+                    primary: $crate::declare_scene_format!(@ui_primary $(, primary $ui_primary_comma)?),
                 },
             )? )+
             $( $(
@@ -398,6 +406,7 @@ macro_rules! declare_scene_format {
                     format: $crate::declare_scene_format!(@ui_or_default "%.3f" $(, $rt_ui_format)?),
                     tooltip: $crate::declare_scene_format!(@ui_or_default "" $(, $rt_ui_tooltip)?),
                     persisted: false,
+                    primary: $crate::declare_scene_format!(@ui_primary $(, primary $rt_ui_primary_comma)?),
                 },
             )? )*
         ];
@@ -412,6 +421,12 @@ macro_rules! declare_scene_format {
     };
     (@ui_kind, $kind:ident) => {
         $crate::UiKind::$kind
+    };
+    (@ui_primary) => {
+        false
+    };
+    (@ui_primary, primary,) => {
+        true
     };
     (@ui_label) => {
         None
@@ -562,6 +577,7 @@ mod tests {
             format: "",
             tooltip: "",
             persisted: true,
+            primary: false,
         };
         let derived = UiParam {
             label: None,
@@ -583,6 +599,7 @@ mod tests {
             format: "",
             tooltip: "",
             persisted: true,
+            primary: false,
         };
         assert_eq!(tint.color_component_names(), ["tint_r", "tint_g", "tint_b"]);
     }

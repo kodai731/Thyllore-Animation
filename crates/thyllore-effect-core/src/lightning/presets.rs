@@ -16,7 +16,7 @@ pub fn apply_lightning_preset(effect: &mut LightningEffect, name: &str) -> bool 
             preset.roughness = 0.6;
             preset.branch_depth = 2;
             preset.branch_zone_start = 0.15;
-            preset.branch_count = 16.0;
+            preset.branch_count = 8.0;
             preset.branch_probability = 0.55;
             preset.branch_angle = 0.9;
             preset.branch_length_ratio = 0.45;
@@ -115,7 +115,7 @@ mod tests {
         assert!((effect.roughness - 0.6).abs() < 1e-6);
         assert_eq!(effect.branch_depth, 2);
         assert!((effect.branch_zone_start - 0.15).abs() < 1e-6);
-        assert!((effect.branch_count - 16.0).abs() < 1e-6);
+        assert!((effect.branch_count - 8.0).abs() < 1e-6);
         assert!((effect.branch_probability - 0.55).abs() < 1e-6);
         assert!((effect.branch_angle - 0.9).abs() < 1e-6);
         assert!((effect.branch_length_ratio - 0.45).abs() < 1e-6);

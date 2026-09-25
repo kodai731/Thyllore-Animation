@@ -25,54 +25,21 @@ pub struct Segment {
     /// Relative envelope (branch dimming x stroke x flicker); the shader applies
     /// `core_intensity` / `rim_intensity` on top, so this must stay O(1).
     pub intensity: f32,
-}
-
-fn segment_progress(p: [f32; 3], start: [f32; 3], dir: [f32; 3], dir_sq_len: f32) -> f32 {
-    (dir[0] * (p[0] - start[0]) + dir[1] * (p[1] - start[1]) + dir[2] * (p[2] - start[2]))
-        / dir_sq_len
+    pub arrival_start: f32,
+    pub arrival_end: f32,
 }
 
 fn interpolate(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 
-fn clip_to_growth_front(
-    segments: &[Segment],
-    start: [f32; 3],
-    end: [f32; 3],
-    front: f32,
-) -> Vec<Segment> {
-    let dir = [end[0] - start[0], end[1] - start[1], end[2] - start[2]];
-    let dir_sq_len = dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2];
-
-    if dir_sq_len < 1e-12 {
-        return segments.to_vec();
-    }
-
+fn clip_to_growth_arrival(segments: &[Segment], front_distance: f32) -> Vec<Segment> {
     let mut out = Vec::with_capacity(segments.len());
     for seg in segments {
-        let s_a = segment_progress(seg.a, start, dir, dir_sq_len);
-        let s_b = segment_progress(seg.b, start, dir, dir_sq_len);
-
-        if s_a <= front && s_b <= front {
+        if seg.arrival_end <= front_distance {
             out.push(*seg);
-        } else if s_a > front && s_b <= front {
-            let frac = (front - s_b) / (s_a - s_b);
-            let new_a = [
-                interpolate(seg.b[0], seg.a[0], frac),
-                interpolate(seg.b[1], seg.a[1], frac),
-                interpolate(seg.b[2], seg.a[2], frac),
-            ];
-            let new_r0 = interpolate(seg.r1, seg.r0, frac);
-            out.push(Segment {
-                a: new_a,
-                b: seg.b,
-                r0: new_r0,
-                r1: seg.r1,
-                intensity: seg.intensity,
-            });
-        } else if s_a <= front {
-            let frac = (front - s_a) / (s_b - s_a);
+        } else if seg.arrival_start < front_distance {
+            let frac = (front_distance - seg.arrival_start) / (seg.arrival_end - seg.arrival_start);
             let new_b = [
                 interpolate(seg.a[0], seg.b[0], frac),
                 interpolate(seg.a[1], seg.b[1], frac),
@@ -85,6 +52,8 @@ fn clip_to_growth_front(
                 r0: seg.r0,
                 r1: new_r1,
                 intensity: seg.intensity,
+                arrival_start: seg.arrival_start,
+                arrival_end: front_distance,
             });
         }
     }
@@ -126,8 +95,12 @@ pub fn build_lightning_segments(effect: &LightningEffect, t: f32) -> Vec<Segment
 
     if let LightningSource::Point = effect.source {
         if effect.growth_time > 0.0 {
-            let front = (tau / effect.growth_time).min(1.0);
-            segments = clip_to_growth_front(&segments, [0.0, 0.0, 0.0], charged.end_offset, front);
+            let max_arrival = segments
+                .iter()
+                .map(|s| s.arrival_end)
+                .fold(0.0f32, f32::max);
+            let front_distance = (tau / effect.growth_time).min(1.0) * max_arrival;
+            segments = clip_to_growth_arrival(&segments, front_distance);
         }
     }
 
@@ -277,15 +250,18 @@ fn emit_path(
     r_start: f32,
     r_end: f32,
     intensity: f32,
+    arrival_origin: f32,
 ) {
     if points.len() < 2 {
         return;
     }
 
     let n = points.len() - 1;
+    let mut travelled = arrival_origin;
     for i in 0..n {
         let t = i as f32 / n as f32;
         let radius = r_start * (1.0 - t) + r_end * t;
+        let seg_len = compute_distance(points[i], points[i + 1]);
 
         if !push_segment(
             segments,
@@ -295,10 +271,13 @@ fn emit_path(
                 r0: radius,
                 r1: radius,
                 intensity,
+                arrival_start: travelled,
+                arrival_end: travelled + seg_len,
             },
         ) {
             break;
         }
+        travelled += seg_len;
     }
 }
 
@@ -410,6 +389,7 @@ struct BranchChord {
     start: [f32; 3],
     end: [f32; 3],
     intensity: f32,
+    arrival: f32,
 }
 
 struct GrownBranch {
@@ -491,6 +471,7 @@ fn plan_branch_chords(
                 start: mid_pos,
                 end: child_end,
                 intensity: seg.intensity * effect.branch_intensity_ratio * site.intensity_scale,
+                arrival: seg.arrival_start + segment_length(seg) * 0.5,
             }
         })
         .collect()
@@ -522,6 +503,7 @@ fn grow_branch(
         radius_start,
         radius_end,
         chord.intensity,
+        chord.arrival,
     );
     GrownBranch { segments, levels }
 }
@@ -682,6 +664,8 @@ pub fn build_strike_segments(effect: &LightningEffect, seed: u32, reseed: u32) -
                 r0: beam_radius,
                 r1: beam_radius * tip_radius_ratio,
                 intensity: 1.0,
+                arrival_start: 0.0,
+                arrival_end: 0.0,
             },
         ) {
             return segments;
@@ -746,6 +730,7 @@ pub fn build_strike_segments(effect: &LightningEffect, seed: u32, reseed: u32) -
                 child_radius_start,
                 child_radius_end,
                 child_intensity,
+                0.0,
             );
         }
     } else {
@@ -810,6 +795,7 @@ pub fn build_strike_segments(effect: &LightningEffect, seed: u32, reseed: u32) -
                 effect.core_radius,
                 effect.core_radius * effect.tip_radius_ratio,
                 1.0,
+                0.0,
             );
             spawn_branches(&mut strike_segments, &interval_ends, effect, seed, reseed);
 
@@ -1580,6 +1566,7 @@ mod tests {
             effect.core_radius,
             effect.core_radius * effect.tip_radius_ratio,
             1.0,
+            0.0,
         );
 
         assert!(segments_match(
@@ -1664,8 +1651,11 @@ mod tests {
         build_lightning_segments(effect, timing::burst_start_time(effect, 0) + tau)
     }
 
-    fn growth_progress(p: [f32; 3], end: [f32; 3]) -> f32 {
-        dot(p, end) / dot(end, end)
+    fn max_arrival(segments: &[Segment]) -> f32 {
+        segments
+            .iter()
+            .map(|seg| seg.arrival_end)
+            .fold(0.0f32, f32::max)
     }
 
     #[test]
@@ -1688,20 +1678,21 @@ mod tests {
         let tau = 0.03;
         let effect = growth_effect(2.0 * tau);
 
+        let half_arrival = 0.5 * max_arrival(&segments_at_burst_time(&growth_effect(0.0), tau));
         let segments = segments_at_burst_time(&effect, tau);
         assert!(!segments.is_empty(), "should have segments");
 
-        let mut farthest_progress = 0.0f32;
         for seg in &segments {
-            let s_a = growth_progress(seg.a, effect.end_offset);
-            let s_b = growth_progress(seg.b, effect.end_offset);
-            assert!(s_a <= 0.5 + 1e-4, "segment a progress {s_a} > 0.5 + 1e-4");
-            assert!(s_b <= 0.5 + 1e-4, "segment b progress {s_b} > 0.5 + 1e-4");
-            farthest_progress = farthest_progress.max(s_b);
+            assert!(
+                seg.arrival_end <= half_arrival + 1e-4,
+                "arrival {} > {half_arrival} + 1e-4",
+                seg.arrival_end
+            );
         }
+        let farthest_arrival = max_arrival(&segments);
         assert!(
-            (farthest_progress - 0.5).abs() < 1e-3,
-            "main path should reach s≈0.5, got {farthest_progress}"
+            (farthest_arrival - half_arrival).abs() < 1e-3,
+            "the front should reach {half_arrival}, got {farthest_arrival}"
         );
     }
 
@@ -1721,7 +1712,7 @@ mod tests {
     }
 
     #[test]
-    fn test_clip_to_growth_front_spanning_segment_interpolation() {
+    fn test_clip_to_growth_arrival_spanning_segment_interpolation() {
         let segments = vec![
             Segment {
                 a: [0.0, 0.0, 0.0],
@@ -1729,6 +1720,8 @@ mod tests {
                 r0: 1.0,
                 r1: 0.5,
                 intensity: 1.0,
+                arrival_start: 0.0,
+                arrival_end: 4.0,
             },
             Segment {
                 a: [0.0, -4.0, 0.0],
@@ -1736,10 +1729,12 @@ mod tests {
                 r0: 0.5,
                 r1: 0.3,
                 intensity: 1.0,
+                arrival_start: 4.0,
+                arrival_end: 8.0,
             },
         ];
 
-        let clipped = clip_to_growth_front(&segments, [0.0, 0.0, 0.0], [0.0, -8.0, 0.0], 0.25);
+        let clipped = clip_to_growth_arrival(&segments, 2.0);
 
         assert_eq!(clipped.len(), 1, "the segment past the front is discarded");
         let seg = &clipped[0];
@@ -1751,34 +1746,38 @@ mod tests {
         );
         assert!((seg.r0 - 1.0).abs() < 1e-6);
         assert!((seg.r1 - 0.75).abs() < 1e-6, "r1 = {}", seg.r1);
+        assert_eq!(seg.arrival_end, 2.0);
     }
 
     #[test]
-    fn test_clip_to_growth_front_all_before_front() {
+    fn test_clip_to_growth_arrival_all_before_front() {
         let segments = vec![Segment {
             a: [0.0, 0.0, 0.0],
             b: [0.0, -4.0, 0.0],
             r0: 1.0,
             r1: 0.5,
             intensity: 1.0,
+            arrival_start: 0.0,
+            arrival_end: 4.0,
         }];
 
-        let clipped = clip_to_growth_front(&segments, [0.0, 0.0, 0.0], [0.0, -8.0, 0.0], 0.7);
-        assert_eq!(clipped.len(), 1);
-        assert_eq!(clipped[0].b, [0.0, -4.0, 0.0]);
+        let clipped = clip_to_growth_arrival(&segments, 5.6);
+        assert_eq!(clipped, segments);
     }
 
     #[test]
-    fn test_clip_to_growth_front_all_after_front() {
+    fn test_clip_to_growth_arrival_all_after_front() {
         let segments = vec![Segment {
             a: [0.0, -4.0, 0.0],
             b: [0.0, -8.0, 0.0],
             r0: 0.5,
             r1: 0.3,
             intensity: 1.0,
+            arrival_start: 4.0,
+            arrival_end: 8.0,
         }];
 
-        let clipped = clip_to_growth_front(&segments, [0.0, 0.0, 0.0], [0.0, -8.0, 0.0], 0.3);
+        let clipped = clip_to_growth_arrival(&segments, 2.4);
         assert!(
             clipped.is_empty(),
             "all segments after front should be discarded"
@@ -1801,26 +1800,67 @@ mod tests {
     }
 
     #[test]
-    fn test_clip_to_growth_front_backward_segment() {
-        let segments = vec![Segment {
-            a: [0.0, -6.0, 0.0],
-            b: [0.0, -2.0, 0.0],
-            r0: 0.3,
-            r1: 0.8,
+    fn test_clip_to_growth_arrival_keeps_a_near_segment_after_a_far_one() {
+        let far = Segment {
+            a: [0.0, -4.0, 0.0],
+            b: [0.0, -8.0, 0.0],
+            r0: 0.5,
+            r1: 0.5,
             intensity: 1.0,
-        }];
+            arrival_start: 4.0,
+            arrival_end: 8.0,
+        };
+        let near = Segment {
+            a: [0.0, -1.0, 0.0],
+            b: [1.0, -1.0, 0.0],
+            r0: 0.2,
+            r1: 0.2,
+            intensity: 0.5,
+            arrival_start: 1.0,
+            arrival_end: 2.0,
+        };
 
-        let clipped = clip_to_growth_front(&segments, [0.0, 0.0, 0.0], [0.0, -8.0, 0.0], 0.5);
+        assert_eq!(clip_to_growth_arrival(&[far, near], 3.0), vec![near]);
+    }
 
-        assert_eq!(clipped.len(), 1, "the backward segment is kept");
-        let seg = &clipped[0];
-        assert!(
-            length(difference(seg.a, [0.0, -4.0, 0.0])) < 1e-6,
-            "a = {:?}",
-            seg.a
-        );
-        assert_eq!(seg.b, [0.0, -2.0, 0.0]);
-        assert!((seg.r0 - 0.55).abs() < 1e-6, "r0 = {}", seg.r0);
-        assert!((seg.r1 - 0.8).abs() < 1e-6);
+    #[test]
+    fn test_growth_reveals_the_interval_before_a_waypoint_first() {
+        let tau = 0.03;
+        let waypoint = [0.0, -10.0, 0.0];
+        let mut whole_effect = waypoint_effect(&[waypoint]);
+        whole_effect.end_offset = [0.0, -4.0, 0.0];
+        whole_effect.branch_count = 0.0;
+        whole_effect.growth_time = 0.0;
+
+        let whole = segments_at_burst_time(&whole_effect, tau);
+        let waypoint_index = whole
+            .iter()
+            .position(|seg| seg.b == waypoint)
+            .expect("the main path passes through the waypoint");
+
+        let mut crossed_the_waypoint = false;
+        for front_fraction in [0.3, 0.6, 0.9] {
+            let mut grown_effect = whole_effect.clone();
+            grown_effect.growth_time = tau / front_fraction;
+            let grown = segments_at_burst_time(&grown_effect, tau);
+
+            let revealed_after_waypoint = grown.len() > waypoint_index + 1;
+            crossed_the_waypoint |= revealed_after_waypoint;
+            if revealed_after_waypoint {
+                assert_eq!(
+                    grown[..=waypoint_index],
+                    whole[..=waypoint_index],
+                    "front {front_fraction}: the interval before the waypoint must be complete"
+                );
+            } else {
+                assert!(
+                    grown
+                        .iter()
+                        .all(|seg| seg.arrival_end <= whole[waypoint_index].arrival_end),
+                    "front {front_fraction}: only the interval before the waypoint may show"
+                );
+            }
+        }
+        assert!(crossed_the_waypoint, "the front must pass the waypoint");
     }
 }

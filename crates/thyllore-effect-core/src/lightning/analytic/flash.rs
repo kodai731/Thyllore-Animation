@@ -81,6 +81,8 @@ mod tests {
             r0: 0.1,
             r1: 0.1,
             intensity,
+            arrival_start: 0.0,
+            arrival_end: 0.0,
         }
     }
 

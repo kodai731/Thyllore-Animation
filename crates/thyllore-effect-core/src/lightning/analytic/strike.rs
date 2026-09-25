@@ -1,6 +1,6 @@
-use crate::lightning::analytic::hash::{hash_f32, HashChannel};
+use crate::lightning::analytic::hash::{hash_f32, hash_u32, HashChannel};
 use crate::lightning::analytic::timing;
-use crate::lightning::effect::LightningSource;
+use crate::lightning::effect::{LightningSource, LIGHTNING_MAX_WAYPOINTS};
 use crate::LightningEffect;
 use cgmath::{InnerSpace, Quaternion, Rad, Rotation, Rotation3, Vector3};
 
@@ -312,13 +312,13 @@ fn branch_detail_levels(budget: usize, length: f32, total_length: f32, max_level
     levels.min(max_levels)
 }
 
-pub(crate) fn segment_length(seg: &Segment) -> f32 {
-    let d = [
-        seg.b[0] - seg.a[0],
-        seg.b[1] - seg.a[1],
-        seg.b[2] - seg.a[2],
-    ];
+fn compute_distance(a: [f32; 3], b: [f32; 3]) -> f32 {
+    let d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
+}
+
+pub(crate) fn segment_length(seg: &Segment) -> f32 {
+    compute_distance(seg.a, seg.b)
 }
 
 struct BranchSite {
@@ -418,17 +418,13 @@ struct GrownBranch {
 }
 
 fn compute_chord_length(chord: &BranchChord) -> f32 {
-    let d = [
-        chord.end[0] - chord.start[0],
-        chord.end[1] - chord.start[1],
-        chord.end[2] - chord.start[2],
-    ];
-    (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
+    compute_distance(chord.start, chord.end)
 }
 
 fn plan_branch_chords(
     parent: &[Segment],
     sites: &[BranchSite],
+    tangent_targets: &[[f32; 3]],
     effect: &LightningEffect,
     seed: u32,
     reseed: u32,
@@ -456,7 +452,7 @@ fn plan_branch_chords(
 
             let chord_remaining_len = segment_length(seg) * 0.5 + remaining_len_after[i + 1];
 
-            let end_pos = parent[parent_count - 1].b;
+            let end_pos = tangent_targets[i];
             let parent_tangent: [f32; 3] = [
                 end_pos[0] - mid_pos[0],
                 end_pos[1] - mid_pos[1],
@@ -532,12 +528,13 @@ fn grow_branch(
 
 fn spawn_root_branches(
     main_path: &[Segment],
+    interval_ends: &[[f32; 3]],
     effect: &LightningEffect,
     seed: u32,
     reseed: u32,
 ) -> Vec<GrownBranch> {
     let sites = pick_counted_branch_sites(main_path, effect, seed, reseed);
-    let chords = plan_branch_chords(main_path, &sites, effect, seed, reseed, 0);
+    let chords = plan_branch_chords(main_path, &sites, interval_ends, effect, seed, reseed, 0);
 
     let remaining_segments = LIGHTNING_MAX_SEGMENTS.saturating_sub(main_path.len());
     let root_budget = if effect.branch_depth > 0 {
@@ -571,11 +568,24 @@ fn spawn_child_branches(
 ) -> Vec<GrownBranch> {
     let sites = pick_probable_branch_sites(parent.segments.len(), effect, seed, reseed, depth);
     let levels = parent.levels.saturating_sub(1).max(1);
+    let parent_end = parent
+        .segments
+        .last()
+        .map(|seg| vec![seg.b; parent.segments.len()])
+        .unwrap_or_default();
 
-    plan_branch_chords(&parent.segments, &sites, effect, seed, reseed, depth)
-        .iter()
-        .map(|chord| grow_branch(chord, effect, seed, reseed, levels))
-        .collect()
+    plan_branch_chords(
+        &parent.segments,
+        &sites,
+        &parent_end,
+        effect,
+        seed,
+        reseed,
+        depth,
+    )
+    .iter()
+    .map(|chord| grow_branch(chord, effect, seed, reseed, levels))
+    .collect()
 }
 
 fn push_branches(segments: &mut Vec<Segment>, branches: &[GrownBranch]) {
@@ -586,8 +596,59 @@ fn push_branches(segments: &mut Vec<Segment>, branches: &[GrownBranch]) {
     }
 }
 
-fn spawn_branches(segments: &mut Vec<Segment>, effect: &LightningEffect, seed: u32, reseed: u32) {
-    let mut generation = spawn_root_branches(segments, effect, seed, reseed);
+fn build_waypoint_path(
+    effect: &LightningEffect,
+    seed: u32,
+    reseed: u32,
+    strike: u32,
+    start: [f32; 3],
+    end: [f32; 3],
+) -> (Vec<[f32; 3]>, Vec<[f32; 3]>) {
+    let waypoint_count = (effect.waypoint_count as usize).min(LIGHTNING_MAX_WAYPOINTS);
+    let mut corners = vec![start];
+    corners.extend_from_slice(&effect.waypoints[..waypoint_count]);
+    corners.push(end);
+
+    let total_length: f32 = corners
+        .windows(2)
+        .map(|pair| compute_distance(pair[0], pair[1]))
+        .sum();
+
+    let mut points = vec![start];
+    let mut interval_ends = Vec::new();
+    for (interval, pair) in corners.windows(2).enumerate() {
+        let levels = if total_length > 0.0 {
+            branch_detail_levels(
+                1 << effect.detail_levels,
+                compute_distance(pair[0], pair[1]),
+                total_length,
+                effect.detail_levels,
+            )
+        } else {
+            effect.detail_levels
+        };
+        let stream = if interval == 0 {
+            strike
+        } else {
+            hash_u32(&[strike, interval as u32])
+        };
+
+        let interval_points = displace_path(effect, seed, reseed, stream, pair[0], pair[1], levels);
+        interval_ends.extend(std::iter::repeat(pair[1]).take(interval_points.len() - 1));
+        points.extend_from_slice(&interval_points[1..]);
+    }
+
+    (points, interval_ends)
+}
+
+fn spawn_branches(
+    segments: &mut Vec<Segment>,
+    interval_ends: &[[f32; 3]],
+    effect: &LightningEffect,
+    seed: u32,
+    reseed: u32,
+) {
+    let mut generation = spawn_root_branches(segments, interval_ends, effect, seed, reseed);
 
     for depth in 1..=effect.branch_depth {
         push_branches(segments, &generation);
@@ -723,15 +784,24 @@ pub fn build_strike_segments(effect: &LightningEffect, seed: u32, reseed: u32) -
                 }
             };
 
-            let points = displace_path(
-                effect,
-                seed,
-                reseed,
-                s,
-                start,
-                end_offset,
-                effect.detail_levels,
-            );
+            let (points, interval_ends) = match &effect.source {
+                LightningSource::Point => {
+                    build_waypoint_path(effect, seed, reseed, s, start, end_offset)
+                }
+                LightningSource::Shell { .. } => {
+                    let points = displace_path(
+                        effect,
+                        seed,
+                        reseed,
+                        s,
+                        start,
+                        end_offset,
+                        effect.detail_levels,
+                    );
+                    let interval_ends = vec![end_offset; points.len() - 1];
+                    (points, interval_ends)
+                }
+            };
 
             let mut strike_segments = Vec::new();
             emit_path(
@@ -741,7 +811,7 @@ pub fn build_strike_segments(effect: &LightningEffect, seed: u32, reseed: u32) -
                 effect.core_radius * effect.tip_radius_ratio,
                 1.0,
             );
-            spawn_branches(&mut strike_segments, effect, seed, reseed);
+            spawn_branches(&mut strike_segments, &interval_ends, effect, seed, reseed);
 
             for seg in strike_segments {
                 if !push_segment(&mut segments, seg) {
@@ -1410,7 +1480,8 @@ mod tests {
     fn build_root_branch_paths(effect: &LightningEffect) -> Vec<Vec<Segment>> {
         let seed = crate::lightning::hash_u32(&[0, 0]);
         let segments = build_strike_segments(effect, seed, 0);
-        let branch_segments = &segments[1 << effect.detail_levels..];
+        let (main_points, _) = build_waypoint_path(effect, seed, 0, 0, [0.0; 3], effect.end_offset);
+        let branch_segments = &segments[main_points.len() - 1..];
 
         let mut paths: Vec<Vec<Segment>> = Vec::new();
         for (i, seg) in branch_segments.iter().enumerate() {
@@ -1428,6 +1499,93 @@ mod tests {
     fn test_integer_branch_count_spawns_exactly_that_many_root_branches() {
         let effect = straight_counted_branch_effect(4.0);
         assert_eq!(build_root_branch_paths(&effect).len(), 4);
+    }
+
+    fn waypoint_effect(waypoints: &[[f32; 3]]) -> LightningEffect {
+        let mut effect = LightningEffect::default();
+        effect.source = LightningSource::Point;
+        effect.end_offset = [3.0, -8.0, 1.0];
+        effect.waypoints[..waypoints.len()].copy_from_slice(waypoints);
+        effect.waypoint_count = waypoints.len() as u32;
+        effect
+    }
+
+    const WAYPOINTS: [[f32; 3]; 3] = [[1.5, -2.0, 0.5], [-1.0, -4.5, 1.0], [2.0, -6.0, -0.5]];
+
+    #[test]
+    fn test_waypoint_path_passes_through_every_waypoint() {
+        for count in 1..=3 {
+            let effect = waypoint_effect(&WAYPOINTS[..count]);
+            let (points, interval_ends) =
+                build_waypoint_path(&effect, 42, 7, 0, [0.0; 3], effect.end_offset);
+
+            for waypoint in &WAYPOINTS[..count] {
+                assert!(
+                    points.contains(waypoint),
+                    "{count} waypoints miss {waypoint:?}"
+                );
+            }
+            assert_eq!(points.first(), Some(&[0.0; 3]));
+            assert_eq!(points.last(), Some(&effect.end_offset));
+            assert_eq!(interval_ends.len(), points.len() - 1);
+        }
+    }
+
+    #[test]
+    fn test_waypoint_path_stays_within_the_segment_budget() {
+        for count in 0..=3 {
+            let effect = waypoint_effect(&WAYPOINTS[..count]);
+            let (points, _) = build_waypoint_path(&effect, 42, 7, 0, [0.0; 3], effect.end_offset);
+            assert!(
+                points.len() - 1 <= 1 << effect.detail_levels,
+                "{count} waypoints give {} segments",
+                points.len() - 1
+            );
+        }
+    }
+
+    #[test]
+    fn test_waypoints_keep_the_root_branch_count() {
+        for count in 1..=3 {
+            let mut effect = straight_counted_branch_effect(4.0);
+            effect.waypoints[..count].copy_from_slice(&WAYPOINTS[..count]);
+            effect.waypoint_count = count as u32;
+            assert_eq!(
+                build_root_branch_paths(&effect).len(),
+                4,
+                "{count} waypoints"
+            );
+        }
+    }
+
+    #[test]
+    fn test_no_waypoints_keeps_the_single_displaced_main_path() {
+        let mut effect = waypoint_effect(&[]);
+        effect.branch_count = 0.0;
+        let (seed, reseed) = (42, 7);
+
+        let points = displace_path(
+            &effect,
+            seed,
+            reseed,
+            0,
+            [0.0; 3],
+            effect.end_offset,
+            effect.detail_levels,
+        );
+        let mut expected = Vec::new();
+        emit_path(
+            &mut expected,
+            &points,
+            effect.core_radius,
+            effect.core_radius * effect.tip_radius_ratio,
+            1.0,
+        );
+
+        assert!(segments_match(
+            &build_strike_segments(&effect, seed, reseed),
+            &expected
+        ));
     }
 
     #[test]

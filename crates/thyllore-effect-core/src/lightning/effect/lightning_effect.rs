@@ -2,6 +2,8 @@ use cgmath::{Matrix4, Quaternion, Vector3};
 use serde::{Deserialize, Serialize};
 use thyllore_scene_core::SnapshotValues;
 
+pub const LIGHTNING_MAX_WAYPOINTS: usize = 8;
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub enum LightningSource {
     #[default]
@@ -72,6 +74,8 @@ pub struct LightningEffect {
     pub flash_radius: f32,
     pub end_variance: f32,
     pub growth_time: f32,
+    pub waypoints: [[f32; 3]; LIGHTNING_MAX_WAYPOINTS],
+    pub waypoint_count: u32,
 }
 
 impl Default for LightningEffect {
@@ -127,6 +131,8 @@ impl Default for LightningEffect {
             flash_radius: 2.0,
             end_variance: 0.0,
             growth_time: 0.0,
+            waypoints: [[0.0; 3]; LIGHTNING_MAX_WAYPOINTS],
+            waypoint_count: 0,
         }
     }
 }

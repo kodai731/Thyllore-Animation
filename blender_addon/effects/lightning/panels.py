@@ -27,6 +27,15 @@ class VIEW3D_PT_thyllore_lightning(bpy.types.Panel):
         props = obj.thyllore_lightning
 
         layout.prop(props, "preset")
+
+        path_box = layout.box()
+        path_box.label(text="Path")
+        for index, waypoint in enumerate(obj.thyllore_lightning_waypoints):
+            row = path_box.row()
+            row.label(text=waypoint.target.name if waypoint.target is not None else "(missing)")
+            row.operator("thyllore.lightning_waypoint_remove", text="", icon="X").index = index
+        path_box.operator("thyllore.lightning_waypoint_add")
+
         effect_properties.draw_primary_params(layout, props)
 
 

@@ -116,7 +116,7 @@ class LightningViewportRenderer:
         with self.fb_resolved.bind():
             self.fb_resolved.clear(color=(0.0, 0.0, 0.0, 0.0))
 
-    def render(self, view, proj, camera_pos, params, time, position, rotation, w, h, depth_tex=None, flip_y=True, debug_view: int = 0):
+    def render(self, view, proj, camera_pos, params, time, position, rotation, w, h, depth_tex=None, flip_y=True, debug_view: int = 0, waypoints=()):
         import gpu
         import thyllore_effect_core as fx
 
@@ -128,7 +128,7 @@ class LightningViewportRenderer:
         frame_bytes = pack_frame_ubo(view, proj, camera_pos + (1.0,), camera_pos + (1.0,), (1.0, 1.0, 1.0, 1.0))
         view_cm = matrix_column_major(view)
         proj_cm = matrix_column_major(proj)
-        ubo_bytes, segments_bytes, segment_count = fx.pack_lightning_ubo(params, time, position, rotation, view_cm, proj_cm)
+        ubo_bytes, segments_bytes, segment_count = fx.pack_lightning_ubo(params, time, position, rotation, view_cm, proj_cm, waypoints=list(waypoints))
 
         self.frame_ubo = update_uniform_buffer(self.frame_ubo, frame_bytes)
         self.lightning_ubo = update_uniform_buffer(self.lightning_ubo, ubo_bytes)
@@ -191,7 +191,7 @@ def find_lightning_objects(scene):
 def draw_lightning():
     import bpy
 
-    from .properties import lightning_render_params
+    from .properties import lightning_render_params, waypoint_local_points
 
     context = bpy.context
     region = context.region
@@ -214,8 +214,9 @@ def draw_lightning():
         params = lightning_render_params(obj.thyllore_lightning)
         position = coordinates.blender_to_engine_point(obj.matrix_world.translation)
         rotation = coordinates.blender_to_engine_quaternion(obj.matrix_world.to_quaternion())
+        waypoints = [coordinates.blender_to_engine_point(p) for p in waypoint_local_points(obj)]
         last_color = renderer.render(
-            view, proj, camera_pos, params, scene_time, position, rotation, w, h, depth_tex=_scene_depth
+            view, proj, camera_pos, params, scene_time, position, rotation, w, h, depth_tex=_scene_depth, waypoints=waypoints
         )
 
     report_first_draw(w, h, camera_pos, lightning_objects, time.perf_counter() - render_started)

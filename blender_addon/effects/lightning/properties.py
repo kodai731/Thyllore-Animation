@@ -12,10 +12,11 @@ select_exposed_params = effect_properties.select_exposed_params
 def build_waypoint_property_group():
     import bpy
 
-    class ThylloreLightningWaypoint(bpy.types.PropertyGroup):
-        target: bpy.props.PointerProperty(type=bpy.types.Object)
-
-    return ThylloreLightningWaypoint
+    return type(
+        "ThylloreLightningWaypoint",
+        (bpy.types.PropertyGroup,),
+        {"__annotations__": {"target": bpy.props.PointerProperty(type=bpy.types.Object)}, "__module__": __name__},
+    )
 
 
 def waypoint_midpoint(previous, end):

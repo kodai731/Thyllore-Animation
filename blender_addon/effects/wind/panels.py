@@ -29,9 +29,16 @@ class VIEW3D_PT_thyllore_wind(bpy.types.Panel):
         layout.prop(props, "preset")
         effect_properties.draw_primary_params(layout, props)
 
-        debug_tools.draw_panel(layout)
-
 
 VIEW3D_PT_thyllore_wind_advanced = effect_properties.build_effect_advanced_panel(
     "wind", "VIEW3D_PT_thyllore_wind"
+)
+
+
+def _debug_draw(layout, props):
+    debug_tools.draw_panel(layout)
+
+
+VIEW3D_PT_thyllore_wind_debug = effect_properties.build_effect_child_panel(
+    "wind", "VIEW3D_PT_thyllore_wind", "debug", "Debug", _debug_draw
 )

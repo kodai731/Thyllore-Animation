@@ -24,6 +24,7 @@ def register():
     debug_tools.register()
     bpy.utils.register_class(panels.VIEW3D_PT_thyllore_wind)
     bpy.utils.register_class(panels.VIEW3D_PT_thyllore_wind_advanced)
+    bpy.utils.register_class(panels.VIEW3D_PT_thyllore_wind_debug)
     viewport_recording.register()
 
     draw_handler.register_draw_handler()
@@ -39,6 +40,7 @@ def unregister():
 
     draw_handler.unregister_draw_handler()
     viewport_recording.unregister()
+    bpy.utils.unregister_class(panels.VIEW3D_PT_thyllore_wind_debug)
     bpy.utils.unregister_class(panels.VIEW3D_PT_thyllore_wind_advanced)
     bpy.utils.unregister_class(panels.VIEW3D_PT_thyllore_wind)
     debug_tools.unregister()

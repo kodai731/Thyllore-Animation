@@ -320,8 +320,8 @@ def build_effect_property_group(
     return type(class_name, (bpy.types.PropertyGroup,), attrs)
 
 
-def build_effect_advanced_panel(effect_type: str, main_panel_id: str):
-    """Closed "Advanced" sub-panel under an effect panel, drawing the non-primary groups."""
+def build_effect_child_panel(effect_type: str, main_panel_id: str, suffix: str, label: str, draw_body):
+    """Closed sub-panel under an effect panel whose body is drawn by draw_body(layout, props)."""
     import bpy
 
     def _poll(cls, context):
@@ -339,16 +339,23 @@ def build_effect_advanced_panel(effect_type: str, main_panel_id: str):
         if obj is None:
             return
         props = getattr(obj, f"thyllore_{effect_type}")
-        draw_param_groups(self.layout, props)
+        draw_body(self.layout, props)
 
-    child_id = main_panel_id + "_advanced"
+    child_id = main_panel_id + "_" + suffix
     return type(child_id, (bpy.types.Panel,), {
         "bl_space_type": "VIEW_3D",
         "bl_region_type": "UI",
         "bl_category": "Thyllore",
         "bl_parent_id": main_panel_id,
-        "bl_label": "Advanced",
+        "bl_label": label,
         "bl_options": {"DEFAULT_CLOSED"},
         "poll": classmethod(_poll),
         "draw": _draw,
     })
+
+
+def build_effect_advanced_panel(effect_type: str, main_panel_id: str):
+    """Closed "Advanced" sub-panel under an effect panel, drawing the non-primary groups."""
+    return build_effect_child_panel(
+        effect_type, main_panel_id, "advanced", "Advanced", draw_param_groups
+    )

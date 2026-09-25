@@ -582,7 +582,10 @@ fn build_wind_section(
         |ui, edited| wind_key_button(ui, ui_events, edited),
     );
     if !effect_applied_this_frame {
-        ui_events.send(UIEvent::UpdateWindEffect(Box::new(effect_copy)));
+        ui_events.send(UIEvent::UpdateWindEffect {
+            entity: selected_wind,
+            effect: Box::new(effect_copy),
+        });
     }
     if ui.button("Curves") {
         ui_events.send(UIEvent::OpenScalarCurveEditor);
@@ -731,7 +734,10 @@ fn build_lightning_section(
     );
 
     if !effect_applied_this_frame {
-        ui_events.send(UIEvent::UpdateLightningEffect(Box::new(effect_copy)));
+        ui_events.send(UIEvent::UpdateLightningEffect {
+            entity: selected,
+            effect: Box::new(effect_copy),
+        });
     }
     if ui.button("Curves") {
         ui_events.send(UIEvent::OpenScalarCurveEditor);
@@ -931,7 +937,10 @@ fn build_water_section(
                     );
 
                     if !effect_applied_this_frame {
-                        ui_events.send(UIEvent::UpdateWaterEffect(Box::new(effect_copy)));
+                        ui_events.send(UIEvent::UpdateWaterEffect {
+                            entity: selected_water,
+                            effect: Box::new(effect_copy),
+                        });
                     }
 
                     if ui.button("Curves") {
@@ -1457,7 +1466,10 @@ fn build_flame_section(
                     }
 
                     if !effect_applied_this_frame {
-                        ui_events.send(UIEvent::UpdateFlameEffect(Box::new(effect_copy)));
+                        ui_events.send(UIEvent::UpdateFlameEffect {
+                            entity: selected_flame,
+                            effect: Box::new(effect_copy),
+                        });
                     }
 
                     if ui.collapsing_header("Flame Debug", imgui::TreeNodeFlags::empty()) {

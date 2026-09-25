@@ -444,7 +444,10 @@ pub enum UIEvent {
     UpdatePhysicalCamera(PhysicalCameraParameters),
     UpdateAutoExposure(AutoExposure),
     UpdateOnionSkinning(OnionSkinningConfig),
-    UpdateFlameEffect(Box<FlameEffect>),
+    UpdateFlameEffect {
+        entity: Entity,
+        effect: Box<FlameEffect>,
+    },
     UpdateFlameBaked(Box<thyllore_effect_core::FlameBaked>),
     ApplyFlamePreset(String),
     ApplyFlameTextureFit {
@@ -485,13 +488,22 @@ pub enum UIEvent {
         source_id: SourceClipId,
         seconds: f32,
     },
-    UpdateWaterEffect(Box<WaterTorusEffect>),
+    UpdateWaterEffect {
+        entity: Entity,
+        effect: Box<WaterTorusEffect>,
+    },
     ApplyWaterPreset(String),
     UpdateWaterRenderSettings(WaterRenderSettings),
-    UpdateWindEffect(Box<WindTornadoEffect>),
+    UpdateWindEffect {
+        entity: Entity,
+        effect: Box<WindTornadoEffect>,
+    },
     ApplyWindPreset(String),
     UpdateWindRenderSettings(WindRenderSettings),
-    UpdateLightningEffect(Box<LightningEffect>),
+    UpdateLightningEffect {
+        entity: Entity,
+        effect: Box<LightningEffect>,
+    },
     ApplyLightningPreset(String),
     AddLightningTarget,
     ClearLightningTarget,

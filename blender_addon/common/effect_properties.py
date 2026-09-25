@@ -92,6 +92,18 @@ def group_params_by_owner(exposed_params: list[dict]) -> list[tuple[str, list[st
     return list(groups.items())
 
 
+def split_primary_params(exposed_params: list[dict]) -> tuple[list[str], list[dict]]:
+    """Primary names in declaration order, and the remaining param dicts."""
+    primary_names: list[str] = []
+    remaining: list[dict] = []
+    for param in exposed_params:
+        if param.get("primary", False):
+            primary_names.append(param["name"])
+        else:
+            remaining.append(param)
+    return primary_names, remaining
+
+
 def draw_param_groups(layout, props) -> None:
     groups = type(props).PARAM_GROUPS
     display_names = type(props).PARAM_DISPLAY_NAMES
@@ -101,6 +113,16 @@ def draw_param_groups(layout, props) -> None:
             box.label(text=owner.title())
         for name in names:
             box.prop(props, display_names.get(name, name))
+
+
+def draw_primary_params(layout, props) -> None:
+    primary_names = type(props).PARAM_PRIMARY
+    if not primary_names:
+        return
+    display_names = type(props).PARAM_DISPLAY_NAMES
+    box = layout.box()
+    for name in primary_names:
+        box.prop(props, display_names.get(name, name))
 
 
 def collect_params(props, names: list[str]) -> dict:
@@ -283,13 +305,50 @@ def build_effect_property_group(
         update=apply_preset,
     )
 
+    primary_names, remaining_params = split_primary_params(exposed_params)
+
     attrs = {
         "__annotations__": annotations,
         "PARAM_NAMES": param_names,
         "OFFSET_PARAM_NAMES": offset_names,
-        "PARAM_GROUPS": group_params_by_owner(exposed_params),
+        "PARAM_PRIMARY": primary_names,
+        "PARAM_GROUPS": group_params_by_owner(remaining_params),
         "PARAM_DISPLAY_NAMES": display_property_names(exposed_params),
         "__module__": module_name,
     }
 
     return type(class_name, (bpy.types.PropertyGroup,), attrs)
+
+
+def build_effect_advanced_panel(effect_type: str, main_panel_id: str):
+    """Closed "Advanced" sub-panel under an effect panel, drawing the non-primary groups."""
+    import bpy
+
+    def _poll(cls, context):
+        obj = context.view_layer.objects.active
+        if obj is None:
+            return False
+        attr = getattr(obj, f"thyllore_{effect_type}", None)
+        if attr is None:
+            return False
+        flag = getattr(attr, f"is_{effect_type}", False)
+        return bool(flag)
+
+    def _draw(self, context):
+        obj = context.view_layer.objects.active
+        if obj is None:
+            return
+        props = getattr(obj, f"thyllore_{effect_type}")
+        draw_param_groups(self.layout, props)
+
+    child_id = main_panel_id + "_advanced"
+    return type(child_id, (bpy.types.Panel,), {
+        "bl_space_type": "VIEW_3D",
+        "bl_region_type": "UI",
+        "bl_category": "Thyllore",
+        "bl_parent_id": main_panel_id,
+        "bl_label": "Advanced",
+        "bl_options": {"DEFAULT_CLOSED"},
+        "poll": classmethod(_poll),
+        "draw": _draw,
+    })

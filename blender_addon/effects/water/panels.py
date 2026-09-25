@@ -27,6 +27,11 @@ class VIEW3D_PT_thyllore_water(bpy.types.Panel):
         props = obj.thyllore_water
 
         layout.prop(props, "preset")
-        effect_properties.draw_param_groups(layout, props)
+        effect_properties.draw_primary_params(layout, props)
 
         debug_tools.draw_panel(layout)
+
+
+VIEW3D_PT_thyllore_water_advanced = effect_properties.build_effect_advanced_panel(
+    "water", "VIEW3D_PT_thyllore_water"
+)

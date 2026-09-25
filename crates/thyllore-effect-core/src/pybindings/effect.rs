@@ -41,6 +41,7 @@ fn fill_ui_param_dict(dict: &Bound<'_, PyDict>, param: &UiParam) -> PyResult<()>
     dict.set_item("format", param.format)?;
     dict.set_item("tooltip", param.tooltip)?;
     dict.set_item("persisted", param.persisted)?;
+    dict.set_item("primary", param.primary)?;
     match param.kind {
         UiKind::Scalar | UiKind::Color | UiKind::Offset => {}
         UiKind::Absorption => {

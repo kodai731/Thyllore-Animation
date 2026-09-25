@@ -27,6 +27,11 @@ class VIEW3D_PT_thyllore_lightning(bpy.types.Panel):
         props = obj.thyllore_lightning
 
         layout.prop(props, "preset")
-        effect_properties.draw_param_groups(layout, props)
+        effect_properties.draw_primary_params(layout, props)
 
         debug_tools.draw_panel(layout)
+
+
+VIEW3D_PT_thyllore_lightning_advanced = effect_properties.build_effect_advanced_panel(
+    "lightning", "VIEW3D_PT_thyllore_lightning"
+)

@@ -27,6 +27,11 @@ class VIEW3D_PT_thyllore_flame(bpy.types.Panel):
         props = obj.thyllore_flame
 
         layout.prop(props, "preset")
-        effect_properties.draw_param_groups(layout, props)
+        effect_properties.draw_primary_params(layout, props)
 
         debug_tools.draw_panel(layout)
+
+
+VIEW3D_PT_thyllore_flame_advanced = effect_properties.build_effect_advanced_panel(
+    "flame", "VIEW3D_PT_thyllore_flame"
+)

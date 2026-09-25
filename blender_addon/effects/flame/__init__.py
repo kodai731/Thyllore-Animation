@@ -23,6 +23,7 @@ def register():
     bpy.utils.register_class(operators.THYLLORE_OT_flame_add)
     debug_tools.register()
     bpy.utils.register_class(panels.VIEW3D_PT_thyllore_flame)
+    bpy.utils.register_class(panels.VIEW3D_PT_thyllore_flame_advanced)
     viewport_recording.register()
 
     draw_handler.register_draw_handler()
@@ -38,6 +39,7 @@ def unregister():
 
     draw_handler.unregister_draw_handler()
     viewport_recording.unregister()
+    bpy.utils.unregister_class(panels.VIEW3D_PT_thyllore_flame_advanced)
     bpy.utils.unregister_class(panels.VIEW3D_PT_thyllore_flame)
     debug_tools.unregister()
     bpy.utils.unregister_class(operators.THYLLORE_OT_flame_add)

@@ -6,7 +6,50 @@ from blender_addon.common.effect_properties import (
     convert_offsets_to_engine,
     group_params_by_owner,
     offset_param_names,
+    split_primary_params,
 )
+
+
+def test_split_primary_params_declaration_order():
+    """Primary names are returned in declaration order."""
+    params = [
+        {"name": "a", "primary": True},
+        {"name": "b", "primary": False},
+        {"name": "c", "primary": True},
+        {"name": "d", "primary": True},
+    ]
+    primary_names, remaining = split_primary_params(params)
+    assert primary_names == ["a", "c", "d"]
+    assert len(remaining) == 1
+    assert remaining[0]["name"] == "b"
+
+
+def test_split_primary_params_missing_key_is_non_primary():
+    """Params missing the 'primary' key are treated as non-primary."""
+    params = [
+        {"name": "a", "primary": True},
+        {"name": "b"},
+        {"name": "c", "primary": False},
+    ]
+    primary_names, remaining = split_primary_params(params)
+    assert primary_names == ["a"]
+    assert len(remaining) == 2
+    assert [p["name"] for p in remaining] == ["b", "c"]
+
+
+def test_split_primary_params_partition_covers_all():
+    """Primary names + remaining param count equals total params."""
+    params = [
+        {"name": "a", "primary": True},
+        {"name": "b", "primary": False},
+        {"name": "c", "primary": True},
+        {"name": "d"},
+        {"name": "e", "primary": True},
+    ]
+    primary_names, remaining = split_primary_params(params)
+    assert len(primary_names) + len(remaining) == len(params)
+    assert set(primary_names) == {"a", "c", "e"}
+    assert {p["name"] for p in remaining} == {"b", "d"}
 
 
 def test_group_used_when_present_and_non_empty():

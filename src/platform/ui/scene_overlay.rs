@@ -71,11 +71,11 @@ pub fn build_scene_overlay(
 
             build_onion_skinning_section(ui, ui_events, ecs_world);
 
-            build_water_section(ui, ui_events, overlay_state, ecs_world);
+            build_water_section(ui, ui_events, ecs_world);
 
-            build_wind_section(ui, ui_events, overlay_state, ecs_world);
+            build_wind_section(ui, ui_events, ecs_world);
 
-            build_lightning_section(ui, ui_events, overlay_state, ecs_world);
+            build_lightning_section(ui, ui_events, ecs_world);
 
             build_flame_section(ui, ui_events, overlay_state, ecs_world, viewport_info);
         });
@@ -511,12 +511,31 @@ fn build_onion_skinning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ec
     }
 }
 
-fn build_wind_section(
+/// Preset combo whose preview is the preset recorded on the selected entity; returns the
+/// preset the user just picked, if any.
+fn draw_preset_combo(
     ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    overlay_state: &mut SceneOverlayState,
-    ecs_world: &World,
-) {
+    label: &str,
+    names: &[&str],
+    applied: Option<&str>,
+) -> Option<String> {
+    let preview = applied.unwrap_or("(none)");
+    let combo = ui.begin_combo(label, preview)?;
+    let mut chosen = None;
+    for &name in names {
+        if ui
+            .selectable_config(name)
+            .selected(Some(name) == applied)
+            .build()
+        {
+            chosen = Some(name.to_string());
+        }
+    }
+    combo.end();
+    chosen
+}
+
+fn build_wind_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
     use crate::ecs::component::WindTornadoEffect;
 
     if !ui.collapsing_header("Wind", imgui::TreeNodeFlags::empty()) {
@@ -552,18 +571,23 @@ fn build_wind_section(
         }
     }
 
-    let presets: Vec<String> = thyllore_effect_core::WIND_PRESET_NAMES
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-    let mut preset_index = overlay_state.model.wind_preset_index;
-    let preset_changed = ui.combo_simple_string("Wind Preset", &mut preset_index, &presets);
-    overlay_state.model.wind_preset_index = preset_index;
+    let applied_preset = selected_wind_entity.and_then(|entity| {
+        ecs_world
+            .get_component::<crate::ecs::component::AppliedWindPreset>(entity)
+            .map(|preset| preset.name.clone())
+    });
     let mut effect_applied_this_frame = false;
-    if preset_changed && selected_wind_entity.is_some() {
-        ui_events.send(UIEvent::ClearScalarKeys);
-        ui_events.send(UIEvent::ApplyWindPreset(presets[preset_index].clone()));
-        effect_applied_this_frame = true;
+    if let Some(chosen) = draw_preset_combo(
+        ui,
+        "Wind Preset",
+        thyllore_effect_core::WIND_PRESET_NAMES,
+        applied_preset.as_deref(),
+    ) {
+        if selected_wind_entity.is_some() {
+            ui_events.send(UIEvent::ClearScalarKeys);
+            ui_events.send(UIEvent::ApplyWindPreset(chosen));
+            effect_applied_this_frame = true;
+        }
     }
 
     let Some(selected_wind) = selected_wind_entity else {
@@ -648,12 +672,7 @@ fn draw_wind_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_w
     ui_events.send(UIEvent::UpdateWindRenderSettings(settings_copy));
 }
 
-fn build_lightning_section(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    overlay_state: &mut SceneOverlayState,
-    ecs_world: &World,
-) {
+fn build_lightning_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
     use crate::ecs::component::LightningEffect;
 
     if !ui.collapsing_header("Lightning", imgui::TreeNodeFlags::empty()) {
@@ -689,18 +708,23 @@ fn build_lightning_section(
         }
     }
 
-    let presets: Vec<String> = thyllore_effect_core::LIGHTNING_PRESET_NAMES
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-    let mut preset_index = overlay_state.model.lightning_preset_index;
-    let preset_changed = ui.combo_simple_string("Lightning Preset", &mut preset_index, &presets);
-    overlay_state.model.lightning_preset_index = preset_index;
+    let applied_preset = selected_entity.and_then(|entity| {
+        ecs_world
+            .get_component::<crate::ecs::component::AppliedLightningPreset>(entity)
+            .map(|preset| preset.name.clone())
+    });
     let mut effect_applied_this_frame = false;
-    if preset_changed && selected_entity.is_some() {
-        ui_events.send(UIEvent::ClearScalarKeys);
-        ui_events.send(UIEvent::ApplyLightningPreset(presets[preset_index].clone()));
-        effect_applied_this_frame = true;
+    if let Some(chosen) = draw_preset_combo(
+        ui,
+        "Lightning Preset",
+        thyllore_effect_core::LIGHTNING_PRESET_NAMES,
+        applied_preset.as_deref(),
+    ) {
+        if selected_entity.is_some() {
+            ui_events.send(UIEvent::ClearScalarKeys);
+            ui_events.send(UIEvent::ApplyLightningPreset(chosen));
+            effect_applied_this_frame = true;
+        }
     }
 
     let Some(selected) = selected_entity else {
@@ -861,12 +885,7 @@ fn draw_lightning_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, 
     ui_events.send(UIEvent::UpdateLightningRenderSettings(settings_copy));
 }
 
-fn build_water_section(
-    ui: &imgui::Ui,
-    ui_events: &mut UIEventQueue,
-    overlay_state: &mut SceneOverlayState,
-    ecs_world: &World,
-) {
+fn build_water_section(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
     use crate::ecs::component::WaterTorusEffect;
 
     if ui.collapsing_header("Water", imgui::TreeNodeFlags::empty()) {
@@ -903,21 +922,22 @@ fn build_water_section(
             }
         }
 
-        // Preset combo
-        let presets: Vec<String> = thyllore_effect_core::WATER_PRESET_NAMES
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
+        let applied_preset = selected_water_entity.and_then(|entity| {
+            ecs_world
+                .get_component::<crate::ecs::component::AppliedWaterPreset>(entity)
+                .map(|preset| preset.name.clone())
+        });
         let mut effect_applied_this_frame = false;
         {
-            let mut preset_index = overlay_state.model.water_preset_index;
-            let preset_changed =
-                ui.combo_simple_string("Water Preset", &mut preset_index, &presets);
-            overlay_state.model.water_preset_index = preset_index;
-            if preset_changed {
+            if let Some(chosen) = draw_preset_combo(
+                ui,
+                "Water Preset",
+                thyllore_effect_core::WATER_PRESET_NAMES,
+                applied_preset.as_deref(),
+            ) {
                 if selected_water_entity.is_some() {
                     ui_events.send(UIEvent::ClearScalarKeys);
-                    ui_events.send(UIEvent::ApplyWaterPreset(presets[preset_index].clone()));
+                    ui_events.send(UIEvent::ApplyWaterPreset(chosen));
                     effect_applied_this_frame = true;
                 }
             }
@@ -1103,27 +1123,28 @@ fn build_flame_section(
             }
         }
 
-        // Flame Preset selector
-        let presets: Vec<String> = thyllore_effect_core::FLAME_PRESET_NAMES
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
+        let applied_preset = selected_flame_entity.and_then(|entity| {
+            ecs_world
+                .get_component::<crate::ecs::component::AppliedFlamePreset>(entity)
+                .map(|preset| preset.name.clone())
+        });
         // The slider block below re-sends the (pre-apply) effect every frame;
         // that send must be skipped on the frame an Apply button fires or it
         // overwrites the applied preset/fit in the same dispatch.
         let mut effect_applied_this_frame = false;
         {
-            let mut preset_index = overlay_state.model.flame_preset_index;
-            let preset_changed =
-                ui.combo_simple_string("Flame Preset", &mut preset_index, &presets);
-            overlay_state.model.flame_preset_index = preset_index;
-            if preset_changed {
+            if let Some(chosen) = draw_preset_combo(
+                ui,
+                "Flame Preset",
+                thyllore_effect_core::FLAME_PRESET_NAMES,
+                applied_preset.as_deref(),
+            ) {
                 if selected_flame_entity.is_some() {
                     // Keyed scalar curves re-stamp their channels every
                     // frame and would silently pin the old look, so a
                     // preset stamp also clears them (undo restores).
                     ui_events.send(UIEvent::ClearScalarKeys);
-                    ui_events.send(UIEvent::ApplyFlamePreset(presets[preset_index].clone()));
+                    ui_events.send(UIEvent::ApplyFlamePreset(chosen));
                     effect_applied_this_frame = true;
                 }
             }

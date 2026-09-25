@@ -9,6 +9,7 @@ use crate::hooks::scene::spawn_scene_owner;
 use cgmath::{Matrix4, SquareMatrix, Vector2, Vector3};
 use thyllore_effect_core::{
     build_lightning_ubo, burst_start_time, compute_lightning_segment_aabb, LightningDebugView,
+    LightningShape,
 };
 use vulkanalia::prelude::v1_0::*;
 
@@ -73,13 +74,14 @@ fn only_a_known_preset_name_replaces_the_selected_effect() {
     world
         .get_component_mut::<LightningEffect>(entity)
         .expect("lightning effect")
+        .shape
         .core_radius = 0.9;
 
     apply_lightning_preset_to_selected(&mut world, "no_such_preset");
     assert_eq!(
         world
             .get_component::<LightningEffect>(entity)
-            .map(|e| e.core_radius),
+            .map(|e| e.shape.core_radius),
         Some(0.9)
     );
 
@@ -94,8 +96,8 @@ fn only_a_known_preset_name_replaces_the_selected_effect() {
     assert_eq!(
         world
             .get_component::<LightningEffect>(entity)
-            .map(|e| e.core_radius),
-        Some(expected.core_radius)
+            .map(|e| e.shape.core_radius),
+        Some(expected.shape.core_radius)
     );
 }
 
@@ -128,7 +130,8 @@ fn lightning_effect_hook_is_subscribed_after_wind() {
 
 fn lightning_inside_first_burst() -> LightningEffect {
     let mut effect = LightningEffect::default();
-    effect.time = burst_start_time(&effect, 0) + effect.attack_time + effect.sustain_time * 0.5;
+    effect.time =
+        burst_start_time(&effect, 0) + effect.timing.attack_time + effect.timing.sustain_time * 0.5;
     effect
 }
 
@@ -241,7 +244,10 @@ fn spawned_target_is_a_child_at_the_end_offset_and_links_by_name() {
     let mut world = World::new();
     let effect = LightningEffect {
         position: Vector3::new(0.0, 8.0, 0.0),
-        end_offset: [0.0, -8.5, 0.0],
+        shape: LightningShape {
+            end_offset: [0.0, -8.5, 0.0],
+            ..LightningShape::default()
+        },
         ..LightningEffect::default()
     };
     let lightning = spawn_lightning(&mut world, DEFAULT_LIGHTNING_NAME, effect);
@@ -286,6 +292,7 @@ fn linked_bolt_takes_the_target_local_translation_as_end_offset() {
     let end_offset = world
         .get_component::<LightningEffect>(lightning)
         .unwrap()
+        .shape
         .end_offset;
     assert_eq!(end_offset, [4.0, 0.0, 2.0]);
 
@@ -330,6 +337,7 @@ fn a_scene_loaded_root_target_is_adopted_as_a_child_on_the_first_follow() {
     let end_offset = world
         .get_component::<LightningEffect>(lightning)
         .unwrap()
+        .shape
         .end_offset;
     assert_eq!(end_offset, [1.0, -6.0, 0.0]);
 }
@@ -339,7 +347,10 @@ fn spawning_two_waypoints_fills_effect_waypoints() {
     let mut world = World::new();
     let effect = LightningEffect {
         position: Vector3::new(0.0, 8.0, 0.0),
-        end_offset: [0.0, -8.0, 0.0],
+        shape: LightningShape {
+            end_offset: [0.0, -8.0, 0.0],
+            ..LightningShape::default()
+        },
         ..LightningEffect::default()
     };
     let lightning = spawn_lightning(&mut world, DEFAULT_LIGHTNING_NAME, effect);
@@ -350,9 +361,9 @@ fn spawning_two_waypoints_fills_effect_waypoints() {
     follow_lightning_path(&mut world);
 
     let effect = world.get_component::<LightningEffect>(lightning).unwrap();
-    assert_eq!(effect.waypoint_count, 2);
-    assert_eq!(effect.waypoints[0], [0.0, -4.0, 0.0]);
-    assert_eq!(effect.waypoints[1], [0.0, -6.0, 0.0]);
+    assert_eq!(effect.shape.waypoint_count, 2);
+    assert_eq!(effect.shape.waypoints[0], [0.0, -4.0, 0.0]);
+    assert_eq!(effect.shape.waypoints[1], [0.0, -6.0, 0.0]);
     assert_eq!(
         world.get_component::<Parent>(wp1).map(|parent| parent.0),
         Some(lightning)
@@ -368,7 +379,10 @@ fn moving_a_waypoint_locator_is_followed_in_effect() {
     let mut world = World::new();
     let effect = LightningEffect {
         position: Vector3::new(0.0, 8.0, 0.0),
-        end_offset: [0.0, -8.0, 0.0],
+        shape: LightningShape {
+            end_offset: [0.0, -8.0, 0.0],
+            ..LightningShape::default()
+        },
         ..LightningEffect::default()
     };
     let lightning = spawn_lightning(&mut world, DEFAULT_LIGHTNING_NAME, effect);
@@ -383,8 +397,8 @@ fn moving_a_waypoint_locator_is_followed_in_effect() {
     follow_lightning_path(&mut world);
 
     let effect = world.get_component::<LightningEffect>(lightning).unwrap();
-    assert_eq!(effect.waypoint_count, 1);
-    assert_eq!(effect.waypoints[0], [5.0, -4.0, 3.0]);
+    assert_eq!(effect.shape.waypoint_count, 1);
+    assert_eq!(effect.shape.waypoints[0], [5.0, -4.0, 3.0]);
 }
 
 #[test]
@@ -392,7 +406,10 @@ fn removing_waypoint_clears_it_from_effect() {
     let mut world = World::new();
     let effect = LightningEffect {
         position: Vector3::new(0.0, 8.0, 0.0),
-        end_offset: [0.0, -8.0, 0.0],
+        shape: LightningShape {
+            end_offset: [0.0, -8.0, 0.0],
+            ..LightningShape::default()
+        },
         ..LightningEffect::default()
     };
     let lightning = spawn_lightning(&mut world, DEFAULT_LIGHTNING_NAME, effect);
@@ -404,6 +421,7 @@ fn removing_waypoint_clears_it_from_effect() {
         world
             .get_component::<LightningEffect>(lightning)
             .unwrap()
+            .shape
             .waypoint_count,
         1
     );
@@ -417,6 +435,7 @@ fn removing_waypoint_clears_it_from_effect() {
         world
             .get_component::<LightningEffect>(lightning)
             .unwrap()
+            .shape
             .waypoint_count,
         0
     );
@@ -428,7 +447,10 @@ fn spawn_waypoint_returns_none_at_cap() {
     let mut world = World::new();
     let effect = LightningEffect {
         position: Vector3::new(0.0, 8.0, 0.0),
-        end_offset: [0.0, -8.0, 0.0],
+        shape: LightningShape {
+            end_offset: [0.0, -8.0, 0.0],
+            ..LightningShape::default()
+        },
         ..LightningEffect::default()
     };
     let lightning = spawn_lightning(&mut world, DEFAULT_LIGHTNING_NAME, effect);

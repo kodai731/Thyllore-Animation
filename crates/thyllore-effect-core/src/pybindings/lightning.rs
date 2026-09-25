@@ -63,8 +63,8 @@ pub fn pack_lightning_ubo(
     let mut effect: LightningEffect =
         build_effect_from_params(py, params, time, position, rotation)?;
     let waypoint_count = waypoints.len().min(LIGHTNING_MAX_WAYPOINTS);
-    effect.waypoints[..waypoint_count].copy_from_slice(&waypoints[..waypoint_count]);
-    effect.waypoint_count = waypoint_count as u32;
+    effect.shape.waypoints[..waypoint_count].copy_from_slice(&waypoints[..waypoint_count]);
+    effect.shape.waypoint_count = waypoint_count as u32;
 
     let inv_view_proj = inverse_view_proj_from_column_major(view, proj);
     let (ubo, segments_ubo) = build_lightning_ubo(&effect, inv_view_proj);

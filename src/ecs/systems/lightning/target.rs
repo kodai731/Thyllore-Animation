@@ -22,7 +22,7 @@ pub fn resolve_lightning_target(world: &World, lightning: Entity) -> Option<Enti
 pub fn spawn_lightning_target(world: &mut World, lightning: Entity) -> Option<Entity> {
     let end_offset = world
         .get_component::<LightningEffect>(lightning)
-        .map(|effect| effect.end_offset)?;
+        .map(|effect| effect.shape.end_offset)?;
     let lightning_name = world
         .get_component::<Name>(lightning)
         .map(|name| name.0.clone())
@@ -60,7 +60,7 @@ pub fn follow_lightning_targets(world: &mut World) {
             continue;
         };
         if let Some(effect) = world.get_component_mut::<LightningEffect>(lightning) {
-            effect.end_offset = local_end.into();
+            effect.shape.end_offset = local_end.into();
         }
     }
 }

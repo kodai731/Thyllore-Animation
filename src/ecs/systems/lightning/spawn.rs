@@ -6,6 +6,7 @@ use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
 
 pub const DEFAULT_LIGHTNING_NAME: &str = "Lightning";
+pub const DEFAULT_LIGHTNING_PRESET: &str = "bolt";
 
 pub const LIGHTNING_SPAWN_HOOK: EffectSpawnHook = EffectSpawnHook {
     key: "lightning",
@@ -26,16 +27,19 @@ fn spawn_lightning_instance(
     assets: &mut AssetStorage,
     ordinal: usize,
 ) -> Entity {
-    let effect = LightningEffect {
+    let mut effect = LightningEffect {
         position: cgmath::Vector3::new(2.5 * ordinal as f32, 0.0, 0.0),
         ..LightningEffect::default()
     };
-    spawn_lightning_with_clip(
+    thyllore_effect_core::apply_lightning_preset(&mut effect, DEFAULT_LIGHTNING_PRESET);
+    let entity = spawn_lightning_with_clip(
         world,
         assets,
         &format!("{DEFAULT_LIGHTNING_NAME} {}", ordinal + 1),
         effect,
-    )
+    );
+    super::preset::record_lightning_preset(world, entity, DEFAULT_LIGHTNING_PRESET);
+    entity
 }
 
 pub fn spawn_lightning(world: &mut World, name: &str, effect: LightningEffect) -> Entity {

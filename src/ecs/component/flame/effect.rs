@@ -25,3 +25,15 @@ impl SceneComponent for AppliedFlameStyle {
 }
 
 crate::scene_attachment!(AppliedFlameStyle);
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AppliedFlamePreset {
+    pub name: String,
+}
+
+impl SceneComponent for AppliedFlamePreset {
+    const TYPE_KEY: &'static str = "flame_preset";
+    const PERSISTED_FIELDS: &'static [&'static str] = &["name"];
+}
+
+crate::scene_attachment!(AppliedFlamePreset);

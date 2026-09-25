@@ -25,7 +25,7 @@ pub fn adopt_lightning_child(world: &mut World, lightning: Entity, child: Entity
 pub fn spawn_lightning_waypoint(world: &mut World, lightning: Entity) -> Option<Entity> {
     let end_offset = world
         .get_component::<LightningEffect>(lightning)
-        .map(|effect| Vector3::from(effect.end_offset))?;
+        .map(|effect| Vector3::from(effect.shape.end_offset))?;
     let lightning_name = world
         .get_component::<Name>(lightning)
         .map(|name| name.0.clone())
@@ -90,10 +90,10 @@ pub fn follow_lightning_path(world: &mut World) {
         waypoints.truncate(LIGHTNING_MAX_WAYPOINTS);
 
         if let Some(effect) = world.get_component_mut::<LightningEffect>(lightning) {
-            for (slot, waypoint) in effect.waypoints.iter_mut().zip(&waypoints) {
+            for (slot, waypoint) in effect.shape.waypoints.iter_mut().zip(&waypoints) {
                 *slot = (*waypoint).into();
             }
-            effect.waypoint_count = waypoints.len() as u32;
+            effect.shape.waypoint_count = waypoints.len() as u32;
         }
     }
 }

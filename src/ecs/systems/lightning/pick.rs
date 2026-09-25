@@ -19,10 +19,10 @@ pub fn find_lightning_by_pick_ray(world: &World, ray: &PickRay) -> Option<(Entit
 
 fn strike_bounding_sphere(effect: &LightningEffect) -> (Vector3<f32>, f32) {
     let start = effect.position;
-    let end = start + Vector3::from(effect.end_offset);
+    let end = start + Vector3::from(effect.shape.end_offset);
 
-    let tip_radius = effect.core_radius * effect.tip_radius_ratio;
-    let sheath_radius = effect.core_radius.max(tip_radius) * effect.rim_ratio;
+    let tip_radius = effect.shape.core_radius * effect.shape.tip_radius_ratio;
+    let sheath_radius = effect.shape.core_radius.max(tip_radius) * effect.look.rim_ratio;
 
     let center = (start + end) * 0.5;
     let radius = (end - start).magnitude() * 0.5 + sheath_radius;

@@ -19,7 +19,7 @@ pub fn compute_total_segment_emission(segments: &[Segment]) -> f32 {
 
 /// Total emission of the alive segments multiplied by `flash_gain`.
 pub fn compute_flash_intensity(effect: &LightningEffect, segments: &[Segment]) -> f32 {
-    compute_total_segment_emission(segments) * effect.flash_gain
+    compute_total_segment_emission(segments) * effect.look.flash_gain
 }
 
 /// Flash veil centred on the screen box of the alive rim capsules, `flash_radius` box half-extents wide.
@@ -64,7 +64,7 @@ pub fn compute_lightning_flash(
     LightningFlash {
         intensity,
         center_uv: [(uv_min[0] + uv_max[0]) * 0.5, (uv_min[1] + uv_max[1]) * 0.5],
-        radius_uv: half_extent * effect.flash_radius,
+        radius_uv: half_extent * effect.look.flash_radius,
     }
 }
 
@@ -73,6 +73,7 @@ mod tests {
     use super::*;
     use crate::lightning::analytic::{build_lightning_segments, burst_start_time};
     use crate::lightning::build_lightning_model_matrix;
+    use crate::LightningShape;
 
     fn segment(a: [f32; 3], b: [f32; 3], intensity: f32) -> Segment {
         Segment {
@@ -89,10 +90,13 @@ mod tests {
     fn make_effect() -> LightningEffect {
         LightningEffect {
             position: cgmath::Vector3::new(0.0, 10.0, 0.0),
-            end_offset: [0.0, -10.0, 0.0],
-            core_radius: 0.5,
-            tip_radius_ratio: 0.2,
-            edge_fraction: 0.3,
+            shape: LightningShape {
+                end_offset: [0.0, -10.0, 0.0],
+                core_radius: 0.5,
+                tip_radius_ratio: 0.2,
+                edge_fraction: 0.3,
+                ..LightningShape::default()
+            },
             ..LightningEffect::default()
         }
     }
@@ -119,11 +123,11 @@ mod tests {
         ];
         let mut effect = make_effect();
 
-        effect.flash_gain = 1.0;
+        effect.look.flash_gain = 1.0;
         let unit = compute_flash_intensity(&effect, &segments);
-        effect.flash_gain = 2.5;
+        effect.look.flash_gain = 2.5;
         let scaled = compute_flash_intensity(&effect, &segments);
-        effect.flash_gain = 0.0;
+        effect.look.flash_gain = 0.0;
         let disabled = compute_flash_intensity(&effect, &segments);
 
         assert!((unit - 11.0).abs() < 1e-5, "unit gain {}", unit);
@@ -134,7 +138,7 @@ mod tests {
     #[test]
     fn test_flash_disabled_by_default_gain() {
         let mut effect = make_effect();
-        effect.time = burst_start_time(&effect, 0) + effect.attack_time;
+        effect.time = burst_start_time(&effect, 0) + effect.timing.attack_time;
         let segments = build_lightning_segments(&effect, effect.time);
         let model = build_lightning_model_matrix(&effect);
 
@@ -148,15 +152,15 @@ mod tests {
     fn test_flash_centered_on_projected_box() {
         let mut effect = make_effect();
         effect.position = cgmath::Vector3::new(0.0, 0.0, 0.0);
-        effect.flash_gain = 1.0;
-        effect.time = burst_start_time(&effect, 0) + effect.attack_time;
+        effect.look.flash_gain = 1.0;
+        effect.time = burst_start_time(&effect, 0) + effect.timing.attack_time;
         let segments = build_lightning_segments(&effect, effect.time);
         let model = build_lightning_model_matrix(&effect);
         let corners = compute_lightning_segment_aabb(&effect, effect.time).expect("alive segments");
         let (low, high) = (corners[0], corners[7]);
 
         let flash = compute_lightning_flash(&effect, &segments, &model, Matrix4::identity());
-        effect.flash_radius *= 2.0;
+        effect.look.flash_radius *= 2.0;
         let wider = compute_lightning_flash(&effect, &segments, &model, Matrix4::identity());
 
         let expected_center = [(low.x + high.x) * 0.25 + 0.5, (low.y + high.y) * 0.25 + 0.5];

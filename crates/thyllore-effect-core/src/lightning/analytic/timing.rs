@@ -1,18 +1,19 @@
-use crate::lightning::{hash_f32, HashChannel, LightningEffect};
+use crate::lightning::{HashChannel, LightningEffect};
+use thyllore_math_core::hash_f32;
 
 pub fn envelope_duration(effect: &LightningEffect) -> f32 {
-    effect.attack_time + effect.sustain_time + effect.release_time
+    effect.timing.attack_time + effect.timing.sustain_time + effect.timing.release_time
 }
 
 pub fn burst_start_time(effect: &LightningEffect, burst_index: u32) -> f32 {
-    let jitter = if effect.burst_jitter > 0.0 {
-        let noise = hash_f32(&[effect.seed, burst_index, HashChannel::Jitter.into()]);
-        effect.burst_jitter * (2.0 * noise - 1.0)
+    let jitter = if effect.timing.burst_jitter > 0.0 {
+        let noise = hash_f32(&[effect.timing.seed, burst_index, HashChannel::Jitter.into()]);
+        effect.timing.burst_jitter * (2.0 * noise - 1.0)
     } else {
         0.0
     };
 
-    effect.burst_start + burst_index as f32 * effect.burst_interval + jitter
+    effect.timing.burst_start + burst_index as f32 * effect.timing.burst_interval + jitter
 }
 
 /// Newest burst covering `t`, with its local time; `None` while no burst is alive.
@@ -22,14 +23,16 @@ pub fn active_burst(effect: &LightningEffect, t: f32) -> Option<(u32, f32)> {
         return None;
     }
 
-    let nearest_index = if effect.burst_interval > 0.0 {
-        ((t - effect.burst_start) / effect.burst_interval).floor() as i64
+    let nearest_index = if effect.timing.burst_interval > 0.0 {
+        ((t - effect.timing.burst_start) / effect.timing.burst_interval).floor() as i64
     } else {
         0
     };
 
     for candidate in [nearest_index + 1, nearest_index, nearest_index - 1] {
-        if candidate < 0 || (effect.burst_count > 0 && candidate >= effect.burst_count as i64) {
+        if candidate < 0
+            || (effect.timing.burst_count > 0 && candidate >= effect.timing.burst_count as i64)
+        {
             continue;
         }
 
@@ -48,18 +51,18 @@ pub fn envelope(effect: &LightningEffect, tau: f32) -> f32 {
         return 0.0;
     }
 
-    if tau < effect.attack_time {
-        return tau / effect.attack_time;
+    if tau < effect.timing.attack_time {
+        return tau / effect.timing.attack_time;
     }
 
-    let sustain_end = effect.attack_time + effect.sustain_time;
+    let sustain_end = effect.timing.attack_time + effect.timing.sustain_time;
     if tau < sustain_end {
         return 1.0;
     }
 
-    let release_end = sustain_end + effect.release_time;
+    let release_end = sustain_end + effect.timing.release_time;
     if tau < release_end {
-        return (release_end - tau) / effect.release_time;
+        return (release_end - tau) / effect.timing.release_time;
     }
 
     0.0
@@ -67,65 +70,69 @@ pub fn envelope(effect: &LightningEffect, tau: f32) -> f32 {
 
 pub fn stroke_intensity(effect: &LightningEffect, tau: f32) -> f32 {
     let burst_envelope = envelope(effect, tau);
-    if effect.stroke_count <= 1 || burst_envelope <= 0.0 {
+    if effect.timing.stroke_count <= 1 || burst_envelope <= 0.0 {
         return burst_envelope;
     }
 
     let mut strongest_stroke = 0.0f32;
     let mut decay = 1.0f32;
-    for stroke in 0..effect.stroke_count {
-        let stroke_tau = tau - stroke as f32 * effect.stroke_interval;
+    for stroke in 0..effect.timing.stroke_count {
+        let stroke_tau = tau - stroke as f32 * effect.timing.stroke_interval;
         strongest_stroke = strongest_stroke.max(decay * envelope(effect, stroke_tau));
-        decay *= effect.stroke_decay;
+        decay *= effect.timing.stroke_decay;
     }
 
     burst_envelope * strongest_stroke
 }
 
 pub fn flicker_factor(effect: &LightningEffect, seed: u32, burst_index: u32, tau: f32) -> f32 {
-    if effect.flicker_period <= 0.0 {
+    if effect.timing.flicker_period <= 0.0 {
         return 1.0;
     }
 
-    let tick = (tau / effect.flicker_period).floor().max(0.0) as u32;
+    let tick = (tau / effect.timing.flicker_period).floor().max(0.0) as u32;
     let noise = hash_f32(&[seed, burst_index, tick, HashChannel::Flicker.into()]);
-    1.0 - effect.flicker_amplitude * noise
+    1.0 - effect.timing.flicker_amplitude * noise
 }
 
 pub fn reseed_index(effect: &LightningEffect, tau: f32) -> u32 {
-    if effect.reseed_period <= 0.0 {
+    if effect.timing.reseed_period <= 0.0 {
         return 0;
     }
 
-    (tau / effect.reseed_period).floor().max(0.0) as u32
+    (tau / effect.timing.reseed_period).floor().max(0.0) as u32
 }
 
 pub fn charge_alive_strikes(effect: &LightningEffect, tau: f32) -> u32 {
-    if effect.charge_ramp <= 0.0 {
-        return effect.strikes_per_burst;
+    if effect.timing.charge_ramp <= 0.0 {
+        return effect.shape.strikes_per_burst;
     }
 
-    let charged = (tau / effect.charge_ramp).clamp(0.0, 1.0);
-    (effect.strikes_per_burst as f32 * charged) as u32
+    let charged = (tau / effect.timing.charge_ramp).clamp(0.0, 1.0);
+    (effect.shape.strikes_per_burst as f32 * charged) as u32
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::LightningTiming;
 
     fn test_effect() -> LightningEffect {
         LightningEffect {
-            seed: 17,
-            burst_start: 0.5,
-            burst_interval: 2.0,
-            burst_jitter: 0.0,
-            burst_count: 4,
-            attack_time: 0.01,
-            sustain_time: 0.04,
-            release_time: 0.12,
-            stroke_count: 1,
-            stroke_interval: 0.05,
-            stroke_decay: 0.6,
+            timing: LightningTiming {
+                seed: 17,
+                burst_start: 0.5,
+                burst_interval: 2.0,
+                burst_jitter: 0.0,
+                burst_count: 4,
+                attack_time: 0.01,
+                sustain_time: 0.04,
+                release_time: 0.12,
+                stroke_count: 1,
+                stroke_interval: 0.05,
+                stroke_decay: 0.6,
+                ..LightningTiming::default()
+            },
             ..LightningEffect::default()
         }
     }
@@ -136,14 +143,14 @@ mod tests {
         let epsilon = 1.0e-5;
 
         assert_eq!(envelope(&effect, 0.0), 0.0);
-        assert!((envelope(&effect, effect.attack_time - epsilon) - 1.0).abs() < 1.0e-2);
-        assert_eq!(envelope(&effect, effect.attack_time), 1.0);
+        assert!((envelope(&effect, effect.timing.attack_time - epsilon) - 1.0).abs() < 1.0e-2);
+        assert_eq!(envelope(&effect, effect.timing.attack_time), 1.0);
 
-        let sustain_end = effect.attack_time + effect.sustain_time;
+        let sustain_end = effect.timing.attack_time + effect.timing.sustain_time;
         assert_eq!(envelope(&effect, sustain_end - epsilon), 1.0);
         assert!((envelope(&effect, sustain_end + epsilon) - 1.0).abs() < 1.0e-2);
 
-        let release_end = sustain_end + effect.release_time;
+        let release_end = sustain_end + effect.timing.release_time;
         assert!(envelope(&effect, release_end - epsilon) < 1.0e-2);
         assert_eq!(envelope(&effect, release_end), 0.0);
         assert_eq!(envelope(&effect, release_end + 1.0), 0.0);
@@ -152,15 +159,16 @@ mod tests {
     #[test]
     fn test_zero_attack_reaches_full_intensity_immediately() {
         let mut effect = test_effect();
-        effect.attack_time = 0.0;
+        effect.timing.attack_time = 0.0;
         assert_eq!(envelope(&effect, 0.0), 1.0);
     }
 
     #[test]
     fn test_bursts_are_evenly_spaced_without_jitter() {
         let effect = test_effect();
-        for burst_index in 0..effect.burst_count {
-            let expected = effect.burst_start + burst_index as f32 * effect.burst_interval;
+        for burst_index in 0..effect.timing.burst_count {
+            let expected =
+                effect.timing.burst_start + burst_index as f32 * effect.timing.burst_interval;
             assert!((burst_start_time(&effect, burst_index) - expected).abs() < 1.0e-6);
         }
     }
@@ -168,11 +176,12 @@ mod tests {
     #[test]
     fn test_jitter_shifts_bursts_within_its_bound() {
         let mut effect = test_effect();
-        effect.burst_jitter = 0.2;
-        for burst_index in 0..effect.burst_count {
-            let unjittered = effect.burst_start + burst_index as f32 * effect.burst_interval;
+        effect.timing.burst_jitter = 0.2;
+        for burst_index in 0..effect.timing.burst_count {
+            let unjittered =
+                effect.timing.burst_start + burst_index as f32 * effect.timing.burst_interval;
             let shift = burst_start_time(&effect, burst_index) - unjittered;
-            assert!(shift.abs() <= effect.burst_jitter, "{shift}");
+            assert!(shift.abs() <= effect.timing.burst_jitter, "{shift}");
         }
     }
 
@@ -195,10 +204,11 @@ mod tests {
     #[test]
     fn test_bursts_stop_after_the_count_and_repeat_forever_when_zero() {
         let mut effect = test_effect();
-        let after_last = effect.burst_start + effect.burst_count as f32 * effect.burst_interval;
+        let after_last = effect.timing.burst_start
+            + effect.timing.burst_count as f32 * effect.timing.burst_interval;
         assert_eq!(active_burst(&effect, after_last), None);
 
-        effect.burst_count = 0;
+        effect.timing.burst_count = 0;
         assert_eq!(active_burst(&effect, after_last).map(|(k, _)| k), Some(4));
         assert_eq!(
             active_burst(&effect, after_last + 200.0).map(|(k, _)| k),
@@ -209,11 +219,11 @@ mod tests {
     #[test]
     fn test_strokes_decay_monotonically() {
         let mut effect = test_effect();
-        effect.stroke_count = 4;
+        effect.timing.stroke_count = 4;
 
         let mut previous = f32::INFINITY;
-        for stroke in 0..effect.stroke_count {
-            let tau = effect.attack_time + stroke as f32 * effect.stroke_interval;
+        for stroke in 0..effect.timing.stroke_count {
+            let tau = effect.timing.attack_time + stroke as f32 * effect.timing.stroke_interval;
             let intensity = stroke_intensity(&effect, tau);
             assert!(intensity < previous, "stroke {stroke} gave {intensity}");
             previous = intensity;
@@ -232,8 +242,8 @@ mod tests {
     #[test]
     fn test_flicker_stays_within_its_amplitude_and_holds_over_a_period() {
         let mut effect = test_effect();
-        effect.flicker_amplitude = 0.25;
-        effect.flicker_period = 0.03;
+        effect.timing.flicker_amplitude = 0.25;
+        effect.timing.flicker_period = 0.03;
 
         let inside_first_period = flicker_factor(&effect, 17, 0, 0.001);
         assert_eq!(flicker_factor(&effect, 17, 0, 0.029), inside_first_period);
@@ -242,36 +252,36 @@ mod tests {
         for step in 0..64 {
             let factor = flicker_factor(&effect, 17, 0, step as f32 * 0.005);
             assert!(
-                (1.0 - effect.flicker_amplitude..=1.0).contains(&factor),
+                (1.0 - effect.timing.flicker_amplitude..=1.0).contains(&factor),
                 "{factor}"
             );
         }
 
-        effect.flicker_period = 0.0;
+        effect.timing.flicker_period = 0.0;
         assert_eq!(flicker_factor(&effect, 17, 0, 0.05), 1.0);
     }
 
     #[test]
     fn test_reseed_index_advances_once_per_period() {
         let mut effect = test_effect();
-        effect.reseed_period = 0.25;
+        effect.timing.reseed_period = 0.25;
         assert_eq!(reseed_index(&effect, 0.0), 0);
         assert_eq!(reseed_index(&effect, 0.24), 0);
         assert_eq!(reseed_index(&effect, 0.26), 1);
         assert_eq!(reseed_index(&effect, 1.1), 4);
 
-        effect.reseed_period = 0.0;
+        effect.timing.reseed_period = 0.0;
         assert_eq!(reseed_index(&effect, 10.0), 0);
     }
 
     #[test]
     fn test_charge_ramp_reveals_strikes_progressively() {
         let mut effect = test_effect();
-        effect.strikes_per_burst = 4;
-        effect.charge_ramp = 0.0;
+        effect.shape.strikes_per_burst = 4;
+        effect.timing.charge_ramp = 0.0;
         assert_eq!(charge_alive_strikes(&effect, 0.0), 4);
 
-        effect.charge_ramp = 0.4;
+        effect.timing.charge_ramp = 0.4;
         assert_eq!(charge_alive_strikes(&effect, 0.0), 0);
         assert_eq!(charge_alive_strikes(&effect, 0.2), 2);
         assert_eq!(charge_alive_strikes(&effect, 0.4), 4);
@@ -282,11 +292,11 @@ mod tests {
     fn test_timing_is_bit_reproducible() {
         let effect = {
             let mut effect = test_effect();
-            effect.burst_jitter = 0.2;
+            effect.timing.burst_jitter = 0.2;
             effect
         };
 
-        for burst_index in 0..effect.burst_count {
+        for burst_index in 0..effect.timing.burst_count {
             let first = burst_start_time(&effect, burst_index);
             assert_eq!(
                 first.to_bits(),
@@ -294,10 +304,10 @@ mod tests {
             );
         }
 
-        let flicker = flicker_factor(&effect, effect.seed, 2, 0.07);
+        let flicker = flicker_factor(&effect, effect.timing.seed, 2, 0.07);
         assert_eq!(
             flicker.to_bits(),
-            flicker_factor(&effect, effect.seed, 2, 0.07).to_bits()
+            flicker_factor(&effect, effect.timing.seed, 2, 0.07).to_bits()
         );
         assert_eq!(
             stroke_intensity(&effect, 0.03).to_bits(),

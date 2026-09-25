@@ -325,6 +325,17 @@ declare_scene_format! {
                 group: "look",
             },
         },
+        end_variance: f32 {
+            get: |e| e.end_variance,
+            set: |e, v| e.end_variance = v,
+            ui {
+                min: 0.0,
+                max: 4.0,
+                format: "%.2f",
+                tooltip: "Radius each discharge scatters its end point by, across the bolt's direction",
+                group: "shape",
+            },
+        },
         burst_start: f32 {
             get: |e| e.burst_start,
             set: |e, v| e.burst_start = v,

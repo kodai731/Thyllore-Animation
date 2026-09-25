@@ -47,6 +47,17 @@ pub fn build_lightning_segments(effect: &LightningEffect, t: f32) -> Vec<Segment
         charged.strikes_per_burst = timing::charge_alive_strikes(effect, tau);
     }
 
+    if effect.end_variance > 0.0 {
+        let azimuth_hash = hash_f32(&[effect.seed, k, HashChannel::EndVariance.into(), 0]);
+        let radius_hash = hash_f32(&[effect.seed, k, HashChannel::EndVariance.into(), 1]);
+        charged.end_offset = scatter_end_offset(
+            charged.end_offset,
+            effect.end_variance,
+            azimuth_hash,
+            radius_hash,
+        );
+    }
+
     let mut segments = build_strike_segments(&charged, burst_seed, reseed);
 
     for seg in &mut segments {
@@ -73,6 +84,24 @@ fn perpendicular_basis(dir: [f32; 3]) -> ([f32; 3], [f32; 3]) {
 
     let v = axis.cross(u);
     (u.into(), v.into())
+}
+
+fn scatter_end_offset(
+    end_offset: [f32; 3],
+    variance: f32,
+    azimuth_hash: f32,
+    radius_hash: f32,
+) -> [f32; 3] {
+    let (u, v) = perpendicular_basis(end_offset);
+    let azimuth = azimuth_hash * std::f32::consts::TAU;
+    let radius = variance * radius_hash.sqrt();
+    let offset_x = radius * azimuth.cos();
+    let offset_y = radius * azimuth.sin();
+    [
+        end_offset[0] + u[0] * offset_x + v[0] * offset_y,
+        end_offset[1] + u[1] * offset_x + v[1] * offset_y,
+        end_offset[2] + u[2] * offset_x + v[2] * offset_y,
+    ]
 }
 
 fn rotate_around_axis(v: [f32; 3], axis: [f32; 3], angle: f32) -> [f32; 3] {
@@ -954,6 +983,67 @@ mod tests {
             build_lightning_segments(&effect, effect.time).len(),
             alive as usize,
             "one straight segment per alive strike"
+        );
+    }
+
+    fn straight_point_effect(end_variance: f32) -> LightningEffect {
+        let mut effect = LightningEffect::default();
+        effect.source = LightningSource::Point;
+        effect.end_offset = [0.0, -6.0, 0.0];
+        effect.detail_levels = 0;
+        effect.branch_count = 0.0;
+        effect.burst_count = 2;
+        effect.end_variance = end_variance;
+        effect
+    }
+
+    fn strike_end_at(
+        effect: &LightningEffect,
+        burst_index: u32,
+        sustain_fraction: f32,
+    ) -> [f32; 3] {
+        let tau = effect.attack_time + effect.sustain_time * sustain_fraction;
+        let t = timing::burst_start_time(effect, burst_index) + tau;
+        let segments = build_lightning_segments(effect, t);
+        segments.last().expect("a burst must produce segments").b
+    }
+
+    #[test]
+    fn test_scatter_end_offset_zero_variance_keeps_end_offset() {
+        let end_offset = [0.3, -5.0, 1.2];
+        assert_eq!(scatter_end_offset(end_offset, 0.0, 0.4, 0.9), end_offset);
+
+        let effect = straight_point_effect(0.0);
+        let end = strike_end_at(&effect, 0, 0.5);
+        assert!(length(difference(end, effect.end_offset)) < 1e-5, "{end:?}");
+    }
+
+    #[test]
+    fn test_scatter_end_offset_stays_within_perpendicular_disk() {
+        let end_offset = [0.3, -5.0, 1.2];
+        let variance = 2.5;
+        for azimuth_hash in [0.0, 0.2, 0.55, 0.99] {
+            for radius_hash in [0.0, 0.3, 1.0] {
+                let scattered = scatter_end_offset(end_offset, variance, azimuth_hash, radius_hash);
+                let shift = difference(scattered, end_offset);
+                assert!(dot(shift, end_offset).abs() < 1e-4, "{shift:?}");
+                assert!(length(shift) <= variance + 1e-5, "{shift:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_end_variance_changes_per_burst_and_holds_within_a_burst() {
+        let effect = straight_point_effect(2.0);
+
+        let early = strike_end_at(&effect, 0, 0.25);
+        let late = strike_end_at(&effect, 0, 0.75);
+        let next_burst = strike_end_at(&effect, 1, 0.25);
+
+        assert_eq!(early, late, "end point must not move during a discharge");
+        assert!(
+            length(difference(early, next_burst)) > 1e-4,
+            "{early:?} {next_burst:?}"
         );
     }
 

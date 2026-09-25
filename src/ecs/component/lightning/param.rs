@@ -54,10 +54,11 @@ pub enum LightningParam {
     ReseedLevel,
     ReseedPeriod,
     ChargeRamp,
+    EndVariance,
 }
 
 impl LightningParam {
-    pub const ALL: [LightningParam; 47] = [
+    pub const ALL: [LightningParam; 48] = [
         LightningParam::EndOffsetX,
         LightningParam::EndOffsetY,
         LightningParam::EndOffsetZ,
@@ -105,6 +106,7 @@ impl LightningParam {
         LightningParam::ReseedLevel,
         LightningParam::ReseedPeriod,
         LightningParam::ChargeRamp,
+        LightningParam::EndVariance,
     ];
 
     pub const fn code(self) -> u16 {
@@ -156,6 +158,7 @@ impl LightningParam {
             LightningParam::ReseedLevel => 809,
             LightningParam::ReseedPeriod => 810,
             LightningParam::ChargeRamp => 811,
+            LightningParam::EndVariance => 815,
         }
     }
 
@@ -226,6 +229,7 @@ impl LightningParam {
             LightningParam::ReseedLevel => "Reseed Level",
             LightningParam::ReseedPeriod => "Reseed Period",
             LightningParam::ChargeRamp => "Charge Ramp",
+            LightningParam::EndVariance => "End Variance",
         }
     }
 
@@ -278,6 +282,7 @@ impl LightningParam {
             LightningParam::ReseedLevel => "reseed_level",
             LightningParam::ReseedPeriod => "reseed_period",
             LightningParam::ChargeRamp => "charge_ramp",
+            LightningParam::EndVariance => "end_variance",
         }
     }
 
@@ -337,6 +342,7 @@ impl LightningParam {
             LightningParam::ReseedLevel => "ReseedLevel",
             LightningParam::ReseedPeriod => "ReseedPeriod",
             LightningParam::ChargeRamp => "ChargeRamp",
+            LightningParam::EndVariance => "EndVariance",
         }
     }
 
@@ -389,6 +395,7 @@ impl LightningParam {
             LightningParam::ReseedLevel => (0.0, 8.0),
             LightningParam::ReseedPeriod => (0.01, 10.0),
             LightningParam::ChargeRamp => (0.0, 2.0),
+            LightningParam::EndVariance => (0.0, 4.0),
         }
     }
 

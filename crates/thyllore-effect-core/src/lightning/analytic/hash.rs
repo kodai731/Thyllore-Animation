@@ -9,6 +9,7 @@ pub enum HashChannel {
     SourcePoint,
     Flicker,
     Reseed,
+    EndVariance,
 }
 
 impl From<HashChannel> for u32 {
@@ -23,6 +24,7 @@ impl From<HashChannel> for u32 {
             HashChannel::SourcePoint => 6,
             HashChannel::Flicker => 7,
             HashChannel::Reseed => 8,
+            HashChannel::EndVariance => 9,
         }
     }
 }
@@ -89,6 +91,7 @@ mod tests {
             HashChannel::SourcePoint,
             HashChannel::Flicker,
             HashChannel::Reseed,
+            HashChannel::EndVariance,
         ]
         .into_iter()
         .map(u32::from)

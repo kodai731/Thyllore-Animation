@@ -4,8 +4,8 @@ use super::effect::{
 };
 use crate::lightning::{
     apply_lightning_preset, build_lightning_ubo, overwrite_lightning_persisted_fields,
-    LightningEffect, LightningSegmentsUBO, LightningUBO, LIGHTNING_PRESET_NAMES,
-    LIGHTNING_UI_PARAMS,
+    LightningEffect, LightningSegmentsUBO, LightningUBO, LIGHTNING_MAX_WAYPOINTS,
+    LIGHTNING_PRESET_NAMES, LIGHTNING_UI_PARAMS,
 };
 use cgmath::{Quaternion, Vector3};
 use pyo3::prelude::*;
@@ -48,7 +48,7 @@ declare_effect_pyfunctions! {
 }
 
 #[pyfunction]
-#[pyo3(signature = (params, time, position, rotation, view, proj))]
+#[pyo3(signature = (params, time, position, rotation, view, proj, waypoints=Vec::new()))]
 pub fn pack_lightning_ubo(
     py: Python<'_>,
     params: &Bound<'_, PyDict>,
@@ -57,8 +57,14 @@ pub fn pack_lightning_ubo(
     rotation: [f32; 4],
     view: [f32; 16],
     proj: [f32; 16],
+    waypoints: Vec<[f32; 3]>,
 ) -> PyResult<(Vec<u8>, Vec<u8>, u32)> {
-    let effect: LightningEffect = build_effect_from_params(py, params, time, position, rotation)?;
+    let mut effect: LightningEffect =
+        build_effect_from_params(py, params, time, position, rotation)?;
+    let waypoint_count = waypoints.len().min(LIGHTNING_MAX_WAYPOINTS);
+    effect.waypoints[..waypoint_count].copy_from_slice(&waypoints[..waypoint_count]);
+    effect.waypoint_count = waypoint_count as u32;
+
     let inv_view_proj = inverse_view_proj_from_column_major(view, proj);
     let (ubo, segments_ubo) = build_lightning_ubo(&effect, inv_view_proj);
     let count = ubo.shape[2] as u32;

@@ -383,6 +383,7 @@ fn test_lightning_preset_names_and_pack() {
             [1.0f32, 0.0f32, 0.0f32, 0.0f32],
             identity_column_major,
             identity_column_major,
+            Vec::new(),
         )
         .unwrap();
 
@@ -399,6 +400,68 @@ fn test_lightning_preset_names_and_pack() {
         assert!(
             segment_count >= 1,
             "segment count should be >= 1 during sustain"
+        );
+    });
+}
+
+#[test]
+fn test_lightning_waypoints_reshape_the_main_channel() {
+    Python::attach(|py| {
+        let preset_dict: Bound<'_, PyDict> = super::lightning_preset_params(py, "bolt").unwrap();
+        let identity_column_major: [f32; 16] = *cgmath::Matrix4::<f32>::identity().as_ref();
+        let pack_with_waypoints = |waypoints: Vec<[f32; 3]>| {
+            super::pack_lightning_ubo(
+                py,
+                &preset_dict,
+                0.4f32,
+                [0.0f32, 0.0f32, 0.0f32],
+                [1.0f32, 0.0f32, 0.0f32, 0.0f32],
+                identity_column_major,
+                identity_column_major,
+                waypoints,
+            )
+            .unwrap()
+        };
+
+        let effect: crate::lightning::LightningEffect = super::effect::build_effect_from_params(
+            py,
+            &preset_dict,
+            0.4f32,
+            [0.0f32, 0.0f32, 0.0f32],
+            [1.0f32, 0.0f32, 0.0f32, 0.0f32],
+        )
+        .unwrap();
+        let inv_view_proj = super::effect::inverse_view_proj_from_column_major(
+            identity_column_major,
+            identity_column_major,
+        );
+        let (baseline_ubo, baseline_segments) =
+            crate::lightning::build_lightning_ubo(&effect, inv_view_proj);
+        let baseline = (
+            super::effect::gpu_block_bytes(&baseline_ubo),
+            super::effect::gpu_block_bytes(&baseline_segments),
+            baseline_ubo.shape[2] as u32,
+        );
+        assert_eq!(
+            pack_with_waypoints(Vec::new()),
+            baseline,
+            "empty waypoints must pack the same bytes as the waypoint-free effect"
+        );
+
+        let (_, empty_segments, empty_count) = pack_with_waypoints(Vec::new());
+        let (_, waypoint_segments, waypoint_count) =
+            pack_with_waypoints(vec![[4.0, -3.0, 2.0], [-4.0, -6.0, -2.0]]);
+        let first_segment_end_offset = 16 * crate::lightning::LIGHTNING_MAX_SEGMENTS;
+        let first_segment = |segments: &[u8]| {
+            [
+                segments[..16].to_vec(),
+                segments[first_segment_end_offset..first_segment_end_offset + 16].to_vec(),
+            ]
+        };
+        assert!(
+            waypoint_count != empty_count
+                || first_segment(&waypoint_segments) != first_segment(&empty_segments),
+            "waypoints must change the segment count or the first segment"
         );
     });
 }

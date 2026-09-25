@@ -616,31 +616,16 @@ fn build_wind_section(
         return;
     };
     let mut effect_copy = effect.clone();
-    let mut drawn_groups: Vec<&str> = Vec::new();
-    for group in thyllore_effect_core::WIND_UI_PARAMS
-        .iter()
-        .map(|param| param.group)
-        .filter(|group| !group.is_empty())
-    {
-        if drawn_groups.contains(&group) {
-            continue;
-        }
-        drawn_groups.push(group);
-
-        let names: Vec<&str> = thyllore_effect_core::WIND_UI_PARAMS
-            .iter()
-            .filter(|param| param.group == group)
-            .map(|param| param.name)
-            .collect();
-        draw_params(
-            ui,
-            &names,
-            thyllore_effect_core::WIND_UI_PARAMS,
-            thyllore_effect_core::WIND_SCALAR_PARAMS,
-            &mut effect_copy,
-            |ui, edited| wind_key_button(ui, ui_events, edited),
-        );
-    }
+    let params_id = ui.push_id("wind_params");
+    draw_tiered_params(
+        ui,
+        thyllore_effect_core::WIND_UI_PARAMS,
+        &thyllore_effect_core::WIND_SCALAR_PARAMS,
+        &mut effect_copy,
+        &[],
+        |ui, edited| wind_key_button(ui, ui_events, edited),
+    );
+    params_id.end();
     if !effect_applied_this_frame {
         ui_events.send(UIEvent::UpdateWindEffect(Box::new(effect_copy)));
     }
@@ -948,31 +933,16 @@ fn build_water_section(
                 if let Some(effect) = ecs_world.get_component::<WaterTorusEffect>(selected_water) {
                     let mut effect_copy = effect.clone();
 
-                    let mut drawn_groups: Vec<&str> = Vec::new();
-                    for group in thyllore_effect_core::WATER_UI_PARAMS
-                        .iter()
-                        .map(|param| param.group)
-                        .filter(|group| !group.is_empty())
-                    {
-                        if drawn_groups.contains(&group) {
-                            continue;
-                        }
-                        drawn_groups.push(group);
-
-                        let names: Vec<&str> = thyllore_effect_core::WATER_UI_PARAMS
-                            .iter()
-                            .filter(|param| param.group == group)
-                            .map(|param| param.name)
-                            .collect();
-                        draw_params(
-                            ui,
-                            &names,
-                            thyllore_effect_core::WATER_UI_PARAMS,
-                            thyllore_effect_core::WATER_SCALAR_PARAMS,
-                            &mut effect_copy,
-                            |ui, edited| water_key_button(ui, ui_events, edited),
-                        );
-                    }
+                    let params_id = ui.push_id("water_params");
+                    draw_tiered_params(
+                        ui,
+                        thyllore_effect_core::WATER_UI_PARAMS,
+                        &thyllore_effect_core::WATER_SCALAR_PARAMS,
+                        &mut effect_copy,
+                        &[],
+                        |ui, edited| water_key_button(ui, ui_events, edited),
+                    );
+                    params_id.end();
 
                     if !effect_applied_this_frame {
                         ui_events.send(UIEvent::UpdateWaterEffect(Box::new(effect_copy)));

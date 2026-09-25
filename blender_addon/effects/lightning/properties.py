@@ -9,6 +9,28 @@ merge_preset_params = effect_properties.merge_preset_params
 select_exposed_params = effect_properties.select_exposed_params
 
 
+def build_waypoint_property_group():
+    import bpy
+
+    class ThylloreLightningWaypoint(bpy.types.PropertyGroup):
+        target: bpy.props.PointerProperty(type=bpy.types.Object)
+
+    return ThylloreLightningWaypoint
+
+
+def waypoint_midpoint(previous, end):
+    return tuple((a + b) * 0.5 for a, b in zip(previous, end))
+
+
+def waypoint_local_points(lightning_obj):
+    world_to_local = lightning_obj.matrix_world.inverted()
+    return [
+        world_to_local @ waypoint.target.matrix_world.translation
+        for waypoint in lightning_obj.thyllore_lightning_waypoints
+        if waypoint.target is not None
+    ]
+
+
 def lightning_default_preset() -> str:
     import thyllore_effect_core as fx
 

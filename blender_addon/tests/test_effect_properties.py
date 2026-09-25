@@ -8,6 +8,7 @@ from blender_addon.common.effect_properties import (
     offset_param_names,
     split_primary_params,
 )
+from blender_addon.effects.lightning.properties import waypoint_midpoint
 
 
 def test_split_primary_params_declaration_order():
@@ -149,3 +150,8 @@ def test_non_offset_values_unchanged():
     engine = convert_offsets_to_engine(blender, ["end_offset"])
     assert engine["intensity"] == 2.5
     assert engine["duration"] == 3.0
+
+
+def test_waypoint_midpoint():
+    """Midpoint of two Blender-axis tuples."""
+    assert waypoint_midpoint((0.0, 0.0, 0.0), (2.0, 4.0, 6.0)) == (1.0, 2.0, 3.0)

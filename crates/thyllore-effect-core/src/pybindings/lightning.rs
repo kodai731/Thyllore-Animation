@@ -43,6 +43,7 @@ declare_effect_pyfunctions! {
     extra: [
         pack_lightning_ubo,
         lightning_ubo_size,
+        lightning_max_waypoints,
         lightning_segments_ubo_size,
     ]
 }
@@ -74,6 +75,11 @@ pub fn pack_lightning_ubo(
 #[pyfunction]
 pub fn lightning_ubo_size() -> usize {
     std::mem::size_of::<LightningUBO>()
+}
+
+#[pyfunction]
+pub fn lightning_max_waypoints() -> usize {
+    LIGHTNING_MAX_WAYPOINTS
 }
 
 #[pyfunction]

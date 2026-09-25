@@ -6,7 +6,6 @@ module lightning_integral;
 import "lightning/include/component.slang";
 import "include/volume_capsule.slang";
 
-public static const int LIGHTNING_MAX_SEGMENTS = 256;
 
 public float lightningRimRatio() {
     return lightning.shape.x;

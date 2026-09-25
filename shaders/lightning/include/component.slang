@@ -15,10 +15,12 @@ public struct LightningUBO {
 
 [[vk::binding(0, 1)]] public ConstantBuffer<LightningUBO> lightning;
 
+public static const int LIGHTNING_MAX_SEGMENTS = 256;
+
 public struct LightningSegmentsUBO {
-    public float4 seg_a_r0[256];
-    public float4 seg_b_r1[256];
-    public float4 seg_misc[256];
+    public float4 seg_a_r0[LIGHTNING_MAX_SEGMENTS];
+    public float4 seg_b_r1[LIGHTNING_MAX_SEGMENTS];
+    public float4 seg_misc[LIGHTNING_MAX_SEGMENTS];
 };
 
 [[vk::binding(1, 1)]] public ConstantBuffer<LightningSegmentsUBO> segments;

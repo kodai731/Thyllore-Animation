@@ -1,4 +1,6 @@
-use crate::lightning::analytic::{build_lightning_segments, compute_lightning_flash};
+use crate::lightning::analytic::{
+    build_lightning_segments, compute_lightning_flash, LIGHTNING_MAX_SEGMENTS,
+};
 use crate::lightning::gpu::components::{LightningSegmentsUBO, LightningUBO};
 use crate::lightning::{build_lightning_model_matrix, LightningEffect};
 use cgmath::{Matrix4, SquareMatrix};
@@ -13,11 +15,11 @@ pub fn build_lightning_ubo(
     let segments = build_lightning_segments(effect, effect.time);
     let count = segments.len();
 
-    let mut seg_a_r0: [[f32; 4]; 256] = [[0.0; 4]; 256];
-    let mut seg_b_r1: [[f32; 4]; 256] = [[0.0; 4]; 256];
-    let mut seg_misc: [[f32; 4]; 256] = [[0.0; 4]; 256];
+    let mut seg_a_r0: [[f32; 4]; LIGHTNING_MAX_SEGMENTS] = [[0.0; 4]; LIGHTNING_MAX_SEGMENTS];
+    let mut seg_b_r1: [[f32; 4]; LIGHTNING_MAX_SEGMENTS] = [[0.0; 4]; LIGHTNING_MAX_SEGMENTS];
+    let mut seg_misc: [[f32; 4]; LIGHTNING_MAX_SEGMENTS] = [[0.0; 4]; LIGHTNING_MAX_SEGMENTS];
 
-    for (i, seg) in segments.iter().take(256).enumerate() {
+    for (i, seg) in segments.iter().take(LIGHTNING_MAX_SEGMENTS).enumerate() {
         seg_a_r0[i] = [seg.a[0], seg.a[1], seg.a[2], seg.r0];
         seg_b_r1[i] = [seg.b[0], seg.b[1], seg.b[2], seg.r1];
         let edge_width_q = effect.edge_fraction * seg.r0 * seg.r0;
@@ -94,7 +96,7 @@ mod tests {
             ubo.shape[2]
         );
 
-        for i in 0..256 {
+        for i in 0..LIGHTNING_MAX_SEGMENTS {
             assert_eq!(
                 segments.seg_a_r0[i], [0.0; 4],
                 "seg_a_r0[{}] should be zero",
@@ -130,7 +132,7 @@ mod tests {
             );
         }
 
-        for i in count..256 {
+        for i in count..LIGHTNING_MAX_SEGMENTS {
             assert_eq!(
                 segments.seg_a_r0[i], [0.0; 4],
                 "seg_a_r0[{}] should be zero",
@@ -167,7 +169,7 @@ mod tests {
         let (ubo2, segments2) = build_lightning_ubo(&effect, Matrix4::identity());
 
         assert_eq!(ubo1.shape, ubo2.shape, "shape differs");
-        for i in 0..256 {
+        for i in 0..LIGHTNING_MAX_SEGMENTS {
             assert_eq!(
                 segments1.seg_a_r0[i], segments2.seg_a_r0[i],
                 "seg_a_r0 differs at {}",
@@ -231,6 +233,15 @@ mod tests {
             "shape.z should be segment count {}: {}",
             expected_count,
             ubo.shape[2]
+        );
+    }
+
+    #[test]
+    fn test_ubo_size_matches_max_segments() {
+        assert_eq!(
+            std::mem::size_of::<LightningSegmentsUBO>(),
+            3 * 16 * LIGHTNING_MAX_SEGMENTS,
+            "LightningSegmentsUBO size should match 3 * 16 * LIGHTNING_MAX_SEGMENTS"
         );
     }
 }

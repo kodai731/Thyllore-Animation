@@ -23,9 +23,6 @@ const OVERLAY_WIDTH: f32 = 420.0;
 
 pub struct SceneOverlayState {
     pub model: ModelState,
-    pub water_preset_index: usize,
-    pub wind_preset_index: usize,
-    pub lightning_preset_index: usize,
     #[cfg(feature = "auto-rig")]
     pub open_text_to_mesh_dialog: bool,
     #[cfg(feature = "auto-rig")]
@@ -525,6 +522,7 @@ fn build_wind_section(
     if !ui.collapsing_header("Wind", imgui::TreeNodeFlags::empty()) {
         return;
     }
+    let _section_id = ui.push_id("wind");
 
     if ui.button("Add Wind") {
         ui_events.send(UIEvent::AddEffect(WIND_SPAWN_HOOK.key));
@@ -558,9 +556,9 @@ fn build_wind_section(
         .iter()
         .map(|s| s.to_string())
         .collect();
-    let mut preset_index = overlay_state.wind_preset_index;
+    let mut preset_index = overlay_state.model.wind_preset_index;
     let preset_changed = ui.combo_simple_string("Wind Preset", &mut preset_index, &presets);
-    overlay_state.wind_preset_index = preset_index;
+    overlay_state.model.wind_preset_index = preset_index;
     let mut effect_applied_this_frame = false;
     if preset_changed && selected_wind_entity.is_some() {
         ui_events.send(UIEvent::ClearScalarKeys);
@@ -575,7 +573,6 @@ fn build_wind_section(
         return;
     };
     let mut effect_copy = effect.clone();
-    let params_id = ui.push_id("wind_params");
     draw_tiered_params(
         ui,
         thyllore_effect_core::WIND_UI_PARAMS,
@@ -584,7 +581,6 @@ fn build_wind_section(
         &[],
         |ui, edited| wind_key_button(ui, ui_events, edited),
     );
-    params_id.end();
     if !effect_applied_this_frame {
         ui_events.send(UIEvent::UpdateWindEffect(Box::new(effect_copy)));
     }
@@ -660,6 +656,7 @@ fn build_lightning_section(
     if !ui.collapsing_header("Lightning", imgui::TreeNodeFlags::empty()) {
         return;
     }
+    let _section_id = ui.push_id("lightning");
 
     if ui.button("Add Lightning") {
         ui_events.send(UIEvent::AddEffect(LIGHTNING_SPAWN_HOOK.key));
@@ -693,9 +690,9 @@ fn build_lightning_section(
         .iter()
         .map(|s| s.to_string())
         .collect();
-    let mut preset_index = overlay_state.lightning_preset_index;
+    let mut preset_index = overlay_state.model.lightning_preset_index;
     let preset_changed = ui.combo_simple_string("Lightning Preset", &mut preset_index, &presets);
-    overlay_state.lightning_preset_index = preset_index;
+    overlay_state.model.lightning_preset_index = preset_index;
     let mut effect_applied_this_frame = false;
     if preset_changed && selected_entity.is_some() {
         ui_events.send(UIEvent::ClearScalarKeys);
@@ -724,7 +721,6 @@ fn build_lightning_section(
         );
     }
 
-    let params_id = ui.push_id("lightning_params");
     draw_tiered_params(
         ui,
         thyllore_effect_core::LIGHTNING_UI_PARAMS,
@@ -733,7 +729,6 @@ fn build_lightning_section(
         &["end_offset"],
         |ui, edited| lightning_key_button(ui, ui_events, edited),
     );
-    params_id.end();
 
     if !effect_applied_this_frame {
         ui_events.send(UIEvent::UpdateLightningEffect(Box::new(effect_copy)));
@@ -869,6 +864,7 @@ fn build_water_section(
     use crate::ecs::component::WaterTorusEffect;
 
     if ui.collapsing_header("Water", imgui::TreeNodeFlags::empty()) {
+        let _section_id = ui.push_id("water");
         // Add Water button (before instance selector, accessible even when no water exists)
         if ui.button("Add Water") {
             ui_events.send(UIEvent::AddEffect(WATER_SPAWN_HOOK.key));
@@ -908,10 +904,10 @@ fn build_water_section(
             .collect();
         let mut effect_applied_this_frame = false;
         {
-            let mut preset_index = overlay_state.water_preset_index;
+            let mut preset_index = overlay_state.model.water_preset_index;
             let preset_changed =
                 ui.combo_simple_string("Water Preset", &mut preset_index, &presets);
-            overlay_state.water_preset_index = preset_index;
+            overlay_state.model.water_preset_index = preset_index;
             if preset_changed {
                 if selected_water_entity.is_some() {
                     ui_events.send(UIEvent::ClearScalarKeys);
@@ -925,7 +921,6 @@ fn build_water_section(
                 if let Some(effect) = ecs_world.get_component::<WaterTorusEffect>(selected_water) {
                     let mut effect_copy = effect.clone();
 
-                    let params_id = ui.push_id("water_params");
                     draw_tiered_params(
                         ui,
                         thyllore_effect_core::WATER_UI_PARAMS,
@@ -934,7 +929,6 @@ fn build_water_section(
                         &[],
                         |ui, edited| water_key_button(ui, ui_events, edited),
                     );
-                    params_id.end();
 
                     if !effect_applied_this_frame {
                         ui_events.send(UIEvent::UpdateWaterEffect(Box::new(effect_copy)));
@@ -1072,6 +1066,7 @@ fn build_flame_section(
     use crate::ecs::component::FlameEffect;
 
     if ui.collapsing_header("Flame", imgui::TreeNodeFlags::empty()) {
+        let _section_id = ui.push_id("flame");
         let flames = ecs_world.entities_with::<FlameEffect>();
         let selected_flame_entity = crate::ecs::systems::resolve_selected_flame(ecs_world);
         let clamped_index = selected_flame_entity
@@ -1400,7 +1395,6 @@ fn build_flame_section(
                     }
 
                     let colors_before = (effect_copy.color.base, effect_copy.color.tip);
-                    let params_id = ui.push_id("flame_params");
                     let advanced_open = draw_tiered_params(
                         ui,
                         thyllore_effect_core::FLAME_UI_PARAMS,
@@ -1412,7 +1406,6 @@ fn build_flame_section(
                     if advanced_open {
                         draw_flame_manual_params(ui, &mut effect_copy);
                     }
-                    params_id.end();
                     if (effect_copy.color.base, effect_copy.color.tip) != colors_before {
                         effect_copy.color.use_blackbody = false;
                     }

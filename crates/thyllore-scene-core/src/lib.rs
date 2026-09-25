@@ -491,7 +491,7 @@ macro_rules! declare_scene_format {
                 set: {
                     fn set_scalar(component: &mut $component, value: f32) {
                         let set: fn(&mut $component, u32) = $set;
-                        set(component, value as u32);
+                        set(component, value.round() as u32);
                     }
                     set_scalar
                 },

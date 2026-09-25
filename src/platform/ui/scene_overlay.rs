@@ -521,50 +521,9 @@ fn build_wind_section(
     ecs_world: &World,
 ) {
     use crate::ecs::component::WindTornadoEffect;
-    use crate::ecs::resource::{WindDebugView, WindRenderSettings, WindShadingMode};
 
     if !ui.collapsing_header("Wind", imgui::TreeNodeFlags::empty()) {
         return;
-    }
-
-    if let Some(settings) = ecs_world.get_resource::<WindRenderSettings>() {
-        let mut settings_copy = *settings;
-        drop(settings);
-
-        if let Some(_token) = ui.begin_combo("Shading Mode", settings_copy.shading_mode.label()) {
-            for mode in WindShadingMode::ALL {
-                if ui
-                    .selectable_config(mode.label())
-                    .selected(mode == settings_copy.shading_mode)
-                    .build()
-                {
-                    settings_copy.shading_mode = mode;
-                }
-            }
-        }
-        if let Some(_token) = ui.begin_combo("Debug View", settings_copy.debug_view.label()) {
-            for view in WindDebugView::ALL {
-                if ui
-                    .selectable_config(view.label())
-                    .selected(view == settings_copy.debug_view)
-                    .build()
-                {
-                    settings_copy.debug_view = view;
-                }
-            }
-        }
-        let mut step_count = settings_copy.reference_step_count as i32;
-        if ui
-            .slider_config("Reference Steps", 16, 2048)
-            .build(&mut step_count)
-        {
-            settings_copy.reference_step_count = step_count.max(1) as u32;
-        }
-        ui.checkbox(
-            "Animate when paused",
-            &mut settings_copy.free_run_when_paused,
-        );
-        ui_events.send(UIEvent::UpdateWindRenderSettings(settings_copy));
     }
 
     if ui.button("Add Wind") {
@@ -632,15 +591,62 @@ fn build_wind_section(
     if ui.button("Curves") {
         ui_events.send(UIEvent::OpenScalarCurveEditor);
     }
-    ui.same_line();
-    if ui.button("Dump Debug") {
-        ui_events.send(UIEvent::CaptureNow(Rc::new(WindDebugCapture)));
+    if ui.collapsing_header("Wind Debug", imgui::TreeNodeFlags::empty()) {
+        draw_wind_render_settings(ui, ui_events, ecs_world);
+        if ui.button("Dump Debug") {
+            ui_events.send(UIEvent::CaptureNow(Rc::new(WindDebugCapture)));
+        }
+        if ui.is_item_hovered() {
+            ui.tooltip_text(
+                "Write wind parameters, UBO, render settings, camera and a screenshot to log/wind/",
+            );
+        }
     }
-    if ui.is_item_hovered() {
-        ui.tooltip_text(
-            "Write wind parameters, UBO, render settings, camera and a screenshot to log/wind/",
-        );
+}
+
+fn draw_wind_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+    use crate::ecs::resource::{WindDebugView, WindRenderSettings, WindShadingMode};
+
+    let Some(settings) = ecs_world.get_resource::<WindRenderSettings>() else {
+        return;
+    };
+    let mut settings_copy = *settings;
+    drop(settings);
+
+    if let Some(_token) = ui.begin_combo("Shading Mode", settings_copy.shading_mode.label()) {
+        for mode in WindShadingMode::ALL {
+            if ui
+                .selectable_config(mode.label())
+                .selected(mode == settings_copy.shading_mode)
+                .build()
+            {
+                settings_copy.shading_mode = mode;
+            }
+        }
     }
+    if let Some(_token) = ui.begin_combo("Debug View", settings_copy.debug_view.label()) {
+        for view in WindDebugView::ALL {
+            if ui
+                .selectable_config(view.label())
+                .selected(view == settings_copy.debug_view)
+                .build()
+            {
+                settings_copy.debug_view = view;
+            }
+        }
+    }
+    let mut step_count = settings_copy.reference_step_count as i32;
+    if ui
+        .slider_config("Reference Steps", 16, 2048)
+        .build(&mut step_count)
+    {
+        settings_copy.reference_step_count = step_count.max(1) as u32;
+    }
+    ui.checkbox(
+        "Animate when paused",
+        &mut settings_copy.free_run_when_paused,
+    );
+    ui_events.send(UIEvent::UpdateWindRenderSettings(settings_copy));
 }
 
 fn build_lightning_section(
@@ -829,57 +835,11 @@ fn build_water_section(
     ecs_world: &World,
 ) {
     use crate::ecs::component::WaterTorusEffect;
-    use crate::ecs::resource::WaterRenderSettings;
 
     if ui.collapsing_header("Water", imgui::TreeNodeFlags::empty()) {
-        // WaterRenderSettings: secondary_rays combo and debug_view slider
-        if let Some(settings) = ecs_world.get_resource::<WaterRenderSettings>() {
-            let mut settings_copy = *settings;
-            drop(settings);
-
-            if let Some(_token) =
-                ui.begin_combo("Secondary Rays", settings_copy.secondary_rays.label())
-            {
-                for mode in thyllore_effect_core::WaterSecondaryRays::ALL {
-                    let selected = mode == settings_copy.secondary_rays;
-                    if ui
-                        .selectable_config(mode.label())
-                        .selected(selected)
-                        .build()
-                    {
-                        settings_copy.secondary_rays = mode;
-                    }
-                }
-            }
-
-            let mut debug_view = settings_copy.debug_view as f32;
-            if ui
-                .slider_config("Debug View", 0.0f32, 1.0f32)
-                .build(&mut debug_view)
-            {
-                settings_copy.debug_view = debug_view as i32;
-            }
-
-            ui.checkbox(
-                "Animate when paused",
-                &mut settings_copy.free_run_when_paused,
-            );
-
-            ui_events.send(UIEvent::UpdateWaterRenderSettings(settings_copy));
-        }
-
         // Add Water button (before instance selector, accessible even when no water exists)
         if ui.button("Add Water") {
             ui_events.send(UIEvent::AddEffect(WATER_SPAWN_HOOK.key));
-        }
-        ui.same_line();
-        if ui.button("Dump Debug") {
-            ui_events.send(UIEvent::CaptureNow(Rc::new(WaterDebugCapture)));
-        }
-        if ui.is_item_hovered() {
-            ui.tooltip_text(
-                "Write water parameters, UBO, camera, render settings and a screenshot to log/water/",
-            );
         }
 
         // Instance selector
@@ -954,7 +914,55 @@ fn build_water_section(
                 }
             }
         }
+        if ui.collapsing_header("Water Debug", imgui::TreeNodeFlags::empty()) {
+            draw_water_render_settings(ui, ui_events, ecs_world);
+            if ui.button("Dump Debug") {
+                ui_events.send(UIEvent::CaptureNow(Rc::new(WaterDebugCapture)));
+            }
+            if ui.is_item_hovered() {
+                ui.tooltip_text(
+                    "Write water parameters, UBO, camera, render settings and a screenshot to log/water/",
+                );
+            }
+        }
     }
+}
+
+fn draw_water_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+    use crate::ecs::resource::WaterRenderSettings;
+
+    let Some(settings) = ecs_world.get_resource::<WaterRenderSettings>() else {
+        return;
+    };
+    let mut settings_copy = *settings;
+    drop(settings);
+
+    if let Some(_token) = ui.begin_combo("Secondary Rays", settings_copy.secondary_rays.label()) {
+        for mode in thyllore_effect_core::WaterSecondaryRays::ALL {
+            if ui
+                .selectable_config(mode.label())
+                .selected(mode == settings_copy.secondary_rays)
+                .build()
+            {
+                settings_copy.secondary_rays = mode;
+            }
+        }
+    }
+
+    let mut debug_view = settings_copy.debug_view as f32;
+    if ui
+        .slider_config("Debug View", 0.0f32, 1.0f32)
+        .build(&mut debug_view)
+    {
+        settings_copy.debug_view = debug_view as i32;
+    }
+
+    ui.checkbox(
+        "Animate when paused",
+        &mut settings_copy.free_run_when_paused,
+    );
+
+    ui_events.send(UIEvent::UpdateWaterRenderSettings(settings_copy));
 }
 
 fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::FlameEffect) {
@@ -1030,85 +1038,8 @@ fn build_flame_section(
     viewport_info: &ViewportInfo,
 ) {
     use crate::ecs::component::FlameEffect;
-    use crate::ecs::resource::{FlameRenderSettings, FlameShadingMode};
 
     if ui.collapsing_header("Flame", imgui::TreeNodeFlags::empty()) {
-        if let Some(settings) = ecs_world.get_resource::<FlameRenderSettings>() {
-            let mut settings_copy = *settings;
-            drop(settings);
-
-            if let Some(_token) = ui.begin_combo("Shading Mode", settings_copy.shading_mode.label())
-            {
-                for mode in FlameShadingMode::ALL {
-                    let selected = mode == settings_copy.shading_mode;
-                    if ui
-                        .selectable_config(mode.label())
-                        .selected(selected)
-                        .build()
-                    {
-                        settings_copy.shading_mode = mode;
-                    }
-                }
-            }
-
-            {
-                use crate::ecs::resource::FlameDebugView;
-                if let Some(_token) = ui.begin_combo("Debug View", settings_copy.debug_view.label())
-                {
-                    for view in FlameDebugView::ALL {
-                        let selected = view == settings_copy.debug_view;
-                        if ui
-                            .selectable_config(view.label())
-                            .selected(selected)
-                            .build()
-                        {
-                            settings_copy.debug_view = view;
-                        }
-                    }
-                }
-            }
-
-            {
-                use thyllore_effect_core::flame_wave::{
-                    read_env_wave_jitter, read_env_wave_jitter_freq, set_wave_jitter,
-                    set_wave_jitter_freq,
-                };
-                let mut jitter = read_env_wave_jitter();
-                if ui
-                    .slider_config("Jitter Depth", 0.0f32, 2.0f32)
-                    .build(&mut jitter)
-                {
-                    set_wave_jitter(jitter);
-                }
-                let mut jitter_freq = read_env_wave_jitter_freq();
-                if ui
-                    .slider_config("Jitter Freq", 0.25f32, 6.0f32)
-                    .build(&mut jitter_freq)
-                {
-                    set_wave_jitter_freq(jitter_freq);
-                }
-            }
-
-            match settings_copy.shading_mode {
-                FlameShadingMode::ReferenceRaymarch => {
-                    let mut steps = settings_copy.reference_step_count as i32;
-                    ui.slider_config("Reference Steps", 8, 512)
-                        .build(&mut steps);
-                    settings_copy.reference_step_count = steps.max(1) as u32;
-                }
-                FlameShadingMode::NoiseRaymarch => {
-                    let mut steps = settings_copy.noise_step_count as i32;
-                    ui.slider_config("Noise Steps", 4, 64).build(&mut steps);
-                    settings_copy.noise_step_count = steps.max(1) as u32;
-                }
-                FlameShadingMode::Analytic
-                | FlameShadingMode::DebugThickness
-                | FlameShadingMode::DebugDepthClamp => {}
-            }
-
-            ui_events.send(UIEvent::UpdateFlameRenderSettings(settings_copy));
-        }
-
         let flames = ecs_world.entities_with::<FlameEffect>();
         let selected_flame_entity = crate::ecs::systems::resolve_selected_flame(ecs_world);
         let clamped_index = selected_flame_entity
@@ -1471,17 +1402,6 @@ fn build_flame_section(
                     if ui.button("Add Flame") {
                         ui_events.send(UIEvent::AddEffect(FLAME_SPAWN_HOOK.key));
                     }
-                    ui.same_line();
-                    if ui.button("Dump Probe") {
-                        ui_events.send(UIEvent::DumpFlameWallProbe {
-                            viewport_size: viewport_info.size,
-                        });
-                    }
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text(
-                            "Dump camera pose + wall-regime ray diagnostics to log/flame/",
-                        );
-                    }
 
                     // Trail checkbox and slider
                     let trail_state = ecs_world
@@ -1514,10 +1434,94 @@ fn build_flame_section(
                     if !effect_applied_this_frame {
                         ui_events.send(UIEvent::UpdateFlameEffect(Box::new(effect_copy)));
                     }
+
+                    if ui.collapsing_header("Flame Debug", imgui::TreeNodeFlags::empty()) {
+                        draw_flame_render_settings(ui, ui_events, ecs_world);
+                        if ui.button("Dump Probe") {
+                            ui_events.send(UIEvent::DumpFlameWallProbe {
+                                viewport_size: viewport_info.size,
+                            });
+                        }
+                        if ui.is_item_hovered() {
+                            ui.tooltip_text(
+                                "Dump camera pose + wall-regime ray diagnostics to log/flame/",
+                            );
+                        }
+                    }
                 }
             }
         }
     }
+}
+
+fn draw_flame_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+    use crate::ecs::resource::{FlameDebugView, FlameRenderSettings, FlameShadingMode};
+    use thyllore_effect_core::flame_wave::{
+        read_env_wave_jitter, read_env_wave_jitter_freq, set_wave_jitter, set_wave_jitter_freq,
+    };
+
+    let Some(settings) = ecs_world.get_resource::<FlameRenderSettings>() else {
+        return;
+    };
+    let mut settings_copy = *settings;
+    drop(settings);
+
+    if let Some(_token) = ui.begin_combo("Shading Mode", settings_copy.shading_mode.label()) {
+        for mode in FlameShadingMode::ALL {
+            if ui
+                .selectable_config(mode.label())
+                .selected(mode == settings_copy.shading_mode)
+                .build()
+            {
+                settings_copy.shading_mode = mode;
+            }
+        }
+    }
+    if let Some(_token) = ui.begin_combo("Debug View", settings_copy.debug_view.label()) {
+        for view in FlameDebugView::ALL {
+            if ui
+                .selectable_config(view.label())
+                .selected(view == settings_copy.debug_view)
+                .build()
+            {
+                settings_copy.debug_view = view;
+            }
+        }
+    }
+
+    let mut jitter = read_env_wave_jitter();
+    if ui
+        .slider_config("Jitter Depth", 0.0f32, 2.0f32)
+        .build(&mut jitter)
+    {
+        set_wave_jitter(jitter);
+    }
+    let mut jitter_freq = read_env_wave_jitter_freq();
+    if ui
+        .slider_config("Jitter Freq", 0.25f32, 6.0f32)
+        .build(&mut jitter_freq)
+    {
+        set_wave_jitter_freq(jitter_freq);
+    }
+
+    match settings_copy.shading_mode {
+        FlameShadingMode::ReferenceRaymarch => {
+            let mut steps = settings_copy.reference_step_count as i32;
+            ui.slider_config("Reference Steps", 8, 512)
+                .build(&mut steps);
+            settings_copy.reference_step_count = steps.max(1) as u32;
+        }
+        FlameShadingMode::NoiseRaymarch => {
+            let mut steps = settings_copy.noise_step_count as i32;
+            ui.slider_config("Noise Steps", 4, 64).build(&mut steps);
+            settings_copy.noise_step_count = steps.max(1) as u32;
+        }
+        FlameShadingMode::Analytic
+        | FlameShadingMode::DebugThickness
+        | FlameShadingMode::DebugDepthClamp => {}
+    }
+
+    ui_events.send(UIEvent::UpdateFlameRenderSettings(settings_copy));
 }
 
 /// Canonicalized directory, falling back to the typed text when the path

@@ -226,6 +226,16 @@ pub fn dispatch_overlay_events(events: &[UIEvent], world: &mut World) {
                     crate::ecs::systems::clear_lightning_target(world, lightning);
                 }
             }
+            UIEvent::AddLightningWaypoint => {
+                if let Some(lightning) = resolve_selected_lightning(world) {
+                    crate::ecs::systems::spawn_lightning_waypoint(world, lightning);
+                }
+            }
+            UIEvent::RemoveLightningWaypoint(index) => {
+                if let Some(lightning) = resolve_selected_lightning(world) {
+                    crate::ecs::systems::remove_lightning_waypoint(world, lightning, *index);
+                }
+            }
             UIEvent::UpdateLightningRenderSettings(new_settings) => {
                 if let Some(mut settings) = world.get_resource_mut::<LightningRenderSettings>() {
                     *settings = *new_settings;

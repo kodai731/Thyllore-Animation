@@ -495,6 +495,8 @@ pub enum UIEvent {
     ApplyLightningPreset(String),
     AddLightningTarget,
     ClearLightningTarget,
+    AddLightningWaypoint,
+    RemoveLightningWaypoint(usize),
     UpdateLightningRenderSettings(LightningRenderSettings),
     OpenScalarCurveEditor,
 }

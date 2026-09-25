@@ -711,6 +711,7 @@ fn build_lightning_section(
     };
     let mut effect_copy = effect.clone();
     let target_name = draw_lightning_target_row(ui, ui_events, ecs_world, selected);
+    draw_lightning_path_rows(ui, ui_events, ecs_world, selected);
 
     if target_name.is_none() {
         draw_params(
@@ -785,6 +786,37 @@ fn draw_lightning_target_row(
         }
     }
     target_name
+}
+
+fn draw_lightning_path_rows(
+    ui: &imgui::Ui,
+    ui_events: &mut UIEventQueue,
+    ecs_world: &World,
+    lightning: crate::ecs::world::Entity,
+) {
+    use crate::ecs::component::LightningPath;
+
+    let waypoints = ecs_world
+        .get_component::<LightningPath>(lightning)
+        .map(|path| path.waypoints.clone())
+        .unwrap_or_default();
+
+    for (i, name) in waypoints.iter().enumerate() {
+        ui.text(name);
+        ui.same_line();
+        if ui.small_button(format!("x##waypoint{i}")) {
+            ui_events.send(UIEvent::RemoveLightningWaypoint(i));
+        }
+    }
+
+    if ui.button("Add Waypoint") {
+        ui_events.send(UIEvent::AddLightningWaypoint);
+    }
+    if ui.is_item_hovered() {
+        ui.tooltip_text(
+            "Spawn a locator halfway to the end point; the bolt passes through waypoints in order",
+        );
+    }
 }
 
 fn draw_lightning_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {

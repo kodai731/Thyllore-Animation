@@ -1,7 +1,8 @@
 use cgmath::Vector3;
 
-use crate::ecs::component::{EditorDisplay, LightningEffect, LightningTarget, Locator};
-use crate::ecs::world::{Entity, Name, Parent, Transform, World};
+use super::path::adopt_lightning_child;
+use crate::ecs::component::{LightningEffect, LightningTarget, Locator};
+use crate::ecs::world::{Entity, Name, Transform, World};
 use crate::ecs::FrameContext;
 use crate::hooks::scene::spawn_scene_owner;
 
@@ -29,7 +30,7 @@ pub fn spawn_lightning_target(world: &mut World, lightning: Entity) -> Option<En
 
     let target_name = format!("{lightning_name} Target");
     let target = spawn_scene_owner(world, &target_name, Locator::at(Vector3::from(end_offset)));
-    adopt_lightning_target(world, lightning, target);
+    adopt_lightning_child(world, lightning, target);
     world.insert_component(
         lightning,
         LightningTarget {
@@ -44,26 +45,13 @@ pub fn clear_lightning_target(world: &mut World, lightning: Entity) {
     world.remove_component::<LightningTarget>(lightning);
 }
 
-/// Makes the target a child of the bolt so moving the bolt moves its end point; the target's
-/// Transform is then the end offset in bolt space. Already-adopted targets are left as they are.
-fn adopt_lightning_target(world: &mut World, lightning: Entity, target: Entity) {
-    if world.has_component::<Parent>(target) {
-        return;
-    }
-    world.insert_component(target, Parent(lightning));
-    world.add_child(lightning, target);
-    if let Some(display) = world.get_component_mut::<EditorDisplay>(lightning) {
-        display.expanded = true;
-    }
-}
-
 /// Copies every linked target's local translation into its bolt's `end_offset`.
 pub fn follow_lightning_targets(world: &mut World) {
     for lightning in world.entities_with::<LightningTarget>() {
         let Some(target) = resolve_lightning_target(world, lightning) else {
             continue;
         };
-        adopt_lightning_target(world, lightning, target);
+        adopt_lightning_child(world, lightning, target);
 
         let Some(local_end) = world
             .get_component::<Transform>(target)

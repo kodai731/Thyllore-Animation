@@ -1,6 +1,8 @@
 use super::passes::compute_lightning_scissor;
 use super::*;
-use crate::ecs::component::{EditorDisplay, EntityIcon, LightningEffect, LightningTarget, Locator};
+use crate::ecs::component::{
+    EditorDisplay, EntityIcon, LightningEffect, LightningPath, LightningTarget, Locator,
+};
 use crate::ecs::resource::{HierarchyState, LightningRenderSettings, PickRay, ProjectionData};
 use crate::ecs::world::{Children, GlobalTransform, Name, Parent, Transform, World};
 use crate::hooks::scene::spawn_scene_owner;
@@ -330,4 +332,112 @@ fn a_scene_loaded_root_target_is_adopted_as_a_child_on_the_first_follow() {
         .unwrap()
         .end_offset;
     assert_eq!(end_offset, [1.0, -6.0, 0.0]);
+}
+
+#[test]
+fn spawning_two_waypoints_fills_effect_waypoints() {
+    let mut world = World::new();
+    let effect = LightningEffect {
+        position: Vector3::new(0.0, 8.0, 0.0),
+        end_offset: [0.0, -8.0, 0.0],
+        ..LightningEffect::default()
+    };
+    let lightning = spawn_lightning(&mut world, DEFAULT_LIGHTNING_NAME, effect);
+
+    let wp1 = spawn_lightning_waypoint(&mut world, lightning).expect("waypoint 1 spawned");
+    let wp2 = spawn_lightning_waypoint(&mut world, lightning).expect("waypoint 2 spawned");
+
+    follow_lightning_path(&mut world);
+
+    let effect = world.get_component::<LightningEffect>(lightning).unwrap();
+    assert_eq!(effect.waypoint_count, 2);
+    assert_eq!(effect.waypoints[0], [0.0, -4.0, 0.0]);
+    assert_eq!(effect.waypoints[1], [0.0, -6.0, 0.0]);
+    assert_eq!(
+        world.get_component::<Parent>(wp1).map(|parent| parent.0),
+        Some(lightning)
+    );
+    assert_eq!(
+        world.get_component::<Parent>(wp2).map(|parent| parent.0),
+        Some(lightning)
+    );
+}
+
+#[test]
+fn moving_a_waypoint_locator_is_followed_in_effect() {
+    let mut world = World::new();
+    let effect = LightningEffect {
+        position: Vector3::new(0.0, 8.0, 0.0),
+        end_offset: [0.0, -8.0, 0.0],
+        ..LightningEffect::default()
+    };
+    let lightning = spawn_lightning(&mut world, DEFAULT_LIGHTNING_NAME, effect);
+
+    let wp1 = spawn_lightning_waypoint(&mut world, lightning).expect("waypoint spawned");
+
+    world
+        .get_component_mut::<Transform>(wp1)
+        .unwrap()
+        .translation = Vector3::new(5.0, -4.0, 3.0);
+
+    follow_lightning_path(&mut world);
+
+    let effect = world.get_component::<LightningEffect>(lightning).unwrap();
+    assert_eq!(effect.waypoint_count, 1);
+    assert_eq!(effect.waypoints[0], [5.0, -4.0, 3.0]);
+}
+
+#[test]
+fn removing_waypoint_clears_it_from_effect() {
+    let mut world = World::new();
+    let effect = LightningEffect {
+        position: Vector3::new(0.0, 8.0, 0.0),
+        end_offset: [0.0, -8.0, 0.0],
+        ..LightningEffect::default()
+    };
+    let lightning = spawn_lightning(&mut world, DEFAULT_LIGHTNING_NAME, effect);
+
+    let wp1 = spawn_lightning_waypoint(&mut world, lightning).expect("waypoint spawned");
+
+    follow_lightning_path(&mut world);
+    assert_eq!(
+        world
+            .get_component::<LightningEffect>(lightning)
+            .unwrap()
+            .waypoint_count,
+        1
+    );
+
+    remove_lightning_waypoint(&mut world, lightning, 0);
+
+    assert!(world.get_component::<LightningPath>(lightning).is_none());
+
+    follow_lightning_path(&mut world);
+    assert_eq!(
+        world
+            .get_component::<LightningEffect>(lightning)
+            .unwrap()
+            .waypoint_count,
+        0
+    );
+    assert!(world.get_component::<Transform>(wp1).is_some());
+}
+
+#[test]
+fn spawn_waypoint_returns_none_at_cap() {
+    let mut world = World::new();
+    let effect = LightningEffect {
+        position: Vector3::new(0.0, 8.0, 0.0),
+        end_offset: [0.0, -8.0, 0.0],
+        ..LightningEffect::default()
+    };
+    let lightning = spawn_lightning(&mut world, DEFAULT_LIGHTNING_NAME, effect);
+
+    use thyllore_effect_core::LIGHTNING_MAX_WAYPOINTS;
+
+    for _ in 0..LIGHTNING_MAX_WAYPOINTS {
+        assert!(spawn_lightning_waypoint(&mut world, lightning).is_some());
+    }
+
+    assert!(spawn_lightning_waypoint(&mut world, lightning).is_none());
 }

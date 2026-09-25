@@ -71,6 +71,7 @@ pub struct LightningEffect {
     pub flash_gain: f32,
     pub flash_radius: f32,
     pub end_variance: f32,
+    pub growth_time: f32,
 }
 
 impl Default for LightningEffect {
@@ -125,6 +126,7 @@ impl Default for LightningEffect {
             flash_gain: 0.0,
             flash_radius: 2.0,
             end_variance: 0.0,
+            growth_time: 0.0,
         }
     }
 }

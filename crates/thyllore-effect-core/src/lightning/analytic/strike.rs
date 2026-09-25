@@ -16,7 +16,7 @@ fn push_segment(segments: &mut Vec<Segment>, seg: Segment) -> bool {
     true
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Segment {
     pub a: [f32; 3],
     pub b: [f32; 3],
@@ -25,6 +25,70 @@ pub struct Segment {
     /// Relative envelope (branch dimming x stroke x flicker); the shader applies
     /// `core_intensity` / `rim_intensity` on top, so this must stay O(1).
     pub intensity: f32,
+}
+
+fn segment_progress(p: [f32; 3], start: [f32; 3], dir: [f32; 3], dir_sq_len: f32) -> f32 {
+    (dir[0] * (p[0] - start[0]) + dir[1] * (p[1] - start[1]) + dir[2] * (p[2] - start[2]))
+        / dir_sq_len
+}
+
+fn interpolate(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
+}
+
+fn clip_to_growth_front(
+    segments: &[Segment],
+    start: [f32; 3],
+    end: [f32; 3],
+    front: f32,
+) -> Vec<Segment> {
+    let dir = [end[0] - start[0], end[1] - start[1], end[2] - start[2]];
+    let dir_sq_len = dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2];
+
+    if dir_sq_len < 1e-12 {
+        return segments.to_vec();
+    }
+
+    let mut out = Vec::with_capacity(segments.len());
+    for seg in segments {
+        let s_a = segment_progress(seg.a, start, dir, dir_sq_len);
+        let s_b = segment_progress(seg.b, start, dir, dir_sq_len);
+
+        if s_a <= front && s_b <= front {
+            out.push(*seg);
+        } else if s_a > front && s_b <= front {
+            let frac = (front - s_b) / (s_a - s_b);
+            let new_a = [
+                interpolate(seg.b[0], seg.a[0], frac),
+                interpolate(seg.b[1], seg.a[1], frac),
+                interpolate(seg.b[2], seg.a[2], frac),
+            ];
+            let new_r0 = interpolate(seg.r1, seg.r0, frac);
+            out.push(Segment {
+                a: new_a,
+                b: seg.b,
+                r0: new_r0,
+                r1: seg.r1,
+                intensity: seg.intensity,
+            });
+        } else if s_a <= front {
+            let frac = (front - s_a) / (s_b - s_a);
+            let new_b = [
+                interpolate(seg.a[0], seg.b[0], frac),
+                interpolate(seg.a[1], seg.b[1], frac),
+                interpolate(seg.a[2], seg.b[2], frac),
+            ];
+            let new_r1 = interpolate(seg.r0, seg.r1, frac);
+            out.push(Segment {
+                a: seg.a,
+                b: new_b,
+                r0: seg.r0,
+                r1: new_r1,
+                intensity: seg.intensity,
+            });
+        }
+    }
+    out
 }
 
 pub fn build_lightning_segments(effect: &LightningEffect, t: f32) -> Vec<Segment> {
@@ -59,6 +123,13 @@ pub fn build_lightning_segments(effect: &LightningEffect, t: f32) -> Vec<Segment
     }
 
     let mut segments = build_strike_segments(&charged, burst_seed, reseed);
+
+    if let LightningSource::Point = effect.source {
+        if effect.growth_time > 0.0 {
+            let front = (tau / effect.growth_time).min(1.0);
+            segments = clip_to_growth_front(&segments, [0.0, 0.0, 0.0], charged.end_offset, front);
+        }
+    }
 
     for seg in &mut segments {
         seg.intensity *= intensity;
@@ -1421,5 +1492,177 @@ mod tests {
                 );
             }
         }
+    }
+
+    fn growth_effect(growth_time: f32) -> LightningEffect {
+        let mut effect = LightningEffect::default();
+        effect.source = LightningSource::Point;
+        effect.end_offset = [0.0, -8.0, 0.0];
+        effect.growth_time = growth_time;
+        effect
+    }
+
+    fn segments_at_burst_time(effect: &LightningEffect, tau: f32) -> Vec<Segment> {
+        build_lightning_segments(effect, timing::burst_start_time(effect, 0) + tau)
+    }
+
+    fn growth_progress(p: [f32; 3], end: [f32; 3]) -> f32 {
+        dot(p, end) / dot(end, end)
+    }
+
+    #[test]
+    fn test_growth_time_zero_is_unchanged() {
+        let effect = growth_effect(0.0);
+        let tau = effect.attack_time + effect.sustain_time * 0.5;
+
+        let segments = segments_at_burst_time(&effect, tau);
+        assert!(!segments.is_empty(), "should have segments");
+        assert!(
+            segments
+                .iter()
+                .any(|seg| length(difference(seg.b, effect.end_offset)) < 1e-3),
+            "growth_time=0 should reach the full end_offset"
+        );
+    }
+
+    #[test]
+    fn test_growth_time_half_tau_clips_to_halfway() {
+        let tau = 0.03;
+        let effect = growth_effect(2.0 * tau);
+
+        let segments = segments_at_burst_time(&effect, tau);
+        assert!(!segments.is_empty(), "should have segments");
+
+        let mut farthest_progress = 0.0f32;
+        for seg in &segments {
+            let s_a = growth_progress(seg.a, effect.end_offset);
+            let s_b = growth_progress(seg.b, effect.end_offset);
+            assert!(s_a <= 0.5 + 1e-4, "segment a progress {s_a} > 0.5 + 1e-4");
+            assert!(s_b <= 0.5 + 1e-4, "segment b progress {s_b} > 0.5 + 1e-4");
+            farthest_progress = farthest_progress.max(s_b);
+        }
+        assert!(
+            (farthest_progress - 0.5).abs() < 1e-3,
+            "main path should reach s≈0.5, got {farthest_progress}"
+        );
+    }
+
+    #[test]
+    fn test_growth_time_tau_ge_growth_time_is_unchanged() {
+        let tau = 0.03;
+        let whole = segments_at_burst_time(&growth_effect(0.0), tau);
+        assert!(!whole.is_empty(), "should have segments");
+
+        for growth_time in [tau, 0.5 * tau] {
+            let grown = segments_at_burst_time(&growth_effect(growth_time), tau);
+            assert_eq!(
+                grown, whole,
+                "growth_time {growth_time} must not clip at tau {tau}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_clip_to_growth_front_spanning_segment_interpolation() {
+        let segments = vec![
+            Segment {
+                a: [0.0, 0.0, 0.0],
+                b: [0.0, -4.0, 0.0],
+                r0: 1.0,
+                r1: 0.5,
+                intensity: 1.0,
+            },
+            Segment {
+                a: [0.0, -4.0, 0.0],
+                b: [0.0, -8.0, 0.0],
+                r0: 0.5,
+                r1: 0.3,
+                intensity: 1.0,
+            },
+        ];
+
+        let clipped = clip_to_growth_front(&segments, [0.0, 0.0, 0.0], [0.0, -8.0, 0.0], 0.25);
+
+        assert_eq!(clipped.len(), 1, "the segment past the front is discarded");
+        let seg = &clipped[0];
+        assert_eq!(seg.a, [0.0, 0.0, 0.0]);
+        assert!(
+            length(difference(seg.b, [0.0, -2.0, 0.0])) < 1e-6,
+            "b = {:?}",
+            seg.b
+        );
+        assert!((seg.r0 - 1.0).abs() < 1e-6);
+        assert!((seg.r1 - 0.75).abs() < 1e-6, "r1 = {}", seg.r1);
+    }
+
+    #[test]
+    fn test_clip_to_growth_front_all_before_front() {
+        let segments = vec![Segment {
+            a: [0.0, 0.0, 0.0],
+            b: [0.0, -4.0, 0.0],
+            r0: 1.0,
+            r1: 0.5,
+            intensity: 1.0,
+        }];
+
+        let clipped = clip_to_growth_front(&segments, [0.0, 0.0, 0.0], [0.0, -8.0, 0.0], 0.7);
+        assert_eq!(clipped.len(), 1);
+        assert_eq!(clipped[0].b, [0.0, -4.0, 0.0]);
+    }
+
+    #[test]
+    fn test_clip_to_growth_front_all_after_front() {
+        let segments = vec![Segment {
+            a: [0.0, -4.0, 0.0],
+            b: [0.0, -8.0, 0.0],
+            r0: 0.5,
+            r1: 0.3,
+            intensity: 1.0,
+        }];
+
+        let clipped = clip_to_growth_front(&segments, [0.0, 0.0, 0.0], [0.0, -8.0, 0.0], 0.3);
+        assert!(
+            clipped.is_empty(),
+            "all segments after front should be discarded"
+        );
+    }
+
+    #[test]
+    fn test_growth_time_shell_source_unchanged() {
+        let tau = 0.03;
+        let mut whole_effect = growth_effect(0.0);
+        whole_effect.source = LightningSource::Shell { radius: 1.0 };
+        let mut grown_effect = whole_effect.clone();
+        grown_effect.growth_time = 2.0 * tau;
+
+        assert_eq!(
+            segments_at_burst_time(&grown_effect, tau),
+            segments_at_burst_time(&whole_effect, tau),
+            "shell sources ignore growth_time"
+        );
+    }
+
+    #[test]
+    fn test_clip_to_growth_front_backward_segment() {
+        let segments = vec![Segment {
+            a: [0.0, -6.0, 0.0],
+            b: [0.0, -2.0, 0.0],
+            r0: 0.3,
+            r1: 0.8,
+            intensity: 1.0,
+        }];
+
+        let clipped = clip_to_growth_front(&segments, [0.0, 0.0, 0.0], [0.0, -8.0, 0.0], 0.5);
+
+        assert_eq!(clipped.len(), 1, "the backward segment is kept");
+        let seg = &clipped[0];
+        assert!(
+            length(difference(seg.a, [0.0, -4.0, 0.0])) < 1e-6,
+            "a = {:?}",
+            seg.a
+        );
+        assert_eq!(seg.b, [0.0, -2.0, 0.0]);
+        assert!((seg.r0 - 0.55).abs() < 1e-6, "r0 = {}", seg.r0);
+        assert!((seg.r1 - 0.8).abs() < 1e-6);
     }
 }

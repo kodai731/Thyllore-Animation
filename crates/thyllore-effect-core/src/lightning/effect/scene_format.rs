@@ -336,6 +336,17 @@ declare_scene_format! {
                 group: "shape",
             },
         },
+        growth_time: f32 {
+            get: |e| e.growth_time,
+            set: |e, v| e.growth_time = v,
+            ui {
+                min: 0.0,
+                max: 1.0,
+                format: "%.3f",
+                tooltip: "Seconds the discharge takes to reach its end; 0 draws it whole at once",
+                group: "timing",
+            },
+        },
         burst_start: f32 {
             get: |e| e.burst_start,
             set: |e, v| e.burst_start = v,

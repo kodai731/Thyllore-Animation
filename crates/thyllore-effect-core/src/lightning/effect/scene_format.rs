@@ -553,6 +553,43 @@ mod tests {
     use super::*;
     use thyllore_scene_core::{find_scalar_param, find_ui_param, SceneComponent, UiKind};
 
+    const DEFAULT_JSON: &str = include_str!("scene_format_default.json");
+    const LIGHTNING_UI_PARAMS_JSON: &str = include_str!("ui_params.json");
+
+    #[test]
+    fn test_default_json_matches_fixture() {
+        let json = serde_json::to_string(&LightningEffect::default()).expect("serialize");
+        assert_eq!(json, DEFAULT_JSON.trim());
+    }
+
+    #[test]
+    fn test_lightning_ui_params_match_fixture() {
+        let params: Vec<serde_json::Value> = LIGHTNING_UI_PARAMS
+            .iter()
+            .map(|param| {
+                serde_json::json!({
+                    "name": param.name,
+                    "group": param.group,
+                    "kind": match param.kind {
+                        UiKind::Scalar => "scalar",
+                        UiKind::Color => "color",
+                        UiKind::Absorption => "absorption",
+                        UiKind::Offset => "offset",
+                    },
+                    "min": param.min,
+                    "max": param.max,
+                    "format": param.format,
+                    "tooltip": param.tooltip,
+                    "persisted": param.persisted,
+                    "primary": param.primary,
+                    "label": param.label,
+                })
+            })
+            .collect();
+        let current = serde_json::to_string(&params).expect("serialize ui params");
+        assert_eq!(current, LIGHTNING_UI_PARAMS_JSON.trim());
+    }
+
     #[test]
     fn test_scene_component_reflection_matches_serialized_keys() {
         let value = serde_json::to_value(LightningEffect::default()).expect("serialize");

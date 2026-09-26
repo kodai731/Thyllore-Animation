@@ -13,6 +13,7 @@ use crate::ecs::systems::lightning::{resolve_selected_lightning, LightningUiComm
 use crate::ecs::systems::LIGHTNING_SPAWN_HOOK;
 use crate::ecs::world::Entity;
 use crate::ecs::World;
+use crate::hooks::effect_ui_event::send_effect_ui_command;
 
 use super::param_widgets::{draw_params, draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
@@ -81,10 +82,7 @@ pub(super) fn build_lightning_section(
     ) {
         if selected_entity.is_some() {
             ui_events.send(UIEvent::ClearScalarKeys);
-            ui_events.send(UIEvent::Effect {
-                key: LIGHTNING_SPAWN_HOOK.key,
-                command: Rc::new(LightningUiCommand::ApplyPreset(chosen)),
-            });
+            send_effect_ui_command(ecs_world, LightningUiCommand::ApplyPreset(chosen));
             effect_applied_this_frame = true;
         }
     }
@@ -120,13 +118,13 @@ pub(super) fn build_lightning_section(
     );
 
     if !effect_applied_this_frame {
-        ui_events.send(UIEvent::Effect {
-            key: LIGHTNING_SPAWN_HOOK.key,
-            command: Rc::new(LightningUiCommand::UpdateEffect {
+        send_effect_ui_command(
+            ecs_world,
+            LightningUiCommand::UpdateEffect {
                 entity: selected,
                 effect: Box::new(effect_copy),
-            }),
-        });
+            },
+        );
     }
     if ui.button("Curves") {
         ui_events.send(UIEvent::OpenScalarCurveEditor);
@@ -161,18 +159,12 @@ fn draw_lightning_target_row(
             ui.text(format!("Target: {name}"));
             ui.same_line();
             if ui.small_button("Clear##lightning_target") {
-                ui_events.send(UIEvent::Effect {
-                    key: LIGHTNING_SPAWN_HOOK.key,
-                    command: Rc::new(LightningUiCommand::ClearTarget),
-                });
+                send_effect_ui_command(ecs_world, LightningUiCommand::ClearTarget);
             }
         }
         None => {
             if ui.button("Add Target") {
-                ui_events.send(UIEvent::Effect {
-                    key: LIGHTNING_SPAWN_HOOK.key,
-                    command: Rc::new(LightningUiCommand::AddTarget),
-                });
+                send_effect_ui_command(ecs_world, LightningUiCommand::AddTarget);
             }
             if ui.is_item_hovered() {
                 ui.tooltip_text("Spawn a locator at the end point; move it to aim the bolt");
@@ -197,18 +189,12 @@ fn draw_lightning_path_rows(
         ui.text(name);
         ui.same_line();
         if ui.small_button(format!("x##waypoint{i}")) {
-            ui_events.send(UIEvent::Effect {
-                key: LIGHTNING_SPAWN_HOOK.key,
-                command: Rc::new(LightningUiCommand::RemoveWaypoint(i)),
-            });
+            send_effect_ui_command(ecs_world, LightningUiCommand::RemoveWaypoint(i));
         }
     }
 
     if ui.button("Add Waypoint") {
-        ui_events.send(UIEvent::Effect {
-            key: LIGHTNING_SPAWN_HOOK.key,
-            command: Rc::new(LightningUiCommand::AddWaypoint),
-        });
+        send_effect_ui_command(ecs_world, LightningUiCommand::AddWaypoint);
     }
     if ui.is_item_hovered() {
         ui.tooltip_text(
@@ -217,7 +203,11 @@ fn draw_lightning_path_rows(
     }
 }
 
-fn draw_lightning_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn draw_lightning_render_settings(
+    ui: &imgui::Ui,
+    _ui_events: &mut UIEventQueue,
+    ecs_world: &World,
+) {
     let Some(settings) = ecs_world.get_resource::<LightningRenderSettings>() else {
         return;
     };
@@ -253,10 +243,10 @@ fn draw_lightning_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, 
     {
         settings_copy.reference_step_count = step_count.max(1) as u32;
     }
-    ui_events.send(UIEvent::Effect {
-        key: LIGHTNING_SPAWN_HOOK.key,
-        command: Rc::new(LightningUiCommand::UpdateRenderSettings(settings_copy)),
-    });
+    send_effect_ui_command(
+        ecs_world,
+        LightningUiCommand::UpdateRenderSettings(settings_copy),
+    );
 }
 
 crate::effect_section_hook!(crate::platform::ui::effect_sections::EffectSectionHook {

@@ -8,6 +8,7 @@ use crate::ecs::resource::{WaterDebugCapture, WaterRenderSettings};
 use crate::ecs::systems::water::WaterUiCommand;
 use crate::ecs::systems::{resolve_selected_water, WATER_SPAWN_HOOK};
 use crate::ecs::World;
+use crate::hooks::effect_ui_event::send_effect_ui_command;
 
 use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
@@ -76,10 +77,7 @@ pub(super) fn build_water_section(
     ) {
         if selected_water_entity.is_some() {
             ui_events.send(UIEvent::ClearScalarKeys);
-            ui_events.send(UIEvent::Effect {
-                key: WATER_SPAWN_HOOK.key,
-                command: Rc::new(WaterUiCommand::ApplyPreset(chosen)),
-            });
+            send_effect_ui_command(ecs_world, WaterUiCommand::ApplyPreset(chosen));
             effect_applied_this_frame = true;
         }
     }
@@ -100,13 +98,13 @@ pub(super) fn build_water_section(
         |ui, edited| water_key_button(ui, ui_events, edited),
     );
     if !effect_applied_this_frame {
-        ui_events.send(UIEvent::Effect {
-            key: WATER_SPAWN_HOOK.key,
-            command: Rc::new(WaterUiCommand::UpdateEffect {
+        send_effect_ui_command(
+            ecs_world,
+            WaterUiCommand::UpdateEffect {
                 entity: selected_water,
                 effect: Box::new(effect_copy),
-            }),
-        });
+            },
+        );
     }
     if ui.button("Curves") {
         ui_events.send(UIEvent::OpenScalarCurveEditor);
@@ -124,7 +122,7 @@ pub(super) fn build_water_section(
     }
 }
 
-fn draw_water_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn draw_water_render_settings(ui: &imgui::Ui, _ui_events: &mut UIEventQueue, ecs_world: &World) {
     let Some(settings) = ecs_world.get_resource::<WaterRenderSettings>() else {
         return;
     };
@@ -153,10 +151,10 @@ fn draw_water_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_
         "Animate when paused",
         &mut settings_copy.free_run_when_paused,
     );
-    ui_events.send(UIEvent::Effect {
-        key: WATER_SPAWN_HOOK.key,
-        command: Rc::new(WaterUiCommand::UpdateRenderSettings(settings_copy)),
-    });
+    send_effect_ui_command(
+        ecs_world,
+        WaterUiCommand::UpdateRenderSettings(settings_copy),
+    );
 }
 
 crate::effect_section_hook!(crate::platform::ui::effect_sections::EffectSectionHook {

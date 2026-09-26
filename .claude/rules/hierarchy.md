@@ -116,6 +116,45 @@ per-frame TLAS refresh from `GlobalTransform`). If the work is mostly GPU upload
 `World` writes, it is app wiring and lives in `src/app/` (`model/`, `scene_model.rs`); if it exists
 only for debugging (debug primitive spawn / delete) it lives in `src/debugview/`.
 
+`src/ecs/resource/` groups its files by domain:
+
+| Path | Contents |
+|---|---|
+| `input/` | Mouse, keyboard modifiers, pointer and its capture, viewport, camera fly |
+| `editor/` | Timeline, curves, clips, hierarchy, layout, history, keyframes, poses, constraints |
+| `render/` | Camera, exposure, bloom, DOF, tone mapping, lens, onion skin, grid, light, billboard |
+| `timing/` | Frame clock, CPU and GPU frame timing, update phase, render prep |
+| `gpu/` | Graphics assets, pipelines, post-process targets, picking readback, imgui and trace |
+| `batch/` | Batch run schedule and pick capture |
+| `gizmo/` | Bone, constraint, grid, light, spring bone and transform gizmo state |
+| `flame/` | Flame effect data, render targets, history snapshot, SDF source, batch capture |
+| `lightning/` | Lightning GPU state, render targets, batch debug capture |
+| `water/` | Water effect data, render targets, history snapshot, trace blocks, batch capture |
+| `wind/` | Wind effect data, render targets, batch capture |
+| `app/` | App command and exit, message log, scene state |
+| `model/` | FBX and glTF model caches |
+| `animation/` | Bone pose override, pose apply cache, spring bone state |
+| `ml/` | Auto-rig, gRPC server process, inference actor, text-to-animation / text-to-mesh state |
+
+`mod.rs` re-exports every subdirectory, so `crate::ecs::resource::X` paths stay unchanged.
+
+`src/ecs/component/` groups its files by domain:
+
+| Path | Contents |
+|---|---|
+| `animation/` | animation meta, clip schedule and track snapshot, constraint set, motion path, scalar channel and its domain table, spring bone |
+| `editor/` | entity icon and editor display, gizmo re-exports, markers, locator |
+| `render/` | camera state, render handles, field-driven look |
+| `model/` | GLB source |
+| `ml/` | inference actor |
+| `mesh/` | GPU mesh types and vertex attribute presets |
+| `flame/` | Flame effect components |
+| `lightning/` | Lightning effect components |
+| `water/` | Water effect components |
+| `wind/` | Wind effect components |
+
+Subdirectory modules are private and re-exported, so `crate::ecs::component::X` paths stay unchanged.
+
 ## src/hooks/
 
 Generic hook infrastructure that lets a subsystem plug into the app lifecycle without being named by

@@ -222,6 +222,9 @@ def analyze_arm(out_dir: Path, arm: str, candidate: str, lightning_set: list[str
     distances = family_distances(ref_desc, describe_sequence(floor_fields, floor_fields["fps"]))
     scores = {family: float(distances[family] / ceiling[family]) for family in FAMILIES}
 
+    # bolt L2/L3 fail since Hard Rim (2026-09-24): L3 and the glow_width part of L2 measure the reference
+    # video halo the hard rim deliberately drops; the core_width / tort part of L2 predates it and is a
+    # parameter gap. Breakdown: Design/20260913_lightning_design/20260913_lightning_design/ref_match.md §6.
     result = {"ceiling": ceiling, "floor": distances, "score": scores,
               "pass": {family: bool(scores[family] <= 1.0) for family in VERDICT_FAMILIES}}
 

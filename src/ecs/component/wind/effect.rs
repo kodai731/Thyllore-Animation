@@ -4,7 +4,7 @@ use thyllore_scene_core::SceneComponent;
 pub use thyllore_effect_core::WindTornadoEffect;
 
 crate::scene_owner!(WindTornadoEffect {
-    icon: Wind,
+    icon: crate::ecs::component::EntityIcon::Effect('T'),
     placement: |e| (e.position, e.rotation),
 });
 

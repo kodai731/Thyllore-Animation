@@ -4,6 +4,7 @@ use crate::asset::AssetStorage;
 use crate::ecs::events::UIEvent;
 use crate::ecs::world::World;
 use crate::ecs::UIEventQueue;
+use crate::hooks::effect_ui_event::EffectUiEventDispatchHooks;
 
 use super::event_dispatch::camera::dispatch_camera_light_debug_events;
 use super::event_dispatch::clip_browser::dispatch_clip_browser_ecs_events;
@@ -42,14 +43,17 @@ pub fn run_event_dispatch_phase(
     super::event_dispatch::ml::poll_rigging_server_status(world);
 
     let events: Vec<UIEvent> = {
-        if let Some(mut ui_events) = world.get_resource_mut::<UIEventQueue>() {
-            ui_events.drain().collect()
-        } else {
+        let has_resource = world.contains_resource::<UIEventQueue>();
+        if !has_resource {
+            dispatch_effect_ui_hooks(world, assets);
             return (Vec::new(), commands);
         }
+        let mut ui_events = world.get_resource_mut::<UIEventQueue>().unwrap();
+        ui_events.drain().collect()
     };
 
     if events.is_empty() {
+        dispatch_effect_ui_hooks(world, assets);
         return (Vec::new(), commands);
     }
 
@@ -63,6 +67,7 @@ pub fn run_event_dispatch_phase(
     dispatch_scene_events(&events, world);
     dispatch_scene_events(&events, world);
     dispatch_overlay_events(&events, world);
+    dispatch_effect_ui_hooks(world, assets);
     dispatch_debug_constraint_events(&events, world, assets);
     dispatch_constraint_edit_events(&events, world);
     dispatch_constraint_bake_events(&events, world, assets);
@@ -88,6 +93,16 @@ pub fn run_event_dispatch_phase(
     let file_events = filter_file_dialog_events(&events);
 
     (file_events, commands)
+}
+
+fn dispatch_effect_ui_hooks(world: &mut World, assets: &mut AssetStorage) {
+    let hooks = world
+        .get_resource::<EffectUiEventDispatchHooks>()
+        .map(|hooks| hooks.entries())
+        .unwrap_or_default();
+    for hook in hooks {
+        (hook.dispatch)(world, assets);
+    }
 }
 
 fn filter_file_dialog_events(events: &[UIEvent]) -> Vec<UIEvent> {

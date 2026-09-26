@@ -4,7 +4,7 @@ use thyllore_scene_core::SceneComponent;
 pub use thyllore_effect_core::{WaterTemporalAccum, WaterTorusEffect};
 
 crate::scene_owner!(WaterTorusEffect {
-    icon: Water,
+    icon: crate::ecs::component::EntityIcon::Effect('W'),
     placement: |e| (e.position, e.rotation),
 });
 

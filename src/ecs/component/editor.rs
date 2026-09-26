@@ -9,10 +9,7 @@ pub enum EntityIcon {
     Grid,
     Gizmo,
     Billboard,
-    Flame,
-    Water,
-    Wind,
-    Lightning,
+    Effect(char),
 }
 
 impl EntityIcon {
@@ -26,10 +23,7 @@ impl EntityIcon {
             EntityIcon::Grid => 'G',
             EntityIcon::Gizmo => 'g',
             EntityIcon::Billboard => 'B',
-            EntityIcon::Flame => 'F',
-            EntityIcon::Water => 'W',
-            EntityIcon::Wind => 'T',
-            EntityIcon::Lightning => 'Z',
+            EntityIcon::Effect(icon) => *icon,
         }
     }
 }

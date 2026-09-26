@@ -8,8 +8,10 @@ use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
 use crate::ecs::systems::timeline_systems::clip_drag_preview_times;
 use crate::ecs::systems::{unit_action_parse, BatchAction};
 use crate::ecs::world::{Entity, World};
+use crate::hooks::effect_ui_event::send_effect_ui_command;
 
 use super::apply_texture_fit_from_path;
+use super::FlameUiCommand;
 
 #[derive(Debug, Default)]
 pub struct AddFlame;
@@ -106,15 +108,17 @@ impl BatchAction for ApplyTextureFitRoundtrip {
             return;
         };
         apply_texture_fit_to_first_flame(world, &self.path, self.blend, self.profile);
-        world
-            .resource_mut::<UIEventQueue>()
-            .send(UIEvent::UpdateFlameEffect {
+        send_effect_ui_command(
+            &*world,
+            FlameUiCommand::UpdateEffect {
                 entity: flame,
                 effect: Box::new(original_effect),
-            });
-        world
-            .resource_mut::<UIEventQueue>()
-            .send(UIEvent::UpdateFlameBaked(Box::new(original_baked)));
+            },
+        );
+        send_effect_ui_command(
+            &*world,
+            FlameUiCommand::UpdateBaked(Box::new(original_baked)),
+        );
     }
 }
 
@@ -172,15 +176,14 @@ fn apply_texture_fit_to_first_flame(world: &World, path: &str, blend: f32, profi
         profile,
         "debug_action",
     );
-    world
-        .resource_mut::<UIEventQueue>()
-        .send(UIEvent::UpdateFlameEffect {
+    send_effect_ui_command(
+        &*world,
+        FlameUiCommand::UpdateEffect {
             entity: flame,
             effect: Box::new(effect),
-        });
-    world
-        .resource_mut::<UIEventQueue>()
-        .send(UIEvent::UpdateFlameBaked(Box::new(baked)));
+        },
+    );
+    send_effect_ui_command(&*world, FlameUiCommand::UpdateBaked(Box::new(baked)));
 }
 
 fn clip_preview_seconds_parse(text: &str) -> Result<f32> {

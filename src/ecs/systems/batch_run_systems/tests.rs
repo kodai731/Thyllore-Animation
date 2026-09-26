@@ -2,16 +2,18 @@ use std::path::{Path, PathBuf};
 
 use super::*;
 use crate::asset::AssetStorage;
-use crate::ecs::component::{FlameEffect, MotionPath};
+use crate::ecs::component::MotionPath;
 use crate::ecs::events::{UIEvent, UIEventQueue};
 use crate::ecs::resource::{
     BatchFlameOrbit, BatchRun, BatchRunState, CaptureOutput, CaptureSchedule, ClipLibrary,
-    DebugViewMode, DebugViewState, FlameWallProbeCapture, FrameClock, TimelineState,
+    DebugViewMode, DebugViewState, FrameClock, TimelineState,
 };
 use crate::ecs::systems::scalar_clip_systems::test_support::{
     spawn_probe, PROBE_DOMAIN, PROBE_LEVEL,
 };
 use crate::ecs::world::{Transform, World};
+use crate::hooks::effect_spawn::EffectSpawnHooks;
+use crate::scene::test_support::ProbeOwner;
 
 fn args(list: &[&str]) -> Vec<String> {
     list.iter().map(|s| s.to_string()).collect()
@@ -173,25 +175,7 @@ fn resolve_rejects_invalid_camera_pose() {
 }
 
 #[test]
-fn engine_overrides_carry_no_subsystem_flags() {
-    let overrides = resolve_engine_cli_overrides(&args(&[
-        "bin",
-        "--batch-screenshot",
-        "/tmp/out.png",
-        "--batch-flame-mode",
-        "raymarch",
-        "--batch-water-probe",
-        "/tmp/probe.json",
-        "--batch-play",
-    ]))
-    .unwrap();
-    assert!(overrides.batch_run.is_some());
-    assert!(overrides.batch_play);
-    assert!(overrides.debug_actions.is_empty());
-}
-
-#[test]
-fn apply_engine_overrides_inserts_the_batch_run_and_leaves_capture_requests_to_actions() {
+fn apply_engine_overrides_inserts_the_batch_run_and_applies_registered_actions() {
     let overrides = resolve_engine_cli_overrides(&args(&[
         "bin",
         "--batch-screenshot",
@@ -199,36 +183,29 @@ fn apply_engine_overrides_inserts_the_batch_run_and_leaves_capture_requests_to_a
         "--batch-frames",
         "7",
         "--batch-debug-action",
-        "dump_wall_probe",
+        "black_background",
     ]))
     .unwrap();
     let mut world = World::new();
+    world.insert_resource(DebugViewState::default());
     apply_engine_overrides(&mut world, &mut AssetStorage::new(), &overrides);
 
     assert_eq!(world.resource::<BatchRun>().capture.first_frame, 7);
-    assert!(world.contains_resource::<FlameWallProbeCapture>());
-}
-
-#[test]
-fn apply_engine_overrides_without_a_batch_run_captures_through_the_event_queue() {
-    let overrides =
-        resolve_engine_cli_overrides(&args(&["bin", "--batch-debug-action", "dump_wall_probe"]))
-            .unwrap();
-    let mut world = World::new();
-    world.insert_resource(UIEventQueue::new());
-    apply_engine_overrides(&mut world, &mut AssetStorage::new(), &overrides);
-    assert!(world.get_resource::<BatchRun>().is_none());
-    assert!(world.get_resource::<FlameWallProbeCapture>().is_none());
-
-    let events: Vec<UIEvent> = world.resource_mut::<UIEventQueue>().drain().collect();
-    assert!(matches!(events[0], UIEvent::CaptureNow(_)));
+    assert!(world.resource::<DebugViewState>().black_background);
 }
 
 #[test]
 fn batch_run_update_orbit_inserts_missing_transform() {
     let mut world = World::new();
+    world.insert_resource(EffectSpawnHooks::collect().expect("unique effect keys"));
     let e = world.spawn();
-    world.insert_component(e, FlameEffect::default());
+    world.insert_component(
+        e,
+        ProbeOwner {
+            position: [0.0, 0.0, 0.0],
+            level: 0.5,
+        },
+    );
     world.insert_resource(FrameClock {
         frame: 1,
         ..FrameClock::fixed(FrameClock::BATCH_DELTA_SECONDS)

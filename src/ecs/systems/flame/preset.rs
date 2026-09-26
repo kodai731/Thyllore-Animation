@@ -1,28 +1,16 @@
-use super::{resolve_selected_flame, write_flame_transform};
 use crate::ecs::component::{AppliedFlamePreset, FlameEffect};
-use crate::ecs::world::World;
+use crate::ecs::systems::effect_edit::EffectPreset;
 
-/// Apply a named preset to the selected flame's parameter component. The
-/// preset table lives in render-core; this system is the only mutation path
-/// so UI and batch actions share one behavior.
-pub fn apply_flame_preset_to_selected(world: &mut World, name: &str) {
-    let Some(target) = resolve_selected_flame(world) else {
-        return;
-    };
-    let Some(mut effect) = world
-        .get_component::<FlameEffect>(target)
-        .map(|e| e.clone())
-    else {
-        return;
-    };
-    if thyllore_effect_core::apply_flame_preset(&mut effect, name) {
-        write_flame_transform(world, target, effect.position, effect.rotation);
-        world.insert_component(target, effect);
-        world.insert_component(
-            target,
-            AppliedFlamePreset {
-                name: name.to_string(),
-            },
-        );
+impl EffectPreset for FlameEffect {
+    type Applied = AppliedFlamePreset;
+
+    fn apply_preset(&mut self, name: &str) -> bool {
+        thyllore_effect_core::apply_flame_preset(self, name)
+    }
+
+    fn applied(name: &str) -> Self::Applied {
+        AppliedFlamePreset {
+            name: name.to_string(),
+        }
     }
 }

@@ -271,6 +271,28 @@ pub fn draw_tiered_params<C>(
     true
 }
 
+pub(super) fn draw_preset_combo(
+    ui: &imgui::Ui,
+    label: &str,
+    names: &[&str],
+    applied: Option<&str>,
+) -> Option<String> {
+    let preview = applied.unwrap_or("(none)");
+    let combo = ui.begin_combo(label, preview)?;
+    let mut chosen = None;
+    for &name in names {
+        if ui
+            .selectable_config(name)
+            .selected(Some(name) == applied)
+            .build()
+        {
+            chosen = Some(name.to_string());
+        }
+    }
+    combo.end();
+    chosen
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

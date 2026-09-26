@@ -18,7 +18,7 @@ fn spawned_wind_carries_the_components_the_editor_queries() {
     assert!(world.get_component::<GlobalTransform>(entity).is_some());
     assert!(world.get_component::<WindTornadoEffect>(entity).is_some());
     let display = world.get_component::<EditorDisplay>(entity).unwrap();
-    assert_eq!(display.icon, EntityIcon::Wind);
+    assert_eq!(display.icon, EntityIcon::Effect('T'));
 }
 
 #[test]

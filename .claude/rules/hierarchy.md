@@ -176,7 +176,18 @@ its instance limit or its placement. `frame_prep.rs` holds the `FramePrepHook` c
 record (time advance, bone attachment, trails at `Advance`; history accumulation and dump sinks at
 `Accumulate`, which runs after the previous frame's GPU timings are written) is registered from
 `src/ecs/systems/<effect>/` and `src/ecs/systems/phases/render_prep_phase.rs` runs `FramePrepHooks`
-(a `World` resource collected at app start, sorted by stage then name) without naming an effect. A hook
+(a `World` resource collected at app start, sorted by stage then name) without naming an effect.
+`effect_ui_event.rs` holds the `EffectUiEventDispatchHooks` contract (key, dispatch) and the
+`ui_event_hook!` macro: an effect owns a typed `EffectUiQueue<C>` as a default resource, and UI
+panels or systems send commands via `send_effect_ui_command(world, command)`. The
+`ui_event_hook!(key, dispatch)` macro registers a function that drains this queue and applies the
+commands. These hooks are collected into an `EffectUiEventDispatchHooks` resource at startup, which
+`src/ecs/systems/phases/event_dispatch_phase.rs` iterates every frame immediately after generic
+overlay events. This ensures that the generic `UIEvent` does not need to contain effect-specific variants.
+`src/ecs/systems/effect_edit.rs` holds the `apply_effect_update` and `apply_effect_preset` functions: these provide
+common logic for updating effects and applying presets across all effects (with transforms derived
+from `SceneOwner::placement`). Each effect only needs to implement the `EffectPreset` trait in its
+own directory to participate in this shared system. A hook
 file describes a contract only; it never names a concrete effect.
 
 ## src/effect/
@@ -300,20 +311,6 @@ for hook in world.resource::<SceneComponentHooks>().ordered() {
 Test for it before finishing: `grep -rni "flame\|water\|wind" src/scene src/hooks src/ecs/systems/phases/render_prep_phase.rs`
 must hit nothing but the stub pass names of `src/hooks/pass.rs` tests and the `window` / `windows(2)`
 matches.
-
-Known violations still to remove (each needs a registry the feature subscribes to; do not add to the list,
-shrink it):
-
-- UI event plumbing: `src/ecs/events/ui_events.rs` (`UIEvent::UpdateFlameEffect`, `ApplyWaterPreset`, ...),
-  `src/ecs/systems/phases/event_dispatch/overlay.rs`, `src/platform/ui/scene_overlay.rs`,
-  `src/ecs/resource/graphics.rs` (`flame_preset_index`, `flame_style_*`), `src/platform/events/frame.rs`.
-- Picking: `src/ecs/systems/object_picking_systems.rs` calls `find_<effect>_by_pick_ray` in a fixed list.
-- Startup defaults: `src/app/init/instance.rs::insert_default_if_missing::<FlameRenderSettings>` and the
-  other effect resources; `src/paths.rs` flame asset directories.
-- Registries written by hand: `EntityIcon::{Flame, Water, Wind}` in `src/ecs/component/editor.rs`,
-  `src/ecs/systems/effect_debug_dump.rs`, `src/ecs/systems/batch_run_systems/orbit.rs`.
-- Tests of shared code naming an effect: the flame batch flag / wall probe / orbit tests in
-  `batch_run_systems/tests.rs` (they follow `orbit.rs` and the flame `cli.rs` hook when those move).
 
 Resources follow the same rule. A resource is persisted by declaring its fields once
 (`declare_scene_format!` in the resource's own file, or in its crate for `thyllore-render-core` settings)

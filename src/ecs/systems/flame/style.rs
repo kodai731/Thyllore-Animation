@@ -1,3 +1,4 @@
+use super::paths::FLAMES_STYLE_DIR;
 use super::resolve_selected_flame;
 use crate::ecs::component::{AppliedFlameStyle, FlameBaked, FlameEffect};
 use crate::ecs::world::World;
@@ -56,7 +57,7 @@ pub fn save_flame_style_of_selected(world: &World, name: &str) -> Option<String>
 
     let target = resolve_selected_flame(world)?;
     let effect = world.get_component::<FlameEffect>(target)?;
-    let path = format!("{}/{}.style.ron", crate::paths::FLAMES_STYLE_DIR, sanitized);
+    let path = format!("{}/{}.style.ron", FLAMES_STYLE_DIR, sanitized);
     dump_flame_style_to_path(effect, &path);
     Some(path)
 }
@@ -151,7 +152,7 @@ mod tests {
 
     #[test]
     fn shipped_style_assets_parse() {
-        for entry in std::fs::read_dir(crate::paths::FLAMES_STYLE_DIR).unwrap() {
+        for entry in std::fs::read_dir(FLAMES_STYLE_DIR).unwrap() {
             let path = entry.unwrap().path();
             if path.to_string_lossy().ends_with(".style.ron") {
                 let content = std::fs::read_to_string(&path).unwrap();

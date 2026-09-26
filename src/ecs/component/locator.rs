@@ -33,7 +33,7 @@ impl SceneComponent for Locator {
 }
 
 crate::scene_owner!(Locator {
-    icon: Empty,
+    icon: crate::ecs::component::EntityIcon::Empty,
     placement: |locator| (
         Vector3::from(locator.position),
         Quaternion::new(

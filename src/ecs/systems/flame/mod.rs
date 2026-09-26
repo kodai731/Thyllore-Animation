@@ -8,6 +8,7 @@ mod frame_prep;
 mod heat_distortion;
 mod history_accumulate;
 mod passes;
+mod paths;
 mod pick;
 mod pipeline;
 mod preset;
@@ -20,6 +21,8 @@ mod texture_fit;
 mod time;
 mod trace;
 mod trail;
+mod ui_apply;
+mod ui_command;
 
 pub use attach::*;
 pub use cli::*;
@@ -29,6 +32,7 @@ pub use field::*;
 pub use heat_distortion::*;
 pub use history_accumulate::*;
 pub use passes::*;
+pub use paths::*;
 pub use pick::*;
 pub use preset::*;
 pub use record::*;
@@ -39,6 +43,7 @@ pub use texture_fit::*;
 pub use time::*;
 pub use trace::*;
 pub use trail::*;
+pub use ui_command::*;
 
 #[cfg(test)]
 mod tests;

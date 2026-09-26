@@ -6,6 +6,7 @@ use vulkanalia::prelude::v1_0::*;
 pub enum OverlayBlend {
     Premultiplied,
     Opaque,
+    Additive,
 }
 
 impl OverlayBlend {
@@ -13,6 +14,7 @@ impl OverlayBlend {
         match self {
             OverlayBlend::Premultiplied => premultiplied_blend(),
             OverlayBlend::Opaque => opaque_blend(),
+            OverlayBlend::Additive => additive_blend(),
         }
     }
 }
@@ -37,6 +39,18 @@ fn opaque_blend() -> BlendConfig {
         color_op: vk::BlendOp::ADD,
         src_alpha_factor: vk::BlendFactor::ONE,
         dst_alpha_factor: vk::BlendFactor::ZERO,
+        alpha_op: vk::BlendOp::ADD,
+    }
+}
+
+fn additive_blend() -> BlendConfig {
+    BlendConfig {
+        enable: true,
+        src_color_factor: vk::BlendFactor::ONE,
+        dst_color_factor: vk::BlendFactor::ONE,
+        color_op: vk::BlendOp::ADD,
+        src_alpha_factor: vk::BlendFactor::ZERO,
+        dst_alpha_factor: vk::BlendFactor::ONE,
         alpha_op: vk::BlendOp::ADD,
     }
 }

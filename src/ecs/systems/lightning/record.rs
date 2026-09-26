@@ -5,8 +5,7 @@ use crate::ecs::resource::LightningRenderTargets;
 use crate::ecs::systems::lightning::descriptors::LightningResolveDescriptorSet;
 use crate::vulkanr::pipeline::RRPipeline;
 use thyllore_vulkan_core::{
-    begin_overlay_render_pass, draw_fullscreen_triangle, set_full_viewport, FrameRenderContext,
-    OverlayAttachmentLoad,
+    record_overlay_draws, FrameRenderContext, OverlayAttachmentLoad, OverlayDraw, OverlayPass,
 };
 
 #[repr(C)]
@@ -42,6 +41,13 @@ pub struct LightningInstanceDraw {
     pub scissor: vk::Rect2D,
 }
 
+fn full_area(extent: vk::Extent2D) -> vk::Rect2D {
+    vk::Rect2D {
+        offset: vk::Offset2D { x: 0, y: 0 },
+        extent,
+    }
+}
+
 pub unsafe fn record_lightning_resolve_pass(
     ctx: &FrameRenderContext,
     targets: &LightningRenderTargets,
@@ -54,42 +60,34 @@ pub unsafe fn record_lightning_resolve_pass(
 ) -> Result<()> {
     let device = &ctx.device.device;
     let extent = targets.extent();
-    begin_overlay_render_pass(
+    let pass = OverlayPass {
+        render_pass: targets.render_pass,
+        framebuffer: targets.framebuffer,
+        extent,
+    };
+    let frame_set = ctx.graphics.frame_set.sets[image_index];
+    let sets = [frame_set, descriptor.descriptor_set];
+    let dynamic_offsets: Vec<[u32; 2]> = draws
+        .iter()
+        .map(|draw| [draw.ubo_dynamic_offset, draw.segments_dynamic_offset])
+        .collect();
+    let overlay_draws: Vec<OverlayDraw> = draws
+        .iter()
+        .zip(&dynamic_offsets)
+        .map(|(draw, offsets)| OverlayDraw {
+            descriptor_sets: &sets,
+            dynamic_offsets: offsets,
+            scissor: draw.scissor,
+        })
+        .collect();
+    record_overlay_draws(
         device,
         cmd,
-        targets.render_pass,
-        targets.framebuffer,
-        vk::Rect2D {
-            offset: vk::Offset2D { x: 0, y: 0 },
-            extent,
-        },
+        &pass,
+        full_area(extent),
         OverlayAttachmentLoad::Keep,
-    );
-
-    device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
-    set_full_viewport(device, cmd, extent);
-    device.cmd_push_constants(
-        cmd,
-        pipeline.pipeline_layout,
-        vk::ShaderStageFlags::FRAGMENT,
-        0,
-        push_constants.as_bytes(),
-    );
-
-    let frame_set = ctx.graphics.frame_set.sets[image_index];
-    for draw in draws {
-        device.cmd_set_scissor(cmd, 0, &[draw.scissor]);
-        device.cmd_bind_descriptor_sets(
-            cmd,
-            vk::PipelineBindPoint::GRAPHICS,
-            pipeline.pipeline_layout,
-            0,
-            &[frame_set, descriptor.descriptor_set],
-            &[draw.ubo_dynamic_offset, draw.segments_dynamic_offset],
-        );
-        draw_fullscreen_triangle(device, cmd);
-    }
-
-    device.cmd_end_render_pass(cmd);
-    Ok(())
+        pipeline,
+        Some(push_constants.as_bytes()),
+        &overlay_draws,
+    )
 }

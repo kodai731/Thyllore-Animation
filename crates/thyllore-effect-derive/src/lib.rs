@@ -1,0 +1,1317 @@
+use proc_macro::TokenStream;
+use quote::quote;
+use syn::{parse_macro_input, Data, DeriveInput, Error, Fields, Meta, Result};
+
+#[proc_macro_derive(PyEffect, attributes(py_effect))]
+pub fn derive_py_effect(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    expand_py_effect(&input)
+        .unwrap_or_else(Error::into_compile_error)
+        .into()
+}
+
+#[proc_macro_derive(SceneFormat, attributes(scene, persist, runtime))]
+pub fn derive_scene_format(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    expand_scene_format(&input)
+        .unwrap_or_else(Error::into_compile_error)
+        .into()
+}
+
+fn expand_scene_format(input: &DeriveInput) -> Result<proc_macro2::TokenStream> {
+    let Data::Struct(data) = &input.data else {
+        return Err(Error::new_spanned(
+            &input.ident,
+            "SceneFormat can only be derived for structs",
+        ));
+    };
+
+    let attrs = parse_scene_attributes(input)?;
+    let Some(attrs) = attrs else {
+        return Err(Error::new_spanned(
+            &input.ident,
+            "SceneFormat requires #[scene(record = ..., tag = ..., key = \"...\", tags = ...)] on the struct",
+        ));
+    };
+
+    let name = &input.ident;
+
+    let record = &attrs.record;
+    let tag = &attrs.tag;
+    let key: syn::LitStr = attrs.key;
+    let tags = &attrs.tags;
+    let snapshot = &attrs.snapshot;
+    let scalars = &attrs.scalars;
+    let ui = &attrs.ui;
+    let overwrite = &attrs.overwrite;
+
+    let persisted_entries = collect_persisted_entries(&data.fields)?;
+    let runtime_entries = collect_runtime_entries(&data.fields)?;
+
+    Ok(quote! {
+        ::thyllore_scene_core::declare_scene_format!(
+            component: #name,
+            record: #record,
+            tag: #tag,
+            items {
+                key: #key,
+                tags: #tags,
+                snapshot: #snapshot,
+                scalars: #scalars,
+                ui: #ui,
+                overwrite: #overwrite,
+            },
+            persisted {
+                #(#persisted_entries),*
+            },
+            runtime {
+                #(#runtime_entries),*
+            },
+        );
+    })
+}
+
+fn parse_scene_attributes(input: &DeriveInput) -> Result<Option<SceneAttributes>> {
+    for attr in input.attrs.iter().filter(|a| a.path().is_ident("scene")) {
+        let Meta::List(list) = &attr.meta else {
+            continue;
+        };
+
+        let mut record: Option<syn::Path> = None;
+        let mut tag: Option<syn::Path> = None;
+        let mut key: Option<syn::LitStr> = None;
+        let mut tags: Option<syn::Path> = None;
+        let mut snapshot: Option<syn::Path> = None;
+        let mut scalars: Option<syn::Path> = None;
+        let mut ui: Option<syn::Path> = None;
+        let mut overwrite: Option<syn::Path> = None;
+
+        list.parse_nested_meta(|meta| {
+            if meta.path.is_ident("record") {
+                record = Some(meta.value()?.parse()?);
+            } else if meta.path.is_ident("tag") {
+                tag = Some(meta.value()?.parse()?);
+            } else if meta.path.is_ident("key") {
+                key = Some(meta.value()?.parse()?);
+            } else if meta.path.is_ident("tags") {
+                tags = Some(meta.value()?.parse()?);
+            } else if meta.path.is_ident("snapshot") {
+                snapshot = Some(meta.value()?.parse()?);
+            } else if meta.path.is_ident("scalars") {
+                scalars = Some(meta.value()?.parse()?);
+            } else if meta.path.is_ident("ui") {
+                ui = Some(meta.value()?.parse()?);
+            } else if meta.path.is_ident("overwrite") {
+                overwrite = Some(meta.value()?.parse()?);
+            } else {
+                return Err(meta.error("unknown scene attribute key"));
+            }
+
+            Ok(())
+        })?;
+
+        return Ok(Some(SceneAttributes {
+            record: record.ok_or_else(|| {
+                Error::new_spanned(&input.ident, "scene attribute requires `record`")
+            })?,
+            tag: tag.ok_or_else(|| {
+                Error::new_spanned(&input.ident, "scene attribute requires `tag`")
+            })?,
+            key: key.ok_or_else(|| {
+                Error::new_spanned(&input.ident, "scene attribute requires `key`")
+            })?,
+            tags: tags.ok_or_else(|| {
+                Error::new_spanned(&input.ident, "scene attribute requires `tags`")
+            })?,
+            snapshot: snapshot.ok_or_else(|| {
+                Error::new_spanned(&input.ident, "scene attribute requires `snapshot`")
+            })?,
+            scalars: scalars.ok_or_else(|| {
+                Error::new_spanned(&input.ident, "scene attribute requires `scalars`")
+            })?,
+            ui: ui
+                .ok_or_else(|| Error::new_spanned(&input.ident, "scene attribute requires `ui`"))?,
+            overwrite: overwrite.ok_or_else(|| {
+                Error::new_spanned(&input.ident, "scene attribute requires `overwrite`")
+            })?,
+        }));
+    }
+
+    Ok(None)
+}
+
+fn collect_persisted_entries(fields: &Fields) -> Result<Vec<proc_macro2::TokenStream>> {
+    let mut entries = Vec::new();
+
+    for field in fields.iter() {
+        let Some(ident) = &field.ident else {
+            continue;
+        };
+
+        for attr in field.attrs.iter().filter(|a| a.path().is_ident("persist")) {
+            let persist = parse_persist_attribute(attr)?;
+            entries.push(expand_persisted_entry(ident, &field.ty, persist)?);
+        }
+    }
+
+    Ok(entries)
+}
+
+fn parse_persist_attribute(attr: &syn::Attribute) -> Result<PersistAttributes> {
+    let mut persist = PersistAttributes::default();
+
+    attr.meta.require_list()?.parse_nested_meta(|meta| {
+        if meta.path.is_ident("owner") {
+            persist.owner = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("as") {
+            persist.as_type = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("get") {
+            persist.get = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("set") {
+            persist.set = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("default") {
+            persist.default = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("scalars") {
+            persist.scalars = Some(parse_persist_scalars(&meta)?);
+        } else if meta.path.is_ident("name") {
+            persist.name = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("path") {
+            persist.path = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("ui") {
+            persist.ui = Some(parse_ui_attributes(&meta)?);
+        } else {
+            return Err(meta.error("unknown persist attribute key"));
+        }
+
+        Ok(())
+    })?;
+
+    if persist.path.is_some() {
+        if persist.name.is_none() {
+            return Err(Error::new_spanned(attr, "persist `path` requires `name`"));
+        }
+        if persist.as_type.is_none() {
+            return Err(Error::new_spanned(attr, "persist `path` requires `as`"));
+        }
+        if persist.get.is_some() || persist.set.is_some() {
+            return Err(Error::new_spanned(
+                attr,
+                "persist `path` cannot be combined with `get` or `set`",
+            ));
+        }
+    }
+
+    if persist.name.is_some() && persist.path.is_none() && persist.get.is_none() {
+        return Err(Error::new_spanned(
+            attr,
+            "persist `name` requires `path` or `get` / `set`",
+        ));
+    }
+
+    Ok(persist)
+}
+
+fn parse_persist_scalars(meta: &syn::meta::ParseNestedMeta) -> Result<PersistScalars> {
+    if meta.input.peek(syn::Token![=]) {
+        return Ok(PersistScalars::Channels(meta.value()?.parse()?));
+    }
+
+    let mut aliases = Vec::new();
+    meta.parse_nested_meta(|alias_meta| {
+        let Some(name) = alias_meta.path.get_ident().cloned() else {
+            return Err(alias_meta.error("scalar alias must be an identifier"));
+        };
+        aliases.push((name, alias_meta.value()?.parse()?));
+        Ok(())
+    })?;
+
+    Ok(PersistScalars::Aliases(aliases))
+}
+
+fn expand_persist_scalars(scalars: PersistScalars) -> Result<proc_macro2::TokenStream> {
+    match scalars {
+        PersistScalars::Channels(channels) => Ok(quote!(, scalars: #channels)),
+        PersistScalars::Aliases(aliases) => {
+            let entries = aliases
+                .iter()
+                .map(|(name, path)| {
+                    let accessors = expand_path_accessors(path)?;
+                    Ok(quote!(#name: { #accessors }))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            Ok(quote!(, scalars { #(#entries),* }))
+        }
+    }
+}
+
+fn expand_path_accessors(path: &syn::LitStr) -> Result<proc_macro2::TokenStream> {
+    let path_str = path.value();
+    let segments: Vec<&str> = path_str.split('.').collect();
+
+    let mut expr: proc_macro2::TokenStream = quote!(e);
+    for seg in &segments {
+        let tokens = parse_segment(*seg, path)?;
+        expr = quote!(#expr.#tokens);
+    }
+
+    Ok(quote!(get: |e| #expr, set: |e, v| #expr = v))
+}
+
+fn parse_segment(seg: &str, path: &syn::LitStr) -> Result<proc_macro2::TokenStream> {
+    if let Some(bracket_pos) = seg.find('[') {
+        let ident_part = &seg[..bracket_pos];
+        let bracket_part = &seg[bracket_pos..];
+
+        if !bracket_part.starts_with('[') || !bracket_part.ends_with(']') {
+            return Err(Error::new_spanned(
+                path,
+                format!(
+                    "invalid index in path segment `{}`: brackets must be closed",
+                    seg
+                ),
+            ));
+        }
+
+        let inner = &bracket_part[1..bracket_part.len() - 1];
+        let n: usize = inner.parse().map_err(|_| {
+            Error::new_spanned(
+                path,
+                format!(
+                    "invalid index in path segment `{}`: index must be a non-negative integer",
+                    seg
+                ),
+            )
+        })?;
+
+        let index = syn::Index::from(n);
+        let ident = syn::Ident::new(ident_part, proc_macro2::Span::call_site());
+        Ok(quote!(#ident[#index]))
+    } else {
+        let ident = syn::Ident::new(seg, proc_macro2::Span::call_site());
+        Ok(quote!(#ident))
+    }
+}
+
+fn expand_persisted_entry(
+    ident: &syn::Ident,
+    field_ty: &syn::Type,
+    persist: PersistAttributes,
+) -> Result<proc_macro2::TokenStream> {
+    let owner = persist
+        .owner
+        .ok_or_else(|| Error::new_spanned(ident, "persist attribute requires `owner`"))?;
+
+    let entry_ident = match &persist.name {
+        Some(name) => name.clone(),
+        None => ident.clone(),
+    };
+
+    let ty = match &persist.as_type {
+        Some(as_type) => quote!(#as_type),
+        None => quote!(#field_ty),
+    };
+
+    let accessors = if let Some(ref path) = persist.path {
+        expand_path_accessors(path)?
+    } else {
+        match (&persist.get, &persist.set) {
+            (Some(get), Some(set)) => quote!(get: #get, set: #set),
+            (None, None) if persist.as_type.is_none() => {
+                quote!(get: |e| e.#ident, set: |e, v| e.#ident = v)
+            }
+            _ => return Err(Error::new_spanned(
+                ident,
+                "persist `as` requires both `get` and `set`, and `get` / `set` must be given together",
+            )),
+        }
+    };
+
+    let def = persist.default.map(|def| quote!(, default: #def));
+    let scalars = persist.scalars.map(expand_persist_scalars).transpose()?;
+    let ui = persist
+        .ui
+        .map(|ui| expand_ui(&entry_ident, ui))
+        .transpose()?;
+
+    Ok(quote! {
+        #entry_ident: #ty = #owner {
+            #accessors
+            #def
+            #scalars
+            #ui
+        }
+    })
+}
+
+fn collect_runtime_entries(fields: &Fields) -> Result<Vec<proc_macro2::TokenStream>> {
+    let mut entries = Vec::new();
+
+    for field in fields.iter() {
+        let Some(ident) = &field.ident else {
+            continue;
+        };
+
+        for attr in field.attrs.iter().filter(|a| a.path().is_ident("runtime")) {
+            let runtime = parse_runtime_attribute(attr)?;
+            entries.push(expand_runtime_entry(ident, &field.ty, runtime)?);
+        }
+    }
+
+    Ok(entries)
+}
+
+fn parse_runtime_attribute(attr: &syn::Attribute) -> Result<RuntimeAttributes> {
+    let mut runtime = RuntimeAttributes::default();
+
+    if let Meta::Path(_) = &attr.meta {
+        return Ok(runtime);
+    }
+
+    attr.meta.require_list()?.parse_nested_meta(|meta| {
+        if meta.path.is_ident("name") {
+            runtime.name = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("path") {
+            runtime.path = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("as") {
+            runtime.as_type = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("ui") {
+            runtime.ui = Some(parse_ui_attributes(&meta)?);
+        } else {
+            return Err(meta.error("unknown runtime attribute key"));
+        }
+
+        Ok(())
+    })?;
+
+    if runtime.path.is_some() {
+        if runtime.name.is_none() {
+            return Err(Error::new_spanned(attr, "runtime `path` requires `name`"));
+        }
+        if runtime.as_type.is_none() {
+            return Err(Error::new_spanned(attr, "runtime `path` requires `as`"));
+        }
+    }
+
+    if runtime.name.is_some() && runtime.path.is_none() {
+        return Err(Error::new_spanned(attr, "runtime `name` requires `path`"));
+    }
+
+    Ok(runtime)
+}
+
+fn expand_runtime_entry(
+    ident: &syn::Ident,
+    field_ty: &syn::Type,
+    runtime: RuntimeAttributes,
+) -> Result<proc_macro2::TokenStream> {
+    let entry_ident = match &runtime.name {
+        Some(name) => name.clone(),
+        None => ident.clone(),
+    };
+
+    let ty = match &runtime.as_type {
+        Some(as_type) => quote!(#as_type),
+        None => quote!(#field_ty),
+    };
+
+    let accessors = if let Some(ref path) = runtime.path {
+        expand_path_accessors(path)?
+    } else {
+        quote!(get: |e| e.#ident, set: |e, v| e.#ident = v)
+    };
+
+    let ui = runtime
+        .ui
+        .map(|ui| expand_ui(&entry_ident, ui))
+        .transpose()?;
+
+    Ok(quote! {
+        #entry_ident: #ty {
+            #accessors
+            #ui
+        }
+    })
+}
+
+fn parse_ui_attributes(meta: &syn::meta::ParseNestedMeta) -> Result<UiAttributes> {
+    let mut ui = UiAttributes::default();
+
+    meta.parse_nested_meta(|ui_meta| {
+        if ui_meta.path.is_ident("kind") {
+            ui.kind = Some(ui_meta.value()?.parse()?);
+        } else if ui_meta.path.is_ident("label") {
+            ui.label = Some(ui_meta.value()?.parse()?);
+        } else if ui_meta.path.is_ident("min") {
+            ui.min = Some(ui_meta.value()?.parse()?);
+        } else if ui_meta.path.is_ident("max") {
+            ui.max = Some(ui_meta.value()?.parse()?);
+        } else if ui_meta.path.is_ident("format") {
+            ui.format = Some(ui_meta.value()?.parse()?);
+        } else if ui_meta.path.is_ident("tooltip") {
+            ui.tooltip = Some(ui_meta.value()?.parse()?);
+        } else if ui_meta.path.is_ident("group") {
+            ui.group = Some(ui_meta.value()?.parse()?);
+        } else if ui_meta.path.is_ident("primary") {
+            ui.primary = true;
+        } else {
+            return Err(ui_meta.error("unknown ui key"));
+        }
+
+        Ok(())
+    })?;
+
+    Ok(ui)
+}
+
+fn expand_ui(ident: &syn::Ident, ui: UiAttributes) -> Result<proc_macro2::TokenStream> {
+    let min = ui
+        .min
+        .ok_or_else(|| Error::new_spanned(ident, "ui requires `min`"))?;
+    let max = ui
+        .max
+        .ok_or_else(|| Error::new_spanned(ident, "ui requires `max`"))?;
+
+    let kind = ui.kind.map(|kind| quote!(kind: #kind,));
+    let label = ui.label.map(|label| quote!(label: #label,));
+    let format = ui.format.map(|format| quote!(, format: #format));
+    let tooltip = ui.tooltip.map(|tooltip| quote!(, tooltip: #tooltip));
+    let group = ui.group.map(|group| quote!(, group: #group));
+    let primary = if ui.primary {
+        quote!(primary,)
+    } else {
+        quote!()
+    };
+
+    Ok(quote! {
+        , ui {
+            #primary
+            #kind
+            #label
+            min: #min,
+            max: #max
+            #format
+            #tooltip
+            #group
+        }
+    })
+}
+
+#[derive(Default)]
+struct PersistAttributes {
+    owner: Option<syn::Ident>,
+    as_type: Option<syn::Type>,
+    get: Option<syn::Path>,
+    set: Option<syn::Path>,
+    default: Option<syn::Expr>,
+    scalars: Option<PersistScalars>,
+    name: Option<syn::Ident>,
+    path: Option<syn::LitStr>,
+    ui: Option<UiAttributes>,
+}
+
+enum PersistScalars {
+    Channels(syn::Ident),
+    Aliases(Vec<(syn::Ident, syn::LitStr)>),
+}
+
+#[derive(Default)]
+struct RuntimeAttributes {
+    name: Option<syn::Ident>,
+    path: Option<syn::LitStr>,
+    as_type: Option<syn::Type>,
+    ui: Option<UiAttributes>,
+}
+
+#[derive(Default)]
+struct UiAttributes {
+    primary: bool,
+    kind: Option<syn::Ident>,
+    label: Option<syn::LitStr>,
+    min: Option<syn::Expr>,
+    max: Option<syn::Expr>,
+    format: Option<syn::LitStr>,
+    tooltip: Option<syn::LitStr>,
+    group: Option<syn::LitStr>,
+}
+
+struct SceneAttributes {
+    record: syn::Path,
+    tag: syn::Path,
+    key: syn::LitStr,
+    tags: syn::Path,
+    snapshot: syn::Path,
+    scalars: syn::Path,
+    ui: syn::Path,
+    overwrite: syn::Path,
+}
+
+#[proc_macro_derive(UboPack, attributes(ubo))]
+pub fn derive_ubo_pack(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    expand_ubo_pack(&input)
+        .unwrap_or_else(Error::into_compile_error)
+        .into()
+}
+
+fn expand_ubo_pack(input: &DeriveInput) -> Result<proc_macro2::TokenStream> {
+    let Data::Struct(data) = &input.data else {
+        return Err(Error::new_spanned(
+            &input.ident,
+            "UboPack can only be derived for structs",
+        ));
+    };
+
+    let name = &input.ident;
+    let (impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
+    let target = parse_target(input)?;
+    let assignments = collect_assignments(&data.fields)?;
+
+    Ok(quote! {
+        impl #impl_generics ::thyllore_effect_core::gpu_pack::UboPack<#target>
+            for #name #type_generics #where_clause
+        {
+            fn pack(&self, ubo: &mut #target) {
+                #(#assignments)*
+            }
+        }
+    })
+}
+
+fn parse_target(input: &DeriveInput) -> Result<syn::Path> {
+    for attr in input.attrs.iter().filter(|a| a.path().is_ident("ubo")) {
+        let Meta::List(list) = &attr.meta else {
+            continue;
+        };
+
+        let meta: Meta = syn::parse2(list.tokens.clone())?;
+        if let Meta::NameValue(name_value) = meta {
+            if name_value.path.is_ident("target") {
+                if let syn::Expr::Path(path) = &name_value.value {
+                    return Ok(path.path.clone());
+                }
+            }
+        }
+    }
+
+    Err(Error::new_spanned(
+        &input.ident,
+        "UboPack requires #[ubo(target = TypeName)] on the struct",
+    ))
+}
+
+fn collect_assignments(fields: &Fields) -> Result<Vec<proc_macro2::TokenStream>> {
+    let mut assignments = Vec::new();
+
+    for (position, field) in fields.iter().enumerate() {
+        let field_ref = match &field.ident {
+            Some(ident) => quote!(self.#ident),
+            None => {
+                let index = syn::Index::from(position);
+                quote!(self.#index)
+            }
+        };
+
+        for attr in field.attrs.iter().filter(|a| a.path().is_ident("ubo")) {
+            let Meta::List(list) = &attr.meta else {
+                continue;
+            };
+
+            let slot: syn::LitStr = syn::parse2(list.tokens.clone())?;
+            assignments.push(generate_assignment(&slot, &field_ref)?);
+        }
+    }
+
+    Ok(assignments)
+}
+
+fn generate_assignment(
+    slot: &syn::LitStr,
+    field_ref: &proc_macro2::TokenStream,
+) -> Result<proc_macro2::TokenStream> {
+    let spec = slot.value();
+    let Some((slot_name, component)) = spec.split_once('.') else {
+        return Err(Error::new_spanned(
+            slot,
+            format!("ubo attribute must be \"slot.component\" (e.g. \"shape.x\"), got \"{spec}\""),
+        ));
+    };
+
+    let slot_ident = syn::Ident::new(slot_name, slot.span());
+
+    if component == "xyz" {
+        return Ok(quote! {
+            ubo.#slot_ident[0] = #field_ref[0];
+            ubo.#slot_ident[1] = #field_ref[1];
+            ubo.#slot_ident[2] = #field_ref[2];
+        });
+    }
+
+    let index: usize = match component {
+        "x" => 0,
+        "y" => 1,
+        "z" => 2,
+        "w" => 3,
+        _ => {
+            return Err(Error::new_spanned(
+                slot,
+                format!("unknown component \"{component}\", expected x/y/z/w or xyz"),
+            ))
+        }
+    };
+
+    Ok(quote! {
+        ubo.#slot_ident[#index] = #field_ref;
+    })
+}
+
+fn expand_py_effect(input: &DeriveInput) -> Result<proc_macro2::TokenStream> {
+    let Data::Struct(data) = &input.data else {
+        return Err(Error::new_spanned(
+            &input.ident,
+            "PyEffect can only be derived for structs",
+        ));
+    };
+
+    let name = &input.ident;
+    let (impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
+
+    let py_effect = parse_py_effect_attributes(input)?;
+    let presets = &py_effect.presets;
+    let apply_preset = &py_effect.apply_preset;
+
+    let Some(scene) = parse_scene_attributes(input)? else {
+        return Err(Error::new_spanned(
+            &input.ident,
+            "PyEffect requires #[scene(...)] with ui, overwrite and tags on the struct",
+        ));
+    };
+    let ui = &scene.ui;
+    let overwrite = &scene.overwrite;
+    let tags = &scene.tags;
+
+    let time_field = find_field_by_name(input, &data.fields, "time")?;
+    if !time_field
+        .attrs
+        .iter()
+        .any(|a| a.path().is_ident("runtime"))
+    {
+        return Err(Error::new_spanned(
+            time_field,
+            "PyEffect requires the `time` field to be #[runtime]",
+        ));
+    }
+
+    let position_set = find_persist_setter(find_field_by_name(input, &data.fields, "position")?)?;
+    let rotation_set = find_persist_setter(find_field_by_name(input, &data.fields, "rotation")?)?;
+
+    Ok(quote! {
+        #[cfg(any(feature = "python", feature = "python-test"))]
+        impl #impl_generics crate::pybindings::PyEffect for #name #type_generics #where_clause {
+            const PRESET_NAMES: &'static [&'static str] = #presets;
+            const UI_PARAMS: &'static [crate::UiParam] = #ui;
+
+            fn apply_preset(&mut self, name: &str) -> bool {
+                #apply_preset(self, name)
+            }
+
+            fn overwrite_persisted_fields(&mut self, source: &Self) {
+                #overwrite(self, source);
+            }
+
+            fn set_placement(&mut self, time: f32, position: [f32; 3], rotation: [f32; 4]) {
+                self.time = time;
+                #position_set(self, position);
+                #rotation_set(self, rotation);
+            }
+
+            fn parameter_owner_name(name: &str) -> &'static str {
+                #tags
+                    .iter()
+                    .find(|(param_name, _)| *param_name == name)
+                    .map_or("unknown", |(_, owner)| {
+                        crate::pybindings::ParameterOwnerName::owner_name(*owner)
+                    })
+            }
+        }
+    })
+}
+
+fn parse_py_effect_attributes(input: &DeriveInput) -> Result<PyEffectAttributes> {
+    let Some(attr) = input.attrs.iter().find(|a| a.path().is_ident("py_effect")) else {
+        return Err(Error::new_spanned(
+            &input.ident,
+            "PyEffect requires #[py_effect(presets = ..., apply_preset = ...)] on the struct",
+        ));
+    };
+
+    let mut presets: Option<syn::Path> = None;
+    let mut apply_preset: Option<syn::Path> = None;
+
+    attr.meta.require_list()?.parse_nested_meta(|meta| {
+        if meta.path.is_ident("presets") {
+            presets = Some(meta.value()?.parse()?);
+        } else if meta.path.is_ident("apply_preset") {
+            apply_preset = Some(meta.value()?.parse()?);
+        } else {
+            return Err(meta.error("unknown py_effect attribute key"));
+        }
+
+        Ok(())
+    })?;
+
+    Ok(PyEffectAttributes {
+        presets: presets
+            .ok_or_else(|| Error::new_spanned(attr, "py_effect attribute requires `presets`"))?,
+        apply_preset: apply_preset.ok_or_else(|| {
+            Error::new_spanned(attr, "py_effect attribute requires `apply_preset`")
+        })?,
+    })
+}
+
+fn find_field_by_name<'a>(
+    input: &DeriveInput,
+    fields: &'a Fields,
+    name: &str,
+) -> Result<&'a syn::Field> {
+    fields
+        .iter()
+        .find(|field| field.ident.as_ref().is_some_and(|ident| ident == name))
+        .ok_or_else(|| {
+            Error::new_spanned(
+                &input.ident,
+                format!("PyEffect requires a field named `{name}`"),
+            )
+        })
+}
+
+fn find_persist_setter(field: &syn::Field) -> Result<syn::Path> {
+    for attr in field.attrs.iter().filter(|a| a.path().is_ident("persist")) {
+        if let Some(set) = parse_persist_attribute(attr)?.set {
+            return Ok(set);
+        }
+    }
+
+    Err(Error::new_spanned(
+        field,
+        "PyEffect requires #[persist(as = ..., get = ..., set = ...)] on this field",
+    ))
+}
+
+struct PyEffectAttributes {
+    presets: syn::Path,
+    apply_preset: syn::Path,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn expand(source: &str) -> String {
+        let input: DeriveInput = syn::parse_str(source).expect("valid struct");
+        expand_ubo_pack(&input).expect("expands").to_string()
+    }
+
+    #[test]
+    fn packs_single_field_to_component() {
+        let expanded = expand(
+            "#[ubo(target = WindUBO)]
+            struct S {
+                #[ubo(\"shape.x\")]
+                pub height: f32,
+            }",
+        );
+        assert!(
+            expanded.contains("ubo . shape [0usize] = self . height"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn packs_multiple_fields() {
+        let expanded = expand(
+            "#[ubo(target = WindUBO)]
+            struct S {
+                #[ubo(\"shape.x\")]
+                pub a: f32,
+                #[ubo(\"shape.y\")]
+                pub b: f32,
+            }",
+        );
+        assert!(
+            expanded.contains("ubo . shape [0usize] = self . a"),
+            "{expanded}"
+        );
+        assert!(
+            expanded.contains("ubo . shape [1usize] = self . b"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn packs_xyz_array_field() {
+        let expanded = expand(
+            "#[ubo(target = WindUBO)]
+            struct S {
+                #[ubo(\"albedo.xyz\")]
+                pub albedo: [f32; 3],
+            }",
+        );
+        assert!(
+            expanded.contains("ubo . albedo [0] = self . albedo [0]"),
+            "{expanded}"
+        );
+        assert!(
+            expanded.contains("ubo . albedo [1] = self . albedo [1]"),
+            "{expanded}"
+        );
+        assert!(
+            expanded.contains("ubo . albedo [2] = self . albedo [2]"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn skips_fields_without_ubo_attribute() {
+        let expanded = expand(
+            "#[ubo(target = WindUBO)]
+            struct S {
+                #[ubo(\"shape.x\")]
+                pub a: f32,
+                pub b: f32,
+            }",
+        );
+        assert!(!expanded.contains("self . b"), "{expanded}");
+    }
+
+    #[test]
+    fn rejects_missing_target() {
+        let input: DeriveInput = syn::parse_str(
+            "struct S {
+                #[ubo(\"shape.x\")]
+                pub a: f32,
+            }",
+        )
+        .expect("valid struct");
+        assert!(expand_ubo_pack(&input).is_err());
+    }
+
+    #[test]
+    fn rejects_unknown_component() {
+        let input: DeriveInput = syn::parse_str(
+            "#[ubo(target = WindUBO)]
+            struct S {
+                #[ubo(\"shape.q\")]
+                pub a: f32,
+            }",
+        )
+        .expect("valid struct");
+        assert!(expand_ubo_pack(&input).is_err());
+    }
+
+    #[test]
+    fn rejects_enum() {
+        let input: DeriveInput = syn::parse_str("enum E { A }").expect("valid enum");
+        assert!(expand_ubo_pack(&input).is_err());
+    }
+
+    fn expand_scene(source: &str) -> String {
+        let input: DeriveInput = syn::parse_str(source).expect("valid struct");
+        expand_scene_format(&input).expect("expands").to_string()
+    }
+
+    #[test]
+    fn scene_persist_field() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Frame)]
+                pub intensity: f32,
+            }",
+        );
+        assert!(
+            expanded.contains("intensity : f32 = Frame { get : | e | e . intensity , set : | e , v | e . intensity = v }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_runtime_field() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[runtime]
+                pub time: f32,
+            }",
+        );
+        assert!(
+            expanded.contains("time : f32 { get : | e | e . time , set : | e , v | e . time = v }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_missing_attribute_error() {
+        let input: DeriveInput = syn::parse_str(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                pub a: f32,
+            }",
+        )
+        .expect("valid struct");
+        let err = expand_scene_format(&input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("scene attribute requires `snapshot`"),
+            "expected snapshot error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_ui_all_fields() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Frame, ui(kind = Color, label = \"Test\", min = 0.0, max = 1.0, format = \"{:.2}\", tooltip = \"tip\", group = \"grp\"))]
+                pub value: f32,
+            }",
+        );
+        assert!(
+            expanded.contains("kind : Color , label : \"Test\" , min : 0.0 , max : 1.0 , format : \"{:.2}\" , tooltip : \"tip\" , group : \"grp\""),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_kind_scalars() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Frame, scalars = rgb, ui(kind = Color, min = 0.0, max = 1.0))]
+                pub color: [f32; 3],
+            }",
+        );
+        assert!(
+            expanded.contains("scalars : rgb , ui { kind : Color , min : 0.0 , max : 1.0 }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_default() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Frame, default = 1.0)]
+                pub value: f32,
+            }",
+        );
+        assert!(
+            expanded.contains("e . value = v , default : 1.0 }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_as_get_set() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Frame, as = [f32; 3], get = read_color, set = write_color)]
+                pub color: Rgb,
+            }",
+        );
+        assert!(
+            expanded.contains("color : [f32 ; 3] = Frame { get : read_color , set : write_color }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_name_with_get_set_and_scalar_aliases() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Frame, name = wind_direction, as = [f32; 2], get = read_wind, set = write_wind, scalars(wind_x = \"wind.direction.x\", wind_z = \"wind.direction.y\"))]
+                pub wind: Wind,
+            }",
+        );
+        assert!(
+            expanded.contains("wind_direction : [f32 ; 2] = Frame { get : read_wind , set : write_wind , scalars { wind_x : { get : | e | e . wind . direction . x , set : | e , v | e . wind . direction . x = v } , wind_z : { get : | e | e . wind . direction . y , set : | e , v | e . wind . direction . y = v } } }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_runtime_ui() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[runtime(ui(min = 0.0, max = 1.0, format = \"{:.2}\"))]
+                pub time: f32,
+            }",
+        );
+        assert!(
+            expanded.contains("ui { min : 0.0 , max : 1.0 , format : \"{:.2}\" }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_runtime_ui_primary() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[runtime(ui(primary, min = 0.0, max = 1.0))]
+                pub time: f32,
+            }",
+        );
+        assert!(
+            expanded.contains("ui { primary , min : 0.0 , max : 1.0 }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_unknown_key_error() {
+        let input: DeriveInput = syn::parse_str(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE, unknown = true)]
+            struct S {
+                #[persist(owner = Frame, ui(min = 0.0, max = 1.0))]
+                pub a: f32,
+            }",
+        )
+        .expect("valid struct");
+        let err = expand_scene_format(&input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("unknown scene attribute key"),
+            "expected unknown key error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn scene_owner_missing_error() {
+        let input: DeriveInput = syn::parse_str(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(ui(min = 0.0, max = 1.0))]
+                pub a: f32,
+            }",
+        )
+        .expect("valid struct");
+        let err = expand_scene_format(&input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("persist attribute requires `owner`"),
+            "expected owner missing error, got: {msg}"
+        );
+    }
+
+    const PY_EFFECT_SCENE: &str = "#[py_effect(presets = WIND_PRESETS, apply_preset = apply_wind)]
+        #[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]";
+
+    #[test]
+    fn py_effect_expands_impl() {
+        let input: DeriveInput = syn::parse_str(&format!(
+            "{PY_EFFECT_SCENE}
+            struct S {{
+                #[runtime]
+                pub time: f32,
+                #[persist(owner = Frame, as = [f32; 3], get = get_position, set = set_position)]
+                pub position: Vector3<f32>,
+                #[persist(owner = Frame, as = [f32; 4], get = get_rotation, set = set_rotation)]
+                pub rotation: Quaternion<f32>,
+            }}"
+        ))
+        .expect("valid struct");
+        let expanded = expand_py_effect(&input).expect("expands").to_string();
+
+        for expected in [
+            "impl crate :: pybindings :: PyEffect for S",
+            "const PRESET_NAMES : & 'static [& 'static str] = WIND_PRESETS ;",
+            "const UI_PARAMS : & 'static [crate :: UiParam] = WIND_UI ;",
+            "apply_wind (self , name)",
+            "WIND_OVERWRITE (self , source) ;",
+            "self . time = time ; set_position (self , position) ; set_rotation (self , rotation) ;",
+            "WIND_TAGS . iter ()",
+            "map_or (\"unknown\"",
+            "crate :: pybindings :: ParameterOwnerName :: owner_name (* owner)",
+        ] {
+            assert!(expanded.contains(expected), "missing `{expected}` in {expanded}");
+        }
+    }
+
+    #[test]
+    fn py_effect_missing_time_error() {
+        let input: DeriveInput = syn::parse_str(&format!(
+            "{PY_EFFECT_SCENE}
+            struct S {{
+                #[persist(owner = Frame, as = [f32; 3], get = get_position, set = set_position)]
+                pub position: Vector3<f32>,
+                #[persist(owner = Frame, as = [f32; 4], get = get_rotation, set = set_rotation)]
+                pub rotation: Quaternion<f32>,
+            }}"
+        ))
+        .expect("valid struct");
+        let msg = expand_py_effect(&input).unwrap_err().to_string();
+        assert!(
+            msg.contains("PyEffect requires a field named `time`"),
+            "expected missing time error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_path_expansion() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Style, name = branch_gain, path = \"branch.gain\", as = f32)]
+                pub branch: Branch,
+            }",
+        );
+        assert!(
+            expanded.contains("branch_gain : f32 = Style { get : | e | e . branch . gain , set : | e , v | e . branch . gain = v }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_two_attributes_on_one_field() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Frame)]
+                #[persist(owner = Style, name = branch_gain, path = \"branch.gain\", as = f32)]
+                pub branch: Branch,
+            }",
+        );
+        assert!(
+            expanded.contains("branch : Branch = Frame { get : | e | e . branch , set : | e , v | e . branch = v }"),
+            "{expanded}"
+        );
+        assert!(
+            expanded.contains("branch_gain : f32 = Style { get : | e | e . branch . gain , set : | e , v | e . branch . gain = v }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_path_without_as_error() {
+        let input: DeriveInput = syn::parse_str(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Style, name = branch_gain, path = \"branch.gain\")]
+                pub branch: Branch,
+            }",
+        )
+        .expect("valid struct");
+        let err = expand_scene_format(&input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("persist `path` requires `as`"),
+            "expected path without as error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_path_with_get_set_error() {
+        let input: DeriveInput = syn::parse_str(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Style, name = branch_gain, path = \"branch.gain\", as = f32, get = my_get)]
+                pub branch: Branch,
+            }",
+        )
+        .expect("valid struct");
+        let err = expand_scene_format(&input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("persist `path` cannot be combined with `get` or `set`"),
+            "expected path with get error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_name_without_path_error() {
+        let input: DeriveInput = syn::parse_str(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Style, name = branch_gain)]
+                pub branch: Branch,
+            }",
+        )
+        .expect("valid struct");
+        let err = expand_scene_format(&input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("persist `name` requires `path`"),
+            "expected name without path error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn scene_runtime_path_expansion() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[runtime(name = warp_y_scale, path = \"warp.y_scale\", as = f32)]
+                pub warp: Warp,
+            }",
+        );
+        assert!(
+            expanded.contains("warp_y_scale : f32 { get : | e | e . warp . y_scale , set : | e , v | e . warp . y_scale = v }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_runtime_path_without_as_error() {
+        let input: DeriveInput = syn::parse_str(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[runtime(name = warp_y_scale, path = \"warp.y_scale\")]
+                pub warp: Warp,
+            }",
+        )
+        .expect("valid struct");
+        let err = expand_scene_format(&input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("runtime `path` requires `as`"),
+            "expected path without as error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_path_with_array_index() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Style, name = end_offset_x, path = \"shape.end_offset[0]\", as = f32)]
+                pub shape: Shape,
+            }",
+        );
+        assert!(
+            expanded.contains("end_offset_x : f32 = Style { get : | e | e . shape . end_offset [0] , set : | e , v | e . shape . end_offset [0] = v }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_path_with_invalid_array_index() {
+        let input: DeriveInput = syn::parse_str(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Style, name = bad, path = \"shape.field[a]\", as = f32)]
+                pub shape: Shape,
+            }",
+        )
+        .expect("valid struct");
+        let err = expand_scene_format(&input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("invalid index") && msg.contains("non-negative integer"),
+            "expected invalid index error, got: {msg}"
+        );
+    }
+}

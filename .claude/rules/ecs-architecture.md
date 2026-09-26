@@ -55,10 +55,10 @@ src/ecs/
 ```
 
 Component and resource types that an effect exposes as parameters (flame, water, wind) are declared once in
-`crates/thyllore-effect-core` with `declare_scene_format!`; `src/ecs/component/` only wraps them. The
-declaration's `key:` item makes the component a `thyllore_scene_core::SceneComponent` (type key + persisted
-field list), which is all the scene format needs: it never names the effect (see `hierarchy.md`, "Feature
-isolation").
+`crates/thyllore-effect-core` via struct field attributes (`#[derive(SceneFormat)]`); `src/ecs/component/`
+only wraps them. The `#[scene(key = ...)]` attribute makes the component a `thyllore_scene_core::SceneComponent`
+(type key + persisted field list), which is all the scene format needs: it never names the effect (see
+`hierarchy.md`, "Feature isolation").
 
 ### Domain ECS Modules
 
@@ -223,7 +223,7 @@ let mut camera = app.resource_mut::<Camera>();   // ResMut<Camera> (mutable)
 4. Add a `spawn_*` system (a thin wrapper over `hooks::scene::spawn_scene_owner`) and call it from the
    event dispatcher or initialization; runtime-only companions (baked data, accumulators) are inserted by
    the domain's per-frame system when missing, so a loaded entity and a spawned one converge
-5. Persist it: give the parameter component a `key:` in `declare_scene_format!` and write
+5. Persist it: give the effect parameter component `#[scene(key = ...)]` (resource: `declare_scene_format!`) and write
    `scene_owner!(C { icon, placement, prepare_loaded? })` in its `ecs/component/` file; provenance
    components (applied preset / style) implement `SceneComponent` and write `scene_attachment!(P)`.
    Registration happens at link time; neither `src/scene/` nor `subscription.rs` is edited

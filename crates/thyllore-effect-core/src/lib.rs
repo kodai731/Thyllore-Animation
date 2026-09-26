@@ -1,5 +1,8 @@
+extern crate self as thyllore_effect_core;
+
 pub mod debug;
 pub mod flame;
+pub mod gpu_pack;
 pub mod lightning;
 pub mod volume;
 pub mod water;

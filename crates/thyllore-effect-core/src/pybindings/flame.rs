@@ -1,42 +1,22 @@
 use super::effect::{
-    build_effect_from_params, declare_effect_pyfunctions, gpu_block_bytes, PyEffect,
+    build_effect_from_params, declare_effect_pyfunctions, gpu_block_bytes, ParameterOwnerName,
 };
 use crate::flame::{
-    apply_flame_preset, build_flame_model_matrix, build_flame_ubo, effective_sigma_t,
-    flame_bend_offset, flame_local_bounds, flame_local_bounds_corners, flame_proxy_pad,
-    flame_support_scale, overwrite_persisted_fields, parameter_owner, refresh_flame_coefficients,
-    FlameBaked, FlameEffect, FlameTemporalAccum, FlameUBO, ParameterOwner, FLAME_PRESET_NAMES,
-    FLAME_UI_PARAMS, MIN_FLAME_EXTENT,
+    build_flame_model_matrix, build_flame_ubo, effective_sigma_t, flame_bend_offset,
+    flame_local_bounds, flame_local_bounds_corners, flame_proxy_pad, flame_support_scale,
+    refresh_flame_coefficients, FlameBaked, FlameEffect, FlameTemporalAccum, FlameUBO,
+    ParameterOwner, MIN_FLAME_EXTENT,
 };
-use cgmath::{Quaternion, Vector3, Vector4};
+use cgmath::{Vector3, Vector4};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use thyllore_scene_core::UiParam;
 
-impl PyEffect for FlameEffect {
-    const PRESET_NAMES: &'static [&'static str] = FLAME_PRESET_NAMES;
-    const UI_PARAMS: &'static [UiParam] = FLAME_UI_PARAMS;
-
-    fn apply_preset(&mut self, name: &str) -> bool {
-        apply_flame_preset(self, name)
-    }
-
-    fn overwrite_persisted_fields(&mut self, source: &Self) {
-        overwrite_persisted_fields(self, source);
-    }
-
-    fn set_placement(&mut self, time: f32, position: [f32; 3], rotation: [f32; 4]) {
-        self.time = time;
-        self.position = Vector3::new(position[0], position[1], position[2]);
-        self.rotation = Quaternion::new(rotation[0], rotation[1], rotation[2], rotation[3]);
-    }
-
-    fn parameter_owner_name(name: &str) -> &'static str {
-        match parameter_owner(name) {
-            Some(ParameterOwner::Frame) => "frame",
-            Some(ParameterOwner::Shape) => "shape",
-            Some(ParameterOwner::Style) => "style",
-            None => "unknown",
+impl ParameterOwnerName for ParameterOwner {
+    fn owner_name(self) -> &'static str {
+        match self {
+            ParameterOwner::Frame => "frame",
+            ParameterOwner::Shape => "shape",
+            ParameterOwner::Style => "style",
         }
     }
 }

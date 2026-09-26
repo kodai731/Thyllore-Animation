@@ -1,3 +1,4 @@
+use crate::gpu_pack::UboPack;
 use crate::water::analytic::laplace_beltrami_basis::{
     compute_laplace_beltrami_modes_cached, LAPLACE_BELTRAMI_MODE_COUNT,
     LAPLACE_BELTRAMI_SLOTS_PER_MODE,
@@ -84,46 +85,26 @@ pub fn build_water_ubo(effect: &WaterTorusEffect, frame_index: u32) -> WaterUBO 
         }
     }
 
-    WaterUBO {
+    let mut ubo = WaterUBO {
         model,
         inverse_model,
-        radii: [
-            effect.major_radius,
-            effect.minor_radius,
-            effect.caustic_strength,
-            0.0,
-        ],
-        absorption: [
-            effect.absorption[0],
-            effect.absorption[1],
-            effect.absorption[2],
-            effect.ior,
-        ],
-        flow: [
-            effect.flow_longitudinal,
-            effect.flow_meridional,
-            effect.time,
-            0.0,
-        ],
-        composite: [
-            effect.reflect_strength,
-            effect.refract_strength,
-            WATER_WAVE_MODE_COUNT as f32,
-            0.0,
-        ],
-        tint: [effect.tint[0], effect.tint[1], effect.tint[2], 0.0],
-        lighting: [
-            effect.light_intensity,
-            effect.highlight_sharpness,
-            effect.sky_brightness,
-            effect.scatter_strength,
-        ],
-        scattering: [effect.scatter_anisotropy, 0.0, 0.0, 0.0],
-        temporal: [0.0, 0.0, 0.0, 0.0],
+        radii: [0.0; 4],
+        absorption: [0.0; 4],
+        flow: [0.0; 4],
+        composite: [0.0; 4],
+        tint: [0.0; 4],
+        lighting: [0.0; 4],
+        scattering: [0.0; 4],
+        temporal: [0.0; 4],
         wave_modes,
         inv_view_proj: Matrix4::identity(),
         lb_modes: build_laplace_beltrami_modes(effect),
-    }
+    };
+
+    effect.pack(&mut ubo);
+    ubo.composite[2] = WATER_WAVE_MODE_COUNT as f32;
+
+    ubo
 }
 
 impl Default for WaterUBO {
@@ -200,5 +181,106 @@ mod tests {
             "flat amplitude sum {} should be ~{expected_sum}",
             flat_amplitude_sum(&ubo)
         );
+    }
+
+    #[test]
+    fn the_water_ubo_slots_hold_the_packed_effect_values() {
+        let default_effect = WaterTorusEffect::default();
+        let modified_effect = WaterTorusEffect {
+            time: 2.7,
+            major_radius: 1.5,
+            minor_radius: 0.4,
+            flow_longitudinal: 0.3,
+            flow_meridional: -0.2,
+            reflect_strength: 0.6,
+            refract_strength: 0.8,
+            light_intensity: 1.5,
+            highlight_sharpness: 3.0,
+            sky_brightness: 0.4,
+            scatter_strength: 0.7,
+            scatter_anisotropy: -0.3,
+            absorption: [0.1, 0.2, 0.3],
+            tint: [0.8, 0.9, 1.0],
+            ..WaterTorusEffect::default()
+        };
+
+        let cases: [(&str, WaterUBO, [(&str, [u32; 4]); 7]); 2] = [
+            (
+                "default",
+                build_water_ubo(&default_effect, 0),
+                [
+                    ("radii", [0x3f800000, 0x3e99999a, 0x3f19999a, 0x00000000]),
+                    (
+                        "absorption",
+                        [0x3eb33333, 0x3da3d70a, 0x3ca3d70a, 0x3faa9fbe],
+                    ),
+                    ("flow", [0x3e4ccccd, 0x00000000, 0x00000000, 0x00000000]),
+                    (
+                        "composite",
+                        [0x3f800000, 0x3f800000, 0x41000000, 0x00000000],
+                    ),
+                    ("tint", [0x3d4ccccd, 0x3e800000, 0x3eb33333, 0x00000000]),
+                    ("lighting", [0x3f800000, 0x42800000, 0x3f800000, 0x3f800000]),
+                    (
+                        "scattering",
+                        [0x00000000, 0x00000000, 0x00000000, 0x00000000],
+                    ),
+                ],
+            ),
+            (
+                "modified",
+                build_water_ubo(&modified_effect, 5),
+                [
+                    ("radii", [0x3fc00000, 0x3ecccccd, 0x3f19999a, 0x00000000]),
+                    (
+                        "absorption",
+                        [0x3dcccccd, 0x3e4ccccd, 0x3e99999a, 0x3faa9fbe],
+                    ),
+                    ("flow", [0x3e99999a, 0xbe4ccccd, 0x402ccccd, 0x00000000]),
+                    (
+                        "composite",
+                        [0x3f19999a, 0x3f4ccccd, 0x41000000, 0x00000000],
+                    ),
+                    ("tint", [0x3f4ccccd, 0x3f666666, 0x3f800000, 0x00000000]),
+                    ("lighting", [0x3fc00000, 0x40400000, 0x3ecccccd, 0x3f333333]),
+                    (
+                        "scattering",
+                        [0xbe99999a, 0x00000000, 0x00000000, 0x00000000],
+                    ),
+                ],
+            ),
+        ];
+
+        for (name, ubo, expected_slots) in cases {
+            for (actual, expected) in collect_slot_bits(&ubo).iter().zip(expected_slots.iter()) {
+                assert_eq!(actual.0, expected.0);
+                assert_eq!(
+                    actual.1, expected.1,
+                    "case {} slot {} mismatch",
+                    name, expected.0
+                );
+            }
+        }
+    }
+
+    fn to_slot_bits(slot: [f32; 4]) -> [u32; 4] {
+        [
+            slot[0].to_bits(),
+            slot[1].to_bits(),
+            slot[2].to_bits(),
+            slot[3].to_bits(),
+        ]
+    }
+
+    fn collect_slot_bits(ubo: &WaterUBO) -> [(&'static str, [u32; 4]); 7] {
+        [
+            ("radii", to_slot_bits(ubo.radii)),
+            ("absorption", to_slot_bits(ubo.absorption)),
+            ("flow", to_slot_bits(ubo.flow)),
+            ("composite", to_slot_bits(ubo.composite)),
+            ("tint", to_slot_bits(ubo.tint)),
+            ("lighting", to_slot_bits(ubo.lighting)),
+            ("scattering", to_slot_bits(ubo.scattering)),
+        ]
     }
 }

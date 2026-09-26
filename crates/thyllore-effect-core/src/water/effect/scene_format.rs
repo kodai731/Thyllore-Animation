@@ -1,278 +1,83 @@
-use crate::water::ownership::WaterParameterOwner;
-use crate::water::*;
 use cgmath::{Quaternion, Vector3};
-use thyllore_scene_core::declare_scene_format;
 
-declare_scene_format! {
-    component: WaterTorusEffect,
-    record: WaterSceneRecord,
-    tag: WaterParameterOwner,
-    items {
-        key: "water_torus",
-        tags: WATER_PARAMETER_OWNERSHIP,
-        snapshot: water_parameter_snapshot,
-        scalars: WATER_SCALAR_PARAMS,
-        ui: WATER_UI_PARAMS,
-        overwrite: overwrite_water_persisted_fields,
-    },
-    persisted {
-        position: [f32; 3] = Frame {
-            get: |e| [e.position.x, e.position.y, e.position.z],
-            set: |e, v| e.position = Vector3::new(v[0], v[1], v[2]),
-        },
-        rotation: [f32; 4] = Frame {
-            get: |e| [e.rotation.s, e.rotation.v.x, e.rotation.v.y, e.rotation.v.z],
-            set: |e, v| e.rotation = Quaternion::new(v[0], v[1], v[2], v[3]),
-        },
-        major_radius: f32 = Frame {
-            get: |e| e.major_radius,
-            set: |e, v| e.major_radius = v,
-            ui {
-                min: 0.01,
-                max: 10.0,
-                format: "%.2f",
-                group: "shape",
-            },
-        },
-        minor_radius: f32 = Frame {
-            get: |e| e.minor_radius,
-            set: |e, v| e.minor_radius = v,
-            ui {
-                min: 0.01,
-                max: 5.0,
-                format: "%.2f",
-                group: "shape",
-            },
-        },
-        ior: f32 = Frame {
-            get: |e| e.ior,
-            set: |e, v| e.ior = v,
-            ui {
-                min: 1.0,
-                max: 2.5,
-                format: "%.3f",
-                group: "optics",
-            },
-        },
-        absorption: [f32; 3] = Frame {
-            get: |e| e.absorption,
-            set: |e, v| e.absorption = v,
-            scalars: rgb,
-            ui {
-                kind: Absorption,
-                min: 0.0,
-                max: 10.0,
-                format: "%.2f",
-                tooltip: "Beer-Lambert absorption per meter; the picker shows the colour transmitted over the reference distance",
-                group: "optics",
-            },
-        },
-        flow_longitudinal: f32 = Frame {
-            get: |e| e.flow_longitudinal,
-            set: |e, v| e.flow_longitudinal = v,
-            ui {
-                primary,
-                min: -5.0,
-                max: 5.0,
-                format: "%.2f",
-                group: "flow",
-            },
-        },
-        flow_meridional: f32 = Frame {
-            get: |e| e.flow_meridional,
-            set: |e, v| e.flow_meridional = v,
-            ui {
-                min: -5.0,
-                max: 5.0,
-                format: "%.2f",
-                group: "flow",
-            },
-        },
-        wave_amplitude: f32 = Frame {
-            get: |e| e.wave_amplitude,
-            set: |e, v| e.wave_amplitude = v,
-            ui {
-                primary,
-                min: 0.0,
-                max: 1.0,
-                format: "%.3f",
-                group: "wave",
-            },
-        },
-        wave_frequency: f32 = Frame {
-            get: |e| e.wave_frequency,
-            set: |e, v| e.wave_frequency = v,
-            ui {
-                primary,
-                min: 0.0,
-                max: 50.0,
-                format: "%.1f",
-                group: "wave",
-            },
-        },
-        wave_speed: f32 = Frame {
-            get: |e| e.wave_speed,
-            set: |e, v| e.wave_speed = v,
-            ui {
-                min: 0.0,
-                max: 10.0,
-                format: "%.2f",
-                group: "wave",
-            },
-        },
-        wave_dispersion: f32 = Frame {
-            get: |e| e.wave_dispersion,
-            set: |e, v| e.wave_dispersion = v,
-            ui {
-                min: 0.0,
-                max: 1.0,
-                format: "%.2f",
-                group: "wave",
-            },
-        },
-        wave_lb_blend: f32 = Frame {
-            get: |e| e.wave_lb_blend,
-            set: |e, v| e.wave_lb_blend = v,
-            ui {
-                min: 0.0,
-                max: 1.0,
-                format: "%.2f",
-                group: "wave",
-            },
-        },
-        light_intensity: f32 = Frame {
-            get: |e| e.light_intensity,
-            set: |e, v| e.light_intensity = v,
-            ui {
-                primary,
-                min: 0.0,
-                max: 20.0,
-                format: "%.2f",
-                group: "lighting",
-            },
-        },
-        highlight_sharpness: f32 = Frame {
-            get: |e| e.highlight_sharpness,
-            set: |e, v| e.highlight_sharpness = v,
-            ui {
-                min: 1.0,
-                max: 1024.0,
-                format: "%.0f",
-                group: "lighting",
-            },
-        },
-        sky_brightness: f32 = Frame {
-            get: |e| e.sky_brightness,
-            set: |e, v| e.sky_brightness = v,
-            ui {
-                min: 0.0,
-                max: 2.0,
-                format: "%.2f",
-                group: "lighting",
-            },
-        },
-        scatter_strength: f32 = Frame {
-            get: |e| e.scatter_strength,
-            set: |e, v| e.scatter_strength = v,
-            ui {
-                min: 0.0,
-                max: 10.0,
-                format: "%.2f",
-                group: "lighting",
-            },
-        },
-        scatter_anisotropy: f32 = Frame {
-            get: |e| e.scatter_anisotropy,
-            set: |e, v| e.scatter_anisotropy = v,
-            ui {
-                min: -0.9,
-                max: 0.9,
-                format: "%.2f",
-                group: "lighting",
-            },
-        },
-        reflect_strength: f32 = Frame {
-            get: |e| e.reflect_strength,
-            set: |e, v| e.reflect_strength = v,
-            ui {
-                primary,
-                min: 0.0,
-                max: 1.0,
-                format: "%.2f",
-                group: "look",
-            },
-        },
-        refract_strength: f32 = Frame {
-            get: |e| e.refract_strength,
-            set: |e, v| e.refract_strength = v,
-            ui {
-                min: 0.0,
-                max: 1.0,
-                format: "%.2f",
-                group: "look",
-            },
-        },
-        caustic_strength: f32 = Frame {
-            get: |e| e.caustic_strength,
-            set: |e, v| e.caustic_strength = v,
-            ui {
-                min: 0.0,
-                max: 2.0,
-                format: "%.2f",
-                group: "look",
-            },
-        },
-        tint: [f32; 3] = Frame {
-            get: |e| e.tint,
-            set: |e, v| e.tint = v,
-            scalars: rgb,
-            ui {
-                primary,
-                kind: Color,
-                min: 0.0,
-                max: 1.0,
-                format: "%.2f",
-                tooltip: "Scattering tint",
-                group: "look",
-            },
-        },
-    },
-    runtime {
-        time: f32 {
-            get: |e| e.time,
-            set: |e, v| e.time = v,
-            ui {
-                min: 0.0,
-                max: 100.0,
-                format: "%.2f",
-            },
-        },
-        time_scale: f32 {
-            get: |e| e.time_scale,
-            set: |e, v| e.time_scale = v,
-            ui {
-                primary,
-                min: 0.0,
-                max: 4.0,
-                format: "%.2f",
-            },
-        },
-        time_offset: f32 {
-            get: |e| e.time_offset,
-            set: |e, v| e.time_offset = v,
-            ui {
-                min: -100.0,
-                max: 100.0,
-                format: "%.2f",
-            },
-        },
-    },
+pub fn water_position_get(effect: &crate::WaterTorusEffect) -> [f32; 3] {
+    [effect.position.x, effect.position.y, effect.position.z]
+}
+
+pub fn water_position_set(effect: &mut crate::WaterTorusEffect, v: [f32; 3]) {
+    effect.position = Vector3::new(v[0], v[1], v[2]);
+}
+
+pub fn water_rotation_get(effect: &crate::WaterTorusEffect) -> [f32; 4] {
+    [
+        effect.rotation.s,
+        effect.rotation.v.x,
+        effect.rotation.v.y,
+        effect.rotation.v.z,
+    ]
+}
+
+pub fn water_rotation_set(effect: &mut crate::WaterTorusEffect, v: [f32; 4]) {
+    effect.rotation = Quaternion::new(v[0], v[1], v[2], v[3]);
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::water::*;
     use thyllore_scene_core::SceneComponent;
+
+    const DEFAULT_JSON: &str = include_str!("scene_format_default.json");
+    const WATER_UI_PARAMS_JSON: &str = include_str!("ui_params.json");
+    const WATER_PARAMETER_OWNERSHIP_JSON: &str = include_str!("parameter_ownership.json");
+
+    #[test]
+    fn test_default_json_matches_fixture() {
+        let json = serde_json::to_string(&WaterTorusEffect::default()).expect("serialize");
+        assert_eq!(json, DEFAULT_JSON.trim());
+    }
+
+    #[test]
+    fn test_water_ui_params_match_fixture() {
+        let params: Vec<serde_json::Value> = WATER_UI_PARAMS
+            .iter()
+            .map(|param| {
+                serde_json::json!({
+                    "name": param.name,
+                    "group": param.group,
+                    "kind": match param.kind {
+                        UiKind::Scalar => "scalar",
+                        UiKind::Color => "color",
+                        UiKind::Absorption => "absorption",
+                        UiKind::Offset => "offset",
+                    },
+                    "min": param.min,
+                    "max": param.max,
+                    "format": param.format,
+                    "tooltip": param.tooltip,
+                    "persisted": param.persisted,
+                })
+            })
+            .collect();
+        let current = serde_json::to_string(&params).expect("serialize ui params");
+        assert_eq!(current, WATER_UI_PARAMS_JSON.trim());
+    }
+
+    #[test]
+    fn test_water_parameter_ownership_matches_fixture() {
+        let ownership: Vec<serde_json::Value> = WATER_PARAMETER_OWNERSHIP
+            .iter()
+            .map(|(name, tag)| {
+                serde_json::json!({
+                    "name": name,
+                    "tag": match tag {
+                        WaterParameterOwner::Frame => "frame",
+                    },
+                })
+            })
+            .collect();
+        let current = serde_json::to_string(&ownership).expect("serialize ownership");
+        assert_eq!(current, WATER_PARAMETER_OWNERSHIP_JSON.trim());
+    }
 
     #[test]
     fn test_scene_component_reflection_matches_serialized_keys() {

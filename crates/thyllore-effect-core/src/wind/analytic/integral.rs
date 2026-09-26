@@ -22,31 +22,55 @@ pub const WIND_MAX_PUFFS: usize = 96;
 const SHADOW_RAY_T_MAX: f32 = 1e4;
 const SHADOW_RADIAL_EXTENT_MARGIN: f32 = 1.25;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, thyllore_effect_derive::UboPack)]
+#[ubo(target = crate::WindUBO)]
 pub struct WindShellParams {
+    #[ubo("shape.x")]
     pub height: f32,
+    #[ubo("shape.y")]
     pub wall_radius_base: f32,
+    #[ubo("shape.z")]
     pub wall_radius_slope: f32,
+    #[ubo("shape.w")]
     pub wall_width_q: f32,
+    #[ubo("wall.x")]
     pub wall_strength: f32,
+    #[ubo("wall.y")]
     pub top_fade: f32,
+    #[ubo("optics.x")]
     pub sigma_t: f32,
+    #[ubo("optics.w")]
     pub h_top: f32,
+    #[ubo("albedo.w")]
     pub spread_offset: f32,
+    #[ubo("streak.x")]
     pub streak_order: f32,
+    #[ubo("streak.y")]
     pub streak_twist: f32,
+    #[ubo("streak.z")]
     pub streak_rise_speed: f32,
+    #[ubo("streak.w")]
     pub streak_amplitude: f32,
+    #[ubo("streak2.x")]
     pub streak_phase: f32,
+    #[ubo("streak2.y")]
     pub streak_rise_time: f32,
+    #[ubo("eddy.x")]
     pub eddy_amplitude: f32,
+    #[ubo("eddy.y")]
     pub eddy_cell_theta: f32,
+    #[ubo("eddy.z")]
     pub eddy_cell_height: f32,
+    #[ubo("eddy.w")]
     pub eddy_cell_radial: f32,
+    #[ubo("eddy2.x")]
     pub eddy_shear: f32,
     pub eddy_speed_spread: f32,
+    #[ubo("eddy2.y")]
     pub eddy_rise_speed: f32,
+    #[ubo("eddy2.z")]
     pub eddy_reseed_period: f32,
+    #[ubo("eddy2.w")]
     pub eddy_erosion: f32,
     pub time: f32,
     pub circulation: f32,

@@ -206,8 +206,47 @@ pub(crate) mod test_support {
     use crate::ecs::component::{ScalarChannel, ScalarChannelDomain};
     use crate::ecs::world::{Entity, World};
     use crate::hooks::effect_spawn::EffectSpawnHook;
+    use crate::hooks::effect_ui_event::EffectUiQueue;
     use crate::hooks::scene::spawn_scene_owner;
     use crate::scene::test_support::ProbeOwner;
+
+    pub enum ProbeUiCommand {
+        Ping,
+    }
+
+    #[derive(Default)]
+    pub struct ProbeDispatchCounter {
+        pub count: usize,
+    }
+
+    fn insert_probe_default_resources(world: &mut World) {
+        if !world.contains_resource::<EffectUiQueue<ProbeUiCommand>>() {
+            world.insert_resource(EffectUiQueue::<ProbeUiCommand>::default());
+        }
+        if !world.contains_resource::<ProbeDispatchCounter>() {
+            world.insert_resource(ProbeDispatchCounter::default());
+        }
+    }
+
+    crate::effect_default_resource!("probe", insert_probe_default_resources);
+
+    fn dispatch_probe_ui_events(world: &mut World, _assets: &mut AssetStorage) {
+        let commands = match world.get_resource_mut::<EffectUiQueue<ProbeUiCommand>>() {
+            Some(mut queue) => queue.drain(),
+            None => return,
+        };
+
+        let Some(mut counter) = world.get_resource_mut::<ProbeDispatchCounter>() else {
+            return;
+        };
+        for command in commands {
+            match command {
+                ProbeUiCommand::Ping => counter.count += 1,
+            }
+        }
+    }
+
+    crate::ui_event_hook!(PROBE_SPAWN_HOOK.key, dispatch_probe_ui_events);
 
     /// Test-only scalar domain over `ProbeOwner`, so tests of the shared clip, timeline and
     /// dispatch code never depend on a concrete effect. Its codes come from the `Probe` block.
@@ -247,15 +286,6 @@ pub(crate) mod test_support {
     };
 
     crate::effect_spawn_hook!(PROBE_SPAWN_HOOK);
-
-    crate::effect_ui_event_hook!(PROBE_SPAWN_HOOK.key, ignore_probe_ui_command);
-
-    fn ignore_probe_ui_command(
-        _world: &mut World,
-        _assets: &mut AssetStorage,
-        _command: &dyn std::any::Any,
-    ) {
-    }
 
     fn probe_has_component(world: &World, entity: Entity) -> bool {
         world.get_component::<ProbeOwner>(entity).is_some()
@@ -312,8 +342,28 @@ pub(crate) mod test_support {
 
 #[cfg(test)]
 mod tests {
-    use super::test_support::{PROBE_DOMAIN, PROBE_HEIGHT, PROBE_LEVEL};
+    use super::test_support::{
+        ProbeDispatchCounter, ProbeUiCommand, PROBE_DOMAIN, PROBE_HEIGHT, PROBE_LEVEL,
+    };
     use super::*;
+    use crate::ecs::systems::phases::event_dispatch_phase::run_event_dispatch_phase;
+    use crate::hooks::effect_defaults::apply_effect_default_resources;
+    use crate::hooks::effect_ui_event::{send_effect_ui_command, EffectUiEventDispatchHooks};
+
+    #[test]
+    fn test_probe_ui_command_reaches_its_dispatch_hook() {
+        let mut world = World::new();
+        let mut assets = AssetStorage::default();
+        apply_effect_default_resources(&mut world);
+        world.insert_resource(
+            EffectUiEventDispatchHooks::collect().expect("dispatch hooks collected"),
+        );
+
+        send_effect_ui_command(&world, ProbeUiCommand::Ping);
+        run_event_dispatch_phase(&mut world, &mut assets, None);
+
+        assert_eq!(world.resource::<ProbeDispatchCounter>().count, 1);
+    }
 
     #[test]
     fn test_insert_overwrites_key_at_same_time() {

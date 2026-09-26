@@ -462,10 +462,6 @@ pub enum UIEvent {
         seconds: f32,
     },
     OpenScalarCurveEditor,
-    Effect {
-        key: &'static str,
-        command: std::rc::Rc<dyn std::any::Any>,
-    },
 }
 
 #[derive(Default)]

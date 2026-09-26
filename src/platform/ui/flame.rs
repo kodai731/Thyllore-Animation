@@ -6,6 +6,7 @@ use crate::ecs::resource::FlameUIState;
 use crate::ecs::systems::flame::{FlameUiCommand, FLAMES_STYLE_DIR, FLAMES_TEXTURE_DIR};
 use crate::ecs::systems::FLAME_SPAWN_HOOK;
 use crate::ecs::World;
+use crate::hooks::effect_ui_event::send_effect_ui_command;
 
 use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
@@ -145,10 +146,7 @@ pub(super) fn build_flame_section(
                     // frame and would silently pin the old look, so a
                     // preset stamp also clears them (undo restores).
                     ui_events.send(UIEvent::ClearScalarKeys);
-                    ui_events.send(UIEvent::Effect {
-                        key: FLAME_SPAWN_HOOK.key,
-                        command: std::rc::Rc::new(FlameUiCommand::ApplyPreset(chosen)),
-                    });
+                    send_effect_ui_command(&*ecs_world, FlameUiCommand::ApplyPreset(chosen));
                     effect_applied_this_frame = true;
                 }
             }
@@ -256,9 +254,9 @@ pub(super) fn build_flame_section(
                     tilt: flame_ui.texture_fit_groups[3],
                 };
                 if selected_flame_entity.is_some() {
-                    ui_events.send(UIEvent::Effect {
-                        key: FLAME_SPAWN_HOOK.key,
-                        command: std::rc::Rc::new(FlameUiCommand::ApplyTextureFit {
+                    send_effect_ui_command(
+                        &*ecs_world,
+                        FlameUiCommand::ApplyTextureFit {
                             path: path.clone(),
                             blend,
                             groups: [
@@ -268,8 +266,8 @@ pub(super) fn build_flame_section(
                                 groups.tilt,
                             ],
                             profile: flame_ui.texture_fit_profile,
-                        }),
-                    });
+                        },
+                    );
                     effect_applied_this_frame = true;
                 }
             }
@@ -314,13 +312,13 @@ pub(super) fn build_flame_section(
             if ui.button("Apply Style") {
                 if let Some(name) = flame_ui.style_scan.get(flame_ui.style_index) {
                     if selected_flame_entity.is_some() {
-                        ui_events.send(UIEvent::Effect {
-                            key: FLAME_SPAWN_HOOK.key,
-                            command: std::rc::Rc::new(FlameUiCommand::ApplyStyle {
+                        send_effect_ui_command(
+                            &*ecs_world,
+                            FlameUiCommand::ApplyStyle {
                                 path: format!("{}/{}", FLAMES_STYLE_DIR, name),
                                 groups: flame_ui.style_groups,
-                            }),
-                        });
+                            },
+                        );
                         effect_applied_this_frame = true;
                     }
                 }
@@ -348,10 +346,7 @@ pub(super) fn build_flame_section(
             if ui.small_button("Save Style") {
                 let name = flame_ui.style_save_name.trim().to_string();
                 if !name.is_empty() && selected_flame_entity.is_some() {
-                    ui_events.send(UIEvent::Effect {
-                        key: FLAME_SPAWN_HOOK.key,
-                        command: std::rc::Rc::new(FlameUiCommand::SaveStyle { name }),
-                    });
+                    send_effect_ui_command(&*ecs_world, FlameUiCommand::SaveStyle { name });
                 }
             }
             if ui.is_item_hovered() {
@@ -436,20 +431,18 @@ pub(super) fn build_flame_section(
                     let mut trail_enabled = trail_state.0;
                     let mut trail_fade = trail_state.1;
                     if ui.checkbox("Trail", &mut trail_enabled) {
-                        ui_events.send(UIEvent::Effect {
-                            key: FLAME_SPAWN_HOOK.key,
-                            command: std::rc::Rc::new(FlameUiCommand::UpdateTrailEnabled(
-                                trail_enabled,
-                            )),
-                        });
+                        send_effect_ui_command(
+                            &*ecs_world,
+                            FlameUiCommand::UpdateTrailEnabled(trail_enabled),
+                        );
                     }
                     ui.slider_config("Trail Fade", 0.1, 5.0)
                         .build(&mut trail_fade);
                     if (trail_fade - trail_state.1).abs() > 0.01 {
-                        ui_events.send(UIEvent::Effect {
-                            key: FLAME_SPAWN_HOOK.key,
-                            command: std::rc::Rc::new(FlameUiCommand::UpdateTrailFade(trail_fade)),
-                        });
+                        send_effect_ui_command(
+                            &*ecs_world,
+                            FlameUiCommand::UpdateTrailFade(trail_fade),
+                        );
                     }
 
                     // GPU Timings section (read-only)
@@ -465,24 +458,24 @@ pub(super) fn build_flame_section(
                     }
 
                     if !effect_applied_this_frame {
-                        ui_events.send(UIEvent::Effect {
-                            key: FLAME_SPAWN_HOOK.key,
-                            command: std::rc::Rc::new(FlameUiCommand::UpdateEffect {
+                        send_effect_ui_command(
+                            &*ecs_world,
+                            FlameUiCommand::UpdateEffect {
                                 entity: selected_flame,
                                 effect: Box::new(effect_copy),
-                            }),
-                        });
+                            },
+                        );
                     }
 
                     if ui.collapsing_header("Flame Debug", imgui::TreeNodeFlags::empty()) {
-                        draw_flame_render_settings(ui, ui_events, ecs_world);
+                        draw_flame_render_settings(ui, ecs_world);
                         if ui.button("Dump Probe") {
-                            ui_events.send(UIEvent::Effect {
-                                key: FLAME_SPAWN_HOOK.key,
-                                command: std::rc::Rc::new(FlameUiCommand::DumpWallProbe {
+                            send_effect_ui_command(
+                                &*ecs_world,
+                                FlameUiCommand::DumpWallProbe {
                                     viewport_size: overlay_state.viewport.size,
-                                }),
-                            });
+                                },
+                            );
                         }
                         if ui.is_item_hovered() {
                             ui.tooltip_text(
@@ -496,7 +489,7 @@ pub(super) fn build_flame_section(
     }
 }
 
-fn draw_flame_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn draw_flame_render_settings(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::{FlameDebugView, FlameRenderSettings, FlameShadingMode};
     use thyllore_effect_core::flame_wave::{
         read_env_wave_jitter, read_env_wave_jitter_freq, set_wave_jitter, set_wave_jitter_freq,
@@ -563,10 +556,10 @@ fn draw_flame_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_
         | FlameShadingMode::DebugDepthClamp => {}
     }
 
-    ui_events.send(UIEvent::Effect {
-        key: FLAME_SPAWN_HOOK.key,
-        command: std::rc::Rc::new(FlameUiCommand::UpdateRenderSettings(settings_copy)),
-    });
+    send_effect_ui_command(
+        &*ecs_world,
+        FlameUiCommand::UpdateRenderSettings(settings_copy),
+    );
 }
 
 /// Canonicalized directory, falling back to the typed text when the path

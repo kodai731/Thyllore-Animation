@@ -5,6 +5,7 @@ use crate::ecs::resource::{
 };
 use crate::ecs::world::{Entity, Transform, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
+use crate::hooks::effect_ui_event::EffectUiQueue;
 use crate::hooks::scene::spawn_scene_owner;
 
 pub const DEFAULT_FLAME_NAME: &str = "Flame";
@@ -104,11 +105,14 @@ fn insert_flame_default_resources(world: &mut World) {
     if !world.contains_resource::<FlameUIState>() {
         world.insert_resource(FlameUIState::default());
     }
+    if !world.contains_resource::<EffectUiQueue<super::ui_command::FlameUiCommand>>() {
+        world.insert_resource(EffectUiQueue::<super::ui_command::FlameUiCommand>::default());
+    }
 }
 
 crate::effect_default_resource!("flame", insert_flame_default_resources);
 
-crate::effect_ui_event_hook!(
+crate::ui_event_hook!(
     FLAME_SPAWN_HOOK.key,
-    super::ui_apply::apply_flame_ui_command
+    super::ui_apply::dispatch_flame_ui_events
 );

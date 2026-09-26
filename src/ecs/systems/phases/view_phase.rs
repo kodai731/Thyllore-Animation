@@ -10,7 +10,7 @@ use crate::ecs::{
 };
 use crate::math::calculate_billboard_click_rect;
 
-pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
+pub fn run_view_phase_ecs(ctx: &mut EcsContext) {
     update_camera_near_plane(ctx);
 
     let proj_data = calculate_projection(&*ctx.camera(), ctx.swapchain_extent);
@@ -52,7 +52,7 @@ pub fn run_transform_phase_ecs(ctx: &mut EcsContext) {
     ctx.world.insert_resource(proj_data);
 }
 
-pub unsafe fn run_transform_phase_gpu(ctx: &mut FrameContext) -> Result<()> {
+pub unsafe fn run_view_phase_gpu(ctx: &mut FrameContext) -> Result<()> {
     let mesh = ctx.light_gizmo().mesh.clone();
     let backend = ctx.create_backend();
     gizmo_update_vertex_buffer(&mesh, &backend)?;

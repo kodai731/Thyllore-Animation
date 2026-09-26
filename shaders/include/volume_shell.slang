@@ -123,17 +123,17 @@ public float biweightSpherePieceIntegral(float3 center, float radius, float3 sta
     return biweightQuadraticIntegral(u0, u1, u2);
 }
 
-public void rayPushKnot(inout float knots[RAY_MAX_KNOTS], inout int count, float t, float lo, float hi) {
-    if (t <= lo || t >= hi || count >= RAY_MAX_KNOTS) {
+public void rayPushKnot<let N : int>(inout float knots[N], inout int count, float t, float lo, float hi) {
+    if (t <= lo || t >= hi || count >= N) {
         return;
     }
     knots[count] = t;
     count += 1;
 }
 
-public void rayPushQuadraticRoots(
+public void rayPushQuadraticRoots<let N : int>(
     float a, float b, float c, float lo, float hi,
-    inout float knots[RAY_MAX_KNOTS], inout int count) {
+    inout float knots[N], inout int count) {
     if (abs(a) < RAY_LINEAR_COEFFICIENT_EPSILON) {
         if (abs(b) >= RAY_LINEAR_COEFFICIENT_EPSILON) {
             rayPushKnot(knots, count, -c / b, lo, hi);
@@ -149,7 +149,7 @@ public void rayPushQuadraticRoots(
     rayPushKnot(knots, count, (-b + sqrtDiscriminant) / (2.0 * a), lo, hi);
 }
 
-public void raySortKnots(inout float knots[RAY_MAX_KNOTS], int count) {
+public void raySortKnots<let N : int>(inout float knots[N], int count) {
     for (int i = 1; i < count; ++i) {
         float value = knots[i];
         int j = i;
@@ -161,7 +161,7 @@ public void raySortKnots(inout float knots[RAY_MAX_KNOTS], int count) {
     }
 }
 
-public int rayBeginKnots(float tNear, float tFar, out float knots[RAY_MAX_KNOTS]) {
+public int rayBeginKnots<let N : int>(float tNear, float tFar, out float knots[N]) {
     knots[0] = tNear;
     knots[1] = tFar;
     return 2;

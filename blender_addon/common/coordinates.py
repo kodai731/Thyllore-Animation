@@ -106,6 +106,10 @@ def blender_to_engine_point(p):
     return (p[0], p[2], -p[1])
 
 
+def engine_to_blender_point(p):
+    return (p[0], -p[2], p[1])
+
+
 def engine_projection(fovy_rad, aspect, near):
     f = 1.0 / math.tan(fovy_rad / 2.0)
     return [

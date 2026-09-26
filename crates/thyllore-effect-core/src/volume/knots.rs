@@ -6,21 +6,21 @@ pub const RAY_LINEAR_COEFFICIENT_EPSILON: f32 = 1e-7;
 /// Ray parameters at which a piecewise-polynomial medium changes form, bracketed by the
 /// near and far bounds; once sorted, every consecutive pair is one closed-form piece.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct RayKnots {
-    values: [f32; RAY_MAX_KNOTS],
+pub struct RayKnots<const N: usize = RAY_MAX_KNOTS> {
+    values: [f32; N],
     count: usize,
 }
 
-impl RayKnots {
+impl<const N: usize> RayKnots<N> {
     pub fn begin(t_near: f32, t_far: f32) -> Self {
-        let mut values = [0.0f32; RAY_MAX_KNOTS];
+        let mut values = [0.0f32; N];
         values[0] = t_near;
         values[1] = t_far;
         Self { values, count: 2 }
     }
 
     pub fn push(&mut self, t: f32, lo: f32, hi: f32) {
-        if t <= lo || t >= hi || self.count >= RAY_MAX_KNOTS {
+        if t <= lo || t >= hi || self.count >= N {
             return;
         }
         self.values[self.count] = t;

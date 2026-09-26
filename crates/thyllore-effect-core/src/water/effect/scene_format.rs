@@ -71,6 +71,7 @@ declare_scene_format! {
             get: |e| e.flow_longitudinal,
             set: |e, v| e.flow_longitudinal = v,
             ui {
+                primary,
                 min: -5.0,
                 max: 5.0,
                 format: "%.2f",
@@ -91,6 +92,7 @@ declare_scene_format! {
             get: |e| e.wave_amplitude,
             set: |e, v| e.wave_amplitude = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 1.0,
                 format: "%.3f",
@@ -101,6 +103,7 @@ declare_scene_format! {
             get: |e| e.wave_frequency,
             set: |e, v| e.wave_frequency = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 50.0,
                 format: "%.1f",
@@ -141,6 +144,7 @@ declare_scene_format! {
             get: |e| e.light_intensity,
             set: |e, v| e.light_intensity = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 20.0,
                 format: "%.2f",
@@ -191,6 +195,7 @@ declare_scene_format! {
             get: |e| e.reflect_strength,
             set: |e, v| e.reflect_strength = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 1.0,
                 format: "%.2f",
@@ -222,6 +227,7 @@ declare_scene_format! {
             set: |e, v| e.tint = v,
             scalars: rgb,
             ui {
+                primary,
                 kind: Color,
                 min: 0.0,
                 max: 1.0,
@@ -245,6 +251,7 @@ declare_scene_format! {
             get: |e| e.time_scale,
             set: |e, v| e.time_scale = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 4.0,
                 format: "%.2f",
@@ -453,5 +460,22 @@ mod tests {
             assert!(!object.contains_key(name), "{name} must stay runtime-only");
         }
         assert_eq!(object.len(), WATER_PARAMETER_OWNERSHIP.len());
+    }
+
+    #[test]
+    fn test_primary_params_are_exactly_the_specified_7() {
+        let primary: Vec<&str> = WATER_UI_PARAMS
+            .iter()
+            .filter(|p| p.primary)
+            .map(|p| p.name)
+            .collect();
+        assert_eq!(primary.len(), 7);
+        assert!(primary.contains(&"wave_amplitude"));
+        assert!(primary.contains(&"wave_frequency"));
+        assert!(primary.contains(&"tint"));
+        assert!(primary.contains(&"reflect_strength"));
+        assert!(primary.contains(&"light_intensity"));
+        assert!(primary.contains(&"flow_longitudinal"));
+        assert!(primary.contains(&"time_scale"));
     }
 }

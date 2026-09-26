@@ -1,4 +1,5 @@
 use super::flame::find_flame_by_pick_ray;
+use super::lightning::find_lightning_by_pick_ray;
 use super::water::find_water_by_pick_ray;
 use super::wind::find_wind_by_pick_ray;
 use crate::asset::AssetStorage;
@@ -95,6 +96,7 @@ fn resolve_closest_pick(
         find_flame_by_pick_ray(world, ray),
         find_water_by_pick_ray(world, ray),
         find_wind_by_pick_ray(world, ray),
+        find_lightning_by_pick_ray(world, ray),
     ]
     .into_iter()
     .flatten()

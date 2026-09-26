@@ -22,7 +22,7 @@ impl BoundGenerations {
         self.per_slot[frame_slot] = Some(generations);
     }
 
-    fn forget(&mut self) {
+    pub fn forget(&mut self) {
         self.per_slot.clear();
     }
 }

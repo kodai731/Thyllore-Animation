@@ -26,6 +26,14 @@ Effect-specific pass recording, resize and descriptor updates live in `src/ecs/s
 `src/app/render.rs` or `src/vulkanr/renderer/deferred/`; a new pass is a node that declares its transients,
 reads and writes, and a declaration must hold whenever `record()` would emit the commands.
 
+### Fullscreen Overlay Passes
+
+- Pipelines are built using `thyllore_vulkan_core::renderer::overlay_pipeline(pass, render_pass, &[OverlayBlend], Option<DepthTestConfig>)` (no vertex input, fullscreen triangle, dynamic viewport/scissor; blend definitions are centralized in vulkan-core).
+- Recording is done via `record_overlay_draws(device, cmd, &OverlayPass, render_area, OverlayAttachmentLoad, pipeline, push_constants, &[OverlayDraw])`.
+- Render passes are created once during effect setup using `create_color_overlay_render_pass(ColorOverlayPassDesc)`, with only resolution-dependent framebuffers recreated on viewport resize.
+- Intermediate images used only within a frame (e.g., wind's half-resolution color) are not owned; they are requested via `RenderPassNode::transients` as `TransientRequest`, and their framebuffers are obtained in `prepare` via `ctx.transient.framebuffer`. Descriptors are updated per frame slot only when generations change (e.g., `src/ecs/systems/wind/passes.rs`).
+- Complex behaviors like history ping-pong (flame) or compute/ray tracing (water's caustic, trace) do not fit this pattern and must be implemented within the effect domain.
+
 ## Frame flow
 
 `App::drive_frame` (`src/app/frame.rs`, called from `src/platform/events/frame.rs`) dispatches the UI

@@ -9,9 +9,8 @@ use crate::ecs::systems::wind::render_targets::wind_shadow_volume_extent;
 use crate::vulkanr::pipeline::RRPipeline;
 use thyllore_effect_core::WIND_SHADOW_VOLUME_SLOTS;
 use thyllore_vulkan_core::{
-    begin_overlay_render_pass, draw_fullscreen_triangle, insert_storage_image_read_barrier,
-    insert_storage_image_write_barrier, set_full_viewport, FrameRenderContext,
-    OverlayAttachmentLoad,
+    insert_storage_image_read_barrier, insert_storage_image_write_barrier, record_overlay_draws,
+    FrameRenderContext, OverlayAttachmentLoad, OverlayDraw, OverlayPass,
 };
 
 /// Must match local_size in shadowBake.comp.
@@ -108,6 +107,7 @@ pub unsafe fn record_wind_shadow_bake_pass(
 pub unsafe fn record_wind_half_resolve_pass(
     ctx: &FrameRenderContext,
     targets: &WindRenderTargets,
+    half_framebuffer: vk::Framebuffer,
     pipeline: &RRPipeline,
     descriptor: &WindResolveDescriptorSet,
     draws: &[WindInstanceDraw],
@@ -117,41 +117,33 @@ pub unsafe fn record_wind_half_resolve_pass(
 ) -> Result<()> {
     let device = &ctx.device.device;
     let half_extent = targets.half_extent();
-    begin_overlay_render_pass(
+    let pass = OverlayPass {
+        render_pass: targets.half_render_pass,
+        framebuffer: half_framebuffer,
+        extent: half_extent,
+    };
+    let frame_set = ctx.graphics.frame_set.sets[image_index];
+    let sets = [frame_set, descriptor.descriptor_set];
+    let dynamic_offsets: Vec<u32> = draws.iter().map(|d| d.ubo_dynamic_offset).collect();
+    let overlay_draws: Vec<OverlayDraw> = draws
+        .iter()
+        .enumerate()
+        .map(|(i, draw)| OverlayDraw {
+            descriptor_sets: &sets,
+            dynamic_offsets: &dynamic_offsets[i..i + 1],
+            scissor: draw.scissor,
+        })
+        .collect();
+    record_overlay_draws(
         device,
         cmd,
-        targets.half_render_pass,
-        targets.half_framebuffer,
+        &pass,
         full_area(half_extent),
-        OverlayAttachmentLoad::Clear(TRANSPARENT_BLACK),
-    );
-
-    device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
-    set_full_viewport(device, cmd, half_extent);
-    device.cmd_push_constants(
-        cmd,
-        pipeline.pipeline_layout,
-        vk::ShaderStageFlags::FRAGMENT,
-        0,
-        push_constants.as_bytes(),
-    );
-
-    let frame_set = ctx.graphics.frame_set.sets[image_index];
-    for draw in draws {
-        device.cmd_set_scissor(cmd, 0, &[draw.scissor]);
-        device.cmd_bind_descriptor_sets(
-            cmd,
-            vk::PipelineBindPoint::GRAPHICS,
-            pipeline.pipeline_layout,
-            0,
-            &[frame_set, descriptor.descriptor_set],
-            &[draw.ubo_dynamic_offset],
-        );
-        draw_fullscreen_triangle(device, cmd);
-    }
-
-    device.cmd_end_render_pass(cmd);
-    Ok(())
+        OverlayAttachmentLoad::Clear(&[TRANSPARENT_BLACK]),
+        pipeline,
+        Some(push_constants.as_bytes()),
+        &overlay_draws,
+    )
 }
 
 pub unsafe fn record_wind_upsample_pass(
@@ -160,33 +152,31 @@ pub unsafe fn record_wind_upsample_pass(
     pipeline: &RRPipeline,
     descriptor: &WindUpsampleDescriptorSet,
     scissor: vk::Rect2D,
+    frame_slot: usize,
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
     let device = &ctx.device.device;
-    begin_overlay_render_pass(
+    let extent = targets.extent();
+    let pass = OverlayPass {
+        render_pass: targets.render_pass,
+        framebuffer: targets.framebuffer,
+        extent,
+    };
+    let overlay_draws = [OverlayDraw {
+        descriptor_sets: &[descriptor.descriptor_set(frame_slot)],
+        dynamic_offsets: &[],
+        scissor,
+    }];
+    record_overlay_draws(
         device,
         cmd,
-        targets.render_pass,
-        targets.framebuffer,
+        &pass,
         scissor,
         OverlayAttachmentLoad::Keep,
-    );
-
-    device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
-    set_full_viewport(device, cmd, targets.extent());
-    device.cmd_set_scissor(cmd, 0, &[scissor]);
-    device.cmd_bind_descriptor_sets(
-        cmd,
-        vk::PipelineBindPoint::GRAPHICS,
-        pipeline.pipeline_layout,
-        0,
-        &[descriptor.descriptor_set],
-        &[],
-    );
-    draw_fullscreen_triangle(device, cmd);
-
-    device.cmd_end_render_pass(cmd);
-    Ok(())
+        pipeline,
+        None,
+        &overlay_draws,
+    )
 }
 
 pub unsafe fn record_wind_shading_pass(
@@ -200,37 +190,26 @@ pub unsafe fn record_wind_shading_pass(
     cmd: vk::CommandBuffer,
 ) -> Result<()> {
     let device = &ctx.device.device;
-    begin_overlay_render_pass(
+    let extent = targets.extent();
+    let pass = OverlayPass {
+        render_pass: targets.render_pass,
+        framebuffer: targets.framebuffer,
+        extent,
+    };
+    let frame_set = ctx.graphics.frame_set.sets[image_index];
+    let overlay_draws = [OverlayDraw {
+        descriptor_sets: &[frame_set, descriptor.descriptor_set],
+        dynamic_offsets: &[draw.ubo_dynamic_offset],
+        scissor: draw.scissor,
+    }];
+    record_overlay_draws(
         device,
         cmd,
-        targets.render_pass,
-        targets.framebuffer,
+        &pass,
         draw.scissor,
         OverlayAttachmentLoad::Keep,
-    );
-
-    device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
-    set_full_viewport(device, cmd, targets.extent());
-    device.cmd_set_scissor(cmd, 0, &[draw.scissor]);
-
-    let frame_set = ctx.graphics.frame_set.sets[image_index];
-    device.cmd_bind_descriptor_sets(
-        cmd,
-        vk::PipelineBindPoint::GRAPHICS,
-        pipeline.pipeline_layout,
-        0,
-        &[frame_set, descriptor.descriptor_set],
-        &[draw.ubo_dynamic_offset],
-    );
-    device.cmd_push_constants(
-        cmd,
-        pipeline.pipeline_layout,
-        vk::ShaderStageFlags::FRAGMENT,
-        0,
-        push_constants.as_bytes(),
-    );
-    draw_fullscreen_triangle(device, cmd);
-
-    device.cmd_end_render_pass(cmd);
-    Ok(())
+        pipeline,
+        Some(push_constants.as_bytes()),
+        &overlay_draws,
+    )
 }

@@ -155,7 +155,7 @@ impl WindShadowBakeDescriptorSet {
 #[derive(Clone, Debug, Default)]
 pub struct WindUpsampleDescriptorSet {
     pub layout: ReflectedSetLayout,
-    pub descriptor_set: vk::DescriptorSet,
+    pub descriptor_sets: Vec<vk::DescriptorSet>,
     pub wind_color_sampler: vk::Sampler,
     pub scene_depth_sampler: vk::Sampler,
 }
@@ -165,28 +165,35 @@ impl WindUpsampleDescriptorSet {
         ReflectedLayoutSpec::local(&WIND_UPSAMPLE)
     }
 
-    pub unsafe fn new(rrdevice: &RRDevice) -> Result<Self> {
+    pub unsafe fn new(rrdevice: &RRDevice, frames_in_flight: usize) -> Result<Self> {
         let layout = ReflectedSetLayout::create(rrdevice, &Self::layout_spec())?;
-        let descriptor_set = layout.allocate_set(rrdevice)?;
+        let descriptor_sets = (0..frames_in_flight)
+            .map(|_| layout.allocate_set(rrdevice))
+            .collect::<Result<Vec<_>>>()?;
         let wind_color_sampler = create_nearest_sampler(rrdevice)?;
         let scene_depth_sampler = create_scene_depth_sampler(rrdevice)?;
 
         Ok(Self {
             layout,
-            descriptor_set,
+            descriptor_sets,
             wind_color_sampler,
             scene_depth_sampler,
         })
     }
 
-    pub unsafe fn update_image_views(
+    pub fn descriptor_set(&self, frame_slot: usize) -> vk::DescriptorSet {
+        self.descriptor_sets[frame_slot]
+    }
+
+    pub unsafe fn update_image_views_at(
         &self,
         rrdevice: &RRDevice,
+        frame_slot: usize,
         wind_color_view: vk::ImageView,
         scene_depth_view: vk::ImageView,
     ) -> Result<()> {
         self.layout
-            .writer(self.descriptor_set)
+            .writer(self.descriptor_sets[frame_slot])
             .image(
                 wind_upsample::WIND_COLOR_SAMPLER,
                 wind_color_view,

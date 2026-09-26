@@ -10,8 +10,10 @@ use crate::ecs::systems::wind::record::{
 };
 use crate::ecs::PassContext;
 use crate::hooks::pass::{
-    CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef, TargetUse,
+    CoreTarget, PassStage, RenderPassNode, TargetAccess, TargetRef, TargetUse, TransientRequest,
+    TransientSlot,
 };
+use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::pipeline::RRPipeline;
 use crate::vulkanr::renderer::deferred::{compute_bounds_scissor, full_extent_scissor};
 use thyllore_effect_core::{
@@ -19,6 +21,8 @@ use thyllore_effect_core::{
     WindResolveScale, WindShadowSlot, WindUBO, WIND_MAX_INSTANCES,
 };
 use thyllore_vulkan_core::FrameRenderContext;
+
+const HALF_COLOR_SLOT: TransientSlot = TransientSlot("wind.half_color");
 
 pub struct WindPassNode;
 
@@ -84,6 +88,54 @@ fn wind_frame(ctx: &PassContext) -> Option<WindFrame> {
     Some(WindFrame { ubos, scissors })
 }
 
+fn uses_half_resolution(ctx: &PassContext) -> bool {
+    wind_render_settings(ctx).resolve_scale == WindResolveScale::Half
+        && wind_frame(ctx).is_some_and(|frame| frame.has_visible_instance())
+}
+
+unsafe fn prepare_half_color_target(ctx: &mut PassContext, frame_slot: usize) -> Result<()> {
+    let Some((half_render_pass, half_extent)) = ctx
+        .world
+        .get_resource::<WindRenderTargets>()
+        .map(|targets| (targets.half_render_pass, targets.half_extent()))
+    else {
+        return Ok(());
+    };
+    let Some(scene_depth_view) = ctx
+        .world
+        .get_resource::<RenderTargets>()
+        .map(|targets| targets.render.gbuffer_depth_image_view)
+    else {
+        return Ok(());
+    };
+    let half_color = ctx.transient_image(HALF_COLOR_SLOT)?;
+    ctx.transient.framebuffer(
+        &ctx.rrdevice.device,
+        half_render_pass,
+        &[half_color.view],
+        half_extent.width,
+        half_extent.height,
+    )?;
+
+    let Some(mut gpu_state) = ctx.world.get_resource_mut::<WindGpuState>() else {
+        return Ok(());
+    };
+    let generations = vec![half_color.generation];
+    if gpu_state.upsample_bound.is_bound(frame_slot, &generations) {
+        return Ok(());
+    }
+    if let Some(upsample_descriptor) = gpu_state.upsample_descriptor.as_ref() {
+        upsample_descriptor.update_image_views_at(
+            ctx.rrdevice,
+            frame_slot,
+            half_color.view,
+            scene_depth_view,
+        )?;
+    }
+    gpu_state.upsample_bound.mark_bound(frame_slot, generations);
+    Ok(())
+}
+
 impl RenderPassNode for WindPassNode {
     fn name(&self) -> &'static str {
         "wind"
@@ -94,18 +146,47 @@ impl RenderPassNode for WindPassNode {
     }
 
     fn writes(&self, ctx: &PassContext) -> Vec<TargetUse> {
-        wind_frame(ctx)
+        if wind_frame(ctx)
             .filter(WindFrame::has_visible_instance)
-            .map(|_| {
-                vec![TargetUse::new(
-                    TargetRef::Core(CoreTarget::HdrColor),
-                    TargetAccess::Attachment {
-                        initial_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                        final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                    },
-                )]
-            })
-            .unwrap_or_default()
+            .is_none()
+        {
+            return Vec::new();
+        }
+        let mut uses = vec![TargetUse::new(
+            TargetRef::Core(CoreTarget::HdrColor),
+            TargetAccess::Attachment {
+                initial_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            },
+        )];
+        if uses_half_resolution(ctx) {
+            uses.push(TargetUse::new(
+                TargetRef::Transient(HALF_COLOR_SLOT),
+                TargetAccess::Attachment {
+                    initial_layout: vk::ImageLayout::UNDEFINED,
+                    final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                },
+            ));
+        }
+        uses
+    }
+
+    fn transients(&self, ctx: &PassContext) -> Vec<TransientRequest> {
+        if !uses_half_resolution(ctx) {
+            return Vec::new();
+        }
+        ctx.world
+            .get_resource::<WindRenderTargets>()
+            .map(|targets| TransientRequest::new(HALF_COLOR_SLOT, targets.half_color_desc()))
+            .into_iter()
+            .collect()
+    }
+
+    unsafe fn prepare(&self, ctx: &mut PassContext, frame_slot: usize) -> Result<()> {
+        if !uses_half_resolution(ctx) {
+            return Ok(());
+        }
+        prepare_half_color_target(ctx, frame_slot)
     }
 
     unsafe fn record(
@@ -113,9 +194,9 @@ impl RenderPassNode for WindPassNode {
         ctx: &PassContext,
         command_buffer: vk::CommandBuffer,
         image_index: usize,
-        _frame_slot: usize,
+        frame_slot: usize,
     ) -> Result<()> {
-        record_wind_passes(ctx, command_buffer, image_index)
+        record_wind_passes(ctx, command_buffer, image_index, frame_slot)
     }
 }
 
@@ -123,6 +204,7 @@ unsafe fn record_wind_passes(
     ctx: &PassContext,
     command_buffer: vk::CommandBuffer,
     image_index: usize,
+    frame_slot: usize,
 ) -> Result<()> {
     let Some(frame) = wind_frame(ctx) else {
         return Ok(());
@@ -202,6 +284,7 @@ unsafe fn record_wind_passes(
             }
         }
         WindResolveScale::Half => record_half_scale_wind_passes(
+            ctx,
             &gpu_state,
             &render,
             wind_buffer,
@@ -210,6 +293,7 @@ unsafe fn record_wind_passes(
             &draws,
             push_constants,
             image_index,
+            frame_slot,
             command_buffer,
         )?,
     }
@@ -219,6 +303,7 @@ unsafe fn record_wind_passes(
 
 #[allow(clippy::too_many_arguments)]
 unsafe fn record_half_scale_wind_passes(
+    pass_ctx: &PassContext,
     gpu_state: &WindGpuState,
     ctx: &FrameRenderContext,
     wind_buffer: &WindRenderTargets,
@@ -227,12 +312,20 @@ unsafe fn record_half_scale_wind_passes(
     draws: &[WindInstanceDraw],
     push_constants: WindPushConstants,
     image_index: usize,
+    frame_slot: usize,
     command_buffer: vk::CommandBuffer,
 ) -> Result<()> {
     let (Some(upsample_pipeline), Some(upsample_descriptor)) = (
         gpu_state.upsample_pipeline.as_ref(),
         gpu_state.upsample_descriptor.as_ref(),
     ) else {
+        return Ok(());
+    };
+    let half_color = pass_ctx.transient_image(HALF_COLOR_SLOT)?;
+    let Some(half_framebuffer) = pass_ctx
+        .transient
+        .cached_framebuffer(wind_buffer.half_render_pass, &[half_color.view])
+    else {
         return Ok(());
     };
 
@@ -248,6 +341,7 @@ unsafe fn record_half_scale_wind_passes(
     record_wind_half_resolve_pass(
         ctx,
         wind_buffer,
+        half_framebuffer,
         shading_pipeline,
         descriptor,
         &half_draws,
@@ -261,6 +355,7 @@ unsafe fn record_half_scale_wind_passes(
         upsample_pipeline,
         upsample_descriptor,
         union_scissor(draws.iter().map(|draw| draw.scissor), wind_buffer.extent()),
+        frame_slot,
         command_buffer,
     )
 }

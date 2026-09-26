@@ -1,10 +1,93 @@
+use crate::descriptor::PassShaders;
+use crate::pipeline::{BlendConfig, DepthTestConfig, PipelineBuilder, VertexInputConfig};
 use vulkanalia::prelude::v1_0::*;
 
-/// What a fullscreen overlay pass finds in its color attachment when it begins.
 #[derive(Clone, Copy, Debug)]
-pub enum OverlayAttachmentLoad {
+pub enum OverlayBlend {
+    Premultiplied,
+    Opaque,
+    Additive,
+}
+
+impl OverlayBlend {
+    pub fn blend_config(self) -> BlendConfig {
+        match self {
+            OverlayBlend::Premultiplied => premultiplied_blend(),
+            OverlayBlend::Opaque => opaque_blend(),
+            OverlayBlend::Additive => additive_blend(),
+        }
+    }
+}
+
+fn premultiplied_blend() -> BlendConfig {
+    BlendConfig {
+        enable: true,
+        src_color_factor: vk::BlendFactor::ONE,
+        dst_color_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+        color_op: vk::BlendOp::ADD,
+        src_alpha_factor: vk::BlendFactor::ONE,
+        dst_alpha_factor: vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+        alpha_op: vk::BlendOp::ADD,
+    }
+}
+
+fn opaque_blend() -> BlendConfig {
+    BlendConfig {
+        enable: false,
+        src_color_factor: vk::BlendFactor::ONE,
+        dst_color_factor: vk::BlendFactor::ZERO,
+        color_op: vk::BlendOp::ADD,
+        src_alpha_factor: vk::BlendFactor::ONE,
+        dst_alpha_factor: vk::BlendFactor::ZERO,
+        alpha_op: vk::BlendOp::ADD,
+    }
+}
+
+fn additive_blend() -> BlendConfig {
+    BlendConfig {
+        enable: true,
+        src_color_factor: vk::BlendFactor::ONE,
+        dst_color_factor: vk::BlendFactor::ONE,
+        color_op: vk::BlendOp::ADD,
+        src_alpha_factor: vk::BlendFactor::ZERO,
+        dst_alpha_factor: vk::BlendFactor::ONE,
+        alpha_op: vk::BlendOp::ADD,
+    }
+}
+
+pub fn overlay_pipeline(
+    pass: &'static PassShaders,
+    render_pass: vk::RenderPass,
+    attachments: &[OverlayBlend],
+    depth_test: Option<DepthTestConfig>,
+) -> PipelineBuilder {
+    let mut builder = PipelineBuilder::from_pass(pass)
+        .vertex_input(VertexInputConfig::Custom {
+            bindings: vec![],
+            attributes: vec![],
+        })
+        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+        .custom_render_pass(render_pass)
+        .msaa_samples(vk::SampleCountFlags::_1)
+        .mrt_attachments(attachments.len() as u32);
+
+    builder = match depth_test {
+        Some(config) => builder.depth_test(config),
+        None => builder.no_depth_test(),
+    };
+
+    for (attachment_index, blend) in attachments.iter().enumerate() {
+        builder = builder.attachment_blend(attachment_index as u32, blend.blend_config());
+    }
+
+    builder.dynamic_states(vec![vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR])
+}
+
+/// What a fullscreen overlay pass finds in its attachments, one clear color per attachment.
+#[derive(Clone, Copy, Debug)]
+pub enum OverlayAttachmentLoad<'a> {
     Keep,
-    Clear([f32; 4]),
+    Clear(&'a [[f32; 4]]),
 }
 
 pub unsafe fn begin_overlay_render_pass(
@@ -17,9 +100,12 @@ pub unsafe fn begin_overlay_render_pass(
 ) {
     let clear_values = match load {
         OverlayAttachmentLoad::Keep => vec![],
-        OverlayAttachmentLoad::Clear(color) => vec![vk::ClearValue {
-            color: vk::ClearColorValue { float32: color },
-        }],
+        OverlayAttachmentLoad::Clear(colors) => colors
+            .iter()
+            .map(|&color| vk::ClearValue {
+                color: vk::ClearColorValue { float32: color },
+            })
+            .collect::<Vec<_>>(),
     };
     let render_pass_info = vk::RenderPassBeginInfo::builder()
         .render_pass(render_pass)
@@ -42,4 +128,66 @@ pub unsafe fn set_full_viewport(device: &Device, cmd: vk::CommandBuffer, extent:
 
 pub unsafe fn draw_fullscreen_triangle(device: &Device, cmd: vk::CommandBuffer) {
     device.cmd_draw(cmd, 3, 1, 0, 0);
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct OverlayPass {
+    pub render_pass: vk::RenderPass,
+    pub framebuffer: vk::Framebuffer,
+    pub extent: vk::Extent2D,
+}
+
+pub struct OverlayDraw<'a> {
+    pub descriptor_sets: &'a [vk::DescriptorSet],
+    pub dynamic_offsets: &'a [u32],
+    pub scissor: vk::Rect2D,
+}
+
+pub unsafe fn record_overlay_draws(
+    device: &Device,
+    cmd: vk::CommandBuffer,
+    pass: &OverlayPass,
+    render_area: vk::Rect2D,
+    load: OverlayAttachmentLoad,
+    pipeline: &crate::pipeline::RRPipeline,
+    push_constants: Option<&[u8]>,
+    draws: &[OverlayDraw],
+) -> anyhow::Result<()> {
+    begin_overlay_render_pass(
+        device,
+        cmd,
+        pass.render_pass,
+        pass.framebuffer,
+        render_area,
+        load,
+    );
+
+    device.cmd_bind_pipeline(cmd, vk::PipelineBindPoint::GRAPHICS, pipeline.pipeline);
+    set_full_viewport(device, cmd, pass.extent);
+
+    if let Some(pc) = push_constants {
+        device.cmd_push_constants(
+            cmd,
+            pipeline.pipeline_layout,
+            vk::ShaderStageFlags::FRAGMENT,
+            0,
+            pc,
+        );
+    }
+
+    for draw in draws {
+        device.cmd_set_scissor(cmd, 0, &[draw.scissor]);
+        device.cmd_bind_descriptor_sets(
+            cmd,
+            vk::PipelineBindPoint::GRAPHICS,
+            pipeline.pipeline_layout,
+            0,
+            draw.descriptor_sets,
+            draw.dynamic_offsets,
+        );
+        draw_fullscreen_triangle(device, cmd);
+    }
+
+    device.cmd_end_render_pass(cmd);
+    Ok(())
 }

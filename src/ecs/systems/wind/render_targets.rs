@@ -1,12 +1,11 @@
 use anyhow::Result;
 use vulkanalia::prelude::v1_0::*;
 
-use crate::ecs::resource::{half_extent, WindGpuState, WindRenderTargets};
-use crate::ecs::EffectContext;
+use crate::ecs::resource::{WindGpuState, WindRenderTargets};
+use crate::ecs::{EffectContext, MAX_FRAMES_IN_FLIGHT};
 use crate::hooks::effect::EffectHook;
 use crate::vulkanr::context::RenderTargets;
 use crate::vulkanr::core::RRDevice;
-use crate::vulkanr::image::{create_image, create_image_view};
 use crate::vulkanr::render::{create_color_overlay_render_pass, ColorOverlayPassDesc, RRRender};
 use crate::vulkanr::resource::hdr_buffer::HDR_FORMAT;
 use crate::vulkanr::resource::{GpuResource, VolumeImage};
@@ -72,26 +71,6 @@ pub unsafe fn create_wind_render_targets(
         vk::Extent2D { width, height },
     )?;
 
-    let half = half_extent(width, height);
-    let (half_color_image, half_color_image_memory) = create_image(
-        instance,
-        rrdevice,
-        half.width,
-        half.height,
-        1,
-        vk::SampleCountFlags::_1,
-        HDR_FORMAT,
-        vk::ImageTiling::OPTIMAL,
-        vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
-        vk::MemoryPropertyFlags::DEVICE_LOCAL,
-    )?;
-    let half_color_image_view = create_image_view(
-        rrdevice,
-        half_color_image,
-        HDR_FORMAT,
-        vk::ImageAspectFlags::COLOR,
-        1,
-    )?;
     let half_render_pass = create_color_overlay_render_pass(
         rrdevice,
         ColorOverlayPassDesc {
@@ -101,8 +80,6 @@ pub unsafe fn create_wind_render_targets(
             final_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
         },
     )?;
-    let half_framebuffer =
-        create_framebuffer(rrdevice, half_render_pass, half_color_image_view, half)?;
 
     let shadow_volume = VolumeImage::new(
         instance,
@@ -117,10 +94,6 @@ pub unsafe fn create_wind_render_targets(
         render_pass,
         framebuffer,
         half_render_pass,
-        half_framebuffer,
-        half_color_image,
-        half_color_image_memory,
-        half_color_image_view,
         shadow_volume,
         width,
         height,
@@ -135,25 +108,9 @@ impl GpuResource for WindRenderTargets {
 
 pub unsafe fn destroy_render_targets(targets: &mut WindRenderTargets, device: &vulkanalia::Device) {
     targets.shadow_volume.destroy(device);
-    if targets.half_framebuffer != vk::Framebuffer::null() {
-        device.destroy_framebuffer(targets.half_framebuffer, None);
-        targets.half_framebuffer = vk::Framebuffer::null();
-    }
     if targets.half_render_pass != vk::RenderPass::null() {
         device.destroy_render_pass(targets.half_render_pass, None);
         targets.half_render_pass = vk::RenderPass::null();
-    }
-    if targets.half_color_image_view != vk::ImageView::null() {
-        device.destroy_image_view(targets.half_color_image_view, None);
-        targets.half_color_image_view = vk::ImageView::null();
-    }
-    if targets.half_color_image != vk::Image::null() {
-        device.destroy_image(targets.half_color_image, None);
-        targets.half_color_image = vk::Image::null();
-    }
-    if targets.half_color_image_memory != vk::DeviceMemory::null() {
-        device.free_memory(targets.half_color_image_memory, None);
-        targets.half_color_image_memory = vk::DeviceMemory::null();
     }
     if targets.framebuffer != vk::Framebuffer::null() {
         device.destroy_framebuffer(targets.framebuffer, None);
@@ -185,6 +142,7 @@ unsafe fn setup_wind(ctx: &mut EffectContext, rrrender: &RRRender) -> Result<()>
         ctx.graphics,
         &targets,
         rrrender.gbuffer_depth_image_view,
+        MAX_FRAMES_IN_FLIGHT,
     )?;
     ctx.world.insert_resource(targets);
     ctx.world.insert_resource(gpu_state);
@@ -207,25 +165,24 @@ unsafe fn resize_wind_render_targets(ctx: &mut EffectContext) -> Result<()> {
     let Some(mut targets) = ctx.world.get_resource_mut::<WindRenderTargets>() else {
         return Ok(());
     };
-    destroy_render_targets(&mut targets, &ctx.rrdevice.device);
-    *targets = create_wind_render_targets(ctx.instance, ctx.rrdevice, width, height, hdr_view)?;
+    ctx.rrdevice
+        .device
+        .destroy_framebuffer(targets.framebuffer, None);
+    targets.framebuffer = create_framebuffer(
+        ctx.rrdevice,
+        targets.render_pass,
+        hdr_view,
+        vk::Extent2D { width, height },
+    )?;
+    targets.width = width;
+    targets.height = height;
 
-    let Some(gpu_state) = ctx.world.get_resource::<WindGpuState>() else {
+    let Some(mut gpu_state) = ctx.world.get_resource_mut::<WindGpuState>() else {
         return Ok(());
     };
+    gpu_state.upsample_bound.forget();
     if let Some(descriptor) = gpu_state.resolve_descriptor.as_ref() {
         descriptor.update_scene_depth(ctx.rrdevice, scene_depth_view)?;
-        descriptor.update_shadow_volume(ctx.rrdevice, &targets.shadow_volume)?;
-    }
-    if let Some(descriptor) = gpu_state.shadow_bake_descriptor.as_ref() {
-        descriptor.update_shadow_volume(ctx.rrdevice, &targets.shadow_volume)?;
-    }
-    if let Some(descriptor) = gpu_state.upsample_descriptor.as_ref() {
-        descriptor.update_image_views(
-            ctx.rrdevice,
-            targets.half_color_image_view,
-            scene_depth_view,
-        )?;
     }
     Ok(())
 }

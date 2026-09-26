@@ -46,7 +46,8 @@ float4 main([[vk::location(0)]] float2 fragTexCoord : TEXCOORD0) : SV_Target0 {
 
     float tNear = 0.0;
     float tFar = SEGMENT_T_MAX;
-    if (!clampToLightningSegments(localOrigin, localDir, tNear, tFar)) {
+    LightningHitMask hitMask;
+    if (!clampToLightningSegments(localOrigin, localDir, tNear, tFar, hitMask)) {
         return outsideSegments(fragTexCoord);
     }
     tNear = max(tNear, 0.0);
@@ -63,7 +64,7 @@ float4 main([[vk::location(0)]] float2 fragTexCoord : TEXCOORD0) : SV_Target0 {
         scattered = lightningReferenceEmission(localOrigin, localDir, tNear, tFar, push.stepCount,
                                                coverage, hitCount, coreCoverage);
     } else {
-        scattered = lightningEmission(localOrigin, localDir, tNear, tFar, coverage, hitCount, coreCoverage);
+        scattered = lightningEmission(localOrigin, localDir, tNear, tFar, hitMask, coverage, hitCount, coreCoverage);
     }
 
     if (push.debugView == LIGHTNING_DEBUG_COVERAGE) {

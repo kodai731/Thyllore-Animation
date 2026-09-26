@@ -58,10 +58,21 @@ public bool lightningSegmentReject(float3 origin, float3 dir, float tNear, float
     return false;
 }
 
-public bool clampToLightningSegments(float3 origin, float3 dir, inout float tNear, inout float tFar) {
+public static const int LIGHTNING_HIT_MASK_WORDS = LIGHTNING_MAX_SEGMENTS / 32;
+
+/// One bit per segment whose bounding sphere the ray enters; the emission loop visits only those.
+public struct LightningHitMask {
+    public uint words[LIGHTNING_HIT_MASK_WORDS];
+}
+
+public bool clampToLightningSegments(float3 origin, float3 dir, inout float tNear, inout float tFar,
+                                     out LightningHitMask hitMask) {
     bool hasInterval = false;
     float entry = tNear;
     float exit = tFar;
+    for (int w = 0; w < LIGHTNING_HIT_MASK_WORDS; ++w) {
+        hitMask.words[w] = 0u;
+    }
     int count = lightningSegmentCount();
     for (int i = 0; i < LIGHTNING_MAX_SEGMENTS; ++i) {
         if (i >= count) break;
@@ -87,6 +98,7 @@ public bool clampToLightningSegments(float3 origin, float3 dir, inout float tNea
         entry = hasInterval ? min(entry, segmentEntry) : segmentEntry;
         exit = hasInterval ? max(exit, segmentExit) : segmentExit;
         hasInterval = true;
+        hitMask.words[i >> 5] |= 1u << (i & 31);
     }
     if (!hasInterval) {
         return false;
@@ -148,18 +160,21 @@ public void lightningAccumulateSegment(
     }
 }
 
-public float3 lightningEmission(float3 origin, float3 dir, float tNear, float tFar,
+public float3 lightningEmission(float3 origin, float3 dir, float tNear, float tFar, LightningHitMask hitMask,
                                 out float coverage, out int hitCount, out float coreCoverage) {
     float coreEmission = 0.0;
     float rimEmission = 0.0;
     coverage = 0.0;
     hitCount = 0;
     coreCoverage = 0.0;
-    int count = lightningSegmentCount();
-    for (int i = 0; i < LIGHTNING_MAX_SEGMENTS; ++i) {
-        if (i >= count) break;
-        lightningAccumulateSegment(i, origin, dir, tNear, tFar, coreEmission, rimEmission,
-                                   coverage, hitCount, coreCoverage);
+    for (int w = 0; w < LIGHTNING_HIT_MASK_WORDS; ++w) {
+        uint bits = hitMask.words[w];
+        while (bits != 0u) {
+            int i = (w << 5) + int(firstbitlow(bits));
+            bits &= bits - 1u;
+            lightningAccumulateSegment(i, origin, dir, tNear, tFar, coreEmission, rimEmission,
+                                       coverage, hitCount, coreCoverage);
+        }
     }
     return lightningCombineEmission(coreEmission, rimEmission);
 }

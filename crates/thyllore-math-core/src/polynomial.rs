@@ -48,20 +48,6 @@ pub fn poly_moments(poly: &Poly) -> f32 {
         .sum()
 }
 
-/// Integral of the polynomial over sigma in [-1/2, 1/2].
-pub fn poly_symmetric_moments(poly: &Poly) -> f32 {
-    poly.iter()
-        .enumerate()
-        .map(|(n, coefficient)| {
-            if n % 2 == 1 {
-                0.0
-            } else {
-                coefficient / ((n as f32 + 1.0) * (1u32 << n) as f32)
-            }
-        })
-        .sum()
-}
-
 /// Integral over sigma in [0, 1] of the polynomial times the linear weight
 /// `w0 + (w1 - w0) sigma`.
 pub fn poly_linear_weighted_moments(poly: &Poly, w0: f32, w1: f32) -> f32 {
@@ -81,23 +67,6 @@ pub fn one_minus_smootherstep_poly(v0: f32, v1: f32) -> Poly {
     poly[3] = v1 * v1 * v1 * (-10.0 + 60.0 * v0 - 60.0 * v0 * v0);
     poly[4] = v1 * v1 * v1 * v1 * (15.0 - 30.0 * v0);
     poly[5] = -6.0 * v1 * v1 * v1 * v1 * v1;
-    poly
-}
-
-/// Coefficients of `1 - S(c0 + c1 sigma + c2 sigma^2)` for the quintic smootherstep
-/// `S(x) = 10 x^3 - 15 x^4 + 6 x^5`, expanded in sigma.
-pub fn one_minus_smootherstep_quadratic_poly(c0: f32, c1: f32, c2: f32) -> Poly {
-    let x = poly_from_quadratic(c0, c1, c2);
-    let x2 = poly_mul(&x, &x);
-    let x3 = poly_mul(&x2, &x);
-    let x4 = poly_mul(&x2, &x2);
-    let x5 = poly_mul(&x4, &x);
-
-    let mut poly = poly_zero();
-    poly[0] = 1.0;
-    for term in 0..POLY_TERMS {
-        poly[term] -= 10.0 * x3[term] - 15.0 * x4[term] + 6.0 * x5[term];
-    }
     poly
 }
 
@@ -148,41 +117,12 @@ mod tests {
     }
 
     #[test]
-    fn symmetric_moments_match_midpoint_quadrature() {
-        let poly = poly_mul(
-            &poly_from_quadratic(1.0, -2.0, 0.5),
-            &poly_from_quadratic(0.25, 1.0, -0.5),
-        );
-        let steps = 20000;
-        let ds = 1.0 / steps as f64;
-        let integral: f64 = (0..steps)
-            .map(|i| {
-                let sigma = -0.5 + (i as f64 + 0.5) * ds;
-                evaluate(&poly, sigma as f32) as f64 * ds
-            })
-            .sum();
-        assert!((poly_symmetric_moments(&poly) as f64 - integral).abs() < 1e-5);
-    }
-
-    #[test]
     fn smootherstep_expansion_matches_direct_evaluation() {
         let (v0, v1) = (0.15, 0.6);
         let poly = one_minus_smootherstep_poly(v0, v1);
         for i in 0..=10 {
             let sigma = i as f32 / 10.0;
             let expected = 1.0 - smootherstep(v0 + v1 * sigma);
-            assert!((evaluate(&poly, sigma) - expected).abs() < 1e-5);
-        }
-    }
-
-    #[test]
-    fn quadratic_smootherstep_expansion_matches_direct_evaluation() {
-        let (c0, c1, c2) = (0.1, 0.5, -0.3);
-        let poly = one_minus_smootherstep_quadratic_poly(c0, c1, c2);
-        for i in 0..=10 {
-            let sigma = i as f32 / 10.0;
-            let x = c0 + c1 * sigma + c2 * sigma * sigma;
-            let expected = 1.0 - smootherstep(x);
             assert!((evaluate(&poly, sigma) - expected).abs() < 1e-5);
         }
     }

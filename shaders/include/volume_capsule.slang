@@ -2,7 +2,7 @@
 //   density = 1 inside, faded by a smootherstep over the last `edgeWidthQ` of
 //   delta = |p - nearest axis point|^2 - radius(lambda)^2.
 // Along a ray delta is quadratic on each of the three regions (both caps and the body), so on
-// every piece between knots the density is one polynomial integrated by exact power moments.
+// every piece between knots the density is one polynomial, integrated exactly by Gauss-Legendre.
 // Mirrored in thyllore-effect-core/src/volume/capsule.rs.
 module volume_capsule;
 
@@ -13,6 +13,9 @@ public static const float CAPSULE_EMPTY_INTERVAL_EPSILON = 1e-6;
 public static const int CAPSULE_REGION_CAP_START = 0;
 public static const int CAPSULE_REGION_BODY = 1;
 public static const int CAPSULE_REGION_CAP_END = 2;
+
+// Ray bounds 2 + axis ends 2 + 3 regions x 2 quadratics x 2 roots.
+public static const int CAPSULE_MAX_KNOTS = 16;
 
 public struct VolumeCapsule {
     public float3 a;
@@ -106,7 +109,7 @@ public float capsuleDensityAt(VolumeCapsule capsule, float3 point) {
 // Region boundaries and support boundaries of the ray, appended unsorted.
 public void capsuleCollectKnots(
     VolumeCapsule capsule, float3 origin, float3 direction, float tNear, float tFar,
-    inout float knots[RAY_MAX_KNOTS], inout int count) {
+    inout float knots[CAPSULE_MAX_KNOTS], inout int count) {
     float3 axisDirection;
     float axisLength;
     if (!capsuleAxis(capsule, axisDirection, axisLength)) {
@@ -131,11 +134,31 @@ public void capsuleCollectKnots(
 
 public int capsuleKnots(
     VolumeCapsule capsule, float3 origin, float3 direction, float tNear, float tFar,
-    out float knots[RAY_MAX_KNOTS]) {
+    out float knots[CAPSULE_MAX_KNOTS]) {
     int count = rayBeginKnots(tNear, tFar, knots);
     capsuleCollectKnots(capsule, origin, direction, tNear, tFar, knots, count);
     raySortKnots(knots, count);
     return count;
+}
+
+static const float CAPSULE_GAUSS_NODES[3] = { 0.2386191860831969, 0.6612093864662645, 0.9324695142031521 };
+static const float CAPSULE_GAUSS_WEIGHTS[3] = { 0.4679139345726910, 0.3607615730481386, 0.1713244923791704 };
+
+float capsuleOneMinusSmootherstep(float x) {
+    return 1.0 - x * x * x * (10.0 - x * (15.0 - 6.0 * x));
+}
+
+// Mean of 1 - S(c0 + c1 u + c2 u^2) on [-1/2, 1/2]; 6-point Gauss-Legendre is exact at degree 10.
+float capsuleEdgeFadeMean(float c0, float c1, float c2) {
+    float sum = 0.0;
+    for (int k = 0; k < 3; ++k) {
+        float u = 0.5 * CAPSULE_GAUSS_NODES[k];
+        float even = c0 + c2 * u * u;
+        float odd = c1 * u;
+        sum += CAPSULE_GAUSS_WEIGHTS[k]
+             * (capsuleOneMinusSmootherstep(even + odd) + capsuleOneMinusSmootherstep(even - odd));
+    }
+    return 0.5 * sum;
 }
 
 // Integral of the density over the piece [s0, s1], which must not cross a knot.
@@ -166,13 +189,10 @@ public float capsulePieceIntegral(VolumeCapsule capsule, float3 origin, float3 d
         capsule, origin, direction, region, axisDirection, axisLength, delta2, delta1, delta0);
 
     float invWidth = 1.0 / capsule.edgeWidthQ;
-    float edge[POLY_TERMS];
-    oneMinusSmootherstepQuadraticPoly(
-        (delta2 * sMid * sMid + delta1 * sMid + delta0 + capsule.edgeWidthQ) * invWidth,
-        (2.0 * delta2 * sMid + delta1) * pieceLength * invWidth,
-        delta2 * pieceLength * pieceLength * invWidth,
-        edge);
-    return max(pieceLength * polySymmetricMoments(edge), 0.0);
+    float c0 = (delta2 * sMid * sMid + delta1 * sMid + delta0 + capsule.edgeWidthQ) * invWidth;
+    float c1 = (2.0 * delta2 * sMid + delta1) * pieceLength * invWidth;
+    float c2 = delta2 * pieceLength * pieceLength * invWidth;
+    return max(pieceLength * capsuleEdgeFadeMean(c0, c1, c2), 0.0);
 }
 
 public float capsuleRayEmission(VolumeCapsule capsule, float3 origin, float3 direction, float tNear, float tFar) {
@@ -184,7 +204,7 @@ public float capsuleRayEmission(VolumeCapsule capsule, float3 origin, float3 dir
     float centeredNear = tNear - centerOffset;
     float centeredFar = tFar - centerOffset;
 
-    float knots[RAY_MAX_KNOTS];
+    float knots[CAPSULE_MAX_KNOTS];
     int knotCount = capsuleKnots(capsule, centeredOrigin, direction, centeredNear, centeredFar, knots);
     float total = 0.0;
     for (int i = 1; i < knotCount; ++i) {

@@ -1,15 +1,39 @@
 use crate::volume::knots::{RayKnots, RAY_LINEAR_COEFFICIENT_EPSILON};
 use cgmath::{InnerSpace, Vector3, Zero};
-use thyllore_math_core::{one_minus_smootherstep_quadratic_poly, poly_symmetric_moments};
 
 // Tapered capsule as a compact-support shell in the squared distance to the segment [a, b]:
 //   density = 1 inside, faded by a smootherstep over the last `edge_width_q` of
 //   delta = |p - nearest axis point|^2 - radius(lambda)^2.
 // Along a ray delta is quadratic on each of the three regions (both caps and the body), so on
-// every piece between knots the density is one polynomial integrated by exact power moments.
-// Mirrored in shaders/include/volume_capsule.glsl.
+// every piece between knots the density is one polynomial, integrated exactly by Gauss-Legendre.
+// Mirrored in shaders/include/volume_capsule.slang.
 
 const EMPTY_INTERVAL_EPSILON: f32 = 1e-6;
+
+// Ray bounds 2 + axis ends 2 + 3 regions x 2 quadratics x 2 roots.
+pub const CAPSULE_MAX_KNOTS: usize = 16;
+
+const GAUSS_NODES: [f32; 3] = [0.238_619_19, 0.661_209_4, 0.932_469_5];
+const GAUSS_WEIGHTS: [f32; 3] = [0.467_913_94, 0.360_761_57, 0.171_324_49];
+
+fn one_minus_smootherstep(x: f32) -> f32 {
+    1.0 - x * x * x * (10.0 - x * (15.0 - 6.0 * x))
+}
+
+// Mean of 1 - S(c0 + c1 u + c2 u^2) on [-1/2, 1/2]; 6-point Gauss-Legendre is exact at degree 10.
+fn edge_fade_mean(c0: f32, c1: f32, c2: f32) -> f32 {
+    let sum: f32 = GAUSS_NODES
+        .iter()
+        .zip(GAUSS_WEIGHTS)
+        .map(|(&node, weight)| {
+            let u = 0.5 * node;
+            let even = c0 + c2 * u * u;
+            let odd = c1 * u;
+            weight * (one_minus_smootherstep(even + odd) + one_minus_smootherstep(even - odd))
+        })
+        .sum();
+    0.5 * sum
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum CapsuleRegion {
@@ -122,13 +146,13 @@ impl VolumeCapsule {
     }
 
     /// Region boundaries and support boundaries of the ray, appended unsorted.
-    pub fn collect_knots(
+    pub fn collect_knots<const N: usize>(
         &self,
         origin: Vector3<f32>,
         direction: Vector3<f32>,
         t_near: f32,
         t_far: f32,
-        knots: &mut RayKnots,
+        knots: &mut RayKnots<N>,
     ) {
         let Some(axis) = self.axis() else {
             return;
@@ -159,7 +183,7 @@ impl VolumeCapsule {
         direction: Vector3<f32>,
         t_near: f32,
         t_far: f32,
-    ) -> RayKnots {
+    ) -> RayKnots<CAPSULE_MAX_KNOTS> {
         let mut knots = RayKnots::begin(t_near, t_far);
         self.collect_knots(origin, direction, t_near, t_far, &mut knots);
         knots.sort();
@@ -195,12 +219,11 @@ impl VolumeCapsule {
         let region = self.region_of_point(mid, axis);
         let (delta_2, delta_1, delta_0) = self.delta_quadratic(origin, direction, region, axis);
         let inv_width = 1.0 / self.edge_width_q;
-        let edge = one_minus_smootherstep_quadratic_poly(
-            (delta_2 * s_mid * s_mid + delta_1 * s_mid + delta_0 + self.edge_width_q) * inv_width,
-            (2.0 * delta_2 * s_mid + delta_1) * length * inv_width,
-            delta_2 * length * length * inv_width,
-        );
-        (length * poly_symmetric_moments(&edge)).max(0.0)
+        let c0 =
+            (delta_2 * s_mid * s_mid + delta_1 * s_mid + delta_0 + self.edge_width_q) * inv_width;
+        let c1 = (2.0 * delta_2 * s_mid + delta_1) * length * inv_width;
+        let c2 = delta_2 * length * length * inv_width;
+        (length * edge_fade_mean(c0, c1, c2)).max(0.0)
     }
 
     pub fn ray_emission(
@@ -228,6 +251,7 @@ impl VolumeCapsule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::volume::knots::RAY_MAX_KNOTS;
 
     fn midpoint_reference_steps(
         capsule: &VolumeCapsule,
@@ -367,6 +391,35 @@ mod tests {
             let shifted_origin = origin - dir * 14.0;
             assert_matches_reference(&capsule, shifted_origin, dir, (0.0, 17.0));
         }
+    }
+
+    #[test]
+    fn capsule_knots_never_exceed_the_capsule_bound() {
+        let capsule = thin_tapered_capsule();
+        let mut most = 0;
+        for (origin, direction) in start_cap_diagonal_rays() {
+            for offset in [-0.2f32, 0.0, 0.2] {
+                let dir = direction.normalize();
+                let shifted_origin = origin + Vector3::new(0.0, offset, offset);
+                let mut unbounded = RayKnots::<RAY_MAX_KNOTS>::begin(-2.0, 3.0);
+                capsule.collect_knots(shifted_origin, dir, -2.0, 3.0, &mut unbounded);
+                most = most.max(unbounded.count());
+            }
+        }
+        assert!(most <= CAPSULE_MAX_KNOTS, "{most} knots");
+    }
+
+    #[test]
+    fn capsule_knot_bound_matches_the_shader() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../shaders/include/volume_capsule.slang"
+        );
+        let source = std::fs::read_to_string(path).expect("volume_capsule.slang");
+        assert_eq!(
+            crate::analytic_manifest::int_constant(&source, "CAPSULE_MAX_KNOTS"),
+            CAPSULE_MAX_KNOTS as i64
+        );
     }
 
     #[test]

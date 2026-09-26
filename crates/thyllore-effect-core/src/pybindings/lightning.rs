@@ -1,36 +1,16 @@
 use super::effect::{
     build_effect_from_params, declare_effect_pyfunctions, gpu_block_bytes,
-    inverse_view_proj_from_column_major, PyEffect,
+    inverse_view_proj_from_column_major, ParameterOwnerName,
 };
 use crate::lightning::{
-    apply_lightning_preset, build_lightning_ubo, overwrite_lightning_persisted_fields,
-    LightningEffect, LightningSegmentsUBO, LightningUBO, LIGHTNING_MAX_WAYPOINTS,
-    LIGHTNING_PRESET_NAMES, LIGHTNING_UI_PARAMS,
+    build_lightning_ubo, LightningEffect, LightningParameterOwner, LightningSegmentsUBO,
+    LightningUBO, LIGHTNING_MAX_WAYPOINTS,
 };
-use cgmath::{Quaternion, Vector3};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use thyllore_scene_core::UiParam;
 
-impl PyEffect for LightningEffect {
-    const PRESET_NAMES: &'static [&'static str] = LIGHTNING_PRESET_NAMES;
-    const UI_PARAMS: &'static [UiParam] = LIGHTNING_UI_PARAMS;
-
-    fn apply_preset(&mut self, name: &str) -> bool {
-        apply_lightning_preset(self, name)
-    }
-
-    fn overwrite_persisted_fields(&mut self, source: &Self) {
-        overwrite_lightning_persisted_fields(self, source);
-    }
-
-    fn set_placement(&mut self, time: f32, position: [f32; 3], rotation: [f32; 4]) {
-        self.time = time;
-        self.position = Vector3::new(position[0], position[1], position[2]);
-        self.rotation = Quaternion::new(rotation[0], rotation[1], rotation[2], rotation[3]);
-    }
-
-    fn parameter_owner_name(_name: &str) -> &'static str {
+impl ParameterOwnerName for LightningParameterOwner {
+    fn owner_name(self) -> &'static str {
         "frame"
     }
 }

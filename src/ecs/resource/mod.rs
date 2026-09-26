@@ -1,13 +1,13 @@
-pub mod animation;
-pub mod app;
-pub mod editor;
+mod animation;
+mod app;
+mod editor;
 pub mod gizmo;
-pub mod gpu;
-pub mod input;
-pub mod ml;
-pub mod model;
-pub mod render;
-pub mod timing;
+mod gpu;
+mod input;
+mod ml;
+mod model;
+mod render;
+mod timing;
 
 mod batch;
 mod flame;

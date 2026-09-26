@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ._common import effect_properties
+from ._common import coordinates, effect_properties
 
 precision_from_format = effect_properties.precision_from_format
 property_kind = effect_properties.property_kind
@@ -32,16 +32,34 @@ def waypoint_local_points(lightning_obj):
     ]
 
 
+def target_local_point(lightning_obj):
+    target = lightning_obj.thyllore_lightning_target
+    if target is None:
+        return None
+    return lightning_obj.matrix_world.inverted() @ target.matrix_world.translation
+
+
+def lightning_local_end_point(lightning_obj):
+    target_point = target_local_point(lightning_obj)
+    if target_point is not None:
+        return tuple(target_point)
+    return tuple(lightning_obj.thyllore_lightning.end_offset)
+
+
 def lightning_default_preset() -> str:
     import thyllore_effect_core as fx
 
     return fx.lightning_preset_names()[0]
 
 
-def lightning_render_params(props) -> dict:
+def lightning_render_params(lightning_obj) -> dict:
     import thyllore_effect_core as fx
 
-    return effect_properties.render_params(props, fx.lightning_preset_params)
+    params = effect_properties.render_params(lightning_obj.thyllore_lightning, fx.lightning_preset_params)
+    target_point = target_local_point(lightning_obj)
+    if target_point is not None:
+        params["end_offset"] = [float(v) for v in coordinates.blender_to_engine_point(target_point)]
+    return params
 
 
 def build_lightning_property_group():

@@ -6,7 +6,7 @@ import time
 
 from .. import draw_handler
 from .._common import coordinates
-from ..properties import lightning_render_params
+from ..properties import lightning_render_params, waypoint_local_points
 from ..lightning_shader import matrix_column_major
 
 
@@ -54,11 +54,12 @@ def write_lightning_debug_dump(context, out_dir: str) -> str:
 
     instances = []
     for index, obj in enumerate(draw_handler.find_lightning_objects(scene)):
-        params = lightning_render_params(obj.thyllore_lightning)
+        params = lightning_render_params(obj)
+        waypoints = [coordinates.blender_to_engine_point(p) for p in waypoint_local_points(obj)]
         position = coordinates.blender_to_engine_point(obj.matrix_world.translation)
         rotation = coordinates.blender_to_engine_quaternion(obj.matrix_world.to_quaternion())
         ubo_bytes, segments_bytes, segment_count = fx.pack_lightning_ubo(
-            params, scene_time, position, rotation, matrix_column_major(view), matrix_column_major(proj)
+            params, scene_time, position, rotation, matrix_column_major(view), matrix_column_major(proj), waypoints=waypoints
         )
         effect = dict(params)
         effect.update({"time": scene_time, "position": list(position), "rotation": list(rotation)})

@@ -6,6 +6,16 @@ from . import debug_tools
 from ._common import effect_properties
 
 
+def draw_target_row(layout, obj):
+    target = obj.thyllore_lightning_target
+    if target is None:
+        layout.operator("thyllore.lightning_target_add")
+        return
+    row = layout.row()
+    row.label(text=f"Target: {target.name}")
+    row.operator("thyllore.lightning_target_clear", text="", icon="X")
+
+
 class VIEW3D_PT_thyllore_lightning(bpy.types.Panel):
 
     bl_space_type = "VIEW_3D"
@@ -30,6 +40,7 @@ class VIEW3D_PT_thyllore_lightning(bpy.types.Panel):
 
         path_box = layout.box()
         path_box.label(text="Path")
+        draw_target_row(path_box, obj)
         for index, waypoint in enumerate(obj.thyllore_lightning_waypoints):
             row = path_box.row()
             row.label(text=waypoint.target.name if waypoint.target is not None else "(missing)")

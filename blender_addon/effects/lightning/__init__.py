@@ -24,10 +24,13 @@ def register():
     properties._registered_waypoint_cls = waypoint_cls
     bpy.utils.register_class(waypoint_cls)
     bpy.types.Object.thyllore_lightning_waypoints = bpy.props.CollectionProperty(type=waypoint_cls)
+    bpy.types.Object.thyllore_lightning_target = bpy.props.PointerProperty(type=bpy.types.Object)
 
     bpy.utils.register_class(operators.THYLLORE_OT_lightning_add)
     bpy.utils.register_class(operators.THYLLORE_OT_lightning_waypoint_add)
     bpy.utils.register_class(operators.THYLLORE_OT_lightning_waypoint_remove)
+    bpy.utils.register_class(operators.THYLLORE_OT_lightning_target_add)
+    bpy.utils.register_class(operators.THYLLORE_OT_lightning_target_clear)
     debug_tools.register()
     bpy.utils.register_class(panels.VIEW3D_PT_thyllore_lightning)
     bpy.utils.register_class(panels.VIEW3D_PT_thyllore_lightning_advanced)
@@ -51,10 +54,13 @@ def unregister():
     bpy.utils.unregister_class(panels.VIEW3D_PT_thyllore_lightning_advanced)
     bpy.utils.unregister_class(panels.VIEW3D_PT_thyllore_lightning)
     debug_tools.unregister()
+    bpy.utils.unregister_class(operators.THYLLORE_OT_lightning_target_clear)
+    bpy.utils.unregister_class(operators.THYLLORE_OT_lightning_target_add)
     bpy.utils.unregister_class(operators.THYLLORE_OT_lightning_waypoint_remove)
     bpy.utils.unregister_class(operators.THYLLORE_OT_lightning_waypoint_add)
     bpy.utils.unregister_class(operators.THYLLORE_OT_lightning_add)
 
+    del bpy.types.Object.thyllore_lightning_target
     del bpy.types.Object.thyllore_lightning_waypoints
     if hasattr(properties, "_registered_waypoint_cls"):
         bpy.utils.unregister_class(properties._registered_waypoint_cls)

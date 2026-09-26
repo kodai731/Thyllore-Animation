@@ -211,7 +211,7 @@ def draw_lightning():
     render_started = time.perf_counter()
     for obj in lightning_objects:
         renderer = _renderers.setdefault(obj.name, LightningViewportRenderer())
-        params = lightning_render_params(obj.thyllore_lightning)
+        params = lightning_render_params(obj)
         position = coordinates.blender_to_engine_point(obj.matrix_world.translation)
         rotation = coordinates.blender_to_engine_quaternion(obj.matrix_world.to_quaternion())
         waypoints = [coordinates.blender_to_engine_point(p) for p in waypoint_local_points(obj)]

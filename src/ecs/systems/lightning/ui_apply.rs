@@ -2,9 +2,10 @@ use super::ui_command::LightningUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::LightningEffect;
 use crate::ecs::resource::LightningRenderSettings;
+use crate::ecs::systems::effect_edit::{apply_effect_preset, apply_effect_update};
 use crate::ecs::systems::{
     clear_lightning_target, resolve_selected_lightning, spawn_lightning_target,
-    spawn_lightning_waypoint, write_lightning_transform,
+    spawn_lightning_waypoint,
 };
 use crate::ecs::world::World;
 use crate::hooks::effect_ui_event::EffectUiQueue;
@@ -18,16 +19,13 @@ pub fn dispatch_lightning_ui_events(world: &mut World, _assets: &mut AssetStorag
     for command in commands {
         match command {
             LightningUiCommand::UpdateEffect { entity, effect } => {
-                if !world.has_component::<LightningEffect>(entity) {
-                    continue;
-                }
-                write_lightning_transform(world, entity, effect.position, effect.rotation);
-                if let Some(current) = world.get_component_mut::<LightningEffect>(entity) {
-                    *current = *effect;
-                }
+                apply_effect_update::<LightningEffect>(world, entity, *effect);
             }
             LightningUiCommand::ApplyPreset(name) => {
-                crate::ecs::systems::apply_lightning_preset_to_selected(world, &name);
+                let Some(target) = resolve_selected_lightning(world) else {
+                    continue;
+                };
+                apply_effect_preset::<LightningEffect>(world, target, &name);
             }
             LightningUiCommand::AddTarget => {
                 if let Some(lightning) = resolve_selected_lightning(world) {

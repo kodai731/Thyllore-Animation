@@ -3,8 +3,9 @@ use std::io::Cursor;
 use serde_json::json;
 use thyllore_effect_core::TextureFitGroups;
 
-use super::{resolve_selected_flame, write_flame_transform};
+use super::resolve_selected_flame;
 use crate::ecs::component::{FlameBaked, FlameEffect};
+use crate::ecs::systems::effect_edit::apply_effect_update;
 use crate::ecs::systems::flame::write_texture_fit_provenance;
 use crate::ecs::world::World;
 
@@ -43,8 +44,7 @@ pub fn apply_flame_texture_fit_to_selected(
 
     apply_texture_fit_from_path(&mut effect, &mut baked, path, blend, groups, profile, route);
 
-    write_flame_transform(world, target, effect.position, effect.rotation);
-    world.insert_component(target, effect);
+    apply_effect_update::<FlameEffect>(world, target, effect);
     world.insert_component(target, baked);
 }
 

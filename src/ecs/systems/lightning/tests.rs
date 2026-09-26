@@ -4,6 +4,7 @@ use crate::ecs::component::{
     EditorDisplay, EntityIcon, LightningEffect, LightningPath, LightningTarget, Locator,
 };
 use crate::ecs::resource::{HierarchyState, LightningRenderSettings, PickRay, ProjectionData};
+use crate::ecs::systems::effect_edit::apply_effect_preset;
 use crate::ecs::world::{Children, GlobalTransform, Name, Parent, Transform, World};
 use crate::hooks::scene::spawn_scene_owner;
 use cgmath::{Matrix4, SquareMatrix, Vector2, Vector3};
@@ -77,7 +78,9 @@ fn only_a_known_preset_name_replaces_the_selected_effect() {
         .shape
         .core_radius = 0.9;
 
-    apply_lightning_preset_to_selected(&mut world, "no_such_preset");
+    if let Some(target) = resolve_selected_lightning(&world) {
+        apply_effect_preset::<LightningEffect>(&mut world, target, "no_such_preset");
+    }
     assert_eq!(
         world
             .get_component::<LightningEffect>(entity)
@@ -92,7 +95,9 @@ fn only_a_known_preset_name_replaces_the_selected_effect() {
         preset_name
     ));
 
-    apply_lightning_preset_to_selected(&mut world, preset_name);
+    if let Some(target) = resolve_selected_lightning(&world) {
+        apply_effect_preset::<LightningEffect>(&mut world, target, preset_name);
+    }
     assert_eq!(
         world
             .get_component::<LightningEffect>(entity)

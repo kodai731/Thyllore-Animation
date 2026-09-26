@@ -2,7 +2,8 @@ use super::ui_command::LightningUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{LightningEffect, LIGHTNING_DOMAIN};
 use crate::ecs::resource::{HierarchyState, LightningRenderSettings};
-use crate::ecs::world::{Entity, Transform, World};
+use crate::ecs::systems::effect_edit::EffectPreset;
+use crate::ecs::world::{Entity, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::effect_ui_event::EffectUiQueue;
 use crate::hooks::scene::spawn_scene_owner;
@@ -33,14 +34,14 @@ fn spawn_lightning_instance(
         position: cgmath::Vector3::new(2.5 * ordinal as f32, 0.0, 0.0),
         ..LightningEffect::default()
     };
-    thyllore_effect_core::apply_lightning_preset(&mut effect, DEFAULT_LIGHTNING_PRESET);
+    effect.apply_preset(DEFAULT_LIGHTNING_PRESET);
     let entity = spawn_lightning_with_clip(
         world,
         assets,
         &format!("{DEFAULT_LIGHTNING_NAME} {}", ordinal + 1),
         effect,
     );
-    super::preset::record_lightning_preset(world, entity, DEFAULT_LIGHTNING_PRESET);
+    world.insert_component(entity, LightningEffect::applied(DEFAULT_LIGHTNING_PRESET));
     entity
 }
 
@@ -78,18 +79,6 @@ pub fn resolve_selected_lightning(world: &World) -> Option<Entity> {
     }
 
     world.entities_with::<LightningEffect>().first().copied()
-}
-
-pub fn write_lightning_transform(
-    world: &mut World,
-    entity: Entity,
-    translation: cgmath::Vector3<f32>,
-    rotation: cgmath::Quaternion<f32>,
-) {
-    if let Some(transform) = world.get_component_mut::<Transform>(entity) {
-        transform.translation = translation;
-        transform.rotation = rotation;
-    }
 }
 
 fn insert_lightning_default_resources(world: &mut World) {

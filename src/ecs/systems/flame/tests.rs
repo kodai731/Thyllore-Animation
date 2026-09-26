@@ -102,13 +102,17 @@ fn selecting_a_non_flame_entity_keeps_editing_the_first_flame() {
 }
 
 #[test]
-fn write_flame_transform_moves_the_transform_not_the_effect() {
+fn apply_effect_update_moves_the_flame_transform() {
     let mut world = World::new();
     let entity = spawn_default_flame(&mut world, DEFAULT_FLAME_NAME);
     let translation = cgmath::Vector3::new(4.0, 0.0, 2.0);
-    let rotation = cgmath::Quaternion::new(1.0, 0.0, 0.0, 0.0);
+    let effect = FlameEffect {
+        position: translation,
+        rotation: cgmath::Quaternion::new(1.0, 0.0, 0.0, 0.0),
+        ..FlameEffect::default()
+    };
 
-    write_flame_transform(&mut world, entity, translation, rotation);
+    crate::ecs::systems::apply_effect_update(&mut world, entity, effect);
 
     let transform = world.get_component::<Transform>(entity).unwrap();
     assert_eq!(transform.translation, translation);

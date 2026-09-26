@@ -1,8 +1,8 @@
-use super::ui_command::WindUiCommand;
+use super::{resolve_selected_wind, ui_command::WindUiCommand};
 use crate::asset::AssetStorage;
 use crate::ecs::component::WindTornadoEffect;
 use crate::ecs::resource::WindRenderSettings;
-use crate::ecs::systems::write_wind_transform;
+use crate::ecs::systems::effect_edit::{apply_effect_preset, apply_effect_update};
 use crate::ecs::world::World;
 use crate::hooks::effect_ui_event::EffectUiQueue;
 
@@ -15,16 +15,13 @@ pub fn dispatch_wind_ui_events(world: &mut World, _assets: &mut AssetStorage) {
     for command in commands {
         match command {
             WindUiCommand::UpdateEffect { entity, effect } => {
-                if !world.has_component::<WindTornadoEffect>(entity) {
-                    continue;
-                }
-                write_wind_transform(world, entity, effect.position, effect.rotation);
-                if let Some(current) = world.get_component_mut::<WindTornadoEffect>(entity) {
-                    *current = *effect;
-                }
+                apply_effect_update::<WindTornadoEffect>(world, entity, *effect);
             }
             WindUiCommand::ApplyPreset(name) => {
-                crate::ecs::systems::apply_wind_preset_to_selected(world, &name);
+                let Some(target) = resolve_selected_wind(world) else {
+                    continue;
+                };
+                apply_effect_preset::<WindTornadoEffect>(world, target, &name);
             }
             WindUiCommand::UpdateRenderSettings(new_settings) => {
                 if let Some(mut settings) = world.get_resource_mut::<WindRenderSettings>() {

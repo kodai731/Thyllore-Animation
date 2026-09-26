@@ -1,8 +1,8 @@
-use super::ui_command::WaterUiCommand;
+use super::{resolve_selected_water, ui_command::WaterUiCommand};
 use crate::asset::AssetStorage;
 use crate::ecs::component::WaterTorusEffect;
 use crate::ecs::resource::WaterRenderSettings;
-use crate::ecs::systems::write_water_transform;
+use crate::ecs::systems::effect_edit::{apply_effect_preset, apply_effect_update};
 use crate::ecs::world::World;
 use crate::hooks::effect_ui_event::EffectUiQueue;
 
@@ -15,16 +15,13 @@ pub fn dispatch_water_ui_events(world: &mut World, _assets: &mut AssetStorage) {
     for command in commands {
         match command {
             WaterUiCommand::UpdateEffect { entity, effect } => {
-                if !world.has_component::<WaterTorusEffect>(entity) {
-                    continue;
-                }
-                write_water_transform(world, entity, effect.position, effect.rotation);
-                if let Some(current) = world.get_component_mut::<WaterTorusEffect>(entity) {
-                    *current = *effect;
-                }
+                apply_effect_update::<WaterTorusEffect>(world, entity, *effect);
             }
             WaterUiCommand::ApplyPreset(name) => {
-                crate::ecs::systems::apply_water_preset_to_selected(world, &name);
+                let Some(target) = resolve_selected_water(world) else {
+                    continue;
+                };
+                apply_effect_preset::<WaterTorusEffect>(world, target, &name);
             }
             WaterUiCommand::UpdateRenderSettings(new_settings) => {
                 if let Some(mut settings) = world.get_resource_mut::<WaterRenderSettings>() {

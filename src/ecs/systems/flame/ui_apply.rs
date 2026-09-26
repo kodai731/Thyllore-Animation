@@ -2,7 +2,8 @@ use super::ui_command::FlameUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::{FlameEffect, FlameTrail};
 use crate::ecs::resource::{FlameRenderSettings, FlameUIState};
-use crate::ecs::systems::{resolve_selected_flame, write_flame_transform};
+use crate::ecs::systems::effect_edit::apply_effect_update;
+use crate::ecs::systems::resolve_selected_flame;
 use crate::ecs::world::World;
 use crate::hooks::effect_ui_event::EffectUiQueue;
 
@@ -15,13 +16,7 @@ pub fn dispatch_flame_ui_events(world: &mut World, _assets: &mut AssetStorage) {
     for command in commands {
         match command {
             FlameUiCommand::UpdateEffect { entity, effect } => {
-                if !world.has_component::<FlameEffect>(entity) {
-                    continue;
-                }
-                write_flame_transform(world, entity, effect.position, effect.rotation);
-                if let Some(current) = world.get_component_mut::<FlameEffect>(entity) {
-                    *current = *effect;
-                }
+                apply_effect_update::<FlameEffect>(world, entity, *effect);
             }
             FlameUiCommand::UpdateBaked(baked) => {
                 let Some(target) = resolve_selected_flame(world) else {
@@ -30,7 +25,12 @@ pub fn dispatch_flame_ui_events(world: &mut World, _assets: &mut AssetStorage) {
                 world.insert_component(target, *baked);
             }
             FlameUiCommand::ApplyPreset(name) => {
-                crate::ecs::systems::apply_flame_preset_to_selected(world, &name);
+                let Some(target) = resolve_selected_flame(world) else {
+                    continue;
+                };
+                crate::ecs::systems::effect_edit::apply_effect_preset::<FlameEffect>(
+                    world, target, &name,
+                );
             }
             FlameUiCommand::ApplyTextureFit {
                 path,

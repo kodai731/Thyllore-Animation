@@ -207,7 +207,7 @@ def draw_lightning():
     scene_time = scene_time_seconds(scene)
     lightning_objects = find_lightning_objects(scene)
 
-    last_color = None
+    rendered_colors = []
     render_started = time.perf_counter()
     for obj in lightning_objects:
         renderer = _renderers.setdefault(obj.name, LightningViewportRenderer())
@@ -215,14 +215,14 @@ def draw_lightning():
         position = coordinates.blender_to_engine_point(obj.matrix_world.translation)
         rotation = coordinates.blender_to_engine_quaternion(obj.matrix_world.to_quaternion())
         waypoints = [coordinates.blender_to_engine_point(p) for p in waypoint_local_points(obj)]
-        last_color = renderer.render(
+        rendered_colors.append(renderer.render(
             view, proj, camera_pos, params, scene_time, position, rotation, w, h, depth_tex=_scene_depth, waypoints=waypoints
-        )
+        ))
 
     report_first_draw(w, h, camera_pos, lightning_objects, time.perf_counter() - render_started)
 
-    if last_color is not None:
-        composite_tonemapped(last_color, w, h)
+    for color in rendered_colors:
+        composite_tonemapped(color, w, h)
 
 
 def composite_tonemapped(color_tex, w, h):

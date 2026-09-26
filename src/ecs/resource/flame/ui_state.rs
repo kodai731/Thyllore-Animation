@@ -1,6 +1,5 @@
 #[derive(Clone, Debug)]
 pub struct FlameUIState {
-    pub preset_index: usize,
     pub texture_fit_path: String,
     pub texture_fit_blend: f32,
     pub texture_fit_groups: [bool; 4],
@@ -24,7 +23,6 @@ pub struct FlameUIState {
 impl Default for FlameUIState {
     fn default() -> Self {
         Self {
-            preset_index: 0,
             texture_fit_path: String::new(),
             texture_fit_blend: 1.0,
             texture_fit_groups: [true; 4],

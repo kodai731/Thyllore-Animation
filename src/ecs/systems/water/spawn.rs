@@ -1,8 +1,6 @@
 use crate::asset::AssetStorage;
 use crate::ecs::component::{WaterTorusEffect, WATER_DOMAIN};
-use crate::ecs::resource::{
-    HierarchyState, WaterHistorySnapshotState, WaterRenderSettings, WaterUIState,
-};
+use crate::ecs::resource::{HierarchyState, WaterHistorySnapshotState, WaterRenderSettings};
 use crate::ecs::world::{Entity, Transform, World};
 use crate::hooks::effect_spawn::EffectSpawnHook;
 use crate::hooks::scene::spawn_scene_owner;
@@ -97,9 +95,6 @@ fn insert_water_default_resources(world: &mut World) {
     }
     if !world.contains_resource::<WaterHistorySnapshotState>() {
         world.insert_resource(WaterHistorySnapshotState::default());
-    }
-    if !world.contains_resource::<WaterUIState>() {
-        world.insert_resource(WaterUIState::default());
     }
 }
 

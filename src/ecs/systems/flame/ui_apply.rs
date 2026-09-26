@@ -13,12 +13,12 @@ pub fn apply_flame_ui_command(world: &mut World, _assets: &mut AssetStorage, com
     };
 
     match command {
-        FlameUiCommand::UpdateEffect(effect) => {
-            let Some(target) = resolve_selected_flame(world) else {
+        FlameUiCommand::UpdateEffect { entity, effect } => {
+            if !world.has_component::<FlameEffect>(*entity) {
                 return;
-            };
-            write_flame_transform(world, target, effect.position, effect.rotation);
-            if let Some(current) = world.get_component_mut::<FlameEffect>(target) {
+            }
+            write_flame_transform(world, *entity, effect.position, effect.rotation);
+            if let Some(current) = world.get_component_mut::<FlameEffect>(*entity) {
                 *current = effect.as_ref().clone();
             }
         }

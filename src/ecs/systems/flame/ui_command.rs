@@ -1,9 +1,13 @@
 use crate::ecs::component::FlameEffect;
 use crate::ecs::resource::FlameRenderSettings;
+use crate::ecs::world::Entity;
 
 #[derive(Clone)]
 pub enum FlameUiCommand {
-    UpdateEffect(Box<FlameEffect>),
+    UpdateEffect {
+        entity: Entity,
+        effect: Box<FlameEffect>,
+    },
     UpdateBaked(Box<thyllore_effect_core::FlameBaked>),
     ApplyPreset(String),
     ApplyTextureFit {

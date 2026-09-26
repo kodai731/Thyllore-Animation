@@ -7,8 +7,7 @@ use crate::ecs::systems::flame::{FlameUiCommand, FLAMES_STYLE_DIR, FLAMES_TEXTUR
 use crate::ecs::systems::FLAME_SPAWN_HOOK;
 use crate::ecs::World;
 
-use super::flame_param_groups::flame_group_param_names;
-use super::param_widgets::{draw_params, EditedScalars};
+use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
 use super::SceneOverlayState;
 
@@ -22,6 +21,71 @@ fn flame_key_button(ui: &imgui::Ui, ui_events: &mut UIEventQueue, edited: Edited
     send_key_button(ui, ui_events, edited, keys);
 }
 
+fn draw_flame_manual_params(ui: &imgui::Ui, effect: &mut crate::ecs::component::FlameEffect) {
+    let mut noise_sharpness =
+        thyllore_effect_core::shaping_scale_to_noise_sharpness(effect.noise.shaping_scale);
+    if ui
+        .slider_config("Noise Sharpness", 0.0, 1.0)
+        .display_format("%.2f")
+        .build(&mut noise_sharpness)
+    {
+        effect.noise.shaping_scale =
+            thyllore_effect_core::noise_sharpness_to_shaping_scale(noise_sharpness);
+    }
+    if ui.is_item_hovered() {
+        ui.tooltip_text(
+            "Crispness of the noise pattern: log remap of the tanh shaping \
+             scale, harder edges to the right (small scale saturates the \
+             tanh into near-binary blobs; ~0.78 = scale 0.25, the measured \
+             perceptual sweet spot). Stateless — noise_shaping_scale stays \
+             the source of truth (0 = built-in 0.6)",
+        );
+    }
+
+    let mut wave_segments = effect.wave_segments as i32;
+    if ui
+        .slider_config(
+            "Noise Segments",
+            thyllore_effect_core::WAVE_SEGMENTS_MIN as i32,
+            thyllore_effect_core::WAVE_SEGMENTS_MAX as i32,
+        )
+        .build(&mut wave_segments)
+    {
+        effect.wave_segments = wave_segments as u32;
+    }
+    if ui.is_item_hovered() {
+        ui.tooltip_text(
+            "Closed-form segments per ray: the noise grid aliases into a \
+             pixel hatch above Noise Frequency ~2 at 64; 128 resolves \
+             frequency ~4 at twice the cost",
+        );
+    }
+
+    let mut vortex =
+        (effect.twist.gain / thyllore_effect_core::VORTEX_MACRO_MAX_GAIN).clamp(0.0, 1.0);
+    if ui
+        .slider_config("Vortex", 0.0, 1.0)
+        .display_format("%.2f")
+        .build(&mut vortex)
+    {
+        let (gain, speed) = thyllore_effect_core::vortex_macro_parameters(vortex);
+        effect.twist.gain = gain;
+        effect.twist.speed = speed;
+    }
+    if ui.is_item_hovered() {
+        ui.tooltip_text(
+            "Vortex macro: one knob writing both twist parameters along a \
+             faster-and-deeper curve (stateless; the fine sliders \
+             stay the source of truth)",
+        );
+    }
+
+    let mut branch_seed = effect.branch.seed as i32;
+    if ui.input_int("Branch Seed", &mut branch_seed).build() {
+        effect.branch.seed = branch_seed.max(0) as u32;
+    }
+}
+
 pub(super) fn build_flame_section(
     ui: &imgui::Ui,
     ui_events: &mut UIEventQueue,
@@ -29,88 +93,9 @@ pub(super) fn build_flame_section(
     ecs_world: &World,
 ) {
     use crate::ecs::component::FlameEffect;
-    use crate::ecs::resource::{FlameRenderSettings, FlameShadingMode};
 
     if ui.collapsing_header("Flame", imgui::TreeNodeFlags::empty()) {
-        if let Some(settings) = ecs_world.get_resource::<FlameRenderSettings>() {
-            let mut settings_copy = *settings;
-            drop(settings);
-
-            if let Some(_token) = ui.begin_combo("Shading Mode", settings_copy.shading_mode.label())
-            {
-                for mode in FlameShadingMode::ALL {
-                    let selected = mode == settings_copy.shading_mode;
-                    if ui
-                        .selectable_config(mode.label())
-                        .selected(selected)
-                        .build()
-                    {
-                        settings_copy.shading_mode = mode;
-                    }
-                }
-            }
-
-            {
-                use crate::ecs::resource::FlameDebugView;
-                if let Some(_token) = ui.begin_combo("Debug View", settings_copy.debug_view.label())
-                {
-                    for view in FlameDebugView::ALL {
-                        let selected = view == settings_copy.debug_view;
-                        if ui
-                            .selectable_config(view.label())
-                            .selected(selected)
-                            .build()
-                        {
-                            settings_copy.debug_view = view;
-                        }
-                    }
-                }
-            }
-
-            {
-                use thyllore_effect_core::flame_wave::{
-                    read_env_wave_jitter, read_env_wave_jitter_freq, set_wave_jitter,
-                    set_wave_jitter_freq,
-                };
-                let mut jitter = read_env_wave_jitter();
-                if ui
-                    .slider_config("Jitter Depth", 0.0f32, 2.0f32)
-                    .build(&mut jitter)
-                {
-                    set_wave_jitter(jitter);
-                }
-                let mut jitter_freq = read_env_wave_jitter_freq();
-                if ui
-                    .slider_config("Jitter Freq", 0.25f32, 6.0f32)
-                    .build(&mut jitter_freq)
-                {
-                    set_wave_jitter_freq(jitter_freq);
-                }
-            }
-
-            match settings_copy.shading_mode {
-                FlameShadingMode::ReferenceRaymarch => {
-                    let mut steps = settings_copy.reference_step_count as i32;
-                    ui.slider_config("Reference Steps", 8, 512)
-                        .build(&mut steps);
-                    settings_copy.reference_step_count = steps.max(1) as u32;
-                }
-                FlameShadingMode::NoiseRaymarch => {
-                    let mut steps = settings_copy.noise_step_count as i32;
-                    ui.slider_config("Noise Steps", 4, 64).build(&mut steps);
-                    settings_copy.noise_step_count = steps.max(1) as u32;
-                }
-                FlameShadingMode::Analytic
-                | FlameShadingMode::DebugThickness
-                | FlameShadingMode::DebugDepthClamp => {}
-            }
-
-            ui_events.send(UIEvent::Effect {
-                key: FLAME_SPAWN_HOOK.key,
-                command: std::rc::Rc::new(FlameUiCommand::UpdateRenderSettings(settings_copy)),
-            });
-        }
-
+        let _section_id = ui.push_id("flame");
         let flames = ecs_world.entities_with::<FlameEffect>();
         let selected_flame_entity = crate::ecs::systems::resolve_selected_flame(ecs_world);
         let clamped_index = selected_flame_entity
@@ -138,22 +123,23 @@ pub(super) fn build_flame_section(
             }
         }
 
-        // Flame Preset selector
-        let presets: Vec<String> = thyllore_effect_core::FLAME_PRESET_NAMES
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
+        let applied_preset = selected_flame_entity.and_then(|entity| {
+            ecs_world
+                .get_component::<crate::ecs::component::AppliedFlamePreset>(entity)
+                .map(|preset| preset.name.clone())
+        });
         // The slider block below re-sends the (pre-apply) effect every frame;
         // that send must be skipped on the frame an Apply button fires or it
         // overwrites the applied preset/fit in the same dispatch.
         let mut effect_applied_this_frame = false;
         {
             let mut flame_ui = ecs_world.resource_mut::<FlameUIState>();
-            let mut preset_index = flame_ui.preset_index;
-            let preset_changed =
-                ui.combo_simple_string("Flame Preset", &mut preset_index, &presets);
-            flame_ui.preset_index = preset_index;
-            if preset_changed {
+            if let Some(chosen) = draw_preset_combo(
+                ui,
+                "Flame Preset",
+                thyllore_effect_core::FLAME_PRESET_NAMES,
+                applied_preset.as_deref(),
+            ) {
                 if selected_flame_entity.is_some() {
                     // Keyed scalar curves re-stamp their channels every
                     // frame and would silently pin the old look, so a
@@ -161,9 +147,7 @@ pub(super) fn build_flame_section(
                     ui_events.send(UIEvent::ClearScalarKeys);
                     ui_events.send(UIEvent::Effect {
                         key: FLAME_SPAWN_HOOK.key,
-                        command: std::rc::Rc::new(FlameUiCommand::ApplyPreset(
-                            presets[preset_index].clone(),
-                        )),
+                        command: std::rc::Rc::new(FlameUiCommand::ApplyPreset(chosen)),
                     });
                     effect_applied_this_frame = true;
                 }
@@ -410,141 +394,21 @@ pub(super) fn build_flame_section(
                         effect_copy.emitter.ring_angular_speed = ring_speed;
                     }
 
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("body"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
                     let colors_before = (effect_copy.color.base, effect_copy.color.tip);
-                    draw_params(
+                    let advanced_open = draw_tiered_params(
                         ui,
-                        &*flame_group_param_names("color"),
                         thyllore_effect_core::FLAME_UI_PARAMS,
                         thyllore_effect_core::FLAME_SCALAR_PARAMS,
                         &mut effect_copy,
+                        &[],
                         |ui, edited| flame_key_button(ui, ui_events, edited),
                     );
+                    if advanced_open {
+                        draw_flame_manual_params(ui, &mut effect_copy);
+                    }
                     if (effect_copy.color.base, effect_copy.color.tip) != colors_before {
                         effect_copy.color.use_blackbody = false;
                     }
-
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("noise"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    let mut noise_sharpness =
-                        thyllore_effect_core::shaping_scale_to_noise_sharpness(
-                            effect_copy.noise.shaping_scale,
-                        );
-                    if ui
-                        .slider_config("Noise Sharpness", 0.0, 1.0)
-                        .display_format("%.2f")
-                        .build(&mut noise_sharpness)
-                    {
-                        effect_copy.noise.shaping_scale =
-                            thyllore_effect_core::noise_sharpness_to_shaping_scale(noise_sharpness);
-                    }
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text(
-                            "Crispness of the noise pattern: log remap of the tanh shaping \
-                             scale, harder edges to the right (small scale saturates the \
-                             tanh into near-binary blobs; ~0.78 = scale 0.25, the measured \
-                             perceptual sweet spot). Stateless — noise_shaping_scale stays \
-                             the source of truth (0 = built-in 0.6)",
-                        );
-                    }
-
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("mix"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    let mut wave_segments = effect_copy.wave_segments as i32;
-                    if ui
-                        .slider_config(
-                            "Noise Segments",
-                            thyllore_effect_core::WAVE_SEGMENTS_MIN as i32,
-                            thyllore_effect_core::WAVE_SEGMENTS_MAX as i32,
-                        )
-                        .build(&mut wave_segments)
-                    {
-                        effect_copy.wave_segments = wave_segments as u32;
-                    }
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text(
-                            "Closed-form segments per ray: the noise grid aliases into a \
-                             pixel hatch above Noise Frequency ~2 at 64; 128 resolves \
-                             frequency ~4 at twice the cost",
-                        );
-                    }
-
-                    let mut vortex = (effect_copy.twist.gain
-                        / thyllore_effect_core::VORTEX_MACRO_MAX_GAIN)
-                        .clamp(0.0, 1.0);
-                    if ui
-                        .slider_config("Vortex", 0.0, 1.0)
-                        .display_format("%.2f")
-                        .build(&mut vortex)
-                    {
-                        let (gain, speed) = thyllore_effect_core::vortex_macro_parameters(vortex);
-                        effect_copy.twist.gain = gain;
-                        effect_copy.twist.speed = speed;
-                    }
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text(
-                            "Vortex macro: one knob writing both twist parameters along a \
-                             faster-and-deeper curve (stateless; the fine sliders below \
-                             stay the source of truth)",
-                        );
-                    }
-
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("motion"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    ui.separator();
-                    ui.text("Branches");
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("branch"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
-
-                    let mut branch_seed = effect_copy.branch.seed as i32;
-                    if ui.input_int("Branch Seed", &mut branch_seed).build() {
-                        effect_copy.branch.seed = branch_seed.max(0) as u32;
-                    }
-
-                    ui.separator();
-                    draw_params(
-                        ui,
-                        &*flame_group_param_names("footer"),
-                        thyllore_effect_core::FLAME_UI_PARAMS,
-                        thyllore_effect_core::FLAME_SCALAR_PARAMS,
-                        &mut effect_copy,
-                        |ui, edited| flame_key_button(ui, ui_events, edited),
-                    );
 
                     if ui.button("Clear Flame Keys") {
                         ui_events.send(UIEvent::ClearScalarKeys);
@@ -562,20 +426,6 @@ pub(super) fn build_flame_section(
                     }
                     if ui.button("Add Flame") {
                         ui_events.send(UIEvent::AddEffect(FLAME_SPAWN_HOOK.key));
-                    }
-                    ui.same_line();
-                    if ui.button("Dump Probe") {
-                        ui_events.send(UIEvent::Effect {
-                            key: FLAME_SPAWN_HOOK.key,
-                            command: std::rc::Rc::new(FlameUiCommand::DumpWallProbe {
-                                viewport_size: overlay_state.viewport.size,
-                            }),
-                        });
-                    }
-                    if ui.is_item_hovered() {
-                        ui.tooltip_text(
-                            "Dump camera pose + wall-regime ray diagnostics to log/flame/",
-                        );
                     }
 
                     // Trail checkbox and slider
@@ -617,15 +467,106 @@ pub(super) fn build_flame_section(
                     if !effect_applied_this_frame {
                         ui_events.send(UIEvent::Effect {
                             key: FLAME_SPAWN_HOOK.key,
-                            command: std::rc::Rc::new(FlameUiCommand::UpdateEffect(Box::new(
-                                effect_copy,
-                            ))),
+                            command: std::rc::Rc::new(FlameUiCommand::UpdateEffect {
+                                entity: selected_flame,
+                                effect: Box::new(effect_copy),
+                            }),
                         });
+                    }
+
+                    if ui.collapsing_header("Flame Debug", imgui::TreeNodeFlags::empty()) {
+                        draw_flame_render_settings(ui, ui_events, ecs_world);
+                        if ui.button("Dump Probe") {
+                            ui_events.send(UIEvent::Effect {
+                                key: FLAME_SPAWN_HOOK.key,
+                                command: std::rc::Rc::new(FlameUiCommand::DumpWallProbe {
+                                    viewport_size: overlay_state.viewport.size,
+                                }),
+                            });
+                        }
+                        if ui.is_item_hovered() {
+                            ui.tooltip_text(
+                                "Dump camera pose + wall-regime ray diagnostics to log/flame/",
+                            );
+                        }
                     }
                 }
             }
         }
     }
+}
+
+fn draw_flame_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+    use crate::ecs::resource::{FlameDebugView, FlameRenderSettings, FlameShadingMode};
+    use thyllore_effect_core::flame_wave::{
+        read_env_wave_jitter, read_env_wave_jitter_freq, set_wave_jitter, set_wave_jitter_freq,
+    };
+
+    let Some(settings) = ecs_world.get_resource::<FlameRenderSettings>() else {
+        return;
+    };
+    let mut settings_copy = *settings;
+    drop(settings);
+
+    if let Some(_token) = ui.begin_combo("Shading Mode", settings_copy.shading_mode.label()) {
+        for mode in FlameShadingMode::ALL {
+            if ui
+                .selectable_config(mode.label())
+                .selected(mode == settings_copy.shading_mode)
+                .build()
+            {
+                settings_copy.shading_mode = mode;
+            }
+        }
+    }
+    if let Some(_token) = ui.begin_combo("Debug View", settings_copy.debug_view.label()) {
+        for view in FlameDebugView::ALL {
+            if ui
+                .selectable_config(view.label())
+                .selected(view == settings_copy.debug_view)
+                .build()
+            {
+                settings_copy.debug_view = view;
+            }
+        }
+    }
+
+    let mut jitter = read_env_wave_jitter();
+    if ui
+        .slider_config("Jitter Depth", 0.0f32, 2.0f32)
+        .build(&mut jitter)
+    {
+        set_wave_jitter(jitter);
+    }
+    let mut jitter_freq = read_env_wave_jitter_freq();
+    if ui
+        .slider_config("Jitter Freq", 0.25f32, 6.0f32)
+        .build(&mut jitter_freq)
+    {
+        set_wave_jitter_freq(jitter_freq);
+    }
+
+    match settings_copy.shading_mode {
+        FlameShadingMode::ReferenceRaymarch => {
+            let mut steps = settings_copy.reference_step_count as i32;
+            ui.slider_config("Reference Steps", 8, 512)
+                .build(&mut steps);
+            settings_copy.reference_step_count = steps.max(1) as u32;
+        }
+        FlameShadingMode::NoiseRaymarch => {
+            let mut steps = settings_copy.noise_step_count as i32;
+            ui.slider_config("Noise Steps", 4, 64).build(&mut steps);
+            settings_copy.noise_step_count = steps.max(1) as u32;
+        }
+        FlameShadingMode::Analytic
+        | FlameShadingMode::DebugThickness
+        | FlameShadingMode::DebugDepthClamp => {}
+    }
+
+    ui_events.send(UIEvent::Effect {
+        key: FLAME_SPAWN_HOOK.key,
+        command: std::rc::Rc::new(FlameUiCommand::UpdateRenderSettings(settings_copy)),
+    });
 }
 
 /// Canonicalized directory, falling back to the typed text when the path
@@ -816,6 +757,6 @@ fn build_texture_fit_browser(ui: &imgui::Ui, flame_ui: &mut FlameUIState) {
 
 crate::effect_section_hook!(crate::platform::ui::effect_sections::EffectSectionHook {
     key: "flame",
-    order: 3,
+    order: 4,
     draw: build_flame_section,
 });

@@ -7,7 +7,7 @@ use crate::ecs::resource::{ClipDragPreview, ClipDragType, TimelineInteractionSta
 use crate::ecs::systems::scalar_clip_systems::find_entity_clip_id;
 use crate::ecs::systems::timeline_systems::clip_drag_preview_times;
 use crate::ecs::systems::{unit_action_parse, BatchAction};
-use crate::ecs::world::World;
+use crate::ecs::world::{Entity, World};
 
 use super::apply_texture_fit_from_path;
 use super::FlameUiCommand;
@@ -102,13 +102,17 @@ impl BatchAction for ApplyTextureFitRoundtrip {
         "apply_texture_fit_roundtrip"
     }
     fn apply(&self, world: &mut World) {
-        let Some((original_effect, original_baked)) = first_flame_effect_and_baked(world) else {
+        let Some((flame, original_effect, original_baked)) = first_flame_effect_and_baked(world)
+        else {
             return;
         };
         apply_texture_fit_to_first_flame(world, &self.path, self.blend, self.profile);
         world.resource_mut::<UIEventQueue>().send(UIEvent::Effect {
             key: super::FLAME_SPAWN_HOOK.key,
-            command: std::rc::Rc::new(FlameUiCommand::UpdateEffect(Box::new(original_effect))),
+            command: std::rc::Rc::new(FlameUiCommand::UpdateEffect {
+                entity: flame,
+                effect: Box::new(original_effect),
+            }),
         });
         world.resource_mut::<UIEventQueue>().send(UIEvent::Effect {
             key: super::FLAME_SPAWN_HOOK.key,
@@ -148,18 +152,18 @@ fn apply_flame_clip_preview(world: &World, end_seconds: f32) {
     });
 }
 
-fn first_flame_effect_and_baked(world: &World) -> Option<(FlameEffect, FlameBaked)> {
+fn first_flame_effect_and_baked(world: &World) -> Option<(Entity, FlameEffect, FlameBaked)> {
     let &flame = world.entities_with::<FlameEffect>().first()?;
     let effect = world.get_component::<FlameEffect>(flame)?.clone();
     let baked = world
         .get_component::<FlameBaked>(flame)
         .cloned()
         .unwrap_or_default();
-    Some((effect, baked))
+    Some((flame, effect, baked))
 }
 
 fn apply_texture_fit_to_first_flame(world: &World, path: &str, blend: f32, profile: bool) {
-    let Some((mut effect, mut baked)) = first_flame_effect_and_baked(world) else {
+    let Some((flame, mut effect, mut baked)) = first_flame_effect_and_baked(world) else {
         return;
     };
     apply_texture_fit_from_path(
@@ -173,7 +177,10 @@ fn apply_texture_fit_to_first_flame(world: &World, path: &str, blend: f32, profi
     );
     world.resource_mut::<UIEventQueue>().send(UIEvent::Effect {
         key: super::FLAME_SPAWN_HOOK.key,
-        command: std::rc::Rc::new(FlameUiCommand::UpdateEffect(Box::new(effect))),
+        command: std::rc::Rc::new(FlameUiCommand::UpdateEffect {
+            entity: flame,
+            effect: Box::new(effect),
+        }),
     });
     world.resource_mut::<UIEventQueue>().send(UIEvent::Effect {
         key: super::FLAME_SPAWN_HOOK.key,

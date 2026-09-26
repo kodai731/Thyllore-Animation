@@ -28,6 +28,7 @@ declare_scene_format! {
             get: |e| e.column_height,
             set: |e, v| e.column_height = v,
             ui {
+                primary,
                 min: 0.1,
                 max: 20.0,
                 format: "%.2f",
@@ -38,6 +39,7 @@ declare_scene_format! {
             get: |e| e.wall_radius_base,
             set: |e, v| e.wall_radius_base = v,
             ui {
+                primary,
                 min: 0.01,
                 max: 10.0,
                 format: "%.3f",
@@ -80,6 +82,7 @@ declare_scene_format! {
             get: |e| e.density,
             set: |e, v| e.density = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 50.0,
                 format: "%.2f",
@@ -112,6 +115,7 @@ declare_scene_format! {
             get: |e| e.rise_duration,
             set: |e, v| e.rise_duration = v,
             ui {
+                primary,
                 min: 0.1,
                 max: 10.0,
                 format: "%.2f",
@@ -167,6 +171,7 @@ declare_scene_format! {
             get: |e| e.circulation,
             set: |e, v| e.circulation = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 100.0,
                 format: "%.2f",
@@ -222,6 +227,7 @@ declare_scene_format! {
             get: |e| e.eddy_amplitude,
             set: |e, v| e.eddy_amplitude = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 1.0,
                 format: "%.2f",
@@ -399,6 +405,7 @@ declare_scene_format! {
             set: |e, v| e.albedo = v,
             scalars: rgb,
             ui {
+                primary,
                 kind: Color,
                 min: 0.0,
                 max: 1.0,
@@ -454,6 +461,7 @@ declare_scene_format! {
             get: |e| e.time_scale,
             set: |e, v| e.time_scale = v,
             ui {
+                primary,
                 min: 0.0,
                 max: 4.0,
                 format: "%.2f",
@@ -651,5 +659,23 @@ mod tests {
         overwrite_wind_persisted_fields(&mut target, &loaded);
         assert_eq!(target.column_height, 5.0);
         assert_eq!(target.time, 2.5);
+    }
+
+    #[test]
+    fn test_primary_params_are_exactly_the_specified_8() {
+        let primary: Vec<&str> = WIND_UI_PARAMS
+            .iter()
+            .filter(|p| p.primary)
+            .map(|p| p.name)
+            .collect();
+        assert_eq!(primary.len(), 8);
+        assert!(primary.contains(&"column_height"));
+        assert!(primary.contains(&"wall_radius_base"));
+        assert!(primary.contains(&"circulation"));
+        assert!(primary.contains(&"rise_duration"));
+        assert!(primary.contains(&"eddy_amplitude"));
+        assert!(primary.contains(&"density"));
+        assert!(primary.contains(&"albedo"));
+        assert!(primary.contains(&"time_scale"));
     }
 }

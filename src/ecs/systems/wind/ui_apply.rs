@@ -4,7 +4,7 @@ use super::ui_command::WindUiCommand;
 use crate::asset::AssetStorage;
 use crate::ecs::component::WindTornadoEffect;
 use crate::ecs::resource::WindRenderSettings;
-use crate::ecs::systems::{resolve_selected_wind, write_wind_transform};
+use crate::ecs::systems::write_wind_transform;
 use crate::ecs::world::World;
 
 pub fn apply_wind_ui_command(world: &mut World, _assets: &mut AssetStorage, command: &dyn Any) {
@@ -13,12 +13,12 @@ pub fn apply_wind_ui_command(world: &mut World, _assets: &mut AssetStorage, comm
     };
 
     match command {
-        WindUiCommand::UpdateEffect(effect) => {
-            let Some(target) = resolve_selected_wind(world) else {
+        WindUiCommand::UpdateEffect { entity, effect } => {
+            if !world.has_component::<WindTornadoEffect>(*entity) {
                 return;
-            };
-            write_wind_transform(world, target, effect.position, effect.rotation);
-            if let Some(current) = world.get_component_mut::<WindTornadoEffect>(target) {
+            }
+            write_wind_transform(world, *entity, effect.position, effect.rotation);
+            if let Some(current) = world.get_component_mut::<WindTornadoEffect>(*entity) {
                 *current = effect.as_ref().clone();
             }
         }

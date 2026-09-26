@@ -31,7 +31,6 @@ thyllore-texture-fit-core = { path = "../thyllore-texture-fit-core" }
 [build-dependencies]
 cc = "1.2"
 thyllore-shader-manifest = { path = "../thyllore-shader-manifest" }
-thyllore-spirv-reflect = { path = "../thyllore-spirv-reflect" }
 
 [dev-dependencies]
 fastrand = "2"

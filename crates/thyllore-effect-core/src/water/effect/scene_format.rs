@@ -48,6 +48,7 @@ mod tests {
                         UiKind::Scalar => "scalar",
                         UiKind::Color => "color",
                         UiKind::Absorption => "absorption",
+                        UiKind::Offset => "offset",
                     },
                     "min": param.min,
                     "max": param.max,
@@ -264,5 +265,22 @@ mod tests {
             assert!(!object.contains_key(name), "{name} must stay runtime-only");
         }
         assert_eq!(object.len(), WATER_PARAMETER_OWNERSHIP.len());
+    }
+
+    #[test]
+    fn test_primary_params_are_exactly_the_specified_7() {
+        let primary: Vec<&str> = WATER_UI_PARAMS
+            .iter()
+            .filter(|p| p.primary)
+            .map(|p| p.name)
+            .collect();
+        assert_eq!(primary.len(), 7);
+        assert!(primary.contains(&"wave_amplitude"));
+        assert!(primary.contains(&"wave_frequency"));
+        assert!(primary.contains(&"tint"));
+        assert!(primary.contains(&"reflect_strength"));
+        assert!(primary.contains(&"light_intensity"));
+        assert!(primary.contains(&"flow_longitudinal"));
+        assert!(primary.contains(&"time_scale"));
     }
 }

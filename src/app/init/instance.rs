@@ -1215,6 +1215,7 @@ impl App {
         Self::insert_default_if_missing::<crate::ecs::resource::FlameRenderSettings>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::WaterRenderSettings>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::WindRenderSettings>(data);
+        Self::insert_default_if_missing::<crate::ecs::resource::LightningRenderSettings>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::FlameHistorySnapshotState>(data);
         Self::insert_default_if_missing::<crate::ecs::resource::WaterHistorySnapshotState>(data);
     }

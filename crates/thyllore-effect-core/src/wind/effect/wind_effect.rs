@@ -18,7 +18,7 @@ pub struct WindTornadoEffect {
     #[ubo("optics.z")]
     #[runtime(ui(min = 0.0, max = 100.0, format = "%.2f"))]
     pub time: f32,
-    #[runtime(ui(min = 0.0, max = 4.0, format = "%.2f"))]
+    #[runtime(ui(primary, min = 0.0, max = 4.0, format = "%.2f"))]
     pub time_scale: f32,
     #[runtime(ui(min = -100.0, max = 100.0, format = "%.2f"))]
     pub time_offset: f32,
@@ -26,9 +26,9 @@ pub struct WindTornadoEffect {
     pub position: Vector3<f32>,
     #[persist(owner = Frame, as = [f32; 4], get = wind_rotation_get, set = wind_rotation_set)]
     pub rotation: Quaternion<f32>,
-    #[persist(owner = Frame, ui(min = 0.1, max = 20.0, format = "%.2f", group = "shape"))]
+    #[persist(owner = Frame, ui(primary, min = 0.1, max = 20.0, format = "%.2f", group = "shape"))]
     pub column_height: f32,
-    #[persist(owner = Frame, ui(min = 0.01, max = 10.0, format = "%.3f", group = "shape"))]
+    #[persist(owner = Frame, ui(primary, min = 0.01, max = 10.0, format = "%.3f", group = "shape"))]
     pub wall_radius_base: f32,
     #[persist(owner = Frame, ui(min = 0.01, max = 10.0, format = "%.3f", group = "shape"))]
     pub wall_radius_top: f32,
@@ -36,13 +36,13 @@ pub struct WindTornadoEffect {
     pub wall_width_q: f32,
     #[persist(owner = Frame, ui(min = 0.01, max = 1.0, format = "%.2f", tooltip = "Fraction of the height over which the density fades to zero at the top", group = "shape"))]
     pub top_fade: f32,
-    #[persist(owner = Frame, ui(min = 0.0, max = 50.0, format = "%.2f", tooltip = "Extinction coefficient per meter at unit shell density", group = "density"))]
+    #[persist(owner = Frame, ui(primary, min = 0.0, max = 50.0, format = "%.2f", tooltip = "Extinction coefficient per meter at unit shell density", group = "density"))]
     pub density: f32,
     #[persist(owner = Frame, ui(min = 0.0, max = 4.0, format = "%.2f", group = "density"))]
     pub wall_strength: f32,
     #[persist(owner = Frame, ui(min = 0.0, max = 1.0, format = "%.2f", tooltip = "Height fraction of the column at t = 0; the top rises to 1 over rise_duration", group = "motion"))]
     pub rise_initial_height: f32,
-    #[persist(owner = Frame, ui(min = 0.1, max = 10.0, format = "%.2f", tooltip = "Seconds of the smoothstep rise from rise_initial_height to the full height", group = "motion"))]
+    #[persist(owner = Frame, ui(primary, min = 0.1, max = 10.0, format = "%.2f", tooltip = "Seconds of the smoothstep rise from rise_initial_height to the full height", group = "motion"))]
     pub rise_duration: f32,
     #[persist(owner = Frame, ui(min = 0.0, max = 10.0, format = "%.2f", tooltip = "Time in seconds when wall spreading begins", group = "motion"))]
     #[ubo("streak2.w")]
@@ -54,7 +54,7 @@ pub struct WindTornadoEffect {
     pub dissipate_start: f32,
     #[persist(owner = Frame, ui(min = 0.0, max = 10.0, format = "%.2f", tooltip = "Time constant of the wall strength decay; 0 keeps the wall at full strength", group = "motion"))]
     pub dissipate_time: f32,
-    #[persist(owner = Frame, ui(min = 0.0, max = 100.0, format = "%.2f", tooltip = "Circulation of the Rankine vortex; used for streak phase computation", group = "motion"))]
+    #[persist(owner = Frame, ui(primary, min = 0.0, max = 100.0, format = "%.2f", tooltip = "Circulation of the Rankine vortex; used for streak phase computation", group = "motion"))]
     #[ubo("lighting.z")]
     pub circulation: f32,
     #[persist(owner = Frame, ui(min = 1.0, max = 16.0, format = "%.1f", tooltip = "Number of spiral streaks (m in the phase)", group = "motion"))]
@@ -65,7 +65,7 @@ pub struct WindTornadoEffect {
     pub streak_rise_speed: f32,
     #[persist(owner = Frame, ui(min = 0.0, max = 1.0, format = "%.2f", tooltip = "Amplitude of the streak modulation; 0 disables streaks (identity)", group = "motion"))]
     pub streak_amplitude: f32,
-    #[persist(owner = Frame, ui(min = 0.0, max = 1.0, format = "%.2f", tooltip = "Amplitude of the volumetric eddy; 0 disables eddies (identity)", group = "eddy"))]
+    #[persist(owner = Frame, ui(primary, min = 0.0, max = 1.0, format = "%.2f", tooltip = "Amplitude of the volumetric eddy; 0 disables eddies (identity)", group = "eddy"))]
     pub eddy_amplitude: f32,
     #[persist(owner = Frame, ui(min = 0.01, max = 2.0, format = "%.2f", tooltip = "Eddy cell size in theta (angular) direction", group = "eddy"))]
     pub eddy_cell_theta: f32,
@@ -99,7 +99,7 @@ pub struct WindTornadoEffect {
     pub puff_strength: f32,
     #[persist(owner = Frame, ui(min = 0.0, max = 10.0, format = "%.1f", tooltip = "Rise speed of puff clumps along the tornado height", group = "eddy"))]
     pub puff_rise_speed: f32,
-    #[persist(owner = Frame, scalars = rgb, ui(kind = Color, min = 0.0, max = 1.0, format = "%.2f", tooltip = "Single-scattering albedo of the dust", group = "look"))]
+    #[persist(owner = Frame, scalars = rgb, ui(primary, kind = Color, min = 0.0, max = 1.0, format = "%.2f", tooltip = "Single-scattering albedo of the dust", group = "look"))]
     #[ubo("albedo.xyz")]
     pub albedo: [f32; 3],
     #[persist(owner = Frame, ui(min = 0.0, max = 5.0, format = "%.2f", group = "look"))]

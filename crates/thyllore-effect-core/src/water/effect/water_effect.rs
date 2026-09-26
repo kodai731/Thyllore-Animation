@@ -32,14 +32,14 @@ pub struct WaterTorusEffect {
     #[persist(owner = Frame, scalars = rgb, ui(kind = Absorption, min = 0.0, max = 10.0, format = "%.2f", tooltip = "Beer-Lambert absorption per meter; the picker shows the colour transmitted over the reference distance", group = "optics"))]
     pub absorption: [f32; 3],
     #[ubo("flow.x")]
-    #[persist(owner = Frame, ui(min = -5.0, max = 5.0, format = "%.2f", group = "flow"))]
+    #[persist(owner = Frame, ui(primary, min = -5.0, max = 5.0, format = "%.2f", group = "flow"))]
     pub flow_longitudinal: f32,
     #[ubo("flow.y")]
     #[persist(owner = Frame, ui(min = -5.0, max = 5.0, format = "%.2f", group = "flow"))]
     pub flow_meridional: f32,
-    #[persist(owner = Frame, ui(min = 0.0, max = 1.0, format = "%.3f", group = "wave"))]
+    #[persist(owner = Frame, ui(primary, min = 0.0, max = 1.0, format = "%.3f", group = "wave"))]
     pub wave_amplitude: f32,
-    #[persist(owner = Frame, ui(min = 0.0, max = 50.0, format = "%.1f", group = "wave"))]
+    #[persist(owner = Frame, ui(primary, min = 0.0, max = 50.0, format = "%.1f", group = "wave"))]
     pub wave_frequency: f32,
     #[persist(owner = Frame, ui(min = 0.0, max = 10.0, format = "%.2f", group = "wave"))]
     pub wave_speed: f32,
@@ -48,7 +48,7 @@ pub struct WaterTorusEffect {
     #[persist(owner = Frame, ui(min = 0.0, max = 1.0, format = "%.2f", group = "wave"))]
     pub wave_lb_blend: f32,
     #[ubo("lighting.x")]
-    #[persist(owner = Frame, ui(min = 0.0, max = 20.0, format = "%.2f", group = "lighting"))]
+    #[persist(owner = Frame, ui(primary, min = 0.0, max = 20.0, format = "%.2f", group = "lighting"))]
     pub light_intensity: f32,
     #[ubo("lighting.y")]
     #[persist(owner = Frame, ui(min = 1.0, max = 1024.0, format = "%.0f", group = "lighting"))]
@@ -63,7 +63,7 @@ pub struct WaterTorusEffect {
     #[persist(owner = Frame, ui(min = -0.9, max = 0.9, format = "%.2f", group = "lighting"))]
     pub scatter_anisotropy: f32,
     #[ubo("composite.x")]
-    #[persist(owner = Frame, ui(min = 0.0, max = 1.0, format = "%.2f", group = "look"))]
+    #[persist(owner = Frame, ui(primary, min = 0.0, max = 1.0, format = "%.2f", group = "look"))]
     pub reflect_strength: f32,
     #[ubo("composite.y")]
     #[persist(owner = Frame, ui(min = 0.0, max = 1.0, format = "%.2f", group = "look"))]
@@ -72,12 +72,12 @@ pub struct WaterTorusEffect {
     #[persist(owner = Frame, ui(min = 0.0, max = 2.0, format = "%.2f", group = "look"))]
     pub caustic_strength: f32,
     #[ubo("tint.xyz")]
-    #[persist(owner = Frame, scalars = rgb, ui(kind = Color, min = 0.0, max = 1.0, format = "%.2f", tooltip = "Scattering tint", group = "look"))]
+    #[persist(owner = Frame, scalars = rgb, ui(primary, kind = Color, min = 0.0, max = 1.0, format = "%.2f", tooltip = "Scattering tint", group = "look"))]
     pub tint: [f32; 3],
     #[ubo("flow.z")]
     #[runtime(ui(min = 0.0, max = 100.0, format = "%.2f"))]
     pub time: f32,
-    #[runtime(ui(min = 0.0, max = 4.0, format = "%.2f"))]
+    #[runtime(ui(primary, min = 0.0, max = 4.0, format = "%.2f"))]
     pub time_scale: f32,
     #[runtime(ui(min = -100.0, max = 100.0, format = "%.2f"))]
     pub time_offset: f32,

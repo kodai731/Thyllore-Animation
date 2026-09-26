@@ -48,6 +48,7 @@ mod tests {
                         thyllore_scene_core::UiKind::Scalar => "scalar",
                         thyllore_scene_core::UiKind::Color => "color",
                         thyllore_scene_core::UiKind::Absorption => "absorption",
+                        thyllore_scene_core::UiKind::Offset => "offset",
                     },
                     "min": param.min,
                     "max": param.max,
@@ -253,5 +254,23 @@ mod tests {
         overwrite_wind_persisted_fields(&mut target, &loaded);
         assert_eq!(target.column_height, 5.0);
         assert_eq!(target.time, 2.5);
+    }
+
+    #[test]
+    fn test_primary_params_are_exactly_the_specified_8() {
+        let primary: Vec<&str> = WIND_UI_PARAMS
+            .iter()
+            .filter(|p| p.primary)
+            .map(|p| p.name)
+            .collect();
+        assert_eq!(primary.len(), 8);
+        assert!(primary.contains(&"column_height"));
+        assert!(primary.contains(&"wall_radius_base"));
+        assert!(primary.contains(&"circulation"));
+        assert!(primary.contains(&"rise_duration"));
+        assert!(primary.contains(&"eddy_amplitude"));
+        assert!(primary.contains(&"density"));
+        assert!(primary.contains(&"albedo"));
+        assert!(primary.contains(&"time_scale"));
     }
 }

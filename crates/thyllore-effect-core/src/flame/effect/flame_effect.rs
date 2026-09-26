@@ -11,28 +11,28 @@ pub struct FlameEffect {
     pub position: Vector3<f32>,
     #[persist(owner = Frame, as = [f32; 4], get = flame_rotation_get, set = flame_rotation_set)]
     pub rotation: Quaternion<f32>,
-    #[persist(owner = Frame, ui(min = 0.05, max = 10.0, format = "%.2f", group = "body"))]
+    #[persist(owner = Frame, ui(primary, min = 0.05, max = 10.0, format = "%.2f", group = "body"))]
     pub height: f32,
-    #[persist(owner = Frame, ui(min = 0.05, max = 10.0, format = "%.2f", group = "body"))]
+    #[persist(owner = Frame, ui(primary, min = 0.05, max = 10.0, format = "%.2f", group = "body"))]
     pub radius: f32,
     #[persist(owner = Style)]
     pub sigma_t: f32,
-    #[persist(owner = Style, ui(min = 0.0, max = 10.0, group = "body"))]
+    #[persist(owner = Style, ui(primary, min = 0.0, max = 10.0, group = "body"))]
     pub intensity: f32,
-    #[persist(owner = Style, name = color_base, path = "color.base", as = [f32; 3], scalars = rgb, ui(kind = Color, label = "Base Color", min = 0.0, max = 1.0, format = "%.2f", tooltip = "Emission color at the flame base (used when blackbody is off)", group = "color"))]
-    #[persist(owner = Style, name = color_tip, path = "color.tip", as = [f32; 3], scalars = rgb, ui(kind = Color, label = "Tip Color", min = 0.0, max = 1.0, format = "%.2f", tooltip = "Emission color at the flame tip (used when blackbody is off)", group = "color"))]
+    #[persist(owner = Style, name = color_base, path = "color.base", as = [f32; 3], scalars = rgb, ui(primary, kind = Color, label = "Base Color", min = 0.0, max = 1.0, format = "%.2f", tooltip = "Emission color at the flame base (used when blackbody is off)", group = "color"))]
+    #[persist(owner = Style, name = color_tip, path = "color.tip", as = [f32; 3], scalars = rgb, ui(primary, kind = Color, label = "Tip Color", min = 0.0, max = 1.0, format = "%.2f", tooltip = "Emission color at the flame tip (used when blackbody is off)", group = "color"))]
     #[persist(owner = Style, name = temperature_base_k, path = "color.temperature_base_k", as = f32, ui(min = 1000.0, max = 6500.0, format = "%.0f", tooltip = "Blackbody temperature at the base in kelvin"))]
     #[persist(owner = Style, name = temperature_tip_k, path = "color.temperature_tip_k", as = f32, ui(min = 1000.0, max = 6500.0, format = "%.0f", tooltip = "Blackbody temperature at the tip in kelvin"))]
     #[persist(owner = Style, name = use_blackbody, path = "color.use_blackbody", as = bool, ui(min = 0.0, max = 1.0, format = "%.0f", tooltip = "Derive the base/tip colors from the blackbody temperatures"))]
     pub color: FlameColor,
-    #[persist(owner = Style, name = noise_amplitude, path = "noise.amplitude", as = f32, ui(min = 0.0, max = 3.0, group = "noise"))]
-    #[persist(owner = Style, name = noise_contrast, path = "noise.contrast", as = f32, ui(min = 0.25, max = 4.0, format = "%.2f", group = "noise"))]
+    #[persist(owner = Style, name = noise_amplitude, path = "noise.amplitude", as = f32, ui(primary, min = 0.0, max = 3.0, group = "noise"))]
+    #[persist(owner = Style, name = noise_contrast, path = "noise.contrast", as = f32, ui(primary, min = 0.25, max = 4.0, format = "%.2f", group = "noise"))]
     #[persist(owner = Style, name = noise_frequency, path = "noise.frequency", as = f32)]
     #[persist(owner = Style, name = noise_scroll_speed, path = "noise.scroll_speed", as = f32)]
     pub noise: FlameNoise,
     #[runtime]
     pub time: f32,
-    #[persist(owner = Frame, ui(min = 0.0, max = 4.0, group = "footer"))]
+    #[persist(owner = Frame, ui(primary, min = 0.0, max = 4.0, group = "footer"))]
     pub time_scale: f32,
     #[persist(owner = Frame)]
     pub time_offset: f32,

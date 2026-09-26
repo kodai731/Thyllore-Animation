@@ -3,6 +3,7 @@ extern crate self as thyllore_effect_core;
 pub mod debug;
 pub mod flame;
 pub mod gpu_pack;
+pub mod lightning;
 pub mod volume;
 pub mod water;
 pub mod wind;
@@ -18,6 +19,7 @@ pub use debug::flame_wall_probe::{
     WALL_PROBE_GRID_ROWS,
 };
 pub use flame::*;
+pub use lightning::*;
 pub use volume::{
     clamp_ray_to_cone_frustum, RayKnots, RayPuffs, VolumeShell, PUFFS_PER_RAY, RAY_MAX_KNOTS,
 };

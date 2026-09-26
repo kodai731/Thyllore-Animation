@@ -419,6 +419,8 @@ fn parse_ui_attributes(meta: &syn::meta::ParseNestedMeta) -> Result<UiAttributes
             ui.tooltip = Some(ui_meta.value()?.parse()?);
         } else if ui_meta.path.is_ident("group") {
             ui.group = Some(ui_meta.value()?.parse()?);
+        } else if ui_meta.path.is_ident("primary") {
+            ui.primary = true;
         } else {
             return Err(ui_meta.error("unknown ui key"));
         }
@@ -442,9 +444,15 @@ fn expand_ui(ident: &syn::Ident, ui: UiAttributes) -> Result<proc_macro2::TokenS
     let format = ui.format.map(|format| quote!(, format: #format));
     let tooltip = ui.tooltip.map(|tooltip| quote!(, tooltip: #tooltip));
     let group = ui.group.map(|group| quote!(, group: #group));
+    let primary = if ui.primary {
+        quote!(primary,)
+    } else {
+        quote!()
+    };
 
     Ok(quote! {
         , ui {
+            #primary
             #kind
             #label
             min: #min,
@@ -484,6 +492,7 @@ struct RuntimeAttributes {
 
 #[derive(Default)]
 struct UiAttributes {
+    primary: bool,
     kind: Option<syn::Ident>,
     label: Option<syn::LitStr>,
     min: Option<syn::Expr>,
@@ -1011,6 +1020,21 @@ mod tests {
         );
         assert!(
             expanded.contains("ui { min : 0.0 , max : 1.0 , format : \"{:.2}\" }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_runtime_ui_primary() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[runtime(ui(primary, min = 0.0, max = 1.0))]
+                pub time: f32,
+            }",
+        );
+        assert!(
+            expanded.contains("ui { primary , min : 0.0 , max : 1.0 }"),
             "{expanded}"
         );
     }

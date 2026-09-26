@@ -57,6 +57,7 @@ mod tests {
                         UiKind::Scalar => "scalar",
                         UiKind::Color => "color",
                         UiKind::Absorption => "absorption",
+                        UiKind::Offset => "offset",
                     },
                     "min": param.min,
                     "max": param.max,
@@ -215,5 +216,23 @@ mod tests {
             assert!(!object.contains_key(name), "{name} must stay runtime-only");
         }
         assert_eq!(object.len(), PARAMETER_OWNERSHIP.len());
+    }
+
+    #[test]
+    fn test_exactly_eight_primary_params() {
+        let primary: Vec<&str> = FLAME_UI_PARAMS
+            .iter()
+            .filter(|p| p.primary)
+            .map(|p| p.name)
+            .collect();
+        assert_eq!(primary.len(), 8);
+        assert!(primary.contains(&"radius"));
+        assert!(primary.contains(&"height"));
+        assert!(primary.contains(&"noise_amplitude"));
+        assert!(primary.contains(&"noise_contrast"));
+        assert!(primary.contains(&"color_base"));
+        assert!(primary.contains(&"color_tip"));
+        assert!(primary.contains(&"intensity"));
+        assert!(primary.contains(&"time_scale"));
     }
 }

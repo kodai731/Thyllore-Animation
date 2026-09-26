@@ -19,13 +19,17 @@ pub fn find_scalar_param<'a, C>(
 }
 
 /// Widget family a parameter is edited with; `Color` and `Absorption` are `[f32; 3]` parameters
-/// whose components are reachable through the `<name>_r/_g/_b` scalar aliases.
+/// whose components are reachable through the `<name>_r/_g/_b` scalar aliases. `Offset` is a
+/// `[f32; 3]` spatial offset whose components are reachable through the `<name>_x/_y/_z` scalar
+/// aliases.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiKind {
     Scalar,
     Color,
     /// Beer-Lambert coefficients per meter, edited as the colour transmitted over a reference distance.
     Absorption,
+    /// 3D spatial offset (x, y, z) in local space, edited with a 3-element drag widget.
+    Offset,
 }
 
 pub use thyllore_color_core::{get_rgb_channel, set_rgb_channel, RgbField, RGB_CHANNEL_SUFFIXES};
@@ -42,6 +46,7 @@ pub struct UiParam {
     pub tooltip: &'static str,
     /// Persisted parameters are saved with the scene; runtime ones are driven by playback.
     pub persisted: bool,
+    pub primary: bool,
 }
 
 impl UiParam {
@@ -58,11 +63,17 @@ impl UiParam {
         RGB_CHANNEL_SUFFIXES.map(|suffix| format!("{}{}", self.name, suffix))
     }
 
+    /// Scalar alias names of an `Offset` parameter, in x, y, z order.
+    pub fn offset_component_names(&self) -> [String; 3] {
+        ["_x", "_y", "_z"].map(|suffix| format!("{}{}", self.name, suffix))
+    }
+
     /// Every `ScalarParam` name this parameter's widget reads and writes.
     pub fn scalar_accessor_names(&self) -> Vec<String> {
         match self.kind {
             UiKind::Scalar => vec![self.name.to_string()],
             UiKind::Color | UiKind::Absorption => self.color_component_names().to_vec(),
+            UiKind::Offset => self.offset_component_names().to_vec(),
         }
     }
 }
@@ -152,6 +163,7 @@ macro_rules! declare_scene_format {
                 } ),+ $(,)? })?
                 $(, scalars: $channels:ident)?
                 $(, ui {
+                    $( primary $ui_primary_comma:tt )?
                     $( kind: $ui_kind:ident, )?
                     $( label: $ui_label:expr, )?
                     min: $ui_min:expr,
@@ -168,6 +180,7 @@ macro_rules! declare_scene_format {
                 get: $runtime_get:expr,
                 set: $runtime_set:expr
                 $(, ui {
+                    $( primary $rt_ui_primary_comma:tt )?
                     $( label: $rt_ui_label:expr, )?
                     min: $rt_ui_min:expr,
                     max: $rt_ui_max:expr
@@ -205,6 +218,7 @@ macro_rules! declare_scene_format {
                     } ),+ })?
                     $(, scalars: $channels)?
                     $(, ui {
+                        $( primary $ui_primary_comma )?
                         $( kind: $ui_kind, )?
                         $( label: $ui_label, )?
                         min: $ui_min,
@@ -220,6 +234,7 @@ macro_rules! declare_scene_format {
                     get: $runtime_get,
                     set: $runtime_set
                     $(, ui {
+                        $( primary $rt_ui_primary_comma )?
                         $( label: $rt_ui_label, )?
                         min: $rt_ui_min,
                         max: $rt_ui_max
@@ -252,6 +267,7 @@ macro_rules! declare_scene_format {
                 } ),+ $(,)? })?
                 $(, scalars: $channels:ident)?
                 $(, ui {
+                    $( primary $ui_primary_comma:tt )?
                     $( kind: $ui_kind:ident, )?
                     $( label: $ui_label:expr, )?
                     min: $ui_min:expr,
@@ -268,6 +284,7 @@ macro_rules! declare_scene_format {
                 get: $runtime_get:expr,
                 set: $runtime_set:expr
                 $(, ui {
+                    $( primary $rt_ui_primary_comma:tt )?
                     $( label: $rt_ui_label:expr, )?
                     min: $rt_ui_min:expr,
                     max: $rt_ui_max:expr
@@ -375,6 +392,7 @@ macro_rules! declare_scene_format {
                     format: $crate::declare_scene_format!(@ui_or_default "%.3f" $(, $ui_format)?),
                     tooltip: $crate::declare_scene_format!(@ui_or_default "" $(, $ui_tooltip)?),
                     persisted: true,
+                    primary: $crate::declare_scene_format!(@ui_primary $(, primary $ui_primary_comma)?),
                 },
             )? )+
             $( $(
@@ -388,6 +406,7 @@ macro_rules! declare_scene_format {
                     format: $crate::declare_scene_format!(@ui_or_default "%.3f" $(, $rt_ui_format)?),
                     tooltip: $crate::declare_scene_format!(@ui_or_default "" $(, $rt_ui_tooltip)?),
                     persisted: false,
+                    primary: $crate::declare_scene_format!(@ui_primary $(, primary $rt_ui_primary_comma)?),
                 },
             )? )*
         ];
@@ -402,6 +421,12 @@ macro_rules! declare_scene_format {
     };
     (@ui_kind, $kind:ident) => {
         $crate::UiKind::$kind
+    };
+    (@ui_primary) => {
+        false
+    };
+    (@ui_primary, primary,) => {
+        true
     };
     (@ui_label) => {
         None
@@ -466,7 +491,7 @@ macro_rules! declare_scene_format {
                 set: {
                     fn set_scalar(component: &mut $component, value: f32) {
                         let set: fn(&mut $component, u32) = $set;
-                        set(component, value as u32);
+                        set(component, value.round() as u32);
                     }
                     set_scalar
                 },
@@ -552,6 +577,7 @@ mod tests {
             format: "",
             tooltip: "",
             persisted: true,
+            primary: false,
         };
         let derived = UiParam {
             label: None,
@@ -573,6 +599,7 @@ mod tests {
             format: "",
             tooltip: "",
             persisted: true,
+            primary: false,
         };
         assert_eq!(tint.color_component_names(), ["tint_r", "tint_g", "tint_b"]);
     }

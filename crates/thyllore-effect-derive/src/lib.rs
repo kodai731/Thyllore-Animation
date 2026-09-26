@@ -228,36 +228,68 @@ fn parse_persist_scalars(meta: &syn::meta::ParseNestedMeta) -> Result<PersistSca
     Ok(PersistScalars::Aliases(aliases))
 }
 
-fn expand_persist_scalars(scalars: PersistScalars) -> proc_macro2::TokenStream {
+fn expand_persist_scalars(scalars: PersistScalars) -> Result<proc_macro2::TokenStream> {
     match scalars {
-        PersistScalars::Channels(channels) => quote!(, scalars: #channels),
+        PersistScalars::Channels(channels) => Ok(quote!(, scalars: #channels)),
         PersistScalars::Aliases(aliases) => {
-            let entries = aliases.iter().map(|(name, path)| {
-                let accessors = expand_path_accessors(path);
-                quote!(#name: { #accessors })
-            });
-            quote!(, scalars { #(#entries),* })
+            let entries = aliases
+                .iter()
+                .map(|(name, path)| {
+                    let accessors = expand_path_accessors(path)?;
+                    Ok(quote!(#name: { #accessors }))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            Ok(quote!(, scalars { #(#entries),* }))
         }
     }
 }
 
-fn expand_path_accessors(path: &syn::LitStr) -> proc_macro2::TokenStream {
+fn expand_path_accessors(path: &syn::LitStr) -> Result<proc_macro2::TokenStream> {
     let path_str = path.value();
     let segments: Vec<&str> = path_str.split('.').collect();
 
-    let mut get_expr: proc_macro2::TokenStream = quote!(e);
+    let mut expr: proc_macro2::TokenStream = quote!(e);
     for seg in &segments {
-        let seg_ident = syn::Ident::new(seg, proc_macro2::Span::call_site());
-        get_expr = quote!(#get_expr.#seg_ident);
+        let tokens = parse_segment(*seg, path)?;
+        expr = quote!(#expr.#tokens);
     }
 
-    let mut set_lhs: proc_macro2::TokenStream = quote!(e);
-    for seg in &segments {
-        let seg_ident = syn::Ident::new(seg, proc_macro2::Span::call_site());
-        set_lhs = quote!(#set_lhs.#seg_ident);
-    }
+    Ok(quote!(get: |e| #expr, set: |e, v| #expr = v))
+}
 
-    quote!(get: |e| #get_expr, set: |e, v| #set_lhs = v)
+fn parse_segment(seg: &str, path: &syn::LitStr) -> Result<proc_macro2::TokenStream> {
+    if let Some(bracket_pos) = seg.find('[') {
+        let ident_part = &seg[..bracket_pos];
+        let bracket_part = &seg[bracket_pos..];
+
+        if !bracket_part.starts_with('[') || !bracket_part.ends_with(']') {
+            return Err(Error::new_spanned(
+                path,
+                format!(
+                    "invalid index in path segment `{}`: brackets must be closed",
+                    seg
+                ),
+            ));
+        }
+
+        let inner = &bracket_part[1..bracket_part.len() - 1];
+        let n: usize = inner.parse().map_err(|_| {
+            Error::new_spanned(
+                path,
+                format!(
+                    "invalid index in path segment `{}`: index must be a non-negative integer",
+                    seg
+                ),
+            )
+        })?;
+
+        let index = syn::Index::from(n);
+        let ident = syn::Ident::new(ident_part, proc_macro2::Span::call_site());
+        Ok(quote!(#ident[#index]))
+    } else {
+        let ident = syn::Ident::new(seg, proc_macro2::Span::call_site());
+        Ok(quote!(#ident))
+    }
 }
 
 fn expand_persisted_entry(
@@ -280,7 +312,7 @@ fn expand_persisted_entry(
     };
 
     let accessors = if let Some(ref path) = persist.path {
-        expand_path_accessors(path)
+        expand_path_accessors(path)?
     } else {
         match (&persist.get, &persist.set) {
             (Some(get), Some(set)) => quote!(get: #get, set: #set),
@@ -295,7 +327,7 @@ fn expand_persisted_entry(
     };
 
     let def = persist.default.map(|def| quote!(, default: #def));
-    let scalars = persist.scalars.map(expand_persist_scalars);
+    let scalars = persist.scalars.map(expand_persist_scalars).transpose()?;
     let ui = persist
         .ui
         .map(|ui| expand_ui(&entry_ident, ui))
@@ -383,7 +415,7 @@ fn expand_runtime_entry(
     };
 
     let accessors = if let Some(ref path) = runtime.path {
-        expand_path_accessors(path)
+        expand_path_accessors(path)?
     } else {
         quote!(get: |e| e.#ident, set: |e, v| e.#ident = v)
     };
@@ -1247,6 +1279,39 @@ mod tests {
         assert!(
             msg.contains("runtime `path` requires `as`"),
             "expected path without as error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_path_with_array_index() {
+        let expanded = expand_scene(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Style, name = end_offset_x, path = \"shape.end_offset[0]\", as = f32)]
+                pub shape: Shape,
+            }",
+        );
+        assert!(
+            expanded.contains("end_offset_x : f32 = Style { get : | e | e . shape . end_offset [0] , set : | e , v | e . shape . end_offset [0] = v }"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn scene_persist_path_with_invalid_array_index() {
+        let input: DeriveInput = syn::parse_str(
+            "#[scene(record = WindRecord, tag = WindTag, key = \"wind\", tags = WIND_TAGS, snapshot = WIND_SNAPSHOT, scalars = WIND_SCALARS, ui = WIND_UI, overwrite = WIND_OVERWRITE)]
+            struct S {
+                #[persist(owner = Style, name = bad, path = \"shape.field[a]\", as = f32)]
+                pub shape: Shape,
+            }",
+        )
+        .expect("valid struct");
+        let err = expand_scene_format(&input).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("invalid index") && msg.contains("non-negative integer"),
+            "expected invalid index error, got: {msg}"
         );
     }
 }

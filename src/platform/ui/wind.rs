@@ -8,6 +8,7 @@ use crate::ecs::resource::{WindDebugCapture, WindRenderSettings};
 use crate::ecs::systems::wind::WindUiCommand;
 use crate::ecs::systems::{resolve_selected_wind, WIND_SPAWN_HOOK};
 use crate::ecs::World;
+use crate::hooks::effect_ui_event::send_effect_ui_command;
 
 use super::param_widgets::{draw_preset_combo, draw_tiered_params, EditedScalars};
 use super::scene_overlay::send_key_button;
@@ -76,10 +77,7 @@ pub(super) fn build_wind_section(
     ) {
         if selected_wind_entity.is_some() {
             ui_events.send(UIEvent::ClearScalarKeys);
-            ui_events.send(UIEvent::Effect {
-                key: WIND_SPAWN_HOOK.key,
-                command: Rc::new(WindUiCommand::ApplyPreset(chosen)),
-            });
+            send_effect_ui_command(ecs_world, WindUiCommand::ApplyPreset(chosen));
             effect_applied_this_frame = true;
         }
     }
@@ -100,19 +98,19 @@ pub(super) fn build_wind_section(
         |ui, edited| wind_key_button(ui, ui_events, edited),
     );
     if !effect_applied_this_frame {
-        ui_events.send(UIEvent::Effect {
-            key: WIND_SPAWN_HOOK.key,
-            command: Rc::new(WindUiCommand::UpdateEffect {
+        send_effect_ui_command(
+            ecs_world,
+            WindUiCommand::UpdateEffect {
                 entity: selected_wind,
                 effect: Box::new(effect_copy),
-            }),
-        });
+            },
+        );
     }
     if ui.button("Curves") {
         ui_events.send(UIEvent::OpenScalarCurveEditor);
     }
     if ui.collapsing_header("Wind Debug", imgui::TreeNodeFlags::empty()) {
-        draw_wind_render_settings(ui, ui_events, ecs_world);
+        draw_wind_render_settings(ui, ecs_world);
         if ui.button("Dump Debug") {
             ui_events.send(UIEvent::CaptureNow(Rc::new(WindDebugCapture)));
         }
@@ -124,7 +122,7 @@ pub(super) fn build_wind_section(
     }
 }
 
-fn draw_wind_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_world: &World) {
+fn draw_wind_render_settings(ui: &imgui::Ui, ecs_world: &World) {
     use crate::ecs::resource::{WindDebugView, WindShadingMode};
 
     let Some(settings) = ecs_world.get_resource::<WindRenderSettings>() else {
@@ -166,10 +164,10 @@ fn draw_wind_render_settings(ui: &imgui::Ui, ui_events: &mut UIEventQueue, ecs_w
         "Animate when paused",
         &mut settings_copy.free_run_when_paused,
     );
-    ui_events.send(UIEvent::Effect {
-        key: WIND_SPAWN_HOOK.key,
-        command: Rc::new(WindUiCommand::UpdateRenderSettings(settings_copy)),
-    });
+    send_effect_ui_command(
+        ecs_world,
+        WindUiCommand::UpdateRenderSettings(settings_copy),
+    );
 }
 
 crate::effect_section_hook!(crate::platform::ui::effect_sections::EffectSectionHook {

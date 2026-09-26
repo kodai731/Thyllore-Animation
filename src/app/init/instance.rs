@@ -337,6 +337,8 @@ impl App {
         data.ecs_world
             .insert_resource(crate::hooks::effect_spawn::EffectSpawnHooks::collect()?);
         data.ecs_world
+            .insert_resource(crate::hooks::effect_ui_event::EffectUiEventDispatchHooks::collect()?);
+        data.ecs_world
             .insert_resource(crate::hooks::pick::PickHooks::collect()?);
         Ok(())
     }
